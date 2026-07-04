@@ -72,6 +72,88 @@ export const RELAX_PASSES = DEFAULTS.RELAX_PASSES;
 // The documented relief band for U sums to roughly [-0.3, +1.0]; the guard is generous (AC1 asserts |U| < this).
 export const STAGNANT_BOUND = 4;
 
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// ── V2-2b-1 (stagnant driver-response): the neutral reference point + the driver→tune seam ──────────────
+// Direct analog of magmatism.js's MAGMA_REF / magmaDriversToTune (#4-MULTIPLY volcanic discipline) on the
+// STAGNANT / Venus corner. The per-body D-vector (V/dryness, g, T_surf, age, thermalState) re-tunes ONLY the
+// population/placement knobs {TESSERA_FRAC, CORONA_ACTIVE_FRAC, CORONA_POOL, PLUME_MIN} via the EXISTING
+// `tune ? { ...DEFAULTS, ...tune } : DEFAULTS` seam (:175) — no new writer machinery. Anchored so
+// stagnantDriversToTune(VENUS_REF) === null → Venus takes the untouched DEFAULTS branch → BYTE-IDENTICAL.
+// PURE: zero alea / Math.random / Date.now — it only computes DEFAULTS overrides. BASE_* floors + all
+// amplitudes are UNTOUCHED ⇒ the mean(tessera)>mean(plains)>mean(rift) ordering is preserved STRUCTURALLY.
+
+// VENUS_REF — the null point (analog of MAGMA_REF, magmatism.js:93, but ON the shipped Venus preset). Venus's
+// REAL preset read-slots, READ-SURFACE-MATCHED: V,g FLAT; T_eq,age NESTED under `.condition`. massGravity is
+// the EXACT live-derived g (0.815/0.95², NOT the rounded 0.903) — byte-exact vs deriveUniforms.surfaceGravity;
+// inert while K_G=0 but load-bearing the instant the K_G opt-in fires. Frozen literal (base/ writers take no
+// cross-imports; MAGMA_REF is likewise a literal). AC-TUNE-NULL asserts every slot === the live Venus bundle.
+export const VENUS_REF = Object.freeze({
+  volatileFraction: 0.02,              // FLAT V/dryness D-slot (Venus composition.volatileFraction, driver-presets.js:47)
+  massGravity: 0.815 / (0.95 * 0.95),  // FLAT g D-slot — EXACT live-derive (== deriveUniforms surfaceGravity), NOT rounded 0.903
+  condition: { T_eq: 737, age: 4.5 },  // NESTED read surface (deriveConditionVector: T_eq=fp.T_eq=737, age=fp.age??4.5=4.5)
+});
+
+// Venus-neutral endogenic drive (== magma's H_REF; tidal-quiet, age 4.5). stagnantThermal reads ONLY an
+// EXPLICIT thermalState (pass-through via clamp01) and falls back to THERMAL_REF when it is absent — it does
+// NOT re-derive from raw tidalHeating. This is the load-bearing byte-safety edit (contract designDecision #6 /
+// the R1 discipline): buildNeutralBodyDrivers omits thermalState at BOTH VENUS_REF and the live Venus bundle,
+// so both collapse to THERMAL_REF ⇒ thermDev = 0 ⇒ byte-identical. A magmaThermal-style raw-tidal mirror would
+// leak Venus's live tidalHeat (0.00118) → thermDev +0.00059 → a non-null tune at Venus → the 75-golden MOVES.
+export const THERMAL_REF = 0.275;
+function stagnantThermal(drivers) {
+  return (drivers && drivers.thermalState != null) ? clamp01(drivers.thermalState) : THERMAL_REF;
+}
+
+// First-cut transfer gains (mirror magma's K_COUNT/K_HEIGHT/K_LO/K_ELONG). UAT-tunable; the ACs assert correct
+// SIGN + measurable magnitude, not a fixed gain. K_G=0 keeps gravity relief-scaling DEFERRED (gFactor ≡ 1) so
+// the anti-mush invariant stays trivially true (BASE_* floors + amplitudes untouched; g feeds NO override).
+const K_TESS = 0.12,   // V(dryness) → TESSERA_FRAC        (drier ↑; a full 0.02→0.6 wet sweep drains tessera to the floor)
+      K_AGE  = 0.015,  // condition.age → TESSERA_FRAC     (older ↑; headless-only limb — no age slider)
+      K_ACT  = 0.35,   // thermalState → CORONA_ACTIVE_FRAC (hotter/younger ↑)
+      K_ACT_T = 0.25,  // T_surf → CORONA_ACTIVE_FRAC      (hot-dry-limb ↑, via tNorm)
+      K_POOL = 0.9,    // vigor(+wetness) → CORONA_POOL    (proportional multiply)
+      K_PLUME = 5,     // vigor → PLUME_MIN
+      K_G    = 0;      // GRAVITY relief-scaling DEFERRED  (zeroable; while 0, g feeds NO override → anti-mush trivially true)
+const TSURF_SPAN = 500; // T_surf normalization span (Kelvin) — 737 → ~237 spans one unit
+
+// Map the body's D-vector → a population-knob `tune` override, anchored so stagnantDriversToTune(VENUS_REF) ===
+// null → the writer's `tune ? {...DEFAULTS,...tune} : DEFAULTS` ternary (stagnantLid.js:175) takes the untouched
+// branch → byte-identical Venus. Mixed read surface BY DESIGN: V,g FLAT; T_surf,age NESTED under .condition.
+// ZERO alea draws — a pure DEFAULTS-override fn. Population knobs only (no BASE_* / amplitude key ever returned).
+export function stagnantDriversToTune(drivers) {
+  if (drivers == null) return null;                          // (i) NULL-GUARD FIRST (mirror magmatism.js:114) — dispatch
+                                                             //     calls with bodyDrivers defaulting null (rivers:452);
+                                                             //     the shipped structure tests (:340,:368) reach it null.
+  const D = DEFAULTS;
+  // read surface: V,g FLAT with VENUS_REF fallback; T_surf,age NESTED via optional-chaining + fallback (never-throw)
+  const V   = drivers.volatileFraction ?? VENUS_REF.volatileFraction;   // 0.02 at Venus
+  const g   = drivers.massGravity      ?? VENUS_REF.massGravity;        // exact live g at Venus (deferred: K_G=0)
+  const age = drivers.condition?.age   ?? VENUS_REF.condition.age;      // 4.5 at Venus — NESTED (never re-drives stagnantThermal)
+  const Ts  = drivers.condition?.T_eq  ?? VENUS_REF.condition.T_eq;     // 737 at Venus — NESTED
+  const H   = stagnantThermal(drivers);                                 // explicit thermalState only → THERMAL_REF at Venus
+
+  // deviation signals — EVERY ONE is exactly 0 at VENUS_REF and at the live Venus bundle (byte anchor)
+  const dryDev   = VENUS_REF.volatileFraction - V;              // drier > 0, wetter < 0   (0 at Venus)
+  const ageDev   = age - VENUS_REF.condition.age;               // older > 0               (0 at Venus)
+  const tNorm    = (Ts - VENUS_REF.condition.T_eq) / TSURF_SPAN; // cooler < 0             (0 at Venus)
+  const thermDev = H - THERMAL_REF;                             // hotter/younger > 0       (0 at Venus)
+  const vigor    = thermDev + tNorm;                           // hot-dry-limb endogenic vigor (0 at Venus)
+  const gFactor  = clamp(0.5, 2.0, Math.pow(g / VENUS_REF.massGravity, -K_G)); // K_G=0 ⇒ gFactor≡1 (byte-safe)
+
+  // population-knob overrides — drier/older ↑ tessera; hotter/younger ↑ activeFrac + coronaCount; more vigor ↑ plumes
+  const TESSERA_FRAC       = clamp(0.02, 0.20, D.TESSERA_FRAC + K_TESS * dryDev + K_AGE * ageDev);
+  const CORONA_ACTIVE_FRAC = clamp(0.30, 0.95, D.CORONA_ACTIVE_FRAC + K_ACT * thermDev + K_ACT_T * tNorm);
+  const CORONA_POOL        = clamp(20, 400, Math.round(D.CORONA_POOL * gFactor * (1 + K_POOL * (vigor - dryDev))));
+  const PLUME_MIN          = clamp(3, 12, Math.round(D.PLUME_MIN + K_PLUME * vigor));
+
+  // (ii) EXACT-ONLY IDENTITY GUARD (mirror magmatism.js:124-127): at VENUS_REF every override === its DEFAULT
+  //      → return null → the writer takes the untouched DEFAULTS branch → byte-identical Venus.
+  if (TESSERA_FRAC === D.TESSERA_FRAC && CORONA_ACTIVE_FRAC === D.CORONA_ACTIVE_FRAC &&
+      CORONA_POOL === D.CORONA_POOL && PLUME_MIN === D.PLUME_MIN) return null;
+  return { TESSERA_FRAC, CORONA_ACTIVE_FRAC, CORONA_POOL, PLUME_MIN };
+}
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+
 // ── regime resolver (mirror of shellRegimeOf, but NEVER gated on `locked` — Venus is a slow retrograde
 // rotator, locked:false; gating on locked would MISS it, which IS the fall-through-to-sin²(lat) bug). ──
 export const STAGNANT_LID_KEYS = new Set(['stagnant-lid', 'venus']);
