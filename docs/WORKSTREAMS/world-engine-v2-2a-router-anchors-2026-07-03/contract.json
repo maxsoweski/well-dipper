@@ -2,7 +2,7 @@
   "workstream": "world-engine-v2-2a-router-anchors-2026-07-03",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "scoping",
+  "status": "building",
   "programRef": "world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md §3.1 V2-2 row (SIGNED OFF 2026-07-03) + §5.1 Option-A router / §5.3 AC table (the V2-2a subset) / §5.5 non-goals + §7a RESOLVED split ('router + both anchors first, stagnant response + mixed interior second'); pre-code gate briefs (all three RESOLVED 2026-07-03): gate-1-L-lidstrength-form-DESIGN.md (L_STRONG≈0.63 §4 + router-boundary table), gate-2-localyield-DESIGN.md (tidal-shoulder PG-5 SHOULDER_LO≈0.15, m_hp-before-L, the effectiveL hand-up), gate-3-interpenetration-statistic-DESIGN.md (primitiveId enum + familyOf plumbing, Open-Q1/Q2/Q3/Q4). GROUNDING.md (same dir). This is the FIRST half of the V2-2 split; the SECOND half is world-engine-v2-2b (mixed interior + stagnant response).",
   "designDecisions": [
     "primitiveId a/b seam (grounding Q1 / gate-3 Open-Q1,Q2): V2-2a AUTHORS the primitiveId enum + familyOf map (+ optional uniform per-node corner emit); V2-2b POPULATES multi-valued + co-emits centerId + measures Π=C·F. Lava-plain and stagnant-basaltic-plain are DISTINCT ids (gate-3 Open-Q2) — do not lump. See AC-PRIMITIVEID-SCHEMA.",
