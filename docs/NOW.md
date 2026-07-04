@@ -67,9 +67,15 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > atmosphere (nested, inert), conformance oracle (13 equal + 2 adjudicated), `_lab.e1Probe()` + console-only weight
 > override. Dispatch untouched — PRESET_ARCHETYPE still routes everything; 75/75 goldens green throughout.
 > ⚠ Condition vector still lacks `tidalState.locked`/T_ss — recorded V2-3 plumbing note (BUILD-PLAN §4.5).
-> **NEXT = scope V2-2 (THE PILOT, split per §7a: router + both anchors first, stagnant response + mixed interior
-> second)** — read the three gate briefs + Max's crude/samey UAT feedback (shell-relief AC11 + Venus AC9 verdicts)
-> at scope time. Atmosphere #3b gate OPEN (`~/briefings/handoff-world-engine-atmosphere-v2-pickup-2026-07-02.md`).
+> **▶ V2-2a (pilot FIRST HALF: Option-A router + both anchors) — SCOPED `6b31e51`, AWAITING MAX GREENLIGHT.**
+> `WORKSTREAMS/world-engine-v2-2a-router-anchors-2026-07-03/` (GROUNDING + intent + contract, schema-valid,
+> status "scoping"; scoped via workflow per Max's via-workflows instruction). 13 headless ACs: 4 byte ACs
+> (both anchors + real Lava/Magma w/ T_ss pre-gate), conformance-fine at the gate-pinned boundaries
+> (L_STRONG 0.63 / SHOULDER_LO 0.15 / m_hp-first), subtractive gate, mixed→explicit-unimplemented stub,
+> primitiveId SCHEMA only, zero-clobber; NO UAT AC (byte-identical to already-UAT'd worlds — V2-0 pattern;
+> the pilot UAT card belongs to V2-2b with the stagnant response + falsification worlds).
+> **NEXT = Max greenlights V2-2a contract → build via workflows (plan → slices → verify).** Then V2-2b scope.
+> Atmosphere #3b gate OPEN (`~/briefings/handoff-world-engine-atmosphere-v2-pickup-2026-07-02.md`).
 > (Prior ACTIVE block, superseded: #4b VERIFIED_PENDING_MAX — now SHIPPED per above.)
 > **▶ #4b (Venus stagnant-lid relief writer) — ✅ VERIFIED_PENDING_MAX `0a95ed9`.** New three-free
 > `src/worldengine/base/stagnantLid.js` (`writeStagnantLidReliefSphere`): ONE seeded mantle-plume field (BAT logic) →
