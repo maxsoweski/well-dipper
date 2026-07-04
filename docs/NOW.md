@@ -28,7 +28,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](FEATURES/world-engine-architecture-spine.md).
 
-> **▶▶ ACTIVE (2026-07-03, world-engine program): ROADMAP v2.1 SIGNED OFF + V2-0 plumbing VERIFIED `0461463`.**
+> **▶▶ ACTIVE (2026-07-04, world-engine program): V2-2a VERIFIED `02cb221`; V2-2b re-split; V2-2b-1 (stagnant-side MULTIPLY) SCOPED + GREENLIT + `building` (`e4c4661`) — NEXT = PLAN workflow in a FRESH session (`~/briefings/handoff-world-engine-v2-2b-1-build-2026-07-04.md`).**
 > **▶ ROADMAP v2.1 (condition-first re-founding) — ✅ SIGNED OFF by Max 2026-07-03** (`7cb10f1`; map of record:
 > `WORKSTREAMS/world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md`). Full §7a review: every
 > recommendation adopted — V2-2 split approved (router+anchors, then stagnant response); wet-stagnant + corona-pierced
@@ -80,8 +80,23 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > 3-slice build `wf_39ebc1c8-847` (`9892275`→`5e726a7`→`02cb221`; Slice A auth-crashed mid-run under Fable, re-ran
 > clean re-verifying the partial drafts). ⚠ Router weak branch omits rivers:483 appliedTune diag mutation — inert
 > (magmaProbe recomputes), reconcile at V2-3. ⚠ MIXED_LO=0.35 local dup of e1Regime MOBILE_L — export at V2-2b/V2-3.
-> **NEXT = scope V2-2b (mixed interior + stagnant-side response + the 3 §5.4 falsification worlds + the pilot UAT
-> card)** — THE half that answers Max's "samey within a world." Then V2-3 dispatch flip. Atmosphere #3b gate OPEN
+> **▶ V2-2b RE-SPLIT + V2-2b-1 (stagnant-side MULTIPLY) — SCOPED + GREENLIT, status `building` (2026-07-04).**
+> V2-2b (mixed interior + stagnant response) was XL+, so Max approved splitting it again: **V2-2b-1 = the
+> stagnant-side driver→expression MULTIPLY** (`stagnantDriversToTune`, the #4-MULTIPLY analog on the pure-strong
+> corner), **V2-2b-2 = mixed interior + 3 §5.4 falsification worlds + pilot UAT**. Framing settled with Max
+> (2026-07-04): V2-2b-1 fixes the BETWEEN-world "re-rolled Venus" fear (§0); the WITHIN-world "samey across the same
+> world" feedback (AC9) is owned by V2-2b-2's mixed interior (per-province distinct primitives) + deeper by V2-7
+> epochs / V2-8 sculpting — Max's bar is that the within-world fix be *scoped* (it is), not delivered now. Scoped via
+> workflow (ground→draft→2 adversarial lenses→revise, `wf_6b783382-5ac`); byte-safety lens (re-run in-thread after a
+> workflow schema-failure) caught the `stagnantDriversToTune(null)` crash-guard must-fix. 12 ACs (9 unit / 2
+> integration / 1 UAT), contract validates. Mechanism: `stagnantDriversToTune(VENUS_REF)===null` keeps shipped Venus
+> byte-identical (75-golden); other drivers (V + T_surf primary) tune population knobs → distinct stagnant worlds.
+> Wired at the SHIPPED dispatch seam (planet-lod-rivers.js:489-491), NOT the router. Artifacts + scope commit
+> `e4c4661`: `docs/WORKSTREAMS/world-engine-v2-2b-1-stagnant-response-2026-07-04/` (GROUNDING, intent, contract).
+> **NEXT (fresh session per Max) = PLAN workflow (author code-grounded BUILD-PLAN → 2 adversarial lenses → revise) →
+> gated build slices (75-golden green each) → verify-workstream (`mode:full`, `liveBranch:main`) → live AC-LAB on
+> :5173 → VERIFIED_PENDING_MAX → Max UAT.** Handoff: `~/briefings/handoff-world-engine-v2-2b-1-build-2026-07-04.md`.
+> Then V2-2b-2 (mixed interior), then V2-3 dispatch flip. Atmosphere #3b gate OPEN
 > (`~/briefings/handoff-world-engine-atmosphere-v2-pickup-2026-07-02.md`).
 > (Prior ACTIVE block, superseded: #4b VERIFIED_PENDING_MAX — now SHIPPED per above.)
 > **▶ #4b (Venus stagnant-lid relief writer) — ✅ VERIFIED_PENDING_MAX `0a95ed9`.** New three-free
