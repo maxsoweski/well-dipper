@@ -30,7 +30,7 @@ import { writeHeightSphere, writeGrainSphere } from './src/worldengine/base/tect
 import { writePlateUpliftSphere, driversToTune } from './src/worldengine/base/plates.js';
 import { writeShellReliefSphere, shellRegimeOf } from './src/worldengine/base/shellRelief.js';
 import { writeMagmatismSphere, magmaDriversToTune } from './src/worldengine/base/magmatism.js';
-import { writeStagnantLidReliefSphere, stagnantLidRegimeOf } from './src/worldengine/base/stagnantLid.js';
+import { writeStagnantLidReliefSphere, stagnantLidRegimeOf, stagnantDriversToTune } from './src/worldengine/base/stagnantLid.js';
 import { makeSphereField } from './src/worldengine/base/sphereField.js';
 
 // ───────────────────────── Defaults (from rivers-terrain-lab.main.js) ─────────────────────
@@ -488,7 +488,13 @@ export function writeBodyRelief(carrier, {
   // validated paths stay byte-identical. stagnantDiag is retained for the live stagnantLidProbe.
   const slRegime = stagnantLidRegimeOf(archetype, locked);
   if (slRegime) {
-    const stagnantDiag = writeStagnantLidReliefSphere(carrier, grainDrivers, { macroSeed, regime: slRegime });
+    // Increment V2-2b-1 (stagnant driver-response): the body's D-vector (bodyDrivers — the SAME separate
+    // channel #2/#4-M use, null off the driver path) is mapped to a `tune` override via stagnantDriversToTune().
+    // At Venus's real drivers (and at null) it returns null ⇒ the writer's DEFAULTS branch ⇒ #4b byte-identical
+    // (AC-ZERO-CLOBBER). bodyDrivers replaces grainDrivers as the drivers arg — byte-safe, the writer voids it.
+    const stagnantTune = stagnantDriversToTune(bodyDrivers);
+    const stagnantDiag = writeStagnantLidReliefSphere(carrier, bodyDrivers, { macroSeed, regime: slRegime, tune: stagnantTune });
+    stagnantDiag.appliedTune = stagnantTune;
     return { path: 'stagnant-lid', plateDiag: null, shellDiag: null, magmaDiag: null, stagnantDiag };
   }
   writeGrainSphere(carrier, grainDrivers);            // precondition: grain before height
