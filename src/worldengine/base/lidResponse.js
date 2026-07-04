@@ -10,9 +10,12 @@
 // SLICE A shipped the CLASSIFIER half:
 //   • classifyLidPath(e1, rawTidal) → 'pure-weak' | 'pure-strong' | 'mixed' | 'off-pilot' (FINE response-class)
 //   • isUnbrokenLidPath(e1)         → boolean subtractive migration gate (D3-MF1)
-// SLICE B (this commit) adds writeLidResponseSphere — the corner DELEGATION (pure-weak → writeMagmatismSphere,
+// SLICE B added writeLidResponseSphere — the corner DELEGATION (pure-weak → writeMagmatismSphere,
 // pure-strong → writeStagnantLidReliefSphere, argument-for-argument with planet-lod-rivers.js:481-482 / :491)
-// + the mixed/off-pilot RETURN-MARKER (carrier.height UNWRITTEN). Slice C adds the primitiveId enum + familyOf.
+// + the mixed/off-pilot RETURN-MARKER (carrier.height UNWRITTEN).
+// SLICE C (this commit) adds the primitiveId INSTRUMENT SCHEMA — the PRIMITIVE_ID enum + FAMILY + familyOf map
+// (lava-plain ≠ stagnant-basaltic-plain; PIERCE=1 / TENT=0) exported beside the router, plus the OPTIONAL
+// byte-safe uniform per-node primitiveId corner emit (a NEW router RETURN field, never a hashed carrier field).
 //
 // HARD DISCIPLINE (grep-audited at the Slice-C AC-0 gate):
 //   • LABEL-FREE: reads ONLY E1 coordinates (compositionClass, geodynamicRegime, L, m_hp) + the precomputed
@@ -112,6 +115,50 @@ export function isUnbrokenLidPath(e1) {
 // by the 'router consumes E1 coordinates, never labels' invariant + the AC-0 grep denylist).
 const STRONG_REGIME = 'venus-stagnant-lid';
 
+// ── SLICE C — the primitiveId INSTRUMENT SCHEMA (gate-3 Open-Q1/Q2 + §2.4 expression legend) ────────────
+//
+// V2-2a authors the SCHEMA only. V2-2b POPULATES the multi-valued mixed primitiveId, co-emits centerId
+// (gate-3 Open-Q3) and runs the Π=C·F interpenetration statistic (gate-3 Open-Q6) — all deferred. The
+// corners are single-family (pure-weak all PIERCE, pure-strong all TENT), so Π on them is trivially 0 — the
+// instrument earns its keep only on the mixed world.
+//
+// FAMILY — the two morphological families the gate-3 interpenetration statistic contrasts. PIERCE=1 (magmatic
+// / weak-lid: point-source edifices that PIERCE the crust), TENT=0 (strong-lid: broad tented/foundered
+// deformation). The numeric assignment is gate-3's §Decision (PIERCE=1, TENT=0).
+export const FAMILY = Object.freeze({ TENT: 0, PIERCE: 1 });
+
+// PRIMITIVE_ID — the landform-expression enum. LOAD-BEARING (gate-3 Open-Q2): 'lava-plain' and
+// 'stagnant-basaltic-plain' are DISTINCT ids so familyOf can route lava-plain → PIERCE and basaltic-plain →
+// TENT — else the Io-vs-Venus contrast blurs at the exact seam the statistic guards. Ids 1-4 are the PIERCE
+// family, 5-8 the TENT family (PIERCE_IDS below encodes the split).
+export const PRIMITIVE_ID = Object.freeze({
+  // PIERCE family — magmatic / weak-lid expressions (gate-3 §Decision; §2.4 legend)
+  shield: 1, caldera: 2, patera: 3, 'lava-plain': 4,
+  // TENT family — strong-lid expressions
+  corona: 5, tessera: 6, rift: 7, 'stagnant-basaltic-plain': 8,
+});
+
+// The PIERCE-family id set (ids 1-4). familyOf(id) → PIERCE for these, TENT for everything else. Kept as a
+// Set (not a range test) so the split survives any future non-contiguous id addition.
+const PIERCE_IDS = new Set([1, 2, 3, 4]);
+
+/**
+ * familyOf — map a primitiveId enum value to its morphological FAMILY (gate-3). PIERCE for the magmatic /
+ * weak-lid expressions (ids 1-4), TENT for the strong-lid expressions (ids 5-8). The V2-2b Π=C·F statistic
+ * reads this to weight primitive co-occurrence by family contrast.
+ * @param {number} id  a PRIMITIVE_ID value.
+ * @returns {number}   FAMILY.PIERCE (1) or FAMILY.TENT (0).
+ */
+export function familyOf(id) { return PIERCE_IDS.has(id) ? FAMILY.PIERCE : FAMILY.TENT; }
+
+// uniformPrimitiveId — a per-node Int32Array filled with ONE primitive id, for the single-family corner paths
+// (pure-weak → all lava-plain PIERCE, pure-strong → all stagnant-basaltic-plain TENT). This is a NEW router
+// RETURN field — NEVER one of the 5 hashed carrier fields (height/grainAngle/grainMag/regime/faultDensity),
+// so it can move no golden (R-C4), and the router is un-wired anyway (never reaches the 75-golden harness).
+// Sized to the carrier's node count (carrier.count === carrier.height.length). V2-2b replaces this uniform
+// fill with the multi-valued mixed primitiveId at the mixed branch.
+const uniformPrimitiveId = (carrier, id) => new Int32Array(carrier.count ?? carrier.height.length).fill(id);
+
 /**
  * writeLidResponseSphere — the TOTAL anchor-preserving lid-response router (Option-A). Classifies the body
  * from its E1 coordinates, then delegates the two pure corners to the UNCHANGED shipped writers (or returns
@@ -152,7 +199,9 @@ const STRONG_REGIME = 'venus-stagnant-lid';
  *                                     and passes it in; the router FORWARDS it verbatim to the weak corner and
  *                                     NEVER re-derives it (AC-TSS-PRE-GATE — no internal T_ss derivation here).
  * @param {object}  [opts.grainDrivers]  DEFAULT_GRAIN_DRIVERS for the strong corner (argument-for-argument :491).
- * @returns {{path:string, fineClass:string, magmaDiag?:object, stagnantDiag?:object, unimplemented?:boolean}}
+ * @returns {{path:string, fineClass:string, primitiveId?:Int32Array, magmaDiag?:object, stagnantDiag?:object, unimplemented?:boolean}}
+ *          On the pure corners `primitiveId` is a uniform per-node Int32Array (a NEW return field, NOT a
+ *          hashed carrier field — R-C4); on mixed / off-pilot it is absent (unimplemented marker).
  */
 export function writeLidResponseSphere(carrier, drivers, {
   e1, rawTidal, macroSeed = 0, locked = false, T_ss = 0, grainDrivers,
@@ -162,7 +211,9 @@ export function writeLidResponseSphere(carrier, drivers, {
     case 'pure-weak': {
       const tune = magmaDriversToTune(drivers);                                                   // === rivers:481
       const magmaDiag = writeMagmatismSphere(carrier, drivers, { macroSeed, locked, T_ss, tune }); // === rivers:482
-      return { path: 'lid-weak', fineClass, magmaDiag };
+      // OPTIONAL byte-safe uniform corner emit (Slice C): a NEW return field, single-family lava-plain (PIERCE).
+      const primitiveId = uniformPrimitiveId(carrier, PRIMITIVE_ID['lava-plain']);
+      return { path: 'lid-weak', fineClass, primitiveId, magmaDiag };
     }
     case 'pure-strong': {
       // ARCHETYPE-FREE regime resolution (must-fix #3): map the E1 coordinate geodynamicRegime === 'stagnant'
@@ -172,7 +223,9 @@ export function writeLidResponseSphere(carrier, drivers, {
       // archetype-free resolution the AC-0 grep asserts. NEVER stagnantLidRegimeOf(archetype).
       const regime = e1.geodynamicRegime === 'stagnant' ? STRONG_REGIME : STRONG_REGIME;
       const stagnantDiag = writeStagnantLidReliefSphere(carrier, grainDrivers, { macroSeed, regime }); // === rivers:491
-      return { path: 'lid-strong', fineClass, stagnantDiag };
+      // OPTIONAL byte-safe uniform corner emit (Slice C): a NEW return field, single-family basaltic-plain (TENT).
+      const primitiveId = uniformPrimitiveId(carrier, PRIMITIVE_ID['stagnant-basaltic-plain']);
+      return { path: 'lid-strong', fineClass, primitiveId, stagnantDiag };
     }
     default:
       // 'mixed' | 'off-pilot' — NO height written (§5.5); return-marker, NOT a throw, so classification tests
