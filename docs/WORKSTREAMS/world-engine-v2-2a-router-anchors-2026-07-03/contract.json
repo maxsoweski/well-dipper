@@ -1,0 +1,163 @@
+{
+  "workstream": "world-engine-v2-2a-router-anchors-2026-07-03",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "programRef": "world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md §3.1 V2-2 row (SIGNED OFF 2026-07-03) + §5.1 Option-A router / §5.3 AC table (the V2-2a subset) / §5.5 non-goals + §7a RESOLVED split ('router + both anchors first, stagnant response + mixed interior second'); pre-code gate briefs (all three RESOLVED 2026-07-03): gate-1-L-lidstrength-form-DESIGN.md (L_STRONG≈0.63 §4 + router-boundary table), gate-2-localyield-DESIGN.md (tidal-shoulder PG-5 SHOULDER_LO≈0.15, m_hp-before-L, the effectiveL hand-up), gate-3-interpenetration-statistic-DESIGN.md (primitiveId enum + familyOf plumbing, Open-Q1/Q2/Q3/Q4). GROUNDING.md (same dir). This is the FIRST half of the V2-2 split; the SECOND half is world-engine-v2-2b (mixed interior + stagnant response).",
+  "designDecisions": [
+    "primitiveId a/b seam (grounding Q1 / gate-3 Open-Q1,Q2): V2-2a AUTHORS the primitiveId enum + familyOf map (+ optional uniform per-node corner emit); V2-2b POPULATES multi-valued + co-emits centerId + measures Π=C·F. Lava-plain and stagnant-basaltic-plain are DISTINCT ids (gate-3 Open-Q2) — do not lump. See AC-PRIMITIVEID-SCHEMA.",
+    "tune-builder naming (grounding Q2): the router REUSES the existing magmaDriversToTune (magmatism.js:113) for the weak side. NO new lidDriversToTune alias in V2-2a. The §5.3 AC-table name 'lidDriversToTune' is satisfied by magmaDriversToTune. See AC-TUNE-NULL.",
+    "live probe (grounding Q3): headless-only. V2-2a renders nothing new, so the _lab.lidRouteProbe() live shadow surface is DEFERRED (optional, not built). No live/integration browser AC; verification is entirely headless (the V2-0 pattern). If a build wants a console-clean AC7-style probe it is additive and NOT a UAT.",
+    "mixed-detection test world (grounding Q4): AC-CONFORMANCE-FINE asserts BOTH — (a) all 15 mapped presets classify non-mixed, AND (b) a hand-set mid-axis vector classifies mixed. Locking the mixed seam now (b) is what makes the V2-2b drop-in a clean swap. See AC-CONFORMANCE-FINE + AC-MIXED-STUB.",
+    "mixed stub (grounding Q5): return-marker, NOT a hard throw. writeLidResponseSphere on fineClass 'mixed' returns { path:'lid-mixed', fineClass:'mixed', unimplemented:true } and LEAVES carrier.height UNWRITTEN (honors §5.5 'no new height-writing machinery'; no golden movable; ergonomic for tests). See AC-MIXED-STUB.",
+    "T_ss delivery (grounding Q6 / D3-MF3): the router RECEIVES precomputed T_ss in opts (caller computes locked ? (T_eq ?? 0) * 1.4 : 0, matching planet-lod-rivers.js:476 exactly), so the pure-weak branch is a verbatim pass-through and byte-identity is STRUCTURAL, not re-derived. The router does NOT recompute T_ss internally. See AC-TSS-PRE-GATE.",
+    "AC2/AC3 disposition (must-fix #2; §5.3 row / grounding Q4): at the two anchors, AC2/AC3 (structure + latitude-control) are SUBSUMED by AC-BYTE-* — the router's corner output is byte-identical to the shipped Lava/Magma/Venus worlds that ALREADY PASS AC2/AC3, so bit-for-bit equality proves them without a standalone re-run. The mixed-world AC2/AC3 (a NEW rendered surface) is V2-2b. V2-2a therefore carries no standalone AC2/AC3 row.",
+    "Strong-branch regime is ARCHETYPE-FREE (must-fix #3): the router resolves the pure-strong regime by mapping the E1 coordinate geodynamicRegime==='stagnant' → the single V2-2a strong constant 'venus-stagnant-lid'. It NEVER calls stagnantLidRegimeOf(archetype) — stagnantLid.js:78 takes a preset LABEL as its first arg, which violates the signed 'router consumes E1 coordinates, never labels' invariant and AC-0's grep denylist. stagnantLidRegimeOf(archetype,locked) is imported ONLY by the TEST to compute the expected regime value. See AC-BYTE-STRONG-REF + AC-0.",
+    "Classification-constant source of truth (must-fix #4): L_STRONG(0.63, e1Regime.js:43) and SHOULDER_LO(0.15, :44) are module-private `const` today; HEATPIPE_PEG(0.45, :40) is already `export const`. V2-2a makes ONE byte-safe export-only edit — adds the `export` keyword to L_STRONG and SHOULDER_LO (changes no runtime value, moves no golden) — so the router IMPORTS all three from e1Regime.js, the single source of truth. The router MUST NOT re-declare 0.63/0.15 (AC-0 grep asserts import-not-redeclare), so a UAT retune of these UAT-tunable constants can never make the router's classifyLidPath diverge from computeE1's own geodynamicRegime routing at the V2-3 dispatch flip. See mustStayWorking (permitted export-only edit) + AC-0."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15 / SPINE-CONFORMANCE.md), the standing world-engine AC-0. (1) Driver connectivity: classifyLidPath/isUnbrokenLidPath read ONLY E1 coordinates (compositionClass, geodynamicRegime, L, m_hp, and the raw Io-ratio via cv.rawTidalIoRatio) + the precomputed T_ss named derivation locked?(T_eq??0)*1.4:0 — every one D-slot-backed or a named derivation per the V2-1 AC-0 tables; NO archetype-string input to the router, grep-audited with an explicit DENYLIST: router source contains no e1.label read, no PRESET_ARCHETYPE read, AND no call to stagnantLidRegimeOf( (nor any archetype-string argument anywhere) — a router that calls stagnantLidRegimeOf(archetype) to obtain the strong-branch regime FAILS AC-0; it MUST instead map the E1 coordinate geodynamicRegime==='stagnant' → the single strong constant 'venus-stagnant-lid' (must-fix #3). Source-of-truth check (must-fix #4): the router IMPORTS its classification constants L_STRONG/SHOULDER_LO (and HEATPIPE_PEG) from e1Regime.js — grep asserts it does NOT re-declare the literals 0.63/0.15 (single source of truth; no second constant that could diverge from computeE1's geodynamicRegime at the V2-3 flip). Accepted debt to declare: dispatch (writeBodyRelief) still routes on PRESET_ARCHETYPE — that is the un-wired seam, retired at V2-3; the router itself is archetype-free. (2) Named consumer: every field the router emits has a named reader from the ROADMAP-v2 DAG — fineClass → AC-CONFORMANCE-FINE now + V2-3 dispatch; primitiveId enum + familyOf → V2-2b interpenetration statistic (gate-3); corner-diag pass-through → existing magmaProbe/stagnantLidProbe. No dead fields. (3) Taxonomy registration: if any lab control is added it registers in planet-archetypes.js; the deferred route probe is console/_lab-only (no *Enabled key) ⇒ drift guards stay green with no taxonomy change.",
+      "verifyVia": {
+        "input": "Read the diff + BUILD-NOTES conformance table (reproduce the V2-1 BUILD-NOTES Table A/B worked-example discipline); grep-audit the router for any archetype/label input INCLUDING stagnantLidRegimeOf( and any archetype-string arg, and assert the router IMPORTS L_STRONG/SHOULDER_LO from e1Regime.js (no re-declared 0.63/0.15 literals); npx vitest run tests/planet-archetypes.test.js",
+        "observable": "All three checks pass; each emitted field's consumer column cites a ROADMAP-v2 increment; router reads no e1.label, no PRESET_ARCHETYPE, and does not call stagnantLidRegimeOf(archetype); router imports L_STRONG/SHOULDER_LO from e1Regime.js (no re-declaration); drift guards green (no taxonomy change)"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC1",
+      "statement": "Determinism + 'lid:' namespace RESERVED (§5.3 AC1, the V2-2a slice). The router is a pure classifier + delegation: zero Math.random / Date.now; classifyLidPath/isUnbrokenLidPath draw NO alea at all (they are pure functions of the E1 tuple); the corner writers keep their own disjoint 'magma:'/'stagnant:' streams, called UNCHANGED. The 'lid:' alea namespace (the V2-2b mixed-interior 'lid:strength:'/'lid:yield:' streams, gate-2 PG-1) is RESERVED — a grep asserts ZERO 'lid:' alea draws exist in V2-2a source. Identical (e1, macroSeed, opts) → identical routing decision and identical delegated output.",
+      "verifyVia": {
+        "input": "Headless vitest: grep the new lidResponse.js for Math.random/Date.now and for any alea('lid:...') draw; repeat-call the router on a fixed (e1, carrier, opts) and assert identical fineClass + identical carrier.height",
+        "observable": "Zero RNG; zero 'lid:' draws (namespace reserved, unused); classifier is a pure function; repeat calls byte-equal"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-BYTE-WEAK-REF",
+      "statement": "Byte-identity at the weak reference (§5.3 AC-BYTE-WEAK-REF). A body whose E1 classifies pure-weak at the MAGMA_REF tuner-neutral vector (magmatism.js:93 {tidalHeating:0, age:4.5, massGravity:0.9} → magmaDriversToTune === null → the DEFAULTS branch) routed through writeLidResponseSphere produces carrier.height + all magma diag arrays (plumeId, A_e, etc.) BIT-FOR-BIT identical to writeMagmatismSphere(carrier, drivers, {macroSeed, locked, T_ss, tune:null}) called directly on a fresh carrier built from the same mesh. Dual-carrier Float32Array equality (the magmatism-structure 'run twice' idiom, worldengine-base-magmatism-structure.test.js:78-85).",
+      "verifyVia": {
+        "input": "Headless vitest: two fresh carriers on the same mesh (makeSphereField(buildIrregularSphere(TARGET_N,LLOYD)) or the shipped carrierOf harness); one via the router (pure-weak), one via writeMagmatismSphere direct with identical args; over seeds {1,2,3,7,42}",
+        "observable": "Float32Array equality of carrier.height + magma diag arrays, every seed"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-BYTE-STRONG-REF",
+      "statement": "Byte-identity at the strong reference (§5.3 AC-BYTE-STRONG-REF). A body whose E1 classifies pure-strong at the Venus reference vector routed through writeLidResponseSphere produces carrier.height + all stagnant diag arrays identical to writeStagnantLidReliefSphere(carrier, grainDrivers, {macroSeed, regime:'venus-stagnant-lid'}) called directly. NOTE the corner asymmetry (grounding Q3): the strong branch passes drivers = grainDrivers (DEFAULT_GRAIN_DRIVERS — NOT bodyDrivers), {macroSeed, regime}, tune omitted (→null→DEFAULTS). CRITICAL (must-fix #3): the ROUTER resolves regime ARCHETYPE-FREE — it maps the E1 coordinate geodynamicRegime==='stagnant' → the single V2-2a strong constant 'venus-stagnant-lid'. It MUST NOT call stagnantLidRegimeOf(archetype) (stagnantLid.js:78 takes a preset LABEL — forbidden by the 'never labels' invariant + AC-0 grep). This is argument-for-argument identical to planet-lod-rivers.js:491 EXCEPT the regime source is the E1 coordinate, not the archetype string. stagnantLidRegimeOf(archetype,locked) is used ONLY inside the TEST to compute the expected regime value; the router never imports or calls it. A uniform bundle across both corners would break byte-identity.",
+      "verifyVia": {
+        "input": "Headless vitest: dual-carrier equality (router pure-strong vs writeStagnantLidReliefSphere direct) over seeds {1,2,3,7,42}; assert the strong branch passes grainDrivers + regime, never bodyDrivers/T_ss/tune; grep-assert the router resolves regime from geodynamicRegime==='stagnant' and does NOT call stagnantLidRegimeOf / read any archetype string",
+        "observable": "Float32Array equality of carrier.height + stagnant diag arrays, every seed; router-resolved regime === 'venus-stagnant-lid' derived from the E1 coordinate (archetype-free); strong-branch args otherwise match :491"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-BYTE-LAVA",
+      "statement": "Byte-identity at the real Lava preset vector (§5.3 AC-BYTE-LAVA; D3-MF3 — the shipped world the discipline actually protects). DRIVER_PRESETS['Lava (hot airless)'] (locked:true, T_eq:950, volatileFraction:0.02) → E1 pure-weak via m_hp (huge margin) → a NON-NULL magmaDriversToTune (raw tidalHeating → high H → non-null tune), and T_ss = 950*1.4 = 1330 > LIQUIDUS(1300) → a narrow substellar basin. Router output === writeMagmatismSphere(carrier, bodyDrivers, {macroSeed, locked:true, T_ss:1330, tune:magmaDriversToTune(bodyDrivers)}) called directly, full Float32Array equality including the basin nodes. Exercises the tune≠null path (distinct from AC-BYTE-WEAK-REF's tune=null path).",
+      "verifyVia": {
+        "input": "Headless vitest: build the Lava E1 via computeE1(deriveConditionVector(fp,u,radiusEarth), macroSeed); route it and compare against the direct writeMagmatismSphere call with the pre-gate T_ss and magmaDriversToTune(bodyDrivers); seeds {1,2,3,7,42}",
+        "observable": "carrier.height + diag arrays byte-equal; magmaDriversToTune(Lava) is non-null and identical on both sides; the T_ss=1330 basin is identical"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-BYTE-MAGMA",
+      "statement": "Byte-identity at the real Magma preset vector (§5.3 AC-BYTE-MAGMA; D3-MF3, the wide-basin case that the pre-gate T_ss requirement exists for). DRIVER_PRESETS['Magma (K2-141b)'] (locked:true, T_eq:2000, volatileFraction:0) → E1 pure-weak (m_hp +7.6e7, also L≈0 from melt) → non-null magmaDriversToTune, and T_ss = 2000*1.4 = 2800 ≫ LIQUIDUS(1300) → a WIDE substellar magma-ocean basin (thetaSea = acos((1300/2800)^4)). Router output === writeMagmatismSphere(carrier, bodyDrivers, {macroSeed, locked:true, T_ss:2800, tune:magmaDriversToTune(bodyDrivers)}) direct, full Float32Array equality including the wide-basin nodes. This is the AC that fails if T_ss is computed after the gate or re-derived with any drift (AC-TSS-PRE-GATE is its structural sibling).",
+      "verifyVia": {
+        "input": "Headless vitest: Magma E1 via computeE1; route vs direct writeMagmatismSphere with pre-gate T_ss=2800 + magmaDriversToTune; seeds {1,2,3,7,42}; assert magmaOceanMask non-empty (basin present) and byte-equal",
+        "observable": "carrier.height + magmaOceanMask + thetaSea/D_flood byte-equal on both sides; the wide basin is bit-for-bit identical"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-TSS-PRE-GATE",
+      "statement": "T_ss computed BEFORE the classification gate and passed through UNCHANGED (D3-MF3, grounding Q6). The caller computes T_ss = locked ? (T_eq ?? 0) * 1.4 : 0 — reproducing planet-lod-rivers.js:476 EXACTLY — and passes it to writeLidResponseSphere in opts; the router's pure-weak branch forwards it verbatim to writeMagmatismSphere with no re-derivation and no touch of the *1.4 expression. Structural (not output-only) check: the router source contains NO internal T_ss computation on the weak path; T_ss arrives precomputed. This is what guarantees Lava's 1330 and Magma's 2800 basins are byte-identical regardless of gate ordering — the classification cannot perturb the basin because T_ss is fixed before it runs.",
+      "verifyVia": {
+        "input": "Headless vitest + source read: assert the router forwards opts.T_ss unchanged (mutation/identity check across a matrix of {locked, T_eq} inputs vs the reference expression); grep the weak path for any internal (T_eq??0)*1.4 or T_ss reassignment",
+        "observable": "Router-forwarded T_ss === locked?(T_eq??0)*1.4:0 for every {locked,T_eq}; zero internal T_ss derivation on the weak path; ordering-independent basin (AC-BYTE-MAGMA passes)"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-TUNE-NULL",
+      "statement": "Weak-side tune-null anchor preserved (§5.3 AC-TUNE-NULL, the V2-2a slice). The router reuses the EXISTING magmaDriversToTune (magmatism.js:113) for the weak side — NO new lidDriversToTune alias (grounding Q2). magmaDriversToTune(MAGMA_REF) === null holds (magmatism.js:124), so the MAGMA_REF weak path takes the untouched DEFAULTS branch (this is the mechanical backing of AC-BYTE-WEAK-REF). The stagnant-side stagnantDriversToTune(Venus)→null of the §5.3 table is NOT in V2-2a — stagnantDriversToTune does not exist today (§3.2 #4b, stagnant is void drivers); building it is the from-scratch V2-2b response. So this AC is WEAK-SIDE ONLY.",
+      "verifyVia": {
+        "input": "Headless vitest: assert magmaDriversToTune(MAGMA_REF) === null; assert the router imports magmaDriversToTune and defines NO lidDriversToTune; assert no stagnantDriversToTune symbol is introduced",
+        "observable": "magmaDriversToTune(MAGMA_REF) === null; router reuses the existing builder; no new tune builder / no stagnant tune builder added"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-CONFORMANCE-FINE",
+      "statement": "Router classifier correctness (§5.3 AC-CONFORMANCE(FINE) + gate-boundary asserts). (a) classifyLidPath over the 15 archetype-mapped presets (driver-presets.js): Lava/Magma → 'pure-weak', Venus → 'pure-strong', every other shipped preset → 'off-pilot', and NONE → 'mixed' (a preset drifting into mixed FAILS). (b) Hand-set boundary vectors assert the pinned defaults: L_STRONG=0.63 cut (a vector at L=0.64 rawTidal=0 → pure-strong; L=0.62 → mixed); the tidal-shoulder rule PG-5 (a would-be pure-strong vector, L≥0.63, but rawTidal≥SHOULDER_LO(0.15) → 'mixed', NOT pure-strong — else the m_hp seam cliffs); m_hp fires before L (a high-L high-m_hp vector → pure-weak, not pure-strong). (c) Margin asserts: Lava/Magma sit well inside pure-weak (m_hp +7.8e5/+7.6e7); Venus L 0.728 is +0.10 above L_STRONG, Mars L 0.551 is −0.08 below (comfortably not pure-strong). Failures print the full e1 tuple for the offending vector.",
+      "verifyVia": {
+        "input": "Headless vitest: computeE1 over the 15 mapped presets → classifyLidPath; plus hand-set condition vectors at (L=0.64,rt=0), (L=0.62,rt=0), (L=0.70,rt=0.20 tidal-shoulder), (high m_hp) — mirrors the gate-1/gate-2 .mjs calib scripts",
+        "observable": "15/15 classify {Lava,Magma}=pure-weak, Venus=pure-strong, rest=off-pilot, none=mixed; the four boundary vectors classify per the pinned L_STRONG/SHOULDER_LO/m_hp-first rules; margins hold"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-SUBTRACTIVE-GATE",
+      "statement": "The subtractive gate keeps Mars + every despun rocky body OFF the pilot (D3-MF1, §5.1). isUnbrokenLidPath(e1) returns true ONLY for rocky/magma-ocean AND (heat-pipe edge OR hot-surface-stagnant edge); it returns FALSE for a cold-dead rocky body (Mars: cls rocky, geodynamicRegime 'dead-lid', L 0.551, Φ 0.268 — neither heat-pipe nor hot-surface-stagnant) and for any other currently-despun rocky body, so they stay on their fallback and the flip clobbers no shipped despun world. The two despun destinations are never conflated: shell 'eyeball-despun' (path:'shell') for LOCKED bodies vs the final zonal fallback (path:'despun') for UNLOCKED bodies — real Mars is unlocked → final despun (§5.1 note). Authored-label exotics (crystal/technogenic/geometric — no driver signature) are excluded by the §1 label carve-out, not by hoping a scalar separates them.",
+      "verifyVia": {
+        "input": "Headless vitest: isUnbrokenLidPath over the Mars hand-set D-vector + a despun rocky + Lava/Magma/Venus; assert the two despun paths resolve distinctly (locked→shell eyeball-despun, unlocked→despun); assert crystal/technogenic fall to the label carve-out",
+        "observable": "isUnbrokenLidPath true ONLY for {heat-pipe, hot-surface-stagnant} rocky; false for Mars/dead-lid + despun; locked vs unlocked despun destinations distinct; exotics carved out"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-MIXED-STUB",
+      "statement": "Mixed vectors hit an explicit-unimplemented marker with NO height written (§5.5, grounding Q5). writeLidResponseSphere on a fineClass 'mixed' vector (reachable in V2-2a only by a hand-set mid-axis / Mars-like vector — no shipped preset classifies mixed) returns the marker { path:'lid-mixed', fineClass:'mixed', unimplemented:true } and LEAVES carrier.height UNWRITTEN (byte-unchanged from its pre-call state — no new height-writing machinery this increment). No 'lid:' alea draw fires (AC1). This is the exact branch V2-2b swaps the real mixed-interior machinery into — a clean seam. (Return-marker, NOT a throw — so classification tests + any future probe read the fine-class without try/catch.)",
+      "verifyVia": {
+        "input": "Headless vitest: pre-fill carrier.height with a sentinel, call writeLidResponseSphere on a hand-set mixed vector, assert the marker shape and that carrier.height is byte-unchanged from the sentinel; assert no 'lid:' draw occurred",
+        "observable": "Return === {path:'lid-mixed', fineClass:'mixed', unimplemented:true}; carrier.height byte-identical to the pre-call sentinel; zero 'lid:' draws"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-PRIMITIVEID-SCHEMA",
+      "statement": "The primitiveId instrument SCHEMA is authored + exported, byte-safe (gate-3 Open-Q1/Q2, grounding Q1). A primitiveId enum (shield, caldera, patera, lava-plain, corona, tessera, rift, stagnant-basaltic-plain, ...) and a familyOf map (PIERCE=1 for magmatic/weak-lid expressions, TENT=0 for strong-lid) are exported as constants BESIDE writeLidResponseSphere, importable by both the (future V2-2b) mixed writer and the (V2-2b) gate-3 metric. LOAD-BEARING: lava-plain and stagnant-basaltic-plain are DISTINCT enum ids (Open-Q2 — familyOf must route lava-plain→PIERCE and basaltic-plain→TENT, else the Io-vs-Venus contrast blurs at the exact seam the statistic guards). OPTIONAL byte-safe corner emit: a uniform per-node primitiveId:Int32Array from the corner paths (pure-weak → one PIERCE-family id, pure-strong → one TENT-family id) — a NEW field, NOT one of the 5 hashed carrier fields (height/grainAngle/grainMag/regime/faultDensity), so it cannot move a golden. V2-2a does NOT populate the multi-valued mixed primitiveId, nor co-emit centerId, nor run Π=C·F (all V2-2b).",
+      "verifyVia": {
+        "input": "Headless vitest: import the enum + familyOf; assert lava-plain !== stagnant-basaltic-plain and familyOf routes each to the correct PIERCE/TENT family; if the optional corner emit is built, assert it is a new field and the 75-golden hash set (AC-ZERO-CLOBBER) is unchanged",
+        "observable": "Enum + familyOf exported; lava-plain and stagnant-basaltic-plain distinct ids with correct families; any corner primitiveId emit leaves the 5 hashed fields byte-identical"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "statement": "Zero behavioral change for every shipped preset — the dispatch seam is byte-untouched (§5.3 AC-ZERO-CLOBBER). Because the router is NOT wired into writeBodyRelief (that flip is V2-3), the standing 75-golden byte-identity harness (tests/v2-0-byte-identity.test.js — 15 presets × seeds [1,2,3,7,42], hashing height/grainAngle/grainMag/regime/faultDensity, captured at 7441c92, NEVER re-captured) stays 75/75 green UNTOUCHED — that un-changed green IS the zero-clobber proof for the shipped dispatch. The plate + shell + volcanic + stagnant sibling gate suites pass unchanged (byte-diff of plate/shell carrier output pre/post). Full vitest suite green with no pre-existing test dropped (the 4 known unrelated failures — KnownObjects ×3, GalacticFeatures ×1 — excluded as known, not newly regressed).",
+      "verifyVia": {
+        "input": "npx vitest run tests/v2-0-byte-identity.test.js (75-golden) + the plate/shell/volcanic/stagnant own suites + npx vitest run (full suite); grep-audit that planet-lod-rivers.js writeBodyRelief does NOT import or call writeLidResponseSphere",
+        "observable": "75/75 golden hashes unchanged; all sibling suites green; router absent from the dispatch seam; no new failures vs the pre-change baseline"
+      },
+      "layer": "integration"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "The E1 tuple from computeE1 (e1Regime.js:155) — the router consumes compositionClass, geodynamicRegime, L, m_hp, and cv.rawTidalIoRatio; NEVER e1.label (§1 invariant). V2-1 VERIFIED, computeE1 live, dispatch untouched (ac307aa)",
+      "The two corner writers imported UNCHANGED as expression kernels: writeMagmatismSphere (magmatism.js:170) + magmaDriversToTune (magmatism.js:113) + MAGMA_REF (magmatism.js:93); writeStagnantLidReliefSphere (stagnantLid.js:170). The strong-branch regime is resolved ARCHETYPE-FREE from the E1 coordinate geodynamicRegime==='stagnant' → 'venus-stagnant-lid' (the single V2-2a strong regime; must-fix #3); stagnantLidRegimeOf(archetype,locked) (stagnantLid.js:78) takes a preset LABEL and is imported ONLY by the TEST to compute the expected regime value — NEVER by the router (AC-0 grep denylist)",
+      "Precomputed T_ss in opts: caller computes locked ? (T_eq ?? 0) * 1.4 : 0 (the shipped F41 convention, planet-lod-rivers.js:476) — the router forwards it verbatim, never re-derives (D3-MF3)",
+      "driver-presets.js (DRIVER_PRESETS 17 vectors; PRESET_ARCHETYPE 15-entry map) — the headless conformance-oracle source (V2-0 deliverable); Lava/Magma → 'lava', Venus → 'stagnant-lid'",
+      "The shipped headless carrier harness makeSphereField(buildIrregularSphere(TARGET_N,LLOYD)) (tests/worldengine-base-magmatism-structure.test.js:28; TARGET_N=700,LLOYD=2 golden mesh, fixtures/v2-0-carrier-golden.mjs) + macroSeed (existing lab seed plumbing)",
+      "Pinned boundary constants are the SINGLE source of truth on e1Regime.js — HEATPIPE_PEG=0.45 (:40, already `export const`); L_STRONG=0.63 (:43) and SHOULDER_LO=0.15 (:44) are currently module-private `const`, so V2-2a makes ONE byte-safe export-only edit (adds `export` to both — changes no runtime value, moves no golden) so the router IMPORTS all three rather than re-declaring them (must-fix #4). This makes drift structurally impossible: the router's classifyLidPath and computeE1's own geodynamicRegime read the SAME constants, so the V2-3 dispatch flip cannot route differently after a UAT retune (gate-1 §4, gate-2 PG-5)"
+    ],
+    "outputs": [
+      "src/worldengine/base/lidResponse.js exporting writeLidResponseSphere(carrier, drivers, opts) + classifyLidPath(e1, rawTidal) + isUnbrokenLidPath(e1) — a pure module, called directly in headless vitest, NEVER wired into the render/dispatch path this increment (the V2-1 shadow discipline, one layer up)",
+      "For pure-weak/pure-strong: carrier.height REPLACE via the UNCHANGED corner writer (byte-identical) + the corner diag arrays passed through (readers: existing magmaProbe/stagnantLidProbe)",
+      "For mixed: an explicit-unimplemented return-marker {path:'lid-mixed', fineClass:'mixed', unimplemented:true}, carrier.height UNWRITTEN (reader: AC-MIXED-STUB now; V2-2b swaps real machinery in at this branch)",
+      "classifyLidPath fineClass (reader: AC-CONFORMANCE-FINE now; V2-3 dispatch flip) + isUnbrokenLidPath boolean (reader: AC-SUBTRACTIVE-GATE now; V2-3 widening)",
+      "The primitiveId enum + familyOf map as exported constants (lava-plain ≠ stagnant-basaltic-plain) — readers: V2-2b mixed writer + the gate-3 Π=C·F interpenetration statistic; plus an OPTIONAL byte-safe uniform per-node primitiveId:Int32Array corner emit (a new field, not one of the 5 hashed golden fields)",
+      "The 'lid:' alea namespace RESERVED (no draws this increment) — reader: V2-2b 'lid:strength:'/'lid:yield:' mixed-interior streams (gate-2 PG-1)"
+    ],
+    "mustStayWorking": [
+      "The 75-golden byte-identity gate (tests/v2-0-byte-identity.test.js — captured 7441c92, NEVER re-capture) stays 75/75 green UNTOUCHED — the router is un-wired, so the harness never reaches it (this un-changed green IS AC-ZERO-CLOBBER)",
+      "The weak-side tune-null anchor: magmaDriversToTune(MAGMA_REF) === null (magmatism.js:124) — no new tune builder, no lidDriversToTune alias, no stagnantDriversToTune introduced",
+      "The plate / shell / volcanic / stagnant own gate suites + planet-archetypes.test.js drift guards (taxonomy registration, *Enabled namespace reservation)",
+      "Dispatch (writeBodyRelief, planet-lod-rivers.js:448) routes on PRESET_ARCHETYPE — the router has ZERO dispatch influence this increment (un-wired; the V2-3 flip is out of scope). The two byte-preserved corner call sites (:481-482 weak, :491 strong) are the exact argument templates the router mirrors",
+      "The E1 module's RUNTIME BEHAVIOR is unchanged — computeE1's output for every body stays byte-identical; V2-2a consumes E1's output. The ONLY permitted edit to e1Regime.js is export-only and byte-safe (must-fix #4): add the `export` keyword to L_STRONG (:43) and SHOULDER_LO (:44) — HEATPIPE_PEG (:40) is already exported — so the router imports all three classification constants from their single source of truth. This changes no runtime value and moves no golden (the 75-golden hashes carrier fields, not the export surface). The router MUST NOT re-declare 0.63/0.15 as a second source (AC-0 grep asserts import-not-redeclare)",
+      "Full vitest suite minus the 4 pre-existing known failures (KnownObjects ×3, GalacticFeatures ×1 — unrelated, must not grow)"
+    ]
+  }
+}
