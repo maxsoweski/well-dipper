@@ -67,15 +67,22 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > atmosphere (nested, inert), conformance oracle (13 equal + 2 adjudicated), `_lab.e1Probe()` + console-only weight
 > override. Dispatch untouched — PRESET_ARCHETYPE still routes everything; 75/75 goldens green throughout.
 > ⚠ Condition vector still lacks `tidalState.locked`/T_ss — recorded V2-3 plumbing note (BUILD-PLAN §4.5).
-> **▶ V2-2a (pilot FIRST HALF: Option-A router + both anchors) — SCOPED `6b31e51`, AWAITING MAX GREENLIGHT.**
-> `WORKSTREAMS/world-engine-v2-2a-router-anchors-2026-07-03/` (GROUNDING + intent + contract, schema-valid,
-> status "scoping"; scoped via workflow per Max's via-workflows instruction). 13 headless ACs: 4 byte ACs
-> (both anchors + real Lava/Magma w/ T_ss pre-gate), conformance-fine at the gate-pinned boundaries
-> (L_STRONG 0.63 / SHOULDER_LO 0.15 / m_hp-first), subtractive gate, mixed→explicit-unimplemented stub,
-> primitiveId SCHEMA only, zero-clobber; NO UAT AC (byte-identical to already-UAT'd worlds — V2-0 pattern;
-> the pilot UAT card belongs to V2-2b with the stagnant response + falsification worlds).
-> **NEXT = Max greenlights V2-2a contract → build via workflows (plan → slices → verify).** Then V2-2b scope.
-> Atmosphere #3b gate OPEN (`~/briefings/handoff-world-engine-atmosphere-v2-pickup-2026-07-02.md`).
+> **▶ V2-2a (pilot FIRST HALF: Option-A router + both anchors) — ✅ VERIFIED `02cb221` (2026-07-04, Max-greenlit;
+> no UAT gate, pure routing/plumbing).** 13/13 ACs PASS at 3/3 adversarial (verify `wf_6d805ba6-1f7`, unit+integration
+> PASS). New `src/worldengine/base/lidResponse.js`: `classifyLidPath` (label-free — reads {compositionClass, m_hp, L}
+> + rawTidal, gate-pinned L_STRONG 0.63/SHOULDER_LO 0.15/m_hp-first, imported from e1Regime.js) + `isUnbrokenLidPath`
+> subtractive gate + `writeLidResponseSphere` delegating pure-weak→writeMagmatismSphere / pure-strong→
+> writeStagnantLidReliefSphere UNCHANGED (argument-for-argument vs rivers:481-491; 4 byte anchors green incl. real
+> Lava/Magma w/ T_ss pre-gate 2800K basin) + mixed→explicit-unimplemented stub + primitiveId enum/familyOf SCHEMA
+> (4 PIERCE/4 TENT, lava-plain≠basaltic-plain). Dispatch UNTOUCHED (router un-wired; 75/75 goldens green throughout);
+> only shipped edits = e1Regime.js export-only + one-line shadow-audit exclusion. Built via adversarial plan
+> `wf_98ea7173-9eb` (byte-safety must-fix: shadow-audit would've gone red on lidResponse importing e1Regime) +
+> 3-slice build `wf_39ebc1c8-847` (`9892275`→`5e726a7`→`02cb221`; Slice A auth-crashed mid-run under Fable, re-ran
+> clean re-verifying the partial drafts). ⚠ Router weak branch omits rivers:483 appliedTune diag mutation — inert
+> (magmaProbe recomputes), reconcile at V2-3. ⚠ MIXED_LO=0.35 local dup of e1Regime MOBILE_L — export at V2-2b/V2-3.
+> **NEXT = scope V2-2b (mixed interior + stagnant-side response + the 3 §5.4 falsification worlds + the pilot UAT
+> card)** — THE half that answers Max's "samey within a world." Then V2-3 dispatch flip. Atmosphere #3b gate OPEN
+> (`~/briefings/handoff-world-engine-atmosphere-v2-pickup-2026-07-02.md`).
 > (Prior ACTIVE block, superseded: #4b VERIFIED_PENDING_MAX — now SHIPPED per above.)
 > **▶ #4b (Venus stagnant-lid relief writer) — ✅ VERIFIED_PENDING_MAX `0a95ed9`.** New three-free
 > `src/worldengine/base/stagnantLid.js` (`writeStagnantLidReliefSphere`): ONE seeded mantle-plume field (BAT logic) →
