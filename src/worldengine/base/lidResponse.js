@@ -204,12 +204,18 @@ const uniformPrimitiveId = (carrier, id) => new Int32Array(carrier.count ?? carr
  *                                     and passes it in; the router FORWARDS it verbatim to the weak corner and
  *                                     NEVER re-derives it (AC-TSS-PRE-GATE — no internal T_ss derivation here).
  * @param {object}  [opts.grainDrivers]  DEFAULT_GRAIN_DRIVERS for the strong corner (argument-for-argument :491).
- * @returns {{path:string, fineClass:string, primitiveId?:Int32Array, magmaDiag?:object, stagnantDiag?:object, unimplemented?:boolean}}
+ * @param {Function|null} [opts.interpen=null]  the Π=C·F instrument, INJECTED (never imported — MF2). Forwarded
+ *                                     verbatim to the mixed composer, which stashes {Pi,M,legibleByFamily} in
+ *                                     mixedDiag when it is a function. Every PRODUCTION caller passes nothing →
+ *                                     null → byte-inert; only the lab render seam (route()'s labLidOverride hook)
+ *                                     supplies it. The router itself never imports interpenetration.js (that would
+ *                                     close the router↔composer↔statistic cycle) — the injection stays one-way.
+ * @returns {{path:string, fineClass:string, primitiveId?:Int32Array, centerId?:Int32Array, magmaDiag?:object, stagnantDiag?:object, mixedDiag?:object, unimplemented?:boolean}}
  *          On the pure corners `primitiveId` is a uniform per-node Int32Array (a NEW return field, NOT a
  *          hashed carrier field — R-C4); on mixed / off-pilot it is absent (unimplemented marker).
  */
 export function writeLidResponseSphere(carrier, drivers, {
-  e1, rawTidal, macroSeed = 0, locked = false, T_ss = 0, grainDrivers,
+  e1, rawTidal, macroSeed = 0, locked = false, T_ss = 0, grainDrivers, interpen = null,
 } = {}) {
   const fineClass = classifyLidPath(e1, rawTidal);
   switch (fineClass) {
@@ -238,7 +244,9 @@ export function writeLidResponseSphere(carrier, drivers, {
       // preserved basaltic-plains datum in the lows, analytic rift corridors between centers. It emits the
       // multi-valued primitiveId (NOT a uniform corner fill) + the per-node centerId + a mixedDiag. The
       // 'mixed' return drops `unimplemented` and stays within the documented return type.
-      const { primitiveId, centerId, mixedDiag } = writeMixedInteriorSphere(carrier, { e1, rawTidal, macroSeed });
+      // interpen (the Π=C·F instrument) is INJECTED, never imported (MF2) — null on every production caller,
+      // supplied only by the lab render seam so mixedDiag carries Pi/M/legibleByFamily for the mixed probe.
+      const { primitiveId, centerId, mixedDiag } = writeMixedInteriorSphere(carrier, { e1, rawTidal, macroSeed, interpen });
       return { path: 'lid-mixed', fineClass, primitiveId, centerId, mixedDiag };
     }
     default:

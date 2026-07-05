@@ -32,6 +32,13 @@ import { writeShellReliefSphere, shellRegimeOf } from './src/worldengine/base/sh
 import { writeMagmatismSphere, magmaDriversToTune } from './src/worldengine/base/magmatism.js';
 import { writeStagnantLidReliefSphere, stagnantLidRegimeOf, stagnantDriversToTune } from './src/worldengine/base/stagnantLid.js';
 import { makeSphereField } from './src/worldengine/base/sphereField.js';
+// V2-2b-2a Slice C — the LAB-ONLY mixed-interior render seam (MF1 Option B). route() forwards a hand-set E1
+// coordinate through the V2-2a lid-response router (classifyLidPath → the mixed composer WRITES carrier.height),
+// and injects the Π=C·F instrument (one-way: rivers.js is the route/lab boundary, NOT a base/ writer, so the
+// injection never closes the router↔composer↔statistic cycle). Both imports are inert until a caller passes a
+// non-null labLidOverride; every PRODUCTION caller passes none → route() stays byte-inert (AC-ZERO-CLOBBER).
+import { writeLidResponseSphere } from './src/worldengine/base/lidResponse.js';
+import { interpenetration } from './src/worldengine/base/interpenetration.js';
 
 // ───────────────────────── Defaults (from rivers-terrain-lab.main.js) ─────────────────────
 export const DEFAULT_PARAMS = Object.freeze({
@@ -1146,6 +1153,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
   let shellDiag = null;     // shell-relief increment: the despun/ice-shell diagnostics on the shell path (null off it); read by the live shellProbe
   let magmaDiag = null;     // magmatism increment: the mantle-plume diagnostics on the volcanic path (null off it); read by the live magmaProbe
   let stagnantDiag = null;  // stagnant-lid increment: the Venus plume-field diagnostics (null off it); read by the live stagnantLidProbe
+  let mixedDiag = null;     // V2-2b-2a mixed-interior increment: the composer's diag + primitiveId histogram (null off the LAB mixed override); read by the live mixedProbe
   let lastHeightSource = 'sampler';  // AC7: 'carrier' when the router read the baked plate-written carrier.height, else 'sampler'
   // WS4 T8: the grain cube (whole-sphere strike field) + a bake counter. grainBakeCount increments
   // once per route() (the bake-once cadence — camera/time changes never call route(), so they never
@@ -1184,7 +1192,8 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
   }
 
   function route({ seaMode = 'histogram', targetFraction = params.TARGET_OCEAN_FRACTION, radiusEarth = null, widthSeed = null,
-                   grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, archetype = null, locked = false, T_eq = null, label = 'route' } = {}) {
+                   grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, archetype = null, locked = false, T_eq = null,
+                   labLidOverride = null, label = 'route' } = {}) {
     const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
     ensureMesh();
     // ── Baked-relief Phase B/D: build the sphere-native E6 height field as DATA. The SAME carrier is
@@ -1210,6 +1219,35 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     shellDiag = relief.shellDiag;                       // null off the shell path
     magmaDiag = relief.magmaDiag;                       // null off the volcanic path
     stagnantDiag = relief.stagnantDiag;                 // null off the stagnant-lid path
+    // ── V2-2b-2a Slice C (MF1 Option B) — LAB-ONLY mixed-interior override. When the lab passes a hand-set E1
+    //    coordinate (labLidOverride = {e1, rawTidal, macroSeed}), route it through the V2-2a lid-response router:
+    //    classifyLidPath places the body (the Tharsis vector → 'mixed'), and on the mixed branch the composer
+    //    WRITES carrier.height (REPLACE) over its own seeded 'lid:' center field. The Π=C·F instrument is
+    //    INJECTED here (never imported by a base/ writer — MF2). The swapped carrier.height rides the SAME
+    //    bakedOn re-point + bakeHeightCube path below, so the mixed relief renders for free. Every PRODUCTION
+    //    caller passes labLidOverride = null → this branch is skipped → route() stays byte-inert (the 75-golden
+    //    harness bypasses route() entirely; AC-ZERO-CLOBBER). The multi-valued primitiveId histogram + the
+    //    composer diag are stashed in mixedDiag for the SCALAR mixed probe (per-node arrays never leave route()).
+    mixedDiag = null;
+    if (labLidOverride && labLidOverride.e1) {
+      const lidRes = writeLidResponseSphere(carrier, bodyDrivers, {
+        e1: labLidOverride.e1,
+        rawTidal: labLidOverride.rawTidal != null ? labLidOverride.rawTidal : 0,
+        macroSeed: labLidOverride.macroSeed != null ? labLidOverride.macroSeed : macroSeed,
+        grainDrivers, locked, interpen: interpenetration,
+      });
+      if (lidRes.mixedDiag && lidRes.primitiveId) {
+        // Small (≤8-key) primitiveId histogram, built HERE so the probe reads scalars only — the per-node
+        // Int32Array never leaves route() (a full array overflows the chrome-devtools token budget).
+        const pid = lidRes.primitiveId, hist = {};
+        for (let i = 0; i < pid.length; i++) { const k = pid[i]; hist[k] = (hist[k] || 0) + 1; }
+        mixedDiag = { ...lidRes.mixedDiag, path: lidRes.path, fineClass: lidRes.fineClass, primitiveIdHistogram: hist };
+      } else {
+        // The hand-set coordinate did NOT classify 'mixed' (pure-weak / pure-strong / off-pilot). Surface the
+        // honest path so the probe reports the real classification, not a stale mixed diag.
+        mixedDiag = { path: lidRes.path, fineClass: lidRes.fineClass, unimplemented: !!lidRes.unimplemented };
+      }
+    }
     const reliefGrad = computeAdjGradient(carrier);     // shading-only tangent gradient (Phase B.3)
     // ── Phase D re-point (SPLIT-TRAP #5 guard): the router's height source is gated on the SAME
     // uReliefBakeStrength uniform the renderer (Phase C) gates on. strength>0 ⇒ BOTH read carrier.height
@@ -1272,6 +1310,10 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     get shellDiag() { return shellDiag; },
     get magmaDiag() { return magmaDiag; },
     get stagnantDiag() { return stagnantDiag; },
+    // V2-2b-2a mixed-interior increment: the composer diag (beltScale/pierce/Pi/M/legibleByFamily) + the
+    // ≤8-key primitiveId histogram, stashed by the labLidOverride branch. null on every production route (the
+    // override rides the LAB mixed-drivers folder only) — read by the live mixedProbe (AC-THARSIS).
+    get mixedDiag() { return mixedDiag; },
     get heightSource() { return lastHeightSource; },
     get carveTexture() { return carve ? carve.texture : null; },
     // WS4 T8: the baked grain cube texture (the host pushes it to uTectonicGrainCube) + the bake

@@ -2690,6 +2690,21 @@
     // tuple/probe sees it, never route()). Console-only ⇒ no dat.GUI binding ⇒ no planet-archetypes.js
     // taxonomy registration needed (AC-0 check 3). A future GUI toggle MUST register there.
     let _e1WeightOverride = null;       // { mobile, episodic, stagnant } | null (frozen default)
+    // ── V2-2b-2a Slice C: the LAB-ONLY mixed-interior drivers. Unlike the driver sliders above (which drive the
+    //    condition→computeE1 pipeline on a shipped preset), these dial the RESOLVED E1 coordinate DIRECTLY —
+    //    L (mixed interior [0.35,0.63)), Φ (compressed convective vigor), n (upwelling-center count), tidal
+    //    (Io-ratio → m_hp + rawTidal). They feed route()'s labLidOverride hook (MF1 Option B): the V2-2a
+    //    lid-response router classifies the hand-set coordinate ('mixed' for Tharsis) and the composer WRITES
+    //    carrier.height — a LAB-ONLY path (production dispatch stays on PRESET_ARCHETYPE, so NO shipped preset
+    //    reaches it → the 75-golden is structurally safe). The default vector IS the hand-set Tharsis coordinate
+    //    (gate-2 §4: L 0.551, Φ 0.27, n 6, tidally quiet → classifies 'mixed' via cut #5).
+    const mixedOv = { L: 0.551, Φ: 0.27, n: 6, tidal: 0.0 };   // Tharsis defaults (hand-set D-vector; no preset)
+    const MIXED_HEATPIPE_PEG = 0.45;   // m_hp = rawTidal − HEATPIPE_PEG (the e1Regime peg; local copy — no e1Regime import in the lab render path)
+    let _mixedActive = false;          // A/B flip: true ⇒ route() renders the hand-set mixed coordinate; false ⇒ baseline preset render
+    let _mixedSeed = null;             // pinned macroSeed for the mixed render (null ⇒ state.macroSeed); set via _lab.setMixedDrivers({macroSeed})
+    // The pre-built override object threaded into route({ labLidOverride }) — built OUTSIDE the route({...}) arg
+    // block (the e1-shadow-audit forbids a bare `e1` token inside that block, :78). null ⇒ no override (baseline).
+    let _mixedLidOverride = null;
     // The plate-path preset's CURRENT derived/preset driver defaults (recomputed each applyDrivers).
     // surfaceGravity + tidalHeat come from the already-derived uniforms; volatileFraction from the raw
     // preset descriptor. (D16 age was descoped from this increment — see plates.js D_EARTH note. The
@@ -3660,6 +3675,9 @@
         // Lava (T_eq 950 → T_ss 1330). Inert off the volcanic path (only 'lava'/'volcanic' read it).
         T_eq: (_fp && _fp.T_eq != null) ? _fp.T_eq : 288,
         bodyDrivers: _bodyDrivers,              // Increment 2: the D-vector → driversToTune() → plate tune override
+        // V2-2b-2a Slice C (MF1 Option B): the LAB-ONLY mixed-interior override (pre-built OUTSIDE this block).
+        // null on every baseline route → byte-inert; active only while the mixed A/B is on (production untouched).
+        labLidOverride: _mixedActive ? _mixedLidOverride : null,
       });
       const stats = res.stats;
       // Always point the planet shader at the freshly-rendered carve cube (the REAL texture, never
@@ -3857,6 +3875,51 @@
       if (grainCarveUI.reliefBakeStrength < 0.5) applyReliefBake(1);   // make the flip visible (sample the carrier)
       ensureNetworkRouted('stagnant-driver-ab');
     } }, 'ab').name('Relief A/B: preset drivers ↔ overrides');
+    // ── V2-2b-2a Slice C: the MIXED-INTERIOR drivers (LAB-ONLY; the first genuinely novel generative primitive).
+    //    Dial the RESOLVED E1 coordinate directly (L / Φ / n / tidal Io-ratio), then "Render mixed" routes the
+    //    composer through route()'s labLidOverride hook: shields where strong centers pierce, coronae/tessera
+    //    where they tent, a preserved basaltic-plains datum in the lows, analytic rift corridors between centers.
+    //    Production dispatch is UNTOUCHED (no shipped preset reaches the mixed path) — this is a pure lab tool. ──
+    // Build the hand-set override object (OUTSIDE any route({...}) block — the e1-shadow-audit forbids a bare
+    // `e1` token there) from the current slider values (+ optional coords override); shared by the folder + _lab.
+    function applyMixedDrivers(coords){
+      if (coords){
+        if (coords.L != null) mixedOv.L = +coords.L;
+        if (coords['Φ'] != null) mixedOv['Φ'] = +coords['Φ'];
+        if (coords.n != null) mixedOv.n = coords.n | 0;
+        if (coords.tidal != null) mixedOv.tidal = +coords.tidal;
+        if (coords.macroSeed != null) _mixedSeed = coords.macroSeed >>> 0;
+      }
+      const seed = _mixedSeed != null ? _mixedSeed : state.macroSeed;
+      _mixedLidOverride = {
+        e1: { compositionClass: 'rocky', geodynamicRegime: 'dead-lid',
+              m_hp: mixedOv.tidal - MIXED_HEATPIPE_PEG, L: mixedOv.L, 'Φ': mixedOv['Φ'], n: mixedOv.n | 0 },
+        rawTidal: mixedOv.tidal, macroSeed: seed,
+      };
+      return _mixedLidOverride;
+    }
+    // Flip the mixed A/B on, refresh the override from the sliders, force baked relief on (so the composer's
+    // carrier.height actually reaches the render → heightSource=='carrier'), and route synchronously.
+    function doRenderMixed(){
+      _mixedActive = true;
+      applyMixedDrivers(null);
+      if (grainCarveUI.reliefBakeStrength < 0.5) applyReliefBake(1);
+      return ensureNetworkRouted('mixed-render');
+    }
+    const fMixedDrivers = fDrivers.addFolder('Drivers → mixed lid (V2-2b-2)'); fMixedDrivers.open();
+    const _onMixedDrag = () => { if (_mixedActive) doRenderMixed(); };   // live re-render only while the mixed A/B is on
+    fMixedDrivers.add(mixedOv, 'L', 0.35, 0.629, 0.001).name('lid strength L (mixed [0.35,0.63))').listen().onChange(_onMixedDrag);
+    fMixedDrivers.add(mixedOv, 'Φ', 0.0, 1.2, 0.01).name('convective vigor Φ').listen().onChange(_onMixedDrag);
+    fMixedDrivers.add(mixedOv, 'n', 3, 11, 1).name('center count n').listen().onChange(_onMixedDrag);
+    fMixedDrivers.add(mixedOv, 'tidal', 0.0, 1.0, 0.005).name('tidal (Io-ratio → m_hp+rawTidal)').listen().onChange(_onMixedDrag);
+    fMixedDrivers.add({ render(){ doRenderMixed(); } }, 'render').name('▶ Render mixed (hand-set coordinate)');
+    // A/B flip: hand-set mixed coordinate ↔ baseline preset render (mirrors the driver folders' A/B idiom).
+    fMixedDrivers.add({ ab(){
+      _mixedActive = !_mixedActive;
+      if (grainCarveUI.reliefBakeStrength < 0.5) applyReliefBake(1);   // make the mixed carrier visible (sample it)
+      if (_mixedActive) doRenderMixed(); else ensureNetworkRouted('mixed-ab-off');
+    } }, 'ab').name('Mixed A/B: hand-set coordinate ↔ preset');
+    fMixedDrivers.add({ get mode(){ return _mixedActive ? 'MIXED (hand-set L/Φ/n/tidal)' : 'preset (baseline)'; } }, 'mode').name('A/B mode').listen().disable();
     // ── AC7 scale readout panel — radius (already above), surface gravity (g), and the
     // flagged per-feature footprints (crater + river) in km. Read-only getters update live.
     const fScaleReadout = fDrivers.addFolder('scale readout'); fScaleReadout.open();
@@ -6168,6 +6231,41 @@
                         meanTessera: mT, meanPlains: mP, meanRiftTrench: mL,
                         orderingHolds: (mT > mP && mP > mL),
                         U: Array.from(U),
+                      };
+                    },
+                    // ── V2-2b-2a Slice C — the LIVE mixed-interior API + probe (AC-THARSIS, objective integration).
+                    //    setMixedDrivers dials the hand-set E1 coordinate (L/Φ/n/tidal Io-ratio; an optional pinned
+                    //    macroSeed); renderMixed flips the mixed A/B on + routes the composer through route()'s
+                    //    labLidOverride hook (baked relief forced so heightSource=='carrier'); mixedProbe returns
+                    //    SCALARS ONLY (a full per-node U/primitiveId array overflows the chrome-devtools token
+                    //    budget — the V2-2b-1 stagnantLidProbe gotcha), read off riverOverlay.mixedDiag. Usage on
+                    //    :9223:  _lab.setMixedDrivers({L:0.551,'Φ':0.27,n:6,tidal:0,macroSeed:42}); _lab.renderMixed(); _lab.mixedProbe();
+                    setMixedDrivers(coords){ applyMixedDrivers(coords || null);
+                      return { L:_mixedLidOverride.e1.L, 'Φ':_mixedLidOverride.e1['Φ'], n:_mixedLidOverride.e1.n,
+                        m_hp:_mixedLidOverride.e1.m_hp, rawTidal:_mixedLidOverride.rawTidal, macroSeed:_mixedLidOverride.macroSeed }; },
+                    renderMixed(){ doRenderMixed(); const md = riverOverlay.mixedDiag;
+                      return { rendered:true, path: md && md.path, fineClass: md && md.fineClass, heightSource: riverOverlay.heightSource }; },
+                    mixedOff(){ _mixedActive = false; ensureNetworkRouted('lab-mixedOff'); return 'off (baseline preset render)'; },
+                    mixedProbe(){
+                      const md = riverOverlay.mixedDiag;
+                      const heightSource = riverOverlay.heightSource;
+                      if (!md) return { heightSource, path:null, fineClass:null, active:_mixedActive,
+                        note:'no mixed override rendered — call _lab.setMixedDrivers(...) then _lab.renderMixed()' };
+                      // SCALARS ONLY (GROUNDING §10): pierceCount, tentCount, primitiveIdHistogram (≤8 keys), Pi, M,
+                      // beltScale, path, fineClass, heightSource. Read off the stashed mixedDiag — never the carrier.
+                      const nCenters = md.n != null ? md.n : null;
+                      const pierceCount = md.pierceCount != null ? md.pierceCount : null;
+                      const tentCount = (nCenters != null && pierceCount != null) ? (nCenters - pierceCount) : null;
+                      return {
+                        heightSource, path: md.path, fineClass: md.fineClass, active: _mixedActive,
+                        pierceCount, tentCount, nCenters,
+                        primitiveIdHistogram: md.primitiveIdHistogram || null,   // { shield:1, caldera:2, corona:5, tessera:6, rift:7, plain:8 } → counts (≤8 keys)
+                        Pi: md.Pi != null ? md.Pi : null,
+                        M: md.M != null ? md.M : null,
+                        legibleByFamily: md.legibleByFamily || null,             // { pierce, tent } legible-component counts (MF4 gate)
+                        beltScale: md.beltScale != null ? md.beltScale : null,
+                        Ybase: md.Ybase != null ? md.Ybase : null,
+                        L: md.L != null ? md.L : null, 'Φ': md['Φ'] != null ? md['Φ'] : null,
                       };
                     },
                     // V2-1 Slice D (AC7) — the live SHADOW probe for the E1 regime selector. Sibling of

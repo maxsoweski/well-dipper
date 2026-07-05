@@ -55,3 +55,60 @@ only the 4 pre-existing known failures, not grown). Both adversarial lenses retu
   asserted for all nodes via primitiveId). verify-workstream is the backstop.
 - [nit] AC-PIERCE mean-band [1,3] redundant with per-seed [1,3] → ACCEPTED (harmless); could tighten
   to ~[1,2] in a later polish.
+
+## Slice C build (lab seam + live Tharsis) — 2026-07-05 (working-Claude, direct build)
+
+Built the three Slice C pieces + drove the live AC-THARSIS. Faithful to BUILD-PLAN §A(Slice C)/§B/§C/§D/§E
+and GROUNDING §10. Files touched (matches the (E) file-fence exactly): `lidResponse.js` (interpen forward),
+`planet-lod-rivers.js` (route() hook), `planet-lod-lab.html` (folder + `_lab` API + probe),
+`tests/worldengine-lid-router-audit.test.js` (reconciled), BUILD-NOTES. **Staged EXPLICITLY** (no `git add -A`);
+the not-ours `CameraChoreographer.js`/`LabMode.js` + the untracked screenshot pile left out.
+
+**1. Interpen injection (MF2-faithful).** `writeLidResponseSphere` gained a null-default `interpen` opt forwarded
+into the composer's `case 'mixed':` call; the router itself imports NO statistic. The **route()** lab hook
+(planet-lod-rivers.js — the route/lab boundary, NOT a `base/` writer) imports `interpenetration` and injects it,
+so mixedDiag carries `Pi`/`M`/`legibleByFamily`. Import graph stays acyclic: rivers → {lidResponse, interpenetration};
+interpenetration → lidResponse. No `base/` module imports the statistic → no router↔composer↔statistic cycle.
+
+**2. route() labLidOverride hook (MF1 Option B).** Added `labLidOverride=null` param + a branch (after
+`writeBodyRelief`, before `reliefGrad` so the shading gradient tracks the mixed height) + `get mixedDiag()`. The
+branch runs `writeLidResponseSphere` on the hand-set E1 coordinate (composer REPLACES carrier.height), builds a
+**≤8-key primitiveId histogram in route()** (per-node arrays never leave route() — the token-overflow gotcha), and
+stashes `{...composerDiag, path, fineClass, primitiveIdHistogram}`. Every production caller passes `labLidOverride
+= null` → the branch is skipped → route() byte-inert (75-golden bypasses route() entirely). If the hand-set
+coordinate does NOT classify mixed, the probe surfaces the honest `path`/`fineClass` (no stale mixed diag).
+
+**3. Lab folder + `_lab` API (byte-safe seam).** New lil-gui folder `Drivers → mixed lid (V2-2b-2)` (L / Φ / n /
+tidal sliders + `▶ Render mixed` + `Mixed A/B` flip + mode readout), a `mixedOv` state object (Tharsis defaults),
+and `_lab.setMixedDrivers / renderMixed / mixedOff / mixedProbe`. The override object is built OUTSIDE the
+`riverOverlay.route({...})` block (SF1 — the e1-shadow-audit forbids a bare `e1` token there; only the identifier
+`_mixedLidOverride` rides in). `mixedProbe` returns **SCALARS ONLY** (pierceCount, tentCount, primitiveIdHistogram,
+Pi, M, beltScale, path, fineClass, heightSource, legibleByFamily, Ybase, L, Φ). renderMixed forces `applyReliefBake(1)`
+so heightSource=='carrier'.
+
+**Nit resolutions (both BUILD-PLAN carry-overs):**
+- **faultDensity → KEEP (not drop).** `carrier.faultDensity[i] = clamp01(prox[i])` is faithful sibling-parity: ALL
+  four corner writers write it identically as an activity proxy (magmatism.js:413 / stagnantLid.js:470 / plates.js:368
+  / shellRelief.js:367). It is a standard hashed carrier field (sphereField.js:17, tracked by verify.js:27) consumed
+  by the tectonic/grain path (tectonic.js:182). On the LAB mixed render path it is now live and correctly populated.
+  No change to the verified composer; the existing "parity bookkeeping (activity proxy)" comment already documents it.
+- **lid-router-audit AC-ZERO-CLOBBER(dispatch) reconciled.** The V2-2a guard "planet-lod-rivers.js references neither
+  lidResponse nor writeLidResponseSphere anywhere" is now false under MF1 Option B. RECONCILED (mirroring Slice B's
+  `lid:` reconciliation): the router reference is PERMITTED but CONFINED to route()'s labLidOverride hook (the test
+  asserts the import + that the `labLidOverride` guard sits immediately above the `writeLidResponseSphere(` call);
+  the second `it` still fences `writeBodyRelief` (production dispatch) router-free. Load-bearing invariant unchanged.
+
+**Verification — headless GREEN + live AC-THARSIS PASS (working-Claude, independently run):**
+- Zero-clobber + audits: **162/162** across v2-0-byte-identity (75-golden **75/75**), lid-byte-anchors,
+  e1-shadow-audit (rivers.js + lab route block clean), reconciled lid-router-audit, lid-primitiveid.
+- Mixed suites + drift: **47/47** (mixed-composer, mixed-pierce, interpenetration, planet-archetypes).
+- Full suite: only the **4 pre-existing known failures** (KnownObjects ×3, GalacticFeatures ×1) — NOT grown; the
+  13 `vendor/motion-test-kit` file failures are pre-existing "No test suite found" collection quirks, disjoint from
+  every Slice C file.
+- **Live AC-THARSIS** (chrome-devtools, localhost:5173 lab, seeds {1,2,3,7,42} at the hand-set Tharsis coordinate
+  L 0.551 / Φ 0.27 / n 6 / tidal 0): all classify **mixed** (`path=='lid-mixed'`), `heightSource=='carrier'`,
+  **pierceCount ∈ [1,3]** every seed (2,3,2,2,1), discrete primitiveId histogram (shield 1 + preserved-plain 8 +
+  rift 7 + tessera/corona/caldera), **Π finite always** and **Π>0 iff ≥2 legible pierce components** (MF4 exactly:
+  seed 2 → 3 legible → Π=0.63; seeds 1&42 → 1 legible → Π=0), M≈0.05 ≪ 0.70, `Ybase(0.551)=0.222` (pins ≈0.220),
+  console clean of NEW errors (only a pre-existing favicon.ico 404). Zoomed screenshot shows discrete rift corridors
+  + shield/tessera piles on a preserved-plains datum — NOT a smeared average. **Pinned seed = 2.**

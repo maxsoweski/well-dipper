@@ -12,8 +12,9 @@
 //   • AC-0 grep leg    — the router reads no e1.label, no PRESET_ARCHETYPE, calls no stagnantLidRegimeOf( (nor any
 //                        archetype-string arg); IMPORTS L_STRONG/SHOULDER_LO from e1Regime.js (no re-declared
 //                        0.63/0.15 literals); resolves the strong regime from geodynamicRegime==='stagnant'.
-//   • AC-ZERO-CLOBBER  — planet-lod-rivers.js (writeBodyRelief / the dispatch seam) neither imports nor calls
-//                        the router: writeLidResponseSphere / lidResponse appear NOWHERE in the dispatch file.
+//   • AC-ZERO-CLOBBER  — RECONCILED (V2-2b-2a Slice C / MF1 Option B): the router reaches planet-lod-rivers.js
+//                        ONLY via route()'s null-default labLidOverride LAB hook; the PRODUCTION dispatch
+//                        (writeBodyRelief) keys on PRESET_ARCHETYPE and touches no router symbol — un-wired.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -130,15 +131,29 @@ describe('V2-2a AC-0 — the router is LABEL-FREE + single-source (grep-audited)
   });
 });
 
-// ── AC-ZERO-CLOBBER (dispatch seam) — the router is ABSENT from planet-lod-rivers.js ─────────────────────
-describe('V2-2a AC-ZERO-CLOBBER — writeBodyRelief neither imports nor calls the router (un-wired dispatch)', () => {
-  it('planet-lod-rivers.js references neither lidResponse nor writeLidResponseSphere anywhere', () => {
-    expect(RIVERS_CODE, 'no import of lidResponse.js').not.toMatch(/from\s+['"][^'"]*lidResponse/);
-    expect(RIVERS_CODE, 'no writeLidResponseSphere reference (the router is absent from the dispatch file)').not.toMatch(/writeLidResponseSphere/);
+// ── AC-ZERO-CLOBBER (dispatch seam) — RECONCILED for V2-2b-2a Slice C (MF1 Option B, Max-approved 2026-07-05).
+//    V2-2a asserted the router was ABSENT from planet-lod-rivers.js entirely. Slice C's LAB-ONLY mixed-interior
+//    render seam legitimately imports writeLidResponseSphere and calls it from route()'s null-default
+//    labLidOverride hook (every PRODUCTION caller passes no override → route() stays byte-inert; the 75-golden
+//    bypasses route()). The load-bearing invariant is UNCHANGED: the PRODUCTION dispatch (writeBodyRelief) keys
+//    on PRESET_ARCHETYPE and touches NO router symbol — so no shipped preset reaches the mixed path. The first
+//    test now confines the router reference to the labLidOverride hook; the second still fences writeBodyRelief.
+describe('V2-2b-2a AC-ZERO-CLOBBER — the router reaches rivers.js ONLY via route()\'s labLidOverride lab hook', () => {
+  it('planet-lod-rivers.js references the router ONLY through the null-default labLidOverride lab hook', () => {
+    // MF1 Option B: the import + the single call are PERMITTED (the lab-only render seam) …
+    expect(RIVERS_CODE, 'imports writeLidResponseSphere for the lab render seam')
+      .toMatch(/import\s*\{[^}]*writeLidResponseSphere[^}]*\}\s*from\s+['"][^'"]*lidResponse/);
+    // … but the router call is GATED on labLidOverride (the null-default lab hook), never an unconditional
+    // production route: the labLidOverride guard sits immediately above the writeLidResponseSphere( call.
+    const callIdx = RIVERS_CODE.indexOf('writeLidResponseSphere(');
+    expect(callIdx, 'writeLidResponseSphere is called (the lab render seam)').toBeGreaterThan(-1);
+    const guardWindow = RIVERS_CODE.slice(Math.max(0, callIdx - 600), callIdx);
+    expect(guardWindow, 'the router call is guarded by the labLidOverride lab hook').toMatch(/labLidOverride/);
+    // classifyLidPath is NEVER referenced in the dispatch file (the router classifies internally).
     expect(RIVERS_CODE, 'no classifyLidPath reference in the dispatch file').not.toMatch(/classifyLidPath/);
   });
 
-  it('the writeBodyRelief function body itself calls no router symbol', () => {
+  it('the writeBodyRelief function body itself calls no router symbol (production dispatch stays on PRESET_ARCHETYPE)', () => {
     const start = RIVERS_CODE.indexOf('function writeBodyRelief');
     expect(start, 'writeBodyRelief found in the dispatch file').toBeGreaterThan(-1);
     // the function is ~50 lines; a generous window covers its whole body without reaching unrelated code.
