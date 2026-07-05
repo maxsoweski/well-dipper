@@ -110,14 +110,27 @@ describe('planLegObstacle — far-side-moon core case, routed path clears the co
     expect(sampledMinDist(W, targetPos, C)).toBeGreaterThan(barrier);
   });
 
-  it('moon-never-engulfed invariant: a target moon at 6R from its planet sits OUTSIDE the 1.5R inflated keep-out', () => {
-    // Physical min moon orbit ~6R (MoonGenerator). With factor 1.5, keep-out 6R
-    // never engulfs a moon at >=6R distance — so the moon is a valid target, not
-    // detected as its own parent's obstacle.
+  it('a normal moon OUTSIDE the inflated parent keep-out (>1.8R) is not treated as engulfed', () => {
     const planetR = 4;
-    const keepOut = obstacleKeepOutRadius({ radius: planetR }); // 6
-    const moonDist = 6 * planetR; // 24
-    expect(moonDist).toBeGreaterThan(keepOut);
+    const inflated = obstacleKeepOutRadius({ radius: planetR }) * 1.2; // 1.8R = the clearance-switch sphere (SC_GOAROUND_SAFETY)
+    // A mid/outer moon (map orbit >= ~2R, MoonGenerator data.orbitRadius) sits
+    // outside the inflated keep-out, so firstBlockingObstacle never flags the parent
+    // for the moon endpoint itself and the clearance switch can clear.
+    const normalMoon = 2.5 * planetR; // mid-range moon-0 map orbit (~[1.7R, 2.5R])
+    expect(normalMoon).toBeGreaterThan(inflated);
+  });
+
+  it('documents the KNOWN residual (measured live per Max 2026-07-05): the tightest moon-0 (~1.7R map orbit) is INSIDE the parent inflated keep-out', () => {
+    const planetR = 4;
+    const inflated = obstacleKeepOutRadius({ radius: planetR }) * 1.2; // 1.8R
+    // MoonGenerator's MAP orbit for moon-0 is planetR*(2.0) + jitter over [-0.3,0.5]R
+    // => tightest ~1.7R (NOT the ~6R physical orbitRadiusScene the tour does not use).
+    // At 1.7R the moon is INSIDE the 1.8R inflated keep-out, so the per-frame clearance
+    // switch cannot clear it and a far-side visit falls back to the motionComplete->
+    // continuation path (worst case: a skipped leg). Telemetry-measured residual; a
+    // clamp-keep-out-to-target fix is ready if the live probe shows real stalls.
+    const tightestMoon0 = planetR * (2.0 - 0.3); // ~1.7R
+    expect(tightestMoon0).toBeLessThan(inflated); // 6.8 < 7.2 — the residual is real, asserted honestly
   });
 });
 

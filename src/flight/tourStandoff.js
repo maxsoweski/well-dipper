@@ -296,8 +296,13 @@ const _obClosest = new THREE.Vector3();
 // 1.05R collision barrier (a routed ship is never pinned) and, inflated by the
 // go-around SAFETY (×1.2 = 1.8R), below the ~2.6R star-style park view distance, so
 // a ship parked at a just-visited planet starts OUTSIDE the inflated sphere (clean
-// tangent, no spurious escape); and well below the ~6R min moon orbit, so a target
-// moon is never engulfed by its own parent's keep-out. One live-tunable knob.
+// tangent, no spurious escape).
+//   RESIDUAL (measured live per Max 2026-07-05): the inflated keep-out is 1.8R, but
+//   the tightest innermost moon-0 MAP orbit is ~1.7R (MoonGenerator data.orbitRadius,
+//   NOT the ~6R physical orbitRadiusScene the tour never uses). So the very tightest
+//   far-side moon-0 can sit inside its parent's inflated sphere and fall back to the
+//   motionComplete->continuation path. Telemetry-tracked; a clamp-keep-out-to-target
+//   fix is ready if the live probe shows real stalls. One live-tunable knob.
 export const OBSTACLE_KEEP_OUT_FACTOR = 1.5;
 
 export function obstacleKeepOutRadius({ radius }) {
