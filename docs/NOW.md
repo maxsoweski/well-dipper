@@ -28,7 +28,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](FEATURES/world-engine-architecture-spine.md).
 
-> **▶▶ ACTIVE (2026-07-04, world-engine program): V2-2a VERIFIED `02cb221`; V2-2b re-split; V2-2b-1 (stagnant-side MULTIPLY) SCOPED + GREENLIT + `building` (`e4c4661`) — NEXT = PLAN workflow in a FRESH session (`~/briefings/handoff-world-engine-v2-2b-1-build-2026-07-04.md`).**
+> **▶▶ ACTIVE (2026-07-05, world-engine program): V2-2a VERIFIED `02cb221`; V2-2b-1 (stagnant-side MULTIPLY) BUILT + `VERIFIED_PENDING_MAX 1995dbb` — all objective ACs green incl. live AC-LAB (2026-07-05); NEXT = Max UAT (open lab on Venus, drive sliders) → Shipped. 6 unpushed commits on `feature/world-engine-production-L1` (awaiting Max push OK).**
 > **▶ ROADMAP v2.1 (condition-first re-founding) — ✅ SIGNED OFF by Max 2026-07-03** (`7cb10f1`; map of record:
 > `WORKSTREAMS/world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md`). Full §7a review: every
 > recommendation adopted — V2-2 split approved (router+anchors, then stagnant response); wet-stagnant + corona-pierced
@@ -80,23 +80,24 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > 3-slice build `wf_39ebc1c8-847` (`9892275`→`5e726a7`→`02cb221`; Slice A auth-crashed mid-run under Fable, re-ran
 > clean re-verifying the partial drafts). ⚠ Router weak branch omits rivers:483 appliedTune diag mutation — inert
 > (magmaProbe recomputes), reconcile at V2-3. ⚠ MIXED_LO=0.35 local dup of e1Regime MOBILE_L — export at V2-2b/V2-3.
-> **▶ V2-2b RE-SPLIT + V2-2b-1 (stagnant-side MULTIPLY) — SCOPED + GREENLIT, status `building` (2026-07-04).**
+> **▶ V2-2b-1 (stagnant-side MULTIPLY) — BUILT + `VERIFIED_PENDING_MAX 1995dbb` (2026-07-05).**
 > V2-2b (mixed interior + stagnant response) was XL+, so Max approved splitting it again: **V2-2b-1 = the
 > stagnant-side driver→expression MULTIPLY** (`stagnantDriversToTune`, the #4-MULTIPLY analog on the pure-strong
-> corner), **V2-2b-2 = mixed interior + 3 §5.4 falsification worlds + pilot UAT**. Framing settled with Max
-> (2026-07-04): V2-2b-1 fixes the BETWEEN-world "re-rolled Venus" fear (§0); the WITHIN-world "samey across the same
-> world" feedback (AC9) is owned by V2-2b-2's mixed interior (per-province distinct primitives) + deeper by V2-7
-> epochs / V2-8 sculpting — Max's bar is that the within-world fix be *scoped* (it is), not delivered now. Scoped via
-> workflow (ground→draft→2 adversarial lenses→revise, `wf_6b783382-5ac`); byte-safety lens (re-run in-thread after a
-> workflow schema-failure) caught the `stagnantDriversToTune(null)` crash-guard must-fix. 12 ACs (9 unit / 2
-> integration / 1 UAT), contract validates. Mechanism: `stagnantDriversToTune(VENUS_REF)===null` keeps shipped Venus
-> byte-identical (75-golden); other drivers (V + T_surf primary) tune population knobs → distinct stagnant worlds.
-> Wired at the SHIPPED dispatch seam (planet-lod-rivers.js:489-491), NOT the router. Artifacts + scope commit
-> `e4c4661`: `docs/WORKSTREAMS/world-engine-v2-2b-1-stagnant-response-2026-07-04/` (GROUNDING, intent, contract).
-> **NEXT (fresh session per Max) = PLAN workflow (author code-grounded BUILD-PLAN → 2 adversarial lenses → revise) →
-> gated build slices (75-golden green each) → verify-workstream (`mode:full`, `liveBranch:main`) → live AC-LAB on
-> :5173 → VERIFIED_PENDING_MAX → Max UAT.** Handoff: `~/briefings/handoff-world-engine-v2-2b-1-build-2026-07-04.md`.
-> Then V2-2b-2 (mixed interior), then V2-3 dispatch flip. Atmosphere #3b gate OPEN
+> corner), **V2-2b-2 = mixed interior + 3 §5.4 falsification worlds + pilot UAT**. V2-2b-1 fixes the BETWEEN-world
+> "re-rolled Venus" fear (§0); the WITHIN-world "samey across the same world" feedback (AC9) is owned by V2-2b-2's
+> mixed interior + deeper by V2-7 epochs / V2-8 sculpting. Mechanism: `stagnantDriversToTune(VENUS_REF)===null` keeps
+> shipped Venus byte-identical (75-golden); other drivers (V + T_surf primary) tune population knobs → distinct
+> stagnant worlds. Wired at the SHIPPED dispatch seam (planet-lod-rivers.js:489-491), NOT the router.
+> **BUILT (all committed; HEAD `1995dbb`, 6 unpushed):** `e3dde95` plan → `c4aaaee` SLICE A (pure builder + 9 unit
+> ACs, 25 tests) → `af708ee` SLICE B (dispatch wiring + lab T_surf control + `stagnantLidProbe.appliedTune`) →
+> `1995dbb` AC3 contract reconciliation. **VERIFIED:** 9/10 objective ACs PASS 3/3 adversarial (incl. 75-golden
+> byte-identity AC-ZERO-CLOBBER, AC-BYTE-VENUS, AC-VARIETY); AC3 reconciled to the hot-dry-limb scope + re-verified
+> PASS 3/3. **AC-LAB live-verified 2026-07-05** (working-Claude, running lab): untuned Venus → `appliedTune=null`
+> (coronaCount 452), thermal-driven → `appliedTune` non-null (coronaCount 842, activeFrac 0.648→0.874, plumeCount
+> 11→14), veLat 0.009 ≪ vePlume 0.25, ordering holds. Evidence: `…/world-engine-v2-2b-1-stagnant-response-2026-07-04/
+> evidence/` (AC-LAB-RESULT.md + 2 screenshots). **NEXT = Max UAT** (open lab on Venus preset, baked relief on, drive
+> the volatiles/T_surf/thermal sliders, judge "driver-varied stagnant world reads varied within itself + distinct
+> from Venus") → UAT green → Shipped. Then V2-2b-2 (mixed interior), then V2-3 dispatch flip. Atmosphere #3b gate OPEN
 > (`~/briefings/handoff-world-engine-atmosphere-v2-pickup-2026-07-02.md`).
 > (Prior ACTIVE block, superseded: #4b VERIFIED_PENDING_MAX — now SHIPPED per above.)
 > **▶ #4b (Venus stagnant-lid relief writer) — ✅ VERIFIED_PENDING_MAX `0a95ed9`.** New three-free
