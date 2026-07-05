@@ -1,0 +1,45 @@
+{
+  "workstream": "world-engine-v2-2b-2a-mixed-interior-2026-07-05",
+  "commit": "9a343d4",
+  "verifyRun": "wf_86460f4e-0c7",
+  "mode": "full",
+  "date": "2026-07-05",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "N/A"
+  },
+  "overall": "VERIFIED",
+  "overallRationale": "All 9 ACs discharged. The verify-workstream (full, 38 agents, 3x adversarial) returned unit=PASS for all 7 unit ACs and PASS for the headless integration AC (AC-ZERO-CLOBBER). The one remaining AC (AC-THARSIS, live=true) was marked INSUFFICIENT BY RULE in the raw workflow verdict — a live browser AC the headless workflow cannot drive; the verdict explicitly deferred it to working-Claude (liveBranch:main). Working-Claude drove AC-THARSIS green live against this exact commit (evidence below). With AC-THARSIS discharged and NO UAT AC (contract designDecision #10), the terminal gate = VERIFIED (like V2-2a/V2-0), NOT VERIFIED_PENDING_MAX. The holistic pilot UAT is deferred to V2-2b-2b by design (roadmap 5.4 #3: Tharsis is an integration checkpoint, not a falsification).",
+  "perAC": [
+    { "id": "AC-0", "result": "PASS", "layer": "unit", "adversarialVotes": "2/3 sufficient",
+      "evidence": "Spine conformance. Composer imports ONLY alea/simplex-noise/mathutil; reads only e1.L/e1.Φ/e1.n (+ void'd rawTidal); zero matches for label/archetype/regimeOf denylist. Every emitted channel has a named reader (see BUILD-NOTES AC-0 conformance table). planet-archetypes drift 21/21, named-reader suites 35/35. The one dissenting judge flagged centerId's consumer as under-documented; the added conformance table makes centerId's readers explicit (AC1 determinism byte-anchor + router-audit + reserved 2b-2b consumer)." },
+    { "id": "AC1", "result": "PASS", "layer": "unit", "adversarialVotes": "3/3 sufficient",
+      "evidence": "Zero new RNG; 5 disjoint 'lid:' streams present, corners make zero 'lid:' draws; byte-identical determinism over seeds {1,2,3,7,42}; carrier.regime untouched; reconciled router-audit green. 22/22 + 53/53 corner byte-anchor/primitiveid." },
+    { "id": "AC-PIERCE", "result": "PASS", "layer": "unit", "adversarialVotes": "3/3 sufficient",
+      "evidence": "Sharp boolean pierce=(strength*Φ>Ybase*(1+SPREAD(2y-1))). mixed-pierce 7/7: Ybase pins (0.551->0.220, 0.728->1.05), Tharsis ensemble mean & every seed in [1,3], Venus-strong 0, monotone correct-sign in Φ and L." },
+    { "id": "AC-STRUCTURE", "result": "PASS", "layer": "unit", "adversarialVotes": "3/3 sufficient",
+      "evidence": "|corr(structureMask, arm's-length center predictor)| >= 0.40 AND > latitude, at all 15 sweep cells. Worst |corr|=0.744; max latitude |corr|=0.137; center-organized, not latitude-banded." },
+    { "id": "AC-ORDER-MIX", "result": "PASS", "layer": "unit", "adversarialVotes": "3/3 sufficient",
+      "evidence": "mean(tessera)>mean(plains)>mean(rift) AND edifice>plain>basin at every sweep point+seed; max edifice contribution above plains = 0.3271 < MIN_FLOOR_GAP 0.55; every shield/caldera node on a PLAINS base (SF3)." },
+    { "id": "AC-MIX-DISCRETE", "result": "PASS", "layer": "unit", "adversarialVotes": "3/3 sufficient",
+      "evidence": "Every node primitiveId in {1,2,5,6,7,8}; interior heights on a single kernel; tessera<->plains boundary a discrete step (min|Δh|>0.35 on primitiveId adjacency); Tharsis histogram <=6 populated ids, plains>0.5, shield+rift present." },
+    { "id": "AC-INTERPEN", "result": "PASS", "layer": "unit", "adversarialVotes": "3/3 sufficient",
+      "evidence": "Reproduces gate-3 100%/0% over 80 synthetic worlds (COMPOUND/COMPOUND-MIXED 20/20 PASS, TILED/SCATTER 0/20; SCATTER C-leak caught by M=0.991); PI_STAR/M_MAX single-source. Tharsis leg: Π finite>=0 every seed, MF4 biconditional Π>0 <=> legibleByFamily.pierce>=2. Reads primitiveId+familyOf (adjacency), not centerId." },
+    { "id": "AC-THARSIS", "result": "PASS", "layer": "integration", "live": true,
+      "drivenBy": "working-Claude (chrome-devtools, localhost:5173/well-dipper/planet-lod-lab.html)",
+      "rawWorkflowResult": "INSUFFICIENT by rule (live=true AC not drivable by the headless workflow; deferred to working-Claude via liveBranch:main)",
+      "evidence": "Live drive against commit 9a343d4, hand-set Tharsis coordinate {L:0.551, Φ:0.27, n:6, tidal:0}. Seeds {1,2,3,7,42}: all classify 'mixed' (path=='lid-mixed'), heightSource=='carrier'; pierceCount in [1,3] every seed (2,3,2,2,1); discrete primitiveId histogram (shield 1 + preserved-plain 8 dominant + rift 7 + tessera/corona/caldera); Π finite ALWAYS and Π>0 IFF >=2 legible pierce components (MF4 exactly: seed2 3-legible->Π=0.627, seeds 1&42 1-legible->Π=0); M~=0.05 << 0.70; Ybase(0.551)=0.222 (pins ~0.220); console clean of NEW errors (sole error = pre-existing favicon.ico 404). Zoomed screenshot shows discrete rift corridors + shield/tessera piles on a preserved-plains datum, NOT a smeared average. Pinned seed = 2. Post-commit re-confirm at seeds {2,3} reproduced identically." },
+    { "id": "AC-ZERO-CLOBBER", "result": "PASS", "layer": "integration", "adversarialVotes": "3/3 sufficient",
+      "evidence": "(a) 75-golden 78/78 (route()'s null-default labLidOverride is the only rivers change; writeBodyRelief byte-untouched, still keys on PRESET_ARCHETYPE). (b) magmatism.js + stagnantLid.js git-diff EMPTY; byte-anchors green. (c) plates/shell/despun untouched. (d) commit touches only in-scope files; no forbidden file touched. (f) carrier.regime + 'lid:' audit reconciled. (g) 4 known failures (KnownObjects x3, GalacticFeatures x1) do not grow; the ~13 vendor/motion-test-kit 'failed files' are pre-existing node:test-vs-vitest collection mismatches, zero test-level failures, disjoint from every Slice C file." }
+  ],
+  "caveatsResolved": [
+    "AC-0 conformance table: the channel x named-consumer table AC-0's verifyVia calls for is now reproduced in BUILD-NOTES (durable evidence discipline).",
+    "Scope hygiene: the two uncommitted edits (src/auto/CameraChoreographer.js, src/debug/LabMode.js) are pre-existing NOT-ours warp/autopilot work (handoff-flagged). The Slice C commit 9a343d4 staged only its 5 in-scope files, so it is scope-clean; the not-ours files were correctly left untouched (feedback_stage-only-touched)."
+  ],
+  "rawWorkflowOverall": "INSUFFICIENT — live integration pending (AC-THARSIS live=true deferred to working-Claude; all other ACs PASS). Resolved by working-Claude's live drive above -> VERIFIED per contract dd#10 (no UAT AC).",
+  "nextGates": {
+    "V2-2b-2b": "wet-stagnant + corona-pierced falsification worlds + effectiveL + the pilot UAT (Max's gate). Scope via dev-collab-scope when Max picks it.",
+    "V2-3": "flip production dispatch to the derived regime."
+  }
+}

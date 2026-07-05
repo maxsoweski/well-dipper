@@ -112,3 +112,36 @@ so heightSource=='carrier'.
   seed 2 → 3 legible → Π=0.63; seeds 1&42 → 1 legible → Π=0), M≈0.05 ≪ 0.70, `Ybase(0.551)=0.222` (pins ≈0.220),
   console clean of NEW errors (only a pre-existing favicon.ico 404). Zoomed screenshot shows discrete rift corridors
   + shield/tessera piles on a preserved-plains datum — NOT a smeared average. **Pinned seed = 2.**
+
+### AC-0 conformance table (channel × named consumer — the V2-1-style discipline)
+
+Every channel the composer emits maps to a named reader in the DAG (no dead knobs). Reproduced here as the durable
+table AC-0's verifyVia.input calls for (added post-verify per the workflow's evidence-discipline caveat):
+
+| Emitted channel | Where written | Named consumer(s) — the reader in the DAG |
+|---|---|---|
+| `carrier.height` (U) | mixedInterior.js:383 | lidResponse `case 'mixed'` return → route()'s bakedOn re-point + bakeHeightCube (render); AC-MIX-DISCRETE interior-kernel + AC-ORDER-MIX province-mean tests |
+| `primitiveId` (multi-valued Int32Array) | mixedInterior.js:364 | AC-MIX-DISCRETE one-primitive-per-node; `interpenetration(mesh, primitiveId, familyOf)` (Π=C·F); the lab `mixedProbe` primitiveId histogram |
+| `centerId` (Int32Array) | mixedInterior.js:260 | AC1 determinism test (Int32Array byte-equality over seeds {1,2,3,7,42}); lid-router-audit per-node emission test; **reserved consumer** for 2b-2b (co-emitted for the probe/2b-2b, NOT read by the adjacency-based Π — corrected 2026-07-05). A tested, byte-anchored channel, not a dead knob. |
+| `mixedDiag.beltScale` | mixedInterior.js:390 | AC-STRUCTURE arm's-length squared-Gaussian center predictor; `mixedProbe.beltScale` |
+| `mixedDiag.strength` / `yield` / `pierce` | mixedInterior.js:390 | AC-PIERCE arm's-length boolean recompute; `mixedProbe.pierceCount`/`tentCount` |
+| `mixedDiag.centers` | mixedInterior.js:390 | AC-STRUCTURE center predictor (rebuilt from published centers) |
+| `mixedDiag.A_e` / `Psi_e` / `isAncient` / `coronaActive` | mixedInterior.js:390 | AC-ORDER-MIX edifice-budget bound; province-mask reconstruction |
+| `mixedDiag.Pi` / `M` / `legibleByFamily` | mixedInterior.js:404-406 (interpen INJECTED) | AC-INTERPEN Π validation; `mixedProbe.Pi`/`M`/`legibleByFamily` (MF4 gate: Π>0 ⇔ legibleByFamily.pierce ≥ 2) |
+| `mixedDiag.n` / `pierceCount` / `Ybase` / `L` / `Φ` | mixedInterior.js:390 | `mixedProbe` scalars; AC-PIERCE Ybase pins |
+| `carrier.faultDensity` | mixedInterior.js:384 | sibling-parity activity proxy (magma:413 / stagnant:470 / plates:368 / shell:367), consumed by the tectonic/grain path (tectonic.js:182); tracked by verify.js:27 |
+
+### Verify-workstream verdict (wf_86460f4e-0c7, commit 9a343d4) → VERIFIED
+
+Full-mode verify (38 agents, 3× adversarial). **Unit layer PASS** — all 7 unit ACs (AC-0, AC1, AC-PIERCE,
+AC-STRUCTURE, AC-ORDER-MIX, AC-MIX-DISCRETE, AC-INTERPEN) independently re-run + adversarially judged (2–3/3
+sufficient). **AC-ZERO-CLOBBER PASS** (75-golden 78/78, corner byte-diffs EMPTY, forbidden files untouched, 4 known
+failures not grown). **AC-THARSIS** was marked INSUFFICIENT *by rule* in the raw verdict (a `live=true` AC the
+headless workflow cannot drive — the verdict explicitly deferred it to working-Claude via `liveBranch:main`);
+**working-Claude drove it green live** against 9a343d4 (evidence above + the re-confirm at seeds {2,3}). With
+AC-THARSIS discharged and **NO UAT AC (dd#10)**, the terminal gate = **VERIFIED** (like V2-2a/V2-0), NOT
+VERIFIED_PENDING_MAX — the workflow's generic "flips to VERIFIED_PENDING_MAX" synthesis is overridden by the
+contract's dd#10 (the holistic pilot UAT is deferred to 2b-2b by design). Verdict archived at `verdict.json` (same
+dir). Two verify caveats both resolved: (1) AC-0 conformance table — ADDED above; (2) the two uncommitted
+`CameraChoreographer.js`/`LabMode.js` edits are pre-existing NOT-ours warp/autopilot work (handoff-flagged),
+correctly EXCLUDED from the commit — my commit staged only its 5 in-scope files, so it is scope-clean.
