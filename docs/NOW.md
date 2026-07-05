@@ -28,7 +28,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](FEATURES/world-engine-architecture-spine.md).
 
-> **▶▶ ACTIVE (2026-07-05, world-engine program): V2-2a VERIFIED `02cb221`; V2-2b-1 (stagnant-side MULTIPLY) BUILT + `VERIFIED_PENDING_MAX 1995dbb` — all objective ACs green incl. live AC-LAB (2026-07-05); NEXT = Max UAT (open lab on Venus, drive sliders) → Shipped. 6 unpushed commits on `feature/world-engine-production-L1` (awaiting Max push OK).**
+> **▶▶ ACTIVE (2026-07-05, world-engine program): V2-2a VERIFIED `02cb221`; V2-2b-1 (stagnant-side MULTIPLY) ✅ SHIPPED `1995dbb` (Max UAT-passed 2026-07-05 — "it looks good … it looks distinct along these axes the sliders control", a pass on the BETWEEN-world criterion). NEXT = Max's call: V2-2b-2 (mixed interior + 3 falsification worlds + pilot UAT), then V2-3 dispatch flip; atmosphere #3b gate also OPEN. Branch was in sync with origin through `43f541a`; the Shipped close-out is 1 unpushed commit (awaiting Max push OK).**
 > **▶ ROADMAP v2.1 (condition-first re-founding) — ✅ SIGNED OFF by Max 2026-07-03** (`7cb10f1`; map of record:
 > `WORKSTREAMS/world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md`). Full §7a review: every
 > recommendation adopted — V2-2 split approved (router+anchors, then stagnant response); wet-stagnant + corona-pierced
@@ -80,7 +80,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > 3-slice build `wf_39ebc1c8-847` (`9892275`→`5e726a7`→`02cb221`; Slice A auth-crashed mid-run under Fable, re-ran
 > clean re-verifying the partial drafts). ⚠ Router weak branch omits rivers:483 appliedTune diag mutation — inert
 > (magmaProbe recomputes), reconcile at V2-3. ⚠ MIXED_LO=0.35 local dup of e1Regime MOBILE_L — export at V2-2b/V2-3.
-> **▶ V2-2b-1 (stagnant-side MULTIPLY) — BUILT + `VERIFIED_PENDING_MAX 1995dbb` (2026-07-05).**
+> **▶ V2-2b-1 (stagnant-side MULTIPLY) — ✅ SHIPPED `1995dbb` (Max UAT-passed 2026-07-05).**
 > V2-2b (mixed interior + stagnant response) was XL+, so Max approved splitting it again: **V2-2b-1 = the
 > stagnant-side driver→expression MULTIPLY** (`stagnantDriversToTune`, the #4-MULTIPLY analog on the pure-strong
 > corner), **V2-2b-2 = mixed interior + 3 §5.4 falsification worlds + pilot UAT**. V2-2b-1 fixes the BETWEEN-world
@@ -95,9 +95,10 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > PASS 3/3. **AC-LAB live-verified 2026-07-05** (working-Claude, running lab): untuned Venus → `appliedTune=null`
 > (coronaCount 452), thermal-driven → `appliedTune` non-null (coronaCount 842, activeFrac 0.648→0.874, plumeCount
 > 11→14), veLat 0.009 ≪ vePlume 0.25, ordering holds. Evidence: `…/world-engine-v2-2b-1-stagnant-response-2026-07-04/
-> evidence/` (AC-LAB-RESULT.md + 2 screenshots). **NEXT = Max UAT** (open lab on Venus preset, baked relief on, drive
-> the volatiles/T_surf/thermal sliders, judge "driver-varied stagnant world reads varied within itself + distinct
-> from Venus") → UAT green → Shipped. Then V2-2b-2 (mixed interior), then V2-3 dispatch flip. Atmosphere #3b gate OPEN
+> evidence/` (AC-LAB-RESULT.md + 2 screenshots). **✅ Max UAT-passed 2026-07-05** ("it looks good … it looks distinct
+> along these axes the sliders control" — a pass on the BETWEEN-world criterion this increment targets; within-world
+> sameness stays out of scope, owned by V2-2b-2 + V2-7/V2-8) → **SHIPPED `1995dbb`**. NEXT = Max's call: V2-2b-2
+> (mixed interior + 3 §5.4 falsification worlds + pilot UAT), then V2-3 dispatch flip. Atmosphere #3b gate OPEN
 > (`~/briefings/handoff-world-engine-atmosphere-v2-pickup-2026-07-02.md`).
 > (Prior ACTIVE block, superseded: #4b VERIFIED_PENDING_MAX — now SHIPPED per above.)
 > **▶ #4b (Venus stagnant-lid relief writer) — ✅ VERIFIED_PENDING_MAX `0a95ed9`.** New three-free
