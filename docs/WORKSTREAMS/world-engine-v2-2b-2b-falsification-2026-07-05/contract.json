@@ -1,0 +1,128 @@
+{
+  "workstream": "world-engine-v2-2b-2b-falsification-2026-07-05",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "statusNote": "SCOPED 2026-07-05, pending Max greenlight before any edit. The falsification half of V2-2b-2: (A) the wet-stagnant world via effectiveL threading, (B) the corona-pierced compound landform, (C) the Π=C·F falsification ASSERTION riding world B (unify §5.4 #2 + the gate-3 Open-Q6 claim 2b-2a fenced out), (D) the pilot UAT. Terminal gate = VERIFIED_PENDING_MAX (carries a UAT AC), NOT VERIFIED. Sibling/parent: world-engine-v2-2b-2a-mixed-interior-2026-07-05 (the composer + Π instrument + lab seam this EXTENDS/CONSUMES). Design settled via brainstorming 2026-07-05: Max chose to unify the falsification onto the new corona-pierced world (AC-INTERPEN-FALSIFY rides world B, not the (L0.60,Φ0.42) compound which becomes the cross-check) + confirmed the wet-stagnant UAT bar is BASIS-LEVEL (structurally-not-Venus, no literal wet cue).",
+  "programRef": "world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md §5.4 (#1 wet-stagnant — the PRIMARY mush-risk falsification; #2 corona-pierced — the PRIMARY new-landform falsification + the interpenetration assertion), §5.3 (pilot AC table), §7b/§7 (gate resolutions: effectiveL is the R-wetstag hand-up (iii); Ybase(L)=Y0·exp(Y_K·L) carries the pierce split; the tidal-shoulder router rule), §2.4 (expression legend: pierce/tent/corona/tessera). Gates: gate-2-localyield-DESIGN.md (per-center pierce boolean) + gate-3-interpenetration-statistic-DESIGN.md (Π=C·F, M≤0.70; MF4: Π>0 conditional on legibleByFamily.pierce≥2). UAT framing: UAT-RUBRICS.md (basis-level control-framed rubric: not-X / organized-by-Y / distinct-per-world).",
+  "designDecisions": [
+    "effectiveL THREADING = TWO READS OF `effectiveL ?? L`, NO e1Regime.js EDIT (§5.4 #1 / gate-2 §4 R-wetstag). e1Regime.js ALREADY computes + emits out.effectiveL for a seeded-'stagnant' pick (:198 effectiveLOf(V), :229 conditional tuple member): effectiveL = clamp(0.60,0.66, 0.65 − 0.05·wetness). A WET seeded-stagnant body → effectiveL≈0.60 (< L_STRONG 0.63) → the mixed interior at the piercable lower edge; a DRY one → ≈0.65 (≥ L_STRONG) → pure-strong (Venus). This increment READS effectiveL in (a) classifyLidPath (lidResponse.js) so the wet body routes to 'mixed' instead of off-pilot/despun (raw L≈0.16 < MIXED_LO 0.35 would fall off-pilot), and (b) the composer's Ybase(L) so the pierce count reflects the strong-but-piercable edge (raw L would pierce pervasively — 'Io-with-water'). Both files are already in 2b-2a's editable scope (the 'mixed' branch); e1Regime.js stays UNTOUCHED. Production-inert: no shipped preset carries effectiveL or reaches the mixed path (writeBodyRelief keys on PRESET_ARCHETYPE; route() is byte-inert without labLidOverride; the 75-golden bypasses route()).",
+    "CORONA-PIERCED = A NEW COMPOUND CENTER TYPE IN THE COMPOSER, NOT A NEW primitiveId (§5.4 #2). Today mixedInterior.js makes each center EITHER a shield (pierce) OR a corona/tessera (tent) — the sharp per-center boolean (:195), corona-only-on-unpierced-centers (:279), disjoint province resolve (:322). 'A shield emerging FROM a corona at one center' is exactly the XOR-forbidden case → a composer EXTENSION: a corona-type (tent) center whose plume ALSO breaches a central shield, resolved as a concentric shield core (PIERCE id 1/2) INSIDE a corona annulus (TENT id 5), at one center. It is NOT a new primitiveId: the whole point is that the compound is shield NODES (family PIERCE) interpenetrating corona NODES (family TENT) — a single new id would erase the exact family contrast the Π instrument measures. Intended mechanism (breach continuum — a middle band between pure-corona and pure-shield-on-plains, deterministic from strength; exact threshold a build-plan call, first-cut UAT-tunable like gate-2's Y0/Y_K). Every node still resolves to EXACTLY ONE primitive (AC-MIX-DISCRETE holds); the compound is adjacent shield+corona nodes, never a blended id.",
+    "THE FALSIFICATION ASSERTION RIDES THE CORONA-PIERCED WORLD (Max 2026-07-05; unifies §5.4 #2 + gate-3 Open-Q6). 2b-2a BUILT + VALIDATED the Π=C·F instrument and fenced OUT the falsification-grade claim. 2b-2b ASSERTS it on world B: shields-inside-coronae is the strongest, most legible interpenetration (every shield core adjacent to its corona annulus → maximal cross-family co-occurrence C). MF4 carried forward: Π>0 requires legibleByFamily.pierce≥2, so the pinned coordinate/seed must yield ≥2 corona-pierced compound centers. The existing (L 0.60, Φ 0.42) seed-2 compound (Π=0.63 in 2b-2a) is the CROSS-CHECK, not the primary substrate. A hand-tiled Io-patch/Venus-patch control (separable regions) is the NULL: Π→0 or M>0.70.",
+    "THIS INCREMENT CARRIES A UAT AC → TERMINAL GATE VERIFIED_PENDING_MAX (§5.4 pilot go/no-go). Unlike 2b-2a (objective-terminal VERIFIED, Tharsis is an integration checkpoint NOT a falsification), 2b-2b's holistic 'do these read coherent/distinct/never-observed' is the pilot UAT — Max-only, deferred-to-max, the workflow NEVER PASSes it. Integration-green → VERIFIED_PENDING_MAX <sha> → Max UAT → Shipped.",
+    "WET-STAGNANT UAT BAR = BASIS-LEVEL (Max 2026-07-05; UAT-RUBRICS.md discipline). Pass = organized-by-plume, structurally distinct from Venus's pure-strong lock, distinct-per-seed — NOT a literal wet albedo/hydrology cue (that is a later expression increment, explicitly out of scope). Mirrors increment-1's basis-level reframe Max authored.",
+    "GUARDRAILS UNCHANGED FROM 2b-2a. No 4th carrier.regime constant (verify.js:39 sub.regime∈{0,1,2}); production dispatch stays on PRESET_ARCHETYPE (mixed path lab-only → 75-golden structurally safe); pure corners byte-identical; V2-2b-1 Venus/stagnant untouched; three-free base/ writers (alea 'lid:'/'magma:'/'stagnant:' only, no Math.random/Date.now, bounded fixed relax); stage ONLY files we touch (the not-ours CameraChoreographer.js/LabMode.js + the untracked screenshot pile stay out of every commit)."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15 / SPINE-CONFORMANCE.md), the standing world-engine AC-0. (1) Driver connectivity: the effectiveL read + the corona-pierced composer extension read ONLY E1-coordinate channels (L, Φ, n, m_hp, effectiveL) + rawTidal + the composer's own seeded 'lid:' center field — NO archetype string, NO e1.label, NO PRESET_ARCHETYPE, NO stagnantLidRegimeOf(/isVolcanicPath( label read (grep DENYLIST, mirror 2b-2a AC-0). (2) Named consumer: effectiveL → classifyLidPath routing + the composer Ybase; the corona-pierced compound center → the shield-in-corona node resolution + the Π statistic + the lab probe (corona-pierced center count / primitiveId histogram); no dead knobs. (3) Taxonomy registration: any NEW lab controls are DRIVER OVERRIDES (add NO *Enabled key) → planet-archetypes.js drift guards stay green.",
+      "verifyVia": {
+        "input": "Read the diff + a BUILD-NOTES conformance table; grep-audit the effectiveL read + the corona-pierced extension for any archetype/label input (e.label, PRESET_ARCHETYPE, stagnantLidRegimeOf(, isVolcanicPath(); assert each channel maps to a named reader; npx vitest run tests/planet-archetypes.test.js",
+        "observable": "All three checks pass; each channel cites a named reader; no label/archetype input; drift guards green (no taxonomy change)"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-EFFECTIVEL",
+      "statement": "effectiveL ROUTES + YIELDS THE WET-STAGNANT WORLD (§5.4 #1 / gate-2 §4). classifyLidPath and the composer Ybase read `effectiveL ?? L`. Assert: (a) a WET seeded-'stagnant' E1 tuple (effectiveL≈0.60) → classifyLidPath returns 'mixed' (NOT 'off-pilot'), where its RAW L (< MIXED_LO 0.35) would have fallen off-pilot; (b) a DRY seeded-'stagnant' tuple (effectiveL≈0.65 ≥ L_STRONG, rawTidal<SHOULDER_LO) → 'pure-strong' (Venus) — effectiveL cleanly separates wet→mixed from dry→Venus; (c) in the composer, the wet coordinate's pierce count reflects Ybase(effectiveL≈0.60) — a FEW pierces (strong-but-piercable edge), NOT the pervasive piercing Ybase(rawL≈0.16) would give. e1Regime.js is NOT edited (it already emits effectiveL).",
+      "verifyVia": {
+        "input": "Headless vitest: build wet + dry seeded-'stagnant' E1 tuples; assert classifyLidPath(wet)==='mixed', classifyLidPath(dry)==='pure-strong'; assert the wet body's raw-L classification would be 'off-pilot' (control); build the mixed field at the wet coordinate and count pierces with Ybase(effectiveL) vs Ybase(rawL); git-diff shows e1Regime.js untouched",
+        "observable": "Wet → 'mixed', dry → 'pure-strong', wet-under-rawL → 'off-pilot'; wet pierce count is a small handful under effectiveL vs pervasive under rawL; e1Regime.js byte-unchanged"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-WETSTAG-BASIS",
+      "statement": "THE WET-STAGNANT WORLD IS STRUCTURALLY NOT-VENUS + PLUME-ORGANIZED + DISTINCT-PER-SEED (§5.4 #1 basis-level; mirror 2b-2a AC-STRUCTURE). At the wet-stagnant coordinate (effectiveL≈0.60), the composer output is a strong-lid-DOMINANT mix: a few pierces + coronae/tessera/plains/rifts (primitiveId histogram shows the TENT family dominant with a minority PIERCE presence), NOT the pure-strong Venus lock (~0 pierce, tessera/corona resurfacing only). Center-organized not latitude-banded: |corr(structureMask, the arm's-length center predictor)| ≥ 0.40 AND varExplainedByLatitude < varExplainedByCenter. Distinct per seed across {1,2,3,7,42}. Its primitiveId histogram is measurably DIFFERENT from a pure-strong Venus coordinate's (the 'not a re-rolled Venus' assertion, measured on primitiveId).",
+      "verifyVia": {
+        "input": "Headless vitest at N=1500: build the wet-stagnant field at the pinned coordinate × 5 seeds; compute the pierce count + primitiveId histogram + the center-vs-latitude variance split; separately build a pure-strong Venus coordinate and diff the primitiveId histograms",
+        "observable": "Strong-lid-dominant mix (TENT-family majority + minority pierce, > Venus's ~0); |corr|≥0.40 center-organized; varExplainedByLatitude < varExplainedByCenter; distinct per seed; histogram distinct from Venus's (not a re-rolled Venus)"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-CORONA-PIERCED",
+      "statement": "THE CORONA-PIERCED COMPOUND LANDFORM — the new expressive primitive (§5.4 #2). The composer grows a compound center type: a corona-type (tent) center whose plume ALSO breaches a central shield → a concentric shield core (PIERCE id shield/caldera) INSIDE a corona annulus (TENT id corona), at ONE center. At the pinned corona-pierced coordinate/seed, ≥2 such compound centers are present. Assert: (a) at a compound center, node-radius sweep shows shield-family ids at small r transitioning to corona-family ids in the surrounding annulus (shield-inside-corona, one center); (b) EVERY node still resolves to exactly one primitiveId (AC-MIX-DISCRETE preserved — the compound is adjacent shield+corona nodes, never a blended id); (c) this is a NEW expression Tharsis does not produce (Tharsis: shields on plains, NO corona-adjacent shields) — a Tharsis control has zero corona-pierced centers.",
+      "verifyVia": {
+        "input": "Headless vitest at N=1500: at the pinned corona-pierced coordinate/seed, count compound centers (corona-type AND pierced); for a compound center, walk node ids outward from the center and assert shield-core→corona-annulus; assert every node has exactly one PRIMITIVE_ID; build the Tharsis coordinate as a control and assert zero corona-pierced centers",
+        "observable": "≥2 compound centers; per-center shield core inside a corona annulus (one center, two families concentric); every node exactly one primitiveId (no blend id); Tharsis control has zero — the landform is genuinely new"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-INTERPEN-FALSIFY",
+      "statement": "THE FALSIFICATION ASSERTION — pierce and tent INTERPENETRATE, not TILE (§5.4 #2 / gate-3 Open-Q6; the claim 2b-2a fenced out). On the corona-pierced world at the pinned coordinate/seed, the already-built Π=C·F instrument fires: Π > 0 AND M ≤ 0.70 AND legibleByFamily.pierce ≥ 2 (MF4 precondition met) — asserting pierce (shields) and tent (coronae) interpenetrate. NULL control: a hand-constructed separable Io-patch/Venus-patch tiling (pierce region here, tent region there) yields Π→0 OR M>0.70 (tiled, not interpenetrated). Cross-check: the (L 0.60, Φ 0.42) seed-2 compound reproduces its 2b-2a Π (≈0.63). The instrument is UNCHANGED (2b-2b consumes it; interpenetration.js is not edited beyond what 2b-2a shipped).",
+      "verifyVia": {
+        "input": "Headless vitest: compute Π/M/legibleByFamily on the corona-pierced field at the pinned coordinate/seed; assert Π>0, M≤0.70, legibleByFamily.pierce≥2; construct the separable-tiling null and assert Π→0 or M>0.70; recompute Π at (L0.60,Φ0.42) seed 2 and assert ≈0.63; git-diff shows interpenetration.js unchanged",
+        "observable": "Corona-pierced world: Π>0, M≤0.70, ≥2 legible pierce components (interpenetrate); separable-tiling null: Π→0 or M>0.70 (tile); (L0.60,Φ0.42) seed 2 reproduces ≈0.63; instrument byte-unchanged"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-PILOT-LIVE",
+      "statement": "LIVE PILOT INTEGRATION — both worlds render in the lab, objective (agent-drivable, NOT Max's gate). In the running lab (fresh tab, localhost:5173/well-dipper/planet-lod-lab.html): (1) drive the WET-STAGNANT coordinate (force the seeded-'stagnant' pick via _lab.e1RegimeWeights on a wet Earth-mass temperate condition, or the mixed-drivers seam at effectiveL≈0.60), force a route, render — the world visibly reads as a strong-lid mix (coronae/tessera/plains + a few shields), heightSource=='carrier', probe pierce count small-but-nonzero, primitiveId histogram TENT-dominant; NOT a Venus re-roll. (2) drive the CORONA-PIERCED coordinate, render — visibly shows shields emerging from coronae (compound centers), probe reports ≥2 corona-pierced centers + Π>0 + M≤0.70. Console clean of NEW errors. Agent closes its browser pages after (window hygiene).",
+      "verifyVia": {
+        "input": "In the lab (fresh Chrome tab via chrome-devtools on 127.0.0.1:9223; check list_pages liveness per sandbox-localhost-probe): drive each world via the lab seam, force a route, read the mixed probe, screenshot; close pages when done",
+        "observable": "Wet-stagnant: heightSource=='carrier', small pierce count, TENT-dominant histogram, reads strong-lid-mix not Venus. Corona-pierced: shields-from-coronae visible, probe ≥2 compound centers, Π>0/M≤0.70. Console clean of NEW errors"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-PILOT-UAT",
+      "statement": "THE PILOT HOLISTIC UAT — Max's gate, deferred-to-max (§5.4 pilot go/no-go). Viewing both worlds in the lab, Max judges whether they read COHERENT, DISTINCT, and NEVER-OBSERVED: the wet-stagnant world reads as a believable strong-lid world that is not a re-rolled Venus (basis-level — no literal wet cue expected); the corona-pierced world reads as a genuinely new compound landform (a shield emerging from a corona), not two catalog landforms placed side by side. Holistic acceptance — NO agent drives or PASSes this; the verify workflow marks it deferred-to-max. Presupposes AC-PILOT-LIVE + all unit ACs GREEN.",
+      "verifyVia": {
+        "input": "Max views the wet-stagnant + corona-pierced worlds in the lab (working-Claude surfaces exactly what to look at + a screenshot/recording per the Shipped-gate) and renders the coherent/distinct/never-observed judgment",
+        "observable": "Max confirms (or rejects) that both worlds read coherent, distinct, and never-observed — not a faded catalog member, not two landforms side by side. Deferred-to-max; never agent-PASSed"
+      },
+      "layer": "uat",
+      "live": false
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "statement": "ZERO behavioral change for every shipped preset + the pure corners + siblings (mirror 2b-2a AC-ZERO-CLOBBER). (a) The 75-golden byte-identity harness (tests/v2-0-byte-identity.test.js, captured 7441c92, NEVER re-capture) stays 75/75 green: the effectiveL read is production-inert (no shipped preset carries effectiveL or reaches the mixed path; writeBodyRelief keys on PRESET_ARCHETYPE; route() byte-inert without labLidOverride). (b) The two PURE corners byte-identical (writeMagmatismSphere + writeStagnantLidReliefSphere unchanged); 2b-2a's byte anchors + V2-2b-1's Venus byte-identity stay green. (c) plate/shell/despun byte-identical. (d) git-diff touches ONLY src/worldengine/base/lidResponse.js (classifyLidPath effectiveL read) + src/worldengine/base/mixedInterior.js (corona-pierced compound center) + planet-lod-lab.html (wet-stagnant + corona-pierced lab drivers/probe) + the new/updated tests + workstream docs — NOT e1Regime.js (already emits effectiveL — UNTOUCHED)/interpenetration.js/magmatism.js/stagnantLid.js/plates.js/shellRelief.js/tectonic.js/sphereField.js/verify.js/body-drivers.js/driver-presets.js, and NOT writeBodyRelief production dispatch. (e) carrier.regime untouched; no 4th regime constant. (f) The 4 pre-existing known failures (KnownObjects ×3, GalacticFeatures ×1) do NOT grow.",
+      "verifyVia": {
+        "input": "npx vitest run tests/v2-0-byte-identity.test.js (75-golden) + the corner byte anchors + the plate/shell suites + npx vitest run (full); git show --stat the commit(s); byte-diff writeMagmatismSphere + writeStagnantLidReliefSphere pre/post; grep that e1Regime.js + interpenetration.js are unchanged",
+        "observable": "75/75 golden unchanged; both corners byte-identical; plate/shell/despun byte-identical; git show touches only in-scope files (e1Regime.js + interpenetration.js UNTOUCHED); carrier.regime untouched, no 4th regime constant; no new failures vs baseline (the 4 known ones don't grow)"
+      },
+      "layer": "integration",
+      "live": false
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "the E1 coordinate tuple from computeE1 (src/worldengine/base/e1Regime.js) — compositionClass, geodynamicRegime, L, Φ, n, m_hp, positionWithinRegime, e1Seed, AND the conditional out.effectiveL member (:198 effectiveLOf(V)=clamp(0.60,0.66,0.65−0.05·wetness), :229) present ONLY on a seeded-'stagnant' pick — now READ (never re-derived) by classifyLidPath + the composer Ybase",
+      "rawTidal = cv.rawTidalIoRatio (precomputed by the caller) — used by classifyLidPath's tidal-shoulder cuts",
+      "the 2b-2a mixed-interior composer src/worldengine/base/mixedInterior.js writeMixedInteriorSphere(carrier,{e1,rawTidal,macroSeed,tune,interpen}) — EXTENDED with the corona-pierced compound center type (STEP 2/3 pierce decision + STEP 7 corona + STEP 9 province resolve)",
+      "gate-2 per-center pierce constants Y0/Y_K (Ybase=Y0·exp(Y_K·L)) + a NEW corona-pierced breach threshold (first-cut UAT-tunable, like #4-M K_* / V2-2b-1 K_*); gate-3 Π=C·F params + the M≤0.70 threshold",
+      "the 2b-2a Π=C·F instrument src/worldengine/base/interpenetration.js interpenetration(mesh, primitiveId, familyOf) → {Pi,M,C,F,nComp,nLegible,legibleByFamily} — CONSUMED unchanged (injected, never imported by a base/ writer — MF2)",
+      "the lab seam (planet-lod-lab.html): _lab.setMixedDrivers/renderMixed/mixedOff/mixedProbe + _lab.e1RegimeWeights (force the contested seeded-'stagnant' pick) + the route() labLidOverride hook + get mixedDiag() in planet-lod-rivers.js",
+      "the PRIMITIVE_ID / FAMILY / familyOf schema (lidResponse.js): shield/caldera/patera/lava-plain = PIERCE 1-4; corona/tessera/rift/stagnant-basaltic-plain = TENT 5-8",
+      "three-free deps unchanged: alea, simplex-noise, mathutil clamp/clamp01"
+    ],
+    "outputs": [
+      "lidResponse.js classifyLidPath reads `effectiveL ?? L` → a wet seeded-'stagnant' body routes to 'mixed' (was off-pilot), a dry one to 'pure-strong' (Venus)",
+      "mixedInterior.js writes the corona-pierced compound landform: a corona-type center that also breaches a central shield → concentric shield core (PIERCE) inside a corona annulus (TENT), one center; every node still exactly one primitiveId; the composer's Ybase reads effectiveL for the wet-stagnant pierce yield",
+      "the Π=C·F falsification ASSERTION on the corona-pierced world (Π>0, M≤0.70, ≥2 legible pierce) — consuming the 2b-2a instrument; the separable-tiling null + the (L0.60,Φ0.42) cross-check",
+      "lab: wet-stagnant + corona-pierced driver paths + probe fields (corona-pierced center count, primitiveId histogram, Π, M) for the live pilot + Max's UAT"
+    ],
+    "mustStayWorking": [
+      "the 75-golden byte-identity gate (tests/v2-0-byte-identity.test.js — captured 7441c92, NEVER re-capture) stays 75/75: the effectiveL read is production-inert (no shipped preset carries effectiveL / reaches the mixed path; writeBodyRelief keys on PRESET_ARCHETYPE; route() byte-inert without labLidOverride; the golden bypasses route())",
+      "the two PURE corners byte-identical (writeMagmatismSphere + writeStagnantLidReliefSphere UNCHANGED); 2b-2a's byte anchors + V2-2b-1's Venus byte-identity stay green",
+      "e1Regime.js UNTOUCHED — it already emits out.effectiveL; this increment only READS it (no edit is a hard invariant, not an allowance)",
+      "interpenetration.js (the Π instrument) UNCHANGED — 2b-2b consumes it, does not modify it",
+      "the plate/shell/despun paths byte-identical; V2-2b-1's shipped stagnantDriversToTune untouched",
+      "NO 4th carrier.regime constant (verify.js:39 sub.regime∈{0,1,2}); carrier.regime never written by the composer",
+      "the 'lid:' alea audit stays reconciled: 'lid:' draws in the mixed path only, the two pure corners ZERO",
+      "three-free base/ writers: alea 'lid:'/'magma:'/'stagnant:' namespaces only, no Math.random/Date.now, bounded FIXED relax passes (render-once, byte-deterministic)",
+      "stage ONLY files we touch — the not-ours src/auto/CameraChoreographer.js + src/debug/LabMode.js + the untracked screenshot/research pile stay out of every commit (feedback_stage-only-touched)",
+      "Full vitest suite minus the 4 pre-existing known failures (KnownObjects ×3, GalacticFeatures ×1 — must not grow)"
+    ]
+  }
+}
