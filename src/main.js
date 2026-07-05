@@ -49,7 +49,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // is kept importable for the deferred control-harness arc.
 import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed } from './flight/flightModes.js';
 import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
-import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR } from './flight/tourStandoff.js';
+import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR, firstBlockingObstacle, planLegObstacle, obstacleKeepOutRadius } from './flight/tourStandoff.js';
 import { createFreeLook } from './flight/freeLook.js';
 import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
@@ -7098,7 +7098,7 @@ let _scPendingRealTarget = null;
 // may insert another waypoint; capped at SC_GOAROUND_CAP so a pathological
 // near-boundary geometry can't loop. Beyond the cap → dispatch direct (the WS-1
 // stall-detector is the backstop). Reset to 0 when a NEW real stop is dispatched.
-const SC_GOAROUND_CAP = 2;
+const SC_GOAROUND_CAP = 3; // 2->3 (tour-body-reachability-2026-07-05): headroom for a star+planet chained go-around leg
 let _scGoAroundCount = 0;
 
 // Increment 1 — go-around safety margin. The waypoint is PLACED against, and the
@@ -7138,6 +7138,34 @@ function _starKeepOut() {
   // Keep park strictly outside the keep-out sphere (decoupled-radii invariant).
   const park = Math.max(rawPark, keepOut * PARK_MIN_FACTOR);
   return { pos: system.star.mesh.position, radius: R, park, keepOut };
+}
+
+// tour-body-reachability-2026-07-05 (Defect 1): the live NON-STAR obstacle list
+// for the tour go-around, mirroring the _scBodies accessors (star/star2/planets/
+// moons, ~8313-8328). Each obstacle carries an inflated keep-out sphere: star &
+// star2 use the star keep-out (~3.5R — gravity bodies the star block only checks
+// for the PRIMARY star), planets/moons use the 1.5R obstacle keep-out. excludeMesh
+// (the leg's own target) is dropped so a target is never its own obstacle. `safety`
+// matches the star routing (1 for detection, SC_GOAROUND_SAFETY for the flown /
+// cleared margin). Fresh array each call — re-derived per frame during a go-around,
+// so there is no parallel pending-obstacle variable to keep in sync.
+function _tourObstacles(excludeMesh, safety = 1) {
+  const out = [];
+  if (!system) return out;
+  const add = (mesh, radius, isStarBody) => {
+    if (!mesh || mesh === excludeMesh || !Number.isFinite(radius) || radius <= 0) return;
+    const keepOut = (isStarBody ? starKeepOutRadius({ starRadius: radius }) : obstacleKeepOutRadius({ radius })) * safety;
+    out.push({ pos: mesh.position, keepOut, mesh, radius });
+  };
+  if (system.star?.mesh) add(system.star.mesh, system.star.data.radius, true);
+  if (system.star2?.mesh) add(system.star2.mesh, system.star2.data.radius, true);
+  for (const entry of system.planets || []) {
+    if (entry?.planet?.mesh) add(entry.planet.mesh, entry.planet.data.radius, false);
+    for (const moon of entry?.moons || []) {
+      if (moon?.mesh) add(moon.mesh, moon.data.radius, false);
+    }
+  }
+  return out;
 }
 
 // Dispatch one tour leg to `stop`, applying Increment-1 routing via the pure
@@ -7245,6 +7273,30 @@ function _dispatchTourLeg(stop, { continuation = false, choreo } = {}) {
     return;
   }
 
+  // tour-body-reachability-2026-07-05 (Defect 1): NON-STAR obstacle go-around. The
+  // star block above owns star-crossing / star-target legs; here we route around a
+  // planet / moon / second star that lies on the straight path to a NON-STAR target
+  // (classically a moon on the far side of its parent planet — the RC2 barrier-pin
+  // carousel). Same gating and shared cap as the star block; the unified per-frame
+  // clearance switch (_handleScPilotFrame) flies the ship AROUND and switches to the
+  // real target the instant the direct path clears every obstacle.
+  if (!isStar && autoNav.isActive && !warpEffect.isActive && _scGoAroundCount < SC_GOAROUND_CAP) {
+    const oPlan = planLegObstacle({
+      shipPos: scModel.position,
+      targetPos: stop.bodyRef.position,
+      obstacles: _tourObstacles(stop.bodyRef),
+    });
+    if (oPlan.obstacle) {
+      _scGoAroundCount++;
+      _scPendingRealTarget = stop;
+      const W = goAroundWaypoint(
+        scModel.position, stop.bodyRef.position, oPlan.obstacle.pos, oPlan.obstacle.keepOut * SC_GOAROUND_SAFETY);
+      const wpRadius = Math.max(oPlan.obstacle.keepOut * 0.08, 1);
+      scControls.flyTo({ toPosition: W, bodyRadius: wpRadius, linger: 0, selfStep: false });
+      return;
+    }
+  }
+
   // Real target: a clear leg, the star park, or the cap reached (dispatch direct;
   // the WS-1 stall-detector is the backstop). No pending target after this.
   _scPendingRealTarget = null;
@@ -7271,10 +7323,16 @@ function _handleScPilotFrame(frame) {
   // (the waypoint is only a steering carrot). Uses the ACTUAL ship position, so it
   // is robust to how close the pilot got to the waypoint.
   if (_scPendingRealTarget && autoNav.isActive && !warpEffect.isActive) {
-    const koF = _starKeepOut();
     const rt = _scPendingRealTarget.bodyRef;
-    if (koF && rt &&
-        !segmentCrossesSphere(scModel.position, rt.position, koF.pos, koF.keepOut * SC_GOAROUND_SAFETY)) {
+    // tour-body-reachability-2026-07-05 (Defect 1): UNIFIED clearance. Switch to the
+    // real target the instant the direct path clears EVERY obstacle (star + planets +
+    // moons), re-derived from live mesh positions each frame — NO parallel pending-
+    // obstacle variable to keep in sync (eliminates the stale-routing desync class).
+    // The star is in this list at starKeepOutRadius·SAFETY == the old koF test, so a
+    // star-only leg switches at the identical instant; a star+planet leg also waits
+    // for the planet before committing to the direct leg.
+    if (rt &&
+        !firstBlockingObstacle(scModel.position, rt.position, _tourObstacles(rt, SC_GOAROUND_SAFETY))) {
       const realStop = _scPendingRealTarget;
       _scPendingRealTarget = null;
       _dispatchTourLeg(realStop, { continuation: true });

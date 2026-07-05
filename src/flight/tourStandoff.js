@@ -280,3 +280,80 @@ export function planLeg({ shipPos, targetPos, targetIsStar, starPos, keepOut, pa
   }
   return { waypoint: null, standoff: null };
 }
+
+// ── Defect-1 (tour-body-reachability-2026-07-05): generalize the star go-around
+// to any NON-STAR obstacle (parent planet, sibling moon, a second star). ADD-ONLY —
+// planLeg / segmentCrossesSphere / goAroundWaypoint above stay byte-identical (their
+// tourStandoff.test.js suite is the AC5 regression witness).
+
+// Dedicated scratch — DISTINCT from _d/_cp/_closest above (which segmentCrossesSphere
+// and goAroundWaypoint overwrite). firstBlockingObstacle must never share theirs.
+const _obDir = new THREE.Vector3();
+const _obToC = new THREE.Vector3();
+const _obClosest = new THREE.Vector3();
+
+// Non-star obstacle keep-out = OBSTACLE_KEEP_OUT_FACTOR·radius. 1.5 sits above the
+// 1.05R collision barrier (a routed ship is never pinned) and, inflated by the
+// go-around SAFETY (×1.2 = 1.8R), below the ~2.6R star-style park view distance, so
+// a ship parked at a just-visited planet starts OUTSIDE the inflated sphere (clean
+// tangent, no spurious escape); and well below the ~6R min moon orbit, so a target
+// moon is never engulfed by its own parent's keep-out. One live-tunable knob.
+export const OBSTACLE_KEEP_OUT_FACTOR = 1.5;
+
+export function obstacleKeepOutRadius({ radius }) {
+  return OBSTACLE_KEEP_OUT_FACTOR * radius;
+}
+
+/**
+ * The obstacle on the straight segment P->T that the ship meets FIRST, or null if
+ * the path clears every obstacle. "First" = smallest clamped closest-approach
+ * parameter t (so a ship starting INSIDE an obstacle clamps to t≈0 and that
+ * obstacle is escaped first). The crossing test mirrors segmentCrossesSphere but
+ * on LOCAL scratch (_ob*), NEVER _d/_cp/_closest, so it is safe to interleave with
+ * the star routing (red-team attack #8).
+ *
+ * @param {THREE.Vector3} P ship position
+ * @param {THREE.Vector3} T target position
+ * @param {Array<{pos:THREE.Vector3, keepOut:number}>} obstacles
+ * @returns {{pos:THREE.Vector3, keepOut:number}|null} the nearest crossed obstacle
+ */
+export function firstBlockingObstacle(P, T, obstacles) {
+  _obDir.copy(T).sub(P);
+  const lenSq = _obDir.lengthSq();
+  let best = null;
+  let bestT = Infinity;
+  for (const o of obstacles) {
+    let t;
+    if (lenSq <= 1e-12) {
+      t = 0;
+    } else {
+      _obToC.copy(o.pos).sub(P);
+      t = _obToC.dot(_obDir) / lenSq;
+      if (t < 0) t = 0; else if (t > 1) t = 1;
+    }
+    _obClosest.copy(_obDir).multiplyScalar(t).add(P); // P + t*(T-P)
+    if (_obClosest.distanceToSquared(o.pos) < o.keepOut * o.keepOut) {
+      if (t < bestT) { bestT = t; best = o; }
+    }
+  }
+  return best;
+}
+
+/**
+ * Non-star analogue of planLeg: does the straight leg to `targetPos` cross a
+ * non-star obstacle, and if so which, plus a go-around waypoint at the obstacle's
+ * (as-passed) keep-out. Inflation is the CALLER's policy — main.js re-places W at
+ * keepOut·SAFETY, matching the star block — so this waypoint is the un-inflated
+ * convenience for tests. planLeg (the star seam) is untouched.
+ *
+ * @param {{shipPos:THREE.Vector3, targetPos:THREE.Vector3,
+ *          obstacles:Array<{pos:THREE.Vector3, keepOut:number}>}} p
+ * @returns {{obstacle:{pos:THREE.Vector3, keepOut:number}|null, waypoint:THREE.Vector3|null}}
+ */
+export function planLegObstacle({ shipPos, targetPos, obstacles }) {
+  const obstacle = firstBlockingObstacle(shipPos, targetPos, obstacles) || null;
+  return {
+    obstacle,
+    waypoint: obstacle ? goAroundWaypoint(shipPos, targetPos, obstacle.pos, obstacle.keepOut) : null,
+  };
+}
