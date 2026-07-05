@@ -290,6 +290,20 @@ export function idleFiresTour({ regime } = {}) {
   return regime === 'helm';
 }
 
+// The forced proximity drop-out (main.js:8333) is a HANDS-ON affordance: near a
+// star the supercruise drive drops so the player coasts into sublight. But there
+// is NO hands-off drive re-arm (R is inert hands-off, main.js:9780), so firing it
+// while the AUTOPILOT owns the throttle strands the ship at throttle*SUBLIGHT_CAP
+// (~0.0015 u/s) and the tour dies. The autopilot owns the throttle whenever a
+// pilot leg OR a tour is active AND we are not in player-directed ASSIST (ASSIST
+// is player-chosen and keeps its own graceful stall-dropout). Pure so main.js can
+// ask "may the forced drop fire?" without re-deriving the regime inline.
+// (tour-body-reachability-2026-07-05, Defect 2.)
+export function forcedProximityDropAllowed({ scManual, pilotActive, tourActive, flightMode } = {}) {
+  const autopilotOwns = (!!pilotActive || !!tourActive) && flightMode !== FlightMode.ASSIST;
+  return !!scManual && !autopilotOwns;
+}
+
 // The OS-cursor + flight-HUD-steering-reticle visibility decision, BY SUB-MODE,
 // extracted pure (§free-look-interaction-redesign-2026-06-27, Part 1). One source
 // of truth the live host (_applyPointerHud) applies on every transition that

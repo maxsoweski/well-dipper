@@ -47,7 +47,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed } from './flight/flightModes.js';
 import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
 import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR } from './flight/tourStandoff.js';
 import { createFreeLook } from './flight/freeLook.js';
@@ -7184,6 +7184,12 @@ function _dispatchTourLeg(stop, { continuation = false, choreo } = {}) {
     console.warn('[TOUR] stop has non-finite/zero bodyRadius — skipping leg', stop);
     return;
   }
+  // tour-body-reachability-2026-07-05 (Defect 2): every tour/boot/fly-in leg
+  // dispatches with the supercruise drive ENGAGED. A tour that INHERITS drive-off
+  // (hands-on R-dropout → idle → tour) would otherwise crawl at sublight and never
+  // cross the leg (AC3). One-shot at the dispatch seam (NOT per-frame); anti-clip is
+  // automatic (speedCap collapses to the surface floor on a nose-into-a-body).
+  scModel.setDrive(true);
   const legCue = choreo === undefined ? () => shipChoreographer.onLegAdvanced() : choreo;
   const linger = stop.linger * settings.get('tourLingerMultiplier');
   const isStar = stop.type === 'star';
@@ -8326,11 +8332,16 @@ function simStep(deltaTime) {
       }
       scModel.setBodies(_scBodies);
 
-      // Forced proximity drop-out (spec §Unit 5): in hands-on flight, if the drive
-      // is ON and we've crossed a body's forced-drop horizon (mass-based for stars,
-      // 1.1R floor otherwise), kick to sublight. The hard barrier (model) is the
-      // backstop; this is the supercruise-side safety + the "stars push you out far".
-      if (_scManual && scModel.driveOn && scModel.proximityDropRequired()) {
+      // Forced proximity drop-out (spec §Unit 5): a HANDS-ON affordance — if the
+      // drive is ON and we've crossed a body's forced-drop horizon (mass-based for
+      // stars, 1.1R floor otherwise), kick to sublight. The hard barrier (model) is
+      // the backstop; this is the supercruise-side safety + "stars push you out far".
+      // tour-body-reachability-2026-07-05 (Defect 2): YIELD while the autopilot owns
+      // the throttle (pilot/tour active, non-ASSIST) — there is NO hands-off drive
+      // re-arm (R is inert hands-off), so dropping mid-tour strands the ship at the
+      // ~0.0015 u/s sublight crawl. The gate is the pure forcedProximityDropAllowed.
+      if (forcedProximityDropAllowed({ scManual: _scManual, pilotActive: scPilot.isActive, tourActive: autoNav.isActive, flightMode: _flightMode })
+          && scModel.driveOn && scModel.proximityDropRequired()) {
         scModel.setDrive(false);
         scModel.setThrottle(0);
         shipChoreographer.dropImpulse();
