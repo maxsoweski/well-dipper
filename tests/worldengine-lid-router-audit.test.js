@@ -32,16 +32,28 @@ const LID_SRC = readSrc('../src/worldengine/base/lidResponse.js');
 const LID_CODE = stripComments(LID_SRC);          // comments stripped: the router names forbidden symbols in
                                                   // "we don't do this" comments; only DEFINITIONS/USES count.
 const RIVERS_CODE = stripComments(readSrc('../planet-lod-rivers.js'));
+// V2-2b-2a — the 'lid:' namespace goes LIVE. The composer OWNS it; the router + the two pure corner writers
+// must still make ZERO 'lid:' draws (so corner byte-identity holds). Corners + composer stripped for the
+// per-file ownership greps below.
+const MAGMA_CODE = stripComments(readSrc('../src/worldengine/base/magmatism.js'));
+const STAGNANT_CODE = stripComments(readSrc('../src/worldengine/base/stagnantLid.js'));
+const COMPOSER_CODE = stripComments(readSrc('../src/worldengine/base/mixedInterior.js'));
 
-// ── AC1 — determinism + reserved 'lid:' namespace ───────────────────────────────────────────────────────
-describe('V2-2a AC1 — the router is pure/deterministic; zero RNG; the \'lid:\' namespace is RESERVED (unused)', () => {
-  it('router source has no Math.random / Date.now and imports/draws NO alea (⇒ zero \'lid:\' draws)', () => {
+// ── AC1 — determinism + 'lid:' namespace OWNERSHIP (live in the composer, forbidden in the router + corners) ─
+describe('V2-2b-2a AC1 — the router stays pure/zero-RNG; the \'lid:\' namespace is OWNED by the composer (corners + router zero)', () => {
+  it('router draws NO alea + NO \'lid:\' colon; corners make ZERO \'lid:\' draws; the composer OWNS lid:centers:/lid:strength:', () => {
     expect(LID_CODE, 'no Math.random').not.toMatch(/Math\.random\s*\(/);
     expect(LID_CODE, 'no Date.now').not.toMatch(/Date\.now\s*\(/);
-    expect(LID_CODE, 'router draws no alea at all (classifier is pure; corners keep their own streams)').not.toMatch(/\balea\b/);
-    // The 'lid:' alea namespace (V2-2b 'lid:strength:'/'lid:yield:') is RESERVED — zero such literals here.
-    // (The path markers use 'lid-weak'/'lid-strong'/'lid-mixed'/'lid-offpilot' — a hyphen, NOT the 'lid:' colon.)
-    expect(LID_CODE, "the 'lid:' namespace is reserved, not used").not.toMatch(/lid:/);
+    // The router delegates to the composer; it acquires NO alea and NO 'lid:' colon ('./mixedInterior.js' has
+    // no colon; the path markers use 'lid-mixed' etc. — a hyphen, NOT the 'lid:' colon).
+    expect(LID_CODE, 'router draws no alea at all (it delegates to the composer)').not.toMatch(/\balea\b/);
+    expect(LID_CODE, "router carries no 'lid:' colon").not.toMatch(/lid:/);
+    // The two pure corners still make ZERO 'lid:' draws ⇒ corner byte-identity is preserved.
+    expect(MAGMA_CODE, "magmatism corner makes no 'lid:' draw").not.toMatch(/lid:/);
+    expect(STAGNANT_CODE, "stagnant corner makes no 'lid:' draw").not.toMatch(/lid:/);
+    // The composer OWNS the 'lid:' namespace (the FIRST code to draw in it).
+    expect(COMPOSER_CODE, 'composer owns lid:centers:').toMatch(/lid:centers:/);
+    expect(COMPOSER_CODE, 'composer owns lid:strength:').toMatch(/lid:strength:/);
   });
 
   it('repeat-call on a fixed (e1, opts) → identical fineClass + identical carrier.height + identical primitiveId', () => {
@@ -58,24 +70,36 @@ describe('V2-2a AC1 — the router is pure/deterministic; zero RNG; the \'lid:\'
   });
 });
 
-// ── AC-MIXED-STUB — the explicit-unimplemented marker; carrier.height UNWRITTEN ─────────────────────────
-describe('V2-2a AC-MIXED-STUB — a mixed vector hits the return-marker with NO height written', () => {
+// ── AC-MIXED-STUB (flipped, V2-2b-2a) — the 'mixed' arm now runs the REAL composer; off-pilot still a marker ─
+describe('V2-2b-2a AC-MIXED-STUB — a mixed vector WRITES height via the composer; off-pilot still a marker', () => {
   // A hand-set mixed vector: rocky, no heat-pipe, L in [MIXED_LO(0.35), L_STRONG(0.63)) → 'mixed' (Mars-like).
-  const mixedE1 = { compositionClass: 'rocky', geodynamicRegime: 'dead-lid', m_hp: -0.45, L: 0.5 };
+  // Now carries Φ + n (the composer reads e1.n center count + e1.Φ convective vigor).
+  const mixedE1 = { compositionClass: 'rocky', geodynamicRegime: 'dead-lid', m_hp: -0.45, L: 0.5, Φ: 0.3, n: 6 };
 
-  it('return === {path:\'lid-mixed\', fineClass:\'mixed\', unimplemented:true}; carrier.height byte-unchanged; no corner emit', () => {
+  it('mixed WRITES carrier.height (byte-changed from a sentinel); emits multi-valued primitiveId + centerId; unimplemented ABSENT', () => {
     const c = carrierOf();
     const SENTINEL = 123.5;
     c.height.fill(SENTINEL);
     const before = arr(c.height);
     const r = writeLidResponseSphere(c, {}, { e1: mixedE1, rawTidal: 0, macroSeed: 1 });
-    expect(r).toEqual({ path: 'lid-mixed', fineClass: 'mixed', unimplemented: true });
-    expect(r.primitiveId, 'no corner emit on the mixed marker').toBeUndefined();
-    expect(arr(c.height), 'carrier.height byte-unchanged from the pre-filled sentinel').toEqual(before);
-    // No 'lid:' alea draw is even POSSIBLE — the router source contains no alea (AC1 grep leg above).
+    expect(r.path, 'lid-mixed path').toBe('lid-mixed');
+    expect(r.fineClass, 'mixed fine-class').toBe('mixed');
+    expect(r.unimplemented, 'the unimplemented marker is GONE (real machinery)').toBeUndefined();
+    // carrier.height is now WRITTEN (byte-changed from the pre-filled sentinel).
+    expect(arr(c.height), 'carrier.height byte-changed from the sentinel (height written)').not.toEqual(before);
+    // primitiveId is present, per-node, and MULTI-VALUED (not a single uniform corner fill).
+    expect(r.primitiveId, 'primitiveId emitted').toBeInstanceOf(Int32Array);
+    expect(r.primitiveId.length, 'primitiveId is per-node').toBe(c.count);
+    const distinct = new Set(arr(r.primitiveId));
+    expect(distinct.size, `primitiveId is multi-valued (ids ${[...distinct].join(',')})`).toBeGreaterThan(1);
+    for (const id of distinct) expect([1, 2, 5, 6, 7, 8], `id ${id} in the enum`).toContain(id);
+    // centerId co-emitted, per-node.
+    expect(r.centerId, 'centerId emitted').toBeInstanceOf(Int32Array);
+    expect(r.centerId.length, 'centerId is per-node').toBe(c.count);
+    expect(r.mixedDiag, 'mixedDiag emitted').toBeTruthy();
   });
 
-  it('an off-pilot vector likewise returns a marker (path lid-offpilot) with height UNWRITTEN', () => {
+  it('an off-pilot vector STILL returns a marker (path lid-offpilot) with height UNWRITTEN', () => {
     const offE1 = { compositionClass: 'rocky', geodynamicRegime: 'dead-lid', m_hp: -0.45, L: 0.30 }; // below MIXED_LO
     const c = carrierOf();
     c.height.fill(7.25);

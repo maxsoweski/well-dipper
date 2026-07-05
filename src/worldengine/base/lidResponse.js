@@ -40,6 +40,11 @@ import { L_STRONG, SHOULDER_LO, HEATPIPE_PEG } from './e1Regime.js';
 // ARCHETYPE-FREE from the E1 coordinate, must-fix #3). No cycle: neither corner writer imports this module.
 import { writeMagmatismSphere, magmaDriversToTune } from './magmatism.js';
 import { writeStagnantLidReliefSphere } from './stagnantLid.js';
+// V2-2b-2a — the mixed-interior COMPOSER (the real 'mixed' machinery). A NEW three-free module (it imports
+// ONLY alea/simplex/mathutil — never this router, so no cycle). The import specifier './mixedInterior.js'
+// carries no 'lid:' colon and no alea token, so the router's byte-identity + reserved-namespace audits hold:
+// the composer OWNS the 'lid:' alea streams, the router still draws none.
+import { writeMixedInteriorSphere } from './mixedInterior.js';
 
 // MIXED_LO — the mixed interior's lower edge (gate-1 §7), separating Mars-mixed (L 0.551) from
 // Earth-off-pilot (L 0.250). e1Regime.js holds this value as the module-private MOBILE_L=0.35 (:47), which
@@ -227,9 +232,18 @@ export function writeLidResponseSphere(carrier, drivers, {
       const primitiveId = uniformPrimitiveId(carrier, PRIMITIVE_ID['stagnant-basaltic-plain']);
       return { path: 'lid-strong', fineClass, primitiveId, stagnantDiag };
     }
+    case 'mixed': {
+      // V2-2b-2a — the real mixed machinery. The composer WRITES carrier.height (REPLACE) over the shared
+      // seeded 'lid:' center field: shields where strong centers pierce, coronae/tessera where they tent, a
+      // preserved basaltic-plains datum in the lows, analytic rift corridors between centers. It emits the
+      // multi-valued primitiveId (NOT a uniform corner fill) + the per-node centerId + a mixedDiag. The
+      // 'mixed' return drops `unimplemented` and stays within the documented return type.
+      const { primitiveId, centerId, mixedDiag } = writeMixedInteriorSphere(carrier, { e1, rawTidal, macroSeed });
+      return { path: 'lid-mixed', fineClass, primitiveId, centerId, mixedDiag };
+    }
     default:
-      // 'mixed' | 'off-pilot' — NO height written (§5.5); return-marker, NOT a throw, so classification tests
-      // + any future probe read the fine-class without try/catch. V2-2b swaps real mixed machinery in HERE.
-      return { path: fineClass === 'mixed' ? 'lid-mixed' : 'lid-offpilot', fineClass, unimplemented: true };
+      // 'off-pilot' — NO height written (§5.5); return-marker, NOT a throw, so classification tests + any
+      // future probe read the fine-class without try/catch. (The 'mixed' arm above is now the real composer.)
+      return { path: 'lid-offpilot', fineClass, unimplemented: true };
   }
 }

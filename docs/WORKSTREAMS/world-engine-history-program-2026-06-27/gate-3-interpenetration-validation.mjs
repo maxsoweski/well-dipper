@@ -32,7 +32,7 @@ const angDist = (a, b) => Math.acos(clamp(-1, 1, dot(a, b)));   // geodesic radi
 
 // ── Fibonacci sphere + symmetric k-NN adjacency (quasi-uniform; k=6 ≈ hexagonal) ──
 // z-band bucketing keeps k-NN ~O(N·√N) so N=40962 is a few seconds, not O(N²).
-function buildFibSphere(N, k = 6) {
+export function buildFibSphere(N, k = 6) {
   const GA = Math.PI * (3 - Math.sqrt(5));   // golden angle
   const verts = new Array(N);
   for (let i = 0; i < N; i++) {
@@ -165,7 +165,7 @@ function computeStats(mesh, cls) {
 // (a) TILED: hemisphere split refined by Voronoi-patch segregation. Pierce provinces
 //     cluster in the north cap (seed.z > zc) with irregular Voronoi walls → one long
 //     seam, few heterotypic edges → LOW M.
-function genTiled(mesh, f, seed, nProv = 24) {
+export function genTiled(mesh, f, seed, nProv = 24) {
   const { verts } = mesh; const N = verts.length;
   const rng = alea('tiled:' + seed + ':' + f);
   const zc = 1 - 2 * f;                         // north-cap fraction ≈ f
@@ -183,7 +183,7 @@ function genTiled(mesh, f, seed, nProv = 24) {
 // (b) COMPOUND / INTERPENETRATING: K pierce DISCS dispersed over the sphere, each
 //     fully enclosed by tent (background) — "shield discs nested inside corona annuli
 //     at the SAME centers". Dispersed enclosure → many compact boundaries → MID M, HIGH C.
-function genCompound(mesh, f, seed, K = 14) {
+export function genCompound(mesh, f, seed, K = 14) {
   const { verts } = mesh; const N = verts.length;
   const rng = alea('compound:' + seed + ':' + f);
   const centers = []; for (let c = 0; c < K; c++) centers.push(randDir(rng));
@@ -198,7 +198,7 @@ function genCompound(mesh, f, seed, K = 14) {
 // (b') COMPOUND-MIXED: half the pierce budget as dispersed enclosed discs (compound),
 //      half as ONE clustered north cap (tiled). Tests that a PARTIALLY-compound world
 //      still reads HIGH (the pilot won't be 100% compound).
-function genCompoundMixed(mesh, f, seed, K = 10) {
+export function genCompoundMixed(mesh, f, seed, K = 10) {
   const { verts } = mesh; const N = verts.length;
   const rng = alea('mixed:' + seed + ':' + f);
   const centers = []; for (let c = 0; c < K; c++) centers.push(randDir(rng));
@@ -213,7 +213,7 @@ function genCompoundMixed(mesh, f, seed, K = 10) {
 }
 
 // (c) SCATTER: seeded per-node random assignment (the salt-and-pepper mush trap).
-function genScatter(mesh, f, seed) {
+export function genScatter(mesh, f, seed) {
   const { verts } = mesh; const N = verts.length;
   const rng = alea('scatter:' + seed + ':' + f);
   const cls = new Uint8Array(N);
@@ -222,7 +222,7 @@ function genScatter(mesh, f, seed) {
 }
 
 // calibration: ONE pierce disc of areal fraction f — a perfect compact figure; C≈q≈1.
-function genSingleDisc(mesh, f, seed) {
+export function genSingleDisc(mesh, f, seed) {
   const { verts } = mesh; const N = verts.length;
   const rng = alea('disc:' + seed + ':' + f);
   const ctr = randDir(rng);
