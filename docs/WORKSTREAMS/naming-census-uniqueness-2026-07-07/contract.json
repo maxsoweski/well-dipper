@@ -3,7 +3,7 @@
   "intentRef": "intent.md",
   "project": "well-dipper",
   "status": "building",
-  "phase": "Increment 0 = AC1+AC2 (defect quick wins); Increment 1 = AC3+AC4 (census + explainer); Increment 2 = AC5 (Max design-review gate — ratify or amend; amendments fold into this contract before building on); Increment 3 = AC6+AC7+AC8 (uniqueness + revisit stability, against the ratified scheme)",
+  "phase": "Increment 0 = AC1+AC2 (defect quick wins, DONE 3d87ed6, live render check batched); Increment 1 = AC3+AC4 (census + explainer, DONE 4928ccd); Increment 2 = AC5 (Max gate — CLOSED 2026-07-07, ratified-with-amendments, see ac5-decision.md); Increment 3a = AC9 (HYG catalog regen) + sky-click real-name fix; Increment 3b = AC6+AC7 (position-derived naming, hard guarantee per ac5-decision.md); then AC8 + batched live checks",
   "acceptanceCriteria": [
     {
       "id": "AC1-horsehead-renders",
@@ -53,10 +53,10 @@
     },
     {
       "id": "AC6-no-duplicate-names",
-      "statement": "Players never encounter the same system name twice: at census volumes (>=100k generated systems across regions), distinct systems produce zero duplicate names, and procgen names never collide with real HYG catalog designations.",
+      "statement": "Players never encounter the same system name twice — guaranteed by construction per the ratified scheme (ac5-decision.md): every procgen name derives injectively from canonical position; name classes = common positional/catalog designations (tiny real-survey ranges dropped/bounded), common multi-part fantasy carrying position-derived parts, RARE bare fantasy words injectively allocated from a finite partitioned supply, and a blocklist so procgen never emits one of the ~355 real proper names; the no-position fallback branch is eliminated.",
       "verifyVia": {
-        "input": "Re-run the AC3 census against the post-fix generator.",
-        "observable": "0 duplicates among distinct systems; 0 procgen names matching real catalog designations; the mechanism is by-construction or registry-backed, not luck (the report states which)."
+        "input": "Re-run the AC3 census against the post-fix generator, plus a dedicated injectivity unit test over the allocation mapping.",
+        "observable": "0 duplicates among distinct systems at >=100k census volume; 0 procgen names matching real catalog designations or proper names; injectivity test proves the guarantee is structural (position->name mapping collision-free over the sampled sector space), not statistical; refreshed per-region sample blocks emitted for Max's UAT."
       },
       "layer": "integration"
     },
@@ -69,6 +69,15 @@
       },
       "layer": "integration",
       "live": true
+    },
+    {
+      "id": "AC9-hyg-real-names",
+      "statement": "The shipped real-star catalog carries usable names: public/assets/data/hyg-stars.json regenerated via the already-fixed scripts/process-hyg-catalog.mjs, eliminating the '\"' artifact on 15,243 of 15,599 entries; every entry has a proper name or a catalog designation (HD/HIP), so real stars can show real names on every targeting path.",
+      "verifyVia": {
+        "input": "Run the regeneration script; then a headless scan of the regenerated JSON (extend or reuse the census tool's HYG loader).",
+        "observable": "0 entries whose name is the '\"' artifact; >=15k entries with a non-empty usable name; the census HYG cross-check now runs against the full usable-name set and its report reflects the new baseline."
+      },
+      "layer": "unit"
     },
     {
       "id": "AC8-sol-guardrail",
