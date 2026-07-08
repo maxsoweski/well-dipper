@@ -9488,9 +9488,18 @@ function trySelectWarpTarget(rayDir) {
     warpTarget.name = entry.galaxyData.name;
     bodyInfo.showWarpTarget(`${entry.galaxyData.name} (${entry.galaxyData.type} galaxy)`);
   } else {
-    // Normal star — generate name from index
-    const nameRng = new SeededRandom(`warp-star-${result.index}`);
-    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), starPos);
+    // Normal star — real catalog stars keep their real name on every
+    // targeting path (ac5-decision.md rule 3); procgen stars still get a
+    // name generated from the transient starfield index. Guard against the
+    // pre-regen hyg-stars.json '"' artifact defensively (AC9 regen is a
+    // parallel fix, not a prerequisite for this one).
+    const realName = entry?.starData?.isRealStar ? entry.starData.name : null;
+    if (realName && realName !== '"') {
+      warpTarget.name = realName;
+    } else {
+      const nameRng = new SeededRandom(`warp-star-${result.index}`);
+      warpTarget.name = generateSystemName(nameRng.child('names').child('system'), starPos);
+    }
     bodyInfo.showWarpTarget(warpTarget.name);
   }
 
@@ -9545,8 +9554,14 @@ function autoSelectWarpTarget() {
     warpTarget.galaxyData = entry.galaxyData;
     warpTarget.name = entry.galaxyData.name;
   } else {
-    const nameRng = new SeededRandom(`warp-star-${result.index}`);
-    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), autoStarPos);
+    // Normal star — same real-name-wins guard as trySelectWarpTarget above.
+    const realName = entry?.starData?.isRealStar ? entry.starData.name : null;
+    if (realName && realName !== '"') {
+      warpTarget.name = realName;
+    } else {
+      const nameRng = new SeededRandom(`warp-star-${result.index}`);
+      warpTarget.name = generateSystemName(nameRng.child('names').child('system'), autoStarPos);
+    }
   }
 
   warpTarget.blinkTimer = 0;

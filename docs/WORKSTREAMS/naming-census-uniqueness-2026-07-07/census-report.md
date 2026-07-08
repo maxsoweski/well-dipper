@@ -106,7 +106,7 @@ running `node scripts/name-census.mjs` twice and diffing the two
 `census-report.md` outputs byte-for-byte (identical; see the tool's
 own verification note in the workstream handoff).
 
-Determinism fingerprint (FNV-1a over sorted summary stats): `2c4efd80`
+Determinism fingerprint (FNV-1a over sorted summary stats): `89deb610`
 
 ### Known limitations (read before trusting these numbers as a ceiling or floor)
 
@@ -140,11 +140,11 @@ Determinism fingerprint (FNV-1a over sorted summary stats): `2c4efd80`
 | catalog duplicate rate | 19.65% (n=25,526) |
 | greek duplicate rate | 2.56% (n=12,083) |
 | fantasy duplicate rate | 8.08% (n=82,391) |
-| HYG real-catalog entries (shipped file) | 15,599 |
-| HYG entries with the `"` ingestion-artifact name (see caveat) | 15,243 (97.72%) |
-| HYG distinct meaningful real names/designations | 355 |
-| Procgen names exactly matching a real HYG name (distinct names) | 8 |
-| Procgen samples that produced a real-HYG-colliding name | 20 |
+| HYG real-catalog entries (shipped file) | 15,598 |
+| HYG entries with the `"` ingestion-artifact name (see caveat) | 0 (0.00%) |
+| HYG distinct meaningful real names/designations | 15,546 |
+| Procgen names exactly matching a real HYG name (distinct names) | 94 |
+| Procgen samples that produced a real-HYG-colliding name | 108 |
 
 ## Per-region duplicate rates (all styles combined)
 
@@ -256,7 +256,7 @@ internal style roll do), so this is informational, not a headline.
 
 ## HYG cross-check (procgen vs. real star names)
 
-`public/assets/data/hyg-stars.json` ships 15,599 entries
+`public/assets/data/hyg-stars.json` ships 15,598 entries
 (the HYG v4.0 naked-eye catalog, per `RealStarCatalog.js`). Read
 directly here (not via `RealStarCatalog`'s browser `fetch()`, which
 this headless tool has no equivalent of) — it's the exact same JSON
@@ -264,7 +264,7 @@ payload the game loads at runtime, so this is not a different data
 source, just a different way of reading the same file.
 
 **Data-quality caveat, discovered while building this cross-check:**
-15,243 of the 15,599 entries
+0 of the 15,598 entries
 (most of the unnamed stars) have `name` set to the literal
 one-character string `"` rather than `null` or an `HD ####`
 designation. `scripts/process-hyg-catalog.mjs` (~106-113, current
@@ -277,18 +277,18 @@ of scope for AC3 — it touches a production asset file, and this
 workstream only adds a standalone tool). It matters here because a
 naive collision check against the raw 15.6k-entry `name` field would
 report ~15,243 "real names," all of them the same useless `"`
-character — so this cross-check uses the 355
+character — so this cross-check uses the 15,546
 *distinct, non-artifact* names instead (proper names like `Sirius`,
 `Aldebaran`, plus a handful of Bayer+constellation designations like
 `p Eridani`).
 
 | metric | value |
 | --- | --- |
-| HYG entries (raw) | 15,599 |
-| HYG entries with `"` artifact name | 15,243 |
-| HYG distinct meaningful names | 355 |
-| Distinct procgen names colliding with a meaningful HYG name | 8 |
-| Total procgen samples affected | 20 |
+| HYG entries (raw) | 15,598 |
+| HYG entries with `"` artifact name | 0 |
+| HYG distinct meaningful names | 15,546 |
+| Distinct procgen names colliding with a meaningful HYG name | 94 |
+| Total procgen samples affected | 108 |
 
 Examples (all collisions found, up to 25):
 
@@ -297,11 +297,28 @@ Examples (all collisions found, up to 25):
 | `Rigel` | 5 | fantasy |
 | `Polis` | 4 | fantasy |
 | `Ain` | 3 | fantasy |
+| `HD 23594` | 2 | catalog |
+| `HD 74591` | 2 | catalog |
 | `Mira` | 2 | fantasy |
 | `Naos` | 2 | fantasy |
 | `Ran` | 2 | fantasy |
-| `Polaris` | 1 | fantasy |
-| `Rana` | 1 | fantasy |
+| `HD 100808` | 1 | catalog |
+| `HD 105943` | 1 | catalog |
+| `HD 105982` | 1 | catalog |
+| `HD 10809` | 1 | catalog |
+| `HD 112657` | 1 | catalog |
+| `HD 120642` | 1 | catalog |
+| `HD 125981` | 1 | catalog |
+| `HD 130084` | 1 | catalog |
+| `HD 130259` | 1 | catalog |
+| `HD 131120` | 1 | catalog |
+| `HD 131637` | 1 | catalog |
+| `HD 133670` | 1 | catalog |
+| `HD 133872` | 1 | catalog |
+| `HD 138406` | 1 | catalog |
+| `HD 13854` | 1 | catalog |
+| `HD 145674` | 1 | catalog |
+| `HD 150258` | 1 | catalog |
 
 ## Path E — no-position spawn fallback (supplementary, not part of the 4-region headline)
 

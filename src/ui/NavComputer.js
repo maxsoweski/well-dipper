@@ -2395,7 +2395,10 @@ export class NavComputer {
       );
       const MATCH_DIST = 0.002; // 2 pc in kpc
       for (const rs of realStars) {
-        if (!rs.name) continue; // skip unnamed catalog entries
+        // Skip unnamed catalog entries, including the pre-regen hyg-stars.json
+        // '"' artifact (AC9 regen eliminates it; guard here defensively since
+        // that regen lands in parallel with this fix, not before it).
+        if (!rs.name || rs.name === '"') continue;
         const realKey = `real-${rs.name}`;
         if (this._loadedSeen.has(realKey)) continue;
         this._loadedSeen.add(realKey);
