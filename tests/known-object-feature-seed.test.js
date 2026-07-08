@@ -20,19 +20,10 @@ describe('known-object feature seeds', () => {
   const map = new GalacticMap();
 
   it('every known object injected into a feature region has a truthy seed', () => {
-    // IC434 (Horsehead) is currently SHADOWED by M78: identical galacticPos
-    // in the catalog, and the known-object injection dedups against features
-    // already pushed — the later entry (M78) splices the earlier (IC434).
-    // Separate latent bug (data + dedup design), found 2026-06-10 while
-    // pinning the seed fix; tracked in docs/NOW.md. Presence is therefore
-    // asserted for all profiles EXCEPT shadowed ones; the seed invariant is
-    // asserted for everything that renders.
-    const SHADOWED = new Set(['IC434']);
     for (const [key, profile] of Object.entries(KNOWN_OBJECT_PROFILES)) {
       const pos = profile.galacticPos;
       const feats = map.findNearbyFeatures(pos, 0.1);
       const mine = feats.find(f => f.isKnownObject && f.knownProfile?.name === profile.name);
-      if (SHADOWED.has(key)) continue;
       expect(mine, `${key} (${profile.name}) not found near its own position`).toBeDefined();
       expect(mine.seed, `${key} (${profile.name}) has falsy feature seed`).toBeTruthy();
     }

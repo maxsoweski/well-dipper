@@ -427,7 +427,7 @@ export const KNOWN_OBJECT_PROFILES = {
     messier: null,
     ngc: null,
     type: 'emission-nebula',
-    galacticPos: { x: 8.34, y: -0.09, z: -0.17 },
+    galacticPos: { x: 8.343, y: -0.089, z: -0.171 },
     radius: 0.003,
     shape: 'irregular',
     colorPrimary: [0.8, 0.2, 0.15],       // H-alpha red background
@@ -457,7 +457,7 @@ export const KNOWN_OBJECT_PROFILES = {
     messier: 'M78',
     ngc: 'NGC 2068',
     type: 'reflection-nebula',
-    galacticPos: { x: 8.34, y: -0.09, z: -0.17 },
+    galacticPos: { x: 8.345, y: -0.093, z: -0.165 },
     radius: 0.002,
     shape: 'irregular',
     colorPrimary: [0.35, 0.5, 0.9],       // Blue reflection

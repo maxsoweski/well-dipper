@@ -39,9 +39,15 @@ describe('Galactic Feature Layer', () => {
 
     const types = new Set(unique.map(f => f.type));
 
-    // Emission nebulae should be in spiral arms
+    // Emission nebulae should be in spiral arms — but only for procedurally
+    // generated ones. Known real objects (KnownObjectProfiles, injected via
+    // GalacticMap._generateFeatureRegion's "known galactic objects" block)
+    // are placed at their real astronomical galacticPos and intentionally
+    // bypass FEATURE_TYPES.conditions(), so a real nebula (e.g. NGC 2237 /
+    // Rosette, armStrength ~0.13) can legitimately fall outside what our
+    // simplified log-spiral arm model calls a "strong arm" region.
     for (const f of unique) {
-      if (f.type === 'emission-nebula') {
+      if (f.type === 'emission-nebula' && !f.isKnownObject) {
         expect(f.context.armStrength).toBeGreaterThan(0.15);
       }
       if (f.type === 'globular-cluster') {
