@@ -5,10 +5,12 @@
 // REAL preset condition vectors (deriveConditionVector → computeE1) and adjudicate the classifier over the
 // 15 archetype-mapped presets × seeds {1,2,3,7,42}, plus hand-set boundary vectors that pin the cuts.
 //
-//   • AC-CONFORMANCE-FINE — classifyLidPath: {Lava,Magma}=pure-weak, Venus=pure-strong, every other shipped
-//     preset=off-pilot, NONE=mixed (a preset drifting into mixed FAILS); the ×5-seed sweep proves the
-//     classifier is SEED-INDEPENDENT (R-A2 — it never reads the seeded geodynamicRegime). Hand-set boundary
-//     vectors pin the L_STRONG / SHOULDER_LO / m_hp-first defaults; margin asserts print the full e1 tuple.
+//   • AC-CONFORMANCE-FINE — classifyLidPath: {Lava,Magma}=pure-weak, Venus=pure-strong. V2-2b-2b threaded the
+//     L-cuts to read `effectiveL ?? L` (R-wetstag), so an in-band Rocky/Ocean/Eyeball whose seeded regime pick
+//     lands on 'stagnant' carries effectiveL ∈ [0.60,0.6275] and now routes 'mixed' on THOSE seeds (was
+//     off-pilot) — a DELIBERATE seed-DEPENDENCE (§4 R2-R5). A body WITHOUT effectiveL still classifies
+//     seed-INDEPENDENTLY on raw L. Hand-set boundary vectors (no effectiveL) pin the L_STRONG / SHOULDER_LO /
+//     m_hp-first defaults; margin asserts print the full e1 tuple.
 //   • AC-SUBTRACTIVE-GATE — isUnbrokenLidPath true ONLY for {heat-pipe, hot-surface-stagnant} rocky; false
 //     for Mars (dead-lid) + every despun rocky (L-guard) + the authored exotics (label carve-out). The two
 //     despun destinations (locked→shell eyeball-despun, unlocked→despun) are asserted via the SHIPPED
@@ -67,42 +69,63 @@ describe('V2-2a AC-CONFORMANCE-FINE — the classifier pins its defaults (single
   });
 });
 
-describe('V2-2a AC-CONFORMANCE-FINE — 15 presets classify {weak,strong,off-pilot}, none mixed, on every seed', () => {
-  for (const [name, expected] of Object.entries(EXPECTED_FINE)) {
-    it(`${name} → ${expected} (seed-independent across ${SEEDS.length} seeds)`, () => {
+describe('V2-2b-2b AC-CONFORMANCE-FINE (§4 R2-R5) — 15 presets classify {weak,strong,off-pilot}, WET in-band picks → mixed', () => {
+  // §4 R2/R3: the L-cuts read `effectiveL ?? L`, so an in-band Rocky/Ocean/Eyeball whose seeded pick is
+  // 'stagnant' emits effectiveL ∈ [0.60,0.6275] and routes 'mixed' on THOSE seeds. The expectation is now the
+  // per-(name,seed) SPLIT: where computeE1 emits effectiveL → 'mixed', else the seed-independent baseline. The
+  // blanket `not.toBe('mixed')` is dropped for the in-band presets (they legitimately route mixed by design).
+  for (const [name, baseline] of Object.entries(EXPECTED_FINE)) {
+    it(`${name} → ${baseline} (or 'mixed' on a WET seeded-'stagnant' seed), across ${SEEDS.length} seeds`, () => {
       const rawTidal = rawTidalOf(name);
       for (const seed of SEEDS) {
         const e1 = e1Of(name, seed);
         const got = classifyLidPath(e1, rawTidal);
-        expect(got, `${name} seed ${seed}: got '${got}', want '${expected}' — e1 ${tup(e1)}`).toBe(expected);
-        // A preset drifting into 'mixed' FAILS (AC-CONFORMANCE-FINE): no shipped preset may classify mixed.
-        expect(got, `${name} seed ${seed} drifted into 'mixed' — e1 ${tup(e1)}`).not.toBe('mixed');
+        const want = e1.effectiveL !== undefined ? 'mixed' : baseline;   // §4 R3: seed-split expectation
+        expect(got, `${name} seed ${seed}: got '${got}', want '${want}' — e1 ${tup(e1)}`).toBe(want);
       }
     });
   }
 
-  it('the tally is exactly {Lava,Magma}=pure-weak, Venus=pure-strong, 12=off-pilot, 0=mixed', () => {
+  it('the seed-1 tally: {Lava,Magma}=pure-weak, Venus=pure-strong, WET in-band picks=mixed, rest=off-pilot (§4 R4)', () => {
     const tally = { 'pure-weak': [], 'pure-strong': [], 'mixed': [], 'off-pilot': [] };
     for (const name of Object.keys(PRESET_ARCHETYPE)) tally[classifyLidPath(e1Of(name, 1), rawTidalOf(name))].push(name);
+    // §4 R4: 'mixed' contains EXACTLY the in-band presets whose seed-1 pick is 'stagnant' (emits effectiveL).
+    const inBandStagnantSeed1 = ['Rocky (Earthlike)', 'Ocean (temperate)', 'Eyeball (locked temperate)']
+      .filter((name) => e1Of(name, 1).effectiveL !== undefined);
     expect(tally['pure-weak'].sort()).toEqual(['Lava (hot airless)', 'Magma (K2-141b)']);
     expect(tally['pure-strong']).toEqual(['Venus (sulfuric shroud)']);
-    expect(tally['off-pilot'].length).toBe(12);
-    expect(tally['mixed']).toEqual([]);
+    expect(tally['mixed'].sort()).toEqual(inBandStagnantSeed1.sort());   // seed 1 → all three in-band presets pick stagnant
+    expect(tally['off-pilot'].length).toBe(12 - inBandStagnantSeed1.length);
   });
 });
 
-describe('V2-2a AC-CONFORMANCE-FINE — SEED-INDEPENDENCE (R-A2): in-band presets stay off-pilot on every seed', () => {
-  // Rocky/Ocean/Eyeball draw a seeded mobile/episodic/STAGNANT regime pick per seed. classifyLidPath reads
-  // only {compositionClass, m_hp, L} — never geodynamicRegime — so they classify off-pilot on EVERY seed.
+describe('V2-2b-2b AC-CONFORMANCE-FINE (§4 R5) — SEED-DEPENDENCE by design: WET in-band picks flip off-pilot→mixed', () => {
+  // §4 R5: the R-A2 seed-INDEPENDENCE is DELIBERATELY flipped for WET in-band bodies (the increment's whole
+  // point). Rocky/Ocean/Eyeball draw a seeded mobile/episodic/STAGNANT pick per seed; on a seed where the pick
+  // is 'stagnant', computeE1 emits effectiveL ∈ [0.60,0.6275] → 'mixed'; on every other seed → 'off-pilot'.
+  // (The subtractive gate isUnbrokenLidPath still reads RAW L — asserted separately below — so this flip never
+  // reaches the Venus pilot.)
   for (const name of ['Rocky (Earthlike)', 'Ocean (temperate)', 'Eyeball (locked temperate)']) {
-    it(`${name}: seeded regime varies but the FINE class is 'off-pilot' on all seeds`, () => {
+    it(`${name}: class is 'mixed' exactly on the effectiveL seeds, 'off-pilot' otherwise (the deliberate flip)`, () => {
       const regimes = new Set(SEEDS.map((s) => e1Of(name, s).geodynamicRegime));
-      // sanity: the seeded pick genuinely varies (else this would not test seed-independence)
+      // sanity: the seeded pick genuinely varies (else this would not exercise the seed-split)
       expect(regimes.size, `${name} seeded regime did not vary across seeds`).toBeGreaterThan(1);
-      const classes = new Set(SEEDS.map((s) => classifyLidPath(e1Of(name, s), rawTidalOf(name))));
-      expect([...classes]).toEqual(['off-pilot']);
+      for (const s of SEEDS) {
+        const e1 = e1Of(name, s);
+        const got = classifyLidPath(e1, rawTidalOf(name));
+        const want = e1.effectiveL !== undefined ? 'mixed' : 'off-pilot';
+        expect(got, `${name} seed ${s}: got '${got}', want '${want}' — e1 ${tup(e1)}`).toBe(want);
+      }
     });
   }
+
+  it('the deliberate flip is REAL: at least one in-band (preset, seed) routes \'mixed\' via effectiveL', () => {
+    let anyMixed = false;
+    for (const name of ['Rocky (Earthlike)', 'Ocean (temperate)', 'Eyeball (locked temperate)']) {
+      for (const s of SEEDS) if (classifyLidPath(e1Of(name, s), rawTidalOf(name)) === 'mixed') anyMixed = true;
+    }
+    expect(anyMixed, 'no in-band preset flipped to mixed — the effectiveL thread is inert').toBe(true);
+  });
 });
 
 describe('V2-2a AC-CONFORMANCE-FINE — hand-set boundary vectors pin the cuts (L_STRONG / SHOULDER_LO / m_hp-first)', () => {

@@ -27,11 +27,15 @@
 //     own geodynamicRegime routing at the V2-3 dispatch flip.
 //   • PURE / DETERMINISTIC: no alea, no Math.random, no Date.now. classifyLidPath / isUnbrokenLidPath are
 //     pure functions of the E1 tuple. The 'lid:' alea namespace is RESERVED for V2-2b (unused here).
-//   • SEED-INDEPENDENCE (R-A2, load-bearing): classifyLidPath reads only {compositionClass, m_hp, L} +
-//     rawTidal — NEVER the seeded geodynamicRegime. So an in-band Earth/Ocean/Eyeball whose seeded regime
-//     pick lands on 'stagnant' on some seed still classifies 'off-pilot' on EVERY seed (its base L is low).
-//     geodynamicRegime is read ONLY by isUnbrokenLidPath, and there it is L-guarded (>= L_STRONG) so a
-//     low-L seeded-'stagnant' pick can never reach the pilot.
+//   • SEED-DEPENDENCE by design for WET in-band bodies (R-wetstag, V2-2b-2b — the increment's whole point):
+//     the L-cuts (#3-6) read `effectiveL ?? e1.L`, so routing is seed-INDEPENDENT for a body WITHOUT effectiveL
+//     (the raw-L read). But a seeded-'stagnant' pick carries effectiveL ∈ [0.60,0.6275] (e1Regime.js:198), so an
+//     in-band Earth/Ocean/Eyeball whose seeded regime lands on 'stagnant' now routes 'mixed' on THOSE seeds (was
+//     'off-pilot'). effectiveL can never reach pure-weak (cut #2 reads raw m_hp), nor pure-strong from a real body
+//     (effectiveL < L_STRONG; only the data-placed Venus edge — which carries NO effectiveL — reaches pure-strong),
+//     nor cross composition (cut #1 reads raw compositionClass). The SUBTRACTIVE gate isUnbrokenLidPath still reads
+//     RAW e1.L (UNTHREADED) — the load-bearing "low-raw-L seeded-'stagnant' body stays off the Venus pilot" guard
+//     is PRESERVED (threading it would misread a synthetic dry tuple).
 import { L_STRONG, SHOULDER_LO, HEATPIPE_PEG } from './e1Regime.js';
 // SLICE B — the two pure corner writers, imported UNCHANGED as expression kernels. The router delegates
 // argument-for-argument to the shipped call sites (planet-lod-rivers.js:481-482 weak, :491 strong). It reuses
@@ -74,16 +78,24 @@ void HEATPIPE_PEG;
  *   5. L >= MIXED_LO                         → 'mixed'      (mixed interior [MIXED_LO, L_STRONG) — Mars 0.551)
  *   6. otherwise                             → 'off-pilot'  (mobile/broken-lid, L < MIXED_LO — Earth/Ocean/Eyeball)
  *
- * @param {{compositionClass:string, m_hp:number, L:number}} e1  a computeE1 tuple (only these three read).
+ * The L-cuts (#3-6) read `effectiveL ?? e1.L` (R-wetstag, §5.4 #1 / gate-2 §4): cuts #1/#2 stay on the RAW
+ * compositionClass/m_hp fields (their guard — effectiveL moves ONLY the L-cuts, never routes to pure-weak or
+ * off-via-composition). A WET seeded-'stagnant' body (effectiveL ∈ [0.60,0.6275] < L_STRONG) thus routes 'mixed'
+ * where its raw L (< MIXED_LO) would have fallen off-pilot.
+ *
+ * @param {{compositionClass:string, m_hp:number, L:number, effectiveL?:number}} e1  a computeE1 tuple. The L-cuts
+ *   (#3-6) read `e1.effectiveL ?? e1.L`; cuts #1/#2 read raw compositionClass/m_hp. effectiveL is present ONLY on a
+ *   seeded-'stagnant' pick (e1Regime.js:198, a conditional tuple member).
  * @param {number} rawTidal  cv.rawTidalIoRatio (the D12 raw Io-ratio; caller precomputes, like T_ss).
  * @returns {'pure-weak'|'pure-strong'|'mixed'|'off-pilot'}
  */
 export function classifyLidPath(e1, rawTidal) {
-  if (e1.compositionClass !== 'rocky') return 'off-pilot';               // 1 — composition terminal (fires first)
-  if (e1.m_hp > 0) return 'pure-weak';                                   // 2 — heat-pipe (fires before L)
-  if (e1.L >= L_STRONG && rawTidal < SHOULDER_LO) return 'pure-strong';  // 3 — Venus (hot, high-L, tidally quiet)
-  if (e1.L >= L_STRONG && rawTidal >= SHOULDER_LO) return 'mixed';       // 4 — tidal-shoulder (PG-5)
-  if (e1.L >= MIXED_LO) return 'mixed';                                  // 5 — mixed interior (Mars)
+  if (e1.compositionClass !== 'rocky') return 'off-pilot';               // 1 — composition terminal (raw; fires first)
+  if (e1.m_hp > 0) return 'pure-weak';                                   // 2 — heat-pipe (raw m_hp; effectiveL can never reach pure-weak)
+  const L = e1.effectiveL ?? e1.L;                                       // R-wetstag hand-up (§5.4 #1 / gate-2 §4) — the L-cuts (#3-6) ONLY
+  if (L >= L_STRONG && rawTidal < SHOULDER_LO) return 'pure-strong';     // 3 — Venus (hot, high-L, tidally quiet)
+  if (L >= L_STRONG && rawTidal >= SHOULDER_LO) return 'mixed';          // 4 — tidal-shoulder (PG-5)
+  if (L >= MIXED_LO) return 'mixed';                                     // 5 — mixed interior (Mars; wet-stagnant via effectiveL)
   return 'off-pilot';                                                    // 6 — low-L mobile/broken-lid
 }
 

@@ -149,8 +149,10 @@ function percentileThreshold(score, frac, N) {
  * @param {object} carrier  F3 sphere carrier (makeSphereField output): verts, adj, N, tangentFrameAt. height
  *                          is REPLACED via .set(U). carrier.regime is left UNTOUCHED.
  * @param {object} opts
- * @param {{L:number, Φ:number, n:number}} opts.e1  the RESOLVED E1 coordinate tuple (L, compressed vigor Φ,
- *                          center count n) — read straight off, re-derived from nothing.
+ * @param {{L:number, Φ:number, n:number, effectiveL?:number}} opts.e1  the RESOLVED E1 coordinate tuple (L,
+ *                          compressed vigor Φ, center count n) — read straight off, re-derived from nothing. The
+ *                          pierce-yield Ybase reads `effectiveL ?? L` (R-wetstag, §5.4 #1); effectiveL is present
+ *                          only on a seeded-'stagnant' pick, so a body without it is byte-unchanged (Lyield===L).
  * @param {number} [opts.rawTidal=0]   accepted for signature parity with the router seam; not consumed here.
  * @param {number} [opts.macroSeed=0]  the body's deterministic integer seed.
  * @param {object|null} [opts.tune=null]  headless-test DEFAULTS override.
@@ -164,7 +166,8 @@ export function writeMixedInteriorSphere(carrier, { e1, rawTidal = 0, macroSeed 
   const T = tune ? { ...MIXED_DEFAULTS, ...tune } : MIXED_DEFAULTS;
   const N = carrier.N, verts = carrier.verts, adj = carrier.adj;
   const seed = (macroSeed | 0);
-  const L = e1.L, PHI = e1.Φ, n = Math.max(1, e1.n | 0);   // count from e1.n (never re-derived)
+  const L = e1.L, PHI = e1.Φ, n = Math.max(1, e1.n | 0);   // count from e1.n (never re-derived); L stays RAW (diag)
+  const Lyield = e1.effectiveL ?? L;   // R-wetstag (§5.4 #1): Ybase reads effectiveL (strong-but-piercable edge); no effectiveL ⇒ Lyield===L ⇒ byte-unchanged
 
   // ── STEP 0 — mean edge angle (geodesic radians per hop): converts node-count radii to a resolution-
   //    independent GEODESIC width (verbatim plates/magma/stagnant). ────────────────────────────────────────
@@ -186,7 +189,7 @@ export function writeMixedInteriorSphere(carrier, { e1, rawTidal = 0, macroSeed 
   const strength = new Float32Array(n);
   const yspread = new Float32Array(n);   // the raw y_p draws (published so AC-PIERCE recomputes arm's-length)
   const pierce = new Uint8Array(n);
-  const Ybase = T.Y0 * Math.exp(T.Y_K * L);                        // Ybase(L) = Y0·exp(Y_K·L), gate-2:22
+  const Ybase = T.Y0 * Math.exp(T.Y_K * Lyield);                   // Ybase = Y0·exp(Y_K·Lyield), gate-2:22 (Lyield = effectiveL ?? L)
   for (let p = 0; p < n; p++) strength[p] = T.STR_LO + (1 - T.STR_LO) * rngStrength();   // one draw/center, index order
   for (let p = 0; p < n; p++) {
     const y = rngYield();                                          // one draw/center, index order
@@ -391,7 +394,7 @@ export function writeMixedInteriorSphere(carrier, { e1, rawTidal = 0, macroSeed 
     isAncient, coronaActive,
     A_e, Psi_e,
     n, pierceCount: centerPierceCount, meanEdgeAngle,
-    Ybase, L, Φ: PHI,
+    Ybase, L, effectiveL: Lyield, Φ: PHI,
     relaxPasses: T.RELAX_PASSES,
   };
 
