@@ -48,3 +48,25 @@ Max reviewed the census report + NAMING_AND_REAL_OBJECTS.md (D1–D5) and ruled.
 Increment plan after this gate: **3a** = AC9 (HYG regen) + sky-click real-name fix;
 **3b** = position-derived procgen naming (AC6 + AC7); then AC8 Sol guardrail + the batched
 live checks (incl. increment 0's Horsehead render).
+
+## Addendum — sample-review knob rulings (2026-07-08, after increment 3b)
+
+Max reviewed the first position-derived samples and ruled on the three flagged knobs:
+
+1. **Shorter, astronomy-shaped designations:** "I like your recommendation, and I like
+   something like the real astronomy designations (expanded and with creative sci fi
+   license)." → Survey designations should read like plausible catalog entries the way
+   real surveys encode position into designations (2MASS J05551028+0724255,
+   PSR B1919+21), with fictional far-future survey prefixes — structured/grouped
+   coordinate-style fields, not base-36 serial soup. Prefer encoding the star's
+   generative grid-cell identity (fewer bits, kills the cross-color residual) if call
+   sites can recover it; else a coarser quantization.
+2. **Bare-word rarity stays; enumerability is the requirement:** "Not sure if this is an
+   issue, so long as we can find them... in setting, settled systems would be cataloged
+   for those who want to find them." → Keep ~1-in-16.8M (≈12k settled systems
+   galaxy-wide). The allocation must be deterministically ENUMERABLE (helper + gazetteer
+   emit) so a future in-game "settled systems catalog / search" feature can list them.
+   That UI feature itself = captured ask for the successor workstream / parked
+   system-tags-save-search revival, NOT this workstream.
+3. **Greek style returns:** "I like this idea." → Restored as a fourth class (greek
+   letter + region-flavored word + position-bit numeral), region-weighted.
