@@ -14,8 +14,8 @@
 //      distinct position cells, 0 collisions with real (HYG) names, 0 procgen
 //      designations inside real designation space — through the exact production
 //      call-site RNG chains (which the namer now ignores; that IS the point).
-//   2. Emit refreshed per-region sample blocks + a bare-word showcase for Max's
-//      AC6 UAT review (the aesthetic evidence).
+//   2. Emit refreshed per-region sample blocks (4 classes) + a settled-systems
+//      gazetteer (via the exported enumeration helper) for Max's AC6 UAT review.
 //
 // DETERMINISM CONTRACT: every RNG draw goes through SeededRandom with a fixed
 // string seed. No Date.now(), Math.random(), or environment value reaches the
@@ -31,7 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
 import { SeededRandom } from '../src/generation/SeededRandom.js';
-import { generateSystemName, quantizePosition } from '../src/generation/NameGenerator.js';
+import { generateSystemName, quantizePosition, enumerateSettledSystems } from '../src/generation/NameGenerator.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG — all fixed, all deterministic
@@ -39,7 +39,6 @@ import { generateSystemName, quantizePosition } from '../src/generation/NameGene
 
 const TOTAL_PER_REGION = 30000;          // 120,000 total (> the 100k bar)
 const SAMPLE_BLOCK_SIZE = 200;           // per region (contract: >= 200/region)
-const BARE_SHOWCASE_COUNT = 40;          // bare words shown per region (rare class)
 
 const SEED_POSITIONS = 'name-census-positions-v2';
 const REGIONS = ['core', 'arm', 'rim', 'halo'];
@@ -93,9 +92,10 @@ function nameFeature(pos, seed)   { return generateSystemName(new SeededRandom(`
 // ─────────────────────────────────────────────────────────────────────────
 
 function classifyClass(name) {
-  if (/^[A-Z]{2,4}-[0-9A-Z]+$/.test(name)) return 'survey';        // PVX-8F3K9Q2M7XA1B0
-  if (!name.includes('-') && !/\d/.test(name)) return 'bare';       // Lyreonuki
-  return 'multipart';                                               // Bakiro-08F3K9Q2M7XA
+  if (/^[A-Z]{2,4} J[0-9A-Z]{7}[+-][0-9A-Z]{7}$/.test(name)) return 'survey';   // NBG J35EI75F-KN0H841
+  if (/^[A-Z][a-z]+ [A-Z][a-z]+ \d{5}$/.test(name)) return 'greek';             // Theta Karnun… 07437
+  if (/^[A-Z][a-z]+-[0-9A-Z]{10}$/.test(name)) return 'multipart';              // Tosnud-6PCUPG2IJU
+  return 'bare';                                                                // Tukgotpigyodcop
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -108,7 +108,7 @@ function runCensus() {
   let starIdx = 0, navIdx = 0, featIdx = 0;
 
   const overall = { total: 0, cells: new Set(), names: new Set() };
-  const classCounts = { survey: 0, multipart: 0, bare: 0 };
+  const classCounts = { survey: 0, greek: 0, multipart: 0, bare: 0 };
   const byRegion = {};
   const sampleBlocks = {};
   let pathDisagreements = 0;
@@ -120,7 +120,7 @@ function runCensus() {
   const nameToCell = new Map();
 
   for (const region of REGIONS) {
-    byRegion[region] = { total: 0, cells: new Set(), names: new Set(), classCounts: { survey: 0, multipart: 0, bare: 0 } };
+    byRegion[region] = { total: 0, cells: new Set(), names: new Set(), classCounts: { survey: 0, greek: 0, multipart: 0, bare: 0 } };
     sampleBlocks[region] = [];
 
     for (let i = 0; i < TOTAL_PER_REGION; i++) {
@@ -164,48 +164,42 @@ function runCensus() {
   };
 }
 
-// ── Bare-word showcase: bare words are rare (~6e-8 of positions) so a uniform
-// sample surfaces ~none. Sample in-galaxy positions per region and SNAP each to
-// the nearest bare-ELIGIBLE lattice cell (a <0.13 pc nudge — stays in region),
-// then render its (real, in-galaxy) name.
-// Bare eligibility (NameGenerator): qx%256==91, qy%256==37, qz%256==173.
-function snapToEligible(pos) {
-  const Q = 1e-6, M = 256;
-  const snap = (v, bias, res) => {
-    let q = Math.round((v + bias) / Q);
-    const rem = (((q - res) % M) + M) % M;
-    q = rem <= M / 2 ? q - rem : q + (M - rem);
-    return q * Q - bias;
-  };
-  return { x: snap(pos.x, 32, 91), y: snap(pos.y, 16, 37), z: snap(pos.z, 32, 173) };
-}
-
-function runBareShowcase() {
-  const M = 256, RX = 91, RY = 37, RZ = 173;
+// ── Settled-systems gazetteer (first-class section, ac5 addendum ruling 2) ──
+// Bare "settled" names are 1-in-16.8M, so a uniform census surfaces ~none. This
+// gazetteer instead drives the EXPORTED enumeration helper
+// (NameGenerator.enumerateSettledSystems) — the deterministic, no-registry basis
+// for a future in-game settled-systems catalog. For each region we scatter many
+// tiny bounding boxes (deterministic seed) and take ONE settled system from each
+// so the sample is spatially spread (maximum name variety), then confirm every
+// listed name round-trips through generateSystemName.
+function runGazetteer() {
   const out = {};
-  for (const region of REGIONS) out[region] = [];
-  const seenName = new Set();
-
-  const rng = new SeededRandom('bare-showcase-v2');
-  let attempts = 0;
-  while (attempts < 6_000_000 && REGIONS.some(r => out[r].length < BARE_SHOWCASE_COUNT)) {
-    attempts++;
-    const region = REGIONS[attempts % 4];
-    if (out[region].length >= BARE_SHOWCASE_COUNT) continue;
-    const p = snapToEligible(samplePosition(region, rng));
-    // confirm eligibility survived the snap
-    const q = quantizePosition(p);
-    if (q.qx % M !== RX || q.qy % M !== RY || q.qz % M !== RZ) continue;
-    // confirm the snapped point is still in this region
-    const R = Math.sqrt(p.x * p.x + p.z * p.z), h = Math.abs(p.y);
-    let rg;
-    if (h > 2.0) rg = 'halo'; else if (R < 3.0) rg = 'core'; else if (R > 14.0) rg = 'rim'; else rg = 'arm';
-    if (rg !== region) continue;
-    const name = generateSystemName(null, p);
-    // keep only genuine bare words (not a real-name fall-through to a designation)
-    if (name.includes('-') || /\d/.test(name) || seenName.has(name)) continue;
-    seenName.add(name);
-    out[region].push({ name, x: p.x, y: p.y, z: p.z });
+  const GAZ_PER_REGION = 24;
+  const half = 0.0012; // ~1.2 pc box — spans ≥1 coarse eligible period per axis
+  const rng = new SeededRandom('gazetteer-centers-v1');
+  for (const region of REGIONS) {
+    const seen = new Set();
+    const list = [];
+    let attempts = 0;
+    while (list.length < GAZ_PER_REGION && attempts < 40000) {
+      attempts++;
+      const c = samplePosition(region, rng);
+      const box = {
+        xMin: c.x - half, xMax: c.x + half,
+        yMin: c.y - half, yMax: c.y + half,
+        zMin: c.z - half, zMax: c.z + half,
+      };
+      const found = enumerateSettledSystems(box, 20);
+      for (const s of found) {
+        if (s.region !== region || seen.has(s.name)) continue;
+        // Confirm the enumeration round-trips (the helper's core guarantee).
+        if (generateSystemName(null, s.position) !== s.name) continue;
+        seen.add(s.name);
+        list.push({ name: s.name, x: s.position.x, y: s.position.y, z: s.position.z });
+        break; // one per box → maximum spatial spread
+      }
+    }
+    out[region] = list;
   }
   return out;
 }
@@ -288,11 +282,23 @@ function renderReport(census, bare, hyg) {
   push('registry and no persistence. Uniqueness is structural:');
   push();
   push('> **By construction:** the position is quantized to a fixed lattice at');
-  push('> `Q = 1e-6 kpc` (0.001 pc); the three lattice coordinates are packed into');
-  push('> one mixed-radix locator `L`; and every name class embeds `L` injectively');
-  push('> (survey number, or word + base-36 code), except the rare bare-word class');
-  push('> which is drawn from a finite region-partitioned supply indexed injectively');
-  push('> by position. Distinct positions → distinct `L` → distinct names.');
+  push('> `Q = 4e-6 kpc` (0.004 pc — the finest grid tier\'s minimum star spacing);');
+  push('> the three lattice coordinates are packed into one mixed-radix locator `L`');
+  push('> (~70 bits); and every name class embeds `L` injectively (survey base-36');
+  push('> field, word + code, or greek letter + word + position numeral), except the');
+  push('> rare bare-word class which is drawn from a finite region-partitioned supply');
+  push('> indexed injectively by position. Distinct positions → distinct `L` →');
+  push('> distinct names. The four class shapes are mutually exclusive strings, so');
+  push('> names never collide across classes either.');
+  push();
+  push('> **The bit floor (honest aesthetics).** An injective encoding of a ~70-bit');
+  push('> locator needs ~14 base-36 chars (or ~21 decimal digits). A short,');
+  push('> pure-decimal 2MASS-style designation is therefore mathematically impossible');
+  push('> while the zero-duplicate guarantee holds — so 3c\'s win is STRUCTURE');
+  push('> (grouping / survey prefix / J-epoch marker / latitude sign / four-class');
+  push('> variety) and shorter/varied words, NOT sub-15-char brevity. Designations run');
+  push('> ~17-20 chars (survey/multipart), greek up to ~29, bare ~15 (down from 3b\'s');
+  push('> up-to-18). See ac5-decision.md addendum ruling 1.');
   push();
   push('The named-via columns below drive the **exact production call-site RNG');
   push('chains** (`warp-star-<idx>` sky-click, `warp-nav-<seed>` NavComputer,');
@@ -322,24 +328,26 @@ function renderReport(census, bare, hyg) {
   push(`Determinism fingerprint (FNV-1a over sorted summary stats): \`${fingerprint}\``);
   push();
 
-  push('## Class mix (region flavor, re-expressed over the new classes)');
+  push('## Class mix (region flavor, re-expressed over the four classes)');
   push();
   push('Region only steers the class MIX (core catalog-heavy → rim fantasy-leaning);');
-  push('it never affects uniqueness. `survey` = fictional-prefix catalogue');
-  push('designation; `multipart` = region-flavoured word + position code; `bare` =');
-  push('RARE settled-era proper name (uniform sampling surfaces ~none — see the');
-  push('dedicated showcase below).');
+  push('it never affects uniqueness. `survey` = fictional-prefix grouped designation;');
+  push('`greek` = greek letter + region word + position numeral (restored 3c);');
+  push('`multipart` = region-flavoured word + position code; `bare` = RARE settled-era');
+  push('proper name (uniform sampling surfaces ~none — see the gazetteer below).');
   push();
-  push(mdTable(['region', 'samples', 'survey', 'multipart', 'bare'],
+  push(mdTable(['region', 'samples', 'survey', 'greek', 'multipart', 'bare'],
     REGIONS.map(r => {
       const b = byRegion[r];
       return [r, b.total.toLocaleString(),
         `${pct(b.classCounts.survey / b.total)}`,
+        `${pct(b.classCounts.greek / b.total)}`,
         `${pct(b.classCounts.multipart / b.total)}`,
         `${b.classCounts.bare}`];
     })));
   push();
   push(`Galaxy-wide totals — survey: ${classCounts.survey.toLocaleString()}, ` +
+    `greek: ${classCounts.greek.toLocaleString()}, ` +
     `multipart: ${classCounts.multipart.toLocaleString()}, bare: ${classCounts.bare}.`);
   push();
 
@@ -368,19 +376,24 @@ function renderReport(census, bare, hyg) {
   }
   push();
 
-  push('## Bare-word showcase (the RARE settled-era proper names)');
+  push('## Settled-systems gazetteer (the RARE settled-era proper names)');
   push();
-  push('Bare fantasy words are deliberately rare (~1 in 16.8M positions), so a');
-  push('uniform galaxy-wide sample shows essentially none. These are drawn directly');
-  push('from bare-ELIGIBLE positions inside the disk, per region, so Max can react to');
-  push('the aesthetic. Each is globally unique and injectively allocated from a');
-  push('finite region-partitioned supply; none is a real star name.');
+  push('Bare "settled" names are deliberately rare — ~1 in 16.8M positions (`BARE_M³`,');
+  push('`256³`), i.e. ≈12k settled systems galaxy-wide — so a uniform census surfaces');
+  push('essentially none. This gazetteer is emitted by the EXPORTED enumeration helper');
+  push('`NameGenerator.enumerateSettledSystems(bounds)`: the deterministic, no-registry');
+  push('basis for a future in-game "settled systems catalog / search" feature (that UI');
+  push('is out of scope — captured for the successor workstream). Each listed name is');
+  push('globally unique, round-trips through `generateSystemName` for its position, and');
+  push('is structurally blocklisted against the real proper-name set. Words are now');
+  push('shorter/varied CVC syllables (1100-syllable alphabet, bijective supply');
+  push('≈1.6e15; bare allocation ≈2.75e14 ⇒ ~17% of supply, well under the 50% margin).');
   push();
   for (const region of REGIONS) {
     push(`### ${region}`);
     push();
     if (bare[region].length === 0) { push('_(none found in the scan window)_'); push(); continue; }
-    push(mdTable(['name', 'position (x, y, z kpc)'],
+    push(mdTable(['settled system', 'position (x, y, z kpc)'],
       bare[region].map(b => [`\`${b.name}\``, `${b.x.toFixed(2)}, ${b.y.toFixed(2)}, ${b.z.toFixed(2)}`])));
     push();
   }
@@ -409,7 +422,7 @@ function renderReport(census, bare, hyg) {
 
 function main() {
   const census = runCensus();
-  const bare = runBareShowcase();
+  const bare = runGazetteer();
   const hyg = loadHyg();
   const report = renderReport(census, bare, hyg);
 

@@ -11,8 +11,22 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { SeededRandom } from '../SeededRandom.js';
-import { generateSystemName, quantizePosition } from '../NameGenerator.js';
+import { generateSystemName, quantizePosition, enumerateSettledSystems, _bareEligible } from '../NameGenerator.js';
 import { REAL_PROPER_NAME_SET } from '../data/realProperNames.js';
+
+// Structural shapes of the four name classes (increment 3c). Each is injective in
+// the position locator L; the shapes are mutually exclusive.
+const RE_SURVEY = /^[A-Z]{2,4} J[0-9A-Z]{7}[+-][0-9A-Z]{7}$/;   // "NBG J35EI75F-KN0H841"
+const RE_MULTIPART = /^[A-Z][a-z]+-[0-9A-Z]{10}$/;              // "Tosnud-6PCUPG2IJU"
+const RE_GREEK = /^[A-Z][a-z]+ [A-Z][a-z]+ \d{5}$/;            // "Theta Karnun… 07437"
+const RE_BARE = /^[A-Z][a-z]+$/;                                // "Tukgotpigyodcop"
+function classify(name) {
+  if (RE_SURVEY.test(name)) return 'survey';
+  if (RE_GREEK.test(name)) return 'greek';
+  if (RE_MULTIPART.test(name)) return 'multipart';
+  if (RE_BARE.test(name)) return 'bare';
+  return 'UNKNOWN';
+}
 
 // Real astronomical-designation prefixes the procgen catalog class must never
 // intrude on (real designation space). Includes the legacy CATALOG_FORMATS
@@ -65,7 +79,8 @@ describe('NameGenerator — injective position→name (AC6/AC7)', () => {
   let revisitMismatch = 0;
   let realNameEmissions = 0;
   let realDesignationEmissions = 0;
-  let bareCount = 0, surveyCount = 0, multipartCount = 0;
+  let unknownShape = 0, tooLong = 0;
+  const classCount = { survey: 0, greek: 0, multipart: 0, bare: 0, UNKNOWN: 0 };
   const perRegionNames = { core: 0, arm: 0, rim: 0, halo: 0 };
 
   for (const region of REGIONS) {
@@ -90,9 +105,12 @@ describe('NameGenerator — injective position→name (AC6/AC7)', () => {
       if (REAL_PROPER_NAME_SET.has(name.toLowerCase())) realNameEmissions++;
       if (REAL_DESIGNATION_RE.test(name)) realDesignationEmissions++;
 
-      if (!name.includes('-') && !/\d/.test(name)) bareCount++;
-      else if (/^[A-Z]{2,4}-/.test(name)) surveyCount++;
-      else multipartCount++;
+      const cls = classify(name);
+      classCount[cls]++;
+      if (cls === 'UNKNOWN') unknownShape++;
+      // Aesthetic length bound (bit floor: ~70-bit locator → greek is the longest
+      // shape; all classes must stay ≤ 30 visible chars).
+      if (name.length > 30) tooLong++;
     }
   }
 
@@ -129,12 +147,40 @@ describe('NameGenerator — injective position→name (AC6/AC7)', () => {
     expect(collisions).toBe(0);
   });
 
-  it('exercises all three name classes over the sample', () => {
-    // Common classes both well represented; bare is rare (may be 0 in a uniform
-    // galaxy-wide sample — it is showcased separately by the census tool).
-    expect(surveyCount).toBeGreaterThan(0);
-    expect(multipartCount).toBeGreaterThan(0);
-    expect(surveyCount + multipartCount + bareCount).toBe(PER_REGION * REGIONS.length);
+  it('every emitted name matches exactly one of the four class shapes', () => {
+    // No name may fall outside the survey/greek/multipart/bare grammars, and
+    // none may exceed the 30-char aesthetic bound.
+    expect(unknownShape).toBe(0);
+    expect(classCount.UNKNOWN).toBe(0);
+    expect(tooLong).toBe(0);
+  });
+
+  it('exercises the common name classes (survey / greek / multipart) over the sample', () => {
+    // The three common classes are all well represented; bare is rare (may be 0
+    // in a uniform galaxy-wide sample — it is showcased separately by the census).
+    expect(classCount.survey).toBeGreaterThan(0);
+    expect(classCount.greek).toBeGreaterThan(0);
+    expect(classCount.multipart).toBeGreaterThan(0);
+    expect(classCount.survey + classCount.greek + classCount.multipart + classCount.bare)
+      .toBe(PER_REGION * REGIONS.length);
+  });
+
+  it('survey designations obey the structured grouped format (not an opaque serial)', () => {
+    // Sample survey-class names and assert the prefix / J-epoch / two coordinate
+    // fields / latitude-sign structure, plus the length bound.
+    const fmtRng = new SeededRandom('survey-format-positions');
+    let checked = 0;
+    for (let i = 0; i < 40000 && checked < 500; i++) {
+      const pos = samplePos(REGIONS[i % 4], fmtRng);
+      const name = generateSystemName(null, pos);
+      if (classify(name) !== 'survey') continue;
+      checked++;
+      expect(name).toMatch(RE_SURVEY);
+      expect(name.length).toBeLessThanOrEqual(20);
+      // structurally disjoint from real designation space
+      expect(REAL_DESIGNATION_RE.test(name)).toBe(false);
+    }
+    expect(checked).toBeGreaterThan(0);
   });
 
   it('agrees across ALL targeting paths for the same position (AC7)', () => {
@@ -152,6 +198,41 @@ describe('NameGenerator — injective position→name (AC6/AC7)', () => {
       expect(c).toBe(a);
       expect(d).toBe(a);
     }
+  });
+
+  it('enumerates settled systems that round-trip through generateSystemName (AC: enumerability)', () => {
+    // Enumerate bare-eligible (settled) systems in several disk boxes and assert
+    // each one is genuinely bare, bare-eligible, unique, and reproduces its own
+    // name when re-generated from its position — the mechanical basis for a future
+    // in-game settled-systems catalog (ac5 addendum ruling 2).
+    const boxes = [
+      { xMin: 6.9, xMax: 7.6, yMin: -0.3, yMax: 0.4, zMin: 0.9, zMax: 1.6 },
+      { xMin: -9.4, xMax: -8.7, yMin: -0.1, yMax: 0.6, zMin: 3.1, zMax: 3.8 },
+      { xMin: 15.1, xMax: 15.8, yMin: -0.4, yMax: 0.3, zMin: -2.4, zMax: -1.7 },
+      { xMin: 1.7, xMax: 2.4, yMin: 3.0, yMax: 3.7, zMin: 0.5, zMax: 1.2 },
+    ];
+    let totalEnumerated = 0;
+    const namesSeen = new Set();
+    for (const box of boxes) {
+      const list = enumerateSettledSystems(box, 5000);
+      expect(list.length).toBeGreaterThan(0);
+      for (const s of list) {
+        totalEnumerated++;
+        // genuinely bare
+        expect(s.name).toMatch(RE_BARE);
+        // bare-eligible cell
+        const q = quantizePosition(s.position);
+        expect(_bareEligible(q.qx, q.qy, q.qz)).toBe(true);
+        // round-trips: re-generating from the position yields the same name
+        expect(generateSystemName(null, s.position)).toBe(s.name);
+        // not a real proper name
+        expect(REAL_PROPER_NAME_SET.has(s.name.toLowerCase())).toBe(false);
+        // globally unique across every box enumerated here
+        expect(namesSeen.has(s.name)).toBe(false);
+        namesSeen.add(s.name);
+      }
+    }
+    expect(totalEnumerated).toBeGreaterThan(50);
   });
 
   it('throws (does not silently fall back) when position is missing (D5 eliminated)', () => {

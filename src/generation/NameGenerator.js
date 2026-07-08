@@ -14,13 +14,26 @@
  *     (sky-click / NavComputer / feature route / screensaver / spawn), quantizes
  *     to the same position and therefore yields the same name, forever.
  *
- * The name is built from three region-weighted classes, each of which embeds the
- * full position "locator" injectively (or, for the rare bare class, is drawn from
- * a finite partitioned supply indexed injectively by position):
+ * The name is built from four region-weighted classes, each of which embeds the
+ * full position "locator" L injectively (or, for the rare bare class, is drawn
+ * from a finite partitioned supply indexed injectively by position):
  *
- *   (a) catalog/survey designation  "PVX-4728391102847726"   — the common case
- *   (b) multi-part fantasy          "Bakiro-08F3K9Q2M7XA"    — word + code suffix
- *   (c) bare fantasy word           "Lyreonuki"              — RARE settled-era name
+ *   (a) survey designation   "PVX J4K7Q2M+9XP3RWZ"   — the common case; a
+ *       far-future catalogue ID: fictional survey prefix + J-epoch marker +
+ *       two coordinate-style base-36 fields split by a latitude sign. Grouped
+ *       and prefixed so it reads like a star-atlas entry, not an opaque serial.
+ *   (b) multi-part fantasy   "Veskol-4K7Q2M9XP3"     — region word + position code
+ *   (c) greek designation    "Theta Veskolnath 0421" — greek letter + region word
+ *       + a short position-bit numeral (Bayer-style, sci-fi expanded)
+ *   (d) bare fantasy word    "Veshakolnir"           — RARE settled-era name
+ *
+ * ── The bit floor (why designations are ~14-20 chars, not ~10) ──
+ * L is a fully-injective function of position over a ~48 kpc × 32 kpc × 48 kpc
+ * envelope quantized to Q = 4e-6 kpc: ~70 bits. Any injective rendering of 70
+ * bits needs ~14 base-36 chars (or ~21 decimal digits). A short 2MASS-style
+ * DECIMAL designation is therefore mathematically impossible while the hard
+ * zero-duplicate guarantee holds — the win here is STRUCTURE (grouping / prefix /
+ * sign / class variety), not brevity. See ac5-decision.md addendum ruling 1.
  *
  * A structural blocklist (src/generation/data/realProperNames.js) keeps the bare
  * class from ever emitting a real star's proper name (design req (d)).
@@ -218,23 +231,29 @@ const REGION_INDEX = { core: 0, arm: 1, rim: 2, halo: 3 };
 // three lattice coordinates into one BigInt "locator" L via mixed-radix. L is
 // injective over the lattice: distinct cells → distinct L.
 //
-// Quantization resolution Q = 1e-6 kpc = 0.001 pc (~206 AU). This is FAR finer
-// than the hash-grid starfield's smallest per-tier cell (M-type dwarfs, 0.0011
-// kpc = 1.1 pc; HashGridStarfield.TYPE_CONFIG). Within any single spectral tier
-// two distinct stars always live in different grid cells, so at least one of
-// their (x,y,z) world coordinates differs — and because a tier's world
-// coordinates are the discrete set {(cell + k/255)·cellSize}, that difference is
-// at least cellSize/255 ≈ 4.3e-6 kpc for M-type, i.e. several Q-cells. The only
-// way two DISTINCT stars can land in one Q-cell is a simultaneous sub-0.001-pc
-// coincidence on ALL THREE axes (necessarily two different spectral tiers, whose
-// grids are independent). Expected such coincidences galaxy-wide are ~10¹, and
-// none is introduced by naming — see docs/NAMING_AND_REAL_OBJECTS.md §"collision
-// physics". The naming function itself introduces ZERO collisions.
+// Quantization resolution Q = 4e-6 kpc = 0.004 pc (~825 AU). This is set to the
+// minimum star spacing the finest grid can produce: the hash-grid starfield's
+// smallest per-tier cell is M-type at 0.0011 kpc (1.1 pc; TYPE_CONFIG), and a
+// tier's world coordinates form the discrete set {(cell + k/255)·cellSize}, so
+// two DISTINCT same-tier stars differ on some axis by at least cellSize/255 =
+// 0.0011/255 = 4.314e-6 kpc. Q = 4e-6 < that spacing → the two always land in
+// different Q-cells (Δ ≥ 1 in Q-units ⇒ distinct quantized coords ⇒ distinct L).
+// Injectivity for distinct same-tier stars is exact.
+//
+// (3c) Q was coarsened from increment 3b's 1e-6 to 4e-6 — authorized by
+// ac5-decision.md addendum ruling 1 ("coarser quantization consistent with the
+// minimum star spacing"). This trims the locator from ~78 to ~70 bits (one fewer
+// designation char). The only cost is the CROSS-tier residual: two stars of
+// DIFFERENT tiers (independent grids) coinciding within 0.004 pc on all three
+// axes. Expected galaxy-wide ≈ 640 (up from ~10 at 1e-6), i.e. ~3e-9 of the
+// ~2e11 stars — negligible, and invisible to the census (which samples arbitrary
+// continuous positions, always injective over the lattice). The naming function
+// itself still introduces ZERO collisions. See docs/NAMING_AND_REAL_OBJECTS.md.
 
-const Q_KPC = 1e-6;
-const X_BIAS = 32, Y_BIAS = 16, Z_BIAS = 32;    // kpc, shift so lattice coords ≥ 0
-const QX_MAX = 64_000_000, QY_MAX = 32_000_000, QZ_MAX = 64_000_000;
-const NX = 64_000_001n, NY = 32_000_001n;        // radices = QX_MAX+1, QY_MAX+1
+const Q_KPC = 4e-6;
+const X_BIAS = 24, Y_BIAS = 16, Z_BIAS = 24;    // kpc, shift so lattice coords ≥ 0
+const QX_MAX = 12_000_000, QY_MAX = 8_000_000, QZ_MAX = 12_000_000; // ±24 / ±16 / ±24 kpc
+const NX = 12_000_001n, NY = 8_000_001n;         // radices = QX_MAX+1, QY_MAX+1
 
 function _quant(v, bias, qmax) {
   let q = Math.round((v + bias) / Q_KPC);
@@ -265,61 +284,80 @@ function _locate(galacticPos) {
 // INJECTIVE NAME RENDERERS
 // ─────────────────────────────────────────────────────────────────────
 
-// CV syllable alphabet (each entry EXACTLY two chars → unambiguous chunking →
-// injective concatenation). 20 consonants × 5 vowels = 100 syllables.
-const CV_CONS = ['b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm',
-  'n', 'p', 'r', 's', 't', 'v', 'w', 'x', 'z', 'y'];
-const CV_VOW = ['a', 'e', 'i', 'o', 'u'];
-const CV = [];
-for (const c of CV_CONS) for (const v of CV_VOW) CV.push(c + v);
-const CV_BASE = CV.length; // 100
+// ── Curated syllable alphabet (bare + greek words) ──────────────────────────
+// Every syllable is EXACTLY 3 chars (consonant-vowel-consonant), so a word built
+// by concatenating syllables chunks unambiguously every 3 chars → the index→word
+// map is injective (distinct syllable sequences → distinct strings). Codas are a
+// clean sonorant/stop set that transitions well into the next onset, which fixes
+// both 3b's monotonous "…ba …ba" tails AND ugly clusters. 20×5×11 = 1100
+// syllables → bijective supply 1100 + 1100² + … + 1100⁵ ≈ 1.6e15.
+const SYL_ONSET = ['b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm',
+  'n', 'p', 'r', 's', 't', 'v', 'w', 'x', 'y', 'z'];
+const SYL_VOWEL = ['a', 'e', 'i', 'o', 'u'];
+const SYL_CODA = ['b', 'd', 'g', 'k', 'l', 'm', 'n', 'p', 'r', 's', 't'];
+const SYL = [];
+for (const o of SYL_ONSET) for (const v of SYL_VOWEL) for (const c of SYL_CODA) SYL.push(o + v + c);
+const SYL_BASE = SYL.length; // 1100
+const SYL_BASE_BIG = BigInt(SYL_BASE);
 
 // Fictional survey prefixes — deliberately NOT any real catalog (HD/HIP/HR/GJ/
 // TYC/2MASS/SDSS/WISE/Gaia/TIC/KIC/GSC/UCAC/…) and never overlapping HYG proper
-// names, so procgen catalog designations stay OUT of real designation space.
+// names, so procgen designations stay OUT of real designation space.
 const SURVEY_PREFIXES = ['PVX', 'QRN', 'XND', 'ZTA', 'KRV', 'NBG', 'ODX', 'VLC', 'TRN', 'WGX'];
 
-// Region-weighted class mix: [catalog/survey, multi-part fantasy]. Re-expresses
-// the ratified flavor (core catalog-heavy → rim fantasy-leaning) over the new
-// classes. Bare fantasy words are a rare overlay applied before this roll.
+// Greek letters (Bayer-style, class c). 24 → 4.58 bits absorbed into the letter.
+const GREEK = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta',
+  'Iota', 'Kappa', 'Lambda', 'Mu', 'Nu', 'Xi', 'Omicron', 'Pi',
+  'Rho', 'Sigma', 'Tau', 'Upsilon', 'Phi', 'Chi', 'Psi', 'Omega'];
+
+// Region-weighted class mix: [survey, greek]; multipart = 1 − survey − greek.
+// Re-expresses the ratified flavor (core catalog-heavy → rim fantasy-leaning) and
+// restores the pre-3b greek class at ~10-15% (ac5 addendum ruling 3). Bare words
+// are a rare overlay applied BEFORE this roll.
 const REGION_CLASS_WEIGHTS = {
-  core: [0.55, 0.45],
-  arm:  [0.30, 0.70],
-  rim:  [0.15, 0.85],
-  halo: [0.25, 0.75],
+  core: [0.50, 0.15],   // survey .50, greek .15, multipart .35
+  arm:  [0.28, 0.12],   // .28 / .12 / .60
+  rim:  [0.13, 0.10],   // .13 / .10 / .77
+  halo: [0.22, 0.13],   // .22 / .13 / .65
 };
 
 // Bare-fantasy sub-lattice: a position is bare-eligible iff each lattice coord
-// hits a fixed residue mod BARE_M. Fraction eligible = 1/BARE_M³ ≈ 6e-8 → bare
-// words are genuinely rare AND uniformly spread across the galaxy (not clustered).
+// hits a fixed residue mod BARE_M. Fraction eligible = 1/BARE_M³ = 1/16.78M → a
+// real star is settled ~1 in 16.8M ≈ 12k galaxy-wide, uniformly spread.
 const BARE_M = 256;
 const BARE_RX = 91, BARE_RY = 37, BARE_RZ = 173;
-const BARE_CX = 250001n, BARE_CY = 125001n; // coarse radices: floor(Q*_MAX/BARE_M)+1
+const BARE_CX = 46876n, BARE_CY = 31251n, BARE_CZ = 46876n; // coarse radices: floor(Q*_MAX/BARE_M)+1
+const BARE_TOTAL = BARE_CX * BARE_CY * BARE_CZ; // coarse cells ⇒ bi ∈ [0, BARE_TOTAL)
+// Decorrelation unit: coprime to BARE_TOTAL (= 2⁴·3·11·947·11719²), so
+// bi ↦ (bi·K) mod BARE_TOTAL is a BIJECTION on [0, BARE_TOTAL) — it scrambles
+// which coarse-cell axis drives the high syllable, killing the "…co_" trailing
+// cluster a thin region would otherwise show, WITHOUT changing the word length
+// (range preserved) or breaking injectivity.
+const BARE_MIX_K = 1000003n;
 
 function _base36(bigval, width) {
   const s = bigval.toString(36).toUpperCase();
   return s.length >= width ? s : '0'.repeat(width - s.length) + s;
 }
 
-// Fixed 3-syllable CV word (base-100, injective) for wIdx in [0, 1_000_000).
-function _cvWord3(wIdx) {
-  let n = wIdx;
-  const a = CV[n % CV_BASE]; n = Math.floor(n / CV_BASE);
-  const b = CV[n % CV_BASE]; n = Math.floor(n / CV_BASE);
-  const c = CV[n % CV_BASE];
-  const w = a + b + c;
+// Exactly-2-syllable CVC word (base-2000, injective) for wIdx in [0, SYL_BASE²).
+function _syl2Word(wIdx) {
+  const a = SYL[wIdx % SYL_BASE];
+  const b = SYL[Math.floor(wIdx / SYL_BASE) % SYL_BASE];
+  const w = a + b;
   return w.charAt(0).toUpperCase() + w.slice(1);
 }
 
-// Bijective base-100 CV word (injective, variable length) for a BigInt index.
-function _cvWordBij(idxBig) {
-  const base = BigInt(CV_BASE);
+// Bijective base-2000 CVC word (injective, variable length) for a BigInt index.
+// Fixed-width syllables ⇒ distinct index → distinct string. Realized indices
+// (bare ≤2.75e14, greek ≤4.8e15) land at ~5 syllables (~15 chars).
+function _sylWordBij(idxBig) {
   let n = idxBig + 1n; // bijective numeration: index 0 → single syllable
   let w = '';
   while (n > 0n) {
-    const r = Number((n - 1n) % base);
-    w += CV[r];
-    n = (n - 1n) / base;
+    const r = Number((n - 1n) % SYL_BASE_BIG);
+    w += SYL[r];
+    n = (n - 1n) / SYL_BASE_BIG;
   }
   return w.charAt(0).toUpperCase() + w.slice(1);
 }
@@ -328,15 +366,59 @@ function _bareEligible(qx, qy, qz) {
   return (qx % BARE_M === BARE_RX) && (qy % BARE_M === BARE_RY) && (qz % BARE_M === BARE_RZ);
 }
 
-function _bareWord(region, qx, qy, qz) {
+// Coarse (bare-eligible) cell index for an eligible position — the injective key
+// shared by _bareWord and enumerateSettledSystems.
+function _bareCellIndex(region, qx, qy, qz) {
   const cx = Math.floor(qx / BARE_M);
   const cy = Math.floor(qy / BARE_M);
   const cz = Math.floor(qz / BARE_M);
   // Injective over the eligible sub-lattice: distinct eligible cells → distinct bi.
   const bi = BigInt(cx) + BARE_CX * (BigInt(cy) + BARE_CY * BigInt(cz));
-  // Partition the word supply across the four regions (disjoint residues mod 4).
-  const fullIdx = bi * 4n + BigInt(REGION_INDEX[region] ?? 1);
-  return _cvWordBij(fullIdx);
+  // Bijective decorrelation mix, then partition the word supply across the four
+  // regions (disjoint residues mod 4). Both steps preserve injectivity.
+  const mixed = (bi * BARE_MIX_K) % BARE_TOTAL;
+  return mixed * 4n + BigInt(REGION_INDEX[region] ?? 1);
+}
+
+function _bareWord(region, qx, qy, qz) {
+  return _sylWordBij(_bareCellIndex(region, qx, qy, qz));
+}
+
+// ── Injective per-class renderers of the locator L ──────────────────────────
+// Each is injective in L; the class shapes are structurally disjoint (survey has
+// " J" + sign; multipart has "-" and no space; greek has two spaces + a leading
+// greek word; bare has no separator), so distinct L → distinct name across
+// classes too. The class itself is a pure function of L (via _classRoll).
+
+// (a) Survey designation: prefix + " J" + two coordinate-style base-36 fields
+// separated by a latitude sign. The 14-char base-36 field IS the full locator,
+// so the (decorative) prefix and sign never affect uniqueness.
+function _surveyName(L, y) {
+  const pfx = SURVEY_PREFIXES[Number(L % BigInt(SURVEY_PREFIXES.length))];
+  const c = _base36(L, 14);
+  const sign = y >= 0 ? '+' : '-';
+  return `${pfx} J${c.slice(0, 7)}${sign}${c.slice(7)}`;
+}
+
+// (b) Multi-part fantasy: 2-syllable region word (low bits) + "-" + base-36 code
+// (high bits). Together they carry all of L injectively.
+function _multipartName(L) {
+  const S2 = SYL_BASE_BIG * SYL_BASE_BIG;
+  const wIdx = Number(L % S2);
+  const code = L / S2;
+  return `${_syl2Word(wIdx)}-${_base36(code, 10)}`;
+}
+
+// (c) Greek designation: greek letter + region word + 5-digit numeral.
+// numeral = low bits, letter = next bits, word = high bits — all injective.
+// The 5-digit numeral keeps the word's index ≤ ~4.8e14 → ~5 syllables at ≤30%
+// of the ~1.6e15 word supply (comfortably under the ≤50% margin).
+function _greekName(L) {
+  const numeral = Number(L % 100000n);
+  const rest = L / 100000n;
+  const letterIdx = Number(rest % 24n);
+  const wordIdx = rest / 24n;
+  return `${GREEK[letterIdx]} ${_sylWordBij(wordIdx)} ${String(numeral).padStart(5, '0')}`;
 }
 
 // Deterministic [0,1) class roll from the locator (independent of the rendering
@@ -395,22 +477,58 @@ function generateSystemName(rng, galacticPos) {
   }
 
   const weights = REGION_CLASS_WEIGHTS[region] || REGION_CLASS_WEIGHTS.arm;
+  const [wSurvey, wGreek] = weights;
   const roll = _classRoll(L);
 
-  if (roll < weights[0]) {
-    // (a) positional/catalog survey designation — fictional prefix + a
-    // position-derived, base-36 catalogue code (fixed width 15 → injective, and
-    // spanning a range far past real designation space; real surveys top out
-    // around ~360k HD numbers). Reads like a far-future deep-survey ID.
-    const pfx = SURVEY_PREFIXES[Number(L % BigInt(SURVEY_PREFIXES.length))];
-    return pfx + '-' + _base36(L, 15);
-  }
+  // (a) survey designation | (c) greek designation | (b) multi-part fantasy.
+  // Each renderer embeds L injectively; the class is a pure function of L.
+  if (roll < wSurvey) return _surveyName(L, galacticPos.y);
+  if (roll < wSurvey + wGreek) return _greekName(L);
+  return _multipartName(L);
+}
 
-  // (b) multi-part fantasy — short region-flavoured word + a designator that
-  // carries the position-derived uniqueness bits (base-36 of the high locator).
-  const wIdx = Number(L % 1000000n);
-  const code = L / 1000000n;
-  return _cvWord3(wIdx) + '-' + _base36(code, 12);
+/**
+ * Enumerate every bare-word-eligible (settled) system within an axis-aligned
+ * bounding volume — the deterministic, no-registry basis for a future in-game
+ * "settled systems catalog / search" (that UI is OUT of scope, ac5 addendum
+ * ruling 2). Each returned position quantizes back to its own eligible cell, so
+ * its name ROUND-TRIPS through generateSystemName. Bare words are 1-in-16.8M, so
+ * a modest box yields a handful; `maxResults` caps runaway galaxy-scale queries.
+ *
+ * @param {{xMin,xMax,yMin,yMax,zMin,zMax:number}} bounds - kpc, galactocentric
+ * @param {number} [maxResults=20000]
+ * @returns {Array<{ position:{x,y,z}, name:string, region:string }>}
+ */
+function enumerateSettledSystems(bounds, maxResults = 20000) {
+  const axis = (min, max, bias, qmax, res) => {
+    let qLo = _quant(min, bias, qmax);
+    const qHi = _quant(max, bias, qmax);
+    qLo += (((res - qLo) % BARE_M) + BARE_M) % BARE_M; // first value ≡ res (mod M)
+    return { qLo, qHi };
+  };
+  const X = axis(bounds.xMin, bounds.xMax, X_BIAS, QX_MAX, BARE_RX);
+  const Y = axis(bounds.yMin, bounds.yMax, Y_BIAS, QY_MAX, BARE_RY);
+  const Z = axis(bounds.zMin, bounds.zMax, Z_BIAS, QZ_MAX, BARE_RZ);
+
+  const out = [];
+  for (let qz = Z.qLo; qz <= Z.qHi && out.length < maxResults; qz += BARE_M) {
+    for (let qy = Y.qLo; qy <= Y.qHi && out.length < maxResults; qy += BARE_M) {
+      for (let qx = X.qLo; qx <= X.qHi && out.length < maxResults; qx += BARE_M) {
+        const position = {
+          x: qx * Q_KPC - X_BIAS,
+          y: qy * Q_KPC - Y_BIAS,
+          z: qz * Q_KPC - Z_BIAS,
+        };
+        const name = generateSystemName(null, position);
+        // Keep only genuine bare words. A real-name fall-through re-rolls into a
+        // designation (has a space/dash/digit) — those are not settled names.
+        if (!name.includes('-') && !name.includes(' ') && !/\d/.test(name)) {
+          out.push({ position, name, region: _classifyRegion(position).region });
+        }
+      }
+    }
+  }
+  return out;
 }
 
 
@@ -540,5 +658,7 @@ export {
   generatePrefixedName,
   generateSyllable,
   quantizePosition,
+  enumerateSettledSystems,
   _classifyRegion,
+  _bareEligible,
 };
