@@ -38,6 +38,8 @@ export const MIXED_DEFAULTS = Object.freeze({
   DETAIL_FREQ: 7.0, DETAIL_AMP: 0.02,  // small isotropic sub-grid texture (<< the ordering margins)
   // per-center pierce boolean (gate-2 localYield form) — the anti-mush lynchpin
   STR_LO: 0.30, SPREAD: 0.30, Y0: 0.001759, Y_K: 8.78,   // gate-2:32-33 (first-cut UAT-tunable)
+  // corona-pierced breach band (SLICE 2 — a Φ-gated sub-pierce band on the EXISTING draws, zero new alea)
+  PHI_BREACH: 0.45, BREACH_LO: 0.75,   // PHI_BREACH strictly > 0.42 (the cross-check Φ); BREACH_LO = band width (UAT-tunable, gate-2 Y0/Y_K precedent)
   // absolute-datum province stack + NUMERIC edifice-budget bound (the §2.4 D1-MF1 fix)
   BASE_TESSERA: 0.70, BASE_PLAINS: 0.10, BASE_RIFT: -0.45,   // floor gaps 0.60 / 0.55
   MIN_FLOOR_GAP: 0.55,        // = min(tessera-plains, plains-rift); the positive within-province stack stays < this
@@ -213,6 +215,20 @@ export function writeMixedInteriorSphere(carrier, { e1, rawTidal = 0, macroSeed 
   for (let p = 0; p < n; p++) { if (!pierce[p]) { if (firstTent < 0) firstTent = p; if (isAncient[p]) nAncientTent++; } }
   if (firstTent >= 0 && nAncientTent === 0) { isAncient[firstTent] = 1; }
 
+  // ── STEP 3b — corona-pierced BREACH band (SLICE 2): a Φ-gated, strength-driven sub-pierce band on the
+  //    EXISTING draws (ZERO new alea, zero draw-order change). A corona-type (non-pierce, non-ancient) center
+  //    whose plume sits just BELOW its pierce cut (within BREACH_LO of it) breaches a concentric shield core
+  //    inside its corona annulus. localYield is RECOMPUTED from the published yspread[p] (STEP 2's quantity),
+  //    so pierce[]/pierceCount/Ybase are UNTOUCHED and breach≡0 whenever PHI ≤ PHI_BREACH (byte-inert leg). ──
+  const breach = new Uint8Array(n);
+  if (PHI > T.PHI_BREACH) {
+    for (let p = 0; p < n; p++) {
+      if (pierce[p] || isAncient[p]) continue;                           // corona-type centers only
+      const localYield = Ybase * (1 + T.SPREAD * (2 * yspread[p] - 1));  // == STEP 2's localYield, recomputed
+      breach[p] = (strength[p] * PHI >= T.BREACH_LO * localYield) ? 1 : 0;
+    }
+  }
+
   // per-center shield amplitude + radius (deterministic from strength_p — no extra stream). A_e is the
   // budget-bounded peak amplitude; Psi_e the angular edifice radius. (mirror magma A_e/Psi_e; NOT magma's
   // native unbounded EDIFICE_HEIGHT=1.0 — the previous unbounded-magma mush, N1/B-4.)
@@ -258,7 +274,7 @@ export function writeMixedInteriorSphere(carrier, { e1, rawTidal = 0, macroSeed 
       const g = Math.exp(-(a / belt) * (a / belt));    // squared-Gaussian proximity
       if (g > bestAny) bestAny = g;
       if (isAncient[p] && !pierce[p] && g > bestAnc) bestAnc = g;
-      if (pierce[p]) { const r = a / Psi_e[p]; if (r < bestPierce) { bestPierce = r; bestPierceOwner = p; } }
+      if (pierce[p] || breach[p]) { const r = a / Psi_e[p]; if (r < bestPierce) { bestPierce = r; bestPierceOwner = p; } }   // SLICE 2: breach centers enroll a shield core too (breach excludes pierce/ancient)
     }
     centerId[i] = best;
     prox[i] = bestAny;
@@ -391,9 +407,9 @@ export function writeMixedInteriorSphere(carrier, { e1, rawTidal = 0, macroSeed 
   const mixedDiag = {
     beltScale: belt,
     strength, yield: yspread, pierce, centers,
-    isAncient, coronaActive,
+    isAncient, coronaActive, breach,
     A_e, Psi_e,
-    n, pierceCount: centerPierceCount, meanEdgeAngle,
+    n, pierceCount: centerPierceCount, breachCount: breach.reduce((a, v) => a + v, 0), meanEdgeAngle,
     Ybase, L, effectiveL: Lyield, Φ: PHI,
     relaxPasses: T.RELAX_PASSES,
   };

@@ -92,3 +92,90 @@ Guardrail quartet green, all trivial-pass by construction (production dispatch n
 `worldengine-effectivel` 8/8 (NEW) · `worldengine-lid-classifier` 33/33 (reconciled) · `worldengine-mixed-composer`
 13/13 · `worldengine-mixed-pierce` 7/7 · `worldengine-interpenetration` 6/6 · `worldengine-lid-router-audit` 9/9 ·
 guardrail quartet 78+39+22+21. **All 236/236 green** across the 10-file Slice-1 set.
+
+---
+
+## SLICE 2 — corona-pierced compound center (breach continuum)
+
+**Landed:** the STEP-3b **breach band** — a corona-type (non-pierce, non-ancient) center whose plume sits just
+BELOW its pierce cut breaches a concentric **shield core** (PIERCE) inside its **corona annulus** (TENT), at ONE
+center, while every node still resolves to exactly one `primitiveId`. Mechanism (a) from the plan §0: a Φ-gated,
+strength-driven sub-pierce band on the EXISTING draws — **ZERO new alea, zero draw-order change**. Terminal-gate
+AC advanced: AC-CORONA-PIERCED (+ AC-0, AC-ZERO-CLOBBER threaded). **Deviation from plan: NONE.**
+
+### Files touched
+| File | Change |
+|---|---|
+| `src/worldengine/base/mixedInterior.js` | `MIXED_DEFAULTS`: `PHI_BREACH: 0.45, BREACH_LO: 0.75` added to the pierce-boolean group. NEW **STEP 3b** (after the ≥1-ancient promote, before the A_e/Psi_e block): `const breach = new Uint8Array(n)`, gated `if (PHI > T.PHI_BREACH)`, `!pierce && !isAncient` only, `breach[p] = strength[p]*PHI >= T.BREACH_LO*localYield` with `localYield` RECOMPUTED from the published `yspread[p]`. **STEP 5** enrollment `if (pierce[p])` → `if (pierce[p] \|\| breach[p])` (breach centers enroll a shield core with their own `Psi_e[p]`). `mixedDiag` gains `breach` + `breachCount`. STEP 7 / STEP 9 UNTOUCHED. |
+| `docs/…/corona-pierced-search.mjs` (NEW) | The §3 one-shot PIN search (grid × 64 seeds; nesting gate reconstructed arm's-length). Ran ONCE to pin; not CI. |
+| `tests/worldengine-corona-pierced.test.js` (NEW) | AC-CORONA-PIERCED (a/b/c/d), pin hard-coded as constants; the shield-core→corona-annulus walk reconstructed from published `centers`/`Psi_e`/`breach`/`coronaActive`/`meanEdgeAngle` + returned `primitiveId` + `carrier.verts`. |
+| `docs/…/BUILD-NOTES.md` | this section. |
+
+### The PINNED corona-pierced coordinate + full search record (real measured numbers, N=1500)
+
+**PIN** (largest Π margin among accepted with Π ≥ PI_STAR, per §3):
+
+```json
+{ "L": 0.58, "Φ": 0.50, "n": 9, "seed": 22,
+  "PHI_BREACH": 0.45, "BREACH_LO": 0.75,
+  "breachCount": 3, "legibleByFamily.pierce": 8, "legibleByFamily.tent": 1,
+  "Π": 0.8535178777393311, "M": 0.35438379488546184,
+  "nesting": 2, "pierceCount": 5 }
+```
+
+- `primitiveId` histogram at the pin: `shield(1):98 caldera(2):4 corona(5):139 tessera(6):114 rift(7):91 plain(8):1054`.
+- **2 active-corona breach centers nest legibly** (`nesting=2`): center **p=1** `core{shield:5,caldera:1}` /
+  `annulus{corona:56}` and center **p=7** `core{shield:7,caldera:1}` / `annulus{corona:51}` — a shield core inside
+  a pure corona annulus, node-legible at N=1500. (A 3rd breach center p=5 is inactive-corona, not counted by the gate.)
+- `meanEdgeAngle=0.1002`, `Rc = CORONA_RC_NODES·meanEdgeAngle = 0.2504`, active corona footprint `1.6·Rc = 0.4006` rad.
+
+**Search extent** (`corona-pierced-search.mjs`, 14.0 s): grid `L ∈ {0.58,0.59,0.60,0.61,0.62}` (step 0.01, all
+< L_STRONG 0.63 and ≤ slider cap 0.629) × `Φ ∈ {0.50,0.52,…,0.68}` (step 0.02) × `n ∈ {7,8,9}` × `seed ∈ 1..64`
+= **9600 builds**; **2201** had `breachCount ≥ 2`; **857** passed ALL gates (`breachCount≥2 ∧ legibleByFamily.pierce≥2
+∧ Π>0 ∧ M≤0.70 ∧ ≥2 active-corona breach centers nesting`); **all 857** cleared `Π ≥ PI_STAR (0.15)`. The accepted
+region is broad — corona-pierced worlds are the RULE across the mixed band, not a knife-edge. **Fallbacks used: NONE.**
+
+**Controls re-confirmed clean** (structurally guaranteed — `PHI ≤ 0.42 < PHI_BREACH ⇒ breach ≡ 0` — and MEASURED):
+`breachCount((L0.60,Φ0.42), seed 2) === 0` AND `breachCount(Tharsis {L0.551,Φ0.27,n6}, seed 22) === 0`. `controlsClean: true`.
+
+**Structural note for a future retune (why the Π-max pin is degenerate):** the Π instrument projects `primitiveId`
+through `familyOf` to a BINARY pierce/tent class, and **both corona (5) and plains (8) are TENT** — so Π is *blind*
+to corona-vs-plains and only "sees" the shield cores. Consequently the max Π (0.85352) is shared by MANY (L,Φ,n=9,
+seed 22) coordinates that differ only in how many shield-bearing centers breach vs pierce (A_e/Psi_e depend on
+`strength[p]` alone, identically for pierce and breach, so a pierce↔breach flip leaves the pierce-figure metrics
+unchanged). **The SHOULD-5 nesting gate — not Π — is what actually enforces the corona-in-shield structure**; Π-max
+is only the §3 tie-break that guarantees the SLICE-3 ADDITIONAL `Π ≥ PI_STAR` observation passes with margin. The
+pin was verified to nest cleanly (p=1, p=7 above) before selection.
+
+### AC-0 conformance (SPINE-CONFORMANCE.md) — the breach channel
+New channels map to named readers; no dead knobs; no archetype/label input; no taxonomy change. `breach` /
+`breachCount` / `PHI_BREACH` / `BREACH_LO` are on no grep denylist (`.label`, `PRESET_ARCHETYPE`,
+`stagnantLidRegimeOf(`, `isVolcanicPath(`, `archetype`) — they are E1-coordinate / composer channels, not labels.
+Composer keeps its exactly-3-imports invariant (`alea`/`simplex-noise`/`./mathutil.js`) — STEP 3b adds no import →
+e1-shadow-audit stays clean (22/22), `planet-archetypes` drift guards green (21/21).
+
+| NEW channel (Slice 2) | Where written | Named consumer(s) — the reader in the DAG |
+|---|---|---|
+| `breach[]` | mixedInterior.js STEP 3b | STEP 5 pierceR enrollment (`pierce[p] \|\| breach[p]` → shield-core resolve at STEP 9) → AC-CORONA-PIERCED node walk; (SLICE 3) `interpenetration.legibleByFamily.pierce` |
+| `mixedDiag.breach` / `mixedDiag.breachCount` | mixedInterior.js `mixedDiag` | AC-CORONA-PIERCED nesting reconstruction + Tharsis/cross-check controls; (SLICE 3) `mixedProbe.coronaPiercedCount` |
+| `PHI_BREACH` / `BREACH_LO` | `MIXED_DEFAULTS` | STEP 3b breach decision (UAT-tunable, gate-2 Y0/Y_K precedent; `PHI_BREACH` strictly > 0.42, the cross-check Φ) |
+
+### AC-ZERO-CLOBBER (threaded)
+Guardrail quartet green, all trivial-pass by construction: `v2-0-byte-identity` **78/78**,
+`worldengine-lid-byte-anchors` **39/39**, `worldengine-e1-shadow-audit` **22/22**, `planet-archetypes` **21/21**.
+Fenced files byte-clean (git-diff empty): `lidResponse.js` (Slice 1, frozen), `e1Regime.js`, `interpenetration.js`,
+`magmatism.js`, `stagnantLid.js`, `plates.js`, `shellRelief.js`, `verify.js`, `planet-lod-rivers.js`,
+`planet-lod-lab.html`. git-diff touches ONLY `mixedInterior.js` (+2 new in-scope files); the not-ours
+`CameraChoreographer.js` / `LabMode.js` + the untracked screenshot pile stay out.
+
+Byte-inertness is asserted at TWO Φ ≤ 0.42 coords (`breachCount === 0`): the (L0.60,Φ0.42) cross-check and Tharsis.
+At the two Φ > 0.45 pinned coords in `worldengine-mixed-pierce.test.js` (Venus Φ0.69, Φ-sweep 0.55) breach CAN fire,
+but those tests observe only the breach-INERT `pierce[]`/`pierceCount`/`Ybase` → GREEN unchanged (7/7). The Venus Φ0.69
+histogram-DIFFERENCE in `worldengine-effectivel.test.js` (TVD ≥ 0.01 vs a measured min separation 0.0273) survives the
+small Venus-side breach perturbation → GREEN unchanged (8/8), as the SLICE-1 [ADV-FIXED] anticipated.
+
+### Test tally (Slice 2 build)
+`worldengine-corona-pierced` **6/6 (NEW)** · must-stay-green set UNCHANGED: `worldengine-effectivel` 8/8 ·
+`worldengine-lid-classifier` 33/33 · `worldengine-mixed-composer` 13/13 · `worldengine-mixed-pierce` 7/7 ·
+`worldengine-interpenetration` 6/6 · `worldengine-lid-router-audit` 9/9 · guardrail quartet 78+39+22+21.
+**All 242/242 green** across the 11-file Slice-2 set.
