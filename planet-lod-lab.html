@@ -2698,7 +2698,7 @@
     //    carrier.height — a LAB-ONLY path (production dispatch stays on PRESET_ARCHETYPE, so NO shipped preset
     //    reaches it → the 75-golden is structurally safe). The default vector IS the hand-set Tharsis coordinate
     //    (gate-2 §4: L 0.551, Φ 0.27, n 6, tidally quiet → classifies 'mixed' via cut #5).
-    const mixedOv = { L: 0.551, Φ: 0.27, n: 6, tidal: 0.0 };   // Tharsis defaults (hand-set D-vector; no preset)
+    const mixedOv = { L: 0.551, Φ: 0.27, n: 6, tidal: 0.0, effectiveL: null };   // Tharsis defaults (hand-set D-vector; no preset). effectiveL: DRIVER OVERRIDE (SLICE 3, no *Enabled key) — non-null ⇒ the wet-stagnant world (routes/yields on effectiveL, not raw L); null ⇒ off (dead-lid corona-pierced drive via L/Φ/n).
     const MIXED_HEATPIPE_PEG = 0.45;   // m_hp = rawTidal − HEATPIPE_PEG (the e1Regime peg; local copy — no e1Regime import in the lab render path)
     let _mixedActive = false;          // A/B flip: true ⇒ route() renders the hand-set mixed coordinate; false ⇒ baseline preset render
     let _mixedSeed = null;             // pinned macroSeed for the mixed render (null ⇒ state.macroSeed); set via _lab.setMixedDrivers({macroSeed})
@@ -3888,14 +3888,22 @@
         if (coords['Φ'] != null) mixedOv['Φ'] = +coords['Φ'];
         if (coords.n != null) mixedOv.n = coords.n | 0;
         if (coords.tidal != null) mixedOv.tidal = +coords.tidal;
+        // effectiveL DRIVER OVERRIDE (SLICE 3): present ⇒ set (null-or-omitted-in-coords clears; passing null OFF).
+        if ('effectiveL' in coords) mixedOv.effectiveL = coords.effectiveL == null ? null : +coords.effectiveL;
         if (coords.macroSeed != null) _mixedSeed = coords.macroSeed >>> 0;
       }
       const seed = _mixedSeed != null ? _mixedSeed : state.macroSeed;
+      // effectiveL set ⇒ the WET-STAGNANT world: geodynamicRegime 'stagnant' + an effectiveL member, so
+      // classifyLidPath (effectiveL ?? L) routes 'mixed' and the composer Ybase yields on the strong-but-
+      // piercable edge — NOT the raw-L 'Io-with-water'. Built HERE, OUTSIDE any route({...}) block, so only the
+      // _mixedLidOverride identifier rides into route() (SF1 e1-shadow-audit discipline). Off ⇒ dead-lid.
+      const wetStagnant = mixedOv.effectiveL != null;
       _mixedLidOverride = {
-        e1: { compositionClass: 'rocky', geodynamicRegime: 'dead-lid',
+        e1: { compositionClass: 'rocky', geodynamicRegime: wetStagnant ? 'stagnant' : 'dead-lid',
               m_hp: mixedOv.tidal - MIXED_HEATPIPE_PEG, L: mixedOv.L, 'Φ': mixedOv['Φ'], n: mixedOv.n | 0 },
         rawTidal: mixedOv.tidal, macroSeed: seed,
       };
+      if (wetStagnant) _mixedLidOverride.e1.effectiveL = mixedOv.effectiveL;
       return _mixedLidOverride;
     }
     // Flip the mixed A/B on, refresh the override from the sliders, force baked relief on (so the composer's
@@ -6263,6 +6271,8 @@
                         Pi: md.Pi != null ? md.Pi : null,
                         M: md.M != null ? md.M : null,
                         legibleByFamily: md.legibleByFamily || null,             // { pierce, tent } legible-component counts (MF4 gate)
+                        coronaPiercedCount: md.breachCount ?? 0,                 // SLICE 3: corona-pierced (breach) center count — SCALAR
+                        effectiveL: md.effectiveL != null ? md.effectiveL : null, // SLICE 3: the L the composer YIELDED on (effectiveL ?? L) — SCALAR
                         beltScale: md.beltScale != null ? md.beltScale : null,
                         Ybase: md.Ybase != null ? md.Ybase : null,
                         L: md.L != null ? md.L : null, 'Φ': md['Φ'] != null ? md['Φ'] : null,

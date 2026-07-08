@@ -179,3 +179,100 @@ small Venus-side breach perturbation → GREEN unchanged (8/8), as the SLICE-1 [
 `worldengine-lid-classifier` 33/33 · `worldengine-mixed-composer` 13/13 · `worldengine-mixed-pierce` 7/7 ·
 `worldengine-interpenetration` 6/6 · `worldengine-lid-router-audit` 9/9 · guardrail quartet 78+39+22+21.
 **All 242/242 green** across the 11-file Slice-2 set.
+
+---
+
+## SLICE 3 — Π falsification assertion + null + cross-check + lab drive/probe
+
+**Landed:** the FALSIFICATION ASSERTION on the corona-pierced **WORLD B** — the Π=C·F instrument (consumed
+UNCHANGED, by injection) fires `Π > 0 ∧ M ≤ M_MAX ∧ legibleByFamily.pierce ≥ 2`, so shield cores and corona
+annuli INTERPENETRATE (the claim 2b-2a fenced OUT); the separable-tiling NULL (Π→0); the (L0.60,Φ0.42) seed-2
+CROSS-CHECK reproducing its 2b-2a Π exactly; and the lab drive/probe wiring for AC-PILOT-LIVE. `interpenetration.js`
+is UNTOUCHED (injected). Terminal-gate ACs advanced: AC-INTERPEN-FALSIFY (asserted) + AC-PILOT-LIVE prep (lab seam)
+(+ AC-0, AC-ZERO-CLOBBER threaded). **Deviation from plan: NONE.**
+
+### Files touched
+| File | Change |
+|---|---|
+| `planet-lod-lab.html` | (i) `mixedOv` gains `effectiveL: null` — a DRIVER OVERRIDE (NO `*Enabled` key). (ii) `applyMixedDrivers` absorbs `coords.effectiveL` (`'effectiveL' in coords` ⇒ set; `null` clears) and, when set, builds the `_mixedLidOverride.e1` override with `geodynamicRegime:'stagnant'` + an `e1.effectiveL` member (so classifyLidPath routes 'mixed' and the composer Ybase yields on the strong-but-piercable edge) — the object is built OUTSIDE any `route({...})` block, only the `_mixedLidOverride` identifier rides in (SF1 e1-shadow-audit clean, verified 22/22). (iii) `mixedProbe` gains SCALARS `coronaPiercedCount: md.breachCount ?? 0` + `effectiveL: md.effectiveL` (null-guarded to the file's style). NO new slider/control. |
+| `tests/worldengine-interpen-falsify.test.js` (NEW) | AC-INTERPEN-FALSIFY: instrument-integrity (imported single-source), WORLD-B AC gate (MF4 first), WORLD-B ADDITIONAL `Π ≥ PI_STAR`, cross-check, NULL. `PI_STAR`/`M_MAX`/`interpenetration`/`familyOf`/`PRIMITIVE_ID` all IMPORTED (0.15/0.70 never re-declared). |
+| `docs/…/BUILD-NOTES.md` | this section. |
+
+### Measured numbers (headless, N=1500; instrument INJECTED via `writeMixedInteriorSphere(..., { interpen })`)
+
+**WORLD B — the pinned corona-pierced coordinate `{L 0.58, Φ 0.50, n 9}` seed 22:**
+
+| observable | value | AC clause |
+|---|---|---|
+| `legibleByFamily.pierce` | **8** | ≥ 2 (MF4 precondition — asserted FIRST) ✓ |
+| `Π` (full precision) | **0.8535178777393311** | **> 0** (THE AC gate) ✓ |
+| `M` (full precision) | **0.35438379488546184** | **≤ M_MAX (0.70)** (THE AC gate) ✓ |
+| `Π ≥ PI_STAR (0.15)` | 0.8535 ≥ 0.15 | ADDITIONAL (non-AC) observation ✓ |
+| `breachCount` / `pierceCount` / `legibleByFamily.tent` | 3 / 5 / 1 | (context; matches SLICE-2 pin) |
+
+- **The AC gate = the contract observable VERBATIM: `Π > 0 ∧ M ≤ 0.70 ∧ legibleByFamily.pierce ≥ 2`** — NOT
+  `Π > PI_STAR` (PI_STAR=0.15 ≠ 0; tightening the bar would be a scope change for Max). The `Π ≥ PI_STAR` leg is a
+  SEPARATE, clearly-labelled ADDITIONAL check, guaranteed by SLICE-2 §3 pin-selection (largest Π ≥ PI_STAR margin).
+
+**CROSS-CHECK — `(L 0.60, Φ 0.42)` seed 2 (breach-free: Φ 0.42 < PHI_BREACH 0.45):**
+- `breachCount` = **0** ✓ (⇒ primitiveId field byte-identical to 2b-2a ⇒ Π reproduces exactly).
+- `Π` FULL PRECISION = **0.6621875839828004** — **EXACT match** to the plan's measured `0.6621875839828004`
+  (HEAD `ecad42d`); `toBeCloseTo(0.66, 2)` holds (|0.6622 − 0.66| = 0.0022 < 0.005). `M` = 0.29069621090385217,
+  `legibleByFamily.pierce` = 3. The stale scope-time "0.63" (the mis-attributed Tharsis {0.551,0.27} value) is NOT used.
+
+**NULL — hand-tiled separable carrier (shield polar cap `z > 0.8` vs stagnant-basaltic-plain, `interpenetration()` called DIRECTLY):**
+- `nShield` = **152** (a genuine MINORITY polar cap, 152 < 750), one segregated blob.
+- `Π` = **0** (< PI_STAR 0.15 — F→0 for a single legible component: TILED, not interpenetrated) ✓; `M` = **0.09889660131985027**
+  (well ≤ M_MAX — a segregated cap, not scatter). `isTiled = Π < PI_STAR ∨ M > M_MAX` = **true** ✓.
+
+### Lab edit summary (AC-PILOT-LIVE seam)
+The wet-stagnant world drives via the new effectiveL override path (`_lab.setMixedDrivers({ effectiveL: 0.60, 'Φ': 0.42, n: 6, macroSeed: … })`
+→ `geodynamicRegime:'stagnant'` + `e1.effectiveL` → 'mixed' route + effectiveL-yield); the corona-pierced world
+drives via the EXISTING L/Φ/n sliders (L 0.58 ≤ cap 0.629, Φ 0.50 ≤ cap 1.2, n 9) with effectiveL OFF (dead-lid).
+`mixedProbe()` now reports `coronaPiercedCount` (= breach-center count) and `effectiveL` (the L the composer yielded
+on) as SCALARS, so the orchestrator can read ≥2 corona-pierced centers + the wet-yield L off the live probe. No new
+GUI control; `mixedOv.effectiveL` is a driver override (no `*Enabled` key). AC-PILOT-LIVE is driven live by the
+orchestrator post-build; AC-PILOT-UAT is Max's gate (deferred-to-max, never agent-PASSed).
+
+### AC-0 conformance (SPINE-CONFORMANCE.md) — COMPLETED whole-increment table (plan §5)
+Every NEW channel across all three slices maps to a named reader (no dead knobs); NO archetype/label input; the new
+lab knob is a DRIVER OVERRIDE (no `*Enabled` key). **Grep-denylist statement:** `effectiveL` / `breach` / `breachCount`
+/ `PHI_BREACH` / `BREACH_LO` / `coronaPiercedCount` / `mixedOv.effectiveL` are E1-coordinate / composer / lab-probe
+channels — NONE appears on the denylist (`.label`, `PRESET_ARCHETYPE`, `stagnantLidRegimeOf(`, `isVolcanicPath(`,
+`archetype`); they are not labels. The composer keeps its exactly-3-imports invariant (`alea`/`simplex-noise`/`./mathutil.js`)
+→ `worldengine-e1-shadow-audit` stays clean (22/22); `mixedOv.effectiveL` adds no taxonomy key → `planet-archetypes`
+drift guards green (21/21).
+
+| NEW channel | Where written | Named consumer(s) — the reader in the DAG |
+|---|---|---|
+| `effectiveL` (read) | lidResponse.js `classifyLidPath` L-cut; mixedInterior.js `Lyield` | `classifyLidPath` cuts #3-5 (routing) + composer `Ybase` (pierce yield) — SLICE 1 |
+| `mixedDiag.effectiveL` | mixedInterior.js `mixedDiag` | AC-EFFECTIVEL(c) Ybase-vs-rawL assert; **`mixedProbe.effectiveL` (SLICE 3)** |
+| `breach[]` / `breachCount` | mixedInterior.js STEP 3b + `mixedDiag` | STEP 5 pierceR enrollment (shield-core resolve) → AC-CORONA-PIERCED; **`interpenetration.legibleByFamily.pierce` → Π (SLICE 3 AC-INTERPEN-FALSIFY)**; **`mixedProbe.coronaPiercedCount` (SLICE 3)** |
+| `PHI_BREACH` / `BREACH_LO` | `MIXED_DEFAULTS` | STEP 3b breach decision (UAT-tunable, gate-2 Y0/Y_K precedent; `PHI_BREACH` strictly > 0.42) — SLICE 2 |
+| `mixedOv.effectiveL` (lab driver override) | planet-lod-lab.html `applyMixedDrivers` | `_mixedLidOverride.e1.effectiveL` + `geodynamicRegime:'stagnant'` → classifyLidPath route + composer Ybase (wet-stagnant live drive) — SLICE 3 |
+| `mixedProbe.coronaPiercedCount` / `mixedProbe.effectiveL` (lab probe scalars) | planet-lod-lab.html `mixedProbe` | AC-PILOT-LIVE readout (≥2 corona-pierced centers; yielded L) — SLICE 3 |
+
+### AC-ZERO-CLOBBER (threaded)
+Guardrail quartet green, all trivial-pass by construction: `v2-0-byte-identity` **78/78**,
+`worldengine-lid-byte-anchors` **39/39**, `worldengine-e1-shadow-audit` **22/22** (the lab `applyMixedDrivers` +
+`mixedProbe` edits are OUTSIDE the `riverOverlay.route({...})` block → the `\be1\b`-in-route grep stays clean),
+`planet-archetypes` **21/21**. Fenced files byte-clean (git-diff empty, MANUALLY verified — AC-ZERO-CLOBBER(d)):
+`mixedInterior.js`, `lidResponse.js`, `e1Regime.js`, **`interpenetration.js`**, `magmatism.js`, `stagnantLid.js`,
+`plates.js`, `shellRelief.js`, `verify.js`, `planet-lod-rivers.js`. git-diff touches ONLY `planet-lod-lab.html`
+(+ the new test + this doc); the not-ours `CameraChoreographer.js` / `LabMode.js` + the untracked screenshot pile stay out.
+
+### Test tally (Slice 3 build)
+`worldengine-interpen-falsify` **5/5 (NEW)** · must-stay-green set UNCHANGED: `worldengine-effectivel` 8/8 ·
+`worldengine-lid-classifier` 33/33 · `worldengine-corona-pierced` 6/6 · `worldengine-mixed-composer` 13/13 ·
+`worldengine-mixed-pierce` 7/7 · `worldengine-interpenetration` 6/6 · `worldengine-lid-router-audit` 9/9 ·
+guardrail quartet 78+39+22+21. **247/247 green** across the 12-file Slice-3 set.
+
+**FULL suite (`npx vitest run`, run ONCE):** `Test Files 17 failed | 114 passed (131)` · `Tests 4 failed | 1827 passed (1831)`.
+The **4 failed TESTS are EXACTLY the 4 pre-existing known ones** (no growth):
+`src/generation/__tests__/GalacticFeatures.test.js > Galactic Feature Layer > feature types match their galactic context`;
+`src/generation/__tests__/KnownObjects.test.js > KnownObjectProfiles > has all five test profiles`;
+`… > searchKnownObjects > is case-insensitive`; `… > searchKnownObjects > partial match works`.
+The 17 failed *files* = those 2 assertion-failing files + **15 pre-existing `vendor/motion-test-kit/tests/*.test.js`
+suite-collection failures** (`Error: No test suite found in file …` — they are written for node's built-in test
+runner and contribute **0 counted tests**; caught by vitest's `*.test.js` glob, independent of this increment's
+3-file scope). Counted-test failures did NOT grow beyond the 4 known.
