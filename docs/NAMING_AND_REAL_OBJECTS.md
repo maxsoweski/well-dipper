@@ -36,6 +36,19 @@ questions that are easy to conflate:
 
 ## 1. How a system gets its name, end to end
 
+> **⚠️ Updated by increment 3b (AC6/AC7, 2026-07-08).** Sections 1.1 and 1.3
+> below describe the *original* seed-based scheme that this doc was written to
+> review (AC4/AC5). That scheme has since been **replaced**: `generateSystemName`
+> is now a **pure, injective function of canonical galactic position** — the
+> `rng`/seed argument is ignored, so naming is unique by construction (AC6) and
+> revisit-stable on every path (AC7). The three live classes are survey
+> designation / multi-part fantasy / rare bare word; there is no `sectorCode`
+> mitigation and no no-position fallback (D5 eliminated). The mechanism is
+> documented at the top of `src/generation/NameGenerator.js`, proven by
+> `src/generation/__tests__/NameGenerator.injective.test.js`, and measured in
+> `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/census-report.md`. The
+> real-object machinery in §2/§3 is unchanged. Read §1.1/§1.3 as history.
+
 ### 1.1 The generator: five styles, region-weighted
 
 Every procedural name is produced by one function, `generateSystemName(rng,

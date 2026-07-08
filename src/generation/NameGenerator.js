@@ -2,28 +2,44 @@
  * NameGenerator — deterministic procedural name generation for star systems,
  * stars, planets, and moons.
  *
- * Produces a mix of:
- * - Catalog-style names ("HD 47832", "GJ 1214", "HR 8799") — ~30%
- * - Pronounceable fantasy names ("Velorath", "Syndara", "Keth Prime") — ~70%
+ * ── System names are UNIQUE BY CONSTRUCTION (increment 3b, ac5-decision.md) ──
  *
- * Uses syllable-based construction with consonant-vowel patterns for
- * pronounceable names. Inspired by real astronomical naming conventions
- * (IAU catalogs, Kepler designations) and procedural techniques from
- * games like Elite Dangerous (Markov-like sound pairs) and No Man's Sky
- * (seeded cascading generation).
+ * `generateSystemName(rng, galacticPos)` is a PURE, INJECTIVE function of the
+ * system's canonical galactic position. Two consequences fall straight out of
+ * that single property:
  *
- * All output is deterministic — same seed always produces the same names.
- * Expects a SeededRandom instance (with .float(), .int(), .pick(), .chance(),
- * .child(label) methods).
+ *   • AC6 (never the same name twice): distinct positions map to distinct names.
+ *     There is no registry and no persistence — uniqueness is structural.
+ *   • AC7 (revisit stability): the same star, reached by ANY targeting path
+ *     (sky-click / NavComputer / feature route / screensaver / spawn), quantizes
+ *     to the same position and therefore yields the same name, forever.
+ *
+ * The name is built from three region-weighted classes, each of which embeds the
+ * full position "locator" injectively (or, for the rare bare class, is drawn from
+ * a finite partitioned supply indexed injectively by position):
+ *
+ *   (a) catalog/survey designation  "PVX-4728391102847726"   — the common case
+ *   (b) multi-part fantasy          "Bakiro-08F3K9Q2M7XA"    — word + code suffix
+ *   (c) bare fantasy word           "Lyreonuki"              — RARE settled-era name
+ *
+ * A structural blocklist (src/generation/data/realProperNames.js) keeps the bare
+ * class from ever emitting a real star's proper name (design req (d)).
+ *
+ * Star/planet/moon names still cascade off the (now unique) system name via
+ * `generateSystemNames`, on the naming RNG's own forked stream — system CONTENTS
+ * (StarSystemGenerator output) are never touched.
+ *
+ * See docs/NAMING_AND_REAL_OBJECTS.md and the injectivity test
+ * (src/generation/__tests__/NameGenerator.injective.test.js) for the full picture.
  */
 
+import { REAL_PROPER_NAME_SET } from './data/realProperNames.js';
+
 // ─────────────────────────────────────────────────────────────────────
-// PHONEME TABLES
+// PHONEME TABLES (used by the body-name generators: planet/moon words)
 // ─────────────────────────────────────────────────────────────────────
 
 // Onsets: consonant(s) that can start a syllable
-// Simple single consonants are duplicated for weighting — they produce
-// smoother, more pronounceable names than clusters like "str" or "scr"
 const ONSETS = [
   'b', 'b', 'c', 'c', 'd', 'd', 'f', 'f', 'g', 'g',
   'h', 'h', 'j', 'k', 'k', 'l', 'l', 'm', 'm', 'n', 'n',
@@ -34,7 +50,7 @@ const ONSETS = [
 
 // Nuclei: vowel sounds (the core of each syllable)
 const NUCLEI = [
-  'a', 'a', 'a',   // heavily weighted simple vowels
+  'a', 'a', 'a',
   'e', 'e', 'e',
   'i', 'i',
   'o', 'o', 'o',
@@ -43,14 +59,11 @@ const NUCLEI = [
 ];
 
 // Codas: consonant(s) that can end a syllable (or empty for open syllable)
-// ~50% open syllables keeps names flowing and avoids consonant pile-ups.
-// Only single-character codas — multi-char codas create ugly clusters at
-// syllable boundaries when the next syllable starts with a consonant onset.
 const CODAS = [
-  '', '', '', '', '', '', '', '', '', '',  // open syllables
+  '', '', '', '', '', '', '', '', '', '',
   'b', 'd', 'f', 'g', 'k', 'l', 'm', 'n', 'p', 'r', 's', 't',
   'x', 'z',
-  'n', 'r', 's', 'l', 'n', 'r',          // extra weight on smooth endings
+  'n', 'r', 's', 'l', 'n', 'r',
 ];
 
 // Special endings that make names feel more "space-y"
@@ -61,7 +74,7 @@ const SPACE_SUFFIXES = [
   'al', 'el', 'il', 'ol', 'ul', 'an', 'en', 'in', 'on',
 ];
 
-// Prefixes that evoke sci-fi/space flavor (used for some names)
+// Prefixes that evoke sci-fi/space flavor (used by generatePrefixedName, exported)
 const FLAVOR_PREFIXES = [
   'Ald', 'Alt', 'Aur', 'Bel', 'Cen', 'Cor', 'Cyr', 'Del',
   'Dra', 'Eri', 'Eth', 'Gal', 'Hel', 'Hyp', 'Ith', 'Kep',
@@ -70,55 +83,7 @@ const FLAVOR_PREFIXES = [
   'Tyr', 'Val', 'Vel', 'Vos', 'Xen', 'Zar', 'Zan', 'Zet',
 ];
 
-// ─────────────────────────────────────────────────────────────────────
-// CATALOG-STYLE NAME TABLES
-// ─────────────────────────────────────────────────────────────────────
-
-// Real catalog prefixes and their typical number ranges
-const CATALOG_FORMATS = [
-  // { prefix, minNum, maxNum, separator }
-  { prefix: 'HD',      minNum: 1000,   maxNum: 299999, separator: ' ' },   // Henry Draper
-  { prefix: 'HR',      minNum: 100,    maxNum: 9999,   separator: ' ' },   // Harvard Revised (Bright Star)
-  { prefix: 'GJ',      minNum: 1,      maxNum: 9999,   separator: ' ' },   // Gliese-Jahreis (nearby stars)
-  { prefix: 'HIP',     minNum: 1000,   maxNum: 120000, separator: ' ' },   // Hipparcos
-  { prefix: 'TYC',     minNum: 1000,   maxNum: 9999,   separator: ' ' },   // Tycho
-  { prefix: 'WISE',    minNum: 100,    maxNum: 9999,   separator: ' ' },   // Wide-field IR Survey
-  { prefix: 'TOI',     minNum: 100,    maxNum: 9999,   separator: '-' },   // TESS Object of Interest
-  { prefix: 'KOI',     minNum: 100,    maxNum: 9999,   separator: '-' },   // Kepler Object of Interest
-  { prefix: 'Kepler',  minNum: 1,      maxNum: 2000,   separator: '-' },   // Kepler confirmed
-  { prefix: 'TRAPPIST',minNum: 1,      maxNum: 99,     separator: '-' },   // TRAPPIST survey
-  { prefix: 'LHS',     minNum: 1,      maxNum: 5000,   separator: ' ' },   // Luyten Half-Second
-  { prefix: 'Ross',    minNum: 1,      maxNum: 999,    separator: ' ' },   // Ross catalog
-  { prefix: 'Wolf',    minNum: 1,      maxNum: 1500,   separator: ' ' },   // Wolf catalog
-  { prefix: '2MASS',   minNum: 1000,   maxNum: 99999,  separator: ' J' },  // 2MASS survey
-  { prefix: 'SDSS',    minNum: 1000,   maxNum: 99999,  separator: ' J' },  // Sloan survey
-];
-
-// Greek letter + constellation style (e.g., "Alpha Centauri")
-const GREEK_LETTERS = [
-  'Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta',
-  'Eta', 'Theta', 'Iota', 'Kappa', 'Lambda', 'Mu',
-  'Nu', 'Xi', 'Omicron', 'Pi', 'Rho', 'Sigma',
-  'Tau', 'Upsilon', 'Phi', 'Chi', 'Psi', 'Omega',
-];
-
-// Fake constellation names (sound real but aren't)
-const CONSTELLATIONS = [
-  'Centauri', 'Cygni', 'Draconis', 'Eridani', 'Gruis',
-  'Hydrae', 'Leonis', 'Lyrae', 'Orionis', 'Pavonis',
-  'Scorpii', 'Serpentis', 'Tauri', 'Ursae', 'Virginis',
-  'Aquilae', 'Bootis', 'Carinae', 'Cassiopeiae', 'Geminorum',
-  'Phoenicis', 'Puppis', 'Velorum', 'Volantis', 'Crucis',
-];
-
-// System title suffixes (rare, added for variety)
-const SYSTEM_TITLES = [
-  'Major', 'Minor', 'Prime', 'Reach', 'Expanse', 'Deep',
-  'Nexus', 'Drift', 'Gate', 'Haven',
-];
-
 // Planet letter suffixes (IAU convention: b, c, d, e, ...)
-// 'a' is traditionally reserved for the star itself
 const PLANET_LETTERS = ['b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k'];
 
 // Roman numerals for moons
@@ -140,33 +105,19 @@ const MOON_NAMES = [
 
 
 // ─────────────────────────────────────────────────────────────────────
-// CORE NAME GENERATION FUNCTIONS
+// CORE SYLLABLE / WORD HELPERS (body names + exported utilities)
 // ─────────────────────────────────────────────────────────────────────
 
-/**
- * Generate a single pronounceable syllable.
- * Structure: onset + nucleus + coda (any part can be empty/simple).
- */
 function generateSyllable(rng, isFirst = false) {
-  // First syllable is more likely to start with a consonant (sounds better)
   const onset = rng.chance(isFirst ? 0.90 : 0.80) ? rng.pick(ONSETS) : '';
   const nucleus = rng.pick(NUCLEI);
-  // Non-final syllables more likely to be open (no coda) for flow
   const coda = rng.pick(CODAS);
   return onset + nucleus + coda;
 }
 
-/**
- * Smooth out ugly consonant clusters at syllable boundaries.
- * Rules:
- * - Max 2 consonants in a row (insert a vowel to break longer runs)
- * - Avoid repeated characters (e.g., "ss", "tt")
- * - Cap total length to avoid runaway names
- */
 function smoothWord(word) {
   const vowels = 'aeiou';
   const isVowel = ch => vowels.includes(ch.toLowerCase());
-  // Break vowels to insert, cycling through them
   const breakVowels = ['a', 'i', 'e', 'o', 'u'];
   let breakIdx = 0;
 
@@ -175,11 +126,7 @@ function smoothWord(word) {
 
   for (let i = 0; i < word.length; i++) {
     const ch = word[i];
-
-    // Skip repeated identical characters
-    if (result.length > 0 && ch === result[result.length - 1]) {
-      continue;
-    }
+    if (result.length > 0 && ch === result[result.length - 1]) continue;
 
     if (isVowel(ch)) {
       consonantRun = 0;
@@ -187,7 +134,6 @@ function smoothWord(word) {
     } else {
       consonantRun++;
       if (consonantRun > 2) {
-        // Insert a break vowel
         result += breakVowels[breakIdx % breakVowels.length];
         breakIdx++;
         consonantRun = 1;
@@ -196,43 +142,26 @@ function smoothWord(word) {
     }
   }
 
-  // Cap at 10 characters (very long names are unwieldy)
-  if (result.length > 10) {
-    result = result.slice(0, 10);
-  }
-
+  if (result.length > 10) result = result.slice(0, 10);
   return result;
 }
 
-/**
- * Generate a pronounceable word of 2-4 syllables.
- * Capitalizes the first letter.
- */
 function generateWord(rng, minSyllables = 2, maxSyllables = 3) {
   const count = rng.int(minSyllables, maxSyllables);
   let word = '';
-
   for (let i = 0; i < count; i++) {
-    // Last syllable sometimes uses a space-y suffix instead
     if (i === count - 1 && rng.chance(0.35)) {
       word += rng.pick(SPACE_SUFFIXES);
     } else {
       word += generateSyllable(rng);
     }
   }
-
-  // Smooth consonant clusters and capitalize
   word = smoothWord(word);
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-/**
- * Generate a name using a flavor prefix + syllable ending.
- * Produces names like "Alderon", "Cyrath", "Veloran".
- */
 function generatePrefixedName(rng) {
   const prefix = rng.pick(FLAVOR_PREFIXES);
-  // Add 1-2 syllables after the prefix
   let suffix = '';
   const syllables = rng.int(1, 2);
   for (let i = 0; i < syllables; i++) {
@@ -247,281 +176,277 @@ function generatePrefixedName(rng) {
 
 
 // ─────────────────────────────────────────────────────────────────────
-// GALACTIC REGION CLASSIFICATION
+// GALACTIC REGION CLASSIFICATION (region flavor for the class mix)
 // ─────────────────────────────────────────────────────────────────────
 
-// Region-specific phoneme preferences. Core = short/formal, Rim = exotic/flowing.
-const REGION_ONSETS = {
-  core: ['k', 'k', 't', 't', 'g', 'd', 'b', 'z', 'kh', 'sk', 'gr', 'dr'],
-  arm: ONSETS, // default
-  rim: ['sh', 'th', 'ch', 'fl', 'v', 'v', 'l', 'l', 'n', 'w', 'ph', 'fr', 'gl', 'cr'],
-  halo: ['th', 'ph', 'kh', 'd', 'b', 'r', 'r', 'n', 'n', 'm', 's', 'h', 'h', 'l'],
-};
-
-const REGION_SUFFIXES = {
-  core: ['ax', 'ix', 'us', 'os', 'ek', 'ar', 'un', 'ot', 'ab'],
-  arm: SPACE_SUFFIXES, // default
-  rim: ['eon', 'ara', 'una', 'iel', 'eon', 'ura', 'ynn', 'ael', 'ova', 'ith'],
-  halo: ['oth', 'ath', 'enn', 'ull', 'arr', 'oss', 'or', 'ur', 'an', 'el'],
-};
-
 /**
- * Classify a galactic position into a naming region.
- * Returns a region key and sector code for collision avoidance.
+ * Classify a galactic position into a naming region. Region only steers the
+ * class MIX (how catalog-heavy vs fantasy-leaning the names feel); it never
+ * affects uniqueness. The `sectorCode` field is retained for backward
+ * compatibility but is no longer consumed by naming.
  *
- * @param {{ x: number, y: number, z: number }} pos - galactocentric kpc
- * @returns {{ region: string, sectorCode: number }}
+ * @param {{ x:number, y:number, z:number }} pos - galactocentric kpc
+ * @returns {{ region:string, sectorCode:number }}
  */
 function _classifyRegion(pos) {
   if (!pos) return { region: 'arm', sectorCode: 0 };
-
   const distFromCenter = Math.sqrt(pos.x * pos.x + pos.z * pos.z);
   const heightAbovePlane = Math.abs(pos.y);
 
-  // Sector code: hash position into ~1 kpc cubes for collision avoidance
   const sx = Math.floor(pos.x + 0.5);
   const sy = Math.floor(pos.y + 0.5);
   const sz = Math.floor(pos.z + 0.5);
-  // Simple spatial hash to create a unique sector number
   const sectorCode = ((sx * 73856093) ^ (sy * 19349663) ^ (sz * 83492791)) >>> 0;
 
   let region;
-  if (heightAbovePlane > 2.0) {
-    region = 'halo';
-  } else if (distFromCenter < 3.0) {
-    region = 'core';
-  } else if (distFromCenter > 14.0) {
-    region = 'rim';
-  } else {
-    region = 'arm';
-  }
+  if (heightAbovePlane > 2.0) region = 'halo';
+  else if (distFromCenter < 3.0) region = 'core';
+  else if (distFromCenter > 14.0) region = 'rim';
+  else region = 'arm';
 
   return { region, sectorCode };
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// SYSTEM NAME GENERATION
-// ─────────────────────────────────────────────────────────────────────
+const REGION_INDEX = { core: 0, arm: 1, rim: 2, halo: 3 };
 
-// Style distributions per region: [catalog, greek, pronounceable, prefixed, titled]
-const REGION_STYLES = {
-  core: [0.40, 0.15, 0.25, 0.15, 0.05], // core: formal, catalog-heavy
-  arm:  [0.20, 0.10, 0.40, 0.20, 0.10], // arm: default mix
-  rim:  [0.10, 0.05, 0.50, 0.25, 0.10], // rim: exotic, more fantasy names
-  halo: [0.15, 0.10, 0.35, 0.25, 0.15], // halo: archaic, titled
-};
+
+// ─────────────────────────────────────────────────────────────────────
+// POSITION → INJECTIVE LOCATOR
+// ─────────────────────────────────────────────────────────────────────
+//
+// Quantize the canonical position to a fixed integer lattice, then pack the
+// three lattice coordinates into one BigInt "locator" L via mixed-radix. L is
+// injective over the lattice: distinct cells → distinct L.
+//
+// Quantization resolution Q = 1e-6 kpc = 0.001 pc (~206 AU). This is FAR finer
+// than the hash-grid starfield's smallest per-tier cell (M-type dwarfs, 0.0011
+// kpc = 1.1 pc; HashGridStarfield.TYPE_CONFIG). Within any single spectral tier
+// two distinct stars always live in different grid cells, so at least one of
+// their (x,y,z) world coordinates differs — and because a tier's world
+// coordinates are the discrete set {(cell + k/255)·cellSize}, that difference is
+// at least cellSize/255 ≈ 4.3e-6 kpc for M-type, i.e. several Q-cells. The only
+// way two DISTINCT stars can land in one Q-cell is a simultaneous sub-0.001-pc
+// coincidence on ALL THREE axes (necessarily two different spectral tiers, whose
+// grids are independent). Expected such coincidences galaxy-wide are ~10¹, and
+// none is introduced by naming — see docs/NAMING_AND_REAL_OBJECTS.md §"collision
+// physics". The naming function itself introduces ZERO collisions.
+
+const Q_KPC = 1e-6;
+const X_BIAS = 32, Y_BIAS = 16, Z_BIAS = 32;    // kpc, shift so lattice coords ≥ 0
+const QX_MAX = 64_000_000, QY_MAX = 32_000_000, QZ_MAX = 64_000_000;
+const NX = 64_000_001n, NY = 32_000_001n;        // radices = QX_MAX+1, QY_MAX+1
+
+function _quant(v, bias, qmax) {
+  let q = Math.round((v + bias) / Q_KPC);
+  if (q < 0) q = 0; else if (q > qmax) q = qmax;
+  return q;
+}
 
 /**
- * Generate a star system name, optionally incorporating galactic position.
+ * Quantize a galactic position to its stable lattice cell.
+ * Exported so tests/census can dedupe samples by the SAME cell the namer uses.
+ * @returns {{ qx:number, qy:number, qz:number, key:string }}
+ */
+function quantizePosition(galacticPos) {
+  const qx = _quant(galacticPos.x, X_BIAS, QX_MAX);
+  const qy = _quant(galacticPos.y, Y_BIAS, QY_MAX);
+  const qz = _quant(galacticPos.z, Z_BIAS, QZ_MAX);
+  return { qx, qy, qz, key: qx + ':' + qy + ':' + qz };
+}
+
+function _locate(galacticPos) {
+  const { qx, qy, qz } = quantizePosition(galacticPos);
+  const L = BigInt(qx) + NX * (BigInt(qy) + NY * BigInt(qz));
+  return { qx, qy, qz, L };
+}
+
+
+// ─────────────────────────────────────────────────────────────────────
+// INJECTIVE NAME RENDERERS
+// ─────────────────────────────────────────────────────────────────────
+
+// CV syllable alphabet (each entry EXACTLY two chars → unambiguous chunking →
+// injective concatenation). 20 consonants × 5 vowels = 100 syllables.
+const CV_CONS = ['b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm',
+  'n', 'p', 'r', 's', 't', 'v', 'w', 'x', 'z', 'y'];
+const CV_VOW = ['a', 'e', 'i', 'o', 'u'];
+const CV = [];
+for (const c of CV_CONS) for (const v of CV_VOW) CV.push(c + v);
+const CV_BASE = CV.length; // 100
+
+// Fictional survey prefixes — deliberately NOT any real catalog (HD/HIP/HR/GJ/
+// TYC/2MASS/SDSS/WISE/Gaia/TIC/KIC/GSC/UCAC/…) and never overlapping HYG proper
+// names, so procgen catalog designations stay OUT of real designation space.
+const SURVEY_PREFIXES = ['PVX', 'QRN', 'XND', 'ZTA', 'KRV', 'NBG', 'ODX', 'VLC', 'TRN', 'WGX'];
+
+// Region-weighted class mix: [catalog/survey, multi-part fantasy]. Re-expresses
+// the ratified flavor (core catalog-heavy → rim fantasy-leaning) over the new
+// classes. Bare fantasy words are a rare overlay applied before this roll.
+const REGION_CLASS_WEIGHTS = {
+  core: [0.55, 0.45],
+  arm:  [0.30, 0.70],
+  rim:  [0.15, 0.85],
+  halo: [0.25, 0.75],
+};
+
+// Bare-fantasy sub-lattice: a position is bare-eligible iff each lattice coord
+// hits a fixed residue mod BARE_M. Fraction eligible = 1/BARE_M³ ≈ 6e-8 → bare
+// words are genuinely rare AND uniformly spread across the galaxy (not clustered).
+const BARE_M = 256;
+const BARE_RX = 91, BARE_RY = 37, BARE_RZ = 173;
+const BARE_CX = 250001n, BARE_CY = 125001n; // coarse radices: floor(Q*_MAX/BARE_M)+1
+
+function _base36(bigval, width) {
+  const s = bigval.toString(36).toUpperCase();
+  return s.length >= width ? s : '0'.repeat(width - s.length) + s;
+}
+
+// Fixed 3-syllable CV word (base-100, injective) for wIdx in [0, 1_000_000).
+function _cvWord3(wIdx) {
+  let n = wIdx;
+  const a = CV[n % CV_BASE]; n = Math.floor(n / CV_BASE);
+  const b = CV[n % CV_BASE]; n = Math.floor(n / CV_BASE);
+  const c = CV[n % CV_BASE];
+  const w = a + b + c;
+  return w.charAt(0).toUpperCase() + w.slice(1);
+}
+
+// Bijective base-100 CV word (injective, variable length) for a BigInt index.
+function _cvWordBij(idxBig) {
+  const base = BigInt(CV_BASE);
+  let n = idxBig + 1n; // bijective numeration: index 0 → single syllable
+  let w = '';
+  while (n > 0n) {
+    const r = Number((n - 1n) % base);
+    w += CV[r];
+    n = (n - 1n) / base;
+  }
+  return w.charAt(0).toUpperCase() + w.slice(1);
+}
+
+function _bareEligible(qx, qy, qz) {
+  return (qx % BARE_M === BARE_RX) && (qy % BARE_M === BARE_RY) && (qz % BARE_M === BARE_RZ);
+}
+
+function _bareWord(region, qx, qy, qz) {
+  const cx = Math.floor(qx / BARE_M);
+  const cy = Math.floor(qy / BARE_M);
+  const cz = Math.floor(qz / BARE_M);
+  // Injective over the eligible sub-lattice: distinct eligible cells → distinct bi.
+  const bi = BigInt(cx) + BARE_CX * (BigInt(cy) + BARE_CY * BigInt(cz));
+  // Partition the word supply across the four regions (disjoint residues mod 4).
+  const fullIdx = bi * 4n + BigInt(REGION_INDEX[region] ?? 1);
+  return _cvWordBij(fullIdx);
+}
+
+// Deterministic [0,1) class roll from the locator (independent of the rendering
+// bits — it only selects which injective renderer runs).
+function _classRoll(L) {
+  let h = 2166136261 >>> 0;
+  const s = L.toString();
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h / 4294967296;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────
+// SYSTEM NAME GENERATION — pure, injective function of position
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Generate a star system name from its canonical galactic position.
  *
- * When position is provided:
- * - Naming style distribution varies by region (core/arm/rim/halo)
- * - Phoneme preferences differ per region (core = harsh/short, rim = flowing/exotic)
- * - A sector-derived hash is mixed into catalog numbers to prevent cross-region collisions
+ * IMPORTANT: `rng` is intentionally IGNORED. Since increment 3b the name is a
+ * pure, injective function of `galacticPos` alone — the seed-based rng that used
+ * to drive naming (warp-star-<index>, warp-nav-<seed>, feat-<seed>, …) no longer
+ * influences the result. That is exactly what makes every targeting path agree
+ * on the same star's name and makes revisits stable. The parameter is retained
+ * only for call-site/signature compatibility.
  *
- * @param {SeededRandom} rng
- * @param {{ x: number, y: number, z: number }} [galacticPos] - optional position in kpc
+ * @param {*} rng - IGNORED (kept for signature compatibility)
+ * @param {{ x:number, y:number, z:number }} galacticPos - REQUIRED, in kpc
  * @returns {string}
  */
 function generateSystemName(rng, galacticPos) {
-  const { region, sectorCode } = _classifyRegion(galacticPos);
-  const thresholds = REGION_STYLES[region];
-  // Mix sector code into RNG to diversify names across regions.
-  // This means the same seed at different positions generates different names.
-  const nameRng = sectorCode ? rng.child('sec-' + sectorCode) : rng;
-  const roll = nameRng.float();
-
-  // Cumulative thresholds
-  const t0 = thresholds[0];
-  const t1 = t0 + thresholds[1];
-  const t2 = t1 + thresholds[2];
-  const t3 = t2 + thresholds[3];
-
-  if (roll < t0) {
-    // ── Catalog designation ── sector code mixed in for uniqueness
-    return _catalogName(nameRng, sectorCode);
+  if (!galacticPos ||
+      !Number.isFinite(galacticPos.x) ||
+      !Number.isFinite(galacticPos.y) ||
+      !Number.isFinite(galacticPos.z)) {
+    // D5 eliminated: no silent no-position fallback. A missing position is a
+    // caller bug — surface it loudly rather than minting a non-unique name.
+    throw new Error('generateSystemName requires a finite canonical galacticPos {x,y,z} (no-position fallback eliminated per ac5-decision.md D5)');
   }
 
-  if (roll < t1) {
-    // ── Greek letter + constellation ──
-    // Append sector-derived number suffix to avoid collisions (24×25=600 base combos isn't enough)
-    const sectorNum = sectorCode ? (sectorCode % 9000 + 1000) : nameRng.int(1000, 9999);
-    return nameRng.pick(GREEK_LETTERS) + ' ' + nameRng.pick(CONSTELLATIONS) + ' ' + sectorNum;
+  const { region } = _classifyRegion(galacticPos);
+  const { qx, qy, qz, L } = _locate(galacticPos);
+
+  // (c) RARE bare fantasy word — injectively allocated from a finite,
+  // region-partitioned supply. A per-position structural guard drops any
+  // candidate equal to a real star's proper name (design (d)); because each name
+  // is a pure function of its OWN position, this fall-through perturbs no other
+  // draw (it is not rejection-sampling over a shared stream).
+  if (_bareEligible(qx, qy, qz)) {
+    const bare = _bareWord(region, qx, qy, qz);
+    if (!REAL_PROPER_NAME_SET.has(bare.toLowerCase())) return bare;
+    // else: fall through to a designation class (still globally unique).
   }
 
-  if (roll < t2) {
-    // ── Pure pronounceable word (region-flavored) ──
-    return _regionWord(nameRng, region, 2, 3);
+  const weights = REGION_CLASS_WEIGHTS[region] || REGION_CLASS_WEIGHTS.arm;
+  const roll = _classRoll(L);
+
+  if (roll < weights[0]) {
+    // (a) positional/catalog survey designation — fictional prefix + a
+    // position-derived, base-36 catalogue code (fixed width 15 → injective, and
+    // spanning a range far past real designation space; real surveys top out
+    // around ~360k HD numbers). Reads like a far-future deep-survey ID.
+    const pfx = SURVEY_PREFIXES[Number(L % BigInt(SURVEY_PREFIXES.length))];
+    return pfx + '-' + _base36(L, 15);
   }
 
-  if (roll < t3) {
-    // ── Prefix-based name ──
-    return _regionPrefixedName(nameRng, region);
-  }
-
-  // ── Pronounceable + title suffix ──
-  return _regionWord(nameRng, region, 2, 2) + ' ' + nameRng.pick(SYSTEM_TITLES);
-}
-
-/**
- * Generate a pronounceable word using region-specific phonemes.
- */
-function _regionWord(rng, region, minSyllables, maxSyllables) {
-  const onsets = REGION_ONSETS[region] || ONSETS;
-  const suffixes = REGION_SUFFIXES[region] || SPACE_SUFFIXES;
-  const count = rng.int(minSyllables, maxSyllables);
-  let word = '';
-
-  for (let i = 0; i < count; i++) {
-    if (i === count - 1 && rng.chance(0.35)) {
-      word += rng.pick(suffixes);
-    } else {
-      // Region-flavored syllable: use region onsets
-      const onset = rng.chance(i === 0 ? 0.90 : 0.80) ? rng.pick(onsets) : '';
-      const nucleus = rng.pick(NUCLEI);
-      const coda = rng.pick(CODAS);
-      word += onset + nucleus + coda;
-    }
-  }
-
-  word = smoothWord(word);
-  return word.charAt(0).toUpperCase() + word.slice(1);
-}
-
-/**
- * Generate a prefix-based name with optional region influence.
- */
-function _regionPrefixedName(rng, region) {
-  const prefix = rng.pick(FLAVOR_PREFIXES);
-  const suffixes = REGION_SUFFIXES[region] || SPACE_SUFFIXES;
-  let suffix = '';
-  const syllables = rng.int(1, 2);
-  for (let i = 0; i < syllables; i++) {
-    if (i === syllables - 1 && rng.chance(0.5)) {
-      suffix += rng.pick(suffixes);
-    } else {
-      suffix += generateSyllable(rng);
-    }
-  }
-  return prefix + suffix;
-}
-
-/**
- * Generate a catalog-style designation.
- * When sectorCode is provided, it's mixed into the number to prevent
- * cross-region collisions (two distant stars can't share "HD 47832").
- */
-function _catalogName(rng, sectorCode = 0) {
-  const catalog = rng.pick(CATALOG_FORMATS);
-
-  // Mix sector code into the number range for uniqueness across regions
-  const range = catalog.maxNum - catalog.minNum;
-  const baseNum = rng.int(catalog.minNum, catalog.maxNum);
-  const offset = sectorCode ? (sectorCode % range) : 0;
-  const number = catalog.minNum + ((baseNum - catalog.minNum + offset) % range);
-  return catalog.prefix + catalog.separator + number;
+  // (b) multi-part fantasy — short region-flavoured word + a designator that
+  // carries the position-derived uniqueness bits (base-36 of the high locator).
+  const wIdx = Number(L % 1000000n);
+  const code = L / 1000000n;
+  return _cvWord3(wIdx) + '-' + _base36(code, 12);
 }
 
 
 // ─────────────────────────────────────────────────────────────────────
-// STAR NAME GENERATION
+// STAR / PLANET / MOON NAME GENERATION (cascade off the unique system name)
 // ─────────────────────────────────────────────────────────────────────
 
-/**
- * Generate a star name. Usually the same as the system name, but
- * binary systems get suffixed with "A" / "B", and catalog systems
- * sometimes use spectral class notation.
- *
- * @param {SeededRandom} rng
- * @param {string} systemName - the parent system name
- * @param {string} spectralClass - e.g., 'G', 'M', 'O'
- * @param {boolean} isBinary - whether this is a binary system
- * @param {boolean} isPrimary - true for primary star, false for secondary
- * @returns {string}
- */
 function generateStarName(rng, systemName, spectralClass, isBinary, isPrimary) {
-  if (isBinary) {
-    return systemName + ' ' + (isPrimary ? 'A' : 'B');
-  }
+  if (isBinary) return systemName + ' ' + (isPrimary ? 'A' : 'B');
   return systemName;
 }
 
-
-// ─────────────────────────────────────────────────────────────────────
-// PLANET NAME GENERATION
-// ─────────────────────────────────────────────────────────────────────
-
-/**
- * Generate a planet name based on the system name and orbital index.
- *
- * Distribution:
- * - 55% letter suffix (Velorath b, Velorath c) — IAU convention
- * - 25% unique pronounceable name (Meridia, Voss)
- * - 10% system name + numeral (Velorath-3)
- * - 10% system name + descriptive (Velorath Prime, Velorath Minor)
- *
- * @param {SeededRandom} rng
- * @param {string} systemName
- * @param {number} index - 0-based orbital index
- * @param {number} totalPlanets - total number of planets in system
- * @returns {string}
- */
 function generatePlanetName(rng, systemName, index, totalPlanets) {
   const roll = rng.float();
   const letter = index < PLANET_LETTERS.length
     ? PLANET_LETTERS[index]
-    : String.fromCharCode(98 + index);  // b=98, continues past 'k'
+    : String.fromCharCode(98 + index);
 
-  if (roll < 0.55) {
-    // ── Letter suffix (most common — matches real convention) ──
-    return systemName + ' ' + letter;
-  }
+  if (roll < 0.55) return systemName + ' ' + letter;
 
   if (roll < 0.80) {
-    // ── Unique name ──
-    // Use a child RNG so the name is stable regardless of planet count
     const nameRng = rng.child('planet-name');
     return generateWord(nameRng, 2, 3);
   }
 
-  if (roll < 0.90) {
-    // ── Numeral suffix ──
-    return systemName + '-' + (index + 1);
-  }
+  if (roll < 0.90) return systemName + '-' + (index + 1);
 
-  // ── Descriptive suffix ──
-  // Only "Prime" for the first planet; others get various titles
-  if (index === 0) {
-    return systemName + ' Prime';
-  }
+  if (index === 0) return systemName + ' Prime';
   const descriptors = ['Minor', 'Outer', 'Far', 'Nova', 'Ultima'];
   return systemName + ' ' + rng.pick(descriptors);
 }
 
-
-// ─────────────────────────────────────────────────────────────────────
-// MOON NAME GENERATION
-// ─────────────────────────────────────────────────────────────────────
-
-/**
- * Generate a moon name based on the planet name and moon index.
- *
- * Distribution:
- * - 40% Roman numeral suffix (Velorath b I, Velorath b II)
- * - 35% unique short name from the moon name pool (Io, Rhea, Nyx)
- * - 25% generated short name (1-2 syllables)
- *
- * @param {SeededRandom} rng
- * @param {string} planetName
- * @param {number} index - 0-based moon index
- * @param {number} totalMoons - total moons around this planet
- * @returns {string}
- */
 function generateMoonName(rng, planetName, index, totalMoons) {
   const roll = rng.float();
 
   if (roll < 0.40) {
-    // ── Roman numeral suffix ──
     const numeral = index < ROMAN_NUMERALS.length
       ? ROMAN_NUMERALS[index]
       : (index + 1).toString();
@@ -529,13 +454,10 @@ function generateMoonName(rng, planetName, index, totalMoons) {
   }
 
   if (roll < 0.75) {
-    // ── Pick from moon name pool ──
-    // Use index as part of selection to avoid duplicates within a planet
     const poolIndex = (rng.int(0, MOON_NAMES.length - 1) + index) % MOON_NAMES.length;
     return MOON_NAMES[poolIndex];
   }
 
-  // ── Generated short name ──
   const nameRng = rng.child('moon-name');
   return generateWord(nameRng, 1, 2);
 }
@@ -548,34 +470,31 @@ function generateMoonName(rng, planetName, index, totalMoons) {
 /**
  * Generate all names for an entire star system.
  *
- * Returns a structured object with system, star(s), planet, and moon names
- * that are all deterministic from the given seed.
+ * The system name is either the caller-supplied override (real name from a
+ * KnownSystem / real-star catalog, which always wins) or the injective
+ * position-derived procgen name. Star/planet/moon names cascade off it on the
+ * naming RNG's own forked stream — system CONTENTS are never touched.
  *
- * @param {SeededRandom} rng - seeded RNG for this system
- * @param {object} systemData - the generated system data from StarSystemGenerator
- *   Expected shape: { star, star2, isBinary, planets: [{ planetData, moons }] }
- * @returns {object} names
- *   {
- *     system: string,
- *     star: string,
- *     star2: string | null,
- *     planets: [{ name: string, moons: string[] }]
- *   }
+ * @param {SeededRandom} rng - seeded RNG for body-name variety (system name is
+ *   position-derived, not rng-derived)
+ * @param {object} systemData - generated system data from StarSystemGenerator
+ * @param {string|null} overrideSystemName - real name that wins over procgen
+ * @param {{x,y,z}|null} galacticPos - REQUIRED when no override (canonical position)
+ * @returns {{ system:string, star:string, star2:string|null, planets:Array }}
  */
 function generateSystemNames(rng, systemData, overrideSystemName = null, galacticPos = null) {
-  // Use a dedicated child RNG so naming doesn't interfere with other generation
   const nameRng = rng.child('names');
 
-  // System name — use override if provided (e.g., from warp target selection)
+  // System name — override (real name) wins; otherwise derive injectively from
+  // position. generateSystemName ignores the rng and requires a finite position.
   const systemName = overrideSystemName || generateSystemName(nameRng.child('system'), galacticPos);
 
-  // Star names
   const starName = generateStarName(
     nameRng.child('star'),
     systemName,
     systemData.star.type,
     systemData.isBinary,
-    true
+    true,
   );
 
   let star2Name = null;
@@ -585,11 +504,10 @@ function generateSystemNames(rng, systemData, overrideSystemName = null, galacti
       systemName,
       systemData.star2.type,
       systemData.isBinary,
-      false
+      false,
     );
   }
 
-  // Planet and moon names
   const totalPlanets = systemData.planets.length;
   const planets = systemData.planets.map((planet, pi) => {
     const planetRng = nameRng.child(`planet-${pi}`);
@@ -604,12 +522,7 @@ function generateSystemNames(rng, systemData, overrideSystemName = null, galacti
     return { name: planetName, moons: moonNames };
   });
 
-  return {
-    system: systemName,
-    star: starName,
-    star2: star2Name,
-    planets,
-  };
+  return { system: systemName, star: starName, star2: star2Name, planets };
 }
 
 
@@ -626,4 +539,6 @@ export {
   generateWord,
   generatePrefixedName,
   generateSyllable,
+  quantizePosition,
+  _classifyRegion,
 };

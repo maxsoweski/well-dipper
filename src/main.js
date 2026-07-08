@@ -4190,7 +4190,14 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     systemNames = systemData._knownSystemNames;
   } else {
     const nameRng = new SeededRandom(seed);
-    systemNames = generateSystemNames(nameRng, systemData, systemData._warpTargetName || null);
+    // Position-derived naming (increment 3b): pass the system's canonical galactic
+    // position so that, when there is no real-name override, the procgen system
+    // name is unique by construction and revisit-stable. Every warp spawn carries
+    // a position (systemData.galacticPosition, set at warp resolution); debug/title
+    // spawns fall back to the current player position — never a no-position
+    // fallback (D5 eliminated per ac5-decision.md).
+    const namingPos = systemData.galacticPosition || systemData._warpTargetPos || playerGalacticPos;
+    systemNames = generateSystemNames(nameRng, systemData, systemData._warpTargetName || null, namingPos);
   }
 
   // ── Create star(s) ──
@@ -9479,7 +9486,10 @@ function trySelectWarpTarget(rayDir) {
     warpTarget.destType = `feature:${entry.featureType}`;
     warpTarget.featureData = entry.featureData;
     const nameRng = new SeededRandom(`feat-${entry.featureData.seed}`);
-    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), starPos);
+    // Feature entries carry no starData; use the feature's own canonical position
+    // so naming has a stable identity (no no-position fallback, D5).
+    const featPos = starPos || entry.featureData?.position || null;
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), featPos);
     bodyInfo.showWarpTarget(`${warpTarget.name} (${entry.featureType.replace('-', ' ')})`);
   } else if (entry?.isExternalGalaxy) {
     // Clicked an external galaxy — Category C destination
@@ -9488,11 +9498,13 @@ function trySelectWarpTarget(rayDir) {
     warpTarget.name = entry.galaxyData.name;
     bodyInfo.showWarpTarget(`${entry.galaxyData.name} (${entry.galaxyData.type} galaxy)`);
   } else {
-    // Normal star — real catalog stars keep their real name on every
-    // targeting path (ac5-decision.md rule 3); procgen stars still get a
-    // name generated from the transient starfield index. Guard against the
-    // pre-regen hyg-stars.json '"' artifact defensively (AC9 regen is a
-    // parallel fix, not a prerequisite for this one).
+    // Normal star — real catalog stars keep their real name on every targeting
+    // path (ac5-decision.md rule 3). Procgen stars are named from their canonical
+    // position (starPos = the star's stable worldX/Y/Z), which is unique by
+    // construction and identical on every path and revisit (increment 3b). The
+    // warp-star-<index> seed is passed for signature compatibility only and no
+    // longer influences the name, so the transient starfield index cannot cause a
+    // revisit rename. Guard against the legacy hyg-stars.json '"' artifact defensively.
     const realName = entry?.starData?.isRealStar ? entry.starData.name : null;
     if (realName && realName !== '"') {
       warpTarget.name = realName;
@@ -9548,13 +9560,17 @@ function autoSelectWarpTarget() {
     warpTarget.destType = `feature:${entry.featureType}`;
     warpTarget.featureData = entry.featureData;
     const nameRng = new SeededRandom(`feat-${entry.featureData.seed}`);
-    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), autoStarPos);
+    // Feature entries carry no starData; use the feature's own canonical position.
+    const featPos = autoStarPos || entry.featureData?.position || null;
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), featPos);
   } else if (entry?.isExternalGalaxy) {
     warpTarget.destType = 'external-galaxy';
     warpTarget.galaxyData = entry.galaxyData;
     warpTarget.name = entry.galaxyData.name;
   } else {
     // Normal star — same real-name-wins guard as trySelectWarpTarget above.
+    // Procgen name is position-derived (autoStarPos); the warp-star-<index> seed
+    // is ignored (kept for signature compatibility only).
     const realName = entry?.starData?.isRealStar ? entry.starData.name : null;
     if (realName && realName !== '"') {
       warpTarget.name = realName;
