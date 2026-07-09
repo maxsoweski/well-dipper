@@ -95,3 +95,32 @@ Ratified class structure (increment 3d):
 - Real-proper-name blocklist applies to both rare-word supplies. All hard constraints
   unchanged (pure function of position, no registry, zero duplicates, revisit-stable,
   path-agreeing, D5 throw, contents untouched).
+
+## Addendum 3 — shipped named-systems catalog (2026-07-08, after 3d blocked)
+
+Increment 3d blocked itself correctly: registry-free runtime allocation must be injective
+over every ELIGIBLE position (not just occupied stars), so short pretty words are
+mathematically impossible at meaningful frequencies (full arithmetic in the 3d workflow
+result). Working-Claude's "rarity escapes the bit floor" reasoning was wrong at the
+proposed frequencies — corrected on record.
+
+Resolution put to Max: make his own lore literal — "in setting, settled systems would be
+cataloged" → ship the catalog. Max: **"This sounds good."**
+
+Ratified structure (increment 3e):
+- **Build-time script** deterministically selects real star positions (via the actual
+  HashGridStarfield generation code, so positions match in-game stars exactly) and
+  authors a static named-systems catalog: ~12k settled (bare pretty words, "Veshara"
+  shape, mixed CV/CVC open-vowel alphabet) + ~30-60k greek notables ("Alpha Vozara 4821"
+  shape). Duplicate-checked + real-proper-name-blocklisted AT BUILD TIME.
+- **Placement lever:** a documented fraction of notables placed near known objects/
+  features (nebulae, clusters) so players meet named systems more often than uniform
+  chance — tunable.
+- **Runtime:** synchronous lookup by quantized position key, precedence
+  known-systems > real-star names > named-catalog > procgen. The FIFTH data mechanism,
+  same pattern as KnownSystems.
+- **Procgen simplifies to two classes** (survey + multipart designations — long by
+  design; region weights rebalanced). The 3c greek/bare runtime classes are REMOVED.
+- Hard guarantee holds end-to-end: catalog uniqueness by build-time check; procgen
+  injective as in 3c; shape exclusivity prevents cross-collisions.
+- Named systems are a finite set — lore-consistent (settlement history is finite).
