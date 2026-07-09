@@ -1,36 +1,41 @@
-// NameGenerator injectivity — structural proof that procedural system naming is
-// unique BY CONSTRUCTION (AC6) and revisit-stable on every path (AC7), per
+// NameGenerator injectivity — structural proof that system naming is unique BY
+// CONSTRUCTION (AC6) and revisit-stable on every path (AC7), per
 // docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/ac5-decision.md.
 //
-// This is NOT a statistical/flaky test: the name is a pure, deterministic,
-// injective function of canonical galactic position, so these assertions hold
-// exactly (0 duplicates among distinct position cells, 0 real-name emissions).
+// Increment 3e (Addendum 3): naming resolves in the order
+//   named-systems catalog (shipped, finite) → procgen (survey | multipart).
+// Uniqueness end to end: catalog uniqueness by BUILD-TIME check; procgen
+// injective in the position locator L; the two procgen shapes are structurally
+// disjoint from the two catalog shapes, so procgen can never collide with a
+// catalog name. These assertions are exact, not statistical.
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { SeededRandom } from '../SeededRandom.js';
-import { generateSystemName, quantizePosition, enumerateSettledSystems, _bareEligible } from '../NameGenerator.js';
+import {
+  generateSystemName, quantizePosition, locatorKey, positionForKey,
+  getNamedSystemsMap, enumerateNamedSystems,
+} from '../NameGenerator.js';
 import { REAL_PROPER_NAME_SET } from '../data/realProperNames.js';
 
-// Structural shapes of the four name classes (increment 3c). Each is injective in
-// the position locator L; the shapes are mutually exclusive.
+// ── Name shapes ──────────────────────────────────────────────────────────────
+// Procgen (two classes, increment 3e): survey / multipart. Each injective in L.
 const RE_SURVEY = /^[A-Z]{2,4} J[0-9A-Z]{7}[+-][0-9A-Z]{7}$/;   // "NBG J35EI75F-KN0H841"
 const RE_MULTIPART = /^[A-Z][a-z]+-[0-9A-Z]{10}$/;              // "Tosnud-6PCUPG2IJU"
-const RE_GREEK = /^[A-Z][a-z]+ [A-Z][a-z]+ \d{5}$/;            // "Theta Karnun… 07437"
-const RE_BARE = /^[A-Z][a-z]+$/;                                // "Tukgotpigyodcop"
+// Catalog (two classes, shipped): settled bare word / greek notable.
+const RE_SETTLED = /^[A-Z][a-z]+$/;                             // "Veshara"
+const RE_GREEK = /^[A-Z][a-z]+ [A-Z][a-z]+ \d{1,4}$/;          // "Alpha Vozara 4821"
+
 function classify(name) {
   if (RE_SURVEY.test(name)) return 'survey';
-  if (RE_GREEK.test(name)) return 'greek';
   if (RE_MULTIPART.test(name)) return 'multipart';
-  if (RE_BARE.test(name)) return 'bare';
+  if (RE_GREEK.test(name)) return 'greek';
+  if (RE_SETTLED.test(name)) return 'settled';
   return 'UNKNOWN';
 }
 
-// Real astronomical-designation prefixes the procgen catalog class must never
-// intrude on (real designation space). Includes the legacy CATALOG_FORMATS
-// prefixes plus common real catalogues.
 const REAL_DESIGNATION_PREFIXES = [
   'HD', 'HR', 'GJ', 'HIP', 'TYC', 'WISE', 'TOI', 'KOI', 'Kepler', 'TRAPPIST',
   'LHS', 'Ross', 'Wolf', '2MASS', 'SDSS', 'Gaia', 'TIC', 'KIC', 'GSC', 'UCAC',
@@ -38,8 +43,7 @@ const REAL_DESIGNATION_PREFIXES = [
 ];
 const REAL_DESIGNATION_RE = new RegExp(`^(?:${REAL_DESIGNATION_PREFIXES.join('|')})[\\s-]`);
 
-// Region geometry mirrors NameGenerator._classifyRegion. Uniform jittered
-// sampling within each bucket (like real star worldX/Y/Z, not round lattice pts).
+// Region geometry mirrors NameGenerator._classifyRegion.
 const REGIONS = ['core', 'arm', 'rim', 'halo'];
 function samplePos(region, rng) {
   let r, h;
@@ -51,9 +55,8 @@ function samplePos(region, rng) {
   return { x: r * Math.cos(th), y: h, z: r * Math.sin(th) };
 }
 
-// Reproduce the four production call-site RNG chains verbatim. The rng is
-// IGNORED by the position-derived namer, so all four MUST agree — that is the
-// property being proven.
+// Four production call-site RNG chains. The namer IGNORES the rng, so all four
+// MUST agree — for procgen positions AND catalog positions.
 function nameViaSkyClick(pos, idx) {
   return generateSystemName(new SeededRandom(`warp-star-${idx}`).child('names').child('system'), pos);
 }
@@ -64,23 +67,24 @@ function nameViaFeature(pos, seed) {
   return generateSystemName(new SeededRandom(`feat-${seed}`).child('names').child('system'), pos);
 }
 function nameViaSpawn(pos, seed) {
-  // generateSystemNames-internal chain: new SeededRandom(seed).child('names').child('system')
   return generateSystemName(new SeededRandom(String(seed)).child('names').child('system'), pos);
 }
 
-describe('NameGenerator — injective position→name (AC6/AC7)', () => {
+// ─────────────────────────────────────────────────────────────────────────────
+// PART 1 — PROCGEN INJECTIVITY over >= 220k random positions
+// ─────────────────────────────────────────────────────────────────────────────
+describe('NameGenerator — injective position→name, procgen (AC6/AC7)', () => {
   const PER_REGION = 55000; // 220,000 total (> the 200k bar)
 
-  // Build the whole sample once, keyed by quantization cell.
   const posRng = new SeededRandom('injectivity-test-positions-v1');
-  const cellToName = new Map();   // cell key -> name (revisit-stability ledger)
-  const nameToCell = new Map();   // name -> cell key (uniqueness ledger)
+  const cellToName = new Map();
+  const nameToCell = new Map();
   let dupNameAcrossCells = 0;
   let revisitMismatch = 0;
   let realNameEmissions = 0;
   let realDesignationEmissions = 0;
   let unknownShape = 0, tooLong = 0;
-  const classCount = { survey: 0, greek: 0, multipart: 0, bare: 0, UNKNOWN: 0 };
+  const classCount = { survey: 0, multipart: 0, greek: 0, settled: 0, UNKNOWN: 0 };
   const perRegionNames = { core: 0, arm: 0, rim: 0, halo: 0 };
 
   for (const region of REGIONS) {
@@ -90,14 +94,12 @@ describe('NameGenerator — injective position→name (AC6/AC7)', () => {
       const name = generateSystemName(null, pos);
       perRegionNames[region]++;
 
-      // Revisit stability: same cell must always give the same name.
       if (cellToName.has(key)) {
         if (cellToName.get(key) !== name) revisitMismatch++;
       } else {
         cellToName.set(key, name);
       }
 
-      // Uniqueness: a name may only ever belong to ONE cell.
       const prevCell = nameToCell.get(name);
       if (prevCell !== undefined && prevCell !== key) dupNameAcrossCells++;
       else nameToCell.set(name, key);
@@ -108,8 +110,6 @@ describe('NameGenerator — injective position→name (AC6/AC7)', () => {
       const cls = classify(name);
       classCount[cls]++;
       if (cls === 'UNKNOWN') unknownShape++;
-      // Aesthetic length bound (bit floor: ~70-bit locator → greek is the longest
-      // shape; all classes must stay ≤ 30 visible chars).
       if (name.length > 30) tooLong++;
     }
   }
@@ -122,7 +122,6 @@ describe('NameGenerator — injective position→name (AC6/AC7)', () => {
 
   it('produces ZERO duplicate names across distinct position cells (injective by construction)', () => {
     expect(dupNameAcrossCells).toBe(0);
-    // distinct names must equal distinct cells exactly.
     expect(nameToCell.size).toBe(cellToName.size);
   });
 
@@ -130,7 +129,7 @@ describe('NameGenerator — injective position→name (AC6/AC7)', () => {
     expect(revisitMismatch).toBe(0);
   });
 
-  it('never emits a real star proper name (blocklist enforced structurally)', () => {
+  it('never emits a real star proper name', () => {
     expect(realNameEmissions).toBe(0);
   });
 
@@ -147,27 +146,22 @@ describe('NameGenerator — injective position→name (AC6/AC7)', () => {
     expect(collisions).toBe(0);
   });
 
-  it('every emitted name matches exactly one of the four class shapes', () => {
-    // No name may fall outside the survey/greek/multipart/bare grammars, and
-    // none may exceed the 30-char aesthetic bound.
+  it('every emitted name matches exactly one known shape; none exceeds 30 chars', () => {
     expect(unknownShape).toBe(0);
     expect(classCount.UNKNOWN).toBe(0);
     expect(tooLong).toBe(0);
   });
 
-  it('exercises the common name classes (survey / greek / multipart) over the sample', () => {
-    // The three common classes are all well represented; bare is rare (may be 0
-    // in a uniform galaxy-wide sample — it is showcased separately by the census).
+  it('procgen output is exactly the two survey/multipart classes; random positions ~never hit the catalog', () => {
+    // Random continuous positions almost never coincide with a discrete catalog
+    // cell, so procgen dominates and catalog-shape hits are ~0.
     expect(classCount.survey).toBeGreaterThan(0);
-    expect(classCount.greek).toBeGreaterThan(0);
     expect(classCount.multipart).toBeGreaterThan(0);
-    expect(classCount.survey + classCount.greek + classCount.multipart + classCount.bare)
-      .toBe(PER_REGION * REGIONS.length);
+    // Catalog shapes should be vanishingly rare from uniform sampling.
+    expect(classCount.settled + classCount.greek).toBeLessThan(50);
   });
 
   it('survey designations obey the structured grouped format (not an opaque serial)', () => {
-    // Sample survey-class names and assert the prefix / J-epoch / two coordinate
-    // fields / latitude-sign structure, plus the length bound.
     const fmtRng = new SeededRandom('survey-format-positions');
     let checked = 0;
     for (let i = 0; i < 40000 && checked < 500; i++) {
@@ -177,66 +171,125 @@ describe('NameGenerator — injective position→name (AC6/AC7)', () => {
       checked++;
       expect(name).toMatch(RE_SURVEY);
       expect(name.length).toBeLessThanOrEqual(20);
-      // structurally disjoint from real designation space
       expect(REAL_DESIGNATION_RE.test(name)).toBe(false);
     }
     expect(checked).toBeGreaterThan(0);
   });
 
-  it('agrees across ALL targeting paths for the same position (AC7)', () => {
-    // For a spread of positions, the sky-click / nav / feature / spawn call-site
-    // chains — which pass different seed strings — must all produce one name.
+  it('agrees across ALL targeting paths for the same procgen position (AC7)', () => {
     const pathRng = new SeededRandom('path-agreement-positions');
     for (let i = 0; i < 5000; i++) {
       const region = REGIONS[i % 4];
       const pos = samplePos(region, pathRng);
       const a = nameViaSkyClick(pos, i);
-      const b = nameViaNav(pos, 90000 + i);
-      const c = nameViaFeature(pos, 500 + i);
-      const d = nameViaSpawn(pos, `sys-${i}`);
-      expect(b).toBe(a);
-      expect(c).toBe(a);
-      expect(d).toBe(a);
+      expect(nameViaNav(pos, 90000 + i)).toBe(a);
+      expect(nameViaFeature(pos, 500 + i)).toBe(a);
+      expect(nameViaSpawn(pos, `sys-${i}`)).toBe(a);
     }
-  });
-
-  it('enumerates settled systems that round-trip through generateSystemName (AC: enumerability)', () => {
-    // Enumerate bare-eligible (settled) systems in several disk boxes and assert
-    // each one is genuinely bare, bare-eligible, unique, and reproduces its own
-    // name when re-generated from its position — the mechanical basis for a future
-    // in-game settled-systems catalog (ac5 addendum ruling 2).
-    const boxes = [
-      { xMin: 6.9, xMax: 7.6, yMin: -0.3, yMax: 0.4, zMin: 0.9, zMax: 1.6 },
-      { xMin: -9.4, xMax: -8.7, yMin: -0.1, yMax: 0.6, zMin: 3.1, zMax: 3.8 },
-      { xMin: 15.1, xMax: 15.8, yMin: -0.4, yMax: 0.3, zMin: -2.4, zMax: -1.7 },
-      { xMin: 1.7, xMax: 2.4, yMin: 3.0, yMax: 3.7, zMin: 0.5, zMax: 1.2 },
-    ];
-    let totalEnumerated = 0;
-    const namesSeen = new Set();
-    for (const box of boxes) {
-      const list = enumerateSettledSystems(box, 5000);
-      expect(list.length).toBeGreaterThan(0);
-      for (const s of list) {
-        totalEnumerated++;
-        // genuinely bare
-        expect(s.name).toMatch(RE_BARE);
-        // bare-eligible cell
-        const q = quantizePosition(s.position);
-        expect(_bareEligible(q.qx, q.qy, q.qz)).toBe(true);
-        // round-trips: re-generating from the position yields the same name
-        expect(generateSystemName(null, s.position)).toBe(s.name);
-        // not a real proper name
-        expect(REAL_PROPER_NAME_SET.has(s.name.toLowerCase())).toBe(false);
-        // globally unique across every box enumerated here
-        expect(namesSeen.has(s.name)).toBe(false);
-        namesSeen.add(s.name);
-      }
-    }
-    expect(totalEnumerated).toBeGreaterThan(50);
   });
 
   it('throws (does not silently fall back) when position is missing (D5 eliminated)', () => {
     expect(() => generateSystemName(new SeededRandom('x'), null)).toThrow(/no-position fallback eliminated|canonical galacticPos/);
     expect(() => generateSystemName(new SeededRandom('x'), { x: NaN, y: 0, z: 0 })).toThrow();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PART 2 — NAMED-SYSTEMS CATALOG (the fifth real-object mechanism)
+// ─────────────────────────────────────────────────────────────────────────────
+describe('NameGenerator — named-systems catalog (increment 3e)', () => {
+  const catalog = getNamedSystemsMap();
+  const entries = [...catalog.entries()]; // [key, name]
+
+  it('ships a non-trivial catalog (~12k settled + greek notables)', () => {
+    expect(entries.length).toBeGreaterThan(20000);
+  });
+
+  it('every catalog entry is unique in name AND key, and blocklist-clean', () => {
+    const names = new Set();
+    const keys = new Set();
+    let dupName = 0, dupKey = 0, blocklistHit = 0, badShape = 0, procgenShape = 0;
+    for (const [key, name] of entries) {
+      if (names.has(name)) dupName++; else names.add(name);
+      if (keys.has(key)) dupKey++; else keys.add(key);
+      const cls = classify(name);
+      if (cls !== 'settled' && cls !== 'greek') badShape++;
+      if (RE_SURVEY.test(name) || RE_MULTIPART.test(name)) procgenShape++;
+      const token = cls === 'settled' ? name : name.split(' ')[1];
+      if (token && REAL_PROPER_NAME_SET.has(token.toLowerCase())) blocklistHit++;
+    }
+    expect(dupName).toBe(0);
+    expect(dupKey).toBe(0);
+    expect(blocklistHit).toBe(0);
+    expect(badShape).toBe(0);      // every entry is a bare or greek shape
+    expect(procgenShape).toBe(0);  // no entry wears a survey/multipart shape
+    expect(names.size).toBe(entries.length);
+    expect(keys.size).toBe(entries.length);
+  });
+
+  it('every entry round-trips: key → representative position → same catalog name (sampled)', () => {
+    let checked = 0, miss = 0, keyMiss = 0, unstable = 0;
+    for (let i = 0; i < entries.length; i += 47) { // ~1000 samples
+      const [key, name] = entries[i];
+      const pos = positionForKey(key);
+      // lattice-key round-trip
+      if (locatorKey(pos) !== key) keyMiss++;
+      // catalog hit through the real generateSystemName
+      const got = generateSystemName(null, pos);
+      if (got !== name) miss++;
+      // lookup stability: same position twice
+      if (generateSystemName(null, pos) !== got) unstable++;
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(500);
+    expect(keyMiss).toBe(0);
+    expect(miss).toBe(0);
+    expect(unstable).toBe(0);
+  });
+
+  it('agrees across ALL targeting paths for a catalog position (AC7, catalog hits)', () => {
+    for (let i = 0; i < entries.length; i += 613) { // ~80 samples
+      const [key, name] = entries[i];
+      const pos = positionForKey(key);
+      expect(nameViaSkyClick(pos, i)).toBe(name);
+      expect(nameViaNav(pos, 12000 + i)).toBe(name);
+      expect(nameViaFeature(pos, 700 + i)).toBe(name);
+      expect(nameViaSpawn(pos, `cat-${i}`)).toBe(name);
+    }
+  });
+
+  it('shape exclusivity: no procgen name equals any catalog name (sampled cross-check)', () => {
+    const catalogNames = new Set(catalog.values());
+    const rng = new SeededRandom('cross-check-positions');
+    let collisions = 0;
+    for (let i = 0; i < 50000; i++) {
+      const pos = samplePos(REGIONS[i % 4], rng);
+      const key = quantizePosition(pos).key;
+      const name = generateSystemName(null, pos);
+      // Skip the (astronomically unlikely) case where the random position IS a
+      // catalog cell — that is a legitimate catalog hit, not a procgen collision.
+      if (catalog.has(locatorKey(pos)) === false && catalogNames.has(name)) collisions++;
+      void key;
+    }
+    expect(collisions).toBe(0);
+  });
+
+  it('enumerateNamedSystems returns catalog entries that round-trip through generateSystemName', () => {
+    // Enumerate over a broad disk box; assert each is a catalog shape, unique,
+    // blocklist-clean, and reproduces its own name from its position — the
+    // mechanical basis for a future in-game settled/notable-systems catalog.
+    const box = { xMin: -16, xMax: 16, yMin: -3, yMax: 3, zMin: -16, zMax: 16 };
+    const list = enumerateNamedSystems(box, 5000);
+    expect(list.length).toBeGreaterThan(100);
+    const seen = new Set();
+    for (const s of list) {
+      const cls = classify(s.name);
+      expect(cls === 'settled' || cls === 'greek').toBe(true);
+      expect(generateSystemName(null, s.position)).toBe(s.name);
+      const token = cls === 'settled' ? s.name : s.name.split(' ')[1];
+      expect(REAL_PROPER_NAME_SET.has(token.toLowerCase())).toBe(false);
+      expect(seen.has(s.name)).toBe(false);
+      seen.add(s.name);
+    }
   });
 });

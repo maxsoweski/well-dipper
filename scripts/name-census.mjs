@@ -5,25 +5,26 @@
 // Writes docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/census-report.md
 // and prints a short summary to stdout. No flags, no network, no browser.
 //
-// PURPOSE. Originally (AC3) this tool MEASURED how often the old seed-based
-// naming produced the same name for two different systems. Since increment 3b
-// (AC6/AC7, ac5-decision.md) system naming is UNIQUE BY CONSTRUCTION: the name
-// is a pure, injective function of canonical galactic position. So this tool now
-// serves two jobs:
-//   1. VERIFY the guarantee empirically at volume — 0 duplicate names across
-//      distinct position cells, 0 collisions with real (HYG) names, 0 procgen
-//      designations inside real designation space — through the exact production
-//      call-site RNG chains (which the namer now ignores; that IS the point).
-//   2. Emit refreshed per-region sample blocks (4 classes) + a settled-systems
-//      gazetteer (via the exported enumeration helper) for Max's AC6 UAT review.
+// PURPOSE. Since increment 3b system naming is UNIQUE BY CONSTRUCTION and since
+// increment 3e (ac5-decision.md Addendum 3) naming resolves as
+//   named-systems catalog (shipped, finite) → procgen (survey | multipart).
+// This tool now serves three jobs:
+//   1. VERIFY the guarantee empirically at volume — 0 duplicate PROCGEN names
+//      across distinct position cells, 0 collisions with real (HYG) names, 0
+//      procgen designations inside real designation space, and 0 procgen names
+//      equal to any CATALOG name (shape-disjoint) — through the exact production
+//      call-site RNG chains (which the namer ignores; that IS the point).
+//   2. INVENTORY the shipped named-systems catalog: counts, per-region
+//      distribution, placement-lever stats, and 30+ sample names per catalog
+//      class (settled bare words + greek notables).
+//   3. Emit refreshed per-region PROCGEN sample blocks for Max's UAT review.
 //
 // DETERMINISM CONTRACT: every RNG draw goes through SeededRandom with a fixed
-// string seed. No Date.now(), Math.random(), or environment value reaches the
-// report. Two runs produce byte-identical census-report.md (verified: run twice,
-// diff the output).
+// string seed, and the catalog it reads is itself deterministic. Two runs
+// produce byte-identical census-report.md (verified: run twice, diff).
 //
-// WHAT THIS CALLS: the real, unmodified generateSystemName() from
-// src/generation/NameGenerator.js, driven through the four production call-site
+// WHAT THIS CALLS: the real, unmodified generateSystemName() and the shipped
+// namedSystemsCatalog via NameGenerator, driven through the production call-site
 // RNG chains (see nameVia* below). It does not modify/mock/stub any source.
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -31,7 +32,10 @@ import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
 import { SeededRandom } from '../src/generation/SeededRandom.js';
-import { generateSystemName, quantizePosition, enumerateSettledSystems } from '../src/generation/NameGenerator.js';
+import {
+  generateSystemName, quantizePosition, locatorKey, positionForKey,
+  getNamedSystemsMap, _classifyRegion,
+} from '../src/generation/NameGenerator.js';
 
 // ─────────────────────────────────────────────────────────────────────────
 // CONFIG — all fixed, all deterministic
@@ -43,18 +47,16 @@ const SAMPLE_BLOCK_SIZE = 200;           // per region (contract: >= 200/region)
 const SEED_POSITIONS = 'name-census-positions-v2';
 const REGIONS = ['core', 'arm', 'rim', 'halo'];
 
-// Call-site family mix (transparency only — the namer ignores the seed string,
-// so family cannot change any name; a fixed 7:2:1 star:nav:feat pattern is kept
-// so the report shows production-shaped seed strings feeding the same positions).
+// Call-site family mix (transparency only — the namer ignores the seed string).
 const FAMILY_PATTERN = ['star', 'star', 'star', 'star', 'star', 'star', 'star', 'nav', 'nav', 'feat'];
 
 const HYG_PATH = fileURLToPath(new URL('../public/assets/data/hyg-stars.json', import.meta.url));
+const META_PATH = fileURLToPath(new URL('../src/generation/data/namedSystemsCatalog.meta.json', import.meta.url));
 const REPORT_PATH = fileURLToPath(new URL(
   '../docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/census-report.md',
   import.meta.url,
 ));
 
-// Real astronomical-designation prefixes procgen must never intrude on.
 const REAL_DESIGNATION_PREFIXES = [
   'HD', 'HR', 'GJ', 'HIP', 'TYC', 'WISE', 'TOI', 'KOI', 'Kepler', 'TRAPPIST',
   'LHS', 'Ross', 'Wolf', '2MASS', 'SDSS', 'Gaia', 'TIC', 'KIC', 'GSC', 'UCAC',
@@ -62,10 +64,14 @@ const REAL_DESIGNATION_PREFIXES = [
 ];
 const REAL_DESIGNATION_RE = new RegExp(`^(?:${REAL_DESIGNATION_PREFIXES.join('|')})[\\s-]`);
 
+// Name shapes.
+const RE_SURVEY = /^[A-Z]{2,4} J[0-9A-Z]{7}[+-][0-9A-Z]{7}$/;   // procgen
+const RE_MULTIPART = /^[A-Z][a-z]+-[0-9A-Z]{10}$/;             // procgen
+const RE_SETTLED = /^[A-Z][a-z]+$/;                            // catalog
+const RE_GREEK = /^[A-Z][a-z]+ [A-Z][a-z]+ \d{1,4}$/;         // catalog
+
 // ─────────────────────────────────────────────────────────────────────────
-// POSITION SAMPLING — uniform jittered positions within each region's geometry
-// (like real star worldX/Y/Z, NOT round lattice points). Mirrors
-// NameGenerator._classifyRegion. r = sqrt(x^2+z^2), y = height above plane.
+// POSITION SAMPLING — uniform jittered positions within each region's geometry.
 // ─────────────────────────────────────────────────────────────────────────
 
 function samplePosition(region, rng) {
@@ -79,8 +85,7 @@ function samplePosition(region, rng) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// PRODUCTION CALL-SITE RNG CHAINS (verbatim). The namer IGNORES the rng — every
-// chain must return the same name for a given position. We assert that.
+// PRODUCTION CALL-SITE RNG CHAINS (verbatim). The namer IGNORES the rng.
 // ─────────────────────────────────────────────────────────────────────────
 
 function nameSkyClick(pos, idx)   { return generateSystemName(new SeededRandom(`warp-star-${idx}`).child('names').child('system'), pos); }
@@ -88,39 +93,40 @@ function nameNav(pos, seed)       { return generateSystemName(new SeededRandom(`
 function nameFeature(pos, seed)   { return generateSystemName(new SeededRandom(`feat-${seed}`).child('names').child('system'), pos); }
 
 // ─────────────────────────────────────────────────────────────────────────
-// NAME CLASSIFICATION (output shape → survey / multipart / bare)
+// NAME CLASSIFICATION
 // ─────────────────────────────────────────────────────────────────────────
 
 function classifyClass(name) {
-  if (/^[A-Z]{2,4} J[0-9A-Z]{7}[+-][0-9A-Z]{7}$/.test(name)) return 'survey';   // NBG J35EI75F-KN0H841
-  if (/^[A-Z][a-z]+ [A-Z][a-z]+ \d{5}$/.test(name)) return 'greek';             // Theta Karnun… 07437
-  if (/^[A-Z][a-z]+-[0-9A-Z]{10}$/.test(name)) return 'multipart';              // Tosnud-6PCUPG2IJU
-  return 'bare';                                                                // Tukgotpigyodcop
+  if (RE_SURVEY.test(name)) return 'survey';
+  if (RE_MULTIPART.test(name)) return 'multipart';
+  if (RE_GREEK.test(name)) return 'greek';       // catalog (rare uniform hit)
+  if (RE_SETTLED.test(name)) return 'settled';   // catalog (rare uniform hit)
+  return 'UNKNOWN';
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// CENSUS
+// PROCGEN CENSUS
 // ─────────────────────────────────────────────────────────────────────────
 
-function runCensus() {
+function runCensus(catalogNameSet) {
   const positionRng = new SeededRandom(SEED_POSITIONS);
 
   let starIdx = 0, navIdx = 0, featIdx = 0;
 
   const overall = { total: 0, cells: new Set(), names: new Set() };
-  const classCounts = { survey: 0, greek: 0, multipart: 0, bare: 0 };
+  const classCounts = { survey: 0, multipart: 0, greek: 0, settled: 0, UNKNOWN: 0 };
   const byRegion = {};
   const sampleBlocks = {};
   let pathDisagreements = 0;
   let revisitMismatches = 0;
   let dupNamesAcrossCells = 0;
-  let realNameEmissions = 0;
   let realDesignationEmissions = 0;
+  let procgenInCatalog = 0;
   const cellToName = new Map();
   const nameToCell = new Map();
 
   for (const region of REGIONS) {
-    byRegion[region] = { total: 0, cells: new Set(), names: new Set(), classCounts: { survey: 0, greek: 0, multipart: 0, bare: 0 } };
+    byRegion[region] = { total: 0, cells: new Set(), names: new Set(), classCounts: { survey: 0, multipart: 0, greek: 0, settled: 0 } };
     sampleBlocks[region] = [];
 
     for (let i = 0; i < TOTAL_PER_REGION; i++) {
@@ -133,10 +139,8 @@ function runCensus() {
       else if (family === 'nav') { seedString = `warp-nav-${navIdx}`; name = nameNav(pos, navIdx); navIdx++; }
       else { seedString = `feat-${featIdx}`; name = nameFeature(pos, featIdx); featIdx++; }
 
-      // Path-agreement: every call-site chain must produce this same name.
       if (nameSkyClick(pos, 1) !== name || nameNav(pos, 2) !== name || nameFeature(pos, 3) !== name) pathDisagreements++;
 
-      // Revisit + uniqueness ledgers.
       if (cellToName.has(key)) { if (cellToName.get(key) !== name) revisitMismatches++; }
       else cellToName.set(key, name);
       const prev = nameToCell.get(name);
@@ -144,10 +148,13 @@ function runCensus() {
       else nameToCell.set(name, key);
 
       if (REAL_DESIGNATION_RE.test(name)) realDesignationEmissions++;
+      // Shape-disjoint cross-check: a procgen name must never equal a catalog
+      // name UNLESS the random position genuinely landed on a catalog cell.
+      if (catalogNameSet.has(name) && !catalogNameSet.hasKey(locatorKey(pos))) procgenInCatalog++;
 
       const cls = classifyClass(name);
       classCounts[cls]++;
-      byRegion[region].classCounts[cls]++;
+      if (cls === 'survey' || cls === 'multipart' || cls === 'greek' || cls === 'settled') byRegion[region].classCounts[cls]++;
       overall.total++; overall.cells.add(key); overall.names.add(name);
       byRegion[region].total++; byRegion[region].cells.add(key); byRegion[region].names.add(name);
 
@@ -160,48 +167,66 @@ function runCensus() {
   return {
     overall, classCounts, byRegion, sampleBlocks,
     pathDisagreements, revisitMismatches, dupNamesAcrossCells,
-    realDesignationEmissions, nameToCell,
+    realDesignationEmissions, procgenInCatalog, nameToCell,
   };
 }
 
-// ── Settled-systems gazetteer (first-class section, ac5 addendum ruling 2) ──
-// Bare "settled" names are 1-in-16.8M, so a uniform census surfaces ~none. This
-// gazetteer instead drives the EXPORTED enumeration helper
-// (NameGenerator.enumerateSettledSystems) — the deterministic, no-registry basis
-// for a future in-game settled-systems catalog. For each region we scatter many
-// tiny bounding boxes (deterministic seed) and take ONE settled system from each
-// so the sample is spatially spread (maximum name variety), then confirm every
-// listed name round-trips through generateSystemName.
-function runGazetteer() {
-  const out = {};
-  const GAZ_PER_REGION = 24;
-  const half = 0.0012; // ~1.2 pc box — spans ≥1 coarse eligible period per axis
-  const rng = new SeededRandom('gazetteer-centers-v1');
-  for (const region of REGIONS) {
-    const seen = new Set();
-    const list = [];
-    let attempts = 0;
-    while (list.length < GAZ_PER_REGION && attempts < 40000) {
-      attempts++;
-      const c = samplePosition(region, rng);
-      const box = {
-        xMin: c.x - half, xMax: c.x + half,
-        yMin: c.y - half, yMax: c.y + half,
-        zMin: c.z - half, zMax: c.z + half,
-      };
-      const found = enumerateSettledSystems(box, 20);
-      for (const s of found) {
-        if (s.region !== region || seen.has(s.name)) continue;
-        // Confirm the enumeration round-trips (the helper's core guarantee).
-        if (generateSystemName(null, s.position) !== s.name) continue;
-        seen.add(s.name);
-        list.push({ name: s.name, x: s.position.x, y: s.position.y, z: s.position.z });
-        break; // one per box → maximum spatial spread
-      }
-    }
-    out[region] = list;
+// ─────────────────────────────────────────────────────────────────────────
+// NAMED-SYSTEMS CATALOG INVENTORY (the fifth real-object mechanism)
+// ─────────────────────────────────────────────────────────────────────────
+
+function catalogClass(name) {
+  if (RE_SETTLED.test(name)) return 'settled';
+  if (RE_GREEK.test(name)) return 'greek';
+  return 'UNKNOWN';
+}
+
+function runCatalogInventory() {
+  const map = getNamedSystemsMap();
+  const meta = JSON.parse(readFileSync(META_PATH, 'utf-8'));
+  const featureKeys = new Set(meta.featureKeys || []);
+
+  const names = new Set();
+  const keys = new Set();
+  let dupName = 0, dupKey = 0, badShape = 0, procgenShape = 0;
+
+  const byRegion = {};
+  for (const r of REGIONS) byRegion[r] = { total: 0, settled: 0, greek: 0, nearFeature: 0 };
+  const classCounts = { settled: 0, greek: 0 };
+  let nearFeatureTotal = 0;
+
+  const settledSamples = [];
+  const greekSamples = [];
+  const entries = [...map.entries()];
+  // Spread samples across the (key-sorted) catalog for variety.
+  const settledStride = Math.max(1, Math.floor(entries.length / 400));
+
+  let idx = 0;
+  for (const [key, name] of entries) {
+    if (names.has(name)) dupName++; else names.add(name);
+    if (keys.has(key)) dupKey++; else keys.add(key);
+    const cls = catalogClass(name);
+    if (cls === 'UNKNOWN') { badShape++; idx++; continue; }
+    if (RE_SURVEY.test(name) || RE_MULTIPART.test(name)) procgenShape++;
+    classCounts[cls]++;
+
+    const region = _classifyRegion(positionForKey(key)).region;
+    const near = featureKeys.has(key);
+    byRegion[region].total++;
+    byRegion[region][cls]++;
+    if (near) { byRegion[region].nearFeature++; nearFeatureTotal++; }
+
+    if (cls === 'settled' && settledSamples.length < 36 && idx % settledStride === 0) settledSamples.push(name);
+    if (cls === 'greek' && greekSamples.length < 36 && idx % 97 === 0) greekSamples.push(name);
+    idx++;
   }
-  return out;
+
+  return {
+    total: entries.length, classCounts, byRegion, nearFeatureTotal,
+    dupName, dupKey, badShape, procgenShape,
+    settledSamples, greekSamples,
+    meta,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -216,9 +241,9 @@ function loadHyg() {
   return { total, quoteArtifactCount, meaningfulSet: meaningful, meaningfulCount: meaningful.size };
 }
 
-function crossCheckHyg(nameToCell, hyg) {
+function crossCheckHyg(nameSet, hyg) {
   const collisions = [];
-  for (const name of nameToCell.keys()) if (hyg.meaningfulSet.has(name)) collisions.push(name);
+  for (const name of nameSet) if (hyg.meaningfulSet.has(name)) collisions.push(name);
   return collisions;
 }
 
@@ -245,12 +270,14 @@ function mdTable(headers, rows) {
 }
 function fmtPos(pos) { return pos ? `${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}` : 'n/a'; }
 
-function renderReport(census, bare, hyg) {
+function renderReport(census, catalog, hyg) {
   const { overall, classCounts, byRegion, sampleBlocks,
     pathDisagreements, revisitMismatches, dupNamesAcrossCells,
-    realDesignationEmissions, nameToCell } = census;
+    realDesignationEmissions, procgenInCatalog, nameToCell } = census;
 
-  const hygCollisions = crossCheckHyg(nameToCell, hyg);
+  const hygProcgenCollisions = crossCheckHyg(nameToCell.keys ? new Set(nameToCell.keys()) : new Set(), hyg);
+  const catalogNames = new Set(getNamedSystemsMap().values());
+  const hygCatalogCollisions = crossCheckHyg(catalogNames, hyg);
 
   const fingerprintInput = JSON.stringify({
     total: overall.total,
@@ -258,9 +285,15 @@ function renderReport(census, bare, hyg) {
     distinctNames: overall.names.size,
     classCounts,
     byRegion: Object.fromEntries(REGIONS.map(r => [r, [byRegion[r].total, byRegion[r].cells.size, byRegion[r].names.size]])),
-    dupNamesAcrossCells, revisitMismatches, pathDisagreements, realDesignationEmissions,
-    hygCollisions: hygCollisions.slice().sort(),
-    bare: Object.fromEntries(REGIONS.map(r => [r, bare[r].map(b => b.name)])),
+    dupNamesAcrossCells, revisitMismatches, pathDisagreements, realDesignationEmissions, procgenInCatalog,
+    hygProcgenCollisions: hygProcgenCollisions.slice().sort(),
+    catalog: {
+      total: catalog.total, classCounts: catalog.classCounts, nearFeatureTotal: catalog.nearFeatureTotal,
+      byRegion: catalog.byRegion, dupName: catalog.dupName, dupKey: catalog.dupKey,
+      badShape: catalog.badShape, procgenShape: catalog.procgenShape,
+      hygCatalogCollisions: hygCatalogCollisions.slice().sort(),
+      settledSamples: catalog.settledSamples, greekSamples: catalog.greekSamples,
+    },
   });
   const fingerprint = fnv1a(fingerprintInput);
 
@@ -269,141 +302,168 @@ function renderReport(census, bare, hyg) {
 
   push('# System-name uniqueness census');
   push();
-  push('Workstream: `naming-census-uniqueness-2026-07-07`, AC3 → AC6/AC7. Generated');
-  push('by `scripts/name-census.mjs` — re-run with `node scripts/name-census.mjs`.');
-  push('This is evidence for Max\'s AC6 UAT review of the position-derived naming');
-  push('scheme. No dates or run-specific values appear below (see "Determinism").');
+  push('Workstream: `naming-census-uniqueness-2026-07-07`, AC3 → AC6/AC7 (increment 3e).');
+  push('Generated by `scripts/name-census.mjs` — re-run with `node scripts/name-census.mjs`.');
+  push('Evidence for Max\'s UAT review of the naming scheme. No dates or run-specific');
+  push('values appear below (see "Determinism").');
   push();
 
   push('## The guarantee, and how it is verified here');
   push();
-  push('Since increment 3b (ac5-decision.md), a system\'s name is a **pure,');
-  push('injective function of its canonical galactic position** — there is no');
-  push('registry and no persistence. Uniqueness is structural:');
+  push('Since increment 3e (ac5-decision.md Addendum 3), a system\'s name resolves as:');
   push();
-  push('> **By construction:** the position is quantized to a fixed lattice at');
-  push('> `Q = 4e-6 kpc` (0.004 pc — the finest grid tier\'s minimum star spacing);');
-  push('> the three lattice coordinates are packed into one mixed-radix locator `L`');
-  push('> (~70 bits); and every name class embeds `L` injectively (survey base-36');
-  push('> field, word + code, or greek letter + word + position numeral), except the');
-  push('> rare bare-word class which is drawn from a finite region-partitioned supply');
-  push('> indexed injectively by position. Distinct positions → distinct `L` →');
-  push('> distinct names. The four class shapes are mutually exclusive strings, so');
-  push('> names never collide across classes either.');
+  push('> **1. Named-systems catalog (shipped, finite).** A build-time-authored table');
+  push('> (`src/generation/data/namedSystemsCatalog.js`) of settled bare words');
+  push('> ("Veshara") + greek notables ("Alpha Vozara 4821"), keyed by the injective');
+  push('> position locator. Uniqueness / blocklist / key-collision / round-trip are all');
+  push('> checked AT BUILD TIME. This is the FIFTH real-object mechanism.');
+  push('>');
+  push('> **2. Procgen (two classes).** For every other position, a **pure, injective**');
+  push('> function of canonical galactic position (no registry, no persistence): the');
+  push('> position quantizes to a fixed lattice at `Q = 4e-6 kpc`; the three lattice');
+  push('> coords pack into one mixed-radix locator `L` (~70 bits); and each of the two');
+  push('> classes — survey designation (base-36 coordinate field) and multi-part fantasy');
+  push('> (word + code) — embeds `L` injectively. Distinct positions → distinct `L` →');
+  push('> distinct names.');
+  push('>');
+  push('> **Shape exclusivity.** The two procgen shapes (survey has " J" + latitude sign;');
+  push('> multipart has "-") are structurally disjoint from the two catalog shapes (bare');
+  push('> `^[A-Z][a-z]+$`, greek `^Word Word \\d+$`), so a procgen name can never equal a');
+  push('> catalog name. Uniqueness holds end to end.');
   push();
-  push('> **The bit floor (honest aesthetics).** An injective encoding of a ~70-bit');
-  push('> locator needs ~14 base-36 chars (or ~21 decimal digits). A short,');
-  push('> pure-decimal 2MASS-style designation is therefore mathematically impossible');
-  push('> while the zero-duplicate guarantee holds — so 3c\'s win is STRUCTURE');
-  push('> (grouping / survey prefix / J-epoch marker / latitude sign / four-class');
-  push('> variety) and shorter/varied words, NOT sub-15-char brevity. Designations run');
-  push('> ~17-20 chars (survey/multipart), greek up to ~29, bare ~15 (down from 3b\'s');
-  push('> up-to-18). See ac5-decision.md addendum ruling 1.');
-  push();
-  push('The named-via columns below drive the **exact production call-site RNG');
-  push('chains** (`warp-star-<idx>` sky-click, `warp-nav-<seed>` NavComputer,');
-  push('`feat-<seed>` feature route). The generator **ignores** those seeds — which');
-  push('is precisely why every path agrees and revisits are stable. This tool asserts');
-  push('that agreement on every sample.');
+  push('The named-via columns below drive the **exact production call-site RNG chains**');
+  push('(`warp-star-<idx>` sky-click, `warp-nav-<seed>` NavComputer, `feat-<seed>`');
+  push('feature route). The generator **ignores** those seeds — which is why every path');
+  push('agrees and revisits are stable. This tool asserts that agreement on every sample.');
   push();
 
   push('## Headline — verification');
   push();
   push(mdTable(['check', 'result'], [
-    ['Total names generated (4-region census)', overall.total.toLocaleString()],
+    ['Procgen names generated (4-region census)', overall.total.toLocaleString()],
     ['Distinct position cells sampled', overall.cells.size.toLocaleString()],
     ['Distinct names produced', overall.names.size.toLocaleString()],
     ['**Duplicate names across distinct cells** (AC6: must be 0)', `**${dupNamesAcrossCells}**`],
     ['Revisit mismatches (same cell → different name; must be 0)', `${revisitMismatches}`],
     ['Path disagreements (sky-click vs nav vs feature; must be 0)', `${pathDisagreements}`],
     ['Procgen designations in real designation space (must be 0)', `${realDesignationEmissions}`],
-    ['Collisions with a real HYG name (must be 0)', `${hygCollisions.length}`],
+    ['Procgen names equal to a CATALOG name (shape-disjoint; must be 0)', `${procgenInCatalog}`],
+    ['Procgen collisions with a real HYG name (must be 0)', `${hygProcgenCollisions.length}`],
   ]));
   push();
   push('`distinct names === distinct cells` and `duplicate names across cells === 0`');
-  push('together are the empirical face of the by-construction injectivity: at this');
-  push('volume every distinct position got its own name, and no two distinct cells');
-  push('ever shared one.');
+  push('together are the empirical face of the by-construction injectivity.');
   push();
   push(`Determinism fingerprint (FNV-1a over sorted summary stats): \`${fingerprint}\``);
   push();
 
-  push('## Class mix (region flavor, re-expressed over the four classes)');
+  push('## Procgen class mix (region flavor, two classes)');
   push();
-  push('Region only steers the class MIX (core catalog-heavy → rim fantasy-leaning);');
-  push('it never affects uniqueness. `survey` = fictional-prefix grouped designation;');
-  push('`greek` = greek letter + region word + position numeral (restored 3c);');
-  push('`multipart` = region-flavoured word + position code; `bare` = RARE settled-era');
-  push('proper name (uniform sampling surfaces ~none — see the gazetteer below).');
+  push('Region steers the class MIX (core catalog-heavy → rim fantasy-leaning); it never');
+  push('affects uniqueness. `survey` = fictional-prefix grouped designation; `multipart`');
+  push('= region-flavoured word + position code. (The removed 3c greek/bare runtime');
+  push('classes are now the shipped catalog — see below. Uniform sampling essentially');
+  push('never lands on a discrete catalog cell, so catalog hits here are ~0.)');
   push();
-  push(mdTable(['region', 'samples', 'survey', 'greek', 'multipart', 'bare'],
+  push(mdTable(['region', 'samples', 'survey', 'multipart', 'catalog hits'],
     REGIONS.map(r => {
       const b = byRegion[r];
       return [r, b.total.toLocaleString(),
         `${pct(b.classCounts.survey / b.total)}`,
-        `${pct(b.classCounts.greek / b.total)}`,
         `${pct(b.classCounts.multipart / b.total)}`,
-        `${b.classCounts.bare}`];
+        `${b.classCounts.settled + b.classCounts.greek}`];
     })));
   push();
-  push(`Galaxy-wide totals — survey: ${classCounts.survey.toLocaleString()}, ` +
-    `greek: ${classCounts.greek.toLocaleString()}, ` +
-    `multipart: ${classCounts.multipart.toLocaleString()}, bare: ${classCounts.bare}.`);
+  push(`Galaxy-wide procgen totals — survey: ${classCounts.survey.toLocaleString()}, ` +
+    `multipart: ${classCounts.multipart.toLocaleString()}, ` +
+    `catalog hits from uniform sampling: ${(classCounts.settled + classCounts.greek)}.`);
   push();
 
-  push('## HYG cross-check (procgen vs. real star names)');
+  push('## Named-systems catalog (the FIFTH real-object mechanism)');
+  push();
+  push('The shipped catalog (`src/generation/data/namedSystemsCatalog.js`) is a finite,');
+  push('lore-consistent set of settled + notable systems, authored at build time by');
+  push('`scripts/gen-named-systems.mjs` over REAL star positions selected by running the');
+  push('actual HashGridStarfield cell generation offline (so each entry sits on a real');
+  push('in-game star). It overrides procgen at matching positions, and is enumerable for');
+  push('a future in-game settled/notable-systems catalog (ac5 addendum ruling 2).');
+  push();
+  push(mdTable(['check', 'result'], [
+    ['Catalog entries', catalog.total.toLocaleString()],
+    ['— settled bare words', catalog.classCounts.settled.toLocaleString()],
+    ['— greek notables', catalog.classCounts.greek.toLocaleString()],
+    ['Duplicate names (must be 0)', `${catalog.dupName}`],
+    ['Duplicate keys (must be 0)', `${catalog.dupKey}`],
+    ['Entries not a catalog shape (must be 0)', `${catalog.badShape}`],
+    ['Entries wearing a procgen shape (must be 0)', `${catalog.procgenShape}`],
+    ['Catalog collisions with a real HYG name (must be 0)', `${hygCatalogCollisions.length}`],
+  ]));
+  push();
+  push('### Per-region distribution');
+  push();
+  push(mdTable(['region', 'total', 'settled', 'greek', 'near-feature'],
+    REGIONS.map(r => {
+      const b = catalog.byRegion[r];
+      return [r, b.total.toLocaleString(), b.settled.toLocaleString(),
+        b.greek.toLocaleString(), b.nearFeature.toLocaleString()];
+    })));
+  push();
+  push('### Placement lever');
+  push();
+  const pl = catalog.meta.placementLever || {};
+  push('A tunable fraction of greek notables is placed within a radius of known objects /');
+  push('features (nebulae, globular clusters) so players meet named systems more often');
+  push('than uniform chance; settled systems + the rest spread with mild disk bias.');
+  push();
+  push(mdTable(['metric', 'value'], [
+    ['Configured near-feature fraction (of greek notables)', `${pl.configuredFraction ?? 'n/a'}`],
+    ['Feature centers used (KnownObjectProfiles + globulars)', `${pl.featureCenters ?? 'n/a'}`],
+    ['Near-feature notables (achieved)', catalog.nearFeatureTotal.toLocaleString()],
+    ['Near-feature share of catalog', pct(catalog.nearFeatureTotal / catalog.total)],
+  ]));
+  push();
+  push('### Sample settled bare words (30+ , spread across the catalog)');
+  push();
+  push(catalog.settledSamples.map(n => `\`${n}\``).join(', ') + '.');
+  push();
+  push('### Sample greek notables (30+ , spread across the catalog)');
+  push();
+  push(catalog.greekSamples.map(n => `\`${n}\``).join(', ') + '.');
+  push();
+
+  push('## HYG cross-check (procgen + catalog vs. real star names)');
   push();
   push(`\`public/assets/data/hyg-stars.json\` ships ${hyg.total.toLocaleString()} entries`);
-  push('(HYG v4.0, regenerated in increment 3a / AC9 — 0 remaining `"` artifacts).');
-  push('Every distinct procgen name in this census was checked against the full set');
-  push(`of ${hyg.meaningfulCount.toLocaleString()} distinct meaningful real names.`);
+  push('(HYG v4.0, regenerated in increment 3a / AC9). Every distinct procgen name in');
+  push('this census AND every catalog name was checked against the full set of');
+  push(`${hyg.meaningfulCount.toLocaleString()} distinct meaningful real names.`);
   push();
   push(mdTable(['metric', 'value'], [
     ['HYG entries (raw)', hyg.total.toLocaleString()],
     ['HYG entries with the `"` artifact name', hyg.quoteArtifactCount.toLocaleString()],
     ['HYG distinct meaningful names', hyg.meaningfulCount.toLocaleString()],
-    ['Distinct procgen names colliding with a real name', hygCollisions.length.toLocaleString()],
+    ['Distinct procgen names colliding with a real name', hygProcgenCollisions.length.toLocaleString()],
+    ['Catalog names colliding with a real name', hygCatalogCollisions.length.toLocaleString()],
   ]));
   push();
-  if (hygCollisions.length === 0) {
-    push('**Zero collisions.** The catalog class uses fictional survey prefixes');
-    push('(disjoint from real designation space) and the bare-word class is');
-    push('structurally blocklisted against the real proper-name set');
-    push('(`src/generation/data/realProperNames.js`), so a procgen name can never');
-    push('equal a real star name.');
+  if (hygProcgenCollisions.length === 0 && hygCatalogCollisions.length === 0) {
+    push('**Zero collisions.** Procgen uses fictional survey prefixes (disjoint from real');
+    push('designation space) and injective word+code shapes; the catalog\'s bare/greek');
+    push('words are structurally blocklisted against the real proper-name set');
+    push('(`src/generation/data/realProperNames.js`) at build time. No procgen or catalog');
+    push('name can equal a real star name.');
   } else {
-    push('Collisions found (should be none): ' + hygCollisions.slice(0, 25).map(n => `\`${n}\``).join(', '));
+    push('Collisions found (should be none): ' +
+      [...hygProcgenCollisions, ...hygCatalogCollisions].slice(0, 25).map(n => `\`${n}\``).join(', '));
   }
   push();
 
-  push('## Settled-systems gazetteer (the RARE settled-era proper names)');
+  push('## Procgen sample blocks — for design review');
   push();
-  push('Bare "settled" names are deliberately rare — ~1 in 16.8M positions (`BARE_M³`,');
-  push('`256³`), i.e. ≈12k settled systems galaxy-wide — so a uniform census surfaces');
-  push('essentially none. This gazetteer is emitted by the EXPORTED enumeration helper');
-  push('`NameGenerator.enumerateSettledSystems(bounds)`: the deterministic, no-registry');
-  push('basis for a future in-game "settled systems catalog / search" feature (that UI');
-  push('is out of scope — captured for the successor workstream). Each listed name is');
-  push('globally unique, round-trips through `generateSystemName` for its position, and');
-  push('is structurally blocklisted against the real proper-name set. Words are now');
-  push('shorter/varied CVC syllables (1100-syllable alphabet, bijective supply');
-  push('≈1.6e15; bare allocation ≈2.75e14 ⇒ ~17% of supply, well under the 50% margin).');
-  push();
-  for (const region of REGIONS) {
-    push(`### ${region}`);
-    push();
-    if (bare[region].length === 0) { push('_(none found in the scan window)_'); push(); continue; }
-    push(mdTable(['settled system', 'position (x, y, z kpc)'],
-      bare[region].map(b => [`\`${b.name}\``, `${b.x.toFixed(2)}, ${b.y.toFixed(2)}, ${b.z.toFixed(2)}`])));
-    push();
-  }
-
-  push('## Sample blocks — for design review');
-  push();
-  push(`${SAMPLE_BLOCK_SIZE} name samples per region, in generation order, labeled by`);
-  push('call-site family and class, with the sampled galactic position (kpc,');
-  push('galactocentric: x/z = galactic plane, y = height above plane). The family');
-  push('column is shown only to prove path-independence — it never changes a name.');
+  push(`${SAMPLE_BLOCK_SIZE} procgen name samples per region, in generation order, labeled`);
+  push('by call-site family and class, with the sampled galactic position (kpc,');
+  push('galactocentric: x/z = galactic plane, y = height above plane). The family column');
+  push('is shown only to prove path-independence — it never changes a name.');
   push();
   for (const region of REGIONS) {
     push(`### ${region}`);
@@ -421,24 +481,34 @@ function renderReport(census, bare, hyg) {
 // ─────────────────────────────────────────────────────────────────────────
 
 function main() {
-  const census = runCensus();
-  const bare = runGazetteer();
+  // Catalog name set with a key-membership probe, so the census can distinguish a
+  // genuine catalog hit from a procgen collision.
+  const catalogMap = getNamedSystemsMap();
+  const catalogNameSet = new Set(catalogMap.values());
+  catalogNameSet.hasKey = (k) => catalogMap.has(k);
+
+  const census = runCensus(catalogNameSet);
+  const catalog = runCatalogInventory();
   const hyg = loadHyg();
-  const report = renderReport(census, bare, hyg);
+  const report = renderReport(census, catalog, hyg);
 
   mkdirSync(dirname(REPORT_PATH), { recursive: true });
   writeFileSync(REPORT_PATH, report, 'utf-8');
 
-  const hygCollisions = crossCheckHyg(census.nameToCell, hyg);
+  const hygProcgenCollisions = crossCheckHyg(new Set(census.nameToCell.keys()), hyg);
   console.log(`name-census: wrote ${REPORT_PATH}`);
-  console.log(`  total names: ${census.overall.total.toLocaleString()}`);
+  console.log(`  procgen names: ${census.overall.total.toLocaleString()}`);
   console.log(`  distinct cells: ${census.overall.cells.size.toLocaleString()}`);
   console.log(`  distinct names: ${census.overall.names.size.toLocaleString()}`);
   console.log(`  duplicate names across cells: ${census.dupNamesAcrossCells}`);
   console.log(`  revisit mismatches: ${census.revisitMismatches}`);
   console.log(`  path disagreements: ${census.pathDisagreements}`);
   console.log(`  real-designation-space emissions: ${census.realDesignationEmissions}`);
-  console.log(`  HYG collisions: ${hygCollisions.length}`);
+  console.log(`  procgen names equal to a catalog name: ${census.procgenInCatalog}`);
+  console.log(`  HYG procgen collisions: ${hygProcgenCollisions.length}`);
+  console.log(`  catalog entries: ${catalog.total.toLocaleString()} (settled ${catalog.classCounts.settled}, greek ${catalog.classCounts.greek})`);
+  console.log(`  catalog dup names/keys/badshape/procgenshape: ${catalog.dupName}/${catalog.dupKey}/${catalog.badShape}/${catalog.procgenShape}`);
+  console.log(`  near-feature notables: ${catalog.nearFeatureTotal.toLocaleString()}`);
 }
 
 main();

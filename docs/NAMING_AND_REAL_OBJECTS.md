@@ -36,18 +36,38 @@ questions that are easy to conflate:
 
 ## 1. How a system gets its name, end to end
 
-> **⚠️ Updated by increment 3b (AC6/AC7, 2026-07-08).** Sections 1.1 and 1.3
+> **⚠️ Updated by increment 3e (AC6/AC7, 2026-07-08).** Sections 1.1 and 1.3
 > below describe the *original* seed-based scheme that this doc was written to
-> review (AC4/AC5). That scheme has since been **replaced**: `generateSystemName`
-> is now a **pure, injective function of canonical galactic position** — the
-> `rng`/seed argument is ignored, so naming is unique by construction (AC6) and
-> revisit-stable on every path (AC7). The three live classes are survey
-> designation / multi-part fantasy / rare bare word; there is no `sectorCode`
-> mitigation and no no-position fallback (D5 eliminated). The mechanism is
-> documented at the top of `src/generation/NameGenerator.js`, proven by
-> `src/generation/__tests__/NameGenerator.injective.test.js`, and measured in
-> `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/census-report.md`. The
-> real-object machinery in §2/§3 is unchanged. Read §1.1/§1.3 as history.
+> review (AC4/AC5). That scheme has since been **replaced**. Read §1.1/§1.3 as
+> history; the current structure is:
+>
+> **`generateSystemName(rng, galacticPos)` resolves in this order** (the `rng`/seed
+> argument is ignored, so naming is unique by construction and revisit-stable on
+> every path):
+>
+> 1. **Named-systems catalog** — a finite, build-time-authored table
+>    (`src/generation/data/namedSystemsCatalog.js`, `NameGenerator.js:462`) of
+>    ~12k settled bare words ("Veshara") + ~36k greek notables ("Alpha Vozara
+>    4821"), keyed by the injective position locator. If it hits, the shipped name
+>    wins over procgen. This is the **fifth real-object mechanism** — see §2. Built
+>    by `scripts/gen-named-systems.mjs` over REAL star positions selected by
+>    running the actual HashGridStarfield cell generation offline (so every entry
+>    sits on a real in-game star); duplicate-checked, real-proper-name-blocklisted,
+>    and key-unique **at build time**.
+> 2. **Procgen — two region-weighted classes**, each a pure injective function of
+>    the position locator `L` (`NameGenerator.js:485-487`): **survey designation**
+>    ("PVX J4K7Q2M+9XP3RWZ") and **multi-part fantasy** ("Veskol-4K7Q2M9XP3").
+>    Region only steers the mix (core catalog-heavy → rim fantasy-leaning,
+>    `REGION_SURVEY_WEIGHT`). There is no `sectorCode` mitigation and no
+>    no-position fallback (D5 eliminated). The removed 3c greek/bare runtime
+>    classes are now the shipped catalog; procgen's survey/multipart shapes are
+>    structurally disjoint from the catalog's bare/greek shapes, so procgen can
+>    never collide with a catalog name.
+>
+> Uniqueness end to end: catalog uniqueness by build-time check; procgen injective
+> in `L`; shapes disjoint. Documented at the top of `src/generation/NameGenerator.js`,
+> proven by `src/generation/__tests__/NameGenerator.injective.test.js`, and measured
+> in `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/census-report.md`.
 
 ### 1.1 The generator: five styles, region-weighted
 
@@ -175,23 +195,24 @@ roll the same style. It feeds in at three points:
 
 ---
 
-## 2. The four real-object mechanisms, side by side
+## 2. The five real-object mechanisms, side by side
 
-Real astronomy enters the game through **four independent subsystems**. They
-were built at different times for different jobs and — this is the key
-finding for scoping the overlay workstream — **they share no common schema.**
-Each is consumed by a different part of the engine through a different adapter.
+Real astronomy enters the game through **five independent subsystems** (the
+fifth, the named-systems catalog, added in increment 3e). They were built at
+different times for different jobs and — this is the key finding for scoping the
+overlay workstream — **they share no common schema.** Each is consumed by a
+different part of the engine through a different adapter.
 
-| | 1. KnownSystems | 2. RealStarCatalog | 3. KnownObjectProfiles | 4. RealFeatureCatalog |
-|---|---|---|---|---|
-| **File** | `src/generation/KnownSystems.js` | `src/generation/RealStarCatalog.js` | `src/data/KnownObjectProfiles.js` | `src/generation/RealFeatureCatalog.js` |
-| **Covers** | Whole handcrafted star systems (only **Sol** today) | ~15,599 real naked-eye stars (HYG v4.0) | 37 Messier/NGC/IC deep-sky objects (nebulae, clusters, SNRs) | 152 real globular clusters (Harris catalog) |
-| **Data source** | Hardcoded in-file | `public/assets/data/hyg-stars.json` (fetched) | Hardcoded in-file | `public/assets/data/globular-clusters.json` (fetched) |
-| **Position field** | `position:{x,y,z}` (`:37`) | raw `x/y/z` → render `worldX/Y/Z` (`:141-145`) | `galacticPos:{x,y,z}` (`:30`) | `position:{x,y,z}` (`:47`) |
-| **Name field** | `name` + a full `names` tree (`:45-64`) | `name` (`:150`) | `name`,`messier`,`ngc` (`:26-29`) | `name` (`:57`) |
-| **Identity tag** | *(none)* | `isRealStar:true` (`:154`) | `isKnownObject:true` (`:1554`, set at injection) | `isReal:true` (`:69`) |
-| **What it overrides** | **Contents + all names** | Star's sky dot + its name (see §3) | A deep-sky feature's *appearance* | A deep-sky feature's presence/size |
-| **Match/hook** | `findAt(pos)` within 0.005 kpc (`:24`,`:76-87`) | `findVisible()` per frame (`:95-161`) | injected into galaxy features (`GalacticMap.js:1515-1566`) | `findNearby()` (`:83-106`) |
+| | 1. KnownSystems | 2. RealStarCatalog | 3. KnownObjectProfiles | 4. RealFeatureCatalog | 5. NamedSystemsCatalog |
+|---|---|---|---|---|---|
+| **File** | `src/generation/KnownSystems.js` | `src/generation/RealStarCatalog.js` | `src/data/KnownObjectProfiles.js` | `src/generation/RealFeatureCatalog.js` | `src/generation/data/namedSystemsCatalog.js` |
+| **Covers** | Whole handcrafted star systems (only **Sol** today) | ~15,599 real naked-eye stars (HYG v4.0) | 37 Messier/NGC/IC deep-sky objects | 152 real globular clusters (Harris) | ~48k settled + notable systems (fictional, on real star positions) |
+| **Data source** | Hardcoded in-file | `public/assets/data/hyg-stars.json` (fetched) | Hardcoded in-file | `public/assets/data/globular-clusters.json` (fetched) | Build-time-generated JS module (bundled, static import) |
+| **Position field** | `position:{x,y,z}` (`:37`) | raw `x/y/z` → render `worldX/Y/Z` (`:141-145`) | `galacticPos:{x,y,z}` (`:30`) | `position:{x,y,z}` (`:47`) | base-36 locator key of `{x,y,z}` (`locatorKey`) |
+| **Name field** | `name` + a full `names` tree (`:45-64`) | `name` (`:150`) | `name`,`messier`,`ngc` (`:26-29`) | `name` (`:57`) | full display name (bare word or "Alpha Vozara 4821") |
+| **Identity tag** | *(none)* | `isRealStar:true` (`:154`) | `isKnownObject:true` (`:1554`) | `isReal:true` (`:69`) | *(none — presence in the table is the tag)* |
+| **What it overrides** | **Contents + all names** | Star's sky dot + its name (see §3) | A deep-sky feature's *appearance* | A deep-sky feature's presence/size | The system's procgen NAME |
+| **Match/hook** | `findAt(pos)` within 0.005 kpc (`:24`,`:76-87`) | `findVisible()` per frame (`:95-161`) | injected into galaxy features (`GalacticMap.js:1515-1566`) | `findNearby()` (`:83-106`) | synchronous `namedSystemLookup(key)` inside `generateSystemName` (`NameGenerator.js:462`) |
 
 Detail per mechanism:
 
@@ -230,13 +251,39 @@ harris-<id>`, `name`, plus context/overrides that make its stars old and
 metal-poor (`:46-70`), tagged `isReal:true`. `findNearby` returns them by
 distance (`:83-106`).
 
+**5. NamedSystemsCatalog — the shipped settled/notable-systems overlay
+(increment 3e).** Unlike the other four, its "objects" are *fictional* — but they
+sit on **real in-game star positions**. The build script
+`scripts/gen-named-systems.mjs` selects those positions by running the actual
+`HashGridStarfield` cell generation offline (so a catalog entry's position is
+bit-identical to the star the player targets), authors ~12k settled bare words +
+~36k greek notables over them, and emits a bundled JS module keyed by the
+injective base-36 position locator. At runtime, `generateSystemName` does a
+**synchronous** `namedSystemLookup(L.toString(36))` (`NameGenerator.js:462`)
+before its procgen classes; a hit wins. It is the mechanism closest to
+KnownSystems in spirit (a finite hand-shipped table matched by position) but it
+overrides only the *name*, not contents. Uniqueness / blocklist / key-collision
+/ round-trip are all enforced **at build time**, and its bare/greek shapes are
+structurally disjoint from procgen's survey/multipart shapes. It is enumerable
+(`enumerateNamedSystems`) — the basis for a future in-game settled/notable-systems
+catalog (ac5 addendum ruling 2).
+
+**Precedence.** When more than one mechanism could apply to a system, the naming
+order is **KnownSystems > real-star names > named-catalog > procgen**. The first
+two override *before* `generateSystemName` is ever called (KnownSystems via
+`_knownSystemNames` at `main.js:4189`; real-star names via `navStar.name ||` at
+`main.js:2833` and the sky-click real-name guard), so the catalog lookup at the
+top of `generateSystemName` only ever precedes procgen — realising that chain
+without touching the first two paths.
+
 **Why "no shared schema" is the load-bearing point.** The position key alone
-is spelled three different ways (`position`, `galacticPos`, raw `x/y/z`); the
-identity flag is a different string in each (or absent); one carries a full
-name tree, the others a flat `name`; two are hardcoded and two are fetched
-JSON. An overlay that wants "all reasonably findable objects" to have real
-names + real characteristics has to either unify these four or add a fifth
-adapter — that's a real scoping fork, called out in §5.
+is now spelled four different ways (`position`, `galacticPos`, raw `x/y/z`, and
+the base-36 locator); the identity flag is a different string in each (or
+absent); one carries a full name tree, the others a flat `name`; two are
+hardcoded, two are fetched JSON, and one is a bundled generated module. An
+overlay that wants "all reasonably findable objects" to have real names + real
+characteristics has to either unify these five or add a sixth adapter — that's a
+real scoping fork, called out in §5.
 
 ---
 
@@ -463,7 +510,9 @@ carry a position so the fallback never fires.
 
 ### For scoping the successor real-universe-overlay workstream
 
-**D6. Which mechanism is the template?** Of the four (§2), only **KnownSystems**
+**D6. Which mechanism is the template?** Of the four *real-data* mechanisms (§2;
+the fifth, the fictional named-systems catalog added in 3e, overrides only names
+on real positions), only **KnownSystems**
 already overrides *contents + names*; the other three override appearance or
 label only. Your ask ("characteristics may have to replace the ones we have")
 is a contents override, which today exists *only* for Sol. *Decision:* extend
@@ -488,7 +537,8 @@ catalog of known exoplanets? real stellar parameters?) and how they replace
 generated contents — this is genuinely new data + new merge logic, not a tweak
 to existing paths. Flagging it now so it isn't discovered mid-build.
 
-**D9. Schema unification (§2).** The four mechanisms disagree on position key,
+**D9. Schema unification (§2).** The mechanisms (four real-data adapters, plus
+the 3e named-systems catalog = five in total) disagree on position key,
 identity flag, and name shape. *Decision:* an overlay spanning stars + deep-sky
 + systems either unifies these or tolerates four adapters. This is an
 architecture decision to make *before* the overlay build, because it
@@ -500,7 +550,10 @@ determines whether the overlay is one system or four extensions.
 
 | Concern | File | Key lines |
 |---|---|---|
-| Name generator (all styles) | `src/generation/NameGenerator.js` | `generateSystemName:326-364`, `_classifyRegion:275-300`, `REGION_STYLES:307-312`, `_catalogName:414-423`, `generateSystemNames:565-613` |
+| Name generator (current: catalog + 2 procgen classes) | `src/generation/NameGenerator.js` | `generateSystemName` (catalog lookup + survey/multipart), `_classifyRegion`, `REGION_SURVEY_WEIGHT`, `locatorKey`/`positionForKey`, `_surveyName`/`_multipartName`, `enumerateNamedSystems`, `generateSystemNames` |
+| Named-systems catalog (5th mechanism) | `src/generation/data/namedSystemsCatalog.js` | `namedSystemLookup`, `getNamedSystemsMap`, `NAMED_SYSTEMS_RAW` |
+| Named-systems build script | `scripts/gen-named-systems.mjs` | harvest (`findStarsInRadius`), placement lever (`NEAR_FEATURE_FRACTION`), build-time verification |
+| Pretty-word generator (build-time) | `scripts/lib/pretty-words.mjs` | `makePrettyWord` (mixed CV/CVC alphabet) |
 | Seeded RNG + child streams | `src/generation/SeededRandom.js` | `child:93-96` |
 | Handcrafted systems (Sol) | `src/generation/KnownSystems.js` | `KNOWN_SYSTEMS:34-68`, `findAt:76-87` |
 | Real star catalog (HYG) | `src/generation/RealStarCatalog.js` | `load:44-57`, `findVisible:95-161` |

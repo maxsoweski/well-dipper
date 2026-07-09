@@ -2,11 +2,11 @@
  * NameGenerator — deterministic procedural name generation for star systems,
  * stars, planets, and moons.
  *
- * ── System names are UNIQUE BY CONSTRUCTION (increment 3b, ac5-decision.md) ──
+ * ── System names are UNIQUE BY CONSTRUCTION (increment 3b/3e, ac5-decision.md) ──
  *
- * `generateSystemName(rng, galacticPos)` is a PURE, INJECTIVE function of the
- * system's canonical galactic position. Two consequences fall straight out of
- * that single property:
+ * `generateSystemName(rng, galacticPos)` is a PURE function of the system's
+ * canonical galactic position. Two consequences fall straight out of that single
+ * property:
  *
  *   • AC6 (never the same name twice): distinct positions map to distinct names.
  *     There is no registry and no persistence — uniqueness is structural.
@@ -14,29 +14,40 @@
  *     (sky-click / NavComputer / feature route / screensaver / spawn), quantizes
  *     to the same position and therefore yields the same name, forever.
  *
- * The name is built from four region-weighted classes, each of which embeds the
- * full position "locator" L injectively (or, for the rare bare class, is drawn
- * from a finite partitioned supply indexed injectively by position):
+ * ── Increment 3e: named-systems catalog + two procgen classes ──
+ * Naming now resolves in this order for a position that reaches this function:
  *
- *   (a) survey designation   "PVX J4K7Q2M+9XP3RWZ"   — the common case; a
- *       far-future catalogue ID: fictional survey prefix + J-epoch marker +
- *       two coordinate-style base-36 fields split by a latitude sign. Grouped
- *       and prefixed so it reads like a star-atlas entry, not an opaque serial.
- *   (b) multi-part fantasy   "Veskol-4K7Q2M9XP3"     — region word + position code
- *   (c) greek designation    "Theta Veskolnath 0421" — greek letter + region word
- *       + a short position-bit numeral (Bayer-style, sci-fi expanded)
- *   (d) bare fantasy word    "Veshakolnir"           — RARE settled-era name
+ *   0. NAMED-SYSTEMS CATALOG (the FIFTH real-object mechanism) — a finite,
+ *      build-time-authored table (src/generation/data/namedSystemsCatalog.js) of
+ *      ~12k settled bare words ("Veshara") + greek notables ("Alpha Vozara 4821"),
+ *      keyed by the SAME injective lattice locator this file uses. A synchronous
+ *      lookup; if it hits, that shipped name wins over procgen. Its entries are
+ *      duplicate-checked, blocklisted against real proper names, and key-unique
+ *      AT BUILD TIME (see the build script). This is Max's "in setting, settled
+ *      systems would be cataloged" made literal (ac5-decision.md Addendum 3).
+ *   1. PROCGEN — the common case, now just TWO region-weighted classes, each of
+ *      which embeds the full position locator L injectively:
+ *        (a) survey designation   "PVX J4K7Q2M+9XP3RWZ" — fictional survey prefix
+ *            + J-epoch marker + two coordinate-style base-36 fields split by a
+ *            latitude sign; reads like a star-atlas entry (catalog-heavy regions).
+ *        (b) multi-part fantasy   "Veskol-4K7Q2M9XP3"   — region word + position
+ *            code (fantasy-leaning regions).
+ *
+ * The 3c runtime greek + bare classes are REMOVED: those name SHAPES now belong
+ * exclusively to the shipped catalog, and procgen's survey/multipart shapes are
+ * structurally disjoint from them (survey has " J" + sign, multipart has "-";
+ * neither can match a bare "^[A-Z][a-z]+$" or greek "^Word Word \d+$" shape), so
+ * a procgen name can never collide with a catalog name. Uniqueness end to end:
+ * catalog uniqueness by build-time check; procgen injective in L; shapes disjoint.
  *
  * ── The bit floor (why designations are ~14-20 chars, not ~10) ──
  * L is a fully-injective function of position over a ~48 kpc × 32 kpc × 48 kpc
  * envelope quantized to Q = 4e-6 kpc: ~70 bits. Any injective rendering of 70
- * bits needs ~14 base-36 chars (or ~21 decimal digits). A short 2MASS-style
- * DECIMAL designation is therefore mathematically impossible while the hard
- * zero-duplicate guarantee holds — the win here is STRUCTURE (grouping / prefix /
- * sign / class variety), not brevity. See ac5-decision.md addendum ruling 1.
- *
- * A structural blocklist (src/generation/data/realProperNames.js) keeps the bare
- * class from ever emitting a real star's proper name (design req (d)).
+ * bits needs ~14 base-36 chars — so procgen designations are structured, not
+ * short (the win is grouping / prefix / sign, not brevity). The catalog escapes
+ * the bit floor precisely because it is a FINITE shipped set, not an injective
+ * function of every eligible position (that impossibility is why 3d blocked and
+ * 3e ships the catalog instead — ac5-decision.md Addendum 3).
  *
  * Star/planet/moon names still cascade off the (now unique) system name via
  * `generateSystemNames`, on the naming RNG's own forked stream — system CONTENTS
@@ -47,6 +58,7 @@
  */
 
 import { REAL_PROPER_NAME_SET } from './data/realProperNames.js';
+import { namedSystemLookup, getNamedSystemsMap } from './data/namedSystemsCatalog.js';
 
 // ─────────────────────────────────────────────────────────────────────
 // PHONEME TABLES (used by the body-name generators: planet/moon words)
@@ -220,9 +232,6 @@ function _classifyRegion(pos) {
   return { region, sectorCode };
 }
 
-const REGION_INDEX = { core: 0, arm: 1, rim: 2, halo: 3 };
-
-
 // ─────────────────────────────────────────────────────────────────────
 // POSITION → INJECTIVE LOCATOR
 // ─────────────────────────────────────────────────────────────────────
@@ -279,6 +288,49 @@ function _locate(galacticPos) {
   return { qx, qy, qz, L };
 }
 
+// ── Catalog key (base-36 locator) ────────────────────────────────────────────
+// The named-systems catalog is keyed by L.toString(36): a compact, injective key
+// over the same lattice the namer quantizes to. `locatorKey` is the ONE function
+// both the runtime lookup and the build script (scripts/gen-named-systems.mjs)
+// use — that shared derivation is what makes a catalog entry hit in-game at the
+// exact position it was authored for. `positionForKey` inverts it to a
+// representative in-cell position (the cell's lower corner), which re-quantizes
+// to the same key — the basis for round-trip verification and enumeration.
+
+const _B36 = '0123456789abcdefghijklmnopqrstuvwxyz';
+const _B36_VAL = {};
+for (let i = 0; i < _B36.length; i++) _B36_VAL[_B36[i]] = i;
+
+/** Injective base-36 locator key for a canonical galactic position. @returns {string} */
+function locatorKey(galacticPos) {
+  return _locate(galacticPos).L.toString(36);
+}
+
+function _parse36(s) {
+  let n = 0n;
+  for (let i = 0; i < s.length; i++) n = n * 36n + BigInt(_B36_VAL[s[i]] ?? 0);
+  return n;
+}
+
+/**
+ * Representative galactic position for a base-36 locator key (the quantized
+ * cell's lower corner). It re-quantizes to the same key, so
+ * `locatorKey(positionForKey(k)) === k`.
+ * @returns {{x:number,y:number,z:number}}
+ */
+function positionForKey(key) {
+  const L = _parse36(key);
+  const qx = L % NX;
+  const rem = L / NX;
+  const qy = rem % NY;
+  const qz = rem / NY;
+  return {
+    x: Number(qx) * Q_KPC - X_BIAS,
+    y: Number(qy) * Q_KPC - Y_BIAS,
+    z: Number(qz) * Q_KPC - Z_BIAS,
+  };
+}
+
 
 // ─────────────────────────────────────────────────────────────────────
 // INJECTIVE NAME RENDERERS
@@ -305,35 +357,19 @@ const SYL_BASE_BIG = BigInt(SYL_BASE);
 // names, so procgen designations stay OUT of real designation space.
 const SURVEY_PREFIXES = ['PVX', 'QRN', 'XND', 'ZTA', 'KRV', 'NBG', 'ODX', 'VLC', 'TRN', 'WGX'];
 
-// Greek letters (Bayer-style, class c). 24 → 4.58 bits absorbed into the letter.
-const GREEK = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta',
-  'Iota', 'Kappa', 'Lambda', 'Mu', 'Nu', 'Xi', 'Omicron', 'Pi',
-  'Rho', 'Sigma', 'Tau', 'Upsilon', 'Phi', 'Chi', 'Psi', 'Omega'];
-
-// Region-weighted class mix: [survey, greek]; multipart = 1 − survey − greek.
-// Re-expresses the ratified flavor (core catalog-heavy → rim fantasy-leaning) and
-// restores the pre-3b greek class at ~10-15% (ac5 addendum ruling 3). Bare words
-// are a rare overlay applied BEFORE this roll.
-const REGION_CLASS_WEIGHTS = {
-  core: [0.50, 0.15],   // survey .50, greek .15, multipart .35
-  arm:  [0.28, 0.12],   // .28 / .12 / .60
-  rim:  [0.13, 0.10],   // .13 / .10 / .77
-  halo: [0.22, 0.13],   // .22 / .13 / .65
+// Region-weighted procgen class mix: survey fraction; multipart = 1 − survey.
+// Re-expresses the ratified flavor (core catalog-heavy → rim fantasy-leaning),
+// now rebalanced across just TWO procgen classes (increment 3e) — the removed 3c
+// greek and bare runtime classes freed their share, absorbed here (core leans
+// survey/catalog-style, rim leans multipart/fantasy). Region never affects
+// uniqueness, only the class mix. The greek & bare SHAPES now belong to the
+// shipped named-systems catalog exclusively.
+const REGION_SURVEY_WEIGHT = {
+  core: 0.70,   // survey .70, multipart .30 — formal, catalog-heavy
+  arm:  0.45,   // .45 / .55 — default mix
+  rim:  0.20,   // .20 / .80 — exotic, mostly fantasy
+  halo: 0.35,   // .35 / .65 — archaic
 };
-
-// Bare-fantasy sub-lattice: a position is bare-eligible iff each lattice coord
-// hits a fixed residue mod BARE_M. Fraction eligible = 1/BARE_M³ = 1/16.78M → a
-// real star is settled ~1 in 16.8M ≈ 12k galaxy-wide, uniformly spread.
-const BARE_M = 256;
-const BARE_RX = 91, BARE_RY = 37, BARE_RZ = 173;
-const BARE_CX = 46876n, BARE_CY = 31251n, BARE_CZ = 46876n; // coarse radices: floor(Q*_MAX/BARE_M)+1
-const BARE_TOTAL = BARE_CX * BARE_CY * BARE_CZ; // coarse cells ⇒ bi ∈ [0, BARE_TOTAL)
-// Decorrelation unit: coprime to BARE_TOTAL (= 2⁴·3·11·947·11719²), so
-// bi ↦ (bi·K) mod BARE_TOTAL is a BIJECTION on [0, BARE_TOTAL) — it scrambles
-// which coarse-cell axis drives the high syllable, killing the "…co_" trailing
-// cluster a thin region would otherwise show, WITHOUT changing the word length
-// (range preserved) or breaking injectivity.
-const BARE_MIX_K = 1000003n;
 
 function _base36(bigval, width) {
   const s = bigval.toString(36).toUpperCase();
@@ -348,47 +384,12 @@ function _syl2Word(wIdx) {
   return w.charAt(0).toUpperCase() + w.slice(1);
 }
 
-// Bijective base-2000 CVC word (injective, variable length) for a BigInt index.
-// Fixed-width syllables ⇒ distinct index → distinct string. Realized indices
-// (bare ≤2.75e14, greek ≤4.8e15) land at ~5 syllables (~15 chars).
-function _sylWordBij(idxBig) {
-  let n = idxBig + 1n; // bijective numeration: index 0 → single syllable
-  let w = '';
-  while (n > 0n) {
-    const r = Number((n - 1n) % SYL_BASE_BIG);
-    w += SYL[r];
-    n = (n - 1n) / SYL_BASE_BIG;
-  }
-  return w.charAt(0).toUpperCase() + w.slice(1);
-}
-
-function _bareEligible(qx, qy, qz) {
-  return (qx % BARE_M === BARE_RX) && (qy % BARE_M === BARE_RY) && (qz % BARE_M === BARE_RZ);
-}
-
-// Coarse (bare-eligible) cell index for an eligible position — the injective key
-// shared by _bareWord and enumerateSettledSystems.
-function _bareCellIndex(region, qx, qy, qz) {
-  const cx = Math.floor(qx / BARE_M);
-  const cy = Math.floor(qy / BARE_M);
-  const cz = Math.floor(qz / BARE_M);
-  // Injective over the eligible sub-lattice: distinct eligible cells → distinct bi.
-  const bi = BigInt(cx) + BARE_CX * (BigInt(cy) + BARE_CY * BigInt(cz));
-  // Bijective decorrelation mix, then partition the word supply across the four
-  // regions (disjoint residues mod 4). Both steps preserve injectivity.
-  const mixed = (bi * BARE_MIX_K) % BARE_TOTAL;
-  return mixed * 4n + BigInt(REGION_INDEX[region] ?? 1);
-}
-
-function _bareWord(region, qx, qy, qz) {
-  return _sylWordBij(_bareCellIndex(region, qx, qy, qz));
-}
-
 // ── Injective per-class renderers of the locator L ──────────────────────────
-// Each is injective in L; the class shapes are structurally disjoint (survey has
-// " J" + sign; multipart has "-" and no space; greek has two spaces + a leading
-// greek word; bare has no separator), so distinct L → distinct name across
-// classes too. The class itself is a pure function of L (via _classRoll).
+// Each is injective in L; the two procgen class shapes are structurally disjoint
+// (survey has " J" + sign; multipart has "-" and no space), so distinct L →
+// distinct name across classes too. The class itself is a pure function of L
+// (via _classRoll). Both shapes are also disjoint from the catalog's bare and
+// greek shapes, so procgen can never collide with a shipped catalog name.
 
 // (a) Survey designation: prefix + " J" + two coordinate-style base-36 fields
 // separated by a latitude sign. The 14-char base-36 field IS the full locator,
@@ -407,18 +408,6 @@ function _multipartName(L) {
   const wIdx = Number(L % S2);
   const code = L / S2;
   return `${_syl2Word(wIdx)}-${_base36(code, 10)}`;
-}
-
-// (c) Greek designation: greek letter + region word + 5-digit numeral.
-// numeral = low bits, letter = next bits, word = high bits — all injective.
-// The 5-digit numeral keeps the word's index ≤ ~4.8e14 → ~5 syllables at ≤30%
-// of the ~1.6e15 word supply (comfortably under the ≤50% margin).
-function _greekName(L) {
-  const numeral = Number(L % 100000n);
-  const rest = L / 100000n;
-  const letterIdx = Number(rest % 24n);
-  const wordIdx = rest / 24n;
-  return `${GREEK[letterIdx]} ${_sylWordBij(wordIdx)} ${String(numeral).padStart(5, '0')}`;
 }
 
 // Deterministic [0,1) class roll from the locator (independent of the rendering
@@ -463,70 +452,49 @@ function generateSystemName(rng, galacticPos) {
   }
 
   const { region } = _classifyRegion(galacticPos);
-  const { qx, qy, qz, L } = _locate(galacticPos);
+  const { L } = _locate(galacticPos);
 
-  // (c) RARE bare fantasy word — injectively allocated from a finite,
-  // region-partitioned supply. A per-position structural guard drops any
-  // candidate equal to a real star's proper name (design (d)); because each name
-  // is a pure function of its OWN position, this fall-through perturbs no other
-  // draw (it is not rejection-sampling over a shared stream).
-  if (_bareEligible(qx, qy, qz)) {
-    const bare = _bareWord(region, qx, qy, qz);
-    if (!REAL_PROPER_NAME_SET.has(bare.toLowerCase())) return bare;
-    // else: fall through to a designation class (still globally unique).
-  }
+  // (0) NAMED-SYSTEMS CATALOG — the fifth real-object mechanism. A synchronous
+  // lookup on the same injective locator key; a shipped settled/notable name
+  // wins over procgen. (KnownSystems and real-star names win EARLIER still — they
+  // override before generateSystemName is ever reached, so this ordering realises
+  // the precedence KnownSystems > real-star names > named-catalog > procgen.)
+  const hit = namedSystemLookup(L.toString(36));
+  if (hit !== undefined) return hit;
 
-  const weights = REGION_CLASS_WEIGHTS[region] || REGION_CLASS_WEIGHTS.arm;
-  const [wSurvey, wGreek] = weights;
+  // (1) PROCGEN — two region-weighted classes, each injective in L.
+  const wSurvey = REGION_SURVEY_WEIGHT[region] ?? REGION_SURVEY_WEIGHT.arm;
   const roll = _classRoll(L);
 
-  // (a) survey designation | (c) greek designation | (b) multi-part fantasy.
-  // Each renderer embeds L injectively; the class is a pure function of L.
+  // (a) survey designation | (b) multi-part fantasy. The class is a pure function
+  // of L; both shapes are disjoint from the catalog's bare/greek shapes.
   if (roll < wSurvey) return _surveyName(L, galacticPos.y);
-  if (roll < wSurvey + wGreek) return _greekName(L);
   return _multipartName(L);
 }
 
 /**
- * Enumerate every bare-word-eligible (settled) system within an axis-aligned
- * bounding volume — the deterministic, no-registry basis for a future in-game
- * "settled systems catalog / search" (that UI is OUT of scope, ac5 addendum
- * ruling 2). Each returned position quantizes back to its own eligible cell, so
- * its name ROUND-TRIPS through generateSystemName. Bare words are 1-in-16.8M, so
- * a modest box yields a handful; `maxResults` caps runaway galaxy-scale queries.
+ * Enumerate named-systems-catalog entries whose representative position falls in
+ * an axis-aligned bounding volume — the deterministic basis for a future in-game
+ * "settled/notable systems catalog / search" (that UI is OUT of scope, ac5
+ * addendum ruling 2). Replaces increment 3c's procgen bare-word enumeration:
+ * settled + notable systems are now the SHIPPED catalog, so enumeration reads it
+ * directly. Each returned position round-trips through `generateSystemName`
+ * (catalog hit). `maxResults` caps galaxy-scale queries.
  *
  * @param {{xMin,xMax,yMin,yMax,zMin,zMax:number}} bounds - kpc, galactocentric
  * @param {number} [maxResults=20000]
- * @returns {Array<{ position:{x,y,z}, name:string, region:string }>}
+ * @returns {Array<{ position:{x,y,z}, name:string, region:string, key:string }>}
  */
-function enumerateSettledSystems(bounds, maxResults = 20000) {
-  const axis = (min, max, bias, qmax, res) => {
-    let qLo = _quant(min, bias, qmax);
-    const qHi = _quant(max, bias, qmax);
-    qLo += (((res - qLo) % BARE_M) + BARE_M) % BARE_M; // first value ≡ res (mod M)
-    return { qLo, qHi };
-  };
-  const X = axis(bounds.xMin, bounds.xMax, X_BIAS, QX_MAX, BARE_RX);
-  const Y = axis(bounds.yMin, bounds.yMax, Y_BIAS, QY_MAX, BARE_RY);
-  const Z = axis(bounds.zMin, bounds.zMax, Z_BIAS, QZ_MAX, BARE_RZ);
-
+function enumerateNamedSystems(bounds, maxResults = 20000) {
   const out = [];
-  for (let qz = Z.qLo; qz <= Z.qHi && out.length < maxResults; qz += BARE_M) {
-    for (let qy = Y.qLo; qy <= Y.qHi && out.length < maxResults; qy += BARE_M) {
-      for (let qx = X.qLo; qx <= X.qHi && out.length < maxResults; qx += BARE_M) {
-        const position = {
-          x: qx * Q_KPC - X_BIAS,
-          y: qy * Q_KPC - Y_BIAS,
-          z: qz * Q_KPC - Z_BIAS,
-        };
-        const name = generateSystemName(null, position);
-        // Keep only genuine bare words. A real-name fall-through re-rolls into a
-        // designation (has a space/dash/digit) — those are not settled names.
-        if (!name.includes('-') && !name.includes(' ') && !/\d/.test(name)) {
-          out.push({ position, name, region: _classifyRegion(position).region });
-        }
-      }
-    }
+  const map = getNamedSystemsMap();
+  for (const [key, name] of map) {
+    if (out.length >= maxResults) break;
+    const position = positionForKey(key);
+    if (position.x < bounds.xMin || position.x > bounds.xMax) continue;
+    if (position.y < bounds.yMin || position.y > bounds.yMax) continue;
+    if (position.z < bounds.zMin || position.z > bounds.zMax) continue;
+    out.push({ position, name, region: _classifyRegion(position).region, key });
   }
   return out;
 }
@@ -658,7 +626,9 @@ export {
   generatePrefixedName,
   generateSyllable,
   quantizePosition,
-  enumerateSettledSystems,
+  locatorKey,
+  positionForKey,
+  enumerateNamedSystems,
+  getNamedSystemsMap,
   _classifyRegion,
-  _bareEligible,
 };
