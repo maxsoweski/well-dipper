@@ -4832,6 +4832,14 @@ debugPanel.setSpawnCallbacks({
           sysData._knownSystemNames = knownSys.names;
         } else {
           sysData = StarSystemGenerator.generate(starSeed, ctx);
+          // Real-star identity: if this position IS a catalog star (search
+          // teleports land on exact catalog coords), its real name overrides
+          // procgen naming — same precedence warp arrivals get via
+          // _warpTargetName from the clicked sky entry (~9508).
+          const realStar = realStarCatalog.findByPosition(playerGalacticPos);
+          if (realStar?.name && realStar.name !== '"') {
+            sysData._warpTargetName = realStar.name;
+          }
         }
         sysData._destType = 'star-system';
         spawnSystem({ forWarp: false, systemData: sysData });

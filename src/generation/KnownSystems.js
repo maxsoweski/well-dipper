@@ -18,10 +18,14 @@
 import { generateSolarSystem } from './SolarSystemData.js';
 import { GalacticMap } from './GalacticMap.js';
 
-// Match tolerance: 5 pc (0.005 kpc). Any star within 5 pc of a known
-// system's center will trigger the override. This is generous enough
-// to catch the nearest hash grid star to the known position.
-const MATCH_RADIUS = 0.005; // kpc
+// Match tolerance: 0.5 pc (0.0005 kpc). Every intentional route to a known
+// system (debug presets, splash-skip, Shift+L, integration suite) passes the
+// exact registered position, so the radius only needs to absorb float noise.
+// It MUST stay below the distance to the nearest real catalog star — Rigil
+// Kentaurus at 1.32 pc — or arrivals at real stars get swallowed by the Sol
+// override (Sirius at 2.64 pc spawned the solar system under the old 5 pc
+// radius; 12 named HYG stars sat inside it).
+const MATCH_RADIUS = 0.0005; // kpc
 
 /**
  * Registry of known systems.
