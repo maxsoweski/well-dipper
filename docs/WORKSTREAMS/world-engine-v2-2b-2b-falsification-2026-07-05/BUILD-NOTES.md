@@ -276,3 +276,23 @@ The 17 failed *files* = those 2 assertion-failing files + **15 pre-existing `ven
 suite-collection failures** (`Error: No test suite found in file …` — they are written for node's built-in test
 runner and contribute **0 counted tests**; caught by vitest's `*.test.js` glob, independent of this increment's
 3-file scope). Counted-test failures did NOT grow beyond the 4 known.
+
+## SLICE 2 amendment — cross-resolution nesting fix (found at the live pilot, 2026-07-08)
+
+**Defect (live, lab mesh ~40k nodes):** the corona-pierced world's primitiveId histogram had ZERO corona
+nodes — every breach core swallowed its annulus. Measured live: meanEdgeAngle 0.01938 → Rc 0.0484,
+active support 0.0775 rad; breach cores' Psi_e 0.1288/0.1327/0.1442 rad → all three "core SWALLOWS
+annulus". Root cause: Rc is node-scaled (CORONA_RC_NODES × meanEdgeAngle, by 2b-2a design) while Psi_e is
+absolute — the scales cross between N=1500 (where every headless test + the search nesting gate passed)
+and the lab mesh. The SHOULD-5 nesting gate guarded exactly this failure mode but was only ever evaluated
+at N=1500.
+
+**Fix (deterministic, zero new alea, breached centers only):** STEP 7 per-center corona radius
+`RcP = breach[p] ? max(Rc, BREACH_ANNULUS_SCALE·Psi_e[p]) : Rc`, new UAT-tunable
+`BREACH_ANNULUS_SCALE = 1.4`. At N=1500 the node term dominates (pin numbers bit-identical — search re-run
+reproduces {L 0.58, Φ 0.50, n 9, seed 22, Π 0.8535178777393311, M 0.35438..., breachCount 3, nesting 2});
+on the lab mesh the absolute term (~0.18–0.20 rad) puts the annulus outside the core. Pure (non-breached)
+corona centers keep the shipped node-scaled Rc — 2b-2a morphology untouched. Test helper
+(coronaFootprint) + search nestingCount updated to the same per-center formula (numerically identical at
+N=1500). All guarded coordinates (Φ ≤ 0.42: cross-check, wet-stagnant, Tharsis) unaffected — breach≡0
+there. Post-fix: 12 files / 247 tests green incl. the quartet.

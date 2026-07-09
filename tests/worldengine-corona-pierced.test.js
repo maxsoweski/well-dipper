@@ -45,16 +45,22 @@ const crossCheckE1 = { compositionClass: 'rocky', geodynamicRegime: 'dead-lid', 
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const angOf = (u, v) => Math.acos(Math.max(-1, Math.min(1, dot(u, v))));
 
-// coronaFootprint — the active-corona support radius (rad), RECONSTRUCTED from the published meanEdgeAngle, so
-// the annulus is defined exactly as STEP 7 paints it (Rc = CORONA_RC_NODES·meanEdgeAngle; active support 1.6).
-const coronaFootprint = (md) => MIXED_DEFAULTS.CORONA_SUPPORT_ACTIVE * MIXED_DEFAULTS.CORONA_RC_NODES * md.meanEdgeAngle;
+// coronaFootprint — the active-corona support radius (rad) FOR CENTER p, RECONSTRUCTED from the published
+// diag, so the annulus is defined exactly as STEP 7 paints it: a breached center's radius is
+// max(CORONA_RC_NODES·meanEdgeAngle, BREACH_ANNULUS_SCALE·Psi_e[p]) (the cross-resolution nesting fix — at
+// N=1500 the node term dominates, so this equals the plain node-scaled footprint here); active support 1.6.
+const coronaFootprint = (md, p) => {
+  const Rc = MIXED_DEFAULTS.CORONA_RC_NODES * md.meanEdgeAngle;
+  const RcP = md.breach[p] ? Math.max(Rc, MIXED_DEFAULTS.BREACH_ANNULUS_SCALE * md.Psi_e[p]) : Rc;
+  return MIXED_DEFAULTS.CORONA_SUPPORT_ACTIVE * RcP;
+};
 
 // nestOf — for a center p, sort the footprint nodes outward by angular distance and classify:
 //   core   = nodes with ang < Psi_e[p]  (pierceR<1 disc)          → want ≥1 PIERCE id (shield/caldera)
 //   annulus= nodes with Psi_e[p] ≤ ang ≤ footprint                → want ≥1 corona id
 // Returns the walk + booleans; nests ⇔ a PIERCE core AND a corona ring, concentrically (shield radii < corona).
 function nestOf(carrier, pid, md, p) {
-  const ctr = md.centers[p], Psi = md.Psi_e[p], foot = coronaFootprint(md);
+  const ctr = md.centers[p], Psi = md.Psi_e[p], foot = coronaFootprint(md, p);
   const shieldAngs = [], coronaAngs = [], walk = [];
   for (let i = 0; i < carrier.N; i++) {
     const ang = angOf(carrier.verts[i], ctr);

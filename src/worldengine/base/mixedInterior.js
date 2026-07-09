@@ -40,6 +40,7 @@ export const MIXED_DEFAULTS = Object.freeze({
   STR_LO: 0.30, SPREAD: 0.30, Y0: 0.001759, Y_K: 8.78,   // gate-2:32-33 (first-cut UAT-tunable)
   // corona-pierced breach band (SLICE 2 — a Φ-gated sub-pierce band on the EXISTING draws, zero new alea)
   PHI_BREACH: 0.45, BREACH_LO: 0.75,   // PHI_BREACH strictly > 0.42 (the cross-check Φ); BREACH_LO = band width (UAT-tunable, gate-2 Y0/Y_K precedent)
+  BREACH_ANNULUS_SCALE: 1.4,  // breached-center corona radius floor as ×Psi_e (cross-resolution nesting; live-pilot fix — see STEP 7)
   // absolute-datum province stack + NUMERIC edifice-budget bound (the §2.4 D1-MF1 fix)
   BASE_TESSERA: 0.70, BASE_PLAINS: 0.10, BASE_RIFT: -0.45,   // floor gaps 0.60 / 0.55
   MIN_FLOOR_GAP: 0.55,        // = min(tessera-plains, plains-rift); the positive within-province stack stays < this
@@ -297,9 +298,16 @@ export function writeMixedInteriorSphere(carrier, { e1, rawTidal = 0, macroSeed 
   for (let p = 0; p < n; p++) {
     if (pierce[p] || isAncient[p]) continue;   // corona only on un-pierced, non-ancient (corona-type) centers
     const ctr = centers[p], active = coronaActive[p];
+    // CROSS-RESOLUTION NESTING (SLICE 2 live-pilot fix): a BREACHED center's annulus must sit OUTSIDE its
+    // shield core at ANY mesh. Rc is node-scaled (shrinks with resolution) while Psi_e is absolute, so on a
+    // fine mesh the core swallows the annulus (zero corona nodes at the compound — found live on the ~40k
+    // lab sphere; at N=1500 the node term dominates and the pinned world is unchanged). Per-center radius
+    // for breached centers only: max(Rc, BREACH_ANNULUS_SCALE·Psi_e[p]); pure corona centers keep the
+    // shipped node-scaled Rc (2b-2a morphology untouched). Deterministic from already-drawn values.
+    const RcP = breach[p] ? Math.max(Rc, T.BREACH_ANNULUS_SCALE * Psi_e[p]) : Rc;
     const support = active ? T.CORONA_SUPPORT_ACTIVE : T.CORONA_SUPPORT_INACTIVE;
     for (let i = 0; i < N; i++) {
-      const rho = Math.acos(clamp(-1, 1, dot(verts[i], ctr))) / Rc;
+      const rho = Math.acos(clamp(-1, 1, dot(verts[i], ctr))) / RcP;
       if (rho > support) continue;
       coronaCover[i] = 1;
       if (active) {

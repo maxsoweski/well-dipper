@@ -29,11 +29,14 @@ const buildDiag = (e1, seed) => writeMixedInteriorSphere(carrier, { e1, macroSee
 function nestingCount(pid, md) {
   const { centers, Psi_e, breach, coronaActive, meanEdgeAngle, n } = md;
   const Rc = MIXED_DEFAULTS.CORONA_RC_NODES * meanEdgeAngle;
-  const footprint = MIXED_DEFAULTS.CORONA_SUPPORT_ACTIVE * Rc;   // active corona support radius (rad)
   const verts = carrier.verts, N = carrier.N;
   let count = 0;
   for (let p = 0; p < n; p++) {
     if (!breach[p] || !coronaActive[p]) continue;
+    // per-center footprint (cross-resolution nesting fix, mirrors STEP 7): breached centers use
+    // max(Rc, BREACH_ANNULUS_SCALE·Psi_e[p]) — at N=1500 the node term dominates (identical to plain Rc)
+    const RcP = Math.max(Rc, MIXED_DEFAULTS.BREACH_ANNULUS_SCALE * Psi_e[p]);
+    const footprint = MIXED_DEFAULTS.CORONA_SUPPORT_ACTIVE * RcP;
     const ctr = centers[p];
     let hasCore = false, hasCorona = false;
     for (let i = 0; i < N; i++) {
