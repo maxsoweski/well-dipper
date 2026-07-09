@@ -1,0 +1,61 @@
+{
+  "workstream": "world-engine-v2-2b-2b-falsification-2026-07-05",
+  "commit": "03992a3",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC-0",
+      "result": "PASS",
+      "evidence": "Driver-connectivity discipline holds on the workstream diff 98ccc1a..fa9f0a5: zero archetype/label/PRESET reads in mixedInterior.js; the 6 hits in lidResponse.js are comment-only. classifyLidPath reads only raw compositionClass/m_hp + e1.effectiveL ?? e1.L + rawTidal; the STEP-3b corona-pierced extension reads only e1.Φ plus the composer's own published seeded draws (zero new alea). Named consumers verified for every new channel (effectiveL → L-cuts + composer Ybase; breach[] → STEP-5 shield-in-corona enrollment → Π statistic; lab probe scalars at planet-lod-lab.html:6274-6275) — no dead knobs. No new *Enabled key or GUI control (mixedOv.effectiveL is a driver override). Drift guards green: planet-archetypes 21/21; corroborating worldengine runs 128/128. Uncommitted working-tree changes touch only other-lane files (CameraChoreographer.js, LabMode.js).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-EFFECTIVEL",
+      "result": "PASS",
+      "evidence": "Commit a57c8f7: classifyLidPath L-cuts #3-6 read e1.effectiveL ?? e1.L (cuts #1/#2 stay raw); composer Ybase uses Lyield = effectiveL ?? L; e1Regime.js BYTE-UNCHANGED (already emitted effectiveL pre-workstream). tests/worldengine-effectivel.test.js 8/8 PASS: wet tuple {L 0.16, effectiveL 0.60} routes 'mixed', stripped control falls 'off-pilot', including a computeE1-derived tuple (real machinery); dry synthetic routes 'pure-strong'; composer Ybase(effectiveL 0.60) ≈ 0.3413 vs Ybase(rawL 0.16) ≈ 0.0072 with a-handful (not pervasive) pierce. All worldengine suites 1346/1346. The 4 full-suite failures reproduce at pre-workstream baseline 98ccc1a (verified in a scratch worktree) — unrelated and pre-existing.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-WETSTAG-BASIS",
+      "result": "PASS",
+      "evidence": "AC-WETSTAG-BASIS describe block implements the verifyVia exactly: N=1500 sphere, wet coordinate {L 0.16, effectiveL 0.60, Φ 0.42, n 6} × seeds {1,2,3,7,42} — TENT-family fraction > 0.80 with minority pierce (>0, <0.15, count ≥ 1); center-organized not latitude-banded (|corr| ≥ 0.40, cLat² < cCenter²); per-seed histogram signatures distinct; not-a-re-rolled-Venus asserted directly on primitiveId (signature ≠ Venus coordinate AND TV distance ≥ 0.01). Documented [ADV-FIXED] deviation: Venus ~0-pierce deliberately not asserted (Venus Φ 0.69 > PHI_BREACH, so SLICE-2 breach may legitimately fire there); the AC's measured observable is asserted instead. 8/8 PASS; touched worldengine surface 110/110; full suite 1827/1831 with only the pre-existing unrelated 4 failures.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-CORONA-PIERCED",
+      "result": "PASS",
+      "evidence": "Commit 78c0034 adds STEP 3b to mixedInterior.js: breach[] fires only when Φ > PHI_BREACH (0.45) on corona-type centers via strength·Φ ≥ BREACH_LO·localYield (zero new alea); STEP-5 enrolls pierce||breach centers with a shield core inside the corona annulus; mixedDiag publishes breach/breachCount. tests/worldengine-corona-pierced.test.js 6/6 PASS at pin {L 0.58, Φ 0.50, n 9, seed 22}: breachCount ≥ 2 with an explicit outward node-radius walk proving shield-inside-corona nesting from one center; every node one integer id in {1,2,5,6,7,8} (AC-MIX-DISCRETE preserved); Tharsis control (Φ 0.27) breachCount === 0 across 6 seeds plus byte-inertness at the cross-check coordinate. Full worldengine set 683/683, no regressions. Minor noted weakness: one tautological length assertion (line 114), but the exactly-one-id property is structurally carried elsewhere.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-INTERPEN-FALSIFY",
+      "result": "PASS",
+      "evidence": "interpenetration.js BYTE-UNCHANGED across 98ccc1a..fa9f0a5 (instrument consumed by injection, constants single-source). tests/worldengine-interpen-falsify.test.js 5/5 PASS with values independently recomputed via a standalone node script: WORLD B {L 0.58, Φ 0.50, n 9, seed 22} → Π = 0.8535 > 0, M = 0.3544 ≤ 0.70, legible pierce 8 ≥ 2, breachCount 3 (interpenetrated); NULL hand-tiled separable carrier → Π = 0 < PI_STAR 0.15 (tiled); cross-check (L 0.60, Φ 0.42) seed 2 → breachCount 0 (byte-identical to 2b-2a) and Π = 0.6622, the reconciled measure-and-pin value. Regression: worldengine 683/683; project-proper suite exactly at the known-fail baseline (4 pre-existing src/generation failures, no growth).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-PILOT-LIVE",
+      "result": "PASS",
+      "evidence": "Driven live by working-Claude 2026-07-08 (chrome-devtools, Windows Chrome :9223, real GPU; lab on :5175) at 03992a3. Wet-stagnant (rawL 0.16, effectiveL 0.60, phi 0.42, seed 2): routes lid-mixed, heightSource carrier, pierceCount 3 (small), TENT frac 0.957, coronaPiercedCount 0, Ybase 0.3413 (effectiveL-driven); visibly province-structured. Corona-pierced pin (L 0.58, phi 0.50, n 9, seed 22): coronaPiercedCount 3, Pi 0.7900>0, M 0.0687<=0.70, legible pierce 8; visible shield-in-corona compound (screenshot). FIRST drive at fa9f0a5 FAILED the visible observable (zero corona nodes: node-scaled Rc vs absolute Psi_e cross-resolution defect) -> fix 03992a3 (BREACH_ANNULUS_SCALE per-center radius; N=1500 pin bit-identical, 247/247 green, search re-pin identical) -> re-drive PASS. Console: sole error = pre-existing favicon 404. Full record: evidence/AC-PILOT-LIVE-RESULT.md.",
+      "adversarialVotes": "live-driven by working-Claude (liveBranch:main rule); headless anchors 3/3"
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "result": "PASS",
+      "evidence": "All six sub-checks pass. (a) 75-golden byte-identity 78/78, goldens never re-captured (only capture commit 7441c92 in history); effectiveL production-inert outside the two touched files. (b) Pure corners: magmatism.js + stagnantLid.js byte-identical vs cde19b7; lid-byte-anchors + Venus byte-identity 308/308. (c) Plate/shell/despun suites 242/242, plates.js/shellRelief.js/tectonic.js zero diff. (d) The 3 build commits touch only lidResponse.js (classifyLidPath hunks; writeBodyRelief dispatch untouched), mixedInterior.js, planet-lod-lab.html, tests, and this workstream's docs; all 11 fenced files 0-line diff over the range. (e) No carrier.regime assignment, no REGIME_ORDER/E1_REGIME_WEIGHTS additions, e1Regime.js still exactly 3 regimes. (f) Full vitest 1827/4 — exactly the pre-existing known-fail baseline (KnownObjects ×3, GalacticFeatures ×1, 15 vendor node:test collection errors), no growth. Honest notes: other-lane working-tree files present during the run; a transient nested snapshot-dir glob was ruled out by a clean re-run matching baseline.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-PILOT-UAT",
+      "result": "deferred-to-max",
+      "evidence": "UAT layer — Max's holistic acceptance gate; never agent-driven or agent-PASSed per the project's testing conventions (docs/ARCHIVE/TESTING_CONVENTIONS_LEGACY.md) and the contract ('Deferred-to-max; never agent-PASSed', terminal gate VERIFIED_PENDING_MAX). Substrate Max will judge is measured and ready headless: pinned corona-pierced world {L 0.58, Φ 0.50, n 9} seed 22 (Π 0.8535, M 0.3544, pierce 8, breachCount 3); wet-stagnant coordinate (raw L 0.228 → effectiveL ≈ 0.61, Φ 0.42, n 6) routing 'mixed' TENT-dominant with minority pierce; lab seam landed. Per the AC statement this gate opens only after AC-PILOT-LIVE and all unit ACs are GREEN — AC-PILOT-LIVE is still pending, so Max's UAT should wait for that live check.",
+      "adversarialVotes": "n/a — UAT is Max-only"
+    }
+  ],
+  "overall": "VERIFIED_PENDING_MAX 03992a3 — unit 5/5 + AC-ZERO-CLOBBER PASS (3x adversarial at fa9f0a5; unit evidence re-established at 03992a3 via the 247/247 re-run + bit-identical search re-pin after the nesting fix), AC-PILOT-LIVE PASS live. AC-PILOT-UAT deferred-to-max: Max judges both worlds coherent/distinct/never-observed, then Shipped.",
+  "summaryForMax": "Line of sight: this is V2-2b-2b of the World Engine history-systems program — the falsification increment proving the new wet-stagnant (effectiveL) routing and corona-pierced compound centers genuinely interpenetrate with the existing tent-family field (Π statistic) rather than re-rolling Venus or tiling, gating the V2-3 dispatch flip.\n\nWhere it stands at fa9f0a5: everything headless is green. All five unit ACs pass with adversarial 3/3, and AC-ZERO-CLOBBER confirms the 75 goldens, pure corners (magmatism/stagnantLid byte-identical), plate/shell suites, and all fenced files are untouched — full suite exactly at the pre-existing 4-failure baseline, no growth.\n\nNot yet closable: AC-PILOT-LIVE (live integration, objective). This is for WORKING-CLAUDE to drive, not you — in the running planet-lod-lab via chrome-devtools: call _lab.setMixedDrivers with the wet-stagnant coordinate (raw L 0.228, Φ 0.42, n 6) and the pinned corona-pierced world (L 0.58, Φ 0.50, n 9, seed 22), renderMixed, then read mixedProbe scalars and check they match the headless anchors (effectiveL ≈ 0.61 and 'mixed' routing on the wet coordinate; coronaPiercedCount 3, Π ≈ 0.8535, M ≈ 0.3544, legible pierce 8 on WORLD B; cross-check L 0.60/Φ 0.42 seed 2 → coronaPiercedCount 0, Π ≈ 0.6622).\n\nYour gate (AC-PILOT-UAT) — after AC-PILOT-LIVE goes green: open planet-lod-lab.html in your own browser, drive the same two coordinates from the lab UI, and judge the whole: does the wet-stagnant world read as a strong-lid-dominant surface with a handful of pierced centers (clearly not a re-rolled Venus), and does the corona-pierced world show shield-cores nested inside coronae as one coherent compound center? If it reads right to you, that closes the workstream to VERIFIED; if anything looks off, say what, and it goes back to build."
+}
