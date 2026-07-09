@@ -34,9 +34,16 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > multipart, zero duplicates by construction, no-position fallback now throws); shipped named-systems
 > catalog (12k settled + 36k greek notables, 40% near features, 0.82MB gzip). Full verify 3/3-adversarial
 > green + live chrome-devtools checks (Horsehead renders rank#2 with M78 #7; Sol 19/19 scene suite;
-> revisit round-trip stable). **▶ NEXT: Max UAT** — name samples in the workstream's `census-report.md`,
-> Horsehead visual, holistic feel. Then: successor scoping (real-universe overlay D6–D9 + settled-catalog
-> UI). Contract: `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/`.
+> revisit round-trip stable). **UAT round 1 (2026-07-08): "looks good in general, BUT" — Sirius search
+> spawned Sol. FIXED `631571b` (2026-07-09):** Sol's KnownSystems match radius 5 pc → 0.5 pc (was
+> swallowing 12 real stars: Sirius 2.64 pc, Rigil Kentaurus 1.32 pc, Procyon…) + teleport arrivals now
+> carry the real star's name via `RealStarCatalog.findByPosition()` (same precedence warp already had).
+> Re-verified: new match-radius suite incl. full-catalog sweep, 1113/1113 vitest, live Sirius→"Sirius",
+> Solar preset→real Sol, scene suite 19/19; light verify addendum
+> `verdict-light-sirius-fix-631571b.json` (AC1 re-checked green end-to-end). **▶ NEXT: Max UAT round 2**
+> — re-run the Sirius search, then name samples in the workstream's `census-report.md`, Horsehead visual,
+> holistic feel. Then: successor scoping (real-universe overlay D6–D9 + settled-catalog UI). Contract:
+> `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/`.
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
