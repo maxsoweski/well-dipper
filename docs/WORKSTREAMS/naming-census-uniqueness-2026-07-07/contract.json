@@ -2,7 +2,7 @@
   "workstream": "naming-census-uniqueness-2026-07-07",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verified",
   "phase": "Increment 0 = AC1+AC2 (defect quick wins, DONE 3d87ed6, live render check batched); Increment 1 = AC3+AC4 (census + explainer, DONE 4928ccd); Increment 2 = AC5 (Max gate — CLOSED 2026-07-07, ratified-with-amendments, see ac5-decision.md); Increment 3a = AC9 (HYG catalog regen) + sky-click real-name fix; Increment 3b = AC6+AC7 (position-derived naming, hard guarantee per ac5-decision.md); then AC8 + batched live checks",
   "acceptanceCriteria": [
     {

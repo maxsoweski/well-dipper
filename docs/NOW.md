@@ -26,6 +26,18 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > Shipped predecessor: `docs/WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/`.
 > *(One-line breadcrumb so the nesting is reflexive across handoffs; update when the active feature changes.)*
 
+> **▶ LANE C (2026-07-08): naming-census-uniqueness-2026-07-07 → VERIFIED_PENDING_MAX (code `3336dd7`,
+> branch `feature/system-details`).** Serves the exploration-immersion outcome ("players never encounter
+> the same system name twice"). Landed: Horsehead IC434/M78 position fix + 4 stale tests; deterministic
+> name census; HYG catalog regenerated (0 `"` artifacts, 15,559 usable real names — CSV-parser root-cause
+> fix); real names win on every targeting path; position-derived injective procgen naming (survey +
+> multipart, zero duplicates by construction, no-position fallback now throws); shipped named-systems
+> catalog (12k settled + 36k greek notables, 40% near features, 0.82MB gzip). Full verify 3/3-adversarial
+> green + live chrome-devtools checks (Horsehead renders rank#2 with M78 #7; Sol 19/19 scene suite;
+> revisit round-trip stable). **▶ NEXT: Max UAT** — name samples in the workstream's `census-report.md`,
+> Horsehead visual, holistic feel. Then: successor scoping (real-universe overlay D6–D9 + settled-catalog
+> UI). Contract: `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/`.
+
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
 > WITH Max + approved. Spec: `docs/superpowers/specs/2026-06-19-structured-feature-lod-methodology-design.md`
