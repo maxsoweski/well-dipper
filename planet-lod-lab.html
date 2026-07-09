@@ -3920,6 +3920,21 @@
     fMixedDrivers.add(mixedOv, 'Φ', 0.0, 1.2, 0.01).name('convective vigor Φ').listen().onChange(_onMixedDrag);
     fMixedDrivers.add(mixedOv, 'n', 3, 11, 1).name('center count n').listen().onChange(_onMixedDrag);
     fMixedDrivers.add(mixedOv, 'tidal', 0.0, 1.0, 0.005).name('tidal (Io-ratio → m_hp+rawTidal)').listen().onChange(_onMixedDrag);
+    // ── V2-2b-2b pilot worlds — one-click UAT buttons. Each applies the PINNED coordinate/seed through the
+    //    SAME setMixedDrivers seam the console path uses (driver overrides only; no *Enabled key, no taxonomy
+    //    entry) and renders. Pilot A carries the effectiveL wet hand-up (0.60, seed 2); Pilot B clears it and
+    //    drives the dead-lid corona-pierced pin (seed 22). Sliders (.listen()) follow the applied values;
+    //    re-dragging them keeps the hand-up state (applyMixedDrivers(null) rebuilds from mixedOv + _mixedSeed).
+    fMixedDrivers.add({ wet(){
+      applyMixedDrivers({ L: 0.16, 'Φ': 0.42, n: 6, tidal: 0, macroSeed: 2, effectiveL: 0.60 });
+      doRenderMixed();
+    } }, 'wet').name('▶ Pilot A — wet-stagnant (V2-2b-2b)');
+    fMixedDrivers.add({ cp(){
+      applyMixedDrivers({ L: 0.58, 'Φ': 0.50, n: 9, tidal: 0, macroSeed: 22, effectiveL: null });
+      doRenderMixed();
+    } }, 'cp').name('▶ Pilot B — corona-pierced (V2-2b-2b)');
+    fMixedDrivers.add({ get eff(){ return mixedOv.effectiveL == null ? 'off (dead-lid drive)' : mixedOv.effectiveL.toFixed(3) + ' (wet hand-up)'; } }, 'eff').name('effectiveL override').listen().disable();
+    fMixedDrivers.add({ get seedRO(){ return String(_mixedSeed != null ? _mixedSeed : state.macroSeed) + (_mixedSeed != null ? ' (pinned)' : ' (world seed)'); } }, 'seedRO').name('mixed seed').listen().disable();
     fMixedDrivers.add({ render(){ doRenderMixed(); } }, 'render').name('▶ Render mixed (hand-set coordinate)');
     // A/B flip: hand-set mixed coordinate ↔ baseline preset render (mirrors the driver folders' A/B idiom).
     fMixedDrivers.add({ ab(){

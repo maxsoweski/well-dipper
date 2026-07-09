@@ -296,3 +296,12 @@ corona centers keep the shipped node-scaled Rc — 2b-2a morphology untouched. T
 (coronaFootprint) + search nestingCount updated to the same per-center formula (numerically identical at
 N=1500). All guarded coordinates (Φ ≤ 0.42: cross-check, wet-stagnant, Tharsis) unaffected — breach≡0
 there. Post-fix: 12 files / 247 tests green incl. the quartet.
+
+## Post-verify UAT-support addition (2026-07-08, Max's request)
+
+Two one-click pilot buttons in `Drivers → mixed lid (V2-2b-2)` — "▶ Pilot A — wet-stagnant" (pinned wet
+coordinate + seed 2, effectiveL 0.60) and "▶ Pilot B — corona-pierced" (pinned {L .58, Φ .50, n 9} seed 22,
+hand-up off) — plus read-only `effectiveL override` / `mixed seed` rows. Same setMixedDrivers seam as the
+console path (driver overrides; no *Enabled key — drift guard + shadow-audit re-run green 52/52). Verified
+live via DOM clicks: Pilot A → pierce 3 / effectiveL 0.6; Pilot B → coronaPiercedCount 3 / Π 0.790.
+UI-support only — the verified behavior at 03992a3 is unchanged.
