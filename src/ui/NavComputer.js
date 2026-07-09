@@ -2374,7 +2374,11 @@ export class NavComputer {
       if (!this._loadedSeen.has(key)) {
         this._loadedSeen.add(key);
         let name = '';
-        try { name = generateSystemName(this._makeRng(s.seed), { x: s.worldX, y: s.worldY, z: s.worldZ }); } catch {}
+        try { name = generateSystemName(this._makeRng(s.seed), { x: s.worldX, y: s.worldY, z: s.worldZ }); } catch (e) {
+          // Naming throws only on a missing/invalid position (D5 invariant) —
+          // a caller bug worth surfacing, not silently blank-naming the star.
+          console.warn('[NavComputer] generateSystemName failed for star', s.seed, e);
+        }
         this._localStars.push({
           wx: s.worldX, wy: s.worldY, wz: s.worldZ,
           name, spectral: s.type,

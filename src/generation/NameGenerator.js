@@ -57,7 +57,6 @@
  * (src/generation/__tests__/NameGenerator.injective.test.js) for the full picture.
  */
 
-import { REAL_PROPER_NAME_SET } from './data/realProperNames.js';
 import { namedSystemLookup, getNamedSystemsMap } from './data/namedSystemsCatalog.js';
 
 // ─────────────────────────────────────────────────────────────────────

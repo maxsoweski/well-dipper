@@ -328,6 +328,14 @@ Everything else — how many planets, their orbits, their names — is procedura
 There is no data path today by which a real star's *real planets* reach the
 player. That gap is exactly what the overlay workstream is for.
 
+> **Historical note (2026-07-08):** §3.3–3.5 and §4 below describe the state
+> *as found during the increment-1 audit* — they motivated the fixes that
+> followed and are kept as the workstream's evidence trail. The defects they
+> describe are FIXED at HEAD: sky-click now keeps real names (increment 3a),
+> the census is regenerated at zero duplicates (3b–3e), and the current scheme
+> is the two-procgen-classes + named-systems-catalog structure described in
+> §1–§2. For current behavior, trust §1–§2 and `census-report.md`.
+
 ### 3.3 Sky-click path — real name is in hand, then discarded
 
 Clicking a star in the sky runs the handler at `src/main.js:9450-9499`. It

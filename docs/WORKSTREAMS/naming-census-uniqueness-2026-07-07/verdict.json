@@ -1,15 +1,67 @@
 {
   "workstream": "naming-census-uniqueness-2026-07-07",
-  "commit": "3d87ed6",
-  "perLayer": { "unit": "N/A", "integration": "INSUFFICIENT", "uat": "N/A" },
+  "commit": "4b768fe",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "INSUFFICIENT",
+    "uat": "deferred-to-max"
+  },
   "perAC": [
+    {
+      "id": "AC2-stale-tests",
+      "result": "PASS",
+      "evidence": "Headless at HEAD 4b768fe: npx vitest run src/generation/__tests__ -> 7 files / 149 tests, 0 failures; the four formerly-failing tests confirmed green by name (KnownObjects x3, GalacticFeatures x1). Failures verified genuinely pre-existing at base ea0482c (catalog already had 37 entries vs length-5 relic assertions). Assertions tightened, not loosened: exact toHaveLength(37) + named-key checks; 'pleiades' and 'ring' searches now assert exact key lists and order (['M45','IC2602'], ['M57','NGC3132']). One honest caveat: GalacticFeatures now excludes f.isKnownObject features from the armStrength assertion \u2014 a documented population-scope narrowing keyed to a real production flag (src/generation/GalacticMap.js:1554), exactly the catalog accommodation the AC describes.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC3-collision-census",
+      "result": "PASS",
+      "evidence": "scripts/name-census.mjs committed and re-runnable (node scripts/name-census.mjs, no flags/network/browser). Deterministic: two fresh runs and the committed docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/census-report.md are byte-identical (sha256 e2385fcb...). Volume: 120,000 procgen names across core/arm/rim/halo (above the 100k bar) + 48,000 catalog entries. Per-path per-region duplicate rates all 0 (duplicates, revisit mismatches, call-site path disagreements); path classes are the ratified post-restructure successors of the AC's original wording (ac5-decision.md addenda 2-3, gate CLOSED). HYG cross-check: 15,546 distinct meaningful real names, 0 procgen and 0 catalog collisions. 200 samples/region + 36 settled + 36 greek catalog samples present for Max. Full suite 1105/1105 project tests pass; 15 vendor/motion-test-kit collection errors are a pre-existing runner mismatch, vendor untouched in range.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC4-explainer-doc",
+      "result": "PASS",
+      "evidence": "docs/NAMING_AND_REAL_OBJECTS.md (571 lines, added in-range at 4928ccd) covers every enumerated section: per-region style splits, syllable tables, sectorCode hash + gaps, forked seed streams, all four tagging mechanisms side-by-side (plus the new fifth NamedSystemsCatalog), per-path real-name flow incl. sky-click vs NavComputer, census numbers, file:line citations (~15 spot-checked accurate at HEAD, minor drift within the doc's stated tolerance). SYSTEMS.md rows flipped to link the doc. Caveat, judged not AC-breaking: S3.3-S3.5 and S4 still state pre-3e behavior superseded later in-range (sky-click now keeps real names; census regenerated to 0 duplicates) \u2014 the S1 banner and S2 precedence paragraph state the successor scheme, but a small history banner over S3.3-S3.5/S4 would make the doc fully current-at-HEAD (optional follow-up for working-Claude).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC9-hyg-real-names",
+      "result": "PASS",
+      "evidence": "Root cause fixed: RFC4180 state-machine CSV parser in scripts/process-hyg-catalog.mjs (lines 66-90) replaces the regex splitter that produced the quote artifact. Regeneration from data/catalogs/hygdata_v40.csv is byte-identical to the shipped public/assets/data/hyg-stars.json. Old baseline at ea0482c matched the AC exactly (15,243 artifact names / 356 usable); new: 15,598 entries, 0 artifacts, 15,559 usable names (13,976 HD, 1,243 Bayer, 340 proper) \u2014 clears the >=15k observable with margin. Caveat: 39 entries (0.25%) are name:null by design, so the statement's 'every entry' prose is slightly overstated, but the operative observable passes. Census cross-check reproduces the committed report byte-identically; 0 collisions against the full usable set.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC6-no-duplicate-names",
+      "result": "PASS",
+      "evidence": "Integration, live=false \u2014 fully verified headless at HEAD. NameGenerator.injective.test.js 17/17: >=220k sampled positions across all four regions, zero duplicate names across distinct cells, revisit-stable, never emits a real proper name or a real-designation-space shape, all four production call-site RNG chains agree (the namer provably ignores the rng \u2014 the structural guarantee), throws on missing position (D5 fallback eliminated, NameGenerator.js:451); shipped catalog (12k settled + 36k greek) name- and key-unique, blocklist-clean, round-trips, shape-disjoint from procgen. Census re-run twice: 120,000/120,000 distinct, all zero-rows, byte-identical to committed report. Mechanism matches the ratified scheme (Q=4e-6 kpc lattice below min same-tier spacing; build-time catalog per addendum 3). Documented residual authorized by ac5 addendum 1: ~640 cross-tier physically co-located pairs galaxy-wide. Non-blocking notes for working-Claude: dead import REAL_PROPER_NAME_SET at src/generation/NameGenerator.js:60; src/ui/NavComputer.js:2377 try/catch would swallow the D5 throw on that one path (no uniqueness impact, but silences the caller-bug signal).",
+      "adversarialVotes": "3/3 sufficient"
+    },
     {
       "id": "AC1-horsehead-renders",
       "result": "INSUFFICIENT",
-      "evidence": "STATIC (headless) checks all green at HEAD=3d87ed6 (clean tree), but this is a live-integration AC and the render half is unproven statically. (1) Diff: src/data/KnownObjectProfiles.js — IC434 galacticPos {8.34,-0.09,-0.17}→{8.343,-0.089,-0.171}, M78 {8.34,-0.09,-0.17}→{8.345,-0.093,-0.165}; positions now distinct. (2) SHADOWED special-case fully removed: `SHADOWED = new Set(['IC434'])` + its `continue` deleted from tests/known-object-feature-seed.test.js; `grep -rn SHADOWED tests/ src/` = zero matches. (3) Tests: npx vitest run on the 3 touched files = 27/27 pass, incl. the seed test now asserting ALL 37 profiles inject with truthy seeds; full suite 1088/1088 pass (the 15 'failed' test FILES are all vendor/motion-test-kit/tests/* 'No test suite found' — vendored, pre-existing, untouched by this 4-file diff). (4) Direct injection run (node, GalacticMap.findNearbyFeatures over profile catalog): IC434 injected=true pos={8.343,-0.089,-0.171} seed=IC434 type=emission-nebula; M78 injected=true pos={8.345,-0.093,-0.165} seed=M78 type=reflection-nebula; distinct=true — both survive known-object injection dedup. (5) Layer basis: docs/TESTING_CONVENTIONS.md absent in worktree; per docs/ARCHIVE/TESTING_CONVENTIONS_LEGACY.md integration = objective/agent-verifiable, UAT = Max-only holistic. REMAINING: prove a nebula actually RENDERS at IC434's (Horsehead) position — and M78 at its now-distinct position — in the running app. This live drive is deferred to working-Claude (main thread) via chrome-devtools; it is objective, NOT a Max-acceptance item.",
-      "adversarialVotes": "0/1 sufficient"
+      "evidence": "All static checks pass; live render check remains (live=true, deferred to working-Claude, NOT to Max). Static: IC434/M78 shared galacticPos split in src/data/KnownObjectProfiles.js; SHADOWED carve-out deleted from tests/known-object-feature-seed.test.js (2/2 pass, invariant now asserted for ALL profiles); headless injection over GalacticMap.findNearbyFeatures shows both objects injected with correct names/seeds at distinct positions. Render-cut analysis for the live drive: SkyFeatureLayer renders top-16 by angular size (src/rendering/sky/SkyFeatureLayer.js:23); from Sol IC434 ranks 268/442 (will not render), but ~0.01 kpc from IC434 it ranks #1 and M78 #3 \u2014 the live check must position the player near IC434 per verifyVia.input, then confirm both Horsehead Nebula and M78 render as distinct sky features.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC7-revisit-stable-name",
+      "result": "INSUFFICIENT",
+      "evidence": "Static implementation confirmed (commits a8493fc, 12b4f43): trySelectWarpTarget (~main.js:9455), autoSelectWarpTarget (~main.js:9532), spawnSystem (~main.js:4190), and NavComputer.js:2377 all name via the same pure position-keyed generateSystemName; the transient warp-star-<index> seed no longer influences names; real names win on every targeting path. Headless: revisit-stability and rng-independence tests pass (42/42 across 3 files). Remaining for working-Claude (live=true): demonstrate cross-path/cross-visit agreement in the running app \u2014 target the same system via sky-click and NavComputer, warp away and return, confirm the identical name every time.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC8-sol-guardrail",
+      "result": "INSUFFICIENT",
+      "evidence": "All static indicators favor PASS; live in-app confirmation remains (deferred to working-Claude). Static: the KnownSystems full-name-override branch (main.js:4189-4190) is byte-identical across ea0482c..4b768fe; the warp-arrival precedence site (main.js:3415-3419) is outside all diff hunks; src/generation/KnownSystems.js untouched (Sol entry with Mercury->Neptune + real moons intact); every naming change sits below KnownSystems in the documented precedence order, so no new route exists for procgen names to reach Sol. Suite 1105/1105. Live check: warp to Sol in the running app and confirm the system, star, and planets render their real names.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC5-scheme-ratified",
+      "result": "deferred-to-max",
+      "evidence": "UAT layer \u2014 Max-only by invariant; no agent PASSes this. Structurally satisfied in the diff: ac5-decision.md records ratify-with-amendments in Max's verbatim words plus three dated addenda; amendments folded into contract.json (commit 3e4cc12) before the AC6/AC7 build commit a8493fc; review inputs exist (census-report.md regenerated post-3e with fresh samples; docs/NAMING_AND_REAL_OBJECTS.md). Residual that is Max's alone: the decision record defers exact ratios/scarcity to refreshed samples at final UAT, and the shipped increment-3e catalog postdates his last structural ruling \u2014 holistic sign-off on the scheme AS SHIPPED is open.",
+      "adversarialVotes": "n/a \u2014 UAT is Max-only"
     }
   ],
-  "overall": "INSUFFICIENT — live integration pending. All static/headless evidence at 3d87ed6 is green (distinct IC434/M78 positions, SHADOWED shadow-set removed, 27/27 touched tests + 1088/1088 suite, direct injection confirms both objects survive dedup with distinct seeds/positions), but AC1-horsehead-renders is a live-integration AC and the in-app render check has not been driven. Deferred to working-Claude (main thread) to drive live via chrome-devtools: confirm a nebula visibly renders at IC434 (Horsehead) and a distinct one at M78 in the running app. Not a Max gate — objective check, not acceptance. No uat-layer ACs exist in this contract, so nothing is deferred-to-max.",
-  "summaryForMax": "Nothing for you to UAT on this one yet — this contract has no uat-layer ACs [CORRECTION by working-Claude: AC5-scheme-ratified IS a uat-layer AC; it was simply outside this increment's diff — Max's naming-scheme review gate still stands at increment 2], and the one open item is an objective check, not an acceptance call. Where it stands: the code change (giving IC434/Horsehead and M78 truly distinct galactic positions and deleting the test shim that had been hiding IC434 from the injection-dedup check) is fully verified statically at 3d87ed6 — 27/27 tests on the touched files, 1088/1088 across the suite (the 15 'failed' files are the pre-existing vendored motion-test-kit noise, unrelated), and a direct headless injection run shows both objects now inject with distinct positions and their own seeds. What's still open: AC1-horsehead-renders requires seeing a nebula actually render at the Horsehead's position (and M78's) in the live app, which working-Claude will drive in the main thread with chrome-devtools. Once that live check passes, integration flips green and the workstream goes VERIFIED_PENDING_MAX for your usual holistic look."
+  "overall": "INSUFFICIENT \u2014 unit PASS (AC2, AC3, AC4, AC9 all green, 3/3 adversarial each); integration not yet closed: AC6 PASS headless, but three live=true ACs (AC1-horsehead-renders, AC7-revisit-stable-name, AC8-sol-guardrail) are static-clean yet pending live in-app checks by working-Claude; UAT (AC5-scheme-ratified) deferred to Max.",
+  "summaryForMax": "Where this stands: every headless check on the naming workstream is green at 4b768fe \u2014 the census tool proves 120,000 procgen names with zero duplicates, the injectivity suite proves the guarantee structurally (name is a pure function of position on all four call paths), the HYG quote-artifact fix lands 15,559 usable real names, and the stale tests are fixed-by-tightening. Nothing is waiting on you yet except your AC5 gate below.\n\nFor working-Claude first (objective live checks, not yours): three live-integration ACs remain INSUFFICIENT pending in-app drives \u2014 (1) AC1: position the player ~0.01 kpc from IC434 (from Sol it ranks 268/442 and will not render; nearby it ranks #1 with M78 at #3) and confirm Horsehead Nebula and M78 both render as distinct sky features; (2) AC7: target one system via sky-click AND NavComputer, warp away and revisit, confirm the identical name on every path and visit; (3) AC8: warp to Sol and confirm Sol/Mercury...Neptune real names in the running app.\n\nYour gate \u2014 AC5 (scheme ratified as shipped): open docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/census-report.md in the well-dipper-sysdetails worktree (Windows: \\\\wsl.localhost\\Ubuntu\\home\\ax\\projects\\well-dipper-sysdetails\\docs\\WORKSTREAMS\\naming-census-uniqueness-2026-07-07\\census-report.md). Look at the four 200-name regional sample blocks (core/arm/rim/halo) and the 36 settled + 36 greek catalog samples, and judge whether the shipped scheme \u2014 style split per region, name formats, regional flavor, bare-word scarcity \u2014 matches what you ratified in ac5-decision.md. Your earlier ruling deferred exact ratios/scarcity to exactly these refreshed samples, and the shipped build-time catalog (increment 3e) postdates your last structural ruling, so this sign-off is the open item. If the samples read right to you, AC5 closes; overall verdict then rides only on working-Claude's three live checks."
 }
