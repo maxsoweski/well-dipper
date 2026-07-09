@@ -70,3 +70,28 @@ Max reviewed the first position-derived samples and ruled on the three flagged k
    system-tags-save-search revival, NOT this workstream.
 3. **Greek style returns:** "I like this idea." → Restored as a fourth class (greek
    letter + region-flavored word + position-bit numeral), region-weighted.
+
+## Addendum 2 — class restructure ruling (2026-07-08, after increment 3c)
+
+The 3c bit-floor finding (full-galaxy injectivity floors any bits-bearing name at ~14
+base-36 chars; "Alpha Vozara 4821"-style names for every system are mathematically
+impossible) was put to Max with the recommendation: put the long codes where nobody
+cares — common systems get designations, only notable systems get names, mirroring real
+astronomy (Bayer letters belong to bright stars only) and the settled-systems lore.
+Max: **"Yes, restructure based on your suggestions here."**
+
+Ratified class structure (increment 3d):
+- **Common** (bits-bearing, long codes acceptable *by design*): survey designations +
+  multipart fantasy — current 3c shapes.
+- **Greek — rare allocated class** ("notable systems"): letter + short pleasant word +
+  short numeral ("Alpha Vozara 4821" shape). Injectively allocated from a finite
+  partitioned supply via sparse position eligibility (same pattern as settled systems),
+  NOT position-bit encoding. Frequency: uncommon but regularly encountered (order
+  1-in-500 to 1-in-2000; build latitude, supply fill ≤50%). Enumerable (notable-systems
+  catalog basis).
+- **Bare words — stay very rare** (~1-in-16.8M settled systems), but now SHORT
+  (2-3 syllables, "Veshara"/"Kolnir" shape) since allocation only has to cover ~12k
+  systems, not encode raw position. Enumerable (existing gazetteer/helper).
+- Real-proper-name blocklist applies to both rare-word supplies. All hard constraints
+  unchanged (pure function of position, no registry, zero duplicates, revisit-stable,
+  path-agreeing, D5 throw, contents untouched).
