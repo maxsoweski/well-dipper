@@ -3933,6 +3933,41 @@
       applyMixedDrivers({ L: 0.58, 'Φ': 0.50, n: 9, tidal: 0, macroSeed: 22, effectiveL: null });
       doRenderMixed();
     } }, 'cp').name('▶ Pilot B — corona-pierced (V2-2b-2b)');
+    // ── UAT rubric CONTROLS (UAT-RUBRICS.md control-framed discipline: "not-X" needs X on screen). ─────────
+    //    Venus coordinate (L 0.728 ≥ L_STRONG, tidal 0) classifies PURE-STRONG → the router delegates to the
+    //    SHIPPED Venus stagnant-lid writer — the control renders the real catalog Venus lock (mixedProbe's
+    //    composer fields are null on this path by design). Tharsis = shields-on-plains via the composer, the
+    //    catalog member that structurally CANNOT make shields-in-coronae (Φ 0.27 < PHI_BREACH) — Pilot B's
+    //    compound must read as something Tharsis doesn't have. Same driver-override seam; no *Enabled key.
+    fMixedDrivers.add({ venus(){
+      applyMixedDrivers({ L: 0.728, 'Φ': 0.69, n: 6, tidal: 0, macroSeed: 2, effectiveL: null });
+      doRenderMixed();
+    } }, 'venus').name('Control — Venus coordinate (pure-strong lock)');
+    fMixedDrivers.add({ tharsis(){
+      applyMixedDrivers({ L: 0.551, 'Φ': 0.27, n: 6, tidal: 0, macroSeed: 2, effectiveL: null });
+      doRenderMixed();
+    } }, 'tharsis').name('Control — Tharsis (shields-on-plains)');
+    // Re-seed whatever mixed world is active (Pilot A's "distinct per seed" rubric line) — free number field.
+    const mixedSeedUI = { seed: 2 };
+    fMixedDrivers.add(mixedSeedUI, 'seed').name('re-seed mixed world').onFinishChange(v => {
+      applyMixedDrivers({ macroSeed: Math.max(0, v | 0) });
+      if (_mixedActive) doRenderMixed();
+    });
+    // Fly the orbit rig to the most interesting center (nesting compound → any breach → any pierce) and snap
+    // the sun to the view, so the landform isn't hiding on the night side / far side.
+    fMixedDrivers.add({ focus(){
+      const md = riverOverlay.mixedDiag;
+      if (!md || !md.centers) return;
+      let p = -1;
+      if (md.breach) for (let k = 0; k < md.n; k++) if (md.breach[k] && md.coronaActive[k]) { p = k; break; }
+      if (p < 0 && md.breach) for (let k = 0; k < md.n; k++) if (md.breach[k]) { p = k; break; }
+      if (p < 0 && md.pierce) for (let k = 0; k < md.n; k++) if (md.pierce[k]) { p = k; break; }
+      if (p < 0) p = 0;
+      const c = md.centers[p];
+      state.yaw = Math.atan2(c[0], c[2]);
+      state.pitch = Math.asin(Math.max(-1, Math.min(1, c[1])));
+      if (window._lab && typeof window._lab.sunToCamera === 'function') window._lab.sunToCamera();
+    } }, 'focus').name('⌖ Focus compound/pierce center (+ sun)');
     fMixedDrivers.add({ get eff(){ return mixedOv.effectiveL == null ? 'off (dead-lid drive)' : mixedOv.effectiveL.toFixed(3) + ' (wet hand-up)'; } }, 'eff').name('effectiveL override').listen().disable();
     fMixedDrivers.add({ get seedRO(){ return String(_mixedSeed != null ? _mixedSeed : state.macroSeed) + (_mixedSeed != null ? ' (pinned)' : ' (world seed)'); } }, 'seedRO').name('mixed seed').listen().disable();
     fMixedDrivers.add({ render(){ doRenderMixed(); } }, 'render').name('▶ Render mixed (hand-set coordinate)');
