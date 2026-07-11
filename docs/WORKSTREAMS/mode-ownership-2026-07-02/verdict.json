@@ -2,7 +2,11 @@
   "workstream": "mode-ownership-2026-07-02",
   "commit": "4079878",
   "verifyRun": "wf_76e22cab-fd9 (unit+static+3x-adversarial at f8230f8) + working-Claude live integration drive on :9223 (this file's live evidence, at 3a3bbe5..4079878)",
-  "perLayer": { "unit": "PASS", "integration": "PASS", "uat": "deferred-to-max" },
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "deferred-to-max"
+  },
   "overall": "VERIFIED_PENDING_MAX 4079878 — unit PASS + live integration PASS; AC12 (holistic modes-don't-mix) is Max's gate, which doubles as the clean Step-0 re-UAT.",
   "perAC": [
     {
@@ -80,9 +84,9 @@
     },
     {
       "id": "AC12-modes-read-cleanly-separate",
-      "result": "deferred-to-max",
+      "result": "PASS",
       "layer": "uat",
-      "evidence": "Max's gate alone. This UAT doubles as the clean Step-0 re-UAT (its AC7): boot ORRERY (nothing flies itself), boot HELM (cockpit screensaver arrives at bodies, visits the star), F mid-tour to grab the stick, fly, Z to hand back, watch. Optional: window._triggerTourComplete() forces the wrap->warp to check the warp-arrival standoff."
+      "evidence": "Max UAT PASS 2026-07-11 (live watch). ORRERY: booted player-only (nothing flew itself); design gaps noted are out-of-contract -> filed for ORRERY-coherence scope. HELM: boot screensaver tour ran, F grabbed the stick, Z handed back, W/S/Q/E/mouse/R dead during tour — 'confirmed it's working as intended'. Tractor-beam arrival easing observed = known HOLD lerp, out-of-contract, inc-2 taste call. | Prior: Max's gate alone. This UAT doubles as the clean Step-0 re-UAT (its AC7): boot ORRERY (nothing flies itself), boot HELM (cockpit screensaver arrives at bodies, visits the star), F mid-tour to grab the stick, fly, Z to hand back, watch. Optional: window._triggerTourComplete() forces the wrap->warp to check the warp-arrival standoff."
     }
   ],
   "residuals": [
