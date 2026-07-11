@@ -40,9 +40,16 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > carry the real star's name via `RealStarCatalog.findByPosition()` (same precedence warp already had).
 > Re-verified: new match-radius suite incl. full-catalog sweep, 1113/1113 vitest, live Sirius→"Sirius",
 > Solar preset→real Sol, scene suite 19/19; light verify addendum
-> `verdict-light-sirius-fix-631571b.json` (AC1 re-checked green end-to-end). **▶ NEXT: Max UAT round 2**
-> — re-run the Sirius search, then name samples in the workstream's `census-report.md`, Horsehead visual,
-> holistic feel. Then: successor scoping (real-universe overlay D6–D9 + settled-catalog UI). Contract:
+> `verdict-light-sirius-fix-631571b.json` (AC1 re-checked green end-to-end). **UAT round 2 (2026-07-10):
+> Sirius OK, BUT nav computer named Sol "Talimon". FIXED `d8d6b63` (2026-07-11):** AC9 catalog regen had
+> dropped Sol (HYG row 0 has dist=0 → distance filter); regen script now emits Sol explicitly (catalog
+> back to 15,599, +1 entry only). Plus identity-aware nav-warp arrival: nav entry named "Sol" warps to
+> REAL Sol with position snapped to registry (was: blanket hasNavStar skip → procgen impostor).
+> Verified: 1114/1114 vitest, live PRISM shows Sol gold-labeled + you-are-here ring, nav-style warp from
+> 1 pc-off grid position spawns real Sol, negative-case nav warp unaffected, scene suite 19/19.
+> **▶ NEXT: Max UAT round 3** — check Sol's name in the nav (N → PRISM), optionally warp home via nav,
+> then the round-1 items: name samples in `census-report.md`, Horsehead visual, holistic feel. Then:
+> successor scoping (real-universe overlay D6–D9 + settled-catalog UI). Contract:
 > `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/`.
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
