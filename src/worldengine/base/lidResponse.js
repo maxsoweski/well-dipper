@@ -184,8 +184,9 @@ const uniformPrimitiveId = (carrier, id) => new Int32Array(carrier.count ?? carr
  *                   (drivers = bodyDrivers; { macroSeed, locked, T_ss, tune: magmaDriversToTune(drivers) }).
  *   • pure-strong → writeStagnantLidReliefSphere, argument-for-argument identical to :491
  *                   (drivers = grainDrivers; { macroSeed, regime: STRONG_REGIME }) — regime ARCHETYPE-FREE.
- *   • mixed | off-pilot → a RETURN-MARKER (NOT a throw); carrier.height UNWRITTEN (§5.5 no new height machinery
- *                   this increment — V2-2b swaps the real mixed writer into the 'mixed' branch here, a clean seam).
+ *   • mixed       → writeMixedInteriorSphere (the V2-2b-2a composer — swapped into this seam as planned):
+ *                   carrier.height REPLACED; returns multi-valued primitiveId + centerId + mixedDiag.
+ *   • off-pilot   → a RETURN-MARKER (NOT a throw); carrier.height UNWRITTEN.
  *
  * ZERO routing influence this increment: nothing in any writer imports this module; dispatch (writeBodyRelief)
  * still keys on PRESET_ARCHETYPE (the V2-3 flip is out of scope). Exercised as a pure module in headless vitest
@@ -204,7 +205,7 @@ const uniformPrimitiveId = (carrier, id) => new Int32Array(carrier.count ?? carr
  * arrays.
  *
  * @param {object} carrier  F3 sphere carrier (makeSphereField output). REPLACED via the corner writer on the
- *                          pure paths; UNWRITTEN on mixed / off-pilot.
+ *                          pure paths and via the mixed-interior composer on 'mixed'; UNWRITTEN only off-pilot.
  * @param {object} drivers  the body's D-vector bundle (bodyDrivers) — the weak corner's drivers arg AND the
  *                          magmaDriversToTune input. VOIDed by both corner writers today (seed-only placement).
  * @param {object} opts
@@ -224,7 +225,8 @@ const uniformPrimitiveId = (carrier, id) => new Int32Array(carrier.count ?? carr
  *                                     close the router↔composer↔statistic cycle) — the injection stays one-way.
  * @returns {{path:string, fineClass:string, primitiveId?:Int32Array, centerId?:Int32Array, magmaDiag?:object, stagnantDiag?:object, mixedDiag?:object, unimplemented?:boolean}}
  *          On the pure corners `primitiveId` is a uniform per-node Int32Array (a NEW return field, NOT a
- *          hashed carrier field — R-C4); on mixed / off-pilot it is absent (unimplemented marker).
+ *          hashed carrier field — R-C4); on 'mixed' it is the composer's multi-valued per-node array
+ *          (with centerId + mixedDiag alongside); absent only on off-pilot (unimplemented marker).
  */
 export function writeLidResponseSphere(carrier, drivers, {
   e1, rawTidal, macroSeed = 0, locked = false, T_ss = 0, grainDrivers, interpen = null,
