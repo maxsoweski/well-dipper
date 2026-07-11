@@ -47,10 +47,19 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > REAL Sol with position snapped to registry (was: blanket hasNavStar skip → procgen impostor).
 > Verified: 1114/1114 vitest, live PRISM shows Sol gold-labeled + you-are-here ring, nav-style warp from
 > 1 pc-off grid position spawns real Sol, negative-case nav warp unaffected, scene suite 19/19.
+> **Post-fix hardening (2026-07-11, Max-directed):** 8-angle subagent code review of the two fixes → 11
+> verified candidates, 6 survived → applied via workflows: `7f5fd1e` (teleport arrivals force real
+> spectral type — Sirius now A-class; currentGalaxyStar realigned on known-system arrivals; dead `"`
+> guard dropped; tolerance-ordering invariant exported + tested) and `a1d2d4c` (identity-join redesign:
+> KnownSystems.associate() derives aliases from catalog stars within MATCH_RADIUS — self-healing across
+> regens; findByAlias name gate + 3 pc belt replaces the display-name lambda; makes future Alpha
+> Centauri registration work — HYG names its components Rigil Kentaurus/Toliman). 1123/1123 vitest,
+> live belt accept/reject verified, scene suite 19/19. Successor flags recorded in `a1d2d4c` message.
 > **▶ NEXT: Max UAT round 3** — check Sol's name in the nav (N → PRISM), optionally warp home via nav,
 > then the round-1 items: name samples in `census-report.md`, Horsehead visual, holistic feel. Then:
-> successor scoping (real-universe overlay D6–D9 + settled-catalog UI). Contract:
-> `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/`.
+> successor scoping (real-universe overlay D6–D9 + settled-catalog UI — includes designing real
+> CONTENTS for real stars; the alias/claimedStars substrate from `a1d2d4c` is its starting point).
+> Contract: `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/`.
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
