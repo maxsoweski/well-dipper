@@ -35,8 +35,8 @@
     },
     {
       "id": "AC6-tour-reads-as-sightseeing-flight",
-      "result": "deferred-to-max",
-      "evidence": "UAT is Max's alone. Integration is now green, so UAT can proceed. Max: open http://localhost:5174/well-dipper/, boot HELM, watch a full tour — does the ship fly to and hold at each body (incl. far-side moons) as a coherent sightseeing flight? Watch for any tightest inner-moon (moon-0) skip (the documented residual)."
+      "result": "PASS",
+      "evidence": "Max UAT PASS 2026-07-11 — watched the HELM boot tour incl. moon legs: 'It looks like it's working for the moons.' | Prior: UAT is Max's alone. Integration is now green, so UAT can proceed. Max: open http://localhost:5174/well-dipper/, boot HELM, watch a full tour — does the ship fly to and hold at each body (incl. far-side moons) as a coherent sightseeing flight? Watch for any tightest inner-moon (moon-0) skip (the documented residual)."
     }
   ],
   "overall": "VERIFIED_PENDING_MAX 9150100 — integration live-green (AC1/AC2/AC3), regression PASS (AC5), unit substance covered (AC4 commit-hygiene artifact gap noted). Open gate: Max UAT (AC6).",
