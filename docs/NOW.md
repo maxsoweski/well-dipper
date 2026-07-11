@@ -26,6 +26,42 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > Shipped predecessor: `docs/WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/`.
 > *(One-line breadcrumb so the nesting is reflexive across handoffs; update when the active feature changes.)*
 
+> **▶ LANE C (2026-07-08): naming-census-uniqueness-2026-07-07 → VERIFIED_PENDING_MAX (code `3336dd7`,
+> branch `feature/system-details`).** Serves the exploration-immersion outcome ("players never encounter
+> the same system name twice"). Landed: Horsehead IC434/M78 position fix + 4 stale tests; deterministic
+> name census; HYG catalog regenerated (0 `"` artifacts, 15,559 usable real names — CSV-parser root-cause
+> fix); real names win on every targeting path; position-derived injective procgen naming (survey +
+> multipart, zero duplicates by construction, no-position fallback now throws); shipped named-systems
+> catalog (12k settled + 36k greek notables, 40% near features, 0.82MB gzip). Full verify 3/3-adversarial
+> green + live chrome-devtools checks (Horsehead renders rank#2 with M78 #7; Sol 19/19 scene suite;
+> revisit round-trip stable). **UAT round 1 (2026-07-08): "looks good in general, BUT" — Sirius search
+> spawned Sol. FIXED `631571b` (2026-07-09):** Sol's KnownSystems match radius 5 pc → 0.5 pc (was
+> swallowing 12 real stars: Sirius 2.64 pc, Rigil Kentaurus 1.32 pc, Procyon…) + teleport arrivals now
+> carry the real star's name via `RealStarCatalog.findByPosition()` (same precedence warp already had).
+> Re-verified: new match-radius suite incl. full-catalog sweep, 1113/1113 vitest, live Sirius→"Sirius",
+> Solar preset→real Sol, scene suite 19/19; light verify addendum
+> `verdict-light-sirius-fix-631571b.json` (AC1 re-checked green end-to-end). **UAT round 2 (2026-07-10):
+> Sirius OK, BUT nav computer named Sol "Talimon". FIXED `d8d6b63` (2026-07-11):** AC9 catalog regen had
+> dropped Sol (HYG row 0 has dist=0 → distance filter); regen script now emits Sol explicitly (catalog
+> back to 15,599, +1 entry only). Plus identity-aware nav-warp arrival: nav entry named "Sol" warps to
+> REAL Sol with position snapped to registry (was: blanket hasNavStar skip → procgen impostor).
+> Verified: 1114/1114 vitest, live PRISM shows Sol gold-labeled + you-are-here ring, nav-style warp from
+> 1 pc-off grid position spawns real Sol, negative-case nav warp unaffected, scene suite 19/19.
+> **Post-fix hardening (2026-07-11, Max-directed):** 8-angle subagent code review of the two fixes → 11
+> verified candidates, 6 survived → applied via workflows: `7f5fd1e` (teleport arrivals force real
+> spectral type — Sirius now A-class; currentGalaxyStar realigned on known-system arrivals; dead `"`
+> guard dropped; tolerance-ordering invariant exported + tested) and `a1d2d4c` (identity-join redesign:
+> KnownSystems.associate() derives aliases from catalog stars within MATCH_RADIUS — self-healing across
+> regens; findByAlias name gate + 3 pc belt replaces the display-name lambda; makes future Alpha
+> Centauri registration work — HYG names its components Rigil Kentaurus/Toliman). 1123/1123 vitest,
+> live belt accept/reject verified, scene suite 19/19. Successor flags recorded in `a1d2d4c` message.
+> **✅ UAT PASSED (Max, 2026-07-11)** — Sol works; workstream CLOSED at `a1d2d4c` (FEATURES.md row
+> added; still branch-only — master merge is a separate, Max-gated moment: pushing master = GitHub
+> Pages deploy). **▶ NEXT: real-universe-overlay scoping interview in a FRESH session** (D6–D9 +
+> settled-catalog UI — real names AND contents for known systems; the alias/claimedStars substrate
+> from `a1d2d4c` is the starting point; successor flags in that commit message + seam handoff).
+> Contract: `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/`.
+
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
 > WITH Max + approved. Spec: `docs/superpowers/specs/2026-06-19-structured-feature-lod-methodology-design.md`

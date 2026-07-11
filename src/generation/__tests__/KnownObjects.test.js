@@ -12,8 +12,11 @@ describe('KnownObjectProfiles', () => {
     expect(m42.galacticPos.x).toBeCloseTo(8.35, 1);
   });
 
-  it('has all five test profiles', () => {
-    expect(Object.keys(KNOWN_OBJECT_PROFILES)).toHaveLength(5);
+  it('has the full 37-profile catalog including the original five test profiles', () => {
+    // Catalog grew from 5 to 37 entries in commit ffb0a32. Hardcoded so future
+    // growth (or accidental shrinkage) trips this test again.
+    expect(Object.keys(KNOWN_OBJECT_PROFILES)).toHaveLength(37);
+    expect(KNOWN_OBJECT_PROFILES['M42']).toBeDefined();
     expect(KNOWN_OBJECT_PROFILES['M1']).toBeDefined();
     expect(KNOWN_OBJECT_PROFILES['M13']).toBeDefined();
     expect(KNOWN_OBJECT_PROFILES['M57']).toBeDefined();
@@ -55,9 +58,9 @@ describe('searchKnownObjects', () => {
   });
 
   it('is case-insensitive', () => {
+    // 'pleiades' now matches both M45 (Pleiades) and IC2602 (Southern Pleiades)
     const results = searchKnownObjects('pleiades');
-    expect(results.length).toBe(1);
-    expect(results[0].key).toBe('M45');
+    expect(results.map(r => r.key)).toEqual(['M45', 'IC2602']);
   });
 
   it('returns empty for unknown objects', () => {
@@ -71,10 +74,9 @@ describe('searchKnownObjects', () => {
   });
 
   it('partial match works', () => {
-    // "ring" should match Ring Nebula
+    // "ring" now matches both M57 (Ring Nebula) and NGC3132 (Southern Ring Nebula)
     const results = searchKnownObjects('ring');
-    expect(results.length).toBe(1);
-    expect(results[0].key).toBe('M57');
+    expect(results.map(r => r.key)).toEqual(['M57', 'NGC3132']);
   });
 });
 

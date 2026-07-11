@@ -91,6 +91,8 @@ Commit history is supporting evidence only, not authority.
 | Feature | Tier | Status | Blocked by | Deep dive |
 |---|---|---|---|---|
 | Background starfield (procedural; density varies per galactic position) | F&F-MVP | shipped-confirmed ("strongest thing in the app, minus nebulae" — Max) | — | — |
+| System naming + real-object identity (position-derived injective procgen names; shipped named-systems catalog 12k settled + 36k greek; HYG real names win on every arrival path incl. real spectral type; KnownSystems catalog-derived alias identity + 3 pc belt; Horsehead IC434/M78 dedup fix; Sol restored to catalog) | F&F-MVP | **UAT-passed on branch** `feature/system-details` @ `a1d2d4c` (Max, 2026-07-11; 3 UAT rounds — Sirius, Sol-nav-name, Sol re-check) — pending master merge | — | [WORKSTREAMS/naming-census-uniqueness-2026-07-07](WORKSTREAMS/naming-census-uniqueness-2026-07-07/), [NAMING_AND_REAL_OBJECTS.md](NAMING_AND_REAL_OBJECTS.md) |
+| Real-universe overlay (real known systems/stars/planets: names AND contents override procgen — Sirius as real A-class binary etc.; builds on `claimedStars` substrate from `a1d2d4c`) | ENRICHED | proposed — scoping interview next (D6–D9 + settled-catalog UI) | System naming UAT-passed ✓ | — |
 | Galactic rendering polish (combined: glow + GMC angular artifacts; bar artificial; color gradient should warm toward center) | F&F-MVP | in-flight | — | [FEATURES/galactic-rendering.md](FEATURES/galactic-rendering.md) |
 
 ## Nebulae

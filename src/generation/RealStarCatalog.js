@@ -14,6 +14,14 @@
 
 import { GalacticMap } from './GalacticMap.js';
 
+// Default identity-match tolerance for findByPosition: 0.1 pc (0.0001 kpc).
+// This MUST stay BELOW KnownSystems' MATCH_RADIUS (0.0005 kpc, see that
+// file) — otherwise a teleport landing in the annulus between the two
+// tolerances could spawn a procgen system wearing a known system's name
+// (the inverse of the Sirius-swallow bug KnownSystems.MATCH_RADIUS guards
+// against).
+export const POSITION_MATCH_TOL = 0.0001; // kpc
+
 // Spectral type → color (same as HashGridStarfield)
 const SPECTRAL_COLOR = {
   O: [0.6, 0.7, 1.0],
@@ -81,6 +89,53 @@ export class RealStarCatalog {
       }
     }
     return results;
+  }
+
+  /**
+   * Find the real star AT a galactic position (identity lookup) — the nearest
+   * catalog star within `tolKpc`, or null. Used by teleport arrivals to carry
+   * the real star's name into the spawned system, mirroring how warp arrivals
+   * resolve identity from the clicked sky entry. Nearest-not-first matters:
+   * close binaries (61 Cygni A/B, ~0.0004 pc apart) both sit inside the
+   * default 0.1 pc tolerance.
+   *
+   * @param {{ x, y, z }} pos — galactic position in kpc
+   * @param {number} tolKpc — match tolerance in kpc (default POSITION_MATCH_TOL = 0.1 pc)
+   * @returns {{ x, y, z, name, spect, absMag, lum, ci } | null}
+   */
+  findByPosition(pos, tolKpc = POSITION_MATCH_TOL) {
+    if (!this._stars) return null;
+    let best = null;
+    let bestDist = tolKpc;
+    for (let i = 0; i < this._stars.length; i++) {
+      const s = this._stars[i];
+      const dx = s.x - pos.x;
+      const dy = s.y - pos.y;
+      const dz = s.z - pos.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dist < bestDist) {
+        best = s;
+        bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Find all real stars within radiusKpc (sphere) of pos. Used by
+   * KnownSystems.associate to derive a known system's catalog aliases.
+   * @param {{x,y,z}} pos  @param {number} radiusKpc
+   * @returns {Array<catalogStar>}
+   */
+  findAllWithin(pos, radiusKpc) {
+    if (!this._stars) return [];
+    const out = [], r2 = radiusKpc * radiusKpc;
+    for (let i = 0; i < this._stars.length; i++) {
+      const s = this._stars[i];
+      const dx = s.x - pos.x, dy = s.y - pos.y, dz = s.z - pos.z;
+      if (dx*dx + dy*dy + dz*dz < r2) out.push(s);
+    }
+    return out;
   }
 
   /**

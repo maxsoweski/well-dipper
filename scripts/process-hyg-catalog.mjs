@@ -56,6 +56,39 @@ function equatorialToGalactic(x_eq, y_eq, z_eq) {
   return { x: x_gal, y: z_gal, z: y_gal }; // y_gal → z in our coords (height above plane)
 }
 
+// Proper RFC4180-style CSV line parser. The previous regex-based splitter
+// mishandled consecutive quoted-empty fields (e.g. `"","","",`), leaving a
+// stray `"` character in a field instead of an empty string — which then
+// looked "truthy" to the name-building logic below and produced bogus
+// star names that were literally the `"` character. This state machine
+// walks the line character by character so quote/comma boundaries are
+// tracked correctly regardless of how many empty quoted fields are adjacent.
+function parseCSVLine(line) {
+  const fields = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; } // escaped quote
+        else { inQuotes = false; }
+      } else {
+        cur += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      fields.push(cur);
+      cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  fields.push(cur);
+  return fields.map(f => f.trim());
+}
+
 // Process stars
 const stars = [];
 let nakedEye = 0;
@@ -66,8 +99,7 @@ for (let i = 1; i < lines.length; i++) {
   const line = lines[i].trim();
   if (!line) continue;
 
-  // Parse CSV (handle quoted fields)
-  const fields = line.match(/(".*?"|[^,]*),?/g)?.map(f => f.replace(/^"|"$|,$/g, '').trim()) || [];
+  const fields = parseCSVLine(line);
   if (fields.length < 10) continue;
 
   const mag = parseFloat(fields[col['mag']]);
@@ -127,6 +159,20 @@ for (let i = 1; i < lines.length; i++) {
     dist: parseFloat((dist / 1000).toFixed(6)), // kpc from Sun
   });
 }
+
+// The Sun: HYG row id=0 is "Sol" with dist=0 (it IS the heliocentric origin),
+// which the distance filter above rejects — correctly for every other star,
+// wrongly for Sol. Emit it explicitly at the game's registered solar position
+// so the catalog carries Sol's identity: the nav computer's real-star overlay
+// names the home system from it, the sky renders it from neighboring systems,
+// and it must agree with the KnownSystems registry entry (same name, same
+// position — see KnownSystems.match-radius.test.js). Values mirror HYG row 0.
+stars.push({
+  x: SOLAR_X, y: SOLAR_Z, z: 0.0,
+  mag: -26.74, absMag: 4.83,
+  spect: 'G', ci: 0.656, lum: 1,
+  name: 'Sol', dist: 0,
+});
 
 console.log(`Processed: ${processed}`);
 console.log(`No distance data: ${noDistance}`);

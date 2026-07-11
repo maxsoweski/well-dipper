@@ -255,6 +255,7 @@ const realFeatureCatalog = new RealFeatureCatalog();
 // Load real star catalog
 realStarCatalog.load().then(() => {
   StarfieldGenerator.realStarCatalog = realStarCatalog;
+  KnownSystems.associate(realStarCatalog);   // derive known-system catalog aliases
   debugPanel.setRealStarCatalog(realStarCatalog);
   if (_navComputer) _navComputer.setRealStarCatalog(realStarCatalog);
   console.log(`Real star catalog loaded: ${realStarCatalog.count} stars`);
@@ -3547,15 +3548,45 @@ warpEffect.onPrepareSystem = () => {
       console.log(`[WARP] Resolved to: (${playerGalacticPos.x.toFixed(4)}, ${playerGalacticPos.y.toFixed(4)}, ${playerGalacticPos.z.toFixed(4)}) seed=${resolvedStar.seed}`);
     }
 
-    // Check for known system override at this position —
-    // but skip if the user explicitly picked a different star from the nav computer
+    // Check for known system override. Identity-aware: a nav-picked star
+    // bypasses the positional check (picking a DIFFERENT star near Sol must
+    // not Sol-override it), but a nav entry carrying a known system's own
+    // name ("Sol" via the real-star overlay) IS that system — the nav's
+    // matched hash-grid star can sit up to 2 pc from the registered
+    // position, outside findAt's radius, so the name is joined via a
+    // catalog-derived alias index (KnownSystems.associate — a registry entry
+    // claims every catalog star within MATCH_RADIUS of its position, so a
+    // multi-star system like Alpha Centauri gets both component names as
+    // aliases automatically). A 3 pc positional belt on playerGalacticPos
+    // then rejects a same-named star reached far from the registered
+    // position (duplicate catalog names).
     const hasNavStar = !!warpTarget.navStarData;
-    const knownWarp = hasNavStar ? null : KnownSystems.findAt(playerGalacticPos);
+    const knownWarp = hasNavStar
+      ? KnownSystems.findByAlias(warpTarget.name, playerGalacticPos)
+      : KnownSystems.findAt(playerGalacticPos);
     console.log(`[WARP] knownSystem check: hasNavStar=${hasNavStar}, knownWarp=${knownWarp?.name || 'none'}`);
     if (knownWarp) {
+      // Arriving at a known system means arriving at ITS registered
+      // position — align the player pos so sky prep, revisit naming, and
+      // the KnownSystems radius all agree (matters when the nav matched a
+      // nearby grid star rather than the exact registry coordinates).
+      playerGalacticPos = { ...knownWarp.position };
       pendingSystemData = knownWarp.generate();
       pendingSystemData._knownSystemNames = knownWarp.names;
       pendingSystemData._warpTargetName = knownWarp.name;
+      // The "where am I" globals must agree after a known-system arrival —
+      // realign currentGalaxyStar (left pointing at the nav-matched grid
+      // star from the resolvedStar branch above) to the registry position,
+      // same as _debugEnterKnownSystem's realignment (~2464-2472).
+      currentGalaxyStar = {
+        worldX: knownWarp.position.x,
+        worldY: knownWarp.position.y,
+        worldZ: knownWarp.position.z,
+        seed: knownWarp.seed || knownWarp.name || 'known',
+        type: pendingSystemData.star?.type || 'G',
+        name: knownWarp.name,
+        isReal: true,
+      };
       console.log(`[WARP] Known system override: ${knownWarp.name}`);
     } else {
       pendingSystemData = await StarSystemGenerator.generateAsync(seed, galaxyContext);
@@ -4328,7 +4359,14 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     systemNames = systemData._knownSystemNames;
   } else {
     const nameRng = new SeededRandom(seed);
-    systemNames = generateSystemNames(nameRng, systemData, systemData._warpTargetName || null);
+    // Position-derived naming (increment 3b): pass the system's canonical galactic
+    // position so that, when there is no real-name override, the procgen system
+    // name is unique by construction and revisit-stable. Every warp spawn carries
+    // a position (systemData.galacticPosition, set at warp resolution); debug/title
+    // spawns fall back to the current player position — never a no-position
+    // fallback (D5 eliminated per ac5-decision.md).
+    const namingPos = systemData.galacticPosition || systemData._warpTargetPos || playerGalacticPos;
+    systemNames = generateSystemNames(nameRng, systemData, systemData._warpTargetName || null, namingPos);
   }
 
   // ── Create star(s) ──
@@ -4962,7 +5000,19 @@ debugPanel.setSpawnCallbacks({
           sysData = knownSys.generate();
           sysData._knownSystemNames = knownSys.names;
         } else {
+          // Real-star identity: if this position IS a catalog star (search
+          // teleports land on exact catalog coords), its real name AND
+          // spectral type override procgen naming/typing — same precedence
+          // warp arrivals get via _warpTargetName from the clicked sky
+          // entry (~9508) and galaxyContext.starTypeOverride (~3405).
+          const realStar = realStarCatalog.findByPosition(playerGalacticPos);
+          if (realStar?.spect) {
+            ctx.starTypeOverride = realStar.spect;
+          }
           sysData = StarSystemGenerator.generate(starSeed, ctx);
+          if (realStar?.name) {
+            sysData._warpTargetName = realStar.name;
+          }
         }
         sysData._destType = 'star-system';
         spawnSystem({ forWarp: false, systemData: sysData });
@@ -10194,7 +10244,10 @@ function trySelectWarpTarget(rayDir) {
     warpTarget.destType = `feature:${entry.featureType}`;
     warpTarget.featureData = entry.featureData;
     const nameRng = new SeededRandom(`feat-${entry.featureData.seed}`);
-    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), starPos);
+    // Feature entries carry no starData; use the feature's own canonical position
+    // so naming has a stable identity (no no-position fallback, D5).
+    const featPos = starPos || entry.featureData?.position || null;
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), featPos);
     bodyInfo.showWarpTarget(`${warpTarget.name} (${entry.featureType.replace('-', ' ')})`);
   } else if (entry?.isExternalGalaxy) {
     // Clicked an external galaxy — Category C destination
@@ -10203,9 +10256,20 @@ function trySelectWarpTarget(rayDir) {
     warpTarget.name = entry.galaxyData.name;
     bodyInfo.showWarpTarget(`${entry.galaxyData.name} (${entry.galaxyData.type} galaxy)`);
   } else {
-    // Normal star — generate name from index
-    const nameRng = new SeededRandom(`warp-star-${result.index}`);
-    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), starPos);
+    // Normal star — real catalog stars keep their real name on every targeting
+    // path (ac5-decision.md rule 3). Procgen stars are named from their canonical
+    // position (starPos = the star's stable worldX/Y/Z), which is unique by
+    // construction and identical on every path and revisit (increment 3b). The
+    // warp-star-<index> seed is passed for signature compatibility only and no
+    // longer influences the name, so the transient starfield index cannot cause a
+    // revisit rename. Guard against the legacy hyg-stars.json '"' artifact defensively.
+    const realName = entry?.starData?.isRealStar ? entry.starData.name : null;
+    if (realName && realName !== '"') {
+      warpTarget.name = realName;
+    } else {
+      const nameRng = new SeededRandom(`warp-star-${result.index}`);
+      warpTarget.name = generateSystemName(nameRng.child('names').child('system'), starPos);
+    }
     bodyInfo.showWarpTarget(warpTarget.name);
   }
 
@@ -10254,14 +10318,24 @@ function autoSelectWarpTarget() {
     warpTarget.destType = `feature:${entry.featureType}`;
     warpTarget.featureData = entry.featureData;
     const nameRng = new SeededRandom(`feat-${entry.featureData.seed}`);
-    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), autoStarPos);
+    // Feature entries carry no starData; use the feature's own canonical position.
+    const featPos = autoStarPos || entry.featureData?.position || null;
+    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), featPos);
   } else if (entry?.isExternalGalaxy) {
     warpTarget.destType = 'external-galaxy';
     warpTarget.galaxyData = entry.galaxyData;
     warpTarget.name = entry.galaxyData.name;
   } else {
-    const nameRng = new SeededRandom(`warp-star-${result.index}`);
-    warpTarget.name = generateSystemName(nameRng.child('names').child('system'), autoStarPos);
+    // Normal star — same real-name-wins guard as trySelectWarpTarget above.
+    // Procgen name is position-derived (autoStarPos); the warp-star-<index> seed
+    // is ignored (kept for signature compatibility only).
+    const realName = entry?.starData?.isRealStar ? entry.starData.name : null;
+    if (realName && realName !== '"') {
+      warpTarget.name = realName;
+    } else {
+      const nameRng = new SeededRandom(`warp-star-${result.index}`);
+      warpTarget.name = generateSystemName(nameRng.child('names').child('system'), autoStarPos);
+    }
   }
 
   warpTarget.blinkTimer = 0;

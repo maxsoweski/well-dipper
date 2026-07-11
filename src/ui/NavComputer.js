@@ -2374,7 +2374,11 @@ export class NavComputer {
       if (!this._loadedSeen.has(key)) {
         this._loadedSeen.add(key);
         let name = '';
-        try { name = generateSystemName(this._makeRng(s.seed), { x: s.worldX, y: s.worldY, z: s.worldZ }); } catch {}
+        try { name = generateSystemName(this._makeRng(s.seed), { x: s.worldX, y: s.worldY, z: s.worldZ }); } catch (e) {
+          // Naming throws only on a missing/invalid position (D5 invariant) —
+          // a caller bug worth surfacing, not silently blank-naming the star.
+          console.warn('[NavComputer] generateSystemName failed for star', s.seed, e);
+        }
         this._localStars.push({
           wx: s.worldX, wy: s.worldY, wz: s.worldZ,
           name, spectral: s.type,
@@ -2395,7 +2399,10 @@ export class NavComputer {
       );
       const MATCH_DIST = 0.002; // 2 pc in kpc
       for (const rs of realStars) {
-        if (!rs.name) continue; // skip unnamed catalog entries
+        // Skip unnamed catalog entries, including the pre-regen hyg-stars.json
+        // '"' artifact (AC9 regen eliminates it; guard here defensively since
+        // that regen lands in parallel with this fix, not before it).
+        if (!rs.name || rs.name === '"') continue;
         const realKey = `real-${rs.name}`;
         if (this._loadedSeen.has(realKey)) continue;
         this._loadedSeen.add(realKey);
