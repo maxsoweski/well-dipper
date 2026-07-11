@@ -3409,12 +3409,23 @@ warpEffect.onPrepareSystem = () => {
       console.log(`[WARP] Resolved to: (${playerGalacticPos.x.toFixed(4)}, ${playerGalacticPos.y.toFixed(4)}, ${playerGalacticPos.z.toFixed(4)}) seed=${resolvedStar.seed}`);
     }
 
-    // Check for known system override at this position —
-    // but skip if the user explicitly picked a different star from the nav computer
+    // Check for known system override. Identity-aware: a nav-picked star
+    // bypasses the positional check (picking a DIFFERENT star near Sol must
+    // not Sol-override it), but a nav entry carrying a known system's own
+    // name ("Sol" via the real-star overlay) IS that system — the nav's
+    // matched hash-grid star can sit up to 2 pc from the registered
+    // position, outside findAt's radius, so match by name, not position.
     const hasNavStar = !!warpTarget.navStarData;
-    const knownWarp = hasNavStar ? null : KnownSystems.findAt(playerGalacticPos);
+    const knownWarp = hasNavStar
+      ? (KnownSystems.getAll().find(k => k.name === warpTarget.name) || null)
+      : KnownSystems.findAt(playerGalacticPos);
     console.log(`[WARP] knownSystem check: hasNavStar=${hasNavStar}, knownWarp=${knownWarp?.name || 'none'}`);
     if (knownWarp) {
+      // Arriving at a known system means arriving at ITS registered
+      // position — align the player pos so sky prep, revisit naming, and
+      // the KnownSystems radius all agree (matters when the nav matched a
+      // nearby grid star rather than the exact registry coordinates).
+      playerGalacticPos = { ...knownWarp.position };
       pendingSystemData = knownWarp.generate();
       pendingSystemData._knownSystemNames = knownWarp.names;
       pendingSystemData._warpTargetName = knownWarp.name;
