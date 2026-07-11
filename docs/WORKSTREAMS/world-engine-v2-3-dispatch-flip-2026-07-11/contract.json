@@ -1,0 +1,125 @@
+{
+  "workstream": "world-engine-v2-3-dispatch-flip-2026-07-11",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "statusNote": "SCOPED 2026-07-11 — AWAITING MAX GREENLIGHT. V2-3 per ROADMAP-v2 §3.1: flip writeBodyRelief production dispatch from the PRESET_ARCHETYPE string chain to E1's derived {compositionClass, geodynamicRegime} + dispatch-level locked-awareness, never e1.label. Scoper read the AMENDED ROADMAP §5.2/§7a (b62fb1e), the RECONCILED 2b-2b contract (386f4e1), and the authoritative oracle tests/worldengine-e1-conformance-oracle.test.js. Two design pins accepted by Max in the scoping interview 2026-07-11: (1) modal-collapse at dispatch for named presets, (2) Frozen golden carve-out via assert-equal-despun (never re-capture). Build via workflows (Max's standing lane directive); adversarial plan → sliced build → verify-workstream full.",
+  "programRef": "world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md §3.1 V2-3 row (flip + Mars mapping + Neptunian/Sub-Neptune taxonomy + Frozen reroute + PRESET_ARCHETYPE retirement trigger), §5.2 as AMENDED 2026-07-11 (empirical divergence set {Frozen(airless), Eyeball(locked temperate)}; Neptunian/Sub-Neptune writer-EQUAL, taxonomy-only), §7a amended note (Eyeball = the actual second divergence, today-wins; Mars→dead is a V2-3 intention), §1 (never-route-on-label invariant; writer-equality oracle). Authoritative allow-list pin: tests/worldengine-e1-conformance-oracle.test.js. Reroute adjudication (Max, §7a 2026-07-03): Frozen(airless)→dead-lid is a FIX; Lava/Magma/Venus byte-identical.",
+  "designDecisions": [
+    "MODAL COLLAPSE AT DISPATCH FOR NAMED PRESETS (Max accepted 2026-07-11). In-band bodies (Rocky/Ocean/Eyeball — BAND mass/T/V window, e1Regime.js inSeededBand) dispatch on the exported seed-free modalRegime(V,T), NOT the live seeded pick. Reason: the seeded pick lands 'stagnant' on some seeds → effectiveL → 'mixed' → the 75-golden (captured 7441c92, NEVER re-capture) breaks and shipped preset worlds change per-seed. The seeded multistability stays FULLY ALIVE in the computeE1 tuple, the _lab.e1Probe, and the _lab.e1RegimeWeights override (the 2b-2b pilot worlds are unaffected); it goes production-live with SEEDED bodies at V2-10 game-port. This mirrors exactly how the V2-1 oracle proved writer-equality (its writerE1 collapses via modalRegime).",
+    "FROZEN GOLDEN CARVE-OUT = ASSERT-EQUAL-DESPUN, NEVER RE-CAPTURE (Max accepted 2026-07-11). Frozen(airless)'s 5 golden rows WILL change (the adjudicated shell→despun reroute). Mechanism: the byte-identity harness keeps the captured goldens for the other 70 rows bit-identical AND asserts Frozen's post-flip output equals the DESPUN writer's output (writeGrainSphere+writeHeightSphere at the same seeds) computed fresh — an adjudicated-divergence assertion, not a re-capture. 70/75 untouched goldens stay the zero-clobber burden-carriers.",
+    "EYEBALL: TODAY WINS via DISPATCH-LEVEL locked-awareness (oracle EXPECTED_DIVERGENCES disposition; V2-1 BUILD-PLAN §4.5 disposition-direction note). E1 stays locked-BLIND (must-fix #4b preserved — computeE1 gains NO locked input); the DISPATCH layer reads locked (as writeBodyRelief already does today) and routes a locked temperate rocky to the eyeball-despun shell writer BYTE-IDENTICAL. E1's 'plate' answer for Eyeball is NOT adopted.",
+    "MARS: MAPPING + ORACLE ROW, RENDER UNCHANGED. Mars joins the oracle (17/17) and gains its archetype-map entry, but its derived route is dead-lid → despun — the SAME writer it reaches today via archetype null. Zero visible change. The dead-lid family's real look is V2-5 bombardment's job; the Tharsis expression stays reachable in the lab via the 2b-2a hand-set D-vector seam. (§7a 'Mars→stagnant/dead' intention resolves as 'dead' on the real E1 numbers: T210 < COLD_DEAD_T 250, Φ 0.268 < 0.4.)",
+    "NEPTUNIAN/SUB-NEPTUNE = TAXONOMY-ONLY, ZERO VISIBLE CHANGE (the AMENDED §5.2: writer-EQUAL both ways, NOT a divergence). The short-key collision ('Ice giant (Neptunian)' → 'sub-neptune') is resolved without flipping any drawn or seeded radius — the ROADMAP's radius hazard (demoting Neptunian→'gas-giant' flips seeded radius [2.5,4.0]→[6.0,14.0]) is exactly what must NOT happen. Mechanism (dedicated 'ice-giant' key with today's effective range vs keep-key+document) is a build-plan call under the zero-visible-change constraint; any new archetype key registers in the taxonomy (AC-0 check 3).",
+    "PRESET_ARCHETYPE SURVIVES AS FALLBACK ORACLE — NOT DELETED HERE. The map + the four dispatch predicates (isEarthlikePlatePath/isShellReliefPath/isVolcanicPath/isStagnantLidPath) stay in the tree as the cross-check oracle. Retirement trigger (ROADMAP §5.2 point 3): post-V2-3 verify-workstream green + Max UAT → deletion is a separate follow-up commit, only after every enumerated misroute is explicitly resolved.",
+    "FENCES (Max confirmed 2026-07-11): no game-port wiring (_pickType untouched, E1 lab-only per charter); no new expression work (writers/composer feature-frozen); no lab-GUI reorganization in-contract (the lab UX pass runs alongside as main-session work, Max-judged, not AC-gated); guardrails unchanged from 2b-2b (no 4th carrier.regime constant, three-free base/ writers, stage only files we touch — the not-ours CameraChoreographer.js/LabMode.js + untracked screenshot pile stay out of every commit)."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15 / SPINE-CONFORMANCE.md). (1) Driver connectivity: the NEW dispatch path reads ONLY derived E1 coordinates (compositionClass, geodynamicRegime, m_hp, L/effectiveL via the router), the condition vector, macroSeed, and the locked flag — grep DENYLIST proves no archetype-string or e1.label read anywhere in the new routing decision (PRESET_ARCHETYPE appears ONLY in the fallback-oracle comparison + preset/radius plumbing). (2) Named consumer: every new channel has a named reader — condition.tidalState.locked → dispatch locked-awareness + T_ss; exported MIXED_LO → lidResponse import; the oracle rows → the adjudication table. No dead knobs. (3) Taxonomy registration: no new *Enabled panel keys; planet-archetypes.js drift guards green; if the Neptunian fix adds an archetype key it is registered intentionally, not scraped in by accident.",
+      "verifyVia": {
+        "input": "Read the diff + a BUILD-NOTES conformance table; grep-audit the new dispatch for PRESET_ARCHETYPE / e1.label / stagnantLidRegimeOf(label) / isVolcanicPath(label) reads inside the routing decision; assert each new channel cites its named reader; npx vitest run tests/planet-archetypes.test.js",
+        "observable": "Grep denylist clean on the routing decision; every channel maps to a named reader; drift guards green"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-FLIP-LABEL-FREE",
+      "statement": "PRODUCTION DISPATCH KEYS ON DERIVED CONDITIONS (the §1 invariant, live). writeBodyRelief's routing decision derives from computeE1(bodyDrivers.condition, macroSeed) → {compositionClass, geodynamicRegime} (+ locked at the dispatch layer, + the lidResponse router for the unbroken-lid family) — NEVER e1.label, NEVER the PRESET_ARCHETYPE string. In-band named presets collapse to modalRegime (designDecision #1): across seeds {1,2,3,7,42,100,777} no named preset's writer choice changes with seed. The old archetype chain survives ONLY as a fallback-oracle comparison (logged divergence check), with zero routing influence.",
+      "verifyVia": {
+        "input": "Headless vitest: for all 17 DRIVER_PRESETS × the seed set, call the new dispatch and assert the writer path matches the AC-ORACLE-17 adjudication table and is seed-invariant per preset; grep the dispatch body for label/archetype routing reads; unit-test that zeroing/garbling PRESET_ARCHETYPE entries changes NO routing outcome (only the logged oracle comparison)",
+        "observable": "Writer path = adjudicated table for all 17, identical across all seeds; label/archetype grep clean; garbled PRESET_ARCHETYPE alters no route — the string is provably not load-bearing"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-ORACLE-17",
+      "statement": "ALL 17 PRESETS ADJUDICATED (Mars + Hot Jupiter join the oracle). The conformance oracle extends to 17 rows: 15 writer-IDENTICAL to today's routing (including Eyeball, now byte-identical via dispatch locked-awareness — E1's 'plate' NOT adopted; including Mars dead-lid→despun = today's despun; including Hot Jupiter gas→despun = today's despun; including Neptunian/Sub-Neptune writer-EQUAL per the amended §5.2), and exactly ONE live reroute: Frozen(airless) shell→despun (the §7a-adjudicated dead-lid fix), asserted AS a named, dispositioned divergence — never silently matched. The V2-1 15-preset oracle keeps passing unchanged (shadow writerE1 vs today), pinning that the flip changed dispatch, not E1.",
+      "verifyVia": {
+        "input": "Headless vitest: extend/add the post-flip oracle to assert new-dispatch writer vs pre-flip writer for all 17 presets; assert the divergence set is exactly {Frozen(airless)} with its named disposition; npx vitest run tests/worldengine-e1-conformance-oracle.test.js (the V2-1 oracle, untouched semantics)",
+        "observable": "16/17 writer-identical incl. Eyeball/Mars/Hot Jupiter/both Neptunes; Frozen the sole asserted reroute; V2-1 oracle still green"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-PLUMB-RECONCILE",
+      "statement": "THE THREE RIDE-ALONG RECONCILES. (a) condition vector gains tidalState.locked (nested under condition, byte-safe like T_eq/surfaceGravity — the V2-1 BUILD-PLAN §4.5 gap), read by dispatch locked-awareness; T_ss stays the shipped convention (locked ? T_eq×1.4 : 0) so the Lava pond / Magma wide-sea basin split is untouched. (b) MIXED_LO single source of truth: e1Regime's module-private MOBILE_L (0.35) becomes an export; lidResponse.js imports it and drops its local literal (the R-A3 flag — the floor IS load-bearing at the flip). (c) Probe parity: post-flip, magmaProbe/stagnantLidProbe diagnostics (incl. appliedTune on both branches — the V2-2a weak-branch omission) report identically to today for every preset that keeps its writer.",
+      "verifyVia": {
+        "input": "Headless vitest: assert condition.tidalState.locked present + flat-key tune builders still ignore it (byte-safe nesting, mirror the V2-0 inertness block); grep lidResponse.js for the 0.35 literal (gone) + the e1Regime import (present); diff probe/diag output objects pre/post flip at Lava/Magma/Venus/Rocky",
+        "observable": "locked nested + inert to tune builders; one MIXED_LO source; probe diagnostics identical for writer-unchanged presets (appliedTune present on both branches)"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-TAXONOMY-NEPTUNE",
+      "statement": "NEPTUNIAN/SUB-NEPTUNE SHORT-KEY COLLISION RESOLVED WITH ZERO VISIBLE CHANGE. After the fix, 'Ice giant (Neptunian)' and 'Sub-Neptune (hazy)' each resolve to a distinct, correctly-named taxonomy identity; BOTH presets' drawn radii, writer routes, and every seeded-random radius range are numerically unchanged (the ROADMAP's [6.0,14.0] Jupiter-sized-Neptunian hazard does not fire).",
+      "verifyVia": {
+        "input": "Headless vitest: snapshot drawPresetRadius/radius-range values for both presets + the affected RADIUS_RANGES_EARTH entries pre/post; assert writer routes unchanged; assert the two presets no longer share one ambiguous key (or the kept key is explicitly documented as shared taxonomy, per the build-plan call)",
+        "observable": "Radii + ranges byte-equal pre/post; routes unchanged; the collision is resolved or explicitly documented — nothing visible moves"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "statement": "ZERO behavioral change everywhere except the ONE adjudicated reroute. (a) 70/75 golden rows (all non-Frozen presets × seeds, captured 7441c92, NEVER re-captured) bit-identical through the flip; Frozen's 5 rows assert-equal the DESPUN writer's fresh output at the same seeds (designDecision #2). (b) Lava/Magma/Venus corner byte anchors green (writeMagmatismSphere/writeStagnantLidReliefSphere unchanged); Eyeball byte-identical on eyeball-despun. (c) plate/shell/despun suites green; V2-2b-1 stagnantDriversToTune + the 2b-2a/2b-2b mixed-path tests green. (d) Guardrail quartet green (v2-0-byte-identity, lid-byte-anchors, e1-shadow-audit, planet-archetypes). (e) The 4 pre-existing known failures (KnownObjects ×3, GalacticFeatures ×1) do NOT grow. (f) No 4th carrier.regime constant; verify.js untouched. (g) git-diff touches only in-scope files: the dispatch seam (planet-lod-rivers.js), e1Regime.js (export-only for MOBILE_L), lidResponse.js (import + any dispatch-facing seam), body-condition-vector.js (+locked), driver-presets.js (Mars mapping / taxonomy), planet-lod-lab.html (route seam + probe), tests, workstream docs — the not-ours files (src/auto/CameraChoreographer.js, src/debug/LabMode.js) and the untracked pile stay out of every commit.",
+      "verifyVia": {
+        "input": "npx vitest run tests/v2-0-byte-identity.test.js (with the Frozen carve-out assertion) + the corner/lid anchors + plate/shell suites + npx vitest run (full); git show --stat every commit; byte-diff the two corner writers pre/post",
+        "observable": "70/75 bit-identical + Frozen-5 assert-equal-despun; corners + Eyeball byte-identical; quartet green; known failures not grown; diff scope clean"
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC-LIVE-SWEEP",
+      "statement": "LIVE INTEGRATION — the flipped dispatch drives the real lab (objective, agent-drivable). In the running lab, sweep ≥9 presets (Venus, Lava, Magma, Rocky, Ocean, Frozen, Eyeball, Mars, one giant) via setPreset (polling _lastBodyDrivers identity — the ~500ms route settle): every preset renders and probes exactly as today EXCEPT Frozen, which now renders the despun zonal fallback; the dispatch probe reports the E1-derived route (+ the logged fallback-oracle comparison agreeing everywhere but Frozen); heightSource/diag fields match today's for writer-unchanged presets; console clean of NEW errors. Agent closes its pages after (window hygiene).",
+      "verifyVia": {
+        "input": "chrome-devtools on 127.0.0.1:9223 against the Max-started dev server (npm run dev -- --port 5175, lane-A port); liveness via list_pages (never sandbox-curl); per-preset: setPreset → poll _lastBodyDrivers identity → read probes → screenshot; close pages when done",
+        "observable": "9-preset sweep: renders/probes unchanged except Frozen→zonal fallback; E1-derived route reported everywhere; console clean of new errors"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-UAT-SWEEP",
+      "statement": "MAX'S GATE — the flip is invisible where it must be, and the one change reads as a fix (deferred-to-max, never agent-PASSed). Max sweeps the 17 presets in the lab and judges: (1) every world he knows still reads exactly as before — nothing subtly off; (2) Frozen (airless) reads as the correct 'dead frozen ball' fix — plausibly less interesting until V2-5 gives dead-lid worlds a real look — not as a bug or regression. Presupposes AC-LIVE-SWEEP + all unit/integration ACs GREEN. This UAT is also the second half of the PRESET_ARCHETYPE retirement trigger (the deletion follow-up only unlocks after it).",
+      "verifyVia": {
+        "input": "Max sweeps the presets in the lab (working-Claude surfaces exactly what to click and what Frozen should look like, with a before/after screenshot pair for Frozen per the Shipped-gate static-UI convention)",
+        "observable": "Max confirms (or rejects): everything reads as before; Frozen reads as the intended fix. Deferred-to-max"
+      },
+      "layer": "uat",
+      "live": false
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "computeE1 (src/worldengine/base/e1Regime.js) — the derived tuple {compositionClass, geodynamicRegime, L, Φ, V, n, m_hp, effectiveL?}; modalRegime (exported, seed-free) for the in-band collapse; L_STRONG/SHOULDER_LO/HEATPIPE_PEG + the newly-exported MIXED_LO (=MOBILE_L 0.35)",
+      "the lidResponse router (src/worldengine/base/lidResponse.js) — classifyLidPath/isUnbrokenLidPath/writeLidResponseSphere with its byte-preserved pure corners (the V2-2 unbroken-lid family entry point)",
+      "the condition vector (body-condition-vector.js deriveConditionVector) — gains tidalState.locked this increment; already carries T_eq/surfaceGravity/rawTidalIoRatio/atmosphere/composition/age/radius",
+      "DRIVER_PRESETS + PRESET_ARCHETYPE (driver-presets.js) — presets as data; the archetype map DEMOTED to fallback-oracle input (+ Mars mapping added; Neptunian taxonomy resolved)",
+      "the V2-1 conformance oracle (tests/worldengine-e1-conformance-oracle.test.js) — the authoritative allow-list {Frozen, Eyeball} + dispositions this contract executes",
+      "the lab route seam (planet-lod-lab.html ensureNetworkRouted → riverOverlay.route) — passes archetype/locked/T_eq/bodyDrivers.condition/macroSeed today; the flip re-keys what route()/writeBodyRelief does with them",
+      "the 75-golden harness (tests/v2-0-byte-identity.test.js + tests/fixtures/v2-0-carrier-golden.mjs) — the zero-clobber burden-carrier, now with the Frozen adjudicated-divergence assertion"
+    ],
+    "outputs": [
+      "writeBodyRelief (planet-lod-rivers.js) routes on derived {compositionClass, geodynamicRegime} + locked — plate / shell (incl. locked-awareness for eyeball-despun) / unbroken-lid via the lidResponse router (pure-weak→magmatism, pure-strong→stagnantLid, mixed→composer) / despun — with PRESET_ARCHETYPE reduced to a logged fallback-oracle comparison",
+      "Frozen(airless) reroutes shell→despun (the adjudicated dead-lid fix) — the increment's single visible change",
+      "the post-flip 17-preset adjudication oracle (new/extended test) — the retirement evidence for the follow-up PRESET_ARCHETYPE deletion",
+      "condition.tidalState.locked + the MIXED_LO export + probe appliedTune parity — plumbing later increments (V2-5 dead-lid home, V2-10 game-port) read"
+    ],
+    "mustStayWorking": [
+      "the 75-golden byte-identity gate — 70/75 rows bit-identical (captured 7441c92, NEVER re-capture); Frozen's 5 rows via the assert-equal-despun carve-out ONLY",
+      "Lava/Magma/Venus byte-identical (corner writers + their anchors); Eyeball byte-identical on the eyeball-despun shell path; Mars renders despun unchanged",
+      "plate/shell/despun paths + V2-2b-1 stagnantDriversToTune + the 2b-2a composer/Π instrument + 2b-2b falsification tests — all green, none edited for features",
+      "the V2-1 shadow oracle (15-preset, modal-collapsed) keeps passing — the flip changes dispatch, not E1",
+      "the guardrail quartet (v2-0-byte-identity / worldengine-lid-byte-anchors / worldengine-e1-shadow-audit / planet-archetypes) — 160/160",
+      "no 4th carrier.regime constant (verify.js sub.regime∈{0,1,2}); three-free base/ writers (alea namespaces only, no Math.random/Date.now, bounded fixed relax)",
+      "the 4 pre-existing known failures (KnownObjects ×3, GalacticFeatures ×1) do not grow; stage only files we touch (not-ours CameraChoreographer.js/LabMode.js + untracked pile excluded)"
+    ]
+  }
+}
