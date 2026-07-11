@@ -14,6 +14,14 @@
 
 import { GalacticMap } from './GalacticMap.js';
 
+// Default identity-match tolerance for findByPosition: 0.1 pc (0.0001 kpc).
+// This MUST stay BELOW KnownSystems' MATCH_RADIUS (0.0005 kpc, see that
+// file) — otherwise a teleport landing in the annulus between the two
+// tolerances could spawn a procgen system wearing a known system's name
+// (the inverse of the Sirius-swallow bug KnownSystems.MATCH_RADIUS guards
+// against).
+export const POSITION_MATCH_TOL = 0.0001; // kpc
+
 // Spectral type → color (same as HashGridStarfield)
 const SPECTRAL_COLOR = {
   O: [0.6, 0.7, 1.0],
@@ -92,10 +100,10 @@ export class RealStarCatalog {
    * default 0.1 pc tolerance.
    *
    * @param {{ x, y, z }} pos — galactic position in kpc
-   * @param {number} tolKpc — match tolerance in kpc (default 0.0001 = 0.1 pc)
+   * @param {number} tolKpc — match tolerance in kpc (default POSITION_MATCH_TOL = 0.1 pc)
    * @returns {{ x, y, z, name, spect, absMag, lum, ci } | null}
    */
-  findByPosition(pos, tolKpc = 0.0001) {
+  findByPosition(pos, tolKpc = POSITION_MATCH_TOL) {
     if (!this._stars) return null;
     let best = null;
     let bestDist = tolKpc;

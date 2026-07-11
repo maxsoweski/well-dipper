@@ -1,12 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { KnownSystems } from '../KnownSystems.js';
-import { RealStarCatalog } from '../RealStarCatalog.js';
+import { KnownSystems, MATCH_RADIUS } from '../KnownSystems.js';
+import { RealStarCatalog, POSITION_MATCH_TOL } from '../RealStarCatalog.js';
 import { GalacticMap } from '../GalacticMap.js';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 const SOL_POS = { x: GalacticMap.SOLAR_R, y: GalacticMap.SOLAR_Z, z: 0.0 };
+
+// Load the shipped HYG catalog once (2.1 MB) and reuse across tests below —
+// readFileSync+JSON.parse is expensive enough that per-test loading was
+// doubling test runtime for no benefit (the file is read-only within a run).
+const HERE = dirname(fileURLToPath(import.meta.url));
+const CATALOG_PATH = join(HERE, '../../../public/assets/data/hyg-stars.json');
+const CATALOG_STARS = JSON.parse(readFileSync(CATALOG_PATH, 'utf8'));
 
 // Real HYG catalog positions (public/assets/data/hyg-stars.json).
 // Sirius is 2.64 pc from Sol — inside the old 5 pc match radius, which made
@@ -38,9 +45,7 @@ describe('KnownSystems.findAt — match radius vs real-star neighbors', () => {
     // itself at the KnownSystems position (nav overlay + sky rendering need
     // it) — a catalog star inside a known system's radius is only a swallow
     // when the NAMES disagree.
-    const here = dirname(fileURLToPath(import.meta.url));
-    const catalogPath = join(here, '../../../public/assets/data/hyg-stars.json');
-    const stars = JSON.parse(readFileSync(catalogPath, 'utf8'));
+    const stars = CATALOG_STARS;
     const swallowed = [];
     for (const s of stars) {
       const ks = KnownSystems.findAt(s);
@@ -55,9 +60,7 @@ describe('KnownSystems.findAt — match radius vs real-star neighbors', () => {
     // nav computer's real-star overlay never names the home system — the
     // nearest hash-grid star shows a procgen/settled name instead ("Sol in
     // the nav computer gets a name like Talimon", UAT 2026-07-10).
-    const here = dirname(fileURLToPath(import.meta.url));
-    const catalogPath = join(here, '../../../public/assets/data/hyg-stars.json');
-    const stars = JSON.parse(readFileSync(catalogPath, 'utf8'));
+    const stars = CATALOG_STARS;
     const sol = stars.filter(s => s.name === 'Sol');
     expect(sol, 'catalog must contain exactly one Sol entry').toHaveLength(1);
     expect(sol[0].x).toBeCloseTo(SOL_POS.x, 6);
@@ -103,5 +106,20 @@ describe('RealStarCatalog.findByPosition — identity lookup for teleport arriva
   it('returns null before the catalog has loaded', () => {
     const cat = new RealStarCatalog();
     expect(cat.findByPosition(SIRIUS_POS)).toBeNull();
+  });
+});
+
+describe('cross-file invariant — RealStarCatalog tolerance vs KnownSystems radius', () => {
+  it('POSITION_MATCH_TOL stays below KnownSystems.MATCH_RADIUS', () => {
+    // If RealStarCatalog's default identity tolerance ever grew to meet or
+    // exceed KnownSystems' match radius, a teleport landing in the annulus
+    // between them (position within POSITION_MATCH_TOL of a real star but
+    // outside MATCH_RADIUS of a known system) could resolve ambiguously —
+    // or, if the ordering flipped, a real star just outside its own
+    // tolerance could still fall inside a known system's radius and spawn
+    // wearing that known system's name (the inverse of the Sirius bug this
+    // file guards against above). Keeping tol < radius keeps the two lookups
+    // strictly nested rather than overlapping.
+    expect(POSITION_MATCH_TOL).toBeLessThan(MATCH_RADIUS);
   });
 });

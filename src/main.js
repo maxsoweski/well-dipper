@@ -3429,6 +3429,19 @@ warpEffect.onPrepareSystem = () => {
       pendingSystemData = knownWarp.generate();
       pendingSystemData._knownSystemNames = knownWarp.names;
       pendingSystemData._warpTargetName = knownWarp.name;
+      // The "where am I" globals must agree after a known-system arrival —
+      // realign currentGalaxyStar (left pointing at the nav-matched grid
+      // star from the resolvedStar branch above) to the registry position,
+      // same as _debugEnterKnownSystem's realignment (~2464-2472).
+      currentGalaxyStar = {
+        worldX: knownWarp.position.x,
+        worldY: knownWarp.position.y,
+        worldZ: knownWarp.position.z,
+        seed: knownWarp.seed || knownWarp.name || 'known',
+        type: pendingSystemData.star?.type || 'G',
+        name: knownWarp.name,
+        isReal: true,
+      };
       console.log(`[WARP] Known system override: ${knownWarp.name}`);
     } else {
       pendingSystemData = await StarSystemGenerator.generateAsync(seed, galaxyContext);
@@ -4842,13 +4855,17 @@ debugPanel.setSpawnCallbacks({
           sysData = knownSys.generate();
           sysData._knownSystemNames = knownSys.names;
         } else {
-          sysData = StarSystemGenerator.generate(starSeed, ctx);
           // Real-star identity: if this position IS a catalog star (search
-          // teleports land on exact catalog coords), its real name overrides
-          // procgen naming — same precedence warp arrivals get via
-          // _warpTargetName from the clicked sky entry (~9508).
+          // teleports land on exact catalog coords), its real name AND
+          // spectral type override procgen naming/typing — same precedence
+          // warp arrivals get via _warpTargetName from the clicked sky
+          // entry (~9508) and galaxyContext.starTypeOverride (~3405).
           const realStar = realStarCatalog.findByPosition(playerGalacticPos);
-          if (realStar?.name && realStar.name !== '"') {
+          if (realStar?.spect) {
+            ctx.starTypeOverride = realStar.spect;
+          }
+          sysData = StarSystemGenerator.generate(starSeed, ctx);
+          if (realStar?.name) {
             sysData._warpTargetName = realStar.name;
           }
         }

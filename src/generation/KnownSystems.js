@@ -25,7 +25,10 @@ import { GalacticMap } from './GalacticMap.js';
 // Kentaurus at 1.32 pc — or arrivals at real stars get swallowed by the Sol
 // override (Sirius at 2.64 pc spawned the solar system under the old 5 pc
 // radius; 12 named HYG stars sat inside it).
-const MATCH_RADIUS = 0.0005; // kpc
+// It must ALSO stay above RealStarCatalog's POSITION_MATCH_TOL (see that
+// file) — otherwise a teleport landing in the annulus between the two
+// tolerances could spawn a procgen system wearing a known system's name.
+export const MATCH_RADIUS = 0.0005; // kpc
 
 /**
  * Registry of known systems.
