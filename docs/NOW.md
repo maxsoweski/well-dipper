@@ -89,7 +89,10 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > "re-rolled Venus" fear (§0); the WITHIN-world "samey across the same world" feedback (AC9) is owned by V2-2b-2's
 > mixed interior + deeper by V2-7 epochs / V2-8 sculpting. Mechanism: `stagnantDriversToTune(VENUS_REF)===null` keeps
 > shipped Venus byte-identical (75-golden); other drivers (V + T_surf primary) tune population knobs → distinct
-> stagnant worlds. Wired at the SHIPPED dispatch seam (planet-lod-rivers.js:489-491), NOT the router.
+> stagnant worlds. Wired at the SHIPPED dispatch seam (planet-lod-rivers.js — grep `stagnantDriversToTune`; at
+> HEAD 9302c53 that is :502-504, the volcanic seam just above at :488-491, `writeBodyRelief` signature :455), NOT
+> the router. [Re-anchored 2026-07-11: the old ":489-491" citation drifted onto the VOLCANIC branch after the
+> 2b-2a/2b insertions; the V2-2b-1 workstream docs carry build-time line numbers — grep the symbol, don't trust them.]
 > **BUILT (all committed; HEAD `1995dbb`, 6 unpushed):** `e3dde95` plan → `c4aaaee` SLICE A (pure builder + 9 unit
 > ACs, 25 tests) → `af708ee` SLICE B (dispatch wiring + lab T_surf control + `stagnantLidProbe.appliedTune`) →
 > `1995dbb` AC3 contract reconciliation. **VERIFIED:** 9/10 objective ACs PASS 3/3 adversarial (incl. 75-golden

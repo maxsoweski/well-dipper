@@ -2,7 +2,8 @@
   "workstream": "world-engine-v2-2b-1-stagnant-response-2026-07-04",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "SHIPPED 1995dbb — Max UAT-passed 2026-07-05 ('it looks good … it looks distinct along these axes the sliders control'), a pass on the BETWEEN-world criterion this increment targets (a driver-varied stagnant world reads distinct from Venus). All 10 objective ACs green incl. live AC-LAB; within-world sameness explicitly OUT of scope (owned by V2-2b-2 + V2-7/V2-8). Was VERIFIED_PENDING_MAX 1995dbb; the verification block below records the AC-LAB observable numbers.",
+  "status": "shipped",
+  "statusNote": "SHIPPED 1995dbb — Max UAT-passed 2026-07-05 ('it looks good … it looks distinct along these axes the sliders control'), a pass on the BETWEEN-world criterion this increment targets (a driver-varied stagnant world reads distinct from Venus). All 10 objective ACs green incl. live AC-LAB; within-world sameness explicitly OUT of scope (owned by V2-2b-2 + V2-7/V2-8). Was VERIFIED_PENDING_MAX 1995dbb; the verification block below records the AC-LAB observable numbers. ERRATA 2026-07-11 (post-ship sweep wf_33332e17-aa9): the planet-lod-rivers.js line refs in this workstream's docs (:489-491 stagnant seam, :481-483 volcanic, :452 signature) are BUILD-TIME numbers that drifted after the 2b-2a/2b insertions — at 9302c53 the stagnant seam is :502-504, volcanic :488-491, writeBodyRelief signature :455. Grep the symbol (stagnantDriversToTune / writeMagmatismSphere), don't trust the numbers.",
   "verification": {
     "gate": "VERIFIED_PENDING_MAX",
     "sha": "1995dbb",
