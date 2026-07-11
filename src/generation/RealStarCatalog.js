@@ -122,6 +122,23 @@ export class RealStarCatalog {
   }
 
   /**
+   * Find all real stars within radiusKpc (sphere) of pos. Used by
+   * KnownSystems.associate to derive a known system's catalog aliases.
+   * @param {{x,y,z}} pos  @param {number} radiusKpc
+   * @returns {Array<catalogStar>}
+   */
+  findAllWithin(pos, radiusKpc) {
+    if (!this._stars) return [];
+    const out = [], r2 = radiusKpc * radiusKpc;
+    for (let i = 0; i < this._stars.length; i++) {
+      const s = this._stars[i];
+      const dx = s.x - pos.x, dy = s.y - pos.y, dz = s.z - pos.z;
+      if (dx*dx + dy*dy + dz*dz < r2) out.push(s);
+    }
+    return out;
+  }
+
+  /**
    * Find all real stars visible from a position.
    * Returns stars with apparent magnitude below the threshold.
    *

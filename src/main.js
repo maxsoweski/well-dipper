@@ -254,6 +254,7 @@ const realFeatureCatalog = new RealFeatureCatalog();
 // Load real star catalog
 realStarCatalog.load().then(() => {
   StarfieldGenerator.realStarCatalog = realStarCatalog;
+  KnownSystems.associate(realStarCatalog);   // derive known-system catalog aliases
   debugPanel.setRealStarCatalog(realStarCatalog);
   if (_navComputer) _navComputer.setRealStarCatalog(realStarCatalog);
   console.log(`Real star catalog loaded: ${realStarCatalog.count} stars`);
@@ -3414,10 +3415,16 @@ warpEffect.onPrepareSystem = () => {
     // not Sol-override it), but a nav entry carrying a known system's own
     // name ("Sol" via the real-star overlay) IS that system — the nav's
     // matched hash-grid star can sit up to 2 pc from the registered
-    // position, outside findAt's radius, so match by name, not position.
+    // position, outside findAt's radius, so the name is joined via a
+    // catalog-derived alias index (KnownSystems.associate — a registry entry
+    // claims every catalog star within MATCH_RADIUS of its position, so a
+    // multi-star system like Alpha Centauri gets both component names as
+    // aliases automatically). A 3 pc positional belt on playerGalacticPos
+    // then rejects a same-named star reached far from the registered
+    // position (duplicate catalog names).
     const hasNavStar = !!warpTarget.navStarData;
     const knownWarp = hasNavStar
-      ? (KnownSystems.getAll().find(k => k.name === warpTarget.name) || null)
+      ? KnownSystems.findByAlias(warpTarget.name, playerGalacticPos)
       : KnownSystems.findAt(playerGalacticPos);
     console.log(`[WARP] knownSystem check: hasNavStar=${hasNavStar}, knownWarp=${knownWarp?.name || 'none'}`);
     if (knownWarp) {
