@@ -55,10 +55,11 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > regens; findByAlias name gate + 3 pc belt replaces the display-name lambda; makes future Alpha
 > Centauri registration work — HYG names its components Rigil Kentaurus/Toliman). 1123/1123 vitest,
 > live belt accept/reject verified, scene suite 19/19. Successor flags recorded in `a1d2d4c` message.
-> **▶ NEXT: Max UAT round 3** — check Sol's name in the nav (N → PRISM), optionally warp home via nav,
-> then the round-1 items: name samples in `census-report.md`, Horsehead visual, holistic feel. Then:
-> successor scoping (real-universe overlay D6–D9 + settled-catalog UI — includes designing real
-> CONTENTS for real stars; the alias/claimedStars substrate from `a1d2d4c` is its starting point).
+> **✅ UAT PASSED (Max, 2026-07-11)** — Sol works; workstream CLOSED at `a1d2d4c` (FEATURES.md row
+> added; still branch-only — master merge is a separate, Max-gated moment: pushing master = GitHub
+> Pages deploy). **▶ NEXT: real-universe-overlay scoping interview in a FRESH session** (D6–D9 +
+> settled-catalog UI — real names AND contents for known systems; the alias/claimedStars substrate
+> from `a1d2d4c` is the starting point; successor flags in that commit message + seam handoff).
 > Contract: `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/`.
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
