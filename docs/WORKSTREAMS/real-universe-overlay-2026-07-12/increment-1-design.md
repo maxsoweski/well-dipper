@@ -140,6 +140,46 @@ Unit layer, no network (reads committed outputs):
   set; NameGenerator.injective + census suites stay green (run as part of full
   suite, not duplicated here).
 
+## Post-build rulings (2026-07-12/13, working-Claude after the adversarial verify)
+
+The build's fable skeptic + build agents surfaced design-vs-reality conflicts
+(1 BLOCKER, 1 MAJOR, 5 minor). Rulings, all applied and re-verified:
+
+1. **Host–host "no duplicates" check → known-binary allowlist.** Real planet
+   hosts exist inside POSITION_MATCH_TOL (HD 20781/HD 20782 at 0.046 pc;
+   TOI-2267 A/B at identical archive coords). The script now pins the EXACT
+   near-pair set (same idiom as RealUniverseIngest.test.js): a new pair fails
+   (duplicate bug or new real binary → reviewed), a stale allowlist entry fails
+   too. Increment-3's hostname-first join disambiguates the real ones.
+2. **Supplement-vs-HYG clearance → POSITION_MATCH_TOL (0.1 pc), exemption
+   derived from the companion table.** §2's blanket MATCH_RADIUS (0.5 pc) check
+   contradicted the contract's own Alpha Cen architecture (Proxima at 0.055 pc
+   from Rigil Kentaurus/Toliman is REQUIRED, resolved by alias membership).
+   Physically-bound neighbors recorded in stellarCompanions.js are exempt —
+   keeping the companion table the single multiplicity source of truth. YZ Cet
+   (a genuine 0.494 pc alignment with Tau Cet) clears the tightened threshold.
+3. **Kepler-90 ships as KOI-351 + display-name override.** The archive has no
+   "Kepler-90" hostname (verified: 0 rows; 8 rows as KOI-351). Same override
+   mechanism as Proxima Cen/Barnard's star; hostname field keeps the archive
+   form for data joins. Supplement = 14 stars.
+4. **Supplement `lum` = 4 significant digits** (not HYG's toFixed(2), which
+   collapsed 9/13 dim hosts to 0 — ambiguous vs missing, NaN-prone downstream).
+5. **Companion-entry count added to the run report** (AC7's counts clause now
+   fully satisfied: systems, planets, new host stars, companion entries).
+6. **BINDING Increment-3 input — overlay merge joins by NAME first.** The
+   coordinate CONVERSION matches HYG exactly, but archive sy_dist disagrees
+   with HYG distance for the same physical star: 116 hosts share an exact HYG
+   name, 104 beyond POSITION_MATCH_TOL (median 0.83 pc; max 141.4 pc =
+   HD 60292, a ~315 pc giant — the tail is Hipparcos-vs-Gaia distance
+   disagreement on distant giants). A bare position join would miss most
+   bright hosts (AC3 would silently fail). The ingest report prints these
+   xref stats every run.
+7. **gen-real-proper-names.mjs sorts by code point** (localeCompare is not
+   byte-stable across ICU builds; matches the ingest script's convention).
+8. **Archive-vs-literature vmag drift recorded, not "fixed"**: TRAPPIST-1
+   sy_vmag=17.02 vs published V≈18.8; Proxima 11.01 vs 11.13. Faithful to
+   source per §2 ("never hand-typed"); not an ingest bug.
+
 ## Non-goals (deliberate)
 
 - No RealStarCatalog/NavComputer/StarSystemGenerator changes (Increments 2–4).
