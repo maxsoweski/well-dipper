@@ -2,8 +2,8 @@
   "workstream": "naming-census-uniqueness-2026-07-07",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "verified",
-  "phase": "Increment 0 = AC1+AC2 (defect quick wins, DONE 3d87ed6, live render check batched); Increment 1 = AC3+AC4 (census + explainer, DONE 4928ccd); Increment 2 = AC5 (Max gate — CLOSED 2026-07-07, ratified-with-amendments, see ac5-decision.md); Increment 3a = AC9 (HYG catalog regen) + sky-click real-name fix; Increment 3b = AC6+AC7 (position-derived naming, hard guarantee per ac5-decision.md); then AC8 + batched live checks",
+  "status": "shipped",
+  "phase": "Increment 0 = AC1+AC2 (defect quick wins, DONE 3d87ed6, live render check batched); Increment 1 = AC3+AC4 (census + explainer, DONE 4928ccd); Increment 2 = AC5 (Max gate — CLOSED 2026-07-07, ratified-with-amendments, see ac5-decision.md); Increment 3a = AC9 (HYG catalog regen) + sky-click real-name fix; Increment 3b = AC6+AC7 (position-derived naming, hard guarantee per ac5-decision.md); then AC8 + batched live checks. SHIPPED: Max UAT passed 2026-07-11 at a1d2d4c ('Sol works'); reached master + Pages via lane B's 847ab19 pre-deploy merge; status flipped at the 2026-07-13 coordinator relay (owed since 07-11)",
   "acceptanceCriteria": [
     {
       "id": "AC1-horsehead-renders",
