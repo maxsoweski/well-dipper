@@ -137,35 +137,72 @@ describe('V2-2a AC-0 — the router is LABEL-FREE + single-source (grep-audited)
   });
 });
 
-// ── AC-ZERO-CLOBBER (dispatch seam) — RECONCILED for V2-2b-2a Slice C (MF1 Option B, Max-approved 2026-07-05).
-//    V2-2a asserted the router was ABSENT from planet-lod-rivers.js entirely. Slice C's LAB-ONLY mixed-interior
-//    render seam legitimately imports writeLidResponseSphere and calls it from route()'s null-default
-//    labLidOverride hook (every PRODUCTION caller passes no override → route() stays byte-inert; the 75-golden
-//    bypasses route()). The load-bearing invariant is UNCHANGED: the PRODUCTION dispatch (writeBodyRelief) keys
-//    on PRESET_ARCHETYPE and touches NO router symbol — so no shipped preset reaches the mixed path. The first
-//    test now confines the router reference to the labLidOverride hook; the second still fences writeBodyRelief.
-describe('V2-2b-2a AC-ZERO-CLOBBER — the router reaches rivers.js ONLY via route()\'s labLidOverride lab hook', () => {
-  it('planet-lod-rivers.js references the router ONLY through the null-default labLidOverride lab hook', () => {
-    // MF1 Option B: the import + the single call are PERMITTED (the lab-only render seam) …
-    expect(RIVERS_CODE, 'imports writeLidResponseSphere for the lab render seam')
+// ── AC-ZERO-CLOBBER (dispatch seam) — REWRITTEN at V2-3 (contract AC-ZERO-CLOBBER d, enumerated repurposing
+//    #2 of 2; BUILD-PLAN §4 / RG1). The V2-2b-2a version pinned the PRE-flip invariant ("the router reaches
+//    rivers.js ONLY via labLidOverride; writeBodyRelief touches no router symbol") — exactly the invariant the
+//    V2-3 flip exists to retire. POST-flip there are TWO legitimate writeLidResponseSphere call sites:
+//      1. PRODUCTION: writeBodyRelief's condition-bearing unbrokenLid() delegation (heat-pipe + hot-high-L
+//         stagnant → the router's byte-preserved corners), INSIDE the writeBodyRelief function body.
+//      2. LAB: route()'s null-default labLidOverride hook (the V2-2b-2a mixed-interior render seam), OUTSIDE it.
+//    The re-pin: router symbols are PERMITTED inside writeBodyRelief; the base/ WRITERS (magmatism/stagnantLid/
+//    shellRelief/tectonic/plates/mixedInterior) still call no router/E1 symbol (the NEW base-writer scan).
+describe('V2-3 AC-ZERO-CLOBBER (repurposed) — exactly TWO legitimate router call sites; base writers router/E1-free', () => {
+  // Slice writeBodyRelief's exact function body by paren-matching the parameter list (which itself contains
+  // a destructuring `{`), then brace-matching the body — not a fixed window.
+  function functionBody(code, marker) {
+    const start = code.indexOf(marker);
+    expect(start, `${marker} found`).toBeGreaterThan(-1);
+    const lparen = code.indexOf('(', start);
+    let pdepth = 0, j = lparen;
+    for (; j < code.length; j++) {
+      if (code[j] === '(') pdepth++;
+      else if (code[j] === ')') { pdepth--; if (pdepth === 0) break; }
+    }
+    const open = code.indexOf('{', j);            // the FUNCTION BODY brace (past the destructured params)
+    let depth = 0, i = open;
+    for (; i < code.length; i++) {
+      if (code[i] === '{') depth++;
+      else if (code[i] === '}') { depth--; if (depth === 0) break; }
+    }
+    return { body: code.slice(open, i + 1), start, end: i + 1 };
+  }
+
+  it('rivers.js calls writeLidResponseSphere at EXACTLY two sites: production dispatch (inside writeBodyRelief) + labLidOverride (outside)', () => {
+    expect(RIVERS_CODE, 'imports writeLidResponseSphere')
       .toMatch(/import\s*\{[^}]*writeLidResponseSphere[^}]*\}\s*from\s+['"][^'"]*lidResponse/);
-    // … but the router call is GATED on labLidOverride (the null-default lab hook), never an unconditional
-    // production route: the labLidOverride guard sits immediately above the writeLidResponseSphere( call.
-    const callIdx = RIVERS_CODE.indexOf('writeLidResponseSphere(');
-    expect(callIdx, 'writeLidResponseSphere is called (the lab render seam)').toBeGreaterThan(-1);
-    const guardWindow = RIVERS_CODE.slice(Math.max(0, callIdx - 600), callIdx);
-    expect(guardWindow, 'the router call is guarded by the labLidOverride lab hook').toMatch(/labLidOverride/);
-    // classifyLidPath is NEVER referenced in the dispatch file (the router classifies internally).
+    const wbr = functionBody(RIVERS_CODE, 'function writeBodyRelief');
+    const callIdxs = [...RIVERS_CODE.matchAll(/writeLidResponseSphere\(/g)].map((m) => m.index);
+    expect(callIdxs.length, 'exactly two call sites').toBe(2);
+    const inside = callIdxs.filter((i) => i > wbr.start && i < wbr.end);
+    const outside = callIdxs.filter((i) => i <= wbr.start || i >= wbr.end);
+    // 1. the PRODUCTION dispatch call, inside writeBodyRelief's condition-bearing branch:
+    expect(inside.length, 'one call inside writeBodyRelief (the derived unbrokenLid delegation)').toBe(1);
+    // 2. the LAB seam call, guarded by the null-default labLidOverride hook:
+    expect(outside.length, 'one call outside writeBodyRelief (the lab render seam)').toBe(1);
+    const guardWindow = RIVERS_CODE.slice(Math.max(0, outside[0] - 600), outside[0]);
+    expect(guardWindow, 'the lab call is guarded by the labLidOverride hook').toMatch(/labLidOverride/);
+    // The dispatch file still never calls classifyLidPath (the router classifies internally; the dispatch
+    // reads only the SUBTRACTIVE gate isUnbrokenLidPath).
     expect(RIVERS_CODE, 'no classifyLidPath reference in the dispatch file').not.toMatch(/classifyLidPath/);
   });
 
-  it('the writeBodyRelief function body itself calls no router symbol (production dispatch stays on PRESET_ARCHETYPE)', () => {
-    const start = RIVERS_CODE.indexOf('function writeBodyRelief');
-    expect(start, 'writeBodyRelief found in the dispatch file').toBeGreaterThan(-1);
-    // the function is ~50 lines; a generous window covers its whole body without reaching unrelated code.
-    const body = RIVERS_CODE.slice(start, start + 4000);
-    expect(body).not.toMatch(/writeLidResponseSphere/);
-    expect(body).not.toMatch(/lidResponse/);
-    expect(body).not.toMatch(/classifyLidPath/);
-  });
+  // The NEW base-writer scan (BUILD-PLAN §4 repurposing #2): the six base/ WRITERS the dispatch routes to
+  // reference no router symbol and no E1 symbol — routing stays ABOVE the expression layer. (lidResponse.js
+  // itself is the router; e1Regime.js is the source; both are the audited files, not scanned writers.
+  // lidResponse legitimately calls writeMagmatismSphere/writeStagnantLidReliefSphere/writeMixedInteriorSphere —
+  // this scan reads what the WRITERS reference, not who references them.)
+  const BASE_WRITERS = ['magmatism.js', 'stagnantLid.js', 'shellRelief.js', 'tectonic.js', 'plates.js', 'mixedInterior.js'];
+  for (const f of BASE_WRITERS) {
+    it(`base writer ${f} calls no router/E1 symbol (writeLidResponseSphere/classifyLidPath/isUnbrokenLidPath/computeE1/modalRegime/inSeededBand)`, () => {
+      const code = stripComments(readSrc(`../src/worldengine/base/${f}`));
+      expect(code, 'no writeLidResponseSphere').not.toMatch(/writeLidResponseSphere/);
+      expect(code, 'no classifyLidPath').not.toMatch(/classifyLidPath/);
+      expect(code, 'no isUnbrokenLidPath').not.toMatch(/isUnbrokenLidPath/);
+      expect(code, 'no computeE1').not.toMatch(/computeE1/);
+      expect(code, 'no modalRegime').not.toMatch(/\bmodalRegime\b/);
+      expect(code, 'no inSeededBand').not.toMatch(/\binSeededBand\b/);
+      expect(code, 'no lidResponse import').not.toMatch(/from\s+['"][^'"]*lidResponse/);
+      expect(code, 'no e1Regime import').not.toMatch(/from\s+['"][^'"]*e1Regime/);
+    });
+  }
 });

@@ -6,9 +6,11 @@
 // the dispatch, and the lab wiring — so the emit-only contract is enforced mechanically, not by inspection:
 //
 //   • AC-0 check 1 (no archetype input) — every computeE1(...) call site passes the CONDITION VECTOR + macroSeed,
-//     never a preset name / archetype string.
-//   • AC1/AC7 shadow — no writer (src/worldengine/base/*Sphere) and not the dispatch (planet-lod-rivers.js)
-//     imports computeE1; the lab computes state._lastE1 but NEVER threads it into route().
+//     never a preset name / archetype string (post-V2-3 this includes the rivers.js dispatch call site).
+//   • AC1/AC7 (REPURPOSED at V2-3, enumerated) — no base/ WRITER imports computeE1. planet-lod-rivers.js moved
+//     to the legitimate-consumer set: the flipped writeBodyRelief derives its condition-bearing route from
+//     computeE1 by design. The lab still computes state._lastE1 data-only and NEVER threads it into route()
+//     (writeBodyRelief computes E1 itself from bodyDrivers.condition).
 //   • AC2 label-invariant (cross-file) — no consumer branches on / reads e1.label outside e1Regime's own
 //     emergent derivation.
 import { describe, it, expect } from 'vitest';
@@ -23,19 +25,24 @@ const read = (rel) => readFileSync(repo(rel), 'utf8');
 const BASE_DIR = 'src/worldengine/base';
 const baseFiles = readdirSync(repo(BASE_DIR)).filter((f) => f.endsWith('.js'));
 
-// The writer + dispatch set: every base module EXCEPT e1Regime.js (the E1 SOURCE) and lidResponse.js (the
-// V2-2a E1 CONSUMER/router — its whole job is to read E1 coordinates, so it legitimately imports the
-// classification constants L_STRONG/SHOULDER_LO/HEATPIPE_PEG from e1Regime.js; excluded the same way the E1
-// source is. planet-lod-rivers.js STAYS audited, so the "E1 has zero routing/render influence" target holds),
-// plus the dispatch seam.
+// The E1-BLIND writer set — REPURPOSED at V2-3 (contract AC-ZERO-CLOBBER d, enumerated repurposing #1 of 2).
+// The LEGITIMATE-CONSUMER set is now THREE files, each excluded from the blind scan:
+//   • e1Regime.js          — the E1 SOURCE.
+//   • lidResponse.js       — the V2-2a CONSUMER/router (imports the classification constants
+//                            L_STRONG/SHOULDER_LO/HEATPIPE_PEG/MOBILE_L from e1Regime.js).
+//   • planet-lod-rivers.js — NEW at V2-3: writeBodyRelief's condition-bearing dispatch derives its route
+//                            from computeE1 (+ modalRegime/inSeededBand) — the flip this guardrail used to
+//                            forbid is now the production invariant. Its label-freeness is guarded by the
+//                            AC-0 grep in worldengine-v2-3-dispatch-oracle.test.js (function-body slice).
+// The base/ WRITERS stay E1-blind: the pre-flip "E1 has zero influence inside the expression layer" target
+// still holds one layer down (writers consume args, never the tuple).
 const WRITER_DISPATCH = [
   ...baseFiles.filter((f) => f !== 'e1Regime.js' && f !== 'lidResponse.js').map((f) => `${BASE_DIR}/${f}`),
-  'planet-lod-rivers.js',
 ];
 
 const LAB = read('planet-lod-lab.html');
 
-describe('V2-1 AC1/AC7 — computeE1 is imported by NO writer/dispatch file (shadow: zero routing influence)', () => {
+describe('V2-1 AC1/AC7 (repurposed V2-3) — computeE1 is imported by NO base/ writer (writers stay E1-blind)', () => {
   for (const rel of WRITER_DISPATCH) {
     it(`${rel} does not reference computeE1 / import e1Regime`, () => {
       const src = read(rel);
@@ -43,6 +50,16 @@ describe('V2-1 AC1/AC7 — computeE1 is imported by NO writer/dispatch file (sha
       expect(/from\s+['"][^'"]*e1Regime/.test(src), `${rel} imports e1Regime`).toBe(false);
     });
   }
+
+  it('planet-lod-rivers.js is a LEGITIMATE consumer: its ONE computeE1 call site feeds the nested condition vector + macroSeed', () => {
+    const code = read('planet-lod-rivers.js').replace(/\/\/[^\n]*/g, '');
+    const calls = [...code.matchAll(/computeE1\(([^)]*)\)/g)].map((m) => m[1]);
+    expect(calls.length, 'exactly one dispatch call site (writeBodyRelief)').toBe(1);
+    expect(calls[0].split(',')[0].trim(), 'first arg is the condition-vector handle').toBe('cond');
+    // `cond` is bound to the NESTED bodyDrivers.condition (never a preset name / archetype string):
+    expect(/const\s+cond\s*=\s*bodyDrivers\.condition/.test(code), 'cond = bodyDrivers.condition').toBe(true);
+    expect(calls[0].split(',')[1].trim(), 'second arg is macroSeed').toBe('macroSeed');
+  });
 });
 
 describe('V2-1 AC-0 check 1 — every computeE1 call site passes the condition vector + macroSeed (no archetype input)', () => {

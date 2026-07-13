@@ -31,13 +31,20 @@ import { writePlateUpliftSphere, driversToTune } from './src/worldengine/base/pl
 import { writeShellReliefSphere, shellRegimeOf } from './src/worldengine/base/shellRelief.js';
 import { writeMagmatismSphere, magmaDriversToTune } from './src/worldengine/base/magmatism.js';
 import { writeStagnantLidReliefSphere, stagnantLidRegimeOf, stagnantDriversToTune } from './src/worldengine/base/stagnantLid.js';
+// V2-3 (the dispatch flip): writeBodyRelief's condition-bearing branch derives its route from computeE1's
+// {compositionClass, geodynamicRegime, m_hp, shellSubRegime} + the exported seed-free modalRegime/inSeededBand
+// (the in-band modal collapse) — planet-lod-rivers.js is now a LEGITIMATE E1 consumer (like lidResponse.js);
+// the base/ writers stay E1-blind (worldengine-e1-shadow-audit.test.js).
+import { computeE1, modalRegime, inSeededBand } from './src/worldengine/base/e1Regime.js';
 import { makeSphereField } from './src/worldengine/base/sphereField.js';
 // V2-2b-2a Slice C — the LAB-ONLY mixed-interior render seam (MF1 Option B). route() forwards a hand-set E1
 // coordinate through the V2-2a lid-response router (classifyLidPath → the mixed composer WRITES carrier.height),
 // and injects the Π=C·F instrument (one-way: rivers.js is the route/lab boundary, NOT a base/ writer, so the
 // injection never closes the router↔composer↔statistic cycle). Both imports are inert until a caller passes a
 // non-null labLidOverride; every PRODUCTION caller passes none → route() stays byte-inert (AC-ZERO-CLOBBER).
-import { writeLidResponseSphere } from './src/worldengine/base/lidResponse.js';
+// V2-3: writeBodyRelief's derived dispatch now ALSO calls the router — its unbroken-lid family (heat-pipe +
+// hot-high-L stagnant, gated by isUnbrokenLidPath) delegates to writeLidResponseSphere's byte-preserved corners.
+import { writeLidResponseSphere, isUnbrokenLidPath } from './src/worldengine/base/lidResponse.js';
 import { interpenetration } from './src/worldengine/base/interpenetration.js';
 
 // ───────────────────────── Defaults (from rivers-terrain-lab.main.js) ─────────────────────
@@ -453,11 +460,104 @@ export function isStagnantLidPath(archetype, locked = false) {
 }
 
 export function writeBodyRelief(carrier, {
-  // V2-0 Slice C: bodyDrivers may carry a NESTED `bodyDrivers.condition` sub-object (the shadow-mode body
-  // condition-vector). It is the V2-1 E1 read surface — no writer consumes it yet; the tune builders read
-  // only flat keys and ignore it (byte-safe, AC1). Not destructured here on purpose (threads inside bodyDrivers).
-  archetype = null, locked = false, grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, heightSeed = 'e6:0', T_eq = null,
+  // V2-0 Slice C: bodyDrivers may carry a NESTED `bodyDrivers.condition` sub-object (the body condition-
+  // vector). V2-3 (THE DISPATCH FLIP): when it is PRESENT (every production/lab path), routing derives from
+  // computeE1's {compositionClass, geodynamicRegime, shellSubRegime, m_hp} + dispatch-level locked-awareness
+  // — NEVER the archetype string. When ABSENT (the ~8 legacy condition-less test callers), the archetype
+  // chain below survives VERBATIM as the enumerated MIGRATION BRIDGE (contract lens MF-3); the bridge dies
+  // at the retirement commit. `locked` is destructured as argLocked: the condition-bearing branch reads the
+  // NESTED condition.tidalState.locked (AC-PLUMB-RECONCILE a) with the argument as fallback.
+  archetype = null, locked: argLocked = false, grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, heightSeed = 'e6:0', T_eq = null,
 } = {}) {
+  if (bodyDrivers?.condition) {
+    // ═══ V2-3 CONDITION-BEARING DERIVED DISPATCH (BUILD-PLAN §1) — label-free by construction ═══
+    // The routing decision reads ONLY: the condition vector, computeE1's derived tuple, macroSeed, and the
+    // dispatch-level locked flag. The AC-0 grep-audit (worldengine-v2-3-dispatch-oracle.test.js) slices
+    // exactly this block and asserts it reads no archetype string, no e1 label, no label-keyed resolver.
+    const cond = bodyDrivers.condition;
+    const locked = cond.tidalState?.locked ?? argLocked;   // NAMED consumer (AC-0 ch.2): condition.tidalState.locked → locked-awareness + T_ss
+    const e1 = computeE1(cond, macroSeed);
+    const cls = e1.compositionClass;
+    const rawTidal = cond.rawTidalIoRatio ?? 0;
+    const T_ss = locked ? (T_eq ?? 0) * 1.4 : 0;           // shipped F41 convention, unchanged (the Lava-pond/Magma-basin split)
+
+    // ── writer helpers: each calls the SAME writer with the SAME args as the bridge chain below, so every
+    //    route-identical preset stays BIT-identical (BUILD-PLAN §1 writer-argument fidelity table). ──
+    const plate = () => {
+      const plateDiag = writePlateUpliftSphere(carrier, bodyDrivers, { macroSeed, tune: driversToTune(bodyDrivers) });
+      return { path: 'plate', plateDiag, shellDiag: null, magmaDiag: null, stagnantDiag: null };
+    };
+    const shell = (regime) => {
+      const shellDiag = writeShellReliefSphere(carrier, grainDrivers, { macroSeed, regime });
+      return { path: 'shell', plateDiag: null, shellDiag, magmaDiag: null, stagnantDiag: null };
+    };
+    const despun = () => {
+      writeGrainSphere(carrier, grainDrivers);            // precondition: grain before height
+      writeHeightSphere(carrier, {}, grainDrivers, { name: 'tectonic-build' }, heightSeed);
+      return { path: 'despun', plateDiag: null, shellDiag: null, magmaDiag: null, stagnantDiag: null };
+    };
+    const unbrokenLid = () => {
+      // The unbroken-lid family (heat-pipe / hot-high-L stagnant) delegates to the V2-2a router's
+      // byte-preserved corners. MF#1: the strong tune is COMPUTED HERE IN THE CALLER (rivers.js already
+      // imports the builder) and threaded via opts.stagnantTune — the router itself never names the builder
+      // (worldengine-lid-byte-anchors.test.js AC-TUNE-NULL stays green untouched).
+      const stagnantTune = stagnantDriversToTune(bodyDrivers);
+      const lidRes = writeLidResponseSphere(carrier, bodyDrivers, { e1, rawTidal, macroSeed, locked, T_ss, grainDrivers, stagnantTune });
+      // Re-wrap the router's return to writeBodyRelief's shape (probe parity: _lab.magmaProbe /
+      // stagnantLidProbe read the identical path strings + diag fields they read today).
+      if (lidRes.path === 'lid-weak') return { path: 'volcanic', plateDiag: null, shellDiag: null, magmaDiag: lidRes.magmaDiag, stagnantDiag: null };
+      if (lidRes.path === 'lid-strong') return { path: 'stagnant-lid', plateDiag: null, shellDiag: null, magmaDiag: null, stagnantDiag: lidRes.stagnantDiag };
+      // Unreachable from rules (3a)/(3c) for real bodies (RT1 — pinned by the 17-oracle's classifyLidPath
+      // assertion); surfaced honestly rather than masked if a future tuple ever lands here.
+      return { path: lidRes.path, plateDiag: null, shellDiag: null, magmaDiag: null, stagnantDiag: null };
+    };
+    const stagnantLidDirect = () => {
+      // In-band modal-'stagnant' collapse target (contract MF-6 pinned map): the SAME direct writer call as
+      // the bridge chain below, regime resolved COORDINATE-free as the single strong-lid constant (the
+      // router's STRONG_REGIME value) — never the label-keyed resolver.
+      const stagnantTune = stagnantDriversToTune(bodyDrivers);
+      const stagnantDiag = writeStagnantLidReliefSphere(carrier, bodyDrivers, { macroSeed, regime: 'venus-stagnant-lid', tune: stagnantTune });
+      stagnantDiag.appliedTune = stagnantTune;
+      return { path: 'stagnant-lid', plateDiag: null, shellDiag: null, magmaDiag: null, stagnantDiag };
+    };
+
+    // ── the derived rule chain (BUILD-PLAN §1; ordering is LOAD-BEARING) ──
+    // (1) composition terminals: gas / carbon → despun (Gas×3, Sub-Neptune, Carbon — and HOT JUPITER, the
+    //     adjudicated reroute #2: today archetype-null + locked lands it on the shell locked-fallback).
+    if (cls === 'gas' || cls === 'carbon') return despun();
+    // (2) icy: a cryo-ACTIVE shell keeps its condition-derived sub-regime (Europa 'icy-active' ≠ Titan
+    //     'volatile-cold' — distinct REGIME_WEIGHTS, §7); dead-lid icy → despun (FROZEN, the adjudicated
+    //     reroute #1; Crystal stays despun as today).
+    if (cls === 'icy') {
+      if (e1.geodynamicRegime === 'icy') return shell(e1.shellSubRegime);
+      return despun();
+    }
+    // (3) rocky:
+    // (3a) heat-pipe BEFORE (3b) locked: Lava/Magma are LOCKED heat-pipes — today's SHELL_EXCLUDE has
+    //      'lava', so a locked lava body falls THROUGH the shell locked-fallback to volcanic; (3a)-first
+    //      mirrors that exactly (else they would wrongly take eyeball-despun).
+    if (e1.m_hp > 0) return unbrokenLid();                 // → router pure-weak → writeMagmatismSphere
+    // (3b) locked BEFORE (3d) in-band: Eyeball (in-band, modal mobile) must stay eyeball-despun
+    //      byte-identical — dispatch-level locked-awareness is the V2-1 oracle's "today wins" disposition
+    //      (computeE1 stays locked-BLIND; the sub-tag comes from THIS layer, never from the tuple).
+    if (locked) return shell('eyeball-despun');
+    // (3c) hot-high-L unbroken lid (Venus, data-placed) → router pure-strong → writeStagnantLidReliefSphere
+    if (isUnbrokenLidPath(e1)) return unbrokenLid();
+    // (3d) seeded temperate-wet band → seed-free MODAL collapse (contract designDecision #1). V/T are
+    //      sourced from the CONDITION VECTOR (V = composition.volatileFraction, T = T_eq — RT2), NEVER the
+    //      seeded e1.geodynamicRegime, so no named preset's writer choice can change with seed.
+    if (inSeededBand(cond)) {
+      const V = cond.composition?.volatileFraction ?? 0.15, T = cond.T_eq ?? 288;
+      return modalRegime(V, T) === 'stagnant' ? stagnantLidDirect() : plate();   // pinned {mobile,episodic}→plate
+    }
+    // (3e) out-of-band mobile/broken lid → plate
+    if (e1.geodynamicRegime === 'mobile') return plate();
+    // (3f) dead-lid rocky (Mars) → despun
+    return despun();
+  }
+  // ═══ MIGRATION BRIDGE (condition ABSENT) — today's archetype chain VERBATIM (contract lens MF-3). ═══
+  // Carries the ~8 legacy condition-less callers unchanged; deleted at the PRESET_ARCHETYPE retirement commit.
+  const locked = argLocked;
   if (isEarthlikePlatePath(archetype, locked)) {
     // Increment 2 (plate driver-response): the body's D-vector (bodyDrivers — a SEPARATE channel from
     // the grain-bake grainDrivers bundle) is mapped to a `tune` override via driversToTune(). SLICE A
