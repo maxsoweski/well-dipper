@@ -36,7 +36,7 @@
 //     nor cross composition (cut #1 reads raw compositionClass). The SUBTRACTIVE gate isUnbrokenLidPath still reads
 //     RAW e1.L (UNTHREADED) — the load-bearing "low-raw-L seeded-'stagnant' body stays off the Venus pilot" guard
 //     is PRESERVED (threading it would misread a synthetic dry tuple).
-import { L_STRONG, SHOULDER_LO, HEATPIPE_PEG } from './e1Regime.js';
+import { L_STRONG, SHOULDER_LO, HEATPIPE_PEG, MOBILE_L } from './e1Regime.js';
 // SLICE B — the two pure corner writers, imported UNCHANGED as expression kernels. The router delegates
 // argument-for-argument to the shipped call sites (planet-lod-rivers.js:481-482 weak, :491 strong). It reuses
 // the EXISTING weak-side tune builder magmaDriversToTune (NO new lidDriversToTune alias — grounding Q2) but
@@ -50,14 +50,11 @@ import { writeStagnantLidReliefSphere } from './stagnantLid.js';
 // the composer OWNS the 'lid:' alea streams, the router still draws none.
 import { writeMixedInteriorSphere } from './mixedInterior.js';
 
-// MIXED_LO — the mixed interior's lower edge (gate-1 §7), separating Mars-mixed (L 0.551) from
-// Earth-off-pilot (L 0.250). e1Regime.js holds this value as the module-private MOBILE_L=0.35 (:47), which
-// the contract's permitted export-only edit does NOT cover (it exports only L_STRONG / SHOULDER_LO). So it
-// is declared locally here (contract-compliant: the AC-0 grep forbids re-declaring only 0.63 / 0.15, not
-// 0.35). Flagged (R-A3): for V2-2a this floor only separates Mars-mixed from Earth-off-pilot — neither
-// renders (router un-wired; Mars oracle-excluded) — so a UAT drift is inert this increment. If the floor
-// becomes load-bearing at the V2-3 dispatch flip, promote e1Regime.MOBILE_L to an export and import it here.
-const MIXED_LO = 0.35;   // === e1Regime.MOBILE_L (kept in sync by the R-A3 note above)
+// MOBILE_L — the mixed interior's lower edge (gate-1 §7), separating Mars-mixed (L 0.551) from
+// Earth-off-pilot (L 0.250). V2-3 executes the R-A3 promotion the V2-2a note predicted: the floor becomes
+// LOAD-BEARING at the dispatch flip, so e1Regime.MOBILE_L (its single source of truth) is now IMPORTED
+// (above) instead of re-declared as a local 0.35 literal — a UAT retune of MOBILE_L can no longer make
+// classifyLidPath diverge from computeE1's own rocky mobile/mixed cut (e1Regime.js `L < MOBILE_L`).
 
 // HEATPIPE_PEG is imported as part of the router's single-source classification-constant set (must-fix #4).
 // The pure-weak / heat-pipe gate keys on e1.m_hp (= rawTidal − HEATPIPE_PEG, PRECOMPUTED by computeE1
@@ -75,13 +72,13 @@ void HEATPIPE_PEG;
  *   3. L >= L_STRONG AND rawTidal < SHOULDER_LO → 'pure-strong' (Venus: data-placed hot, high-L, tidally quiet)
  *   4. L >= L_STRONG AND rawTidal >= SHOULDER_LO → 'mixed'  (tidal-shoulder: would-be strong, tidally warming —
  *                                                             PG-5, no cliff at the m_hp seam)
- *   5. L >= MIXED_LO                         → 'mixed'      (mixed interior [MIXED_LO, L_STRONG) — Mars 0.551)
- *   6. otherwise                             → 'off-pilot'  (mobile/broken-lid, L < MIXED_LO — Earth/Ocean/Eyeball)
+ *   5. L >= MOBILE_L                         → 'mixed'      (mixed interior [MOBILE_L, L_STRONG) — Mars 0.551)
+ *   6. otherwise                             → 'off-pilot'  (mobile/broken-lid, L < MOBILE_L — Earth/Ocean/Eyeball)
  *
  * The L-cuts (#3-6) read `effectiveL ?? e1.L` (R-wetstag, §5.4 #1 / gate-2 §4): cuts #1/#2 stay on the RAW
  * compositionClass/m_hp fields (their guard — effectiveL moves ONLY the L-cuts, never routes to pure-weak or
  * off-via-composition). A WET seeded-'stagnant' body (effectiveL ∈ [0.60,0.6275] < L_STRONG) thus routes 'mixed'
- * where its raw L (< MIXED_LO) would have fallen off-pilot.
+ * where its raw L (< MOBILE_L) would have fallen off-pilot.
  *
  * @param {{compositionClass:string, m_hp:number, L:number, effectiveL?:number}} e1  a computeE1 tuple. The L-cuts
  *   (#3-6) read `e1.effectiveL ?? e1.L`; cuts #1/#2 read raw compositionClass/m_hp. effectiveL is present ONLY on a
@@ -95,7 +92,7 @@ export function classifyLidPath(e1, rawTidal) {
   const L = e1.effectiveL ?? e1.L;                                       // R-wetstag hand-up (§5.4 #1 / gate-2 §4) — the L-cuts (#3-6) ONLY
   if (L >= L_STRONG && rawTidal < SHOULDER_LO) return 'pure-strong';     // 3 — Venus (hot, high-L, tidally quiet)
   if (L >= L_STRONG && rawTidal >= SHOULDER_LO) return 'mixed';          // 4 — tidal-shoulder (PG-5)
-  if (L >= MIXED_LO) return 'mixed';                                     // 5 — mixed interior (Mars; wet-stagnant via effectiveL)
+  if (L >= MOBILE_L) return 'mixed';                                     // 5 — mixed interior (Mars; wet-stagnant via effectiveL)
   return 'off-pilot';                                                    // 6 — low-L mobile/broken-lid
 }
 
@@ -182,8 +179,9 @@ const uniformPrimitiveId = (carrier, id) => new Int32Array(carrier.count ?? carr
  * an explicit-unimplemented marker off the pilot):
  *   • pure-weak   → writeMagmatismSphere, argument-for-argument identical to planet-lod-rivers.js:481-482
  *                   (drivers = bodyDrivers; { macroSeed, locked, T_ss, tune: magmaDriversToTune(drivers) }).
- *   • pure-strong → writeStagnantLidReliefSphere, argument-for-argument identical to :491
- *                   (drivers = grainDrivers; { macroSeed, regime: STRONG_REGIME }) — regime ARCHETYPE-FREE.
+ *   • pure-strong → writeStagnantLidReliefSphere, argument-for-argument identical to rivers:502-504
+ *                   (drivers = bodyDrivers; { macroSeed, regime: STRONG_REGIME, tune: opts.stagnantTune }) —
+ *                   regime ARCHETYPE-FREE; the strong tune is COMPUTED IN THE CALLER (MF#1), threaded via opts.
  *   • mixed       → writeMixedInteriorSphere (the V2-2b-2a composer — swapped into this seam as planned):
  *                   carrier.height REPLACED; returns multi-valued primitiveId + centerId + mixedDiag.
  *   • off-pilot   → a RETURN-MARKER (NOT a throw); carrier.height UNWRITTEN.
@@ -192,12 +190,12 @@ const uniformPrimitiveId = (carrier, id) => new Int32Array(carrier.count ?? carr
  * still keys on PRESET_ARCHETYPE (the V2-3 flip is out of scope). Exercised as a pure module in headless vitest
  * — the V2-1 shadow discipline one layer up.
  *
- * The corner ASYMMETRY (GROUNDING Q3, a real gotcha): the weak corner takes `drivers` (= bodyDrivers) +
- * { macroSeed, locked, T_ss, tune }; the strong corner takes `grainDrivers` + { macroSeed, regime } (tune
- * omitted → null → the writer's DEFAULTS branch). A uniform bundle across both corners would NOT be
- * argument-for-argument faithful to the shipped sites (and would break byte-identity). Both corners `void
- * drivers` today, so the drivers-arg swap is byte-inert now — the faithfulness is V2-2b future-proofing + an
- * AC-0 arg-audit target, not a current byte lever.
+ * The corner symmetry (V2-3): BOTH corners now take `drivers` (= bodyDrivers) matching the shipped sites
+ * (rivers:489 weak / :503 strong) and thread a tune — weak = magmaDriversToTune(drivers) computed here (the
+ * EXISTING builder); strong = opts.stagnantTune computed IN THE CALLER (MF#1 — the router never names
+ * stagnantDriversToTune). Both corner writers `void drivers` and take their DEFAULTS branch on a null tune, so
+ * while both tunes are null at the anchors (magmaDriversToTune(MAGMA_REF)===null; every Slice-A caller passes
+ * stagnantTune=null) the threading is byte-inert; it closes the parity STRUCTURALLY, not coincidentally.
  *
  * The corner writer's full diagnostics are returned NESTED under magmaDiag / stagnantDiag (mirrors
  * writeBodyRelief's { path, magmaDiag, stagnantDiag } shape, R-B3), so path / fineClass never collide with
@@ -216,7 +214,14 @@ const uniformPrimitiveId = (carrier, id) => new Int32Array(carrier.count ?? carr
  * @param {number}  [opts.T_ss=0]      the caller computes locked ? (T_eq ?? 0) * 1.4 : 0 (D3-MF3, rivers:476)
  *                                     and passes it in; the router FORWARDS it verbatim to the weak corner and
  *                                     NEVER re-derives it (AC-TSS-PRE-GATE — no internal T_ss derivation here).
- * @param {object}  [opts.grainDrivers]  DEFAULT_GRAIN_DRIVERS for the strong corner (argument-for-argument :491).
+ * @param {object}  [opts.grainDrivers]  legacy strong-corner drivers arg — UNUSED post-V2-3 (the strong corner
+ *                                     now takes `drivers` = bodyDrivers, rivers:503); still accepted for caller
+ *                                     compatibility, and byte-irrelevant regardless (writeStagnantLidReliefSphere
+ *                                     `void drivers`).
+ * @param {object|null} [opts.stagnantTune=null]  the strong-corner tune, COMPUTED IN THE CALLER (rivers.js
+ *                                     unbrokenLid() via stagnantDriversToTune — MF#1) and threaded verbatim to
+ *                                     writeStagnantLidReliefSphere; null on every Slice-A caller → DEFAULTS branch
+ *                                     → byte-inert. Also written to stagnantDiag.appliedTune (probe parity, rivers:504).
  * @param {Function|null} [opts.interpen=null]  the Π=C·F instrument, INJECTED (never imported — MF2). Forwarded
  *                                     verbatim to the mixed composer, which stashes {Pi,M,legibleByFamily} in
  *                                     mixedDiag when it is a function. Every PRODUCTION caller passes nothing →
@@ -229,13 +234,14 @@ const uniformPrimitiveId = (carrier, id) => new Int32Array(carrier.count ?? carr
  *          (with centerId + mixedDiag alongside); absent only on off-pilot (unimplemented marker).
  */
 export function writeLidResponseSphere(carrier, drivers, {
-  e1, rawTidal, macroSeed = 0, locked = false, T_ss = 0, grainDrivers, interpen = null,
+  e1, rawTidal, macroSeed = 0, locked = false, T_ss = 0, grainDrivers, interpen = null, stagnantTune = null,
 } = {}) {
   const fineClass = classifyLidPath(e1, rawTidal);
   switch (fineClass) {
     case 'pure-weak': {
       const tune = magmaDriversToTune(drivers);                                                   // === rivers:481
       const magmaDiag = writeMagmatismSphere(carrier, drivers, { macroSeed, locked, T_ss, tune }); // === rivers:482
+      magmaDiag.appliedTune = tune;   // V2-3 probe parity (rivers:490): magmaProbe reads appliedTune identically post-flip
       // OPTIONAL byte-safe uniform corner emit (Slice C): a NEW return field, single-family lava-plain (PIERCE).
       const primitiveId = uniformPrimitiveId(carrier, PRIMITIVE_ID['lava-plain']);
       return { path: 'lid-weak', fineClass, primitiveId, magmaDiag };
@@ -247,7 +253,13 @@ export function writeLidResponseSphere(carrier, drivers, {
       // e1Regime.js:199), so this always resolves to STRONG_REGIME; the explicit coordinate read documents the
       // archetype-free resolution the AC-0 grep asserts. NEVER stagnantLidRegimeOf(archetype).
       const regime = e1.geodynamicRegime === 'stagnant' ? STRONG_REGIME : STRONG_REGIME;
-      const stagnantDiag = writeStagnantLidReliefSphere(carrier, grainDrivers, { macroSeed, regime }); // === rivers:491
+      // V2-3 probe parity (rivers:502-504): thread `drivers` (bodyDrivers post-flip; writeStagnantLidReliefSphere
+      // `void drivers` → byte-inert vs today's grainDrivers) + the strong tune. MF#1: the strong tune is COMPUTED
+      // IN THE CALLER (rivers.js unbrokenLid(), which already imports stagnantDriversToTune) and threaded in via
+      // opts.stagnantTune — this router NEVER names the builder, so byte-anchors:181 (/stagnantDriversToTune/) stays green.
+      const tune = stagnantTune ?? null;                                                             // null on every Slice-A caller → the writer's DEFAULTS branch → byte-inert
+      const stagnantDiag = writeStagnantLidReliefSphere(carrier, drivers, { macroSeed, regime, tune }); // === rivers:503
+      stagnantDiag.appliedTune = tune;   // V2-3 probe parity (rivers:504): stagnantLidProbe reads appliedTune identically post-flip
       // OPTIONAL byte-safe uniform corner emit (Slice C): a NEW return field, single-family basaltic-plain (TENT).
       const primitiveId = uniformPrimitiveId(carrier, PRIMITIVE_ID['stagnant-basaltic-plain']);
       return { path: 'lid-strong', fineClass, primitiveId, stagnantDiag };

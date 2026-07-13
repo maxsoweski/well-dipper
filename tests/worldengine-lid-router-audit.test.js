@@ -125,6 +125,12 @@ describe('V2-2a AC-0 — the router is LABEL-FREE + single-source (grep-audited)
     expect(LID_CODE, 'no re-declared 0.15 literal (single source of truth)').not.toMatch(/\b0\.15\b/);
   });
 
+  it('V2-3 Slice A — IMPORTS MOBILE_L from e1Regime.js; the local 0.35 literal is GONE (R-A3 promotion executed)', () => {
+    expect(LID_CODE, 'imports MOBILE_L from e1Regime.js (the single source of truth for the mixed floor)')
+      .toMatch(/import\s*\{[^}]*\bMOBILE_L\b[^}]*\}\s*from\s*['"]\.\/e1Regime\.js['"]/);
+    expect(LID_CODE, 'no re-declared 0.35 literal (single source of truth)').not.toMatch(/\b0\.35\b/);
+  });
+
   it('resolves the strong regime ARCHETYPE-FREE from geodynamicRegime===\'stagnant\' → the single constant', () => {
     expect(LID_CODE, "reads the E1 coordinate geodynamicRegime==='stagnant'").toMatch(/geodynamicRegime\s*===\s*['"]stagnant['"]/);
     expect(LID_CODE, 'maps to the single strong constant').toMatch(/venus-stagnant-lid/);

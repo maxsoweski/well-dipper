@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-import { computeE1 } from '../src/worldengine/base/e1Regime.js';
+import { computeE1, MOBILE_L, inSeededBand } from '../src/worldengine/base/e1Regime.js';
 import { deriveConditionVector } from '../body-condition-vector.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
 
@@ -111,5 +111,64 @@ describe('V2-1 AC2 — shadow discipline (namespace / rng / no-archetype grep)',
                    surfaceGravity: 0.9, radiusEarth: 1.0, age: 4.5, rawTidalIoRatio: 0, atmosphere: null };
     const e = computeE1(bare, 1);
     for (const k of TUPLE_KEYS) expect(e).toHaveProperty(k);
+  });
+});
+
+// ── V2-3 Slice A (AC-FLIP partial + AC-PLUMB-RECONCILE b) — the dispatch-facing surface computeE1 grows:
+//    shellSubRegime (conditional icy sub-tag, §7) + the MOBILE_L / inSeededBand exports. Same real-derivation
+//    discipline as the blocks above: deriveConditionVector over DRIVER_PRESETS, never hand-set tuples. ──
+describe('V2-3 Slice A — shellSubRegime is the condition-derived icy sub-tag (conditional tuple member)', () => {
+  it("Europa (icy moon): shellSubRegime === 'icy-active' (tidally ACTIVE shell) at every seed", () => {
+    for (const seed of SEEDS) {
+      const e = computeE1(vec('Europa (icy moon)'), seed);
+      expect(e.compositionClass).toBe('icy');
+      expect(e.geodynamicRegime).toBe('icy');
+      expect(e.shellSubRegime).toBe('icy-active');
+    }
+  });
+
+  it("Titan (methane seas): shellSubRegime === 'volatile-cold' (methane window, NOT tidally active) at every seed", () => {
+    for (const seed of SEEDS) {
+      const e = computeE1(vec('Titan (methane seas)'), seed);
+      expect(e.compositionClass).toBe('icy');
+      expect(e.geodynamicRegime).toBe('icy');
+      expect(e.shellSubRegime).toBe('volatile-cold');
+    }
+  });
+
+  it('Europa ≠ Titan sub-regimes (the MF-2 coarse-tuple collapse is resolved by the sub-tag)', () => {
+    expect(computeE1(vec('Europa (icy moon)'), 1).shellSubRegime)
+      .not.toBe(computeE1(vec('Titan (methane seas)'), 1).shellSubRegime);
+  });
+
+  it('Frozen (airless): dead-lid icy carries NO shellSubRegime property (conditional member OMITTED)', () => {
+    for (const seed of SEEDS) {
+      const e = computeE1(vec('Frozen (airless)'), seed);
+      expect(e.compositionClass).toBe('icy');
+      expect(e.geodynamicRegime).toBe('dead-lid');
+      expect(e).not.toHaveProperty('shellSubRegime');
+    }
+  });
+
+  it('Rocky (Earthlike): a non-icy body carries NO shellSubRegime property', () => {
+    for (const seed of SEEDS) {
+      const e = computeE1(vec('Rocky (Earthlike)'), seed);
+      expect(e.compositionClass).toBe('rocky');
+      expect(e).not.toHaveProperty('shellSubRegime');
+    }
+  });
+});
+
+describe('V2-3 Slice A — MOBILE_L + inSeededBand exports (dispatch plumbing)', () => {
+  it('MOBILE_L is exported === 0.35 (the R-A3 promotion — single source of truth, no value change)', () => {
+    expect(MOBILE_L).toBe(0.35);
+  });
+
+  it('inSeededBand is an exported function: Rocky (Earthlike) IN-band, Mars (arid rocky) OUT-of-band', () => {
+    expect(typeof inSeededBand).toBe('function');
+    // Rocky: mass 0.9 ∈ [0.6,1.6], T_eq 288 ∈ [250,320], V 0.15 ≥ 0.12 → in the seeded band.
+    expect(inSeededBand(vec('Rocky (Earthlike)'))).toBe(true);
+    // Mars: massEarthOf(cv) = g·d² = 0.107 < MASS_LO 0.6 → out of the seeded band.
+    expect(inSeededBand(vec('Mars (arid rocky)'))).toBe(false);
   });
 });

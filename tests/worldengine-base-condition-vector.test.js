@@ -19,6 +19,7 @@ import { calibrateTidal } from '../src/worldengine/base/adaptL0.js';
 import { bodyShellThickness, bodyRawTidal, bodySurfaceGravity } from '../src/worldengine/base/baseStep.js';
 import { D_EARTH, driversToTune } from '../src/worldengine/base/plates.js';
 import { MAGMA_REF, magmaDriversToTune } from '../src/worldengine/base/magmatism.js';
+import { stagnantDriversToTune } from '../src/worldengine/base/stagnantLid.js';
 
 // The gate bundle-builder + headless carrier pattern — the SAME source the AC1 byte-identity gate uses,
 // so the seam spy observes exactly the bundle the lab's route() feeds writeBodyRelief (single source).
@@ -208,5 +209,59 @@ describe('V2-0 AC4 — REQUIRED widened-bundle inertness: tune builders ignore c
   it('the tune-null reference anchors still hold (D_EARTH / MAGMA_REF → null)', () => {
     expect(driversToTune(D_EARTH)).toBeNull();
     expect(magmaDriversToTune(MAGMA_REF)).toBeNull();
+  });
+});
+
+// ── V2-3 Slice A (AC-PLUMB-RECONCILE a) — the condition vector gains NESTED tidalState.locked (the V2-1
+//    BUILD-PLAN §4.5 gap), read ONLY by the dispatch layer's locked-awareness. Byte-safe like T_eq /
+//    surfaceGravity: invisible to every flat-key tune builder (the inertness block below mirrors the
+//    V2-0 block above, now covering all THREE builders incl. V2-2b-1's stagnantDriversToTune). ──
+describe('V2-3 AC-PLUMB-RECONCILE (a) — condition.tidalState.locked present + faithful for all 17 presets', () => {
+  for (const name of Object.keys(DRIVER_PRESETS)) {
+    it(`"${name}": tidalState.locked present and === !!fp.tidalState?.locked`, () => {
+      const fp = DRIVER_PRESETS[name];
+      const u = deriveUniforms(fp, QUALITY_TIER);
+      const v = deriveConditionVector(fp, u, fp.radiusEarth);
+      expect(v, name).toHaveProperty('tidalState');
+      expect(typeof v.tidalState.locked, name).toBe('boolean');
+      expect(v.tidalState.locked, name).toBe(!!(fp.tidalState && fp.tidalState.locked));
+    });
+  }
+
+  it('the field is non-vacuous: at least one preset locked (Europa) and one unlocked (Rocky)', () => {
+    const of = (name) => { const fp = DRIVER_PRESETS[name]; return deriveConditionVector(fp, null, fp.radiusEarth); };
+    expect(of('Europa (icy moon)').tidalState.locked).toBe(true);
+    expect(of('Rocky (Earthlike)').tidalState.locked).toBe(false);
+  });
+});
+
+describe('V2-3 AC-PLUMB-RECONCILE (a) — tidalState is BYTE-INERT to all three flat-key tune builders', () => {
+  // Mirror of the V2-0 inertness block: compare each builder's output for a condition WITH the new nested
+  // tidalState vs a twin condition WITHOUT it — identical outputs ⇒ the nesting is invisible to the flat-key
+  // read surfaces (driversToTune / magmaDriversToTune read flat keys; stagnantDriversToTune reads flat keys +
+  // condition.age/condition.T_eq — never condition.tidalState).
+  const rows = Object.keys(DRIVER_PRESETS).map((name) => {
+    const fp = DRIVER_PRESETS[name];
+    const u = deriveUniforms(fp, QUALITY_TIER);
+    const cond = deriveConditionVector(fp, u, fp.radiusEarth);
+    const { tidalState: _ts, ...condSansTidal } = cond;            // the without-field twin
+    const base = buildNeutralBodyDrivers(u, fp);
+    return { name,
+             withField:    { ...base, condition: cond },
+             withoutField: { ...base, condition: condSansTidal } };
+  });
+
+  for (const { name, withField, withoutField } of rows) {
+    it(`"${name}": driversToTune/magmaDriversToTune/stagnantDriversToTune identical with/without tidalState`, () => {
+      expect(driversToTune(withField)).toEqual(driversToTune(withoutField));
+      expect(magmaDriversToTune(withField)).toEqual(magmaDriversToTune(withoutField));
+      expect(stagnantDriversToTune(withField)).toEqual(stagnantDriversToTune(withoutField));
+    });
+  }
+
+  it('the equality is non-vacuous: at least one preset drives a non-null tune from EACH builder', () => {
+    expect(rows.some((r) => driversToTune(r.withField) !== null)).toBe(true);
+    expect(rows.some((r) => magmaDriversToTune(r.withField) !== null)).toBe(true);
+    expect(rows.some((r) => stagnantDriversToTune(r.withField) !== null)).toBe(true);
   });
 });

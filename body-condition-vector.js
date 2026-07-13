@@ -34,6 +34,11 @@ export function deriveConditionVector(fp, derived, radiusEarth) { return {
   //    Slice A did not plumb it; surfaced here as a THIRD nested passthrough (same byte-safe discipline as
   //    T_eq/surfaceGravity — nested under condition, invisible to the flat-key tune builders, AC1-inert).
   atmosphere:      fp.atmosphere ?? null,                // atmosphere passthrough (composition read by compositionClass; null for airless presets, handled by ?.composition)
+  // ── V2-3 AC-PLUMB-RECONCILE (a): the writeBodyRelief dispatch's locked-awareness (eyeball-despun + T_ss)
+  //    reads condition.tidalState.locked — the V2-1 BUILD-PLAN §4.5 gap. NESTED (byte-safe like T_eq /
+  //    surfaceGravity — invisible to the flat-key tune builders → AC1-inert). computeE1 stays locked-BLIND;
+  //    ONLY the dispatch layer reads this (as writeBodyRelief already reads a `locked` arg today). ──
+  tidalState:      { locked: !!(fp.tidalState && fp.tidalState.locked) },
   rawTidalIoRatio: derived?.tidalHeat ?? bodyRawTidal(fp), // D12 RAW, explicitly named + un-calibrated (m_hp source)
   shellThickness:  bodyShellThickness(fp),               // baseStep helper (Slice B) — raw scalar, NO d³ transform (R4)
   magneticField:   fp.magneticField,                     // D13 data-only (undefined for lab presets)

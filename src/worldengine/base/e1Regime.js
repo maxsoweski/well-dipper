@@ -44,7 +44,7 @@ export const L_STRONG = 0.63;        // pure-strong lid cut (Venus 0.728 → str
 export const SHOULDER_LO = 0.15;     // rawTidal shoulder below which a hot-high-L body reads as stagnant (not heat-pipe) [V2-2a: exported alongside L_STRONG]
 const ACTIVE_TIDAL = 0.5;     // rawTidalIoRatio above which an icy shell is tidally ACTIVE (Europa rt≈137)
 const METH_LO = 85, METH_HI = 120;  // methane-window band (Titan T94 kept 'icy'; Frozen T60 falls to dead-lid)
-const MOBILE_L = 0.35;        // rocky below this (non-heatpipe, out-of-band) reads mobile/broken-lid
+export const MOBILE_L = 0.35; // rocky below this (non-heatpipe, out-of-band) reads mobile/broken-lid [V2-3: EXPORTED as the single source of truth for lidResponse.js's mixed-interior floor — R-A3 promotion, no value change]
 const COLD_DEAD_T = 250;      // cold-dead rocky upper T (Mars T210 — diagnostic placement; Mars is oracle-excluded)
 const COLD_DEAD_PHI = 0.4;    // cold-dead rocky upper Φ (Mars Φ0.268)
 
@@ -110,8 +110,9 @@ export function centerCount(phi, L) {
   return clamp(N.N_MIN, N.N_MAX, Math.round(N.N_BASE + N.N_PHI * Math.min(phi, 1.2) + N.N_L * (1 - L)));
 }
 
-// ── Seeded-band membership (rocky temperate-wet Earth-mass). ──
-function inSeededBand(cv) {
+// ── Seeded-band membership (rocky temperate-wet Earth-mass). EXPORTED (V2-3): the writeBodyRelief dispatch
+//    reads it to decide the in-band modal collapse (never re-derives the BAND edges at a second site). ──
+export function inSeededBand(cv) {
   const T = cv.T_eq ?? 288, V = cv.composition?.volatileFraction ?? 0.15, mass = massEarthOf(cv);
   return mass >= BAND.MASS_LO && mass <= BAND.MASS_HI && T >= BAND.T_LO && T <= BAND.T_HI && V >= BAND.V_MIN;
 }
@@ -149,8 +150,11 @@ function effectiveLOf(V) {
  * @param {{weights?:{mobile:number,episodic:number,stagnant:number}}} [opts]  lab-only seeded-band weight
  *        override (Slice D `_lab.e1RegimeWeights`, mirrors _driverAbMode); omitted ⇒ FROZEN E1_REGIME_WEIGHTS.
  * @returns {{compositionClass:string, geodynamicRegime:string, label:string, L:number, Φ:number, V:number,
- *            n:number, m_hp:number, e1Seed:number, positionWithinRegime:number, effectiveL?:number}}
+ *            n:number, m_hp:number, e1Seed:number, positionWithinRegime:number, effectiveL?:number,
+ *            shellSubRegime?:string}}
  *          effectiveL is present ONLY on a seeded-'stagnant' pick (conditional tuple member, gate-2 §4).
+ *          shellSubRegime is present ONLY on an ACTIVE icy branch ('icy-active'|'volatile-cold'; §7) — the
+ *          dispatch's shell sub-tag; omitted on dead-lid icy and on every non-icy body.
  */
 export function computeE1(conditionVector, macroSeed, opts = {}) {
   const cv = conditionVector || {};
@@ -170,7 +174,7 @@ export function computeE1(conditionVector, macroSeed, opts = {}) {
   const rng = alea('e1:regime:' + (macroSeed | 0));
   const e1Seed = macroSeed >>> 0;
 
-  let geodynamicRegime, positionWithinRegime, effectiveL;
+  let geodynamicRegime, positionWithinRegime, effectiveL, shellSubRegime;
 
   // compositionClass gates the edge SET (matching oracle-preview.mjs writerE1 order — the AC3 numeric
   // reference): icy bodies never take the heat-pipe edge (an icy tidal world is a cryo-active SHELL, Europa —
@@ -180,6 +184,12 @@ export function computeE1(conditionVector, macroSeed, opts = {}) {
     const activeTidal = rawTidal > ACTIVE_TIDAL;                       // Europa
     const methaneVolatile = V >= 0.12 && T >= METH_LO && T <= METH_HI; // Titan (methane hydrology window)
     geodynamicRegime = (activeTidal || methaneVolatile) ? 'icy' : 'dead-lid';  // else cold-dead icy (Frozen/Crystal)
+    // V2-3 (§7): expose the icy shell SUB-REGIME the dispatch consumes so Europa/Titan keep DISTINCT shell
+    // REGIME_WEIGHTS ('icy-active' ≠ 'volatile-cold' → different bytes) — reuses the EXISTING activeTidal /
+    // methaneVolatile booleans, re-derives NO constants (ACTIVE_TIDAL/METH_LO/METH_HI stay single-site).
+    // Conditional tuple member (like effectiveL): OMITTED on dead-lid (Frozen/Crystal → route despun, sub-tag
+    // unused). computeE1 stays locked-BLIND — 'eyeball-despun' is a DISPATCH-layer concern, never derived here.
+    shellSubRegime = activeTidal ? 'icy-active' : methaneVolatile ? 'volatile-cold' : undefined;
     positionWithinRegime = rng();
   } else if (cls === 'gas' || cls === 'carbon') {
     // Off-pilot composition terminals: no solid-surface geodynamics. 'dead-lid' is an INERT diagnostic value —
@@ -227,6 +237,7 @@ export function computeE1(conditionVector, macroSeed, opts = {}) {
     positionWithinRegime,
   };
   if (effectiveL !== undefined) out.effectiveL = effectiveL;   // conditional tuple member (seeded-stagnant only)
+  if (shellSubRegime !== undefined) out.shellSubRegime = shellSubRegime;  // conditional (icy-active/volatile-cold; §7)
   return out;
 }
 
