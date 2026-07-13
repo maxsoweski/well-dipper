@@ -4,7 +4,8 @@
 // A three-free, deterministic sibling of plates.js that organizes relief about a SEEDED paleo-spin
 // axis (w0) and tidal axis (t_hat) — NOT carrier latitude — for icy / despun / tidally-locked shells,
 // replacing the sin^2(lat) zonal fallback for those bodies ONLY. It never touches the validated
-// Earth-like plate path (the dispatch checks isEarthlikePlatePath FIRST, then shellRegimeOf).
+// Earth-like plate path — writeBodyRelief's condition-derived dispatch routes plate bodies (mobile
+// lid) before ever reaching the shell regime.
 //
 // Determinism: every draw via alea(seedString) keyed off the integer macroSeed; NO Math.random /
 // NO Date.now anywhere. Generative-not-simulative: the determined end-state in one pass + a bounded

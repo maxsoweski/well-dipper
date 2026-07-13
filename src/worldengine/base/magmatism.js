@@ -4,8 +4,9 @@
 // A three-free, deterministic sibling of plates.js and shellRelief.js that organizes relief about a
 // SEEDED mantle-plume field — NOT carrier latitude — for volcanic bodies (Lava / Magma-K2-141b /
 // Io-type), replacing the sin^2(lat) zonal fallback for those bodies ONLY. It never touches the
-// validated Earth-like plate path or the icy/despun shell path (the dispatch checks
-// isEarthlikePlatePath FIRST, then isShellReliefPath, then isVolcanicPath LAST).
+// validated Earth-like plate path or the icy/despun shell path — writeBodyRelief's condition-derived
+// dispatch routes the heat-pipe / unbroken-lid family here (via the lidResponse router) only after
+// the plate and icy-shell regimes have already claimed their bodies.
 //
 // Determinism: every draw via alea(seedString) keyed off the integer macroSeed in the DISJOINT
 // 'magma:' namespace (never collides with plates' 'plates:', shell's 'shell:' or 'e6:'); NO

@@ -6,7 +6,8 @@
 // mathutil.js. It NEVER imports three. A sibling of plates.js / shellRelief.js / magmatism.js: it
 // consumes the F3 sphere carrier ({verts, adj, N, tangentFrameAt}) and REPLACES carrier.height for a
 // stagnant-lid silicate body (Venus). The regime gate that selects this writer lives at the
-// route()/lab boundary (planet-lod-rivers.js isStagnantLidPath), NOT in here.
+// route()/lab boundary — writeBodyRelief's condition-derived dispatch (pure-strong unbroken lid),
+// NOT in here.
 //
 // GENERATIVE, NOT SIMULATIVE — it places the *determined end-state* of a Venus-type history in ONE
 // pass, all organized about ONE seeded mantle-plume field (reproducing the Beta–Atla–Themis causal
