@@ -255,7 +255,7 @@ const realFeatureCatalog = new RealFeatureCatalog();
 // Load real star catalog
 realStarCatalog.load().then(() => {
   StarfieldGenerator.realStarCatalog = realStarCatalog;
-  KnownSystems.associate(realStarCatalog);   // derive known-system catalog aliases
+  KnownSystems.associate(realStarCatalog, galacticMap);   // derive known-system catalog aliases + inject map for authored-entry ctx (design D7)
   debugPanel.setRealStarCatalog(realStarCatalog);
   if (_navComputer) _navComputer.setRealStarCatalog(realStarCatalog);
   console.log(`Real star catalog loaded: ${realStarCatalog.count} stars`);

@@ -154,13 +154,27 @@ describe('real-star-supplement.json — dim famous hosts as real catalog stars',
     expect(names.has('TRAPPIST-1')).toBe(true);
   });
 
-  it('every entry clears MATCH_RADIUS from every KnownSystems position', () => {
-    const ksPositions = KnownSystems.getAll().map(k => k.position);
+  it('every entry clears MATCH_RADIUS from every KnownSystems position UNLESS it is a derived alias', () => {
+    // Companion-table-derived exemption (mirror of the shipped
+    // KnownSystems.match-radius swallow idiom; Increment-1 post-build ruling 2 /
+    // d8d6b63 identity-agreement). A supplement star inside a KnownSystems
+    // entry's MATCH_RADIUS is a swallow ONLY when it is NOT one of that entry's
+    // derived aliases. Increment 2 registers Alpha Centauri at Rigil's position;
+    // Proxima Centauri sits 0.055 pc away — inside MATCH_RADIUS — but is aliased
+    // to Alpha Centauri via the companion table (eagerly, since Proxima is below
+    // the HYG cut), so it resolves by ALIAS MEMBERSHIP, never a radius swallow.
+    // A NEW supplement star landing atop a KnownSystems position without an alias
+    // (an actual duplicate-ingest bug) still fails this.
+    const entries = KnownSystems.getAll();
+    const swallowed = [];
     for (const s of SUPP) {
-      for (const p of ksPositions) {
-        expect(dist(s, p), `${s.name} vs KnownSystems`).toBeGreaterThanOrEqual(MATCH_RADIUS);
+      for (const ks of entries) {
+        if (dist(s, ks.position) < MATCH_RADIUS && !ks.aliases.has(s.name)) {
+          swallowed.push(`${s.name} → ${ks.name}`);
+        }
       }
     }
+    expect(swallowed, `supplement stars swallowed: ${swallowed.join(', ')}`).toHaveLength(0);
   });
 
   it('no entry shares a name with a hyg-stars.json star', () => {

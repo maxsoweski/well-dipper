@@ -34,6 +34,9 @@ const SPECTRAL_COLOR = {
   W: [0.5, 0.6, 1.0],  // Wolf-Rayet
   C: [1.0, 0.4, 0.1],  // Carbon star
   S: [1.0, 0.5, 0.3],  // S-type
+  D: [0.85, 0.9, 1.0], // Degenerate white dwarf (AC10) — blue-white; matches
+                       //   StarSystemGenerator.STAR_PROPERTIES.D / the
+                       //   WhiteDwarfStar core palette. Increment-3 future-proof.
 };
 
 export class RealStarCatalog {

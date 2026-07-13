@@ -470,7 +470,7 @@ function checkSupplement(supplement, failures) {
   // clearance vs hyg-stars.json (position + name) and KnownSystems positions.
   const hyg = JSON.parse(readFileSync(HYG_PATH, 'utf8'));
   const hygNames = new Set(hyg.filter((h) => h.name).map((h) => h.name));
-  const knownPositions = KnownSystems.getAll().map((k) => k.position);
+  const knownEntries = KnownSystems.getAll();
   for (const s of stars) {
     if (hygNames.has(s.name)) failures.push(`supplement name "${s.name}" collides with a hyg-stars.json name`);
     // Duplicate detection vs hyg uses the engine's actual identity tolerance
@@ -488,10 +488,21 @@ function checkSupplement(supplement, failures) {
         failures.push(`supplement ${s.name} within POSITION_MATCH_TOL of hyg star ${h.name ?? '(unnamed)'} (${d.toExponential(3)} kpc) — duplicate or unmodeled binary`);
       }
     }
-    for (const kp of knownPositions) {
-      const d = dist3(s, kp);
-      if (d < MATCH_RADIUS) {
-        failures.push(`supplement ${s.name} within MATCH_RADIUS of KnownSystems position (${d.toExponential(3)} kpc)`);
+    // Companion-table-derived exemption (mirror of the shipped
+    // KnownSystems.match-radius swallow idiom; Increment-1 post-build ruling 2 /
+    // d8d6b63 identity-agreement — same rule RealUniverseIngest.test.js applies).
+    // A supplement star inside a KnownSystems entry's MATCH_RADIUS is a swallow
+    // ONLY when it is NOT one of that entry's derived aliases. Increment 2
+    // registers Alpha Centauri at Rigil's position; Proxima Centauri sits
+    // 0.055 pc away — inside MATCH_RADIUS — but is aliased to Alpha Centauri via
+    // the companion table (eagerly, since Proxima is below the HYG cut), so it
+    // resolves by ALIAS MEMBERSHIP, never a radius swallow. A genuinely new
+    // supplement star landing atop a KnownSystems position without an alias
+    // still fails this.
+    for (const ks of knownEntries) {
+      const d = dist3(s, ks.position);
+      if (d < MATCH_RADIUS && !ks.aliases.has(s.name)) {
+        failures.push(`supplement ${s.name} within MATCH_RADIUS of KnownSystems position ${ks.name} (${d.toExponential(3)} kpc)`);
       }
     }
   }

@@ -35,8 +35,16 @@ describe('KnownSystems.findAt — match radius vs real-star neighbors', () => {
     expect(KnownSystems.findAt(SIRIUS_POS)).toBeNull();
   });
 
-  it('does NOT match Sol at Rigil Kentaurus (1.32 pc — nearest real star)', () => {
-    expect(KnownSystems.findAt(RIGIL_POS)).toBeNull();
+  it('matches Alpha Centauri at Rigil Kentaurus (a1d2d4c successor flag 1 flips)', () => {
+    // Increment 2 (real-universe-overlay-2026-07-12, AC5) registers Alpha
+    // Centauri AT Rigil's HYG position. This test previously asserted findAt
+    // returned null there ("does NOT match Sol at Rigil Kentaurus"); the
+    // successor flag flips now that the authored A+B binary claims the position.
+    // Rigil keeps its identity — it is now Alpha Centauri's, not Sol's, and not
+    // a procgen impostor.
+    const ks = KnownSystems.findAt(RIGIL_POS);
+    expect(ks).not.toBeNull();
+    expect(ks.name).toBe('Alpha Centauri');
   });
 
   it('no real catalog star falls inside a known system radius UNLESS it is a derived alias', () => {
@@ -135,8 +143,13 @@ describe('alias-index + positional-belt join', () => {
   // into these assertions.
   it('resolves Sol via its eager self-name alias, seeded at module load', () => {
     expect(KnownSystems.findByAlias('Sol', SOL_POS)?.name).toBe('Sol');
-    // Rigil is 1.32 pc from Sol — never claimed by the Sol-only registry.
-    expect(KnownSystems.findByAlias('Rigil Kentaurus', RIGIL_POS)).toBeNull();
+    // Rigil is 1.32 pc from Sol — never claimed by Sol. Since Increment 2 (AC5)
+    // registered Alpha Centauri at Rigil's position, Rigil is now that entry's
+    // alias (once associate() runs), not Sol's. Order-robust but exact: the
+    // only legal outcomes are null (associate not yet run in this file) or
+    // the Alpha Centauri entry — anything else is a mis-claim.
+    const rigilOwner = KnownSystems.findByAlias('Rigil Kentaurus', RIGIL_POS);
+    expect([null, 'Alpha Centauri']).toContain(rigilOwner?.name ?? null);
   });
 
   it('the positional belt rejects a far same-named arrival', () => {
