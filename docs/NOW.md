@@ -68,8 +68,20 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > review (12 findings folded, 3 blockers: multiplicity had no data source/engine support) + round-2
 > re-verify (clean + 3 residuals folded). Resolves D6–D9. Contract:
 > `docs/WORKSTREAMS/real-universe-overlay-2026-07-12/` (schema-valid, status building).
-> **▶ NEXT: Max greenlight → BUILD Increment 1 (AC7 ingest) via opus-pinned workflows in a FRESH
-> session.** AC2's NavComputer search seam is lane-D-adjacent — coordinator-flagged before build.
+> **▶ GREENLIT (Max 2026-07-12) → Increment 1 (AC7 ingest) BUILT `77723c2` (2026-07-13).** AC8
+> baseline captured FIRST (`1fc7357`: 24 procgen-only systems, deep-equal + re-filter hook). Archive
+> verified live (pscomppars 6319 planets/4735 hosts; attribution license). Built via 5-agent workflow
+> (opus builders, sonnet integrate, **fable adversarial verifier** — Max's today-only unlock) + 8
+> post-build rulings (design doc §Post-build): known-binary allowlist (HD 20781/20782, TOI-2267 A/B),
+> companion-table-derived duplicate exemption (Proxima vs Rigil/Toliman per contract's Alpha Cen
+> architecture), Kepler-90-as-KOI-351, lum 4-sig-digits, ICU-stable sorts. Shipped: ingest script
+> (byte-identical, exit 0, drops 0/7/7/27/260 reported), real-system-contents.json (4457 hosts/6030
+> planets), real-star-supplement.json (14 dim hosts), stellarCompanions.js (5 web-cited entries),
+> blocklist 323→325 (0 named-catalog collisions), 18 contract tests. Suite 1249 passed (vendor noise
+> unchanged). ⚠ **BINDING Increment-3 input:** overlay merge joins by NAME first — 104/116 same-named
+> hosts sit >0.1 pc from their HYG record (Hipparcos-vs-Gaia distance disagreement, max 141 pc).
+> **▶ NEXT: Increment 2 = AC10 engine structural support + AC5 authoring machinery (Alpha Cen proof).**
+> AC2's NavComputer search seam is lane-D-adjacent — coordinator routing needed BEFORE Increment 4.
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
