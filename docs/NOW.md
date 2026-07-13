@@ -80,8 +80,26 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > blocklist 323→325 (0 named-catalog collisions), 18 contract tests. Suite 1249 passed (vendor noise
 > unchanged). ⚠ **BINDING Increment-3 input:** overlay merge joins by NAME first — 104/116 same-named
 > hosts sit >0.1 pc from their HYG record (Hipparcos-vs-Gaia distance disagreement, max 141 pc).
-> **▶ NEXT: Increment 2 = AC10 engine structural support + AC5 authoring machinery (Alpha Cen proof).**
-> AC2's NavComputer search seam is lane-D-adjacent — coordinator routing needed BEFORE Increment 4.
+> **▶ Increment 2 (AC10+AC5) BUILT `d106181` (2026-07-13).** Design-first (`65994e2`, 2 explorer passes),
+> built via resumed 4-agent workflow (opus builders/reviewer, sonnet integrate; builder-2's report died on
+> StructuredOutput — work was on disk, recovered via audit-stage resume). Landed: STAR_PROPERTIES.D
+> (spec-only, never rolled) + normalizeSpectralClass ('DA2'→'D'); ctx companionSpec/knownPlanets/
+> farCompanions (omitted-not-null — AC8 snapshot held byte-identical); KnownSystemAuthoring adapter routes
+> declarative entries THROUGH StarSystemGenerator; Alpha Centauri entry = companionsRef only (A+B from
+> stellarCompanions, Proxima planets via gen-known-system-contents.mjs generated module); Proxima alias
+> derived from companion table; both anticipated test flips (findAt(RIGIL_POS)→Alpha Cen; ingest clearance
+> exemption); ONE surgical main.js line (map injection at associate()). Cap rules: representation-cap.md
+> (`c713625`). Suite 1276 (was 1249). Verify full ×2 (2nd run after an API-crash rerun of the AC10 check):
+> **AC10 PASS 3/3 + AC7 PASS 3/3**; AC5 static-green + **LIVE-DRIVEN same day** (Max brought up :5176 +
+> debug Chrome): nav-warp at Rigil, Proxima-position-targeted warp, and debug-search teleport ALL spawn
+> the authored Alpha Centauri (G2V+K1V @23.5 AU, Proxima far companion w/ planets b,d, names aligned, no
+> impostor); Sol intermediate spawned as Sol; **AC8 live enterSol() 19/19 CLEARED** (owed since Inc 1);
+> console zero errors/warns. Addendum: `verdict-live-drives-d106181.json` (sky-click deferred w/ rationale
+> — same findAt branch as teleport, plumbing untouched). ⚠ Inc-3 BINDING inputs: name-first join
+> (unchanged); ExoticOverlay._applyFungal 1-candidate crash must be fixed BEFORE D-primaries become
+> reachable; injected known planets need migration/stability immunity (TRAPPIST-class).
+> **▶ NEXT: Increment 3 = AC3+AC4 bulk overlay merge (fresh session recommended).** AC2's NavComputer
+> search seam is lane-D-adjacent — coordinator routing needed BEFORE Increment 4.
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
