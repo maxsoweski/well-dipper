@@ -18,7 +18,10 @@ the screensaver sees this at V2-10 game-port.
 ## Success criteria (Max's language, confirmed 2026-07-11)
 
 - Flipping the switch changes nothing I can see: every preset except Frozen renders exactly as
-  before, byte-provable, across seeds.
+  before, byte-provable, across seeds. *(Amended same day, adversarial-lens finding M2: Hot
+  Jupiter joins Frozen as a second adjudicated reroute — today it wrongly rides the icy-shell
+  writer via the locked-fallback; the fix is byte-real but visually masked by the gas-row
+  relief gating. Surfaced to Max in the amendment report.)*
 - Frozen is the one deliberate change, and it reads as the correct "dead frozen ball" fix,
   not a bug.
 - No label routing anywhere: dispatch reads only derived conditions; the archetype string
