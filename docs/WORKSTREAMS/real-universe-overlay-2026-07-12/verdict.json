@@ -1,0 +1,73 @@
+{
+  "workstream": "real-universe-overlay-2026-07-12",
+  "commit": "77723c2",
+  "perLayer": {
+    "unit": "FAIL",
+    "integration": "INSUFFICIENT",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC1-neighborhood-fidelity",
+      "result": "INSUFFICIENT",
+      "evidence": "Live-integration AC; contract schedules AC1 for Increment 5 (not yet built — diff since 77723c2 is docs/NOW.md only). Reference table docs/WORKSTREAMS/.../neighborhood-reference.json does not exist; RealStarCatalog.js still only loads hyg-stars.json (new real-universe JSON unwired to runtime); no enterSirius() lab hook exists for the Sol/Sirius comparison. A live drive today would fail for reasons unrelated to AC1 itself. Deferred to working-Claude to attempt once Increment 5 ships — not ready now.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC2-player-search",
+      "result": "INSUFFICIENT",
+      "evidence": "Live-integration AC; scheduled Increment 4 (not built). Zero search-box/keydown-reconciliation code in NavComputer.js; DebugPanel.js still holds the only search implementation (prior art awaiting port, per contract's own architecturalConnections note). No player-facing search UI exists yet to drive. Deferred to working-Claude for Increment 4, not ready now.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC3-real-characteristics",
+      "result": "INSUFFICIENT",
+      "evidence": "Live-integration AC; scheduled Increment 3 (bulk overlay merge, not built). StarSystemGenerator.js/main.js/NavComputer.js untouched by this diff; stellarCompanions.js and new JSON data are consumed only by tests/name-blocklist generator, never by the generator or arrival paths. Arriving at Sirius/TRAPPIST-1 cannot yet surface real structure. Deferred to working-Claude for Increment 3, not ready now.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC4-procgen-fill",
+      "result": "INSUFFICIENT",
+      "evidence": "Scheduled Increment 3. Grep across src/ finds no overlay-merge module anywhere in the codebase. Increment-1 design doc explicitly disclaims RealStarCatalog/NavComputer/StarSystemGenerator changes until Increments 2-4. 18/18 ingestion tests pass but none exercise the overlay-merge mechanism this AC requires (it doesn't exist). No live pipeline to drive yet.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC5-authoring-path",
+      "result": "INSUFFICIENT",
+      "evidence": "Live-integration AC; scheduled Increment 2 (paired with AC10). KnownSystems.js has only a Sol entry; Alpha Centauri exists solely as a commented-out example, not registered. match-radius regression test (18/18 pass) still asserts Sol does NOT match Rigil Kentaurus — confirming the AC's described flip hasn't happened. No AC10 engine substrate exists yet for AC5 to build on. Deferred to working-Claude for Increment 2, not ready now.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC6-structures-audit",
+      "result": "FAIL",
+      "evidence": "Headless/unit AC — absence is directly and fully checkable without live driving. No committed audit report or audit script exists anywhere in the repo (workstream dir has no such artifact; no script computes a profile/globular position-radius audit against a reference catalog). Scheduled Increment 5, not started. Reported FAIL rather than INSUFFICIENT because there is nothing ambiguous or pending-live here.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC7-ingestion-pipeline",
+      "result": "PASS",
+      "evidence": "Ingestion script reproduced byte-identical output across 2 independent process runs; committed JSON independently re-verified for required-field coverage (0 missing positions/spectral classes/orbital-physical params, TRAPPIST-1/Proxima planet lists exact, 0 duplicates). Relevant suites: RealUniverseIngest 18/18, ProcgenSnapshot 24/24, NameGenerator.injective 17/17, KnownSystems.match-radius 18/18; full suite 1249/1249 (15 pre-existing vendor/motion-test-kit submodule collection failures, unrelated/untouched by this diff). Blocklist regen idempotent (323→325, superset holds; minor commit-message attribution note on \"Sol\" being pre-existing drift, not new content — no correctness impact). Verifier self-corrected an errant git checkout mid-session before finalizing, confirmed clean tree after.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC8-sol-and-regression-guardrail",
+      "result": "INSUFFICIENT",
+      "evidence": "2 of 3 sub-clauses headless-confirmed: full suite 1249/1249 green (only pre-existing vendor noise), ProcgenSnapshot 24/24 (seed-stream isolation intact, 23/24 active post real-coverage filter as expected). Third sub-clause — Sol still resolves live via window._lab.enterSol() + window.__wd.runIntegrationSuite() showing 19/19 in Sol — requires a real browser drive not attempted in this pass. Unlike AC1/AC2/AC3/AC5, this one's prerequisites already exist in Increment 1 — ready for working-Claude to drive now.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC9-known-universe-uat",
+      "result": "deferred-to-max",
+      "evidence": "UAT — Max-only, never agent-scored. As of this commit only the data-ingestion pipeline (AC7) exists; none of the gameplay surface (nav search, overlay merge, companion engine support, Alpha Cen authoring proof, neighborhood/structures audits) is wired into the running app yet. There is nothing new to explore or judge in a play session right now.",
+      "adversarialVotes": "n/a — UAT is Max-only"
+    },
+    {
+      "id": "AC10-engine-structural-support",
+      "result": "FAIL",
+      "evidence": "Headless/unit AC — absence directly checkable. StarSystemGenerator.js caps at 7 star types (O,B,A,F,G,K,M); no class-D/degenerate type exists, so a class-D star would trigger exactly the G-type fallback warning the AC requires be absent. No companionSpec/farCompanion/knownPlanets fields exist anywhere in generation context (grep confirms zero hits outside the unconsumed Increment-1 data table). No representation-cap doc, no AC10-specific unit tests. Scheduled Increment 2, not started. Reported FAIL rather than INSUFFICIENT — feature and its tests are both provably absent.",
+      "adversarialVotes": "3/3 sufficient"
+    }
+  ],
+  "overall": "FAIL — Increment 1 (AC7, ingestion pipeline) shipped clean and PASSED on its own narrow scope. But AC6 (structures audit) and AC10 (engine structural support) are unit/headless ACs whose deliverables are provably absent (scheduled Increments 5 and 2 respectively) — hard FAIL, not pending. The integration layer (AC1, AC2, AC3, AC4, AC5, AC8) is INSUFFICIENT: five of six ACs are premature — their underlying features simply don't exist in the app yet (scheduled across Increments 2-5) — and only AC8 (Sol regression guardrail) is actually ready for a live check today. UAT (AC9) is deferred to Max per invariant, but there is nothing new for him to test yet since only the data pipeline is built.",
+  "summaryForMax": "Workstream real-universe-overlay-2026-07-12 @ 77723c2: only Increment 1 of 5 is built (AC7, the exoplanet/companion ingestion pipeline) and it PASSED cleanly — reproducible ingestion, full field-coverage validation, all related suites green, full test suite 1249/1249 (the 15 \"failed\" files are pre-existing vendor/motion-test-kit submodule noise, unrelated to this diff).\n\nUNIT layer — FAIL (2 ACs):\n- AC6 (structures audit): no audit report or audit script exists anywhere in the repo. Scheduled Increment 5.\n- AC10 (engine structural support — class-D stars, companion/far-companion fields, no-fallback-warning behavior): none of it exists in StarSystemGenerator.js yet. Scheduled Increment 2.\nBoth are headless-checkable and simply absent — not ambiguous, hence FAIL rather than INSUFFICIENT.\n\nINTEGRATION layer — INSUFFICIENT (6 ACs, all classified live-integration):\n- Ready for working-Claude to drive NOW: AC8 (Sol regression guardrail). Two of its three sub-clauses are already headless-confirmed (full suite green, procgen seed-isolation intact) — the remaining piece is a live check: `window._lab.enterSol()` then `window.__wd.runIntegrationSuite()`, confirm 19/19 in Sol.\n- NOT ready to drive yet (would fail trivially — feature doesn't exist): AC1 (neighborhood fidelity, waits on Increment 5), AC2 (player search, Increment 4), AC3 (real characteristics overlay, Increment 3), AC5 (Alpha Cen authoring path, Increment 2). Re-attempt each only after its increment ships.\n- AC4 (procgen fill) is also unbuilt (Increment 3, no overlay-merge module exists anywhere) — flagged INSUFFICIENT for the same underlying reason, nothing yet to check.\n\nUAT — deferred to you, but not yet meaningful:\n- AC9 asks you to explore nav from Sol, search systems/structures, and warp to Sirius/Alpha Centauri/TRAPPIST-1, judging the fill against your Elite intuition. Right now none of that is wired into gameplay — only the underlying data pipeline exists. Recommend holding off this UAT pass until Increments 2-5 land; doing it now would only exercise pre-existing Sol/procgen behavior, not the actual feature.\n\nNet: the one increment that shipped is solid on its own terms. The workstream overall has 4 more increments to go before AC1, AC2, AC3, AC4, AC5, AC6, AC9, AC10 have anything real to verify."
+}
