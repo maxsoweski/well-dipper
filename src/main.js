@@ -264,6 +264,7 @@ realStarCatalog.load().then(() => {
 // Load real feature catalogs (globular clusters, etc.)
 realFeatureCatalog.load().then(() => {
   debugPanel.setRealFeatureCatalog(realFeatureCatalog);
+  if (_navComputer) _navComputer.setRealFeatureCatalog(realFeatureCatalog); // Inc-4 AC2: class-(c) structures search
   // Make real features available to the hash grid for Plummer density
   HashGridStarfield.realFeatureCatalog = realFeatureCatalog;
   console.log(`Real feature catalog loaded: ${realFeatureCatalog.globularClusters.length} globular clusters`);
@@ -2779,6 +2780,7 @@ function _initNavComputer() {
   const navCanvas = document.getElementById('nav-computer-canvas');
   _navComputer = new NavComputer(navCanvas, galacticMap, retroRenderer.renderer);
   if (realStarCatalog.loaded) _navComputer.setRealStarCatalog(realStarCatalog);
+  if (realFeatureCatalog.loaded) _navComputer.setRealFeatureCatalog(realFeatureCatalog); // Inc-4 AC2: class-(c) structures search
 
   // COMMIT button → request close (action retrieved via nav.close())
   _navComputer.setCommitCallback((action) => {

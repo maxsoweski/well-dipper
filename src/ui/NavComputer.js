@@ -1,4 +1,5 @@
 import { generateSystemName } from '../generation/NameGenerator.js';
+import { resolveKnownObjects } from '../generation/knownObjectSearch.js';
 import { StarSystemGenerator } from '../generation/StarSystemGenerator.js';
 import { HashGridStarfield } from '../generation/HashGridStarfield.js';
 import { GalacticSectors } from '../generation/GalacticSectors.js';
@@ -137,6 +138,13 @@ export class NavComputer {
     // ── Real star catalog (set via setRealStarCatalog) ──
     this._realStarCatalog = null;
 
+    // ── Player-facing search (Increment 4 / AC2) ──
+    this._realFeatureCatalog = null;   // set via setRealFeatureCatalog (class-c structures/globulars)
+    this._searchFocused = false;       // true while the search <input> holds focus (keydown guard)
+    this._searchResults = [];          // current SearchResult[] rendered as rows
+    this._searchHighlight = -1;        // keyboard-highlighted row index (-1 = none)
+    this._searchDom = null;            // { root, input, list } — created lazily in _ensureSearchDom()
+
     // ── RNG ──
     this._makeRng = (seed) => {
       const fn = alea(seed);
@@ -166,6 +174,11 @@ export class NavComputer {
     this._localDebug = false;
     this._localYOffset = 0; // Y offset for viewing above/below the plane
     this._onKeyDown = (e) => {
+      // AC2 (design D6, fact 1): never eat WASDRF/Backquote while typing in the
+      // search field. This capture-phase handler runs BEFORE the input's own
+      // listeners, so without this guard the six pan/zoom letters would be
+      // preventDefaulted out of the text field.
+      if (this._searchFocused) return;
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyF'].includes(e.code)) {
         this._heldKeys.add(e.code);
         e.preventDefault();
@@ -190,6 +203,7 @@ export class NavComputer {
     document.addEventListener('keydown', this._onKeyDown, true);
     document.addEventListener('keyup', this._onKeyUp, true);
     this._resizeCanvas();
+    this._showSearch();
   }
 
   /** Open directly to the system view for the current system. */
@@ -223,6 +237,7 @@ export class NavComputer {
   deactivate() {
     document.removeEventListener('keydown', this._onKeyDown, true);
     document.removeEventListener('keyup', this._onKeyUp, true);
+    this._hideSearch();
     this._heldKeys.clear();
     this._systemZoomAnim = null; // cancel in-flight prism→system zoom so it can't fire after close
     this._resetPrismLoad();
@@ -236,6 +251,247 @@ export class NavComputer {
    */
   setRealStarCatalog(catalog) {
     this._realStarCatalog = catalog;
+  }
+
+  /** Loaded RealFeatureCatalog — supplies class-(c) globular structures to search. */
+  setRealFeatureCatalog(catalog) {
+    this._realFeatureCatalog = catalog;
+  }
+
+  // ════════════════════════════════════════════════════
+  // PLAYER-FACING SEARCH (Increment 4 / AC2)
+  // ════════════════════════════════════════════════════
+
+  /**
+   * Lazily build the DOM search overlay — a real `<input>` + a results list —
+   * as siblings of the nav canvas inside `.nav-computer-panel`, absolutely
+   * positioned over the top-left of the canvas. DOM (not a canvas widget) so the
+   * browser owns caret/backspace/IME/clipboard and real focus/blur drive the
+   * `_searchFocused` keyboard guard for free (design D2/D6, fact 2). Mirrors the
+   * imperative-DOM search pattern in DebugPanel (src/ui/DebugPanel.js) —
+   * including the `stopPropagation` on keydown that DebugPanel's input uses
+   * (:714-717) to keep game keybinds from firing while typing.
+   */
+  _ensureSearchDom() {
+    if (this._searchDom) return;
+    const panel = this._canvas.parentElement; // .nav-computer-panel
+    if (!panel) return;
+
+    // One-time style block (class-based so we get :focus / :hover / highlight).
+    if (!document.getElementById('nav-search-style')) {
+      const style = document.createElement('style');
+      style.id = 'nav-search-style';
+      style.textContent = `
+        .nav-search-overlay { position:absolute; top:12px; left:12px; width:320px; max-width:calc(100% - 24px); z-index:8; font-family:'Courier New',monospace; pointer-events:auto; }
+        .nav-search-input { width:100%; box-sizing:border-box; padding:8px 10px; background:rgba(4,10,20,0.92); color:#cfe6ff; border:1px solid rgba(100,180,255,0.35); border-radius:2px; font:13px 'Courier New',monospace; letter-spacing:0.04em; outline:none; }
+        .nav-search-input::placeholder { color:rgba(140,180,220,0.5); }
+        .nav-search-input:focus { border-color:rgba(120,200,255,0.85); box-shadow:0 0 8px rgba(80,160,255,0.35); }
+        .nav-search-results { list-style:none; margin:4px 0 0; padding:0; max-height:52vh; overflow-y:auto; background:rgba(4,10,20,0.92); border:1px solid rgba(100,180,255,0.18); border-radius:2px; }
+        .nav-search-results:empty { display:none; }
+        .nav-search-row { display:flex; justify-content:space-between; gap:10px; padding:6px 10px; color:#bcd6f0; font:12px 'Courier New',monospace; cursor:pointer; border-bottom:1px solid rgba(100,180,255,0.08); }
+        .nav-search-row:last-child { border-bottom:none; }
+        .nav-search-row:hover, .nav-search-row.hl { background:rgba(60,130,220,0.28); color:#eaf4ff; }
+        .nav-search-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .nav-search-kind { color:rgba(140,180,220,0.7); text-transform:uppercase; font-size:10px; letter-spacing:0.08em; align-self:center; flex:0 0 auto; }
+        .nav-search-empty { padding:6px 10px; color:rgba(150,180,210,0.55); font:12px 'Courier New',monospace; }
+      `;
+      document.head.appendChild(style);
+    }
+
+    const root = document.createElement('div');
+    root.className = 'nav-search-overlay';
+    root.style.display = 'none';
+
+    const input = document.createElement('input');
+    input.className = 'nav-search-input';
+    input.type = 'text';
+    input.setAttribute('placeholder', 'Search stars · systems · structures…');
+    input.setAttribute('aria-label', 'Search known objects');
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+
+    const list = document.createElement('ul');
+    list.className = 'nav-search-results';
+
+    root.appendChild(input);
+    root.appendChild(list);
+    panel.appendChild(root);
+
+    // Focus/blur drive the capture-phase keydown guard (design D6).
+    input.addEventListener('focus', () => { this._searchFocused = true; });
+    input.addEventListener('blur', () => { this._searchFocused = false; });
+    input.addEventListener('input', () => { this._runSearch(input.value); });
+
+    // Stop EVERY keydown from reaching the global `window` keydown handler
+    // (main.js:9553) — it has NO target guard, so 'N'/'K'/'P'/'T'/'X'/arrows
+    // typed into this field would otherwise fire game toggles. Mirrors
+    // DebugPanel.js:714-717. Then handle the nav-list keys.
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.code === 'ArrowDown') { e.preventDefault(); this._moveSearchHighlight(1); return; }
+      if (e.code === 'ArrowUp')   { e.preventDefault(); this._moveSearchHighlight(-1); return; }
+      if (e.code === 'Enter')     { e.preventDefault(); this._activateSearchHighlight(); return; }
+      if (e.code === 'Escape') {
+        // Escape while search-focused = clear + blur the search ONLY; it does
+        // NOT drill the nav level (design D6). Once blurred/empty, the next
+        // Escape flows to the global handler and governs the panel as before.
+        e.preventDefault();
+        input.value = '';
+        this._runSearch('');
+        input.blur();
+      }
+    });
+
+    this._searchDom = { root, input, list };
+  }
+
+  /** Show + reset the search overlay (called from activate()). */
+  _showSearch() {
+    this._ensureSearchDom();
+    if (!this._searchDom) return;
+    this._searchDom.input.value = '';
+    this._searchResults = [];
+    this._searchHighlight = -1;
+    this._renderSearchResults();
+    this._searchDom.root.style.display = 'block';
+  }
+
+  /** Hide + reset the search overlay and clear the focus guard (from deactivate()). */
+  _hideSearch() {
+    this._searchFocused = false;
+    if (!this._searchDom) return;
+    this._searchDom.input.blur();
+    this._searchDom.input.value = '';
+    this._searchResults = [];
+    this._searchHighlight = -1;
+    this._renderSearchResults();
+    this._searchDom.root.style.display = 'none';
+  }
+
+  /** Resolve `query` against all known-object sources and render result rows. */
+  _runSearch(query) {
+    const q = (query || '').trim();
+    if (!q) {
+      this._searchResults = [];
+      this._searchHighlight = -1;
+      this._renderSearchResults();
+      return;
+    }
+    // knownSystems defaults to the KnownSystems singleton inside the resolver;
+    // playerPos anchors the class-(b) named-systems box.
+    this._searchResults = resolveKnownObjects(q, {
+      realStarCatalog: this._realStarCatalog,
+      realFeatureCatalog: this._realFeatureCatalog,
+      playerPos: { x: this._playerX, y: this._playerY, z: this._playerZ },
+    });
+    this._searchHighlight = this._searchResults.length ? 0 : -1;
+    this._renderSearchResults();
+  }
+
+  _renderSearchResults() {
+    if (!this._searchDom) return;
+    const list = this._searchDom.list;
+    list.textContent = '';
+    const hasQuery = this._searchDom.input.value.trim().length > 0;
+    if (!this._searchResults.length) {
+      if (hasQuery) {
+        const empty = document.createElement('li');
+        empty.className = 'nav-search-empty';
+        empty.textContent = 'No matches';
+        list.appendChild(empty);
+      }
+      return;
+    }
+    this._searchResults.forEach((r, i) => {
+      const row = document.createElement('li');
+      row.className = 'nav-search-row' + (i === this._searchHighlight ? ' hl' : '');
+      const name = document.createElement('span');
+      name.className = 'nav-search-name';
+      name.textContent = r.name;
+      const kind = document.createElement('span');
+      kind.className = 'nav-search-kind';
+      kind.textContent = this._searchKindLabel(r);
+      row.appendChild(name);
+      row.appendChild(kind);
+      // mousedown (not click) so selection fires BEFORE the input's blur, and
+      // preventDefault keeps focus stable through the select→warp→close path.
+      row.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        this._selectSearchResult(i);
+      });
+      list.appendChild(row);
+    });
+  }
+
+  /** Short right-aligned type/kind label for a result row. */
+  _searchKindLabel(r) {
+    if (r.kind === 'star') return r.type || 'STAR';
+    if (r.kind === 'structure') return r.type || 'STRUCTURE';
+    if (r.kind === 'named') return r.region || 'SYSTEM';
+    if (r.kind === 'registry') return 'SYSTEM';
+    return r.kind;
+  }
+
+  _moveSearchHighlight(delta) {
+    if (!this._searchResults.length) return;
+    const n = this._searchResults.length;
+    this._searchHighlight = (this._searchHighlight + delta + n) % n;
+    this._renderSearchResults();
+  }
+
+  _activateSearchHighlight() {
+    if (this._searchHighlight >= 0 && this._searchHighlight < this._searchResults.length) {
+      this._selectSearchResult(this._searchHighlight);
+    }
+  }
+
+  /**
+   * Select a search result → arm a genuine WARP to it and close the nav computer.
+   *
+   * Routes through the SAME supported close→warp contract the COMMIT button uses:
+   * fire `_onCommit({type:'warp', star})` → main.js stores it as `_pendingAction`,
+   * closes the nav, and `dispatchNavAction` calls `_setWarpTargetFromNavStar` +
+   * `beginWarpTurn` (main.js:2884-2895). This NEVER hand-sets `window._warpTarget`
+   * and NEVER uses the debug teleport (which bypasses `onPrepareSystem` and would
+   * skip the Inc-3 real-star merge — fact 7 / Gate 4).
+   *
+   * `action.star` uses NavComputer's native `{wx,wy,wz,seed,name,spectral}` shape
+   * (what dispatchNavAction's warp branch reads, main.js:2890-2893). `spectral` is
+   * carried ONLY for real-star hits (result.starType), so a merged real star
+   * (Sirius) passes a valid class to arrival's starTypeOverride; named/structure/
+   * registry hits pass `spectral:undefined` so procgen / the known-system override
+   * decides the type at arrival.
+   */
+  _selectSearchResult(index) {
+    const r = this._searchResults[index];
+    if (!r) return;
+
+    // Build the internal star object in NavComputer's native shape — mirror
+    // openToCurrentSystem's externally-supplied-hit head (:199-213) and the
+    // prism-click tail (:3119-3122). The catalog hit is NOT in `_localStars`, so
+    // we do NOT reuse `_hoveredLocalStar` (fact 8).
+    const star = {
+      wx: r.worldPos.x, wy: r.worldPos.y, wz: r.worldPos.z,
+      seed: r.seed, name: r.name, spectral: r.starType,
+      color: NavComputer._SPECTRAL_COLORS[r.starType] || '#ffefb0',
+    };
+    this._systemStar = star;
+    this._selectedNavStar = star;
+    this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '' };
+
+    if (this._onSound) this._onSound('warpTarget');
+
+    // Arm the warp via the supported callback contract (no main.js edit needed).
+    if (this._onCommit) {
+      this._onCommit({
+        type: 'warp',
+        target: 'star',
+        star: {
+          wx: star.wx, wy: star.wy, wz: star.wz,
+          seed: star.seed, name: star.name, spectral: star.spectral,
+        },
+      });
+    }
   }
 
   setExternalTarget(worldPos, name) {
@@ -2303,6 +2559,7 @@ export class NavComputer {
   static _SPECTRAL_COLORS = {
     O: '#94b4ff', B: '#b0c4ff', A: '#d0d8ff', F: '#fff5e0',
     G: '#ffefb0', K: '#ffc480', M: '#ff9664',
+    D: '#e8f0ff', // white dwarf (design D7) — pale blue-white
     Kg: '#ffa050', Gg: '#ffd880', Mg: '#ff6030',
   };
 
