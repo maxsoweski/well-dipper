@@ -113,9 +113,26 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > @19.8 AU**, TRAPPIST-1 **M + all 7 knowns, real designations on HUD**, Rigil→authored Alpha Cen,
 > console clean. Merged-star nav-warp deferred w/ rationale (close at Inc-4 search or AC9). Structure
 > stays table-only — **snum-as-single-pin parked as an AC9/UAT knob** (with Alpha-Cen fill policy).
-> **▶ NEXT: Increment 4 = AC2 player search.** NavComputer seam is lane-D-owned — coordinator default
-> GRANTED to lane C ('D' swatch folds in; Max veto at the Inc-4 design seam). Then Inc 5 (AC1+AC6) →
-> AC9 batched UAT.
+> **▶ Increment 4 (AC2 player search) BUILT `44c7075` + VERIFIED + LIVE-DRIVEN (2026-07-13).** Design
+> `f40bac2` (2 explorer passes). New pure resolver `knownObjectSearch.js` (ports DebugPanel three-source
+> search + ADDS named-systems catalog class-b + registry-name bridge so 'Alpha Centauri'/'Sol' resolve +
+> toNavStar seed-parity). NavComputer: DOM `<input>` overlay, `_searchFocused` capture-guard **+**
+> bubble `stopPropagation` (both phases needed — build caught my design miss), result list w/ keyboard
+> nav, Escape clears+blurs, 'D' swatch; select → **genuine warp** via the real `_onCommit`→
+> `dispatchNavAction`→`_setWarpTargetFromNavStar` contract (never teleport, never hand-set `_warpTarget`).
+> +2 flagged main.js input-wiring lines. Max-ratified NavComputer seam recorded in `increment-4-design.md`
+> for lane D. Suite 1321→1340 (0 new failures); ProcgenSnapshot byte-identical. Verify full at `44c7075`:
+> **AC4+AC7+AC10 PASS 3/3** (unregressed); AC2/AC3/AC5/AC8 live-closed same day
+> (verdict-live-drives-44c7075.json): reachable via N; keyboard guard **both phases** ('WASDRFN' all land,
+> nav stays open); all 4 resolve classes; **search→warp→Sirius = real A1V+DA2 binary @19.8 AU**
+> (CLOSES the owed Gate-4 merged-star nav-warp; routes through the Inc-3 arrival merge); search→warp→Sol =
+> authored Sol; Sol integration suite **19/19**; console clean. Boot-tour warp-collision edge case
+> documented (in-flight boot warp overrides a mid-boot selection — NOT an AC2 defect; lane-B tour/N-gating
+> territory). Parked knobs: **snum==1 single-pin ADOPTED** (Max; representation-cap §5, `cd8abd0`);
+> Alpha-Cen A/B fill = Max's rec-open call at Inc-5.
+> **▶ NEXT: Increment 5 = AC1 (author `neighborhood-reference.json` → live-drive) + AC6 (structures audit;
+> fix the `RealFeatureCatalog` uniform `radius:0.03` placeholder) + implement snum-pin & rule Alpha-Cen
+> fill.** Then AC9 = Max's batched UAT. Branch UNPUSHED (merge Max-gated; deploy = Pages).
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
