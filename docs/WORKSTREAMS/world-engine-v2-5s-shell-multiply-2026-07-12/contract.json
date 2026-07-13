@@ -1,0 +1,145 @@
+{
+  "workstream": "world-engine-v2-5s-shell-multiply-2026-07-12",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "statusNote": "SCOPED 2026-07-13 early (grounding: GROUNDING.md in this dir — fable agent, read-only, all mechanism claims verified by headless runs of the real dispatch incl. the live flat-slot values and the plates-precedent non-transfer proof) — AWAITING MAX GREENLIGHT + four taste confirms, each pre-answered with a recommendation: (1) HONESTY FLAG re-confirm (shipped Titan/Europa/Eyeball stay byte-identical; Max judges the response space on driver-varied worlds — the exact V2-2b-1 framing he accepted 2026-07-05); (2) AXIS PALETTE = gravity + tidal + thermal-vigor first cut (recommended as grounded + research-free); (3) A4 warm-shell chaos-area response IN, gains UAT-tunable (Max may strike); (4) shellThickness axis DEFERRED behind K_SHELL=0 (recommended — the K_G precedent; its Eyeball REF slot is an ugly derived literal). SEQUENCING: build queues behind the in-flight V2-7d build workflow + the V2-3 verify-workstream run (lane/OOM discipline); no file conflict with either (verified: V2-7d's hard fence excludes shellRelief.js; V2-3 never touched planet-lod-lab.html). Research-gate-free: the stress mechanism stays frozen; this is the fourth MULTIPLY-template instance (#2/#4-M/V2-2b-1 precedents).",
+  "programRef": "world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md §3.1 V2-5s row ('thread the D-vector into shellRelief so low-g vs high-g icy worlds differ within-regime — the north-star gap D2-MF5 names'; size M; dep V2-1), §3.2 'Unscheduled MULTIPLY passes' row (explicitly scheduled, none silently dropped), Reuse Ledger shellRelief row (P-LID-ICY sibling whole; REGIME_WEIGHTS = response-table shape only, untouched; STEP-2 is V2-7d's read-only seed). Template precedents: #2 plates driversToTune/D_EARTH, #4-M magmaDriversToTune/MAGMA_REF, V2-2b-1 stagnantDriversToTune/VENUS_REF (contract docs/WORKSTREAMS/world-engine-v2-2b-1-stagnant-response-2026-07-04/).",
+  "designDecisions": [
+    "PER-REGIME REFs — SHELL_REFS = { 'icy-active': Europa's live slots, 'volatile-cold': Titan's, 'eyeball-despun': Eyeball's }, builder shellDriversToTune(drivers, regime). Evidence (GROUNDING §2, all verified by headless runs): the three golden-pinned shell presets occupy three DISJOINT regimes (one preset per regime — the property plates lacked), so per-regime anchoring nulls all three exactly. The plates precedent does NOT transfer: driversToTune anchors only at D_EARTH and the live Ocean bundle returns a NON-NULL tune (UPLIFT_GAIN 1.647...) that was baked into Ocean's golden at capture — that pin-as-tuned path is CLOSED for shell (goldens already pinned tune-less, NEVER re-capture). A single-REF null-zone cannot satisfy the house exact-only === guard at three driver points without dead zones in exactly the space this increment opens.",
+    "REF DISCIPLINE = READ-SURFACE-MATCHED (the VENUS_REF pattern, not MAGMA_REF synthetic-neutral): frozen literals with derivation expressions (massGravity as mass/R² e.g. 0.07/(0.5*0.5); tidal slots derived inline from preset orbital constants per the plates EARTH_TIDAL_HEATING pattern — never hand-typed long decimals; no cross-import from driver-presets.js). Guards: null/{} → null FIRST; exact-only identity per regime; unknown regime → icy-active REF (mirrors the writer's REGIME_WEIGHTS fallback); AC-TUNE-NULL(c) pins every REF slot === the live-constructed bundle slot to full float precision (non-circular).",
+    "SEED-STABILITY RULE (new, shell-specific): the builder NEVER reads condition.radiusEarth — it is the DRAWN radius (seed-varying for seeded archetype worlds). Grep-enforced in AC-0's denylist. All consumed slots are fp-stable: flat massGravity/volatileFraction/tidalHeating + nested condition.T_eq.",
+    "RESPONSE AXES (all research-free; the stress mechanism + its Melosh/Beuthe/Hoppa constants stay FROZEN): A1 gravity → RIDGE_AMP + CHAOS_AMP + CHAOS_BASE via ONE common gFactor = clamp(0.4, 2.5, (massGravity/REF)^-0.5) (the house convention, plates/magmatism precedent; relief ∝ 1/g) — THE HEADLINE AXIS; A2 rawTidal → CREST_THRESH + TENSILE_THRESH via clamped LOG10-ratio deviation (within-regime tidal spans ~10 decades: Titan 1.6e-8 → Europa 1.4e2; linear/clamp01 would die or saturate; log10(REF/REF)=0 exactly → null-safe; the log-ratio transfer shape is NEW to the family — flagged); A3 thermal vigor (nested T_eq + flat volatileFraction) → CELL_MIN within a clamp (finer convection planform; structurally inert on eyeball-despun, CHAOS_W 0 skips STEP-2 — physically correct); A4 T_eq → CHAOS_THRESH down on warm shells (more melt-through chaos; IN per recommendation, Max may strike; gains UAT-tunable). AGE OMITTED — honors Max's 2026-06-28 plates descope ('age IS history'). shellThickness DEFERRED behind K_SHELL=0 (the V2-2b-1 K_G=0 precedent).",
+    "SAFE-KEYS vs LOAD-BEARING (the anti-mush discipline; shellRelief has no BASE_* floors — its structural equivalents are protected instead): tune may return ONLY {CELL_MIN, CREST_THRESH, TENSILE_THRESH, CHAOS_THRESH, RIDGE_AMP, CHAOS_AMP, CHAOS_BASE} (key-set asserted in AC-ORDER). NEVER returned: DESPIN_REF/DIUR_REF/DIUR_PEAK (STRESS_REF calibration — tuning silently re-balances regime character), SHOULDER_HT/TROUGH_DEPTH (double-ridge cross-section shape — A1 scales the whole profile via RIDGE_AMP so ridges stay double-ridged at every drive), SHELL_BASE/RELAX_PASSES/SHELL_BOUND, BELT_RADIANS/WARP_*/DETAIL_*/RIDGE_FREQ/CHAOS_FREQ (resolution/texture calibration), REGIME_WEIGHTS (regime identity; not in the seam). Blast-radius property worth asserting: the tune touches neither stressTensile nor thetaTraj, so carrier.grainAngle + faultDensity (two of five hashed golden fields) stay byte-stable even under drive — only height (+ lineament/chaos diag) responds.",
+    "DISPATCH THREADING mirrors #4-M/V2-2b-1 verbatim at BOTH call sites (the V2-3 derived shell() helper AND the migration bridge): pass bodyDrivers as the drivers arg (byte-safe — the writer voids it), tune: shellDriversToTune(bodyDrivers, regime), shellDiag.appliedTune = tune. The regime arg is dispatch-provided derived context (the same tuple REGIME_WEIGHTS[regime] consumes) — declared in AC-0, not a label read inside the builder. CELL_MIN overrides change 'shell:cells:' draw counts — deterministic per (seed, tune), the CORONA_POOL precedent, named in AC1 so a reviewer doesn't misread it as a determinism break.",
+    "LAB: new fShellDrivers folder (the fStagnantDrivers idiom) + shellProbe().appliedTune + the FREE LEVER — the existing gravity/tidal sliders already write the flat slots the shell builder reads, so they go live on icy presets with zero new plumbing; the stale planet-lod-lab.html comment ('these sliders ONLY affect the plate-path presets') MUST be updated in the same commit. Any new vigor override overlays NESTED condition.T_eq via the sanctioned V2-2b-1 tsurf pattern. No *Enabled keys (driver overrides only).",
+    "HONESTY FLAG (the V2-2b-1 designDecision-#10 framing, re-applied — Max re-confirms at greenlight): the three shipped icy presets stay byte-identical at their own drivers; the UAT judges that the response SPACE exists on driver-varied worlds ('reads genuinely different'), NOT that Titan/Europa/Eyeball changed. Within-WORLD sameness stays out of scope (AC11 feedback routed to V2-7/V2-8/V2-7d). Seeded icy archetype worlds inherit the response for free at V2-10 (their derived conditions differ per world).",
+    "CONCURRENCY/FORWARD NOTES: zero file overlap with V2-7d (its hard fence excludes shellRelief.js; verified) — but if lidDisruption ever absorbs shellRelief STEP-2 post-V2-7, the CELL_MIN tune key migrates with it (forward note, not scope). Fences: stage only files we touch; not-ours CameraChoreographer.js/LabMode.js + untracked pile stay out of every commit."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15). (1) Driver connectivity: shellDriversToTune reads ONLY D-slot-backed channels — flat massGravity/volatileFraction/tidalHeating + nested condition.T_eq via optional-chaining with per-regime REF fallback (never throws on partial bundles). Grep DENYLIST on the builder: no archetype string, no e1.label, no shellRegimeOf(, and NO condition.radiusEarth (the drawn-radius seed-stability rule). The regime parameter is dispatch-provided derived context (the same value REGIME_WEIGHTS[regime] consumes) used ONLY to select the REF. (2) Named consumer per knob: CELL_MIN→cellCount, CREST_THRESH/TENSILE_THRESH→lineamentNodeCount, RIDGE_AMP/CHAOS_AMP/CHAOS_BASE→std(U)+lineamentInteriorRatio, CHAOS_THRESH→chaos-area-fraction — all observable in shellProbe + the structure suite; appliedTune's named readers = shellProbe + AC-LAB. (3) Taxonomy: lab controls are driver overrides only, NO *Enabled key; planet-archetypes drift guards green.",
+      "verifyVia": {
+        "input": "Read the diff + BUILD-NOTES conformance table; grep-audit the builder against the denylist; map each knob to its named observable; npx vitest run tests/planet-archetypes.test.js",
+        "observable": "Denylist clean (incl. radiusEarth); every knob cites a live observable; drift guards green"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC1",
+      "statement": "Determinism + zero new RNG. The builder is PURE (zero alea/Math.random/Date.now — a DEFAULTS-override computation only); the writer stays in its disjoint 'shell:' namespace ('lid:'/'disrupt:' untouched); repeated builds at fixed (drivers, seed) are byte-equal; |U| < SHELL_BOUND holds across the tune sweep. NAMED NON-ISSUE: a CELL_MIN override changes the number of 'shell:cells:' draws — deterministic per (seed, tune) exactly like stagnant's CORONA_POOL; asserted stable, not mistaken for a determinism break.",
+      "verifyVia": {
+        "input": "Headless vitest: grep the builder for RNG; double-build byte-equality at fixed (drivers, seed) for null and non-null tunes; SHELL_BOUND check across sweep points",
+        "observable": "Builder RNG-free; reruns bit-identical; bound holds"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-TUNE-NULL",
+      "statement": "The byte anchor ×3 regimes, non-circular. (a0) shellDriversToTune(null, r) === null and ({}, r) === null for every regime (the dispatch and shipped shell tests reach bodyDrivers === null). (a) shellDriversToTune(SHELL_REFS[r], r) === null per regime (exact-only identity, the house === guard). (b) NON-CIRCULAR: for each of Titan/Europa/Eyeball, construct the LIVE bundle (buildNeutralBodyDrivers(deriveUniforms(fp), fp) + deriveConditionVector) and assert the builder returns null on it. (c) Every REF read slot === its live-derived slot to full float precision (catches rounded-vs-live drift before it surfaces as an unexplained golden break). (d) A perturbed vector returns a non-null override (non-vacuousness).",
+      "verifyVia": {
+        "input": "Headless vitest: the four assertion families over all three regimes using the real preset data + derive pipeline",
+        "observable": "Null at null/{}/REF/live-bundle ×3; REF slots float-exact vs live; perturbation → non-null"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-BYTE-SHELL",
+      "statement": "Null tune ≡ omitted tune, per preset: for Titan/Europa/Eyeball × seeds {1,2,3,7,42}, dual fresh carriers — the shipped call shape (grainDrivers, no tune) vs the new call shape (bodyDrivers + tune from the REF, which is null) — produce typed-array-equal height + all shell diag arrays and equal cellCount/lineamentNodeCount. Proves the threading (incl. the grainDrivers→bodyDrivers swap the writer voids) is byte-inert at every shipped icy world.",
+      "verifyVia": {
+        "input": "Headless vitest: 3 presets × 5 seeds dual-carrier byte comparison through writeShellReliefSphere",
+        "observable": "Bit-equality on height + diag arrays, all 15 combinations"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-TUNE-RESPONSE",
+      "statement": "The MULTIPLY core — monotone, correct-sign, per-axis: at fixed seed, sweeping each axis within its clamped valid domain — gravity↓ ⇒ std(U)/lineament amplitude ↑ (A1); tidal↑ ⇒ lineamentNodeCount ↑ (A2); vigor↑ ⇒ cellCount ↑ (A3); T_eq↑ ⇒ chaos-area-fraction ↑ on icy-active (A4) — each measurable above a stated noise floor with no sign inversion inside the domain; at each regime's REF the output collapses exactly to the shipped preset field. Out-of-domain behavior documented, not claimed (the V2-2b-1 AC3 scope lesson).",
+      "verifyVia": {
+        "input": "Headless vitest: per-axis sweeps at fixed seed inside the clamps; observables from the writer diag; REF-collapse check per regime",
+        "observable": "Monotone correct-sign responses above floor; exact collapse at each REF"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-VARIETY",
+      "statement": "The D2-MF5 objective proxy: at a FIXED seed, two driver vectors in the SAME regime differ on the composite observable vector {lineamentNodeCount/N, std(U), chaos-area-fraction, cellCount} by more than a per-observable noise floor, where the floor = that observable's spread across the 5 seeds at fixed drivers (the V2-2b-1 delta-H-min discipline); the seed-only baseline stays within the floor. Directly instantiates 'low-g vs high-g icy worlds differ within-regime'.",
+      "verifyVia": {
+        "input": "Headless vitest: noise floors from 5-seed spreads at fixed drivers; low-g vs high-g comparison at fixed seed per regime (icy-active + volatile-cold)",
+        "observable": "Driver-varied delta exceeds the floor per observable; seed-only delta stays within it"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-ORDER",
+      "statement": "Anti-mush, structural, across EVERY sweep point: (i) varExplainedByStress > varExplainedByLatitudeY AND > varExplainedByLatitudeW0 (the shipped falsifier stays green under tune — stress-organization beats latitude); (ii) lineamentInteriorRatio > 1 (lineaments remain the relief-carrying structure); (iii) KEY-SET: the returned tune object ⊆ {CELL_MIN, CREST_THRESH, TENSILE_THRESH, CHAOS_THRESH, RIDGE_AMP, CHAOS_AMP, CHAOS_BASE} — never DESPIN_REF/DIUR_REF/DIUR_PEAK/SHOULDER_HT/TROUGH_DEPTH/SHELL_BASE/RELAX_PASSES/REGIME_WEIGHTS keys; (iv) the blast-radius property: grainAngle + faultDensity byte-identical across the whole sweep (the tune touches no stress machinery).",
+      "verifyVia": {
+        "input": "Headless vitest: falsifier + ratio at every sweep point; key-set assertion on every non-null tune; grainAngle/faultDensity byte-diff across sweep",
+        "observable": "Falsifier green everywhere; ratio > 1; key-set exact; stress-derived channels byte-stable"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "statement": "ZERO behavioral change for everything shipped. (a) The 75-golden stays green UNCHANGED (Titan/Europa/Eyeball null at their REFs; Frozen routes despun post-V2-3 so no fourth shell row exists to move; NEVER re-capture). (b) Shell's own suites (worldengine-base-shell-structure, worldengine-shell-regime-gate) + the V2-3 dispatch-oracle + taxonomy suites green. (c) plate/volcanic/stagnant/despun byte-identical (the dispatch edit is confined to the two shell call sites). (d) Diff fence: ONLY src/worldengine/base/shellRelief.js, planet-lod-rivers.js, planet-lod-lab.html, new/updated shell tests, workstream docs — NOT plates/magmatism/stagnantLid/mixedInterior/lidResponse/e1Regime/body-condition-vector/driver-presets, and NOT V2-7d's lidDisruption module. (e) 'lid:'/'disrupt:' namespaces untouched. (f) The 4 pre-existing known failures do not grow; every new test file collects + runs nonzero tests (the MF#3 counting discipline).",
+      "verifyVia": {
+        "input": "npx vitest run tests/v2-0-byte-identity.test.js + the shell suites + the quartet + full suite; git show --stat every commit",
+        "observable": "75/75 unchanged; suites green; full suite at baseline; diff scope exactly the fence"
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC-LAB",
+      "statement": "LIVE INTEGRATION (agent-drivable, objective — mirror V2-2b-1 AC-LAB). Fresh tab on the running lab: Europa preset (routes shell icy-active), fixed seed, reliefBakeStrength 1. TRUE baseline first (A/B 'preset' mode): shellProbe().appliedTune === null with unchanged observables. Then drag gravity low/high and tidal low/high (the existing sliders — now live on icy presets), forcing a route each time: appliedTune non-null with lineamentNodeCount/cellCount/std(U) moving in the correct directions; screenshots at both ends. Repeat one axis on Titan (volatile-cold) proving the second regime responds about its own REF. Console clean of NEW errors; close all agent pages after (window hygiene).",
+      "verifyVia": {
+        "input": "chrome-devtools on 127.0.0.1:9223 against the Max-started dev server (npm run dev -- --port 5175); liveness via list_pages (never sandbox-curl); poll _lastBodyDrivers identity after each change (~500ms settle)",
+        "observable": "Baseline null + unchanged; per-axis live response in correct directions on two regimes; console clean; screenshots archived in evidence/"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "MAX'S GATE (deferred-to-max, never agent-PASSed; the single UAT AC, V2-2b-1 precedent): viewing a driver-varied icy world in the lab — low-g vs high-g at the same seed (and optionally a tidal sweep) — Max judges it reads as a GENUINELY DIFFERENT icy world, not a re-rolled Titan/Europa. HONESTY FLAG carried verbatim-in-spirit: the three shipped presets stay byte-identical; the judgment is that the response space EXISTS and reads coherent along the axes the sliders control — not that any shipped world changed. Within-world sameness out of scope (routed to V2-7/V2-8/V2-7d). Presupposes AC-LAB + all unit/integration ACs GREEN. Deferred past Max's usage-window reset per his 2026-07-12 directive.",
+      "verifyVia": {
+        "input": "Max drives the low-g/high-g A/B in the lab (working-Claude surfaces exactly what to click + before/after screenshots per axis)",
+        "observable": "Max confirms (or rejects) genuinely-different within-regime reads along the driver axes. Deferred-to-max"
+      },
+      "layer": "uat",
+      "live": false
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "writeShellReliefSphere (src/worldengine/base/shellRelief.js) — the existing tune seam (tune ? {...SHELL_DEFAULTS,...tune} : SHELL_DEFAULTS) + void drivers reserved exactly for this increment; REGIME_WEIGHTS per-regime character (READ, never tuned); the STEP-1..5 render surface (stress tensor → lineaments → chaos → assemble) whose population/threshold/amplitude knobs the tune moves",
+      "the V2-3 derived dispatch (planet-lod-rivers.js): the shell() helper + the migration bridge — both call sites thread the builder; regime arrives as derived context (e1.shellSubRegime / locked-awareness / bridge shellRegimeOf)",
+      "the condition bundle: flat massGravity/volatileFraction/tidalHeating (deriveUniforms-backed) + nested condition.T_eq (deriveConditionVector) — fp-stable slots only; condition.radiusEarth EXCLUDED by the seed-stability rule",
+      "MULTIPLY template precedents: plates driversToTune/D_EARTH (+ the gFactor convention), magmaDriversToTune/MAGMA_REF, stagnantDriversToTune/VENUS_REF (read-surface-matched REF discipline, null-guard order, exact-only identity)",
+      "the 75-golden harness (v2-0-byte-identity + carrier-golden fixtures) — Titan/Europa/Eyeball pinned tune-less; the shipped shell structure suite + shellProbe (planet-lod-lab.html) as the observable surface",
+      "lab driver-override plumbing: driverOv/_driverTouched/_driverAbMode + buildBodyDrivers overlay + the existing gravity/tidal sliders (the free lever) + the V2-2b-1 nested-T_eq override pattern"
+    ],
+    "outputs": [
+      "shellDriversToTune(drivers, regime) + frozen SHELL_REFS (per-regime, read-surface-matched) exported from shellRelief.js; dispatch threading at both call sites + shellDiag.appliedTune",
+      "within-regime icy driver response: gravity → relief amplitude, tidal → crack density, vigor → cell count, warmth → chaos area — the D2-MF5 gap closed for the icy family; seeded icy archetype worlds inherit it at V2-10",
+      "lab: fShellDrivers folder + live gravity/tidal sliders on icy presets + shellProbe().appliedTune (+ the corrected :2682 comment)",
+      "the shell response vocabulary later increments key on (V2-8 sculpting; the K_SHELL=0 deferred thickness axis; the CELL_MIN→lidDisruption migration forward-note)"
+    ],
+    "mustStayWorking": [
+      "the 75-golden byte-identity gate 75/75 (NEVER re-capture) — Titan/Europa/Eyeball null-at-REF is the mechanism",
+      "the shipped shell structure falsifiers (stress-beats-latitude, lineamentInteriorRatio) green at every sweep point — not just at REF",
+      "carrier.grainAngle + faultDensity byte-stable under any tune (the no-stress-machinery blast-radius property)",
+      "plate/volcanic/stagnant/despun paths byte-identical; the V2-3 dispatch-oracle + taxonomy + quartet suites green; V2-7d's module untouched",
+      "REGIME_WEIGHTS + STRESS_REF calibration constants + the double-ridge cross-section constants never returned by the tune (key-set assertion)",
+      "the 4 pre-existing known failures do not grow; stage only files we touch (not-ours files excluded from every commit)"
+    ]
+  }
+}
