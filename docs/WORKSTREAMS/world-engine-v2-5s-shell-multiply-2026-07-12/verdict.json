@@ -3,7 +3,7 @@
   "commit": "c24ea37",
   "perLayer": {
     "unit": "PASS",
-    "integration": "INSUFFICIENT",
+    "integration": "PASS",
     "uat": "deferred-to-max"
   },
   "perAC": [
@@ -57,9 +57,9 @@
     },
     {
       "id": "AC-LAB",
-      "result": "INSUFFICIENT",
-      "evidence": "Live chrome-devtools drive not yet performed; evidence/ dir empty. Code prerequisites confirmed present (shellProbe() returns appliedTune, gravity/tidal sliders exist in 'Body drivers -> plate relief' folder, reliefBakeStrength defaults to 1). Needs working-Claude to drive: start dev server, open planet-lod-lab.html, switch Europa<->Titan preset, drag gravity/tidal sliders, confirm _lab.shellProbe().appliedTune and cellCount/lineamentNodeCount/std(U) respond, capture before/after screenshots.",
-      "adversarialVotes": "0/3 sufficient"
+      "result": "PASS",
+      "evidence": "DRIVEN LIVE by working-Claude 2026-07-13 (chrome-devtools :9223, dev server :5175, one isolated tab, real GUI sliders): Europa TRUE baseline appliedTune===null; A1 gravity both directions (std(U) 0.1208 @g0.1 / 0.0722 @REF / 0.0314 @g1.5 — RIDGE_AMP matches (g/REF)^-0.5 to 4 decimals; linN/cellCount/varStress untouched = blast-radius visible live); A2 tidal-down linN 3935->964 (Europa tidal-up slider-unreachable by design, demonstrated on Titan); A3/A4 T_surf 250K: cellCount 11->19 (the calibration Delta-8 exactly), CHAOS_THRESH 0.6->0.3. Titan second regime: true baseline null after real preset change, tidal-up linN 3948->9872 about its own REF. Console zero errors; agent page closed. Full table + 6 screenshots: evidence/AC-LAB-RESULT.md. Gotcha recorded: same-preset re-select does not reset touched overrides (_presetChanged gate, lab :3634).",
+      "adversarialVotes": "driven-live by working-Claude (liveBranch:main), evidence archived"
     },
     {
       "id": "AC-UAT",
@@ -68,7 +68,7 @@
       "adversarialVotes": "n/a — UAT is Max-only"
     }
   ],
-  "overall": "INSUFFICIENT — unit layer fully green (7/7 ACs, 3/3 adversarial votes each); integration layer partially blocked — AC-ZERO-CLOBBER PASS but AC-LAB has not yet been live-driven (0/3 votes, evidence dir empty); UAT deferred to Max pending AC-LAB.",
+  "overall": "VERIFIED_PENDING_MAX c24ea37 — unit PASS (7/7 ACs, 3/3 adversarial each) + integration PASS (AC-ZERO-CLOBBER 3/3; AC-LAB driven live 2026-07-13 by working-Claude: both regimes respond per-axis in correct directions about their own REFs, baselines null, console clean). Sole remaining gate: AC-UAT, Max-only — low-g vs high-g icy world at the same seed reads as a genuinely different world.",
   "summaryForMax": "Feature: threads real body-driver values (gravity/tidal/temperature) into the shell-relief terrain builder for icy/ocean-moon presets (Europa, Titan, Eyeball), so those worlds' surface terrain responds to their physical parameters instead of using one fixed baked preset — same mechanism V2-2 already gave the plate-tectonics path.\n\nAll 7 unit-layer ACs are fully green: determinism/no-RNG, byte-identical null-tune fallback to the shipped preset, monotonic response to gravity/tidal/temperature knobs, driver-varied worlds differing more than seed noise, and a falsifier/key-safety/blast-radius check confirming the new tuning only touches 7 named safe knobs and never leaks into structural fields. Integration guard AC-ZERO-CLOBBER is also green — nothing else (plates, stagnant-lid, magmatism, the 75 golden byte-identity hashes) was disturbed.\n\nWhat's NOT done yet: AC-LAB, the one live-browser check, has not been run — no chrome-devtools drive has happened and its evidence folder is empty. This is next for working-Claude: open planet-lod-lab.html, switch the preset dropdown between Europa and Titan, drag the existing gravity and tidal sliders (folder \"Body drivers -> plate relief (Inc.2)\" — no new slider was added, by design), and confirm via the console (`_lab.shellProbe()`) that appliedTune and the resulting cellCount/lineamentNodeCount/std(U) actually change, with before/after screenshots. Not a defect — just an unexecuted check.\n\nOnce AC-LAB is green, your UAT (AC-UAT) is: open the lab yourself, flip between the Europa and Titan presets, drag those same gravity/tidal sliders, and confirm by eye that the shell terrain (crater density, ridge/lineament pattern, chaos-terrain area) visibly changes with the sliders rather than staying static. That visual check is the only thing standing between this workstream and shipped.",
   "verifyRun": {
     "workflow": "verify-workstream full",
