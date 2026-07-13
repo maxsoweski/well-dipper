@@ -76,9 +76,45 @@ Original ask (2026-07-07, predecessor intent):
    `generate()`), Alpha Centauri as the proof case. Story locations are a future *use*
    of the capability, no content scoped here.
 
+## Post-review rulings (2026-07-12, from the 3-lens adversarial contract review)
+
+These are working-Claude scoping rulings made after the review workflow surfaced gaps;
+they implement what Max ratified rather than extend it, and he sees them at greenlight:
+
+6. **Stellar structure gets a data source and engine support.** The review found the
+   contract promised real companions (Sirius's white dwarf, Alpha Centauri's three
+   stars — part of Max's ratified "(a) real structure" answer) with no scoped source
+   (the exoplanet archive covers only planet-hosting systems; HYG has no binary linkage)
+   and no engine representation (star types stop at O–M; two-star cap). Ruling: a small
+   **curated companion table** joins the ingest (famous systems first; may pin famous
+   singles) — deliberately NOT a bulk double-star-catalog ingest (WDS-class data is
+   noisy with optical pairs; curation is the "reasonably easy" route here, unlike
+   exoplanets where the archive is clean bulk). A new engine AC (AC10) scopes the
+   degenerate star class, known-planet injection, and far-companion representation,
+   with an explicit cap: 2 close stars per system, wide companions as far companions
+   or adjacent systems, documented.
+7. **Alpha Centauri models as the A+B binary claiming all three catalog stars, with
+   Proxima as a far companion carrying its known planets.** Matches astronomy (Proxima
+   sits ~0.06 pc from the pair) and the alias machinery (all three stars inside the
+   entry's claim radius resolve to the one authored system — never a procgen impostor).
+   Sirius stays on the overlay merge path, NOT a registry entry, so authoring stays
+   scoped to Alpha Centauri and Sirius's `findAt` behavior is unchanged.
+8. **D9 resolved: no schema unification.** The overlay adds its own contents adapter
+   over the ingested data; the five existing mechanisms stay as they are (finalizes
+   ac5-decision's interim "tolerate the adapters" ruling for this workstream).
+9. **Named-systems catalog contingency.** If a newly ingested real proper name collides
+   with a shipped settled/notable catalog name, deterministically regenerating
+   `namedSystemsCatalog.js` under the enlarged blocklist is in-scope remediation —
+   shape disjointness does not protect bare-word proper names (e.g. "Vega"-class names
+   share the settled catalog's shape).
+
 ## Out of scope (deliberate)
 
 - New deep-sky content or rendering changes (lane D owns those surfaces).
+- Bulk double-star-catalog ingest (WDS-class) — structure comes from the curated
+  companion table only (post-review ruling 6).
+- A generic third-close-star engine slot — the 2-close-star cap + far-companion
+  representation stands (post-review ruling 6/7).
 - Story-location/creative system authoring content.
 - `system-tags-save-search` revival (parked; re-evaluate once the search surface ships).
 - Catalog hot-swap support in `KnownSystems.associate()` (additive-only stands until a
