@@ -1,6 +1,6 @@
 # PRESET_ARCHETYPE Retirement — Sliced BUILD-PLAN
 
-Branch `feature/world-engine-production-L1` @ `a892f28`. Contract:
+Branch `feature/world-engine-production-L1` @ `d721fa4`. Contract:
 `contract.json` (GREENLIT 2026-07-13). Intent: `intent.md`.
 
 **Baseline, empirically confirmed at HEAD (this session, full `npx vitest run` from the repo dir):**
@@ -9,7 +9,7 @@ CASES are KnownObjects ×3 + GalacticFeatures ×1; the 17 failing FILES are thos
 files + 15 `vendor/motion-test-kit/tests/*.test.js` collection failures. Guardrail quartet green;
 `worldengine-v2-3-dispatch-oracle.test.js` runs **25** tests green (NOT the stale "24" in the
 standing gate — the appliedTune probe-parity follow-up was permanently added at the V2-3 verify,
-9322645; see §4). **All routing/byte claims below are read off the live code at `a892f28`, symbols
+9322645; see §4). **All routing/byte claims below are read off the live code at `d721fa4`, symbols
 grepped not line-numbered.**
 
 ## §0 — Feature → outcome line of sight (lead orientation)
@@ -138,6 +138,28 @@ Representative presets per route (REF-anchored, tune-null, seed-invariant): **pl
 | R8 | `shell-regime-gate` › `AC9 › isShellReliefPath predicate agrees with the dispatch (and earthlike never matches)` | **REPURPOSE** | The `isShellReliefPath`/`isEarthlikePlatePath` lines die. `shell-regime-gate › AC9 › Europa fall-through: archetype=null + locked => shell eyeball-despun` uses `shellRegimeOf` — KEEP (surviving resolver). Fold the surviving-resolver checks (`shellRegimeOf('ice',false)==='icy-active'`, `shellRegimeOf(null,true)==='eyeball-despun'`, `shellRegimeOf('gas-giant',true)===null`) into that `it` as the re-anchored reference. |
 | R9 | `shell-multiply` › `AC-ZERO-CLOBBER (dispatch) › call site 2 (migration bridge, bodyDrivers null): ice/volatile/eyeball archetypes route shell…` | **RETIRE** (the ONE `it`) | This is the contract's named "bridge-byte-safety AC whose subject dies with the bridge" (task 2d). It calls `writeBodyRelief({archetype, bodyDrivers:null})` (condition-less) → post-retirement it THROWS. Its two sibling `it`s — **call site 1 (condition-bearing derived shell) + call site 1 NON-VACUOUS (driven)** — are condition-BEARING and stay green UNCHANGED, and already fully cover the surviving shell path's tune-inert + driven byte-safety. The bridge call-site's coverage is redundant once the bridge is gone. |
 
+**Dead-predicate import removal (lens MF-GREP-GATE-UNSATISFIABLE / minor-1 — now load-bearing for the
+§5/§7 import gate).** After the R-row uses die, remove the now-dead predicate names from each
+migrate/repurpose suite's `planet-lod-rivers.js` import list, keeping every surviving binding
+(`buildIrregularSphere`, `writeBodyRelief`, `DEFAULT_GRAIN_DRIVERS`):
+- `worldengine-plate-regime-gate.test.js` (import line) — drop `isEarthlikePlatePath` (R3/R4).
+- `worldengine-base-magmatism-structure.test.js` (import line) — drop `isVolcanicPath`, `isEarthlikePlatePath`, `isShellReliefPath` (R5/R6).
+- `worldengine-base-stagnantlid-structure.test.js` (import line) — drop all four (`isStagnantLidPath`, `isEarthlikePlatePath`, `isShellReliefPath`, `isVolcanicPath`) (R7).
+- `worldengine-shell-regime-gate.test.js` (import line) — drop `isEarthlikePlatePath`, `isShellReliefPath` (R8).
+- The four oracle suites drop their 4-predicate import as §4 already states.
+
+Empirically Vite/vitest TOLERATES an unused/undefined named import (probe-confirmed: the binding just
+becomes `undefined`; a leftover does NOT fail collection or grow the Test-Files-17 count) — so this is
+cleanliness, EXCEPT that the corrected §5/§7 gate is now an IMPORT-specifier grep, which a leftover import
+WOULD trip. Removal is therefore required for a scope-clean, gate-green diff.
+
+**`worldengine-mixed-composer.test.js` is OUT of scope and stays untouched (lens MF-GREP-GATE-UNSATISFIABLE).**
+A naive `grep -rlE '<4 predicate names>' tests/` matches it only via `expect(CODE, 'no isVolcanicPath( call').not.toMatch(/isVolcanicPath/)`
+— a source-purity guard over `mixedInterior.js` (which has 0 `isVolcanicPath` occurrences, so it stays green
+forever). It **imports only `buildIrregularSphere`** from `planet-lod-rivers.js`, NEVER a predicate, so it is
+not a migration caller and the corrected import-specifier gate (§5/§7) correctly ignores it. Named here so its
+persistent textual match is explained, not misread as an un-migrated caller.
+
 **Enumeration completeness for AC2:** every `writeBodyRelief(` occurrence in `tests/` is accounted for
 above (MIGRATE M1–M17, RETIRE R1/R2/R9) OR is already condition-bearing and untouched
 (`fixtures/v2-0-carrier-golden.mjs` buildBundle, `worldengine-base-condition-vector.test.js` AC4 spy,
@@ -157,6 +179,15 @@ frozen test-local reference copy):**
 | `worldengine-e1-conformance-oracle` (V2-1 shadow oracle) | identical `classifyWriterPath`; `writerToday`; `rows[].today`; asserted vs `ORACLE_PREVIEW[name].today` | Delete `classifyWriterPath`/`writerToday` + import; set `rows[].today = ORACLE_PREVIEW[name].today`. `writerE1(cv)` (the live shadow-E1) is UNCHANGED (imports `computeE1`/`modalRegime`, not the predicates). | **PINNED TABLE.** `ORACLE_PREVIEW` already pins `today` (from `oracle-preview.mjs`). The 13-equal/2-divergent tally stays real: `equal = (pinned today === LIVE writerE1)`; divergences {Eyeball, Frozen} = pinned-today ≠ live-E1. Parent `mustStayWorking`: "V2-1 shadow oracle keeps passing" — preserved. | **0** |
 | `worldengine-lid-classifier` (`dispatchPath` in the last `describe`) | `dispatchPath(archetype, locked)` (4 predicates) + `shellRegimeOf(null,true)` | Delete `dispatchPath`; re-express the "two despun destinations resolve distinctly" `it` via the SURVIVING `shellRegimeOf`: `shellRegimeOf(null,true)==='eyeball-despun'` (locked shell destination) vs `shellRegimeOf(null,false)===null` (→ despun). Keep the Mars-unmapped line. | **FROZEN/SURVIVING RESOLVER** (not a copy): `shellRegimeOf` survives and the intent explicitly blesses test-oracle use of it. It IS the resolver the bridge locked-fallback used, so the "distinct destinations" claim is asserted at the real source, not a re-implemented chain. | **0** |
 | `worldengine-v2-3-taxonomy` (`classifyWriterPath` in the "writer routes unchanged" `describe`) | `classifyWriterPath(...)==='despun'` AND `derivedPath(name,1)==='despun'` for both Neptunes | Delete `classifyWriterPath` + import; keep `expect(derivedPath(name,1)).toBe('despun')`, add `expect(ADJUDICATION-pinned 'despun')` as the documented expectation (both Neptunes route despun — the taxonomy's real concern is radius, covered by the other describes). | **PINNED** (the derived dispatch already proves despun; the legacy cross-check is redundant once the chain is gone). | **0** (the `for` loop still yields 2 its) |
+
+**Reduced-coverage note (lens minor-2, non-blocking).** After the re-anchor sets `rows[].today =
+ADJUDICATION[name].today`, the dispatch-oracle's SECOND row `it` still runs
+`expect(r.today, r.name).toBe(exp.today)` against `exp = EXPECTED_REROUTES[r.name]` — so that line becomes
+`ADJUDICATION.today` VS `EXPECTED_REROUTES.today`, a **pinned-table-vs-pinned-table** consistency check, no
+longer live-code coverage (both tables are hand-maintained). It stays green and the count is unchanged; §4
+above only enumerates dropping the tautological `expect(r.today).toBe(exp.today)` in the FIRST `it`. Logged
+so this surviving line is not mistaken for live retirement coverage — the real teeth are `r.derived.path` /
+`r.derived.shellRegime` (LIVE) vs the pinned table.
 
 **Dispatch-oracle test count (the enumerated gate value).** Current HEAD = **25** (verified this session:
 the 3 AC-ORACLE-17 scope/row/tally its + 17 seed-invariance its + Europa≠Titan + RT1 pure-strong +
@@ -194,12 +225,23 @@ collect+run ≥1 test per MF#3). One `describe`, ≥2 `it`s:
 grep -rn 'writeBodyRelief(' tests/ \
   | grep -v 'tests/worldengine-condition-less-throw.test.js' \
   | grep -v '\.condition'   # heuristic; the AUTHORITATIVE check is the green full suite (any missed condition-less caller THROWS → red)
-# AND: no test imports the deleted predicates
-grep -rlE 'isEarthlikePlatePath|isShellReliefPath|isVolcanicPath|isStagnantLidPath' tests/   # → expect: (empty)
+# AND: no test IMPORTS a deleted predicate from planet-lod-rivers.js.
+# ⚠ DO NOT use `grep -rlE 'isEarthlikePlatePath|isShellReliefPath|isVolcanicPath|isStagnantLidPath' tests/`
+#   as the gate — it returns 9 files today and can NEVER go empty (lens MF-GREP-GATE-UNSATISFIABLE, §9):
+#   three files legitimately KEEP the predicate NAMES this plan preserves —
+#     • worldengine-mixed-composer.test.js:114  .not.toMatch(/isVolcanicPath/)     (source guard over mixedInterior.js; OUT of scope, imports only buildIrregularSphere)
+#     • worldengine-plate-regime-gate.test.js:79 .not.toMatch(/isEarthlikePlatePath/)  (base-layer purity grep — R4 KEEPS)
+#     • worldengine-v2-3-dispatch-oracle.test.js:271,273 .not.toMatch(/isVolcanicPath\s*\(/), .not.toMatch(/isEarthlikePlatePath\s*\(/)  (AC-0 region denylist — §6 KEEPS)
+#   plus header/it-title COMMENTS in dispatch-oracle / e1-conformance-oracle / shell-regime-gate.
+# The CORRECT gate detects an import SPECIFIER (a name pulled in from planet-lod-rivers.js), not any text:
+perl -0777 -ne 'print "$ARGV\n" if /import\s*\{[^;]*\b(?:isEarthlikePlatePath|isShellReliefPath|isVolcanicPath|isStagnantLidPath)\b[^;]*from[^;]*planet-lod-rivers/s' tests/*.test.js
+# → 8 files today (the migrate/repurpose + 4 oracle suites); → (empty) after Slice A removes every predicate import.
 ```
 The carve-out is the single named file `worldengine-condition-less-throw.test.js`. The *authoritative*
 "zero condition-less call sites" proof is the full suite staying green: a missed condition-less caller
-throws at runtime → a red test, not a silent pass.
+throws at runtime → a red test, not a silent pass. The import-specifier grep above is the correct
+"no test imports a deleted predicate" gate (verified: 8 importers at HEAD → empty after Slice A);
+it deliberately does NOT flag the preserved source-guard / region-denylist / comment occurrences.
 
 ## §6 — AC-0 grep impact (keep the guard, throw in the else — PREFERRED, no slice-marker re-anchor)
 
@@ -233,7 +275,7 @@ counts `writeLidResponseSphere(` at one inside + one at `labLidOverride` outside
 3. **FULL:** `npx vitest run` — EXACTLY `Tests  4 failed` AND `Test Files  17 failed` (KnownObjects ×3 + GalacticFeatures ×1 cases; 2 case-files + 15 vendor files — MF#3 counting rule: pin BOTH counts). AND every touched/added test file collected + ran a NONZERO test count (guards a silently-uncollected suite from reading green — the new throw file especially).
 
 **Additional per-slice checks:**
-- Slice A: `npx vitest run` on the 13 touched test suites (M/R rows + the 4 oracle suites) — all green on the DERIVED path with the bridge still present; `grep -rlE 'isEarthlikePlatePath|isShellReliefPath|isVolcanicPath|isStagnantLidPath' tests/` → empty (no test imports a predicate anymore).
+- Slice A: `npx vitest run` on the 13 touched test suites (M/R rows + the 4 oracle suites) — all green on the DERIVED path with the bridge still present; the import-specifier gate (§5, lens MF-GREP-GATE-UNSATISFIABLE) — `perl -0777 -ne 'print "$ARGV\n" if /import\s*\{[^;]*\b(?:isEarthlikePlatePath|isShellReliefPath|isVolcanicPath|isStagnantLidPath)\b[^;]*from[^;]*planet-lod-rivers/s' tests/*.test.js` → **(empty)** = no test imports a deleted predicate. (Do NOT use the naive `grep -rlE '<names>' tests/`; it can never be empty — see §5/§9.)
 - Slice B: `grep -nE 'isEarthlikePlatePath|isShellReliefPath|isVolcanicPath|isStagnantLidPath|VOLCANIC_ARCHETYPES' planet-lod-rivers.js` → empty; `grep -n 'bodyDrivers?.condition ? shellDriversToTune' planet-lod-rivers.js` → empty (bridge-tune gate gone); the AC-0 region grep (gate 2) green; `grep -n 'STRONG_REGIME :' src/worldengine/base/lidResponse.js` → empty (ternary folded); the throw test green.
 
 **Scope-clean diff (contract designDecision #6 — `git add <paths>` ONLY, never `-A`/`.`):**
@@ -250,3 +292,17 @@ counts `writeLidResponseSphere(` at one inside + one at `labLidOverride` outside
 - **RG-C (guardrail-adjacent windows).** `worldengine-lid-router-audit` / `worldengine-e1-shadow-audit` slice the `writeBodyRelief` body by paren/brace matching; deleting the bridge shrinks that body. Expected unaffected (the surviving router call + call-site count are unchanged), but the Slice B gate MUST re-run them; if a window shifts, re-anchor is enumerated (a rewrite, like the V2-3 RG1 precedent) — do NOT silently relax.
 - **RG-D (dispatch-oracle count drift).** The standing gate says 24; HEAD is 25 (appliedTune follow-up). The plan pins the enumerated post-workstream count at 25. If a builder "restores 24" by dropping the appliedTune test, that is a regression — the count is 25 and the appliedTune parity `it` stays.
 - **AMB-1 (`archetype` destructure param).** AC1 says "the routing region no longer reads an `archetype` parameter." The derived region already reads none; the plan additionally removes the now-dead `archetype = null` destructure from the signature (only the bridge read it). Production `route()` still passes `archetype` harmlessly (ignored). Non-blocking; noted so the removal is intentional, not accidental.
+
+## §9 — Adversarial lens log (V2-5s pattern — each fix tagged with its lens id)
+
+Folded into this plan on the adversarial build-plan pass, 2026-07-13. Each fix carries its lens id inline
+at the point of change (grep the id) AND is summarized here. Claims re-verified against live code at
+`d721fa4`.
+
+| Lens id | Sev | Disposition | What changed (grep the id in-file) |
+|---|---|---|---|
+| **MF-GREP-GATE-UNSATISFIABLE** | must-fix | **FOLDED** | The `grep -rlE '<4 predicate names>' tests/ → (empty)` gate in §5 (AC2) and §7 (Slice-A check) can NEVER be empty — verified it returns **9** files at `d721fa4` and ≥3 forever, because the plan itself KEEPS the predicate *names* as source-purity guards (dispatch-oracle:271/273 AC-0 region denylist §6; plate-regime-gate:79 base-layer purity R4) plus a source guard the plan never enumerated (mixed-composer:114, over `mixedInterior.js`), plus header/it-title comments. A builder running it as written would see it "fail" and either stall or delete the Rule-15 region denylist / purity greps to force emptiness — silently dropping real coverage. **Fix:** replaced BOTH occurrences with an import-SPECIFIER detector (`perl -0777 … /import{…predicate…}from…planet-lod-rivers/`) that matches the actual mechanism ("a test IMPORTS a deleted predicate"), verified to return the **8** importer files at HEAD and **(empty)** after Slice A removes the imports; added the ⚠ do-not-use annotation on the naive grep; and NAMED `worldengine-mixed-composer.test.js` in §3.2 as out-of-scope (imports only `buildIrregularSphere`) so its persistent textual match is explained, not read as an un-migrated caller. |
+| **minor-1** (import-removal under-specified) | minor | **FOLDED** | §3.2 rows R3/R4, R5/R6, R7, R8 deleted the predicate *uses* but never said to remove the now-dead `planet-lod-rivers.js` predicate IMPORTS (plate-regime-gate, magmatism-structure, stagnantlid-structure, shell-regime-gate). Empirically vitest tolerates an unused/undefined named import (probe-confirmed — no collection break, no Test-Files-17 growth), so it was cleanliness only — **until** MF-GREP-GATE made the gate an import-specifier grep, which a leftover import would trip. Now enumerated as a required, load-bearing removal in §3.2 (surviving bindings kept). |
+| **minor-2** (dispatch-oracle line 167 reduced meaning) | minor | **FOLDED** | After the §4 re-anchor (`rows[].today = ADJUDICATION[name].today`), the second row `it`'s `expect(r.today).toBe(exp.today)` (vs `EXPECTED_REROUTES`) becomes pinned-table-vs-pinned-table, not live coverage. §4 only enumerated dropping the *first* `it`'s tautological line. Added a reduced-coverage note in §4 so this surviving line is not mistaken for live retirement coverage (real teeth = `r.derived.*` LIVE vs pinned). Count unchanged, stays green. |
+| **minor-3** (standing gate says 24, HEAD is 25) | minor | **NO CHANGE NEEDED** | The plan is already RIGHT: it pins the enumerated dispatch-oracle count at **25** (RG-D, §4; the appliedTune probe-parity `it` shipped at 9322645). This is the plan correct against a stale standing gate, not a plan defect — accepted under the standing gate's "or the plan's enumerated new count" clause. Re-confirmed 25 passing at `d721fa4`. No edit. |
+| **minor-4** (stale header SHA) | minor | **FOLDED** | Plan header line 3 + the routing-claims line said branch @ `a892f28`; actual HEAD is `d721fa4`. Non-load-bearing (all symbol/route claims re-verified against live `d721fa4`), but both SHA references refreshed to `d721fa4`. |
