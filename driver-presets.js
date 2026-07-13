@@ -178,6 +178,17 @@ export const PRESET_ARCHETYPE = {
   'Frozen (airless)': 'ice',
   'Gas giant (Jovian)': 'gas-giant',
   'Gas giant (Saturnian)': 'gas-giant',
+  // ── V2-3 AC-TAXONOMY-NEPTUNE — SHARED TAXONOMY IDENTITY, DELIBERATE (Option B, plan §8/MF#2). ──
+  // 'Ice giant (Neptunian)' and 'Sub-Neptune (hazy)' INTENTIONALLY share the 'sub-neptune' key:
+  // an explicitly-shared taxonomy identity, not an accidental collision. Both resolve the SAME
+  // RADIUS_RANGES_EARTH['sub-neptune'] = [2.5, 4.0] (Neptune itself = 3.88 R⊕ sits inside it),
+  // so drawPresetRadius's seeded draw range is identical for both and the ROADMAP §3.1 radius
+  // hazard — demoting Neptunian to 'gas-giant' [6.0, 14.0] and inflating a seeded Neptunian to
+  // Jupiter size — CANNOT fire. Writer routes are identical too (both despun: gas-row dead-lid
+  // under the derived dispatch AND under the legacy archetype chain). A distinct 'ice-giant' key
+  // (Option A) is Max-gated out of scope: it would edit src/core/ScaleConstants.js AND bump the
+  // frozen v2-0-preset-archetype.ad156cc.json fixture, both outside AC-ZERO-CLOBBER(g).
+  // Guarded by tests/worldengine-v2-3-taxonomy.test.js.
   'Ice giant (Neptunian)': 'sub-neptune',
   'Sub-Neptune (hazy)': 'sub-neptune',
   'Eyeball (locked temperate)': 'eyeball',
