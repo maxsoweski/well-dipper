@@ -56,11 +56,20 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > Centauri registration work — HYG names its components Rigil Kentaurus/Toliman). 1123/1123 vitest,
 > live belt accept/reject verified, scene suite 19/19. Successor flags recorded in `a1d2d4c` message.
 > **✅ UAT PASSED (Max, 2026-07-11)** — Sol works; workstream CLOSED at `a1d2d4c` (FEATURES.md row
-> added; still branch-only — master merge is a separate, Max-gated moment: pushing master = GitHub
-> Pages deploy). **▶ NEXT: real-universe-overlay scoping interview in a FRESH session** (D6–D9 +
-> settled-catalog UI — real names AND contents for known systems; the alias/claimedStars substrate
-> from `a1d2d4c` is the starting point; successor flags in that commit message + seam handoff).
-> Contract: `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/`.
+> added). **Now IN MASTER + DEPLOYED** — lane B's `847ab19` pre-deploy merge (2026-07-11) folded this
+> branch in; `feature/system-details` is a strict ancestor of master (build sessions: just ff onto
+> master first). Contract: `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/`.
+> **▶ SUCCESSOR SCOPED (2026-07-12): `real-universe-overlay-2026-07-12`** — interview done (Max's 4
+> facets: nav-neighborhood fidelity, player search, observed characteristics, structures; rulings:
+> true positions never procgen-snapping, bulk exoplanet ingest + curated companion table, structures
+> = search+audit only, settled-catalog UI folds into search, seedtags stays parked). 10 ACs incl.
+> AC10 engine structural support (degenerate star class, known-planet injection, far-companion; Alpha
+> Cen = A+B binary + Proxima far companion, authoring proof). Contract survived a 3-lens adversarial
+> review (12 findings folded, 3 blockers: multiplicity had no data source/engine support) + round-2
+> re-verify (clean + 3 residuals folded). Resolves D6–D9. Contract:
+> `docs/WORKSTREAMS/real-universe-overlay-2026-07-12/` (schema-valid, status building).
+> **▶ NEXT: Max greenlight → BUILD Increment 1 (AC7 ingest) via opus-pinned workflows in a FRESH
+> session.** AC2's NavComputer search seam is lane-D-adjacent — coordinator-flagged before build.
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
