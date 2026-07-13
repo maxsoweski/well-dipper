@@ -1,0 +1,61 @@
+{
+  "workstream": "world-engine-v2-7d-lid-disruption-2026-07-12",
+  "commit": "22a68bb3153f04e383fb008bafd8a7d070538e38",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "N/A"
+  },
+  "perAC": [
+    {
+      "id": "AC-0",
+      "result": "PASS",
+      "evidence": "Driver connectivity (0 imports beyond alea/simplex-noise/mathutil, 0 driver/condition/e1/archetype reads confirmed by independent grep), named future consumers (V2-7, V2-9a) matched to intent.md, and taxonomy non-registration all independently re-verified via grep plus headless run: tests/worldengine-lid-disruption.test.js + drawcount + planet-archetypes.test.js = 52/52 passed.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-DET",
+      "result": "PASS",
+      "evidence": "Determinism (byte-identical cells/foci across two fresh runs, seeds 1/7/42), zero Math.random/Date.now, single bounded BFS while-loop, no shipped-namespace literal leakage, and seedKey 'disrupt:' guard all independently re-greped and confirmed in the actual headless run: 31/31 tests passed.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-STRUCT-CELLS",
+      "result": "PASS",
+      "evidence": "Space-filling partition, count band, interiorness invariants, wall-fraction/mean-interiorness bands, and cell-size spread bands all verified via headless vitest run (31/31 passed) against a real calibration probe driving the actual shipped writeShellReliefSphere STEP-2 writer; anti-vacuous perturbed-control tests confirm bands aren't tautological. CELL_DEFAULTS confirmed value-identical to shellRelief.js's STEP-2 tune object.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-STRUCT-FOCI",
+      "result": "PASS",
+      "evidence": "Resolution-invariant coverage (pool proportional to N), real field bias vs null-control, heavy-tailed radius law, type-split-vs-TYPE_FRAC, and low-count grace (POOL:3, no special-casing) all confirmed via headless run (27/27 in main file, 31/31 combined); each band paired with an anti-vacuous perturbed-parameter test showing the metric moves outside the band.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-PROFILE-EQ",
+      "result": "PASS",
+      "evidence": "profileActiveCorona/profileInactiveCorona confirmed byte-identical (toBe, dense 341-point grid + boundary points) to the inline formulas still present verbatim in stagnantLid.js STEP-3/4 and mixedInterior.js STEP-7/8; both shipped files confirmed untouched by commit 22a68bb via git show --stat. 27/27 tests passed headless.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-CONSUMER-SEAM",
+      "result": "PASS",
+      "evidence": "V2-9a pluggability (grooved-diapir profile: ring count/spacing/trough-ordering pure-function test + renders correctly through evalFociDeformation when registered, absent from shipped DISRUPT_PROFILES default) and V2-7 editor seam (deactivate/retype one focus -> change localized to its support, zero draws on re-eval via real alea counting proxy) both confirmed via 31/31 headless run.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-ZERO-WIRING",
+      "result": "PASS",
+      "evidence": "grep -rn lidDisruption src/ returns only self-references inside the module; git show 22a68bb --name-status confirms diff surface is exactly new module + new tests + workstream docs, no existing src/ file modified. Working-tree dirty files (CameraChoreographer.js, LabMode.js) confirmed unrelated (grep for lidDisruption/disrupt: content returns zero matches) and correctly absent from all V2-7d commits.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "result": "PASS",
+      "evidence": "Full npx vitest run: 1946/1950 passed, 4 known-baseline failures unchanged (KnownObjects x3 + GalacticFeatures x1, pre-existing, unrelated to this workstream). New test files (31/31) don't appear among the 17 pre-existing failing files. Guardrail quartet (byte-identity, lid-byte-anchors, e1-shadow-audit, planet-archetypes) 166/166 passed. git show --stat on all three V2-7d commits confirms none touch shellRelief/stagnantLid/mixedInterior/magmatism/plates/tectonic/lidResponse/e1Regime.js.",
+      "adversarialVotes": "3/3 sufficient"
+    }
+  ],
+  "overall": "Unit PASS (7/7 ACs) + Integration PASS (AC-ZERO-CLOBBER) — no UAT-layer ACs in this workstream's contract. All 8 ACs independently re-verified (not just trusted from BUILD-NOTES.md) via real headless vitest runs and manual greps against commit 22a68bb, with 3/3 adversarial votes each. The increment is a fully isolated, zero-production-wiring module (SP-LID-DISRUPTION family) with its own 31-test validation suite; the standing repo-wide baseline of 4 known-unrelated failures is unchanged.",
+  "summaryForMax": "world-engine-v2-7d-lid-disruption-2026-07-12 (commit 22a68bb) is VERIFIED at unit + integration — all 8 contract ACs PASS, each independently re-checked (real command output, not just trusting BUILD-NOTES.md), 3/3 adversarial votes on every one. This increment ships src/worldengine/base/lidDisruption.js: a deterministic, seeded ('disrupt:' namespace) module producing (1) a cell partition and (2) proximity-biased 'foci' with pluggable rho-profiles (active/inactive corona equations byte-matched to the existing inline copies in stagnantLid.js and mixedInterior.js), plus a 31-test validation suite (tests/worldengine-lid-disruption.test.js + drawcount.test.js). It has ZERO production wiring by design — nothing in src/ imports it yet; it exists purely as pre-built, validated raw material for two future increments named in intent.md: V2-7 (cantaloupe-silicate epoch cell descriptors) and V2-9a (diapir-grooved-coronae option). The repo-wide suite (1946/1950) shows no new breakage — the 4 failing tests are a pre-existing, unrelated baseline (KnownObjects x3, GalacticFeatures x1).\n\nThere is NO UAT-layer AC in this workstream's contract, so there is nothing visual or interactive for you to click through and accept right now — this increment doesn't touch anything renderable or in-game yet (that's deliberate: it's a validated-in-isolation module, not a feature). If you want to sanity-check it yourself, the concrete artifact is the module + its test file at /home/ax/projects/well-dipper/src/worldengine/base/lidDisruption.js and /home/ax/projects/well-dipper/tests/worldengine-lid-disruption.test.js — running `npx vitest run tests/worldengine-lid-disruption.test.js tests/worldengine-lid-disruption-drawcount.test.js` reproduces the green 31/31 yourself. Your actual UAT moment will come when V2-7 or V2-9a wires this module into a visible planet feature — that's the workstream to watch for a real accept/reject decision.\n\nNote for you: the working tree also carries unrelated, unstaged edits to src/auto/CameraChoreographer.js and src/debug/LabMode.js (a separate in-flight camera-spring feature) — confirmed unrelated to this workstream and correctly excluded from every V2-7d commit; no action needed from you on those as part of this verdict."
+}
