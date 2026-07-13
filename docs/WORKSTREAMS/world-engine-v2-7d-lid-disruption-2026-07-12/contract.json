@@ -1,0 +1,123 @@
+{
+  "workstream": "world-engine-v2-7d-lid-disruption-2026-07-12",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "statusNote": "SCOPED 2026-07-12 (grounding brief: scratchpad v2-7d-grounding.md, fable agent, read-only survey of shellRelief STEP-2 + stagnantLid coronae + the mixedInterior STEP-7 duplicate) — AWAITING MAX GREENLIGHT + two scope confirms: (OQ-MAX-1) the grooved-diapir profile is a synthetic capability proof, NOT the #4.5 geometry decision (droppable to a test-local stub if preferred); (OQ-MAX-2) cuttability re-confirm — ROADMAP 2026-07-03 record says V2-7d stays funded; cutting now is free, cutting after build wastes the scope. Runs FILE-DISJOINT from the in-flight V2-3 dispatch flip (new module + new tests only; depends only on shipped V2-2). Active-workstream pointer stays on V2-3 until its close (single-valued; noted, not an error). Process/tooling carve-out per dev-collab reference: contract-shaped ACs, NO UAT gate, terminal gate VERIFIED (V2-0/V2-1/V2-2a precedent).",
+  "programRef": "world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md §2.2 SP-LID-DISRUPTION bullet (a FUTURE shared abstraction to be BUILT, not existing shared machinery — the two seeds are structurally different implementations), §3.1 V2-7d row (CUTTABLE: cutting strikes the cantaloupe unlock + forces #4.5 to block-jumble), §3.2 #1/#4.5 dispositions (shellRelief cell disruption = the seed; diapir branch → this family), §6 R-disrupt (the metasystematicity warning this contract's family-shape answers), §7a (#4.5 geometry pick stays Max's — NOT decided here). Namespace correction recorded: §2.2's 'new lid: namespace' phrasing is STALE — 'lid:' was consumed by shipped V2-2; this module uses 'disrupt:' (verified absent from the base/ namespace inventory).",
+  "designDecisions": [
+    "A FAMILY, NOT A MODE FLAG (R-disrupt / metasystematicity; SP-CENTERS D2-MF6 precedent one level up). Two constructors sharing a vocabulary, a profile library, and a discipline: makeCellDisruption (space-filling warped-Voronoi partition, BFS-from-walls interiorness — the shellRelief STEP-2 shape) + makeFociDisruption (sparse pool-∝-N field-biased rejection sampling, per-feature heavy-tailed radii, typed analytic profiles — the stagnantLid corona shape). The duals stay distinct BY DESIGN: placement algorithms, count semantics (fixed band vs emergent-from-pool), radial coordinates (wall-referenced BFS inward vs center-referenced analytic ρ outward), and deformation semantics (gate-for-consumer-texture vs additive typed contribution) are NEVER unified under a shared parameter.",
+    "THE PROFILE LIBRARY IS THE ONE LEGITIMATE 1:1 EXTRACTION. The dome/trench/rise + rim/depression formulas are already copy-duplicated verbatim between stagnantLid.js STEP-3 and mixedInterior.js STEP-7 (grounding §1c finding — a third partial implementation with a third placement scheme). Extract them as pure ρ→Δh functions provably formula-identical to BOTH shipped inline copies (AC-PROFILE-EQ). The shipped files are NOT edited — the dedup of mixedInterior's copy is a recorded non-goal / post-V2-7 candidate.",
+    "NAMESPACE = 'disrupt:' with documented FROZEN draw orders. Cells: 1 count draw then 4/cell (randDir 2 + 2 RESERVED vigor/polarity draws kept deliberately — mirrors shell SLICE-B intent, prevents a future draw-order break; R6). Foci: per candidate randDir(2)+accept(1), on accept +radius(1)+type(1) — the stagnantLid conditional-draw-count pattern. The module never draws in any shipped namespace (grep-enforced) and therefore never byte-matches shipped worlds — by design; validation is structure-reproduction on synthetic inputs with ENUMERATED statistics (gate-3 discipline), never byte-match.",
+    "STRESS COUPLING STAYS CONSUMER-SIDE (R3). shellRelief's chaos gating by stressTensile is that writer's physics, not the disruption construction's. The module returns raw fields (interiorness, contrib, coverMask); callers gate/modulate. Lid-strength/field coupling enters ONLY via caller-supplied inputs: acceptWeightAt(dir)→[0,1] for placement bias (null ⇒ constant-accept control, the stagnant AC4 decoupling pattern) and amplitude scaling on the profile params.",
+    "PLACEMENT/EVAL SPLIT IS THE V2-7 EDITOR SEAM. evalFociDeformation(carrier, foci, profiles, P) is separate from makeFociDisruption so an epoch editor can mutate descriptors (deactivate a focus, change a type) and re-evaluate WITHOUT redrawing — demonstrated in AC-CONSUMER-SEAM. The module NEVER writes carrier channels and contains NO relax passes (SP-RELAX belongs to writers/composers); composition into datumStack is V2-7's job.",
+    "THE GROOVED PROFILE IS A CAPABILITY PROOF, NOT THE #4.5 DECISION (OQ-MAX-1, pending Max's confirm at greenlight). profileGroovedDiapir demonstrates profile pluggability on synthetic inputs only — no preset, no writer, no lab surface, no Miranda look. §7a keeps the block-jumble-vs-diapir pick Max's, at V2-9a scoping. If Max prefers, it drops to a test-local stub with the pluggability AC kept.",
+    "ZERO PRODUCTION WIRING (R1 mitigation; interpenetration.js precedent). No src/ file imports lidDisruption.js this increment; the increment's whole diff = the new module + new tests. Interface revision at V2-7 scoping is therefore cheap and non-breaking — the honest answer to the speculative-generality risk. Resist speculative knobs beyond what the two seeds + two consumer seams need.",
+    "GUARDRAILS UNCHANGED: three-free module (imports only alea / simplex-noise createNoise3D / mathutil), no Math.random/Date.now, bounded iteration only (the O(N) BFS queue drain — the plates/shell pattern), pool ∝ N + sizes × meanEdgeAngle resolution-invariance idioms, tune ? {...DEFAULTS,...tune} : DEFAULTS seam mirroring every sibling writer; stage only files we touch (not-ours CameraChoreographer.js/LabMode.js + untracked pile stay out of every commit)."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15), carve-out shape for infrastructure: (1) Driver connectivity — N/A and ASSERTED so: the module takes NO D-vector and reads NO E1 coordinate; its inputs are carrier + seed + explicit tune/callback params (grep: no bodyDrivers/condition/computeE1/e1. reads). (2) Named consumer — the increment's own validation suite is the present consumer; V2-7 (cantaloupe epoch expression via editable cell descriptors) and V2-9a (diapir profile) are the named FUTURE consumers, recorded in intent.md's UNLOCKS card. (3) Taxonomy registration — no new archetype/regime/*Enabled key anywhere; planet-archetypes drift guards untouched and green.",
+      "verifyVia": {
+        "input": "Read the diff + BUILD-NOTES conformance table; grep the module for D-vector/E1/archetype reads; npx vitest run tests/planet-archetypes.test.js",
+        "observable": "Module is condition-blind by construction; future consumers named; drift guards green with zero taxonomy change"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-DET",
+      "statement": "Seeded determinism + namespace isolation. Same macroSeed ⇒ byte-identical outputs across two independent runs for BOTH constructors AND evalFociDeformation (Float32Array/Int32Array exact equality). Greps prove: zero Math.random/Date.now/while-to-convergence in lidDisruption.js; every alea call uses the 'disrupt:' namespace; NO 'magma:'/'stagnant:'/'shell:'/'plates:'/'lid:'/'e1:' literal appears in the module; the documented draw orders (cells: 1 count + 4/cell incl. 2 reserved; foci: 2+1 per candidate, +1+1 on accept) are pinned by a draw-counting test (instrumented alea).",
+      "verifyVia": {
+        "input": "Headless vitest: double-run byte-equality on both constructors + eval at N≈1500 across ≥3 seeds; grep assertions; a draw-count test with an instrumented rng",
+        "observable": "Bit-identical reruns; greps clean; draw counts match the frozen documented orders exactly"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-STRUCT-CELLS",
+      "statement": "makeCellDisruption reproduces the STRUCTURE of the shellRelief STEP-2 pattern on synthetic inputs (enumerated statistics, gate-3 discipline — explicitly NOT byte-match): with tune matched to shell's values, the partition is space-filling (every node assigned a cellId), cellCount ∈ [CELL_MIN, CELL_MIN+CELL_SPAN), interiorness ∈ [0,1] with exactly 0 on wall nodes and monotone-nondecreasing in wallDist, and the wall-node fraction + cell-size distribution fall within bands pinned in the test across ≥5 seeds (bands enumerated at build from a calibration run against shellRelief's own STEP-2 statistics on the same mesh — the bands are the falsifiable claim).",
+      "verifyVia": {
+        "input": "Headless vitest at N≈1500: build cells across seeds {1,2,3,7,42}; compute the enumerated statistics; compare against the pinned bands; assert space-filling/count/interiorness invariants",
+        "observable": "All invariants hold; every enumerated statistic within its pinned band on every seed; no vacuous always-true bands (each band demonstrably excludes a perturbed control)"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-STRUCT-FOCI",
+      "statement": "makeFociDisruption reproduces the STRUCTURE of the stagnantLid corona pattern on synthetic inputs: with tune matched to stagnant DEFAULTS and a SYNTHETIC proximity field as acceptWeightAt — (a) coverage is resolution-invariant (two mesh densities; pool ∝ N; coverage fraction within a pinned band); (b) field bias is real: mean acceptWeightAt over accepted centers strictly exceeds the acceptWeightAt=null constant-accept control (the stagnant AC4 decoupling pattern); (c) the radius distribution is heavy-tailed within the configured band (SIZE_SKEW respected); (d) the type split ≈ TYPE_FRAC within a pinned tolerance across seeds; (e) low-count grace: a small-pool config yields ~3 features with no special-casing (the V2-9a Miranda seam).",
+      "verifyVia": {
+        "input": "Headless vitest at two mesh densities: build foci across ≥5 seeds with the synthetic field and with the null control; compute coverage/bias/radius/type statistics; run the small-pool config",
+        "observable": "Coverage band holds at both densities; biased mean > control mean on every seed; radius/type statistics in band; small-pool run produces a handful of features cleanly"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-PROFILE-EQ",
+      "statement": "The extracted profile functions are FORMULA-IDENTICAL to BOTH shipped inline copies: over a dense sampled ρ grid (incl. the support cutoffs and segment boundaries 0.75/0.85/0.95/1.25), profileActiveCorona/profileInactiveCorona equal the stagnantLid.js STEP-3 arithmetic AND the mixedInterior.js STEP-7 duplicate to EXACT floating-point equality at the shipped default amplitudes — pure-function equality, never writer-output equality; the two shipped files are byte-untouched (this is the one legitimate 1:1 extraction claim).",
+      "verifyVia": {
+        "input": "Headless vitest: evaluate the extracted functions and locally re-inlined copies of both shipped expressions over the ρ grid; exact === comparison; git-diff shows stagnantLid.js + mixedInterior.js untouched",
+        "observable": "Exact FP equality on every grid point vs both copies; both shipped files byte-unchanged"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-CONSUMER-SEAM",
+      "statement": "Both future consumer obligations are mechanically demonstrated on synthetic inputs: (a) V2-9a pluggability — registering profileGroovedDiapir for a type makes evalFociDeformation render concentric grooves (ring count + spacing asserted on the ρ profile), keeping the diapir option ALIVE without deciding the #4.5 geometry pick (no preset/writer/lab surface); (b) V2-7 editor seam — mutate a returned descriptor (deactivate one focus; change one type) and re-run evalFociDeformation WITHOUT redrawing: the deformation updates exactly at the mutated features and the draw streams are untouched (placement/eval split proven).",
+      "verifyVia": {
+        "input": "Headless vitest: grooved-profile registration + ring-structure assertions; descriptor mutation + re-eval with byte-comparison localized to the mutated features' support",
+        "observable": "Grooves render with the asserted ring count/spacing; re-eval after mutation changes only the mutated features' contribution; zero re-draws"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-ZERO-WIRING",
+      "statement": "Zero production wiring: no file under src/ imports lidDisruption.js (grep; the module itself and tests exempt) — the interpenetration.js precedent. The increment's entire diff surface = the new module + new test files (+ workstream docs); no existing src/ file is modified.",
+      "verifyVia": {
+        "input": "grep -r lidDisruption src/ (only the module itself); git diff --stat vs the base commit",
+        "observable": "No src/ importer; diff touches only new files + workstream docs"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "statement": "Trivial-by-construction zero-clobber, asserted anyway: full npx vitest run green with the standing baseline (the 4 pre-existing known failures — KnownObjects ×3, GalacticFeatures ×1 — do not grow; every NEW test file shown to collect + run a nonzero test count, the MF#3 counting discipline); the guardrail quartet green untouched; every shipped writer byte-identical by construction (no existing src/ file in the diff); stage only files we touch.",
+      "verifyVia": {
+        "input": "npx vitest run (full) + the quartet; git show --stat every commit",
+        "observable": "Full suite at baseline (Tests-failed == 4, new files collected+ran); quartet green; commit file lists exactly the new module + tests + docs"
+      },
+      "layer": "integration",
+      "live": false
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "shellRelief.js STEP-2 (read-only seed #1): 'shell:cells:' interleaved stream (1 count + 4/cell), domain-warped nearest-centroid Voronoi cellId, BFS-from-walls cellInteriorness with BELT_RADIANS falloff — the cell-constructor shape to generalize",
+      "stagnantLid.js coronae (read-only seed #2): 'stagnant:corona:' conditional-draw rejection sampling (pool ∝ N via CORONA_POOL_REF_N, accept ∝ prox^CORONA_BIAS), heavy-tailed R_c, typed active/inactive analytic profiles with hard support — the foci-constructor shape to generalize",
+      "mixedInterior.js STEP-7 (read-only, evidence): the third inline copy of the corona profile formulas with a third placement scheme — pins the profile library as the shareable piece; NOT edited this increment",
+      "the shared domain-warp idiom (the three-tap +19.1/−7.3/+3.7 offsets, verbatim in both seeds) and the randDir draw idiom",
+      "three-free deps: alea, simplex-noise createNoise3D, mathutil clamp/clamp01",
+      "the dev-collab process precedents: interpenetration.js (zero-wiring base/ instrument), gate-3 enumerated-statistics validation discipline, the V2-0/V2-1/V2-2a no-UAT VERIFIED-terminal pattern"
+    ],
+    "outputs": [
+      "src/worldengine/base/lidDisruption.js: makeCellDisruption + makeFociDisruption (the family), PROFILE_DEFAULTS + profileActiveCorona/profileInactiveCorona/profileGroovedDiapir (pure ρ→Δh library), evalFociDeformation (placement/eval split) — all in the NEW 'disrupt:' namespace with frozen documented draw orders",
+      "the validation test suite: determinism/draw-count, structure-reproduction with pinned statistic bands (cells + foci), profile FP-equality vs both shipped copies, consumer-seam demonstrations (grooved pluggability + mutate-and-re-eval), zero-wiring grep",
+      "the V2-7 editor seam (editable descriptors + re-eval) and the V2-9a diapir seam (pluggable profiles, low-count grace) — mechanically proven, consumers not wired",
+      "a recorded follow-up candidate: dedup mixedInterior.js's inline profile copy after V2-7 proves the interface (non-goal now)"
+    ],
+    "mustStayWorking": [
+      "EVERY shipped writer byte-identical by construction — shellRelief.js, stagnantLid.js, mixedInterior.js, magmatism.js, plates.js, tectonic.js, lidResponse.js, e1Regime.js all UNTOUCHED (zero existing-src/ modifications is the increment's hard diff fence)",
+      "the guardrail quartet (v2-0-byte-identity / worldengine-lid-byte-anchors / worldengine-e1-shadow-audit / planet-archetypes) green untouched — NOTE: the in-flight V2-3 flip repurposes two of these; V2-7d builds against whatever HEAD state V2-3 has landed and must not touch them either way",
+      "no shipped alea namespace drawn from ('disrupt:' only); no carrier channel written; no relax inside the module",
+      "the 4 pre-existing known failures do not grow; full-suite baseline counts per the MF#3 discipline",
+      "the not-ours dirty files (src/auto/CameraChoreographer.js, src/debug/LabMode.js) + untracked pile stay out of every commit"
+    ]
+  }
+}
