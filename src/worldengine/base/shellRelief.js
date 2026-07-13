@@ -89,6 +89,80 @@ const SHELL_DEFAULTS = Object.freeze({
   CHAOS_BASE: -0.04, CHAOS_AMP: 0.12, CHAOS_FREQ: 5.0,   // foundered blocks below + raised matrix
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+// ── V2-5s (shell driver-response): per-regime REFs + the driver→tune seam ──────────────────────────────
+// The per-body D-vector re-tunes population/threshold/amplitude knobs via the EXISTING
+// `tune ? { ...SHELL_DEFAULTS, ...tune } : SHELL_DEFAULTS` seam (:167) — no new writer machinery. Anchored
+// PER REGIME so shellDriversToTune(SHELL_REFS[r], r) === null → each shipped icy preset renders BYTE-IDENTICAL
+// (the three golden-pinned presets occupy three DISJOINT regimes — one per regime — so per-regime anchoring
+// nulls all three exactly; the plates single-REF path is CLOSED because the shell goldens are pinned tune-less).
+// PURE: zero alea / Math.random / Date.now. READ-SURFACE-MATCHED (the VENUS_REF discipline): frozen literals
+// via derivation EXPRESSIONS (mass/R²; tidal via the plates EARTH_TIDAL_HEATING ioRef formula) — NO hand-typed
+// decimals, NO cross-import from driver-presets.js. NEVER reads condition.radiusEarth (drawn radius — seed-varying).
+const IO_TIDAL_REF = (0.0041 * 0.0041) * (317.8 * 317.8) * Math.pow(0.286, 5) / Math.pow(66, 5);
+const shellTidal = (ecc, star, R, orbit) =>
+  (ecc * ecc * star * star * Math.pow(R, 5) / Math.pow(orbit, 5)) / IO_TIDAL_REF;
+
+export const SHELL_REFS = Object.freeze({
+  'icy-active':     Object.freeze({ massGravity: 0.07 / (0.5 * 0.5),  volatileFraction: 0.5,  tidalHeating: shellTidal(0.1,  332946, 0.5, 2500),   condition: Object.freeze({ T_eq: 110 }) }),   // Europa
+  'volatile-cold':  Object.freeze({ massGravity: 0.025 / (0.4 * 0.4), volatileFraction: 0.4,  tidalHeating: shellTidal(0.03, 332946, 0.4, 120000), condition: Object.freeze({ T_eq: 94 }) }),    // Titan
+  'eyeball-despun': Object.freeze({ massGravity: 1 / (1 * 1),         volatileFraction: 0.25, tidalHeating: shellTidal(0.01, 332946, 1,   23455),  condition: Object.freeze({ T_eq: 270 }) }),   // Eyeball
+});
+
+// First-cut transfer gains (UAT-tunable; the ACs assert sign + measurability, not magnitudes).
+const SPAN_DECADES = 6, K_CREST = 0.09, CREST_LO = 0.82, CREST_HI = 0.985,
+      K_TENSILE = 0.03, TENSILE_LO = 0.01, TENSILE_HI = 0.12,
+      K_CELL = 7, T_VIGOR_SPAN = 120, CELL_LO = 4, CELL_HI = 22,
+      K_CHAOSTHRESH = 0.28, T_WARM_SPAN = 120, CHAOS_LO = 0.30, CHAOS_HI = 0.80;
+
+/**
+ * Map the body's D-vector → a population/threshold/amplitude `tune` override, anchored per regime so
+ * shellDriversToTune(SHELL_REFS[regime], regime) === null (the writer's `tune ? {...SHELL_DEFAULTS,...tune}
+ * : SHELL_DEFAULTS` ternary, :167, then takes the untouched branch → byte-identical shipped preset).
+ * `regime` is dispatch-provided derived context (the same tuple REGIME_WEIGHTS[regime] consumes) used ONLY
+ * to select the REF. Population/amplitude knobs ONLY — never DESPIN_REF/DIUR_REF/DIUR_PEAK/SHOULDER_HT/
+ * TROUGH_DEPTH/SHELL_BASE/RELAX_PASSES/REGIME_WEIGHTS. ZERO alea draws — a pure DEFAULTS-override fn.
+ * Read surface: flat massGravity/volatileFraction/tidalHeating + NESTED condition.T_eq (optional-chained,
+ * never-throw). NEVER reads condition.radiusEarth (the drawn radius — seed-varying; grep-denied in AC-0).
+ * @param {object|null} drivers  the per-body D-vector (bodyDrivers); null/{} → null (the dispatch bridge + shipped tests reach null).
+ * @param {string} regime  the routed shell regime ('icy-active'|'volatile-cold'|'eyeball-despun') — selects the REF.
+ * @returns {{CELL_MIN,CREST_THRESH,TENSILE_THRESH,CHAOS_THRESH,RIDGE_AMP,CHAOS_AMP,CHAOS_BASE}|null}
+ */
+export function shellDriversToTune(drivers, regime) {
+  if (drivers == null) return null;                                   // (i) NULL-GUARD FIRST (dispatch bridge + shipped tests reach null)
+  const D = SHELL_DEFAULTS;
+  const REF = SHELL_REFS[regime] || SHELL_REFS['icy-active'];         // unknown regime → icy-active (writer REGIME_WEIGHTS fallback parity)
+  // read surface: flat massGravity/volatileFraction/tidalHeating + NESTED condition.T_eq (optional-chained, never-throw)
+  const g   = drivers.massGravity      ?? REF.massGravity;
+  const vf  = drivers.volatileFraction ?? REF.volatileFraction;
+  const th  = drivers.tidalHeating     ?? REF.tidalHeating;
+  const Teq = drivers.condition?.T_eq  ?? REF.condition.T_eq;         // NESTED (never re-drives anything; shell reads no thermalState)
+
+  // A1 gravity → ONE common gFactor onto RIDGE_AMP + CHAOS_AMP + CHAOS_BASE (relief ∝ 1/g). 1 at REF → byte-safe.
+  const gFactor = clamp(0.4, 2.5, Math.pow(g / REF.massGravity, -0.5));
+  const RIDGE_AMP  = D.RIDGE_AMP  * gFactor;
+  const CHAOS_AMP  = D.CHAOS_AMP  * gFactor;
+  const CHAOS_BASE = D.CHAOS_BASE * gFactor;
+  // A2 tidal → CREST_THRESH (+ TENSILE_THRESH) down as tidal rises (denser cracks). log-ratio: 0 at REF (6-decade span).
+  const tidalDev = clamp(-1, 1, Math.log10(Math.max(th, 1e-30) / REF.tidalHeating) / SPAN_DECADES);
+  const CREST_THRESH   = clamp(CREST_LO,   CREST_HI,   D.CREST_THRESH   - K_CREST   * tidalDev);
+  const TENSILE_THRESH = clamp(TENSILE_LO, TENSILE_HI, D.TENSILE_THRESH - K_TENSILE * tidalDev);
+  // A3 thermal vigor (T_eq + vf) → CELL_MIN (finer convection planform). 0 at REF.
+  const vigor = (Teq - REF.condition.T_eq) / T_VIGOR_SPAN + (vf - REF.volatileFraction);
+  const CELL_MIN = clamp(CELL_LO, CELL_HI, Math.round(D.CELL_MIN + K_CELL * vigor));
+  // A4 T_eq → CHAOS_THRESH down on warm shells (more melt-through chaos). 0 at REF.
+  const warmDev = (Teq - REF.condition.T_eq) / T_WARM_SPAN;
+  const CHAOS_THRESH = clamp(CHAOS_LO, CHAOS_HI, D.CHAOS_THRESH - K_CHAOSTHRESH * warmDev);
+
+  // (ii) EXACT-ONLY IDENTITY GUARD: at REF every knob === its DEFAULT → null → the writer takes the untouched branch.
+  if (CELL_MIN === D.CELL_MIN && CREST_THRESH === D.CREST_THRESH && TENSILE_THRESH === D.TENSILE_THRESH &&
+      CHAOS_THRESH === D.CHAOS_THRESH && RIDGE_AMP === D.RIDGE_AMP && CHAOS_AMP === D.CHAOS_AMP && CHAOS_BASE === D.CHAOS_BASE) {
+    return null;
+  }
+  return { CELL_MIN, CREST_THRESH, TENSILE_THRESH, CHAOS_THRESH, RIDGE_AMP, CHAOS_AMP, CHAOS_BASE };
+}
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+
 // ── tiny vec3 helpers on plain [x,y,z] arrays (COPIED VERBATIM from plates.js for resolution-independence) ──
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 function norm(a) { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
