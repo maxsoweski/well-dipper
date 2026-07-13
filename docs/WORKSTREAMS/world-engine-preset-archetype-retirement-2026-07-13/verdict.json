@@ -1,0 +1,51 @@
+{
+  "workstream": "world-engine-preset-archetype-retirement-2026-07-13",
+  "commit": "c2cb97f",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "N/A"
+  },
+  "perAC": [
+    {
+      "id": "AC1-BRIDGE-DELETED",
+      "result": "PASS",
+      "evidence": "Zero definitions/uses of the four label predicates (isEarthlikePlatePath/isShellReliefPath/isVolcanicPath/isStagnantLidPath) or VOLCANIC_ARCHETYPES remain in planet-lod-rivers.js (grep exit 1). writeBodyRelief has exactly one routing path (the condition-bearing derived dispatch), followed by the pinned throw for condition-less input; the old archetype else-chain is deleted (git show c2cb97f). The `archetype` destructure param is gone from writeBodyRelief; the residual harmless archetype param on the outer route() wrapper is accepted non-blocking (BUILD-PLAN §8 AMB-1 + designDecision #3 — PRESET_ARCHETYPE survives for radius selection). dispatch-oracle (25) + condition-less-throw (2) = 27/27 green.",
+      "adversarialVotes": "1/1 sufficient (handed AC1 finding)"
+    },
+    {
+      "id": "AC2-CALLERS-MIGRATED",
+      "result": "PASS",
+      "evidence": "No test imports a deleted predicate (import-specifier grep over tests/*.test.js → 0). All 8 enumerated touched suites green: worldengine-base-plate-driver-response, worldengine-plate-regime-gate, planet-lod-rivers-discharge-param, worldengine-base-magmatism-structure, worldengine-base-magmatism-multiply, worldengine-base-stagnantlid-structure, worldengine-shell-regime-gate, worldengine-base-shell-multiply → Test Files 8 passed, Tests 117 passed. None of the 8 appears among the full-suite's pre-existing failures. Net −8 test cases across caller suites (RG-A: synthetic bridge-only inputs — AC5 D_OFF shell no-clobber; terrestrial+locked→despun — retired rather than force-migrated, each with equivalent live coverage in dispatch-oracle/shell-multiply/migrated M-rows; enumerated in BUILD-PLAN §10).",
+      "adversarialVotes": "single confirmatory run (verify light)"
+    },
+    {
+      "id": "AC3-ORACLES-REANCHORED",
+      "result": "PASS",
+      "evidence": "All four predicate-composing oracle suites re-anchored and green: worldengine-v2-3-dispatch-oracle (25, incl. the AC-0 label-free grep + the garble test's radius exemption) + worldengine-e1-conformance-oracle + worldengine-lid-classifier + worldengine-v2-3-taxonomy → 50 across the latter three; 75/75 total. Dispatch-oracle count is 25 (the enumerated re-anchored target with in-plan rationale — the shipped 9322645 appliedTune probe-parity it, not the stale 24), satisfying the contract's '24 or enumerated new count' allowance.",
+      "adversarialVotes": "single confirmatory run (verify light)"
+    },
+    {
+      "id": "AC4-TERNARY-FOLDED",
+      "result": "PASS",
+      "evidence": "grep 'STRONG_REGIME :' src/worldengine/base/lidResponse.js → 0 matches; the degenerate ternary is folded to `const regime = STRONG_REGIME;` (12 lines changed, byte-inert by construction — both arms were identical). Guardrail quartet incl. worldengine-lid-byte-anchors green in the combined 193/193 run.",
+      "adversarialVotes": "single confirmatory run (verify light)"
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "result": "PASS",
+      "evidence": "83/83 byte-identity goldens pass against UNCHANGED fixtures (never re-captured); guardrail quartet green; FULL npx vitest run EXACTLY at the pinned MF#3 baseline — Test Files 17 failed | 120 passed (137); Tests 4 failed | 1970 passed (1974). The 4 failing cases are the pre-existing KnownObjects ×3 + GalacticFeatures ×1 in src/generation (named non-goal in intent.md); none grew, none in scope. git diff 6d8610e..c2cb97f touches only planet-lod-rivers.js, src/worldengine/base/lidResponse.js, tests/worldengine-condition-less-throw.test.js — scope-clean (designDecision #6). Not-ours files (CameraChoreographer.js/LabMode.js) + untracked pile stayed dirty and uncommitted. INDEPENDENT BYTE PROBE (build verifier): copied a892f28:planet-lod-rivers.js (old bridge) to a temp module, compared old condition-less bridge calls vs HEAD's migrated condition-bearing calls on identical meshes — terrestrial→Rocky plate + ice→Europa shell both byte-identical (f32 height arrays) at seeds 0/1/7 (6/6). Re-confirmed by working-Claude directly: quartet 166/166, byte-identity 83/83 isolated, dispatch-oracle 25/25, full suite at baseline.",
+      "adversarialVotes": "build-phase in-flow verifier PASS (round 1, 0 must-fix) + working-Claude independent gate re-run + verify-light confirmatory"
+    }
+  ],
+  "overall": "VERIFIED-TERMINAL 2026-07-13 (commit c2cb97f) — unit PASS + integration PASS across all 5 contract ACs. NO UAT-layer AC by design: this is a byte-provable zero-behavioral-change refactor carve-out (intent.md: 'the diff + byte gates are the acceptance'), so perLayer.uat is N/A, not deferred — nothing for Max to accept experientially. Terminal gate reached, same disposition as V2-2a / V2-7d / V2-2b-2a. Docs-only follow-up 0101ba5 (de-staling writer comments that named the deleted predicates) sits atop c2cb97f, confirmed byte-inert, does not affect this verdict.",
+  "summaryForMax": "PRESET_ARCHETYPE retirement is done and byte-clean. The old routing is GONE, not bypassed: writeBodyRelief now has exactly one dispatch path (the condition-derived one V2-3 flipped to), and feeding it condition-less input throws loudly instead of silently misrouting — as designed. All 5 ACs check out: AC1 the four label predicates + VOLCANIC_ARCHETYPES + the bridge-tune gate are all deleted from planet-lod-rivers.js (−126 lines); AC2 all 8 test-caller suites migrated to condition-bearing bundles and green (no test imports a deleted predicate); AC3 the four oracle suites re-anchored off the predicates and green; AC4 the lidResponse degenerate ternary folded; AC-ZERO-CLOBBER 83/83 byte-identity goldens pass unchanged and the full suite sits at EXACTLY the pinned baseline (same 4 pre-existing failures, nothing new). This is a pure refactor with no visible behavior change by design — no UAT gate, nothing for you to click through. The only way it could be 'wrong' is a silently-broken caller, which the unchanged full-suite baseline + 83/83 byte-identity rule out. Two honest deviations the build caught and recorded (BUILD-PLAN §10): (1) the derived volcanic path is DRIVER-RESPONSIVE (magmaDriversToTune non-null at neutral Lava — the volcanic analog of the V2-5s shell response), so byte-identity was asserted against the driver-responsive writer, not a tune-null one; (2) net −8 test cases — a few synthetic bridge-only inputs route differently under derived dispatch and were retired with equivalent live coverage elsewhere, flagged so it's not misread as lost coverage.",
+  "verifyRun": {
+    "workflow": "verify-workstream light",
+    "runId": "wf_da976c64-d81",
+    "date": "2026-07-13",
+    "agents": 4,
+    "buildRunId": "wf_4b406bae-ee4",
+    "note": "Build ran via the standing lane workflow pattern (adversarial BUILD-PLAN d721fa4 → byte-safety lens NEEDS-FIX 1 must-fix → revise 30acca3 → Slice A 6d8610e → Slice B c2cb97f → in-flow adversarial verifier PASS round 1). verdict extracted from the verify-light workflow result by working-Claude per the standing pattern (the workflow does not write verdict.json itself). All gates independently re-run by working-Claude before this file was written."
+  }
+}
