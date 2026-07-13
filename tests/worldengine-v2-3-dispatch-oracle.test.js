@@ -275,3 +275,21 @@ describe('V2-3 AC-0 check 1 — the condition-bearing routing region is label-fr
     expect(region, 'no `archetype` identifier at all in the routing region').not.toMatch(/\barchetype\b/);
   });
 });
+
+// ── V2-3 verify follow-up (wf_d9529b1e AC-PLUMB coverage gap): appliedTune probe parity is PERMANENTLY
+//    asserted on the derived path — previously only exercised ad-hoc by the verify run. The field must be
+//    PRESENT (null or object, never undefined) on both router corners + the modal-stagnant direct call. ──
+describe('V2-3 AC-PLUMB follow-up — diag.appliedTune present on every tune-bearing derived route', () => {
+  it('volcanic (Lava/Magma) carries magmaDiag.appliedTune; stagnant-lid (Venus) carries stagnantDiag.appliedTune', () => {
+    for (const name of ['Lava (hot airless)', 'Magma (K2-141b)']) {
+      const carrier = makeSphereField(MESH);
+      const r = writeBodyRelief(carrier, bundle17(name, 1));
+      expect(r.path, name).toBe('volcanic');
+      expect('appliedTune' in r.magmaDiag, `${name}: magmaDiag.appliedTune present`).toBe(true);
+    }
+    const carrier = makeSphereField(MESH);
+    const r = writeBodyRelief(carrier, bundle17('Venus (sulfuric shroud)', 1));
+    expect(r.path).toBe('stagnant-lid');
+    expect('appliedTune' in r.stagnantDiag, 'Venus: stagnantDiag.appliedTune present').toBe(true);
+  });
+});
