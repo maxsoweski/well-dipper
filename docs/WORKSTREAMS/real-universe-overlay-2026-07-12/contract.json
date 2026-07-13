@@ -1,0 +1,127 @@
+{
+  "workstream": "real-universe-overlay-2026-07-12",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "phase": "Pre-step: fast-forward feature/system-details onto origin/master 847ab19 (branch is a strict ancestor; naming workstream already deployed). Increment 1 = AC7 (build-time ingest: exoplanet archive + dim hosts + enlarged real-name blocklist); Increment 2 = AC5 (data-driven authoring path, Alpha Centauri proof — flips the flagged match-radius test per a1d2d4c successor flag 1); Increment 3 = AC3+AC4 (bulk contents overlay + Elite-style procgen fill); Increment 4 = AC2 (player search surface: real + settled/notable + structures — NavComputer UI seam is lane-D-adjacent, route through coordinator); Increment 5 = AC1+AC6 (neighborhood verify + structures audit); AC8 = continuous guardrail per increment; AC9 = Max's batched UAT at the end.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-neighborhood-fidelity",
+      "statement": "In the neighborhood of Sol or another famous star, the Nav screen shows the stars Max would expect to see: real neighbors with real names at true positions, including newly ingested dim hosts (e.g. Proxima Centauri, TRAPPIST-1) that are not naked-eye but are nav-instrument-visible.",
+      "verifyVia": {
+        "input": "Enter Sol, open the nav computer; repeat from Sirius.",
+        "observable": "From Sol the nav view/list contains the expected named neighbors (Rigil Kentaurus, Toliman, Proxima Centauri, Barnard's Star, Sirius, Procyon, ...) with distances matching real values within tolerance; newly added dim hosts appear despite being below naked-eye magnitude; no expected famous neighbor is missing or misplaced."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC2-player-search",
+      "statement": "A player-facing search in the nav computer finds a system the player knows about — real star systems (proper name or designation), named settled/notable catalog systems (the ac5 settled-catalog UI ask folds in here), and deep-sky structures — and selecting a result targets it for travel.",
+      "verifyVia": {
+        "input": "Open the nav computer search; query 'TRAPPIST-1', 'Sirius', 'M42', and one settled-catalog name from the gazetteer; select each result and travel/warp.",
+        "observable": "Each query resolves to the right object; selection targets it; warp arrival lands on a system whose name matches the query (structures: nav/travel points at the structure's true position). Search is reachable in normal play without the debug panel."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC3-real-characteristics",
+      "statement": "Systems Max knows about match the characteristics already observed (type of star, known planets, etc.): arriving at a known real system spawns its real structure from the ingested data, not procgen inventions in their place.",
+      "verifyVia": {
+        "input": "Warp to Sirius and to TRAPPIST-1 (any targeting path).",
+        "observable": "Sirius: A-class primary plus its white-dwarf companion present as a binary. TRAPPIST-1: M-dwarf with its seven known planets carrying their real designations (b–h) and archive-derived parameters. Star class matches the sky/catalog on every arrival path."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC4-procgen-fill",
+      "statement": "When real data runs out, the system fills the rest with procgen (Elite as the guide): known planets appear per the ingested data, procgen deterministically completes the remainder, and real systems with no known planets keep real star parameters with full procgen contents.",
+      "verifyVia": {
+        "input": "Headless: generate contents twice for (a) a real system with partial known planets, (b) a real star with zero known planets, through the real arrival pipeline (StarSystemGenerator + overlay merge).",
+        "observable": "(a) all known planets present with archive-derived parameters, remainder procgen-filled, both runs byte-identical (revisit-stable); (b) real star parameters (type, multiplicity) preserved, planets fully procgen, byte-identical across runs."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC5-authoring-path",
+      "statement": "The ability to author systems and place them over procgen ones exists as a data-driven capability: a KnownSystems registry entry defined as structured data (not a hand-written generate() function) produces full system contents — proven by registering Alpha Centauri (triple star with Proxima's known planets).",
+      "verifyVia": {
+        "input": "Register Alpha Centauri as a data-defined entry; arrive via all three paths (nav-warp, sky-click warp, teleport); run the KnownSystems test suites.",
+        "observable": "All three arrival paths spawn the authored triple system; findAt(RIGIL_POS) resolves to Alpha Centauri (the a1d2d4c successor-flag test flips from 'does NOT match Sol'); alias/belt/sweep tests stay green with the new entry; Proxima's known planets present per the ingested archive."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC6-structures-audit",
+      "statement": "Famous structures (nebulas and so on) match observation: the shipped deep-sky objects (37 KnownObjectProfiles) and real globular clusters (152, Harris) sit at observed positions and sizes, with discrepancies fixed or explicitly documented.",
+      "verifyVia": {
+        "input": "Run a committed headless audit comparing profile/catalog positions and radii against reference catalog values.",
+        "observable": "Audit report committed to this workstream dir; the famous set (M42, Horsehead/IC434, M78, 47 Tuc, ...) within documented tolerance; each out-of-tolerance entry either corrected or carries a written rationale."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC7-ingestion-pipeline",
+      "statement": "Build-time ingestion delivers the data everything else consumes: re-runnable scripts ingest a public confirmed-exoplanet archive (candidate: NASA Exoplanet Archive — source, license, field coverage, and counts verified in this increment) plus dim famous hosts as new real catalog stars at true positions, with build-time verification.",
+      "verifyVia": {
+        "input": "Run the ingestion scripts twice; run the existing naming/catalog test suites against the enlarged data.",
+        "observable": "Two runs byte-identical; ingested counts reported (systems, planets, new host stars); no duplicate star identities; the enlarged real-proper-name set feeds the procgen blocklist and the named-systems build-time checks with zero collisions (no settled/notable name matches a new real name); the full-catalog sweep test stays green (new hosts near known-system entries resolve via alias membership, not swallow)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC8-sol-and-regression-guardrail",
+      "statement": "The universe that already works stays working: Sol still resolves as Sol with handcrafted contents (always-test-Sol), the full test suite stays green, and purely procedural systems — those touched by no real data — generate byte-identical contents before vs after this workstream (seed-stream isolation holds).",
+      "verifyVia": {
+        "input": "Per increment: window._lab.enterSol() + window.__wd.runIntegrationSuite(); full vitest run from the repo dir; a pinned snapshot test over sample procgen-only seeds/positions captured before Increment 1.",
+        "observable": "Scene suite 19/19 in Sol; vitest fully green (baseline 1123 grows, never shrinks); procgen-only snapshot byte-identical across the workstream."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC9-known-universe-uat",
+      "statement": "Max's holistic acceptance: the universe he knows is actually there and findable as a cohesive whole — the nav neighborhood looks right from home, searching finds what he expects, arriving matches what astronomy says, structures included.",
+      "verifyVia": {
+        "input": "Max explores freely: nav from Sol, searches systems and structures he knows, warps to Sirius / Alpha Centauri / TRAPPIST-1, checks the fill against his Elite intuition.",
+        "observable": "Max's pass/fail-with-findings judgment, recorded in this workstream dir. The workflow never marks this AC — deferred-to-max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "Confirmed-exoplanet archive (candidate: NASA Exoplanet Archive Planetary Systems table) — NEW external data source, fetched at build time only; source/license/fields/counts verified in Increment 1",
+      "HYG real-star catalog (public/assets/data/hyg-stars.json, 15,599 usable names post-AC9-regen) + a dim-host supplement at true positions (same processing pattern as scripts/process-hyg-catalog.mjs)",
+      "KnownSystems substrate from a1d2d4c: associate()/claimedStars (built as this overlay's foundation, currently unused), findByAlias (alias index + 3 pc belt), MATCH_RADIUS/NAME_JOIN_RADIUS/POSITION_MATCH_TOL ordering pinned by test",
+      "StarSystemGenerator + galaxyContext.starTypeOverride arrival path (main.js ~3405) — the seam where overlay contents replace/augment procgen",
+      "Naming precedence chain (KnownSystems > real-star names > named-systems catalog > procgen) — unchanged, consumed as-is",
+      "NavComputer real-star overlay (setRealStarCatalog / findInVolume, src/ui/NavComputer.js ~2396) — AC1's existing substrate; the AC2 search surface is NEW UI in this file",
+      "DebugPanel search (src/ui/DebugPanel.js ~298, searchKnownObjects) — prior art for search resolution logic; debug panel itself stays as-is",
+      "KnownObjectProfiles (37) + RealFeatureCatalog (152 Harris globulars) — AC6 audit subjects and AC2 search targets",
+      "namedSystemsCatalog enumeration (enumerateNamedSystems) — AC2's settled/notable search feed (ac5 addendum ruling 2)"
+    ],
+    "outputs": [
+      "Shipped overlay data: exoplanet/system-contents catalog + enlarged real-star catalog with dim hosts — consumed by arrival generation, nav, and search",
+      "Data-driven KnownSystems authoring path (structured entry -> full system) — the durable capability for future story-location/creative authoring",
+      "Player-facing nav search surface (real + settled/notable + structures) — also the designated future home of the parked system-tags-save-search idea",
+      "Enlarged real-proper-name blocklist feeding the naming uniqueness invariants",
+      "Structures audit report (AC6) — evidence base for lane-D deep-sky successor work"
+    ],
+    "mustStayWorking": [
+      "Naming uniqueness invariants with the enlarged real-name set: procgen injectivity, real-proper-name blocklist, catalog/procgen shape disjointness (NameGenerator.injective tests + census baseline)",
+      "Sol full override + 19/19 scene suite (always-test-Sol; Sol IS the known-system code path)",
+      "Real-name + real-spectral-type precedence on all three arrival paths (nav-warp main.js ~2833/~3405, sky-click, teleport ~7f5fd1e)",
+      "Procgen systems untouched: any system covered by no real data generates byte-identical contents pre/post (content RNG stream isolation, AC8 snapshot)",
+      "Tolerance-ordering invariant (POSITION_MATCH_TOL < MATCH_RADIUS < NAME_JOIN_RADIUS, pinned by test) and belt accept/reject semantics",
+      "Lane boundaries: main.js warp-arrival/nav-arm blocks = minimal surgical edits flagged in the seam handoff (lane B adjacency); NavComputer rendering internals are lane-D-owned — the AC2 search UI must be a contained, coordinator-flagged seam; no edits to lane-D GalacticMap regions (density/clouds/features)",
+      "Full vitest suite green from the repo dir (baseline 1123/1123; vendor/motion-test-kit collection errors are pre-existing noise)"
+    ]
+  }
+}
