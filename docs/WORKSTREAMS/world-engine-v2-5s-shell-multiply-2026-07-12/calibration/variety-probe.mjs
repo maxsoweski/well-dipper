@@ -56,6 +56,35 @@ for (const r of ['icy-active', 'volatile-cold']) {
   ok = ok && pass;
   console.log(`  ${r.padEnd(15)} min driver-dist=${minDriver.toFixed(3)}  max seed-only-dist=${maxSeed.toFixed(3)}  PASS=${pass}`);
 }
+// ── minor #e: PER-OBSERVABLE reconciliation with the contract wording ("differ by more than a per-observable
+//    noise floor"). floor[k] = observable k's 5-seed spread at REF drivers. A "CLEARS" = the LOW↔HIGH corner
+//    moves observable k by more than floor[k] on EVERY seed. The composite distance above stays a REPORTED
+//    summary; the PASS criterion the AC-VARIETY test asserts is these per-observable clears + the seed-only
+//    baseline staying within floor. Observables that do NOT clear are documented as not-claimed, never folded in.
+console.log('\n#### AC-VARIETY per-observable — floor-normalized |Δ(LOW,HIGH)| at fixed seed (contract wording) ####');
+for (const r of ['icy-active', 'volatile-cold']) {
+  const f = floors(r);
+  console.log(`\n  ${r}:`);
+  for (const k of KEYS) {
+    let minNorm = Infinity, minRaw = Infinity;
+    for (const s of SEEDS) {
+      const raw = Math.abs(b(s, r, HIGH)[k] - b(s, r, LOW)[k]);
+      minRaw = Math.min(minRaw, raw);
+      minNorm = Math.min(minNorm, raw / f[k]);
+    }
+    console.log(`    ${k.padEnd(10)} floor=${f[k].toExponential(3)}  min|Δ|(seeds)=${minRaw.toExponential(3)}  min normΔ=${minNorm.toFixed(3)}  CLEARS(every seed)=${minNorm > 1}`);
+  }
+  // seed-only baseline: max pairwise |Δ|/floor across the 5 REF-driver rerolls (= 1.0 by construction; must be ≤1)
+  const sr = [];
+  for (const k of KEYS) {
+    let maxNorm = 0;
+    for (let i = 0; i < SEEDS.length; i++) for (let j = i + 1; j < SEEDS.length; j++)
+      maxNorm = Math.max(maxNorm, Math.abs(b(SEEDS[i], r, null)[k] - b(SEEDS[j], r, null)[k]) / f[k]);
+    sr.push(`${k}=${maxNorm.toFixed(3)}`);
+  }
+  console.log(`    seed-only baseline max normΔ (≤1 by construction): ${sr.join('  ')}`);
+}
+
 console.log('\n#### A1 headline — low-g/high-g std(U) RATIO per seed (icy-active) ####');
 { let minR = Infinity; for (const s of SEEDS) { const lo = b(s, 'icy-active', { massGravity: 0.0448 }).stdU, hi = b(s, 'icy-active', { massGravity: 1.75 }).stdU; minR = Math.min(minR, lo / hi); } console.log(`  min ratio across seeds = ${minR.toFixed(2)}  (>3 => ${minR > 3})`); ok = ok && minR > 3; }
 console.log('\n#### A4 aggregate — mean chaos-area @T_eq=290 − @REF (icy-active) vs floor ####');

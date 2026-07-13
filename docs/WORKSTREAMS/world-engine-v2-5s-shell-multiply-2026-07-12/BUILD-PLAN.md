@@ -74,6 +74,18 @@ Named calibration constants for the builder: `SPAN_DECADES=6`, `K_CREST=0.09` `C
 `CELL_LO=4` `CELL_HI=22`, `K_CHAOSTHRESH=0.28` `T_WARM_SPAN=120` `CHAOS_LO=0.30` `CHAOS_HI=0.80`. These are
 first-cut, **UAT-tunable** (the ACs assert sign + measurability, not magnitudes — the V2-2b-1 discipline).
 
+**Clamp reachability (lens minor #f, verified in `gain-probes.mjs`):** across the tidal axis `tidalDev ∈ [−1,1]`,
+`CREST_THRESH = 0.94 − 0.09·tidalDev ∈ [0.85, 0.985]`. So **`CREST_LO=0.82` is a DEAD defensive bound** (never
+reached via tidal — the min is 0.85 at `tidalDev=+1`); **`CREST_HI=0.985` IS reached at `tidalDev=−1`** (the tidal-
+DOWN extreme, e.g. Europa driven below its REF). Kept as a guard for forward axes / future gains, not a live clamp
+on the shipped tidal transfer. `TENSILE_THRESH` similarly floors near `TENSILE_LO`. A2 monotonicity note: because
+`CREST_THRESH` saturates on the `CREST_LO` plateau past `tidalDev=+1`, adjacent sweep points there return EQUAL
+`lineamentNodeCount` — the A2 monotonicity gate is therefore **non-strict** (see §5, MF#1).
+
+**Margin honesty (lens minor #g):** A3 `cellCount` endpoint Δ is **8 vs floor 7** on both icy (T_eq 110→250) and
+Titan (T_eq 94→230) — a thin margin. `K_CELL=7` is **UAT-tunable up** if the built test proves marginal at any
+seed; the per-seed check (`gain-probes.mjs`, §MF2) currently shows Δ=8>7 on all five seeds {1,2,3,7,42}.
+
 **Exact collapse verified** (`gain-probes.mjs`): `shellDriversToTune(SHELL_REFS[r], r) === null` and
 `shellDriversToTune(liveREF, r) === null` for all three regimes; `shellDriversToTune(null,·)===null`,
 `shellDriversToTune({},·)===null`. All 7 knobs === their DEFAULT at REF because `pow(1,-0.5)===1`,
@@ -114,19 +126,38 @@ Learnings that shaped the AC tests:
 - **A1 is multiplicative** — `std(U)` scales with `gFactor`. Its absolute Δ-vs-floor is marginal at the
   lowest-relief seed (0.051 vs 0.047), but the **ratio** `std(U)@min-g / std(U)@max-g ≈ 6.2×` is
   **seed-independent** (6.12–6.27). → **A1 asserts the RATIO (>3), not an absolute floor.**
+- **A3 must be driven IN-DOMAIN (lens MF#2)** — `volatileFraction` is physically bounded ≤1.0 (lab slider max
+  0.6). An in-domain vf sweep (0.1→1.0) moves `cellCount` by only Δ=7 = the floor **exactly** (every seed) — it
+  does NOT clear `> floor`. The earlier probe cleared only by reaching out-of-domain **vf=1.4**. → **A3-icy is
+  driven by `T_eq` instead** (lab `tsurf` slider [230,760] overlays `condition.T_eq`): `T_eq 110→250` gives
+  Δ cellCount **8 > floor 7 on EVERY seed** {1,2,3,7,42} (CELL_MIN 9→17), matching the Titan `T_eq 94→230` A3
+  driver. Any `volatileFraction` sweep in the tests is **capped ≤1.0**; vf remains a secondary vigor input inside
+  the composite, never the sole A3 endpoint driver.
 - **A4 chaos is seed-fragile** — seed 42's stress field never coincides with cell interiors, so chaos
   barely turns on even when warm (Δ 0.007). → **A4 asserts the CHAOS_THRESH knob strictly decreasing
   (every seed) + chaos-area non-decreasing/no-inversion (every seed) + measurable in AGGREGATE**
   (mean warm − mean REF = 0.088 > floor 0.035). Max may strike A4 at UAT (per contract dd#4).
-- **Single-axis pairs can't move all four observables** (each axis owns its observable). → **AC-VARIETY
-  uses a COMPOSITE floor-normalized distance** between two distinct driver worlds (low-corner vs
-  high-corner): min driver-dist **4.94** (icy) / **5.49** (volatile-cold) vs max seed-only-reroll dist
-  **1.86 / 1.58** → driver ≫ seed at every seed (the V2-2b-1 Shannon-entropy discipline, generalized to a
-  4-vector). Plus the headline `low-g/high-g std(U) ratio > 3` per seed.
+- **AC-VARIETY reconciled to the contract's PER-OBSERVABLE wording (lens minor #e).** The contract says two
+  worlds "differ by more than a per-observable noise floor"; `variety-probe.mjs` originally only reported a
+  composite floor-normalized distance. Extended + re-run, the LOW↔HIGH corner pair (floor = each observable's
+  5-seed spread at REF) clears per-observable, **every seed**, as follows:
+  - **icy-active:** `linFrac` normΔ **2.83**, `stdU` **2.10**, `cellCount` **2.57** CLEAR; **`chaosFrac` normΔ
+    0.19 does NOT clear** at this corner pair (seed-fragile chaos) → **not-claimed** here (A4's own aggregate+knob
+    criterion covers chaos, not AC-VARIETY).
+  - **volatile-cold:** `stdU` normΔ **4.65**, `chaosFrac` **1.14**, `cellCount` **2.43** CLEAR; **`linFrac` normΔ
+    0.36 does NOT clear** (both corners sit in the tidal-saturated CREST band → sub-floor separation) →
+    **not-claimed** here.
+  → **AC-VARIETY's PASS criterion = per-observable Δ > that observable's own 5-seed floor for the CLEARING
+  observables above (every seed), PLUS the seed-only baseline within floor** (= 1.000 by construction — the floor
+  IS the 5-seed max-min spread, so no reroll pair exceeds it). The **composite distance stays a REPORTED summary**
+  (min driver-dist **4.94** icy / **5.49** volatile-cold vs max seed-only-reroll **1.86 / 1.58** — driver ≫ seed
+  at every seed), **not the pass gate**. Plus the headline `low-g/high-g std(U) ratio > 3` per seed.
 
 Per-axis response deltas (`gain-probes.mjs`, seed 7; multi-seed confirmed): A1 stdU Δ0.070>floor0.047;
-A2 linN Δ64>23 (icy), Δ86>39 (Titan); A3 cellCount Δ9>7 (icy), Δ8>7 (Titan); A4 chaosFrac Δ0.090>0.035.
-All monotone correct-sign inside the clamped domain; `|U| < SHELL_BOUND(4)` at every point (max 0.52).
+A2 linN Δ64>23 (icy), Δ82>39 (Titan, **interior** sweep `tidalDev∈(0,0.97)` — no CREST plateau); A3 cellCount
+Δ8>7 (icy, `T_eq 110→250`, every seed — MF#2), Δ8>7 (Titan, `T_eq 94→230`); A4 chaosFrac Δ0.090>0.035. All
+**non-strict** monotone correct-sign (no downward inversion) inside the clamped domain; `|U| < SHELL_BOUND(4)` at
+every point (max 0.52).
 
 ---
 
@@ -203,6 +234,19 @@ Note: `clamp` is already imported in shellRelief.js (`./mathutil.js`). `SHELL_DE
 its 7 read keys are all present. `CHAOS_BASE` is negative (−0.04); scaling by `gFactor` deepens chaos lows
 proportionally with the whole relief profile (correct — A1 scales the profile wholesale).
 
+**Known non-issues (lens-verified — DO NOT add code to "fix" these; stay idiom-matched to the siblings):**
+- **(minor #b) The `SHELL_REFS[regime] || SHELL_REFS['icy-active']` fallback is DEAD CODE for all shipped
+  routing.** `e1Regime.js` guarantees `regime ∈ {icy-active, volatile-cold, eyeball-despun}` at both dispatch
+  call sites (the shell path only runs on a routed shell regime), so the `||` branch is **currently unreachable**.
+  It is a **defensive-only** parity with the writer's `REGIME_WEIGHTS[regime]` fallback; a future routing break
+  would be caught by the 83-golden before it reached this line. Keep it (idiom-matched), do not remove.
+- **(minor #d) NaN inputs propagate NaN knobs — house-consistent, unreachable.** A `NaN` in a driver slot passes
+  the `?? REF` guard (only `null`/`undefined` trigger the coalesce, not `NaN`) and would flow into the knobs.
+  This is **unreachable through the real `deriveUniforms → buildNeutralBodyDrivers → deriveConditionVector`
+  pipeline** (it never emits NaN) and is **consistent with the sibling builders' house behavior**
+  (`driversToTune`/`magmaDriversToTune`/`stagnantDriversToTune` do not `Number.isFinite`-guard either). Documented
+  as a known, house-consistent limitation — **do NOT add `Number.isFinite` guards** (would diverge from the family).
+
 ---
 
 ## 3. Slice decomposition + exact commit boundaries
@@ -275,6 +319,13 @@ import { writeShellReliefSphere, shellRegimeOf, shellDriversToTune } from './src
 ```
 Here `bodyDrivers` is `null` for the ~8 legacy condition-less callers → `shellDriversToTune(null,·)===null` →
 writer voids `drivers` → byte-identical.
+> **Migration-bridge assumption (lens minor #a):** this byte-safety rests on `bodyDrivers === null` at every
+> legacy bridge caller (they are condition-less). A hypothetical **non-null bodyDrivers WITHOUT a `condition`**
+> reaching this bridge would still yield a **non-null** tune (g/vf/th slots read from the drivers about the REF,
+> `T_eq` falling back to REF) — a behavior change vs today's tune-less bridge. **No current caller does this**
+> (verified: the bridge's non-null-drivers path only fires on the condition-bearing V2-3 route at call site 1,
+> not here). Acknowledged, not guarded — if a future caller feeds partial drivers here, AC-BYTE-SHELL / the
+> 83-golden would surface the shift.
 
 **Why the `grainDrivers → bodyDrivers` swap is byte-safe (both sites):** the writer's first line is
 `void drivers;` (shellRelief.js:166) — the drivers arg is read by NOTHING. Swapping `grainDrivers`
@@ -297,8 +348,8 @@ via `{...buildNeutralBodyDrivers(deriveUniforms(fp),fp), condition: deriveCondit
 | **AC1** | new file | `String(shellDriversToTune)` has no `Math.random`/`Date.now`; SHELL_SRC no `alea('lid:`; double-build byte-equal (null + non-null tune); `\|U\| < SHELL_BOUND` across sweep; named non-issue: `shell:cells:` draw count moves with CELL_MIN (deterministic per seed) |
 | **AC-TUNE-NULL** | new file | (a0) `null`/`{}`→null ×3 regimes; (a) `SHELL_REFS[r]`→null; (b) LIVE Europa/Titan/Eyeball bundle→null; (c) every REF slot `===` its live-derived slot (incl. `SHELL_REFS[r].massGravity === deriveUniforms.surfaceGravity`, tidal `===` u.tidalHeat, `Object.isFrozen`); (d) perturbed → non-null ⊆ 7 keys |
 | **AC-BYTE-SHELL** | new file (Slice A) | 3 presets × 5 seeds: `writeShellReliefSphere(c, grainDrivers, {macroSeed,regime})` (shipped) === `writeShellReliefSphere(c, liveBundle, {macroSeed,regime,tune:shellDriversToTune(SHELL_REFS[r],r)/*null*/})` on height + every shell diag array + cellCount + lineamentNodeCount |
-| **AC-TUNE-RESPONSE** | new file | A1: `std(U)` monotone ↑ as g↓ every seed + ratio(min-g/max-g) > 3; A2: `lineamentNodeCount` monotone ↑ in tidal, Δ>linN-floor every seed (icy + Titan); A3: `cellCount` monotone ↑ in vf(icy)/T_eq(Titan), Δ≥floor; A4 (icy): `CHAOS_THRESH` knob strictly ↓ in T_eq every seed + chaos-area non-decreasing/no-inversion + aggregate mean(warm−REF)>floor; REF-collapse: field === shipped at each REF |
-| **AC-VARIETY** | new file | composite floor-normalized distance(low-corner, high-corner) > seed-only-reroll distance AND > 1.5, every seed, icy-active + volatile-cold; headline low-g/high-g `std(U)` ratio > 3 per seed (icy) |
+| **AC-TUNE-RESPONSE** | new file | A1: `std(U)` monotone ↑ as g↓ every seed + ratio(min-g/max-g) > 3; **A2 (MF#1):** `lineamentNodeCount` **NON-STRICT monotone** in tidal (`v[i] ≥ v[i-1]`, no downward inversion — `CREST_THRESH` saturates on the `CREST_LO` plateau so a STRICT adjacent-pair read would falsely fail), **endpoint Δ > linN-floor** as the measurability gate (icy Δ64>23; Titan **interior** sweep Δ82>39, `tidalDev∈(0,0.97)`); **A3 (MF#2):** `cellCount` **NON-STRICT monotone** (integer `round(CELL_MIN)` plateaus), driven by **`T_eq` on BOTH icy + Titan** (in-domain; any `volatileFraction` sweep capped ≤1.0), **endpoint Δ > cellCount-floor every seed** (icy `T_eq 110→250` Δ8>7 all 5 seeds; Titan `T_eq 94→230` Δ8>7); A4 (icy): `CHAOS_THRESH` knob strictly ↓ in T_eq every seed + chaos-area non-decreasing/no-inversion + aggregate mean(warm−REF)>floor; REF-collapse: field === shipped at each REF. "Non-strict, no downward inversion" = the contract's "no sign inversion inside the domain" phrasing |
+| **AC-VARIETY** | new file | **(MF minor #e) PER-OBSERVABLE, matching the contract wording:** at fixed seed, LOW↔HIGH corner Δ > that observable's own 5-seed floor, **every seed**, for the observables the corners MOVE — **icy-active: `linFrac`/`stdU`/`cellCount`** (normΔ 2.83/2.10/2.57); **volatile-cold: `stdU`/`chaosFrac`/`cellCount`** (4.65/1.14/2.43). NOT-CLAIMED (documented, not folded in): icy `chaosFrac` (normΔ 0.19, seed-fragile — A4 owns chaos), volatile-cold `linFrac` (normΔ 0.36, both corners tidal-saturated). PLUS seed-only baseline within floor (=1.0 by construction). Composite floor-normalized distance (4.94 icy / 5.49 vc vs seed-only 1.86/1.58) kept as a **reported summary metric, NOT the pass gate**. Headline low-g/high-g `std(U)` ratio > 3 per seed (icy) |
 | **AC-ORDER** | new file | every sweep point × 5 seeds: `varExplainedByStress > varExplainedByLatitudeY` AND `> varExplainedByLatitudeW0` (arm's-length predictor w/ tuned CREST); `lineamentInteriorRatio > 1`; key-set ⊆ 7 (never DESPIN_REF/DIUR_REF/DIUR_PEAK/SHOULDER_HT/TROUGH_DEPTH/SHELL_BASE/RELAX_PASSES/REGIME_WEIGHTS); grainAngle+faultDensity byte-identical across the sweep |
 | **AC-ZERO-CLOBBER** | EXISTING gates (Slice B) | (a) `v2-0-byte-identity` 83/83; (b) `worldengine-base-shell-structure`, `worldengine-shell-regime-gate`, `worldengine-v2-3-dispatch-oracle`, `worldengine-base-stagnantlid-structure` (its `shellReference` null-tune helper :301) green; (c) plate/volcanic/stagnant/despun byte-identical; (d) diff fence (§6); (e) `lid:`/`disrupt:` untouched; (f) 4-known-failures don't grow, new file collects nonzero |
 | **AC-LAB** | live (§8) | chrome-devtools drive recipe |
@@ -385,6 +436,26 @@ Europa/Eyeball changed). Deferred past Max's usage-window reset.
 - `calibration/ref-slots.mjs` — REF slots byte-exact vs live/deriveUniforms (§1a).
 - `calibration/gain-probes.mjs` — noise floors, exact collapse, blast-radius, per-axis monotone sweeps (§1b/1c).
 - `calibration/order-probe.mjs` — AC-ORDER falsifier under tune; arm's-length vs reliefStress (§1d).
-- `calibration/variety-probe.mjs` — final A1-ratio / A4-aggregate / composite-distance measurability (§1e).
+- `calibration/variety-probe.mjs` — A1-ratio / A4-aggregate / composite-distance + PER-OBSERVABLE clears (§1e).
+
+---
+
+## Lens log (V2-3 in-file pattern)
+
+Two adversarial lenses reviewed BUILD-PLAN `6f1852d`. **Byte lens verdict: BUILD-READY (0 must-fixes).**
+**Mechanism lens verdict: NEEDS-FIX (2 must-fixes).** Both must-fixes + all seven minors folded IN PLACE below;
+every refreshed number is the real output of the re-run calibration script cited.
+
+| # | Lens | Finding | RESOLVED-BY |
+|---|---|---|---|
+| **MF1** | mechanism (byte concurred, its minor #1) | AC-TUNE-RESPONSE A2/A3 monotonicity under-specified as "monotone ↑"; a STRICT adjacent-pair read fails at the plan's own sweep points — Titan `tidal=1.0` & `100` both saturate `CREST=0.85` → identical `linN=162`; `round(CELL_MIN)` plateaus similarly | §5 AC-TUNE-RESPONSE row + §1b + §1e restated A2/A3 as **NON-STRICT** (`v[i] ≥ v[i-1]`, no downward inversion; endpoint Δ>floor is the measurability gate), matching the contract's "no sign inversion inside the domain". **Trimmed the Titan A2 sweep into the interior** `tidalDev∈(0,0.97)` (REF, 1e-6, 1e-4, 1e-2) in `gain-probes.mjs`, re-ran: **linN 76→101→129→158, Δ82 vs floor 39, no plateau, monotone-up true** |
+| **MF2** | mechanism | AC-TUNE-RESPONSE A3-icy proved measurability with OUT-OF-DOMAIN `volatileFraction=1.4` (physical ≤1.0, slider max 0.6); in-domain vf sweep gives Δ cellCount = 7 = floor exactly | Re-drove A3-icy via **`T_eq`** in `gain-probes.mjs` (added a per-seed block), re-ran: **`T_eq 110→250` → cellCount Δ8 > floor 7 on EVERY seed** {1,2,3,7,42} (CELL_MIN 9→17). Capped vf ≤1.0. Updated §1e + §5 |
+| a | byte | Migration bridge assumes `bodyDrivers===null`; a non-null-without-`condition` bodyDrivers would produce a non-null tune (behavior change) — no current caller does | §4 Slice-B migration-bridge note added (acknowledged, not guarded; 83-golden/AC-BYTE-SHELL would surface a future regression) |
+| b | byte | `SHELL_REFS[regime] \|\| SHELL_REFS['icy-active']` fallback is DEAD CODE (e1Regime.js guarantees the invariant) | §2 "Known non-issues" note: defensive-only, currently unreachable, keep idiom-matched |
+| c | byte | `gain-probes.mjs` labeled `tidalHeating=136.745` "REF" but exact REF = `136.74504375182553` → spurious non-null tune at that row | Fixed the script to reference the **exact** `SHELL_REFS['icy-active'].tidalHeating` (no hand-typed decimal), re-ran: **the REF row now prints `[null]`**; icy A2 Δ64>23 unchanged |
+| d | mechanism | NaN inputs pass the `?? REF` guard → NaN knobs (unreachable via `deriveUniforms`; sibling builders don't guard either) | §2 "Known non-issues" note: documented as house-consistent; **no `Number.isFinite` guard added** (stays idiom-matched) |
+| e | mechanism | AC-VARIETY wording (contract: per-observable floor) vs `variety-probe.mjs` (composite Euclidean > 1.5) | Extended + re-ran `variety-probe.mjs` to print PER-OBSERVABLE floor-normalized LOW↔HIGH deltas both regimes. §5 AC-VARIETY now asserts **per-observable Δ>floor for the CLEARING observables** (icy: linFrac/stdU/cellCount 2.83/2.10/2.57; vc: stdU/chaosFrac/cellCount 4.65/1.14/2.43), documents **not-claimed** (icy chaosFrac 0.19, vc linFrac 0.36), keeps composite as reported summary only; seed-only baseline within floor |
+| f | mechanism | `CREST_LO=0.82` unreachable via tidal (`CREST∈[0.85,0.985]`); `CREST_HI` reached at `tidalDev=−1` | §1b clamp-reachability note added (dead defensive bound; CREST_HI reached at the tidal-DOWN extreme) |
+| g | mechanism | A3-Titan margin thin (Δ8 vs floor 7) | §1b margin-honesty note: `K_CELL` UAT-tunable up; per-seed check shows Δ8>7 on all 5 seeds (icy + Titan) |
 
 All four are `.mjs` (NOT `*.test.js`) so vitest never collects them.

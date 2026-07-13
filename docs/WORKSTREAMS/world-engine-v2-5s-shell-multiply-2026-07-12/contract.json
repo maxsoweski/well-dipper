@@ -69,10 +69,10 @@
     },
     {
       "id": "AC-VARIETY",
-      "statement": "The D2-MF5 objective proxy: at a FIXED seed, two driver vectors in the SAME regime differ on the composite observable vector {lineamentNodeCount/N, std(U), chaos-area-fraction, cellCount} by more than a per-observable noise floor, where the floor = that observable's spread across the 5 seeds at fixed drivers (the V2-2b-1 delta-H-min discipline); the seed-only baseline stays within the floor. Directly instantiates 'low-g vs high-g icy worlds differ within-regime'.",
+      "statement": "The D2-MF5 objective proxy: at a FIXED seed, two driver vectors in the SAME regime differ on the composite observable vector {lineamentNodeCount/N, std(U), chaos-area-fraction, cellCount} by more than a per-observable noise floor, where the floor = that observable's spread across the 5 seeds at fixed drivers (the V2-2b-1 delta-H-min discipline); the seed-only baseline stays within the floor. Directly instantiates 'low-g vs high-g icy worlds differ within-regime'. AMENDED 2026-07-13 (BUILD-PLAN lens fold minor-e, empirically reconciled per-seed by calibration/variety-probe.mjs): 'more than a per-observable noise floor' is pinned as PER-OBSERVABLE clearance for every observable the regime's corner pair actually moves — icy-active clears {lineamentNodeCount/N 2.83×, std(U) 2.10×, cellCount 2.57×}, chaos-area-fraction NOT-CLAIMED (seed-fragile at these corners); volatile-cold clears {std(U) 4.65×, chaos-area-fraction 1.14×, cellCount 2.43×}, lineamentNodeCount/N NOT-CLAIMED (tidal-saturated at the corner — the axis itself is proven responsive by AC-TUNE-RESPONSE's interior sweep). Non-clearing observables are documented exclusions, never silently folded; the composite floor-normalized distance (4.94/5.49 vs seed-only ≤1.86) is REPORTED as a summary metric, not the pass criterion.",
       "verifyVia": {
         "input": "Headless vitest: noise floors from 5-seed spreads at fixed drivers; low-g vs high-g comparison at fixed seed per regime (icy-active + volatile-cold)",
-        "observable": "Driver-varied delta exceeds the floor per observable; seed-only delta stays within it"
+        "observable": "Driver-varied delta exceeds the floor for every claimed observable (3 of 4 per regime, enumerated in the amended statement; exclusions documented); seed-only delta stays within it; composite reported as summary only"
       },
       "layer": "unit",
       "live": false

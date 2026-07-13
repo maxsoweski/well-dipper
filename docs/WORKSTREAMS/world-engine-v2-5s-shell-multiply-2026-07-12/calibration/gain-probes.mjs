@@ -155,27 +155,33 @@ sweep('A1 gravity → std(U) (gravity DOWN ⇒ relief UP)', 'icy-active', 7, [
 ], 'stdU');
 
 // A2 tidal UP => more cracks (lineamentNodeCount up). Sweep within clamp domain.
+// REF row uses the EXACT byte-exact REF (SHELL_REFS[...].tidalHeating), not a truncated 136.745 literal
+// (minor #c: 136.745 !== 136.74504375182553 → a spurious non-null tune at the "REF" row).
 sweep('A2 tidal → lineamentNodeCount (tidal UP ⇒ cracks UP)', 'icy-active', 7, [
-  { label: 'tidal=REF/100',   drivers: { tidalHeating: 136.745 / 100 } },
-  { label: 'tidal=REF',        drivers: { tidalHeating: 136.745 } },
-  { label: 'tidal=REF×100',    drivers: { tidalHeating: 136.745 * 100 } },
-  { label: 'tidal=REF×10000',  drivers: { tidalHeating: 136.745 * 10000 } },
+  { label: 'tidal=REF/100',   drivers: { tidalHeating: SHELL_REFS['icy-active'].tidalHeating / 100 } },
+  { label: 'tidal=REF',        drivers: { tidalHeating: SHELL_REFS['icy-active'].tidalHeating } },
+  { label: 'tidal=REF×100',    drivers: { tidalHeating: SHELL_REFS['icy-active'].tidalHeating * 100 } },
+  { label: 'tidal=REF×10000',  drivers: { tidalHeating: SHELL_REFS['icy-active'].tidalHeating * 10000 } },
 ], 'linN');
 
-// A2 on volatile-cold (Titan) — tidal UP from its tiny REF (the lab's feasible direction on Titan)
-sweep('A2 tidal → lineamentNodeCount (Titan; tidal UP)', 'volatile-cold', 7, [
-  { label: 'tidal=REF',       drivers: { tidalHeating: 1.582697265646129e-8 } },
-  { label: 'tidal=0.01',       drivers: { tidalHeating: 0.01 } },
-  { label: 'tidal=1.0',        drivers: { tidalHeating: 1.0 } },
-  { label: 'tidal=100',        drivers: { tidalHeating: 100 } },
+// A2 on volatile-cold (Titan) — tidal UP from its tiny REF, kept INSIDE the live-response region tidalDev∈(−1,1)
+// (MF#1: REF×1e6 ≈ 0.0158 is the interior ceiling; the prior 1.0/100 points sat on the CREST_LO plateau →
+// equal linN=162 → a STRICT adjacent-pair monotone read would falsely fail. Interior points move CREST every step).
+sweep('A2 tidal → lineamentNodeCount (Titan; tidal UP, interior)', 'volatile-cold', 7, [
+  { label: 'tidal=REF',   drivers: { tidalHeating: SHELL_REFS['volatile-cold'].tidalHeating } },
+  { label: 'tidal=1e-6',  drivers: { tidalHeating: 1e-6 } },
+  { label: 'tidal=1e-4',  drivers: { tidalHeating: 1e-4 } },
+  { label: 'tidal=1e-2',  drivers: { tidalHeating: 1e-2 } },
 ], 'linN');
 
-// A3 vigor (volatileFraction, isolates CELL_MIN) => cellCount up. icy-active.
-sweep('A3 vigor(vf) → cellCount (wetter ⇒ finer cells)', 'icy-active', 7, [
-  { label: 'vf=0.1',  drivers: { volatileFraction: 0.1 } },
-  { label: 'vf=REF(0.5)', drivers: { volatileFraction: 0.5 } },
-  { label: 'vf=0.9',  drivers: { volatileFraction: 0.9 } },
-  { label: 'vf=1.4',  drivers: { volatileFraction: 1.4 } },
+// A3 vigor via T_eq (icy) => cellCount up. IN-DOMAIN drive (lab tsurf slider [230,760] overlays condition.T_eq).
+// (MF#2: the prior vf=1.4 endpoint was OUT-OF-DOMAIN — physical vf≤1.0, slider max 0.6 — and an in-domain vf
+// sweep only reaches Δ=floor exactly. T_eq 110→250 clears the floor in-domain on every seed; see per-seed block below.)
+sweep('A3 vigor(T_eq) → cellCount (icy; warmer ⇒ finer cells)', 'icy-active', 7, [
+  { label: 'T_eq=REF(110)', drivers: { condition: { T_eq: 110 } } },
+  { label: 'T_eq=170',      drivers: { condition: { T_eq: 170 } } },
+  { label: 'T_eq=210',      drivers: { condition: { T_eq: 210 } } },
+  { label: 'T_eq=250',      drivers: { condition: { T_eq: 250 } } },
 ], 'cellCount');
 
 // A3 vigor via T_eq on volatile-cold (Titan) => cellCount up
@@ -199,4 +205,20 @@ for (const seed of [1, 7]) {
   const lo = build(seed, 'icy-active', { massGravity: 0.07 }).obs;   // low-g
   const hi = build(seed, 'icy-active', { massGravity: 0.70 }).obs;   // high-g
   console.log(`  seed ${seed}: Δstd(U)=${(Math.abs(hi.stdU - lo.stdU)).toFixed(4)} vs floor ${FLOOR['icy-active'].stdU.floor.toFixed(4)}  ->${Math.abs(hi.stdU - lo.stdU) > FLOOR['icy-active'].stdU.floor}`);
+}
+
+// ════ A3-icy PER-SEED (MF#2): in-domain T_eq 110→250 Δ cellCount > floor on EVERY seed {1,2,3,7,42} ════
+// Backs the "Δ>floor every seed" claim the T_eq-driven A3-icy test relies on (replaces the out-of-domain vf=1.4).
+console.log('\n#### A3-icy T_eq(110→250) Δ cellCount per seed (icy-active) vs floor ####');
+{
+  const floor = FLOOR['icy-active'].cellCount.floor;
+  let allAbove = true;
+  for (const seed of SEEDS) {
+    const lo = build(seed, 'icy-active', { condition: { T_eq: 110 } }).obs.cellCount;
+    const hi = build(seed, 'icy-active', { condition: { T_eq: 250 } }).obs.cellCount;
+    const d = Math.abs(hi - lo);
+    if (!(d > floor)) allAbove = false;
+    console.log(`  seed ${seed}: cellCount ${lo}→${hi}  Δ=${d}  vs floor ${floor}  >floor=${d > floor}`);
+  }
+  console.log(`  ALL seeds Δ>floor: ${allAbove}`);
 }
