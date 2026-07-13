@@ -136,10 +136,28 @@ export function deriveAuthoredNames(entry, companion, systemData) {
   const primaryName = companion.components?.[0]?.name || systemName;
   const secondaryName = companion.components?.[1]?.name || null;
 
-  const planets = systemData.planets.map((p, i) => {
-    const letter = p.letter != null
-      ? p.letter
-      : (i < PLANET_LETTERS.length ? PLANET_LETTERS[i] : String.fromCharCode(98 + i));
+  // Fill letters must skip designations the injected knowns already carry:
+  // migration can sort a procgen fill planet BELOW a known, and an index-based
+  // letter would then duplicate the known's real designation (e.g. two
+  // 'HD 10697 b'). With no knowns present the cursor walks the same sequence
+  // as the old index-based assignment, so procgen-only output is unchanged.
+  const usedLetters = new Set(
+    systemData.planets.filter((p) => p.letter != null).map((p) => p.letter)
+  );
+  let fillCursor = 0;
+  const nextFillLetter = () => {
+    let letter;
+    do {
+      letter = fillCursor < PLANET_LETTERS.length
+        ? PLANET_LETTERS[fillCursor]
+        : String.fromCharCode(98 + fillCursor);
+      fillCursor++;
+    } while (usedLetters.has(letter));
+    return letter;
+  };
+
+  const planets = systemData.planets.map((p) => {
+    const letter = p.letter != null ? p.letter : nextFillLetter();
     // Injected known planets carry a real name; procgen fill uses the letter.
     const planetName = p.name != null ? p.name : `${systemName} ${letter}`;
     const moons = p.moons.map((_m, mi) => `${planetName} ${romanNumeral(mi + 1)}`);

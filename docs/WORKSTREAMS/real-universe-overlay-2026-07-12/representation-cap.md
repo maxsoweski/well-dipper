@@ -68,6 +68,51 @@ planet's semi-major axis. Eccentric-orbit rendering is out of scope; the number
 is preserved for future use and for honesty in any data readout. When the archive
 has no eccentricity, the `eccen` key is omitted (never emitted as `null`).
 
+## 5. Bulk-merge fidelity caveats (Increment 3, AC3/AC4)
+
+The bulk overlay merge (every arrival at a real catalog star gets its real
+contents, procgen filling the remainder — design D1–D9,
+`increment-3-design.md`) honours the bounds above and adds these deliberate,
+documented fidelity caveats:
+
+- **Known planets keep their ARCHIVE orbits.** Injected real planets
+  (`p.known === true`) are exempt from the post-injection reshaping passes:
+  migration never destroys, retypes, or reorbits them; the resonance snap skips
+  any pair that involves a known (its real semi-major axis wins); and the
+  binary-stability cull keeps every known regardless of the critical radius
+  (`p.known || orbit > a_crit`). Their real `radiusEarth` / `massEarth` also
+  survive the exotic/civilized overlay, which never selects a known planet as a
+  candidate. Consequence: a tight real system (e.g. TRAPPIST-1, planets at
+  0.012–0.062 AU) survives intact even when the primary rolls or is pinned to a
+  companion — the planets are NOT physically re-solved against that companion.
+
+- **A non-table host may roll a procgen companion around real planets.**
+  Structure honesty is TABLE-scoped (design D4): only the curated companion
+  table (`stellarCompanions.js`) pins multiplicity. A real host that is NOT in
+  that table leaves the procgen binary roll live (~35%), so its known planets
+  can end up orbiting inside a *rolled* (not observed) close binary. The planets
+  are real; the companion is procgen. This is the accepted price of not
+  ingesting a noisy bulk double-star catalog — famous real binaries (Sirius,
+  Procyon, Alpha Centauri) are table-covered and correct.
+
+- **`starTypeOverride` is catalog-sourced, never contents-sourced** (design D6).
+  The primary's type always comes from the catalog `spect`, routed through
+  `normalizeSpectralClass`. When a contents host joins, the host's full class
+  string is recorded on `star.spectFull` for display honesty (merged systems
+  only; the key is OMITTED, never null, otherwise).
+
+- **D primaries carry main-sequence evolution labels** (cosmetic). A degenerate
+  white-dwarf primary reached via override still runs the ordinary
+  `stellarEvolution` path, which reports a main-sequence-style label; the
+  visual/physical parameters are correct (STAR_PROPERTIES.D), only the evolution
+  descriptor is nominal.
+
+- **Far-companion planets remain data-level** (unchanged from §2): a wide
+  member's known planets are archive-shaped data on `systemData.farCompanions`,
+  never scene bodies. On the bulk path far companions only appear for a
+  table-covered host that has them (Alpha Centauri → Proxima), which arrives via
+  the AC5 authoring/alias path rather than a bare entry-name arrival.
+
 ## Why these bounds
 
 Every consumer downstream (rendering, nav, gravity, camera, system map) already

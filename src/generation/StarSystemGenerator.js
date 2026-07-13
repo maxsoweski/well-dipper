@@ -601,19 +601,26 @@ export class StarSystemGenerator {
       migrationHistory = migrationResult;
       const migrant = planets[migrationResult.migrantIndex];
 
-      // Remove scattered planets (iterate backwards to preserve indices)
+      // Remove scattered planets (iterate backwards to preserve indices).
+      // D3 known-planet immunity (overlay design D3): a real, injected planet is
+      // NEVER destroyed by migration scatter. The 70% roll STILL happens for each
+      // scattered index (the RNG draw is load-bearing for revisit-stability, and
+      // procgen systems carry no knowns so this branch is a no-op there — AC8);
+      // a known index is simply never added to the removal set.
       const toRemove = new Set();
       for (const idx of migrationResult.scatteredIndices) {
-        if (rng.chance(0.7)) {
-          toRemove.add(idx); // 70% destroyed
-        }
+        const destroyed = rng.chance(0.7); // draw unconditionally (cadence)
+        if (destroyed && !planets[idx].known) toRemove.add(idx); // 70% destroyed
         // 30% survive but get kicked to wider orbits (not implemented yet — just survive)
       }
       // Filter out destroyed planets
       const surviving = planets.filter((_, i) => !toRemove.has(i));
       // Update migrant's orbit
       const migrantInSurviving = surviving.find(p => p === migrant);
-      if (migrantInSurviving) {
+      // D3: never retype/reorbit a KNOWN planet into a hot-jupiter — its real
+      // orbit + archive params are authoritative. Procgen migrants (migrant.known
+      // undefined → falsy) reshape exactly as before, so AC8 holds.
+      if (migrantInSurviving && !migrant.known) {
         migrantInSurviving.orbitRadiusAU = migrationResult.finalOrbitAU;
         migrantInSurviving.orbitRadiusScene = auToScene(migrationResult.finalOrbitAU);
         migrantInSurviving.orbitRadius = migrationResult.finalOrbitAU * mapUnitsPerAU;
@@ -634,9 +641,20 @@ export class StarSystemGenerator {
     // Compact systems may show resonance chains (like TRAPPIST-1)
     const resonanceData = detectResonances(planets);
     if (resonanceData.isResonant) {
-      snapToResonances(planets, resonanceData.resonances);
+      // D3 known-planet immunity: skip any resonance pair that involves a known
+      // planet — its real semi-major axis wins and must not be snapped. Procgen
+      // systems carry no knowns, so nothing is filtered and the snap is identical
+      // (AC8). detection itself is left intact (data-only resonanceChain report).
+      const snapPairs = resonanceData.resonances.filter(
+        (r) => !planets[r.innerIdx].known && !planets[r.outerIdx].known,
+      );
+      snapToResonances(planets, snapPairs);
       // Update scene/map units after snapping
       for (const p of planets) {
+        // Knowns keep their real orbit AND their jittered orbit speed (D3): their
+        // AU was never snapped, so leave them untouched. Procgen fillers recompute
+        // from the (possibly-snapped) AU exactly as before — no knowns → no skips.
+        if (p.known) continue;
         p.orbitRadiusScene = auToScene(p.orbitRadiusAU);
         p.orbitRadius = p.orbitRadiusAU * mapUnitsPerAU;
         // Resonance snapping moved the orbit → recompute speed for the new AU
@@ -652,8 +670,11 @@ export class StarSystemGenerator {
     let binaryStability = null;
     if (isBinary) {
       const stabilityLimitAU = binaryStabilityLimit(binarySeparationAU, binaryMassRatio);
-      // Remove planets inside stability limit
-      const stablePlanets = planets.filter(p => p.orbitRadiusAU > stabilityLimitAU);
+      // Remove planets inside stability limit — but D3 known-planet immunity keeps
+      // every KNOWN planet regardless of the critical radius (this is what lets a
+      // TRAPPIST-class tight system survive a rolled/forced companion's a_crit).
+      // Procgen planets cull exactly as before (no knowns → identical filter, AC8).
+      const stablePlanets = planets.filter(p => p.known || p.orbitRadiusAU > stabilityLimitAU);
       planets.length = 0;
       stablePlanets.forEach(p => planets.push(p));
       // Compute circumbinary HZ

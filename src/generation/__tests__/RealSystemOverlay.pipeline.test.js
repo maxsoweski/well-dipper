@@ -1,0 +1,234 @@
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { RealSystemOverlay } from '../RealSystemOverlay.js';
+import { GalacticMap } from '../GalacticMap.js';
+import { StarSystemGenerator } from '../StarSystemGenerator.js';
+
+/**
+ * AC4 procgen-fill + AC3 real-characteristics — end-to-end through the REAL
+ * arrival pipeline (real-universe-overlay-2026-07-12, Increment 3). ctx is built
+ * exactly as the two main.js call sites build it: deriveGalaxyContext(position),
+ * starTypeOverride = catalog spect (D6), then RealSystemOverlay.applyToContext
+ * bolts on the overlay fields; StarSystemGenerator.generate then produces the
+ * merged system. Data is the REAL shipped ingest (no mocks), read off disk (the
+ * same JSON RealStarCatalog.load fetches — design D5 latitude).
+ *
+ * AC4 verifyVia (contract.json): (a) partial-known host procgen-fills, (b) a
+ * zero-data catalog star stays pure procgen, (c) a companion-table binary, (d) a
+ * pinned single — each generate-twice deep-equal (revisit-stable, D8). Plus the
+ * merged-name observable (D7): a merged system exposes its real designations.
+ *
+ * Cited: increment-3-design.md (D1–D9), representation-cap.md (§5).
+ */
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const DATA = (name) => join(HERE, '../../../public/assets/data', name);
+const contents = JSON.parse(readFileSync(DATA('real-system-contents.json'), 'utf8'));
+const supplement = JSON.parse(readFileSync(DATA('real-star-supplement.json'), 'utf8'));
+const HYG = JSON.parse(readFileSync(DATA('hyg-stars.json'), 'utf8'));
+const CATALOG_STARS = HYG.concat(supplement.stars);
+
+const OV = () => new RealSystemOverlay({
+  contentsHosts: contents.hosts,
+  supplementStars: supplement.stars,
+  catalogStars: CATALOG_STARS,
+});
+
+const MASTER_SEED = 'well-dipper-galaxy-1';
+const POS = { x: 8.0, y: 0.025, z: -0.001 };
+const baseCtx = () => new GalacticMap(MASTER_SEED).deriveGalaxyContext(POS);
+const rt = (o) => JSON.parse(JSON.stringify(o));
+const hostByName = (name) => OV().resolve(name).host;
+
+afterEach(() => vi.restoreAllMocks());
+
+describe('AC4(a) — a real host with PARTIAL known planets: knowns present + procgen fills', () => {
+  // HD 10697 (real HYG G star, 1 archive planet 'b' at 2.051 AU). Seed 'a4-2'
+  // rolls MORE than one planet, so the remainder is procgen-filled. Not a binary
+  // on this seed → no companion cull to muddy the fill.
+  const NAME = 'HD 10697';
+  const build = () => {
+    const ctx = baseCtx();
+    ctx.starTypeOverride = 'G'; // catalog spect (HYG), D6
+    return OV().applyToContext(ctx, NAME);
+  };
+
+  it('every known planet present with archive params; procgen fills the rest', () => {
+    const host = hostByName(NAME);
+    const sys = StarSystemGenerator.generate('a4-2', build());
+    const known = sys.planets.filter((p) => p.known);
+    // All (both) archive planets injected with their real designations.
+    expect(known.map((p) => p.letter)).toEqual(host.planets.map((p) => p.letter));
+    const b = known.find((p) => p.letter === 'b');
+    const archiveB = host.planets.find((p) => p.letter === 'b');
+    expect(b.orbitRadiusAU).toBe(archiveB.smaAU);           // pinned to real sma
+    expect(b.planetData.radiusEarth).toBe(archiveB.radiusEarth);
+    expect(b.planetData.massEarth).toBe(archiveB.massEarth);
+    expect(b.name).toBe('HD 10697 b');
+    // Remainder procgen-filled (Elite-style) — strictly more slots than knowns.
+    expect(sys.planets.length).toBeGreaterThan(known.length);
+    expect(sys.planets.some((p) => !p.known)).toBe(true);
+  });
+
+  it('generate twice → deep-equal systemData (revisit-stable)', () => {
+    expect(rt(StarSystemGenerator.generate('a4-2', build())))
+      .toEqual(rt(StarSystemGenerator.generate('a4-2', build())));
+  });
+
+  // Inc-3 adversarial-review finding: fill letters were assigned by ARRAY INDEX,
+  // so a migrated procgen giant sorting below the known planet took the known's
+  // letter — two planets both labeled 'HD 10697 b' on the _knownSystemNames path
+  // (29/400 seeds). Fill letters must skip designations the knowns already carry.
+  it('procgen-fill planets never duplicate a known designation', () => {
+    for (const seed of ['hd-33', 'hd-63', 'hd-91']) {
+      const sys = StarSystemGenerator.generate(seed, build());
+      expect(sys.migration?.occurred ?? true).toBe(true); // seeds chosen to migrate
+      const all = OV().deriveMergedNames(NAME, sys).planets.map((p) => p.name);
+      expect(new Set(all).size).toBe(all.length);
+      expect(all.filter((n) => n === 'HD 10697 b')).toHaveLength(1);
+      // the real known still owns its designation
+      const knownIdx = sys.planets.findIndex((p) => p.known);
+      expect(all[knownIdx]).toBe('HD 10697 b');
+    }
+  });
+});
+
+describe('AC4(b) — a zero-data catalog star: catalog type + pure procgen', () => {
+  // Betelgeuse is a real HYG star (spect M) with NO archive host and NO companion
+  // table entry → the overlay supplies nothing, so the merged ctx is byte-equal
+  // to a plain procgen ctx and the systemData is fully procedural.
+  const NAME = 'Betelgeuse';
+
+  it('the overlay supplies no fields for a zero-data star', () => {
+    expect(OV().resolve(NAME)).toEqual({});
+    const ctx = baseCtx();
+    ctx.starTypeOverride = 'M';
+    OV().applyToContext(ctx, NAME);
+    expect('companionSpec' in ctx).toBe(false);
+    expect('knownPlanets' in ctx).toBe(false);
+    expect('farCompanions' in ctx).toBe(false);
+  });
+
+  it('overlay-applied systemData == plain procgen systemData (fully procedural), catalog type kept', () => {
+    const overlaidCtx = baseCtx(); overlaidCtx.starTypeOverride = 'M';
+    OV().applyToContext(overlaidCtx, NAME);
+    const merged = StarSystemGenerator.generate('bet-1', overlaidCtx);
+
+    const plainCtx = baseCtx(); plainCtx.starTypeOverride = 'M';
+    const plain = StarSystemGenerator.generate('bet-1', plainCtx);
+
+    expect(rt(merged)).toEqual(rt(plain));          // overlay supplied nothing
+    expect(merged.star.type).toBe('M');             // catalog type preserved
+    expect(merged.planets.every((p) => !p.known)).toBe(true);
+    expect('farCompanions' in rt(merged)).toBe(false);
+  });
+
+  it('generate twice → deep-equal systemData', () => {
+    const build = () => { const c = baseCtx(); c.starTypeOverride = 'M'; return OV().applyToContext(c, NAME); };
+    expect(rt(StarSystemGenerator.generate('bet-1', build())))
+      .toEqual(rt(StarSystemGenerator.generate('bet-1', build())));
+  });
+});
+
+describe('AC4(c) — a companion-table binary: Sirius → class-D star2 at 19.8 AU', () => {
+  const NAME = 'Sirius';
+  const build = () => {
+    const ctx = baseCtx();
+    ctx.starTypeOverride = 'A'; // catalog spect
+    return OV().applyToContext(ctx, NAME);
+  };
+
+  it('forces the white-dwarf companion from the curated table (no warn)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sys = StarSystemGenerator.generate('sirius-ac4', build());
+    expect(sys.isBinary).toBe(true);
+    expect(sys.star2.type).toBe('D');
+    expect(sys.star2.spectFull).toBe('DA2');
+    expect(sys.star.spectFull).toBe('A1V');        // primary's full class (table)
+    expect(sys.binarySeparationAU).toBe(19.8);
+    const fallback = warnSpy.mock.calls.map((a) => String(a[0]))
+      .filter((m) => /Unknown star type|Unknown companion class/.test(m));
+    expect(fallback).toEqual([]);
+  });
+
+  it('generate twice → deep-equal systemData', () => {
+    expect(rt(StarSystemGenerator.generate('sirius-ac4', build())))
+      .toEqual(rt(StarSystemGenerator.generate('sirius-ac4', build())));
+  });
+});
+
+describe('AC4(d) — a pinned single: Vega → no companion, ever', () => {
+  const NAME = 'Vega';
+  const build = () => {
+    const ctx = baseCtx();
+    ctx.starTypeOverride = 'A';
+    return OV().applyToContext(ctx, NAME);
+  };
+
+  it('the single-pin suppresses the binary roll and injects no planets', () => {
+    // A-type systems roll a binary ~35% of the time; the pin must veto it.
+    for (const seed of ['vega-ac4', 'vega-2', 'vega-3']) {
+      const sys = StarSystemGenerator.generate(seed, build());
+      expect(sys.isBinary).toBe(false);
+      expect(sys.star2).toBeNull();
+      expect(sys.planets.every((p) => !p.known)).toBe(true); // Vega has no archive planets
+    }
+  });
+
+  it('generate twice → deep-equal systemData', () => {
+    expect(rt(StarSystemGenerator.generate('vega-ac4', build())))
+      .toEqual(rt(StarSystemGenerator.generate('vega-ac4', build())));
+  });
+});
+
+describe('AC3 — TRAPPIST-1 end-to-end: 7 real planets survive + expose real designations (D7)', () => {
+  // The headline AC3 case: an M-dwarf whose seven tight known planets carry their
+  // real b–h designations and archive parameters, through the FULL join +
+  // generate pipeline. Seed 't1-b' additionally ROLLS a spurious binary — the D3
+  // stability-cull immunity is what keeps all seven planets alive.
+  const NAME = 'TRAPPIST-1';
+  const build = () => {
+    const ctx = baseCtx();
+    ctx.starTypeOverride = 'M'; // TRAPPIST-1 catalog spect (supplement)
+    return OV().applyToContext(ctx, NAME);
+  };
+
+  it('all seven archive planets present, with their real params, despite a rolled binary', () => {
+    const host = hostByName(NAME);
+    const sys = StarSystemGenerator.generate('t1-b', build());
+    expect(sys.isBinary).toBe(true); // this seed rolled a spurious companion
+    const known = sys.planets.filter((p) => p.known);
+    expect(known.map((p) => p.letter)).toEqual(['b', 'c', 'd', 'e', 'f', 'g', 'h']);
+    // Every known planet keeps its archive orbit + radius + mass (D3 immunity).
+    for (const p of known) {
+      const a = host.planets.find((h) => h.letter === p.letter);
+      expect(p.orbitRadiusAU).toBe(a.smaAU);
+      expect(p.planetData.radiusEarth).toBe(a.radiusEarth);
+      expect(p.planetData.massEarth).toBe(a.massEarth);
+    }
+  });
+
+  it('deriveMergedNames exposes the real designations the UI reads (D7)', () => {
+    const ov = OV();
+    const ctx = baseCtx();
+    ctx.starTypeOverride = 'M';
+    ov.applyToContext(ctx, NAME);
+    const sys = StarSystemGenerator.generate('t1-b', ctx);
+    const names = ov.deriveMergedNames(NAME, sys);
+    expect(names.system).toBe('TRAPPIST-1');
+    expect(names.star).toBe('TRAPPIST-1');
+    // No curated companion table entry → no real star2 designation (the rolled
+    // binary's companion falls back to the generic 'Star' label in spawnSystem).
+    expect(names.star2).toBeNull();
+    // The seven planets expose their real b–h designations, index-aligned.
+    expect(names.planets.map((p) => p.name))
+      .toEqual(['b', 'c', 'd', 'e', 'f', 'g', 'h'].map((l) => `TRAPPIST-1 ${l}`));
+  });
+
+  it('generate twice → deep-equal systemData', () => {
+    expect(rt(StarSystemGenerator.generate('t1-b', build())))
+      .toEqual(rt(StarSystemGenerator.generate('t1-b', build())));
+  });
+});

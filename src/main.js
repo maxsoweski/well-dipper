@@ -3589,7 +3589,28 @@ warpEffect.onPrepareSystem = () => {
       };
       console.log(`[WARP] Known system override: ${knownWarp.name}`);
     } else {
+      // ── Real-universe overlay merge (AC3/AC4, design D1/D6/D7) ──
+      // Join this real catalog arrival to its ingested contents by NAME
+      // (warpTarget.name); applyToContext bolts the overlay ctx fields onto
+      // galaxyContext (companionSpec / knownPlanets / farCompanions — OMITTED,
+      // never null, when the data supplies nothing, so a zero-data arrival stays
+      // pure procgen) and console.warns if the catalog is not yet loaded (D5).
+      // starTypeOverride was already set from the CATALOG spect above (D6); the
+      // overlay never touches star type.
+      const _overlay = realStarCatalog?.overlay || null;
+      if (_overlay) _overlay.applyToContext(galaxyContext, warpTarget.name, playerGalacticPos);
       pendingSystemData = await StarSystemGenerator.generateAsync(seed, galaxyContext);
+      // D7 real display names + D6 host spectFull — only when the join supplied
+      // structure or known planets (a merged system, not a bare procgen arrival).
+      const _merge = _overlay && _overlay.ready
+        ? _overlay.resolve(warpTarget.name, playerGalacticPos) : null;
+      if (_merge && (_merge.companionSpec || _merge.knownPlanets)) {
+        pendingSystemData._knownSystemNames =
+          _overlay.deriveMergedNames(warpTarget.name, pendingSystemData, _merge.tableEntry ?? null);
+        if (_merge.host?.spectFull && !pendingSystemData.star.spectFull) {
+          pendingSystemData.star.spectFull = _merge.host.spectFull;
+        }
+      }
     }
   } else {
     // Any other destType that wasn't caught above — should not happen in production.
@@ -5007,11 +5028,34 @@ debugPanel.setSpawnCallbacks({
           // entry (~9508) and galaxyContext.starTypeOverride (~3405).
           const realStar = realStarCatalog.findByPosition(playerGalacticPos);
           if (realStar?.spect) {
-            ctx.starTypeOverride = realStar.spect;
+            // D6: starTypeOverride stays CATALOG-sourced, routed through
+            // normalizeSpectralClass so the HYG letter zoo ('W','C','S','D',…)
+            // resolves defensively; a null (unrepresentable) result leaves the
+            // roll to galaxy weights. Only fires for a real star, so procgen
+            // teleports (realStar null) are untouched (AC8).
+            const _t = StarSystemGenerator.normalizeSpectralClass(realStar.spect);
+            if (_t) ctx.starTypeOverride = _t;
+          }
+          // ── Real-universe overlay merge (AC3/AC4, design D1/D6/D7) ──
+          // Join by the real star's NAME; applyToContext omits keys it can't
+          // supply and console.warns if the catalog is not yet loaded (D5).
+          const _overlay = realStarCatalog.overlay || null;
+          const _merge = (realStar?.name && _overlay?.ready)
+            ? _overlay.resolve(realStar.name, playerGalacticPos) : null;
+          if (realStar?.name && _overlay) {
+            _overlay.applyToContext(ctx, realStar.name, playerGalacticPos);
           }
           sysData = StarSystemGenerator.generate(starSeed, ctx);
           if (realStar?.name) {
             sysData._warpTargetName = realStar.name;
+          }
+          // D7 real display names + D6 host spectFull on a merged system.
+          if (_merge && (_merge.companionSpec || _merge.knownPlanets)) {
+            sysData._knownSystemNames =
+              _overlay.deriveMergedNames(realStar.name, sysData, _merge.tableEntry ?? null);
+            if (_merge.host?.spectFull && !sysData.star.spectFull) {
+              sysData.star.spectFull = _merge.host.spectFull;
+            }
           }
         }
         sysData._destType = 'star-system';

@@ -13,6 +13,7 @@
  */
 
 import { GalacticMap } from './GalacticMap.js';
+import { RealSystemOverlay } from './RealSystemOverlay.js';
 
 // Default identity-match tolerance for findByPosition: 0.1 pc (0.0001 kpc).
 // This MUST stay BELOW KnownSystems' MATCH_RADIUS (0.0005 kpc, see that
@@ -43,27 +44,80 @@ export class RealStarCatalog {
   constructor() {
     this._stars = null;
     this._loaded = false;
+    // The bulk real-universe overlay merge index (AC3/AC4). Constructed EMPTY
+    // (not ready) here; populated by load() from the same Promise.all that loads
+    // the stars, so any arrival that resolved a catalog star finds it ready
+    // (design D5). main.js reads `catalog.overlay` at the two arrival call sites.
+    this.overlay = new RealSystemOverlay();
   }
 
   get loaded() { return this._loaded; }
   get count() { return this._stars?.length ?? 0; }
 
   /**
-   * Load the star catalog from the static JSON file.
-   * Call once at startup.
+   * Load the star catalog + the real-universe overlay data (design D5). ONE
+   * Promise.all fetches hyg-stars.json, real-star-supplement.json, and
+   * real-system-contents.json together. `_stars` becomes hyg ∪ supplement,
+   * concatenated BEFORE this resolves — so the load().then() wiring in main.js
+   * (StarfieldGenerator, KnownSystems.associate) sees the supplement stars as
+   * findVisible/findInVolume/findByPosition targets. The contents are handed to
+   * the overlay index. Call once at startup.
    */
   async load() {
     try {
-      const resp = await fetch('./assets/data/hyg-stars.json');
-      if (!resp.ok) {
-        console.warn('RealStarCatalog: failed to load hyg-stars.json:', resp.status);
+      const [hyg, supplement, contents] = await Promise.all([
+        this._fetchJson('./assets/data/hyg-stars.json'),
+        this._fetchJson('./assets/data/real-star-supplement.json'),
+        this._fetchJson('./assets/data/real-system-contents.json'),
+      ]);
+      if (!Array.isArray(hyg)) {
+        console.warn('RealStarCatalog: hyg-stars.json missing or malformed; catalog not loaded');
         return;
       }
-      this._stars = await resp.json();
-      this._loaded = true;
-      console.log(`RealStarCatalog: loaded ${this._stars.length} real stars`);
+      this.ingestCatalogData(hyg, supplement, contents);
+      const suppCount = supplement?.stars?.length ?? 0;
+      const hostCount = contents?.hosts?.length ?? 0;
+      console.log(
+        `RealStarCatalog: loaded ${this._stars.length} real stars ` +
+        `(${hyg.length} HYG + ${suppCount} supplement), ${hostCount} exoplanet hosts`,
+      );
     } catch (e) {
       console.warn('RealStarCatalog: load error:', e.message);
+    }
+  }
+
+  /**
+   * Merge already-parsed catalog data and build the overlay index. This is the
+   * ONE code path for the star concat + overlay index build (design D5); load()
+   * is the browser fetch wrapper around it, and tests feed it fs-read JSON.
+   *
+   * @param {Array} hyg — hyg-stars.json (array of star records)
+   * @param {object|null} supplement — real-star-supplement.json ({ stars })
+   * @param {object|null} contents — real-system-contents.json ({ hosts })
+   */
+  ingestCatalogData(hyg, supplement = null, contents = null) {
+    const supplementStars = supplement?.stars ?? [];
+    const contentsHosts = contents?.hosts ?? [];
+    // hyg ∪ supplement — supplement dim hosts become catalog stars (nav/sky/
+    // arrival visible). Concat before _loaded flips so associate() sees them.
+    this._stars = supplementStars.length ? hyg.concat(supplementStars) : hyg;
+    this._loaded = true;
+    this.overlay.setData({ contentsHosts, supplementStars, catalogStars: this._stars });
+  }
+
+  /** Fetch + parse a JSON asset, tolerating a missing/failed file (returns null)
+   *  so one absent overlay file never aborts the whole catalog load. */
+  async _fetchJson(url) {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        console.warn(`RealStarCatalog: failed to load ${url}:`, resp.status);
+        return null;
+      }
+      return await resp.json();
+    } catch (e) {
+      console.warn(`RealStarCatalog: fetch error ${url}:`, e.message);
+      return null;
     }
   }
 
