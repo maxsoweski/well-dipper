@@ -1,0 +1,80 @@
+{
+  "workstream": "world-engine-v2-5s-shell-multiply-2026-07-12",
+  "commit": "c24ea37",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "INSUFFICIENT",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC-0",
+      "result": "PASS",
+      "evidence": "shellDriversToTune denylist/D-slot/named-consumer/taxonomy checks all pass; combined guardrail run 254/254 across 8 suites.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC1",
+      "result": "PASS",
+      "evidence": "Determinism+zero-RNG+disjoint-namespace+|U|-bound tests 30/30; full suite 1976/4 unchanged baseline; calibration script corroborates |U|max 0.259-0.518 across sweep (manual, non-CI, noted as coverage gap not a defect).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-TUNE-NULL",
+      "result": "PASS",
+      "evidence": "REF-collapse-to-null, non-circular live-bundle collapse, frozen-object/precision checks, and SAFE-key perturbation tests all pass (5/5 targeted, 30/30 file).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-BYTE-SHELL",
+      "result": "PASS",
+      "evidence": "Null-tune path byte-identical to shipped preset across 3 regimes x 5 seeds = 15 combos, verified via verbose vitest run; full suite unchanged baseline.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-TUNE-RESPONSE",
+      "result": "PASS",
+      "evidence": "All 4 axis tests (gravity/tidal/vigor/warmth-chaos) + REF-collapse pass with documented in-domain restrictions for out-of-domain plateaus.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-VARIETY",
+      "result": "PASS",
+      "evidence": "CLAIMED-vs-EXCLUDED observable table matches amended AC verbatim; calibration probe reproduces cited multipliers (2.83x-4.65x) exactly; seed-only baseline stays within floor.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-ORDER",
+      "result": "PASS",
+      "evidence": "Falsifier + 7-key allowlist (structurally guaranteed by function's only 2 return shapes) + blast-radius byte-identity all pass across full sweep x 5 seeds.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "result": "PASS",
+      "evidence": "75-golden byte-identity untouched; shell/plate/stagnant-lid/magmatism suites all green (179+133+40 tests); diff-fence confirms zero touch to non-shell modules; known-failure baseline unchanged (4/17).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-LAB",
+      "result": "INSUFFICIENT",
+      "evidence": "Live chrome-devtools drive not yet performed; evidence/ dir empty. Code prerequisites confirmed present (shellProbe() returns appliedTune, gravity/tidal sliders exist in 'Body drivers -> plate relief' folder, reliefBakeStrength defaults to 1). Needs working-Claude to drive: start dev server, open planet-lod-lab.html, switch Europa<->Titan preset, drag gravity/tidal sliders, confirm _lab.shellProbe().appliedTune and cellCount/lineamentNodeCount/std(U) respond, capture before/after screenshots.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC-UAT",
+      "result": "deferred-to-max",
+      "evidence": "UAT presupposes AC-LAB green first. Once AC-LAB is driven: Max should open the lab himself, switch between Europa and Titan presets, drag the existing gravity/tidal sliders in 'Body drivers' folder (no new slider added by design), and visually confirm shell relief terrain (craters/ridges/chaos) visibly responds rather than staying static.",
+      "adversarialVotes": "n/a — UAT is Max-only"
+    }
+  ],
+  "overall": "INSUFFICIENT — unit layer fully green (7/7 ACs, 3/3 adversarial votes each); integration layer partially blocked — AC-ZERO-CLOBBER PASS but AC-LAB has not yet been live-driven (0/3 votes, evidence dir empty); UAT deferred to Max pending AC-LAB.",
+  "summaryForMax": "Feature: threads real body-driver values (gravity/tidal/temperature) into the shell-relief terrain builder for icy/ocean-moon presets (Europa, Titan, Eyeball), so those worlds' surface terrain responds to their physical parameters instead of using one fixed baked preset — same mechanism V2-2 already gave the plate-tectonics path.\n\nAll 7 unit-layer ACs are fully green: determinism/no-RNG, byte-identical null-tune fallback to the shipped preset, monotonic response to gravity/tidal/temperature knobs, driver-varied worlds differing more than seed noise, and a falsifier/key-safety/blast-radius check confirming the new tuning only touches 7 named safe knobs and never leaks into structural fields. Integration guard AC-ZERO-CLOBBER is also green — nothing else (plates, stagnant-lid, magmatism, the 75 golden byte-identity hashes) was disturbed.\n\nWhat's NOT done yet: AC-LAB, the one live-browser check, has not been run — no chrome-devtools drive has happened and its evidence folder is empty. This is next for working-Claude: open planet-lod-lab.html, switch the preset dropdown between Europa and Titan, drag the existing gravity and tidal sliders (folder \"Body drivers -> plate relief (Inc.2)\" — no new slider was added, by design), and confirm via the console (`_lab.shellProbe()`) that appliedTune and the resulting cellCount/lineamentNodeCount/std(U) actually change, with before/after screenshots. Not a defect — just an unexecuted check.\n\nOnce AC-LAB is green, your UAT (AC-UAT) is: open the lab yourself, flip between the Europa and Titan presets, drag those same gravity/tidal sliders, and confirm by eye that the shell terrain (crater density, ridge/lineament pattern, chaos-terrain area) visibly changes with the sliders rather than staying static. That visual check is the only thing standing between this workstream and shipped.",
+  "verifyRun": {
+    "workflow": "verify-workstream full",
+    "runId": "wf_cda075a7-770",
+    "date": "2026-07-13",
+    "agents": 39,
+    "note": "verdict extracted from the workflow result by working-Claude per the standing pattern (the workflow does not write verdict.json itself). AC-LAB live drive follows as the next step; this file will be updated when it is driven."
+  }
+}
