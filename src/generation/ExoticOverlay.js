@@ -176,8 +176,15 @@ export class ExoticOverlay {
     const isBloom = rng.chance(0.10);
 
     if (isBloom) {
-      // Bloom: colonize 2-4 bodies — any with atmosphere or rocky
-      const bloomCount = rng.int(2, Math.min(4, candidates.length));
+      // Bloom: colonize 2-4 bodies — any with atmosphere or rocky.
+      // With exactly 1 candidate, rng.int(2, 1) is an inverted range and
+      // returns 2. The draw must still happen (RNG cadence is load-bearing
+      // for procgen revisit-stability), so clamp the count rather than
+      // skip the roll — for ≥2 candidates the clamp is a no-op.
+      const bloomCount = Math.min(
+        rng.int(2, Math.min(4, candidates.length)),
+        candidates.length
+      );
       for (let b = 0; b < bloomCount; b++) {
         this._swapPlanetType(planets[candidates[b].idx], 'fungal', rng);
       }
