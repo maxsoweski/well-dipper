@@ -95,6 +95,14 @@ documented fidelity caveats:
   ingesting a noisy bulk double-star catalog — famous real binaries (Sirius,
   Procyon, Alpha Centauri) are table-covered and correct.
 
+  > **ADOPTED 2026-07-13 (Max — contract deviation to post-review ruling 6):**
+  > archive `snum == 1` becomes an implicit single-pin — a real host whose
+  > archive record says the system has exactly one star suppresses the procgen
+  > companion roll. One-directional tightening: it can only suppress
+  > fabrication, never add structure; the curated table still wins wherever
+  > both apply. Implementation scheduled for Increment 5; the contract
+  > amendment is recorded there (validate after edit).
+
 - **`starTypeOverride` is catalog-sourced, never contents-sourced** (design D6).
   The primary's type always comes from the catalog `spect`, routed through
   `normalizeSpectralClass`. When a contents host joins, the host's full class
