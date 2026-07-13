@@ -1,0 +1,86 @@
+{
+  "workstream": "world-engine-preset-archetype-retirement-2026-07-13",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "statusNote": "Scoped 2026-07-13 (trimmed dev-collab-scope pass — scope was pre-pinned by the V2-3 contract's enumerated retirement clauses, which Max greenlit 2026-07-11 and whose trigger [post-V2-3 verify green + his 17-preset UAT] completed 2026-07-13). LIGHT workstream: refactor carve-out — ZERO behavioral change, the diff + byte gates are the acceptance. Awaiting Max's greenlight → building.",
+  "programRef": "world-engine-history-program-2026-06-27/ROADMAP-v2-condition-first.md §5.2 point 3 (retirement trigger); parent contract world-engine-v2-3-dispatch-flip-2026-07-11 (designDecisions: 'PRESET_ARCHETYPE SURVIVES AS FALLBACK ORACLE — NOT DELETED HERE ... deletion is a separate follow-up commit' + 'CONDITION-LESS CALLERS TAKE THE MIGRATION BRIDGE (lens MF-3) ... The bridge dies at the retirement commit'; R-GARBLE adjudication: PRESET_ARCHETYPE legitimately stays load-bearing for radius selection).",
+  "designDecisions": [
+    "ONE SEAM: the migration bridge (condition-absent archetype chain in writeBodyRelief), the four label-keyed dispatch predicates (isEarthlikePlatePath/isShellReliefPath/isVolcanicPath/isStagnantLidPath) + the VOLCANIC_ARCHETYPES set, and the V2-5s bridge-tune gate (the `bodyDrivers?.condition ? shellDriversToTune(...) : null` conditional in the bridge's shell branch) are deleted TOGETHER in planet-lod-rivers.js. They are one mechanism; a partial deletion would leave dead exports or an unreachable gate.",
+    "CONDITION-LESS INPUT THROWS. Post-retirement, writeBodyRelief without bodyDrivers.condition fails loudly with a clear error, and that behavior is itself tested. Rationale: a silent despun default could mask an unmigrated caller as a distant byte-diff; a throw surfaces it at the call site. The build plan may amend this shape only with enumerated rationale.",
+    "PRESET_ARCHETYPE SURVIVES FOR RADIUS SELECTION (V2-3 R-GARBLE adjudication). The map and the lab's radius plumbing are untouched. Retirement = the dispatch bridge only, never the radius map. The dispatch-oracle garble test's radius exemption stays intact.",
+    "TEST RE-ANCHORING IS ENUMERATED, NEVER SILENT (the V2-3 M3/MF-4 discipline). Two classes: (a) the ~8 condition-less writeBodyRelief call sites — worldengine-base-plate-driver-response (the 'ice'/'impact-airless' pairs incl. the AC5 D_OFF no-clobber variants), worldengine-plate-regime-gate (3 calls), planet-lod-rivers-discharge-param, and the condition-less `relief(...)` helpers in worldengine-base-magmatism-structure / worldengine-base-magmatism-multiply / worldengine-base-stagnantlid-structure / worldengine-shell-regime-gate, plus worldengine-base-shell-multiply's bridge-byte-safety AC (whose subject dies with the bridge — repurposed or retired, enumerated) — each migrates to a condition-bearing bundle that routes to the SAME writer with the SAME args (the existing bundle17/dispatchBundle/buildBundle idioms are the pattern). (b) the four suites that IMPORT the deleted predicates to compose the legacy chain as an oracle — worldengine-v2-3-dispatch-oracle (writer_today), worldengine-e1-conformance-oracle, worldengine-lid-classifier, worldengine-v2-3-taxonomy — re-anchor to pinned expected-route tables (or a frozen test-local reference copy; build plan's pick, enumerated per suite). The AC-0 label-free grep test re-anchors its slice marker ONLY if the block shape forces it, enumerated.",
+    "MF#3 COUNTING RULE (carried from the V2-3 build plan): the full-suite gate pins BOTH failure counts (Tests failed == 4 AND Test Files failed == 17) and asserts every touched/added test file still collects and runs a NONZERO test count — a silently-uncollected suite must not read green.",
+    "SCOPE-CLEAN COMMITS: git diff touches ONLY planet-lod-rivers.js, src/worldengine/base/lidResponse.js, the enumerated test files, and this workstream's docs. The not-ours dirty files (src/auto/CameraChoreographer.js, src/debug/LabMode.js) and the untracked screenshot/qa-results pile stay out of every commit. The v2-0 golden fixtures are NEVER re-captured (fixture files absent from the diff)."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-BRIDGE-DELETED",
+      "statement": "The old routing is deleted, not bypassed: planet-lod-rivers.js's writeBodyRelief has exactly ONE routing path (the condition-bearing derived dispatch). The condition-absent archetype chain, the four label-keyed predicates + VOLCANIC_ARCHETYPES, and the bridge-tune gate are gone from the file in the same commit; condition-less input throws the pinned loud error, and a test asserts that throw.",
+      "verifyVia": {
+        "input": "grep planet-lod-rivers.js for the four predicate names, VOLCANIC_ARCHETYPES, and the bridge chain; run the dispatch test suites (npx vitest run tests/worldengine-v2-3-dispatch-oracle.test.js plus the new condition-less-throw test) from the repo dir",
+        "observable": "zero definitions or uses of the four predicates / VOLCANIC_ARCHETYPES / the archetype chain remain in planet-lod-rivers.js; the routing region no longer reads an `archetype` parameter; the condition-less-throw test passes"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2-CALLERS-MIGRATED",
+      "statement": "Every condition-less writeBodyRelief call site (the ~8 enumerated in designDecision #4a) passes a condition-bearing bundle that routes to the SAME writer with the SAME arguments, so each suite's existing assertions stay green unchanged (except the enumerated repurposings, e.g. shell-multiply's bridge-byte-safety AC). No condition-less call site remains anywhere in tests/.",
+      "verifyVia": {
+        "input": "npx vitest run on the eight touched suites from the repo dir; grep tests/ for writeBodyRelief call sites lacking a condition-bearing bundle",
+        "observable": "all eight suites green with their pre-existing assertions intact (repurposings enumerated in the build plan); the grep finds zero condition-less call sites"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC3-ORACLES-REANCHORED",
+      "statement": "The four suites that composed the legacy chain from the deleted predicates (designDecision #4b) are re-anchored to pinned expected-route tables (or a frozen test-local reference), each change enumerated in the build plan. The dispatch-oracle suite still runs its full test count green — including the AC-0 label-free grep on the routing region and the garble test with the radius exemption intact.",
+      "verifyVia": {
+        "input": "npx vitest run tests/worldengine-v2-3-dispatch-oracle.test.js tests/worldengine-e1-conformance-oracle.test.js tests/worldengine-lid-classifier.test.js tests/worldengine-v2-3-taxonomy.test.js from the repo dir",
+        "observable": "all four suites green; dispatch-oracle test count == 24 (or the enumerated new count with in-plan rationale); AC-0 grep and garble tests pass"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC4-TERNARY-FOLDED",
+      "statement": "The lidResponse.js degenerate ternary (pre-existing V2-2a verifier minor: `e1.geodynamicRegime === 'stagnant' ? STRONG_REGIME : STRONG_REGIME`) is folded to a direct STRONG_REGIME assignment with its comment de-staled — byte-inert by construction (both arms were identical).",
+      "verifyVia": {
+        "input": "grep src/worldengine/base/lidResponse.js for the degenerate ternary; npx vitest run tests/worldengine-lid-byte-anchors.test.js and the lid router suites from the repo dir",
+        "observable": "the ternary is gone; lid byte anchors and router suites green"
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "statement": "ZERO behavioral change, byte-provable: the 83/83 byte-identity goldens pass against UNCHANGED fixtures (never re-captured — fixture files absent from the git diff); the guardrail quartet is green; the full suite sits EXACTLY at baseline (Tests 4 failed / Test Files 17 failed) under the MF#3 counting rule (designDecision #5); the git diff is confined to the in-scope files (designDecision #6).",
+      "verifyVia": {
+        "input": "npx vitest run tests/v2-0-byte-identity.test.js tests/worldengine-lid-byte-anchors.test.js tests/worldengine-e1-shadow-audit.test.js tests/planet-archetypes.test.js, then the FULL npx vitest run, both from the repo dir; git diff --stat against the pre-workstream commit",
+        "observable": "byte-identity 83/83; quartet green; full suite reports EXACTLY 'Tests 4 failed' and 'Test Files 17 failed'; every touched test file collected and ran a nonzero test count; diff touches only planet-lod-rivers.js, src/worldengine/base/lidResponse.js, the enumerated tests, and workstream docs"
+      },
+      "layer": "integration"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "V2-3 derived dispatch (shipped 9322645): writeBodyRelief's condition-bearing branch — the surviving, now-sole routing path",
+      "V2-5s shell tune threading (shipped c24ea37): shellDriversToTune at the derived shell() helper — unaffected; only the bridge-side gate dies",
+      "computeE1 / e1Regime.js exports (tuple, shellSubRegime, inSeededBand, modalRegime) — consumed unchanged by the surviving path",
+      "the V2-3 contract's enumerated retirement clauses + BUILD-PLAN MF#3 counting rule — this workstream's authority for what dies and what gates",
+      "existing condition-bearing bundle builders in tests (bundle17 / dispatchBundle / buildBundle) — the migration pattern for the ~8 callers"
+    ],
+    "outputs": [
+      "a single condition-bearing production routing path — consumed by every later increment (V2-4 substrate, V2-5 bombardment, V2-7 epochs, V2-8 sculpting, atmo #3b) and the V2-10 game-port",
+      "PRESET_ARCHETYPE reduced to its adjudicated surviving jobs: radius selection + diagnostic label",
+      "re-anchored oracle suites that pin the 17-preset adjudication table directly, no longer via the legacy chain"
+    ],
+    "mustStayWorking": [
+      "byte-identity 83/83 against unchanged goldens (NEVER re-capture)",
+      "guardrail quartet: v2-0-byte-identity + worldengine-lid-byte-anchors + worldengine-e1-shadow-audit + planet-archetypes",
+      "dispatch-oracle suite (24 tests) incl. AC-0 label-free grep + garble test with radius exemption",
+      "full-suite baseline EXACTLY Tests-4-failed / Test-Files-17-failed (KnownObjects ×3 + GalacticFeatures ×1, not grown)",
+      "PRESET_ARCHETYPE radius selection in the lab (untouched plumbing)",
+      "lab route() production path — condition-bearing, behavior unchanged (byte gates are the proof; no live drive required for this refactor)",
+      "V2-5s driver-response behavior at the derived shell() helper (its REF-null anchors stay green)"
+    ]
+  }
+}
