@@ -27,7 +27,6 @@ import { DRIVER_PRESETS, PRESET_ARCHETYPE } from '../driver-presets.js';
 import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import {
   buildIrregularSphere, writeBodyRelief, DEFAULT_GRAIN_DRIVERS,
-  isEarthlikePlatePath, isShellReliefPath, isVolcanicPath, isStagnantLidPath,
 } from '../planet-lod-rivers.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
 import { deriveConditionVector } from '../body-condition-vector.js';
@@ -66,15 +65,9 @@ describe('V2-3 AC-TAXONOMY-NEPTUNE — radius resolution byte-equal pre/post (re
   });
 });
 
-describe('V2-3 AC-TAXONOMY-NEPTUNE — writer routes unchanged (despun both ways, both Neptunes)', () => {
-  // legacy chain: the FOUR exported predicates in bridge order (identical to the 17-oracle's writerToday)
-  function classifyWriterPath(archetype, locked) {
-    if (isEarthlikePlatePath(archetype, locked)) return 'plate';
-    if (isShellReliefPath(archetype, locked)) return 'shell';
-    if (isVolcanicPath(archetype, locked)) return 'volcanic';
-    if (isStagnantLidPath(archetype, locked)) return 'stagnant-lid';
-    return 'despun';
-  }
+describe('V2-3 AC-TAXONOMY-NEPTUNE — writer routes unchanged (despun both Neptunes)', () => {
+  // (PRESET_ARCHETYPE-retirement, 2026-07-13) the legacy classifyWriterPath chain (four now-DELETED predicates)
+  // is retired; the LIVE derived dispatch already proves both Neptunes route despun, pinned below.
 
   // condition-BEARING production-shaped bundle (mirrors the 17-oracle's bundle17)
   const MESH = buildIrregularSphere(TARGET_N, LLOYD);
@@ -97,10 +90,8 @@ describe('V2-3 AC-TAXONOMY-NEPTUNE — writer routes unchanged (despun both ways
   }
 
   for (const name of NEPTUNES) {
-    it(`"${name}": legacy chain AND derived dispatch both route despun`, () => {
-      const locked = !!DRIVER_PRESETS[name].tidalState?.locked;
-      expect(classifyWriterPath(PRESET_ARCHETYPE[name] ?? null, locked), `${name} legacy route`).toBe('despun');
-      expect(derivedPath(name, 1), `${name} derived route`).toBe('despun');
+    it(`"${name}": derived dispatch routes despun (pinned; radius is the taxonomy's real concern, other describes)`, () => {
+      expect(derivedPath(name, 1), `${name} derived route`).toBe('despun');   // LIVE derived dispatch (pinned 'despun')
     });
   }
 });

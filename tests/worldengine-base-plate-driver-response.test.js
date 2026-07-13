@@ -18,9 +18,25 @@
 import { describe, it, expect } from 'vitest';
 import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import { writePlateUpliftSphere, driversToTune, D_EARTH, DEFAULTS, U_BOUND } from '../src/worldengine/base/plates.js';
-import { writeBodyRelief, buildIrregularSphere } from '../planet-lod-rivers.js';
+import { writeBodyRelief, buildIrregularSphere, DEFAULT_GRAIN_DRIVERS } from '../planet-lod-rivers.js';
+// PRESET_ARCHETYPE-retirement (2026-07-13): the AC5 no-clobber `it`s migrate to condition-bearing bundles.
+import { DRIVER_PRESETS } from '../driver-presets.js';
+import { buildNeutralBodyDrivers } from '../body-drivers.js';
+import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveUniforms } from '../planet-lod-lab-core.js';
 
 const SHARED_MESH = buildIrregularSphere(800, 2);
+// Condition-bearing bundle for a representative preset (mirrors the dispatch-oracle bundle17). SHARED_MESH is
+// this suite's own mesh; despun() never reads bodyDrivers, so the no-clobber invariant is exact.
+function condBundle(name, opts = {}) {
+  const fp = DRIVER_PRESETS[name];
+  const u = deriveUniforms(fp, 1.0);
+  return {
+    grainDrivers: DEFAULT_GRAIN_DRIVERS,
+    bodyDrivers: { ...buildNeutralBodyDrivers(u, fp), condition: deriveConditionVector(fp, u, fp.radiusEarth) },
+    ...opts,
+  };
+}
 const SEEDS = [1, 2, 7, 42];
 // Wider seed pool for the AC3 direction sweeps: the per-plate continental/oceanic split is a discrete
 // threshold (rngType() < CONTINENTAL_FRACTION), so single-seed monotonicity is noisy. Averaging the
@@ -82,20 +98,20 @@ describe('AC2 — EARTH byte-identity (the load-bearing identity guard)', () => 
   });
 });
 
-describe('AC5 — NO-CLOBBER of the shell + despun paths (durable)', () => {
-  it('shell path (icy-active) is byte-identical whether or not bodyDrivers is passed', () => {
+describe('AC5 — NO-CLOBBER of the despun path (durable)', () => {
+  // (R1, PRESET_ARCHETYPE-retirement) the shell-path no-clobber `it` is RETIRED: D_OFF's massGravity/
+  // volatileFraction/tidalHeating are EXACTLY the fields shellDriversToTune reads, and the derived shell()
+  // helper now computes the tune UNCONDITIONALLY (V2-5s made shell driver-responsive by design), so a
+  // condition-bearing D_OFF changes shell bytes — the old "bodyDrivers inert on shell" premise was a
+  // bridge-gate artifact. Byte-safe-at-REF-regardless-of-driver-bundle is owned by shell-multiply call-site-1.
+  it('despun path (Mars) is byte-identical whether or not extra bodyDrivers are merged (despun never reads them)', () => {
     for (const macroSeed of SEEDS) {
       const cA = makeSphereField(SHARED_MESH), cB = makeSphereField(SHARED_MESH);
-      writeBodyRelief(cA, { archetype: 'ice', macroSeed });
-      writeBodyRelief(cB, { archetype: 'ice', bodyDrivers: D_OFF, macroSeed });
-      expect(f32Equal(cA.height, cB.height)).toBe(true);
-    }
-  });
-  it('despun path (unlocked impact-airless) is byte-identical whether or not bodyDrivers is passed', () => {
-    for (const macroSeed of SEEDS) {
-      const cA = makeSphereField(SHARED_MESH), cB = makeSphereField(SHARED_MESH);
-      writeBodyRelief(cA, { archetype: 'impact-airless', macroSeed });
-      writeBodyRelief(cB, { archetype: 'impact-airless', bodyDrivers: D_OFF, macroSeed });
+      // M1: 'impact-airless' → Mars condition (dead-lid rocky → despun). despun() reads only grainDrivers +
+      // heightSeed, never bodyDrivers, so merging D_OFF onto the condition-bearing bundle is byte-inert forever.
+      const bundle = condBundle('Mars (arid rocky)', { macroSeed });
+      writeBodyRelief(cA, bundle);
+      writeBodyRelief(cB, { ...bundle, bodyDrivers: { ...bundle.bodyDrivers, ...D_OFF } });
       expect(f32Equal(cA.height, cB.height)).toBe(true);
     }
   });

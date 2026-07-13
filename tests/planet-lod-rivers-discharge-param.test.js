@@ -7,12 +7,24 @@ import { describe, it, expect } from 'vitest';
 import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import { buildIrregularSphere, routeAndOrder, computeOcean, writeBodyRelief, DEFAULT_GRAIN_DRIVERS } from '../planet-lod-rivers.js';
 import { solveSeaLevel } from '../planet-lod-sealevel.js';
+// PRESET_ARCHETYPE-retirement (2026-07-13): M4 — the discharge suite tests routeAndOrder, not the relief writer;
+// it needs any populated carrier.height. 'terrestrial' → Rocky condition (plate), the same self-referential body.
+import { DRIVER_PRESETS } from '../driver-presets.js';
+import { buildNeutralBodyDrivers } from '../body-drivers.js';
+import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveUniforms } from '../planet-lod-lab-core.js';
 
 const TARGET_N = 700, LLOYD = 2;
 
 function buildBody(seed = 1) {
   const carrier = makeSphereField(buildIrregularSphere(TARGET_N, LLOYD));
-  writeBodyRelief(carrier, { archetype: 'terrestrial', grainDrivers: DEFAULT_GRAIN_DRIVERS, macroSeed: seed, heightSeed: 'e6:' + seed });
+  const fp = DRIVER_PRESETS['Rocky (Earthlike)'];
+  const u = deriveUniforms(fp, 1.0);
+  writeBodyRelief(carrier, {
+    grainDrivers: DEFAULT_GRAIN_DRIVERS,
+    bodyDrivers: { ...buildNeutralBodyDrivers(u, fp), condition: deriveConditionVector(fp, u, fp.radiusEarth) },
+    macroSeed: seed, heightSeed: 'e6:' + seed,
+  });
   const N = carrier.N;
   const seaLevel = solveSeaLevel(carrier.height, 0.35);
   const { isOcean } = computeOcean(carrier.height, seaLevel, N);

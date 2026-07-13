@@ -20,11 +20,16 @@ import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import { writeGrainSphere, writeHeightSphere } from '../src/worldengine/base/tectonic.js';
 import { writePlateUpliftSphere } from '../src/worldengine/base/plates.js';
 import { writeShellReliefSphere } from '../src/worldengine/base/shellRelief.js';
-import { writeMagmatismSphere } from '../src/worldengine/base/magmatism.js';
+import { writeMagmatismSphere, magmaDriversToTune } from '../src/worldengine/base/magmatism.js';
 import {
-  buildIrregularSphere, writeBodyRelief, isStagnantLidPath, isEarthlikePlatePath, isShellReliefPath, isVolcanicPath,
-  DEFAULT_GRAIN_DRIVERS,
+  buildIrregularSphere, writeBodyRelief, DEFAULT_GRAIN_DRIVERS,
 } from '../planet-lod-rivers.js';
+// PRESET_ARCHETYPE-retirement (2026-07-13): the four label-keyed predicates are gone; the AC6/AC7 dispatch
+// callers migrate to condition-bearing bundles. stagnantLidRegimeOf (writer-module export) SURVIVES — kept.
+import { DRIVER_PRESETS } from '../driver-presets.js';
+import { buildNeutralBodyDrivers } from '../body-drivers.js';
+import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveUniforms } from '../planet-lod-lab-core.js';
 
 // N=1500 (finer than the plate/magma siblings' 600): stagnant-lid ships MANY small clustered coronae +
 // tessera — a finer structure than a few big plate/plume features — so it needs more nodes to resolve.
@@ -295,49 +300,67 @@ describe('stagnant-lid — AC5 variety (plume + corona layout moves with the see
 // branch is checked AFTER plate + shell + volcanic, so all three must stay byte-identical (zero-clobber).
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 const relief = (c, opts) => writeBodyRelief(c, { grainDrivers: DEFAULT_GRAIN_DRIVERS, ...opts });
+// Condition-bearing bundle for a representative preset (the shipped bundle17 idiom). deriveUniforms(fp,1.0)==QUALITY_TIER.
+function condBundle(name, opts = {}) {
+  const fp = DRIVER_PRESETS[name];
+  const u = deriveUniforms(fp, 1.0);
+  return {
+    grainDrivers: DEFAULT_GRAIN_DRIVERS,
+    bodyDrivers: { ...buildNeutralBodyDrivers(u, fp), condition: deriveConditionVector(fp, u, fp.radiusEarth) },
+    ...opts,
+  };
+}
+// The Lava-neutral drivers + its magma tune: the derived volcanic path is DRIVER-RESPONSIVE post-flip (V2-5s made
+// the endogenic-heat writers driver-responsive), so a condition-bearing Lava carries a NON-null tune. The volcanic
+// no-clobber reference below therefore applies that tune (the old tune-null reference was a condition-less artifact).
+const LAVA_FP = DRIVER_PRESETS['Lava (hot airless)'];
+const LAVA_NEUTRAL = buildNeutralBodyDrivers(deriveUniforms(LAVA_FP, 1.0), LAVA_FP);
+const LAVA_TUNE = magmaDriversToTune(LAVA_NEUTRAL);
 
 // EXACT references — same underlying writer + args + seed each dispatch branch uses.
 function plateReference(macroSeed) { const c = carrierOf(); writePlateUpliftSphere(c, DEFAULT_GRAIN_DRIVERS, { macroSeed }); return c; }
 function shellReference(macroSeed) { const c = carrierOf(); writeShellReliefSphere(c, DEFAULT_GRAIN_DRIVERS, { macroSeed, regime: 'icy-active' }); return c; }
-function volcanicReference(macroSeed) { const c = carrierOf(); writeMagmatismSphere(c, null, { macroSeed, locked: false, T_ss: 0, tune: null }); return c; }
+function volcanicReference(macroSeed) { const c = carrierOf(); writeMagmatismSphere(c, LAVA_NEUTRAL, { macroSeed, locked: true, T_ss: 0, tune: LAVA_TUNE }); return c; }
 function despunReference(macroSeed) { const c = carrierOf(); writeGrainSphere(c, DEFAULT_GRAIN_DRIVERS); writeHeightSphere(c, {}, DEFAULT_GRAIN_DRIVERS, { name: 'tectonic-build' }, 'e6:' + (macroSeed | 0)); return c; }
 
 describe('stagnant-lid — AC6 no-clobber (plate / shell / volcanic / despun byte-identical; stagnantDiag null)', () => {
-  it('terrestrial => path:plate, byte-identical, stagnantDiag null', () => {
+  it('terrestrial (Rocky) => path:plate, byte-identical, stagnantDiag null', () => {
     const s = 1; const ref = plateReference(s); const c = carrierOf();
-    const out = relief(c, { archetype: 'terrestrial', locked: false, macroSeed: s, heightSeed: 'e6:' + s });
+    const out = relief(c, condBundle('Rocky (Earthlike)', { macroSeed: s, heightSeed: 'e6:' + s }));   // M12
     expect(out.path).toBe('plate');
     expect(out.stagnantDiag).toBe(null);
     expect(out.plateDiag).toBeTruthy();
     expect(Array.from(c.height)).toEqual(Array.from(ref.height));
   });
-  it('ice (Europa) locked => path:shell, byte-identical, stagnantDiag null', () => {
+  it('ice (Europa) => path:shell, byte-identical, stagnantDiag null', () => {
     const s = 5; const ref = shellReference(s); const c = carrierOf();
-    const out = relief(c, { archetype: 'ice', locked: true, macroSeed: s, heightSeed: 'e6:' + s });
+    const out = relief(c, condBundle('Europa (icy moon)', { macroSeed: s, heightSeed: 'e6:' + s }));   // M12
     expect(out.path).toBe('shell');
     expect(out.stagnantDiag).toBe(null);
     expect(out.shellDiag).toBeTruthy();
     expect(out.shellDiag.regime).toBe('icy-active');
     expect(Array.from(c.height)).toEqual(Array.from(ref.height));
   });
-  it('lava (volcanic) unlocked => path:volcanic, byte-identical, stagnantDiag null', () => {
+  it('lava (Lava) => path:volcanic, byte-identical to the driver-responsive writer, stagnantDiag null', () => {
+    // M12: Lava is intrinsically locked (no unlocked-lava preset); T_eq unset → T_ss=0. The volcanic field is
+    // driver-responsive → byte-identical to volcanicReference (which applies LAVA_TUNE), not to a tune-null call.
     const s = 9; const ref = volcanicReference(s); const c = carrierOf();
-    const out = relief(c, { archetype: 'lava', locked: false, macroSeed: s, heightSeed: 'e6:' + s });
+    const out = relief(c, condBundle('Lava (hot airless)', { macroSeed: s, heightSeed: 'e6:' + s }));
     expect(out.path).toBe('volcanic');
     expect(out.stagnantDiag).toBe(null);
     expect(out.magmaDiag).toBeTruthy();
     expect(Array.from(c.height)).toEqual(Array.from(ref.height));
   });
-  it('gas-giant unlocked => path:despun, byte-identical, stagnantDiag null', () => {
+  it('gas-giant (Jovian) => path:despun, byte-identical, stagnantDiag null', () => {
     const s = 3; const ref = despunReference(s); const c = carrierOf();
-    const out = relief(c, { archetype: 'gas-giant', locked: false, macroSeed: s, heightSeed: 'e6:' + s });
+    const out = relief(c, condBundle('Gas giant (Jovian)', { macroSeed: s, heightSeed: 'e6:' + s }));   // M12
     expect(out.path).toBe('despun');
     expect(out.stagnantDiag).toBe(null);
     expect(Array.from(c.height)).toEqual(Array.from(ref.height));
   });
   it('carrier.regime stays in {0,1,2} on the stagnant-lid path (no 4th regime constant)', () => {
     const c = carrierOf();
-    relief(c, { archetype: 'stagnant-lid', locked: false, macroSeed: 1, heightSeed: 'e6:1' });
+    relief(c, condBundle('Venus (sulfuric shroud)', { macroSeed: 1, heightSeed: 'e6:1' }));   // M13
     for (let i = 0; i < c.regime.length; i++) expect(c.regime[i] === 0 || c.regime[i] === 1 || c.regime[i] === 2).toBe(true);
   });
 });
@@ -351,21 +374,14 @@ describe('stagnant-lid — AC7 seam fires + single-coverage fragility (key-based
     expect(stagnantLidRegimeOf('terrestrial')).toBe(null);
     expect(stagnantLidRegimeOf('lava')).toBe(null);
   });
-  it('isStagnantLidPath fires only on the key; the other predicates are unchanged and never match it', () => {
-    expect(isStagnantLidPath('stagnant-lid', false)).toBe(true);
-    expect(isStagnantLidPath('stagnant-lid', true)).toBe(true);
-    expect(isStagnantLidPath('terrestrial', false)).toBe(false);
-    expect(isEarthlikePlatePath('stagnant-lid', false)).toBe(false);
-    expect(isShellReliefPath('stagnant-lid', false)).toBe(false);
-    expect(isVolcanicPath('stagnant-lid', false)).toBe(false);
-    // sanity: the sibling predicates still match their own keys
-    expect(isEarthlikePlatePath('terrestrial', false)).toBe(true);
-    expect(isShellReliefPath('ice', false)).toBe(true);
-    expect(isVolcanicPath('lava', false)).toBe(true);
-  });
-  it("WITH the archetype 'stagnant-lid' (the PRESET_ARCHETYPE line), a body routes to path:stagnant-lid", () => {
+  // (R7, PRESET_ARCHETYPE-retirement) the `isStagnantLidPath fires only on the key` predicate truth-table `it`
+  // is RETIRED with the four label-keyed predicates; the stagnantLidRegimeOf key-based `it` above SURVIVES
+  // (its resolver is a writer-module export the intent explicitly blesses for test-oracle use).
+  it('a body with the Venus condition routes to path:stagnant-lid (pure-strong lid → writeStagnantLidReliefSphere)', () => {
+    // MIGRATED (PRESET_ARCHETYPE-retirement, was condition-less `archetype:'stagnant-lid'`): Venus → cls rocky,
+    // no heat-pipe, unlocked, isUnbrokenLidPath → rule (3c) → router pure-strong → regime 'venus-stagnant-lid'.
     const c = carrierOf();
-    const out = relief(c, { archetype: 'stagnant-lid', locked: false, macroSeed: 5, heightSeed: 'e6:5' });
+    const out = relief(c, condBundle('Venus (sulfuric shroud)', { macroSeed: 5, heightSeed: 'e6:5' }));
     expect(out.path).toBe('stagnant-lid');
     expect(out.stagnantDiag).toBeTruthy();
     expect(out.stagnantDiag.regime).toBe('venus-stagnant-lid');
@@ -374,10 +390,9 @@ describe('stagnant-lid — AC7 seam fires + single-coverage fragility (key-based
     expect(out.magmaDiag).toBe(null);
     expect(c.height).not.toBeUndefined();
   });
-  it('WITHOUT the PRESET_ARCHETYPE line, Venus (archetype null, locked:false) has NO fallback net => path:despun (single-coverage fragility)', () => {
-    const c = carrierOf();
-    const out = relief(c, { archetype: null, locked: false, macroSeed: 5, heightSeed: 'e6:5' });
-    expect(out.path).toBe('despun');              // regresses to sin^2(lat) — the one PRESET_ARCHETYPE line is load-bearing
-    expect(out.stagnantDiag).toBe(null);
-  });
+  // (PRESET_ARCHETYPE-retirement) the `WITHOUT the PRESET_ARCHETYPE line ... => path:despun` single-coverage-
+  // fragility `it` is RETIRED: it exercised the condition-LESS bridge fallback (null archetype → despun), which
+  // is exactly the dispatch bridge being retired — post-retirement a condition-less caller THROWS, so there is
+  // no condition-bearing analog (a null-archetype condition-bearing Venus routes to stagnant-lid, not despun).
+  // PRESET_ARCHETYPE's SURVIVING load-bearing role (radius selection) is guarded by the dispatch-oracle GARBLE test.
 });

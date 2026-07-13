@@ -19,25 +19,14 @@
 // oracle MUST reproduce it row-for-row: 13 writer-equal + 2 divergent {Frozen(airless), Eyeball(locked
 // temperate)}; Neptunian/Sub-Neptune are writer-EQUAL both ways (a taxonomy NOTE, not a divergence).
 import { describe, it, expect } from 'vitest';
-import {
-  isEarthlikePlatePath, isShellReliefPath, isVolcanicPath, isStagnantLidPath,
-} from '../planet-lod-rivers.js';
 import { computeE1, modalRegime } from '../src/worldengine/base/e1Regime.js';
 import { deriveConditionVector } from '../body-condition-vector.js';
 import { DRIVER_PRESETS, PRESET_ARCHETYPE } from '../driver-presets.js';
 
-// ── writerUnder(PRESET_ARCHETYPE): the REAL 5-way dispatch, composing the exported predicates in the exact
-//    writeBodyRelief (planet-lod-rivers.js:454-496) order. ──
-function classifyWriterPath(archetype, locked) {
-  if (isEarthlikePlatePath(archetype, locked)) return 'plate';
-  if (isShellReliefPath(archetype, locked)) return 'shell';
-  if (isVolcanicPath(archetype, locked)) return 'volcanic';
-  if (isStagnantLidPath(archetype, locked)) return 'stagnant-lid';
-  return 'despun';
-}
-function writerToday(name) {
-  return classifyWriterPath(PRESET_ARCHETYPE[name], !!DRIVER_PRESETS[name].tidalState?.locked);
-}
+// ── writerUnder(PRESET_ARCHETYPE): PRESET_ARCHETYPE-retirement (2026-07-13) — the classifyWriterPath /
+//    writerToday chain (composed from the four now-DELETED dispatch predicates) is retired; writer_today is
+//    read straight from the ORACLE_PREVIEW pin below (its `today` column was empirically the archetype-chain
+//    writer at build time, from oracle-preview.mjs), asserted against the LIVE shadow writerE1. ──
 
 // ── writerUnder(e1): map the REAL computeE1 tuple → writer path (subtractive gate, §Slice C). The band + icy
 //    edge constants below MIRROR e1Regime's module-private values (BUILD-PLAN §4.5); they are re-derived here
@@ -70,13 +59,7 @@ const vec = (name) => { const fp = DRIVER_PRESETS[name]; return deriveConditionV
 
 // The 15 archetype-mapped presets (Object-key order; Mars + Hot Jupiter drop out — not in PRESET_ARCHETYPE).
 const NAMES15 = Object.keys(DRIVER_PRESETS).filter((n) => n in PRESET_ARCHETYPE);
-const rows = NAMES15.map((name) => {
-  const cv = vec(name);
-  const today = writerToday(name), e1path = writerE1(cv);
-  return { name, today, e1path, equal: today === e1path, tuple: computeE1(cv, 1) };
-});
-const row = (name) => rows.find((r) => r.name === name);
-const tup = (name) => JSON.stringify(row(name).tuple);   // full e1 tuple for failure messages (AC3: print on divergence)
+// `rows` reads writer_today from the ORACLE_PREVIEW pin (defined below) → relocated after it (avoids the TDZ).
 
 // ── The row-for-row table EMPIRICALLY PINNED by oracle-preview.mjs (the AC3 counterpart to phi-calib.mjs). ──
 const ORACLE_PREVIEW = {
@@ -111,6 +94,16 @@ const EXPECTED_DIVERGENCES = {
     disposition: 'Today wins — V2-3 gives dispatch locked-awareness; locked temperate rocky stays eyeball-despun byte-identical.',
   },
 };
+
+// writer_today is now PINNED from ORACLE_PREVIEW (the deleted predicate chain's build-time output); writerE1 is
+// the LIVE shadow-E1 (unchanged). equal = pinned-today === live-e1 → the 13-equal/2-divergent tally stays real.
+const rows = NAMES15.map((name) => {
+  const cv = vec(name);
+  const today = ORACLE_PREVIEW[name].today, e1path = writerE1(cv);
+  return { name, today, e1path, equal: today === e1path, tuple: computeE1(cv, 1) };
+});
+const row = (name) => rows.find((r) => r.name === name);
+const tup = (name) => JSON.stringify(row(name).tuple);   // full e1 tuple for failure messages (AC3: print on divergence)
 
 describe('V2-1 AC3 — conformance oracle: scope', () => {
   it('adjudicates exactly the 15 archetype-mapped presets (Mars + Hot Jupiter excluded)', () => {

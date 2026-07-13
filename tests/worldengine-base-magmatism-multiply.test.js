@@ -18,6 +18,11 @@ import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import {
   buildIrregularSphere, writeBodyRelief, DEFAULT_GRAIN_DRIVERS,
 } from '../planet-lod-rivers.js';
+// PRESET_ARCHETYPE-retirement (2026-07-13): the AC5 dispatch `it`s migrate to condition-bearing bundles.
+import { DRIVER_PRESETS } from '../driver-presets.js';
+import { buildNeutralBodyDrivers } from '../body-drivers.js';
+import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveUniforms } from '../planet-lod-lab-core.js';
 
 const TARGET_N = 600, LLOYD = 2;
 const SEEDS = [1, 2, 3, 7, 42];
@@ -28,6 +33,16 @@ const carrierOf = () => makeSphereField(buildIrregularSphere(TARGET_N, LLOYD));
 const LAVA_DRIVERS = { tidalHeating: 7.82e5, massGravity: 0.80, volatileFraction: 0.02 };
 const MAGMA_DRIVERS = { tidalHeating: 7.58e7, massGravity: 2.22, volatileFraction: 0.0 };
 const meanOverMask = (U, mask) => { let s = 0, n = 0; for (let i = 0; i < U.length; i++) if (mask[i]) { s += U[i]; n++; } return n ? s / n : 0; };
+// Condition-bearing bundle for a representative preset (bundle17 idiom). deriveUniforms(fp,1.0)==QUALITY_TIER.
+function condBundle(name, opts = {}) {
+  const fp = DRIVER_PRESETS[name];
+  const u = deriveUniforms(fp, 1.0);
+  return {
+    grainDrivers: DEFAULT_GRAIN_DRIVERS,
+    bodyDrivers: { ...buildNeutralBodyDrivers(u, fp), condition: deriveConditionVector(fp, u, fp.radiusEarth) },
+    ...opts,
+  };
+}
 
 // ── AC1 — byte-identical at the neutral reference + mapper determinism ────────────────────────────────
 describe('#4-MULTIPLY AC1 — byte-identical at MAGMA_REF + determinism', () => {
@@ -112,26 +127,41 @@ describe('#4-MULTIPLY AC5 — no-clobber + dispatch', () => {
   const relief = (c, opts) => writeBodyRelief(c, { grainDrivers: DEFAULT_GRAIN_DRIVERS, ...opts });
 
   it('off the volcanic path magmaDiag is null (plate / shell / despun), even though bodyDrivers is non-null', () => {
-    for (const [arch, locked] of [['terrestrial', false], ['ocean', false], ['gas-giant', false]]) {
-      const r = relief(carrierOf(), { archetype: arch, locked, bodyDrivers: MAGMA_DRIVERS, macroSeed: 3 });
-      expect(r.magmaDiag, `${arch}: magmaDiag null off the volcanic path`).toBeNull();
+    // M9: route via the condition (Rocky/Ocean → plate, Gas → despun); MAGMA_DRIVERS merged onto the neutral
+    // bodyDrivers is inert off the volcanic path (routing reads the nested .condition, not the flat driver slots).
+    for (const name of ['Rocky (Earthlike)', 'Ocean (temperate)', 'Gas giant (Jovian)']) {
+      const b = condBundle(name, { macroSeed: 3 });
+      b.bodyDrivers = { ...b.bodyDrivers, ...MAGMA_DRIVERS };
+      const r = relief(carrierOf(), b);
+      expect(r.magmaDiag, `${name}: magmaDiag null off the volcanic path`).toBeNull();
     }
   });
 
-  it('the volcanic path with bodyDrivers=null (existing callers) is byte-identical to the #4a writer', () => {
+  it('the volcanic path threads the driver tune end-to-end (byte-identical to the driver-responsive writer)', () => {
+    // (M10 REPURPOSED, PRESET_ARCHETYPE-retirement) the old bridge property — bodyDrivers=null → tune null → #4a
+    // byte-identical — was a condition-LESS artifact. Post-flip the volcanic path is DRIVER-RESPONSIVE (like shell,
+    // V2-5s): a condition-bearing Lava carries a NON-null magma tune. This anchors the end-to-end dispatch → the
+    // driver-responsive writeMagmatismSphere call (the volcanic analog of shell-multiply call-site-1). Writer-level
+    // byte-identity at MAGMA_REF (tune null) is still owned by AC1 above, untouched.
+    const lavaFp = DRIVER_PRESETS['Lava (hot airless)'];
+    const lavaNeutral = buildNeutralBodyDrivers(deriveUniforms(lavaFp, 1.0), lavaFp);
+    const lavaTune = magmaDriversToTune(lavaNeutral);
+    expect(lavaTune, 'Lava sits off MAGMA_REF → non-null tune').not.toBeNull();
     for (const s of SEEDS) {
       const cVia = carrierOf();
-      const via = relief(cVia, { archetype: 'lava', locked: true, bodyDrivers: null, macroSeed: s, T_eq: 950 });
+      const via = relief(cVia, condBundle('Lava (hot airless)', { macroSeed: s, T_eq: 950 }));
       expect(via.path).toBe('volcanic');
-      expect(via.magmaDiag.appliedTune, 'appliedTune null with null bodyDrivers').toBeNull();
+      expect(via.magmaDiag.appliedTune, `seed ${s}: appliedTune threads the Lava driver tune`).toEqual(lavaTune);
       const cBase = carrierOf();
-      writeMagmatismSphere(cBase, {}, { macroSeed: s, locked: true, T_ss: 950 * 1.4 });
-      expect(Array.from(cVia.height), `seed ${s}: volcanic bodyDrivers=null == #4a`).toEqual(Array.from(cBase.height));
+      writeMagmatismSphere(cBase, lavaNeutral, { macroSeed: s, locked: true, T_ss: 950 * 1.4, tune: lavaTune });
+      expect(Array.from(cVia.height), `seed ${s}: volcanic dispatch == driver-responsive writer`).toEqual(Array.from(cBase.height));
     }
   });
 
-  it('the volcanic path with real drivers routes to volcanic and applies a non-null tune', () => {
-    const r = relief(carrierOf(), { archetype: 'lava', locked: true, bodyDrivers: MAGMA_DRIVERS, macroSeed: 1, T_eq: 2000 });
+  it('the volcanic path with real (off-REF) drivers routes to volcanic and applies a non-null tune', () => {
+    const b = condBundle('Lava (hot airless)', { macroSeed: 1, T_eq: 2000 });   // M11
+    b.bodyDrivers = { ...b.bodyDrivers, ...MAGMA_DRIVERS };
+    const r = relief(carrierOf(), b);
     expect(r.path).toBe('volcanic');
     expect(r.magmaDiag.appliedTune, 'appliedTune non-null with real drivers').not.toBeNull();
   });

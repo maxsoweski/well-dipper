@@ -20,11 +20,9 @@ import { classifyLidPath, isUnbrokenLidPath } from '../src/worldengine/base/lidR
 import { computeE1, L_STRONG, SHOULDER_LO } from '../src/worldengine/base/e1Regime.js';
 import { deriveConditionVector } from '../body-condition-vector.js';
 import { DRIVER_PRESETS, PRESET_ARCHETYPE } from '../driver-presets.js';
-// The SHIPPED dispatch predicates (composed exactly as the V2-1 conformance oracle does) + the shell
-// regime resolver — the REFERENCE for the "two despun destinations distinct" assert (NOT re-implemented).
-import {
-  isEarthlikePlatePath, isShellReliefPath, isVolcanicPath, isStagnantLidPath,
-} from '../planet-lod-rivers.js';
+// PRESET_ARCHETYPE-retirement (2026-07-13): the four label-keyed dispatch predicates are DELETED; the
+// "two despun destinations distinct" assert re-anchors to the SURVIVING shellRegimeOf resolver (the
+// writer-module export the bridge locked-fallback itself used).
 import { shellRegimeOf } from '../src/worldengine/base/shellRelief.js';
 
 const SEEDS = [1, 2, 3, 7, 42];
@@ -213,24 +211,17 @@ describe('V2-2a AC-SUBTRACTIVE-GATE — isUnbrokenLidPath true ONLY for heat-pip
   });
 });
 
-describe('V2-2a AC-SUBTRACTIVE-GATE — the two despun destinations resolve distinctly (shipped predicates)', () => {
-  // Composed exactly as writeBodyRelief / the V2-1 conformance oracle dispatches — REFERENCE, not re-implemented.
-  const dispatchPath = (archetype, locked) => {
-    if (isEarthlikePlatePath(archetype, locked)) return 'plate';
-    if (isShellReliefPath(archetype, locked)) return 'shell';
-    if (isVolcanicPath(archetype, locked)) return 'volcanic';
-    if (isStagnantLidPath(archetype, locked)) return 'stagnant-lid';
-    return 'despun';
-  };
+describe('V2-2a AC-SUBTRACTIVE-GATE — the two despun destinations resolve distinctly (surviving shellRegimeOf resolver)', () => {
+  // (PRESET_ARCHETYPE-retirement) re-anchored to the SURVIVING shellRegimeOf resolver (writer-module export)
+  // instead of the deleted predicate chain: it IS the resolver the bridge locked-fallback used, so the "distinct
+  // destinations" claim is asserted at the real source, not a re-implemented archetype chain.
 
   it('a despun rocky that falls off the pilot lands distinctly by lock state: locked→shell eyeball-despun, unlocked→despun', () => {
-    expect(dispatchPath(null, true)).toBe('shell');    // locked → shell locked-fallback
-    expect(dispatchPath(null, false)).toBe('despun');  // unlocked → final zonal fallback
-    expect(shellRegimeOf(null, true)).toBe('eyeball-despun');   // the locked destination is specifically eyeball-despun
+    expect(shellRegimeOf(null, true)).toBe('eyeball-despun');   // locked → the shell locked-fallback destination
+    expect(shellRegimeOf(null, false)).toBe(null);              // unlocked → no shell regime → final zonal despun
     // real Mars is UNLOCKED and archetype-unmapped → final despun (§5.1 note; Mars not in PRESET_ARCHETYPE)
     expect(PRESET_ARCHETYPE['Mars (arid rocky)']).toBeUndefined();
-    expect(dispatchPath(PRESET_ARCHETYPE['Mars (arid rocky)'], false)).toBe('despun');
     // the two destinations are genuinely DISTINCT
-    expect(dispatchPath(null, true)).not.toBe(dispatchPath(null, false));
+    expect(shellRegimeOf(null, true)).not.toBe(shellRegimeOf(null, false));
   });
 });

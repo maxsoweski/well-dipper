@@ -17,9 +17,14 @@ import { writePlateUpliftSphere } from '../src/worldengine/base/plates.js';
 import { writeGrainSphere, writeHeightSphere } from '../src/worldengine/base/tectonic.js';
 import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import {
-  buildIrregularSphere, writeBodyRelief, isVolcanicPath, isEarthlikePlatePath, isShellReliefPath,
-  DEFAULT_GRAIN_DRIVERS,
+  buildIrregularSphere, writeBodyRelief, DEFAULT_GRAIN_DRIVERS,
 } from '../planet-lod-rivers.js';
+// PRESET_ARCHETYPE-retirement (2026-07-13): the label-keyed predicates are gone; the dispatch AC7/AC8/AC9
+// callers migrate to condition-bearing bundles routing to the SAME writers. deriveUniforms(fp,1.0)==QUALITY_TIER.
+import { DRIVER_PRESETS } from '../driver-presets.js';
+import { buildNeutralBodyDrivers } from '../body-drivers.js';
+import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveUniforms } from '../planet-lod-lab-core.js';
 
 const TARGET_N = 600, LLOYD = 2;
 const SEEDS = [1, 2, 3, 7, 42];
@@ -32,6 +37,17 @@ const buildMagma = (macroSeed, locked) => {
   return { c, diag };
 };
 const relief = (c, opts) => writeBodyRelief(c, { grainDrivers: DEFAULT_GRAIN_DRIVERS, ...opts });
+// Condition-bearing bundle for a representative preset (the shipped bundle17 idiom). Neutral drivers → REF → tune
+// null for plate/shell/despun (byte-identical); the VOLCANIC path is driver-responsive (Lava tune non-null, §M8).
+function condBundle(name, opts = {}) {
+  const fp = DRIVER_PRESETS[name];
+  const u = deriveUniforms(fp, 1.0);
+  return {
+    grainDrivers: DEFAULT_GRAIN_DRIVERS,
+    bodyDrivers: { ...buildNeutralBodyDrivers(u, fp), condition: deriveConditionVector(fp, u, fp.radiusEarth) },
+    ...opts,
+  };
+}
 
 // EXACT plate reference (same call/args/seed as the plate branch of writeBodyRelief) — the AC7 baseline.
 function plateReference(macroSeed) {
@@ -165,7 +181,7 @@ describe('magmatism — AC7 no-clobber of the plate path', () => {
     const seed = 1;
     const ref = plateReference(seed);
     const c = carrierOf();
-    const out = relief(c, { archetype: 'terrestrial', locked: false, macroSeed: seed, heightSeed: 'e6:' + seed });
+    const out = relief(c, condBundle('Rocky (Earthlike)', { macroSeed: seed, heightSeed: 'e6:' + seed }));   // M5
     expect(out.path).toBe('plate');
     expect(out.magmaDiag).toBe(null);
     expect(out.shellDiag).toBe(null);
@@ -174,7 +190,7 @@ describe('magmatism — AC7 no-clobber of the plate path', () => {
   });
   it('ocean unlocked => path:plate, magmaDiag null', () => {
     const c = carrierOf();
-    const out = relief(c, { archetype: 'ocean', locked: false, macroSeed: 1, heightSeed: 'e6:1' });
+    const out = relief(c, condBundle('Ocean (temperate)', { macroSeed: 1, heightSeed: 'e6:1' }));   // M5
     expect(out.path).toBe('plate');
     expect(out.magmaDiag).toBe(null);
   });
@@ -185,7 +201,7 @@ describe('magmatism — AC8 no-clobber of shell + despun; isVolcanicPath gating'
   it('Europa (ice) => path:shell, byte-identical, magmaDiag null', () => {
     const seed = 5;
     const c = carrierOf();
-    const out = relief(c, { archetype: 'ice', locked: true, macroSeed: seed, heightSeed: 'e6:' + seed });
+    const out = relief(c, condBundle('Europa (icy moon)', { macroSeed: seed, heightSeed: 'e6:' + seed }));   // M6
     expect(out.path).toBe('shell');
     expect(out.magmaDiag).toBe(null);
     expect(out.shellDiag).toBeTruthy();
@@ -195,7 +211,7 @@ describe('magmatism — AC8 no-clobber of shell + despun; isVolcanicPath gating'
     const seed = 7;
     const ref = despunReference(seed);
     const c = carrierOf();
-    const out = relief(c, { archetype: 'impact-airless', locked: false, macroSeed: seed, heightSeed: 'e6:' + seed });
+    const out = relief(c, condBundle('Mars (arid rocky)', { macroSeed: seed, heightSeed: 'e6:' + seed }));   // M7
     expect(out.path).toBe('despun');
     expect(out.magmaDiag).toBe(null);
     expect(Array.from(c.height)).toEqual(Array.from(ref.height));
@@ -204,20 +220,14 @@ describe('magmatism — AC8 no-clobber of shell + despun; isVolcanicPath gating'
     const seed = 3;
     const ref = despunReference(seed);
     const c = carrierOf();
-    const out = relief(c, { archetype: 'gas-giant', locked: false, macroSeed: seed, heightSeed: 'e6:' + seed });
+    const out = relief(c, condBundle('Gas giant (Jovian)', { macroSeed: seed, heightSeed: 'e6:' + seed }));   // M7
     expect(out.path).toBe('despun');
     expect(out.magmaDiag).toBe(null);
     expect(Array.from(c.height)).toEqual(Array.from(ref.height));
   });
-  it('isVolcanicPath is FALSE for every non-volcanic archetype (only the volcanic set matches)', () => {
-    for (const k of ['terrestrial', 'ocean', 'ice', 'volatile', 'eyeball', 'gas-giant', 'sub-neptune', 'carbon', 'crystal', 'impact-airless']) {
-      expect(isVolcanicPath(k, false), `${k} unlocked`).toBe(false);
-      expect(isVolcanicPath(k, true), `${k} locked`).toBe(false);
-    }
-    // sanity: the plate + shell predicates are unchanged by the volcanic addition
-    expect(isEarthlikePlatePath('terrestrial', false)).toBe(true);
-    expect(isShellReliefPath('ice', false)).toBe(true);
-  });
+  // (R5, PRESET_ARCHETYPE-retirement) the `isVolcanicPath is FALSE for every non-volcanic archetype` truth-table
+  // `it` (+ its isEarthlikePlatePath/isShellReliefPath sanity lines) is RETIRED with the predicates; the routing
+  // it guarded is now covered by the dispatch-oracle 17-preset derived routes + M8 (lava/volcanic → volcanic).
 });
 
 // ── AC9 (headless part) — the Lava & Magma presets route to the volcanic regime ─────────────────────
@@ -226,21 +236,21 @@ describe('magmatism — AC8 no-clobber of shell + despun; isVolcanicPath gating'
 // NAMED_BODY with archetype null otherwise). Both presets are tidally locked. The live magmaOceanMask
 // locked-vs-unlocked assertion is SLICE B.
 describe('magmatism — AC9 (headless) Lava/Magma route to path:volcanic', () => {
-  it("archetype 'lava' (Lava + Magma) routes to path:volcanic, locked or not", () => {
-    for (const L of LOCKS) {
-      const c = carrierOf();
-      const out = relief(c, { archetype: 'lava', locked: L, macroSeed: 1234, heightSeed: 'e6:1234' });
-      expect(out.path, `lava locked ${L}`).toBe('volcanic');
-      expect(out.plateDiag).toBe(null);
-      expect(out.shellDiag).toBe(null);
-      expect(out.magmaDiag, `lava locked ${L}: magmaDiag`).toBeTruthy();
-      expect(out.magmaDiag.plumeCount).toBeGreaterThan(0);
-      expect(isVolcanicPath('lava', L)).toBe(true);
-    }
-  });
-  it("the 'volcanic' short-key alias also routes to path:volcanic (unlocked)", () => {
+  it('the Lava preset routes to path:volcanic (heat-pipe rule 3a → router pure-weak)', () => {
+    // M8: 'lava'/'volcanic' archetype → Lava condition (cls rocky, m_hp>0 → (3a) unbrokenLid → volcanic). Lava is
+    // intrinsically locked, so the bridge's "locked or not" arg no longer applies (no unlocked-Lava preset); the
+    // route is condition-driven. (R6) the isVolcanicPath('lava',L) predicate assertion is retired with the predicate.
     const c = carrierOf();
-    const out = relief(c, { archetype: 'volcanic', locked: false, macroSeed: 9, heightSeed: 'e6:9' });
+    const out = relief(c, condBundle('Lava (hot airless)', { macroSeed: 1234, heightSeed: 'e6:1234' }));
+    expect(out.path).toBe('volcanic');
+    expect(out.plateDiag).toBe(null);
+    expect(out.shellDiag).toBe(null);
+    expect(out.magmaDiag, 'Lava: magmaDiag').toBeTruthy();
+    expect(out.magmaDiag.plumeCount).toBeGreaterThan(0);
+  });
+  it('the Magma preset also routes to path:volcanic', () => {
+    const c = carrierOf();
+    const out = relief(c, condBundle('Magma (K2-141b)', { macroSeed: 9, heightSeed: 'e6:9' }));
     expect(out.path).toBe('volcanic');
     expect(out.magmaDiag).toBeTruthy();
   });
@@ -500,7 +510,9 @@ describe('magmatism — AC9 T_ss-scaled substellar basin extent (F41 iso-angle)'
   }
   const routeBody = (T_eq, macroSeed) => {
     const c = carrierOf();
-    const out = relief(c, { archetype: 'lava', locked: true, T_eq, macroSeed, heightSeed: 'e6:' + macroSeed });
+    // M8: 'lava' locked → Lava condition; T_eq is threaded as the top-level param (locked from cond.tidalState →
+    // T_ss = T_eq*1.4), so the F41 iso-angle basin math is unchanged. The Lava driver tune does not touch T_ss.
+    const out = relief(c, condBundle('Lava (hot airless)', { T_eq, macroSeed, heightSeed: 'e6:' + macroSeed }));
     return { c, out };
   };
 

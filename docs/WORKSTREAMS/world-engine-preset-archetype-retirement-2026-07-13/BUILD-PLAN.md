@@ -306,3 +306,47 @@ at the point of change (grep the id) AND is summarized here. Claims re-verified 
 | **minor-2** (dispatch-oracle line 167 reduced meaning) | minor | **FOLDED** | After the §4 re-anchor (`rows[].today = ADJUDICATION[name].today`), the second row `it`'s `expect(r.today).toBe(exp.today)` (vs `EXPECTED_REROUTES`) becomes pinned-table-vs-pinned-table, not live coverage. §4 only enumerated dropping the *first* `it`'s tautological line. Added a reduced-coverage note in §4 so this surviving line is not mistaken for live retirement coverage (real teeth = `r.derived.*` LIVE vs pinned). Count unchanged, stays green. |
 | **minor-3** (standing gate says 24, HEAD is 25) | minor | **NO CHANGE NEEDED** | The plan is already RIGHT: it pins the enumerated dispatch-oracle count at **25** (RG-D, §4; the appliedTune probe-parity `it` shipped at 9322645). This is the plan correct against a stale standing gate, not a plan defect — accepted under the standing gate's "or the plan's enumerated new count" clause. Re-confirmed 25 passing at `d721fa4`. No edit. |
 | **minor-4** (stale header SHA) | minor | **FOLDED** | Plan header line 3 + the routing-claims line said branch @ `a892f28`; actual HEAD is `d721fa4`. Non-load-bearing (all symbol/route claims re-verified against live `d721fa4`), but both SHA references refreshed to `d721fa4`. |
+
+## §10 — Slice A build deviations (2026-07-13, builder)
+
+Recorded per the standing "smallest faithful correction" rule. Baseline empirically re-confirmed at build:
+full `npx vitest run` = `Test Files 17 failed | 119 passed (136)`, `Tests 4 failed | 1968 passed (1972)`
+(the 4 = KnownObjects ×3 + GalacticFeatures ×1; total dropped 1980→1972 = the 8 enumerated retirements
+R1/R2/R3/R5/R7/stagnantlid-`WITHOUT`/shell-`isShellReliefPath`/R9). Dispatch-oracle = **25**. Byte-identity
+**83/83**. Import-specifier gate **empty**. All 12 touched suites green, nonzero, on the DERIVED path with the
+bridge still present. HEAD at build = `30acca3` (the §9-fold docs commit atop `d721fa4`; code identical to `d721fa4`).
+
+1. **VOLCANIC path is DRIVER-RESPONSIVE — the M8/M10/M12 "neutral Lava → tune null → byte-identical to `#4a`"
+   premise is empirically FALSE (must-fix, corrected).** Probed at HEAD: `magmaDriversToTune(neutral Lava)` is
+   **NON-null** (Lava sits off MAGMA_REF), and the derived Lava volcanic field is byte-identical to the
+   **driver-responsive** writer call `writeMagmatismSphere(lavaNeutral, {…, tune: magmaDriversToTune(lavaNeutral)})`,
+   NOT the tune-null `#4a`/`volcanicReference` (verified all seeds, T_ss ∈ {0, 1330}). This is the volcanic analog
+   of the shell V2-5s driver-response the plan already knew about (cf. R1). The §3 lemma's `unbrokenLid` line and
+   the M8/M10/M12 proof sketches that assumed tune-null for volcanic are wrong. Faithful corrections (within
+   designDecision #4a's "except the enumerated repurposings" clause):
+   - **M10** (`worldengine-base-magmatism-multiply`, the "volcanic bodyDrivers=null byte-identical to #4a" `it`):
+     REPURPOSED — `appliedTune` asserted `=== magmaDriversToTune(lavaNeutral)` (non-null); byte reference re-anchored
+     to the driver-responsive writer call (the volcanic analog of shell-multiply call-site-1). Writer-level
+     tune-null-at-MAGMA_REF byte-identity stays owned by this file's AC1 (untouched).
+   - **M12** (`worldengine-base-stagnantlid-structure`, AC6 no-clobber lava case): `volcanicReference` updated to
+     apply the Lava tune (`writeMagmatismSphere(LAVA_NEUTRAL, {…, T_ss:0, tune: LAVA_TUNE})`) → derived Lava byte-identical.
+   - **M8** (`worldengine-base-magmatism-structure`, AC9 headless + T_ss basin) and **M16** (`worldengine-shell-regime-gate`,
+     locked-lava): UNAFFECTED — neither asserts volcanic byte-identity; the F41 basin geometry is T_ss-driven,
+     tune-independent (verified green). The AC9 headless second `it` was migrated to the Magma preset (both Lava
+     and Magma are the volcanic bodies) rather than the moot 'volcanic' short-key alias.
+
+2. **`relief()`-wrapped condition-less callers the plan's `writeBodyRelief(` grep did not individually enumerate
+   (Slice A must leave zero bridge callers).** Faithfully dispositioned:
+   - `worldengine-base-stagnantlid-structure` AC7 `WITH the archetype 'stagnant-lid' → path:stagnant-lid`:
+     MIGRATED to Venus condition (rule 3c → pure-strong → 'venus-stagnant-lid'; all assertions hold).
+   - `worldengine-base-stagnantlid-structure` AC7 `WITHOUT the PRESET_ARCHETYPE line … => path:despun`
+     (single-coverage fragility): RETIRED — it exercised the condition-LESS bridge fallback being retired
+     (null archetype → despun); no condition-bearing analog exists (a condition-bearing null-archetype Venus routes
+     to stagnant-lid, not despun); PRESET_ARCHETYPE's SURVIVING radius role is guarded by the dispatch-oracle GARBLE test.
+   - `worldengine-shell-regime-gate` AC8 `LOCKED gas-giant => despun` (within M15's despun group): MIGRATED to
+     `Hot Jupiter (locked giant)` condition (locked gas → despun, dispatch-oracle reroute #2) — preserving the
+     LOCKED-gas-world semantic an unlocked Gas-giant-Jovian would not.
+   - `worldengine-shell-regime-gate` AC9 `Europa fall-through: archetype=null + locked => shell eyeball-despun`
+     (R8 described this `it` as "uses shellRegimeOf", but the code used a condition-less `relief` call): MIGRATED
+     the dispatch call to `Eyeball (locked temperate)` condition (rule 3b → 'eyeball-despun') AND folded in the
+     surviving `shellRegimeOf` resolver checks per R8, replacing the deleted `isShellReliefPath predicate` `it`.

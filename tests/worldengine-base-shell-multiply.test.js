@@ -584,8 +584,10 @@ describe('V2-5s AC-ZERO-CLOBBER (dispatch) — both call sites thread the tune b
     archetype: null, locked: false, grainDrivers: DEFAULT_GRAIN_DRIVERS, bodyDrivers,
     macroSeed: seed, T_eq: fpOf(regime).T_eq ?? 288,
   });
-  // migration-bridge archetype short keys (call site 2): condition ABSENT ⇒ bodyDrivers null ⇒ shellDriversToTune(null,·) null.
-  const BRIDGE_ARCH = { 'icy-active': 'ice', 'volatile-cold': 'volatile', 'eyeball-despun': 'eyeball' };
+  // (R9, PRESET_ARCHETYPE-retirement) the migration-bridge short-key map + its "call site 2" `it` are RETIRED
+  // with the bridge: that `it` called writeBodyRelief with condition-LESS bodyDrivers:null (post-retirement it
+  // THROWS), and its coverage — shell routes + appliedTune null at REF + byte-identity to the shipped writer —
+  // is redundant with call site 1 (condition-bearing derived shell) below, which stays green unchanged.
 
   it('call site 1 (condition-bearing derived shell): every shipped icy preset routes shell, appliedTune PRESENT + null at REF, carrier byte-identical to the shipped writer call', () => {
     for (const r of REGIMES) {
@@ -627,23 +629,6 @@ describe('V2-5s AC-ZERO-CLOBBER (dispatch) — both call sites thread the tune b
         // gFactor = 0.5^-0.5 = 1.414 scales RIDGE_AMP (lineamentRelief is present in ALL three regimes via
         // DESPIN_W+DIURNAL_W) ⇒ carrier.height MUST move. A1 is the headline axis — non-vacuous everywhere.
         expect(Array.from(cDrv.height), `${tag}: driven carrier.height differs from REF`).not.toEqual(Array.from(cRef.height));
-      }
-    }
-  });
-
-  it('call site 2 (migration bridge, bodyDrivers null): ice/volatile/eyeball archetypes route shell, appliedTune PRESENT + null, carrier byte-identical to the shipped writer call', () => {
-    for (const r of REGIMES) {
-      const arch = BRIDGE_ARCH[r];
-      for (const s of SEEDS) {
-        const c = carrierOf();
-        const res = writeBodyRelief(c, { archetype: arch, locked: false, grainDrivers: DEFAULT_GRAIN_DRIVERS, bodyDrivers: null, macroSeed: s });
-        const tag = `bridge ${arch}→${r} seed ${s}`;
-        expect(res.path, `${tag}: routes shell`).toBe('shell');
-        expect(res.shellDiag.regime, `${tag}: regime`).toBe(r);
-        expect('appliedTune' in res.shellDiag, `${tag}: appliedTune present`).toBe(true);
-        expect(res.shellDiag.appliedTune, `${tag}: appliedTune null (bodyDrivers null → tune null)`).toBeNull();
-        const cRef = carrierOf(); writeShellReliefSphere(cRef, DEFAULT_GRAIN_DRIVERS, { macroSeed: s, regime: r });
-        expect(Array.from(c.height), `${tag}: carrier.height byte-identical to the shipped writer call`).toEqual(Array.from(cRef.height));
       }
     }
   });

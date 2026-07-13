@@ -37,7 +37,6 @@ import { fileURLToPath } from 'node:url';
 import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import {
   buildIrregularSphere, writeBodyRelief, DEFAULT_GRAIN_DRIVERS,
-  isEarthlikePlatePath, isShellReliefPath, isVolcanicPath, isStagnantLidPath,
 } from '../planet-lod-rivers.js';
 import { computeE1 } from '../src/worldengine/base/e1Regime.js';
 import { classifyLidPath, isUnbrokenLidPath } from '../src/worldengine/base/lidResponse.js';
@@ -79,17 +78,10 @@ function derivedRoute(name, seed) {
   return { path: r.path, shellRegime: r.shellDiag ? r.shellDiag.regime : null };
 }
 
-// writer_today: the legacy archetype chain, composed from the FOUR exported predicates in bridge order
-// (identical to the V2-1 oracle's classifyWriterPath — reuse, not re-implement).
-function classifyWriterPath(archetype, locked) {
-  if (isEarthlikePlatePath(archetype, locked)) return 'plate';
-  if (isShellReliefPath(archetype, locked)) return 'shell';
-  if (isVolcanicPath(archetype, locked)) return 'volcanic';
-  if (isStagnantLidPath(archetype, locked)) return 'stagnant-lid';
-  return 'despun';
-}
-const writerToday = (name) =>
-  classifyWriterPath(PRESET_ARCHETYPE[name] ?? null, !!DRIVER_PRESETS[name].tidalState?.locked);
+// writer_today: PRESET_ARCHETYPE-retirement (2026-07-13) — the legacy archetype chain (classifyWriterPath /
+// writerToday, composed from the four now-DELETED dispatch predicates) is retired; the retirement evidence is
+// preserved by reading `today` straight from the pinned ADJUDICATION table below (its `today` column was
+// empirically the archetype-chain writer at build time), asserted against the LIVE `derived` route.
 
 // The condition vector + tuple the rule chain reads (derived=null → helper fallbacks, like the V2-1 oracle).
 const vec = (name) => { const fp = DRIVER_PRESETS[name]; return deriveConditionVector(fp, null, fp.radiusEarth); };
@@ -129,7 +121,7 @@ const EXPECTED_REROUTES = {
 };
 
 const rows = NAMES17.map((name) => {
-  const today = writerToday(name);
+  const today = ADJUDICATION[name].today;   // pinned (was writerToday via the now-deleted predicate chain)
   const derived = derivedRoute(name, 1);
   return { name, today, derived, equal: today === derived.path };
 });
@@ -149,7 +141,8 @@ describe('V2-3 AC-ORACLE-17 — the §0 adjudication table, row-for-row (writer_
     for (const r of rows) {
       const exp = ADJUDICATION[r.name];
       expect(exp, `${r.name}: not in the pinned table`).toBeDefined();
-      expect(r.today, `${r.name} writer_today`).toBe(exp.today);
+      // (r.today === exp.today is now tautological — rows[].today reads ADJUDICATION[name].today — so it is dropped;
+      //  the teeth are the LIVE derived route vs the pinned table, the actual retirement evidence.)
       expect(r.derived.path, `${r.name} writer_derived path`).toBe(exp.derived.path);
       expect(r.derived.shellRegime, `${r.name} derived shell sub-regime`).toBe(exp.derived.shellRegime);
     }
