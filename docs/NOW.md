@@ -98,8 +98,24 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > — same findAt branch as teleport, plumbing untouched). ⚠ Inc-3 BINDING inputs: name-first join
 > (unchanged); ExoticOverlay._applyFungal 1-candidate crash must be fixed BEFORE D-primaries become
 > reachable; injected known planets need migration/stability immunity (TRAPPIST-class).
-> **▶ NEXT: Increment 3 = AC3+AC4 bulk overlay merge (fresh session recommended).** AC2's NavComputer
-> search seam is lane-D-adjacent — coordinator routing needed BEFORE Increment 4.
+> **▶ Increment 3 (AC3+AC4 bulk overlay merge) BUILT `c68c1fb` + VERIFIED + LIVE-DRIVEN (2026-07-13).**
+> Pre-work `d417a39` (fungal 1-candidate fix, TDD, cadence-preserving) + design `240ec99` (2 explorer
+> passes — both died at StructuredOutput, findings recovered from transcripts → new rule
+> `feedback_workflow-structuredoutput-hazard.md`). Landed: RealSystemOverlay (name-first join, dup-name
+> position disambiguator, display-name→hostname bridge, unready-warn); supplement+contents ride
+> RealStarCatalog.load() Promise.all (15,613 stars — TRAPPIST-1/Proxima arrivable); known-planet
+> immunity (migration/resonance/cull/exotic + slot guarantee — the ~4,000-host spurious-binary threat:
+> 2,437 hosts have a planet <0.1 AU); TWO surgical main.js edits (warp+teleport else-branches,
+> coordinator-flagged); merged display names (real designations); cap §5. Adversarial review 1 MED
+> (fill-letter dup of known designation under migration reorder) fixed in-thread + pinned. Suite
+> 1278→1321; ProcgenSnapshot 24/24. Verify full at `c68c1fb`: **AC4 + AC7 + AC10 PASS 3/3**;
+> AC3/AC5/AC8 live-closed same day (verdict-live-drives-c68c1fb.json): Sol 19/19, Sirius **A+D binary
+> @19.8 AU**, TRAPPIST-1 **M + all 7 knowns, real designations on HUD**, Rigil→authored Alpha Cen,
+> console clean. Merged-star nav-warp deferred w/ rationale (close at Inc-4 search or AC9). Structure
+> stays table-only — **snum-as-single-pin parked as an AC9/UAT knob** (with Alpha-Cen fill policy).
+> **▶ NEXT: Increment 4 = AC2 player search.** NavComputer seam is lane-D-owned — coordinator default
+> GRANTED to lane C ('D' swatch folds in; Max veto at the Inc-4 design seam). Then Inc 5 (AC1+AC6) →
+> AC9 batched UAT.
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed

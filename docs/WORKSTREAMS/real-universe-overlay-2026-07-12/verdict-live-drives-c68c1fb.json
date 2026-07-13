@@ -1,0 +1,43 @@
+{
+  "workstream": "real-universe-overlay-2026-07-12",
+  "commit": "c68c1fb",
+  "type": "live-integration addendum to verdict.json (working-Claude drove chrome-devtools on :5176, 2026-07-13, page hard-reloaded to pick up c68c1fb)",
+  "context": "verdict.json (c68c1fb) marked AC3/AC5/AC8 INSUFFICIENT solely for missing live evidence at this commit. Max's :5176 + 9223 debug Chrome were still up from the Increment-2 session; working-Claude hard-reloaded and drove the checks below. Console captured across ALL drives: zero errors, zero warns, zero '[SSG] Unknown star type' fallbacks. Boot log confirms the D5 load: 'RealStarCatalog: loaded 15613 real stars (15599 HYG + 14 supplement), 4457 exoplanet hosts'.",
+  "checks": [
+    {
+      "ac": "AC8-sol-and-regression-guardrail (live sub-clause)",
+      "drive": "window._lab.enterSol() then window.__wd.runIntegrationSuite()",
+      "observed": "In-system Sol, scene integration suite 19/19 passed, 0 failures (G-class, 13 planets, handcrafted contents intact)",
+      "result": "PASS"
+    },
+    {
+      "ac": "AC3-real-characteristics (live: Sirius via debug-search teleport — the edited teleport call site)",
+      "drive": "Debug panel GO TO OBJECT 'Sirius' (real teleportToPosition callback, findAt miss -> overlay merge)",
+      "observed": "Console: '[BINARY] star2: radius=0.05, type=D, color=[0.85,0.9,1], sep=19800.00' + 'System \"Sirius\" — A+D binary, 3 planets' + 'Star2: 0.01 R-sun, binary sep: 19.800 AU'. A-class primary from catalog, D-class white-dwarf companion at 19.8 AU verbatim from stellarCompanions.js, STAR_PROPERTIES.D color/params, no G-fallback warn. Procgen fill honest: 3 planets all beyond the binary stability limit (49.5-117 AU). Two star flares in scene inventory.",
+      "result": "PASS"
+    },
+    {
+      "ac": "AC3-real-characteristics (live: TRAPPIST-1 — supplement star, knowns-immunity end-to-end)",
+      "drive": "Debug panel GO TO OBJECT 'TRAPPIST-1' (findable only because the Increment-3 supplement load landed)",
+      "observed": "Console: 'System \"TRAPPIST-1\" — M-class star, 7 planets' with orbits 0.01-0.06 AU and radii 0.76-1.13 R-earth matching the archive (b-h; smaAU 0.0115-0.0619). All seven knowns survived generation (no cull/retype/migration loss). Real designations on the display path: HUD shows 'TRAPPIST-1 E — LAVA WORLD' / 'TRAPPIST-1 F — ROCKY WORLD' on Tab-select; focus logs 'TRAPPIST-1 e'/'TRAPPIST-1 f'. Debug panel: Spectral M, 0.04 L-sun, Binary No, Planets 7.",
+      "result": "PASS"
+    },
+    {
+      "ac": "AC5-authoring-path regression at c68c1fb (live: teleport at Rigil Kentaurus)",
+      "drive": "Debug panel GO TO OBJECT 'Rigil Kentaurus' -> teleport to its HYG position -> findAt",
+      "observed": "Console: 'System \"Alpha Centauri\" — G+K binary, 0 planets' + '[BINARY] star2: type=K, sep=23500.00' (23.5 AU companion-table verbatim). Scene flares 'effect.starflare.alpha-centauri' + 'effect.starflare2.alpha-centauri'. The authored system, not a procgen impostor — the new bulk-merge code proved inert on the KnownSystems path. A+B planetless = documented deterministic outcome.",
+      "result": "PASS"
+    },
+    {
+      "ac": "warp call site (the OTHER Increment-3 main.js edit) — procgen negative path",
+      "drive": "Scripted _warpTarget arm + _beginWarpTurn() (Inc-2 recipe); the hand-armed target did not take and the warp landed on a procgen hash-grid star",
+      "observed": "'Zimcep-4P23SXBSUA' (A-class, 4 planets) generated cleanly THROUGH the edited warp else-branch with the overlay code live: zero console errors/warns, procgen naming intact — live evidence the zero-data/procgen path through the new warp-site code is unbroken (AC8-adjacent).",
+      "result": "PASS (negative path)"
+    }
+  ],
+  "notDriven": {
+    "nav-warp arrival at a MERGED star (e.g. Sirius) through the warp call site": "Hand-arming _warpTarget for a specific real star did not reproduce a genuine nav pick this session (known hand-craft trap, see lessons-learned 2026-07-11). Coverage that exists instead: (1) the warp site's procgen else-branch driven live (Zimcep, above); (2) applyToContext + deriveMergedNames are the same calls the teleport site makes, and the teleport site is live-proven on Sirius/TRAPPIST-1/Rigil; (3) headless pipeline tests build ctx exactly as the warp site does (13/13). Increment 4's search surface makes nav-warp trivially drivable — close this then, or at Max's AC9 tour. Recorded so it is not mistaken for covered.",
+    "sky-click warp": "Unchanged from the d106181 addendum: needs a pixel-accurate canvas click; shares the warp call site above and its own selection plumbing has zero edits this increment."
+  },
+  "uatNote": "These are objective integration drives, NOT UAT. AC9 remains deferred-to-max per the contract. Newly UAT-tourable at this commit: Sirius (A+D binary), TRAPPIST-1 (7 real planets), any real catalog star (type-true arrivals), dim famous hosts via search."
+}
