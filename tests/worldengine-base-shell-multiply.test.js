@@ -11,8 +11,13 @@
 // zero-RNG + 'shell:'-disjoint + bound; AC-TUNE-NULL byte anchor (null/{}/SHELL_REFS/live-bundle → null,
 // exact-slot equality, non-circular); AC-BYTE-SHELL (null-tune ≡ omitted-tune per preset); AC-TUNE-RESPONSE
 // (monotone correct-sign per axis, NON-STRICT per the lens fold); AC-VARIETY (per-observable clearance, the
-// AMENDED contract AC); AC-ORDER (anti-mush falsifier + key-set + blast-radius). The dispatch wiring + lab +
-// integration ACs (AC-ZERO-CLOBBER, AC-LAB, AC-UAT) are SLICE B — NOT this file.
+// AMENDED contract AC); AC-ORDER (anti-mush falsifier + key-set + blast-radius).
+//
+// SLICE B (appended at the foot of this file) adds the DISPATCH-LEVEL AC-ZERO-CLOBBER assertions: the two
+// writeBodyRelief call sites (the V2-3 condition-bearing derived shell() helper + the migration bridge) thread
+// shellDriversToTune BYTE-INERTLY at each shipped icy REF AND carry a driven response to the writer end-to-end.
+// The rest of AC-ZERO-CLOBBER (83-golden / dispatch-oracle / quartet staying green) + AC-LAB (live) + AC-UAT
+// (Max) run in the Slice-B gate / on the running lab, not here.
 //
 // Anti-circularity: every AC-ORDER predictor is rebuilt ARM'S-LENGTH from the PUBLISHED stress geometry
 // (diag.thetaTraj + max(0,stressTensile)) with the APPLIED-tune CREST — NEVER from U or lineamentNode. The
@@ -29,7 +34,7 @@ import {
   writeShellReliefSphere, shellDriversToTune, SHELL_REFS, SHELL_BOUND,
 } from '../src/worldengine/base/shellRelief.js';
 import { makeSphereField } from '../src/worldengine/base/sphereField.js';
-import { buildIrregularSphere, DEFAULT_GRAIN_DRIVERS } from '../planet-lod-rivers.js';
+import { buildIrregularSphere, DEFAULT_GRAIN_DRIVERS, writeBodyRelief } from '../planet-lod-rivers.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
 import { deriveConditionVector } from '../body-condition-vector.js';
@@ -558,6 +563,87 @@ describe('V2-5s AC-ORDER — falsifier + key-set + blast-radius across the tune 
         const dv = build(7, regime, d);
         expect(Array.from(dv.c.grainAngle), `${regime}/${l}: grainAngle byte-stable`).toEqual(Array.from(refB.c.grainAngle));
         expect(Array.from(dv.c.faultDensity), `${regime}/${l}: faultDensity byte-stable`).toEqual(Array.from(refB.c.faultDensity));
+      }
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════════
+// AC-ZERO-CLOBBER (DISPATCH, SLICE B) — the two dispatch edits (planet-lod-rivers.js §4) thread the tune BYTE-
+// INERTLY at BOTH shell call sites, AND a driven response reaches the writer END-TO-END through writeBodyRelief.
+// The writer-level byte anchor is AC-BYTE-SHELL above; THIS discharges the actual dispatch wiring — call site 1
+// = the V2-3 condition-bearing derived shell() helper; call site 2 = the migration bridge (bodyDrivers null →
+// tune null). The remaining AC-ZERO-CLOBBER surface (83-golden, dispatch-oracle, quartet green) is the Slice-B
+// gate run, not re-implemented here.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════════════════
+describe('V2-5s AC-ZERO-CLOBBER (dispatch) — both call sites thread the tune byte-inertly + the response reaches the writer', () => {
+  // condition-bearing bundle → writeBodyRelief's V2-3 derived block (call site 1). `archetype` is IGNORED there
+  // (the route is condition-driven); `locked` comes from cond.tidalState.locked. Mirrors the dispatch-oracle's
+  // bundle17 shape (buildNeutralBodyDrivers + deriveConditionVector — the production construction).
+  const dispatchBundle = (regime, seed, bodyDrivers) => ({
+    archetype: null, locked: false, grainDrivers: DEFAULT_GRAIN_DRIVERS, bodyDrivers,
+    macroSeed: seed, T_eq: fpOf(regime).T_eq ?? 288,
+  });
+  // migration-bridge archetype short keys (call site 2): condition ABSENT ⇒ bodyDrivers null ⇒ shellDriversToTune(null,·) null.
+  const BRIDGE_ARCH = { 'icy-active': 'ice', 'volatile-cold': 'volatile', 'eyeball-despun': 'eyeball' };
+
+  it('call site 1 (condition-bearing derived shell): every shipped icy preset routes shell, appliedTune PRESENT + null at REF, carrier byte-identical to the shipped writer call', () => {
+    for (const r of REGIMES) {
+      const live = liveBundleOf(r);
+      for (const s of SEEDS) {
+        const c = carrierOf();
+        const res = writeBodyRelief(c, dispatchBundle(r, s, live));
+        const tag = `${r} seed ${s}`;
+        expect(res.path, `${tag}: routes shell`).toBe('shell');
+        expect(res.shellDiag.regime, `${tag}: regime`).toBe(r);
+        // appliedTune must be PRESENT (null or object, never undefined) — the V2-3 AC-PLUMB parity + the AC-LAB reader.
+        expect('appliedTune' in res.shellDiag, `${tag}: appliedTune present (never undefined)`).toBe(true);
+        expect(res.shellDiag.appliedTune, `${tag}: appliedTune null at the shipped REF (the byte anchor, end-to-end)`).toBeNull();
+        // the SHIPPED dispatch call shape (grainDrivers, tune omitted) on a fresh carrier — must be bit-identical
+        // through the whole dispatch (the grainDrivers→bodyDrivers swap the writer voids + the null tune).
+        const cRef = carrierOf();
+        const base = writeShellReliefSphere(cRef, DEFAULT_GRAIN_DRIVERS, { macroSeed: s, regime: r });
+        expect(Array.from(c.height), `${tag}: carrier.height`).toEqual(Array.from(cRef.height));
+        expect(Array.from(c.grainAngle), `${tag}: carrier.grainAngle`).toEqual(Array.from(cRef.grainAngle));
+        expect(Array.from(c.faultDensity), `${tag}: carrier.faultDensity`).toEqual(Array.from(cRef.faultDensity));
+        expect(Array.from(res.shellDiag.U), `${tag}: U`).toEqual(Array.from(base.U));
+        expect(Array.from(res.shellDiag.lineamentNode), `${tag}: lineamentNode`).toEqual(Array.from(base.lineamentNode));
+        expect(res.shellDiag.cellCount, `${tag}: cellCount`).toBe(base.cellCount);
+      }
+    }
+  });
+
+  it('call site 1 NON-VACUOUS: a driven icy bundle routes shell with appliedTune NON-null + carrier.height DIFFERING from REF (the tune reaches the writer through the dispatch)', () => {
+    for (const r of REGIMES) {
+      // perturb the FLAT massGravity slot ONLY — the condition (which drives ROUTING) is untouched, so the route
+      // stays shell at the same regime; the non-null tune (gFactor≠1, relief ∝ 1/g) is the ONLY behavioral change.
+      const driven = { ...liveBundleOf(r), massGravity: SHELL_REFS[r].massGravity * 0.5 };
+      for (const s of SEEDS) {
+        const cRef = carrierOf(); writeBodyRelief(cRef, dispatchBundle(r, s, liveBundleOf(r)));
+        const cDrv = carrierOf(); const res = writeBodyRelief(cDrv, dispatchBundle(r, s, driven));
+        const tag = `${r} seed ${s}`;
+        expect(res.path, `${tag}: still routes shell (routing reads condition, not massGravity)`).toBe('shell');
+        expect(res.shellDiag.appliedTune, `${tag}: driven appliedTune non-null`).not.toBeNull();
+        // gFactor = 0.5^-0.5 = 1.414 scales RIDGE_AMP (lineamentRelief is present in ALL three regimes via
+        // DESPIN_W+DIURNAL_W) ⇒ carrier.height MUST move. A1 is the headline axis — non-vacuous everywhere.
+        expect(Array.from(cDrv.height), `${tag}: driven carrier.height differs from REF`).not.toEqual(Array.from(cRef.height));
+      }
+    }
+  });
+
+  it('call site 2 (migration bridge, bodyDrivers null): ice/volatile/eyeball archetypes route shell, appliedTune PRESENT + null, carrier byte-identical to the shipped writer call', () => {
+    for (const r of REGIMES) {
+      const arch = BRIDGE_ARCH[r];
+      for (const s of SEEDS) {
+        const c = carrierOf();
+        const res = writeBodyRelief(c, { archetype: arch, locked: false, grainDrivers: DEFAULT_GRAIN_DRIVERS, bodyDrivers: null, macroSeed: s });
+        const tag = `bridge ${arch}→${r} seed ${s}`;
+        expect(res.path, `${tag}: routes shell`).toBe('shell');
+        expect(res.shellDiag.regime, `${tag}: regime`).toBe(r);
+        expect('appliedTune' in res.shellDiag, `${tag}: appliedTune present`).toBe(true);
+        expect(res.shellDiag.appliedTune, `${tag}: appliedTune null (bodyDrivers null → tune null)`).toBeNull();
+        const cRef = carrierOf(); writeShellReliefSphere(cRef, DEFAULT_GRAIN_DRIVERS, { macroSeed: s, regime: r });
+        expect(Array.from(c.height), `${tag}: carrier.height byte-identical to the shipped writer call`).toEqual(Array.from(cRef.height));
       }
     }
   });

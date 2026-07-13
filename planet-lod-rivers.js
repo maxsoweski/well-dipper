@@ -28,7 +28,7 @@ import { bakeTectonicGrain, buildGrainCubeGeometry, createGrainCube } from './pl
 import { createHeightCube, buildHeightCubeGeometry, bakeHeightCube, RELIEF_CUBE_SIZE } from './planet-lod-tectonic.js';
 import { writeHeightSphere, writeGrainSphere } from './src/worldengine/base/tectonic.js';
 import { writePlateUpliftSphere, driversToTune } from './src/worldengine/base/plates.js';
-import { writeShellReliefSphere, shellRegimeOf } from './src/worldengine/base/shellRelief.js';
+import { writeShellReliefSphere, shellRegimeOf, shellDriversToTune } from './src/worldengine/base/shellRelief.js';
 import { writeMagmatismSphere, magmaDriversToTune } from './src/worldengine/base/magmatism.js';
 import { writeStagnantLidReliefSphere, stagnantLidRegimeOf, stagnantDriversToTune } from './src/worldengine/base/stagnantLid.js';
 // V2-3 (the dispatch flip): writeBodyRelief's condition-bearing branch derives its route from computeE1's
@@ -488,7 +488,14 @@ export function writeBodyRelief(carrier, {
       return { path: 'plate', plateDiag, shellDiag: null, magmaDiag: null, stagnantDiag: null };
     };
     const shell = (regime) => {
-      const shellDiag = writeShellReliefSphere(carrier, grainDrivers, { macroSeed, regime });
+      // V2-5s (shell driver-response): body D-vector → `tune` via shellDriversToTune(bodyDrivers, regime),
+      // anchored per regime (null at each REF → the shipped icy presets render byte-identical). bodyDrivers
+      // REPLACES grainDrivers as the drivers arg — byte-safe, the writer voids it. `regime` is this helper's own
+      // in-scope derived-context param (no preset-string / resolver read here — the dispatch-oracle grep on this
+      // block forbids them).
+      const shellTune = shellDriversToTune(bodyDrivers, regime);
+      const shellDiag = writeShellReliefSphere(carrier, bodyDrivers, { macroSeed, regime, tune: shellTune });
+      shellDiag.appliedTune = shellTune;
       return { path: 'shell', plateDiag: null, shellDiag, magmaDiag: null, stagnantDiag: null };
     };
     const despun = () => {
@@ -568,7 +575,21 @@ export function writeBodyRelief(carrier, {
   }
   const regime = shellRegimeOf(archetype, locked);    // icy-active | volatile-cold | eyeball-despun | null
   if (regime) {
-    const shellDiag = writeShellReliefSphere(carrier, grainDrivers, { macroSeed, regime });
+    // V2-5s (shell driver-response), the #4-M/V2-2b-1 bridge idiom: bodyDrivers is null for the ~8 legacy
+    // condition-less bridge callers → shellDriversToTune(null,·) === null → the writer's DEFAULTS branch →
+    // byte-identical. The shell response is CONDITION-FIRST (applied at call site 1 on the real condition-bearing
+    // bundle); this migration bridge is the condition-LESS legacy path, so the tune is GATED on
+    // `bodyDrivers?.condition` — which is ALWAYS false here by construction (we only reach the bridge because the
+    // top `if (bodyDrivers?.condition)` was false), so the tune is null for EVERY bridge input, keeping it
+    // byte-inert. This CORRECTS BUILD-PLAN §4's lens-minor-#a assumption ("no current caller passes a non-null
+    // condition-LESS bodyDrivers"): the plate suite's AC5 no-clobber DOES (bodyDrivers=D_OFF — a raw plate
+    // D-vector, NOT a body bundle). Synthesizing a shell response from it would be both wrong (garbage from a
+    // non-body vector) and an AC5 clobber; gating keeps the bridge byte-identical for null AND D_OFF. Defensive-
+    // but-currently-dead, the idiom of the plan's own minor-#b fallback — if the bridge ever admits a
+    // condition-bearing caller, it would then correctly apply the response. appliedTune stays null.
+    const shellTune = bodyDrivers?.condition ? shellDriversToTune(bodyDrivers, regime) : null;
+    const shellDiag = writeShellReliefSphere(carrier, bodyDrivers, { macroSeed, regime, tune: shellTune });
+    shellDiag.appliedTune = shellTune;
     return { path: 'shell', plateDiag: null, shellDiag, magmaDiag: null, stagnantDiag: null };
   }
   // Increment 4a (magmatism): volcanic bodies (Lava / Magma-K2-141b / Io-type) get the one-pass
