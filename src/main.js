@@ -47,8 +47,9 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed } from './flight/flightModes.js';
 import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
+import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR, firstBlockingObstacle, planLegObstacle, obstacleKeepOutRadius } from './flight/tourStandoff.js';
 import { createFreeLook } from './flight/freeLook.js';
 import { syncHeadToFreeLook } from './flight/freeLookApply.js';
 import { flightExitAnchor } from './flight/flightExitAnchor.js';
@@ -305,11 +306,18 @@ let system = null;
 let focusIndex = -1;   // -1 = system overview, 0+ = focused planet index
 let focusMoonIndex = -1; // -1 = focused on planet itself, 0+ = specific moon
 let orbitsVisible = settings.get('showOrbits');
+// A1 (orrery-nav): orbit lines follow the station by default — ON in ORRERY
+// (god's-eye), OFF in HELM (cockpit stays clean) — UNTIL the player explicitly
+// toggles them (Settings / O key / HUD button, all via toggleOrbits), after which
+// their choice sticks. Session-scoped.
+let _orbitsUserOverride = false;
 let gravityWellVisible = settings.get('showGravityWells');
 // Default minimap off on mobile (too small to be useful, overlaps controls)
 const _isMobile = 'ontouchstart' in window;
-// Tag the body so mobile-only CSS (e.g. hiding the desktop ORRERY/HELM swap
-// button — mobile is ORRERY-only) can key off it. JS guards still apply too.
+// Tag the body so mobile-only CSS can key off it. JS guards still apply too.
+// (Mobile is no longer ORRERY-only, docs/WORKSTREAMS/mode-ownership-2026-07-02
+// AC9 — the desktop ORRERY/HELM mode-swap button is shown on mobile too, since
+// it is mobile-HELM's only tour exit; this class no longer hides that button.)
 if (_isMobile) document.body.classList.add('is-mobile');
 let minimapVisible = false; // off by default — toggle with R key (was M; M now swaps ORRERY<->HELM)
 let gravityWell = null;        // GravityWellMap instance (contour minimap)
@@ -525,6 +533,10 @@ function setScManual(on) {
   // W/S takeover / exit). _updateModeSwapButton is a hoisted fn-declaration
   // reached only at runtime, so the forward reference is safe.
   if (typeof _updateModeSwapButton === 'function') _updateModeSwapButton();
+  // A1 (orrery-nav): re-derive orbit-line visibility from the new station. This is
+  // THE universal regime-flip point, so hooking here covers every HELM<->ORRERY path
+  // (same hoisted-forward-reference safety as above).
+  if (typeof _syncOrbitsToMode === 'function') _syncOrbitsToMode();
 }
 let _flightMode = FlightMode.MANUAL;          // in-flight sub-state (meaningful while _scManual)
 const _alignState = { active: false, mesh: null, t: 0 }; // Mode-B one-time align (Task 5)
@@ -1837,6 +1849,20 @@ function _captureTelemetrySample() {
 window._triggerTourComplete = () => { if (autoNav.onTourComplete) autoNav.onTourComplete(); };
 window._startFlythrough = () => startFlythrough();
 window._getState = () => ({ warp: warpEffect.isActive, splash: splashActive, title: titleScreenActive, autopilot: _autopilotEnabled, idle: idleTimer.toFixed(1), labState: _portalLabState });
+// Mode-ownership regime probe (mode-ownership-2026-07-02 live ACs): the actual
+// regime/hand-state bits, so live verification reads flags, not inferences.
+window._regime = () => ({
+  scManual: _scManual,
+  freeLookLatched: freeLook.latched,
+  handsOn: _scManual && !freeLook.latched,
+  flightMode: _flightMode,
+  tour: autoNav.isActive,
+  pilot: scPilot.isActive,
+  pilotPhase: scPilot.phase,
+  showReticle: _showReticle,
+  cursor: _pointerCursor,
+  camBypassed: cameraController.bypassed,
+});
 // V1 STATION-hold redesign — debug accessor for the shared player-ship.
 window._ship = ship;
 
@@ -2074,6 +2100,99 @@ window._lab = {
     idleTimer = 0;
     startFlythrough();
     return { ok: !!autoNav.isActive };
+  },
+
+  /** Increment 1 (AC8): count of CRUISE stall-aborts on tour legs since the last
+   * forceFarSideStarLeg() reset. The far-side scenario asserts this stays 0. */
+  tourStallAbortCount() { return _scTourStallAbortCount; },
+
+  /** Increment 1 (AC8): force a FAR-SIDE-STAR tour leg through the REAL departure
+   * regime. Places the ship at the star's PARK distance on the far side of the
+   * outermost planet — i.e. exactly where the pilot would sit having just parked
+   * AT the star — so the star sits between ship and target and the ship departs
+   * from OUTSIDE the keep-out sphere (not a teleport that dodges the on-sphere
+   * case). Points it at the planet and dispatches through the real go-around tour
+   * dispatch (_dispatchTourLeg). Resets the stall-abort counter. The caller (the
+   * reliability suite) then samples until the planet leg completes and asserts:
+   * 0 stall-aborts, ship never ENTERS the keep-out sphere. Returns setup
+   * telemetry incl. whether the direct path crosses the keep-out sphere. */
+  forceFarSideStarLeg() {
+    if (!system?.star?.mesh) return { ok: false, reason: 'no star in system' };
+    const planets = system.planets || [];
+    if (!planets.length) return { ok: false, reason: 'system has no planets' };
+    if (!autoNav.queue || !autoNav.queue.length) autoNav.buildQueue(system);
+    populateQueueRefs();
+    // Innermost planet stop with a bodyRef → the realistic star->planet1 far-side
+    // target (the actual livelock leg Max saw). A near-star->OUTERMOST marathon is
+    // an unnatural leg no real tour flies (real order is star->innermost->outward
+    // through adjacent planets); such a leg would trip the WS-1 stall-detector on
+    // transit LENGTH — unrelated to the star go-around this scenario tests.
+    let targetIdx = -1, bestOrbit = Infinity;
+    autoNav.queue.forEach((s, i) => {
+      if (s.type === 'planet' && s.bodyRef) {
+        const orb = system.planets[s.planetIndex]?.orbitRadius ?? Infinity;
+        if (orb < bestOrbit) { bestOrbit = orb; targetIdx = i; }
+      }
+    });
+    if (targetIdx < 0) return { ok: false, reason: 'no planet stop with a bodyRef' };
+    const stop = autoNav.queue[targetIdx];
+    const ko = _starKeepOut();
+    if (!ko) return { ok: false, reason: 'no star keep-out geometry' };
+    const starPos = system.star.mesh.position;
+    const planetPos = stop.bodyRef.position;
+    // Real departure regime: ship parked at the star's PARK distance, on the far
+    // side of the planet. PARK > keepOut, so the ship starts OUTSIDE the keep-out
+    // sphere (the on-sphere degeneracy the unified-radius design suffered is gone)
+    // while the star still sits squarely between ship and planet → the direct
+    // segment crosses the keep-out sphere and a go-around must fire.
+    const dir = new THREE.Vector3().subVectors(starPos, planetPos).normalize();
+    const shipPos = new THREE.Vector3().copy(starPos).addScaledVector(dir, ko.park);
+
+    // Engage the tour machinery and pin the current stop to the far-side planet.
+    _autopilotEnabled = true;
+    cameraController.bypassed = true;
+    autoNav.start();
+    autoNav.currentIndex = targetIdx;
+    scPilot.stop();
+    scModel.position.copy(shipPos);
+    scModel.speed = 0; scModel.setThrottle(0);
+    const toPlanet = new THREE.Vector3().subVectors(planetPos, shipPos).normalize();
+    scModel.orientation.setFromUnitVectors(new THREE.Vector3(0, 0, -1), toPlanet);
+    shipChoreographer.beginTour({ fromWarp: false });
+    _scPendingRealTarget = null;
+    _scGoAroundCount = 0;
+    _scTourStallAbortCount = 0;
+
+    const crosses = segmentCrossesSphere(shipPos, planetPos, ko.pos, ko.keepOut);
+    _dispatchTourLeg(stop, { choreo: null });
+    return {
+      ok: true,
+      targetIndex: targetIdx,
+      crosses,
+      park: ko.park,
+      keepOut: ko.keepOut,
+      starRadius: system.star.data.radius,
+      startCenterDist: shipPos.distanceTo(starPos),
+    };
+  },
+
+  /** Live star geometry (position + radius + DECOUPLED park/keep-out radii) for
+   * the reliability suite's keep-out-entry check. Null when there is no star. */
+  starKeepOutInfo() {
+    const ko = _starKeepOut();
+    if (!ko) return null;
+    return { x: ko.pos.x, y: ko.pos.y, z: ko.pos.z, radius: ko.radius, keepOut: ko.keepOut, park: ko.park };
+  },
+
+  /** Read a settings value (e.g. 'tourLingerMultiplier', 'celestialTimeMultiplier').
+   * Used by runFlightReliabilitySuite to speed up the standing tour check. */
+  getSetting(key) { return settings.get(key); },
+
+  /** Set a settings value. Returns the previous value so callers can restore it. */
+  setSetting(key, value) {
+    const prev = settings.get(key);
+    settings.set(key, value);
+    return prev;
   },
 
   /** Currently-loaded system metadata. */
@@ -2364,7 +2483,8 @@ const _heldKeys = new Set();
 // plays the DESHÉ/score logos, reveals the WELL-DIPPER title screen, starts the
 // title theme, and arms the auto-dismiss. The ONLY difference from the pre-session
 // flow is that the chooser is prepended and the chosen mode is consumed at the first
-// star-system arrival by warpRevealSystem (HELM → flight; ORRERY → autopilot tour).
+// star-system arrival by warpRevealSystem — FLIPPED (docs/WORKSTREAMS/mode-ownership
+// -2026-07-02): HELM → autopilot tour, hands-off; ORRERY → god's-eye, nothing armed.
 let splashActive = true;
 
 function startIntroSequence() {
@@ -2516,23 +2636,33 @@ document.getElementById('splash-screen')?.addEventListener('touchend', _handleSp
 let titleScreenActive = false;
 let _titleAutoTimer = null;
 // The station the player picked at the BLACK ORRERY/HELM chooser (the repurposed
-// splash) (§supercruise-arrival-modes-design-2026-06-27, #2). Consumed ONCE by
-// warpRevealSystem when the first star system goes live: 'helm' → enter HELM (drive
-// untouched) instead of the autopilot tour; 'orrery' (the default / no-explicit-pick
-// path) → today's contemplative autopilot-screensaver reveal. Mobile is ORRERY-only,
-// so this is only ever 'helm' on desktop. Reset to 'orrery' after it's applied.
+// splash). Consumed ONCE by warpRevealSystem when the first star system goes live:
+// 'helm' → boot straight into the cockpit screensaver tour, hands-off (the autopilot
+// is a HELM feature); 'orrery' (the default / no-explicit-pick path) → the god's-eye
+// orrery with nothing armed (docs/WORKSTREAMS/mode-ownership-2026-07-02 — FLIPPED
+// from the 2026-06-27 mapping this comment used to describe). Both stations are
+// offered on mobile too (AC9). Reset to 'orrery' after it's applied.
 let _pendingBootMode = 'orrery';
+// True until the FIRST star-system reveal of the session consumes it — marks that
+// reveal as the BOOT reveal (docs/WORKSTREAMS/mode-ownership-2026-07-02, AC7). The
+// ORRERY-boot branch needs to distinguish "boot, nothing armed" from a mid-session
+// warp-in (whose arrival fly-in must keep running). A flag set in _pickBootMode
+// would miss the splash-background "press anything" default path, which calls
+// startIntroSequence() directly — so the anchor is the reveal itself, not the pick.
+let _pendingBootReveal = true;
 
 // The splash mode-picker action (boot-flow corrected 2026-06-27). The BLACK
 // ORRERY/HELM chooser is the cold-open; picking a station records it, then runs the
 // ORIGINAL begin flow UNCHANGED via startIntroSequence (DESHÉ/score logos → title →
 // music → press-anything/auto-dismiss → warp). The chosen mode is consumed at the
 // end by warpRevealSystem. The two chooser buttons funnel through here; the splash
-// background ("press anything") defaults to ORRERY via _handleSplashDismiss. On
-// mobile HELM is hidden (ORRERY-only), so any non-orrery pick is coerced to orrery.
+// background ("press anything") defaults to ORRERY via _handleSplashDismiss. Mobile
+// picks are honored (docs/WORKSTREAMS/mode-ownership-2026-07-02, AC9 — "mobile can
+// work via Orrery, and have Helm autopilot on by default for mobile if they choose
+// that mode"): both stations are shown on mobile (CSS), no coercion here.
 function _pickBootMode(mode) {
   if (!splashActive) return;
-  const decided = (_isMobile ? 'orrery' : (mode ?? 'orrery'));
+  const decided = mode ?? 'orrery';
   _pendingBootMode = bootModeAction(decided).mode;
   startIntroSequence(); // hides the chooser, plays the original intro → title → music
 }
@@ -2542,7 +2672,9 @@ function dismissTitleScreen() {
   titleScreenActive = false;
   // soundEngine.play('titleDismiss'); // muted for now
   musicManager.stop(0.5);
-  _autopilotEnabled = true; // title screen always leads to autopilot screensaver
+  // mode-ownership-2026-07-02: no longer unconditionally armed here — the
+  // boot pick (bootModeAction, consumed by warpRevealSystem) now decides
+  // whether the tour starts. ORRERY must never auto-arm it.
   // Galaxy glow stays hidden until warp (restored in onSwapSystem)
   if (_titleAutoTimer) { clearTimeout(_titleAutoTimer); _titleAutoTimer = null; }
 
@@ -2572,7 +2704,13 @@ function dismissTitleScreen() {
       // Free-look orbit (not bypassed) — user can drag to look around
       cameraController.autoRotateActive = true;
       _deepSkyLingerTimer = 15;
-    } else if (!autoNav.isActive) {
+    } else if (_scManual && !autoNav.isActive) {
+      // Legacy screensaver fallback, now HELM-gated (adversarial-review finding,
+      // mode-ownership-2026-07-02): warpRevealSystem owns the boot tour-start.
+      // On an ORRERY boot autoNav never starts, so an ungated branch here would
+      // auto-arm a tour in ORRERY if the warp reveal lands inside this 5s window
+      // — exactly the "ORRERY never auto-arms" violation. HELM keeps it as a
+      // harmless defensive re-arm (autoNav.isActive dedupes).
       idleTimer = 0;
       startFlythrough();
     }
@@ -5780,15 +5918,13 @@ function _beginTourLegMotion(stop, priorBody) {
   // driver in that case, so no stop is needed.
   if (!scPilot.isActive && !_scManual && navSubsystem.stop) navSubsystem.stop();
   _seedScPoseFromCameraIfIdle();
-  scControls.flyTo({
-    toBody: stop.bodyRef,
-    bodyRadius: stop.bodyRadius,
-    linger: stop.linger * settings.get('tourLingerMultiplier'),
-    selfStep: false,
-  });
-  // Ship-axis tour-leg advance — flips ENTRY→CRUISE on first post-ENTRY
-  // call; 1:1 mapping thereafter.
-  shipChoreographer.onLegAdvanced();
+  // A fresh jump abandons any in-flight go-around pending target.
+  _scPendingRealTarget = null;
+  // Increment 1: routes through the standoff/go-around dispatch — parks the star
+  // at its standoff, and inserts a pass-through waypoint for a far-side jump.
+  // _dispatchTourLeg calls shipChoreographer.onLegAdvanced() for the real leg
+  // (the ship-axis ENTRY→CRUISE flip), matching the prior inline call.
+  _dispatchTourLeg(stop);
 }
 
 /**
@@ -5799,6 +5935,37 @@ function _beginTourLegMotion(stop, priorBody) {
 function startFlythrough() {
   if (!system) return;
   if (warpEffect.isActive) return;
+  // Mode-ownership (docs/WORKSTREAMS/mode-ownership-2026-07-02, reviewer
+  // finding 2026-07-02): establish hands-off HERE, not only in the Z handler.
+  // startFlythrough() has other callers (idle timeout, warp-resume, boot
+  // flow, nav-computer toggle, the beginAutopilotTour scenario helper) that
+  // never latch free-look themselves — they'd leave _scManual true with
+  // freeLook.latched false, so handRouting(_scManual && !freeLook.latched)
+  // at the held-keys block (8489) and the mouse-steer gate (10099) both keep
+  // reporting hands-ON, letting held Q/E/W/S and mouse motion leak into the
+  // pilot's flight every frame. The tour is a HELM feature and may only fly
+  // hands-off, so any tour entry that finds itself in HELM latches free-look
+  // right here — one shared hands-off establishment instead of relying on
+  // each caller to remember. Gated on _scManual so the ORRERY default
+  // screensaver (which runs with _scManual=false) is unaffected.
+  if (_scManual) freeLook.enter();
+  // Mode-ownership (docs/WORKSTREAMS/mode-ownership-2026-07-02): assert the
+  // ship-input regime at tour start REGARDLESS OF CALLER (Z, idle timeout,
+  // boot flow, …) — the tour is hands-off, so no stale/held-key turnInput can
+  // survive into the pilot's first frame. The Z handler already zeroes this
+  // defensively before calling in; this is the backstop for every other path.
+  scModel.turnInput.yaw = 0;
+  scModel.turnInput.pitch = 0;
+  scModel.turnInput.roll = 0;
+  // Mode-ownership fix (adversarial-review finding, 2026-07-02): the tour runs
+  // MANUAL by design (see flightModes.js playerBurnMode — the tour is the
+  // system-picked source). A stale ASSIST left by a finished player commit-burn
+  // (nothing on the burn path ever resets _flightMode after HOLD) would make the
+  // held-keys gate's _assistLegActive branch treat the whole tour as a player
+  // leg — re-opening the Q/E roll leak and the W/S cancel this workstream
+  // retires. Reset here: the single shared tour entry (Z, idle, boot,
+  // warp-resume, nav-computer).
+  _flightMode = FlightMode.MANUAL;
   soundEngine.play('autopilotOn');
   _autopilotEnabled = true;
 
@@ -5836,12 +6003,12 @@ function startFlythrough() {
   // autopilot from live manual supercruise flight must keep the live
   // pose/speed, not stomp them (Task-9 manual-controls heads-up).
   _seedScPoseFromCameraIfIdle();
-  scControls.flyTo({
-    toBody: firstStop.bodyRef,
-    bodyRadius: firstStop.bodyRadius,
-    linger: firstStop.linger * settings.get('tourLingerMultiplier'),
-    selfStep: false,
-  });
+  _scPendingRealTarget = null;
+  // Increment 1: first leg routes through the standoff/go-around dispatch (parks
+  // the star at its standoff; inserts a pass-through waypoint if the first stop is
+  // on the star's far side). choreo:null — startFlythrough owns the ship-axis cue
+  // via beginTour below, so the dispatcher must not also fire onLegAdvanced.
+  _dispatchTourLeg(firstStop, { choreo: null });
   // Ship-axis: non-warp engage → first leg is CRUISE (not ENTRY).
   shipChoreographer.beginTour({ fromWarp: false });
 
@@ -5851,6 +6018,34 @@ function startFlythrough() {
 
   const src = autopilotSourceInfo('tour'); // system-pick autopilot → same pilot door as Assist
   console.log(`[AUTOPILOT] ${src.label} (${src.picks}-picked) → ${src.door}`);
+}
+
+/**
+ * Shared HELM hands-off tour engage (docs/WORKSTREAMS/mode-ownership-2026-07-02).
+ * The Z key's 'hands-off-start-tour'/'start-tour' side effects, extracted so
+ * every non-Z tour-arm path (currently: the idle-timeout gate) enters hands-off
+ * the SAME way instead of calling startFlythrough() bare — startFlythrough()'s
+ * own free-look backstop latches the hand-state but never refreshes the
+ * pointer HUD, which would leave the hands-on cursor/reticle stale through an
+ * idle-fired tour (the AC6 leak). Deep-sky is a HELM no-op (startFlythrough's
+ * non-star-system branch flies an orrery-style orbit cam that would yank the
+ * pilot out of the ship) — mirrors the Z handler's own guard.
+ */
+function _beginHandsOffTour() {
+  if (!system) return;
+  if (system.type && system.type !== 'star-system') {
+    console.log('[MODE] autopilot unavailable in deep space');
+    return;
+  }
+  if (!freeLook.latched) {
+    freeLook.enter(); // latch ON = hands-off (the ONLY state the autopilot may fly in)
+    _applyPointerHud();
+  }
+  scModel.turnInput.yaw = 0;
+  scModel.turnInput.pitch = 0;
+  scModel.turnInput.roll = 0;
+  idleTimer = 0;
+  startFlythrough();
 }
 
 /**
@@ -5870,6 +6065,7 @@ function stopFlythrough() {
   autoNav.stop();
   shipChoreographer.stop();
   scPilot.stop();
+  _scPendingRealTarget = null; // Increment 1: abandon any in-flight go-around
   setScManual(false);
   _flightMode = FlightMode.MANUAL; // #1 takeover: any player-directed ASSIST leg ends here too — reset for the next engage
   if (freeLook.latched) freeLook.exit(); // clear a tour-set free-look latch on stop (§arrival-modes)
@@ -5896,6 +6092,31 @@ function stopFlythrough() {
 }
 
 /**
+ * Z mid-tour: stop the pilot/tour but STAY IN THE SHIP, hands-off, coasting
+ * (docs/WORKSTREAMS/mode-ownership-2026-07-02, zKeyAction 'stop-tour-coast').
+ * Unlike stopFlythrough() — which drops _scManual to false and restores the
+ * ORRERY/Toy-Box orbit camera around the closest body — this keeps the player
+ * in HELM: the ship simply coasts (drive state untouched) until F grabs the
+ * stick back (fKeyAction 'takeover') or Z arms the tour again.
+ */
+function _stopTourStayInShip() {
+  soundEngine.play('autopilotOff');
+  autoNav.stop();
+  scPilot.stop();
+  shipChoreographer.stop();
+  _scPendingRealTarget = null; // abandon any in-flight go-around, same as stopFlythrough
+  _flightMode = FlightMode.MANUAL; // mirror stopFlythrough — don't leave a stale ASSIST in the coast state
+  _autopilotEnabled = false;   // an explicit Z-stop shouldn't auto-resume the tour on the next warp
+  // Stay in HELM, hands-off: _scManual is untouched (stays true), the camera
+  // stays ship-welded, and the free-look latch stays ON (hands-off coast).
+  cameraController.setCameraMode(CameraMode.FLIGHT);
+  cameraController.bypassed = true;
+  if (!freeLook.latched) freeLook.enter(); // defensive: stay hands-off coasting
+  _applyPointerHud();
+  console.log('[MODE] tour stopped — coasting hands-off (press F to take the stick)');
+}
+
+/**
  * Warp: dispose old system and generate a new one (hidden).
  * Called at hyper start — tunnel is fully opaque, hides everything.
  * System data was pre-generated during FOLD phase (onPrepareSystem).
@@ -5909,6 +6130,9 @@ function warpSwapSystem() {
   // already stops the pilot at turn start; this covers any path that
   // reaches the swap without it (mirrors the flythrough/autoNav stops).
   scPilot.stop();
+  // Increment 1: drop any in-flight go-around target so a warp mid-go-around
+  // can't leave a stale old-system stop for the new system's arrival fly-in.
+  _scPendingRealTarget = null;
   _cancelSystemMusic(); // stop ambient music during warp
   // Cancel any stale deep sky linger timer from the previous system
   // (e.g., title screen auto-dismiss sets this during warp)
@@ -6050,27 +6274,75 @@ function warpRevealSystem() {
   if (firstStopIdx < 0) firstStopIdx = 0;
   autoNav.currentIndex = firstStopIdx;
 
-  // Splash mode-picker handoff (§supercruise-arrival-modes-design-2026-06-27, #2,
-  // AC6): if the player picked HELM at the title, boot INTO the helm instead of
-  // the contemplative autopilot tour. Consume the pick once (reset to ORRERY),
-  // disable the screensaver, and enter flight from the live warp-exit pose (no
-  // tour leg). The drive is left untouched — entering the helm is not "lighting
-  // the drive" (that's E's job). ORRERY boot falls through to today's reveal.
+  // Splash mode-picker handoff (docs/WORKSTREAMS/mode-ownership-2026-07-02):
+  // FLIPPED per Max's standing model — "HELM should be our chosen Autopilot
+  // path; the Autopilot is a HELM feature. ORRERY is a player-driven feature."
+  // Picking HELM at the title boots straight INTO the cockpit screensaver
+  // tour, hands-off (F grabs the stick) — the SAME hands-off assertion the Z
+  // key uses (setScManual(true) + free-look latch ON + zeroed turnInput), then
+  // the tour's first-stop arrival. Consume the pick once (reset to ORRERY).
+  // Valid on mobile too (mobile-HELM = tour by default, AC9) — the old
+  // !_isMobile gate that routed mobile through plain flight-entry (no tour)
+  // is gone. ORRERY boot (or any non-HELM pick) falls through to today's
+  // reveal, unchanged.
   const _boot = bootModeAction(_pendingBootMode);
   _pendingBootMode = 'orrery';
-  if (_boot.enterFlight && !_isMobile) {
-    _autopilotEnabled = false;
-    autoNav.stop();
+  const _isBootReveal = _pendingBootReveal;
+  _pendingBootReveal = false;
+  if (_boot.startAutopilot) {
+    _autopilotEnabled = true;
     _seedScPoseFromCameraIfIdle();
-    _enterFlightInternal();
+    setScManual(true);
+    cameraController.setCameraMode(CameraMode.FLIGHT);
+    cameraController.bypassed = true;
+    freeLook.enter(); // latch ON = hands-off, the only state the autopilot may fly in
+    scModel.turnInput.yaw = 0;
+    scModel.turnInput.pitch = 0;
+    scModel.turnInput.roll = 0;
+    _applyPointerHud();
     _updateModeSwapButton();
-    console.log('Warp: booting into HELM (splash mode-picker)');
+
+    autoNav.start();
+    const firstStop = autoNav.getCurrentStop();
+    if (firstStop && firstStop.bodyRef) {
+      _dispatchTourLeg(firstStop, { choreo: null });
+      shipChoreographer.beginTour({ fromWarp: true });
+      updateFocusFromStop(firstStop);
+      if (systemMap) systemMap.triggerBlink();
+    }
+    console.log('Warp: booting into HELM tour, hands-off (splash mode-picker)');
     _scheduleSystemMusic(20, 35);
     return;
   }
 
+  // A1 (orrery-nav): ORRERY reveal (boot pick or any warp-in) — default orbit lines
+  // ON for the god's-eye view unless the player overrode. HELM boot returned above.
+  _syncOrbitsToMode();
+
   // Only start autoNav if autopilot was enabled before warp
   if (_autopilotEnabled) autoNav.start();
+
+  // ORRERY BOOT (mode-ownership-2026-07-02, AC7 — adversarial-review finding):
+  // nothing is armed, INCLUDING the arrival fly-in. The fly-in below activates
+  // SupercruisePilot, whose HOLD park never returns to IDLE — scPilot.isActive
+  // would stay true forever, keeping the camera ship-welded (HeadMount) and
+  // starving cameraController.update()'s `!scPilot.isActive && !_scManual`
+  // gate, i.e. a first-person ship parked at the sun with dead orrery controls.
+  // A boot into ORRERY presents the god's-eye immediately instead: orbit camera
+  // re-anchored on the system origin from the warp-exit pose (no snap — the
+  // deep-sky reveal's restore pattern), system-overview focus, player drives.
+  // Mid-session warp-ins (tour loop, manual warp commits) keep the fly-in
+  // exactly as before — this branch fires only on the session's boot reveal.
+  if (_isBootReveal && !_autopilotEnabled) {
+    cameraController.bypassed = false;
+    cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
+    focusIndex = -1;
+    focusMoonIndex = -1;
+    focusStarIndex = -1;
+    console.log('Warp: ORRERY boot — god\'s-eye reveal, nothing armed');
+    _scheduleSystemMusic(20, 35);
+    return;
+  }
 
   const firstStop = autoNav.getCurrentStop();
   if (firstStop && firstStop.bodyRef) {
@@ -6082,12 +6354,19 @@ function warpRevealSystem() {
     // stops it at turn start; warpSwapSystem stops it defensively), so
     // the guarded seed always takes.
     _seedScPoseFromCameraIfIdle();
-    scControls.flyTo({
-      toBody: firstStop.bodyRef,
-      bodyRadius: firstStop.bodyRadius,
-      linger: firstStop.linger * settings.get('tourLingerMultiplier'),
-      selfStep: false,
-    });
+    // RC3 (tour-reliability-corrections-2026-07-01): route through the SAME
+    // standoff/go-around dispatch startFlythrough() uses (Increment 1), instead
+    // of a bare flyTo. The bare call here predated Increment 1 and was never
+    // updated to apply the star PARK standoff — since firstStopIdx above always
+    // resolves to the star stop, EVERY warp arrival parked at the legacy 2.6R
+    // hold INSIDE the keep-out sphere (the measured stuck-at-the-sun bug — see
+    // docs/WORKSTREAMS/autopilot-standoff-routing-2026-07-01/triage/). A star
+    // target never produces a go-around waypoint (planLeg only routes non-star
+    // far-side targets), so this cannot alter the choreographed fly-in visuals.
+    // choreo:null — this function owns the ship-axis cue via
+    // beginTour({fromWarp:true}) below, so the dispatcher must not also fire
+    // onLegAdvanced (mirrors startFlythrough's identical choreo:null).
+    _dispatchTourLeg(firstStop, { choreo: null });
     // Ship-axis ENTRY — warp-exit is the continuity-anchor per §10.5.
     shipChoreographer.beginTour({ fromWarp: true });
 
@@ -6303,7 +6582,10 @@ function _scDropState() {
   const R = (sel ? sel.radius : scControls.target?.radius) ?? 5;
   const t = scPilot.tuning;
   const captureSphere = R * t.DROP_RADIUS_FACTOR;          // 10R
-  const dropMaxSpeed = captureSphere / t.DROP_ETA_MAX;     // (10R)/2.5
+  // Same floor the pilot's capture rule applies (DROP_MAX_SPEED_FLOOR) — the
+  // single-source promise above only holds if the HUD mirrors it for tiny R.
+  const dropMaxSpeed = Math.max(captureSphere / t.DROP_ETA_MAX,
+    t.DROP_MAX_SPEED_FLOOR ?? 0);
   const d = scModel.position.distanceTo(bp);
   const state = d > captureSphere
     ? 'none'
@@ -6692,7 +6974,15 @@ function focusMoon(planetIndex, moonIndex) {
 function toggleOrbits() {
   if (!system) return;
   orbitsVisible = !orbitsVisible;
+  _orbitsUserOverride = true; // A1: explicit player choice — stops the mode-driven default
   soundEngine.play(orbitsVisible ? 'toggleOn' : 'toggleOff');
+  _applyOrbitVisibility();
+}
+
+// A1 (orrery-nav): push `orbitsVisible` onto every orbit-line mesh in the current
+// system. Shared by the player toggle (toggleOrbits) and the mode sync.
+function _applyOrbitVisibility() {
+  if (!system) return;
   for (const line of system.orbitLines) {
     line.mesh.visible = orbitsVisible;
   }
@@ -6706,6 +6996,15 @@ function toggleOrbits() {
       line.mesh.visible = orbitsVisible;
     }
   }
+}
+
+// A1 (orrery-nav): default orbit-line visibility from the station — ON in ORRERY,
+// OFF in HELM — unless the player has explicitly overridden. Called from setScManual
+// (every regime flip) and the ORRERY reveal path in warpRevealSystem.
+function _syncOrbitsToMode() {
+  if (_orbitsUserOverride) return;
+  orbitsVisible = !_scManual; // ORRERY (not HELM hands-on) → orbits visible
+  _applyOrbitVisibility();
 }
 
 function toggleFullscreen() {
@@ -6837,10 +7136,259 @@ function _composeShakeOntoCamera() {
 // one-shot; it clears on the next leg's ALIGN entry.
 let _scLegAdvanced = false;
 
+// Increment 1 (autopilot-standoff-routing) — go-around glue. When a straight
+// tour leg would cross the star keep-out sphere, we dispatch a PASS-THROUGH
+// waypoint leg first and stash the REAL target here; the motionComplete handler
+// flies the real target once the waypoint arrives, WITHOUT advancing the tour
+// index (a pass-through is not a queue stop). Null when no go-around is pending.
+let _scPendingRealTarget = null;
+
+// Increment 1 — pass-through waypoints inserted for the CURRENT real stop. The
+// real-target dispatch re-checks crossing from the ACTUAL arrival position and
+// may insert another waypoint; capped at SC_GOAROUND_CAP so a pathological
+// near-boundary geometry can't loop. Beyond the cap → dispatch direct (the WS-1
+// stall-detector is the backstop). Reset to 0 when a NEW real stop is dispatched.
+const SC_GOAROUND_CAP = 3; // 2->3 (tour-body-reachability-2026-07-05): headroom for a star+planet chained go-around leg
+let _scGoAroundCount = 0;
+
+// Increment 1 — go-around safety margin. The waypoint is PLACED against, and the
+// switch-to-real-target clearance is TESTED against, keepOut·SC_GOAROUND_SAFETY
+// (a sphere slightly larger than the true keep-out) so the flown detour keeps a
+// margin ABOVE the true keep-out sphere rather than grazing it. Detection of
+// whether a leg needs a go-around at all still uses the true keep-out.
+const SC_GOAROUND_SAFETY = 1.2;
+
+// Increment 1 telemetry — count CRUISE stall-aborts that fire during a tour leg
+// (read by the reliability suite's far-side-star scenario via _lab, AC8). Reset
+// per scenario run by _lab.forceFarSideStarLeg().
+let _scTourStallAbortCount = 0;
+
+// Live star geometry for Increment-1 routing — TWO DECOUPLED radii:
+//   • park    = the star's HOLD/viewing distance = revived orbitDistance
+//               min(8R, 0.6·innerOrbit) computed in populateQueueRefs (dead for
+//               the pilot until now), RAISED to stay strictly outside keepOut.
+//   • keepOut = KEEP_OUT_FACTOR·R (~3.5R) — the go-around crossing sphere.
+// A ship parked at `park` sits OUTSIDE the `keepOut` sphere, so a star->planet
+// departure starts outside it and the go-around never degenerates.
+// Returns null when there is no star (deep-sky / no system) → no special routing.
+// RC3 (tour-reliability-corrections-2026-07-01): also returns null for a
+// non-finite/non-positive star radius — a degenerate value would otherwise
+// propagate into `park`/`keepOut` (~0), producing a standoff that looks
+// "computed" but still parks the ship at the star. Real generated star data
+// is never 0/NaN; this is a defensive backstop, not a live path.
+function _starKeepOut() {
+  if (!system?.star?.mesh) return null;
+  const R = system.star.data.radius;
+  if (!Number.isFinite(R) || R <= 0) return null;
+  const keepOut = starKeepOutRadius({ starRadius: R });
+  const starStop = autoNav.queue?.find?.(s => s.type === 'star');
+  const rawPark = (starStop && Number.isFinite(starStop.orbitDistance))
+    ? starStop.orbitDistance
+    : starParkRadius({ starRadius: R, innerOrbitRadius: system.planets?.[0]?.orbitRadius ?? Infinity });
+  // Keep park strictly outside the keep-out sphere (decoupled-radii invariant).
+  const park = Math.max(rawPark, keepOut * PARK_MIN_FACTOR);
+  return { pos: system.star.mesh.position, radius: R, park, keepOut };
+}
+
+// tour-body-reachability-2026-07-05 (Defect 1): the live NON-STAR obstacle list
+// for the tour go-around, mirroring the _scBodies accessors (star/star2/planets/
+// moons, ~8313-8328). Each obstacle carries an inflated keep-out sphere: star &
+// star2 use the star keep-out (~3.5R — gravity bodies the star block only checks
+// for the PRIMARY star), planets/moons use the 1.5R obstacle keep-out. excludeMesh
+// (the leg's own target) is dropped so a target is never its own obstacle. `safety`
+// matches the star routing (1 for detection, SC_GOAROUND_SAFETY for the flown /
+// cleared margin). Fresh array each call — re-derived per frame during a go-around,
+// so there is no parallel pending-obstacle variable to keep in sync.
+function _tourObstacles(excludeMesh, safety = 1) {
+  const out = [];
+  if (!system) return out;
+  const add = (mesh, radius, isStarBody) => {
+    if (!mesh || mesh === excludeMesh || !Number.isFinite(radius) || radius <= 0) return;
+    const keepOut = (isStarBody ? starKeepOutRadius({ starRadius: radius }) : obstacleKeepOutRadius({ radius })) * safety;
+    out.push({ pos: mesh.position, keepOut, mesh, radius });
+  };
+  if (system.star?.mesh) add(system.star.mesh, system.star.data.radius, true);
+  if (system.star2?.mesh) add(system.star2.mesh, system.star2.data.radius, true);
+  for (const entry of system.planets || []) {
+    if (entry?.planet?.mesh) add(entry.planet.mesh, entry.planet.data.radius, false);
+    for (const moon of entry?.moons || []) {
+      if (moon?.mesh) add(moon.mesh, moon.data.radius, false);
+    }
+  }
+  return out;
+}
+
+// Dispatch one tour leg to `stop`, applying Increment-1 routing via the pure
+// planLeg() seam (DECOUPLED park vs keep-out radii):
+//   • STAR target → park at the PARK distance (held OUTSIDE the keep-out sphere
+//     and the gravity well).
+//   • any other target whose straight path crosses the star KEEP-OUT sphere →
+//     insert ONE pass-through waypoint (fly around the star first), stashing the
+//     real target in _scPendingRealTarget; no onLegAdvanced for the waypoint.
+//   • clear legs → today's plain flyTo (2.6R hold) + onLegAdvanced.
+// RC3 (tour-reliability-corrections-2026-07-01) — SPLIT warp gate: star geometry
+// (`_starKeepOut()`) is read fresh from the LIVE system/queue every dispatch,
+// regardless of warpEffect.isActive — it reflects real scene state, not warp
+// VISUAL state, and nulling it here (the pre-fix behavior) sent every
+// warp-arrival star leg to the degenerate `{standoff:null}` branch below → the
+// legacy 2.6R hold INSIDE the keep-out sphere (the measured stuck-at-the-sun
+// bug; see docs/WORKSTREAMS/autopilot-standoff-routing-2026-07-01/triage/).
+// Only WAYPOINT INSERTION — the pass-through detour for a far-side non-star
+// leg — still stays suppressed while warpEffect.isActive: re-routing around the
+// star mid-choreographed-fly-in would visibly hijack the scripted arrival. A
+// star target never gets a waypoint from planLeg anyway, so that suppression is
+// a no-op for the star case; it only guards a theoretical non-star dispatch
+// during warp (scPilot.stop() runs at warp turn start and stays stopped for the
+// whole warp, so no frame-driven dispatch reaches here while warpEffect.isActive
+// is true today — this is a hard guarantee for the future, not a live path).
+// `continuation` is set when dispatching the real target right after a waypoint
+// arrival (or a waypoint-leg stall retry): it KEEPS the per-stop go-around
+// counter (so the SC_GOAROUND_CAP still bounds re-inserted waypoints) and
+// re-checks crossing from the ACTUAL arrival position. A fresh (non-continuation)
+// dispatch resets the counter — it is a new real stop.
+// `choreo` is the ship-axis cue fired for the REAL (non-waypoint) leg — default
+// shipChoreographer.onLegAdvanced; pass null when the caller owns the cue
+// (startFlythrough / warpRevealSystem fire beginTour themselves). A pass-through
+// waypoint fires NO cue.
+function _dispatchTourLeg(stop, { continuation = false, choreo } = {}) {
+  if (!stop || !stop.bodyRef) return;
+  // RC3 defensive guard: a non-finite/zero bodyRadius would collapse holdDist
+  // toward 0 (flying INTO the body) whether or not a standoff applies. Real
+  // populateQueueRefs data is always a positive finite radius; this is a
+  // backstop, not a live path — advanceToNextWithBody() already filters
+  // null-bodyRef stops before they reach here, so skipping (rather than
+  // dispatching a degenerate leg) can't newly freeze the tour.
+  if (!Number.isFinite(stop.bodyRadius) || stop.bodyRadius <= 0) {
+    console.warn('[TOUR] stop has non-finite/zero bodyRadius — skipping leg', stop);
+    return;
+  }
+  // tour-body-reachability-2026-07-05 (Defect 2): every tour/boot/fly-in leg
+  // dispatches with the supercruise drive ENGAGED. A tour that INHERITS drive-off
+  // (hands-on R-dropout → idle → tour) would otherwise crawl at sublight and never
+  // cross the leg (AC3). One-shot at the dispatch seam (NOT per-frame); anti-clip is
+  // automatic (speedCap collapses to the surface floor on a nose-into-a-body).
+  scModel.setDrive(true);
+  const legCue = choreo === undefined ? () => shipChoreographer.onLegAdvanced() : choreo;
+  const linger = stop.linger * settings.get('tourLingerMultiplier');
+  const isStar = stop.type === 'star';
+  const ko = _starKeepOut();
+
+  // RC3 defensive guard: never dispatch a STAR leg with unreadable or
+  // degenerate keep-out geometry (system swapped mid-dispatch, or a corrupt
+  // star radius) — that would fall through to the same "park near 0" bug this
+  // workstream removes, just dressed up as "using planLeg." Every live caller
+  // (startFlythrough, warpRevealSystem) runs populateQueueRefs() against the
+  // CURRENT system immediately before dispatching a star stop, so `ko` is
+  // valid whenever `stop.bodyRef` (== system.star.mesh at populate time) is
+  // valid — this should never fire in practice.
+  if (isStar && (!ko || !Number.isFinite(ko.park) || ko.park <= 0)) {
+    console.warn('[TOUR] star stop dispatched with unreadable/degenerate keep-out geometry — skipping leg');
+    return;
+  }
+
+  // A fresh real stop resets the per-stop go-around waypoint counter.
+  if (!continuation) _scGoAroundCount = 0;
+
+  let plan = ko
+    ? planLeg({
+        shipPos: scModel.position,
+        targetPos: stop.bodyRef.position,
+        targetIsStar: isStar,
+        starPos: ko.pos,
+        keepOut: ko.keepOut,
+        park: ko.park,
+      })
+    : { waypoint: null, standoff: null };
+
+  // Waypoint INSERTION stays gated on warp (see header comment) — degrade a
+  // would-be detour to a direct dispatch rather than hijacking the
+  // choreographed fly-in. The standoff (if any) computed above is unaffected.
+  if (warpEffect.isActive && plan.waypoint) plan = { waypoint: null, standoff: plan.standoff };
+
+  if (plan.waypoint && _scGoAroundCount < SC_GOAROUND_CAP) {
+    // Far-side leg — route AROUND the star. Place the waypoint against the
+    // SAFETY-inflated keep-out so the detour bulges clear of the true sphere.
+    // The ship is switched to the real target PER-FRAME by clearance (see
+    // _handleScPilotFrame) the instant the direct path clears — NOT by capturing
+    // this waypoint (its capture radius is large relative to the maneuver, which
+    // would false-complete before the ship ever flies the detour). wpRadius is a
+    // small fallback capture only; linger 0.
+    _scGoAroundCount++;
+    _scPendingRealTarget = stop;
+    const W = goAroundWaypoint(
+      scModel.position, stop.bodyRef.position, ko.pos, ko.keepOut * SC_GOAROUND_SAFETY);
+    const wpRadius = Math.max(ko.keepOut * 0.08, 1);
+    scControls.flyTo({ toPosition: W, bodyRadius: wpRadius, linger: 0, selfStep: false });
+    // No cue for a pass-through — the shake cue fires on the REAL leg.
+    return;
+  }
+
+  // tour-body-reachability-2026-07-05 (Defect 1): NON-STAR obstacle go-around. The
+  // star block above owns star-crossing / star-target legs; here we route around a
+  // planet / moon / second star that lies on the straight path to a NON-STAR target
+  // (classically a moon on the far side of its parent planet — the RC2 barrier-pin
+  // carousel). Same gating and shared cap as the star block; the unified per-frame
+  // clearance switch (_handleScPilotFrame) flies the ship AROUND and switches to the
+  // real target the instant the direct path clears every obstacle.
+  if (!isStar && autoNav.isActive && !warpEffect.isActive && _scGoAroundCount < SC_GOAROUND_CAP) {
+    const oPlan = planLegObstacle({
+      shipPos: scModel.position,
+      targetPos: stop.bodyRef.position,
+      obstacles: _tourObstacles(stop.bodyRef),
+    });
+    if (oPlan.obstacle) {
+      _scGoAroundCount++;
+      _scPendingRealTarget = stop;
+      const W = goAroundWaypoint(
+        scModel.position, stop.bodyRef.position, oPlan.obstacle.pos, oPlan.obstacle.keepOut * SC_GOAROUND_SAFETY);
+      const wpRadius = Math.max(oPlan.obstacle.keepOut * 0.08, 1);
+      scControls.flyTo({ toPosition: W, bodyRadius: wpRadius, linger: 0, selfStep: false });
+      return;
+    }
+  }
+
+  // Real target: a clear leg, the star park, or the cap reached (dispatch direct;
+  // the WS-1 stall-detector is the backstop). No pending target after this.
+  _scPendingRealTarget = null;
+  scControls.flyTo({
+    toBody: stop.bodyRef,
+    bodyRadius: stop.bodyRadius,
+    linger,
+    standoff: plan.standoff, // PARK for the star, else null (today's 2.6R hold)
+    selfStep: false,
+  });
+  if (legCue) legCue();
+}
+
 function _handleScPilotFrame(frame) {
   // New leg started (beginLeg → ALIGN) — re-arm the advance latch.
   if (frame.phaseChanged && frame.phase === PilotPhase.ALIGN) {
     _scLegAdvanced = false;
+  }
+
+  // Increment 1 go-around switch: while a pass-through waypoint is pending, switch
+  // to the REAL target the instant the ship has swung far enough that the direct
+  // path to it no longer crosses the SAFETY-inflated star keep-out sphere. This —
+  // not capturing the waypoint — is what actually flies the ship AROUND the star
+  // (the waypoint is only a steering carrot). Uses the ACTUAL ship position, so it
+  // is robust to how close the pilot got to the waypoint.
+  if (_scPendingRealTarget && autoNav.isActive && !warpEffect.isActive) {
+    const rt = _scPendingRealTarget.bodyRef;
+    // tour-body-reachability-2026-07-05 (Defect 1): UNIFIED clearance. Switch to the
+    // real target the instant the direct path clears EVERY obstacle (star + planets +
+    // moons), re-derived from live mesh positions each frame — NO parallel pending-
+    // obstacle variable to keep in sync (eliminates the stale-routing desync class).
+    // The star is in this list at starKeepOutRadius·SAFETY == the old koF test, so a
+    // star-only leg switches at the identical instant; a star+planet leg also waits
+    // for the planet before committing to the direct leg.
+    if (rt &&
+        !firstBlockingObstacle(scModel.position, rt.position, _tourObstacles(rt, SC_GOAROUND_SAFETY))) {
+      const realStop = _scPendingRealTarget;
+      _scPendingRealTarget = null;
+      _dispatchTourLeg(realStop, { continuation: true });
+      updateFocusFromStop(realStop);
+      return;
+    }
   }
 
   // Manual COMMIT BURN arrival (supercruise-freelook-2026-06-10, AC5c):
@@ -6852,8 +7400,24 @@ function _handleScPilotFrame(frame) {
     _manualBurnOrbiting = true;
   }
 
+  // WS-1 no-freeze guard: the pilot's CRUISE stall-detector aborted a wedged /
+  // uncatchable leg. A standalone (Assist / commit-burn) leg drops out of
+  // supercruise gracefully here (settle to rest — no runaway drive); a tour leg
+  // is advanced below (skip-and-continue). Handle the standalone case before the
+  // tour-only early return.
+  if (frame.stallAborted && !autoNav.isActive) {
+    scModel.setDrive(false);
+    _manualBurnOrbiting = false;
+    return;
+  }
+
   // Tour-only wiring below; manual-burn pilot legs (Task 9) skip it.
   if (!autoNav.isActive) return;
+
+  // Increment 1 telemetry (AC8): a tour-leg CRUISE stall-abort. With the star
+  // standoff + go-around in place a far-side leg should NOT reach this — the
+  // suite asserts the count stays 0 for that scenario.
+  if (frame.stallAborted) _scTourStallAbortCount++;
 
   // Reticle sync (mirrors the V1 autopilotMotion branch, 2026-04-25):
   // surface the autopilot target as the selected reticle so the camera-
@@ -6868,18 +7432,40 @@ function _handleScPilotFrame(frame) {
     if (_tgt) _selectedTarget = _tgt;
   }
 
-  // Tour advance: motionComplete fires after the HOLD linger timer.
-  if (frame.motionComplete && !_scLegAdvanced) {
+  // Tour advance: motionComplete fires after the HOLD linger timer, OR the WS-1
+  // stall-detector aborted a wedged/uncatchable leg (skip-and-continue). Either
+  // way advance past any null-bodyRef stops so the tour can never freeze.
+  if ((frame.motionComplete || frame.stallAborted) && !_scLegAdvanced) {
     _scLegAdvanced = true;
-    const nextStop = autoNav.advanceToNext();
+
+    // Increment 1 go-around: a pass-through waypoint just arrived (motionComplete,
+    // not a stall). Fly the REAL target now WITHOUT advancing the tour index — the
+    // index already points at it; the waypoint was never a queue stop. Re-check
+    // crossing from the ACTUAL arrival position (continuation:true keeps the
+    // per-stop cap) — insert another waypoint only if the path still crosses.
+    if (_scPendingRealTarget && frame.motionComplete && !frame.stallAborted) {
+      const realStop = _scPendingRealTarget;
+      _scPendingRealTarget = null;
+      _dispatchTourLeg(realStop, { continuation: true });
+      updateFocusFromStop(realStop);
+      return;
+    }
+    // A pass-through waypoint leg STALLED. Do NOT skip past the real stop — retry
+    // the real target directly (continuation:true re-plans from the actual pos;
+    // the cap + WS-1 backstop bound it). Only if the REAL target then stalls does
+    // the normal WS-1 skip-and-continue apply (on a later frame).
+    if (_scPendingRealTarget && frame.stallAborted) {
+      const realStop = _scPendingRealTarget;
+      _scPendingRealTarget = null;
+      _dispatchTourLeg(realStop, { continuation: true });
+      updateFocusFromStop(realStop);
+      return;
+    }
+    _scPendingRealTarget = null;
+
+    const nextStop = autoNav.advanceToNextWithBody();
     if (nextStop && nextStop.bodyRef) {
-      scControls.flyTo({
-        toBody: nextStop.bodyRef,
-        bodyRadius: nextStop.bodyRadius,
-        linger: nextStop.linger * settings.get('tourLingerMultiplier'),
-        selfStep: false,
-      });
-      shipChoreographer.onLegAdvanced();
+      _dispatchTourLeg(nextStop); // may insert a go-around waypoint (sets _scPendingRealTarget)
       updateFocusFromStop(nextStop);
     }
   }
@@ -7854,11 +8440,16 @@ function simStep(deltaTime) {
       }
       scModel.setBodies(_scBodies);
 
-      // Forced proximity drop-out (spec §Unit 5): in hands-on flight, if the drive
-      // is ON and we've crossed a body's forced-drop horizon (mass-based for stars,
-      // 1.1R floor otherwise), kick to sublight. The hard barrier (model) is the
-      // backstop; this is the supercruise-side safety + the "stars push you out far".
-      if (_scManual && scModel.driveOn && scModel.proximityDropRequired()) {
+      // Forced proximity drop-out (spec §Unit 5): a HANDS-ON affordance — if the
+      // drive is ON and we've crossed a body's forced-drop horizon (mass-based for
+      // stars, 1.1R floor otherwise), kick to sublight. The hard barrier (model) is
+      // the backstop; this is the supercruise-side safety + "stars push you out far".
+      // tour-body-reachability-2026-07-05 (Defect 2): YIELD while the autopilot owns
+      // the throttle (pilot/tour active, non-ASSIST) — there is NO hands-off drive
+      // re-arm (R is inert hands-off), so dropping mid-tour strands the ship at the
+      // ~0.0015 u/s sublight crawl. The gate is the pure forcedProximityDropAllowed.
+      if (forcedProximityDropAllowed({ scManual: _scManual, pilotActive: scPilot.isActive, tourActive: autoNav.isActive, flightMode: _flightMode })
+          && scModel.driveOn && scModel.proximityDropRequired()) {
         scModel.setDrive(false);
         scModel.setThrottle(0);
         shipChoreographer.dropImpulse();
@@ -7949,6 +8540,26 @@ function simStep(deltaTime) {
       _composeShakeOntoCamera();
 
       if (scFrame) _handleScPilotFrame(scFrame); // reticle sync + tour advance (live since the 2026-06-10 cutover)
+
+      // mode-ownership-2026-07-02 (AC8, live-caught): idle must also accrue in
+      // HELM. The idle chain below sits in this branch's `else`, so it never
+      // runs while _scManual — pre-existing structure from when idle was an
+      // ORRERY-only screensaver mechanism. Max's pick: "idle → tour only from
+      // HELM" — walking away mid-flight (no input for idleTimeout; pilot not
+      // flying a leg) hands the ship to the tour via the same hands-off
+      // assertion Z uses. A flying pilot leg (tour or Assist) is purposeful
+      // activity, never idle. Ship-lock suppression mirrors the ORRERY branch.
+      if (_scManual && !scPilot.isActive && !autoNav.isActive
+          && !warpEffect.isActive && !splashActive && !titleScreenActive) {
+        idleTimer += deltaTime;
+        if (_selectedTarget?.kind === 'ship') {
+          idleTimer = 0;
+        } else if (idleTimer >= settings.get('idleTimeout')
+                   && idleFiresTour({ regime: 'helm' })) {
+          _manualBurnOrbiting = false;
+          _beginHandsOffTour();
+        }
+      }
     }
     // ── Autopilot (cinematic flythrough) ──
     // (V1 AutopilotMotion simStep branch removed 2026-06-26 — the
@@ -7999,7 +8610,7 @@ function simStep(deltaTime) {
         // mover. (Since the Task-7 cutover the warp-arrival fly-in is
         // a scPilot leg from warpRevealSystem — this handoff only
         // fires for manual-burn navSubsystem legs, Task 9's domain.)
-        const nextStop = autoNav.advanceToNext();
+        const nextStop = autoNav.advanceToNextWithBody(); // WS-1: skip null-bodyRef stops
         if (nextStop && nextStop.bodyRef) {
           if (navSubsystem.stop) navSubsystem.stop();
           // navSubsystem owned the camera until this frame — seed the
@@ -8028,8 +8639,15 @@ function simStep(deltaTime) {
       if (_selectedTarget?.kind === 'ship') {
         idleTimer = 0;
       } else if (idleTimer >= settings.get('idleTimeout')) {
-        _manualBurnOrbiting = false;
-        startFlythrough();
+        // mode-ownership-2026-07-02: the tour may auto-arm ONLY from HELM —
+        // ORRERY idles forever, never auto-arming (idleFiresTour is the pure
+        // gate). HELM idle-fires from either hand state through the SAME
+        // hands-off assertion Z uses (_beginHandsOffTour), not a bare
+        // startFlythrough().
+        if (idleFiresTour({ regime: _scManual ? 'helm' : 'orrery' })) {
+          _manualBurnOrbiting = false;
+          _beginHandsOffTour();
+        }
       }
     }
 
@@ -8042,8 +8660,13 @@ function simStep(deltaTime) {
       if (_selectedTarget?.kind === 'ship') {
         idleTimer = 0;
       } else if (idleTimer >= settings.get('idleTimeout')) {
-        _manualBurnOrbiting = false;
-        startFlythrough();
+        // Same HELM-only idle gate as above (mode-ownership-2026-07-02) — a
+        // ship-target burn orbit (the QUARANTINED-legacy navSubsystem path)
+        // idling out in ORRERY must not auto-arm the tour either.
+        if (idleFiresTour({ regime: _scManual ? 'helm' : 'orrery' })) {
+          _manualBurnOrbiting = false;
+          _beginHandsOffTour();
+        }
       }
     }
 
@@ -8138,7 +8761,29 @@ function simStep(deltaTime) {
                    && document.getElementById('keybinds-overlay')?.style.display === 'none';
     cameraController._flightEnabled = flightOk;
 
-    if (_scManual) {
+    // Mode-ownership (docs/WORKSTREAMS/mode-ownership-2026-07-02): the ship's
+    // hand-inputs (W/S throttle, Q/E roll) are live IFF hands-ON — exactly
+    // pointerHudState's helmHandsOn, `handRouting`'s source condition. Hands-
+    // OFF (tour or a Z-stopped coast) is a passenger state: no W/S/Q/E should
+    // reach the ship, and turnInput.roll — which the pilot never zeroes itself
+    // — must be explicitly held at 0 so a stale/held Q/E press can't leak into
+    // the autopilot's flight (the measured main.js:8468 leak).
+    const _handRouting = handRouting(_scManual && !freeLook.latched);
+    // Assist-type player burns (Space commit-burn) are OUT OF SCOPE for the
+    // hand-state mutual exclusion (docs/WORKSTREAMS/mode-ownership-2026-07-02
+    // intent.md non-goals: "the hands-on/off mutual exclusion is scoped to
+    // the TOUR ... extending it to Assist is a named follow-up for Max to
+    // call"). A HELM-native ASSIST leg can be launched from hands-off — aim/
+    // select requires a free cursor (main.js ~10177: "no click-select" in
+    // hands-on) — so gating this branch on hand-state alone stranded the
+    // manualCancelsLeg W/S-cancel path (and Q/E roll) behind a hands-on check
+    // they never had before this workstream. Keep the branch reachable
+    // whenever an ASSIST leg is actively flying, regardless of hand-state —
+    // this restores pre-workstream Assist semantics untouched. The TOUR never
+    // sets _flightMode to ASSIST (it stays MANUAL throughout), so this OR
+    // cannot reopen the tour's Q/E-roll leak.
+    const _assistLegActive = scPilot.isActive && _flightMode === FlightMode.ASSIST;
+    if (_handRouting.throttle || _assistLegActive) {
       // Supercruise manual throttle (Elite convention): W ramps throttle up,
       // S ramps it down, both held-key stepping at SC_TUNING.THROTTLE_RATE
       // (units/s). The supercruise mover owns motion in this mode, so the
@@ -8155,8 +8800,15 @@ function simStep(deltaTime) {
       }
       // Roll axis (Q/E held) — rotational input the mouse stick (yaw+pitch) doesn't
       // cover. Polled per-frame like W/S throttle; SupercruiseModel.update applies it.
-      // (Sign: E rolls one way, Q the other — flip the subtraction if reversed.)
-      scModel.turnInput.roll = (_heldKeys.has('KeyE') ? 1 : 0) - (_heldKeys.has('KeyQ') ? 1 : 0);
+      // Sign FLIPPED to Q−E per Max UAT 2026-06-30 (the original E−Q guess was inverted).
+      scModel.turnInput.roll = (_heldKeys.has('KeyQ') ? 1 : 0) - (_heldKeys.has('KeyE') ? 1 : 0);
+      cameraController.setFlightInput(0, 0, false);
+    } else if (_scManual) {
+      // HELM hands-off (tour flying, or a Z-stopped coast waiting on F): the
+      // ship is the pilot's/nobody's alone — no ship hand-input, and NOT the
+      // legacy ORRERY/Toy-Box WASD camera-fly below either (that's an orrery
+      // camera control, not a ship flight control, and we're still in HELM).
+      scModel.turnInput.roll = 0;
       cameraController.setFlightInput(0, 0, false);
     } else if (flightOk) {
       // Use e.code values (KeyW/KeyS/etc.) — immune to Shift changing e.key case
@@ -8668,6 +9320,17 @@ window.addEventListener('resize', () => retroRenderer.resize());
 // caller (engage(type)) if given, else Settings — the SAME source the inline
 // handler read on each engage. Guard against an unexpected stored value → Manual.
 function _enterFlightInternal(type) {
+  // mode-ownership-2026-07-02 fix: an ORRERY idle period leaves idleTimer
+  // sitting at/above idleTimeout (the ORRERY idle branch never fires the
+  // tour, so it never resets the timer either — idleFiresTour({regime:
+  // 'orrery'}) is always false). Without this reset, swapping into HELM
+  // hands-on (M, or R-engage via the enterFlight delegate at :582) right
+  // after such an idle stretch would insta-fire _beginHandsOffTour() on the
+  // very next simStep frame — zero hands-on grace for a player who just
+  // deliberately took the helm. Every hands-on entry point funnels through
+  // here, so resetting once at the choke point covers M-swap and R-engage
+  // alike.
+  idleTimer = 0;
   // Reuse the existing ENTER setup verbatim (camera → FLIGHT, model seeded
   // from the live camera pose, throttle zero, cameraController bypassed).
   cameraController.setCameraMode(CameraMode.FLIGHT);
@@ -8762,9 +9425,15 @@ function _exitFlightInternal() {
 // pose-preserving exit (_exitFlightInternal — the SAME no-snap path the old
 // Esc-exit used) HELM→ORRERY, and _enterFlightInternal (drive untouched, since
 // it never calls setDrive) ORRERY→HELM. Same warp/splash/title/star-system
-// guards as E; mobile is ORRERY-only (Toy-Box locked) so it's a no-op there.
+// guards as E. Mobile is no longer excluded (docs/WORKSTREAMS/mode-ownership
+// -2026-07-02, AC9), but only in the HELM→ORRERY direction: mobile-HELM boots
+// the tour by default with no F key to take the stick, so this swap is the
+// ONLY way off it — "the mode-swap HUD button leaves it to ORRERY." AC9 does
+// NOT offer a mobile ORRERY→HELM entry via this button (mobile-ORRERY is a
+// touch-driven orrery with no tour to opt into here); that direction stays a
+// no-op on mobile so a stray tap can't strand a touch player in a keyless,
+// hands-on HELM with no F/W/S/Q/E/Z (mode-ownership-2026-07-02 review fix).
 function _doModeSwap() {
-  if (_isMobile) return;
   if (warpEffect.isActive || warpTarget.turning) return;
   if (splashActive || titleScreenActive) return;
   if (!system || (system.type && system.type !== 'star-system')) {
@@ -8772,11 +9441,22 @@ function _doModeSwap() {
     return;
   }
   const swap = modeSwapAction({ scManual: _scManual });
+  if (_isMobile && !swap.exitFlight) return; // mobile: ORRERY→HELM entry not offered
   if (swap.exitFlight) {
-    // HELM → ORRERY: pose-preserving exit (no snap). Clear any free-look latch
-    // first so the orbit isn't left mid-look.
-    if (freeLook.latched) freeLook.exit();
-    _exitFlightInternal();
+    // HELM → ORRERY. If a tour is running, _exitFlightInternal alone doesn't
+    // stop it — it never touches autoNav/flythrough/shipChoreographer, which
+    // would leave the tour wedged active with _scManual now false (mode
+    // -ownership-2026-07-02, mobile tour exit). stopFlythrough() is the
+    // existing full teardown and already lands in ORRERY (setScManual(false)
+    // + camera restore around the closest body), so it subsumes
+    // _exitFlightInternal's job whenever a tour is active. Outside a tour,
+    // keep the no-snap pose-preserving exit exactly as before.
+    if (autoNav.isActive) {
+      stopFlythrough();
+    } else {
+      if (freeLook.latched) freeLook.exit();
+      _exitFlightInternal();
+    }
   } else {
     // ORRERY → HELM: enter flight WITHOUT lighting the drive (drive state
     // preserved — _enterFlightInternal never calls setDrive; only E does).
@@ -8791,16 +9471,22 @@ function _doModeSwap() {
 }
 
 // Reflect the CURRENT station on the desktop HUD swap button: it names the mode
-// you're IN (so the press is "leave here"). Hidden on mobile (ORRERY-only), on
-// the title/splash screen, when no star system is loaded, and while the HUD is
-// hidden — the SAME gates the M key honors, so the button never offers a swap
-// the key would refuse. Called every render frame (visibility) + on each regime
-// flip (label), so it stays in sync no matter what path changed the mode.
+// you're IN (so the press is "leave here"). Hidden on the title/splash screen,
+// when no star system is loaded, and while the HUD is hidden — the SAME gates
+// the M key honors (mobile has no M key, but the button itself is the mobile
+// HELM→ORRERY tour exit — AC9 — so it is no longer unconditionally
+// mobile-hidden here or in CSS). On mobile it's additionally gated to
+// _scManual: AC9 offers it only as the tour exit, not as a mobile ORRERY→HELM
+// entry, so it stays hidden through mobile-ORRERY (matches the _doModeSwap
+// no-op above; mode-ownership-2026-07-02 review fix). Called every render
+// frame (visibility) + on each regime flip (label), so it stays in sync no
+// matter what path changed the mode.
 function _updateModeSwapButton() {
   const btn = document.getElementById('mode-swap-btn');
   if (!btn) return;
-  const swappable = !_isMobile && _hudVisible && !splashActive && !titleScreenActive
-    && !!system && !(system.type && system.type !== 'star-system');
+  const swappable = _hudVisible && !splashActive && !titleScreenActive
+    && !!system && !(system.type && system.type !== 'star-system')
+    && (!_isMobile || _scManual);
   btn.style.display = swappable ? 'block' : 'none';
   if (swappable) btn.textContent = _scManual ? 'HELM' : 'ORRERY';
 }
@@ -9164,7 +9850,8 @@ window.addEventListener('keydown', (e) => {
   //     (_exitFlightInternal — the SAME no-snap path the old Esc-exit used).
   //   - in ORRERY (!_scManual) → swap to HELM via _enterFlightInternal, drive
   //     state PRESERVED (it doesn't call setDrive — only the E-engage path does).
-  // Mobile is ORRERY-only (hard-locked to Toy Box), so M is a no-op there. Same
+  // Mobile has no physical M key; the same swap action is reachable there via
+  // the mode-swap HUD button only (AC9 — mobile's tour-exit path). Same
   // warp/splash/title/star-system guards as E. (Was: toggle minimap — moved to R.)
   if (e.code === 'KeyM') {
     _doModeSwap();
@@ -9205,6 +9892,14 @@ window.addEventListener('keydown', (e) => {
       console.log('[MODE] Supercruise unavailable — no star system');
       return;
     }
+    // Mode-ownership: hands-off (tour flying, or a Z-stopped coast) is a
+    // passenger state — R would fight the pilot / has nothing to toggle for
+    // a passenger, so it's inert with a hint. Engage-from-Toy-Box/orrery
+    // entry (!_scManual) and hands-on dropout/reengage are untouched.
+    if (_scManual && !handRouting(_scManual && !freeLook.latched).driveToggle) {
+      console.log('[MODE] drive toggle unavailable — hands-off (a passenger doesn\'t fly the drive); press F to take the stick');
+      return;
+    }
     const action = nextDriveAction(_scManual, scModel.driveOn);
     if (action === 'engage') {
       scControls.engage();          // enter In-Flight at the Settings-selected type
@@ -9229,29 +9924,46 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // F key: toggle free-look MODE on/off (§free-look-interaction-redesign
-  // -2026-06-27, Part 2; was §supercruise-arrival-modes Feature 2). In-Flight only.
-  // F no longer engages/disengages supercruise (that's E), and it no longer LATCHES
-  // the look: in free-look the head looks ONLY while LMB is dragged, and a bare
-  // cursor is a free pointer (it neither steers nor moves the camera — the mousemove
-  // joystick gate is `!freeLook.latched`). F-ON shows the cursor + hides the steering
-  // reticle (Part 1). F-OFF arms the one-shot recenter (freeLook.exit → the frame
-  // bridge calls scHead.beginRecenter → a FAST-but-graceful eased return to nose-
-  // forward, EXIT_RECENTER_TAU). Desktop only; same warp/splash guards as E.
+  // F key: "Pressing F should put control back into the player's hands"
+  // (Max, mode-ownership-2026-07-02 scope session). F is the ONE hands-on/
+  // off toggle (§free-look-interaction-redesign-2026-06-27, Part 2 supersedes
+  // its old "free-look toggle" framing per the mode-ownership reversal):
+  // hands-OFF absorbs free-look (bare cursor aims/selects, LMB-drag looks; the
+  // head looks ONLY while LMB is dragged — a bare cursor neither steers nor
+  // moves the camera, mousemove joystick gate is `!freeLook.latched`).
+  // fKeyAction is the pure decision (src/flight/flightModes.js): F is a HELM
+  // key (no-op in ORRERY — there's no ship hand-state to toggle there), F
+  // mid-tour is ALWAYS a takeover regardless of the stale hand-state bit, and
+  // otherwise it's the existing hands-on/off flip. Desktop only; same
+  // warp/splash guards as E/R.
   if (e.code === 'KeyF') {
     if (_isMobile) return;
     if (warpEffect.isActive || warpTarget.turning) return;
     if (splashActive || titleScreenActive) return;
-    // Free-look is available whenever the supercruise camera path is live — i.e.
-    // In-Flight (_scManual) OR while the autopilot/tour is flying (scPilot.isActive).
-    // This matches the frame-loop apply gate (scPilot.isActive || _scManual) and the
-    // middle-mouse peek gate, so F latches free-look during the Q tour too ("look
-    // around while the autopilot flies", §arrival-modes Feature 2 / AC6). Outside
-    // both there's nothing to free-look from (Toybox already orbits via drag).
-    if (!_scManual && !scPilot.isActive) {
-      console.log('[MODE] free-look unavailable — engage supercruise (E) or start the autopilot tour first');
+    const regime = _scManual ? 'helm' : 'orrery';
+    const handsOn = _scManual && !freeLook.latched;
+    const tourActive = autoNav.isActive;
+    const f = fKeyAction({ regime, tourActive, handsOn });
+    if (f.action === 'none') {
+      console.log('[MODE] flight controls unavailable — ORRERY has no hand-state to toggle (swap to HELM with M)');
       return;
     }
+    if (f.action === 'takeover') {
+      // F mid-tour: "put control back into the player's hands" — mirrors the
+      // old W/S-takeover recipe. NO pose reseed: the model keeps its live
+      // pose/speed, so the handoff is seamless (no snap).
+      scPilot.stop();
+      setScManual(true); // already true in HELM — kept defensively
+      _flightMode = FlightMode.MANUAL; // don't inherit a stale mode
+      cameraController.setCameraMode(CameraMode.FLIGHT);
+      cameraController.bypassed = true;
+      autoNav.stop();
+      freeLook.exit(); // latch OFF = hands-on
+      _applyPointerHud();
+      console.log('[MODE] F takeover — tour stopped, controls back in your hands');
+      return;
+    }
+    // 'hands-off' / 'hands-on': the existing toggle path.
     freeLook.toggle();
     // Free-look ON → show the cursor (free pointer for aiming/selecting) + hide the
     // steering reticle; OFF → hide the cursor + show it again, in HELM hands-on.
@@ -9261,48 +9973,51 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Q key: toggle the autopilot TOUR — the system-picked autopilot source
-  // (§supercruise-arrival-modes-design-2026-06-27, Feature 4 / Task 8). The same
-  // SupercruisePilot/scControls.flyTo door as player-directed Assist, just with the
-  // system choosing targets. UNAFFECTED by the E/F rewire: E drives supercruise and
-  // F latches free-look, both orthogonal to who-picks. Free-look works DURING the
-  // tour (the frame loop applies scHead every In-Flight frame), and W/S takeover
-  // (below, ~scPilot.isActive branch) still cancels the pilot mid-tour. (Was A —
-  // moved to free WASD for movement.)
-  // Z key: autopilot TOUR toggle (was Q — remapped 2026-06-28 so Q/E free for roll).
+  // The autopilot TOUR — the system-picked autopilot source (§supercruise
+  // -arrival-modes-design-2026-06-27, Feature 4 / Task 8). The same
+  // SupercruisePilot/scControls.flyTo door as player-directed Assist, just
+  // with the system choosing targets. Free-look works DURING the tour (the
+  // frame loop applies scHead every In-Flight frame — it's absorbed into
+  // hands-off, see fKeyAction above); the W/S-takeover this comment used to
+  // describe is RETIRED (mode-ownership-2026-07-02) — F is now the only
+  // takeover path (fKeyAction 'takeover').
+  // Z key: "toggle-off flight control if the player is in flight control
+  // mode when they press it" (Max, mode-ownership-2026-07-02 scope session) —
+  // and start the tour in that same press. zKeyAction is the pure decision
+  // (src/flight/flightModes.js): ORRERY never arms the tour (a hint, not a
+  // no-op-silent — "I do not want/need autopilot for orrery"); mid-tour Z
+  // stops it, staying hands-off/coasting (F grabs the stick, see fKeyAction
+  // 'takeover' above); from hands-on HELM, one press turns controls off AND
+  // starts the tour; from hands-off HELM (no tour running yet — e.g. after an
+  // F-driven hands-off) Z just arms it. (Was Q — remapped 2026-06-28 so Q/E
+  // free for roll.)
   if (e.code === 'KeyZ') {
-    if (autoNav.isActive) {
-      stopFlythrough();
-    } else if (system) {
-      idleTimer = 0;
-      startFlythrough();
+    const regime = _scManual ? 'helm' : 'orrery';
+    const handsOn = _scManual && !freeLook.latched;
+    const tourActive = autoNav.isActive;
+    const z = zKeyAction({ regime, handsOn, tourActive });
+    if (z.action === 'hint') {
+      console.log('[MODE] autopilot is a HELM feature — press M for the helm');
+      return;
     }
+    if (z.action === 'stop-tour-coast') {
+      _stopTourStayInShip();
+      return;
+    }
+    // 'hands-off-start-tour' / 'start-tour': arm the tour, via the shared
+    // hands-off engage (_beginHandsOffTour) also used by the idle-timeout
+    // gate — same deep-sky guard, free-look latch, HUD refresh, zeroed
+    // turnInput, and startFlythrough() call.
+    _beginHandsOffTour();
     return;
   }
 
-  // During autopilot, some keys redirect the tour instead of normal behavior
+  // During autopilot, some keys redirect the tour instead of normal behavior.
+  // W/S/A/D takeover retired (mode-ownership-2026-07-02): during a tour the
+  // ship is the pilot's alone — W/S/A/D are inert for the ship (they fall
+  // through this block untouched; F is the only way to take the stick back,
+  // see fKeyAction 'takeover' above).
   if (autoNav.isActive) {
-    // W/S while supercruise is flying: seamless takeover. The same model keeps
-    // flying — the pilot hands off mid-state (no snap, position/velocity
-    // preserved) and the player picks up the throttle/stick. A/D fall through
-    // to the legacy stopFlythrough() → Toy Box restore.
-    if (scPilot.isActive && (e.code === 'KeyW' || e.code === 'KeyS')) {
-      scPilot.stop();
-      setScManual(true);
-      _flightMode = FlightMode.MANUAL; // spec §1: W/S takeover enters Manual (don't inherit a stale mode)
-      // Intent follows action; setCameraMode persists wd_cameraMode + holds
-      // the mobile lock (mobile never reaches here anyway — keyboard).
-      cameraController.setCameraMode(CameraMode.FLIGHT);
-      cameraController.bypassed = true;
-      autoNav.stop();
-      _applyPointerHud(); // entered hands-on HELM via tour takeover — hide cursor + show steering reticle (bypasses _enterFlightInternal)
-      return;
-    }
-    // WASD: stop autopilot and take manual control
-    if (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD') {
-      stopFlythrough();
-      return;
-    }
     if (e.code === 'Space') {
       e.preventDefault();
       // Universal commit — burns the in-system selection OR warps, whichever
@@ -9663,6 +10378,9 @@ function beginWarpTurn() {
   // stop above (camera drivers only — _scManual / autoNav untouched);
   // warpRevealSystem re-arms the fly-in on emergence.
   scPilot.stop();
+  // Increment 1: drop any in-flight go-around target on warp teardown (mirrors
+  // warpSwapSystem) so a stale old-system stop can't leak into the new system.
+  _scPendingRealTarget = null;
   cameraController.bypassed = true;
   warpTarget.turning = true;
   warpTarget.turnTimer = 0;
@@ -10015,9 +10733,23 @@ canvas.addEventListener('touchstart', (e) => {
     _touchStart.x = e.touches[0].clientX;
     _touchStart.y = e.touches[0].clientY;
   }
-  // Stop autopilot or manual-burn-orbit on tap (matches mousedown behavior
-  // for desktop). Mobile is always Toy Box, so no Flight-mode carve-out needed.
-  if ((autoNav.isActive || _manualBurnOrbiting) && !warpEffect.isActive && !warpTarget.turning && !cameraController.forceFreeLook) {
+  // Stop autopilot or manual-burn-orbit on tap (matches mousedown/wheel
+  // behavior for desktop, :10380/:10393) — gated on cameraMode !== FLIGHT,
+  // same as those two. mode-ownership-2026-07-02 (AC9): mobile-HELM now
+  // boots the autopilot tour by default and runs it in FLIGHT (cockpit)
+  // camera, same as desktop HELM, so "Mobile is always Toy Box" is stale —
+  // without this gate ANY tap tore the tour down (stopFlythrough → ORRERY),
+  // leaving only the 300s idle timer to re-arm it (no F key on mobile). The
+  // mode-swap HUD button is the sole mobile-HELM tour exit (AC9); taps still
+  // select/aim through the FLIGHT camera during the tour via trySelect below.
+  // Gate on the REGIME bit too (live-caught, AC9): ShipCameraSystem hard-locks
+  // mobile to TOY_BOX (setCameraMode:370 — mobile can never hand-fly), so
+  // during a mobile-HELM tour cameraMode is never FLIGHT and the cameraMode
+  // clause alone can't protect the tour. _scManual is the honest "player is
+  // in the ship" bit on every platform; the mode-swap button is the mobile
+  // tour exit, not a stray tap.
+  if ((autoNav.isActive || _manualBurnOrbiting) && !warpEffect.isActive && !warpTarget.turning && !cameraController.forceFreeLook
+      && cameraController.cameraMode !== CameraMode.FLIGHT && !_scManual) {
     stopFlythrough();
     // Update the speed dial button state
     const autonBtn = mobileControls?.querySelector('[data-action="autonav"]');

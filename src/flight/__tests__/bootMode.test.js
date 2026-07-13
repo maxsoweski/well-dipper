@@ -12,6 +12,11 @@
 //
 // The load-bearing invariant: boot-into-HELM must request enterFlight (→ the live
 // host sets _scManual true); boot-into-ORRERY must NOT (→ _scManual stays false).
+//
+// FLIPPED (docs/WORKSTREAMS/mode-ownership-2026-07-02, per Max's standing model,
+// thrice-stated 2026-07-01/02): HELM is now ALSO the autopilot path — booting HELM
+// starts the screensaver tour hands-off; ORRERY arms nothing, ever. `startAutopilot`
+// pins that second bit alongside `enterFlight`.
 import { describe, it, expect } from 'vitest';
 import { bootModeAction } from '../flightModes.js';
 
@@ -43,5 +48,19 @@ describe('bootModeAction — the splash mode-picker boot decision (pure)', () =>
     expect(bootModeAction('orrery').enterFlight).toBe(false);
     // and never both modes at once
     expect(bootModeAction('helm').mode).not.toBe(bootModeAction('orrery').mode);
+  });
+
+  it('boot into HELM also starts the autopilot tour, hands-off (the cockpit screensaver)', () => {
+    expect(bootModeAction('helm').startAutopilot).toBe(true);
+  });
+
+  it('boot into ORRERY arms nothing — no tour, no autopilot flag', () => {
+    expect(bootModeAction('orrery').startAutopilot).toBe(false);
+  });
+
+  it('a garbage/missing choice never starts the autopilot either (falls back to ORRERY)', () => {
+    for (const bad of [undefined, null, '', 'nonsense', 'HELM ']) {
+      expect(bootModeAction(bad).startAutopilot).toBe(false);
+    }
   });
 });

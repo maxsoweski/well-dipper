@@ -1667,3 +1667,215 @@ export async function runShipScannerBurnArrivalTest() {
 
   return { passed, failed, total: results.length, results };
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// WS-1 — Flight reliability suite (cruise-stall-detector-2026-07-01).
+//
+// The standing "does the unattended screensaver still run without freezing"
+// gate. Runs the autopilot tour at a low linger and watches that (a) legs keep
+// advancing and (b) NO leg ever sits in CRUISE past the pilot's stall window —
+// the single signature of every freeze flavor (star wedge, null-bodyRef stop,
+// non-convergent fast moon). A permanent freeze would show as a leg pinned in
+// CRUISE forever; the WS-1 stall-detector must abort+skip it instead.
+//
+// This is the AC7 "full-tour-completes" check. The AC6 forced-star-wedge
+// recovery is driven live by working-Claude via the teleport recipe (reads live
+// star/target mesh positions each frame) — it's a one-off adversarial probe, not
+// a repeatable standing check, so it lives in the live-drive script, not here.
+export async function runFlightReliabilitySuite(opts = {}) {
+  if (typeof window === 'undefined' || typeof window.__wd !== 'object') {
+    throw new Error('runFlightReliabilitySuite: window.__wd not installed. Enter Sol first via _lab.enterSol().');
+  }
+  const _lab = window._lab, _sc = window._sc, _autoNav = window._autoNav;
+  if (!_lab || typeof _lab.beginAutopilotTour !== 'function') {
+    throw new Error('runFlightReliabilitySuite: window._lab.beginAutopilotTour not available.');
+  }
+  if (!_sc || !_sc.pilot) throw new Error('runFlightReliabilitySuite: window._sc.pilot not available.');
+  if (!_autoNav) throw new Error('runFlightReliabilitySuite: window._autoNav not available.');
+  if (typeof _lab.isInSystem === 'function' && !_lab.isInSystem()) {
+    throw new Error('runFlightReliabilitySuite: not in a system — call _lab.enterSol() first.');
+  }
+
+  const stallWindow = _sc.pilot.tuning?.CRUISE_STALL_WINDOW ?? 12;
+  const margin = opts.marginSeconds ?? 5;
+  const lingerMult = opts.tourLingerMultiplier ?? 0.15;
+  const maxWallMs = (opts.maxWallSeconds ?? 120) * 1000;
+  const pollMs = 100;
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const results = [];
+  const rec = (name, passed, evidence) => { results.push({ name, passed, evidence: evidence ?? '' }); return passed; };
+
+  // Speed up the tour for the standing check; restore afterwards.
+  const prevLinger = _lab.setSetting ? _lab.setSetting('tourLingerMultiplier', lingerMult) : undefined;
+  // Detect a full wrap without clobbering main.js's onTourComplete handler.
+  let tourWrapped = 0;
+  const prevOnComplete = _autoNav.onTourComplete;
+  _autoNav.onTourComplete = () => {
+    tourWrapped++;
+    if (typeof prevOnComplete === 'function') prevOnComplete();
+  };
+
+  const telemetry = {};
+  try {
+    _lab.stopAutopilot?.();
+    await sleep(150);
+    const begun = _lab.beginAutopilotTour();
+    await sleep(150);
+    if (!begun || !begun.ok) {
+      rec('full-tour: autopilot started', false, JSON.stringify(begun));
+    } else {
+      rec('full-tour: autopilot started', true);
+
+      // "Stuck" is measured as NO PROGRESS (dist-to-target not decreasing) while in
+      // CRUISE — NOT total CRUISE time. A leg flying to a distant outer planet is
+      // legitimately in CRUISE for many seconds while dist keeps shrinking; that is
+      // not a freeze. Only a leg whose dist fails to improve for longer than the
+      // pilot's own stall window (which should then abort it) is a real freeze.
+      const distToTarget = () => {
+        const mesh = _sc.controls?.target?.mesh;
+        if (!mesh || !mesh.position) return null;
+        return _sc.model.position.distanceTo(mesh.position);
+      };
+      const legsSeen = new Set([_autoNav.currentIndex]);
+      let lastIdx = _autoNav.currentIndex;
+      let bestDist = Infinity, noProgress = 0, maxNoProgress = 0, stuck = null;
+      const t0 = performance.now();
+      while (performance.now() - t0 < maxWallMs) {
+        await sleep(pollMs);
+        const idx = _autoNav.currentIndex;
+        const phase = _sc.pilot.phase;
+        if (idx !== lastIdx) { lastIdx = idx; legsSeen.add(idx); bestDist = Infinity; noProgress = 0; }
+        if (phase === 'CRUISE') {
+          const d = distToTarget();
+          if (d != null && d < bestDist * 0.999) { bestDist = d; noProgress = 0; } // real progress
+          else { noProgress += pollMs / 1000; if (noProgress > maxNoProgress) maxNoProgress = noProgress; }
+        } else {
+          bestDist = Infinity; noProgress = 0;
+        }
+        if (noProgress > stallWindow + margin) { stuck = { idx, noProgressSeconds: +noProgress.toFixed(1) }; break; }
+        if (tourWrapped > 0 && legsSeen.size > 1) break; // completed a full pass — enough
+      }
+
+      telemetry.legsVisited = legsSeen.size;
+      telemetry.tourWrapped = tourWrapped;
+      telemetry.maxNoProgressSeconds = +maxNoProgress.toFixed(1);
+      telemetry.stallWindowSeconds = stallWindow;
+
+      rec('full-tour: no leg stuck in CRUISE without progress past the stall window',
+        stuck === null,
+        stuck ? `leg ${stuck.idx} made no progress for ${stuck.noProgressSeconds}s (> ${stallWindow + margin}) — detector failed to abort`
+              : `max no-progress dwell ${maxNoProgress.toFixed(1)}s ≤ ${stallWindow + margin}s`);
+      rec('full-tour: tour advanced through multiple legs (not frozen on one)',
+        legsSeen.size >= 2,
+        `visited ${legsSeen.size} distinct stop(s); wrapped x${tourWrapped}`);
+    }
+
+    // ── Far-side-star scenario (Increment 1, AC8) ──────────────────────────
+    // Drive the REAL star->planet departure: forceFarSideStarLeg parks the ship
+    // at the star's PARK distance on the far side of the INNERMOST planet (the
+    // realistic star->planet1 leg — the star sits between ship and target), then
+    // dispatches the planet leg through the real go-around routing. The ship must
+    // ROUTE AROUND the star (never ENTER the keep-out sphere), make net progress
+    // to the planet, and NEVER stall-abort. Pre-fix (and the rejected unified-
+    // radius design) this leg wedged at the barrier / degenerated.
+    // NOTE: full HOLD-arrival is gated by the slow inner-system cruise speed
+    // (pre-existing gravity-well speedCap), orthogonal to the star livelock — so
+    // success is "routed around + net progress toward the planet", not "reached
+    // HOLD within N seconds".
+    if (typeof _lab.forceFarSideStarLeg === 'function' && typeof _lab.starKeepOutInfo === 'function') {
+      _lab.stopAutopilot?.();
+      await sleep(150);
+      _lab.setSetting?.('tourLingerMultiplier', lingerMult);
+      const setup = _lab.forceFarSideStarLeg();
+      if (!setup || !setup.ok) {
+        rec('far-side-star: scenario set up', false, JSON.stringify(setup));
+      } else {
+        rec('far-side-star: scenario set up (direct path crosses keep-out sphere)',
+          setup.crosses === true,
+          `targetIndex=${setup.targetIndex} park=${setup.park?.toFixed?.(2)} keepOut=${setup.keepOut?.toFixed?.(2)} crosses=${setup.crosses}`);
+
+        const ko = _lab.starKeepOutInfo();
+        const starPos = ko ? { x: ko.x, y: ko.y, z: ko.z } : { x: 0, y: 0, z: 0 };
+        // Tightened (AC8): the ship must never ENTER the keep-out sphere, not
+        // merely stay off the 1.05R barrier. 0.95·keepOut allows only capture
+        // slop at the go-around waypoint (placed at ~1.2·keepOut).
+        const keepOut = ko ? ko.keepOut : 0;
+        const keepOutFloor = keepOut * 0.95;
+        // Read the star position FRESH each sample: world-origin rebasing shifts
+        // BOTH the ship and the star by the same offset, so only a same-frame
+        // relative read is valid. A captured starPos goes stale after a rebase and
+        // corrupts minCenterDist (the ship flies >100u to the planet → rebases).
+        const centerDist = () => {
+          const p = _sc.model.position;
+          const s = _lab.starKeepOutInfo() || starPos;
+          return Math.hypot(p.x - s.x, p.y - s.y, p.z - s.z);
+        };
+        const startIdx = _autoNav.currentIndex;
+        const targetRef = _autoNav.queue[startIdx]?.bodyRef;
+        const distToTarget = () => {
+          if (!targetRef) return Infinity;
+          const p = _sc.model.position, t = targetRef.position;
+          return Math.hypot(p.x - t.x, p.y - t.y, p.z - t.z);
+        };
+        let minCenterDist = Infinity;
+        const distStart = distToTarget();
+        let distToTargetMin = distStart;
+        let legDone = false;
+        const t0fs = performance.now();
+        const budget = Math.min(maxWallMs, 45000);
+        while (performance.now() - t0fs < budget) {
+          await sleep(pollMs);
+          const cd = centerDist();
+          if (cd < minCenterDist) minCenterDist = cd;
+          const dt = distToTarget();
+          if (dt < distToTargetMin) distToTargetMin = dt;
+          if (_autoNav.currentIndex !== startIdx) { legDone = true; break; }
+          // Early success: the go-around resolved and the ship has clearly
+          // transited a good fraction of the way to the planet (not wedged).
+          if (Number.isFinite(distStart) && distToTargetMin < distStart * 0.6) break;
+        }
+
+        // "Not stuck at the sun" = routed around (min>keepOut) AND either the leg
+        // fully advanced OR the ship made clear NET PROGRESS toward the planet (the
+        // go-around resolved and the ship is transiting, not wedged). Full HOLD-
+        // arrival is gated by the slow inner-system cruise speed (pre-existing
+        // speedCap), orthogonal to the star livelock under test.
+        const progressed = Number.isFinite(distStart) && distToTargetMin < distStart * 0.7;
+        const notStuck = legDone || progressed;
+        const stallAborts = _lab.tourStallAbortCount?.() ?? -1;
+        rec('far-side-star: not stuck — routed around and transiting to the planet (advanced or >=30% net progress)',
+          notStuck, `legDone=${legDone} progressed=${progressed} distStart=${distStart.toFixed(0)} distMin=${distToTargetMin.toFixed(0)}`);
+        rec('far-side-star: ZERO stall-aborts on the leg (routed around, never wedged)',
+          stallAborts === 0, `tourStallAbortCount=${stallAborts}`);
+        rec('far-side-star: ship never ENTERS the star keep-out sphere',
+          minCenterDist > keepOutFloor,
+          `minCenterDist=${minCenterDist.toFixed(2)} > keepOut*0.95=${keepOutFloor.toFixed(2)} (keepOut=${keepOut.toFixed(2)})`);
+        telemetry.farSide = {
+          minCenterDist: +minCenterDist.toFixed(2),
+          keepOut: +keepOut.toFixed(2),
+          keepOutFloor: +keepOutFloor.toFixed(2),
+          stallAborts,
+          legDone,
+          progressed,
+          distStart: Number.isFinite(distStart) ? +distStart.toFixed(0) : null,
+          distToTargetMin: Number.isFinite(distToTargetMin) ? +distToTargetMin.toFixed(0) : null,
+          park: setup.park,
+        };
+      }
+    }
+  } finally {
+    _autoNav.onTourComplete = prevOnComplete;
+    if (prevLinger !== undefined && _lab.setSetting) _lab.setSetting('tourLingerMultiplier', prevLinger);
+    _lab.stopAutopilot?.();
+  }
+
+  const passed = results.filter(r => r.passed).length;
+  const failed = results.length - passed;
+  console.group('[__wd flight reliability] ' + passed + '/' + results.length + ' passed', telemetry);
+  for (const r of results) {
+    console.log((r.passed ? '✔' : '✘') + ' ' + r.name, r.evidence);
+  }
+  console.groupEnd();
+
+  return { passed, failed, total: results.length, results, telemetry };
+}

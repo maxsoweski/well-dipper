@@ -108,8 +108,12 @@ export class ShipControls {
   // IN-GAME: pass { selfStep: false } — flyTo only calls pilot.beginLeg and
   //   returns the Arrival; the live sim loop owns stepping and feeds frames to
   //   arrival.poll() via this.step().
-  flyTo({ toBody, bodyRadius, linger = 8, selfStep = true, maxSteps = 100000, dt = 1 / 60 } = {}) {
-    this.pilot.beginLeg({ toBody, bodyRadius, linger });
+  // Increment 1 (autopilot-standoff-routing): `standoff` (per-leg hold distance)
+  // and `toPosition` (a fixed go-around waypoint, no mesh) are forwarded through
+  // to beginLeg. Both default to null → byte-for-byte today's leg. Assist legs
+  // (no standoff, no toPosition) are unaffected.
+  flyTo({ toBody, bodyRadius, linger = 8, standoff = null, toPosition = null, selfStep = true, maxSteps = 100000, dt = 1 / 60 } = {}) {
+    this.pilot.beginLeg({ toBody, bodyRadius, linger, standoff, toPosition });
     const arrival = makeArrival();
     this._arrival = arrival;
     if (!selfStep) return arrival;            // in-game: the loop polls via step()

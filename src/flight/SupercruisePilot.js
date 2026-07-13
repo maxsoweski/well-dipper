@@ -21,10 +21,11 @@ export const PilotPhase = Object.freeze({
  * @property {boolean} motionComplete  HOLD linger timer elapsed (level-triggered past linger)
  * @property {boolean} overshoot       entered capture sphere too hot — flew past, stayed CRUISE
  * @property {boolean} decelStarted    one-shot AC6 shake cue at 15R (DECEL_CUE_FACTOR)
+ * @property {boolean} stallAborted    CRUISE made no net progress for CRUISE_STALL_WINDOW s — leg aborted (WS-1 no-freeze guard)
  */
 // Canonical field list/order of a PilotFrame — the named arrival/Frame contract.
 export const PILOT_FRAME_FIELDS = Object.freeze([
-  'phase', 'prevPhase', 'phaseChanged', 'motionComplete', 'overshoot', 'decelStarted',
+  'phase', 'prevPhase', 'phaseChanged', 'motionComplete', 'overshoot', 'decelStarted', 'stallAborted',
 ]);
 
 export const PILOT_TUNING = {
@@ -37,10 +38,47 @@ export const PILOT_TUNING = {
   CRUISE_THROTTLE: 0.75,     // Elite blue-zone
   STEER_GAIN: 3.0,           // local-offset → turn-input proportional gain
   DROP_RADIUS_FACTOR: 10,    // capture sphere = 10R (today's APPROACH onset)
-  DROP_ETA_MAX: 2.5,         // s — dropMaxSpeed = 10R / DROP_ETA_MAX
+  DROP_ETA_MAX: 2.5,         // s — dropMaxSpeed = max(10R / DROP_ETA_MAX, DROP_MAX_SPEED_FLOOR)
+  // RC4 (tour-reliability-corrections, 2026-07-01): absolute floor under dropMaxSpeed. The
+  // radius-scaled window (10R/DROP_ETA_MAX = 4R) is provably sufficient WHEN the target body's
+  // own gravity well is what governs the ship's speed all the way in (cap at the capture sphere
+  // is ≤ 3R there, always under 4R — see SupercruisePilot.test.js "capture stays arithmetically
+  // possible"). It stops being sufficient the moment something ELSE sets the local cap near a
+  // very small body (a bigger nearby mass, a coarser tracked reference, ...): 4R shrinks to a
+  // near-zero target while the ship's actual crawl speed there does not, and it flies through
+  // uncaptured. CONSTRAINT the floor value must satisfy: bigger than ordinary near-body crawl
+  // speeds (a small fraction of a u/s) so tiny bodies still capture, yet far below 4R for any
+  // body radius that isn't itself minute (radius ≳ 0.03) — so it can only ever WIDEN the tiny-
+  // body window and never touches the existing large-body threshold (AC4: R=0.48 ⇒ unchanged).
+  // SCOPE (adversarial review, 2026-07-01 — SupercruiseCaptureFloor.test.js AC4(a)/AC4(a2)/
+  // AC4-known-limit): main.js registers every moon as its OWN gravity body every tick, so the
+  // live tour's target is normally self-governed — this floor is then a byte-identical no-op
+  // (self-governed capture already works with NO floor, at any production radius). This floor
+  // only earns its keep for an EXTERNALLY-governed tiny target (a nearby body sets the local cap
+  // above the target's own 4R window): measured sufficient for governor radii up to ~0.2, NOT
+  // beyond ~0.21 (that case still fails to reach HOLD, though it now cleanly stall-aborts via
+  // RC1 instead of hanging). Whether real live geometry needs the >0.21 case is unresolved by
+  // unit tests alone — deferred to the AC6/AC7 live monitored-tour gate.
+  DROP_MAX_SPEED_FLOOR: 0.1, // u/s — floor under dropMaxSpeed; see constraint above
   DECEL_CUE_FACTOR: 15,      // decelStarted one-shot at 15R (AC6 shake cue)
   HOLD_VIEW_FRAC: 2.6,       // hold distance ≈ 2.6R (today's felt-fill)
   HOLD_SETTLE_TAU: 0.6,      // s — exponential ease from capture point to hold point (kills HOLD-entry snap)
+  // WS-1 CRUISE stall-detector (no-freeze guard). CRUISE has no natural timeout; a leg blocked by the
+  // star (wedge), pinned at a collision barrier, or chasing an uncatchable fast-orbiting moon would
+  // stay in CRUISE forever. CAP-RELATIVE (corrected 2026-07-01, tour-reliability-corrections RC1 —
+  // replaces an earlier absolute "2% of the leg's initial distance" quota that killed every long leg
+  // in its terminal crawl, since near-body absolute progress-per-window collapses as the speed cap
+  // shrinks approaching a body): 'stuck' is judged against what the CURRENT model.speedCap() permits,
+  // not the leg's absolute distance. Each CRUISE frame, dist-to-target must beat its running best by
+  // CRUISE_STALL_CAP_FRAC * speedCap() * (time since that best was last set) — i.e. sustained closing
+  // progress below a small fraction of the achievable speed — or the no-progress clock keeps running;
+  // CRUISE_STALL_WINDOW seconds of that aborts the leg (frame.stallAborted). A leg genuinely crawling
+  // AT the cap near a body (absolute speed tiny, but that IS the locally achievable speed) always
+  // clears this — the check only trips a leg making LESS progress than its own well permits (wedged,
+  // barrier-pinned at speed~0 while the cap is meaningfully positive, or a fast-orbit that never closes
+  // even though the cap stays high). Only the CRUISE phase is watched — a HOLD park (linger:∞) never is.
+  CRUISE_STALL_WINDOW: 12.0,     // s — no-sufficient-progress window before abort
+  CRUISE_STALL_CAP_FRAC: 0.1,    // k — required closing rate, as a fraction of the CURRENT speedCap()
 };
 
 export class SupercruisePilot {
@@ -54,6 +92,8 @@ export class SupercruisePilot {
     this._holdTimer = 0;
     this._alignTimer = 0;
     this._decelCued = false;
+    this._cruiseStallTimer = 0;   // WS-1: s since dist-to-target last beat its cap-relative-required best
+    this._cruiseBestDist = Infinity; // WS-1: dist-to-target ratchet — the reference the next required-progress check is measured against
     this._prevPhase = PilotPhase.IDLE;
     this._toTarget = new THREE.Vector3();
     this._local = new THREE.Vector3();
@@ -64,12 +104,23 @@ export class SupercruisePilot {
 
   get isActive() { return this.phase !== PilotPhase.IDLE; }
 
-  beginLeg({ toBody, bodyRadius, linger = 8 }) {
-    this._target = { mesh: toBody, radius: bodyRadius, linger };
+  // Increment 1 (autopilot-standoff-routing): beginLeg now accepts an optional
+  // per-leg `standoff` hold distance and an optional `toPosition` (a fixed
+  // point/waypoint) target instead of only a mesh. `standoff` overrides the
+  // hardcoded bodyRadius*HOLD_VIEW_FRAC (2.6R) at capture so the tour can park
+  // OUTSIDE a star's gravity well; absent it, capture is byte-for-byte today's
+  // 2.6R. `toPosition` lets the tour fly a pass-through go-around waypoint (no
+  // mesh) — wrapped in a { position } shim so the whole update() path is unchanged.
+  beginLeg({ toBody, bodyRadius, linger = 8, standoff = null, toPosition = null }) {
+    // A position/waypoint target is wrapped so tgt.mesh.position still resolves.
+    const mesh = toPosition != null ? { position: toPosition } : toBody;
+    this._target = { mesh, radius: bodyRadius, linger, standoff };
     this.phase = PilotPhase.ALIGN;
     this._holdTimer = 0;
     this._alignTimer = 0;
     this._decelCued = false;
+    this._cruiseStallTimer = 0;      // WS-1: fresh no-progress window per leg
+    this._cruiseBestDist = Infinity;
   }
 
   stop() {
@@ -83,7 +134,7 @@ export class SupercruisePilot {
     const frame = {
       phase: this.phase, prevPhase: this._prevPhase,
       phaseChanged: false, motionComplete: false,
-      overshoot: false, decelStarted: false,
+      overshoot: false, decelStarted: false, stallAborted: false,
     };
     this._prevPhase = this.phase;
     if (this.phase === PilotPhase.IDLE || !this._target) return frame;
@@ -93,7 +144,7 @@ export class SupercruisePilot {
     this._toTarget.copy(bodyPos).sub(m.position);
     const dist = this._toTarget.length();
     const dropRadius = tgt.radius * t.DROP_RADIUS_FACTOR;
-    const dropMaxSpeed = dropRadius / t.DROP_ETA_MAX;
+    const dropMaxSpeed = Math.max(dropRadius / t.DROP_ETA_MAX, t.DROP_MAX_SPEED_FLOOR);
 
     if (this.phase === PilotPhase.HOLD) {
       // Body-locked hold (today's STATION-A): ease toward the (moving) hold
@@ -134,15 +185,52 @@ export class SupercruisePilot {
         this.phase = PilotPhase.CRUISE;
       }
     } else if (this.phase === PilotPhase.CRUISE) {
+      // WS-1 no-freeze guard: watch dist-to-target while in CRUISE. CAP-RELATIVE — the
+      // ship must beat its running-best dist by at least CRUISE_STALL_CAP_FRAC (k) of
+      // the CURRENT speedCap(), sustained for the time since that best was set; failing
+      // that for CRUISE_STALL_WINDOW seconds (wedged behind the star, barrier-pinned, or
+      // chasing an uncatchable fast moon) aborts the leg — the caller skips-and-continues
+      // (tour) or drops out (Assist). A leg crawling AT the cap near a body (tiny absolute
+      // speed, but that's the achievable speed there) always beats this and never trips; a
+      // HOLD park is a different phase and is never watched here.
+      if (frame.prevPhase !== PilotPhase.CRUISE) {
+        this._cruiseBestDist = dist;   // first CRUISE frame — seed the ratchet
+        this._cruiseStallTimer = 0;
+      } else {
+        this._cruiseStallTimer += dt;
+        // Distance the ship should have closed by now if moving at just k×cap for the
+        // whole no-progress window — recomputed off the CURRENT cap each frame, so a
+        // shrinking near-body cap only ever makes this MORE lenient, never less (biasing
+        // toward "don't abort a real leg", never toward a false abort).
+        const need = t.CRUISE_STALL_CAP_FRAC * m.speedCap() * this._cruiseStallTimer;
+        if (this._cruiseBestDist - dist >= need) {
+          this._cruiseBestDist = dist; // real cap-relative progress — restart the window
+          this._cruiseStallTimer = 0;
+        }
+        if (this._cruiseStallTimer >= t.CRUISE_STALL_WINDOW) {
+          frame.stallAborted = true;
+          m.setTurnInput(0, 0);
+          this.phase = PilotPhase.IDLE;
+          this._target = null;
+          return this._stamp(frame);
+        }
+      }
       m.setThrottle(t.CRUISE_THROTTLE);
       if (!this._decelCued && dist <= tgt.radius * t.DECEL_CUE_FACTOR) {
         this._decelCued = true; frame.decelStarted = true;
       }
       if (dist <= dropRadius) {
         if (m.speed <= dropMaxSpeed) {
-          // Capture: enter the body-locked hold at felt-fill distance.
+          // Capture: enter the body-locked hold. Hold distance = the per-leg
+          // standoff when supplied (Increment 1 — parks the star OUTSIDE its
+          // gravity well), else today's felt-fill 2.6R. The ×1.05 inside-body
+          // guard is scale-free and applies to both (a standoff below 1.05R
+          // would still clear the surface).
+          const holdDist = tgt.standoff != null
+            ? Math.max(tgt.standoff, tgt.radius * 1.05)
+            : Math.max(tgt.radius * t.HOLD_VIEW_FRAC, tgt.radius * 1.05);
           this._holdOffset.copy(m.position).sub(bodyPos)
-            .normalize().multiplyScalar(Math.max(tgt.radius * t.HOLD_VIEW_FRAC, tgt.radius * 1.05)); // scale-free: ×1.05 inside-body guard, no absolute term
+            .normalize().multiplyScalar(holdDist);
           this.phase = PilotPhase.HOLD;
           this._holdTimer = 0;
         } else {

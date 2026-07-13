@@ -1,0 +1,114 @@
+{
+  "workstream": "cruise-stall-detector-2026-07-01",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "verified",
+  "verifiedState": "VERIFIED_PENDING_MAX 5945f07 — unit 5 ACs green (253/253 flight+auto, build clean, SC_TUNING untouched; AC1 wedge/AC4 null-ref/AC5 fast-moon red-first→green, AC2 converging/AC3 hold-park guards + mutation check) + live on :5173 Sol (chrome-devtools): AC6 forced star-wedge → tour advances at a clean ~12s abort cadence (never permanently frozen); AC7 runFlightReliabilitySuite 3/3 (no leg stuck without progress, 0 false-aborts on normal legs). AC8 = Max UAT (pending). KNOWN RESIDUAL (accepted as scoped, logged in intent.md): after a wedge-abort the ship is pinned at the star barrier (speed 0), and subsequent far-side legs re-wedge → a temporary livelock at the sun (tour index advances, ship stuck) until a near-side target frees it. This is the flip side of WS-1's explicit 'no re-routing' non-goal; to be solved by the next workstream = obstacle-aware intelligent tour routing (Max, 2026-07-01).",
+  "phase": "WS-1 of the flight-reliability program. Add a CRUISE stall-detector / no-freeze guard to the supercruise pilot + autopilot tour so the unattended Orrery screensaver can never freeze permanently. Root cause (flight-audit Phase 2/3): SupercruisePilot CRUISE has no timeout (only ALIGN does), so a leg whose straight path is blocked by the star (wedge), or that chases a moon orbiting too fast to catch (overshoot limit-cycle), or a tour stop with a null bodyRef, stays in CRUISE / never advances forever. Approach: (1) a rolling-window dist-not-decreasing detector INSIDE SupercruisePilot, active only in CRUISE, that aborts the leg after ~10-15s of no net progress; on abort a tour advances to the next stop (skip-and-continue), a standalone Assist leg drops out gracefully; (2) a null-bodyRef skip-guard on the tour-advance path; (3) a standing runFlightReliabilitySuite() built alongside. Default: a non-convergent fast-moon leg is SKIPPED (not captured) — capture via target-lead is deferred to WS-4. Out of scope: obstacle-avoidance/re-routing, SC_TUNING floor re-tuning, any change to warp / HELM manual / commitBurn / Toybox beyond the stall guard, new abort HUD.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-cruise-stall-aborts-wedge",
+      "statement": "The CRUISE stall-detector aborts a wedged leg. Given a leg pre-aligned into CRUISE whose straight ship->target line is blocked by the star (the antipodal star-wedge: dist pins at the collision barrier / forced-drop horizon, speed ~0, dist never decreasing), the pilot aborts the leg within the stall window + margin instead of staying in CRUISE forever. The abort is observable on the pilot (phase leaves CRUISE / an abort flag on the PilotFrame).",
+      "verifyVia": {
+        "input": "Headless Vitest with real classes (fresh SupercruiseModel + SupercruisePilot, star radius 4.65, ship on the far side of the star from a real planet, orientation set toward target, beginLeg, then step pilot.update(dt)+model.setBodies([star,target])+model.update(dt) each frame). Mirror src/flight/__tests__/SupercruisePilot.align.test.js.",
+        "observable": "Within stallWindow + a small margin the pilot signals abort (phase != CRUISE, e.g. IDLE, and/or frame.stallAborted true); before the window it stays in CRUISE; without the fix it would stay CRUISE for the whole run."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2-converging-leg-never-aborted",
+      "statement": "A leg that is genuinely still closing on its target is NEVER falsely aborted. Given a normal CRUISE approach whose dist is monotonically (or net) decreasing, the detector never fires and the leg proceeds to HOLD and motionComplete exactly as it does today.",
+      "verifyVia": {
+        "input": "Headless Vitest: a clear-line leg (line offset from star >= 10u, or open space) stepped to completion; assert the detector never trips over a run longer than the stall window.",
+        "observable": "phase progresses ALIGN->CRUISE->HOLD, motionComplete fires, and frame.stallAborted is never set; identical outcome to the pre-fix pilot on this input."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC3-hold-linger-park-not-aborted",
+      "statement": "A deliberate Assist/commit-burn park (reaches HOLD and orbits with linger:Infinity) is never treated as a stall. Because the detector keys on CRUISE only, a leg sitting in HOLD indefinitely is left alone (no abort, no spurious advance).",
+      "verifyVia": {
+        "input": "Headless Vitest: a leg that captures to HOLD with linger:Infinity, stepped well past the stall window.",
+        "observable": "phase stays HOLD, the ship keeps orbiting, frame.stallAborted never set, motionComplete never forced by the detector."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC4-null-bodyref-stop-skipped",
+      "statement": "A tour stop whose bodyRef is null is skipped and the tour continues to the next valid stop (or completes) rather than freezing with no leg. The advance logic re-advances past null-bodyRef stops.",
+      "verifyVia": {
+        "input": "Headless Vitest on the extracted advance-past-null helper (or AutoNavigator advance) with a queue containing a null-bodyRef stop between valid stops.",
+        "observable": "advancing lands on the next stop that HAS a bodyRef (or fires onTourComplete if none remain); no state where the tour is advanced-but-flying-nothing."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC5-fastmoon-leg-aborts",
+      "statement": "A fast-orbiting moon the pure-pursuit pilot cannot close on (high celestialTimeMultiplier: dist oscillates / speed stays above dropMaxSpeed -> perpetual CRUISE overshoot) is aborted (skipped), not chased forever. Default behavior is SKIP, not capture.",
+      "verifyVia": {
+        "input": "Headless Vitest: a moon target advanced each step at a high orbital rate (omega ~0.05+, the ~700x-realtime regime that never captures pre-fix); mirror the moving-moon setup in SupercruisePilot.align.test.js.",
+        "observable": "the pilot aborts within stallWindow + margin (phase leaves CRUISE / frame.stallAborted); pre-fix this leg stays CRUISE forever."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC6-wedge-recovery-live",
+      "statement": "In the running game, a forced star-crossing tour leg RECOVERS: the tour advances to the next stop within the stall window + margin instead of pinning at the star forever. Verified against the real pilot + main.js tour loop together (emergent whole-loop check, not the isolated mechanism).",
+      "verifyVia": {
+        "input": "Live (chrome-devtools :9223, window foreground): drive an autopilot tour, force a star-crossing leg via the session teleport recipe (stopAutopilot -> selectBody -> commitBurnNow -> teleport model to the far side of the star, orient at target), rAF-sample pilot phase + autoNav.currentIndex.",
+        "observable": "autoNav.currentIndex advances (the leg is abandoned) within stallWindow + margin; the tour is not permanently frozen; 0 new console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7-full-tour-completes-live",
+      "statement": "The unattended autopilot tour completes a full pass with no leg stuck in CRUISE: every leg reaches HOLD (or is cleanly skipped) and the tour wraps (onTourComplete fires). This is the standing screensaver reliability check, driven through the new runFlightReliabilitySuite().",
+      "verifyVia": {
+        "input": "Live (chrome-devtools :9223): window._lab.beginAutopilotTour() at a low tourLingerMultiplier via runFlightReliabilitySuite(); watch legs to completion across a full queue pass.",
+        "observable": "every stop resolves (HOLD reached or null/non-convergent stop skipped), onTourComplete fires, no leg observed pinned in CRUISE past the stall window; suite returns a pass summary; 0 new console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC8-screensaver-runs-reliably-holistic",
+      "statement": "Watching the unattended screensaver soak, it runs reliably as a whole and still showcases the system: the tour keeps moving system after system (tour -> warp -> repeat), never freezes, and the abort/skip behavior isn't visually jarring or degrading to the showcase.",
+      "verifyVia": {
+        "input": "Max lets the unattended loop run a multi-system soak and watches it.",
+        "observable": "Holistic acceptance — does the screensaver run reliably and still look good as the showcase Max wanted. Deferred to Max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "SupercruisePilot.update() CRUISE branch (src/flight/SupercruisePilot.js:136-152) — CRUISE has NO timeout (only ALIGN does, :126-135 ALIGN_TIMEOUT 8.0); per-frame `dist` is a local at :94 (not stored); beginLeg (:67-73) is where a rolling-window/last-dist field would reset alongside _alignTimer",
+      "PILOT_TUNING (src/flight/SupercruisePilot.js:30-44) — ALIGN_TIMEOUT:8.0 (:35) is the direct analogue; the new CRUISE stall window + no-progress threshold live here; DROP_RADIUS_FACTOR:10 (:39) defines the 10R capture sphere the overshoot branch (:149) fails to enter",
+      "SupercruiseModel.speed / position (src/flight/SupercruiseModel.js) — detector reads model.speed (overshoot = speed > dropMaxSpeed) and model.position (dist recompute); speedCap() (:85-94) + collision barrier (:176-189) + proximityDropRequired() (:101-118) are the pin mechanisms the wedge hits",
+      "_handleScPilotFrame(frame) (src/main.js:6820-6866) — the tour-advance-on-motionComplete listener; the null-bodyRef freeze block is :6851-6865; the _scLegAdvanced latch is declared :6810-6818; the abort-driven advance must reuse this path (and its shipChoreographer.onLegAdvanced / updateFocusFromStop calls)",
+      "AutoNavigator.advanceToNext()/getCurrentStop() (src/auto/AutoNavigator.js:140-152, :115-120) + stop shape {type,...,bodyRef:null,...} (:32-80) populated by populateQueueRefs (main.js:5645-5663) — the null-bodyRef skip operates here",
+      "Legacy manual-burn advance path (src/main.js:7974-8001, null guard at :7983) — the same null-bodyRef skip-guard family applies here too",
+      "celestialTimeMultiplier -> celestialDt (src/main.js:6956) -> moon.mesh positions (:7033-7042) — the fast-moon driver that makes a CRUISE leg non-convergent (AC5)",
+      "ShipControls.step()/flyTo() (src/flight/ShipControls.js:92-125) — the single engage door; headless flyTo self-steps to motionComplete or maxSteps (:117-124), the 'standalone Assist drops out gracefully' analogue for a non-tour abort",
+      "Test harness: src/debug/integration-suite.js (runWarpEntrySuite :572) + SceneInspector.js window.__wd registration (:84-156, pattern :123-126); flight unit tests src/flight/__tests__/*, closest pattern SupercruisePilot.align.test.js (moving-moon AC8); run via ./node_modules/.bin/vitest run <path> (npx vitest is hook-blocked)"
+    ],
+    "outputs": [
+      "A CRUISE stall-detector inside SupercruisePilot: a rolling-window dist-no-net-progress guard, active ONLY in phase CRUISE, that aborts the leg after ~10-15s of no progress; exposes the abort on the PilotFrame (e.g. frame.stallAborted) and resets its window state in beginLeg",
+      "New PILOT_TUNING fields for the CRUISE stall window + no-progress threshold (do NOT touch SC_TUNING)",
+      "Tour-side handling: on a stall abort, _handleScPilotFrame advances the tour to the next stop (skip-and-continue), reusing the existing advance path (latch + onLegAdvanced + focus)",
+      "Null-bodyRef skip-guard on the tour-advance path (main.js:6851-6865 and legacy :7982-8000): re-advance past null-bodyRef stops to the next valid stop or onTourComplete",
+      "A standing runFlightReliabilitySuite() in src/debug/integration-suite.js + a window.__wd entry in SceneInspector.js (mirrors the runWarpEntrySuite wiring): full-tour-completes + wedge-recovery checks, driven via window._lab / window._sc",
+      "New headless unit tests in src/flight/__tests__ (cruise-stall wedge + fast-moon + converging-not-aborted + hold-park-not-aborted) and the null-bodyRef skip-guard test"
+    ],
+    "mustStayWorking": [
+      "Normal converging tour legs advance exactly as today — the _scLegAdvanced latch correctness (main.js:6810-6818), no skipped stops, no onTourComplete spam (guarded by AC2)",
+      "Deliberate HELM/Assist parks with linger:Infinity (commitBurn nav/star/moon at main.js:6547/6596/6643; _manualBurnOrbiting armed :6831-6833/:7970-7972) — a HOLD orbit is NOT a stall; the detector must key on CRUISE only (guarded by AC3)",
+      "The warp loop (runWarpEntrySuite / window.__wd) and the warp-arrival fly-in (itself a scPilot leg) — a stall-abort must be suppressed by the !warpEffect.isActive gate (main.js:7808-7809) and never fire during warp arrival",
+      "HELM manual flight and manual takeover: manualCancelsLeg(_flightMode, scPilot.isActive) at main.js:8128/9689/9695 must still cancel legs; a standalone (non-tour) Assist abort drops out gracefully rather than advancing a tour",
+      "ShipChoreographer shake envelope: onLegAdvanced (main.js:6862/7998) / beginTour must still be called on every advance path the abort reuses, or the enter/drop shake cue desyncs",
+      "SC_TUNING scale-bug floors (src/flight/SupercruiseModel.js:10-38) — scale-free for production radii; NEVER re-tune (two prior live regressions 259f855/d5e4e2f)",
+      "Existing flight/camera/ui unit suites stay green (src/flight/__tests__/*, incl. SupercruisePilot.align.test.js AC8 moving-target); the fix adds tests, breaks none"
+    ]
+  }
+}

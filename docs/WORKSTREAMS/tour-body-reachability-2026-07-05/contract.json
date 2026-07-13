@@ -1,0 +1,95 @@
+{
+  "workstream": "tour-body-reachability-2026-07-05",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "shipped",
+  "verifiedState": "Shipped — Max UAT PASS 2026-07-11 (live watch, same combined session as mode-ownership AC12 + Step-0 AC7): 'It looks like it's working for the moons.' Code sha 9150100. Prior state: VERIFIED_PENDING_MAX 9150100 — Defect-2 drive-persistence (ba26aae) + Defect-1 barrier-pin carousel (9442586) + review-driven test honesty (9150100). Headless verify wf_e25a59d7-4e4: AC5 regression PASS 3/3, guards byte-identical, 330/330. Live integration (working-Claude, :9223 on :5174): AC1 moon reached (Sol moon2.0), AC2 0 aborts vs 38 pre-fix (Sol ~6min + Rozjenlom), AC3 drive persists incl. real HELM boot near a big star (Rozjenlom R=25.5, 0 drops). AC4 = commit-hygiene note (TDD substance holds). Open gate: Max UAT (AC6). Geometry-dependent residuals -> system-finder side-quest (see verdict.json).",
+  "phase": "Fix pass between mode-ownership (VERIFIED_PENDING_MAX 4079878) and inc-2 (DEPART), per docs/FLIGHT_RELIABILITY_ROADMAP_2026-07-01.md. Diagnosed 2026-07-05 by three parallel code reviewers + live chrome-devtools telemetry (:9223). Two independent defects both surface as 'select a body -> don't travel -> select another': (1) BARRIER-PIN CAROUSEL (dominant, logged RC2 in the 2026-07-01 triage, never fixed on this branch) — SupercruisePilot.steerToward aims a straight line; tourStandoff.planLeg routes around the STAR ONLY; a moon on the far side of its parent planet is flown at through the planet; SupercruiseModel's collision barrier pins the ship at speed 0 at ~1.05*R; the cap-relative 12s CRUISE stall-abort correctly fires; the tour re-dispatches the next leg from the same pinned spot -> carousel. (2) DRIVE-DROP NEAR BIG STARS — the forced proximity drop-out (main.js:8333, gated only on _scManual which is true the whole HELM tour) turns the supercruise drive off mid-tour; there is no hands-off re-arm; the ship then crawls at sublight (~0.0015 u/s = throttle 0.75 * SUBLIGHT cap 0.002) and cannot cross legs. IMPLEMENTATION (routing vs pilot escape vs drive re-gate/re-arm) is the ARCHITECT/PLAN call; this contract binds the observables, not the representation. GUARDRAILS: SC_TUNING (SupercruiseModel.js:10-38) byte-identical; the cap-relative stall-abort SAFETY stays intact as a backstop (fix the CAUSES of the pin/crawl, do not weaken the guard); mode-ownership regime untouched. Due diligence (Max): plan+TDD each defect independently, verify each unit (headless+live) before the next, stop-and-design on any second fix attempt.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-far-side-body-reachable",
+      "statement": "When a tour leg targets a body occluded by another body (classically a moon on the far side of its parent planet), the ship reaches the target and captures it, instead of pinning against the occluding body's collision barrier and aborting. The path clears the obstacle's surface.",
+      "verifyVia": {
+        "input": "Live (chrome-devtools :9223, tab foreground): drive a HELM tour (or _lab tour with the drive engaged) in a system with moons; identify a leg whose target moon starts on the far side of its parent planet (segment ship->moon crosses the planet); run the tour telemetry sampler across that leg.",
+        "observable": "distReal to the target closes monotonically to capture and the leg ends in HOLD (arrival), NOT stallAbort; the ship is never parked at ~1.05*R of the occluding body with speed~0 for the leg; the min-cap 'nearBody' during the leg is not a non-target obstacle held at surf~0."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC2-no-barrier-pin-carousel",
+      "statement": "Over a full multi-body tour in a system that includes moons, the ship visibly travels between stops and stall-aborts stay near zero — no self-sustaining 'select -> sit still -> reselect' carousel. Consecutive legs do not share the same pinned ship position.",
+      "verifyVia": {
+        "input": "Live (:9223): run a complete HELM tour (star + planets + moons) end-to-end with the telemetry sampler installed; compare against the 2026-07-01 triage baseline (35 aborts) captured in the same harness.",
+        "observable": "Total stall-aborts across the full tour are near zero (order-of-magnitude below the 35-abort baseline, target <=2); every leg shows real distance-closing (distReal decreasing) and speed>0 through CRUISE; no run of consecutive aborts sharing one ship position."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC3-drive-persists-through-tour",
+      "statement": "The supercruise drive does not silently drop mid-tour (near big stars or anywhere) and strand the ship at a sublight crawl. If a legitimate proximity condition would drop the drive during a hands-off tour, the tour keeps making supercruise progress (the drop is prevented for the autopilot, or the drive re-engages) so the ship never gets stuck at ~0.0015 u/s.",
+      "verifyVia": {
+        "input": "Live (:9223): boot HELM into a system with a large star (or force a leg that parks/detours near the star's forced-drop horizon); sample scModel.driveOn, scModel.speed, scModel.speedCap() across the star visit and the following legs.",
+        "observable": "driveOn stays effectively engaged through the tour (or re-arms promptly after any drop); ship speed tracks the supercruise cap, not the sublight crawl (~0.0015); no leg is stranded making sub-cap progress because the drive is off; no stallAbort attributable to a dropped drive."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC4-fix-mechanisms-unit-covered",
+      "statement": "The obstacle-avoidance/escape mechanism and the drive-persistence mechanism (whatever the plan chooses) each have headless unit tests proving the core behavior in isolation, built TDD (failing test first). At minimum: routing/escape clears a non-star occluding body on the ship->target segment; and the hands-off tour no longer suffers the forced drive-drop (drop prevented or re-armed) under the star-proximity condition that currently trips it.",
+      "verifyVia": {
+        "input": "Headless Vitest on the new/extended pure logic (mirroring src/flight/__tests__ patterns, e.g. SupercruisePilot.align.test.js / tourStandoff tests): a leg whose straight segment crosses a non-star body yields an avoidance/escape target that clears it; the drive-persistence predicate/gate behaves correctly for (hands-off tour, near-star) vs (manual flight, near-star).",
+        "observable": "New headless tests pass with hand-built expectations (not mirrors of the implementation); the failing-first commit is visible in history; tests live alongside the existing flight tests and run under ./node_modules/.bin/vitest run src/flight src/auto."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC5-regression-gate",
+      "statement": "Everything that works keeps working: the existing STAR go-around/keep-out still routes correctly; the cap-relative CRUISE stall-abort remains as a backstop (not removed or weakened); the mode-ownership regime (scManual/hands-off, F/Z, idle, boot) is untouched; SC_TUNING is byte-identical; the full flight+auto suites are green and the build is clean.",
+      "verifyVia": {
+        "input": "./node_modules/.bin/vitest run src/flight src/auto; npm run build; git diff over SupercruiseModel.js:10-38 (SC_TUNING); git diff over the mode-ownership regime code (flightModes.js hand-state reducers, boot/idle) to confirm untouched.",
+        "observable": "All flight+auto suites green (>=307, plus this workstream's new tests); build exits 0; SC_TUNING diff empty; the star go-around test still passes; the stall-abort test(s) still pass (safety intact); full-repo baseline still shows only the 4 pre-existing unrelated src/generation failures."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC6-tour-reads-as-sightseeing-flight",
+      "statement": "Watching a full HELM screensaver tour, it reads as a coherent sightseeing flight: the ship purposefully travels to and visits each body, moons included, never sitting frozen and skipping targets. The motion looks like the flight system genuinely touring the system.",
+      "verifyVia": {
+        "input": "Max on :5174/well-dipper/ (or a recording per docs/MAX_RECORDING_PROTOCOL.md): boot HELM, watch a full tour across planets and moons, including at least one far-side moon and a large-star system.",
+        "observable": "Holistic acceptance — the tour visibly flies to and visits its bodies as a cohesive sightseeing experience, no frozen carousel. Deferred to Max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "SupercruisePilot.steerToward (src/flight/SupercruisePilot.js:173) — straight-line aim at the target each frame; the stall detector (:187-217) is the correct backstop, NOT to be weakened.",
+      "tourStandoff.js — planLeg (:278) tests the ship->target segment against the STAR keep-out ONLY (segmentCrossesSphere :168); goAroundWaypoint (:246) + escape branch (:93-123); starParkRadius (:148-154).",
+      "Leg dispatch + go-around glue (src/main.js): _dispatchTourLeg (~7176/7208), SC_GOAROUND_SAFETY detour (~7235), waypoint clearance switch (~7267-7278), waypoint arrival/stall handlers (~7332-7349), abort->advance (~7324/7352 advanceToNextWithBody).",
+      "SupercruiseModel collision barrier (src/flight/SupercruiseModel.js:176-189) — projects the ship back to ~1.05*R and sets speed=0 when a step lands inside a body; speed cap (:90) floored at R*0.5 (cannot collapse to ~0 for normal bodies).",
+      "Forced proximity drop-out (src/main.js:8333-8338) gated ONLY on _scManual; proximityDropRequired (SupercruiseModel.js:101-118); proximityHorizon.js (~4.2R+ horizon, scales with star mass).",
+      "Drive re-arm path (src/main.js:9784-9803, R/E key) — currently BLOCKED while hands-off (:9780-9783); scModel.setDrive; scModel.driveOn.",
+      "AutoNavigator (src/auto/AutoNavigator.js) — queue order (parent planet then its moons), advanceToNextWithBody (:162-170).",
+      "Live telemetry: docs/WORKSTREAMS/autopilot-standoff-routing-2026-07-01/triage/ (tour-telemetry-sampler.js, analyze-tour.mjs, analysis-output.txt = 35-abort baseline); _lab hooks (enterSol, beginAutopilotTour, tourStallAbortCount, starKeepOutInfo, systemInfo); window._regime()/_getState().",
+      "Test patterns: src/flight/__tests__/ (SupercruisePilot.align.test.js, SupercruiseStall.test.js, SupercruiseStallCapRelative.test.js which encodes the pin-abort geometry); ./node_modules/.bin/vitest run <path>; npx is hook-blocked; the word 'vite' in commit messages trips a hook."
+    ],
+    "outputs": [
+      "Obstacle-aware tour motion: non-star bodies (planets, moons, and where relevant a second star) are routed around or escaped so occluded targets are reachable — the RC2 barrier-pin carousel is eliminated.",
+      "Drive persistence through hands-off tours: the forced proximity drop no longer strands the autopilot at sublight (drop prevented for the tour, or drive re-armed), near big stars included.",
+      "New headless unit tests (obstacle avoidance/escape; drive persistence) in src/flight/__tests__/, built TDD.",
+      "An updated verdict.json for this workstream after the verify-workstream workflow + live integration drives."
+    ],
+    "mustStayWorking": [
+      "SC_TUNING (SupercruiseModel.js:10-38) byte-identical — standing guard, two prior live regressions.",
+      "The cap-relative CRUISE stall-abort SAFETY (SupercruisePilot.js:187-217) stays intact as a backstop — the fixes remove the CAUSES of the pin/crawl, they do not remove or loosen the guard; SupercruiseStallCapRelative.test.js still passes.",
+      "The existing STAR go-around/keep-out routing (tourStandoff.planLeg star path + escape waypoint) + warp-arrival star standoff (Step-0 RC3).",
+      "Mode-ownership regime (VERIFIED_PENDING_MAX 4079878): scManual/hands-off hand-state, F/Z semantics, idle-fires-only-in-HELM, boot flip — untouched.",
+      "The screensaver loop: tour -> wrap -> auto-warp -> next system -> tour continues; warp choreography seams unchanged.",
+      "R drive toggle semantics in hands-on flight (engage/dropout/reengage incl. mass-lock) — must not regress even if the hands-off re-arm path changes.",
+      "Full flight+auto suite (>=307) green; build clean; full-repo baseline still shows only the 4 pre-existing unrelated src/generation failures as the ONLY failures."
+    ]
+  }
+}

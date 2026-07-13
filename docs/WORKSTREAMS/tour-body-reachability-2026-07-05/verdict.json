@@ -1,0 +1,50 @@
+{
+  "workstream": "tour-body-reachability-2026-07-05",
+  "commit": "9150100f2de64a67b0033876ae4d96a9d7364ce1",
+  "verifiedState": "VERIFIED_PENDING_MAX 9150100 — headless verify (wf_e25a59d7-4e4): AC5 regression PASS 3/3, AC4 unit substance covered (commit-hygiene note below); live integration (working-Claude, chrome-devtools :9223 on :5174): AC1/AC2/AC3 GREEN. Open gate: Max UAT (AC6). Geometry-dependent residuals need the system-finder side-quest (below).",
+  "perLayer": {
+    "unit": "PASS (substance) — AC4 commit-hygiene artifact gap noted",
+    "integration": "PASS (live, working-Claude drove AC1/AC2/AC3)",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC1-far-side-body-reachable",
+      "result": "PASS (live)",
+      "evidence": "Live drive on :9223 (:5174). Sol lab tour (enterSol + beginAutopilotTour + telemetry sampler): the ship reached moon2.0 at PilotPhase.HOLD (a moon visited, not pinned at ~1.05R, not stall-skipped); planets planet0/1/2 all reached HOLD; ship at supercruise speed (0.15c, targeting MARS) — the SAME tour was frozen at 0.0015 u/s pre-fix. Headless backing: end-to-end pilot proof (direct leg pins+aborts, routed leg reaches HOLD never pinned). Residual (below): tightest moon-0 (~1.7R far-side) not exercised — needs the system-finder to force the geometry."
+    },
+    {
+      "id": "AC2-no-barrier-pin-carousel",
+      "result": "PASS (live)",
+      "evidence": "Live: Sol lab tour ran ~6 min with 0 stall-aborts (vs the 2026-07-01 baseline of 38 aborts in 93s in the same harness) — no self-sustaining same-spot carousel, every leg closed distance. Real HELM boot (Rozjenlom, big star): 0 aborts. Target was <=2; observed 0."
+    },
+    {
+      "id": "AC3-drive-persists-through-tour",
+      "result": "PASS (live)",
+      "evidence": "Live: Sol lab tour — driveOn stayed true the whole run, 0 drops (the setDrive(true)-at-dispatch re-arm; this exact tour had the drive OFF/crawling pre-fix). Real HELM boot in Rozjenlom (star radius 25.5, scManual true): driveAlwaysOn true, 0 drops across the star visit and following legs, speed tracked the supercruise cap (never the ~0.0015 sublight crawl) — the forced-drop suppression holding in the real regime near a big star. Residual (below): a system where the pre-fix WOULD drop (tight big star) not deterministically reproducible without the system-finder, so 'suppression exercised' is inferred from the unit gate + drive-never-dropped, not from observing proximityDropRequired()==true mid-tour."
+    },
+    {
+      "id": "AC4-fix-mechanisms-unit-covered",
+      "result": "PASS (substance); INSUFFICIENT (artifact)",
+      "evidence": "Mechanisms unit-covered with hand-built (non-mirroring) oracles; 330/330 flight+auto, 23/23 new. Verify downgraded on ONE named observable: 'the failing-first commit is visible in history' — the fix commits bundle test+impl (no discrete red-first commit). TDD substance holds (all four tested exports net-new; red runs are in the build session). Commit-granularity hygiene gap for Max's call (waiver vs follow-up); not a behavioral hole."
+    },
+    {
+      "id": "AC5-regression-gate",
+      "result": "PASS",
+      "evidence": "Verify 3/3 adversarial: flight+auto 36 files/330 passed; build exit 0; SC_TUNING byte-identical (SupercruiseModel.js not in diff); flightModes.js +14/-0 additive; star go-around add-only (planLeg/segmentCrossesSphere/goAroundWaypoint byte-identical, tourStandoff.test.js witness passes); cap-relative stall-abort backstop intact (30/30); only the 4 pre-existing unrelated src/generation failures remain."
+    },
+    {
+      "id": "AC6-tour-reads-as-sightseeing-flight",
+      "result": "PASS",
+      "evidence": "Max UAT PASS 2026-07-11 — watched the HELM boot tour incl. moon legs: 'It looks like it's working for the moons.' | Prior: UAT is Max's alone. Integration is now green, so UAT can proceed. Max: open http://localhost:5174/well-dipper/, boot HELM, watch a full tour — does the ship fly to and hold at each body (incl. far-side moons) as a coherent sightseeing flight? Watch for any tightest inner-moon (moon-0) skip (the documented residual)."
+    }
+  ],
+  "overall": "VERIFIED_PENDING_MAX 9150100 — integration live-green (AC1/AC2/AC3), regression PASS (AC5), unit substance covered (AC4 commit-hygiene artifact gap noted). Open gate: Max UAT (AC6).",
+  "residualsForSystemFinderSideQuest": [
+    "Tightest moon-0 (~1.7R map orbit) far-side visit: inside the 1.8R inflated keep-out; worst case a skipped leg. Clamp-keep-out-to-target fix staged. NOT observed in Sol (moons reached) — needs a forced tight-moon-0 geometry.",
+    "Binary-star2 routing + coupling (Defect-1 routes around star2 inside its drop horizon, safe only because Defect-2 keeps the drive on): not exercised — Sol + Rozjenlom are single-star. Needs a binary system.",
+    "Forced-drop 'suppression exercised' proof (proximityDropRequired()==true mid-tour while drive stays on): needs a tight big-star system where the pre-fix WOULD drop.",
+    "Fast inner-moon re-pin (bounded 12s stall + escape, not a carousel): not observed — needs a fast-orbit inner moon.",
+    "Assist-near-star and Z-coast-near-star pre-existing strands (left OUT of scope per contract): not exercised."
+  ]
+}

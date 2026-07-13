@@ -1,0 +1,157 @@
+{
+  "workstream": "mode-ownership-2026-07-02",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "shipped",
+  "verifiedState": "Shipped — Max UAT PASS 2026-07-11 (live watch; combined session also closed Step-0 AC7). Code sha 4079878. Acceptance artifact: Max's live watch per MAX_RECORDING_PROTOCOL (his call). Out-of-contract observations filed at UAT, none regressions: (1) ORRERY-coherence cluster -> next scope (no non-cinematic system entry; mid-session warp fly-in ungated+uncancelable in ORRERY (main.js:6297); BURN button unguarded in ORRERY + commitBurnSwapsToHelm silent swap; no second-click go-to; title/linger auto-warps); (2) HOLD-lerp arrival easing ('tractor beam', SupercruisePilot.js:156) -> inc-2 arrival taste call, on record. Prior state: VERIFIED_PENDING_MAX 4079878 — unit PASS (verify wf_76e22cab-fd9 at f8230f8: AC1/AC2/AC10/AC11, 3/3 adversarial each) + live integration PASS (working-Claude drove AC3-AC9 on :9223; see verdict.json). Two defects live-caught and fixed during the drive: HELM idle never accrued (idle chain sat in the sc branch's else — AC8), and the mobile canvas-tap teardown gate couldn't protect a tour (ShipCameraSystem mobile TOY_BOX lock — AC9). Guardrails clean across the whole workstream: SC_TUNING + pilot/standoff/AutoNavigator motion code byte-identical, 307/307 flight+auto, build green. AC12 UAT = Max's open gate; it doubles as the clean Step-0 re-UAT (tour-reliability-corrections AC7).",
+  "phase": "Mode-ownership workstream between Step 0 (VERIFIED_PENDING_MAX f0bd7cc) and inc-2, per docs/FLIGHT_RELIABILITY_ROADMAP_2026-07-01.md sequencing. Lands BEFORE Max's Step-0 re-UAT so he judges the tour from a clean regime. Absorbs spec inc-4's minimal-delta (2026-07-01 spec §Increment-4): the camera 'big part' already exists (first-person in both modes since the 2026-06-10 cutover, per docs/FLIGHT_TOUR_MOTION_AUTHORITY_TRACE_2026-07-02.md), so what remains is input/HUD/boot/idle ownership. Mechanism decisions: (1) ONE hand-state (flight controls ON/OFF) governs every ship hand-input (W/S throttle, Q/E roll, mouse joystick) and the HUD; autopilot may fly IFF hands-OFF; hands-OFF absorbs the 2026-06-27 free-look behaviors (free cursor aim/select, LMB-drag look). Whether hand-state reuses _scManual+freeLook.latched or becomes a dedicated flag is the architect/build call — the contract binds the observables, not the representation. (2) Z from hands-on = controls off + tour start; Z mid-tour = tour stop, land hands-off coasting. F mid-tour = takeover (tour stops, hands-on). The tour W/S-takeover branch (main.js:9598-9611) is retired for tours. (3) Boot flip: bootModeAction carries startAutopilot=(mode==='helm'); warpRevealSystem HELM branch starts the tour hands-off, ORRERY branch arms nothing; dismissTitleScreen's unconditional _autopilotEnabled=true (main.js:2647) removed; mobile coercion in _pickBootMode (main.js:2637) removed so mobile offers both stations. (4) Idle-timeout tour fires only in HELM (both idle branches main.js:8331-8357 gated). GUARDRAILS: SC_TUNING never touched; SupercruisePilot/AutoNavigator/tourStandoff motion code untouched (this workstream owns regime/input/HUD/boot, not flight); Assist-type player burns explicitly out of scope.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-hand-state-and-routing-reducers",
+      "statement": "A pure reducer layer decides, from the hand-state, where every hand input goes and whether the autopilot may fly: W/S throttle, Q/E roll, and mouse-steer are live IFF flight controls are ON; autopilot is legal IFF they are OFF; F toggles the hand-state (and mid-tour means takeover); Z from hands-on yields controls-off-plus-tour-start, Z mid-tour yields tour-stop-hands-off. Built TDD in flightModes.js alongside the existing reducers.",
+      "verifyVia": {
+        "input": "Headless Vitest on the new/extended pure reducers in src/flight/flightModes.js: every (handState, input) routing cell; F action from hands-on, hands-off, and mid-tour; Z action from hands-on, hands-off, and mid-tour; autopilot-legality predicate.",
+        "observable": "All routing/transition cases pass with hand-built expectations (not mirrors of the implementation); existing reducer tests (pointerHudState, bootModeAction, escCascade, modeSwap) still green or deliberately extended."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2-boot-and-idle-reducers",
+      "statement": "bootModeAction carries the flipped mapping — picking HELM means the autopilot tour starts (hands-off), picking ORRERY means nothing is armed — and an idle-gate predicate fires the tour only from HELM, never from ORRERY. Mobile no longer coerces the pick to ORRERY.",
+      "verifyVia": {
+        "input": "Headless Vitest: bootModeAction('helm'|'orrery'|garbage) on desktop and mobile; the idle-gate predicate across (regime, handState) combinations.",
+        "observable": "helm carries startAutopilot=true, orrery carries startAutopilot=false and stays the safe fallback for garbage; mobile pick is honored (no coercion); idle predicate true only for HELM states, false for every ORRERY state."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC3-tour-input-isolation",
+      "statement": "During an autopilot tour leg, no hand input moves the ship: holding Q or E produces zero roll (the measured main.js:8468 leak is dead), W or S neither changes throttle nor takes over (W/S only works in flight mode), and mouse motion neither steers the ship nor deflects a reticle.",
+      "verifyVia": {
+        "input": "Live (chrome-devtools :9223, tab foreground): boot HELM or press Z to start the tour, then during a CRUISE leg synthesize held KeyQ/KeyE, KeyW/KeyS, and mouse moves across the canvas.",
+        "observable": "scModel.turnInput.roll stays 0 across Q/E frames; scModel.throttle unchanged and scPilot.isActive stays true across W/S; ship heading/trajectory matches the pilot's plan (telemetry sampler shows no player-injected deltas); 0 new console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC4-f-is-the-hands-toggle",
+      "statement": "Pressing F puts control back into the player's hands: F mid-tour stops the pilot and tour and lands hands-on (throttle live, reticle up); outside the tour F toggles hands-on/hands-off; hands-off preserves the absorbed free-look behaviors (bare cursor aims/selects, LMB-drag looks around, release holds the view) — which also means you can still look around during the tour with no extra key.",
+      "verifyVia": {
+        "input": "Live (:9223): (a) F during a tour leg, then W/S; (b) F toggling in normal flight, checking cursor/reticle and that LMB-drag moves the head while a bare cursor move does not steer; (c) LMB-drag look during a tour leg.",
+        "observable": "(a) autoNav.isActive false, scPilot.isActive false, hands-on flags set, W/S changes throttle. (b) hand-state flips per press; pointer HUD matches; bare-cursor move leaves turnInput at 0; LMB-drag changes head orientation. (c) head looks around while the pilot keeps flying the leg."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC5-z-semantics",
+      "statement": "Pressing Z from hands-on flight toggles flight control off and starts the tour in the same press; pressing Z during the tour stops it, leaving the ship hands-off and coasting (F then grabs the stick). No state from the hands-on session (roll input, deflection, throttle intent) survives into the tour.",
+      "verifyVia": {
+        "input": "Live (:9223): enter hands-on flight (R engage), hold some roll/deflection, press Z; sample regime flags and scModel.turnInput on the next frames; press Z again mid-leg.",
+        "observable": "After Z: hands-off flags set, tour active, turnInput (incl. roll) zeroed, throttle owned by the pilot. After second Z: tour stopped, ship coasting hands-off, no HELM hands-on HUD; F restores hands-on."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC6-hud-tells-the-truth",
+      "statement": "The steering reticle is shown and the OS cursor hidden exactly when hands-on; every other state (tour running, hands-off coast, ORRERY, mobile) shows a normal cursor and no steering reticle — across all transitions: both boots, Z on/off, F on/off, idle-fire, M swap.",
+      "verifyVia": {
+        "input": "Live (:9223): walk the transition matrix (boot HELM, boot ORRERY, Z on/off, F on/off, idle-fire with a short idleTimeout, M swap) reading the pointer-HUD state and DOM cursor/reticle each step.",
+        "observable": "cursor 'none' + reticle visible IFF hands-on at every step; during tours the cursor is visible and no reticle renders; no transition leaves a stale combination (the measured hands-on-HUD-during-tour leak is dead)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7-boot-mapping-flipped",
+      "statement": "Picking HELM at the title boots into the autopilot tour hands-off (the cockpit screensaver; F grabs the stick); picking ORRERY boots into the god's-eye orrery with nothing armed — no tour, no autopilot flag. The title dismiss no longer unconditionally arms the autopilot.",
+      "verifyVia": {
+        "input": "Live (:9223): fresh page load twice — pick HELM, pick ORRERY — read _getState() and regime flags after the warp reveal settles.",
+        "observable": "HELM boot: autoNav active, pilot flying, hands-off flags, cockpit view. ORRERY boot: autopilot flag false, autoNav inactive, orrery interactions (select, orbit, WASD camera-fly) work; nothing starts a tour without input."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC8-idle-fires-only-in-helm",
+      "statement": "With the idle timeout elapsed, the tour starts only in HELM (from either hand state); ORRERY idles indefinitely — it never auto-arms the tour.",
+      "verifyVia": {
+        "input": "Live (:9223) with settings idleTimeout set low: idle in ORRERY past several timeouts; idle in HELM hands-on; idle in HELM hands-off coast.",
+        "observable": "ORRERY: autoNav stays inactive indefinitely. HELM (both hand states): tour starts after the timeout, hands-off, clean regime (AC3 observables hold on its first leg)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC9-mobile-both-stations",
+      "statement": "Mobile works via Orrery, and Helm autopilot is on by default for mobile if they choose that mode: the title chooser shows BOTH stations on mobile; mobile-HELM boots the tour (no keyboard needed; the mode-swap HUD button leaves it to ORRERY); mobile-ORRERY is the touch-driven orrery with no tour.",
+      "verifyVia": {
+        "input": "Live (:9223) with chrome-devtools mobile emulation (touch, mobile UA): load fresh, verify the chooser offers both; boot each way; from the mobile tour tap the mode-swap button.",
+        "observable": "Both chooser options visible and pickable on mobile; mobile-HELM: tour running hands-off; mobile-ORRERY: no tour, touch select/orbit works; swap button drops the tour to ORRERY."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC10-peer-mode-doc-reconciled",
+      "statement": "The 2026-06-27 mode-restructure design doc is reconciled with the reversal: its god's-eye-tour framing, its 'no restriction of the autopilot tour in either mode' non-goal, and its F=free-look semantics carry explicit STALE/SUPERSEDED markers pointing at this workstream and the motion-authority trace. The reversal is recorded as deliberate (thrice-stated), not silent drift.",
+      "verifyVia": {
+        "input": "Read docs/superpowers/specs/2026-06-27-orrery-helm-mode-restructure-design.md and the 2026-07-01 spec's inc-4 section after the edit.",
+        "observable": "Stale markers present at all three reversed points with pointers to mode-ownership-2026-07-02; no other content of the 2026-06-27 doc altered; the inc-4 section notes this workstream realizes its minimal-delta."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC11-regression-gate",
+      "statement": "Everything that worked keeps working: full flight+auto suites green (288 baseline plus this workstream's new tests), build clean, SC_TUNING byte-identical, WS-1 stall guard and all four Step-0 corrections intact with their tests unmodified, and the Assist-type player path (Space commit-burn, W/S-cancels-leg, commitBurnSwapsToHelm incl. the ship-target quarantine) untouched.",
+      "verifyVia": {
+        "input": "./node_modules/.bin/vitest run src/flight src/auto; npm run build; git diff over SupercruiseModel.js:10-38 (SC_TUNING); git diff over SupercruisePilot.js and tourStandoff.js (must be motion-code-clean).",
+        "observable": "All suites green (>=288 + new); build exits 0; SC_TUNING diff empty; Step-0/WS-1 test files unmodified and passing; no diff to pilot motion/stall/capture code; full-repo baseline still shows only the 4 pre-existing unrelated src/generation failures."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC12-modes-read-cleanly-separate",
+      "statement": "Watching and driving it, the modes don't mix: Max boots both stations, runs the tour from HELM, grabs the stick with F, hands back with Z — ORRERY is his, the ship in a tour is the pilot's alone, and the tour's motion now reads as the flight system's genuine output. This is also the clean vehicle for the Step-0 re-UAT (its AC7).",
+      "verifyVia": {
+        "input": "Max on :5173/well-dipper/: boot ORRERY (confirm nothing flies itself), boot HELM (watch the screensaver arrive at bodies and visit a star), press F mid-tour, fly, press Z, watch again; optionally window._triggerTourComplete() for the warp-arrival standoff.",
+        "observable": "Holistic acceptance — the two stations read as cleanly separated experiences and the autopilot's flight looks like flight. Deferred to Max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "Key handlers (src/main.js): Z tour toggle :9582; F free-look toggle :9550 (becomes the hands toggle); M mode swap :9478; R drive toggle :9509; tour W/S-takeover branch :9598-9611 (retired for tours); held-keys ship-input block :8450-8468 (W/S throttle + the Q/E roll leak); mouse virtual-joystick gate :10008.",
+      "Pure reducers (src/flight/flightModes.js): pointerHudState :227, bootModeAction :201, freeLookPointerRoute :85, headReleaseAction :99, manualCancelsLeg :127 (Assist — unchanged), commitBurnSwapsToHelm :185 (unchanged), escCascadeAction :147, escFocusResetFires :258.",
+      "Boot flow (src/main.js): _pickBootMode :2635 (mobile ORRERY coercion at :2637 to remove), _pendingBootMode :2626, dismissTitleScreen :2642 (hard-set _autopilotEnabled=true at :2647 to remove), warpRevealSystem boot consumer :6114-6125, _updateModeSwapButton.",
+      "Idle loop (src/main.js:8331-8357) — both branches call startFlythrough() on idleTimeout regardless of regime today.",
+      "Tour entry/exit + regime plumbing (src/main.js): startFlythrough :5850 (sets _autopilotEnabled + bypassed, no regime reset today), stopFlythrough, _enterFlightInternal :8979, _applyPointerHud :9005, _exitFlightInternal :9011, setScManual.",
+      "Free-look modules (src/flight/freeLook.js, freeLookApply.js) — behaviors absorbed into the hands-off state; middle-mouse peek + recenter path.",
+      "Tour engine CONSUMED, not modified: AutoNavigator, SupercruisePilot, tourStandoff, _dispatchTourLeg (+ Step-0 corrections within them).",
+      "Evidence base: docs/FLIGHT_TOUR_MOTION_AUTHORITY_TRACE_2026-07-02.md (the leak table each integration AC kills); telemetry sampler + analyzer in docs/WORKSTREAMS/autopilot-standoff-routing-2026-07-01/triage/.",
+      "Test patterns: src/flight/__tests__/ incl. bootMode.test.js; ./node_modules/.bin/vitest run <path>; npx is hook-blocked; the word 'vite' in commit messages trips a hook."
+    ],
+    "outputs": [
+      "A single pilot-owned tour regime: the hand-state flag consumed by the ship-input block, the mouse gate, the pointer HUD, and the autopilot-legality check; Z/F/idle/boot all route through it.",
+      "Flipped boot mapping: bootModeAction carries startAutopilot; warpRevealSystem HELM branch starts the tour hands-off, ORRERY branch arms nothing; title dismiss no longer hard-arms the autopilot.",
+      "Mobile chooser offering both stations (coercion removed); mobile-HELM = tour by default; mode-swap button as the mobile exit.",
+      "Idle gate: tour fires only from HELM.",
+      "STALE/SUPERSEDED markers in docs/superpowers/specs/2026-06-27-orrery-helm-mode-restructure-design.md + an inc-4 realization note in the 2026-07-01 spec.",
+      "New reducer unit tests in src/flight/__tests__/ (hand-state routing, F/Z transitions, boot flip, idle gate)."
+    ],
+    "mustStayWorking": [
+      "SC_TUNING (SupercruiseModel.js:10-38) byte-identical — standing guard, two prior live regressions.",
+      "Step-0 corrections (RC1 cap-relative stall criterion, RC3 warp-arrival star standoff, AC3-B escape-first waypoint, RC4 capture floor) + WS-1 CRUISE stall guard — pilot motion code untouched, their test files unmodified.",
+      "Player Assist path end-to-end: aim/select in hands-off, Space commit-burn -> ASSIST leg, W/S cancels the leg, commitBurnSwapsToHelm (incl. ship-target QUARANTINED-legacy exclusion) — explicitly out of scope, must not regress.",
+      "M-key ORRERY<->HELM swap both directions (drive untouched) + Esc-cascade no-mode-switch invariant + escFocusResetFires HELM no-op.",
+      "ORRERY-native controls: WASD camera-fly (main.js:8470 flightOk branch), mouse orbit/select, touch on mobile.",
+      "The screensaver loop: tour -> wrap -> auto-warp -> next system -> tour continues; warp choreography seams (choreo:null dispatch, shipChoreographer.beginTour fromWarp) unchanged.",
+      "R drive toggle semantics (engage/dropout/reengage incl. mass-lock block) in hands-on flight.",
+      "Free-look behaviors surviving inside hands-off: LMB-drag look, hold-on-release, bare-cursor aim/select, middle-mouse peek + snap-back in hands-on.",
+      "Full-repo test baseline: the 4 pre-existing unrelated src/generation failures stay the ONLY failures."
+    ]
+  }
+}

@@ -123,9 +123,9 @@ function mkControls() {
 }
 
 describe('PilotFrame named contract (CONTRACT §2)', () => {
-  it('lists exactly the six one-shot fields, in order', () => {
+  it('lists exactly the seven one-shot fields, in order', () => {
     expect(PILOT_FRAME_FIELDS).toEqual([
-      'phase', 'prevPhase', 'phaseChanged', 'motionComplete', 'overshoot', 'decelStarted',
+      'phase', 'prevPhase', 'phaseChanged', 'motionComplete', 'overshoot', 'decelStarted', 'stallAborted',
     ]);
   });
 

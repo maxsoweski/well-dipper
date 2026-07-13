@@ -339,11 +339,6 @@ html, body {
   margin-top: 4px;
 }
 
-/* Mobile is ORRERY-only (hard-locked to Toy Box) — hide the HELM choice. */
-@media (pointer: coarse) {
-  #splash-mode-helm { display: none; }
-}
-
 /* ── Overlay Close Button (used in settings + keybinds panels) ── */
 .overlay-close {
   position: absolute;
@@ -799,11 +794,6 @@ body.hud-hidden #flight-mode-toast { display: none !important; }
 
 #mode-swap-btn:active {
   transform: translateY(1px);
-}
-
-/* Mobile is ORRERY-only (Toy-Box locked) — no Helm, so no swap button. */
-body.is-mobile #mode-swap-btn {
-  display: none !important;
 }
 
 body.hud-hidden #mode-swap-btn {

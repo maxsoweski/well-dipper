@@ -152,6 +152,24 @@ export class AutoNavigator {
   }
 
   /**
+   * WS-1 null-bodyRef skip-guard. Advance to the next stop that actually has a
+   * bodyRef, skipping any stop whose mesh failed to spawn (bodyRef null) — those
+   * would otherwise freeze the tour (main.js advances the index but skips flyTo
+   * when bodyRef is null). Advances at most one full queue length, so a queue
+   * with no valid bodyRef returns null instead of looping forever.
+   * @returns {object|null} the next stop with a bodyRef, or null if none exist.
+   */
+  advanceToNextWithBody() {
+    const n = this.queue.length;
+    if (n === 0) return null;
+    for (let i = 0; i < n; i++) {
+      const stop = this.advanceToNext();
+      if (stop && stop.bodyRef) return stop;
+    }
+    return null; // no stop in the queue has a bodyRef
+  }
+
+  /**
    * Jump the tour to a specific queue index.
    */
   jumpTo(index) {

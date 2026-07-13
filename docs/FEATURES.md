@@ -129,6 +129,8 @@ Commit history is supporting evidence only, not authority.
 | Title theme music (first 3-second riff needs rework — grating after a while) | F&F-MVP | in-flight | — | — |
 | Music — non-title tracks (`explore.mp3` present; `hyperspace.mp3`, `deepsky.mp3`, `warp-charge.mp3`, `arrival.mp3` wired-but-absent on disk; Christian's tracks status unknown) | F&F-MVP | proposed | Christian delivering tracks | — |
 | SFX — all (currently placeholders from title-theme clipping/pitch-shift; 21 files including 5 warp-related: charge/enter/exit/lockOn/target) | F&F-MVP | in-flight | — | — |
+| System music themes — 12 categories: 1 baseline "average/normal" system + 11 variations on it. Define the 12 system categories, then classify a system algorithmically during gameplay and play its matching theme at the right time. **Open:** the 12-category taxonomy is undefined; the in-gameplay classifier is undesigned. Future — not now. | ENRICHED | proposed | 12-category taxonomy undefined | — |
+| Nav-menu BGM filter — apply a filter effect (e.g. low-pass / muffle) to whatever BGM is playing while the navigation-system menu is open; restore on close. Future — not now. | ENRICHED | proposed | — | — |
 
 ## UI / HUD
 

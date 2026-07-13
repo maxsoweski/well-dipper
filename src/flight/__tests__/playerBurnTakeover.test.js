@@ -14,7 +14,7 @@
 // OLD (mode stuck at MANUAL) behavior is NOT cancellable (the regression we fix).
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as THREE from 'three';
-import { FlightMode, playerBurnMode, manualCancelsLeg, isManualInput } from '../flightModes.js';
+import { FlightMode, playerBurnMode, manualCancelsLeg, isManualInput, handRouting } from '../flightModes.js';
 import { SupercruiseModel } from '../SupercruiseModel.js';
 import { SupercruisePilot } from '../SupercruisePilot.js';
 
@@ -121,5 +121,80 @@ describe('player-directed commit-burn leg is cancellable by manual input (end to
     const cancelled = tryManualTakeover({ x: 0, y: 0 }, -1); // S held, but gate can't fire
     expect(cancelled).toBe(false);
     expect(pilot.isActive).toBe(true); // strands the player in an uncancellable burn
+  });
+});
+
+describe('mode-ownership-2026-07-02 wiring: Assist is OUT OF SCOPE for the hand-state gate', () => {
+  // Mirrors main.js ~8503-8524 (the held-keys throttle/cancel branch), which the
+  // mode-ownership workstream re-gated on hand-state (handRouting(_scManual &&
+  // !freeLook.latched).throttle) to kill the TOUR's Q/E-roll leak. Regression:
+  // a HELM-native ASSIST leg (Space commit-burn) can be launched from hands-off
+  // — aim/select requires a free cursor, i.e. free-look latched — so the pure
+  // hand-state gate stranded manualCancelsLeg's W/S-cancel path behind a
+  // hands-on check the Assist path never had before. The live fix keeps the
+  // branch reachable whenever an ASSIST leg is actively flying, regardless of
+  // hand-state. This harness reproduces the EXACT main.js OR-condition (no
+  // three.js scene / DOM) so the wiring regression can't reopen silently —
+  // the pure reducer tests (manualCancelsLeg alone) can't catch this because
+  // the bug was in the gate wrapped AROUND the reducer call, not the reducer.
+  let model, pilot, body, flightMode;
+
+  function startPlayerBurn() {
+    pilot.beginLeg({ toBody: body, bodyRadius: 5, linger: Infinity });
+    flightMode = playerBurnMode();
+  }
+  // The live wiring: `if (handRouting(scManual && !freeLookLatched).throttle
+  // || (scPilot.isActive && _flightMode === ASSIST)) { if (manualCancelsLeg
+  // (...) && dir !== 0) { scPilot.stop(); _flightMode = MANUAL; } }`
+  function pressWS({ scManual, freeLookLatched, throttleDir }) {
+    const handsOn = scManual && !freeLookLatched;
+    const routing = handRouting(handsOn);
+    const assistLegActive = pilot.isActive && flightMode === FlightMode.ASSIST;
+    if (!(routing.throttle || assistLegActive)) return false; // branch never entered
+    if (manualCancelsLeg(flightMode, pilot.isActive) && throttleDir !== 0) {
+      pilot.stop();
+      flightMode = FlightMode.MANUAL;
+      return true;
+    }
+    return false;
+  }
+
+  beforeEach(() => {
+    model = new SupercruiseModel();
+    model.position.set(0, 0, 0);
+    pilot = new SupercruisePilot(model);
+    body = new THREE.Object3D();
+    body.position.set(0, 0, -1000);
+    flightMode = FlightMode.MANUAL;
+  });
+
+  it('REGRESSION GUARD: W/S still cancels a HELM free-look (hands-off) ASSIST leg', () => {
+    startPlayerBurn();
+    pilot.update(1 / 60);
+    // scManual true (HELM), freeLook.latched true (hands-off — how the target
+    // was aimed/selected in the first place). Pre-fix this fell into the new
+    // hands-off passenger branch and never reached manualCancelsLeg.
+    const cancelled = pressWS({ scManual: true, freeLookLatched: true, throttleDir: -1 });
+    expect(cancelled).toBe(true);
+    expect(pilot.isActive).toBe(false);
+    expect(flightMode).toBe(FlightMode.MANUAL);
+  });
+
+  it('W/S also still cancels a HELM hands-on ASSIST leg (unchanged path)', () => {
+    startPlayerBurn();
+    pilot.update(1 / 60);
+    const cancelled = pressWS({ scManual: true, freeLookLatched: false, throttleDir: 1 });
+    expect(cancelled).toBe(true);
+    expect(pilot.isActive).toBe(false);
+    expect(flightMode).toBe(FlightMode.MANUAL);
+  });
+
+  it('does NOT reopen the tour leak: hands-off with NO assist leg active never enters the branch', () => {
+    // Tour/coast state: pilot idle (no ASSIST leg), hands-off. The branch must
+    // stay closed so Q/E-roll zeroing (the sibling `else if (_scManual)` arm)
+    // still runs — this is the leak the workstream was built to kill.
+    const cancelled = pressWS({ scManual: true, freeLookLatched: true, throttleDir: -1 });
+    expect(cancelled).toBe(false);
+    expect(pilot.isActive).toBe(false);
   });
 });
