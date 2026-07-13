@@ -115,10 +115,17 @@ re-stated, provably identical via AC-PROFILE-EQ, not imported).
 **Module-private helpers (verbatim plates/shell idiom):** `dot`, `norm`, `randDir` (2 draws/call,
 draw order load-bearing), the STEP-0 `meanEdgeAngle` scan.
 
-**Comment discipline:** the AC-DET/AC-0 greps scan the whole source, comments included. Module comments
-must never contain a quoted shipped-namespace literal (write "the shell cells stream", never the quoted
-`'shell:'+…` form) and must avoid the D-vector tokens (`drivers`, `volatileFraction`, `massGravity`,
-`thermalState`, `archetype`).
+**Comment discipline [RESOLVED-BY-LENS: MF2]:** all discipline greps EXCEPT ONE run on
+**comment-stripped source** (the house idiom is `stripComments` — verified against real code:
+`worldengine-mixed-composer.test.js:34` defines it and `:108`/`:133` grep `CODE = stripComments(SRC)`,
+NOT the raw source; this plan's earlier "comments included" phrasing contradicted both that precedent
+and its own token list — the three self-trips MF2 enumerates: `conditional` ⊃ `condition`,
+"regime-gate-free" ⊃ `regime`, a header comment quoting the BFS `while` making whileCount=2). The
+exact regexes are pinned in §1.6; with stripped-source greps, comment wording is free EXCEPT for the
+one raw-source pin: comments must never contain a quoted shipped-namespace literal (never write a
+quote character followed by a shipped namespace-with-colon token; phrase it as "the shell cells
+stream"). Code identifiers must still avoid the §1.6 banned tokens (`condition`, `bodyDrivers`,
+`archetype`, carrier channel names as `carrier.` writes) — those greps see code, not comments.
 
 ### 1.1 Shared profile library (pure, alea-free)
 
@@ -274,13 +281,26 @@ export function evalFociDeformation(carrier, foci, profiles = DISRUPT_PROFILES, 
 | C — foci | `'disrupt:foci:' + seed` | per candidate: z, azimuth, accept; on accept: radius, type | `3·pool + 2·accepted` |
 | eval | — | none | `0` |
 
-### 1.6 Module-wide discipline pins (grep-enforced)
+### 1.6 Module-wide discipline pins (grep-enforced) — exact regexes [RESOLVED-BY-LENS: MF2]
 
-Alea-only in `'disrupt:'` (+ structural seedKey guard); no `Math.random`/`Date.now`; exactly ONE
-`while` (the BFS drain `while (qh < qt)`); no relax/Jacobi pass (`for (let pass` absent); reads only
-`carrier.N/verts/adj` — no carrier channel token in the source; no D-vector/E1/taxonomy token;
-`tune ? { ...DEFAULTS, ...tune } : DEFAULTS` seam on both constructors; all three DEFAULTS objects +
-the registry frozen. Zero production wiring (interpenetration.js precedent) — no `src/` importer.
+Every grep below runs on `CODE = stripComments(SRC)` (the mixed-composer house idiom) **except** the
+quoted-namespace check, which runs on the RAW source (a quoted shipped-namespace literal is banned
+even in a comment — the contract AC-DET wording):
+
+| Pin | Regex | Source | Expect |
+|---|---|---|---|
+| no Math.random | `/Math\.random\s*\(/` | stripped | absent |
+| no Date.now | `/Date\.now\s*\(/` | stripped | absent |
+| exactly ONE `while` (the BFS drain) | `/while\s*\(/g` | stripped | match count === 1 |
+| no relax/Jacobi pass | `/for\s*\(\s*let\s+pass/` | stripped | absent |
+| no carrier channel write/read | `/carrier\.(height|grainAngle|faultDensity|regime)/` | stripped | absent (reads only `carrier.N/verts/adj`) |
+| no D-vector/E1 read (AC-0) | `/\bbodyDrivers\b/`, `/\bcondition\b/` (word-boundary — does NOT match `conditional`), `/computeE1/`, `/\be1\./`, `/\barchetype\b/` | stripped | all absent |
+| no quoted shipped-namespace literal | `/['"´\`](magma:|stagnant:|shell:|plates:|lid:|e1:)/` | **raw** | absent |
+| every alea call is seedKey-derived | `/alea\(/g` count === `/alea\(\s*seedKey/g` count | stripped | equal (static half; the dynamic half is the drawcount test's key bookkeeping + the D4 `startsWith('disrupt:')` throw) |
+
+Plus (non-grep): `tune ? { ...DEFAULTS, ...tune } : DEFAULTS` seam on both constructors; all three
+DEFAULTS objects + the registry frozen. Zero production wiring (interpenetration.js precedent) — no
+`src/` importer.
 
 ---
 
