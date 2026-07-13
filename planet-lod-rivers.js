@@ -416,58 +416,15 @@ export function computeOcean(height, seaLevel, N, baseLevel = null) {
   return { isOcean, oceanCount };
 }
 
-// ───────────── regime gate: Earth-like plate path vs despun zonal E6 (AC5) ─────────────
-// The gate lives HERE at the route()/lab boundary — NOT inside the three-free src/worldengine/base
-// layer, which stays regime-agnostic. Earth-like terrestrial/ocean bodies get the one-pass plate/
-// uplift field; everything else (tidally-locked / icy / stagnant-lid / volatile / impact) keeps the
-// existing despun/zonal E6 writers BYTE-IDENTICAL ("addition by regime, not replacement").
-export function isEarthlikePlatePath(archetype, locked = false) {
-  if (locked) return false;                 // tidally-locked bodies => despun shell, never plates
-  return archetype === 'terrestrial' || archetype === 'ocean';
-}
-
-// Writes carrier.height for the body via the gated relief path, and returns which path ran plus the
-// plate diagnostics (for the live plateProbe, AC7). Earth-like => the one-pass plate writer
-// (carrier.height = U, the SOLE low/mid source). Non-Earth-like => the despun writers EXACTLY as
-// before — writeGrainSphere(carrier,grainDrivers) + writeHeightSphere(carrier,{},grainDrivers,
-// {name:'tectonic-build'},heightSeed) — same calls, same args, same seed => byte-identical fallback.
-// Sibling of isEarthlikePlatePath: true when the body is an icy/despun shell regime. Checked AFTER
-// the earthlike gate so the validated plate path is never touched (zero-clobber by construction).
-export function isShellReliefPath(archetype, locked = false) {
-  return shellRegimeOf(archetype, locked) !== null;
-}
-
-// Volcanic set = the `lava` / `volcanic` short keys/tags (Lava (hot airless) → 'lava'; Magma (K2-141b)
-// resolves to 'lava' via the PRESET_ARCHETYPE line added in the lab). CHECKED AFTER isEarthlikePlatePath
-// AND isShellReliefPath so it never touches the validated plate path or the icy/despun path. It excludes
-// everything already claimed (terrestrial/ocean by plate; icy/volatile/eyeball by shell) and the
-// non-volcanic keys (gas-giant/sub-neptune/carbon/crystal) by simple set membership: only the volcanic
-// set matches. NOTE the ordering dependence: 'lava' being in shellRelief's SHELL_EXCLUDE is what lets a
-// LOCKED lava body fall THROUGH the shell locked-fallback down to here (an unlisted locked key would be
-// grabbed by shell's eyeball-despun fallback first).
-const VOLCANIC_ARCHETYPES = new Set(['lava', 'volcanic']);
-export function isVolcanicPath(archetype, locked = false) {
-  void locked;   // both locked (Lava/Magma) and unlocked volcanic bodies route here — seed-only placement
-  return VOLCANIC_ARCHETYPES.has(archetype);
-}
-
-// Increment #4b (stagnant-lid): true for the Venus stagnant-lid silicate regime (key 'stagnant-lid').
-// KEY-based only — NEVER gated on locked (Venus is a slow retrograde rotator, locked:false; gating on
-// locked would MISS it, which is the fall-through-to-sin²(lat) bug). Checked AFTER plate/shell/volcanic
-// so all three validated paths stay byte-identical (zero-clobber by construction).
-export function isStagnantLidPath(archetype, locked = false) {
-  return stagnantLidRegimeOf(archetype, locked) !== null;
-}
-
 export function writeBodyRelief(carrier, {
-  // V2-0 Slice C: bodyDrivers may carry a NESTED `bodyDrivers.condition` sub-object (the body condition-
-  // vector). V2-3 (THE DISPATCH FLIP): when it is PRESENT (every production/lab path), routing derives from
-  // computeE1's {compositionClass, geodynamicRegime, shellSubRegime, m_hp} + dispatch-level locked-awareness
-  // — NEVER the archetype string. When ABSENT (the ~8 legacy condition-less test callers), the archetype
-  // chain below survives VERBATIM as the enumerated MIGRATION BRIDGE (contract lens MF-3); the bridge dies
-  // at the retirement commit. `locked` is destructured as argLocked: the condition-bearing branch reads the
-  // NESTED condition.tidalState.locked (AC-PLUMB-RECONCILE a) with the argument as fallback.
-  archetype = null, locked: argLocked = false, grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, heightSeed = 'e6:0', T_eq = null,
+  // V2-0 Slice C: bodyDrivers carries a NESTED `bodyDrivers.condition` sub-object (the body condition-
+  // vector). V2-3 (THE DISPATCH FLIP) made it the SOLE routing input: routing derives from computeE1's
+  // {compositionClass, geodynamicRegime, shellSubRegime, m_hp} + dispatch-level locked-awareness — NEVER
+  // an archetype string. The PRESET_ARCHETYPE migration bridge (the condition-less archetype chain) was
+  // RETIRED (world-engine-preset-archetype-retirement, 2026-07-13): condition-less input now THROWS
+  // loudly (below) instead of falling back. `locked` is destructured as argLocked: the condition-bearing
+  // branch reads the NESTED condition.tidalState.locked (AC-PLUMB-RECONCILE a) with the argument as fallback.
+  locked: argLocked = false, grainDrivers = DEFAULT_GRAIN_DRIVERS, bodyDrivers = null, macroSeed = 0, heightSeed = 'e6:0', T_eq = null,
 } = {}) {
   if (bodyDrivers?.condition) {
     // ═══ V2-3 CONDITION-BEARING DERIVED DISPATCH (BUILD-PLAN §1) — label-free by construction ═══
@@ -562,72 +519,7 @@ export function writeBodyRelief(carrier, {
     // (3f) dead-lid rocky (Mars) → despun
     return despun();
   }
-  // ═══ MIGRATION BRIDGE (condition ABSENT) — today's archetype chain VERBATIM (contract lens MF-3). ═══
-  // Carries the ~8 legacy condition-less callers unchanged; deleted at the PRESET_ARCHETYPE retirement commit.
-  const locked = argLocked;
-  if (isEarthlikePlatePath(archetype, locked)) {
-    // Increment 2 (plate driver-response): the body's D-vector (bodyDrivers — a SEPARATE channel from
-    // the grain-bake grainDrivers bundle) is mapped to a `tune` override via driversToTune(). SLICE A
-    // stub ⇒ null ⇒ the DEFAULTS branch ⇒ byte-identical to the validated POC (AC2). SLICE B fills the
-    // calibration. bodyDrivers stays null off the lab driver-response path (every existing caller).
-    const plateDiag = writePlateUpliftSphere(carrier, bodyDrivers, { macroSeed, tune: driversToTune(bodyDrivers) });
-    return { path: 'plate', plateDiag, shellDiag: null, magmaDiag: null, stagnantDiag: null };
-  }
-  const regime = shellRegimeOf(archetype, locked);    // icy-active | volatile-cold | eyeball-despun | null
-  if (regime) {
-    // V2-5s (shell driver-response), the #4-M/V2-2b-1 bridge idiom: bodyDrivers is null for the ~8 legacy
-    // condition-less bridge callers → shellDriversToTune(null,·) === null → the writer's DEFAULTS branch →
-    // byte-identical. The shell response is CONDITION-FIRST (applied at call site 1 on the real condition-bearing
-    // bundle); this migration bridge is the condition-LESS legacy path, so the tune is GATED on
-    // `bodyDrivers?.condition` — which is ALWAYS false here by construction (we only reach the bridge because the
-    // top `if (bodyDrivers?.condition)` was false), so the tune is null for EVERY bridge input, keeping it
-    // byte-inert. This CORRECTS BUILD-PLAN §4's lens-minor-#a assumption ("no current caller passes a non-null
-    // condition-LESS bodyDrivers"): the plate suite's AC5 no-clobber DOES (bodyDrivers=D_OFF — a raw plate
-    // D-vector, NOT a body bundle). Synthesizing a shell response from it would be both wrong (garbage from a
-    // non-body vector) and an AC5 clobber; gating keeps the bridge byte-identical for null AND D_OFF. Defensive-
-    // but-currently-dead, the idiom of the plan's own minor-#b fallback — if the bridge ever admits a
-    // condition-bearing caller, it would then correctly apply the response. appliedTune stays null.
-    const shellTune = bodyDrivers?.condition ? shellDriversToTune(bodyDrivers, regime) : null;
-    const shellDiag = writeShellReliefSphere(carrier, bodyDrivers, { macroSeed, regime, tune: shellTune });
-    shellDiag.appliedTune = shellTune;
-    return { path: 'shell', plateDiag: null, shellDiag, magmaDiag: null, stagnantDiag: null };
-  }
-  // Increment 4a (magmatism): volcanic bodies (Lava / Magma-K2-141b / Io-type) get the one-pass
-  // mantle-plume field (carrier.height = U, the SOLE low/mid source). Checked AFTER plate + shell so
-  // the validated paths are never touched. magmaDiag is retained for the live magmaProbe.
-  if (isVolcanicPath(archetype, locked)) {
-    // §0/§5: the substellar magma-ocean basin gates on T_ss (= T_eq*1.4 on locked worlds, else 0 — the
-    // shipped F41 convention, planet-lod-lab.html:3617), NOT on the `locked` boolean (BOTH Lava & Magma
-    // are locked; only T_ss separates a wide sea from a small pond, AC9). T_eq is threaded from route()
-    // (from the preset _fp.T_eq). Off the lab path (headless callers that pass no T_eq) T_ss defaults 0,
-    // so no basin — the volcanic gate still fires (plume field only).
-    const T_ss = locked ? (T_eq ?? 0) * 1.4 : 0;
-    // Increment #4-MULTIPLY (volcanic driver-response): the body's D-vector (bodyDrivers — the SAME separate
-    // channel #2 uses for plates, null off the driver path) is mapped to a `tune` override via
-    // magmaDriversToTune(). At the neutral reference it returns null ⇒ the writer's DEFAULTS branch ⇒ #4a
-    // byte-identical (AC1). bodyDrivers replaces grainDrivers as the drivers arg — byte-safe, the writer voids it.
-    const magmaTune = magmaDriversToTune(bodyDrivers);
-    const magmaDiag = writeMagmatismSphere(carrier, bodyDrivers, { macroSeed, locked, T_ss, tune: magmaTune });
-    magmaDiag.appliedTune = magmaTune;
-    return { path: 'volcanic', plateDiag: null, shellDiag: null, magmaDiag, stagnantDiag: null };
-  }
-  // Increment #4b (stagnant-lid): Venus gets the one-pass mantle-plume field (tessera + coronae + plains;
-  // carrier.height = U, the SOLE low/mid source). Checked AFTER plate + shell + volcanic so all three
-  // validated paths stay byte-identical. stagnantDiag is retained for the live stagnantLidProbe.
-  const slRegime = stagnantLidRegimeOf(archetype, locked);
-  if (slRegime) {
-    // Increment V2-2b-1 (stagnant driver-response): the body's D-vector (bodyDrivers — the SAME separate
-    // channel #2/#4-M use, null off the driver path) is mapped to a `tune` override via stagnantDriversToTune().
-    // At Venus's real drivers (and at null) it returns null ⇒ the writer's DEFAULTS branch ⇒ #4b byte-identical
-    // (AC-ZERO-CLOBBER). bodyDrivers replaces grainDrivers as the drivers arg — byte-safe, the writer voids it.
-    const stagnantTune = stagnantDriversToTune(bodyDrivers);
-    const stagnantDiag = writeStagnantLidReliefSphere(carrier, bodyDrivers, { macroSeed, regime: slRegime, tune: stagnantTune });
-    stagnantDiag.appliedTune = stagnantTune;
-    return { path: 'stagnant-lid', plateDiag: null, shellDiag: null, magmaDiag: null, stagnantDiag };
-  }
-  writeGrainSphere(carrier, grainDrivers);            // precondition: grain before height
-  writeHeightSphere(carrier, {}, grainDrivers, { name: 'tectonic-build' }, heightSeed);
-  return { path: 'despun', plateDiag: null, shellDiag: null, magmaDiag: null, stagnantDiag: null };
+  throw new Error('writeBodyRelief: bodyDrivers.condition is required — the PRESET_ARCHETYPE migration bridge was retired (world-engine-preset-archetype-retirement, 2026-07-13). Every production/lab caller must pass a condition-bearing bundle.');
 }
 
 // ═══════════════════════ ROUTING + ORDER + METRICS ═══════════════════════

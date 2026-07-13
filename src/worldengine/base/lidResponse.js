@@ -247,12 +247,12 @@ export function writeLidResponseSphere(carrier, drivers, {
       return { path: 'lid-weak', fineClass, primitiveId, magmaDiag };
     }
     case 'pure-strong': {
-      // ARCHETYPE-FREE regime resolution (must-fix #3): map the E1 coordinate geodynamicRegime === 'stagnant'
-      // → the single strong constant. pure-strong is reachable only for the data-placed 'stagnant' rocky (its
-      // classifyLidPath cut L≥L_STRONG ∧ rawTidal<SHOULDER_LO is computeE1's own data-placed-stagnant cut,
-      // e1Regime.js:199), so this always resolves to STRONG_REGIME; the explicit coordinate read documents the
-      // archetype-free resolution the AC-0 grep asserts. NEVER stagnantLidRegimeOf(archetype).
-      const regime = e1.geodynamicRegime === 'stagnant' ? STRONG_REGIME : STRONG_REGIME;
+      // ARCHETYPE-FREE regime resolution (must-fix #3): pure-strong is reachable only for the data-placed
+      // 'stagnant' rocky (its classifyLidPath cut L≥L_STRONG ∧ rawTidal<SHOULDER_LO is computeE1's own
+      // data-placed-stagnant cut, e1Regime.js:199), so the regime is unconditionally the single strong
+      // constant. A former degenerate ternary (both arms identical) was folded to this direct assignment
+      // (world-engine-preset-archetype-retirement, 2026-07-13; byte-inert). NEVER stagnantLidRegimeOf(archetype).
+      const regime = STRONG_REGIME;
       // V2-3 probe parity (rivers:502-504): thread `drivers` (bodyDrivers post-flip; writeStagnantLidReliefSphere
       // `void drivers` → byte-inert vs today's grainDrivers) + the strong tune. MF#1: the strong tune is COMPUTED
       // IN THE CALLER (rivers.js unbrokenLid(), which already imports stagnantDriversToTune) and threaded in via
