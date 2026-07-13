@@ -1,5 +1,9 @@
 # real-universe-overlay-2026-07-12 — intent
 
+> **GREENLIT by Max 2026-07-12** (post-review contract, 10 ACs, after the 3-lens
+> adversarial review + round-2 verification). Build proceeds per the contract's
+> increment plan, via workflows, in a fresh session.
+
 Lane C (system details), successor to `naming-census-uniqueness-2026-07-07` (closed at
 `a1d2d4c`, Max UAT 2026-07-11; reached master + GitHub Pages via lane B's `847ab19`
 pre-deploy merge). Scoped 2026-07-12 from Max's ask 3 and the D6–D9 decisions deferred by
