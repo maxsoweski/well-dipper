@@ -338,13 +338,23 @@ future edit moves them. (Byte-untouchedness of the shipped files is the commit-p
 not an in-test assertion.)
 
 AC-CONSUMER-SEAM mechanics:
-- (a) grooved: (a1) pure-profile ring structure — over the ρ grid, exactly `GROOVE_RINGS` local minima
-  with prominence ≥ 0.05 in (0.05, GROOVE_SUPPORT), minima within GROOVE_DR/4 of `R0 + k·DR`,
-  consecutive-minima spacing = GROOVE_DR ± GROOVE_DR/4; (a2) plumbing — register
-  `{ fn: profileGroovedDiapir, support: PROFILE_DEFAULTS.GROOVE_SUPPORT }` as typeId 2, take one focus,
-  set `radii[c] = 0.5` (rad; ~130 covered nodes at N=1500) and `typeIds[c] = 2`, others `alive = 0`;
-  eval; assert per-node `contrib === profileGroovedDiapir(rho_i, P)` recomputed arm's-length, cover set
-  === {ρ ≤ support}, and nodes near ring radii sit below nodes at ring-midpoints.
+- (a) grooved [RESOLVED-BY-LENS: MF1]: (a1) pure-profile ring structure + trough-vs-flank ordering —
+  over the ρ grid, exactly `GROOVE_RINGS` local minima with prominence ≥ 0.05 in (0.05, GROOVE_SUPPORT),
+  minima within GROOVE_DR/4 of `R0 + k·DR`, consecutive-minima spacing = GROOVE_DR ± GROOVE_DR/4; AND for
+  each ring k, `profileGroovedDiapir(rk) < profileGroovedDiapir(rk − GROOVE_DR/2)` AND
+  `< profileGroovedDiapir(rk + GROOVE_DR/2)` — an ADJACENT-midpoint comparison (robust; verified margins
+  ≥ 0.11). The earlier GLOBAL "ring troughs sit below ALL ring-midpoints" claim is FALSE on the §1.1
+  profile: the dome slope lifts inner-ring troughs above outer midpoints — `profile(0.37) = 0.0735 >
+  profile(0.77) = 0.0657` (a ring-1 node 0.02 in ρ off-centre already exceeds the rings-2/3 midpoint), and
+  even the exact ring-1 minimum 0.0622 beats that midpoint by only 0.0035, so no node tolerance rescues the
+  global form. (a2) plumbing — register `{ fn: profileGroovedDiapir, support: PROFILE_DEFAULTS.GROOVE_SUPPORT }`
+  as typeId 2, take one focus, set `radii[c] = 0.5` (rad; ~130 covered nodes at N=1500) and `typeIds[c] = 2`,
+  others `alive = 0`; eval; assert per-node `contrib[i] === Math.fround(profileGroovedDiapir(rho_i, P))`
+  recomputed arm's-length (Float32Array store ⇒ fround the Float64 recompute; `rho_i` reconstructed with the
+  identical `acos(clamp(−1,1,dot))/Rc`) and cover set === {ρ ≤ support}. The GLOBAL per-node ring/midpoint
+  ordering clause is DROPPED (MF1): the per-node exact-equality proves the grooved profile renders through
+  `evalFociDeformation`, (a1) discharges the contract's "ring count + spacing asserted on the ρ profile",
+  and the fragile ring-1 mesh window (~3–8 nodes at radii=0.5/N=1500) is not relied on.
 - (b) editor split: eval → base snapshot; `alive[j] = 0` → re-eval: bytes identical at every node
   outside focus j's support, changed inside (and = 0 where no other focus covers); then `typeIds[k] = 2`
   → re-eval: change confined to k's old∪new support. Zero draws during eval is pinned in the drawcount
@@ -411,7 +421,7 @@ piece is still isolated. This matches the V2-2a/4b sibling build shape.
 | **AC-STRUCT-CELLS** | main · `space-filling partition + count band + interiorness invariants, every seed` (C1, C-inv); `C2/C3: wall-node fraction and mean interiorness within pinned bands, every seed`; `C4/C5: pooled cell-size spread and min within pinned bands`; `anti-vacuous: every perturbed control falls OUTSIDE its band (K down/K up/warp up/belt x4)` | Bands §0.2 verbatim |
 | **AC-STRUCT-FOCI** | main · `F1: accepted count within band at N=1500, every seed`; `F2: pooled coverage in band at BOTH densities; cross-density ratio in band (resolution invariance)`; `F3: radius law heavy-tailed — pooled u-hat median in band`; `F4: type split ~= TYPE_FRAC — pooled activeFrac in band`; `F5: field bias real — biased mean > null-control mean every seed/density, margins at N=1500`; `F6: small-pool grace — POOL:3 + accept-floor yields exactly 3 features, cleanly evaluated`; `anti-vacuous: every perturbed control falls OUTSIDE its band (pool x4 / pool /4 / skew=1 / typeFrac)` | Bands §0.2 verbatim; synthetic field per §2.1 |
 | **AC-PROFILE-EQ** | main · `profileActiveCorona === stagnantLid STEP-3 arithmetic AND mixedInterior STEP-7 duplicate, exact FP, dense rho grid`; `profileInactiveCorona === both shipped copies, exact FP, dense rho grid`; `PROFILE_DEFAULTS amplitudes === STAG_DEFAULTS === MIXED_DEFAULTS values; shipped sources still contain the inline formulas` | Shipped files byte-untouched = commit-point `git diff` gate |
-| **AC-CONSUMER-SEAM** | main · `(a) grooved profile: ring count + spacing on the rho profile (pure)`; `(a) grooved profile renders concentric grooves through evalFociDeformation (big-radius focus)`; `(b) deactivate one focus + re-eval: change localized to its support, bytes elsewhere identical`; `(b) retype one focus to grooved + re-eval: change localized, draw streams untouched` · drawcount · `evalFociDeformation performs zero draws (placement/eval split)` | |
+| **AC-CONSUMER-SEAM** | main · `(a) grooved profile: ring count + spacing + trough<flanks ordering on the rho profile (pure) [MF1]`; `(a) grooved profile renders through evalFociDeformation — per-node exact-equality (fround) + cover set (big-radius focus) [MF1]`; `(b) deactivate one focus + re-eval: change localized to its support, bytes elsewhere identical`; `(b) retype one focus to grooved + re-eval: change localized, draw streams untouched` · drawcount · `evalFociDeformation performs zero draws (placement/eval split)` | MF1: global ring/midpoint ordering dropped (false on the dome-sloped profile); replaced by adjacent-midpoint pure ordering + per-node plumbing |
 | **AC-ZERO-WIRING** | main · `no src/ file (nor planet-lod-rivers.js) imports lidDisruption.js` (recursive walk over `src/**/*.js`, module itself exempt) | Diff-surface half = commit-point `git diff --stat` gate |
 | **AC-ZERO-CLOBBER** | **NOT run during this build** (integration layer) — working-Claude's commit point: full `npx vitest run` at baseline (4 known failures: KnownObjects ×3, GalacticFeatures ×1; new files collected + nonzero counts per MF#3), guardrail quartet green, per-commit file lists = new module + tests + docs only | The build-scope archetypes run (step 8) is the only guardrail this workflow touches |
 
