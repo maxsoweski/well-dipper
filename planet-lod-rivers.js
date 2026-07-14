@@ -38,6 +38,7 @@ import { writeStagnantLidReliefSphere, stagnantLidRegimeOf, stagnantDriversToTun
 import { computeE1, modalRegime, inSeededBand } from './src/worldengine/base/e1Regime.js';
 import { makeSphereField } from './src/worldengine/base/sphereField.js';
 import { writeAccommodation, initSedimentHost } from './src/worldengine/base/hostChannels.js';
+import { writePassiveMargins } from './src/worldengine/base/passiveMargins.js';   // V2-4 slice-3: passive-margin shelfDepth channel (plate path only)
 // V2-2b-2a Slice C — the LAB-ONLY mixed-interior render seam (MF1 Option B). route() forwards a hand-set E1
 // coordinate through the V2-2a lid-response router (classifyLidPath → the mixed composer WRITES carrier.height),
 // and injects the Π=C·F instrument (one-way: rivers.js is the route/lab boundary, NOT a base/ writer, so the
@@ -147,9 +148,12 @@ export function bakeGrainCube({
 // then express the gradient back in world space as gE*east + gN*north (already tangent, no radial
 // component). Deterministic (no rng), finite (degenerate neighbour sets ⇒ zero gradient guard),
 // seam-free (operates on carrier.adj + the pole-safe tangent frame, object-space — no UV/lat-long).
-export function computeAdjGradient(carrier) {
+export function computeAdjGradient(carrier, heightOverride = null) {
+  // V2-4 slice-3: optional heightOverride lets route() compute the gradient of the margin-COMPOSITED
+  // surface (carrier.height + shelfDepth) without mutating carrier.height. Omitted ⇒ reads carrier.height,
+  // byte-identical for every existing 1-arg caller (the router re-point + the four test imports).
   const N = carrier.N;
-  const h = carrier.height;
+  const h = heightOverride || carrier.height;
   const verts = carrier.verts;
   const adj = carrier.adj;
   const grad = new Float32Array(N * 3);
@@ -185,6 +189,24 @@ export function computeAdjGradient(carrier) {
     grad[i * 3 + 2] = gE * east[2] + gN * north[2];
   }
   return grad;
+}
+
+// ── compositeMargins(carrier) — V2-4 slice-3 render composite (own-channel discipline) ──
+// Returns a NEW Float32Array = carrier.height + carrier.shelfDepth where the passive-margin channel is
+// nonzero, so the coastline renders/routes as a graded continental margin — WITHOUT ever mutating
+// carrier.height (the 75-golden captures the untouched carrier.height; margins live on their own channel,
+// designDecision #MARGINS). Returns null when shelfDepth is all-zero (non-plate worlds + plate worlds with
+// no passive margins) so those paths reuse carrier.height/reliefGrad and render byte-identically (AC-LAB c).
+function compositeMargins(carrier) {
+  const sd = carrier.shelfDepth;
+  if (!sd) return null;
+  let any = false;
+  for (let i = 0; i < sd.length; i++) { if (sd[i] !== 0) { any = true; break; } }
+  if (!any) return null;
+  const h = carrier.height;
+  const out = new Float32Array(h.length);
+  for (let i = 0; i < h.length; i++) out[i] = h[i] + sd[i];
+  return out;
 }
 
 // AC6: object-space river-width factor for a planet of radiusEarth. ∝ refRadius/radiusEarth
@@ -529,6 +551,7 @@ export function writeBodyRelief(carrier, {
     // ── V2-4 POST-DISPATCH WRITES (BUILD-PLAN §0 seam) — byte-inert: touch only the unhashed host channels ──
     writeAccommodation(carrier);   // slice 1: sink-ranking read of the now-finished carrier.height → accommodation ∈ [0,1]
     initSedimentHost(carrier);     // slice 1: zero the sediment host (pristine bedrock; V2-8 deposits later)
+    if (relief.plateDiag) writePassiveMargins(carrier, relief.plateDiag, bodyDrivers, { macroSeed });   // slice 3: plate path only — writes only the unhashed shelfDepth channel (carrier.height untouched)
     return relief;
   }
   throw new Error('writeBodyRelief: bodyDrivers.condition is required — the PRESET_ARCHETYPE migration bridge was retired (world-engine-preset-archetype-retirement, 2026-07-13). Every production/lab caller must pass a condition-bearing bundle.');
@@ -1274,6 +1297,14 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
       }
     }
     const reliefGrad = computeAdjGradient(carrier);     // shading-only tangent gradient (Phase B.3)
+    // ── V2-4 slice-3 margin composite (folds lens A-M1): composite carrier.height + shelfDepth into a NEW
+    //    array and recompute the gradient OF that composited surface, so the shelf actually reshades/reroutes
+    //    (feeding composited height but the stale pre-shelf reliefGrad would displace-without-reshading).
+    //    null on non-margin worlds ⇒ reuse carrier.height/reliefGrad ⇒ byte-identical (AC-LAB c). Never
+    //    mutates carrier.height (own-channel discipline; the 75-golden bypasses route()).
+    const composited = compositeMargins(carrier);
+    const marginHeight = composited || carrier.height;
+    const marginGrad = composited ? computeAdjGradient(carrier, composited) : reliefGrad;
     // ── Phase D re-point (SPLIT-TRAP #5 guard): the router's height source is gated on the SAME
     // uReliefBakeStrength uniform the renderer (Phase C) gates on. strength>0 ⇒ BOTH read carrier.height
     // (the IDENTICAL array baked into heightCube below — single source, no surface-vs-rivers split).
@@ -1283,7 +1314,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     const bakedOn = !!(uniforms.uReliefBakeStrength && uniforms.uReliefBakeStrength.value > 0.0);
     lastHeightSource = bakedOn ? 'carrier' : 'sampler';  // AC7: the objective single-source signal the plateProbe reads
     if (bakedOn) {
-      height = carrier.height; grad = reliefGrad;       // SAME source as the cube (Option B)
+      height = marginHeight; grad = marginGrad;         // SAME source as the cube (Option B) — margin-composited (V2-4 s3)
     } else {
       const r = sampler.read(); height = r.height; grad = r.grad;   // legacy in-shader RTT (strength-0 fallback)
     }
@@ -1312,7 +1343,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // cadence as grain. source = sphere-native E6 DATA, NOT sampler.read() (the §B.5 SPLIT-TRAP #3
     // guard). This is the cube the renderer (Phase C) displaces from; the router reads the identical
     // carrier.height (Phase D) — single source, gated by the same uReliefBakeStrength uniform.
-    bakeHeightCube({ mesh, height: carrier.height, grad: reliefGrad, heightCube });
+    bakeHeightCube({ mesh, height: marginHeight, grad: marginGrad, heightCube });   // V2-4 s3: margin-composited (identical to carrier.height/reliefGrad on non-margin worlds)
     heightBakeCount++;
     const totalMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
     stats = buildStats({ routed, height, N, faces: mesh.faces.length, seaLevel, oceanCount, ribGeo, label, totalMs });

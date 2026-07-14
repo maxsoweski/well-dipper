@@ -185,9 +185,10 @@ describe('relief height cube — (4) bake-host wiring source-scan (planet-lod-ri
     expect(riversSrc).toMatch(/heightBakeCount\+\+/);
   });
 
-  it('⚠ SPLIT-TRAP #3: bakeHeightCube is fed carrier.height (DATA), NOT sampler.read()/r.height', () => {
-    // the bake call must take carrier.height as its height source
-    expect(riversSrc).toMatch(/bakeHeightCube\(\s*\{[^}]*height\s*:\s*carrier\.height/);
+  it('⚠ SPLIT-TRAP #3: bakeHeightCube is fed marginHeight (DATA), NOT sampler.read()/r.height', () => {
+    // V2-4 slice-3: the bake takes `marginHeight` (= composited || carrier.height — carrier.height + the own
+    // shelfDepth channel, carrier.height never mutated) as its height source — generated DATA, not the RTT.
+    expect(riversSrc).toMatch(/bakeHeightCube\(\s*\{[^}]*height\s*:\s*marginHeight/);
     // and must NOT feed the in-shader RTT readback (r.height / sampler.read()) into the bake
     const bakeCall = riversSrc.match(/bakeHeightCube\(\s*\{[^}]*\}\s*\)/);
     expect(bakeCall, 'bakeHeightCube call site present').toBeTruthy();

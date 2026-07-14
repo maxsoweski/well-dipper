@@ -61,24 +61,27 @@ describe('Phase D / AC3 — river-router height-source re-point wiring (SPLIT-TR
     expect(body).toMatch(/uReliefBakeStrength[\s\S]{0,40}\.value\s*>\s*0/);
   });
 
-  it('the baked branch reads carrier.height (the single source the cube is baked from), NOT sampler.read', () => {
-    // Find the gating boolean and the branch that assigns height under it. The baked branch must set
-    // height from carrier.height — the IDENTICAL array passed to bakeHeightCube — so router == renderer.
+  it('the baked branch reads the margin-composited single source (marginHeight/marginGrad), NOT sampler.read', () => {
+    // V2-4 slice-3: the baked branch sets height from `marginHeight` — the IDENTICAL array passed to
+    // bakeHeightCube — so router == renderer (single source). marginHeight = `composited || carrier.height`
+    // (carrier.height + shelfDepth where the passive-margin channel is nonzero; carrier.height itself is
+    // NEVER mutated), so it is generated DATA, never the sampler RTT readback (SPLIT-TRAP #5 still guarded).
     expect(body).toMatch(/const\s+bakedOn\s*=/);
-    expect(body).toMatch(/height\s*=\s*carrier\.height/);
-    // and the grad in the baked branch is the relief gradient computed off the SAME carrier.
-    expect(body).toMatch(/grad\s*=\s*reliefGrad/);
+    expect(body).toMatch(/height\s*=\s*marginHeight/);
+    expect(body).toMatch(/grad\s*=\s*marginGrad/);
+    // the composited source resolves to carrier.height on non-margin worlds — DATA, never sampler.read
+    expect(body).toMatch(/const\s+marginHeight\s*=\s*composited\s*\|\|\s*carrier\.height/);
   });
 
   it('the carrier the router re-points to IS the array baked into the height cube (single source)', () => {
-    // The SAME `carrier` variable feeds BOTH the re-point (height = carrier.height) AND the cube bake
-    // (bakeHeightCube({ ..., height: carrier.height, ... })). One field, one cube, both consumers.
-    // The relief WRITER is now the AC5 regime gate writeBodyRelief(carrier, ...) — it encapsulates
-    // writeGrainSphere+writeHeightSphere (despun path) OR writePlateUpliftSphere (Earth-like plate
-    // path); either way it writes the SAME carrier.height that is baked + routed. Single source preserved.
+    // V2-4 slice-3: the SAME margin-composited array feeds BOTH the re-point (height = marginHeight) AND the
+    // cube bake (bakeHeightCube({ ..., height: marginHeight, ... })). One field, one cube, both consumers.
+    // The relief WRITER is the AC5 regime gate writeBodyRelief(carrier, ...) — despun (writeGrainSphere+
+    // writeHeightSphere) OR plate (writePlateUpliftSphere); either way it writes carrier.height, which the
+    // margin composite READS (adding the own shelfDepth channel) WITHOUT mutating it. Single source preserved.
     expect(body).toMatch(/const\s+carrier\s*=\s*makeSphereField\(/);
     expect(body).toMatch(/writeBodyRelief\(\s*carrier/);
-    expect(body).toMatch(/bakeHeightCube\(\{[\s\S]{0,120}height:\s*carrier\.height/);
+    expect(body).toMatch(/bakeHeightCube\(\{[\s\S]{0,120}height:\s*marginHeight/);
   });
 
   it('the strength-0 fallback PRESERVES the legacy in-shader RTT (sampler.read still wired in route())', () => {

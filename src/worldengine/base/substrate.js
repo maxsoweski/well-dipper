@@ -14,6 +14,7 @@ export function makeSubstrate({ n, lat0Deg, lat1Deg, domainKm }) {
     faultDensity: new Float32Array(count),
     sediment: new Float32Array(count),        // V2-4 host: pristine bedrock (initSedimentHost zero-fills; V2-8 deposits)
     accommodation: new Float32Array(count),   // V2-4 host: sink-ranking [0,1] (writeAccommodation reads finished height)
+    shelfDepth: new Float32Array(count),      // V2-4 margins: passive-margin shelf→break→slope→rise lift (writePassiveMargins; route() composites, never carrier.height)
     flowAccum: new Float32Array(count),
     baseLevel: new Float32Array(count),
     standing: new Uint8Array(count),
