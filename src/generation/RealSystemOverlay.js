@@ -171,6 +171,17 @@ export class RealSystemOverlay {
     if (host) {
       result.host = host;
       result.knownPlanets = this._toKnownPlanets(host.planets);
+      // ── snum==1 single-pin (design D7; ADOPTED 2026-07-13) ──────────────
+      // A non-table host whose archive record says the system has exactly one
+      // star suppresses the procgen companion roll: synthesize a 'single'
+      // companionSpec that rides the existing applyToContext → forceBinary=false
+      // path (no StarSystemGenerator edit). One-directional (only fires for
+      // snum===1, can only SUPPRESS fabrication, never add structure) and
+      // table-wins by construction — the `!tableEntry` guard means the pin only
+      // fires where the curated table did NOT already set companionSpec above.
+      if (!tableEntry && host.snum === 1) {
+        result.companionSpec = { kind: 'single', source: 'archive-snum' };
+      }
     }
 
     return result;

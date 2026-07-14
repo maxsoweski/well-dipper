@@ -111,6 +111,16 @@ describe('AC4(b) — a zero-data catalog star: catalog type + pure procgen', () 
     expect('farCompanions' in ctx).toBe(false);
   });
 
+  it('(e) the snum==1 pin never fires for a non-host real star (no companionSpec)', () => {
+    // Betelgeuse is a real HYG star with NO contents host, so resolve() never
+    // enters the host branch where the D7 snum pin lives (the pin keys on a
+    // resolved host). AC8 safety: a non-host real star can never gain a
+    // companionSpec from the pin.
+    const r = OV().resolve(NAME);
+    expect(r.host).toBeUndefined();
+    expect('companionSpec' in r).toBe(false);
+  });
+
   it('overlay-applied systemData == plain procgen systemData (fully procedural), catalog type kept', () => {
     const overlaidCtx = baseCtx(); overlaidCtx.starTypeOverride = 'M';
     OV().applyToContext(overlaidCtx, NAME);
@@ -186,8 +196,11 @@ describe('AC4(d) — a pinned single: Vega → no companion, ever', () => {
 describe('AC3 — TRAPPIST-1 end-to-end: 7 real planets survive + expose real designations (D7)', () => {
   // The headline AC3 case: an M-dwarf whose seven tight known planets carry their
   // real b–h designations and archive parameters, through the FULL join +
-  // generate pipeline. Seed 't1-b' additionally ROLLS a spurious binary — the D3
-  // stability-cull immunity is what keeps all seven planets alive.
+  // generate pipeline. TRAPPIST-1 is archive snum:1, so the D7 single-pin
+  // (RealSystemOverlay.resolve) suppresses the procgen companion roll seed 't1-b'
+  // used to fire — arrival is now a true single star. The stability-cull immunity
+  // demonstration (tight real planets surviving a CLOSE companion) moves to the
+  // snum>=2 rolled-binary vehicle below, since the pin removes the roll here.
   const NAME = 'TRAPPIST-1';
   const build = () => {
     const ctx = baseCtx();
@@ -195,13 +208,15 @@ describe('AC3 — TRAPPIST-1 end-to-end: 7 real planets survive + expose real de
     return OV().applyToContext(ctx, NAME);
   };
 
-  it('all seven archive planets present, with their real params, despite a rolled binary', () => {
+  it('all seven archive planets present with real params; the snum:1 pin keeps it single', () => {
     const host = hostByName(NAME);
     const sys = StarSystemGenerator.generate('t1-b', build());
-    expect(sys.isBinary).toBe(true); // this seed rolled a spurious companion
+    // The D7 single-pin suppresses the companion roll seed 't1-b' would fire.
+    expect(sys.isBinary).toBe(false);
+    expect(sys.star2).toBeNull();
     const known = sys.planets.filter((p) => p.known);
     expect(known.map((p) => p.letter)).toEqual(['b', 'c', 'd', 'e', 'f', 'g', 'h']);
-    // Every known planet keeps its archive orbit + radius + mass (D3 immunity).
+    // Every known planet keeps its archive orbit + radius + mass.
     for (const p of known) {
       const a = host.planets.find((h) => h.letter === p.letter);
       expect(p.orbitRadiusAU).toBe(a.smaAU);
@@ -219,8 +234,7 @@ describe('AC3 — TRAPPIST-1 end-to-end: 7 real planets survive + expose real de
     const names = ov.deriveMergedNames(NAME, sys);
     expect(names.system).toBe('TRAPPIST-1');
     expect(names.star).toBe('TRAPPIST-1');
-    // No curated companion table entry → no real star2 designation (the rolled
-    // binary's companion falls back to the generic 'Star' label in spawnSystem).
+    // No curated table entry AND no companion at all (snum:1 pin) → star2 null.
     expect(names.star2).toBeNull();
     // The seven planets expose their real b–h designations, index-aligned.
     expect(names.planets.map((p) => p.name))
@@ -230,5 +244,103 @@ describe('AC3 — TRAPPIST-1 end-to-end: 7 real planets survive + expose real de
   it('generate twice → deep-equal systemData', () => {
     expect(rt(StarSystemGenerator.generate('t1-b', build())))
       .toEqual(rt(StarSystemGenerator.generate('t1-b', build())));
+  });
+});
+
+describe('AC3 — known-planet immunity on a LIVE rolled binary (snum>=2 vehicle)', () => {
+  // The stability-cull immunity demonstration MOVED off TRAPPIST-1: now that the
+  // snum:1 pin makes TRAPPIST-1 single, the "tight real planets survive a close
+  // companion" case rides a snum>=2 non-table host whose roll stays live. 55 Cnc
+  // (archive snum:2, five known planets b–f, catalog G, NOT in the companion
+  // table) rolls a binary on seed 'imm-5'; all five knowns must survive the cull.
+  const NAME = '55 Cnc';
+  const build = () => {
+    const ctx = baseCtx();
+    ctx.starTypeOverride = 'G'; // 55 Cnc catalog spect
+    return OV().applyToContext(ctx, NAME);
+  };
+
+  it('a snum>=2 host rolls a live binary and every known planet survives it', () => {
+    const host = hostByName(NAME);
+    expect(host.snum).toBeGreaterThanOrEqual(2); // the D7 pin must NOT fire here
+    const sys = StarSystemGenerator.generate('imm-5', build());
+    expect(sys.isBinary).toBe(true); // procgen roll stayed live (one-directional pin)
+    expect(sys.star2).not.toBeNull();
+    const known = sys.planets.filter((p) => p.known);
+    expect(known).toHaveLength(5);
+    // Each known keeps its archive orbit + radius + mass despite the companion.
+    for (const p of known) {
+      const a = host.planets.find((h) => h.letter === p.letter);
+      expect(p.orbitRadiusAU).toBe(a.smaAU);
+      expect(p.planetData.radiusEarth).toBe(a.radiusEarth);
+      expect(p.planetData.massEarth).toBe(a.massEarth);
+    }
+  });
+
+  it('generate twice → deep-equal systemData', () => {
+    expect(rt(StarSystemGenerator.generate('imm-5', build())))
+      .toEqual(rt(StarSystemGenerator.generate('imm-5', build())));
+  });
+});
+
+describe('D7 — snum==1 single-pin (archive-snum, RealSystemOverlay.resolve)', () => {
+  // A non-table contents host whose archive record says snum===1 gets a
+  // synthesized companionSpec { kind:'single', source:'archive-snum' } that rides
+  // the existing forceBinary=false path — suppressing the procgen companion roll
+  // with no StarSystemGenerator edit. One-directional (snum>=2 untouched) and
+  // table-wins by construction (only fires when tableEntry is null).
+
+  it('(resolve) synthesizes the archive-snum single-pin for a snum==1 non-table host', () => {
+    const r = OV().resolve('61 Vir'); // snum:1 catalog-G host, planets b/c/d, not table-covered
+    expect(r.tableEntry).toBeUndefined();
+    expect(r.host.snum).toBe(1);
+    expect(r.companionSpec).toEqual({ kind: 'single', source: 'archive-snum' });
+    expect(r.knownPlanets).toHaveLength(3);
+  });
+
+  it('(b) a snum==1 host on a would-roll seed → roll suppressed, knowns intact, revisit-stable', () => {
+    const NAME = '61 Vir';
+    const SEED = 'b-5'; // this seed rolls a binary when no companionSpec is present
+    // Baseline: same knowns but NO companionSpec → the seed's procgen roll fires.
+    const bare = baseCtx();
+    bare.starTypeOverride = 'G';
+    bare.knownPlanets = OV().resolve(NAME).knownPlanets;
+    expect(StarSystemGenerator.generate(SEED, bare).isBinary).toBe(true);
+    // With the pin (full overlay applyToContext): the roll is suppressed.
+    const build = () => {
+      const c = baseCtx();
+      c.starTypeOverride = 'G';
+      return OV().applyToContext(c, NAME);
+    };
+    const sys = StarSystemGenerator.generate(SEED, build());
+    expect(sys.isBinary).toBe(false);
+    expect(sys.star2).toBeNull();
+    expect(sys.planets.filter((p) => p.known).map((p) => p.letter)).toEqual(['b', 'c', 'd']);
+    // Revisit-stable.
+    expect(rt(StarSystemGenerator.generate(SEED, build())))
+      .toEqual(rt(StarSystemGenerator.generate(SEED, build())));
+  });
+
+  it('(c) a snum>=2 non-table host is NOT pinned — the roll stays live (one-directional boundary)', () => {
+    const r = OV().resolve('55 Cnc'); // snum:2
+    expect(r.host.snum).toBe(2);
+    expect(r.tableEntry).toBeUndefined();
+    expect('companionSpec' in r).toBe(false); // the pin never fires for snum>=2
+  });
+
+  it('(d) a host both snum==1 AND table-covered → the curated table decides (table wins)', () => {
+    // Synthetic contents host named 'Sirius' (a table binary) flagged snum:1. The
+    // pin's `!tableEntry` guard means the table entry wins — companionSpec is the
+    // curated multiple, never the archive-snum single.
+    const ov = new RealSystemOverlay({
+      contentsHosts: [{ name: 'Sirius', snum: 1, planets: [] }],
+      supplementStars: [],
+      catalogStars: null,
+    });
+    const r = ov.resolve('Sirius');
+    expect(r.tableEntry).toBeTruthy();
+    expect(r.companionSpec).toBe(r.tableEntry); // the table entry, not the synthesized single
+    expect(r.companionSpec.kind).toBe('multiple');
+    expect(r.companionSpec.source).toBeUndefined(); // not 'archive-snum'
   });
 });

@@ -46,9 +46,10 @@ export class RealFeatureCatalog {
       this._globularClusters = data.map(gc => ({
         type: 'globular-cluster',
         position: { x: gc.x, y: gc.y, z: gc.z },
-        // Real clusters have varying sizes — estimate radius from rGc
-        // Average globular: 5-50 pc = 0.005-0.05 kpc
-        radius: 0.03, // default 30 pc, could refine per-cluster
+        // Per-cluster tidal radius from Harris Part III (r_t = r_c·10^c, converted
+        // at the cluster's Sun distance; AC6/D5). Falls back to the historical
+        // 30 pc default only for the lone cluster with no structural params (Pyxis).
+        radius: gc.radiusKpc ?? 0.03,
         seed: `harris-${gc.id}`,
         color: [1.0, 0.85, 0.5], // warm yellow-orange (old population)
         name: gc.name,

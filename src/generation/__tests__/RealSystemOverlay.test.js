@@ -125,8 +125,9 @@ describe('RealSystemOverlay — known-planet join (design D2)', () => {
         ['eccen', 'letter', 'massEarth', 'name', 'periodDays', 'radiusEarth', 'smaAU'],
       );
     }
-    // TRAPPIST-1 has no curated companion table entry → no companionSpec.
-    expect('companionSpec' in r).toBe(false);
+    // TRAPPIST-1 has no curated companion table entry, but its archive snum==1
+    // → the D7 single-pin synthesizes a 'single' companionSpec (source archive-snum).
+    expect(r.companionSpec).toEqual({ kind: 'single', source: 'archive-snum' });
   });
 
   it('a plain HYG-named host joins directly (no bridge entry)', () => {
@@ -171,10 +172,11 @@ describe('RealSystemOverlay — zero-data arrival supplies nothing (AC8 omit-not
 
   it('applyToContext sets ONLY the keys the data supplies', () => {
     const ov = makeOverlay();
-    // TRAPPIST-1: knownPlanets only (no companion table entry).
+    // TRAPPIST-1: knownPlanets + the snum==1 single-pin companionSpec (no table entry).
     const t = ov.applyToContext(baseCtx(), 'TRAPPIST-1');
     expect('knownPlanets' in t).toBe(true);
-    expect('companionSpec' in t).toBe(false);
+    expect('companionSpec' in t).toBe(true);
+    expect(t.companionSpec).toEqual({ kind: 'single', source: 'archive-snum' });
     expect('farCompanions' in t).toBe(false);
     // Sirius: companionSpec only (no archive host).
     const s = ov.applyToContext(baseCtx(), 'Sirius');

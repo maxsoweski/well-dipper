@@ -95,13 +95,23 @@ documented fidelity caveats:
   ingesting a noisy bulk double-star catalog — famous real binaries (Sirius,
   Procyon, Alpha Centauri) are table-covered and correct.
 
-  > **ADOPTED 2026-07-13 (Max — contract deviation to post-review ruling 6):**
-  > archive `snum == 1` becomes an implicit single-pin — a real host whose
-  > archive record says the system has exactly one star suppresses the procgen
-  > companion roll. One-directional tightening: it can only suppress
-  > fabrication, never add structure; the curated table still wins wherever
-  > both apply. Implementation scheduled for Increment 5; the contract
-  > amendment is recorded there (validate after edit).
+  > **ADOPTED 2026-07-13 (Max — contract deviation to post-review ruling 6);
+  > IMPLEMENTED Increment 5 (design D7).** Archive `snum == 1` is an implicit
+  > single-pin — a real host whose archive record says the system has exactly
+  > one star suppresses the procgen companion roll. `RealSystemOverlay.resolve()`
+  > synthesizes `companionSpec = { kind: 'single', source: 'archive-snum' }` in
+  > the no-table branch when the joined host has `snum === 1`; it rides the
+  > existing `applyToContext → forceBinary=false` path (no `StarSystemGenerator`
+  > edit). One-directional tightening: it can only suppress fabrication, never
+  > add structure (snum>=2 hosts keep the live ~35% roll); the curated table
+  > still wins wherever both apply, **by construction** — the pin only fires
+  > when `tableEntry` is null. The contract AC4 amendment (case (e)) is recorded
+  > and re-validated. **RNG-stream consequence (design fact 12):** suppressing
+  > the roll SKIPS the `rng.chance(0.35 × binaryModifier)` draw rather than
+  > overriding its outcome, so it shifts that host's downstream RNG stream — the
+  > result is still deterministic and revisit-stable, but it IS a real change to
+  > the `systemData` of those snum==1 hosts (all of which carry a contents
+  > record, so AC8's procgen-only snapshot is untouched by construction).
 
 - **`starTypeOverride` is catalog-sourced, never contents-sourced** (design D6).
   The primary's type always comes from the catalog `spect`, routed through
@@ -120,6 +130,68 @@ documented fidelity caveats:
   never scene bodies. On the bulk path far companions only appear for a
   table-covered host that has them (Alpha Centauri → Proxima), which arrives via
   the AC5 authoring/alias path rather than a bare entry-name arrival.
+
+## 6. Planet fill and the empty-system rate (Increment 5 — Alpha-Cen ruling)
+
+Alpha Centauri A and B carry no confirmed planets in the archive, so the
+authoring path leaves them to procgen fill (Proxima's known planets ride the
+far-companion data, §2). The question raised was whether "fill-on" (letting
+procgen populate a planet-free real star) is acceptable, or whether such stars
+should render barren. Max's ruling settles it:
+
+> **Max, 2026-07-14:** "I'm fine with fill-on so long as we occassionally [sic]
+> get systems where there are no planets at a rate predicted by the relevant
+> astronomy/physics."
+
+Both halves of this resolve to **documentation, not code** (Increment 5 design
+D8). The record:
+
+- **Fill-on is the current behaviour — zero code.** `buildAuthoredContext` sets
+  `starTypeOverride 'G'`, the A+B close-pair `companionSpec` (23.5 AU) and
+  Proxima's `farCompanions` (planets b, d as archive data). It does NOT set
+  `knownPlanets`, so `StarSystemGenerator` procgen-fills A and B normally, the
+  same as any other planet-free star. Nothing needs to change to keep fill on.
+
+- **The zero-planet condition is already satisfied by the existing empty roll.**
+  Planet count is `rng.chance(0.08) ? 0 : round(gaussianClamped(mean, 1.5, 1,
+  max))` — an **8% empty roll** shared by all generation paths, with a non-empty
+  floor of 1. Contents hosts are floored at ≥1 by their injected knowns
+  (astronomy-correct — a detected planet exists, so those systems are never
+  rolled empty); purely-procgen systems and planet-free real hosts (Sirius,
+  Alpha Cen A/B) get the 8% tail. `rng.chance(p)` consumes exactly one draw for
+  any `p` (outcome-only sensitivity), so the empty roll is deterministic and
+  revisit-stable. Empty systems are therefore a well-trodden path (~8% of all
+  procgen today), and Alpha Cen A/B each independently roll planetless ~8% of
+  the time — occasional planetless systems, exactly as the ruling asks.
+
+- **Astronomy basis (researched 2026-07-14).** The truly-planetless fraction of
+  stars is not tightly pinned by observation, but the engine's 8% sits inside
+  the plausible envelope, on the planet-rich (few-empty) side:
+  - ~30 ± 3% of FGK stars host Kepler-like systems averaging ~3 planets
+    (He/Zhu et al., arXiv:1802.09526 — <https://arxiv.org/pdf/1802.09526>).
+  - ≥50% of stars harbour planets as a Kepler lower bound
+    (<https://www.universetoday.com/99309/nearly-all-sun-like-stars-have-planetary-systems/>).
+  - The truly-planetless fraction is observationally unconstrained and strongly
+    metallicity-dependent — metal-poor stars are overwhelmingly planet-free, so
+    the real barren fraction is plausibly ~10–50% and star-population-dependent
+    (<https://bigthink.com/starts-with-a-bang/stars-dont-have-planets/>).
+  A flat 8% is a defensible constant for a solar-neighbourhood (metal-rich)
+  population and honours the ruling; a metallicity- or population-aware rate is
+  future refinement, not an Increment-5 requirement.
+
+- **The calibration seam is NAMED, not built (AC8-safe).** Should a future
+  workstream want to tune the empty rate, the safe seam is a context override:
+  `galaxyContext.emptyChanceOverride ?? 0.08`, settable only on overlay/authored
+  contexts. That leaves the shared constant — and therefore every purely-procgen
+  system's `systemData` — byte-identical, so AC8's procgen-only snapshot holds.
+  A **universe-wide** change to the empty rate (touching the shared constant)
+  would regress that snapshot and is explicitly **successor-workstream
+  territory**, out of scope here. This seam is documented, deliberately not
+  implemented in Increment 5.
+
+- **Recorded quirk (out of scope):** for the Alpha-Cen close pair, circumbinary
+  fill starts at `2.5 × 23.5 ≈ 58.75` AU — beyond a G star's normal ~50 AU max
+  orbit. Noted as an observation only; no fix in this increment.
 
 ## Why these bounds
 

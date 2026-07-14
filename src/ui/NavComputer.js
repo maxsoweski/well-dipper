@@ -193,6 +193,11 @@ export class NavComputer {
     this._onKeyUp = (e) => {
       this._heldKeys.delete(e.code);
     };
+
+    // Read-only debug / live-drive handle (design D3). Guarded so headless
+    // tests (no `window`) don't throw; harmless in play — the AC1 live drive
+    // reads `window._navComputer._localStars`.
+    if (typeof window !== 'undefined') window._navComputer = this;
   }
 
   // ════════════════════════════════════════════════════
@@ -2675,12 +2680,24 @@ export class NavComputer {
         }
 
         if (bestIdx >= 0) {
-          // Replace the hash-grid star's name with the real name
-          this._localStars[bestIdx].name = rs.name;
-          this._localStars[bestIdx].isReal = true;
+          // Replace the matched hash-grid star's identity with the real star.
+          // Interview ruling 1 + AC1 (design fact 3 / D2): the rendered position
+          // and distance must come from the CATALOG, never the hash grid — so
+          // ALSO overwrite wx/wy/wz with the real position and recompute
+          // dist/distPc from the player (same math as the unmatched branch
+          // below). The hash-grid `seed` is retained (arrival identity rides
+          // name/navStarData, not the grid position).
+          const ls = this._localStars[bestIdx];
+          ls.name = rs.name;
+          ls.isReal = true;
+          ls.wx = rs.x; ls.wy = rs.y; ls.wz = rs.z;
+          const dx = rs.x - this._playerX, dy = rs.y - this._playerY, dz = rs.z - this._playerZ;
+          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          ls.dist = dist;
+          ls.distPc = (dist * 1000).toFixed(0);
           if (rs.spect) {
-            this._localStars[bestIdx].spectral = rs.spect;
-            this._localStars[bestIdx].color = NavComputer._SPECTRAL_COLORS[rs.spect] || '#ff9664';
+            ls.spectral = rs.spect;
+            ls.color = NavComputer._SPECTRAL_COLORS[rs.spect] || '#ff9664';
           }
         } else {
           // No nearby match — add as a new star entry

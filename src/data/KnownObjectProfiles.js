@@ -89,7 +89,7 @@ export const KNOWN_OBJECT_PROFILES = {
     messier: 'M13',
     ngc: 'NGC 6205',
     type: 'globular-cluster',
-    galacticPos: { x: 4.37, y: 4.54, z: 3.34 },
+    galacticPos: { x: 5.23, y: 4.67, z: 4.60 }, // AC6 audit-corrected from (4.37,4.54,3.34) to match l/b/d
     radius: 0.021, // ~21 pc radius (84 ly diameter)
     shape: 'spherical',
     colorPrimary: [1.0, 0.85, 0.5],      // Warm yellow-orange (old stars)
@@ -120,7 +120,7 @@ export const KNOWN_OBJECT_PROFILES = {
     messier: 'M57',
     ngc: 'NGC 6720',
     type: 'planetary-nebula',
-    galacticPos: { x: 7.54, y: 0.19, z: 0.45 },
+    galacticPos: { x: 7.69, y: 0.19, z: 0.61 }, // AC6 audit-corrected from (7.54,0.19,0.45) to match l/b/d
     radius: 0.00043, // ~0.43 pc radius (~1.4 ly diameter)
     shape: 'ring',
     colorPrimary: [0.2, 0.7, 0.6],       // OIII teal (dominant ring)
@@ -155,7 +155,7 @@ export const KNOWN_OBJECT_PROFILES = {
     messier: 'M45',
     ngc: null, // no NGC number — it's a Messier-only object
     type: 'open-cluster',
-    galacticPos: { x: 8.12, y: -0.03, z: -0.06 },
+    galacticPos: { x: 8.12, y: -0.03, z: 0.03 }, // AC6 audit-corrected from z=-0.06 to match l/b/d
     radius: 0.005, // ~5 pc radius (cluster extent)
     shape: 'irregular',
     colorPrimary: [0.5, 0.6, 1.0],       // Blue-white young stars
