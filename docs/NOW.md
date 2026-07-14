@@ -130,9 +130,29 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > documented (in-flight boot warp overrides a mid-boot selection — NOT an AC2 defect; lane-B tour/N-gating
 > territory). Parked knobs: **snum==1 single-pin ADOPTED** (Max; representation-cap §5, `cd8abd0`);
 > Alpha-Cen A/B fill = Max's rec-open call at Inc-5.
-> **▶ NEXT: Increment 5 = AC1 (author `neighborhood-reference.json` → live-drive) + AC6 (structures audit;
-> fix the `RealFeatureCatalog` uniform `radius:0.03` placeholder) + implement snum-pin & rule Alpha-Cen
-> fill.** Then AC9 = Max's batched UAT. Branch UNPUSHED (merge Max-gated; deploy = Pages).
+> **▶ Increment 5 (AC1 + AC6 + snum-pin + fill ruling) BUILT `3e58fac` + VERIFIED + LIVE-DRIVEN (2026-07-14)
+> → workstream VERIFIED_PENDING_MAX.** Design `4775f5f` (2 explorer passes; OOM sequential-builder rule
+> suspended by Max → 3 parallel opus builders + gate + adversarial review, 1 fix round — the review CAUGHT the
+> AC6 builder dying on the boilerplate-spawn glitch and the fix round built it). Landed: AC1
+> `neighborhood-reference.json` (19 Sol / 15 Sirius neighbors, shipped-catalog distances, 6 absent-famous
+> documented) + **NavComputer position-snap FIX** (matched real stars rendered at hash-grid positions up to
+> 2 pc off — interview-ruling-1 violation; now catalog-true) + `window._navComputer` handle; AC6 Harris
+> Part-III per-cluster radii (152 distinct, 1.9–180.2 pc, replaces uniform 30 pc) + committed audit that
+> CAUGHT 3 real position errors (M13 1.53 kpc off!, M57, M45 z-sign — corrected); snum==1 single-pin
+> (resolve()-side, one-directional, table-wins; AC4 case (e) amendment validated; AC3 immunity vehicle →
+> 55 Cnc); Alpha-Cen **fill-ON ruled by Max** w/ zero-planet-rate condition → documentation only
+> (representation-cap §6: existing 8% empty roll + astronomy basis + named-not-built calibration seam).
+> Suite 1340→**1404** (0 new failures); ProcgenSnapshot 24/24; ZERO main.js edits. verify-workstream full
+> (wf_1eab0d7b-3eb, 39 agents): **AC4+AC6+AC7+AC10 PASS 3/3** (AC6 flipped from FAIL-as-scheduled);
+> AC1/AC2/AC3/AC5/AC8 live-closed same day, TWO circuits (`verdict-live-drives-3e58fac.json`): AC1 both
+> vantages **worst error 0.03% vs ±2%** (34 assertions), TRAPPIST-1 visible @12.43 pc AND arrives as M
+> SINGLE w/ exactly 7 knowns b–h (the pin live), authored Alpha Cen G2V+K1V@23.5 AU + Proxima(b,d), Sirius
+> A1V+DA2@19.8 AU (table-wins), Sol 19/19 ×3, console clean. **⚠ AC9 flag: Alpha Cen A/B drew ZERO fill
+> planets on the authored seed** (fill-on active; deterministic empty branch / circumbinary geometry) —
+> small authoring knob if Max wants the flagship populated.
+> **▶ NEXT: AC9 = Max's batched UAT over the whole workstream** (nav neighborhood from Sol, search things he
+> knows, arrivals vs astronomy, structures; the α-Cen zero-planet flag above is his call). The only open
+> gate. Branch UNPUSHED (merge Max-gated; deploy = Pages).
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed

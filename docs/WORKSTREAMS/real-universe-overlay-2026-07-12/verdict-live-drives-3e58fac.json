@@ -33,6 +33,26 @@
       "id": "console",
       "result": "PASS",
       "evidence": "Zero console errors and zero warnings across the entire drive session (reload → boot → three warps → two prism assertions → two suite runs)."
+    },
+    {
+      "id": "AC3-trappist1-under-snum-pin",
+      "result": "PASS",
+      "evidence": "SECOND CIRCUIT (after the verify-workstream verdict flagged that the pin changed TRAPPIST-1's arrival behavior and it had never been live-driven post-pin): search→warp→TRAPPIST-1 arrives at an M primary with isBinary FALSE and star2 null (the archive-snum single-pin live — pre-pin this was seed-dependent), planetCount exactly 7, all 7 known with real designations TRAPPIST-1 b–h, zero procgen additions."
+    },
+    {
+      "id": "AC5-authored-alpha-centauri",
+      "result": "PASS",
+      "evidence": "search→warp→'Alpha Centauri' (registry display name) arrives at the authored system: seed 'alpha-centauri', G2V primary + K1V close companion at 23.5 AU, farCompanions = [Proxima Centauri (M5.5Ve) with planets Proxima Cen b, d — data-level]. Sky-click path keeps its written d106181 deferral (untouched by this diff). ⚠ FLAG FOR AC9: A/B carry ZERO fill planets on the authored seed — fill-on is active but this deterministic seed lands the documented empty branch (or the circumbinary ≥58.75 AU geometry); astronomy-plausible per representation-cap §6, but Max may prefer the flagship system to carry worlds (small authoring knob if so)."
+    },
+    {
+      "id": "AC2-search-exercised-at-sha",
+      "result": "PASS",
+      "evidence": "Not a dedicated AC2 pass (the diff doesn't touch AC2's mechanism), but the search→select→warp path was exercised five times at this sha (Sol ×2, Sirius, TRAPPIST-1, Alpha Centauri — real-star, registry, and dim-host resolve classes), all resolving and warping correctly from normal play via N."
+    },
+    {
+      "id": "AC8-final",
+      "result": "PASS",
+      "evidence": "Post-second-circuit: back at authored Sol, suite 19/19 (third run this session), nav panel closed, console still zero errors/warns."
     }
   ],
   "notes": {
