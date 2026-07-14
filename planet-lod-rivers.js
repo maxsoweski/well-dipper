@@ -39,6 +39,7 @@ import { computeE1, modalRegime, inSeededBand } from './src/worldengine/base/e1R
 import { makeSphereField } from './src/worldengine/base/sphereField.js';
 import { writeAccommodation, initSedimentHost } from './src/worldengine/base/hostChannels.js';
 import { writePassiveMargins } from './src/worldengine/base/passiveMargins.js';   // V2-4 slice-3: passive-margin shelfDepth channel (plate path only)
+import { writeProvince } from './src/worldengine/base/province.js';   // V2-4 slice-4: history-tied province channel (universal — every dispatch path; reads accommodation)
 // V2-2b-2a Slice C — the LAB-ONLY mixed-interior render seam (MF1 Option B). route() forwards a hand-set E1
 // coordinate through the V2-2a lid-response router (classifyLidPath → the mixed composer WRITES carrier.height),
 // and injects the Π=C·F instrument (one-way: rivers.js is the route/lab boundary, NOT a base/ writer, so the
@@ -552,6 +553,7 @@ export function writeBodyRelief(carrier, {
     writeAccommodation(carrier);   // slice 1: sink-ranking read of the now-finished carrier.height → accommodation ∈ [0,1]
     initSedimentHost(carrier);     // slice 1: zero the sediment host (pristine bedrock; V2-8 deposits later)
     if (relief.plateDiag) writePassiveMargins(carrier, relief.plateDiag, bodyDrivers, { macroSeed });   // slice 3: plate path only — writes only the unhashed shelfDepth channel (carrier.height untouched)
+    writeProvince(carrier, { seed: macroSeed });   // slice 4: UNIVERSAL (every path) — reads accommodation (order after writeAccommodation is load-bearing); writes only the unhashed Uint8Array province channel
     return relief;
   }
   throw new Error('writeBodyRelief: bodyDrivers.condition is required — the PRESET_ARCHETYPE migration bridge was retired (world-engine-preset-archetype-retirement, 2026-07-13). Every production/lab caller must pass a condition-bearing bundle.');
@@ -1195,6 +1197,7 @@ export function buildStats({ routed, height, N, faces, seaLevel, oceanCount, rib
 export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS, octavesDuringRead = 9,
                                      makeGrainCube = createGrainCube }) {
   let mesh = null, sampler = null, carve = null, N = 0;
+  let reliefCarrier = null;   // V2-4: the last carrier writeBodyRelief built (province/host channels + history fields) — read by the lab province overlay + _lab.provinceProbe
   let height = null, grad = null, isOcean = null, oceanCount = 0, seaLevel = 0, stats = null, meshMs = 0;
   let routedGraph = null;   // AC2: retain the router graph (receiver/accum/strahler/isChannel) instead of discarding it
   let plateDiag = null;     // plate-uplift increment: the plate partition diagnostics on the Earth-like path (null on despun); read by the live plateProbe (AC7)
@@ -1258,6 +1261,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // built from the integer macroSeed (the SAME entropy the grain bake consumes; NO Math.random).
     const heightSeed = 'e6:' + (macroSeed | 0);
     const carrier = makeSphereField(mesh);
+    reliefCarrier = carrier;   // V2-4: retain for the lab province overlay + _lab.provinceProbe (province/host channels written by the writeBodyRelief seam below)
     // ── AC5 regime gate: Earth-like terrestrial/ocean bodies get the one-pass plate/uplift field
     // (carrier.height = U, the SOLE low/mid source — REPLACES the latitude-band E6 writer); every
     // other regime keeps the despun writeGrainSphere+writeHeightSphere byte-identical. The plate
@@ -1360,6 +1364,9 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     get height() { return height; }, get grad() { return grad; }, get isOcean() { return isOcean; },
     get sampler() { return sampler; },
     get routed() { return routedGraph; },
+    // V2-4 slice-4: the last carrier writeBodyRelief built — its `province` (+ faultDensity/grainMag/
+    // accommodation) feed the ground-owned lab province overlay + _lab.provinceProbe. Read-only handle.
+    get reliefCarrier() { return reliefCarrier; },
     // plate-uplift increment: the plate partition diagnostics (Earth-like path) + the router's height
     // source — both read by the live plateProbe (AC7). plateDiag is null on the despun path.
     get plateDiag() { return plateDiag; },

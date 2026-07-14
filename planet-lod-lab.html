@@ -165,6 +165,7 @@
     import { presetDriverDefaults, buildNeutralBodyDrivers } from './body-drivers.js';   // V2-0 Slice A: neutral (no-slider-override) driver construction the lab overlays overrides on (presetDriverDefaults also used by resetDriverOverrides)
     import { deriveConditionVector } from './body-condition-vector.js';   // V2-0 Slice C: pure _fp→condition vector, attached NESTED as bodyDrivers.condition (shadow-mode; V2-1 E1 read surface; SAME derive the headless AC1 harness uses)
     import { computeE1 } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment).
+    import { assessProvinceAssociation, provinceStats, classProportions } from './src/worldengine/base/province.js';   // V2-4 slice-4: the province honesty instrument (read-only) for _lab.provinceProbe()
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
 
@@ -1452,6 +1453,47 @@
     const riverOverlay = createRiverOverlay({ renderer, uniforms, octavesDuringRead: 9 });
     riverOverlay.ribbon.visible = false;
     planet.add(riverOverlay.ribbon);
+
+    // ── V2-4 slice-4 — PROVINCE false-colour debug overlay (GROUND-OWNED; BUILD-PLAN §4 pinned mechanism).
+    // A SEPARATE THREE.Mesh on its OWN NEW BufferGeometry (the province attribute lives on THIS geometry as
+    // per-vertex colours). It adds NO attribute to the shared planet BufferGeometry and edits NO line of the
+    // shared planet vertex/fragment shader — the atmo-shared aBand/aShear/aMush surface (decl :200-206, set
+    // :1436-1438, upd :2775-2777) is untouched, so there is zero AC-ZERO-CLOBBER(d) collision with the atmo
+    // lane. Parented to `planet` (co-rotates); default HIDDEN ⇒ the render is byte-identical (AC-LAB c). It is
+    // NOT a `state.<x>Enabled` feature-card (taxonomy-exempt per lens B-m4 — no PROVINCES/gProvince entry;
+    // the V2-9 gProvince rewire is a separate job). Rebuilt from the live carrier.province on toggle / route.
+    const provinceOverlayUI = { show: false };
+    const PROVINCE_COLORS = [[0.62, 0.55, 0.36], [0.86, 0.28, 0.22], [0.20, 0.42, 0.78]];  // 0 craton tan · 1 orogen red · 2 basin blue
+    let provinceOverlayMesh = null;
+    function buildProvinceOverlay() {
+      if (provinceOverlayMesh) { planet.remove(provinceOverlayMesh); provinceOverlayMesh.geometry.dispose(); provinceOverlayMesh.material.dispose(); provinceOverlayMesh = null; }
+      const carrier = riverOverlay.reliefCarrier, m = riverOverlay.mesh;
+      if (!carrier || !m || !carrier.province) return null;
+      const verts = m.verts, faces = m.faces, prov = carrier.province, n = verts.length;
+      const pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) {
+        pos[3 * i] = verts[i][0] * R; pos[3 * i + 1] = verts[i][1] * R; pos[3 * i + 2] = verts[i][2] * R;
+        const c = PROVINCE_COLORS[prov[i]] || PROVINCE_COLORS[0];
+        col[3 * i] = c[0]; col[3 * i + 1] = c[1]; col[3 * i + 2] = c[2];
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      const idx = new Uint32Array(faces.length * 3);
+      for (let f = 0; f < faces.length; f++) { idx[3 * f] = faces[f][0]; idx[3 * f + 1] = faces[f][1]; idx[3 * f + 2] = faces[f][2]; }
+      g.setIndex(new THREE.BufferAttribute(idx, 1));
+      const mat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.FrontSide });
+      provinceOverlayMesh = new THREE.Mesh(g, mat);
+      provinceOverlayMesh.scale.setScalar(1.0015);   // hair above the surface so the labels read over the shaded planet
+      provinceOverlayMesh.visible = provinceOverlayUI.show;
+      planet.add(provinceOverlayMesh);
+      return provinceOverlayMesh;
+    }
+    function setProvinceOverlay(show) {
+      provinceOverlayUI.show = !!show;
+      if (provinceOverlayUI.show) { if (!provinceOverlayMesh) buildProvinceOverlay(); if (provinceOverlayMesh) provinceOverlayMesh.visible = true; }
+      else if (provinceOverlayMesh) provinceOverlayMesh.visible = false;
+    }
     // Option B river-LOD STEP 2 — camera-localised fine-tributary patch. Reads the REAL GPU height at
     // a fine tangent-plane lattice (octaves 12 > the router's 9), grows the dendritic network onto the
     // in-patch trunk outlets, and bakes valley depth into a 2D ortho RTT unioned into sampleCarve.
@@ -2558,6 +2600,13 @@
     // Use while isolated (or after any route at relief>0) so the plate carrier is already baked.
     fPlateRelief.add({ ab(){ applyReliefBake(grainCarveUI.reliefBakeStrength >= 0.5 ? 0 : 1); } }, 'ab')
       .name('Relief A/B: plates ↔ flat ocean');
+
+    // ▸ Substrate (V2-4) — GROUND-OWNED debug folder. The province overlay toggle is bound to the local
+    // `provinceOverlayUI` object (NOT `state.<x>Enabled`), so it is NOT a feature-card enable-key and does
+    // not register in the PROVINCES/gProvince taxonomy (lens B-m4 — planet-archetypes.test.js stays green).
+    const fSubstrate = guiLeft.addFolder('Substrate (V2-4)'); fSubstrate.open();
+    fSubstrate.add(provinceOverlayUI, 'show').name('Province overlay (craton/orogen/basin)')
+      .onChange(v => setProvinceOverlay(v)).listen();
 
     // ── Sun direction (world-space), runtime-adjustable ──────────────────────────
     // Rewrites the WORLD_LIGHT constant (mutated in place) from state.lightAzimuth/Elevation,
@@ -3701,6 +3750,7 @@
       applyCarveAmounts();                 // (re)apply the enabled && carve-gated gouging amounts
       riverOverlayState.status = `ocean ${stats.oceanPct}% · ord ${stats.maxStrahler} · R_b ${stats.bifurcationRatio} · w×${stats.widthRadiusFactor}r/${stats.widthSeedFactor}s · ${stats.totalMs}ms`;
       syncDisplays();
+      if (provinceOverlayUI.show) buildProvinceOverlay();   // V2-4 slice-4: track the freshly-routed world's province labels while the overlay is shown
       return res;                          // { stats, seaLevel }
     }
     // Option B river-LOD STEP 2 — bake the fine-tributary patch at the CURRENT camera direction.
@@ -6364,6 +6414,34 @@
                       if (bd && bd.condition) return computeE1(bd.condition, state.macroSeed, _e1WeightOverride ? { weights: _e1WeightOverride } : {});
                       return null;
                     },
+                    // V2-4 slice-4 — PROVINCE probe (AC-LAB b): per-class node counts + proportions, per-class
+                    // history-field means (cross-check: orogens high faultDensity/grainMag, cratons low fault,
+                    // basins high accommodation), contiguity/component metrics, and the AC-PROVINCE-ASSOC
+                    // decision (real η² vs the contiguity-preserving spatial-null p99 + a rejected control).
+                    // NPERM defaults to 200 (BUILD-PLAN §6.3); pass {nperm} to trade cost for tightness. The
+                    // overlay recolors by these labels. Read-only (never mutates the carrier / render).
+                    provinceProbe(opts){
+                      const carrier = riverOverlay.reliefCarrier, m = riverOverlay.mesh;
+                      if (!carrier || !m || !carrier.province) return null;
+                      const prov = carrier.province, Np = carrier.N;
+                      const counts = [0, 0, 0], fdS = [0, 0, 0], gmS = [0, 0, 0], acS = [0, 0, 0];
+                      for (let i = 0; i < Np; i++) { const c = prov[i]; counts[c]++; fdS[c] += carrier.faultDensity[i]; gmS[c] += carrier.grainMag[i]; acS[c] += carrier.accommodation[i]; }
+                      const mn = (s, c) => c > 0 ? s / c : 0;
+                      const st = provinceStats(prov, m.adj, Np);
+                      const NPERM = (opts && opts.nperm) || 200;
+                      const a = assessProvinceAssociation(prov, m, [carrier.faultDensity, carrier.grainMag, carrier.accommodation], { NPERM, seed: state.macroSeed >>> 0 });
+                      const names = ['craton', 'orogen', 'basin'];
+                      const classMeans = {};
+                      for (let c = 0; c < 3; c++) classMeans[names[c]] = { count: counts[c], faultDensity: mn(fdS[c], counts[c]), grainMag: mn(gmS[c], counts[c]), accommodation: mn(acS[c], counts[c]) };
+                      return {
+                        counts, proportions: classProportions(prov, Np), classMeans,
+                        contiguity: st.contiguity, components: st.components,
+                        association: { realEta2: a.realEta2, nullMean: a.nullMean, nullP99: a.nullP99, controlEta2: a.controlEta2, pass: a.pass, controlRejected: a.controlRejected },
+                        overlayShown: provinceOverlayUI.show,
+                      };
+                    },
+                    provinceOverlay(on){ setProvinceOverlay(on !== false); return provinceOverlayUI.show; },
+                    rebuildProvinceOverlay(){ return !!buildProvinceOverlay(); },
                     // V2-1 Slice D (AC5) — lab-only seeded-regime WEIGHT override (console/_lab API ONLY; no
                     // dat.GUI binding ⇒ no planet-archetypes.js taxonomy registration, AC-0 check 3). Mirrors
                     // _driverAbMode: replaces the FROZEN E1_REGIME_WEIGHTS base used for the in-band temperate-wet
