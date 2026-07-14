@@ -3,7 +3,8 @@
 // STAGNANT-LID SILICATE RELIEF WRITER  (World-Engine history program, increment #4b — Venus)
 //
 // THREE-FREE BY CONSTRUCTION: imports only alea + simplex-noise + the pure scalar helpers in
-// mathutil.js. It NEVER imports three. A sibling of plates.js / shellRelief.js / magmatism.js: it
+// mathutil.js + the pure leaf stressFabric.js (V2-4 SP-STRESS-FABRIC — itself importing nothing; the shared
+// steeredNoise3 fabric, formerly a verbatim private copy). It NEVER imports three. A sibling of plates.js / shellRelief.js / magmatism.js: it
 // consumes the F3 sphere carrier ({verts, adj, N, tangentFrameAt}) and REPLACES carrier.height for a
 // stagnant-lid silicate body (Venus). The regime gate that selects this writer lives at the
 // route()/lab boundary — writeBodyRelief's condition-derived dispatch (pure-strong unbroken lid),
@@ -40,6 +41,7 @@
 import alea from 'alea';
 import { createNoise3D } from 'simplex-noise';
 import { clamp, clamp01 } from './mathutil.js';
+import { steeredNoise3 } from './stressFabric.js';   // V2-4 SP-STRESS-FABRIC: the one owned copy (was verbatim private here)
 
 // ── LOCKED tunables (production passes ONLY macroSeed; DEFAULTS overridable via opts.tune purely so the
 // headless structure tests / exploration can sweep — the route()/lab path never overrides them). ──────
@@ -177,30 +179,11 @@ function randDir(rng) {
   return [r * Math.cos(t), r * Math.sin(t), z];
 }
 
-// Anisotropic ridged noise steered along a strike axis. COPIED VERBATIM from tectonic.js:93-116
-// (module-private there) in the shellRelief.js:110-129 ridged-boolean form — ridged=true → 0.5-|n| (a
-// positive relief lobe). Both tessera fold + ribbon call with ridged=true; fold uses the strike+π/2,
-// ribbon the strike, so the two fabrics are strictly orthogonal (the tessera double-deformation).
-function steeredNoise3(noise3, dir, east, north, angle, ridged, freq, sign = +1) {
-  const ca = Math.cos(angle), sa = Math.sin(angle);
-  const contraction = sign >= 0;
-  const fScale = contraction ? 0.7 : 1.5;
-  const along = contraction ? 0.25 : 0.55;
-  const across = contraction ? 1.9 : 1.2;
-  const sU = freq * fScale * along;
-  const sV = freq * fScale * across;
-  const ux = east[0] * ca + north[0] * sa;
-  const uy = east[1] * ca + north[1] * sa;
-  const uz = east[2] * ca + north[2] * sa;
-  const vx = -east[0] * sa + north[0] * ca;
-  const vy = -east[1] * sa + north[1] * ca;
-  const vz = -east[2] * sa + north[2] * ca;
-  const px = dir[0] * freq + ux * sU + vx * sV;
-  const py = dir[1] * freq + uy * sU + vy * sV;
-  const pz = dir[2] * freq + uz * sU + vz * sV;
-  const nVal = noise3(px, py, pz);
-  return ridged ? (0.5 - Math.abs(nVal)) : (Math.abs(nVal) - 0.5);
-}
+// Anisotropic ridged noise steered along a strike axis — now the owned SP-STRESS-FABRIC module
+// (./stressFabric.js), imported above (was a verbatim private copy here). Both tessera call sites (fold +
+// ribbon, below) already pass a boolean `ridged=true` — fold uses strike+π/2, ribbon the strike, so the two
+// fabrics stay strictly orthogonal (the tessera double-deformation) — so the calls are unchanged and
+// byte-exact (proven in tests/worldengine-v2-4-stress-fabric.test.js).
 
 // Analytic geodesic distance (radians) from unit point P to the great-circle ARC segment A→B. No BFS,
 // no while-loop. If P projects inside the arc span, distance = |angle to the arc's great circle|; else

@@ -2,6 +2,7 @@
 // Production port of relief-e6-tectonic.js (stress + build half). Pure stress (stressAtLat/writeGrain);
 // runE6 (Task 8) adds seeded simplex. No three.js. nu=0.25, REGIME_GAIN=0.4 LOCKED.
 import { REGIME, idx, latDegOfRow } from './substrate.js';
+import { steeredNoise3 } from './stressFabric.js';   // V2-4 SP-STRESS-FABRIC: the one owned copy (was verbatim private here)
 import alea from 'alea';
 import { createNoise2D, createNoise3D } from 'simplex-noise';
 
@@ -84,36 +85,11 @@ export function writeGrainSphere(carrier, drivers) {
 // h∈[-0.5,~1.0] per node, blend∈(0,1] ⇒ roughly [-0.75,+1.5] normalized relief units; Jacobi
 // (a convex combination) cannot expand it. We assert the generous guard band |height| < 4.
 
-// Sphere variant of steeredNoise (math reference: the flat steeredNoise above). SEAM-FREE:
-// the rotation is applied in the pole-safe tangent frame {east,north} and the sample is a
-// continuous 3D simplex of the rotated unit direction (createNoise3D), so same-direction
-// neighbours — across the antimeridian and at the poles — sample the same value. The LOCKED
-// anisotropy constants ({0.7|1.5}/{0.25|0.55}/{1.9|1.2}) and the ridged-regime transform
-// (NORMAL ? |n|-0.5 : 0.5-|n|) are applied identically to the flat helper.
-function steeredNoise3(noise3, dir, east, north, angle, regime, freq, sign = +1) {
-  const ca = Math.cos(angle), sa = Math.sin(angle);
-  const contraction = sign >= 0;
-  const fScale = contraction ? 0.7 : 1.5;
-  const along  = contraction ? 0.25 : 0.55;
-  const across = contraction ? 1.9 : 1.2;
-  // Anisotropic scale factors along the grain-rotated tangent axes (mirrors flat u,v scaling).
-  const sU = freq * fScale * along;   // along-grain axis scale
-  const sV = freq * fScale * across;  // across-grain axis scale
-  // grain-rotated tangent basis: u' = east*cos + north*sin ; v' = -east*sin + north*cos
-  const ux = east[0] * ca + north[0] * sa;
-  const uy = east[1] * ca + north[1] * sa;
-  const uz = east[2] * ca + north[2] * sa;
-  const vx = -east[0] * sa + north[0] * ca;
-  const vy = -east[1] * sa + north[1] * ca;
-  const vz = -east[2] * sa + north[2] * ca;
-  // Perturb the 3D unit direction along the (anisotropically scaled) rotated tangent axes.
-  // The base direction also enters at `freq` so the sample varies coherently around the sphere.
-  const px = dir[0] * freq + ux * sU + vx * sV;
-  const py = dir[1] * freq + uy * sU + vy * sV;
-  const pz = dir[2] * freq + uz * sU + vz * sV;
-  const nVal = noise3(px, py, pz);
-  return regime === REGIME.NORMAL ? Math.abs(nVal) - 0.5 : 0.5 - Math.abs(nVal);
-}
+// steeredNoise3 (the sphere-native steered ridged-noise fabric) is now the owned SP-STRESS-FABRIC module
+// (./stressFabric.js), imported above. It was a verbatim private copy here; the extraction is byte-exact
+// (tests/worldengine-v2-4-stress-fabric.test.js). The canonical export takes a `ridged` BOOLEAN instead of
+// this file's `regime` int, so the call site (writeHeightSphere below) passes `regime !== REGIME.NORMAL`
+// — arithmetically identical: NORMAL ⇒ ridged=false ⇒ |n|-0.5; non-NORMAL ⇒ ridged=true ⇒ 0.5-|n|.
 
 // Sphere-native crust-thickness blob (math reference: relief-base-step.js thicknessBlob).
 // SAME two-octave blend on a seam-free 3D direction domain: weights 0.65/0.35, freqs 2.5/5.0,
@@ -170,7 +146,9 @@ export function writeHeightSphere(carrier, crust, drivers,
     const d = carrier.verts[i];
     const { east, north } = carrier.tangentFrameAt(i);
     // (a) steered tectonic grain relief — seam-free 3D port of the flat steeredNoise term.
-    let h = steeredNoise3(noise, d, east, north, carrier.grainAngle[i], carrier.regime[i],
+    // `ridged = regime !== REGIME.NORMAL` maps the old REGIME ternary onto the canonical ridged-boolean form
+    // (bit-identical: NORMAL ⇒ ridged=false ⇒ |n|-0.5; STRIKESLIP/THRUST ⇒ ridged=true ⇒ 0.5-|n|).
+    let h = steeredNoise3(noise, d, east, north, carrier.grainAngle[i], carrier.regime[i] !== REGIME.NORMAL,
                           9.0, sign) * carrier.grainMag[i];
     // (b) crust-thickness plateau (sphere-native blob).
     const blob = thicknessBlobSphere(d, crustNoise);                 // [0,1]

@@ -9,7 +9,9 @@
 // mirrored (copied verbatim below), and the composition — the per-center pierce boolean + the disjoint
 // province precedence + the absolute-datum province stack with a NUMERIC edifice-budget bound — is new.
 //
-// THREE-FREE BY CONSTRUCTION: imports ONLY alea + simplex-noise + the pure scalar helpers in mathutil.js.
+// THREE-FREE BY CONSTRUCTION: imports ONLY alea + simplex-noise + the pure scalar helpers in mathutil.js
+// + the pure leaf stressFabric.js (V2-4 SP-STRESS-FABRIC — itself importing nothing; the shared steeredNoise3
+// fabric, formerly a verbatim private copy). It NEVER imports three, the router, or the E1 source.
 // It NEVER imports the router (importing its family map would be a circular import) nor the E1 source
 // module; it reads the RESOLVED E1 coordinate tuple straight off its argument (L, the compressed vigor Φ,
 // the center count n) and re-derives nothing. It reads NO preset name and no morphology name of any kind.
@@ -28,6 +30,7 @@
 import alea from 'alea';
 import { createNoise3D } from 'simplex-noise';
 import { clamp, clamp01 } from './mathutil.js';
+import { steeredNoise3 } from './stressFabric.js';   // V2-4 SP-STRESS-FABRIC: the one owned copy (was verbatim private here)
 
 // ── LOCKED tunables (first-cut, UAT-tunable; the ACs assert SIGN + the gate-calibrated counts, not a frozen
 //    gain). The composer takes no override in Slice A production; `tune` merges over these for the tests. ──
@@ -87,27 +90,10 @@ function randDir(rng) {
   return [r * Math.cos(t), r * Math.sin(t), z];
 }
 
-// Anisotropic ridged noise steered along a strike axis. COPIED VERBATIM from stagnantLid.js:183-202.
-function steeredNoise3(noise3, dir, east, north, angle, ridged, freq, sign = +1) {
-  const ca = Math.cos(angle), sa = Math.sin(angle);
-  const contraction = sign >= 0;
-  const fScale = contraction ? 0.7 : 1.5;
-  const along = contraction ? 0.25 : 0.55;
-  const across = contraction ? 1.9 : 1.2;
-  const sU = freq * fScale * along;
-  const sV = freq * fScale * across;
-  const ux = east[0] * ca + north[0] * sa;
-  const uy = east[1] * ca + north[1] * sa;
-  const uz = east[2] * ca + north[2] * sa;
-  const vx = -east[0] * sa + north[0] * ca;
-  const vy = -east[1] * sa + north[1] * ca;
-  const vz = -east[2] * sa + north[2] * ca;
-  const px = dir[0] * freq + ux * sU + vx * sV;
-  const py = dir[1] * freq + uy * sU + vy * sV;
-  const pz = dir[2] * freq + uz * sU + vz * sV;
-  const nVal = noise3(px, py, pz);
-  return ridged ? (0.5 - Math.abs(nVal)) : (Math.abs(nVal) - 0.5);
-}
+// Anisotropic ridged noise steered along a strike axis — now the owned SP-STRESS-FABRIC module
+// (./stressFabric.js), imported above (was a verbatim private copy here). Both tessera call sites (fold +
+// ribbon, below) already pass a boolean `ridged=true`, so the calls are unchanged and byte-exact (proven in
+// tests/worldengine-v2-4-stress-fabric.test.js).
 
 // Analytic geodesic distance (radians) from unit point P to the great-circle ARC A→B. COPIED VERBATIM from
 // stagnantLid.js:207-222. No BFS, no while-loop.

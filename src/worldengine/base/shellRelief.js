@@ -23,6 +23,7 @@
 import alea from 'alea';
 import { createNoise3D } from 'simplex-noise';
 import { clamp, clamp01 } from './mathutil.js';
+import { steeredNoise3 } from './stressFabric.js';   // V2-4 SP-STRESS-FABRIC: the one owned copy (was verbatim private here)
 
 // ── Regime resolution (the dispatch blocker, resolved) ────────────────────────────────────────────
 // One source-of-truth map accepting BOTH the short lab keys (PRESET_ARCHETYPE) and the canonical long
@@ -179,29 +180,10 @@ const falloffAng = (angDist, belt) => Math.exp(-angDist / belt);
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const smoothstepS = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 
-// ── steeredNoise3 — COPIED VERBATIM from tectonic.js L93-116 (module-private there; tectonic.js is
-//    out-of-scope to edit). The substrate REGIME branch is INLINED as `ridged = regime !== 0`, so a
-//    truthy `ridged` arg yields the ridged transform (0.5-|n|) and falsy yields (|n|-0.5). No import. ──
-function steeredNoise3(noise3, dir, east, north, angle, ridged, freq, sign = +1) {
-  const ca = Math.cos(angle), sa = Math.sin(angle);
-  const contraction = sign >= 0;
-  const fScale = contraction ? 0.7 : 1.5;
-  const along  = contraction ? 0.25 : 0.55;
-  const across = contraction ? 1.9 : 1.2;
-  const sU = freq * fScale * along;
-  const sV = freq * fScale * across;
-  const ux = east[0] * ca + north[0] * sa;
-  const uy = east[1] * ca + north[1] * sa;
-  const uz = east[2] * ca + north[2] * sa;
-  const vx = -east[0] * sa + north[0] * ca;
-  const vy = -east[1] * sa + north[1] * ca;
-  const vz = -east[2] * sa + north[2] * ca;
-  const px = dir[0] * freq + ux * sU + vx * sV;
-  const py = dir[1] * freq + uy * sU + vy * sV;
-  const pz = dir[2] * freq + uz * sU + vz * sV;
-  const nVal = noise3(px, py, pz);
-  return ridged ? (0.5 - Math.abs(nVal)) : (Math.abs(nVal) - 0.5);
-}
+// steeredNoise3 (the anisotropic ridged-noise fabric) is now the owned SP-STRESS-FABRIC module
+// (./stressFabric.js), imported above — was a verbatim private copy here. The ridge/trajectory call site
+// (writeShellReliefSphere below) already passes a boolean `ridged`, so the call is unchanged and byte-exact
+// (proven in tests/worldengine-v2-4-stress-fabric.test.js).
 
 // Pole-safe meridional/azimuthal tangent basis at unit dir `d` about an arbitrary `axis`.
 // theta_hat = meridional (increasing colatitude line), phi_hat = azimuthal (about axis). Both ⟂ d.

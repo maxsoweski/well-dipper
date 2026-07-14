@@ -1,0 +1,128 @@
+{
+  "_meta": {
+    "what": "V2-4 slice-2 SP-STRESS-FABRIC pre-extraction goldens — SHA-256 of carrier.height per (call-site, seed) across the four steeredNoise3 call sites.",
+    "capturedFrom": "PRE-EXTRACTION tree (four verbatim steeredNoise3 copies still in tectonic/shellRelief/mixedInterior/stagnantLid). Capture-order guard: run before any source edit.",
+    "targetN": 1500,
+    "lloyd": 2,
+    "seeds": [
+      1,
+      2,
+      3,
+      7,
+      42
+    ],
+    "callSites": [
+      "tectonic-grain",
+      "shell-ridge",
+      "mixed-tessera",
+      "stagnant-tessera"
+    ],
+    "note": "mixed-tessera + stagnant-tessera witness records tessera-node counts (>0 proves the tessera fold+ribbon call sites fired); tectonic/shell witness records nonzero-height counts."
+  },
+  "fixtures": {
+    "tectonic-grain": {
+      "hashes": {
+        "1": "e7438bd77fca03bb5ac7938d22ae0e4c41fc48889f8b5abbdf7babca4c322cb8",
+        "2": "0f53d4d562cffc9cc1cb314018f70fcc92a3ba75e1c387741bd647b65f798186",
+        "3": "369472ac15593879c75bb71c26b9e77d407145d0df72d1a6c7a651e3c217df9f",
+        "7": "1872b1650afe0641f3c4b18f853df8ba040c8b03c583476eee6f652c8d2b6cee",
+        "42": "4e063c7e04e7172bb6a76e740eb4c02114b28cc185a7a746604077b3421683c1"
+      },
+      "witness": {
+        "1": {
+          "nonzeroHeight": 1500
+        },
+        "2": {
+          "nonzeroHeight": 1500
+        },
+        "3": {
+          "nonzeroHeight": 1500
+        },
+        "7": {
+          "nonzeroHeight": 1500
+        },
+        "42": {
+          "nonzeroHeight": 1500
+        }
+      }
+    },
+    "shell-ridge": {
+      "hashes": {
+        "1": "43967d147c652b79548bfc0b593b940ff7631b6f1c084aacfeba4ecb24b6626a",
+        "2": "177c965755f473ee7f9f008c5468e391b8486d1eaa8d6be947a2600a81cc3262",
+        "3": "a12a112381180a891c2fac8d1f12e2f1ab8e271f61a66253fd02e7746a1acaa7",
+        "7": "6adf3e9af25f47c5517c1c13263fc467c3d0708d71d438feeca865db7e950795",
+        "42": "220aa9d6cd139a8be0193615ae8cc06cc670f17294470af3ef00192b2be35203"
+      },
+      "witness": {
+        "1": {
+          "nonzeroHeight": 1500
+        },
+        "2": {
+          "nonzeroHeight": 1500
+        },
+        "3": {
+          "nonzeroHeight": 1500
+        },
+        "7": {
+          "nonzeroHeight": 1500
+        },
+        "42": {
+          "nonzeroHeight": 1500
+        }
+      }
+    },
+    "mixed-tessera": {
+      "hashes": {
+        "1": "56f6023545cde44915c81cc2ec12772ca96b0fba0a2dcc070f1f5e63764d2186",
+        "2": "b57b9a99e2b23bf7074947ad75d9debaf2ad05bfc6885d87c107c80bb6294383",
+        "3": "537d80e169faf595eca30f7e35887328bbda75b8e6a4414f15f230922b418efa",
+        "7": "e38440ae34cfc099016c14939f0858283d835ce037f17bcc107ad8249acdb8aa",
+        "42": "5f89e2ac96da6fba82dcf92f6ab7d047abb3cdd36ae1d8335d2c9b3913fb4edd"
+      },
+      "witness": {
+        "1": {
+          "tesseraNodes": 113
+        },
+        "2": {
+          "tesseraNodes": 98
+        },
+        "3": {
+          "tesseraNodes": 113
+        },
+        "7": {
+          "tesseraNodes": 111
+        },
+        "42": {
+          "tesseraNodes": 113
+        }
+      }
+    },
+    "stagnant-tessera": {
+      "hashes": {
+        "1": "24ae472f98bed3c3c64a24397296986009cb1f6463e07c3ea16bfbb886d867d7",
+        "2": "a8ec0fb6296486adb3e6d2282cb5c767907b4b1acbf749ff4dab82355c5731d6",
+        "3": "35e9b59feedcdb321ee6bd0f84f8f1479516226fe6b03dda25f9dd867208a9b5",
+        "7": "4f1f8e460d622b4e878c66be755bc7dd68b7ee86255fa8dca54c5350d8aef5cf",
+        "42": "78284c25a3320497ef66fd6e9583a212c3a97f6ac93e72a02cbdfa25ba29657d"
+      },
+      "witness": {
+        "1": {
+          "tesseraNodes": 113
+        },
+        "2": {
+          "tesseraNodes": 113
+        },
+        "3": {
+          "tesseraNodes": 113
+        },
+        "7": {
+          "tesseraNodes": 112
+        },
+        "42": {
+          "tesseraNodes": 111
+        }
+      }
+    }
+  }
+}
