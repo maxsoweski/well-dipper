@@ -37,6 +37,7 @@ import { writeStagnantLidReliefSphere, stagnantLidRegimeOf, stagnantDriversToTun
 // the base/ writers stay E1-blind (worldengine-e1-shadow-audit.test.js).
 import { computeE1, modalRegime, inSeededBand } from './src/worldengine/base/e1Regime.js';
 import { makeSphereField } from './src/worldengine/base/sphereField.js';
+import { writeAccommodation, initSedimentHost } from './src/worldengine/base/hostChannels.js';
 // V2-2b-2a Slice C — the LAB-ONLY mixed-interior render seam (MF1 Option B). route() forwards a hand-set E1
 // coordinate through the V2-2a lid-response router (classifyLidPath → the mixed composer WRITES carrier.height),
 // and injects the Π=C·F instrument (one-way: rivers.js is the route/lab boundary, NOT a base/ writer, so the
@@ -486,6 +487,12 @@ export function writeBodyRelief(carrier, {
     };
 
     // ── the derived rule chain (BUILD-PLAN §1; ordering is LOAD-BEARING) ──
+    // V2-4 §0 SEAM (IIFE-capture): the 9-way early-return chain resolves through the five closures above, each
+    // finalizing carrier.height BEFORE it returns — so there is NO reachable "before the return" point after the
+    // chain. Capture the chain in an inner IIFE (verbatim & unchanged inside; every existing return intact), then
+    // post-write the byte-inert host channels on the now-finished carrier. The captured object IS exactly the
+    // closure's result (plateDiag / probe parity preserved), returned unchanged below.
+    const relief = (() => {
     // (1) composition terminals: gas / carbon → despun (Gas×3, Sub-Neptune, Carbon — and HOT JUPITER, the
     //     adjudicated reroute #2: today archetype-null + locked lands it on the shell locked-fallback).
     if (cls === 'gas' || cls === 'carbon') return despun();
@@ -518,6 +525,11 @@ export function writeBodyRelief(carrier, {
     if (e1.geodynamicRegime === 'mobile') return plate();
     // (3f) dead-lid rocky (Mars) → despun
     return despun();
+    })();
+    // ── V2-4 POST-DISPATCH WRITES (BUILD-PLAN §0 seam) — byte-inert: touch only the unhashed host channels ──
+    writeAccommodation(carrier);   // slice 1: sink-ranking read of the now-finished carrier.height → accommodation ∈ [0,1]
+    initSedimentHost(carrier);     // slice 1: zero the sediment host (pristine bedrock; V2-8 deposits later)
+    return relief;
   }
   throw new Error('writeBodyRelief: bodyDrivers.condition is required — the PRESET_ARCHETYPE migration bridge was retired (world-engine-preset-archetype-retirement, 2026-07-13). Every production/lab caller must pass a condition-bearing bundle.');
 }
