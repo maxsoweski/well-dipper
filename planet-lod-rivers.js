@@ -40,6 +40,7 @@ import { makeSphereField } from './src/worldengine/base/sphereField.js';
 import { writeAccommodation, initSedimentHost } from './src/worldengine/base/hostChannels.js';
 import { writePassiveMargins } from './src/worldengine/base/passiveMargins.js';   // V2-4 slice-3: passive-margin shelfDepth channel (plate path only)
 import { writeProvince } from './src/worldengine/base/province.js';   // V2-4 slice-4: history-tied province channel (universal — every dispatch path; reads accommodation)
+import { deriveFigureDescriptor } from './src/worldengine/base/bodyFigure.js';   // V2-4 slice-5: E2-figure descriptor (pure fn of the condition vector; rides on relief.figure — no carrier array, no RNG)
 // V2-2b-2a Slice C — the LAB-ONLY mixed-interior render seam (MF1 Option B). route() forwards a hand-set E1
 // coordinate through the V2-2a lid-response router (classifyLidPath → the mixed composer WRITES carrier.height),
 // and injects the Π=C·F instrument (one-way: rivers.js is the route/lab boundary, NOT a base/ writer, so the
@@ -554,6 +555,7 @@ export function writeBodyRelief(carrier, {
     initSedimentHost(carrier);     // slice 1: zero the sediment host (pristine bedrock; V2-8 deposits later)
     if (relief.plateDiag) writePassiveMargins(carrier, relief.plateDiag, bodyDrivers, { macroSeed });   // slice 3: plate path only — writes only the unhashed shelfDepth channel (carrier.height untouched)
     writeProvince(carrier, { seed: macroSeed });   // slice 4: UNIVERSAL (every path) — reads accommodation (order after writeAccommodation is load-bearing); writes only the unhashed Uint8Array province channel
+    relief.figure = deriveFigureDescriptor(cond);   // slice 5: E2-figure descriptor — a return-object field (NOT a carrier array), pure fn of the condition vector, draws no RNG ⇒ byte-inert; populated on EVERY dispatch path
     return relief;
   }
   throw new Error('writeBodyRelief: bodyDrivers.condition is required — the PRESET_ARCHETYPE migration bridge was retired (world-engine-preset-archetype-retirement, 2026-07-13). Every production/lab caller must pass a condition-bearing bundle.');

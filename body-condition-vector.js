@@ -39,6 +39,15 @@ export function deriveConditionVector(fp, derived, radiusEarth) { return {
   //    surfaceGravity — invisible to the flat-key tune builders → AC1-inert). computeE1 stays locked-BLIND;
   //    ONLY the dispatch layer reads this (as writeBodyRelief already reads a `locked` arg today). ──
   tidalState:      { locked: !!(fp.tidalState && fp.tidalState.locked) },
+  // ── V2-4 Slice C5 (E2-figure descriptor) addendum: D8 rotationHours plumbed into the condition vector.
+  //    Until now NO field carried spin HERE — the gas-band derivation reads the RAW `_fp.rotationHours` in
+  //    the lab (planet-lod-lab.html), never this vector. NESTED (like T_eq / surfaceGravity / tidalState) ⇒
+  //    invisible to the flat-key tune builders (driversToTune / magmaDriversToTune) and to computeE1, which
+  //    read only named keys — so this widening is BYTE-INERT by the same V2-0 precedent the 75-golden proves
+  //    (adding a nested key no path reads leaves every HASHED_FIELD untouched). The SOLE reader is
+  //    bodyFigure.deriveFigureDescriptor (the E2-figure ω source); the write-path dispatch never reads it.
+  //    Fallback 24 h = the driver-presets D8 default (terrestrial presets omit spin — inert here too).
+  rotationHours:   fp.rotationHours ?? 24,               // D8 spin (hours) — figure ω source ONLY; never a tune-builder / computeE1 input
   rawTidalIoRatio: derived?.tidalHeat ?? bodyRawTidal(fp), // D12 RAW, explicitly named + un-calibrated (m_hp source)
   shellThickness:  bodyShellThickness(fp),               // baseStep helper (Slice B) — raw scalar, NO d³ transform (R4)
   magneticField:   fp.magneticField,                     // D13 data-only (undefined for lab presets)
