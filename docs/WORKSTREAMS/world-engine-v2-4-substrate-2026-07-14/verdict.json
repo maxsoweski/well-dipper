@@ -1,0 +1,81 @@
+{
+  "workstream": "world-engine-v2-4-substrate-2026-07-14",
+  "commit": "d44537a",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "INSUFFICIENT",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC-0",
+      "result": "PASS",
+      "evidence": "Driver connectivity verified by direct source read across all 6 workstream commits (3650550..d44537a): bodyFigure.js reads only condition.{rotationHours,radiusEarth,surfaceGravity,tidalState.locked} (grep-confirmed no shellThickness read); province.js reads carrier.{faultDensity,grainMag,accommodation}; hostChannels.js writers are narrowly scoped (writeAccommodation reads only carrier.height); passiveMargins.js reads plateDiag.{plateId,plateType,boundaryStress,meanEdgeAngle} + volatileFraction. One wording-vs-code note: AC text says boundaryClass, code uses a self-reconstructed boundaryStress BFS (documented, reasoned substitution, not a gap). Named consumers for every field confirmed live in code (province.js, planet-lod-rivers.js) plus stub consumer tests. Taxonomy: new lab control is deliberately taxonomy-exempt (debug view, documented). 21+96 headless tests run, all passed.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-DOCS",
+      "result": "INSUFFICIENT",
+      "evidence": "Part A (SUBSTRATE-MAP.md 5-field checklist: function/pipeline-position/named-consumers/non-goals across all 6 records) PASSES on direct read. Part B (AC's own verifyVia: `npm run doc-rot` reporting no gap for this workstream) FAILS on both plausible invocations: `--workstream <slug>` gets dropped by npm (runs unscoped, 166 project-wide flags) or errors with 'workstream file not found' when passed through correctly. Root cause: scripts/doc-rot-check.sh's --workstream scoping only recognizes the legacy flat docs/WORKSTREAMS/<slug>.md format; this workstream (and every dev-collab-scope directory-format workstream since the 2026-06-06 migration) has no such stub, so the scoped check is currently non-functional for ANY current-format workstream, not just this one. Content quality is not in question; the AC's literal mechanized bar cannot currently be satisfied by any invocation.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC-CHANNELS",
+      "result": "PASS",
+      "evidence": "writeAccommodation (hostChannels.js) is a single clamp01 assignment from finished carrier.height — no +=, *=, mass, or volume terms (source-read confirmed, not just test regex). initSedimentHost is a pure zero-fill. sediment/accommodation allocated as separate Float32Arrays, not aliased to E9 reserves (baseLevel/standing/maturity), confirmed via sphereField.js/substrate.js grep. Seam wiring in planet-lod-rivers.js runs accommodation-then-province post-dispatch on every relief path. `npx vitest run tests/worldengine-v2-4-host-channels.test.js` -> 13/13 passed, covering parity, bounds across 17 presets x 5 seeds, non-degeneracy, determinism, and a V2-8-shaped stub-consumer seam test.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-FABRIC",
+      "result": "PASS",
+      "evidence": "Single steeredNoise3 definition now lives only in new owned module stressFabric.js (grep-confirmed no verbatim copies remain in the 4 former call sites: tectonic.js, shellRelief.js, mixedInterior.js, stagnantLid.js). `npx vitest run tests/worldengine-v2-4-stress-fabric.test.js` -> 30/30 passed: function-level dual-run against independently embedded pre-extraction reference implementations (>1000 bit-exact checks), writer-level SHA-256 fixture equality across 4 call sites x 5 seeds vs. captured pre-extraction goldens, and module-purity checks (no RNG, deterministic). Corroborating gates (byte-identity, lid byte-anchors, dispatch-oracle, E1-conformance) 156/156 passed. Full suite: 4 failed/2075 total, matching the documented pre-existing baseline exactly (unrelated KnownObjects/GalacticFeatures failures).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-MARGIN",
+      "result": "PASS",
+      "evidence": "passiveMargins.js reconstructs belt stress via BFS from plates.js's boundaryStress (plates.js itself confirmed unedited via git show --stat); marginProfileFrac implements shelf/break/slope/rise at calibrated anchors (calibration/margin-scale.mjs). carrier.height confirmed byte-untouched: full 75-golden byte-identity suite (37 tests) green project-wide. Only new carrier.shelfDepth channel written. Driver response: shelfWidthFactor(volatileFraction) shown strictly monotone in an isolated sweep (>2% signal above jitter noise floor), documented in SUBSTRATE-MAP.md/BUILD-PLAN.md. Determinism: source-grepped RNG-free, double-run byte-identical. `npx vitest run tests/worldengine-v2-4-passive-margins.test.js` -> 15/15 passed; combined margin+golden+lid-anchor+relief-cube+dispatch-oracle run 138/138 passed; full suite matches the documented 4-failed/2075 baseline exactly.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-PROVINCE-ASSOC",
+      "result": "PASS",
+      "evidence": "`npx vitest run tests/worldengine-v2-4-province.test.js` -> 21/21 passed (channel presence/identity, universal write across all 5 dispatch paths, association test across 5 presets x 2 seeds with both real>p99 AND control<=p99 asserted, contiguity >=0.90, byte-inertness, RNG-freedom). Independently re-derived real numbers outside the test file (realEta2 0.23-0.62 vs nullP99 0.04-0.17, matching commit message). Ran the workstream's own calibration script across a broader 5x5=25-cell sweep -- all 25 pass with comfortable margins. Ran an independent adversarial construction (separate LCG for pure-noise and Fisher-Yates-shuffle controls, bypassing the codebase's own null generator) -- both correctly rejected against nullP99 for all 5 presets, satisfying the 'rejection must be actively tested, not assumed' bar via a construction outside the implementation under test.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-FIGURE",
+      "result": "PASS",
+      "evidence": "`npx vitest run tests/worldengine-v2-4-figure.test.js` -> 17/17 passed, covering: (a) condition.rotationHours present/defaulting with byte-identity proof; (b) Earth f in-band, Jupiter f in-band with >5x ordering, despun tidal-bulge split correctly isolating present-vs-fossil spin; (c) deriveFigureDescriptor takes only condition (grep-deny confirms no shellThickness/shell-axis/RNG read); (d) relief.figure populated on all 17 presets across all 5 dispatch paths, deterministic. Corroborating byte-identity suite (83/83) confirms zero HASHED_FIELDS drift from the new D8 plumbing. Independent calibration script reproduced Earth/Jupiter magnitudes and the despun-fossil split, including an honestly-surfaced Magma inversion edge case (documented, not hidden). Jupiter f is order-of-magnitude correct per the AC's own banded gate, not exact-value; documented ~2x homogeneous-coefficient overestimate is a stated deliberate approximation.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "result": "PASS",
+      "evidence": "All 5 sub-clauses verified with real headless output: (a) 75-golden byte-identity 83/83 passed, fixtures never re-captured (git diff on fixture files empty). (b) Lid byte-anchors 39/39 passed. (c) Guardrail quartet + dispatch-oracle 225/225 passed; full project suite = 4 failed/2075 total across 17 failed files, matching the pinned pre-existing baseline exactly (same GalacticFeatures/KnownObjects failures, no new failures). (d) Atmosphere suites 29/29 unchanged. (e) Diff fence: enumerated all 30 files touched across the 6-commit range -- all within the allowed fence (worldengine base modules, new V2-4 modules, tests, workstream docs); explicit grep for forbidden files (climate-e5.js, emission-e.js, planet-lod-uniforms.js, lidDisruption.js) returned none across the whole range; not-ours dirty files (CameraChoreographer.js, LabMode.js) confirmed absent from every V2-4 commit.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-LAB",
+      "result": "INSUFFICIENT",
+      "evidence": "layer=integration, live=true -- requires driving the running lab (dev server :5175 + debug Chrome :9223), which this verification pass did not do. The underlying code (passiveMargins.js, province.js, the 'Substrate (V2-4)' GUI folder + window._lab.provinceProbe/setPreset/provinceOverlay API in planet-lod-lab.html) is already committed and grep-confirmed present. SUBSTRATE-MAP.md documents a known render-reality caveat: at practical mesh resolution the shelf/break/slope zones are sub-node, so the visible read is a smooth graded coast-to-abyss apron rather than 3 distinct bands -- the 4-zone morphology is verified headlessly (profile function), not yet confirmed by eye. No margin on/off toggle exists in the lab GUI, so a clean before/after screenshot would need a pre-C3 checkout. No evidence/ directory exists yet for this workstream (screenshots not archived).",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC-UAT",
+      "result": "deferred-to-max",
+      "evidence": "UAT is Max's acceptance judgment alone; no agent renders this verdict regardless of live=false. Presupposes AC-LAB (live) going green first -- that live-drive has not yet happened (see AC-LAB above), and no AC-LAB evidence/screenshots are archived for this workstream yet. Once AC-LAB is live-verified, Max's acceptance check should be: open planet-lod-lab.html (dev server :5175), open the 'Substrate (V2-4)' GUI folder, toggle the province overlay on several presets (e.g. Earth, Mars, Ocean, a despun/tidally-locked preset), and visually confirm the coastline/margin apron and province regions look plausible and legible (not speckled noise, not obviously broken) -- keeping in mind the documented caveat that shelf/break/slope render as one graded apron rather than 3 distinct visual bands at current mesh resolution.",
+      "adversarialVotes": "n/a — UAT is Max-only"
+    }
+  ],
+  "adjudications": [
+    {
+      "id": "AC-DOCS",
+      "workflowResult": "INSUFFICIENT (0/3)",
+      "adjudicatedResult": "PASS",
+      "by": "working-Claude, 2026-07-14, post-verify tooling fix",
+      "rationale": "The workflow found Part A (SUBSTRATE-MAP.md content: 6 records x function/pipeline/consumers/non-goals) PASSES on direct read; Part B failed ONLY because scripts/doc-rot-check.sh --workstream recognized just the legacy flat <slug>.md format — non-functional for EVERY directory-format workstream since the 2026-06-06 dev-collab migration (a pre-existing project tooling defect, not a V2-4 gap). Fix applied (own commit, outside the increment's code fence): (1) doc-rot-check.sh directory-format fallback reading contract.json top-level scope{paths,features,systems}; (2) machine-readable scope added to this contract; (3) docs/SYSTEMS/worldengine/README.md AUTHORED claiming all 24 base modules (the real underlying gap — no worldengine SYSTEMS README existed project-wide); (4) latent doc-graph.js section-regex bug fixed ($ under /m truncated Module(s) capture to its first line — unexercised while app-shell's one-module README was the only system). Post-fix: npm run doc-rot -- --workstream world-engine-v2-4-substrate-2026-07-14 -> flagged: 0 (the AC's literal verifyVia bar, now met); doc-graph unclaimed 160->136 (-24, exactly the claimed modules)."
+    }
+  ],
+  "layerNote": "unit = PASS with the AC-DOCS adjudication above (all other unit ACs 3/3 adversarial from the workflow). integration = INSUFFICIENT solely on AC-LAB (live:true — needs the running lab; working-Claude drives it next with Max's dev server :5175 + debug Chrome :9223; before/after baseline available from a pre-C1 checkout, e.g. the atmo worktree at 69f4ae9 or a throwaway worktree at 3650550). uat = deferred-to-max by design (margins graded-apron caveat pre-surfaced to Max)."
+}

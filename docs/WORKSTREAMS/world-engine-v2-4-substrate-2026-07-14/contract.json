@@ -146,5 +146,29 @@
       "non-plate presets render byte-identically (margins fire only at plate-world passive boundaries; overlay off = zero change)",
       "planet-archetypes drift guards green; not-ours dirty files (CameraChoreographer.js, LabMode.js) excluded from every commit"
     ]
+  },
+  "scope": {
+    "paths": [
+      "src/worldengine/base/hostChannels.js",
+      "src/worldengine/base/stressFabric.js",
+      "src/worldengine/base/passiveMargins.js",
+      "src/worldengine/base/province.js",
+      "src/worldengine/base/bodyFigure.js",
+      "src/worldengine/base/sphereField.js",
+      "src/worldengine/base/substrate.js",
+      "src/worldengine/base/tectonic.js",
+      "src/worldengine/base/shellRelief.js",
+      "src/worldengine/base/mixedInterior.js",
+      "src/worldengine/base/stagnantLid.js",
+      "body-condition-vector.js",
+      "planet-lod-rivers.js",
+      "planet-lod-lab.html",
+      "tests/worldengine-v2-4-*.test.js",
+      "tests/fixtures/v2-4-*",
+      "docs/WORKSTREAMS/world-engine-v2-4-substrate-2026-07-14/*"
+    ],
+    "systems": [
+      "worldengine"
+    ]
   }
 }

@@ -82,12 +82,34 @@ SCOPE_SYSTEMS=""
 
 if [ -n "$WORKSTREAM_SLUG" ]; then
   WS_FILE="docs/WORKSTREAMS/${WORKSTREAM_SLUG}.md"
-  if [ ! -f "$WS_FILE" ]; then
-    echo "error: workstream file not found: $WS_FILE" >&2
+  WS_CONTRACT="docs/WORKSTREAMS/${WORKSTREAM_SLUG}/contract.json"
+  if [ ! -f "$WS_FILE" ] && [ -f "$WS_CONTRACT" ]; then
+    # Directory-format workstream (dev-collab contract, post-2026-06-06 migration):
+    # read optional top-level "scope": {"paths": [...], "features": [...], "systems": [...]}
+    PYOUT=$(python3 - "$WS_CONTRACT" <<'PY'
+import sys, json
+c = json.load(open(sys.argv[1]))
+scope = c.get('scope', {}) or {}
+print("PATHS=" + ' '.join(scope.get('paths', [])))
+print("FEATURES=" + ' '.join(scope.get('features', [])))
+print("SYSTEMS=" + ' '.join(scope.get('systems', [])))
+PY
+    )
+    SCOPE_PATHS=$(echo "$PYOUT" | grep '^PATHS=' | sed 's/^PATHS=//')
+    SCOPE_FEATURES=$(echo "$PYOUT" | grep '^FEATURES=' | sed 's/^FEATURES=//')
+    SCOPE_SYSTEMS=$(echo "$PYOUT" | grep '^SYSTEMS=' | sed 's/^SYSTEMS=//')
+    if [ -z "$SCOPE_PATHS$SCOPE_FEATURES$SCOPE_SYSTEMS" ]; then
+      echo "error: directory-format workstream has no top-level \"scope\" in contract.json — add {\"scope\":{\"paths\":[...]}} for scoped doc-rot" >&2
+      exit 2
+    fi
+    WS_FILE=""   # skip the legacy frontmatter parse below
+  elif [ ! -f "$WS_FILE" ]; then
+    echo "error: workstream not found: $WS_FILE (flat) or $WS_CONTRACT (directory format)" >&2
     exit 2
   fi
-  # Parse YAML frontmatter via python3 (assumed available)
-  PYOUT=$(python3 - "$WS_FILE" <<'PY'
+  # Parse YAML frontmatter via python3 (assumed available) — legacy flat format only
+  if [ -n "$WS_FILE" ]; then
+    PYOUT=$(python3 - "$WS_FILE" <<'PY'
 import sys, re, yaml
 path = sys.argv[1]
 text = open(path).read()
@@ -106,10 +128,11 @@ print(f"PATHS={paths}")
 print(f"FEATURES={features}")
 print(f"SYSTEMS={systems}")
 PY
-  )
-  SCOPE_PATHS=$(echo "$PYOUT" | grep '^PATHS=' | sed 's/^PATHS=//')
-  SCOPE_FEATURES=$(echo "$PYOUT" | grep '^FEATURES=' | sed 's/^FEATURES=//')
-  SCOPE_SYSTEMS=$(echo "$PYOUT" | grep '^SYSTEMS=' | sed 's/^SYSTEMS=//')
+    )
+    SCOPE_PATHS=$(echo "$PYOUT" | grep '^PATHS=' | sed 's/^PATHS=//')
+    SCOPE_FEATURES=$(echo "$PYOUT" | grep '^FEATURES=' | sed 's/^FEATURES=//')
+    SCOPE_SYSTEMS=$(echo "$PYOUT" | grep '^SYSTEMS=' | sed 's/^SYSTEMS=//')
+  fi
 fi
 
 # Helper: returns 0 if scope is empty (no filter) OR file matches scope
