@@ -1,0 +1,137 @@
+{
+  "workstream": "world-engine-atmo-3b-storms-2026-07-14",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "statusNote": "SCOPED 2026-07-14 (interview complete; grounding ~/briefings/grounding-atmo-3b-storms-2026-07-14.md). Awaiting Max greenlight. Build in own worktree ~/projects/well-dipper-atmo, branch feature/world-engine-atmo-3b, dev port :5178 (concurrent with the ground track on L1 until the V2-8 seam — coordination memory has the mega-file fence). Size flag: XL as contracted (taxonomy + physics writer + render complexity); the BUILD-PLAN slices R (taxonomy, Max ratifies) → P (physics writer) → V (render complexity), and MAY propose a formal sub-split (the V2-2b precedent) if slice V balloons — re-scope gate, not silent growth.",
+  "programRef": "world-engine-history-program-2026-06-27/ATMOSPHERE-PLAN.md #3b row (keystone: 'Full dU/dφ shear + PV staircase → vortex placement (argmax anticyclonic shear, deterministic tie-break: lowest-lat→lowest-node); chromophore aging (white→red); ice-giant CH₄ companion clouds; storm/convection MASK + phase infra'; consumers #4/#5/#8 per the DAG) + ROADMAP-v2-condition-first.md §3.1 V2-6 pointer row. GROUNDING CORRECTION carried into scope: the plan's watch-item 'uStorm[8] carriage unverified (grep=0 in src/)' is FALSE — the full storm render carriage exists and is wired at repo root (uStormPosSize/uStormParams/uStormColor/uStormCount + uPolar* in planet-lod-uniforms.js:362-378; stormSwirl/stormColTerms/polarVortexCol in planet-lod-height.glsl.js; per-frame writer planet-lod-lab.html:5584-5606). #3b is therefore a REPLACE of the hash-random placement (planet-lod-lab.html:3160-3269, mulberry32 — NOT alea) by a physics writer feeding the existing carriage, plus render-complexity terms Max's interview added to scope.",
+  "designDecisions": [
+    "REPLACE, NOT FALLBACK (Max, interview 2026-07-14): the physics writer supersedes the legacy hash-random placement; the mulberry32 hash path is DELETED in this increment, not kept as a fallback — keeping both recreates the dual-dispatch debt the PRESET_ARCHETYPE retirement just paid off. Safety rails: AC-OFFGATE (storms disabled → byte-identical render) + AC-UAT (Max protects the look he already accepted). The F27/F28/F29 render PRIMITIVES (stormSwirl/stormColTerms/polarVortexCol GLSL) are REUSED and extended, not deleted — only placement/derivation moves to the writer.",
+    "STATIC PLACE-ONCE (generative-not-simulative, program discipline): no uTime in any storm term (preserves the shipped 'Static in v1' contract). The phase infra ships as a PER-VORTEX SEEDED PHASE BANK (place-once scalars in the writer output) so #4 lightning flicker, #5 brown-dwarf drift, and #8 Mars oscillator can consume phases WITHOUT #3b animating anything.",
+    "PER-SEED VARIETY ROUTED OUT (Max's ruling): Max's 'every re-roll seriously different' criterion is the UAT of the derive-not-freeze variety increment (shellDepthFrac/internalHeat/dissipation gain D-slots — ATMOSPHERE-PLAN §(e)), queued IMMEDIATELY after #3b in the atmosphere lane. Consequence accepted at scope: within #3b, same-regime re-rolls share storm latitudes (frozen shear inputs) and vary longitude/phase/count-mix only. AC-0 names the variety increment as the declared future deriver for the three frozen constants.",
+    "TAXONOMY FIRST, MAX RATIFIES (Max: 'we'll need to figure out all the different kinds of atmospheric phenomena and how they can differ visually'): Slice R produces PHENOMENA-TAXONOMY.md (per giant regime: phenomenon, visual signature, driving field/physics, render mechanism, regime applicability — the condition-to-regime-research.md pattern). MAX RATIFIES THE TAXONOMY before slices P/V build against it (the ROADMAP-signoff pattern; a build-sequencing gate, not a UAT AC). The taxonomy pins which phenomena are IN #3b vs deferred to later atmosphere increments (e.g. Uranus near-featurelessness, hot-Jupiter storm policy).",
+    "GAS GATE DERIVED, NOT LABELLED: the storm path keys its gas/giant eligibility on composition ('h2-he' is already in the presets/condition bundle), NOT on the archetype strings ['gas-giant','hot-jupiter'] the legacy F27-F30 gating uses — consistent with the post-retirement dispatch discipline. If the build finds a real blocker, fallback is DOCUMENTED DEBT with a named deriver, flagged at verify (SPINE-CONFORMANCE check 1).",
+    "CARRIAGE REUSE + ONE NEW ATTRIBUTE: the writer fills the existing uStorm[8]/uPolar uniform carriage for discrete vortices; the CONTINUOUS storm/convection mask travels as a new baked vertex attribute on the #3a seam (aBand/aShear/aMush precedent: bakeClimateE5Attributes → geometry attribute → varying). No other new uniforms expected for core storms.",
+    "DETERMINISM: new disjoint alea namespace(s) (e.g. 'stormE:*' or 'climateE5:storm:*' — pinned at BUILD-PLAN), fixed draw order, no Math.random/Date.now (static-source test, climate-e5.test.js:42 mold). The lab 'reroll storms' button migrates from the mulberry32 stormSeed to the seeded writer path.",
+    "CONCURRENCY FENCE (coordination memory 2026-07-14): this branch owns the storm/band sections of planet-lod-lab.html + planet-lod-height.glsl.js + planet-lod-uniforms.js and the atmosphere writers; it NEVER edits relief/dispatch sections (planet-lod-rivers.js, lidResponse.js, e1Regime.js are OUT of the diff fence entirely — grounding verified zero src/ overlap). Rebase onto L1 before any merge back; never mid-edit the same mega-file section as the ground track.",
+    "WSL OOM RULE: build workflows opus-pinned, ≤2-3 concurrent agents, staggered against any ground-track workflow (host-level constraint)."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15). (1) Driver connectivity: every scalar the storm writer reads is D-slot-backed, derived-by-named-derivation from #3a params (jetShear/u(lat)/T/phase), or a DECLARED frozen constant with its named future deriver = the derive-not-freeze variety increment (shellDepthFrac/internalHeat/dissipation). The gas/giant gate derives from composition ('h2-he'), not archetype strings — or is documented debt with a named deriver (designDecision 5). (2) Named consumer: the storm mask names its DAG readers (#4 lightning Poisson, #5 brown-dwarf patchiness, #8 Mars dust); the phase bank names its oscillator consumers; no dead field ships. (3) Taxonomy registration: any new lab control/province interaction registers in planet-archetypes.js (+ GLSL PROV mirror where applicable); tests/planet-archetypes.test.js drift guards green. DOES/UNLOCKS card in intent.md.",
+      "verifyVia": {
+        "input": "Read the diff + BUILD-NOTES conformance table; grep-audit the writer inputs against the declared-source list; map mask/phase to named consumers; npx vitest run tests/planet-archetypes.test.js",
+        "observable": "Every input sourced or declared-with-deriver; consumers named; drift guards green"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-TAX",
+      "statement": "The phenomena taxonomy exists and is load-bearing (Max: 'figure out all the different kinds of atmospheric phenomena and how they can differ visually'). PHENOMENA-TAXONOMY.md in the workstream dir covers, per giant regime (Jovian, Saturnian, Neptunian, Uranian, hot-Jupiter, sub-Neptune): the phenomena family list (at minimum: belt/zone turbulent boundaries, folded-filament regions, GRS-class anticyclones + wakes, vortex streets/storm trains, barges/festoons/hot-spots, polar cyclone clusters + Saturn hexagon mode, ice-giant dark spots + CH₄ companions, chromophore aging states, haze mutes) — each entry carrying: visual signature, driving field/physics (which #3a/#3b field controls it), render mechanism, regime applicability, and IN-#3b vs DEFERRED disposition. Every IN-#3b phenomenon traces to at least one AC observable; every DEFERRED one names its target increment. Max's ratification of the doc is recorded (build-sequencing gate before slices P/V — designDecision 4).",
+      "verifyVia": {
+        "input": "Read PHENOMENA-TAXONOMY.md; cross-check every IN-#3b row against the AC list and every DEFERRED row against a named increment; check the ratification record",
+        "observable": "Coverage complete per regime; all required fields present per entry; IN/DEFERRED dispositions traceable; ratification recorded"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-WRITER",
+      "statement": "The physics writer (src/worldengine/base/, name pinned at BUILD-PLAN) is deterministic and physics-placed. (a) Zero Math.random/Date.now (static-source test); all draws in the new disjoint alea namespace; fixed draw order; byte-identical output across two runs at fixed (regime, seed, drivers). (b) Golden byte-hash of the writer's field output at a canonical (regime, seed) — the GOLDEN_BANDFIELD_HASH mold. (c) Vortex placement = argmax anticyclonic shear over the PV-staircase-adjusted jet profile, deterministic tie-break lowest-lat→lowest-node (the ATMOSPHERE-PLAN pin), band-confined. (d) Arm's-length re-derivation: vortex centers reproduce from the writer's RETURNED params alone, independent of its internal search (climate-e5 AC3 mold). (e) Per-seed behavior within #3b: reseeds re-place deterministically (longitude/phase/mix vary; latitudes may repeat per the frozen-constant carve-out).",
+      "verifyVia": {
+        "input": "Headless vitest: static-source grep; double-run byte equality; golden hash; independent argmax re-derivation from returned params; reseed sweep",
+        "observable": "RNG-free outside alea; reruns bit-identical; golden pinned; centers = independent argmax result incl. tie-break; reseeds deterministic"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-FIELDS",
+      "statement": "The new fields are real physics fields, not decoration. (a) Storm/convection MASK: continuous, bounded [0,1], finite everywhere, spatially correlated with |jetShear| above a stated floor (the climate-e5 AC8 correlation mold) and consistent with vortex placement (mask maxima at/near placed vortices). (b) Chromophore aging: each vortex carries a seeded age scalar; color mapping is monotonic white→red in age. (c) CH₄ companion clouds appear ONLY on ice-giant regimes, adjacent to their parent dark spot. (d) Phase bank: every vortex carries a place-once seeded phase; no uTime enters any storm term (the shipped static contract preserved).",
+      "verifyVia": {
+        "input": "Headless vitest: mask bounds/finiteness/correlation; age→color monotonicity; regime-conditional companion presence; grep no-uTime in storm GLSL terms",
+        "observable": "Mask bounded + shear-correlated + vortex-consistent; aging monotonic; companions ice-giant-only; storm terms static"
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-PARITY",
+      "statement": "Writer→render carriage is faithful. (a) Bake↔writer parity: the baked mask attribute (and any other baked field) equals the writer field at matching node directions (climate-e5 AC10 mold). (b) The uStorm[8]/uPolar uniform slots are filled from the writer output (position/size/params/color derive from writer vortex records, not from lab-local dice). (c) CPU↔GLSL parity for any new or changed GLSL constant tables/stops (emission-e mold).",
+      "verifyVia": {
+        "input": "Headless vitest: bake-vs-writer node comparison; slot-fill provenance assertions; GLSL constant-table parity tests",
+        "observable": "Attributes equal writer fields; uniform slots trace to writer records; GLSL tables byte-equal their CPU sources"
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC-OFFGATE",
+      "statement": "ZERO behavioral change outside the storm scope. (a) Storms disabled (uStormCount 0 / writer off) → render byte-identical to pre-#3b (the shipped F25/F28/F29 off-gate contract, preserved through the replace). (b) Non-gas presets: storm attrs stay flat/unread, zero visual change. (c) #3a GOLDEN_BANDFIELD_HASH (-1329854088) and the emission (#2) goldens unchanged; the writer never touches any carrier relief channel. (d) Ground-track gates untouched: 75-golden byte-identity, quartet, dispatch-oracle 25/25, full suite EXACTLY at the 4-failed/17-files baseline; every touched test file collects+runs nonzero tests. (e) Diff fence: the new writer + its tests, planet-lod-lab.html storm/band sections, planet-lod-height.glsl.js storm/band sections, planet-lod-uniforms.js, planet-archetypes.js (registration only), workstream docs — NOT planet-lod-rivers.js, NOT src/worldengine/base/{lidResponse,e1Regime,plates,shellRelief,magmatism,stagnantLid,mixedInterior,lidDisruption}.js (the concurrency fence). Not-ours dirty files excluded from every commit.",
+      "verifyVia": {
+        "input": "Headless: off-gate byte comparison; goldens + quartet + dispatch-oracle + full suite from the worktree repo dir; git show --stat every commit against the fence",
+        "observable": "Off = byte-identical; goldens unchanged; full suite at baseline; diff scope exactly the fence"
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC-LIVE",
+      "statement": "LIVE INTEGRATION (agent-drivable, objective). On the running atmo-worktree lab: per-regime sweep — Jovian: ≥1 great-spot-class anticyclone at the shear argmax + a vortex street/train + turbulent band boundaries active where |shear| is high; Saturnian: polar structure incl. the hexagon mode + spots; Neptunian: dark spot + CH₄ companion adjacent; sub-Neptune: haze-muted per #3a; (Uranian + hot-Jupiter per the ratified taxonomy's IN/DEFERRED disposition). Reseeding re-places deterministically (two identical seeds → identical render; two different seeds → different longitudes/phases). The 'reroll storms' GUI control drives the writer path (not the deleted hash path). Console clean of NEW errors; screenshots archived in evidence/; all agent pages closed after (window hygiene).",
+      "verifyVia": {
+        "input": "chrome-devtools on 127.0.0.1:9223 against Max-started dev server (cd ~/projects/well-dipper-atmo && npm run dev -- --port 5178); liveness via list_pages (never sandbox-curl); lab URL http://localhost:5178/well-dipper/planet-lod-lab.html",
+        "observable": "Per-regime phenomena present per taxonomy; placement at shear argmax visually confirmed vs the probe; deterministic reseed; console clean; screenshots archived"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-VIS",
+      "statement": "Render-complexity mechanisms are live and physics-keyed (the objective half of Max's 'ink dropped in water' / 'not a simple oval' criteria — the holistic half is AC-UAT). (a) Band-boundary turbulence: a filamentation/advected-detail render term exists, is modulated by the shear/mask fields (active where |shear|/mask high, absent where low — assertable via A/B screenshot diff localized to high-shear latitudes), and is absent when storms/turbulence are disabled. (b) Storm interior structure: placed vortices render with internal structure terms (spiral/annular/wake detail), not flat oval fill — A/B diff between primitive-only and structured render is nonzero within storm radii and ~zero outside. (c) Chromophore age visibly differentiates two vortices of different seeded age on the same planet.",
+      "verifyVia": {
+        "input": "chrome-devtools A/B toggles + screenshot diffs (term on/off, storms on/off) at pinned camera/seed; localized-diff assertions against the mask/shear regions",
+        "observable": "Turbulence term localized to high-shear/mask regions; storm interiors structured (nonzero in-radius diff); age states visually distinct; all effects vanish when disabled"
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "MAX'S GATE (deferred-to-max, never agent-PASSed). Flipping through the giant presets in the lab and re-rolling: the bands can read like 'ink dropped in water' rather than clean stripes; a great spot no longer 'reads as a simple oval'; the visual detail of the storms/atmospheric phenomena is no longer 'seriously lacking'; the phenomena cohere as planet-like weather (the GRS turns 'bands' into 'a planet'), consistent with the ratified taxonomy. HONESTY CARVE-OUT (Max's own ruling at scope): per-seed 'seriously different-looking planet' is NOT judged here — it is the variety increment's UAT; within #3b, reseeds vary placement/phase/mix only. Presupposes AC-LIVE + AC-VIS + all unit/integration ACs GREEN.",
+      "verifyVia": {
+        "input": "Max drives the giant presets + reseeds in the lab (working-Claude surfaces exactly what to click and the before/after evidence)",
+        "observable": "Max confirms (or rejects) the visual-complexity and physics-coherence reads. Deferred-to-max"
+      },
+      "layer": "uat",
+      "live": false
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "#3a substrate (src/worldengine/base/climate-e5.js): jetShear(lat,P) analytic dU/dφ + per-node shearMag/turbulence + u(lat) jet profile + T field + place-once phase pattern + haze overlay; bakeClimateE5Attributes → aBand/aShear/aMush attribute seam (the mold for the new mask attribute)",
+      "#2 emission compositor (src/worldengine/base/emission-e.js) — untouched here, but the storm mask's #4 lightning consumer lands on it; CPU↔GLSL parity test mold",
+      "the existing storm render carriage (REUSED): uStormPosSize/uStormParams/uStormColor/uStormCount + uPolar* (planet-lod-uniforms.js:362-378); stormSwirl/stormColTerms/polarVortexCol (planet-lod-height.glsl.js); per-frame slot writer + lil-gui F27/F28/F29/F30 folders (planet-lod-lab.html)",
+      "the LEGACY hash placement being REPLACED: planet-lod-lab.html:3160-3269 (mulberry32 off hash(macroSeed, stormSeed), belt-snapped random longitude) — deleted in this increment",
+      "driver presets / condition bundle: composition 'h2-he' (the derived gas gate), rotation/tidal-locked, T_eq; E5_PRESET_REGIME lab routing (Jovian/Saturnian/Neptunian/Sub-Neptune/Hot-Jupiter); the three FROZEN constants shellDepthFrac/internalHeat/dissipation (declared, deriver = the variety increment)",
+      "test harness molds: golden byte-hash + arm's-length re-derivation + shear-correlation (worldengine-base-climate-e5.test.js), CPU↔GLSL parity + cross-golden guard (worldengine-base-emission-e.test.js), static-source determinism grep"
+    ],
+    "outputs": [
+      "the storm/vortex physics writer (new, src/worldengine/base/): vortex records (position by shear-argmax/PV-staircase, size, mode, seeded age, phase) + the continuous storm/convection MASK field + CH₄ companion records — consumers: #4 lightning (Poisson on mask), #5 brown-dwarf (patchy drift on mask+phase), #8 Mars (oscillator on phase infra), the render carriage",
+      "PHENOMENA-TAXONOMY.md (Max-ratified): the visual-differentiation source of truth every later giant-facing atmosphere increment reads",
+      "render-complexity terms: shear/mask-keyed band-boundary filamentation ('ink in water'), storm interior structure (spiral/annular/wake), chromophore age coloring — all off-gated",
+      "the per-vortex seeded phase bank (place-once; the oscillator substrate for #4/#5/#8)",
+      "queue artifact: the derive-not-freeze variety increment formally queued next in the atmosphere lane, carrying Max's per-seed-variety UAT criterion"
+    ],
+    "mustStayWorking": [
+      "#3a bands/jets: GOLDEN_BANDFIELD_HASH -1329854088 unchanged; aBand/aShear/aMush seam intact; zonalBandCol behavior on storm-off renders byte-identical",
+      "#2 emission goldens + EMISSION_BB_STOPS CPU↔GLSL parity unchanged",
+      "the off-gate contract: storms disabled → byte-identical render (the shipped F25/F28/F29 regression rail, preserved through the replace)",
+      "non-gas presets: zero visual or attribute change",
+      "ALL ground-track gates from the shared repo: 75-golden byte-identity (NEVER re-capture), quartet, dispatch-oracle 25/25, full suite at the 4-failed/17-files baseline; no relief carrier channel touched",
+      "planet-archetypes drift guards green; taxonomy registration complete for any new control",
+      "the concurrency fence: zero edits to relief/dispatch sections or files (planet-lod-rivers.js, lidResponse.js, e1Regime.js and all ground writers); not-ours dirty files (CameraChoreographer.js, LabMode.js) excluded from every commit"
+    ]
+  }
+}
