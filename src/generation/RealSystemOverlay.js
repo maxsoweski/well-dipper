@@ -134,7 +134,11 @@ export class RealSystemOverlay {
    * with the keys the data actually supplies (omit, never null: mirrors the AC8
    * discipline at the ctx level). Keys:
    *   - companionSpec — the curated STELLAR_COMPANIONS entry (when the table
-   *     covers this star by its entry name); drives forced binary / pinned single.
+   *     covers this star by its entry name); drives forced binary / pinned
+   *     single. When the table does NOT cover it, a synthesized single may be
+   *     supplied instead: { kind:'single', source:'archive-snum' } for a
+   *     snum==1 host, or { kind:'single', source:'pin-by-default' } for an
+   *     un-tabled, un-hosted real star (FIX-3 pin-by-default).
    *   - knownPlanets  — archive-shaped planet list (when a contents host joins).
    *   - farCompanions — wide members with their archive planets (only when the
    *     table entry supplies them).
@@ -182,6 +186,23 @@ export class RealSystemOverlay {
       if (!tableEntry && host.snum === 1) {
         result.companionSpec = { kind: 'single', source: 'archive-snum' };
       }
+    }
+
+    // ── Pin-by-default single (FIX-3; Max ruling 2026-07-15) ──────────────
+    // A REAL catalog star the curated table does NOT cover and the exoplanet
+    // archive does NOT host arrives SINGLE — it never rolls a fabricated
+    // stellar companion. resolve() is only ever invoked for a resolved
+    // real-catalog arrival (the main.js warp + teleport real-star branches),
+    // so "no tableEntry and no host" here is exactly an un-tabled, un-hosted
+    // REAL star; procgen (non-real) stars never reach this module and keep
+    // their live binary roll. One-directional (rides the same forceBinary=false
+    // path as the archive-snum pin — only suppresses fabrication, never adds
+    // structure; no StarSystemGenerator edit) and data-wins by construction:
+    // the table (above) and the archive snum (BOTH directions — snum==1 pins,
+    // snum>=2 kept its roll) already decided wherever they cover, so this
+    // default only fills the no-data remainder. Precedence: table > snum > pin.
+    if (!tableEntry && !host) {
+      result.companionSpec = { kind: 'single', source: 'pin-by-default' };
     }
 
     return result;

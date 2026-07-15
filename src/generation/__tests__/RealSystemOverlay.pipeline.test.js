@@ -16,9 +16,11 @@ import { StarSystemGenerator } from '../StarSystemGenerator.js';
  * same JSON RealStarCatalog.load fetches — design D5 latitude).
  *
  * AC4 verifyVia (contract.json): (a) partial-known host procgen-fills, (b) a
- * zero-data catalog star stays pure procgen, (c) a companion-table binary, (d) a
- * pinned single — each generate-twice deep-equal (revisit-stable, D8). Plus the
- * merged-name observable (D7): a merged system exposes its real designations.
+ * zero-data catalog star (UPDATED: now arrives pinned-single per the FIX-3
+ * pin-by-default ruling, not pure procgen — Max 2026-07-15,
+ * real-star-identity-unification-2026-07-15 / AC5), (c) a companion-table binary,
+ * (d) a pinned single — each generate-twice deep-equal (revisit-stable, D8). Plus
+ * the merged-name observable (D7): a merged system exposes its real designations.
  *
  * Cited: increment-3-design.md (D1–D9), representation-cap.md (§5).
  */
@@ -95,43 +97,52 @@ describe('AC4(a) — a real host with PARTIAL known planets: knowns present + pr
   });
 });
 
-describe('AC4(b) — a zero-data catalog star: catalog type + pure procgen', () => {
+describe('AC4(b) — an un-tabled, un-hosted real star: procedural planets, pinned single', () => {
   // Betelgeuse is a real HYG star (spect M) with NO archive host and NO companion
-  // table entry → the overlay supplies nothing, so the merged ctx is byte-equal
-  // to a plain procgen ctx and the systemData is fully procedural.
+  // table entry. UPDATED for the FIX-3 pin-by-default ruling (Max 2026-07-15,
+  // real-star-identity-unification-2026-07-15 / AC5): such a real star arrives
+  // SINGLE — the overlay now supplies a { kind:'single', source:'pin-by-default' }
+  // companionSpec (it never rolls a fabricated stellar companion). Planets stay
+  // fully procedural (no archive host → no knownPlanets) and the catalog type holds.
   const NAME = 'Betelgeuse';
 
-  it('the overlay supplies no fields for a zero-data star', () => {
-    expect(OV().resolve(NAME)).toEqual({});
+  it('the overlay supplies ONLY the pin-by-default single (no knowns, no far)', () => {
+    expect(OV().resolve(NAME)).toEqual({
+      companionSpec: { kind: 'single', source: 'pin-by-default' },
+    });
     const ctx = baseCtx();
     ctx.starTypeOverride = 'M';
     OV().applyToContext(ctx, NAME);
-    expect('companionSpec' in ctx).toBe(false);
+    expect(ctx.companionSpec).toEqual({ kind: 'single', source: 'pin-by-default' });
     expect('knownPlanets' in ctx).toBe(false);
     expect('farCompanions' in ctx).toBe(false);
   });
 
-  it('(e) the snum==1 pin never fires for a non-host real star (no companionSpec)', () => {
-    // Betelgeuse is a real HYG star with NO contents host, so resolve() never
-    // enters the host branch where the D7 snum pin lives (the pin keys on a
-    // resolved host). AC8 safety: a non-host real star can never gain a
-    // companionSpec from the pin.
+  it('(e) a non-host real star gets the pin-by-default single, NOT the archive-snum pin', () => {
+    // Betelgeuse has NO contents host, so resolve() never enters the host branch
+    // where the D7 archive-snum pin lives. Under FIX-3 it still arrives single —
+    // via the pin-by-default source, distinguishable from the archive-snum source.
     const r = OV().resolve(NAME);
     expect(r.host).toBeUndefined();
-    expect('companionSpec' in r).toBe(false);
+    expect(r.companionSpec).toEqual({ kind: 'single', source: 'pin-by-default' });
   });
 
-  it('overlay-applied systemData == plain procgen systemData (fully procedural), catalog type kept', () => {
+  it('planets fully procedural + catalog type kept; the pin suppresses the binary roll', () => {
     const overlaidCtx = baseCtx(); overlaidCtx.starTypeOverride = 'M';
     OV().applyToContext(overlaidCtx, NAME);
     const merged = StarSystemGenerator.generate('bet-1', overlaidCtx);
 
-    const plainCtx = baseCtx(); plainCtx.starTypeOverride = 'M';
-    const plain = StarSystemGenerator.generate('bet-1', plainCtx);
+    // The pin is the ONLY overlay field a zero-data real star now contributes, so
+    // a plain procgen ctx carrying the same single-pin is byte-identical.
+    const pinnedPlain = baseCtx(); pinnedPlain.starTypeOverride = 'M';
+    pinnedPlain.companionSpec = { kind: 'single', source: 'pin-by-default' };
+    const plain = StarSystemGenerator.generate('bet-1', pinnedPlain);
 
-    expect(rt(merged)).toEqual(rt(plain));          // overlay supplied nothing
+    expect(rt(merged)).toEqual(rt(plain));          // pin is the only supplied field
+    expect(merged.isBinary).toBe(false);            // pinned single
+    expect(merged.star2).toBeNull();
     expect(merged.star.type).toBe('M');             // catalog type preserved
-    expect(merged.planets.every((p) => !p.known)).toBe(true);
+    expect(merged.planets.every((p) => !p.known)).toBe(true); // no archive host
     expect('farCompanions' in rt(merged)).toBe(false);
   });
 

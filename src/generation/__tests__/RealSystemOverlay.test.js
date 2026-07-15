@@ -154,18 +154,28 @@ describe('RealSystemOverlay — supplement display-name → hostname bridge (des
   });
 });
 
-describe('RealSystemOverlay — zero-data arrival supplies nothing (AC8 omit-not-null)', () => {
-  it('a real star with no table entry and no archive host yields no overlay keys', () => {
+describe('RealSystemOverlay — un-tabled, un-hosted real star → pin-by-default single (FIX-3)', () => {
+  // FIX-3 pin-by-default ruling (Max 2026-07-15,
+  // real-star-identity-unification-2026-07-15 / AC5): a REAL catalog star the
+  // curated table does NOT cover and the archive does NOT host arrives SINGLE.
+  // resolve() therefore supplies a { kind:'single', source:'pin-by-default' }
+  // companionSpec (and nothing else) instead of the previous empty result — it
+  // never rolls a fabricated stellar companion. knownPlanets/farCompanions stay
+  // omitted (omit-not-null holds for the fields the data genuinely can't supply).
+  it('a real star with no table entry and no archive host → only the pin single', () => {
     const r = makeOverlay().resolve('Betelgeuse');
-    expect(r).toEqual({}); // no companionSpec / knownPlanets / farCompanions / host
+    expect(r).toEqual({ companionSpec: { kind: 'single', source: 'pin-by-default' } });
+    expect('knownPlanets' in r).toBe(false);
+    expect('farCompanions' in r).toBe(false);
+    expect('host' in r).toBe(false);
   });
 
-  it('applyToContext adds NO overlay keys for a zero-data arrival', () => {
+  it('applyToContext adds ONLY the pin-by-default companionSpec (no knowns/far)', () => {
     const ov = makeOverlay();
     const ctx = baseCtx();
     ctx.starTypeOverride = 'M';
     ov.applyToContext(ctx, 'Betelgeuse');
-    expect('companionSpec' in ctx).toBe(false);
+    expect(ctx.companionSpec).toEqual({ kind: 'single', source: 'pin-by-default' });
     expect('knownPlanets' in ctx).toBe(false);
     expect('farCompanions' in ctx).toBe(false);
   });
