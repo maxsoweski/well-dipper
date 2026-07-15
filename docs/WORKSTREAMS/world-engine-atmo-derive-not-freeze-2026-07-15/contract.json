@@ -17,6 +17,15 @@
   ],
   "acceptanceCriteria": [
     {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15, SPINE-CONFORMANCE.md). (1) Driver connectivity: shellDepthFrac/internalHeat/dissipation lose their declared-frozen status — each becomes D-slot-backed or derived-by-named-derivation from the condition bundle; every OTHER scalar the new derivations read is likewise D-slot-backed, derived, or declared frozen WITH its future deriver named; no archetype-string routing (gates stay composition-derived). (2) Named consumer: the derived per-seed shear profile is consumed by resolveStormE placement + climate-e5 band construction (render seam); the storm mask + phase bank keep their named #4/#5/#8 consumers with unchanged shape; no dead fields ship. (3) Taxonomy registration: any new lab control (D-slot sliders etc.) registers in planet-archetypes.js FEATURES/PROVINCES (+ GLSL province mirror where applicable); the planet-archetypes.test.js drift guards stay green.",
+      "verifyVia": {
+        "input": "Static audit of the increment's diff against the three SPINE-CONFORMANCE.md checks + the drift-guard suite run from the worktree dir.",
+        "observable": "Every read scalar traces to a D-slot / named derivation / named-deriver debt entry; every emitted field names its consumer from the ATMOSPHERE-PLAN DAG; drift guards pass."
+      },
+      "layer": "unit"
+    },
+    {
       "id": "AC-WIRING",
       "statement": "The New-planet button and the macro-seed GUI slider re-run the storm/polar writer: reseeding through EITHER path re-places storms and polar state, matching an independent writer re-call at the new seed (today both paths leave spotCenter/trainLons/polarPhase bit-identical).",
       "verifyVia": {

@@ -18,6 +18,25 @@ expression + phenomenon interaction (findings 2/3 + smooth-vs-jagged) is a separ
 increment; lab legibility/provenance is the separate simultaneous `planet-lod-lab-ux` workstream
 on L1. Canonical-N rider re-ruled: demoted from pin to regime-conditioned prior.
 
+## DOES / UNLOCKS (Rule 15 card)
+
+**DOES** (field ← driver ← what Max sees):
+
+| Output | Set by | Max sees |
+|---|---|---|
+| shellDepthFrac (was frozen) | derived per-seed from condition bundle | eq-jet sign / band structure varies per re-roll |
+| internalHeat (was frozen) | derived per-seed | jet strength / storm vigor varies per re-roll |
+| dissipation (was frozen) | derived per-seed | shear profile shifts → storm latitudes move |
+| storm placement lat+lon | derived shear argmax per seed | spots in a different place every seed |
+| band layout + drift direction | per-seed band construction | bands stop reading as fixed belts |
+| polar presence/N/size/position | regime prior + seeded variation | poles differ per seed, sometimes absent |
+| reseed wiring | New-planet / macro-seed paths run the writer | re-roll actually re-places |
+
+**UNLOCKS:** the expression increment (ink-in-water + interaction) builds on the per-seed derived
+fields; #4 lightning / #5 brown-dwarf / #8 Mars oscillator keep consuming the mask/phase infra
+(shape unchanged, now seed-varied); discharges atmo-3b AC-0's declared-frozen debt (ATMOSPHERE-PLAN
+§(e)); with the simultaneous lab-ux workstream, Max's solo re-roll UAT.
+
 ## Success criteria (Max's language)
 
 - Storms stop appearing "in the same place every seed" — different seeds place them at
