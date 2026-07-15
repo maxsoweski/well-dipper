@@ -359,3 +359,161 @@ export function aimPoint({ cursorHidden, mouseX, mouseY, centerX, centerY } = {}
 export function escFocusResetFires({ code, scManual } = {}) {
   return code === 'Backquote' || !scManual;
 }
+
+// ---------------------------------------------------------------------------
+// Orrery-coherence reducers (docs/WORKSTREAMS/orrery-coherence-2026-07-15,
+// AC1). The ratified holistic read (2026-07-15): "ORRERY is a god's-eye,
+// player-driven contemplation of the system — nothing flies in ORRERY; things
+// only view." Max, 2026-07-02: "I do not want/need autopilot for orrery. And I
+// don't want these modes to mix." Every one of Max's 2026-07-11 UAT findings is
+// the same defect — ship machinery (warps, fly-ins, burns, tour arming) leaking
+// into a mode that should only move a viewpoint. This layer answers, per seam,
+// that no ORRERY input or timer may produce ship flight, while every HELM
+// resolution byte-matches today's routing (SEAM-MAP-2026-07-15.md). Pure so each
+// gate is unit-testable without three.js or the live host, and so the live call
+// sites read ONE regime answer instead of each re-deriving "may this fly?".
+// ---------------------------------------------------------------------------
+
+// a. Tab / number-key body cycling (seam map §4). Max, 2026-07-11 UAT holistic:
+// "nothing flies in ORRERY; things only view" — success criterion "no
+// Tab/number-key flying." Today the keydown handler (main.js §4) has two live
+// branches: the autopilot-active branch (~10020-10047, HELM tour) → autoNav
+// .advance (tour-advance), and the normal-mode branch (~10050-10086) → focus
+// Planet(i>=0) which FLIES (~6823, bypassed=true → scControls.flyTo). In ORRERY
+// both must collapse to a VIEW-ONLY select (cycle _selectedTarget / scControls
+// .selectTarget — eases the orbit pivot only, never flyTo). The action strings
+// are deliberately non-flight-shaped so a caller can't misread 'view-select' as
+// motion. Any non-HELM regime (garbage/missing) → the safe view-only default.
+//   - regime 'orrery' (any tourActive) → 'view-select'
+//   - regime 'helm', tour active       → 'tour-advance' (today's autopilot branch)
+//   - regime 'helm', no tour           → 'focus-fly'    (today's focusPlanet fly)
+export function bodyCycleAction({ regime, tourActive } = {}) {
+  if (regime !== 'helm') return { action: 'view-select' };
+  return tourActive ? { action: 'tour-advance' } : { action: 'focus-fly' };
+}
+
+// b. BURN commit-ACTION availability (seam map §5). Max, success criteria: "No
+// 'burn for' workflow in ORRERY at all — BURN hidden entirely, no silent swap
+// to HELM" (his pick over a crossover button); 2026-07-11 UAT: "I still have the
+// 'burn for' workflow." This gates the two burn-ACTION seams only — "may a
+// commit-burn ACTION proceed?" — namely the Space commit `commitSelection`→
+// `commitBurn` (~6712) and the nav-computer burn branch in `dispatchNavAction`
+// (~2865-2883):
+//   - HELM  → true.  HELM commits a player-directed ASSIST burn on scPilot,
+//     exactly as today (commitBurn's `commitBurnSwapsToHelm` gate returns false
+//     in HELM, so no swap — it just flies the ASSIST leg). This reducer does not
+//     change HELM burn behavior.
+//   - ORRERY → false. Refusing the ACTION here makes commitBurnSwapsToHelm's
+//     ORRERY-swap cell (flightModes.js:185) UNREACHABLE — so THAT reducer stays
+//     byte-identical while its ORRERY path can never fire.
+// SCOPE: this is the ACTION gate ONLY. It deliberately does NOT gate the BURN
+// BUTTON's visibility — that is a SEPARATE concern, `burnButtonRegimeVisible`
+// (below). The two must stay split because their HELM answers DIFFER: the burn
+// ACTION is available in HELM (true), but the BURN BUTTON is already HIDDEN in
+// HELM today (main.js:6736 folds `_scManual` into `burning`). Wiring the button
+// to THIS true-in-HELM value would newly SHOW a BURN button in HELM on idle
+// selection — a regression against the "HELM behavior unchanged" guardrail /
+// AC4's "HELM still shows BURN exactly as today" (= hidden). Any non-HELM regime
+// (garbage/missing) → unavailable (safe: no ship machinery).
+export function burnWorkflowAvailable({ regime } = {}) {
+  return regime === 'helm';
+}
+
+// b2. BURN BUTTON regime visibility (seam map §5, the third burn call site,
+// split out of burnWorkflowAvailable per orrery-coherence review round 1). The
+// every-frame `_updateCommitBurnButton` (main.js:6736-6738) computes
+// `visible = !!_selectedTarget && !burning`, where today `burning` folds in
+// `_scManual` — so the BURN button is ALREADY hidden in HELM and only ever
+// rendered in ORRERY (its legacy "select a body → jump to it → HELM" affordance,
+// the commitBurnSwapsToHelm path). AC4 removes that affordance: in ORRERY "the
+// button never renders for a selected body," and "HELM still shows BURN exactly
+// as today" (= hidden, since main.js:6736 suppresses it under `_scManual`). So
+// AFTER AC4 no regime renders the button — HELM was already hidden, ORRERY
+// becomes hidden. This reducer pins that regime verdict (false = hidden by
+// regime) so Increment-2 can REPLACE the bare `_scManual` suppressor in `burning`
+// with `!burnButtonRegimeVisible(regime)`: it returns false in HELM (matching
+// today's `_scManual` hide) AND false in ORRERY (AC4's new hide), so the wiring
+// can never make HELM render a BURN button it never showed. The finer per-frame
+// flags (flythrough / warpEffect / warpTarget.turning / scPilot) stay inline in
+// main.js and are unchanged. Constant-false over regime is DELIBERATE — AC4
+// collapses the ORRERY-vs-HELM difference the button used to carry, retiring the
+// affordance in both regimes — and is in this file's decision-pinning idiom (cf.
+// `playerBurnMode`, which likewise pins a decision as code, not behavior). The
+// test pins HELM = hidden so the wiring can't regress the "HELM unchanged"
+// guardrail. Any regime (garbage/missing included) → false (hidden).
+export function burnButtonRegimeVisible({ regime } = {}) {
+  // regime is accepted for call-site uniformity with its sibling burn gates and
+  // to document that the verdict is intentionally regime-independent: no regime
+  // renders the button after AC4.
+  void regime;
+  return false;
+}
+
+// c. NavComputer AUTOPILOT toggle (seam map §6). Max, 2026-07-02: "I do not
+// want/need autopilot for orrery" — success criterion "no NavComputer AUTOPILOT
+// arming a tour from ORRERY." The canvas-drawn AUTOPILOT button's callback
+// (main.js ~2794-2799) is wired UNGATED as `enable ? startFlythrough() :
+// stopFlythrough()`; in ORRERY startFlythrough still arms the tour and FLIES. In
+// ORRERY the toggle is inert BOTH directions (there is no tour to start or stop
+// there). HELM keeps start/stop as today. (Lane C's DOM search overlay is a
+// distinct surface — only this callback consults the gate.) Garbage/missing
+// regime → inert (safe: never arms a tour).
+//   - regime 'orrery'          → 'inert'  (both enable=true and enable=false)
+//   - regime 'helm', enable    → 'start'  (startFlythrough)
+//   - regime 'helm', !enable   → 'stop'   (stopFlythrough)
+export function navAutopilotToggleAction({ regime, enable } = {}) {
+  if (regime !== 'helm') return { action: 'inert' };
+  return enable ? { action: 'start' } : { action: 'stop' };
+}
+
+// d. Auto-warp timer gate (seam map §3). Success criterion: "Nothing in ORRERY
+// ever flies the ship: no auto-warp timers." Three ungated warp sites consult
+// this one predicate: the title-end (~3:16) `autoSelectWarpTarget()`+`beginWarp
+// Turn()` (main.js ~2554), the deep-sky/nebula-linger (15s) warp-away
+// (~8697-8717), and the mobile double-tap warp (touchend ~10772). In ORRERY none
+// may fire — "ORRERY idles indefinitely" (the ratified 'ORRERY idles forever'
+// ruling, now extended to the warp timers). HELM fires as today. Any non-HELM
+// regime (garbage/missing) → no warp (safe default).
+export function autoWarpTimerFires({ regime } = {}) {
+  return regime === 'helm';
+}
+
+// e. System-entry resolution (AC2 substrate, seam map §2 — consumed by
+// Increment 2). Max, 2026-07-11 UAT: "when I warp into a system in orrery,
+// there's the whole shaking cam and unskippable auto fly-in towards the system
+// star"; success criterion: entering a system from ORRERY is "an instant framed
+// cut — the whole system framed in view, no cinematic, no shake, no fly-in"
+// (his pick over glide/skippable-cinematic). HELM keeps today's cinematic:
+// `commitSelection`→portal preview→`warpEffect.start` (~6652-6710), then reveal's
+// pilot fly-in + `shipChoreographer.beginTour({fromWarp:true})` shake
+// (~6347-6371). ORRERY must instead take the instant-spawn path `spawnSystem
+// ({forWarp:false})` (~4227) + `cameraController.viewSystem(systemRadius)`
+// framing — bypassing warpEffect entirely (not merely skipping the fly-in), with
+// the pilot never leaving idle. Returns a descriptor pinning each sub-decision
+// so Increment 2 wires them without re-guessing intent. Any non-HELM regime
+// (garbage/missing) → instant-cut (safe: never a cinematic/fly-in).
+//   - regime 'helm'   → { style:'warp-cinematic', warpEffect,cameraShake,flyIn:true, pilotIdle:false }
+//   - regime 'orrery' → { style:'instant-cut',    warpEffect,cameraShake,flyIn:false, pilotIdle:true }
+export function systemEntryStyle({ regime } = {}) {
+  if (regime === 'helm') {
+    return { style: 'warp-cinematic', warpEffect: true, cameraShake: true, flyIn: true, pilotIdle: false };
+  }
+  return { style: 'instant-cut', warpEffect: false, cameraShake: false, flyIn: false, pilotIdle: true };
+}
+
+// f. Tour-complete re-arm gate (AC7 pure half, seam map §8). intent.md non-goal:
+// "The screensaver's onTourComplete re-arm loop is CORRECT behavior while
+// hands-off in HELM (it IS the screensaver); this workstream only pins that it
+// never runs in ORRERY and stops when the player takes the stick." The
+// `autoNav.onTourComplete` handler (main.js ~2427-2468) re-warps onward + arms
+// the next tour; today it's ungated (correct-by-construction in ORRERY, but not
+// pinned). Re-arm fires IFF regime === 'helm' AND hands-off (handsOn === false).
+// STRICT `=== false`: a missing/garbage handsOn under HELM must NOT be read as
+// hands-off (only an explicit hands-off state arms the loop), so garbage/missing
+// anything → no re-arm. ORRERY never; HELM hands-on never. F-takeover / Z-stop
+// (main.js ~9951-9964) break the loop live by ending the tour; this pins the
+// regime+hand-state boundary so lane-C's 18h-loop observation stays correct-by-
+// design in HELM and impossible in ORRERY.
+export function tourRearmAllowed({ regime, handsOn } = {}) {
+  return regime === 'helm' && handsOn === false;
+}
