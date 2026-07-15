@@ -223,4 +223,48 @@ content any time; no build. Standing resolution — Max can redirect.
 
 ---
 
+## Finding #3 — AC9 RE-RUN (2026-07-15, fix WS live at f6b3eff): far-companion systems read as adjacent duplicate binaries
+
+**Max's observation (verbatim):** "Rigil Kentaurus A&B are right up next to Proxima Centauri
+A&B... looks like 3 stars right next to each other in the prism view and then each is a binary
+system in the system view. I feel like we keep running into the same issue..."
+
+**Mechanism (live-verified in his window, same session):** the DATA layer is coherent — both
+markers carry the same seed 1816942132, both browsed previews resolve to the authored Alpha
+Centauri (knownName set, preview ≡ arrival exact, per the fix WS) — but THREE presentation gaps
+make one system read as two:
+1. **SYSTEM view titles by the clicked marker's name** (`_systemStar.name`): browsing Proxima
+   renders the α Cen A+B pair under the title "Proxima Centauri" → reads as "Proxima Centauri
+   A&B", a second binary with the wrong star types (G+K under an M dwarf's name) and 0 planets
+   (Proxima's b/d ride the invisible far-companion payload).
+2. **The SYSTEM view never renders `farCompanions` at all** (zero references in NavComputer) —
+   the triple is never visible AS a triple anywhere: Rigil's view shows only A+B; Proxima is
+   invisible in it.
+3. **The prism has no co-membership cue** between a far-companion marker and its primary — two
+   markers 0.055 pc apart (2 dots + 1 dot) with nothing saying "one system".
+
+**Why it slipped the fix contract:** AC4 (preview ≡ arrival) and AC8 (per-marker dot honesty,
+incl. the ratified "far companions with resolvable separations keep their own dot") both HOLD.
+No AC ever said "a far-companion entry must present as a member of its system, not as a system
+under its own name." The recurring class Max is naming: each pass makes one LAYER honest
+(naming → seeds/data → per-marker glyphs) while the CROSS-VIEW grammar — "these views all
+describe the same one system" — has never been anyone's acceptance criterion.
+
+**Options for Max's ruling (design fork):**
+- **(a) System-identity titling + component annotation (smallest):** known/named systems title
+  the SYSTEM view by the system ("Alpha Centauri"), clicked component annotated ("via Proxima
+  Centauri — far companion"); render `farCompanions` in the SYSTEM view (the triple becomes
+  visible as a triple with Proxima's planets on the far chip). NavComputer-only, inside the
+  ratified seam.
+- **(b) Component-centric preview + arrival (R2's territory, bigger):** browsing/warping a
+  far-companion marker centers ON that component (Proxima = M dwarf + b/d + "far companion of
+  Alpha Centauri" link; arrival drops you at Proxima, not the pair). Touches arrival mechanics
+  (main.js), lane-B-adjacent.
+- **(c) Prism co-membership cue:** tether/bracket between far-companion marker and primary on
+  hover/selection; label suffix ("Proxima Centauri · α Cen C"). Complements (a).
+
+*(Recorded pre-ruling; Max decides scope + whether this blocks his AC9 verdict.)*
+
+---
+
 *(further findings append below as the UAT proceeds)*
