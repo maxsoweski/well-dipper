@@ -1,0 +1,108 @@
+{
+  "workstream": "orrery-coherence-2026-07-15",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "phase": "Sibling A of the post-847ab19 pair (sibling B = autopilot-depart-2026-07-15; Max chose two siblings at scope 2026-07-15). Finishes the ORRERY half of the mode-ownership model: ORRERY is god's-eye player-driven viewing — nothing flies in ORRERY. Ready seams verified 2026-07-15: boot-skip branch (_pendingBootReveal, main.js ~6290) + cameraController.viewSystem framing = the non-cinematic entry; ShipCameraSystem.focusOn (camera/ShipCameraSystem.js:548, currently debug-key-only) = the click-2 primitive; NavComputer AUTOPILOT button (ui/NavComputer.js ~2795) calls startFlythrough ungated; commitBurnSwapsToHelm reducer family in flightModes.js. GUARDRAILS: SC_TUNING + SupercruisePilot/AutoNavigator/tourStandoff byte-identical (pilot motion belongs to sibling B); HELM behavior unchanged (boot screensaver, F/Z, warp cinematic); Esc-cascade first-branch + escCascadeAction pinned invariants stay green; lane C's NavComputer search overlay (DOM input + _searchFocused guard) untouched.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-orrery-no-ship-authority-reducers",
+      "statement": "A pure reducer layer answers, for ORRERY, that no input or timer may produce ship flight: Tab/number-key body cycling, the BURN path, the NavComputer AUTOPILOT action, and the title-end/nebula-linger auto-warp timers all resolve to view-only or inert in ORRERY, while their HELM resolutions are unchanged. Built TDD in flightModes.js alongside the existing reducers.",
+      "verifyVia": {
+        "input": "Headless Vitest on the new/extended pure reducers in src/flight/flightModes.js: every (station=orrery, input/timer) cell vs its (station=helm) twin.",
+        "observable": "All ORRERY cells return view-only/inert routings; all HELM cells byte-match today's routing table; suite green."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2-instant-framed-entry",
+      "statement": "From ORRERY, choosing a star system enters it as an instant framed cut: the whole system framed in view, no warp cinematic, no camera shake, no auto fly-in, and the pilot never leaves idle. This is the production non-cinematic entry Max asked for ('how am I supposed to get into a system other than by...').",
+      "verifyVia": {
+        "input": "Live drive on :5173 (chrome-devtools :9223): boot ORRERY, select a system from the galaxy context.",
+        "observable": "Next settled frame shows the target system framed (viewSystem-scale vantage); no warpEffect activation, no choreographer shake, PilotPhase stays idle throughout (window._regime()/_lab probes)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC3-no-auto-warps-in-orrery",
+      "statement": "The title-end (~3:16) and nebula-linger (15s) timers never fire a warp while in ORRERY; ORRERY idles indefinitely (the already-ratified 'ORRERY idles forever' ruling, now covering the warp timers).",
+      "verifyVia": {
+        "input": "Headless where the timer chain is pure; live fallback: boot ORRERY and let title-end/linger windows elapse (timers accelerated via probe where available).",
+        "observable": "No warp fires; station remains ORRERY; camera vantage unchanged by any timer."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC4-burn-hidden-no-silent-swap",
+      "statement": "In ORRERY there is no BURN FOR workflow at all: the button never renders for a selected body, and no code path silently swaps the station to HELM. Station changes happen only by the explicit station switch. (Max's pick: hide entirely, no crossover button.)",
+      "verifyVia": {
+        "input": "Live drive: boot ORRERY, select bodies incl. SHIP-target and planet targets; attempt the old burn/commit flows.",
+        "observable": "No BURN button in the DOM in ORRERY; station stays ORRERY across all selection flows; HELM still shows BURN exactly as today."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC5-click-click-view-glide",
+      "statement": "Click 1 on a body selects it (existing behavior); click 2 on the same selected body smoothly glides the VIEW over to frame that body (ShipCameraSystem.focusOn + glide easing). The camera is never welded to the ship; it works on bodies across the system. Max: 'click 1 selects, click 2 quickly moves us over to that body' — glide feel his pick.",
+      "verifyVia": {
+        "input": "Live drive: boot ORRERY, click a body once, then again; repeat on a second body.",
+        "observable": "First click selects only (vantage unchanged); second click animates the vantage to frame the body over a short ease; camera tracking state is view-focused, not ship-welded."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC6-midboot-nav-selection-wins",
+      "statement": "A nav-computer selection dispatched during the boot warp wins: the player arrives at the SELECTED system, not the boot tour's own warp target (the coordinator-flagged collision from lane C's live drives — player intent beats autopilot).",
+      "verifyVia": {
+        "input": "Live drive: boot HELM, open nav during the boot warp, select a different system before the boot warp completes.",
+        "observable": "[WARP] log + arrival system match the player's selection; the in-flight boot tour warp is cancelled or redirected, never completes to its own target."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7-screensaver-rearm-bounds",
+      "statement": "The tour-complete re-arm loop (warp onward + new tour) continues only while hands-off in HELM — that IS the screensaver; it never arms in ORRERY, and taking the stick (F) or Z-stop ends the loop. Pins the boundary so lane-C's 18h-loop observation stays correct-by-design in HELM and impossible in ORRERY.",
+      "verifyVia": {
+        "input": "Headless reducer cells where pure (idleFiresTour family) + live spot-check: let a tour complete hands-off in HELM; then same in ORRERY; then F mid-loop.",
+        "observable": "HELM hands-off: re-arm fires. ORRERY: never. After F: no further re-arm until Z."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC8-orrery-coheres-uat",
+      "statement": "ORRERY works as a cohesive whole from Max's view: he can get into systems without the cinematic, browse and click-click around the system, and nothing ever flies him anywhere — the mode finally fits 'the whole point of Orrery.'",
+      "verifyVia": {
+        "input": "Max boots ORRERY on :5173/well-dipper/ and explores freely: enter a system, select bodies, click-2 glide between them, sit idle, try the old burn/tab habits.",
+        "observable": "Max's holistic acceptance that ORRERY is player-driven contemplation with zero ship machinery leaking in."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "mode-ownership regime reducers (src/flight/flightModes.js: bootModeAction, idleFiresTour, commitBurnSwapsToHelm family) — shipped 847ab19",
+      "boot-skip branch (_pendingBootReveal, main.js ~6290) + cameraController.viewSystem — the ready non-cinematic arrival",
+      "ShipCameraSystem.focusOn (camera/ShipCameraSystem.js:548) — the ready click-2 view-move primitive",
+      "NavComputer AUTOPILOT button (ui/NavComputer.js ~2795 -> startFlythrough) — the ungated seam AC1 closes",
+      "title-end / nebula-linger auto-warp timers (main.js warp chain)"
+    ],
+    "outputs": [
+      "ORRERY as a pure player-driven viewing mode (the ratified 'nothing flies in ORRERY' rule) — the register lane D's nav/deep-sky rendering work inherits",
+      "Production non-cinematic system entry — first non-warp arrival path in the game",
+      "Click-2 view-glide semantics available as an ORRERY-native navigation idiom"
+    ],
+    "mustStayWorking": [
+      "HELM boot screensaver tour + F/Z semantics + warp cinematic in HELM (mode-ownership AC12, Max-UAT'd 2026-07-11)",
+      "Esc-cascade first-branch + flightModes.escCascadeAction pinned invariants (lane B's two NavComputer invariants)",
+      "Lane C NavComputer search overlay (DOM input, _searchFocused capture guard, search-hit warp) and catalog-true star positions",
+      "SC_TUNING + SupercruisePilot/AutoNavigator/tourStandoff byte-identical (sibling B owns pilot motion)",
+      "Full flight+auto suite (497/497 at 847ab19) + build green"
+    ]
+  }
+}
