@@ -47,7 +47,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed, bodyCycleAction, burnWorkflowAvailable, burnButtonRegimeVisible, navAutopilotToggleAction, autoWarpTimerFires, systemEntryStyle } from './flight/flightModes.js';
 import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
 import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR, firstBlockingObstacle, planLegObstacle, obstacleKeepOutRadius } from './flight/tourStandoff.js';
 import { createFreeLook } from './flight/freeLook.js';
@@ -2550,7 +2550,17 @@ function startIntroSequence() {
               dismissTitleScreen();
               // Always select a real hash grid star before warping — but skip
               // the auto-warp in portal-lab diagnostic mode (player drives).
-              if (!_portalLabMode) {
+              // orrery-coherence-2026-07-15 W3 (autoWarpTimerFires, seam map §3):
+              // the title-end (boot) auto-warp fires only in HELM. The regime here
+              // is _pendingBootMode, NOT _scManual: at the title-end the boot pick
+              // has NOT been consumed yet (warpRevealSystem enters the HELM regime
+              // ~6s later, at warp reveal), so _scManual is still false even for a
+              // HELM boot — reading _scManual would wrongly gate OFF the HELM boot
+              // tour. In ORRERY the timer never fires ("ORRERY idles indefinitely",
+              // AC3); dismissTitleScreen above still ran, so the player lands in the
+              // god's-eye view and enters a system via W2's instant-cut. HELM boot
+              // is byte-unchanged (it always fired before, and HELM still fires).
+              if (!_portalLabMode && autoWarpTimerFires({ regime: bootModeAction(_pendingBootMode).mode })) {
                 setTimeout(() => { autoSelectWarpTarget(); beginWarpTurn(); }, 1500);
               }
             }
@@ -2791,9 +2801,19 @@ function _initNavComputer() {
   _navComputer.setDrillSoundCallback((levelIdx) => soundEngine.play(`navDrill${levelIdx}`));
   _navComputer.setSoundCallback((name) => soundEngine.play(name));
 
-  // Autopilot toggle from nav computer
+  // Autopilot toggle from nav computer.
+  // orrery-coherence-2026-07-15 W5 (navAutopilotToggleAction, seam map §6): the
+  // AUTOPILOT button arms a tour only in HELM. In ORRERY the toggle is INERT both
+  // directions — "I do not want/need autopilot for orrery" (Max, 2026-07-02).
+  // HAZARD F3: on the inert path we must NOT call setAutopilotState(true), or the
+  // button paints ON with nothing flying. Nothing flies in ORRERY; things only view.
   _navComputer.setOnAutopilotToggle((enable) => {
-    if (enable) startFlythrough();
+    const act = navAutopilotToggleAction({ regime: _scManual ? 'helm' : 'orrery', enable }).action;
+    if (act === 'inert') {
+      console.log('[NAV] AUTOPILOT inert in ORRERY — nothing flies in ORRERY (navAutopilotToggleAction)');
+      return;
+    }
+    if (act === 'start') startFlythrough();
     else stopFlythrough();
     _navComputer.setAutopilotState(enable);
   });
@@ -2863,6 +2883,13 @@ function dispatchNavAction(action) {
   console.log(`[NAV DISPATCH] type=${action.type}, target=${action.target}, star=${action.star?.name} seed=${action.star?.seed}`);
 
   if (action.type === 'burn') {
+    // orrery-coherence-2026-07-15 W4b (burnWorkflowAvailable, seam map §5): the
+    // nav-computer burn ACTION is available only in HELM. In ORRERY it is inert —
+    // nothing flies in ORRERY; a nav 'burn' resolves to view-only elsewhere.
+    if (!burnWorkflowAvailable({ regime: _scManual ? 'helm' : 'orrery' })) {
+      console.log('[NAV] burn inert in ORRERY — nothing flies in ORRERY (burnWorkflowAvailable)');
+      return;
+    }
     // Stop autopilot so the travelComplete handler uses the manual path
     // (otherwise it orbits autoNav's current stop, not the burn target)
     if (autoNav.isActive) {
@@ -2886,12 +2913,21 @@ function dispatchNavAction(action) {
     if (flythrough.active) flythrough.stop();
     if (autoNav.isActive) autoNav.stop();
     _manualBurnOrbiting = false;
-    // Inter-system warp
+    // Inter-system warp. _setWarpTargetFromNavStar sets the SAME warpTarget
+    // (navStarData) both the cinematic and the instant-cut resolve from.
     _setWarpTargetFromNavStar({
       worldX: action.star.wx, worldY: action.star.wy, worldZ: action.star.wz,
       seed: action.star.seed, name: action.star.name, type: action.star.spectral,
     });
-    setTimeout(() => beginWarpTurn(), 500);
+    // orrery-coherence-2026-07-15 W2 (systemEntryStyle, seam map §2): HELM →
+    // 'warp-cinematic', today's beginWarpTurn portal/warpEffect path. ORRERY →
+    // 'instant-cut': enter the selected system as an instant framed cut (no
+    // cinematic, no shake, no fly-in), identity preserved via the warpTarget above.
+    if (systemEntryStyle({ regime: _scManual ? 'helm' : 'orrery' }).style === 'instant-cut') {
+      _enterSystemInstantOrrery();
+    } else {
+      setTimeout(() => beginWarpTurn(), 500);
+    }
   }
 }
 
@@ -3433,20 +3469,17 @@ const _galleryOrigin = new THREE.Vector3(0, 0, 0); // parent position for galler
 // By the time we need to create GPU resources (hyper start), data is ready.
 // Also clean up the old system here so GC pressure happens during FOLD
 // (lots of visual activity to mask any hitch), not during ENTER.
-warpEffect.onPrepareSystem = () => {
-  // Heavy generation (StarSystemGenerator.generateAsync + skyRenderer
-  // .prepareForPositionAsync) runs inside this IIFE. The promise is stored
-  // on pendingSystemDataPromise; onSwapSystem awaits it before spawnSystem.
-  // Sync setup (sound, music, seed counter) runs immediately before the
-  // first await, so FOLD-start feedback is instantaneous.
-  pendingSystemDataPromise = (async () => {
-  bodyInfo.hide();
-  soundEngine.play('warpCharge');
-  musicManager.stop(0.5);
-
-  // Keep system visible during FOLD — camera flies past objects.
-  // _hideCurrentSystem() is called later when ENTER starts (see animation loop).
-
+// orrery-coherence-2026-07-15 W2 (seam map §2): the destination-resolution +
+// system-generation the warp cinematic runs at FOLD is extracted here so the
+// ORRERY instant-cut entry (_enterSystemInstantOrrery) can resolve the SAME
+// destination with byte-identical identity precedence (Priority 1 navStarData →
+// Priority 2 starIndex → KnownSystems catalog override — "a real star arrives
+// catalog-true, byte-same identity as a warp arrival"), instead of duplicating
+// (and drifting) the logic. HELM is byte-unchanged: onPrepareSystem still calls
+// this, awaited, in the same order; only the warp-charge cues (bodyInfo/sound/
+// music) stay inline in the FOLD wrapper below — they are cinematic feedback, not
+// part of resolving the destination. Sets pendingSystemData + the position globals.
+async function _generateWarpDestinationData() {
   seedCounter++;
   let seed = `system-${seedCounter}`;
   // ── Route based on what was clicked ──
@@ -3604,6 +3637,22 @@ warpEffect.onPrepareSystem = () => {
   await skyRenderer.prepareForPositionAsync(playerGalacticPos);
   const _sfCount = skyRenderer._pendingData?.count ?? 'NO DATA';
   console.log(`Warp: pre-generated "${destType}" (seed "${seed}") during fold | pos=(${playerGalacticPos.x.toFixed(3)},${playerGalacticPos.y.toFixed(3)},${playerGalacticPos.z.toFixed(3)}) | starfield=${_sfCount} stars`);
+}
+
+// Pre-generate next system DATA at fold start (cheap CPU work, ~1-5ms). By the
+// time we need GPU resources (hyper start), data is ready. The FOLD wrapper plays
+// the warp-charge cues (cinematic feedback — instantaneous), then awaits the
+// shared _generateWarpDestinationData (above); the promise is stored on
+// pendingSystemDataPromise, which onSwapSystem awaits before spawnSystem. HELM
+// warp path byte-unchanged (same statements, same order — orrery-coherence W2).
+warpEffect.onPrepareSystem = () => {
+  pendingSystemDataPromise = (async () => {
+    bodyInfo.hide();
+    soundEngine.play('warpCharge');
+    musicManager.stop(0.5);
+    // Keep system visible during FOLD — camera flies past objects.
+    // _hideCurrentSystem() is called later when ENTER starts (see animation loop).
+    await _generateWarpDestinationData();
   })();  // end async IIFE — promise stored on pendingSystemDataPromise
 };
 
@@ -6224,6 +6273,78 @@ function warpSwapSystem() {
   console.log('Warp: system swapped');
 }
 
+// orrery-coherence-2026-07-15 W2 (AC2, seam map §2): frame the whole current
+// system for the god's-eye ORRERY view. Mirrors the ORRERY boot-skip branch in
+// warpRevealSystem (restore the orbit cam at origin, clear focus indices to
+// system-overview) and ADDS the viewSystem framing Max asked for ("the whole
+// system framed in view"). Shared by (a) the generalized ORRERY reveal skip, (b)
+// the boot reveal, and (c) the instant-cut entry. Never touches the pilot;
+// cameraController.bypassed stays FALSE (Toy-Box orbit) — nothing flies.
+function _frameSystemForOrrery() {
+  cameraController.bypassed = false;
+  cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
+  focusIndex = -1;
+  focusMoonIndex = -1;
+  focusStarIndex = -1;
+  // systemRadius mirrors focusPlanet(-1)'s overview distance (outermost planet
+  // orbit, else star*10; deep-sky uses its destination radius). viewSystem frames
+  // at 1.5x that (ShipCameraSystem.viewSystem), so the whole system sits in view.
+  let systemRadius;
+  if (system && system.type && system.type !== 'star-system' && system.destination) {
+    systemRadius = system.destination.data.radius;
+  } else if (system && system.planets && system.planets.length > 0) {
+    systemRadius = system.planets[system.planets.length - 1].orbitRadius;
+  } else if (system && system.star) {
+    systemRadius = system.star.data.radius * 10;
+  } else {
+    systemRadius = 200;
+  }
+  cameraController.viewSystem(systemRadius);
+}
+
+// orrery-coherence-2026-07-15 W2 (AC2, seam map §2): the ORRERY production
+// non-cinematic system entry — "an instant framed cut ... no cinematic, no shake,
+// no fly-in," pilot never leaving idle (Max, 2026-07-11 UAT). Every player-intent
+// ORRERY system-entry commit (systemEntryStyle → 'instant-cut') routes here
+// instead of the warp cinematic (portal → warpEffect → reveal fly-in). Resolve
+// the SAME destination the warp would (_generateWarpDestinationData preserves the
+// identity precedence — a real star arrives catalog-true), spawn it via the
+// instant-spawn precedent (spawnSystem forWarp:false, as _debugEnterKnownSystem /
+// window._lab.enterSol do), then frame the whole system. Async generation latency
+// is fine (AC2); the cinematic/shake/fly-in are not. Guarded against re-entry.
+let _orreryEntryInFlight = false;
+async function _enterSystemInstantOrrery() {
+  if (_orreryEntryInFlight) return;
+  if (warpEffect.isActive || warpTarget.turning) return; // a cinematic is mid-flight; don't race it
+  _orreryEntryInFlight = true;
+  try {
+    // Stop any orbit/tour motion so the spawn's opening-shot can't restart a leg,
+    // and drop the pilot defensively (it must stay idle throughout — AC2).
+    if (flythrough.active) flythrough.stop();
+    if (autoNav.isActive) autoNav.stop();
+    scPilot.stop();
+    _manualBurnOrbiting = false;
+    bodyInfo.hide();
+    // Defensive auto-select ONLY when nothing is targeted (the mobile double-tap /
+    // WARP-button case, mirroring beginWarpTurn's own no-target autoselect). The
+    // nav / bg-star-click sites already carry navStarData / direction, so this is a
+    // no-op there and the exact same destination is resolved.
+    if (!warpTarget.direction && !warpTarget.navStarData && warpTarget.starIndex < 0) {
+      autoSelectWarpTarget();
+    }
+    await _generateWarpDestinationData(); // identity-true resolution + generation
+    spawnSystem({ forWarp: false, systemData: pendingSystemData });
+    pendingSystemData = null;
+    pendingSystemDataPromise = null;
+    _frameSystemForOrrery();
+    console.log('[ORRERY] instant framed cut — system entered, nothing flew (systemEntryStyle instant-cut)');
+  } catch (e) {
+    console.error('[ORRERY] instant-cut entry failed:', e);
+  } finally {
+    _orreryEntryInFlight = false;
+  }
+}
+
 /**
  * Warp: reveal the new system and start autopilot.
  * Called when the warp exit phase finishes.
@@ -6322,24 +6443,26 @@ function warpRevealSystem() {
   // Only start autoNav if autopilot was enabled before warp
   if (_autopilotEnabled) autoNav.start();
 
-  // ORRERY BOOT (mode-ownership-2026-07-02, AC7 — adversarial-review finding):
-  // nothing is armed, INCLUDING the arrival fly-in. The fly-in below activates
-  // SupercruisePilot, whose HOLD park never returns to IDLE — scPilot.isActive
-  // would stay true forever, keeping the camera ship-welded (HeadMount) and
-  // starving cameraController.update()'s `!scPilot.isActive && !_scManual`
-  // gate, i.e. a first-person ship parked at the sun with dead orrery controls.
-  // A boot into ORRERY presents the god's-eye immediately instead: orbit camera
-  // re-anchored on the system origin from the warp-exit pose (no snap — the
-  // deep-sky reveal's restore pattern), system-overview focus, player drives.
-  // Mid-session warp-ins (tour loop, manual warp commits) keep the fly-in
-  // exactly as before — this branch fires only on the session's boot reveal.
-  if (_isBootReveal && !_autopilotEnabled) {
-    cameraController.bypassed = false;
-    cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
-    focusIndex = -1;
-    focusMoonIndex = -1;
-    focusStarIndex = -1;
-    console.log('Warp: ORRERY boot — god\'s-eye reveal, nothing armed');
+  // ORRERY REVEAL (mode-ownership-2026-07-02 AC7 origin; GENERALIZED by
+  // orrery-coherence-2026-07-15 W2 task (a)): nothing is armed, INCLUDING the
+  // arrival fly-in. The fly-in below activates SupercruisePilot, whose HOLD park
+  // never returns to IDLE — scPilot.isActive would stay true forever, keeping the
+  // camera ship-welded (HeadMount) and starving cameraController.update()'s
+  // `!scPilot.isActive && !_scManual` gate (a first-person ship parked at the sun
+  // with dead orrery controls). Originally this skip fired ONLY on the boot reveal;
+  // now ANY reveal that lands in ORRERY (regime === 'orrery', i.e. !_scManual)
+  // takes the no-fly god's-eye framing — covering the boot pick AND the
+  // defense-in-depth case where the player swapped to ORRERY mid-cinematic (a HELM
+  // warp completing after an M-swap). Post-W2, ORRERY entries use the instant-cut
+  // path and never reach here, so this is the safety net. task (b): the framing now
+  // also calls viewSystem (via _frameSystemForOrrery) so the boot/any ORRERY reveal
+  // frames the whole system in view. HELM reveal (fly-in below) is byte-unchanged:
+  // _scManual === true skips this branch entirely.
+  if (!_scManual) {
+    _frameSystemForOrrery();
+    console.log(_isBootReveal
+      ? 'Warp: ORRERY boot — god\'s-eye reveal, nothing armed'
+      : 'Warp: reveal landed in ORRERY — god\'s-eye framing, nothing flew');
     _scheduleSystemMusic(20, 35);
     return;
   }
@@ -6658,6 +6781,16 @@ function commitSelection() {
   //   #3 (aligning → warp):     fire warp (cuts short any in-progress alignment)
   // `_portalLabState` survives across warps — onComplete resets it to 'idle'.
   if (warpTarget.direction) {
+    // orrery-coherence-2026-07-15 W2 (systemEntryStyle, seam map §2): in ORRERY
+    // the 3-stage portal/warp cinematic is skipped ENTIRELY — 'instant-cut' enters
+    // the selected system as an instant framed cut. warpTarget (direction +
+    // navStarData/starIndex) already carries the SAME destination the warp would
+    // resolve, so the instant-cut path preserves that identity. HELM falls through
+    // to today's portal preview → warpEffect path, byte-unchanged.
+    if (systemEntryStyle({ regime: _scManual ? 'helm' : 'orrery' }).style === 'instant-cut') {
+      _enterSystemInstantOrrery();
+      return true;
+    }
     if (_portalLabState === 'idle') {
       // Stop autopilot AND bypass the orbit controller so camera stays put
       // during preview + aligning. Two effects to stop:
@@ -6710,7 +6843,17 @@ function commitSelection() {
   }
 
   if (_selectedTarget) {
-    commitBurn();
+    // orrery-coherence-2026-07-15 W4b (burnWorkflowAvailable, seam map §5): gate
+    // the SELECTED-BODY burn leg only (the warpTarget leg above is W2's business).
+    // HELM commits the player-directed ASSIST burn exactly as today. In ORRERY the
+    // burn leg is INERT — no commitBurn, no commitBurnSwapsToHelm swap; station
+    // stays ORRERY (AC4 "no code path silently swaps the station to HELM"). Space
+    // is still consumed (return true) so nothing flies and nothing falls through.
+    if (burnWorkflowAvailable({ regime: _scManual ? 'helm' : 'orrery' })) {
+      commitBurn();
+    } else {
+      console.log('[BURN] inert in ORRERY — nothing flies in ORRERY (burnWorkflowAvailable)');
+    }
     return true;
   }
   // (No reachable `beginWarpTurn()` path here anymore — the 3-stage preview
@@ -6733,7 +6876,13 @@ function _updateCommitBurnButton() {
   // supercruise-freelook-2026-06-10 (AC5c): suppress the BURN button while a
   // supercruise leg is flying (autopilot pilot OR manual stick), the same way
   // the legacy autopilotMotion.isActive guard suppressed it during V1 legs.
-  const burning = flythrough.active || warpEffect.isActive || warpTarget.turning || scPilot.isActive || _scManual;
+  // orrery-coherence-2026-07-15 W4a (burnButtonRegimeVisible, seam map §5): the
+  // bare `_scManual` suppressor is replaced by `!burnButtonRegimeVisible(regime)`.
+  // burnButtonRegimeVisible is constant-false over regime (AC4 retires the BURN
+  // FOR affordance in BOTH regimes), so `!false === true` keeps HELM hidden
+  // exactly as today (`_scManual` did the same) AND newly hides ORRERY (AC4: "the
+  // button never renders for a selected body"). The finer per-frame flags stay inline.
+  const burning = flythrough.active || warpEffect.isActive || warpTarget.turning || scPilot.isActive || !burnButtonRegimeVisible({ regime: _scManual ? 'helm' : 'orrery' });
   const visible = !!_selectedTarget && !burning;
   btn.style.display = visible ? 'block' : 'none';
   if (visible) {
@@ -6742,19 +6891,34 @@ function _updateCommitBurnButton() {
   }
 }
 
-// Wire the commit burn button's click handler once
+// Wire the commit burn button's click handler once.
+// orrery-coherence-2026-07-15 W4c (burnWorkflowAvailable, seam map §5 —
+// defense-in-depth for the BURN button's own click/touchend handlers). Today
+// these fire only in HELM because the every-frame _updateCommitBurnButton hides
+// the button in every regime (burnButtonRegimeVisible is constant-false → the
+// button is display:none, unclickable). This gate closes the latent bypass so
+// that even if button-visibility logic later changes, a BURN click can never run
+// commitBurn (→ commitBurnSwapsToHelm swap) in ORRERY. HELM byte-unchanged:
+// burnWorkflowAvailable is true in HELM, so commitBurn runs exactly as today.
 {
   const btn = document.getElementById('commit-burn-btn');
   if (btn) {
+    const _commitBurnFromButton = () => {
+      if (burnWorkflowAvailable({ regime: _scManual ? 'helm' : 'orrery' })) {
+        commitBurn();
+      } else {
+        console.log('[BURN] button inert in ORRERY — nothing flies in ORRERY (burnWorkflowAvailable)');
+      }
+    };
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      commitBurn();
+      _commitBurnFromButton();
     });
     btn.addEventListener('touchend', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      commitBurn();
+      _commitBurnFromButton();
     });
   }
 }
@@ -8695,24 +8859,33 @@ function simStep(deltaTime) {
     // Paused during title screen (title has its own 30s dismiss timer).
     // Paused in portal-lab diagnostic mode (no auto-warps; player drives).
     if (_deepSkyLingerTimer >= 0 && !warpEffect.isActive && !warpTarget.turning && !splashActive && !titleScreenActive && !_portalLabMode) {
-      _deepSkyLingerTimer -= deltaTime;
-      if (_deepSkyLingerTimer <= 0) {
-        _deepSkyLingerTimer = -1;
-        // For distant deep sky, try picking a particle from the galaxy/cluster first
-        let picked = false;
-        if (system && system.destination && system.destination.getRandomParticle) {
-          const dir = system.destination.getRandomParticle(camera);
-          if (dir) {
-            warpTarget.direction = dir;
-            warpTarget.blinkTimer = 0;
-            warpTarget.blinkOn = true;
-            picked = true;
+      // orrery-coherence-2026-07-15 W3 (autoWarpTimerFires, seam map §3): the
+      // nebula/deep-sky linger auto-warp fires only in HELM. In ORRERY it never
+      // fires and never busy-loops re-arming — clear the timer once so ORRERY idles
+      // indefinitely (AC3 "ORRERY idles indefinitely"). HELM counts down + warps
+      // away exactly as today. Mid-session, so _scManual is the honest regime bit.
+      if (!autoWarpTimerFires({ regime: _scManual ? 'helm' : 'orrery' })) {
+        _deepSkyLingerTimer = -1; // ORRERY: stop counting; no warp, no re-arm loop
+      } else {
+        _deepSkyLingerTimer -= deltaTime;
+        if (_deepSkyLingerTimer <= 0) {
+          _deepSkyLingerTimer = -1;
+          // For distant deep sky, try picking a particle from the galaxy/cluster first
+          let picked = false;
+          if (system && system.destination && system.destination.getRandomParticle) {
+            const dir = system.destination.getRandomParticle(camera);
+            if (dir) {
+              warpTarget.direction = dir;
+              warpTarget.blinkTimer = 0;
+              warpTarget.blinkOn = true;
+              picked = true;
+            }
           }
+          if (!picked) {
+            autoSelectWarpTarget();
+          }
+          setTimeout(() => beginWarpTurn(), 500);
         }
-        if (!picked) {
-          autoSelectWarpTarget();
-        }
-        setTimeout(() => beginWarpTurn(), 500);
       }
     }
 
@@ -10069,7 +10242,21 @@ window.addEventListener('keydown', (e) => {
     if (!system) return;
     const n = system.planets.length;
     if (n === 0) return; // no planets to cycle through
-    if (e.shiftKey) {
+    // orrery-coherence-2026-07-15 W1 (bodyCycleAction, seam map §4): Tab cycles a
+    // body. In HELM here (the autopilot/tour branch already returned above) →
+    // 'focus-fly', today's focusPlanet fly-to, UNCHANGED. In ORRERY → 'view-select':
+    // cycle the SELECTION only, with NO flight — exactly what a click-1 does
+    // (scControls.selectTarget eases the orbit pivot; cameraController.bypassed stays
+    // false; never flyTo). HAZARD F1: do NOT route this to focusPlanet(i>=0), which
+    // FLIES (bypassed=true → flyTo). Nothing flies in ORRERY; things only view.
+    const cycleAct = bodyCycleAction({ regime: _scManual ? 'helm' : 'orrery', tourActive: autoNav.isActive }).action;
+    if (cycleAct === 'view-select') {
+      // Cursor = the current planet selection (else -1, so a forward Tab starts at
+      // planet 0 and Shift+Tab wraps to the last — mirrors the focusIndex cursor).
+      const cur = (_selectedTarget && _selectedTarget.kind === 'planet') ? _selectedTarget.planetIndex : -1;
+      const nextIdx = e.shiftKey ? (cur <= 0 ? n - 1 : cur - 1) : ((cur + 1) % n);
+      scControls.selectTarget(_makeTarget('planet', { planetIndex: nextIdx }));
+    } else if (e.shiftKey) {
       focusPlanet(focusIndex <= 0 ? n - 1 : focusIndex - 1);
     } else {
       focusPlanet((focusIndex + 1) % n);
@@ -10081,7 +10268,15 @@ window.addEventListener('keydown', (e) => {
   } else if (e.key >= '1' && e.key <= '9') {
     const idx = parseInt(e.key) - 1;
     if (system && idx < system.planets.length) {
-      focusPlanet(idx);
+      // orrery-coherence-2026-07-15 W1 (bodyCycleAction, seam map §4): number keys
+      // select the indexed planet. HELM → 'focus-fly' (focusPlanet, UNCHANGED).
+      // ORRERY → 'view-select' (click-1 select of that body, NO flight). HAZARD F1:
+      // never focusPlanet(idx) in ORRERY — it FLIES.
+      if (bodyCycleAction({ regime: _scManual ? 'helm' : 'orrery', tourActive: autoNav.isActive }).action === 'view-select') {
+        scControls.selectTarget(_makeTarget('planet', { planetIndex: idx }));
+      } else {
+        focusPlanet(idx);
+      }
     }
   }
 });
@@ -10132,8 +10327,23 @@ function trySelect(clientX, clientY) {
           soundEngine.play('select');
           if (systemMap) systemMap.triggerBlink();
         } else {
-          // Manual mode: smoothly fly to the selected body
-          if (hit.type === 'star') {
+          // orrery-coherence-2026-07-15 W1b (bodyCycleAction, seam map §4 — the
+          // MINIMAP body-click surface, twin of the Tab/number gate the first
+          // wiring pass covered). A manual (no active-pilot tour) minimap body-
+          // click. HELM → today's focusStar/focusPlanet fly-to, byte-UNCHANGED.
+          // ORRERY → 'view-select': select the body only, NO flight — the same
+          // view-only select a click-1 does (scControls.selectTarget eases the
+          // orbit pivot; cameraController.bypassed stays false; never flyTo).
+          // HAZARD F1 mirror: focusStar/focusPlanet FLY (bypassed=true → flyTo),
+          // so they must never run in ORRERY. Nothing flies in ORRERY; things view.
+          if (bodyCycleAction({ regime: _scManual ? 'helm' : 'orrery' }).action === 'view-select') {
+            if (hit.type === 'star') {
+              scControls.selectTarget(_makeTarget('star', { starIndex: hit.starIndex }));
+            } else if (hit.type === 'planet') {
+              scControls.selectTarget(_makeTarget('planet', { planetIndex: hit.planetIndex }));
+            }
+          } else if (hit.type === 'star') {
+            // Manual mode (HELM): smoothly fly to the selected body
             focusStar(hit.starIndex);
           } else if (hit.type === 'planet') {
             focusPlanet(hit.planetIndex);
@@ -10768,8 +10978,17 @@ canvas.addEventListener('touchend', (e) => {
 
   const now = Date.now();
   if (now - _lastTapTime < 350) {
-    // Double tap: warp to new system
-    beginWarpTurn();
+    // Double tap: warp to new system. orrery-coherence-2026-07-15 W2 (player
+    // intent, NOT a timer — systemEntryStyle, seam map §2): mobile is ORRERY by
+    // default → 'instant-cut' (instant framed cut, no cinematic); the
+    // _enterSystemInstantOrrery helper auto-selects a target when none is set,
+    // mirroring beginWarpTurn's own no-target autoselect. Mobile-HELM tour →
+    // 'warp-cinematic', today's beginWarpTurn.
+    if (systemEntryStyle({ regime: _scManual ? 'helm' : 'orrery' }).style === 'instant-cut') {
+      _enterSystemInstantOrrery();
+    } else {
+      beginWarpTurn();
+    }
     _lastTapTime = 0;
   } else {
     _lastTapTime = now;
@@ -10823,15 +11042,38 @@ if (mobileControls) {
     const action = btn.dataset.action;
     if (action === 'warp') {
       autoSelectWarpTarget();
-      beginWarpTurn();
+      // orrery-coherence-2026-07-15 W2 (systemEntryStyle, seam map §2): the mobile
+      // speed-dial WARP button is player-intent system entry, same class as the
+      // double-tap above — gate it identically so mobile-ORRERY gets the instant
+      // framed cut (no cinematic) rather than the warp cinematic. (Not in the
+      // seam map's enumerated list, but "every player-intent ORRERY system-entry
+      // commit" per W2; leaving it ungated would be an AC2 hole on mobile.)
+      // Mobile-HELM tour keeps today's beginWarpTurn.
+      if (systemEntryStyle({ regime: _scManual ? 'helm' : 'orrery' }).style === 'instant-cut') {
+        _enterSystemInstantOrrery();
+      } else {
+        beginWarpTurn();
+      }
     } else if (action === 'nav') {
       if (_navComputerOpen) closeNavComputer();
       else openNavComputer();
-    } else if (action === 'autonav-toggle') {
-      if (autoNav.isActive) {
+    } else if (action === 'autonav-toggle' || action === 'autonav') {
+      // orrery-coherence-2026-07-15 W5b (navAutopilotToggleAction, seam map §6 —
+      // the MOBILE AUTOPILOT twins of the NavComputer callback: dock
+      // 'autonav-toggle' + speed-dial 'autonav', identical behavior, gated as
+      // one). The AUTOPILOT button arms a tour only in HELM; startFlythrough
+      // arms the tour and FLIES, forbidden in ORRERY ("I do not want/need
+      // autopilot for orrery", Max 2026-07-02). In ORRERY the toggle is INERT
+      // both directions. HAZARD F3 mirror: on the inert path do NOT paint the
+      // button active with nothing flying. HELM byte-unchanged: enable maps to
+      // start/stop with the exact same side-effects as before.
+      const act = navAutopilotToggleAction({ regime: _scManual ? 'helm' : 'orrery', enable: !autoNav.isActive }).action;
+      if (act === 'inert') {
+        console.log('[NAV] mobile AUTOPILOT inert in ORRERY — nothing flies in ORRERY (navAutopilotToggleAction)');
+      } else if (act === 'stop') {
         stopFlythrough();
         btn.classList.remove('active');
-      } else if (system) {
+      } else if (act === 'start' && system) {
         idleTimer = 0;
         startFlythrough();
         btn.classList.add('active');
@@ -10849,7 +11091,18 @@ if (mobileControls) {
       } else {
         const n = system.planets.length;
         if (n === 0) return;
-        focusPlanet(focusIndex <= 0 ? n - 1 : focusIndex - 1);
+        // orrery-coherence-2026-07-15 W1c (bodyCycleAction, seam map §4 — mobile
+        // 'prev' body button, twin of the desktop Shift+Tab gate). HELM → today's
+        // focusPlanet fly-to, byte-UNCHANGED. ORRERY → 'view-select': cycle the
+        // SELECTION backward only, NO flight (mirror of the keydown W1 cursor:
+        // _selectedTarget planetIndex, else -1). HAZARD F1: focusPlanet(i>=0) FLIES.
+        if (bodyCycleAction({ regime: _scManual ? 'helm' : 'orrery' }).action === 'view-select') {
+          const cur = (_selectedTarget && _selectedTarget.kind === 'planet') ? _selectedTarget.planetIndex : -1;
+          const nextIdx = cur <= 0 ? n - 1 : cur - 1;
+          scControls.selectTarget(_makeTarget('planet', { planetIndex: nextIdx }));
+        } else {
+          focusPlanet(focusIndex <= 0 ? n - 1 : focusIndex - 1);
+        }
       }
     } else if (action === 'next') {
       if (!system) return;
@@ -10863,7 +11116,17 @@ if (mobileControls) {
       } else {
         const n = system.planets.length;
         if (n === 0) return;
-        focusPlanet((focusIndex + 1) % n);
+        // orrery-coherence-2026-07-15 W1c (bodyCycleAction, seam map §4 — mobile
+        // 'next' body button, twin of the desktop Tab gate). HELM → today's
+        // focusPlanet fly-to, byte-UNCHANGED. ORRERY → 'view-select': cycle the
+        // SELECTION forward only, NO flight. HAZARD F1: focusPlanet(i>=0) FLIES.
+        if (bodyCycleAction({ regime: _scManual ? 'helm' : 'orrery' }).action === 'view-select') {
+          const cur = (_selectedTarget && _selectedTarget.kind === 'planet') ? _selectedTarget.planetIndex : -1;
+          const nextIdx = (cur + 1) % n;
+          scControls.selectTarget(_makeTarget('planet', { planetIndex: nextIdx }));
+        } else {
+          focusPlanet((focusIndex + 1) % n);
+        }
       }
     } else if (action === 'orbits') {
       toggleOrbits();
@@ -10871,15 +11134,6 @@ if (mobileControls) {
     } else if (action === 'gravity') {
       toggleGravityWell();
       btn.classList.toggle('active', gravityWellVisible);
-    } else if (action === 'autonav') {
-      if (autoNav.isActive) {
-        stopFlythrough();
-        btn.classList.remove('active');
-      } else if (system) {
-        idleTimer = 0;
-        startFlythrough();
-        btn.classList.add('active');
-      }
     } else if (action === 'gyro') {
       if (cameraController.gyroEnabled) {
         cameraController.disableGyro();
