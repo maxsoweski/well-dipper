@@ -20,6 +20,7 @@ import { GravityWellMap } from './ui/GravityWellMap.js';
 import { ShipCameraSystem, CameraMode } from './camera/ShipCameraSystem.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
+import { resolveArrivalSystemAsync } from './generation/arrivalResolution.js';
 import { PlanetGenerator } from './generation/PlanetGenerator.js';
 import { MoonGenerator } from './generation/MoonGenerator.js';
 import { DestinationPicker } from './generation/DestinationPicker.js';
@@ -3511,7 +3512,6 @@ warpEffect.onPrepareSystem = () => {
     // First, check if the clicked starfield point maps to a specific
     // GalacticMap star. If so, warp directly to THAT star — don't do
     // a second direction-based search that might find a different star.
-    let galaxyContext = null;
     let resolvedStar = null;
 
     // Priority 1: Nav computer selected a specific star — use its exact position + seed
@@ -3540,47 +3540,44 @@ warpEffect.onPrepareSystem = () => {
     if (resolvedStar) {
       playerGalacticPos = { x: resolvedStar.worldX, y: resolvedStar.worldY, z: resolvedStar.worldZ };
       currentGalaxyStar = resolvedStar;
-      galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
-      // Hash grid already determined this star's type — pass it through
-      // so StarSystemGenerator uses it instead of re-rolling from weights
-      if (resolvedStar.type) {
-        galaxyContext.starTypeOverride = resolvedStar.type;
-      }
-      // Use the resolved star's seed for deterministic system generation
+      // Use the resolved star's seed for deterministic system generation.
+      // Context derivation + starTypeOverride now live in the shared arrival
+      // resolution module (FIX-2), fed resolvedStar.type below.
       seed = String(resolvedStar.seed);
       console.log(`[WARP] Resolved to: (${playerGalacticPos.x.toFixed(4)}, ${playerGalacticPos.y.toFixed(4)}, ${playerGalacticPos.z.toFixed(4)}) seed=${resolvedStar.seed}`);
     }
 
-    // Check for known system override. Identity-aware: a nav-picked star
-    // bypasses the positional check (picking a DIFFERENT star near Sol must
-    // not Sol-override it), but a nav entry carrying a known system's own
-    // name ("Sol" via the real-star overlay) IS that system — the nav's
-    // matched hash-grid star can sit up to 2 pc from the registered
-    // position, outside findAt's radius, so the name is joined via a
-    // catalog-derived alias index (KnownSystems.associate — a registry entry
-    // claims every catalog star within MATCH_RADIUS of its position, so a
-    // multi-star system like Alpha Centauri gets both component names as
-    // aliases automatically). A 3 pc positional belt on playerGalacticPos
-    // then rejects a same-named star reached far from the registered
-    // position (duplicate catalog names).
+    // ── Shared arrival resolution (FIX-2) ──
+    // ONE resolution core (arrivalResolution.js) owns context derivation +
+    // starTypeOverride + KnownSystems findByAlias/findAt routing + real-universe
+    // overlay merge + generate + merged display names, so the nav SYSTEM preview
+    // (NavComputer._renderSystem) generates EXACTLY what arrival delivers. The
+    // KnownSystems routing is identity-aware: a nav pick joins by the star's own
+    // name via the catalog-derived alias index (a multi-star system like Alpha
+    // Centauri gets each component name as an alias), gated by a 3 pc belt; a sky
+    // click uses the positional findAt. Engine globals a known-system arrival
+    // realigns (playerGalacticPos, currentGalaxyStar) and the arrival transport
+    // fields (_destType/_warpTargetName, set below) stay HERE — not the module's.
     const hasNavStar = !!warpTarget.navStarData;
-    const knownWarp = hasNavStar
-      ? KnownSystems.findByAlias(warpTarget.name, playerGalacticPos)
-      : KnownSystems.findAt(playerGalacticPos);
+    const _arr = await resolveArrivalSystemAsync({
+      galacticMap,
+      overlay: realStarCatalog?.overlay || null,
+      pos: playerGalacticPos,
+      starType: resolvedStar?.type || null,
+      seed,
+      displayName: warpTarget.name,
+      hasNavStar,
+    });
+    pendingSystemData = _arr.systemData;
+    const knownWarp = _arr.knownWarp;
     console.log(`[WARP] knownSystem check: hasNavStar=${hasNavStar}, knownWarp=${knownWarp?.name || 'none'}`);
     if (knownWarp) {
-      // Arriving at a known system means arriving at ITS registered
-      // position — align the player pos so sky prep, revisit naming, and
-      // the KnownSystems radius all agree (matters when the nav matched a
-      // nearby grid star rather than the exact registry coordinates).
+      // Arriving at a known system means arriving at ITS registered position —
+      // align the player pos so sky prep, revisit naming, and the KnownSystems
+      // radius all agree (matters when the nav matched a nearby grid star rather
+      // than the exact registry coordinates), and realign the "where am I"
+      // globals, same as _debugEnterKnownSystem's realignment (~2464-2472).
       playerGalacticPos = { ...knownWarp.position };
-      pendingSystemData = knownWarp.generate();
-      pendingSystemData._knownSystemNames = knownWarp.names;
-      pendingSystemData._warpTargetName = knownWarp.name;
-      // The "where am I" globals must agree after a known-system arrival —
-      // realign currentGalaxyStar (left pointing at the nav-matched grid
-      // star from the resolvedStar branch above) to the registry position,
-      // same as _debugEnterKnownSystem's realignment (~2464-2472).
       currentGalaxyStar = {
         worldX: knownWarp.position.x,
         worldY: knownWarp.position.y,
@@ -3591,29 +3588,6 @@ warpEffect.onPrepareSystem = () => {
         isReal: true,
       };
       console.log(`[WARP] Known system override: ${knownWarp.name}`);
-    } else {
-      // ── Real-universe overlay merge (AC3/AC4, design D1/D6/D7) ──
-      // Join this real catalog arrival to its ingested contents by NAME
-      // (warpTarget.name); applyToContext bolts the overlay ctx fields onto
-      // galaxyContext (companionSpec / knownPlanets / farCompanions — OMITTED,
-      // never null, when the data supplies nothing, so a zero-data arrival stays
-      // pure procgen) and console.warns if the catalog is not yet loaded (D5).
-      // starTypeOverride was already set from the CATALOG spect above (D6); the
-      // overlay never touches star type.
-      const _overlay = realStarCatalog?.overlay || null;
-      if (_overlay) _overlay.applyToContext(galaxyContext, warpTarget.name, playerGalacticPos);
-      pendingSystemData = await StarSystemGenerator.generateAsync(seed, galaxyContext);
-      // D7 real display names + D6 host spectFull — only when the join supplied
-      // structure or known planets (a merged system, not a bare procgen arrival).
-      const _merge = _overlay && _overlay.ready
-        ? _overlay.resolve(warpTarget.name, playerGalacticPos) : null;
-      if (_merge && (_merge.companionSpec || _merge.knownPlanets)) {
-        pendingSystemData._knownSystemNames =
-          _overlay.deriveMergedNames(warpTarget.name, pendingSystemData, _merge.tableEntry ?? null);
-        if (_merge.host?.spectFull && !pendingSystemData.star.spectFull) {
-          pendingSystemData.star.spectFull = _merge.host.spectFull;
-        }
-      }
     }
   } else {
     // Any other destType that wasn't caught above — should not happen in production.

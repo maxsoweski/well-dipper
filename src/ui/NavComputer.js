@@ -3,6 +3,7 @@ import { resolveKnownObjects } from '../generation/knownObjectSearch.js';
 import { StarSystemGenerator } from '../generation/StarSystemGenerator.js';
 import { HashGridStarfield } from '../generation/HashGridStarfield.js';
 import { realStarSeed } from '../generation/realStarSeed.js';
+import { resolveArrivalSystem } from '../generation/arrivalResolution.js';
 import { GalacticSectors } from '../generation/GalacticSectors.js';
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
 import { NavGalaxyRenderer } from '../rendering/NavGalaxyRenderer.js';
@@ -1585,10 +1586,22 @@ export class NavComputer {
         console.log('[NAV] Using actual system data:', this._systemData.planets?.length, 'planets');
       } else {
         console.log('[NAV] Generating system for', star.name, '...');
-        const galaxyCtx = this._gm.deriveGalaxyContext({ x: star.wx, y: star.wy, z: star.wz });
-        galaxyCtx.starTypeOverride = star.spectral;
         try {
-          this._systemData = StarSystemGenerator.generate(String(star.seed), galaxyCtx);
+          // Shared arrival resolution (FIX-2): the BROWSED-system preview routes
+          // through the SAME core arrival uses — overlay applied, KnownSystems
+          // routed via findByAlias, merged names attached — so the SYSTEM view
+          // previews EXACTLY what warping delivers (kills the overlay-less
+          // divergence). A browsed nav star is nav-picked → hasNavStar:true. Seed
+          // is canonical (FIX-1) and passed as given, never re-derived.
+          this._systemData = resolveArrivalSystem({
+            galacticMap: this._gm,
+            overlay: this._realStarCatalog?.overlay || null,
+            pos: { x: star.wx, y: star.wy, z: star.wz },
+            starType: star.spectral,
+            seed: star.seed,
+            displayName: star.name,
+            hasNavStar: true,
+          }).systemData;
           console.log('[NAV] System generated:', this._systemData.planets?.length, 'planets');
         } catch (e) {
           console.warn('[NAV] System generation failed:', e);
