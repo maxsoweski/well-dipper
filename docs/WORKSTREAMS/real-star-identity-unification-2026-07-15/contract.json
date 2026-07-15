@@ -1,0 +1,151 @@
+{
+  "workstream": "real-star-identity-unification-2026-07-15",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "phase": "SCOPED 2026-07-15 (interview rulings: fabrication reach = pin-by-default; lane-D render half FOLDED IN under a Max-ratified NavComputer seam, Inc-4 precedent; NEW workstream — real-universe-overlay-2026-07-12 stays verified with AC9-FAIL recorded, its AC9 re-runs after this ships to :5176). Plan of record: ../real-universe-overlay-2026-07-12/seed-identity-investigation.md (commit 882d121) — Fix 1 F1 seed unification, Fix 2 shared arrival-resolution module, Fix 3 pin-by-default, Fix 4 lane-C data half (census companion table + dup-row dedup) PLUS folded render half (N-dot glyph + deferred label pass, designed in ac9-uat-findings.md finding #1). Awaiting Max greenlight before build.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-canonical-seed",
+      "statement": "One canonical seed per real star: the F1 position-hash (RealStarCatalog.findVisible / knownObjectSearch.seedFromPos, byte-identical today) becomes ONE shared function that every real-star seed derivation imports — the NavComputer prism-merge matched branch overwrites the retained hash-grid seed with F1(catalog position), the unmatched branch's degenerate x^z XOR is replaced with F1, and debug teleport resolves real stars to F1. No third fork of the formula exists anywhere.",
+      "verifyVia": {
+        "input": "Headless: rewrite src/ui/__tests__/NavComputer.merge.test.js to pin F1 on BOTH merge branches (this test is the loud guard — today it hard-pins the retained-GRID and XOR expectations); new unit tests assert the shared module and the merge/search/catalog sites produce identical seeds for identical catalog positions; grep-level assertion that the F1 formula body exists in exactly one module.",
+        "observable": "Rewritten merge test green with F1 expectations on matched AND unmatched branches; seed parity across RealStarCatalog, knownObjectSearch, prism merge, and teleport for the same star; exactly one implementation of the formula in src/."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC2-path-identity",
+      "statement": "Warping to the same unregistered (non-KnownSystems, un-tabled) real star by search-warp and by prism-click-warp arrives at the identical system — same seed, same contents. The prism binary-stash matcher (seed-equality at NavComputer ~:867) starts working for real stars as a side effect of seed agreement.",
+      "verifyVia": {
+        "input": "Live on :5176 (stop window._autoNav FIRST and confirm isActive===false per feedback_wd-nav-drives-autopilot-off; confirm YOUR seed in the [WARP] log before trusting any arrival read): warp to the same plain real catalog star via nav search, then via prism click; capture [WARP] seed and _systemData both times.",
+        "observable": "Identical seed in the [WARP] log on both paths; deep-compare of _systemData (multiplicity, planet count, planet names) identical. Teleport-path seed parity is covered headless in AC1."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC3-arrival-resolution-module",
+      "statement": "One shared arrival-resolution core: the arrival generation stack currently inlined in main.js onPrepareSystem (context derivation + starTypeOverride + RealSystemOverlay.applyToContext + KnownSystems findByAlias routing + generate + merged display names) is extracted into a shared module (shared-height-module precedent; sync/async wrappers around one core) consumed by BOTH main.js arrival and NavComputer._renderSystem preview.",
+      "verifyVia": {
+        "input": "Headless unit tests: run the preview-path entry point and the arrival-path entry point for fixture stars of each class — plain un-tabled real star, companion-table binary (Sirius), KnownSystems alias (Alpha Centauri), archive host (TRAPPIST-1), pure procgen star — and deep-compare outputs.",
+        "observable": "Preview-path systemData deep-equals arrival-path systemData for every fixture class; KnownSystems aliases route through findByAlias identically on both paths; exactly one implementation of the resolution stack (main.js retains only a thin call site)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC4-preview-honesty",
+      "statement": "The nav SYSTEM view for a BROWSED system previews exactly what arrival would deliver — overlay applied, canonical seed, known systems routed — killing the live-verified divergence (Guniibuu preview showed 6 planets; arrival delivered a K+K binary + 4).",
+      "verifyVia": {
+        "input": "Live on :5176 (autopilot-off drive rule): select a plain un-tabled real star (e.g. Guniibuu) in the nav, read the SYSTEM-view preview (star count, planet count); warp there; repeat for a companion-table star (Sirius) and a KnownSystems star (Alpha Centauri).",
+        "observable": "For each: SYSTEM-view preview multiplicity and planet count/names match the actual arrival exactly (preview ≡ arrival); Sirius previews A+D binary; Alpha Centauri previews the authored system, not a procgen impostor."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC5-fabrication-pin",
+      "statement": "Pin-by-default (Max ruling 2026-07-15): a REAL catalog star with no companion-table entry and no archive data never rolls a fabricated stellar companion — it arrives single. Overrides stay data-won: the curated companion table wins where it covers; archive snum wins in BOTH directions (snum==1 pins single as today; an un-tabled snum>=2 host keeps its companion roll — the archive says multiple). Reach is real-catalog arrivals only: procgen stars keep their live binary roll untouched.",
+      "verifyVia": {
+        "input": "Headless through the real arrival pipeline (StarSystemGenerator + overlay merge), each case generated twice: (a) un-tabled, un-hosted real star on a seed that WOULD roll a binary absent the pin; (b) companion-table binary (Sirius); (c) archive snum==1 host (TRAPPIST-1); (d) un-tabled archive snum>=2 host; (e) pure procgen star on a binary-rolling seed.",
+        "observable": "(a) NO companion (isBinary false, star2 null), deterministic across runs; (b) A+DA2 binary — table wins; (c) M single with all 7 known planets b–h — snum pin intact; (d) companion roll preserved — archive multiplicity honored; (e) procgen binary still rolls — the pin never reaches procgen stars."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC6-census-table-and-dedup",
+      "statement": "The collision-census multiples get honest data: curated companion-table entries for 36 Ophiuchi (honest K-triple within the documented representation cap — far-companion mechanism per AC10 precedent), 61 Cygni A/B, and Zeta Reticuli 1/2; catalog regen dedups the two duplicate-name rows (Alula Australis/Xi UMa, Graffias/Xi Sco → one row each) and drops secondary rows of table-covered multiples to aliases (Sirius/Proxima precedent — including Toliman → Alpha Centauri alias, so Alpha Cen renders ONE marker). Dropped/aliased names stay searchable and stay on the real-proper-name blocklist. The gamma Leporis + HD 38392 wide pair stays two systems (documented as acceptable).",
+      "verifyVia": {
+        "input": "Run the catalog regen twice; run the naming-census, blocklist, and search-resolver suites against the regenerated data; regenerate neighborhood-reference.json + the structures/census audits that consume the catalog (the Toliman-as-Sol-neighbor ripple is IN scope).",
+        "observable": "Regen byte-identical across two runs with a row-count accounting (which rows dropped to aliases, which deduped); searching each of the three 36 Oph names resolves to the SAME destination; searching Toliman resolves to Alpha Centauri; every dropped name still blocklisted (procgen can never mint it) ; naming-census invariants green; neighborhood reference + audits regenerate consistently with AC1-neighborhood tolerances intact (±2%)."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC7-multiplicity-oracle",
+      "statement": "multiplicityForSeed() answers with ARRIVAL TRUTH for every star class — KnownSystems (alias-aware), companion-table multiple, archive-snum host, pin-by-default single, and procgen stars via extracting the generator's pre-binary-roll RNG prefix (StarSystemGenerator ~:250 region) into ONE shared function used by both the generator and the oracle, so cadence drift is impossible by construction.",
+      "verifyVia": {
+        "input": "Headless unit tests: for representative seeds/stars of every class, compare the oracle's answer against the multiplicity of the actually generated systemData through the real pipeline; run ProcgenSnapshot.",
+        "observable": "Oracle == generated multiplicity for every class including procgen singles AND procgen binaries (the shared-prefix proof); ProcgenSnapshot 24/24 byte-identical (the extraction changed no generation output); a glyph consumer can never contradict what warping delivers."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC8-ndot-glyph",
+      "statement": "Multiplicity-honest prism markers (Max's finding-#1 ruling: 'every system marker shows the appropriate number of dots — procgen and real alike'): the N-dot glyph generalizes the existing Escape-stash double-dot, driven by the AC7 oracle. The glyph is a SYMBOL at the marker — close-pair separations are sub-pixel; marker positions never move (overlay interview ruling 1). Built under the Max-ratified NavComputer seam (this scoping), recorded for lane D.",
+      "verifyVia": {
+        "input": "Live on :5176 (autopilot-off drive rule): open the prism at Sol and at the 36 Oph neighborhood; read marker dot counts; warp-confirm one real multiple and one procgen binary.",
+        "observable": "Sirius marker = 2 dots; TRAPPIST-1 = 1 dot (pin); Alpha Centauri = ONE marker with 2 dots (A+B) with Proxima its own dot (genuinely resolvable separation); 36 Oph = ONE marker, 3 dots; a procgen binary = 2 dots and a procgen single = 1 dot; each warp-confirmed arrival matches its glyph."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC9-label-declutter",
+      "statement": "Label readability (Max's hard requirement: 'no overlapping / hard-to-read labels'): the designed deferred label pass (ac9-uat-findings.md finding #1 — collect {name,x,y,priority} during the star loop, priority sort, greedy screen-space AABB placement with ±1–2 line-height stack offsets, leader line when displaced more than ~half a line, ~35% alpha fade when no slot frees). Marker positions untouched. Built under the same ratified NavComputer seam.",
+      "verifyVia": {
+        "input": "Live on :5176: max prism zoom at the densest shipped label fields (Rigil↔Proxima neighborhood post-dedup; a dense named procgen field); programmatically read the placed label rects from the pass's frame array.",
+        "observable": "Zero overlapping label AABBs among drawn labels; displaced labels carry leader lines to their dots; overflow labels faded, not overlapped; marker/dot positions byte-identical to a pass-disabled render (labels are draw-only)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC10-regression-guardrail",
+      "statement": "The universe that already works stays working: GalacticMap.hashCombine and the GRID cell formula are untouched (ProcgenSnapshot pins them); Sol, the authored/table arrivals, Inc-4 search, and the Inc-5 position-snap all hold; the full suite grows from its 1,404 baseline and never shrinks.",
+      "verifyVia": {
+        "input": "Full vitest from the repo dir; ProcgenSnapshot; live on :5176: window._lab.enterSol() + window.__wd.runIntegrationSuite(); spot-check Sirius (A1V+DA2 @19.8 AU), TRAPPIST-1 (M single, 7 knowns), Alpha Centauri (authored, G2V+K1V @23.5 AU + Proxima b,d); nav search resolve classes incl. the both-phase keyboard guard.",
+        "observable": "Suite green at >=1,404 with new tests added; ProcgenSnapshot 24/24 byte-identical; Sol scene suite 19/19; all spot-check arrivals unchanged; real-star prism markers still render at catalog-true positions (Inc-5 snap fix); any new main.js surgical lines added to the lane-B flag count (currently FOUR)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC11-identity-uat",
+      "statement": "Max's holistic acceptance: a real star is one system, the same system, everywhere he meets it — PRISM, SYSTEM view, and arrival agree; multiples read honestly; labels are readable; exploring reads true. The re-run of real-universe-overlay-2026-07-12 AC9 is the natural vehicle for this judgment.",
+      "verifyVia": {
+        "input": "Max explores freely on :5176 with the fix live — nav from Sol, the 36 Oph neighborhood, systems he knows, prism vs SYSTEM view vs arrivals.",
+        "observable": "Max's pass/fail-with-findings judgment, recorded in this workstream dir (and the overlay's AC9 re-run recorded in its dir). The workflow never marks this AC — deferred-to-max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "seed-identity-investigation.md (882d121) — the plan of record: seed families F1/GRID/XOR/KNOWN, agreement matrix, collision census (F1: 6 groups/13 stars = real multiples + dup rows; XOR: 10,986/15,560 collide), compat blast radius",
+      "F1 formula — today byte-identical twins in RealStarCatalog.findVisible (~:248) and knownObjectSearch.seedFromPos (~:104); extraction source for the ONE shared module (AC1)",
+      "NavComputer._queryYRange prism merge — matched branch (retains grid seed, ~:2688) + unmatched branch (XOR, ~:2710); _renderSystem browsed-preview (~:1590, overlay-less today); _buildCommitAction (~:594) passes the entry's own seed; prism binary-stash matcher (~:867) needs seed agreement to fire",
+      "main.js arrival stack (onPrepareSystem region ~:3508-3616: context + starTypeOverride + RealSystemOverlay.applyToContext + KnownSystems override + generate + merged names) — extraction source for the shared arrival-resolution module (AC3); debug teleport (~:5011) currently nearest-GRID",
+      "RealSystemOverlay.resolve — the pin site (snum==1 branch exists; pin-by-default extends the no-data default per Max's ruling); stellarCompanions.js curated table (5 entries; grows by 3 census groups)",
+      "KnownSystems findByAlias + associate() alias derivation (a1d2d4c substrate) — preview must route through it same as arrival; Toliman alias ripple",
+      "HYG catalog + regen script (process-hyg-catalog.mjs) — dup-row dedup + secondary-row-to-alias rule lands here; RIPPLE: neighborhood-reference.json (Toliman is an asserted Sol neighbor), census baselines, audits and their tests regenerate together (this ripple is why the census half was successor-scoped; now in scope)",
+      "StarSystemGenerator pre-binary-roll RNG prefix (~:250 region) — extracted into the shared function feeding the AC7 oracle; ProcgenSnapshot guards the extraction byte-exactly",
+      "NavComputer prism render loop — inline label draws (the star.isReal && star.name fillText branch) replaced by the deferred label pass; Escape-stash double-dot (~:865) generalized to the N-dot glyph; ALL NavComputer edits under the Max-ratified seam from this scoping (Inc-4 AC2 precedent), recorded for lane D",
+      "Seed-keyed consumers that ride the unification: planet/moon names (fnv1a(seed:ordinal)), ExoticOverlay (seed + '-overlay') — contents at formerly-divergent stars legitimately change (expected fallout; no persistence exists, names are position-keyed)"
+    ],
+    "outputs": [
+      "Canonical real-star seed module (F1, one implementation) — every future real-star surface imports it; kills the class of path-dependent-arrival bugs",
+      "Shared arrival-resolution module (one core, sync/async wrappers) — preview + arrival today; any future consumer (autopilot previews, save/share) inherits arrival truth",
+      "multiplicityForSeed() oracle + shared RNG-prefix function — reusable by lane D rendering and any future multiplicity surface",
+      "Deduped catalog + 3 new companion-table entries — 36 Oph/61 Cyg/ζ Ret honest; α Cen one marker; two dup-name destinations removed",
+      "N-dot glyph + deferred label pass in the prism (folded lane-D half) — seam record for lane D's future NavComputer rendering work",
+      "Unblocks: real-universe-overlay-2026-07-12 AC9 re-run, then that workstream's close-out sequence (contract→shipped, Rule-3 doc pass, doc-rot)"
+    ],
+    "mustStayWorking": [
+      "GalacticMap.hashCombine and the GRID cell formula UNTOUCHED — ProcgenSnapshot 24/24 byte-identical pins procgen generation (procgen stars keep GRID seeds; unification covers real stars only)",
+      "Sol full override + 19/19 scene suite; authored Alpha Centauri (G2V+K1V @23.5 AU + Proxima b,d); Sirius table-win (A1V+DA2 @19.8 AU); TRAPPIST-1 snum pin (M single, 7 knowns b–h)",
+      "Inc-5 NavComputer position-snap: real-star markers render at CATALOG positions (interview ruling 1 — positions never move; glyph + label pass are draw-only)",
+      "AC1 neighborhood fidelity of the overlay (±2% vs neighborhood-reference.json) across the catalog regen — the reference regenerates WITH the dedup, tolerances hold",
+      "Naming invariants: census, injectivity, shape disjointness; dropped/aliased catalog names REMAIN on the real-proper-name blocklist and remain searchable as aliases",
+      "Inc-4 search: all four resolve classes + the both-phase keyboard guard (capture-return + stopPropagation) + search-hit→genuine-warp dispatch",
+      "Lane boundaries: main.js edits stay minimal + surgical, added to the lane-B flag ledger (currently FOUR); NavComputer edits confined to the ratified seam and recorded for lane D; no edits to lane-D GalacticMap regions (density/clouds/features)",
+      "Full vitest from the repo dir only; suite baseline 1,404 grows, never shrinks (vendor/motion-test-kit collection noise is pre-existing)",
+      "Escape-stash double-dot semantics preserved as the glyph's base case (last-visited stash still reads)"
+    ]
+  }
+}

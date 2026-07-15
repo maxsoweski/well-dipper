@@ -169,6 +169,18 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > preview honesty, fabrication-reach ruling). New drive rule: **stop `window._autoNav` before any nav
 > drive** (`feedback_wd-nav-drives-autopilot-off` — boot demo tour auto-warps under agents; contaminated
 > + retracted 2 mid-investigation claims). Window parked at Sol, suite 19/19, tour OFF.
+> **▶ FIX WORKSTREAM SCOPED (2026-07-15): `real-star-identity-unification-2026-07-15`** — serves
+> exploration-immersion (a real star = ONE system, the same system, on every path). Interview rulings
+> (Max): fabrication reach = **pin-by-default** (un-tabled/un-hosted real stars never roll fabricated
+> companions; table + archive snum win both directions); lane-D render half (N-dot glyph + deferred
+> label pass) **FOLDED IN under a Max-ratified NavComputer seam** (Inc-4 precedent, recorded for lane
+> D); **NEW workstream** (overlay stays `verified` w/ AC9-FAIL recorded; AC9 re-runs after this ships
+> to :5176). 11 ACs per `docs/WORKSTREAMS/real-star-identity-unification-2026-07-15/` (schema-valid):
+> canonical F1 seed + merge-test rewrite, path-identity live, shared arrival-resolution module +
+> preview honesty, pin-by-default, census companion table (36 Oph/61 Cyg/ζ Ret) + dup-row dedup w/
+> the neighborhood-reference regen ripple, multiplicity oracle (shared RNG prefix, snapshot-guarded),
+> glyph + label AABB pass, regression guardrail (GRID formula untouched), Max UAT via the AC9 re-run.
+> Plan of record: `seed-identity-investigation.md` (882d121). **Awaiting Max greenlight → build.**
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
