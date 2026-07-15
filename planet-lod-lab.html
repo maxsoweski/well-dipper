@@ -2786,6 +2786,108 @@
       const bakeStorm = bakeStormEAttributes(pos.array, pos.count, R, { regime, drivers: _sd, macroSeed: state.macroSeed | 0, stormSeed: state.stormSeed | 0 });
       geometry.attributes.aStorm.array.set(bakeStorm.aStorm); geometry.attributes.aStorm.needsUpdate = true;
     }
+    // ── #3b Slice 1 WIRING extraction: the discrete-vortex placement below used to live INLINED
+    // inside applyDrivers, so the reseed paths (New-planet / macro-seed slider / _lab.setSeed) —
+    // which called updateSeedUniforms()+rebakeE5Bands() but NOT applyDrivers() — left the vortices
+    // FROZEN while the mask re-baked, so mask and vortices momentarily disagreed (evidence/README.md
+    // skew). Lifting it into a named function lets reseedGiant() re-run it off the SAME
+    // (regime, drivers, macroSeed, stormSeed) as the mask bake, so they can never disagree.
+    // Behavior-preserving: recomputes _fp / _stormRegime / _stormDrivers identically to the old
+    // inlined block and reads the already-set state.bandTint (valid on reseed — preset unchanged).
+    // NO internal early-return on non-gas: the composition gas-gate inside resolveStormE returns
+    // strength 0 there (state.spot*/train*/polar* reset to 0), which applyDrivers relies on to keep
+    // the OFFGATE render byte-identical after a gas→solid preset change; an early-return would leave
+    // stale gas storm state. On the reseed path (preset unchanged) that same strength-0 result is a
+    // no-op, so reseedGiant() is naturally inert on non-gas presets.
+    function applyStormState(){
+      const _fp = DRIVER_PRESETS[driverUI.preset];
+      // ── #3b Slice P: PHYSICS storm/vortex placement — REPLACES the F27/F28/F29
+      // mulberry32 hash closures with the storm-e.js writer. resolveStormE places
+      // vortices at the anticyclonic-shear ARGMAX over the PV staircase (band-confined,
+      // deterministic tie-break lowest-lat→lowest-node), draws longitude/phase/count-mix
+      // from the disjoint stormE:{place,age,phase,polar} alea streams, and returns a
+      // place-once seeded age + phase bank (the #4/#5/#8 oscillator substrate). Placement
+      // is STILL SEED IDENTITY (macroSeed, stormSeed) — same pair ⇒ same latitudes on
+      // re-approach; the folder 🎲 rerolls stormSeed THROUGH applyDrivers. Gas gate keys
+      // on composition 'h2-he' (designDecision-5): every solid preset ⇒ count 0 ⇒ the
+      // per-frame carriage writes uStormCount 0 ⇒ byte-identical off-gate render. Discrete
+      // vortices fill the existing uStorm[8]/uPolar carriage (unchanged); the ONE new
+      // baked field is the storm/convection MASK (aStorm, filled in rebakeE5Bands). Colors
+      // are materialized HERE from state.bandTint + the vortex role/mode (V-α.4 will swap
+      // this for the writer's ageScalar→chromophore ramp).
+      const _bt = state.bandTint;
+      // V-α.4 chromophore aging: the WARM anticyclones (grs / pearl / oval) take their color
+      // from the writer's per-vortex ageScalar via the white→red ramp (storm-e chromophoreColor),
+      // lightly deck-tinted so the family still reads as one planet — two vortices of different
+      // seeded age now read visibly different (AC-VIS c). Dark cyclonic features (dark-spot / barge)
+      // do NOT redden: their color is a cleared/darker hole (taxonomy 1.1/4.1).
+      const _stormColor = (role, mode, age = 0, coreScale = 1) => {
+        if (role === 'dark-spot') {
+          // V-β.3 lifecycle: coreScale = dark-core visibility (precursor 0 = NO cleared hole, blends into
+          // the deck / companion-only read; mature 1 = full clearing; dissipating ~0.45 = weak contrast).
+          // Blend the cleared color toward the deck background (bandTint) by (1−coreScale).
+          const _d = chromophoreColor(age, 1);                                              // cleared dark hole (ice-giant GDS) — neutral, no reddening
+          const cs = (coreScale == null) ? 1 : coreScale;
+          return [_bt[0] * (1 - cs) + _d[0] * cs, _bt[1] * (1 - cs) + _d[1] * cs, _bt[2] * (1 - cs) + _d[2] * cs];
+        }
+        if (role === 'barge')     return [_bt[0] * 0.50, _bt[1] * 0.42, _bt[2] * 0.38];     // brown barge (dark cyclonic)
+        if (role === 'scooter')   return [0.85, 0.90, 1.0];                                 // Neptune blue-white companion
+        const _cr = chromophoreColor(age, 0);                                               // white→red age ramp (the chromophore output)
+        return [_bt[0] * 0.20 + _cr[0] * 0.80, _bt[1] * 0.20 + _cr[1] * 0.80, _bt[2] * 0.20 + _cr[2] * 0.80];  // grs / pearl / oval — age-reddened, lightly deck-tinted
+      };
+      const _stormRegime = E5_PRESET_REGIME[driverUI.preset] || E5_REGIME.GAS_GIANT;
+      const _stormDrivers = {
+        rotationRate: (9.9 / (_fp.rotationHours ?? 24)) * (state.e5RotationScale ?? 1),
+        radius: (_fp.radiusEarth ?? 1) / 11.2,
+        composition: _fp.atmosphere?.composition,   // the gas gate (designDecision-5)
+        T_eq: _fp.T_eq ?? 288,                       // the deck-personality ramp
+      };
+      if (state.e5Obliquity > 0) _stormDrivers.obliquityDeg = state.e5Obliquity;
+      const _storm = resolveStormE(_stormRegime, _stormDrivers, state.macroSeed | 0, state.stormSeed | 0);
+      // F27 great spot ← writer primary (null off-gate ⇒ strength 0 keeps the carriage silent)
+      state.spotStrength = _storm.strength;
+      if (_storm.primary){
+        const _p = _storm.primary;
+        state.spotCenter = _p.center;
+        state.spotRadius = _p.radius;
+        state.spotRot = _p.rot;
+        state.spotAspect = _p.aspect;
+        state.spotMode = _p.mode;
+        state.spotColor = _stormColor(_p.role, _p.mode, _p.ageScalar, _p.coreScale);   // V-β.3 lifecycle core visibility
+        state.spotCompanion = _p.companion;
+      }
+      // F28 storm clusters ← writer train members (vortex street / brown barge / scooters)
+      state.trainStrength = _storm.strength;
+      state.trainSpots = _storm.train.map((v) => ({
+        center: v.center, radius: v.radius, rot: v.rot, aspect: v.aspect,
+        color: _stormColor(v.role, v.mode, v.ageScalar), companion: v.companion,
+      }));
+      state.trainCount = state.trainSpots.length;
+      // F29 polar vortex ← writer pole (drawn from the disjoint stormE:polar stream, BEFORE
+      // the variable-count vortex loop, so the count-mix never moves the pole structure — F5)
+      const _pl = _storm.pole;
+      state.polarStrength = _pl.strength;
+      state.polarMode = _pl.mode;
+      state.polarSides = _pl.sides;
+      state.polarR0 = _pl.r0;
+      state.polarRing = _pl.ring;
+      state.polarPole = _pl.pole;
+      state.polarPhase = _pl.phase;
+      // Cap tint: bandTint shifted COOL (teal-blue lean) — the Cassini gold-haze-outside /
+      // blue-core two-tone (card §6 item 2).
+      state.polarTint = [_bt[0] * 0.45, _bt[1] * 0.62, Math.min(1, _bt[2] * 0.85 + 0.25)];
+      // Slice 1: _storm.uranian is read downstream in applyDrivers (F31 hazeMute bump). The extraction
+      // stashes it on state so that consumer keeps working — applyStormState() runs BEFORE that line.
+      state._stormUranian = _storm.uranian;
+    }
+    // Slice 1 coherence seam (§2): ONE seed pass re-runs the seeded terrain offsets, the E5 band +
+    // storm MASK bake, AND the discrete vortex/pole placement together — so mask and vortices always
+    // re-derive off the SAME macroSeed/stormSeed. Every reseed path routes through this.
+    function reseedGiant(){
+      updateSeedUniforms();
+      rebakeE5Bands();
+      applyStormState();
+    }
     function applyDrivers(){
       const u = deriveUniforms(DRIVER_PRESETS[driverUI.preset], driverUI.qualityTier);
       // Capture preset-change BEFORE the radius block consumes state._lastPreset, so the bodyDrivers
@@ -3160,81 +3262,11 @@
       // (Lava/Europa are locked but airless) — verify by manual uniform poke,
       // deferred-to-profiles (card §6.5 step 4).
       state.weatherLocked = (_fp.tidalState?.locked && _hadLiquid) ? 1 : 0;
-      // ── #3b Slice P: PHYSICS storm/vortex placement — REPLACES the F27/F28/F29
-      // mulberry32 hash closures with the storm-e.js writer. resolveStormE places
-      // vortices at the anticyclonic-shear ARGMAX over the PV staircase (band-confined,
-      // deterministic tie-break lowest-lat→lowest-node), draws longitude/phase/count-mix
-      // from the disjoint stormE:{place,age,phase,polar} alea streams, and returns a
-      // place-once seeded age + phase bank (the #4/#5/#8 oscillator substrate). Placement
-      // is STILL SEED IDENTITY (macroSeed, stormSeed) — same pair ⇒ same latitudes on
-      // re-approach; the folder 🎲 rerolls stormSeed THROUGH applyDrivers. Gas gate keys
-      // on composition 'h2-he' (designDecision-5): every solid preset ⇒ count 0 ⇒ the
-      // per-frame carriage writes uStormCount 0 ⇒ byte-identical off-gate render. Discrete
-      // vortices fill the existing uStorm[8]/uPolar carriage (unchanged); the ONE new
-      // baked field is the storm/convection MASK (aStorm, filled in rebakeE5Bands). Colors
-      // are materialized HERE from state.bandTint + the vortex role/mode (V-α.4 will swap
-      // this for the writer's ageScalar→chromophore ramp).
-      const _bt = state.bandTint;
-      // V-α.4 chromophore aging: the WARM anticyclones (grs / pearl / oval) take their color
-      // from the writer's per-vortex ageScalar via the white→red ramp (storm-e chromophoreColor),
-      // lightly deck-tinted so the family still reads as one planet — two vortices of different
-      // seeded age now read visibly different (AC-VIS c). Dark cyclonic features (dark-spot / barge)
-      // do NOT redden: their color is a cleared/darker hole (taxonomy 1.1/4.1).
-      const _stormColor = (role, mode, age = 0, coreScale = 1) => {
-        if (role === 'dark-spot') {
-          // V-β.3 lifecycle: coreScale = dark-core visibility (precursor 0 = NO cleared hole, blends into
-          // the deck / companion-only read; mature 1 = full clearing; dissipating ~0.45 = weak contrast).
-          // Blend the cleared color toward the deck background (bandTint) by (1−coreScale).
-          const _d = chromophoreColor(age, 1);                                              // cleared dark hole (ice-giant GDS) — neutral, no reddening
-          const cs = (coreScale == null) ? 1 : coreScale;
-          return [_bt[0] * (1 - cs) + _d[0] * cs, _bt[1] * (1 - cs) + _d[1] * cs, _bt[2] * (1 - cs) + _d[2] * cs];
-        }
-        if (role === 'barge')     return [_bt[0] * 0.50, _bt[1] * 0.42, _bt[2] * 0.38];     // brown barge (dark cyclonic)
-        if (role === 'scooter')   return [0.85, 0.90, 1.0];                                 // Neptune blue-white companion
-        const _cr = chromophoreColor(age, 0);                                               // white→red age ramp (the chromophore output)
-        return [_bt[0] * 0.20 + _cr[0] * 0.80, _bt[1] * 0.20 + _cr[1] * 0.80, _bt[2] * 0.20 + _cr[2] * 0.80];  // grs / pearl / oval — age-reddened, lightly deck-tinted
-      };
-      const _stormRegime = E5_PRESET_REGIME[driverUI.preset] || E5_REGIME.GAS_GIANT;
-      const _stormDrivers = {
-        rotationRate: (9.9 / (_fp.rotationHours ?? 24)) * (state.e5RotationScale ?? 1),
-        radius: (_fp.radiusEarth ?? 1) / 11.2,
-        composition: _fp.atmosphere?.composition,   // the gas gate (designDecision-5)
-        T_eq: _fp.T_eq ?? 288,                       // the deck-personality ramp
-      };
-      if (state.e5Obliquity > 0) _stormDrivers.obliquityDeg = state.e5Obliquity;
-      const _storm = resolveStormE(_stormRegime, _stormDrivers, state.macroSeed | 0, state.stormSeed | 0);
-      // F27 great spot ← writer primary (null off-gate ⇒ strength 0 keeps the carriage silent)
-      state.spotStrength = _storm.strength;
-      if (_storm.primary){
-        const _p = _storm.primary;
-        state.spotCenter = _p.center;
-        state.spotRadius = _p.radius;
-        state.spotRot = _p.rot;
-        state.spotAspect = _p.aspect;
-        state.spotMode = _p.mode;
-        state.spotColor = _stormColor(_p.role, _p.mode, _p.ageScalar, _p.coreScale);   // V-β.3 lifecycle core visibility
-        state.spotCompanion = _p.companion;
-      }
-      // F28 storm clusters ← writer train members (vortex street / brown barge / scooters)
-      state.trainStrength = _storm.strength;
-      state.trainSpots = _storm.train.map((v) => ({
-        center: v.center, radius: v.radius, rot: v.rot, aspect: v.aspect,
-        color: _stormColor(v.role, v.mode, v.ageScalar), companion: v.companion,
-      }));
-      state.trainCount = state.trainSpots.length;
-      // F29 polar vortex ← writer pole (drawn from the disjoint stormE:polar stream, BEFORE
-      // the variable-count vortex loop, so the count-mix never moves the pole structure — F5)
-      const _pl = _storm.pole;
-      state.polarStrength = _pl.strength;
-      state.polarMode = _pl.mode;
-      state.polarSides = _pl.sides;
-      state.polarR0 = _pl.r0;
-      state.polarRing = _pl.ring;
-      state.polarPole = _pl.pole;
-      state.polarPhase = _pl.phase;
-      // Cap tint: bandTint shifted COOL (teal-blue lean) — the Cassini gold-haze-outside /
-      // blue-core two-tone (card §6 item 2).
-      state.polarTint = [_bt[0] * 0.45, _bt[1] * 0.62, Math.min(1, _bt[2] * 0.85 + 0.25)];
+      // #3b Slice 1: the discrete-vortex placement (F27/F28/F29 spot*/train*/polar*) was extracted to
+      // applyStormState() so the reseed paths re-run it. Called HERE in place of the old inlined block —
+      // behavior-identical on the applyDrivers path (same seed/regime/drivers, same state writes,
+      // including the strength-0 reset on non-gas that keeps the OFFGATE render byte-identical).
+      applyStormState();
       // ── F30 lightning — flash-activity drivers (card §6.5 step 4). Gas decks
       // always convect (Juno/Cassini: flashes are ubiquitous on h2-he giants) ⇒ 1,
       // with the Juno POLAR clustering regime (PIA22474). Solid worlds reuse the
@@ -3275,7 +3307,7 @@
       state.hazeMute = _cloudRegime === 2 ? 0.85 : 0.0;
       // V-β.5 Uranian variant (Rider A, taxonomy 5.1/5.5): thick accumulated (un-recycled) haze veil on
       // the high-obliquity Neptunian read — set AFTER the cloud-regime derivation so it isn't overwritten.
-      if (_storm.uranian) state.hazeMute = Math.max(state.hazeMute, 0.6);
+      if (state._stormUranian) state.hazeMute = Math.max(state.hazeMute, 0.6);   // Slice 1: _storm now local to applyStormState(); uranian flag stashed on state
       // Sub-neptune featureless contract (card §6 F31c): the photochemical haze
       // that flattens the GJ 1214 b spectrum sits ABOVE the convective deck, so
       // deep-deck flashes mute too — the gas-gate F30 derivation above would
@@ -5183,9 +5215,9 @@
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = guiLeft.addFolder('Seeds'); fSeeds.close();
-    fSeeds.add(state, 'macroSeed', 0, 10000, 1).name('macro seed').listen().onChange(() => { updateSeedUniforms(); rebakeE5Bands(); });
+    fSeeds.add(state, 'macroSeed', 0, 10000, 1).name('macro seed').listen().onChange(reseedGiant);   // Slice 1: reseedGiant() = updateSeedUniforms()+rebakeE5Bands()+applyStormState() — re-places storms/pole on drag (was frozen)
     fSeeds.add(state, 'detailSeed', 0, 10000, 1).name('detail seed').listen().onChange(updateSeedUniforms);
-    fSeeds.add({ newPlanet(){ state.macroSeed = (Math.random()*10000)|0; state.detailSeed = (Math.random()*10000)|0; updateSeedUniforms(); rebakeE5Bands(); } }, 'newPlanet').name('New planet (re-roll both)');
+    fSeeds.add({ newPlanet(){ state.macroSeed = (Math.random()*10000)|0; state.detailSeed = (Math.random()*10000)|0; reseedGiant(); } }, 'newPlanet').name('New planet (re-roll both)');   // Slice 1: reseedGiant() re-places storms/pole (was updateSeedUniforms()+rebakeE5Bands() only — vortices stayed frozen)
 
     // ▸ Presets — lil-gui save/load round-trips the whole panel as JSON
     const fPresets = guiLeft.addFolder('Presets'); fPresets.close();
@@ -6328,7 +6360,12 @@
                     setSeed(macro, detail){
                       state.macroSeed = (macro >>> 0);
                       state.detailSeed = (detail !== undefined ? detail : macro) >>> 0;
-                      updateSeedUniforms();
+                      // R1/Slice 1: route through reseedGiant() = updateSeedUniforms() + rebakeE5Bands() +
+                      // applyStormState(). setSeed is the DETERMINISTIC reseed path the evidence uses, so it
+                      // must re-place storms/pole (not just re-offset terrain) — it used to call ONLY
+                      // updateSeedUniforms(), leaving spotCenter/trainLons/polarPhase bit-frozen across seeds.
+                      // Still deterministic: the integer seed is the only entropy (no wall-clock / rng draws).
+                      reseedGiant();
                       return { macroSeed: state.macroSeed, detailSeed: state.detailSeed };
                     },
                     // Sun-direction control (lab lighting). setLightDir(azDeg, elDeg) rotates the world
