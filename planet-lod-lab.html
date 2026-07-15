@@ -98,6 +98,7 @@
     /* Render-audit surface (Ask 4) — per-feature title-bar glyph + World summary. */
     .lil-gui .audit-badge { margin-left: 6px; font-size: 12px; line-height: 1; user-select: none; }
     .lil-gui .audit-badge.stale { opacity: 0.35; }              /* dimmed when state.audit.fresh === false */
+    .lil-gui .prov-badge { color: #6db3f2; font-size: 12px; line-height: 1; user-select: none; }  /* provenance glyph: ✦ writer / ◐ grain-oriented */
     .lil-gui .audit-summary { font-size: 11px; line-height: 1.4; padding: 4px 8px; margin: 2px 0 4px;
       color: #cfd2d6; }
     .lil-gui .audit-summary.stale { color: #c98a2a; }           /* "stale — re-audit" tint */
@@ -4058,12 +4059,18 @@
     fScaleReadout.add({ get edifice(){ return state.edificeSizeKm.toFixed(0)+' km'; } }, 'edifice').name('edifice footprint').listen().disable();
     fScaleReadout.add({ get relief(){ return state.mountainHeightKm.toFixed(1)+' km h'; } }, 'relief').name('mtn relief height').listen().disable();
 
+    // ── World Engine features (lab-ux 2026-07-15) — the OPEN top section of the
+    // Features panel: folders whose placement/physics a worldengine writer authors
+    // (FEATURES[key].provenance === 'writer'). Declared BEFORE fLegacy so it renders
+    // above it. The atmo #3b merge flips F27/F28/F29's provenance and moves their
+    // declarations here (atmo owns those sections — fence).
+    const fWorldEngine = guiRight.addFolder('World Engine ✦'); fWorldEngine.open();
     // ── Legacy synth drawer (lab-UI cleanup 2026-06-27) — collapses the 5 in-shader
     // synth feature families into one CLOSED parent so the world-engine carrier
     // controls read clean for UAT. Re-parenting is DOM-only; the relevance filter
     // (applyArchetypeFilter) operates on STORED parentEl/folder objects, not on a
     // literal guiRight parent, so nesting these groups one level deeper is render-safe.
-    const fLegacy = guiRight.addFolder('Legacy synth renderer (F1–F49)'); fLegacy.close();
+    const fLegacy = guiRight.addFolder('Legacy features'); fLegacy.close();
     // ▸ Surface — Relief
     const fRelief = fLegacy.addFolder('Surface — Relief');
     fRelief.add(state, 'perturb', 0, 1.5, 0.01).name('perturb (relief)');
@@ -4420,7 +4427,7 @@
     // ▸ Zonal belts (F24) — alternating zone/belt luminance bands on gas presets, ALBEDO
     // only. strength/count/contrast/warp/tint are driven (h2-he gate / Rhines spin×disc /
     // T_eq vigor ramp / atmosphere color, .listen()); stretch + lat power are shape knobs.
-    const fBands = fBandsGroup.addFolder('Zonal belts (F24)'); fBands.close();
+    const fBands = fWorldEngine.addFolder('Zonal belts (F24)'); fBands.close();   // lab-ux 2026-07-15: writer-fed (climate-e5 aBand) → lives in the World Engine section, not Legacy
     fBands.add(state, 'bandStrength', 0, 1, 0.01).name('strength (driven)').listen();
     fBands.add(state, 'bandCount', 2, 20, 1).name('band count (driven)').listen();
     fBands.add(state, 'bandContrast', 0, 1, 0.01).name('contrast (driven)').listen();
@@ -4437,7 +4444,7 @@
     // ▸ Jets & shear (F25) — the deck dynamics: counter-rotating drift, shear-gated
     // boundary turbulence, one-sided festoons. strength/speed/turb/festoons are driven
     // (h2-he gate / D8 spin / T_eq vigor ramp, .listen()); freq + eq width are lab knobs.
-    const fJets = fBandsGroup.addFolder('Jets & shear (F25)'); fJets.close();
+    const fJets = fWorldEngine.addFolder('Jets & shear (F25)'); fJets.close();   // lab-ux 2026-07-15: writer-fed (climate-e5 aShear) → World Engine section
     fJets.add(state, 'jetStrength', 0, 1, 0.01).name('strength (driven)').listen();
     fJets.add(state, 'jetSpeed', 0, 3, 0.01).name('drift speed (driven)').listen();
     fJets.add(state, 'jetShearTurb', 0, 0.6, 0.01).name('shear turb (driven)').listen();
@@ -4828,6 +4835,24 @@
       badge.textContent = '';                 // empty until the first audit
       folder.$title.appendChild(badge);       // after the relocated enable toggle
       auditBadges[key] = badge;
+    }
+    // ── Provenance badges (lab-ux 2026-07-15) — same plain-DOM pattern as the audit
+    // badges, but PREPENDED so the glyph reads as part of the folder name. Data-driven
+    // from FEATURES[key].provenance (planet-archetypes.js): 'writer' = a worldengine
+    // writer authors this feature's placement/physics; 'grain' = legacy body whose
+    // orientation reads the shared WS4 tectonic grain; absent = pure legacy (no badge).
+    const PROV_GLYPHS = {
+      writer: { glyph: '✦', tip: 'World Engine writer-driven (placement/physics authored by a worldengine writer)' },
+      grain:  { glyph: '◐', tip: 'Writer-oriented: legacy body, strike/orientation driven by the WS4 tectonic grain' },
+    };
+    for (const [key, folder] of Object.entries(featureFolders)) {
+      const prov = PROV_GLYPHS[FEATURES[key].provenance];
+      if (!prov) continue;
+      const b = document.createElement('span');
+      b.className = 'prov-badge';
+      b.textContent = prov.glyph + ' ';
+      b.title = prov.tip;
+      folder.$title.prepend(b);               // before the name — never clobbers the relocated toggle
     }
     // Fill every badge from state.audit. Empty when no audit has run; dimmed (.stale)
     // when the audit is not fresh or was computed for a different preset.

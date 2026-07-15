@@ -6,16 +6,16 @@
 export const FEATURES = {
   craters:    { label: 'Craters (F2)',          enableKey: 'cratersEnabled',   archetypes: ['impact-airless','tectonic-terrestrial','volatile-cold','icy-active'] },  // 2026-06-15 audit: cratering universal on solid surfaces (driver self-limits) — +Titan(volatile-cold)/Europa(icy-active); driver scales density by age/resurfacing
   ejecta:     { label: 'Ejecta & Rays (F3)',    enableKey: 'ejectaEnabled',    archetypes: ['impact-airless','tectonic-terrestrial','volatile-cold','icy-active'] },  // 2026-06-15 audit: cratering universal on solid surfaces (driver self-limits) — mirrors craters (ejecta aprons physically inseparable)
-  scarps:     { label: 'Scarps (F5)',           enableKey: 'scarpsEnabled',    archetypes: ['impact-airless','tectonic-terrestrial','volcanic'] },  // 2026-06-15 triage: Io (volcanic, Lava preset) scarps — silicate/tectonic relief
-  mountains:  { label: 'Mountains (F1)',        enableKey: 'mountainsEnabled', archetypes: ['tectonic-terrestrial','volcanic'] },  // 2026-06-15 triage: Io (volcanic, Lava preset) has 17 km silicate thrust mountains — observed
+  scarps:     { label: 'Scarps (F5)',           enableKey: 'scarpsEnabled',    archetypes: ['impact-airless','tectonic-terrestrial','volcanic'], provenance: 'grain' },  // 2026-06-15 triage: Io (volcanic, Lava preset) scarps — silicate/tectonic relief
+  mountains:  { label: 'Mountains (F1)',        enableKey: 'mountainsEnabled', archetypes: ['tectonic-terrestrial','volcanic'], provenance: 'grain' },  // 2026-06-15 triage: Io (volcanic, Lava preset) has 17 km silicate thrust mountains — observed
 
-  canyons:    { label: 'Canyons (F4)',          enableKey: 'canyonsEnabled',   archetypes: ['tectonic-terrestrial','volcanic'] },  // 2026-06-15 triage: Io (volcanic, Lava preset) has silicate canyons — observed
+  canyons:    { label: 'Canyons (F4)',          enableKey: 'canyonsEnabled',   archetypes: ['tectonic-terrestrial','volcanic'], provenance: 'grain' },  // 2026-06-15 triage: Io (volcanic, Lava preset) has silicate canyons — observed
   plateaus:   { label: 'Plateaus (F6)',         enableKey: 'plateausEnabled',  archetypes: ['tectonic-terrestrial','volcanic'] },  // 2026-06-15 triage: Io silicate plateaus — silicate/tectonic relief on a volcanic body
-  tessera:    { label: 'Tessera (F6)',          enableKey: 'tesseraEnabled',   archetypes: ['tectonic-terrestrial'] },
+  tessera:    { label: 'Tessera (F6)',          enableKey: 'tesseraEnabled',   archetypes: ['tectonic-terrestrial'], provenance: 'grain' },
   edifices:   { label: 'Edifices (F7)',         enableKey: 'edificesEnabled',  archetypes: ['volcanic','tectonic-terrestrial'] },  // 2026-06-15 triage: volcanic edifices on rocky worlds (Earth Hawaii, Mars Olympus Mons) — observed
-  lava:       { label: 'Lava plains (F8)',      enableKey: 'lavaEnabled',      archetypes: ['volcanic'] },
+  lava:       { label: 'Lava plains (F8)',      enableKey: 'lavaEnabled',      archetypes: ['volcanic'], provenance: 'grain' },
   chaos:      { label: 'Chaos (F9)',            enableKey: 'chaosEnabled',     archetypes: ['icy-active'] },
-  cryoRidge:  { label: 'Ridged icy (F10)',      enableKey: 'cryoRidgeEnabled', archetypes: ['icy-active'] },
+  cryoRidge:  { label: 'Ridged icy (F10)',      enableKey: 'cryoRidgeEnabled', archetypes: ['icy-active'], provenance: 'grain' },
   frost:      { label: 'Cryo / Frost (F23/F22)',enableKey: 'frostEnabled',     archetypes: ['volatile-cold','icy-active','tectonic-terrestrial'] },  // 2026-06-15 triage: Europa water-ice (observed); Mars seasonal frost (observed) on tectonic-terrestrial preset
   sublimation:{ label: 'Sublimation (F18)',     enableKey: 'subEnabled',       archetypes: ['volatile-cold','icy-active','tectonic-terrestrial'] },  // 2026-06-15 triage: Europa penitentes (Hobley 2018); Mars CO₂ sublimation (araneiforms, observed) + eyeball terminator on tectonic-terrestrial preset
   glacial:    { label: 'Glacial (F17)',         enableKey: 'glacialEnabled',   archetypes: ['volatile-cold','icy-active','tectonic-terrestrial'] },  // 2026-06-15 triage: Europa ice flow (theorized); Earth glaciers (observed) + eyeball nightside ice on tectonic-terrestrial preset
@@ -28,8 +28,13 @@ export const FEATURES = {
   dunes:      { label: 'Dunes & wind forms (F15)', enableKey: 'dunesEnabled',  archetypes: ['tectonic-terrestrial','volatile-cold'] },
   dust:       { label: 'Dust mantles (F16)',    enableKey: 'dustEnabled',      archetypes: ['tectonic-terrestrial','volatile-cold'] },
   massWasting:{ label: 'Mass-wasting (F19)',    enableKey: 'massWastEnabled',  archetypes: ['impact-airless','tectonic-terrestrial','volcanic','icy-active','volatile-cold','exotic-carbon','exotic-geometric'] },  // 2026-06-15 triage: mass-wasting needs only slopes+gravity — universal on ALL solid-surface worlds (Max: blanket)
-  bands:      { label: 'Zonal belts (F24)',     enableKey: 'bandsEnabled',     archetypes: ['gas-giant','hot-jupiter'] },
-  jets:       { label: 'Jets & shear (F25)',    enableKey: 'jetsEnabled',      archetypes: ['gas-giant','hot-jupiter'] },
+  // provenance (lab-ux 2026-07-15): 'writer' = a worldengine writer authors what this
+  // renders (placement/physics; the folder's knobs stay display gates); 'grain' = legacy
+  // body whose orientation reads the shared WS4 tectonic grain (writer-oriented);
+  // absent = pure legacy synth. The GUI renders badges from THIS field — the atmo
+  // branch flips greatSpot/stormTrain/polarVortex to 'writer' when #3b merges.
+  bands:      { label: 'Zonal belts (F24)',     enableKey: 'bandsEnabled',     archetypes: ['gas-giant','hot-jupiter'], provenance: 'writer' },  // climate-e5.js writer feeds aBand
+  jets:       { label: 'Jets & shear (F25)',    enableKey: 'jetsEnabled',      archetypes: ['gas-giant','hot-jupiter'], provenance: 'writer' },  // climate-e5.js writer feeds aShear
   weatherBands:{ label: 'Weather bands (F26)',  enableKey: 'weatherBandsEnabled', archetypes: ['tectonic-terrestrial'] },
   greatSpot:  { label: 'Great spot (F27)',      enableKey: 'greatSpotEnabled', archetypes: ['gas-giant','hot-jupiter'] },
   stormTrain: { label: 'Storm clusters (F28)',  enableKey: 'stormTrainEnabled', archetypes: ['gas-giant','hot-jupiter'] },
