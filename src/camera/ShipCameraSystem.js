@@ -628,9 +628,20 @@ export class ShipCameraSystem {
     }
   }
 
-  viewSystem(systemRadius) {
-    this.target.set(0, 0, 0);
-    this._targetGoal.set(0, 0, 0);
+  viewSystem(systemRadius, center = null) {
+    // orrery-coherence-2026-07-15 AC2 live-drive fix: systems spawned via the
+    // instant-cut path (spawnSystem forWarp:false) live at their true galactic
+    // world position, NOT at the origin the warp flow rebases to — anchoring
+    // the overview at (0,0,0) framed empty space ~100k units from the system.
+    // `center` (the star's world position) anchors the frame on the system;
+    // omitted → origin, byte-equivalent for every pre-existing caller.
+    if (center) {
+      this.target.copy(center);
+      this._targetGoal.copy(center);
+    } else {
+      this.target.set(0, 0, 0);
+      this._targetGoal.set(0, 0, 0);
+    }
     this._transitioning = false;
     this._returningToOrbit = false;
     this.distance = systemRadius * 1.5;

@@ -6355,24 +6355,47 @@ function warpSwapSystem() {
 // cameraController.bypassed stays FALSE (Toy-Box orbit) — nothing flies.
 function _frameSystemForOrrery() {
   cameraController.bypassed = false;
-  cameraController.restoreFromWorldState(new THREE.Vector3(0, 0, 0));
+  // Live-drive fix (AC2): instant-cut systems (spawnSystem forWarp:false) sit at
+  // their true galactic world position — the warp flow's rebase-to-origin never
+  // ran. Anchor the frame on the SYSTEM CENTER (star mesh), not the origin, or
+  // the overview orbits empty space ~100k units away. Deep-sky/title systems
+  // keep the origin anchor (they spawn there).
+  const _center = (system && (!system.type || system.type === 'star-system') && system.star?.mesh)
+    ? system.star.mesh.position.clone()
+    : new THREE.Vector3(0, 0, 0);
+  cameraController.restoreFromWorldState(_center);
   focusIndex = -1;
   focusMoonIndex = -1;
   focusStarIndex = -1;
-  // systemRadius mirrors focusPlanet(-1)'s overview distance (outermost planet
-  // orbit, else star*10; deep-sky uses its destination radius). viewSystem frames
-  // at 1.5x that (ShipCameraSystem.viewSystem), so the whole system sits in view.
+  // systemRadius: SCENE-scale outermost orbit (orbitRadiusScene — what the meshes
+  // actually orbit at; the data-scale orbitRadius under-frames ~30x, the same
+  // pre-existing under-frame focusPlanet(-1)'s overview has). viewSystem frames
+  // at 1.5x, so the whole system sits in view. Deep-sky uses destination radius.
   let systemRadius;
   if (system && system.type && system.type !== 'star-system' && system.destination) {
     systemRadius = system.destination.data.radius;
   } else if (system && system.planets && system.planets.length > 0) {
-    systemRadius = system.planets[system.planets.length - 1].orbitRadius;
+    // Frame the coherent inner system: walk the sorted scene-scale orbits and
+    // stop at the first >5x gap — wide-binary companions / far captured bodies
+    // (orbits in the millions of units) would otherwise degenerate the frame to
+    // a dot-in-a-starfield (live-caught on a "+companion" binary). Max can
+    // re-rule the gap factor at UAT; the parked wide-separation thread
+    // (well-dipper-binary-wide-separation) owns the deeper presentation question.
+    const orbits = system.planets
+      .map(p => p.orbitRadiusScene ?? p.orbitRadius)
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
+    systemRadius = orbits[0] ?? (system.star ? system.star.data.radius * 10 : 200);
+    for (let i = 1; i < orbits.length; i++) {
+      if (orbits[i] > orbits[i - 1] * 5) break;
+      systemRadius = orbits[i];
+    }
   } else if (system && system.star) {
     systemRadius = system.star.data.radius * 10;
   } else {
     systemRadius = 200;
   }
-  cameraController.viewSystem(systemRadius);
+  cameraController.viewSystem(systemRadius, _center);
 }
 
 // orrery-coherence-2026-07-15 W2 (AC2, seam map §2): the ORRERY production
@@ -6409,6 +6432,12 @@ async function _enterSystemInstantOrrery() {
     spawnSystem({ forWarp: false, systemData: pendingSystemData });
     pendingSystemData = null;
     pendingSystemDataPromise = null;
+    // Consume the boot flags exactly as warpRevealSystem's reveal does — for an
+    // ORRERY boot, THIS entry is the boot reveal (the cinematic path never runs).
+    // Leaving _pendingBootReveal true would make every later boot-aware regime
+    // read (title-end/linger gates) and the next real reveal's consume stale.
+    _pendingBootReveal = false;
+    _pendingBootMode = 'orrery';
     _frameSystemForOrrery();
     console.log('[ORRERY] instant framed cut — system entered, nothing flew (systemEntryStyle instant-cut)');
   } catch (e) {
@@ -7091,13 +7120,20 @@ function focusPlanet(index) {
 
   if (index < 0 || index >= system.planets.length || system.planets.length === 0) {
     focusIndex = -1;
+    // orrery-coherence-2026-07-15 live-drive fix: anchor the overview on the
+    // SYSTEM CENTER. Warp-arrival systems sit ≈ origin (post-rebase), so the
+    // center is ≈ (0,0,0) there and this is behavior-identical; instant-cut
+    // systems (spawnSystem forWarp:false) sit at their galactic position, where
+    // the old origin anchor flung the overview ~100k units into empty space.
+    const _ovCenter = ((!system.type || system.type === 'star-system') && system.star?.mesh)
+      ? system.star.mesh.position.clone() : null;
     if (system.planets.length > 0) {
       const outerOrbit = system.planets[system.planets.length - 1].orbitRadius;
-      cameraController.viewSystem(outerOrbit);
+      cameraController.viewSystem(outerOrbit, _ovCenter);
     } else {
       // 0-planet system: orbit the star instead
       const starR = system.star ? system.star.data.radius : 5;
-      cameraController.viewSystem(starR * 10);
+      cameraController.viewSystem(starR * 10, _ovCenter);
     }
     bodyInfo.hide();
     console.log('System overview');
@@ -8961,8 +8997,18 @@ function simStep(deltaTime) {
       // nebula/deep-sky linger auto-warp fires only in HELM. In ORRERY it never
       // fires and never busy-loops re-arming — clear the timer once so ORRERY idles
       // indefinitely (AC3 "ORRERY idles indefinitely"). HELM counts down + warps
-      // away exactly as today. Mid-session, so _scManual is the honest regime bit.
-      if (!autoWarpTimerFires({ regime: _scManual ? 'helm' : 'orrery' })) {
+      // away exactly as today.
+      // Live-drive fix: the linger ALSO runs in the BOOT window — a MANUAL title
+      // dismissal hands off to this timer (dismissTitleScreen sets it to 15s; the
+      // direct boot warp only lives in the title-end AUTO path), and there
+      // _scManual is NOT honest yet: the HELM pick is unconsumed until the warp
+      // reveal. Reading _scManual stranded a HELM boot that clicked through the
+      // title in the nebula forever. Same boot-aware read as the title-end gate:
+      // while the boot reveal is pending, the effective regime is the PICKED mode.
+      const _lingerRegime = _pendingBootReveal
+        ? bootModeAction(_pendingBootMode).mode
+        : (_scManual ? 'helm' : 'orrery');
+      if (!autoWarpTimerFires({ regime: _lingerRegime })) {
         _deepSkyLingerTimer = -1; // ORRERY: stop counting; no warp, no re-arm loop
       } else {
         _deepSkyLingerTimer -= deltaTime;
