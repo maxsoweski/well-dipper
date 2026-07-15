@@ -1,0 +1,61 @@
+{
+  "workstream": "orrery-coherence-2026-07-15",
+  "commit": "188809f",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "INSUFFICIENT",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC1-orrery-no-ship-authority-reducers",
+      "result": "PASS",
+      "evidence": "Unit/live:false. `npx vitest run src/flight/__tests__/orreryCoherence.test.js` -> 36/36 pass, covering all 4 named seams (bodyCycleAction, burnWorkflowAvailable/burnButtonRegimeVisible, navAutopilotToggleAction, autoWarpTimerFires) as pure reducers plus a cross-reducer INVARIANT that no reducer yields a ship-flight token in regime 'orrery'. Full flight suite (35 files/355 tests) and full repo (89 files/1247 tests; 15 pre-existing unrelated vendor/motion-test-kit Node-test-runner files excluded) all green. Commits 78a94ad->a6548f9->188809f; working tree clean at 188809f.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC2-instant-framed-entry",
+      "result": "INSUFFICIENT",
+      "evidence": "Integration/live:true \u2014 static-only pass per protocol, no browser driven. a6548f9 wires every ORRERY entry route (star-click+Space, nav-computer burn, mobile double-tap/speed-dial) to new _enterSystemInstantOrrery()/_frameSystemForOrrery() instead of beginWarpTurn(); confirmed no warpEffect/shake call reachable, cameraController.bypassed set false via viewSystem framing, and the named observable probes (window._regime(), console log line) are real and wired. 36/36 + 422/422 headless tests pass. Static shape satisfies the AC text but the AC itself requires driving the browser and observing live frames/console/regime state \u2014 not done.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC3-no-auto-warps-in-orrery",
+      "result": "INSUFFICIENT",
+      "evidence": "Integration/live:true \u2014 static-only pass. autoWarpTimerFires reducer (true only regime='helm') correctly gates both the title-end (~3:16) and nebula-linger (15s) auto-warp call sites; all 5 other beginWarpTurn() call sites traced and none are unguarded in ORRERY. 36/36 unit + 422/422 flight/camera/auto + 1247/1247 full-repo pass (15 unrelated pre-existing vendor failures). Live check \u2014 booting and letting the real timers actually elapse with no warp firing \u2014 not performed.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC4-burn-hidden-no-silent-swap",
+      "result": "INSUFFICIENT",
+      "evidence": "Integration/live:true \u2014 static-only pass. burnButtonRegimeVisible is constant-false (button never renders in any regime); burnWorkflowAvailable gates the action itself (true only HELM) at all 3 call sites (button click/touch, Space-key commitSelection, NavComputer 'burn' dispatch), plus AC5's click-2 glide path confirmed not an alternate silent route. Ship and planet/star/moon targets both covered. 36/36 reducer tests pass. No live DOM/runtime observation (getComputedStyle, real click sequence) performed.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC5-click-click-view-glide",
+      "result": "INSUFFICIENT",
+      "evidence": "Integration/live:true \u2014 static-only pass. New bodyClickAction reducer (orrery+sameAsSelected -> 'glide-view', else 'select') wired into trySelect(); new ShipCameraSystem.glideFocus() eases the orbit pivot via existing per-frame smoothing (never snaps, never sets bypassed=true, never calls flyTo), additive sibling of untouched focusOn. Ships structurally excluded from glide. 65/65 new+existing camera/reducer tests + 422/422 flight/camera/auto pass. Live feel/smoothness and 'never welded to ship during play' not observed.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC6-midboot-nav-selection-wins",
+      "result": "INSUFFICIENT",
+      "evidence": "Integration/live:true \u2014 static-only pass. New navDispatchDuringWarp reducer (no warp->'normal'; pre-FOLD in-flight->'overwrite'/player wins; post-FOLD->'stash'/redirect at reveal) wired at 5 main.js seams matching the pre-build seam-map; warpRevealSystem's stash-redirect branch returns before boot-reveal fly-in/tour-arm code runs, structurally guaranteeing the boot target never completes when a player warp is stashed. 8 new unit tests + 36/36 + 422/422 pass, but only exercise the reducer with synthetic inputs \u2014 not the real async FOLD-timing race, real console output, or actual arrival correctness in a running boot sequence.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC7-screensaver-rearm-bounds",
+      "result": "INSUFFICIENT",
+      "evidence": "Integration/live:true \u2014 static-only pass. tourRearmAllowed reducer (true only regime='helm' && handsOn===false) wired into autoNav.onTourComplete, deriving regime/handsOn from live _scManual/freeLook.latched state; denies re-arm and returns before building/starting the next autopilot sequence when false. F-key takeover / Z-key re-arm call sites traced and structurally consistent. 36/36 reducer tests + 422/422 pass + clean `npm run build`. Live wiring (real key input, an actual completed tour, F/Z's live effect on the loop) not exercised.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC8-orrery-coheres-uat",
+      "result": "deferred-to-max",
+      "evidence": "UAT layer \u2014 never PASSed/FAILed by an agent, per invariant. Confirmed AC1-7 are code-complete (commits 78a94ad, a6548f9, 188809f) with all headless suites green (422/422 flight+auto+camera; 1247/1247 full-repo minus 15 pre-existing unrelated vendor failures) and `npm run build` clean. contract.json status is still 'building'. AC8 cannot be meaningfully judged by anyone until AC2-AC7's live-integration checks are actually driven and come back green.",
+      "adversarialVotes": "n/a \u2014 UAT is Max-only"
+    }
+  ],
+  "overall": "INSUFFICIENT \u2014 unit layer PASS (AC1, 3/3 adversarial-confirmed); all six integration ACs (AC2-AC7) remain INSUFFICIENT pending live browser-driven verification (this pass was static-only per protocol, no browser opened); UAT (AC8) deferred to Max and blocked until integration goes green.",
+  "summaryForMax": "Where this stands at 188809f: the pure-logic (unit) layer is fully green \u2014 AC1's ORRERY/HELM reducer table (body-cycling, BURN gating, nav-autopilot toggle, auto-warp timers) passed 36/36 targeted tests plus the full 1247-test suite, 3/3 adversarial reviewers confirmed it. Nothing here needed live-driving.\n\nAC2-AC7 all landed in code (commits 78a94ad, a6548f9, 188809f) and are structurally sound on static/code-path review \u2014 every seam traced to its wiring, all headless tests green, build clean \u2014 but every one of them is a `live:true` integration AC, meaning this verification pass was explicitly barred from opening a browser to check them. That's not a finding against the work; it's the pass being unable to close these on its own. Working-Claude (main thread) needs to drive these six live next:\n- AC2 instant-framed-entry: enter an ORRERY system via star-click+Space, nav-computer burn, and mobile double-tap/speed-dial \u2014 confirm no warp cinematic (no shake, no warpEffect), instant framed cut, pilotPhase IDLE, camBypassed false.\n- AC3 no-auto-warps-in-orrery: sit through the title-end (~3:16) and nebula-linger (15s) windows while in ORRERY \u2014 confirm no auto-warp fires; confirm it still fires normally in HELM.\n- AC4 burn-hidden-no-silent-swap: in ORRERY, select ship/planet/star/moon targets and try BURN via button, Space, and nav-computer \u2014 confirm the button never appears and nothing silently swaps station/target; confirm HELM still shows BURN as before.\n- AC5 click-click-view-glide: click a body once (select), click again (camera glides smoothly, never snaps, never welds to ship); confirm ships are select-only.\n- AC6 midboot-nav-selection-wins: pick a new nav target mid-warp both before and after FOLD \u2014 confirm player's choice wins pre-FOLD and gets stashed/redirected at reveal post-FOLD, with the original boot target never silently completing.\n- AC7 screensaver-rearm-bounds: let an autopilot tour complete hands-off in ORRERY and confirm it does NOT auto-loop; confirm F-key takeover and Z-key re-arm still behave correctly in HELM.\n\nFor you, Max, on AC8 (the only AC you decide): once working-Claude reports those six live checks green, launch the game yourself and judge whether ORRERY mode feels coherent as one whole flow \u2014 no ship-authority sneaking in while browsing (instant cuts, no surprise auto-warps, BURN never appearing), the double-click glide feeling smooth and not disorienting, mid-boot nav choices behaving sensibly, and tours not looping past their end. Watch specifically for anything that technically \"passes\" a checklist but feels janky or incoherent in actual play \u2014 that's the gap only your eyes can close."
+}
