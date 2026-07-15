@@ -1,6 +1,7 @@
 # AC9 — Max's batched UAT: findings record
 
-**Workstream:** `real-universe-overlay-2026-07-12` · **Status: UAT IN PROGRESS** (started 2026-07-14)
+**Workstream:** `real-universe-overlay-2026-07-12` · **Status: AC9 FAIL recorded 2026-07-15**
+(UAT started 2026-07-14; re-run gated on the multiplicity/legibility fix workstream — finding #2)
 **Bundle under test:** build `3e58fac` (branch HEAD `a8c8e44`, docs-only past the build) on `:5176`.
 **Session context:** working-Claude pre-drove a smoke circuit before Max's UAT (window had drifted
 into Object Gallery debug mode since the prior session — recovered via search→warp→Sol; suite
@@ -142,6 +143,37 @@ entry; also answer the astronomy: systems that close are bound, not coincidental
    essentially never sit within ~0.1 ly of each other (chance alignment ≈ 1 in 30,000 per star
    at local density; two such neighbors ≈ never) — a grouping that tight is bound or a shared
    birth cluster. No new scope.
+
+---
+
+## Finding #2 — SYSTEM view and PRISM view disagree on multiplicity → formal AC9: **FAIL**
+
+**Max's verdict (2026-07-15, verbatim):** "It's a FAIL — it partially works, minus the
+difficult legibility, in the PRISM view. But the SYSTEM view doesn't match the PRISM view for
+binary/trinary systems today so that is not a pass."
+
+**Code grounding (this session, read-only):** SYSTEM view always renders arrival truth —
+`sys.isBinary && sys.star2` draws primary + companion with barycentric offsets and dashed
+orbit rings (`NavComputer.js` system-level star block, ~`:1754-1810`). PRISM view learns
+multiplicity only two accidental ways: (a) the Escape-stash hack — leaving a system copies
+`_systemData.isBinary` onto that ONE prism marker (`match._isBinary`, ~`:865-870`), so the
+double-dot glyph appears only on the last-visited system; (b) real pairs HYG catalogued as
+separate rows render 2 dots. Every unvisited procgen binary = 1 dot; Sirius (companion has no
+HYG row) = 1 dot in PRISM but 2 stars in SYSTEM view. Same root cause as finding #1, observed
+across the PRISM↔SYSTEM seam.
+
+**Consequence:** supersedes the 2026-07-14 "ships without blocking on it" disposition — the
+finding-#1 successor scope (multiplicityForSeed oracle + companion table/dedup + N-dot glyph
++ label-declutter pass, all recorded above) is now **BLOCKING for AC9**. No new design needed:
+the oracle principle already states this finding's fix exactly — a prism glyph must never
+contradict what warping delivers, i.e. PRISM must match SYSTEM view. AC9 re-runs after that
+workstream is live on `:5176`.
+
+**α-Cen A/B ruling (same exchange):** Max questioned the premise ("should some systems not
+realistically be empty of planets? What am I missing?") — empty-is-realistic stands. Recorded
+as **SHIP-AS-IS** (the documented 8% empty roll, rep-cap §6; consistent with observation — no
+confirmed planets around A or B). The populate knob remains available as pure authoring
+content any time; no build. Standing resolution — Max can redirect.
 
 ---
 
