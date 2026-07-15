@@ -153,6 +153,22 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > **▶ NEXT: AC9 = Max's batched UAT over the whole workstream** (nav neighborhood from Sol, search things he
 > knows, arrivals vs astronomy, structures; the α-Cen zero-planet flag above is his call). The only open
 > gate. Branch UNPUSHED (merge Max-gated; deploy = Pages).
+> **▶ AC9 RUN 2026-07-15: FAIL — and the 36 Oph investigation found a procgen-level identity defect
+> (bigger than nav).** Max's verdict verbatim + corrected mechanism in
+> `docs/WORKSTREAMS/real-universe-overlay-2026-07-12/ac9-uat-findings.md` finding #2 (commits `bd5733a`,
+> `d725c27`): (1) real-star seed identity is pipeline-dependent — search/catalog quantize position to
+> 0.1 pc (the 36 Oph trio collapses to ONE seed; 6 groups/13 stars total), the prism merge retains
+> replaced hash-grid seeds, its unmatched branch uses a degenerate x^z XOR (**10,986/15,560 named stars
+> collide**, incl. Sol/Sirius) — same named star generates DIFFERENT systems by selection path; (2) nav
+> SYSTEM view for browsed systems is an overlay-less locally-generated preview (live: Guniibuu preview
+> 6 planets vs arrival K+K binary + 4); (3) un-tabled/un-hosted real stars roll FABRICATED companions
+> (snum pin reaches archive hosts only). **Max tabled close-out + successor scoping: investigate root
+> cause → plan solutions → implement in a FRESH session (via /handoff), carrying the standing items**
+> (α-Cen SHIP-AS-IS standing resolution; label-declutter mechanism designed 2026-07-15 = deferred label
+> pass, lane D builds; formal close-out sequence; the 3 new scope questions: seed-identity unification,
+> preview honesty, fabrication-reach ruling). New drive rule: **stop `window._autoNav` before any nav
+> drive** (`feedback_wd-nav-drives-autopilot-off` — boot demo tour auto-warps under agents; contaminated
+> + retracted 2 mid-investigation claims). Window parked at Sol, suite 19/19, tour OFF.
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
