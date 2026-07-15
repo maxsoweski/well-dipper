@@ -1657,14 +1657,48 @@ export const HEIGHT_GLSL = /* glsl */ `
           // pale collar 0.6R-1.0R: multiplicative luminance lift (hue-preserving)
           float collar = smoothstep(0.55 * R, 0.72 * R, d) * (1.0 - smoothstep(0.88 * R, 1.05 * R, d));
           col = min(col * (1.0 + 0.22 * collar), vec3(1.0));
-          // bright companion (dark mode only — uStormParams.w derives mode x 0.8):
-          // a near-white additive Gaussian east-poleward of the core
+          // ── V-α.3 storm INTERIOR STRUCTURE — spiral arms + concentric shear rings so a
+          // placed vortex reads as a churning cell, NOT a flat oval (taxonomy 2.3 / Max's
+          // "must stop reading as a simple oval"). STATIC (F1): the regularity is broken by a
+          // FRESH bandWarpField(n) sample — time-invariant, no animated warp. Winds with the swirl
+          // sign so the arms trail the rotation; confined to the near-side interior (rr<1).
+          float rr = d / max(R, 1.0e-4);                       // 0 core … 1 rim (elliptical metric; far side rr>>1 via the +100 pedestal)
+          if (rr < 1.0){
+            float thv    = atan(dn, de);                       // azimuth in the storm tangent frame
+            float spiral = sin(3.0 * thv + 6.0 * rr * sign(uStormParams[i].x));   // logarithmic-ish arms, wound by swirl sign
+            float annuli = cos(9.0 * rr);                      // concentric shear rings
+            float detail = mix(spiral, annuli, 0.4) * bandWarpField(n * 5.0 + vec3(3.1, -6.4, 2.7));
+            float interior = (1.0 - smoothstep(0.5, 1.0, rr)) * step(0.0, dot(n, c));
+            col = clamp(col * (1.0 + 0.12 * interior * detail), vec3(0.0), vec3(1.0));
+          }
+          // bright companion (dark spots — uStormParams.w SIGN-PACKED, V-α.5): magnitude = the
+          // CH₄ cloud brightness, SIGN = placement. comp<0 ⇒ DS2 bright-CORED variant (companion
+          // centered ON the cleared core, taxonomy 4.4); comp>0 ⇒ the GDS OFFSET companion ~1.3R
+          // east + 0.5R poleward (the Voyager-2 read). abs(comp) drives amplitude (F2) so a
+          // negative (centered) flag still BRIGHTENS — sign relocates the offset, never darkens.
           float comp = uStormParams[i].w;
-          if (comp > 0.0){
+          if (comp != 0.0){
             float py = (c.y < 0.0) ? -1.0 : 1.0;   // poleward = away from the equator
-            vec2 q = vec2(de - 1.3 * R, dn - py * 0.5 * R) / (0.35 * R);
+            vec2 off = (comp < 0.0) ? vec2(0.0) : vec2(1.3 * R, py * 0.5 * R);   // centered (DS2) vs offset (GDS)
+            vec2 q = vec2(de - off.x, dn - off.y) / (0.35 * R);
             float g = exp(-dot(q, q)) * step(0.0, dot(n, c));
-            col = min(col + vec3(0.30, 0.32, 0.34) * (comp * g), vec3(1.0));
+            col = min(col + vec3(0.30, 0.32, 0.34) * (abs(comp) * g), vec3(1.0));
+          }
+          // ── V-α.2 GRS turbulent WAKE — an upstream (west) turbulence cone on the PRIMARY warm
+          // anticyclone (slot 0): the planet's single most turbulent patch, torn-tissue filaments
+          // WEST of the core where the deflected westward jet piles into an eastward one (taxonomy
+          // 2.4, Q5 ratified: a bespoke wake term over swirl-only). STATIC bandWarpField; time-invariant.
+          if (i == 0 && uStormParams[0].z < 0.5){
+            float west  = -de;                                 // >0 upstream (west of the core)
+            float axial = west / (2.6 * R);                    // 0 at core … 1 at the cone tip
+            float halfW = R * (0.35 + 0.55 * clamp(axial, 0.0, 1.0));   // cone widens downstream
+            float latW  = abs(dn) / max(halfW, 1.0e-4);
+            float cone  = smoothstep(0.05, 0.25, west / R)
+                        * (1.0 - smoothstep(0.7, 1.15, axial))
+                        * (1.0 - smoothstep(0.6, 1.0, latW))
+                        * step(0.0, dot(n, c));
+            float torn  = bandWarpField(n * 6.5 + vec3(-4.7, 1.3, 9.2));
+            col = clamp(col * (1.0 + 0.16 * cone * torn), vec3(0.0), vec3(1.0));
           }
         }
         return col;
@@ -1758,7 +1792,7 @@ export const HEIGHT_GLSL = /* glsl */ `
       // every one behind uJetStrength > 0.0 (jets off ⇒ byte-identical F24 statics).
       // Poles: latitude-only keying means bands can never converge or
       // pinch; an explicit darkened polar hood caps them instead (card §6 item 5).
-      vec3 zonalBandCol(vec3 N, vec3 pos, float wBand, float wShear, float wMush){
+      vec3 zonalBandCol(vec3 N, vec3 pos, float wBand, float wShear, float wMush, float wStorm){
         // true latitude from the geometric normal, normalized to -1..1
         float trueLat = asin(clamp(N.y, -1.0, 1.0)) * 0.63661977;   // × 2/π
         // uBandLatPow > 1 widens the equatorial bands and narrows the polar ones
@@ -1794,6 +1828,26 @@ export const HEIGHT_GLSL = /* glsl */ `
         // the writer's shear wShear gates the jet turbulence so the filaments ride the REAL shear.
         float bandVal = wBand + uBandWarp * 0.16 * r;
         if (uJetStrength > 0.0) bandVal += uJetStrength * jetsDisp(trueLat, latC, pos) * (0.25 + 0.75 * wShear) * 0.35;
+        // ── V-α.1 "ink in water" band-boundary FILAMENTATION (increment 3b, taxonomy 2.1/2.2) ──
+        // Fine turbulent detail woven INTO the band boundary — Kelvin-Helmholtz billows / von-Kármán
+        // streets strung along the shear interface (the literal dye-drawn-along-a-shear-line read).
+        // Localized by the REAL fields: wShear (|du/dφ|, peaks at band edges, ≈0 at band centers)
+        // × wStorm (the baked convection MASK, ≈0 on an empty deck), so the filaments live ONLY where
+        // BOTH are high and the whole term VANISHES when the mask is empty (off-gate byte-identity).
+        // STATIC (F1 MUST-FIX): the detail is a FRESH bandWarpField() sample at a decorrelated higher
+        // frequency — it reads NEITHER the animation clock NOR the jets-on animated warp (never the
+        // animated-phase path), so "static place-once" (designDecision-2) holds with no animation to leak.
+        // FFR sign-of-shear asymmetry (taxonomy 2.2, Q8 ratified): the CYCLONIC side (belts, the low
+        // half of the writer's signed band field wBand<0.5) churns to full chaos while the
+        // ANTICYCLONIC zone side stays cleaner — the character split the FFR read needs.
+        // F1 STATIC: cyclonic keys on wBand (the baked signed band field, param from aBand) — NOT the
+        // composite band value, which carries the jets-on animated warp and animated jetsDisp; keying
+        // on the baked wBand keeps the whole filament amplitude place-once static (designDecision-2).
+        float shearMask = wShear * clamp(wStorm, 0.0, 1.0);
+        float fila = bandWarpField(pos * 3.7 + vec3(8.3, -2.9, 5.1));   // fresh STATIC fine warp (time-invariant; not the animated path)
+        float cyclonic = clamp((0.5 - wBand) * 2.0, 0.0, 1.0);         // 1 deep belt (cyclonic) … 0 zone (anticyclonic); wBand=static baked field
+        float ffr = 0.55 + 0.45 * cyclonic;                            // belts filament harder than zones (FFR asymmetry)
+        bandVal += uBandWarp * 0.14 * shearMask * ffr * fila;          // ink-in-water boundary distortion, shear×mask gated
         // alternating zone/belt LUMINANCE — a smoothstep across the writer band value; the soft risers
         // still land on posterize-step transitions so the Bayer dither textures the festooned boundary.
         float zone = smoothstep(0.34, 0.66, clamp(bandVal, 0.0, 1.0));

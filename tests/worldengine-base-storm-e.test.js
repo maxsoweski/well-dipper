@@ -13,6 +13,7 @@ import {
   STORM_PHYS,
   resolveStormE, resolveStormPlacement, rankStormCandidates,
   writeStormESphere, bakeStormEAttributes,
+  chromophoreColor, CHROMOPHORE_STOPS,
 } from '../src/worldengine/base/storm-e.js';
 
 const TARGET_N = 4000, LLOYD = 2;
@@ -168,6 +169,50 @@ describe('worldengine base — storm-e vortex placement + mask writer (increment
     expect(run(E5_REGIME.GAS_GIANT, 1).primary.mode).toBe(0);
     // rot sign encodes anticyclonic spin (cyclonic/anticyclonic in .rot sign — the carriage .x convention)
     expect(Math.abs(run(E5_REGIME.GAS_GIANT, 1).primary.rot)).toBeGreaterThan(0);
+  });
+
+  // ── AC-FIELDS(b): CHROMOPHORE AGE → COLOR is monotonic white→red (V-α.4) ───────────────────────
+  it('[AC-FIELDS b] chromophoreColor(age,0) is monotone white→red — redness rises, green falls, endpoints pinned', () => {
+    const N = 41, prev = { rg: -Infinity, rb: -Infinity, g: Infinity };
+    for (let k = 0; k < N; k++) {
+      const age = k / (N - 1);
+      const [r, g, b] = chromophoreColor(age, 0);
+      for (const ch of [r, g, b]) { expect(Number.isFinite(ch)).toBe(true); expect(ch).toBeGreaterThanOrEqual(0); expect(ch).toBeLessThanOrEqual(1); }
+      expect(r - g).toBeGreaterThanOrEqual(prev.rg - 1e-9);   // redness (vs green) non-decreasing
+      expect(r - b).toBeGreaterThanOrEqual(prev.rb - 1e-9);   // redness (vs blue) non-decreasing
+      expect(g).toBeLessThanOrEqual(prev.g + 1e-9);           // green channel non-increasing
+      prev.rg = r - g; prev.rb = r - b; prev.g = g;
+    }
+    const white = chromophoreColor(0, 0), brick = chromophoreColor(1, 0);
+    expect(white[2]).toBeGreaterThan(0.85);                   // young ⇒ near-white (high blue)
+    expect(brick[0] - brick[2]).toBeGreaterThan(0.4);         // old ⇒ strongly red (r ≫ b)
+    expect(brick[0]).toBeGreaterThan(brick[1]);               // and r > g (brick, not grey)
+    // the exported stops are themselves monotone per channel (the ramp's backbone)
+    for (let i = 1; i < CHROMOPHORE_STOPS.length; i++) for (let ch = 0; ch < 3; ch++)
+      expect(CHROMOPHORE_STOPS[i].c[ch]).toBeLessThanOrEqual(CHROMOPHORE_STOPS[i - 1].c[ch] + 1e-9);
+  });
+  it('[AC-FIELDS b] chromophoreColor(age,1) is a cleared DARK neutral — never reddens (ice-giant branch)', () => {
+    for (let k = 0; k <= 10; k++) {
+      const [r, g, b] = chromophoreColor(k / 10, 1);
+      expect(Math.max(r, g, b)).toBeLessThan(0.55);           // dark hole, not a bright cap
+      expect(Math.abs(r - b)).toBeLessThan(0.12);             // neutral — NOT reddened
+      expect(r).toBeLessThanOrEqual(b + 1e-9);                // if anything, cooler (cleared aerosol) — never r>b redness
+    }
+  });
+
+  // ── V-α.5: DS2 sign-packed companion — magnitude = strength, sign = placement ──────────────────
+  it('[V-α.5] ice-giant dark-spot companion is sign-packed |0.8|; BOTH DS2(centered,−) and GDS(offset,+) are reachable; warm GRS carries none', () => {
+    // gas-giant warm primary (mode 0, GRS) never carries a companion
+    for (const s of SEEDS) expect(run(E5_REGIME.GAS_GIANT, s).primary.companion).toBe(0);
+    // ice-giant primary always carries a |0.8| companion; sign selects DS2 vs GDS
+    let sawNeg = false, sawPos = false;
+    for (let s = 1; s <= 24; s++) {
+      const c = run(E5_REGIME.NEPTUNIAN, s).primary.companion;
+      expect(Math.abs(c)).toBeCloseTo(0.8, 12);
+      if (c < 0) sawNeg = true; if (c > 0) sawPos = true;
+    }
+    expect(sawNeg).toBe(true);   // DS2 bright-cored variant (centered) is reachable
+    expect(sawPos).toBe(true);   // GDS offset companion is reachable
   });
 
   // ── ENVELOPE GUARD: exactly ONE new baked attribute (the mask), no new storm uniform (Slice P wire-in) ─

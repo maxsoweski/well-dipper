@@ -167,7 +167,7 @@
     import { computeE1 } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment).
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
-    import { resolveStormE, bakeStormEAttributes } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute)
+    import { resolveStormE, bakeStormEAttributes, chromophoreColor } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -219,6 +219,7 @@
       varying float vBand;
       varying float vShear;
       varying float vMush;
+      varying float vStorm;   // #3b storm/convection MASK (V-α.1 filamentation gate) — passed into zonalBandCol as a PARAM (HEIGHT_GLSL stays varying-agnostic, comment above)
       // ── AC4 river carve — samplerCube of valley depth (rendered from the REAL routed network,
       // planet-lod-rivers.js). Sampled by surface direction; bends the normal into a V-channel +
       // darkens the floor. uRiverCarveStrength == 0 ⇒ untouched (regression-safe). This is the
@@ -645,7 +646,7 @@
             bandN = stormSwirl(normalize(vPos));
             bandPos = bandN * length(vPos);
           }
-          albedoCol = mix(albedoCol, zonalBandCol(bandN, bandPos, vBand, vShear, vMush), bandMask);
+          albedoCol = mix(albedoCol, zonalBandCol(bandN, bandPos, vBand, vShear, vMush, vStorm), bandMask);
         }
         // ── F25 jets solo visibility — jets key on uJetStrength ALONE: with the deck
         // dark (solo('jets') zeroes uBandStrength), the shear turbulence still reads
@@ -3174,12 +3175,17 @@
       // are materialized HERE from state.bandTint + the vortex role/mode (V-α.4 will swap
       // this for the writer's ageScalar→chromophore ramp).
       const _bt = state.bandTint;
-      const _stormColor = (role, mode) => {
-        if (role === 'grs')       return [_bt[0] * 0.92, _bt[1] * 0.52, _bt[2] * 0.40];   // GRS brick-red (warm anticyclone)
-        if (role === 'dark-spot') return [_bt[0] * 0.55, _bt[1] * 0.55, _bt[2] * 0.55];   // cleared dark bruise (ice-giant GDS)
-        if (role === 'barge')     return [_bt[0] * 0.50, _bt[1] * 0.42, _bt[2] * 0.38];   // brown barge (dark cyclonic)
-        if (role === 'scooter')   return [0.85, 0.90, 1.0];                                // Neptune blue-white companion
-        return [Math.min(1, _bt[0] * 0.55 + 0.45), Math.min(1, _bt[1] * 0.55 + 0.45), Math.min(1, _bt[2] * 0.55 + 0.45)];  // pearl/oval — pale deck-tint lift
+      // V-α.4 chromophore aging: the WARM anticyclones (grs / pearl / oval) take their color
+      // from the writer's per-vortex ageScalar via the white→red ramp (storm-e chromophoreColor),
+      // lightly deck-tinted so the family still reads as one planet — two vortices of different
+      // seeded age now read visibly different (AC-VIS c). Dark cyclonic features (dark-spot / barge)
+      // do NOT redden: their color is a cleared/darker hole (taxonomy 1.1/4.1).
+      const _stormColor = (role, mode, age = 0) => {
+        if (role === 'dark-spot') return chromophoreColor(age, 1);                          // cleared dark hole (ice-giant GDS) — neutral, no reddening
+        if (role === 'barge')     return [_bt[0] * 0.50, _bt[1] * 0.42, _bt[2] * 0.38];     // brown barge (dark cyclonic)
+        if (role === 'scooter')   return [0.85, 0.90, 1.0];                                 // Neptune blue-white companion
+        const _cr = chromophoreColor(age, 0);                                               // white→red age ramp (the chromophore output)
+        return [_bt[0] * 0.20 + _cr[0] * 0.80, _bt[1] * 0.20 + _cr[1] * 0.80, _bt[2] * 0.20 + _cr[2] * 0.80];  // grs / pearl / oval — age-reddened, lightly deck-tinted
       };
       const _stormRegime = E5_PRESET_REGIME[driverUI.preset] || E5_REGIME.GAS_GIANT;
       const _stormDrivers = {
@@ -3199,14 +3205,14 @@
         state.spotRot = _p.rot;
         state.spotAspect = _p.aspect;
         state.spotMode = _p.mode;
-        state.spotColor = _stormColor(_p.role, _p.mode);
+        state.spotColor = _stormColor(_p.role, _p.mode, _p.ageScalar);
         state.spotCompanion = _p.companion;
       }
       // F28 storm clusters ← writer train members (vortex street / brown barge / scooters)
       state.trainStrength = _storm.strength;
       state.trainSpots = _storm.train.map((v) => ({
         center: v.center, radius: v.radius, rot: v.rot, aspect: v.aspect,
-        color: _stormColor(v.role, v.mode), companion: v.companion,
+        color: _stormColor(v.role, v.mode, v.ageScalar), companion: v.companion,
       }));
       state.trainCount = state.trainSpots.length;
       // F29 polar vortex ← writer pole (drawn from the disjoint stormE:polar stream, BEFORE

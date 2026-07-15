@@ -74,6 +74,41 @@ const DEFAULT_T_EQ = Object.freeze({
 const TWO_PI = Math.PI * 2;
 const smooth01 = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 
+// ── Chromophore aging ramp (V-α.4) — the phenomenological white→red mapping ─────
+// Taxonomy §1.1/§10: a single "possibly universal" red chromophore — a thin aerosol cap
+// thickened/reddened by residence time + UV dosing. age 0 = fresh NH₃-ice WHITE →
+// age 1 = GRS BRICK-RED, monotone through cream→tan→orange. This is the age→uStormColor[i]
+// source the lab carriage feeds (AC-FIELDS b monotonicity, AC-VIS c differentiation).
+// It is a phenomenological COLOR mapping, NOT a chemistry claim (taxonomy §10 caveat).
+// Mode 1 (ice-giant dark spot) does NOT redden — its "color" is a CLEARED darker hole
+// (deep aerosol showing through), a low-albedo neutral branch of the same age axis
+// (taxonomy 1.1 REGIME APPLICABILITY / 4.1). Pure + deterministic + headless-testable.
+export const CHROMOPHORE_STOPS = Object.freeze([
+  { a: 0.00, c: [0.96, 0.95, 0.93] },   // white  — fresh upwelled ammonia ice (no chromophore yet)
+  { a: 0.25, c: [0.93, 0.86, 0.68] },   // cream  — Equatorial-Zone
+  { a: 0.50, c: [0.88, 0.68, 0.44] },   // tan    — belt
+  { a: 0.75, c: [0.82, 0.50, 0.28] },   // orange
+  { a: 1.00, c: [0.74, 0.32, 0.18] },   // brick-red — aged GRS (max UV dosing)
+]);
+export function chromophoreColor(age, mode = 0) {
+  const t = clamp01(age);
+  if (mode === 1) {
+    // cleared dark hole: neutral + darkened, older ⇒ MORE cleared (fainter). Never reddens.
+    const k = 0.55 - 0.12 * t;
+    return [0.80 * k + 0.02, 0.82 * k + 0.02, 0.86 * k + 0.04];
+  }
+  const S = CHROMOPHORE_STOPS;
+  let i = 0;
+  while (i < S.length - 1 && t > S[i + 1].a) i++;
+  const lo = S[i], hi = S[Math.min(i + 1, S.length - 1)];
+  const f = clamp01((t - lo.a) / ((hi.a - lo.a) || 1));
+  return [
+    lo.c[0] + (hi.c[0] - lo.c[0]) * f,
+    lo.c[1] + (hi.c[1] - lo.c[1]) * f,
+    lo.c[2] + (hi.c[2] - lo.c[2]) * f,
+  ];
+}
+
 // The (macroSeed, stormSeed) placement identity — the SAME mix the legacy closures used, so a given pair
 // still owns ALL storm placement (card §6 item 8), now feeding alea namespaces instead of mulberry32.
 function stormIdentity(macroSeed, stormSeed) {
@@ -205,12 +240,21 @@ export function resolveStormE(regime = E5_REGIME.GAS_GIANT, drivers = {}, macroS
   const pRadius = STORM_PHYS.SPOT_R_MIN + STORM_PHYS.SPOT_R_SPAN * rngPlace();
   const pRot = (STORM_PHYS.SPOT_ROT_MIN + STORM_PHYS.SPOT_ROT_SPAN * rngPlace()) * primaryCand.rotSign;
   const pAspect = STORM_PHYS.SPOT_ASPECT_MIN + STORM_PHYS.SPOT_ASPECT_SPAN * rngPlace();
+  const pAge = rngAge();
+  const pPhase = rngPhase() * TWO_PI;
+  // V-α.5 DS2 sign-pack (F2): a dark spot's CH₄ companion rides the carriage .w slot with its
+  // MAGNITUDE = brightness (0.8) and its SIGN = placement — negative ⇒ the DS2 bright-CORED
+  // variant (companion centered ON the cleared core, taxonomy 4.4); positive ⇒ the GDS OFFSET
+  // companion (~1.3R east + 0.5R poleward, the Voyager-2 read). The GLSL reads abs(comp) so a
+  // negative (centered) flag still BRIGHTENS. The split is taken off the ALREADY-DRAWN place-once
+  // age (NO new rng draw) so the stormE:place stream draw-order + the golden mask are undisturbed.
+  const pCompanion = darkPrimary ? (pAge < 0.5 ? -0.8 : 0.8) : 0.0;
   const primary = makeVortex(
     primaryCand.lat, pLon, pRadius, pRot, pAspect,
     darkPrimary ? 1 : 0,
     darkPrimary ? 'dark-spot' : 'grs',
-    rngAge(), rngPhase() * TWO_PI,
-    darkPrimary ? 0.8 : 0.0,                            // dark spots carry a companion (CH₄ bright cloud slot)
+    pAge, pPhase,
+    pCompanion,
     primaryCand.node, primaryCand.score,
   );
 
