@@ -2687,6 +2687,20 @@ let _pendingBootReveal = true;
 let _foldSnapshotTaken = false;
 let _pendingPlayerWarp = null;
 
+// The honest regime for regime-gated decisions. _scManual is DISHONEST during
+// the boot window: a HELM pick is unconsumed until warpRevealSystem's reveal
+// (setScManual(true) at the HELM branch), so _scManual reads false for a HELM
+// boot the whole way from splash to reveal. While the boot reveal is pending,
+// the effective regime is the PICKED mode — the same boot-aware read the
+// title-end auto-warp gate and the nebula-linger gate use. Reading raw
+// _scManual at a player-intent entry site during that window silently
+// downgraded a HELM boot to an ORRERY instant-cut (re-check finding, 2026-07-15).
+function _effectiveRegime() {
+  return _pendingBootReveal
+    ? bootModeAction(_pendingBootMode).mode
+    : (_scManual ? 'helm' : 'orrery');
+}
+
 // The splash mode-picker action (boot-flow corrected 2026-06-27). The BLACK
 // ORRERY/HELM chooser is the cold-open; picking a station records it, then runs the
 // ORIGINAL begin flow UNCHANGED via startIntroSequence (DESHÉ/score logos → title →
@@ -2989,7 +3003,7 @@ function dispatchNavAction(action) {
     // 'warp-cinematic', today's beginWarpTurn portal/warpEffect path. ORRERY →
     // 'instant-cut': enter the selected system as an instant framed cut (no
     // cinematic, no shake, no fly-in), identity preserved via the warpTarget above.
-    if (systemEntryStyle({ regime: _scManual ? 'helm' : 'orrery' }).style === 'instant-cut') {
+    if (systemEntryStyle({ regime: _effectiveRegime() }).style === 'instant-cut') {
       _enterSystemInstantOrrery();
     } else {
       setTimeout(() => beginWarpTurn(), 500);
@@ -6914,7 +6928,7 @@ function commitSelection() {
     // navStarData/starIndex) already carries the SAME destination the warp would
     // resolve, so the instant-cut path preserves that identity. HELM falls through
     // to today's portal preview → warpEffect path, byte-unchanged.
-    if (systemEntryStyle({ regime: _scManual ? 'helm' : 'orrery' }).style === 'instant-cut') {
+    if (systemEntryStyle({ regime: _effectiveRegime() }).style === 'instant-cut') {
       _enterSystemInstantOrrery();
       return true;
     }
@@ -7121,10 +7135,16 @@ function focusPlanet(index) {
   if (index < 0 || index >= system.planets.length || system.planets.length === 0) {
     focusIndex = -1;
     // orrery-coherence-2026-07-15 live-drive fix: anchor the overview on the
-    // SYSTEM CENTER. Warp-arrival systems sit ≈ origin (post-rebase), so the
-    // center is ≈ (0,0,0) there and this is behavior-identical; instant-cut
+    // SYSTEM CENTER. Warp-arrival SINGLE-star systems sit ≈ origin (post-rebase),
+    // so the center is ≈ (0,0,0) there and this is behavior-identical; instant-cut
     // systems (spawnSystem forWarp:false) sit at their galactic position, where
     // the old origin anchor flung the overview ~100k units into empty space.
+    // BINARIES: the primary orbits the barycenter at offset r1, so this anchor
+    // pivots on the primary where the old code pivoted on the barycenter —
+    // negligible for close pairs, visible for wide ones. Which point a wide
+    // binary's overview SHOULD pivot on belongs to the parked presentation
+    // thread (well-dipper-binary-wide-separation); this matches
+    // _frameSystemForOrrery's deliberate star anchor until that's ruled.
     const _ovCenter = ((!system.type || system.type === 'star-system') && system.star?.mesh)
       ? system.star.mesh.position.clone() : null;
     if (system.planets.length > 0) {
@@ -9004,11 +9024,9 @@ function simStep(deltaTime) {
       // _scManual is NOT honest yet: the HELM pick is unconsumed until the warp
       // reveal. Reading _scManual stranded a HELM boot that clicked through the
       // title in the nebula forever. Same boot-aware read as the title-end gate:
-      // while the boot reveal is pending, the effective regime is the PICKED mode.
-      const _lingerRegime = _pendingBootReveal
-        ? bootModeAction(_pendingBootMode).mode
-        : (_scManual ? 'helm' : 'orrery');
-      if (!autoWarpTimerFires({ regime: _lingerRegime })) {
+      // while the boot reveal is pending, the effective regime is the PICKED mode
+      // (_effectiveRegime — shared with the systemEntryStyle player-entry sites).
+      if (!autoWarpTimerFires({ regime: _effectiveRegime() })) {
         _deepSkyLingerTimer = -1; // ORRERY: stop counting; no warp, no re-arm loop
       } else {
         _deepSkyLingerTimer -= deltaTime;
@@ -11156,7 +11174,7 @@ canvas.addEventListener('touchend', (e) => {
     // _enterSystemInstantOrrery helper auto-selects a target when none is set,
     // mirroring beginWarpTurn's own no-target autoselect. Mobile-HELM tour →
     // 'warp-cinematic', today's beginWarpTurn.
-    if (systemEntryStyle({ regime: _scManual ? 'helm' : 'orrery' }).style === 'instant-cut') {
+    if (systemEntryStyle({ regime: _effectiveRegime() }).style === 'instant-cut') {
       _enterSystemInstantOrrery();
     } else {
       beginWarpTurn();
@@ -11221,7 +11239,7 @@ if (mobileControls) {
       // seam map's enumerated list, but "every player-intent ORRERY system-entry
       // commit" per W2; leaving it ungated would be an AC2 hole on mobile.)
       // Mobile-HELM tour keeps today's beginWarpTurn.
-      if (systemEntryStyle({ regime: _scManual ? 'helm' : 'orrery' }).style === 'instant-cut') {
+      if (systemEntryStyle({ regime: _effectiveRegime() }).style === 'instant-cut') {
         _enterSystemInstantOrrery();
       } else {
         beginWarpTurn();
