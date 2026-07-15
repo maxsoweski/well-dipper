@@ -5400,6 +5400,26 @@
     fRings.add(state, 'ringThickness', 0.002, 0.06, 0.002).name('thickness (rebake)')
       .onChange(() => rebakeRingCloud());
 
+    // ── Left-pane IA (lab-ux 2026-07-15, AC-NAV — Max-ratified 4-group layout) ──
+    // DOM-ONLY moves, the render-safe pattern the fLegacy drawer + relevance filter
+    // already use: declaration lines stay untouched (the Seeds folder's INNER lines
+    // are about to be edited on the atmo branch — its re-nesting under World is
+    // DEFERRED to the post-merge pass to keep the rebase clean; reordering via
+    // domElement below touches no declaration lines, so it carries no rebase risk).
+    // Target order: World (open) · Seeds (open — the re-roll surface) · Drivers ·
+    // View & Light · Dev tools · Presets · Rings (all closed).
+    const fViewLight = guiLeft.addFolder('View & Light'); fViewLight.close();
+    const fDevTools  = guiLeft.addFolder('Dev tools (increment UAT/debug)'); fDevTools.close();
+    fViewLight.$children.append(fView.domElement, fEnv.domElement);
+    fDevTools.$children.append(fPlateRelief.domElement, fSubstrate.domElement,
+      fMixedDrivers.domElement, fScaleReadout.domElement);
+    fDrivers.$children.prepend(fGrainCarve.domElement);   // grain/carve = how writer relief routes → lives with the driver controls
+    // Top-level order (append re-slots each element at the end, in sequence):
+    guiLeft.$children.append(fWorld.domElement, fSeeds.domElement, fDrivers.domElement,
+      fViewLight.domElement, fDevTools.domElement, fPresets.domElement, fRings.domElement);
+    fSeeds.open();
+    for (const f of [fGrainCarve, fPlateRelief, fSubstrate, fView, fEnv, fDrivers]) f.close();
+
     applyDrivers();   // load the default driver bundle (Rocky) into the envelope uniforms
     applyWorldDefaults();   // lab-ux AC-DEFAULTS: fresh lab boots judgment-ready (water on water worlds, bands on giants)
 
