@@ -1,0 +1,68 @@
+{
+  "workstream": "world-engine-atmo-3b-storms-2026-07-14",
+  "commit": "51c769f",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "INSUFFICIENT",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC-0",
+      "result": "PASS",
+      "evidence": "Driver connectivity, named-consumer wiring, and taxonomy registration all verified against the actual diff (storm-e.js gas-gate on drivers?.composition==='h2-he', DAG readers named in-source/in-contract, no new archetype-string debt). Vitest planet-archetypes.test.js 21/21, storm-e test 21/21, full suite 1938/1942 matching claimed baseline. One out-of-scope observation flagged (missing automated GLSL uTime-absence guard) but doesn't change verdict.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-TAX",
+      "result": "PASS",
+      "evidence": "PHENOMENA-TAXONOMY.md covers all 6 giant regimes and all 9 required phenomena families with full per-entry fields; §8 traceability audit cross-checks cleanly against contract.json AC ids; git history confirms genuine unratified→ratified transition (832de93→705d11c) with no build commit preceding ratification, and slice commits demonstrably implement specific taxonomy entries/riders.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-WRITER",
+      "result": "PASS",
+      "evidence": "All 5 sub-criteria (no Math.random/Date.now + namespaced alea + byte-identical reruns; golden mask hash; argmax placement with deterministic tie-break; arm's-length re-derivation from returned params; reseed sweep sharing latitude) verified via passing vitest tests plus independent manual re-derivation outside the harness. Full suite 1938/1942, failures pre-existing/unrelated.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-FIELDS",
+      "result": "PASS",
+      "evidence": "Mask bounded/finite/shear-correlated, chromophore aging monotonic white→red, CH4 companion ice-giant-only and structurally adjacent, phase bank bounded with no-uTime confirmed in writer JS (grep) and manually in GLSL (no automated GLSL-side uTime regression test exists — flagged as a coverage gap, not a current defect).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-PARITY",
+      "result": "PASS",
+      "evidence": "Bake↔writer mask parity directly tested and green. uStorm/uPolar slot-fill provenance verified by static source-read of unchanged wiring plus an existing anti-regression guard (no dedicated numeric provenance test — pre-existing gap, not new). No new CPU/GLSL constant table introduced this diff, so parity-test N/A there. Full suite matches claimed unchanged baseline.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-OFFGATE",
+      "result": "PASS",
+      "evidence": "Failing-test/file set unchanged (4 tests/7 files, all pre-existing and unrelated to storms) despite total count rising from new storm tests. Quartet+dispatch-oracle+atmosphere-fence+writer bundle 242/242 matching commit's claim. Golden bandfield/emission hashes unchanged; storm writer never touches the carrier. Off-gate (non-gas ⇒ all-zero) tested green. Diff-fence: only permitted files touched across the whole workstream, no forbidden files, clean working tree.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-LIVE",
+      "result": "INSUFFICIENT",
+      "evidence": "No browser driven this pass (correct per layer=integration/live=true routing — static classification only). Diff on paper implements everything the AC lists (both-poles polar paint, canonical-N GUI range, ice-giant 3-phase lifecycle, haze-mute gating, Uranian obliquity variant, explicit hot-Jupiter suppression) and evidence/ already holds 4 screenshots from a prior live pass (Jovian bands+storms, Saturn north-hexagon, Saturn south-cap-eyewall, Neptune dark-spot+companion). Missing: sub-Neptune haze shot, Uranian-variant shot, Hot-Jupiter-suppression shot, reseed-determinism check, console-clean check, GUI-button-click path evidence — not one complete pass yet.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC-VIS",
+      "result": "INSUFFICIENT",
+      "evidence": "No browser driven this pass (correct per layer=integration/live=true routing). Filamentation term, storm interior structure (spiral/annuli/wake cone gated by vortex radius), and independent per-vortex chromophore aging are all wired and off-gated correctly per static/code read, but none has been observed live via a localized pixel/screenshot diff. No existing GUI/console hook isolates these sub-terms specifically (window._lab exposes state/setPreset/renderDeltaSweep keyed only on whole-feature toggles, not filamentation/interior-structure/wake individually) — a screen-projection-based localized-diff probe will need to be built for this check.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC-UAT",
+      "result": "deferred-to-max",
+      "evidence": "Layer=uat, Max's gate alone — no agent verdict rendered or should be rendered. Headless unit/integration baseline independently re-confirmed live this pass (storm test 21/21, full suite 1938/1942 matching claimed unchanged baseline) grounding that the underlying build is in the state claimed, but AC-0/AC-WRITER/AC-FIELDS/AC-PARITY/AC-OFFGATE were not re-verified item-by-item here (separate ACs' job), and AC-LIVE/AC-VIS were not driven.",
+      "adversarialVotes": "n/a — UAT is Max-only"
+    }
+  ],
+  "overall": "INSUFFICIENT — unit layer clean PASS (4/4), integration layer PASS on the 2 static/headless ACs (AC-PARITY, AC-OFFGATE) but blocked by 2 undriven live-integration ACs (AC-LIVE, AC-VIS); UAT deferred to Max and gated behind integration closing.",
+  "summaryForMax": "Repo confirmed: branch feature/world-engine-atmo-3b, HEAD 51c769f, working tree clean — this is the real state on disk, not just claimed.\n\nUnit layer: clean PASS. All 4 headless ACs (AC-0 driver-wiring/taxonomy-registration, AC-TAX taxonomy doc, AC-WRITER determinism/placement, AC-FIELDS mask/color/companion/phase math) verified via live vitest runs plus manual re-derivation, no gaps.\n\nIntegration layer: NOT yet closed. AC-PARITY and AC-OFFGATE (the static/headless integration checks — bake/writer parity, no-regression gates, diff-fence) are green. But AC-LIVE and AC-VIS require driving the running planet-lod-lab.html with chrome-devtools, and that has not happened in full — this is deferred to working-Claude (main thread), not to you. Specifically still needed: screenshots for sub-Neptune haze, the Uranian variant, and hot-Jupiter suppression (Jovian/Saturn-hexagon/Saturn-southcap/Neptune-darkspot are already captured in evidence/ from an earlier pass); a reseed-determinism check (same seed twice = identical, different seed = different); a console-clean pass; and — for AC-VIS specifically — a localized pixel-diff on the new filamentation term, the in-vortex interior structure (spiral/annuli/wake cone), and independent chromophore-age coloring between the primary storm and train members, since no existing probe isolates those sub-terms yet (one will need to be built).\n\nOnce working-Claude closes those two, here's what to look at for your own UAT (AC-UAT) — open planet-lod-lab.html yourself and, across a few preset regimes (Jupiter, Saturn, Neptune, a sub-Neptune, and a Uranian-obliquity case), check: does each planet's storm system look right to your eye — bands with visible filament turbulence near the jet streams, a great-spot-class vortex with visible interior swirl/wake, ice-giant dark spots that visibly age from white through to brick-red over their lifecycle with a companion cloud riding alongside, both poles showing distinct polar vortex structure (hexagon-capable on the active pole, a plainer cap on the far pole), the Uranian case reading as muted/near-featureless per the taxonomy's deliberate policy, and hot Jupiters showing no storm activity at all. There's no unit test or agent check that can tell you whether it looks convincing — that call is yours alone.",
+  "layerNote": "unit = PASS 3/3-adversarial (AC-0/AC-TAX/AC-WRITER/AC-FIELDS). integration = AC-PARITY + AC-OFFGATE PASS; AC-LIVE + AC-VIS INSUFFICIENT pending working-Claude's live drive on :5178 (owed items enumerated in each AC's evidence; verifier notes: token-scope the static grep to added GLSL [storm-e.js has innocent r0 identifiers]; run uTime-invariance with jets OFF; filamentation fires on any sheared gas deck — gating to storm-enable is a UAT taste call; wBand<0.5 cyclonic convention worth a live sanity glance). uat = deferred-to-max (bands 'ink dropped in water', spot not 'a simple oval'; carve-out: per-seed variety NOT judged — derive-not-freeze increment). Verify run wf_e369b08f-d7a, 35 agents, 2026-07-14."
+}
