@@ -100,4 +100,18 @@ Alpha-Cen A/B zero-fill-planets call; (3) final AC9 verdict.
 
 ---
 
+## UAT status at session seam (2026-07-15)
+
+Max, after the objective sweep + his stale-nav check: **"Looks like it's working."** The
+stale-nav-position flag did NOT reproduce for him → treated as agent-mechanics artifact, dropped
+(no lane D routing). **Formal AC9 verdict NOT yet given** — still owed: explicit pass/fail, the
+α-Cen A/B zero-fill ruling. Two follow-up questions handed to the next session (in the seam
+handoff): (1) easy mechanism to stop binary-system label overlap at max prism zoom (= the finding
+#1 label hard-requirement, wants a concrete lane-D answer); (2) the 36 Ophiuchi trio near Sol
+(Max spotted HD 155886 + HD 156026 + Guniibuu within ~0.2 ly reading as three separate singles —
+it's census row 5 of finding #1: a real bound triple, unified by the successor's companion-table
+entry; also answer the astronomy: systems that close are bound, not coincidental neighbors).
+
+---
+
 *(further findings append below as the UAT proceeds)*
