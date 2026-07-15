@@ -15,6 +15,15 @@
   ],
   "acceptanceCriteria": [
     {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15, SPINE-CONFORMANCE.md), scoped to a GUI-only workstream: (1) Driver connectivity — asserted N/A: this workstream reads no new scalars and adds no derivations (a new driver-reading control would be out of scope). (2) Named consumer — asserted N/A: no fields emitted. (3) Taxonomy registration — LIVE: the reorganized GUI keeps every retained feature control registered and scrape-visible — the planet-archetypes.test.js orphan-folder guard (which scrapes the literal .add(state,'<x>Enabled') form) and sibling drift guards stay green after every move; controls that deliberately live off the guard (the rings-proxy pattern) keep their documented proxy form.",
+      "verifyVia": {
+        "input": "Run the planet-archetypes drift-guard suite from the repo dir after each reorganization commit; diff audit confirms GUI layout/label changes only.",
+        "observable": "Drift guards green; no new state reads/derivations in the diff."
+      },
+      "layer": "unit"
+    },
+    {
       "id": "AC-DEFAULTS",
       "statement": "A fresh lab load is judgment-ready per world type: the features that matter for judging that preset are ON by default (water visible on water worlds; bands/storms/polar enabled on giants) — no manual flag-flipping before judging.",
       "verifyVia": {

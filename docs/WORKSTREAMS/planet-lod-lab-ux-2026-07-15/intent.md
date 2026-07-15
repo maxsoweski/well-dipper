@@ -19,6 +19,15 @@ all bite; trusting-state was NOT picked (out of scope unless it emerges). Legacy
 ruled: quarantine + badge, delete only what's provably dead. Solo-UAT bar ruled: "decluttered
 lab is enough" — no new guided-mode machinery.
 
+## DOES / UNLOCKS (Rule 15 card)
+
+**DOES:** GUI-only — emits no worldengine fields. Rebuilds the judging instrument: per-world-type
+judgment-ready defaults, Legacy quarantine + provenance badges, a navigable pane.
+
+**UNLOCKS:** Max's solo UAT — starting with the derive-not-freeze AC-UAT and every increment after;
+provenance legibility (the atmo-3b META-finding's fix); the "fresh person judges a world in 30s"
+north star.
+
 ## Success criteria (Max's language)
 
 - Right defaults: a fresh lab shows the world judgment-ready — the features that matter for
