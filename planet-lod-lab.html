@@ -168,6 +168,7 @@
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
     import { resolveStormE, bakeStormEAttributes, chromophoreColor } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp
+    import { drawGiantConditions, deriveGiantDrivers } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation) — replaces the frozen DRIVER_BUNDLES constants per seed
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -2769,19 +2770,31 @@
       const regime = E5_PRESET_REGIME[driverUI.preset];
       if (!regime) return;                                   // non-gas preset: attrs stay flat (unread)
       const _fp = DRIVER_PRESETS[driverUI.preset] || {};
+      // derive-not-freeze Slice D: derive the per-seed D-slot triple from the condition vector. The
+      // condition is derived FRESH here ([RESOLVED-BY-REVISE:2] — NOT state._lastBodyDrivers.condition,
+      // which is debounce-stale / Rocky-preset-wrong on the first synchronous giant bake). Same single-
+      // source pure derive buildBodyDrivers uses (deriveConditionVector), with the ensureNetworkRouted
+      // uniforms fallback. deriveConditionVector has NO macroSeed dep; per-seed variety comes entirely
+      // from drawGiantConditions(regime, condition, macroSeed).
+      const _gu = state._derived || deriveUniforms(_fp, driverUI.qualityTier);
+      const _gcond = deriveConditionVector(_fp, _gu, state.planetRadiusEarth);
+      const _gd = deriveGiantDrivers(drawGiantConditions(regime, _gcond, state.macroSeed | 0));   // { shellDepthFrac, internalHeat, dissipation }
       const drivers = {
+        ..._gd,                                                                            // per-seed triple OVERRIDES the frozen DRIVER_BUNDLES (resolveParams merges caller drivers on top)
         rotationRate: (9.9 / (_fp.rotationHours ?? 24)) * (state.e5RotationScale ?? 1),   // Jupiter 9.9h → 1.0
         radius: (_fp.radiusEarth ?? 1) / 11.2,                                            // Jupiter 11.2 → 1.0
       };
       if (state.e5Obliquity > 0) drivers.obliquityDeg = state.e5Obliquity;                // else regime default
       const pos = geometry.attributes.position;
-      const bake = bakeClimateE5Attributes(pos.array, pos.count, R, { regime, drivers, macroSeed: state.macroSeed | 0 });
+      const bake = bakeClimateE5Attributes(pos.array, pos.count, R, { regime, drivers, macroSeed: state.macroSeed | 0 });   // consumer (a) BANDS — reads _gd via drivers
       geometry.attributes.aBand.array.set(bake.aBand);   geometry.attributes.aBand.needsUpdate = true;
       geometry.attributes.aShear.array.set(bake.aShear); geometry.attributes.aShear.needsUpdate = true;
       geometry.attributes.aMush.array.set(bake.aMush);   geometry.attributes.aMush.needsUpdate = true;
       state.e5BandCount = bake.bandCount; state.e5EqSign = bake.eqSign; state.e5PeakU = bake.peakU;  // live-AC probes
       // #3b Slice P: bake the storm/convection MASK (the one new attribute) from the SAME regime/drivers,
-      // plus the composition gas-gate + T_eq personality inputs the storm writer reads.
+      // plus the composition gas-gate + T_eq personality inputs the storm writer reads. _sd inherits the
+      // derived _gd via ...drivers ([RESOLVED-BY-REVISE-2:minor-1] — consumer (b) MASK: miss it and the
+      // mask bakes FROZEN while the vortices derive, the exact skew reseedGiant()'s coherence rule kills).
       const _sd = { ...drivers, composition: _fp.atmosphere?.composition, T_eq: _fp.T_eq };
       const bakeStorm = bakeStormEAttributes(pos.array, pos.count, R, { regime, drivers: _sd, macroSeed: state.macroSeed | 0, stormSeed: state.stormSeed | 0 });
       geometry.attributes.aStorm.array.set(bakeStorm.aStorm); geometry.attributes.aStorm.needsUpdate = true;
@@ -2836,7 +2849,17 @@
         return [_bt[0] * 0.20 + _cr[0] * 0.80, _bt[1] * 0.20 + _cr[1] * 0.80, _bt[2] * 0.20 + _cr[2] * 0.80];  // grs / pearl / oval — age-reddened, lightly deck-tinted
       };
       const _stormRegime = E5_PRESET_REGIME[driverUI.preset] || E5_REGIME.GAS_GIANT;
+      // derive-not-freeze Slice D: the SAME per-seed D-slot triple the band + mask bakes use. Derived
+      // FRESH ([RESOLVED-BY-REVISE:2]) from the same (regime, condition, macroSeed) → identical _gd to
+      // rebakeE5Bands (drawGiantConditions is deterministic), so placement rides the SAME per-seed jets
+      // the bands + mask bake ([RESOLVED-BY-REVISE-2:minor-1] — consumer (c) VORTICES). The derived
+      // shellDepthFrac/internalHeat/dissipation OVERRIDE the frozen DRIVER_BUNDLES in resolveStormE's
+      // resolveParams → per-seed uPeak/m/sEq → per-seed storm latitudes (AC-LAT) on the shear argmax.
+      const _su = state._derived || deriveUniforms(_fp, driverUI.qualityTier);
+      const _scond = deriveConditionVector(_fp, _su, state.planetRadiusEarth);
+      const _sgd = deriveGiantDrivers(drawGiantConditions(_stormRegime, _scond, state.macroSeed | 0));
       const _stormDrivers = {
+        ..._sgd,                                     // per-seed triple (consumer c — vortices)
         rotationRate: (9.9 / (_fp.rotationHours ?? 24)) * (state.e5RotationScale ?? 1),
         radius: (_fp.radiusEarth ?? 1) / 11.2,
         composition: _fp.atmosphere?.composition,   // the gas gate (designDecision-5)
