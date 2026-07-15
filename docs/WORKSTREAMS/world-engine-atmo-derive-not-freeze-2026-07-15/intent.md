@@ -24,7 +24,7 @@ on L1. Canonical-N rider re-ruled: demoted from pin to regime-conditioned prior.
 
 | Output | Set by | Max sees |
 |---|---|---|
-| shellDepthFrac (was frozen) | derived per-seed from condition bundle | eq-jet sign / band structure varies per re-roll |
+| shellDepthFrac (was frozen) | derived per-seed from condition bundle | band structure varies per re-roll (eq-jet DIRECTION flip is plausibly Sub-Neptune-only — expectation set at the slice-R forms review) |
 | internalHeat (was frozen) | derived per-seed | jet strength / storm vigor varies per re-roll |
 | dissipation (was frozen) | derived per-seed | shear profile shifts → storm latitudes move |
 | storm placement lat+lon | derived shear argmax per seed | spots in a different place every seed |
