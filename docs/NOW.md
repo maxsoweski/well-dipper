@@ -4,6 +4,19 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> **▶ LANE B (2026-07-15): post-ship pair SCOPED + GREENLIT — build orrery-coherence first.**
+> Serves the SCREENSAVER heart (35%). Combined scoping interview (recovered from the interrupted
+> 7/11 VS Code seam via `~/briefings/handoff-lane-B-scope-inc2-orrery-2026-07-11.md`) produced two
+> sibling contracts, both greenlit by Max: **`orrery-coherence-2026-07-15`** (ratified rule:
+> *nothing flies in ORRERY* — instant framed entry, no auto-warps, BURN hidden, click-2 view
+> glide, nav-autopilot gate, mid-boot nav-selection wins, re-arm bounds; 8 ACs) and
+> **`autopilot-depart-2026-07-15`** (inc-2 DEPART: radial climb → orbit-to-horizon → transit;
+> ETA-scheduled decel replaces the "tractor beam" HOLD lerp; ≥90% arrival-rate gate + Step-0
+> residuals carried in; 8 ACs). Scope `7b31d5a`, greenlight `9396e43`. Ledger closes at the same
+> seam: cruise-stall-detector + autopilot-standoff-routing shipped-absorbed into `847ab19`;
+> supercruise-arrival-modes-2026-06-27 closed-superseded by mode-ownership. **NEXT = build
+> sibling A in a fresh session via opus-pinned workflows** (seam handoff in `~/briefings/`).
+
 > **🧭 Orientation chain (active focus):** Well Dipper → SCREENSAVER heart → LOD-lab renderer
 > (lab≠game, by design) → Phase 2 per-feature quality pass → **Theme A (wrong generation
 > primitive) → #3 rivers ✅ SHIPPED (2026-06-19); F11 retired + dendritic made first-class
