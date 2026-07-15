@@ -152,22 +152,68 @@ entry; also answer the astronomy: systems that close are bound, not coincidental
 difficult legibility, in the PRISM view. But the SYSTEM view doesn't match the PRISM view for
 binary/trinary systems today so that is not a pass."
 
-**Code grounding (this session, read-only):** SYSTEM view always renders arrival truth —
-`sys.isBinary && sys.star2` draws primary + companion with barycentric offsets and dashed
-orbit rings (`NavComputer.js` system-level star block, ~`:1754-1810`). PRISM view learns
-multiplicity only two accidental ways: (a) the Escape-stash hack — leaving a system copies
-`_systemData.isBinary` onto that ONE prism marker (`match._isBinary`, ~`:865-870`), so the
-double-dot glyph appears only on the last-visited system; (b) real pairs HYG catalogued as
-separate rows render 2 dots. Every unvisited procgen binary = 1 dot; Sirius (companion has no
-HYG row) = 1 dot in PRISM but 2 stars in SYSTEM view. Same root cause as finding #1, observed
-across the PRISM↔SYSTEM seam.
+**⚠ MECHANISM CORRECTED (same day, after Max challenged the first write-up):** the original
+"SYSTEM view always renders arrival truth / same root cause as finding #1" claim was WRONG.
+Live investigation of Max's illustrative case (the 36 Oph trio) found the real mechanism —
+FIVE layers that disagree, with THREE root causes beyond finding #1:
 
-**Consequence:** supersedes the 2026-07-14 "ships without blocking on it" disposition — the
-finding-#1 successor scope (multiplicityForSeed oracle + companion table/dedup + N-dot glyph
-+ label-declutter pass, all recorded above) is now **BLOCKING for AC9**. No new design needed:
-the oracle principle already states this finding's fix exactly — a prism glyph must never
-contradict what warping delivers, i.e. PRISM must match SYSTEM view. AC9 re-runs after that
-workstream is live on `:5176`.
+1. **PRISM** — 3 single gold dots (one per catalog row) + colliding labels. As before
+   (finding #1 territory).
+2. **Seed identity is pipeline-dependent — THREE different formulas** (live-verified):
+   (a) search resolver + `RealStarCatalog.findVisible` share
+   `hashCombine(round(x·1e4), hashCombine(round(y·1e4), round(z·1e4)))` — **0.1 pc position
+   quantization → all three trio stars collapse to ONE seed 1336718286**: search-warping any
+   of the three names delivers the same system; (b) the prism merge's matched branch
+   (`NavComputer.js` real-star overlay, symbol `_queryYRange` merge) **retains the replaced
+   hash-grid star's seed** (Guniibuu → 3993234634, HD 155886 → 3256345130); (c) its unmatched
+   branch uses a degenerate `round(x·1e4) ^ round(z·1e4)` XOR that ignores y entirely
+   (HD 156026 → −80059). Arrival generates from the **dispatched** seed
+   (`main.js` `seed = String(resolvedStar.seed)` + every `[WARP] pre-generated (seed …)` log)
+   and prism commits carry the entry's own seed (`_buildCommitAction`) → **the same named
+   star generates different systems depending on how it was selected.**
+3. **SYSTEM view** — only the CURRENT system shows actual spawned data. Any *browsed*
+   system renders a locally generated PREVIEW (`_renderSystem` non-current branch:
+   `StarSystemGenerator.generate(String(star.seed), galaxyCtx)`) that **never applies
+   RealSystemOverlay** — no companion table, no knownPlanets, no snum pin — and uses the
+   nav's own selected-entry seed. Live: preview for selected Guniibuu = **6 planets**;
+   arrival at Guniibuu = **K+K binary + 4 planets** (console msgids 1328-29 vs 1336-39).
+4. **Arrival** — overlay-applied generation from the dispatched seed. For the trio: no
+   curated table entry, and the snum pin CANNOT fire (it sits inside the exoplanet-archive
+   host branch, `RealSystemOverlay.resolve` — 36 Oph has no archive planets) → procgen
+   freely **fabricates a companion**: search-arrival = fictional K+K tight binary @0.16 AU
+   + 4 planets (`[BINARY] star2 … sep=159.64` log-confirmed).
+5. **Reality** — a genuinely bound K+K+K triple at ~5,000–9,000 AU separations.
+
+So in-game today the trio is: 3 prism dots ≠ a 6-planet SYSTEM preview ≠ one shared
+fabricated-binary arrival (via search) or three DIFFERENT arrivals (via prism clicks) ≠ the
+real bound triple. (Census row 5's "THREE separate systems in-game" was the data-level view;
+the runtime picture above supersedes it.)
+
+**Consequence:** supersedes the 2026-07-14 "ships without blocking on it" disposition — this
+is **BLOCKING for AC9**, and the fix is BIGGER than the drafted successor scope. The drafted
+scope (multiplicityForSeed oracle + companion table/dedup + N-dot glyph + label-declutter)
+covers the glyph layer and gives the trio a table entry, but does NOT cover three newly
+grounded root causes, which go to the scoping interview as open scope questions:
+- **Seed-identity unification** — one canonical seed per star across search / prism merge /
+  sky pipelines (kills both the 0.1 pc collision collapse and the path-dependent arrivals).
+- **Preview honesty** — SYSTEM view for a browsed system must preview what arrival would
+  actually deliver (apply the overlay + the canonical seed, or don't show planets at all).
+- **Fabrication reach ruling (Max's call)** — should un-tabled, un-hosted REAL stars ever
+  roll fictional companions? The snum pin only reaches exoplanet-archive hosts today;
+  most of the 15,599 catalog stars are outside it.
+AC9 re-runs after the fix workstream is live on `:5176`.
+
+**Evidence & retractions (agent-drive hygiene):** the `:5176` window had the boot demo tour
+still armed (`autoNav` + `onTourComplete` re-arm) — it auto-warped between systems during
+agent drives. Two mid-investigation live claims were tour-contaminated and are RETRACTED:
+"prism-click Guniibuu arrives as an M single" (that was the tour's own Xotger hop) and
+"HD 155886/156026 warps refused as same-destination" (dispatches swallowed while the tour
+owned the nav). The conclusions above rest only on code paths + direct seed probes + the
+log-confirmed Guniibuu arrival. Tour STOPPED this session; window re-parked at Sol, suite
+19/19. Process rule for future drives: **stop `window._autoNav` before any nav-driving**; a
+splash-boot via synthetic Space lands in perpetual demo mode (synthetic internal calls don't
+count as user input for mode-ownership cancellation). Flag for lane B: whether the tour's
+re-arm loop should survive past the boot at all.
 
 **α-Cen A/B ruling (same exchange):** Max questioned the premise ("should some systems not
 realistically be empty of planets? What am I missing?") — empty-is-realistic stands. Recorded
