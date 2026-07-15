@@ -4,18 +4,18 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> **▶ LANE B (2026-07-15): post-ship pair SCOPED + GREENLIT — build orrery-coherence first.**
-> Serves the SCREENSAVER heart (35%). Combined scoping interview (recovered from the interrupted
-> 7/11 VS Code seam via `~/briefings/handoff-lane-B-scope-inc2-orrery-2026-07-11.md`) produced two
-> sibling contracts, both greenlit by Max: **`orrery-coherence-2026-07-15`** (ratified rule:
-> *nothing flies in ORRERY* — instant framed entry, no auto-warps, BURN hidden, click-2 view
-> glide, nav-autopilot gate, mid-boot nav-selection wins, re-arm bounds; 8 ACs) and
-> **`autopilot-depart-2026-07-15`** (inc-2 DEPART: radial climb → orbit-to-horizon → transit;
-> ETA-scheduled decel replaces the "tractor beam" HOLD lerp; ≥90% arrival-rate gate + Step-0
-> residuals carried in; 8 ACs). Scope `7b31d5a`, greenlight `9396e43`. Ledger closes at the same
-> seam: cruise-stall-detector + autopilot-standoff-routing shipped-absorbed into `847ab19`;
-> supercruise-arrival-modes-2026-06-27 closed-superseded by mode-ownership. **NEXT = build
-> sibling A in a fresh session via opus-pinned workflows** (seam handoff in `~/briefings/`).
+> **▶ LANE B (2026-07-15, build session): `orrery-coherence-2026-07-15` → VERIFIED_PENDING_MAX
+> `8b35ec4` — ⭐ AWAITING MAX's AC8 UAT.** Serves the SCREENSAVER heart (35%): ORRERY is now
+> player-driven viewing by construction — nothing flies in ORRERY. Built in 3 opus-workflow
+> increments (AC1 reducers TDD `orreryCoherence.test.js` 27 tests → entry/timers/BURN/autopilot
+> wiring → glide/nav-wins/re-arm), each 2-lens adversarially reviewed; verify-full wf_3786dbdc-f25
+> (unit PASS 3/3-adv) + working-Claude live drives on :5173 closed AC2/AC3/AC4/AC5/AC7 with FOUR
+> live-caught fixes (entry framing anchor+scale+binary-clamp; overview-fling; boot-aware linger
+> gate — a HELM-boot-stranding regression; boot-flag consume). AC6 unit+static green, live folded
+> into Max's UAT (turn-window timing; steps in contract statusNote). Suite 422/422, build green,
+> zero console errors. **UAT script + taste items: contract statusNote + seam handoff
+> `~/briefings/handoff-lane-B-orrery-verified-2026-07-15.md`. Sibling
+> `autopilot-depart-2026-07-15` queued (build after A ships).**
 
 > **🧭 Orientation chain (active focus):** Well Dipper → SCREENSAVER heart → LOD-lab renderer
 > (lab≠game, by design) → Phase 2 per-feature quality pass → **Theme A (wrong generation

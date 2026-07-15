@@ -1,0 +1,37 @@
+{
+  "workstream": "orrery-coherence-2026-07-15",
+  "commit": "8b35ec4",
+  "kind": "live-integration-addendum",
+  "driver": "working-Claude (chrome-devtools :9223, dev :5173, isolated context laneB-orrery, closed after)",
+  "date": "2026-07-15",
+  "baseVerdict": "verdict.json (wf_3786dbdc-f25 at 188809f: unit PASS 3/3-adv; AC2-AC7 static-sound, live-barred)",
+  "perAC": {
+    "AC2-instant-framed-entry": {
+      "result": "PASS",
+      "evidence": "Player route bg-star click ('GEKMOR-4' / 'XND J3J4AV9I' / 'WOLMUN-4P' targets) + Space -> [ORRERY] instant framed cut log, no warpEffect/portal/shake lines, pilotPhase IDLE + camBypassed:false throughout, arrival framed: camera-to-star EXACTLY 1.5x clamped outermost scene orbit (174718.2 vs 174718.5; binary case 3838772.6 vs .7 pre-clamp), star bracket-labeled center screen (evidence/ac2-fixed-normal-system-framed.jpeg). TWO live-caught defects fixed in 8b35ec4: origin-anchored framing (systems spawn at galactic position; camera orbited empty space 101,505u from the star) and data-vs-scene radius (~30x under-frame) + wide-binary >5x-gap clamp."
+    },
+    "AC3-no-auto-warps-in-orrery": {
+      "result": "PASS",
+      "evidence": "ORRERY boot sat through the full ~3:16 title window (foreground tab, elapsed 309s): title auto-dismissed, ZERO warp lines, station orrery, IDLE. Nebula-linger: >40s in the title deep-sky post-dismiss, no warp-away (timer set at dismiss would fire at 15s). HELM twin: linger warp FIRED on a HELM boot after manual title dismissal ('Warp: pre-generated...' -> reveal -> scManual:true tour:true CRUISE). Live-caught defect fixed in 8b35ec4: the linger gate read _scManual, which is false pre-reveal even for a HELM boot -> manual-dismissal HELM boots were stranded in the nebula (regression, now boot-aware via _pendingBootMode)."
+    },
+    "AC4-burn-hidden-no-silent-swap": {
+      "result": "PASS",
+      "evidence": "ORRERY with planet selected (Mopaesnou): commit-burn-btn display:none; Space fully inert (station orrery, pilot IDLE, selection intact, same system). Nav burn dispatch: [NAV DISPATCH] type=burn -> '[NAV] burn inert in ORRERY (burnWorkflowAvailable)' -> nothing flew. HELM twin: burn action alive — selected Kezitix + Space -> [BURN START] planet, flightMode assist, pilot HOLD (today's behavior). Note: the nav commit produced type=burn for a foreign star via the PRE-EXISTING _isCurrentSystem position-seeding quirk (NavComputer.js untouched; lane C identity-defect family) — the gate neutered it correctly."
+    },
+    "AC5-click-click-view-glide": {
+      "result": "PASS",
+      "evidence": "Three bodies across two systems: click-1 selects only (selectedTarget set, pilot IDLE); click-2 glides the VIEW — camera-to-body 16342->0.1, 236.6->0.8, 174718->0.3 (radius-derived viewDist), log '[ORRERY] click-2 VIEW glide -> <body> — nothing flew (bodyClickAction glide-view)', camBypassed:false + pilot:false throughout, arrival visual = planet disc framed with brackets (evidence/ac5-glide-arrived-mopaesnou.jpeg). Ships select-only by construction. Tab in ORRERY cycles selection view-only (W1). TASTE for UAT: log-space ease covers cross-system zooms in ~0.5-1s (reads as fast snap-zoom at 6 decades; smooth at planet-to-planet range)."
+    },
+    "AC6-midboot-nav-selection-wins": {
+      "result": "DEFERRED-TO-MAX-UAT",
+      "evidence": "Unit (navDispatchDuringWarp 8 cells) + static (both adversarial lenses traced stash-consume at reveal + turn-preserving overwrite; composition order verified: during-warp check precedes entry-style, regime-independent — correct for the pre-reveal window). Live NOT closed: (a) the nav commit degrades to type=burn in contexts where _isCurrentSystem misfires (pre-existing, lane C family), (b) the player window is the warp TURN phase (N is gated during warpEffect) — several seconds wide with visual feedback for a human, not reliably reachable by synthetic choreography (3 attempts). Max's UAT step: boot HELM, when the boot warp TURN starts press N, pick any different star, commit — the [WARP]/[NAV DISPATCH] console lines name the winner; arrival must be the selection."
+    },
+    "AC7-screensaver-rearm-bounds": {
+      "result": "PASS",
+      "evidence": "All three cells live: ORRERY _triggerTourComplete -> '[TOUR] onTourComplete re-arm DENIED (regime=orrery, handsOn=false)', nothing armed. HELM hands-off -> re-arm FIRED ([NAV-SEQ] chain -> warp onward to seed 3488028832 -> arrival). HELM hands-on (post-burn-takeover) -> '[TOUR] onTourComplete re-arm DENIED (regime=helm, handsOn=true)'. handsOn derived (_scManual && !freeLook.latched), no stored bit."
+    }
+  },
+  "console": "zero errors across all drives (includePreservedMessages sweep)",
+  "suites": "422/422 flight+auto+camera at 8b35ec4; build green",
+  "protocol": "wd-nav-drives-autopilot-off honored (autoNav stopped/confirmed inactive before nav reads; own dispatch seeds confirmed in logs); tab foregrounded for timed checks; no drives during verify workflow"
+}
