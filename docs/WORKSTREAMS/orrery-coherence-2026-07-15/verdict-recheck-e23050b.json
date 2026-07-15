@@ -1,0 +1,51 @@
+{
+  "kind": "adversarial-recheck-addendum",
+  "workstream": "orrery-coherence-2026-07-15",
+  "date": "2026-07-15",
+  "commit": "e23050b",
+  "supplements": ["verdict.json", "verdict-live-drives-8b35ec4.json"],
+  "why": "The build session's context was well past the smart window when the four 8b35ec4 live-drive fixes were authored with NO workflow review (Tier 1 of the seam handoff's risk map). This re-check ran in a fresh session BEFORE handing Max the UAT.",
+  "method": {
+    "workflow": "wf_32f3fac9-81a — 2 opus lenses in parallel (contract-fidelity; adversarial sequence-breaker with the Tier-1 items as named targets), plain-text VERDICT returns, 326k subagent tokens, 55 tool calls",
+    "independent": "working-Claude (Fable, fresh context) traced the same seams in-thread before reading lens output; the HIGH finding was derived independently by both the in-thread trace and the sequence-breaker lens — same mechanism, same fix shape"
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "status": "FIXED at e23050b",
+      "title": "Boot-window HELM downgrade at the systemEntryStyle player-entry sites",
+      "mechanism": "The four player-intent entry gates (nav dispatch 'normal' branch, commitSelection/Space, mobile double-tap, mobile WARP button) read raw _scManual, which is false for the whole boot window even on a HELM pick (consumed only at warpRevealSystem). A HELM booter who manually dismissed the title and entered a system during the 15s nebula linger (or after activity-cancel, indefinitely) resolved to 'orrery' → instant-cut → _enterSystemInstantOrrery's flag consume hardcoded _pendingBootMode='orrery' — the pick silently destroyed, no tour ever armed, unrecoverable without relaunch. The 8b35ec4 diff fixed this exact _scManual dishonesty at the title-end and linger gates but missed the entry sites.",
+      "fix": "_effectiveRegime() helper (pending boot reveal → bootModeAction(_pendingBootMode).mode, else _scManual read) shared by the four entry sites and the linger gate. Title-end gate untouched (definitionally pre-reveal). In-system interaction gates (Tab/body-click/burn/re-arm/autonav toggles) deliberately stay on raw _scManual — inert pre-reveal (no bodies, no tour), none consume boot flags, both lenses cleared them.",
+      "uatStep": "Boot HELM → key-dismiss the title → immediately enter a system (bg-star + Space, or N + pick + commit) → expect the CINEMATIC warp and the tour armed at YOUR target."
+    },
+    {
+      "severity": "low",
+      "status": "COMMENT-CORRECTED at e23050b (behavior unchanged, choice surfaced to Max)",
+      "title": "focusPlanet(-1) binary overview pivots on the primary, not the barycenter",
+      "mechanism": "For binaries the primary sits at offset r1 from the barycenter, so the new star anchor shifts the Esc-overview pivot off the old origin/barycenter pivot — negligible for close pairs, visible for wide ones. 'Behavior-identical' held only for single-star systems.",
+      "disposition": "Matches _frameSystemForOrrery's deliberate star anchor; which point a wide binary's overview should pivot on belongs to the parked well-dipper-binary-wide-separation thread. Comment corrected to say so."
+    }
+  ],
+  "clearedByBothLenses": [
+    "viewSystem(center) copy semantics — all callers pass clones, .copy() snapshot, no aliasing; cameraController confirmed a ShipCameraSystem so the param lands",
+    ">5x-gap contiguous orbit clamp — 1-planet/equal/NaN-filtered/fallback paths sane",
+    "deep-sky instant-cut — reachable only via the external-galaxy Easter egg; spawnDeepSky places at origin post-_resetWorldOrigin, matching the origin _center anchor",
+    "boot-flag double-consume — warpRevealSystem's consume is idempotent after instant-cut's; no starvation",
+    "M-swap mid-boot — _doModeSwap no-ops without a live star system, cannot corrupt boot flags",
+    "_pendingPlayerWarp stash — consumed at the very next reveal; no concrete stale-redirect sequence constructible",
+    "_orreryEntryInFlight re-entry guard vs async awaits — holds",
+    "linger timer economy — no ORRERY re-arm busy loop; HELM always warps away",
+    "HELM byte-equivalence across every touched seam (fidelity lens, enumerated)",
+    "reducers pure/deterministic; tests assert decision tables, not implementation echoes"
+  ],
+  "verifyLightAtCommit": {
+    "run": "wf_fb37f8ac-161 (verify-workstream light, commit e23050b)",
+    "perLayer": { "unit": "PASS", "integration": "INSUFFICIENT (AC6 only)", "uat": "deferred-to-max" },
+    "note": "Unit re-run green (36/36 + 1247/1247 full repo ex-vendor); AC2/3/4/5/7 carried from the 8b35ec4 live drives and reconfirmed unregressed at e23050b. AC6 remains the sole live-open item — the warp-TURN input window is not synthetically reachable (0/3 prior attempts); its console-observable check is folded into Max's UAT session, with a debug-hook synthetic retry available if Max prefers agent closure."
+  },
+  "gatesAtCommit": {
+    "suites": "422/422 (flight+auto+camera)",
+    "build": "green",
+    "byteGuards": "SupercruiseModel/SupercruisePilot/AutoNavigator/tourStandoff/NavComputer.js zero-diff vs 8f1d8e8"
+  }
+}

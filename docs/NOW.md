@@ -4,17 +4,21 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> **▶ LANE B (2026-07-15, build session): `orrery-coherence-2026-07-15` → VERIFIED_PENDING_MAX
-> `8b35ec4` — ⭐ AWAITING MAX's AC8 UAT.** Serves the SCREENSAVER heart (35%): ORRERY is now
-> player-driven viewing by construction — nothing flies in ORRERY. Built in 3 opus-workflow
-> increments (AC1 reducers TDD `orreryCoherence.test.js` 27 tests → entry/timers/BURN/autopilot
-> wiring → glide/nav-wins/re-arm), each 2-lens adversarially reviewed; verify-full wf_3786dbdc-f25
-> (unit PASS 3/3-adv) + working-Claude live drives on :5173 closed AC2/AC3/AC4/AC5/AC7 with FOUR
-> live-caught fixes (entry framing anchor+scale+binary-clamp; overview-fling; boot-aware linger
-> gate — a HELM-boot-stranding regression; boot-flag consume). AC6 unit+static green, live folded
-> into Max's UAT (turn-window timing; steps in contract statusNote). Suite 422/422, build green,
-> zero console errors. **UAT script + taste items: contract statusNote + seam handoff
-> `~/briefings/handoff-lane-B-orrery-verified-2026-07-15.md`. Sibling
+> **▶ LANE B (2026-07-15, build session + fresh-session re-check): `orrery-coherence-2026-07-15`
+> → VERIFIED_PENDING_MAX `e23050b` — ⭐ AWAITING MAX's AC8 UAT.** Serves the SCREENSAVER heart
+> (35%): ORRERY is now player-driven viewing by construction — nothing flies in ORRERY. Built in
+> 3 opus-workflow increments (AC1 reducers TDD `orreryCoherence.test.js` → entry/timers/BURN/
+> autopilot wiring → glide/nav-wins/re-arm), each 2-lens adversarially reviewed; verify-full
+> wf_3786dbdc-f25 (unit PASS 3/3-adv) + working-Claude live drives on :5173 closed
+> AC2/AC3/AC4/AC5/AC7 with FOUR live-caught fixes at `8b35ec4`. **Fresh-session adversarial
+> re-check 2026-07-15 (wf_32f3fac9-81a + independent trace): 1 HIGH fixed at `e23050b` —
+> boot-window HELM downgrade at the four systemEntryStyle entry sites (raw `_scManual` read
+> pre-reveal; now boot-aware `_effectiveRegime()`), 1 LOW comment-corrected (binary overview
+> pivots on primary, parked to wide-separation thread); verify-light wf_fb37f8ac-161 unit PASS,
+> AC2–AC7 unregressed. Record: `verdict-recheck-e23050b.json`.** AC6 unit+static green, live
+> folded into Max's UAT (turn-window timing; steps in contract statusNote incl. the NEW e23050b
+> HELM boot-window step). Suite 422/422, build green. **UAT script + taste items: contract
+> statusNote + seam handoff `~/briefings/handoff-lane-B-orrery-verified-2026-07-15.md`. Sibling
 > `autopilot-depart-2026-07-15` queued (build after A ships).**
 
 > **🧭 Orientation chain (active focus):** Well Dipper → SCREENSAVER heart → LOD-lab renderer
