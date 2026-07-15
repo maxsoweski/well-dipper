@@ -191,17 +191,26 @@ export class RealSystemOverlay {
     // ── Pin-by-default single (FIX-3; Max ruling 2026-07-15) ──────────────
     // A REAL catalog star the curated table does NOT cover and the exoplanet
     // archive does NOT host arrives SINGLE — it never rolls a fabricated
-    // stellar companion. resolve() is only ever invoked for a resolved
-    // real-catalog arrival (the main.js warp + teleport real-star branches),
-    // so "no tableEntry and no host" here is exactly an un-tabled, un-hosted
-    // REAL star; procgen (non-real) stars never reach this module and keep
-    // their live binary roll. One-directional (rides the same forceBinary=false
-    // path as the archive-snum pin — only suppresses fabrication, never adds
-    // structure; no StarSystemGenerator edit) and data-wins by construction:
-    // the table (above) and the archive snum (BOTH directions — snum==1 pins,
-    // snum>=2 kept its roll) already decided wherever they cover, so this
-    // default only fills the no-data remainder. Precedence: table > snum > pin.
-    if (!tableEntry && !host) {
+    // stellar companion. The pin is GATED on the arrival name actually being a
+    // real catalog star (_catalogByName.has). resolve() is NOT invoked only for
+    // real stars: the main.js WARP call site (warp else branch) applies the
+    // overlay for EVERY non-KnownSystems arrival, procgen included — a procgen
+    // star's warpTarget.name is a non-empty generateSystemName string, so an
+    // ungated "no tableEntry and no host" default would suppress that procgen
+    // star's live binary roll (AC5(e) breach). The catalog-membership check
+    // keeps reach to real arrivals only; the real-proper-name blocklist
+    // guarantees a procgen name can never equal a real catalog name, so the gate
+    // fires for exactly the un-tabled, un-hosted REAL stars. One-directional
+    // (rides the same forceBinary=false path as the archive-snum pin — only
+    // suppresses fabrication, never adds structure; no StarSystemGenerator edit)
+    // and data-wins by construction: the table (above) and the archive snum
+    // (BOTH directions — snum==1 pins, snum>=2 kept its roll) already decided
+    // wherever they cover, so this default only fills the no-data remainder.
+    // Precedence: table > snum > pin. CONSTRAINT: the pin therefore requires the
+    // overlay to have been built WITH catalogStars — RealStarCatalog always
+    // passes them; an overlay constructed pure-name (no catalogStars) pins
+    // nothing.
+    if (!tableEntry && !host && this._catalogByName.has(starName)) {
       result.companionSpec = { kind: 'single', source: 'pin-by-default' };
     }
 

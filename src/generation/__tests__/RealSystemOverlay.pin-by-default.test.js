@@ -197,22 +197,53 @@ describe('AC5(d) — un-tabled archive snum>=2 host: 55 Cnc keeps its companion 
   });
 });
 
-describe('AC5(e) — pure procgen star: the pin never reaches it, the binary still rolls', () => {
-  // A procgen (non-real) star never passes through the overlay — resolve() is
-  // never called for it, so no companionSpec is ever synthesized. 'procgen-b0'
-  // rolls a binary on a bare procgen ctx and must keep doing so.
+describe('AC5(e) — pure procgen star THROUGH the arrival merge: the pin never reaches it', () => {
+  // The WARP arrival path (main.js warp else, ~:3604) runs applyToContext for a
+  // procgen star too — with warpTarget.name = a generateSystemName string that is
+  // NOT a real catalog name. So the AC5(e) observable ("the pin never reaches
+  // procgen stars") must be proven THROUGH the overlay merge the real pipeline
+  // actually runs, not on a bare ctx that skips applyToContext (the merge is the
+  // component under test — a bare-ctx assertion is a strawman). The real-star
+  // gate (arrival name ∈ catalog) keeps the pin out of reach: resolve() supplies
+  // nothing, the merged ctx stays byte-identical to pure procgen, and the binary
+  // rolls. 'procgen-b0' rolls a binary on a bare procgen ctx and must keep doing
+  // so after the merge.
   const SEED = 'procgen-b0';
-  const build = () => baseCtx(); // no starTypeOverride, no overlay, no companionSpec
+  const PROCGEN_NAME = 'Zsubaneth-4471'; // generateSystemName-style; not a catalog star
+  const build = () => OV().applyToContext(baseCtx(), PROCGEN_NAME); // the real merge step
 
-  it('a binary-rolling procgen seed still rolls its binary (pin out of reach)', () => {
-    const ctx = build();
-    expect('companionSpec' in ctx).toBe(false);
-    const sys = StarSystemGenerator.generate(SEED, ctx);
+  it('the procgen name is NOT a real catalog star (gate precondition)', () => {
+    // If a procgen name ever collided with a real catalog name, the
+    // real-proper-name blocklist would be the bug, not this module — pin the
+    // precondition so the gate is exercised against a genuinely non-catalog name.
+    expect(OV()._catalogByName.has(PROCGEN_NAME)).toBe(false);
+  });
+
+  it('resolve(procgenName) supplies NO companionSpec — the pin is gated on catalog membership', () => {
+    const r = OV().resolve(PROCGEN_NAME);
+    expect('companionSpec' in r).toBe(false);
+    expect('knownPlanets' in r).toBe(false);
+    expect(r.tableEntry).toBeUndefined();
+    expect(r.host).toBeUndefined();
+  });
+
+  it('applyToContext(procgenName) leaves ctx byte-identical to bare procgen (zero-data arrival stays pure procgen)', () => {
+    const bare = baseCtx();
+    const merged = build();
+    expect('companionSpec' in merged).toBe(false);
+    expect(rt(merged)).toEqual(rt(bare));
+  });
+
+  it('a binary-rolling procgen seed still rolls its binary THROUGH the merge (pin out of reach)', () => {
+    // Bare baseline rolls a binary…
+    expect(StarSystemGenerator.generate(SEED, baseCtx()).isBinary).toBe(true);
+    // …and the same seed through the real procgen arrival merge (applyToContext).
+    const sys = StarSystemGenerator.generate(SEED, build());
     expect(sys.isBinary).toBe(true);
     expect(sys.star2).not.toBeNull();
   });
 
-  it('generate twice → deep-equal systemData (deterministic)', () => {
+  it('generate twice through the merge → deep-equal systemData (deterministic)', () => {
     expect(rt(StarSystemGenerator.generate(SEED, build())))
       .toEqual(rt(StarSystemGenerator.generate(SEED, build())));
   });
