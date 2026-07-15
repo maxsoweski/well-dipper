@@ -1,0 +1,107 @@
+{
+  "workstream": "world-engine-atmo-derive-not-freeze-2026-07-15",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "statusNote": "SCOPED 2026-07-15 (dev-collab-scope interview folding Max's five atmo-3b UAT findings; findings verbatim in the atmo-3b contract statusNote @ bdcf06d). Max's shape ruling: SPLIT, variety first — this increment carries findings 1 (same-place-every-seed storms), 5 (static/always-present polar vortices), and the placement/direction half of 4 (belt-regular bands), PLUS the confirmed reseed-wiring gap as slice 1. Findings 2 (phenomenon interaction) + 3 (ink-in-water) + smooth-vs-jagged half of 4 = the follow-on expression increment (unscoped). Legacy/provenance legibility (the META finding) = the simultaneous planet-lod-lab-ux-2026-07-15 workstream on L1 main. Canonical-N rider B RE-RULED at this interview: demoted from pin to regime-conditioned PRIOR with per-seed presence gating. AWAITING MAX GREENLIGHT before build.",
+  "programRef": "world-engine-history-program-2026-06-27/ATMOSPHERE-PLAN.md §(e) derive-not-freeze row (the declared future deriver named by atmo-3b's AC-0: shellDepthFrac/internalHeat/dissipation gain D-slots) + atmo-3b designDecision 3 (variety routed here; Max's standing UAT criterion 'every re-roll seriously different').",
+  "designDecisions": [
+    "WIRING FIX IS SLICE 1 (Max folded it here, not a standalone light fix): the 'New planet' button (~L5188) and macro-seed GUI slider (~L5186) call updateSeedUniforms()+rebakeE5Bands() but never applyDrivers() — the storm/polar writer never re-runs on those reseed paths (verified live 2026-07-15: _lab.setSeed(42) left spotCenter/trainLons/polarPhase bit-identical). Standalone it would under-deliver anyway: latitudes stay frozen-shear-shared, and Max's handoff diagnosis records longitude-only motion doesn't read as different placement. Cite symbol anchors, not line numbers, in build docs.",
+    "D-SLOT DERIVATION (the increment's namesake): shellDepthFrac, internalHeat, dissipation stop being frozen constants and derive from the condition bundle per ATMOSPHERE-PLAN §(e) — per-seed shear profile => per-seed storm latitudes. This discharges atmo-3b AC-0's declared-frozen-constant debt; the derivation forms are pinned at BUILD-PLAN with a research slice if needed (slice-R pattern).",
+    "CANONICAL-N DEMOTED TO PRIOR (Max re-ruling 2026-07-15, supersedes the ratified rider B pin): polar-N becomes a regime-conditioned bias the seed varies around; vortex PRESENCE is gated per-seed by derived conditions. Saturn-like regimes stay hexagon-LIKELY, not hexagon-pinned; other regimes can morph N/shape/size/position or lack vortices entirely. Same seed still reproduces exactly.",
+    "PROVENANCE ROUTED OUT: no GUI provenance/badging work in this increment — that is planet-lod-lab-ux-2026-07-15 on L1 (avoids two branches reorganizing the same GUI). This increment keeps its planet-lod-lab.html footprint MINIMAL: the reseed wiring + any new D-slot sliders only.",
+    "GENERATIVE-NOT-SIMULATIVE HOLDS: still no uTime in storm terms; variety is place-once per seed. Render primitives (filamentation/wake/interior/chromophore GLSL) are consumed unchanged — this increment moves DERIVATION, not expression.",
+    "DETERMINISM DISCIPLINE: new derivations on disjoint alea namespaces (stormE:*/climateE5:* families, pinned at BUILD-PLAN); no Math.random/Date.now; static-source test mold (climate-e5.test.js).",
+    "CONCURRENCY FENCE (standing): this branch owns storm/band sections of planet-lod-lab.html / planet-lod-height.glsl.js / planet-lod-uniforms.js + atmosphere writers; NEVER relief/dispatch files (planet-lod-rivers.js, lidResponse.js, e1Regime.js out of the diff fence). Rebase onto L1 before merge-back — REQUIRED this time since lab-ux is actively editing the lab HTML on L1.",
+    "BUILD MECHANICS: workflows build (opus-pinned agents per feedback_subagent-model); OOM sequential rule SUSPENDED while Max is out of VS Code (his 2026-07-14 ruling) — reinstate ≤2-3 concurrent the moment he returns."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-WIRING",
+      "statement": "The New-planet button and the macro-seed GUI slider re-run the storm/polar writer: reseeding through EITHER path re-places storms and polar state, matching an independent writer re-call at the new seed (today both paths leave spotCenter/trainLons/polarPhase bit-identical).",
+      "verifyVia": {
+        "input": "In the running lab on :5178, click 'New planet' (and separately drag the macro-seed slider), capturing storm/polar state before and after.",
+        "observable": "Post-reseed state (spotCenter/trainLons/polarPhase and companions) differs from pre-reseed AND bit-matches an independent in-page resolveStormE/resolveStormPlacement call at the new seed."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-LAT",
+      "statement": "Storm latitudes derive per seed — 'the spots/storms appear in the same place every seed' is dead. Across a seed sweep at fixed regime, primary-storm latitudes take materially distinct values (no bit-shared latitude across all seeds), stay regime-plausible (within the anticyclonic shear band the derived profile produces), and reproduce exactly at the same seed.",
+      "verifyVia": {
+        "input": "Headless writer calls across a pinned seed sweep (>=12 seeds) per giant regime, twice per seed.",
+        "observable": "Latitude sets are non-degenerate per the BUILD-PLAN-pinned variance floor; same-seed pairs are bit-identical; distributions stay within regime bounds."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-BANDS",
+      "statement": "Band layout varies per seed: 'much more variety in placement, direction of movement' — band/jet counts, edge positions, widths, and per-band drift direction derive from the seeded D-slot conditions, not a fixed belt template.",
+      "verifyVia": {
+        "input": "Headless E5/band profile generation across the same pinned seed sweep per regime.",
+        "observable": "Jet-position/width/count sets differ materially across seeds (BUILD-PLAN-pinned floor); drift-direction assignments vary across seeds; same seed reproduces exactly."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-POLAR",
+      "statement": "Polar vortices 'change shape/size/position across seeds' and don't 'always appear': presence is gated per-seed by derived conditions; N varies around the regime-conditioned prior (Saturn-likes hexagon-likely, not pinned); size/shape/position vary per seed.",
+      "verifyVia": {
+        "input": "Headless polar resolution across the pinned seed sweep per regime.",
+        "observable": "Presence flips across seeds at regime-appropriate rates (some seeds have no vortex where the prior allows); N/size/position distributions are non-degenerate; Saturn-like regime's modal N remains the hexagon prior; same seed reproduces exactly."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-REGRESSION",
+      "statement": "Nothing already accepted regresses: same-seed determinism holds end-to-end; regime reads survive (Jovian primary spot, Uranian mute + obliquity gate, HJ full suppression); storms-disabled renders byte-identical (the OFFGATE invariant); relief byte goldens untouched; the pre-existing full-suite failed-SET does not grow.",
+      "verifyVia": {
+        "input": "Full gate battery from ~/projects/well-dipper-atmo: byte goldens 83, fence suites, full vitest suite, plus the regime-read unit probes.",
+        "observable": "83/83 byte goldens; fence suites green; failed-SET exactly the pre-existing 4-failed/7-files; regime probes match their pinned expectations."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-LIVE-VARIETY",
+      "statement": "Live in the lab, re-rolls are visibly different worlds: across >=3 seeds at a fixed regime and pinned view, storm/band/polar configurations differ visibly (large inter-seed pixel distances with state evidence), while the same seed re-rendered twice is pixel-stable.",
+      "verifyVia": {
+        "input": "Drive :5178 at a pinned view (jets off for pixel stability): render the same regime at >=3 seeds via the real GUI reseed paths, plus one same-seed repeat.",
+        "observable": "Inter-seed AE distances are large and localized to storm/band/polar features (with per-seed state dumps as evidence); same-seed repeat AE=0; console clean."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max's gate: 'every re-roll seriously different' — re-rolling a giant reads as a genuinely different world in storm placement, band layout, and poles, as a cohesive whole.",
+      "verifyVia": {
+        "input": "Max re-rolls giants in the lab himself (the simultaneous lab-ux workstream is what makes this solo drive possible).",
+        "observable": "Max's holistic acceptance that re-rolls read seriously different, across the regimes he samples."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "src/worldengine/base/storm-e.js (resolveStormE/resolveStormPlacement — the #3b writer this increment feeds per-seed shear into)",
+      "src/worldengine/base/climate-e5.js (u(lat)/shear/band substrate; E5_REGIME)",
+      "body-drivers condition bundle + driver-presets.js (the D-vector the new shellDepthFrac/internalHeat/dissipation derivations read)",
+      "planet-lod-lab.html reseed paths: New-planet button, macro-seed slider, storm-folder dice, setPreset (the applyDrivers wiring seam)",
+      "alea seeded streams (stormE:*/climateE5:* namespaces)"
+    ],
+    "outputs": [
+      "Per-seed storm/band/polar placement consumed by the existing render carriage (uStorm[8]/uPolar uniforms, aStorm attribute, E5 band bake) — carriage unchanged",
+      "Derived shear/D-slot fields the follow-on expression increment (ink-in-water + interaction, findings 2/3) will build on",
+      "Storm mask + phase bank contracts for downstream atmosphere increments #4/#5/#8 (unchanged shape, now per-seed-varied)"
+    ],
+    "mustStayWorking": [
+      "Same seed => same world, end to end (determinism)",
+      "Relief byte goldens 83/83 (relief/dispatch files entirely outside the diff fence)",
+      "Regime reads: Jovian primary spot, Saturn hexagon-likely pole, Uranian near-featureless mute + obliquity-85 gate, hot-Jupiter full suppression",
+      "#3b render terms (filamentation/wake/interior/chromophore) and the storms-disabled byte-identical OFFGATE",
+      "Full-suite pre-existing failed-SET (4 failed / 7 files) must not grow; byte goldens NEVER re-captured",
+      "Lane fence: no edits to relief/dispatch sections or files; rebase onto L1 before merge-back"
+    ]
+  }
+}
