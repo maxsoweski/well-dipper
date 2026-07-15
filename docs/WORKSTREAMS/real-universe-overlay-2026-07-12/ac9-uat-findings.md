@@ -68,9 +68,24 @@ fields pile labels generally).
   - N-dot marker glyph (generalizes the existing Escape-stash double-dot at ~`NavComputer.js:865`
     from "last-visited system" to every marker). Glyph is a SYMBOL — close-pair separations
     (~1e-7 pc) are sub-pixel; positions never move (interview ruling 1 stands).
-  - **Label collision handling** (Max's hard requirement): declutter for overlapping labels —
-    offset/stacking/leader lines and/or zoom-priority culling. Applies to real near-neighbors
-    (Rigil↔Proxima) and dense procgen fields alike.
+  - **Label collision handling** (Max's hard requirement) — CONCRETE MECHANISM (designed
+    2026-07-15 answering Max's max-zoom overlap question; lane D builds, lane C does not touch
+    NavComputer): **deferred label pass with greedy stack-offset.** Today each prism label
+    draws inline in the projected-star loop (`fillText` at dot-edge+4px, real named stars
+    only, 10px DotGothic — the `star.isReal && star.name` branch) with no awareness of other
+    labels. Instead: (1) during the star loop, push `{name, x, y, priority}` into a
+    frame-reused array rather than drawing; (2) after the loop, sort by priority
+    (selected > current-system > nearest/brightest); (3) greedy screen-space AABB pass —
+    label width from `measureText` (cache per name string), height = font size; on overlap
+    with an already-placed rect, try ±1–2 line-height vertical slots (stacking — a 2–3-label
+    pile like Rigil↔Proxima or an unmerged trio becomes a tidy vertical list); if displaced
+    more than ~half a line, draw a 1px leader line from label to dot; if no slot frees, fade
+    the loser to ~35% alpha. O(n²) over visible *labelled* stars (dozens at prism zoom) —
+    negligible; ~40–60 lines; marker positions untouched (interview ruling 1 intact).
+    NOTE the two halves compose: the companion-row dedup above independently removes the
+    worst overlap case (Toliman's row → alias ⇒ α Cen = one marker, one label); the label
+    pass covers what dedup can't reach — genuinely separate near-neighbors (Rigil↔Proxima,
+    0.055 pc) and dense procgen fields.
 - **Boundary:** far companions with genuinely resolvable separations (Proxima at 0.055 pc) keep
   their own true-position dot; the glyph covers close multiples only (AC10's 2-close-star cap →
   procgen markers are 1–2 dots).
@@ -111,6 +126,22 @@ handoff): (1) easy mechanism to stop binary-system label overlap at max prism zo
 (Max spotted HD 155886 + HD 156026 + Guniibuu within ~0.2 ly reading as three separate singles —
 it's census row 5 of finding #1: a real bound triple, unified by the successor's companion-table
 entry; also answer the astronomy: systems that close are bound, not coincidental neighbors).
+
+---
+
+## 2026-07-15 session — the two handed-over questions ANSWERED
+
+1. **Label overlap at max prism zoom** — concrete mechanism designed and folded into the
+   successor scope above (deferred label pass, greedy stack-offset + leader lines; lane
+   D-owned build). Companion-row dedup alone already merges α Cen A/B to one label; the label
+   pass covers true near-neighbors and dense fields.
+2. **HD 155886 / HD 156026 / Guniibuu within ~0.2 ly** — confirmed as census row 5 (36
+   Ophiuchi): a real, gravitationally bound K-dwarf triple at ~5.9 pc, separations 0.08–0.14 ly.
+   Reads as three separate singles only because HYG carries each component as its own catalog
+   row; the successor's companion-table entry unifies it. Astronomy: unbound field systems
+   essentially never sit within ~0.1 ly of each other (chance alignment ≈ 1 in 30,000 per star
+   at local density; two such neighbors ≈ never) — a grouping that tight is bound or a shared
+   birth cluster. No new scope.
 
 ---
 
