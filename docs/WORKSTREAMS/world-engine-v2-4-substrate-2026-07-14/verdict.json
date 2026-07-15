@@ -4,7 +4,7 @@
   "perLayer": {
     "unit": "PASS",
     "integration": "PASS",
-    "uat": "deferred-to-max"
+    "uat": "PASS"
   },
   "perAC": [
     {
@@ -63,9 +63,9 @@
     },
     {
       "id": "AC-UAT",
-      "result": "deferred-to-max",
-      "evidence": "UAT is Max's acceptance judgment alone; no agent renders this verdict regardless of live=false. AC-LAB went green 2026-07-14 (see above) with screenshots archived in evidence/. Max's acceptance check: open planet-lod-lab.html (dev server :5175, F5 any stale tab), open the 'Substrate (V2-4)' GUI folder, toggle the province overlay on several presets (e.g. Rocky, Ocean, Europa, Mars, Venus), and judge (1) coastlines read like Earth-from-space as a start, (2) province regions read as real history -- keeping in mind the pre-agreed carve-outs: shelf/break/slope render as one graded apron (not 3 distinct bands) at current mesh resolution; despun worlds legitimately show craton+basin only; rough/'balls of clay' surface reads belong to V2-5/7/8, not this gate.",
-      "adversarialVotes": "n/a — UAT is Max-only"
+      "result": "PASS",
+      "evidence": "MAX UAT PASS 2026-07-14 (recorded by working-Claude — this is Max's verdict, not an agent's): coastlines verbatim 'I think the coastlines look fine. They do look different.'; province overlay verbatim 'yes, passed on the province overlay.' Judged live on :5175 with water-family features enabled (rivers/lakes/deltas/coastlines — default-off on a fresh page, a UAT-experience gap now on record) against the :5178 pre-C1 before-build. Carve-outs honored as pre-agreed (graded apron, despun craton+basin-only, balls-of-clay out of scope).",
+      "adversarialVotes": "n/a — Max-only gate, passed by Max"
     }
   ],
   "adjudications": [
