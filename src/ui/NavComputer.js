@@ -4,6 +4,8 @@ import { StarSystemGenerator } from '../generation/StarSystemGenerator.js';
 import { HashGridStarfield } from '../generation/HashGridStarfield.js';
 import { realStarSeed } from '../generation/realStarSeed.js';
 import { resolveArrivalSystem } from '../generation/arrivalResolution.js';
+import { multiplicityForSeed } from '../generation/multiplicityOracle.js';
+import { placeLabels } from './labelPlacement.js';
 import { GalacticSectors } from '../generation/GalacticSectors.js';
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
 import { NavGalaxyRenderer } from '../rendering/NavGalaxyRenderer.js';
@@ -1449,6 +1451,11 @@ export class NavComputer {
       currentSystemStar = this._findNearestStar();
     }
 
+    // Deferred label pass (AC9): collect real-star name labels during the loop,
+    // place + draw them AFTER so drawn labels never overlap. Frame-reused array.
+    if (!this._labelQueue) this._labelQueue = [];
+    this._labelQueue.length = 0;
+
     for (const { star, starP, planeP } of projected) {
       // Vertical reference line (subtle)
       ctx.setLineDash([2, 5]);
@@ -1466,33 +1473,38 @@ export class NavComputer {
       const baseRadius = star.isReal ? 4.5 : 3.5;
       const drawR = isSelected ? baseRadius + 1 : baseRadius;
 
-      if (star._isBinary) {
-        // Binary: draw two slightly offset dots instead of one
-        const offset = drawR * 0.7; // separation between the pair
-        // Primary dot
-        ctx.fillStyle = star.color;
-        ctx.beginPath(); ctx.arc(starP.x - offset, starP.y, drawR * 0.8, 0, Math.PI * 2); ctx.fill();
-        // Companion dot — use companion spectral color if available, else dimmer primary
-        const s2Color = star._star2Type
-          ? (NavComputer._SPECTRAL_COLORS[star._star2Type] || star.color)
-          : star.color;
-        ctx.fillStyle = s2Color;
-        ctx.beginPath(); ctx.arc(starP.x + offset, starP.y, drawR * 0.65, 0, Math.PI * 2); ctx.fill();
-      } else {
-        ctx.fillStyle = star.color;
-        ctx.beginPath(); ctx.arc(starP.x, starP.y, drawR, 0, Math.PI * 2); ctx.fill();
-      }
+      // N-dot glyph (AC8): dot count = arrival-truth multiplicity from the AC7
+      // oracle, cached per entry. The Escape-stash double-dot is the base case —
+      // a visited binary always reads >=2 (and lends its companion spectral
+      // color) even if the oracle is momentarily unavailable.
+      const mult = this._glyphMult(star);
+      let dotCount = mult ? mult.count : (star._isBinary ? 2 : 1);
+      if (star._isBinary && dotCount < 2) dotCount = 2;
+      const companionColor = star._star2Type
+        ? (NavComputer._SPECTRAL_COLORS[star._star2Type] || star.color)
+        : null;
+      this._drawStarGlyph(ctx, starP.x, starP.y, drawR, dotCount, star.color, companionColor);
 
-      // Real named stars: always show name label in gold/amber
+      // Real named stars: amber glow ring stays at the marker (draw-only
+      // decoration; positions never move). The NAME text is DEFERRED to the
+      // post-loop label pass (AC9) so labels can be placed without overlap —
+      // collect it now, draw after the loop.
       if (star.isReal && star.name) {
-        ctx.font = '10px "DotGothic16", monospace';
-        ctx.fillStyle = '#ffc850'; // gold/amber
-        ctx.textAlign = 'left';
-        ctx.fillText(star.name, starP.x + baseRadius + 4, starP.y + 3);
-        // Subtle amber glow ring
         ctx.strokeStyle = 'rgba(255, 200, 80, 0.3)';
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.arc(starP.x, starP.y, baseRadius + 2, 0, Math.PI * 2); ctx.stroke();
+
+        // Priority: selected > current-system > nearest (smaller dist ranks higher).
+        const tier = isSelected ? 2 : (star === currentSystemStar ? 1 : 0);
+        this._labelQueue.push({
+          name: star.name,
+          anchorX: starP.x + baseRadius + 2, // ring edge — leader lines target here
+          anchorY: starP.y,
+          homeX: starP.x + baseRadius + 4,   // text baseline home x (was the inline x)
+          homeY: starP.y + 3,                // text baseline home y (was the inline y)
+          tier,
+          dist: star.dist ?? Infinity,
+        });
       }
 
       // Selected star: green highlight ring
@@ -1527,6 +1539,10 @@ export class NavComputer {
         this._hoveredLocalStar = { star, sx: starP.x, sy: starP.y };
       }
     }
+
+    // Deferred label pass (AC9): place + draw the collected labels on top of the
+    // markers, overlap-free. Draw-only — marker/dot positions untouched.
+    this._drawLabelPass(ctx);
 
     // Player marker — only if no star at the player's position (prism not
     // loaded yet, or player between systems). Otherwise the cyan "you are
@@ -1568,6 +1584,134 @@ export class NavComputer {
 
     // Unified prism minimap
     this._renderPrismMinimap(ctx, w, drawH);
+  }
+
+  // ════════════════════════════════════════════════════
+  // PRISM STAR GLYPHS + LABELS (AC8 / AC9)
+  // ════════════════════════════════════════════════════
+
+  /**
+   * Arrival-truth multiplicity for a prism star, cached PER ENTRY (not per
+   * frame): the N-dot glyph's dot count (AC8). Consumes the AC7 oracle so the
+   * glyph can never contradict what warping delivers. Passes the star shaped as
+   * the oracle expects (worldX/Y/Z + type) with its canonical seed (FIX-1).
+   *
+   * Cache invalidates exactly once if the first answer was computed before the
+   * real-star overlay finished loading (a real table star would otherwise have
+   * fallen through to a procgen roll and cached the wrong count). `null` marks a
+   * failed lookup → the draw falls back to the Escape-stash base case.
+   */
+  _glyphMult(star) {
+    const ready = !!(this._realStarCatalog?.overlay?.ready);
+    if (star._navMult === undefined || (star._navMultReady === false && ready)) {
+      try {
+        star._navMult = multiplicityForSeed(
+          {
+            seed: star.seed, name: star.name, type: star.spectral,
+            worldX: star.wx, worldY: star.wy, worldZ: star.wz,
+          },
+          { overlay: this._realStarCatalog?.overlay || null, galacticMap: this._gm },
+        );
+      } catch (e) {
+        star._navMult = null;
+      }
+      star._navMultReady = ready;
+    }
+    return star._navMult;
+  }
+
+  /**
+   * Draw the N-dot marker glyph — a SYMBOL centered at (cx,cy); the centroid
+   * never moves off the marker (interview ruling 1). N=1/2 reproduce the prior
+   * single-dot / Escape-stash double-dot look byte-for-byte (base case); N>=3
+   * (real close multiples, e.g. the 36 Oph triple) lay out on a compact ring.
+   */
+  _drawStarGlyph(ctx, cx, cy, drawR, dotCount, primaryColor, companionColor) {
+    const n = Math.max(1, Math.round(dotCount));
+    if (n === 1) {
+      ctx.fillStyle = primaryColor;
+      ctx.beginPath(); ctx.arc(cx, cy, drawR, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
+    if (n === 2) {
+      const offset = drawR * 0.7; // separation between the pair (unchanged)
+      ctx.fillStyle = primaryColor;
+      ctx.beginPath(); ctx.arc(cx - offset, cy, drawR * 0.8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = companionColor || primaryColor;
+      ctx.beginPath(); ctx.arc(cx + offset, cy, drawR * 0.65, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
+    const ringR = drawR * 0.85;
+    const dotR = drawR * 0.55;
+    for (let k = 0; k < n; k++) {
+      const a = -Math.PI / 2 + (k * 2 * Math.PI) / n; // first dot at top
+      const dx = Math.cos(a) * ringR, dy = Math.sin(a) * ringR;
+      ctx.fillStyle = (k === 1 && companionColor) ? companionColor : primaryColor;
+      ctx.beginPath(); ctx.arc(cx + dx, cy + dy, dotR, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  /** measureText width for a label string, cached per name (font is constant). */
+  _measureLabel(ctx, name) {
+    if (!this._labelWidthCache) this._labelWidthCache = new Map();
+    let w = this._labelWidthCache.get(name);
+    if (w === undefined) {
+      w = ctx.measureText(name).width;
+      this._labelWidthCache.set(name, w);
+    }
+    return w;
+  }
+
+  /**
+   * Deferred label pass (AC9, ac9-uat-findings.md finding #1): priority-sort the
+   * labels collected during the star loop, run the pure greedy AABB placement
+   * (vertical stack slots), then draw — leader line when displaced past half a
+   * line, ~35% alpha when no slot frees. Publishes the frame's placed rects on
+   * `this._labelRects` (window._navComputer) for the live zero-overlap assertion.
+   */
+  _drawLabelPass(ctx) {
+    this._labelRects = [];
+    const queue = this._labelQueue;
+    if (!queue || queue.length === 0) return;
+
+    const FONT = '10px "DotGothic16", monospace';
+    const FONT_SIZE = 10;
+    const LINE_H = 12;
+    ctx.font = FONT;
+
+    // Home AABBs (top-left) derived from each label's text baseline; width via
+    // cached measureText. Priority: tier dominates, nearer wins within a tier.
+    const labels = queue.map((q) => ({
+      x: q.homeX,
+      y: q.homeY - FONT_SIZE,            // baseline -> box top
+      w: this._measureLabel(ctx, q.name) + 2,
+      h: FONT_SIZE + 2,
+      priority: q.tier * 1e7 - q.dist,
+      _q: q,
+    }));
+
+    const placed = placeLabels(labels, { lineHeight: LINE_H, leaderThreshold: LINE_H / 2 });
+
+    ctx.textAlign = 'left';
+    for (const p of placed) {
+      const q = p._q;
+      const baselineY = p.y + FONT_SIZE;  // box top -> baseline
+      if (p.leader) {
+        ctx.strokeStyle = 'rgba(255, 200, 80, 0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(q.anchorX, q.anchorY);
+        ctx.lineTo(p.x, baselineY - FONT_SIZE / 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#ffc850'; // gold/amber
+      ctx.globalAlpha = p.faded ? 0.35 : 1;
+      ctx.fillText(q.name, p.x, baselineY);
+      ctx.globalAlpha = 1;
+      this._labelRects.push({
+        x: p.x, y: p.y, w: p.w, h: p.h, name: q.name, faded: p.faded, leader: p.leader,
+      });
+    }
   }
 
   // ════════════════════════════════════════════════════
