@@ -38,6 +38,19 @@ N varies {5,6,7} across present seeds; spot latitudes span −35.7° … +23.7°
 "They always appear" is dead on ice giants; Jovian stays ~always-present by ratified
 prior 0.98 (the physically honest call Max ratified with the forms table).
 
+## LITERAL-UI close (second drive, fresh context, post-verify-workstream)
+
+The verify run correctly noted the first drive used `_lab.setSeed` (the JS API). A second
+drive used the REAL UI controls via chrome-devtools a11y-tree interaction:
+
+- **'New planet (re-roll both)' BUTTON click:** macroSeed 1 → 7848 (Math.random path),
+  spot lat −23.50° → +27.75°, trainCount 4 → 6, polar N 7 → 8 — and state at the clicked
+  seed bit-matches the independent writer re-call. Console clean.
+- **Macro-seed GUI number input** (fires the slider's `.onChange(reseedGiant)`): typed
+  777 → spot −26.25°, N=8, writer bit-match ✓; typed 900 → spot −36.75°; re-typed 777 →
+  identical state + writer bit-match ✓. Pixel AE (disc crop): 777 vs 900 = **345,476**;
+  777 vs 777 repeat = **0**. Crops: `crop-dnf-ui-777a/900/777b.png`.
+
 ## Honest notes
 
 - `state.bandCount` read 3 at all Neptunian seeds: that key is the F24 legacy display knob,

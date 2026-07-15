@@ -1,0 +1,18 @@
+{
+  "workstream": "world-engine-atmo-derive-not-freeze-2026-07-15",
+  "commit": "004efa6",
+  "verifyRun": "wf_f06545e2-da2 (verify-workstream full, 31 agents, 2026-07-15)",
+  "perLayer": { "unit": "PASS", "integration": "PASS", "uat": "deferred-to-max" },
+  "perAC": [
+    { "id": "AC-0", "result": "PASS", "adversarialVotes": "3/3", "evidence": "Diff-audited against SPINE-CONFORMANCE.md: triple derives from deriveGiantDrivers(condition), new frozen scalars carry declared-future-deriver comments, all 3 named consumers threaded (draw order preserved, GOLDEN_STORM_MASK_HASH unmoved), zero new GUI controls, drift guards 21/21." },
+    { "id": "AC-WIRING", "result": "PASS", "adjudicatedBy": "working-Claude LITERAL-UI drive (workflow: INSUFFICIENT — wanted the real click/drag, not the _lab.setSeed API)", "evidence": "Real 'New planet' button click: macroSeed 1->7848, spot lat -23.50->+27.75, train 4->6, polar N 7->8, state bit-matches independent writer re-call. Real macro-seed GUI input: 777/900/777 — reseeds fire, writer bit-match at 777 both visits. evidence/README.md 'LITERAL-UI close'." },
+    { "id": "AC-LAT", "result": "PASS", "adversarialVotes": "3/3", "evidence": "27/27 giant-drivers tests: set-size >=9/12 distinct lats, stdev 0.065-0.188 rad >> 0.035 floor, argmax anti-jitter across 4 regimes x 12 seeds, determinism bit-identical." },
+    { "id": "AC-BANDS", "result": "PASS", "adversarialVotes": "3/3", "evidence": "69/69 across giant-drivers/climate-e5/storm-e: rhinesWavenumber set-size >=2 every regime; SubN eqSign straddles D_THR both signs (others fixed as ratified); sign-vector anti-cheat 53-75% reorganization on different-m pairs." },
+    { "id": "AC-POLAR", "result": "PASS", "adversarialVotes": "3/3", "evidence": "25/25 storm-e tests incl. pinned prior asserts; verifier mutated priors to 1.0 (always-on cheat) and watched 2 tests fail, then reverted. Mask golden byte-unchanged. Live corroboration: Neptunian 8-seed sweep 5/8 present, 3 ABSENT, N in {5,6,7}." },
+    { "id": "AC-REGRESSION", "result": "PASS", "adversarialVotes": "3/3", "evidence": "Full 8-suite fence bundle green (both goldens, 83/83 byte, 39/39 lid anchors); full suite 1970/4-failed = exactly the pinned pre-existing baseline; zero diff on relief/dispatch fence files." },
+    { "id": "AC-LIVE-VARIETY", "result": "PASS", "adjudicatedBy": "working-Claude drives (workflow: INSUFFICIENT — could not itself recompute AE)", "evidence": "Two independent circuits: setSeed path (301/302/303: inter-seed AE 320-362k, same-seed 0; writer bit-match all seeds; hemisphere-flipping lats) + literal-UI path (777/900: AE 345,476; 777 repeat: 0). Montage + crops in evidence/." },
+    { "id": "AC-UAT", "result": "deferred-to-max", "evidence": "Max-only. Integration now green — precondition met. Drive: open the lab, pick a giant, hit New planet / drag macro seed repeatedly; judge 'every re-roll seriously different' (bands+storms+poles). Ratified expectations: Jovian/Saturnian poles ~always present; eq-jet direction flip SubN-only." }
+  ],
+  "adjudications": "The two live:true integration ACs were INSUFFICIENT in the headless workflow run per protocol; closed by working-Claude's chrome-devtools drives on :5178 — including a second LITERAL-UI circuit (real button click + real GUI seed input via the a11y tree) after the workflow correctly flagged that the first circuit used the _lab.setSeed API. Console clean both drives (first drive's single 404 was working-Claude's own mistyped probe import, documented).",
+  "status": "VERIFIED_PENDING_MAX 004efa6"
+}
