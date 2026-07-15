@@ -3,6 +3,7 @@ import { resolveKnownObjects } from '../generation/knownObjectSearch.js';
 import { StarSystemGenerator } from '../generation/StarSystemGenerator.js';
 import { HashGridStarfield } from '../generation/HashGridStarfield.js';
 import { realStarSeed } from '../generation/realStarSeed.js';
+import { POSITION_MATCH_TOL } from '../generation/RealStarCatalog.js';
 import { resolveArrivalSystem } from '../generation/arrivalResolution.js';
 import { multiplicityForSeed } from '../generation/multiplicityOracle.js';
 import { placeLabels } from './labelPlacement.js';
@@ -573,7 +574,15 @@ export class NavComputer {
     const dx = this._systemStar.wx - this._playerX;
     const dy = this._systemStar.wy - this._playerY;
     const dz = this._systemStar.wz - this._playerZ;
-    return Math.sqrt(dx * dx + dy * dy + dz * dz) < 0.002;
+    // Identity radius, not neighborhood radius: POSITION_MATCH_TOL (0.1 pc) is
+    // the same-star tolerance everywhere else AND the F1 seed bin, so "current
+    // system" agrees with seed identity. The old 0.002 (2 pc) swallowed real
+    // neighbors — browsing Rigil Kentaurus (1.32 pc) from Sol showed Sol's
+    // spawned data as its "preview" and built a BURN instead of a warp. A
+    // same-system sibling inside 0.1 pc (Proxima browsed from Alpha Centauri)
+    // still reads current on purpose: its arrival routes to the same spawned
+    // system, so the spawned data IS its honest preview.
+    return Math.sqrt(dx * dx + dy * dy + dz * dz) < POSITION_MATCH_TOL;
   }
 
   /** Set callback for COMMIT BURN/WARP button. */
