@@ -81,4 +81,23 @@ oracle + data. Composes with the parked empty-rate-calibration seam (representat
 
 ---
 
+## Objective sweep (2026-07-15) — drive-card steps 1–4 machine-covered
+
+**Max's directive:** the objective layer of AC9 (presence/positions/search/arrivals/structures =
+disk-truth) is the agent's to verify, at machine scale; his gate narrows to the judgment residue.
+Executed via workflow `wf_89f11a25-cee` — full record in
+`verdict-ac9-objective-sweep-3e58fac.json` + raw evidence `ac9-sweep-results-3e58fac.json`.
+Result: **all green** — 1,503 per-star position assertions at 5 vantages worst error 0.0%
+(exact catalog match, independently re-derived from disk); search 50/50 + 6/6 negatives;
+arrivals 5/5 correct (α-Cen zero-fill re-confirmed live); structures 10/10; suite 19/19;
+console clean. One **UNCONFIRMED possible defect** flagged: stale NavComputer player-position
+after search-warp (empty PRISM until close+reopen) — seen only under the agent's synthetic-input
+mechanics, never in natural-flow drives; 30-second human check in the verdict file; lane D if real.
+RUN 1 note: the :5176 tab crashed (3 WebGL tabs live) — fresh page rebooted, RUN 2 clean.
+
+**Max's remaining AC9 residue:** (1) free-play feel — does exploring read true; (2) the
+Alpha-Cen A/B zero-fill-planets call; (3) final AC9 verdict.
+
+---
+
 *(further findings append below as the UAT proceeds)*

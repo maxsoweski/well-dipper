@@ -1,0 +1,55 @@
+{
+  "workstream": "real-universe-overlay-2026-07-12",
+  "commit": "3e58fac (build under test; branch HEAD 6989640 docs-only past it)",
+  "type": "ac9-objective-sweep-addendum",
+  "date": "2026-07-15",
+  "context": "Max's AC9 directive (2026-07-14): the objective layer of the UAT drive card (presence/positions/search/arrivals/structures) is disk-truth-checkable and belongs to agents, at a scale eyes can't match. Run via workflow wf_89f11a25-cee (battery: sonnet; live driver + 2 independent adjudicators: opus). RUN 1 aborted — the :5176 tab crashed after the driver's first reads (likely WebGL/memory pressure: game + two World Engine lab tabs live). Working-Claude rebooted a fresh :5176 page (HELM boot walked, boot-tour warp completed to procgen landing system), edited the driver prompt, resumed from cache. RUN 2 completed with the page alive throughout. AC9 itself remains Max's gate — this addendum covers only the objective layer; Max's residual = free-play feel, the Alpha-Cen fill call, final AC9 verdict.",
+  "checks": [
+    {
+      "id": "nav-fidelity-5-vantages",
+      "result": "PASS",
+      "evidence": "1,503 per-star assertions across Sol / Sirius / TRAPPIST-1 / Rigil Kentaurus / Vega: EVERY isReal star in the loaded prism at each vantage measured (dist*1000, full precision) against euclidean(vantage->catalog position) from the shipped hyg-stars.json + real-star-supplement.json. Worst error 0.0% — exact float match at all five vantages (distances 1.3–311 pc, non-degenerate). 0 stars over the ±2% bar; 0 isReal names absent from the disk catalogs. Independent adjudicator recomputed all 1,503 from disk without trusting the driver's in-page values: 1,503/1,503 match at 0.000e+0 relative error. NOTE: prior circuits' 0.03% worst error was an artifact of neighborhood-reference.json rounding refDistPc to 3 decimals — nav distances are exactly catalog-derived."
+    },
+    {
+      "id": "search-battery",
+      "result": "PASS",
+      "evidence": "50/50 mustResolve resolve with a highlighted top hit (14 supplement hosts incl. all dim archive hosts; 25 brightest HYG named stars; Sol; 'Alpha Centauri' -> [SYSTEM] registry row; 10 deep-sky structures resolve to canonical names). 6/6 mustNotResolveAsReal (the absent-famous list: Wolf 359, Lalande 21185, Luyten 726-8/UV Ceti, Ross 154, Ross 248, Lacaille 9352) return ZERO rows — no fake-real hits, no procgen fuzzy noise."
+    },
+    {
+      "id": "arrivals-5",
+      "result": "PASS",
+      "evidence": "Handle window._systemData each time. Sol: seed 'sol', G, 13 handcrafted planets. Sirius: A + D white-dwarf binary ('Sirius B'), 2 procgen fill planets (fill-on design). TRAPPIST-1: M single (snum pin), exactly 7 knowns b–h. Rigil Kentaurus -> seed 'alpha-centauri': G+K binary (star2 'Toliman'), 0 planets (the standing AC9 zero-fill flag, re-confirmed live). Vega: A single, 5 procgen fill planets Vega b–f (fill-on design, same as Sirius precedent)."
+    },
+    {
+      "id": "structures-spot-read",
+      "result": "PASS",
+      "evidence": "10/10: M42->Orion Nebula [emission-nebula], M1->Crab [supernova-remnant], M13->Great Hercules Cluster [globular-cluster], M57->Ring [planetary-nebula], M45->Pleiades [open-cluster], M8/M17/M20/M16 -> Lagoon/Omega/Trifid/Eagle [emission-nebula], NGC2237->Rosette [emission-nebula]."
+    },
+    {
+      "id": "sol-suite-and-console",
+      "result": "PASS",
+      "evidence": "runIntegrationSuite() 19/19 after the full sweep (return shape is an OBJECT {passed,failed,total,results}, per-result field 'passed'). Console errors+warnings across the entire RUN 2 sweep: zero. Window left at authored Sol, nav panel closed (lane convention)."
+    },
+    {
+      "id": "adjudication",
+      "result": "PASS",
+      "evidence": "truth-check (independent disk recompute, no browser): VERDICT CLEAN. coverage-audit (anti-boilerplate/anti-gap): VERDICT COMPLETE — all 5 vantages non-empty, battery counts reconcile exactly, no skipped sections, no boilerplate signature."
+    }
+  ],
+  "possibleDefect": {
+    "id": "stale-nav-position-after-search-warp",
+    "status": "UNCONFIRMED — needs a 30-second human check or lane D triage",
+    "observed": "Driver (all 5 vantages): after a search-warp, NavComputer's internal _playerX/Y/Z + _currentSystemName remained at the PRE-warp system, so entering PRISM left _localStars=0 (load never kicked; first seen stuck on boot system 'Bespop-31FQHW4D1M' after arriving Sol). Workaround: nc.deactivate() + reopen via N refreshed the position (verified exact vs battery coords) before drilling to PRISM.",
+    "uncertainty": "Working-Claude's in-thread drive (2026-07-14) and the prior session's recorded circuits used the natural flow (select result -> panel closes -> warp -> press N) and got correct fresh positions — no staleness. The driver's synthetic-input mechanics (window-dispatched keys, handleEscape() calls, panel possibly held open through warp) may not reproduce a real player's path.",
+    "humanCheck": "Search-warp somewhere, then N, then Escape once: if the PRISM appears EMPTY of stars, the bug is real for players -> route to lane D (NavComputer position refresh on open/arrival). If populated, agent-mechanics artifact only.",
+    "routing": "lane D (NavComputer internals) if confirmed"
+  },
+  "designNotes": [
+    "Curated local real-star selection: ~300 isReal entries per vantage (299/303/303/300/298) out of ~12,700–13,000 catalog stars within the perStar span (~292 pc) — the prism renders a local-neighborhood subset (union 467 across 5 vantages, 150 common), mixing faint near stars (Proxima mag 11) with bright far ones. Every member is real and exactly placed; the SELECTION rule has no committed spec. Recorded for lane D / successor awareness, not a defect.",
+    "Driver page mechanics recorded in ac9-sweep-results-3e58fac.json anomalies[]: synthetic Escape swallowed by search-input focus (handleEscape() is the semantic equivalent); button.overlay-close is 0x0 canvas-era DOM that acts as back-one-level at PRISM; first same-position warp cycles idle->exit->idle in ~300ms."
+  ],
+  "artifacts": {
+    "fullEvidence": "ac9-sweep-results-3e58fac.json (413 KB: per-star arrays for all vantages, search battery rows verbatim, arrivals, anomalies)",
+    "workflow": "wf_89f11a25-cee (RUN 1 aborted tab-crash; RUN 2 resumed complete; 4 agents, adjudication independent of driver)"
+  }
+}
