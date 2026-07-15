@@ -10,7 +10,7 @@ import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import { buildIrregularSphere } from '../planet-lod-rivers.js';
 import { E5_REGIME, resolveParams, jetShear, jetShearPeak } from '../src/worldengine/base/climate-e5.js';
 import {
-  STORM_PHYS, POLAR_CANONICAL_N,
+  STORM_PHYS, POLAR_CANONICAL_N, POLAR_PRESENCE_PRIOR, POLAR_N_DELTA_WEIGHTS,
   resolveStormE, resolveStormPlacement, rankStormCandidates,
   writeStormESphere, bakeStormEAttributes,
   chromophoreColor, CHROMOPHORE_STOPS, iceGiantLifecyclePhase,
@@ -30,6 +30,15 @@ const LAB = readFileSync(fileURLToPath(new URL('../planet-lod-lab.html', import.
 // deterministic int32 hash over a Float32Array (byte-stable since the field is deterministic)
 const hashField = (f) => { let h = 0x811c9dc5 | 0; for (let i = 0; i < f.length; i++) h = (Math.imul(h, 31) + Math.round(f[i] * 1e6)) | 0; return h; };
 const run = (regime, macroSeed, stormSeed = 1234, drivers = GAS) => resolveStormE(regime, drivers, macroSeed, stormSeed);
+// arm's-length copy of storm-e's private dirFromLatLon (lon 0 = +x, +lat = +y) — used to assert that a
+// non-lifecycle vortex's rendered .center is EXACTLY its (lat,lon) direction (kills a .center jitter cheat).
+const dirFromLatLon = (lat, lon) => { const c = Math.cos(lat); return [c * Math.cos(lon), Math.sin(lat), c * Math.sin(lon)]; };
+const modeOf = (arr) => { const m = new Map(); for (const x of arr) m.set(x, (m.get(x) || 0) + 1); let best = null, bc = -1; for (const [k, c] of m) if (c > bc) { bc = c; best = k; } return best; };
+const stdevOf = (arr) => { const mu = arr.reduce((a, b) => a + b, 0) / arr.length; return Math.sqrt(arr.reduce((a, b) => a + (b - mu) ** 2, 0) / arr.length); };
+// Slice P (derive-not-freeze): the pinned 12-macroSeed sweep (measured 2026-07-15 to contain a PRESENCE
+// flip for BOTH Neptunian and Sub-Neptune; Jovian/Saturnian are all-present at their ≥0.97 priors — see
+// the AC-POLAR presence-gating test). stormSeed fixed at 1234 to match `run`.
+const POLAR_SWEEP = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 describe('worldengine base — storm-e vortex placement + mask writer (increment 3b Slice P)', () => {
   // ── AC-WRITER(a): DETERMINISM + NO-RNG STATIC SOURCE ───────────────────────────────────────────
@@ -84,6 +93,30 @@ describe('worldengine base — storm-e vortex placement + mask writer (increment
       const belts = new Set(ranked.map((c) => c.lat));
       for (const v of rec.vortices) expect(belts.has(v.lat)).toBe(true);
     }
+  });
+
+  // ── AC-LAT anti-cheat (derive-not-freeze [RESOLVED-BY-REVISE-2 minor-2]): a NON-lifecycle vortex's ──
+  //    rendered .center must be EXACTLY dirFromLatLon(.lat, .lon). This closes the loophole where a
+  //    .center jitter evades the AC-WRITER(d) `.lat`-argmax equality bar. ONLY dark-spot LIFECYCLE
+  //    primaries are exempt (they legitimately re-point .center to the lifecycle-drifted renderLat).
+  it('[AC-LAT anti-cheat] non-lifecycle vortex .center == dirFromLatLon(lat,lon) exactly; only lifecycle primaries drift', () => {
+    let sawLifecycleDrift = false;
+    for (const regime of REGIMES) for (const s of POLAR_SWEEP) {
+      const rec = run(regime, s);
+      for (const v of rec.vortices) {
+        if (v.lifecycle === undefined) {
+          // GRS primary + ALL train members: center is the bit-exact (lat,lon) direction, no jitter.
+          expect(v.center).toEqual(dirFromLatLon(v.lat, v.lon));
+        } else {
+          // lifecycle primary: .lat stays the birth (argmax) latitude; .center may drift off it (renderLat).
+          const birth = dirFromLatLon(v.lat, v.lon);
+          const drifted = v.center[0] !== birth[0] || v.center[1] !== birth[1] || v.center[2] !== birth[2];
+          if (drifted) sawLifecycleDrift = true;
+        }
+      }
+    }
+    // the exemption is real: at least one ice-giant lifecycle primary actually drifts its center off .lat
+    expect(sawLifecycleDrift).toBe(true);
   });
 
   // ── AC-WRITER(e): RESEED SWEEP — longitude/phase vary, latitude frozen (designDecision-3 carve-out) ─
@@ -152,17 +185,23 @@ describe('worldengine base — storm-e vortex placement + mask writer (increment
   });
 
   // ── GAS GATE (designDecision-5) + regime reads ─────────────────────────────────────────────────
-  it('[gate] gas gate keys on composition h2-he: non-gas ⇒ count 0, mask all-zero, pole off', () => {
+  it('[gate] gas gate keys on composition h2-he: non-gas ⇒ count 0, mask all-zero, pole OFF (never consulted)', () => {
+    // Slice P (derive-not-freeze) revision: the pole is no longer ALWAYS-ON when gas — presence is
+    // per-seed gated (see the AC-POLAR presence test). This [gate] test now pins only the COMPOSITION
+    // gate: non-gas ⇒ everything off (pole never even consults its prior, because stormsOn=false), and
+    // gas ⇒ discrete STORMS present (count>0, independent of pole presence) with pole.strength a valid
+    // 0/1 presence flag gated by the regime prior (asserted concretely in the AC-POLAR test below).
     const solid = resolveStormE(E5_REGIME.GAS_GIANT, { composition: 'n2-o2' }, 1, 1234);
     expect(solid.count).toBe(0);
     expect(solid.strength).toBe(0);
-    expect(solid.pole.strength).toBe(0);
+    expect(solid.pole.strength).toBe(0);          // non-gas: pole off regardless of any prior
     const out = writeStormESphere(freshCarrier(), { composition: 'n2-o2' }, { regime: E5_REGIME.GAS_GIANT, macroSeed: 1 });
     expect(Array.from(out.mask).every((m) => m === 0)).toBe(true);
-    // gas ⇒ storms present
+    // gas ⇒ discrete storms present; pole presence is prior-GATED, not forced (Jovian prior 0.98 ⇒
+    // seed 1 present here, but that is a probability, not the old always-on invariant).
     const gas = run(E5_REGIME.GAS_GIANT, 1);
     expect(gas.count).toBeGreaterThan(0);
-    expect(gas.pole.strength).toBe(1);
+    expect([0, 1]).toContain(gas.pole.strength);  // valid presence flag (no longer pinned to 1)
   });
   it('[regime] ice-giant primary is a dark cleared spot (mode 1); Jovian primary is a warm GRS (mode 0)', () => {
     expect(run(E5_REGIME.NEPTUNIAN, 1).primary.mode).toBe(1);
@@ -215,22 +254,81 @@ describe('worldengine base — storm-e vortex placement + mask writer (increment
     expect(sawPos).toBe(true);   // GDS offset companion is reachable
   });
 
-  // ── V-β.2: DECLARED per-regime canonical polar N (Rider B) — NOT a per-seed draw ───────────────
-  it('[V-β.2] pole sides/ring are the per-regime canonical N (Saturn 6, Jupiter ~8), in the 5..8 GUI range, seed-invariant', () => {
+  // ── V-β.2: POLAR presence gating + N-around-prior (derive-not-freeze Slice P — canonical-N demotion) ──
+  // Max re-ruling 2026-07-15 (supersedes Rider B's PIN): polar N is a regime-conditioned PRIOR the seed
+  // varies around, and vortex PRESENCE is gated per seed so poles "don't always appear" (atmo-3b UAT
+  // finding 5). These tests replace the old frozen-N / always-present assertions (this increment's
+  // behavioral golden to move, per BUILD-PLAN §5 — NOT the byte-immutable mask golden, which reads only
+  // stormE:place vortices and is UNCHANGED). Floors: BUILD-PLAN §6 AC-POLAR (1)-(4).
+  it('[V-β.2] POLAR_PRESENCE_PRIOR + POLAR_N_DELTA_WEIGHTS are the pinned named constants (de-floated prior)', () => {
+    // pinned priors (DERIVE-FORMS §4): the AC-POLAR floor asserts these EXACT numbers so a presence-
+    // always-on build cannot satisfy "flips" vacuously by shipping prior≈1 for every regime.
+    expect(POLAR_PRESENCE_PRIOR[E5_REGIME.GAS_GIANT]).toBe(0.98);
+    expect(POLAR_PRESENCE_PRIOR[E5_REGIME.SATURNIAN]).toBe(0.97);
+    expect(POLAR_PRESENCE_PRIOR[E5_REGIME.NEPTUNIAN]).toBe(0.55);
+    expect(POLAR_PRESENCE_PRIOR[E5_REGIME.SUB_NEPTUNE]).toBe(0.45);
+    expect(POLAR_PRESENCE_PRIOR[E5_REGIME.HOT_JUPITER]).toBeUndefined();   // storm-gate-off ⇒ no entry
+    // the ratified constraints: Jovian/Saturnian ≥ 0.95 (persistent), Neptunian/Sub-Neptune ≤ 0.8 (transient)
+    expect(POLAR_PRESENCE_PRIOR[E5_REGIME.GAS_GIANT]).toBeGreaterThanOrEqual(0.95);
+    expect(POLAR_PRESENCE_PRIOR[E5_REGIME.SATURNIAN]).toBeGreaterThanOrEqual(0.95);
+    expect(POLAR_PRESENCE_PRIOR[E5_REGIME.NEPTUNIAN]).toBeLessThanOrEqual(0.8);
+    expect(POLAR_PRESENCE_PRIOR[E5_REGIME.SUB_NEPTUNE]).toBeLessThanOrEqual(0.8);
+    // N-delta weights: {−1:.25, 0:.50, +1:.25}, modal delta 0 ⇒ modal N == canonical
+    expect(POLAR_N_DELTA_WEIGHTS).toEqual({ '-1': 0.25, '0': 0.50, '+1': 0.25 });
+    expect(POLAR_N_DELTA_WEIGHTS['0']).toBeGreaterThan(POLAR_N_DELTA_WEIGHTS['-1'] + POLAR_N_DELTA_WEIGHTS['+1'] - 1e-9);  // 0 is the modal bin
+    expect(POLAR_N_DELTA_WEIGHTS['-1'] + POLAR_N_DELTA_WEIGHTS['0'] + POLAR_N_DELTA_WEIGHTS['+1']).toBeCloseTo(1, 12);
+  });
+  it('[V-β.2] presence is per-seed gated: sub-1-prior regimes FLIP across the sweep; ≥0.95-prior regimes may stay all-present', () => {
+    // AC-POLAR floor (1): for regimes whose prior ≤ 0.8, BOTH present AND absent occur across the pinned
+    // sweep (0 < Σpresent < 12). Jovian/Saturnian (prior ~1) may be all-present — assert the PRIOR there.
+    for (const [regime, subOne] of [
+      [E5_REGIME.GAS_GIANT, false], [E5_REGIME.SATURNIAN, false],
+      [E5_REGIME.NEPTUNIAN, true], [E5_REGIME.SUB_NEPTUNE, true],
+    ]) {
+      const present = POLAR_SWEEP.map((s) => run(regime, s).pole.strength);
+      const nPresent = present.reduce((a, b) => a + b, 0);
+      if (subOne) {
+        expect(nPresent).toBeGreaterThan(0);          // some seeds DO show a pole
+        expect(nPresent).toBeLessThan(POLAR_SWEEP.length);   // and some DON'T — the flip (kills always-on)
+      } else {
+        // high-prior regime: all-present here is CORRECT (Juno crystal / Saturn hexagon are persistent);
+        // the anti-vacuous guard is the pinned-prior assertion above, not a forced flip.
+        expect(nPresent).toBe(POLAR_SWEEP.length);
+      }
+    }
+    // measured rates (2026-07-15): Neptunian 4/12, Sub-Neptune 7/12 — a genuine, non-trivial flip.
+    expect(POLAR_SWEEP.map((s) => run(E5_REGIME.NEPTUNIAN, s).pole.strength).reduce((a, b) => a + b, 0)).toBe(4);
+    expect(POLAR_SWEEP.map((s) => run(E5_REGIME.SUB_NEPTUNE, s).pole.strength).reduce((a, b) => a + b, 0)).toBe(7);
+  });
+  it('[V-β.2] polar N draws AROUND the canonical prior: modal N == canonical, non-degenerate, clamped 5..8', () => {
     const lo = STORM_PHYS.POLAR_N_MIN, hi = STORM_PHYS.POLAR_N_MIN + STORM_PHYS.POLAR_N_SPAN;
     expect([lo, hi]).toEqual([5, 8]);
-    expect(POLAR_CANONICAL_N[E5_REGIME.SATURNIAN].sides).toBe(6);       // Saturn hexagon
-    expect(POLAR_CANONICAL_N[E5_REGIME.GAS_GIANT].ring).toBe(8);        // Juno Jovian cluster ≈ 8
+    expect(POLAR_CANONICAL_N[E5_REGIME.SATURNIAN].sides).toBe(6);       // Saturn hexagon prior
+    expect(POLAR_CANONICAL_N[E5_REGIME.GAS_GIANT].ring).toBe(8);        // Juno Jovian cluster ≈ 8 prior
     for (const regime of REGIMES) {
       const canon = POLAR_CANONICAL_N[regime];
-      // canonical, seed-INVARIANT (per-seed N variation routed to derive-not-freeze), and inside 5..8
-      for (const s of SEEDS) {
-        const p = run(regime, s).pole;
-        expect(p.sides).toBe(Math.max(lo, Math.min(hi, canon.sides)));
-        expect(p.ring).toBe(Math.max(lo, Math.min(hi, canon.ring)));
-        expect(p.sides).toBeGreaterThanOrEqual(lo); expect(p.sides).toBeLessThanOrEqual(hi);
-        expect(p.ring).toBeGreaterThanOrEqual(lo); expect(p.ring).toBeLessThanOrEqual(hi);
-      }
+      const present = POLAR_SWEEP.filter((s) => run(regime, s).pole.strength === 1);
+      const sides = present.map((s) => run(regime, s).pole.sides);
+      const ring = present.map((s) => run(regime, s).pole.ring);
+      // AC-POLAR floor (2): N non-degenerate (varies) AND modal N == the canonical prior (Saturn modal 6,
+      // NOT pinned). Modal asserted on `sides` (the polygon N the floor names); ring likewise varies.
+      expect(new Set(sides).size).toBeGreaterThanOrEqual(2);
+      expect(modeOf(sides)).toBe(canon.sides);
+      expect(new Set(ring).size).toBeGreaterThanOrEqual(2);
+      // every drawn N stays inside the plausible 5..8 physics band (clamp respected)
+      for (const n of [...sides, ...ring]) { expect(n).toBeGreaterThanOrEqual(lo); expect(n).toBeLessThanOrEqual(hi); }
+    }
+  });
+  it('[V-β.2] polar size/position vary per seed (r0/phase stdev > 0); same seed reproduces exactly', () => {
+    // AC-POLAR floor (3): size (r0) and position (phase) vary across present seeds. Floor (4): determinism.
+    for (const regime of REGIMES) {
+      const present = POLAR_SWEEP.filter((s) => run(regime, s).pole.strength === 1);
+      const r0 = present.map((s) => run(regime, s).pole.r0);
+      const phase = present.map((s) => run(regime, s).pole.phase);
+      expect(stdevOf(r0)).toBeGreaterThan(0);
+      expect(stdevOf(phase)).toBeGreaterThan(0);
+      // same-seed bit-identity of the whole pole record
+      for (const s of present) expect(JSON.stringify(run(regime, s).pole)).toEqual(JSON.stringify(run(regime, s).pole));
     }
   });
 

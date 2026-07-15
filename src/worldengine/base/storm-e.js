@@ -64,11 +64,13 @@ export const STORM_PHYS = Object.freeze({
   URANIAN_OBLIQUITY: 80,  // V-β.5: NEPTUNIAN regime + obliquity ≥ this ⇒ the Uranian read (Uranus ≈ 98°). GUI-reachable via the E5 obliquity° slider. (DECLARED; the internal-heat driver that fully separates Uranus from Neptune stays frozen → derive-not-freeze, taxonomy §0.5/5.1.)
 });
 
-// V-β.2 (Rider B): DECLARED per-regime canonical polar cyclone-cluster N — the physics-grounded DEFAULT,
-// NOT a per-seed draw (per-seed N variation is routed to derive-not-freeze). Jupiter's Juno cluster ≈ 8
-// (8 north), Saturn's polar hexagon = 6. Both `sides` (polygon/hexagon N) and `ring` (lattice member M)
-// are exposed GUI-tunable across the plausible 5..8 range (uniforms.js:394/398) but default to these
-// canonical values so the pole reads correct per regime without a stability calculation (taxonomy 2.10/3.1).
+// V-β.2 → derive-not-freeze Slice P: per-regime canonical polar cyclone-cluster N — now the modal PRIOR
+// the seed varies AROUND, not a per-seed PIN (Max re-ruling 2026-07-15 demoted Rider B's pin to a
+// regime-conditioned bias). Jupiter's Juno cluster ≈ 8 (8 north), Saturn's polar hexagon = 6. Both
+// `sides` (polygon/hexagon N) and `ring` (lattice member M) draw a canonical ± small delta per seed
+// (see POLAR_N_DELTA_WEIGHTS / resolvePole), clamped into the plausible 5..8 range (uniforms.js:394/398),
+// with MODAL N == this canonical value — so Saturn stays hexagon-LIKELY (not hexagon-pinned) and other
+// regimes may morph N/shape/size per seed while the pole still reads correct on average (taxonomy 2.10/3.1).
 export const POLAR_CANONICAL_N = Object.freeze({
   [E5_REGIME.GAS_GIANT]:   { sides: 8, ring: 8 },   // Juno Jovian cyclone crystal ≈ 8
   [E5_REGIME.SATURNIAN]:   { sides: 6, ring: 6 },   // Saturn north-polar hexagon
@@ -76,6 +78,34 @@ export const POLAR_CANONICAL_N = Object.freeze({
   [E5_REGIME.SUB_NEPTUNE]: { sides: 6, ring: 5 },
   [E5_REGIME.HOT_JUPITER]: { sides: 6, ring: 6 },
 });
+
+// V-β.2 → derive-not-freeze Slice P: per-seed POLAR PRESENCE prior. Replaces the always-on pole (the old
+// `strength: stormsOn ? 1 : 0`) with a per-seed coin flip against a regime-conditioned probability, so
+// polar vortices "don't always appear" (Max's atmo-3b UAT finding 5). The priors are PINNED named
+// constants, FROZEN this increment (AC-0 (1) declared-with-named-deriver debt): the NAMED future deriver
+// is a condition-derived presence probability — seasonal/convective forcing (obliquity-phase +
+// internalHeat) attenuated by hazeMute — that would replace the flat per-regime prior with a per-body
+// probability; until then the asserted constant equals the effective prior this increment. Jupiter's Juno
+// cyclone crystal + Saturn's hexagon are the solar system's most persistent polar structures (≈ always
+// present); ice-giant / sub-Neptune dark vortices are transient / seasonal (come and go). HOT_JUPITER
+// has NO entry: storms are regime-suppressed (stormsOn=false) so the prior is never consulted.
+// Grounded in DERIVE-FORMS.md §4 (Adriani et al. 2018 / Fletcher et al. 2018 / Simon et al. 2019).
+export const POLAR_PRESENCE_PRIOR = Object.freeze({
+  [E5_REGIME.GAS_GIANT]:   0.98,   // Juno polar cyclone cluster — persistent, effectively always structured
+  [E5_REGIME.SATURNIAN]:   0.97,   // north-polar hexagon + vortex, stable for decades (Voyager→Cassini)
+  [E5_REGIME.NEPTUNIAN]:   0.55,   // Great Dark Spots are transient (form/dissipate every few years)
+  [E5_REGIME.SUB_NEPTUNE]: 0.45,   // no polar imaging; haze-muted, presumed leaner/seasonal → below Neptune
+});
+
+// V-β.2 → derive-not-freeze Slice P: N-around-prior delta weights. The cluster count N (both `sides` and
+// `ring`) is a per-seed pick of the canonical prior + a delta drawn from {−1: .25, 0: .50, +1: .25},
+// weighted toward 0 so the MODAL delta is 0 ⇒ MODAL N == the canonical prior. Drawn on the APPENDED
+// stormE:polar stream; the result is clamped into POLAR_N_MIN..(POLAR_N_MIN+POLAR_N_SPAN) = 5..8.
+// DECLARED-with-named-deriver (AC-0 driver connectivity): this fixed triangular spread is a physics-free
+// placeholder; its FUTURE deriver is a polar-vortex STABILITY calculation (the barotropic wavenumber the
+// pole actually selects from rotation rate + shell depth + Rossby deformation radius — taxonomy 2.10/3.1),
+// which would replace the weights with a condition-derived N distribution. Frozen this increment.
+export const POLAR_N_DELTA_WEIGHTS = Object.freeze({ '-1': 0.25, '0': 0.50, '+1': 0.25 });
 
 // Per-regime default equilibrium temperature — used ONLY when the caller passes no drivers.T_eq, so the
 // writer's personality ramp still lands on the right regime read (Jovian hot/churning, Neptunian cold/
@@ -379,26 +409,49 @@ export function resolveStormE(regime = E5_REGIME.GAS_GIANT, drivers = {}, macroS
   };
 }
 
-// Pole params from the stormE:polar stream. V-β.2 (Rider B): the cluster count N is a DECLARED per-regime
-// canonical constant (POLAR_CANONICAL_N — Jupiter ≈8, Saturn 6), NOT a per-seed draw (per-seed N variation
-// is routed to derive-not-freeze). Everything ELSE (r0, active-pole sign, phase, age) still varies per seed
-// off the disjoint stormE:polar stream — the longitude/phase-style variety designDecision-3 permits. Drawn
-// with a constant count so the fields stay decoupled from any branch (mirrors the legacy constant-draw
-// discipline). N is clamped into the plausible 5..8 physics range the GUI also spans.
+// Weighted pick of the N delta {−1: .25, 0: .50, +1: .25} from a uniform u ∈ [0,1). Cumulative bins:
+// [0,.25)→−1, [.25,.75)→0, [.75,1)→+1. The modal (widest) bin is 0, so modal N == the canonical prior.
+function pickNDelta(u) {
+  const wLo = POLAR_N_DELTA_WEIGHTS['-1'];
+  if (u < wLo) return -1;
+  if (u < wLo + POLAR_N_DELTA_WEIGHTS['0']) return 0;
+  return 1;
+}
+
+// Pole params from the stormE:polar stream. V-β.2 → derive-not-freeze Slice P (canonical-N demotion +
+// per-seed presence gating — Max re-ruling 2026-07-15):
+//   • PRESENCE is now gated per seed: a gas deck's pole APPEARS with regime-conditioned probability
+//     (POLAR_PRESENCE_PRIOR) — Jovian/Saturnian effectively always, ice-giant/sub-Neptune transient.
+//     Non-gas / hot-Jupiter (stormsOn=false) ⇒ absent regardless. Some gas seeds now have NO pole.
+//   • N (sides/ring) is drawn AROUND the canonical PRIOR (± a {−1,0,+1} delta weighted toward 0) instead
+//     of pinned to it — Saturn stays hexagon-LIKELY (modal 6), others may morph. Clamped into 5..8.
+//   • r0, active-pole sign, phase, age still vary per seed off the disjoint stormE:polar stream.
+// DRAW-ORDER DISCIPLINE (byte-safety): the five original draws (r0, poleSign, phase, ageScalar,
+// phaseScalar) keep their order and values; the presence coin + the two N-deltas are APPENDED after them.
+// The golden mask (GOLDEN_STORM_MASK_HASH) reads ONLY stormE:place vortices — never the pole draws — so
+// appending here cannot move it; keeping the append order stable also keeps every pole-scalar test green.
 function resolvePole(regime, stormsOn, vigor, rng) {
+  // ── the original FIVE draws (byte-stable order — do NOT reorder) ──
   const r0 = STORM_PHYS.POLAR_R0_MIN + STORM_PHYS.POLAR_R0_SPAN * rng();
   const poleSign = rng() > 0.5 ? 1 : -1;
   const phase = rng() * TWO_PI;
   const ageScalar = rng();
   const phaseScalar = rng() * TWO_PI;
+  // ── APPENDED derive-not-freeze draws (drawn unconditionally so the stream order is branch-invariant) ──
+  const presenceRoll = rng();              // draw #6: per-seed presence coin
+  const dSides = pickNDelta(rng());        // draw #7: sides N delta
+  const dRing = pickNDelta(rng());         // draw #8: ring N delta
   // mode from the personality ramp: hot ⇒ cyclone lattice (2), mid ⇒ polygon/hexagon jet (1), cold ⇒ cap (0).
   const mode = vigor >= STORM_PHYS.LATTICE_VIGOR ? 2 : (vigor >= STORM_PHYS.DARK_VIGOR ? 1 : 0);
   const canon = POLAR_CANONICAL_N[regime] || { sides: 6, ring: 6 };
   const lo = STORM_PHYS.POLAR_N_MIN, hi = STORM_PHYS.POLAR_N_MIN + STORM_PHYS.POLAR_N_SPAN;   // 5..8
-  const sides = clamp(lo, hi, canon.sides);
-  const ring = clamp(lo, hi, canon.ring);
+  const sides = clamp(lo, hi, canon.sides + dSides);
+  const ring = clamp(lo, hi, canon.ring + dRing);
+  // presence gating: appear with the regime prior; off-gate / hot-Jupiter (stormsOn=false) never appears.
+  const prior = POLAR_PRESENCE_PRIOR[regime] ?? 0;
+  const present = stormsOn && presenceRoll < prior;
   return {
-    strength: stormsOn ? 1 : 0,
+    strength: present ? 1 : 0,
     mode, sides, r0, ring, pole: poleSign, phase, ageScalar, phaseScalar,
   };
 }

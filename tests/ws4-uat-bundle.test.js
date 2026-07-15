@@ -70,9 +70,12 @@ describe('WS4 T18 — UAT bundle for Max (landscape-with-history, deferred-to-ma
     const body = bodyAfter(labSrc, 'setSeed(macro');
     // writes the integer macroSeed into state (the seed that feeds uMacroOffset + the grain bake).
     expect(body).toMatch(/state\.macroSeed\s*=/);
-    // re-propagates through the existing seeded path (updateSeedUniforms → debounced route → re-bake),
-    // NOT a bespoke re-implementation, so the seed change re-routes + re-bakes exactly like a GUI reroll.
-    expect(body).toMatch(/updateSeedUniforms\s*\(/);
+    // re-propagates through the existing seeded path — either updateSeedUniforms() directly, or (post
+    // atmo-3b Slice 1) reseedGiant() = updateSeedUniforms()+rebakeE5Bands()+applyStormState() — NOT a
+    // bespoke re-implementation, so the seed change re-routes + re-bakes + re-places storms like a GUI
+    // reroll. Widened from /updateSeedUniforms/ so this binds to the ACTUAL reseedGiant() call, not the
+    // comment mentioning updateSeedUniforms() (was fragile-green on prose after Slice 1 rewired setSeed).
+    expect(body).toMatch(/(?:updateSeedUniforms|reseedGiant)\s*\(/);
   });
 
   it('the seed control is DETERMINISTIC — no Math.random / Date.now (same seed → same world)', () => {
