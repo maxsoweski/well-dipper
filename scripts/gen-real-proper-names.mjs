@@ -14,7 +14,10 @@
 // real-universe-overlay-2026-07-12, design doc §4).
 //
 // SOURCES (union, increment 1 / AC7):
-//   1. public/assets/data/hyg-stars.json            — `name` field (original set)
+//   1. public/assets/data/hyg-stars.json            — `name` + `aliases` fields
+//      (aliases = dropped duplicate/companion designations the FIX-4 dedup folded
+//      into a surviving row; keeps a single-token dropped name like 'Toliman'
+//      blocklisted after its own row is gone)
 //   2. public/assets/data/real-star-supplement.json — `name` field (dim famous
 //      hosts below the HYG naked-eye cut, e.g. "Barnard's Star" is filtered out
 //      by the single-token-alphabetic shape test below, same as multi-word HYG
@@ -60,9 +63,17 @@ function addIfSingleToken(set, n) {
 }
 
 // --- 1. hyg-stars.json ------------------------------------------------------
+// `name` (original set) PLUS `aliases` — dropped duplicate/companion designations
+// the catalog-regen dedup folded into a surviving row (FIX-4). A single-token
+// dropped name (e.g. 'Toliman') must STAY blocklisted even though it is no longer
+// any row's `name`; reading aliases guarantees it, independent of whether the
+// companion table also happens to carry it.
 const hyg = JSON.parse(readFileSync(HYG_PATH, 'utf-8'));
 const hygOnly = new Set();
-for (const s of hyg) addIfSingleToken(hygOnly, s.name);
+for (const s of hyg) {
+  addIfSingleToken(hygOnly, s.name);
+  for (const a of s.aliases ?? []) addIfSingleToken(hygOnly, a);
+}
 
 // --- 2. real-star-supplement.json (dim famous hosts, display names) --------
 const supplement = JSON.parse(readFileSync(SUPPLEMENT_PATH, 'utf-8'));

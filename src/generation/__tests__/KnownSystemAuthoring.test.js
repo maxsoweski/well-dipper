@@ -172,9 +172,12 @@ describe('AC5 — the registry entry duplicates NO multiplicity data (D4)', () =
 
 describe('AC5 — alias derivation over all three catalog names (D6)', () => {
   it('aliases include Rigil Kentaurus + Toliman (via associate) and Proxima Centauri (via the table)', () => {
-    // Rigil + Toliman are HYG catalog names claimed by associate() (both within
-    // MATCH_RADIUS of the registered position). Proxima is below the HYG cut, so
-    // it is aliased EAGERLY from the companion table (design D6).
+    // Rigil Kentaurus is the HYG row associate() claims within MATCH_RADIUS.
+    // Post-FIX-4 the Toliman row is deduped INTO Rigil's aliases[]; associate()
+    // folds a claimed row's aliases into the registry entry, so Toliman is still
+    // an Alpha Centauri alias (searchable) though it no longer has its own row.
+    // Proxima is below the HYG cut, so it is aliased EAGERLY from the companion
+    // table (design D6).
     const cat = new RealStarCatalog();
     cat._stars = HYG;
     cat._loaded = true;

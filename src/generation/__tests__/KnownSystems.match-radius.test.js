@@ -132,11 +132,11 @@ describe('RealStarCatalog.findByPosition — identity lookup for teleport arriva
     // (browser fetches, tests feed fs). Supplement dim hosts become
     // findByPosition/findVisible targets — TRAPPIST-1 is below the naked-eye HYG
     // cut and reachable ONLY via the supplement.
-    expect(CATALOG_STARS.length).toBe(15599);
+    expect(CATALOG_STARS.length).toBe(15592); // 15599 pre-FIX-4, minus 7 deduped secondary rows
     expect(SUPPLEMENT.stars.length).toBe(14);
     const cat = new RealStarCatalog();
     cat.ingestCatalogData(CATALOG_STARS, SUPPLEMENT, CONTENTS);
-    expect(cat.count).toBe(CATALOG_STARS.length + SUPPLEMENT.stars.length); // 15599 + 14
+    expect(cat.count).toBe(CATALOG_STARS.length + SUPPLEMENT.stars.length); // 15592 + 14
     const t1 = SUPPLEMENT.stars.find((s) => s.name === 'TRAPPIST-1');
     expect(cat.findByPosition({ x: t1.x, y: t1.y, z: t1.z })?.name).toBe('TRAPPIST-1');
     // The overlay index rode the same merge and is ready for the arrival join.

@@ -24,12 +24,6 @@
         "source": "hyg"
       },
       {
-        "name": "Toliman",
-        "refDistPc": 1.325,
-        "spect": "K",
-        "source": "hyg"
-      },
-      {
         "name": "Barnard's Star",
         "refDistPc": 1.827,
         "spect": "M",
@@ -56,12 +50,6 @@
       {
         "name": "HD 201091",
         "refDistPc": 3.486,
-        "spect": "K",
-        "source": "hyg"
-      },
-      {
-        "name": "HD 201092",
-        "refDistPc": 3.497,
         "spect": "K",
         "source": "hyg"
       },
@@ -150,12 +138,6 @@
         "refDistPc": 2.867,
         "spect": "M",
         "source": "supplement"
-      },
-      {
-        "name": "Toliman",
-        "refDistPc": 2.918,
-        "spect": "K",
-        "source": "hyg"
       },
       {
         "name": "Rigil Kentaurus",

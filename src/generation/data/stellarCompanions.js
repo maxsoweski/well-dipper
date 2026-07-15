@@ -103,6 +103,76 @@ export const STELLAR_COMPANIONS = [
     ],
   },
 
+  // 36 Ophiuchi (Guniibuu) — a real, gravitationally-bound K-dwarf TRIPLE at
+  // ~5.9 pc. Represented within the AC10 2-close-star cap: the bright A+B pair
+  // as the rendered close binary, the wide K5 tertiary (C) as a far companion
+  // (Proxima precedent — §2/§3 of representation-cap.md). Anchor "Guniibuu"
+  // (36 Oph A) resolves in hyg-stars.json; the secondary rows HD 155886 (B) +
+  // HD 156026 (C) collapse to Guniibuu aliases at catalog regen
+  // (process-hyg-catalog.mjs dedup) so the trio is ONE searchable destination.
+  {
+    name: 'Guniibuu',
+    kind: 'multiple',
+    components: [
+      // 36 Oph A: K1V orange dwarf; IAU name Guniibuu. (A and B are near-identical
+      // ~K1 dwarfs.) Source: Wikipedia "36 Ophiuchi".
+      { name: 'Guniibuu', class: 'K1V' },
+      // 36 Oph B (HD 155886): K1V. separationAU = the A–B mean separation
+      // ≈ 82.3 AU (period 471 yr, highly eccentric e≈0.92 → 7 AU periastron,
+      // 157 AU apastron). Source: Wikipedia "36 Ophiuchi".
+      { name: 'HD 155886', class: 'K1V', separationAU: 82.3 },
+    ],
+    farCompanions: [
+      // 36 Oph C (HD 156026): K5V, orbiting the A–B inner binary at a minimum
+      // ≈ 4,400 AU (period >180,000 yr) — bound but far beyond the close-pair
+      // slot, so it rides the far-companion mechanism. Source: Wikipedia
+      // "36 Ophiuchi".
+      { name: 'HD 156026', class: 'K5V', separationAU: 4400 },
+    ],
+  },
+
+  // 61 Cygni — the high-proper-motion "Flying Star" K-dwarf binary at ~3.5 pc
+  // (first star with a measured stellar parallax, Bessel 1838). Anchor
+  // "HD 201091" (61 Cyg A) resolves in hyg-stars.json; the "HD 201092" (61 Cyg B)
+  // row collapses to an HD 201091 alias at catalog regen so the pair is ONE
+  // marker / ONE destination.
+  {
+    name: 'HD 201091',
+    kind: 'multiple',
+    components: [
+      // 61 Cyg A (HD 201091): K5V. Source: Wikipedia "61 Cygni"; Kervella et al.
+      // CHARA/FLUOR radii of "the nearby K5V and K7V stars 61 Cygni A & B".
+      { name: 'HD 201091', class: 'K5V' },
+      // 61 Cyg B (HD 201092): K7V. separationAU = the A–B orbital semi-major axis
+      // ≈ 86 AU (period ~659 yr, e≈0.48 → 44 AU periastron, 124 AU apastron).
+      // Source: Wikipedia "61 Cygni".
+      { name: 'HD 201092', class: 'K7V', separationAU: 86 },
+    ],
+  },
+
+  // Zeta Reticuli — a WIDE common-proper-motion pair of two old, Sun-like G
+  // dwarfs at ~12 pc, members of the ζ Herculis moving group. There is no close
+  // orbit: the secondary is the far-companion mechanism (Proxima precedent), not
+  // a rendered close binary, so the primary renders SINGLE. Anchor "Zet-1 Ret"
+  // (ζ¹) resolves in hyg-stars.json; the "Zet-2 Ret" (ζ²) row collapses to a
+  // Zet-1 Ret alias at catalog regen.
+  {
+    name: 'Zet-1 Ret',
+    kind: 'multiple',
+    components: [
+      // ζ¹ Reticuli (HD 20766): G2.5V yellow dwarf (catalog spect 'G'). Source:
+      // Wikipedia "Zeta Reticuli".
+      { name: 'Zet-1 Ret', class: 'G2.5V' },
+    ],
+    farCompanions: [
+      // ζ² Reticuli (HD 20807): G1V yellow dwarf. separationAU = the projected
+      // physical separation ≥ ~3,750 AU (mean orbital distance ~9,000 AU, period
+      // ≳ 1 Myr) — far beyond any close-pair slot. Source: Wikipedia
+      // "Zeta Reticuli".
+      { name: 'Zet-2 Ret', class: 'G1V', separationAU: 3750 },
+    ],
+  },
+
   // --- Pinned famous singles (singleness marker only; NO companion fields) ---
   // Each singleness claim web-verified 2026-07-12 — NOT pinned from memory.
   // (Fomalhaut is deliberately NOT pinned here: it is a wide multiple.)

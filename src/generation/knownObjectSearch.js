@@ -46,7 +46,8 @@
  * @property {string} [region]    Galactic region (named only, display).
  * @property {string} [harrisId]  Harris catalog id (globular only, display).
  * @property {number} [radius]    Structure radius, kpc (structure only, display).
- * @property {string} [matchedAlias]  The alias string that matched (registry only).
+ * @property {string} [matchedAlias]  The alias string that matched (registry, or a
+ *                                 star hit resolved via a catalog-dedup alias).
  */
 
 import { enumerateNamedSystems } from './NameGenerator.js';
@@ -135,11 +136,19 @@ export function resolveKnownObjects(query, {
   const named = [];
   const structures = [];
 
-  // ── (a) REAL STARS — substring on _stars.name (mirror DebugPanel.js:595-600) ──
+  // ── (a) REAL STARS — substring on _stars.name (mirror DebugPanel.js:595-600),
+  // PLUS the catalog-dedup aliases: a row that absorbed a duplicate/companion row
+  // at regen (Guniibuu ← HD 155886/HD 156026; HD 201091 ← HD 201092; Alula
+  // Australis ← Xi UMa; ...) also matches on those absorbed names, resolving them
+  // to the ONE surviving destination (canonical name, position, F1 seed). This is
+  // what keeps every dropped designation searchable after the dedup.
   const catalog = realStarCatalog;
   if (catalog?.loaded && Array.isArray(catalog._stars)) {
     for (const star of catalog._stars) {
-      if (star.name && star.name.toLowerCase().includes(q)) {
+      const nameHit = star.name && star.name.toLowerCase().includes(q);
+      const aliasHit = !nameHit && Array.isArray(star.aliases)
+        && star.aliases.some((a) => a.toLowerCase().includes(q));
+      if (nameHit || aliasHit) {
         stars.push({
           name: star.name,
           worldPos: { x: star.x, y: star.y, z: star.z },
@@ -148,6 +157,9 @@ export function resolveKnownObjects(query, {
           starType: star.spect,
           type: star.spect,
           mag: star.mag,
+          // Record which alias matched (display parity with the registry source);
+          // omitted when the primary name itself matched.
+          ...(aliasHit ? { matchedAlias: star.aliases.find((a) => a.toLowerCase().includes(q)) } : {}),
         });
         if (stars.length >= STAR_CAP) break;
       }

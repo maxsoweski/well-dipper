@@ -198,14 +198,21 @@ export class KnownSystems {
     for (const ks of KNOWN_SYSTEMS) {
       ks.claimedStars = catalog.findAllWithin(ks.position, MATCH_RADIUS);
       for (const s of ks.claimedStars) {
-        if (!s.name || s.name === '"') continue; // skip unnamed + legacy '"' artifact
-        ks.aliases.add(s.name);
-        const existing = _aliasIndex.get(s.name);
-        if (existing && existing !== ks) { // cross-entry duplicate-name guard (belt-and-suspenders)
-          console.warn(`[KnownSystems] alias "${s.name}" claimed by both ${existing.name} and ${ks.name}; keeping ${existing.name}`);
-          continue;
+        // A claimed catalog star contributes its own name AND any dedup aliases
+        // it absorbed at catalog regen (Rigil Kentaurus absorbed 'Toliman', the
+        // α Cen B row), so every real designation of a claimed star routes to
+        // this system — Toliman stays searchable as an Alpha Centauri alias even
+        // though its own catalog row is gone.
+        for (const nm of [s.name, ...(Array.isArray(s.aliases) ? s.aliases : [])]) {
+          if (!nm || nm === '"') continue; // skip unnamed + legacy '"' artifact
+          ks.aliases.add(nm);
+          const existing = _aliasIndex.get(nm);
+          if (existing && existing !== ks) { // cross-entry duplicate-name guard (belt-and-suspenders)
+            console.warn(`[KnownSystems] alias "${nm}" claimed by both ${existing.name} and ${ks.name}; keeping ${existing.name}`);
+            continue;
+          }
+          _aliasIndex.set(nm, ks);
         }
-        _aliasIndex.set(s.name, ks);
       }
     }
   }

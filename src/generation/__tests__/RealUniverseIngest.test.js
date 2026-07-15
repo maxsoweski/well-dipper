@@ -247,12 +247,18 @@ describe('stellarCompanions.js — curated multiplicity source of truth', () => 
     expect(farNames).toContain('Proxima Centauri');
   });
 
-  it('every anchor and far companion resolves in hyg-stars.json ∪ supplement; close companions are exempt', () => {
+  it('every anchor and far companion resolves in hyg-stars.json ∪ supplement (name OR dedup alias); close companions are exempt', () => {
     // Anchor = primary component (multiples) or the star itself (singles).
-    // Far companions are real catalog stars too. Close white-dwarf companions
-    // (Sirius B, Procyon B) are NEW content the overlay adds — deliberately in
-    // no catalog — so they carry no resolvability requirement (design §137-138).
-    const catalogNames = new Set([...HYG.map(h => h.name), ...SUPP.map(s => s.name)]);
+    // Far companions are real catalog stars too — but FIX-4 may represent one as
+    // a dedup ALIAS of the primary rather than its own row (36 Oph C = HD 156026
+    // → Guniibuu alias; ζ² Ret = Zet-2 Ret → Zet-1 Ret alias), so resolution
+    // accepts a catalog `.name` OR any row's `aliases[]`. Close white-dwarf
+    // companions (Sirius B, Procyon B) are NEW content the overlay adds —
+    // deliberately in no catalog — so they carry no resolvability requirement.
+    const catalogNames = new Set([
+      ...HYG.flatMap(h => [h.name, ...(h.aliases ?? [])]),
+      ...SUPP.map(s => s.name),
+    ]);
     for (const e of STELLAR_COMPANIONS) {
       const anchor = e.kind === 'multiple' ? e.components[0].name : e.name;
       expect(catalogNames.has(anchor), `anchor ${anchor} (${e.name}) unresolved`).toBe(true);

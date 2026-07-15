@@ -35,23 +35,39 @@ describe('neighborhood-reference.json — closed neighbor sets (design fact 2)',
   const solNames = ref.origins.Sol.map((e) => e.name);
   const sirNames = ref.origins.Sirius.map((e) => e.name);
 
-  it('Sol has 19 named neighbors within 5 pc (12 hyg + 7 supplement)', () => {
-    expect(ref.origins.Sol).toHaveLength(19);
-    expect(ref.origins.Sol.filter((e) => e.source === 'hyg')).toHaveLength(12);
+  it('Sol has 17 named neighbors within 5 pc (10 hyg + 7 supplement)', () => {
+    // Was 19 (12 hyg) pre-FIX-4: the catalog-dedup dropped Toliman (α Cen B → an
+    // alias of Rigil Kentaurus) and HD 201092 (61 Cyg B → an alias of HD 201091),
+    // so two hyg rows leave the closed Sol set (companions now live inside their
+    // primary's system, Sirius/Proxima precedent). Supplement set is untouched.
+    expect(ref.origins.Sol).toHaveLength(17);
+    expect(ref.origins.Sol.filter((e) => e.source === 'hyg')).toHaveLength(10);
     expect(ref.origins.Sol.filter((e) => e.source === 'supplement')).toHaveLength(7);
   });
 
-  it('Sirius has 15 named neighbors within 5 pc, including Sol at ~2.64 pc', () => {
-    expect(ref.origins.Sirius).toHaveLength(15);
+  it('Sirius has 14 named neighbors within 5 pc, including Sol at ~2.64 pc', () => {
+    // Was 15 pre-FIX-4: Toliman (2.918 pc from Sirius) dropped to an alias.
+    expect(ref.origins.Sirius).toHaveLength(14);
     const sol = ref.origins.Sirius.find((e) => e.name === 'Sol');
     expect(sol).toBeDefined();
     expect(sol.refDistPc).toBeCloseTo(2.637, 3);
     expect(sol.source).toBe('hyg');
   });
 
+  it('the FIX-4-deduped secondary rows are no longer separate destinations', () => {
+    // Toliman / HD 201092 collapsed to aliases of their primaries — they must NOT
+    // appear as their own neighbor rows any more (their primaries still do).
+    expect(solNames).not.toContain('Toliman');
+    expect(solNames).not.toContain('HD 201092');
+    expect(sirNames).not.toContain('Toliman');
+    // Primaries survive.
+    expect(solNames).toContain('Rigil Kentaurus');
+    expect(solNames).toContain('HD 201091');
+  });
+
   it('encodes the shipped name-string traps verbatim (Sol set)', () => {
-    for (const n of ['Ran', 'Tau Cet', 'Eps Ind', 'HD 201091', 'HD 201092',
-                     'Keid', 'Rigil Kentaurus', 'Toliman']) {
+    for (const n of ['Ran', 'Tau Cet', 'Eps Ind', 'HD 201091',
+                     'Keid', 'Rigil Kentaurus']) {
       expect(solNames, n).toContain(n);
     }
     // Near-namesake traps: the real neighbors, NOT their famous lookalikes.
