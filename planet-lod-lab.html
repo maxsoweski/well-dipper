@@ -167,6 +167,7 @@
     import { computeE1 } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment).
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
+    import { resolveStormE, bakeStormEAttributes } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute)
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -200,10 +201,11 @@
       attribute float aBand;   varying float vBand;    // bandNorm — the writer's driver-organized band value
       attribute float aShear;  varying float vShear;   // |du/dφ| normalized — gates the jet filament turbulence
       attribute float aMush;   varying float vMush;    // NH₃ mushball compositional banding (depth layer)
+      attribute float aStorm;  varying float vStorm;   // #3b storm/convection MASK — the ONE new baked attribute (consumed by V-α filamentation; passthrough-only in Slice P)
       void main() {
         vPos = position;
         vObjN = normalize(position);
-        vBand = aBand; vShear = aShear; vMush = aMush;
+        vBand = aBand; vShear = aShear; vMush = aMush; vStorm = aStorm;
         vSubstellarAngle = acos(clamp(dot(normalize(position), normalize(uLightDir)), -1.0, 1.0));
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
@@ -1436,6 +1438,7 @@
       geometry.setAttribute('aBand',  new THREE.BufferAttribute(new Float32Array(_vc), 1));
       geometry.setAttribute('aShear', new THREE.BufferAttribute(new Float32Array(_vc), 1));
       geometry.setAttribute('aMush',  new THREE.BufferAttribute(new Float32Array(_vc), 1));
+      geometry.setAttribute('aStorm', new THREE.BufferAttribute(new Float32Array(_vc), 1));   // #3b storm mask (default 0 = flat; refilled by rebakeE5Bands on gas presets)
     }
     const material = new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms });
     const planet = new THREE.Mesh(geometry, material);
@@ -2776,6 +2779,11 @@
       geometry.attributes.aShear.array.set(bake.aShear); geometry.attributes.aShear.needsUpdate = true;
       geometry.attributes.aMush.array.set(bake.aMush);   geometry.attributes.aMush.needsUpdate = true;
       state.e5BandCount = bake.bandCount; state.e5EqSign = bake.eqSign; state.e5PeakU = bake.peakU;  // live-AC probes
+      // #3b Slice P: bake the storm/convection MASK (the one new attribute) from the SAME regime/drivers,
+      // plus the composition gas-gate + T_eq personality inputs the storm writer reads.
+      const _sd = { ...drivers, composition: _fp.atmosphere?.composition, T_eq: _fp.T_eq };
+      const bakeStorm = bakeStormEAttributes(pos.array, pos.count, R, { regime, drivers: _sd, macroSeed: state.macroSeed | 0, stormSeed: state.stormSeed | 0 });
+      geometry.attributes.aStorm.array.set(bakeStorm.aStorm); geometry.attributes.aStorm.needsUpdate = true;
     }
     function applyDrivers(){
       const u = deriveUniforms(DRIVER_PRESETS[driverUI.preset], driverUI.qualityTier);
@@ -3151,170 +3159,68 @@
       // (Lava/Europa are locked but airless) — verify by manual uniform poke,
       // deferred-to-profiles (card §6.5 step 4).
       state.weatherLocked = (_fp.tidalState?.locked && _hadLiquid) ? 1 : 0;
-      // ── F27 great-spot anticyclone — deterministic storm derivation (card §6.5
-      // step 4; derivation HERE per the F11 precedent — core.js untouched). Placement
-      // is SEED IDENTITY: hash(macroSeed, stormSeed) — same pair ⇒ same spot on
-      // re-approach (card §6 item 8); stormSeed survives preset changes (NOT in the
-      // 🎲 transient reset above) and rerolls only via the folder 🎲. mulberry32-style
-      // inline PRNG — each draw advances the stream, so the fields decorrelate.
-      const _spotRng = (seed => { let _a = seed >>> 0; return () => {
-        _a = (_a + 0x6D2B79F5) | 0;
-        let _t = Math.imul(_a ^ (_a >>> 15), 1 | _a);
-        _t = (_t + Math.imul(_t ^ (_t >>> 7), 61 | _t)) ^ _t;
-        return ((_t ^ (_t >>> 14)) >>> 0) / 4294967296;
-      }; })((Math.imul(state.macroSeed, 2654435761) ^ state.stormSeed) >>> 0);
-      // Same h2-he gate as F24/F25: a great spot is a gas-deck vortex — every solid
-      // preset derives 0 and the per-frame count gate writes uStormCount 0 (the
-      // 9-preset pre-check 2026-06-10: terrestrials/airless all 0; the F27 contract).
-      state.spotStrength = _gas ? 1.0 : 0.0;
-      // Center: longitude uniform; y = 1.4·(hash−0.5) clamped |y| <= 0.7 (the card's
-      // pole-avoid — also keeps the GLSL east-frame cross(up,c) non-degenerate).
-      const _spotLon = _spotRng() * Math.PI * 2.0;
-      const _spotY = Math.max(-0.7, Math.min(0.7, 1.4 * (_spotRng() - 0.5)));
-      const _spotRxz = Math.sqrt(1.0 - _spotY * _spotY);
-      state.spotCenter = [_spotRxz * Math.cos(_spotLon), _spotY, _spotRxz * Math.sin(_spotLon)];
-      // Radius 0.18..0.30 rad (~2 stripes on the count-14 Jovian — the GRS straddles
-      // ~2 bands, card §6.5 step 6); swirl 1.2..2.5 rad signed (sign = spin direction);
-      // aspect 1.6..2.0 E-W (the zonal-shear elongation, card §6 item 2).
-      state.spotRadius = 0.18 + 0.12 * _spotRng();
-      state.spotRot = (1.2 + 1.3 * _spotRng()) * (_spotRng() > 0.5 ? 1 : -1);
-      state.spotAspect = 1.6 + 0.4 * _spotRng();
-      // Variant from the SAME T_eq vigor ramp as the deck personality: a cold bland
-      // ice giant gets the dark GDS bruise + bright companion (Neptunian, vigor 0);
-      // warm churning decks get the warm GRS oval (Jovian 0.99 / Saturnian 0.55).
-      state.spotMode = _vigor < 0.35 ? 1 : 0;
+      // ── #3b Slice P: PHYSICS storm/vortex placement — REPLACES the F27/F28/F29
+      // mulberry32 hash closures with the storm-e.js writer. resolveStormE places
+      // vortices at the anticyclonic-shear ARGMAX over the PV staircase (band-confined,
+      // deterministic tie-break lowest-lat→lowest-node), draws longitude/phase/count-mix
+      // from the disjoint stormE:{place,age,phase,polar} alea streams, and returns a
+      // place-once seeded age + phase bank (the #4/#5/#8 oscillator substrate). Placement
+      // is STILL SEED IDENTITY (macroSeed, stormSeed) — same pair ⇒ same latitudes on
+      // re-approach; the folder 🎲 rerolls stormSeed THROUGH applyDrivers. Gas gate keys
+      // on composition 'h2-he' (designDecision-5): every solid preset ⇒ count 0 ⇒ the
+      // per-frame carriage writes uStormCount 0 ⇒ byte-identical off-gate render. Discrete
+      // vortices fill the existing uStorm[8]/uPolar carriage (unchanged); the ONE new
+      // baked field is the storm/convection MASK (aStorm, filled in rebakeE5Bands). Colors
+      // are materialized HERE from state.bandTint + the vortex role/mode (V-α.4 will swap
+      // this for the writer's ageScalar→chromophore ramp).
       const _bt = state.bandTint;
-      state.spotColor = state.spotMode === 1
-        ? [_bt[0] * 0.55, _bt[1] * 0.55, _bt[2] * 0.55]                                  // dark bruise: 1-2 posterize levels down
-        : [_bt[0] * 0.92, _bt[1] * 0.52, _bt[2] * 0.40];                                 // GRS brick-red: DARKER + redder than the deck so the core posterizes 1-2 levels below the pale collar (live tune 2026-06-10 — the first cut x(1.25,0.95,0.8) matched the zone luminance and the core vanished into the deck)
-      state.spotCompanion = state.spotMode * 0.8;
-      // ── F28 storm clusters / oval trains — deterministic train derivation (card
-      // §6.5 steps 2-5; derivation HERE per the F11 precedent — core.js untouched).
-      // SAME PRNG STREAM as F27, extended: every draw below continues after the great
-      // spot's, so one (macroSeed, stormSeed) pair owns ALL storm placement and the
-      // two features decorrelate for free (card §6.5 step 5). Same h2-he gate —
-      // trains are gas-deck vortices; every solid preset derives 0 and the per-frame
-      // writer adds no slots.
-      state.trainStrength = _gas ? 1.0 : 0.0;
-      // Band confinement (card §6 item 3): pearl/plume latitudes SNAP to a BELT
-      // center. F24's ladder INVERTED: belts sit at fract(bandCoord) = 0.5, i.e.
-      // bandCoord = 0.5 + m, and bandCoord = 0.25·latC·bandCount, so latC =
-      // (2 + 4m)/bandCount; |trueLat| = pow(|latC|, 1/bandLatPow) (the GLSL latitude
-      // remap inverted) and y = sin(trueLat·π/2) (trueLat = asin(y)·2/π inverted).
-      // Candidate belts filtered in Y-SPACE, |y| <= 0.75 (live tune 2026-06-10: the
-      // first cut filtered |latC| 0.25..0.75, but the latPow remap is nonlinear —
-      // on count-14 Jovian that excluded the equatorward belt (y 0.35) and ADMITTED
-      // a 70-degree near-polar one (y 0.94), violating the card's pole-avoid).
-      // Mirrors the GLSL chain through the same state knobs.
-      const _trMs = [];
-      for (let _m = 0; (2 + 4 * _m) / state.bandCount <= 1.0 + 1e-9; _m++){
-        const _yc = Math.sin(Math.pow((2 + 4 * _m) / state.bandCount, 1 / state.bandLatPow) * Math.PI / 2);
-        if (_yc <= 0.75 + 1e-9) _trMs.push(_m);
-      }
-      const _trBeltY = () => {
-        const _m = _trMs.length ? _trMs[Math.floor(_spotRng() * _trMs.length)] : 0;
-        const _latC = (2 + 4 * _m) / state.bandCount;
-        const _hemi = _spotRng() > 0.5 ? 1 : -1;
-        return _hemi * Math.sin(Math.pow(_latC, 1 / state.bandLatPow) * Math.PI / 2);
+      const _stormColor = (role, mode) => {
+        if (role === 'grs')       return [_bt[0] * 0.92, _bt[1] * 0.52, _bt[2] * 0.40];   // GRS brick-red (warm anticyclone)
+        if (role === 'dark-spot') return [_bt[0] * 0.55, _bt[1] * 0.55, _bt[2] * 0.55];   // cleared dark bruise (ice-giant GDS)
+        if (role === 'barge')     return [_bt[0] * 0.50, _bt[1] * 0.42, _bt[2] * 0.38];   // brown barge (dark cyclonic)
+        if (role === 'scooter')   return [0.85, 0.90, 1.0];                                // Neptune blue-white companion
+        return [Math.min(1, _bt[0] * 0.55 + 0.45), Math.min(1, _bt[1] * 0.55 + 0.45), Math.min(1, _bt[2] * 0.55 + 0.45)];  // pearl/oval — pale deck-tint lift
       };
-      // One mechanism, three reads on the SAME T_eq vigor ramp as the deck personality
-      // (card §6.5 step 2): Jovian ⇒ string-of-pearls train; Saturnian ⇒ GWS plume
-      // head + sheared tail (a rot-0 aspect-9 slot — the elliptical metric stretches
-      // it into the along-band streak, no GLSL change); Neptunian ⇒ 1-2 scooters.
-      const _tr = [];
-      if (_vigor >= 0.7){
-        // PEARL TRAIN: 4-6 pale near-white ovals sharing ONE belt latitude, quasi-
-        // regular longitudes (2π/n spacing ± 15% jitter), mild SAME-SIGN swirl —
-        // one anticyclonic shear zone spins the whole family the same way.
-        const _trN = 4 + Math.floor(_spotRng() * 3);
-        const _trY = _trBeltY();
-        const _trRxz = Math.sqrt(1 - _trY * _trY);
-        const _trLon0 = _spotRng() * Math.PI * 2;
-        const _trSgn = _spotRng() > 0.5 ? 1 : -1;
-        // pale near-white lift of the deck tint — the bright-oval posterize bucket
-        const _trCol = [Math.min(1, _bt[0] * 0.55 + 0.45), Math.min(1, _bt[1] * 0.55 + 0.45), Math.min(1, _bt[2] * 0.55 + 0.45)];
-        for (let _i = 0; _i < _trN; _i++){
-          const _lon = _trLon0 + (_i + 0.3 * (_spotRng() - 0.5)) * Math.PI * 2 / _trN;
-          _tr.push({ center: [_trRxz * Math.cos(_lon), _trY, _trRxz * Math.sin(_lon)],
-                     radius: 0.05 + 0.04 * _spotRng(), rot: _trSgn * (0.6 + 0.4 * _spotRng()),
-                     aspect: 1.3 + 0.5 * _spotRng(), color: _trCol, companion: 0 });
-        }
-      } else if (_vigor >= 0.35){
-        // PLUME OUTBREAK (Saturn 2010 GWS): bright convective head + sheared tail =
-        // a second slot at the same belt offset 2.5 head-radii EAST along the band
-        // (east = normalize(cross(up, c)) — the GLSL tangent frame's east), rot 0,
-        // aspect 9, head color dimmed ×0.75 (tail decay gradient is a v1 scope cut).
-        const _trY = _trBeltY();
-        const _trRxz = Math.sqrt(1 - _trY * _trY);
-        const _trLon = _spotRng() * Math.PI * 2;
-        const _hc = [_trRxz * Math.cos(_trLon), _trY, _trRxz * Math.sin(_trLon)];
-        const _hR = 0.09;
-        const _hCol = [Math.min(1, _bt[0] * 0.35 + 0.65), Math.min(1, _bt[1] * 0.35 + 0.65), Math.min(1, _bt[2] * 0.35 + 0.65)];
-        // TAIL FIRST: stormColTerms paints slots in order and later slots win in
-        // overlaps — the head's bright oval must repaint ON TOP of the dim streak
-        // (review fix 2026-06-10: head-first let the wide tail core erase the head).
-        // Tail center = head rotated about the y axis (preserves the snapped belt
-        // latitude exactly; the cross-product offset sagged y by ~2.5%).
-        // d(center)/d(lon) = -east·rxz, so EAST = decreasing longitude here.
-        const _tAng = 2.5 * _hR / _trRxz;
-        const _tLon = _trLon - _tAng;
-        _tr.push({ center: [_trRxz * Math.cos(_tLon), _trY, _trRxz * Math.sin(_tLon)],
-                   radius: 0.10, rot: 0, aspect: 9,
-                   color: [_hCol[0] * 0.75, _hCol[1] * 0.75, _hCol[2] * 0.75], companion: 0 });
-        _tr.push({ center: _hc, radius: _hR, rot: 1.2, aspect: 1.4, color: _hCol, companion: 0 });
-      } else {
-        // SCOOTERS (Neptune's transient companions): 1-2 small bright white-blue
-        // patches, each snapped to its own belt — band confinement holds for the
-        // cold bland deck too.
-        const _trN = 1 + (_spotRng() > 0.5 ? 1 : 0);
-        for (let _i = 0; _i < _trN; _i++){
-          const _trY = _trBeltY();
-          const _trRxz = Math.sqrt(1 - _trY * _trY);
-          const _lon = _spotRng() * Math.PI * 2;
-          _tr.push({ center: [_trRxz * Math.cos(_lon), _trY, _trRxz * Math.sin(_lon)],
-                     radius: 0.05 + 0.02 * _spotRng(), rot: (_spotRng() > 0.5 ? 1 : -1) * 0.5,
-                     aspect: 1.3, color: [0.85, 0.90, 1.0], companion: 0 });
-        }
+      const _stormRegime = E5_PRESET_REGIME[driverUI.preset] || E5_REGIME.GAS_GIANT;
+      const _stormDrivers = {
+        rotationRate: (9.9 / (_fp.rotationHours ?? 24)) * (state.e5RotationScale ?? 1),
+        radius: (_fp.radiusEarth ?? 1) / 11.2,
+        composition: _fp.atmosphere?.composition,   // the gas gate (designDecision-5)
+        T_eq: _fp.T_eq ?? 288,                       // the deck-personality ramp
+      };
+      if (state.e5Obliquity > 0) _stormDrivers.obliquityDeg = state.e5Obliquity;
+      const _storm = resolveStormE(_stormRegime, _stormDrivers, state.macroSeed | 0, state.stormSeed | 0);
+      // F27 great spot ← writer primary (null off-gate ⇒ strength 0 keeps the carriage silent)
+      state.spotStrength = _storm.strength;
+      if (_storm.primary){
+        const _p = _storm.primary;
+        state.spotCenter = _p.center;
+        state.spotRadius = _p.radius;
+        state.spotRot = _p.rot;
+        state.spotAspect = _p.aspect;
+        state.spotMode = _p.mode;
+        state.spotColor = _stormColor(_p.role, _p.mode);
+        state.spotCompanion = _p.companion;
       }
-      state.trainSpots = _tr;
-      state.trainCount = _tr.length;
-      // ── F29 polar vortex — deterministic pole-structure derivation (card §6.5
-      // step 5; derivation HERE per the F11 precedent — core.js untouched). FRESH
-      // mulberry32 stream, NOT the F27/F28 stream extended: F28's draw count varies
-      // by vigor branch, so extending it would let a deck-personality change MOVE
-      // the pole structure. The seed mixes the SAME (macroSeed, stormSeed) identity
-      // with a golden-ratio constant — one seed pair still owns ALL storm/vortex
-      // placement (card §6 item 8) while the polar stream decorrelates from the
-      // spot/train stream.
-      const _polRng = (seed => { let _a = seed >>> 0; return () => {
-        _a = (_a + 0x6D2B79F5) | 0;
-        let _t = Math.imul(_a ^ (_a >>> 15), 1 | _a);
-        _t = (_t + Math.imul(_t ^ (_t >>> 7), 61 | _t)) ^ _t;
-        return ((_t ^ (_t >>> 14)) >>> 0) / 4294967296;
-      }; })(((Math.imul(state.macroSeed, 2654435761) ^ state.stormSeed) ^ 0x9E3779B9) >>> 0);
-      // Same h2-he gate as the storm family — a polar vortex is a gas-deck regime;
-      // every solid preset derives 0 and the per-frame writer zeroes the combiner.
-      state.polarStrength = _gas ? 1.0 : 0.0;
-      // Variant from the SAME T_eq vigor ramp as the deck/storm personality (card
-      // §6.5 step 3): hot churning Jovian ⇒ cyclone-cluster lattice (the Juno
-      // poles); mid Saturnian ⇒ polygonal jet (the hexagon); cold bland
-      // Neptunian/ice ⇒ single lobed cap (the Venus-style swirl core stands in —
-      // no Venus-type preset exists, card §6.5 v1 cuts).
-      state.polarMode = _vigor >= 0.7 ? 2 : (_vigor >= 0.35 ? 1 : 0);
-      // Wavenumber 5..8 with a re-draw bias toward Saturn's signature 6. The second
-      // draw is ALWAYS consumed — constant draw count keeps the later fields
-      // decoupled from the bias branch.
-      const _ps1 = 5 + Math.floor(_polRng() * 3.99);
-      const _ps2 = _polRng();
-      state.polarSides = (_ps1 !== 6 && _ps2 < 0.4) ? 6 : _ps1;
-      // Jet/ring radius 0.18..0.26 rad: with amp 0.12 the polygon's rJet max is
-      // 0.26 x 1.12 = 0.29 — comfortably inside the 0.38 gate onset (pre-check).
-      state.polarR0 = 0.18 + 0.08 * _polRng();
-      state.polarRing = 5 + Math.floor(_polRng() * 3.99);
-      state.polarPole = _polRng() > 0.5 ? 1 : -1;
-      state.polarPhase = _polRng() * 6.283;
-      // Cap tint: bandTint shifted COOL (teal-blue lean) — the Cassini gold-haze-
-      // outside / blue-core two-tone (card §6 item 2).
+      // F28 storm clusters ← writer train members (vortex street / brown barge / scooters)
+      state.trainStrength = _storm.strength;
+      state.trainSpots = _storm.train.map((v) => ({
+        center: v.center, radius: v.radius, rot: v.rot, aspect: v.aspect,
+        color: _stormColor(v.role, v.mode), companion: v.companion,
+      }));
+      state.trainCount = state.trainSpots.length;
+      // F29 polar vortex ← writer pole (drawn from the disjoint stormE:polar stream, BEFORE
+      // the variable-count vortex loop, so the count-mix never moves the pole structure — F5)
+      const _pl = _storm.pole;
+      state.polarStrength = _pl.strength;
+      state.polarMode = _pl.mode;
+      state.polarSides = _pl.sides;
+      state.polarR0 = _pl.r0;
+      state.polarRing = _pl.ring;
+      state.polarPole = _pl.pole;
+      state.polarPhase = _pl.phase;
+      // Cap tint: bandTint shifted COOL (teal-blue lean) — the Cassini gold-haze-outside /
+      // blue-core two-tone (card §6 item 2).
       state.polarTint = [_bt[0] * 0.45, _bt[1] * 0.62, Math.min(1, _bt[2] * 0.85 + 0.25)];
       // ── F30 lightning — flash-activity drivers (card §6.5 step 4). Gas decks
       // always convect (Juno/Cassini: flashes are ubiquitous on h2-he giants) ⇒ 1,

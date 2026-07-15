@@ -1,0 +1,361 @@
+// src/worldengine/base/storm-e.js
+// ─────────────────────────────────────────────────────────────────────────────
+// STORM-E — DRIVER-ORGANIZED GAS-GIANT VORTEX PLACEMENT + STORM/CONVECTION MASK
+// (World-Engine production-L1, atmosphere increment #3b "Storms" — Slice P)
+//
+// WHAT THIS BUILDS (plain language). The physics PLACEMENT of discrete storm vortices on a gas-giant
+// deck, plus the continuous storm/convection MASK field over the sphere — both as DATA. It REPLACES the
+// old lab-local mulberry32 hash placement (planet-lod-lab.html F27/F28/F29 derivation closures) with a
+// writer that places vortices by the ANTICYCLONIC-SHEAR ARGMAX over the #3a jet profile (the "PV
+// staircase" read), band-confined, deterministic tie-break lowest-lat→lowest-node. Every discrete
+// vortex carries a place-once seeded AGE scalar (the chromophore substrate #V-α.4 consumes) and a
+// place-once seeded PHASE scalar (the oscillator substrate #4 lightning / #5 brown-dwarf / #8 Mars
+// consume). It fills the EXISTING uStorm[8]/uPolar carriage; the ONE new baked attribute is the mask.
+//
+// WHY IT IS A SIBLING OF climate-e5.js (never edits it). #3a (climate-e5.js) owns the signed zonal jet
+// field u(lat) and its analytic shear du/dφ. #3b READS those (import resolveParams/jetProfile/jetShear/
+// jetShearPeak) to PLACE storms on the jets — it is a pure consumer, mirroring the emission-e.js seam.
+// The jet field is the single source of truth for "where the shear is"; storms live on that shear.
+//
+// STATIC PLACE-ONCE (program discipline, contract designDecision-2): NO uTime anywhere. Age and phase
+// ship as place-once scalars so downstream increments can animate WITHOUT #3b animating anything.
+//
+// GAS GATE DERIVES FROM COMPOSITION (contract designDecision-5): eligibility keys on
+// drivers.composition === 'h2-he', NOT on archetype strings. Non-gas ⇒ empty record set (count 0),
+// mask all-zero ⇒ the carriage writes uStormCount 0 ⇒ every GLSL storm term no-ops (AC-OFFGATE).
+//
+// PER-SEED VARIETY IS ROUTED OUT (contract designDecision-3): within #3b, same-regime reseeds SHARE
+// storm LATITUDES (the shear argmax is a pure function of the frozen driver inputs) and vary
+// longitude / phase / count-mix only. The frozen constants below (STORM_PHYS) each name their future
+// deriver = the derive-not-freeze variety increment (AC-0 driver connectivity).
+//
+// DETERMINISM HARD-RULE: no Math.random / Date.now anywhere. Every random draw is alea seeded off the
+// integer (macroSeed, stormSeed) identity in FOUR DISJOINT sub-namespaces — `stormE:place`,
+// `stormE:age`, `stormE:phase`, `stormE:polar` — with fixed draw order. `stormE:polar` is a separate
+// stream (mirrors the legacy `_polRng ^ 0x9E3779B9` fork) so the VARIABLE per-seed vortex count in
+// `stormE:place` can never move the pole structure (the F5 recoupling the legacy fork avoided). Same
+// (regime, macroSeed, stormSeed, drivers) ⇒ byte-identical records + mask.
+// ─────────────────────────────────────────────────────────────────────────────
+import alea from 'alea';
+import { clamp, clamp01 } from './mathutil.js';
+import {
+  E5_REGIME,
+  resolveParams, jetProfile, jetShear, jetShearPeak,
+} from './climate-e5.js';
+
+// ── Frozen constants (each a DECLARED constant; deriver = the derive-not-freeze variety increment) ──
+export const STORM_PHYS = Object.freeze({
+  SAMPLES: 721,          // latitude sampling resolution for the shear argmax (matches climate-e5 diagnostics)
+  BELT_Y_MAX: 0.75,      // band-confinement pole-avoid |sin lat| ceiling (ports the legacy _trBeltY filter)
+  STAIR_GAMMA: 1.6,      // PV-staircase contrast exponent (>1 sharpens the jet-flank maxima into steps)
+  MASK_FLOOR: 0.06,      // mask baseline over the deck (keeps corr(mask,|shear|) robust; ~empty-deck read)
+  MASK_VORTEX_LIFT: 1.0, // peak mask lift at a placed vortex center (mask maxima at/near vortices — AC-FIELDS a)
+  SPOT_R_MIN: 0.18, SPOT_R_SPAN: 0.12,     // GRS-class primary angular radius rad
+  SPOT_ROT_MIN: 1.2, SPOT_ROT_SPAN: 1.3,   // primary core swirl magnitude rad (sign = anticyclonic convention)
+  SPOT_ASPECT_MIN: 1.6, SPOT_ASPECT_SPAN: 0.4,  // primary E-W ellipse aspect (zonal-shear elongation)
+  TRAIN_R_MIN: 0.05, TRAIN_R_SPAN: 0.04,   // train / street member angular radius rad
+  TRAIN_MAX: 7,          // max discrete train members (the carriage caps total at 8 incl. primary)
+  BARGE_ASPECT: 2.4,     // brown-barge cyclonic elongation (taxonomy 2.7)
+  VIGOR_LO: 55, VIGOR_HI: 130,             // T_eq → personality ramp (ports the legacy _ss(55,130,T_eq))
+  DARK_VIGOR: 0.35,      // below ⇒ dark (GDS/ice-giant) primary; above ⇒ warm GRS
+  LATTICE_VIGOR: 0.70,   // above ⇒ hot churning deck (pearl train + polar lattice)
+  POLAR_R0_MIN: 0.18, POLAR_R0_SPAN: 0.08, // polar jet / lattice-ring angular radius rad
+  POLAR_N_MIN: 5, POLAR_N_SPAN: 3,         // polar wavenumber N draw 5..8 (Rider-B canonical range)
+});
+
+// Per-regime default equilibrium temperature — used ONLY when the caller passes no drivers.T_eq, so the
+// writer's personality ramp still lands on the right regime read (Jovian hot/churning, Neptunian cold/
+// bland) in headless tests. Real lab callers pass the preset's T_eq. (DECLARED; deriver = variety inc.)
+const DEFAULT_T_EQ = Object.freeze({
+  [E5_REGIME.GAS_GIANT]: 124, [E5_REGIME.SATURNIAN]: 95, [E5_REGIME.NEPTUNIAN]: 47,
+  [E5_REGIME.SUB_NEPTUNE]: 60, [E5_REGIME.HOT_JUPITER]: 1400,
+});
+
+const TWO_PI = Math.PI * 2;
+const smooth01 = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+
+// The (macroSeed, stormSeed) placement identity — the SAME mix the legacy closures used, so a given pair
+// still owns ALL storm placement (card §6 item 8), now feeding alea namespaces instead of mulberry32.
+function stormIdentity(macroSeed, stormSeed) {
+  return (Math.imul(macroSeed | 0, 2654435761) ^ (stormSeed | 0)) >>> 0;
+}
+
+// unit direction from (lat, lon). lon 0 = +x, +lat = +y (matches the carrier / lab spot-center convention).
+function dirFromLatLon(lat, lon) {
+  const c = Math.cos(lat);
+  return [c * Math.cos(lon), Math.sin(lat), c * Math.sin(lon)];
+}
+
+// ── The PV-staircase-adjusted anticyclonic-shear PLACEMENT FIELD ──────────────
+// Potential-vorticity mixing homogenizes PV inside belts and concentrates the gradient at jet cores (the
+// "PV staircase"), so vortices preferentially sit on the sharpened jet flanks — the shear maxima. We
+// model the placement score as the #3a analytic shear |du/dφ|, normalized by its peak, passed through a
+// monotone staircase contrast map x^STAIR_GAMMA (>1) that flattens weak inter-belt shear toward 0 and
+// sharpens the dominant flank maxima. This is the field the argmax runs over (AC-WRITER c).
+function pvStaircaseScore(lat, P, shearPeak) {
+  const s = clamp01(Math.abs(jetShear(lat, P)) / (shearPeak || 1));
+  return Math.pow(s, STORM_PHYS.STAIR_GAMMA);
+}
+
+// Anticyclonic spin convention: NH anticyclones roll clockwise (negative), SH counter-clockwise
+// (positive). (DECLARED sign convention; a per-flank refinement is a derive-not-freeze slot.)
+function anticyclonicSign(lat) { return -Math.sign(lat) || 1; }
+
+/**
+ * Rank storm-placement candidates. PURE (no RNG). Deterministic tie-break: higher score first; on an
+ * (approximate) score tie, LOWER |lat| first, then LOWER sample node index first (the ATMOSPHERE-PLAN
+ * "lowest-lat → lowest-node" pin). Exported so the AC-WRITER(c)/(d) tests can re-rank arm's-length.
+ */
+export function rankStormCandidates(cands) {
+  const EPS = 1e-9;
+  return cands.slice().sort((a, b) => {
+    if (Math.abs(a.score - b.score) > EPS) return b.score - a.score;      // higher score wins
+    const la = Math.abs(a.lat), lb = Math.abs(b.lat);
+    if (Math.abs(la - lb) > EPS) return la - lb;                           // lowest |lat| wins the tie
+    return a.node - b.node;                                                // then lowest node index
+  });
+}
+
+/**
+ * Resolve the band-confined shear-maxima candidate latitudes and their ranking, from the resolved #3a
+ * param bundle ALONE (no seed, no RNG). This is the arm's-length re-derivation target (AC-WRITER d): the
+ * placed vortex LATITUDES reproduce from the returned params via this independent search.
+ * @returns {{ranked: Array<{lat,score,node,y,rotSign}>, shearPeak:number}}
+ */
+export function resolveStormPlacement(P) {
+  const n = STORM_PHYS.SAMPLES;
+  const shearPeak = jetShearPeak(P) || 1;
+  const lats = new Float64Array(n), score = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const lat = (-0.5 + i / (n - 1)) * Math.PI;                            // −π/2 → π/2
+    lats[i] = lat;
+    score[i] = pvStaircaseScore(lat, P, shearPeak);
+  }
+  // interior local maxima of the staircase score, pole-avoid filtered (band-confinement). Left-edge of a
+  // plateau is chosen deterministically (>= on the left, > on the right).
+  const cands = [];
+  for (let i = 1; i < n - 1; i++) {
+    if (score[i] >= score[i - 1] && score[i] > score[i + 1]) {
+      const lat = lats[i], y = Math.sin(lat);
+      if (Math.abs(y) <= STORM_PHYS.BELT_Y_MAX + 1e-9) {
+        cands.push({ lat, y, score: score[i], node: i, rotSign: anticyclonicSign(lat) });
+      }
+    }
+  }
+  return { ranked: rankStormCandidates(cands), shearPeak };
+}
+
+// T_eq → deck personality (0 cold/bland ice-giant … 1 hot/churning Jovian). Ports the legacy _vigor ramp.
+function vigorOf(regime, drivers) {
+  const teq = drivers?.T_eq ?? DEFAULT_T_EQ[regime] ?? 288;
+  return smooth01(STORM_PHYS.VIGOR_LO, STORM_PHYS.VIGOR_HI, teq);
+}
+
+function makeVortex(lat, lon, radius, rot, aspect, mode, role, ageScalar, phaseScalar, companion, node, score) {
+  return {
+    center: dirFromLatLon(lat, lon),
+    lat, lon, radius, rot, aspect, mode, role,
+    ageScalar, phaseScalar, companion, node, score,
+  };
+}
+
+/**
+ * Resolve the storm/vortex placement records + pole params from (regime, drivers, macroSeed, stormSeed).
+ * PURE + deterministic (alea-only, fixed draw order). Gas gate: drivers.composition === 'h2-he'.
+ *
+ * @returns flat object:
+ *   strength   1 on a gas deck, 0 otherwise (the master carriage gate).
+ *   count      total discrete vortices (primary + train), 0 when off-gate.
+ *   primary    the GRS-class / ice-giant dark-spot record at the strongest anticyclonic-shear argmax
+ *              (null when off-gate).
+ *   train      the vortex-street / barge / scooter members (Array; [] when off-gate).
+ *   vortices   flat [primary, ...train] convenience list (drives the mask + tests).
+ *   pole       { strength, mode, sides, r0, ring, pole, phase, ageScalar, phaseScalar } from stormE:polar.
+ *   vigor      the deck-personality scalar (diagnostic).
+ *   params     the resolved #3a param bundle P (the AC-WRITER d re-derivation source).
+ *   placementLats  the ranked candidate latitudes (diagnostic / re-derivation aid).
+ */
+export function resolveStormE(regime = E5_REGIME.GAS_GIANT, drivers = {}, macroSeed = 0, stormSeed = 0) {
+  const P = resolveParams(regime, drivers, macroSeed);
+  const gas = drivers?.composition === 'h2-he';
+  const id = stormIdentity(macroSeed, stormSeed);
+
+  // stormE:polar is drawn FIRST from its OWN disjoint stream (F5) — the variable per-seed vortex count in
+  // stormE:place below can never move the pole structure.
+  const rngPolar = alea('stormE:polar:' + regime + ':' + id);
+  const vigor = vigorOf(regime, drivers);
+  const pole = resolvePole(gas, vigor, rngPolar);
+
+  if (!gas) {
+    return { strength: 0, count: 0, primary: null, train: [], vortices: [], pole, vigor, params: P, placementLats: [] };
+  }
+
+  const { ranked } = resolveStormPlacement(P);
+  const rngPlace = alea('stormE:place:' + regime + ':' + id);
+  const rngAge = alea('stormE:age:' + regime + ':' + id);
+  const rngPhase = alea('stormE:phase:' + regime + ':' + id);
+
+  // Fallback: a degenerate profile with no interior shear maximum still gets one equatorial-flank slot so
+  // the deck never renders storm-less on a gas world (guards the argmax against a flat jet field).
+  const primaryCand = ranked[0] || { lat: 0.38, node: 0, rotSign: 1, score: 0 };
+
+  const darkPrimary = vigor < STORM_PHYS.DARK_VIGOR;   // cold/ice-giant deck ⇒ dark cleared spot (GDS/2006)
+  // ── PRIMARY: GRS-class anticyclone (warm) or ice-giant dark spot (cleared). Placed at the argmax. ──
+  const pLon = rngPlace() * TWO_PI;
+  const pRadius = STORM_PHYS.SPOT_R_MIN + STORM_PHYS.SPOT_R_SPAN * rngPlace();
+  const pRot = (STORM_PHYS.SPOT_ROT_MIN + STORM_PHYS.SPOT_ROT_SPAN * rngPlace()) * primaryCand.rotSign;
+  const pAspect = STORM_PHYS.SPOT_ASPECT_MIN + STORM_PHYS.SPOT_ASPECT_SPAN * rngPlace();
+  const primary = makeVortex(
+    primaryCand.lat, pLon, pRadius, pRot, pAspect,
+    darkPrimary ? 1 : 0,
+    darkPrimary ? 'dark-spot' : 'grs',
+    rngAge(), rngPhase() * TWO_PI,
+    darkPrimary ? 0.8 : 0.0,                            // dark spots carry a companion (CH₄ bright cloud slot)
+    primaryCand.node, primaryCand.score,
+  );
+
+  // ── TRAIN: vortex street / brown barge / scooters, on the SAME argmax latitude + next-N shear maxima,
+  //    evenly-spaced longitudes from the phase bank (taxonomy 2.5/2.7/4.x). Family read from vigor. ──
+  const train = [];
+  if (vigor >= STORM_PHYS.LATTICE_VIGOR) {
+    // STRING OF PEARLS: 4-6 pale same-latitude ovals along the primary belt, even longitudes ± jitter,
+    // same-sign swirl (one anticyclonic shear zone spins the whole family the same way).
+    const trN = 4 + Math.floor(rngPlace() * 3);
+    const lon0 = rngPlace() * TWO_PI;
+    for (let i = 0; i < trN; i++) {
+      const lon = lon0 + (i + 0.3 * (rngPlace() - 0.5)) * TWO_PI / trN;
+      train.push(makeVortex(
+        primaryCand.lat, lon,
+        STORM_PHYS.TRAIN_R_MIN + STORM_PHYS.TRAIN_R_SPAN * rngPlace(),
+        (0.6 + 0.4 * rngPlace()) * primaryCand.rotSign, 1.3 + 0.5 * rngPlace(),
+        0, 'pearl', rngAge(), rngPhase() * TWO_PI, 0, primaryCand.node, primaryCand.score,
+      ));
+    }
+  } else if (vigor >= STORM_PHYS.DARK_VIGOR) {
+    // BROWN BARGE (cyclonic) + a secondary anticyclone on the next shear maximum: the cyclonic-dark ↔
+    // anticyclonic-bright polarity axis (taxonomy 2.7). Barge sits on the primary belt, elongated.
+    const bargeLon = rngPlace() * TWO_PI;
+    train.push(makeVortex(
+      primaryCand.lat, bargeLon,
+      STORM_PHYS.TRAIN_R_MIN + STORM_PHYS.TRAIN_R_SPAN * rngPlace(),
+      -(0.6 + 0.4 * rngPlace()) * primaryCand.rotSign, STORM_PHYS.BARGE_ASPECT,
+      1, 'barge', rngAge(), rngPhase() * TWO_PI, 0, primaryCand.node, primaryCand.score,
+    ));
+    const second = ranked[1];
+    if (second) {
+      train.push(makeVortex(
+        second.lat, rngPlace() * TWO_PI,
+        STORM_PHYS.TRAIN_R_MIN + STORM_PHYS.TRAIN_R_SPAN * rngPlace(),
+        (0.6 + 0.4 * rngPlace()) * second.rotSign, 1.4 + 0.4 * rngPlace(),
+        0, 'oval', rngAge(), rngPhase() * TWO_PI, 0, second.node, second.score,
+      ));
+    }
+  } else {
+    // SCOOTERS: 1-2 small bright companions on their own next-N shear-maxima belts (the ice-giant deck).
+    const trN = 1 + (rngPlace() > 0.5 ? 1 : 0);
+    for (let i = 0; i < trN && i < ranked.length; i++) {
+      const cand = ranked[i] || primaryCand;
+      train.push(makeVortex(
+        cand.lat, rngPlace() * TWO_PI,
+        STORM_PHYS.TRAIN_R_MIN + 0.5 * STORM_PHYS.TRAIN_R_SPAN * rngPlace(),
+        (rngPlace() > 0.5 ? 1 : -1) * 0.5, 1.3,
+        0, 'scooter', rngAge(), rngPhase() * TWO_PI, 0, cand.node, cand.score,
+      ));
+    }
+  }
+
+  const vortices = [primary, ...train].slice(0, 8);      // carriage caps at 8 slots
+  return {
+    strength: 1, count: vortices.length,
+    primary, train: vortices.slice(1), vortices,
+    pole, vigor, params: P,
+    placementLats: ranked.map((c) => c.lat),
+  };
+}
+
+// Pole params from the stormE:polar stream. Drawn with a CONSTANT count (both wavenumber draws always
+// consumed) so the later fields stay decoupled from the bias branch (mirrors the legacy constant-draw
+// discipline). Rider-B canonical N: hot lattice biased ~8, mid hexagon biased to Saturn's 6.
+function resolvePole(gas, vigor, rng) {
+  const n1 = STORM_PHYS.POLAR_N_MIN + Math.floor(rng() * (STORM_PHYS.POLAR_N_SPAN + 0.99));   // 5..8
+  const n2 = rng();                                       // always consumed (constant draw count)
+  const r0 = STORM_PHYS.POLAR_R0_MIN + STORM_PHYS.POLAR_R0_SPAN * rng();
+  const ring = STORM_PHYS.POLAR_N_MIN + Math.floor(rng() * (STORM_PHYS.POLAR_N_SPAN + 0.99));
+  const poleSign = rng() > 0.5 ? 1 : -1;
+  const phase = rng() * TWO_PI;
+  const ageScalar = rng();
+  const phaseScalar = rng() * TWO_PI;
+  // mode from the same personality ramp: hot ⇒ cyclone lattice (2), mid ⇒ polygon/hexagon jet (1),
+  // cold ⇒ single cap (0). Hexagon N biased toward 6 (Saturn's signature) via the always-consumed n2.
+  const mode = vigor >= STORM_PHYS.LATTICE_VIGOR ? 2 : (vigor >= STORM_PHYS.DARK_VIGOR ? 1 : 0);
+  const sides = (n1 !== 6 && n2 < 0.4) ? 6 : n1;
+  return {
+    strength: gas ? 1 : 0,
+    mode, sides, r0, ring, pole: poleSign, phase, ageScalar, phaseScalar,
+  };
+}
+
+// ── The storm/convection MASK — continuous [0,1] field over node directions ────
+// mask(node) = clamp01( shear-correlated baseline  +  Σ vortex-proximity lift ).
+//   shear baseline  : MASK_FLOOR + (1−FLOOR)·clamp01(|jetShear(lat)|/shearPeak)   → correlates with |shear|
+//   vortex lift     : Σ_i MASK_VORTEX_LIFT · exp(−(angDist/ radius_i)²)            → maxima at placed vortices
+// Because vortices are PLACED at the shear maxima, both terms reinforce the shear correlation while
+// lifting the mask toward 1 near the discrete storms (AC-FIELDS a: bounded, shear-correlated, vortex-
+// consistent). Off-gate (non-gas) ⇒ all-zero.
+function stormMaskAt(nx, ny, nz, vortices, P, shearPeak) {
+  const y = clamp(-1, 1, ny);
+  const lat = Math.asin(y);
+  let m = STORM_PHYS.MASK_FLOOR + (1 - STORM_PHYS.MASK_FLOOR) * clamp01(Math.abs(jetShear(lat, P)) / (shearPeak || 1));
+  for (let k = 0; k < vortices.length; k++) {
+    const c = vortices[k].center;
+    const d = clamp(-1, 1, nx * c[0] + ny * c[1] + nz * c[2]);
+    const ang = Math.acos(d);                             // angular distance node↔vortex center
+    const r = vortices[k].radius || 0.1;
+    m += STORM_PHYS.MASK_VORTEX_LIFT * Math.exp(-(ang / r) * (ang / r));
+  }
+  return clamp01(m);
+}
+
+/**
+ * Storm writer over a carrier sphere — RETURNS the mask field + the placement records. Mirrors
+ * writeClimateE5Sphere: evaluates the closed-form mask per carrier node and returns its OWN Float32Array.
+ * Never mutates the carrier.
+ * @returns {{ mask:Float32Array, vortices:Array, primary, train, pole, count, strength, params, shearPeak }}
+ */
+export function writeStormESphere(carrier, drivers = {}, { regime = E5_REGIME.GAS_GIANT, macroSeed = 0, stormSeed = 0 } = {}) {
+  const rec = resolveStormE(regime, drivers, macroSeed, stormSeed);
+  const N = carrier.N;
+  const verts = carrier.verts;
+  const mask = new Float32Array(N);
+  if (rec.strength > 0) {
+    const shearPeak = jetShearPeak(rec.params) || 1;
+    for (let i = 0; i < N; i++) {
+      const v = verts[i];
+      mask[i] = stormMaskAt(v[0], v[1], v[2], rec.vortices, rec.params, shearPeak);
+    }
+  }
+  return { mask, vortices: rec.vortices, primary: rec.primary, train: rec.train, pole: rec.pole, count: rec.count, strength: rec.strength, params: rec.params, shearPeak: jetShearPeak(rec.params) || 1 };
+}
+
+/**
+ * Bake the ONE new per-render-vertex attribute (the storm/convection mask) onto a render mesh — the
+ * single permitted new baked attribute (aBand/aShear/aMush precedent). Samples the SAME closed-form mask
+ * on the render verts, so aStorm is byte-faithful to writeStormESphere.mask at matching node directions
+ * (AC-PARITY a). Off-gate (non-gas) ⇒ all-zero (unread; the shader gate no-ops).
+ * @param {Float32Array|number[]} positions flat [x,y,z,...] object-space render-vertex positions.
+ * @param {number} count  vertex count.
+ * @param {number} radius render sphere radius R (positions/R = unit node dir).
+ * @returns {{ aStorm:Float32Array, vortices:Array, pole, strength:number, count:number, params:object }}
+ */
+export function bakeStormEAttributes(positions, count, radius, { regime = E5_REGIME.GAS_GIANT, drivers = {}, macroSeed = 0, stormSeed = 0 } = {}) {
+  const rec = resolveStormE(regime, drivers, macroSeed, stormSeed);
+  const aStorm = new Float32Array(count);
+  if (rec.strength > 0) {
+    const shearPeak = jetShearPeak(rec.params) || 1;
+    for (let i = 0; i < count; i++) {
+      const nx = positions[3 * i] / radius, ny = positions[3 * i + 1] / radius, nz = positions[3 * i + 2] / radius;
+      aStorm[i] = stormMaskAt(nx, ny, nz, rec.vortices, rec.params, shearPeak);
+    }
+  }
+  return { aStorm, vortices: rec.vortices, pole: rec.pole, strength: rec.strength, count: rec.count, params: rec.params };
+}
