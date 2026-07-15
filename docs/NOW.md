@@ -180,7 +180,19 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > preview honesty, pin-by-default, census companion table (36 Oph/61 Cyg/ζ Ret) + dup-row dedup w/
 > the neighborhood-reference regen ripple, multiplicity oracle (shared RNG prefix, snapshot-guarded),
 > glyph + label AABB pass, regression guardrail (GRID formula untouched), Max UAT via the AC9 re-run.
-> Plan of record: `seed-identity-investigation.md` (882d121). **Awaiting Max greenlight → build.**
+> Plan of record: `seed-identity-investigation.md` (882d121). **GREENLIT same day → BUILT + VERIFIED
+> same day: → VERIFIED_PENDING_MAX `f6b3eff` (2026-07-15).** 6 units via build workflow (each
+> adversarially verified; suite 1,404→**1,504**/0; ProcgenSnapshot 24/24; main.js net −18 lines, all
+> regions on the lane-B ledger) → verify-workstream full (unit ACs 3/3-adversarial) → working-Claude
+> live circuit on :5176 closed AC2/AC4/AC8/AC9/AC10 (`verdict-live-drives-f6b3eff.json` + committed
+> screenshot): Denebola search≡prism-click IDENTICAL; previews ≡ arrivals ×4 classes; Guniibuu = ONE
+> marker, 3 dots, honest K+K+K arrival; Rigil 2 dots + Proxima her own; zero label overlaps at max
+> zoom (Rigil↔Proxima stack + leader line); Sol 19/19; console clean. **Live drives caught + TDD-fixed
+> `f6b3eff`:** `_isCurrentSystem` 2 pc radius swallowed neighbors (Rigil-from-Sol previewed Sol + built
+> BURN) → now POSITION_MATCH_TOL (0.1 pc = F1 bin). **NEW lane-B flag:** warp dispatch ungated during
+> in-flight warp (mid-flight commit re-targets against a moving frame). Max notes: R2 Proxima-marker
+> arrival = whole α Cen system (taste call); formerly-divergent stars legitimately changed contents.
+> **▶ NEXT: Max UAT = the overlay AC9 re-run on :5176** → then overlay close-out sequence (§7 item 3).
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
