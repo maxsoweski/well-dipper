@@ -51,7 +51,7 @@
 
 import { enumerateNamedSystems } from './NameGenerator.js';
 import { KnownSystems } from './KnownSystems.js';
-import { GalacticMap } from './GalacticMap.js';
+import { realStarSeed } from './realStarSeed.js';
 import { searchKnownObjects } from '../data/KnownObjectProfiles.js';
 
 // Per-source result caps (mirror the debug panel's cap of 10 for stars/features).
@@ -94,18 +94,16 @@ export function neighborhoodBounds(playerPos) {
 }
 
 /**
- * Deterministic position seed — byte-for-byte the same formula
- * `RealStarCatalog.findVisible` uses (RealStarCatalog.js:248-251), so a real-star
- * hit here carries the identical seed the sky/nav pipeline would assign it, and
- * every other class gets a stable, position-derived seed for procgen at arrival.
+ * Deterministic position seed — the canonical F1 real-star seed (shared
+ * `realStarSeed` module), so a real-star hit here carries the identical seed the
+ * sky/nav/prism/arrival pipeline assigns it, and every other class gets a
+ * stable, position-derived seed for procgen at arrival. Kept as a thin local
+ * wrapper so this file's call sites read unchanged.
  * @param {number} x @param {number} y @param {number} z
  * @returns {number}
  */
 function seedFromPos(x, y, z) {
-  return GalacticMap.hashCombine(
-    Math.round(x * 10000),
-    GalacticMap.hashCombine(Math.round(y * 10000), Math.round(z * 10000)),
-  );
+  return realStarSeed(x, y, z);
 }
 
 /**

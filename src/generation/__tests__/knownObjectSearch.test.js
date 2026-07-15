@@ -19,6 +19,7 @@ import {
 import { RealStarCatalog } from '../RealStarCatalog.js';
 import { RealFeatureCatalog } from '../RealFeatureCatalog.js';
 import { enumerateNamedSystems } from '../NameGenerator.js';
+import { realStarSeed } from '../realStarSeed.js';
 
 function loadJson(rel) {
   return JSON.parse(readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf-8'));
@@ -218,5 +219,15 @@ describe('toNavStar — SearchResult → warp nav-star adapter', () => {
     const visible = realStarCatalog.findVisible(SOL, 20).find(s => s.name === 'Sirius');
     expect(visible).toBeDefined();
     expect(hit.seed).toBe(visible.seed);
+  });
+
+  it('search site emits the canonical F1 seed (shared realStarSeed module)', () => {
+    // FIX-1 (AC1): the search site is one of the four real-star seed derivations
+    // that must import the ONE canonical module. Prove its seed IS the module's
+    // output for the catalog star's own coordinates.
+    const star = realStarCatalog._stars.find(s => s.name === 'Sirius');
+    expect(star).toBeDefined();
+    const hit = run('Sirius').find(r => r.kind === 'star' && r.name === 'Sirius');
+    expect(hit.seed).toBe(realStarSeed(star.x, star.y, star.z));
   });
 });

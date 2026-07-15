@@ -12,8 +12,8 @@
  *   const visibleRealStars = catalog.findVisible(playerPos, threshold);
  */
 
-import { GalacticMap } from './GalacticMap.js';
 import { RealSystemOverlay } from './RealSystemOverlay.js';
+import { realStarSeed } from './realStarSeed.js';
 
 // Default identity-match tolerance for findByPosition: 0.1 pc (0.0001 kpc).
 // This MUST stay BELOW KnownSystems' MATCH_RADIUS (0.0005 kpc, see that
@@ -244,11 +244,9 @@ export class RealStarCatalog {
       else if (appMag < 6) size = 4;
       else size = 3;
 
-      // Generate a deterministic seed from position
-      const seed = GalacticMap.hashCombine(
-        Math.round(s.x * 10000),
-        GalacticMap.hashCombine(Math.round(s.y * 10000), Math.round(s.z * 10000))
-      );
+      // Generate a deterministic seed from position (canonical F1 — the ONE
+      // shared real-star seed module; formerly inlined here, now imported).
+      const seed = realStarSeed(s.x, s.y, s.z);
 
       results.push({
         worldX: s.x,

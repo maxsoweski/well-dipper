@@ -2,6 +2,7 @@ import { generateSystemName } from '../generation/NameGenerator.js';
 import { resolveKnownObjects } from '../generation/knownObjectSearch.js';
 import { StarSystemGenerator } from '../generation/StarSystemGenerator.js';
 import { HashGridStarfield } from '../generation/HashGridStarfield.js';
+import { realStarSeed } from '../generation/realStarSeed.js';
 import { GalacticSectors } from '../generation/GalacticSectors.js';
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
 import { NavGalaxyRenderer } from '../rendering/NavGalaxyRenderer.js';
@@ -2685,12 +2686,14 @@ export class NavComputer {
           // and distance must come from the CATALOG, never the hash grid — so
           // ALSO overwrite wx/wy/wz with the real position and recompute
           // dist/distPc from the player (same math as the unmatched branch
-          // below). The hash-grid `seed` is retained (arrival identity rides
-          // name/navStarData, not the grid position).
+          // below). FIX-1 (AC1): the seed must be the canonical F1 of the
+          // CATALOG position — overwrite the retained grid seed so this path
+          // agrees with search/sky/arrival identity.
           const ls = this._localStars[bestIdx];
           ls.name = rs.name;
           ls.isReal = true;
           ls.wx = rs.x; ls.wy = rs.y; ls.wz = rs.z;
+          ls.seed = realStarSeed(rs.x, rs.y, rs.z);
           const dx = rs.x - this._playerX, dy = rs.y - this._playerY, dz = rs.z - this._playerZ;
           const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
           ls.dist = dist;
@@ -2707,7 +2710,10 @@ export class NavComputer {
             wx: rs.x, wy: rs.y, wz: rs.z,
             name: rs.name, spectral: rs.spect || '?',
             color: NavComputer._SPECTRAL_COLORS[rs.spect] || '#ff9664',
-            seed: Math.round(rs.x * 10000) ^ Math.round(rs.z * 10000),
+            // FIX-1 (AC1): canonical F1 seed of the catalog position (was a
+            // degenerate round(x*1e4) ^ round(z*1e4) XOR that ignored y and
+            // collided catastrophically).
+            seed: realStarSeed(rs.x, rs.y, rs.z),
             dist, distPc: (dist * 1000).toFixed(0),
             isReal: true,
           });

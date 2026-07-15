@@ -4,6 +4,7 @@ import { StarFlare } from './objects/StarFlare.js';
 import { RealStarCatalog } from './generation/RealStarCatalog.js';
 import { RealFeatureCatalog } from './generation/RealFeatureCatalog.js';
 import { HashGridStarfield } from './generation/HashGridStarfield.js';
+import { realStarSeed } from './generation/realStarSeed.js';
 import { createStarRenderer } from './rendering/objects/StarRenderer.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
@@ -5016,7 +5017,7 @@ debugPanel.setSpawnCallbacks({
       // Step 3: system generation — deferred again
       setTimeout(() => {
         const nearest = HashGridStarfield.findStarsInRadius(galacticMap, playerGalacticPos, 0.01, 1);
-        const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'debug-teleport';
+        let starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'debug-teleport';
         const knownSys = KnownSystems.findAt(playerGalacticPos);
         let sysData;
         if (knownSys) {
@@ -5029,6 +5030,13 @@ debugPanel.setSpawnCallbacks({
           // warp arrivals get via _warpTargetName from the clicked sky
           // entry (~9508) and galaxyContext.starTypeOverride (~3405).
           const realStar = realStarCatalog.findByPosition(playerGalacticPos);
+          // FIX-1 (AC1): a teleport that resolves to a real catalog star seeds
+          // by the canonical F1 of the CATALOG position — not the nearest
+          // hash-grid star — so debug arrivals share the search/sky/prism
+          // identity. Procgen teleports (realStar null) keep the grid seed.
+          if (realStar) {
+            starSeed = String(realStarSeed(realStar.x, realStar.y, realStar.z));
+          }
           if (realStar?.spect) {
             // D6: starTypeOverride stays CATALOG-sourced, routed through
             // normalizeSpectralClass so the HYG letter zoo ('W','C','S','D',…)
