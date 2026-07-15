@@ -121,16 +121,16 @@ than uniform chance; settled systems + the rest spread with mild disk bias.
 
 ## HYG cross-check (procgen + catalog vs. real star names)
 
-`public/assets/data/hyg-stars.json` ships 15,598 entries
+`public/assets/data/hyg-stars.json` ships 15,592 entries
 (HYG v4.0, regenerated in increment 3a / AC9). Every distinct procgen name in
 this census AND every catalog name was checked against the full set of
-15,546 distinct meaningful real names.
+15,540 distinct meaningful real names.
 
 | metric | value |
 | --- | --- |
-| HYG entries (raw) | 15,598 |
+| HYG entries (raw) | 15,592 |
 | HYG entries with the `"` artifact name | 0 |
-| HYG distinct meaningful names | 15,546 |
+| HYG distinct meaningful names | 15,540 |
 | Distinct procgen names colliding with a real name | 0 |
 | Catalog names colliding with a real name | 0 |
 
