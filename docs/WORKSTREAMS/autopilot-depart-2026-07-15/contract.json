@@ -102,5 +102,6 @@
       "The visited-body terminal crawl (cinematic, deliberate) and SC_TUNING byte-identity",
       "Full flight+auto suite at/above the 847ab19 baseline + build green"
     ]
-  }
+  },
+  "greenlight": "Max, 2026-07-15 (scoping session, recovered from the interrupted 7/11 VS Code seam): both siblings greenlit; build order = orrery-coherence first, autopilot-depart second; builds run in fresh sessions via opus-pinned workflows."
 }
