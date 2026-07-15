@@ -2,21 +2,21 @@
   "workstream": "planet-lod-lab-ux-2026-07-15",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "verified",
-  "statusNote": "UAT RUN 2026-07-15 — FAILED, NOT shipped. Max verbatim: 'This looks awful, like a mishmash of different legacy systems overlaid on top of each other. Did you test this?' DIAGNOSIS ON RECORD (working-Claude): AC-DEFAULTS as built enables the FULL ASSOCIATIONS.rendersOn set per preset — on terrestrials that stacks ~15 legacy synth features simultaneously; the rendersOn matrix asserts each feature renders individually, NOT that they compose. Working-Claude verified mechanism (flags/controls/console/negative-cases) + screenshotted Jovian/Lava but never aesthetically judged the terrestrial default stack at judging distance — composition miss, owned. DISPOSITION: rescope the defaults design next session (candidates: small curated judgment set per world type; writer-driven-first defaults with legacy staying OFF — ties to the META provenance finding; tiered defaults). Badges/quarantine/nav-IA slices are NOT implicated by the verbatim but re-judge after the defaults fix. VERIFIED_PENDING_MAX 5e5b64e (2026-07-15) — unit PASS (AC-0 3/3-adversarial, wf_7c610b44-585) + all 4 live-integration ACs closed by working-Claude formal drive in a brand-new context (verdict.json: fresh-boot defaults incl. negatives across Rocky/Ocean/Jovian/Lava, 8 badges, ratified IA order, moved-control spot-drives, console clean). SOLE OPEN GATE = AC-SOLO-UAT (Max solo; first real use = the derive-not-freeze UAT). UAT note: WE folder reads 'Empty' on non-giant worlds (archetype-honest) — Max judges polish. BUILT 2026-07-15, slices 1-3 (badges+WE section 6175eb9, world defaults 4390c9d, left-pane IA bd372fb) — all live-verified by working-Claude on :5175 (fresh-context boots, Ocean/Jovian defaults, one-screen pane, defaults-button roundtrip, moved-control spot-drives; evidence/ + BUILD-NOTES.md). verify-workstream launched same day. SCOPED 2026-07-15 at the atmo-3b UAT-findings interview (Max: run this SIMULTANEOUSLY with the atmo derive-not-freeze increment — 'I can't even UAT without you driving because the UX is so cluttered, confusing, and stuffed with legacy features'). Folds the parked lab-UX friction workstream (proposed 2026-07-14) + the atmo-3b META-finding (new-vs-legacy legibility). Interview rulings: friction = wrong defaults + finding controls + legacy clutter (trusting-state NOT picked); legacy disposition = quarantine + badge, delete only provably dead; solo-UAT bar = 'decluttered lab is enough', no guided-mode machinery; verbatim: 'the left-side navigation pane is also way too big / has too much in it and I can't navigate it'. GREENLIT BY MAX 2026-07-15 ('greenlight both' — this + world-engine-atmo-derive-not-freeze together); main-session work started same day.",
+  "status": "building",
+  "statusNote": "DEFAULTS RESCOPE RATIFIED 2026-07-15 (post-UAT-fail interview). Max's ruling verbatim: option 1 (writer + minimal dressing), 'so long as the UI also makes it very clear what's a current system and what is a placeholder legacy system slated for replacement'. Session-opening ruling verbatim: 'I want features to enable only when they should. As it is today, a bunch of legacy features are enabled by default, including legacy features that are not driven by the new proc gen systems. So, those are just a waste of time. If a feature is relevant to the NEW proc gen world engine, it should be available WHEN RELEVANT to the drivers that are enabled.' Diagnosis CONFIRMED BY EYE before rescoping (evidence/defaults-rescope/): fresh Rocky boots 30 legacy features incl. UN-DRIVEN technogenic exotics (ecumenopolis/machine/cityLights/bioMats) -> cyan-gridded ball; writer-only Rocky (all legacy off, carrier relief at default 1.0) reads as a coherent planet but boots dry (ocean fill is legacy F14). AMENDMENT: AC-DEFAULTS rewritten (writer-set + per-world-class DRESSING table of driver-fed legacy; un-driven legacy never defaults on); new AC-BOOT-PROVENANCE (booted composition legible: placeholder dressing visibly marked, legacy drawer titled as placeholder-slated-for-replacement, WE section never reads 'Empty' while the writer carrier authors the relief). Badges/nav-IA slices NOT implicated -- re-judge at re-UAT. || PRIOR RECORD: UAT RUN 2026-07-15 FAILED, NOT shipped. Max verbatim: 'This looks awful, like a mishmash of different legacy systems overlaid on top of each other. Did you test this?' Root cause: AC-DEFAULTS as built enabled the FULL ASSOCIATIONS.rendersOn union per preset (rendersOn asserts individual renderability, not composition); working-Claude verified mechanism but never judged the terrestrial stack at judging distance -- composition miss, owned. Was VERIFIED_PENDING_MAX 5e5b64e (unit PASS AC-0 3/3-adversarial wf_7c610b44-585; 4 live ACs closed; slices 1-3: badges+WE section 6175eb9, defaults 4390c9d, left-pane IA bd372fb). GREENLIT 2026-07-15 ('greenlight both'); scoped at the atmo-3b UAT-findings interview; folds the parked lab-UX friction workstream + the atmo-3b META legibility finding.",
   "programRef": "Cross-cutting UAT-instrument workstream for the world-engine program (ROADMAP-v2 increments all terminate at Max's lab UAT); north star recorded 2026-07-14: a fresh person judges a world in 30s.",
   "designDecisions": [
     "RUNS ON L1 IN THE MAIN CHECKOUT, MAIN-SESSION-DRIVEN: lane A owns the lab HTML; per Max's standing 2026-07-11 directive, workflows build features while the MAIN session owns lab UI/UX. This work is iterative with Max in-thread, not workflow-built. The concurrent atmo derive-not-freeze branch keeps its lab-HTML footprint minimal and rebases onto L1 before merge-back.",
-    "QUARANTINE + BADGE (Max's ruling): legacy randomly-applied controls move into a collapsed 'Legacy' section; writer-driven controls get a visible provenance mark; deletion only for provably-dead controls (reversible-first). No feature code is deleted in this workstream — GUI reorganization only.",
+    "QUARANTINE + BADGE (Max's ruling): legacy randomly-applied controls move into a collapsed 'Legacy' section; writer-driven controls get a visible provenance mark; deletion only for provably-dead controls (reversible-first). No feature code is deleted in this workstream \u2014 GUI reorganization only.",
     "DEFAULTS ARE PER-WORLD-TYPE: a fresh lab load enables the features that matter for judging that preset (water on water worlds; bands/storms/polar on giants). The default set per preset is agreed with Max in-session as the IA lands.",
     "INFORMATION ARCHITECTURE AGREED IN-SESSION: the nav pane shrinks to a small set of logically-ordered top-level groups. Max is the evaluator of the IA at each step (step-at-a-time, his exact words drive grouping); the contract pins the outcome bar, not the folder tree.",
     "TRUSTING-STATE EXPLICITLY OUT OF SCOPE (Max did not pick it as a friction): stale-override/same-preset-reselect gotchas stay as documented lab gotchas unless they block the solo-UAT gate, in which case re-scope.",
-    "NO NEW MACHINERY: Max ruled 'decluttered lab is enough' — no one-click UAT panel, no guided mode. Existing preset picker + reroll buttons remain the drive surface."
+    "NO NEW MACHINERY: Max ruled 'decluttered lab is enough' \u2014 no one-click UAT panel, no guided mode. Existing preset picker + reroll buttons remain the drive surface."
   ],
   "acceptanceCriteria": [
     {
       "id": "AC-0",
-      "statement": "Spine conformance (Rule 15, SPINE-CONFORMANCE.md), scoped to a GUI-only workstream: (1) Driver connectivity — asserted N/A: this workstream reads no new scalars and adds no derivations (a new driver-reading control would be out of scope). (2) Named consumer — asserted N/A: no fields emitted. (3) Taxonomy registration — LIVE: the reorganized GUI keeps every retained feature control registered and scrape-visible — the planet-archetypes.test.js orphan-folder guard (which scrapes the literal .add(state,'<x>Enabled') form) and sibling drift guards stay green after every move; controls that deliberately live off the guard (the rings-proxy pattern) keep their documented proxy form.",
+      "statement": "Spine conformance (Rule 15, SPINE-CONFORMANCE.md), scoped to a GUI-only workstream: (1) Driver connectivity \u2014 asserted N/A: this workstream reads no new scalars and adds no derivations (a new driver-reading control would be out of scope). (2) Named consumer \u2014 asserted N/A: no fields emitted. (3) Taxonomy registration \u2014 LIVE: the reorganized GUI keeps every retained feature control registered and scrape-visible \u2014 the planet-archetypes.test.js orphan-folder guard (which scrapes the literal .add(state,'<x>Enabled') form) and sibling drift guards stay green after every move; controls that deliberately live off the guard (the rings-proxy pattern) keep their documented proxy form.",
       "verifyVia": {
         "input": "Run the planet-archetypes drift-guard suite from the repo dir after each reorganization commit; diff audit confirms GUI layout/label changes only.",
         "observable": "Drift guards green; no new state reads/derivations in the diff."
@@ -25,17 +25,27 @@
     },
     {
       "id": "AC-DEFAULTS",
-      "statement": "A fresh lab load is judgment-ready per world type: the features that matter for judging that preset are ON by default (water visible on water worlds; bands/storms/polar enabled on giants) — no manual flag-flipping before judging.",
+      "statement": "A fresh lab load is judgment-ready per world type under the RATIFIED composition rule: writer-driven features ON (per provenance x rendersOn), plus a small per-world-class DRESSING set of driver-fed legacy so worlds read as worlds (wet terrestrials boot with ocean/coastlines/clouds/limb/terminator; identity features like Magma's ocean boot on); features with NO driver connection (technogenic exotics etc.) NEVER default on. Features enable only when they should.",
       "verifyVia": {
-        "input": "Fresh page load (new context, no persisted state) for each preset in the agreed default table.",
-        "observable": "The agreed per-preset feature flags read true on _lab.state at load and the corresponding features are visible in the render; no console errors."
+        "input": "Fresh page load (new context, no persisted state) for each preset in the DEFAULTS table (data-defined next to ASSOCIATIONS).",
+        "observable": "_lab.state enabled set == writerSet(preset) UNION dressing(preset) exactly; un-driven legacy (bioMats/machine/cityLights/ecumenopolis/hexTess/shatter) reads false on EVERY preset; a composition screenshot at judging distance is archived per preset CLASS (not just per mechanism) before presenting; no console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-BOOT-PROVENANCE",
+      "statement": "Max's condition on the ratified defaults: the UI makes it very clear what's a current system and what is a placeholder legacy system slated for replacement -- for the BOOTED composition, not just the folder tree: default-enabled legacy dressing is visibly marked as placeholder without opening the quarantine drawer; the legacy drawer title says it is placeholder/slated-for-replacement; the World Engine section never reads 'Empty' on a world whose relief the writer carrier is authoring.",
+      "verifyVia": {
+        "input": "Fresh load per preset class; inspect the panel against the GUI-INVENTORY classification.",
+        "observable": "On a wet terrestrial: WE section names the writer-authored relief (carrier: plates+margins) instead of 'Empty'; the enabled dressing features are listed/marked as placeholder in the default view; the legacy drawer title carries the placeholder framing."
       },
       "layer": "integration",
       "live": true
     },
     {
       "id": "AC-QUARANTINE",
-      "statement": "Legacy randomly-applied controls live under a collapsed 'Legacy' section and writer-driven controls carry a visible provenance mark — what's the new procgen model vs old legacy features is legible at a glance.",
+      "statement": "Legacy randomly-applied controls live under a collapsed 'Legacy' section and writer-driven controls carry a visible provenance mark \u2014 what's the new procgen model vs old legacy features is legible at a glance.",
       "verifyVia": {
         "input": "Inspect the GUI tree on a fresh load and against the agreed legacy/writer-driven classification list.",
         "observable": "Every control on the classification list sits on its ruled side (Legacy folder collapsed by default; writer-driven controls marked); no control is missing."
@@ -65,7 +75,7 @@
     },
     {
       "id": "AC-SOLO-UAT",
-      "statement": "Max's gate: he runs a UAT completely solo — picks a preset, re-rolls, finds the controls he needs, and judges the world — without Claude driving and without asking where anything is.",
+      "statement": "Max's gate: he runs a UAT completely solo \u2014 picks a preset, re-rolls, finds the controls he needs, and judges the world \u2014 without Claude driving and without asking where anything is.",
       "verifyVia": {
         "input": "Max sits down at the decluttered lab alone (first real use: the atmo derive-not-freeze UAT).",
         "observable": "Max's holistic acceptance that the lab is navigable and judgment-ready solo."
@@ -75,12 +85,12 @@
   ],
   "architecturalConnections": {
     "inputs": [
-      "planet-lod-lab.html GUI (lil-gui folder tree, Features panel, preset picker) — the reorganization surface",
+      "planet-lod-lab.html GUI (lil-gui folder tree, Features panel, preset picker) \u2014 the reorganization surface",
       "_lab.state feature flags + DRIVER_PRESETS (the per-preset default table reads these)",
       "The legacy/writer-driven classification (built in-session from planet-archetypes.js taxonomy + the writer registries; Max ratifies the list)"
     ],
     "outputs": [
-      "A solo-drivable UAT instrument — the atmo derive-not-freeze AC-UAT and all future increment UATs depend on it",
+      "A solo-drivable UAT instrument \u2014 the atmo derive-not-freeze AC-UAT and all future increment UATs depend on it",
       "Provenance legibility (the atmo-3b META-finding's fix): new-vs-legacy visible in the GUI",
       "The agreed per-preset default table + IA, recorded in the workstream dir for future lab work"
     ],
@@ -88,7 +98,7 @@
       "Every existing retained control's function (GUI reorganization must not change behavior)",
       "The _lab programmatic API (setSeed/applyDrivers/setPreset/probes) that verification drives depend on",
       "Preset apply flow and camera/keyboard controls",
-      "The atmo lane's storm/band folder functionality (their sections may move/get badged but must keep working — coordinate at the atmo rebase)",
+      "The atmo lane's storm/band folder functionality (their sections may move/get badged but must keep working \u2014 coordinate at the atmo rebase)",
       "Existing suites at baseline from the repo dir; relief byte goldens untouched (this workstream edits GUI layout, not writers)"
     ]
   }
