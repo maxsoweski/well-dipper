@@ -162,11 +162,22 @@ export class StarSystemGenerator {
   }
 
   /**
-   * Internal generator. All the system-generation logic lives here so the
-   * sync and async wrappers share one source of truth. `yield` points are
-   * chosen at the boundaries of heavy work (per-planet, per-moon, per-belt).
+   * Pre-binary-roll RNG prefix — the draws from generation start through the
+   * binary decision, shared VERBATIM with the multiplicity oracle
+   * (multiplicityOracle.js) so the two can never disagree about whether a
+   * procgen star rolls a companion (real-star-identity-unification-2026-07-15,
+   * AC7). Consumes exactly: the star-type pick (only when no starTypeOverride),
+   * `starVariation`, and — for a rolled (non-forced) system — the binary
+   * `chance` draw. ProcgenSnapshot byte-identity is the proof this extraction
+   * changed no generation output. The RNG object is CREATED here and RETURNED so
+   * the generator keeps drawing from the same stream; the oracle discards it.
+   *
+   * @param {string} seed
+   * @param {object|null} galaxyContext
+   * @returns {{ rng, star, starType, props, radiusSolarVaried, wasEvolvedType,
+   *   pinnedCompanion, isBinary }}
    */
-  static *_generateIterator(seed, galaxyContext = null) {
+  static stellarPrefix(seed, galaxyContext = null) {
     const rng = new SeededRandom(seed);
 
     // ── Primary Star ──
@@ -248,6 +259,25 @@ export class StarSystemGenerator {
     // Galaxy context adjusts binary rate by component (bulge: 0.65x, halo: 0.8x)
     const binaryBaseChance = 0.35 * (galaxyContext ? galaxyContext.binaryModifier : 1.0);
     const isBinary = forceBinary === null ? rng.chance(binaryBaseChance) : forceBinary;
+
+    return {
+      rng, star, starType, props, radiusSolarVaried, wasEvolvedType,
+      pinnedCompanion, isBinary,
+    };
+  }
+
+  /**
+   * Internal generator. All the system-generation logic lives here so the
+   * sync and async wrappers share one source of truth. `yield` points are
+   * chosen at the boundaries of heavy work (per-planet, per-moon, per-belt).
+   */
+  static *_generateIterator(seed, galaxyContext = null) {
+    // Seed → star type → starVariation → binary decision, drawn by the shared
+    // prefix so the oracle sees the identical cadence (AC7). rng continues here.
+    const {
+      rng, star, starType, props, radiusSolarVaried, wasEvolvedType,
+      pinnedCompanion, isBinary,
+    } = this.stellarPrefix(seed, galaxyContext);
     let star2 = null;
     let binarySeparation = 0;
     let binarySeparationAU = 0;
