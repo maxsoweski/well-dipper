@@ -7,9 +7,16 @@
 // on :5176; these tests pin the same invariants at the method boundary so a
 // regression in the wiring (not just the pure geometry) fails in CI.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { NavComputer } from '../NavComputer.js';
 import { rectsOverlap } from '../labelPlacement.js';
+import { multiplicityForSeed } from '../../generation/multiplicityOracle.js';
+import { RealStarCatalog } from '../../generation/RealStarCatalog.js';
+import { KnownSystems } from '../../generation/KnownSystems.js';
+import { GalacticMap } from '../../generation/GalacticMap.js';
 
 // Minimal 2D-context stub: records arc() draws and answers measureText with a
 // length-proportional width so overlap tests are realistic.
@@ -98,6 +105,108 @@ describe('_glyphMult — caches per entry (AC8)', () => {
     // The result is cached on the entry.
     expect('_navMult' in star).toBe(true);
   });
+});
+
+describe('_glyphDotCount — per-marker dot count from the oracle result (AC8)', () => {
+  // The oracle answers with a SYSTEM's multiplicity; this method splits it across
+  // the system's markers. Synthetic mult objects + a _localStarNames set pin the
+  // decision at the boundary (the real-data block below proves the wiring).
+  function nav(localNames = []) {
+    const n = bareNav();
+    n._localStarNames = new Set(localNames);
+    return n;
+  }
+
+  it('draws count when there are no far companions (Sirius: closeCount 2 → 2)', () => {
+    const m = { count: 2, closeCount: 2, farCount: 0, farNames: [], source: 'table' };
+    expect(nav()._glyphDotCount({ name: 'Sirius' }, m)).toBe(2);
+  });
+
+  it('draws count when the far companion has NO own marker (36 Oph: 2+1 deduped → 3)', () => {
+    const m = { count: 3, closeCount: 2, farCount: 1, farNames: ['HD 156026'], source: 'table' };
+    // HD 156026 is not in the marker set (deduped to a Guniibuu alias at regen).
+    expect(nav(['Guniibuu'])._glyphDotCount({ name: 'Guniibuu' }, m)).toBe(3);
+  });
+
+  it('EXCLUDES a far companion that has its OWN marker (α Cen A+B: 2+1, Proxima separate → 2)', () => {
+    const m = { count: 3, closeCount: 2, farCount: 1, farNames: ['Proxima Centauri'], source: 'known' };
+    // Proxima IS a marker → drawn on its own marker, not the primary's.
+    const n = nav(['Rigil Kentaurus', 'Proxima Centauri']);
+    expect(n._glyphDotCount({ name: 'Rigil Kentaurus' }, m)).toBe(2);
+  });
+
+  it('draws 1 for the far-companion marker itself (Proxima routes to α Cen but is one star here)', () => {
+    // Proxima's own oracle lookup routes to Alpha Centauri (alias) → farNames
+    // contains Proxima's own name → this marker is the wide companion → 1 dot.
+    const m = { count: 3, closeCount: 2, farCount: 1, farNames: ['Proxima Centauri'], source: 'known' };
+    expect(nav(['Rigil Kentaurus', 'Proxima Centauri'])
+      ._glyphDotCount({ name: 'Proxima Centauri' }, m)).toBe(1);
+  });
+
+  it('ζ Reticuli: primary + wide-but-deduped secondary → 2', () => {
+    const m = { count: 2, closeCount: 1, farCount: 1, farNames: ['Zet-2 Ret'], source: 'table' };
+    expect(nav(['Zet-1 Ret'])._glyphDotCount({ name: 'Zet-1 Ret' }, m)).toBe(2);
+  });
+
+  it('never returns below 1, and falls back to the base case on a null mult', () => {
+    const m = { count: 3, closeCount: 2, farCount: 1, farNames: ['Proxima Centauri'], source: 'known' };
+    // Degenerate: every member somehow has its own marker → clamp at 1, not 0.
+    expect(nav(['Proxima Centauri'])._glyphDotCount({ name: 'Proxima Centauri' }, m)).toBe(1);
+    expect(nav()._glyphDotCount({ name: 'x', _isBinary: true }, null)).toBe(2);
+    expect(nav()._glyphDotCount({ name: 'x', _isBinary: false }, null)).toBe(1);
+  });
+});
+
+describe('AC8 dot counts over the REAL catalog rows (finding-#4 guard)', () => {
+  // Drives the ACTUAL oracle + catalog + KnownSystems for the exact rows the
+  // verifier's probe used — the gap the synthetic tests missed. _localStarNames
+  // is the full catalog name set (hyg ∪ supplement) = every name that renders as
+  // its own marker, so "far companion has its own marker" is answered honestly
+  // (Proxima is a supplement row; the deduped secondaries are not rows at all).
+  const HERE = dirname(fileURLToPath(import.meta.url));
+  const DATA = (name) => join(HERE, '../../../public/assets/data', name);
+  const HYG = JSON.parse(readFileSync(DATA('hyg-stars.json'), 'utf8'));
+  const supplement = JSON.parse(readFileSync(DATA('real-star-supplement.json'), 'utf8'));
+  const contents = JSON.parse(readFileSync(DATA('real-system-contents.json'), 'utf8'));
+  const CATALOG_STARS = HYG.concat(supplement.stars);
+  const byName = (n) => CATALOG_STARS.find((s) => s.name === n);
+
+  let deps;
+  let markerNames;
+
+  beforeAll(() => {
+    const map = new GalacticMap('well-dipper-galaxy-1');
+    const catalog = new RealStarCatalog();
+    catalog.ingestCatalogData(HYG, { stars: supplement.stars }, { hosts: contents.hosts });
+    KnownSystems.associate(catalog, map); // wire catalog aliases as main.js does
+    deps = { overlay: catalog.overlay, galacticMap: map };
+    markerNames = new Set(CATALOG_STARS.map((s) => s.name).filter(Boolean));
+  });
+
+  /** Reproduce the render's per-marker decision for a real catalog row. */
+  function dotsFor(name) {
+    const row = byName(name);
+    expect(row, `catalog row for ${name}`).toBeTruthy();
+    const mult = multiplicityForSeed(
+      { name, worldX: row.x, worldY: row.y, worldZ: row.z, type: row.spect ?? row.type },
+      deps,
+    );
+    const n = bareNav();
+    n._localStarNames = markerNames;
+    return n._glyphDotCount({ name }, mult);
+  }
+
+  // The AC8 observables, asserted against arrival-truth resolution — not synthetics.
+  it('Sirius marker = 2 dots (A + white dwarf)', () => expect(dotsFor('Sirius')).toBe(2));
+  it('TRAPPIST-1 = 1 dot (snum pin)', () => expect(dotsFor('TRAPPIST-1')).toBe(1));
+  it('36 Ophiuchi (Guniibuu) = 3 dots (one marker, tertiary deduped in)', () =>
+    expect(dotsFor('Guniibuu')).toBe(3));
+  it('61 Cygni (HD 201091) = 2 dots', () => expect(dotsFor('HD 201091')).toBe(2));
+  it('ζ Reticuli (Zet-1 Ret) = 2 dots', () => expect(dotsFor('Zet-1 Ret')).toBe(2));
+  it('Alpha Centauri A (Rigil Kentaurus) = 2 dots — Proxima excluded (own marker)', () =>
+    expect(dotsFor('Rigil Kentaurus')).toBe(2));
+  it('Proxima Centauri = 1 dot — its own marker, a single red dwarf', () =>
+    expect(dotsFor('Proxima Centauri')).toBe(1));
 });
 
 describe('_drawLabelPass — overlap-free drawn labels, leaders, fade (AC9)', () => {

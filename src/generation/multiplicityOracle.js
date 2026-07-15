@@ -30,7 +30,10 @@
  * (1 + star2?1:0 + farCompanions.length) — the invariant AC7's tests pin. The
  * glyph decides which of {count, closeCount} to draw at a given marker (a
  * far companion with its own marker → closeCount; one deduped into the marker →
- * count); the oracle supplies both, it does not make that rendering call.
+ * count); the oracle supplies both PLUS `farNames` (the wide members' display
+ * names) so the glyph can make that per-marker call — it identifies which marker
+ * IS a far companion and which far companions render as their own separate
+ * marker. The oracle names the members; it does not make the rendering call.
  *
  * COST: real stars resolve through map/array lookups; procgen stars draw a few
  * RNG values (starVariation + the binary chance) via the shared prefix. Known
@@ -97,11 +100,14 @@ function _procgenClose(seed, pos, type, galacticMap) {
 
 /**
  * @typedef {Object} Multiplicity
- * @property {number} count       total stellar members (== generated systemData)
- * @property {number} closeCount  members in the close cluster (marker dots; 1–2)
- * @property {number} farCount    wide companions (own marker where catalogued)
- * @property {string} source      'known' | 'table' | 'archive-snum' |
- *                                 'pin-by-default' | 'archive-roll' | 'procgen'
+ * @property {number}   count       total stellar members (== generated systemData)
+ * @property {number}   closeCount  members in the close cluster (marker dots; 1–2)
+ * @property {number}   farCount    wide companions (own marker where catalogued)
+ * @property {string[]} farNames    display names of the wide companions (farCount
+ *                                   long; the glyph matches a marker's own name
+ *                                   against these to spot a far-companion marker)
+ * @property {string}   source      'known' | 'table' | 'archive-snum' |
+ *                                   'pin-by-default' | 'archive-roll' | 'procgen'
  */
 
 /**
@@ -125,14 +131,18 @@ export function multiplicityForSeed(starOrSeed, { overlay = null, galacticMap = 
       // entry (Sol) has none — read its static names (star2 => close pair).
       let closeCount;
       let farCount;
+      let farNames;
       if (ks._companion) {
         closeCount = _closeFromSpec({ kind: 'multiple', components: ks._companion.components });
-        farCount = Array.isArray(ks._companion.farCompanions) ? ks._companion.farCompanions.length : 0;
+        const fars = Array.isArray(ks._companion.farCompanions) ? ks._companion.farCompanions : [];
+        farCount = fars.length;
+        farNames = fars.map((f) => f.name);
       } else {
         closeCount = 1 + (ks.names?.star2 ? 1 : 0);
         farCount = 0;
+        farNames = [];
       }
-      return { count: closeCount + farCount, closeCount, farCount, source: 'known' };
+      return { count: closeCount + farCount, closeCount, farCount, farNames, source: 'known' };
     }
   }
 
@@ -141,20 +151,22 @@ export function multiplicityForSeed(starOrSeed, { overlay = null, galacticMap = 
     const r = overlay.resolve(name, pos);
     if (r.companionSpec) {
       const closeCount = _closeFromSpec(r.companionSpec);
-      const farCount = Array.isArray(r.farCompanions) ? r.farCompanions.length : 0;
+      const fars = Array.isArray(r.farCompanions) ? r.farCompanions : [];
+      const farCount = fars.length;
+      const farNames = fars.map((f) => f.name);
       const source = r.companionSpec.source
         || (r.companionSpec.kind === 'multiple' ? 'table' : 'table');
-      return { count: closeCount + farCount, closeCount, farCount, source };
+      return { count: closeCount + farCount, closeCount, farCount, farNames, source };
     }
     // A real host with snum>=2 supplies no companionSpec — arrival rolls the
     // companion procedurally (archive multiplicity honored via the live roll).
     if (r.host) {
       const closeCount = _procgenClose(seed, pos, type, galacticMap);
-      return { count: closeCount, closeCount, farCount: 0, source: 'archive-roll' };
+      return { count: closeCount, closeCount, farCount: 0, farNames: [], source: 'archive-roll' };
     }
   }
 
   // 3. Non-real (procgen) star — the shared prefix roll IS the arrival truth.
   const closeCount = _procgenClose(seed, pos, type, galacticMap);
-  return { count: closeCount, closeCount, farCount: 0, source: 'procgen' };
+  return { count: closeCount, closeCount, farCount: 0, farNames: [], source: 'procgen' };
 }

@@ -1456,6 +1456,15 @@ export class NavComputer {
     if (!this._labelQueue) this._labelQueue = [];
     this._labelQueue.length = 0;
 
+    // Names of all currently-loaded prism markers (AC8): the N-dot glyph consults
+    // this to tell a far companion that has its OWN marker (α Cen's Proxima, a
+    // supplement catalog row → drawn as a separate dot, excluded from the A+B
+    // primary) from one deduped into the primary marker (36 Oph C, ζ² Ret — no
+    // catalog row, so no marker → drawn on the primary). Built from _localStars
+    // (not the `visible` filter) so an off-view companion still resolves.
+    this._localStarNames = new Set();
+    for (const s of this._localStars) if (s.name) this._localStarNames.add(s.name);
+
     for (const { star, starP, planeP } of projected) {
       // Vertical reference line (subtle)
       ctx.setLineDash([2, 5]);
@@ -1474,11 +1483,12 @@ export class NavComputer {
       const drawR = isSelected ? baseRadius + 1 : baseRadius;
 
       // N-dot glyph (AC8): dot count = arrival-truth multiplicity from the AC7
-      // oracle, cached per entry. The Escape-stash double-dot is the base case —
-      // a visited binary always reads >=2 (and lends its companion spectral
-      // color) even if the oracle is momentarily unavailable.
+      // oracle, cached per entry, resolved to a PER-MARKER count (a resolvably
+      // wide companion draws on its own marker, not the primary's). The
+      // Escape-stash double-dot is the base case — a visited binary always reads
+      // >=2 even if the oracle is momentarily unavailable.
       const mult = this._glyphMult(star);
-      let dotCount = mult ? mult.count : (star._isBinary ? 2 : 1);
+      let dotCount = this._glyphDotCount(star, mult);
       if (star._isBinary && dotCount < 2) dotCount = 2;
       const companionColor = star._star2Type
         ? (NavComputer._SPECTRAL_COLORS[star._star2Type] || star.color)
@@ -1618,6 +1628,40 @@ export class NavComputer {
       star._navMultReady = ready;
     }
     return star._navMult;
+  }
+
+  /**
+   * Per-marker dot count (AC8). The oracle answers with a SYSTEM's arrival
+   * multiplicity; a system whose wide companion sits at a genuinely resolvable
+   * separation renders as MORE THAN ONE marker, so the dots split across those
+   * markers (and only sum to the system multiplicity across all of them):
+   *
+   *  - The marker whose own name is a far companion (α Cen's Proxima Centauri —
+   *    the oracle routed it to Alpha Centauri via the alias, so mult.farNames
+   *    contains this marker's name) is a single star at its own position → 1 dot.
+   *  - A primary/close marker EXCLUDES every far companion that renders as its
+   *    own marker (present in _localStars), leaving the deduped-in ones. So α Cen
+   *    A+B draws 2 (Proxima has its own marker), while 36 Oph draws 3 (its K5
+   *    tertiary was deduped into the marker at catalog regen — no separate row).
+   *
+   * This is exactly the oracle-doc rule ("far companion with its own marker →
+   * closeCount; deduped into the marker → count"), driven by the one honest
+   * signal for "has its own marker": presence in the prism's marker set. `null`
+   * mult falls back to the Escape-stash base case.
+   */
+  _glyphDotCount(star, mult) {
+    if (!mult) return star._isBinary ? 2 : 1;
+    const farNames = mult.farNames;
+    if (Array.isArray(farNames) && farNames.length > 0) {
+      // This marker IS the wide companion of a larger system — one star here.
+      if (star.name && farNames.includes(star.name)) return 1;
+      // Primary/close marker: subtract far companions drawn on their own marker.
+      let separate = 0;
+      const names = this._localStarNames;
+      if (names) for (const fn of farNames) if (names.has(fn)) separate++;
+      return Math.max(1, mult.count - separate);
+    }
+    return mult.count;
   }
 
   /**
