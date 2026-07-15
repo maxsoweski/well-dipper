@@ -1,0 +1,86 @@
+{
+  "workstream": "planet-lod-lab-ux-2026-07-15",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "statusNote": "SCOPED 2026-07-15 at the atmo-3b UAT-findings interview (Max: run this SIMULTANEOUSLY with the atmo derive-not-freeze increment — 'I can't even UAT without you driving because the UX is so cluttered, confusing, and stuffed with legacy features'). Folds the parked lab-UX friction workstream (proposed 2026-07-14) + the atmo-3b META-finding (new-vs-legacy legibility). Interview rulings: friction = wrong defaults + finding controls + legacy clutter (trusting-state NOT picked); legacy disposition = quarantine + badge, delete only provably dead; solo-UAT bar = 'decluttered lab is enough', no guided-mode machinery; verbatim: 'the left-side navigation pane is also way too big / has too much in it and I can't navigate it'. AWAITING MAX GREENLIGHT.",
+  "programRef": "Cross-cutting UAT-instrument workstream for the world-engine program (ROADMAP-v2 increments all terminate at Max's lab UAT); north star recorded 2026-07-14: a fresh person judges a world in 30s.",
+  "designDecisions": [
+    "RUNS ON L1 IN THE MAIN CHECKOUT, MAIN-SESSION-DRIVEN: lane A owns the lab HTML; per Max's standing 2026-07-11 directive, workflows build features while the MAIN session owns lab UI/UX. This work is iterative with Max in-thread, not workflow-built. The concurrent atmo derive-not-freeze branch keeps its lab-HTML footprint minimal and rebases onto L1 before merge-back.",
+    "QUARANTINE + BADGE (Max's ruling): legacy randomly-applied controls move into a collapsed 'Legacy' section; writer-driven controls get a visible provenance mark; deletion only for provably-dead controls (reversible-first). No feature code is deleted in this workstream — GUI reorganization only.",
+    "DEFAULTS ARE PER-WORLD-TYPE: a fresh lab load enables the features that matter for judging that preset (water on water worlds; bands/storms/polar on giants). The default set per preset is agreed with Max in-session as the IA lands.",
+    "INFORMATION ARCHITECTURE AGREED IN-SESSION: the nav pane shrinks to a small set of logically-ordered top-level groups. Max is the evaluator of the IA at each step (step-at-a-time, his exact words drive grouping); the contract pins the outcome bar, not the folder tree.",
+    "TRUSTING-STATE EXPLICITLY OUT OF SCOPE (Max did not pick it as a friction): stale-override/same-preset-reselect gotchas stay as documented lab gotchas unless they block the solo-UAT gate, in which case re-scope.",
+    "NO NEW MACHINERY: Max ruled 'decluttered lab is enough' — no one-click UAT panel, no guided mode. Existing preset picker + reroll buttons remain the drive surface."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-DEFAULTS",
+      "statement": "A fresh lab load is judgment-ready per world type: the features that matter for judging that preset are ON by default (water visible on water worlds; bands/storms/polar enabled on giants) — no manual flag-flipping before judging.",
+      "verifyVia": {
+        "input": "Fresh page load (new context, no persisted state) for each preset in the agreed default table.",
+        "observable": "The agreed per-preset feature flags read true on _lab.state at load and the corresponding features are visible in the render; no console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-QUARANTINE",
+      "statement": "Legacy randomly-applied controls live under a collapsed 'Legacy' section and writer-driven controls carry a visible provenance mark — what's the new procgen model vs old legacy features is legible at a glance.",
+      "verifyVia": {
+        "input": "Inspect the GUI tree on a fresh load and against the agreed legacy/writer-driven classification list.",
+        "observable": "Every control on the classification list sits on its ruled side (Legacy folder collapsed by default; writer-driven controls marked); no control is missing."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-NAV",
+      "statement": "The navigation pane is no longer 'way too big': top level collapses to the small set of logically-ordered groups agreed with Max, with every retained control reachable under exactly one group.",
+      "verifyVia": {
+        "input": "Inspect the GUI tree on a fresh load against the agreed IA.",
+        "observable": "Top-level group count and order match the agreed IA; no orphaned or duplicated controls; Legacy collapsed."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-INTACT",
+      "statement": "Reorganization breaks nothing: every retained control still drives its state and render exactly as before the move; the _lab API surface used by verification drives is unchanged.",
+      "verifyVia": {
+        "input": "Spot-drive a sample of moved controls from each group (state writes + GUI interaction) and run the existing suites from the repo dir.",
+        "observable": "Controls change _lab.state and the render as before; suites at their pre-existing baseline; console clean."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-SOLO-UAT",
+      "statement": "Max's gate: he runs a UAT completely solo — picks a preset, re-rolls, finds the controls he needs, and judges the world — without Claude driving and without asking where anything is.",
+      "verifyVia": {
+        "input": "Max sits down at the decluttered lab alone (first real use: the atmo derive-not-freeze UAT).",
+        "observable": "Max's holistic acceptance that the lab is navigable and judgment-ready solo."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "planet-lod-lab.html GUI (lil-gui folder tree, Features panel, preset picker) — the reorganization surface",
+      "_lab.state feature flags + DRIVER_PRESETS (the per-preset default table reads these)",
+      "The legacy/writer-driven classification (built in-session from planet-archetypes.js taxonomy + the writer registries; Max ratifies the list)"
+    ],
+    "outputs": [
+      "A solo-drivable UAT instrument — the atmo derive-not-freeze AC-UAT and all future increment UATs depend on it",
+      "Provenance legibility (the atmo-3b META-finding's fix): new-vs-legacy visible in the GUI",
+      "The agreed per-preset default table + IA, recorded in the workstream dir for future lab work"
+    ],
+    "mustStayWorking": [
+      "Every existing retained control's function (GUI reorganization must not change behavior)",
+      "The _lab programmatic API (setSeed/applyDrivers/setPreset/probes) that verification drives depend on",
+      "Preset apply flow and camera/keyboard controls",
+      "The atmo lane's storm/band folder functionality (their sections may move/get badged but must keep working — coordinate at the atmo rebase)",
+      "Existing suites at baseline from the repo dir; relief byte goldens untouched (this workstream edits GUI layout, not writers)"
+    ]
+  }
+}
