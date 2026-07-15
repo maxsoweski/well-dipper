@@ -60,7 +60,21 @@ export const STORM_PHYS = Object.freeze({
   DARK_VIGOR: 0.35,      // below ⇒ dark (GDS/ice-giant) primary; above ⇒ warm GRS
   LATTICE_VIGOR: 0.70,   // above ⇒ hot churning deck (pearl train + polar lattice)
   POLAR_R0_MIN: 0.18, POLAR_R0_SPAN: 0.08, // polar jet / lattice-ring angular radius rad
-  POLAR_N_MIN: 5, POLAR_N_SPAN: 3,         // polar wavenumber N draw 5..8 (Rider-B canonical range)
+  POLAR_N_MIN: 5, POLAR_N_SPAN: 3,         // polar wavenumber N plausible physics range 5..8 (Rider-B GUI-tunable range)
+  URANIAN_OBLIQUITY: 80,  // V-β.5: NEPTUNIAN regime + obliquity ≥ this ⇒ the Uranian read (Uranus ≈ 98°). GUI-reachable via the E5 obliquity° slider. (DECLARED; the internal-heat driver that fully separates Uranus from Neptune stays frozen → derive-not-freeze, taxonomy §0.5/5.1.)
+});
+
+// V-β.2 (Rider B): DECLARED per-regime canonical polar cyclone-cluster N — the physics-grounded DEFAULT,
+// NOT a per-seed draw (per-seed N variation is routed to derive-not-freeze). Jupiter's Juno cluster ≈ 8
+// (8 north), Saturn's polar hexagon = 6. Both `sides` (polygon/hexagon N) and `ring` (lattice member M)
+// are exposed GUI-tunable across the plausible 5..8 range (uniforms.js:394/398) but default to these
+// canonical values so the pole reads correct per regime without a stability calculation (taxonomy 2.10/3.1).
+export const POLAR_CANONICAL_N = Object.freeze({
+  [E5_REGIME.GAS_GIANT]:   { sides: 8, ring: 8 },   // Juno Jovian cyclone crystal ≈ 8
+  [E5_REGIME.SATURNIAN]:   { sides: 6, ring: 6 },   // Saturn north-polar hexagon
+  [E5_REGIME.NEPTUNIAN]:   { sides: 6, ring: 5 },
+  [E5_REGIME.SUB_NEPTUNE]: { sides: 6, ring: 5 },
+  [E5_REGIME.HOT_JUPITER]: { sides: 6, ring: 6 },
 });
 
 // Per-regime default equilibrium temperature — used ONLY when the caller passes no drivers.T_eq, so the
@@ -107,6 +121,24 @@ export function chromophoreColor(age, mode = 0) {
     lo.c[1] + (hi.c[1] - lo.c[1]) * f,
     lo.c[2] + (hi.c[2] - lo.c[2]) * f,
   ];
+}
+
+// ── Ice-giant dark-spot LIFECYCLE phase (V-β.3) — a place-once STATE, never an arc ───────────────────
+// Taxonomy 4.3 / Q6 ratified: a Neptune/Uranus dark spot is one frame of a birth→drift→death arc. We
+// paint ONE lifecycle phase as a seeded AGE state (STATIC — the age scalar picks which phase, #3b
+// animates nothing). Three phases, keyed on the ALREADY-DRAWN place-once ageScalar (NO new rng draw):
+//   precursor   (age <1/3): bright CH₄ companion clouds only, NO dark core yet — coreScale 0.
+//   mature      (1/3..2/3): full dark cleared core + offset cap + a small POLEWARD latitude drift.
+//   dissipating (age ≥2/3): weak-contrast dark core, drifted toward the EQUATOR (equatorward death).
+// coreScale is the dark-core visibility the carriage folds into the spot color (background↔cleared);
+// renderLat is the lifecycle-drifted latitude the carriage renders at (the birth latitude — the shear
+// argmax — is preserved in the record's `.lat` so the arm's-length re-derivation AC-WRITER d still holds).
+// Pure + deterministic + headless-testable.
+export function iceGiantLifecyclePhase(age, lat) {
+  const t = clamp01(age);
+  if (t < 1 / 3) return { phase: 'precursor',   coreScale: 0.0,  renderLat: lat };
+  if (t < 2 / 3) return { phase: 'mature',      coreScale: 1.0,  renderLat: lat + 0.06 * Math.sign(lat || 1) };  // poleward drift
+  return {         phase: 'dissipating', coreScale: 0.45, renderLat: lat * 0.55 };                               // equatorward death
 }
 
 // The (macroSeed, stormSeed) placement identity — the SAME mix the legacy closures used, so a given pair
@@ -213,16 +245,29 @@ function makeVortex(lat, lon, radius, rot, aspect, mode, role, ageScalar, phaseS
 export function resolveStormE(regime = E5_REGIME.GAS_GIANT, drivers = {}, macroSeed = 0, stormSeed = 0) {
   const P = resolveParams(regime, drivers, macroSeed);
   const gas = drivers?.composition === 'h2-he';
+  // V-β.6 (F6, taxonomy §6.6): HOT-JUPITER is a different machine (day–night dipole + one wide equatorial
+  // jet). #3b renders it as a banded deck (#3a) + haze ONLY; ALL active storm phenomena DEFER to #4. This
+  // is an EXPLICIT regime suppression gate (keyed on the regime, NOT on "low shear" — the one wide jet
+  // still carries flank shear V-α.1 would filament). Suppressed ⇒ empty record set + all-zero mask, so the
+  // shear×mask-gated filamentation term vanishes regardless of local shear.
+  const hotJupiter = regime === E5_REGIME.HOT_JUPITER;
+  const stormsOn = gas && !hotJupiter;
+  // V-β.5 (Rider A, taxonomy §5): the URANIAN read is the NEPTUNIAN regime + high obliquity (Ward
+  // hot-poles inversion) — NOT a new frozen preset. Reachable via the E5 obliquity° driver/GUI. It paints
+  // near-empty storm slots + a seasonal polar HOOD (mode-0 cap) here; the lab adds thick haze. The
+  // low-internal-heat driver that fully separates Uranus from Neptune stays frozen → derive-not-freeze.
+  const uranian = regime === E5_REGIME.NEPTUNIAN && (drivers?.obliquityDeg ?? 0) >= STORM_PHYS.URANIAN_OBLIQUITY;
   const id = stormIdentity(macroSeed, stormSeed);
 
   // stormE:polar is drawn FIRST from its OWN disjoint stream (F5) — the variable per-seed vortex count in
   // stormE:place below can never move the pole structure.
   const rngPolar = alea('stormE:polar:' + regime + ':' + id);
   const vigor = vigorOf(regime, drivers);
-  const pole = resolvePole(gas, vigor, rngPolar);
+  const pole = resolvePole(regime, stormsOn, vigor, rngPolar);
+  if (uranian) pole.mode = 0;   // V-β.5: seasonal polar hood is a single mode-0 cap (taxonomy 5.2)
 
-  if (!gas) {
-    return { strength: 0, count: 0, primary: null, train: [], vortices: [], pole, vigor, params: P, placementLats: [] };
+  if (!stormsOn) {
+    return { strength: 0, count: 0, primary: null, train: [], vortices: [], pole, vigor, params: P, placementLats: [], uranian, hotJupiter };
   }
 
   const { ranked } = resolveStormPlacement(P);
@@ -257,6 +302,18 @@ export function resolveStormE(regime = E5_REGIME.GAS_GIANT, drivers = {}, macroS
     pCompanion,
     primaryCand.node, primaryCand.score,
   );
+  // V-β.3 ice-giant dark-spot LIFECYCLE: the age scalar picks precursor / mature / dissipating. coreScale
+  // (dark-core visibility) rides to the carriage; the lifecycle-drifted latitude re-points the rendered
+  // center (and the mask lift, which reads .center), while .lat stays the BIRTH latitude (the shear argmax)
+  // so AC-WRITER(d) re-derivation is untouched. Warm GRS primaries carry no lifecycle (coreScale left 1).
+  if (darkPrimary) {
+    const lc = iceGiantLifecyclePhase(pAge, primaryCand.lat);
+    primary.lifecycle = lc.phase;
+    primary.coreScale = lc.coreScale;
+    primary.center = dirFromLatLon(lc.renderLat, pLon);
+    // V-β.5 Uranian: a faint (2006-type) dark spot — low amplitude (taxonomy 5.3).
+    if (uranian) { primary.radius *= 0.6; primary.rot *= 0.5; primary.coreScale *= 0.5; }
+  }
 
   // ── TRAIN: vortex street / brown barge / scooters, on the SAME argmax latitude + next-N shear maxima,
   //    evenly-spaced longitudes from the phase bank (taxonomy 2.5/2.7/4.x). Family read from vigor. ──
@@ -308,33 +365,40 @@ export function resolveStormE(regime = E5_REGIME.GAS_GIANT, drivers = {}, macroS
     }
   }
 
+  // V-β.5 Uranian: near-empty storm slots — the faint primary stands alone (taxonomy 5.1 "storm mask
+  // near-empty"; the low-contrast extreme, boring by design).
+  if (uranian) train.length = 0;
+
   const vortices = [primary, ...train].slice(0, 8);      // carriage caps at 8 slots
   return {
     strength: 1, count: vortices.length,
     primary, train: vortices.slice(1), vortices,
     pole, vigor, params: P,
     placementLats: ranked.map((c) => c.lat),
+    uranian, hotJupiter,
   };
 }
 
-// Pole params from the stormE:polar stream. Drawn with a CONSTANT count (both wavenumber draws always
-// consumed) so the later fields stay decoupled from the bias branch (mirrors the legacy constant-draw
-// discipline). Rider-B canonical N: hot lattice biased ~8, mid hexagon biased to Saturn's 6.
-function resolvePole(gas, vigor, rng) {
-  const n1 = STORM_PHYS.POLAR_N_MIN + Math.floor(rng() * (STORM_PHYS.POLAR_N_SPAN + 0.99));   // 5..8
-  const n2 = rng();                                       // always consumed (constant draw count)
+// Pole params from the stormE:polar stream. V-β.2 (Rider B): the cluster count N is a DECLARED per-regime
+// canonical constant (POLAR_CANONICAL_N — Jupiter ≈8, Saturn 6), NOT a per-seed draw (per-seed N variation
+// is routed to derive-not-freeze). Everything ELSE (r0, active-pole sign, phase, age) still varies per seed
+// off the disjoint stormE:polar stream — the longitude/phase-style variety designDecision-3 permits. Drawn
+// with a constant count so the fields stay decoupled from any branch (mirrors the legacy constant-draw
+// discipline). N is clamped into the plausible 5..8 physics range the GUI also spans.
+function resolvePole(regime, stormsOn, vigor, rng) {
   const r0 = STORM_PHYS.POLAR_R0_MIN + STORM_PHYS.POLAR_R0_SPAN * rng();
-  const ring = STORM_PHYS.POLAR_N_MIN + Math.floor(rng() * (STORM_PHYS.POLAR_N_SPAN + 0.99));
   const poleSign = rng() > 0.5 ? 1 : -1;
   const phase = rng() * TWO_PI;
   const ageScalar = rng();
   const phaseScalar = rng() * TWO_PI;
-  // mode from the same personality ramp: hot ⇒ cyclone lattice (2), mid ⇒ polygon/hexagon jet (1),
-  // cold ⇒ single cap (0). Hexagon N biased toward 6 (Saturn's signature) via the always-consumed n2.
+  // mode from the personality ramp: hot ⇒ cyclone lattice (2), mid ⇒ polygon/hexagon jet (1), cold ⇒ cap (0).
   const mode = vigor >= STORM_PHYS.LATTICE_VIGOR ? 2 : (vigor >= STORM_PHYS.DARK_VIGOR ? 1 : 0);
-  const sides = (n1 !== 6 && n2 < 0.4) ? 6 : n1;
+  const canon = POLAR_CANONICAL_N[regime] || { sides: 6, ring: 6 };
+  const lo = STORM_PHYS.POLAR_N_MIN, hi = STORM_PHYS.POLAR_N_MIN + STORM_PHYS.POLAR_N_SPAN;   // 5..8
+  const sides = clamp(lo, hi, canon.sides);
+  const ring = clamp(lo, hi, canon.ring);
   return {
-    strength: gas ? 1 : 0,
+    strength: stormsOn ? 1 : 0,
     mode, sides, r0, ring, pole: poleSign, phase, ageScalar, phaseScalar,
   };
 }

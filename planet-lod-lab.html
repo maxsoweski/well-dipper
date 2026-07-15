@@ -3180,8 +3180,15 @@
       // lightly deck-tinted so the family still reads as one planet — two vortices of different
       // seeded age now read visibly different (AC-VIS c). Dark cyclonic features (dark-spot / barge)
       // do NOT redden: their color is a cleared/darker hole (taxonomy 1.1/4.1).
-      const _stormColor = (role, mode, age = 0) => {
-        if (role === 'dark-spot') return chromophoreColor(age, 1);                          // cleared dark hole (ice-giant GDS) — neutral, no reddening
+      const _stormColor = (role, mode, age = 0, coreScale = 1) => {
+        if (role === 'dark-spot') {
+          // V-β.3 lifecycle: coreScale = dark-core visibility (precursor 0 = NO cleared hole, blends into
+          // the deck / companion-only read; mature 1 = full clearing; dissipating ~0.45 = weak contrast).
+          // Blend the cleared color toward the deck background (bandTint) by (1−coreScale).
+          const _d = chromophoreColor(age, 1);                                              // cleared dark hole (ice-giant GDS) — neutral, no reddening
+          const cs = (coreScale == null) ? 1 : coreScale;
+          return [_bt[0] * (1 - cs) + _d[0] * cs, _bt[1] * (1 - cs) + _d[1] * cs, _bt[2] * (1 - cs) + _d[2] * cs];
+        }
         if (role === 'barge')     return [_bt[0] * 0.50, _bt[1] * 0.42, _bt[2] * 0.38];     // brown barge (dark cyclonic)
         if (role === 'scooter')   return [0.85, 0.90, 1.0];                                 // Neptune blue-white companion
         const _cr = chromophoreColor(age, 0);                                               // white→red age ramp (the chromophore output)
@@ -3205,7 +3212,7 @@
         state.spotRot = _p.rot;
         state.spotAspect = _p.aspect;
         state.spotMode = _p.mode;
-        state.spotColor = _stormColor(_p.role, _p.mode, _p.ageScalar);
+        state.spotColor = _stormColor(_p.role, _p.mode, _p.ageScalar, _p.coreScale);   // V-β.3 lifecycle core visibility
         state.spotCompanion = _p.companion;
       }
       // F28 storm clusters ← writer train members (vortex street / brown barge / scooters)
@@ -3266,6 +3273,9 @@
       // band contrast under one posterize bucket while 2-3 flat bands survive.
       if (_fp.atmosphere?.color) state.hazeColor = _fp.atmosphere.color.slice();
       state.hazeMute = _cloudRegime === 2 ? 0.85 : 0.0;
+      // V-β.5 Uranian variant (Rider A, taxonomy 5.1/5.5): thick accumulated (un-recycled) haze veil on
+      // the high-obliquity Neptunian read — set AFTER the cloud-regime derivation so it isn't overwritten.
+      if (_storm.uranian) state.hazeMute = Math.max(state.hazeMute, 0.6);
       // Sub-neptune featureless contract (card §6 F31c): the photochemical haze
       // that flattens the GJ 1214 b spectrum sits ABOVE the convective deck, so
       // deep-deck flashes mute too — the gas-gate F30 derivation above would
@@ -4352,7 +4362,8 @@
     // placement), so it re-rolls F27/F28 too.
     const fPolar = fBandsGroup.addFolder('Polar vortex (F29)'); fPolar.close();
     fPolar.add(state, 'polarMode', 0, 2, 1).name('mode (driven)').listen();
-    fPolar.add(state, 'polarSides', 5, 8, 1).name('sides (driven)').listen();
+    fPolar.add(state, 'polarSides', 5, 8, 1).name('sides N (driven)').listen();   // V-β.2 Rider B: hexagon/polygon N — canonical per regime (Saturn 6), GUI-tunable 5..8
+    fPolar.add(state, 'polarRing', 5, 8, 1).name('ring M (driven)').listen();     // V-β.2 Rider B: lattice member count M — canonical per regime (Jupiter ~8), GUI-tunable 5..8
     fPolar.add(state, 'polarR0', 0.1, 0.3, 0.005).name('radius r0 (driven)').listen();
     fPolar.add(state, 'polarW', 0.005, 0.06, 0.001).name('collar width');
     fPolar.add({ roll(){ state.stormSeed = (Math.random() * 4294967296) >>> 0; applyDrivers(); } }, 'roll').name('🎲 reroll storms (shared seed)');

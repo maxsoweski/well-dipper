@@ -1651,12 +1651,17 @@ export const HEIGHT_GLSL = /* glsl */ `
           float de = dot(n, east), dn = dot(n, north);
           // facing guard as a +100 far-side distance pedestal: branchless antipode kill
           float d = length(vec2(de / uStormParams[i].y, dn)) + (1.0 - step(0.0, dot(n, c))) * 100.0;
+          // V-β.4 haze veil (taxonomy §1.2): desaturate the storm tint toward its luminance + soften the
+          // collar contrast by uHazeMute (Saturn / sub-Neptune / Uranus). uHazeMute 0 on every non-haze
+          // preset ⇒ EXACT identity (byte-identical off-gate). No new uniform.
+          vec3 stormCol = mix(uStormColor[i], vec3(dot(uStormColor[i], vec3(0.299, 0.587, 0.114))), uHazeMute);
+          float hazeAmp = 1.0 - uHazeMute;
           // core <= 0.6R soft: a coherent closed oval, not a smeared noise blob
           float core = 1.0 - smoothstep(0.40 * R, 0.62 * R, d);
-          col = mix(col, uStormColor[i], core * 0.85);
+          col = mix(col, stormCol, core * 0.85);
           // pale collar 0.6R-1.0R: multiplicative luminance lift (hue-preserving)
           float collar = smoothstep(0.55 * R, 0.72 * R, d) * (1.0 - smoothstep(0.88 * R, 1.05 * R, d));
-          col = min(col * (1.0 + 0.22 * collar), vec3(1.0));
+          col = min(col * (1.0 + 0.22 * collar * hazeAmp), vec3(1.0));
           // ── V-α.3 storm INTERIOR STRUCTURE — spiral arms + concentric shear rings so a
           // placed vortex reads as a churning cell, NOT a flat oval (taxonomy 2.3 / Max's
           // "must stop reading as a simple oval"). STATIC (F1): the regularity is broken by a
@@ -1717,12 +1722,21 @@ export const HEIGHT_GLSL = /* glsl */ `
       // ALBEDO/LUMINANCE ONLY — no h/grad writes; static — no uTime (PIA24967:
       // the Juno lattice held its ring positions for five years).
       vec3 polarVortexCol(vec3 n, vec3 col){
-        float pr = acos(clamp(uPolarPole * n.y, -1.0, 1.0));   // angular distance from the active pole (rad)
+        float theta = atan(n.z, n.x);
+        float pr = acos(clamp(uPolarPole * n.y, -1.0, 1.0));   // angular distance from the ACTIVE pole (rad)
         // overall gate: the combiner is a polar-cap regime — fade out well inside
         // the band ladder's hood so the handoff is a smooth co-fade, no edge.
         float g = 1.0 - smoothstep(0.38, 0.48, pr);
-        if (g <= 0.0) return col;   // cheap early-out: every term below scales by g
-        float theta = atan(n.z, n.x);
+        // ── V-β.1 BOTH POLES IN ONE PASS (§11 flag-2, taxonomy 3.1/3.2): the OPPOSITE pole
+        // (−uPolarPole) shows a fixed mode-0 cap + eyewall from the SAME uniforms, so Saturn reads its
+        // N-hexagon on the active pole and a bare eye-walled polar cyclone on the other, with NO new
+        // uniform. Full per-pole independent param tuning stays deferred (derive-not-freeze). STATIC —
+        // reads no animation clock and no animated warp locals (the Juno-lattice place-once contract).
+        float prO = acos(clamp(-uPolarPole * n.y, -1.0, 1.0));   // angular distance from the OPPOSITE pole (rad)
+        float gO = 1.0 - smoothstep(0.38, 0.48, prO);
+        if (g <= 0.0 && gO <= 0.0) return col;   // neither pole in range — cheap early-out
+        // ── ACTIVE pole: the driven uPolarMode structure (cap / hexagon / lattice) ──
+        if (g > 0.0){
         float s = uPolarStrength * provinceWeight(PROV_POLAR) * g;
         // variant selectors — uPolarMode is exactly 0.0 / 1.0 / 2.0 (driven)
         float isPoly = step(0.5, uPolarMode) * (1.0 - step(1.5, uPolarMode));
@@ -1776,6 +1790,18 @@ export const HEIGHT_GLSL = /* glsl */ `
         vec2 q2 = (pp + lb) / 0.05;
         col = mix(col, min(col + vec3(0.25), vec3(1.0)), exp(-dot(q1, q1)) * sc);   // bright lobe (mix-form, same review fix)
         col *= 1.0 - 0.25 * exp(-dot(q2, q2)) * sc;                        // dark lobe
+        }
+        // ── OPPOSITE pole (V-β.1): a fixed mode-0 cap + a bright eyewall collar ring + a calm eye —
+        // the Saturn S-polar hurricane read (taxonomy 3.2), same uniforms, static (place-once, no clock).
+        if (gO > 0.0){
+          float sO = uPolarStrength * provinceWeight(PROV_POLAR) * gO;
+          float capO = 1.0 - smoothstep(0.12, 0.30, prO);                  // soft polar cap
+          col = mix(col, uPolarTint, 0.30 * capO * sO);
+          float eyewall = 1.0 - smoothstep(0.0, 0.03, abs(prO - 0.10));    // bright towering wall at ~0.10 rad
+          col = mix(col, min(col + vec3(0.20), vec3(1.0)), 0.5 * eyewall * sO);
+          float eyeO = 1.0 - smoothstep(0.0, 0.02, prO);                   // calm clear eye
+          col = mix(col, min(col + vec3(0.18), vec3(1.0)), eyeO * sO);
+        }
         return col;
       }
 
@@ -1847,7 +1873,7 @@ export const HEIGHT_GLSL = /* glsl */ `
         float fila = bandWarpField(pos * 3.7 + vec3(8.3, -2.9, 5.1));   // fresh STATIC fine warp (time-invariant; not the animated path)
         float cyclonic = clamp((0.5 - wBand) * 2.0, 0.0, 1.0);         // 1 deep belt (cyclonic) … 0 zone (anticyclonic); wBand=static baked field
         float ffr = 0.55 + 0.45 * cyclonic;                            // belts filament harder than zones (FFR asymmetry)
-        bandVal += uBandWarp * 0.14 * shearMask * ffr * fila;          // ink-in-water boundary distortion, shear×mask gated
+        bandVal += uBandWarp * 0.14 * shearMask * ffr * fila * (1.0 - uHazeMute);   // ink-in-water distortion, shear×mask gated; V-β.4 haze veil mutes amplitude (taxonomy §1.2; uHazeMute 0 ⇒ identity)
         // alternating zone/belt LUMINANCE — a smoothstep across the writer band value; the soft risers
         // still land on posterize-step transitions so the Bayer dither textures the festooned boundary.
         float zone = smoothstep(0.34, 0.66, clamp(bandVal, 0.0, 1.0));

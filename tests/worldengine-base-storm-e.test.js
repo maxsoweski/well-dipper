@@ -10,10 +10,10 @@ import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import { buildIrregularSphere } from '../planet-lod-rivers.js';
 import { E5_REGIME, resolveParams, jetShear, jetShearPeak } from '../src/worldengine/base/climate-e5.js';
 import {
-  STORM_PHYS,
+  STORM_PHYS, POLAR_CANONICAL_N,
   resolveStormE, resolveStormPlacement, rankStormCandidates,
   writeStormESphere, bakeStormEAttributes,
-  chromophoreColor, CHROMOPHORE_STOPS,
+  chromophoreColor, CHROMOPHORE_STOPS, iceGiantLifecyclePhase,
 } from '../src/worldengine/base/storm-e.js';
 
 const TARGET_N = 4000, LLOYD = 2;
@@ -213,6 +213,77 @@ describe('worldengine base — storm-e vortex placement + mask writer (increment
     }
     expect(sawNeg).toBe(true);   // DS2 bright-cored variant (centered) is reachable
     expect(sawPos).toBe(true);   // GDS offset companion is reachable
+  });
+
+  // ── V-β.2: DECLARED per-regime canonical polar N (Rider B) — NOT a per-seed draw ───────────────
+  it('[V-β.2] pole sides/ring are the per-regime canonical N (Saturn 6, Jupiter ~8), in the 5..8 GUI range, seed-invariant', () => {
+    const lo = STORM_PHYS.POLAR_N_MIN, hi = STORM_PHYS.POLAR_N_MIN + STORM_PHYS.POLAR_N_SPAN;
+    expect([lo, hi]).toEqual([5, 8]);
+    expect(POLAR_CANONICAL_N[E5_REGIME.SATURNIAN].sides).toBe(6);       // Saturn hexagon
+    expect(POLAR_CANONICAL_N[E5_REGIME.GAS_GIANT].ring).toBe(8);        // Juno Jovian cluster ≈ 8
+    for (const regime of REGIMES) {
+      const canon = POLAR_CANONICAL_N[regime];
+      // canonical, seed-INVARIANT (per-seed N variation routed to derive-not-freeze), and inside 5..8
+      for (const s of SEEDS) {
+        const p = run(regime, s).pole;
+        expect(p.sides).toBe(Math.max(lo, Math.min(hi, canon.sides)));
+        expect(p.ring).toBe(Math.max(lo, Math.min(hi, canon.ring)));
+        expect(p.sides).toBeGreaterThanOrEqual(lo); expect(p.sides).toBeLessThanOrEqual(hi);
+        expect(p.ring).toBeGreaterThanOrEqual(lo); expect(p.ring).toBeLessThanOrEqual(hi);
+      }
+    }
+  });
+
+  // ── V-β.3: ice-giant dark-spot LIFECYCLE phases (Q6 ratified: three) — no new rng ──────────────
+  it('[V-β.3] iceGiantLifecyclePhase is a deterministic 3-band map on age; precursor has no core, mature drifts poleward, dissipating goes equatorward', () => {
+    const pre = iceGiantLifecyclePhase(0.1, 0.4);
+    const mat = iceGiantLifecyclePhase(0.5, 0.4);
+    const dis = iceGiantLifecyclePhase(0.9, 0.4);
+    expect(pre.phase).toBe('precursor');   expect(pre.coreScale).toBe(0.0);   // companion-only, no dark core
+    expect(mat.phase).toBe('mature');      expect(mat.coreScale).toBe(1.0);
+    expect(dis.phase).toBe('dissipating'); expect(dis.coreScale).toBeLessThan(1.0);
+    expect(Math.abs(mat.renderLat)).toBeGreaterThan(0.4);   // mature drifts POLEWARD of birth |lat|
+    expect(Math.abs(dis.renderLat)).toBeLessThan(0.4);      // dissipating drifts toward the EQUATOR
+    expect(pre.renderLat).toBe(0.4);                         // precursor sits at the birth latitude
+  });
+  it('[V-β.3] ice-giant dark-spot primary carries a lifecycle + coreScale; warm GRS primary carries neither; birth latitude preserved', () => {
+    for (let s = 1; s <= 12; s++) {
+      const ice = run(E5_REGIME.NEPTUNIAN, s).primary;
+      expect(['precursor', 'mature', 'dissipating']).toContain(ice.lifecycle);
+      expect(ice.coreScale).toBeGreaterThanOrEqual(0); expect(ice.coreScale).toBeLessThanOrEqual(1);
+      // .lat stays the shear-argmax birth latitude (AC-WRITER d re-derivation guard) even as center drifts
+      const { ranked } = resolveStormPlacement(run(E5_REGIME.NEPTUNIAN, s).params);
+      expect(ice.lat).toBe(ranked[0].lat);
+    }
+    const grs = run(E5_REGIME.GAS_GIANT, 1).primary;
+    expect(grs.lifecycle).toBeUndefined();
+    expect(grs.coreScale).toBeUndefined();
+  });
+
+  // ── V-β.5: URANIAN variant (Rider A) — Neptunian regime + high obliquity, NOT a preset ─────────
+  it('[V-β.5] high-obliquity Neptunian ⇒ Uranian read: near-empty slots (count 1), mode-0 polar hood, uranian flag; normal Neptunian is unaffected', () => {
+    const uran = resolveStormE(E5_REGIME.NEPTUNIAN, { composition: 'h2-he', obliquityDeg: 90 }, 3, 1234);
+    expect(uran.uranian).toBe(true);
+    expect(uran.count).toBe(1);                 // faint primary alone, no train (near-empty)
+    expect(uran.pole.mode).toBe(0);             // seasonal polar hood = single mode-0 cap
+    expect(uran.primary.coreScale).toBeLessThanOrEqual(0.5);   // faint 2006-type spot
+    const norm = resolveStormE(E5_REGIME.NEPTUNIAN, { composition: 'h2-he' }, 3, 1234);
+    expect(norm.uranian).toBe(false);
+    expect(norm.count).toBeGreaterThan(1);      // normal Neptunian keeps its scooter train
+    // obliquity below the Uranian threshold does NOT trip the variant
+    expect(resolveStormE(E5_REGIME.NEPTUNIAN, { composition: 'h2-he', obliquityDeg: 40 }, 3).uranian).toBe(false);
+  });
+
+  // ── V-β.6: HOT-JUPITER suppression policy (Q1/F6: explicit regime gate, not emergent) ──────────
+  it('[V-β.6] hot-Jupiter is suppressed by an explicit regime gate: no storms, all-zero mask, pole off — even though composition is h2-he', () => {
+    const hj = resolveStormE(E5_REGIME.HOT_JUPITER, { composition: 'h2-he', T_eq: 1400 }, 1, 1234);
+    expect(hj.hotJupiter).toBe(true);
+    expect(hj.count).toBe(0);
+    expect(hj.strength).toBe(0);
+    expect(hj.primary).toBe(null);
+    expect(hj.pole.strength).toBe(0);
+    const out = writeStormESphere(freshCarrier(), { composition: 'h2-he', T_eq: 1400 }, { regime: E5_REGIME.HOT_JUPITER, macroSeed: 1 });
+    expect(Array.from(out.mask).every((m) => m === 0)).toBe(true);   // filamentation term (∝ mask) vanishes regardless of flank shear
   });
 
   // ── ENVELOPE GUARD: exactly ONE new baked attribute (the mask), no new storm uniform (Slice P wire-in) ─
