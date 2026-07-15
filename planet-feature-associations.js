@@ -475,3 +475,34 @@ for (const a of Object.values(ASSOCIATIONS)) a.modifies = [];
 for (const [key, a] of Object.entries(ASSOCIATIONS)) {
   for (const dep of a.dependsOn.features) ASSOCIATIONS[dep].modifies.push(key);
 }
+
+// ── DEFAULT_DRESSING (defaults rescope, lab-ux 2026-07-15) ─────────────────────
+// The RATIFIED boot-composition rule (Max, 2026-07-15): a fresh preset boots with
+// (a) writer-driven features (FEATURES[key].provenance === 'writer' ∩ rendersOn),
+// PLUS (b) this small per-preset set of driver-fed legacy "dressing" so the world
+// reads as a world (ocean on wet terrestrials, Magma's ocean, Crystal's facets).
+// Features with NO driver connection (technogenic exotics etc.) NEVER default on.
+// The old rule (full rendersOn union) stacked ~30 legacy features on terrestrials —
+// rendersOn asserts individual renderability, NOT composition ("mishmash" UAT fail).
+// Every entry must be ⊆ ASSOCIATIONS[key].rendersOn for its preset — the lab warns
+// at boot if this drifts. Dressing is PLACEHOLDER legacy slated for replacement;
+// the lab's World Engine section lists it as such (AC-BOOT-PROVENANCE).
+export const DEFAULT_DRESSING = {
+  'Rocky (Earthlike)':          ['lakes', 'coastlines', 'clouds', 'limb', 'terminator'],
+  'Ocean (temperate)':          ['lakes', 'coastlines', 'clouds', 'limb', 'terminator', 'sunglint'],
+  'Eyeball (locked temperate)': ['lakes', 'coastlines', 'clouds', 'limb', 'terminator'],
+  'Venus (sulfuric shroud)':    ['clouds', 'limb', 'terminator'],
+  'Mars (arid rocky)':          ['dust', 'limb', 'terminator'],
+  'Titan (methane seas)':       ['lakes', 'coastlines', 'clouds', 'limb', 'terminator'],
+  'Magma (K2-141b)':            ['magma'],
+  'Carbon (high C/O)':          ['carbon'],
+  'Crystal (faceted)':          ['facets'],
+  'Gas giant (Jovian)':         ['clouds', 'limb', 'terminator'],
+  'Gas giant (Saturnian)':      ['clouds', 'limb', 'terminator'],
+  'Ice giant (Neptunian)':      ['clouds', 'limb', 'terminator'],
+  'Sub-Neptune (hazy)':         ['clouds', 'limb', 'terminator'],
+  'Hot Jupiter (locked giant)': ['clouds', 'limb', 'terminator'],
+  'Lava (hot airless)':         [],   // airless: the writer carrier (magmatism) IS the look
+  'Frozen (airless)':           [],   // airless: shell/despun writer carrier
+  'Europa (icy moon)':          [],   // airless: shell writer carrier
+};

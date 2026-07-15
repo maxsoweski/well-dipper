@@ -99,6 +99,11 @@
     .lil-gui .audit-badge { margin-left: 6px; font-size: 12px; line-height: 1; user-select: none; }
     .lil-gui .audit-badge.stale { opacity: 0.35; }              /* dimmed when state.audit.fresh === false */
     .lil-gui .prov-badge { color: #6db3f2; font-size: 12px; line-height: 1; user-select: none; }  /* provenance glyph: ✦ writer / ◐ grain-oriented */
+    /* AC-BOOT-PROVENANCE: what's-authoring-this-world summary at the top of the World Engine section */
+    .lil-gui .we-summary { font-size: 11px; line-height: 1.5; padding: 4px 8px 5px; margin: 2px 0 4px; border-left: 2px solid #3a4c63; }
+    .lil-gui .we-summary .we-current { color: #6db3f2; }        /* current system (writer) — matches the ✦ badge blue */
+    .lil-gui .we-summary .we-placeholder { color: #b8a065; }    /* placeholder legacy dressing — amber, visually 'not the new system' */
+    .lil-gui .we-summary .we-dim { color: #8a8f96; }
     .lil-gui .audit-summary { font-size: 11px; line-height: 1.4; padding: 4px 8px; margin: 2px 0 4px;
       color: #cfd2d6; }
     .lil-gui .audit-summary.stale { color: #c98a2a; }           /* "stale — re-audit" tint */
@@ -146,7 +151,7 @@
     import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, animationRateFactor } from './planet-lod-lab-core.js';
     import { RADIUS_RANGES_EARTH } from './src/core/ScaleConstants.js';   // AC5/AC6: single-source archetype radius ranges (game + lab)
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
-    import { ASSOCIATIONS } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature
+    import { ASSOCIATIONS, DEFAULT_DRESSING } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature; DEFAULT_DRESSING = ratified boot dressing (defaults rescope 2026-07-15)
     import { expectedMatrix, auditRenderMatrix } from './lab-render-audit.js';   // NEW: pure auditor (Ask 4)
     import { statusOf, EPS as AUDIT_EPS } from './lab-render-status.js';          // NEW: glyph map + shared eps (Ask 4)
     import { PROCESSES, driversFor, DRIVERS } from './planet-drivers.js';   // card "Driven by"/"Depends on" lines: process labels + friendly driver names
@@ -2543,6 +2548,7 @@
       grainCarveUI.reliefBakeStrength = v;
       uniforms.uReliefBakeStrength.value = v;
       if (cReliefBake) cReliefBake.updateDisplay();
+      if (typeof refreshWorldEngineSummary === 'function') refreshWorldEngineSummary();   // carrier on/off flips the summary's relief line (declared later — boot-order guard)
     }
     fGrainCarve.add(grainCarveUI, 'legend').name('⊞ shared grain feeds').disable();
     fGrainCarve.add(grainCarveUI, 'grainStrength', 0, 1, 0.01).name('grain strength (0 = old scatter)')
@@ -4065,12 +4071,48 @@
     // above it. The atmo #3b merge flips F27/F28/F29's provenance and moves their
     // declarations here (atmo owns those sections — fence).
     const fWorldEngine = guiRight.addFolder('World Engine ✦'); fWorldEngine.open();
+    // ── AC-BOOT-PROVENANCE (defaults rescope 2026-07-15): "what is authoring this
+    // world right now" summary — current system vs placeholder legacy must be
+    // legible from the default view, without opening the Legacy drawer. Lives as
+    // the first DOM child of the WE section (which also defeats lil-gui's CSS
+    // "Empty" label on presets whose writer feature folders are filtered away —
+    // the carrier relief IS the world engine even when no feature folder shows).
+    const weSummaryEl = document.createElement('div');
+    weSummaryEl.className = 'we-summary';
+    fWorldEngine.$children.prepend(weSummaryEl);
+    function refreshWorldEngineSummary(){
+      const preset = driverUI.preset;
+      const esc = (s) => String(s).replace(/[&<>]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
+      // Current system: is the writer carrier routed as the relief source?
+      const carrierOn = grainCarveUI.reliefBakeStrength > 0 && riverOverlay.heightSource === 'carrier';
+      const writerFeats = Object.keys(FEATURES)
+        .filter(k => FEATURES[k].provenance === 'writer' && (ASSOCIATIONS[k]?.rendersOn || []).includes(preset))
+        .map(k => FEATURES[k].label);
+      const currentBits = [];
+      currentBits.push(carrierOn ? 'relief: writer carrier' : 'relief: LEGACY synth (carrier off)');
+      if (writerFeats.length) currentBits.push(writerFeats.join(', '));
+      // Placeholder dressing: driver-fed legacy currently enabled (ratified defaults + hand-toggles)
+      const enabledLegacy = Object.keys(FEATURES)
+        .filter(k => FEATURES[k].provenance !== 'writer' && state[FEATURES[k].enableKey]);
+      const dressing = new Set(DEFAULT_DRESSING[preset] || []);
+      const dressOn  = enabledLegacy.filter(k => dressing.has(k)).map(k => FEATURES[k].label);
+      const extraOn  = enabledLegacy.filter(k => !dressing.has(k));
+      let html = `<div class="we-current">✦ current: ${esc(currentBits.join(' · '))}</div>`;
+      html += dressOn.length
+        ? `<div class="we-placeholder">▢ placeholder dressing ON: ${esc(dressOn.join(', '))}<span class="we-dim"> — legacy, slated for replacement</span></div>`
+        : `<div class="we-dim">▢ no placeholder dressing enabled</div>`;
+      if (extraOn.length) {   // beyond-default legacy: hand-toggles or driver auto-sets (Hot Jupiter's F32/F33 thermal) — name them, don't claim how they got on
+        const names = extraOn.length <= 3 ? extraOn.map(k => FEATURES[k].label).join(', ') : `${extraOn.length} features`;
+        html += `<div class="we-placeholder">▢ legacy ON beyond defaults: ${esc(names)}</div>`;
+      }
+      weSummaryEl.innerHTML = html;
+    }
     // ── Legacy synth drawer (lab-UI cleanup 2026-06-27) — collapses the 5 in-shader
     // synth feature families into one CLOSED parent so the world-engine carrier
     // controls read clean for UAT. Re-parenting is DOM-only; the relevance filter
     // (applyArchetypeFilter) operates on STORED parentEl/folder objects, not on a
     // literal guiRight parent, so nesting these groups one level deeper is render-safe.
-    const fLegacy = guiRight.addFolder('Legacy features'); fLegacy.close();
+    const fLegacy = guiRight.addFolder('Legacy — placeholders (being replaced)'); fLegacy.close();   // AC-BOOT-PROVENANCE: the drawer itself says these are placeholder systems slated for replacement
     // ▸ Surface — Relief
     const fRelief = fLegacy.addFolder('Surface — Relief');
     fRelief.add(state, 'perturb', 0, 1.5, 0.01).name('perturb (relief)');
@@ -4947,6 +4989,7 @@
     // Refresh every visible card's State line (enable dots + relevance). Cheap — text only.
     function refreshAllCardStates(){
       for (const key of Object.keys(featureCards)) refreshCardState(featureCards[key].stateEl, key);
+      refreshWorldEngineSummary();   // AC-BOOT-PROVENANCE: every enable/preset/filter change re-derives the current-vs-placeholder summary
     }
     // soloKey=null → enable ALL features; otherwise enable ONLY that feature.
     // LEGACY destructive path — kept for "enable all". Solo now goes through the
@@ -4977,17 +5020,27 @@
       for (const k of Object.keys(FEATURES)) state[FEATURES[k].enableKey] = set.has(k);
       syncDisplays();
     };
-    // ── Per-world default enables (lab-ux 2026-07-15, AC-DEFAULTS) ──────────
-    // A fresh preset should be judgment-ready: enable exactly the features whose
-    // ASSOCIATIONS row says they render on this preset — the same rendersOn data
-    // the render-audit's expected side reads (one source, no second place to
-    // drift). Applied on boot, on preset CHANGE (dropdown + _lab.setPreset), and
-    // by the 'reset to world defaults' button. NOT applied on driver-slider
-    // applyDrivers re-runs or 🎲 reroll paths — hand-toggles survive those.
+    // ── Per-world default enables (defaults rescope 2026-07-15, AC-DEFAULTS) ──
+    // RATIFIED rule (Max): a fresh preset boots writer-driven features (provenance
+    // 'writer' ∩ rendersOn — grows automatically when the atmo merge flips
+    // F27–F29) plus the small DEFAULT_DRESSING set of driver-fed legacy so the
+    // world reads as a world. The old full-rendersOn union stacked ~30 legacy
+    // features on terrestrials (rendersOn asserts individual renderability, not
+    // composition — the "mishmash" UAT fail). Un-driven legacy never defaults on.
+    // Applied on boot, on preset CHANGE (dropdown + _lab.setPreset), and by the
+    // 'reset to world defaults' button. NOT applied on driver-slider applyDrivers
+    // re-runs or 🎲 reroll paths — hand-toggles survive those.
     function worldDefaultEnableSet(preset){
       const set = new Set();
       for (const k of Object.keys(FEATURES)) {
-        if ((ASSOCIATIONS[k]?.rendersOn || []).includes(preset)) set.add(k);
+        if (FEATURES[k].provenance === 'writer' && (ASSOCIATIONS[k]?.rendersOn || []).includes(preset)) set.add(k);
+      }
+      for (const k of (DEFAULT_DRESSING[preset] || [])) {
+        if (!(ASSOCIATIONS[k]?.rendersOn || []).includes(preset)) {   // table drifted from the manifest — enable nothing silently wrong
+          console.warn(`DEFAULT_DRESSING drift: '${k}' is not in rendersOn for '${preset}' — skipped`);
+          continue;
+        }
+        set.add(k);
       }
       return set;
     }
@@ -4999,6 +5052,7 @@
       setRiverOverlay(set.has('rivers'));        // rivers carries the re-route side-effect (isolate precedent)
       refreshAllCardStates();
       if (typeof refreshArchetypeInfo === 'function') refreshArchetypeInfo();
+      setTimeout(refreshWorldEngineSummary, 700);   // route completes ~500ms after a preset change — re-read heightSource once settled
     }
     function soloFeature(key, { mode } = {}){
       if (_preSoloEnables === null) _preSoloEnables = captureEnables();   // capture once, on first solo

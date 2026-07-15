@@ -53,3 +53,31 @@ World Engine program; these slices make it solo-drivable and make new-vs-legacy 
 - Evidence: `evidence/slice1-we-section-jovian.jpeg`, `evidence/slice2-jovian-boots-banded.jpeg`,
   `evidence/slice3-leftpane-4groups.jpeg`; spot-drives in the session record (distance slider,
   craters toggle, isolate roundtrip site, defaults button restore).
+
+---
+
+## Defaults rescope build (2026-07-15, post-UAT-fail)
+
+**What it does:** `worldDefaultEnableSet()` now returns writer-provenance features
+(∩ rendersOn) plus the per-preset `DEFAULT_DRESSING` table (new export in
+planet-feature-associations.js) instead of the full rendersOn union. A new
+`.we-summary` block at the top of the World Engine section states, per preset,
+what the current system is authoring (relief carrier + writer features) and which
+placeholder legacy dressing is ON; the Legacy drawer is retitled
+"Legacy — placeholders (being replaced)".
+
+**Intent (Max's ruling):** features enable only when they should; legacy not driven
+by the new procgen is a waste of time as a default; the UI must make very clear
+what's a current system vs a placeholder legacy system slated for replacement.
+
+**Deliberate non-goals:** no feature deletion (quarantine only); no change to the
+relevance filter, badges, solo, audit, or isolate mechanisms; the Hot Jupiter
+F32/F33 auto-thermal carve-out stays (applyDrivers, pre-existing); storm trio
+F27–F29 joins the writer set automatically at the atmo merge (provenance flip) —
+no anticipatory wiring here. Dressing table drift from rendersOn is a console
+warn + skip, never a silent enable.
+
+**Evidence:** evidence/defaults-rescope/ — 3 interview shots (mishmash / writer-bare /
+curated) + 12 per-class composition screenshots at judging distance (Rocky, Ocean,
+Venus, Mars, Titan, Lava, Europa, Magma, Crystal, Jovian, Neptunian, Hot Jupiter),
+live enabled-set assertion 18/18 exact, console clean.
