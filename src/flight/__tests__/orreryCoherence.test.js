@@ -20,6 +20,8 @@ import {
   autoWarpTimerFires,
   systemEntryStyle,
   tourRearmAllowed,
+  bodyClickAction,
+  navDispatchDuringWarp,
 } from '../flightModes.js';
 
 // -------------------------------------------------------------------------
@@ -265,5 +267,72 @@ describe('INVARIANT: no reducer ever yields a ship-flight routing for regime "or
     expect(autoWarpTimerFires({ regime: 'orrery' })).toBe(false);
     expect(tourRearmAllowed({ regime: 'orrery', handsOn: false })).toBe(false);
     expect(tourRearmAllowed({ regime: 'orrery', handsOn: true })).toBe(false);
+  });
+});
+
+// -------------------------------------------------------------------------
+// g. Body-CLICK action (AC5, seam map §9). Click 1 selects; click 2 on the SAME
+//    body glides the VIEW (ORRERY only). ORRERY new body → select; HELM (any) →
+//    select (click semantics unchanged); garbage → select.
+// -------------------------------------------------------------------------
+describe('bodyClickAction — click-2 on the same body glides the view, ORRERY only', () => {
+  // Mirror of the cross-reducer invariant for the Increment-3 additions: neither
+  // 'glide-view' nor 'select' is a ship-flight routing — in ORRERY the click moves
+  // the VIEW (glide-view) or nothing (select), never the ship.
+  const FLIGHT_TOKENS = new Set(['tour-advance', 'focus-fly', 'start', 'warp-cinematic']);
+  it('never yields a flight routing in ORRERY (glide-view/select move the VIEW or nothing)', () => {
+    for (const same of [true, false, undefined, 1, 0, null]) {
+      const { action } = bodyClickAction({ regime: 'orrery', sameAsSelected: same });
+      expect(FLIGHT_TOKENS.has(action)).toBe(false);
+    }
+  });
+  it('ORRERY + same body clicked again → glide-view (the AC5 vantage glide)', () => {
+    expect(bodyClickAction({ regime: 'orrery', sameAsSelected: true })).toEqual({ action: 'glide-view' });
+  });
+  it('ORRERY + a new/different body → select (click 1 selects only)', () => {
+    expect(bodyClickAction({ regime: 'orrery', sameAsSelected: false })).toEqual({ action: 'select' });
+    expect(bodyClickAction({ regime: 'orrery', sameAsSelected: undefined })).toEqual({ action: 'select' });
+    expect(bodyClickAction({ regime: 'orrery', sameAsSelected: 0 })).toEqual({ action: 'select' });
+  });
+  it('HELM → always select, even on a repeat click (HELM click semantics unchanged)', () => {
+    expect(bodyClickAction({ regime: 'helm', sameAsSelected: true })).toEqual({ action: 'select' });
+    expect(bodyClickAction({ regime: 'helm', sameAsSelected: false })).toEqual({ action: 'select' });
+  });
+  it('garbage/missing regime → select (safe: a plain select moves neither ship nor vantage)', () => {
+    for (const bad of [undefined, null, '', 'nonsense', 'HELM', 'Orrery']) {
+      expect(bodyClickAction({ regime: bad, sameAsSelected: true })).toEqual({ action: 'select' });
+      expect(bodyClickAction({ regime: bad, sameAsSelected: false })).toEqual({ action: 'select' });
+    }
+    expect(bodyClickAction()).toEqual({ action: 'select' });
+    expect(bodyClickAction({})).toEqual({ action: 'select' });
+  });
+});
+
+// -------------------------------------------------------------------------
+// h. Nav-dispatch-during-warp decision (AC6, seam map §7). A nav warp the player
+//    dispatches while the boot warp is in flight must win. no warp → normal
+//    (byte-unchanged); pre-FOLD → overwrite (player's warpTarget write wins the
+//    snapshot); post-FOLD → stash (redirect at the reveal seam).
+// -------------------------------------------------------------------------
+describe('navDispatchDuringWarp — a mid-warp nav selection wins (overwrite pre-FOLD, stash post-FOLD)', () => {
+  it('no warp in flight → normal (today\'s behavior; HELM normal warp untouched)', () => {
+    expect(navDispatchDuringWarp({ warpInFlight: false, foldSnapshotTaken: false })).toEqual({ action: 'normal' });
+    expect(navDispatchDuringWarp({ warpInFlight: false, foldSnapshotTaken: true })).toEqual({ action: 'normal' });
+  });
+  it('warp in flight, pre-FOLD → overwrite (player write lands before the snapshot)', () => {
+    expect(navDispatchDuringWarp({ warpInFlight: true, foldSnapshotTaken: false })).toEqual({ action: 'overwrite' });
+  });
+  it('warp in flight, post-FOLD → stash (generation committed; redirect at reveal)', () => {
+    expect(navDispatchDuringWarp({ warpInFlight: true, foldSnapshotTaken: true })).toEqual({ action: 'stash' });
+  });
+  it('garbage/missing inputs → normal (safe default = identical to today)', () => {
+    expect(navDispatchDuringWarp()).toEqual({ action: 'normal' });
+    expect(navDispatchDuringWarp({})).toEqual({ action: 'normal' });
+    for (const bad of [undefined, null, 0, '']) {
+      expect(navDispatchDuringWarp({ warpInFlight: bad, foldSnapshotTaken: true })).toEqual({ action: 'normal' });
+    }
+    // truthy-garbage warpInFlight still routes by the FOLD flag (coerced)
+    expect(navDispatchDuringWarp({ warpInFlight: 1, foldSnapshotTaken: 1 })).toEqual({ action: 'stash' });
+    expect(navDispatchDuringWarp({ warpInFlight: 1, foldSnapshotTaken: 0 })).toEqual({ action: 'overwrite' });
   });
 });

@@ -578,6 +578,56 @@ export class ShipCameraSystem {
     }
   }
 
+  // Glide-focus — the VIEW-ONLY sibling of focusOn (orrery-coherence-2026-07-15
+  // AC5, Max: "click 1 selects, click 2 quickly moves us over to that body"). A
+  // SEPARATE method (not an option on focusOn) so focusOn's SNAP semantics stay
+  // byte-identical for its debug callers (main.js:5159/:9837). Where focusOn snaps
+  // smoothedYaw/Pitch/Distance AND this.target, glideFocus writes only the TARGETS
+  // (yaw/pitch/distance) and the orbit-pivot GOAL (_targetGoal + _transitioning),
+  // leaving every smoothed field and this.target alone — so the existing per-frame
+  // smoothing (update() ~937-944) and the _transitioning pivot ease (update()
+  // ~927-934, the SAME easing selectTarget uses in main.js) glide the vantage over
+  // instead of snapping. It never touches _applyOrbit/adoptCurrentPose math (the
+  // drift guard), and it is Toy-Box orbit only: the caller keeps bypassed=false and
+  // never calls flyTo, so the pilot is untouched — nothing flies, the VIEW moves.
+  // `position` is captured by the caller at click time (bodies move); the glide
+  // eases toward that captured point.
+  glideFocus(position, viewDistance = 8) {
+    // Glide the orbit PIVOT to the body — set the GOAL, don't snap this.target
+    // (precedent: selectTarget's pivot ease, main.js ~6637-6639).
+    this._targetGoal.copy(position);
+    this._transitioning = true;
+    this._transitionSpeed = 0.06;
+    this._returningToOrbit = false;
+
+    // Yaw/pitch TARGETS from the CURRENT camera pose relative to the body — the
+    // same geometry focusOn computes, but written to yaw/pitch (targets) ONLY, with
+    // NO smoothedYaw/smoothedPitch write, so the smoothing eases them. Keeps the
+    // camera on its current side of the body while it reframes.
+    const dx = this.camera.position.x - position.x;
+    const dy = this.camera.position.y - position.y;
+    const dz = this.camera.position.z - position.z;
+    const horizDist = Math.sqrt(dx * dx + dz * dz);
+    this.yaw = Math.atan2(dx, dz);
+    this.pitch = Math.atan2(dy, horizDist);
+    this.distance = viewDistance;   // TARGET only — smoothedDistance eases in update()
+    this.zoomSpeed = 0;
+
+    // Keep the flight system loosely in sync for a later Flight-mode switch, like
+    // focusOn — seeded from the FINAL framed vantage (body at viewDistance) so a
+    // mid-glide mode flip still lands sensibly.
+    if (this._hasGravity && this.flight) {
+      const d = viewDistance;
+      const cosPitch = Math.cos(this.pitch);
+      _v1.set(
+        position.x + d * Math.sin(this.yaw) * cosPitch,
+        position.y + d * Math.sin(this.pitch),
+        position.z + d * Math.cos(this.yaw) * cosPitch,
+      );
+      this.flight.setPositionVelocity(_v1);
+    }
+  }
+
   viewSystem(systemRadius) {
     this.target.set(0, 0, 0);
     this._targetGoal.set(0, 0, 0);

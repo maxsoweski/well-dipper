@@ -47,7 +47,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed, bodyCycleAction, burnWorkflowAvailable, burnButtonRegimeVisible, navAutopilotToggleAction, autoWarpTimerFires, systemEntryStyle } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed, bodyCycleAction, burnWorkflowAvailable, burnButtonRegimeVisible, navAutopilotToggleAction, autoWarpTimerFires, systemEntryStyle, tourRearmAllowed, bodyClickAction, navDispatchDuringWarp } from './flight/flightModes.js';
 import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
 import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR, firstBlockingObstacle, planLegObstacle, obstacleKeepOutRadius } from './flight/tourStandoff.js';
 import { createFreeLook } from './flight/freeLook.js';
@@ -2425,6 +2425,21 @@ window._warpTarget = warpTarget;  // DEBUG: expose warp target for Playwright dr
 // When the tour visits every body, use the nav computer for a cinematic warp sequence.
 // The nav computer opens, drills down through galaxy levels, picks a star, and warps.
 autoNav.onTourComplete = () => {
+  // orrery-coherence-2026-07-15 U3 (tourRearmAllowed, AC7, seam map §8). The re-arm
+  // loop below (warp onward + a fresh tour) IS the screensaver — but it may run ONLY
+  // while hands-off in HELM. handsOn is DERIVED (window._regime()'s definition,
+  // main.js ~1857) — _scManual && !freeLook.latched — no stored bit. Denied (ORRERY
+  // ALWAYS, or HELM hands-on) → no re-arm chain: no AutopilotNavSequence, no warp
+  // onward. This makes the screensaver loop impossible in ORRERY by construction and
+  // explicit-by-code in HELM; F-takeover / Z-stop end it live by ending the tour
+  // (main.js ~9951). HELM hands-off → today's re-arm runs verbatim below.
+  const _rearmRegime = _scManual ? 'helm' : 'orrery';
+  const _rearmHandsOn = _scManual && !freeLook.latched;
+  if (!tourRearmAllowed({ regime: _rearmRegime, handsOn: _rearmHandsOn })) {
+    console.log(`[TOUR] onTourComplete re-arm DENIED (regime=${_rearmRegime}, handsOn=${_rearmHandsOn}) — no screensaver loop here (tourRearmAllowed)`);
+    return;
+  }
+
   // Initialize the nav sequence if needed
   if (!_autopilotNavSequence) {
     _autopilotNavSequence = new AutopilotNavSequence({
@@ -2660,6 +2675,17 @@ let _pendingBootMode = 'orrery';
 // would miss the splash-background "press anything" default path, which calls
 // startIntroSequence() directly — so the anchor is the reveal itself, not the pick.
 let _pendingBootReveal = true;
+
+// orrery-coherence-2026-07-15 U2 (AC6, seam map §7): the mid-boot nav-selection-wins
+// warp race. `_foldSnapshotTaken` marks whether onPrepareSystem has already
+// snapshotted warpTarget.navStarData at FOLD-start (set true there, reset false at
+// each fresh beginWarpTurn) — it's the pre-FOLD/post-FOLD boundary navDispatchDuringWarp
+// reads. `_pendingPlayerWarp` stashes a player warp dispatched POST-FOLD during an
+// in-flight (boot) warp; warpRevealSystem consumes it, suppressing the in-flight
+// target's reveal/tour-arm and immediately warping to the player's selection so the
+// boot target never gets a settled arrival.
+let _foldSnapshotTaken = false;
+let _pendingPlayerWarp = null;
 
 // The splash mode-picker action (boot-flow corrected 2026-06-27). The BLACK
 // ORRERY/HELM chooser is the cold-open; picking a station records it, then runs the
@@ -2909,6 +2935,46 @@ function dispatchNavAction(action) {
     else if (action.target === 'planet') focusPlanet(action.planetIndex);
     else if (action.target === 'moon') focusMoon(action.planetIndex, action.moonIndex);
   } else if (action.type === 'warp') {
+    // orrery-coherence-2026-07-15 U2 (navDispatchDuringWarp, AC6, seam map §7): a nav
+    // warp the player dispatches WHILE a warp is already in flight (the boot tour's
+    // warp is the flagged case) must WIN — the player arrives at THEIR system, the
+    // boot warp never settles at its own target. warpInFlight = a turn OR the warp
+    // effect is running; _foldSnapshotTaken tells pre-FOLD (overwrite) from post-FOLD
+    // (stash). No warp in flight → 'normal' = today's behavior, byte-unchanged (HELM's
+    // ordinary warp is untouched — this is the only path reached in normal operation).
+    const _warpInFlight = warpEffect.isActive || warpTarget.turning;
+    const _during = navDispatchDuringWarp({ warpInFlight: _warpInFlight, foldSnapshotTaken: _foldSnapshotTaken }).action;
+    if (_during === 'stash') {
+      // POST-FOLD: generation already committed to the in-flight (boot) target;
+      // overwriting warpTarget is too late. Stash the player's pick — warpRevealSystem
+      // consumes it, suppressing the boot target's reveal/tour-arm and immediately
+      // warping to the player's selection (the boot target gets NO settled arrival).
+      _pendingPlayerWarp = {
+        wx: action.star.wx, wy: action.star.wy, wz: action.star.wz,
+        seed: action.star.seed, name: action.star.name, type: action.star.spectral,
+      };
+      console.log(`[NAV DISPATCH] player warp STASHED post-FOLD → ${action.star?.name} (seed=${action.star?.seed}); redirect at reveal — boot target gets no settled arrival (AC6)`);
+      return;
+    }
+    if (_during === 'overwrite') {
+      // PRE-FOLD: overwrite the in-flight warp's DESTINATION so onPrepareSystem
+      // snapshots the player's star. _setWarpTargetFromNavStar zeroes warpTarget.turning
+      // as its last line, which would STALL a mid-boot turn (main.js ~8083 drives the
+      // turn only while turning===true) — so save+restore turning. direction is re-aimed
+      // at the player's star (coherent tunnel axis). The in-flight warp then carries the
+      // player to THEIR system; at reveal bootModeAction(_pendingBootMode) still delivers
+      // the (HELM) boot experience — at the player's target. Deliberate + logged; no
+      // second turn started (one warp is already in flight).
+      const _wasTurning = warpTarget.turning;
+      _setWarpTargetFromNavStar({
+        worldX: action.star.wx, worldY: action.star.wy, worldZ: action.star.wz,
+        seed: action.star.seed, name: action.star.name, type: action.star.spectral,
+      });
+      if (_wasTurning) warpTarget.turning = true;
+      console.log(`[WARP] player overwrites in-flight warp target pre-FOLD — player WINS → ${action.star?.name} (seed=${action.star?.seed})`);
+      return;
+    }
+    // 'normal' — no warp in flight: today's behavior, byte-unchanged.
     // Stop any active flythrough/orbit before warping
     if (flythrough.active) flythrough.stop();
     if (autoNav.isActive) autoNav.stop();
@@ -3646,6 +3712,13 @@ async function _generateWarpDestinationData() {
 // pendingSystemDataPromise, which onSwapSystem awaits before spawnSystem. HELM
 // warp path byte-unchanged (same statements, same order — orrery-coherence W2).
 warpEffect.onPrepareSystem = () => {
+  // orrery-coherence-2026-07-15 U2 (AC6, seam map §7): mark the FOLD snapshot taken
+  // SYNCHRONOUSLY, before the async IIFE reads warpTarget.navStarData (the read at
+  // _generateWarpDestinationData ~3548 runs before its first await). Any player nav
+  // dispatch that observes _foldSnapshotTaken === false is therefore guaranteed to
+  // have landed BEFORE this snapshot — the exact pre-FOLD/post-FOLD boundary
+  // navDispatchDuringWarp routes on (pre-FOLD → overwrite, post-FOLD → stash).
+  _foldSnapshotTaken = true;
   pendingSystemDataPromise = (async () => {
     bodyInfo.hide();
     soundEngine.play('warpCharge');
@@ -6358,6 +6431,31 @@ async function _enterSystemInstantOrrery() {
 function warpRevealSystem() {
   if (!system) return;
   cameraController.bypassed = true;
+
+  // orrery-coherence-2026-07-15 U2 (AC6, seam map §7): a nav warp the player
+  // dispatched POST-FOLD during THIS (boot) warp was stashed — the boot target
+  // generated + spawned, but must NOT get a settled arrival. Consume the stash here:
+  // suppress this reveal's tour-arm / fly-in / music entirely and immediately warp to
+  // the player's selection. _pendingBootMode / _pendingBootReveal are LEFT unconsumed
+  // (we return before line ~6435 reads them), so the redirect warp still delivers the
+  // (HELM) boot experience — at the player's system. The boot system is only briefly
+  // visible during the redirect turn, exactly as any normal warp departure (never a
+  // fly-in toward its star, never a tour armed there). [WARP] log names the winner.
+  if (_pendingPlayerWarp) {
+    const _pw = _pendingPlayerWarp;
+    _pendingPlayerWarp = null;
+    _foldSnapshotTaken = false; // the redirect is a fresh warp; no FOLD snapshot yet
+    if (flythrough.active) flythrough.stop();
+    if (autoNav.isActive) autoNav.stop();
+    scPilot.stop();
+    console.log(`[WARP] reveal REDIRECT — consuming stashed player warp → ${_pw.name} (seed=${_pw.seed}); boot target gets NO settled arrival (AC6)`);
+    _setWarpTargetFromNavStar({
+      worldX: _pw.wx, worldY: _pw.wy, worldZ: _pw.wz,
+      seed: _pw.seed, name: _pw.name, type: _pw.type,
+    });
+    setTimeout(() => beginWarpTurn(), 0);
+    return;
+  }
 
   // ── Distant deep sky: contemplation view with momentum coast ──
   // Galaxies + globular clusters — camera drifts in with decelerating momentum,
@@ -10375,7 +10473,31 @@ function trySelect(clientX, clientY) {
   // planet doesn't fall through to "nearest background star".
   const bodyHit = hitTestBodies(clientX, clientY);
   if (bodyHit) {
-    scControls.selectTarget(bodyHit);
+    // orrery-coherence-2026-07-15 U1b (bodyClickAction + ShipCameraSystem.glideFocus,
+    // AC5, seam map §9). Max: "click 1 selects, click 2 quickly moves us over to that
+    // body" (glide of the VIEW — his pick). Desktop click AND mobile tap both funnel
+    // here. Click 1, or a click on a NEW body, or ANY HELM click → select, byte-
+    // unchanged. Click 2 on the SAME already-selected body in ORRERY → glide the
+    // VIEW to frame it: cameraController.glideFocus eases the vantage (bypassed stays
+    // FALSE, NEVER flyTo, the pilot stays idle — nothing flies, the view moves).
+    // Ships are select-only by construction: _isSameTarget returns false for ships,
+    // so sameAsSelected is never true for a ship → 'select' — the view-glide stays on
+    // celestial bodies (star/planet/moon), off the quarantined ship-lock path.
+    const _sameAsSelected = _isSameTarget(bodyHit, _selectedTarget);
+    const _clickAct = bodyClickAction({ regime: _scManual ? 'helm' : 'orrery', sameAsSelected: _sameAsSelected }).action;
+    if (_clickAct === 'glide-view' && bodyHit.mesh && !cameraController.bypassed) {
+      // Radius-derived view distance (focusPlanet's ~6R precedent, floored) so a moon
+      // frames close and the star frames wide. Position captured at click time
+      // (bodies move) — the same static-goal idiom as the existing pivot ease;
+      // continuous body-tracking through the glide is a UAT taste item, deliberately
+      // not built here (do not over-engineer).
+      const _viewDist = Math.max(bodyHit.radius * 6, 0.02);
+      soundEngine.play('select');
+      cameraController.glideFocus(bodyHit.mesh.position.clone(), _viewDist);
+      console.log(`[ORRERY] click-2 VIEW glide → ${bodyHit.name} (viewDist=${_viewDist.toFixed(3)}) — nothing flew (bodyClickAction glide-view)`);
+    } else {
+      scControls.selectTarget(bodyHit);
+    }
     return;
   }
 
@@ -10561,6 +10683,10 @@ window._autoSelectWarpTarget = autoSelectWarpTarget;  // DEBUG
 function beginWarpTurn() {
   if (warpEffect.isActive) return;   // already warping
   if (warpTarget.turning) return;    // already turning
+  // orrery-coherence-2026-07-15 U2 (AC6): a fresh warp turn is starting — its FOLD
+  // snapshot hasn't happened yet, so any nav dispatch from here until onPrepareSystem
+  // fires is PRE-FOLD (navDispatchDuringWarp → 'overwrite'). Reset the boundary flag.
+  _foldSnapshotTaken = false;
   if (!_portalLabMode) soundEngine.play('warpLockOn');
 
   // Kill any WASD flight momentum before warping

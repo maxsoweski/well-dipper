@@ -129,6 +129,71 @@ describe('ShipCameraSystem', () => {
       expect(sys.target.x).toBe(0);
     });
 
+    // orrery-coherence-2026-07-15 AC5: glideFocus is the VIEW-ONLY sibling of
+    // focusOn. It must set the yaw/pitch/distance + orbit-pivot as TARGETS and let
+    // the per-frame smoothing ease the vantage over — NOT snap like focusOn.
+    describe('glideFocus() — glides the vantage (does not snap)', () => {
+      it('sets targets but does NOT snap the smoothed fields or the pivot', () => {
+        // Settle a known orbit pose first (camera at ~(0,0,10) looking at origin).
+        sys.target.set(0, 0, 0);
+        sys.yaw = 0; sys.pitch = 0; sys.distance = 10;
+        sys.smoothedYaw = 0; sys.smoothedPitch = 0; sys.smoothedDistance = 10;
+        sys.update(1 / 60);
+
+        const pos = new THREE.Vector3(100, 0, 0);
+        sys.glideFocus(pos, 5);
+
+        // Distance TARGET is set...
+        expect(sys.distance).toBe(5);
+        // ...but the smoothed distance is NOT snapped (focusOn would set it to 5).
+        expect(sys.smoothedDistance).not.toBe(5);
+        // Pivot GOAL is the body, but the live pivot has NOT jumped there.
+        expect(sys._targetGoal.x).toBe(100);
+        expect(sys.target.x).not.toBe(100);
+        expect(sys._transitioning).toBe(true);
+      });
+
+      it('smoothed distance eases toward the target monotonically over update() steps', () => {
+        sys.target.set(0, 0, 0);
+        sys.yaw = 0; sys.pitch = 0; sys.distance = 10;
+        sys.smoothedYaw = 0; sys.smoothedPitch = 0; sys.smoothedDistance = 10;
+        sys.update(1 / 60);
+
+        sys.glideFocus(new THREE.Vector3(100, 0, 0), 5);
+        const d0 = sys.smoothedDistance;
+        sys.update(1 / 60);
+        const d1 = sys.smoothedDistance;
+        sys.update(1 / 60);
+        const d2 = sys.smoothedDistance;
+        // Easing from 10 toward 5: strictly decreasing, still above the target.
+        expect(d1).toBeLessThan(d0);
+        expect(d2).toBeLessThan(d1);
+        expect(d2).toBeGreaterThan(5);
+      });
+
+      it('converges to the framed vantage (distance → target, pivot → body) after many steps', () => {
+        sys.target.set(0, 0, 0);
+        sys.yaw = 0; sys.pitch = 0; sys.distance = 10;
+        sys.smoothedYaw = 0; sys.smoothedPitch = 0; sys.smoothedDistance = 10;
+        sys.update(1 / 60);
+
+        sys.glideFocus(new THREE.Vector3(100, 0, 0), 5);
+        for (let i = 0; i < 800; i++) sys.update(1 / 60);
+        expect(sys.smoothedDistance).toBeCloseTo(5, 1);
+        expect(sys.target.x).toBeCloseTo(100, 1);
+        expect(sys._transitioning).toBe(false);
+      });
+
+      it('focusOn still SNAPS — glide is a separate method, snap semantics preserved', () => {
+        const pos = new THREE.Vector3(50, 0, 0);
+        sys.focusOn(pos, 7);
+        expect(sys.distance).toBe(7);
+        expect(sys.smoothedDistance).toBe(7); // snapped
+        expect(sys.target.x).toBe(50);        // pivot snapped
+        expect(sys._transitioning).toBe(false);
+      });
+    });
+
     it('restoreFromWorldState() reverse-computes orbit', () => {
       camera.position.set(0, 0, 20);
       camera.lookAt(0, 0, 0);

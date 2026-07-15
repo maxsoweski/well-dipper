@@ -517,3 +517,66 @@ export function systemEntryStyle({ regime } = {}) {
 export function tourRearmAllowed({ regime, handsOn } = {}) {
   return regime === 'helm' && handsOn === false;
 }
+
+// ---------------------------------------------------------------------------
+// Orrery-coherence Increment 3 reducers (AC5 + AC6). Same ratified read:
+// "ORRERY is a god's-eye, player-driven contemplation of the system — nothing
+// flies in ORRERY; things only view." These two add the click-2 VIEW glide
+// (AC5) and the mid-boot nav-selection-wins WARP race (AC6) as pure decisions
+// so the live call sites read ONE answer instead of re-deriving them inline.
+// ---------------------------------------------------------------------------
+
+// g. Body-CLICK action (AC5, seam map §9). Max, 2026-07-11 UAT: "click 1 selects,
+// click 2 quickly moves us over to that body" (a smooth glide of the VIEW — his
+// pick over an instant snap, ratified 2026-07-15). The click pipeline (trySelect's
+// body-hit branch, main.js — desktop click AND mobile tap both funnel through it)
+// asks this what a body-click means, given the regime and whether the clicked body
+// is ALREADY the selected one:
+//   - regime 'orrery', SAME body clicked again (sameAsSelected) → 'glide-view'.
+//     The view-only glide (ShipCameraSystem.glideFocus): eases the vantage over to
+//     frame the body (bypassed stays false, NEVER flyTo, the pilot stays idle).
+//     "Nothing flies in ORRERY; things only view."
+//   - regime 'orrery', a NEW/different body → 'select'. Click 1 selects only
+//     (today's scControls.selectTarget — eases the orbit pivot, no vantage move).
+//   - regime 'helm' (any) → 'select'. HELM click semantics are UNCHANGED — a body
+//     click selects; HELM never gets the click-2 glide (its click-to-fly lives on
+//     the separate burn/focus paths, out of scope here).
+//   - garbage/missing regime → 'select' (safe: a plain select moves neither the
+//     ship nor the vantage).
+// The second click glides ONLY when it lands on the SAME body a first click already
+// selected — a first click on a fresh body must select, never glide. Neither action
+// is a flight routing (the ORRERY invariant holds: 'glide-view' moves the VIEW,
+// 'select' moves nothing).
+export function bodyClickAction({ regime, sameAsSelected } = {}) {
+  if (regime === 'orrery' && sameAsSelected) return { action: 'glide-view' };
+  return { action: 'select' };
+}
+
+// h. Nav-dispatch-during-warp decision (AC6, seam map §7). The coordinator-flagged
+// collision from lane C's live drives: a nav-computer warp the player dispatches
+// DURING the boot tour's warp must win — "the player ARRIVES at their SELECTED
+// system," and the boot warp "never completes to a settled arrival at its own
+// target" (player intent beats autopilot). Pending-warp state is ONE mutable
+// warpTarget with NO queue; onPrepareSystem snapshots warpTarget.navStarData at
+// FOLD-start (seam map §7). So WHEN the player's dispatch lands relative to that
+// snapshot decides HOW it wins:
+//   - no warp in flight (warpInFlight false) → 'normal'. Today's behavior, byte-
+//     UNCHANGED: set warpTarget + begin the turn (or ORRERY instant-cut). This is
+//     the overwhelmingly common path — HELM's normal warp is untouched, so the
+//     "HELM behavior byte-equivalent" guardrail holds for every non-collision warp.
+//   - warp in flight, PRE-FOLD (foldSnapshotTaken false) → 'overwrite'. The
+//     player's warpTarget write lands BEFORE the FOLD snapshot reads it, so the
+//     in-flight warp naturally resolves to the player's star. Make that deliberate
+//     + logged (and do NOT start a second turn — one warp is already in flight).
+//   - warp in flight, POST-FOLD (foldSnapshotTaken true) → 'stash'. Generation
+//     already committed to the in-flight (boot) target; overwriting warpTarget is
+//     too late. Stash the player's pick and consume it at the reveal seam
+//     (warpRevealSystem): suppress the boot target's reveal/tour-arm and immediately
+//     begin the player's warp — the boot target gets no settled arrival.
+// Pure so main.js reads ONE answer instead of re-deriving the FOLD-timing race.
+// Bools coerced so garbage inputs can't mis-route — a missing warpInFlight → the
+// safe 'normal' (identical-to-today) default.
+export function navDispatchDuringWarp({ warpInFlight, foldSnapshotTaken } = {}) {
+  if (!warpInFlight) return { action: 'normal' };
+  return foldSnapshotTaken ? { action: 'stash' } : { action: 'overwrite' };
+}
