@@ -4,8 +4,14 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> **▶ LANE B (2026-07-15, build session + fresh-session re-check): `orrery-coherence-2026-07-15`
-> → VERIFIED_PENDING_MAX `e23050b` — ⭐ AWAITING MAX's AC8 UAT.** Serves the SCREENSAVER heart
+> **▶ LANE B (2026-07-16, UAT round 1): `orrery-coherence-2026-07-15` → VERIFIED_PENDING_MAX
+> `ffea67c` — ⭐ AWAITING MAX's re-UAT (round 2).** Round-1 UAT found 4 findings, ONE root
+> cause (instant-cut skipped camera-mode housekeeping; persisted FLIGHT mode left the flight
+> integrator owning the camera — framing writes never moved it) + skipped A1 orbit-line sync.
+> Fixed + live-verified through the real boot circuit at `ffea67c` (entry: TOY_BOX assert,
+> 1.8x outer-orbit frame, pitch 0.7 tilt, maxDistance 3x, _syncOrbitsToMode). Residual taste:
+> drag-sign convention, mirrored backside label. Full record: contract statusNote +
+> `~/briefings/handoff-lane-B-uat-round-2-2026-07-16.md`. Serves the SCREENSAVER heart
 > (35%): ORRERY is now player-driven viewing by construction — nothing flies in ORRERY. Built in
 > 3 opus-workflow increments (AC1 reducers TDD `orreryCoherence.test.js` → entry/timers/BURN/
 > autopilot wiring → glide/nav-wins/re-arm), each 2-lens adversarially reviewed; verify-full
