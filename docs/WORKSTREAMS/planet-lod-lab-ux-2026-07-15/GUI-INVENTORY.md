@@ -120,7 +120,7 @@ Per-frame writes gate each family in the render loop (`uX.value = state.xEnabled
 | Folder | Class | Ctrls | JR | Evidence (symbols) |
 |---|---|---|---|---|
 | Limb glow (F34) | LEGACY | 6 | sometimes | `fLimb`, `limbEnabled`, `limbStrength` derived (hasAtmo gate, per-preset `LIMB_COLOR_BY_PRESET`); geometry-placed. |
-| Terminator gradient (F35) | LEGACY | 5 | sometimes | `fTerm`, `terminatorEnabled`, `termStrength` derived, `TERM_COLOR_BY_PRESET`. |
+| Terminator gradient (F35) | LEGACY | 5 | no | `fTerm`, `terminatorEnabled`, `termStrength` derived, `TERM_COLOR_BY_PRESET`. **Max ruling 2026-07-16: disabled totally — removed from all `DEFAULT_DRESSING` entries; doesn't work, and day/night shading belongs to the main game's lighting engine. Manual toggle retained (reversible-first).** |
 | Sunglint (F36) | LEGACY | 6 | sometimes | `fGlint`, `sunglintEnabled`, `specStrength` derived (F14 sea gate). |
 | Aurorae (F37) | LEGACY | 5 | sometimes | `fAurora`, `auroraEnabled`, `auroraIntensity` derived (D13 field gate). |
 | Airglow (F38) | LEGACY | 3 | sometimes | `fAirglow`, `airglowEnabled`, `airglowIntensity`×`featureRelevant.airglow`. |

@@ -487,21 +487,24 @@ for (const [key, a] of Object.entries(ASSOCIATIONS)) {
 // Every entry must be ⊆ ASSOCIATIONS[key].rendersOn for its preset — the lab warns
 // at boot if this drifts. Dressing is PLACEHOLDER legacy slated for replacement;
 // the lab's World Engine section lists it as such (AC-BOOT-PROVENANCE).
+// Terminator gradient (F35) is EXCLUDED from every entry (Max ruling 2026-07-16):
+// disabled totally — it doesn't work, and day/night shading is ultimately the main
+// game's lighting engine's job. Manual toggle remains in the lab's Optical group.
 export const DEFAULT_DRESSING = {
-  'Rocky (Earthlike)':          ['lakes', 'coastlines', 'clouds', 'limb', 'terminator'],
-  'Ocean (temperate)':          ['lakes', 'coastlines', 'clouds', 'limb', 'terminator', 'sunglint'],
-  'Eyeball (locked temperate)': ['lakes', 'coastlines', 'clouds', 'limb', 'terminator'],
-  'Venus (sulfuric shroud)':    ['clouds', 'limb', 'terminator'],
-  'Mars (arid rocky)':          ['dust', 'limb', 'terminator'],
-  'Titan (methane seas)':       ['lakes', 'coastlines', 'clouds', 'limb', 'terminator'],
+  'Rocky (Earthlike)':          ['lakes', 'coastlines', 'clouds', 'limb'],
+  'Ocean (temperate)':          ['lakes', 'coastlines', 'clouds', 'limb', 'sunglint'],
+  'Eyeball (locked temperate)': ['lakes', 'coastlines', 'clouds', 'limb'],
+  'Venus (sulfuric shroud)':    ['clouds', 'limb'],
+  'Mars (arid rocky)':          ['dust', 'limb'],
+  'Titan (methane seas)':       ['lakes', 'coastlines', 'clouds', 'limb'],
   'Magma (K2-141b)':            ['magma'],
   'Carbon (high C/O)':          ['carbon'],
   'Crystal (faceted)':          ['facets'],
-  'Gas giant (Jovian)':         ['clouds', 'limb', 'terminator'],
-  'Gas giant (Saturnian)':      ['clouds', 'limb', 'terminator'],
-  'Ice giant (Neptunian)':      ['clouds', 'limb', 'terminator'],
-  'Sub-Neptune (hazy)':         ['clouds', 'limb', 'terminator'],
-  'Hot Jupiter (locked giant)': ['clouds', 'limb', 'terminator'],
+  'Gas giant (Jovian)':         ['clouds', 'limb'],
+  'Gas giant (Saturnian)':      ['clouds', 'limb'],
+  'Ice giant (Neptunian)':      ['clouds', 'limb'],
+  'Sub-Neptune (hazy)':         ['clouds', 'limb'],
+  'Hot Jupiter (locked giant)': ['clouds', 'limb'],
   'Lava (hot airless)':         [],   // airless: the writer carrier (magmatism) IS the look
   'Frozen (airless)':           [],   // airless: shell/despun writer carrier
   'Europa (icy moon)':          [],   // airless: shell writer carrier
