@@ -192,7 +192,14 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > BURN) → now POSITION_MATCH_TOL (0.1 pc = F1 bin). **NEW lane-B flag:** warp dispatch ungated during
 > in-flight warp (mid-flight commit re-targets against a moving frame). Max notes: R2 Proxima-marker
 > arrival = whole α Cen system (taste call); formerly-divergent stars legitimately changed contents.
-> **▶ NEXT: Max UAT = the overlay AC9 re-run on :5176** → then overlay close-out sequence (§7 item 3).
+> **▶ AC9 RE-RUN STARTED (2026-07-15): finding #3 recorded `d502ec8`** — far-companion systems read
+> as adjacent duplicate binaries (Max verbatim + live-verified mechanism in ac9-uat-findings.md:
+> SYSTEM view titles by clicked marker; `farCompanions` never rendered; no prism co-membership cue —
+> DATA layer verified coherent). Options (a) system-identity titling + render fars (seam-local),
+> (b) component-centric arrival (R2, bigger), (c) prism co-membership cue. **Max tabled → fresh
+> session REASSESSES the fork first, then recs** (his ruling before any build). Handoff:
+> `~/briefings/handoff-lane-C-far-companion-fork-2026-07-15.md`. AC9 verdict still open; overlay
+> close-out remains gated on AC9-PASS. Branch 25 ahead of origin (push Max-gated).
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
