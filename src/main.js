@@ -6369,6 +6369,17 @@ function warpSwapSystem() {
 // cameraController.bypassed stays FALSE (Toy-Box orbit) — nothing flies.
 function _frameSystemForOrrery() {
   cameraController.bypassed = false;
+  // UAT fix 2026-07-16 (Max findings F1/F4, root cause): the instant-cut path
+  // skipped the camera-mode housekeeping every legacy entry path did. The mode
+  // is PERSISTED (_loadPersistedMode), so a fresh boot can arrive here in
+  // FLIGHT — and in FLIGHT the flight integrator owns the camera position:
+  // restoreFromWorldState/viewSystem set target+distance but the camera never
+  // travels (observed live: system at ~690M units, camera parked near origin →
+  // sub-pixel system, starfield-only clicks, drag routed to the decaying
+  // flight look-offset = "wonky/inverted"). TOY_BOX hands the camera to
+  // _applyOrbit, which places it at target+spherical(distance) — the actual
+  // instant framed cut.
+  cameraController.setCameraMode(CameraMode.TOY_BOX);
   // Live-drive fix (AC2): instant-cut systems (spawnSystem forWarp:false) sit at
   // their true galactic world position — the warp flow's rebase-to-origin never
   // ran. Anchor the frame on the SYSTEM CENTER (star mesh), not the origin, or
@@ -6409,7 +6420,19 @@ function _frameSystemForOrrery() {
   } else {
     systemRadius = 200;
   }
-  cameraController.viewSystem(systemRadius, _center);
+  // UAT fix 2026-07-16 (F4): Max's entry spec — "far enough to see the whole
+  // system, close enough to see all the orbits." Pad the radius 1.2x (net 1.8x
+  // outer orbit through viewSystem's internal 1.5x) so the outermost ring fits
+  // fully under the overview tilt (1.5x clipped it bottom-of-frame, verified
+  // live), and pitch the vantage ~40° above the plane so the orrery reads as
+  // an orrery instead of an edge-on line (restoreFromWorldState back-solves
+  // pitch≈0 from the cross-galaxy approach). Raise the zoom ceiling to 3x the
+  // outer orbit — the legacy 50,000 cap predates scene-scale orbits and would
+  // snap the framed 1.8R vantage down to the cap on the first wheel tick.
+  cameraController.viewSystem(systemRadius * 1.2, _center);
+  cameraController.pitch = 0.7;
+  cameraController.smoothedPitch = 0.7;
+  cameraController.maxDistance = Math.max(50000, systemRadius * 3);
 }
 
 // orrery-coherence-2026-07-15 W2 (AC2, seam map §2): the ORRERY production
@@ -6453,6 +6476,11 @@ async function _enterSystemInstantOrrery() {
     _pendingBootReveal = false;
     _pendingBootMode = 'orrery';
     _frameSystemForOrrery();
+    // UAT fix 2026-07-16 (F2): the instant-cut bypasses warpRevealSystem, so it
+    // must run the A1 orbit-line sync the reveal path runs — ORRERY defaults
+    // orbit lines ON (unless the player explicitly overrode). Without this the
+    // lines stayed at the showOrbits:false boot default on every instant entry.
+    _syncOrbitsToMode();
     console.log('[ORRERY] instant framed cut — system entered, nothing flew (systemEntryStyle instant-cut)');
   } catch (e) {
     console.error('[ORRERY] instant-cut entry failed:', e);
