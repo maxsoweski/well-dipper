@@ -4,8 +4,21 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> **▶ LANE B (2026-07-16, UAT round 1): `orrery-coherence-2026-07-15` → VERIFIED_PENDING_MAX
-> `ffea67c` — ⭐ AWAITING MAX's re-UAT (round 2).** Round-1 UAT found 4 findings, ONE root
+> **▶ LANE B (2026-07-17, UAT round 2): `orrery-coherence-2026-07-15` → VERIFIED_PENDING_MAX
+> `31eae77` — ⭐ AWAITING MAX's re-UAT (round 2b: A2–A4 feel + B5–B7).** Round 2 (2026-07-17):
+> A1/A2 PASSED, then Max's 3 new findings (dogleg glide / moons unapproachable / planets-far
+> stars-close) root-caused by investigation workflow wf_c2ee4336-a9f to ONE method (click-2
+> glideFocus: 3 mismatched ease channels; absolute floors vs tiny moons; flat 6R vs 3R star
+> glow) → FIXED `31eae77` via TDD workflow wf_635f2767-237 (single-channel glide w/ live body
+> tracking + orreryStandoff table {star 15/planet 4/moon 2.6, 0.002 degenerate floor} + focus
+> min-distance 1.05R w/ overview+mode-swap resets; red tests measured dogleg 40.67%→0.00%).
+> 2-lens adversarial PASS ×2, 3 advisories folded; suites 428/428, guards EMPTY, live drive
+> green (Saturn glide 4R exact, floors exact, Esc cascade resets, console clean). Standoff
+> numbers + 1.1s glide duration = one-line tunes if UAT feel is off. NEW pre-existing taste
+> item: evenly-spaced wide systems frame at full outer orbit (dot-in-a-starfield; gap-break
+> factor Max-re-rulable). Round-1 record below stands.
+>
+> **(round 1, superseded)** Round-1 UAT found 4 findings, ONE root
 > cause (instant-cut skipped camera-mode housekeeping; persisted FLIGHT mode left the flight
 > integrator owning the camera — framing writes never moved it) + skipped A1 orbit-line sync.
 > Fixed + live-verified through the real boot circuit at `ffea67c` (entry: TOY_BOX assert,
