@@ -1,6 +1,6 @@
 # BOMBARDMENT-MAP — the `craterField` host channel (V2-5)
 
-**Workstream:** `world-engine-v2-5-bombardment-2026-07-17` · **Slice 1 landed:** 2026-07-17
+**Workstream:** `world-engine-v2-5-bombardment-2026-07-17` · **Slices 1-3 landed:** 2026-07-17
 **Writer:** `src/worldengine/base/bombardment.js` · **Channel:** `carrier.craterField` (signed `Float32Array`, unhashed)
 
 This is the `record-build-intent` note + the AC-0 named-consumer documentation for the crater-population
@@ -26,7 +26,7 @@ un-cratered ground and on every non-target body.
   `T_eq`, `rawTidalIoRatio`) + `carrier.verts/adj` + its own `alea('bombard:'+seed)` stream. It reads **no
   geodynamic tuple, regime, composition class, archetype, or label** and imports **no derived-dispatch
   module** — so the E1-blind shadow-audit passes by construction.
-- **Composited** by `route()` at render (SLICE 2): `compositeMargins` will sum `height + shelfDepth +
+- **Composited** by `route()` at render (SLICE 2, live): `compositeMargins` sums `height + shelfDepth +
   craterField` so the crater relief displaces AND reshades (recomputed gradient). `carrier.height` is **never**
   mutated — the 75-golden byte-identity holds (craterField is outside `HASHED_FIELDS`; byte-inert by
   own-channel + independent-alea-stream + `route()`-only composite).
@@ -38,7 +38,7 @@ un-cratered ground and on every non-target body.
 ## Named consumers (AC-0 ch.2)
 
 1. `route()` → `compositeMargins` (SLICE 2) — the render composite.
-2. The lab `✦ current` summary + dropdown (SLICE 3) — reads the live carrier field, label-free.
+2. The lab `✦ current` summary (SLICE 3, live) — reads the live carrier field, label-free (`carrier.craterField.some(v=>v!==0)` ⇒ `craters: writer overprint`); NO `FEATURES` entry, NO `*Enabled` key. Slice 3 also adds the `age (Gyr)` driver-override slider + plumbs the `gravity`/`age` sliders into `condition.surfaceGravity`/`condition.age`; the preset drops into the lab dropdown after Mars with `DEFAULT_DRESSING: []` (the writer carrier IS the look).
 3. The #6 epoch editor (future) — the host it edits.
 
 ## Deliberate non-goals (this increment)

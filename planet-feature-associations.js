@@ -508,4 +508,5 @@ export const DEFAULT_DRESSING = {
   'Lava (hot airless)':         [],   // airless: the writer carrier (magmatism) IS the look
   'Frozen (airless)':           [],   // airless: shell/despun writer carrier
   'Europa (icy moon)':          [],   // airless: shell writer carrier
+  'Moon/Mercury (impact-airless)': [], // V2-5 airless: the writer carrier (bombardment overprint) IS the look
 };
