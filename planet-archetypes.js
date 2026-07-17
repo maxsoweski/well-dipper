@@ -31,14 +31,14 @@ export const FEATURES = {
   // provenance (lab-ux 2026-07-15): 'writer' = a worldengine writer authors what this
   // renders (placement/physics; the folder's knobs stay display gates); 'grain' = legacy
   // body whose orientation reads the shared WS4 tectonic grain (writer-oriented);
-  // absent = pure legacy synth. The GUI renders badges from THIS field — the atmo
-  // branch flips greatSpot/stormTrain/polarVortex to 'writer' when #3b merges.
+  // absent = pure legacy synth. The GUI renders badges from THIS field —
+  // greatSpot/stormTrain/polarVortex flipped to 'writer' at the #3b merge (2026-07-17).
   bands:      { label: 'Zonal belts (F24)',     enableKey: 'bandsEnabled',     archetypes: ['gas-giant','hot-jupiter'], provenance: 'writer' },  // climate-e5.js writer feeds aBand
   jets:       { label: 'Jets & shear (F25)',    enableKey: 'jetsEnabled',      archetypes: ['gas-giant','hot-jupiter'], provenance: 'writer' },  // climate-e5.js writer feeds aShear
   weatherBands:{ label: 'Weather bands (F26)',  enableKey: 'weatherBandsEnabled', archetypes: ['tectonic-terrestrial'] },
-  greatSpot:  { label: 'Great spot (F27)',      enableKey: 'greatSpotEnabled', archetypes: ['gas-giant','hot-jupiter'] },
-  stormTrain: { label: 'Storm clusters (F28)',  enableKey: 'stormTrainEnabled', archetypes: ['gas-giant','hot-jupiter'] },
-  polarVortex:{ label: 'Polar vortex (F29)',    enableKey: 'polarVortexEnabled', archetypes: ['gas-giant','hot-jupiter'] },
+  greatSpot:  { label: 'Great spot (F27)',      enableKey: 'greatSpotEnabled', archetypes: ['gas-giant','hot-jupiter'], provenance: 'writer' },  // storm-e.js writer authors placement/regime (#3b merge 2026-07-17)
+  stormTrain: { label: 'Storm clusters (F28)',  enableKey: 'stormTrainEnabled', archetypes: ['gas-giant','hot-jupiter'], provenance: 'writer' },  // storm-e.js writer authors placement/regime (#3b merge 2026-07-17)
+  polarVortex:{ label: 'Polar vortex (F29)',    enableKey: 'polarVortexEnabled', archetypes: ['gas-giant','hot-jupiter'], provenance: 'writer' },  // storm-e.js writer authors placement/regime (#3b merge 2026-07-17)
   lightning:  { label: 'Lightning (F30)',       enableKey: 'lightningEnabled', archetypes: ['gas-giant','tectonic-terrestrial','hot-jupiter'] },
   clouds:     { label: 'Clouds & haze (F31)',   enableKey: 'cloudsEnabled',    archetypes: ['tectonic-terrestrial','volatile-cold','gas-giant','hot-jupiter'] },
   // F32/F33 thermal pair — ONE temperature curve, two ownable consumers (built
