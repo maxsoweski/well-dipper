@@ -1,0 +1,45 @@
+{
+  "workstream": "orrery-coherence-2026-07-15",
+  "commit": "802cceb",
+  "date": "2026-07-17",
+  "driver": "working-Claude (chrome-devtools, real canvas events, :5173, debug Chrome :9223 working tab)",
+  "context": "Closes the AC5 cells named by verify-light wf_689b62f9-01e for the two-phase center-then-fly glide redesign (Max's round-2b ruling: 'make orrery navigation always fly straight, by first centering on the target destination before flying over towards it'; built via wf_8b343c64-ca1). All cells driven with real mousedown/mouseup/click/keydown events through trySelect, autoNav stopped first per feedback_wd-nav-drives-autopilot-off, boot via the ORRERY splash chooser. All shape measures are camera-to-mesh RELATIVE (rebase-immune); aim/approach phase reads via cc._glidePhase for diagnostics only.",
+  "cells": {
+    "two-phase-planet-race": {
+      "result": "PASS",
+      "evidence": "THE UAT-reported scenario, worst case: Neptune from overview with click-2 racing the select-pivot (80ms). Trace: AIM ran 0.071s (= 0.45 s/rad x 9deg, the design curve), angle eased 8.59deg -> 0.12deg with camera POSITION frozen — after the arm-transition sample, max camera step 7 units on a 113k-unit approach (0.006%, sub-pixel). APPROACH began at 0.06deg off-center, body pinned <=0.06deg every sampled frame to arrival, finalDist 0.6612 = 4R exact. [ORRERY] click-2 VIEW glide dispatch line fired. The side-slide is gone by construction, live."
+    },
+    "two-phase-moon": {
+      "result": "PASS",
+      "evidence": "Tethys (r=0.00354) from Saturn vantage: aim 6.69deg -> 0.026deg at approach start, arrived 0.0092 = 2.6R exact, focus floor 0.00371 = 1.05R exact."
+    },
+    "two-phase-star-aim-skip": {
+      "result": "PASS",
+      "evidence": "Sol (r=4.65) clicked dead-center at overview: aim correctly SKIPPED (<2deg threshold, aimFrames=0), straight approach, arrived 69.750 = 15R exact, floor 4.8825 = 1.05R exact. Matches the round-2 expected numbers to the digit — standoff table unregressed."
+    },
+    "mid-AIM-interrupt": {
+      "result": "PASS",
+      "evidence": "Real drag (mousedown+mousemove) dispatched at a verified phase-0 (AIM) moment, ~2 frames into a Neptune race glide: _gliding true->false immediately, no NaN, max single-frame camera step during the 60-frame convergence window 10.1 units at overview scale (invisible), settled to 0 within the window. The known carried advisory (post-interrupt convergence under real per-frame trackTarget ordering, measured strictly smaller than the shipped single-channel's window by the mechanism lens) reproduced as a gentle settle, not a pop, in this configuration."
+    },
+    "repeat-and-cross-glides": {
+      "result": "PASS",
+      "evidence": "Distances all exact across the session: Neptune 0.6612 = 4R (3 separate drives), Uranus 0.6833 = 4R, Saturn 1.6103 = 4R, Tethys 0.0092 = 2.6R, Sol 69.750 = 15R. Repeat-glide: re-click at Uranus arrival stays parked at 0.6833, tracking held. Cross-glide (settled two-click on Neptune from a prior park): armed, flew, arrived 0.6612, post-arrival tracking held 600+ frames with zero spurious glide-end. An earlier apparent early-end at 1.55 was reproduced as an instrument artifact of 80ms-stale synthetic click coordinates and vanished with human-plausible timing."
+    },
+    "phoebe-floor": {
+      "result": "NOT-DRIVEN",
+      "evidence": "Phoebe (r=0.0007, the 0.002 degenerate-floor cell) was NOT re-driven at 802cceb: 3 routes attempted (overview race click; 300-frame poll-and-click at its live projection post-select, 2100 jittered hit-tests, window never re-opened; Saturn-vantage scan — not hit-testable there). Compensating evidence: orreryStandoff.js is byte-unchanged since 31eae77 where this exact cell was live-verified PASS (arrived 0.0020); the arrival-at-standoff path is proven exact live on five bodies across all three kinds this session; the floor branch is unit-covered (T4). Observation for the taste queue (pre-existing, hit-test code untouched by 802cceb): a sub-pixel moon selected from overview distance may not offer a click-2 window until the player zooms in."
+    },
+    "console": {
+      "result": "PASS",
+      "evidence": "Zero errors, zero warnings across the entire drive session (boot, chooser, enterSol, all glides, interrupt, Esc cascades)."
+    }
+  },
+  "ac6-disposition": "Unchanged: not agent-drivable per the standing round-1 ruling; stays with Max's hands as re-UAT script step B7 (debug-hook synthetic retry available if he prefers agent closure). 802cceb's diff cannot have touched it (main.js/NavComputer.js untouched).",
+  "adjudication": "AC5 integration layer: PASS at 802cceb on the cells above (the four named by verify-light wf_689b62f9-01e: exact-UAT-scenario, mid-AIM interrupt, moving-body glide [Neptune is in live orbit in every drive], distance spot-repeats). Unit layer already PASS per the verify run. AC6 remains Max's per the standing ruling; AC8 (UAT) deferred-to-max as always. Net: VERIFIED_PENDING_MAX 802cceb.",
+  "residuals": [
+    "Total glide time grew by the aim phase: worst case 0.7s aim + 1.1s approach = 1.8s (typical edge click ~1.3s) vs the shipped 1.1s — taste-tunable constants (GLIDE_AIM_SECONDS_PER_RAD 0.45, cap 0.7s, skip <2deg), flagged for Max's UAT pacing check.",
+    "Mid-AIM/mid-glide interrupt feel (coast/convergence as smoothing settles into the back-solved orbit) = carried UAT taste item, now strictly gentler than the shipped single-channel per the mechanism lens's comparative measurement.",
+    "Phoebe degenerate-floor cell not re-driven live (see phoebe-floor cell for the compensating evidence).",
+    "Sub-pixel moon click-2 reachability from overview distance (pre-existing, surfaced this session) — taste-queue candidate, not a 802cceb defect."
+  ]
+}

@@ -4,13 +4,19 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> **▶ LANE B (2026-07-17, UAT round 2b DONE): `orrery-coherence-2026-07-15` VERIFIED_PENDING_MAX
-> `31eae77` — round 2b PASSED except ONE residual (occasional side-slide approaching planets).
-> Max RULED the successor design: CENTER-THEN-FLY two-phase glide (aim until centered, then
-> translate straight — body centered throughout). ⭐ NEXT = FRESH SESSION builds it
-> workflows-first: `~/briefings/handoff-lane-B-glide-center-then-fly-2026-07-17.md`
-> (F2 moons + F3 framing UAT-passed; B5–B7 + taste calls still owed after the fix; verify-light
-> wf_ce03c185-1dd + live moon/star/interrupt closure at `da60f65`).** Round 2 (2026-07-17):
+> **▶ LANE B (2026-07-17, later session — TWO-PHASE GLIDE BUILT): `orrery-coherence-2026-07-15`
+> VERIFIED_PENDING_MAX `802cceb`. Max's ruled center-then-fly redesign landed via TDD workflow
+> wf_8b343c64-ca1 (AIM rotates in place until centered [0.45 s/rad, cap 0.7s, skip <2°], then
+> APPROACH flies straight with the body pinned; trackTarget cedes the target while gliding —
+> retires advisory #3; 2 opus lenses PASS, 0 MUST-FIX, 5 advisories folded). Suites 433/433,
+> guards EMPTY, main.js untouched. Verify-light wf_689b62f9-01e unit-PASS + AC5 live-closed
+> same day (verdict-live-drives-802cceb.json): race-click Neptune AIM 8.59°→0.12° camera-frozen
+> then approach ≤0.06° to 4R exact; Tethys 2.6R + Sol aim-skip 15R exact; mid-AIM interrupt
+> clean; console clean (Phoebe floor cell not re-drivable — compensated, see evidence file).
+> ⭐ NEXT = Max's UAT round 2c: THE side-slide re-test (click off-center body, click again —
+> centers FIRST, then flies straight) + pacing taste (aim adds ≤0.7s; one-line tunables) +
+> B5–B7 + taste calls. Then Rule-3 docs → Shipped → real merge (master carries lane C) → push.**
+> Round 2 (2026-07-17, earlier):
 > A1/A2 PASSED, then Max's 3 new findings (dogleg glide / moons unapproachable / planets-far
 > stars-close) root-caused by investigation workflow wf_c2ee4336-a9f to ONE method (click-2
 > glideFocus: 3 mismatched ease channels; absolute floors vs tiny moons; flat 6R vs 3R star
