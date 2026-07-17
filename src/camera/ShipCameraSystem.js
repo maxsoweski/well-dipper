@@ -66,10 +66,37 @@ const CHASE_SCALE_MIN = 0.3;
 const CHASE_SCALE_MAX = 4.0;
 const CHASE_SCALE_STEP = 0.1;                // per wheel tick
 
-// ORRERY single-channel glide (orrery-coherence-2026-07-15): seconds for the
-// normalized glide progress t to run 0→1 (one easing curve). "Quick but smooth"
-// — comparable to the old 3-channel ease it replaces; tunable at UAT.
-const GLIDE_DURATION = 1.1;
+// ORRERY two-phase glide (orrery-coherence-2026-07-15 → round 2b, Max's ruling
+// 2026-07-17: "make orrery navigation always fly straight, by first centering on
+// the target destination before flying over towards it"). History trail:
+//   3-channel — pivot/yaw-pitch/log-distance eased at mismatched rates toward
+//     independent endpoints → the distance collapsed before the pivot carried
+//     over → a curved DOGLEG.
+//   single-channel (31eae77) — one t drove camera P_start→P_final and target
+//     T_start→body together → straight PATH, but the look ROTATED while the camera
+//     translated, so a body clicked at screen edge slid edge→center WHILE flying
+//     — read as a lateral slide-in. Straight path, wrong feel.
+//   two-phase (this) — PHASE 1 AIM rotates the view in place (camera POSITION
+//     frozen) until the body is centered, THEN PHASE 2 APPROACH translates the
+//     camera straight down the settled camera→body ray with the body pinned
+//     centered. Translation only ever happens while the body is already centered,
+//     so a side-slide is impossible for poses reachable from the ORRERY overview
+//     (body on-screen, in front, near the orbital plane — a hypothetical behind-
+//     the-camera or near-zenith aim sweep could still roll the view, but no
+//     ORRERY click can produce one).
+// All durations are taste-tunable at Max's UAT.
+const GLIDE_APPROACH_DURATION = 1.1;    // s for the straight approach ease t: 0→1 (smoothstep)
+// AIM duration scales with the INITIAL angular offset between the current look
+// direction and the camera→body ray, so an edge-of-screen click aims longer than a
+// near-center one. Capped, and skipped entirely when already essentially centered.
+const GLIDE_AIM_SECONDS_PER_RAD = 0.45; // ⇒ ~0.24s at 30°, hits the cap near ~89°
+const GLIDE_AIM_MAX_DURATION = 0.7;     // s cap on the aim ease
+const GLIDE_AIM_MIN_ANGLE = (2 * Math.PI) / 180; // <2° off-axis ⇒ skip aim, go straight to approach
+
+// Glide phase tags (internal; the tests detect the AIM→APPROACH boundary
+// implementation-agnostically as the first frame the camera position moves).
+const GLIDE_PHASE_AIM = 0;
+const GLIDE_PHASE_APPROACH = 1;
 
 const STORAGE_KEY = 'wd_cameraMode';
 
@@ -250,16 +277,21 @@ export class ShipCameraSystem {
     this._transitioning = false;
     this._transitionSpeed = 0.06;
 
-    // ── ORRERY single-channel glide (orrery-coherence-2026-07-15) ──
-    // A dedicated glide state used ONLY by glideFocus (the click-2 view move),
-    // replacing the 3-channel (pivot/yaw-pitch/distance) decomposition that
-    // doglegged. One normalized t drives camera P_start→P_final and target
-    // T_start→body on the SAME curve, re-derived from the body's LIVE position
-    // each frame. `_glideBody` is the caller's LIVE Vector3 (NOT a clone), so a
-    // moving moon is met at its live spot. `_glideDir` freezes the approach
-    // direction at glide start.
+    // ── ORRERY two-phase glide (orrery-coherence-2026-07-15 → round 2b) ──
+    // Dedicated glide state used ONLY by glideFocus (the click-2 view move).
+    // PHASE 1 AIM: camera POSITION frozen at `_glidePStart`, the look target eases
+    //   `_glideTStart`→body over `_glideAimDuration` (∝ initial off-axis angle)
+    //   until the body is centered. PHASE 2 APPROACH: camera translates
+    //   `_glidePStart`→(body+`_glideDir`·standoff) over GLIDE_APPROACH_DURATION,
+    //   the look pinned to the live body. `_glideBody` is the caller's LIVE Vector3
+    //   (NOT a clone) so a moving moon is met at its live spot; `_glideDir` is
+    //   re-derived from (P_start−body_live) at the phase boundary (the body may
+    //   have moved during the aim) and frozen for the straight approach.
     this._gliding = false;
-    this._glideT = 0;
+    this._glidePhase = GLIDE_PHASE_AIM; // AIM until the body is centered, then APPROACH
+    this._glideAimT = 0;                // 0→1 aim ease progress
+    this._glideAimDuration = 0;         // s, set per-glide from the initial off-axis angle
+    this._glideApproachT = 0;           // 0→1 approach ease progress
     this._glideBody = null;
     this._glideStandoff = 0;
     this._glideDir = new THREE.Vector3(0, 0, 1);
@@ -611,29 +643,23 @@ export class ShipCameraSystem {
   // AC5, Max: "click 1 selects, click 2 quickly moves us over to that body"). A
   // SEPARATE method (not an option on focusOn) so focusOn's SNAP semantics stay
   // byte-identical for its debug callers. Where focusOn snaps the whole pose,
-  // glideFocus arms a dedicated single-channel glide (UAT round 2 redesign — see
-  // _updateGlide): one normalized t moves camera P_start→P_final and target
-  // T_start→body on the SAME curve, re-derived from the body's LIVE position each
-  // frame. It never touches _applyOrbit/adoptCurrentPose math (the drift guard),
-  // and is Toy-Box orbit only: the caller keeps bypassed=false and never calls
-  // flyTo, so the pilot is untouched — nothing flies, the VIEW moves. `position`
-  // is the caller's LIVE Vector3 (mesh.position, NOT a clone) so a moving moon is
-  // met at its live spot; drag/wheel/select hand the glide back to orbit.
+  // glideFocus arms a dedicated TWO-PHASE glide (round 2b — see GLIDE_* consts +
+  // _updateGlide): PHASE 1 rotates the view in place until the body is centered,
+  // PHASE 2 flies the camera straight down the settled camera→body ray to the
+  // standoff. This retires the single-channel side-slide (its look rotated WHILE
+  // the camera translated, so an edge-clicked body slid edge→center while flying).
+  // It never touches _applyOrbit/adoptCurrentPose math (the drift guard), and is
+  // Toy-Box orbit only: the caller keeps bypassed=false and never calls flyTo, so
+  // the pilot is untouched — nothing flies, the VIEW moves. `position` is the
+  // caller's LIVE Vector3 (mesh.position, NOT a clone) so a moving moon is met at
+  // its live spot; drag/wheel/select hand the glide back to orbit mid-EITHER phase.
   glideFocus(position, viewDistance = 8) {
-    // Single-channel glide (orrery-coherence-2026-07-15, UAT round 2). The old
-    // 3-channel decomposition (pivot @0.06 + yaw/pitch @0.08 + log-distance @0.08,
-    // composed as camera = target + smoothedDistance·dir) eased its channels at
-    // mismatched rates toward independent endpoints, so the distance collapsed
-    // toward the OLD pivot before the pivot carried over → a curved dogleg. Here
-    // the WHOLE move is ONE t: camera runs P_start→P_final and target runs
-    // T_start→body on the SAME easing curve (update()→_updateGlide), arriving
-    // together along a straight segment.
     this._transitioning = false;    // this glide owns the move — no pivot ease
     this._returningToOrbit = false;
 
-    // Freeze the approach direction from the CURRENT camera→body ray. P_final is
-    // re-derived from the body's LIVE position each frame (below), but along THIS
-    // frozen direction — keeping the camera on its current side of the body.
+    // Initial approach direction from the CURRENT camera→body ray. Re-derived at
+    // the AIM→APPROACH boundary in _beginApproachPhase (the body may move during
+    // the aim), but kept here for the degenerate fallback + the flight seed below.
     const dir = _v1.copy(this.camera.position).sub(position);
     const len = dir.length();
     if (len > 1e-6) dir.divideScalar(len);
@@ -641,41 +667,101 @@ export class ShipCameraSystem {
     this._glideDir.copy(dir);
 
     // `position` is the caller's LIVE Vector3 (mesh.position) — stored by REFERENCE,
-    // NOT cloned, so _updateGlide re-reads a moving body's live spot (meets, not chases).
+    // NOT cloned, so the glide re-reads a moving body's live spot (meets, not chases).
     this._glideBody = position;
     this._glideStandoff = viewDistance;
     this._glidePStart.copy(this.camera.position);
     this._glideTStart.copy(this.target);
-    this._glideT = 0;
+
+    // AIM duration ∝ the INITIAL angular offset between the current look direction
+    // and the camera→body ray (edge-of-screen click aims longer than a near-centre
+    // one), capped, and skipped when already essentially centered (no aim stall on
+    // the trivial on-axis click — the glide goes straight to the approach).
+    this.camera.getWorldDirection(_v3);          // current forward
+    const toBody = _v4.copy(position).sub(this.camera.position);
+    const tbLen = toBody.length();
+    let aimAngle = 0;
+    if (tbLen > 1e-6) {
+      toBody.divideScalar(tbLen);
+      const d = Math.max(-1, Math.min(1, _v3.dot(toBody)));
+      aimAngle = Math.acos(d);                   // radians
+    }
+    if (aimAngle < GLIDE_AIM_MIN_ANGLE) {
+      this._glideAimDuration = 0;                // already centered — skip the aim
+      this._glidePhase = GLIDE_PHASE_APPROACH;
+    } else {
+      this._glideAimDuration = Math.min(
+        GLIDE_AIM_MAX_DURATION, GLIDE_AIM_SECONDS_PER_RAD * aimAngle,
+      );
+      this._glidePhase = GLIDE_PHASE_AIM;
+    }
+    this._glideAimT = 0;
+    this._glideApproachT = 0;
     this._gliding = true;
     this._targetGoal.copy(position); // keep the pivot goal on the body (tidy handoff)
     this.zoomSpeed = 0;
 
     // Keep the flight system loosely in sync for a later Flight-mode switch, like
-    // focusOn — seeded from the FINAL framed vantage (body + standoff along dir).
+    // focusOn — seeded from the framed vantage along the ARM-TIME ray (the approach
+    // re-derives dir post-aim; sub-second body drift makes the difference negligible).
     if (this._hasGravity && this.flight) {
       _v2.copy(position).addScaledVector(this._glideDir, viewDistance);
       this.flight.setPositionVelocity(_v2);
     }
   }
 
-  // Advance the single-channel glide one frame: one normalized progress t, one
-  // easing curve, endpoints re-derived from the body's LIVE position (moving moons
-  // are MET at their live spot, not chased to a stale clone). After t reaches 1 the
-  // easing pins camera = body + standoff·dir and target = body each frame, so the
-  // vantage keeps tracking a still-moving body until an input hands off to orbit
-  // (_endGlideToOrbit). Straight path: with a static body P_final is constant, so
-  // camera lerps P_start→P_final along a line (zero perpendicular deviation).
+  // Advance the two-phase glide one frame.
+  //   PHASE 1 AIM — the camera POSITION is never touched; the look target eases
+  //     T_start→body (smoothstep) and camera.lookAt() rotates the view IN PLACE
+  //     until the body is centered. When the aim ease completes, freeze the
+  //     approach direction from the body's LIVE position and switch to APPROACH.
+  //   PHASE 2 APPROACH — the camera translates P_start→(body+dir·standoff) on a
+  //     smoothstep with the look PINNED to the live body, so the body stays
+  //     centered the whole way (never slides in from the side). `dir` is frozen;
+  //     P_final is re-derived from the LIVE body each frame (moving moons are MET,
+  //     not chased). Both phases use smoothstep, so both endpoints have zero
+  //     velocity and the AIM→APPROACH boundary has no jerk. After the approach t
+  //     reaches 1 the camera stays pinned at body+dir·standoff each frame, tracking
+  //     a still-moving body until an input hands off to orbit (_endGlideToOrbit).
   _updateGlide(deltaTime) {
-    this._glideT = Math.min(1, this._glideT + deltaTime / GLIDE_DURATION);
-    const t = this._glideT;
-    const ease = t * t * (3 - 2 * t); // smoothstep — clean 0 and 1 endpoints
-
     const body = this._glideBody;
+
+    if (this._glidePhase === GLIDE_PHASE_AIM) {
+      if (this._glideAimDuration > 1e-6) {
+        this._glideAimT = Math.min(1, this._glideAimT + deltaTime / this._glideAimDuration);
+        const t = this._glideAimT;
+        const ease = t * t * (3 - 2 * t); // smoothstep — zero-velocity endpoints
+        this.target.lerpVectors(this._glideTStart, body, ease);
+        this.camera.lookAt(this.target);
+        if (this._glideAimT >= 1) this._beginApproachPhase();
+        return; // AIM never moves the camera position
+      }
+      // Zero-duration aim (already centered) — go straight to the approach.
+      this._beginApproachPhase();
+    }
+
+    // PHASE 2 APPROACH
+    this._glideApproachT = Math.min(1, this._glideApproachT + deltaTime / GLIDE_APPROACH_DURATION);
+    const t = this._glideApproachT;
+    const ease = t * t * (3 - 2 * t); // smoothstep — zero-velocity endpoints
     const pFinal = _v1.copy(body).addScaledVector(this._glideDir, this._glideStandoff);
     this.camera.position.lerpVectors(this._glidePStart, pFinal, ease);
-    this.target.lerpVectors(this._glideTStart, body, ease);
+    this.target.copy(body);           // look pinned to the live body — stays centered
     this.camera.lookAt(this.target);
+  }
+
+  // Freeze the approach direction from (P_start − body_live) at the AIM→APPROACH
+  // boundary (the body may have moved during the aim), normalize, keep the
+  // degenerate fallback (len < 1e-6 → (0,0,1)), reset the approach ease, and
+  // switch the phase. Uses scratch _v2 (independent of _updateGlide's _v1 pFinal).
+  _beginApproachPhase() {
+    const dir = _v2.copy(this._glidePStart).sub(this._glideBody);
+    const len = dir.length();
+    if (len > 1e-6) dir.divideScalar(len);
+    else dir.set(0, 0, 1);
+    this._glideDir.copy(dir);
+    this._glideApproachT = 0;
+    this._glidePhase = GLIDE_PHASE_APPROACH;
   }
 
   // Hand the current glide pose back to the normal Toy-Box orbit with NO snap:
@@ -775,7 +861,13 @@ export class ShipCameraSystem {
         this.camera.position.z += dz;
         this._returnTrackPos.copy(position);
       }
-    } else if (!this._transitioning) {
+    } else if (!this._transitioning && !this._gliding) {
+      // A two-phase glide OWNS the look target (phase-1 eased aim, phase-2 pin on
+      // the live body). main.js simStep calls trackTarget(body) EVERY frame while a
+      // body is focused; stomping this.target here would defeat the eased aim into
+      // an instant snap. _targetGoal (updated above) still follows the body for a
+      // superseding select's pivot request; the interrupt handback back-solves
+      // about this.target (the eased look point), NOT _targetGoal.
       this.target.copy(position);
     }
   }
@@ -1050,11 +1142,12 @@ export class ShipCameraSystem {
       this._decayLookOffset(deltaTime);
     }
 
-    // ── ORRERY single-channel glide owns the Toy-Box camera while active ──
+    // ── ORRERY two-phase glide owns the Toy-Box camera while active ──
     // A freshly-requested pivot ease (a select of a NEW body sets _transitioning
-    // directly, main.js) supersedes the glide: hand the current pose to orbit and
-    // fall through to the normal transition/smoothing path. Otherwise the glide
-    // drives camera+target for this frame and returns (skips zoom/drift/smoothing).
+    // directly, main.js) supersedes the glide: hand the current pose to orbit
+    // (works mid-AIM or mid-APPROACH) and fall through to the normal transition/
+    // smoothing path. Otherwise the glide drives camera+target for this frame and
+    // returns (skips zoom/drift/smoothing).
     if (this._gliding) {
       if (this._transitioning) {
         this._endGlideToOrbit();
