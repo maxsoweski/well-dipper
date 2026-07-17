@@ -7,6 +7,7 @@ import { POSITION_MATCH_TOL } from '../generation/RealStarCatalog.js';
 import { resolveArrivalSystem } from '../generation/arrivalResolution.js';
 import { multiplicityForSeed } from '../generation/multiplicityOracle.js';
 import { placeLabels } from './labelPlacement.js';
+import { deriveSystemTitle, deriveSystemAnnotation, deriveStarHoverName } from './systemIdentity.js';
 import { GalacticSectors } from '../generation/GalacticSectors.js';
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
 import { NavGalaxyRenderer } from '../rendering/NavGalaxyRenderer.js';
@@ -552,6 +553,42 @@ export class NavComputer {
     const known = this._systemData?._knownSystemNames?.planets?.[pIdx]?.moons?.[mIdx];
     if (known) return known;
     return `${starName}-${pIdx + 1}${String.fromCharCode(97 + mIdx)}`;
+  }
+
+  /**
+   * Draw the SYSTEM-view header (AC3): the title is the SYSTEM name for a known
+   * multi-star/single system (never the clicked component marker), with an
+   * optional "via <component>" annotation directly under it, then the
+   * star-type / planet-count / age line. For a procgen system (no
+   * `_knownSystemNames`) `deriveSystemTitle` returns the marker name and
+   * `deriveSystemAnnotation` returns null, so the two lines land at their
+   * historical y=24 / y=42 positions — byte-identical to pre-AC3.
+   */
+  _drawSystemHeader(ctx, sys, markerName, planetCount) {
+    const title = deriveSystemTitle(sys, markerName);
+    ctx.font = '14px "DotGothic16", monospace';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    ctx.fillText(title, 16, 24);
+
+    // Optional component annotation — routes the system identity, keeping the
+    // title itself un-overloaded. Only known systems ever draw it; when present
+    // the type line drops to make room (procgen never shifts).
+    const annotation = deriveSystemAnnotation(sys, markerName);
+    let typeLineY = 42;
+    if (annotation) {
+      ctx.font = '9px "DotGothic16", monospace';
+      ctx.fillStyle = 'rgba(180, 200, 230, 0.55)';
+      ctx.fillText(annotation, 16, 38);
+      typeLineY = 54;
+    }
+
+    ctx.font = '11px "DotGothic16", monospace';
+    ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
+    const starTypeLabel = sys.isBinary && sys.star2
+      ? `${sys.star?.type || '?'}+${sys.star2.type} binary`
+      : `${sys.star?.type || '?'}`;
+    ctx.fillText(`${starTypeLabel} · ${planetCount} planet${planetCount !== 1 ? 's' : ''} · ${(sys.ageGyr || 0).toFixed(1)} Gyr`, 16, typeLineY);
   }
 
   /** Find the star nearest to the player's position in _localStars. */
@@ -1820,6 +1857,11 @@ export class NavComputer {
     const planets = sys.planets || [];
     const zones = sys.zones || {};
     const starName = this._systemStar?.name || 'Unknown';
+    // System-identity name (AC3): the SYSTEM name for known systems, else the
+    // marker name. Procgen-fill planet display names key off THIS (so a fill
+    // planet in Alpha Centauri reads 'Alpha Centauri-N', not 'Proxima
+    // Centauri-N'); for procgen systems it equals starName → unchanged.
+    const systemName = deriveSystemTitle(sys, starName);
 
     // ── 3D projection setup ──
     const cosX = Math.cos(this._systemRotX), sinX = Math.sin(this._systemRotX);
@@ -2116,7 +2158,7 @@ export class NavComputer {
       ctx.font = '9px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.textAlign = 'center';
-      ctx.fillText(this._planetDisplayName(i, starName), sp.x, sp.y + baseR + 12);
+      ctx.fillText(this._planetDisplayName(i, systemName), sp.x, sp.y + baseR + 12);
 
       // Hover detection
       const mdx = this._mouseX - sp.x, mdy = this._mouseY - sp.y;
@@ -2145,7 +2187,7 @@ export class NavComputer {
       if (hb.type === 'planet') {
         const p = planets[hb.index];
         const pd = p.planetData;
-        title = this._planetDisplayName(hb.index, starName);
+        title = this._planetDisplayName(hb.index, systemName);
         lines = [
           `${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕`,
           `${p.orbitRadiusAU.toFixed(2)} AU`,
@@ -2159,16 +2201,16 @@ export class NavComputer {
         ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(hb.sx, hb.sy, 10, 0, Math.PI * 2); ctx.stroke();
       } else if (hb.index === 1 && sys.isBinary && sys.star2) {
-        // Companion star hover
-        title = starName + ' B';
+        // Companion star hover — real component name for known systems (AC3).
+        title = deriveStarHoverName(sys, starName, 1, sys.isBinary);
         lines = [
           `${sys.star2.type} class (companion)`,
           `${(sys.star2.radiusSolar || 0.5).toFixed(2)} R☉`,
           `Sep: ${(sys.binarySeparationAU || 0).toFixed(3)} AU`,
         ];
       } else {
-        // Primary star hover
-        title = starName + (sys.isBinary ? ' A' : '');
+        // Primary star hover — real component name for known systems (AC3).
+        title = deriveStarHoverName(sys, starName, 0, sys.isBinary);
         lines = [
           `${sys.star.type} class${sys.isBinary ? ' (primary)' : ''}`,
           `${(sys.star.radiusSolar || 1).toFixed(2)} R☉`,
@@ -2288,17 +2330,8 @@ export class NavComputer {
       }
     }
 
-    // ── Header ──
-    ctx.font = '14px "DotGothic16", monospace';
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'left';
-    ctx.fillText(starName, 16, 24);
-    ctx.font = '11px "DotGothic16", monospace';
-    ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
-    const starTypeLabel = sys.isBinary && sys.star2
-      ? `${sys.star?.type || '?'}+${sys.star2.type} binary`
-      : `${sys.star?.type || '?'}`;
-    ctx.fillText(`${starTypeLabel} · ${planets.length} planet${planets.length !== 1 ? 's' : ''} · ${(sys.ageGyr || 0).toFixed(1)} Gyr`, 16, 42);
+    // ── Header (AC3: system-identity title + component annotation) ──
+    this._drawSystemHeader(ctx, sys, starName, planets.length);
 
     // ── Selection ring on selected body ──
     if (this._selectedBody) {
@@ -2376,6 +2409,9 @@ export class NavComputer {
     const pd = p.planetData;
     const moons = p.moons || [];
     const starName = this._systemStar?.name || 'Unknown';
+    // Procgen-fill planet/moon names key off the system name (AC3); equals
+    // starName for procgen systems, so unchanged there.
+    const systemName = deriveSystemTitle(this._systemData, starName);
 
     // ── 3D projection (same as system view) ──
     const cosX = Math.cos(this._systemRotX), sinX = Math.sin(this._systemRotX);
@@ -2478,7 +2514,7 @@ export class NavComputer {
         `${(moon.radiusEarth || 0.1).toFixed(2)} R⊕`,
       ];
       if (moon.isPlanetMoon) lines.push('Planet-class moon');
-      this._drawTooltip(ctx, this._hoveredBody.sx, this._hoveredBody.sy, this._moonDisplayName(idx, this._hoveredBody.index, starName), lines);
+      this._drawTooltip(ctx, this._hoveredBody.sx, this._hoveredBody.sy, this._moonDisplayName(idx, this._hoveredBody.index, systemName), lines);
     }
 
     // ── Ship position indicator + trajectory line (planet detail) ──
@@ -2572,7 +2608,7 @@ export class NavComputer {
     ctx.font = '14px "DotGothic16", monospace';
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'left';
-    ctx.fillText(this._planetDisplayName(idx, starName), 16, 24);
+    ctx.fillText(this._planetDisplayName(idx, systemName), 16, 24);
     ctx.font = '11px "DotGothic16", monospace';
     ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
     ctx.fillText(`${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕ · ${(p.orbitRadiusAU).toFixed(2)} AU · ${moons.length} moon${moons.length !== 1 ? 's' : ''}`, 16, 42);
