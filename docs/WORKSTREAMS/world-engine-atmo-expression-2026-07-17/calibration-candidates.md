@@ -124,3 +124,10 @@ Pinned Jovian seed 1, isolated context, A/B strips archived in `evidence/readgat
   so a later amplitude shrink fails headless, per the plan's §6.0 Phase-B instruction.
 - Isotropic null (`stretch=1`) visually confirmed flatter/grainier than the stretched read.
 - Wake constants untouched (slice I not yet built; its floors freeze at its own live gate).
+
+## Slice-I wake read-gate ruling (2026-07-17, working-Claude live A/B — WAKE_* FROZEN AS-BUILT)
+
+Storm on/off A/B on pinned Jovian (evidence/AC-INTERACT-LIVE-RESULT.md): 1426 diff pixels in
+the 2.6R–6R annulus (pre-slice-I: ~0), concentrated ~3.8:1 downstream — the derived-direction
+wake reads at judging distance at the as-built constants (WAKE_LEN 4.5 / WID 1.2 / BOW 0.34 /
+AMP 0.22 / K 7.0). Frozen without adjustment; WAKE_DLAT_FLOOR stands.
