@@ -1,0 +1,107 @@
+{
+  "workstream": "world-engine-atmo-expression-2026-07-17",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "statusNote": "SCOPED 2026-07-17 (in-thread interview; Max answered all four forks: 1 INTERACTION-ONLY 'Interaction only' — multi-deck parallax layering deferred to a future increment; 2 jaggedness PER-BAND physics-driven (shear-scaled) + per-seed global dial; 3 ONE increment, three slices, re-scope gate if a slice balloons; 4 viscous read OVERSHOOT BOLD, dial back at UAT). Pre-answered constraints honored without re-litigating: real directional advection not stronger noise (noise read already rejected at the 2026-07-15 UAT); static place-once no-uTime; new fields = separate baked attributes, aStorm/phase goldens never move. Grounding brief: ~/briefings/grounding-atmo-expression-2026-07-17.md. AWAITING MAX GREENLIGHT. Builds on the MERGED branch state (atmo = L1 = 68972f4, merge landed 2026-07-17).",
+  "programRef": "ATMOSPHERE-PLAN.md — this is the unfinished RENDER half of #3b (vortices/storms), not a new numbered increment; it GROWS #3b alongside derive-not-freeze. Owns atmo-3b UAT findings 2 (layered-not-interacting) + 3 (no ink-in-water) + the smooth-vs-jagged half of 4. Downstream DAG consumers to protect: #4 lightning (aStorm mask), #5 brown-dwarf (mask + phase), #8 Mars oscillator (phase bank).",
+  "designDecisions": [
+    "INTERACTION ONLY (Max fork 1): storms distort the band field around them + shed a downstream wake INTO the bands. NO multi-deck parallax layering this increment (deferred; different machinery).",
+    "REAL DIRECTIONAL ADVECTION (pre-ruled): the viscous read stretches/folds the band pattern ALONG the local jet/shear direction — anisotropic displacement + roll-up at shear interfaces. NOT an amplitude bump on the existing isotropic edge noise (that is what Max read as 'not rendered at all').",
+    "STATIC PLACE-ONCE (program rule, non-negotiable): no uTime in any storm/band term; the viscous look is a baked/analytic still that reads fluid, not a running sim. Alea-only randomness.",
+    "PER-BAND JAGGEDNESS (Max fork 2): each band's edge roughness scales with that band's shear (belts rougher than zones on the same planet) + one per-seed global roughness draw. New scalars are D-slot-backed or declared-frozen-with-named-deriver per AC-0.",
+    "ONE INCREMENT, THREE SLICES (Max fork 3): interaction / ink-in-water / jaggedness share the zonalBandCol path + shear/mask fields; re-scope gate if any slice balloons.",
+    "OVERSHOOT BOLD (Max fork 4): ship a clearly-visible fluid read; Max dials back at UAT.",
+    "CORE MECHANISM ROUTED TO BUILD-PLAN: how the storm swirl deflects the BAKED wBand at render time (#3a's bake defeated the old deflection — the sticker-gap root cause). The baked aBand attribute and GOLDEN_BANDFIELD_HASH never change; render-side re-warp only. Whether a CPU-side mirror term is needed for headless asserts = build-plan call.",
+    "NEW FIELDS ARE ADDITIVE: any flow-direction/roughness attribute is a NEW baked attribute; aStorm mask + phase bank stay byte-identical (their goldens must not move); #4/#5 noted as optional future readers of the new field."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15): every new scalar/field is D-slot-backed, derived by a named derivation, or declared-frozen-with-named-deriver; every emitted field names its DAG consumer; new lab controls register in planet-archetypes.js (+ GLSL PROV mirror) as driver overrides adding NO *Enabled key; drift guards green.",
+      "verifyVia": {
+        "input": "Run planet-archetypes drift suite + storm-e/giant-drivers suites from the atmo worktree; diff audit of new fields' derivations and consumers.",
+        "observable": "All guards green; each new field's deriver + consumer documented in BUILD-NOTES; no *Enabled keys added."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-ADVECT",
+      "statement": "The viscous mechanism is genuinely directional, not isotropic noise: the advection displacement field is anisotropic along the local jet/shear direction (stretch factor along-flow vs cross-flow within the documented band), static (no uTime), deterministic per seed, at the documented bold amplitude.",
+      "verifyVia": {
+        "input": "Headless: sample the displacement field (CPU reference) across seeds and latitudes; compute along-flow vs cross-flow anisotropy; repeat-seed determinism.",
+        "observable": "Anisotropy ratio within the build-plan's documented band on every seed; isotropic null clearly rejected; repeat-seed byte-equal; grep confirms no uTime in new terms."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-INTERACT",
+      "statement": "Storms and bands interact — not one on top of the other: on a Jovian with a placed primary storm, the primary band boundaries visibly deflect around the storm and a wake trails downstream into the band field; A/B against storm-disabled shows the band field differing well beyond the storm rim (today's alpha-over sticker leaves it identical outside the rim).",
+      "verifyVia": {
+        "input": "Live drive on :5178 (fresh context): Jovian at pinned seed, screenshot A/B with the primary storm enabled/disabled at pinned camera; localized pixel-diff analysis.",
+        "observable": "Band-boundary deflection visible around the storm; A/B diff extends into the band field beyond the storm rim (documented radius multiple), concentrated downstream (wake); zero new console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-JAG",
+      "statement": "Smooth-vs-jagged varies per band and per seed: on one planet, high-shear belt edges are measurably rougher than calm zone edges; across seeds the global roughness draw differs; deterministic per seed.",
+      "verifyVia": {
+        "input": "Headless: per-band roughness values across a seed sweep on Jovian/Saturnian/Neptunian; compare belt vs zone roughness at fixed seed; repeat-seed check.",
+        "observable": "roughness(belt) > roughness(zone) in the documented ratio band at every fixed seed; per-seed global draw varies across seeds; repeat-seed byte-equal."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-LIVE",
+      "statement": "The full circuit reads live: Jovian/Saturnian/Neptunian re-rolls on :5178 show all three effects (interaction, bold ink-in-water tendrils/folds, varied band-edge character) via the real GUI reseed paths (New planet button + macro-seed slider — the derive-not-freeze wiring must still re-run the writers); console clean.",
+      "verifyVia": {
+        "input": "Live drive on :5178 (fresh context): real GUI clicks through 3+ regimes x multiple seeds; screenshots archived in evidence/.",
+        "observable": "All three effects visible per regime; reseed paths re-run the storm/band writers (state parity at clicked seed); zero new console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "statement": "Nothing locked moves: GOLDEN_BANDFIELD_HASH (-1329854088) + GOLDEN_STORM_MASK_HASH (568852786) unmoved and never re-captured; aStorm mask contract ([0,1], shear-correlated floor, off-gate all-zero) + phase bank byte-identical; storms-disabled OFF-GATE byte-identity holds; filamentation/wake/interior/chromophore terms intact; regime reads intact (Jovian primary spot, Saturn hexagon-likely, Uranian mute + obliquity-85 gate, HJ suppression); atmo fence (zero relief/dispatch edits); full suite at the post-merge baseline from the worktree dir.",
+      "verifyVia": {
+        "input": "Full suite from ~/projects/well-dipper-atmo at the build commit; golden-hash assertions; off-gate byte test; fence diff audit.",
+        "observable": "Suite at baseline signature (4 pre-existing failures, not grown); both golden hashes unchanged; fixtures git-diff-empty; no edits outside the atmo-owned sections/writers."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max's gate: the giants read as viscous fluid worlds — storms belong to the band field (no more 'one on top of the other'), the ink-in-water effect is clearly present (bold; he may dial it back), and band edges vary smooth-vs-jagged — judged solo in the lab, re-rolling seeds across regimes.",
+      "verifyVia": {
+        "input": "Max drives :5178 solo: re-rolls Jovian/Saturnian/Neptunian, judges the composite read.",
+        "observable": "Max's holistic acceptance."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "Baked band field wBand (aBand -> vBand; signed, <0.5 belt / >0.5 zone) + shear field wShear (aShear) + storm mask aStorm + uStorm[8]/uPolar uniforms",
+      "deriveGiantDrivers (giant-drivers.js) per-seed shear/band/storm derivations — the derive-not-freeze inheritance this rides on",
+      "Shader terms in planet-lod-height.glsl.js: zonalBandCol / stormSwirl / stormColTerms / bandWarpField (the composite path all three slices edit)",
+      "The lab call site (planet-lod-lab.html bandMask block) + reseed wiring (rebakeE5Bands -> deriveGiantDrivers -> resolveStormE)"
+    ],
+    "outputs": [
+      "The interaction/viscous/jaggedness render terms in zonalBandCol (the finished 'fluid world' read)",
+      "Any new baked flow/roughness attribute (named at build-plan) — a new DAG output; #4 lightning / #5 brown-dwarf noted as optional future readers",
+      "The answer to atmo-3b UAT findings 2, 3, and the jaggedness half of 4"
+    ],
+    "mustStayWorking": [
+      "GOLDEN_BANDFIELD_HASH -1329854088 + GOLDEN_STORM_MASK_HASH 568852786 — never re-captured",
+      "aStorm mask contract + phase bank byte-identical (#4/#5/#8 downstream consumers)",
+      "derive-not-freeze reseed wiring: New-planet button + macro-seed slider re-run the storm/polar writers",
+      "Regime reads: Jovian primary spot, Saturnian hexagon-likely, Uranian mute + obliquity-85 gate, HJ full suppression",
+      "Storms-disabled OFF-GATE byte-identity; same-seed determinism end-to-end; alea-only, no uTime anywhere",
+      "Atmo fence: zero edits to relief/dispatch (planet-lod-rivers.js, lidResponse.js, e1Regime.js, plate/shell/magmatism writers); not-ours dirty files excluded from commits",
+      "Full suite at the post-merge baseline from the worktree dir; branch stays at/after the 68972f4 merge seam (no rebase of pushed history)"
+    ]
+  }
+}
