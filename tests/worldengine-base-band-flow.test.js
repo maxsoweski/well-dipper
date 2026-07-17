@@ -56,7 +56,7 @@ const ADVECT_RATIO_HI = 3.2;      // measured J/S/N ratio max 2.787 (margin up)
 const ADVECT_NULL_MAX = 1.5;      // measured isotropic-null max 1.301 — clearly below ADVECT_RATIO_LO
 const ADVECT_DLAT_FLOOR_BW = 0.08;// 2× the candidate floor — INK_AMP frozen ×2 at the 2026-07-17 Phase-B read-gate; a later shrink back to the sub-perceptual candidate FAILS here
 const ADVECT_DBAND_FLOOR = 0.10;  // 2× the candidate floor (same freeze)
-const JAG_RATIO_FLOOR = 30;       // measured all-regime belt/zone min 36.7 (J/S/N min 233)
+const JAG_RATIO_FLOOR = 30;       // measured all-regime belt/zone min 36.7 (J/S/N min 112.6, post-freeze re-run 2026-07-17)
 const WAKE_DSR = 3;               // downstream ds/R past the old 2.6R GRS cone
 const WAKE_DLAT_FLOOR = 0.01;     // measured wake |dLat| at ds/R=3 ≈ 0.19·R (R∈[0.18,0.30] ⇒ 0.034+)
 const ADVECT_STEPS = 256;         // transect samples (moderate; ratio stable, keeps the suite fast)
@@ -366,5 +366,40 @@ describe('worldengine base — slice-I GLSL ↔ mirror constant parity (atmo-exp
   it('[F1] the dWake body contains no uTime / animated-warp path (diff-scoped, comments stripped)', () => {
     expect(I_CODE).not.toMatch(/uTime/);
     expect(I_CODE).not.toMatch(/\b(ph0|ph1|r0|r1|jetRotY|jetsDisp)\b/);
+  });
+});
+
+// ── Slice-J GLSL ↔ mirror constant parity (2026-07-17 session-review fix — the J leg was MISSING) ─────────
+// The K/I legs above predate this one; slice J's GLSL term (the bandVal jag edit inside zonalBandCol) shipped
+// with NO parity pin, so the GLSL amplitude could be zeroed or deleted suite-green (session-review confirmed
+// finding). Unlike K/I, the J GLSL uses INLINE literals (comment-named, no const decls), so parity binds the
+// literals in comment-stripped CODE: a mirror change without the matching GLSL change fails the BAND_FLOW
+// pins; a GLSL change (zero/delete/retune) without the mirror fails the toContain legs. The slice runs from
+// the slice-J banner comment to the zone-luminance smoothstep that follows the jag edit.
+const J_START = GLSL.indexOf('slice J: per-band EDGE JAGGEDNESS');
+const J_BODIES = GLSL.slice(J_START, GLSL.indexOf('float zone = smoothstep', J_START));
+const J_CODE = J_BODIES.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+describe('worldengine base — slice-J GLSL ↔ mirror constant parity (atmo-expression 2026-07-17)', () => {
+  it('[wire] the jag term exists inside zonalBandCol and is MASK-gated exactly 0 off-gate (filament precedent)', () => {
+    expect(J_START).toBeGreaterThan(0);
+    expect(J_CODE).toContain('bandVal += 0.15 * rough * jag * clamp(wStorm, 0.0, 1.0);');
+  });
+
+  it('[parity] the jag GLSL literals match the BAND_FLOW mirror constants (ROUGH_AMP/FREQ/BELT/EDGE/OFF)', () => {
+    // amplitude — the previously-unguarded literal: zeroing/deleting GLSL `0.15 * rough * jag` fails here
+    expect(BAND_FLOW.ROUGH_AMP).toBe(0.15);  expect(J_CODE).toContain('0.15 * rough * jag');
+    expect(BAND_FLOW.ROUGH_BELT).toBe(0.7);  expect(J_CODE).toContain('0.7 * cyclonic');
+    expect(BAND_FLOW.ROUGH_EDGE).toBe(0.5);  expect(J_CODE).toContain('0.5 * clamp(wShear, 0.0, 1.0)');
+    expect(BAND_FLOW.ROUGH_FREQ).toBe(7.0);  expect(J_CODE).toContain('pos * 7.0');
+    expect(BAND_FLOW.ROUGH_OFF).toEqual([-5.9, 2.2, 8.8]);
+    expect(J_CODE).toContain(vec3Str(BAND_FLOW.ROUGH_OFF));   // vec3(-5.9, 2.2, 8.8)
+    // per-seed global draw rides the same uniform the mirror consumes
+    expect(J_CODE).toContain('* uBandRough');
+  });
+
+  it('[F1] the jag term contains no uTime / animated-warp path (fresh STATIC warp sample)', () => {
+    expect(J_CODE).not.toMatch(/uTime/);
+    expect(J_CODE).not.toMatch(/\b(ph0|ph1|r0|r1|jetRotY|jetsDisp)\b/);
   });
 });

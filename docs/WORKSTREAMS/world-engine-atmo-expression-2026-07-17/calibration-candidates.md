@@ -6,6 +6,10 @@
 > (BUILD-PLAN §6.0 Phase B) AFTER this workstream. The AC assertion bands in
 > `tests/worldengine-base-band-flow.test.js` are keyed to these candidate values so a later amplitude
 > shrink FAILS headless (fluid-lens must-fix #1). Re-run the tool any time to reproduce.
+> **Post-freeze refresh (2026-07-17 session-review fix):** the measured tables below were re-generated from
+> the shipped tool AFTER the Phase-B freeze (`INK_AMP` 0.12, `ROUGH_AMP` 0.15) — the original filing still
+> showed pre-freeze magnitudes beside post-freeze floors, so the AC-ADVECT rows contradicted the shipped
+> `ADVECT_DLAT_FLOOR_BW`/`ADVECT_DBAND_FLOOR` (0.08/0.10) recorded in the Phase-B ruling further down.
 
 ## Linchpin — bandProxy ↔ aBand parity (the re-scope gate)
 
@@ -59,12 +63,12 @@ floor (a field can satisfy the anisotropy ratio yet read as nothing — the V-α
 |---|---|---|---|
 | L_east/L_north ratio | [1.953, 2.787] mean 2.40 | **(1.6, 3.2)** every seed | `ADVECT_RATIO_LO/HI` |
 | isotropic null (stretch=1) | [1.087, 1.301] mean 1.19 | **< 1.5** (clearly below 1.6) | `ADVECT_NULL_MAX` |
-| peak &#124;dLat&#124; | [0.047, 0.349] band-widths | **> 0.04 band-widths** | `ADVECT_DLAT_FLOOR_BW` |
-| peak &#124;dBand&#124; | [0.065, 0.186] | **> 0.05** | `ADVECT_DBAND_FLOOR` |
+| peak &#124;dLat&#124; | [0.093, 0.699] band-widths | **> 0.08 band-widths** (×2 at the freeze) | `ADVECT_DLAT_FLOOR_BW` |
+| peak &#124;dBand&#124; | [0.120, 0.305] | **> 0.10** (×2 at the freeze) | `ADVECT_DBAND_FLOOR` |
 
 The null max (1.301) sits clearly below the ratio floor (1.6) — the direction mechanism is not isotropic noise.
 The peak floors mean a later `INK_AMP` shrink FAILS instead of passing on the ratio alone. Sub-Neptune
-(haze-muted, peak &#124;dBand&#124; ~0.02 by design) is measured in the sweep but held out of the vivid-deck
+(haze-muted, peak &#124;dBand&#124; ~0.03–0.06 post-freeze, low by design) is measured in the sweep but held out of the vivid-deck
 amplitude floor. Estimator: `⟨|∂n dLat|⟩ / ⟨|∂e dLat|⟩` (mean arc-length finite-difference gradients — the
 pinned choice per §6.0 adjudicable).
 
@@ -72,7 +76,7 @@ pinned choice per §6.0 adjudicable).
 
 | quantity | measured | pinned | test const |
 |---|---|---|---|
-| roughness(beltCenter)/roughness(zoneCenter) | J/S/N min 233 (all-regime min 36.7) | **> 30** every seed | `JAG_RATIO_FLOOR` |
+| roughness(beltCenter)/roughness(zoneCenter) | J/S/N min 112.6 (all-regime min 36.7; post-freeze re-run) | **> 30** every seed | `JAG_RATIO_FLOOR` |
 | uBandRough per-seed set-size | 12/12 every regime | **≥ ⌈0.75·12⌉ = 9** | — |
 
 Both centers sit at `jetProfile` extrema (`wShear≈0` at BOTH) — the split is driven by `cyc = clamp((0.5−wBand)·2)`
@@ -95,11 +99,11 @@ in belts), not hard-coded west (fluid-lens must-fix #5) — asserted by the wake
 
 | uAtmoInk | peak dLat (band-widths) |
 |---|---|
-| 0.5 (tame) | [0.023, 0.175] mean 0.088 |
-| 1.0 (bold default) | [0.047, 0.349] mean 0.176 |
-| 1.5 | [0.070, 0.524] mean 0.264 |
+| 0.5 (tame — reproduces the pre-freeze candidate look) | [0.047, 0.349] mean 0.176 |
+| 1.0 (bold default) | [0.093, 0.699] mean 0.352 |
+| 1.5 | [0.140, 1.048] mean 0.529 |
 
-Bold at 1.0 (~0.2–0.35 band-widths on Jovian/Saturnian), linearly tameable — Max's UAT tame-down dial.
+Bold at 1.0 (~0.46–0.70 band-widths on Jovian/Saturnian post-freeze), linearly tameable — Max's UAT tame-down dial.
 
 ## What Phase B (live read-gate) still owns before the freeze
 

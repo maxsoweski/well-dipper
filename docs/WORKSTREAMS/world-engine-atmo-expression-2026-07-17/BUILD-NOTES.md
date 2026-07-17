@@ -20,9 +20,11 @@
 
 GLSL consts (no uniform): `AEQ/PHI_EQ/WARD_GAIN/ENV_BASE` from `PHYS`; `INK_FREQ/FOLD_K/FOLD_FREQ/
 ROUGH_FREQ/ROUGH_AMP/ROUGH_BELT/ROUGH_EDGE/WAKE_*` — calibration-pinned, GLSL≡mirror parity-tested
-(`tests/worldengine-base-band-flow.test.js` literal-parity legs). `INK_AMP`/`ROUGH_AMP` frozen at the
-2026-07-17 Phase-B read-gate (×2 / ×1.5); `WAKE_*` frozen as-built at the slice-I live gate
-(`calibration-candidates.md` ruling sections).
+(`tests/worldengine-base-band-flow.test.js` literal-parity legs — K/I from the build; the slice-J
+`ROUGH_*` leg added at the 2026-07-17 session-review fix. As originally filed this line OVERCLAIMED:
+the J literals had no parity pin and the GLSL jag amplitude was deletable suite-green). `INK_AMP`/
+`ROUGH_AMP` frozen at the 2026-07-17 Phase-B read-gate (×2 / ×1.5); `WAKE_*` frozen as-built at the
+slice-I live gate (`calibration-candidates.md` ruling sections).
 
 ## Taxonomy registration (the manual audit note — the drift guard is blind to non-`*Enabled` keys)
 

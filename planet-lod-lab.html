@@ -4072,8 +4072,10 @@
     // ── World Engine features (lab-ux 2026-07-15) — the OPEN top section of the
     // Features panel: folders whose placement/physics a worldengine writer authors
     // (FEATURES[key].provenance === 'writer'). Declared BEFORE fLegacy so it renders
-    // above it. The atmo #3b merge flips F27/F28/F29's provenance and moves their
-    // declarations here (atmo owns those sections — fence).
+    // above it. The atmo #3b merge flipped F27/F28/F29's provenance; their folder
+    // declarations moved here at the 2026-07-17 session-review fix (the merge had
+    // landed the flip only, leaving ✦-badged folders under the Legacy drawer —
+    // atmo owns those sections, fence).
     const fWorldEngine = guiRight.addFolder('World Engine ✦'); fWorldEngine.open();
     // ── AC-BOOT-PROVENANCE (defaults rescope 2026-07-15): "what is authoring this
     // world right now" summary — current system vs placeholder legacy must be
@@ -4468,7 +4470,8 @@
     fMassWast.add({ roll(){ state.massWastOffset = randOffset(); } }, 'roll').name('🎲 randomize');
     fMassWast.add(state, 'massWastEnabled').name('✓ enabled');
 
-    // ▸ Surface — Bands: the atmosphere-bands family (gas F24/F25 + the F27-F29 riders + terrestrial F26).
+    // ▸ Surface — Bands: legacy remnants of the atmosphere-bands family (terrestrial F26 +
+    // the F30/F31/F40 cloud/transient families; gas F24/F25 + F27-F29 live in World Engine ✦).
     const fBandsGroup = fLegacy.addFolder('Surface — Bands');
     // ▸ Zonal belts (F24) — alternating zone/belt luminance bands on gas presets, ALBEDO
     // only. strength/count/contrast/warp/tint are driven (h2-he gate / Rhines spin×disc /
@@ -4533,7 +4536,7 @@
     // (stormSeed hash, .listen()); the 🎲 rerolls stormSeed THROUGH applyDrivers —
     // placement is seed identity, exercised end-to-end (card §5), and it survives
     // preset changes (unlike the transient domain-offset rolls).
-    const fSpot = fBandsGroup.addFolder('Great spot (F27)'); fSpot.close();
+    const fSpot = fWorldEngine.addFolder('Great spot (F27)'); fSpot.close();   // atmo-merge provenance flip → World Engine section (declaration moved 2026-07-17 session-review fix)
     fSpot.add(state, 'spotRadius', 0.05, 0.35, 0.005).name('radius (driven)').listen();
     fSpot.add(state, 'spotRot', -3, 3, 0.01).name('swirl (driven)').listen();
     fSpot.add(state, 'spotAspect', 1, 3, 0.01).name('aspect (driven)').listen();
@@ -4545,7 +4548,7 @@
     // SHARED stormSeed, so it re-rolls the great spot too (seed identity, card §6
     // item 8). Count is a driven display (.listen().disable()); radius scale is the
     // lab knob the per-frame writer multiplies onto every train radius.
-    const fTrain = fBandsGroup.addFolder('Storm clusters (F28)'); fTrain.close();
+    const fTrain = fWorldEngine.addFolder('Storm clusters (F28)'); fTrain.close();   // atmo-merge provenance flip → World Engine section (moved 2026-07-17 session-review fix)
     fTrain.add(state, 'trainCount', 0, 7, 1).name('spots (driven)').listen().disable();
     fTrain.add(state, 'trainRadiusScale', 0.5, 2, 0.01).name('radius scale');
     fTrain.add({ roll(){ state.stormSeed = (Math.random() * 4294967296) >>> 0; applyDrivers(); } }, 'roll').name('🎲 reroll storms (shared seed)');
@@ -4556,7 +4559,7 @@
     // in-shader). mode/sides/r0 are driven displays; collar width is the lab knob.
     // The 🎲 rerolls the SHARED stormSeed (seed identity owns ALL storm/vortex
     // placement), so it re-rolls F27/F28 too.
-    const fPolar = fBandsGroup.addFolder('Polar vortex (F29)'); fPolar.close();
+    const fPolar = fWorldEngine.addFolder('Polar vortex (F29)'); fPolar.close();   // atmo-merge provenance flip → World Engine section (moved 2026-07-17 session-review fix)
     fPolar.add(state, 'polarMode', 0, 2, 1).name('mode (driven)').listen();
     fPolar.add(state, 'polarSides', 5, 8, 1).name('sides N (driven)').listen();   // V-β.2 Rider B: hexagon/polygon N — canonical per regime (Saturn 6), GUI-tunable 5..8
     fPolar.add(state, 'polarRing', 5, 8, 1).name('ring M (driven)').listen();     // V-β.2 Rider B: lattice member count M — canonical per regime (Jupiter ~8), GUI-tunable 5..8

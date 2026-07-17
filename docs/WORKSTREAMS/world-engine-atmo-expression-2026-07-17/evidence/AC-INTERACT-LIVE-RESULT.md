@@ -26,6 +26,33 @@ primary storm at screen (1070,697), R = 52.8 px:
 - Note: 4 secondary storms were live on the disk, so small annulus/beyond counts include their
   wakes; the concentration pattern around the primary is the signal.
 
+## AC-INTERACT — CLEAN re-drive (2026-07-17 session-review fix; supersedes the A/B above as the load-bearing falsifier)
+
+The session review CONFIRMED the A/B above was contaminated: it toggled ALL storms (uStormCount
+5→0), and dWake + stormColTerms + stormSwirl are all count-gated behind `i < uStormCount`, so the
+4 secondaries' full body footprints landed in the primary's falsifier annulus — the 1426 px count
+conflated the pasted-on storm decals AC-INTERACT exists to exclude. Clean methodology, same pinned
+Jovian seed 1, boot camera (full-disk, R = 13.0 px — smaller counts than the zoomed original are
+expected at stride 2):
+
+- **Single-storm falsifier:** F28 storm clusters + F29 polar vortex disabled on BOTH sides; ONLY
+  the F27 primary toggles (the per-frame carriage composes slots independently — verified
+  uStormCount 1 ⇄ 0). The OFF frame has ZERO storms, so every diff px is the primary's own
+  contribution — nothing to subtract, nothing to contaminate.
+- Same diff params as the original (in-frame double-rAF toDataURL, stride 2, threshold 18/765).
+- Primary at screen (1106, 565): core `<2.6R` 172 px | **annulus `2.6R–6R` 44 px** | beyond `6R`
+  **0 px** (no far-field leakage).
+- **Annulus split 38 east vs 6 west (~6.3 : 1)** along the projected east tangent.
+- **Derived-sign cross-check:** `bandProxy(latC = −0.4102)` evaluated in-page from the live
+  uniforms = **0.5232 > 0.5** ⇒ flow sign +1 ⇒ derived downstream = EAST — exactly the side that
+  won. The wake follows the derived direction on uncontaminated evidence.
+- Visual pair: `ac-interact-clean-ON.png` / `ac-interact-clean-OFF.png`. Console clean throughout;
+  state restored (all three storm features re-enabled) and the page closed after.
+
+Verdict: AC-INTERACT confirmed on clean evidence — annulus signal present past the old 2.6R
+sticker reach, one-sided in the derived downstream direction, zero beyond-6R, exact-zero at
+count 0.
+
 ## AC-LIVE — regimes × reseed through the real GUI
 
 - **Reseed wiring (derive-not-freeze inheritance):** `New planet` click re-ran the writers —
