@@ -320,3 +320,51 @@ describe('worldengine base — slice-K GLSL ↔ mirror constant parity (atmo-exp
     expect(K_CODE).not.toMatch(/\b(ph0|ph1|r0|r1|jetRotY|jetsDisp)\b/);
   });
 });
+
+// ── Slice-I GLSL ↔ mirror constant parity (BUILD-PLAN §2.1; the K constant-parity pattern) ─────────────────
+// vitest has no GPU, so numeric truth for dWake lives in band-flow.js stormBandDrag (the wake-reach / count-gate
+// / derived-sign floors asserted above) and the GLSL is a faithful STRUCTURAL transcription. This leg proves the
+// shipped GLSL (planet-lod-height.glsl.js) carries the SAME candidate WAKE_* constants the mirror was calibrated
+// on, DERIVES the downstream sign from bandProxy (not hard-coded west — fluid-lens must-fix #5), COUNT-gates
+// behind i < uStormCount (⇒ exactly 0 with no storms — the off-gate identity), wires + dWake(Nraw) at the dLat
+// seam, and — DIFF-SCOPED to the dWake body — contains no uTime / animated-warp path (F1 static place-once). The
+// dWake body is sliced from its def to the F24 comment (dWake sits between dAdvect and zonalBandCol).
+const I_BODIES = GLSL.slice(GLSL.indexOf('float dWake(vec3 Nraw){'), GLSL.indexOf('// ── F24 zonalBandCol'));
+const I_CODE = I_BODIES.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+describe('worldengine base — slice-I GLSL ↔ mirror constant parity (atmo-expression 2026-07-17)', () => {
+  it('[wire] + dWake(Nraw) is added at the dLat seam alongside dAdvect (the storm/band interaction term)', () => {
+    expect(GLSL).toContain('dAdvect(Nraw, wShear, wBand, wStorm) + dWake(Nraw)');
+    expect(GLSL).toContain('float dWake(vec3 Nraw){');
+  });
+
+  it('[parity] dWake GLSL carries the SAME candidate WAKE_* constants as the BAND_FLOW mirror', () => {
+    // a mirror change without the matching GLSL change fails here (constant-parity intent, the K pattern)
+    expect(BAND_FLOW.WAKE_LEN).toBe(4.5);  expect(I_BODIES).toContain('WAKE_LEN = 4.5');
+    expect(BAND_FLOW.WAKE_WID).toBe(1.2);  expect(I_BODIES).toContain('WAKE_WID = 1.2');
+    expect(BAND_FLOW.WAKE_BOW).toBe(0.34); expect(I_BODIES).toContain('WAKE_BOW = 0.34');
+    expect(BAND_FLOW.WAKE_AMP).toBe(0.22); expect(I_BODIES).toContain('WAKE_AMP = 0.22');
+    expect(BAND_FLOW.WAKE_K).toBe(7.0);    expect(I_BODIES).toContain('WAKE_K = 7.0');
+  });
+
+  it('[parity] downstream sign is DERIVED from bandProxy(latC) − 0.5 (not hard-coded west; fluid-lens #5)', () => {
+    expect(I_CODE).toContain('sign(bandProxy(latC) - 0.5)');
+    expect(I_CODE).toContain('flow * de');                    // ds = flow·de (downstream = flow-sign·east)
+    // both contributors present: the near-storm elliptical BOW + the downstream wake cone × von-Kármán meander
+    expect(I_CODE).toContain('WAKE_BOW * R * bow');
+    expect(I_CODE).toContain('WAKE_AMP * R * cone * wave');
+  });
+
+  it('[gate] dWake is COUNT-gated behind i < uStormCount (⇒ exactly 0 when no storms) + uAtmoInk-scaled', () => {
+    expect(I_CODE).toContain('for (int i = 0; i < 8; i++)');
+    expect(I_CODE).toContain('if (i >= uStormCount) break;');
+    expect(I_CODE).toContain('uAtmoInk');                     // Max's UAT tame-down dial scales the whole term
+    // the tangent frame matches stormSwirl/stormColTerms (same east/north the mask edge rides)
+    expect(I_CODE).toContain('normalize(cross(vec3(0.0, 1.0, 0.0), c))');
+  });
+
+  it('[F1] the dWake body contains no uTime / animated-warp path (diff-scoped, comments stripped)', () => {
+    expect(I_CODE).not.toMatch(/uTime/);
+    expect(I_CODE).not.toMatch(/\b(ph0|ph1|r0|r1|jetRotY|jetsDisp)\b/);
+  });
+});

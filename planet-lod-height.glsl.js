@@ -1874,6 +1874,53 @@ export const HEIGHT_GLSL = /* glsl */ `
         float ink  = s1 + s2f + fold;
         return uAtmoInk * INK_AMP * ink * clamp(wStorm, 0.0, 1.0);
       }
+      // dWake — the storm-anchored INTERACTION displacement (slice I, finding 2; BUILD-PLAN §2.1). Two
+      // meridional contributors, both fed into the SAME dLat as dAdvect ⇒ they DEFLECT the primary baked
+      // band (via bandProxy) instead of pasting a decal — the root fix for "one on top of the other":
+      //   (a) a near-storm ROTATIONAL BOW that wraps the primary bands around each oval (dies by ~1.6R), and
+      //   (b) a DOWNSTREAM wake cone + von-Kármán meander carrying the deflection PAST the rim into the band
+      //       field (reach well past today's 2.6R GRS cone — finding 2's "wake into the band field beyond
+      //       the rim"), so the storm belongs to the band field rather than sitting on top of it.
+      // Per-storm loop in the SAME east/north tangent frame stormSwirl/stormColTerms build; COUNT-gated
+      // behind i < uStormCount ⇒ EXACTLY 0 whenever there are no storms (non-gas AND gas-storms-off) — the
+      // same lever stormColTerms uses, so dWake==0 ⇔ uStormCount==0 (off-gate identity). Downstream direction
+      // is DERIVED from sign(bandProxy(latC) − 0.5) = the LOCAL zonal-flow sign at the storm latitude (east in
+      // zones, west in belts) — NOT hard-coded west (fluid-lens must-fix #5; reuses slice-K's bandProxy, so I
+      // lands after K). Scaled by uAtmoInk (Max's UAT tame-down dial). STATIC — every sample is a pure function
+      // of Nraw + the storm uniforms + the proxy uniforms, no uTime (F1). Faithful transcription of
+      // band-flow.js stormBandDrag; the WAKE_* GLSL literals match BAND_FLOW.WAKE_* EXACTLY (the K
+      // constant-parity pattern). Phase-A CANDIDATES (band-flow.js BAND_FLOW / calibration-candidates.md) —
+      // NOT yet frozen; they freeze at slice I's own live A/B read-gate (§6.0 Phase B; wake floors §2.1).
+      float dWake(vec3 Nraw){
+        const float WAKE_LEN = 4.5, WAKE_WID = 1.2, WAKE_BOW = 0.34, WAKE_AMP = 0.22, WAKE_K = 7.0;   // mirror parity: band-flow.js BAND_FLOW.WAKE_*
+        float sum = 0.0;
+        for (int i = 0; i < 8; i++){
+          if (i >= uStormCount) break;                                 // COUNT-gate ⇒ 0 when no storms (same lever stormColTerms uses)
+          vec3 c  = uStormPosSize[i].xyz;
+          float R = max(uStormPosSize[i].w, 1.0e-4);
+          vec3 east  = normalize(cross(vec3(0.0, 1.0, 0.0), c));       // SAME tangent frame stormSwirl/stormColTerms build
+          vec3 north = cross(c, east);
+          float de = dot(Nraw, east), dn = dot(Nraw, north);
+          float facing = step(0.0, dot(Nraw, c));                      // near-side only (antipode kill, stormColTerms idiom)
+          float rot    = uStormParams[i].x;                            // sign = circulation direction
+          // downstream sign DERIVED from the local zonal flow at the storm latitude (NOT hard-coded west)
+          float latC = asin(clamp(c.y, -1.0, 1.0));
+          float flow = sign(bandProxy(latC) - 0.5);                    // +east in zones (bandProxy>0.5), −east in belts
+          float ds   = flow * de;                                      // >0 downstream, <0 upstream (per-storm, per-band correct)
+          // (a) near-storm rotational BOW: push bands meridionally, sign following the swirl ⇒ bands wrap the oval
+          float rr  = length(vec2(de / uStormParams[i].y, dn)) / R;    // elliptical metric (E-W aspect on the east axis)
+          float bow = sign(dn) * (1.0 - smoothstep(0.0, 1.6, rr));     // dies by ~1.6R (wider than the rim)
+          // (b) DOWNSTREAM wake cone + von-Kármán meander (downstream = flow-sign·east)
+          float along = ds / (WAKE_LEN * R);                           // 0 at core … 1 at the cone tip, downstream
+          float latW  = dn / (WAKE_WID * R);
+          float cone  = smoothstep(0.05, 0.30, ds / R)                 // starts just downstream of the core
+                      * (1.0 - smoothstep(0.75, 1.15, along))          // long downstream reach past the rim
+                      * exp(-latW * latW);                             // lateral Gaussian
+          float wave  = sin(WAKE_K * along) * (1.0 - smoothstep(0.6, 1.1, along));   // von-Kármán meander in the tail
+          sum += uAtmoInk * sign(rot) * facing * (WAKE_BOW * R * bow + WAKE_AMP * R * cone * wave);
+        }
+        return sum;
+      }
       // ── F24 zonalBandCol (Stage-6 albedo, Bands step 4b — card F24) — the gas-giant
       // visible deck: alternating bright ZONES (anticyclonic upwelling, fresh high
       // condensate) and dark BELTS (cyclonic subsidence, deeper warm cloud showing
@@ -1926,13 +1973,14 @@ export const HEIGHT_GLSL = /* glsl */ `
         // The root fix for "one on top of the other": instead of pasting a storm decal, DISPLACE the latitude at
         // which the primary band field is read, then RE-DERIVE the band value analytically via bandProxy (which
         // reconstructs wBand to float tolerance — §0.2). dLat is the meridional "ink in water" advection (slice K);
-        // slice I later ADDS dWake(Nraw) to the SAME dLat. dBand = bandProxy(latRaw+dLat) − bandProxy(latRaw) is
+        // slice I ADDS dWake(Nraw) — the storm/band interaction — to the SAME dLat (count-gated ⇒ 0 with no
+        // storms). dBand = bandProxy(latRaw+dLat) − bandProxy(latRaw) is
         // ADDITIVE and == 0 EXACTLY wherever dLat == 0 (identical proxy inputs) — so on a non-gas deck (wStorm=0
         // ⇒ dAdvect=0) the term vanishes and the render is byte-identical (off-gate). STATIC: dLat is a pure
         // function of Nraw + baked fields + per-seed uniforms — no uTime (F1). bandProxy READS the proxy uniforms
         // and ADDS to the LOCAL bandVal; it never writes aBand ⇒ GOLDEN_BANDFIELD_HASH frozen by construction.
         float latRaw = asin(clamp(Nraw.y, -1.0, 1.0));                 // raw (un-swirled) latitude, radians
-        float dLat   = dAdvect(Nraw, wShear, wBand, wStorm);           // slice K ink; slice I adds + dWake(Nraw)
+        float dLat   = dAdvect(Nraw, wShear, wBand, wStorm) + dWake(Nraw);   // slice K ink + slice I storm/band interaction; dWake count-gated ⇒ 0 when uStormCount==0
         bandVal     += bandProxy(latRaw + dLat) - bandProxy(latRaw);   // deflect the PRIMARY band (non-linear re-sample)
         if (uJetStrength > 0.0) bandVal += uJetStrength * jetsDisp(trueLat, latC, pos) * (0.25 + 0.75 * wShear) * 0.35;
         // ── V-α.1 "ink in water" band-boundary FILAMENTATION (increment 3b, taxonomy 2.1/2.2) ──
