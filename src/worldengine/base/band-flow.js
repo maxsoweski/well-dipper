@@ -67,7 +67,7 @@ import { PHYS, jetProfile, jetShear, jetShearPeak } from './climate-e5.js';
 export const BAND_FLOW = Object.freeze({
   // ink-in-water (slice K)
   INK_FREQ: 2.2,          // base tendril frequency (over the unit-sphere domain)
-  INK_AMP: 0.06,          // base meridional displacement (rad) at uAtmoInk=1 (~0.2–0.3 band-width — bold)
+  INK_AMP: 0.12,          // base meridional displacement (rad) at uAtmoInk=1 — FROZEN at the 2026-07-17 Phase-B read-gate: the 0.06 candidate read sub-perceptual at full disk; ×2 puts the default dial at the confirmed fluid read (evidence/readgate-bandedge-ink*.png)
   INK_OFF: Object.freeze([2.7, -1.9, 5.3]),   // decorrelated static warp offset (octave 1)
   INK_OFF2: Object.freeze([-8.1, 4.4, -2.6]), // decorrelated static warp offset (octave 2)
   FOLD_K: 0.5,            // shear-interface fold gain (breaking-wave / festoon read — NOT a vortex roll-up)
@@ -75,7 +75,7 @@ export const BAND_FLOW = Object.freeze({
   FOLD_OFF: Object.freeze([1.7, -3.3, 6.1]),  // decorrelated fold warp offset
   // per-band jaggedness (slice J)
   ROUGH_FREQ: 7.0,        // high-freq jag warp (well above the 3.7 filament / 2.2 advection → distinct band)
-  ROUGH_AMP: 0.10,        // jag displacement amplitude on bandVal
+  ROUGH_AMP: 0.15,        // jag displacement amplitude on bandVal — FROZEN ×1.5 at the Phase-B read-gate (typical per-seed draws read subtle at 0.10; serration confirmed at the edge, evidence/readgate-bandedge-jag*.png)
   ROUGH_BELT: 0.7,        // per-band base: whole belts (cyc≈1) carry this baseline roughness
   ROUGH_EDGE: 0.5,        // edge boost: extra roughness at high-shear boundaries
   ROUGH_OFF: Object.freeze([-5.9, 2.2, 8.8]), // decorrelated jag warp offset

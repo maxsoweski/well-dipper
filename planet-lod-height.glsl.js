@@ -1859,7 +1859,7 @@ export const HEIGHT_GLSL = /* glsl */ `
       // the V-α.1 filament precedent. Constants are Phase-A CANDIDATES (band-flow.js BAND_FLOW /
       // calibration-candidates.md) — frozen at the live A/B read-gate (§6.0 Phase B).
       float dAdvect(vec3 Nraw, float wShear, float wBand, float wStorm){
-        const float INK_FREQ = 2.2, INK_AMP = 0.06, FOLD_K = 0.5, FOLD_FREQ = 9.0;   // candidates
+        const float INK_FREQ = 2.2, INK_AMP = 0.12, FOLD_K = 0.5, FOLD_FREQ = 9.0;   // INK_AMP frozen ×2 at the 2026-07-17 Phase-B read-gate (mirror parity: band-flow.js BAND_FLOW)
         float lat = asin(clamp(Nraw.y, -1.0, 1.0));
         // anisotropic domain: compress the zonal (longitude / x,z) plane by 1/uInkStretch, keep y (meridional)
         vec3 s    = vec3(Nraw.x / uInkStretch, Nraw.y, Nraw.z / uInkStretch);
@@ -1970,7 +1970,7 @@ export const HEIGHT_GLSL = /* glsl */ `
         // calibration-candidates.md) — frozen at the live A/B read-gate (§6.0 Phase B).
         float rough = (0.7 * cyclonic + 0.5 * clamp(wShear, 0.0, 1.0)) * uBandRough;   // ROUGH_BELT 0.7 / ROUGH_EDGE 0.5 (candidates) × per-seed global
         float jag   = bandWarpField(pos * 7.0 + vec3(-5.9, 2.2, 8.8));                 // ROUGH_FREQ 7.0 / ROUGH_OFF (candidates) — fresh STATIC high-freq warp
-        bandVal += 0.10 * rough * jag * clamp(wStorm, 0.0, 1.0);                       // ROUGH_AMP 0.10 (candidate); MASK-gated ⇒ 0 off-gate (filament precedent)
+        bandVal += 0.15 * rough * jag * clamp(wStorm, 0.0, 1.0);                       // ROUGH_AMP 0.15 (frozen ×1.5 at the Phase-B read-gate; mirror parity: band-flow.js); MASK-gated ⇒ 0 off-gate (filament precedent)
         // alternating zone/belt LUMINANCE — a smoothstep across the writer band value; the soft risers
         // still land on posterize-step transitions so the Bayer dither textures the festooned boundary.
         float zone = smoothstep(0.34, 0.66, clamp(bandVal, 0.0, 1.0));

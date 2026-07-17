@@ -32,10 +32,10 @@ ONLY to form a deflection delta `bandProxy(lat+dLat) − bandProxy(lat)` — the
 | `uAtmoInk` (default) | boldness dial (scales dWake + dAdvect); GUI 0..2 | **1.0** | bold read; Max tames at UAT |
 | `uInkStretch` (default) | anisotropy (zonal-plane domain compression); GUI 1..6 | **3.5** | AC-ADVECT ratio band |
 | `INK_FREQ` | base tendril frequency | 2.2 | anisotropy sweep |
-| `INK_AMP` | base meridional displacement (rad) at ink=1 | 0.06 | perceptual floor (peak &#124;dLat&#124; / &#124;dBand&#124;) |
+| `INK_AMP` | base meridional displacement (rad) at ink=1 | **0.12 (FROZEN ×2, Phase-B read-gate 2026-07-17)** | perceptual floor (peak &#124;dLat&#124; / &#124;dBand&#124;) |
 | `FOLD_K` / `FOLD_FREQ` | shear-interface fold gain / freq (NOT a vortex roll-up) | 0.5 / 9.0 | null-separation + live read-gate |
 | `ROUGH_FREQ` | high-freq jag warp (distinct from 3.7 filament / 2.2 advection) | 7.0 | — |
-| `ROUGH_AMP` | jag displacement on bandVal | 0.10 | live read-gate |
+| `ROUGH_AMP` | jag displacement on bandVal | **0.15 (FROZEN ×1.5, Phase-B read-gate 2026-07-17)** | live read-gate |
 | `ROUGH_BELT` / `ROUGH_EDGE` | per-band base (cyc) / high-shear edge boost | 0.7 / 0.5 | AC-JAG belt/zone split |
 | `ROUGH_MEAN` / `ROUGH_SPREAD` | per-seed global draw uBandRough mean / ± | 1.0 / 0.4 | AC-JAG per-seed set-size |
 | `WAKE_LEN` / `WAKE_WID` | downstream cone scale / lateral width (× R) | 4.5 / 1.2 | wake-reach (sphere caps ds/R at 1/R) |
@@ -109,3 +109,18 @@ Bold at 1.0 (~0.2–0.35 band-widths on Jovian/Saturnian), linearly tameable —
 - Router-compile check: `HEIGHT_FRAG = HEIGHT_GLSL + ROUTER_MAIN` compiles with zero shader errors after the
   slice-K/J/I band edits (the 9 new uniforms must be declared IN HEIGHT_GLSL).
 - Then set the AC perceptual floors to the confirmed reading amplitude and freeze.
+
+
+## Phase-B read-gate ruling (2026-07-17, working-Claude live A/B on :5178 — CONSTANTS FROZEN)
+
+Pinned Jovian seed 1, isolated context, A/B strips archived in `evidence/readgate-*.png`:
+- `ink=0` vs `ink=1(candidate)` vs `ink=2`: the candidate read was **sub-perceptual at full-disk**
+  and gentle at band-edge zoom; `ink=2` produced the genuine dye-dragged tongues + folded billows.
+  → **INK_AMP frozen at 0.12 (×2)** so the default dial (1.0) lands on the confirmed fluid read;
+  the 0..2 dial retains a full tame-down to the old candidate look (0.5) per Max's UAT dial.
+- `jag=0` vs `jag=2` at `ink=0`: serrated belt edges confirmed; typical per-seed draws (~0.75)
+  read subtle at candidate amplitude → **ROUGH_AMP frozen at 0.15 (×1.5)**.
+- AC floors raised with the freeze (ADVECT_DLAT_FLOOR_BW 0.04→0.08, ADVECT_DBAND_FLOOR 0.05→0.10)
+  so a later amplitude shrink fails headless, per the plan's §6.0 Phase-B instruction.
+- Isotropic null (`stretch=1`) visually confirmed flatter/grainier than the stretched read.
+- Wake constants untouched (slice I not yet built; its floors freeze at its own live gate).

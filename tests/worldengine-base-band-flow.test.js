@@ -54,8 +54,8 @@ const seedP = (regime, seed) => {
 const ADVECT_RATIO_LO = 1.6;      // measured J/S/N ratio min 1.953 (margin down)
 const ADVECT_RATIO_HI = 3.2;      // measured J/S/N ratio max 2.787 (margin up)
 const ADVECT_NULL_MAX = 1.5;      // measured isotropic-null max 1.301 — clearly below ADVECT_RATIO_LO
-const ADVECT_DLAT_FLOOR_BW = 0.04;// measured J/S/N peak|dLat| min 0.047 band-widths (perceptual floor)
-const ADVECT_DBAND_FLOOR = 0.05;  // measured J/S/N peak|dBand| min 0.065 (perceptual floor)
+const ADVECT_DLAT_FLOOR_BW = 0.08;// 2× the candidate floor — INK_AMP frozen ×2 at the 2026-07-17 Phase-B read-gate; a later shrink back to the sub-perceptual candidate FAILS here
+const ADVECT_DBAND_FLOOR = 0.10;  // 2× the candidate floor (same freeze)
 const JAG_RATIO_FLOOR = 30;       // measured all-regime belt/zone min 36.7 (J/S/N min 233)
 const WAKE_DSR = 3;               // downstream ds/R past the old 2.6R GRS cone
 const WAKE_DLAT_FLOOR = 0.01;     // measured wake |dLat| at ds/R=3 ≈ 0.19·R (R∈[0.18,0.30] ⇒ 0.034+)
@@ -300,7 +300,7 @@ describe('worldengine base — slice-K GLSL ↔ mirror constant parity (atmo-exp
   it('[parity] dAdvect GLSL carries the SAME candidate constants + decorrelation offsets as the BAND_FLOW mirror', () => {
     // scalar candidates — a mirror change without the matching GLSL change fails here (constant-parity intent)
     expect(BAND_FLOW.INK_FREQ).toBe(2.2);  expect(K_BODIES).toContain('INK_FREQ = 2.2');
-    expect(BAND_FLOW.INK_AMP).toBe(0.06);  expect(K_BODIES).toContain('INK_AMP = 0.06');
+    expect(BAND_FLOW.INK_AMP).toBe(0.12);  expect(K_BODIES).toContain('INK_AMP = 0.12');   // frozen ×2, Phase-B read-gate 2026-07-17
     expect(BAND_FLOW.FOLD_K).toBe(0.5);    expect(K_BODIES).toContain('FOLD_K = 0.5');
     expect(BAND_FLOW.FOLD_FREQ).toBe(9.0); expect(K_BODIES).toContain('FOLD_FREQ = 9.0');
     // decorrelation offsets keyed to the mirror vectors
