@@ -16,6 +16,7 @@ export function makeSubstrate({ n, lat0Deg, lat1Deg, domainKm }) {
     accommodation: new Float32Array(count),   // V2-4 host: sink-ranking [0,1] (writeAccommodation reads finished height)
     shelfDepth: new Float32Array(count),      // V2-4 margins: passive-margin shelf→break→slope→rise lift (writePassiveMargins; route() composites, never carrier.height)
     province: new Uint8Array(count),          // V2-4 province: {0=craton,1=orogen,2=basin} history-tied labeling (writeProvince reads faultDensity/grainMag/accommodation; lab overlay + V2-9 palette)
+    craterField: new Float32Array(count),     // V2-5 bombardment: signed exogenic crater-population displacement (flat-grid twin parity — allocated for symmetry; writeBombardment runs on the sphere carrier only, §2 guards on verts/adj)
     flowAccum: new Float32Array(count),
     baseLevel: new Float32Array(count),
     standing: new Uint8Array(count),
