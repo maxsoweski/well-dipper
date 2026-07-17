@@ -17,6 +17,7 @@ import { PlanetBillboard } from './objects/PlanetBillboard.js';
 import { GravityWellMap } from './ui/GravityWellMap.js';
 // import { CameraController } from './camera/CameraController.js'; // OLD — kept for revert
 import { ShipCameraSystem, CameraMode } from './camera/ShipCameraSystem.js';
+import { orreryStandoff } from './camera/orreryStandoff.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
 import { PlanetGenerator } from './generation/PlanetGenerator.js';
@@ -6433,6 +6434,8 @@ function _frameSystemForOrrery() {
   cameraController.pitch = 0.7;
   cameraController.smoothedPitch = 0.7;
   cameraController.maxDistance = Math.max(50000, systemRadius * 3);
+  // (Focused-body min-distance clamp is reset inside viewSystem — the shared
+  // overview primitive — so both this entry path and focusPlanet(-1)/Esc reset it.)
 }
 
 // orrery-coherence-2026-07-15 W2 (AC2, seam map §2): the ORRERY production
@@ -6806,6 +6809,11 @@ function selectTarget(target) {
     cameraController._targetGoal.copy(target.mesh.position);
     cameraController._transitioning = true;
     cameraController._transitionSpeed = 0.06;
+    // Fix C applies at SELECT too, not just the click-2 glide: focusing a body
+    // (click-1 / Tab-cycle) should already let wheel-zoom approach it to
+    // radius*1.05 — otherwise a prior focus's floor (e.g. a star's ~4.9)
+    // sticks until the glide click. Overview framing (viewSystem) resets it.
+    cameraController.setFocusMinDistance(target.radius);
   }
 
   // Flight-assist modes react to a (re)selection while flying.
@@ -10578,14 +10586,19 @@ function trySelect(clientX, clientY) {
     const _sameAsSelected = _isSameTarget(bodyHit, _selectedTarget);
     const _clickAct = bodyClickAction({ regime: _scManual ? 'helm' : 'orrery', sameAsSelected: _sameAsSelected }).action;
     if (_clickAct === 'glide-view' && bodyHit.mesh && !cameraController.bypassed) {
-      // Radius-derived view distance (focusPlanet's ~6R precedent, floored) so a moon
-      // frames close and the star frames wide. Position captured at click time
-      // (bodies move) — the same static-goal idiom as the existing pivot ease;
-      // continuous body-tracking through the glide is a UAT taste item, deliberately
-      // not built here (do not over-engineer).
-      const _viewDist = Math.max(bodyHit.radius * 6, 0.02);
+      // Per-KIND standoff (orrery-coherence-2026-07-15 UAT round 2, fix B): the flat
+      // radius*6 framed a star's 3R glow too close and a bare planet too far. The
+      // table (star 15R / planet 4R / moon 2.6R, 0.002 degenerate floor) frames each
+      // kind consistently; the moon multiple mirrors HELM's approved close-hold feel.
+      const _viewDist = orreryStandoff(bodyHit.kind, bodyHit.radius);
+      // Radius-relative min-distance (fix C): let wheel-zoom reach just above the
+      // surface (radius*1.05) instead of the absolute 0.01 floor that made sub-0.01
+      // moons unapproachable. Reset to 0.01 on overview framing (_frameSystemForOrrery).
+      cameraController.setFocusMinDistance(bodyHit.radius);
       soundEngine.play('select');
-      cameraController.glideFocus(bodyHit.mesh.position.clone(), _viewDist);
+      // Pass the LIVE mesh.position (NOT a clone) so the single-channel glide meets a
+      // moving moon at its live spot each frame instead of chasing the click-time clone.
+      cameraController.glideFocus(bodyHit.mesh.position, _viewDist);
       console.log(`[ORRERY] click-2 VIEW glide → ${bodyHit.name} (viewDist=${_viewDist.toFixed(3)}) — nothing flew (bodyClickAction glide-view)`);
     } else {
       scControls.selectTarget(bodyHit);
