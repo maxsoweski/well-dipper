@@ -4,8 +4,13 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> **▶ LANE B (2026-07-17, UAT round 2): `orrery-coherence-2026-07-15` → VERIFIED_PENDING_MAX
-> `31eae77` — ⭐ AWAITING MAX's re-UAT (round 2b: A2–A4 feel + B5–B7).** Round 2 (2026-07-17):
+> **▶ LANE B (2026-07-17, UAT round 2b DONE): `orrery-coherence-2026-07-15` VERIFIED_PENDING_MAX
+> `31eae77` — round 2b PASSED except ONE residual (occasional side-slide approaching planets).
+> Max RULED the successor design: CENTER-THEN-FLY two-phase glide (aim until centered, then
+> translate straight — body centered throughout). ⭐ NEXT = FRESH SESSION builds it
+> workflows-first: `~/briefings/handoff-lane-B-glide-center-then-fly-2026-07-17.md`
+> (F2 moons + F3 framing UAT-passed; B5–B7 + taste calls still owed after the fix; verify-light
+> wf_ce03c185-1dd + live moon/star/interrupt closure at `da60f65`).** Round 2 (2026-07-17):
 > A1/A2 PASSED, then Max's 3 new findings (dogleg glide / moons unapproachable / planets-far
 > stars-close) root-caused by investigation workflow wf_c2ee4336-a9f to ONE method (click-2
 > glideFocus: 3 mismatched ease channels; absolute floors vs tiny moons; flat 6R vs 3R star
