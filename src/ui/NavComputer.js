@@ -9,6 +9,8 @@ import { multiplicityForSeed } from '../generation/multiplicityOracle.js';
 import { placeLabels } from './labelPlacement.js';
 import { deriveSystemTitle, deriveSystemAnnotation, deriveStarHoverName } from './systemIdentity.js';
 import { buildFarCompanionChips, formatSeparationAU } from './farCompanionChips.js';
+import { resolveMembership, membershipLabel } from './prismMembership.js';
+import { KnownSystems } from '../generation/KnownSystems.js';
 import { GalacticSectors } from '../generation/GalacticSectors.js';
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
 import { NavGalaxyRenderer } from '../rendering/NavGalaxyRenderer.js';
@@ -1565,6 +1567,12 @@ export class NavComputer {
     }));
     projected.sort((a, b) => b.starP.depth - a.starP.depth);
 
+    // Name -> screen point for every projected marker (AC2): the co-membership
+    // tether draws between a marker and its co-member markers' points. Draw-only
+    // (positions never move); an off-view co-member simply has no entry → no line.
+    const projByName = new Map();
+    for (const p of projected) if (p.star.name) projByName.set(p.star.name, p.starP);
+
     this._hoveredLocalStar = null;
     const hitDist = 12;
 
@@ -1642,10 +1650,20 @@ export class NavComputer {
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.arc(starP.x, starP.y, baseRadius + 2, 0, Math.PI * 2); ctx.stroke();
 
+        // Membership suffix (AC2): when this marker is a FAR member of a known
+        // multi-star system (Proxima → Alpha Centauri), the label carries the
+        // system name — 'Proxima Centauri · Alpha Centauri' — so a wide member
+        // reads as part of its system even before hover. Draw-only; the suffixed
+        // string flows through the deferred label pass (measureText keys by
+        // string). Procgen/singles resolve to no suffix → byte-identical label.
+        const membership = resolveMembership(star, mult, {
+          localStarNames: this._localStarNames,
+          findByAlias: KnownSystems.findByAlias,
+        });
         // Priority: selected > current-system > nearest (smaller dist ranks higher).
         const tier = isSelected ? 2 : (star === currentSystemStar ? 1 : 0);
         this._labelQueue.push({
-          name: star.name,
+          name: membershipLabel(star.name, membership),
           anchorX: starP.x + baseRadius + 2, // ring edge — leader lines target here
           anchorY: starP.y,
           homeX: starP.x + baseRadius + 4,   // text baseline home x (was the inline x)
@@ -1687,6 +1705,10 @@ export class NavComputer {
         this._hoveredLocalStar = { star, sx: starP.x, sy: starP.y };
       }
     }
+
+    // Co-membership cue (AC2): draw the tether(s) for the hovered/selected marker
+    // BENEATH the labels so text stays legible. Draw-only — positions untouched.
+    this._drawMembershipCues(ctx, projByName);
 
     // Deferred label pass (AC9): place + draw the collected labels on top of the
     // markers, overlap-free. Draw-only — marker/dot positions untouched.
@@ -1894,6 +1916,47 @@ export class NavComputer {
         x: p.x, y: p.y, w: p.w, h: p.h, name: q.name, faded: p.faded, leader: p.leader,
       });
     }
+  }
+
+  /**
+   * Co-membership cue (AC2): for the hovered and/or selected prism marker, draw a
+   * tether to the OTHER markers of the same KNOWN multi-star system, so a system
+   * whose members render as separate markers (α Cen A+B marker + Proxima's own
+   * marker) visibly reads as ONE system. Gated to hover/selection only — a settled
+   * prism draws no tethers. Resolution is oracle/alias-backed (resolveMembership);
+   * drawing is line-only, positions never move (interview ruling 1).
+   */
+  _drawMembershipCues(ctx, projByName) {
+    if (!projByName) return;
+    const active = [];
+    if (this._selectedNavStar) active.push(this._selectedNavStar);
+    const hov = this._hoveredLocalStar && this._hoveredLocalStar.star;
+    if (hov && hov !== this._selectedNavStar) active.push(hov);
+    for (const star of active) this._drawMembershipCue(ctx, star, projByName);
+  }
+
+  /** Draw one marker's tether(s) to its co-member markers (AC2 helper). */
+  _drawMembershipCue(ctx, star, projByName) {
+    if (!star || !star.name) return;
+    const from = projByName.get(star.name);
+    if (!from) return;
+    const membership = resolveMembership(star, this._glyphMult(star), {
+      localStarNames: this._localStarNames,
+      findByAlias: KnownSystems.findByAlias,
+    });
+    if (membership.memberMarkerNames.length === 0) return;
+    ctx.strokeStyle = 'rgba(120, 200, 255, 0.4)';
+    ctx.lineWidth = 1;
+    if (ctx.setLineDash) ctx.setLineDash([4, 4]);
+    for (const name of membership.memberMarkerNames) {
+      const to = projByName.get(name);
+      if (!to) continue;
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+    }
+    if (ctx.setLineDash) ctx.setLineDash([]);
   }
 
   // ════════════════════════════════════════════════════
