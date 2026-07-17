@@ -1,0 +1,67 @@
+{
+  "workstream": "world-engine-v2-5-bombardment-2026-07-17",
+  "commit": "c64e0cd",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "INSUFFICIENT",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC-0",
+      "result": "PASS",
+      "evidence": "Writer reads only condition-vector scalars (surfaceGravity, age, atmosphere, rawTidalIoRatio, T_eq) \u2014 grep confirms zero archetype/regime/label reads. Named consumer (route()\u2192compositeMargins) composites craterField at render. Taxonomy/drift guards (shadow-audit, dispatch-oracle, lid-router-audit, planet-archetypes) 145/145 pass; full suite 2163/2167 (4 pre-existing failures confirmed unrelated via stash-and-rerun at HEAD).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-CHANNEL",
+      "result": "PASS",
+      "evidence": "writeBombardment writes only carrier.craterField, post-dispatch, never touches carrier.height; route() composites at render via compositeMargins (height+shelfDepth+craterField), never mutating carrier.height itself. HASHED_FIELDS excludes craterField; 83/83 golden byte-identity suite passes; 28/28 bombardment+preset-composite tests pass including explicit \"HASHED_FIELDS byte-untouched\" and null-composite-for-non-target-world checks.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-POWERLAW",
+      "result": "PASS",
+      "evidence": "19/19 dedicated tests pass, including both AC-named rows (SFD slope band [-2.2,-1.8] with R\u00b2>0.95 every seed; uniform-density null clearly rejected). Independently re-derived outside vitest for all 5 seeds: slopes -1.97 to -2.04, R\u00b2>0.997 everywhere; uniform null gives slope\u2248+1.0 for all seeds, unambiguously outside the band.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-MULTIPLY",
+      "result": "PASS",
+      "evidence": "19/19 tests pass. Direct-writer describe block confirms neutral reference (G_REF,AGE_REF)\u2192(N_CRATERS_REF,sizeMul=1), non-strict monotone response to gravity (count+size) and age (count only, size age-independent), all exponents (K_AGE,K_GD,K_GS) confirmed >0 in source. Non-strict monotonicity matches AC wording (not \"strictly monotonic\").",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-DISTINCT",
+      "result": "PASS",
+      "evidence": "19/19 tests pass: repeat-seed byte-equal determinism confirmed; inter-seed L2 distance >0.5 across 5 seeds at fixed condition; (gravity,age) grid produces visibly distinct fields (L2>0.5) at fixed seed. Code path unchanged since slice-1 commit 6a352a3; unrelated working-tree diff (CameraChoreographer/LabMode) confirmed to not touch this file.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-PRESET",
+      "result": "PASS",
+      "evidence": "9/9 dedicated preset-composite tests pass: new Moon/Mercury preset routes dead-lid with populated craterField every seed; Frozen 5/5 golden HEIGHT rows stay byte-identical AND get non-trivial crater overprint. Dispatch-oracle's 18th adjudication row covers the new preset by name. 83-golden suite confirms new preset correctly excluded from PRESET_ARCHETYPE (no golden regression) while still routing/compositing live. Full guardrail set (159 tests) green.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-LAB",
+      "result": "INSUFFICIENT",
+      "evidence": "Static-only pass performed per instructions; the required live chrome-devtools browser drive on :5175 was NOT executed this pass. Static inspection confirms all lab-UI wiring is committed and present: Moon/Mercury preset registered in driver-presets.js and NAMED_BODY radius lock, lil-gui dropdown + window._lab.setPreset() entry point, new 'age (Gyr)' slider alongside existing 'gravity (g)' slider both plumbed into condition.surfaceGravity/condition.age, and a '\u2726 current' summary line surfacing craters. No evidence/ folder or screenshots exist yet \u2014 the live drive genuinely has not been done. Also found: an unrelated uncommitted working-tree diff (CameraChoreographer.js, LabMode.js \u2014 a different camera/warp-flow lane) sitting alongside this build-complete workstream; harmless to this AC but should be committed/stashed separately before further commits land.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "result": "PASS",
+      "evidence": "Guardrail quartet + dispatch-oracle + archetype drift guard: 141/141 pass. Golden+new-test set: 65/65 pass. Full suite matches pre-existing baseline signature exactly (verified via disposable git worktree at pre-V2-5 commit c85adfd with submodule init: identical 17-file/4-test failure signature, all pre-existing/unrelated \u2014 vendor/motion-test-kit collection mismatches + GalacticFeatures/KnownObjects staleness). Fixtures/goldens never re-captured (empty diff both working-tree and full range). Atmo-owned writer files untouched by the diff.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-UAT",
+      "result": "deferred-to-max",
+      "evidence": "Per contract and project convention, UAT is Max-only and never agent-PASSed. Build is functionally complete per static inspection (BUILD-PLAN.md slices 1-3 all committed and test-verified) but the AC-LAB integration prerequisite has not yet been live-driven, so UAT should follow that. Two known design items to accept/reject during UAT: (1) Crystal preset also receives crater overprint \u2014 deliberate, since the writer is label-blind and Crystal is condition-scalar-indistinguishable from Frozen; (2) gravity slider's effect on individual crater size is weak by design (K_GS=0.17, ~1.3x per drag) \u2014 visible response rides mainly on count, not size.",
+      "adversarialVotes": "n/a \u2014 UAT is Max-only"
+    }
+  ],
+  "overall": "INSUFFICIENT \u2014 unit layer fully PASS (6/6 ACs, 3/3 adversarial each) and integration AC-PRESET PASS, but AC-LAB (the live chrome-devtools browser drive on :5175) was not performed this pass and is deferred to working-Claude. UAT is deferred to Max and should follow AC-LAB's completion.",
+  "summaryForMax": "Bombardment feature (craters via gravity+age drivers) is code-complete and unit-verified: all 6 unit ACs (AC-0 driver connectivity, AC-CHANNEL persistent-host/composite-at-render, AC-POWERLAW size-frequency distribution, AC-MULTIPLY continuous gravity/age scheduling, AC-DISTINCT per-seed determinism/distinctness, AC-ZERO-CLOBBER no regression on existing goldens/atmo) pass cleanly with real headless test runs, each independently confirmed 3/3 by adversarial review. AC-PRESET (integration, the new Moon/Mercury dead-lid preset routing + compositing) also passes with real test output.\n\nWhat's NOT done yet: AC-LAB \u2014 the live browser check that the lab UI (new 'age' slider, preset dropdown, crater visibility) actually works in a running browser on :5175 \u2014 was not driven this pass (static code inspection only). That's queued for working-Claude to drive live before this can move further.\n\nOnce AC-LAB is green, your UAT (AC-UAT) is: open the lab at :5175, select the Moon/Mercury preset and the Frozen preset, re-roll seeds a few times, and sweep the gravity and age sliders \u2014 confirm craters visibly appear/change and nothing else looks broken. Two things to have an opinion on while you're there: (1) the Crystal preset also gets crater overprint now \u2014 that's deliberate (the writer can't distinguish it from Frozen), decide if that's acceptable; (2) dragging the gravity slider changes crater count much more visibly than crater size (by design, weak size exponent) \u2014 don't be surprised if size doesn't balloon.\n\nOne housekeeping flag surfaced repeatedly during verification: your working tree currently has unrelated uncommitted changes to src/auto/CameraChoreographer.js and src/debug/LabMode.js (a different camera/warp-flow lane, not bombardment). They're harmless to this workstream but should get committed or stashed on their own before you commit anything further here, so they don't accidentally ride along."
+}
