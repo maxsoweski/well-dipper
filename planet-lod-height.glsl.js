@@ -354,6 +354,24 @@ export const HEIGHT_GLSL = /* glsl */ `
       // ROUGH_MEAN). Declared HERE in HEIGHT_GLSL (not the lab wrapper) so the shared HEIGHT_FRAG river-
       // router material — which compiles zonalBandCol's whole body without calling it — links (golden-lens).
       uniform float uBandRough;        // per-band edge-jaggedness global scale (slice J; consumed in zonalBandCol)
+      // atmo-expression slice K: the 6 render-side band-PROXY uniforms + 2 ink dials (BUILD-PLAN §5). The
+      // proxy reconstructs the baked band value aBand analytically render-side (the writer's normDenom =
+      // uPeak·(aEq+aMid·envMax) makes uPeak CANCEL, leaving bandProxy(lat) = clamp01(0.5 + uBandDeflectScale·
+      // (uBandSEq·AEQ·g + uBandAMid·mid))), so the storm swirl + ink advection can DEFLECT the primary band
+      // (dBand = bandProxy(latRaw+dLat) − bandProxy(latRaw)) instead of pasting a decal — aBand +
+      // GOLDEN_BANDFIELD_HASH are never touched (read-only reconstruction). Exported per-seed from bake.params
+      // in rebakeE5Bands (single-sourced via band-flow.js bandProxyUniforms). Declared HERE in HEIGHT_GLSL
+      // (NOT the lab wrapper / JS value file) so the shared HEIGHT_FRAG river-router material — which compiles
+      // zonalBandCol's whole body without calling it — links instead of failing "undeclared identifier"
+      // (golden-lens must-fix #1; the ws4-grain-scarp-wire precedent).
+      uniform float uBandM;            // P.m — Rhines wavenumber (bandProxy)
+      uniform float uBandPhaseJet;     // P.phaseJet — per-seed band phase (bandProxy)
+      uniform float uBandSEq;          // P.sEq — signed equatorial-jet sign (bandProxy)
+      uniform float uBandAMid;         // P.aMid — mid-latitude jet amplitude (bandProxy)
+      uniform float uBandS2;           // P.s2 — Ward pole-emphasis coefficient (bandProxy env)
+      uniform float uBandDeflectScale; // 0.5·contrast/(aEq+aMid·envMax) — the one combined proxy scalar
+      uniform float uAtmoInk;          // THE boldness dial (scales dWake + dAdvect); GUI 0..2, CANDIDATE default 1.0 (bold)
+      uniform float uInkStretch;       // ink anisotropy (zonal-plane domain compression); GUI 1..6, CANDIDATE default 3.5
       // ── F25 jets & shear turbulence (Bands step 4b — card F25) — ALBEDO/LUMINANCE ONLY ──
       // Regression contract: every jets term sits behind uJetStrength > 0.0, so at 0 the
       // render is byte-identical F24 output (uTime enters the band family ONLY through F25).
@@ -1810,6 +1828,52 @@ export const HEIGHT_GLSL = /* glsl */ `
         return col;
       }
 
+      // ── atmo-expression slice K: bandProxy + anisotropic ink advection (BUILD-PLAN §0.2/§3.1) ──
+      // bandProxy — the 6-uniform ANALYTIC reconstruction of the baked band value aBand. Because the writer's
+      // normDenom = uPeak·(aEq + aMid·envMax), uPeak CANCELS, leaving a closed form the render can evaluate at
+      // ANY (displaced) latitude. Used ONLY to form the deflection delta dBand = bandProxy(latRaw+dLat) −
+      // bandProxy(latRaw); the baked aBand + GOLDEN_BANDFIELD_HASH are NEVER written (read-only). PHYS consts
+      // (AEQ/PHI_EQ/WARD_GAIN/ENV_BASE) inline from climate-e5 PHYS. Faithful transcription of band-flow.js
+      // bandProxy (the numeric truth lives in that mirror; parity < 1e-3 — calibration-candidates.md).
+      float bandProxy(float lat){
+        const float AEQ = 0.6, PHI_EQ = 0.35, WARD_GAIN = 0.8, ENV_BASE = 1.0;   // climate-e5 PHYS
+        float s     = sin(lat);
+        float p2    = 0.5 * (3.0 * s * s - 1.0);                    // Legendre P2(sinLat)
+        float ratio = lat / PHI_EQ;
+        float g     = exp(-ratio * ratio);                          // equatorial Gaussian
+        float env   = ENV_BASE + WARD_GAIN * uBandS2 * p2;          // Ward pole-emphasis envelope
+        float mid   = sin(uBandM * lat + uBandPhaseJet) * (1.0 - g) * env;
+        return clamp(0.5 + uBandDeflectScale * (uBandSEq * AEQ * g + uBandAMid * mid), 0.0, 1.0);
+      }
+      // dAdvect — the ANISOTROPIC "ink in water" meridional displacement (slice K, finding 3). Long
+      // correlation ALONG the zonal flow, short ACROSS it, + a shear-interface FOLD (breaking-wave / festoon
+      // read — NOT a literal vortex roll-up; BUILD-PLAN §3.1 mechanism boundary). ANISOTROPY MECHANISM: the
+      // zonal (x,z / longitude) plane is COMPRESSED by 1/uInkStretch while y (meridional) is kept, so warp
+      // features elongate east-west along the jets. (This is the band-flow.js REALIZATION — BUILD-PLAN §3.1's
+      // literal e=dot(Nraw,eF) is ≡0 for a unit point on its own tangent frame and collapses to isotropic /
+      // AC-ADVECT ratio ~1.0; recorded as an adjudicable deviation in calibration-candidates.md. The GLSL
+      // transcribes the MIRROR — that is the whole point of §2.3 "numeric truth lives in the mirror.") Per-seed
+      // tendril variety enters via uBandOffset baked inside bandWarpField (the GLSL analog of the mirror's
+      // seedOffsetOf). STATIC — every sample is bandWarpField of an Nraw-derived domain, no uTime / no
+      // animated ph0/ph1/r0/r1/jetRotY path (F1). MASK-gated by clamp(wStorm) ⇒ exactly 0 off-gate (non-gas),
+      // the V-α.1 filament precedent. Constants are Phase-A CANDIDATES (band-flow.js BAND_FLOW /
+      // calibration-candidates.md) — frozen at the live A/B read-gate (§6.0 Phase B).
+      float dAdvect(vec3 Nraw, float wShear, float wBand, float wStorm){
+        const float INK_FREQ = 2.2, INK_AMP = 0.06, FOLD_K = 0.5, FOLD_FREQ = 9.0;   // candidates
+        float lat = asin(clamp(Nraw.y, -1.0, 1.0));
+        // anisotropic domain: compress the zonal (longitude / x,z) plane by 1/uInkStretch, keep y (meridional)
+        vec3 s    = vec3(Nraw.x / uInkStretch, Nraw.y, Nraw.z / uInkStretch);
+        vec3 dom1 = s * INK_FREQ + vec3(2.7, -1.9, 5.3);                                // INK_OFF (decorrelation; per-seed via uBandOffset in bandWarpField)
+        float s1  = bandWarpField(dom1);
+        float s2f = 0.5 * bandWarpField(s * (2.0 * INK_FREQ) + vec3(-8.1, 4.4, -2.6));  // INK_OFF2 — 2nd octave, half amplitude
+        // shear-interface FOLD: meridional sinusoid, belt/zone phase flip (step(0.5,wBand)), shear-gated,
+        // irregularized by a decorrelated warp sample (dom1.zxy + FOLD_OFF). NOT a literal vortex roll-up.
+        float foldWarp  = bandWarpField(dom1.zxy + vec3(1.7, -3.3, 6.1));               // FOLD_OFF
+        float foldPhase = FOLD_FREQ * lat + 3.14159265 * step(0.5, wBand);
+        float fold = FOLD_K * clamp(wShear, 0.0, 1.0) * sin(foldPhase) * foldWarp;
+        float ink  = s1 + s2f + fold;
+        return uAtmoInk * INK_AMP * ink * clamp(wStorm, 0.0, 1.0);
+      }
       // ── F24 zonalBandCol (Stage-6 albedo, Bands step 4b — card F24) — the gas-giant
       // visible deck: alternating bright ZONES (anticyclonic upwelling, fresh high
       // condensate) and dark BELTS (cyclonic subsidence, deeper warm cloud showing
@@ -1823,7 +1887,7 @@ export const HEIGHT_GLSL = /* glsl */ `
       // every one behind uJetStrength > 0.0 (jets off ⇒ byte-identical F24 statics).
       // Poles: latitude-only keying means bands can never converge or
       // pinch; an explicit darkened polar hood caps them instead (card §6 item 5).
-      vec3 zonalBandCol(vec3 N, vec3 pos, float wBand, float wShear, float wMush, float wStorm){
+      vec3 zonalBandCol(vec3 N, vec3 Nraw, vec3 pos, float wBand, float wShear, float wMush, float wStorm){
         // true latitude from the geometric normal, normalized to -1..1
         float trueLat = asin(clamp(N.y, -1.0, 1.0)) * 0.63661977;   // × 2/π
         // uBandLatPow > 1 widens the equatorial bands and narrows the polar ones
@@ -1858,6 +1922,18 @@ export const HEIGHT_GLSL = /* glsl */ `
         // r festoons the edges (jets-on: the rotated warp domain slides adjacent bands opposite ways);
         // the writer's shear wShear gates the jet turbulence so the filaments ride the REAL shear.
         float bandVal = wBand + uBandWarp * 0.16 * r;
+        // ── Atmo-expression slice K: DEFLECT the primary baked band (BUILD-PLAN §1; band-flow advectDisplacement) ──
+        // The root fix for "one on top of the other": instead of pasting a storm decal, DISPLACE the latitude at
+        // which the primary band field is read, then RE-DERIVE the band value analytically via bandProxy (which
+        // reconstructs wBand to float tolerance — §0.2). dLat is the meridional "ink in water" advection (slice K);
+        // slice I later ADDS dWake(Nraw) to the SAME dLat. dBand = bandProxy(latRaw+dLat) − bandProxy(latRaw) is
+        // ADDITIVE and == 0 EXACTLY wherever dLat == 0 (identical proxy inputs) — so on a non-gas deck (wStorm=0
+        // ⇒ dAdvect=0) the term vanishes and the render is byte-identical (off-gate). STATIC: dLat is a pure
+        // function of Nraw + baked fields + per-seed uniforms — no uTime (F1). bandProxy READS the proxy uniforms
+        // and ADDS to the LOCAL bandVal; it never writes aBand ⇒ GOLDEN_BANDFIELD_HASH frozen by construction.
+        float latRaw = asin(clamp(Nraw.y, -1.0, 1.0));                 // raw (un-swirled) latitude, radians
+        float dLat   = dAdvect(Nraw, wShear, wBand, wStorm);           // slice K ink; slice I adds + dWake(Nraw)
+        bandVal     += bandProxy(latRaw + dLat) - bandProxy(latRaw);   // deflect the PRIMARY band (non-linear re-sample)
         if (uJetStrength > 0.0) bandVal += uJetStrength * jetsDisp(trueLat, latC, pos) * (0.25 + 0.75 * wShear) * 0.35;
         // ── V-α.1 "ink in water" band-boundary FILAMENTATION (increment 3b, taxonomy 2.1/2.2) ──
         // Fine turbulent detail woven INTO the band boundary — Kelvin-Helmholtz billows / von-Kármán

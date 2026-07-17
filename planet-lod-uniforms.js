@@ -343,6 +343,18 @@ export function makeUniforms(WORLD_LIGHT) {
       uBandLatPow:      { value: 1.3 },   // F24 latitude remap exponent (wide equatorial, narrow polar bands) — lab knob
       uBandOffset:      { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds it to the warp domain)
       uBandRough:       { value: 1.0 },   // atmo-expression slice J: per-seed global band-edge roughness (drawBandRoughness/bandFlow:rough; GUI 0..2, touched-flag override) — CANDIDATE default 1.0 (ROUGH_MEAN)
+      // atmo-expression slice K: 6 render-side band-PROXY uniforms (exported per-seed from bake.params in
+      // rebakeE5Bands via band-flow.js bandProxyUniforms) + 2 ink dials. Consumed in zonalBandCol's bandProxy /
+      // dAdvect; declared IN HEIGHT_GLSL for the river-router link (golden-lens #1). Proxy values are seed
+      // placeholders (overwritten on every gas rebake; unread on non-gas where bandMask=0). Ink = CANDIDATE defaults.
+      uBandM:            { value: 8.0 },   // P.m Rhines wavenumber (bandProxy)
+      uBandPhaseJet:     { value: 0.0 },   // P.phaseJet per-seed band phase (bandProxy)
+      uBandSEq:          { value: 1.0 },   // P.sEq signed equatorial-jet sign (bandProxy)
+      uBandAMid:         { value: 0.5 },   // P.aMid mid-latitude jet amplitude (bandProxy)
+      uBandS2:           { value: 0.0 },   // P.s2 Ward pole-emphasis coefficient (bandProxy env)
+      uBandDeflectScale: { value: 0.3 },   // 0.5·contrast/(aEq+aMid·envMax) combined proxy scalar
+      uAtmoInk:          { value: 1.0 },   // atmo-expression slice K: boldness dial (scales dWake+dAdvect); GUI 0..2 — CANDIDATE 1.0 (bold)
+      uInkStretch:       { value: 3.5 },   // atmo-expression slice K: ink anisotropy (zonal-plane compression); GUI 1..6 — CANDIDATE 3.5
       uJetStrength:     { value: 0.0 },   // F25 master gate (driven: 1 on h2-he gas worlds, 0 on solid); 0 ⇒ byte-identical F24
       uJetSpeed:        { value: 0.8 },   // F25 drift amplitude, rad per flow phase (driven: 8/rotationHours, clamped 0.2..1.2)
       uJetShearTurb:    { value: 0.25 },  // F25 boundary-turbulence amplitude in stripe units (driven: T_eq vigor ramp)

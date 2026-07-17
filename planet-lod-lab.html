@@ -176,7 +176,7 @@
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
     import { resolveStormE, bakeStormEAttributes, chromophoreColor } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp
     import { drawGiantConditions, deriveGiantDrivers } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation) — replaces the frozen DRIVER_BUNDLES constants per seed
-    import { drawBandRoughness } from './src/worldengine/base/band-flow.js';   // atmo-expression slice J: per-seed global band-edge roughness draw on the append-only bandFlow:rough stream (disjoint from climateE5:/stormE:/giantD: ⇒ both goldens frozen)
+    import { drawBandRoughness, bandProxyUniforms } from './src/worldengine/base/band-flow.js';   // atmo-expression slice J: per-seed global band-edge roughness draw on the append-only bandFlow:rough stream (disjoint from climateE5:/stormE:/giantD: ⇒ both goldens frozen). slice K: bandProxyUniforms — the 6 render-side band-proxy uniforms from bake.params (single-sourced; the lab does NOT re-derive DEFLECT_SCALE)
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -651,11 +651,14 @@
           // terrestrial preset deriving spotStrength 0) takes the raw N/vPos path:
           // byte-identical F25 rendering — the F27 regression contract.
           vec3 bandN = N, bandPos = vPos;
+          // slice K: the RAW (un-swirled) sphere direction — the latitude the ink advection deflects FROM
+          // (bandN is storm-swirled; Nraw must be the un-rotated direction so dBand reads the true baked band).
+          vec3 bandNraw = normalize(vPos);
           if (uStormCount > 0){
             bandN = stormSwirl(normalize(vPos));
             bandPos = bandN * length(vPos);
           }
-          albedoCol = mix(albedoCol, zonalBandCol(bandN, bandPos, vBand, vShear, vMush, vStorm), bandMask);
+          albedoCol = mix(albedoCol, zonalBandCol(bandN, bandNraw, bandPos, vBand, vShear, vMush, vStorm), bandMask);
         }
         // ── F25 jets solo visibility — jets key on uJetStrength ALONE: with the deck
         // dark (solo('jets') zeroes uBandStrength), the shear turbulence still reads
@@ -2079,6 +2082,8 @@
       bandTint: [0.78,0.62,0.44],  // F24 deck base color (driven: atmosphere.color)
       bandStretch: 2.5,     // F24 vertical domain compression (lab knob)
       bandRough: 1.0,       // atmo-expression slice J: per-seed global band-edge roughness (uBandRough; drawn by rebakeE5Bands on bandFlow:rough unless the slider is dragged — touched-flag override). CANDIDATE default 1.0.
+      atmoInk: 1.0,         // atmo-expression slice K: THE boldness dial (scales dWake+dAdvect); GUI 0..2. CANDIDATE default 1.0 (bold) — Max's UAT tame-down dial.
+      inkStretch: 3.5,      // atmo-expression slice K: ink anisotropy (zonal-plane domain compression); GUI 1..6. CANDIDATE default 3.5.
       bandLatPow: 1.3,      // F24 latitude remap exponent (lab knob)
       e5Obliquity: 0,       // #3a Ward obliquity override (0 = use regime default; >54.7° ⇒ hot-poles inversion)
       e5RotationScale: 1.0, // #3a rotation multiplier (sweep to show Rhines band-count response, AC12)
@@ -2848,6 +2853,18 @@
       geometry.attributes.aBand.array.set(bake.aBand);   geometry.attributes.aBand.needsUpdate = true;
       geometry.attributes.aShear.array.set(bake.aShear); geometry.attributes.aShear.needsUpdate = true;
       geometry.attributes.aMush.array.set(bake.aMush);   geometry.attributes.aMush.needsUpdate = true;
+      // atmo-expression slice K: export the 6 render-side band-PROXY uniforms from bake.params (the full
+      // resolved P). bandProxy reconstructs the baked band value analytically render-side so the storm swirl +
+      // ink advection DEFLECT the primary band (dBand) instead of pasting a decal — aBand + GOLDEN_BANDFIELD_HASH
+      // untouched (read-only reconstruction). Single-sourced via band-flow.js bandProxyUniforms (the lab does
+      // NOT re-derive DEFLECT_SCALE). Every reseed re-runs rebakeE5Bands ⇒ re-exports (derive-not-freeze wiring).
+      const _proxyU = bandProxyUniforms(bake.params);
+      uniforms.uBandM.value            = _proxyU.uBandM;
+      uniforms.uBandPhaseJet.value     = _proxyU.uBandPhaseJet;
+      uniforms.uBandSEq.value          = _proxyU.uBandSEq;
+      uniforms.uBandAMid.value         = _proxyU.uBandAMid;
+      uniforms.uBandS2.value           = _proxyU.uBandS2;
+      uniforms.uBandDeflectScale.value = _proxyU.uBandDeflectScale;
       state.e5BandCount = bake.bandCount; state.e5EqSign = bake.eqSign; state.e5PeakU = bake.peakU;  // live-AC probes
       // #3b Slice P: bake the storm/convection MASK (the one new attribute) from the SAME regime/drivers,
       // plus the composition gas-gate + T_eq personality inputs the storm writer reads. _sd inherits the
@@ -4477,6 +4494,14 @@
     // manual value survives reseeds (the per-frame block pushes state.bandRough → uBandRough). GUI 0..2.
     fBands.add(state, 'bandRough', 0, 2, 0.01).name('edge roughness').listen()
       .onChange(() => { _driverTouched.add('bandRough'); });
+    // atmo-expression slice K: INK / FLOW — the "ink in water" advection dials. VALUE sliders (driver
+    // overrides — NO *Enabled key; ride the already-registered PROV_BANDS province, so the planet-archetypes
+    // drift guard, which scrapes only *Enabled checkbox keys, is blind to them by design). state is the single
+    // source; the per-frame block syncs state.atmoInk/inkStretch → uAtmoInk/uInkStretch (same as every band
+    // uniform, no reseed needed). uAtmoInk is Max's UAT tame-down dial (default 1.0 bold, GUI 0..2); uInkStretch
+    // is the anisotropy (GUI 1..6, uInkStretch=1 collapses to isotropic — the AC-ADVECT null).
+    fBands.add(state, 'atmoInk', 0, 2, 0.01).name('ink / flow boldness');
+    fBands.add(state, 'inkStretch', 1, 6, 0.05).name('ink stretch (anisotropy)');
     // ▸ Jets & shear (F25) — the deck dynamics: counter-rotating drift, shear-gated
     // boundary turbulence, one-sided festoons. strength/speed/turb/festoons are driven
     // (h2-he gate / D8 spin / T_eq vigor ramp, .listen()); freq + eq width are lab knobs.
@@ -5728,6 +5753,8 @@
       uniforms.uBandTint.value.setRGB(state.bandTint[0], state.bandTint[1], state.bandTint[2]);
       uniforms.uBandStretch.value  = state.bandStretch;
       uniforms.uBandRough.value    = state.bandRough;   // atmo-expression slice J: per-seed draw (rebakeE5Bands) or dragged value (touched-flag) — state is the single source, synced here like every band uniform
+      uniforms.uAtmoInk.value      = state.atmoInk;     // atmo-expression slice K: ink boldness dial (state is the single source; scales dWake+dAdvect)
+      uniforms.uInkStretch.value   = state.inkStretch;  // atmo-expression slice K: ink anisotropy (zonal-plane domain compression)
       uniforms.uBandLatPow.value   = state.bandLatPow;
       uniforms.uBandOffset.value.set(state.bandOffset[0], state.bandOffset[1], state.bandOffset[2]);
       // F25 jets — jetsEnabled gates strength→0 (the zonalBandCol drift/displacement

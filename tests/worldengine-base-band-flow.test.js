@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import { buildIrregularSphere } from '../planet-lod-rivers.js';
 import {
-  E5_REGIME, DRIVER_BUNDLES, resolveParams, bakeClimateE5Attributes, writeClimateE5Sphere,
+  E5_REGIME, DRIVER_BUNDLES, resolveParams, bakeClimateE5Attributes, writeClimateE5Sphere, PHYS,
 } from '../src/worldengine/base/climate-e5.js';
 import {
   drawGiantConditions, deriveGiantDrivers, canonicalGiantCondition, SWEEP_SEEDS,
@@ -254,5 +254,69 @@ describe('worldengine base — band-flow atmo-expression CPU mirrors (atmo-expre
     expect(BAND_FLOW.ROUGH_MEAN).toBe(1.0);
     expect(BAND_FLOW.ROUGH_SPREAD).toBe(0.4);
     expect(BAND_FLOW.WAKE_BOW).toBeGreaterThanOrEqual(0.3);   // pinned up for the Jovian ≥0.25-band-width bow
+  });
+});
+
+// ── Slice-K GLSL ↔ mirror constant parity (emission-e CPU↔GLSL precedent, BUILD-PLAN §2.3) ─────────────────
+// vitest has no GPU, so numeric truth lives in the band-flow.js mirror (asserted above) and the GLSL is a
+// faithful STRUCTURAL transcription. This leg proves the shipped GLSL (planet-lod-height.glsl.js) carries the
+// SAME candidate constants + offsets the mirror was calibrated on, declares all 8 K-uniforms IN HEIGHT_GLSL
+// (the river-router link — a lab-only decl would compile-fail HEIGHT_FRAG at runtime, golden-lens #1), wires
+// the dBand deflection + the 7-param signature, and — DIFF-SCOPED to the two added helper bodies — contains no
+// uTime / animated-warp path (F1 static place-once; a whole-file grep false-trips on the legacy F25 jets path).
+const GLSL = readFileSync(fileURLToPath(new URL('../planet-lod-height.glsl.js', import.meta.url)), 'utf8');
+const LAB  = readFileSync(fileURLToPath(new URL('../planet-lod-lab.html', import.meta.url)), 'utf8');
+// the two added slice-K helper bodies ONLY (diff-scoped): from bandProxy's def to the F24 comment that
+// precedes zonalBandCol. Comments stripped so the F1 no-uTime grep inspects CODE, not the doc prose that
+// legitimately names uTime/ph0/… (the climate-e5 idiom used for the mirror above).
+const K_BODIES = GLSL.slice(GLSL.indexOf('float bandProxy(float lat){'), GLSL.indexOf('// ── F24 zonalBandCol'));
+const K_CODE = K_BODIES.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+const vec3Str = (a) => `vec3(${a[0]}, ${a[1]}, ${a[2]})`;
+
+describe('worldengine base — slice-K GLSL ↔ mirror constant parity (atmo-expression 2026-07-17)', () => {
+  it('[wire] all 8 K-uniforms are declared IN HEIGHT_GLSL (river-router HEIGHT_FRAG link; golden-lens #1)', () => {
+    for (const u of ['uBandM','uBandPhaseJet','uBandSEq','uBandAMid','uBandS2','uBandDeflectScale','uAtmoInk','uInkStretch']) {
+      expect(GLSL, `${u} uniform decl in HEIGHT_GLSL`).toContain(`uniform float ${u};`);
+    }
+  });
+
+  it('[wire] zonalBandCol gains the 7th param Nraw + the dBand deflection term; the lab call site matches', () => {
+    expect(GLSL).toContain('vec3 zonalBandCol(vec3 N, vec3 Nraw, vec3 pos, float wBand, float wShear, float wMush, float wStorm)');
+    expect(GLSL).toContain('dAdvect(Nraw, wShear, wBand, wStorm)');
+    expect(GLSL).toContain('bandProxy(latRaw + dLat) - bandProxy(latRaw)');
+    // signature ↔ call-site parity: a mismatch is a shader compile fail vitest cannot catch, so pin it here
+    expect(LAB).toContain('zonalBandCol(bandN, bandNraw, bandPos, vBand, vShear, vMush, vStorm)');
+    expect(LAB).toContain('bandProxyUniforms(bake.params)');   // proxy export site (rebakeE5Bands) present
+  });
+
+  it('[parity] bandProxy GLSL carries the climate-e5 PHYS consts + the combined DEFLECT_SCALE uniform', () => {
+    expect(K_CODE).toContain('uBandDeflectScale');
+    expect(K_BODIES).toContain(`AEQ = ${PHYS.A_EQ}`);          // 0.6
+    expect(K_BODIES).toContain(`PHI_EQ = ${PHYS.PHI_EQ}`);     // 0.35
+    expect(K_BODIES).toContain(`WARD_GAIN = ${PHYS.WARD_GAIN}`); // 0.8
+    expect(K_BODIES).toContain(`ENV_BASE = ${PHYS.ENV_BASE}`);   // 1.0
+  });
+
+  it('[parity] dAdvect GLSL carries the SAME candidate constants + decorrelation offsets as the BAND_FLOW mirror', () => {
+    // scalar candidates — a mirror change without the matching GLSL change fails here (constant-parity intent)
+    expect(BAND_FLOW.INK_FREQ).toBe(2.2);  expect(K_BODIES).toContain('INK_FREQ = 2.2');
+    expect(BAND_FLOW.INK_AMP).toBe(0.06);  expect(K_BODIES).toContain('INK_AMP = 0.06');
+    expect(BAND_FLOW.FOLD_K).toBe(0.5);    expect(K_BODIES).toContain('FOLD_K = 0.5');
+    expect(BAND_FLOW.FOLD_FREQ).toBe(9.0); expect(K_BODIES).toContain('FOLD_FREQ = 9.0');
+    // decorrelation offsets keyed to the mirror vectors
+    expect(K_BODIES).toContain(vec3Str(BAND_FLOW.INK_OFF));    // vec3(2.7, -1.9, 5.3)
+    expect(K_BODIES).toContain(vec3Str(BAND_FLOW.INK_OFF2));   // vec3(-8.1, 4.4, -2.6)
+    expect(K_BODIES).toContain(vec3Str(BAND_FLOW.FOLD_OFF));   // vec3(1.7, -3.3, 6.1)
+    // the anisotropy MECHANISM: compress the zonal (x,z) plane by 1/uInkStretch, keep y — and mask/ink gating
+    expect(K_CODE).toContain('Nraw.x / uInkStretch');
+    expect(K_CODE).toContain('Nraw.z / uInkStretch');
+    expect(K_CODE).toContain('uAtmoInk');
+    expect(K_CODE).toContain('clamp(wStorm, 0.0, 1.0)');       // MASK-gated ⇒ 0 off-gate (non-gas)
+    expect(K_CODE).toContain('step(0.5, wBand)');              // belt/zone fold phase flip
+  });
+
+  it('[F1] the added slice-K helper bodies contain no uTime / animated-warp path (diff-scoped, comments stripped)', () => {
+    expect(K_CODE).not.toMatch(/uTime/);
+    expect(K_CODE).not.toMatch(/\b(ph0|ph1|r0|r1|jetRotY|jetsDisp)\b/);
   });
 });
