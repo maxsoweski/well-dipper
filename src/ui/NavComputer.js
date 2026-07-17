@@ -8,6 +8,7 @@ import { resolveArrivalSystem } from '../generation/arrivalResolution.js';
 import { multiplicityForSeed } from '../generation/multiplicityOracle.js';
 import { placeLabels } from './labelPlacement.js';
 import { deriveSystemTitle, deriveSystemAnnotation, deriveStarHoverName } from './systemIdentity.js';
+import { buildFarCompanionChips, formatSeparationAU } from './farCompanionChips.js';
 import { GalacticSectors } from '../generation/GalacticSectors.js';
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
 import { NavGalaxyRenderer } from '../rendering/NavGalaxyRenderer.js';
@@ -589,6 +590,97 @@ export class NavComputer {
       ? `${sys.star?.type || '?'}+${sys.star2.type} binary`
       : `${sys.star?.type || '?'}`;
     ctx.fillText(`${starTypeLabel} · ${planetCount} planet${planetCount !== 1 ? 's' : ''} · ${(sys.ageGyr || 0).toFixed(1)} Gyr`, 16, typeLineY);
+  }
+
+  /**
+   * Draw the far-companion edge chips (AC4) for the SYSTEM view. Wide,
+   * gravitationally-bound members on `systemData.farCompanions` — Proxima
+   * Centauri (~13,000 AU) for Alpha Centauri, 36 Oph C for Guniibuu — are far
+   * beyond the orrery's sqrt-AU orbital scale and carry no direction vector, so
+   * they cannot be drawn as an in-scene orbit. Each renders as an informational
+   * chip anchored to a consistent top-right boundary slot (clear of the U1
+   * header at 16,24 and the top-right level-name at w-16,24): a spectral-colour
+   * dot, the member's name, its separation, and its planets. Draw-only — no
+   * arrival change, positions never move.
+   *
+   * When `farCompanions` is absent/empty this returns having drawn NOTHING and
+   * published an empty `_farChipRects`, so a procgen (or planetless single)
+   * system renders byte-identically and no existing layout shifts.
+   */
+  _drawFarCompanionChips(ctx, w, drawH) {
+    this._farChipRects = [];
+    this._hoveredFarChip = null;
+    const fars = this._systemData?.farCompanions;
+    if (!Array.isArray(fars) || fars.length === 0) return;
+
+    const NAME_FONT = '10px "DotGothic16", monospace';
+    const META_FONT = '8px "DotGothic16", monospace';
+    const LINE_H = 12;
+    const PAD_X = 8;
+    const PAD_Y = 6;
+
+    // Measure with the widest (name) font so a chip never clips its own text.
+    ctx.font = NAME_FONT;
+    const chips = buildFarCompanionChips(fars, {
+      right: w - 12,
+      top: 40, // below the top-right level-name HUD line (drawn later at y=24)
+      measure: (s) => ctx.measureText(s).width,
+      colorForType: (t) => NavComputer._SPECTRAL_COLORS[t] || '#ff9664',
+      lineHeight: LINE_H, padX: PAD_X, padY: PAD_Y, gap: 6, dotGap: 12,
+    });
+
+    for (const chip of chips) {
+      // Panel
+      ctx.fillStyle = 'rgba(10, 12, 20, 0.82)';
+      ctx.strokeStyle = 'rgba(120, 150, 200, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(chip.x, chip.y, chip.w, chip.h, 4);
+      ctx.fill();
+      ctx.stroke();
+
+      // Line 1: spectral-colour dot + name
+      const nameBaseline = chip.y + PAD_Y + 9;
+      ctx.fillStyle = chip.color;
+      ctx.beginPath();
+      ctx.arc(chip.x + PAD_X + 3, nameBaseline - 3, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = NAME_FONT;
+      ctx.fillStyle = '#dfe8ff';
+      ctx.textAlign = 'left';
+      ctx.fillText(chip.name, chip.x + PAD_X + 12, nameBaseline);
+
+      // Line 2: separation
+      ctx.font = META_FONT;
+      ctx.fillStyle = 'rgba(150, 175, 215, 0.75)';
+      ctx.fillText(chip.sepLine, chip.x + PAD_X, chip.y + PAD_Y + LINE_H + 9);
+
+      // Line 3 (optional): planets
+      if (chip.planetLine) {
+        ctx.fillStyle = 'rgba(120, 180, 255, 0.7)';
+        ctx.fillText(chip.planetLine, chip.x + PAD_X, chip.y + PAD_Y + LINE_H * 2 + 9);
+      }
+
+      this._farChipRects.push({ x: chip.x, y: chip.y, w: chip.w, h: chip.h, chip });
+
+      // Hover hit-test → tooltip (the existing tooltip path, same as bodies).
+      if (this._mouseX >= chip.x && this._mouseX <= chip.x + chip.w &&
+          this._mouseY >= chip.y && this._mouseY <= chip.y + chip.h) {
+        this._hoveredFarChip = chip;
+      }
+    }
+
+    if (this._hoveredFarChip) {
+      const c = this._hoveredFarChip;
+      const lines = [
+        `${c.fullClass || c.type || '?'} · far companion`,
+        `separation: ${formatSeparationAU(c.separationAU)} AU`,
+        c.planetLetters.length > 0
+          ? `${c.planetLetters.length} planet${c.planetLetters.length > 1 ? 's' : ''}: ${c.planetLetters.join(', ')}`
+          : 'no known planets',
+      ];
+      this._drawTooltip(ctx, c.x, c.y + c.h / 2, c.name, lines);
+    }
   }
 
   /** Find the star nearest to the player's position in _localStars. */
@@ -2332,6 +2424,9 @@ export class NavComputer {
 
     // ── Header (AC3: system-identity title + component annotation) ──
     this._drawSystemHeader(ctx, sys, starName, planets.length);
+
+    // ── Far-companion edge chips (AC4: wide members the orrery can't place) ──
+    this._drawFarCompanionChips(ctx, w, drawH);
 
     // ── Selection ring on selected body ──
     if (this._selectedBody) {
