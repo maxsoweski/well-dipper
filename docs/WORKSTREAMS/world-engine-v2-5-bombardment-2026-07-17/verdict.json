@@ -3,7 +3,7 @@
   "commit": "c64e0cd",
   "perLayer": {
     "unit": "PASS",
-    "integration": "INSUFFICIENT",
+    "integration": "PASS",
     "uat": "deferred-to-max"
   },
   "perAC": [
@@ -45,9 +45,9 @@
     },
     {
       "id": "AC-LAB",
-      "result": "INSUFFICIENT",
-      "evidence": "Static-only pass performed per instructions; the required live chrome-devtools browser drive on :5175 was NOT executed this pass. Static inspection confirms all lab-UI wiring is committed and present: Moon/Mercury preset registered in driver-presets.js and NAMED_BODY radius lock, lil-gui dropdown + window._lab.setPreset() entry point, new 'age (Gyr)' slider alongside existing 'gravity (g)' slider both plumbed into condition.surfaceGravity/condition.age, and a '\u2726 current' summary line surfacing craters. No evidence/ folder or screenshots exist yet \u2014 the live drive genuinely has not been done. Also found: an unrelated uncommitted working-tree diff (CameraChoreographer.js, LabMode.js \u2014 a different camera/warp-flow lane) sitting alongside this build-complete workstream; harmless to this AC but should be committed/stashed separately before further commits land.",
-      "adversarialVotes": "0/3 sufficient"
+      "result": "PASS",
+      "evidence": "Live drive by working-Claude 2026-07-17 (fresh isolated context, :5175, real GUI paths): preset boots cratered w/ correct provenance summary + empty dressing; gravity sweep 0.12/0.80 and age sweep 1.0/8.4 both visibly move the population in the documented directions; Frozen carries the overprint; zero console errors. Evidence: evidence/AC-LAB-RESULT.md + 6 screenshots. Caveat recorded: lab camera does not re-frame small worlds (pre-existing, all small presets).",
+      "adversarialVotes": "closed by working-Claude live drive (liveBranch:main rule)"
     },
     {
       "id": "AC-ZERO-CLOBBER",
@@ -62,6 +62,6 @@
       "adversarialVotes": "n/a \u2014 UAT is Max-only"
     }
   ],
-  "overall": "INSUFFICIENT \u2014 unit layer fully PASS (6/6 ACs, 3/3 adversarial each) and integration AC-PRESET PASS, but AC-LAB (the live chrome-devtools browser drive on :5175) was not performed this pass and is deferred to working-Claude. UAT is deferred to Max and should follow AC-LAB's completion.",
+  "overall": "VERIFIED_PENDING_MAX \u2014 unit 6/6 PASS 3/3-adv; integration AC-PRESET PASS + AC-LAB PASS (live drive 2026-07-17); sole open gate = AC-UAT (Max).",
   "summaryForMax": "Bombardment feature (craters via gravity+age drivers) is code-complete and unit-verified: all 6 unit ACs (AC-0 driver connectivity, AC-CHANNEL persistent-host/composite-at-render, AC-POWERLAW size-frequency distribution, AC-MULTIPLY continuous gravity/age scheduling, AC-DISTINCT per-seed determinism/distinctness, AC-ZERO-CLOBBER no regression on existing goldens/atmo) pass cleanly with real headless test runs, each independently confirmed 3/3 by adversarial review. AC-PRESET (integration, the new Moon/Mercury dead-lid preset routing + compositing) also passes with real test output.\n\nWhat's NOT done yet: AC-LAB \u2014 the live browser check that the lab UI (new 'age' slider, preset dropdown, crater visibility) actually works in a running browser on :5175 \u2014 was not driven this pass (static code inspection only). That's queued for working-Claude to drive live before this can move further.\n\nOnce AC-LAB is green, your UAT (AC-UAT) is: open the lab at :5175, select the Moon/Mercury preset and the Frozen preset, re-roll seeds a few times, and sweep the gravity and age sliders \u2014 confirm craters visibly appear/change and nothing else looks broken. Two things to have an opinion on while you're there: (1) the Crystal preset also gets crater overprint now \u2014 that's deliberate (the writer can't distinguish it from Frozen), decide if that's acceptable; (2) dragging the gravity slider changes crater count much more visibly than crater size (by design, weak size exponent) \u2014 don't be surprised if size doesn't balloon.\n\nOne housekeeping flag surfaced repeatedly during verification: your working tree currently has unrelated uncommitted changes to src/auto/CameraChoreographer.js and src/debug/LabMode.js (a different camera/warp-flow lane, not bombardment). They're harmless to this workstream but should get committed or stashed on their own before you commit anything further here, so they don't accidentally ride along."
 }
