@@ -1,5 +1,20 @@
 # world-engine-atmo-expression-2026-07-17 — intent
 
+## DOES / UNLOCKS (Rule 15 card)
+
+**DOES:** makes the giant-planet gas deck read as ONE connected fluid — storms deflect and wake
+the band field they sit in (`dWake` via the render-side `bandProxy` re-derivation), the band
+pattern stretches and folds along the flow like ink in water (`dAdvect`, anisotropic + static),
+and band edges vary smooth-vs-jagged per band by shear + per seed (`uBandRough` on the new
+`bandFlow:rough` stream). All render-side; the baked `aBand`/`aStorm` fields and their goldens
+never move.
+
+**UNLOCKS:** the visual-quality bar for every downstream storm-mask consumer (#4 lightning,
+#5 brown-dwarf drift, #8 Mars oscillator inherit a deck that reads fluid, not layered); the
+`bandProxy` render-side reconstruction is reusable machinery for any future term that must
+distort the baked band field without re-baking; answers atmo-3b UAT findings 2/3 + the
+jaggedness half of 4, clearing the path to the atmosphere plan's next numbered increments.
+
 ## Why we care
 
 From Max's atmo-3b UAT (2026-07-15): the storm systems are "generally good" and confirmed
