@@ -1,0 +1,112 @@
+{
+  "workstream": "system-identity-grammar-2026-07-17",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "phase": "SCOPED + GREENLIT 2026-07-17 (Max's verbatim directive in intent.md IS the greenlight; he delegated plan/implement/test). Successor to real-star-identity-unification-2026-07-15 (VERIFIED_PENDING_MAX f6b3eff) answering ac9-uat-findings.md finding #3. All code inside the Max-ratified NavComputer seam (Inc-4 precedent); zero main.js edits. Build order: U1 system-identity naming (AC3) -> U2 far-companion chip (AC4) -> U3 prism co-membership cue (AC2) -> doc rule (AC6, working-Claude); sequential (same file). Each unit TDD + adversarially verified; then gates (ProcgenSnapshot 24/24, suite >= 1,504), verify-workstream full, live drives on :5176 (AC2/AC5), VERIFIED_PENDING_MAX -> Max resumes the real-universe-overlay AC9 re-run (AC8 rides it).",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-multi-dot-markers",
+      "statement": "Binaries/trinaries appear as multiple dots in the prism view (Max sentence 1 — standing behavior, pinned): a procgen binary marker draws 2 dots, 36 Ophiuchi draws 3, the authored Alpha Centauri draws 2 on the A+B marker plus Proxima's own true-position 1-dot marker. Dot counts stay oracle-backed arrival truth (predecessor AC8); this workstream must not regress them.",
+      "verifyVia": {
+        "input": "Headless: existing glyph suite (NavComputer glyph/label tests + multiplicityOracle tests) green at the new HEAD; spot assertions for the three named cases via the bare Object.create(NavComputer.prototype) harness with _glyphDotCount(star, mult) two-arg calls.",
+        "observable": "Glyph suite green; procgen binary = 2 dots, 36 Oph marker = 3 dots, Alpha Cen A+B marker = 2 dots + Proxima marker = 1 dot, unchanged from f6b3eff behavior."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC2-prism-co-membership",
+      "statement": "When one system's members render as separate prism markers, the prism visibly says they are ONE system: hovering or selecting any member marker draws a co-membership cue (tether line or bracket) to the system's other marker(s), and the member's label carries a membership suffix (e.g. 'Proxima Centauri · Alpha Centauri'). Resolution is oracle/alias-backed (mult.farNames + KnownSystems.findByAlias + _localStarNames), draw-only, positions untouched.",
+      "verifyVia": {
+        "input": "Headless: unit tests for the membership-resolution helper (far marker -> its primary marker's name + position; primary marker -> its separately-rendered far members; procgen and single-real stars -> no cue) and for suffix composition through the deferred label pass (suffix included in measured width, declutter still collision-free). Live on :5176 (stop window._autoNav FIRST, confirm isActive===false; settled state, never dispatch mid-warp): hover/select Proxima's marker and the A+B marker at prism zoom near Sol.",
+        "observable": "Headless tests green. Live: selecting either Alpha Cen marker shows the tether between the two markers and 'Proxima Centauri · Alpha Centauri' suffix on the far member's label; labels remain non-overlapping (predecessor AC9 declutter intact); screenshot evidence captured."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC3-system-identity-naming",
+      "statement": "The SYSTEM view for any member of a known multi-star system is titled by the SYSTEM ('Alpha Centauri'), not the clicked marker; when the clicked marker's name differs from the system name the view carries a component annotation ('via Proxima Centauri — far companion' for far members; 'via Rigil Kentaurus' for the primary marker); star hover names use the real component names from _knownSystemNames (star/star2 — 'Rigil Kentaurus'/'Toliman', never 'Proxima Centauri A/B'); procgen-fill planet display names key off the system name. Systems without _knownSystemNames render exactly as today.",
+      "verifyVia": {
+        "input": "Headless TDD via the bare NavComputer.prototype harness: _renderSystem title/annotation/hover-name derivation for (i) browse via far-companion marker, (ii) browse via primary marker, (iii) current-system view, (iv) procgen system without _knownSystemNames, (v) known single (TRAPPIST-1).",
+        "observable": "Title = _knownSystemNames.system whenever present with the correct 'via <component>' annotation; hover names = real component names; procgen title/paths byte-identical to today's output."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC4-far-companions-visible",
+      "statement": "systemData.farCompanions renders in the SYSTEM view: each far member appears as an edge chip anchored at a consistent view-boundary slot (the payload carries no direction vector, and sqrt-AU scale cannot place a ~8,700 AU member honestly), showing name, spectral color, separation, and its planets (Proxima Centauri with b and d — visible in-game for the first time; 36 Ophiuchi's tertiary likewise). Chip is informational (no arrival change) with hover tooltip; the triple is finally visible AS a triple.",
+      "verifyVia": {
+        "input": "Headless TDD via the bare prototype harness: chip layout/content derivation for Alpha Centauri (1 far companion w/ 2 planets), 36 Oph (1 far companion, 0 planets), a no-farCompanions system (no chip, no layout shift), and a hypothetical 2-far-member system (chips don't collide).",
+        "observable": "Chip present exactly when farCompanions is non-empty, carrying name/type/separation/planet list; hover yields the tooltip; planet-orbit projection scale unchanged by the chip."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC5-one-destination",
+      "statement": "Clicking any member marker of a known multiple never lands in a different system, in the nav computer or via warp (Max sentence 3): the SYSTEM preview from the A+B marker and from Proxima's marker is the same system (same seed, same 'Alpha Centauri' title, same structure incl. the far chip), and warping from either marker arrives at the identical authored system.",
+      "verifyVia": {
+        "input": "Live on :5176 (autopilot-off protocol; confirm YOUR seed in the [WARP] log before trusting an arrival): browse both Alpha Cen markers in the nav, capture titles + seeds; warp from each marker in turn from a settled state.",
+        "observable": "Both previews: seed 1816942132, title 'Alpha Centauri', A+B rendered + Proxima chip w/ b,d; both warps: same seed in the [WARP] log, arrival at the authored G2V+K1V @23.5 AU system. Console clean."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC6-grammar-rule-doc",
+      "statement": "The system-identity grammar rule is written into docs/NAMING_AND_REAL_OBJECTS.md as durable design law (Max's directive verbatim + the normative form: any view of any component of a known multi-star system must name the system, show its full structure, mark which component you're viewing, and cue co-membership wherever components render as separate markers), so future multi-star presentation work inherits it as an AC template and the recurrence class closes.",
+      "verifyVia": {
+        "input": "Read docs/NAMING_AND_REAL_OBJECTS.md; scoped doc-rot check for this workstream.",
+        "observable": "The rule section exists, quotes the directive, states the four normative clauses, and cross-references this workstream; doc-rot flagged:0."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC7-regression-guardrail",
+      "statement": "Nothing procgen or lane-owned moves: ProcgenSnapshot stays 24/24 byte-identical; the full suite stays at/above the 1,504 baseline and never shrinks; zero main.js edits (lane-B flag ledger stays at FOUR); all NavComputer edits confined to the ratified seam and recorded for lane D; catalog-true marker positions and the Escape-stash glyph base case intact.",
+      "verifyVia": {
+        "input": "Headless: full vitest from the repo dir; ProcgenSnapshot suite; git diff --stat vs f6b3eff scoped to src/.",
+        "observable": "Suite >= 1,504/0 (vendor/motion-test-kit collection noise pre-existing); ProcgenSnapshot 24/24; diff touches src/ui/NavComputer.js (+ its tests, + any new pure helper module) only."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC8-one-system-uat",
+      "statement": "Max's holistic gate: the Alpha Centauri cluster (and 36 Ophiuchi) reads as ONE system everywhere he looks — prism, system view, warp — 'the same issue' does not come back in free play. Rides his AC9 re-run of real-universe-overlay-2026-07-12 on :5176.",
+      "verifyVia": {
+        "input": "Max free-plays the nav computer around Sol's neighborhood with the fix live.",
+        "observable": "Max's judgment; no agent marks this — deferred-to-max until his verdict."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "systemData.farCompanions (StarSystemGenerator ~:856 emission; name/class/type/separationAU/planets) — authored by KnownSystemAuthoring + RealSystemOverlay table entries; TODAY has zero render references — AC4's data source",
+      "systemData._knownSystemNames {system, star, star2, planets} — attached by BOTH preview and arrival paths (arrivalResolution.finalizeArrival; knownWarp.names for authored systems); NavComputer already consumes it for planet/moon names (_planetDisplayName ~:545) but NOT the title (~:2295) or star hover labels (~:2163/:2171) — AC3's data source",
+      "multiplicityForSeed() oracle {count, closeCount, farCount, farNames} + _glyphMult per-entry cache + _localStarNames marker set (NavComputer ~:1623-1674) — AC2's membership-resolution substrate (farNames already tells a far marker it IS one and tells a primary which members render separately)",
+      "KnownSystems.findByAlias — resolves any member alias to the authored entry (system name + components) for the suffix/tether endpoints",
+      "Deferred label pass + labelPlacement.js pure helpers + _labelRects debug handle (predecessor AC9) — the suffix rides through it; measureText cache keys by full label string",
+      "Ratified NavComputer seam (Inc-4 AC2 precedent, extended by predecessor glyph+label pass) — the ONLY code surface this workstream touches",
+      "ac9-uat-findings.md finding #3 (d502ec8) — the live-verified mechanism record (title-by-marker, farCompanions never rendered, no co-membership cue); do not re-derive"
+    ],
+    "outputs": [
+      "System-identity grammar rule in NAMING_AND_REAL_OBJECTS.md — the class-closer future contracts cite",
+      "Far-companion edge chip + membership cue — seam record extended for lane D's PRISM/rendering increments",
+      "Unblocks: Max's AC9 re-run of real-universe-overlay-2026-07-12, then the overlay close-out sequence (contract->shipped, Rule-3 doc pass, FEATURES.md row, doc-rot) and the predecessor's AC11 UAT riding the same verdict"
+    ],
+    "mustStayWorking": [
+      "Predecessor (f6b3eff) invariants: canonical seed everywhere (FIX-1), preview ≡ arrival (AC4), pin-by-default (AC5), N-dot glyph arrival truth (AC8), label declutter (AC9), POSITION_MATCH_TOL current-system identity",
+      "Catalog-true marker positions — interview ruling 1: positions never move; tether/chip/suffix are draw-only",
+      "Sol full override + 19/19 scene suite; authored Alpha Centauri (G2V+K1V @23.5 AU + Proxima w/ b,d as farCompanions); Sirius table-win; TRAPPIST-1 snum pin; 36 Oph honest triple within the 2-close rep cap",
+      "Inc-4 search overlay: all resolve classes + both-phase keyboard guard + search-hit->warp dispatch (search-selecting a member still previews/arrives the one system)",
+      "Escape-stash double-dot base case; _SPECTRAL_COLORS 'D' swatch",
+      "Lane boundaries: zero main.js edits (ledger stays FOUR for lane B); no lane-D GalacticMap regions (density/clouds/features); vitest from repo dir only, baseline 1,504 grows never shrinks"
+    ]
+  }
+}
