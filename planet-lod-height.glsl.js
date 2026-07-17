@@ -349,6 +349,11 @@ export const HEIGHT_GLSL = /* glsl */ `
       uniform float uBandStretch;      // vertical domain compression (~2.5) so the warp FBM streaks along latitude — lab knob
       uniform float uBandLatPow;       // latitude remap exponent (>1 ⇒ wide equatorial bands, narrow polar) — lab knob
       uniform vec3  uBandOffset;       // 🎲 domain offset — own warp seed, decorrelated from the terrain features
+      // atmo-expression slice J: per-seed GLOBAL band-edge roughness draw (drawBandRoughness on the
+      // bandFlow:rough stream; GUI 0..2, touched-flag override). CANDIDATE default 1.0 (band-flow.js
+      // ROUGH_MEAN). Declared HERE in HEIGHT_GLSL (not the lab wrapper) so the shared HEIGHT_FRAG river-
+      // router material — which compiles zonalBandCol's whole body without calling it — links (golden-lens).
+      uniform float uBandRough;        // per-band edge-jaggedness global scale (slice J; consumed in zonalBandCol)
       // ── F25 jets & shear turbulence (Bands step 4b — card F25) — ALBEDO/LUMINANCE ONLY ──
       // Regression contract: every jets term sits behind uJetStrength > 0.0, so at 0 the
       // render is byte-identical F24 output (uTime enters the band family ONLY through F25).
@@ -1874,6 +1879,22 @@ export const HEIGHT_GLSL = /* glsl */ `
         float cyclonic = clamp((0.5 - wBand) * 2.0, 0.0, 1.0);         // 1 deep belt (cyclonic) … 0 zone (anticyclonic); wBand=static baked field
         float ffr = 0.55 + 0.45 * cyclonic;                            // belts filament harder than zones (FFR asymmetry)
         bandVal += uBandWarp * 0.14 * shearMask * ffr * fila * (1.0 - uHazeMute);   // ink-in-water distortion, shear×mask gated; V-β.4 haze veil mutes amplitude (taxonomy §1.2; uHazeMute 0 ⇒ identity)
+        // ── Atmo-expression slice J: per-band EDGE JAGGEDNESS (BUILD-PLAN §4.1; band-flow.js bandRoughness) ──
+        // A high-frequency edge-roughness term on bandVal that reads as jagged band edges. Two contributors:
+        //   • per-band BASE (cyclonic) — whole BELTS rougher than whole ZONES (the contract's ask). cyclonic
+        //     (reused from the filament above = clamp((0.5-wBand)*2)) is the belt/zone DISCRIMINATOR: 1 on a
+        //     cyclonic belt, 0 on an anticyclonic zone. wShear ALONE cannot key this — it is a BOUNDARY field
+        //     ≈0 at every band CENTER (belt AND zone centers both sit at jetProfile extrema), so it can't tell
+        //     a belt from a zone; the SIGN cyclonic can (fluid-lens must-fix).
+        //   • EDGE BOOST (wShear) — extra roughness at high-shear boundaries.
+        // × uBandRough (the per-seed global draw). ROUGH_FREQ 7.0 sits well above the 3.7 filament / 2.2
+        // advection ⇒ a DISTINCT high-freq "jagged edge", not a flowing tendril. jag is a FRESH STATIC
+        // bandWarpField sample (no uTime — F1). MASK-gated by clamp(wStorm) ⇒ exactly 0 off-gate (non-gas),
+        // the same filament precedent. Constants are Phase-A CANDIDATES (band-flow.js BAND_FLOW /
+        // calibration-candidates.md) — frozen at the live A/B read-gate (§6.0 Phase B).
+        float rough = (0.7 * cyclonic + 0.5 * clamp(wShear, 0.0, 1.0)) * uBandRough;   // ROUGH_BELT 0.7 / ROUGH_EDGE 0.5 (candidates) × per-seed global
+        float jag   = bandWarpField(pos * 7.0 + vec3(-5.9, 2.2, 8.8));                 // ROUGH_FREQ 7.0 / ROUGH_OFF (candidates) — fresh STATIC high-freq warp
+        bandVal += 0.10 * rough * jag * clamp(wStorm, 0.0, 1.0);                       // ROUGH_AMP 0.10 (candidate); MASK-gated ⇒ 0 off-gate (filament precedent)
         // alternating zone/belt LUMINANCE — a smoothstep across the writer band value; the soft risers
         // still land on posterize-step transitions so the Bayer dither textures the festooned boundary.
         float zone = smoothstep(0.34, 0.66, clamp(bandVal, 0.0, 1.0));

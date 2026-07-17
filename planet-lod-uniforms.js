@@ -342,6 +342,7 @@ export function makeUniforms(WORLD_LIGHT) {
       uBandStretch:     { value: 2.5 },   // F24 vertical domain compression (streaks the warp along latitude) — lab knob
       uBandLatPow:      { value: 1.3 },   // F24 latitude remap exponent (wide equatorial, narrow polar bands) — lab knob
       uBandOffset:      { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds it to the warp domain)
+      uBandRough:       { value: 1.0 },   // atmo-expression slice J: per-seed global band-edge roughness (drawBandRoughness/bandFlow:rough; GUI 0..2, touched-flag override) — CANDIDATE default 1.0 (ROUGH_MEAN)
       uJetStrength:     { value: 0.0 },   // F25 master gate (driven: 1 on h2-he gas worlds, 0 on solid); 0 ⇒ byte-identical F24
       uJetSpeed:        { value: 0.8 },   // F25 drift amplitude, rad per flow phase (driven: 8/rotationHours, clamped 0.2..1.2)
       uJetShearTurb:    { value: 0.25 },  // F25 boundary-turbulence amplitude in stripe units (driven: T_eq vigor ramp)

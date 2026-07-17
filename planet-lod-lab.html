@@ -176,6 +176,7 @@
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
     import { resolveStormE, bakeStormEAttributes, chromophoreColor } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp
     import { drawGiantConditions, deriveGiantDrivers } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation) — replaces the frozen DRIVER_BUNDLES constants per seed
+    import { drawBandRoughness } from './src/worldengine/base/band-flow.js';   // atmo-expression slice J: per-seed global band-edge roughness draw on the append-only bandFlow:rough stream (disjoint from climateE5:/stormE:/giantD: ⇒ both goldens frozen)
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -2077,6 +2078,7 @@
       bandWarp: 0.5,        // F24 festoon displacement in stripe units (driven: same ramp)
       bandTint: [0.78,0.62,0.44],  // F24 deck base color (driven: atmosphere.color)
       bandStretch: 2.5,     // F24 vertical domain compression (lab knob)
+      bandRough: 1.0,       // atmo-expression slice J: per-seed global band-edge roughness (uBandRough; drawn by rebakeE5Bands on bandFlow:rough unless the slider is dragged — touched-flag override). CANDIDATE default 1.0.
       bandLatPow: 1.3,      // F24 latitude remap exponent (lab knob)
       e5Obliquity: 0,       // #3a Ward obliquity override (0 = use regime default; >54.7° ⇒ hot-poles inversion)
       e5RotationScale: 1.0, // #3a rotation multiplier (sweep to show Rhines band-count response, AC12)
@@ -2854,6 +2856,14 @@
       const _sd = { ...drivers, composition: _fp.atmosphere?.composition, T_eq: _fp.T_eq };
       const bakeStorm = bakeStormEAttributes(pos.array, pos.count, R, { regime, drivers: _sd, macroSeed: state.macroSeed | 0, stormSeed: state.stormSeed | 0 });
       geometry.attributes.aStorm.array.set(bakeStorm.aStorm); geometry.attributes.aStorm.needsUpdate = true;
+      // atmo-expression slice J: the per-seed GLOBAL band-edge roughness draw (uBandRough). Drawn on the
+      // NEW append-only bandFlow:rough:<regime>:<macroSeed> alea stream — disjoint from every climateE5:/
+      // stormE:/giantD: stream, so it does NOT shift any existing draw order ⇒ GOLDEN_BANDFIELD_HASH +
+      // GOLDEN_STORM_MASK_HASH stay frozen (BUILD-PLAN §4.3). Touched-flag override (golden-lens must-fix #3):
+      // re-draw per seed ONLY when the roughness slider has NOT been manually dragged; a dragged value
+      // persists across reseeds until resetDriverOverrides (preset change) clears _driverTouched. state is
+      // the single source — the per-frame block syncs it into uniforms.uBandRough (same as every band uniform).
+      if (!_driverTouched.has('bandRough')) state.bandRough = drawBandRoughness(regime, state.macroSeed | 0);
     }
     // ── #3b Slice 1 WIRING extraction: the discrete-vortex placement below used to live INLINED
     // inside applyDrivers, so the reseed paths (New-planet / macro-seed slider / _lab.setSeed) —
@@ -4460,6 +4470,13 @@
     // override → Ward pole-emphasis, cross 54.7° for the hot-poles inversion (AC7/AC12). 0 = regime default.
     fBands.add(state, 'e5RotationScale', 0.25, 3.0, 0.05).name('E5 rotation ×').onChange(rebakeE5Bands);
     fBands.add(state, 'e5Obliquity', 0, 100, 1).name('E5 obliquity° (0=auto)').onChange(rebakeE5Bands);
+    // atmo-expression slice J: per-band EDGE ROUGHNESS — the per-seed global roughness draw (uBandRough,
+    // bandFlow:rough stream). VALUE slider (driver override — NO *Enabled key; rides the already-registered
+    // PROV_BANDS province, so the planet-archetypes drift guard, which scrapes only *Enabled checkbox keys,
+    // is blind to it by design). .listen() tracks the per-seed re-draw; .onChange marks it touched so a
+    // manual value survives reseeds (the per-frame block pushes state.bandRough → uBandRough). GUI 0..2.
+    fBands.add(state, 'bandRough', 0, 2, 0.01).name('edge roughness').listen()
+      .onChange(() => { _driverTouched.add('bandRough'); });
     // ▸ Jets & shear (F25) — the deck dynamics: counter-rotating drift, shear-gated
     // boundary turbulence, one-sided festoons. strength/speed/turb/festoons are driven
     // (h2-he gate / D8 spin / T_eq vigor ramp, .listen()); freq + eq width are lab knobs.
@@ -5710,6 +5727,7 @@
       uniforms.uBandWarp.value     = state.bandWarp;
       uniforms.uBandTint.value.setRGB(state.bandTint[0], state.bandTint[1], state.bandTint[2]);
       uniforms.uBandStretch.value  = state.bandStretch;
+      uniforms.uBandRough.value    = state.bandRough;   // atmo-expression slice J: per-seed draw (rebakeE5Bands) or dragged value (touched-flag) — state is the single source, synced here like every band uniform
       uniforms.uBandLatPow.value   = state.bandLatPow;
       uniforms.uBandOffset.value.set(state.bandOffset[0], state.bandOffset[1], state.bandOffset[2]);
       // F25 jets — jetsEnabled gates strength→0 (the zonalBandCol drift/displacement
