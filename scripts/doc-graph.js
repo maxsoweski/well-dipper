@@ -57,7 +57,11 @@ for (const entry of readdirSync(SYSTEMS_DIR, { withFileTypes: true })) {
   const text = readFileSync(readmePath, 'utf8');
 
   // Find Module(s) section
-  const moduleMatch = text.match(/^##\s+Module\(s\)\s*\n([\s\S]*?)(?=\n##\s|\n# |$)/m);
+  // NB: the terminator must be next-heading or TRUE end-of-string — a bare `$` under /m
+  // matches every line end, truncating the captured section to its first line (latent bug,
+  // unexercised while app-shell's one-module README was the only system; caught 2026-07-14
+  // when the 24-module worldengine README parsed as zero modules).
+  const moduleMatch = text.match(/^##\s+Module\(s\)\s*\n([\s\S]*?)(?=\n##\s|\n# |$(?![\s\S]))/m);
   if (!moduleMatch) continue;
 
   const moduleBlock = moduleMatch[1];

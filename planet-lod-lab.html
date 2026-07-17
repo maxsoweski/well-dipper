@@ -98,6 +98,12 @@
     /* Render-audit surface (Ask 4) — per-feature title-bar glyph + World summary. */
     .lil-gui .audit-badge { margin-left: 6px; font-size: 12px; line-height: 1; user-select: none; }
     .lil-gui .audit-badge.stale { opacity: 0.35; }              /* dimmed when state.audit.fresh === false */
+    .lil-gui .prov-badge { color: #6db3f2; font-size: 12px; line-height: 1; user-select: none; }  /* provenance glyph: ✦ writer / ◐ grain-oriented */
+    /* AC-BOOT-PROVENANCE: what's-authoring-this-world summary at the top of the World Engine section */
+    .lil-gui .we-summary { font-size: 11px; line-height: 1.5; padding: 4px 8px 5px; margin: 2px 0 4px; border-left: 2px solid #3a4c63; }
+    .lil-gui .we-summary .we-current { color: #6db3f2; }        /* current system (writer) — matches the ✦ badge blue */
+    .lil-gui .we-summary .we-placeholder { color: #b8a065; }    /* placeholder legacy dressing — amber, visually 'not the new system' */
+    .lil-gui .we-summary .we-dim { color: #8a8f96; }
     .lil-gui .audit-summary { font-size: 11px; line-height: 1.4; padding: 4px 8px; margin: 2px 0 4px;
       color: #cfd2d6; }
     .lil-gui .audit-summary.stale { color: #c98a2a; }           /* "stale — re-audit" tint */
@@ -145,7 +151,7 @@
     import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, animationRateFactor } from './planet-lod-lab-core.js';
     import { RADIUS_RANGES_EARTH } from './src/core/ScaleConstants.js';   // AC5/AC6: single-source archetype radius ranges (game + lab)
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
-    import { ASSOCIATIONS } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature
+    import { ASSOCIATIONS, DEFAULT_DRESSING } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature; DEFAULT_DRESSING = ratified boot dressing (defaults rescope 2026-07-15)
     import { expectedMatrix, auditRenderMatrix } from './lab-render-audit.js';   // NEW: pure auditor (Ask 4)
     import { statusOf, EPS as AUDIT_EPS } from './lab-render-status.js';          // NEW: glyph map + shared eps (Ask 4)
     import { PROCESSES, driversFor, DRIVERS } from './planet-drivers.js';   // card "Driven by"/"Depends on" lines: process labels + friendly driver names
@@ -165,6 +171,7 @@
     import { presetDriverDefaults, buildNeutralBodyDrivers } from './body-drivers.js';   // V2-0 Slice A: neutral (no-slider-override) driver construction the lab overlays overrides on (presetDriverDefaults also used by resetDriverOverrides)
     import { deriveConditionVector } from './body-condition-vector.js';   // V2-0 Slice C: pure _fp→condition vector, attached NESTED as bodyDrivers.condition (shadow-mode; V2-1 E1 read surface; SAME derive the headless AC1 harness uses)
     import { computeE1 } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment).
+    import { assessProvinceAssociation, provinceStats, classProportions } from './src/worldengine/base/province.js';   // V2-4 slice-4: the province honesty instrument (read-only) for _lab.provinceProbe()
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
     import { resolveStormE, bakeStormEAttributes, chromophoreColor } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp
@@ -1457,6 +1464,47 @@
     const riverOverlay = createRiverOverlay({ renderer, uniforms, octavesDuringRead: 9 });
     riverOverlay.ribbon.visible = false;
     planet.add(riverOverlay.ribbon);
+
+    // ── V2-4 slice-4 — PROVINCE false-colour debug overlay (GROUND-OWNED; BUILD-PLAN §4 pinned mechanism).
+    // A SEPARATE THREE.Mesh on its OWN NEW BufferGeometry (the province attribute lives on THIS geometry as
+    // per-vertex colours). It adds NO attribute to the shared planet BufferGeometry and edits NO line of the
+    // shared planet vertex/fragment shader — the atmo-shared aBand/aShear/aMush surface (decl :200-206, set
+    // :1436-1438, upd :2775-2777) is untouched, so there is zero AC-ZERO-CLOBBER(d) collision with the atmo
+    // lane. Parented to `planet` (co-rotates); default HIDDEN ⇒ the render is byte-identical (AC-LAB c). It is
+    // NOT a `state.<x>Enabled` feature-card (taxonomy-exempt per lens B-m4 — no PROVINCES/gProvince entry;
+    // the V2-9 gProvince rewire is a separate job). Rebuilt from the live carrier.province on toggle / route.
+    const provinceOverlayUI = { show: false };
+    const PROVINCE_COLORS = [[0.62, 0.55, 0.36], [0.86, 0.28, 0.22], [0.20, 0.42, 0.78]];  // 0 craton tan · 1 orogen red · 2 basin blue
+    let provinceOverlayMesh = null;
+    function buildProvinceOverlay() {
+      if (provinceOverlayMesh) { planet.remove(provinceOverlayMesh); provinceOverlayMesh.geometry.dispose(); provinceOverlayMesh.material.dispose(); provinceOverlayMesh = null; }
+      const carrier = riverOverlay.reliefCarrier, m = riverOverlay.mesh;
+      if (!carrier || !m || !carrier.province) return null;
+      const verts = m.verts, faces = m.faces, prov = carrier.province, n = verts.length;
+      const pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) {
+        pos[3 * i] = verts[i][0] * R; pos[3 * i + 1] = verts[i][1] * R; pos[3 * i + 2] = verts[i][2] * R;
+        const c = PROVINCE_COLORS[prov[i]] || PROVINCE_COLORS[0];
+        col[3 * i] = c[0]; col[3 * i + 1] = c[1]; col[3 * i + 2] = c[2];
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      const idx = new Uint32Array(faces.length * 3);
+      for (let f = 0; f < faces.length; f++) { idx[3 * f] = faces[f][0]; idx[3 * f + 1] = faces[f][1]; idx[3 * f + 2] = faces[f][2]; }
+      g.setIndex(new THREE.BufferAttribute(idx, 1));
+      const mat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.FrontSide });
+      provinceOverlayMesh = new THREE.Mesh(g, mat);
+      provinceOverlayMesh.scale.setScalar(1.0015);   // hair above the surface so the labels read over the shaded planet
+      provinceOverlayMesh.visible = provinceOverlayUI.show;
+      planet.add(provinceOverlayMesh);
+      return provinceOverlayMesh;
+    }
+    function setProvinceOverlay(show) {
+      provinceOverlayUI.show = !!show;
+      if (provinceOverlayUI.show) { if (!provinceOverlayMesh) buildProvinceOverlay(); if (provinceOverlayMesh) provinceOverlayMesh.visible = true; }
+      else if (provinceOverlayMesh) provinceOverlayMesh.visible = false;
+    }
     // Option B river-LOD STEP 2 — camera-localised fine-tributary patch. Reads the REAL GPU height at
     // a fine tangent-plane lattice (octaves 12 > the router's 9), grows the dendritic network onto the
     // in-patch trunk outlets, and bakes valley depth into a 2D ortho RTT unioned into sampleCarve.
@@ -2505,6 +2553,7 @@
       grainCarveUI.reliefBakeStrength = v;
       uniforms.uReliefBakeStrength.value = v;
       if (cReliefBake) cReliefBake.updateDisplay();
+      if (typeof refreshWorldEngineSummary === 'function') refreshWorldEngineSummary();   // carrier on/off flips the summary's relief line (declared later — boot-order guard)
     }
     fGrainCarve.add(grainCarveUI, 'legend').name('⊞ shared grain feeds').disable();
     fGrainCarve.add(grainCarveUI, 'grainStrength', 0, 1, 0.01).name('grain strength (0 = old scatter)')
@@ -2563,6 +2612,13 @@
     // Use while isolated (or after any route at relief>0) so the plate carrier is already baked.
     fPlateRelief.add({ ab(){ applyReliefBake(grainCarveUI.reliefBakeStrength >= 0.5 ? 0 : 1); } }, 'ab')
       .name('Relief A/B: plates ↔ flat ocean');
+
+    // ▸ Substrate (V2-4) — GROUND-OWNED debug folder. The province overlay toggle is bound to the local
+    // `provinceOverlayUI` object (NOT `state.<x>Enabled`), so it is NOT a feature-card enable-key and does
+    // not register in the PROVINCES/gProvince taxonomy (lens B-m4 — planet-archetypes.test.js stays green).
+    const fSubstrate = guiLeft.addFolder('Substrate (V2-4)'); fSubstrate.open();
+    fSubstrate.add(provinceOverlayUI, 'show').name('Province overlay (craton/orogen/basin)')
+      .onChange(v => setProvinceOverlay(v)).listen();
 
     // ── Sun direction (world-space), runtime-adjustable ──────────────────────────
     // Rewrites the WORLD_LIGHT constant (mutated in place) from state.lightAzimuth/Elevation,
@@ -3678,6 +3734,7 @@
       applyCarveAmounts();                 // (re)apply the enabled && carve-gated gouging amounts
       riverOverlayState.status = `ocean ${stats.oceanPct}% · ord ${stats.maxStrahler} · R_b ${stats.bifurcationRatio} · w×${stats.widthRadiusFactor}r/${stats.widthSeedFactor}s · ${stats.totalMs}ms`;
       syncDisplays();
+      if (provinceOverlayUI.show) buildProvinceOverlay();   // V2-4 slice-4: track the freshly-routed world's province labels while the overlay is shown
       return res;                          // { stats, seaLevel }
     }
     // Option B river-LOD STEP 2 — bake the fine-tributary patch at the CURRENT camera direction.
@@ -3985,12 +4042,54 @@
     fScaleReadout.add({ get edifice(){ return state.edificeSizeKm.toFixed(0)+' km'; } }, 'edifice').name('edifice footprint').listen().disable();
     fScaleReadout.add({ get relief(){ return state.mountainHeightKm.toFixed(1)+' km h'; } }, 'relief').name('mtn relief height').listen().disable();
 
+    // ── World Engine features (lab-ux 2026-07-15) — the OPEN top section of the
+    // Features panel: folders whose placement/physics a worldengine writer authors
+    // (FEATURES[key].provenance === 'writer'). Declared BEFORE fLegacy so it renders
+    // above it. The atmo #3b merge flips F27/F28/F29's provenance and moves their
+    // declarations here (atmo owns those sections — fence).
+    const fWorldEngine = guiRight.addFolder('World Engine ✦'); fWorldEngine.open();
+    // ── AC-BOOT-PROVENANCE (defaults rescope 2026-07-15): "what is authoring this
+    // world right now" summary — current system vs placeholder legacy must be
+    // legible from the default view, without opening the Legacy drawer. Lives as
+    // the first DOM child of the WE section (which also defeats lil-gui's CSS
+    // "Empty" label on presets whose writer feature folders are filtered away —
+    // the carrier relief IS the world engine even when no feature folder shows).
+    const weSummaryEl = document.createElement('div');
+    weSummaryEl.className = 'we-summary';
+    fWorldEngine.$children.prepend(weSummaryEl);
+    function refreshWorldEngineSummary(){
+      const preset = driverUI.preset;
+      const esc = (s) => String(s).replace(/[&<>]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
+      // Current system: is the writer carrier routed as the relief source?
+      const carrierOn = grainCarveUI.reliefBakeStrength > 0 && riverOverlay.heightSource === 'carrier';
+      const writerFeats = Object.keys(FEATURES)
+        .filter(k => FEATURES[k].provenance === 'writer' && (ASSOCIATIONS[k]?.rendersOn || []).includes(preset))
+        .map(k => FEATURES[k].label);
+      const currentBits = [];
+      currentBits.push(carrierOn ? 'relief: writer carrier' : 'relief: LEGACY synth (carrier off)');
+      if (writerFeats.length) currentBits.push(writerFeats.join(', '));
+      // Placeholder dressing: driver-fed legacy currently enabled (ratified defaults + hand-toggles)
+      const enabledLegacy = Object.keys(FEATURES)
+        .filter(k => FEATURES[k].provenance !== 'writer' && state[FEATURES[k].enableKey]);
+      const dressing = new Set(DEFAULT_DRESSING[preset] || []);
+      const dressOn  = enabledLegacy.filter(k => dressing.has(k)).map(k => FEATURES[k].label);
+      const extraOn  = enabledLegacy.filter(k => !dressing.has(k));
+      let html = `<div class="we-current">✦ current: ${esc(currentBits.join(' · '))}</div>`;
+      html += dressOn.length
+        ? `<div class="we-placeholder">▢ placeholder dressing ON: ${esc(dressOn.join(', '))}<span class="we-dim"> — legacy, slated for replacement</span></div>`
+        : `<div class="we-dim">▢ no placeholder dressing enabled</div>`;
+      if (extraOn.length) {   // beyond-default legacy: hand-toggles or driver auto-sets (Hot Jupiter's F32/F33 thermal) — name them, don't claim how they got on
+        const names = extraOn.length <= 3 ? extraOn.map(k => FEATURES[k].label).join(', ') : `${extraOn.length} features`;
+        html += `<div class="we-placeholder">▢ legacy ON beyond defaults: ${esc(names)}</div>`;
+      }
+      weSummaryEl.innerHTML = html;
+    }
     // ── Legacy synth drawer (lab-UI cleanup 2026-06-27) — collapses the 5 in-shader
     // synth feature families into one CLOSED parent so the world-engine carrier
     // controls read clean for UAT. Re-parenting is DOM-only; the relevance filter
     // (applyArchetypeFilter) operates on STORED parentEl/folder objects, not on a
     // literal guiRight parent, so nesting these groups one level deeper is render-safe.
-    const fLegacy = guiRight.addFolder('Legacy synth renderer (F1–F49)'); fLegacy.close();
+    const fLegacy = guiRight.addFolder('Legacy — placeholders (being replaced)'); fLegacy.close();   // AC-BOOT-PROVENANCE: the drawer itself says these are placeholder systems slated for replacement
     // ▸ Surface — Relief
     const fRelief = fLegacy.addFolder('Surface — Relief');
     fRelief.add(state, 'perturb', 0, 1.5, 0.01).name('perturb (relief)');
@@ -4347,7 +4446,7 @@
     // ▸ Zonal belts (F24) — alternating zone/belt luminance bands on gas presets, ALBEDO
     // only. strength/count/contrast/warp/tint are driven (h2-he gate / Rhines spin×disc /
     // T_eq vigor ramp / atmosphere color, .listen()); stretch + lat power are shape knobs.
-    const fBands = fBandsGroup.addFolder('Zonal belts (F24)'); fBands.close();
+    const fBands = fWorldEngine.addFolder('Zonal belts (F24)'); fBands.close();   // lab-ux 2026-07-15: writer-fed (climate-e5 aBand) → lives in the World Engine section, not Legacy
     fBands.add(state, 'bandStrength', 0, 1, 0.01).name('strength (driven)').listen();
     fBands.add(state, 'bandCount', 2, 20, 1).name('band count (driven)').listen();
     fBands.add(state, 'bandContrast', 0, 1, 0.01).name('contrast (driven)').listen();
@@ -4364,7 +4463,7 @@
     // ▸ Jets & shear (F25) — the deck dynamics: counter-rotating drift, shear-gated
     // boundary turbulence, one-sided festoons. strength/speed/turb/festoons are driven
     // (h2-he gate / D8 spin / T_eq vigor ramp, .listen()); freq + eq width are lab knobs.
-    const fJets = fBandsGroup.addFolder('Jets & shear (F25)'); fJets.close();
+    const fJets = fWorldEngine.addFolder('Jets & shear (F25)'); fJets.close();   // lab-ux 2026-07-15: writer-fed (climate-e5 aShear) → World Engine section
     fJets.add(state, 'jetStrength', 0, 1, 0.01).name('strength (driven)').listen();
     fJets.add(state, 'jetSpeed', 0, 3, 0.01).name('drift speed (driven)').listen();
     fJets.add(state, 'jetShearTurb', 0, 0.6, 0.01).name('shear turb (driven)').listen();
@@ -4757,6 +4856,24 @@
       folder.$title.appendChild(badge);       // after the relocated enable toggle
       auditBadges[key] = badge;
     }
+    // ── Provenance badges (lab-ux 2026-07-15) — same plain-DOM pattern as the audit
+    // badges, but PREPENDED so the glyph reads as part of the folder name. Data-driven
+    // from FEATURES[key].provenance (planet-archetypes.js): 'writer' = a worldengine
+    // writer authors this feature's placement/physics; 'grain' = legacy body whose
+    // orientation reads the shared WS4 tectonic grain; absent = pure legacy (no badge).
+    const PROV_GLYPHS = {
+      writer: { glyph: '✦', tip: 'World Engine writer-driven (placement/physics authored by a worldengine writer)' },
+      grain:  { glyph: '◐', tip: 'Writer-oriented: legacy body, strike/orientation driven by the WS4 tectonic grain' },
+    };
+    for (const [key, folder] of Object.entries(featureFolders)) {
+      const prov = PROV_GLYPHS[FEATURES[key].provenance];
+      if (!prov) continue;
+      const b = document.createElement('span');
+      b.className = 'prov-badge';
+      b.textContent = prov.glyph + ' ';
+      b.title = prov.tip;
+      folder.$title.prepend(b);               // before the name — never clobbers the relocated toggle
+    }
     // Fill every badge from state.audit. Empty when no audit has run; dimmed (.stale)
     // when the audit is not fresh or was computed for a different preset.
     function renderAllAuditBadges(){
@@ -4850,6 +4967,7 @@
     // Refresh every visible card's State line (enable dots + relevance). Cheap — text only.
     function refreshAllCardStates(){
       for (const key of Object.keys(featureCards)) refreshCardState(featureCards[key].stateEl, key);
+      refreshWorldEngineSummary();   // AC-BOOT-PROVENANCE: every enable/preset/filter change re-derives the current-vs-placeholder summary
     }
     // soloKey=null → enable ALL features; otherwise enable ONLY that feature.
     // LEGACY destructive path — kept for "enable all". Solo now goes through the
@@ -4880,6 +4998,40 @@
       for (const k of Object.keys(FEATURES)) state[FEATURES[k].enableKey] = set.has(k);
       syncDisplays();
     };
+    // ── Per-world default enables (defaults rescope 2026-07-15, AC-DEFAULTS) ──
+    // RATIFIED rule (Max): a fresh preset boots writer-driven features (provenance
+    // 'writer' ∩ rendersOn — grows automatically when the atmo merge flips
+    // F27–F29) plus the small DEFAULT_DRESSING set of driver-fed legacy so the
+    // world reads as a world. The old full-rendersOn union stacked ~30 legacy
+    // features on terrestrials (rendersOn asserts individual renderability, not
+    // composition — the "mishmash" UAT fail). Un-driven legacy never defaults on.
+    // Applied on boot, on preset CHANGE (dropdown + _lab.setPreset), and by the
+    // 'reset to world defaults' button. NOT applied on driver-slider applyDrivers
+    // re-runs or 🎲 reroll paths — hand-toggles survive those.
+    function worldDefaultEnableSet(preset){
+      const set = new Set();
+      for (const k of Object.keys(FEATURES)) {
+        if (FEATURES[k].provenance === 'writer' && (ASSOCIATIONS[k]?.rendersOn || []).includes(preset)) set.add(k);
+      }
+      for (const k of (DEFAULT_DRESSING[preset] || [])) {
+        if (!(ASSOCIATIONS[k]?.rendersOn || []).includes(preset)) {   // table drifted from the manifest — enable nothing silently wrong
+          console.warn(`DEFAULT_DRESSING drift: '${k}' is not in rendersOn for '${preset}' — skipped`);
+          continue;
+        }
+        set.add(k);
+      }
+      return set;
+    }
+    function applyWorldDefaults(){
+      _preSoloEnables = null; _soloKey = null;   // a defaults-apply supersedes an in-flight solo (enable-all precedent)
+      if (_preIsolate) { _preIsolate = null; plateReliefUI.isolate = false; }   // and a stale isolate snapshot (its enables belong to the OLD preset); checkbox refreshed by syncDisplays below
+      const set = worldDefaultEnableSet(driverUI.preset);
+      applyEnableSet(set);
+      setRiverOverlay(set.has('rivers'));        // rivers carries the re-route side-effect (isolate precedent)
+      refreshAllCardStates();
+      if (typeof refreshArchetypeInfo === 'function') refreshArchetypeInfo();
+      setTimeout(refreshWorldEngineSummary, 700);   // route completes ~500ms after a preset change — re-read heightSource once settled
+    }
     function soloFeature(key, { mode } = {}){
       if (_preSoloEnables === null) _preSoloEnables = captureEnables();   // capture once, on first solo
       if (mode) _soloMode = mode;
@@ -5140,7 +5292,7 @@
     }
     // Header controls live in the top World folder: preset picker first, then
     // the derived archetype label directly beneath it, then filter/solo.
-    fWorld.add(driverUI, 'preset', Object.keys(DRIVER_PRESETS)).name('preset').onChange(applyDrivers);
+    fWorld.add(driverUI, 'preset', Object.keys(DRIVER_PRESETS)).name('preset').onChange(() => { applyDrivers(); applyWorldDefaults(); });   // preset change = drivers + judgment-ready enables (lab-ux AC-DEFAULTS)
     const archCtrl = fWorld.add(filterUI, 'archetypeLabel').name('archetype').disable();
     // ── Archetype info block: plain DOM injected directly under the archetype field
     //    row, toggled by an ⓘ on that row (mirrors relocateEnableToTitle's injection).
@@ -5170,6 +5322,7 @@
     // soloMode dropdown: context = solo + its isolationKit (dependents emerge); bare = solo alone.
     fWorld.add(filterUI, 'soloMode', ['context', 'bare']).name('solo mode').onChange(setSoloMode);
     fWorld.add({ enableAll(){ _preSoloEnables = null; _soloKey = null; setFeatureEnables(null); } }, 'enableAll').name('enable all');
+    fWorld.add({ worldDefaults(){ applyWorldDefaults(); } }, 'worldDefaults').name('reset to world defaults');   // lab-ux AC-DEFAULTS: back to the judgment-ready set for this preset
     fWorld.add({ clearSolo(){ unsolo(); } }, 'clearSolo').name('clear solo (restore)');
 
     // ── Audit this world (Ask 4) ──────────────────────────────────────────────
@@ -5279,7 +5432,28 @@
     fRings.add(state, 'ringThickness', 0.002, 0.06, 0.002).name('thickness (rebake)')
       .onChange(() => rebakeRingCloud());
 
+    // ── Left-pane IA (lab-ux 2026-07-15, AC-NAV — Max-ratified 4-group layout) ──
+    // DOM-ONLY moves, the render-safe pattern the fLegacy drawer + relevance filter
+    // already use: declaration lines stay untouched (the Seeds folder's INNER lines
+    // are about to be edited on the atmo branch — its re-nesting under World is
+    // DEFERRED to the post-merge pass to keep the rebase clean; reordering via
+    // domElement below touches no declaration lines, so it carries no rebase risk).
+    // Target order: World (open) · Seeds (open — the re-roll surface) · Drivers ·
+    // View & Light · Dev tools · Presets · Rings (all closed).
+    const fViewLight = guiLeft.addFolder('View & Light'); fViewLight.close();
+    const fDevTools  = guiLeft.addFolder('Dev tools (increment UAT/debug)'); fDevTools.close();
+    fViewLight.$children.append(fView.domElement, fEnv.domElement);
+    fDevTools.$children.append(fPlateRelief.domElement, fSubstrate.domElement,
+      fMixedDrivers.domElement, fScaleReadout.domElement);
+    fDrivers.$children.prepend(fGrainCarve.domElement);   // grain/carve = how writer relief routes → lives with the driver controls
+    // Top-level order (append re-slots each element at the end, in sequence):
+    guiLeft.$children.append(fWorld.domElement, fSeeds.domElement, fDrivers.domElement,
+      fViewLight.domElement, fDevTools.domElement, fPresets.domElement, fRings.domElement);
+    fSeeds.open();
+    for (const f of [fGrainCarve, fPlateRelief, fSubstrate, fView, fEnv, fDrivers]) f.close();
+
     applyDrivers();   // load the default driver bundle (Rocky) into the envelope uniforms
+    applyWorldDefaults();   // lab-ux AC-DEFAULTS: fresh lab boots judgment-ready (water on water worlds, bands on giants)
 
     // ─────────────────────────────────────────────────────────────────────────
     // Mouse orbit + zoom — ports src/camera/CameraController.js to the lab.
@@ -5969,7 +6143,7 @@
     // Expose for chrome-devtools verification (set state, read a frame)
     window._lab = { state, uniforms, planet, camera, lodRampOf, autoOctaves, rebuildTarget,
                     settingsBlob, applySettings, driverUI, applyDrivers,
-                    setPreset(name){ if (DRIVER_PRESETS[name]) { driverUI.preset = name; applyDrivers(); } return state._derived; },
+                    setPreset(name){ if (DRIVER_PRESETS[name]) { driverUI.preset = name; applyDrivers(); applyWorldDefaults(); } return state._derived; },   // lab-ux: presets arrive judgment-ready via the API too (hand-set enables after setPreset still win)
                     setQuality(q){ driverUI.qualityTier = q; applyDrivers(); return state._derived; },
                     solo(key, opts){ soloFeature(key, opts); }, unsolo(){ unsolo(); },
                     get soloMode(){ return _soloMode; }, set soloMode(m){ filterUI.soloMode = (m === 'bare') ? 'bare' : 'context'; setSoloMode(m); },
@@ -6342,6 +6516,34 @@
                       if (bd && bd.condition) return computeE1(bd.condition, state.macroSeed, _e1WeightOverride ? { weights: _e1WeightOverride } : {});
                       return null;
                     },
+                    // V2-4 slice-4 — PROVINCE probe (AC-LAB b): per-class node counts + proportions, per-class
+                    // history-field means (cross-check: orogens high faultDensity/grainMag, cratons low fault,
+                    // basins high accommodation), contiguity/component metrics, and the AC-PROVINCE-ASSOC
+                    // decision (real η² vs the contiguity-preserving spatial-null p99 + a rejected control).
+                    // NPERM defaults to 200 (BUILD-PLAN §6.3); pass {nperm} to trade cost for tightness. The
+                    // overlay recolors by these labels. Read-only (never mutates the carrier / render).
+                    provinceProbe(opts){
+                      const carrier = riverOverlay.reliefCarrier, m = riverOverlay.mesh;
+                      if (!carrier || !m || !carrier.province) return null;
+                      const prov = carrier.province, Np = carrier.N;
+                      const counts = [0, 0, 0], fdS = [0, 0, 0], gmS = [0, 0, 0], acS = [0, 0, 0];
+                      for (let i = 0; i < Np; i++) { const c = prov[i]; counts[c]++; fdS[c] += carrier.faultDensity[i]; gmS[c] += carrier.grainMag[i]; acS[c] += carrier.accommodation[i]; }
+                      const mn = (s, c) => c > 0 ? s / c : 0;
+                      const st = provinceStats(prov, m.adj, Np);
+                      const NPERM = (opts && opts.nperm) || 200;
+                      const a = assessProvinceAssociation(prov, m, [carrier.faultDensity, carrier.grainMag, carrier.accommodation], { NPERM, seed: state.macroSeed >>> 0 });
+                      const names = ['craton', 'orogen', 'basin'];
+                      const classMeans = {};
+                      for (let c = 0; c < 3; c++) classMeans[names[c]] = { count: counts[c], faultDensity: mn(fdS[c], counts[c]), grainMag: mn(gmS[c], counts[c]), accommodation: mn(acS[c], counts[c]) };
+                      return {
+                        counts, proportions: classProportions(prov, Np), classMeans,
+                        contiguity: st.contiguity, components: st.components,
+                        association: { realEta2: a.realEta2, nullMean: a.nullMean, nullP99: a.nullP99, controlEta2: a.controlEta2, pass: a.pass, controlRejected: a.controlRejected },
+                        overlayShown: provinceOverlayUI.show,
+                      };
+                    },
+                    provinceOverlay(on){ setProvinceOverlay(on !== false); return provinceOverlayUI.show; },
+                    rebuildProvinceOverlay(){ return !!buildProvinceOverlay(); },
                     // V2-1 Slice D (AC5) — lab-only seeded-regime WEIGHT override (console/_lab API ONLY; no
                     // dat.GUI binding ⇒ no planet-archetypes.js taxonomy registration, AC-0 check 3). Mirrors
                     // _driverAbMode: replaces the FROZEN E1_REGIME_WEIGHTS base used for the in-band temperate-wet

@@ -115,10 +115,13 @@ describe('V2-2b-2a AC-0 — the composer is preset/label-free + imports ONLY ale
     expect(CODE, 'no archetype string read').not.toMatch(/archetype/);
   });
 
-  it('imports ONLY alea / simplex-noise / mathutil — NEVER the router family map, e1Regime, or computeE1 (MF2/SF1)', () => {
+  it('imports ONLY alea / simplex-noise / mathutil / stressFabric — NEVER the router family map, e1Regime, or computeE1 (MF2/SF1)', () => {
     const specifiers = [...CODE.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1]);
-    expect(specifiers.length, 'exactly three imports').toBe(3);
-    const allowed = new Set(['alea', 'simplex-noise', './mathutil.js']);
+    // V2-4 SP-STRESS-FABRIC: the verbatim-private steeredNoise3 was extracted to the pure leaf module
+    // ./stressFabric.js (itself three-free — imports nothing), so the allowlist gains one entry (3 → 4).
+    // The three-free SPIRIT holds: no three.js, no router/family map, no E1 source, no circular import.
+    expect(specifiers.length, 'exactly four imports (alea/simplex/mathutil/stressFabric)').toBe(4);
+    const allowed = new Set(['alea', 'simplex-noise', './mathutil.js', './stressFabric.js']);
     for (const s of specifiers) expect(allowed.has(s), `import '${s}' is on the three-free allowlist`).toBe(true);
     // no circular / no E1-source imports (would break the e1-shadow-audit auto-sweep of base/*.js)
     expect(CODE, 'no familyOf import (circular via lidResponse.js)').not.toMatch(/familyOf/);

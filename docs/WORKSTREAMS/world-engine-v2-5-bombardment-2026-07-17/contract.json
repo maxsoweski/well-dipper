@@ -1,0 +1,122 @@
+{
+  "workstream": "world-engine-v2-5-bombardment-2026-07-17",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "statusNote": "SCOPED + GREENLIT 2026-07-17 (interview in-thread; Max answered all six grounded decisions: 1 crater-layer-not-height 'Sounds good'; 2 new Moon/Mercury preset 'Yes, sounds good'; 3 basis-level power-law 'Sounds good'; 4 read-collision ruling verbatim: 'The craters are probably not the problem here, it's the volcanoes--they need to be more visually legible as volcanoes' -> volcano legibility stays routed to V2-7/V2-8, NOT a V2-5 criterion; 5 shielding 'Defer is fine'; 6 MULTIPLY 'Yes'). Grounding brief: ~/briefings/grounding-v2-5-bombardment-2026-07-17.md. Build via opus-pinned workflows in a fresh session per Max's directive.",
+  "programRef": "ROADMAP-v2-condition-first.md V2-5 row (exogenic P-IMPACT crater-population field; dead-lid low-Phi floor; editor-on-host exemplar; deps V2-1 + V2-4). Carries routed UAT feedback: Frozen 'bumpy' (V2-3) answered by the overprint; 2b-2b 'shields read as craters' resolved on the VOLCANO side per Max's 2026-07-17 ruling (V2-7/V2-8).",
+  "designDecisions": [
+    "CRATER LAYER, NOT HEIGHT (Max Q1): the writer emits a NEW unhashed crater host channel on the carrier (exact field shape = build-plan call), composited by route() at render exactly like V2-4's shelfDepth. carrier.height and all HASHED_FIELDS untouched on every golden preset -- the 75-golden suite must pass WITHOUT re-capture.",
+    "NEW PRESET (Max Q2): one impact-airless preset (working name 'Moon/Mercury (impact-airless)') added to DRIVER_PRESETS, routing dead-lid through the existing derived dispatch (no new dispatch rule, no label routing). It is NOT added to the golden set. Frozen + dead-lid rocky (Mars-class) receive the crater overprint via the same channel.",
+    "BASIS-LEVEL STATISTICS (Max Q3): power-law size-frequency, count/size responsive to gravity (D14) + age (D16), distinct per seed. No gold-plating beyond the rubric bar.",
+    "READ-COLLISION ROUTED OUT (Max Q4 verbatim in statusNote): craters carry NO distinctness-from-volcanoes criterion; volcano visual legibility belongs to the V2-7/V2-8 expression increments (roadmap rows exist, contracts not yet scoped -- flagged to Max 2026-07-17).",
+    "ATMOSPHERIC SHIELDING DEFERRED (Max Q5): no shielding scalar this increment; targets are airless/dead-lid bodies where atmosphere is null.",
+    "MULTIPLY CONTINUUM (Max Q6): craterDensity/craterSize are continuous functions of gravity + age with neutral mid-body reference values -- the established MULTIPLY pattern (magmatism, V2-5s, plate, stagnant).",
+    "EXOGENIC OVERLAY: the bombardment writer is post-dispatch (the V2-4 IIFE seam alongside writeAccommodation/writeProvince), E1-blind (shadow-audit stays green), reads ONLY condition-vector channels (surfaceGravity, age) + its own seeded field.",
+    "LEGACY F2/F3 UNTOUCHED: the in-shader craterCombiner/ejectaCombiner synth and its uniforms/toggles are not edited or removed this increment; provenance classification of the new writer field vs legacy knobs follows the lab's ratified provenance model."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15): (1) driver connectivity -- the writer reads condition.surfaceGravity + condition.age (nested condition vector) and no label/archetype string; (2) named consumer -- route() composites the crater channel at render, and the channel is documented as the #6 editor's host; (3) taxonomy registration -- drift guards stay green (any new lab control is a driver override adding NO *Enabled key).",
+      "verifyVia": {
+        "input": "Run the dispatch-oracle + shadow-audit + router-audit + planet-archetypes drift suites from the repo dir; diff audit of the writer's reads.",
+        "observable": "All guards green; grep shows no label reads in the writer; consumer documented in BUILD-NOTES."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-CHANNEL",
+      "statement": "Craters are a persistent host, not a final overlay: the writer emits the crater channel post-dispatch on the finalized carrier; route() composites it at render; carrier.height and all HASHED_FIELDS are byte-untouched everywhere.",
+      "verifyVia": {
+        "input": "Run the 75-golden byte-identity suite (+8 anchors) at the build commit; inspect the composite path.",
+        "observable": "83/83 green with git-diff-empty fixtures; crater channel present and non-trivial on dead-lid bodies; height bytes identical."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-POWERLAW",
+      "statement": "The crater population is organized, not sprinkled: size-frequency follows a power law (log-log linear fit over the population's size bins within a documented slope band), not uniform density.",
+      "verifyVia": {
+        "input": "Headless: generate populations for the new preset across seeds; fit size-frequency.",
+        "observable": "Fit quality + slope within the build-plan's documented band on every seed; uniform-density null clearly rejected."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-MULTIPLY",
+      "statement": "Drivers schedule the population continuously (MULTIPLY): at fixed seed, lower gravity -> more + larger craters; older age -> more craters; both monotonic over the slider ranges, with neutral reference values at a mid-body.",
+      "verifyVia": {
+        "input": "Headless sweeps of gravity and age at fixed seed on the new preset.",
+        "observable": "Monotonic count/size responses in the documented directions; mid-body reference approximately neutral."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-DISTINCT",
+      "statement": "Distinct per draw: different seeds give genuinely different crater layouts (deterministic per seed; different populations across seeds), and different (gravity, age) pairs give visibly different populations.",
+      "verifyVia": {
+        "input": "Headless: repeat-seed determinism + inter-seed difference metrics on the crater channel.",
+        "observable": "Repeat-seed byte-equal; inter-seed difference large; (gravity, age) grid shows distinct populations."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-PRESET",
+      "statement": "The new impact-airless preset exists and routes through the derived dispatch to a dead-lid path with the crater overprint live; Frozen's despun surface also carries the overprint (the 'bumpy' answer) with its goldens intact.",
+      "verifyVia": {
+        "input": "Headless route + dispatch-oracle rows for the new preset; Frozen golden rows re-run.",
+        "observable": "New preset routes dead-lid with a populated crater channel; Frozen 5/5 golden rows green with a non-trivial crater channel."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC-LAB",
+      "statement": "Live in the lab: the new preset boots judgment-ready and cratered at judging distance; the gravity/age driver sliders move the population live; console clean.",
+      "verifyVia": {
+        "input": "Fresh-context browser drive on :5175 (working-Claude drives; liveBranch:'main').",
+        "observable": "Preset renders a cratered world; slider sweeps visibly change crater count/size; screenshot evidence archived; zero new console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "statement": "Nothing else moves: guardrail quartet + dispatch oracle + full suite at their pre-existing baseline; atmo fence untouched; goldens never re-captured.",
+      "verifyVia": {
+        "input": "Full suite from the repo dir at the build commit.",
+        "observable": "Suite at baseline signature; fixtures git-diff-empty."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max's gate: the Moon/Mercury world reads as a genuinely cratered world at judging distance (and Frozen's 'bumpy' read is answered), judged solo in the lab.",
+      "verifyVia": {
+        "input": "Max drives the lab solo on the new preset + Frozen, re-rolling seeds and sweeping gravity/age.",
+        "observable": "Max's holistic acceptance."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "Condition vector (body-condition-vector.js): condition.surfaceGravity (D14) + condition.age (D16) -- the only driver reads",
+      "The derived dispatch's dead-lid routes (icy dead-lid -> despun; rocky fall-through -> despun) as the overprint targets",
+      "V2-4 substrate host allocation (makeSubstrate) + the post-dispatch IIFE seam in writeBodyRelief (slot alongside writeAccommodation/writeProvince)",
+      "DRIVER_PRESETS (driver-presets.js) for the new impact-airless preset entry"
+    ],
+    "outputs": [
+      "The crater host channel -- composited by route() at render; the persistent host the #6 epoch editor will edit (editor-on-host exemplar)",
+      "A UAT-testable impact-airless world type (Moon/Mercury preset)",
+      "The answer to the routed Frozen 'bumpy' feedback"
+    ],
+    "mustStayWorking": [
+      "75-golden byte-identity (+8 anchors) with fixtures never re-captured; Frozen + Crystal height bytes identical",
+      "Guardrail quartet (conformance oracle, shadow audit, router audit, byte anchors) + V2-3 dispatch oracle + planet-archetypes drift guards",
+      "The atmo fence (F24-F31 sections + climateE5:*/stormE:* writers untouched -- atmo lane owns them)",
+      "Existing suites at baseline from the repo dir; the _lab API surface verification drives depend on",
+      "Legacy F2/F3 crater/ejecta synth behavior (untouched this increment)"
+    ]
+  }
+}

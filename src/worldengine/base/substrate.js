@@ -12,6 +12,10 @@ export function makeSubstrate({ n, lat0Deg, lat1Deg, domainKm }) {
     grainMag: new Float32Array(count),     // grain magnitude 0..1
     regime: new Uint8Array(count),         // Anderson regime per REGIME
     faultDensity: new Float32Array(count),
+    sediment: new Float32Array(count),        // V2-4 host: pristine bedrock (initSedimentHost zero-fills; V2-8 deposits)
+    accommodation: new Float32Array(count),   // V2-4 host: sink-ranking [0,1] (writeAccommodation reads finished height)
+    shelfDepth: new Float32Array(count),      // V2-4 margins: passive-margin shelf→break→slope→rise lift (writePassiveMargins; route() composites, never carrier.height)
+    province: new Uint8Array(count),          // V2-4 province: {0=craton,1=orogen,2=basin} history-tied labeling (writeProvince reads faultDensity/grainMag/accommodation; lab overlay + V2-9 palette)
     flowAccum: new Float32Array(count),
     baseLevel: new Float32Array(count),
     standing: new Uint8Array(count),

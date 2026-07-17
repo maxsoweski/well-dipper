@@ -37,6 +37,7 @@ to many systems but per Gap O is excluded from receiving systems'
 | System | Calls | Called by | Has deep dive |
 |---|---|---|---|
 | app-shell | — | — | 📄 SYSTEMS/app-shell/ |
+| worldengine | — | — | 📄 SYSTEMS/worldengine/ |
 <!-- /AUTO-GENERATED -->
 
 ## Systems index (manual)
