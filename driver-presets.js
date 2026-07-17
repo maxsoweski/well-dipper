@@ -98,6 +98,29 @@ export const DRIVER_PRESETS = {
   // 0.05), terminator width clamped to the 0.06 hairline — with the recorded
   // Mars-blue sunset hue now LIVE in TERM_COLOR_BY_PRESET below (review N6).
   'Mars (arid rocky)': { radiusEarth:0.53, massEarth:0.107, rotationHours:24.6, eccentricity:0.093, starMassEarth:332946, orbitRadiusEarth:35652, axialTilt:25, composition:{ironFraction:0.10,density:3.93,volatileFraction:0.1}, age:4.5, T_eq:210, tidalState:{locked:false}, atmosphere:{color:[0.80,0.58,0.36],retained:true,pressure:0.01,composition:'co2'}, habitability:0.05, surfaceHistory:{erosion:0.35,bombardmentIntensity:0.7,resurfacingRate:0.15} },
+  // ── V2-5 bombardment preset (impact-airless dead-rocky; the UAT target) — NON-GOLDEN by design ──
+  // "Moon/Mercury (impact-airless)" is the V2-5 carrier: an airless, dead, cold, small rocky body whose
+  // surface IS its impact record. It is added to DRIVER_PRESETS but DELIBERATELY NOT to PRESET_ARCHETYPE —
+  // so the 75-golden carrier loop (Object.keys(PRESET_ARCHETYPE)) never sees it (LANDMINE #2), and it joins
+  // the V2-3 dispatch oracle as an archetype-null row alongside Mars + Hot Jupiter. It routes dead-lid through
+  // the EXISTING derived dispatch (no new dispatch rule, no label routing): g = 0.04/0.38² = 0.277 g → rocky
+  // (density 4.5 > 3.9), lidStrength L≈0.588 < L_STRONG(0.63), T_eq 235 < 250 + Φ≈0.161 < 0.4 + rawTidal~0 ⇒
+  // computeE1 = 'dead-lid' ⇒ writeBodyRelief rule (3f) despun (§5 arithmetic verified). orbitRadiusEarth
+  // 117275 = Frozen/Crystal's cold-far distance ⇒ rawTidalIoRatio ~0 (guaranteed dead, no active tidal
+  // resurfacing). UNLOCKED — else dispatch rule (3b) would route eyeball-despun, not dead-lid. atmosphere
+  // null + volatileFraction 0.02 (bone-dry) ⇒ isImpactSurface (airless+dead+cold) fires ⇒ the bombardment
+  // writer populates craterField. surfaceHistory (battered old surface) is legacy-knob consistency; the
+  // crater writer reads condition.age (4.5), not these fields. NAMED_BODY (planet-lod-lab.html) locks its
+  // canonical 0.38 R⊕ so drawPresetRadius never seeds a random radius ⇒ deterministic surfaceGravity.
+  'Moon/Mercury (impact-airless)': {
+    radiusEarth: 0.38, massEarth: 0.04, eccentricity: 0.05,
+    starMassEarth: 332946, orbitRadiusEarth: 117275,
+    composition: { ironFraction: 0.4, density: 4.5, volatileFraction: 0.02 },
+    age: 4.5, T_eq: 235,
+    tidalState: { locked: false },
+    atmosphere: null, habitability: 0,
+    surfaceHistory: { erosion: 0.05, bombardmentIntensity: 0.9, resurfacingRate: 0.05 },
+  },
   // ── F41 magma-ocean preset (card §6.5 step 1 — data only) ──
   // "Magma (K2-141b)" is the F41 proper carrier: the locked iron-rich
   // super-Earth whose permanent dayside melts outright. T_eq 2000 -> T_ss

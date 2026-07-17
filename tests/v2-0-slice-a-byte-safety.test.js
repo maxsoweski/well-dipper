@@ -27,8 +27,8 @@ const PA_SNAPSHOT = readFixture('v2-0-preset-archetype.ad156cc.json');
 const NEUTRAL_SNAPSHOT = readFixture('v2-0-neutral-drivers.post-a.json');
 
 describe('V2-0 Slice A — DRIVER_PRESETS extraction is value-preserving', () => {
-  it('exports all 17 preset descriptors', () => {
-    expect(Object.keys(DRIVER_PRESETS).length).toBe(17);
+  it('exports all 18 preset descriptors (17 ad156cc + V2-5 Moon/Mercury)', () => {
+    expect(Object.keys(DRIVER_PRESETS).length).toBe(18);   // V2-5 slice-2: the 18th non-golden preset joined
   });
   it('includes Mars + Hot Jupiter (data, no archetype mapping)', () => {
     expect(DRIVER_PRESETS).toHaveProperty('Mars (arid rocky)');
@@ -37,8 +37,16 @@ describe('V2-0 Slice A — DRIVER_PRESETS extraction is value-preserving', () =>
   it('PRESET_NAMES === Object.keys(DRIVER_PRESETS) (dropdown order)', () => {
     expect(PRESET_NAMES).toEqual(Object.keys(DRIVER_PRESETS));
   });
-  it('deep-equals the ad156cc pre-change literal (byte-safety §1 A(1))', () => {
-    expect(DRIVER_PRESETS).toEqual(DP_SNAPSHOT);
+  it('the original 17 ad156cc descriptors are UNMUTATED — per-key subset (byte-safety §1 A(1); fixture never re-captured)', () => {
+    // V2-5 slice-2 (BS-MF2): the 18th preset (Moon/Mercury, added to DRIVER_PRESETS but NOT to the frozen
+    // v2-0-driver-presets.ad156cc.json fixture) makes a whole-object toEqual(DP_SNAPSHOT) fail. The
+    // extraction-pin semantics ("the ad156cc 17 are unmutated") are preserved WITHOUT re-capturing the
+    // git-diff-empty fixture by asserting each of the 17 snapshot keys per-key — the Mars/Hot-Jupiter-join
+    // precedent (a code-level assertion edit, not a golden re-capture).
+    expect(Object.keys(DP_SNAPSHOT).length).toBe(17);
+    for (const key of Object.keys(DP_SNAPSHOT)) {
+      expect(DRIVER_PRESETS[key], key).toEqual(DP_SNAPSHOT[key]);
+    }
   });
 });
 

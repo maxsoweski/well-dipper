@@ -1974,7 +1974,8 @@
     // redraws; a manual radius slider then overrides until the next preset/reroll.
     const NAMED_BODY = new Set([
       'Mars (arid rocky)', 'Titan (methane seas)', 'Europa (icy moon)',
-      'Venus (sulfuric shroud)', 'Magma (K2-141b)', 'Hot Jupiter (locked giant)'
+      'Venus (sulfuric shroud)', 'Magma (K2-141b)', 'Hot Jupiter (locked giant)',
+      'Moon/Mercury (impact-airless)'   // V2-5: canonical 0.38 R⊕ lock ⇒ deterministic surfaceGravity (no seeded radius draw)
     ]);
     // PRESET_ARCHETYPE (preset key → RADIUS_RANGES_EARTH archetype tag) moved to ./driver-presets.js (V2-0 Slice A) — imported at the top of this module.
     // Deterministic seeded PRNG (mulberry32) for the radius draw — same family as the lab's

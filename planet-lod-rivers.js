@@ -194,21 +194,28 @@ export function computeAdjGradient(carrier, heightOverride = null) {
   return grad;
 }
 
-// ── compositeMargins(carrier) — V2-4 slice-3 render composite (own-channel discipline) ──
-// Returns a NEW Float32Array = carrier.height + carrier.shelfDepth where the passive-margin channel is
-// nonzero, so the coastline renders/routes as a graded continental margin — WITHOUT ever mutating
-// carrier.height (the 75-golden captures the untouched carrier.height; margins live on their own channel,
-// designDecision #MARGINS). Returns null when shelfDepth is all-zero (non-plate worlds + plate worlds with
-// no passive margins) so those paths reuse carrier.height/reliefGrad and render byte-identically (AC-LAB c).
-function compositeMargins(carrier) {
+// ── compositeMargins(carrier) — V2-4 slice-3 / V2-5 render composite (own-channel discipline) ──
+// Returns a NEW Float32Array = carrier.height + carrier.shelfDepth + carrier.craterField — the two UNHASHED
+// overlay channels summed ONTO (never INTO) carrier.height, so the coastline renders as a graded continental
+// margin (V2-4 shelfDepth) AND dead-lid worlds render the bombardment overprint (V2-5 craterField), WITHOUT
+// ever mutating carrier.height (the 75-golden captures the untouched carrier.height; both overlays live on
+// their own channels — designDecision #MARGINS / V2-5 CRATER-LAYER-NOT-HEIGHT). Returns null when BOTH
+// overlay channels are all-zero (non-plate + non-dead-lid worlds, and plate/dead-lid worlds with no populated
+// overlay) so those paths reuse carrier.height/reliefGrad and render byte-identically (AC-LAB c).
+// craterField is read null-tolerantly ((cf ? cf[i] : 0), BS-m2): both allocators populate it today, but a
+// future carrier reaching route() without the field must not TypeError, and the early-out still short-
+// circuits to null when only shelfDepth is populated (or neither is). Exported for the V2-5 slice-2
+// composite value-identity unit test (route() below is the sole runtime caller).
+export function compositeMargins(carrier) {
   const sd = carrier.shelfDepth;
   if (!sd) return null;
+  const cf = carrier.craterField;
   let any = false;
-  for (let i = 0; i < sd.length; i++) { if (sd[i] !== 0) { any = true; break; } }
+  for (let i = 0; i < sd.length; i++) { if (sd[i] !== 0 || (cf ? cf[i] : 0) !== 0) { any = true; break; } }
   if (!any) return null;
   const h = carrier.height;
   const out = new Float32Array(h.length);
-  for (let i = 0; i < h.length; i++) out[i] = h[i] + sd[i];
+  for (let i = 0; i < h.length; i++) out[i] = h[i] + sd[i] + (cf ? cf[i] : 0);
   return out;
 }
 

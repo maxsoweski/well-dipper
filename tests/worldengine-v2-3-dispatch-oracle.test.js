@@ -1,9 +1,9 @@
 // tests/worldengine-v2-3-dispatch-oracle.test.js — World Engine V2-3 THE DISPATCH FLIP
 // (AC-ORACLE-17 / AC-FLIP-LABEL-FREE / AC-0 check 1).
 //
-// The POST-flip 17-preset adjudication oracle — the retirement evidence for the follow-up PRESET_ARCHETYPE
-// deletion. Over ALL 17 DRIVER_PRESETS (Mars + Hot Jupiter now adjudicated — they have no PRESET_ARCHETYPE
-// entry, so they join as archetype=null rows):
+// The POST-flip 18-preset adjudication oracle — the retirement evidence for the follow-up PRESET_ARCHETYPE
+// deletion. Over ALL 18 DRIVER_PRESETS (Mars + Hot Jupiter + V2-5 Moon/Mercury adjudicated — they have no
+// PRESET_ARCHETYPE entry, so they join as archetype=null rows):
 //
 //   • writer_today   = classifyWriterPath(PRESET_ARCHETYPE[name] ?? null, locked) — the FOUR exported legacy
 //                      dispatch predicates composed in bridge-chain order (reuse, not re-implement; identical
@@ -12,7 +12,7 @@
 //                      bundle (the production construction: buildNeutralBodyDrivers + deriveConditionVector)
 //                      — the ACTUAL dispatch, not a re-derivation.
 //
-// Asserts the BUILD-PLAN §0 empirically-verified adjudication table row-for-row: 15 writer-IDENTICAL + exactly
+// Asserts the BUILD-PLAN §0 empirically-verified adjudication table row-for-row: 16 writer-IDENTICAL + exactly
 // TWO adjudicated reroutes {Frozen (airless), Hot Jupiter (locked giant)}, both shell→despun, each with a NAMED
 // disposition (never silently matched). Plus:
 //   • SEED-INVARIANCE (AC-FLIP): across seeds {1,2,3,7,42,100,777} no preset's derived writer choice changes —
@@ -106,6 +106,10 @@ const ADJUDICATION = {
   'Magma (K2-141b)':            { today: 'volcanic',     derived: { path: 'volcanic', shellRegime: null } },
   'Carbon (high C/O)':          { today: 'despun',       derived: { path: 'despun', shellRegime: null } },
   'Crystal (faceted)':          { today: 'despun',       derived: { path: 'despun', shellRegime: null } },
+  // V2-5: the 18th DRIVER_PRESETS key joins the oracle as an archetype-null row (like Mars + Hot Jupiter —
+  // the Mars/Hot-Jupiter-join precedent, NOT a golden re-capture). It is writer-IDENTICAL (despun today AND
+  // derived): dead-lid rocky routing (rule 3f) per §5's computeE1 arithmetic, verified live below.
+  'Moon/Mercury (impact-airless)': { today: 'despun',    derived: { path: 'despun', shellRegime: null } },
 };
 
 // The EXACTLY-two adjudicated reroutes, each with its NAMED disposition (contract AC-ORACLE-17).
@@ -127,17 +131,18 @@ const rows = NAMES17.map((name) => {
 });
 const row = (name) => rows.find((r) => r.name === name);
 
-describe('V2-3 AC-ORACLE-17 — scope: ALL 17 presets adjudicated (Mars + Hot Jupiter join)', () => {
-  it('adjudicates exactly the 17 DRIVER_PRESETS; the pinned table covers each once', () => {
-    expect(NAMES17.length).toBe(17);
+describe('V2-3 AC-ORACLE-17 — scope: ALL 18 presets adjudicated (Mars + Hot Jupiter + V2-5 Moon/Mercury join)', () => {
+  it('adjudicates exactly the 18 DRIVER_PRESETS; the pinned table covers each once', () => {
+    expect(NAMES17.length).toBe(18);   // V2-5: 17 + Moon/Mercury (impact-airless), the 18th non-golden preset
     expect(NAMES17).toContain('Mars (arid rocky)');
     expect(NAMES17).toContain('Hot Jupiter (locked giant)');
+    expect(NAMES17).toContain('Moon/Mercury (impact-airless)');
     expect([...NAMES17].sort()).toEqual(Object.keys(ADJUDICATION).sort());
   });
 });
 
 describe('V2-3 AC-ORACLE-17 — the §0 adjudication table, row-for-row (writer_today vs writer_derived)', () => {
-  it('every row matches: 17× today-path + derived-path + derived shell sub-regime', () => {
+  it('every row matches: 18× today-path + derived-path + derived shell sub-regime', () => {
     for (const r of rows) {
       const exp = ADJUDICATION[r.name];
       expect(exp, `${r.name}: not in the pinned table`).toBeDefined();
@@ -148,10 +153,10 @@ describe('V2-3 AC-ORACLE-17 — the §0 adjudication table, row-for-row (writer_
     }
   });
 
-  it('exactly 15 writer-identical + 2 reroutes; the reroute set is EXACTLY {Frozen, Hot Jupiter}, both shell→despun, each with a NAMED disposition', () => {
+  it('exactly 16 writer-identical + 2 reroutes; the reroute set is EXACTLY {Frozen, Hot Jupiter}, both shell→despun, each with a NAMED disposition', () => {
     const equal = rows.filter((r) => r.equal);
     const rerouted = rows.filter((r) => !r.equal);
-    expect(equal.length).toBe(15);
+    expect(equal.length).toBe(16);   // V2-5: 15 + Moon/Mercury (writer-identical despun; NOT a reroute)
     expect(rerouted.length).toBe(2);
     expect(rerouted.map((r) => r.name).sort()).toEqual(['Frozen (airless)', 'Hot Jupiter (locked giant)']);
     for (const r of rerouted) {
@@ -210,7 +215,7 @@ describe('V2-3 RT1 pin — every rule-(3c) body classifies PURE-STRONG via class
 });
 
 describe('V2-3 AC-FLIP — GARBLE: a garbled PRESET_ARCHETYPE changes NO condition-bearing route (R-GARBLE)', () => {
-  it('with every PRESET_ARCHETYPE entry garbled, all 17 derived routes are unchanged', () => {
+  it('with every PRESET_ARCHETYPE entry garbled, all 18 derived routes are unchanged', () => {
     const baseline = {};
     for (const name of NAMES17) baseline[name] = derivedRoute(name, 1);
     const snapshot = { ...PRESET_ARCHETYPE };
