@@ -5,9 +5,12 @@
 //                 ONLY craterField (HASHED_FIELDS byte-untouched on a golden preset at N=700); non-triviality
 //                 (variance>0 AND both signs) via a resolution-free craterProfile unit test AND at ≈40k
 //                 (M-MF3 split — NOT asserted at N=700 where craters barely resolve).
-//   AC-POWERLAW — the writer's OWN population (forEachCrater on the new preset, all 5 seeds) fits a
-//                 DIFFERENTIAL dN/dlogD log-log line of slope ∈ [−2.2,−1.8], R² > 0.95 every seed; a
-//                 uniform-diameter null's dN/dlogD slope is ≥ 0 and outside the band (M-MF1).
+//   AC-POWERLAW — the writer's SFD SAMPLER (drawPowerLaw on the writer's 'bombard:'+seed stream, all 5
+//                 seeds) fits a DIFFERENTIAL dN/dlogD log-log line of slope ∈ [−2.2,−1.8], R² > 0.95 every
+//                 seed; a uniform-diameter null's dN/dlogD slope is ≥ 0 and outside the band (M-MF1). The
+//                 slope is invariant to forEachCrater's centre/diameter interleave (IID subsequence) and
+//                 ×sizeMul (constant log-shift), so this validates the LAW, not the assembly path (assembly
+//                 determinism/scaling live in AC-DISTINCT / AC-MULTIPLY).
 //   AC-MULTIPLY — direct-writer-metric (craterSchedule, route-independent — M-MF2): ↓gravity ⇒ ≥count & ≥size,
 //                 ↑age ⇒ ≥count; NON-STRICT (round() staircase — M-m1); neutral at (G_REF, AGE_REF) (M-m6).
 //   AC-DISTINCT — repeat-seed byte-equal; inter-seed L2 large; (gravity, age) grid distinct.
@@ -144,7 +147,7 @@ const N_FIT = 16000;
 describe('V2-5 AC-POWERLAW — the population is organized (differential dN/dlogD power law), not sprinkled', () => {
   it('every seed: the writer SFD sampler dN/dlogD log-log slope ∈ [−2.2, −1.8] AND R² > 0.95', () => {
     for (const seed of SEEDS) {
-      const rng = alea('bombard:' + seed);                 // the writer's own 'bombard:'+seed SFD stream
+      const rng = alea('bombard:' + seed);                 // the writer's SFD stream — contiguous draws (no centre interleave / ×sizeMul; slope-invariant to both)
       const diams = []; for (let k = 0; k < N_FIT; k++) diams.push(drawPowerLaw(rng));
       const { slope, r2 } = fitDiff(diams);
       expect(slope, `seed ${seed} slope`).toBeGreaterThanOrEqual(-2.2);

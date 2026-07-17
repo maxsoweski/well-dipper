@@ -73,9 +73,11 @@ describe('WS4 T18 — UAT bundle for Max (landscape-with-history, deferred-to-ma
     // re-propagates through the existing seeded path — either updateSeedUniforms() directly, or (post
     // atmo-3b Slice 1) reseedGiant() = updateSeedUniforms()+rebakeE5Bands()+applyStormState() — NOT a
     // bespoke re-implementation, so the seed change re-routes + re-bakes + re-places storms like a GUI
-    // reroll. Widened from /updateSeedUniforms/ so this binds to the ACTUAL reseedGiant() call, not the
-    // comment mentioning updateSeedUniforms() (was fragile-green on prose after Slice 1 rewired setSeed).
-    expect(body).toMatch(/(?:updateSeedUniforms|reseedGiant)\s*\(/);
+    // reroll. COMMENT-STRIPPED before matching: setSeed's body carries a comment naming BOTH functions,
+    // so a raw-source match stays green even with the real call deleted (2026-07-17 session-review fix —
+    // the earlier "widened" regex still matched that prose).
+    const seedCode = body.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    expect(seedCode).toMatch(/(?:updateSeedUniforms|reseedGiant)\s*\(/);
   });
 
   it('the seed control is DETERMINISTIC — no Math.random / Date.now (same seed → same world)', () => {
