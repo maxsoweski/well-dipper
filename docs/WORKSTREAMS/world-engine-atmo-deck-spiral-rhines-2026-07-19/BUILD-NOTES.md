@@ -203,6 +203,16 @@ giantD: namespace" — this is an intent-preserving extension, NOT a golden re-c
 
 - S1 file `tests/worldengine-atmo-deck-spiral-rhines.test.js` + extended
   `worldengine-base-giant-drivers.test.js`: green (43 tests).
+- **AC-ROTDRAW wrapper gap closed (adversarial verify follow-up):** the `drawRotationHours`
+  pure fn was already pinned, but the LAB wrapper `drawPresetRotation` (NAMED_BODY bypass +
+  `isHotJupiterClass` dispatch) was confirmed only by code reading. New describe block
+  `S1 AC-ROTDRAW — drawPresetRotation lab wrapper` closes it: a source-read leg (`fnBody` over
+  `LAB_CODE`, the sibling `drawPresetRadius` house pattern — inline-pinned, not module-extracted)
+  asserts the four wired behaviors (NAMED_BODY→canonical bypass; `isHotJupiterClass` identity
+  overriding the gate; delegation keyed on `PRESET_ARCHETYPE` carrying the orbit fields; no own
+  entropy), and a behavioral leg drives the SHIPPED `DRIVER_PRESETS` data through
+  `drawRotationHours`/`tidalLockRotationHours` (Hot Jupiter ≡ orbit-derived + seed-independent;
+  Jovian drawn in range + deterministic; Mars canonical). +8 tests.
 - Fast fence (climate-e5 golden `-1329854088`, emission-e, storm-e golden `568852786` + phase
   bank + `[envelope]`, band-flow, giant-drivers, planet-archetypes, v2-3 dispatch oracle,
   v2-0-byte-identity 75 goldens): green (212 tests).

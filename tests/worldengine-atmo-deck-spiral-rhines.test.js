@@ -20,6 +20,7 @@ import { resolveStormE, STORM_DECK } from '../src/worldengine/base/storm-e.js';
 import {
   BAND_SPIRAL, SPIRAL_NB, bandProxy, spiralDisplacement, spiralWrapProfile,
 } from '../src/worldengine/base/band-flow.js';
+import { DRIVER_PRESETS, PRESET_ARCHETYPE } from '../driver-presets.js';   // AC-ROTDRAW wrapper: the shipped preset data the lab's drawPresetRotation reads
 
 // ── comment-stripped source text (the house K_CODE/I_CODE pattern) ─────────────────────────────────
 const src = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
@@ -168,6 +169,90 @@ describe('S1 AC-ROTDRAW — drawRotationHours', () => {
     const body = fnBody(GD_CODE, 'function drawRotationHours');
     expect(body).toMatch(/alea\(/);
     expect(body).toContain('giantD:rot:');
+  });
+});
+
+// ── AC-ROTDRAW (wrapper) — the LAB's inline drawPresetRotation: NAMED_BODY gate + isHotJupiterClass ──
+// The pure drawRotationHours math is pinned above (ranges/lock/derivation/alea/determinism); the gap this
+// block closes is the LAB WRAPPER doing the NAMED_BODY bypass + hot-Jupiter dispatch before delegating.
+// The wrapper is INLINE in planet-lod-lab.html and — like its sibling drawPresetRadius (source-pinned via
+// the storm-e `LAB.toContain('mulberry32')` guard, never module-extracted) — is closed by the source-read
+// house pattern (fnBody over LAB_CODE, the same extractor the S2 carriage block uses). A behavioral leg
+// then drives the SHIPPED preset data through the real drawRotationHours/tidalLockRotationHours so the
+// documented per-class outcomes are an automated assertion, not a code-reading claim (BUILD-NOTES
+// §"New / changed symbols (planet-lod-lab.html)" → drawPresetRotation).
+describe('S1 AC-ROTDRAW — drawPresetRotation lab wrapper (NAMED_BODY gate + hot-Jupiter dispatch)', () => {
+  const WRAP = fnBody(LAB_CODE, 'function drawPresetRotation');
+  const SEEDS = [0, 1, 7, 42, 256, 9999];
+  // the wrapper's field map (mirrors drawPresetRotation) — the [delegation] structural test below pins
+  // that the lab uses EXACTLY these fields, so a drift between this oracle and the wrapper fails there.
+  const wrapArgs = (name) => {
+    const p = DRIVER_PRESETS[name] || {};
+    return {
+      archetype: PRESET_ARCHETYPE[name], canonicalHours: p.rotationHours,
+      locked: !!p.tidalState?.locked, hydrogenAtmo: p.atmosphere?.composition === 'h2-he',
+      orbitRadiusEarth: p.orbitRadiusEarth, starMassEarth: p.starMassEarth,
+    };
+  };
+  const isHJ = (name) => { const p = DRIVER_PRESETS[name] || {}; return !!p.tidalState?.locked && p.atmosphere?.composition === 'h2-he'; };
+
+  // ── structural (source-read) — the wrapper body wires the four documented behaviors ──────────────
+  it('[wrapper present] the lab defines the drawPresetRotation wrapper (fnBody finds a body)', () => {
+    expect(WRAP).not.toBe('');
+  });
+
+  it('[NAMED_BODY bypass] named non-hot-Jupiter bodies return canonical rotationHours, skipping the draw', () => {
+    expect(WRAP).toContain('NAMED_BODY.has(presetName) && !isHotJupiterClass');
+    expect(WRAP).toContain('return preset.rotationHours ?? 24');
+  });
+
+  it('[hot-Jupiter identity] isHotJupiterClass = locked AND an h2-he envelope (overrides the NAMED_BODY gate)', () => {
+    expect(WRAP).toContain("!!preset.tidalState?.locked && preset.atmosphere?.composition === 'h2-he'");
+  });
+
+  it('[delegation] non-named presets delegate to drawRotationHours keyed on PRESET_ARCHETYPE, carrying the orbit fields', () => {
+    expect(WRAP).toContain('drawRotationHours({');
+    expect(WRAP).toContain('archetype: PRESET_ARCHETYPE[presetName]');
+    expect(WRAP).toContain('canonicalHours: preset.rotationHours');
+    expect(WRAP).toContain('locked: !!preset.tidalState?.locked');
+    expect(WRAP).toContain("hydrogenAtmo: preset.atmosphere?.composition === 'h2-he'");
+    expect(WRAP).toContain('orbitRadiusEarth: preset.orbitRadiusEarth');   // the fields that route hot-Jupiter-class
+    expect(WRAP).toContain('starMassEarth: preset.starMassEarth');         // to tidalLockRotationHours inside drawRotationHours
+  });
+
+  it('[no own entropy] the wrapper forwards seed unchanged and adds no RNG (determinism is seed-driven)', () => {
+    expect(WRAP).not.toMatch(/Math\.random\s*\(/);
+    expect(WRAP).not.toMatch(/Date\.now\s*\(/);
+    expect(WRAP).not.toMatch(/mulberry32/);
+    expect(WRAP).not.toMatch(/alea\s*\(/);
+    expect(WRAP).toContain(', seed);');   // the drawn seed is forwarded to drawRotationHours verbatim
+  });
+
+  // ── behavioral — the SHIPPED preset data drives the real modules to the documented outcomes ──────
+  it('[hot-Jupiter DERIVED from orbit] the real Hot Jupiter preset ≡ tidalLockRotationHours(orbit, starMass), seed-independent', () => {
+    const name = 'Hot Jupiter (locked giant)', p = DRIVER_PRESETS[name];
+    expect(isHJ(name)).toBe(true);                                   // it IS hot-Jupiter-class (locked + h2-he)
+    expect(PRESET_ARCHETYPE[name]).toBeUndefined();                  // and ABSENT from PRESET_ARCHETYPE (F10 — identity is the only key)
+    const expected = tidalLockRotationHours(p.orbitRadiusEarth, p.starMassEarth);
+    for (const s of SEEDS) expect(drawRotationHours(wrapArgs(name), s)).toBe(expected);   // derived, not drawn (seed cannot move it)
+    expect(expected).not.toBe(p.rotationHours);                     // and NOT the preset's frozen 80 h pseudo-sync (derived, not frozen)
+  });
+
+  it('[gas archetype DRAWN] the real Jovian preset draws inside its gas range, varies by seed, deterministic per seed', () => {
+    const name = 'Gas giant (Jovian)';
+    expect(isHJ(name)).toBe(false);                                 // not locked ⇒ takes the draw branch
+    const [lo, hi] = ROTATION_RANGES_HOURS[PRESET_ARCHETYPE[name]]; // 'gas-giant' → [8, 14]
+    const hs = SEEDS.map((s) => drawRotationHours(wrapArgs(name), s));
+    for (const h of hs) { expect(h).toBeGreaterThanOrEqual(lo); expect(h).toBeLessThanOrEqual(hi); }
+    expect(new Set(hs).size).toBeGreaterThan(1);                    // genuinely varies (drawn, not constant)
+    for (const s of SEEDS) expect(drawRotationHours(wrapArgs(name), s)).toBe(drawRotationHours(wrapArgs(name), s));   // determinism per worldSeed
+  });
+
+  it('[named solid CANONICAL] Mars is NAMED + not hot-Jupiter-class ⇒ the wrapper returns its canonical rotationHours', () => {
+    const name = 'Mars (arid rocky)', p = DRIVER_PRESETS[name];
+    expect(isHJ(name)).toBe(false);                                 // NOT hot-Jupiter-class (unlocked, co2 atmosphere)
+    expect(Number.isFinite(p.rotationHours)).toBe(true);
+    expect(p.rotationHours).toBe(24.6);                             // the canonical value the NAMED_BODY branch returns ([NAMED_BODY bypass] pins the branch)
   });
 });
 
