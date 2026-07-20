@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ORRERY ORBIT LAB — SDF vs LineLoop (AC5)</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
+    #canvas { display: block; width: 100vw; height: 100vh; }
+    #hud {
+      position: fixed; top: 10px; left: 12px;
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #9fe6b0; white-space: pre; pointer-events: none;
+      text-shadow: 0 1px 2px #000;
+    }
+    #hud b { color: #cfeedd; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hud"></div>
+
+  <script type="module">
+    // ─────────────────────────────────────────────────────────────────────────
+    // ORRERY ORBIT LAB — isolated harness for orrery-entry-orbits-2026-07-20 AC5.
+    //
+    // Compares the production orbit line (THREE.LineLoop via OrbitLine) against
+    // the candidate fix (OrbitRingSDF) inside the EXACT production downsample
+    // pipeline (RetroRenderer: pixelScale 3, NearestFilter, antialias:false,
+    // pixelRatio 1). The green-pixel counter reads the low-res sceneTarget and
+    // is the objective orbit-presence probe. Star glow at origin is a faithful
+    // billboard-clamp stand-in (~17px, mirrors StarFlare.js:350). No production
+    // file is modified; this page only imports them.
+    // ─────────────────────────────────────────────────────────────────────────
+    import * as THREE from 'three';
+    import { RetroRenderer } from './src/rendering/RetroRenderer.js';   // PROD pipeline — imported for fidelity
+    import { OrbitLine }     from './src/objects/OrbitLine.js';         // baseline (the vanishing LineLoop)
+    import { OrbitRingSDF }  from './src/objects/OrbitRingSDF.js';      // candidate fix
+
+    // ── Scene / camera ──────────────────────────────────────────────────────
+    const canvas = document.getElementById('canvas');
+    const scene  = new THREE.Scene();
+    const FOV = 70;                                     // ORRERY global FOV (main.js)
+    const camera = new THREE.PerspectiveCamera(
+      FOV, window.innerWidth / window.innerHeight, 0.01, 1e6);
+
+    // RetroRenderer IS the production compositor. Its constructor owns the
+    // WebGLRenderer (antialias:false, pixelRatio 1, logarithmicDepthBuffer) and
+    // builds the render targets: bgTarget at FULL res, sceneTarget at
+    // ceil(w/3) x ceil(h/3) with NearestFilter — the aliasing surface under test.
+    const retro = new RetroRenderer(canvas, scene, camera);
+
+    // ── Star glow stand-in (the AC3 rule's denominator) ───────────────────────
+    // Camera-facing quad whose WORLD size is recomputed every frame so it
+    // projects to a constant ~17px (StarFlare targetPx for a G-class star:
+    // max(16, min(22, 16 + 6*(lf-0.55))), lf~0.7 → 17). Pale-yellow + additive,
+    // so it never registers as a "green" orbit pixel.
+    const STAR_TARGET_PX = 17;
+    const starMat = new THREE.ShaderMaterial({
+      uniforms: { uColor: { value: new THREE.Vector3(1.0, 0.95, 0.8) } },
+      vertexShader: /* glsl */`
+        varying vec2 vUv;
+        void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+      `,
+      fragmentShader: /* glsl */`
+        varying vec2 vUv; uniform vec3 uColor;
+        void main() {
+          float d = length(vUv - 0.5) * 2.0;          // 0 center .. 1 edge
+          float a = smoothstep(1.0, 0.15, d);         // soft round glow
+          if (a < 0.02) discard;
+          gl_FragColor = vec4(uColor, a);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    const star = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), starMat);
+    star.frustumCulled = false;
+    scene.add(star);
+
+    function updateStar() {
+      const dist = Math.max(camera.position.length(), 0.001);   // star at origin
+      const fovRad = camera.fov * Math.PI / 180;
+      const pixelsPerRadian = (window.innerHeight / 2) / Math.tan(fovRad / 2);
+      const worldSize = dist * STAR_TARGET_PX / pixelsPerRadian; // == StarFlare clamp
+      star.scale.set(worldSize, worldSize, 1);
+      star.quaternion.copy(camera.quaternion);
+    }
+
+    // ── Rings: 13 total, EACH built BOTH ways ─────────────────────────────────
+    // 9 planet-scale (Sol-like AU-ish scene radii) + 4 moon-scale around a point
+    // sitting on the 5200 orbit. Colors mirror production (planets 0x00ff00,
+    // moons 0x00bb00) so the green-pixel counter treats both builds identically.
+    const PLANET_RADII = [387, 723, 1000, 1520, 5200, 9500, 19100, 30000, 67670];
+    const MOON_RADII   = [2, 8, 20, 40];
+    const MOON_CENTER  = new THREE.Vector3(5200, 0, 0);   // repositioned every frame
+
+    const ringDefs = [];   // { radius, color, isMoon }
+    for (const r of PLANET_RADII) ringDefs.push({ radius: r, color: 0x00ff00, isMoon: false });
+    for (const r of MOON_RADII)   ringDefs.push({ radius: r, color: 0x00bb00, isMoon: true  });
+    const N = ringDefs.length;   // 13
+
+    const baselineRings = [];   // OrbitLine instances
+    const sdfRings = [];        // OrbitRingSDF instances
+    for (const def of ringDefs) {
+      const bl = new OrbitLine(def.radius, def.color);
+      const sd = new OrbitRingSDF(def.radius, def.color);
+      bl.addTo(scene);
+      sd.addTo(scene);
+      baselineRings.push(bl);
+      sdfRings.push(sd);
+    }
+
+    // ── Mode / solo state ─────────────────────────────────────────────────────
+    let mode = 'sdf';      // 'baseline' | 'sdf'
+    let solo = null;       // ring index or null (=all)
+
+    function applyVisibility() {
+      const showSdf = (mode === 'sdf');
+      for (let i = 0; i < N; i++) {
+        const on = (solo === null || solo === i);
+        baselineRings[i].mesh.visible = on && !showSdf;
+        sdfRings[i].mesh.visible      = on &&  showSdf;
+      }
+    }
+
+    // ── Camera placement: pitch-0.7 orbit at distance d ───────────────────────
+    let distance = 121806;    // ~1.8x Sol effOuter (settled overview, investigation.md)
+    const PITCH = 0.7;        // radians above the orbit plane
+    function placeCamera(d) {
+      distance = d;
+      const horiz = d * Math.cos(PITCH);
+      const y     = d * Math.sin(PITCH);
+      camera.position.set(0, y, horiz);   // azimuth 0 (+Z)
+      camera.up.set(0, 1, 0);
+      camera.lookAt(0, 0, 0);
+      camera.updateMatrixWorld();
+    }
+
+    // ── Render one frame + read pixels ────────────────────────────────────────
+    // Moon rings get their mesh.position set EVERY frame (exercises per-frame
+    // reposition — the SDF computes distance in local space, so this is a rigid
+    // move of the whole ring).
+    function renderOnce() {
+      for (let i = 0; i < N; i++) {
+        if (ringDefs[i].isMoon) {
+          baselineRings[i].mesh.position.copy(MOON_CENTER);
+          sdfRings[i].mesh.position.copy(MOON_CENTER);
+        }
+      }
+      updateStar();
+      applyVisibility();
+      retro.render();
+    }
+
+    const GREEN_THRESHOLD = 2;   // >THRESHOLD green px ⇒ ring is "visible"
+    function countGreenPixels() {
+      const w = retro.sceneTarget.width;
+      const h = retro.sceneTarget.height;
+      const buf = new Uint8Array(w * h * 4);
+      retro.renderer.readRenderTargetPixels(retro.sceneTarget, 0, 0, w, h, buf);
+      let n = 0;
+      for (let i = 0; i < buf.length; i += 4) {
+        const r = buf[i], g = buf[i + 1], b = buf[i + 2];
+        // investigation.md probe: green-dominant, bright-enough pixel.
+        if (g > 40 && g > 1.5 * r && g > 1.5 * b) n++;
+      }
+      return n;
+    }
+
+    // ── Public instrument API ─────────────────────────────────────────────────
+    window._orbitLab = {
+      setMode(m) { mode = (m === 'baseline') ? 'baseline' : 'sdf'; applyVisibility(); return mode; },
+      setDistance(d) { placeCamera(d); renderOnce(); return distance; },
+      ringCount() { return N; },
+      soloRing(i) { solo = (i === null || i === undefined) ? null : (i | 0); applyVisibility(); return solo; },
+      countGreenPixels() { renderOnce(); return countGreenPixels(); },
+
+      // Per-distance green-px for BOTH modes, rings all-on. Switches modes
+      // internally; restores prior mode/solo/distance on exit.
+      measureLadder(distances) {
+        const prevMode = mode, prevSolo = solo, prevDist = distance;
+        solo = null;
+        const out = [];
+        for (const d of distances) {
+          placeCamera(d);
+          mode = 'baseline'; renderOnce(); const baseline = countGreenPixels();
+          mode = 'sdf';      renderOnce(); const sdf      = countGreenPixels();
+          out.push({ distance: d, baseline, sdf });
+        }
+        mode = prevMode; solo = prevSolo; placeCamera(prevDist); renderOnce();
+        return out;
+      },
+
+      // Per-ring per-mode visibility matrix: solo each ring, mark visible when
+      // green-px > GREEN_THRESHOLD at each distance. Restores prior state.
+      perRingLadder(distances) {
+        const prevMode = mode, prevSolo = solo, prevDist = distance;
+        const rings = [];
+        for (let i = 0; i < N; i++) {
+          const row = { index: i, radius: ringDefs[i].radius, isMoon: ringDefs[i].isMoon, baseline: [], sdf: [] };
+          for (const which of ['baseline', 'sdf']) {
+            mode = which; solo = i;
+            for (const d of distances) {
+              placeCamera(d); renderOnce();
+              row[which].push(countGreenPixels() > GREEN_THRESHOLD);
+            }
+          }
+          rings.push(row);
+        }
+        mode = prevMode; solo = prevSolo; placeCamera(prevDist); renderOnce();
+        return { distances, threshold: GREEN_THRESHOLD, rings };
+      },
+
+      // introspection helpers
+      get mode() { return mode; },
+      get distance() { return distance; },
+      get sceneTargetSize() { return { w: retro.sceneTarget.width, h: retro.sceneTarget.height }; },
+    };
+
+    // ── Live loop + readout (cosmetics minimal — this is an instrument) ────────
+    const hud = document.getElementById('hud');
+    placeCamera(distance);
+    applyVisibility();
+    let frame = 0;
+    let lastPx = 0;
+    function loop() {
+      renderOnce();
+      if ((frame++ % 15) === 0) lastPx = countGreenPixels();
+      hud.textContent =
+        `ORRERY ORBIT LAB — SDF vs LineLoop (AC5)\n` +
+        `mode      : ${mode}${solo !== null ? `  (solo ring ${solo})` : ''}\n` +
+        `distance  : ${distance.toFixed(0)}\n` +
+        `green px  : ${lastPx}   (sceneTarget ${retro.sceneTarget.width}x${retro.sceneTarget.height})\n` +
+        `rings     : ${N}  (9 planet + 4 moon)\n` +
+        `API       : window._orbitLab`;
+      requestAnimationFrame(loop);
+    }
+    loop();
+
+    window.addEventListener('resize', () => {
+      retro.resize();
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      placeCamera(distance);
+    });
+
+    console.log('[orrery-orbit-lab] ready — window._orbitLab', window._orbitLab);
+  </script>
+</body>
+</html>
