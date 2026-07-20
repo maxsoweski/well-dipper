@@ -169,6 +169,31 @@ describe('AC5 — ESC pop + component-mode click return', () => {
   });
 });
 
+describe('AC5 — stale _pendingComponentSelect cleared on zoom-cancel / fresh entry (S5-verify material fix)', () => {
+  // The pre-select must only survive the prism→system zoom that set it. ESC
+  // (which cancels an in-flight zoom at any level) and a fresh system entry
+  // must kill it — otherwise a later, unrelated level-4 entry (tab
+  // auto-select, nav reopen) consumes the stale name and opens an
+  // unrequested drill.
+  it('handleEscape clears a pending component select along with the zoom it cancels', () => {
+    const nav = drillNav();
+    nav._pendingComponentSelect = 'Proxima Centauri';
+    nav.handleEscape();
+    expect(nav._pendingComponentSelect).toBeNull();
+  });
+
+  it('openToCurrentSystem opens clean — no inherited pre-select', () => {
+    const nav = drillNav();
+    nav._pendingComponentSelect = 'Proxima Centauri';
+    nav.openToCurrentSystem(
+      { wx: 1, wy: 2, wz: 3, seed: 's', name: 'Somewhere', spectral: 'G' },
+      { star: {}, planets: [] },
+    );
+    expect(nav._pendingComponentSelect).toBeNull();
+    expect(nav._systemMode).toBe('system');
+  });
+});
+
 describe('AC5 — _renderComponentDetail render source', () => {
   it('reads orbits from the payload (same object, never synthesized) and sets no commit affordance', () => {
     const nav = drillNav({ mode: 'component' });

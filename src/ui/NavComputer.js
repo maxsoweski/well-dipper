@@ -239,6 +239,7 @@ export class NavComputer {
     if (systemData) this._currentSystemData = systemData;
     this._hoveredBody = null;
     this._systemMode = 'system';
+    this._pendingComponentSelect = null; // fresh entry — no inherited pre-select (S5-verify)
     this._systemZoom = 1.0;
     this._clearCommitSelection();
     this._levelIndex = 4;
@@ -258,6 +259,7 @@ export class NavComputer {
     this._hideSearch();
     this._heldKeys.clear();
     this._systemZoomAnim = null; // cancel in-flight prism→system zoom so it can't fire after close
+    this._pendingComponentSelect = null; // never carry a pre-select across close/reopen (S5-verify)
     this._resetPrismLoad();
   }
 
@@ -1000,6 +1002,7 @@ export class NavComputer {
   handleEscape() {
     if (this._anim) return true; // ignore during animation
     this._systemZoomAnim = null; // cancel in-flight prism→system zoom so it can't slam level 4 after ESC
+    this._pendingComponentSelect = null; // the pre-select dies with the zoom that set it (S5-verify)
     if (this._levelIndex > 0) {
       // System view: planet detail → system overview → prism
       if (this._levelIndex === 4) {
@@ -3827,6 +3830,7 @@ export class NavComputer {
       const idx = Math.floor(p.x / tabW);
       if (idx >= 0 && idx < LEVELS.length) {
         this._systemZoomAnim = null; // cancel in-flight zoom so a tab click isn't overridden by it landing on level 4
+        this._pendingComponentSelect = null; // the pre-select dies with the zoom (S5-verify)
         const target = this._viewStack[idx];
         // Animate between 2D levels if both are 2D and have stack entries
         if (idx <= 2 && this._levelIndex <= 2 && target) {
