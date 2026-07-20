@@ -26,8 +26,11 @@ function makeCtx() {
     measureText: (s) => ({ width: s.length * 6 }),
     beginPath() {}, arc(x, y, r) { arcs.push({ x, y, r }); }, fill() {},
     moveTo() {}, lineTo() {}, stroke() {}, closePath() {},
-    setLineDash() {}, ellipse() {},
+    setLineDash() {}, ellipse() {}, roundRect() {},
+    fillRect() {}, strokeRect() {}, save() {}, restore() {},
+    translate() {}, rotate() {}, quadraticCurveTo() {},
     createRadialGradient: () => ({ addColorStop() {} }),
+    createLinearGradient: () => ({ addColorStop() {} }),
     fillText(t, x, y) { texts.push({ t, x, y }); },
   };
 }
@@ -124,6 +127,26 @@ describe('AC5 — entry (a): far-chip click', () => {
     nav._dragStartX = 150; nav._dragStartY = 150;
     nav._handleClick(evt(150, 150));
     expect(nav._systemMode).toBe('system');
+  });
+});
+
+describe('AC5 — entry (b): PRISM far-member pre-select', () => {
+  it('_renderSystem consumes _pendingComponentSelect and sets component mode with the matching idx', () => {
+    const nav = drillNav();
+    nav._pendingComponentSelect = 'Proxima Centauri';
+    nav._renderSystem(makeCtx(), 400, 300);
+    expect(nav._systemMode).toBe('component');
+    expect(nav._selectedComponentIdx).toBe(0);
+    expect(nav._pendingComponentSelect).toBeNull(); // consumed exactly once
+  });
+
+  it('a non-component marker (Rigil Kentaurus — a close member) leaves system mode', () => {
+    const nav = drillNav();
+    nav._pendingComponentSelect = 'Rigil Kentaurus';
+    nav._renderSystem(makeCtx(), 400, 300);
+    expect(nav._systemMode).toBe('system');
+    expect(nav._selectedComponentIdx).toBe(-1);
+    expect(nav._pendingComponentSelect).toBeNull(); // still consumed — no sticky retry
   });
 });
 

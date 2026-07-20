@@ -2015,6 +2015,21 @@ export class NavComputer {
       return;
     }
 
+    // Deferred component pre-select (AC5 entry b): a PRISM far-member click
+    // stashes the marker name because componentSystems does not exist until
+    // _systemData resolves (it persists across the 400ms prism→system zoom).
+    // Consumed exactly once on the first level-4 render; a non-component
+    // marker (Rigil — a close member, or any procgen star) resolves to -1 and
+    // leaves the SYSTEM view untouched.
+    if (this._pendingComponentSelect) {
+      const idx = findComponentIndexByName(this._systemData, this._pendingComponentSelect);
+      if (idx >= 0) {
+        this._selectedComponentIdx = idx;
+        this._systemMode = 'component';
+      }
+      this._pendingComponentSelect = null;
+    }
+
     if (this._systemMode === 'component') {
       this._renderComponentDetail(ctx, w, h);
       return;
@@ -3973,6 +3988,13 @@ export class NavComputer {
       // Update external target so trajectory line shows in 2D views
       this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '' };
       this._systemData = null; // will be generated in _renderSystem
+      // Component pre-select (AC5 entry b): if this marker is a far member of
+      // the system it resolves into (Proxima → Alpha Centauri), the SYSTEM
+      // view opens with that component drilled. Unconditional set is safe —
+      // findComponentIndexByName returns -1 for non-component markers at
+      // consumption time. Warp untouched: _systemStar/COMMIT still build the
+      // one destination.
+      this._pendingComponentSelect = star.name || null;
       this._hoveredBody = null;
       this._systemMode = 'system';
       this._systemZoom = 1.0; // reset zoom for new system
