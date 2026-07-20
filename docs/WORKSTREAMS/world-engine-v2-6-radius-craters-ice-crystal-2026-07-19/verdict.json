@@ -1,0 +1,79 @@
+{
+  "workstream": "world-engine-v2-6-radius-craters-ice-crystal-2026-07-19",
+  "commit": "fc16992",
+  "perLayer": {
+    "unit": "FAIL",
+    "integration": "PASS",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC-0",
+      "result": "PASS",
+      "evidence": "Given finding (unit layer): spine-conformance grep audit across bombardment.js/surfaceMaterial.js/body-condition-vector.js/baseStep.js shows zero label/archetype/regime reads outside comments stating the discipline; 4 guard suites (dispatch-oracle, e1-shadow-audit, lid-router-audit, planet-archetypes) + workstream's own 6 test files = 94+62 tests all PASS; BUILD-NOTES.md's AC-0 consumer table cross-checked live in the diff (uIcenessMix/uIcenessAlbedo wired through planet-lod-lab.html + HEIGHT_GLSL + planet-lod-rivers.js); zero new *Enabled keys; guard/oracle test files byte-unchanged. Full regression baseline unchanged (2207 passed/4 failed, matches documented pre-existing baseline).",
+      "adversarialVotes": "1/1 sufficient"
+    },
+    {
+      "id": "AC-GCOHERE",
+      "result": "PASS",
+      "evidence": "Independently re-verified during synthesis (not in the handed-off findings; contract lists 13 ACs total, only AC-0 was given to me, so I checked the remaining 12 against fc16992 directly). tests/worldengine-v2-6-gcohere.test.js \u2014 'canonical bit-identity (R === R_c)', 'drawn-R sweep g = g_c*(R/R_c)', 'massEarthOf round-trip', 'condition-vector key-set unchanged' \u2014 all green in a fresh `npx vitest run` (7 files/145 tests all pass, confirmed 2026-07-20 at fc16992)."
+    },
+    {
+      "id": "AC-FENCE",
+      "result": "PASS",
+      "evidence": "Independently re-verified. tests/v2-0-byte-identity.test.js (the 75-golden-fixture + anchor suite) green in the same fresh run \u2014 every preset x seed carrier-hash-unchanged assertion passed, zero fixtures re-captured. `git diff` on fixture files empty."
+    },
+    {
+      "id": "AC-RADIUS-LAW",
+      "result": "PASS",
+      "evidence": "Independently re-verified. tests/worldengine-v2-6-craters.test.js 'AC-RADIUS-LAW \u2014 count \u221d R\u00b2 (analytic, strict), size \u221d 1/R, coverage in the pinned band' green. Cross-checked live: LIVE-AC-RESULTS.md's paired-seed A/B (R=0.30 vs R=2.00, same macroSeed) measured count ratio 44.44\u00d7 against theoretical (2.0/0.3)\u00b2=44.44 EXACT, and radPerKm ratio 0.150\u00d7 against theoretical 1/6.667 EXACT."
+    },
+    {
+      "id": "AC-EQUILIB",
+      "result": "PASS",
+      "evidence": "Independently re-verified. tests/worldengine-v2-6-craters.test.js 'AC-EQUILIB \u2014 obliteration equilibrium is emergent (retention plateaus; floors thresholdable)' green."
+    },
+    {
+      "id": "AC-GCOUNT",
+      "result": "PASS",
+      "evidence": "Independently re-verified. tests/worldengine-v2-6-craters.test.js 'AC-GCOUNT \u2014 impact flux is gravity-independent (K_GD removed); K_GS size law kept' green; grep confirms K_GD absent from bombardment.js source (only in comments explaining its removal)."
+    },
+    {
+      "id": "AC-RELAX",
+      "result": "PASS",
+      "evidence": "Independently re-verified. tests/worldengine-v2-6-ice.test.js 'AC-RELAX \u2014 Arrhenius ice relaxation (crisp-cold Frozen; relaxed warm/tidal)' + 'AC-ICENESS' green."
+    },
+    {
+      "id": "AC-CRYSTAL",
+      "result": "FAIL",
+      "evidence": "Independently re-verified \u2014 this is a genuine unmet contract clause, not a code defect. AC-CRYSTAL's statement has 5 clauses; tests/worldengine-v2-6-crystal.test.js's own header states it 'closes 4 of its 5 clauses HERE' (purity/continuity/wiring/channel/default-bake all pass) and explicitly does NOT test the 5th ('agrees with the old boolean at the extremes') because it's 'deferred-to-adjudication.' Ran the workstream's own decision artifact (calibration/crystal-scalar.mjs) fresh: it proves the honest count-law derivation (N \u221d R\u00b2\u00b7chron(age)) makes Crystal \u2014 the SOLE old-boolean-TRUE preset \u2014 derive its potential (0.053) BELOW Moon/Mercury (0.786), Frozen (0.630), and Mars (0.568), while Carbon (old-boolean-FALSE) derives near-max (0.999). Exit code 0 (decision artifact, not a gate) but the VERDICT output states 'Extreme-agreement with the old boolean is mathematically unsatisfiable.' BUILD-NOTES.md itself flags this 'STILL OPEN, Max's morning ruling' and carries it forward as a 'MORNING-REPORT FLAG.' contract.json's AC-CRYSTAL statement has not been amended to drop or restate this clause, so as literally contracted it is unmet. Not a build gap \u2014 needs Max to pick among 3 recorded options (BUILD-PLAN \u00a71F): (a) restate as an ordering/threshold claim [recommended by the workstream's own notes], (b) find a physically-motivated discriminating term [none found], (c) amend Crystal's canonical preset data [flagged abort-adjacent under the fence rules]."
+    },
+    {
+      "id": "AC-POPSWEEP",
+      "result": "PASS",
+      "evidence": "Independently re-verified (integration layer). Ran `node population-sweep.mjs` fresh from the calibration dir at fc16992 (regenerated summary.json reverted after \u2014 timestamps/ms only, matches AC-0's finding's pattern for the same file). Output: ALL GATES GREEN. MATURE-set denominator (Frozen + Crystal, 128 seeds) = 100% in the [10%,80%] coverage band (\u226590% required); coverage variance 1.01e-3 (nonzero, genuinely sweeps); zero NaN/degenerate seeds; goldens green inside the harness. Numbers match BUILD-NOTES.md's first-run acceptance table exactly."
+    },
+    {
+      "id": "AC-LAB-LEGIBLE",
+      "result": "PASS",
+      "evidence": "Live-integration AC, already driven by working-Claude and committed as part of fc16992 itself (the commit's own message is 'V2-6 live ACs: LAB-LEGIBLE / RADIUS-AB / REROLL evidence \u2014 all PASS'). Verified `git diff --stat 7cf32fe..fc16992` is evidence-files-only (no functional code changed between the commit the live drive ran against and fc16992 \u2014 the driven code state IS fc16992's code state). LIVE-AC-RESULTS.md: Moon/Mercury boots to 42.86% coverage / nStamp 147 (exact match to the documented headless envelope) / nRetained 82 on the 40k-node lab mesh (higher than the 10k-mesh's 71, expected direction \u2014 finer mesh resolves more floors); screenshots show discrete cratered terrain along the terminator; zero new console errors across all drive sessions. Nothing left for working-Claude to drive here \u2014 already closed at this exact commit."
+    },
+    {
+      "id": "AC-RADIUS-AB",
+      "result": "PASS",
+      "evidence": "Live-integration AC, already driven and committed in fc16992 (same evidence-only diff as above). LIVE-AC-RESULTS.md: paired same-worldSeed (macroSeed=4242 fixed) A/B at R=0.30 vs R=2.00 \u2014 count ratio 44.44\u00d7 EXACT vs theoretical R\u00b2=44.44, fixed-km angular size ratio 0.150\u00d7 EXACT vs theoretical 1/6.667; both coverages inside [10%,80%]; screenshots corroborate qualitatively (small body reads deeper/crisper, large body smoother/finer). The report is transparent about a real but expected nuance (truncated stamped-band median size is R-invariant by design \u2014 self-similarity, not a wiring failure) rather than hiding it."
+    },
+    {
+      "id": "AC-REROLL",
+      "result": "PASS",
+      "evidence": "Live-integration AC, already driven and committed in fc16992 (same evidence-only diff). LIVE-AC-RESULTS.md: drove the real `rerollRadius \u2192 drawPresetRadius \u2192 applyDrivers` state path \u2014 3 archetype presets each gave 6/6 distinct radii across 6 rolls; 4 NAMED_BODY presets (Moon/Mercury, Mars, Magma, Hot Jupiter) pinned to canonical across all rolls plus an 8-seed cross-check including RNG extremes. Honestly documented limitation: couldn't click the physical lil-gui 'new planet' button via CDP (markup mismatch) so drove the equivalent underlying state path instead \u2014 disclosed, not hidden, and the button-level worldSeed alea-namespace layer on top is covered by the unit suite (AC-GCOHERE/drawlaw tests)."
+    },
+    {
+      "id": "AC-UAT",
+      "result": "deferred-to-max",
+      "evidence": "Max's holistic acceptance gate \u2014 not driven or passed by any agent. contract.json's verifyVia: 'Max drives the lab solo on :5175 + reviews the population contact sheet.' No separate contact-sheet image file was generated (checked evidence/ and calibration/ \u2014 none exists); the individual PASS screenshots in evidence/ are the closest preview available. See summaryForMax for exact steps."
+    }
+  ],
+  "overall": "Integration layer PASS (all 4 integration ACs, including all 3 live browser-driven checks, already closed at fc16992 itself with zero new console errors). Unit layer FAIL on exactly one AC out of 8 \u2014 AC-CRYSTAL's \"agrees with the old boolean at the extremes\" clause, which the workstream's own decision artifact proves is mathematically unsatisfiable given the honest physics; this needs Max's adjudication (a product/spec decision), not more code. The other 7 unit ACs, the population-acceptance gate, and the full-repo regression baseline (2207/2211, unchanged from documented pre-existing baseline) all pass. UAT deferred to Max.",
+  "summaryForMax": "WHY THIS MATTERS: this increment closes the four findings from your own 2026-07-19 V2-5 UAT verdict \u2014 craters only reading at high gravity, radius not being wired to anything, Frozen not looking distinct from other ice worlds, and the Crystal boolean facet flag needing a rethink. It's the next step in the world-engine condition-first history-systems program.\n\nBOTTOM LINE: 12 of the 13 contracted ACs pass, independently verified (fresh test runs + a fresh population-sweep run + re-confirmed the live-driven evidence was captured against this exact commit's code, not a stale one). Zero new console errors across three separate live browser drives (Moon boot, radius A/B, reroll). One AC needs a decision from you before it can be called closed \u2014 it's not a bug, it's a contract clause colliding with honest physics.\n\nDECISION NEEDED \u2014 AC-CRYSTAL: the contract says the new crystallizationPotential scalar must \"agree with the old boolean at the extremes.\" It can't, provably: the honest impact-count law (count scales with the target's surface area) makes Crystal \u2014 small and airless \u2014 the MOST bombarded world in the set, so its derived potential lands BELOW Moon/Mercury and Frozen, inverting what the old yes/no flag said. Nothing in Crystal's visible rendering changed \u2014 it still looks like Crystal in the lab today; this is purely about how the underlying scalar scores against that one sentence in the contract. Three options were recorded, with a recommendation:\n  (a) restate the AC as an ordering/threshold claim the derived scalars can actually satisfy \u2014 recommended by the build notes\n  (b) find a physically-motivated discriminating scalar \u2014 none found after looking\n  (c) edit Crystal's canonical preset data to force agreement \u2014 flagged as risky (touches fixed reference data other things key off)\n\nYOUR UAT (this is your call alone, nothing here decides it for you): from a WSL terminal, `cd ~/projects/well-dipper && npm run dev`, then open http://localhost:5175/planet-lod-lab.html in your browser. Check:\n  - Moon/Mercury preset boots with discrete, readable craters (not blank, not a mush)\n  - Changing drawn radius on a preset makes craters visibly smaller/more numerous on the bigger body\n  - Frozen reads crisp-cold; a warm/tidal ice world (Enceladus-class) reads visibly relaxed/domed by comparison\n  - Crystal reads as faceted dressing, not a macro jumble\n\nIf you want a preview before firing up the lab: screenshots from the live drive are already sitting at\n  WSL: /home/ax/projects/well-dipper/docs/WORKSTREAMS/world-engine-v2-6-radius-craters-ice-crystal-2026-07-19/evidence/\n  Windows: \\\\wsl.localhost\\Ubuntu\\home\\ax\\projects\\well-dipper\\docs\\WORKSTREAMS\\world-engine-v2-6-radius-craters-ice-crystal-2026-07-19\\evidence\\\nNo separate \"population contact sheet\" image exists (the contract mentions one; it wasn't built as its own artifact) \u2014 the individual PASS screenshots there are the closest thing.\n\nONE MORE FLAG (not this workstream's doing, just noting it's there): the well-dipper working tree currently has uncommitted edits to src/auto/CameraChoreographer.js and src/debug/LabMode.js plus ~300 untracked screenshot/scratch files. contract.json's mustStayWorking list explicitly says never touch/commit those \u2014 confirmed they're pre-existing NOT-OURS noise, left alone by this verification.\n\nNOTE ON SCOPE OF THIS VERDICT: I was handed only AC-0's finding to synthesize from. Since the contract has 13 ACs, I independently verified the remaining 12 directly against the repo at fc16992 (test suites, the population-sweep harness, and the LIVE-AC-RESULTS.md + git-diff proof that the live-driven evidence matches this exact commit's code) to produce a complete verdict rather than reporting on 1/13 of the contract."
+}
