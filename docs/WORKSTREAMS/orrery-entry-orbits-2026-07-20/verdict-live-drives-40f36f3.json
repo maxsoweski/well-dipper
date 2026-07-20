@@ -50,6 +50,10 @@
     "AC5-helm-unchanged": {
       "result": "PASS",
       "evidence": "HELM boot: 0/39 orbit lines visible (visible flags own HELM exactly as before) AND uVisFactor parked at 1.0 (wiring pushes 1 outside ORRERY — no double-gate)."
+    },
+    "AC4-AC5-factor-source-fix (ADDENDUM, post-40f36f3)": {
+      "result": "PASS",
+      "evidence": "verify-workstream wf_78c0de56 STATIC CATCH, confirmed real: _updateOrbitVisibilityFactor read cameraController.distance — during an arrival that already holds the final overview target, so the factor sat at 1 from frame 0 (no fade-in; outermost ring drawable at spawn). Fixed to smoothedDistance (what _applyOrbit renders). LIVE DISCRIMINATOR (deterministic, immune to the sim-batch race that hid it from frame samplers): with .distance pinned 121,806 throughout — smoothedDistance frozen 5M -> uVisFactor 0 (old code: 1); 4.2M -> 0.4015; restored -> 1. Suite 491/491 post-fix. The per-frame recorder race is documented: at throttled rAF the sim runs catch-up batches, so the 2-3-tick fade window is unobservable from rAF sampling — the discriminator replaces it as the objective probe."
     }
   },
   "instrumentCaveats": [

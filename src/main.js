@@ -7569,8 +7569,14 @@ function _updateOrbitVisibilityFactor() {
     const { effOuter, glowPx } = _orbitFactorGeom();
     if (effOuter > 0 && glowPx > 0) {
       factor = orbitVisibilityFactor({
+        // smoothedDistance, NOT distance: _applyOrbit renders the camera from
+        // smoothedDistance, and during an AC4 arrival zoom `.distance` already
+        // holds the final overview target while the camera is still millions of
+        // units out — factoring from `.distance` lit the orbits from frame 0 and
+        // skipped the fade-in entirely (verify-workstream wf_78c0de56 static
+        // catch, 2026-07-20). smoothedDistance is what is actually on screen.
+        camDist: cameraController.smoothedDistance ?? cameraController.distance,
         outermostOrbitRadius: effOuter,
-        camDist: cameraController.distance, // distance to the system center/star
         fovDeg: camera.fov,
         viewportH: window.innerHeight,
         starGlowRadiusPx: glowPx,
