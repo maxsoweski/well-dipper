@@ -45,6 +45,36 @@ the planet was. This increment makes the DRAWN radius physically load-bearing:
 
 ---
 
+## DOES / UNLOCKS (Rule 15 card, restated AS-BUILT)
+
+**DOES (as shipped across S1–S6):** derives gravity from the drawn radius at the condition-vector root
+(`deriveConditionVector` `surfaceGravity = g_c·(R/R_c)`, byte-exact at canonical R — resolving `massEarthOf`
+incoherence with zero edit to `e1Regime.js`); adds the `radPerKm`/`KM_PER_EARTH_RADIUS` derived scalars in
+`baseStep.js`; rewrites `craterSchedule`/`writeBombardment` into km-space physics (bounded-Pareto SFD B=2.0
+in km, angular size `= D_km·radPerKm ∝ 1/R`, closed-form `N_analytic ∝ R²`, `K_GD` removed so count is
+gravity-independent while `K_GS = 0.17` size scaling is kept, graded atmo floor `∝ P^0.65` replacing binary
+`CRATER_ATMO_MAX`, continuous tidal+erosion exposure age replacing the binary tidal gate, deep-envelope
+`P_SURF_MAX` impact-surface clause, sub-mesh-floor SFD mass folded analytically into `regolithRoughness`);
+makes crater equilibrium emergent via oldest-first obliteration stamping (bowl RESETS, rim/ejecta accumulate)
+with the legacy `CRATER_SAT_N` tanh surviving only as a safety clamp; adds Arrhenius ice relaxation in
+`craterProfile` (bit-identical to unrelaxed at 60 K, domed floors + persistent short-λ rims on warm/tidal
+ice); ships the condition-pure `surfaceMaterial.js` module (`icenessOf`, `erosionOf`,
+`crystallizationPotential(cond, schedule)`, `deriveSurfaceMaterial`) driving a render-side
+`uIcenessMix`/`uIcenessAlbedo` albedo pair and the `relief.surfaceMaterial` return channel; re-rolls radius
+per world from one alea-namespaced `worldSeed` (`newPlanet` GUI button + `draw:radius/macro/detail`
+namespaces, `mulberry32` retired for new draws, draw law extracted to `driver-presets.js`); and ships the
+`population-sweep.mjs` acceptance harness (64-seed × archetype, pinned gates).
+
+**UNLOCKS (as-built):** Increment 3 (relief-scale spine — now sizes against coherent g); Increment 8
+(regolith/micro-relief — `regolithRoughness` computed and riding the channel, awaiting its render consumer;
+exogenic dressing on an honest SFD); Increment 9 (full no-default population — extends the worldSeed alea
+namespaces); the epoch editor's thresholdable crater floors (exact pre-clamp on zero-overlap retained
+craters, order-thresholdable post-clamp on all); and every future radius-consuming law (`radPerKm` is now the
+shared km→angular derivation). AC-CRYSTAL's extreme-agreement clause + the lab `_facetClass` flip remain
+gated on Max's adjudication (below) — NOT unlocked by this build.
+
+---
+
 ## AC-0 — named consumers (spine-conformance driver-connectivity law)
 
 Every new driver has a named, wired consumer. The AC-0 grep sweep confirms `bombardment.js` and
@@ -144,6 +174,45 @@ scalar would turn Crystal's facets OFF live (the one archetype whose identity IS
 regression Max has not ruled on. Recorded options (BUILD-PLAN §1F): (a) restate extreme agreement as an
 ordering/threshold claim the derived scalars can satisfy [recommended]; (b) a physically-motivated
 discriminating term [none found]; (c) amend Crystal's canonical data [ABORT-adjacent under FENCE 1/2].
+
+---
+
+## Deviations summary (as-built vs BUILD-PLAN)
+
+Full rows with derivations live in BUILD-PLAN §8; this is the increment-level roll-up. Nothing silent.
+
+- **S1:** none.
+- **S2 · Deviation #1 — `AGE_MAX = 4.6 Ga` surface-age cap** added to `craterSchedule` before `chron(age)`.
+  The published Neukum chronology diverges exponentially; an unphysical `age` (older than the ~4.567 Ga
+  solar system) drove `N_stamp` toward ~1e15 / an unbounded stamp loop. A surface cannot predate the solar
+  system, so the cap is physically correct — INERT on every preset (max preset age 4.5), bounds
+  `N_stamp ≤ ~300 ≪ N_STAMP_SAFETY`. AC-EQUILIB's old-age plateau now lands exactly at the cap; the
+  obliteration signature is unaffected. Adjudicable for Max.
+- **S2 · Deviation #2 — erosion-completion priors pinned:** `P_ER_REF = 0.5`, `DRY_ER_FLOOR = 0.1` (in
+  `surfaceMaterial.erosionOf`) and `T_RESURF_ERODE = 0.1 Ga`. The plan gave the erosion FORM (footnote-13
+  `smoothstep(0,P_ER_REF,P)·max(waterWindow,DRY_ER_FLOOR)`) as the §4-adjudicable "ship-it-and-flag"
+  completion but not the values. Chosen so Rocky/Ocean (P≈1 bar, liquid-water T) reach erosion≈1 ⇒
+  `t_exp ≈ 0.1 Ga` (real Earth crater-retention age) ⇒ ~zero stamped craters, while airless worlds keep
+  full-age exposure. Closes the "Rocky/Ocean/Titan boot Moon-cratered" live regression the audit did not
+  intend. AC-GCOUNT/RADIUS-LAW/EQUILIB unaffected (measured on airless fixtures where erosion=0). Surfaced
+  for Max.
+- **S2 · record (not a plan-deviation) — `F_REF = 488000`** solved by the sanctioned step-0 closed-form
+  pre-check (`crater-sfd-km.mjs`) against the [10,80]% coverage gate (MATURE-set geo-mean centred in-band:
+  Moon 42.9%, Frozen 44.2%, Crystal 33.7%). The `F_REF` comment in `craterSchedule` cites this.
+- **S3 · file-list expansion (the refuted-defect fix):** the plan's S3 file list named `planet-lod-uniforms.js`
+  for the JS uniform but omitted the companion GLSL `uniform` declaration. Fix (`a1be480`) adds
+  `uniform float uIcenessMix;` + `uniform vec3 uIcenessAlbedo;` to `HEIGHT_GLSL` in `planet-lod-height.glsl.js`
+  (beside the `uFrostAlbedo` precedent, clear of the atmo-owned F24–F31 sections) so both the lab planet and
+  the router HEIGHT_FRAG compile — the established link rule (`ws4-grain-scarp-wire.test.js`). No AC impact;
+  byte-inert (uniform defaults to 0 ⇒ bare-rock ramp).
+- **S4 · record — `N_BOMB_REF = 1.0e7`** pinned from the `crystal-scalar.mjs` table (§4-adjudicable prior).
+  The AC-CRYSTAL ordering/inversion conclusion is `N_BOMB_REF`-invariant (recorded in the module comment +
+  artifact), so this scales the scalar without moving the adjudication verdict.
+- **S4 · in-plan carve (NOT a deviation — declared BUILD-PLAN §1E/§1F/Lens L8/L9):** the
+  `relief.surfaceMaterial` 2-key→3-key shape restatement is the pre-declared channel change; the
+  AC-CRYSTAL extreme-agreement clause + the lab `_facetClass` flip are `deferred-to-adjudication`, not built
+  around (see the AC-CRYSTAL flag above). **MORNING-REPORT FLAG carried forward.**
+- **S5, S6:** none.
 
 ---
 
