@@ -186,3 +186,115 @@ in the train loop).
   planet-archetypes, v2-3 dispatch oracle, v2-0-byte-identity 75 goldens): green (216 tests).
 - Full suite failed-SET unchanged from baseline: 4 failed (KnownObjects ×3 + GalacticFeatures
   ×1) + collection-error env-noise files. Not grown.
+
+---
+
+## S3 — DECK-Z COMPOSITOR (AC-DECK enablement) (seam 3)
+
+**What it does (plain language):** until now the storm was *painted onto* the finished band
+color with one alpha-over rule for both storm kinds (the audit's "pasted" root cause). S3 gives
+every storm a HEIGHT (the S2-carried `deckZ`) and derives its compositing from it. A warm
+anticyclone (mode 0) is a TOWER (deckZ 0.7–0.9): it earns shaded-relief embossing, a cold ring
+instead of a bright collar, and a core weight that grows with age. A dark spot (mode 1) is a
+REVEAL down to the deep FLOOR (deckZ 0.0): its interior stops taking the storm's hue and instead
+shows the belt-family deep deck, with thin band-frequency wisps streaking its rim. Haze becomes
+deck-weighted (a tower pokes above the haze; a hole mutes fully), and a documented-marginal
+hood-exposure term lets a high deck poke above the polar hood.
+
+**Intent:** close AC-DECK's enablement — make storms read as vertical structure occluding/
+revealing the deck around them, not decals — while keeping the stormless render byte-identical
+(every S3 term lives inside the `uStormCount > 0` gate or the per-storm loop) and the whole thing
+STATIC (no `uTime`). Live pixel probes are the orchestrator's; this slice ships the mechanism +
+the source-structure closers.
+
+**Deliberate non-goals (this slice):**
+- No `dAdvect` edit (the LIKED layer), no relief/dispatch/writer contact, no golden-fixture
+  contact — S3 touches ONLY `zonalBandCol` + `stormColTerms` in `planet-lod-height.glsl.js`.
+- No new uniform, attribute, `*Enabled` key, or GUI control — S3 consumes the S2 `uStormAux`
+  carriage and the `STORM_DECK`/`DECK_HAZE` constants already in place.
+- V-α.2 GRS wake, V-α.3 interior spiral, V-α.5 companion cloud left byte-untouched (audit-correct).
+- The dSpiral roll-up is S4, not here.
+
+### New / changed symbols (`planet-lod-height.glsl.js` — storm section only)
+
+| Symbol | Kind | Function | Intent / non-goal |
+|---|---|---|---|
+| `LUMA` | `const vec3` | Rec.601 luma weights `(0.299,0.587,0.114)` | replaces the file's inline weight triples in new code; single source for the deep-deck donor + cold-annulus luminance |
+| `DECK_HAZE` | `const float` 1.0 | the hood/haze deck height — the `hoodExposure` minuend | F16-consts: the ONLY GLSL-declared deck const (FLOOR/ZONE/TOWER live in `STORM_DECK`, BELT in `deepBase`) |
+| `EMB_K` / `COLLAR_K` / `WISP_K` / `WISP_WARP` / `WISP_OFF` | `const` | mode-0 emboss gain 0.18, cold-annulus depth 0.55, mode-1 wisp weight 0.10, wisp warp gain 1.5, wisp offset `(2.3,5.7,-1.1)` | **Phase-A CANDIDATES** — Phase-B live freeze belongs to the orchestrating session (atmo-expression precedent). `WISP_WARP`/`WISP_OFF` are builder-chosen (the plan gave the wisp form, not these two magnitudes — deviation 3 below) |
+| `stormColTerms(vec3 n, vec3 col, float hood)` | signature change | gains the `hood` param so each storm takes hood exposure ∝ its own deck depth | the call site `stormColTerms(N, col, hood)` + the hood reorder pass it |
+
+### Composition reorder (`zonalBandCol` tail)
+
+- The polar-hood multiply (`col *= 1.0 − 0.30·hood`) now runs BEFORE the storm call (was after),
+  so `stormColTerms` receives the hood-dimmed base and can re-expose high decks per storm.
+  **Off-gate byte-identity is preserved:** when `uStormCount == 0` the storm call is skipped in
+  BOTH orders, leaving `col *= 1−0.30·hood` then `polarVortexCol` — a scalar multiply of the same
+  value in the same sequence. Storms-ON is *supposed* to change (that is AC-DECK). The polar
+  vortex still paints last (deck = `DECK_HAZE`, correctly on top).
+
+### Per-storm compositing (inside the loop, AFTER the `i >= uStormCount` break)
+
+- **Deck reads:** `age = uStormAux[i].x`, `deckZ = uStormAux[i].z`, `prom = 0.35 + 0.65·age`
+  (the same reconstruction the carriage `_stormDeckZ` used — comment cross-ref, single source is
+  the carriage value in `.z`).
+- **Deck-weighted haze:** `hazeX = uHazeMute·(1 − deckZ)`; `stormCol = mix(uStormColor[i], luma,
+  hazeX)`, `hazeAmp = 1 − hazeX`. `uHazeMute == 0` on every non-haze preset ⇒ `hazeX == 0` ⇒ the
+  V-β.4 byte-identity precedent holds.
+- **mode-0 tower (`uStormParams[i].z < 0.5`):** core weight `core·(0.60 + 0.30·prom)` (aged GRS
+  ≈ 0.90, young ovals lower); emboss rim `col *= 1 + EMB_K·prom·rim·asym·hazeAmp` with
+  `asym = cos(thv − embossDir)` (the `stormE:emboss` axis — the live AC-DECK asymmetry probe);
+  cold annulus `mix(col, luma·(0.90,0.99,1.14), COLLAR_K·collar·hazeAmp)` replacing the old
+  bright-collar luminance lift.
+- **mode-1 reveal (else):** `deepBase = uBandTint·(0.62,0.52,0.42)·(0.72,0.60,0.52)` (belt family
+  darkened + warmed); `deep = deepBase · min(dot(uStormColor[i],luma)/max(dot(deepBase,luma),
+  1e-3), 1.5)` — HUE from the deep deck, VALUE from the writer lifecycle donor, ratio **CLAMPED at
+  1.5** (F-deep: precursor spots would otherwise desaturate out of the belt family). Core mixes
+  toward `deep`, NOT `uStormColor`. Keeps the pale-collar luminance lift. Rim wisps
+  `sin(uBandM·latHere + uBandPhaseJet + WISP_WARP·bandWarpField(n·4.3 + WISP_OFF))` sharpened
+  `pow(|·|,6)`, mixed toward a zone-tint at `WISP_K·wispBand`.
+- **hoodExposure:** `col *= 1 − 0.30·hood·(DECK_HAZE − deckZ)` — a tower (deckZ 0.9) barely dims,
+  a mode-1 hole (0.0) dims fully into the hood. See the reachability note below.
+
+### hoodExposure reachability (F16-hood — documented-marginal, EXCLUDED from probes)
+
+For the DRAWN population the term is a no-op: writer pole-avoidance `BELT_Y_MAX 0.75` (|sin lat|
+≤ 0.75 ⇒ center ≤ 0.848 rad, +0.06 mature poleward drift) with `SPOT_R_MIN 0.18 + SPAN 0.12`
+(R ≤ 0.30 rad) puts a storm core's max normalized `trueLat` (×2/π; GLSL anchor
+`asin(clamp(N.y,…))·0.63661977`) at ≈ 0.67 < the `smoothstep(0.72, 0.95, …)` hood floor ⇒
+**core `hood` is exactly 0 population-wide**, so `1 − 0.30·hood·(…)` ≡ 1.0 at every storm core
+today. Only the outer collar fringe of an extreme-corner storm (max lat, max R) reaches
+`hood ≈ 0.3`. Kept as principled future-proofing for polar-storm increments (one multiply,
+correct physics); hood interaction stays OUT of the AC-DECK probe recipe (unfalsifiable on the
+drawn population).
+
+### AC-0 consumer table — S3 reads of the S2 carriage
+
+| Reads | From | Effect |
+|---|---|---|
+| `uStormAux[i].x` (ageScalar) | `stormE:age` (via carriage) | `prom` → tower core weight + emboss gain |
+| `uStormAux[i].y` (embossDir) | `stormE:emboss` | mode-0 shaded-relief asymmetry axis |
+| `uStormAux[i].z` (deckZ) | `STORM_DECK`-derived (`_stormDeckZ`) | deck-weighted haze + hoodExposure + mode branch |
+| `uStormColor[i]` | writer lifecycle (`_stormColor`) | mode-1 luminance donor (value only; hue from `deepBase`) |
+| `uBandTint / uBandM / uBandPhaseJet` | band writer | mode-1 `deepBase` family + rim-wisp band frequency |
+
+### AC-DECK live probe recipe (ORCHESTRATOR closes on `:5178`)
+
+Fixed seed with a mode-0 primary (Jovian) and mode-1 primaries at BOTH a mature AND a
+young/precursor lifecycle phase (Neptunian — the F-deep young-spot case), probe coords from
+`state.spotCenter`: (1) mode-0 emboss luminance asymmetry across `embossDir`; (2) desaturated/
+blue-shifted mode-0 collar; (3) mode-1 interior within the belt-derived family (hue distance to
+`deepBase` ≪ to `uStormColor` hue) on BOTH mature AND young spots; (4) rim wisps at band
+frequency. Hood interaction NOT probed (F16-hood — unreachable on the drawn population).
+
+### Gate at seam 3
+
+- Increment file `tests/worldengine-atmo-deck-spiral-rhines.test.js` (S1+S2+S3 blocks) +
+  band-flow + storm-e + climate-e5: green (105 tests) — the S3 AC-STATIC diff-scoped grep, the
+  deck-read / mode-0 / mode-1 / hoodExposure structure closers, the off-gate structural asserts,
+  and the dAdvect-untouched fence all pass.
+- Fast fence (climate-e5 golden `-1329854088`, emission-e, storm-e golden `568852786` + phase
+  bank + `[envelope]`, band-flow `[parity]` dAdvect/dWake pins, giant-drivers, planet-archetypes,
+  v2-3 dispatch oracle, v2-0-byte-identity 75 goldens): green.
+- Full suite failed-SET unchanged from baseline: 4 failed (KnownObjects ×3 + GalacticFeatures
+  ×1) + 5 collection-error env-noise files. Not grown.

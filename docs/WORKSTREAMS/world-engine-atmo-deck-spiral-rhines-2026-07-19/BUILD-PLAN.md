@@ -811,3 +811,17 @@ trigger class from §9 and the BUILD-NOTES cross-ref)*
    `s.mode`. Consumer-safe: the only GLSL reader of `.z` today is the slot-0 GRS wake gate
    (`i==0 && uStormParams[0].z < 0.5`), which never inspects train slots. Verified against the
    §0.4 draw-order note. Cross-ref: BUILD-NOTES §S2 carriage bullet.
+3. **[S3, ADJUDICABLE §9 — candidate magnitudes] `WISP_WARP` / `WISP_OFF` are builder-chosen.**
+   §4.3 specified the rim-wisp FORM (`sin(uBandM·latHere + uBandPhaseJet + WISP_WARP·bandWarpField(
+   n·4.3 + WISP_OFF))`, `pow(|·|,6)` sharpen, `WISP_K = 0.10`) but not the `WISP_WARP` gain or the
+   `WISP_OFF` decorrelation offset. Chosen `WISP_WARP = 1.5`, `WISP_OFF = vec3(2.3, 5.7, -1.1)` as
+   Phase-A candidates (declared `const`, commented CANDIDATE) — same bucket as `EMB_K`/`COLLAR_K`/
+   `WISP_K`/`BAND_SPIRAL.*`: Phase-B live freeze belongs to the orchestrating session. Cross-ref:
+   BUILD-NOTES §S3 consts table.
+4. **[S3, ADJUDICABLE §9 — documented-marginal] hoodExposure APPLICATION form.** §4.1 gave the
+   value `hoodExposure_i = 0.30·hood·(DECK_HAZE − deckZ_i)` but not how it composites onto `col`.
+   Applied as a deck-weighted hood-dimming multiply on the storm-painted color: `col *= 1.0 −
+   0.30·hood·(DECK_HAZE − deckZ)` — a tower (deckZ 0.9) barely dims, a mode-1 hole (0.0) dims fully
+   into the hood, matching §4.1's "tower pops above / hole dims with it" prose. Marginal by F16-hood
+   (`hood` ≈ 0 at every storm core population-wide ⇒ the multiply is ≡ 1.0 today), excluded from the
+   AC-DECK probe recipe. Cross-ref: BUILD-NOTES §S3 hoodExposure reachability.

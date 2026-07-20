@@ -1659,7 +1659,23 @@ export const HEIGHT_GLSL = /* glsl */ `
         }
         return n;
       }
-      vec3 stormColTerms(vec3 n, vec3 col){
+      // ── S3 DECK-Z COMPOSITOR — the vertical-column story (BUILD-PLAN §4) ──────────────────
+      // Deck table (documented ONCE here; computational values live where consumed — F16-consts):
+      //   0.0 deep FLOOR · 0.35 BELT · 0.7 ZONE (=mush) · 0.9 mode-0 TOWER · 1.0 HAZE (=polar hood).
+      // FLOOR/ZONE/TOWER live in STORM_DECK (storm-e.js), consumed by the lab carriage deckZ
+      // derivation (_stormDeckZ) → uStormAux[i].z; BELT's computational content IS the mode-1
+      // deepBase belt-family derivation below; only DECK_HAZE is declared GLSL-side (the hoodExposure
+      // minuend). COMPOSITING RULE: same-deck phenomena DEFLECT (the dWake/dAdvect/dSpiral machinery);
+      // DIFFERENT-deck phenomena OCCLUDE/REVEAL (this function). Every S3 term sits inside the
+      // per-storm loop (called only under uStormCount>0) ⇒ off-gate byte-identity is structural.
+      const vec3  LUMA      = vec3(0.299, 0.587, 0.114);  // Rec.601 luma (matches the inline weights this file used)
+      const float DECK_HAZE = 1.0;                        // hood/haze deck height — hoodExposure minuend (§4.1)
+      const float EMB_K     = 0.18;                       // emboss shaded-relief gain (Phase-A CANDIDATE)
+      const float COLLAR_K  = 0.55;                       // mode-0 cold-annulus desaturate/blue-shift depth (CANDIDATE)
+      const float WISP_K    = 0.10;                       // mode-1 rim-wisp weight (CANDIDATE)
+      const float WISP_WARP = 1.5;                        // mode-1 wisp warp-domain gain (CANDIDATE)
+      const vec3  WISP_OFF  = vec3(2.3, 5.7, -1.1);       // mode-1 wisp decorrelation offset (CANDIDATE)
+      vec3 stormColTerms(vec3 n, vec3 col, float hood){
         // color terms ON TOP of the finished band color (card §6.5 step 3): a soft
         // elliptical core mixing toward uStormColor (warm deepened tint mode 0 / dark
         // bruise mode 1), a pale collar LUMINANCE lift ring at 0.6R-1.0R (rim/interior
@@ -1678,17 +1694,60 @@ export const HEIGHT_GLSL = /* glsl */ `
           float de = dot(n, east), dn = dot(n, north);
           // facing guard as a +100 far-side distance pedestal: branchless antipode kill
           float d = length(vec2(de / uStormParams[i].y, dn)) + (1.0 - step(0.0, dot(n, c))) * 100.0;
-          // V-β.4 haze veil (taxonomy §1.2): desaturate the storm tint toward its luminance + soften the
-          // collar contrast by uHazeMute (Saturn / sub-Neptune / Uranus). uHazeMute 0 on every non-haze
-          // preset ⇒ EXACT identity (byte-identical off-gate). No new uniform.
-          vec3 stormCol = mix(uStormColor[i], vec3(dot(uStormColor[i], vec3(0.299, 0.587, 0.114))), uHazeMute);
-          float hazeAmp = 1.0 - uHazeMute;
+          // ── S3 per-storm deck reads (uStormAux carriage, S2): height + age drive compositing ──
+          float age   = uStormAux[i].x;                       // stormE:age-derived chromophore age
+          float deckZ = uStormAux[i].z;                       // STORM_DECK-derived column height (mode-0 tower / mode-1 floor)
+          float prom  = 0.35 + 0.65 * age;                    // older = redder = higher (cross-ref: carriage _stormDeckZ, §3.1)
+          // V-β.4 haze veil, now DECK-WEIGHTED (§4.2): haze mutes prop (1 − deckZ) of what's below — a tower
+          // pokes above the haze, a mode-1 hole (deckZ 0) mutes fully. uHazeMute 0 on every non-haze preset ⇒
+          // hazeX 0 ⇒ EXACT identity (the V-β.4 byte-identity precedent). No new uniform.
+          float hazeX = uHazeMute * (1.0 - deckZ);
+          vec3 stormCol = mix(uStormColor[i], vec3(dot(uStormColor[i], LUMA)), hazeX);
+          float hazeAmp = 1.0 - hazeX;
           // core <= 0.6R soft: a coherent closed oval, not a smeared noise blob
           float core = 1.0 - smoothstep(0.40 * R, 0.62 * R, d);
-          col = mix(col, stormCol, core * 0.85);
-          // pale collar 0.6R-1.0R: multiplicative luminance lift (hue-preserving)
+          // collar 0.6R-1.0R annulus mask (mode-0 recasts it as a cold ring; mode-1 keeps the luminance lift)
           float collar = smoothstep(0.55 * R, 0.72 * R, d) * (1.0 - smoothstep(0.88 * R, 1.05 * R, d));
-          col = min(col * (1.0 + 0.22 * collar * hazeAmp), vec3(1.0));
+          if (uStormParams[i].z < 0.5){
+            // ── mode-0 WARM ANTICYCLONE TOWER (deckZ 0.7–0.9): earns height (footnote 17) ──
+            // tower prominence ∝ age: aged GRS core paint ≈ 0.90, young ovals sit lower (was flat 0.85)
+            col = mix(col, stormCol, core * (0.60 + 0.30 * prom));
+            // emboss rim (STATIC place-once; direction = the stormE:emboss draw): shaded-relief luminance
+            // asymmetry across the per-storm axis — the AC-DECK probe. No uTime.
+            float embossDir = uStormAux[i].y;
+            float rim  = smoothstep(0.50 * R, 0.72 * R, d) * (1.0 - smoothstep(1.0 * R, 1.18 * R, d));
+            float thv  = atan(dn, de);
+            float asym = cos(thv - embossDir);
+            col *= 1.0 + EMB_K * prom * rim * asym * hazeAmp;
+            // cold annulus: the mode-0 collar becomes an observed cold RING — desaturate + blue-shift
+            // (replaces the old ×(1+0.22·collar) luminance lift for warm anticyclones)
+            col = mix(col, vec3(dot(col, LUMA)) * vec3(0.90, 0.99, 1.14), COLLAR_K * collar * hazeAmp);
+          } else {
+            // ── mode-1 DARK SPOT REVEAL (deckZ 0.0 floor): a hole showing the deep deck (footnote 18) ──
+            // deep-deck fill, LUMINANCE-DONOR form: HUE from the belt family (deepBase), VALUE from the writer
+            // lifecycle carried in uStormColor. Donor ratio CLAMPED at 1.5 (F-deep: precursor-phase spots blend
+            // uStormColor toward the bright deck, driving the unclamped ratio past 1 and desaturating young
+            // holes out of the belt family — the AC-DECK hue probe reads this on BOTH mature AND young spots).
+            vec3 deepBase = uBandTint * vec3(0.62, 0.52, 0.42) * vec3(0.72, 0.60, 0.52);   // beltCol darkened + warmed ("seeing 5 bar")
+            vec3 deep = deepBase * min(dot(uStormColor[i], LUMA) / max(dot(deepBase, LUMA), 1.0e-3), 1.5);
+            col = mix(col, deep, core * 0.85);
+            // mode-1 KEEPS the pale-collar luminance lift (hue-preserving)
+            col = min(col * (1.0 + 0.22 * collar * hazeAmp), vec3(1.0));
+            // rim wisps (BAND-frequency, low weight): thin streaks of the deck ABOVE crossing the rim — a
+            // clearing you look INTO. STATIC (fresh bandWarpField sample; no uTime).
+            float wispBand = smoothstep(0.70 * R, 0.95 * R, d) * (1.0 - smoothstep(1.15 * R, 1.35 * R, d));
+            float latHere  = asin(clamp(n.y, -1.0, 1.0));
+            float wisp = sin(uBandM * latHere + uBandPhaseJet + WISP_WARP * bandWarpField(n * 4.3 + WISP_OFF));
+            wisp = pow(abs(wisp), 6.0);                                                    // sharpen to thin streaks
+            vec3 zoneish = min(uBandTint * 1.30 + vec3(0.08), vec3(1.0));                  // the deck-above tint (zoneCol form)
+            col = mix(col, zoneish, WISP_K * wispBand * wisp);
+          }
+          // hoodExposure (documented-marginal future-proofing — F16-hood): deck-weighted hood dimming applied
+          // to the storm — a tower (deckZ 0.9) barely dims, a mode-1 hole (0.0) dims fully into the hood.
+          // hood ≈ 0 at every storm core for the DRAWN population (BELT_Y_MAX 0.75 + R ≤ 0.30 rad ⇒ core
+          // trueLat ≈ 0.67 < 0.72), so this is a no-op today; kept for polar-storm increments (§4.1). Excluded
+          // from the AC-DECK probe recipe (unfalsifiable on the drawn population).
+          col *= 1.0 - 0.30 * hood * (DECK_HAZE - deckZ);
           // ── V-α.3 storm INTERIOR STRUCTURE — spiral arms + concentric shear rings so a
           // placed vortex reads as a churning cell, NOT a flat oval (taxonomy 2.3 / Max's
           // "must stop reading as a simple oval"). STATIC (F1): the regularity is broken by a
@@ -2049,12 +2108,16 @@ export const HEIGHT_GLSL = /* glsl */ `
         // F28 train slots 1+ ride this SAME weight: PROV_STORMTRAIN's row exists only
         // for the data mirror (vitest drift guard) — both rows are neutral, so the
         // shared read is identically 1.0 either way.
-        if (uStormCount > 0) col = mix(col, stormColTerms(N, col), provinceWeight(PROV_GREATSPOT));
-        // polar hood: a darkened cap keyed on latitude only (Jupiter/Neptune hoods);
-        // bands fade INTO it rather than pinching at a convergence point.
+        // polar hood: a darkened cap keyed on latitude only (Jupiter/Neptune hoods); bands fade
+        // INTO it rather than pinching at a convergence point. S3 DECK-Z: the hood is applied to the
+        // BASE deck BEFORE the storm call (was after) so each storm can take hood exposure ∝ its own
+        // deck depth (hoodExposure in stormColTerms, §4.1). Off-gate (uStormCount==0) this reorder is
+        // byte-identical to the pre-S3 order — a scalar multiply of the same value with the storm call
+        // skipped either way.
         float hood = smoothstep(0.72, 0.95, abs(trueLat));
-        col *= 1.0 - 0.30 * hood;
-        // F29 polar vortex — painted AFTER the hood (composition choice, card §6.5
+        col *= 1.0 - 0.30 * hood;                              // base deck gets the FULL hood (unchanged arithmetic)
+        if (uStormCount > 0) col = mix(col, stormColTerms(N, col, hood), provinceWeight(PROV_GREATSPOT));
+        // F29 polar vortex — painted AFTER the storm/hood (composition choice, card §6.5
         // step deviation noted): the hood is the far-distance polar read and stays
         // the unchanged base wherever the vortex gate fades (0.38-0.48 rad), while
         // the vortex regime takes over ON TOP of it poleward — collar/eyes/tint

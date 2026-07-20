@@ -309,3 +309,98 @@ describe('S2 carriage — uStormAux slot-sync (F2) + train s.mode pass-through',
     expect(LAB_RAW).not.toMatch(/uStormMask/);   // uStormAux is not a mask uniform
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// Slice S3 — DECK-Z COMPOSITOR (AC-DECK enablement; footnotes 17/18/21). All edits live inside
+// zonalBandCol + stormColTerms (planet-lod-height.glsl.js); every new term sits inside the uStormCount>0
+// gate or the per-storm loop ⇒ off-gate byte-identity is STRUCTURAL (AC-OFFGATE). AC-STATIC is a diff-
+// scoped grep on the S3 code (const block + stormColTerms), comment-stripped. Live pixel probes (emboss
+// asymmetry / cold collar / belt-family interior / rim wisps) are the ORCHESTRATOR's; this block owns the
+// source-structure closers + the AC-STATIC / dAdvect-untouched fence.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+const GLSL_RAW = src('../planet-lod-height.glsl.js');
+// diff-scoped S3 slice: the deck header + consts through the end of stormColTerms (F29 banner follows it).
+const S3_RAW  = GLSL_RAW.slice(GLSL_RAW.indexOf('// ── S3 DECK-Z COMPOSITOR'), GLSL_RAW.indexOf('// ── F29 polarVortexCol'));
+const S3_CODE = strip(S3_RAW);
+
+describe('S3 AC-STATIC — the deck compositor is static (no uTime / animated-warp path)', () => {
+  it('[F1 diff-scoped] the S3 const block + stormColTerms body carry no uTime / animated-warp identifiers', () => {
+    // house pattern (K_CODE/I_CODE): comment-stripped, diff-scoped to the added code — a whole-file grep
+    // false-trips on the legacy F25 jets path. The prose "no uTime" in the comments is stripped out first.
+    expect(S3_CODE).not.toMatch(/uTime/);
+    expect(S3_CODE).not.toMatch(/\b(ph0|ph1|r0|r1|jetRotY|jetsDisp)\b/);
+  });
+});
+
+describe('S3 AC-DECK (enablement) — deckZ drives compositing inside stormColTerms', () => {
+  it('[signature] stormColTerms carries the hood param; the call site + reorder pass it', () => {
+    expect(GLSL_CODE).toContain('vec3 stormColTerms(vec3 n, vec3 col, float hood)');
+    // the reordered tail: hood computed + applied to the BASE deck BEFORE the storm call, hood passed in
+    const hoodDecl = GLSL_CODE.indexOf('float hood = smoothstep(0.72, 0.95, abs(trueLat))');
+    const stormCall = GLSL_CODE.indexOf('stormColTerms(N, col, hood)');
+    expect(hoodDecl).toBeGreaterThan(0);
+    expect(stormCall).toBeGreaterThan(hoodDecl);                     // storm call AFTER the hood multiply (deck-weighted exposure)
+    expect(GLSL_CODE).toContain('col = mix(col, stormColTerms(N, col, hood), provinceWeight(PROV_GREATSPOT))');
+  });
+
+  it('[deck consts] the S3 constants are declared with named consumers (F16-consts)', () => {
+    for (const c of ['DECK_HAZE = 1.0', 'EMB_K     = 0.18', 'COLLAR_K  = 0.55', 'WISP_K    = 0.10'])
+      expect(GLSL_CODE).toContain(c);
+  });
+
+  it('[per-storm reads] stormColTerms reads the uStormAux carriage (age + deckZ) inside the loop', () => {
+    const body = fnBody(GLSL_CODE, 'vec3 stormColTerms(vec3 n, vec3 col, float hood)');
+    expect(body).toContain('uStormAux[i].x');                        // ageScalar
+    expect(body).toContain('uStormAux[i].z');                        // deckZ (STORM_DECK-derived height)
+    expect(body).toContain('prom  = 0.35 + 0.65 * age');             // prominence ∝ age (carriage cross-ref)
+    // deck-weighted haze: mutes prop (1 − deckZ); uHazeMute 0 ⇒ hazeX 0 ⇒ identity (V-β.4 precedent)
+    expect(body).toContain('hazeX = uHazeMute * (1.0 - deckZ)');
+  });
+
+  it('[mode-0 tower] emboss rim + cold annulus + age-∝ prominence (footnote 17)', () => {
+    const body = fnBody(GLSL_CODE, 'vec3 stormColTerms(vec3 n, vec3 col, float hood)');
+    expect(body).toContain('core * (0.60 + 0.30 * prom)');           // tower prominence ∝ age (was flat 0.85)
+    expect(body).toContain('EMB_K * prom * rim * asym * hazeAmp');   // shaded-relief emboss on the emboss axis
+    expect(body).toContain('cos(thv - embossDir)');                  // asymmetry across the stormE:emboss direction
+    expect(body).toContain('vec3(0.90, 0.99, 1.14)');                // cold-annulus blue-shift (recast collar)
+    expect(body).toContain('COLLAR_K * collar * hazeAmp');
+  });
+
+  it('[mode-1 reveal] deep-deck fill (belt-family, donor ratio CLAMPED 1.5 — F-deep) + rim wisps (footnote 18)', () => {
+    const body = fnBody(GLSL_CODE, 'vec3 stormColTerms(vec3 n, vec3 col, float hood)');
+    // interior HUE from the belt family (deepBase), VALUE from the writer lifecycle donor, ratio min(·,1.5)
+    expect(body).toContain('vec3 deepBase = uBandTint * vec3(0.62, 0.52, 0.42) * vec3(0.72, 0.60, 0.52)');
+    expect(body).toContain('min(dot(uStormColor[i], LUMA) / max(dot(deepBase, LUMA), 1.0e-3), 1.5)');
+    expect(body).toContain('col = mix(col, deep, core * 0.85)');     // core targets the deep deck, NOT uStormColor
+    // rim wisps at the BAND frequency (a clearing you look into)
+    expect(body).toContain('sin(uBandM * latHere + uBandPhaseJet');
+    expect(body).toContain('WISP_K * wispBand * wisp');
+  });
+
+  it('[hoodExposure] the deck-weighted hood-exposure term is present (documented-marginal, F16-hood)', () => {
+    const body = fnBody(GLSL_CODE, 'vec3 stormColTerms(vec3 n, vec3 col, float hood)');
+    expect(body).toContain('0.30 * hood * (DECK_HAZE - deckZ)');     // tower barely dims, mode-1 hole dims fully
+  });
+
+  it('[off-gate structural] the S3 terms live inside the per-storm loop; the storm call stays uStormCount-gated', () => {
+    const body = fnBody(GLSL_CODE, 'vec3 stormColTerms(vec3 n, vec3 col, float hood)');
+    expect(body).toContain('for (int i = 0; i < 8; i++)');
+    expect(body).toContain('if (i >= uStormCount) break;');
+    // the deck reads + branch sit AFTER the count-gate break ⇒ never reached at count 0
+    const brk = body.indexOf('if (i >= uStormCount) break;');
+    expect(body.indexOf('uStormAux[i].z')).toBeGreaterThan(brk);
+    expect(body.indexOf('uStormParams[i].z < 0.5')).toBeGreaterThan(brk);
+    // the whole call is gated — stormless (count 0) skips it entirely (byte-identical off-gate)
+    expect(GLSL_CODE).toContain('if (uStormCount > 0) col = mix(col, stormColTerms(N, col, hood)');
+  });
+});
+
+describe('S3 AC-FENCE — dAdvect (the LIKED layer) is untouched', () => {
+  it('[dAdvect intact] the dLat seam + dAdvect candidate constants are unchanged (band-flow [parity] re-pin)', () => {
+    // S3 edits only the storm-section compositing; the dAdvect body + dLat wire are byte-untouched. The
+    // band-flow suite pins the full body — here a light cross-check that the seam substrings still stand.
+    expect(GLSL_CODE).toContain('dAdvect(Nraw, wShear, wBand, wStorm) + dWake(Nraw)');
+    expect(GLSL_CODE).toContain('INK_FREQ = 2.2');
+    expect(GLSL_CODE).toContain('bandProxy(latRaw + dLat) - bandProxy(latRaw)');
+  });
+});
