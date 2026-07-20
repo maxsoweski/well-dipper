@@ -201,6 +201,24 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > `~/briefings/handoff-lane-C-far-companion-fork-2026-07-15.md`. AC9 verdict still open; overlay
 > close-out remains gated on AC9-PASS. Branch 25 ahead of origin (push Max-gated).
 
+> **▶ FINDING #3 RESOLVED (2026-07-19): `system-identity-grammar-2026-07-17` → VERIFIED_PENDING_MAX
+> `5583651`.** Fork reassessed 2026-07-17 → rec (a)+(c)+grammar-rule; **Max overrode with his own
+> three-sentence directive** (intent.md verbatim: multiple dots in prism / SAME system in system view /
+> one destination via nav or warp) and delegated plan/implement/test — (b) recorded as deliberate
+> non-goal. Built same-directive: U1 system-identity naming `5cc6baf` (title by `_knownSystemNames.system`
+> + "via <component>" annotation + real component hover names), U2 far-companion edge chips `f60cad9`
+> (Proxima + b/d visible in SYSTEM view for the first time; covers every farCompanions system incl.
+> 36 Oph), U3 prism co-membership cue `2cc925d` (tether on hover/selection + "· Alpha Centauri" label
+> suffix through the declutter pass; new pure helpers systemIdentity/farCompanionChips/prismMembership),
+> AC6 design law `5583651` (NAMING_AND_REAL_OBJECTS.md §6 — Max's directive as normative grammar; closes
+> the naming→seeds→glyphs→cross-view recurrence CLASS). Each unit adversarial-PASS round 1; verify-full
+> wf_35113e26-c4e 5 unit ACs PASS 3/3; gates personally re-run (suite 1,557/0, Snapshot 24/24, zero
+> main.js); AC2/AC5 closed by live drives (verdict-live-drives-5583651.json + 4 screenshots: both-marker
+> previews title "Alpha Centauri" seed 1816942132, both warps land the authored G+K system log-confirmed,
+> instrumented dot-to-dot tether, zero label overlaps, console clean). **REMAINING: AC8 UAT = Max's AC9
+> re-run** (:5176 tab parked at Sol, tour off). Overlay close-out still gated on AC9-PASS. Branch ~32
+> ahead of origin (push Max-gated).
+
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
 > WITH Max + approved. Spec: `docs/superpowers/specs/2026-06-19-structured-feature-lod-methodology-design.md`
