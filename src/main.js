@@ -18,6 +18,11 @@ import { GravityWellMap } from './ui/GravityWellMap.js';
 // import { CameraController } from './camera/CameraController.js'; // OLD — kept for revert
 import { ShipCameraSystem, CameraMode } from './camera/ShipCameraSystem.js';
 import { orreryStandoff } from './camera/orreryStandoff.js';
+import {
+  effectiveOuterOrbit,
+  starGlowRadiusPx,
+  arrivalSpawnDistance,
+} from './camera/orreryEntryGeometry.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
 import { PlanetGenerator } from './generation/PlanetGenerator.js';
@@ -2790,6 +2795,10 @@ function _bootSkipToSol(mode) {
     scPilot.stop();
     _frameSystemForOrrery();
     _syncOrbitsToMode();
+    // AC4 (orrery-entry-orbits-2026-07-20): the D-hold boot skip arrives via the
+    // same far-spawn zoom-in as every other ORRERY entry. After framing + orbit
+    // sync (both far-plane-neutral), seed the zoom.
+    _beginOrreryArrivalZoom();
     console.log('[BOOT-SKIP] D-hold → straight into Sol, ORRERY god\'s-eye (no ceremony)');
   }
 }
@@ -6514,6 +6523,59 @@ function _frameSystemForOrrery() {
   // overview primitive — so both this entry path and focusPlanet(-1)/Esc reset it.)
 }
 
+// orrery-entry-orbits-2026-07-20 AC4: the far-spawn ZOOM-IN arrival. Called at the
+// system-entry seams ONLY, immediately AFTER _frameSystemForOrrery has set the
+// overview frame (distance/pitch/maxDistance). It re-seeds the camera to the AC3
+// spawn distance (star = bare billboard, no planets distinct, no orbit lines) and
+// lets ShipCameraSystem's existing smoothedDistance log-lerp close to the UNCHANGED
+// overview in ~1s. NEVER call this inside _frameSystemForOrrery / viewSystem —
+// viewSystem is also the Esc de-focus overview primitive, and Esc must not far-spawn.
+//
+// Star-systems with planets only — deep-sky targets (no planets, no star glow) and
+// degenerate/empty systems fall through with today's instant-cut framing (no zoom).
+// The far plane is raised to clear the spawn (StarFlare's billboard is GPU-far-
+// clipped otherwise); logarithmicDepthBuffer (RetroRenderer) keeps the big far
+// z-safe. spawnSystem reset far to 200000 before framing, so the raise lands here.
+function _beginOrreryArrivalZoom() {
+  if (!system || (system.type && system.type !== 'star-system')) return;
+  if (!system.planets || system.planets.length === 0) return;
+
+  const radii = system.planets
+    .map(p => p.orbitRadiusScene ?? p.orbitRadius)
+    .filter(Number.isFinite);
+  const outermost = effectiveOuterOrbit(radii);
+  if (!(outermost > 0)) return;
+
+  const luminosity = (system.star && Number.isFinite(system.star.data?.luminosity)
+    && system.star.data.luminosity > 0)
+    ? system.star.data.luminosity : 1;
+  const glow = starGlowRadiusPx(luminosity);
+
+  const spawn = arrivalSpawnDistance({
+    outermostOrbitRadius: outermost,
+    fovDeg: camera.fov,
+    viewportH: window.innerHeight,
+    starGlowRadiusPx: glow,
+  });
+  // Only zoom IN when the honest spawn sits beyond the just-framed overview; a
+  // degenerate spawn (≤ overview) would zoom out or NaN the log-lerp — skip it.
+  if (!Number.isFinite(spawn) || spawn <= cameraController.distance) return;
+
+  // Arm the arrival FIRST — beginArrivalZoom fires any superseded arrival's
+  // onSettle (restoring far to 200000) before it re-arms — THEN raise the far
+  // plane for THIS spawn, so a rapid re-entry can't leave far restored-down.
+  cameraController.beginArrivalZoom(spawn, {
+    onSettle: () => {
+      if (camera.far !== 200000) {
+        camera.far = 200000;
+        camera.updateProjectionMatrix();
+      }
+    },
+  });
+  camera.far = Math.max(200000, spawn * 1.15);
+  camera.updateProjectionMatrix();
+}
+
 // orrery-coherence-2026-07-15 W2 (AC2, seam map §2): the ORRERY production
 // non-cinematic system entry — "an instant framed cut ... no cinematic, no shake,
 // no fly-in," pilot never leaving idle (Max, 2026-07-11 UAT). Every player-intent
@@ -6555,6 +6617,10 @@ async function _enterSystemInstantOrrery() {
     _pendingBootReveal = false;
     _pendingBootMode = 'orrery';
     _frameSystemForOrrery();
+    // AC4 (orrery-entry-orbits-2026-07-20): arrive via zoom-IN. This is the
+    // convergence point for nav warp, bg-star+Space, and both mobile sites — all
+    // reach here — so seeding the far-spawn zoom once covers them together.
+    _beginOrreryArrivalZoom();
     // UAT fix 2026-07-16 (F2): the instant-cut bypasses warpRevealSystem, so it
     // must run the A1 orbit-line sync the reveal path runs — ORRERY defaults
     // orbit lines ON (unless the player explicitly overrode). Without this the
@@ -6729,6 +6795,9 @@ function warpRevealSystem() {
   // _scManual === true skips this branch entirely.
   if (!_scManual) {
     _frameSystemForOrrery();
+    // AC4 (orrery-entry-orbits-2026-07-20): this ORRERY reveal safety net frames
+    // the system, so it too arrives via the far-spawn zoom-in.
+    _beginOrreryArrivalZoom();
     console.log(_isBootReveal
       ? 'Warp: ORRERY boot — god\'s-eye reveal, nothing armed'
       : 'Warp: reveal landed in ORRERY — god\'s-eye framing, nothing flew');

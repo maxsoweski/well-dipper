@@ -98,6 +98,13 @@ const GLIDE_AIM_MIN_ANGLE = (2 * Math.PI) / 180; // <2° off-axis ⇒ skip aim, 
 const GLIDE_PHASE_AIM = 0;
 const GLIDE_PHASE_APPROACH = 1;
 
+// ORRERY arrival zoom-in (orrery-entry-orbits-2026-07-20, AC4) — the log gap
+// |ln(smoothedDistance) − ln(distance)| under which the far-spawn zoom counts as
+// SETTLED (fires the far-plane restore hook). ε in log-units: at 1e-3 the camera
+// sits within ~0.1% of the overview distance — visually landed. The global
+// smoothing keeps closing the remaining sliver after the hook fires.
+const ARRIVAL_SETTLE_LOG_EPS = 1e-3;
+
 const STORAGE_KEY = 'wd_cameraMode';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -309,6 +316,18 @@ export class ShipCameraSystem {
     this.smoothedDistance = this.distance;
     this.smoothing = 0.08;
 
+    // ── ORRERY arrival zoom-in (orrery-entry-orbits-2026-07-20, AC4) ──
+    // beginArrivalZoom() re-seeds smoothedDistance to a FAR spawn; the existing
+    // log-lerp (update(), smoothing 0.08) then closes it to the pre-set overview
+    // `distance` — the camera zooms IN. `_arrivalActive` holds from arm until
+    // settle OR any interruption; `_arrivalSettled` flips ONCE at the natural
+    // log-gap close. `_arrivalOnSettle` (the far-plane restore hook) fires EXACTLY
+    // once per arrival — on settle, or on any cancel/supersede — never twice,
+    // never leaked. This does NOT touch the two-phase glide machinery (802cceb).
+    this._arrivalActive = false;
+    this._arrivalSettled = false;
+    this._arrivalOnSettle = null;
+
     // ── Zoom ──
     this.zoomSpeed = 0;
     this.zoomDamping = 0.88;
@@ -426,6 +445,7 @@ export class ShipCameraSystem {
 
     const prev = this.cameraMode;
     this.cameraMode = mode;
+    this._endArrival(false); // AC4: a real mode swap cancels a live arrival zoom
 
     if (mode === CameraMode.TOY_BOX) {
       // Leaving Flight → Toy Box. Derive yaw/pitch/distance from the
@@ -597,7 +617,41 @@ export class ShipCameraSystem {
   //  PUBLIC API (CameraController-compatible)
   // ═══════════════════════════════════════════════════════════════════
 
+  // ── ORRERY arrival zoom-in (orrery-entry-orbits-2026-07-20, AC4) ──────
+  // Seed the far spawn and arm the arrival. The CALLER has already framed the
+  // overview (viewSystem set `distance`, pitch 0.7, maxDistance); this only
+  // re-seeds smoothedDistance to the spawn so the existing log-lerp zooms IN to
+  // that overview `distance`. CRUCIALLY it writes smoothedDistance, NEVER
+  // this.distance — the wheel branch clamps `distance` to maxDistance (~overview)
+  // and would snap a multi-million spawn; the log-lerp reads `distance` as its
+  // UNCLAMPED target. A superseding call fires the prior onSettle first (the
+  // far-plane restore can never leak), then re-arms fresh.
+  // opts.onSettle fires EXACTLY once — at the natural settle, or on any cancel.
+  beginArrivalZoom(spawnDistance, opts = {}) {
+    // Supersede: an in-flight arrival's restore MUST run exactly once before the
+    // new one arms (C5). No-op if nothing is active.
+    this._endArrival(false);
+    this.smoothedDistance = spawnDistance;
+    this._arrivalActive = true;
+    this._arrivalSettled = false;
+    this._arrivalOnSettle = (typeof opts.onSettle === 'function') ? opts.onSettle : null;
+  }
+
+  // End the live arrival exactly once. `natural` true ⇒ the log gap closed (flip
+  // _arrivalSettled); false ⇒ an interruption/supersede cancelled it. Either way
+  // the onSettle hook fires once and is cleared, so no far-restore ever leaks or
+  // double-fires. Guarded on _arrivalActive so repeat calls are no-ops.
+  _endArrival(natural) {
+    if (!this._arrivalActive) return;
+    this._arrivalActive = false;
+    if (natural) this._arrivalSettled = true;
+    const cb = this._arrivalOnSettle;
+    this._arrivalOnSettle = null;
+    if (cb) cb();
+  }
+
   setTarget(position) {
+    this._endArrival(false); // AC4: retargeting cancels a live arrival zoom
     this.target.copy(position);
     this._targetGoal.copy(position);
     this._transitioning = false;
@@ -606,6 +660,7 @@ export class ShipCameraSystem {
   }
 
   focusOn(position, viewDistance = 8) {
+    this._endArrival(false); // AC4: a focus-snap cancels a live arrival zoom
     this.target.copy(position);
     this._targetGoal.copy(position);
     this._transitioning = false;
@@ -654,6 +709,7 @@ export class ShipCameraSystem {
   // caller's LIVE Vector3 (mesh.position, NOT a clone) so a moving moon is met at
   // its live spot; drag/wheel/select hand the glide back to orbit mid-EITHER phase.
   glideFocus(position, viewDistance = 8) {
+    this._endArrival(false);        // AC4: arming a glide cancels a live arrival zoom
     this._transitioning = false;    // this glide owns the move — no pivot ease
     this._returningToOrbit = false;
 
@@ -814,6 +870,7 @@ export class ShipCameraSystem {
     // the overview at (0,0,0) framed empty space ~100k units from the system.
     // `center` (the star's world position) anchors the frame on the system;
     // omitted → origin, byte-equivalent for every pre-existing caller.
+    this._endArrival(false); // AC4: re-framing (incl. Esc de-focus) cancels a live arrival
     if (center) {
       this.target.copy(center);
       this._targetGoal.copy(center);
@@ -887,6 +944,7 @@ export class ShipCameraSystem {
   }
 
   enterFreeLook() {
+    this._endArrival(false); // AC4: entering free-look cancels a live arrival zoom
     this._gliding = false;
     if (this._returningToOrbit) {
       this._returningToOrbit = false;
@@ -1217,6 +1275,15 @@ export class ShipCameraSystem {
     const logTarget = Math.log(this.distance);
     this.smoothedDistance = Math.exp(logSmoothed + (logTarget - logSmoothed) * factor);
 
+    // ── ORRERY arrival zoom-in settle probe (AC4) ──
+    // Once the log gap the arrival is closing shrinks under ε, the far-spawn zoom
+    // has visually landed on the overview: flip _arrivalSettled ONCE and fire the
+    // far-plane restore hook exactly once. The lerp keeps closing the sliver after.
+    if (this._arrivalActive) {
+      const arrivalGap = Math.abs(logTarget - Math.log(this.smoothedDistance));
+      if (arrivalGap < ARRIVAL_SETTLE_LOG_EPS) this._endArrival(true);
+    }
+
     if (flightMode) {
       // ── FLIGHT MODE: flight dynamics drive camera, director composes ──
 
@@ -1393,6 +1460,9 @@ export class ShipCameraSystem {
         // Toy Box: scroll changes orbit distance. Wheel interrupts a glide —
         // hand off to orbit first so the zoom applies to the settled pose (and
         // reaches the radius-relative min-distance set on the focused body).
+        // It also interrupts an arrival zoom (AC4): the player grabbed the wheel;
+        // cancel the arrival and fire the far-plane restore before applying zoom.
+        this._endArrival(false);
         if (this._gliding) this._endGlideToOrbit();
         this.zoomSpeed += Math.sign(e.deltaY) * this.scrollSensitivity;
       }
