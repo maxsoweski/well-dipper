@@ -33,13 +33,20 @@
 // N_STAMP_SAFETY, screen<1 Venus-class / ≈1 Mars-class, and the deep-envelope gate — BEFORE this writer. Its
 // printed F_REF=488000 is the source of truth the F_REF constant below cites.
 //
-// DELIBERATE NON-GOALS (this slice, S2): ice relaxation (ε per crater) is S3; the iceness/crystal material
-// scalars are S3/S4; the render-side albedo uniform is S3. Legacy F2/F3 in-shader crater synth is untouched.
-// craterProfile zone arithmetic is UNCHANGED this slice (the ε relaxation transform grafts in S3).
+// S3 GRAFT (BUILD-PLAN §1D, footnote 4): per-crater viscous ICE RELAXATION now rides on the stamp loop. Each
+// stamped crater's floor/wall relaxes toward a dome and its rim/ejecta relaxes 100× slower (P_RIM) by the
+// Arrhenius creep fraction ε (iceRelaxation below), gated by icenessOf(condition). On a warm/tidal icy world old
+// craters read as domed palimpsests with crisp rims; on cold rock (iceness 0) OR a deep-frozen icy surface
+// (T ⇒ η so large that t/τ<1e-16) ε≡0 exactly ⇒ the field is BIT-IDENTICAL to the un-relaxed S2 write. The
+// craterField stays unhashed, so relaxation is byte-inert against the 75-golden regardless.
+//
+// DELIBERATE NON-GOALS (this slice, S3): the crystal material scalar is S4; the worldSeed re-roll is S5. Legacy
+// F2/F3 in-shader crater synth is untouched. The VERTICAL amplitude / zone geometry of craterProfile is unchanged
+// — relaxation is applied as a multiplicative fraction on the existing zone values plus the dome term.
 
 import { clamp } from './mathutil.js';
 import { KM_PER_EARTH_RADIUS, radPerKm } from './baseStep.js';   // pure km→angular scalar (NOT a dispatch module)
-import { erosionOf } from './surfaceMaterial.js';                 // condition-pure erosion scalar (leaf, imports nothing)
+import { erosionOf, icenessOf } from './surfaceMaterial.js';      // condition-pure erosion + iceness scalars (leaf, imports nothing)
 import alea from 'alea';
 
 // ── km-space SFD priors (calibration/crater-sfd-km.mjs step-0 pre-check, 2026-07-19) ─────────────────
@@ -90,6 +97,23 @@ const EJECTA_FRAC   = 0.05;         // ejecta-apron lift at +EJECTA_FRAC·A
 const RIM_W         = 0.1;          // rim zone width = RIM_W·δ beyond the crest
 const RIM_FRAC      = 1.0;          // ejecta-apron outer edge = RIM_FRAC·δ beyond the crest
 export const CRATER_SAT_N = 0.5;    // FINAL safety clamp only (equilibrium is emergent from obliteration, not this)
+
+// ── S3 ICE RELAXATION (BUILD-PLAN §1D, footnote 4) — Arrhenius creep of an ICY crater floor toward a dome. ─────
+export const ETA_M      = 1e14;     // Pa·s — reference ice viscosity at T_MELT (Arrhenius pre-factor)
+export const QSTAR      = 60e3;     // J/mol — activation energy for ice creep
+export const RGAS       = 8.314;    // J/mol/K — gas constant
+export const T_MELT     = 273;      // K — water-ice melting point (η reference temperature)
+export const DT_TIDAL   = 120;      // K — bounded tidal warming: T_rel = T_eq + DT_TIDAL·td/(1+td)
+export const RHO_ICE    = 917;      // kg/m³ — ice density (relaxation driving stress ρ·g·D)
+export const SEC_PER_GA = 3.156e16; // s per Ga (1 Ga = 1e9 yr · 3.156e7 s/yr) — τ is computed in SI then → Ga
+export const P_RIM      = 2;        // CONTRACT-PINNED phenomenological rim-persistence exponent (Lens L16): the rim
+                                    //   relaxation time-scale is τ·(1/RIM_W)^P_RIM = 100·τ, so short-wavelength
+                                    //   rims survive while long-wavelength bowls dome. NOT derived from τ∝1/λ (that
+                                    //   gives only p=1 = the bowl law); motivated by elastic/lithospheric support
+                                    //   steepening the effective exponent at short wavelength (no false cite).
+export const DOME_FRAC  = 0.3;      // relaxed-floor dome lift as a fraction of the bowl amplitude A (a fully
+                                    //   relaxed floor bulges to +A·DOME_FRAC at centre). calibration/ice-relax.mjs
+                                    //   prior; §4 adjudicable (calibration output is the source of truth).
 
 // ── chronology ───────────────────────────────────────────────────────────────────────────────────────
 export function chron(t)  { return A_NEU * (Math.exp(LAMBDA_NEU * t) - 1) + B_NEU * t; }
@@ -203,6 +227,50 @@ export const craterStampRadius = (D) => 0.5 * D + RIM_FRAC * D;
 const bowlEdge = (D) => 0.5 * D;
 const floorEdgeOf = (D) => FLOOR_FRAC * 0.5 * D;   // flat-floor edge (value = −A) — the pre-clamp exactness zone
 
+// iceRelaxation(condition, D_km, tI, iceness) — per-crater viscous-relaxation fractions (BUILD-PLAN §1D, footnote 4).
+// η(T_rel) is the Arrhenius ice viscosity with bounded tidal warming; the Maxwell-time relaxation scale τ ∝
+// η/(ρ·g·D) so a LARGER crater relaxes FASTER (∂ε/∂D > 0). ε ∈ [0, iceness] is the relaxed fraction; the rim
+// relaxes 100× slower (P_RIM) so palimpsests read as domed floors with crisp rims. Two exact-zero cases (the
+// crisp-cold-Frozen invariant): iceness=0 (rock — granite does not flow at these T/timescales) ⇒ early-return 0;
+// a very cold surface (T ⇒ η so large that t/τ < 1e-16) ⇒ 1−exp(−t/τ) === 0.0 bit-exact in float64.
+export function iceRelaxation(condition, D_km, tI, iceness) {
+  if (!(iceness > 0) || !(tI > 0) || !(D_km > 0)) return { epsBowl: 0, epsRim: 0, tauGa: Infinity, tauRimGa: Infinity };
+  const T_eq = condition?.T_eq ?? 288;
+  const td   = condition?.rawTidalIoRatio ?? 0;
+  const g    = Math.max(1e-6, condition?.surfaceGravity ?? G_REF);
+  const T_rel = T_eq + DT_TIDAL * td / (1 + td);                  // bounded tidal warming (td/(1+td) → 1)
+  const eta   = ETA_M * Math.exp((QSTAR / RGAS) * (1 / T_rel - 1 / T_MELT));
+  const g_SI  = 9.81 * g;                                          // surfaceGravity is Earth-relative → m/s²
+  const D_m   = D_km * 1e3;
+  const tauGa    = (4 * Math.PI * eta) / (RHO_ICE * g_SI * D_m) / SEC_PER_GA;
+  const tauRimGa = tauGa * Math.pow(1 / RIM_W, P_RIM);            // 100× slower — short-λ rims persist
+  const epsBowl = iceness * (1 - Math.exp(-tI / tauGa));
+  const epsRim  = iceness * (1 - Math.exp(-tI / tauRimGa));
+  return { epsBowl, epsRim, tauGa, tauRimGa };
+}
+
+// relaxedCraterProfile(s, D, epsBowl, epsRim) — craterProfile's zone arithmetic with viscous relaxation applied:
+// floor/wall zones × (1−epsBowl) plus a dome term (a relaxed floor bulges up); rim/ejecta zones × (1−epsRim).
+// EXACT DEGENERACY: at epsBowl=epsRim=0 every zone reduces to base·(1−0)=base·1 (+0 for the dome) ⇒ BIT-IDENTICAL
+// to craterProfile(s, D) — the ε=0 invariant the un-relaxed S2 write and the 75-golden byte discipline rely on.
+export function relaxedCraterProfile(s, D, epsBowl, epsRim) {
+  const A = craterAmplitude(D);
+  const r = 0.5 * D;
+  const floorEdge = FLOOR_FRAC * r;
+  const rimH = RIM_HEIGHT_FRAC * A;
+  const ejH = EJECTA_FRAC * A;
+  const rimEnd = r + RIM_W * D;
+  const ejEnd = r + RIM_FRAC * D;
+  if (s < floorEdge) {                                            // flat floor: relax toward a dome
+    const dome = A * DOME_FRAC * (1 - (s / floorEdge) * (s / floorEdge));
+    return -A * (1 - epsBowl) + epsBowl * dome;
+  }
+  if (s < r) { const t = (s - floorEdge) / (r - floorEdge); return (-A + t * (A + rimH)) * (1 - epsBowl); }  // inner wall
+  if (s < rimEnd) { const t = (s - r) / (rimEnd - r); return (rimH + t * (ejH - rimH)) * (1 - epsRim); }     // rim crest
+  if (s < ejEnd) { const t = (s - rimEnd) / (ejEnd - rimEnd); return (ejH * (1 - t)) * (1 - epsRim); }       // ejecta apron
+  return 0;
+}
+
 // forEachCrater(condition, macroSeed, N, cb) — the single entropy source + fixed per-STAMPED-crater draw order
 // (u_centre → u_size → u_age; 3 draws per stamped crater — the restated stream contract; sub-floor mass never
 // draws, it is analytic). Diameters are drawn from the TRUNCATED band [L_trunc, H] in km and converted to
@@ -260,7 +328,10 @@ export function writeBombardment(carrier, condition, { macroSeed = 0, collectDia
   const craters = collectDiag ? [] : null;
   let order = 0;
 
-  const sched = forEachCrater(condition, macroSeed, N, (centre, delta, tI) => {
+  const iceness = icenessOf(condition);   // S3: viscous-relaxation gate (0 on rock ⇒ ε≡0 ⇒ byte-identical to S2)
+
+  const sched = forEachCrater(condition, macroSeed, N, (centre, delta, tI, D_km) => {
+    const { epsBowl, epsRim } = iceRelaxation(condition, D_km, tI, iceness);   // S3: per-crater relaxed fractions
     const stampR = craterStampRadius(delta);
     const bEdge = bowlEdge(delta);
     const fEdge = floorEdgeOf(delta);
@@ -275,8 +346,8 @@ export function writeBombardment(carrier, condition, { macroSeed = 0, collectDia
       const vj = verts[j];
       const s = Math.acos(clamp(-1, 1, cvx * vj[0] + cvy * vj[1] + cvz * vj[2]));
       if (s > stampR) continue;                    // outside the ejecta apron — stop the flood
-      if (s < bEdge) cf[j] = craterProfile(s, delta);   // bowl interior: RESET (obliterate older)
-      else cf[j] += craterProfile(s, delta);            // rim / ejecta: accumulate
+      if (s < bEdge) cf[j] = relaxedCraterProfile(s, delta, epsBowl, epsRim);   // bowl interior: RESET (obliterate older)
+      else cf[j] += relaxedCraterProfile(s, delta, epsBowl, epsRim);            // rim / ejecta: accumulate
       if (collectDiag) { lastTouch[j] = myOrder; if (s < fEdge) floorNodes.push(j); }
       const nb = adj[j];
       for (let k = 0; k < nb.length; k++) { const m = nb[k]; if (seen[m] !== epoch) { seen[m] = epoch; queue[qt++] = m; } }

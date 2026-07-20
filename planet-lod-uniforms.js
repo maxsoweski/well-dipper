@@ -233,6 +233,11 @@ export function makeUniforms(WORLD_LIGHT) {
       uFrostNoiseAmp:    { value: 0.06 },  // boundary breakup amplitude (× T_eq, K) — lab knob
       uFrostNoiseScale:  { value: 3.0 },   // boundary breakup noise frequency — lab knob
       uFrostOffset:      { value: new THREE.Vector3() },   // 🎲 domain offset
+      // ── V2-6 S3 iceness material (BUILD-PLAN §1E) — condition-derived icy-material albedo, NOT a frost overlay:
+      //    the BASE ground reads as ice on an icy body (the material answer to "Frozen reads rock-brown"), driven
+      //    by icenessOf(cond) in applyDrivers. 0 ⇒ bare rock ramp (regression-safe). ──
+      uIcenessMix:       { value: 0.0 },   // condition-derived icy-material albedo mix (0 = bare rock ramp)
+      uIcenessAlbedo:    { value: new THREE.Color(0.86, 0.90, 0.95) },  // icy-surface tint the rock ramp mixes toward
       // ── Cryo step 3: F22 polar-layered-deposit strata (cap banding) ──
       uPldStrength:      { value: 0.0 },   // dark-band luminance dip (driven; ≤0 ⇒ no banding)
       uPldLevels:        { value: 6.0 },   // annular strata band count (driven constant; lab-tunable)

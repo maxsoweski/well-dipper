@@ -171,6 +171,7 @@
     import { presetDriverDefaults, buildNeutralBodyDrivers } from './body-drivers.js';   // V2-0 Slice A: neutral (no-slider-override) driver construction the lab overlays overrides on (presetDriverDefaults also used by resetDriverOverrides)
     import { deriveConditionVector } from './body-condition-vector.js';   // V2-0 Slice C: pure _fp→condition vector, attached NESTED as bodyDrivers.condition (shadow-mode; V2-1 E1 read surface; SAME derive the headless AC1 harness uses)
     import { computeE1 } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment).
+    import { icenessOf } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3: condition-derived icy-material fraction → drives uIcenessMix (Stage-6 albedo). Pure scalar, imports nothing.
     import { assessProvinceAssociation, provinceStats, classProportions } from './src/worldengine/base/province.js';   // V2-4 slice-4: the province honesty instrument (read-only) for _lab.provinceProbe()
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
@@ -608,6 +609,11 @@
         // Water = dark cool fill; methane/ethane = darker warm fill (Titan radar-dark).
         vec3 liquidCol = (uLiquidSpecies == 1) ? vec3(0.11, 0.07, 0.03) : vec3(0.04, 0.10, 0.22);
         vec3 albedoCol = mix(uBaseColor, liquidCol, liquidMask);
+        // ── V2-6 S3 iceness material (BUILD-PLAN §1E) — an icy body's BASE ground reads as ice (bluish-white),
+        // not rock-brown. Condition-derived (uIcenessMix = icenessOf(cond), driven in applyDrivers); pre-posterize
+        // so the ice band survives quantization; uIcenessMix=0 ⇒ bare rock ramp (byte-identical Stage-6 base).
+        // Mixed BEFORE the dust/frost overlays so a seasonal frost cap still wins on top of the base ice material.
+        albedoCol = mix(albedoCol, uIcenessAlbedo, uIcenessMix);
         // F16 dust ochre lift — settled-mantle albedo mixed BEFORE the frost mix so frost
         // WINS where cold (F20's frost-wins ordering; ice-cemented mantles still read
         // frosty). Butterscotch ochre = dust absorbs blue, scatters the rest (card §3
@@ -2357,6 +2363,7 @@
       frostLatitudeBias: 0.0,
       frostAlbedo: [0.93,0.94,0.96],
       frostLocked: 0,
+      iceness: 0,   // V2-6 S3: condition-derived icy-material fraction (icenessOf(cond)); frame() syncs → uIcenessMix
       tempEq: 280.0,
       frostLatChill: 0.35,
       frostLapseRate: 0.3,
@@ -3699,6 +3706,7 @@
       const _u = state._derived || deriveUniforms(_fp, driverUI.qualityTier);
       const _bodyDrivers = buildBodyDrivers(_u, _fp);
       state._lastBodyDrivers = _bodyDrivers;   // surfaced by _lab.plateProbe() (the values that reached the writer)
+      state.iceness = icenessOf(_bodyDrivers.condition);   // V2-6 S3: drive the Stage-6 iceness albedo from the SAME condition vector the writer reads (frame() syncs → uIcenessMix)
       // V2-1 Slice D (SHADOW): compute the E1 regime tuple from the SAME condition vector + macroSeed and
       // stash it for _lab.e1Probe() (AC7). DATA-ONLY — state._lastE1 is NEVER threaded into route() below
       // (archetype stays PRESET_ARCHETYPE), so E1 has ZERO routing influence this increment. The lab-only
@@ -6021,6 +6029,7 @@
       uniforms.uFrostCondensationT.value = state.frostCondensationT;
       uniforms.uFrostLatitudeBias.value  = state.frostLatitudeBias;
       uniforms.uFrostAlbedo.value.setRGB(state.frostAlbedo[0], state.frostAlbedo[1], state.frostAlbedo[2]);
+      uniforms.uIcenessMix.value         = state.iceness;   // V2-6 S3: condition-derived icy-material albedo mix (Stage-6, pre-frost)
       uniforms.uPlanetTempEq.value       = state.tempEq;
       uniforms.uFrostLocked.value        = state.frostLocked;
       uniforms.uFrostLatChill.value      = state.frostLatChill;
