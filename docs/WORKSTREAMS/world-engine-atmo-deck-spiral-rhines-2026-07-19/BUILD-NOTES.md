@@ -6,6 +6,104 @@
 
 ---
 
+## Increment roll-up (as-built, all four slices landed)
+
+**What this increment does (plain language):** it answers Max's atmo-expression UAT verdict
+(2026-07-19) — "the red spot storms still seem pasted on top … I still am not seeing the kind of
+'ink diffusing in water' rolling storm effects" — with three mechanisms wired as one unit on the
+gas-giant renderer:
+
+1. **A vertical column (deckZ).** Every atmo phenomenon now has a HEIGHT, and compositing is
+   derived from it instead of a single paint order. Warm anticyclones (mode 0) are TOWERS that
+   earn shaded-relief embossing, a cold ring, and age-tied prominence; dark spots (mode 1) are
+   REVEALS that show the belt-family deep deck with band-frequency rim wisps — a hole you look
+   into, not a decal. Haze mutes proportional to `(1 − deckZ)`.
+2. **A storm-local roll-up (dSpiral).** Band material genuinely winds around aged storms — a
+   static log-spiral displacement `ψ = thv + W·log(rr+EPS)`, `W ∝ ageScalar·sign(rot)`, `dWake`'s
+   sibling, consumed both meridionally (band latitude winds in) and as a pigment-domain offset
+   (arms carry entrained band colour), with a 42-lobe Kelvin-Helmholtz scallop.
+3. **The band architecture spans the drawn population (Rhines/rotation wires).** The one law that
+   consumes radius finally reads the DRAWN radius at both call sites, rotation becomes a drawn
+   per-archetype condition (hot-Jupiter-class derived tidally locked), and the vestigial second
+   band count dies so exactly one derived count (`uBandM`) drives everything.
+
+**Intent:** turn "procedurally building the system" into checked artifacts — storms that read as
+IN the flow with a real vertical-column architecture, and bands that vary ×2+ across re-rolled
+giants (charter INTENT FRAME: physics-derived populations, no defaults). Ships the structural
+substrate that Increment 6 (storm sizes from Rossby L_D) and Increment 7 (limb cue + ink thermal
+drivers) build on.
+
+**Deliberate non-goals (whole increment):**
+- `dAdvect` is Max-LIKED — never edited, only extended around (taste fence).
+- Both golden hashes (`GOLDEN_BANDFIELD_HASH -1329854088`, `GOLDEN_STORM_MASK_HASH 568852786`) +
+  the aStorm mask contract + the phase bank are byte-identical; new alea streams are APPENDED
+  only, never inserted into the four existing `stormE:{place,age,phase,polar}` draws.
+- Static discipline: no `uTime` anywhere in the new F24–F31 terms; all new per-storm scalars are
+  alea-only.
+- No relief/dispatch/bombardment contact (a concurrent Increment-1 lane owns those in the L1
+  tree); no `climate-e5.js` edit; no second baked attribute, no `*Enabled` key, no new GUI control.
+- Deferred with named owners: limb/scale-height cue + ink thermal drivers → Increment 7; storm
+  radii from L_D → Increment 6; figure-ω (`body-condition-vector.js` D8 spin) → a future figure-ω
+  increment (F13 divergence, documented in S1).
+
+### DOES / UNLOCKS card — restated as-built
+
+**DOES:** gives every atmo phenomenon a deck height (`deckZ`, DERIVED from mode+age via
+`STORM_DECK` rather than a drawn stream — deviation 1) and derives compositing from it (same-deck
+deflects via the existing `dWake`/`dAdvect`/`dSpiral` machinery, different-deck occludes/reveals);
+makes mode-1 spots holes you look into (deep-deck belt-family palette + band-frequency rim wisps,
+luminance donor clamped 1.5 so young/precursor spots stay in family — F-deep) and mode-0 storms
+towers that earn height (emboss rim on the `stormE:emboss` axis, cold annulus, age-tied prominence);
+adds `dSpiral` static log-spiral displacement so bands wind around aged storms with 42-lobe KH
+scalloping leaned downstream WITH radius (F15); wires the drawn radius into Rhines at both call
+sites, draws rotation per archetype (hot-Jupiter-class tidally locked, derived — locked SOLIDS stay
+canonical, F10), and retires the vestigial second band count (`uBandCount` → derived `uBandM`).
+
+**As-built refinements to the card:** deckZ is derived-not-drawn (deviation 1); the hood-exposure
+term is footprint-masked and documented-marginal (no-op at every drawn storm core — F16-hood,
+deviation 5); the AC-SPIRAL live read is a RADIAL transect + `wrap_visible`, not the contract's
+literal "along a ring" (F9, deviation 6); candidate magnitudes (`EMB_K`/`COLLAR_K`/`WISP_K`/
+`WISP_WARP`/`WISP_OFF`/`BAND_SPIRAL.*`) are Phase-A candidates whose live freeze is the
+orchestrator's (deviations 3, 6).
+
+**UNLOCKS:** Increment 6 (storm sizes from L_D — needs the deck architecture), Increment 7 (limb
+cue + ink drivers — extends deckZ-weighted haze), the brown-dwarf/lava/terrestrial atmo increments
+(inherit an honest vertical column), and population-level band variety (the audit's ×2+ visible
+spread per roll, made true headlessly by S1 first).
+
+### Deviations summary (all ADJUDICABLE §9 — none hit a HARD STOP; full detail in the per-slice sections + BUILD-PLAN §11)
+
+| # | Slice | Deviation | Why safe |
+|---|---|---|---|
+| 1 | S2 | **deckZ DERIVED, not a drawn `stormE:deck` stream** — `uStormAux[i].z` computed in the lab carriage (`_stormDeckZ`: mode-0 ⇒ `mix(ZONE,TOWER,0.35+0.65·age)`, mode-1 ⇒ `FLOOR`) from mode + drawn age via `STORM_DECK`. | Stronger AC-0 driver-connectivity (the deck a storm occupies IS the storm); avoids inserting a draw. emboss/billow remain the alea draws. |
+| 2 | S2 | **train-slot `s.mode` pass-through** — was hard-coded `0` in `uStormParams[_stormN].z`; now passes the true `s.mode`. | Consumer-safe (§0.4): the only GLSL `.z` reader today is the slot-0 GRS wake gate (`i==0 && …`), which never inspects train slots. |
+| 3 | S3 | **`WISP_WARP=1.5` / `WISP_OFF=vec3(2.3,5.7,-1.1)` builder-chosen** — §4.3 gave the rim-wisp form, not these two magnitudes. Declared `const`, commented CANDIDATE. | Same Phase-A candidate bucket as `EMB_K`/`COLLAR_K`/`WISP_K`/`BAND_SPIRAL.*`; live freeze is the orchestrator's. |
+| 4 | S3 | **hoodExposure APPLICATION form** — §4.1 gave the value `0.30·hood·(DECK_HAZE−deckZ)` but not how it composites; applied as a deck-weighted dimming multiply on the storm's paint. | Documented-marginal (F16-hood: `hood≈0` at every drawn storm core ⇒ ≡ 1.0 today); excluded from AC-DECK probes. |
+| 5 | S3-fix | **hoodExposure FOOTPRINT-MASKED** — root-caused the adversarial refutation (unmasked per-storm multiply darkened the whole planet's hood band far from any vortex); fixed with `hoodFoot = 1 − smoothstep(1.0·R, 1.4·R, d)` ⇒ far-field `col *= 1.0` exact identity. | Not suppression: `[hoodExposure]` structural closer still passes, AC-STATIC unaffected (no uTime), off-gate identity + F16-hood no-op-on-drawn-population conclusion unchanged. |
+| 6 | S4 | **pure estimator exports** `spiralWrapProfile`/`spiralMeridional` + derived `SPIRAL_NB` (=42) added to `band-flow.js` beyond the plan's `spiralDisplacement` signature; **`BAND_SPIRAL.*` are Phase-A candidates**; **AC-SPIRAL live read is a RADIAL transect + `wrap_visible`**, not the contract's literal "along a ring" (F9 — the ring read is measurement-vacuous). | `wakeReachProfile` precedent (single-sources test + calibrate); no source-writing, no rng, zero fence contact. Radial read closes the AC's intent (wrap ∝ ageScalar). Surface at UAT. |
+
+### AC-0 consumers documented (the roll-up verify-workstream audits)
+
+Every new field's deriver → DAG consumer is tabled per slice (S1 `state.rotationHours`, S2/S3
+`uStormAux[8]`, S4 `BAND_SPIRAL`/`spiralDisplacement`). The named-consumer spine, condensed:
+
+| New field | Deriver (driver/stream) | Consumer(s) |
+|---|---|---|
+| `state.rotationHours` | `drawPresetRotation` → `giantD:rot:` alea (gas) / `tidalLockRotationHours` (hot-Jupiter-class) / canonical (else) | `giantDriverScalars` → `resolveParams` at BOTH call sites (Rhines band count); `_rotH` → `jetSpeed`/`weatherCells` |
+| `uBandM` (single band count) | Rhines m (writer) | `jetU`, `jetShearGate`, `jetsDisp` (retired `uBandCount`'s three sites); mode-1 rim-wisp band frequency |
+| `uStormAux[i].x` ageScalar | `stormE:age` vortex field | S3 tower prominence + emboss gain + deck-weighted haze; S4 spiral wrap `W ∝ age` |
+| `uStormAux[i].y` embossDir | `stormE:emboss` (new, append-only) | S3 mode-0 shaded-relief asymmetry axis |
+| `uStormAux[i].z` deckZ | DERIVED (mode+age via `STORM_DECK`, `_stormDeckZ`) | S3 deck-weighted haze + hoodExposure minuend + mode branch |
+| `uStormAux[i].w` billowPhase | `stormE:billow` (new, append-only) | S4 dSpiral KH scallop azimuth phase |
+| `STORM_DECK` | frozen export (no alea) | carriage `_stormDeckZ` (FLOOR/ZONE/TOWER); GLSL `DECK_HAZE` (hood minuend); BELT → `deepBase` deriver |
+| `BAND_SPIRAL` / `SPIRAL_NB` / `spiralDisplacement` | frozen export + mirror (`band-flow.js`, separate from `BAND_FLOW`) | GLSL `dSpiralVec` constant parity; headless AC-SPIRAL props + `deck-spiral-calibrate.mjs` |
+
+Taxonomy registration: no new `*Enabled` key, no new checkbox, no new FEATURES/PROVINCES row — all
+terms ride `PROV_GREATSPOT`/`PROV_BANDS` weights already in place; drift guards green. The existing
+`e5RotationScale` slider stays the manual rotation override (a driver dial, not a new control).
+
+---
+
 ## S1 — RHINES + ROTATION WIRES, ONE BAND COUNT (seam 1)
 
 **What it does (plain language):** the gas-giant band-count law (`rhinesWavenumber` in
