@@ -219,6 +219,15 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > re-run** (:5176 tab parked at Sol, tour off). Overlay close-out still gated on AC9-PASS. Branch ~32
 > ahead of origin (push Max-gated).
 
+> **▶ NEXT (2026-07-19): MULTI-STAR RENDER FEASIBILITY INVESTIGATION (fresh session).** Max's UAT look
+> at the grammar WS escalated into a directive (verbatim in the handoff): can a 3-body relationship
+> like α Cen be rendered at BOTH the SYSTEM nav scale AND the in-game system environment scale —
+> exhaust feasibility avenues FIRST; nav-side PRISM↔SYSTEM redesign is the fallback only if truly
+> infeasible. Concrete gap: no way to select the Proxima component (with b/d) — every prism click
+> lands on the Rigil+Toliman inner view. All three open UAT gates (overlay AC9 re-run, unification
+> AC11, grammar AC8) now ride this investigation's outcome. Investigation-first, no build; rec → Max
+> rules → scope. ⭐ Handoff: `~/briefings/handoff-lane-C-multistar-render-feasibility-2026-07-19.md`.
+
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
 > WITH Max + approved. Spec: `docs/superpowers/specs/2026-06-19-structured-feature-lod-methodology-design.md`
