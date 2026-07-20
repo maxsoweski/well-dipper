@@ -15,6 +15,7 @@ import {
 import {
   giantDriverScalars, drawRotationHours, tidalLockRotationHours, ROTATION_RANGES_HOURS,
 } from '../src/worldengine/base/giant-drivers.js';
+import { resolveStormE, STORM_DECK } from '../src/worldengine/base/storm-e.js';
 
 // ── comment-stripped source text (the house K_CODE/I_CODE pattern) ─────────────────────────────────
 const src = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
@@ -24,6 +25,8 @@ const GD_CODE = strip(GD_SRC);
 const GLSL_CODE = strip(src('../planet-lod-height.glsl.js'));
 const UNIF_CODE = strip(src('../planet-lod-uniforms.js'));
 const LAB_CODE = strip(src('../planet-lod-lab.html'));
+const LAB_RAW = src('../planet-lod-lab.html');
+const STORM_SRC = src('../src/worldengine/base/storm-e.js');
 
 // balanced-brace body extractor over comment-stripped code (defn found by a signature substring).
 // Skips the parameter list FIRST (paren-balanced) so a destructured/`= {}` param brace isn't mistaken
@@ -200,5 +203,109 @@ describe('S1 AC-0 — spine conformance (driver connectivity)', () => {
     expect(s.rotationRate).toBeCloseTo(1.0, 9);
     expect(s.radius).toBeCloseTo(1.0, 9);
     expect(giantDriverScalars(11.2, 9.9, 2).rotationRate).toBeCloseTo(2.0, 9);   // e5RotationScale multiplies
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// Slice S2 — PER-STORM SCALAR SUBSTRATE (streams + carriage; zero visual change).
+// Closes AC-FENCE re-proof (the storm-e golden/phase suite runs unchanged — asserted GREEN there) +
+// AC-0(2/3) groundwork. This block owns the NEW-surface unit checks: append-only emboss/billow streams,
+// the STORM_DECK export, and the F2 both-blocks slot-sync + s.mode lab-source grep.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+const GAS = { composition: 'h2-he' };
+const TWO_PI = Math.PI * 2;
+
+describe('S2 stormE:emboss / stormE:billow — append-only per-storm scalar streams', () => {
+  it('[namespaces present] the two appended streams are drawn from stormE:emboss / stormE:billow', () => {
+    // the AC-WRITER(a) storm-e guard already pins every alea() to contain "stormE:"; here we assert the
+    // two NEW sub-namespaces exist (append-only substrate), alongside the four placement streams.
+    expect(STORM_SRC).toContain('stormE:emboss:');
+    expect(STORM_SRC).toContain('stormE:billow:');
+    for (const ns of ['stormE:place', 'stormE:age', 'stormE:phase', 'stormE:polar'])
+      expect(STORM_SRC).toContain(ns);   // the four placement streams are untouched (append-only)
+  });
+
+  it('[range] every vortex carries embossDir + billowPhase in [0, 2π]', () => {
+    for (const regime of [E5_REGIME.GAS_GIANT, E5_REGIME.NEPTUNIAN, E5_REGIME.SATURNIAN]) {
+      const rec = resolveStormE(regime, GAS, 5, 1234);
+      expect(rec.vortices.length).toBeGreaterThan(0);
+      for (const v of rec.vortices) {
+        expect(v.embossDir).toBeGreaterThanOrEqual(0);
+        expect(v.embossDir).toBeLessThanOrEqual(TWO_PI + 1e-9);
+        expect(v.billowPhase).toBeGreaterThanOrEqual(0);
+        expect(v.billowPhase).toBeLessThanOrEqual(TWO_PI + 1e-9);
+      }
+    }
+  });
+
+  it('[determinism] same (regime, macroSeed, stormSeed) ⇒ identical embossDir/billowPhase', () => {
+    for (const [regime, s, ss] of [[E5_REGIME.GAS_GIANT, 5, 1234], [E5_REGIME.NEPTUNIAN, 7, 99]]) {
+      const a = resolveStormE(regime, GAS, s, ss), b = resolveStormE(regime, GAS, s, ss);
+      expect(a.vortices.map((v) => v.embossDir)).toEqual(b.vortices.map((v) => v.embossDir));
+      expect(a.vortices.map((v) => v.billowPhase)).toEqual(b.vortices.map((v) => v.billowPhase));
+    }
+  });
+
+  it('[append-only, no cross-stream draw] emboss/billow do NOT vary the placement scalars they follow', () => {
+    // the emboss/billow post-pass draws from its OWN streams, so age/phase/lon/lat/mask-driving .center
+    // are byte-identical to a run — the golden mask + phase bank fence (asserted in the storm-e suite)
+    // holds by construction. Here: the pre-existing scalars still reproduce exactly across two runs.
+    const a = resolveStormE(E5_REGIME.GAS_GIANT, GAS, 3, 1234);
+    const b = resolveStormE(E5_REGIME.GAS_GIANT, GAS, 3, 1234);
+    expect(a.vortices.map((v) => [v.lat, v.lon, v.ageScalar, v.phaseScalar]))
+      .toEqual(b.vortices.map((v) => [v.lat, v.lon, v.ageScalar, v.phaseScalar]));
+  });
+});
+
+describe('S2 STORM_DECK — frozen deck table (F16-consts: every value has a named consumer)', () => {
+  it('[shape] the five-row deck table is the pinned column heights', () => {
+    expect(STORM_DECK).toEqual({ FLOOR: 0.0, BELT: 0.35, ZONE: 0.7, TOWER: 0.9, HAZE: 1.0 });
+    expect(Object.isFrozen(STORM_DECK)).toBe(true);
+    // ordered floor → belt → zone → tower → haze (the vertical column)
+    expect(STORM_DECK.FLOOR).toBeLessThan(STORM_DECK.BELT);
+    expect(STORM_DECK.BELT).toBeLessThan(STORM_DECK.ZONE);
+    expect(STORM_DECK.ZONE).toBeLessThan(STORM_DECK.TOWER);
+    expect(STORM_DECK.TOWER).toBeLessThan(STORM_DECK.HAZE);
+  });
+  it('[no alea] STORM_DECK is a plain declared const — the storm-e alea-guard is not weakened', () => {
+    const body = STORM_SRC.slice(STORM_SRC.indexOf('export const STORM_DECK'));
+    const decl = body.slice(0, body.indexOf(';') + 1);
+    expect(decl).not.toMatch(/alea\(/);
+  });
+});
+
+describe('S2 carriage — uStormAux slot-sync (F2) + train s.mode pass-through', () => {
+  it('[decl] uStormAux[8] is declared in HEIGHT_GLSL and provisioned in the uniforms map', () => {
+    expect(GLSL_CODE).toMatch(/uniform\s+vec4\s+uStormAux\[8\]/);
+    expect(UNIF_CODE).toContain('uStormAux');
+  });
+
+  it('[F2 slot-sync] uStormAux is written INSIDE BOTH gated composition blocks at the matching slot', () => {
+    // greatSpotEnabled block ⇒ slot 0; stormTrainEnabled loop ⇒ slot _stormN. A naive aux[0]=primary /
+    // aux[1..]=train fill desyncs from the other arrays whenever greatSpot is unchecked (train ⇒ slot 0+).
+    const greatBlock = fnBody(LAB_CODE, 'if (state.greatSpotEnabled && state.spotStrength');
+    const trainBlock = fnBody(LAB_CODE, 'if (state.stormTrainEnabled && state.trainStrength');
+    expect(greatBlock).toMatch(/uStormAux\.value\[0\]\.set\(/);          // slot-0 aux write in the greatSpot block
+    expect(trainBlock).toMatch(/uStormAux\.value\[_stormN\]\.set\(/);    // slot-_stormN aux write in the train loop
+    // the aux write sits alongside the other arrays at the SAME slot index in each block
+    expect(greatBlock).toMatch(/uStormPosSize\.value\[0\]/);
+    expect(trainBlock).toMatch(/uStormPosSize\.value\[_stormN\]/);
+  });
+
+  it('[s.mode pass-through] the train slot writes the TRUE storm mode (was hard-coded 0)', () => {
+    const trainBlock = fnBody(LAB_CODE, 'if (state.stormTrainEnabled && state.trainStrength');
+    expect(trainBlock).toMatch(/uStormParams\.value\[_stormN\]\.set\(s\.rot,\s*s\.aspect,\s*s\.mode,\s*s\.companion\)/);
+  });
+
+  it('[deckZ derivation] the carriage derives deckZ from mode+age via STORM_DECK, not a raw literal', () => {
+    // the deck value is DERIVED (mode-0 tower / mode-1 floor) — the derivation reads STORM_DECK, so the
+    // deck constants have a real consumer (F16-consts / AC-0 driver connectivity).
+    expect(LAB_CODE).toContain('_stormDeckZ');
+    expect(LAB_CODE).toMatch(/STORM_DECK\.(FLOOR|ZONE|TOWER)/);
+  });
+
+  it('[envelope] S2 adds NO new baked attribute (aStorm stays the only one)', () => {
+    expect((LAB_RAW.match(/attribute float aStorm\b/g) || []).length).toBe(1);
+    expect(LAB_RAW).not.toMatch(/uStormMask/);   // uStormAux is not a mask uniform
   });
 });

@@ -798,3 +798,16 @@ plan-level defects with in-scope fixes — the increment remains buildable as co
 
 *(placeholder — builder appends deviations from this plan as they are adjudicated, with the
 trigger class from §9 and the BUILD-NOTES cross-ref)*
+
+1. **[S2, ADJUDICABLE §9] deckZ is DERIVED, not a drawn `stormE:deck` stream.** designDecision-8
+   offered a `stormE:deck` alea stream as an example; S2 instead DERIVES `uStormAux[i].z` in the
+   lab carriage (`_stormDeckZ`: mode-0 ⇒ `mix(ZONE, TOWER, 0.35+0.65·age)`, mode-1 ⇒ `FLOOR`)
+   from the storm's mode + already-drawn age via `STORM_DECK`. Stronger AC-0 driver-connectivity
+   (the deck a storm occupies IS the storm), and it avoids inserting a draw that would need its
+   own append slot. The stochastic per-storm scalars (`emboss`/`billow`) remain the alea draws.
+   Cross-ref: BUILD-NOTES §S2 "New/changed symbols" + AC-0 consumer table.
+2. **[S2, ADJUDICABLE §9] train-slot `s.mode` pass-through (honesty fix).** The per-frame train
+   carriage previously hard-coded mode `0` into `uStormParams[_stormN].z`; S2 passes the true
+   `s.mode`. Consumer-safe: the only GLSL reader of `.z` today is the slot-0 GRS wake gate
+   (`i==0 && uStormParams[0].z < 0.5`), which never inspects train slots. Verified against the
+   §0.4 draw-order note. Cross-ref: BUILD-NOTES §S2 carriage bullet.

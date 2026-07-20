@@ -174,7 +174,7 @@
     import { assessProvinceAssociation, provinceStats, classProportions } from './src/worldengine/base/province.js';   // V2-4 slice-4: the province honesty instrument (read-only) for _lab.provinceProbe()
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
-    import { resolveStormE, bakeStormEAttributes, chromophoreColor } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp
+    import { resolveStormE, bakeStormEAttributes, chromophoreColor, STORM_DECK } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp; S2 STORM_DECK deck table (carriage deckZ derivation)
     import { drawGiantConditions, deriveGiantDrivers, giantDriverScalars, drawRotationHours } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation); + S1 giantDriverScalars (single-sourced radius/rotation wire) & drawRotationHours (per-archetype rotation draw, hot-Jupiter derived)
     import { drawBandRoughness, bandProxyUniforms } from './src/worldengine/base/band-flow.js';   // atmo-expression slice J: per-seed global band-edge roughness draw on the append-only bandFlow:rough stream (disjoint from climateE5:/stormE:/giantD: ⇒ both goldens frozen). slice K: bandProxyUniforms — the 6 render-side band-proxy uniforms from bake.params (single-sourced; the lab does NOT re-derive DEFLECT_SCALE)
 
@@ -2917,6 +2917,14 @@
     // the OFFGATE render byte-identical after a gas→solid preset change; an early-return would leave
     // stale gas storm state. On the reseed path (preset unchanged) that same strength-0 result is a
     // no-op, so reseedGiant() is naturally inert on non-gas presets.
+    // S2 deckZ derivation (§3.1): the deck a storm occupies IS the storm. Mode 0 (warm anticyclone) earns
+    // a TOWER above the zone deck, height ∝ prominence (older/redder = higher, shares the chromophore age
+    // driver: prom = 0.35 + 0.65·age); mode 1 (dark spot) is a hole that REVEALS the deep FLOOR. Consumed
+    // by the per-frame uStormAux carriage; STORM_DECK is the single source of the deck constants.
+    const _stormDeckZ = (mode, age) => (mode >= 0.5)
+      ? STORM_DECK.FLOOR
+      : STORM_DECK.ZONE + (STORM_DECK.TOWER - STORM_DECK.ZONE) * (0.35 + 0.65 * (age ?? 0));
+
     function applyStormState(){
       const _fp = DRIVER_PRESETS[driverUI.preset];
       // ── #3b Slice P: PHYSICS storm/vortex placement — REPLACES the F27/F28/F29
@@ -2984,12 +2992,20 @@
         state.spotMode = _p.mode;
         state.spotColor = _stormColor(_p.role, _p.mode, _p.ageScalar, _p.coreScale);   // V-β.3 lifecycle core visibility
         state.spotCompanion = _p.companion;
+        // S2 per-storm scalar substrate (append-only stormE:emboss/billow + the age scalar) — stashed for
+        // the per-frame uStormAux slot-0 carriage (deckZ derived from mode+age via STORM_DECK).
+        state.spotAge = _p.ageScalar;
+        state.spotEmboss = _p.embossDir;
+        state.spotBillow = _p.billowPhase;
       }
       // F28 storm clusters ← writer train members (vortex street / brown barge / scooters)
       state.trainStrength = _storm.strength;
       state.trainSpots = _storm.train.map((v) => ({
         center: v.center, radius: v.radius, rot: v.rot, aspect: v.aspect,
         color: _stormColor(v.role, v.mode, v.ageScalar), companion: v.companion,
+        // S2: carry the per-storm scalars + the TRUE mode into the train-slot carriage (mode was
+        // hard-coded 0 at the uStormParams write — §0.4 consumer-safe: only slot-0's z is read today).
+        age: v.ageScalar, embossDir: v.embossDir, billowPhase: v.billowPhase, mode: v.mode,
       }));
       state.trainCount = state.trainSpots.length;
       // F29 polar vortex ← writer pole (drawn from the disjoint stormE:polar stream, BEFORE
@@ -5816,14 +5832,19 @@
         uniforms.uStormPosSize.value[0].set(state.spotCenter[0], state.spotCenter[1], state.spotCenter[2], state.spotRadius);
         uniforms.uStormParams.value[0].set(state.spotRot, state.spotAspect, state.spotMode, state.spotCompanion);
         uniforms.uStormColor.value[0].set(state.spotColor[0], state.spotColor[1], state.spotColor[2]);
+        // S2 slot-sync (F2): uStormAux MUST be written at the SAME _stormN as the arrays above, inside
+        // THIS gated block — with greatSpot off, train members occupy slot 0+, so a naive aux[0]=primary
+        // fill would desync deck/emboss scalars from another storm under the stormTrainEnabled toggle.
+        uniforms.uStormAux.value[0].set(state.spotAge, state.spotEmboss, _stormDeckZ(state.spotMode, state.spotAge), state.spotBillow);
         _stormN = 1;
       }
       if (state.stormTrainEnabled && state.trainStrength > 0){
         for (let i = 0; i < state.trainSpots.length && _stormN < 8; i++, _stormN++){
           const s = state.trainSpots[i];
           uniforms.uStormPosSize.value[_stormN].set(s.center[0], s.center[1], s.center[2], s.radius * state.trainRadiusScale);
-          uniforms.uStormParams.value[_stormN].set(s.rot, s.aspect, 0, s.companion);
+          uniforms.uStormParams.value[_stormN].set(s.rot, s.aspect, s.mode, s.companion);   // S2: TRUE mode (was 0) — §0.4 consumer-safe
           uniforms.uStormColor.value[_stormN].set(s.color[0], s.color[1], s.color[2]);
+          uniforms.uStormAux.value[_stormN].set(s.age, s.embossDir, _stormDeckZ(s.mode, s.age), s.billowPhase);   // S2 slot-sync (F2): SAME _stormN as the arrays above
         }
       }
       uniforms.uStormCount.value = _stormN;   // ✓ both enable gates folded in

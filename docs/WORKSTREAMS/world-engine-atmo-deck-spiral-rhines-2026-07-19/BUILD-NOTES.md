@@ -111,3 +111,78 @@ giantD: namespace" — this is an intent-preserving extension, NOT a golden re-c
 - Full suite failed-SET unchanged from baseline: 4 failed (KnownObjects ×3 + GalacticFeatures
   ×1) + 5 collection-error files (BodyRenderer.dispose, motion-test-kit-smoke,
   star-billboard-switch, warp-portal-logdepth, warp-tunnel-rebase — env noise). Not grown.
+
+---
+
+## S2 — PER-STORM SCALAR SUBSTRATE (streams + carriage; zero visual change) (seam 2)
+
+**What it does (plain language):** every storm vortex already carries a seeded age + phase.
+S2 gives each vortex two more place-once seeded scalars — an *emboss direction* (a shading
+axis) and a *billow phase* (a scallop azimuth) — drawn on two brand-new alea streams, and
+carries all of it (plus a derived *deckZ* height) into the shader through one new uniform array
+`uStormAux[8]`. Nothing is drawn on screen yet: the uniform is declared but unread this slice.
+It is the substrate S3 (deck compositing) and S4 (spiral roll-up) read.
+
+**Intent:** land the scariest fence in the whole increment — the storm-mask golden + phase
+bank + draw-order — in ISOLATION, so S3/S4 diffs can never be confused with a stream
+regression. The two new streams are drawn in an APPEND-ONLY post-pass over the finalized vortex
+list, so they consume zero draws from the four placement streams ⇒ `GOLDEN_STORM_MASK_HASH` +
+the phase bank + every #4/#5/#8 downstream consumer are byte-identical **by construction**.
+
+**Deliberate non-goals (this slice):**
+- No render change: `uStormAux` is a DECL-ONLY uniform (an unread declared uniform is
+  compile-safe). No new GLSL term, no `stormColTerms`/`zonalBandCol` edit (that is S3).
+- No draw INSERTED into `stormE:{place,age,phase,polar}` — the append-only post-pass is the
+  only sanctioned shape. No `dAdvect`, relief/dispatch, or golden-fixture contact.
+- No new baked attribute, no `*Enabled` key, no new GUI control.
+
+### New / changed symbols (`src/worldengine/base/storm-e.js`)
+
+| Symbol | Kind | Function | Intent / non-goal |
+|---|---|---|---|
+| `stormE:emboss` / `stormE:billow` | alea streams | post-pass over the FINALIZED `vortices` list sets `v.embossDir = rngEmboss()·2π`, `v.billowPhase = rngBillow()·2π` | append-only AFTER `stormE:{place,age,phase,polar}` — the golden mask + phase-bank tests are the non-disturbance proof; both are STATIC place-once (no uTime) |
+| `STORM_DECK` | frozen export (no alea) | the five-row deck table `{FLOOR 0.0, BELT 0.35, ZONE 0.7, TOWER 0.9, HAZE 1.0}` | F16-consts: computational values live where consumed — the lab carriage's `_stormDeckZ` reads FLOOR/ZONE/TOWER now; GLSL `DECK_HAZE` (hood minuend) + BELT (deepBase deriver) get their consumers in S3. Guard-safe: no alea in the decl |
+
+### New / changed symbols (`planet-lod-lab.html`)
+
+- `_stormDeckZ(mode, age)` — the deckZ derivation (deckZ is DERIVED, not a drawn scalar: the
+  deck a storm occupies IS the storm). Mode 0 (warm) ⇒ `mix(ZONE, TOWER, 0.35 + 0.65·age)` (a
+  tower whose height ∝ prominence, sharing the chromophore age driver); mode 1 (dark spot) ⇒
+  `FLOOR` (the hole reveals the deep floor). Reads `STORM_DECK`.
+- `applyStormState()` stashes `state.spotAge/spotEmboss/spotBillow` (from the primary's
+  `ageScalar/embossDir/billowPhase`) and extends the `trainSpots` map entries with
+  `{ age, embossDir, billowPhase, mode }`.
+- Per-frame carriage: `uStormAux.value[_stormN].set(age, embossDir, deckZ, billowPhase)` is
+  written **inside BOTH gated composition blocks at the matching `_stormN`** (F2 slot-sync,
+  below). The train-slot `uStormParams` write now passes the TRUE `s.mode` where it hard-coded
+  `0` (§0.4 consumer-safe: only slot-0's `.z` is read in GLSL today, by the GRS wake gate).
+
+### F2 slot-sync (blocker-class desync, avoided)
+
+The composition loop runs behind TWO independent GUI gates: `greatSpotEnabled` writes slot 0,
+`stormTrainEnabled` writes slots `_stormN`+. With greatSpot OFF, train members occupy slot 0+.
+A naive `aux[0]=primary / aux[1..]=train` fill would desync `uStormAux` from
+`uStormPosSize/uStormParams/uStormColor` whenever greatSpot is unchecked — S3/S4 would then read
+another storm's deck/emboss/billow scalars under an existing toggle. Fix: the aux write lives
+INSIDE each gated block at the exact same `_stormN` index as the other arrays. The increment
+test greps BOTH blocks (`uStormAux.value[0]` in the greatSpot block; `uStormAux.value[_stormN]`
+in the train loop).
+
+### AC-0 consumer table — `uStormAux[8]` DAG
+
+| Field | Deriver | Consumer (this slice → future) |
+|---|---|---|
+| `uStormAux[i].x` = ageScalar | existing `stormE:age` vortex field | decl-only S2 → S3 prominence/haze, S4 spiral wrap `W ∝ age` |
+| `uStormAux[i].y` = embossDir | `stormE:emboss` (new) | decl-only S2 → S3 emboss rim / cold-annulus shading axis |
+| `uStormAux[i].z` = deckZ | DERIVED (mode+age via `STORM_DECK`, `_stormDeckZ`) | decl-only S2 → S3 hood exposure + deck-weighted haze |
+| `uStormAux[i].w` = billowPhase | `stormE:billow` (new) | decl-only S2 → S4 dSpiral scallop azimuth phase |
+
+### Gate at seam 2
+
+- Increment file `tests/worldengine-atmo-deck-spiral-rhines.test.js` (S1 + S2 blocks) +
+  `worldengine-base-storm-e.test.js`: green (50 tests) — the storm-e golden mask `568852786`,
+  phase bank, `[envelope]`, and #4/#5/#8 consumer tests pass UNCHANGED (AC-FENCE re-proof).
+- Fast fence (climate-e5 golden `-1329854088`, emission-e, band-flow, giant-drivers,
+  planet-archetypes, v2-3 dispatch oracle, v2-0-byte-identity 75 goldens): green (216 tests).
+- Full suite failed-SET unchanged from baseline: 4 failed (KnownObjects ×3 + GalacticFeatures
+  ×1) + collection-error env-noise files. Not grown.

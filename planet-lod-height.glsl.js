@@ -402,6 +402,11 @@ export const HEIGHT_GLSL = /* glsl */ `
       uniform vec4  uStormParams[8];   // x = rotStrength (rad), y = E-W aspect, z = mode (0 warm / 1 dark), w = companion strength
       uniform vec3  uStormColor[8];    // core color (driven: bandTint warmed for GRS-class / bruised for GDS-class)
       uniform int   uStormCount;       // live storm count (driven: gas gate x enable; 0 = whole family no-ops)
+      // S2 per-storm scalar substrate — slot-synced with the arrays above (written at the SAME _stormN).
+      // x = ageScalar, y = embossDir (rad), z = deckZ (STORM_DECK-derived: mode-0 tower / mode-1 floor),
+      // w = billowPhase (rad). DECL-ONLY this slice: an unread declared uniform is compile-safe, so S2
+      // lands with zero render change; S3 (deck emboss/prominence/haze) + S4 (dSpiral scallop) read it.
+      uniform vec4  uStormAux[8];
       // ── F29 polar vortex (Bands step 4b — card F29) — ALBEDO/LUMINANCE ONLY, analytic ──
       // One combiner in the pole tangent frame, NO carriage slots: the lattice's ring-
       // cyclone centers derive in-shader from angle rounding (zero arrays). Variant by

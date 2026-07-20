@@ -30,11 +30,15 @@
 // deriver = the derive-not-freeze variety increment (AC-0 driver connectivity).
 //
 // DETERMINISM HARD-RULE: no Math.random / Date.now anywhere. Every random draw is alea seeded off the
-// integer (macroSeed, stormSeed) identity in FOUR DISJOINT sub-namespaces — `stormE:place`,
-// `stormE:age`, `stormE:phase`, `stormE:polar` — with fixed draw order. `stormE:polar` is a separate
-// stream (mirrors the legacy `_polRng ^ 0x9E3779B9` fork) so the VARIABLE per-seed vortex count in
-// `stormE:place` can never move the pole structure (the F5 recoupling the legacy fork avoided). Same
-// (regime, macroSeed, stormSeed, drivers) ⇒ byte-identical records + mask.
+// integer (macroSeed, stormSeed) identity in SIX DISJOINT sub-namespaces — the FOUR placement streams
+// `stormE:place`, `stormE:age`, `stormE:phase`, `stormE:polar` (fixed draw order), plus the two
+// APPEND-ONLY per-storm scalar streams `stormE:emboss`, `stormE:billow` drawn in a post-pass AFTER the
+// vortex list is finalized (S2 substrate — the deck/spiral shading scalars). `stormE:polar` is a
+// separate stream (mirrors the legacy `_polRng ^ 0x9E3779B9` fork) so the VARIABLE per-seed vortex
+// count in `stormE:place` can never move the pole structure (the F5 recoupling the legacy fork avoided).
+// The APPEND-ONLY rule keeps the four placement streams' draw order + values frozen ⇒
+// GOLDEN_STORM_MASK_HASH + the phase bank + every #4/#5/#8 downstream consumer are byte-identical by
+// construction. Same (regime, macroSeed, stormSeed, drivers) ⇒ byte-identical records + mask.
 // ─────────────────────────────────────────────────────────────────────────────
 import alea from 'alea';
 import { clamp, clamp01 } from './mathutil.js';
@@ -63,6 +67,16 @@ export const STORM_PHYS = Object.freeze({
   POLAR_N_MIN: 5, POLAR_N_SPAN: 3,         // polar wavenumber N plausible physics range 5..8 (Rider-B GUI-tunable range)
   URANIAN_OBLIQUITY: 80,  // V-β.5: NEPTUNIAN regime + obliquity ≥ this ⇒ the Uranian read (Uranus ≈ 98°). GUI-reachable via the E5 obliquity° slider. (DECLARED; the internal-heat driver that fully separates Uranus from Neptune stays frozen → derive-not-freeze, taxonomy §0.5/5.1.)
 });
+
+// ── STORM_DECK — the five-row vertical-column deck table (world-engine-atmo-deck-spiral S2/S3) ──
+// The atmosphere is a stack of decks at increasing normalized height z ∈ [0,1]: deep floor (0.0) below
+// the belts (0.35) below the zones/mush (0.7); a warm mode-0 anticyclone earns a TOWER (0.9) above the
+// zone deck, and the haze / polar hood caps the column (1.0). This is a DECLARED table (no alea —
+// guard-safe): its COMPUTATIONAL values are consumed by the lab carriage's per-storm deckZ derivation
+// (mode 0 ⇒ mix(ZONE, TOWER, prominence); mode 1 dark spot ⇒ FLOOR — the hole reveals the deep floor)
+// and, in GLSL (S3), by the hood-exposure minuend (DECK_HAZE) and the mode-1 deepBase belt-family fill
+// (BELT). deckZ is DERIVED (the deck a storm occupies is what the storm IS), not a drawn scalar.
+export const STORM_DECK = Object.freeze({ FLOOR: 0.0, BELT: 0.35, ZONE: 0.7, TOWER: 0.9, HAZE: 1.0 });
 
 // V-β.2 → derive-not-freeze Slice P: per-regime canonical polar cyclone-cluster N — now the modal PRIOR
 // the seed varies AROUND, not a per-seed PIN (Max re-ruling 2026-07-15 demoted Rider B's pin to a
@@ -400,6 +414,21 @@ export function resolveStormE(regime = E5_REGIME.GAS_GIANT, drivers = {}, macroS
   if (uranian) train.length = 0;
 
   const vortices = [primary, ...train].slice(0, 8);      // carriage caps at 8 slots
+
+  // ── APPEND-ONLY per-storm scalar substrate (S2): post-pass over the FINALIZED vortex list. Two NEW
+  //    disjoint alea streams (stormE:emboss / stormE:billow) — they consume ZERO draws from the four
+  //    placement streams above, so GOLDEN_STORM_MASK_HASH + the phase bank + every #4/#5/#8 downstream
+  //    consumer stay byte-identical by construction (append-only rule; draw order of place/age/phase/
+  //    polar frozen). embossDir = place-once mode-0 shading axis (S3 emboss rim / cold-annulus shading
+  //    direction, footnote 17); billowPhase = place-once KH scallop azimuth phase (S4 dSpiral scallop,
+  //    footnote 19). Both are STATIC place-once scalars (no uTime) — downstream slices animate nothing.
+  const rngEmboss = alea('stormE:emboss:' + regime + ':' + id);
+  const rngBillow = alea('stormE:billow:' + regime + ':' + id);
+  for (const v of vortices) {                            // deterministic creation order
+    v.embossDir = rngEmboss() * TWO_PI;
+    v.billowPhase = rngBillow() * TWO_PI;
+  }
+
   return {
     strength: 1, count: vortices.length,
     primary, train: vortices.slice(1), vortices,

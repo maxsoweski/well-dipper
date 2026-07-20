@@ -375,6 +375,7 @@ export function makeUniforms(WORLD_LIGHT) {
       uStormParams:     { value: Array.from({ length: 8 }, () => new THREE.Vector4()) },  // x rotStrength, y aspect, z mode, w companion
       uStormColor:      { value: Array.from({ length: 8 }, () => new THREE.Vector3()) },  // core color (driven: bandTint warmed/bruised)
       uStormCount:      { value: 0 },     // live storm count (driven: gas gate x greatSpotEnabled)
+      uStormAux:        { value: Array.from({ length: 8 }, () => new THREE.Vector4()) },  // S2 per-storm scalar substrate: x ageScalar, y embossDir (rad), z deckZ (STORM_DECK-derived), w billowPhase (rad) — written slot-synced with the arrays above; unread until S3/S4
       // ── F29 polar vortex (card F29 §6.5) — analytic pole combiner, NO carriage slots ──
       // Lattice centers derive in-shader from angle rounding (zero arrays). uPolarStrength
       // 0 ⇒ the GLSL call is skipped entirely (byte-identical F28 render).
