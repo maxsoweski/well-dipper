@@ -1,4 +1,5 @@
 import { SeededRandom } from './SeededRandom.js';
+import { componentSeed, buildComponentContext } from './componentSystems.js';
 import { PlanetGenerator } from './PlanetGenerator.js';
 import { MoonGenerator } from './MoonGenerator.js';
 import { AsteroidBeltGenerator } from './AsteroidBeltGenerator.js';
@@ -864,6 +865,36 @@ export class StarSystemGenerator {
         if (fc.planets != null) out.planets = fc.planets;
         return out;
       });
+
+      // ── Component sub-systems (multistar-components-2026-07-19, DECISIONs
+      // a+b) ── promote each far companion to a full spawnable sub-system:
+      // its own single star + known-planet pins + child-stream procgen fill.
+      // Seeded off a FRESH SeededRandom root on the canonical system seed
+      // (componentSeed), so the parent rng above is never drawn from —
+      // byte-safe by construction. buildComponentContext destructure-strips
+      // farCompanions, so the recursion cannot re-enter this block. yield*
+      // delegates the child iterator's yields to the async driver (warp FOLD
+      // keeps breathing on generateAsync). NOTE: componentCtx.knownPlanets
+      // shares the SAME planet objects as fc.planets (and, on the authored
+      // path, the KNOWN_SYSTEM_CONTENTS module constant) — read-only by
+      // contract; the S3 baseline deep-equal guards the corruption route.
+      const componentSystems = [];
+      for (let idx = 0; idx < galaxyContext.farCompanions.length; idx++) {
+        const fc = galaxyContext.farCompanions[idx];
+        const normalizedType = this.normalizeSpectralClass(fc.class) || 'M';
+        const componentCtx = buildComponentContext(galaxyContext, fc, normalizedType);
+        const cSeed = componentSeed(seed, idx);
+        const componentSystemData = yield* this._generateIterator(cSeed, componentCtx);
+        componentSystems.push({
+          name: fc.name,
+          class: fc.class,
+          type: normalizedType,
+          separationAU: fc.separationAU,
+          seed: cSeed,
+          systemData: componentSystemData,
+        });
+      }
+      systemData.componentSystems = componentSystems;
     }
 
     yield;  // pre-overlay yield — ExoticOverlay walks the planets array again

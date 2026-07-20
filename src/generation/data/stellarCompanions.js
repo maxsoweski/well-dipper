@@ -194,6 +194,23 @@ export const STELLAR_COMPANIONS = [
 ];
 
 /**
+ * Far-row promotability predicate (multistar-components-2026-07-19 / AC1).
+ * A far companion's class must have a leading letter the component promotion
+ * can normalize to a star type, or StarSystemGenerator's emission would fall
+ * back to 'M' silently — the table validator rejects it at authoring time
+ * instead. LOCAL mirror of StarSystemGenerator.normalizeSpectralClass's
+ * acceptance (OBAFGKMD directly; W/C/S/L/T/Y map into that set) so this data
+ * module stays dependency-free; the mirror is pinned against the real
+ * normalizer by stellarCompanions.promotability.test.js's agreement battery.
+ */
+function _promotableLead(str) {
+  const s = str.trim();
+  if (!s) return false;
+  const lead = s[0].toUpperCase();
+  return 'OBAFGKMD'.includes(lead) || 'WCSLTY'.includes(lead);
+}
+
+/**
  * Validate the companion table against the schema/discriminator rules above.
  * Pure and side-effect-free (does not throw) so tests and build scripts can call
  * it. Returns { ok, errors } where errors is a list of human-readable problems.
@@ -247,6 +264,11 @@ export function validateStellarCompanions(entries = STELLAR_COMPANIONS) {
         if (!f || typeof f.class !== 'string' || !f.class) push(i, `farCompanions[${fi}] missing class`);
         if (!f || !(typeof f.separationAU === 'number' && f.separationAU > 0)) {
           push(i, `farCompanions[${fi}] needs a positive separationAU`);
+        }
+        // Promotability (multistar-components AC1): the class must normalize
+        // to a component star type — no silent 'M' fallback at emission.
+        if (f && typeof f.class === 'string' && !_promotableLead(f.class)) {
+          push(i, `farCompanions[${fi}] class ${JSON.stringify(f.class)} is not promotable to a component star type (no normalizable leading letter)`);
         }
       });
     }
