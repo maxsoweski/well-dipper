@@ -1743,11 +1743,17 @@ export const HEIGHT_GLSL = /* glsl */ `
             col = mix(col, zoneish, WISP_K * wispBand * wisp);
           }
           // hoodExposure (documented-marginal future-proofing — F16-hood): deck-weighted hood dimming applied
-          // to the storm — a tower (deckZ 0.9) barely dims, a mode-1 hole (0.0) dims fully into the hood.
+          // to THE STORM'S PAINT — a tower (deckZ 0.9) barely dims, a mode-1 hole (0.0) dims fully into the hood.
+          // FOOTPRINT-MASKED by hoodFoot (§4.1 "the storm's paint, not the whole planet"): without a d-based
+          // envelope this multiply fired on EVERY fragment once per storm — at polar fragments (hood→1, all the
+          // storm's own core/collar/rim masks ≈0) it darkened the whole planet, compounding per storm into
+          // near-black poles far from any vortex. hoodFoot is 1 across the painted footprint and 0 beyond the
+          // rim (and 0 on the far side via the +100 pedestal in d) ⇒ exact identity (col *= 1.0) off the storm.
           // hood ≈ 0 at every storm core for the DRAWN population (BELT_Y_MAX 0.75 + R ≤ 0.30 rad ⇒ core
-          // trueLat ≈ 0.67 < 0.72), so this is a no-op today; kept for polar-storm increments (§4.1). Excluded
+          // trueLat ≈ 0.67 < 0.72), so this stays a no-op today; kept for polar-storm increments (§4.1). Excluded
           // from the AC-DECK probe recipe (unfalsifiable on the drawn population).
-          col *= 1.0 - 0.30 * hood * (DECK_HAZE - deckZ);
+          float hoodFoot = 1.0 - smoothstep(1.0 * R, 1.4 * R, d);   // storm footprint: 1 across the paint → 0 beyond rim/far side
+          col *= 1.0 - 0.30 * hood * (DECK_HAZE - deckZ) * hoodFoot;
           // ── V-α.3 storm INTERIOR STRUCTURE — spiral arms + concentric shear rings so a
           // placed vortex reads as a churning cell, NOT a flat oval (taxonomy 2.3 / Max's
           // "must stop reading as a simple oval"). STATIC (F1): the regularity is broken by a

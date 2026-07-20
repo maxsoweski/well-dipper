@@ -253,8 +253,9 @@ the source-structure closers.
   toward `deep`, NOT `uStormColor`. Keeps the pale-collar luminance lift. Rim wisps
   `sin(uBandM·latHere + uBandPhaseJet + WISP_WARP·bandWarpField(n·4.3 + WISP_OFF))` sharpened
   `pow(|·|,6)`, mixed toward a zone-tint at `WISP_K·wispBand`.
-- **hoodExposure:** `col *= 1 − 0.30·hood·(DECK_HAZE − deckZ)` — a tower (deckZ 0.9) barely dims,
-  a mode-1 hole (0.0) dims fully into the hood. See the reachability note below.
+- **hoodExposure:** `col *= 1 − 0.30·hood·(DECK_HAZE − deckZ)·hoodFoot` — a tower (deckZ 0.9)
+  barely dims, a mode-1 hole (0.0) dims fully into the hood, applied to THE STORM'S PAINT via the
+  `hoodFoot` footprint envelope (S3-fix deviation 5 below). See the reachability note below.
 
 ### hoodExposure reachability (F16-hood — documented-marginal, EXCLUDED from probes)
 
@@ -267,6 +268,25 @@ today. Only the outer collar fringe of an extreme-corner storm (max lat, max R) 
 `hood ≈ 0.3`. Kept as principled future-proofing for polar-storm increments (one multiply,
 correct physics); hood interaction stays OUT of the AC-DECK probe recipe (unfalsifiable on the
 drawn population).
+
+**Deviation 5 (S3-fix, root-cause of the adversarial refutation): hoodExposure is
+FOOTPRINT-MASKED.** The as-committed term `col *= 1 − 0.30·hood·(DECK_HAZE − deckZ)` carried NO
+spatial mask — unlike every other per-storm term it read no `d`-based factor and no facing guard,
+so inside the per-storm loop it multiplied EVERY fragment once per storm regardless of storm
+position/facing. The declared marginality ("≡ 1.0 today") holds only where `hood = 0`; at polar
+fragments `hood → 1` while the storm's own core/collar/rim masks are ≈ 0 (the fragment is far from
+the storm), so the term darkened the *whole planet's* hood band by `0.70` per storm, compounding
+into near-black poles far from any vortex (8 mode-1 slots ⇒ `0.7^8 ≈ 0.057`). That contradicts
+§4.1's "each storm takes hood exposure ∝ its own deck depth — the storm's paint, not the whole
+planet" (the base deck already took the FULL planet hood at the pre-call `col *= 1 − 0.30·hood`).
+Fix: multiply the exposure by `hoodFoot = 1 − smoothstep(1.0·R, 1.4·R, d)` — 1 across the painted
+footprint (core/collar/rim ≤ 1.18–1.35·R), 0 beyond the rim, and 0 on the far side via the `+100`
+pedestal already baked into `d`. Far from the storm `hoodFoot = 0` ⇒ `col *= 1.0` EXACT identity,
+so the term now only ever dims the storm's own paint. The `[hoodExposure]` structural closer still
+passes (`0.30 * hood * (DECK_HAZE - deckZ)` remains a substring); AC-STATIC is unaffected
+(`hoodFoot` reads only `d`/`R`/`smoothstep`, no uTime); off-gate identity is unchanged (still
+inside the count-gated loop). The F16-hood no-op-on-drawn-population conclusion is UNCHANGED — the
+mask only removes the far-field mis-fire, it does not alter behavior at any drawn storm core.
 
 ### AC-0 consumer table — S3 reads of the S2 carriage
 
