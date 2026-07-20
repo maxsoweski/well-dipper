@@ -11,6 +11,14 @@
 //
 // Relocation only: values are byte-for-byte what the lab literal held at ad156cc; the
 // tests/v2-0-slice-a-byte-safety.test.js deep-equal guard pins them to the pre-change snapshot.
+//
+// V2-6 slice-5 (draw-law extraction, Lens L21): NAMED_BODY + drawPresetRadius() are lifted OUT of
+// planet-lod-lab.html to here so the lab GUI and calibration/population-sweep.mjs draw radii from ONE
+// shared law (no scrape, no drift). Both the range lookup and the seeded draw live here; the lab
+// imports drawPresetRadius and the harness will too. New draws use alea (mulberry32 retired) — see §1H.
+
+import alea from 'alea';
+import { RADIUS_RANGES_EARTH } from './src/core/ScaleConstants.js';
 
 export const DRIVER_PRESETS = {
   // age (Gyr) is the D16 driver-response field surfaced this increment — read ONLY by the plate-path
@@ -222,3 +230,29 @@ export const PRESET_ARCHETYPE = {
   'Carbon (high C/O)': 'carbon',
   'Crystal (faceted)': 'crystal'
 };
+
+// ── V2-6 slice-5: shared preset-radius draw law (extracted from planet-lod-lab.html, Lens L21) ──
+// NAMED_BODY worlds are the canonical-radius lock (no seeded draw ⇒ deterministic surfaceGravity):
+// the AC-REROLL named-body clause. Every other archetype preset draws its radius from its
+// RADIUS_RANGES_EARTH band. Single source of truth so the lab GUI and calibration/population-sweep.mjs
+// stay byte-aligned.
+export const NAMED_BODY = new Set([
+  'Mars (arid rocky)', 'Titan (methane seas)', 'Europa (icy moon)',
+  'Venus (sulfuric shroud)', 'Magma (K2-141b)', 'Hot Jupiter (locked giant)',
+  'Moon/Mercury (impact-airless)'   // V2-5: canonical 0.38 R⊕ lock ⇒ deterministic surfaceGravity (no seeded radius draw)
+]);
+
+// Resolve the radius for a preset given a seed: canonical lock for named bodies, else a seeded
+// draw from the archetype range (falls back to the preset's own radiusEarth if no mapping).
+// V2-6 slice-5: the draw PRNG is alea('draw:radius:'+seed) — mulberry32 retired for new draws
+// (its definition survives in the lab as the storm-e envelope guard; see §1H).
+export function drawPresetRadius(presetName, seed) {
+  const preset = DRIVER_PRESETS[presetName];
+  const canonical = preset.radiusEarth ?? 1.0;
+  if (NAMED_BODY.has(presetName)) return canonical;
+  const arch = PRESET_ARCHETYPE[presetName];
+  const range = arch && RADIUS_RANGES_EARTH[arch];
+  if (!range) return canonical;   // archetype-less preset (overlay types) keep their value
+  const r = alea('draw:radius:' + (seed >>> 0))();
+  return range[0] + r * (range[1] - range[0]);
+}

@@ -167,7 +167,8 @@
     import { writeGrainSphere, writeHeightSphere } from './src/worldengine/base/tectonic.js';   // AC2 _bakedReliefAt probe: re-derive the SAME pure height field the relief cube holds
     import { driversToTune } from './src/worldengine/base/plates.js';   // Increment 2: pure D-vector→tune mapper — plateProbe() echoes the SAME tune the writer applied (read-only; we do not edit plates.js)
     import { magmaDriversToTune, magmaThermal } from './src/worldengine/base/magmatism.js';   // Increment 4-MULTIPLY: same arm's-length echo for magmaProbe() + preset thermal-drive seeding
-    import { DRIVER_PRESETS, PRESET_ARCHETYPE } from './driver-presets.js';   // V2-0 Slice A: body driver-preset vectors + archetype map (extracted; single source shared with the headless AC1 harness + tests)
+    import { DRIVER_PRESETS, PRESET_ARCHETYPE, drawPresetRadius } from './driver-presets.js';   // V2-0 Slice A: body driver-preset vectors + archetype map (extracted; single source shared with the headless AC1 harness + tests). V2-6 slice-5: drawPresetRadius (radius draw law) extracted here too — shared with calibration/population-sweep.mjs
+    import alea from 'alea';   // V2-6 slice-5: worldSeed → deterministic per-namespace sub-seeds (draw:radius/macro/detail) for newPlanet()
     import { presetDriverDefaults, buildNeutralBodyDrivers } from './body-drivers.js';   // V2-0 Slice A: neutral (no-slider-override) driver construction the lab overlays overrides on (presetDriverDefaults also used by resetDriverOverrides)
     import { deriveConditionVector } from './body-condition-vector.js';   // V2-0 Slice C: pure _fp→condition vector, attached NESTED as bodyDrivers.condition (shadow-mode; V2-1 E1 read surface; SAME derive the headless AC1 harness uses)
     import { computeE1 } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment).
@@ -1978,27 +1979,14 @@
     // size). Every OTHER preset draws a seeded-random radius from the game's RADIUS_RANGES_EARTH
     // for its archetype, mirroring PlanetGenerator.generate(). A reroll button + seed field
     // redraws; a manual radius slider then overrides until the next preset/reroll.
-    const NAMED_BODY = new Set([
-      'Mars (arid rocky)', 'Titan (methane seas)', 'Europa (icy moon)',
-      'Venus (sulfuric shroud)', 'Magma (K2-141b)', 'Hot Jupiter (locked giant)',
-      'Moon/Mercury (impact-airless)'   // V2-5: canonical 0.38 R⊕ lock ⇒ deterministic surfaceGravity (no seeded radius draw)
-    ]);
-    // PRESET_ARCHETYPE (preset key → RADIUS_RANGES_EARTH archetype tag) moved to ./driver-presets.js (V2-0 Slice A) — imported at the top of this module.
-    // Deterministic seeded PRNG (mulberry32) for the radius draw — same family as the lab's
-    // inline storm-placement streams, lifted here so reroll is reproducible per seed.
+    // NAMED_BODY (canonical-radius lock) + drawPresetRadius (the seeded radius draw law) moved to
+    // ./driver-presets.js (V2-6 slice-5, Lens L21) — imported at the top of this module and shared
+    // with calibration/population-sweep.mjs so the lab and the harness draw from ONE law (no drift).
+    // retired for new draws 2026-07-19 — kept for the storm-e envelope guard: mulberry32 no longer
+    // backs drawPresetRadius (alea does, in driver-presets.js), but the definition survives as dead
+    // code because tests/worldengine-base-storm-e.test.js pins `toContain('mulberry32')` on this file
+    // and the concurrent atmo lane owns the storm-closure comment that would otherwise carry the token.
     function mulberry32(a){ return function(){ a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-    // Resolve the radius for a preset given a seed: canonical lock for named bodies, else a seeded
-    // draw from the archetype range (falls back to the preset's own radiusEarth if no mapping).
-    function drawPresetRadius(presetName, seed){
-      const preset = DRIVER_PRESETS[presetName];
-      const canonical = preset.radiusEarth ?? 1.0;
-      if (NAMED_BODY.has(presetName)) return canonical;
-      const arch = PRESET_ARCHETYPE[presetName];
-      const range = arch && RADIUS_RANGES_EARTH[arch];
-      if (!range) return canonical;   // archetype-less preset (overlay types) keep their value
-      const r = mulberry32(seed >>> 0)();
-      return range[0] + r * (range[1] - range[0]);
-    }
     const state = {
       distance: 20.0,       // camera distance in radii (mouse-wheel driven) -> drives lodRamp
       yaw: 0.337,           // orbit yaw   (pointer-drag) — initial ≈ the old fixed CAM_DIR view
@@ -2006,6 +1994,7 @@
       macroSeed: 1,         // big-feature noise band seed (octaves 0..2 — the continents)
       radiusSeed: 1,        // AC5 seeded-radius draw seed (reroll redraws the archetype-range radius)
       detailSeed: 1,        // fine-detail noise band seed (octaves 3+ — surface texture)
+      worldSeed: 1,         // V2-6 slice-5: the ONE world seed — newPlanet() re-rolls it and derives radius/macro/detail sub-seeds via alea namespaces (AC-REROLL). Manual radiusSeed / planetRadiusEarth still override it for AC-RADIUS-AB toggling at fixed worldSeed.
       pixelScale: 3,        // low-res buffer divisor (matches production RetroRenderer)
       octaves: 4.0,         // manual octave value (used when octAuto = false)
       levels: 6,
@@ -3876,6 +3865,23 @@
     function rerollRadius(){ state.radiusSeed = (Math.random()*4294967296)>>>0; state._radiusDirty = true; applyDrivers(); }
     fDrivers.add(state, 'radiusSeed', 0, 4294967295, 1).name('radius seed').listen().onChange(()=>{ state._radiusDirty = true; applyDrivers(); });
     fDrivers.add({ roll(){ rerollRadius(); } }, 'roll').name('🎲 reroll radius');
+    // V2-6 slice-5 (AC-REROLL): ONE worldSeed re-rolls the WHOLE world — radius, macro band, detail
+    // band — through disjoint alea namespaces, so a fresh planet is one click, radius included. This
+    // lives beside 🎲 reroll-radius (the fDrivers GUI-wiring seam), NOT beside the fSeeds
+    // 'New planet (re-roll both)' control which sits against the atmo-owned storm/giant hunks.
+    // Explicit float→uint32 mapping (Lens L26): each sub-seed is a deterministic function of worldSeed.
+    // NAMED_BODY presets ignore the drawn radiusSeed (canonical lock in drawPresetRadius) — the
+    // named-body clause. reseedGiant()+applyDrivers() is the same chain reroll-radius/fSeeds use.
+    function newPlanet(){
+      state.worldSeed  = (Math.random()*4294967296)>>>0;
+      state.radiusSeed = Math.floor(alea('draw:radius:'+state.worldSeed)()*4294967296)>>>0;   // into the 0–4294967295 seed field
+      state.macroSeed  = Math.floor(alea('draw:macro:' +state.worldSeed)()*10000);            // into the existing 0–9999 range
+      state.detailSeed = Math.floor(alea('draw:detail:'+state.worldSeed)()*10000);            // into the existing 0–9999 range
+      state._radiusDirty = true;
+      reseedGiant();
+      applyDrivers();
+    }
+    fDrivers.add({ roll(){ newPlanet(); } }, 'roll').name('🌍 new planet (re-roll all)');
 
     // ── Increment 2 (plate driver-response) bodyDrivers overrides ────────────────────
     // Four sliders that vary the body's formation drivers → reshape the plate relief (a SEPARATE
