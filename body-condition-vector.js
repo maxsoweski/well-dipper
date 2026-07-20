@@ -28,7 +28,13 @@ export function deriveConditionVector(fp, derived, radiusEarth) { return {
   eccentricity:    fp.eccentricity ?? 0,                 // D12 input
   // ── V2-1 AC6 plumbing (gate-1 GAP-1/GAP-2): the two scalars E1's L/Φ/gMod need, missing today. ──
   T_eq:            fp.T_eq ?? 288,                        // SURFACE temperature (D3-MF2 — NOT equilibrium temp); raw-preset read (baseStep reads T_eq internally but never returns it). 288 = lab route default; fallback unreached (all 17 presets define T_eq).
-  surfaceGravity:  derived?.surfaceGravity ?? bodySurfaceGravity(fp), // D14 — EXPOSED from baseStep (deriveBodyScalars g=M/R²), NEVER re-derived inline (mirrors rawTidalIoRatio's helper-fallback shape).
+  // D14 — gravity coherence (V2-6 §1A / AC-GCOHERE). g_c = today's expression unchanged (canonical-preset g,
+  // EXPOSED from baseStep deriveBodyScalars g=M/R², never re-derived inline). The drawn radius R now scales it:
+  // g = g_c·(R/R_c) — the normalized-at-canonical ratio form of M=(ρ/ρ⊕)·R³ per composition class (M_derived(R) =
+  // M_c·(R/R_c)³ ⇒ g = M_derived/R² = g_c·(R/R_c)). R_c = fp.radiusEarth ?? 1.0 (canonical), R = the drawn 3rd arg
+  // (radiusEarth ?? R_c). BYTE-EXACT at canonical: every golden/NAMED_BODY/headless path passes R === R_c, so
+  // R/R_c = 1.0 exactly (float64 x/x) and g_c·1.0 === g_c bit-for-bit — no fixture re-capture (FENCE 1/2).
+  surfaceGravity:  (derived?.surfaceGravity ?? bodySurfaceGravity(fp)) * ((radiusEarth ?? fp.radiusEarth ?? 1.0) / (fp.radiusEarth ?? 1.0)),
   // ── V2-1 Slice B addendum (compositionClass gas terminal): E1's Stage-A reads atmosphere.composition
   //    ('h2-he' → 'gas', BUILD-PLAN §4.4). GAP not enumerated by gate-1 (which only sized L's inputs), so
   //    Slice A did not plumb it; surfaced here as a THIRD nested passthrough (same byte-safe discipline as

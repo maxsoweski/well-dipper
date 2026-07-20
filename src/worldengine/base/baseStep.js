@@ -92,6 +92,12 @@ export function bodyLiquidStability(bundle) { return deriveBodyScalars(bundle).l
 export function bodySurfaceGravity(bundle)  { return deriveBodyScalars(bundle).surfaceGravity; }    // was :14 (size/vigor ingredient for Φ)
 export function bodyAgeNorm(bundle)         { return deriveBodyScalars(bundle).ageNorm; }           // was :34 (radiogenic ingredient for Φ)
 
+// ── V2-6 §1B — shared km→angular derivation (radPerKm). Pure, byte-inert (new export; nothing existing reads it). ──
+// Angular size of a D_km surface feature: δ = D_km · radPerKm(R) ⇒ ∝ 1/R at fixed D_km. The single km-to-angular
+// conversion every radius law consumes (bombardment.js gains its import in V2-6 slice 2). Math.max floor guards 1/0.
+export const KM_PER_EARTH_RADIUS = 6371;
+export function radPerKm(radiusEarth) { return 1 / (KM_PER_EARTH_RADIUS * Math.max(radiusEarth ?? 1.0, 1e-6)); }
+
 export function makeBaseStep(bundle, { n, lat0Deg, lat1Deg, domainKm, seed = 'worldengine', discriminate = true }) {
   const s = deriveBodyScalars(bundle, discriminate);
 
