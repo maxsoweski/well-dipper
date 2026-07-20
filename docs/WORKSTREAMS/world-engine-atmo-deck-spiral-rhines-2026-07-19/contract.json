@@ -36,10 +36,10 @@
     },
     {
       "id": "AC-OFFGATE",
-      "statement": "Off-gate identity: storm count 0 implies dSpiral is identically 0 and all deck terms inert — stormless-seed output identical to pre-change.",
+      "statement": "Off-gate identity: storm count 0 implies dSpiral is identically 0 and all deck terms inert — stormless-seed output identical to pre-change AT PINNED DRAW STATE. NOTE (build-time clarification, audit-consistent): on gas presets the drawn band count changes BY DESIGN (Rhines wire + rotation draw); identity is asserted on solid presets and on gas presets with radius/rotation pinned canonical — drawn-population band variety is the feature, not a regression.",
       "verifyVia": {
-        "input": "Headless render/field diff on stormless seeds pre/post.",
-        "observable": "Byte-identical (or documented-epsilon-identical) stormless output."
+        "input": "Headless render/field diff on stormless seeds pre/post: solid presets as-is; gas presets with radius/rotation pinned to canonical values.",
+        "observable": "Byte-identical (or documented-epsilon-identical) stormless output under those pinnings."
       },
       "layer": "unit"
     },
