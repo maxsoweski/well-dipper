@@ -1,0 +1,157 @@
+{
+  "workstream": "world-engine-atmo-deck-spiral-rhines-2026-07-19",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "statusNote": "SCOPED under standing greenlight 2026-07-19, Max (overnight ultracode campaign; authorization recorded in ~/briefings/handoff-lane-A-overnight-ultracode-2026-07-19.md). Scope = driver-wiring audit 2026-07-19 section 3 Increment 2 verbatim. Answers Max's atmo-expression UAT verdict findings 1 (pasted-on-top => deckZ compositor) and 2 (ink-in-water roll-up => dSpiral), honoring finding 3 (dAdvect LIKED — untouched). Runs CONCURRENTLY with terrain Increment 1 in the L1 tree; section-ownership fence in force.",
+  "programRef": "Driver-wiring audit 2026-07-19 section 3 Increment 2 + charter INTENT FRAME. Successor to world-engine-atmo-expression-2026-07-17: ships that UAT's two called-due mechanisms (deck ordering/height, storm-local roll-up) plus the Rhines radius wire + rotation draw. Limb/scale-height cue deferred to audit Increment 7; storm-size derive-not-freeze to Increment 6.",
+  "designDecisions": [
+    "DECK-Z COMPOSITOR (2A, audit footnotes 17-18, 21): per-fragment deckZ table — 0.0 deep floor (only ever revealed), 0.35 belts, 0.7 zones/mush, 0.9 mode-0 tower, 1.0 haze/polar hood. Rule: same-deck phenomena DEFLECT (existing dWake/dAdvect machinery, correct as-is); different-deck phenomena OCCLUDE/REVEAL. Haze mutes prop (1 - deckZ) of what's below.",
+    "MODE-1 STOPS BEING PAINT (footnote 18): dark-spot fill derived FROM the deep-deck palette (beltCol darkened/warmed — 'seeing 5 bar'), NOT uStormColor; thin band-frequency wisps cross the hole rim at low weight — a clearing you look into. Companion-cloud physics already correct, kept.",
+    "MODE-0 EARNS HEIGHT (footnote 17): static per-storm emboss rim (place-once shading direction, new alea stream, no uTime); collar recast as observed COLD ANNULUS (desaturate/blue-shift, not pure luminance); tower prominence prop ageScalar (real GRS: older = redder = higher — shares the existing chromophore age driver).",
+    "dSPIRAL STATIC ROLL-UP (2B, footnote 19): per-storm 2-component static displacement, sibling of dWake (same tangent frame/count-gate/uAtmoInk scale); spiral phase psi = thv + W*log(rr+eps), wrap W prop ageScalar*sign(rot); amplitude annulus at the collar (core oval stays coherent); KH billow scallop N_b = max(3, round(2*pi*R/lambda_KH)), lambda_KH ~ 0.15R, lobes leaned downstream. Consumed at (a) meridional component into dLat BEFORE bandProxy (band genuinely winds in; entrainment free) and (b) full 2D domain offset of bandWarpField texture samples (bandProxy is latitude-only by contract). Pigment sampled at displaced positions both ways. dAdvect UNTOUCHED (LIKED).",
+    "RHINES RADIUS WIRE (2C, footnote 15): resolveParams receives state.planetRadiusEarth at BOTH call sites (rebakeE5Bands + storm-placement re-derive) — one-token-class fix; the law was already correct, the wire was broken. Vestigial uBandCount = round(12*RE/rotH) RETIRED — jetsDisp festoon gate derives from uBandM (two band counts, one bare = AC-0 violation).",
+    "ROTATION DRAW (2C, footnote 16): drawPresetRotation sibling of drawPresetRadius, new alea stream, per-archetype ranges (gas-giant ~8-14 h, ice-giant/sub-Neptune ~12-20 h); hot-Jupiter NOT drawn — DERIVED tidally locked from orbitRadius (the preset 80 h pseudo-sync, derived instead of frozen); NAMED_BODY locked.",
+    "NEW UNIFORMS/STREAMS APPEND-ONLY: uStormDeck[8]-style uniforms fed by NEW alea streams (stormE:deck, stormE:emboss, ...) appended AFTER existing stormE:{place,age,phase,polar} draws — existing consumers (#4 lightning, #5 brown-dwarf, #8 Mars-oscillator) unaffected by stream order.",
+    "DEFERRED WITH NAMED OWNERS: limb/scale-height cue + ink thermal drivers => Increment 7; storm radii from Rossby L_D => Increment 6 (STORM_PHYS derive-not-freeze). Declared in intent.md driver enumeration for the pre-UAT briefing."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15): (1) driver connectivity — deckZ/dSpiral/rotation draws read condition-vector channels + alea streams, no label/archetype strings; radius reaches resolveParams from the drawn state, not _fp constants; (2) named consumers — exactly ONE band count (uBandM) with jetsDisp documented as its consumer; new uniforms' consumers documented in BUILD-NOTES; (3) taxonomy registration — drift guards green; any new lab control is a driver override adding no *Enabled key.",
+      "verifyVia": {
+        "input": "Drift/guard suites from the worktree dir; grep audit of new reads + the retired uBandCount.",
+        "observable": "Guards green; no label reads; uBandCount gone; consumers documented."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-FENCE",
+      "statement": "Fence: GOLDEN_BANDFIELD_HASH + GOLDEN_STORM_MASK_HASH unchanged; aStorm mask contract + phase bank byte-identical; existing stormE:{place,age,phase,polar} draw order untouched (new streams appended only) — #4 lightning / #5 brown-dwarf / #8 Mars-oscillator consumers unaffected.",
+      "verifyVia": {
+        "input": "Golden hash suites + storm-mask contract tests from the worktree dir.",
+        "observable": "Hashes byte-identical; draw-order snapshot unchanged; downstream consumer tests green."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-OFFGATE",
+      "statement": "Off-gate identity: storm count 0 implies dSpiral is identically 0 and all deck terms inert — stormless-seed output identical to pre-change.",
+      "verifyVia": {
+        "input": "Headless render/field diff on stormless seeds pre/post.",
+        "observable": "Byte-identical (or documented-epsilon-identical) stormless output."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-STATIC",
+      "statement": "Static discipline: no uTime anywhere in F24-F31 sections (grep assert); dSpiral a pure function of Nraw + uniforms; per-storm deck/emboss/billow scalars alea-only.",
+      "verifyVia": {
+        "input": "Grep assert + purity unit tests.",
+        "observable": "Zero uTime hits; determinism across repeated evaluations; alea-stream-only provenance."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-RHINES",
+      "statement": "Rhines wire: resolveParams receives the drawn radius; over drawn gas giants R in [6,14] x rot 8-14 h, band count m spans the sqrt(a*Omega) prediction (population N ~ 3 to 15-16); hot-Jupiter collapses to M_MIN = 2 with derived locked rotation.",
+      "verifyVia": {
+        "input": "Headless population sweep over drawn (R, rot) grids per archetype.",
+        "observable": "Band-count span matches the prediction envelope; hot-Jupiter pinned at M_MIN."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-ROTDRAW",
+      "statement": "Rotation draw: per-archetype ranges honored; hot-Jupiter rotation identical to the tidal-lock derivation from orbitRadius; NAMED_BODY locked; alea stream only.",
+      "verifyVia": {
+        "input": "Unit tests on drawPresetRotation across archetypes + named bodies.",
+        "observable": "Ranges + lock + derivation all hold; determinism per worldSeed."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-ONECOUNT",
+      "statement": "Single band count: jetsDisp festoon gate derives from uBandM; the bare uBandCount heuristic is gone from source and uniform tables.",
+      "verifyVia": {
+        "input": "Grep + festoon-gate unit test at varying uBandM.",
+        "observable": "uBandCount absent; festoon window tracks uBandM."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-DECK",
+      "statement": "Live pixel probes at fixed seed: mode-0 storm shows emboss luminance asymmetry across the per-storm shading axis and a desaturated/blue-shifted collar annulus; mode-1 storm interior color sits within the deep-deck (belt-derived) palette family, NOT uStormColor, with band-frequency wisps detectable crossing the hole rim.",
+      "verifyVia": {
+        "input": "Fresh-context browser drive on :5178 (working-Claude drives; liveBranch 'main'; 45s cold-load timeout).",
+        "observable": "Pixel-probe measurements + screenshots archived in evidence/."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-SPIRAL",
+      "statement": "Live spiral read: sampled band latitude along a ring around an aged storm shows the predicted wrap count (prop ageScalar); KH scallop lobe count matches the N_b formula; arms carry entrained band color.",
+      "verifyVia": {
+        "input": "Browser drive with ring-sampling probes on an aged-storm seed.",
+        "observable": "Wrap count + lobe count within predicted bands; entrained color confirmed."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-POP",
+      "statement": "Live population contact sheet across drawn giants: band-count spread x2+ visible — few broad soft bands on a small slow ice giant vs fine striping on a large fast gas giant.",
+      "verifyVia": {
+        "input": "Browser drive: re-roll drawn giants, capture contact sheet.",
+        "observable": "Contact sheet archived; counted bands span the x2+ spread."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-ADVECT-REGRESS",
+      "statement": "dAdvect regression: the whispiness layer is unchanged on a stormless seed (screenshot diff) — the LIKED layer provably untouched.",
+      "verifyVia": {
+        "input": "Browser drive: stormless seed pre/post screenshot diff.",
+        "observable": "Diff empty within tolerance; evidence archived."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max's gate: storms read as IN the flow — GRS towers over bands with wound arms and serrated boundary; dark spots read as holes; 'ink diffusing in water' present; nothing reads pasted.",
+      "verifyVia": {
+        "input": "Max drives :5178 solo, re-rolling giants.",
+        "observable": "Max's holistic acceptance."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "zonalBandCol/stormColTerms/stormSwirl (F24-F31 GLSL) — the compositing sites deckZ restructures",
+      "dWake/dAdvect displacement machinery — dSpiral is dWake's sibling (same tangent frame/count-gate/uAtmoInk scale); dAdvect untouched",
+      "climate-e5.js rhinesWavenumber/amplitudeLaw/resolveParams + rebakeE5Bands and the storm-placement re-derive (the two broken call sites)",
+      "storm-e.js alea stream bank stormE:{place,age,phase,polar} (append-only) + the chromophore ageScalar driver",
+      "drawPresetRadius pattern (the sibling drawPresetRotation follows it); state.planetRadiusEarth from the bandCount derivation",
+      "beltCol deep-deck palette (mode-1 fill derivation source)"
+    ],
+    "outputs": [
+      "deckZ vertical-column architecture — the structural substrate Increments 6-7 and the brown-dwarf/lava/terrestrial atmo increments build on",
+      "dSpiral — the storm-local roll-up mechanism ('ink in water' answered mechanically)",
+      "Honest mode-1 holes + mode-0 towers (the 'pasted on top' answer)",
+      "Drawn-population band variety (Rhines wired to drawn R; rotation drawn; one band count)",
+      "stormE:deck/emboss append-only stream pattern for future per-storm scalars"
+    ],
+    "mustStayWorking": [
+      "GOLDEN_BANDFIELD_HASH + GOLDEN_STORM_MASK_HASH byte-stable; aStorm mask contract + phase bank; stormE draw order (existing streams)",
+      "dAdvect whispiness on stormless seeds (Max-LIKED, taste fence — AC-ADVECT-REGRESS)",
+      "#4 lightning / #5 brown-dwarf / #8 Mars-oscillator storm-mask consumers",
+      "Ground-lane fence: relief/dispatch untouched from this tree (concurrent Increment 1 owns them in L1)",
+      "Existing suites at the worktree baseline (4 failed KnownObjects x3 + GalacticFeatures x1 + ~5-7 collection-error files, pre-existing env noise)",
+      "Static no-uTime discipline across F24-F31"
+    ]
+  }
+}
