@@ -16,7 +16,10 @@
 **Ground truth gathered by:** 3 parallel read-only explorations (spawn path + scale;
 lane-B supercruise/DEPART surface at `well-dipper-supercruise`; data-model blast radius) +
 a bit-exact float32 probe (`Math.fround`) + prior-art review
-(`~/briefings/well-dipper-binary-separation-analysis.md`, 2026-06-04). Line of sight:
+(`~/briefings/well-dipper-binary-separation-analysis.md`, 2026-06-04). **Then
+adversarially verified** by 3 independent refutation passes (engine / lane-B / data-model)
+at sysdetails `62fe938` and supercruise HEAD `44803e6`; all corrections folded in — the
+material catch was the Proxima seed-bin inversion (§3.3). Line of sight:
 exploration-immersion — a triple like Alpha Centauri should be *experienceable* as a
 triple (visit Proxima, see her planets), not just labeled as one.
 
@@ -54,9 +57,9 @@ frame holds both as bodies; no current mechanism carries the player across the g
 | Scene scale | `AU_TO_SCENE = 1000`; 1 su ≈ 149,598 km = 0.001 AU | `src/core/ScaleConstants.js:39` |
 | World proportions | Real-scale: radius on the SAME 1000 su/AU map as distance (G star = 4.65 su, Earth = 0.0426 su). No orrery compression in the 3D world; the compressed scale (`mapUnitsPerAU`, `MAP_SCALE`) is 2D-HUD-only | `ScaleConstants.js:28-38`, `solarRadiiToScene`, `SystemMap.js` |
 | α Cen pair today | star2 spawns at `binarySeparationScene` = 23,500 su, mutual barycentric orbit | `main.js:4393-4407, 7600-7618` |
-| Proxima true distance | 13,000 AU = **13,000,000 su** | authored `stellarCompanions.js:87-104` |
+| Proxima true distance | 13,000 AU = **13,000,000 su** | authored `src/generation/data/stellarCompanions.js:87-104` |
 | Farthest current spawn | outer planets ≤ ~50,000 su (`maxOrbitAU = 50·√L`) | `StarSystemGenerator.js:447` |
-| Main-camera far plane | `far = 200,000` su (65× short of Proxima; dynamically raised for navigable nebulae — precedent exists) | `main.js:131, 4251-4255` |
+| Main-camera far plane | `far = 200,000` su (65× short of Proxima); only a defensive reset guard exists — nothing in `src/` currently raises it | `main.js:131, 4252-4253` |
 
 ### 2.2 Precision probe (bit-exact `Math.fround`; scratchpad `float32-probe.mjs`)
 
@@ -86,8 +89,9 @@ analysis reached the same conclusion for *rendering*; the floating origin now ex
 
 - **Floating origin** — `WorldOrigin.js` (above). `spawnSystem` calls `_resetWorldOrigin()`
   at every swap (`main.js:4247`).
-- **Scene-recenter primitive** — `warpSwapSystem` (`main.js:6261`): camera teleport +
-  `_resetWorldOrigin()` + `cameraInterp.resync(camera)` under the occluded HYPER pocket
+- **Scene-recenter primitive** — `warpSwapSystem` (`main.js:6152`): camera teleport +
+  `cameraInterp.resync(camera)`, with `_resetWorldOrigin()` running inside the
+  `spawnSystem({forWarp:true})` it calls, under the occluded HYPER pocket
   (`WarpEffect` FOLD→ENTER→HYPER→EXIT; `portalTraversal.js` plane-crossing state machine,
   load-adaptive destination-ready gate). Hard-wired today to "new system, new seed"
   (`onPrepareSystem` increments `seedCounter`) — but the primitive IS "re-center the world
@@ -102,14 +106,20 @@ analysis reached the same conclusion for *rendering*; the floating origin now ex
   long legs). Star arrival standoff (`tourStandoff.starParkRadius` ~8R) generalizes to any
   star.
 - **DEPART (lane B, already `building`)** — `autopilot-depart-2026-07-15`: radial-climb
-  escape from the current body, all-bodies horizon predicate (explicitly closes the
-  "star2 has no star-level keep-out" gap), ETA-scheduled physics deceleration replacing the
-  HOLD position-lerp. Exactly the departure/arrival behavior a companion trip needs.
+  escape from the current body, a *departed-body* horizon predicate (orbit until the nose
+  clears THAT body's horizon — single-body by charter; routing over ALL keep-out spheres is
+  explicitly the NEXT roadmap step, tangent-graph transit), and ETA-scheduled physics
+  deceleration replacing the HOLD position-lerp. The departure and arrival halves a
+  companion trip needs; threading past the pair mid-route uses the existing go-around
+  obstacle router, where star2 already gets keep-out treatment (`_tourObstacles`; the
+  star-detour path `_starKeepOut` reads the primary only).
   **Board note:** lane B has moved past its last coordinator relay — orrery-coherence is
   VERIFIED_PENDING_MAX `802cceb` and DEPART is greenlit/`building`, not pending-scoping.
-- **Multi-star-per-scene precedent** — `_deepSkyStars`/`system.extraStars`
-  (`main.js:4862-4899, 5515-5579`): open clusters / navigable nebulae already spawn many
-  `StarFlare`s in one scene — but scaled-down, ungravitated, decorative.
+- **Multi-star-per-scene precedent** — `_deepSkyStars` (`main.js:4862-4877`; the
+  gallery-preview `_galleryMeshes` path is a second instance): open clusters / navigable
+  nebulae already spawn many `StarFlare`s in one scene — scaled-down, ungravitated,
+  decorative. (`system.extraStars` is a dead field — defensive reads only, never
+  populated.)
 - **Components data recipe** — `farCompanions` proves the byte-identity-safe pattern:
   authored-only, omitted entirely from procgen output, zero RNG draws
   (`StarSystemGenerator.js:856-867`; ProcgenSnapshot pins only purely-procgen samples).
@@ -124,7 +134,8 @@ exists; (b) `camera.far = 200,000` — the companion is invisible in the main pa
 65× extension (log depth makes this *survivable*, but the sky pass already does this job
 correctly); (c) single-barycenter assumptions — `GravityField`, tour queue
 (`AutoNavigator.buildQueue` treats star2 as an ordinary nearby stop), gravity-well HUD,
-`SystemMap`, ORRERY framing (drops >5× orbit gaps, `main.js:6415`); (d) travel time — 11–15
+`SystemMap`, ORRERY overview framing (this branch frames to the outermost orbit; lane B's
+unmerged `_frameSystemForOrrery` will drop >5×-gap outliers); (d) travel time — 11–15
 min under the byte-frozen cap, unshortenable without touching `SC_TUNING`.
 
 **What it costs:** engine surgery across lighting, gravity, HUD, autopilot — the widest
@@ -182,11 +193,17 @@ descriptors, `stellarCompanions.js:21-24`); the new field needs a distinct name 
 - **Byte-identity: SAFE** by the proven `farCompanions` recipe — authored-only, key omitted
   from procgen output, zero RNG draws on the procgen path. ProcgenSnapshot (24/24) pins
   only procgen samples and re-filters real-covered cells.
-- **Seed derivation: asymmetric.** Proxima's own catalog position falls outside the 0.1 pc
-  F1 quantization bin → she derives her own deterministic `realStarSeed` for free. Close
-  members (A+B) deliberately collapse to ONE F1 seed — if close components ever needed
-  separate neighborhoods (they don't, for v1: the A+B pair IS one neighborhood), that would
-  need a reviewed component-index salt. **v1 needs no new seed policy.**
+- **Seed derivation: one seed, child streams.** The adversarial check refuted the tempting
+  "Proxima seeds herself" assumption: her catalog position bins to the SAME 0.1 pc F1 cell
+  as Rigil Kentaurus — (80009, 250, −9), computed from the live catalog data; 13,000 AU
+  ≈ 0.063 pc is *inside* the 0.1 pc quantum — so all three members collapse to ONE
+  `realStarSeed`. That is the §6 invariant working as designed ("one system = one seed"),
+  and the design follows it: components never mint top-level seeds — each component's
+  procgen fill draws a deterministic child stream off the system's canonical seed (the
+  existing `SeededRandom.child` mechanism), keyed by component index. No new seed formula,
+  no F1 fork (`realStarSeed.js` untouched). A component pocket keyed on `realStarSeed(pos)`
+  would have COLLIDED with the system seed — the child-stream rule closes that class
+  outright.
 - **Oracle lockstep:** `multiplicityOracle.count` and the test helper `mult()` are defined
   as `1 + (star2?1:0) + farCompanions.length`. If components replace/extend farCompanions,
   both must change in lockstep or glyph honesty (AC7) breaks.
@@ -197,13 +214,15 @@ descriptors, `stellarCompanions.js:21-24`); the new field needs a distinct name 
   payload generates them as real bodies (KNOWN_SYSTEM_CONTENTS pins, procgen fill per the
   fill-ON ruling) — the same authoring machinery α Cen's pair already uses.
 
-**Rep-cap amendment — narrower than feared.** The 2-close-star cap (§1) was written about
-*the scene*: "scene-rendered, gravitationally-modelled stellar content is capped at
-star + star2." Components don't add a third star to any scene — each component scene still
-holds ≤2 close stars. What changes is §2's "Data-level v1: no scene body" sentence —
-far companions gain *their own scene*, not a slot in the pair's scene. §3 (higher-order
-collapse) also survives per-component. The amendment is a targeted supersession of §2's
-v1 line, not a repeal of the cap.
+**Rep-cap amendment — targeted, with one honest rewording.** The cap's BODY is
+scene-scoped ("scene-rendered, gravitationally-modelled stellar content is capped at
+star + star2") and components honor it — each component scene still holds ≤2 close stars.
+But §1's HEADER reads "At most 2 close stars **per system**", and under components the one
+system Alpha Centauri spans 3 close stars across its scenes. So the amendment is two
+explicit strokes, not zero: (a) supersede §2's "Data-level v1: no scene body" line — far
+companions gain *their own scene*, not a slot in the pair's scene; (b) reword §1's header
+from per-system to per-rendered-scene, which the body already means. §3 (higher-order
+collapse) survives per-component.
 
 ### 3.4 Sky honesty + affordance — cheapest read, ships in any ordering
 
@@ -267,16 +286,21 @@ member-specific entry: "the view says so explicitly"):
 - **Lane B owns / joint scoping:** the §3.2 transition path (warpSwapSystem-adjacent
   main.js, mode-ownership invariants, DEPART machinery, nav-autopilot gate). The handoff
   anticipated this overlap; the grounding confirms it and strengthens it — DEPART is
-  ALREADY `building` and its all-bodies horizon predicate + ETA-decel are the companion
-  trip's departure/arrival halves. **Recommendation: the §3.2 increment scopes in a JOINT
-  lane B+C interview**, sequenced after orrery-coherence's UAT.
+  ALREADY `building`, and its radial-climb departure + ETA-decel arrival are the companion
+  trip's two endpoint behaviors (multi-obstacle routing between them is the tangent-graph
+  NEXT roadmap step; the existing go-around router covers the interim).
+  **Recommendation: the §3.2 increment scopes in a JOINT lane B+C interview**, sequenced
+  after orrery-coherence's UAT.
 - **Pocket-traversal dependency:** the transition's tunnel dressing reuses the parked
   `warp-tunnel-pocket-traversal` rig (tasks 4–7 unfinished). The component fold can ship
   on the rig as-is (the warp already uses it); finishing its polish tasks stays that
   workstream's own business.
-- **ORRERY framing:** the >5× orbit-gap heuristic (`_frameSystemForOrrery`) correctly
-  keeps far components out of the pair's frame; each component's own scene frames itself.
-  No change needed under §3.2 (a shared-scene avenue would have had to fight it).
+- **ORRERY framing:** on THIS branch the overview simply frames to the outermost orbit —
+  no gap logic exists here. Lane B's unmerged orrery-coherence adds `_frameSystemForOrrery`
+  (supercruise `main.js:6371`), stopping at the first >5× orbit gap precisely so far bodies
+  can't degenerate the frame — its comment names the parked wide-separation thread. Under
+  §3.2 each component's own scene frames itself, and the merged heuristic composes cleanly
+  (a shared-scene avenue would have had to fight it).
 - **Open UAT gates:** AC9 re-run (overlay), AC11 (unification), AC8 (grammar) all ride
   this ruling — the census/PRISM/SYSTEM behaviors they gate are unchanged by §3.3/§4
   data+view work, so they can re-run on the first increment's build.
@@ -319,7 +343,8 @@ increment), with §3.4 sky honesty folded into whichever increment touches it fi
   marker → annotated component view; warp destination unchanged (seed 1816942132 both
   markers); component transition round-trip (A+B → Proxima → A+B) with mode-ownership
   invariants held (drive rules: stop `window._autoNav`, CDP press_key only).
-- **Suite:** ProcgenSnapshot 24/24 byte-identical (components key absent from procgen);
+- **Suite:** ProcgenSnapshot green — 24-sample baseline, byte-compared over the
+  real-coverage-filtered procgen subset (components key absent from procgen output);
   oracle/mult lockstep tests; baseline 1,557 + new units. Vitest from repo dir only.
 - **Census:** `componentSystems` authored for every `STELLAR_COMPANIONS` entry with
   farCompanions; validator extended.
