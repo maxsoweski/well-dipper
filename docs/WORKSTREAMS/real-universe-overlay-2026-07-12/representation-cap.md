@@ -12,7 +12,7 @@ the engine can and cannot show is bounded, on purpose, so that the data model
 stays inside what the renderer, nav, gravity, and camera consumers already
 understand. The bounds:
 
-## 1. At most 2 CLOSE stars per system (`star` + `star2`)
+## 1. At most 2 CLOSE stars per rendered scene (`star` + `star2`)
 
 A system's scene-rendered, gravitationally-modelled stellar content is capped at
 the primary (`star`) plus a single close companion (`star2`). This is the
@@ -40,6 +40,19 @@ planets? }`:
   catalog star once Increment 3 loads the dim-host supplement (Proxima is in that
   supplement). The far companion here is the *structural* record that the wide
   member belongs to this family, plus its known planets as archive data.
+  **SUPERSEDED in part by `multistar-components-2026-07-19`:** a far companion
+  now ALSO gains its **own component scene payload** — `systemData
+  .componentSystems[idx]` carries a full generated sub-system (the component's
+  star + known-planet pins + child-stream procgen fill), navigable via the nav
+  component drill-in today and spawnable by Increment B's travel. It is a
+  component scene of its own, NOT a slot in the pair's scene: no 3D scene body
+  is spawned in the parent scene, so this section's heading ("(data-level), not
+  close stars") and §5's "Far-companion planets remain data-level … never scene
+  bodies" bullet — both of which this note explicitly governs by reference —
+  remain literally true of the PARENT scene; only the "data-level" framing is
+  superseded (the record is now also a full component payload). When Increment
+  B lands a real far-companion scene transition, those passages need their own
+  refresh.
 - **Its planets are archive-shaped data**, not scene bodies (the far companion has
   no rendered system of its own in v1).
 - `farCompanions` is **OMITTED entirely** from `systemData` when the overlay
