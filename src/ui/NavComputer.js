@@ -8,6 +8,7 @@ import { resolveArrivalSystem } from '../generation/arrivalResolution.js';
 import { multiplicityForSeed } from '../generation/multiplicityOracle.js';
 import { placeLabels } from './labelPlacement.js';
 import { deriveSystemTitle, deriveSystemAnnotation, deriveStarHoverName } from './systemIdentity.js';
+import { findComponentIndexByName, deriveComponentView } from './componentIdentity.js';
 import { buildFarCompanionChips, formatSeparationAU } from './farCompanionChips.js';
 import { resolveMembership, membershipLabel } from './prismMembership.js';
 import { KnownSystems } from '../generation/KnownSystems.js';
@@ -100,8 +101,11 @@ export class NavComputer {
     this._hoveredBody = null;       // planet/star under cursor { type, index }
     this._systemRotX = 0.5;         // 3D view rotation (elevation)
     this._systemRotY = 0.0;         // 3D view rotation (azimuth)
-    this._systemMode = 'system';    // 'system' or 'planet'
+    this._systemMode = 'system';    // 'system' | 'planet' | 'component'
     this._selectedPlanetIdx = -1;   // which planet is selected for detail view
+    this._selectedComponentIdx = -1; // which componentSystems entry is drilled (AC5)
+    this._pendingComponentSelect = null; // far-member marker name awaiting _systemData (entry b)
+    this._componentView = null;      // deriveComponentView cache for the drilled frame
     this._systemZoom = 1.0;         // zoom multiplier for system view
 
     // ── COMMIT BURN / WARP ──
@@ -663,7 +667,7 @@ export class NavComputer {
         ctx.fillText(chip.planetLine, chip.x + PAD_X, chip.y + PAD_Y + LINE_H * 2 + 9);
       }
 
-      this._farChipRects.push({ x: chip.x, y: chip.y, w: chip.w, h: chip.h, chip });
+      this._farChipRects.push({ x: chip.x, y: chip.y, w: chip.w, h: chip.h, chip, index: chip.index });
 
       // Hover hit-test → tooltip (the existing tooltip path, same as bodies).
       if (this._mouseX >= chip.x && this._mouseX <= chip.x + chip.w &&
@@ -1000,6 +1004,14 @@ export class NavComputer {
       // System view: planet detail → system overview → prism
       if (this._levelIndex === 4) {
         this._clearCommitSelection();
+        // Component sub-view pops back to the SYSTEM view first (AC5) —
+        // mirrors the planet-detail pop below; second ESC leaves level 4.
+        if (this._systemMode === 'component') {
+          this._systemMode = 'system';
+          this._selectedComponentIdx = -1;
+          this._componentView = null;
+          return true;
+        }
         if (this._systemMode === 'planet') {
           this._systemMode = 'system';
           this._selectedPlanetIdx = -1;
@@ -2003,6 +2015,11 @@ export class NavComputer {
       return;
     }
 
+    if (this._systemMode === 'component') {
+      this._renderComponentDetail(ctx, w, h);
+      return;
+    }
+
     if (this._systemMode === 'planet') {
       this._renderPlanetDetail(ctx, w, h);
       return;
@@ -2552,6 +2569,131 @@ export class NavComputer {
         ctx.fillText('SELECT STAR TO WARP · CLICK PLANET FOR DETAIL · ESC TO RETURN', w / 2, drawH - 8);
       }
     }
+    ctx.textAlign = 'left';
+  }
+
+  // ── Component sub-view (AC5, multistar-components-2026-07-19) ──
+  // The drill MECHANISM mirrors the planet-detail drill (mode + index + render
+  // fn + ESC pop); the RENDER is a SYSTEM-scale orrery over the component's
+  // own full generated payload (componentSystems[idx].systemData — a component
+  // is a full system, so sqrt-AU projection, not the moon-scale one). VIEW
+  // ONLY: no commit affordance — warp semantics unchanged, travel is
+  // Increment B's. Publishes its OWN _labelRects so the AC6 live non-overlap
+  // handle measures THIS view, not stale prism rects (fable M2).
+  _renderComponentDetail(ctx, w, h) {
+    const drawH = h - 50;
+    const view = deriveComponentView(
+      this._systemData, this._selectedComponentIdx, this._systemStar?.name);
+    this._componentView = view;
+    this._commitButtonRect = null;
+    this._labelRects = [];
+    if (!view.systemData) {
+      // Stale index / procgen payload — degrade to the SYSTEM view, no throw.
+      this._systemMode = 'system';
+      this._selectedComponentIdx = -1;
+      this._componentView = null;
+      return;
+    }
+    const sys = view.systemData;
+    const planets = sys.planets || [];
+
+    // ── Header: title (clause 1), annotation (clause 3), breadcrumb (clause 4) ──
+    ctx.textAlign = 'center';
+    ctx.font = '14px "DotGothic16", monospace';
+    ctx.fillStyle = 'rgba(160, 210, 255, 0.95)';
+    ctx.fillText(view.title, w / 2, 24);
+    if (view.annotation) {
+      ctx.font = '9px "DotGothic16", monospace';
+      ctx.fillStyle = 'rgba(120, 180, 255, 0.75)';
+      ctx.fillText(view.annotation, w / 2, 38);
+    }
+    ctx.font = '9px "DotGothic16", monospace';
+    ctx.fillStyle = 'rgba(150, 175, 215, 0.6)';
+    ctx.fillText(view.breadcrumb, w / 2, 50);
+
+    // ── SYSTEM-scale orrery over the payload (the _renderSystem projection) ──
+    const cosX = Math.cos(this._systemRotX), sinX = Math.sin(this._systemRotX);
+    const cosY = Math.cos(this._systemRotY), sinY = Math.sin(this._systemRotY);
+    const viewSize = Math.min(w, drawH) * 0.8;
+    const centerSX = w / 2, centerSY = drawH / 2 + 10;
+    const maxOrbitAU = planets.length > 0
+      ? Math.max(...planets.map(p => p.orbitRadiusAU))
+      : 1;
+    const maxR = Math.sqrt(maxOrbitAU) * 1.2 || 1;
+    const projScale = (viewSize / 2) / maxR;
+    const auToScreen = (au) => Math.sqrt(au);
+    const project = (wx, wy, wz) => {
+      let rx = wx, ry = wy, rz = wz;
+      const tx = rx * cosY - rz * sinY; rz = rx * sinY + rz * cosY; rx = tx;
+      const ty = ry * cosX - rz * sinX; rz = ry * sinX + rz * cosX; ry = ty;
+      return { x: centerSX + rx * projScale, y: centerSY - ry * projScale, depth: rz };
+    };
+
+    // Orbit rings (payload-sourced radii — never synthesized).
+    const ORBIT_SEGS = 48;
+    for (const p of planets) {
+      const r = auToScreen(p.orbitRadiusAU);
+      ctx.strokeStyle = 'rgba(100, 180, 255, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      for (let s = 0; s <= ORBIT_SEGS; s++) {
+        const a = (s / ORBIT_SEGS) * Math.PI * 2;
+        const sp = project(Math.cos(a) * r, 0, Math.sin(a) * r);
+        if (s === 0) ctx.moveTo(sp.x, sp.y); else ctx.lineTo(sp.x, sp.y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // The component star (single by construction — kind:'single' pin).
+    const starColor = sys.star?.color || [1, 0.9, 0.7];
+    const starR = Math.max(6, Math.min(16, (sys.star?.radiusSolar || 1) * 5));
+    const starP = project(0, 0, 0);
+    const grad = ctx.createRadialGradient(starP.x, starP.y, 0, starP.x, starP.y, starR * 3);
+    grad.addColorStop(0, `rgba(${Math.round(starColor[0] * 255)},${Math.round(starColor[1] * 255)},${Math.round(starColor[2] * 255)},0.3)`);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(starP.x, starP.y, starR * 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgb(${Math.round(starColor[0] * 255)},${Math.round(starColor[1] * 255)},${Math.round(starColor[2] * 255)})`;
+    ctx.beginPath(); ctx.arc(starP.x, starP.y, starR, 0, Math.PI * 2); ctx.fill();
+
+    // Planets at their payload orbits + labels (one _labelRects entry per label).
+    const planetColors = {
+      'rocky': '#a09080', 'terrestrial': '#4a8a4a', 'ocean': '#3060b0',
+      'ice': '#b0c8e0', 'lava': '#d04020', 'venus': '#c0a050',
+      'gas-giant': '#c09060', 'hot-jupiter': '#e06030', 'sub-neptune': '#5090c0',
+      'carbon': '#606060', 'volcanic': '#b03010', 'eyeball': '#80a0c0',
+    };
+    ctx.font = '9px "DotGothic16", monospace';
+    for (let i = 0; i < planets.length; i++) {
+      const p = planets[i];
+      const r = auToScreen(p.orbitRadiusAU);
+      const angle = p.orbitAngle || 0;
+      const sp = project(Math.cos(angle) * r, 0, Math.sin(angle) * r);
+      const pd = p.planetData || {};
+      const baseR = Math.max(3, Math.min(10, 3 + Math.log2(Math.max(0.5, pd.radiusEarth || 1)) * 2.5));
+      ctx.fillStyle = planetColors[pd.type] || '#808080';
+      ctx.beginPath(); ctx.arc(sp.x, sp.y, baseR, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(sp.x, sp.y, baseR, 0, Math.PI * 2); ctx.stroke();
+
+      const label = p.name || (p.letter && view.componentName
+        ? `${view.componentName} ${p.letter}` : `P${i + 1}`);
+      ctx.fillStyle = p.known ? 'rgba(120, 200, 255, 0.75)' : 'rgba(255,255,255,0.4)';
+      ctx.textAlign = 'center';
+      const labelY = sp.y + baseR + 12;
+      ctx.fillText(label, sp.x, labelY);
+      const labelW = ctx.measureText(label).width;
+      this._labelRects.push({ x: sp.x - labelW / 2, y: labelY - 8, w: labelW, h: 10, name: label });
+    }
+
+    // ── Footer: view-only affordance ──
+    ctx.font = '8px "DotGothic16", monospace';
+    ctx.fillStyle = 'rgba(150, 175, 215, 0.55)';
+    ctx.textAlign = 'center';
+    ctx.fillText('VIEW ONLY · ESC TO GO BACK', w / 2, drawH - 8);
     ctx.textAlign = 'left';
   }
 
@@ -3757,6 +3899,32 @@ export class NavComputer {
           // Foreign system planet detail: click returns to system (info only)
           this._systemMode = 'system';
           return;
+        }
+      }
+
+      // Component sub-view: click returns to system (info only — the drill-in
+      // is a VIEW; travel is Increment B's, mirroring the foreign planet-detail
+      // return above).
+      if (this._systemMode === 'component') {
+        this._systemMode = 'system';
+        this._selectedComponentIdx = -1;
+        this._componentView = null;
+        return;
+      }
+
+      // Far-companion chip → component drill-in (AC5 entry a). Guarded by the
+      // matching componentSystems payload: a system carrying farCompanions but
+      // no components (pre-substrate data) keeps today's hover-only chip.
+      if (this._farChipRects) {
+        for (const r of this._farChipRects) {
+          if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
+            if (this._systemData?.componentSystems?.[r.index]) {
+              if (this._onSound) this._onSound('select');
+              this._selectedComponentIdx = r.index;
+              this._systemMode = 'component';
+            }
+            return;
+          }
         }
       }
 

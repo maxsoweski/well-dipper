@@ -61,7 +61,13 @@ export function buildFarCompanionChips(farCompanions, opts = {}) {
   const chips = [];
   let y = top;
 
-  for (const fc of farCompanions || []) {
+  // Indexed loop: each descriptor carries its SOURCE index into farCompanions
+  // (the component drill-in keys componentSystems[idx] off it, 1:1 by
+  // emission). A falsy slot is skipped, so a chip-position counter would
+  // desync from the source array — the explicit carry closes that.
+  const src = farCompanions || [];
+  for (let i = 0; i < src.length; i++) {
+    const fc = src[i];
     if (!fc) continue;
     const name = fc.name || 'Unknown';
     const type = fc.type || null;
@@ -87,6 +93,7 @@ export function buildFarCompanionChips(farCompanions, opts = {}) {
     chips.push({
       name,
       type,
+      index: i,
       fullClass: fc.class || null,
       separationAU: fc.separationAU ?? null,
       color: colorForType ? colorForType(type) : null,

@@ -108,6 +108,17 @@ describe('buildFarCompanionChips — content + geometry (pure)', () => {
     expect(chips[0].color).toBe('#ffc480'); // K swatch
   });
 
+  it('carries the SOURCE index on each descriptor — falsy slots skipped without desync (AC5 drill key)', () => {
+    // The component drill-in keys componentSystems[idx] off the chip's SOURCE
+    // index into farCompanions (1:1 by emission). A falsy far entry is skipped
+    // by the chip loop, so a position-based counter would desync; the
+    // descriptor must carry the source index explicitly.
+    const chips = buildFarCompanionChips([null, PROXIMA, undefined, OPH_C], opts());
+    expect(chips.map((c) => c.index)).toEqual([1, 3]);
+    // The plain 1:1 case keys identically.
+    expect(buildFarCompanionChips([PROXIMA, OPH_C], opts()).map((c) => c.index)).toEqual([0, 1]);
+  });
+
   it('no far companions: absent or empty → zero chips, no geometry', () => {
     expect(buildFarCompanionChips(undefined, opts())).toEqual([]);
     expect(buildFarCompanionChips([], opts())).toEqual([]);
