@@ -1,0 +1,93 @@
+{
+  "workstream": "orrery-entry-orbits-2026-07-20",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "statusNote": "Scoped 2026-07-20 (lane B, post round-2c interview). Pins: ONE workstream for the triplet; skip driver = dev iteration speed (blunt OK); D-hold skips logos+title both modes, HELM-skip preserves normal post-boot semantics; zoom-in arrival on ALL ORRERY entry paths; orbit rule = screen-space, all orbits together, outermost-planet anchor vs star rendered-glow disc, short fade; spawn just beyond that threshold (~1s zoom, UAT-tuned). B5-B7 of orrery-coherence-2026-07-15 run at the same UAT sitting; both ship together (one Rule-3 pass, one real merge, one push/deploy). Awaiting greenlight.",
+  "phase": "Successor to orrery-coherence-2026-07-15 (UAT round 2c PASSED 2026-07-20; that contract holds at verified until the shared UAT sitting). Amends shipped AC2's arrival PRESENTATION (approach becomes far-spawn zoom-in) — the overview destination frame (1.8x outer orbit, pitch 0.7, maxDistance 3x, _syncOrbitsToMode) is unchanged. Ready seams verified at scope: chooser buttons #splash-mode-orrery/#splash-mode-helm via wirePick (main.js ~:2784); _enterSystemInstantOrrery (~:6452) -> _frameSystemForOrrery (~:6371); ShipCameraSystem two-phase AIM/APPROACH glide machinery (802cceb) = candidate carrier for the scripted zoom-in; orbit layer _syncOrbitsToMode (~:7358) / _applyOrbitVisibility / creation ~:4566-4700 / _orbitsUserOverride. NO explicit camera-distance orbit fade exists today — first build step reproduces and locates the actual vanish mechanism (pixel coverage of thin lines vs retroRenderer/downsample) before designing the fix. GUARDRAILS: sibling B (autopilot-depart-2026-07-15) owns pilot motion — SC_TUNING + SupercruiseModel/SupercruisePilot/AutoNavigator/tourStandoff/NavComputer byte-identical vs 8f1d8e8; HELM behavior unchanged; center-then-fly glide (802cceb) untouched.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-dhold-boot-skip",
+      "statement": "Holding D while clicking either chooser button (ORRERY or HELM) boots straight into Sol in the chosen mode — no intro logos, no title sequence; D-hold + mode click is the last interaction before you're in the system. Without D held, the normal boot ceremony is byte-for-byte today's.",
+      "verifyVia": {
+        "input": "Reload the app; hold D; click #splash-mode-orrery (then repeat for #splash-mode-helm). Control run: same clicks without D held.",
+        "observable": "With D: Sol is the active system in the chosen mode and the logo/title sequence never displays after the click. Without D: logos, title, and normal post-choice boot flow appear unchanged.",
+        "live": true
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC2-skip-preserves-mode-semantics",
+      "statement": "The skip removes ceremony, never mode semantics: HELM-skip ends in the normal HELM post-boot state (landed, screensaver-tour arming, boot-aware regime reads incl. the e23050b boot-window behavior); ORRERY-skip arrives with nothing flying (orrery-coherence no-auto-warp/no-flight invariants hold) via the AC4 zoom-in arrival.",
+      "verifyVia": {
+        "input": "D-hold skip into each mode; read the same regime/arming probes a normal boot is verified with (window._regime(), tour-arm state, _effectiveRegime-dependent behavior).",
+        "observable": "HELM-skip probe values match a normal HELM boot's post-boot twin; ORRERY-skip shows no self-flight or auto-warp within the observation window and lands at the AC4 overview end-state.",
+        "live": true
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC3-entry-geometry-rules",
+      "statement": "The screen-space geometry lives in pure, TDD-built functions: (a) an orbit-visibility factor implementing the ratified rule — all planet orbits share one factor that reaches 1 when the outermost planet's screen offset clears the star's rendered glow disc, with a short fade band, honoring the user orbit toggle and regime gate; (b) an arrival spawn-distance rule placing the spawn just beyond the factor-zero point (star billboard, no planets distinct), respecting the existing wide-binary framing clamp.",
+      "verifyVia": {
+        "input": "Headless Vitest over the new pure functions with fixtures spanning Sol-like, tight, and wide-binary systems plus varying glow clamp / FOV / viewport values.",
+        "observable": "Factor is 1 inside the threshold, 0 beyond the fade band, monotonic across it; user-toggle-off and HELM regime force 0; spawn distance always lands in the factor-zero zone and inside the wide-binary clamp; suite green.",
+        "live": false
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC4-zoom-in-arrival",
+      "statement": "Every ORRERY system entry arrives via zoom IN, not out: nav warp, bg-star+Space warp, instant-cut viewSystem, and the D-hold boot skip all start at the far spawn (star rendered as billboard, no planets distinct, no orbit lines) and glide quickly (~1s, tunable) in to the existing overview frame with orbits visible at the end. No entry path retains the teleport-then-zoom-out arrival. The overview destination frame is unchanged from shipped orrery-coherence AC2.",
+      "verifyVia": {
+        "input": "Drive each of the four entry paths on :5173 via chrome-devtools; sample camera distance and star/planet/orbit visibility at arrival start, mid-glide, and settle.",
+        "observable": "On every path: initial camera distance is at/beyond the AC3 spawn rule with no orbit lines rendered; distance decreases monotonically to the overview frame; orbits fade in during approach and are fully visible at settle; settle framing matches the pre-existing overview (same frame parameters as shipped AC2).",
+        "live": true
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC5-orbit-visibility-threshold",
+      "statement": "The premature orbit vanish is gone: orbit lines are visibly rendered at every camera distance from the overview out to the AC3 threshold, fade out smoothly across the short band when zooming out past it, and fade back in when returning. The user orbit toggle still wins at any distance, and HELM orbit behavior is unchanged.",
+      "verifyVia": {
+        "input": "From the overview in ORRERY, step the camera outward through a distance ladder to beyond the threshold and back; repeat with the orbit toggle off; check a HELM session for unchanged behavior.",
+        "observable": "Pixel-level orbit-line presence at every ladder rung inside the threshold (the vanish distance Max hit is now inside the visible range); opacity ramps only within the fade band; toggle-off shows no orbit lines anywhere; HELM matches today.",
+        "live": true
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC6-entry-grammar-coheres-uat",
+      "statement": "The triplet coheres as one ORRERY entry grammar from Max's view: D-hold boot into both modes feels like a clean fast path; warping between systems in ORRERY reads as arriving INTO the system (billboard star -> zoom -> overview with orbits); orbits are visible wherever he expects them while zooming freely. Same sitting also runs the orrery-coherence B5-B7 HELM blocks (recorded in THAT contract).",
+      "verifyVia": {
+        "input": "Max drives: D-hold boots (both modes), several ORRERY warps across systems, free zoom in/out around the threshold.",
+        "observable": "Max's holistic acceptance in his words.",
+        "live": true
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "Boot chooser wirePick handlers (#splash-mode-orrery / #splash-mode-helm, main.js ~:2784) + intro-logo/title boot pipeline + _pendingBootReveal branch",
+      "_enterSystemInstantOrrery (main.js ~:6452) -> _frameSystemForOrrery (~:6371) — today's instant-cut arrival this WS amends",
+      "ShipCameraSystem two-phase AIM/APPROACH glide machinery (802cceb) — candidate carrier for the scripted far-spawn zoom-in",
+      "Star glow billboard LOD (clamped minimum screen size) — the denominator of the screen-space visibility rule",
+      "Orbit-line layer: creation (main.js ~:4566-4700), _applyOrbitVisibility, _syncOrbitsToMode (~:7358), _orbitsUserOverride, hover opacity (~:10961)",
+      "retroRenderer/downsample pipeline — prime suspect for today's vanish; first build step reproduces and locates the mechanism"
+    ],
+    "outputs": [
+      "One consistent ORRERY entry grammar (far spawn -> zoom-in -> overview) across all four entry paths, incl. the new dev boot-skip",
+      "A system-level orbit-visibility factor lane D's nav/deep-sky rendering can inherit",
+      "D-hold skip as the standing fast path into Sol for Max and agent drives"
+    ],
+    "mustStayWorking": [
+      "Mode-ownership invariants: HELM boot screensaver arming, F/Z semantics, nothing flies in ORRERY, boot-aware _effectiveRegime (e23050b)",
+      "orrery-coherence shipped surfaces: no-auto-warps-in-ORRERY, nav-dispatch-during-warp stash, click-1/click-2 center-then-fly glide (802cceb) untouched, overview destination frame",
+      "Normal boot ceremony without D held (logos, title, chooser) byte-for-byte",
+      "SC_TUNING + byte-guards EMPTY vs 8f1d8e8: SupercruiseModel.js, SupercruisePilot.js, AutoNavigator.js, tourStandoff.js, NavComputer.js",
+      "Flight+auto+camera suite green (433/433 at e8023a5) + build green",
+      "User orbit toggle semantics + HELM orbit regime behavior"
+    ]
+  }
+}
