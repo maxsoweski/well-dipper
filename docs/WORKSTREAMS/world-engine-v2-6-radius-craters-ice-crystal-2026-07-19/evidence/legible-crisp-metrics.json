@@ -1,0 +1,11 @@
+{
+  "meshN": 40000,
+  "cfNonzero": 33435,
+  "cfPct": 83.59,
+  "nAnalytic": 2137278.228296118,
+  "nStamp": 147,
+  "coveragePct": 42.86,
+  "heightSource": "carrier",
+  "pixelScale": 1,
+  "levels": 10
+}

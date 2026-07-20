@@ -1,0 +1,18 @@
+[debug] [vite] connecting...
+[debug] [vite] connected.
+
+=== REROLL SESSION ===
+[debug] [vite] connecting...
+[debug] [vite] connected.
+
+=== LEGIBLE-CRISP SESSION ===
+[debug] [vite] connecting...
+[debug] [vite] connected.
+
+=== LEGIBLE-DISK SESSION ===
+[debug] [vite] connecting...
+[debug] [vite] connected.
+
+=== AB-CLEAN SESSION ===
+[debug] [vite] connecting...
+[debug] [vite] connected.

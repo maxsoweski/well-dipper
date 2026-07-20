@@ -1,0 +1,202 @@
+{
+  "archetypeRolls": {
+    "Frozen (airless)": {
+      "sequence": [
+        0.57315,
+        0.74597,
+        0.81933,
+        1.17129,
+        0.9271,
+        0.62162
+      ],
+      "distinct": 6,
+      "min": 0.57315,
+      "max": 1.17129
+    },
+    "Rocky (Earthlike)": {
+      "sequence": [
+        0.91272,
+        0.98831,
+        1.01952,
+        1.19921,
+        1.01284,
+        0.94134
+      ],
+      "distinct": 6,
+      "min": 0.91272,
+      "max": 1.19921
+    },
+    "Crystal (faceted)": {
+      "sequence": [
+        0.6253,
+        0.70325,
+        0.4743,
+        0.33354,
+        0.76487,
+        0.65921
+      ],
+      "distinct": 6,
+      "min": 0.33354,
+      "max": 0.76487
+    }
+  },
+  "namedBodies": {
+    "Moon/Mercury (impact-airless)": {
+      "canonicalAfterSetPreset": 0.38,
+      "rollsRadius": [
+        0.38,
+        0.38,
+        0.38,
+        0.38
+      ],
+      "allEqualCanonical": true
+    },
+    "Mars (arid rocky)": {
+      "canonicalAfterSetPreset": 0.53,
+      "rollsRadius": [
+        0.53,
+        0.53,
+        0.53,
+        0.53
+      ],
+      "allEqualCanonical": true
+    },
+    "Magma (K2-141b)": {
+      "canonicalAfterSetPreset": 1.5,
+      "rollsRadius": [
+        1.5,
+        1.5,
+        1.5,
+        1.5
+      ],
+      "allEqualCanonical": true
+    },
+    "Hot Jupiter (locked giant)": {
+      "canonicalAfterSetPreset": 13,
+      "rollsRadius": [
+        13,
+        13,
+        13,
+        13
+      ],
+      "allEqualCanonical": true
+    }
+  },
+  "drawPresetRadiusPure": {
+    "Frozen (airless)": {
+      "seeds": [
+        1,
+        2,
+        7,
+        42,
+        100,
+        999,
+        123456,
+        4294967290
+      ],
+      "radii": [
+        0.42156,
+        0.93876,
+        1.06527,
+        0.48602,
+        0.69426,
+        0.48418,
+        1.14774,
+        0.91851
+      ],
+      "distinct": 8
+    },
+    "Rocky (Earthlike)": {
+      "seeds": [
+        1,
+        2,
+        7,
+        42,
+        100,
+        999,
+        123456,
+        4294967290
+      ],
+      "radii": [
+        0.81886,
+        1.27142,
+        1.38211,
+        0.87527,
+        1.05748,
+        0.87366,
+        1.45428,
+        1.25369
+      ],
+      "distinct": 8
+    },
+    "Moon/Mercury (impact-airless)": {
+      "seeds": [
+        1,
+        2,
+        7,
+        42,
+        100,
+        999,
+        123456,
+        4294967290
+      ],
+      "radii": [
+        0.38,
+        0.38,
+        0.38,
+        0.38,
+        0.38,
+        0.38,
+        0.38,
+        0.38
+      ],
+      "distinct": 1
+    },
+    "Mars (arid rocky)": {
+      "seeds": [
+        1,
+        2,
+        7,
+        42,
+        100,
+        999,
+        123456,
+        4294967290
+      ],
+      "radii": [
+        0.53,
+        0.53,
+        0.53,
+        0.53,
+        0.53,
+        0.53,
+        0.53,
+        0.53
+      ],
+      "distinct": 1
+    },
+    "Magma (K2-141b)": {
+      "seeds": [
+        1,
+        2,
+        7,
+        42,
+        100,
+        999,
+        123456,
+        4294967290
+      ],
+      "radii": [
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        1.5
+      ],
+      "distinct": 1
+    }
+  }
+}
