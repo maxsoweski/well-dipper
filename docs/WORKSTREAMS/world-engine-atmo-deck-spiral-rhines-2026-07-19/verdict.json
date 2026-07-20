@@ -1,0 +1,84 @@
+{
+  "workstream": "world-engine-atmo-deck-spiral-rhines-2026-07-19",
+  "commit": "0f75413",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC-0",
+      "result": "PASS",
+      "evidence": "Given finding (adversarially reviewed, 1/1 sufficient): dedicated slice suite 56/56 PASS incl. the explicit spine-conformance describe block; grep/source audit confirms driver connectivity, single named consumer (uBandM), and zero new taxonomy keys. Independently re-run by this synthesis pass at HEAD 0f75413 (working tree clean) \u2014 still 56/56.",
+      "adversarialVotes": "1/1 sufficient (as given)"
+    },
+    {
+      "id": "AC-FENCE",
+      "result": "PASS",
+      "evidence": "Independently run at 0f75413: dedicated 'S3 AC-FENCE \u2014 dAdvect untouched' block passes (band-flow [parity] re-pin); golden-hash fence suites (climate-e5 golden -1329854088, storm-e golden 568852786 + phase bank) run clean \u2014 7 fence/golden files, 249/249 tests pass. No source-agent adversarial pass recorded for this AC beyond what BUILD-NOTES documents per-seam ('AC-FENCE re-proof' at S2/S3/S4 gates); direct test-run corroboration only.",
+      "adversarialVotes": "not separately adversarial-reviewed \u2014 direct test-run verification"
+    },
+    {
+      "id": "AC-OFFGATE",
+      "result": "PASS",
+      "evidence": "S4 '[off-gate] zero/null vortices \u21d2 [0,0]' + S3 'off-gate structural' (all deck terms live inside the uStormCount-gated loop) both pass; golden-hash suites (frozen DRIVER_BUNDLES path, which the S1 wire never touches) unchanged, proving pinned-state stormless identity. BUILD-NOTES documents the honest scope caveat: identity is proven on solid presets + gas-with-radius/rotation-pinned-canonical, not free-drawn gas (by design \u2014 S1 intentionally changes drawn-gas band count). Not a defect.",
+      "adversarialVotes": "not separately adversarial-reviewed \u2014 direct test-run + structural-proof verification"
+    },
+    {
+      "id": "AC-STATIC",
+      "result": "PASS",
+      "evidence": "S3 'AC-STATIC \u2014 no uTime/animated-warp path' diff-scoped grep + S4 'F7/AC-STATIC \u2014 dSpiralVec body has no uTime' both pass at 0f75413 (part of the 56/56 dedicated suite).",
+      "adversarialVotes": "not separately adversarial-reviewed \u2014 direct test-run verification"
+    },
+    {
+      "id": "AC-RHINES",
+      "result": "PASS",
+      "evidence": "S1 AC-RHINES describe block (4 tests: gas-leg monotonic span, ice-leg 3-class, \u2265\u00d72 population span, hot-Jupiter M_MIN collapse) all pass. Corroborated live by AC-POP below (drawn population spans 2\u219216 bands, 8\u00d7).",
+      "adversarialVotes": "not separately adversarial-reviewed \u2014 direct test-run verification"
+    },
+    {
+      "id": "AC-ROTDRAW",
+      "result": "PASS",
+      "evidence": "S1 AC-ROTDRAW pure-fn block (5 tests) + the lab-wrapper closure block (8 tests, added at commit 1f72625 specifically to close a gap BUILD-NOTES records as found by 'adversarial verify follow-up') both pass \u2014 13 tests total, all green at 0f75413. This is the one AC with an explicit on-record adversarial finding-and-fix in this workstream's history.",
+      "adversarialVotes": "1 documented adversarial pass (mid-build, seam 1) found + closed the lab-wrapper gap; re-confirmed green post-fix by this synthesis pass"
+    },
+    {
+      "id": "AC-ONECOUNT",
+      "result": "PASS",
+      "evidence": "S1 AC-ONECOUNT block (3 tests: uBandCount absent comment-stripped, jets ladder reads uBandM, both driver-assembly sites wired) passes; matches AC-0's grep confirmation.",
+      "adversarialVotes": "not separately adversarial-reviewed \u2014 direct test-run verification"
+    },
+    {
+      "id": "AC-DECK",
+      "result": "PASS",
+      "evidence": "Live-driven by working-Claude, fresh isolated CDP context, :5178, HEAD 64ce6a9 (ancestor of 0f75413, only doc/evidence commits follow). Fixed-seed pixel probes: mode-0 (Jovian) emboss wave-1 luminance modulation 46.5% of ring mean (3.18x rim ratio) + cold-annulus desat 0.175 vs 0.312 surroundings + blue-shift 0.298 vs 0.268; mode-1 (Neptunian mature+young) interior chroma closer to belt-derived deepBase (0.057/0.020) than to uStormColor (0.094/0.151) on both lifecycle phases. Zero console errors. Deviation: hood interaction correctly excluded from probe (F16-hood, unreachable on drawn population, documented). Evidence: 3 screenshots in evidence/.",
+      "adversarialVotes": "single live-drive pass; no separate adversarial re-drive recorded"
+    },
+    {
+      "id": "AC-SPIRAL",
+      "result": "PASS",
+      "evidence": "Live ON/OFF A/B at identical camera (band field cancels): arms carry entrained band colour (chroma dist 0.049 to bandTint vs 0.193 to stormColor); KH scallop at predicted wavenumber 42, amplitude age-scaled 2.02 (aged) vs 1.09 (young); winding age-directional (annulus RMS 0.451 aged vs 0.332 young). HONEST METHOD LIMITATION (disclosed by the live-drive report, not discovered by this synthesis): exact wrap_visible turn count is not separately pixel-measurable at screenshot resolution \u2014 that quantitative claim rests on the green headless S4 unit proofs (radial-\u0394\u03c8 \u221d ageScalar, 42-lobe count, GLSL\u2194mirror parity), which this synthesis pass independently re-ran and confirmed passing. Also flag for Max: contract literally said 'along a ring'; BUILD-NOTES documents an adjudicated (non-hard-stop) deviation to a radial-transect read instead, reasoning that a fixed-rr ring is measurement-vacuous for this signal (F9) \u2014 worth Max's awareness even though it's pre-adjudicated, not an open question.",
+      "adversarialVotes": "single live-drive pass; wrap-count claim backstopped by headless suite, independently re-run and confirmed by this synthesis pass"
+    },
+    {
+      "id": "AC-POP",
+      "result": "PASS",
+      "evidence": "Storms-off contact sheet across 5 worlds (drawn + 2 pinned extremes): uBandM spans 2\u219216 (8x); drawn Jovian (11) vs drawn Neptunian (2) = 5.5x; fine-striping spectral energy tracks monotonically 5.6\u219278.3 (~14x). All three measures clear the required \u00d72+ bar decisively. Evidence: contact sheet + 5 per-world captures.",
+      "adversarialVotes": "single live-drive pass; no separate adversarial re-drive recorded"
+    },
+    {
+      "id": "AC-ADVECT-REGRESS",
+      "result": "PASS",
+      "evidence": "Stormless Jovian, both canonical-pinned and drawn-unpinned captured. uStormCount=0 in both \u21d2 dSpiral identically 0, all deck terms structurally inert (count-gated). Canonical-pinned uBandM=13 matches pre-change preset-constant path; drawn uBandM=11 differs BY DESIGN (S1 feature, not regression). Whispiness visibly intact. HONEST METHOD LIMITATION (disclosed by the live-drive report): no byte-aligned pixel diff was run because there is no pre-change screenshot in this workstream and the closest prior-workstream reference is a different resolution (2230x1062 vs this run's 2225x1060) \u2014 sub-pixel misregistration against retro dither would manufacture false diffs. Closed instead via the strongest honest available combination: live uStormCount=0 confirmation + canonical-pinned band-count match + visible whispiness + code-level dAdvect byte-identity (band-flow [parity] pins, independently re-confirmed green by this synthesis pass). This is a PASS by rigorous alternate method, not a literal screenshot diff \u2014 worth naming to Max plainly rather than letting 'PASS' imply a pixel-diff happened.",
+      "adversarialVotes": "single live-drive pass; dAdvect byte-identity claim independently re-run and confirmed by this synthesis pass"
+    },
+    {
+      "id": "AC-UAT",
+      "result": "deferred-to-max",
+      "evidence": "Max's sole acceptance gate \u2014 not driven or judged by any agent. What to do: drive :5178 (planet-lod-lab.html) yourself, re-roll several drawn gas giants (Jovian/Saturnian/Neptunian archetypes), and toggle great-spot/storm-train on. What to look at, per the contract's own wording: does the GRS-class storm read as a TOWER over the bands (shaded-relief rim, cold ring, doesn't look flat-painted)? Do dark spots read as HOLES you look into (grey-green deep-deck floor, not a flat blue-tinted disc)? Do you see wound/spiral arms around aged storms with a serrated (scalloped) boundary \u2014 the 'ink diffusing in water' feel you flagged missing on 2026-07-19? Does the band count/striping visibly vary between re-rolled giants (some finely striped, some broad and few bands)? Nothing should read as pasted on top. Two things worth your awareness while you look, both pre-adjudicated as non-blocking by the build process (documented in BUILD-NOTES, not hidden): (1) the spiral-wind live check used a radial read instead of the originally-specified 'ring' read \u2014 same underlying claim, different measurement angle; (2) the dAdvect-regression check couldn't do a literal pixel diff against a pre-change screenshot (viewport size changed between sessions) and was closed by an alternate rigorous method instead."
+    }
+  ],
+  "overall": "Unit PASS (7/7 ACs) + Integration PASS (4/4 ACs, live-driven on :5178) \u2014 UAT deferred to Max. 11 of 12 contract ACs closed at commit 0f75413; AC-UAT is Max's sole holistic-acceptance gate and is not touched by any agent.",
+  "summaryForMax": "Line of sight: this workstream is the direct answer to your 2026-07-19 atmo-expression UAT verdict \u2014 findings 1 ('pasted on top') and 2 ('not seeing ink diffusing in water'), while leaving finding 3 (dAdvect, which you liked) untouched. It ships three mechanisms: a per-fragment deck height so storms occlude/reveal bands instead of painting over them, a static spiral roll-up so band material visibly winds around aged storms, and a fix wiring the Rhines band-count law to each body's actually-drawn radius/rotation (previously it silently always used preset constants, so every re-rolled giant showed the same band count).\n\nVerdict: 11 of 12 contract ACs are closed and green at commit 0f75413 \u2014 all 7 unit ACs (spine conformance, golden-hash fence, off-gate identity, static-no-uTime discipline, the Rhines/rotation wiring, one band count) independently re-run by me and confirmed passing, plus all 4 live-integration ACs (deck compositing, spiral wind, population band-count spread, dAdvect non-regression) already driven on :5178 by working-Claude with real pixel-probe measurements and 17 archived screenshots in evidence/. Full repo suite: 2159/2163 passing, the 4 failures + 5 collection-errors are pre-existing baseline noise in unrelated Known-Objects/Galactic-Features/rendering-smoke files \u2014 I independently re-ran the full suite and confirmed this exact failure set, none touch worldengine/atmo code.\n\nAC-UAT is the only thing left, and it's yours alone \u2014 see the AC-UAT row above for exactly what to drive and look at. Two honest caveats worth knowing before you judge (both pre-adjudicated as non-blocking during the build, not new problems I found): the spiral live-check measured via a radial transect rather than the originally-specified 'ring' shape (same claim, different angle \u2014 a fixed-rr ring is mathematically not a valid way to see this signal); and the dAdvect-regression check couldn't do a literal before/after pixel diff because the browser viewport size differed by a couple pixels between sessions, so it was closed via uStormCount=0 confirmation + canonical band-count match + code-level byte-identity instead of a screenshot diff.\n\nRepo state: worktree /home/ax/projects/well-dipper-atmo, branch feature/world-engine-atmo-3b, HEAD 0f75413, clean working tree, 11 commits ahead of origin (not yet pushed)."
+}
