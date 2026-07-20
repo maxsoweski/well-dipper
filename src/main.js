@@ -22,6 +22,7 @@ import {
   effectiveOuterOrbit,
   starGlowRadiusPx,
   arrivalSpawnDistance,
+  orbitVisibilityFactor,
 } from './camera/orreryEntryGeometry.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
@@ -4116,7 +4117,12 @@ function hitTestOrbits(clientX, clientY, thresholdPx = 8) {
   for (const [mesh, info] of _orbitLineTargets) {
     if (!mesh.visible) continue;
     mesh.updateMatrixWorld(true);
-    const posAttr = mesh.geometry.getAttribute('position');
+    // orrery-entry-orbits-2026-07-20 AC5: orbit meshes are now OrbitRingSDF quads
+    // (4 corner verts) — walking their geometry would collapse hit-testing to 4
+    // diagonal points. OrbitLine publishes the true ring perimeter on
+    // userData.orbitHitPositions; prefer it. Fall back to geometry for any other
+    // mesh that might land in this map.
+    const posAttr = mesh.userData.orbitHitPositions || mesh.geometry.getAttribute('position');
 
     for (let i = 0; i < posAttr.count; i++) {
       _projVec.set(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
@@ -7527,6 +7533,62 @@ function _syncOrbitsToMode() {
   _applyOrbitVisibility();
 }
 
+// orrery-entry-orbits-2026-07-20 AC5 half (B): per-spawned-system geometry for the
+// orbit-visibility factor — the effective outermost orbit and the star's rendered
+// glow-disc radius (px). Both are system-invariant, so memoize keyed on the current
+// `system` object identity; a system change (new object, or null) auto-invalidates
+// (no per-spawn reset needed). Mirrors _beginOrreryArrivalZoom's inputs exactly.
+let _orbitFactorCache = null; // { system, effOuter, glowPx }
+function _orbitFactorGeom() {
+  if (_orbitFactorCache && _orbitFactorCache.system === system) return _orbitFactorCache;
+  const radii = system.planets
+    .map(p => p.orbitRadiusScene ?? p.orbitRadius)
+    .filter(Number.isFinite);
+  const effOuter = effectiveOuterOrbit(radii);
+  const luminosity = (system.star && Number.isFinite(system.star.data?.luminosity)
+    && system.star.data.luminosity > 0)
+    ? system.star.data.luminosity : 1;
+  const glowPx = starGlowRadiusPx(luminosity);
+  _orbitFactorCache = { system, effOuter, glowPx };
+  return _orbitFactorCache;
+}
+
+// orrery-entry-orbits-2026-07-20 AC5 half (B): push the shared AC3 orbit-visibility
+// factor onto EVERY orbit line (planet + star + moon — the ratified all-together
+// rule), ONCE per frame. In ORRERY the factor is the screen-space ratified rule
+// (outermost ring's offset clears the star glow → 1, short fade band → 0). Outside
+// ORRERY push 1.0: HELM/user-toggle visibility is owned by the `visible` flags via
+// _syncOrbitsToMode, and the factor must never DOUBLE-gate that — hence the constant
+// userOrbitsOff:false / regime:'orrery' inputs to the pure fn (its own gates stay
+// out of the wiring). The factor multiplies alpha orthogonally to hover opacity.
+function _updateOrbitVisibilityFactor() {
+  if (!system || !system.orbitLines) return;
+
+  let factor = 1;
+  if (_effectiveRegime() === 'orrery' && system.planets && system.planets.length > 0) {
+    const { effOuter, glowPx } = _orbitFactorGeom();
+    if (effOuter > 0 && glowPx > 0) {
+      factor = orbitVisibilityFactor({
+        outermostOrbitRadius: effOuter,
+        camDist: cameraController.distance, // distance to the system center/star
+        fovDeg: camera.fov,
+        viewportH: window.innerHeight,
+        starGlowRadiusPx: glowPx,
+        userOrbitsOff: false, // toggle stays with the `visible` flags, not the factor
+        regime: 'orrery',
+      });
+    }
+  }
+
+  for (const line of system.orbitLines) line.setVisibilityFactor(factor);
+  if (system.starOrbitLines) {
+    for (const line of system.starOrbitLines) line.setVisibilityFactor(factor);
+  }
+  for (const entry of system.planets) {
+    for (const line of entry.moonOrbitLines) line.setVisibilityFactor(factor);
+  }
+}
+
 function toggleFullscreen() {
   const el = document.documentElement;
   const isFs = document.fullscreenElement || document.webkitFullscreenElement;
@@ -9408,6 +9470,11 @@ function simStep(deltaTime) {
   // camera-origin rebasing, not a near-plane cap.
   camera.near = 1e-9;
   camera.updateProjectionMatrix();
+
+  // orrery-entry-orbits-2026-07-20 AC5 half (B): update the shared orbit-visibility
+  // factor after the camera pose/distance is settled for this frame (post
+  // cameraController.update above) — no-op outside a star system.
+  _updateOrbitVisibilityFactor();
 
   // skyRenderer / lodManager / debugPanel / warpDebugHUD / targetingReticle
   // / systemMap / gravityWell migrated to renderFrame (Phase 3 Group 3A,

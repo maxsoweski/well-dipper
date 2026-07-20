@@ -77,6 +77,13 @@ export class OrbitRingSDF {
         uColor:      { value: new THREE.Vector3(col.r, col.g, col.b) },
         uOpacity:    { value: 0.8 },          // matches OrbitLine's default opacity
         uPixelWidth: { value: pixelWidth },   // constant band width, in render px
+        // orrery-entry-orbits-2026-07-20 AC5 half (B): the LIVE AC3 orbit-visibility
+        // factor. Multiplies the final alpha ORTHOGONALLY to uOpacity (hover) — see
+        // gl_FragColor below. Defaults 1.0 so this uniform is a no-op until main.js
+        // drives it via setVisibilityFactor(); the standalone orbit-lab (which never
+        // calls the setter) renders byte-identically. Additive only — the SDF band
+        // math and the 0.4R grazing cap are untouched.
+        uVisFactor:  { value: 1.0 },
       },
       // Derivatives (fwidth) are core in WebGL2/GLSL-ES-3.0 (this codebase's
       // renderer); this flag makes the shader also valid on a WebGL1 fallback.
@@ -97,6 +104,7 @@ export class OrbitRingSDF {
         uniform vec3  uColor;
         uniform float uOpacity;
         uniform float uPixelWidth;
+        uniform float uVisFactor;
         varying vec3 vLocalPos;
 
         void main() {
@@ -141,7 +149,9 @@ export class OrbitRingSDF {
           // would black out the starfield behind the whole disc.
           if (alpha < 0.01) discard;
 
-          gl_FragColor = vec4(uColor, alpha * uOpacity);
+          // uVisFactor (AC3 shared factor) and uOpacity (hover) multiply into the
+          // final alpha independently — orthogonal channels, per the ratified rule.
+          gl_FragColor = vec4(uColor, alpha * uOpacity * uVisFactor);
         }
       `,
       transparent: true,
@@ -172,6 +182,18 @@ export class OrbitRingSDF {
   /** Match OrbitLine.addTo — add the mesh to a scene/group. */
   addTo(scene) {
     scene.add(this.mesh);
+  }
+
+  /**
+   * orrery-entry-orbits-2026-07-20 AC5 half (B): drive the shared AC3 orbit-
+   * visibility factor. Clamped to [0,1] and pushed into uVisFactor, which the
+   * fragment shader multiplies into the final alpha alongside (and independently
+   * of) the hover-owned uOpacity. main.js computes ONE factor per frame per system
+   * (all orbits together) and calls this on every ring. Defaults to 1 (see uniform).
+   * @param {number} f visibility factor in [0,1] (out-of-range values are clamped)
+   */
+  setVisibilityFactor(f) {
+    this.material.uniforms.uVisFactor.value = Math.min(1, Math.max(0, f));
   }
 
   /** Match OrbitLine.dispose — free GPU resources. */
