@@ -115,7 +115,7 @@ describe('V2-6 AC-ICENESS — condition-derived icy-material fraction + the S3 m
     }
   });
 
-  it('relief.surfaceMaterial is populated on EVERY dispatch path with EXACTLY the S3 keys { iceness, regolithRoughness }', () => {
+  it('relief.surfaceMaterial is populated on EVERY dispatch path with EXACTLY the S4 keys { iceness, crystallizationPotential, regolithRoughness }', () => {
     // Presets spanning the dispatch chain: despun-icy (Frozen), shell-icy (Europa), plate (Rocky), stagnant-lid
     // (Venus), volcanic heat-pipe (Lava), despun-gas (Jovian), dead-lid rocky (Mars), nonzero-low icy (Crystal).
     const presets = [
@@ -126,7 +126,9 @@ describe('V2-6 AC-ICENESS — condition-derived icy-material fraction + the S3 m
       const carrier = makeSphereField(buildIrregularSphere(700, 2));
       const relief = writeBodyRelief(carrier, reliefBundle(name, 1));
       expect(relief.surfaceMaterial, `${name} has a surfaceMaterial channel`).toBeTruthy();
-      expect(Object.keys(relief.surfaceMaterial).sort(), `${name} S3 channel shape`).toEqual(['iceness', 'regolithRoughness']);
+      // S4 restated the channel shape: crystallizationPotential joined the { iceness, regolithRoughness } pair
+      // (Lens L8 — declared in-plan, not a deviation). Full shape coverage lives in worldengine-v2-6-crystal.test.js.
+      expect(Object.keys(relief.surfaceMaterial).sort(), `${name} S4 channel shape`).toEqual(['crystallizationPotential', 'iceness', 'regolithRoughness']);
       expect(typeof relief.surfaceMaterial.iceness, `${name} iceness numeric`).toBe('number');
       expect(typeof relief.surfaceMaterial.regolithRoughness, `${name} regolithRoughness numeric`).toBe('number');
       expect(relief.surfaceMaterial.iceness, `${name} iceness matches icenessOf(cond)`).toBe(icenessOf(condOf(name)));

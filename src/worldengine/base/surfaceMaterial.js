@@ -7,10 +7,10 @@
 // substrings (incl. comments) — so the shadow-audit's blind-writer scan passes by construction, and it never
 // reads a label / archetype / regime / PRESET_ARCHETYPE (AC-0 grep discipline).
 //
-// PHASED BUILD (BUILD-PLAN §1E/§1F, Lens L8): SLICE 2 creates the module with `erosionOf` ONLY (the exposure-age
+// PHASED BUILD (BUILD-PLAN §1E/§1F, Lens L8): SLICE 2 created the module with `erosionOf` ONLY (the exposure-age
 // erosion term bombardment.js's t_exp needs — footnote 13's erosion scalar); `icenessOf` + `deriveSurfaceMaterial`
-// join in SLICE 3; `crystallizationPotential(cond, schedule)` joins in SLICE 4 (schedule passed as an explicit
-// PARAMETER — never an import — so the dependency stays strictly one-way).
+// joined in SLICE 3; `crystallizationPotential(cond, schedule)` joins in SLICE 4 (schedule passed as an explicit
+// PARAMETER — never an import — so the dependency stays strictly one-way, no ESM cycle).
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const smoothstep = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -59,14 +59,73 @@ export function icenessOf(cond) {
   return clamp01(dens * vol * cold);
 }
 
+// ── crystal priors (BUILD-PLAN §1F; SLICE 4). crystallizationPotential = the slow-crystallization endmember
+//    signal: an airless crust that no rain erodes, no tides/heat repave, and few impacts churn keeps a pristine
+//    growing lattice. Pure fn of condition scalars + the PASSED craterSchedule (explicit parameter — this module
+//    imports nothing, so the bombardment dependency stays strictly one-way). N_BOMB_REF pinned by S4's
+//    crystal-scalar.mjs decision-artifact table; the ranking conclusion below is N_BOMB_REF-invariant (clamp01
+//    preserves order). ────────────────────────────────────────────────────────────────────────────────────────
+export const P_AIR_REF   = 0.1;    // bar — above this the surface is no longer airless (crystallization stops)
+export const K_RES_TD    = 1.0;    // tidal-resurfacing weight — high-tide worlds (Europa td≈137) repave the crust
+export const K_RES_TH    = 1.0;    // thermal/young-crust resurfacing weight — a young crust is still re-forming
+export const AGE_RES_REF = 4.5;    // Ga — reference surface age; younger crusts gain a thermal-resurfacing term
+export const N_BOMB_REF  = 1.0e7;  // craterSchedule.nAnalytic count that reads as "fully bombarded" (pinned in
+                                   // crystal-scalar.mjs; Crystal's 9.47e6 ⇒ intensity≈0.95, Moon's 2.14e6 ⇒ ≈0.21)
+
+// airlessnessOf(cond) — 1 on a bare rock (null/zero atmosphere), → 0 once a real atmosphere exists.
+export function airlessnessOf(cond) {
+  const P = cond?.atmosphere?.pressure ?? 0;
+  return 1 - smoothstep(0, P_AIR_REF, P);
+}
+
+// resurfacingRateOf(cond) — [0,1] how fast tides/internal heat repave the crust: a tidal td term (Io/Europa-class
+// worlds repave fast) + a young-crust thermal term (a crust younger than AGE_RES_REF is still forming).
+export function resurfacingRateOf(cond) {
+  const td  = cond?.rawTidalIoRatio ?? 0;
+  const age = cond?.age ?? AGE_RES_REF;
+  const tidal   = K_RES_TD * (td / (1 + td));
+  const thermal = K_RES_TH * clamp01(1 - age / AGE_RES_REF);
+  return clamp01(tidal + thermal);
+}
+
+// bombardmentIntensityOf(schedule) — [0,1] drawn-impact churn from the PASSED craterSchedule.nAnalytic (§1C) — the
+// closed-form drawn-population count. craterSchedule is the explicit parameter (no bombardment import ⇒ no cycle).
+// dN/dg = 0 by design (K_GD removed — AC-GCOUNT); radiusEarth is the impact input that moves this term (nAnalytic
+// ∝ R²), which is why S4's wiring spy perturbs radiusEarth, not gravity (Lens L10).
+export function bombardmentIntensityOf(schedule) {
+  const n = schedule?.nAnalytic ?? 0;
+  return clamp01(n / N_BOMB_REF);
+}
+
+// crystallizationPotential(cond, schedule) — continuous [0,1] slow-crystallization endmember driver. Pure fn of
+// condition scalars + the passed craterSchedule; the four factors are each [0,1] so the product stays [0,1]
+// (continuity AC). A pristine airless crust (airless · un-eroded · un-resurfaced · little-bombarded) reads high;
+// erosion, tides/heat, or heavy impacts each pull it toward 0. A downstream driver like fungal — NOT baked into
+// any carrier array, NOT RNG.
+//   RECORDED FOR ADJUDICATION (BUILD-PLAN §1F / Lens L9): the presets are condition-scalar DEGENERATE where the
+//   old boolean discriminated. The count law N ∝ R²·chronN(age) makes Crystal (R 0.8) the MOST-impacted airless
+//   world, so the honest (1−bombardmentIntensity) term drives Crystal's derived potential BELOW Moon/Frozen —
+//   inverting the old-boolean ranking (Crystal was the sole boolean-TRUE). Carbon derives ≈max while boolean-false.
+//   No condition scalar repairs the split (crystal-scalar.mjs prints the full 18-preset table). S4 ships the scalar
+//   + that decision artifact; the extreme-agreement thresholds + the lab facet-wiring flip are
+//   deferred-to-adjudication — NOT built around.
+export function crystallizationPotential(cond, schedule) {
+  const airlessness = airlessnessOf(cond);
+  const erosion     = erosionOf(cond);
+  const resurf      = resurfacingRateOf(cond);
+  const bombard     = bombardmentIntensityOf(schedule);
+  return clamp01(airlessness * (1 - erosion) * (1 - resurf) * (1 - bombard));
+}
+
 // deriveSurfaceMaterial(cond, schedule) — the material channel returned on relief.surfaceMaterial (a byte-inert
-// return-object field, populated on EVERY dispatch path, drawing no RNG — the relief.figure precedent). SLICE-3
-// SHAPE: exactly { iceness, regolithRoughness } (Lens L8). `crystallizationPotential` joins in SLICE 4 and the
-// shape assert restates there — declared in-plan, not a deviation. `schedule` is the craterSchedule output the
+// return-object field, populated on EVERY dispatch path, drawing no RNG — the relief.figure precedent). SLICE-4
+// SHAPE (restated per Lens L8, declared in-plan not a deviation): exactly
+// { iceness, crystallizationPotential, regolithRoughness }. `schedule` is the craterSchedule output the
 // composition site computes once and passes in (explicit PARAMETER — this module imports nothing, no cycle).
 export function deriveSurfaceMaterial(cond, schedule) {
   return {
     iceness: icenessOf(cond),
+    crystallizationPotential: crystallizationPotential(cond, schedule),
     regolithRoughness: schedule?.regolithRoughness ?? 0,
   };
 }
