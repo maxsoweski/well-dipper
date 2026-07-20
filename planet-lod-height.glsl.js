@@ -1990,6 +1990,44 @@ export const HEIGHT_GLSL = /* glsl */ `
         }
         return sum;
       }
+      // dSpiralVec — the STATIC log-spiral roll-up displacement (atmo-deck-spiral slice S4; BUILD-PLAN §5).
+      // dWake's SIBLING: same east/north tangent frame, same i < uStormCount count-gate (⇒ EXACTLY vec3(0)
+      // when there are no storms — the off-gate identity lever), same uAtmoInk scale. It winds band material
+      // around AGED storms: a log-spiral ψ = thv + W·log(rr+EPS) with W ∝ ageScalar·sign(rot) (older ovals
+      // wind harder), gated to a collar ANNULUS (the core oval stays coherent) and textured by a KH SCALLOP
+      // whose crest leans downstream WITH radius (rate SPIRAL_LEAN, signed by the local flow — F15; a
+      // constant phase would be degenerate with billowPhase). Naming constraint (F7): this body sits inside
+      // the band-flow I_BODIES slice, whose [F1] grep bans ph0/ph1/r0/r1/jetRotY/jetsDisp + uTime — so NO
+      // local here is named r0/r1 and none of the animated-warp path is touched. STATIC: every sample is a
+      // pure function of Nraw + the storm uniforms + the proxy uniforms; no uTime. Faithful transcription of
+      // band-flow.js spiralDisplacement; the SPIRAL_* literals match BAND_SPIRAL EXACTLY (the constant-parity
+      // pattern). Phase-A CANDIDATES — the amplitude freezes at the live A/B read-gate (the orchestrator).
+      vec3 dSpiralVec(vec3 Nraw){
+        const float SPIRAL_WRAP = 2.5, SPIRAL_EPS = 0.08, SPIRAL_AMP = 0.30;                    // mirror parity: band-flow.js BAND_SPIRAL.{WRAP,EPS,AMP}
+        const float SPIRAL_ANN_IN = 0.45, SPIRAL_ANN_PEAK = 0.80, SPIRAL_OUT_LO = 1.35, SPIRAL_OUT_HI = 2.0;  // BAND_SPIRAL.{ANN_IN,ANN_PEAK,ANN_OUT_LO,ANN_OUT_HI}
+        const float SPIRAL_SCAL = 0.35, SPIRAL_LEAN = 0.6, SPIRAL_NB = 42.0;                    // BAND_SPIRAL.{SCAL,LEAN} + derived lobe count NB = max(3, round(2π/0.15))
+        vec3 acc = vec3(0.0);
+        for (int i = 0; i < 8; i++){
+          if (i >= uStormCount) break;                                 // COUNT-gate ⇒ vec3(0) when no storms (the dWake off-gate lever)
+          vec3 c  = uStormPosSize[i].xyz;
+          float R = max(uStormPosSize[i].w, 1.0e-4);
+          vec3 east  = normalize(cross(vec3(0.0, 1.0, 0.0), c));       // SAME tangent frame dWake/stormColTerms build
+          vec3 north = cross(c, east);
+          float de = dot(Nraw, east), dn = dot(Nraw, north);
+          float facing = step(0.0, dot(Nraw, c));                      // near-side only (antipode kill)
+          float rr  = length(vec2(de / uStormParams[i].y, dn)) / R;    // elliptical metric (E-W aspect on the east axis)
+          float thv = atan(dn, de);
+          float W   = SPIRAL_WRAP * uStormAux[i].x * sign(uStormParams[i].x);   // wrap ∝ ageScalar·sign(rot)
+          float psi = thv + W * log(rr + SPIRAL_EPS);                  // the log-spiral phase (winding is RADIAL — F9)
+          float ann = smoothstep(SPIRAL_ANN_IN, SPIRAL_ANN_PEAK, rr) * (1.0 - smoothstep(SPIRAL_OUT_LO, SPIRAL_OUT_HI, rr));
+          float latS = asin(clamp(uStormPosSize[i].y, -1.0, 1.0));     // storm latitude (= centre .y)
+          float flow = sign(bandProxy(latS) - 0.5);                    // downstream sign (the dWake idiom)
+          float scal = 1.0 + SPIRAL_SCAL * sin(SPIRAL_NB * (thv - flow * SPIRAL_LEAN * (rr - SPIRAL_ANN_PEAK)) + uStormAux[i].w);  // KH scallop: crest tilts downstream WITH rr (F15 — rr-coupled lean, not a constant phase)
+          float amp  = uAtmoInk * SPIRAL_AMP * R * ann * scal * facing;
+          acc += (east * (-sin(psi)) + north * cos(psi)) * amp * sign(uStormParams[i].x);
+        }
+        return acc;
+      }
       // ── F24 zonalBandCol (Stage-6 albedo, Bands step 4b — card F24) — the gas-giant
       // visible deck: alternating bright ZONES (anticyclonic upwelling, fresh high
       // condensate) and dark BELTS (cyclonic subsidence, deeper warm cloud showing
@@ -2009,6 +2047,20 @@ export const HEIGHT_GLSL = /* glsl */ `
         // uBandLatPow > 1 widens the equatorial bands and narrows the polar ones
         // (the Cassini-map spacing read) without moving the equator or the poles.
         float latC = sign(trueLat) * pow(abs(trueLat), uBandLatPow);
+        // ── Atmo-deck-spiral slice S4: STATIC log-spiral roll-up domain offset (BUILD-PLAN §5.3) ──
+        // dSpiralVec (dWake's sibling, count-gated ⇒ vec3(0) with no storms) is consumed through TWO channels,
+        // BOTH branched on uStormCount so the stormless render is BITWISE-identical (AC-OFFGATE): (a) the
+        // meridional component folds into dLat below (band material genuinely winds in), and (b) posD offsets
+        // the 2D domain of the pigment warp samples (the primary warp r + the V-α.1 filament) so the arms
+        // carry entrained band colour. posD is derived from the RECEIVED pos — off-gate: LITERAL pos (bitwise);
+        // storms-on: the stormSwirl-ROTATED domain this function already receives, re-projected onto the
+        // length(pos) shell (F1/F8 — rebuilding from un-swirled Nraw would strip the shipped F27 swirl, and an
+        // unbranched normalize(vPos)·length(vPos) is not bitwise vPos). The slice-J jag KEEPS un-displaced pos
+        // (F3 — its literal pos*7.0 is band-flow [parity]-pinned; the jag rides the dLat-deflected bandVal, so
+        // band edges still wind). STATIC: dSp is a pure function of Nraw + the storm uniforms (no uTime).
+        vec3 dSp   = dSpiralVec(Nraw);                                  // ≡ vec3(0) when uStormCount==0
+        vec3 NrawD = (uStormCount > 0) ? normalize(Nraw + dSp) : Nraw;  // meridional (dLat) channel — BRANCH, ulp-exact off-gate
+        vec3 posD  = (uStormCount > 0) ? normalize(pos / length(pos) + dSp) * length(pos) : pos;  // pigment domain: swirled pos + spiral, or LITERAL pos off-gate (F1/F8)
         // recursive domain warp (research doc q/r recipe — THE bands→fluid trick),
         // now via bandWarpField() (vertically-compressed domain, fixed 4 octaves,
         // fwBase 0 ⇒ no LOD fade): r rides on q, so band edges scallop and festoon
@@ -2024,11 +2076,11 @@ export const HEIGHT_GLSL = /* glsl */ `
           float ph0 = fract(uTime * 0.04);
           float ph1 = fract(uTime * 0.04 + 0.5);
           float w   = abs(2.0 * ph0 - 1.0);
-          float r0  = bandWarpField(jetRotY(pos, u * uJetSpeed * (ph0 - 0.5)));
-          float r1  = bandWarpField(jetRotY(pos, u * uJetSpeed * (ph1 - 0.5)));
+          float r0  = bandWarpField(jetRotY(posD, u * uJetSpeed * (ph0 - 0.5)));   // posD: slice-S4 spiral domain offset (dWake sibling)
+          float r1  = bandWarpField(jetRotY(posD, u * uJetSpeed * (ph1 - 0.5)));
           r = mix(r0, r1, w);
         } else {
-          r = bandWarpField(pos);
+          r = bandWarpField(posD);                                       // posD: slice-S4 spiral domain offset (≡ pos off-gate)
         }
         // ── E5 #3a (AC10): the band VALUE is the writer's per-vertex bandNorm (wBand) — NOT an inline
         // latitude ladder. wBand already encodes the driver-organized jet COUNT (Rhines), the SIGNED
@@ -2049,7 +2101,7 @@ export const HEIGHT_GLSL = /* glsl */ `
         // function of Nraw + baked fields + per-seed uniforms — no uTime (F1). bandProxy READS the proxy uniforms
         // and ADDS to the LOCAL bandVal; it never writes aBand ⇒ GOLDEN_BANDFIELD_HASH frozen by construction.
         float latRaw = asin(clamp(Nraw.y, -1.0, 1.0));                 // raw (un-swirled) latitude, radians
-        float dLat   = dAdvect(Nraw, wShear, wBand, wStorm) + dWake(Nraw);   // slice K ink + slice I storm/band interaction; dWake count-gated ⇒ 0 when uStormCount==0
+        float dLat   = dAdvect(Nraw, wShear, wBand, wStorm) + dWake(Nraw) + (asin(clamp(NrawD.y, -1.0, 1.0)) - latRaw);   // slice K ink + slice I wake + slice S4 spiral meridional; APPENDED after dWake(Nraw) (band-flow [wire] substring intact); off-gate NrawD≡Nraw ⇒ this term is EXACTLY 0
         bandVal     += bandProxy(latRaw + dLat) - bandProxy(latRaw);   // deflect the PRIMARY band (non-linear re-sample)
         if (uJetStrength > 0.0) bandVal += uJetStrength * jetsDisp(trueLat, latC, pos) * (0.25 + 0.75 * wShear) * 0.35;
         // ── V-α.1 "ink in water" band-boundary FILAMENTATION (increment 3b, taxonomy 2.1/2.2) ──
@@ -2068,7 +2120,7 @@ export const HEIGHT_GLSL = /* glsl */ `
         // composite band value, which carries the jets-on animated warp and animated jetsDisp; keying
         // on the baked wBand keeps the whole filament amplitude place-once static (designDecision-2).
         float shearMask = wShear * clamp(wStorm, 0.0, 1.0);
-        float fila = bandWarpField(pos * 3.7 + vec3(8.3, -2.9, 5.1));   // fresh STATIC fine warp (time-invariant; not the animated path)
+        float fila = bandWarpField(posD * 3.7 + vec3(8.3, -2.9, 5.1));  // fresh STATIC fine warp on the slice-S4 spiral domain (posD ≡ pos off-gate); filaments entrain into the arms
         float cyclonic = clamp((0.5 - wBand) * 2.0, 0.0, 1.0);         // 1 deep belt (cyclonic) … 0 zone (anticyclonic); wBand=static baked field
         float ffr = 0.55 + 0.45 * cyclonic;                            // belts filament harder than zones (FFR asymmetry)
         bandVal += uBandWarp * 0.14 * shearMask * ffr * fila * (1.0 - uHazeMute);   // ink-in-water distortion, shear×mask gated; V-β.4 haze veil mutes amplitude (taxonomy §1.2; uHazeMute 0 ⇒ identity)

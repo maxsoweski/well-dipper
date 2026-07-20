@@ -14,8 +14,12 @@ import {
 } from '../src/worldengine/base/climate-e5.js';
 import {
   giantDriverScalars, drawRotationHours, tidalLockRotationHours, ROTATION_RANGES_HOURS,
+  drawGiantConditions, deriveGiantDrivers, canonicalGiantCondition, SWEEP_SEEDS,
 } from '../src/worldengine/base/giant-drivers.js';
 import { resolveStormE, STORM_DECK } from '../src/worldengine/base/storm-e.js';
+import {
+  BAND_SPIRAL, SPIRAL_NB, bandProxy, spiralDisplacement, spiralWrapProfile,
+} from '../src/worldengine/base/band-flow.js';
 
 // ── comment-stripped source text (the house K_CODE/I_CODE pattern) ─────────────────────────────────
 const src = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
@@ -402,5 +406,165 @@ describe('S3 AC-FENCE — dAdvect (the LIKED layer) is untouched', () => {
     expect(GLSL_CODE).toContain('dAdvect(Nraw, wShear, wBand, wStorm) + dWake(Nraw)');
     expect(GLSL_CODE).toContain('INK_FREQ = 2.2');
     expect(GLSL_CODE).toContain('bandProxy(latRaw + dLat) - bandProxy(latRaw)');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// Slice S4 — dSPIRAL STATIC ROLL-UP (AC-SPIRAL enablement; footnote 19). BAND_SPIRAL mirror (radial-Δψ
+// wrap — F9; rr-coupled LEAN — F15; envelope ×(1+SCAL) — F-env) + dSpiralVec (I_BODIES naming constraint
+// — F7) consumed through BRANCHED NrawD/posD derived from the received pos (F1/F8; jag excluded — F3).
+// The numeric truth lives in the band-flow mirror (no GPU in vitest); the GLSL is a faithful STRUCTURAL
+// transcription pinned by the constant-parity substrings. Live radial-transect reads are the ORCHESTRATOR's.
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+
+// per-seed lab-path P (derived D-slots + bundle rotationRate/radius — the band-flow / calibrate idiom)
+const seedP = (regime, seed) => {
+  const bundle = DRIVER_BUNDLES[regime];
+  const d = deriveGiantDrivers(drawGiantConditions(regime, canonicalGiantCondition(regime), seed));
+  const drv = { ...d, rotationRate: bundle.rotationRate, radius: bundle.radius };
+  return { P: resolveParams(regime, drv, seed), drv };
+};
+// synthetic single vortex on the lon=0 meridian at a chosen latitude (center is unit by construction)
+const mkVortex = (lat, o = {}) => ({
+  center: [Math.cos(lat), Math.sin(lat), 0], lat, lon: 0,
+  radius: o.radius != null ? o.radius : 0.2, rot: o.rot != null ? o.rot : 1,
+  aspect: o.aspect != null ? o.aspect : 1, mode: o.mode != null ? o.mode : 0,
+  ageScalar: o.age != null ? o.age : 1, billowPhase: o.billowPhase != null ? o.billowPhase : 0.7,
+});
+
+describe('S4 dSpiral mirror — BAND_SPIRAL static log-spiral roll-up props', () => {
+  const { P } = seedP(E5_REGIME.GAS_GIANT, 42);
+  // a latitude that flows east (bandProxy>0.5) and one that flows west (<0.5) — for the F15 sign test
+  const findLat = (want) => { for (let lat = -1.2; lat <= 1.2; lat += 0.02) if (Math.sign(bandProxy(lat, P) - 0.5) === want) return lat; return null; };
+  const latPos = findLat(1), latNeg = findLat(-1);
+
+  it('[NB formula] SPIRAL_NB == max(3, round(2π/LAMBDA_KH)) == 42 (R-invariant lobe count)', () => {
+    expect(SPIRAL_NB).toBe(Math.max(3, Math.round((2 * Math.PI) / BAND_SPIRAL.LAMBDA_KH)));
+    expect(SPIRAL_NB).toBe(42);
+  });
+
+  it('[off-gate] zero / null vortices ⇒ exactly [0, 0] (AC-OFFGATE, the count-gate)', () => {
+    const dir = [0.4, 0.5, 0.766];
+    expect(spiralDisplacement(dir, [], P)).toEqual([0, 0]);
+    expect(spiralDisplacement(dir, null, P)).toEqual([0, 0]);
+  });
+
+  it('[core coherent] rr < ANN_IN ⇒ ~0 displacement (the core oval is not wound)', () => {
+    const prof = spiralWrapProfile(mkVortex(0.3), P);
+    for (const thv of [0, 1.1, 2.5, 4.4]) expect(prof.magAt(0.2, thv)).toBeLessThan(1e-9);
+  });
+
+  it('[wrap radial, F9] Δψ across two radii on one azimuth == W·Δln(rr+EPS); ∝ ageScalar (monotone)', () => {
+    const thv = 0.6, rr1 = 1.0, rr2 = 1.5;
+    const dpsi = (age) => { const p = spiralWrapProfile(mkVortex(0.3, { age }), P); return p.psiAt(rr2, thv) - p.psiAt(rr1, thv); };
+    const p1 = spiralWrapProfile(mkVortex(0.3, { age: 1 }), P);
+    expect(dpsi(1)).toBeCloseTo(p1.deltaPsiPredicted(rr1, rr2), 6);    // Δψ = W·Δln (thv cancels)
+    // ∝ ageScalar: age 1 winds exactly twice as far as age 0.5; both nonzero, monotone
+    expect(Math.abs(dpsi(1))).toBeGreaterThan(Math.abs(dpsi(0.5)));
+    expect(dpsi(1) / dpsi(0.5)).toBeCloseTo(2, 5);
+    expect(dpsi(0)).toBeCloseTo(0, 9);                                 // age 0 ⇒ W 0 ⇒ no wind
+  });
+
+  it('[lobe count] the annulus scallop shows exactly SPIRAL_NB (42) lobes around a ring', () => {
+    const prof = spiralWrapProfile(mkVortex(0.3), P);
+    const M = 4200, mags = [];
+    for (let k = 0; k < M; k++) mags.push(prof.magAt(BAND_SPIRAL.ANN_PEAK, (2 * Math.PI * k) / M));
+    let peaks = 0;
+    for (let k = 0; k < M; k++) { const a = mags[(k - 1 + M) % M], b = mags[k], c = mags[(k + 1) % M]; if (b > a && b > c) peaks++; }
+    expect(peaks).toBe(SPIRAL_NB);
+  });
+
+  it('[lobe lean, F15] the crest azimuth shifts with radius at rate LEAN, signed by the local flow', () => {
+    expect(latPos).not.toBeNull(); expect(latNeg).not.toBeNull();
+    const predicted = BAND_SPIRAL.LEAN * (BAND_SPIRAL.ANN_OUT_LO - BAND_SPIRAL.ANN_PEAK);   // 0.6·0.55 = 0.33
+    const profP = spiralWrapProfile(mkVortex(latPos), P);
+    const shiftP = profP.crestShift(BAND_SPIRAL.ANN_PEAK, BAND_SPIRAL.ANN_OUT_LO);
+    expect(profP.flow).toBe(1);
+    expect(Math.abs(shiftP)).toBeGreaterThan(0.1);                    // non-degenerate (a constant phase ⇒ 0 shift)
+    expect(Math.abs(Math.abs(shiftP) - predicted)).toBeLessThan(0.03);
+    expect(Math.sign(shiftP)).toBe(profP.flow);
+    // opposite flow ⇒ opposite lean (the flow-sign dependence is OBSERVABLE, not laundered into billowPhase)
+    const profN = spiralWrapProfile(mkVortex(latNeg), P);
+    const shiftN = profN.crestShift(BAND_SPIRAL.ANN_PEAK, BAND_SPIRAL.ANN_OUT_LO);
+    expect(profN.flow).toBe(-1);
+    expect(Math.sign(shiftN)).toBe(profN.flow);
+    expect(Math.sign(shiftN)).not.toBe(Math.sign(shiftP));
+  });
+
+  it('[envelope, F-env] |displacement| ≤ AMP·R·(1+SCAL)·ink (the scallop peaks at 1+SCAL)', () => {
+    const R = 0.2, ink = 1, bound = BAND_SPIRAL.AMP * R * (1 + BAND_SPIRAL.SCAL) * ink;
+    const prof = spiralWrapProfile(mkVortex(0.3, { radius: R }), P, { ink });
+    let mx = 0;
+    for (let rr = BAND_SPIRAL.ANN_IN; rr <= BAND_SPIRAL.ANN_OUT_HI; rr += 0.02)
+      for (let t = 0; t < 2 * Math.PI; t += Math.PI / 60) mx = Math.max(mx, prof.magAt(rr, t));
+    expect(mx).toBeLessThanOrEqual(bound + 1e-9);
+    expect(mx).toBeGreaterThan(0.5 * bound);                          // and the bound is actually approached (not a vacuous pass)
+  });
+
+  it('[static/determinism] same inputs ⇒ byte-equal displacement (pure, no uTime / no rng)', () => {
+    const dir = [0.9, 0.29, 0.31], v = [mkVortex(0.3)];
+    expect(spiralDisplacement(dir, v, P)).toEqual(spiralDisplacement(dir, v, P));
+    // and it is a REAL displacement in the annulus (not trivially zero)
+    const prof = spiralWrapProfile(mkVortex(0.3), P);
+    expect(prof.magAt(BAND_SPIRAL.ANN_PEAK, 0.9)).toBeGreaterThan(0);
+  });
+
+  it('[real primary] a resolved storm primary winds age-dependently (uses the shipped storm record)', () => {
+    for (const seed of [1, 42, 1234]) {
+      const { P: Pg, drv } = seedP(E5_REGIME.GAS_GIANT, seed);
+      const rec = resolveStormE(E5_REGIME.GAS_GIANT, { ...drv, composition: 'h2-he' }, seed, 1234);
+      expect(rec.primary).toBeTruthy();
+      const prof = spiralWrapProfile(rec.primary, Pg, { ink: 1 });
+      const wv = prof.wrapVisibleOver(BAND_SPIRAL.ANN_IN, BAND_SPIRAL.ANN_OUT_HI);
+      expect(wv).toBeGreaterThanOrEqual(0);
+      expect(wv).toBeLessThan(1);                                     // never more than a full turn at these candidates
+    }
+  });
+});
+
+describe('S4 dSpiral GLSL ↔ mirror constant parity + consumption wiring', () => {
+  it('[parity] dSpiralVec carries the SAME BAND_SPIRAL constants as the mirror (a drift on either side fails)', () => {
+    expect(BAND_SPIRAL.WRAP).toBe(2.5);      expect(GLSL_CODE).toContain('SPIRAL_WRAP = 2.5');
+    expect(BAND_SPIRAL.EPS).toBe(0.08);      expect(GLSL_CODE).toContain('SPIRAL_EPS = 0.08');
+    expect(BAND_SPIRAL.AMP).toBe(0.30);      expect(GLSL_CODE).toContain('SPIRAL_AMP = 0.30');
+    expect(BAND_SPIRAL.ANN_IN).toBe(0.45);   expect(GLSL_CODE).toContain('SPIRAL_ANN_IN = 0.45');
+    expect(BAND_SPIRAL.ANN_PEAK).toBe(0.80); expect(GLSL_CODE).toContain('SPIRAL_ANN_PEAK = 0.80');
+    expect(BAND_SPIRAL.ANN_OUT_LO).toBe(1.35); expect(GLSL_CODE).toContain('SPIRAL_OUT_LO = 1.35');
+    expect(BAND_SPIRAL.ANN_OUT_HI).toBe(2.0);  expect(GLSL_CODE).toContain('SPIRAL_OUT_HI = 2.0');
+    expect(BAND_SPIRAL.SCAL).toBe(0.35);     expect(GLSL_CODE).toContain('SPIRAL_SCAL = 0.35');
+    expect(BAND_SPIRAL.LEAN).toBe(0.6);      expect(GLSL_CODE).toContain('SPIRAL_LEAN = 0.6');
+    expect(SPIRAL_NB).toBe(42);              expect(GLSL_CODE).toContain('SPIRAL_NB = 42.0');
+  });
+
+  it('[wire] dSpiralVec is dWake\'s sibling — count-gated, same tangent frame, derived flow, uAtmoInk-scaled', () => {
+    const body = fnBody(GLSL_CODE, 'vec3 dSpiralVec(vec3 Nraw)');
+    expect(body).toContain('if (i >= uStormCount) break;');
+    expect(body).toContain('normalize(cross(vec3(0.0, 1.0, 0.0), c))');
+    expect(body).toContain('sign(bandProxy(latS) - 0.5)');
+    expect(body).toContain('W * log(rr + SPIRAL_EPS)');              // the log-spiral phase
+    expect(body).toContain('uStormAux[i].x');                        // ageScalar drives wrap
+    expect(body).toContain('uStormAux[i].w');                        // billowPhase drives the scallop
+    expect(body).toContain('uAtmoInk');
+  });
+
+  it('[consumption] posD/NrawD branch on uStormCount (bitwise off-gate) + the dLat meridional append', () => {
+    expect(GLSL_CODE).toContain('vec3 dSp   = dSpiralVec(Nraw);');
+    expect(GLSL_CODE).toContain('(uStormCount > 0) ? normalize(Nraw + dSp) : Nraw');
+    expect(GLSL_CODE).toContain('normalize(pos / length(pos) + dSp) * length(pos) : pos');
+    // the meridional term is APPENDED after dWake(Nraw) — the band-flow [wire] substring stays contained
+    expect(GLSL_CODE).toContain('dAdvect(Nraw, wShear, wBand, wStorm) + dWake(Nraw) + (asin(clamp(NrawD.y, -1.0, 1.0)) - latRaw)');
+  });
+
+  it('[pigment, F3] the primary warp + filament ride posD; the slice-J jag KEEPS un-displaced pos', () => {
+    expect(GLSL_CODE).toContain('bandWarpField(posD)');                              // jets-off primary warp
+    expect(GLSL_CODE).toContain('jetRotY(posD, u * uJetSpeed * (ph0 - 0.5))');       // jets-on primary warp
+    expect(GLSL_CODE).toContain('bandWarpField(posD * 3.7 + vec3(8.3, -2.9, 5.1))'); // filament entrains
+    expect(GLSL_CODE).toContain('bandWarpField(pos * 7.0 + vec3(-5.9, 2.2, 8.8))');  // jag pinned to pos (F3, band-flow [parity])
+  });
+
+  it('[F7 / AC-STATIC] the dSpiralVec body has no uTime / banned identifiers (I_BODIES naming constraint)', () => {
+    const body = fnBody(GLSL_CODE, 'vec3 dSpiralVec(vec3 Nraw)');
+    expect(body).not.toMatch(/uTime/);
+    expect(body).not.toMatch(/\b(ph0|ph1|r0|r1|jetRotY|jetsDisp)\b/);
   });
 });

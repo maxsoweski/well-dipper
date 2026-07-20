@@ -318,3 +318,91 @@ frequency. Hood interaction NOT probed (F16-hood — unreachable on the drawn po
   v2-3 dispatch oracle, v2-0-byte-identity 75 goldens): green.
 - Full suite failed-SET unchanged from baseline: 4 failed (KnownObjects ×3 + GalacticFeatures
   ×1) + 5 collection-error env-noise files. Not grown.
+
+---
+
+## S4 — dSPIRAL STATIC ROLL-UP (AC-SPIRAL enablement) (seam 4)
+
+**What it does (plain language):** aged storms now genuinely wind the band material around
+themselves. `dSpiralVec` is `dWake`'s sibling — same tangent frame, same `i >= uStormCount`
+count-gate, same `uAtmoInk` scale — a STATIC log-spiral displacement `ψ = thv + W·log(rr+EPS)`
+with `W ∝ ageScalar·sign(rot)` (older, faster-spun ovals wind harder), confined to a collar
+ANNULUS (the core oval stays a coherent oval, it does not smear) and textured by a
+Kelvin-Helmholtz SCALLOP whose 42 lobes lean downstream WITH radius (rate `SPIRAL_LEAN`, signed
+by the local zonal flow). The single displacement is consumed through TWO channels: (a) its
+meridional component folds into the existing `dLat → bandProxy` deflection so band latitude
+genuinely winds in; (b) `posD` offsets the 2D domain of the pigment warp samples (the primary
+`bandWarpField` warp + the V-α.1 filament) so the spiral arms carry entrained band colour.
+
+**Intent:** close AC-SPIRAL's enablement — visible band winding around an aged storm, ∝ its age,
+readable along a RADIAL transect (F9 — a fixed-radius ring shows one cycle for every wrap count
+and measures nothing). Keep the stormless render BITWISE-identical (both `NrawD` and `posD` branch
+to their literal inputs when `uStormCount == 0`) and the whole term STATIC (no `uTime`). The
+amplitude constants are Phase-A CANDIDATES; the live freeze belongs to the orchestrating session.
+
+**Deliberate non-goals (this slice):**
+- No `dAdvect` edit (the LIKED layer) — its internal samples keep `Nraw`; no relief/dispatch/
+  writer contact; no golden-fixture contact; no new uniform/attribute/`*Enabled`/GUI control.
+  S4 touches ONLY `band-flow.js` (a SEPARATE `BAND_SPIRAL` export — `BAND_FLOW` pins untouched),
+  `planet-lod-height.glsl.js` (`dSpiralVec` + the `zonalBandCol` head), and `tools/`.
+- The slice-J jag KEEPS un-displaced `pos` (F3): its literal `pos * 7.0` is band-flow
+  `[parity]`-pinned, and the jag rides the dLat-deflected `bandVal` so band edges still wind.
+- No lab edit: `dSpiralVec` reads uniforms already carried by S1/S2 (`uStormAux`, `uStormPosSize`,
+  `uStormParams`, `uStormCount`, `uAtmoInk`) + the existing `bandProxy`.
+
+### New / changed symbols (`src/worldengine/base/band-flow.js` — separate `BAND_SPIRAL` export)
+
+| Symbol | Kind | Function | Intent / non-goal |
+|---|---|---|---|
+| `BAND_SPIRAL` | frozen export | Phase-A candidates: `WRAP 2.5 / EPS 0.08 / AMP 0.30 / ANN_IN 0.45 / ANN_PEAK 0.80 / ANN_OUT_LO 1.35 / ANN_OUT_HI 2.0 / LAMBDA_KH 0.15 / SCAL 0.35 / LEAN 0.6` | NOT folded into `BAND_FLOW` (whose `[candidates]`/`[parity]` tests deep-pin it + `dAdvect`); the GLSL `SPIRAL_*` literals transcribe these |
+| `SPIRAL_NB` | derived export | `max(3, round(2π/LAMBDA_KH)) = 42` | the R-invariant KH lobe count (λ_KH ∝ R cancels — adjudicable §9) |
+| `spiralDisplacement(dir, vortices, P, {ink})` | pure export | `[dE, dN]` tangential displacement summed per-vortex-frame; `ψ = thv + W·log(rr+EPS)`, KH scallop on the annulus | the GLSL `dSpiralVec` numeric truth; zero/empty vortices ⇒ `[0,0]` (count-gate) |
+| `spiralWrapProfile(vortex, P, opts)` | estimator export | frame-exact `dirAt/dispAt/magAt/psiAt`, `wrapVisibleOver`, `crestShift` — single-sourced test+calibrate | the `wakeReachProfile` pattern (no measure drift between suite and tool) |
+| `spiralMeridional(dir, vortices, P, {ink})` | estimator export | the GLSL channel-(a) `Δlat = asin(NrawD.y) − asin(dir.y)` | single-sources the dWake+dSpiral superposition-envelope analysis (F17) |
+
+### New / changed symbols (`planet-lod-height.glsl.js` — `dSpiralVec` + `zonalBandCol` head)
+
+| Symbol | Kind | Function | Intent / non-goal |
+|---|---|---|---|
+| `dSpiralVec(vec3 Nraw)` | new GLSL fn | the log-spiral world-tangent displacement; `SPIRAL_*` consts mirror `BAND_SPIRAL` | sits in the band-flow `I_BODIES` slice ⇒ NO `r0/r1/ph0/ph1/jetRotY/jetsDisp` locals + no `uTime` (F7 naming constraint) |
+| `dSp / NrawD / posD` | `zonalBandCol` head | `dSp = dSpiralVec(Nraw)`; `NrawD`/`posD` BRANCH on `uStormCount>0`, literal `Nraw`/`pos` off-gate | F1/F8: `posD` is the RECEIVED (stormSwirl-rotated) `pos` re-projected onto the `length(pos)` shell, NOT rebuilt from `Nraw`; both channels bitwise off-gate |
+| `dLat` meridional append | `zonalBandCol` | `+ (asin(clamp(NrawD.y,-1,1)) - latRaw)` APPENDED after `+ dWake(Nraw)` | keeps the band-flow `[wire]` substring `dAdvect(...) + dWake(Nraw)` contained; off-gate `NrawD≡Nraw` ⇒ term exactly 0 |
+| primary warp `r` + `fila` | `zonalBandCol` | now sample `posD` (jets-off `bandWarpField(posD)`, jets-on `jetRotY(posD,…)`, filament `bandWarpField(posD*3.7+…)`) | the pigment 2D-domain channel (b); jag stays `pos` (F3) |
+
+### F1/F8 — why `posD` is derived from `pos`, branched (blocker-class, avoided)
+
+Storms-ON, the `pos` `zonalBandCol` receives is the stormSwirl-ROTATED domain (`bandPos =
+stormSwirl(normalize(vPos))·length(vPos)`); rebuilding `posD` from the un-swirled `Nraw` would
+silently strip the shipped F27 embedded swirl from every pigment sample. Storms-OFF,
+`normalize(vPos)·length(vPos)` is NOT bitwise `vPos` (normalize+rescale rounding), so an unbranched
+`posD` flips posterize/dither pixels and breaks AC-OFFGATE. The branch takes LITERAL `pos`
+off-gate and the normalize-compose form (samples stay on the `length(pos)` shell, the stormSwirl
+idiom) storms-on.
+
+### AC-SPIRAL live probe recipe (ORCHESTRATOR closes on `:5178`)
+
+RADIAL-transect read (F9 — NOT a ring): sample band latitude along a radial from an aged storm
+over `rr ∈ [1.05, 2.0]` (outside stormSwirl's ≤1R support + dWake's bow core, so the age signal is
+attributable — F17). Visible winding matches `wrap_visible = W·Δln(rr+EPS)/2π` (calibrate: global
+`[0.007, 0.542]` turns, ≈0.54 at WRAP 2.5 / age 1) and is ∝ ageScalar across two ages; lobe count
+== 42-formula; entrained band colour in the arms. Contract wording says "along a ring" — the
+radial read is the faithful closer of its intent (adjudicable §9).
+
+### Calibrate (`tools/deck-spiral-calibrate.mjs`, writes no source)
+
+Reports over Jovian/Saturnian/Neptunian × SWEEP_SEEDS: (i) `wrap_visible` distribution
+(global `[0.007, 0.542]` turns); (ii) `|dSpiral|` amplitude within the `AMP·R·(1+SCAL)·ink` bound
+(F-env — within on every seed); (iii) the combined `|dWake + dSpiral|` meridional envelope vs
+`π/uBandM` (F17) — NO population corner exceeds it ⇒ candidates SAFE at Phase-A.
+
+### Gate at seam 4
+
+- Increment file (S1+S2+S3+S4 blocks) + band-flow: green (S4 adds the mirror props — off-gate,
+  core-coherent, radial-Δψ wrap ∝ ageScalar, 42-lobe count, rr-coupled flow-signed lean, envelope
+  bound, determinism — plus the GLSL↔mirror constant parity, the branched-consumption wiring, the
+  jag-excluded pigment pins, and the F7/AC-STATIC dSpiralVec-body grep).
+- Fast fence (climate-e5 golden `-1329854088`, emission-e, storm-e golden `568852786` + phase
+  bank + `[envelope]`, band-flow `[parity]` dAdvect/dWake pins, giant-drivers, planet-archetypes,
+  v2-3 dispatch oracle, v2-0-byte-identity 75 goldens): green.
+- Full suite failed-SET unchanged from baseline: 4 failed (KnownObjects ×3 + GalacticFeatures ×1)
+  + 5 collection-error env-noise files. Not grown.

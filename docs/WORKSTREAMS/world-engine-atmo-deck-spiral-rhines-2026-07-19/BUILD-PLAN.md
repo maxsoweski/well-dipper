@@ -825,3 +825,18 @@ trigger class from §9 and the BUILD-NOTES cross-ref)*
    into the hood, matching §4.1's "tower pops above / hole dims with it" prose. Marginal by F16-hood
    (`hood` ≈ 0 at every storm core population-wide ⇒ the multiply is ≡ 1.0 today), excluded from the
    AC-DECK probe recipe. Cross-ref: BUILD-NOTES §S3 hoodExposure reachability.
+5. **[S4, ADJUDICABLE §9] estimator helpers `spiralWrapProfile` / `spiralMeridional` +
+   `SPIRAL_NB` export added to `band-flow.js`.** §5.1 specifies `BAND_SPIRAL` + `spiralDisplacement`;
+   the radial-Δψ wrap prop (F9), the 42-lobe count, the rr-coupled flow-signed lean (F15), and the
+   calibrate superposition envelope (F17) need a frame-exact `(rr, thv)` sampler + the channel-(a)
+   meridional deflection. Added as pure estimator exports (the `wakeReachProfile` precedent — single
+   source of truth so the unit test and `deck-spiral-calibrate.mjs` measure the SAME quantity), plus
+   `SPIRAL_NB = max(3, round(2π/LAMBDA_KH)) = 42` as a derived export. They write no source, draw no
+   rng, and are disjoint from `BAND_FLOW`'s pinned values — zero fence contact. Cross-ref:
+   BUILD-NOTES §S4 "New / changed symbols (band-flow.js)".
+6. **[S4, ADJUDICABLE §9 — candidate magnitudes] `BAND_SPIRAL.*` are Phase-A candidates.** WRAP/AMP/
+   SCAL/LEAN/annulus edges are measured-safe at Phase-A (`deck-spiral-calibrate.mjs`: wrap_visible
+   ≤ 0.542 turns, amplitude within the `AMP·R·(1+SCAL)` bound, no envelope corner exceeds `π/uBandM`)
+   but the live amplitude freeze belongs to the orchestrating session — same bucket as `EMB_K`/
+   `COLLAR_K`/`WISP_K`. The AC-SPIRAL live read is a RADIAL transect + `wrap_visible`, not the
+   contract's literal "along a ring" (F9 — the ring read is measurement-vacuous). Surface at UAT.

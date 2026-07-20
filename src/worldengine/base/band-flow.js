@@ -98,6 +98,26 @@ export const BAND_FLOW_DEFAULTS = Object.freeze({
   // uBandRough default is per-seed (drawBandRoughness); GUI 0..2, touched-flag override in the lab
 });
 
+// ── BAND_SPIRAL (Phase-A candidates; dSpiral static log-spiral roll-up, atmo-deck-spiral slice S4) ────
+// A SEPARATE frozen export — NOT folded into BAND_FLOW, whose [candidates]/[parity] tests deep-pin its
+// values and dAdvect's GLSL body (which S4 never touches). dSpiral is dWake's sibling: same tangent frame,
+// same count-gate, same uAtmoInk scale — a STATIC displacement that winds band material around AGED storms.
+// The numeric truth lives here (spiralDisplacement); the GLSL dSpiralVec transcribes these constants with a
+// [parity]-style substring test. STATIC place-once: no uTime; the only per-storm variety is the already-drawn
+// ageScalar (wrap strength) + billowPhase (KH scallop azimuth) — no new alea draw in this module.
+export const BAND_SPIRAL = Object.freeze({
+  WRAP: 2.5,        // wrap count at ageScalar=1 (W = WRAP·age·sign(rot)); winding manifests RADIALLY (F9)
+  EPS: 0.08,        // log(rr+EPS) core regularizer (keeps ψ finite as rr→0)
+  AMP: 0.30,        // tangential displacement amplitude × R × uAtmoInk
+  ANN_IN: 0.45, ANN_PEAK: 0.80, ANN_OUT_LO: 1.35, ANN_OUT_HI: 2.0,  // collar annulus (core oval stays coherent)
+  LAMBDA_KH: 0.15,  // billow wavelength × R ⇒ NB = max(3, round(2π/0.15)) = 42 (R cancels — the R-invariant lobe count)
+  SCAL: 0.35,       // scallop amplitude on the annulus (scal ∈ [1−SCAL, 1+SCAL] = [0.65, 1.35], always > 0)
+  LEAN: 0.6,        // downstream lean RATE of the lobes: rad of azimuthal crest shift per unit rr, signed by
+                    // local flow (F15 — a CONSTANT phase would be degenerate with billowPhase, a silent no-op)
+});
+// the derived KH lobe count on the annulus (R-invariant because λ_KH ∝ R cancels; adjudicable §9)
+export const SPIRAL_NB = Math.max(3, Math.round((2 * Math.PI) / BAND_SPIRAL.LAMBDA_KH));   // = 42
+
 // mirror of storm-e's MASK_FLOOR (STORM_PHYS.MASK_FLOOR = 0.06). Duplicated as a LOCAL const to honor the
 // atmo import fence (band-flow imports climate-e5 READ-ONLY only; it does NOT import storm-e). Used only
 // as the self-contained default gas-deck mask baseline when a caller does not pass wStorm.
@@ -392,4 +412,127 @@ export function wakeReachProfile(vortex, P, opts = {}) {
     if (x > 0.3 && dl >= thresh) reachDsR = x;   // last ds/R (past the near-core) where the wake still reads
   }
   return { bowPeak, bowPeakBandWidths: bowPeak / bandWidth, reachDsR, dsMax, dsAt, profile };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// dSPIRAL (slice S4) — the STATIC log-spiral roll-up mirror + its estimators. Numeric truth for the GLSL
+// dSpiralVec (planet-lod-height.glsl.js), the dWake sibling. vitest has no GPU, so this is the faithful
+// CPU transcription; the GLSL carries the SAME BAND_SPIRAL constants (the constant-parity pattern).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// spiralDisplacement(dir, vortices, P, {ink}) — the tangential displacement summed over vortices, returned
+// as the [dE, dN] components in EACH vortex's own (east, north) tangent frame (the GLSL sums the world
+// vectors east·dE + north·dN). For a SINGLE vortex — the case every direction-based prop uses — [dE, dN]
+// is exact; the magnitude equals `amp` (the unit (−sinψ, cosψ) rotor × |sign(rot)|). Zero/empty vortices
+// ⇒ [0, 0] (the count-gate / AC-OFFGATE). ψ = thv + W·log(rr+EPS), W = WRAP·ageScalar·sign(rot); a KH
+// scallop `scal` (NB lobes, crest leaning downstream WITH rr at rate LEAN·flow — F15) modulates the
+// magnitude on the annulus. STATIC: pure function of dir + the vortex records + P (no uTime, no rng).
+export function spiralDisplacement(dir, vortices, P, opts = {}) {
+  const ink = opts.ink != null ? opts.ink : BAND_FLOW_DEFAULTS.uAtmoInk;
+  if (!vortices || vortices.length === 0) return [0, 0];
+  let accE = 0, accN = 0;
+  const n = Math.min(vortices.length, 8);
+  for (let i = 0; i < n; i++) {
+    const v = vortices[i];
+    const c = v.center;
+    const R = Math.max(v.radius || 0.1, 1e-4);
+    const aspect = v.aspect || 1;
+    const rot = v.rot || 1, s = Math.sign(rot) || 1;
+    const age = v.ageScalar != null ? v.ageScalar : (v.age != null ? v.age : 0);
+    const billowPhase = v.billowPhase || 0;
+    // storm tangent frame (the SAME east/north dWake/stormColTerms/dSpiralVec build): east = normalize(cross(up, c))
+    let ex0 = c[2], ex1 = 0, ex2 = -c[0];
+    const exLen = Math.max(Math.hypot(ex0, ex1, ex2), 1e-4); ex0 /= exLen; ex1 /= exLen; ex2 /= exLen;
+    const north0 = c[1] * ex2 - c[2] * ex1, north1 = c[2] * ex0 - c[0] * ex2, north2 = c[0] * ex1 - c[1] * ex0;
+    const de = dir[0] * ex0 + dir[1] * ex1 + dir[2] * ex2;
+    const dn = dir[0] * north0 + dir[1] * north1 + dir[2] * north2;
+    const facing = (dir[0] * c[0] + dir[1] * c[1] + dir[2] * c[2]) >= 0 ? 1 : 0;
+    const rr = Math.hypot(de / aspect, dn) / R;
+    const thv = Math.atan2(dn, de);
+    const W = BAND_SPIRAL.WRAP * age * s;                                  // wrap ∝ ageScalar·sign(rot)
+    const psi = thv + W * Math.log(rr + BAND_SPIRAL.EPS);
+    const ann = smoothstep(BAND_SPIRAL.ANN_IN, BAND_SPIRAL.ANN_PEAK, rr)
+              * (1 - smoothstep(BAND_SPIRAL.ANN_OUT_LO, BAND_SPIRAL.ANN_OUT_HI, rr));
+    const latS = Math.asin(clamp(-1, 1, c[1]));
+    const flow = Math.sign(bandProxy(latS, P) - 0.5) || 1;                 // downstream sign (the dWake idiom)
+    const scal = 1 + BAND_SPIRAL.SCAL
+      * Math.sin(SPIRAL_NB * (thv - flow * BAND_SPIRAL.LEAN * (rr - BAND_SPIRAL.ANN_PEAK)) + billowPhase);
+    const amp = ink * BAND_SPIRAL.AMP * R * ann * scal * facing;
+    accE += (-Math.sin(psi)) * amp * s;
+    accN += (Math.cos(psi)) * amp * s;
+  }
+  return [accE, accN];
+}
+
+// spiralWrapProfile(vortex, P, opts) — SINGLE-source estimator for the S4 props (the wakeReachProfile
+// pattern, so the unit test + calibrate tool measure the SAME quantity). Builds the vortex frame once and
+// offers: dirAt(rr, thv) — an EXACT unit dir at storm-frame (rr, thv) via the orthonormal (c, east, north)
+// basis; dispAt/magAt — the displacement + its magnitude there; psiAt — the spiral phase ψ RECOVERED from
+// the displacement DIRECTION (ψ = atan2(−dE·s, dN·s)); wrapVisibleOver(rr1,rr2) = |W·Δln(rr+EPS)|/2π (the
+// ON-SCREEN turn count the live radial read counts — F9, NOT the vacuous ring cycle); crestShift(rrFrom,
+// rrTo) — the continuously-TRACKED azimuthal shift of ONE lobe crest between two radii (unaliased: 42
+// lobes leaning 0.33 rad aliases any per-lobe read, so a single crest is followed in small rr steps).
+export function spiralWrapProfile(vortex, P, opts = {}) {
+  const ink = opts.ink != null ? opts.ink : BAND_FLOW_DEFAULTS.uAtmoInk;
+  const c = vortex.center, R = Math.max(vortex.radius || 0.1, 1e-4);
+  const aspect = vortex.aspect || 1, rot = vortex.rot || 1, s = Math.sign(rot) || 1;
+  const age = vortex.ageScalar != null ? vortex.ageScalar : (vortex.age != null ? vortex.age : 0);
+  let ex0 = c[2], ex1 = 0, ex2 = -c[0];
+  const exLen = Math.max(Math.hypot(ex0, ex1, ex2), 1e-4); ex0 /= exLen; ex1 /= exLen; ex2 /= exLen;
+  const n0 = c[1] * ex2 - c[2] * ex1, n1 = c[2] * ex0 - c[0] * ex2, n2 = c[0] * ex1 - c[1] * ex0;
+  const latS = Math.asin(clamp(-1, 1, c[1]));
+  const flow = Math.sign(bandProxy(latS, P) - 0.5) || 1;
+  const W = BAND_SPIRAL.WRAP * age * s;
+  // exact (rr, thv) → unit dir: de = rr·R·aspect·cos(thv), dn = rr·R·sin(thv) ⇒ rr/thv recovered exactly at
+  // aspect=1 (thv distorts by aspect but is rr-INDEPENDENT, so it cancels in every Δ over radii).
+  const dirAt = (rr, thv) => {
+    const de = rr * R * aspect * Math.cos(thv), dn = rr * R * Math.sin(thv);
+    const al = Math.sqrt(Math.max(0, 1 - de * de - dn * dn));
+    return [al * c[0] + de * ex0 + dn * n0, al * c[1] + de * ex1 + dn * n1, al * c[2] + de * ex2 + dn * n2];
+  };
+  const dispAt = (rr, thv) => spiralDisplacement(dirAt(rr, thv), [vortex], P, { ink });
+  const magAt = (rr, thv) => { const [dE, dN] = dispAt(rr, thv); return Math.hypot(dE, dN); };
+  const psiAt = (rr, thv) => { const [dE, dN] = dispAt(rr, thv); return Math.atan2(-dE * s, dN * s); };
+  const dLn = (rr1, rr2) => Math.log(rr2 + BAND_SPIRAL.EPS) - Math.log(rr1 + BAND_SPIRAL.EPS);
+  // continuous single-crest tracking (unaliased): find one crest near thv=0 at rrFrom, follow it in ±half-
+  // lobe windows across small rr steps, return the accumulated azimuthal shift (≈ flow·LEAN·(rrTo−rrFrom)).
+  const period = (2 * Math.PI) / SPIRAL_NB;
+  const argmax = (rr, a, b, K = 129) => {
+    let best = -Infinity, bestT = a;
+    for (let k = 0; k <= K; k++) { const t = a + (b - a) * (k / K); const m = magAt(rr, t); if (m > best) { best = m; bestT = t; } }
+    return bestT;
+  };
+  const crestShift = (rrFrom, rrTo, step = 0.05) => {
+    let thvC = argmax(rrFrom, 0, period);            // the first crest in [0, one period)
+    const thv0 = thvC;
+    for (let rr = rrFrom + step; rr <= rrTo + 1e-9; rr += step) thvC = argmax(rr, thvC - period / 2, thvC + period / 2);
+    return thvC - thv0;
+  };
+  return {
+    dirAt, dispAt, magAt, psiAt, crestShift, W, flow, R,
+    wrapVisibleOver: (rr1, rr2) => Math.abs(W * dLn(rr1, rr2)) / (2 * Math.PI),
+    deltaPsiPredicted: (rr1, rr2) => W * dLn(rr1, rr2),
+  };
+}
+
+// spiralMeridional(dir, vortices, P, {ink}) — the GLSL channel-(a) meridional deflection
+// Δlat = asin(NrawD.y) − asin(dir.y), NrawD = normalize(dir + dSp_world). East has ZERO y-component
+// (east = normalize(c.z, 0, −c.x)), so only the NORTH component of the spiral displacement reaches
+// latitude. This is exactly the term the GLSL folds into dLat; single-sources the dWake+dSpiral
+// superposition-envelope analysis (F17) so the calibrate tool measures the shipped quantity.
+export function spiralMeridional(dir, vortices, P, opts = {}) {
+  const ink = opts.ink != null ? opts.ink : BAND_FLOW_DEFAULTS.uAtmoInk;
+  if (!vortices || vortices.length === 0) return 0;
+  let wx = 0, wy = 0, wz = 0;
+  const n = Math.min(vortices.length, 8);
+  for (let i = 0; i < n; i++) {
+    const [dE, dN] = spiralDisplacement(dir, [vortices[i]], P, { ink });
+    const c = vortices[i].center;
+    let ex0 = c[2], ex1 = 0, ex2 = -c[0];
+    const exLen = Math.max(Math.hypot(ex0, ex1, ex2), 1e-4); ex0 /= exLen; ex1 /= exLen; ex2 /= exLen;
+    const north0 = c[1] * ex2 - c[2] * ex1, north1 = c[2] * ex0 - c[0] * ex2, north2 = c[0] * ex1 - c[1] * ex0;
+    wx += ex0 * dE + north0 * dN; wy += ex1 * dE + north1 * dN; wz += ex2 * dE + north2 * dN;
+  }
+  const nd = Math.hypot(dir[0] + wx, dir[1] + wy, dir[2] + wz) || 1;
+  return Math.asin(clamp(-1, 1, (dir[1] + wy) / nd)) - Math.asin(clamp(-1, 1, dir[1]));
 }
