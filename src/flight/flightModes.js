@@ -212,6 +212,24 @@ export function bootModeAction(mode) {
   return { mode: helm ? 'helm' : 'orrery', enterFlight: helm, startAutopilot: helm };
 }
 
+// The D-HOLD BOOT-SKIP decision (docs/WORKSTREAMS/orrery-entry-orbits-2026-07-20,
+// AC1/AC2). Holding D while clicking a chooser button skips the intro logos +
+// title ceremony and boots STRAIGHT into Sol in the chosen mode; without D held
+// the boot is byte-for-byte today's. This pure reducer pins the DECISION only —
+// "does this click skip, and into which mode?" — so the live _pickBootMode
+// handler (main.js) reads ONE answer instead of re-deriving the D-held + valid-
+// mode branching inline. `skip` is true IFF D is held AND the pick is a REAL
+// chooser mode ('helm'|'orrery' exactly); a garbage/missing pick can never skip.
+// The returned `mode` is normalized through bootModeAction's SAME validation
+// (helm→helm, orrery→orrery, anything else→orrery) so the chosen-mode boot tail
+// keys on exactly the value bootModeAction keys on — a fixed point under it, and
+// never a garbage mode. The skip removes CEREMONY, never mode SEMANTICS. Robust
+// to a missing args object (never throws → skip false, mode orrery).
+export function bootSkipDecision({ dHeld, mode } = {}) {
+  const validMode = mode === 'helm' || mode === 'orrery';
+  return { skip: !!dHeld && validMode, mode: bootModeAction(mode).mode };
+}
+
 // ---------------------------------------------------------------------------
 // Mode-ownership reducers (docs/WORKSTREAMS/mode-ownership-2026-07-02). Max,
 // 2026-07-02 (3rd articulation, standing): "I do not want/need autopilot for

@@ -48,7 +48,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed, bodyCycleAction, burnWorkflowAvailable, burnButtonRegimeVisible, navAutopilotToggleAction, autoWarpTimerFires, systemEntryStyle, tourRearmAllowed, bodyClickAction, navDispatchDuringWarp } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed, bodyCycleAction, burnWorkflowAvailable, burnButtonRegimeVisible, navAutopilotToggleAction, autoWarpTimerFires, systemEntryStyle, tourRearmAllowed, bodyClickAction, navDispatchDuringWarp, bootSkipDecision } from './flight/flightModes.js';
 import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
 import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR, firstBlockingObstacle, planLegObstacle, obstacleKeepOutRadius } from './flight/tourStandoff.js';
 import { createFreeLook } from './flight/freeLook.js';
@@ -2715,7 +2715,83 @@ function _pickBootMode(mode) {
   if (!splashActive) return;
   const decided = mode ?? 'orrery';
   _pendingBootMode = bootModeAction(decided).mode;
+  // D-hold boot skip (orrery-entry-orbits-2026-07-20, AC1/AC2): holding D while
+  // clicking a chooser button boots STRAIGHT to Sol in the chosen mode — no intro
+  // logos, no title. Branching BEFORE startIntroSequence means _titleAutoTimer is
+  // never armed (no double-entry). Without D held, boot is byte-for-byte today's.
+  const _skip = bootSkipDecision({ dHeld: _heldKeys.has('KeyD'), mode });
+  if (_skip.skip) {
+    // Clear the still-held D so it can't bleed into WASD flight after the skip
+    // (mirrors the mode-blind splash D-skip, _handleSplashDismiss).
+    _heldKeys.delete('KeyD');
+    _heldKeys.delete('d');
+    _bootSkipToSol(_skip.mode);
+    return;
+  }
   startIntroSequence(); // hides the chooser, plays the original intro → title → music
+}
+
+// D-hold boot skip target (orrery-entry-orbits-2026-07-20, AC1/AC2). Boots
+// STRAIGHT into Sol in the chosen mode, skipping ALL ceremony (intro logos +
+// title). Mirrors the mode-blind splash D-skip (_handleSplashDismiss) for the
+// hide + Sol spawn, then adds the per-mode boot tail the ceremony path would have
+// reached: HELM → the shared hands-off tour arm (_armHelmBootTour); ORRERY →
+// today's instant framed entry (_frameSystemForOrrery + _syncOrbitsToMode — the
+// same tail _enterSystemInstantOrrery runs). AC4's far-spawn zoom-in arrival will
+// upgrade the ORRERY tail in a later increment — NOT built here. `mode` is the
+// already-normalized 'helm'|'orrery' from bootSkipDecision.
+function _bootSkipToSol(mode) {
+  // Hide the chooser + title outright (mirror _handleSplashDismiss / the
+  // startIntroSequence fallback) — no logos, no title animation.
+  const splash = document.getElementById('splash-screen');
+  if (splash) splash.style.display = 'none';
+  const titleEl = document.getElementById('title-screen');
+  if (titleEl) titleEl.style.display = 'none';
+  splashActive = false;
+  titleScreenActive = false;
+  if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
+
+  // Resolve + generate Sol exactly as the mode-blind D-skip does — spawnSystem
+  // forWarp:false PLUS currentGalaxyStar / _currentSystemName / playerGalacticPos
+  // (without those the nav computer opens to prism view).
+  const solPos = { x: GalacticMap.SOLAR_R, y: GalacticMap.SOLAR_Z, z: 0.0 };
+  const knownSol = KnownSystems.findAt(solPos);
+  if (knownSol) {
+    _debugEnterKnownSystem(knownSol, solPos);
+  } else {
+    console.warn('[BOOT-SKIP] Sol not found in KnownSystems — falling back to random star system');
+    _debugSpawnType('star-system');
+  }
+
+  // Consume the boot flags exactly as the reveal / instant-cut paths do — THIS is
+  // the boot reveal (the ceremony + warp never ran). Stale flags would make every
+  // boot-aware regime read (_effectiveRegime, title-end/linger gates) lie.
+  _pendingBootReveal = false;
+  _pendingBootMode = 'orrery';
+
+  if (mode === 'helm') {
+    // Build the tour queue exactly as warpRevealSystem's star-branch does, then
+    // arm the shared HELM tour. fromWarp:false — an instant spawn has no warp exit
+    // to anchor the ENTRY ship-axis shake, so the tour opens in CRUISE.
+    autoNav.buildQueue(system);
+    populateQueueRefs();
+    let firstStopIdx = autoNav.queue.findIndex(s => s.type === 'star');
+    if (firstStopIdx < 0) firstStopIdx = 0;
+    autoNav.currentIndex = firstStopIdx;
+    _armHelmBootTour({ fromWarp: false });
+    console.log('[BOOT-SKIP] D-hold → straight into Sol, HELM tour (no ceremony)');
+  } else {
+    // ORRERY: today's instant framed entry (the _enterSystemInstantOrrery tail).
+    // Defensive stop mirror of _enterSystemInstantOrrery — inert at a cold boot,
+    // but keeps the skip production-equivalent if anything is ever mid-motion
+    // when the chooser fires (lens-A advisory fold, 2026-07-20).
+    if (flythrough.active) flythrough.stop();
+    if (autoNav.isActive) autoNav.stop();
+    scPilot.stop();
+    _frameSystemForOrrery();
+    _syncOrbitsToMode();
+    console.log('[BOOT-SKIP] D-hold → straight into Sol, ORRERY god\'s-eye (no ceremony)');
+  }
 }
 
 function dismissTitleScreen() {
@@ -6492,6 +6568,45 @@ async function _enterSystemInstantOrrery() {
   }
 }
 
+// Factored HELM boot-tour arm — the hands-off screensaver-tour assertion shared
+// by BOTH the warp reveal (warpRevealSystem, when the splash pick was HELM) and
+// the D-hold boot skip (_bootSkipToSol, orrery-entry-orbits-2026-07-20). Extracted
+// so the two entries land in the IDENTICAL post-boot HELM state: setScManual(true)
+// (the load-bearing anti-stranding bit — omitting it strands the ship), free-look
+// latch ON = hands-off (the only state the autopilot may fly in), FLIGHT camera,
+// zeroed turn input, autopilot tour armed to the first stop. PRECONDITION: the
+// caller has already built the tour queue (autoNav.buildQueue(system) +
+// populateQueueRefs()) and set autoNav.currentIndex to the first stop.
+//   fromWarp — passed straight to shipChoreographer.beginTour. TRUE for the warp
+//   reveal (byte-identical to the pre-factor path: warp-exit is the ENTRY ship-
+//   axis continuity anchor, §10.5). FALSE for the instant boot skip: there is no
+//   warp exit to anchor the ENTRY shake, so the tour opens in CRUISE, exactly as
+//   every other non-warp tour start does (_beginTourLegMotion, idle re-arm).
+function _armHelmBootTour({ fromWarp } = {}) {
+  _autopilotEnabled = true;
+  _seedScPoseFromCameraIfIdle();
+  setScManual(true);
+  cameraController.setCameraMode(CameraMode.FLIGHT);
+  cameraController.bypassed = true;
+  freeLook.enter(); // latch ON = hands-off, the only state the autopilot may fly in
+  scModel.turnInput.yaw = 0;
+  scModel.turnInput.pitch = 0;
+  scModel.turnInput.roll = 0;
+  _applyPointerHud();
+  _updateModeSwapButton();
+
+  autoNav.start();
+  const firstStop = autoNav.getCurrentStop();
+  if (firstStop && firstStop.bodyRef) {
+    _dispatchTourLeg(firstStop, { choreo: null });
+    shipChoreographer.beginTour({ fromWarp: !!fromWarp });
+    updateFocusFromStop(firstStop);
+    if (systemMap) systemMap.triggerBlink();
+  }
+  console.log('Warp: booting into HELM tour, hands-off (splash mode-picker)');
+  _scheduleSystemMusic(20, 35);
+}
+
 /**
  * Warp: reveal the new system and start autopilot.
  * Called when the warp exit phase finishes.
@@ -6583,28 +6698,10 @@ function warpRevealSystem() {
   const _isBootReveal = _pendingBootReveal;
   _pendingBootReveal = false;
   if (_boot.startAutopilot) {
-    _autopilotEnabled = true;
-    _seedScPoseFromCameraIfIdle();
-    setScManual(true);
-    cameraController.setCameraMode(CameraMode.FLIGHT);
-    cameraController.bypassed = true;
-    freeLook.enter(); // latch ON = hands-off, the only state the autopilot may fly in
-    scModel.turnInput.yaw = 0;
-    scModel.turnInput.pitch = 0;
-    scModel.turnInput.roll = 0;
-    _applyPointerHud();
-    _updateModeSwapButton();
-
-    autoNav.start();
-    const firstStop = autoNav.getCurrentStop();
-    if (firstStop && firstStop.bodyRef) {
-      _dispatchTourLeg(firstStop, { choreo: null });
-      shipChoreographer.beginTour({ fromWarp: true });
-      updateFocusFromStop(firstStop);
-      if (systemMap) systemMap.triggerBlink();
-    }
-    console.log('Warp: booting into HELM tour, hands-off (splash mode-picker)');
-    _scheduleSystemMusic(20, 35);
+    // Factored (orrery-entry-orbits-2026-07-20): the HELM boot-tour arm is shared
+    // byte-for-byte with the D-hold boot skip. fromWarp:true keeps THIS (warp)
+    // path identical — warp-exit is the ENTRY ship-axis continuity anchor.
+    _armHelmBootTour({ fromWarp: true });
     return;
   }
 

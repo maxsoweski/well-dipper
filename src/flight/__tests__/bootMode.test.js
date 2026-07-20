@@ -18,7 +18,7 @@
 // starts the screensaver tour hands-off; ORRERY arms nothing, ever. `startAutopilot`
 // pins that second bit alongside `enterFlight`.
 import { describe, it, expect } from 'vitest';
-import { bootModeAction } from '../flightModes.js';
+import { bootModeAction, bootSkipDecision } from '../flightModes.js';
 
 describe('bootModeAction — the splash mode-picker boot decision (pure)', () => {
   it('boot into HELM requests entering flight (live host → _scManual true)', () => {
@@ -61,6 +61,68 @@ describe('bootModeAction — the splash mode-picker boot decision (pure)', () =>
   it('a garbage/missing choice never starts the autopilot either (falls back to ORRERY)', () => {
     for (const bad of [undefined, null, '', 'nonsense', 'HELM ']) {
       expect(bootModeAction(bad).startAutopilot).toBe(false);
+    }
+  });
+});
+
+// The D-HOLD BOOT-SKIP decision (docs/WORKSTREAMS/orrery-entry-orbits-2026-07-20,
+// AC1/AC2). Holding D while clicking a chooser button skips the intro logos +
+// title ceremony and boots STRAIGHT into Sol in the chosen mode; without D the
+// boot is byte-for-byte today's. This pure reducer pins the DECISION only —
+// "does this click skip, and into which mode?" — so the live _pickBootMode
+// handler (main.js) reads ONE answer instead of re-deriving the D-held + valid-
+// mode branching inline. The skip removes CEREMONY, never mode SEMANTICS: the
+// returned `mode` is the same normalized value bootModeAction uses (helm→helm,
+// orrery→orrery, anything else→orrery), so the chosen-mode boot tail is picked
+// by exactly the same key bootModeAction keys on. `skip` is true IFF D is held
+// AND the pick is a real chooser mode; a garbage/missing pick can never skip.
+describe('bootSkipDecision — the D-hold boot-skip decision (pure)', () => {
+  it('D held + HELM → skips, into HELM', () => {
+    expect(bootSkipDecision({ dHeld: true, mode: 'helm' })).toEqual({ skip: true, mode: 'helm' });
+  });
+
+  it('D held + ORRERY → skips, into ORRERY', () => {
+    expect(bootSkipDecision({ dHeld: true, mode: 'orrery' })).toEqual({ skip: true, mode: 'orrery' });
+  });
+
+  it('D NOT held → never skips (normal ceremony), mode still normalized passthrough', () => {
+    // Without D the boot must be untouched, so skip is false for BOTH valid
+    // modes; the mode field is still the normalized passthrough (unused by the
+    // non-skip branch, but kept honest so the field never lies).
+    expect(bootSkipDecision({ dHeld: false, mode: 'helm' })).toEqual({ skip: false, mode: 'helm' });
+    expect(bootSkipDecision({ dHeld: false, mode: 'orrery' })).toEqual({ skip: false, mode: 'orrery' });
+  });
+
+  it('invalid / undefined / missing mode → never skips, never throws (safe fallback to ORRERY)', () => {
+    // A stray value, or D held with no real pick, must never boot-skip; and it
+    // must fall back to the safe ORRERY mode exactly as bootModeAction does.
+    for (const bad of [undefined, null, '', 'nonsense', 'HELM ']) {
+      expect(() => bootSkipDecision({ dHeld: true, mode: bad })).not.toThrow();
+      expect(bootSkipDecision({ dHeld: true, mode: bad })).toEqual({ skip: false, mode: 'orrery' });
+    }
+    // robust to a missing args object entirely (never throws)
+    expect(() => bootSkipDecision()).not.toThrow();
+    expect(bootSkipDecision().skip).toBe(false);
+  });
+
+  it('result mode is NEVER a value bootModeAction would reject (fixed point under its normalization)', () => {
+    // "The skip removes ceremony, never mode semantics": the returned mode must
+    // always be one bootModeAction accepts as-is (helm|orrery) — feeding it back
+    // through bootModeAction is a fixed point — so the chosen-mode tail keys on
+    // exactly the same normalized value, never a garbage mode.
+    const inputs = [
+      { dHeld: true, mode: 'helm' },
+      { dHeld: true, mode: 'orrery' },
+      { dHeld: false, mode: 'helm' },
+      { dHeld: false, mode: 'orrery' },
+      { dHeld: true, mode: 'nonsense' },
+      { dHeld: true, mode: undefined },
+      { dHeld: false, mode: null },
+    ];
+    for (const inp of inputs) {
+      const r = bootSkipDecision(inp);
+      expect(['helm', 'orrery']).toContain(r.mode);
+      expect(bootModeAction(r.mode).mode).toBe(r.mode);
     }
   });
 });
