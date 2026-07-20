@@ -48,6 +48,22 @@ A complete physics-first model was authored up front and is the source of truth:
   (composition, atmosphere, magnetosphere, tidal, `habitabilityScore` as a result of the others).
 If you find yourself asking "is the planet-type/feature model laid out?" — yes, it is, here.
 
+## ⭐ INTENT FRAME — the world engine is a physics simulation (Max, 2026-07-19)
+**The defining intent, in Max's words:** "for terrain and atmosphere features, I want to
+replicate what we've observed in the real world and extrapolate from there based on real
+theories/speculation about what else is out there in the universe." Operationally:
+- **Physics-derivable questions are Claude's to answer, not interview forks for Max.** The
+  scoping algorithm: enumerate the drivers that would physically determine the feature (or the
+  interaction) → figure out the real-world relationships → wire them → proceed. Bring Max only
+  taste/product calls physics cannot resolve, batched.
+- **No defaults.** Presets are dev fixtures / named-body locks. The real object is seed-drawn
+  worlds whose condition vectors come from the generation distributions; calibration and
+  acceptance target the drawn POPULATION, not a hand-tuned boot state.
+- **Driver completeness before UAT** — every relevant driver wired, or explicitly surfaced as
+  unwired, before any UAT ask (`feedback_wire-relevant-drivers-before-uat.md`).
+- Max's gates: greenlight + UAT. Everything between is physics + verification.
+Full rule + provenance: `feedback_physics-first-worldengine-scoping.md` (Claude memory, Rule 12 link).
+
 ## The program (where the arc is going)
 1. **Catalog — ✅ DONE (2026-06-14).** All 47 manifest features re-based on the canonical
    D1–D16 model; `planet-feature-associations.js` declares `processes:[P#]` and DERIVES
@@ -72,4 +88,5 @@ handoff, and `planet-lod-campaign-tracker.md` for which feature is next (▶️ 
   + the tracker's per-feature process lessons (grad-routing, isolation recipe, line-number drift).
 - **Shared working tree** — stage explicit paths only, **never `git add -A`** (warp WIP + loose
   .png/.webm/.html litter the tree).
-- Subagents: `model: opus` (fable unavailable here).
+- Subagents: pin an explicit model on every call; `fable` granted by Max (2026-07-19) for
+  judgment-heavy stages, `opus`/`sonnet` for mechanical ones (`feedback_subagent-model.md`).
