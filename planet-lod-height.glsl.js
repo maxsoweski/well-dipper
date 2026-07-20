@@ -239,6 +239,12 @@ export const HEIGHT_GLSL = /* glsl */ `
       uniform float uFrostNoiseAmp;     // fractal boundary breakup amplitude (× T_eq, K) — lab knob
       uniform float uFrostNoiseScale;   // boundary-breakup noise frequency — lab knob
       uniform vec3  uFrostOffset;       // 🎲 domain offset — default (0,0,0) = unchanged
+      // ── V2-6 S3 iceness material (BUILD-PLAN §1E) — condition-derived icy-material albedo, NOT a frost overlay:
+      //    the BASE ground reads as ice on an icy body (driven by icenessOf(cond) in applyDrivers → uIcenessMix).
+      //    Consumed in Stage-6 surface albedo (pre-frost); uIcenessMix=0 ⇒ bare rock ramp (byte-identical base).
+      //    uFrostAlbedo above is the exact driven-albedo GLSL-declaration precedent. ──
+      uniform float uIcenessMix;        // condition-derived icy-material albedo mix (0 = bare rock ramp)
+      uniform vec3  uIcenessAlbedo;     // icy-surface tint the rock ramp mixes toward (Stage-6, pre-frost)
       // ── Cryo step 3: F22 polar-layered-deposit strata (cap banding — ALBEDO, not relief) ──
       uniform float uPldStrength;       // 0..~0.35 dark-band luminance dip (driven; cap budget × surface-age); ≤0 ⇒ no banding
       uniform float uPldLevels;         // number of annular strata bands (driven constant; lab-tunable)
