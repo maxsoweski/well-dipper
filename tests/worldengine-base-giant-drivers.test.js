@@ -275,10 +275,49 @@ describe('giant-drivers static-source guard', () => {
     expect(CODE).not.toMatch(/uTime/);
   });
 
-  it('[namespaced entropy] every alea() call is in the giantD: namespace (disjoint stream)', () => {
+  // Non-weakening guard EXTENSION (lens fold F6, S1 rotation draw): the whole-module loop widens to
+  // accept the giantD: namespace's TWO disjoint streams (cond + rot), and two per-path slice assertions
+  // re-pin each stream at FULL strength on its own function body — so a cond-stream call silently renamed
+  // `rot:` (or vice-versa) still fails. Intent-preserving: the guard has always pinned "the giantD:
+  // namespace". Balanced-brace body extractor (comment-stripped CODE).
+  const fnBody = (code, name) => {
+    const i = code.indexOf('function ' + name);
+    if (i < 0) return '';
+    const pOpen = code.indexOf('(', i);   // skip the param list first (paren-balanced) — a `= {}` default
+    let pd = 0, j = pOpen;                //   or destructured param brace is NOT the body open
+    for (; j < code.length; j++) {
+      if (code[j] === '(') pd++;
+      else if (code[j] === ')') { pd--; if (pd === 0) { j++; break; } }
+    }
+    const bOpen = code.indexOf('{', j);
+    let bd = 0;
+    for (let k = bOpen; k < code.length; k++) {
+      if (code[k] === '{') bd++;
+      else if (code[k] === '}') { bd--; if (bd === 0) return code.slice(bOpen, k + 1); }
+    }
+    return code.slice(bOpen);
+  };
+
+  it('[namespaced entropy] every alea() call is in the giantD: namespace (cond|rot disjoint streams)', () => {
     const aleas = [...CODE.matchAll(/alea\(([^;]*?)\)/g)];
     expect(aleas.length).toBeGreaterThan(0);
+    for (const m of aleas) expect(m[1]).toMatch(/giantD:(cond|rot):/);   // (i) widened loop
+  });
+
+  it('[namespaced entropy] the condition-vector draw path keeps its giantD:cond: pin at full strength', () => {
+    // (ii) re-pin: slice drawGiantConditions and assert its alea args are STILL exactly giantD:cond:
+    const body = fnBody(CODE, 'drawGiantConditions');
+    const aleas = [...body.matchAll(/alea\(([^;]*?)\)/g)];
+    expect(aleas.length).toBeGreaterThan(0);
     for (const m of aleas) expect(m[1]).toContain('giantD:cond:');
+  });
+
+  it('[namespaced entropy] the rotation draw path uses the giantD:rot: stream (disjoint from cond)', () => {
+    // (iii) new pin: slice drawRotationHours and assert its alea args are giantD:rot:
+    const body = fnBody(CODE, 'drawRotationHours');
+    const aleas = [...body.matchAll(/alea\(([^;]*?)\)/g)];
+    expect(aleas.length).toBeGreaterThan(0);
+    for (const m of aleas) expect(m[1]).toContain('giantD:rot:');
   });
 });
 

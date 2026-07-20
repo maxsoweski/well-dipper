@@ -335,7 +335,6 @@ export function makeUniforms(WORLD_LIGHT) {
       uLobeFreq:        { value: 6.0 },   // F19 tongue seed frequency — lab knob
       uMassWastOffset:  { value: new THREE.Vector3() },   // 🎲 domain offset (GLSL adds a constant decorrelation vec)
       uBandStrength:    { value: 0.0 },   // F24 master gate (driven: 1 on h2-he gas worlds, 0 on solid); <= 0 ⇒ no-op
-      uBandCount:       { value: 8.0 },   // F24 visible stripe count (driven: 12·R/rotationHours, clamped 3..16)
       uBandContrast:    { value: 0.6 },   // F24 zone↔belt luminance separation (driven: T_eq convective-vigor ramp)
       uBandWarp:        { value: 1.8 },   // F24 festoon displacement in stripe units (driven: same vigor ramp)
       uBandTint:        { value: new THREE.Color(0.78, 0.62, 0.44) },  // F24 deck base color (driven: atmosphere.color)

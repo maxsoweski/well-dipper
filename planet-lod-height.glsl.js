@@ -342,7 +342,6 @@ export const HEIGHT_GLSL = /* glsl */ `
       uniform vec3  uMassWastOffset;   // 🎲 domain offset — own lobe seed, decorrelated from craters/karst
       // ── F24 zonal belts & zones (Bands step 4b — card F24) — ALBEDO ONLY, no relief ──
       uniform float uBandStrength;     // 0..1 master gate (driven: 1 on h2-he gas worlds, 0 on every solid preset); <= 0 ⇒ no-op
-      uniform float uBandCount;        // visible stripe count pole-to-pole (driven, Rhines-flavored: D8 spin × disc size)
       uniform float uBandContrast;     // zone↔belt luminance separation (driven: T_eq convective-vigor ramp; cold CH4-haze giants go bland)
       uniform float uBandWarp;         // recursive-domain-warp displacement in stripe units (driven: festooning tracks the same ramp)
       uniform vec3  uBandTint;         // deck base color (driven: atmosphere.color — tan / pale-gold / blue)
@@ -1525,7 +1524,7 @@ export const HEIGHT_GLSL = /* glsl */ `
         // boundaries (fract(bandCoord) 0.25/0.75), plus a wide equatorial
         // superrotation Gaussian, ~1.6x amplitude — the widest, fastest band
         // (card §6 item 3; the hot-Jupiter hotspot mechanism rides this in F32).
-        float jet = sin(6.2831853 * 0.25 * latC * uBandCount);
+        float jet = sin(6.2831853 * 0.25 * latC * uBandM);   // consumer of uBandM (Rhines m) — the single band count (AC-ONECOUNT)
         float eq  = 1.6 * exp(-(trueLat * trueLat) / (uJetEqWidth * uJetEqWidth));
         return jet + eq;
       }
@@ -1537,7 +1536,7 @@ export const HEIGHT_GLSL = /* glsl */ `
         // Gaussian FLANK term (normalized |d/dlat| of the superrotation bump, peak 1
         // at lat = width/sqrt(2)). min() caps the gate so the displacement budget
         // (uJetShearTurb in stripe units) is exact.
-        float s = sin(6.2831853 * 0.25 * latC * uBandCount);
+        float s = sin(6.2831853 * 0.25 * latC * uBandM);   // consumer of uBandM (Rhines m) — the single band count (AC-ONECOUNT)
         float aL = abs(trueLat) / uJetEqWidth;
         float eqFlank = 1.4142136 * aL * exp(0.5 - aL * aL);
         return min(1.0, s * s + 0.6 * eqFlank);
@@ -1577,7 +1576,7 @@ export const HEIGHT_GLSL = /* glsl */ `
         // straddles the b = 0.25 boundary, zero for b < 0 ⇒ one hemisphere).
         // max(0, tn) keeps every hook the same sign — consistent trailing direction
         // is the festoon signature (card §6 item 2). Peak ≈ 0.45·0.9 ≈ 0.40 <= 0.5.
-        float b = 0.25 * latC * uBandCount;
+        float b = 0.25 * latC * uBandM;   // consumer of uBandM (Rhines m) — the single band count (AC-ONECOUNT)
         float flank = smoothstep(0.08, 0.20, b) * (1.0 - smoothstep(0.30, 0.42, b));
         disp += uJetFestoon * flank * max(0.0, tn);
         return disp;
@@ -1964,8 +1963,8 @@ export const HEIGHT_GLSL = /* glsl */ `
         // ── E5 #3a (AC10): the band VALUE is the writer's per-vertex bandNorm (wBand) — NOT an inline
         // latitude ladder. wBand already encodes the driver-organized jet COUNT (Rhines), the SIGNED
         // equatorial jet (ice-giant retrograde reads as an equatorial belt, wBand<0.5), per-seed band
-        // phase, and the Ward pole-emphasis (>54° inversion). The old 0.25·latC·uBandCount stripe
-        // ladder is removed — bands are now caused by climate-e5, exercisable by a headless test.
+        // phase, and the Ward pole-emphasis (>54° inversion). The old stripe ladder off the retired
+        // second band count is removed — bands are now caused by climate-e5, exercisable by a headless test.
         // r festoons the edges (jets-on: the rotated warp domain slides adjacent bands opposite ways);
         // the writer's shear wShear gates the jet turbulence so the filaments ride the REAL shear.
         float bandVal = wBand + uBandWarp * 0.16 * r;

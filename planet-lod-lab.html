@@ -175,7 +175,7 @@
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
     import { resolveStormE, bakeStormEAttributes, chromophoreColor } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp
-    import { drawGiantConditions, deriveGiantDrivers } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation) — replaces the frozen DRIVER_BUNDLES constants per seed
+    import { drawGiantConditions, deriveGiantDrivers, giantDriverScalars, drawRotationHours } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation); + S1 giantDriverScalars (single-sourced radius/rotation wire) & drawRotationHours (per-archetype rotation draw, hot-Jupiter derived)
     import { drawBandRoughness, bandProxyUniforms } from './src/worldengine/base/band-flow.js';   // atmo-expression slice J: per-seed global band-edge roughness draw on the append-only bandFlow:rough stream (disjoint from climateE5:/stormE:/giantD: ⇒ both goldens frozen). slice K: bandProxyUniforms — the 6 render-side band-proxy uniforms from bake.params (single-sourced; the lab does NOT re-derive DEFLECT_SCALE)
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1996,6 +1996,27 @@
       const r = mulberry32(seed >>> 0)();
       return range[0] + r * (range[1] - range[0]);
     }
+    // S1 rotation draw (sibling of drawPresetRadius): the DRAWN rotation period the Rhines wire + the
+    // F25 drift consumers read. The hot-Jupiter-CLASS body (locked + h2-he envelope) is DERIVED tidally
+    // locked from its orbit (the preset's 80 h pseudo-sync is derived, not frozen — the contract's
+    // explicit ruling); NAMED_BODY solids stay canonical; every gas archetype draws from
+    // ROTATION_RANGES_HOURS on the disjoint giantD:rot: alea stream. Locked SOLIDS (Eyeball, Lava,
+    // Europa, Magma) fall through the identity test AND the range lookup → canonical (lens fold F10 —
+    // gating derivation on `locked` alone would wrongly Kepler-derive them). Disjoint namespace keeps
+    // the radius stream (mulberry32) byte-identical; one reroll = one body-identity redraw.
+    function drawPresetRotation(presetName, seed){
+      const preset = DRIVER_PRESETS[presetName] || {};
+      const isHotJupiterClass = !!preset.tidalState?.locked && preset.atmosphere?.composition === 'h2-he';
+      if (NAMED_BODY.has(presetName) && !isHotJupiterClass) return preset.rotationHours ?? 24;   // Mars/Titan/Europa/Venus/Magma canonical
+      return drawRotationHours({
+        archetype: PRESET_ARCHETYPE[presetName],
+        canonicalHours: preset.rotationHours,
+        locked: !!preset.tidalState?.locked,
+        hydrogenAtmo: preset.atmosphere?.composition === 'h2-he',
+        orbitRadiusEarth: preset.orbitRadiusEarth,
+        starMassEarth: preset.starMassEarth,
+      }, seed);
+    }
     const state = {
       distance: 20.0,       // camera distance in radii (mouse-wheel driven) -> drives lodRamp
       yaw: 0.337,           // orbit yaw   (pointer-drag) — initial ≈ the old fixed CAM_DIR view
@@ -2076,7 +2097,7 @@
       lobeFreq: 6.0,        // F19 tongue seed frequency
       massWastEnabled: false,// F19 enable gate
       bandStrength: 0.0,    // F24 master gate (driven — 1 on h2-he gas presets, 0 on every solid world)
-      bandCount: 8.0,       // F24 visible stripe count (driven: 12·R/rotationHours, clamped 3..16)
+      rotationHours: 24,    // S1: drawn rotation period (drawPresetRotation at the _radiusDirty block) — gas archetypes drawn, hot-Jupiter derived, solids canonical; feeds the Rhines wire + _rotH
       bandContrast: 0.6,    // F24 zone↔belt luminance separation (driven: T_eq vigor ramp)
       bandWarp: 0.5,        // F24 festoon displacement in stripe units (driven: same ramp)
       bandTint: [0.78,0.62,0.44],  // F24 deck base color (driven: atmosphere.color)
@@ -2844,8 +2865,9 @@
       const _gd = deriveGiantDrivers(drawGiantConditions(regime, _gcond, state.macroSeed | 0));   // { shellDepthFrac, internalHeat, dissipation }
       const drivers = {
         ..._gd,                                                                            // per-seed triple OVERRIDES the frozen DRIVER_BUNDLES (resolveParams merges caller drivers on top)
-        rotationRate: (9.9 / (_fp.rotationHours ?? 24)) * (state.e5RotationScale ?? 1),   // Jupiter 9.9h → 1.0
-        radius: (_fp.radiusEarth ?? 1) / 11.2,                                            // Jupiter 11.2 → 1.0
+        // S1 Rhines wire (AC-RHINES): the DRAWN radius/rotation, single-sourced with applyStormState via
+        // giantDriverScalars (was the broken preset-constant read _fp.radiusEarth/_fp.rotationHours).
+        ...giantDriverScalars(state.planetRadiusEarth, state.rotationHours ?? _fp.rotationHours, state.e5RotationScale),
       };
       if (state.e5Obliquity > 0) drivers.obliquityDeg = state.e5Obliquity;                // else regime default
       const pos = geometry.attributes.position;
@@ -2943,8 +2965,9 @@
       const _sgd = deriveGiantDrivers(drawGiantConditions(_stormRegime, _scond, state.macroSeed | 0));
       const _stormDrivers = {
         ..._sgd,                                     // per-seed triple (consumer c — vortices)
-        rotationRate: (9.9 / (_fp.rotationHours ?? 24)) * (state.e5RotationScale ?? 1),
-        radius: (_fp.radiusEarth ?? 1) / 11.2,
+        // S1 Rhines wire (AC-RHINES): DRAWN radius/rotation, SAME single source as rebakeE5Bands so the
+        // two sites can never diverge (giantDriverScalars) — was the duplicated preset-constant read.
+        ...giantDriverScalars(state.planetRadiusEarth, state.rotationHours ?? _fp.rotationHours, state.e5RotationScale),
         composition: _fp.atmosphere?.composition,   // the gas gate (designDecision-5)
         T_eq: _fp.T_eq ?? 288,                       // the deck-personality ramp
       };
@@ -3008,6 +3031,7 @@
       // draw a seeded radius from RADIUS_RANGES_EARTH.
       if (driverUI.preset !== state._lastPreset || state._radiusDirty) {
         state.planetRadiusEarth = drawPresetRadius(driverUI.preset, state.radiusSeed);
+        state.rotationHours = drawPresetRotation(driverUI.preset, state.radiusSeed);   // S1: drawn rotation (gas archetypes; hot-Jupiter derived; solids canonical) → Rhines wire + _rotH
         state._lastPreset = driverUI.preset;
         state._radiusDirty = false;
       }
@@ -3298,12 +3322,13 @@
       // preset (the no-leakage pre-check, card §6.5.6) — no partial gas in v1.
       const _gas = (_fp.atmosphere?.composition === 'h2-he');
       state.bandStrength = _gas ? 1.0 : 0.0;
-      // Band count, Rhines-flavored (card §4): fast D8 spin on a big disc organizes
-      // convection into more alternating jets — 12·R/rotationHours, clamped 3..16.
-      // Jovian 11.2R/9.9h → 14; Saturnian 9.4R/10.7h → 11; Neptunian 3.9R/16.1h → 3.
-      // Terrestrial presets omit rotationHours (default 24 h) — inert behind strength 0.
-      const _rotH = _fp.rotationHours ?? 24;
-      state.bandCount = Math.min(16, Math.max(3, Math.round(12 * (_fp.radiusEarth ?? 1) / _rotH)));
+      // Rotation period for the F25 jet-drift / weather-cell consumers: the DRAWN spin
+      // (drawPresetRotation at the _radiusDirty block → state.rotationHours; gas archetypes drawn,
+      // hot-Jupiter derived tidally locked, solids canonical), falling back to the preset canonical
+      // then 24 h. The vestigial SECOND band count (the old 12·R/rotationHours stripe heuristic) is RETIRED —
+      // uBandM (Rhines m from climate-e5) is now the single band count (AC-ONECOUNT), and the Rhines
+      // wire reads the drawn radius. Terrestrial presets are identical (canonical 24 h behind strength 0).
+      const _rotH = state.rotationHours ?? _fp.rotationHours ?? 24;
       // Contrast AND festooning track convective vigor on one T_eq ramp 55→130 K
       // (D1/interior heat): a warm interior churns vivid scalloped bands (Jupiter);
       // a cold CH4-haze ice giant goes near-bland blue (Neptune). The 0.08 floor
@@ -4478,7 +4503,6 @@
     // T_eq vigor ramp / atmosphere color, .listen()); stretch + lat power are shape knobs.
     const fBands = fWorldEngine.addFolder('Zonal belts (F24)'); fBands.close();   // lab-ux 2026-07-15: writer-fed (climate-e5 aBand) → lives in the World Engine section, not Legacy
     fBands.add(state, 'bandStrength', 0, 1, 0.01).name('strength (driven)').listen();
-    fBands.add(state, 'bandCount', 2, 20, 1).name('band count (driven)').listen();
     fBands.add(state, 'bandContrast', 0, 1, 0.01).name('contrast (driven)').listen();
     fBands.add(state, 'bandWarp', 0, 4, 0.05).name('festoon warp (driven)').listen();
     fBands.addColor(state, 'bandTint').name('deck tint (driven)').listen();
@@ -5750,7 +5774,6 @@
       // shadeN flatten both read uBandStrength, so one gate kills the whole family),
       // preserving the slider value.
       uniforms.uBandStrength.value = state.bandsEnabled ? state.bandStrength : 0.0;   // ✓ enable gate
-      uniforms.uBandCount.value    = state.bandCount;
       uniforms.uBandContrast.value = state.bandContrast;
       uniforms.uBandWarp.value     = state.bandWarp;
       uniforms.uBandTint.value.setRGB(state.bandTint[0], state.bandTint[1], state.bandTint[2]);
