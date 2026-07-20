@@ -84,11 +84,31 @@ export class OrbitRingSDF {
         // calls the setter) renders byte-identically. Additive only — the SDF band
         // math and the 0.4R grazing cap are untouched.
         uVisFactor:  { value: 1.0 },
+        // staticky-orbit fix (2026-07-20, UAT round 1): the ORRERY camera is never
+        // still (autoRotateSpeed + player nav), so every intermediate-alpha pixel
+        // the band produces crawls perpetually. Close to a planet the camera sits
+        // nearly IN the orbit plane; fwidth(g) explodes and the 0.4R cap turns the
+        // band into a huge dim world-space slab whose soft edges seethe — Max's
+        // "staticky" (prod-measured: pixel ramps 102→0 over ~10 frames at
+        // yaw drift 8.7e-4 rad/frame). Two knobs, both alpha-side only:
+        //   uFeatherPx — soft-edge width in render px (was hardcoded 1.0). Smaller
+        //                = crisper retro edge, fewer crawling mid-alpha pixels.
+        // (The smear itself needs no knob: the raw-band discard in the fragment
+        // shader is threshold-free — see the shader comment.)
+        // Shipped default (lab matrix 2026-07-20): feather 0.5 — the 1.0px soft
+        // skirt was ~half the crawling-pixel population; 0.5 keeps sub-pixel
+        // coverage continuity (worst-case diagonal pixel-center distance 0.707px
+        // < 0.5*width+feather = 1.0px) while restoring near-crisp retro pops.
+        // 0.25 measured lower churn still but its coverage margin is 0.75px —
+        // too tight to ship blind. Width + feather are Max's taste knobs at re-UAT.
+        uFeatherPx:  { value: 0.5 },
       },
       // Derivatives (fwidth) are core in WebGL2/GLSL-ES-3.0 (this codebase's
       // renderer); this flag makes the shader also valid on a WebGL1 fallback.
       extensions: { derivatives: true },
       vertexShader: /* glsl */`
+        #include <common>
+        #include <logdepthbuf_pars_vertex>
         varying vec3 vLocalPos;
         void main() {
           // Object-space position. The mesh is only rotated/translated (never
@@ -97,17 +117,29 @@ export class OrbitRingSDF {
           // mesh (moon rings) moves the whole ring rigidly — geometry unchanged.
           vLocalPos = position;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          #include <logdepthbuf_vertex>
         }
       `,
       fragmentShader: /* glsl */`
+        #include <logdepthbuf_pars_fragment>
         uniform float uRadius;
         uniform vec3  uColor;
         uniform float uOpacity;
         uniform float uPixelWidth;
         uniform float uVisFactor;
+        uniform float uFeatherPx;
         varying vec3 vLocalPos;
 
         void main() {
+          // staticky-orbit fix (2026-07-20): write LOG depth like every other
+          // custom ShaderMaterial in this scene (WarpPortal/RingRenderer/Moon —
+          // the renderer runs logarithmicDepthBuffer). Without this the band's
+          // depth is standard NDC (~0.9999 at ORRERY scales) while planets write
+          // log depth (~0.6): incommensurable values, so ring-vs-planet occlusion
+          // was garbage. The old LineLoop was a BUILT-IN material and got the
+          // chunks automatically — this regressed in the AC5 swap.
+          #include <logdepthbuf_fragment>
+
           // Signed distance to the ideal circle, in scene units.
           float g = length(vLocalPos.xz) - uRadius;
 
@@ -117,7 +149,8 @@ export class OrbitRingSDF {
           // from the ring measured in RENDER pixels. This is what makes the
           // band a constant ~1 render-px wide at every camera distance and why
           // it can never go dashed like a sampled LineLoop.
-          float aa = fwidth(g);
+          float aaRaw = fwidth(g);
+          float aa = aaRaw;
 
           // ── Grazing-angle clamp ──
           // When the camera sits nearly IN the orbit plane, the plane is almost
@@ -137,12 +170,25 @@ export class OrbitRingSDF {
 
           float distPx = abs(g) / aa;                 // render-pixels from centerline
 
-          // Band: solid within +-0.5*width, ~1px soft edge. NearestFilter then
-          // magnifies this back up to the chunky 3x retro block — but with full
-          // coverage, which is exactly what the polyline lacked.
+          // Band: solid within +-0.5*width, uFeatherPx soft edge. NearestFilter
+          // then magnifies this back up to the chunky 3x retro block — but with
+          // full coverage, which is exactly what the polyline lacked.
           float alpha = 1.0 - smoothstep(uPixelWidth * 0.5,
-                                         uPixelWidth * 0.5 + 1.0,
+                                         uPixelWidth * 0.5 + uFeatherPx,
                                          distPx);
+
+          // ── Smear cut (staticky-orbit fix) ──
+          // The 0.4R clamp may only STABILIZE alpha inside the band — it must
+          // never WIDEN coverage. Pixels that fail the UNCLAMPED screen-px band
+          // test are painted purely by clamp over-paint: that is the wide dim
+          // grazing smear whose soft level-sets crawl under the ORRERY's
+          // perpetual camera motion — UAT round 1's "staticky". Discard them.
+          // Threshold-free and scale-free: true horizon arcs and distant tiny
+          // rings pass the raw test (that is WHY they are visible) and keep
+          // rendering; only clamp-inflated smear pixels go. (A smooth fade
+          // instead of a discard only relocates the crawling alpha contour —
+          // lab-measured 2026-07-20, toggles unchanged under fade.)
+          if (abs(g) / max(aaRaw, 1e-6) > uPixelWidth * 0.5 + uFeatherPx) discard;
 
           // Paint ONLY annulus pixels. Discarding elsewhere is essential: the
           // composite pass blends by sceneTarget alpha, so a full opaque quad

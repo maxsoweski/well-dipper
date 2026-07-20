@@ -35,8 +35,29 @@
     // ─────────────────────────────────────────────────────────────────────────
     import * as THREE from 'three';
     import { RetroRenderer } from './src/rendering/RetroRenderer.js';   // PROD pipeline — imported for fidelity
-    import { OrbitLine }     from './src/objects/OrbitLine.js';         // baseline (the vanishing LineLoop)
     import { OrbitRingSDF }  from './src/objects/OrbitRingSDF.js';      // candidate fix
+
+    // BASELINE (staticky-orbit fix, 2026-07-20): since the AC5 prod swap,
+    // src/objects/OrbitLine.js EXTENDS OrbitRingSDF — importing it no longer
+    // yields a LineLoop, so "baseline vs sdf" silently measured SDF vs SDF
+    // (caught 2026-07-20: identical drift numbers to the decimal). This is a
+    // byte-faithful replica of the pre-swap OrbitLine (git 7e8b0ef).
+    class LineLoopRing {
+      constructor(radius, color = 0x444444) {
+        const segments = Math.max(128, Math.ceil(Math.sqrt(radius) * 32));
+        const points = [];
+        for (let i = 0; i < segments; i++) {
+          const angle = (i / segments) * Math.PI * 2;
+          points.push(new THREE.Vector3(
+            Math.cos(angle) * radius, 0, Math.sin(angle) * radius));
+        }
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 });
+        this.mesh = new THREE.LineLoop(geometry, material);
+      }
+      addTo(scene) { scene.add(this.mesh); }
+      dispose() { this.mesh.geometry.dispose(); this.mesh.material.dispose(); }
+    }
 
     // ── Scene / camera ──────────────────────────────────────────────────────
     const canvas = document.getElementById('canvas');
@@ -90,6 +111,18 @@
       star.quaternion.copy(camera.quaternion);
     }
 
+    // ── Planet stand-in (staticky-orbit fix, 2026-07-20) ─────────────────────
+    // BUILT-IN material on purpose: MeshBasicMaterial compiles three's
+    // logdepthbuf chunks, so this ball writes LOG depth exactly like production
+    // Planet/Moon meshes (Planet.js / Moon.js include the chunks explicitly).
+    // Any depth-contest static between an orbit band and a prod planet mesh
+    // reproduces against this ball. Hidden unless driftMeasure({planet:true}).
+    const planetStandIn = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 24, 16),
+      new THREE.MeshBasicMaterial({ color: 0x3a6ea5 }));
+    planetStandIn.visible = false;
+    scene.add(planetStandIn);
+
     // ── Rings: 13 total, EACH built BOTH ways ─────────────────────────────────
     // 9 planet-scale (Sol-like AU-ish scene radii) + 4 moon-scale around a point
     // sitting on the 5200 orbit. Colors mirror production (planets 0x00ff00,
@@ -103,10 +136,10 @@
     for (const r of MOON_RADII)   ringDefs.push({ radius: r, color: 0x00bb00, isMoon: true  });
     const N = ringDefs.length;   // 13
 
-    const baselineRings = [];   // OrbitLine instances
+    const baselineRings = [];   // LineLoopRing instances (pre-swap replica — see above)
     const sdfRings = [];        // OrbitRingSDF instances
     for (const def of ringDefs) {
-      const bl = new OrbitLine(def.radius, def.color);
+      const bl = new LineLoopRing(def.radius, def.color);
       const sd = new OrbitRingSDF(def.radius, def.color);
       bl.addTo(scene);
       sd.addTo(scene);
@@ -213,6 +246,72 @@
         }
         mode = prevMode; solo = prevSolo; placeCamera(prevDist); renderOnce();
         return { distances, threshold: GREEN_THRESHOLD, rings };
+      },
+
+      // ── Fix-candidate config (staticky-orbit fix, 2026-07-20) ─────────────
+      // Pokes the OrbitRingSDF taste knobs on ALL sdf rings. Pass nulls to
+      // leave a knob unchanged. (The smear cut is threshold-free in the shader
+      // — no knob; pre-fix behavior is only reproducible by checkout.)
+      setSdfConfig({ pixelWidth = null, featherPx = null } = {}) {
+        for (const sd of sdfRings) {
+          const u = sd.material.uniforms;
+          if (pixelWidth !== null) u.uPixelWidth.value = pixelWidth;
+          if (featherPx !== null) u.uFeatherPx.value = featherPx;
+        }
+        const u0 = sdfRings[0].material.uniforms;
+        return { pixelWidth: u0.uPixelWidth.value, featherPx: u0.uFeatherPx.value };
+      },
+
+      // ── Temporal instrument (staticky-orbit fix, 2026-07-20) ──────────────
+      // Slow camera drift orbiting `center`; per-frame symmetric difference of
+      // the green-pixel SET in the low-res sceneTarget. Pixels toggling on/off
+      // between consecutive frames ARE the "static" from UAT round 1 — this
+      // counts them objectively. Run the 2×2: {baseline,sdf} × {planet off,on}
+      // to discriminate depth-contest static from pure band re-quantization.
+      driftMeasure({ mode: m = 'sdf', planet: showPlanet = false, planetRadius = 1.5,
+                     center = [5200, 0, 0], dist = 25, pitch = 0.35,
+                     degPerFrame = 0.12, frames = 90, startDeg = 0 } = {}) {
+        const prevMode = mode, prevSolo = solo, prevDist = distance;
+        mode = (m === 'baseline') ? 'baseline' : 'sdf';
+        solo = null;
+        planetStandIn.visible = showPlanet;
+        planetStandIn.position.set(center[0], center[1], center[2]);
+        planetStandIn.scale.setScalar(planetRadius);
+        const c = new THREE.Vector3(center[0], center[1], center[2]);
+        const w = retro.sceneTarget.width, h = retro.sceneTarget.height;
+        const buf = new Uint8Array(w * h * 4);
+        let prev = null, sumGreen = 0, sumTog = 0, maxTog = 0;
+        for (let f = 0; f < frames; f++) {
+          const az = (startDeg + f * degPerFrame) * Math.PI / 180;
+          const horiz = dist * Math.cos(pitch);
+          camera.position.set(c.x + Math.sin(az) * horiz,
+                              c.y + dist * Math.sin(pitch),
+                              c.z + Math.cos(az) * horiz);
+          camera.lookAt(c);
+          camera.updateMatrixWorld();
+          renderOnce();
+          retro.renderer.readRenderTargetPixels(retro.sceneTarget, 0, 0, w, h, buf);
+          const cur = new Set();
+          for (let i = 0; i < buf.length; i += 4) {
+            const r = buf[i], g = buf[i + 1], b = buf[i + 2];
+            if (g > 40 && g > 1.5 * r && g > 1.5 * b) cur.add(i >> 2);
+          }
+          if (prev) {
+            let tog = 0;
+            for (const p of cur) if (!prev.has(p)) tog++;
+            for (const p of prev) if (!cur.has(p)) tog++;
+            sumTog += tog; if (tog > maxTog) maxTog = tog;
+          }
+          sumGreen += cur.size;
+          prev = cur;
+        }
+        planetStandIn.visible = false;
+        mode = prevMode; solo = prevSolo; placeCamera(prevDist); renderOnce();
+        const avgGreen = sumGreen / frames, avgTog = sumTog / (frames - 1);
+        return { mode: m, planet: showPlanet, frames,
+                 avgGreen: +avgGreen.toFixed(1),
+                 avgToggles: +avgTog.toFixed(1), maxToggles: maxTog,
+                 togglePerGreen: +(avgTog / Math.max(avgGreen, 1e-9)).toFixed(3) };
       },
 
       // introspection helpers
