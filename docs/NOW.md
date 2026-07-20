@@ -13,9 +13,12 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > same day (verdict-live-drives-802cceb.json): race-click Neptune AIM 8.59°→0.12° camera-frozen
 > then approach ≤0.06° to 4R exact; Tethys 2.6R + Sol aim-skip 15R exact; mid-AIM interrupt
 > clean; console clean (Phoebe floor cell not re-drivable — compensated, see evidence file).
-> ⭐ NEXT = Max's UAT round 2c: THE side-slide re-test (click off-center body, click again —
-> centers FIRST, then flies straight) + pacing taste (aim adds ≤0.7s; one-line tunables) +
-> B5–B7 + taste calls. Then Rule-3 docs → Shipped → real merge (master carries lane C) → push.**
+> **UAT round 2c PASSED (2026-07-20, Max: "looks good") — the side-slide is closed.**
+> ⭐ NEXT = FRESH SESSION: one dev-collab-scope interview folding Max's 3 new ORRERY items
+> (D-hold boot skip → Sol; warp arrival as far-spawn zoom-IN; orbit visibility threshold —
+> verbatim + anchors in `~/briefings/handoff-lane-B-orrery-triplet-2026-07-20.md`) + the
+> orrery-coherence close-out ruling (run B5–B7 or waive → Rule-3 docs → Shipped → real merge
+> [master carries lane C] → push).**
 > Round 2 (2026-07-17, earlier):
 > A1/A2 PASSED, then Max's 3 new findings (dogleg glide / moons unapproachable / planets-far
 > stars-close) root-caused by investigation workflow wf_c2ee4336-a9f to ONE method (click-2
