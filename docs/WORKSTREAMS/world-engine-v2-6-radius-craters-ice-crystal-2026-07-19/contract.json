@@ -1,0 +1,171 @@
+{
+  "workstream": "world-engine-v2-6-radius-craters-ice-crystal-2026-07-19",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "statusNote": "SCOPED under standing greenlight 2026-07-19, Max (overnight ultracode campaign; authorization recorded in ~/briefings/handoff-lane-A-overnight-ultracode-2026-07-19.md). Scope = driver-wiring audit 2026-07-19 section 3 Increment 1 verbatim; the three product calls (ejecta-rays defer, crystal out of default bake, super-Earth sparsity accepted) ruled by Max in-session 2026-07-19 ('All three sound good to me'). No scope interview per the physics-first INTENT FRAME: all forks here are physics-derivable; taste calls were pre-ruled.",
+  "programRef": "Driver-wiring audit 2026-07-19 section 3 Increment 1 + charter INTENT FRAME (docs/FEATURES/planet-lod-CHARTER.md). Successor to V2-5 bombardment: closes that UAT's four findings (craters-only-at-high-g, radius-not-wired, Frozen-less-distinct, Crystal-defer-and-rethink). Root increment for the audit queue: Increments 3 and 8-9 sequence behind gravity coherence. NOTE: slug 'v2-6' is the audit's numbering; ROADMAP-v2.1's own V2-6 row is the atmosphere pointer row (collision flagged in the morning report).",
+  "designDecisions": [
+    "GRAVITY COHERENCE ROOT FIX (1A): deriveConditionVector derives g from the DRAWN radius — M = (rho/rho_earth)*R^3 per composition class, g = M/R^2 — fixing e1Regime massEarthOf's drawn-radius x preset-gravity incoherence for all 8 archetype presets. NAMED_BODY presets stay canonical (locked derivation inputs) so all condition vectors for golden fixtures are byte-identical.",
+    "radPerKm DERIVED SCALAR (1B): radPerKm = 1/(6371*R) lands beside deriveBodyScalars in baseStep.js as the shared km-to-angular conversion every radius law consumes.",
+    "BOMBARDMENT REWRITE (1C, audit footnotes 1-3, 5-6): K_GD removed entirely (count is g-independent by physics), K_GS = 0.17 size law kept exactly; crater diameters drawn in km from bounded-Pareto SFD (B_SFD = 2.0), angular size = D_km * radPerKm (so size prop 1/R), count = F_REF * R^2 * chron(age); D_MAX = c_basin * R_km; D_MIN = max(mesh floor ~3*meanEdgeAngle, graded atmo floor D_min_km ~ c*P^0.65 replacing binary CRATER_ATMO_MAX); sub-floor SFD mass folds into a regolith-roughness scalar, never discrete stamps; binary tidal gate becomes continuous exposure age min(age, t_resurf prop 1/tidalHeat).",
+    "EQUILIBRIUM VIA OBLITERATION STAMPING (1C): age-ordered stamping — bowl interiors RESET the accumulated field, rims/ejecta add — implements production-vs-retention N_ret = N_eq*(1-exp(-N_prod/N_eq)); the existing CRATER_SAT_N tanh survives only as a safety clamp. Analyst reconciliation adopted: obliteration is the observed process, keeps every retained crater legible at any count, preserves thresholdable floors for the epoch editor.",
+    "ICE RELAXATION + MATERIAL PAIR (1D+1E): craterProfile gains viscous relaxation tau ~ 4*pi*eta_eff/(rho*g*D) with Arrhenius eta (eta_m ~1e14 Pa*s at 273 K, Q* ~60 kJ/mol), epsilon = 1-exp(-t_c/tau), dome floors + persistent rims (tau prop 1/lambda, p~2); honestly INERT on Frozen (60 K, td~0 => epsilon~0 — ice stiffer than granite) and transformative on warm/tidal icy worlds. PAIRED with a condition-derived iceness material scalar feeding a render-side albedo uniform, or the Frozen finding stays open (audit: the missing piece is material, not schedule).",
+    "CRYSTAL CARVE-OUT (1F, footnote 13): boolean _facetClass promoted to continuous crystallizationPotential = airlessness*(1-erosion)*(1-resurfacingRate)*pristine(bombardment), with the archetype-constant surfaceHistory scalars derived (erosion from pressure+rainFactor, resurfacing from tidal/thermal, bombardmentIntensity from craterSchedule output). Dressing-scale, own NEW unhashed channel, condition scalars only (no label/archetype/regime reads). Facet layer stays OUT of the default bake per Max's ruling — the driver becomes honest either way.",
+    "NO-DEFAULT RESEED (1H): newPlanet re-rolls one worldSeed with alea sub-namespaces (draw:radius, ...); mulberry32 retired for new draws (pre-fence RNG); NAMED_BODY presets lock all draws to canonical values.",
+    "POPULATION CALIBRATION HARNESS (1G): population-sweep.mjs extends the committed crater-*.mjs calibrator pattern (docs/WORKSTREAMS/world-engine-v2-5-bombardment-2026-07-17/calibration/); acceptance judges the N-seed drawn population, never a single boot state (INTENT FRAME 'no defaults').",
+    "MAX'S RULED PRODUCT CALLS (2026-07-19): ejecta rays DEFERRED height-only (fence renegotiation stays with Increment 8); crystal facets out of default render; super-Earth crater sparsity ACCEPTED (1/R is honest — small worlds are the showcases).",
+    "KNOWN LEGITIMATE CHURN: v2-5 bombardment test calibration constants + forEachCrater stream contract restated WITH physics derivations recorded; craterField unhashed. HASHED_FIELDS goldens NEVER re-captured."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15): (1) driver connectivity — every new law reads nested condition-vector channels (surfaceGravity, age, T_eq, rawTidalIoRatio, composition/density, atmosphere.pressure) or derived scalars (radPerKm), and no label/archetype string; (2) named consumers — route()/composite documents the iceness albedo uniform and the crystal channel's consumer; (3) taxonomy registration — drift guards stay green; any new lab control is a driver override adding no *Enabled key.",
+      "verifyVia": {
+        "input": "Dispatch-oracle + shadow-audit + router-audit + planet-archetypes drift suites from the repo dir; grep audit of all new/modified writers' reads.",
+        "observable": "All guards green; no label reads in bombardment/relaxation/crystal paths; consumers documented in BUILD-NOTES."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-GCOHERE",
+      "statement": "Gravity coherence: for all archetype presets with drawn R, surfaceGravity is identical to M_derived/R_drawn^2 (M = (rho/rho_earth)*R^3 per composition class) and e1Regime massEarthOf round-trips; NAMED_BODY condition vectors byte-identical to today.",
+      "verifyVia": {
+        "input": "Unit sweep over archetypes x drawn radii; NAMED_BODY condition-vector snapshot diff.",
+        "observable": "g = M/R^2 exact within float64 for every draw; named-body vectors byte-equal; massEarthOf(cv) round-trip consistent."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-FENCE",
+      "statement": "Fence: all 75 golden fixtures + HASHED_FIELDS (height, grainAngle, grainMag, regime, faultDensity) byte-identical without re-capture; carrier.height untouched everywhere.",
+      "verifyVia": {
+        "input": "75-golden byte-identity suite (+anchors) at the build commit from the repo dir.",
+        "observable": "All green with git-diff-empty fixtures."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-RADIUS-LAW",
+      "statement": "Radius law: over an R sweep at fixed seed — median angular crater size monotone decreasing in R, count monotone increasing in R, and bowl-coverage fraction radius-invariant within tolerance (the free invariance theorem under size prop 1/R, count prop R^2).",
+      "verifyVia": {
+        "input": "Headless R sweep at fixed seed via the calibration harness.",
+        "observable": "Monotonicity both directions; coverage invariance within the documented tolerance band."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-EQUILIB",
+      "statement": "Equilibrium: retained density monotone non-decreasing in age with plateau; every retained crater's floor thresholdable (obliteration, not tanh, does the capping); coverage never exceeds the cap.",
+      "verifyVia": {
+        "input": "Headless age sweep; floor-thresholdability probe on the retained population.",
+        "observable": "Plateau present; density-below-plateau distinguishes young surfaces; per-crater floors remain thresholdable at every age."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-GCOUNT",
+      "statement": "Count is gravity-independent: K_GD removed, dN/dg = 0 at fixed (R, age, seed); size law keeps K_GS = 0.17 exactly.",
+      "verifyVia": {
+        "input": "Headless g sweep at fixed seed/R/age; grep for K_GD.",
+        "observable": "Count invariant across g; size scales g^-0.17; K_GD absent from source."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-RELAX",
+      "statement": "Relaxation: epsilon ~ 0 at (T_eq = 60 K, td ~ 0) — Frozen stays crisp; epsilon large for Enceladus-class (warm/tidal); d(epsilon)/dD > 0; dome-floor + rim-persistence (p ~ 2) terms present.",
+      "verifyVia": {
+        "input": "Unit tests over the (T_eq, td, D) grid on the relaxation law.",
+        "observable": "The four properties hold; Frozen profile bytes unchanged by relaxation at 60 K."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-CRYSTAL",
+      "statement": "Crystal: crystallizationPotential is a pure function of condition scalars (grep-style: no label/archetype/regime reads), continuous on [0,1], agrees with the old boolean at the extremes; bombardmentIntensity is derived from craterSchedule output; the facet layer does NOT enter the default bake.",
+      "verifyVia": {
+        "input": "Unit tests on the scalar; grep audit; default-bake weight check.",
+        "observable": "Purity + continuity + extreme-agreement pass; upstream wiring from craterSchedule confirmed; default bake unchanged."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-POPSWEEP",
+      "statement": "Population gates: population-sweep.mjs over N ~ 64 seeds x archetype passes — physical invariants every seed (g rho-R-coherent); bowl coverage in [10%, 80%] for >= 90% of impact-surface seeds; nonzero metric variance and >= k regimes per archetype where physics allows; zero NaN/flat/degenerate seeds; goldens stable.",
+      "verifyVia": {
+        "input": "node population-sweep.mjs from the repo dir (headless).",
+        "observable": "All gates green in the harness's machine-readable summary."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC-LAB-LEGIBLE",
+      "statement": "Live: lab at Moon/Mercury preset boots to discrete, legible craters (retained count within the calibrated envelope) — the direct fix for 'craters don't read until gravity is turned up'.",
+      "verifyVia": {
+        "input": "Fresh-context browser drive on :5175 (working-Claude drives; liveBranch 'main').",
+        "observable": "Screenshot evidence: discrete legible craters at boot; retained count in envelope; zero new console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-RADIUS-AB",
+      "statement": "Live radius A/B: same worldSeed, small vs large drawn R — craters proportionally smaller and more numerous on the large body.",
+      "verifyVia": {
+        "input": "Browser drive: fix worldSeed, toggle drawn radius small/large, screenshot both.",
+        "observable": "Screenshots show the 1/R size + R^2 count relationship qualitatively; measured metrics in the expected direction."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-REROLL",
+      "statement": "Live: newPlanet re-rolls radius (successive rolls vary); NAMED_BODY presets locked to canonical.",
+      "verifyVia": {
+        "input": "Browser drive: successive newPlanet rolls; named-body preset check.",
+        "observable": "Drawn radius varies across rolls; named bodies pin to canonical values."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max's gate: contact sheet of the N-seed population across archetypes — craters read at low g, radius visibly drives crater scale, Frozen/ice worlds read deliberate (crisp-cold vs relaxed-warm), Crystal reads as downstream dressing not macro mishmash.",
+      "verifyVia": {
+        "input": "Max drives the lab solo on :5175 + reviews the population contact sheet.",
+        "observable": "Max's holistic acceptance."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "body-condition-vector.js deriveConditionVector — the root site: g derivation moves from canonical-preset to drawn-radius (M = rho*R^3 composition classes)",
+      "e1Regime.js massEarthOf — incoherence resolves automatically once g is coherent",
+      "baseStep.js deriveBodyScalars seam — radPerKm lands beside it",
+      "bombardment.js craterSchedule/craterProfile + the committed crater-*.mjs calibrator pattern (v2-5 calibration dir)",
+      "drawPresetRadius + newPlanet reseed path (mulberry32 to alea migration; RADIUS_RANGES_EARTH)",
+      "F43 applyDrivers _facetClass + surfaceHistory scalars (crystal promotion inputs)",
+      "Condition-vector channels: surfaceGravity, age, T_eq, rawTidalIoRatio, density/composition/volatileFraction, atmosphere.pressure"
+    ],
+    "outputs": [
+      "Coherent (R, M, g) condition vectors for every drawn world — the prerequisite every later radius law sizes against (Increments 3, 5, 8, 9)",
+      "radPerKm — the shared km-to-angular derivation for all future physical-size laws",
+      "Physically scheduled crater population (SFD in km, obliteration equilibrium) with thresholdable floors for the epoch editor",
+      "Iceness material scalar + render-side albedo uniform (the Frozen material answer)",
+      "crystallizationPotential continuous scalar on its own unhashed channel (crystal as downstream dressing)",
+      "population-sweep.mjs harness — the population-level acceptance instrument for this and later increments",
+      "worldSeed alea sub-namespace pattern (draw:radius, ...) that Increment 9 extends"
+    ],
+    "mustStayWorking": [
+      "75-golden byte-identity (+anchors), fixtures never re-captured; carrier.height byte-stable everywhere",
+      "Guardrail quartet + V2-3 dispatch oracle + planet-archetypes drift guards",
+      "The atmo fence: F24-F31 GLSL sections + climateE5:*/stormE:* writers untouched (atmo lane owns them; concurrent Increment 2 is live in the sibling tree)",
+      "NAMED_BODY canonical condition vectors byte-identical",
+      "Existing suites at baseline from the repo dir (baseline: 4 failed KnownObjects x3 + GalacticFeatures x1 + ~5-7 collection-error files, pre-existing env noise)",
+      "Legacy F2/F3 crater/ejecta synth untouched; shellRelief.js AC-0 radius ban untouched this increment (lift protocol belongs to Increment 5)",
+      "NOT-OURS dirty files in L1 (src/auto/CameraChoreographer.js, src/debug/LabMode.js, loose png/qa strays) never committed/stashed/cleaned"
+    ]
+  }
+}
