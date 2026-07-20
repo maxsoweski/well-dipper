@@ -93,6 +93,17 @@ describe('AC4 — mult()/oracle invariance under the componentSystems key', () =
     expect(alphaCen.componentSystems.length).toBe(alphaCen.farCompanions.length);
   });
 
+  it('Zet-1 Ret intermediate oracle object pinned — the third topology (S4-verify NIT)', () => {
+    // The contract's AC4 observable is the full {count, closeCount, farCount,
+    // farNames} shape; every other census row's object is pinned in
+    // multiplicityOracle.test.js, but Zet-1 Ret (single primary + collapsed
+    // far companion) had only count + end-to-end dots pinned anywhere.
+    const rec = byName('Zet-1 Ret');
+    expect(multiplicityForSeed(starObj(rec), deps)).toMatchObject({
+      count: 2, closeCount: 1, farCount: 1, farNames: ['Zet-2 Ret'], source: 'table',
+    });
+  });
+
   it('oracle.count === mult(generated systemData) for the full census WITH componentSystems present', () => {
     // Alpha Cen 3 (authored, components present).
     const rigil = byName('Rigil Kentaurus');
