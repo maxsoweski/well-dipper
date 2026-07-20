@@ -1,0 +1,133 @@
+{
+  "workstream": "multistar-components-2026-07-19",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "phase": "SCOPED 2026-07-20 via trimmed dev-collab-scope (interview pre-pinned by Max's 2026-07-19 ruling — intent.md); scope artifacts 2-lens adversarially reviewed (fidelity + verifiability), findings folded. Implements Increment A of ../real-universe-overlay-2026-07-12/multistar-render-feasibility.md (§3.3 componentSystems substrate + §4 nav drill-in + rep-cap amendment; report's 3-verifier passes ran at 62fe938, corrections folded at 7cb8253 — the anchor of record). D1+D2 greenlit-in-principle; D4 default = ALL authored wide multiples = THREE far rows (Alpha Cen, Guniibuu/36 Oph, Zet-1 Ret — flagged, Max-overridable); D3 + Increment B out of scope (joint lane B+C later). Next: Phase 2 adversarial build plan, then sliced TDD build.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-components-substrate",
+      "statement": "systemData.componentSystems exists as an authored-only data substrate: every STELLAR_COMPANIONS entry carrying farCompanions — the D4 default breadth is ALL THREE table rows: 'Alpha Centauri' (→ Proxima, planets b/d), 'Guniibuu' (36 Oph → HD 156026), 'Zet-1 Ret' (→ Zet-2 Ret) — promotes its wide members from inert {name, class, type, separationAU, planets?} records to spawnable component sub-system payloads (the component's star + its known-planet pins + child-stream procgen fill; exact payload key shape is pinned by the Phase-2 build plan and asserted by these tests once pinned). Validation is extended at BOTH artifacts: validateStellarCompanions covers far-row promotability in the authored table; a new payload-shape check covers the generated componentSystems value. The field name is distinct from the existing close-pair companionSpec.components descriptors (the terminology trap the report names).",
+      "verifyVia": {
+        "input": "Headless: extended validator suite + new payload-shape unit tests; census assertion walking STELLAR_COMPANIONS that every farCompanions-bearing row yields component payload(s) and every row without farCompanions yields none.",
+        "observable": "Validator green over the extended table; census: Alpha Cen yields a Proxima component (with b, d pins), Guniibuu yields its HD 156026 component, Zet-1 Ret yields its Zet-2 Ret component (both 0 planet pins); no far-bearing row left un-promoted; rows without farCompanions emit no componentSystems key and are byte-unchanged."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC2-child-seed-determinism",
+      "statement": "ONE canonical system seed; each component's procgen fill draws a deterministic child stream (SeededRandom.child keyed by component index) — no new top-level seed formula, realStarSeed.js byte-identical (report §3.3: Proxima bins to the SAME 0.1 pc F1 cell as Rigil, (80009, 250, −9), so a component seeded via realStarSeed would COLLIDE with the system seed; the child-stream rule closes that class). The same component payload resolves on every path and every repeat.",
+      "verifyVia": {
+        "input": "Headless: repeat/path-independence tests — resolve the Alpha Cen component payload on each distinct resolution path the build exposes (at minimum: the nav preview path and the authoring/arrival-context path, plus a same-path repeat), deep-compare payloads; git diff scoped to src/generation/realStarSeed.js; negative assertion by instrumentation (stub realStarSeed to throw during component resolution) or static check (component-seed module has zero realStarSeed references).",
+        "observable": "Deep-equal component payloads across the enumerated paths and repeats; zero diff on realStarSeed.js; the instrumented/static negative check proves component seeding never routes through realStarSeed."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC3-procgen-byte-safety",
+      "statement": "The substrate is byte-safe by the proven farCompanions recipe: the componentSystems key is ABSENT from purely-procgen systemData (omitted, never null), and ZERO RNG draws are added on the procgen path — so ProcgenSnapshot stays 24/24 byte-identical.",
+      "verifyVia": {
+        "input": "Headless: ProcgenSnapshot suite; a poison-probe-style negative test proving the procgen path's RNG stream is draw-for-draw unchanged; assertion that procgen systemData lacks the componentSystems key.",
+        "observable": "ProcgenSnapshot 24/24 byte-identical; poison probe green (zero added draws); componentSystems key absent from procgen output."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC4-oracle-lockstep",
+      "statement": "multiplicityOracle (multiplicityForSeed's {count, closeCount, farCount, farNames}) and the test helper mult() agree with the new structure in lockstep — glyph honesty (grammar-WS AC-class) is preserved: prism glyph dot counts are unchanged from 5583651 behavior for ALL census rows, enumerated: procgen binary 2, Guniibuu/36 Oph marker 3, Alpha Cen A+B marker 2 + Proxima's own marker 1, AND the Zet-1 Ret marker (single primary + collapsed far companion — a third topology; assert its current-oracle dot count explicitly in the test, pinned at build time from 5583651 behavior).",
+      "verifyVia": {
+        "input": "Headless: oracle/mult lockstep tests over the full census (every STELLAR_COMPANIONS row + a procgen binary control), including the Zet-1 Ret case; focused glyph spot-assertions for the named cases via the bare-prototype harness.",
+        "observable": "Lockstep suite green; dot counts for all named cases (incl. Zet-1 Ret) identical to 5583651 behavior."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC5-drill-in-render",
+      "statement": "The component drill-in mirrors the planet-detail drill pattern exactly: _systemMode='component' + _selectedComponentIdx (mirroring 'planet' + _selectedPlanetIdx), rendered by a _renderComponentDetail mirroring _renderPlanetDetail, ESC pops back to the SYSTEM view. TWO entries: (a) a far-chip click handler hit-testing the already-published _farChipRects; (b) the far member's own PRISM marker drills to the parent SYSTEM view with the component pre-selected. The sub-view renders the component's REAL generated planets (Proxima b and d with actual orbits from the AC1/AC2 payload — never fabricated view-only orbits), titled by the system with breadcrumb 'part of Alpha Centauri' and clause-3 annotation ('via Proxima Centauri — far companion'); the four system-identity grammar clauses hold in the new view, each asserted concretely: (1) title names the system, (2) full structure shown, (3) viewed component marked via the annotation string, (4) co-membership cued.",
+      "verifyVia": {
+        "input": "Headless TDD via the bare Object.create(NavComputer.prototype) harness: state transitions (chip click → component mode; ESC → pop; PRISM-member entry → pre-selected component), title/breadcrumb/annotation derivation, orbit-data source assertions (payload-sourced, not synthesized), _farChipRects hit-test geometry, and a no-componentSystems system (chip behavior unchanged from today, no drill).",
+        "observable": "Drill state machine + render derivation suites green; b/d orbit values deep-equal the generated component payload's orbit values (payload-sourced, not synthesized defaults); one concrete assertion per grammar clause (title string, structure list, annotation string, co-membership cue) green."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC6-drill-in-live",
+      "statement": "Both drill-in entries work in the wired app: (a) clicking the far-companion chip in Alpha Centauri's SYSTEM view opens the component sub-view showing Proxima with b and d; (b) clicking Proxima's own PRISM marker lands in the Alpha Centauri SYSTEM view with the component pre-selected and annotated; ESC round-trips back to the SYSTEM view both times. Labels stay non-overlapping (measured via the instrumented _labelRects handle, grammar-WS precedent — not screenshot judgment); console clean.",
+      "verifyVia": {
+        "input": "Live on :5176 (stop window._autoNav immediately on load and re-check after any warp; canvas MouseEvents for clicks; CDP press_key for ESC; confirm _hoveredLocalStar wrapper before click-drill; close every page opened). Screenshot evidence per entry path; _labelRects overlap assertion in the drilled view.",
+        "observable": "Chip click → component view with b and d markers visible (orbit-value provenance is AC5's headless assertion); PRISM Proxima marker → annotated, pre-selected component view with breadcrumb; ESC returns to the SYSTEM view; _labelRects pairwise non-overlapping; console clean; evidence screenshots on disk in this workstream dir."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7-arrival-unchanged",
+      "statement": "Preview ≡ arrival ≡ pre-increment behavior — the drill-in is a VIEW and the §6 one-destination invariant stands: both Alpha Cen markers preview title 'Alpha Centauri' with the same structure (A+B rendered, far chip present) and both warp to seed 1816942132, landing the authored G2V+K1V @23.5 AU system, exactly as verified in the grammar workstream at 5583651.",
+      "verifyVia": {
+        "input": "Live on :5176 (autopilot-off protocol; settled state; confirm the seed in the [WARP] log before trusting an arrival): browse both markers, warp from each in turn.",
+        "observable": "Both previews: seed 1816942132, title 'Alpha Centauri'; both warps: seed 1816942132 in the [WARP] log, authored system arrival; console clean."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC8-rep-cap-amendment",
+      "statement": "docs/WORKSTREAMS/real-universe-overlay-2026-07-12/representation-cap.md is amended in exactly TWO strokes (report §3.3): (a) §2's 'Data-level v1: no scene body' line is superseded — far companions gain their OWN component scene, not a slot in the pair's scene; (b) §1's header 'At most 2 CLOSE stars per system' is reworded per-rendered-scene (which the body already means — each component scene still holds ≤2 close stars). §3 higher-order collapse survives per-component. NAMING_AND_REAL_OBJECTS.md §6 cross-references the amendment if touched.",
+      "verifyVia": {
+        "input": "Read the amended doc; scoped doc-rot check for this workstream.",
+        "observable": "Stroke (a): the 'Data-level v1: no scene body' line carries an explicit supersession note citing this workstream. Stroke (b): the §1 header contains 'per rendered scene' (or equivalent wording) AND still asserts the ≤2-close-stars cap. §3 (higher-order collapse) textually unchanged. The NAMING_AND_REAL_OBJECTS.md cross-ref is NON-GATING (only required if that doc is touched). doc-rot flagged: 0."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC9-regression-guardrail",
+      "statement": "Nothing lane-owned moves: full suite ≥ 1,557/0 (baseline grows, never shrinks; vendor/motion-test-kit collection noise pre-existing); ZERO main.js edits (lane-B flag ledger stays FOUR); no lane-B files (src/flight/, src/auto/, SC_TUNING); no src/rendering/sky/* (lane D); diff confined to src/ui/, src/generation/, tests, and docs; new pure helpers follow the src/ui/systemIdentity.js pattern — concretely: pure module, no NavComputer-instance dependency, unit-testable without constructing NavComputer.",
+      "verifyVia": {
+        "input": "Headless: full vitest from the repo dir; git diff --stat vs dc0f3c5 scoped to src/; helper-purity check (new helper tests import the module bare, never new NavComputer).",
+        "observable": "Suite ≥ 1,557/0; ProcgenSnapshot green per AC3; diff touches only the allowed surfaces; main.js untouched; new helper test files construct no NavComputer instance."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC10-uat",
+      "statement": "Max's holistic gate: selecting the Proxima part of Alpha Centauri and seeing her planets feels like navigating ONE system's structure — the triple is experienceable as a triple in nav. The three riding gates re-run in the SAME sitting on this build: real-universe-overlay AC9 re-run, unification AC11, grammar AC8.",
+      "verifyVia": {
+        "input": "Max free-plays the nav computer on :5176 with the build live, per the seam handoff's UAT recipe.",
+        "observable": "Max's judgment; no agent marks this — deferred-to-max until his verdict."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "STELLAR_COMPANIONS authored table + validateStellarCompanions (src/generation/data/stellarCompanions.js) — the promotion source. Terminology trap (report §3.3): companionSpec.components already means the ≤2 close-pair spectral descriptors, so the new field is systemData.componentSystems (distinct name).",
+      "systemData.farCompanions emission (StarSystemGenerator authored-only branch) — the PROVEN byte-safety recipe this substrate copies: key omitted from procgen output, zero RNG draws on the procgen path; ProcgenSnapshot pins only purely-procgen samples.",
+      "SeededRandom.child (src/generation/SeededRandom.js) — the deterministic child-stream mechanism; the ONE canonical system seed comes from the existing realStarSeed path, UNTOUCHED (Proxima bins to Rigil's same 0.1 pc F1 cell (80009, 250, −9) — report §3.3's verified correction).",
+      "KnownSystemAuthoring.buildAuthoredContext / RealSystemOverlay.resolve — where authored component payloads join; KNOWN_SYSTEM_CONTENTS pins Proxima b/d; resolveArrivalSystem flows new authored fields through transparently (never reads structural star fields).",
+      "NavComputer planet-detail drill pattern (_systemMode + _selectedPlanetIdx + _renderPlanetDetail) — the pattern AC5 mirrors; _farChipRects hit-rects already published (hover-only today) — the chip click handler's geometry source.",
+      "multiplicityOracle.multiplicityForSeed {count, closeCount, farCount, farNames} + test helper mult() — the AC4 lockstep obligation (both defined off farCompanions today; components must not desynchronize them).",
+      "System-identity grammar rule (docs/NAMING_AND_REAL_OBJECTS.md — four normative clauses; clause 3 explicitly anticipates member-specific entry) — the drill-in view must satisfy clauses 1–4.",
+      "multistar-render-feasibility.md §3.2–§3.3, §4, §6–§7 (adversarially verified at 7cb8253) — ground truth for every design fact above; trust-but-cite, do not re-derive."
+    ],
+    "outputs": [
+      "componentSystems data substrate — the spawnable component payload Increment B's travel transition (joint lane B+C scoping, after orrery-coherence UAT) will spawn from.",
+      "Component drill-in nav view — closes Max's concrete complaint: the Proxima part of Alpha Centauri is selectable, with b/d shown at real generated orbits.",
+      "Rep-cap per-rendered-scene amendment — the design law wide-binary procgen (Max's 2026-06-04 intent) and Increment B build on.",
+      "The Increment-A UAT sitting carries the three riding gates: real-universe-overlay AC9 re-run, unification AC11, grammar AC8."
+    ],
+    "mustStayWorking": [
+      "Grammar-WS invariants at 5583651: one destination (both Alpha Cen markers → seed 1816942132, preview ≡ arrival), system-title + 'via <component>' annotation grammar, prism tether + membership suffix, label declutter, catalog-true marker positions (draw-only rule).",
+      "ProcgenSnapshot 24/24 byte-identical; suite baseline 1,557 grows-never-shrinks; realStarSeed.js byte-identical.",
+      "Lane boundaries: ZERO main.js edits (lane-B ledger stays FOUR); no src/flight/, src/auto/, SC_TUNING (lane B); no src/rendering/sky/* (lane D); vitest from the repo dir only.",
+      "Existing farCompanions presentation for non-drill contexts: edge chip + hover tooltip content, prism glyph dot counts for all census rows, 36 Oph honest triple within the per-scene cap.",
+      "Overlay invariants: Sol full override + scene suite; Sirius table-win; TRAPPIST-1 snum pin; alias arrival (far-member name lands the one authored system); pin-by-default; POSITION_MATCH_TOL current-system identity."
+    ]
+  }
+}
