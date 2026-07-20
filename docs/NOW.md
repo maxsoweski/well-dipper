@@ -219,14 +219,20 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > re-run** (:5176 tab parked at Sol, tour off). Overlay close-out still gated on AC9-PASS. Branch ~32
 > ahead of origin (push Max-gated).
 
-> **▶ NEXT (2026-07-19): MULTI-STAR RENDER FEASIBILITY INVESTIGATION (fresh session).** Max's UAT look
-> at the grammar WS escalated into a directive (verbatim in the handoff): can a 3-body relationship
-> like α Cen be rendered at BOTH the SYSTEM nav scale AND the in-game system environment scale —
-> exhaust feasibility avenues FIRST; nav-side PRISM↔SYSTEM redesign is the fallback only if truly
-> infeasible. Concrete gap: no way to select the Proxima component (with b/d) — every prism click
-> lands on the Rigil+Toliman inner view. All three open UAT gates (overlay AC9 re-run, unification
-> AC11, grammar AC8) now ride this investigation's outcome. Investigation-first, no build; rec → Max
-> rules → scope. ⭐ Handoff: `~/briefings/handoff-lane-C-multistar-render-feasibility-2026-07-19.md`.
+> **✅ DONE (2026-07-19): MULTI-STAR RENDER FEASIBILITY INVESTIGATION — verdict: FEASIBLE; Max
+> greenlit implementation.** Report `docs/WORKSTREAMS/real-universe-overlay-2026-07-12/`
+> `multistar-render-feasibility.md` (draft `8d9f08f` → 3-verifier adversarial corrections `7cb8253`;
+> material catch: Proxima F1 seed-bin inversion → one-seed + child-stream design). Headline: float32
+> was never the blocker (WorldOrigin rebasing + log depth already live); rec = **Increment A** (lane C:
+> `componentSystems` substrate + nav component drill-in + rep-cap amendment, zero main.js) then
+> **Increment B** (JOINT lane B+C scoping: component travel via warp-swap recenter + DEPART legs).
+> Max ruled 2026-07-19: "Great; … handle implementation (and any planning/research needed before and
+> testing needed after)" → D1/D2 greenlit-in-principle, D4 default = all authored wide multiples,
+> D3 + Increment B deferred to joint scoping. All three open UAT gates (AC9 re-run / AC11 / AC8)
+> re-run on Increment A's build. **▶ NEXT: Increment A via self-paced loop session** —
+> ⭐ Handoff: `~/briefings/handoff-lane-C-multistar-components-implementation-2026-07-19.md`.
+> Cross-lane relay owed to coordinator: lane B board drift (orrery-coherence VERIFIED_PENDING_MAX
+> `802cceb`; DEPART greenlit + `building`).
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
