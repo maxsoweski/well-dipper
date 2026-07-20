@@ -21,12 +21,14 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { STELLAR_COMPANIONS } from '../data/stellarCompanions.js';
 import { KnownSystems } from '../KnownSystems.js';
-import { generateAuthoredSystem } from '../KnownSystemAuthoring.js';
+import { generateAuthoredSystem, buildAuthoredContext } from '../KnownSystemAuthoring.js';
 import { resolveArrivalSystem, resolveArrivalSystemAsync } from '../arrivalResolution.js';
 import { RealSystemOverlay } from '../RealSystemOverlay.js';
 import { GalacticMap } from '../GalacticMap.js';
 import { StarSystemGenerator } from '../StarSystemGenerator.js';
-import { componentSeed, validateComponentPayload } from '../componentSystems.js';
+import {
+  componentSeed, buildComponentContext, validateComponentPayload,
+} from '../componentSystems.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATA = (name) => join(HERE, '../../../public/assets/data', name);
@@ -130,10 +132,10 @@ describe('AC1 — component payload contents', () => {
 
   it('Guniibuu → HD 156026 (0 pins) and Zet-1 Ret → Zet-2 Ret (0 pins) are single stars, procgen fill only', () => {
     const CASES = [
-      { row: 'Guniibuu', type: 'K', compName: 'HD 156026', compClass: 'K5V' },
-      { row: 'Zet-1 Ret', type: 'G', compName: 'Zet-2 Ret', compClass: 'G1V' },
+      { row: 'Guniibuu', type: 'K', compName: 'HD 156026', compClass: 'K5V', compType: 'K' },
+      { row: 'Zet-1 Ret', type: 'G', compName: 'Zet-2 Ret', compClass: 'G1V', compType: 'G' },
     ];
-    for (const { row, type, compName, compClass } of CASES) {
+    for (const { row, type, compName, compClass, compType } of CASES) {
       const { systemData } = resolveArrivalSystem({
         galacticMap: gm, overlay, pos: REAL_POS, starType: type,
         seed: `${row}-sub`, displayName: row, hasNavStar: true,
@@ -143,6 +145,7 @@ describe('AC1 — component payload contents', () => {
       expect(comp.name).toBe(compName);
       expect(comp.systemData.isBinary).toBe(false);
       expect(comp.systemData.star2).toBeNull();
+      expect(comp.systemData.star.type).toBe(compType);
       expect(comp.systemData.star.spectFull).toBe(compClass);
       // Zero pins: no known planet ever appears — the fill is pure child-stream procgen.
       expect(comp.systemData.planets.every((p) => p.known !== true), row).toBe(true);
@@ -151,6 +154,35 @@ describe('AC1 — component payload contents', () => {
 });
 
 describe('AC2 — child-stream seed on the emission path', () => {
+  it('seed↔payload coherence: regenerating from comp.seed reproduces comp.systemData (S2-verify NIT)', () => {
+    // An implementation that RECORDS componentSeed(...) while generating from
+    // some other seed passes every other test in this file; this pins the
+    // recorded seed as the actual re-spawn key — Increment B's spawn contract.
+    const ks = alphaCenEntry();
+    const comp = generateAuthoredSystem(ks, null).componentSystems[0];
+    const parentCtx = buildAuthoredContext(ks, null);
+    const fc = parentCtx.farCompanions[0];
+    const type = StarSystemGenerator.normalizeSpectralClass(fc.class) || 'M';
+    const regen = StarSystemGenerator.generate(comp.seed, buildComponentContext(parentCtx, fc, type));
+    expect(rt(regen)).toEqual(rt(comp.systemData));
+  });
+
+  it('a synthetic 2-far ctx emits componentSystems in farCompanions order (S2-verify NIT — 1:1 not vacuous)', () => {
+    // Every real far row carries exactly one companion, so the census cannot
+    // see a reversed-order emission; this synthetic pair pins index order.
+    const ctx = gm.deriveGalaxyContext(REAL_POS);
+    ctx.starTypeOverride = 'G';
+    ctx.farCompanions = [
+      { name: 'Far Alpha', class: 'M2V', separationAU: 5000 },
+      { name: 'Far Beta', class: 'K3V', separationAU: 9000 },
+    ];
+    const sys = StarSystemGenerator.generate('two-far-order', ctx);
+    expect(sys.componentSystems.map((c) => c.name)).toEqual(['Far Alpha', 'Far Beta']);
+    expect(sys.componentSystems.map((c) => c.type)).toEqual(['M', 'K']);
+    expect(sys.componentSystems[0].seed).toBe(componentSeed('two-far-order', 0));
+    expect(sys.componentSystems[1].seed).toBe(componentSeed('two-far-order', 1));
+  });
+
   it('payload seed === componentSeed(canonicalSeed, idx) — recomputed', () => {
     // Authored path: the canonical seed is the registry entry's own seed.
     const ks = alphaCenEntry();
