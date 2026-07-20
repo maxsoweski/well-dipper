@@ -48,6 +48,10 @@ const parentCtx = () => ({
   binaryModifier: 1.0,
   starWeights: { G: 0.1, K: 0.2, M: 0.7 },
   position: { x: 8.000948, y: 0.024984, z: -0.000924 },
+  // A field this test suite does NOT know about — pins the ...rest PASS-THROUGH
+  // semantics (a whitelist copy of the individually-asserted fields would pass
+  // every other test; real ctxs carry more fields than this factory).
+  unknownExtraField: 'must-survive-pass-through',
   starTypeOverride: 'G',
   companionSpec: {
     name: 'Alpha Centauri',
@@ -77,6 +81,17 @@ describe('componentSeed — child-stream derivation (AC2)', () => {
     const childSpy = vi.spyOn(SeededRandom.prototype, 'child');
     componentSeed('alpha-centauri', 2);
     expect(childSpy).toHaveBeenCalledWith('component-2');
+  });
+
+  it('golden derivation: the suffix IS the child-stream draw (S1-verify NIT — a call-and-discard fake passes the spy test)', () => {
+    // Recomputed independently: an implementation that calls .child(), discards
+    // it, and draws the suffix from the root (or bare-concats) passes the spy +
+    // determinism + distinctness tests but fails THIS pin. Also the only guard
+    // against derivation drift — S2's payload-seed test recomputes via
+    // componentSeed itself, so it can never catch drift here.
+    const expected =
+      `x:component-0:${new SeededRandom('x').child('component-0').int(0, 0xffffffff).toString(36)}`;
+    expect(componentSeed('x', 0)).toBe(expected);
   });
 
   it('never references realStarSeed (module source has zero occurrences)', () => {
@@ -125,6 +140,8 @@ describe('buildComponentContext — recursion + no-inherit guard (DECISION b)', 
     expect(ctx.binaryModifier).toBe(parent.binaryModifier);
     expect(ctx.starWeights).toEqual(parent.starWeights);
     expect(ctx.position).toEqual(parent.position);
+    // Pass-through, not whitelist: fields the helper has never heard of survive.
+    expect(ctx.unknownExtraField).toBe('must-survive-pass-through');
   });
 });
 
@@ -183,6 +200,14 @@ describe('validateComponentPayload — payload-shape check (AC1)', () => {
       entry.systemData = sd;
       expect(validateComponentPayload(entry).ok, `systemData ${JSON.stringify(sd)}`).toBe(false);
     }
+  });
+
+  it('rejects a null entry, an array entry, and an empty-string name', () => {
+    expect(validateComponentPayload(null).ok).toBe(false);
+    expect(validateComponentPayload([]).ok).toBe(false);
+    const entry = wellFormed();
+    entry.name = '';
+    expect(validateComponentPayload(entry).ok).toBe(false);
   });
 
   it('requires systemData to carry a star object and a planets array (drill-in consumables)', () => {
