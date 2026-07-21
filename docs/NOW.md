@@ -199,7 +199,9 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > (b) component-centric arrival (R2, bigger), (c) prism co-membership cue. **Max tabled → fresh
 > session REASSESSES the fork first, then recs** (his ruling before any build). Handoff:
 > `~/briefings/handoff-lane-C-far-companion-fork-2026-07-15.md`. AC9 verdict still open; overlay
-> close-out remains gated on AC9-PASS. Branch 25 ahead of origin (push Max-gated).
+> close-out remains gated on AC9-PASS. Branch 25 ahead of origin (push Max-gated). *(RESOLVED
+> 2026-07-21: the AC9 re-run PASSED in the ship-cascade UAT sitting on build `6bc5177` → overlay
+> Shipped `3e58fac`, unification Shipped `f6b3eff` — see the SHIPPED block below.)*
 
 > **▶ FINDING #3 RESOLVED (2026-07-19): `system-identity-grammar-2026-07-17` → VERIFIED_PENDING_MAX
 > `5583651`.** Fork reassessed 2026-07-17 → rec (a)+(c)+grammar-rule; **Max overrode with his own
@@ -217,7 +219,8 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > previews title "Alpha Centauri" seed 1816942132, both warps land the authored G+K system log-confirmed,
 > instrumented dot-to-dot tether, zero label overlaps, console clean). **REMAINING: AC8 UAT = Max's AC9
 > re-run** (:5176 tab parked at Sol, tour off). Overlay close-out still gated on AC9-PASS. Branch ~32
-> ahead of origin (push Max-gated).
+> ahead of origin (push Max-gated). *(RESOLVED 2026-07-21: AC8 PASSED in the ship-cascade UAT sitting
+> on build `6bc5177` → Shipped `5583651` — see the SHIPPED block below.)*
 
 > **✅ DONE (2026-07-19): MULTI-STAR RENDER FEASIBILITY INVESTIGATION — verdict: FEASIBLE; Max
 > greenlit implementation.** Report `docs/WORKSTREAMS/real-universe-overlay-2026-07-12/`
@@ -234,8 +237,9 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > Cross-lane relay owed to coordinator: lane B board drift (orrery-coherence VERIFIED_PENDING_MAX
 > `802cceb`; DEPART greenlit + `building`).
 
-> **▶ LATEST lane C (2026-07-21): MULTISTAR COMPONENTS INCREMENT A — VERIFIED_PENDING_MAX
-> `6bc5177`; awaiting Max UAT (AC10 + the three riding gates).** Workstream
+> **✅ SHIPPED lane C (2026-07-21): MULTISTAR COMPONENTS INCREMENT A — Shipped `6bc5177`;
+> Max UAT PASSED same day ("UAT passes as written"): AC10 + all three riding gates in one
+> sitting.** Workstream
 > `multistar-components-2026-07-19` (JOURNEY: real-universe navigability / PLAYER_EXPERIENCE:
 > nav-computer tier). Headless S1–S5+S7+S8 (`a52163b`…`9904569`, each slice TDD +
 > fable-adversarially verified, findings folded same-session; suite 1,557→**1,616/0**;
@@ -248,9 +252,20 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > verify-workstream** wf_2dc6721a-12c at `6bc5177`: 8/8 unit ACs PASS (3/3 adversarial votes
 > each); AC6/AC7 static-INSUFFICIENT by design → closed by `verdict-live-drives-6bc5177.json`;
 > AC10 deferred-to-max. Contract `status: verified` / `VERIFIED_PENDING_MAX 6bc5177`.
-> **REMAINING: Max's UAT sitting** — ⭐ recipe:
-> `~/briefings/handoff-lane-C-multistar-components-verified-2026-07-21.md` (same sitting
-> re-runs overlay AC9, unification AC11, grammar AC8). Watch-items for Increment B scoping:
+> **✅ UAT PASSED (Max, 2026-07-21, verbatim "UAT passes as written")** — all four gates in
+> one sitting on build `6bc5177`: AC10 + overlay AC9 re-run + unification AC11 + grammar AC8
+> (recipe: `~/briefings/handoff-lane-C-multistar-components-verified-2026-07-21.md` §3). Max
+> also confirmed no-warp-to-components is correct by design (Increment B; view only; §6
+> one-destination invariant). No recording artifact — Max drove the app HIMSELF live, which
+> is direct Max evaluation (motion evidence, Max-evaluated), satisfying the Shipped-gate
+> principle. **SHIP CASCADE EXECUTED same day:** FOUR contracts → `shipped`, all schema-valid
+> (multistar-components @`6bc5177`; grammar @`5583651` — AC8 was its last gate; unification
+> @`f6b3eff` — AC11 ditto; overlay @`3e58fac` — the AC9 re-run its close-out was gated on).
+> Rule 3 docs: FEATURES.md overlay row de-staled + 3 new rows (unification, grammar, component
+> drill-in) + naming row → shipped-confirmed; doc-graph zero-diff; doc-rot 225 flags, no new.
+> **Push + master-merge remain Max-gated (branch unpushed).** **▶ NEXT: Increment B (component
+> travel) = JOINT lane B+C scoping interview — not before Max prompts; also waits on lane B's
+> orrery-coherence UAT (`802cceb`).** Watch-items for Increment B scoping:
 > one 998 ms fold stall on the Sol→α Cen leg (attribution open; leg 1 clean); HELM boot-tour
 > auto-warp (standing lane-B flag). Parked (out of surface, recorded in commit messages +
 > seam handoff): normalizeSpectralClass prototype-key lookup quirk; silent 'M' fallback for
