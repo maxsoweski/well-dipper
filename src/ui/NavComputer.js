@@ -740,10 +740,33 @@ export class NavComputer {
   /** Get the pending commit action (backup for close path). */
   getCommitAction() { return this._commitAction; }
 
-  /** Build a commit action from the current selection. */
+  /** Build a commit action from the current selection.
+   *
+   * Component drill-in commit (AC1, multistar-component-travel-2026-07-21):
+   * the arrival address rides the NAME channel — action.star.name →
+   * warpTarget.name → the arrival resolver's displayName — the only
+   * nav→arrival channel main.js's dispatchNavAction whitelist copy
+   * preserves. BOTH entry paths must commit the COMPONENT's name: the PRISM
+   * member-marker path already has _systemStar = the member, but the
+   * far-chip path leaves _systemStar as the SYSTEM marker — load-bearing
+   * for dedup-absorbed siblings (HD 156026, Zet-2 Ret), which have no PRISM
+   * marker of their own, so the far chip is their only entry point.
+   * Position/seed stay the MARKER's: the marker position keeps findByAlias
+   * routing and the F1 seed-bin identity (both alpha Cen marker positions
+   * hash to the one canonical seed).
+   *
+   * `component: true` is the opt-in component-resolution flag (the
+   * action-side twin of the arrival resolver's explicit component
+   * parameter). main.js's whitelist copy drops it harmlessly today; GB7
+   * threads it through the mid-warp stash once lane B lands. Non-component
+   * commits are byte-identical to the legacy shape — no flag key at all.
+   */
   _buildCommitAction() {
     if (!this._selectedBody || !this._systemStar) return null;
     const isCurrent = this._isCurrentSystem();
+    const comp = this._systemMode === 'component'
+      ? this._systemData?.componentSystems?.[this._selectedComponentIdx] ?? null
+      : null;
     const action = {
       type: isCurrent ? 'burn' : 'warp',
       target: this._selectedBody.type,
@@ -752,9 +775,12 @@ export class NavComputer {
       moonIndex: this._selectedBody.moonIndex ?? null,
       star: {
         wx: this._systemStar.wx, wy: this._systemStar.wy, wz: this._systemStar.wz,
-        seed: this._systemStar.seed, name: this._systemStar.name, spectral: this._systemStar.spectral,
+        seed: this._systemStar.seed,
+        name: comp ? comp.name : this._systemStar.name,
+        spectral: this._systemStar.spectral,
       },
     };
+    if (comp) action.component = true;
     return action;
   }
 
@@ -2594,10 +2620,15 @@ export class NavComputer {
   // The drill MECHANISM mirrors the planet-detail drill (mode + index + render
   // fn + ESC pop); the RENDER is a SYSTEM-scale orrery over the component's
   // own full generated payload (componentSystems[idx].systemData — a component
-  // is a full system, so sqrt-AU projection, not the moon-scale one). VIEW
-  // ONLY: no commit affordance — warp semantics unchanged, travel is
-  // Increment B's. Publishes its OWN _labelRects so the AC6 live non-overlap
-  // handle measures THIS view, not stale prism rects (fable M2).
+  // is a full system, so sqrt-AU projection, not the moon-scale one).
+  // Increment A shipped this VIEW ONLY; AC1 of multistar-component-travel-
+  // 2026-07-21 supersedes that for the FOREIGN case: the drilled component is
+  // warp-addressable, so the view arms and draws a [ WARP ] commit affordance
+  // targeting THIS component (name-channel transport — see
+  // _buildCommitAction). The CURRENT-system drill stays view-only until GB2
+  // delivers the inter-component BURN leg (lane-B-gated). Publishes its OWN
+  // _labelRects so the AC6 live non-overlap handle measures THIS view, not
+  // stale prism rects (fable M2).
   _renderComponentDetail(ctx, w, h) {
     const drawH = h - 50;
     const view = deriveComponentView(
@@ -2607,6 +2638,10 @@ export class NavComputer {
     this._labelRects = [];
     if (!view.systemData) {
       // Stale index / procgen payload — degrade to the SYSTEM view, no throw.
+      // Drop any armed component-addressed action with it: the SYSTEM view's
+      // rebuild guard (!_commitAction) would otherwise leave a stale
+      // component name under the parent's WARP button.
+      this._clearCommitSelection();
       this._systemMode = 'system';
       this._selectedComponentIdx = -1;
       this._componentView = null;
@@ -2707,11 +2742,41 @@ export class NavComputer {
       this._labelRects.push({ x: sp.x - labelW / 2, y: labelY - 8, w: labelW, h: 10, name: label });
     }
 
-    // ── Footer: view-only affordance ──
-    ctx.font = '8px "DotGothic16", monospace';
-    ctx.fillStyle = 'rgba(150, 175, 215, 0.55)';
-    ctx.textAlign = 'center';
-    ctx.fillText('VIEW ONLY · ESC TO GO BACK', w / 2, drawH - 8);
+    // ── Commit affordance (AC1, multistar-component-travel-2026-07-21) ──
+    // Foreign system: the drilled component is warp-addressable — arm the
+    // component-named action every frame (idx can change between drills; the
+    // component star is the only commit target in this view, so the
+    // unconditional rebuild clobbers nothing) and draw [ WARP ] with the
+    // system view's button geometry. Current system: no affordance — the
+    // inter-component BURN leg is GB2's (lane-B-gated), so the drill stays
+    // honestly view-only there.
+    if (!this._isCurrentSystem()) {
+      this._selectedBody = { type: 'star', starIndex: 0 };
+      this._commitAction = this._buildCommitAction();
+
+      const btnColor = 'rgba(100, 180, 255, 0.9)';
+      const btnW = 180, btnH = 28;
+      const btnX = (w - btnW) / 2, btnY = drawH - 52;
+      ctx.fillStyle = 'rgba(100, 180, 255, 0.1)';
+      ctx.fillRect(btnX, btnY, btnW, btnH);
+      ctx.strokeStyle = btnColor;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(btnX, btnY, btnW, btnH);
+      ctx.font = '12px "DotGothic16", monospace';
+      ctx.fillStyle = btnColor;
+      ctx.textAlign = 'center';
+      ctx.fillText('[ WARP ]', w / 2, btnY + 19);
+      this._commitButtonRect = { x: btnX, y: btnY, w: btnW, h: btnH };
+
+      ctx.font = '8px "DotGothic16", monospace';
+      ctx.fillStyle = 'rgba(150, 175, 215, 0.55)';
+      ctx.fillText('DRAG TO ROTATE · ESC TO GO BACK', w / 2, drawH - 8);
+    } else {
+      ctx.font = '8px "DotGothic16", monospace';
+      ctx.fillStyle = 'rgba(150, 175, 215, 0.55)';
+      ctx.textAlign = 'center';
+      ctx.fillText('VIEW ONLY · ESC TO GO BACK', w / 2, drawH - 8);
+    }
     ctx.textAlign = 'left';
   }
 
@@ -3921,10 +3986,15 @@ export class NavComputer {
         }
       }
 
-      // Component sub-view: click returns to system (info only — the drill-in
-      // is a VIEW; travel is Increment B's, mirroring the foreign planet-detail
-      // return above).
+      // Component sub-view: a [ WARP ] hit was already handled by the
+      // commit-button branch above (AC1, multistar-component-travel-2026-07-21
+      // — it commits the COMPONENT-addressed action instead of popping). Any
+      // other click pops back to the SYSTEM view, dropping the
+      // component-addressed action with it so the system view re-arms its own
+      // marker-named commit (leak guard — without the clear, the parent's
+      // WARP button would silently keep the component destination).
       if (this._systemMode === 'component') {
+        this._clearCommitSelection();
         this._systemMode = 'system';
         this._selectedComponentIdx = -1;
         this._componentView = null;

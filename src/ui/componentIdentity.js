@@ -14,21 +14,12 @@
 
 import { deriveSystemTitle, deriveSystemAnnotation } from './systemIdentity.js';
 
-/**
- * Index of the component whose name matches `markerName`, or -1. The name key
- * is componentSystems[i].name (=== farCompanions[i].name by the 1:1 emission
- * invariant). -1 for procgen stars, close members (Rigil/Toliman), and any
- * system without componentSystems — callers treat -1 as "no drill".
- *
- * @param {object|null|undefined} systemData parent system payload
- * @param {string|null|undefined} markerName
- * @returns {number}
- */
-export function findComponentIndexByName(systemData, markerName) {
-  const comps = systemData?.componentSystems;
-  if (!Array.isArray(comps) || !markerName) return -1;
-  return comps.findIndex((c) => c && c.name === markerName);
-}
+// findComponentIndexByName moved to src/generation/arrivalResolution.js
+// (multistar-component-travel-2026-07-21): component-addressable arrival makes
+// the arrival resolver a consumer too, and generation code must not import UI
+// modules — so the canonical implementation lives with the resolver and this
+// module re-exports it (ONE implementation; NavComputer's import is unchanged).
+export { findComponentIndexByName } from '../generation/arrivalResolution.js';
 
 /**
  * View-model for the component drill-in. Falls back safely on out-of-range

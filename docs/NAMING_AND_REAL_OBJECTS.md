@@ -593,12 +593,31 @@ system must:
    Alpha Centauri") plus a tether cue on hover/selection.
 
 **The invariant behind all four:** one star system = one identity everywhere.
-The same seed, the same structure, the same name, and the same warp
-destination, on every path a player can reach it — search, prism click, sky
-click, teleport — and on every screen that describes it. The data half of this
-invariant is built and verified (`real-star-identity-unification-2026-07-15`:
-canonical seed, preview ≡ arrival, pin-by-default); this section binds the
-presentation half (`system-identity-grammar-2026-07-17`).
+The same seed, the same structure, and the same name, on every path a player
+can reach it — search, prism click, sky click, teleport — and on every screen
+that describes it, with ONE system identity and a **component-addressable
+arrival point**. The data half of this invariant is built and verified
+(`real-star-identity-unification-2026-07-15`: canonical seed, preview ≡
+arrival, pin-by-default); this section binds the presentation half
+(`system-identity-grammar-2026-07-17`).
+
+> **Amendment — 2026-07-21 (`multistar-component-travel-2026-07-21`, AC1).**
+> This clause originally read "…and the same warp destination, on every
+> path" — i.e. one destination = primary arrival: every marker of a multi-star
+> system warped to the primary pair. SUPERSEDED by Max's interview ruling
+> (2026-07-21): *one system identity, component-addressable arrival point.*
+> Committing WARP from a component's own view (PRISM member marker → component
+> SYSTEM view, or the far-companion chip) arrives at THAT component's
+> neighborhood ("I select Proxima in PRISM… I select WARP, and end up in front
+> of PROXIMA"); warping from the close pair's marker or the system name still
+> arrives at the pair. Identity is untouched — one title ('Alpha Centauri'),
+> one canonical seed family (`[WARP]` seed 1816942132 for either Alpha Cen
+> marker), one KnownSystems entry. The amendment changes only WHERE within the
+> one system arrival places you. The shipped test pins that hard-coded
+> primary-only arrival (the multistar-components AC7 view-only pins and the
+> derived-alias arrival pin) were amended in the same commit, each citing this
+> workstream — see `src/ui/__tests__/NavComputer.componentDrill.test.js` and
+> `src/generation/__tests__/arrivalResolution.test.js`.
 
 **Boundary.** The grammar binds *known* multi-star systems (KnownSystems
 registry + curated companion table). Procgen systems have no

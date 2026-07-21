@@ -23,6 +23,36 @@ import { realStarSeed } from './realStarSeed.js';
 // against).
 export const POSITION_MATCH_TOL = 0.0001; // kpc
 
+// findVisible's self-exclusion epsilon: 1e-6 kpc ≈ 0.001 pc ≈ 206 AU.
+// (BN5 of multistar-component-travel-2026-07-21, AC8.) This used to be a
+// blanket 0.1 pc skip (the same 0.0001 literal as POSITION_MATCH_TOL —
+// same number, DIFFERENT job), which hid every authored component sibling:
+// the whole component-separation regime (ceiling ≈ 0.1 pc) sits inside it
+// (Rigil↔Proxima is 0.0554 pc). Shrinking to an epsilon is safe because
+// every arrival/teleport path lands playerGalacticPos EXACTLY on catalog/
+// registry coords, so "self" is dist = 0; the 206 AU margin only absorbs
+// float noise. Scope guards (pinned in starfieldHonesty.test.js):
+//   - HashGridStarfield's 0.0001 near-origin skips must NOT shrink with
+//     this (that would newly reveal procgen stars in every system's sky).
+//   - POSITION_MATCH_TOL above must NOT shrink either (identity matching;
+//     KnownSystems.MATCH_RADIUS ordering invariant).
+export const SELF_SKIP_EPSILON_KPC = 1e-6;
+
+// Blazing tier (BN5, AC8): apparent magnitudes below −3 get a dedicated
+// top size tier + a wider-halo branch in StarfieldLayer's fragment shader,
+// so a component-scene sibling (A+B from Proxima: appMag −6.90) reads as
+// unmistakably blazing instead of pixel-identical to Sirius-from-Sol
+// (−1.44; size buckets used to cap at 12 below appMag −1 and the shader
+// clamps to white). Threshold ruling (working-Claude 2026-07-21, ruling 2):
+// fires ONLY below −3, so every star at appMag ≥ −3 renders byte-identical
+// to before — Sirius-from-Sol is pinned byte-identical in
+// starfieldHonesty.test.js. Max judges the look at UAT.
+export const BLAZING_MAG_THRESHOLD = -3;
+// The aSize value that marks the blazing tier. Strictly above every legacy
+// size bucket (max 12) so StarfieldLayer's shader can key its halo branch
+// on it unambiguously (it interpolates BLAZING_SIZE into the GLSL).
+export const BLAZING_SIZE = 20;
+
 // Spectral type → color (same as HashGridStarfield)
 const SPECTRAL_COLOR = {
   O: [0.6, 0.7, 1.0],
@@ -218,7 +248,10 @@ export class RealStarCatalog {
       const dy = s.y - py;
       const dz = s.z - pz;
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (dist < 0.0001) continue; // skip self
+      // Skip self only — arrival/teleport puts the player exactly on catalog
+      // coords (dist = 0). Component siblings sit inside 0.1 pc (Proxima is
+      // 0.0554 pc from A+B) and MUST render — see SELF_SKIP_EPSILON_KPC.
+      if (dist < SELF_SKIP_EPSILON_KPC) continue;
 
       // Apparent magnitude from the catalog's absolute magnitude
       const d_pc = dist * 1000;
@@ -237,7 +270,8 @@ export class RealStarCatalog {
 
       // Size from magnitude
       let size;
-      if (appMag < -1) size = 12; // very brightest (Sirius, Canopus)
+      if (appMag < BLAZING_MAG_THRESHOLD) size = BLAZING_SIZE; // blazing tier (component siblings)
+      else if (appMag < -1) size = 12; // very brightest (Sirius, Canopus)
       else if (appMag < 0) size = 10;
       else if (appMag < 2) size = 8;
       else if (appMag < 4) size = 6;

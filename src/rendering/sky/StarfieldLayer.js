@@ -1,5 +1,13 @@
 import * as THREE from 'three';
 import { assignName } from '../../util/scene-naming.js';
+import { BLAZING_SIZE } from '../../generation/RealStarCatalog.js';
+
+// GLSL literal for the blazing-tier size key (BN5, multistar-component-travel
+// AC8). RealStarCatalog marks appMag < −3 stars with aSize = BLAZING_SIZE
+// (20 — strictly above the legacy 12 cap), and the fragment shader keys its
+// wider-halo branch on it. Interpolated into the shader source so the two
+// files can never drift apart silently.
+const BLAZING_SIZE_GLSL = BLAZING_SIZE.toFixed(1);
 
 /**
  * StarfieldLayer — background stars on a sky sphere.
@@ -279,6 +287,18 @@ export class StarfieldLayer {
           float coreBright = 1.0 - smoothstep(0.0, 0.2, dist);   // bright center
           float glow = 1.0 - smoothstep(0.1, 0.5, dist);          // soft halo
           float shape = coreBright * 0.6 + glow * 0.4;
+
+          // ── Blazing tier (BN5, multistar-component-travel AC8) ──
+          // aSize >= BLAZING_SIZE marks stars RealStarCatalog mapped below
+          // appMag −3 (component-scene siblings: A+B from Proxima is −6.9).
+          // Wider core + a halo reaching the sprite edge so they read as
+          // unmistakably blazing instead of pixel-identical to Sirius.
+          // Ordinary stars (aSize <= 12) keep the exact shape math above.
+          if (vSize >= ${BLAZING_SIZE_GLSL}) {
+            float blazeCore = 1.0 - smoothstep(0.0, 0.35, dist);
+            float blazeHalo = 1.0 - smoothstep(0.2, 0.7, dist);
+            shape = blazeCore * 0.7 + blazeHalo * 0.3;
+          }
 
           // Dithered edge (retro feel)
           float threshold = bayerDither(floor(gl_FragCoord.xy / 3.0));

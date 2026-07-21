@@ -161,7 +161,14 @@ describe('AC5 — ESC pop + component-mode click return', () => {
     expect(nav._levelIndex).toBe(3);        // second ESC → prism, unchanged behavior
   });
 
-  it('component-mode click returns to system (info-only)', () => {
+  it('component-mode click outside any commit affordance returns to system', () => {
+    // AMENDED (multistar-component-travel-2026-07-21, AC1): this pin was
+    // 'component-mode click returns to system (info-only)' — the Increment-A
+    // view-only ruling. Superseded: the component view gains a WARP commit
+    // (BN2 owns the commit-rect coverage); what STANDS is that clicks outside
+    // the commit affordance still pop back to system. The click point here is
+    // the far-chip position, which is not a commit affordance in either
+    // increment.
     const nav = drillNav({ mode: 'component' });
     nav._handleClick(evt(CLICK_IN_CHIP.x, CLICK_IN_CHIP.y));
     expect(nav._systemMode).toBe('system');
@@ -195,16 +202,20 @@ describe('AC5 — stale _pendingComponentSelect cleared on zoom-cancel / fresh e
 });
 
 describe('AC5 — _renderComponentDetail render source', () => {
-  it('reads orbits from the payload (same object, never synthesized) and sets no commit affordance', () => {
+  it('reads orbits from the payload (same object, never synthesized)', () => {
+    // AMENDED (multistar-component-travel-2026-07-21, AC1): this pin also
+    // asserted 'sets no commit affordance' (_commitButtonRect stays null) —
+    // the Increment-A view-only / primary-only-arrival ruling, superseded by
+    // component-addressable WARP. The commit-rect assertion is DROPPED here
+    // (not silently — this note is the citation); BN2's tests own the new
+    // affordance. The payload-sourced render pin below stands unchanged.
     const nav = drillNav({ mode: 'component' });
-    nav._commitButtonRect = { x: 0, y: 0, w: 10, h: 10 }; // must be cleared by the view
     nav._renderComponentDetail(makeCtx(), 400, 300);
     // Payload-sourced BY IDENTITY: the view renders the exact componentSystems
     // payload object — the strongest "not synthesized" form.
     expect(nav._componentView.systemData).toBe(nav._systemData.componentSystems[0].systemData);
     expect(nav._componentView.systemData.planets.map((p) => p.orbitRadiusAU))
       .toEqual([0.02881, 0.04848]);
-    expect(nav._commitButtonRect).toBeNull();
   });
 
   it('b and d markers are present in the drilled view (structure list = payload planets)', () => {
@@ -214,11 +225,14 @@ describe('AC5 — _renderComponentDetail render source', () => {
     const drawn = ctx._texts.map((t) => t.t);
     expect(drawn).toContain('Proxima Cen d');
     expect(drawn).toContain('Proxima Cen b');
-    // Grammar clauses drawn: title (1), annotation (3), breadcrumb (4), footer.
+    // Grammar clauses drawn: title (1), annotation (3), breadcrumb (4).
     expect(drawn).toContain('Alpha Centauri');
     expect(drawn).toContain('via Proxima Centauri — far companion');
     expect(drawn).toContain('part of Alpha Centauri');
-    expect(drawn.some((t) => /VIEW ONLY/.test(t))).toBe(true);
+    // AMENDED (multistar-component-travel-2026-07-21, AC1): the 'VIEW ONLY'
+    // footer assertion was dropped — the footer pinned the Increment-A
+    // primary-only-arrival ruling, superseded by component-addressable WARP
+    // (BN2 replaces the footer with the commit affordance and owns its tests).
     // Star + 2 planet bodies drawn as arcs (glow + bodies ≥ 3 arcs).
     expect(ctx._arcs.length).toBeGreaterThanOrEqual(3);
   });
