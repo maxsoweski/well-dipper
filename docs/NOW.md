@@ -234,23 +234,27 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > Cross-lane relay owed to coordinator: lane B board drift (orrery-coherence VERIFIED_PENDING_MAX
 > `802cceb`; DEPART greenlit + `building`).
 
-> **▶ LATEST lane C (2026-07-20): MULTISTAR COMPONENTS INCREMENT A — headless build COMPLETE
-> (S1–S5, S7, S8 of 8 slices); BLOCKED on Max for S6 live drives.** Workstream
+> **▶ LATEST lane C (2026-07-21): MULTISTAR COMPONENTS INCREMENT A — VERIFIED_PENDING_MAX
+> `6bc5177`; awaiting Max UAT (AC10 + the three riding gates).** Workstream
 > `multistar-components-2026-07-19` (JOURNEY: real-universe navigability / PLAYER_EXPERIENCE:
-> nav-computer tier). Slices, each TDD + fable-adversarially verified (6 verifier runs +
-> 3 mutation-testing runs, every material finding folded same-session): S1 pure helpers +
-> pre-S2 baselines `a52163b`+`8682709`; S2 componentSystems substrate emission (yield*-delegated
-> child-stream recursion; Proxima b/d at archive orbits) `cbc37d4`+`1cb7795`; S3 byte-safety
-> guards (poison probe, additivity vs baselines) `f2a49a5`; S4 oracle/glyph invariance pins
-> `f03cc12`+`930c703`; S5 component drill-in (componentIdentity.js + both entries: far-chip
-> click `150cb11`, PRISM pre-select `9cf8560`, stale-pre-select material fix `627d072`);
-> S7 sweep + S8 rep-cap two-stroke amendment `9904569`. Suite 1,557→**1,616/0**; ProcgenSnapshot
-> 24/24; main.js + realStarSeed.js zero-diff; scripts/ untouched. **REMAINING: S6 live drives
-> (AC6 drill-in both entries, AC7 arrival-unchanged seed 1816942132) → Phase 4 verify-workstream
-> → Phase 5 seam.** Needs from Max: `:5176` up (`npm run dev -- --port 5176 --strictPort`) AND
-> a session with the chrome-devtools MCP connected (absent from this one). Parked (out of
-> surface, recorded in commit messages): normalizeSpectralClass prototype-key lookup quirk;
-> silent 'M' fallback for non-table far classes; doc-rot scoped-mode port-check still owed.
+> nav-computer tier). Headless S1–S5+S7+S8 (`a52163b`…`9904569`, each slice TDD +
+> fable-adversarially verified, findings folded same-session; suite 1,557→**1,616/0**;
+> ProcgenSnapshot 24/24; main.js + realStarSeed.js zero-diff; scripts/ untouched). **S6 live
+> drives DONE 2026-07-21** (chrome-devtools on `:5176`, build `e8100d8`≡`6bc5177`): AC6 both
+> entries (far-chip drill + PRISM pre-select, real payload b+d at archive orbits, 15 label
+> pairs zero overlap, ESC round-trips) + AC7 both α Cen markers (preview seed 1816942132
+> captured pre-warp; identical authored G+K @23.5 AU arrivals log-confirmed; console 0 err/
+> 0 warn) — `s6-live-drive-log-e8100d8.md` + 8 screenshots (`6bc5177`). **Phase 4
+> verify-workstream** wf_2dc6721a-12c at `6bc5177`: 8/8 unit ACs PASS (3/3 adversarial votes
+> each); AC6/AC7 static-INSUFFICIENT by design → closed by `verdict-live-drives-6bc5177.json`;
+> AC10 deferred-to-max. Contract `status: verified` / `VERIFIED_PENDING_MAX 6bc5177`.
+> **REMAINING: Max's UAT sitting** — ⭐ recipe:
+> `~/briefings/handoff-lane-C-multistar-components-verified-2026-07-21.md` (same sitting
+> re-runs overlay AC9, unification AC11, grammar AC8). Watch-items for Increment B scoping:
+> one 998 ms fold stall on the Sol→α Cen leg (attribution open; leg 1 clean); HELM boot-tour
+> auto-warp (standing lane-B flag). Parked (out of surface, recorded in commit messages +
+> seam handoff): normalizeSpectralClass prototype-key lookup quirk; silent 'M' fallback for
+> non-table far classes; doc-rot scoped-mode port-check still owed.
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed

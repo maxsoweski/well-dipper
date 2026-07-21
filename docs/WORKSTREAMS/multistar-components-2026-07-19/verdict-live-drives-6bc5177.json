@@ -1,0 +1,41 @@
+{
+  "workstream": "multistar-components-2026-07-19",
+  "commit": "6bc5177",
+  "date": "2026-07-21",
+  "driver": "working-Claude (main thread, chrome-devtools on :5176, debug Chrome 9223)",
+  "scope": "Closes the two live:true integration ACs the verify-workstream full run (wf_2dc6721a-12c, verdict.json at the same commit) left INSUFFICIENT: AC6-drill-in-live, AC7-arrival-unchanged. Complements, does not replace, verdict.json. Same-session, same-tree drives (code identical to e8100d8; 6bc5177 is docs-only on top). Full narrative + methods: s6-live-drive-log-e8100d8.md.",
+  "protocol": {
+    "tour": "window._autoNav stopped at boot chooser and re-checked after every warp; it re-armed twice (HELM-tour boot, arrival) and was stopped both times; zero [NAV-SEQ] lines all session; every arrival's [NAV DISPATCH]/[WARP] seed matched the driver's own dispatch (per feedback_wd-nav-drives-autopilot-off)",
+    "inputs": "trusted CDP keys (n/Escape) for game-level input; canvas MouseEvents through the real listener chain (_handleMouseMove/_handleClick) for hover/click/commit; search rows via their own DOM mousedown handlers",
+    "markerDisambiguation": "the two alpha Cen prism dots project ~9 px apart with hitDist=12 last-match-wins; every hover/click point chosen inside the target's hit radius and outside the other's, _hoveredLocalStar.star.name confirmed before every click",
+    "seeds": "per-marker preview seed captured from marker state AND the [NAV] Entering-system-view console line BEFORE warping; every warp confirmed via [NAV DISPATCH]/[WARP] log before trusting the arrival"
+  },
+  "AC6-drill-in-live": {
+    "result": "PASS",
+    "evidence": [
+      "Entry (a) far-chip: from the alpha Cen SYSTEM view (entered via Rigil's marker), real click on _farChipRects[0] -> _systemMode='component', _selectedComponentIdx=0; _componentView = {title 'Alpha Centauri', breadcrumb 'part of Alpha Centauri', annotation 'via Proxima Centauri — far companion', componentName 'Proxima Centauri'}",
+      "Component payload is the REAL generated system: authored pins Proxima Cen d (0.02881 AU) + Proxima Cen b (0.04848 AU) at their actual orbits plus 4 procgen-fill siblings (P3-P6) from componentSystems[0].systemData — never fabricated view-only orbits",
+      "_labelRects non-overlap via the instrumented handle: 6 labels, 15 pairs, ZERO overlaps (exact float AABB) — asserted independently in BOTH the entry-(a) and entry-(b) drilled views",
+      "ESC round-trip: _systemMode -> 'system', _selectedComponentIdx -> -1, _componentView -> null; verified after both entries",
+      "Entry (b) PRISM far-member: real hover+click on Proxima's own marker (console '[NAV] Entering system view for: Proxima Centauri seed: 1816942132 type: M') -> lands level 4 with the component PRE-SELECTED (_systemMode='component', idx 0, _pendingComponentSelect consumed to null), same title/breadcrumb/annotation strings; resolves to the one alpha Cen system (_knownSystemNames {system 'Alpha Centauri', star 'Rigil Kentaurus', star2 'Toliman'})",
+      "Rigil control case: clicking Rigil's marker set then consumed the pre-select as a no-op (findComponentIndexByName -> -1) — plain SYSTEM view, as designed",
+      "Screenshots: evidence-s6-ac6a-component-drilled.png, evidence-s6-ac6a-esc-back-system.png, evidence-s6-ac6b-preselect-via-proxima-marker.png (+ prism hover shots)"
+    ]
+  },
+  "AC7-arrival-unchanged": {
+    "result": "PASS",
+    "evidence": [
+      "Leg 1 (from procgen Fisxam-4OPZ1SMDUO): Rigil marker preview seed 1816942132 captured pre-warp (state + console msgid 39); commit action {type warp, star 'Rigil Kentaurus', seed 1816942132}; [NAV DISPATCH] star=Rigil Kentaurus seed=1816942132 -> [WARP] Known system override: Alpha Centauri -> arrival System 'Alpha Centauri' G+K binary, Star 1.04 Rsun + Star2 0.76 Rsun K, [BINARY] sep=23500.00 scene (authored 23.5 AU), 0 parent planets, farCompanions [Proxima b,d], componentSystems [Proxima] present in arrival payload",
+      "Return leg to Sol via search-warp, log-confirmed own dispatch (star=Sol seed=163760118) — no tour contamination between legs",
+      "Leg 2 (from Sol): Proxima marker preview seed 1816942132 captured pre-warp (state + console msgid 87); [NAV DISPATCH] star=Proxima Centauri seed=1816942132 -> [WARP] Known system override: Alpha Centauri -> IDENTICAL authored arrival (msgid 97-100)",
+      "Both previews titled 'Alpha Centauri' with A+B rendered + far chip 'Proxima Centauri / far companion · 13,000 AU / planets: b, d'",
+      "Console: 97 messages across the whole drive session, ZERO errors, ZERO warnings",
+      "Screenshots: evidence-s6-ac7-system-via-rigil.png, evidence-s6-ac7-arrival-via-rigil.png, evidence-s6-ac7-arrival-via-proxima.png"
+    ]
+  },
+  "watchItems": [
+    "FOLD hitch (non-gating, fable N2): rAF frame-delta watcher armed at each commit click. Leg 1: 2400 frames, mean 8.3 ms, worst 18 ms — clean. Leg 2 (Sol -> alpha Cen): 1899 frames, mean 8.9 ms, ONE 998 ms stall (next-worst 22 ms). Attribution NOT established — leg 1 ran the identical parent+component generation burst cleanly; candidates include Sol's outgoing scene teardown (13 planets, 400 asteroids) and tab-visibility throttling. Rides to the Increment B joint scoping; no fix here (main.js/warp out of surface).",
+    "Boot noise (pre-drive, standing lane-B flag): the HELM splash choice auto-warped to procgen Fisxam-4OPZ1SMDUO seed 1635859914 ('Warp: booting into HELM tour, hands-off') and the tour re-armed once more on a later arrival — stopped before it ever fired a drive-visible warp."
+  ],
+  "windowState": "game tab on :5176 left open for Max's UAT — parked in-system Alpha Centauri, demo tour OFF, nav closed; no agent-opened pages left behind"
+}
