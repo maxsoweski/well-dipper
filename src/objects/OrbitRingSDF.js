@@ -1,6 +1,29 @@
 import * as THREE from 'three';
 
 /**
+ * JS mirror of the GLSL proximity-fade envelope (round-3 staticky fix, 2026-07-21).
+ * Exported so the unit suite and the orbit-lab instrument share ONE definition with
+ * the shader — the envelope can't drift from its tests without a string-pin failing.
+ *
+ *   near = max(nearAbs, nearRel * radius)   — absolute floor for moon-scale rings,
+ *                                             relative term for star-scale rings
+ *   far  = near * farMul
+ *   returns smoothstep(near, far, circleDist)
+ *
+ * @param {number} circleDist 3D distance from the camera to the ring's CIRCLE (not
+ *                            its center): hypot(length(camLocal.xz) - R, camLocal.y)
+ * @param {number} radius     ring radius in scene units
+ * @param {object} [cfg]      {nearAbs=0.35, nearRel=0.02, farMul=3.0} — UAT taste knobs
+ * @returns {number} fade factor in [0,1]; 0 standing on the circle, 1 far away
+ */
+export function proximityFadeFactor(circleDist, radius, { nearAbs = 0.35, nearRel = 0.02, farMul = 3.0 } = {}) {
+  const near = Math.max(nearAbs, nearRel * radius);
+  const far = near * farMul;
+  const t = Math.min(1, Math.max(0, (circleDist - near) / (far - near)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
  * OrbitRingSDF — an analytic, coverage-based replacement for OrbitLine.
  *
  * WHY THIS EXISTS (orrery-entry-orbits-2026-07-20, AC5)
@@ -102,6 +125,20 @@ export class OrbitRingSDF {
         // 0.25 measured lower churn still but its coverage margin is 0.75px —
         // too tight to ship blind. Width + feather are Max's taste knobs at re-UAT.
         uFeatherPx:  { value: 0.5 },
+        // Proximity fade (round-3 staticky fix, 2026-07-21 — Max-ratified after the
+        // confirmed reproduction at 8715e27). The "mess" is the focused planet's OWN
+        // orbit ring drawn from a camera standing ON its circle: near the ring's
+        // on-screen horizon fwidth(g) explodes and the 1/3-res band test flips per
+        // quad — torn slashes that seethe under the ORRERY's perpetual drift. No
+        // alpha shaping fixes that regime (width 2.0 measured: fatter mess, same
+        // tearing). So: fade a ring by the camera's 3D distance to ITS CIRCLE —
+        // the line you stand on carries no information — and leave every far ring
+        // (the AC5 chunky-retro look) untouched. Envelope mirrored in
+        // proximityFadeFactor above; defaults validated by live mock with Max.
+        // All three are his UAT taste knobs (setProximityFade).
+        uProxNearAbs: { value: 0.35 },
+        uProxNearRel: { value: 0.02 },
+        uProxFarMul:  { value: 3.0 },
       },
       // Derivatives (fwidth) are core in WebGL2/GLSL-ES-3.0 (this codebase's
       // renderer); this flag makes the shader also valid on a WebGL1 fallback.
@@ -109,13 +146,34 @@ export class OrbitRingSDF {
       vertexShader: /* glsl */`
         #include <common>
         #include <logdepthbuf_pars_vertex>
+        uniform float uRadius;
+        uniform float uProxNearAbs;
+        uniform float uProxNearRel;
+        uniform float uProxFarMul;
         varying vec3 vLocalPos;
+        varying float vProxFade;
         void main() {
           // Object-space position. The mesh is only rotated/translated (never
           // scaled), so 1 object unit == 1 world unit and length(vLocalPos.xz)
           // is the true scene-unit radius at this fragment. Repositioning the
           // mesh (moon rings) moves the whole ring rigidly — geometry unchanged.
           vLocalPos = position;
+
+          // Proximity fade: camera position in OBJECT space. Because the model
+          // transform is rigid (pinned above — never scaled), undoing it is the
+          // dot-product-by-columns form below — no ES-3.00-only matrix builtins,
+          // which keeps this valid GLSL ES 1.00 on the WebGL1 fallback. The
+          // factor is constant across the quad, so per-vertex + varying
+          // interpolation is exact. Envelope mirrored in proximityFadeFactor.
+          vec3 dWorld = cameraPosition - vec3(modelMatrix[3]);
+          vec3 camObj = vec3(dot(modelMatrix[0].xyz, dWorld),
+                             dot(modelMatrix[1].xyz, dWorld),
+                             dot(modelMatrix[2].xyz, dWorld));
+          float radial = length(camObj.xz) - uRadius;
+          float circleDist = length(vec2(radial, camObj.y));
+          float proxNear = max(uProxNearAbs, uProxNearRel * uRadius);
+          vProxFade = smoothstep(proxNear, proxNear * uProxFarMul, circleDist);
+
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           #include <logdepthbuf_vertex>
         }
@@ -129,8 +187,14 @@ export class OrbitRingSDF {
         uniform float uVisFactor;
         uniform float uFeatherPx;
         varying vec3 vLocalPos;
+        varying float vProxFade;
 
         void main() {
+          // Proximity fade floor: below the 8-bit quantization step the ring
+          // contributes nothing — skip the band math entirely so a fully-faded
+          // ring can't leave a residual seething contour.
+          if (vProxFade < 0.004) discard;
+
           // staticky-orbit fix (2026-07-20): write LOG depth like every other
           // custom ShaderMaterial in this scene (WarpPortal/RingRenderer/Moon —
           // the renderer runs logarithmicDepthBuffer). Without this the band's
@@ -197,7 +261,7 @@ export class OrbitRingSDF {
 
           // uVisFactor (AC3 shared factor) and uOpacity (hover) multiply into the
           // final alpha independently — orthogonal channels, per the ratified rule.
-          gl_FragColor = vec4(uColor, alpha * uOpacity * uVisFactor);
+          gl_FragColor = vec4(uColor, alpha * uOpacity * uVisFactor * vProxFade);
         }
       `,
       transparent: true,
@@ -240,6 +304,20 @@ export class OrbitRingSDF {
    */
   setVisibilityFactor(f) {
     this.material.uniforms.uVisFactor.value = Math.min(1, Math.max(0, f));
+  }
+
+  /**
+   * Tune the proximity-fade envelope (round-3 staticky fix — Max's UAT taste
+   * knobs). Partial updates: only the keys provided change. Non-finite or
+   * non-positive values are ignored (farMul must additionally exceed 1, or the
+   * smoothstep edges collapse).
+   * @param {object} [cfg] {nearAbs?, nearRel?, farMul?}
+   */
+  setProximityFade({ nearAbs, nearRel, farMul } = {}) {
+    const u = this.material.uniforms;
+    if (Number.isFinite(nearAbs) && nearAbs > 0) u.uProxNearAbs.value = nearAbs;
+    if (Number.isFinite(nearRel) && nearRel > 0) u.uProxNearRel.value = nearRel;
+    if (Number.isFinite(farMul) && farMul > 1) u.uProxFarMul.value = farMul;
   }
 
   /** Match OrbitLine.dispose — free GPU resources. */
