@@ -285,6 +285,18 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > auto-warp (standing lane-B flag). Parked (out of surface, recorded in commit messages +
 > seam handoff): normalizeSpectralClass prototype-key lookup quirk; silent 'M' fallback for
 > non-table far classes; doc-rot scoped-mode port-check still owed.
+> **▶ MINORS PASS `2aaa6ff` (2026-07-21, gate re-checked: lane B still NOT landed — mid
+> critical-dig, 41 ahead of origin; autopilot-depart still ZERO code on lane B):** all 21
+> MINOR build-verifier findings (wf_16801d1c-86a) triaged. 8 safe follow-ups landed: public
+> `RealSystemOverlay.catalogStarsByName()` accessor supersedes BN1's private `_catalogByName`
+> reach (TDD, pinned in the overlay's own suite); segments-clamp + vSize-raw-aSize +
+> knownWarp pin-evasion guards (destructure/alias/spread, efficacy-proven); 4 comment
+> corrections (float32 claim, alias-pin wording, stale `_isCurrentSystem` rationale). Suite
+> 1,694→**1,699/0**; Snapshot 24/24; zero-diff holds. 3 findings now OWNED by gated units
+> (design doc §Post-build verifier triage): GB7 preview≠arrival hole after component arrival
+> + sky-click live-drive line; GB2 star-B selection-reset re-pin. Rest = stale builder-report
+> drift or already recorded in audit §5. GB1–GB7 remain lane-B-gated; push Max-gated
+> (6 commits ahead of origin incl. the NOW.md record).
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
