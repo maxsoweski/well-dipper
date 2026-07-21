@@ -148,7 +148,7 @@
   <script type="module">
     import * as THREE from 'three';
     import GUI from 'lil-gui';
-    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, animationRateFactor } from './planet-lod-lab-core.js';
+    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, reliefEnvelope, animationRateFactor } from './planet-lod-lab-core.js';
     import { RADIUS_RANGES_EARTH } from './src/core/ScaleConstants.js';   // AC5/AC6: single-source archetype radius ranges (game + lab)
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
     import { ASSOCIATIONS, DEFAULT_DRESSING } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature; DEFAULT_DRESSING = ratified boot dressing (defaults rescope 2026-07-15)
@@ -1959,20 +1959,16 @@
     const C_SHAT = 1.0, C_KARST = 1.0, C_ECUD = 1.0, C_ECUB = 1.0, C_SUBPIT = 1.0, C_SUBPOLY = 1.0;
     const C_DUNE = 1.0, C_OUTFLOW = 1.0, C_FLUVIAL = 1.0; // rivers calibrated DOWN: default km set for freq ≈4.6 (~2× old 2.3, mirrors the crater rule — flagged-oversized per backlog #3)
 
-    // ── AC3 relief normalization — physically-plausible relief amplitude multiplier. ──
-    // A height of heightKm on a body of radius RE renders, in unit-sphere space, at amplitude
-    // reliefAmplitudeFromKm(heightKm, RE) = heightKm/(RE·6371), capped by reliefGravityFactor(g).
-    // To preserve each feature's HISTORIC look at the reference radius (RE=1) and Earth gravity
-    // (g=1) we normalize against that reference: at RE=1,g=1 the multiplier is exactly 1.0 (so the
-    // existing baseAmp is unchanged), then scales ∝ (1/RE)·reliefGravityFactor(g) — bigger planet ⇒
-    // shallower relative relief; low-g (Mars/Titan) ⇒ exaggerated; high-g (Magma/Carbon) ⇒ flat.
-    // (heightKm cancels in the ratio, so it's the per-feature *authored* height that future tuning
-    // can push individual features above/below 1.0 by; with the defaults all four sit at 1.0 @ Earth.)
-    function reliefNorm(heightKm, radiusEarth, surfaceGravity){
-      const ref = reliefAmplitudeFromKm(heightKm, 1);            // amplitude at reference RE=1
-      const here = reliefAmplitudeFromKm(heightKm, radiusEarth); // amplitude at this radius
-      return (here / ref) * reliefGravityFactor(surfaceGravity); // = (1/RE)·gravityFactor
-    }
+    // ── AC3 relief normalization — RETIRED 2026-07-21 (Inc-3 relief-scale spine). ──
+    // The old reliefNorm(heightKm, RE, g) collapsed to (1/RE)·reliefGravityFactor(g) — heightKm
+    // cancelled in here/ref. The (1/RE) term was UNCAPPED and drove apparent relief/radius to ~7×
+    // at low radius (MATH-CHECK-2026-07-21); worse, because uPerturb ALSO carried it while scaling
+    // the whole accumulated gradient, the families that carried it in their own amp too were
+    // SQUARED (~49×). Both are replaced by the DERIVED, strength-capped reliefEnvelope(RE, g) =
+    // clamp(g^-0.58, 0.40, 133) in planet-lod-lab-core.js, applied EXACTLY ONCE via uPerturb (the
+    // universal perturbAnalytic strength that scales every family's grad). Radius flows through g
+    // (post-v2-6 g ∝ R at fixed composition), resolving the audit footnote-14 double-dip. See the
+    // workstream BUILD-NOTES §1 (the derivation note) for the full family-by-family ledger.
 
     // ── AC5 size-source — seeded radius draw + canonical lock (planet-scale-normalization) ──
     // Named real bodies are SIZE-LOCKED to their canonical radiusEarth (their identity IS their
@@ -5601,11 +5597,13 @@
       uniforms.uLevels.value = state.levels;
       // ── AC3/AC4 scale factors (computed once per frame from the live radius + gravity) ──
       // _animRate ∝ 1/radius — big worlds animate slower (lava breathing, churn, storm drift,
-      // city flash). _g is the stashed surface gravity used by reliefNorm() per relief feature.
+      // city flash). _gNow is the stashed surface gravity read by reliefEnvelope() (the relief cap).
       const _RE = state.planetRadiusEarth, _gNow = state.surfaceGravity ?? 1.0;
       const _animRate = animationRateFactor(_RE);
-      // AC3 global relief (perturb): the planet-wide displacement scale also tracks radius+gravity.
-      uniforms.uPerturb.value = state.perturb * reliefNorm(state.mountainHeightKm, _RE, _gNow);
+      // AC3 global relief (perturb) — the ONE relief-envelope application (Inc-3): the planet-wide
+      // displacement strength that scales the whole accumulated gradient in perturbAnalytic. Radius
+      // flows through g via reliefEnvelope (was × reliefNorm's uncapped 1/RE — the convicted defect).
+      uniforms.uPerturb.value = state.perturb * reliefEnvelope(_RE, _gNow);
       uniforms.uNormalMode.value = state.normalMode;
       uniforms.uFwClamp.value = state.fwClamp ? 1 : 0;
       uniforms.uDitherMode.value = state.ditherMode;
@@ -5919,7 +5917,7 @@
       uniforms.uEcuGlowIntensity.value = state.ecuGlowIntensity;
       uniforms.uEcuDistrictScale.value = featureFrequencyFromKm(state.planetRadiusEarth, state.ecuDistrictSizeKm, C_ECUD);
       uniforms.uEcuBlockScale.value    = featureFrequencyFromKm(state.planetRadiusEarth, state.ecuBlockSizeKm, C_ECUB);
-      uniforms.uEcuCanyonDepth.value   = state.ecuCanyonDepth * reliefNorm(state.canyonDepthKm, _RE, _gNow);   // AC3 canyon depth km, radius+gravity normalized
+      uniforms.uEcuCanyonDepth.value   = state.ecuCanyonDepth;   // Inc-3: relief envelope rides ONCE via uPerturb (was × reliefNorm here too, which squared it)
       uniforms.uEcuSeamWidth.value     = state.ecuSeamWidth;
       uniforms.uEcuWarpAmt.value       = state.ecuWarpAmt;
       uniforms.uEcuConcreteColor.value.setRGB(state.ecuConcreteColor[0], state.ecuConcreteColor[1], state.ecuConcreteColor[2]);
@@ -5956,7 +5954,7 @@
       uniforms.uCraterRelaxation.value = state.craterRelaxation;
       uniforms.uTerraceCount.value     = state.terraceCount;
       uniforms.uCraterScale.value      = featureFrequencyFromKm(state.planetRadiusEarth, state.craterSizeKm, C_CRATER);
-      uniforms.uCraterAmp.value        = state.craterAmp * reliefNorm(state.craterDepthKm, _RE, _gNow);   // AC3 crater depth in km, radius+gravity normalized
+      uniforms.uCraterAmp.value        = state.craterAmp;   // Inc-3: relief envelope rides ONCE via uPerturb (was × reliefNorm here too, which squared it)
       // F3 ejecta & rays — strength/rampart/ray-brightness driven; amp/lump/count/sharp lab.
       uniforms.uEjectaStrength.value   = state.ejectaEnabled ? state.ejectaStrength * state.featureRelevant.ejecta : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — strength→0 early-outs the ejecta pass on non-members (Carbon/Crystal/gas)
       uniforms.uEjectaRampart.value    = state.ejectaRampart;
@@ -5966,7 +5964,7 @@
       uniforms.uRayCount.value         = state.rayCount;
       uniforms.uRaySharp.value         = state.raySharp;
       // F1 mountains — amplitude/orogeny driven; ridge fold + scale lab-tunable.
-      uniforms.uMountainAmp.value      = state.mountainsEnabled ? state.mountainAmp * (1.0 - state.isExoticCarbonOrGeometric) * state.featureRelevant.mountains * reliefNorm(state.mountainHeightKm, _RE, _gNow) : 0.0;   // ✓ enable gate × Carbon/Crystal exotic-crust knockdown × per-feature relevance hard-gate (Thread B idiom) × AC3 mountain height km radius+gravity normalized
+      uniforms.uMountainAmp.value      = state.mountainsEnabled ? state.mountainAmp * (1.0 - state.isExoticCarbonOrGeometric) * state.featureRelevant.mountains : 0.0;   // ✓ enable gate × Carbon/Crystal exotic-crust knockdown × per-feature relevance hard-gate (Thread B idiom); Inc-3: relief envelope rides ONCE via uPerturb (was × reliefNorm here too, which squared it)
       uniforms.uRidgeOffset.value      = state.ridgeOffset;
       uniforms.uRidgeGain.value        = state.ridgeGain;
       uniforms.uOrogenyStrength.value  = state.orogenyStrength;
@@ -5999,7 +5997,7 @@
       uniforms.uEdificeMaxHeight.value = state.edificeMaxHeight;
       uniforms.uShieldStratoMix.value  = state.shieldStratoMix;
       uniforms.uEdificeScale.value     = featureFrequencyFromKm(state.planetRadiusEarth, state.edificeSizeKm, C_EDIFICE);
-      uniforms.uEdificeAmp.value       = state.edificeAmp * reliefNorm(state.edificeHeightKm, _RE, 1.0);   // AC3 edifice height km, RADIUS-normalized only — gravity already in uEdificeMaxHeight (core ∝1/g), so g=1 here avoids double-applying
+      uniforms.uEdificeAmp.value       = state.edificeAmp;   // Inc-3: dropped × reliefNorm(…, 1.0) (the (1/RE) radius term) — edifice radius now flows via the uPerturb envelope (g^-0.58 bulk cap) × uEdificeMaxHeight (∝1/g volcano-buoyancy); composed g^-1.58 is an accepted DISTINCT-effect composition (strength-cap × buoyancy), not the footnote-14 same-effect double-dip (BUILD-NOTES derivation)
       uniforms.uEdificeCaldera.value   = state.edificeCaldera;
       // F8 lava plains — coverage (SMOOTHS relief, gates region) + activity (emissive cracks)
       // driven; wrinkle/crack/glow lab-tunable. The enable toggle gates BOTH the early-outs

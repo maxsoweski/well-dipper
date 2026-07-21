@@ -987,6 +987,26 @@ export function reliefGravityFactor(surfaceGravity) {
   return Math.min(CEIL, Math.max(FLOOR, f));
 }
 
+// ── Inc-3 relief-scale envelope (2026-07-21) — the DERIVED, strength-capped replacement for the
+// lab's retired reliefNorm = (1/RE)·reliefGravityFactor(g). The (1/RE) term was UNCAPPED and blew
+// apparent relief/radius to ~7× at low radius (R=0.27,g=0.28 → 7.0×; → ∞ as R → 0), which the
+// v2-6 UAT read as "molten waves" (MATH-CHECK-2026-07-21). Post-v2-6 deriveConditionVector sets
+// surfaceGravity = g_c·(R/R_c), so g is MONOTONIC in the drawn radius at fixed composition — g
+// ALREADY carries the radius signal. Radius therefore flows through g exactly ONCE (the audit
+// footnote-14 double-dip resolved) and the explicit 1/RE is DROPPED. surfaceGravity is floored at
+// 1e-3 before the power so a degenerate near-zero g caps the multiplier at (1e-3)^-Q ≈ 55 (≤ the
+// Phobos strength extreme) instead of blowing up. Q_RELIEF/RELIEF_FLOOR/RELIEF_CEIL are anchor-fit
+// in the workstream's calibration/relief-envelope.mjs (least squares through the real-body
+// relief/radius anchors Earth/Mercury/Mars/Moon/Mimas, forced Earth=1). radiusEarth is accepted
+// for call-site symmetry with the old reliefNorm signature but is UNUSED in the return (radius via
+// g). Sign kept: lower g ⇒ higher relief/R.
+export const Q_RELIEF = 0.58;      // relief/R ∝ g^-Q_RELIEF; 2-sig-fig least-squares fit (calibration)
+export const RELIEF_FLOOR = 0.40;  // inherited from the reliefGravityFactor floor; binds only g ≳ 4.85
+export const RELIEF_CEIL = 133;    // apparent-0.40 ceiling as a multiplier; never binds (g-floor caps ≈ 55)
+export function reliefEnvelope(radiusEarth, surfaceGravity) {
+  return Math.min(RELIEF_CEIL, Math.max(RELIEF_FLOOR, Math.pow(Math.max(surfaceGravity, 1e-3), -Q_RELIEF)));
+}
+
 // Animation-rate factor. Bounded, ∝ 1/radiusEarth relative to a reference radius: big worlds
 // animate slower (lava breathing, glint shimmer, storm drift, aurora pulse). Chosen form:
 //   clamp( refRadiusEarth / radiusEarth, FLOOR, CEIL )  with FLOOR = 0.1, CEIL = 3.
