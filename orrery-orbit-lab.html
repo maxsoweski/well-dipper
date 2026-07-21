@@ -59,6 +59,237 @@
       dispose() { this.mesh.geometry.dispose(); this.mesh.material.dispose(); }
     }
 
+    // ── ANALYTIC-ESTIMATOR candidate (critical-dig session, 2026-07-21) ──────
+    // Identical to OrbitRingSDF in every respect EXCEPT the screen-px distance
+    // estimator: instead of fwidth(g) (per-2x2-quad finite differences — the
+    // hypothesized noise source at grazing angles), the fragment shader computes
+    // the EXACT first-order screen-space gradient of g from the plane→screen
+    // Jacobian:  ∇_s g = A⁻ᵀ r̂,  A[:,i] = Fpx·(mᵢ.xy·w + pv.xy·mᵢ.z)/w²
+    // (mᵢ = modelView columns for the plane's x/z axes, pv = view-space pos,
+    // w = -pv.z, Fpx = projection scale in RENDER pixels). Smooth everywhere;
+    // blows up smoothly (not noisily) at the horizon, where the same 0.4R
+    // clamp bounds it. Band/clamp/smear-cut/prox-fade structure is UNCHANGED —
+    // the estimator is the single experimental variable.
+    class AnalyticRingSDF extends OrbitRingSDF {
+      constructor(radius, color) {
+        super(radius, color);
+        const m = this.material;
+        m.uniforms.uFpx = { value: new THREE.Vector2(1, 1) };  // set per-frame by renderOnce
+        m.vertexShader = /* glsl */`
+          #include <common>
+          #include <logdepthbuf_pars_vertex>
+          uniform float uRadius;
+          uniform float uProxNearAbs;
+          uniform float uProxNearRel;
+          uniform float uProxFarMul;
+          varying vec3 vLocalPos;
+          varying float vProxFade;
+          varying vec3 vViewPos;
+          varying vec3 vMVc0;
+          varying vec3 vMVc2;
+          void main() {
+            vLocalPos = position;
+            vec3 dWorld = cameraPosition - vec3(modelMatrix[3]);
+            vec3 camObj = vec3(dot(modelMatrix[0].xyz, dWorld),
+                               dot(modelMatrix[1].xyz, dWorld),
+                               dot(modelMatrix[2].xyz, dWorld));
+            float radial = length(camObj.xz) - uRadius;
+            float circleDist = length(vec2(radial, camObj.y));
+            float proxNear = max(uProxNearAbs, uProxNearRel * uRadius);
+            vProxFade = smoothstep(proxNear, proxNear * uProxFarMul, circleDist);
+
+            vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+            vViewPos = mvPos.xyz;
+            vMVc0 = modelViewMatrix[0].xyz;
+            vMVc2 = modelViewMatrix[2].xyz;
+            gl_Position = projectionMatrix * mvPos;
+            #include <logdepthbuf_vertex>
+          }
+        `;
+        m.fragmentShader = /* glsl */`
+          #include <logdepthbuf_pars_fragment>
+          uniform float uRadius;
+          uniform vec3  uColor;
+          uniform float uOpacity;
+          uniform float uPixelWidth;
+          uniform float uVisFactor;
+          uniform float uFeatherPx;
+          uniform vec2  uFpx;
+          varying vec3 vLocalPos;
+          varying float vProxFade;
+          varying vec3 vViewPos;
+          varying vec3 vMVc0;
+          varying vec3 vMVc2;
+
+          void main() {
+            if (vProxFade < 0.004) discard;
+            #include <logdepthbuf_fragment>
+
+            float g = length(vLocalPos.xz) - uRadius;
+
+            // Analytic screen-space gradient of g (replaces fwidth — see class doc).
+            float w = -vViewPos.z;
+            if (w < 1e-6) discard;
+            vec2 rhat = vLocalPos.xz / max(length(vLocalPos.xz), 1e-9);
+            float w2 = w * w;
+            vec2 a0 = uFpx * vec2(vMVc0.x * w + vViewPos.x * vMVc0.z,
+                                  vMVc0.y * w + vViewPos.y * vMVc0.z) / w2;
+            vec2 a1 = uFpx * vec2(vMVc2.x * w + vViewPos.x * vMVc2.z,
+                                  vMVc2.y * w + vViewPos.y * vMVc2.z) / w2;
+            float det = a0.x * a1.y - a1.x * a0.y;
+            vec2 grad = vec2( a1.y * rhat.x - a0.y * rhat.y,
+                             -a1.x * rhat.x + a0.x * rhat.y);
+            float aaRaw = length(grad) / max(abs(det), 1e-12);
+
+            float aaMax = max(uRadius * 0.4, 1e-4);
+            float aa = clamp(aaRaw, 1e-6, aaMax);
+
+            float distPx = abs(g) / aa;
+            float alpha = 1.0 - smoothstep(uPixelWidth * 0.5,
+                                           uPixelWidth * 0.5 + uFeatherPx,
+                                           distPx);
+            if (abs(g) / max(aaRaw, 1e-6) > uPixelWidth * 0.5 + uFeatherPx) discard;
+            if (alpha < 0.01) discard;
+            gl_FragColor = vec4(uColor, alpha * uOpacity * uVisFactor * vProxFade);
+          }
+        `;
+        m.needsUpdate = true;
+      }
+    }
+
+    // ── SCREEN-SPACE CONIC probe (critical-dig session, 2026-07-21) ──────────
+    // The domain-correct candidate: each ring's circle projects to a conic in
+    // screen space; the CPU builds that conic per ring per frame (homography
+    // H = screen ∘ [P·V·M columns x,z,w], conic Cs = H⁻ᵀ·diag(1,1,-R²)·H⁻¹)
+    // and ONE fullscreen pass paints every pixel within the band of ANY ring's
+    // curve via Sampson distance |pᵀCs p| / |2(Cs p).xy| — measured directly in
+    // RENDER pixels. No derivatives (no quad noise), no world-domain footprint
+    // (no 0.4R clamp, no smear cut), and per-pixel evaluation (no raster
+    // starvation of grazing slivers). Front-branch guard via w_clip sign.
+    // PROBE ONLY: no depth write (real impl would reconstruct plane point +
+    // write log depth), single color per ring set, no prox fade.
+    const CONIC_MAX = 16;
+    function inv3(m) {
+      const [a,b,c] = m[0], [d,e,f] = m[1], [g,h,i] = m[2];
+      const A = e*i-f*h, B = -(d*i-f*g), C = d*h-e*g;
+      const det = a*A + b*B + c*C;
+      if (!isFinite(det) || Math.abs(det) < 1e-30) return null;
+      const s = 1/det;
+      return [
+        [A*s, -(b*i-c*h)*s, (b*f-c*e)*s],
+        [B*s, (a*i-c*g)*s, -(a*f-c*d)*s],
+        [C*s, -(a*h-b*g)*s, (a*e-b*d)*s],
+      ];
+    }
+    const conicMat = new THREE.Matrix4();
+    function ringConicScreen(mesh, radius, W, Hh) {
+      conicMat.multiplyMatrices(camera.matrixWorldInverse, mesh.matrixWorld);
+      conicMat.premultiply(camera.projectionMatrix);
+      const el = conicMat.elements;                 // column-major
+      const M = (r, c) => el[c*4 + r];
+      const rowX = [M(0,0), M(0,2), M(0,3)];
+      const rowY = [M(1,0), M(1,2), M(1,3)];
+      const rowW = [M(3,0), M(3,2), M(3,3)];
+      const Hm = [
+        [(rowX[0]+rowW[0])*W/2, (rowX[1]+rowW[1])*W/2, (rowX[2]+rowW[2])*W/2],
+        [(rowY[0]+rowW[0])*Hh/2, (rowY[1]+rowW[1])*Hh/2, (rowY[2]+rowW[2])*Hh/2],
+        rowW,
+      ];
+      const Hi = inv3(Hm);
+      if (!Hi) return null;
+      const Ck = [1, 1, -radius*radius];
+      const Cs = [[0,0,0],[0,0,0],[0,0,0]];
+      let mx = 0;
+      for (let i2 = 0; i2 < 3; i2++) for (let j = 0; j < 3; j++) {
+        let s = 0;
+        for (let k = 0; k < 3; k++) s += Ck[k]*Hi[k][i2]*Hi[k][j];
+        Cs[i2][j] = s;
+        mx = Math.max(mx, Math.abs(s));
+      }
+      if (!(mx > 0) || !isFinite(mx)) return null;
+      for (let i2 = 0; i2 < 3; i2++) for (let j = 0; j < 3; j++) Cs[i2][j] /= mx;
+      return { Cs, rowW, Hi };
+    }
+    const conicUniforms = {
+      uConic:  { value: Array.from({length: CONIC_MAX}, () => new THREE.Matrix3()) },
+      uRowW:   { value: Array.from({length: CONIC_MAX}, () => new THREE.Vector3()) },
+      uHinv:   { value: Array.from({length: CONIC_MAX}, () => new THREE.Matrix3()) },
+      uActive: { value: new Array(CONIC_MAX).fill(0) },
+      uCount:  { value: 0 },
+      uPixelWidth: { value: 1.0 },
+      uFeatherPx:  { value: 0.5 },
+    };
+    const conicMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(2, 2),
+      new THREE.ShaderMaterial({
+        uniforms: conicUniforms,
+        vertexShader: /* glsl */`
+          void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }
+        `,
+        fragmentShader: /* glsl */`
+          uniform mat3 uConic[${CONIC_MAX}];
+          uniform vec3 uRowW[${CONIC_MAX}];
+          uniform mat3 uHinv[${CONIC_MAX}];
+          uniform float uActive[${CONIC_MAX}];
+          uniform int uCount;
+          uniform float uPixelWidth;
+          uniform float uFeatherPx;
+          void main() {
+            vec3 p = vec3(gl_FragCoord.xy, 1.0);
+            float alpha = 0.0;
+            for (int i = 0; i < ${CONIC_MAX}; i++) {
+              if (i >= uCount) break;
+              if (uActive[i] < 0.5) continue;
+              vec3 cp = uConic[i] * p;
+              float v = dot(p, cp);
+              float gl = length(2.0 * cp.xy);
+              float distPx = abs(v) / max(gl, 1e-12);
+              // front-branch guard: reconstruct the plane point, require w_clip>0
+              vec3 q = uHinv[i] * p;
+              vec2 XZ = q.xy / q.z;
+              float wclip = dot(uRowW[i], vec3(XZ, 1.0));
+              if (wclip <= 0.0) continue;
+              float a = 1.0 - smoothstep(uPixelWidth * 0.5,
+                                         uPixelWidth * 0.5 + uFeatherPx, distPx);
+              alpha = max(alpha, a);
+            }
+            if (alpha < 0.01) discard;
+            gl_FragColor = vec4(0.0, 1.0, 0.0, alpha * 0.8);
+          }
+        `,
+        transparent: true,
+        depthWrite: false,
+        depthTest: false,
+      }));
+    conicMesh.frustumCulled = false;
+    conicMesh.visible = false;
+
+    function updateConics() {
+      camera.updateMatrixWorld();
+      camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+      const W = retro.sceneTarget.width, Hh = retro.sceneTarget.height;
+      const u = conicUniforms;
+      u.uCount.value = Math.min(N, CONIC_MAX);
+      for (let i = 0; i < Math.min(N, CONIC_MAX); i++) {
+        const mesh = sdfRings[i].mesh;   // transform source (same placement as all sets)
+        mesh.updateMatrixWorld();
+        const r = ringConicScreen(mesh, ringDefs[i].radius, W, Hh);
+        const on = (solo === null || solo === i) && r !== null;
+        u.uActive.value[i] = on ? 1 : 0;
+        if (r) {
+          u.uConic.value[i].set(
+            r.Cs[0][0], r.Cs[0][1], r.Cs[0][2],
+            r.Cs[1][0], r.Cs[1][1], r.Cs[1][2],
+            r.Cs[2][0], r.Cs[2][1], r.Cs[2][2]);
+          u.uHinv.value[i].set(
+            r.Hi[0][0], r.Hi[0][1], r.Hi[0][2],
+            r.Hi[1][0], r.Hi[1][1], r.Hi[1][2],
+            r.Hi[2][0], r.Hi[2][1], r.Hi[2][2]);
+          u.uRowW.value[i].set(r.rowW[0], r.rowW[1], r.rowW[2]);
+        }
+      }
+    }
+
     // ── Scene / camera ──────────────────────────────────────────────────────
     const canvas = document.getElementById('canvas');
     const scene  = new THREE.Scene();
@@ -138,26 +369,36 @@
 
     const baselineRings = [];   // LineLoopRing instances (pre-swap replica — see above)
     const sdfRings = [];        // OrbitRingSDF instances
+    const analyticRings = [];   // AnalyticRingSDF instances (estimator candidate)
     for (const def of ringDefs) {
       const bl = new LineLoopRing(def.radius, def.color);
       const sd = new OrbitRingSDF(def.radius, def.color);
+      const an = new AnalyticRingSDF(def.radius, def.color);
       bl.addTo(scene);
       sd.addTo(scene);
+      an.addTo(scene);
       baselineRings.push(bl);
       sdfRings.push(sd);
+      analyticRings.push(an);
     }
+    scene.add(conicMesh);   // fullscreen conic probe (visible only in 'conic' mode)
 
     // ── Mode / solo state ─────────────────────────────────────────────────────
-    let mode = 'sdf';      // 'baseline' | 'sdf'
+    let mode = 'sdf';      // 'baseline' | 'sdf' | 'analytic'
     let solo = null;       // ring index or null (=all)
 
+    function normMode(m) {
+      return (m === 'baseline' || m === 'analytic' || m === 'conic') ? m : 'sdf';
+    }
+
     function applyVisibility() {
-      const showSdf = (mode === 'sdf');
       for (let i = 0; i < N; i++) {
         const on = (solo === null || solo === i);
-        baselineRings[i].mesh.visible = on && !showSdf;
-        sdfRings[i].mesh.visible      = on &&  showSdf;
+        baselineRings[i].mesh.visible = on && (mode === 'baseline');
+        sdfRings[i].mesh.visible      = on && (mode === 'sdf');
+        analyticRings[i].mesh.visible = on && (mode === 'analytic');
       }
+      conicMesh.visible = (mode === 'conic');
     }
 
     // ── Camera placement: pitch-0.7 orbit at distance d ───────────────────────
@@ -182,8 +423,17 @@
         if (ringDefs[i].isMoon) {
           baselineRings[i].mesh.position.copy(MOON_CENTER);
           sdfRings[i].mesh.position.copy(MOON_CENTER);
+          analyticRings[i].mesh.position.copy(MOON_CENTER);
         }
       }
+      // Analytic estimator: projection scale in RENDER pixels (the 1/3-res
+      // sceneTarget — the buffer fwidth measures in, so both estimators speak
+      // the same pixel unit). P00/P11 read fresh each frame (resize-safe).
+      const pe = camera.projectionMatrix.elements;
+      const fx = pe[0] * retro.sceneTarget.width  / 2;
+      const fy = pe[5] * retro.sceneTarget.height / 2;
+      for (const an of analyticRings) an.material.uniforms.uFpx.value.set(fx, fy);
+      if (mode === 'conic') updateConics();
       updateStar();
       applyVisibility();
       retro.render();
@@ -206,7 +456,7 @@
 
     // ── Public instrument API ─────────────────────────────────────────────────
     window._orbitLab = {
-      setMode(m) { mode = (m === 'baseline') ? 'baseline' : 'sdf'; applyVisibility(); return mode; },
+      setMode(m) { mode = normMode(m); applyVisibility(); return mode; },
       setDistance(d) { placeCamera(d); renderOnce(); return distance; },
       ringCount() { return N; },
       soloRing(i) { solo = (i === null || i === undefined) ? null : (i | 0); applyVisibility(); return solo; },
@@ -222,7 +472,8 @@
           placeCamera(d);
           mode = 'baseline'; renderOnce(); const baseline = countGreenPixels();
           mode = 'sdf';      renderOnce(); const sdf      = countGreenPixels();
-          out.push({ distance: d, baseline, sdf });
+          mode = 'analytic'; renderOnce(); const analytic = countGreenPixels();
+          out.push({ distance: d, baseline, sdf, analytic });
         }
         mode = prevMode; solo = prevSolo; placeCamera(prevDist); renderOnce();
         return out;
@@ -234,8 +485,8 @@
         const prevMode = mode, prevSolo = solo, prevDist = distance;
         const rings = [];
         for (let i = 0; i < N; i++) {
-          const row = { index: i, radius: ringDefs[i].radius, isMoon: ringDefs[i].isMoon, baseline: [], sdf: [] };
-          for (const which of ['baseline', 'sdf']) {
+          const row = { index: i, radius: ringDefs[i].radius, isMoon: ringDefs[i].isMoon, baseline: [], sdf: [], analytic: [], conic: [] };
+          for (const which of ['baseline', 'sdf', 'analytic', 'conic']) {
             mode = which; solo = i;
             for (const d of distances) {
               placeCamera(d); renderOnce();
@@ -253,13 +504,27 @@
       // leave a knob unchanged. (The smear cut is threshold-free in the shader
       // — no knob; pre-fix behavior is only reproducible by checkout.)
       setSdfConfig({ pixelWidth = null, featherPx = null } = {}) {
-        for (const sd of sdfRings) {
+        for (const sd of [...sdfRings, ...analyticRings]) {
           const u = sd.material.uniforms;
           if (pixelWidth !== null) u.uPixelWidth.value = pixelWidth;
           if (featherPx !== null) u.uFeatherPx.value = featherPx;
         }
+        if (pixelWidth !== null) conicUniforms.uPixelWidth.value = pixelWidth;
+        if (featherPx !== null) conicUniforms.uFeatherPx.value = featherPx;
         const u0 = sdfRings[0].material.uniforms;
         return { pixelWidth: u0.uPixelWidth.value, featherPx: u0.uFeatherPx.value };
+      },
+
+      // ── Prox-fade envelope on BOTH SDF ring sets (critical-dig, 2026-07-21) ──
+      // The estimator A/B must run with the fade NEUTRALIZED (else the shipped
+      // fade hides the very regime under test). setProxFade({off:true}) shrinks
+      // the envelope to epsilon; setProxFade() restores shipped defaults.
+      setProxFade({ off = false, nearAbs = 0.35, nearRel = 0.02, farMul = 3.0 } = {}) {
+        const cfg = off
+          ? { nearAbs: 1e-6, nearRel: 1e-9, farMul: 1.000001 }
+          : { nearAbs, nearRel, farMul };
+        for (const sd of [...sdfRings, ...analyticRings]) sd.setProximityFade(cfg);
+        return cfg;
       },
 
       // ── Temporal instrument (staticky-orbit fix, 2026-07-20) ──────────────
@@ -272,7 +537,7 @@
                      center = [5200, 0, 0], dist = 25, pitch = 0.35,
                      degPerFrame = 0.12, frames = 90, startDeg = 0 } = {}) {
         const prevMode = mode, prevSolo = solo, prevDist = distance;
-        mode = (m === 'baseline') ? 'baseline' : 'sdf';
+        mode = normMode(m);
         solo = null;
         planetStandIn.visible = showPlanet;
         planetStandIn.position.set(center[0], center[1], center[2]);
@@ -312,6 +577,19 @@
                  avgGreen: +avgGreen.toFixed(1),
                  avgToggles: +avgTog.toFixed(1), maxToggles: maxTog,
                  togglePerGreen: +(avgTog / Math.max(avgGreen, 1e-9)).toFixed(3) };
+      },
+
+      // ── Fixed-pose camera for screenshot evidence (critical-dig, 2026-07-21) ──
+      // Places the camera at an explicit pose and leaves it there (the RAF loop
+      // only re-renders; it never re-poses). placeCamera()/setDistance() restore
+      // the standard orbit placement.
+      poseCamera(pos, look) {
+        camera.position.set(pos[0], pos[1], pos[2]);
+        camera.up.set(0, 1, 0);
+        camera.lookAt(look[0], look[1], look[2]);
+        camera.updateMatrixWorld();
+        renderOnce();
+        return { pos, look };
       },
 
       // introspection helpers
