@@ -266,9 +266,21 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > **✅ PUSHED + MERGED + DEPLOYED (Max "push & merge; go", 2026-07-21):** `feature/system-details`
 > pushed to origin; master fast-forwarded `58d11f3`→`e565bee` (pure ff — origin/master was an
 > ancestor; no merge commit needed) and pushed; GitHub Pages deploy run 29848620206 SUCCESS at
-> `e565bee`. FEATURES.md rows → shipped-confirmed. **▶ NEXT: Increment B (component
-> travel) = JOINT lane B+C scoping interview — not before Max prompts; also waits on lane B's
-> orrery-coherence UAT (`802cceb`).** Watch-items for Increment B scoping:
+> `e565bee`. FEATURES.md rows → shipped-confirmed.
+> **▶ INCREMENT B SCOPED + GREENLIT + BUILD-NOW TRANCHE BUILT (2026-07-21, same day):**
+> `multistar-component-travel-2026-07-21` scoped via joint-lane dev-collab-scope interview
+> (Max's rulings: component-addressable warp arrival supersedes D2 primary-only — §6 amended;
+> D3 = REAL supercruise w/ mid-leg scene handover, not the pocket fold; CAP_MAX raise → ~3-min
+> α Cen legs; procgen wide binaries OUT). Greenlit; built via workflows (grounding
+> wf_e688b0f3-a4e → increment-b-design.md + 6 rulings; build wf_16801d1c-86a: 4 TDD builders,
+> 8/8 adversarial verdicts PASS, 0 material findings). **`13af702`**: BN1 component-addressable
+> arrival (name-channel, zero main.js), BN2 nav [WARP] commit in the component view, BN3
+> OrbitArc pure helper, BN5 sky honesty (SELF_SKIP epsilon — Proxima now renders from A+B;
+> A+B blaze mag −6.9 from Proxima; blazing tier < mag −3), BN4 committed audit doc. Suite
+> 1,616→**1,694/0**; Snapshot 24/24; main.js/flight/scripts/realStarSeed zero-diff.
+> **REMAINING = lane-B-gated GB1–GB7** (BURN legs DOUBLE-gated on autopilot-depart, which has
+> zero code on lane B's branch yet); coordinator relay owed: AC2×depart SupercruiseModel
+> byte-guard collision. Watch-items for Increment B (carried):
 > one 998 ms fold stall on the Sol→α Cen leg (attribution open; leg 1 clean); HELM boot-tour
 > auto-warp (standing lane-B flag). Parked (out of surface, recorded in commit messages +
 > seam handoff): normalizeSpectralClass prototype-key lookup quirk; silent 'M' fallback for
