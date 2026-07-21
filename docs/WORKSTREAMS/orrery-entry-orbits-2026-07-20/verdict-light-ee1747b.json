@@ -1,0 +1,35 @@
+{
+  "workstream": "orrery-entry-orbits-2026-07-20",
+  "commit": "ee1747b",
+  "scope": "verify-light after the round-3 proximity-fade fix (Max-confirmed near-field mess) + working-Claude live closure of the flagged AC1 gap",
+  "workflowRun": {
+    "runId": "wf_6a4f6a41-12e",
+    "mode": "light",
+    "agents": 4,
+    "overall": "INSUFFICIENT (narrow scope) \u2014 AC1 headless-only this pass; no regression vector found (round-3 diff confined to src/objects/OrbitRingSDF.js + test; the one main.js hunk since 40f36f3 is the already-verified factor-source fix)",
+    "perAC": [
+      {
+        "id": "AC1-dhold-boot-skip",
+        "result": "INSUFFICIENT (static) -> CLOSED by liveClosure below",
+        "evidence": "bootMode.test.js 12/12 re-confirmed; full-repo vitest 1330/1330; static read confirms skip branch order; diff analysis: no boot-skip-relevant line changed since the two prior live-GREEN closures (40f36f3, ff686b3)"
+      }
+    ],
+    "note": "Round-3 proximity-fade gates reported in contract.json at ee1747b (proxfade suite 14/14; four-glob 505/505; perRingLadder 13x7 zero violations; byte-guards empty) were run by working-Claude pre-workflow; the workflow did not independently re-run them this pass."
+  },
+  "liveClosure": {
+    "by": "working-Claude live drive, debug Chrome :9223 page :5173, 2026-07-21, at HEAD 41b95b5 (code-identical to ee1747b \u2014 sole delta is a contract.json statusNote prose edit, verified by the workflow)",
+    "AC1-dhold-boot-skip": {
+      "helm": "fresh reload -> D-keydown + #splash-mode-helm click -> [BOOT-SKIP] D-hold -> straight into Sol, HELM tour (no ceremony) logged; Sol entered; ceremony (intro-overlay/title-screen) never visible across 20x200ms samples; HELM tour armed as designed; tour stopped post-check (_lab.stopAutopilot + _autoNav.stop \u2014 the re-arm lesson)",
+      "orrery": "fresh reload -> D-keydown + #splash-mode-orrery click -> [BOOT-SKIP] D-hold -> straight into Sol, ORRERY god's-eye (no ceremony) logged; Sol entered; ceremony never visible across 20x200ms samples; autopilot NOT armed (ORRERY never auto-arms \u2014 state.autopilot false); settled at the framed god's-eye (distance 121806)",
+      "result": "PASS both variants"
+    },
+    "otherLiveACs": "AC2/AC4/AC5 stand at their prior live-GREEN closures (verdict-live-drives-40f36f3.json); round-3 proximity fade live-verified separately at the Max-confirmed repro site (contract statusNote at ee1747b + evidence/proxfade-after-close-jupiter-inplane.png): double-click Jupiter, wheel to dist 1.02, forced in-plane pitch 0.002 \u2014 clean disc, crisp moon-ring dashes, planet's own ring correctly faded, zero tearing"
+  },
+  "perLayer": {
+    "unit": "PASS (proxfade 14/14; four-glob 505/505; bootMode 12/12; full-repo 1330/1330)",
+    "integration": "PASS (AC1 live-closed both variants at HEAD; perRingLadder zero violations; byte-guards empty)",
+    "uat": "deferred-to-max (round-3 re-UAT at his repro path: staircase gone? fade envelope taste \u2014 reappearance range + moon-ring dimming are his knobs via setProximityFade)"
+  },
+  "overall": "VERIFIED_PENDING_MAX ee1747b",
+  "_provenance": "workflow wf_6a4f6a41-12e (4 agents, models pinned in-script) + working-Claude live drives; authored by working-Claude 2026-07-21"
+}
