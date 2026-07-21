@@ -142,9 +142,12 @@ describe('V2-6 AC-EQUILIB — obliteration equilibrium is emergent (retention pl
     const r = writeBombardment(c, cond({ age: 4.5 }), { macroSeed: 7, collectDiag: true });
     const clean = r.diag.craters.filter((cr) => cr.cleanFloor);
     expect(clean.length, 'some craters retain a clean floor').toBeGreaterThan(0);
-    // (1) clean floor value is EXACTLY −A(δ) at float32 (craterField is a Float32Array; the reset stores fround).
+    // (1) clean floor value is EXACTLY −A at float32 (craterField is a Float32Array; the reset stores fround).
+    // INC-3 S2: the writer stamps the COMPLEX amplitude craterAmplitude(δ, D_km, g); the diag stores that
+    // actually-stamped value as cr.A. Compare to −cr.A, NOT a re-derived angular-only A(δ) (which would be the
+    // simple-branch amplitude and no longer match the complex-shallowed floor the writer actually wrote).
     for (const cr of clean) {
-      expect(cr.floorValuePreClamp, `clean floor δ=${cr.delta.toFixed(3)}`).toBe(Math.fround(-craterAmplitude(cr.delta)));
+      expect(cr.floorValuePreClamp, `clean floor δ=${cr.delta.toFixed(3)}`).toBe(Math.fround(-cr.A));
     }
     // (2) order-thresholdable post-clamp: the tanh safety clamp is monotone ⇒ ordering + sign survive it. Sort
     //     clean floors by pre-clamp value; their post-clamp values must be in the SAME order and still negative.

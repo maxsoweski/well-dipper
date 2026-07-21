@@ -40,9 +40,10 @@
 // (T ⇒ η so large that t/τ<1e-16) ε≡0 exactly ⇒ the field is BIT-IDENTICAL to the un-relaxed S2 write. The
 // craterField stays unhashed, so relaxation is byte-inert against the 75-golden regardless.
 //
-// DELIBERATE NON-GOALS (this slice, S3): the crystal material scalar is S4; the worldSeed re-roll is S5. Legacy
-// F2/F3 in-shader crater synth is untouched. The VERTICAL amplitude / zone geometry of craterProfile is unchanged
-// — relaxation is applied as a multiplicative fraction on the existing zone values plus the dome term.
+// DELIBERATE NON-GOALS (S3): the crystal material scalar is S4; the worldSeed re-roll is S5. Legacy F2/F3 in-shader
+// crater synth is untouched. In S3 the vertical amplitude / zone geometry of craterProfile was unchanged (relaxation
+// is a multiplicative fraction on the existing zone values plus the dome term). NOTE: INC-3 S2 (below) SUPERSEDES
+// that amplitude law — d/D is now Pike-physical (0.20 simple, complex roll-off above D_t); zone geometry still stands.
 
 import { clamp } from './mathutil.js';
 import { KM_PER_EARTH_RADIUS, radPerKm } from './baseStep.js';   // pure km→angular scalar (NOT a dispatch module)
@@ -84,13 +85,21 @@ export const P_SURF_MAX   = 200;    // bar — above Venus (92), far below the g
 // ── mesh resolution floor (angular): craters below this fold into regolithRoughness, never stamped discretely ─
 export const MESH_FLOOR_RAD = 0.055;// 3·meanEdgeAngle at the lab display N (~12k nodes ⇒ meanEdge ≈ 2/√N ≈ 0.0183)
 
-// ── VERTICAL amplitude (normalized-height) + dimensionless profile SHAPE — unchanged from V2-5 (crater-scale.mjs);
-//    A is keyed on ANGULAR diameter δ (A ∝ δ^0.5): normalized height is planet-relative, so the angular form is
-//    defensible (§4 adjudicable). The profile zone arithmetic is untouched this slice (ε relaxation is S3). ─────
-export const CRATER_DEPTH_N = 0.18; // A(D_REF): bowl amplitude of a D_REF crater
+// ── VERTICAL amplitude (normalized-height) + dimensionless profile SHAPE — INC-3 S2 DEPTH-LAW CORRECTION. ──────
+//    A is keyed on ANGULAR diameter δ; normalized height is planet-relative so the angular form is defensible.
+//    INC-3 S2 (calibration/crater-depth-law.mjs, math-check cause #2): the V2-5 law A ∝ δ^0.5 gave d/D = A/δ ∝ δ^-0.5
+//    — 0.36 at the reference crater (2× the fresh-simple 0.20) and ~1.09 at the mesh floor (near-hemispherical pits,
+//    INVERTED: smallest craters steepest). CORRECTED to Pike-1977 physics: d/D = 0.20 CONSTANT in the simple-crater
+//    band (A ∝ δ, DEPTH_POW=1.0), then a COMPLEX roll-off above the gravity-set transition diameter D_t(g)=K_DT/g
+//    (larger D_t on low-g bodies ⇒ small worlds keep simple bowls, the Mimas/Vesta lumpy-but-cratered read). The
+//    real (km) diameter D_km and g enter ONLY at that transition; angular-only callers get the simple branch. ─────
+export const CRATER_DEPTH_N = 0.10; // (Inc-3 S2: was 0.18) A(D_REF) simple bowl amplitude; A=D_D_SIMPLE·δ ⇒ d/D=0.20 at δ=D_REF
 export const D_REF_RAD    = 0.50;   // reference angular diameter (A(D_REF_RAD)=CRATER_DEPTH_N)
-export const DEPTH_POW    = 0.5;    // sub-linear depth↑ with size
-export const MIN_BASIN_DEPTH_N = 0.08; // legibility floor: a δ=D_REF basin is a visible bowl
+export const DEPTH_POW    = 1.0;    // (Inc-3 S2: was 0.5) LINEAR in δ ⇒ d/D CONSTANT across the simple-crater band
+export const D_D_SIMPLE   = 0.20;   // (Inc-3 S2) fresh-simple depth/diameter (Pike 1977); A_simple(δ)=D_D_SIMPLE·δ
+export const K_DT         = 3.1;    // (Inc-3 S2) simple→complex transition diameter D_t(g)=K_DT/g (km); LS-fit Earth/Mercury/Moon (Pike 1980)
+export const P_COMPLEX    = 0.66;   // (Inc-3 S2) complex roll-off: d/D=D_D_SIMPLE·(D_t/D)^P_COMPLEX above D_t (Pike d∝D^0.3, SPA anchor)
+export const MIN_BASIN_DEPTH_N = 0.08; // legibility floor: a δ=D_REF basin is a visible bowl (A(D_REF)=0.10 ≥ 0.08)
 const FLOOR_FRAC    = 0.5;          // flat floor out to FLOOR_FRAC·(δ/2)
 const RIM_HEIGHT_FRAC = 0.20;       // rim crest at +RIM_HEIGHT_FRAC·A
 const EJECTA_FRAC   = 0.05;         // ejecta-apron lift at +EJECTA_FRAC·A
@@ -204,12 +213,27 @@ export function drawBoundedPareto(u, L, H, B) {
   return Math.pow(Lb - u * (Lb - Hb), -1 / B);
 }
 
-// craterAmplitude(δ) — vertical bowl amplitude (normalized-height) of a crater of ANGULAR diameter δ (radians).
-export function craterAmplitude(D) { return CRATER_DEPTH_N * Math.pow(D / D_REF_RAD, DEPTH_POW); }
+// transitionDiameterKm(g) — the simple→complex transition diameter (km): D_t(g) = K_DT/g. Larger on low-g bodies,
+// so a small/low-g world keeps most craters in the simple bowl band (Inc-3 S2; Pike 1980).
+export function transitionDiameterKm(g) { return K_DT / Math.max(g, 1e-6); }
 
-// craterProfile(s, δ) — radial displacement at geodesic angle s (rad) from centre (UNCHANGED from V2-5; ε S3).
-export function craterProfile(s, D) {
-  const A = craterAmplitude(D);
+// craterAmplitude(δ, D_km, g) — vertical bowl amplitude (normalized-height) of a crater of ANGULAR diameter δ (rad).
+// SIMPLE band: A = CRATER_DEPTH_N·(δ/D_REF_RAD)^DEPTH_POW = D_D_SIMPLE·δ ⇒ d/D = 0.20 CONSTANT (Pike 1977). COMPLEX
+// roll-off: when the REAL (km) diameter D_km exceeds the gravity-set transition D_t(g), the bowl shallows by
+// (D_t/D_km)^P_COMPLEX (d/D falls with size). Angular-only callers (D_km/g omitted) ⇒ the simple branch —
+// preserves the single-arg V2-5/V2-6 callers and the ε=0 bit-identity (Inc-3 S2).
+export function craterAmplitude(D, D_km, g) {
+  const simple = CRATER_DEPTH_N * Math.pow(D / D_REF_RAD, DEPTH_POW);
+  if (D_km == null || g == null) return simple;
+  const dt = transitionDiameterKm(g);
+  const shallow = D_km > dt ? Math.pow(dt / D_km, P_COMPLEX) : 1;
+  return simple * shallow;
+}
+
+// craterProfile(s, δ, D_km, g) — radial displacement at geodesic angle s (rad) from centre. (D_km, g) pass through
+// to craterAmplitude's complex roll-off; omitted ⇒ the simple branch (angular-only callers unchanged). ε S3.
+export function craterProfile(s, D, D_km, g) {
+  const A = craterAmplitude(D, D_km, g);
   const r = 0.5 * D;
   const floorEdge = FLOOR_FRAC * r;
   const rimH = RIM_HEIGHT_FRAC * A;
@@ -249,12 +273,13 @@ export function iceRelaxation(condition, D_km, tI, iceness) {
   return { epsBowl, epsRim, tauGa, tauRimGa };
 }
 
-// relaxedCraterProfile(s, D, epsBowl, epsRim) — craterProfile's zone arithmetic with viscous relaxation applied:
-// floor/wall zones × (1−epsBowl) plus a dome term (a relaxed floor bulges up); rim/ejecta zones × (1−epsRim).
-// EXACT DEGENERACY: at epsBowl=epsRim=0 every zone reduces to base·(1−0)=base·1 (+0 for the dome) ⇒ BIT-IDENTICAL
-// to craterProfile(s, D) — the ε=0 invariant the un-relaxed S2 write and the 75-golden byte discipline rely on.
-export function relaxedCraterProfile(s, D, epsBowl, epsRim) {
-  const A = craterAmplitude(D);
+// relaxedCraterProfile(s, D, epsBowl, epsRim, D_km, g) — craterProfile's zone arithmetic with viscous relaxation
+// applied: floor/wall zones × (1−epsBowl) plus a dome term (a relaxed floor bulges up); rim/ejecta zones × (1−epsRim).
+// (D_km, g) pass through to craterAmplitude's complex roll-off; omitted ⇒ the simple branch. EXACT DEGENERACY: at
+// epsBowl=epsRim=0 every zone reduces to base·(1−0)=base·1 (+0 for the dome) ⇒ BIT-IDENTICAL to craterProfile(s, D,
+// D_km, g) — the ε=0 invariant the un-relaxed write and the 75-golden byte discipline rely on.
+export function relaxedCraterProfile(s, D, epsBowl, epsRim, D_km, g) {
+  const A = craterAmplitude(D, D_km, g);
   const r = 0.5 * D;
   const floorEdge = FLOOR_FRAC * r;
   const rimH = RIM_HEIGHT_FRAC * A;
@@ -329,6 +354,7 @@ export function writeBombardment(carrier, condition, { macroSeed = 0, collectDia
   let order = 0;
 
   const iceness = icenessOf(condition);   // S3: viscous-relaxation gate (0 on rock ⇒ ε≡0 ⇒ byte-identical to S2)
+  const gStamp  = Math.max(1e-6, condition.surfaceGravity ?? G_REF);   // Inc-3 S2: g for the depth-law complex roll-off
 
   const sched = forEachCrater(condition, macroSeed, N, (centre, delta, tI, D_km) => {
     const { epsBowl, epsRim } = iceRelaxation(condition, D_km, tI, iceness);   // S3: per-crater relaxed fractions
@@ -346,13 +372,13 @@ export function writeBombardment(carrier, condition, { macroSeed = 0, collectDia
       const vj = verts[j];
       const s = Math.acos(clamp(-1, 1, cvx * vj[0] + cvy * vj[1] + cvz * vj[2]));
       if (s > stampR) continue;                    // outside the ejecta apron — stop the flood
-      if (s < bEdge) cf[j] = relaxedCraterProfile(s, delta, epsBowl, epsRim);   // bowl interior: RESET (obliterate older)
-      else cf[j] += relaxedCraterProfile(s, delta, epsBowl, epsRim);            // rim / ejecta: accumulate
+      if (s < bEdge) cf[j] = relaxedCraterProfile(s, delta, epsBowl, epsRim, D_km, gStamp);   // bowl interior: RESET (obliterate older)
+      else cf[j] += relaxedCraterProfile(s, delta, epsBowl, epsRim, D_km, gStamp);            // rim / ejecta: accumulate
       if (collectDiag) { lastTouch[j] = myOrder; if (s < fEdge) floorNodes.push(j); }
       const nb = adj[j];
       for (let k = 0; k < nb.length; k++) { const m = nb[k]; if (seen[m] !== epoch) { seen[m] = epoch; queue[qt++] = m; } }
     }
-    if (collectDiag) craters.push({ order: myOrder, delta, tI, floorNodes, A: craterAmplitude(delta) });
+    if (collectDiag) craters.push({ order: myOrder, delta, tI, D_km, floorNodes, A: craterAmplitude(delta, D_km, gStamp) });
   });
 
   let diag = null;

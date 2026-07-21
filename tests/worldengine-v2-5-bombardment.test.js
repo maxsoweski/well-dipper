@@ -241,16 +241,28 @@ describe('V2-6 AC-DISTINCT — deterministic per seed; genuinely different acros
   const mesh = buildIrregularSphere(4000, 2);
   const stampFor = (cond, seed) => { const c = makeSphereField(mesh); writeBombardment(c, cond, { macroSeed: seed }); return c.craterField; };
 
+  // INC-3 S2 CHURN (hard-fence rule 9). The crater depth-law correction (bombardment.js, d/D ∝ δ^-0.5 → 0.20
+  // simple / complex roll-off) makes every stamped Moon-fixture crater COMPLEX-shallowed — amplitudes drop ~32-41×
+  // at this fixture — so the RAW field L2 collapses ~30-50× (inter-seed min 2.68 → 0.075, grid min 1.20 → 0.023).
+  // The V2-6 absolute gate `√l2 > 0.5` was sized to the OLD deep amplitudes and now fails on the (unchanged)
+  // populations. Replaced by an amplitude-INVARIANT relative distance relL2 = ‖a−b‖ / rms(a,b): identical fields ⇒
+  // 0, near-disjoint populations ⇒ ~√2. This tests POPULATION distinctness independent of the depth scale — the
+  // exact intent of AC-DISTINCT — and is immune to any future amplitude retune. Observed post-edit: inter-seed min
+  // relL2 ≈ 1.35, grid min ≈ 1.26 (both ≫ the 0 same-seed repeat floor); gate set at 0.9 with margin.
+  const relL2 = (a, b) => {
+    let dd = 0, nn = 0; for (let k = 0; k < a.length; k++) { const d = a[k] - b[k]; dd += d * d; nn += a[k] * a[k] + b[k] * b[k]; }
+    return nn > 0 ? Math.sqrt(dd) / Math.sqrt(0.5 * nn) : 0;
+  };
+
   it('repeat-seed determinism: two runs at the same (condition, seed) are byte-equal', () => {
     const a = stampFor(moonCond(), 7), b = stampFor(moonCond(), 7);
     for (let i = 0; i < a.length; i++) expect(b[i]).toBe(a[i]);
   });
 
-  it('inter-seed difference: distinct seeds give large pairwise field L2 (well above the 0 repeat floor)', () => {
+  it('inter-seed difference: distinct seeds give large pairwise relative field distance (≫ the 0 repeat floor)', () => {
     const fields = SEEDS.map((s) => stampFor(moonCond(), s));
     for (let i = 0; i < fields.length; i++) for (let j = i + 1; j < fields.length; j++) {
-      let l2 = 0; for (let k = 0; k < fields[i].length; k++) { const d = fields[i][k] - fields[j][k]; l2 += d * d; }
-      expect(Math.sqrt(l2), `seeds ${SEEDS[i]} vs ${SEEDS[j]}`).toBeGreaterThan(0.5);
+      expect(relL2(fields[i], fields[j]), `seeds ${SEEDS[i]} vs ${SEEDS[j]}`).toBeGreaterThan(0.9);
     }
   });
 
@@ -260,8 +272,7 @@ describe('V2-6 AC-DISTINCT — deterministic per seed; genuinely different acros
     const grid = [moonCond(0.15, 4.6), moonCond(0.5, 4.4), moonCond(0.85, 4.2)];
     const fields = grid.map((c) => stampFor(c, 1));
     for (let i = 0; i < fields.length; i++) for (let j = i + 1; j < fields.length; j++) {
-      let l2 = 0; for (let k = 0; k < fields[i].length; k++) { const d = fields[i][k] - fields[j][k]; l2 += d * d; }
-      expect(Math.sqrt(l2), `grid pair ${i},${j}`).toBeGreaterThan(0.5);
+      expect(relL2(fields[i], fields[j]), `grid pair ${i},${j}`).toBeGreaterThan(0.9);
     }
   });
 });

@@ -89,7 +89,65 @@ calibration hygiene, flagged not silent (see §2.1 caveats — S3).
 
 ## (2) CALIBRATION RECORDS — *(S3: envelope band table caveats, Vesta under-band note, apparent-model-is-illustrative caveat, Copernicus residual, CEIL-never-binds / FLOOR-inherited note)*
 
-## (3) DEPTH-LAW RECORD — *(S2)*
+## (3) DEPTH-LAW RECORD (AC-DEPTHLAW + AC-FENCE — S2)
+
+> **DOES (S2):** replaces the inverted crater depth/diameter law in
+> `src/worldengine/base/bombardment.js` with Pike-1977 physics. **INTENT:** kill
+> the "wavey magma" read's second convicted cause (math-check #2) — near-
+> hemispherical over-deep bowls whose over-steep field merged into molten waves.
+> **NON-GOALS:** count/placement/coverage (untouched — the population is the S1/v2-6
+> draw, proven invariant); the legacy F2/F3 in-shader crater synth (separate path);
+> ice-relaxation numerics (S3); the render-side envelope (S1).
+
+### 3.1 The law change (file : symbol)
+
+`bombardment.js` → **`craterAmplitude(D, D_km, g)`** (was `craterAmplitude(D)`):
+- SIMPLE band: `A = CRATER_DEPTH_N·(δ/D_REF_RAD)^DEPTH_POW = D_D_SIMPLE·δ` ⇒
+  **d/D = 0.20 CONSTANT** (Pike 1977 fresh-simple). Preserves the `A(D_REF)=CRATER_DEPTH_N` invariant.
+- COMPLEX roll-off: when the REAL diameter `D_km > D_t(g)`, `A ×= (D_t/D_km)^P_COMPLEX`
+  ⇒ **d/D falls with size** (`transitionDiameterKm(g) = K_DT/g`, new export).
+- Angular-only callers (`D_km`/`g` omitted) ⇒ the simple branch — the single-arg
+  V2-5/V2-6 callers and the ε=0 bit-identity are preserved.
+
+**Constants** (calibration/crater-depth-law.mjs step-0 solution, reproduces):
+`CRATER_DEPTH_N 0.18→0.10`, `DEPTH_POW 0.5→1.0`, new `D_D_SIMPLE=0.20`,
+`K_DT=3.1` (LS-fit Earth 3.5 / Mercury 10 / Moon 18 km), `P_COMPLEX=0.66`
+(SPA d/D=0.008 anchor; Pike complex d∝D^0.3).
+
+Pass-through: **`craterProfile(s, D, D_km, g)`** and
+**`relaxedCraterProfile(s, D, epsBowl, epsRim, D_km, g)`** forward `(D_km, g)` to
+`craterAmplitude`; **`writeBombardment`** derives `gStamp` once and passes the
+yielded `D_km` + `gStamp` into every stamp; `collectDiag` per-crater record adds
+`D_km` and stores `A` as the **actually-stamped** amplitude
+`craterAmplitude(delta, D_km, gStamp)`.
+
+### 3.2 Verified numbers (reproduce: `node calibration/crater-depth-law.mjs`)
+
+- OLD d/D `0.36 → 1.085` across the rendered Moon range (inverted, hemispherical
+  at the floor). NEW d/D **`0.068 → 0.015`**, monotone non-increasing, **max 0.068 ≤
+  0.25**; simple-basin legibility `A(D_REF)=0.10 ≥ MIN_BASIN 0.08`. A tiny low-g body
+  (g=0.0065 ⇒ `D_t=477 km`) keeps rendered craters SIMPLE bowls (d/D=0.20) — the
+  Mimas/Vesta lumpy-but-cratered read, not molten.
+- **Known residual (flagged, not silent — BUILD-PLAN §2.2/risk 3):** Copernicus
+  cross-check reads d/D ≈ **0.070 vs literature 0.040** (single-SPA-anchor fit
+  under-shallows the mid-complex range ~1.7×). Shape, extremes, and monotonicity are
+  correct and the render goal (kill the inversion + hemispherical pits) is met;
+  tightening `P_COMPLEX` against a second anchor is deferred.
+
+### 3.3 Fence proof (AC-FENCE — the depth edit cannot move the population)
+
+- **Structural** (unit test): `craterSchedule` / `forEachCrater` bodies contain **no
+  `craterAmplitude` reference** (brace-scoped grep assert) — the draw stream is
+  amplitude-free by construction.
+- **Empirical** (`calibration/fence-population-invariance.mjs` + committed
+  `fence-baseline.json`, captured at the **pre-edit S1 head**): at a fixed
+  worldSeed + Moon-class condition the population is **byte-identical pre/post** —
+  `nStamp 147`, `coverage 0.428556`, all 147 sorted `{centre, D_km, tI}` tuples, and
+  the 3154-node nonzero **footprint** (crater geometry is amplitude-free). Only the
+  craterField **amplitudes changed**: full-array hash `794774e4 → 24a929a6`,
+  exemplar[0] `0.01697 → 0.00041` (≈41× shallower), every exemplar `|new| ≤ |old|`.
+- **Golden byte-identity:** `tests/v2-0-byte-identity.test.js` green, **no re-capture**
+  (the edit is `craterField`-only, unhashed; carrier bytes untouched).
 
 ## (4) FROZEN-ICE TRACE (AC-FROZEN-TRACE) — *(S3)*
 
@@ -99,6 +157,14 @@ Full `npx vitest run` from the repo dir after S1 = **4 known failures**
 (KnownObjects ×3, GalacticFeatures ×1) + 15 vendor/motion-test-kit collection
 files (load-time noise) — **baseline not grown**. New file
 `tests/worldengine-inc3-relief-envelope.test.js` = 10/10 green.
+
+**After S2:** full `npx vitest run` from the repo dir = **the SAME 4 known
+failures + the SAME 15 vendor/motion-test-kit collection files — baseline not
+grown**; 2228 passed. Targeted: `worldengine-inc3-depth-law` (new) +
+`worldengine-v2-5-bombardment` (edited) + `worldengine-v2-6-craters` (edited) +
+`worldengine-v2-6-ice` + `v2-0-byte-identity` = **130/130 green**; AC-0 guards
+(`e1-shadow-audit`, `e1-conformance-oracle`, `v2-3-dispatch-oracle`,
+`v2-3-taxonomy`, `ws4-router-zero-drift`, `v2-6-crystal`) = **90/90 green**.
 
 ## (6) DEVIATIONS FROM PLAN
 
@@ -116,3 +182,31 @@ files (load-time noise) — **baseline not grown**. New file
   calibration's published 5-sig-fig multipliers with a **0.1% relative** tolerance
   (an absolute `toBeCloseTo(_,2)` is too tight at ~18.6/~55). Still catches any
   real drift (a `Q_RELIEF` change moves anchors by whole percents).
+
+### S2 deviations
+
+- **AC-DISTINCT metric (plan §4 offered "normalized OR law-derived threshold" — chose
+  normalized):** the two AC-DISTINCT asserts (`worldengine-v2-5-bombardment.test.js`
+  :253/:264) were re-based onto an amplitude-INVARIANT relative distance
+  `relL2 = ‖a−b‖ / rms(a,b)` at threshold **0.9** (with the required churn comment).
+  The plan's predicted raw collapse reproduced exactly (inter-seed min `2.68→0.075`,
+  grid min `1.20→0.023`); observed post-edit `relL2` min ≈ **1.35** (inter-seed) /
+  **1.26** (grid), both ≫ the 0 same-seed repeat floor. Intent preserved and now
+  immune to any future amplitude retune.
+- **`transitionDiameterKm(g)` extra export (additive to plan §S2.1):** the plan named
+  `K_DT`/`P_COMPLEX`/`D_D_SIMPLE` as new exports and wrote `D_t=K_DT/g` inline. I
+  factored `D_t` into an exported helper `transitionDiameterKm(g)` so AC-DEPTHLAW's
+  "D_t(g) at the three anchors" is asserted directly. Pure additive; no behavior change.
+- **Fence harness gated in CI (additive to plan §5.2):** `fence-population-invariance.mjs`
+  also exports `runVerify()`, which the new `worldengine-inc3-depth-law` test calls, so
+  the empirical population-invariance proof runs in vitest (not only standalone). The
+  committed `fence-baseline.json` was captured at the pre-edit S1 head per §5.2 —
+  **do NOT re-capture post-edit**.
+- **Unused import left in place:** `craterAmplitude` is no longer referenced in
+  `worldengine-v2-6-craters.test.js` (the clean-floor assert switched to the diag's
+  stamped `cr.A`) but was **left in the import** — harmless in ESM, and removing it was
+  not in the plan's edit (smallest-edit discipline).
+- **`bombardment.js` S3 header note updated (comment-only):** the S3-era "the vertical
+  amplitude of craterProfile is unchanged" line would now mislead; appended a one-line
+  "INC-3 S2 supersedes that amplitude law" pointer (same rationale as byte-fence
+  MINOR-5). No code effect.
