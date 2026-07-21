@@ -1,0 +1,137 @@
+{
+  "workstream": "multistar-component-travel-2026-07-21",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "phase": "SCOPED 2026-07-21 via dev-collab-scope joint-lane interview (Increment B per multistar-render-feasibility.md §3.2/§6; interview rulings in intent.md: component-addressable warp arrival supersedes D2's primary-only clause; D3 = real supercruise, NOT the pocket fold; fixed-ceiling throttle raise; procgen wide binaries OUT). BUILD GATED on: (1) Max greenlight of this contract; (2) lane B's in-flight branch landing (orrery follow-up in progress 2026-07-21; autopilot-depart-2026-07-15 status building — its radial-climb departure + ETA-decel arrival are the BURN leg's endpoint behaviors; orrery-coherence's _frameSystemForOrrery is the AC7 zoom seam). This workstream TOUCHES main.js + src/flight/ (lane B surface) by design — the Increment-A lane-C-only boundary does NOT carry over; lane split recorded per-AC in architecturalConnections.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-component-warp-arrival",
+      "statement": "Component-addressable warp arrival: selecting a component in nav (PRISM member marker or far chip -> component SYSTEM view) and selecting WARP lands the player at THAT component's neighborhood (Max: 'I select Proxima in PRISM... I select WARP, and end up in front of PROXIMA') at standard star standoff. System identity unchanged: title 'Alpha Centauri', canonical seed family, [WARP] log seed 1816942132. Warping from the A+B marker still lands at A+B. Supersession is part of this AC: NAMING_AND_REAL_OBJECTS.md section-6 wording amended from 'one destination = primary arrival' to 'one system identity, component-addressable arrival point', and the shipped test pins that hard-coded primary-only arrival (multistar-components AC7 pin + grammar-WS pins) are amended in the same commit, cited as this workstream's ruling.",
+      "verifyVia": {
+        "input": "Headless: arrival-resolution unit tests (selected component index -> that component's spawn payload; no selection -> primary; non-component systems -> unchanged). Live on :5176 (autopilot-off protocol): PRISM -> Proxima component view -> WARP; then PRISM -> A+B marker -> WARP; confirm seeds in the [WARP] log.",
+        "observable": "Proxima-selected warp arrives in Proxima's neighborhood (b, d present as real bodies; A+B as sky points); A+B warp arrives at the pair; both log seed 1816942132 and title 'Alpha Centauri'; section-6 amendment text present and old pins updated with a citation, not silently deleted."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC2-supercruise-ceiling",
+      "statement": "SC_TUNING.CAP_MAX raised ~20,000 -> ~75,000 u/s (final value = lane-B live tuning) so the alpha Cen inter-component leg runs ~3 minutes at full throttle (Max: 'more like... 3 minutes to get from one star to the other'); 36 Oph / Zet Ret legs ~1 min. In-system flight feel untouched: below ~225 AU the distance-proportional cap (dist/ETA_K) governs, so no behavior change near bodies; drop-safety and capture invariants (ETA_K >= 9/4 chain) hold at the new ceiling.",
+      "verifyVia": {
+        "input": "Headless: tuning-invariant tests (cap-vs-dropMax chain at new CAP_MAX; cap below 225 AU unchanged vs old value); leg-time computation test (13,000 AU at ceiling within 3 min +/- 20%). Live: timed full-throttle alpha Cen leg.",
+        "observable": "Invariant suite green; computed and live leg time ~3 min; near-body manual-flight feel checks (existing supercruise suite) unregressed."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC3-burn-transition",
+      "statement": "BURN from the system nav screen: in HELM, selecting the far component star in the SYSTEM nav view and hitting BURN starts an autopilot leg (DEPART-style radial escape -> cruise at ceiling -> ETA-decel) that arrives at the target component's star standoff; mid-leg the engine hands the ship from the origin component's scene to the target's (despawn/spawn + scene-local reposition) with no visible pop -- by construction both neighborhoods are sub-pixel at handover distance. Round trip (A+B -> Proxima -> A+B) works. Mode ownership holds: autopilot legal iff hands-off; player input reclaims per the mode-ownership model.",
+      "verifyVia": {
+        "input": "Headless: handover unit tests (handover point selection; scene-local position/velocity re-expression across the swap; state-machine legality). Live on :5176: drive the full round trip via nav BURN; instrument the handover frame (console clean, no HUD flicker markers, renderer stats continuous); screenshot evidence.",
+        "observable": "Both legs complete hands-off; arrival at correct standoff each way; handover frame visually continuous (no pop in captured frames), console 0 err/warn; oracle/glyph/label behavior in the arrived scene matches that component's payload."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC4-burn-to-planet",
+      "statement": "Selecting a far component's PLANET (e.g. Proxima b) in the system nav screen and hitting BURN composes the component transition with the existing in-system body leg: the ship crosses to the component's scene, then continues to the planet and arrives at its standoff (Max: 'select the far-away star or planet... and select burn, then have us go there').",
+      "verifyVia": {
+        "input": "Live on :5176: nav-select Proxima b from the A+B scene, BURN, ride to arrival.",
+        "observable": "Arrival at Proxima b standoff (HUD names the planet, real designation); one continuous autopilot sequence, no manual re-targeting after the handover."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC5-manual-cruise-crossing",
+      "statement": "The crossing is a property of the flight model, not the autopilot: manually flying HELM at full throttle toward the far companion also triggers the mid-leg handover and permits manual arrival. (D3 = real supercruise; the manual and autopilot paths share the model.)",
+      "verifyVia": {
+        "input": "Live on :5176: from A+B, point the nose at Proxima's sky marker, full throttle, fly the leg manually (autopilot off).",
+        "observable": "Handover fires mid-leg (instrumented), Proxima neighborhood spawns, manual approach and drop at Proxima possible; console clean."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC6-component-orbit-render",
+      "statement": "In a component scene, the O orbit toggle shows the component's own barycentric orbit in addition to its planets' orbits (Max: 'I see not only the orbits of the planets circling Proxima, but I see Proxima itself is strung on its own orbit. That orbit is so huge, it will probably seem like just a straight line'). Draw-only: orbit line derived from the componentSystems payload (separationAU), no physics/position change to any body.",
+      "verifyVia": {
+        "input": "Headless: orbit-line derivation unit tests (payload separation -> line geometry; absent for non-component systems). Live: O toggle in Proxima's scene.",
+        "observable": "Planet orbits + one near-straight giant orbit line rendered; toggling off removes both; non-component systems byte-identical orbit behavior."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7-orrery-cross-component",
+      "statement": "ORRERY cross-component navigation: scrolling out past the auto-frame (lane B's _frameSystemForOrrery gap-stop) log-zooms until the component's full barycentric orbit and bracket markers for the sibling component are visible; clicking a sibling bracket flies the ORRERY camera over 'like any other in-system object' (Max), performing the component swap under the hood. ORRERY never flies the ship (mode-ownership law): this is camera + scene swap only.",
+      "verifyVia": {
+        "input": "Headless: zoom-range/bracket-hit unit tests via the established bare-prototype harness. Live on :5176 in ORRERY: scroll out at Proxima, click the pair's bracket, observe the fly-over; ESC/scroll-in returns.",
+        "observable": "Full orbit + sibling brackets visible at max zoom-out; click -> camera arrives framing the sibling component's scene; ship state (flight model) untouched by the whole interaction; round trip works."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC8-starfield-honesty-audit",
+      "statement": "Audit-first (Max: 'make sure that everything we're doing is being accurately reflected in the starfield of nearby systems. Dunno if we've checked'): from inside a component scene the SIBLING component appears in the sky at player-relative brightness (Proxima from A+B: dim naked-eye point; A+B from Proxima: ~mag -6, unmistakably blazing); from nearby systems (Sol) the multiple renders at catalog-true positions. The audit report is a committed artifact; defects found within the sky-representation surface are fixed in this workstream, larger findings are recorded and triaged with Max. NOTE: src/rendering/sky/ was lane D's boundary in prior workstreams -- this AC explicitly claims the minimal sky surface needed, recorded for lane D.",
+      "verifyVia": {
+        "input": "Audit script/notes over StarfieldLayer + RealStarCatalog brightness path (is apparent magnitude player-relative?); live checks from A+B scene, Proxima scene, and Sol.",
+        "observable": "Committed audit doc in this workstream dir; sibling visible from each component at plausible relative brightness; catalog positions true from third systems; any fix within surface verified live."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC9-regression-guardrail",
+      "statement": "Nothing standing moves: one-system identity invariants (preview == arrival, canonical seed family, grammar clauses with the amended section-6), ProcgenSnapshot 24/24 byte-identical (componentSystems key still absent from procgen output), full suite grows-never-shrinks from the 1,616 baseline, realStarSeed.js byte-identical, Sol scene suite green, existing warp UX for non-component systems unchanged, mode-ownership model invariants (ORRERY never flies; autopilot hands-off rule) hold, in-system supercruise feel unregressed (AC2's under-225-AU checks). Lane split honored as recorded in architecturalConnections (main.js/src/flight edits are lane-B-surface work items, built after lane B's branch lands).",
+      "verifyVia": {
+        "input": "Headless: full vitest from the repo dir; ProcgenSnapshot; unscoped git diff review vs the pre-workstream base; Sol suite live x1.",
+        "observable": "Suite >= baseline/0 new failures; snapshot byte-identical; diff confined to declared surfaces; Sol 19/19; console clean on all live drives."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC10-uat",
+      "statement": "Max's holistic gate: the triple is traversable without warping -- warp-arrive at any of the three, then navigate between them in-system via HELM BURN or ORRERY fly-over, with the whole thing reading as ONE system's places (his full walkthrough in intent.md). Rides: does the 3-minute leg feel right; does the handover feel seamless; does the giant orbit line + blazing sibling sky sell 'they all share a center'.",
+      "verifyVia": {
+        "input": "Max free-plays the walkthrough on :5176 with the build live.",
+        "observable": "Max's judgment; no agent marks this -- deferred-to-max until his verdict."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "componentSystems substrate + component drill-in view (multistar-components-2026-07-19, SHIPPED 6bc5177) -- the spawnable payload and the nav entry this travel work triggers from.",
+      "Shared arrival-resolution module (real-star-identity-unification f6b3eff) -- AC1's component-addressable arrival extends it; preview==arrival must survive the extension.",
+      "SupercruiseModel/SC_TUNING (src/flight/, lane B surface) -- AC2's ceiling knob; invariant chain documented in-file (ETA_K/dropMax coupling).",
+      "SupercruisePilot + autopilot-depart-2026-07-15 (lane B, status building) -- DEPART radial-climb + ETA-decel are the BURN leg endpoints; contract ACs written against these as seams; build gated on lane B landing.",
+      "orrery-coherence _frameSystemForOrrery (lane B, unmerged, supercruise main.js ~6371) -- AC7's zoom extension composes with its >5x-gap stop; Max-ratified seam precedent (Inc-4).",
+      "warpSwapSystem + WorldOrigin rebasing (main.js) -- the scene handover primitive AC3 builds on; today hard-wired to fresh systems, gains a component-target path.",
+      "NAMING_AND_REAL_OBJECTS.md section 6 + shipped AC7/grammar test pins -- amended (not deleted) by AC1's ruling.",
+      "src/rendering/sky/ starfield layers + RealStarCatalog (lane D boundary historically) -- AC8's audit surface, minimal claim recorded.",
+      "Feasibility report multistar-render-feasibility.md sections 2-3, 5-7 (adversarially verified 7cb8253) -- scale/precision ground truth incl. the 0.1 pc F1-bin size limit; trust-but-cite."
+    ],
+    "outputs": [
+      "Traversable wide multiples -- Max's directive: warp-arrive anywhere in the triple, navigate between components in-system (HELM BURN, ORRERY fly-over, manual cruise).",
+      "Component-addressable arrival grammar (section-6 v2) -- one system identity, component-resolved arrival point.",
+      "Raised deep-space ceiling -- any future long-leg feature (deep-space POIs, procgen wide binaries) inherits ~3-min-class legs.",
+      "The architecture procgen wide-binary generation (2026-06-04 intent, OUT of scope here) will ride in its own workstream.",
+      "Sky-honesty audit artifact -- lane D's starting point for any larger sky-fidelity work."
+    ],
+    "mustStayWorking": [
+      "One-system identity: canonical seed family, preview == arrival on every path, both alpha Cen markers -> seed 1816942132, title/annotation grammar clauses (with amended section 6).",
+      "ProcgenSnapshot 24/24 byte-identical; componentSystems key absent from procgen output; realStarSeed.js byte-identical; suite baseline 1,616 grows-never-shrinks.",
+      "In-system supercruise feel: distance-proportional cap below ~225 AU numerically unchanged; drop-safety/capture invariant chain; sublight + forced-drop behavior.",
+      "Mode-ownership model: ORRERY never flies; autopilot legal iff hands-off; HELM input reclaim.",
+      "Non-component systems: warp, arrival, nav, orbit toggle byte-identical behavior.",
+      "Overlay invariants: Sol full override + scene suite 19/19; Sirius table-win; TRAPPIST-1 pin; alias arrival.",
+      "Lane discipline (reshaped for this WS): main.js + src/flight/ edits are declared lane-B-surface work gated on lane B's branch landing; no src/rendering/sky/ edits beyond AC8's declared minimal surface; scripts/ untouched."
+    ]
+  }
+}
