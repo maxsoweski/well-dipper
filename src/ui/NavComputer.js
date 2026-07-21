@@ -717,8 +717,14 @@ export class NavComputer {
     // neighbors — browsing Rigil Kentaurus (1.32 pc) from Sol showed Sol's
     // spawned data as its "preview" and built a BURN instead of a warp. A
     // same-system sibling inside 0.1 pc (Proxima browsed from Alpha Centauri)
-    // still reads current on purpose: its arrival routes to the same spawned
-    // system, so the spawned data IS its honest preview.
+    // still reads current on purpose — one system identity (§6 grammar).
+    // CAVEAT (multistar-component-travel-2026-07-21 AC1): arrival is now
+    // component-addressable, so "the spawned data IS its honest preview" holds
+    // only for the member the player actually arrived AT. From a component
+    // scene, browsing the OTHER member's marker serves the arrived component's
+    // payload as its "preview" (post-Proxima-arrival, the A+B marker previews
+    // Proxima's scene while committing WARP there delivers the pair) —
+    // recorded as a GB7-owned gap in increment-b-design.md; resolve there.
     return Math.sqrt(dx * dx + dy * dy + dz * dz) < POSITION_MATCH_TOL;
   }
 

@@ -246,4 +246,16 @@ describe('StarfieldLayer blazing halo (shader-source pin)', () => {
     // Legacy vertex size rule, byte-identical (blazing rides it, ×2 like all >5):
     expect(mat.vertexShader).toContain('float baseSize = aSize > 5.0 ? aSize * 2.0 : aSize;');
   });
+
+  it('vSize carries RAW aSize — the invariant the blazing key depends on', () => {
+    // The fragment branch fires on vSize >= BLAZING_SIZE (20), which is only
+    // a "blazing tier" test because the vertex shader forwards the RAW
+    // attribute: `vSize = aSize;`. If a future edit forwarded the doubled
+    // baseSize instead, ordinary size-12 stars (baseSize 24 ≥ 20) would
+    // silently gain the halo while both pins above stayed green (BN5 verifier
+    // finding, 2026-07-21). Same headless-ceiling rationale as the rest of
+    // this describe: pin the source, judge the pixels live.
+    const mat = tinyLayer().mesh.material;
+    expect(mat.vertexShader).toContain('vSize = aSize;');
+  });
 });

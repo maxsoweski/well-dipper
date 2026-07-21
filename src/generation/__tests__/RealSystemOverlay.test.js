@@ -307,3 +307,27 @@ describe('RealSystemOverlay — merged display names (design D7, data side)', ()
     expect(names.planets[7].name).toBe('TRAPPIST-1 i');
   });
 });
+
+describe('catalogStarsByName — public catalog-name accessor (multistar-component-travel-2026-07-21 BN1 follow-up)', () => {
+  // arrivalResolution's component knownWarp wrapper reads the component's own
+  // catalog position off this accessor. It is pinned HERE, in the overlay's own
+  // suite, so an overlay-internal rename of the index fails loudly at the
+  // source instead of silently degrading the wrapper to the registry position
+  // (the BN1 verifier's exact failure scenario).
+  it('returns the catalog records for a display name, null for unknowns', () => {
+    const ov = makeOverlay();
+    const rows = ov.catalogStarsByName('Proxima Centauri');
+    expect(Array.isArray(rows)).toBe(true);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0].name).toBe('Proxima Centauri');
+    for (const k of ['x', 'y', 'z']) expect(Number.isFinite(rows[0][k])).toBe(true);
+    expect(ov.catalogStarsByName('No Such Star Anywhere')).toBeNull();
+  });
+
+  it('returns a fresh array each call (read-only view of the private index)', () => {
+    const ov = makeOverlay();
+    const first = ov.catalogStarsByName('Proxima Centauri');
+    first.length = 0; // caller mutation must not reach the index
+    expect(ov.catalogStarsByName('Proxima Centauri').length).toBeGreaterThan(0);
+  });
+});

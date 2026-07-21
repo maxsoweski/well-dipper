@@ -189,6 +189,38 @@ session workflow journal). Contract: `contract.json` in this dir.
 ]
 ```
 
+## Post-build verifier triage → gated-unit addenda (2026-07-21, minors pass)
+
+Triage of the build workflow's 21 MINOR findings (wf_16801d1c-86a journal;
+lane B not yet landed, so only follow-ups were buildable). Comment/pin/accessor
+fixes landed in the same commit as this section; audit-covered items (epsilon
+blast radius, StarFlare staleness, mobile point-size cap) already live in
+`starfield-honesty-audit.md` §5. Three findings need OWNERS in the gated units
+— recorded here so they aren't orphaned:
+
+- **GB7 addendum — preview ≠ arrival after a component arrival (was unowned).**
+  `_isCurrentSystem` (NavComputer.js, POSITION_MATCH_TOL identity radius) plus
+  the current-system preview shortcut (`_systemData = _currentSystemData`)
+  means: warp-arrive at Proxima → browse the A+B/Rigil marker → SYSTEM view
+  previews Proxima's single-M payload titled 'Alpha Centauri' (no drill chip),
+  while committing WARP there delivers the pair. The design's tension #8 only
+  half-covered this: recognition IS tested (AC1(b)); the preview-content
+  consequence is not. GB7 must either route same-identity sibling previews
+  through resolveArrivalSystem (parent semantics) or rule the current behavior
+  correct-per-§6 with Max — either way it's GB7's call to close, with a test.
+  A cross-reference comment now sits at the cause site (`_isCurrentSystem`).
+- **GB7 addendum — sky-click component arrival live check.** Sky-click
+  (hasNavStar:false) arrival on Proxima's own catalog row now
+  component-resolves via the findAt path — consistent with amended §6 'on
+  every path' and headless-tested, but never driven live. Add one line to the
+  GB7 :5176 circuit: sky-click a component's own sky point → component scene.
+- **GB2 note — foreign-binary star-B selection resets on drill round-trip.**
+  `_renderComponentDetail` unconditionally overwrites `_selectedBody` with
+  star 0 every frame; pop-back + system-view re-arm leave the ring on star A
+  even if star B was selected pre-drill (pre-BN2 it survived). Cosmetic —
+  warp dispatch ignores starIndex — but GB2 rebuilds the commit affordance
+  for BURN legs, so fix or re-pin it there.
+
 ## AC8 audit draft (trace-3 evidence, BN4 formalizes)
 
 WHAT THE SKY DOES TODAY (verified, trace 3): Catalog-star brightness IS player-relative — the AC8 audit question's core premise holds. RealStarCatalog.findVisible (RealStarCatalog.js:207-271) recomputes apparent magnitude per position: appMag = absMag + 5*log10(d_pc/10) from the live player→star distance (:224-225); the catalog's Earth-relative mag field is never used for rendering. Color = SPECTRAL_COLOR × max(0.1, 1.5 − appMag/5) (:236), size buckets (:239-245), sky direction is the true player→star unit vector (:229-232). StarfieldLayer renders this baked vertex data verbatim with a per-channel white clamp (StarfieldLayer.js:295). From third systems positions are catalog-true: from Sol, Rigil renders at appMag −0.01 (matches reality) in the correct direction; Proxima's separate supplement row is correctly cut at the 6.5 naked-eye threshold (real mag 11.01). Note for UAT: the Sol check will show Alpha Cen as ONE point (A+B share one HYG row) and NO Proxima — physically honest, not a defect.

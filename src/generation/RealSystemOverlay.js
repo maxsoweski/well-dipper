@@ -83,6 +83,19 @@ export class RealSystemOverlay {
   get ambiguousJoinNames() { return this._ambiguousNames; }
 
   /**
+   * Public read-only view of the catalog-name index: the hyg ∪ supplement
+   * catalog star records carrying this display name (a fresh array), or null
+   * when the name is unknown / catalogStars was never supplied. Promoted for
+   * arrivalResolution's component knownWarp wrapper
+   * (multistar-component-travel-2026-07-21 BN1 follow-up) so external readers
+   * don't couple to the private index shape; pinned in this class's own suite.
+   */
+  catalogStarsByName(name) {
+    const arr = this._catalogByName.get(name);
+    return arr ? arr.slice() : null;
+  }
+
+  /**
    * Populate the join indexes. ONE code path for the index/join logic regardless
    * of data source (design D5 latitude): the browser fetches the JSON and the
    * tests read the same files off disk, both landing here.

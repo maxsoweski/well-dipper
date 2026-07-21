@@ -171,9 +171,11 @@ describe('AC3(c) — KnownSystems alias Alpha Centauri: routes through findByAli
     // arrival supersedes that: the ASYNC (arrival) wrapper now component-
     // resolves member names by default, so this test pins the UNFLAGGED
     // routing only — findByAlias identity and the parent payload with
-    // component resolution explicitly opted out on both wrappers (the
-    // NavComputer parent-preview semantics). The arrival-path behavior for
-    // this same name is pinned in the AC1 section below.
+    // component resolution OFF on both wrappers: explicitly
+    // (resolveComponents:false) on the async arrival call below, by
+    // wrapper default on the sync preview path (the NavComputer
+    // parent-preview semantics). The arrival-path behavior for this same
+    // name is pinned in the AC1 section below.
     const fx = fixture({ name: 'Proxima Centauri', pos: AC_POS, type: 'M', seed: 'irrelevant' });
     const previewRes = previewPath(fx.nav);
     const arrivalRes = await resolveArrivalSystemAsync({
@@ -503,6 +505,26 @@ describe('PINNED implicit main.js contract — knownWarp consumers read ONLY pos
     const props = new Set();
     for (const m of main.matchAll(/\bknownWarp\??\.([A-Za-z_$][\w$]*)/g)) props.add(m[1]);
     expect([...props].sort()).toEqual(['name', 'position', 'seed']);
+  });
+
+  it('knownWarp is never destructured, re-aliased, or spread in main.js (pin-evasion guard)', () => {
+    // The prop-access pin above is a source regex over `knownWarp.<prop>` — it
+    // cannot see `const { generate } = knownWarp`, `const kw = _arr.knownWarp`,
+    // or `{ ...knownWarp }`, each of which could read a fourth field without
+    // tripping it (BN1 verifier finding, 2026-07-21). Pin those three evasion
+    // shapes shut. Still lexical, not a parser — but the named holes are loud.
+    // Accessing knownWarp.position's OWN contents any way (spread/destructure/
+    // alias of `.position` etc.) stays allowed: position is a contract field.
+    const main = SRC('../main.js');
+    // (1) no destructuring of knownWarp itself
+    expect(main).not.toMatch(/\{[^}]*\}\s*=\s*(?:[\w$]+\s*\.\s*)*knownWarp\b(?!\s*[?.])/);
+    // (2) any assignment whose RHS is knownWarp (or a chain ending .knownWarp)
+    //     must bind the name `knownWarp` — no kw-style re-aliasing
+    for (const m of main.matchAll(/([\w$]+)\s*=\s*(?:[\w$]+\.)*knownWarp\s*[;,)\n]/g)) {
+      expect(m[1]).toBe('knownWarp');
+    }
+    // (3) no spread of knownWarp itself
+    expect(main).not.toMatch(/\.\.\.\s*(?:[\w$]+\.)*knownWarp\b(?!\s*[?.])/);
   });
 });
 

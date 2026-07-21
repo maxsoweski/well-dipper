@@ -192,11 +192,12 @@ function _effectiveParams(params, resolveComponents) {
  *  Read off the overlay's catalog-name index — the same hyg ∪ supplement rows
  *  RealStarCatalog ingested (Proxima's supplement row is the one authored
  *  component with its own record). Null when unknown → the wrapper degrades to
- *  the registry position, i.e. today's primary realignment. (`_catalogByName`
- *  is overlay-internal; accessed read-only here because RealSystemOverlay is
- *  outside this workstream's edit surface — guarded, never mutated.) */
+ *  the registry position, i.e. today's primary realignment. Reads the PUBLIC
+ *  catalogStarsByName accessor (pinned in RealSystemOverlay's own suite), so
+ *  an overlay-internal index rename fails loudly there instead of silently
+ *  degrading this wrapper. */
 function _componentCatalogPosition(overlay, componentName) {
-  const rec = overlay?._catalogByName?.get?.(componentName)?.[0];
+  const rec = overlay?.catalogStarsByName?.(componentName)?.[0];
   return rec && Number.isFinite(rec.x) && Number.isFinite(rec.y) && Number.isFinite(rec.z)
     ? { x: rec.x, y: rec.y, z: rec.z }
     : null;

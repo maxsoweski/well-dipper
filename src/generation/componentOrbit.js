@@ -15,8 +15,10 @@
  *      by ~1–2 scene units at that magnitude — BIGGER than an M-dwarf's
  *      ~0.7-unit scene radius, i.e. visible jitter. Emitting only the arc
  *      NEAR the component, with vertices near the local origin (≤ camera-far
- *      magnitudes), keeps float32 error sub-milli-unit. This is the fix,
- *      not an optimization.
+ *      magnitudes), bounds float32 error under ~0.05 scene units even at the
+ *      arc ends (test-pinned; ~45× below that M-dwarf radius — and near φ=0,
+ *      where the arc renders at full brightness, error is far smaller still).
+ *      This is the fix, not an optimization.
  *   2. clipping — the camera far plane (200,000 units, main.js camera ctor)
  *      clips everything beyond ~±200 AU anyway; generating the full circle
  *      (~115k vertices under OrbitLine's segment formula) buys nothing.

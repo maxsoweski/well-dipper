@@ -129,8 +129,9 @@ describe('deriveComponentOrbitSpec — component-local coordinates bound every v
     const { maxCoord, maxMag } = vertexExtremes(spec);
     expect(maxCoord).toBeLessThan(4e5);
     expect(maxMag).toBeLessThanOrEqual(CAMERA_FAR_SCENE + 1e-6);
-    // …and float32 quantization at that magnitude is sub-milli-unit scale,
-    // far below any body radius (the jitter hazard is gone by construction).
+    // …and float32 quantization at that magnitude stays under 0.05 scene
+    // units (centi-unit scale — not the naive circle's ~1–2 units), ~45×
+    // below the ~0.7-unit M-dwarf radius that defined the jitter hazard.
     expect(maxCoord * Math.pow(2, -23)).toBeLessThan(0.05);
   });
 
@@ -446,5 +447,34 @@ describe('deriveComponentOrbitSpec — the near-straight giant orbit (sagitta pi
     expect(spec.halfSpanScene).toBeLessThanOrEqual(spec.radiusScene * Math.PI / 2 + 1e-6);
     const { maxMag } = vertexExtremes(spec);
     expect(maxMag).toBeLessThanOrEqual(2 * spec.radiusScene);
+  });
+});
+
+describe('deriveComponentOrbitSpec — options.segments clamp contract (16–1024, forced even)', () => {
+  // Pin for the documented override contract (componentOrbit.js clampSegments):
+  // segments must land even so i = segments/2 is the exact-origin midpoint
+  // vertex (the star strung on its orbit). GB6 calls with defaults, so no AC
+  // observable exercises overrides — without this pin a clampSegments refactor
+  // could break the midpoint invariant for override callers with no red test
+  // (BN3 verifier finding, 2026-07-21).
+  const CASES = [
+    { given: 17, segments: 18 },     // odd in range → +1
+    { given: 3, segments: 16 },      // below floor → 16
+    { given: 5000, segments: 1024 }, // above cap → 1024
+    { given: 0, segments: COMPONENT_ORBIT_SEGMENTS },   // non-positive → default
+    { given: -4, segments: COMPONENT_ORBIT_SEGMENTS },  // non-positive → default
+    { given: 2.5, segments: COMPONENT_ORBIT_SEGMENTS }, // non-integer → default
+  ];
+
+  it('every override lands even + bounded, with the exact-origin midpoint vertex intact', () => {
+    for (const { given, segments } of CASES) {
+      const spec = specFor(AUTHORED[0], { segments: given });
+      expect(spec.vertexCount).toBe(segments + 1);
+      expect(segments % 2).toBe(0);
+      const mid = (segments / 2) * 3;
+      expect(spec.positions[mid]).toBe(0);
+      expect(spec.positions[mid + 1]).toBe(0);
+      expect(spec.positions[mid + 2]).toBe(0);
+    }
   });
 });
