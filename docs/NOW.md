@@ -263,7 +263,10 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > @`f6b3eff` — AC11 ditto; overlay @`3e58fac` — the AC9 re-run its close-out was gated on).
 > Rule 3 docs: FEATURES.md overlay row de-staled + 3 new rows (unification, grammar, component
 > drill-in) + naming row → shipped-confirmed; doc-graph zero-diff; doc-rot 225 flags, no new.
-> **Push + master-merge remain Max-gated (branch unpushed).** **▶ NEXT: Increment B (component
+> **✅ PUSHED + MERGED + DEPLOYED (Max "push & merge; go", 2026-07-21):** `feature/system-details`
+> pushed to origin; master fast-forwarded `58d11f3`→`e565bee` (pure ff — origin/master was an
+> ancestor; no merge commit needed) and pushed; GitHub Pages deploy run 29848620206 SUCCESS at
+> `e565bee`. FEATURES.md rows → shipped-confirmed. **▶ NEXT: Increment B (component
 > travel) = JOINT lane B+C scoping interview — not before Max prompts; also waits on lane B's
 > orrery-coherence UAT (`802cceb`).** Watch-items for Increment B scoping:
 > one 998 ms fold stall on the Sol→α Cen leg (attribution open; leg 1 clean); HELM boot-tour
