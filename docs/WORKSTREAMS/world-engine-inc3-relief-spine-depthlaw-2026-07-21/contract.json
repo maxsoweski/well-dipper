@@ -1,0 +1,112 @@
+{
+  "workstream": "world-engine-inc3-relief-spine-depthlaw-2026-07-21",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "statusNote": "SCOPED + GREENLIT 2026-07-21 (Max: 'go!' — combined Inc-3 relief-scale spine + depth-law rider after MATH-CHECK-2026-07-21.md; audit Increment 3 carries the overnight campaign's standing greenlight, the rider greenlit explicitly with it). Scope = driver-wiring-audit-2026-07-19 section 3 'Later increments' item 3 verbatim + section 2 footnote 14, extended by math-check convicted causes #1 (reliefNorm 7x over-drive, uncapped 1/RE term) and #2 (inverted d/D law, hemispherical pits at the small end). Cause #3 peppering = explicit non-goal (Inc 8); cause #4 ice-relaxation compounding = trace-only AC. Physics-first per charter INTENT FRAME: envelope and depth anchors derived from real-body data (Pike d/D, Vesta/Mimas/Phobos relief ratios), no taste forks. Sequencing '3 after 1' satisfied (v2-6 landed fc16992, gravity coherent).",
+  "programRef": "driver-wiring-audit-2026-07-19.md section 3 Increment 3 + section 2 footnote 14; docs/FEATURES/planet-lod-CHARTER.md INTENT FRAME (physics-first); MATH-CHECK-2026-07-21.md (decision artifact, this dir)",
+  "designDecisions": [
+    "COMBINED INCREMENT (Max 2026-07-21 'go!'): audit Inc-3 spine + depth-law rider are one build — same vertical-honesty seam family. The math check convicted both together: the finding 'craters resolve when g/R turned up' fingerprints reliefNorm (stamp count is scale-free ~147; only reliefNorm moves with g/R), and the molten read needs BOTH the 7x over-drive removed AND the hemispherical pits fixed.",
+    "ENVELOPE IS DERIVED, NOT CLAMPED: the relief bound comes from a strength-limited h_max/R law sized against real-body anchors (Earth-class ~0.003-0.01, Moon-class ~0.01-0.05, Mimas-class ~0.05-0.15, absolute ceiling ~0.40 Phobos) — no hand-tuned aesthetic clamp. The g^-0.5 SIGN is correct and kept (lower g => proportionally higher relief); the defect is magnitude + the uncapped 1/RE term. Small bodies SHOULD read lumpy — do not flatten toward Earth-smooth.",
+    "DOUBLE-DIP RESOLUTION (audit footnote 14): post-v2-6, g derives from drawn R, so g-based factors already carry radius signal. ALL radius/gravity exponents across height-bearing families are sized together in ONE derivation note in BUILD-PLAN; no family may compound explicit rF and g-derived factors blindly.",
+    "DEPTH LAW: fresh simple craters d/D = 0.20 constant; complex rolloff above transition diameter D_t proportional to 1/g (anchors: Earth ~3.5 km, Mercury ~10 km, Moon ~18 km — most craters on low-g bodies stay simple bowls); the shipped delta^-0.5 inversion (d/D rising to ~1.09 at the small end) is the convicted defect. Depth edits must NOT move count, placement, or areal coverage — the SFD and stamping are untouched.",
+    "RENDER-SIDE ONLY for the spine: composite/bake-seam multiplier; carrier bytes untouched; craterField churn legitimate ONLY in the depth/profile dimension.",
+    "PLAN MUST GROUND-TRUTH THE SEAM FIRST (v2-4 lesson): the audit assumed the spine did not exist; the math check found a live reliefNorm at the lab-core/lab.html sites. BUILD-PLAN states what EXISTS vs what changes before any edit is specced.",
+    "Unit-sphere ruling stands (audit section 2): R=1.0 mesh, camera in radii; radius is expressed through feature scale (and later the limb cue), never mesh scaling."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15): the envelope law and depth law read condition/derived scalars only (g, R/radPerKm, composition class where needed — no label/archetype/regime-string reads); named consumers documented in BUILD-NOTES (reliefNorm -> bake/perturb path across ALL height families; craterAmplitude -> craterField); taxonomy/drift guards stay green; no new *Enabled keys.",
+      "verifyVia": {
+        "input": "Dispatch-oracle + shadow-audit + drift suites from the repo dir; grep audit of modified writers' reads.",
+        "observable": "All guards green; no label reads in modified paths; consumers documented."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-ENVELOPE",
+      "statement": "Apparent relief-to-radius is governed by a DERIVED strength-cap law replacing the uncapped 1/RE term: sign preserved (lower g, smaller R => higher relief/R), magnitude within the real-body band — anchors: Earth-class ~0.003-0.01, Moon-class ~0.01-0.05, Mimas-class ~0.05-0.15, absolute ceiling ~0.40; the convicted worked case (R=0.27, g=0.28, previously 7.0x => apparent ~0.70) lands in band. ONE derivation note resolves the footnote-14 double-dip across ALL height-bearing families.",
+      "verifyVia": {
+        "input": "Unit tests on the law at the anchor points + the convicted worked case; the derivation note cross-checked against implemented exponents.",
+        "observable": "All anchors in band; the 7x case collapsed into band; note present and consistent with code."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-DEPTHLAW",
+      "statement": "Fresh simple craters render at d/D = 0.20 (+/-0.02) constant across the simple regime; complex rolloff above D_t proportional to 1/g (anchors: Earth ~3.5 km, Mercury ~10 km, Moon ~18 km); d/D is monotonically non-increasing with D; no crater exceeds d/D 0.25; degradation/obliteration only ever shallows. The delta^-0.5 inversion is gone.",
+      "verifyVia": {
+        "input": "Unit tests across the size range at 3 gravity anchors; a monotonicity property test.",
+        "observable": "d/D flat at 0.20 in the simple regime, rolls off complex; no near-hemispherical pits at the small end."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-FENCE",
+      "statement": "Byte fences: carrier bytes untouched (the spine is composite/render-side); golden suites pass with NO re-capture; at fixed worldSeed the crater POPULATION is invariant (count, centers, diameters, areal coverage exactly equal pre/post) — only depth/profile amplitudes change; full suite at the 4-failed baseline (+ known collection noise), not grown.",
+      "verifyVia": {
+        "input": "Golden byte-identity suite; a fixed-seed population diff harness run pre/post; full vitest from the repo dir.",
+        "observable": "Goldens green, no re-capture; population invariant with only profile amplitudes differing; baseline not grown."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-FROZEN-TRACE",
+      "statement": "Ice-relaxation's numeric contribution to the Frozen molten read at low R/g is traced and quantified in BUILD-NOTES (math-check cause #4 was speculative, untraced): fix ONLY if it is the same vertical-scale defect family; otherwise file the finding for the ice/exogenic increments with the number that justifies the call.",
+      "verifyVia": {
+        "input": "Traced numbers in BUILD-NOTES + a reproduction script or test.",
+        "observable": "Contribution quantified; fix-or-file decision recorded with evidence."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-POPSWEEP",
+      "statement": "The population harness re-runs with a NEW envelope gate: across the drawn population (>=64 seeds, all archetype presets), apparent relief/R lands in the AC-ENVELOPE band, and all existing machine gates stay green (areal coverage unaffected by depth edits).",
+      "verifyVia": {
+        "input": "population-sweep.mjs extended with the envelope gate and run live.",
+        "observable": "All gates green including the new envelope gate, 64+ seeds."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC-LAB-READ",
+      "statement": "At the UAT failing point (Moon/Mercury preset at LOW drawn radius + gravity, paired same-worldSeed before/after): the render shows discrete crater bowls with legible rim arcs instead of the wavey-magma read — quantified via a stated metric (e.g. rim-arc contrast / surface-normal distribution) with before/after screenshots committed to evidence/; zero new console errors.",
+      "verifyVia": {
+        "input": "Working-Claude CDP drive on :5175 using the paired same-worldSeed protocol (v2-6 precedent).",
+        "observable": "Metric shift + visually discrete craters at the same seed; evidence committed."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max's gate: low-g/low-R Moon/Mercury and Frozen read as heavily-cratered small worlds (the Mimas/Vesta-class look — 'I have never seen a photo...' resolved), while radius still visibly drives crater scale (no regression of the v2-6 win).",
+      "verifyVia": {
+        "input": "Max drives the lab solo on :5175.",
+        "observable": "Max's holistic acceptance."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "planet-lod-lab-core.js reliefNorm sites + planet-lod-lab.html consumer — the convicted 7x multiplier (uncapped 1/RE x clamped g^-0.5); ground-truth pass required before edits",
+      "bombardment.js craterAmplitude/craterProfile (CRATER_DEPTH_N, DEPTH_POW) — the inverted d/D law",
+      "v2-6 gravity coherence (deriveConditionVector derives g from drawn R) — the spine sizes against coherent g; sequencing '3 after 1' satisfied",
+      "MATH-CHECK-2026-07-21.md — convicting numbers + real-body anchor table (Pike d/D, relief/R ratios)",
+      "population-sweep.mjs harness (v2-6 S6) + the v2-5/v2-6 calibration/*.mjs artifact pattern"
+    ],
+    "outputs": [
+      "Bounded, derived reliefNorm consumed across ALL height-bearing families at the bake seam",
+      "Physical craterField depth profile (d/D 0.20 simple, complex rolloff)",
+      "ONE derivation note governing radius/gravity exponents — the sizing reference for Inc 4 (figure render) and Inc 5 (angular widths)"
+    ],
+    "mustStayWorking": [
+      "Golden byte-identity suites, no re-capture; carrier bytes untouched",
+      "v2-6 shipped wins: crater count proportional to R^2 / size proportional to 1/R live behavior, named-body locks, one-worldSeed re-roll",
+      "Full suite at the 4-failed baseline (KnownObjects x3, GalacticFeatures x1) + known collection noise, not grown",
+      "NOT-OURS modified files src/auto/CameraChoreographer.js + src/debug/LabMode.js — never staged, never touched",
+      "Atmo-lane sections of planet-lod-lab.html (section-ownership fence)"
+    ]
+  }
+}
