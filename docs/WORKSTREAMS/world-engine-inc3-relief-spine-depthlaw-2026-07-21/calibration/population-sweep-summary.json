@@ -1,0 +1,573 @@
+{
+  "meta": {
+    "generated": "2026-07-21T12:57:28.323Z",
+    "workstream": "world-engine-inc3-relief-spine-depthlaw-2026-07-21",
+    "nSeeds": 64,
+    "sweptPresets": 11,
+    "meshN": 10000,
+    "totalMs": 2155,
+    "budgetMs": 600000
+  },
+  "gates": {
+    "physicsInvariants": true,
+    "coverageBand": true,
+    "variance": true,
+    "e1Diversity": true,
+    "envelope": true,
+    "goldensStable": true,
+    "sharedDrawLaw": true,
+    "envelopeWiring": true,
+    "runtimeBudget": true
+  },
+  "coverage": {
+    "band": [
+      0.1,
+      0.8
+    ],
+    "inBandMin": 0.9,
+    "matureN": 128,
+    "matureInBand": 128,
+    "matureInBandFrac": 1,
+    "matureCovVariance": 0.0010126130011595103
+  },
+  "envelope": {
+    "law": "reliefEnvelope(R,g)=clamp(g^-0.58, 0.4, 133); radius via g (unused)",
+    "Q_RELIEF": 0.58,
+    "RELIEF_FLOOR": 0.4,
+    "RELIEF_CEIL": 133,
+    "phobosMult": 54.95408738576244,
+    "refReliefIllustrative": 0.003,
+    "nPoints": 704,
+    "multMin": 0.5125557518910179,
+    "multMax": 2.3746710565263482,
+    "apparentMinIllustrative": 0.0015376672556730536,
+    "apparentMaxIllustrative": 0.007124013169579045,
+    "boundOK": true,
+    "monotoneViolations": 0,
+    "radiusLeaks": 0,
+    "wiring": {
+      "ok": true,
+      "uPerturbEnv": 1,
+      "reliefEnvelopeRefs": 5,
+      "reliefNormDefs": 0
+    },
+    "note": "The MULTIPLIER bound+monotone+radius-independence is the exact defensible invariant. The apparent band is illustrative only (lens physics MF1); the in-band RENDER claim is the coordinator live AC-LAB-READ."
+  },
+  "matureDenominator": {
+    "screenMature": 0.9,
+    "kExpMature": 0.25,
+    "definition": "isImpactSurface(cond) && screen>=SCREEN_MATURE && t_exp>=K_EXP_MATURE*age",
+    "bySource": {
+      "Frozen (airless)": 64,
+      "Crystal (faceted)": 64
+    }
+  },
+  "erosionSuppressed": {
+    "count": 192,
+    "bySource": {
+      "Rocky (Earthlike)": 64,
+      "Ocean (temperate)": 64,
+      "Eyeball (locked temperate)": 64
+    }
+  },
+  "regimePin": {
+    "Rocky (Earthlike)": {
+      "k": 3,
+      "labels": [
+        "rocky/episodic",
+        "rocky/mobile",
+        "rocky/stagnant"
+      ]
+    },
+    "Lava (hot airless)": {
+      "k": 1,
+      "labels": [
+        "rocky/heat-pipe"
+      ]
+    },
+    "Ocean (temperate)": {
+      "k": 3,
+      "labels": [
+        "rocky/episodic",
+        "rocky/mobile",
+        "rocky/stagnant"
+      ]
+    },
+    "Frozen (airless)": {
+      "k": 1,
+      "labels": [
+        "icy/dead-lid"
+      ]
+    },
+    "Gas giant (Jovian)": {
+      "k": 1,
+      "labels": [
+        "gas/dead-lid"
+      ]
+    },
+    "Gas giant (Saturnian)": {
+      "k": 1,
+      "labels": [
+        "gas/dead-lid"
+      ]
+    },
+    "Ice giant (Neptunian)": {
+      "k": 1,
+      "labels": [
+        "gas/dead-lid"
+      ]
+    },
+    "Sub-Neptune (hazy)": {
+      "k": 1,
+      "labels": [
+        "gas/dead-lid"
+      ]
+    },
+    "Eyeball (locked temperate)": {
+      "k": 3,
+      "labels": [
+        "rocky/episodic",
+        "rocky/mobile",
+        "rocky/stagnant"
+      ]
+    },
+    "Carbon (high C/O)": {
+      "k": 1,
+      "labels": [
+        "carbon/dead-lid"
+      ]
+    },
+    "Crystal (faceted)": {
+      "k": 1,
+      "labels": [
+        "icy/dead-lid"
+      ]
+    }
+  },
+  "boot": {
+    "moonMercury": {
+      "coverage": 0.42855235463394475,
+      "nAnalytic": 2137278.228296118,
+      "nStamp": 147,
+      "nRetained": 71,
+      "reliefMult": 2.1054948190870233,
+      "g": 0.2770083102493075
+    },
+    "labLegibleEnvelope": {
+      "covMinPct": 33.73233269341023,
+      "covMaxPct": 46.11233384938203,
+      "covMeanPct": 38.9796502672774
+    }
+  },
+  "presets": [
+    {
+      "name": "Rocky (Earthlike)",
+      "archetype": "terrestrial",
+      "impact": true,
+      "R": {
+        "min": 0.8017449374310672,
+        "max": 1.4994881528429687,
+        "variance": 0.04377570386158056
+      },
+      "coverage": {
+        "mean": 0.000014247153027522314,
+        "variance": 3.171503300374776e-13
+      },
+      "matureSeeds": 0,
+      "e1": {
+        "distinct": 3,
+        "labels": [
+          "rocky/episodic",
+          "rocky/mobile",
+          "rocky/stagnant"
+        ],
+        "counts": {
+          "rocky/mobile": 43,
+          "rocky/episodic": 15,
+          "rocky/stagnant": 6
+        }
+      },
+      "carrier": {
+        "resolved": 64,
+        "naN": 0,
+        "flatBad": 0
+      },
+      "env": {
+        "multMin": 0.8404122652225142,
+        "multMax": 1.2083655445977168,
+        "apparentMin": 0.0025212367956675428,
+        "apparentMax": 0.0036250966337931507
+      },
+      "ms": 258
+    },
+    {
+      "name": "Lava (hot airless)",
+      "archetype": "lava",
+      "impact": false,
+      "R": {
+        "min": 0.30174493743106723,
+        "max": 0.9994881528429687,
+        "variance": 0.04377570386158059
+      },
+      "coverage": {
+        "mean": 0,
+        "variance": 0
+      },
+      "matureSeeds": 0,
+      "e1": {
+        "distinct": 1,
+        "labels": [
+          "rocky/heat-pipe"
+        ],
+        "counts": {
+          "rocky/heat-pipe": 64
+        }
+      },
+      "carrier": {
+        "resolved": 0,
+        "naN": 0,
+        "flatBad": 0
+      },
+      "env": {
+        "multMin": 1.0691070223049344,
+        "multMax": 2.1414159049244117,
+        "apparentMin": 0.003207321066914803,
+        "apparentMax": 0.0064242477147732355
+      },
+      "ms": 2
+    },
+    {
+      "name": "Ocean (temperate)",
+      "archetype": "ocean",
+      "impact": true,
+      "R": {
+        "min": 0.8024927677586675,
+        "max": 1.7992687897756696,
+        "variance": 0.08933817114608283
+      },
+      "coverage": {
+        "mean": 0.000013576612503782172,
+        "variance": 4.86358094256401e-13
+      },
+      "matureSeeds": 0,
+      "e1": {
+        "distinct": 3,
+        "labels": [
+          "rocky/episodic",
+          "rocky/mobile",
+          "rocky/stagnant"
+        ],
+        "counts": {
+          "rocky/mobile": 54,
+          "rocky/stagnant": 6,
+          "rocky/episodic": 4
+        }
+      },
+      "carrier": {
+        "resolved": 64,
+        "naN": 0,
+        "flatBad": 0
+      },
+      "env": {
+        "multMin": 0.7210749702869175,
+        "multMax": 1.1517554450327703,
+        "apparentMin": 0.0021632249108607523,
+        "apparentMax": 0.003455266335098311
+      },
+      "ms": 59
+    },
+    {
+      "name": "Frozen (airless)",
+      "archetype": "ice",
+      "impact": true,
+      "R": {
+        "min": 0.401994214206934,
+        "max": 1.1994150318205357,
+        "variance": 0.057176429533492994
+      },
+      "coverage": {
+        "mean": 0.4104923028458712,
+        "variance": 0.0007249757195431752
+      },
+      "matureSeeds": 64,
+      "e1": {
+        "distinct": 1,
+        "labels": [
+          "icy/dead-lid"
+        ],
+        "counts": {
+          "icy/dead-lid": 64
+        }
+      },
+      "carrier": {
+        "resolved": 64,
+        "naN": 0,
+        "flatBad": 0
+      },
+      "env": {
+        "multMin": 1.259646376323815,
+        "multMax": 2.3746710565263482,
+        "apparentMin": 0.0037789391289714453,
+        "apparentMax": 0.007124013169579045
+      },
+      "ms": 120
+    },
+    {
+      "name": "Gas giant (Jovian)",
+      "archetype": "gas-giant",
+      "impact": false,
+      "R": {
+        "min": 6.01994214206934,
+        "max": 13.994150318205357,
+        "variance": 5.717642953349304
+      },
+      "coverage": {
+        "mean": 0,
+        "variance": 0
+      },
+      "matureSeeds": 0,
+      "e1": {
+        "distinct": 1,
+        "labels": [
+          "gas/dead-lid"
+        ],
+        "counts": {
+          "gas/dead-lid": 64
+        }
+      },
+      "carrier": {
+        "resolved": 0,
+        "naN": 0,
+        "flatBad": 0
+      },
+      "env": {
+        "multMin": 0.5125557518910179,
+        "multMax": 0.8360390393816503,
+        "apparentMin": 0.0015376672556730536,
+        "apparentMax": 0.0025081171181449507
+      },
+      "ms": 0
+    },
+    {
+      "name": "Gas giant (Saturnian)",
+      "archetype": "gas-giant",
+      "impact": false,
+      "R": {
+        "min": 6.01994214206934,
+        "max": 13.994150318205357,
+        "variance": 5.717642953349304
+      },
+      "coverage": {
+        "mean": 0,
+        "variance": 0
+      },
+      "matureSeeds": 0,
+      "e1": {
+        "distinct": 1,
+        "labels": [
+          "gas/dead-lid"
+        ],
+        "counts": {
+          "gas/dead-lid": 64
+        }
+      },
+      "carrier": {
+        "resolved": 0,
+        "naN": 0,
+        "flatBad": 0
+      },
+      "env": {
+        "multMin": 0.7602983450359687,
+        "multMax": 1.2401365035553877,
+        "apparentMin": 0.0022808950351079064,
+        "apparentMax": 0.0037204095106661635
+      },
+      "ms": 1
+    },
+    {
+      "name": "Ice giant (Neptunian)",
+      "archetype": "sub-neptune",
+      "impact": false,
+      "R": {
+        "min": 2.503739151638001,
+        "max": 3.9989031846635044,
+        "variance": 0.20101088507868645
+      },
+      "coverage": {
+        "mean": 0,
+        "variance": 0
+      },
+      "matureSeeds": 0,
+      "e1": {
+        "distinct": 1,
+        "labels": [
+          "gas/dead-lid"
+        ],
+        "counts": {
+          "gas/dead-lid": 64
+        }
+      },
+      "carrier": {
+        "resolved": 0,
+        "naN": 0,
+        "flatBad": 0
+      },
+      "env": {
+        "multMin": 0.9208501350372832,
+        "multMax": 1.2081837924869219,
+        "apparentMin": 0.00276255040511185,
+        "apparentMax": 0.0036245513774607655
+      },
+      "ms": 1
+    },
+    {
+      "name": "Sub-Neptune (hazy)",
+      "archetype": "sub-neptune",
+      "impact": false,
+      "R": {
+        "min": 2.503739151638001,
+        "max": 3.9989031846635044,
+        "variance": 0.20101088507868645
+      },
+      "coverage": {
+        "mean": 0,
+        "variance": 0
+      },
+      "matureSeeds": 0,
+      "e1": {
+        "distinct": 1,
+        "labels": [
+          "gas/dead-lid"
+        ],
+        "counts": {
+          "gas/dead-lid": 64
+        }
+      },
+      "carrier": {
+        "resolved": 0,
+        "naN": 0,
+        "flatBad": 0
+      },
+      "env": {
+        "multMin": 0.7437640780311908,
+        "multMax": 0.9758414212263548,
+        "apparentMin": 0.0022312922340935724,
+        "apparentMax": 0.002927524263679064
+      },
+      "ms": 1
+    },
+    {
+      "name": "Eyeball (locked temperate)",
+      "archetype": "eyeball",
+      "impact": true,
+      "R": {
+        "min": 0.8012463838793338,
+        "max": 1.2996343948878348,
+        "variance": 0.02233454278652071
+      },
+      "coverage": {
+        "mean": 0.000014580669593386549,
+        "variance": 1.9634854494751103e-13
+      },
+      "matureSeeds": 0,
+      "e1": {
+        "distinct": 3,
+        "labels": [
+          "rocky/episodic",
+          "rocky/mobile",
+          "rocky/stagnant"
+        ],
+        "counts": {
+          "rocky/mobile": 37,
+          "rocky/episodic": 21,
+          "rocky/stagnant": 6
+        }
+      },
+      "carrier": {
+        "resolved": 64,
+        "naN": 0,
+        "flatBad": 0
+      },
+      "env": {
+        "multMin": 0.858981293481482,
+        "multMax": 1.137144544477418,
+        "apparentMin": 0.002576943880444446,
+        "apparentMax": 0.003411433633432254
+      },
+      "ms": 27
+    },
+    {
+      "name": "Carbon (high C/O)",
+      "archetype": "carbon",
+      "impact": false,
+      "R": {
+        "min": 0.40124638387933376,
+        "max": 0.8996343948878348,
+        "variance": 0.02233454278652071
+      },
+      "coverage": {
+        "mean": 0,
+        "variance": 0
+      },
+      "matureSeeds": 0,
+      "e1": {
+        "distinct": 1,
+        "labels": [
+          "carbon/dead-lid"
+        ],
+        "counts": {
+          "carbon/dead-lid": 64
+        }
+      },
+      "carrier": {
+        "resolved": 0,
+        "naN": 0,
+        "flatBad": 0
+      },
+      "env": {
+        "multMin": 1.0325490747556731,
+        "multMax": 1.649265427477246,
+        "apparentMin": 0.0030976472242670197,
+        "apparentMax": 0.0049477962824317386
+      },
+      "ms": 1
+    },
+    {
+      "name": "Crystal (faceted)",
+      "archetype": "crystal",
+      "impact": true,
+      "R": {
+        "min": 0.3012463838793337,
+        "max": 0.7996343948878348,
+        "variance": 0.02233454278652072
+      },
+      "coverage": {
+        "mean": 0.36910070249967636,
+        "variance": 0.0004436179931662985
+      },
+      "matureSeeds": 64,
+      "e1": {
+        "distinct": 1,
+        "labels": [
+          "icy/dead-lid"
+        ],
+        "counts": {
+          "icy/dead-lid": 64
+        }
+      },
+      "carrier": {
+        "resolved": 64,
+        "naN": 0,
+        "flatBad": 0
+      },
+      "env": {
+        "multMin": 1.1542421362231197,
+        "multMax": 2.0332899134868176,
+        "apparentMin": 0.003462726408669359,
+        "apparentMax": 0.006099869740460453
+      },
+      "ms": 94
+    }
+  ],
+  "failures": []
+}
