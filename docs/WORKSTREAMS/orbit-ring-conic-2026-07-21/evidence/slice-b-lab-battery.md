@@ -256,3 +256,90 @@ three** (< SDF 0.042 < LineLoop 0.060). No regression.
 2. Confirm/close the grazing-drift regression (conic 0.222 > SDF 0.137) at the live
    grazing drive; investigate the `gl_FragDepth`/depthTest path if it reproduces
    in-game (the lab green-counter moon-color confound accounts for part but not all).
+
+---
+
+## 2026-07-21 — grazing-drift regression: mechanism proven + fixed (Slice B fix)
+
+Follow-up to the b6 grazing FLAG (conic-prod 0.222 > shipped SDF 0.137 > probe
+0.089). Reproduced the exact A/B in-lab (prod-argmax **0.222** / probe **0.089**,
+byte-identical to b6), then isolated the cause with single-variable A/B variants
+run on the productized DATA path via a self-contained `OrbitConicField` harness
+(657×282 RT, logdepth, the exact grazing driftMeasure: center `[5200,0,0]`, d25,
+p0.002, 0.12°/f, 90f). The harness reproduced prod-argmax at **0.227** (avgGreen
+1552.8 vs lab 1554.6) — validated. All numbers `togglePerGreen`.
+
+### Variant-isolation table (same 13-ring grazing scene unless noted)
+
+| variant | what it isolates | togglePerGreen | avgGreen | avgToggles |
+|---|---|---:|---:|---:|
+| V0 prod-argmax (shipped) | baseline | **0.227** | 1552.8 | 353.1 |
+| V1 max-alpha selection (prod data path + depth write held identical) | selection logic ONLY | **0.090** | 2145.5 | 192.2 |
+| V3 all-rings-same bright green, argmax kept | green-counter moon-color confound | **0.258** | 1784.6 | 460.0 |
+| V4 solo 5200 planet ring, argmax | overlap removed (single ring) | 0.234 | 866.2 | 203.0 |
+| V5 argmax, depthTest/Write OFF | depth-write contribution | **0.227** | 1552.8 | 353.1 |
+| probe (lab conicProd=false) | reference | 0.089 | 2145.3 | 191.9 |
+
+**PROVEN mechanism (V0 vs V1 — identical geometry/data/depth, ONLY selection
+differs): the single-argmax overlap selection couples ALPHA to the front-most
+(min `w_clip`) ring.** Swapping argmax → max-band-coverage (V1) collapses
+0.227 → 0.090 (== probe) with the DataTexture path and log-depth write held byte-
+identical. Therefore the noise is neither the data path nor the depth write
+(V5 = 0.227, depth-write off changes nothing) nor the dim moon color (V3 = 0.258,
+*higher* with all-bright rings → the green-counter moon-color confound is
+**REFUTED**). It is the selection logic.
+
+**Why the coupling drifts (quantified):** at grazing, rings compress onto the
+horizon where their reconstructed `w_clip` becomes co-depth — at overlap pixels
+the two front rings' `w_clip` differ by a RELATIVE gap of ~0 (measured: 100% of
+347 overlap samples within 0.005; per-frame `w_clip` jitter floor ~6.4e-6). Under
+a strict `<` argmax the winner flaps frame-to-frame on sub-0.3% float
+differences, and because each candidate carries its own band COVERAGE the
+winner's alpha flaps with it — a near ring that only edge-grazes a pixel
+(coverage ≈ threshold) steals it from a farther ring that strongly covers it,
+suppressing the green count (1553 vs probe 2145) AND toggling it as the winner
+flaps. (V4's 0.234 for a lone grazing ring is the inherent single-ring horizon-
+edge jitter, R6 — not the overlap mechanism; it changes avgGreen too much to be a
+clean control, unlike the same-scene V0-vs-V1.)
+
+### Fix (`src/objects/OrbitConicField.js`)
+
+Co-depth tie-break in the overlap selection, `CONIC_WCLIP_TIE_EPS = 0.005`
+(relative). Outside the epsilon band the strictly-nearer ring wins (true
+front-most; b5b color correct). INSIDE the band (`|w_clip|` within eps of the
+current best — rings co-depth on the compressed horizon) the ring that COVERS the
+pixel more strongly (higher band coverage `a`) takes ownership of color + alpha +
+depth together (its `w_clip` is within eps of best, so depth stays coherent —
+D-4's coupling preserved, no decoupling). Stateless: a pure function of the
+frame's ring set, no temporal state in the shader.
+
+**Epsilon sizing (from measured `w_clip` spread, not free choice):** grazing
+`togglePerGreen` plateaus at 0.094 for eps ≥ 0.003 (below it the noise-flips leak:
+eps 1e-4 → 0.214, 1e-3 → 0.101); b5b front-most color stays 100% for eps ≤ 0.005
+and first breaks at eps 0.01 (1/12 crossing pixels flip within the 1% depth band).
+**0.005** sits above the ~0.003 co-depth plateau knee and below the 0.01 b5b-break.
+
+Also folded (b8b calibration): `DEFAULT_ANGULAR_CUTOFF_PX` **2.0 → 1.0** (fade
+band [0.5, 1.0]); doc comment updated provisional → calibrated-2026-07-21. No unit
+test pinned the default value (the b2 `CUTOFF=2.0` is a local input to the fade
+*function*, not a default assertion — left unchanged); the only shader-string pins
+are the `inverse(`/`transpose(` negatives, which the fix does not add.
+
+### Post-fix re-measure (real edited field, lab-native instruments unless noted)
+
+| gate | pre-fix | post-fix | bar | verdict |
+|---|---:|---:|---|---|
+| grazing @5200 p.002 toggle-per-green (conic-prod) | 0.222 | **0.094** | ≤ shipped 0.137; goal probe 0.089 | **PASS** |
+| probe grazing (reference) | 0.089 | 0.089 | — | unchanged |
+| b5b two-color crossing argmax-match (self-contained, real shader) | 100% | **100%** (12/12, 0 blend, 6/6 split) | 100% | **PASS** |
+| b5 dead-zone @3000 p.01 green (conic-prod) | 1314 | **1314** | ≥ shipped, no regress | **PASS** |
+| gentle control @5200 p.35 toggle-per-green | 0.039 | **0.033** | ≤ shipped 0.042 | **PASS** |
+| b8 anti-vanish @ cutoff 1.0 (perRing ladder) | 0 cells | **0 cells** | 0 | **PASS** |
+
+3 far-dots at cutoff 1.0 (planet 387@40k, 1000@120k, 5200@600k) unchanged —
+conic's documented improvement (SDF's flaky band dropped them), not moon dots.
+Console clean across the whole post-fix battery except the benign favicon 404;
+field shader recompiled (FS 2964 → 3754 chars). Full vitest: **1360 tests
+passed, 0 failed** (15 `vendor/motion-test-kit` collection-noise files are the
+documented baseline). Byte-guards vs `8f1d8e8` EMPTY (all 6). Only
+`OrbitConicField.js` changed.

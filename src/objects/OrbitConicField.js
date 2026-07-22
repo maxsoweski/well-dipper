@@ -14,8 +14,10 @@ import { buildRingConic } from './ringConic.js';
  * and the fragment shader — for every sceneTarget pixel — loops the live ring
  * set, tests the Sampson distance band, guards the front branch, applies the
  * per-ring angular-size fade, and (over all band-passing rings at that pixel)
- * writes the FRONT-MOST ring's color + alpha + log-depth TOGETHER (single
- * argmax by clip-w; never decoupled — D-4).
+ * writes the FRONT-MOST ring's color + alpha + log-depth TOGETHER (argmax by
+ * clip-w; never decoupled - D-4), with a co-depth tie-break: where rings compress
+ * onto the horizon (equal clip-w within CONIC_WCLIP_TIE_EPS) the pixel is owned by
+ * the ring that covers it most, killing the grazing argmax flap (Slice B b6 fix).
  *
  * WHY A DataTexture, NOT A UNIFORM ARRAY (D-3)
  * --------------------------------------------
@@ -66,15 +68,33 @@ export const CONIC_TEX_ROWS = 8;
 // "persistent dots") and is removed.
 const ANGULAR_FADE_LO_FRAC = 0.5;
 
-// PROVISIONAL default cutoff — see the class doc + `angularCutoffPx` option.
-// 2.0 render px of PROJECTED RADIUS: on the 1/3-res sceneTarget a ring spanning
-// under ~1 px radius is an isolated dot, so full visibility at >=2 px and full
-// fade by ~1 px keeps legible rings while dissolving dots. This is a STARTING
-// value only; the shipping cutoff is calibrated at the lab-battery b8b step
-// against the MEASURED shipped-SDF angular dropout per ring class (AC5 anti-
-// vanish vs AC8 fade tension). Settable via ctor {angularCutoffPx} and
-// setAngularCutoff(); do NOT treat this literal as final.
-export const DEFAULT_ANGULAR_CUTOFF_PX = 2.0;
+// Relative-w_clip tie-break epsilon for the overlap selection (grazing-drift fix,
+// 2026-07-21). At grazing poses many rings compress onto the horizon line where
+// their reconstructed clip-w becomes co-depth: at overlap pixels the two front
+// rings' w_clip differ by a RELATIVE gap of ~0 (measured: 100% within 0.005; the
+// per-frame w_clip jitter floor is ~6e-6). Under a strict `<` argmax the winner
+// then flaps frame-to-frame on sub-0.3% float differences, and because each
+// candidate carries its own band COVERAGE the winner's alpha flaps with it —
+// suppressing and toggling the painted line (the 0.222 vs probe-0.089 regression,
+// Slice B b6). This epsilon defines the co-depth band within which rings are
+// treated as one depth and the pixel is owned by the ring that actually COVERS it
+// most (highest band coverage `a`), deterministically. Sized from the measured
+// w_clip spread: 0.005 sits above the ~0.003 co-depth plateau knee (below it the
+// noise-flips leak through) and below the ~0.01 where it would start overriding
+// genuine front-most color at real crossings (b5b stays 100% at 0.005, breaks at
+// 0.01). Grazing toggle-per-green: 0.222 -> 0.094 (probe class), b5b 100%,
+// dead-zone/gentle unchanged. Stateless: a pure function of the frame's ring set,
+// no temporal state in the shader.
+const CONIC_WCLIP_TIE_EPS = 0.005;
+
+// CALIBRATED default cutoff (2026-07-21, lab-battery b8b) — see the class doc +
+// `angularCutoffPx` option. 1.0 render px of PROJECTED RADIUS, fade band
+// [0.5, 1.0]. Pinned to the MEASURED shipped-SDF angular dropout per ring class
+// (planet ~0.8 px, moon ~0.45-0.6 px): full removal at 0.5 px sits at/below both
+// classes' SDF dropouts, so the fade removes a ring only where shipped-SDF also
+// drops it — 0 anti-vanish cells across the b8 perRing ladder (the provisional
+// 2.0 produced 4). Settable via ctor {angularCutoffPx} and setAngularCutoff().
+export const DEFAULT_ANGULAR_CUTOFF_PX = 1.0;
 
 /**
  * JS mirror of the shader's angular-size fade (GLSL-mirror-parity discipline,
@@ -192,12 +212,24 @@ void main() {
     float a = band * t7.w * ang;
     if (a < 0.01) continue;
 
-    // Single argmax: the nearest band-passing ring owns color + alpha + depth.
-    if (wclip < bestW) {
+    // Overlap selection: front-most band-passing ring owns color + alpha + depth
+    // TOGETHER (D-4, never decoupled), with a co-depth tie-break (grazing-drift
+    // fix). Outside the epsilon band the strictly-nearer ring wins (true
+    // front-most ordering; b5b crossing color stays correct). INSIDE the band
+    // (|w_clip| within CONIC_WCLIP_TIE_EPS of the current best — the rings are
+    // co-depth on the compressed horizon) the ring that COVERS this pixel more
+    // strongly (higher band coverage a) takes ownership; its w_clip is within
+    // epsilon of best so depth stays coherent. This kills the strict-argmax
+    // frame-to-frame flap that suppressed + toggled the line at grazing.
+    if (wclip < bestW * (1.0 - ${CONIC_WCLIP_TIE_EPS.toFixed(6)})) {
       bestW = wclip;
       bestColor = t7.rgb;
       bestAlpha = a;
       found = true;
+    } else if (found && wclip < bestW * (1.0 + ${CONIC_WCLIP_TIE_EPS.toFixed(6)}) && a > bestAlpha) {
+      bestW = wclip;
+      bestColor = t7.rgb;
+      bestAlpha = a;
     }
   }
 
