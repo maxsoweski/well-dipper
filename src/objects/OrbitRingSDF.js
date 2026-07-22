@@ -1,5 +1,25 @@
 import * as THREE from 'three';
 
+// ── orbit-ring-conic Slice C: runtime switchover flag + proxy render layer ──
+//
+// USE_CONIC_FIELD is the single source of truth for whether the OrbitConicField
+// owns orbit-ring rendering. Default ON. When ON, each per-ring OrbitRingSDF proxy
+// STAYS a scene child (world-origin rebasing depends on it — BUILD-PLAN D-1) but is
+// assigned to ORBIT_PROXY_LAYER so the ORRERY/HELM camera (whose layer mask is the
+// default: layer 0 only) draws NONE of them — the 39 per-ring quads collapse to the
+// field's one fullscreen pass (AC9). `.mesh.visible` stays free to carry LOGICAL
+// visibility (hitTestOrbits + the field's per-ring active flag). The legacy SDF
+// render path is retained-but-dormant through Slice C (no shader strip — that is
+// Slice D), so rollback is a single-line flip of the default here: set it false and
+// every proxy renders on layer 0 exactly as shipped, atomically, no slice revert.
+//
+// It lives HERE (the leaf module, imports only three) so OrbitRingSDF reads it with
+// no cycle; OrbitConicField and main.js import it from here as the one source.
+export const ORBIT_PROXY_LAYER = 10; // camera default mask (layer 0) excludes it
+export let USE_CONIC_FIELD = true;
+/** Flip the switchover flag (rollback / tests). Returns the new value. */
+export function setUseConicField(v) { USE_CONIC_FIELD = !!v; return USE_CONIC_FIELD; }
+
 /**
  * JS mirror of the GLSL proximity-fade envelope (round-3 staticky fix, 2026-07-21).
  * Exported so the unit suite and the orbit-lab instrument share ONE definition with
@@ -287,6 +307,15 @@ export class OrbitRingSDF {
     // fragment discard keeps off-band pixels cheap). Mirrors the intent that
     // orbit visibility is owned by _applyOrbitVisibility, not frustum culling.
     this.mesh.frustumCulled = false;
+
+    // orbit-ring-conic Slice C: when the field owns rendering, suppress THIS proxy's
+    // draw by moving it to ORBIT_PROXY_LAYER — a layer the ORRERY/HELM camera does
+    // NOT include (its mask is the default: layer 0 only). The mesh STAYS a scene
+    // child (rebasing — D-1) and `.mesh.visible` stays free to carry LOGICAL
+    // visibility; only the render list skips it. Flag OFF -> stay on layer 0 and
+    // render as shipped. Read at construction (system spawn); a mid-session flip
+    // takes effect on the next spawn, and the prod rollback is flag-default + reload.
+    if (USE_CONIC_FIELD) this.mesh.layers.set(ORBIT_PROXY_LAYER);
   }
 
   /** Match OrbitLine.addTo — add the mesh to a scene/group. */

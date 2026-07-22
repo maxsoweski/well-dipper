@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { buildRingConic } from './ringConic.js';
+import { proximityFadeFactor } from './OrbitRingSDF.js';
 
 /**
  * OrbitConicField — one fullscreen pass that paints every orbit ring's
@@ -316,6 +317,16 @@ export class OrbitConicField {
     this._viewInv = new THREE.Matrix4();
     this._camPos = new THREE.Vector3();
     this._ringCtr = new THREE.Vector3();
+
+    // ── Slice C system-adapter scratch (updateFromSystem) ── Reused across frames
+    // so the OrbitLine->descriptor build allocates nothing in the hot path (R5).
+    // _descPool holds the reused descriptor objects (grows once, never shrinks);
+    // _descView is the exact-length reference array handed to update() each frame.
+    this._descPool = [];
+    this._descView = [];
+    this._descCount = 0;
+    this._adapterCam = new THREE.Vector3();
+    this._proxCfg = { nearAbs: 0.35, nearRel: 0.02, farMul: 3.0 };
   }
 
   /** Match OrbitLine/OrbitRingSDF.addTo — add the fullscreen mesh to a scene. */
@@ -338,6 +349,105 @@ export class OrbitConicField {
       this.material.uniforms.uAngCutoffPx.value = px;
     }
     return this.angularCutoffPx;
+  }
+
+  /**
+   * SYSTEM ADAPTER (orbit-ring-conic Slice C) — build the field's descriptor list
+   * from a live main.js `system` and drive update(). This is the ONE place that
+   * knows the OrbitLine surface; the generic update() below stays OrbitLine-agnostic.
+   *
+   * Per VISIBLE ring (star pair + planet + moon lists) it reads the LIVE mutated
+   * material — so hover (material.color/.opacity, main.js :11210) and the AC3 factor
+   * (uVisFactor) propagate with zero per-ring draw (R8) — and folds the THREE
+   * camera-only channels into the descriptor alpha:
+   *
+   *     alpha = uOpacity * uVisFactor * proxFade      (CPU, per ring)
+   *
+   * where proxFade mirrors the shipped GLSL envelope EXACTLY: the camera is taken
+   * into the ring's object space via its (rigid) matrixWorld columns, circleDist =
+   * hypot(length(camObj.xz) - R, camObj.y), then proximityFadeFactor(). The
+   * angular-size fade is deliberately NOT folded here — it stays IN-SHADER
+   * (angularFade multiplies on top), a three-channel CPU composition + one in-shader
+   * channel; folding it CPU-side too would DOUBLE-APPLY it.
+   *
+   * Hidden rings (`mesh.visible === false`, set by _applyOrbitVisibility/mode sync)
+   * are simply not emitted — the field is stateless per frame (no registry), so a
+   * disposed/removed ring just stops appearing on the next call. Ring order is star
+   * + planet first, moons last, so an (unexpected) overflow past CONIC_MAX drops the
+   * least-visible sub-pixel moon rings first (R9).
+   *
+   * @param {object} system  main.js system: { orbitLines, starOrbitLines, planets:[{moonOrbitLines}] }
+   * @param {THREE.PerspectiveCamera} camera  render-time interpolated camera (D-2)
+   * @param {{width:number, height:number}} viewport  the sceneTarget dimensions
+   * @returns {this}
+   */
+  updateFromSystem(system, camera, viewport) {
+    this._adapterCam.setFromMatrixPosition(camera.matrixWorld);
+    this._descCount = 0;
+    if (system) {
+      const so = system.starOrbitLines;
+      if (so) for (let i = 0; i < so.length; i++) this._appendRing(so[i]);
+      const po = system.orbitLines;
+      if (po) for (let i = 0; i < po.length; i++) this._appendRing(po[i]);
+      const pl = system.planets;
+      if (pl) {
+        for (let i = 0; i < pl.length; i++) {
+          const mo = pl[i] && pl[i].moonOrbitLines;
+          if (mo) for (let j = 0; j < mo.length; j++) this._appendRing(mo[j]);
+        }
+      }
+    }
+    const n = this._descCount;
+    const view = this._descView;
+    view.length = n; // reference view over the pooled objects — no object churn
+    for (let i = 0; i < n; i++) view[i] = this._descPool[i];
+    this.update(view, camera, viewport);
+    return this;
+  }
+
+  /**
+   * Append one OrbitLine as a pooled descriptor if it is visible (Slice C adapter).
+   * Zero-alloc after warm-up: reuses this._descPool[n], references ring.mesh.matrixWorld
+   * and the live material color (no copies).
+   */
+  _appendRing(ring) {
+    if (!ring || !ring.mesh || !ring.mesh.visible) return;
+    const n = this._descCount;
+    let d = this._descPool[n];
+    if (!d) { d = { matrixWorld: null, radius: 0, color: null, alpha: 1, active: true }; this._descPool[n] = d; }
+
+    // Current transform off the render path (mirrors hitTestOrbits' per-mesh sync,
+    // main.js:4119) — the moon-ring position is written at sim time and its
+    // matrixWorld would otherwise lag until the renderer's own updateMatrixWorld.
+    ring.mesh.updateMatrixWorld(true);
+    const mw = ring.mesh.matrixWorld, e = mw.elements;
+
+    // Camera in the ring's OBJECT space via the rigid model columns (byte-mirror of
+    // the shipped vertex shader's dot-product-by-columns form). e[12..14] = model
+    // translation; e[0..2]/[4..6]/[8..10] = object X/Y/Z axes in world.
+    const cw = this._adapterCam;
+    const dx = cw.x - e[12], dy = cw.y - e[13], dz = cw.z - e[14];
+    const camObjX = e[0] * dx + e[1] * dy + e[2] * dz;
+    const camObjY = e[4] * dx + e[5] * dy + e[6] * dz;
+    const camObjZ = e[8] * dx + e[9] * dy + e[10] * dz;
+    const radial = Math.hypot(camObjX, camObjZ) - ring.radius;
+    const circleDist = Math.hypot(radial, camObjY);
+
+    const u = ring.material.uniforms;
+    const cfg = this._proxCfg;
+    cfg.nearAbs = u.uProxNearAbs.value;
+    cfg.nearRel = u.uProxNearRel.value;
+    cfg.farMul = u.uProxFarMul.value;
+    const proxFade = proximityFadeFactor(circleDist, ring.radius, cfg);
+
+    d.matrixWorld = mw;
+    d.radius = ring.radius;
+    // Live color: OrbitLine surfaces material.color (=== uColor.value, mutated in
+    // place by hover); base OrbitRingSDF has only the uColor Vector3.
+    d.color = ring.material.color || u.uColor.value;
+    d.alpha = u.uOpacity.value * u.uVisFactor.value * proxFade;
+    d.active = true;
+    this._descCount = n + 1;
   }
 
   /**

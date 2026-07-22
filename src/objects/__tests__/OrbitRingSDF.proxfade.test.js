@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
 import { OrbitRingSDF, proximityFadeFactor } from '../OrbitRingSDF.js';
 import { OrbitLine } from '../OrbitLine.js';
+import { OrbitConicField, angularFadeFactor } from '../OrbitConicField.js';
 
 // RED stage — orrery-entry-orbits-2026-07-20, round-3 staticky fix (proximity fade).
 // Max-confirmed reproduction (2026-07-21, contract statusNote at 8715e27): the "mess"
@@ -124,6 +126,83 @@ describe('setProximityFade — partial-update setter', () => {
     expect(u.uProxNearAbs.value).toBeCloseTo(0.35);
     expect(u.uProxNearRel.value).toBeCloseTo(0.02);
     expect(u.uProxFarMul.value).toBeCloseTo(3.0);
+  });
+});
+
+// (c4 — orbit-ring-conic Slice C) — CPU-side channel-composition pin for the
+// OrbitConicField descriptor adapter (field.updateFromSystem).
+//
+// COORDINATION RULE (Slice B/C, binding): the angular-size fade lives IN-SHADER in
+// OrbitConicField. The CPU descriptor `alpha` folds ONLY the three camera-only
+// channels — opacity * uVisFactor * proxFade — and the shader multiplies
+// angularFade ON TOP (a three-channel CPU composition + one in-shader channel, NOT
+// four channels CPU-side). Folding angularFade into the descriptor alpha too would
+// DOUBLE-APPLY it (once here, once in the fragment shader's angular mirror). These
+// pins assert (a) all three CPU channels compose and none is silently dropped, and
+// (b) angularFade is NOT in the descriptor alpha (it stays in-shader).
+// HYPOTHESIS: FAILS at HEAD — field.updateFromSystem does not exist yet.
+describe('c4 CPU descriptor alpha = opacity * uVisFactor * proxFade (three-channel; angularFade in-shader)', () => {
+  const W = 657, H = 282, FOV = 70, ASPECT = W / H, NEAR = 0.01, FAR = 1e6;
+  const VIEWPORT = { width: W, height: H };
+
+  function poseCamera(dist, pitch) {
+    const cam = new THREE.PerspectiveCamera(FOV, ASPECT, NEAR, FAR);
+    cam.position.set(0, dist * Math.sin(pitch), dist * Math.cos(pitch));
+    cam.up.set(0, 1, 0);
+    cam.lookAt(0, 0, 0);
+    cam.updateMatrixWorld(true);
+    return cam;
+  }
+
+  function systemOf(ring) { return { orbitLines: [ring], starOrbitLines: [], planets: [] }; }
+
+  it('far from the ring (proxFade = 1) the descriptor alpha == opacity * uVisFactor', () => {
+    const ring = new OrbitLine(1520, 0x00ff00);
+    ring.mesh.visible = true;
+    ring.material.opacity = 0.8;
+    ring.setVisibilityFactor(0.5);
+    const field = new OrbitConicField();
+    field.updateFromSystem(systemOf(ring), poseCamera(60000, 0.7), VIEWPORT);
+    expect(field.readConic(0).alpha).toBeCloseTo(Math.fround(0.8 * 0.5), 5);
+  });
+
+  it('proxFade is a real channel: standing ON the circle zeroes the descriptor alpha', () => {
+    const ring = new OrbitLine(1520, 0x00ff00);
+    ring.mesh.visible = true;
+    ring.material.opacity = 1.0;
+    ring.setVisibilityFactor(1.0);
+    const field = new OrbitConicField();
+    // Camera at radius 1520 in the ring's plane -> circleDist 0 -> proxFade 0.
+    const cam = new THREE.PerspectiveCamera(FOV, ASPECT, NEAR, FAR);
+    cam.position.set(1520, 0, 0); cam.up.set(0, 1, 0); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(true);
+    field.updateFromSystem(systemOf(ring), cam, VIEWPORT);
+    expect(field.readConic(0).alpha).toBeCloseTo(0, 5);
+  });
+
+  it('uVisFactor is a real channel: setVisibilityFactor(0) zeroes the descriptor alpha', () => {
+    const ring = new OrbitLine(1520, 0x00ff00);
+    ring.mesh.visible = true;
+    ring.material.opacity = 1.0;
+    ring.setVisibilityFactor(0);
+    const field = new OrbitConicField();
+    field.updateFromSystem(systemOf(ring), poseCamera(60000, 0.7), VIEWPORT);
+    expect(field.readConic(0).alpha).toBeCloseTo(0, 5);
+  });
+
+  it('angular-size fade is NOT folded into the descriptor alpha (stays in-shader)', () => {
+    const ring = new OrbitLine(1520, 0x00ff00);
+    ring.mesh.visible = true;
+    ring.material.opacity = 0.8;
+    ring.setVisibilityFactor(0.5);
+    const field = new OrbitConicField();
+    // Far enough that projected radius < the angular cutoff: the SHADER would dim
+    // this ring, but the CPU descriptor alpha must stay the full three-channel value.
+    const camDist = 500000;
+    const angMirror = angularFadeFactor(1520, camDist, FOV, H, field.angularCutoffPx);
+    expect(angMirror).toBeLessThan(1); // sanity: the in-shader angular fade IS partial here
+    field.updateFromSystem(systemOf(ring), poseCamera(camDist, 0.7), VIEWPORT);
+    // proxFade is 1 at this range -> alpha is opacity*uVisFactor, NOT reduced by angMirror.
+    expect(field.readConic(0).alpha).toBeCloseTo(Math.fround(0.8 * 0.5), 5);
   });
 });
 
