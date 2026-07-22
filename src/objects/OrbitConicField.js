@@ -359,8 +359,12 @@ export class OrbitConicField {
 
   /** Pack one ring column (rows 0-7). conic===null zeros the conic rows. */
   _packRing(src, i, conic, radius, camDist, activeFlag, color, alpha) {
-    const off = (r) => (r * CONIC_MAX + i) * 4;
-    const o0 = off(0), o1 = off(1), o2 = off(2), o3 = off(3), o4 = off(4), o5 = off(5), o6 = off(6), o7 = off(7);
+    // off(r) = (r*CONIC_MAX + i)*4 = i*4 + r*(CONIC_MAX*4). Inlined as running
+    // additions of a constant row stride — no per-call closure allocation (R5).
+    const stride = CONIC_MAX * 4;
+    const o0 = i * 4;
+    const o1 = o0 + stride, o2 = o1 + stride, o3 = o2 + stride, o4 = o3 + stride;
+    const o5 = o4 + stride, o6 = o5 + stride, o7 = o6 + stride;
     if (conic) {
       const Cs = conic.Cs, Hi = conic.Hinv, rW = conic.rowW;
       // row0: Cs0..3
@@ -380,7 +384,13 @@ export class OrbitConicField {
     } else {
       // Null conic: zero the conic rows so no stale data lingers; keep radius/
       // camDist for introspection but force active=0 (shader skips it anyway).
-      for (const b of [o0, o1, o3, o4, o5, o6]) { src[b] = 0; src[b + 1] = 0; src[b + 2] = 0; src[b + 3] = 0; }
+      // Unrolled (rows 0,1,3,4,5,6) — no per-call array-literal allocation (R5).
+      src[o0] = 0; src[o0 + 1] = 0; src[o0 + 2] = 0; src[o0 + 3] = 0;
+      src[o1] = 0; src[o1 + 1] = 0; src[o1 + 2] = 0; src[o1 + 3] = 0;
+      src[o3] = 0; src[o3 + 1] = 0; src[o3 + 2] = 0; src[o3 + 3] = 0;
+      src[o4] = 0; src[o4 + 1] = 0; src[o4 + 2] = 0; src[o4 + 3] = 0;
+      src[o5] = 0; src[o5 + 1] = 0; src[o5 + 2] = 0; src[o5 + 3] = 0;
+      src[o6] = 0; src[o6 + 1] = 0; src[o6 + 2] = 0; src[o6 + 3] = 0;
       src[o2] = 0; src[o2 + 1] = radius; src[o2 + 2] = camDist; src[o2 + 3] = 0;
     }
     // row7: color.rgb, alpha
