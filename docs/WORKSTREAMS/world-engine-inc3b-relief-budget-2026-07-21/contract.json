@@ -1,0 +1,164 @@
+{
+  "workstream": "world-engine-inc3b-relief-budget-2026-07-21",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "statusNote": "Scoped 2026-07-21 from the panel synthesis brief (~/briefings/grounding-relief-budget-2026-07-21.md, panel wf_fa5bfba8-73d — 3 fable design lenses x fable-skeptic critique x fable synthesis, 19/19 must-fixes adjudicated) + Max's four scope-interview rulings (R1 Mars/Crystal ride-along, R2 full-phase accepted, R3 Moon/Mercury radius unlock, R4 conditional slice diagnose-first). AWAITING MAX GREENLIGHT. Repo ~/projects/well-dipper, branch feature/world-engine-production-L1, HEAD 041d7a8 (verified). This is the Inc-3 follow-up: Inc-3 shipped correct crater physics (Pike d/D, g^-0.58 envelope) but the diagnosis (fresh session, commit 041d7a8) measured craters at ~1.5% of the composited relief budget under the generic despun terrain, envelope-INDEPENDENT (compositeMargins sums 1:1, uPerturb scales the sum) — so no envelope or depth fix could produce a crater READ. This increment reallocates relief variance at the composite seam so craterField dominates, at preserved total band. Design is SETTLED by the panel + rulings; do NOT redesign at build time. Layer litmus binding: objective/assertable -> unit or (wired/live) integration; holistic does-it-cohere -> AC-UAT (Max only). AC-READ is LIVE INTEGRATION (agent-drivable), not uat.",
+  "programRef": "docs/FEATURES/planet-lod-CHARTER.md INTENT FRAME (physics-first); ~/briefings/grounding-relief-budget-2026-07-21.md (panel wf_fa5bfba8-73d synthesis brief, grounding artifact); docs/WORKSTREAMS/world-engine-inc3-relief-spine-depthlaw-2026-07-21/ (predecessor: MATH-CHECK-2026-07-21.md + the 041d7a8 diagnosis this increment corrects); docs/WORKSTREAMS/world-engine-history-program-2026-06-27/SPINE-CONFORMANCE.md (Rule 15 AC-0)",
+  "designDecisions": [
+    "SETTLED (physics; panel wf_fa5bfba8-73d + Max 2026-07-21): Suppress the endogenic share, don't inflate crater physics — craterField already sits on the real Moon's sigma/R (measured boot 1.09e-3); it is the despun channel that claims ~500x physical relief.",
+    "SETTLED: Reallocation at PRESERVED TOTAL BAND, not physicalization — the only form that survives both skeptics' opposite failure modes (flat ball vs -1.4*R basin) and keeps the reliefEnvelope's calibration premise intact. w_e, w_i solve var-ratio = f_I/(1-f_I) AND total composite RMS unchanged.",
+    "SETTLED: Seam = composite-side budget (Candidate B) — forced by the Frozen despunRef byte fence. Writer-side (A) rejected (despunRef equality kills it); render-side crater-cube (C) rejected (SPLIT-TRAP #5 — crater cube parked for the exogenic increment).",
+    "SETTLED: Mars and Crystal are IN the affected set (measured nStamp 132 / 104) — ACs restructured accordingly. Whether Max likes the Mars result is his gate (R1); that the law REACHES Mars is fact.",
+    "SETTLED: Lambda is a 2-anchor RELIC law (Mercury sigma_endo/R~1.8e-4 + Moon ~2.5e-4, P_Lambda~0.25) with an explicit domain (dead-lid impact-retentive worlds only). Earth/live worlds exit via the bit-exact identity path — the only fit-consistent shape (Earth+Moon->P=0.69 vs Mercury+Moon->P=0.25 are mutually exclusive). Q_RELIEF=0.58 reused, no second strength exponent.",
+    "SETTLED: epsilon==0 ice relaxation STANDS (correct physics at 60 K, two independent skeptic verifications); ice-D_t crater flattening DEFERRED (panel P6) — it would flatten Frozen craters 2.4x exactly when we fight for crater read, its fence impact is re-capture-shaped/unadjudicated, and its form is single-anchor guessed.",
+    "SETTLED: No stamped-rim work, no uPerturb/normal boosts this increment — sub-node geometry (rims 0.3-0.9 measured edges) and taste constants respectively.",
+    "SETTLED: F2 cannot fire on Moon/Mercury today without relevance-gate rework; adding the preset name to craters.rendersOn (planet-feature-associations.js:74, which lacks 'Moon/Mercury (impact-airless)') is BARRED (AC-0 spirit). The relevance gate must be re-derived from condition scalars (isImpactSurface / schedule-derived) if S3 fires.",
+    "SETTLED: Read-gate before any Max ask, thresholds FROZEN pre-capture (feedback_perceptual-read-gate-before-uat).",
+    "SETTLED: UAT recipe pins lighting (~70 deg incidence via uLightDir, planet-lod-lab.html:209) and points radius-variety judgment at Frozen (+ the newly-drawable Moon/Mercury radius, R3); full-phase near-featurelessness is surfaced as the honest pre-albedo state.",
+    "R1 (Mars/Crystal ride-along, Max 2026-07-21 — ACCEPTED REC): Mars and Crystal ride under the law with before/after captures at S4 as an explicit UAT checkpoint. AC-MARS files them presented-not-silent; Max's acceptance of the look is folded into AC-UAT. Mars's f_I gate is derived from real-Mars hypsometry (f_I in [0.3,0.8]), so the change should read 'cratered southern-highlands Mars', not 'Moon'.",
+    "R2 (full-phase, Max 2026-07-21 — ACCEPTED): a face-on lit disc reads near-featureless pre-albedo; albedo/ejecta stay deferred to the exogenic increment. The UAT recipe pins oblique lighting and files the full-phase control capture (AC-READ iv).",
+    "R3 (radius unlock, Max 2026-07-21): Moon/Mercury radius UNLOCKED — removed from the NAMED_BODY lock (driver-presets.js:239) for the LAB draw ONLY; seeded draw over the [0.27, 0.38] R-Earth band. The preset has NO archetype, so it needs its own range entry, not the archetype table. 're-rolls draw radius' is folded into AC-REROLL. Other NAMED_BODY presets stay locked THIS increment. Headless calibration never needed the lab lock — it passes canonical radii explicitly, so the lock was never load-bearing for calibration.",
+    "R3 PROGRAM NOTE (Max's framing, verbatim): 'i thought the names in the lod lab were just archetypes, not supposed to be simulating one specific body?' — the archetype reading is the product intent. The remaining NAMED_BODY locks are open to the same treatment in later increments; this increment unlocks only Moon/Mercury.",
+    "R4 (conditional slice — DIAGNOSE-FIRST, Max 2026-07-21 verbatim): 'i do not want to just accept the old framework; if this is not working I want to diagnose and fix. That may mean addressing something like the scale of the rendering or something, which I am open to if that's our issue (or something along those lines).' So S3 is NOT 'adopt the F2-adapted legacy texture'. On an S2 read-gate texture-fail, S3 = a ROOT-CAUSE DIAGNOSIS (content vs instrument: sub-mesh population absent vs mesh density N / 256-per-face bake attenuation / posterize-dither quantization), fix scoped at the CONVICTED layer; legacy-F2 adoption NOT pre-authorized; rendering-scale/instrument fixes explicitly in-domain. Panel's named suspects (the ~133 km stamp floor at N=40k, the S0 bake-attenuation model) are the diagnosis starting list.",
+    "SLICE S0 — calibration (closed-form, no code ship): relic-Lambda fit + f_I law + normalization choice (closed-form schedule statistics preferred over per-carrier RMS, with a stated determinism argument); domain/continuity predicate stated in condition scalars + near-cliff enumeration (Titan tExp=1.0 nStamp=0, Europa tExp=0.005); affected-set table run into the contract; triple g-term double-dip audit (reliefEnvelope, depth law, and the dormant writer gCap at tectonic.js:137/207 — inert under DEFAULT_GRAIN_DRIVERS, rivers passes no surfaceGravity); bake-attenuation model + measured-edge geometry (1.11 deg, not 0.573 deg); arc-test thresholds derived and FROZEN; worked cases Moon/Mercury, Frozen, Mars, Crystal.",
+    "SLICE S1 — seam: new leaf src/worldengine/base/reliefBudget.js (condition scalars only) -> relief.reliefBudget via the planet-lod-rivers.js:569 return-object idiom (same as relief.surfaceMaterial) -> route() passes it -> extend the one-arg compositeMargins(carrier) at planet-lod-rivers.js:210 to compositeMargins(carrier, budget = IDENTITY). Tests: identity default (existing suite green UNEDITED), budget arithmetic, goldens, oracle grep, AC-NULLPATH, AC-IDENTITY.",
+    "SLICE S2 — perceptual read-gate #1 (flip ALONE, working-Claude live): the AC-READ bars. PASS => S3 is demoted to its own later increment.",
+    "SLICE S3 — CONDITIONAL, diagnose-first per R4 (built ONLY on an S2 texture-fail): NOT a pre-authorized legacy-F2 adoption. Root-cause diagnosis (content vs instrument), fix at the convicted layer. If the fix is a peppering/relevance path it carries the render-skeptic riders MANDATORY: condition-derived craters+ejecta relevance gate (re-derived from scalars; rendersOn name-add BARRED), envelope-free uCraterAmp (the reliefEnvelope must NOT re-enter uCraterAmp — that is the convicted relief^2 defect; chain verified planet-lod-lab.html:398-400/:536-537/:5606), worldSeed-seeded craterOffset (currently [0,0,0] at planet-lod-lab.html:2428, re-roll-invariant), inherited-constant adjudication + a SINGLE density law, provinceWeight decision, regolithRoughness plumbing route()->uniform (relief.surfaceMaterial populated at planet-lod-rivers.js:569, consumed nowhere today). Mechanism per Max decision #4 (recommended: F2-adapted with the riders, if diagnosis convicts content).",
+    "SLICE S4 — read-gate #2 + re-roll evidence + ride-along captures (Mars, Crystal before/after; Frozen; 3 macroSeeds + 2 Frozen radius draws) -> Max UAT with the lighting-bound recipe."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15): reliefBudget.js and the composite budget read condition/derived scalars ONLY (f_I from the shipped impact/relief laws; g, radPerKm, iceness, the impact-retentive tExp-band predicate — NO label/archetype/regime-string reads, and NO preset-name add to craters.rendersOn); named consumers documented (reliefBudget -> route() -> compositeMargins(carrier, budget); f_I -> variance weights w_e/w_i -> the composited surface); taxonomy/drift guards stay green; no new *Enabled keys.",
+      "verifyVia": {
+        "input": "Dispatch-oracle + taxonomy/drift suites from the repo dir; grep audit of reliefBudget.js and the modified route()/compositeMargins reads for label/archetype-string routing and any craters.rendersOn preset-name add.",
+        "observable": "All guards green; zero label/archetype reads in the budget path; craters.rendersOn (planet-feature-associations.js:74) unmodified; the F2 relevance gate re-derived from condition scalars if S3 fires; consumers documented; no new *Enabled keys."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-BUDGET",
+      "statement": "At the boot worked point (Moon/Mercury, N=40k, seed 1) the derived variance ratio f_I lands in the S0-declared band (relic-law + real-body anchors; boot outcome f_I~0.97, w_e~0.17, w_i~O(90)), so craterField — not the despun endogenic terrain — is the dominant slope signal, at total composite RMS unchanged (the ~1.5% crater:base ratio inverts; no flat-ball, no basin overshoot past the Phobos extreme).",
+      "verifyVia": {
+        "input": "Re-run the amplitude-budget diagnosis harness (the one that measured the 1.14% ratio at N=40k seed 1) with the budget applied; assert f_I and w_e/w_i against the S0 band and total RMS against the pre-budget value.",
+        "observable": "f_I in the S0 band; crater:base variance inverted to crater-dominant; total composite RMS equal to pre-budget within float tolerance."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-FENCE",
+      "statement": "Byte fences hold: Frozen 5/5 golden HEIGHT rows byte-identical with NO re-capture; despunRef equality untouched; carrier.height NEVER mutated (the budget is composite-side; craterField/shelfDepth stay their own unhashed channels; carrier hashes see nothing); all existing composite unit tests still call one-arg compositeMargins and pass; zero edited/relaxed assertions; full vitest suite at the 4-failed baseline, not grown.",
+      "verifyVia": {
+        "input": "Golden byte-identity suite; the despunRef equality test; the v2-5 composite suite (tests/worldengine-v2-5-preset-composite.test.js, 9 blocks); full vitest from the repo dir; a diff of test assertions vs the 4-failed baseline.",
+        "observable": "Goldens green, no re-capture; despunRef equality green; carrier hashes unchanged; suite at the 4-failed baseline; zero assertion edits."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-IDENTITY",
+      "statement": "Margin worlds that flow THROUGH the composite — Rocky (Earthlike) and Ocean (temperate) — composite BIT-IDENTICALLY pre/post: outside the budget domain the weights are w_e = w_i = 1.0 bit-exact, so their composited surface is byte-for-byte the pre-budget output (asserted, not assumed).",
+      "verifyVia": {
+        "input": "A bit-identity harness compositing Rocky and Ocean carriers pre/post with the budget wired, weights forced onto the identity path.",
+        "observable": "Composited arrays byte-identical for Rocky and Ocean; weights asserted exactly 1.0 on the identity path."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-NULLPATH",
+      "statement": "True null-path worlds are byte-identical pre/post: the Jovian/Saturnian/Neptunian/Sub-Neptune/Hot-Jupiter/Venus/Magma/Carbon/Lava (gate=n or degenerate) and Titan/Europa/Eyeball (gate=Y, nStamp=0, no shelf -> null) sets never enter the budget domain; their composite output is unchanged, excluded by the condition-scalar domain predicate rather than by a null-topology accident.",
+      "verifyVia": {
+        "input": "A null-path enumeration harness compositing each listed world pre/post with the budget wired.",
+        "observable": "Every enumerated null-path world byte-identical; the domain predicate demonstrably excludes them by condition scalar."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-ORACLE",
+      "statement": "The V2-3 dispatch-oracle denylist is untripped: reliefBudget.js and the modified route()/compositeMargins introduce no archetype-string dispatch.",
+      "verifyVia": {
+        "input": "tests/worldengine-v2-3-dispatch-oracle.test.js + the oracle grep from the repo dir.",
+        "observable": "Oracle green; denylist unchanged."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-FROZEN",
+      "statement": "Frozen's golden HEIGHT rows stay byte-identical (no re-capture, no carve-out) AND its composited surface is crater-dominated under the same seam flip. The HONEST FINDING is recorded in BUILD-NOTES: this increment leaves Frozen statistically NEAR-identical to Moon/Mercury (R-invariant stamped population, near-equal g; distinctness this increment = slightly lower endo substrate via the iceness term + existing palette; ice-D_t and bright-rim/ejecta deferred). We tell Max this up front rather than re-promise distinctness.",
+      "verifyVia": {
+        "input": "Frozen golden byte-identity + the composite variance measurement at the Frozen worked point; the finding written to BUILD-NOTES.",
+        "observable": "Golden HEIGHT byte-identical; Frozen composite crater-dominated; the near-Moon/Mercury finding filed with the numbers that justify it."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-READ",
+      "statement": "At staged oblique light (~70 deg incidence via uLightDir), N=40k, seed 1 + two re-rolls, the read-gate bars — FROZEN in S0 before any capture — pass: (i) arc-asymmetry: >=70% of >=-median lit-disc stamps show light-consistent wall-half luminance asymmetry >=1 posterize band (thresholds from S0's bake-attenuation/measured-edge model, centres via the RNG-neutral probe); (ii) blind read: a fresh-context agent captions with impact/crater vocabulary UNPROMPTED; (iii) surface-class match: side-by-side with a committed real reference photo (LRO last-quarter Moon / Cassini Mimas class, pushed through the SAME posterize/dither/pixelScale pipeline) reads 'same surface class: heavily cratered' incl. a density/texture clause; (iv) a full-phase control capture is filed as the honest pre-albedo state; (v) crispnessRatio diagnostic-only. Verdict recorded whichever way it falls; Max pinged only after. (If S2's flip alone texture-fails, S3 diagnose-first fires per R4, then this gate is re-run at S4.)",
+      "verifyVia": {
+        "input": "Working-Claude CDP drive of the lab at the staged oblique light on the current vite port, seed 1 + 2 re-rolls, thresholds read from S0.",
+        "observable": "The frozen arc/blind/surface-class bars evaluated and recorded, evidence captures committed to evidence/; full-phase control filed; verdict recorded either way."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-REROLL",
+      "statement": "Re-rolls produce the variety physics permits, restated per panel A4 (the deleted 'count proportional to R^2 / sizes proportional to 1/R' claim is NOT re-used): on Moon/Mercury the crater LAYOUT and the LARGEST-BASIN draw vary across macroSeeds (stamped-population count/angular-SFD are R-INVARIANT — a mesh-floor instrument limit, surfaced to Max, NOT sold as variety); on drawn-radius Frozen the g-mediated deltas vary (count g^0.34, envelope, D_t). Per R3, newPlanet() re-rolls now DRAW the Moon/Mercury radius over [0.27, 0.38] R-Earth (Moon/Mercury off the NAMED_BODY lock for the LAB draw only), so radius varies across re-rolls too.",
+      "verifyVia": {
+        "input": "A seed-sweep draw/population diff harness (population-sweep pattern) over 3 macroSeeds on Moon/Mercury + 2 Frozen radius draws, exercising drawPresetRadius() with Moon/Mercury unlocked.",
+        "observable": "Layout + largest-basin diameter differ across Moon/Mercury macroSeeds; radius draws land in [0.27,0.38] and vary; Frozen g-mediated deltas differ across radius draws; stamped-count R-invariance stated, not claimed as variety."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC-MARS",
+      "statement": "Mars — and Crystal — ride along under the law (measured affected set nStamp 132 / 104), and their BEFORE/AFTER renders at the staged oblique light are captured, filed to evidence/, and surfaced in the UAT packet — PRESENTED, never silently shipped (R1). Mars's f_I gate is derived from real-Mars hypsometry (f_I in [0.3,0.8]), so the change should read 'cratered southern-highlands Mars', not 'Moon'.",
+      "verifyVia": {
+        "input": "Working-Claude CDP drive capturing Mars and Crystal before/after at the staged light; files committed to evidence/; Mars f_I asserted in [0.3,0.8].",
+        "observable": "Before/after Mars and Crystal captures committed and present in the UAT packet; Mars f_I in band; the change presented to Max, not shipped without his checkpoint."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max's gate (holistic): Moon/Mercury and Frozen read as heavily-cratered small worlds — his 'No, still looks the same' becomes yes, and Frozen no longer reads as 'just like 1... with a different color pallette'; the Venus-like plateau landforms are gone from Moon/Mercury; re-rolls visibly vary ('They do not, as far as i can see' becomes they do); the Mars/Crystal ride-along look is accepted; judged at the oblique-light recipe with the full-phase control reviewed as the honest pre-albedo state.",
+      "verifyVia": {
+        "input": "Max drives the lab solo on the current vite port with the oblique-light UAT recipe (staged sun azimuth/elevation, Moon/Mercury + Frozen presets, re-roll, Mars/Crystal ride-along, full-phase control capture).",
+        "observable": "Max's holistic acceptance."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "planet-lod-rivers.js:210 compositeMargins(carrier) — the one-arg composite seam to extend to (carrier, budget = IDENTITY); route() at :1322 is the sole runtime caller",
+      "planet-lod-rivers.js:569 relief.surfaceMaterial / the return-object idiom — the verified attach point for relief.reliefBudget (surfaceMaterial's regolithRoughness currently dies inside route(), consumed nowhere)",
+      "src/worldengine/base/bombardment.js writeBombardment/craterSchedule — the shipped impact laws (LAW-I); craterField is the channel the budget reallocates TOWARD (measured boot sigma/R 1.09e-3 ~ real Moon)",
+      "planet-lod-lab-core.js reliefEnvelope(RE,g) = clamp(g^-0.58, 0.40, 133) — the display compressor, UNCHANGED; applied once via uPerturb at planet-lod-lab.html:5606",
+      "planet-feature-associations.js:74 craters.rendersOn — lacks 'Moon/Mercury (impact-airless)'; the F2 relevance gate to re-derive from condition scalars (preset-name add BARRED) IF S3 fires",
+      "driver-presets.js:239 NAMED_BODY + drawPresetRadius() — Moon/Mercury removed from the lock for the LAB draw ONLY (R3), seeded over [0.27,0.38] R-Earth",
+      "the amplitude-budget diagnosis harness (scratchpad, measured 1.14% crater:base at N=40k seed 1) + the predecessor increment's population-sweep.mjs / fence-population-invariance.mjs calibration pattern (docs/WORKSTREAMS/world-engine-inc3-relief-spine-depthlaw-2026-07-21/calibration/)",
+      "MATH-CHECK-2026-07-21.md + the Inc-3 diagnosis (commit 041d7a8): base-terrain dominance, crater:base ~1.5%, envelope-independent, Venus :e6plateau term on Moon/Mercury"
+    ],
+    "outputs": [
+      "src/worldengine/base/reliefBudget.js — NEW condition-scalar leaf emitting relief.reliefBudget (f_I + w_e/w_i)",
+      "compositeMargins(carrier, budget = IDENTITY) — variance-reallocated composite at preserved total band; IDENTITY (w=1.0) outside the domain",
+      "S0 calibration note: relic-Lambda 2-anchor fit + f_I law + domain/continuity predicate + triple g-term audit + bake-attenuation/measured-edge model + FROZEN arc thresholds",
+      "read-gate evidence (oblique-light captures, Mars/Crystal before/after, full-phase control) + the honest Frozen-~-Moon/Mercury finding in BUILD-NOTES",
+      "(CONDITIONAL S3, only on S2 texture-fail + diagnosis conviction) condition-derived craters/ejecta relevance gate + envelope-free uCraterAmp + worldSeed-seeded craterOffset + regolithRoughness route()->uniform plumbing"
+    ],
+    "mustStayWorking": [
+      "Frozen 5/5 golden HEIGHT rows + despunRef equality — byte-identical, NO re-capture (the composite-side budget must not touch the writer)",
+      "carrier.height NEVER mutated; craterField and shelfDepth stay their own unhashed channels; carrier hashes see nothing",
+      "tests/worldengine-v2-3-dispatch-oracle.test.js denylist untripped (no archetype-string dispatch)",
+      "the v2-5 composite suite (tests/worldengine-v2-5-preset-composite.test.js, 9 blocks) — existing callers still invoke one-arg compositeMargins and pass",
+      "Rocky/Ocean margin worlds composite bit-identical (w=1.0 identity path); true null-path worlds byte-identical",
+      "atmo-owned sections of planet-lod-lab.html (section-ownership fence) — untouched",
+      "NOT-OURS files src/auto/CameraChoreographer.js + src/debug/LabMode.js — never staged, never touched",
+      "full vitest suite at the 4-failed baseline, not grown",
+      "v2-6 shipped wins preserved — gravity coherence g = g_c*(R/R_c) that the R3 Moon/Mercury radius unlock RELIES on (drawn radius -> coherent g -> g-mediated crater deltas)"
+    ]
+  }
+}
