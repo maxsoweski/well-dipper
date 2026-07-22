@@ -12,7 +12,6 @@ import { LODManager } from './rendering/LODManager.js';
 import { DebugPanel } from './ui/DebugPanel.js';
 import { OrbitLine } from './objects/OrbitLine.js';
 import { OrbitConicField } from './objects/OrbitConicField.js';
-import { USE_CONIC_FIELD } from './objects/OrbitRingSDF.js';
 import { AsteroidBelt } from './objects/AsteroidBelt.js';
 import { Billboard, billboardColor } from './objects/Billboard.js';
 import { PlanetBillboard } from './objects/PlanetBillboard.js';
@@ -185,19 +184,17 @@ window._cc = cameraController;
 window._scene = scene;
 window._retroRenderer = retroRenderer;
 
-// ── LEDGER #5 (orbit-ring-conic Slice C) ── One persistent OrbitConicField that
-// paints every orbit ring in a single fullscreen pass (39 per-ring SDF quads -> 1
-// draw, AC9). Created once here and added to the main scene; it survives system
-// swaps and re-reads the current `system`'s ring lists every frame (#6), so a spawn
-// needs no new wiring. Gated on USE_CONIC_FIELD: flag OFF -> null, and the per-ring
-// SDF proxies render as shipped (atomic single-flag rollback). The field.mesh is
-// rebase-immune by construction (clip-space passthrough vertex shader — D-1b).
-let orbitConicField = null;
-if (USE_CONIC_FIELD) {
-  orbitConicField = new OrbitConicField();
-  orbitConicField.addTo(scene);
-  window._orbitConicField = orbitConicField; // debug/inspection access
-}
+// ── LEDGER #5 (orbit-ring-conic Slice C; un-gated Slice D) ── One persistent
+// OrbitConicField that paints every orbit ring in a single fullscreen pass (39
+// per-ring SDF quads -> 1 draw, AC9). Created once here and added to the main scene;
+// it survives system swaps and re-reads the current `system`'s ring lists every frame
+// (#6), so a spawn needs no new wiring. Slice D deleted the USE_CONIC_FIELD switchover
+// flag on a green live battery — the field is now the UNCONDITIONAL ring renderer
+// (rollback = git revert). The field.mesh is rebase-immune by construction (clip-space
+// passthrough vertex shader — D-1b).
+const orbitConicField = new OrbitConicField();
+orbitConicField.addTo(scene);
+window._orbitConicField = orbitConicField; // debug/inspection access
 
 // Lab-mode bootstrap: only when ?lab=1 is in URL. Per
 // docs/WORKSTREAMS/welldipper-lab-mode-2026-05-05.md AC #1, the import is
@@ -9885,13 +9882,13 @@ function renderFrame(alpha) {
     gravityWell.update(hudYaw);
   }
 
-  // ── LEDGER #6 (orbit-ring-conic Slice C) ── Rebuild the conic field at RENDER
-  // time (D-2): AFTER the interpolated camera's updateMatrixWorld above and BEFORE
-  // retroRenderer.render(), from the LIVE system's planet/moon/star ring lists and
-  // the render-time camera + sceneTarget dims. Building it at sim time would lag it
-  // by the interpolation fraction (the sub-frame drift this workstream kills).
-  // Gated on the field (only non-null when USE_CONIC_FIELD is ON) + a live system.
-  if (orbitConicField && system) {
+  // ── LEDGER #6 (orbit-ring-conic Slice C; un-gated Slice D) ── Rebuild the conic
+  // field at RENDER time (D-2): AFTER the interpolated camera's updateMatrixWorld
+  // above and BEFORE retroRenderer.render(), from the LIVE system's planet/moon/star
+  // ring lists and the render-time camera + sceneTarget dims. Building it at sim time
+  // would lag it by the interpolation fraction (the sub-frame drift this workstream
+  // kills). The field is unconditional (Slice D); guarded only on a live system.
+  if (system) {
     orbitConicField.updateFromSystem(system, camera, retroRenderer.sceneTarget);
   }
 

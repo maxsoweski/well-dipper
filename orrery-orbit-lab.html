@@ -368,9 +368,20 @@
     for (const r of MOON_RADII)   ringDefs.push({ radius: r, color: 0x00bb00, isMoon: true  });
     const N = ringDefs.length;   // 13
 
+    // ── NOTE (orbit-ring-conic Slice D — sdf/analytic columns INERT post-strip) ──
+    // Slice D stripped OrbitRingSDF's self-rendering shaders: it is now a transform
+    // proxy + param bag whose .mesh sits UNCONDITIONALLY on ORBIT_PROXY_LAYER (the
+    // OrbitConicField is the one, unconditional ring renderer). This lab camera is
+    // default-masked (layer 0 only), so it draws NONE of the sdfRings — the 'sdf'
+    // mode (and 'analytic', which extends the stripped base and also lands on the
+    // proxy layer) renders nothing from here on. This is EXPECTED, not a regression:
+    // the Slice B acceptance battery (measureLadder/perRingLadder/driftMeasure over
+    // baseline vs sdf) ran fully BEFORE the strip, so the ACs are unaffected. The
+    // 'conic' mode still works: it reads sdfRings[i].mesh.matrixWorld purely as the
+    // TRANSFORM SOURCE (placement is independent of the deleted render geometry).
     const baselineRings = [];   // LineLoopRing instances (pre-swap replica — see above)
-    const sdfRings = [];        // OrbitRingSDF instances
-    const analyticRings = [];   // AnalyticRingSDF instances (estimator candidate)
+    const sdfRings = [];        // OrbitRingSDF instances (transform source only post-strip)
+    const analyticRings = [];   // AnalyticRingSDF instances (INERT post-strip — see note above)
     for (const def of ringDefs) {
       const bl = new LineLoopRing(def.radius, def.color);
       const sd = new OrbitRingSDF(def.radius, def.color);
@@ -652,7 +663,7 @@
       if ((frame++ % 15) === 0) lastPx = countGreenPixels();
       hud.textContent =
         `ORRERY ORBIT LAB — SDF vs LineLoop (AC5)\n` +
-        `mode      : ${mode}${solo !== null ? `  (solo ring ${solo})` : ''}\n` +
+        `mode      : ${mode}${(mode === 'sdf' || mode === 'analytic') ? '  (inert post-strip — Slice D)' : ''}${solo !== null ? `  (solo ring ${solo})` : ''}\n` +
         `distance  : ${distance.toFixed(0)}\n` +
         `green px  : ${lastPx}   (sceneTarget ${retro.sceneTarget.width}x${retro.sceneTarget.height})\n` +
         `rings     : ${N}  (9 planet + 4 moon)\n` +

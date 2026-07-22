@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
 import { OrbitLine } from '../OrbitLine.js';
-import { setUseConicField, ORBIT_PROXY_LAYER } from '../OrbitRingSDF.js';
+import { ORBIT_PROXY_LAYER } from '../OrbitRingSDF.js';
 
 // RED stage — orrery-entry-orbits-2026-07-20 AC5, feature half (A) SWAP + (B) FACTOR WIRING.
 // Pins today's call-site + mesh surface; drives the LineLoop→OrbitRingSDF-backed Mesh swap
@@ -110,20 +110,20 @@ describe('setVisibilityFactor drives the uVisFactor uniform', () => {
   });
 });
 
-// (c2/c3) — orbit-ring-conic Slice C: USE_CONIC_FIELD draw-suppression via layer.
-// When the flag is ON the field owns rendering, so the per-ring SDF proxy is moved
-// to ORBIT_PROXY_LAYER — a layer the ORRERY/HELM camera (default mask = layer 0
-// only) does NOT include, so it contributes 0 camera draws — while STAYING a scene
-// child with a live matrixWorld (world-origin rebasing depends on it, D-1). Draw
-// suppression is by LAYER, never by detachment or visible=false (mesh.visible keeps
-// carrying LOGICAL visibility for hitTestOrbits + the field's active flag). With the
-// flag OFF the mesh renders on layer 0 exactly as shipped (atomic single-flag rollback).
-// HYPOTHESIS: FAILS at HEAD — no ORBIT_PROXY_LAYER / setUseConicField / layer assignment.
-describe('conic-field proxy layer (USE_CONIC_FIELD draw suppression, Slice C)', () => {
-  afterEach(() => { setUseConicField(true); }); // restore module default (ON)
-
-  it('flag ON: proxy is on ORBIT_PROXY_LAYER, excluded from a default camera, still a scene child with a live matrixWorld', () => {
-    setUseConicField(true);
+// (c2/c3) — orbit-ring-conic Slice D: the OrbitConicField is the UNCONDITIONAL ring
+// renderer, so every per-ring proxy is UNCONDITIONALLY on ORBIT_PROXY_LAYER — a layer
+// the ORRERY/HELM camera (default mask = layer 0 only) does NOT include, so it
+// contributes 0 camera draws — while STAYING a scene child with a live matrixWorld
+// (world-origin rebasing depends on it, D-1). Draw suppression is by LAYER, never by
+// detachment or visible=false (mesh.visible keeps carrying LOGICAL visibility for
+// hitTestOrbits + the field's active flag).
+//
+// Slice C's USE_CONIC_FIELD flag (and its flag-OFF "renders on layer 0" case) were
+// DELETED in Slice D on a green live battery: the flag-OFF legacy SDF render path no
+// longer exists (rollback is now a git revert, not a flag flip), so the test for that
+// deleted behavior is removed. The flag-ON assertions below are now unconditional.
+describe('conic-field proxy layer (unconditional draw suppression, Slice D)', () => {
+  it('proxy is on ORBIT_PROXY_LAYER, excluded from a default camera, still a scene child with a live matrixWorld', () => {
     const line = new OrbitLine(100, 0x00ff00);
     const scene = new THREE.Scene();
     line.addTo(scene);
@@ -144,15 +144,6 @@ describe('conic-field proxy layer (USE_CONIC_FIELD draw suppression, Slice C)', 
     const p = new THREE.Vector3().setFromMatrixPosition(line.mesh.matrixWorld);
     expect(p.x).toBeCloseTo(7, 6);
     expect(p.z).toBeCloseTo(-3, 6);
-  });
-
-  it('flag OFF: proxy renders on the default layer (layer 0), shipped path', () => {
-    setUseConicField(false);
-    const line = new OrbitLine(100, 0x00ff00);
-    expect(line.mesh.layers.isEnabled(0)).toBe(true);
-    expect(line.mesh.layers.isEnabled(ORBIT_PROXY_LAYER)).toBe(false);
-    const cam = new THREE.PerspectiveCamera();
-    expect(cam.layers.test(line.mesh.layers)).toBe(true); // camera draws it
   });
 });
 

@@ -36,38 +36,32 @@ describe('prox-fade uniforms + defaults', () => {
   });
 });
 
-// (2) — the shaders carry the fade. Vertex computes the factor from cameraPosition
-// via the rigid-inverse dot-product form (NO inverse()/transpose() — must stay valid
-// GLSL ES 1.00 for the WebGL1 fallback, same constraint the file already documents);
-// fragment multiplies it into the final alpha alongside (not replacing) the existing
-// uOpacity * uVisFactor channels, and early-discards fully-faded fragments.
-// String-level pins so the term can't be silently deleted suite-green (the lane-A
-// GLSL-mirror-parity lesson).
-// HYPOTHESIS: FAILS at HEAD — no prox term in either shader.
-describe('shader carries the fade term', () => {
-  const ring = new OrbitRingSDF(100, 0x00ff00);
-  const vs = ring.material.vertexShader;
-  const fs = ring.material.fragmentShader;
-
-  it('vertex: computes circleDist against the uniforms, no ES-3.00-only builtins', () => {
-    expect(vs).toMatch(/uProxNearAbs/);
-    expect(vs).toMatch(/uProxNearRel/);
-    expect(vs).toMatch(/uProxFarMul/);
-    expect(vs).toMatch(/cameraPosition/);
-    expect(vs).toMatch(/smoothstep/);
-    expect(vs).not.toMatch(/\binverse\s*\(/);
-    expect(vs).not.toMatch(/\btranspose\s*\(/);
-  });
-
-  it('fragment: multiplies vProxFade into final alpha and keeps existing channels', () => {
-    expect(fs).toMatch(/vProxFade/);
-    expect(fs).toMatch(/alpha\s*\*\s*uOpacity\s*\*\s*uVisFactor\s*\*\s*vProxFade/);
-  });
-
-  it('fragment: early-discards fully-faded fragments', () => {
-    expect(fs).toMatch(/vProxFade\s*<\s*0\.004[\s\S]*?discard/);
-  });
-});
+// (2) — RETIRED in orbit-ring-conic Slice D. AC11 STRING-PIN MIGRATION DECISION.
+// ---------------------------------------------------------------------------------
+// The describe('shader carries the fade term') block here pinned the GLSL of the
+// per-ring OrbitRingSDF RENDER shader (vertex prox-term strings; the fragment
+// `alpha * uOpacity * uVisFactor * vProxFade` alpha composition; the `vProxFade <
+// 0.004 discard`; and the `inverse(`/`transpose(` NEGATIVE pins that guaranteed no
+// per-pixel matrix inversion / WebGL1-ES-1.00 validity). Slice D DELETED that render
+// shader — OrbitRingSDF is now a transform proxy + param bag, the OrbitConicField is
+// the unconditional renderer — so those string pins have no shader left to protect
+// and are retired, NOT silently dropped. Two migrations (BUILD-PLAN §5):
+//
+//   • RE-HOMED — the `inverse(`/`transpose(` negative pin (the live invariant: NO
+//     per-pixel matrix inversion; all matrices are CPU-built) now guards the FIELD
+//     shader. See OrbitConicField.test.js →
+//     describe('field fragment shader carries no GLSL matrix inversion') which
+//     asserts CONIC_FRAGMENT_SHADER matches neither /inverse\s*\(/ nor
+//     /transpose\s*\(/ (added in Slice B, verified to cover this re-home). The dead
+//     WebGL1/GLSL-ES-1.00 rationale is gone with the shader it justified.
+//
+//   • REPLACED — the GLSL alpha-composition pin (`alpha*uOpacity*uVisFactor*
+//     vProxFade`) is superseded by the CPU-side channel-composition pin below,
+//     describe('c4 CPU descriptor alpha = opacity * uVisFactor * proxFade ...'):
+//     the field folds opacity·uVisFactor·proxFade into each descriptor alpha CPU-
+//     side (angularFade stays in-shader), so the composition is now pinned where it
+//     actually lives after the strip.
+// ---------------------------------------------------------------------------------
 
 // (3) — JS mirror of the GLSL envelope, exported for tests + the orbit-lab instrument.
 // HYPOTHESIS: FAILS at HEAD — export doesn't exist.
