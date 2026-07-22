@@ -4,7 +4,28 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> **▶ LANE B (2026-07-17, later session — TWO-PHASE GLIDE BUILT): `orrery-coherence-2026-07-15`
+> **▶ LANE B (2026-07-22 — CONIC RING-RENDER BUILT + VERIFIED): `orbit-ring-conic-2026-07-21`
+> VERIFIED_PENDING_MAX `7761d54` (code `903d3d8`).** The dig-proven screen-space conic + Sampson
+> pass REPLACED OrbitRingSDF's per-ring quad+fwidth render (dead zone + far-orbit flicker = Max's
+> round-3 findings, root-caused in `orrery-entry-orbits-2026-07-20/evidence/dig-record.md`).
+> Full arc in one session chain: scope+greenlight (`034c80d`) → BUILD-PLAN 2-lens adversarial
+> (`3f2197e`; rebase-safe proxies, DataTexture committed, argmax overlap, flag-gated switchover)
+> → Slice A math (`57e899b`) → Slice B field + lab battery + grazing-regression dig+fix
+> (`8fe3826`/`3df940c`/`7ea589a`: argmax alpha-flap proven by variant isolation, co-depth
+> tie-break eps=.005, calibrated cutoff 1.0) → Slice C re-route + ledger #5/#6 (`47ca81f`) →
+> Slice D live battery (`1a0bf9a`, AC2–AC9 in-game, −38 draw calls) → strip + AC11 (`3c46205`,
+> legacy SDF render DELETED, pins re-homed) → verify-full wf_acea8162-51d (unit PASS; live
+> INSUFFICIENT = stale-commit artifact) → close-out drive at HEAD (`7761d54`, all 8 live ACs
+> re-PASS). Suite 1367/0; byte-guards EMPTY; ledger FOUR→SIX.
+> **⭐ NEXT = Max's AC10 UAT flight** (:5173 ORRERY: overview → dive → skim plane → stand on
+> ring → drift at range; pre-set expectations: gentle-angle band wider, overview center dot-not-
+> square; caveats: different-inventory warp sliver, no floor-GPU perf sample). Then: Rule-3 docs
+> → Shipped → the PAIRED ship (orrery-entry-orbits + orrery-coherence: one real merge vs master
+> `847ab19`+lane-C, one push/deploy). Queued behind: `autopilot-depart-2026-07-15` (greenlit,
+> unbuilt); B5–B7 UAT items; taste queue; lane-C boot-tour re-arm flag. Anti-drop queue pinned
+> in the conic contract statusNote.**
+>
+> Prior (2026-07-17, superseded): `orrery-coherence-2026-07-15`
 > VERIFIED_PENDING_MAX `802cceb`. Max's ruled center-then-fly redesign landed via TDD workflow
 > wf_8b343c64-ca1 (AIM rotates in place until centered [0.45 s/rad, cap 0.7s, skip <2°], then
 > APPROACH flies straight with the body pinned; trackTarget cedes the target while gliding —
