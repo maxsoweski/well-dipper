@@ -1,0 +1,143 @@
+{
+  "workstream": "orbit-ring-conic-2026-07-21",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "statusNote": "2026-07-21 SCOPED (interview this session; greenlight PENDING Max). Ratified by Max at interview: (a) extreme-range = per-ring ANGULAR-SIZE FADE (over AC3-only / keep-dots); (b) NEW SIBLING workstream (orrery-entry-orbits-2026-07-20 stays verified/VERIFIED_PENDING_MAX ee1747b with its qualified round-3 record). Working-Claude defaults ratified-by-silence at interview: single fullscreen pass over per-ring uniform array; CONIC_MAX=64 (inventory: Sol=39 rings; procgen worst case 8 planets x (1+6 gas-giant moons) + 2 binary star rings = 58); depth via per-pixel plane-point -> log-depth gl_FragDepth (occlusion = AC6, not assumed); parity surface enumerated (AC7); in-plane degenerate lab cell (AC1); WebGL1 comment-rot cleanup folded in (AC11 — incl. conscious keep-or-retire of the proxfade test's inverse( pin; conic shader needs no GLSL inverse, Cs is CPU-built). Reference implementation = ringConicScreen()/updateConics() in orrery-orbit-lab.html 'conic' mode (dig-proven: dead-zone 1314 px identical to LineLoop, grazing toggle-per-green 0.125 vs LineLoop floor 0.118 vs shipped 0.184, near-field tearing gone, perRingLadder zero regressions). UAT EXPECTATION PRE-SET: gentle-angle band paints wider (4906 vs 3779 px, Sampson L2 vs fwidth L1 band shape); overview center cluster reads dot-not-square; chunky-retro pin is Max's eye. ANTI-DROP QUEUE (Max directive 2026-07-21: 'don't let workstreams get lost' — recorded here so nothing rides session memory): [1] autopilot-depart-2026-07-15 building/greenlit/unbuilt, queued behind this WS; [2] paired ship still owed: orrery-entry-orbits-2026-07-20 (verified, VERIFIED_PENDING_MAX ee1747b) + orrery-coherence-2026-07-15 (verified) — one Rule-3 doc pass, one real merge vs master 847ab19+lane-C, one push/deploy; the round-3 fade-envelope taste item ('orbits disappear a little too early') is DEFERRED BEHIND THIS WS (a working grazing render may dissolve or re-tune it); [3] B5-B7 UAT items owed at a Max sitting (defs: handoff-lane-B-uat-round-2-2026-07-16.md lines 78-87); [4] standing taste queue: drag vertical sign, mirrored backside label, wide-system dot gap-break, mid-glide-interrupt feel, Phoebe sub-pixel click-2 window; [5] lane-C flag owed to lane B: boot-tour onTourComplete re-arm survival past boot; [6] ledger hygiene noted, not actioned: system-tags-save-search contract reads 'building' but was ruled PARKED 2026-07-12; supercruise-freelook-2026-06-10 + rivers-dendritic-drainage-2026-06-17 carry prose status fields (schema-invalid enum) — pre-campaign docs-pass-someday backlog.",
+  "phase": "Successor to orrery-entry-orbits-2026-07-20 (structural replacement of its AC5 ring-render architecture: OrbitRingSDF per-ring quad+fwidth plane-domain band -> one CPU-conic + Sampson-distance fullscreen pass, screen pixels measured IN screen space; no derivatives, no 0.4R clamp, no smear cut). OrbitLine wrapper API survives; internals re-route to per-ring uniform entries + CPU update hook. Prox fade STAYS as shipped UX (camera-only => CPU-computable exactly per ring). Build via opus-pinned workflows with 2-lens adversarial review per lane norm; the 4-mode lab (baseline/sdf/analytic/conic) + dig scenario battery (dead-zone poses, grazing drift, gentle control, perRingLadder) is the acceptance harness. library-context brief owed before build increments (three r0.183.1 post-cutoff render-pass idioms).",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-conic-math-unit",
+      "statement": "The productized conic module reproduces the lab reference: points on a ring's circle evaluate to ~zero Sampson distance for known camera poses; the front-branch guard rejects the behind-camera branch; the exact-in-plane degenerate case (|camY| < 1e-3) stays finite and stable (no NaN, no sign flap) despite the double-line conic's ~2x distance error.",
+      "verifyVia": {
+        "input": "Headless unit suite over ported lab poses (mid-range in-plane, grazing, gentle, overview) plus the |camY| < 1e-3 degenerate cell.",
+        "observable": "All assertions pass: on-circle Sampson ~0, off-circle monotone growth, behind-camera fragments rejected, degenerate cell finite/stable across a 90-step camY sweep."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2-dead-zone-renders",
+      "statement": "The mid-range near-plane dead zone is gone: at the dig's dead-zone poses (pitch 0.002-0.05 at [3000,0,0] dist 25) where shipped SDF paints ZERO pixels, the conic pass paints the LineLoop class of pixels — wherever the old LineLoop drew a solid line, the ring renders.",
+      "verifyVia": {
+        "input": "Drive the lab dead-zone pose battery (poseCamera + measure) in conic mode with prox fade neutralized; compare against the LineLoop baseline column.",
+        "observable": "Zero-pixel rows eliminated; painted px within the LineLoop class at every dead-zone pose (dig reference: 1314 px identical at pitch .01)."
+      },
+      "verifyRef": "orrery-entry-orbits-2026-07-20/evidence/dig-record.md dead-zone table",
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC3-far-orbit-flicker-gone",
+      "statement": "Max's round-3 finding — 'flickering on far-away orbits when we are close to the orbit's plane' — is gone: camera drift near the plane no longer toggles ring pixels at the dead-zone boundary.",
+      "verifyVia": {
+        "input": "driftMeasure 90-frame camera drift at the dead-zone boundary pose and the grazing @5200 pose, conic mode.",
+        "observable": "Mid-range drift toggles/frame ~0 (dig: 0 vs LineLoop 0.8 vs shipped invisible); grazing toggle-per-green at the LineLoop floor class (<=~0.125 vs shipped 0.184)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC4-nearfield-clean",
+      "statement": "Standing at or near a ring with prox fade off shows a clean stable solid line — the shipped tearing/blotch structure is gone. Prox fade itself stays as shipped UX on top.",
+      "verifyVia": {
+        "input": "Near-field pose (standing on the ring), setProxFade({off:true}), conic mode; then fade re-enabled.",
+        "observable": "Contiguous stable band under drift (evidence class: dig-nearfield-conic.png vs dig-nearfield-sdf-fadeoff.png); with fade re-enabled the shipped fade envelope applies unchanged."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC5-anti-vanish-ladder",
+      "statement": "Nothing that renders today vanishes: the full perRingLadder grid (7 poses x 13 rings incl. moon rings) shows zero anti-vanish regressions vs the shipped render.",
+      "verifyVia": {
+        "input": "perRingLadder across all lab modes at the scoped grid.",
+        "observable": "Every (pose, ring) cell visible under shipped SDF is visible under conic; regression count 0 (dig: 0)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC6-occlusion-holds",
+      "statement": "Ring-vs-planet occlusion — the shipped round-2 win — must not regress: the fullscreen pass writes correct log-depth per pixel (reconstructed plane point), so rings pass behind planets and in front of them exactly as today.",
+      "verifyVia": {
+        "input": "Poses with a ring segment passing behind and in front of a planet body (round-2 occlusion scenario set), prod pipeline.",
+        "observable": "Behind segments occluded, front segments visible; depth interaction matches shipped screenshots; no z-fighting shimmer under drift."
+      },
+      "verifyRef": "orrery-entry-orbits-2026-07-20/evidence/staticky-fix-record.md section 3",
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7-parity-surface",
+      "statement": "Every consumer-facing OrbitLine behavior works exactly as today through the same API: hover hit-test (userData.orbitHitPositions perimeter samples) + hover highlight (opacity/color accessors), .visible toggling via _syncOrbitsToMode/_applyOrbitVisibility, setVisibilityFactor (AC3 system factor), prox fade, per-frame moon-ring position/rotation.x, per-ring colors (planets 0x00ff00 / moons 0x00bb00 / star pair 0x00dd00), dispose. Each maps to a per-ring uniform entry + CPU update hook — none silently dropped.",
+      "verifyVia": {
+        "input": "Live drive: hover each ring class, toggle ORRERY/HELM mode sync, move a moon ring over frames, dispose/recreate a system; headless: existing proxfade + swap unit tests stay green.",
+        "observable": "Hover highlight appears/clears per ring; mode sync hides/shows rings; moon rings track their planet per frame; colors per class correct; dispose leaves no orphan uniforms/draws; existing OrbitRingSDF unit tests (or their ported successors) green."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC8-angular-size-fade",
+      "statement": "At extreme range, rings fade out by per-ring angular size instead of persisting as sub-pixel dots (Max's ratified choice): the far ladder rows behave like today's quiet dropout, not the conic probe's persistent dots.",
+      "verifyVia": {
+        "input": "perRingLadder far-distance rows (the 4 distances where the probe kept moon-ring dots) with the angular-size fade active.",
+        "observable": "Sub-pixel rings fade smoothly to invisible below the cutoff; no persistent isolated dots; fade is per-ring (a large planet ring can remain while its moon rings have faded)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC9-single-pass-perf",
+      "statement": "Ring rendering is one fullscreen draw over the conic uniform array (CONIC_MAX=64) replacing 39 per-ring quads with frustumCulled:false — draw calls drop accordingly and frame time does not regress.",
+      "verifyVia": {
+        "input": "renderer.info draw-call count in Sol ORRERY before/after; frame-time sample at overview + near-field poses.",
+        "observable": "Ring draw contribution 39 -> 1; frame-time at or below shipped at both poses (no regression class)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC10-orbit-read-coheres-uat",
+      "statement": "The whole ORRERY orbit read coheres to Max's eye across near-field, mid-range, grazing, and overview — including the ratified chunky-retro overview pin, with the pre-set expectation that the gentle-angle band paints slightly wider and the overview center cluster reads as a dot rather than a square.",
+      "verifyVia": {
+        "input": "Max flies the ORRERY: overview, dive to a planet, skim the orbit plane, stand on a ring, drift at range.",
+        "observable": "Max's holistic acceptance: the orbit read feels solid everywhere the dig scenarios cover, and the retro look survives his eye."
+      },
+      "layer": "uat"
+    },
+    {
+      "id": "AC11-webgl1-rot-cleanup",
+      "statement": "Dead WebGL1/GLSL-ES-1.00 rationale is cleaned up with zero behavior change: the extensions:{derivatives:true} + fallback comments go (three r0.183.1 dropped WebGL1 at r163), and the proxfade test's inverse( pin is consciously kept-with-new-rationale or retired — not silently inherited.",
+      "verifyVia": {
+        "input": "Code diff review + full headless suite at the cleanup commit.",
+        "observable": "No WebGL1-rationale comments or dead extension flags remain in the ring path; the inverse( pin decision is recorded in the commit/test comment; suite at baseline (tests failed = 0)."
+      },
+      "layer": "unit"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "Per-ring set from main.js system creation (~:4621-4867): planet orbitLine per planet, moonOrbitLines per moon, starOrbitLines pair for binaries — radius, color class, parent position, rotation.x",
+      "Camera projection-view + viewport per frame (ORRERY ShipCameraSystem; autoRotateSpeed 3 means the camera is never still)",
+      "1/3-res sceneTarget composite pipeline (rings draw into sceneTarget; composite mixes bg/scene by alpha)",
+      "AC3 system visibility factor (setVisibilityFactor, one per system)",
+      "Prox-fade camera-to-ring distance (CPU-computable per ring exactly)",
+      "Hover state from hitTestOrbits screen-space matching over userData.orbitHitPositions perimeter samples"
+    ],
+    "outputs": [
+      "Ring pixels + per-pixel log-depth (gl_FragDepth) into sceneTarget — consumed by ring-vs-planet occlusion and the composite mix",
+      "OrbitLine public API surface consumed by main.js: .visible, material.opacity/color accessors, mesh.position, rotation.x, dispose(), userData.orbitHitPositions",
+      "Per-ring uniform array (CONIC_MAX=64: conic mat3 + color/alpha/fade entries) + CPU update hook run per frame"
+    ],
+    "mustStayWorking": [
+      "hitTestOrbits hover picking + hover highlight (opacity/color restore on unhover, main.js ~:11197-11217)",
+      "_syncOrbitsToMode / _applyOrbitVisibility / _orbitsUserOverride visibility semantics",
+      "Ring-vs-planet occlusion (shipped round-2 win — AC6)",
+      "Composite pipeline unchanged for all other transparent scene objects (the known double-alpha note in dig-record 'Also noted' stays out of scope)",
+      "Byte-guards EMPTY vs 8f1d8e8: SupercruiseModel.js, SupercruisePilot.js, AutoNavigator.js, tourStandoff.js, NavComputer.js",
+      "main.js flight/boot/tour sections untouched; any main.js ring-section edits FLAGGED to the lane-B merge ledger (flagged count currently FOUR)",
+      "Full vitest suite from repo dir at baseline: tests failed = 0 (vendor/motion-test-kit collection noise known); ProcgenSnapshot untouched"
+    ]
+  }
+}
