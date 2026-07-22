@@ -36,6 +36,7 @@
     import * as THREE from 'three';
     import { RetroRenderer } from './src/rendering/RetroRenderer.js';   // PROD pipeline — imported for fidelity
     import { OrbitRingSDF }  from './src/objects/OrbitRingSDF.js';      // candidate fix
+    import { OrbitConicField } from './src/objects/OrbitConicField.js'; // productized Slice B field
 
     // BASELINE (staticky-orbit fix, 2026-07-20): since the AC5 prod swap,
     // src/objects/OrbitLine.js EXTENDS OrbitRingSDF — importing it no longer
@@ -391,6 +392,41 @@
       return (m === 'baseline' || m === 'analytic' || m === 'conic') ? m : 'sdf';
     }
 
+    // ── PRODUCTIZED conic field (orbit-ring-conic Slice B) ────────────────────
+    // The old inline probe (conicMesh, above) STAYS reachable behind the
+    // `conic-prod` toggle (default ON). When ON, the 'conic' mode drives the
+    // productized OrbitConicField (DataTexture + texelFetch + log-depth +
+    // angular fade + single-argmax overlap); when OFF, the probe renders — so a
+    // probe-vs-productized A/B is one toggle if any measured number drifts.
+    // Fed the SAME transform source as every set (sdfRings[i].mesh) + ringDefs.
+    // NOTE: this wiring is UNVERIFIED headless — proven only at the lab GL battery.
+    const conicField = new OrbitConicField({ pixelWidth: 1.0, featherPx: 0.5 });
+    conicField.mesh.visible = false;
+    scene.add(conicField.mesh);
+    let conicProd = true;
+
+    function buildConicDescriptors() {
+      const descs = [];
+      for (let i = 0; i < N; i++) {
+        const mesh = sdfRings[i].mesh;   // transform source (same placement as all sets)
+        mesh.updateMatrixWorld();
+        const on = (solo === null || solo === i);
+        descs.push({
+          matrixWorld: mesh.matrixWorld,
+          radius: ringDefs[i].radius,
+          color: ringDefs[i].color,
+          alpha: 0.8,           // matches the probe's alpha*0.8 output scale
+          active: on,
+        });
+      }
+      return descs;
+    }
+
+    function updateFieldConics() {
+      camera.updateMatrixWorld();
+      conicField.update(buildConicDescriptors(), camera, retro.sceneTarget);
+    }
+
     function applyVisibility() {
       for (let i = 0; i < N; i++) {
         const on = (solo === null || solo === i);
@@ -398,7 +434,8 @@
         sdfRings[i].mesh.visible      = on && (mode === 'sdf');
         analyticRings[i].mesh.visible = on && (mode === 'analytic');
       }
-      conicMesh.visible = (mode === 'conic');
+      conicMesh.visible      = (mode === 'conic') && !conicProd;
+      conicField.mesh.visible = (mode === 'conic') && conicProd;
     }
 
     // ── Camera placement: pitch-0.7 orbit at distance d ───────────────────────
@@ -433,7 +470,7 @@
       const fx = pe[0] * retro.sceneTarget.width  / 2;
       const fy = pe[5] * retro.sceneTarget.height / 2;
       for (const an of analyticRings) an.material.uniforms.uFpx.value.set(fx, fy);
-      if (mode === 'conic') updateConics();
+      if (mode === 'conic') { if (conicProd) updateFieldConics(); else updateConics(); }
       updateStar();
       applyVisibility();
       retro.render();
@@ -457,6 +494,11 @@
     // ── Public instrument API ─────────────────────────────────────────────────
     window._orbitLab = {
       setMode(m) { mode = normMode(m); applyVisibility(); return mode; },
+      // conic-prod A/B: ON = productized OrbitConicField, OFF = inline probe.
+      setConicProd(on) { conicProd = !!on; applyVisibility(); if (mode === 'conic') renderOnce(); return conicProd; },
+      get conicProd() { return conicProd; },
+      // Provisional angular-size cutoff (render px of projected radius) — b8b sets the shipping value.
+      setConicCutoff(px) { const r = conicField.setAngularCutoff(px); if (mode === 'conic') renderOnce(); return r; },
       setDistance(d) { placeCamera(d); renderOnce(); return distance; },
       ringCount() { return N; },
       soloRing(i) { solo = (i === null || i === undefined) ? null : (i | 0); applyVisibility(); return solo; },
@@ -511,6 +553,7 @@
         }
         if (pixelWidth !== null) conicUniforms.uPixelWidth.value = pixelWidth;
         if (featherPx !== null) conicUniforms.uFeatherPx.value = featherPx;
+        conicField.setBand({ pixelWidth, featherPx });   // keep the productized field's band in sync
         const u0 = sdfRings[0].material.uniforms;
         return { pixelWidth: u0.uPixelWidth.value, featherPx: u0.uFeatherPx.value };
       },
