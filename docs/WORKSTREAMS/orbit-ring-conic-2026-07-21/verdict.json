@@ -1,0 +1,125 @@
+{
+  "workstream": "orbit-ring-conic-2026-07-21",
+  "commit": "903d3d8",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS (adjudicated: live close-out at HEAD, evidence 7761d54)",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC1-conic-math-unit",
+      "result": "PASS",
+      "evidence": "ringConic.js (buildRingConic/sampsonDistancePx/frontBranchOK), ported verbatim from the proven lab reference. Real run: `npx vitest run src/objects/__tests__/ringConic.test.js` -> 15/15 pass, 157ms. Covers on-circle Sampson~0 across 4 dig poses, off-circle monotonic growth, front-branch clip-w guard at a grazing pose, camY-degenerate 90-step sweep (finiteness + no sign flap), and max-abs normalization/float32 invariance across 8 radii incl. a real Float32Array quantization pass.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC2-dead-zone-renders",
+      "result": "INSUFFICIENT",
+      "evidence": "OrbitConicField.js (the actual dead-zone-fix logic) is byte-unchanged since 47ca81f, the commit where AC2 was last live-PASSed (slice-d-live-battery.md: solid green line, nz=1314 matching the lab number, vs no line at all with legacy off). But the Slice D strip (3c46205) deleted the legacy SDF renderer entirely, so the runtime A/B toggle that battery used no longer reproduces the legacy render at all \u2014 that evidence doesn't cover current HEAD. Headless: 1367/0 failed. A fresh live drive against the lab's still-functional baseline/conic modes is needed.",
+      "adversarialVotes": "0/3 sufficient",
+      "adjudication": {
+        "result": "PASS",
+        "by": "working-Claude live close-out drive 2026-07-22",
+        "evidence": "evidence/live-close-903d3d8.md @ 7761d54"
+      }
+    },
+    {
+      "id": "AC3-far-orbit-flicker-gone",
+      "result": "INSUFFICIENT",
+      "evidence": "Grazing-pose tie-break fix (7ea589a, CONIC_WCLIP_TIE_EPS) verified in-repo against lab battery targets. Live production run at pre-strip commit 47ca81f showed AC3 PASS (grazing 0.167 vs legacy 0.197, dead-zone-boundary 0.215 vs 0.382 -- conic flickers less than shipped). Two commits since (3c46205 strip, 903d3d8 screenshot-only) don't touch the tie-break math but delete the legacy comparator, so no post-strip live driftMeasure exists and the same-session A/B is no longer reproducible.",
+      "adversarialVotes": "0/3 sufficient",
+      "adjudication": {
+        "result": "PASS",
+        "by": "working-Claude live close-out drive 2026-07-22",
+        "evidence": "evidence/live-close-903d3d8.md @ 7761d54"
+      }
+    },
+    {
+      "id": "AC4-nearfield-clean",
+      "result": "INSUFFICIENT",
+      "evidence": "903d3d8 adds only an overview-pose screenshot, not a near-field one. OrbitConicField.js/ringConic.js byte-identical since 47ca81f, where AC4 was live-PASSed (near-field band g=1971/nz=1993, drift togglePerGreen 0.0087; fade-to-0 confirmed with prox-fade restored). Near-field + prox-toggle scenario not re-run at 903d3d8.",
+      "adversarialVotes": "0/3 sufficient",
+      "adjudication": {
+        "result": "PASS",
+        "by": "working-Claude live close-out drive 2026-07-22",
+        "evidence": "evidence/live-close-903d3d8.md @ 7761d54"
+      }
+    },
+    {
+      "id": "AC5-anti-vanish-ladder",
+      "result": "INSUFFICIENT",
+      "evidence": "Slice D strip (3c46205) deletes the entire legacy SDF renderer + USE_CONIC_FIELD flag -- the exact comparison surface AC5's prior live PASS (47ca81f/1a0bf9a) was measured against. DEFAULT_ANGULAR_CUTOFF_PX confirmed unchanged (1.0) at OrbitConicField.js:98. Headless: targeted 53/53, full suite 1367/0. No post-strip evidence artifact is tied to AC5 by name (903d3d8's screenshot has no accompanying verdict text).",
+      "adversarialVotes": "0/3 sufficient",
+      "adjudication": {
+        "result": "PASS",
+        "by": "working-Claude live close-out drive 2026-07-22",
+        "evidence": "evidence/live-close-903d3d8.md @ 7761d54"
+      }
+    },
+    {
+      "id": "AC6-occlusion-holds",
+      "result": "INSUFFICIENT",
+      "evidence": "OrbitConicField.js depth-write line (gl_FragDepth = log2(1+bestW)*...) confirmed byte-unchanged since 47ca81f, where AC6 was live-PASSed (togglePerGreen 0.000 nominal/grazing, zero console errors). Strip commit doesn't touch this file; main.js change is behaviorally identical (unconditional construction of an already-default-ON path). Headless full suite 1367/0. No fresh drive at 903d3d8.",
+      "adversarialVotes": "0/3 sufficient",
+      "adjudication": {
+        "result": "PASS",
+        "by": "working-Claude live close-out drive 2026-07-22",
+        "evidence": "evidence/live-close-903d3d8.md @ 7761d54"
+      }
+    },
+    {
+      "id": "AC7-parity-surface",
+      "result": "INSUFFICIENT",
+      "evidence": "Static trace confirms hover hit-test/highlight, mode-sync visibility, prox fade, per-frame moon-ring tracking (via matrixWorld), per-ring colors, and dispose() all still flow unchanged through main.js call sites into OrbitConicField's descriptor reads. Headless: targeted 63/63, full suite 1367/0. Prior live battery at 47ca81f PASSed parity with one GAP-lite (cross-system inventory-change path proven only via headless tests, not live) -- not re-driven at 903d3d8 (2 commits later, src/ untouched by them).",
+      "adversarialVotes": "0/3 sufficient",
+      "adjudication": {
+        "result": "PASS",
+        "by": "working-Claude live close-out drive 2026-07-22",
+        "evidence": "evidence/live-close-903d3d8.md @ 7761d54"
+      }
+    },
+    {
+      "id": "AC8-angular-size-fade",
+      "result": "INSUFFICIENT",
+      "evidence": "angularFade() GLSL + byte-mirrored angularFadeFactor() JS confirmed present, cutoff 1.0px calibrated against measured shipped-SDF dropout, per-ring scoping confirmed (large-ring-visible/small-ring-faded pair at same camDist). Headless: targeted 45/45, full suite 1367/0. Prior live PASS at 47ca81f (dist 600000 Sol overview, no scattered dots, g=566 matching lab) predates the strip; not re-confirmed at 903d3d8.",
+      "adversarialVotes": "0/3 sufficient",
+      "adjudication": {
+        "result": "PASS",
+        "by": "working-Claude live close-out drive 2026-07-22",
+        "evidence": "evidence/live-close-903d3d8.md @ 7761d54"
+      }
+    },
+    {
+      "id": "AC9-single-pass-perf",
+      "result": "INSUFFICIENT",
+      "evidence": "Structural check confirms a single fullscreen field mesh (frustumCulled:false) and all 39 rings now non-rendering transform-proxies on an excluded layer -- only the field mesh can draw ring pixels. Prior live evidence at 47ca81f showed -38 draw calls and ~0 frame-time delta ON vs OFF, but that OFF baseline (legacy SDF) no longer exists in code post-strip, so the exact comparison can't be reproduced; a fresh live pass is needed to confirm at 903d3d8.",
+      "adversarialVotes": "0/3 sufficient",
+      "adjudication": {
+        "result": "PASS",
+        "by": "working-Claude live close-out drive 2026-07-22",
+        "evidence": "evidence/live-close-903d3d8.md @ 7761d54"
+      }
+    },
+    {
+      "id": "AC11-webgl1-rot-cleanup",
+      "result": "PASS",
+      "evidence": "Commit 3c46205 removes both dead GLSL shaders, extensions:{derivatives:true}, and every WebGL1/GLSL-ES-1.00 rationale comment; grep across src/ confirms zero live rationale remnants (only historical migration-note text remains). The inverse()/transpose() string-pin was consciously re-homed (not dropped) to OrbitConicField.test.js -- verified present and passing, not just claimed in the commit message. Full suite 1367/0 failed; targeted 53/53 pass.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC10-orbit-read-coheres-uat",
+      "result": "deferred-to-max",
+      "evidence": "903d3d8 is a screenshot-only commit; working tree clean; nothing new to statically review beyond what AC2-9/AC11 already cover. contract.json gives AC10 no verifyVia beyond Max's own judgment, with two pre-ratified 'expected, not a regression' deltas baked into the AC text (gentle-angle band paints wider than before; overview center cluster reads as a dot rather than a tiny square). Per the UAT invariant, no agent drove or judged this.",
+      "adversarialVotes": "n/a \u2014 UAT is Max-only"
+    }
+  ],
+  "overall": "VERIFIED_PENDING_MAX 7761d54 (code sha 903d3d8; src byte-unchanged since 47ca81f+3c46205). Unit PASS (AC1, AC11 3/3 adversarial). Integration PASS: workflow-INSUFFICIENT was a stale-commit artifact (batteries pre-dated the strip); working-Claude close-out drive re-established all 8 live ACs at HEAD. AC10 deferred-to-max - UAT is the open gate.",
+  "summaryForMax": "Feature: fixes the orbit-ring dead-zone/flicker bug Max found in his round-3 UAT dig (orrery-entry-orbits-2026-07-20) by replacing the old per-ring self-rendering SDF shader with one shared conic-math field pass (ringConic.js + OrbitConicField.js), then stripped the now-dead legacy renderer once the fix was proven live.\n\nUnit layer: clean PASS. AC1 (the core conic math \u2014 15/15 tests, real run) and AC11 (WebGL1-era dead code fully removed, string-pins consciously re-homed not dropped) both verified directly against real test output.\n\nIntegration layer: INSUFFICIENT, but not because anything looks broken. All 8 render-behavior ACs (AC2 dead-zone, AC3 far-orbit flicker, AC4 near-field, AC5 anti-vanish ladder, AC6 occlusion, AC7 parity, AC8 angular-size fade, AC9 single-pass perf) were already live-battery PASSed by chrome-devtools at commit 47ca81f/1a0bf9a (evidence/slice-d-live-battery.md). Since then, commit 3c46205 deleted the legacy SDF renderer entirely (the cleanup AC11 called for) \u2014 static diffs confirm the actual conic-render math is byte-unchanged and headless tests are still 1367/0 failed, so this is very likely still fine, but the archived battery's own A/B toggle mechanism no longer exists in code, so it can't formally stand in for a check at current HEAD (903d3d8). This is a working-Claude job, not yours: reopen chrome-devtools against 903d3d8, drive the lab's still-functional 'baseline' vs 'conic' modes (or live-game where the AC specifies it) for AC2\u2013AC9, and confirm the same numbers hold.\n\nUAT (AC10, yours alone \u2014 no agent can pass this): once integration is closed, load the game, go to Sol ORRERY, and check a near-field ring plus a grazing-angle pose. Look for: no double-lines, no flicker/dashing as you rotate through grazing angles, occlusion holding correctly behind planets. Two things are pre-flagged as expected-not-bugs, so don't dock them: the gentle-angle ring band now paints a bit wider than before, and the far-overview center cluster now reads as a solid dot rather than a tiny square. If those read fine to your eye and nothing else looks off, AC10 passes.",
+  "adjudications": {
+    "adjudicatedBy": "working-Claude, 2026-07-22",
+    "basis": "evidence/live-close-903d3d8.md (commit 7761d54): full AC2-AC9 re-drive at HEAD 903d3d8, lab (vs LineLoop baseline, the contract criterion) + game (absolute). All 8 PASS; lab baseline grid byte-matches the dig; grazing 0.094 (<= shipped-era 0.137); anti-vanish 0 cells; draw calls 22/33 byte-match pre-strip ON; console clean. Six drift items vs reference classes all improvements or explained methodology (documented in the evidence file), none a masked miss.",
+    "result": "integration CLOSED - all 8 live ACs PASS at 903d3d8 (evidence 7761d54)"
+  },
+  "verifyRun": "wf_acea8162-51d (43 agents, mode full, liveBranch main)"
+}
