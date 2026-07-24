@@ -1,0 +1,2288 @@
+{
+  "meta": {
+    "workstream": "world-engine-inc3b-relief-budget-2026-07-21",
+    "slice": "S3.a",
+    "gate": "diagnosis (content-vs-instrument)",
+    "fixRound": 2,
+    "ironLaw": "θ_wall ≷ the SAMPLING floor (mesh/bake Nyquist, ≈2.22°) discriminant — NOT the sub-band display floor 0.37° (FIX-R2 issue 1); conviction = measured deficit split across the floor ladder (BUILD-PLAN §1.S3.a / lens-log MF-3). No fix chosen here.",
+    "generated": "deterministic (no wall-clock in payload)",
+    "meshN": 40000,
+    "lloyd": 4,
+    "displayFloorDeg_rejected": 0.37000000000000005,
+    "samplingFloorDeg": 2.22,
+    "meshSpacingDeg": 1.0155,
+    "bakePitchDeg": 1.11,
+    "measuredEdgeDeg": 1.11,
+    "posterizeLevels": 6,
+    "bakeModelSubstitution": "The 256²/face GPU CubeCamera bake (createHeightCube/bakeHeightCube, planet-lod-tectonic.js) requires a WebGL renderer and is NOT runnable headless. Its attenuation is modeled with the committed box-filter model (calibration/bake-attenuation-model.json, S0.5) — flagged, not hidden.",
+    "perturbAssumption": "state JSON omits 'perturb'; the lab default 0.55 (planet-lod-lab.html:1997) is used with reliefEnvelope(R,g) and lodRampOf(distance) to reconstruct reliefAmp. Sensitivity: reliefAmp scales the carrier asymmetry ~linearly."
+  },
+  "verdict": {
+    "verdict": "MIXED",
+    "convictedLayer": "MIXED (floor-sensitive): CONTENT = walls below the mesh/bake SAMPLING floor (53% of the deficit at the 1-sample floor → 88% at the 2-texel Nyquist floor) + INSTRUMENT = a resolved-wall residual (bake sub-texel arc-smear ⊕ display-rendering-scale, NOT sub-splittable headlessly). Neither content nor instrument is excludable by measurement.",
+    "evidence": "FIX-R2 overturns the S3-v1 clean INSTRUMENT verdict. (issue 1) The v1 discriminant floor θ_floor=0.37° is a sub-band DISPLAY floor (=2·pitch/6) sitting 3× below the bake pitch (1.11°) and below the mesh spacing (1.0155°), so its \"100% resolvable / 0% content\" split was GUARANTEED by the floor choice (every stampable wall δ/4≥0.79°>0.37°), not discovered. At the HONEST mesh/bake sampling floor the deficit split flips: content is 53% at the 1-sample floor (1.11°), 85% at the mesh Nyquist, and 88% at the 2-texel bake Nyquist (2.22°) — content is a material-to-majority owner, NOT excluded. (issue 3) On the un-saturated slope, carrier signalPresent=true (median wallSlope 3.65241 > slope floor 0.10631) — the resolved-wall residual is a real display/bake loss, not carrier absence; the v1 gate median(clampedTilt)=36.522°>5.11° was constant-true by clamp saturation. (issue 2) With bake applied to the pre-shading SLOPE, the box model's ~25% slope haircut is absorbed by the clamp (median bakedPeakBand 5.726 still ≫1), so the best-texel model alone does not collapse the wall — but full sub-texel arc-smear is un-modellable headlessly (GPU bake un-runnable), so BAKE remains an unexcluded co-owner of the instrument residual alongside display-scale (~7.29× clamped-carrier→peak-floor). Convicted: MIXED — content (sub-sampling walls) and instrument (non-sub-splittable bake⊕display residual) are both material; the v1 single-owner \"display-rendering-scale\" conviction was an artifact of three constant-true routing gates.",
+    "deficitSplit_overall_samplingFloor": {
+      "failingTotal": 156,
+      "ownedByResolvable": 0.1218,
+      "ownedBySubFloor": 0.8782
+    },
+    "contentShare_1sampleFloor": 0.5273,
+    "contentShare_meshNyquist": 0.8545,
+    "contentShare_bakeNyquist": 0.8793,
+    "allStampsResolvable_samplingFloor": false,
+    "allStampsResolvable_displayFloor": true,
+    "carrierSignalPresent_slopeGate": true,
+    "arcShadowOnScreenAtPeak": true,
+    "meanMetricTiltLoss_OVERstated": 60.8,
+    "instrumentResidualPeakLoss": 7.29,
+    "convictionRule": "FIX-R2: discriminant = θ_wall ≷ the SAMPLING floor (mesh/bake Nyquist), read across the floor ladder — NOT the sub-band display floor 0.37° (which pre-ordained 100% resolvable). contentLo>0.5 ⇒ CONTENT; contentLo≤0.5<contentHi ⇒ MIXED (content + non-sub-splittable bake⊕display residual, both material); contentHi<~0.5 ∧ slope-signal-present ⇒ INSTRUMENT. Bake is applied to the pre-shading slope (not the saturated asymmetry) so it is a co-owner, not excluded; signalPresent gates on the un-saturated slope. Measured split reported; no side forced."
+  },
+  "captures": [
+    {
+      "capture": "target-seed1",
+      "W": 2463,
+      "H": 1060,
+      "worldSeed": 1,
+      "macroSeed": 1,
+      "planetRadiusEarth": 0.2729641867568717,
+      "gravity": 0.199,
+      "isImpactSurface": true,
+      "budget": {
+        "inDomain": true,
+        "f_I": 0.98145
+      },
+      "schedule": {
+        "fired": true,
+        "nStamp": 165,
+        "D_FLOOR_KM": 95.6,
+        "D_HI_KM": 1739.1,
+        "tExp": 4.5
+      },
+      "projectionSelfTestPx": 0,
+      "reliefAmp": 1.403,
+      "stampCounts": {
+        "total": 165,
+        "litDisc": 59,
+        "measurable": 58,
+        "resolvable": 7,
+        "subFloor": 51
+      },
+      "thetaWallStats": {
+        "displayFloorDeg_rejected": 0.37000000000000005,
+        "samplingFloorDeg": 2.22,
+        "meshSpacingDeg": 1.0155,
+        "bakePitchDeg": 1.11,
+        "minThetaWallDeg": 0.7902,
+        "medianThetaWallDeg": 1.164,
+        "maxThetaWallDeg": 5.1491,
+        "geometricFloorThetaWallDeg": 0.7878,
+        "allResolvableDisplayFloor": true,
+        "allResolvable": false
+      },
+      "deficitSplit": {
+        "failingTotal": 58,
+        "discriminantFloor": "sampling (mesh/bake Nyquist)",
+        "discriminantFloorDeg": 2.22,
+        "ownedByResolvable": 0.1207,
+        "ownedBySubFloor": 0.8793,
+        "failResolvableCount": 7,
+        "failSubFloorCount": 51,
+        "floorLadder": [
+          {
+            "floor": "display_0.37_subBand",
+            "floorDeg": 0.37,
+            "contentFrac": 0,
+            "contentCount": 0,
+            "instrumentCount": 58
+          },
+          {
+            "floor": "mesh_1sample",
+            "floorDeg": 1.0155,
+            "contentFrac": 0.3966,
+            "contentCount": 23,
+            "instrumentCount": 35
+          },
+          {
+            "floor": "bake_1pitch",
+            "floorDeg": 1.11,
+            "contentFrac": 0.431,
+            "contentCount": 25,
+            "instrumentCount": 33
+          },
+          {
+            "floor": "mesh_Nyquist_2x",
+            "floorDeg": 2.0311,
+            "contentFrac": 0.8448,
+            "contentCount": 49,
+            "instrumentCount": 9
+          },
+          {
+            "floor": "bake_Nyquist_2texel",
+            "floorDeg": 2.22,
+            "contentFrac": 0.8793,
+            "contentCount": 51,
+            "instrumentCount": 7
+          }
+        ]
+      },
+      "carrierSignal": {
+        "nStampsWithCarrier": 59,
+        "medianWallSlope_reliefPerRad": 3.65241,
+        "medianCarrierTiltDeg": 36.522,
+        "medianCarrierTiltUnclampedDeg": 71.983,
+        "medianAsymCarrier_255_saturating": 123.06,
+        "medianAsymCarrier_bands_saturating": 2.896,
+        "fracCarrierGe1band_saturating": 0.932,
+        "signalPresentSlopeFloor_reliefPerRad": 0.10631,
+        "signalPresentTiltFloorDeg": 5.114,
+        "fracSlopeAboveFloor": 1,
+        "signalPresent": true,
+        "note": "wallSlope = |composited-relief tangent gradient| along sunward at the wall (relief-units/rad) — the un-saturated DATA signal. signalPresent now gates on wallSlope>SLOPE_FLOOR (a gate that CAN fire false), NOT the clamp-saturated carrierTilt (pinned ~30-40°, non-monotonic in slope — see carrierTiltDeg vs carrierTiltUnclampedDeg). The relief IS in the data (slope well above floor); asymCarrier_255 SATURATES at the Lambert ceiling so its magnitude is a ceiling, not linear — used only to show sign/presence."
+      },
+      "bakeLayer": {
+        "medianAttenAtWall_boxModel": 0.7737,
+        "medianCarrierPeakBand_preBake": 5.369,
+        "medianBakedPeakBand_postBake": 5.726,
+        "medianBakedTiltDeg": 35.463,
+        "note": "FIX-R2 issue 2: bake now attenuates the un-saturated wall SLOPE (bakedSlope = wallSlope·bestTexelFrac) BEFORE shading, then re-shades — not the post-shading saturated asymmetry. The best-texel box model still leaves both PEAK bands >>1 (the clamp/Lambert saturation absorbs a ~25% slope haircut), so this box model alone does not collapse the wall. But a full sub-texel bake SMEARS the arc over a texel (beyond the best-texel retained fraction), and the GPU CubeCamera bake is un-runnable headless — so bake is a STRUCTURAL, unexcluded co-owner of the model→measured residual (predicted median bakedPeakBand vs the arc-report measured peak of ~1-2 bands). Bake is NOT ruled out; the bake-vs-display sub-split is deferred to the live 256→512 falsifier."
+      },
+      "shadingQuant": {
+        "reliefAmp": 1.403,
+        "reliefEnvelope": 2.5509,
+        "perturbAssumed": 0.55,
+        "lodMix": 1,
+        "medianScreenEffTiltDeg_meanMetric": 0.604,
+        "medianCarrierTiltDeg": 36.522,
+        "medianCarrierTiltUnclampedDeg": 71.983,
+        "medianTiltLossRatio_meanMetric": 60.8,
+        "measured_medianScreenAsym_bands": 0,
+        "measured_fracScreenGe1band": 0,
+        "note": "screenEffTilt_meanMetric = wall tilt backed out from the MEASURED detrended half-annulus MEAN reflectance asymmetry (real S2 pixels) via ΔL=2·sin(i)·sin(ψ). tiltLossRatio_meanMetric = clampedCarrierTilt/meanScreenTilt. MF-1: the MEAN dilutes a thin peak wall arc, so this loss is an UPPER bound; peakReconciliation supplies the honest peak-based loss (~7×). reliefAmp = perturb(0.55)·reliefEnvelope(R,g)·lodMix."
+      },
+      "peakReconciliation": {
+        "source": "evidence/S2/arc-report.json renders[].diagnostics_NOT_the_bar.gradientControlled",
+        "peakDiff_crater_fracGe1band": 0.8,
+        "peakDiff_flatControl_fracGe1band": 0.11,
+        "controlN": 200,
+        "craterExcessOverControl": 0.69,
+        "twoProportionZ": 13.86,
+        "pValue": "<1e-12",
+        "arcShadowOnScreenAtPeak": true,
+        "peakScreenTiltFloorDeg": 5.114,
+        "medianCarrierTiltDeg_clamped": 36.522,
+        "peakBasedTiltLossRatio": 7.14,
+        "detrendHalfMean_crater_mean_255": 0.84,
+        "detrendHalfMean_flatControl_mean_255": 0.05,
+        "note": "MF-1: the arc-report hand-waved the peak as \"indistinguishable from posterize/dither noise\". That is FALSE — the flat control fixes the dither/posterize outlier rate (pf), and the crater peak fraction pc is z>>3.29 above it, so the wall arc-shadow IS on screen at PEAK. The S2 FAIL is therefore PART metric-dilution (the frozen half-annulus MEAN averages a thin peak arc away) + PART display-attenuation (~clampedCarrierTilt/5.11° ≈ 7× residual), NOT a ~217× pure display loss. Even the MEAN detrended crater signal is 17× the flat control with correct sign (0.84 vs 0.05)."
+      },
+      "largestBasinAnchor": {
+        "centre": 26977,
+        "D_km": 625.15,
+        "thetaWallDeg": 5.1491,
+        "resolvable": true,
+        "carrierTiltDeg": 32.966,
+        "carrierTiltUnclampedDeg": 65.932,
+        "carrierAsym_255_saturating": 131.05,
+        "measuredScreenDetrend_255": 12.95,
+        "screenEffTiltDeg": 1.551,
+        "tiltLossRatio": 21.2,
+        "note": "The single largest basin (θ_wall well ABOVE the sampling floor — an unambiguous INSTRUMENT case): cross-check vs S2 arc-report.json largestBasinLand. Carrier tilt (clamped/shader-realized) is tens of degrees (data present) yet the realized MEAN-metric screen tilt is ~1–3° — an instrument residual (bake ⊕ display-scale, non-separable headlessly), but see peakReconciliation: at PEAK the arc-shadow does clear ≥1 band (metric-dilution is part of the MEAN gap)."
+      },
+      "metricHonesty": {
+        "partitionN": 7,
+        "frozenRawMean_mean_255": 15.92,
+        "frozenRawMean_fracGe1band": 0.143,
+        "detrended_mean_255": 2.17,
+        "detrended_fracGe1band": 0,
+        "detrended_fracPositiveSign": 0.571,
+        "note": "Frozen half-annulus MEAN vs gradient-detrended, both 8-bit. MF-1: the MEAN under-measures because a thin peak wall arc is averaged over the whole half-annulus — see peakReconciliation, where the arc-report PEAK diagnostic shows ≥1 band on ~80% of craters (vs 11% flat control, z>>3.29). So the MEAN metric is a real dilution contributor; it never substitutes for the deficit split (see deficitSplit — floor-bracketed, content-majority at the sampling floors; this note was corrected at the S3 adjudication seam, it previously carried a stale v1 literal)."
+      }
+    },
+    {
+      "capture": "target-reroll1",
+      "W": 2463,
+      "H": 1060,
+      "worldSeed": 798855525,
+      "macroSeed": 834,
+      "planetRadiusEarth": 0.3414947219984606,
+      "gravity": 0.2489,
+      "isImpactSurface": true,
+      "budget": {
+        "inDomain": true,
+        "f_I": 0.96761
+      },
+      "schedule": {
+        "fired": true,
+        "nStamp": 153,
+        "D_FLOOR_KM": 119.7,
+        "D_HI_KM": 2175.7,
+        "tExp": 4.5
+      },
+      "projectionSelfTestPx": 0,
+      "reliefAmp": 1.2321,
+      "stampCounts": {
+        "total": 153,
+        "litDisc": 44,
+        "measurable": 43,
+        "resolvable": 5,
+        "subFloor": 38
+      },
+      "thetaWallStats": {
+        "displayFloorDeg_rejected": 0.37000000000000005,
+        "samplingFloorDeg": 2.22,
+        "meshSpacingDeg": 1.0155,
+        "bakePitchDeg": 1.11,
+        "minThetaWallDeg": 0.8146,
+        "medianThetaWallDeg": 1.043,
+        "maxThetaWallDeg": 4.0645,
+        "geometricFloorThetaWallDeg": 0.7878,
+        "allResolvableDisplayFloor": true,
+        "allResolvable": false
+      },
+      "deficitSplit": {
+        "failingTotal": 43,
+        "discriminantFloor": "sampling (mesh/bake Nyquist)",
+        "discriminantFloorDeg": 2.22,
+        "ownedByResolvable": 0.1163,
+        "ownedBySubFloor": 0.8837,
+        "failResolvableCount": 5,
+        "failSubFloorCount": 38,
+        "floorLadder": [
+          {
+            "floor": "display_0.37_subBand",
+            "floorDeg": 0.37,
+            "contentFrac": 0,
+            "contentCount": 0,
+            "instrumentCount": 43
+          },
+          {
+            "floor": "mesh_1sample",
+            "floorDeg": 1.0155,
+            "contentFrac": 0.4419,
+            "contentCount": 19,
+            "instrumentCount": 24
+          },
+          {
+            "floor": "bake_1pitch",
+            "floorDeg": 1.11,
+            "contentFrac": 0.5581,
+            "contentCount": 24,
+            "instrumentCount": 19
+          },
+          {
+            "floor": "mesh_Nyquist_2x",
+            "floorDeg": 2.0311,
+            "contentFrac": 0.8837,
+            "contentCount": 38,
+            "instrumentCount": 5
+          },
+          {
+            "floor": "bake_Nyquist_2texel",
+            "floorDeg": 2.22,
+            "contentFrac": 0.8837,
+            "contentCount": 38,
+            "instrumentCount": 5
+          }
+        ]
+      },
+      "carrierSignal": {
+        "nStampsWithCarrier": 44,
+        "medianWallSlope_reliefPerRad": 4.85812,
+        "medianCarrierTiltDeg": 37.283,
+        "medianCarrierTiltUnclampedDeg": 74.44,
+        "medianAsymCarrier_255_saturating": 118.82,
+        "medianAsymCarrier_bands_saturating": 2.796,
+        "fracCarrierGe1band_saturating": 0.955,
+        "signalPresentSlopeFloor_reliefPerRad": 0.12106,
+        "signalPresentTiltFloorDeg": 5.114,
+        "fracSlopeAboveFloor": 1,
+        "signalPresent": true,
+        "note": "wallSlope = |composited-relief tangent gradient| along sunward at the wall (relief-units/rad) — the un-saturated DATA signal. signalPresent now gates on wallSlope>SLOPE_FLOOR (a gate that CAN fire false), NOT the clamp-saturated carrierTilt (pinned ~30-40°, non-monotonic in slope — see carrierTiltDeg vs carrierTiltUnclampedDeg). The relief IS in the data (slope well above floor); asymCarrier_255 SATURATES at the Lambert ceiling so its magnitude is a ceiling, not linear — used only to show sign/presence."
+      },
+      "bakeLayer": {
+        "medianAttenAtWall_boxModel": 0.7189,
+        "medianCarrierPeakBand_preBake": 5.75,
+        "medianBakedPeakBand_postBake": 5.511,
+        "medianBakedTiltDeg": 35.946,
+        "note": "FIX-R2 issue 2: bake now attenuates the un-saturated wall SLOPE (bakedSlope = wallSlope·bestTexelFrac) BEFORE shading, then re-shades — not the post-shading saturated asymmetry. The best-texel box model still leaves both PEAK bands >>1 (the clamp/Lambert saturation absorbs a ~25% slope haircut), so this box model alone does not collapse the wall. But a full sub-texel bake SMEARS the arc over a texel (beyond the best-texel retained fraction), and the GPU CubeCamera bake is un-runnable headless — so bake is a STRUCTURAL, unexcluded co-owner of the model→measured residual (predicted median bakedPeakBand vs the arc-report measured peak of ~1-2 bands). Bake is NOT ruled out; the bake-vs-display sub-split is deferred to the live 256→512 falsifier."
+      },
+      "shadingQuant": {
+        "reliefAmp": 1.2321,
+        "reliefEnvelope": 2.2401,
+        "perturbAssumed": 0.55,
+        "lodMix": 1,
+        "medianScreenEffTiltDeg_meanMetric": 0.269,
+        "medianCarrierTiltDeg": 37.283,
+        "medianCarrierTiltUnclampedDeg": 74.44,
+        "medianTiltLossRatio_meanMetric": 137.1,
+        "measured_medianScreenAsym_bands": 0.038,
+        "measured_fracScreenGe1band": 0,
+        "note": "screenEffTilt_meanMetric = wall tilt backed out from the MEASURED detrended half-annulus MEAN reflectance asymmetry (real S2 pixels) via ΔL=2·sin(i)·sin(ψ). tiltLossRatio_meanMetric = clampedCarrierTilt/meanScreenTilt. MF-1: the MEAN dilutes a thin peak wall arc, so this loss is an UPPER bound; peakReconciliation supplies the honest peak-based loss (~7×). reliefAmp = perturb(0.55)·reliefEnvelope(R,g)·lodMix."
+      },
+      "peakReconciliation": {
+        "source": "evidence/S2/arc-report.json renders[].diagnostics_NOT_the_bar.gradientControlled",
+        "peakDiff_crater_fracGe1band": 0.913,
+        "peakDiff_flatControl_fracGe1band": 0.09,
+        "controlN": 200,
+        "craterExcessOverControl": 0.823,
+        "twoProportionZ": 16.46,
+        "pValue": "<1e-12",
+        "arcShadowOnScreenAtPeak": true,
+        "peakScreenTiltFloorDeg": 5.114,
+        "medianCarrierTiltDeg_clamped": 37.283,
+        "peakBasedTiltLossRatio": 7.29,
+        "detrendHalfMean_crater_mean_255": 0.57,
+        "detrendHalfMean_flatControl_mean_255": 0.03,
+        "note": "MF-1: the arc-report hand-waved the peak as \"indistinguishable from posterize/dither noise\". That is FALSE — the flat control fixes the dither/posterize outlier rate (pf), and the crater peak fraction pc is z>>3.29 above it, so the wall arc-shadow IS on screen at PEAK. The S2 FAIL is therefore PART metric-dilution (the frozen half-annulus MEAN averages a thin peak arc away) + PART display-attenuation (~clampedCarrierTilt/5.11° ≈ 7× residual), NOT a ~217× pure display loss. Even the MEAN detrended crater signal is 17× the flat control with correct sign (0.84 vs 0.05)."
+      },
+      "largestBasinAnchor": {
+        "centre": 12612,
+        "D_km": 617.35,
+        "thetaWallDeg": 4.0645,
+        "resolvable": true,
+        "carrierTiltDeg": 36.364,
+        "carrierTiltUnclampedDeg": 72.728,
+        "carrierAsym_255_saturating": 139.66,
+        "measuredScreenDetrend_255": -1.82,
+        "screenEffTiltDeg": 0.215,
+        "tiltLossRatio": 169.2,
+        "note": "The single largest basin (θ_wall well ABOVE the sampling floor — an unambiguous INSTRUMENT case): cross-check vs S2 arc-report.json largestBasinLand. Carrier tilt (clamped/shader-realized) is tens of degrees (data present) yet the realized MEAN-metric screen tilt is ~1–3° — an instrument residual (bake ⊕ display-scale, non-separable headlessly), but see peakReconciliation: at PEAK the arc-shadow does clear ≥1 band (metric-dilution is part of the MEAN gap)."
+      },
+      "metricHonesty": {
+        "partitionN": 5,
+        "frozenRawMean_mean_255": 17.37,
+        "frozenRawMean_fracGe1band": 0.2,
+        "detrended_mean_255": -0.43,
+        "detrended_fracGe1band": 0,
+        "detrended_fracPositiveSign": 0.4,
+        "note": "Frozen half-annulus MEAN vs gradient-detrended, both 8-bit. MF-1: the MEAN under-measures because a thin peak wall arc is averaged over the whole half-annulus — see peakReconciliation, where the arc-report PEAK diagnostic shows ≥1 band on ~80% of craters (vs 11% flat control, z>>3.29). So the MEAN metric is a real dilution contributor; it never substitutes for the deficit split (see deficitSplit — floor-bracketed, content-majority at the sampling floors; this note was corrected at the S3 adjudication seam, it previously carried a stale v1 literal)."
+      }
+    },
+    {
+      "capture": "target-reroll2",
+      "W": 2463,
+      "H": 1060,
+      "worldSeed": 962606153,
+      "macroSeed": 5462,
+      "planetRadiusEarth": 0.3673932290240191,
+      "gravity": 0.2678,
+      "isImpactSurface": true,
+      "budget": {
+        "inDomain": true,
+        "f_I": 0.96116
+      },
+      "schedule": {
+        "fired": true,
+        "nStamp": 149,
+        "D_FLOOR_KM": 128.7,
+        "D_HI_KM": 2340.7,
+        "tExp": 4.5
+      },
+      "projectionSelfTestPx": 0,
+      "reliefAmp": 1.1809,
+      "stampCounts": {
+        "total": 149,
+        "litDisc": 57,
+        "measurable": 55,
+        "resolvable": 7,
+        "subFloor": 48
+      },
+      "thetaWallStats": {
+        "displayFloorDeg_rejected": 0.37000000000000005,
+        "samplingFloorDeg": 2.22,
+        "meshSpacingDeg": 1.0155,
+        "bakePitchDeg": 1.11,
+        "minThetaWallDeg": 0.7943,
+        "medianThetaWallDeg": 1.0981,
+        "maxThetaWallDeg": 6.0218,
+        "geometricFloorThetaWallDeg": 0.7878,
+        "allResolvableDisplayFloor": true,
+        "allResolvable": false
+      },
+      "deficitSplit": {
+        "failingTotal": 55,
+        "discriminantFloor": "sampling (mesh/bake Nyquist)",
+        "discriminantFloorDeg": 2.22,
+        "ownedByResolvable": 0.1273,
+        "ownedBySubFloor": 0.8727,
+        "failResolvableCount": 7,
+        "failSubFloorCount": 48,
+        "floorLadder": [
+          {
+            "floor": "display_0.37_subBand",
+            "floorDeg": 0.37,
+            "contentFrac": 0,
+            "contentCount": 0,
+            "instrumentCount": 55
+          },
+          {
+            "floor": "mesh_1sample",
+            "floorDeg": 1.0155,
+            "contentFrac": 0.4,
+            "contentCount": 22,
+            "instrumentCount": 33
+          },
+          {
+            "floor": "bake_1pitch",
+            "floorDeg": 1.11,
+            "contentFrac": 0.5273,
+            "contentCount": 29,
+            "instrumentCount": 26
+          },
+          {
+            "floor": "mesh_Nyquist_2x",
+            "floorDeg": 2.0311,
+            "contentFrac": 0.8545,
+            "contentCount": 47,
+            "instrumentCount": 8
+          },
+          {
+            "floor": "bake_Nyquist_2texel",
+            "floorDeg": 2.22,
+            "contentFrac": 0.8727,
+            "contentCount": 48,
+            "instrumentCount": 7
+          }
+        ]
+      },
+      "carrierSignal": {
+        "nStampsWithCarrier": 57,
+        "medianWallSlope_reliefPerRad": 5.6838,
+        "medianCarrierTiltDeg": 38.027,
+        "medianCarrierTiltUnclampedDeg": 76.055,
+        "medianAsymCarrier_255_saturating": 131.49,
+        "medianAsymCarrier_bands_saturating": 3.094,
+        "fracCarrierGe1band_saturating": 0.947,
+        "signalPresentSlopeFloor_reliefPerRad": 0.12631,
+        "signalPresentTiltFloorDeg": 5.114,
+        "fracSlopeAboveFloor": 1,
+        "signalPresent": true,
+        "note": "wallSlope = |composited-relief tangent gradient| along sunward at the wall (relief-units/rad) — the un-saturated DATA signal. signalPresent now gates on wallSlope>SLOPE_FLOOR (a gate that CAN fire false), NOT the clamp-saturated carrierTilt (pinned ~30-40°, non-monotonic in slope — see carrierTiltDeg vs carrierTiltUnclampedDeg). The relief IS in the data (slope well above floor); asymCarrier_255 SATURATES at the Lambert ceiling so its magnitude is a ceiling, not linear — used only to show sign/presence."
+      },
+      "bakeLayer": {
+        "medianAttenAtWall_boxModel": 0.7446,
+        "medianCarrierPeakBand_preBake": 5.503,
+        "medianBakedPeakBand_postBake": 5.131,
+        "medianBakedTiltDeg": 36.399,
+        "note": "FIX-R2 issue 2: bake now attenuates the un-saturated wall SLOPE (bakedSlope = wallSlope·bestTexelFrac) BEFORE shading, then re-shades — not the post-shading saturated asymmetry. The best-texel box model still leaves both PEAK bands >>1 (the clamp/Lambert saturation absorbs a ~25% slope haircut), so this box model alone does not collapse the wall. But a full sub-texel bake SMEARS the arc over a texel (beyond the best-texel retained fraction), and the GPU CubeCamera bake is un-runnable headless — so bake is a STRUCTURAL, unexcluded co-owner of the model→measured residual (predicted median bakedPeakBand vs the arc-report measured peak of ~1-2 bands). Bake is NOT ruled out; the bake-vs-display sub-split is deferred to the live 256→512 falsifier."
+      },
+      "shadingQuant": {
+        "reliefAmp": 1.1809,
+        "reliefEnvelope": 2.1471,
+        "perturbAssumed": 0.55,
+        "lodMix": 1,
+        "medianScreenEffTiltDeg_meanMetric": 0.663,
+        "medianCarrierTiltDeg": 38.027,
+        "medianCarrierTiltUnclampedDeg": 76.055,
+        "medianTiltLossRatio_meanMetric": 54.6,
+        "measured_medianScreenAsym_bands": 0.004,
+        "measured_fracScreenGe1band": 0,
+        "note": "screenEffTilt_meanMetric = wall tilt backed out from the MEASURED detrended half-annulus MEAN reflectance asymmetry (real S2 pixels) via ΔL=2·sin(i)·sin(ψ). tiltLossRatio_meanMetric = clampedCarrierTilt/meanScreenTilt. MF-1: the MEAN dilutes a thin peak wall arc, so this loss is an UPPER bound; peakReconciliation supplies the honest peak-based loss (~7×). reliefAmp = perturb(0.55)·reliefEnvelope(R,g)·lodMix."
+      },
+      "peakReconciliation": {
+        "source": "evidence/S2/arc-report.json renders[].diagnostics_NOT_the_bar.gradientControlled",
+        "peakDiff_crater_fracGe1band": 0.828,
+        "peakDiff_flatControl_fracGe1band": 0.125,
+        "controlN": 200,
+        "craterExcessOverControl": 0.703,
+        "twoProportionZ": 14.08,
+        "pValue": "<1e-12",
+        "arcShadowOnScreenAtPeak": true,
+        "peakScreenTiltFloorDeg": 5.114,
+        "medianCarrierTiltDeg_clamped": 38.027,
+        "peakBasedTiltLossRatio": 7.44,
+        "detrendHalfMean_crater_mean_255": 1.25,
+        "detrendHalfMean_flatControl_mean_255": -0.21,
+        "note": "MF-1: the arc-report hand-waved the peak as \"indistinguishable from posterize/dither noise\". That is FALSE — the flat control fixes the dither/posterize outlier rate (pf), and the crater peak fraction pc is z>>3.29 above it, so the wall arc-shadow IS on screen at PEAK. The S2 FAIL is therefore PART metric-dilution (the frozen half-annulus MEAN averages a thin peak arc away) + PART display-attenuation (~clampedCarrierTilt/5.11° ≈ 7× residual), NOT a ~217× pure display loss. Even the MEAN detrended crater signal is 17× the flat control with correct sign (0.84 vs 0.05)."
+      },
+      "largestBasinAnchor": {
+        "centre": 27197,
+        "D_km": 984.01,
+        "thetaWallDeg": 6.0218,
+        "resolvable": true,
+        "carrierTiltDeg": 34.624,
+        "carrierTiltUnclampedDeg": 69.247,
+        "carrierAsym_255_saturating": 106.01,
+        "measuredScreenDetrend_255": 23.75,
+        "screenEffTiltDeg": 2.714,
+        "tiltLossRatio": 12.8,
+        "note": "The single largest basin (θ_wall well ABOVE the sampling floor — an unambiguous INSTRUMENT case): cross-check vs S2 arc-report.json largestBasinLand. Carrier tilt (clamped/shader-realized) is tens of degrees (data present) yet the realized MEAN-metric screen tilt is ~1–3° — an instrument residual (bake ⊕ display-scale, non-separable headlessly), but see peakReconciliation: at PEAK the arc-shadow does clear ≥1 band (metric-dilution is part of the MEAN gap)."
+      },
+      "metricHonesty": {
+        "partitionN": 7,
+        "frozenRawMean_mean_255": -1.61,
+        "frozenRawMean_fracGe1band": 0,
+        "detrended_mean_255": 4.55,
+        "detrended_fracGe1band": 0,
+        "detrended_fracPositiveSign": 0.571,
+        "note": "Frozen half-annulus MEAN vs gradient-detrended, both 8-bit. MF-1: the MEAN under-measures because a thin peak wall arc is averaged over the whole half-annulus — see peakReconciliation, where the arc-report PEAK diagnostic shows ≥1 band on ~80% of craters (vs 11% flat control, z>>3.29). So the MEAN metric is a real dilution contributor; it never substitutes for the deficit split (see deficitSplit — floor-bracketed, content-majority at the sampling floors; this note was corrected at the S3 adjudication seam, it previously carried a stale v1 literal)."
+      }
+    }
+  ],
+  "perStamp_seed1": [
+    {
+      "centre": 26977,
+      "D_km": 625.15,
+      "deltaDeg": 20.597,
+      "thetaWallDeg": 5.1491,
+      "resolvable": true,
+      "resolvableDisplay": true,
+      "incidenceDeg": 69.75,
+      "rProj": 61,
+      "carrier": {
+        "nWall": 243,
+        "wallSlope_reliefPerRad": 2.65972,
+        "carrierTiltDeg": 32.966,
+        "carrierTiltUnclampedDeg": 65.932,
+        "asymCarrier_255_saturating": 131.05,
+        "attenMean": 1,
+        "attenP05": 1,
+        "bakedTiltDeg": 32.966,
+        "carrierPeakBand": 6.126,
+        "bakedPeakBand": 6.126
+      },
+      "screen": {
+        "rawMeanDiff_255": 18.94,
+        "detrendDiff_255": 12.95,
+        "detrendDiff_bands": 0.305,
+        "screenEffTiltDeg": 1.551,
+        "showsBand": false
+      },
+      "tiltLossRatio": 21.2
+    },
+    {
+      "centre": 10960,
+      "D_km": 155.96,
+      "deltaDeg": 5.138,
+      "thetaWallDeg": 1.2846,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 68.5,
+      "rProj": 7.3,
+      "carrier": {
+        "nWall": 14,
+        "wallSlope_reliefPerRad": 3.63732,
+        "carrierTiltDeg": 35.956,
+        "carrierTiltUnclampedDeg": 71.913,
+        "asymCarrier_255_saturating": 158.93,
+        "attenMean": 0.8225,
+        "attenP05": 0.604,
+        "bakedTiltDeg": 34.171,
+        "carrierPeakBand": 6.556,
+        "bakedPeakBand": 6.271
+      },
+      "screen": {
+        "rawMeanDiff_255": 49.73,
+        "detrendDiff_255": -0.74,
+        "detrendDiff_bands": -0.017,
+        "screenEffTiltDeg": 0.09,
+        "showsBand": false
+      },
+      "tiltLossRatio": 400.5
+    },
+    {
+      "centre": 23500,
+      "D_km": 97.78,
+      "deltaDeg": 3.222,
+      "thetaWallDeg": 0.8054,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 38.3,
+      "rProj": 15,
+      "carrier": {
+        "nWall": 6,
+        "wallSlope_reliefPerRad": 2.04739,
+        "carrierTiltDeg": 59.876,
+        "carrierTiltUnclampedDeg": 59.876,
+        "asymCarrier_255_saturating": 109.21,
+        "attenMean": 0.594,
+        "attenP05": 0.388,
+        "bakedTiltDeg": 45.67,
+        "carrierPeakBand": 6.433,
+        "bakedPeakBand": 5.32
+      },
+      "screen": {
+        "rawMeanDiff_255": 35.68,
+        "detrendDiff_255": 1.24,
+        "detrendDiff_bands": 0.029,
+        "screenEffTiltDeg": 0.224,
+        "showsBand": false
+      },
+      "tiltLossRatio": 267
+    },
+    {
+      "centre": 19159,
+      "D_km": 109.34,
+      "deltaDeg": 3.602,
+      "thetaWallDeg": 0.9006,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 25.51,
+      "rProj": 9.7,
+      "carrier": {
+        "nWall": 8,
+        "wallSlope_reliefPerRad": 3.48627,
+        "carrierTiltDeg": 35.592,
+        "carrierTiltUnclampedDeg": 71.183,
+        "asymCarrier_255_saturating": 101.7,
+        "attenMean": 0.6468,
+        "attenP05": 0.431,
+        "bakedTiltDeg": 31.109,
+        "carrierPeakBand": 3.008,
+        "bakedPeakBand": 2.67
+      },
+      "screen": {
+        "rawMeanDiff_255": 36.43,
+        "detrendDiff_255": -1.59,
+        "detrendDiff_bands": -0.037,
+        "screenEffTiltDeg": 0.414,
+        "showsBand": false
+      },
+      "tiltLossRatio": 85.9
+    },
+    {
+      "centre": 28959,
+      "D_km": 203.94,
+      "deltaDeg": 6.719,
+      "thetaWallDeg": 1.6797,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 89.11,
+      "rProj": 11.6,
+      "carrier": {
+        "nWall": 28,
+        "wallSlope_reliefPerRad": 3.53445,
+        "carrierTiltDeg": 35.711,
+        "carrierTiltUnclampedDeg": 71.422,
+        "asymCarrier_255_saturating": 98.79,
+        "attenMean": 0.9408,
+        "attenP05": 0.782,
+        "bakedTiltDeg": 35.17,
+        "carrierPeakBand": 7.004,
+        "bakedPeakBand": 6.911
+      },
+      "screen": {
+        "rawMeanDiff_255": 6.66,
+        "detrendDiff_255": -5.85,
+        "detrendDiff_bands": -0.138,
+        "screenEffTiltDeg": 0.658,
+        "showsBand": false
+      },
+      "tiltLossRatio": 54.3
+    },
+    {
+      "centre": 32074,
+      "D_km": 98.97,
+      "deltaDeg": 3.261,
+      "thetaWallDeg": 0.8152,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 59.51,
+      "rProj": 13.3,
+      "carrier": {
+        "nWall": 8,
+        "wallSlope_reliefPerRad": 3.05018,
+        "carrierTiltDeg": 34.36,
+        "carrierTiltUnclampedDeg": 68.721,
+        "asymCarrier_255_saturating": 137.24,
+        "attenMean": 0.5996,
+        "attenP05": 0.3924,
+        "bakedTiltDeg": 56.993,
+        "carrierPeakBand": 5.836,
+        "bakedPeakBand": 8.672
+      },
+      "screen": {
+        "rawMeanDiff_255": 40.08,
+        "detrendDiff_255": 1.15,
+        "detrendDiff_bands": 0.027,
+        "screenEffTiltDeg": 0.151,
+        "showsBand": false
+      },
+      "tiltLossRatio": 228.3
+    },
+    {
+      "centre": 2862,
+      "D_km": 161.05,
+      "deltaDeg": 5.306,
+      "thetaWallDeg": 1.3265,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 40.27,
+      "rProj": 22,
+      "carrier": {
+        "nWall": 16,
+        "wallSlope_reliefPerRad": 2.34503,
+        "carrierTiltDeg": 31.567,
+        "carrierTiltUnclampedDeg": 63.134,
+        "asymCarrier_255_saturating": 102.98,
+        "attenMean": 0.838,
+        "attenP05": 0.623,
+        "bakedTiltDeg": 58.846,
+        "carrierPeakBand": 4.061,
+        "bakedPeakBand": 6.639
+      },
+      "screen": {
+        "rawMeanDiff_255": 20.67,
+        "detrendDiff_255": -0.93,
+        "detrendDiff_bands": -0.022,
+        "screenEffTiltDeg": 0.161,
+        "showsBand": false
+      },
+      "tiltLossRatio": 196.2
+    },
+    {
+      "centre": 35284,
+      "D_km": 254.45,
+      "deltaDeg": 8.383,
+      "thetaWallDeg": 2.0958,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 85.54,
+      "rProj": 25.3,
+      "carrier": {
+        "nWall": 37,
+        "wallSlope_reliefPerRad": 4.11565,
+        "carrierTiltDeg": 36.95,
+        "carrierTiltUnclampedDeg": 73.9,
+        "asymCarrier_255_saturating": 109.62,
+        "attenMean": 0.9969,
+        "attenP05": 0.9691,
+        "bakedTiltDeg": 36.926,
+        "carrierPeakBand": 7.191,
+        "bakedPeakBand": 7.187
+      },
+      "screen": {
+        "rawMeanDiff_255": -1.8,
+        "detrendDiff_255": 1.55,
+        "detrendDiff_bands": 0.037,
+        "screenEffTiltDeg": 0.175,
+        "showsBand": false
+      },
+      "tiltLossRatio": 211.3
+    },
+    {
+      "centre": 25259,
+      "D_km": 119.35,
+      "deltaDeg": 3.932,
+      "thetaWallDeg": 0.9831,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 41.43,
+      "rProj": 10,
+      "carrier": {
+        "nWall": 10,
+        "wallSlope_reliefPerRad": 4.17482,
+        "carrierTiltDeg": 37.058,
+        "carrierTiltUnclampedDeg": 74.116,
+        "asymCarrier_255_saturating": 144.66,
+        "attenMean": 0.6896,
+        "attenP05": 0.468,
+        "bakedTiltDeg": 33.788,
+        "carrierPeakBand": 4.785,
+        "bakedPeakBand": 4.416
+      },
+      "screen": {
+        "rawMeanDiff_255": 23.65,
+        "detrendDiff_255": -1.46,
+        "detrendDiff_bands": -0.034,
+        "screenEffTiltDeg": 0.248,
+        "showsBand": false
+      },
+      "tiltLossRatio": 149.4
+    },
+    {
+      "centre": 7585,
+      "D_km": 105.3,
+      "deltaDeg": 3.469,
+      "thetaWallDeg": 0.8673,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 29.11,
+      "rProj": 15.7,
+      "carrier": {
+        "nWall": 7,
+        "wallSlope_reliefPerRad": 4.16803,
+        "carrierTiltDeg": 37.046,
+        "carrierTiltUnclampedDeg": 74.092,
+        "asymCarrier_255_saturating": 96.21,
+        "attenMean": 0.6287,
+        "attenP05": 0.416,
+        "bakedTiltDeg": 32.807,
+        "carrierPeakBand": 3.517,
+        "bakedPeakBand": 3.163
+      },
+      "screen": {
+        "rawMeanDiff_255": 39.98,
+        "detrendDiff_255": 1.67,
+        "detrendDiff_bands": 0.039,
+        "screenEffTiltDeg": 0.385,
+        "showsBand": false
+      },
+      "tiltLossRatio": 96.2
+    },
+    {
+      "centre": 31181,
+      "D_km": 183.98,
+      "deltaDeg": 6.061,
+      "thetaWallDeg": 1.5154,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 57.97,
+      "rProj": 16.1,
+      "carrier": {
+        "nWall": 20,
+        "wallSlope_reliefPerRad": 3.35512,
+        "carrierTiltDeg": 35.251,
+        "carrierTiltUnclampedDeg": 70.502,
+        "asymCarrier_255_saturating": 123.06,
+        "attenMean": 0.8993,
+        "attenP05": 0.708,
+        "bakedTiltDeg": 34.254,
+        "carrierPeakBand": 5.871,
+        "bakedPeakBand": 5.726
+      },
+      "screen": {
+        "rawMeanDiff_255": 5.99,
+        "detrendDiff_255": -4.21,
+        "detrendDiff_bands": -0.099,
+        "screenEffTiltDeg": 0.558,
+        "showsBand": false
+      },
+      "tiltLossRatio": 63.2
+    },
+    {
+      "centre": 30817,
+      "D_km": 347.54,
+      "deltaDeg": 11.45,
+      "thetaWallDeg": 2.8626,
+      "resolvable": true,
+      "resolvableDisplay": true,
+      "incidenceDeg": 61.98,
+      "rProj": 22.2,
+      "carrier": {
+        "nWall": 79,
+        "wallSlope_reliefPerRad": 2.96165,
+        "carrierTiltDeg": 34.072,
+        "carrierTiltUnclampedDeg": 68.144,
+        "asymCarrier_255_saturating": 132.41,
+        "attenMean": 1,
+        "attenP05": 1,
+        "bakedTiltDeg": 34.072,
+        "carrierPeakBand": 5.935,
+        "bakedPeakBand": 5.935
+      },
+      "screen": {
+        "rawMeanDiff_255": 1.89,
+        "detrendDiff_255": -1,
+        "detrendDiff_bands": -0.024,
+        "screenEffTiltDeg": 0.128,
+        "showsBand": false
+      },
+      "tiltLossRatio": 267.2
+    },
+    {
+      "centre": 3949,
+      "D_km": 100.96,
+      "deltaDeg": 3.326,
+      "thetaWallDeg": 0.8316,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 72.71,
+      "rProj": 2.6,
+      "carrier": {
+        "nWall": 6,
+        "wallSlope_reliefPerRad": 3.40052,
+        "carrierTiltDeg": 35.372,
+        "carrierTiltUnclampedDeg": 70.743,
+        "asymCarrier_255_saturating": 122.98,
+        "attenMean": 0.6089,
+        "attenP05": 0.4,
+        "bakedTiltDeg": 30.077,
+        "carrierPeakBand": 6.632,
+        "bakedPeakBand": 5.742
+      },
+      "screen": {
+        "rawMeanDiff_255": 5.22,
+        "detrendDiff_255": 2.21,
+        "detrendDiff_bands": 0.052,
+        "screenEffTiltDeg": 0.26,
+        "showsBand": false
+      },
+      "tiltLossRatio": 136.1
+    },
+    {
+      "centre": 23542,
+      "D_km": 195.51,
+      "deltaDeg": 6.441,
+      "thetaWallDeg": 1.6103,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 48.83,
+      "rProj": 27.1,
+      "carrier": {
+        "nWall": 22,
+        "wallSlope_reliefPerRad": 3.5275,
+        "carrierTiltDeg": 35.694,
+        "carrierTiltUnclampedDeg": 71.388,
+        "asymCarrier_255_saturating": 136.87,
+        "attenMean": 0.9246,
+        "attenP05": 0.7507,
+        "bakedTiltDeg": 34.993,
+        "carrierPeakBand": 5.27,
+        "bakedPeakBand": 5.18
+      },
+      "screen": {
+        "rawMeanDiff_255": 60.01,
+        "detrendDiff_255": 3.88,
+        "detrendDiff_bands": 0.091,
+        "screenEffTiltDeg": 0.579,
+        "showsBand": false
+      },
+      "tiltLossRatio": 61.6
+    },
+    {
+      "centre": 33396,
+      "D_km": 141.32,
+      "deltaDeg": 4.656,
+      "thetaWallDeg": 1.164,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 62.87,
+      "rProj": 16.7,
+      "carrier": {
+        "nWall": 12,
+        "wallSlope_reliefPerRad": 1.85636,
+        "carrierTiltDeg": 57.383,
+        "carrierTiltUnclampedDeg": 57.383,
+        "asymCarrier_255_saturating": 66.67,
+        "attenMean": 0.7737,
+        "attenP05": 0.5496,
+        "bakedTiltDeg": 50.406,
+        "carrierPeakBand": 8.996,
+        "bakedPeakBand": 8.23
+      },
+      "screen": {
+        "rawMeanDiff_255": 8.63,
+        "detrendDiff_255": -3.95,
+        "detrendDiff_bands": -0.093,
+        "screenEffTiltDeg": 0.498,
+        "showsBand": false
+      },
+      "tiltLossRatio": 115.2
+    },
+    {
+      "centre": 9726,
+      "D_km": 138.54,
+      "deltaDeg": 4.565,
+      "thetaWallDeg": 1.1411,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 44.78,
+      "rProj": 1.2,
+      "carrier": {
+        "nWall": 12,
+        "wallSlope_reliefPerRad": 4.01037,
+        "carrierTiltDeg": 36.75,
+        "carrierTiltUnclampedDeg": 73.5,
+        "asymCarrier_255_saturating": 137.22,
+        "attenMean": 0.7638,
+        "attenP05": 0.5391,
+        "bakedTiltDeg": 34.402,
+        "carrierPeakBand": 5.057,
+        "bakedPeakBand": 4.776
+      },
+      "screen": null,
+      "tiltLossRatio": null
+    },
+    {
+      "centre": 4886,
+      "D_km": 411,
+      "deltaDeg": 13.541,
+      "thetaWallDeg": 3.3852,
+      "resolvable": true,
+      "resolvableDisplay": true,
+      "incidenceDeg": 50.79,
+      "rProj": 43.7,
+      "carrier": {
+        "nWall": 105,
+        "wallSlope_reliefPerRad": 2.92414,
+        "carrierTiltDeg": 33.945,
+        "carrierTiltUnclampedDeg": 67.89,
+        "asymCarrier_255_saturating": 133.72,
+        "attenMean": 1,
+        "attenP05": 1,
+        "bakedTiltDeg": 33.945,
+        "carrierPeakBand": 5.192,
+        "bakedPeakBand": 5.192
+      },
+      "screen": {
+        "rawMeanDiff_255": 8.25,
+        "detrendDiff_255": -0.99,
+        "detrendDiff_bands": -0.023,
+        "screenEffTiltDeg": 0.144,
+        "showsBand": false
+      },
+      "tiltLossRatio": 235.9
+    },
+    {
+      "centre": 3414,
+      "D_km": 329.67,
+      "deltaDeg": 10.861,
+      "thetaWallDeg": 2.7154,
+      "resolvable": true,
+      "resolvableDisplay": true,
+      "incidenceDeg": 45.08,
+      "rProj": 15.1,
+      "carrier": {
+        "nWall": 70,
+        "wallSlope_reliefPerRad": 4.0013,
+        "carrierTiltDeg": 36.732,
+        "carrierTiltUnclampedDeg": 73.464,
+        "asymCarrier_255_saturating": 130.19,
+        "attenMean": 1,
+        "attenP05": 1,
+        "bakedTiltDeg": 36.732,
+        "carrierPeakBand": 5.082,
+        "bakedPeakBand": 5.082
+      },
+      "screen": {
+        "rawMeanDiff_255": -3.34,
+        "detrendDiff_255": -3.81,
+        "detrendDiff_bands": -0.09,
+        "screenEffTiltDeg": 0.604,
+        "showsBand": false
+      },
+      "tiltLossRatio": 60.8
+    },
+    {
+      "centre": 19487,
+      "D_km": 139.1,
+      "deltaDeg": 4.583,
+      "thetaWallDeg": 1.1457,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 84.24,
+      "rProj": 4.5,
+      "carrier": {
+        "nWall": 12,
+        "wallSlope_reliefPerRad": 4.40248,
+        "carrierTiltDeg": 37.45,
+        "carrierTiltUnclampedDeg": 74.899,
+        "asymCarrier_255_saturating": 123.06,
+        "attenMean": 0.7658,
+        "attenP05": 0.5411,
+        "bakedTiltDeg": 35.295,
+        "carrierPeakBand": 7.26,
+        "bakedPeakBand": 6.898
+      },
+      "screen": {
+        "rawMeanDiff_255": 30.72,
+        "detrendDiff_255": -1.67,
+        "detrendDiff_bands": -0.039,
+        "screenEffTiltDeg": 0.188,
+        "showsBand": false
+      },
+      "tiltLossRatio": 199
+    },
+    {
+      "centre": 19285,
+      "D_km": 102.48,
+      "deltaDeg": 3.376,
+      "thetaWallDeg": 0.8441,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 32.97,
+      "rProj": 15.9,
+      "carrier": {
+        "nWall": 6,
+        "wallSlope_reliefPerRad": 4.26541,
+        "carrierTiltDeg": 37.219,
+        "carrierTiltUnclampedDeg": 74.437,
+        "asymCarrier_255_saturating": 104.17,
+        "attenMean": 0.6159,
+        "attenP05": 0.4054,
+        "bakedTiltDeg": 32.833,
+        "carrierPeakBand": 3.95,
+        "bakedPeakBand": 3.541
+      },
+      "screen": {
+        "rawMeanDiff_255": 38.57,
+        "detrendDiff_255": 0.45,
+        "detrendDiff_bands": 0.011,
+        "screenEffTiltDeg": 0.092,
+        "showsBand": false
+      },
+      "tiltLossRatio": 403.6
+    },
+    {
+      "centre": 19178,
+      "D_km": 131.15,
+      "deltaDeg": 4.321,
+      "thetaWallDeg": 1.0802,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 74.68,
+      "rProj": 6.8,
+      "carrier": {
+        "nWall": 12,
+        "wallSlope_reliefPerRad": 4.66528,
+        "carrierTiltDeg": 37.857,
+        "carrierTiltUnclampedDeg": 75.714,
+        "asymCarrier_255_saturating": 148.51,
+        "attenMean": 0.7364,
+        "attenP05": 0.512,
+        "bakedTiltDeg": 35.463,
+        "carrierPeakBand": 7.103,
+        "bakedPeakBand": 6.715
+      },
+      "screen": {
+        "rawMeanDiff_255": 55.44,
+        "detrendDiff_255": 0.07,
+        "detrendDiff_bands": 0.002,
+        "screenEffTiltDeg": 0.008,
+        "showsBand": false
+      },
+      "tiltLossRatio": 4877.7
+    },
+    {
+      "centre": 18510,
+      "D_km": 104.38,
+      "deltaDeg": 3.439,
+      "thetaWallDeg": 0.8597,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 25,
+      "rProj": 16.5,
+      "carrier": {
+        "nWall": 6,
+        "wallSlope_reliefPerRad": 4.48354,
+        "carrierTiltDeg": 37.58,
+        "carrierTiltUnclampedDeg": 75.16,
+        "asymCarrier_255_saturating": 75.37,
+        "attenMean": 0.6245,
+        "attenP05": 0.4125,
+        "bakedTiltDeg": 33.506,
+        "carrierPeakBand": 3.093,
+        "bakedPeakBand": 2.8
+      },
+      "screen": {
+        "rawMeanDiff_255": 24.62,
+        "detrendDiff_255": -1.28,
+        "detrendDiff_bands": -0.03,
+        "screenEffTiltDeg": 0.34,
+        "showsBand": false
+      },
+      "tiltLossRatio": 110.4
+    },
+    {
+      "centre": 1833,
+      "D_km": 101.32,
+      "deltaDeg": 3.338,
+      "thetaWallDeg": 0.8345,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 44.59,
+      "rProj": 13,
+      "carrier": {
+        "nWall": 7,
+        "wallSlope_reliefPerRad": 5.23393,
+        "carrierTiltDeg": 38.606,
+        "carrierTiltUnclampedDeg": 77.212,
+        "asymCarrier_255_saturating": 149.77,
+        "attenMean": 0.6105,
+        "attenP05": 0.401,
+        "bakedTiltDeg": 34.803,
+        "carrierPeakBand": 5.257,
+        "bakedPeakBand": 4.809
+      },
+      "screen": {
+        "rawMeanDiff_255": 17.79,
+        "detrendDiff_255": -3.84,
+        "detrendDiff_bands": -0.09,
+        "screenEffTiltDeg": 0.615,
+        "showsBand": false
+      },
+      "tiltLossRatio": 62.8
+    },
+    {
+      "centre": 20136,
+      "D_km": 341.27,
+      "deltaDeg": 11.244,
+      "thetaWallDeg": 2.8109,
+      "resolvable": true,
+      "resolvableDisplay": true,
+      "incidenceDeg": 50.51,
+      "rProj": 42.3,
+      "carrier": {
+        "nWall": 76,
+        "wallSlope_reliefPerRad": 3.06596,
+        "carrierTiltDeg": 34.41,
+        "carrierTiltUnclampedDeg": 68.82,
+        "asymCarrier_255_saturating": 139.07,
+        "attenMean": 1,
+        "attenP05": 1,
+        "bakedTiltDeg": 34.41,
+        "carrierPeakBand": 5.234,
+        "bakedPeakBand": 5.234
+      },
+      "screen": {
+        "rawMeanDiff_255": 59.95,
+        "detrendDiff_255": 4.53,
+        "detrendDiff_bands": 0.107,
+        "screenEffTiltDeg": 0.659,
+        "showsBand": false
+      },
+      "tiltLossRatio": 52.2
+    },
+    {
+      "centre": 33637,
+      "D_km": 108.12,
+      "deltaDeg": 3.562,
+      "thetaWallDeg": 0.8906,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 66.24,
+      "rProj": 14.2,
+      "carrier": {
+        "nWall": 8,
+        "wallSlope_reliefPerRad": 4.08515,
+        "carrierTiltDeg": 36.893,
+        "carrierTiltUnclampedDeg": 73.786,
+        "asymCarrier_255_saturating": 160.21,
+        "attenMean": 0.6414,
+        "attenP05": 0.4263,
+        "bakedTiltDeg": 32.806,
+        "carrierPeakBand": 6.593,
+        "bakedPeakBand": 5.95
+      },
+      "screen": {
+        "rawMeanDiff_255": 0.19,
+        "detrendDiff_255": -5.82,
+        "detrendDiff_bands": -0.137,
+        "screenEffTiltDeg": 0.715,
+        "showsBand": false
+      },
+      "tiltLossRatio": 51.6
+    },
+    {
+      "centre": 9653,
+      "D_km": 183.37,
+      "deltaDeg": 6.041,
+      "thetaWallDeg": 1.5103,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 12.11,
+      "rProj": 21.5,
+      "carrier": {
+        "nWall": 20,
+        "wallSlope_reliefPerRad": 3.06007,
+        "carrierTiltDeg": 34.392,
+        "carrierTiltUnclampedDeg": 68.783,
+        "asymCarrier_255_saturating": 29.89,
+        "attenMean": 0.8978,
+        "attenP05": 0.7057,
+        "bakedTiltDeg": 33.308,
+        "carrierPeakBand": 1.422,
+        "bakedPeakBand": 1.383
+      },
+      "screen": {
+        "rawMeanDiff_255": 7.46,
+        "detrendDiff_255": 0.13,
+        "detrendDiff_bands": 0.003,
+        "screenEffTiltDeg": 0.071,
+        "showsBand": false
+      },
+      "tiltLossRatio": 484.2
+    },
+    {
+      "centre": 812,
+      "D_km": 101.7,
+      "deltaDeg": 3.351,
+      "thetaWallDeg": 0.8377,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 52.9,
+      "rProj": 12.3,
+      "carrier": {
+        "nWall": 6,
+        "wallSlope_reliefPerRad": 2.20985,
+        "carrierTiltDeg": 30.869,
+        "carrierTiltUnclampedDeg": 61.739,
+        "asymCarrier_255_saturating": 120.51,
+        "attenMean": 0.6123,
+        "attenP05": 0.4026,
+        "bakedTiltDeg": 48.717,
+        "carrierPeakBand": 4.911,
+        "bakedPeakBand": 7.193
+      },
+      "screen": {
+        "rawMeanDiff_255": -4.28,
+        "detrendDiff_255": -11.91,
+        "detrendDiff_bands": -0.28,
+        "screenEffTiltDeg": 1.677,
+        "showsBand": false
+      },
+      "tiltLossRatio": 18.4
+    },
+    {
+      "centre": 19450,
+      "D_km": 100.03,
+      "deltaDeg": 3.296,
+      "thetaWallDeg": 0.8239,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 40.54,
+      "rProj": 14.5,
+      "carrier": {
+        "nWall": 6,
+        "wallSlope_reliefPerRad": 4.0422,
+        "carrierTiltDeg": 36.811,
+        "carrierTiltUnclampedDeg": 73.623,
+        "asymCarrier_255_saturating": 129.81,
+        "attenMean": 0.6045,
+        "attenP05": 0.3963,
+        "bakedTiltDeg": 32.037,
+        "carrierPeakBand": 4.674,
+        "bakedPeakBand": 4.138
+      },
+      "screen": {
+        "rawMeanDiff_255": 43.68,
+        "detrendDiff_255": 3.21,
+        "detrendDiff_bands": 0.076,
+        "screenEffTiltDeg": 0.555,
+        "showsBand": false
+      },
+      "tiltLossRatio": 66.3
+    },
+    {
+      "centre": 8234,
+      "D_km": 174.02,
+      "deltaDeg": 5.733,
+      "thetaWallDeg": 1.4333,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 17.79,
+      "rProj": 18.9,
+      "carrier": {
+        "nWall": 17,
+        "wallSlope_reliefPerRad": 4.55558,
+        "carrierTiltDeg": 37.692,
+        "carrierTiltUnclampedDeg": 75.385,
+        "asymCarrier_255_saturating": 54.72,
+        "attenMean": 0.8744,
+        "attenP05": 0.671,
+        "bakedTiltDeg": 36.697,
+        "carrierPeakBand": 2.241,
+        "bakedPeakBand": 2.191
+      },
+      "screen": {
+        "rawMeanDiff_255": 15.69,
+        "detrendDiff_255": 0.16,
+        "detrendDiff_bands": 0.004,
+        "screenEffTiltDeg": 0.059,
+        "showsBand": false
+      },
+      "tiltLossRatio": 635.2
+    },
+    {
+      "centre": 36530,
+      "D_km": 261.76,
+      "deltaDeg": 8.624,
+      "thetaWallDeg": 2.156,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 80.5,
+      "rProj": 31.5,
+      "carrier": {
+        "nWall": 43,
+        "wallSlope_reliefPerRad": 3.89647,
+        "carrierTiltDeg": 36.522,
+        "carrierTiltUnclampedDeg": 73.045,
+        "asymCarrier_255_saturating": 121.88,
+        "attenMean": 0.9992,
+        "attenP05": 0.9963,
+        "bakedTiltDeg": 36.516,
+        "carrierPeakBand": 7.044,
+        "bakedPeakBand": 7.043
+      },
+      "screen": {
+        "rawMeanDiff_255": -4.91,
+        "detrendDiff_255": -0.43,
+        "detrendDiff_bands": -0.01,
+        "screenEffTiltDeg": 0.049,
+        "showsBand": false
+      },
+      "tiltLossRatio": 741.7
+    },
+    {
+      "centre": 9601,
+      "D_km": 147.51,
+      "deltaDeg": 4.86,
+      "thetaWallDeg": 1.215,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 39.48,
+      "rProj": 19.5,
+      "carrier": {
+        "nWall": 14,
+        "wallSlope_reliefPerRad": 3.65241,
+        "carrierTiltDeg": 35.991,
+        "carrierTiltUnclampedDeg": 71.983,
+        "asymCarrier_255_saturating": 129.17,
+        "attenMean": 0.795,
+        "attenP05": 0.5726,
+        "bakedTiltDeg": 33.875,
+        "carrierPeakBand": 4.483,
+        "bakedPeakBand": 4.252
+      },
+      "screen": {
+        "rawMeanDiff_255": 49.68,
+        "detrendDiff_255": 2.7,
+        "detrendDiff_bands": 0.064,
+        "screenEffTiltDeg": 0.477,
+        "showsBand": false
+      },
+      "tiltLossRatio": 75.4
+    },
+    {
+      "centre": 24079,
+      "D_km": 96.3,
+      "deltaDeg": 3.173,
+      "thetaWallDeg": 0.7932,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 85.08,
+      "rProj": 4.5,
+      "carrier": {
+        "nWall": 6,
+        "wallSlope_reliefPerRad": 3.23943,
+        "carrierTiltDeg": 34.931,
+        "carrierTiltUnclampedDeg": 69.861,
+        "asymCarrier_255_saturating": 122.68,
+        "attenMean": 0.5869,
+        "attenP05": 0.3826,
+        "bakedTiltDeg": 58.002,
+        "carrierPeakBand": 6.846,
+        "bakedPeakBand": 10.139
+      },
+      "screen": {
+        "rawMeanDiff_255": 22.26,
+        "detrendDiff_255": -1.5,
+        "detrendDiff_bands": -0.035,
+        "screenEffTiltDeg": 0.169,
+        "showsBand": false
+      },
+      "tiltLossRatio": 206.3
+    },
+    {
+      "centre": 30859,
+      "D_km": 112.92,
+      "deltaDeg": 3.72,
+      "thetaWallDeg": 0.9301,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 56.19,
+      "rProj": 10.4,
+      "carrier": {
+        "nWall": 8,
+        "wallSlope_reliefPerRad": 2.23171,
+        "carrierTiltDeg": 30.987,
+        "carrierTiltUnclampedDeg": 61.973,
+        "asymCarrier_255_saturating": 107.76,
+        "attenMean": 0.6624,
+        "attenP05": 0.444,
+        "bakedTiltDeg": 51.214,
+        "carrierPeakBand": 5.133,
+        "bakedPeakBand": 7.772
+      },
+      "screen": {
+        "rawMeanDiff_255": 24.23,
+        "detrendDiff_255": -3.54,
+        "detrendDiff_bands": -0.083,
+        "screenEffTiltDeg": 0.479,
+        "showsBand": false
+      },
+      "tiltLossRatio": 64.7
+    },
+    {
+      "centre": 9289,
+      "D_km": 333.54,
+      "deltaDeg": 10.989,
+      "thetaWallDeg": 2.7472,
+      "resolvable": true,
+      "resolvableDisplay": true,
+      "incidenceDeg": 21.09,
+      "rProj": 28.2,
+      "carrier": {
+        "nWall": 70,
+        "wallSlope_reliefPerRad": 3.85273,
+        "carrierTiltDeg": 36.432,
+        "carrierTiltUnclampedDeg": 72.863,
+        "asymCarrier_255_saturating": 66.58,
+        "attenMean": 1,
+        "attenP05": 1,
+        "bakedTiltDeg": 36.432,
+        "carrierPeakBand": 2.565,
+        "bakedPeakBand": 2.565
+      },
+      "screen": {
+        "rawMeanDiff_255": 24.54,
+        "detrendDiff_255": 2.01,
+        "detrendDiff_bands": 0.047,
+        "screenEffTiltDeg": 0.628,
+        "showsBand": false
+      },
+      "tiltLossRatio": 58
+    },
+    {
+      "centre": 2653,
+      "D_km": 138.02,
+      "deltaDeg": 4.547,
+      "thetaWallDeg": 1.1368,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 66.37,
+      "rProj": 7.2,
+      "carrier": {
+        "nWall": 11,
+        "wallSlope_reliefPerRad": 3.36991,
+        "carrierTiltDeg": 35.291,
+        "carrierTiltUnclampedDeg": 70.582,
+        "asymCarrier_255_saturating": 151.87,
+        "attenMean": 0.7619,
+        "attenP05": 0.5372,
+        "bakedTiltDeg": 32.586,
+        "carrierPeakBand": 6.351,
+        "bakedPeakBand": 5.921
+      },
+      "screen": {
+        "rawMeanDiff_255": -6.38,
+        "detrendDiff_255": -4.95,
+        "detrendDiff_bands": -0.116,
+        "screenEffTiltDeg": 0.607,
+        "showsBand": false
+      },
+      "tiltLossRatio": 58.2
+    },
+    {
+      "centre": 3805,
+      "D_km": 159.42,
+      "deltaDeg": 5.252,
+      "thetaWallDeg": 1.3131,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 71.92,
+      "rProj": 4.5,
+      "carrier": {
+        "nWall": 14,
+        "wallSlope_reliefPerRad": 4.31047,
+        "carrierTiltDeg": 37.296,
+        "carrierTiltUnclampedDeg": 74.592,
+        "asymCarrier_255_saturating": 156.8,
+        "attenMean": 0.8331,
+        "attenP05": 0.617,
+        "bakedTiltDeg": 35.848,
+        "carrierPeakBand": 6.912,
+        "bakedPeakBand": 6.681
+      },
+      "screen": {
+        "rawMeanDiff_255": -24.18,
+        "detrendDiff_255": -4.74,
+        "detrendDiff_bands": -0.112,
+        "screenEffTiltDeg": 0.561,
+        "showsBand": false
+      },
+      "tiltLossRatio": 66.5
+    },
+    {
+      "centre": 3904,
+      "D_km": 244.79,
+      "deltaDeg": 8.065,
+      "thetaWallDeg": 2.0162,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 36.52,
+      "rProj": 34.5,
+      "carrier": {
+        "nWall": 37,
+        "wallSlope_reliefPerRad": 4.44718,
+        "carrierTiltDeg": 37.522,
+        "carrierTiltUnclampedDeg": 75.044,
+        "asymCarrier_255_saturating": 99.82,
+        "attenMean": 0.9916,
+        "attenP05": 0.9334,
+        "bakedTiltDeg": 37.461,
+        "carrierPeakBand": 4.349,
+        "bakedPeakBand": 4.343
+      },
+      "screen": {
+        "rawMeanDiff_255": 25.73,
+        "detrendDiff_255": 2.26,
+        "detrendDiff_bands": 0.053,
+        "screenEffTiltDeg": 0.426,
+        "showsBand": false
+      },
+      "tiltLossRatio": 88.1
+    },
+    {
+      "centre": 28634,
+      "D_km": 113.41,
+      "deltaDeg": 3.736,
+      "thetaWallDeg": 0.9341,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 53.72,
+      "rProj": 16.2,
+      "carrier": {
+        "nWall": 8,
+        "wallSlope_reliefPerRad": 2.06873,
+        "carrierTiltDeg": 30.067,
+        "carrierTiltUnclampedDeg": 60.134,
+        "asymCarrier_255_saturating": 145.73,
+        "attenMean": 0.6645,
+        "attenP05": 0.446,
+        "bakedTiltDeg": 49.166,
+        "carrierPeakBand": 4.847,
+        "bakedPeakBand": 7.319
+      },
+      "screen": {
+        "rawMeanDiff_255": 51.99,
+        "detrendDiff_255": -2.39,
+        "detrendDiff_bands": -0.056,
+        "screenEffTiltDeg": 0.333,
+        "showsBand": false
+      },
+      "tiltLossRatio": 90.4
+    },
+    {
+      "centre": 1990,
+      "D_km": 108.22,
+      "deltaDeg": 3.565,
+      "thetaWallDeg": 0.8913,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 43.91,
+      "rProj": 13.9,
+      "carrier": {
+        "nWall": 8,
+        "wallSlope_reliefPerRad": 3.9081,
+        "carrierTiltDeg": 36.546,
+        "carrierTiltUnclampedDeg": 73.092,
+        "asymCarrier_255_saturating": 152.02,
+        "attenMean": 0.6418,
+        "attenP05": 0.427,
+        "bakedTiltDeg": 32.328,
+        "carrierPeakBand": 4.956,
+        "bakedPeakBand": 4.451
+      },
+      "screen": {
+        "rawMeanDiff_255": 5.18,
+        "detrendDiff_255": -2.64,
+        "detrendDiff_bands": -0.062,
+        "screenEffTiltDeg": 0.428,
+        "showsBand": false
+      },
+      "tiltLossRatio": 85.4
+    },
+    {
+      "centre": 5223,
+      "D_km": 190.61,
+      "deltaDeg": 6.28,
+      "thetaWallDeg": 1.57,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 45.83,
+      "rProj": 4.1,
+      "carrier": {
+        "nWall": 20,
+        "wallSlope_reliefPerRad": 5.22749,
+        "carrierTiltDeg": 38.598,
+        "carrierTiltUnclampedDeg": 77.197,
+        "asymCarrier_255_saturating": 151.23,
+        "attenMean": 0.9143,
+        "attenP05": 0.7324,
+        "bakedTiltDeg": 38.021,
+        "carrierPeakBand": 5.369,
+        "bakedPeakBand": 5.301
+      },
+      "screen": {
+        "rawMeanDiff_255": 29.39,
+        "detrendDiff_255": 10.95,
+        "detrendDiff_bands": 0.258,
+        "screenEffTiltDeg": 1.715,
+        "showsBand": false
+      },
+      "tiltLossRatio": 22.5
+    },
+    {
+      "centre": 9653,
+      "D_km": 161.18,
+      "deltaDeg": 5.31,
+      "thetaWallDeg": 1.3276,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 12.11,
+      "rProj": 18.9,
+      "carrier": {
+        "nWall": 15,
+        "wallSlope_reliefPerRad": 3.70823,
+        "carrierTiltDeg": 36.118,
+        "carrierTiltUnclampedDeg": 72.237,
+        "asymCarrier_255_saturating": 36.53,
+        "attenMean": 0.8384,
+        "attenP05": 0.623,
+        "bakedTiltDeg": 34.544,
+        "carrierPeakBand": 1.484,
+        "bakedPeakBand": 1.428
+      },
+      "screen": {
+        "rawMeanDiff_255": 8.26,
+        "detrendDiff_255": -0.03,
+        "detrendDiff_bands": -0.001,
+        "screenEffTiltDeg": 0.017,
+        "showsBand": false
+      },
+      "tiltLossRatio": 2116.5
+    },
+    {
+      "centre": 30469,
+      "D_km": 157.24,
+      "deltaDeg": 5.181,
+      "thetaWallDeg": 1.2951,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 52.63,
+      "rProj": 18.1,
+      "carrier": {
+        "nWall": 16,
+        "wallSlope_reliefPerRad": 2.58986,
+        "carrierTiltDeg": 32.68,
+        "carrierTiltUnclampedDeg": 65.359,
+        "asymCarrier_255_saturating": 145.75,
+        "attenMean": 0.8264,
+        "attenP05": 0.6088,
+        "bakedTiltDeg": 30.484,
+        "carrierPeakBand": 5.149,
+        "bakedPeakBand": 4.838
+      },
+      "screen": {
+        "rawMeanDiff_255": 8.9,
+        "detrendDiff_255": -5.08,
+        "detrendDiff_bands": -0.119,
+        "screenEffTiltDeg": 0.718,
+        "showsBand": false
+      },
+      "tiltLossRatio": 45.5
+    },
+    {
+      "centre": 22369,
+      "D_km": 119.74,
+      "deltaDeg": 3.945,
+      "thetaWallDeg": 0.9862,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 34.92,
+      "rProj": 18.5,
+      "carrier": {
+        "nWall": 10,
+        "wallSlope_reliefPerRad": 1.9812,
+        "carrierTiltDeg": 59.053,
+        "carrierTiltUnclampedDeg": 59.053,
+        "asymCarrier_255_saturating": 89.7,
+        "attenMean": 0.6911,
+        "attenP05": 0.4695,
+        "bakedTiltDeg": 49.056,
+        "carrierPeakBand": 5.891,
+        "bakedPeakBand": 5.188
+      },
+      "screen": {
+        "rawMeanDiff_255": 28.88,
+        "detrendDiff_255": 0.33,
+        "detrendDiff_bands": 0.008,
+        "screenEffTiltDeg": 0.066,
+        "showsBand": false
+      },
+      "tiltLossRatio": 901.2
+    },
+    {
+      "centre": 13243,
+      "D_km": 173.89,
+      "deltaDeg": 5.729,
+      "thetaWallDeg": 1.4322,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 79.48,
+      "rProj": 3.7,
+      "carrier": {
+        "nWall": 18,
+        "wallSlope_reliefPerRad": 3.97192,
+        "carrierTiltDeg": 36.674,
+        "carrierTiltUnclampedDeg": 73.349,
+        "asymCarrier_255_saturating": 128.98,
+        "attenMean": 0.8741,
+        "attenP05": 0.6703,
+        "bakedTiltDeg": 35.555,
+        "carrierPeakBand": 7.047,
+        "bakedPeakBand": 6.861
+      },
+      "screen": {
+        "rawMeanDiff_255": 44.09,
+        "detrendDiff_255": -0.57,
+        "detrendDiff_bands": -0.013,
+        "screenEffTiltDeg": 0.065,
+        "showsBand": false
+      },
+      "tiltLossRatio": 563.5
+    },
+    {
+      "centre": 23089,
+      "D_km": 97.18,
+      "deltaDeg": 3.202,
+      "thetaWallDeg": 0.8004,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 40.05,
+      "rProj": 14.8,
+      "carrier": {
+        "nWall": 6,
+        "wallSlope_reliefPerRad": 4.46108,
+        "carrierTiltDeg": 37.544,
+        "carrierTiltUnclampedDeg": 75.089,
+        "asymCarrier_255_saturating": 119.16,
+        "attenMean": 0.5911,
+        "attenP05": 0.386,
+        "bakedTiltDeg": 32.874,
+        "carrierPeakBand": 4.706,
+        "bakedPeakBand": 4.191
+      },
+      "screen": {
+        "rawMeanDiff_255": 43.19,
+        "detrendDiff_255": 1.98,
+        "detrendDiff_bands": 0.047,
+        "screenEffTiltDeg": 0.346,
+        "showsBand": false
+      },
+      "tiltLossRatio": 108.4
+    },
+    {
+      "centre": 922,
+      "D_km": 150.25,
+      "deltaDeg": 4.95,
+      "thetaWallDeg": 1.2376,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 51.93,
+      "rProj": 18.3,
+      "carrier": {
+        "nWall": 14,
+        "wallSlope_reliefPerRad": 3.78283,
+        "carrierTiltDeg": 36.283,
+        "carrierTiltUnclampedDeg": 72.566,
+        "asymCarrier_255_saturating": 148.16,
+        "attenMean": 0.8042,
+        "attenP05": 0.5829,
+        "bakedTiltDeg": 34.334,
+        "carrierPeakBand": 5.591,
+        "bakedPeakBand": 5.329
+      },
+      "screen": {
+        "rawMeanDiff_255": 4.83,
+        "detrendDiff_255": 1.77,
+        "detrendDiff_bands": 0.042,
+        "screenEffTiltDeg": 0.253,
+        "showsBand": false
+      },
+      "tiltLossRatio": 143.5
+    },
+    {
+      "centre": 27718,
+      "D_km": 178.03,
+      "deltaDeg": 5.865,
+      "thetaWallDeg": 1.4663,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 81.57,
+      "rProj": 12.3,
+      "carrier": {
+        "nWall": 20,
+        "wallSlope_reliefPerRad": 4.21985,
+        "carrierTiltDeg": 37.139,
+        "carrierTiltUnclampedDeg": 74.277,
+        "asymCarrier_255_saturating": 119.21,
+        "attenMean": 0.8848,
+        "attenP05": 0.686,
+        "bakedTiltDeg": 36.175,
+        "carrierPeakBand": 7.167,
+        "bakedPeakBand": 7.007
+      },
+      "screen": {
+        "rawMeanDiff_255": -8.33,
+        "detrendDiff_255": 11.54,
+        "detrendDiff_bands": 0.272,
+        "screenEffTiltDeg": 1.311,
+        "showsBand": false
+      },
+      "tiltLossRatio": 28.3
+    },
+    {
+      "centre": 959,
+      "D_km": 514.19,
+      "deltaDeg": 16.941,
+      "thetaWallDeg": 4.2352,
+      "resolvable": true,
+      "resolvableDisplay": true,
+      "incidenceDeg": 61.46,
+      "rProj": 58.2,
+      "carrier": {
+        "nWall": 167,
+        "wallSlope_reliefPerRad": 2.75199,
+        "carrierTiltDeg": 33.326,
+        "carrierTiltUnclampedDeg": 66.652,
+        "asymCarrier_255_saturating": 128.95,
+        "attenMean": 1,
+        "attenP05": 1,
+        "bakedTiltDeg": 33.326,
+        "carrierPeakBand": 5.792,
+        "bakedPeakBand": 5.792
+      },
+      "screen": {
+        "rawMeanDiff_255": 1.18,
+        "detrendDiff_255": 1.51,
+        "detrendDiff_bands": 0.035,
+        "screenEffTiltDeg": 0.193,
+        "showsBand": false
+      },
+      "tiltLossRatio": 172.8
+    },
+    {
+      "centre": 16615,
+      "D_km": 97.97,
+      "deltaDeg": 3.228,
+      "thetaWallDeg": 0.8069,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 79.24,
+      "rProj": 3.2,
+      "carrier": {
+        "nWall": 6,
+        "wallSlope_reliefPerRad": 2.97306,
+        "carrierTiltDeg": 34.11,
+        "carrierTiltUnclampedDeg": 68.22,
+        "asymCarrier_255_saturating": 141.31,
+        "attenMean": 0.5948,
+        "attenP05": 0.3889,
+        "bakedTiltDeg": 56.109,
+        "carrierPeakBand": 6.611,
+        "bakedPeakBand": 9.786
+      },
+      "screen": {
+        "rawMeanDiff_255": 24.98,
+        "detrendDiff_255": 2.05,
+        "detrendDiff_bands": 0.048,
+        "screenEffTiltDeg": 0.235,
+        "showsBand": false
+      },
+      "tiltLossRatio": 145.3
+    },
+    {
+      "centre": 9158,
+      "D_km": 107.21,
+      "deltaDeg": 3.532,
+      "thetaWallDeg": 0.883,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 31.89,
+      "rProj": 5.1,
+      "carrier": {
+        "nWall": 8,
+        "wallSlope_reliefPerRad": 3.10238,
+        "carrierTiltDeg": 34.524,
+        "carrierTiltUnclampedDeg": 69.047,
+        "asymCarrier_255_saturating": 116.44,
+        "attenMean": 0.6373,
+        "attenP05": 0.423,
+        "bakedTiltDeg": 59.001,
+        "carrierPeakBand": 3.593,
+        "bakedPeakBand": 5.434
+      },
+      "screen": {
+        "rawMeanDiff_255": 60.41,
+        "detrendDiff_255": 8.61,
+        "detrendDiff_bands": 0.203,
+        "screenEffTiltDeg": 1.831,
+        "showsBand": false
+      },
+      "tiltLossRatio": 18.9
+    },
+    {
+      "centre": 20539,
+      "D_km": 201.17,
+      "deltaDeg": 6.628,
+      "thetaWallDeg": 1.6569,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 31.41,
+      "rProj": 31.5,
+      "carrier": {
+        "nWall": 26,
+        "wallSlope_reliefPerRad": 3.84911,
+        "carrierTiltDeg": 36.424,
+        "carrierTiltUnclampedDeg": 72.848,
+        "asymCarrier_255_saturating": 102.14,
+        "attenMean": 0.9357,
+        "attenP05": 0.7717,
+        "bakedTiltDeg": 35.872,
+        "carrierPeakBand": 3.714,
+        "bakedPeakBand": 3.665
+      },
+      "screen": {
+        "rawMeanDiff_255": 39.63,
+        "detrendDiff_255": 0.17,
+        "detrendDiff_bands": 0.004,
+        "screenEffTiltDeg": 0.036,
+        "showsBand": false
+      },
+      "tiltLossRatio": 1005.2
+    },
+    {
+      "centre": 30294,
+      "D_km": 175.88,
+      "deltaDeg": 5.795,
+      "thetaWallDeg": 1.4487,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 71.11,
+      "rProj": 19.4,
+      "carrier": {
+        "nWall": 16,
+        "wallSlope_reliefPerRad": 4.34812,
+        "carrierTiltDeg": 37.36,
+        "carrierTiltUnclampedDeg": 74.719,
+        "asymCarrier_255_saturating": 153.45,
+        "attenMean": 0.8793,
+        "attenP05": 0.678,
+        "bakedTiltDeg": 36.369,
+        "carrierPeakBand": 6.89,
+        "bakedPeakBand": 6.733
+      },
+      "screen": {
+        "rawMeanDiff_255": 16.41,
+        "detrendDiff_255": 8.02,
+        "detrendDiff_bands": 0.189,
+        "screenEffTiltDeg": 0.953,
+        "showsBand": false
+      },
+      "tiltLossRatio": 39.2
+    },
+    {
+      "centre": 11106,
+      "D_km": 138.32,
+      "deltaDeg": 4.557,
+      "thetaWallDeg": 1.1393,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 9.36,
+      "rProj": 15.9,
+      "carrier": {
+        "nWall": 12,
+        "wallSlope_reliefPerRad": 5.42357,
+        "carrierTiltDeg": 38.823,
+        "carrierTiltUnclampedDeg": 77.645,
+        "asymCarrier_255_saturating": 37.48,
+        "attenMean": 0.763,
+        "attenP05": 0.5384,
+        "bakedTiltDeg": 36.992,
+        "carrierPeakBand": 1.224,
+        "bakedPeakBand": 1.174
+      },
+      "screen": {
+        "rawMeanDiff_255": 7.94,
+        "detrendDiff_255": 0.45,
+        "detrendDiff_bands": 0.011,
+        "screenEffTiltDeg": 0.313,
+        "showsBand": false
+      },
+      "tiltLossRatio": 123.9
+    },
+    {
+      "centre": 20591,
+      "D_km": 95.93,
+      "deltaDeg": 3.161,
+      "thetaWallDeg": 0.7902,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 34.73,
+      "rProj": 6.3,
+      "carrier": {
+        "nWall": 6,
+        "wallSlope_reliefPerRad": 2.36411,
+        "carrierTiltDeg": 31.66,
+        "carrierTiltUnclampedDeg": 63.321,
+        "asymCarrier_255_saturating": 114.48,
+        "attenMean": 0.5852,
+        "attenP05": 0.381,
+        "bakedTiltDeg": 49.347,
+        "carrierPeakBand": 3.588,
+        "bakedPeakBand": 5.186
+      },
+      "screen": {
+        "rawMeanDiff_255": 48.84,
+        "detrendDiff_255": 1.71,
+        "detrendDiff_bands": 0.04,
+        "screenEffTiltDeg": 0.337,
+        "showsBand": false
+      },
+      "tiltLossRatio": 93.9
+    },
+    {
+      "centre": 32671,
+      "D_km": 147.44,
+      "deltaDeg": 4.858,
+      "thetaWallDeg": 1.2144,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 64.58,
+      "rProj": 19.7,
+      "carrier": {
+        "nWall": 12,
+        "wallSlope_reliefPerRad": 4.09514,
+        "carrierTiltDeg": 36.912,
+        "carrierTiltUnclampedDeg": 73.823,
+        "asymCarrier_255_saturating": 162.83,
+        "attenMean": 0.7948,
+        "attenP05": 0.5721,
+        "bakedTiltDeg": 34.975,
+        "carrierPeakBand": 6.509,
+        "bakedPeakBand": 6.212
+      },
+      "screen": {
+        "rawMeanDiff_255": 12.63,
+        "detrendDiff_255": -0.91,
+        "detrendDiff_bands": -0.021,
+        "screenEffTiltDeg": 0.113,
+        "showsBand": false
+      },
+      "tiltLossRatio": 327.2
+    },
+    {
+      "centre": 10473,
+      "D_km": 124.45,
+      "deltaDeg": 4.1,
+      "thetaWallDeg": 1.025,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 62.74,
+      "rProj": 8,
+      "carrier": {
+        "nWall": 10,
+        "wallSlope_reliefPerRad": 2.54371,
+        "carrierTiltDeg": 32.483,
+        "carrierTiltUnclampedDeg": 64.967,
+        "asymCarrier_255_saturating": 129.05,
+        "attenMean": 0.7103,
+        "attenP05": 0.487,
+        "bakedTiltDeg": 56.674,
+        "carrierPeakBand": 5.729,
+        "bakedPeakBand": 8.913
+      },
+      "screen": {
+        "rawMeanDiff_255": 55.17,
+        "detrendDiff_255": 0.02,
+        "detrendDiff_bands": 0.001,
+        "screenEffTiltDeg": 0.003,
+        "showsBand": false
+      },
+      "tiltLossRatio": 11456.1
+    },
+    {
+      "centre": 34006,
+      "D_km": 120.8,
+      "deltaDeg": 3.98,
+      "thetaWallDeg": 0.995,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 65.28,
+      "rProj": 14.1,
+      "carrier": {
+        "nWall": 8,
+        "wallSlope_reliefPerRad": 1.55878,
+        "carrierTiltDeg": 52.689,
+        "carrierTiltUnclampedDeg": 52.689,
+        "asymCarrier_255_saturating": 111.37,
+        "attenMean": 0.6955,
+        "attenP05": 0.4734,
+        "bakedTiltDeg": 42.384,
+        "carrierPeakBand": 8.67,
+        "bakedPeakBand": 7.348
+      },
+      "screen": {
+        "rawMeanDiff_255": 8.78,
+        "detrendDiff_255": -1.8,
+        "detrendDiff_bands": -0.042,
+        "screenEffTiltDeg": 0.223,
+        "showsBand": false
+      },
+      "tiltLossRatio": 236.6
+    },
+    {
+      "centre": 30385,
+      "D_km": 99.72,
+      "deltaDeg": 3.285,
+      "thetaWallDeg": 0.8213,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 62.5,
+      "rProj": 5.8,
+      "carrier": {
+        "nWall": 8,
+        "wallSlope_reliefPerRad": 1.67336,
+        "carrierTiltDeg": 54.628,
+        "carrierTiltUnclampedDeg": 54.628,
+        "asymCarrier_255_saturating": 21,
+        "attenMean": 0.6031,
+        "attenP05": 0.395,
+        "bakedTiltDeg": 40.347,
+        "carrierPeakBand": 8.679,
+        "bakedPeakBand": 6.891
+      },
+      "screen": {
+        "rawMeanDiff_255": 0.01,
+        "detrendDiff_255": 0,
+        "detrendDiff_bands": 0,
+        "screenEffTiltDeg": 0,
+        "showsBand": false
+      },
+      "tiltLossRatio": 149112.5
+    },
+    {
+      "centre": 3674,
+      "D_km": 155.17,
+      "deltaDeg": 5.112,
+      "thetaWallDeg": 1.2781,
+      "resolvable": false,
+      "resolvableDisplay": true,
+      "incidenceDeg": 64.05,
+      "rProj": 9.3,
+      "carrier": {
+        "nWall": 13,
+        "wallSlope_reliefPerRad": 4.39019,
+        "carrierTiltDeg": 37.429,
+        "carrierTiltUnclampedDeg": 74.859,
+        "asymCarrier_255_saturating": 164.8,
+        "attenMean": 0.82,
+        "attenP05": 0.601,
+        "bakedTiltDeg": 35.869,
+        "carrierPeakBand": 6.558,
+        "bakedPeakBand": 6.322
+      },
+      "screen": {
+        "rawMeanDiff_255": 10.79,
+        "detrendDiff_255": -6.21,
+        "detrendDiff_bands": -0.146,
+        "screenEffTiltDeg": 0.776,
+        "showsBand": false
+      },
+      "tiltLossRatio": 48.3
+    }
+  ]
+}
