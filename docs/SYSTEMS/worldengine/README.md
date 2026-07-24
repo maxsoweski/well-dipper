@@ -43,6 +43,8 @@ relief writer through a 9-way rule chain, then runs the V2-4 shared-substrate po
 - `src/worldengine/base/passiveMargins.js`
 - `src/worldengine/base/province.js`
 - `src/worldengine/base/bodyFigure.js`
+- `src/worldengine/base/bombardment.js`
+- `src/worldengine/base/reliefBudget.js`
 - `src/worldengine/base/climate-e5.js`
 - `src/worldengine/base/emission-e.js`
 - `src/worldengine/base/fieldViz.js`
@@ -54,6 +56,10 @@ interpenetration instrument, tectonic despun path, and the deliberately-unwired
 lidDisruption family module (V2-7d); shared substrate (V2-4) = sphereField/substrate
 carriers + hostChannels/stressFabric/passiveMargins/province/bodyFigure — records in
 [`SUBSTRATE-MAP.md`](../../WORKSTREAMS/world-engine-v2-4-substrate-2026-07-14/SUBSTRATE-MAP.md);
+exogenic = bombardment (V2-5 crater schedule; inc3b added `craterRelevanceOf`, the
+condition-derived crater/ejecta enable that replaced the preset-name `rendersOn` gate) +
+reliefBudget (inc3b condition-pure f_I — reallocates composite relief variance so craters
+dominate on impact surfaces, consumed by the lab's `compositeMargins`);
 atmosphere family = climate-e5 (#3a), emission-e (#2), fieldViz harness.)*
 
 ## Tier(s) served
