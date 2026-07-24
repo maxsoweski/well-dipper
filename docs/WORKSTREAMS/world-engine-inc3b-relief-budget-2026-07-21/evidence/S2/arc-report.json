@@ -1,0 +1,365 @@
+{
+  "meta": {
+    "workstream": "world-engine-inc3b-relief-budget-2026-07-21",
+    "slice": "S2",
+    "gate": "arc-asymmetry",
+    "generated": "deterministic (no wall-clock in payload)",
+    "frozenBar": {
+      "source": "calibration/read-gate-thresholds.json .arc",
+      "geqOneBandMagnitude_normalized": 0.16666666666666666,
+      "geqOneBandMagnitude_8bit": 42.5,
+      "populationFraction": 0.7,
+      "sizeGate": ">=median lit-disc stamp size"
+    },
+    "meshBuildMs": 795,
+    "meshN": 40000
+  },
+  "result": {
+    "evaluable": true,
+    "verdict": "FAIL",
+    "seed1Fraction": 0.1,
+    "bar": 0.7,
+    "seed1Pass": false,
+    "rerollFractions": [
+      {
+        "capture": "target-reroll1",
+        "fraction": 0.1739,
+        "pass": false
+      },
+      {
+        "capture": "target-reroll2",
+        "fraction": 0.2414,
+        "pass": false
+      }
+    ],
+    "alignmentSanityOK": true,
+    "interpretation": "ARC BAR FAILS on all three renders (seed1 0.10, rerolls 0.17/0.24 vs 0.70). Applied AS FROZEN — no post-hoc tuning; verdict recorded whichever way it fell. Alignment is VALIDATED (0px self-test + overlay correlation), so this is EVALUABLE, not an artifact. The render IS legibly cratered (visual + gradient-controlled diagnostics), but the ≥-median stamps carry only a WEAK, correct-signed, sub-1-band half-annulus MEAN asymmetry (detrended ~0.9 lum vs flat-control ~0; peak contrast indistinguishable from dither noise). Per BUILD-PLAN §1.S2 a texture-FAIL fires S3 (diagnose-first). The diagnostics here directly seed S3.a content-vs-instrument: candidate leads = (i) the frozen half-annulus MEAN metric is gradient-confounded/dilution-prone for smaller craters; (ii) the ≥-median size gate (GUESSED) may select older/overprinted craters over the crisp younger sub-median ones — its own resolutionPath. NOT for the read-gate to re-tune; flagged for S3 diagnosis."
+  },
+  "darkClipRebaseline": {
+    "perRender": [
+      {
+        "capture": "target-seed1",
+        "darkClipFrac": 0.036392,
+        "ditherBand1Frac": 0.150613,
+        "litDarkClipFrac": 0.036193
+      },
+      {
+        "capture": "target-reroll1",
+        "darkClipFrac": 0.027644,
+        "ditherBand1Frac": 0.14396,
+        "litDarkClipFrac": 0.027472
+      },
+      {
+        "capture": "target-reroll2",
+        "darkClipFrac": 0.039927,
+        "ditherBand1Frac": 0.138634,
+        "litDarkClipFrac": 0.03983
+      }
+    ],
+    "darkClipFrac1_mean": 0.034654,
+    "sigma": 0.005163,
+    "ditherNoiseFloor": 0.144402,
+    "toleranceFrac": 0.144402,
+    "toleranceFracFormula": "max(2*sigma, ditherNoiseFloor)",
+    "ditherNoiseFloorJustification": "ditherNoiseFloor = fraction of disc pixels with 0 < lum <= 1 band (42.5/255). Bayer dither (ditherMode=0) perturbs the pre-posterize value by up to ~1 band, so ONLY pixels currently within one band of black can be newly pushed to (or away from) luminance-0 clipping between captures; that fraction is the largest defensible per-capture wiggle attributable to dithering rather than a real regression.",
+    "resolutionPathExecuted": "read-gate-thresholds.json .arc.darkClipGuard.toleranceFrac.resolutionPath — measured darkClipFrac1 + per-reroll sigma at the staged light across seed 1 + 2 re-rolls; the main session replaces the GUESSED 0.01 with toleranceFrac above, then FREEZES and holds (no per-capture re-baseline).",
+    "note": "darkClipFrac here is the LITERAL frozen formula (disc pixels at lum 0 / disc pixels) and therefore INCLUDES the night-side of the disc (a large, geometry-fixed contribution at el=20.79 → high absolute value, near-constant across re-rolls ⇒ small sigma). litDarkClipFrac (lit-hemisphere-only) is reported alongside as the crater-interior-relevant variant; the frozen guard uses the literal number."
+  },
+  "renders": [
+    {
+      "capture": "target-seed1",
+      "W": 2463,
+      "H": 1060,
+      "worldSeed": 1,
+      "macroSeedRecorded": 1,
+      "macroSeedDerived": 7892,
+      "macroSeedMatchesDerivation": false,
+      "planetRadiusEarth": 0.2729641867568717,
+      "gravity": 0.199,
+      "isImpactSurface": true,
+      "schedule": {
+        "fired": true,
+        "nStamp": 165,
+        "R_km": 1739.1,
+        "D_FLOOR_KM": 95.6,
+        "D_HI_KM": 1739.1,
+        "L_trunc": 95.648,
+        "tExp": 4.5,
+        "coverage": 0.4554
+      },
+      "stampCounts": {
+        "total": 165,
+        "visible": 60,
+        "litDisc": 59,
+        "geMedian": 30,
+        "measured": 30,
+        "discardedUnmeasurable": 0
+      },
+      "medianDeltaDeg": 4.656,
+      "discRadiusPx": 371.4,
+      "asymmetry": {
+        "counted": 3,
+        "denom": 30,
+        "fraction": 0.1,
+        "bar": 0.7,
+        "pass": false
+      },
+      "diagnostics_NOT_the_bar": {
+        "note": "DIAGNOSTIC ONLY — NOT the frozen verdict. Illuminates the S3 content-vs-instrument question.",
+        "geMedian_discreteCraterSubset": {
+          "counted": 3,
+          "measured": 30,
+          "fraction": 0.1,
+          "definition": "≥-median stamps whose projected rim rProj ≤ 0.35·discRadiusPx (130px) — i.e. craters that fit as discrete near-side features, excluding hemisphere-scale degraded basins."
+        },
+        "oversizedInGeMedian": {
+          "count": 0,
+          "note": "count of ≥-median stamps with rProj > 0.35·discRadiusPx (hemisphere-scale). EMPIRICALLY ~0 here — the fail is NOT giant-basin pollution; the discrete-crater subset fraction equals the frozen fraction."
+        },
+        "allLitDisc": {
+          "counted": 9,
+          "measured": 59,
+          "fraction": 0.1525,
+          "note": "asymmetry fraction over ALL lit-disc stamps (no size gate) — the whole population."
+        },
+        "gradientControlled": {
+          "note": "Answers \"do ≥-median craters carry ≥1-band light-consistent wall contrast once the global disc-illumination gradient is removed and dither noise is averaged?\" detrendHalfMeanDiff = residual (plane-subtracted) anti-sun−sun half-annulus mean (>0 ⇒ sun-side shadowed, the crater sign). Compare craters vs a FLAT lit-terrain control.",
+          "detrendHalfMean_crater_mean": 0.84,
+          "detrendHalfMean_crater_fracPositive": 0.533,
+          "detrendHalfMean_crater_fracGe1band": 0,
+          "detrendHalfMean_crater_fracGeHalfBand": 0,
+          "detrendHalfMean_flatControl_mean": 0.05,
+          "detrendHalfMean_flatControl_fracGe1band": 0,
+          "peakDiff_crater_fracGe1band": 0.8,
+          "peakDiff_flatControl_fracGe1band": 0.11,
+          "controlN": 200,
+          "interpretation": "detrended half-mean crater contrast is barely above the flat control and sub-1-band ⇒ the ≥-median stamps do NOT carry a coherent ≥1-band asymmetry on a half-annulus MEAN basis (correct SIGN present but weak). The peak metric reaches ≥1 band for many craters BUT the flat control reaches it too ⇒ peak contrast at this magnitude is indistinguishable from posterize/dither noise. Neither rescues the frozen mean-bar."
+        }
+      },
+      "darkClip": {
+        "discPixels": 485682,
+        "darkDiscPixels": 17675,
+        "darkClipFrac": 0.036392,
+        "ditherBand1Frac": 0.150613,
+        "litDiscPixels": 485513,
+        "litDarkPixels": 17572,
+        "litDarkClipFrac": 0.036193
+      },
+      "largestBasinLand": {
+        "centre": 26977,
+        "D_km": 625.2,
+        "deltaDeg": 20.6,
+        "cx": 967.9,
+        "cy": 765.6,
+        "rProj": 65.7,
+        "onDisc": true,
+        "lumDown": 24.3,
+        "lumUp": 35.5,
+        "downLightDarker": false,
+        "lumDiff": 11.3
+      },
+      "projectionSelfTestResidualPx": 0
+    },
+    {
+      "capture": "target-reroll1",
+      "W": 2463,
+      "H": 1060,
+      "worldSeed": 798855525,
+      "macroSeedRecorded": 834,
+      "macroSeedDerived": 834,
+      "macroSeedMatchesDerivation": true,
+      "planetRadiusEarth": 0.3414947219984606,
+      "gravity": 0.2489,
+      "isImpactSurface": true,
+      "schedule": {
+        "fired": true,
+        "nStamp": 153,
+        "R_km": 2175.7,
+        "D_FLOOR_KM": 119.7,
+        "D_HI_KM": 2175.7,
+        "L_trunc": 119.661,
+        "tExp": 4.5,
+        "coverage": 0.4372
+      },
+      "stampCounts": {
+        "total": 153,
+        "visible": 45,
+        "litDisc": 44,
+        "geMedian": 23,
+        "measured": 23,
+        "discardedUnmeasurable": 0
+      },
+      "medianDeltaDeg": 4.172,
+      "discRadiusPx": 371.4,
+      "asymmetry": {
+        "counted": 4,
+        "denom": 23,
+        "fraction": 0.1739,
+        "bar": 0.7,
+        "pass": false
+      },
+      "diagnostics_NOT_the_bar": {
+        "note": "DIAGNOSTIC ONLY — NOT the frozen verdict. Illuminates the S3 content-vs-instrument question.",
+        "geMedian_discreteCraterSubset": {
+          "counted": 4,
+          "measured": 23,
+          "fraction": 0.1739,
+          "definition": "≥-median stamps whose projected rim rProj ≤ 0.35·discRadiusPx (130px) — i.e. craters that fit as discrete near-side features, excluding hemisphere-scale degraded basins."
+        },
+        "oversizedInGeMedian": {
+          "count": 0,
+          "note": "count of ≥-median stamps with rProj > 0.35·discRadiusPx (hemisphere-scale). EMPIRICALLY ~0 here — the fail is NOT giant-basin pollution; the discrete-crater subset fraction equals the frozen fraction."
+        },
+        "allLitDisc": {
+          "counted": 8,
+          "measured": 44,
+          "fraction": 0.1818,
+          "note": "asymmetry fraction over ALL lit-disc stamps (no size gate) — the whole population."
+        },
+        "gradientControlled": {
+          "note": "Answers \"do ≥-median craters carry ≥1-band light-consistent wall contrast once the global disc-illumination gradient is removed and dither noise is averaged?\" detrendHalfMeanDiff = residual (plane-subtracted) anti-sun−sun half-annulus mean (>0 ⇒ sun-side shadowed, the crater sign). Compare craters vs a FLAT lit-terrain control.",
+          "detrendHalfMean_crater_mean": 0.57,
+          "detrendHalfMean_crater_fracPositive": 0.696,
+          "detrendHalfMean_crater_fracGe1band": 0,
+          "detrendHalfMean_crater_fracGeHalfBand": 0,
+          "detrendHalfMean_flatControl_mean": 0.03,
+          "detrendHalfMean_flatControl_fracGe1band": 0,
+          "peakDiff_crater_fracGe1band": 0.913,
+          "peakDiff_flatControl_fracGe1band": 0.09,
+          "controlN": 200,
+          "interpretation": "detrended half-mean crater contrast is barely above the flat control and sub-1-band ⇒ the ≥-median stamps do NOT carry a coherent ≥1-band asymmetry on a half-annulus MEAN basis (correct SIGN present but weak). The peak metric reaches ≥1 band for many craters BUT the flat control reaches it too ⇒ peak contrast at this magnitude is indistinguishable from posterize/dither noise. Neither rescues the frozen mean-bar."
+        }
+      },
+      "darkClip": {
+        "discPixels": 485682,
+        "darkDiscPixels": 13426,
+        "darkClipFrac": 0.027644,
+        "ditherBand1Frac": 0.14396,
+        "litDiscPixels": 485513,
+        "litDarkPixels": 13338,
+        "litDarkClipFrac": 0.027472
+      },
+      "largestBasinLand": {
+        "centre": 12612,
+        "D_km": 617.4,
+        "deltaDeg": 16.26,
+        "cx": 874.9,
+        "cy": 411.7,
+        "rProj": 41.9,
+        "onDisc": true,
+        "lumDown": 35.9,
+        "lumUp": 32.2,
+        "downLightDarker": false,
+        "lumDiff": -3.7
+      },
+      "projectionSelfTestResidualPx": 0
+    },
+    {
+      "capture": "target-reroll2",
+      "W": 2463,
+      "H": 1060,
+      "worldSeed": 962606153,
+      "macroSeedRecorded": 5462,
+      "macroSeedDerived": 5462,
+      "macroSeedMatchesDerivation": true,
+      "planetRadiusEarth": 0.3673932290240191,
+      "gravity": 0.2678,
+      "isImpactSurface": true,
+      "schedule": {
+        "fired": true,
+        "nStamp": 149,
+        "R_km": 2340.7,
+        "D_FLOOR_KM": 128.7,
+        "D_HI_KM": 2340.7,
+        "L_trunc": 128.736,
+        "tExp": 4.5,
+        "coverage": 0.4313
+      },
+      "stampCounts": {
+        "total": 149,
+        "visible": 57,
+        "litDisc": 57,
+        "geMedian": 29,
+        "measured": 29,
+        "discardedUnmeasurable": 0
+      },
+      "medianDeltaDeg": 4.392,
+      "discRadiusPx": 371.4,
+      "asymmetry": {
+        "counted": 7,
+        "denom": 29,
+        "fraction": 0.2414,
+        "bar": 0.7,
+        "pass": false
+      },
+      "diagnostics_NOT_the_bar": {
+        "note": "DIAGNOSTIC ONLY — NOT the frozen verdict. Illuminates the S3 content-vs-instrument question.",
+        "geMedian_discreteCraterSubset": {
+          "counted": 7,
+          "measured": 29,
+          "fraction": 0.2414,
+          "definition": "≥-median stamps whose projected rim rProj ≤ 0.35·discRadiusPx (130px) — i.e. craters that fit as discrete near-side features, excluding hemisphere-scale degraded basins."
+        },
+        "oversizedInGeMedian": {
+          "count": 0,
+          "note": "count of ≥-median stamps with rProj > 0.35·discRadiusPx (hemisphere-scale). EMPIRICALLY ~0 here — the fail is NOT giant-basin pollution; the discrete-crater subset fraction equals the frozen fraction."
+        },
+        "allLitDisc": {
+          "counted": 14,
+          "measured": 57,
+          "fraction": 0.2456,
+          "note": "asymmetry fraction over ALL lit-disc stamps (no size gate) — the whole population."
+        },
+        "gradientControlled": {
+          "note": "Answers \"do ≥-median craters carry ≥1-band light-consistent wall contrast once the global disc-illumination gradient is removed and dither noise is averaged?\" detrendHalfMeanDiff = residual (plane-subtracted) anti-sun−sun half-annulus mean (>0 ⇒ sun-side shadowed, the crater sign). Compare craters vs a FLAT lit-terrain control.",
+          "detrendHalfMean_crater_mean": 1.25,
+          "detrendHalfMean_crater_fracPositive": 0.552,
+          "detrendHalfMean_crater_fracGe1band": 0,
+          "detrendHalfMean_crater_fracGeHalfBand": 0,
+          "detrendHalfMean_flatControl_mean": -0.21,
+          "detrendHalfMean_flatControl_fracGe1band": 0,
+          "peakDiff_crater_fracGe1band": 0.828,
+          "peakDiff_flatControl_fracGe1band": 0.125,
+          "controlN": 200,
+          "interpretation": "detrended half-mean crater contrast is barely above the flat control and sub-1-band ⇒ the ≥-median stamps do NOT carry a coherent ≥1-band asymmetry on a half-annulus MEAN basis (correct SIGN present but weak). The peak metric reaches ≥1 band for many craters BUT the flat control reaches it too ⇒ peak contrast at this magnitude is indistinguishable from posterize/dither noise. Neither rescues the frozen mean-bar."
+        }
+      },
+      "darkClip": {
+        "discPixels": 485682,
+        "darkDiscPixels": 19392,
+        "darkClipFrac": 0.039927,
+        "ditherBand1Frac": 0.138634,
+        "litDiscPixels": 485513,
+        "litDarkPixels": 19338,
+        "litDarkClipFrac": 0.03983
+      },
+      "largestBasinLand": {
+        "centre": 27197,
+        "D_km": 984,
+        "deltaDeg": 24.09,
+        "cx": 918.9,
+        "cy": 746.2,
+        "rProj": 67.7,
+        "onDisc": true,
+        "lumDown": 34,
+        "lumUp": 26.7,
+        "downLightDarker": false,
+        "lumDiff": -7.3
+      },
+      "projectionSelfTestResidualPx": 0
+    }
+  ],
+  "methodsNotes": {
+    "projection": "RNG-neutral probe: forEachCrater re-enumerated on the production mesh buildIrregularSphere(40000,4) (radius-independent, built once, 40000 verts). Crater centre = verts[Math.floor(uCentre*N)] (the writer's own index). Projected through recorded matrixWorld (identity) + matrixWorldInverse + projectionMatrix. Sub-camera-point self-test residual (should hit image centre): target-seed1=0px, target-reroll1=0px, target-reroll2=0px — all sub-pixel ⇒ projection aligned.",
+    "radiusR3": "Condition derived at the RECORDED DRAWN radius (R3 live): seed1 R=0.273, reroll1 R=0.341, reroll2 R=0.367 (NOT canonical 0.38). Consequently nStamp = 165/153/149, NOT the frozen-file assumption of 147 (which was computed at canonical R). The frozen bar VALUES (0.70, ≥1 band, ≥median) are unchanged; only the population N differs, as mandated (\"reproduce at the recorded drawn radius, not canonical\").",
+    "macroSeed": "macroSeed taken from each state JSON (the render's actual seed). seed1 recorded macroSeed=1 is the BOOT DEFAULT and does NOT equal alea('draw:macro:'+worldSeed)=7892; the two re-rolls' recorded macroSeeds DO match that derivation (target-reroll1: rec 834 vs derived 834 (match); target-reroll2: rec 5462 vs derived 5462 (match)).",
+    "wallHalfConvention": "DOWN-LIGHT half-annulus = the disc half on the SUN-FACING side (offset·ŝ>0, ŝ = per-crater sunward screen dir). Physics: for a concave bowl at oblique light the interior wall on the sun-facing side is SHADOWED (its outward normal points away from the sun) while the anti-sun interior wall is lit; so the shadowed (down-light) wall sits on the sun-facing disc half. Asymmetry counts when that down-light half is DARKER than the up-light (anti-sun) half by ≥1 posterize band (42.5/255). This is the light-consistent crater signature.",
+    "annulus": "Interior-wall annulus = [FLOOR_FRAC·r, r] = [0.5, 1]·r_proj, r_proj = projected radius of the crater rim (angular offset δ/2). From craterProfile (bombardment.js): flat floor ends at FLOOR_FRAC·r=0.5r, rim crest at r — so [0.5,1.0]·r is the interior wall band where the light-consistent shadow lives. Annulus pixels restricted to the ray-sphere disc mask (no background bleed).",
+    "conservativeBias": "The GLOBAL disc illumination rises toward the sun (verified: sunward disc is brighter). The down-light (sun-facing) half therefore sits on a globally BRIGHTER background, which works AGAINST detecting \"down-light darker.\" The raw-mean bar (implemented AS FROZEN, no detrend) is thus conservative: a passing fraction is a floor, not inflated by the global gradient.",
+    "visualValidation": "Two full-image overlays are committed as forensic evidence (evidence/S2/_overlay_seed1.png = all visible+lit stamp centres coloured by size; _diag_annuli_seed1.png = the ≥-median annuli + sunward ticks). Findings: (1) projected centres CORRELATE with rendered craters and many ≥-median annuli sit ON real craters ⇒ projection/mesh/index are sound (self-test residual 0px) and the harness is EVALUABLE. (2) The render is strongly, legibly cratered — but the crisp, high-contrast arc-shadowed craters are predominantly the SMALLER, younger ones. (3) A meaningful share of ≥-median (larger-angular) annuli sit on overprinted small-crater fields or smoothed plains rather than clean single bowls — consistent with obliteration stamping (old large craters overwritten oldest-first by younger craters). Craters are NOT absent; the frozen ≥-median MEAN bar simply does not register their contrast.",
+    "whyItFails_evidenced": "The FAIL is NOT giant-basin pollution (oversizedInGeMedian≈0; the discrete-crater subset gives the SAME fraction as the frozen bar — my initial giant-hemisphere hypothesis was DISPROVEN by the data and discarded). Two evidenced contributors: (a) the frozen metric is a MEAN over the whole half-annulus, which the GLOBAL disc-illumination gradient (sunward globally brighter — verified) drives NEGATIVE for many craters (raw meanD distribution spans −38…+61); (b) even after removing that gradient (least-squares plane detrend) and averaging out dither, the ≥-median half-mean shadow is only ~0.9 luminance — sub-1-band and barely above the flat-terrain control (~0), with correct sign only 55–78% of the time. A peak/percentile metric DOES reach ≥1 band for ~80% of ≥-median craters, but the flat control reaches it too, so that contrast is indistinguishable from posterize/dither noise. Net: at the ≥-median size gate, the render carries a WEAK, correct-signed, but sub-1-band-MEAN wall asymmetry — a genuine texture shortfall by the frozen bar, plausibly compounded by the sizeGate GUESS selecting older/overprinted craters (its own resolutionPath concern) rather than the crisp younger sub-median ones. Reported as observed; not over-attributed to a single cause.",
+    "discardPolicy": "Stamps discarded from the ≥-median denominator only when UNMEASURABLE: r_proj<2px, or a half-annulus has <8 disc pixels (too small / clipped by the limb to yield a mean). Per render: target-seed1=0, target-reroll1=0, target-reroll2=0. No stamp discarded for its luminance value.",
+    "alignment": "Largest-basin land check (proxy for \"largest basin lands on a visibly concave feature\"): target-seed1 D=625.2km @(967.9,765.6) onDisc=true down-light-darker=false (lumDiff 11.3) | target-reroll1 D=617.4km @(874.9,411.7) onDisc=true down-light-darker=false (lumDiff -3.7) | target-reroll2 D=984km @(918.9,746.2) onDisc=true down-light-darker=false (lumDiff -7.3).",
+    "limitations": "Projection ignores the sub-pixel radial relief displacement (~0.003·envelope) and near-limb foreshortening distorts the annulus circle into an ellipse (the circular-annulus split slightly mismeasures near-limb craters); both are reported, neither is corrected (correcting would perturb the frozen population)."
+  }
+}

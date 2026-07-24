@@ -63,10 +63,14 @@
       "protocol": "re-baseline-after-flip (bake-attenuation-model.json.shadowRebaselineProtocol): record darkClipFrac0 pre-flip, RE-BASELINE darkClipFrac1 once at the S1 seam, then HOLD it for S3/S4.",
       "source": "bake-attenuation-model.json.shadowRebaselineProtocol",
       "toleranceFrac": {
-        "value": 0.01,
-        "status": "GUESSED",
-        "rationale": "A per-capture growth bound: post-flip darkClipFrac must not EXCEED the re-baselined darkClipFrac1 by more than this fraction of disc pixels newly clipping to black (which would erase arc asymmetry). bake-attenuation-model.json.shadowRebaselineProtocol step 4 explicitly defers this number to read-gate-thresholds.json (S0.6); it cannot be derived from S0 alone because darkClipFrac1 is not measured until the S1 flip.",
-        "resolutionPath": "At the S1 re-baseline seam (before any S2/S3/S4 capture), measure darkClipFrac1 and its per-reroll sampling spread σ across seed 1 + 2 re-rolls at the staged light; set toleranceFrac = max(k·σ (k=2), dither-noise floor). Replace this GUESS with that derived value, then FREEZE and hold (do not re-baseline per capture — that would launder a regression)."
+        "value": 0.144402,
+        "status": "DERIVED",
+        "rationale": "A per-capture growth bound: post-flip darkClipFrac must not EXCEED the re-baselined darkClipFrac1 by more than this fraction of disc pixels newly clipping to black (which would erase arc asymmetry). DERIVED 2026-07-24 at the S1 re-baseline seam per the original resolutionPath formula max(2σ, dither-noise floor): darkClipFrac1 measured on the three S2 target captures (seed 1 + 2 re-rolls, staged light) = {0.036392, 0.027644, 0.039927}, mean 0.034654, σ 0.005163, 2σ 0.010326; dither-noise floor 0.144402 (fraction of disc pixels within 1 posterize band of black that Bayer dither could push across the clip boundary — a conservative upper bound on this dark, terminator-heavy oblique scene) → max = 0.144402. Evidence: evidence/S2/arc-report.json.darkClipRebaseline.",
+        "derivedCaveat": "The dither floor dominates 2σ by ~14× on this scene, making the guard loose — recorded as derived, NOT re-tightened (tightening post-derivation because the number displeases would itself be post-hoc tuning). Diagnostic alternative recorded in arc-report.json: lit-only darkClipFrac (excludes the geometry-fixed night side) ≈ {0.0362, 0.0275, 0.0398}. If S3/S4 need a sharper regression guard, its derivation happens THERE with its own recorded rationale, never by editing this held value mid-protocol.",
+        "replacedGuess": {
+          "value": 0.01,
+          "replacedAt": "S1 re-baseline seam 2026-07-24, before S3/S4 captures, per the frozen resolutionPath"
+        }
       },
       "note": "The dark-clip guard is a REGRESSION guard on the arc bar, not an independent read bar."
     },

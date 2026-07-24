@@ -1,0 +1,37 @@
+{
+  "capture": "target-reroll1",
+  "role": "target-reroll",
+  "preset": "Moon/Mercury (impact-airless)",
+  "worldSeed": 798855525,
+  "macroSeed": 834,
+  "detailSeed": 6541,
+  "radiusSeed": 1611078049,
+  "planetRadiusEarth": 0.3414947219984606,
+  "lightAzimuthDeg": 40.6,
+  "lightElevationDeg": 20.79,
+  "posterizeLevels": 6,
+  "pixelScale": 3,
+  "ditherMode": 0,
+  "spinSpeed": 0,
+  "distance": 3.06,
+  "cratersEnabled": false,
+  "craterDensity": 0.85222421875,
+  "rerolledVia": "lil-gui '🌍 new planet (re-roll all)' -> newPlanet() (planet-lod-lab.html:3871); worldSeed re-rolled, macroSeed=alea('draw:macro:'+worldSeed)*10000, radius redrawn under labUnlock (R3 live).",
+  "canvas": { "cssW": 1970, "cssH": 848, "pxW": 2462, "pxH": 1060, "dpr": 1.25 },
+  "camera": {
+    "type": "PerspectiveCamera",
+    "fov": 50,
+    "near": 0.01,
+    "far": 5000,
+    "aspect": 2.3215547703180213,
+    "projectionMatrix": [0.9237373797628693,0,0,0,0,2.1445069205095586,0,0,0,0,-1.0000040000080002,-1,0,0,-0.020000040000080002,0],
+    "matrixWorldInverse": [0.9437508829112643,-0.06731097391501314,0.32373369270871616,0,0,0.979060984519505,0.203567159904778,0,-0.3306573316958344,-0.19211668689187278,0.9239896685642546,0,0,0,-3.0599999999999996,0.9999999999999999],
+    "position": [0.9906250996886713,0.6229155093086206,2.827408385806619]
+  },
+  "planetMesh": {
+    "matrixWorld": [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+    "scale": [1,1,1],
+    "worldRadius": 1.0000000448773203
+  },
+  "derived": { "camDist": 3.059999999999999, "discFracHeight": 0.7008192865193735 }
+}

@@ -1,0 +1,41 @@
+{
+  "capture": "control-fullphase",
+  "role": "control-fullphase",
+  "preset": "Moon/Mercury (impact-airless)",
+  "worldSeed": 1,
+  "macroSeed": 1,
+  "detailSeed": 1,
+  "radiusSeed": 3722342324,
+  "planetRadiusEarth": 0.3673932290240191,
+  "lightingMode": "face-on / zero-phase (sun behind camera)",
+  "howSet": "_lab.sunToCamera() — sets lightAzimuthDeg=camera yaw (deg), lightElevationDeg=camera pitch (deg); WORLD_LIGHT then equals the camera forward axis (verified: worldLight [0.32373,0.20357,0.92399] == camera matrixWorldInverse row-3 forward). Zero phase => fully-lit disc.",
+  "fullPhaseLightAzimuthDeg": 19.308677695908745,
+  "fullPhaseLightElevationDeg": 11.745634800181875,
+  "worldLightVector": [0.32373369270871616, 0.20356715990477803, 0.9239896685642548],
+  "stagedLightRestoredAfter": { "az": 40.6, "el": 20.79 },
+  "posterizeLevels": 6,
+  "pixelScale": 3,
+  "ditherMode": 0,
+  "spinSpeed": 0,
+  "distance": 3.06,
+  "cratersEnabled": false,
+  "craterDensity": 0.85222421875,
+  "note": "CONTROL, not a scored bar (read-gate fullPhaseControl.isGate=false). Shows the honest pre-albedo full-phase state. NOTE: radiusSeed carried over from prior distractor rerolls (3722342324 -> radius 0.3674), so crater-size scaling differs slightly from target-seed1 (radiusSeed 1 -> 0.273); layout (macroSeed=1) is identical to target-seed1. Radius is a physical scalar and does not affect this lighting control's purpose. Flagged for transparency.",
+  "canvas": { "cssW": 1970, "cssH": 848, "pxW": 2462, "pxH": 1060, "dpr": 1.25 },
+  "camera": {
+    "type": "PerspectiveCamera",
+    "fov": 50,
+    "near": 0.01,
+    "far": 5000,
+    "aspect": 2.3215547703180213,
+    "projectionMatrix": [0.9237373797628693,0,0,0,0,2.1445069205095586,0,0,0,0,-1.0000040000080002,-1,0,0,-0.020000040000080002,0],
+    "matrixWorldInverse": [0.9437508829112643,-0.06731097391501314,0.32373369270871616,0,0,0.979060984519505,0.203567159904778,0,-0.3306573316958344,-0.19211668689187278,0.9239896685642546,0,0,0,-3.0599999999999996,0.9999999999999999],
+    "position": [0.9906250996886713,0.6229155093086206,2.827408385806619]
+  },
+  "planetMesh": {
+    "matrixWorld": [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+    "scale": [1,1,1],
+    "worldRadius": 1.0000000448773203
+  },
+  "derived": { "camDist": 3.059999999999999, "discFracHeight": 0.7008192865193735 }
+}
