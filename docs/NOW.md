@@ -1007,9 +1007,33 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
+> **▶ NON-VISUAL ANALYSIS CHANNEL — instrument build, 4/10 ACs green (2026-07-24, `70f2829`, NOT pushed).**
+> Max's directive: "a way other than visual for you to be able to analyse what's happening in the lab."
+> Research + proposal → scoped (`dev-collab-scope`) → building. **AC-0 / AC-MATH / AC-SAMPLE / AC-CURVE
+> green**; AC-POSCTRL, AC-REGRESS, AC-LAWS, AC-DIAG, AC-REAL, AC-CENSUS remain; AC-TRUST is Max's UAT.
+> New read-only instrument at `src/worldengine/instrument/` (descriptors, stats with three-valued
+> PASS/FAIL/**UNRESOLVABLE** verdicts, sampling geometry, float-RTT field readback, sweep orchestration),
+> lab API `_lab.sampleField / fieldProbe / responseCurve / planSweep`, 84 tests.
+> **Banked results:** form-wavelength noise floor **8.8%** vs the retired band-width instrument's
+> 24.8–47.4%; radius response measured with error bars — physical form size **+0.458 ± 0.015**,
+> on-screen **−0.042 ± 0.015** (Max's "planet bigger, forms same size" is true in the screen frame,
+> false in physical km where forms grow ≈√R). **Two findings that constrain future work:** the lab has
+> NO vertical km calibration (relief is shaded not displaced; vertical reports height-units — a named
+> follow-on workstream), and "most energetic spectral bin" is a dead form-size metric on scale-free
+> terrain. Artifacts + evidence: `docs/WORKSTREAMS/nonvisual-analysis-channel-2026-07-24/`.
+> Handoff: `~/briefings/handoff-lane-A-nonvisual-instrument-2026-07-24.md`.
+> **NEXT = AC-POSCTRL** (plant a known defect, prove the audit names it) → AC-LAWS → census.
+> Two named follow-on workstreams (Max's calls): vertical km calibration; game-side pipeline telemetry.
+> Still open upstream: Max's radius-across-all-systems directive
+> (`~/briefings/handoff-lane-A-radius-systems-2026-07-24.md`) — the census is its scope artifact.
+
+<details><summary>Earlier active entries (kept as record)</summary>
+
 > **▶ WORLD-ENGINE HISTORY PROGRAM — GROUND track, increment #4a (volcanic/magmatism) — `VERIFIED_PENDING_MAX eb18666` (2026-06-30).**
 > New `src/worldengine/base/magmatism.js` (`writeMagmatismSphere`): one seeded mantle-plume field → shield edifices + lava-plain flooding + a T_ss-scaled substellar magma basin (F41 iso-angle law); `writeBodyRelief` now 4-way plate→shell→volcanic→despun (plate+shell paths byte-identical). **Live AC10 driven + PASS** (Lava & Magma, seed 1234): heightSource=carrier, regime=volcanic, plume-variance crushes latitude (0.74/0.76 vs 0.0003/0.0001), edifice>plain>basin ordering holds, Magma basin (1.52 rad) strictly wider than Lava (0.42 rad). Headless: 19 files/196 + magma structure 28/28. Artifacts: `docs/WORKSTREAMS/world-engine-magmatism-2026-06-30/` (contract + intent + SLICE-B-mechanism-math + **verdict.json**). **NEXT = Max AC11 UAT** (does Lava/Magma read as distinct volcanic worlds). ⚠ UAT gotcha: the seed-derived magma-basin axis is ~opposite the lab's fixed sun, so the basin defaults to the NIGHT side — a new adjustable world-light control (`_lab.setLightDir(az,el)` + GUI) lets Max rotate the sun onto it. Program SoT: memory `[[well-dipper-world-engine-program]]` + newest `/tmp/handoff-world-engine-*.md`. (#1 shell-relief + #2 plate-driver already VERIFIED_PENDING_MAX/SHIPPED; the WS1/WS2 block below is the 2026-06-24/25 base-step history, kept as record.)
 > **#4a UAT (2026-07-01) → next = #4-MULTIPLY.** Max UAT'd: structure right, look reads "crude/too regular" (circular analytic domes; "one giant + arbitrary sizes"). Root-caused vs the spine (naturalism accretes from later causal layers, not cosmetic noise). Recorded 2 un-owned gaps (`816800b`): new ROADMAP increment **#4-MULTIPLY** (E7 driver-response + grain-aligned asymmetry, mirroring #2) + a #7 volcanic-terrain note + "circular dome = skeleton not final" deferrals in the #4a docs. Also shipped an adjustable lab **world-light control** (`a21270f`, Max's request — the seed-placed Magma basin defaults to the night side). **NEXT (fresh session, via workflows): build #4-MULTIPLY** (design skeleton is in the ROADMAP note; mirror #2's byte-identical-at-neutral-ref discipline). Max's #4a AC11 UAT (accept-as-skeleton → ship) is his parallel gate. Handoff: `/tmp/handoff-world-engine-4multiply-2026-07-01.md`.
+
+</details>
 
 **`world-engine` PRODUCTION-L1 PORT — WS1 (L0 plumbing) BUILT + ✅ VERIFIED 2026-06-24
 (`05bf668`, branch `feature/world-engine-production-L1`; `master` preserved at `25fe51c`; push HOLD).
