@@ -1,0 +1,283 @@
+{
+  "meta": {
+    "workstream": "world-engine-inc3b-relief-budget-2026-07-21",
+    "slice": "S0.1 + S0.1a",
+    "script": "calibration/relic-lambda.mjs",
+    "law": "sigma_endo/R = C_RELIC * g^(-Q_RELIEF) * max(LAMBDA_FLOOR, phiPeak^P_LAMBDA) * (1 - K_IR*iceness)",
+    "domain": "dead-lid impact-retentive worlds ONLY; live/Earth worlds take the bit-exact identity path",
+    "exactlyIdentified": true,
+    "provenance": {
+      "repoDerived": [
+        "Q_RELIEF (import)",
+        "in-domain g/phiPeak/iceness (shipped modules, canonical R)"
+      ],
+      "trainingSourcedMediumConfidence": [
+        "g/R of Mercury, Moon, Earth",
+        "sigma_endo/R anchors 1.8e-4 (Mercury), 2.5e-4 (Moon), 3.6e-4 (Earth demo)",
+        "sigma_imp/R = 1.09e-3 boot reference"
+      ],
+      "guessed": {
+        "LAMBDA_FLOOR": "0.05 — faint relic substrate; inactive in-set; resolve via low-vigor cold-body anchor",
+        "K_IR": "0.5 — Callisto-targeted; half the crater-bowl ice-relaxation asymptote; resolve via icy sigma_endo anchor + wavelength-dependent tau_relax"
+      }
+    }
+  },
+  "fit": {
+    "C_RELIC": 0.00014558245419776515,
+    "P_LAMBDA": 0.24462978039190114,
+    "Q_RELIEF": 0.58,
+    "LAMBDA_FLOOR": 0.05,
+    "K_IR": 0.5,
+    "SIGMA_IMP_OVER_R": 0.00109,
+    "residuals": {
+      "Mercury": 0,
+      "Moon": 0
+    },
+    "floorBindsInSet": false
+  },
+  "anchors": {
+    "Mercury": {
+      "g": 0.3772949988018335,
+      "phiPeak": 0.2360952618547883,
+      "sigmaEndoOverR": 0.00018
+    },
+    "Moon": {
+      "g": 0.1651940265024244,
+      "phiPeak": 0.1276038939302898,
+      "sigmaEndoOverR": 0.00025
+    },
+    "Earth_outOfDomain": {
+      "g": 1,
+      "phiPeak": 1,
+      "sigmaEndoOverR": 0.00036
+    }
+  },
+  "mutualExclusivity": {
+    "mercuryMoon": {
+      "P_LAMBDA": 0.24462978039190114,
+      "C_RELIC": 0.00014558245419776515
+    },
+    "earthMoon": {
+      "P_LAMBDA": 0.6843765666744216,
+      "C_RELIC": 0.00036
+    },
+    "deltaP": 0.43974678628252045
+  },
+  "inDomainWorlds": [
+    {
+      "name": "Moon/Mercury (impact-airless)",
+      "g": 0.2770083102493075,
+      "phiPeak": 0.21779845320277882,
+      "iceness": 0,
+      "inDomain": true,
+      "nStamp": 147,
+      "sigmaEndoOverR": 0.00021112113031101153,
+      "f_I": 0.9638410486301512
+    },
+    {
+      "name": "Frozen (airless)",
+      "g": 0.28,
+      "phiPeak": 0.31224991496950194,
+      "iceness": 0.3703703703703703,
+      "inDomain": true,
+      "nStamp": 147,
+      "sigmaEndoOverR": 0.0001867052415763474,
+      "f_I": 0.9714963039754134
+    },
+    {
+      "name": "Crystal (faceted)",
+      "g": 0.7812499999999999,
+      "phiPeak": 0.7113374009763705,
+      "iceness": 0.06481481481481483,
+      "inDomain": true,
+      "nStamp": 104,
+      "sigmaEndoOverR": 0.00014955352398649812,
+      "f_I": 0.981522610468489
+    },
+    {
+      "name": "Mars (arid rocky)",
+      "g": 0.38091847632609466,
+      "phiPeak": 0.3603683293001999,
+      "iceness": 0,
+      "inDomain": true,
+      "nStamp": 132,
+      "sigmaEndoOverR": 0.00019851506767038933,
+      "f_I": 0.9678957492407108
+    }
+  ],
+  "sweep": [
+    {
+      "label": "baseline",
+      "moonScale": 1,
+      "moonSigmaEndoOverR": 0.00025,
+      "C_RELIC": 0.00014558245419776515,
+      "P_LAMBDA": 0.24462978039190114,
+      "moonAnchorFI": 0.9500239884855269,
+      "worlds": [
+        {
+          "name": "Moon/Mercury (impact-airless)",
+          "sigmaEndoOverR": 0.00021112113031101153,
+          "f_I": 0.9638410486301512
+        },
+        {
+          "name": "Frozen (airless)",
+          "sigmaEndoOverR": 0.0001867052415763474,
+          "f_I": 0.9714963039754134
+        },
+        {
+          "name": "Crystal (faceted)",
+          "sigmaEndoOverR": 0.00014955352398649812,
+          "f_I": 0.981522610468489
+        },
+        {
+          "name": "Mars (arid rocky)",
+          "sigmaEndoOverR": 0.00019851506767038933,
+          "f_I": 0.9678957492407108
+        }
+      ]
+    },
+    {
+      "label": "moon -20%",
+      "moonScale": 0.8,
+      "moonSigmaEndoOverR": 0.0002,
+      "C_RELIC": 0.00024573237590526777,
+      "P_LAMBDA": 0.6072852713447058,
+      "moonAnchorFI": 0.9674293624297695,
+      "worlds": [
+        {
+          "name": "Moon/Mercury (impact-airless)",
+          "sigmaEndoOverR": 0.00020503451771705558,
+          "f_I": 0.9658256926971414
+        },
+        {
+          "name": "Frozen (airless)",
+          "sigmaEndoOverR": 0.00020662760781483592,
+          "f_I": 0.9653110636535495
+        },
+        {
+          "name": "Crystal (faceted)",
+          "sigmaEndoOverR": 0.0002231024884110426,
+          "f_I": 0.9597901794765458
+        },
+        {
+          "name": "Mars (arid rocky)",
+          "sigmaEndoOverR": 0.00023141875138627728,
+          "f_I": 0.9568683297006202
+        }
+      ]
+    },
+    {
+      "label": "moon +20%",
+      "moonScale": 1.2,
+      "moonSigmaEndoOverR": 0.0003,
+      "C_RELIC": 0.00009491783614590623,
+      "P_LAMBDA": -0.05168133100242911,
+      "moonAnchorFI": 0.929582974728112,
+      "worlds": [
+        {
+          "name": "Moon/Mercury (impact-airless)",
+          "sigmaEndoOverR": 0.00021622814150571283,
+          "f_I": 0.9621375594896154
+        },
+        {
+          "name": "Frozen (airless)",
+          "sigmaEndoOverR": 0.00017186200730765587,
+          "f_I": 0.9757427209567655
+        },
+        {
+          "name": "Crystal (faceted)",
+          "sigmaEndoOverR": 0.00010786165357510971,
+          "f_I": 0.9903027379484918
+        },
+        {
+          "name": "Mars (arid rocky)",
+          "sigmaEndoOverR": 0.00017513509065754366,
+          "f_I": 0.9748334451151058
+        }
+      ]
+    },
+    {
+      "label": "moon x2",
+      "moonScale": 2,
+      "moonSigmaEndoOverR": 0.0005,
+      "C_RELIC": 0.000028634199553032793,
+      "P_LAMBDA": -0.8818810669440302,
+      "moonAnchorFI": 0.8261595160280927,
+      "worlds": [
+        {
+          "name": "Moon/Mercury (impact-airless)",
+          "sigmaEndoOverR": 0.00023120444081279275,
+          "f_I": 0.9569447409048559
+        },
+        {
+          "name": "Frozen (airless)",
+          "sigmaEndoOverR": 0.0001362639993594338,
+          "f_I": 0.9846122716388479
+        },
+        {
+          "name": "Crystal (faceted)",
+          "sigmaEndoOverR": 0.00004317288327072826,
+          "f_I": 0.998433651766011
+        },
+        {
+          "name": "Mars (arid rocky)",
+          "sigmaEndoOverR": 0.00012328187524796095,
+          "f_I": 0.9873693669813048
+        }
+      ]
+    }
+  ],
+  "fI_band": {
+    "method": "per-world [min,max] of f_I across baseline/-20%/+20% (within-uncertainty); x2 is extreme witness only",
+    "perWorld": {
+      "Moon/Mercury (impact-airless)": {
+        "lo": 0.9621375594896154,
+        "hi": 0.9658256926971414,
+        "width": 0.0036881332075259232
+      },
+      "Frozen (airless)": {
+        "lo": 0.9653110636535495,
+        "hi": 0.9757427209567655,
+        "width": 0.010431657303216046
+      },
+      "Crystal (faceted)": {
+        "lo": 0.9597901794765458,
+        "hi": 0.9903027379484918,
+        "width": 0.030512558471946005
+      },
+      "Mars (arid rocky)": {
+        "lo": 0.9568683297006202,
+        "hi": 0.9748334451151058,
+        "width": 0.017965115414485644
+      }
+    },
+    "overall": {
+      "lo": 0.9568683297006202,
+      "hi": 0.9903027379484918,
+      "width": 0.03343440824787158
+    },
+    "x2ExtremeWidthPerWorld": {
+      "Moon/Mercury (impact-airless)": {
+        "lo": 0.9569447409048559,
+        "hi": 0.9658256926971414,
+        "width": 0.00888095179228543
+      },
+      "Frozen (airless)": {
+        "lo": 0.9653110636535495,
+        "hi": 0.9846122716388479,
+        "width": 0.01930120798529844
+      },
+      "Crystal (faceted)": {
+        "lo": 0.9597901794765458,
+        "hi": 0.998433651766011,
+        "width": 0.038643472289465186
+      },
+      "Mars (arid rocky)": {
+        "lo": 0.9568683297006202,
+        "hi": 0.9873693669813048,
+        "width": 0.03050103728068465
+      }
+    },
+    "marsGateNote": "Mars acceptance gate is real-Mars-hypsometry f_I in [0.3,0.8] (S0.6), NOT this relic-law value"
+  }
+}

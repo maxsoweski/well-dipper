@@ -1,0 +1,246 @@
+{
+  "meta": {
+    "workstream": "world-engine-inc3b-relief-budget-2026-07-21",
+    "slice": "S0.2 + S0.2a + S0.6 worked cases",
+    "script": "calibration/relief-budget-fit.mjs",
+    "point": {
+      "N": 40000,
+      "seed": 1,
+      "LLOYD": 2
+    },
+    "reuses": "relic-lambda-band.json (σ_endo/R + fit, READ not imported); amplitude pattern mirrors inc3b-amplitude-budget.mjs",
+    "solve": {
+      "form": "w_e² = (V_h+V_cf)/(V_h·(1+r)); w_i² = r·w_e²·V_h/V_cf; r = f_I/(1−f_I)",
+      "constraints": "variance-ratio = r AND preserved band w_e²V_h+w_i²V_cf = V_h+V_cf (shelfDepth weight 1, Cov(h,cf)≈0)",
+      "exactness": "both identities exact algebra; asserted to 1e-12 / 1e-9 on the boot referent"
+    }
+  },
+  "varianceDefinition": {
+    "frozen": "raw-mean-square",
+    "definition": "V = mean(x^2) (raw second moment about zero); RMS = sqrt(mean(x^2))",
+    "justification": "only raw-mean-square reproduces the recorded ~1.14% crater:base diagnosis; the recorded 0.09606/0.001094 ARE the raw RMS at N=40k seed 1, and the recorded w_i=86.48 requires the RAW V_h/V_cf ratio",
+    "binding": "inc3b-amplitude-budget.mjs (the AC-BUDGET harness) and AC-BUDGET use this same definition",
+    "reproductionAtRecordedPoint": {
+      "N": 40000,
+      "seed": 1,
+      "rawRMS_height": 0.0960601611122509,
+      "rawRMS_crater": 0.0010939577785745158,
+      "ratio_rawMeanSquare": 0.011388256753974979,
+      "std_height": 0.07129898397717929,
+      "std_crater": 0.001075044994118414,
+      "ratio_aboutMean": 0.015077984764306097,
+      "recorded_ratio": 0.01139,
+      "band": [
+        0.009,
+        0.014
+      ],
+      "rawMeanSquareReproduces": true,
+      "aboutMeanReproduces": false,
+      "witness_wi_aboutMean": 65.3268818048818,
+      "witness_wi_raw_recorded": 86.48
+    }
+  },
+  "epsilonVcf": {
+    "value": 1.1814295123540973e-8,
+    "definition": "smallest single-stamp raw mean-square the shipped schedule can produce",
+    "derivation": "one δ=MESH_FLOOR_RAD crater (A=0.01100) stamped on the N=40000 mesh with the shipped writer arithmetic (craterProfile bowl-reset/accumulate + CRATER_SAT_N tanh clamp), centre=node 0",
+    "minStampDelta": 0.055,
+    "minStampAmplitude": 0.011000000000000001,
+    "nodesTouched": 67,
+    "smallestRealizedInDomainVcf_Crystal": 4.4210118146197875e-8,
+    "clampFiresInDomain": false,
+    "fallback": "when realized V_cf < ε the budget returns IDENTITY (w_e=w_i=1) rather than an unbounded w_i",
+    "blowupWithoutClamp": [
+      {
+        "V_cf": 0.000001,
+        "w_i_unclamped": 94.61325431460435,
+        "belowEpsilon": false
+      },
+      {
+        "V_cf": 1e-9,
+        "w_i_unclamped": 2991.771859951891,
+        "belowEpsilon": true
+      },
+      {
+        "V_cf": 1e-12,
+        "w_i_unclamped": 94608.1280491798,
+        "belowEpsilon": true
+      }
+    ]
+  },
+  "fIByWorld": {
+    "Moon/Mercury (impact-airless)": {
+      "sigmaImpOverR_realized": 0.0010939577785745158,
+      "sigmaEndoOverR_relic": 0.00021112113031101153,
+      "f_I_model": 0.9640928333043023,
+      "f_I_relicFlatRef": 0.9638410486301512,
+      "nStamp": 147
+    },
+    "Frozen (airless)": {
+      "sigmaImpOverR_realized": 0.000906278232327816,
+      "sigmaEndoOverR_relic": 0.0001867052415763474,
+      "f_I_model": 0.9592865164419571,
+      "f_I_relicFlatRef": 0.9714963039754134,
+      "nStamp": 147
+    },
+    "Mars (arid rocky)": {
+      "sigmaImpOverR_realized": 0.0007058774337623437,
+      "sigmaEndoOverR_relic": 0.00019851506767038933,
+      "f_I_model": 0.9267057017464356,
+      "f_I_relicFlatRef": 0.9678957492407108,
+      "nStamp": 132
+    },
+    "Crystal (faceted)": {
+      "sigmaImpOverR_realized": 0.00021026202259608813,
+      "sigmaEndoOverR_relic": 0.00014955352398649812,
+      "f_I_model": 0.6640511496265264,
+      "f_I_relicFlatRef": 0.981522610468489,
+      "nStamp": 104
+    }
+  },
+  "weWiByWorld": {
+    "Moon/Mercury (impact-airless)": {
+      "V_h": 0.009227554552911599,
+      "V_cf": 0.0000011967436213036893,
+      "f_I": 0.9640928333043023,
+      "r": 26.8495936054965,
+      "w_e": 0.18950415188600125,
+      "w_i": 86.22443113483216,
+      "clampFired": false,
+      "preRawRMS": 0.09595750698734103,
+      "postRawRMS": 0.09427149349069648,
+      "deltaPctRaw": -1.7570417881604288,
+      "preStd": 0.07134331867661795,
+      "postStd": 0.09412437552583978,
+      "deltaPctAboutMean": 31.931591173215356
+    },
+    "Frozen (airless)": {
+      "V_h": 0.009227554552911599,
+      "V_cf": 8.213402343912308e-7,
+      "f_I": 0.9592865164419571,
+      "r": 23.561887429120524,
+      "w_e": 0.20178480479415928,
+      "w_i": 103.81862177449774,
+      "clampFired": false,
+      "preRawRMS": 0.09597423963954145,
+      "postRawRMS": 0.09415685492450392,
+      "deltaPctRaw": -1.893617205891122,
+      "preStd": 0.07133456307197919,
+      "postStd": 0.09405257465111588,
+      "deltaPctAboutMean": 31.847130760741305
+    },
+    "Mars (arid rocky)": {
+      "V_h": 0.009227554552911599,
+      "V_cf": 4.98262951494912e-7,
+      "f_I": 0.9267057017464356,
+      "r": 12.643626091356554,
+      "w_e": 0.2707365064913491,
+      "w_i": 131.00764963447753,
+      "clampFired": false,
+      "preRawRMS": 0.09599319257169417,
+      "postRawRMS": 0.0935638829188508,
+      "deltaPctRaw": -2.530710342849568,
+      "preStd": 0.07132495519437326,
+      "postStd": 0.09356223618871677,
+      "deltaPctAboutMean": 31.17742020831691
+    },
+    "Crystal (faceted)": {
+      "V_h": 0.009227554552911599,
+      "V_cf": 4.4210118146197875e-8,
+      "f_I": 0.6640511496265264,
+      "r": 1.9766436137176904,
+      "w_e": 0.5796123359085261,
+      "w_i": 372.29249358943724,
+      "clampFired": false,
+      "preRawRMS": 0.09605907712309154,
+      "postRawRMS": 0.09577640867822466,
+      "deltaPctRaw": -0.2942652098402566,
+      "preStd": 0.07132407834862432,
+      "postStd": 0.09207810604456029,
+      "deltaPctAboutMean": 29.09820663155652
+    }
+  },
+  "bootReferent": {
+    "V_h": 0.0092275236,
+    "V_cf": 0.0000011968359999999999,
+    "f_I": 0.97,
+    "r": 32.33333333333331,
+    "w_e": 0.17321631298796447,
+    "w_i": 86.48470138617814,
+    "rmsPreservationResidual": 0,
+    "varRatioResidual": 0,
+    "recorded": {
+      "rawRMS_height": 0.09606,
+      "rawRMS_crater": 0.001094,
+      "w_e": 0.1732,
+      "w_i": 86.48
+    }
+  },
+  "identityCollapse": {
+    "note": "deriving r from realized norms (r := V_cf/V_h) collapses w_e² to EXACTLY 1.0 — the §6-T2 split reason",
+    "rRealized": 0.00012970283814825462,
+    "we2": 1.0000000000000002,
+    "wi2": 1.0000000000000002
+  },
+  "independence": {
+    "acceptance": "about-mean |corr(h,cf)| < 0.15 (visible-band preservation premise)",
+    "acceptanceConvention": {
+      "value": 0.15,
+      "status": "GUESSED",
+      "rule": "about-mean |corr(h,cf)| < 0.15",
+      "rationale": "δ ≤ |ρ| (AM-GM bound above): neglecting Cov(h,cf) corrupts the visible about-mean band by at most the correlation coefficient, so |ρ|<0.15 caps the visible-band error under 15%. The 15% tolerance is a picked acceptance bar (an order-of-magnitude \"small correlation\"), NOT a derived model output.",
+      "resolutionPath": "Drop the proxy correlation threshold entirely: gate the EXACT per-world fractional band error δ = |2·w_e·w_i·ρ·σ_h·σ_cf| / (w_e²σ_h² + w_i²σ_cf²) directly (all five inputs — ρ, w_e, w_i, σ_h, σ_cf — are already measured/solved in this script; see weWiByWorld + independence). Gating δ needs no arbitrary tolerance on a proxy — it either meets whatever composite-band error budget AC-BUDGET sets or it does not. (This also folds in the raw-cross-moment E[h·cf] concern flagged below, whose DC-offset dominance is the reason the raw-band, unlike the about-mean band, is only approximately preserved.)"
+    },
+    "maxAbsCorr": 0.11909527768598174,
+    "worst": "Crystal (faceted)",
+    "rawCrossMomentFlag": "raw cross moment E[h·cf] is dominated by the height DC offset mean(h)≈0.0644, so realized RAW-band preservation is approximate (the SOLVE identity stays exact)",
+    "worlds": [
+      {
+        "name": "Moon/Mercury (impact-airless)",
+        "corr": 0.03371368415412335,
+        "cov": 0.0000025841409379665765,
+        "crossMoment": -0.000010454074653479105,
+        "meanH": 0.06437398105394052,
+        "meanCf": -0.00020253859366753648,
+        "accepted": true
+      },
+      {
+        "name": "Frozen (airless)",
+        "corr": 0.03371349394571846,
+        "cov": 0.0000021407931112195954,
+        "crossMoment": -0.000008660609378796508,
+        "meanH": 0.06437398105394052,
+        "meanCf": -0.00016779143239510725,
+        "accepted": true
+      },
+      {
+        "name": "Mars (arid rocky)",
+        "corr": 0.032560798533656087,
+        "cov": 0.0000016112213957152077,
+        "crossMoment": -0.0000066798978782393354,
+        "meanH": 0.06437398105394052,
+        "meanCf": -0.00012879612443119243,
+        "accepted": true
+      },
+      {
+        "name": "Crystal (faceted)",
+        "corr": 0.11909527768598174,
+        "cov": 0.0000017678458499767919,
+        "crossMoment": -1.2623264470443992e-7,
+        "meanH": 0.06437398105394052,
+        "meanCf": -0.00002942304427458304,
+        "accepted": true
+      }
+    ]
+  },
+  "marsGate": {
+    "gate": [
+      0.3,
+      0.8
+    ],
+    "source": "real-Mars hypsometry (training-sourced, medium confidence)",
+    "modelFI": 0.9267057017464356,
+    "modelInGate": false,
+    "domainNote": "the relic-Λ law's domain is dead-lid impact-retentive worlds; it EXCLUDES Mars-like eroded worlds, so it over-predicts Mars f_I — the real-hypsometry gate, not the model, is Mars's referent"
+  }
+}

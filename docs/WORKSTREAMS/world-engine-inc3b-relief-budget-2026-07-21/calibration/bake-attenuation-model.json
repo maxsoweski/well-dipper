@@ -1,0 +1,117 @@
+{
+  "measuredEdgeDeg": 1.11,
+  "thetaFloorDeg": 0.37000000000000005,
+  "bandThreshold": 0.16666666666666666,
+  "attenuationStats": {
+    "atMeasuredEdge": {
+      "mean": 0.75,
+      "std": 0.14433814464652092,
+      "min": 0.5,
+      "max": 1,
+      "p05": 0.525,
+      "p50": 0.75
+    },
+    "conservativeTail": "p05",
+    "bandThresholdTrueContrast": 0.31746031746031744
+  },
+  "displayChain": {
+    "levels": 6,
+    "bandLuminance": 0.16666666666666666,
+    "faceTexels": 256,
+    "incidenceDeg": 69.21000000000001,
+    "lightAzimuthDeg": 40.6,
+    "lightElevationDeg": 20.79
+  },
+  "edgeUnits": {
+    "measuredEdgeDeg": 1.11,
+    "naiveEdgeDeg": 0.5740991584648074,
+    "ratioMeasuredToNaive": 1.9334639036368553,
+    "texelFaceAvgDeg": 0.3515625,
+    "texelCentreGnomonicDeg": 0.4476141708605531,
+    "note": "naive 2/√N counts √N_total texels on a great circle; a cube-map actually puts 4·256=1024 texels there ⇒ true per-texel 0.35–0.45°, and the resolvable EDGE (Nyquist 2-texel + bake blur) is the measured 1.11°."
+  },
+  "thetaFloorSelfCheck": {
+    "formula": "2·PITCH/LEVELS (full-contrast wall carries exactly 1 band at worst sub-texel phase)",
+    "pitchDeg": 1.11,
+    "worstPhaseBestTexel": 0.167,
+    "expectedBandLuminance": 0.16666666666666666
+  },
+  "maxLambertWallContrast": {
+    "C_WALL_MAX": 0.9630054607404389,
+    "reposeDeg": 31,
+    "note": "CEILING (angle-of-repose wall) on available opposing-wall contrast at the staged incidence; not the population slope."
+  },
+  "arcAsymmetryBar": {
+    "modelDerived": {
+      "geqOneBandMagnitude": 0.16666666666666666,
+      "setOn": "conservative tail (p05), not the mean",
+      "trueContrastToClear": 0.31746031746031744,
+      "frozenPreCapture": true
+    },
+    "acceptanceConventions": {
+      "populationFraction": {
+        "value": 0.7,
+        "status": "JUSTIFIED",
+        "justification": "binomial: null p0=0.5, N≈73 (≥-median subset of nStamp=147); α=0.05 one-sided significance floor = 0.5 + 1.645·√(0.25/73) = 0.596; 0.70 chosen above that floor with power ≈ 0.973 against a true 0.70 asymmetry fraction.",
+        "significanceFloor": 0.5962663435688174,
+        "powerAt070": 0.9734476102603861,
+        "notModelOutput": true
+      },
+      "sizeGate": {
+        "rule": ">=median lit-disc stamp size",
+        "status": "GUESSED",
+        "rationale": "median is a convenient proxy for \"resolvable\" (larger crater ⇒ larger θ_wall ⇒ more likely ≥ THETA_FLOOR_DEG); it avoids diluting the fraction with sub-floor stamps.",
+        "resolutionPath": "Replace the median proxy with the EXACT per-stamp partition θ_wall ≥ THETA_FLOOR_DEG (θ_wall from the RNG-neutral probe, §E). Then no arbitrary median cut is needed and the size gate becomes the same geometric floor S3.a already uses."
+      }
+    },
+    "note": "ONLY geqOneBandMagnitude is a model output. populationFraction + sizeGate are acceptance conventions (MF-2). To be frozen into read-gate-thresholds.json at the S0.6 seam with these tags."
+  },
+  "rngNeutralProbeSpec": {
+    "purpose": "Export per-stamp crater centres (unit-vector direction), diameter D_km, and depth (from craterField) with ZERO added RNG draws and NO reordering, so the arc-test reads real geometry rather than a re-sampled population.",
+    "byteFenceSafe": {
+      "rule": "The probe MUST NOT consume any alea()/RNG stream state, MUST NOT reorder the crater iteration, and MUST NOT mutate carrier.height/craterField. It only READS centres/depths already placed by writeBombardment.",
+      "validation": "Validate against the fence-population harness pattern (../world-engine-inc3-relief-spine-depthlaw-2026-07-21/calibration/fence-population-invariance.mjs): the carrier hashes + drawn population must be byte-identical with the probe enabled vs disabled (probe is read-only)."
+    },
+    "perStampFields": [
+      "centreDir(x,y,z)",
+      "D_km",
+      "depth_km",
+      "thetaWallDeg"
+    ],
+    "thetaWallFromProbe": "θ_wall(D,R,incidence) is computed per stamp from the probe geometry at S2/S3 and compared to THETA_FLOOR_DEG for the content-vs-instrument split (S3.a). S0 freezes THETA_FLOOR_DEG; S3 supplies the per-stamp θ_wall."
+  },
+  "shadowRebaselineProtocol": {
+    "purpose": "darkClipFrac / shadowFrac guard against the render clipping crater interiors to black (which would erase arc asymmetry). After the S1 variance flip the luminance histogram shifts, so the guard baseline is stale.",
+    "protocol": [
+      "1. BEFORE the flip: record darkClipFrac0/shadowFrac0 from the pre-budget render at the staged light.",
+      "2. AFTER the S1 flip: RE-BASELINE darkClipFrac1/shadowFrac1 from the post-flip render at the SAME staged light.",
+      "3. HOLD darkClipFrac1/shadowFrac1 fixed for S3/S4 (do not re-baseline again per capture — that would launder a regression).",
+      "4. GATE: post-flip darkClipFrac must not EXCEED darkClipFrac1 by more than the frozen tolerance in read-gate-thresholds.json (S0.6)."
+    ],
+    "note": "re-baseline-after-flip is a ONE-TIME reset at the S1 seam, not a per-capture moving target (brief R8: \"re-baselined after the S1 flip, then held for S3/S4\")."
+  },
+  "moonMercuryGeometry": {
+    "R_earth": 0.38,
+    "R_km": 2420.98,
+    "nStamp": 147,
+    "tExp": 4.5,
+    "isImpactSurface": true,
+    "diameters": {
+      "D_FLOOR_KM": {
+        "D_km": 133.1539,
+        "angularDiameterDeg": 3.151267873219527,
+        "angularDiameterVsFloor": "resolvable"
+      },
+      "D_LO_KM": {
+        "D_km": 1,
+        "angularDiameterDeg": 0.02366635805049291,
+        "angularDiameterVsFloor": "sub-floor"
+      },
+      "D_HI_KM": {
+        "D_km": 2420.98,
+        "angularDiameterDeg": 57.29577951308232,
+        "angularDiameterVsFloor": "resolvable"
+      }
+    }
+  }
+}

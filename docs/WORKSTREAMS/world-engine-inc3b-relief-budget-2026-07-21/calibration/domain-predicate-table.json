@@ -1,0 +1,417 @@
+{
+  "workstream": "world-engine-inc3b-relief-budget-2026-07-21",
+  "slice": "S0.3",
+  "seed": 1,
+  "domainPredicate": {
+    "statement": "isImpactSurface(cond) AND craterSchedule(cond).fired AND craterSchedule(cond).nStamp > 0",
+    "conditionScalars": [
+      "T_eq",
+      "atmosphere.pressure",
+      "radiusEarth",
+      "surfaceGravity",
+      "age",
+      "rawTidalIoRatio"
+    ],
+    "outsideDomain": "w_e = w_i = 1.0 (bit-exact identity; compositeMargins reduces to h+sd+cf byte-for-byte)",
+    "nullTopologyNote": "compositeMargins returns null iff BOTH shelfDepth AND craterField are all-zero — a realized-array implementation fact read at composite time, NOT the physical predicate. Domain membership is decided from condition scalars at writeBodyRelief time, before the composite runs.",
+    "constants": {
+      "CRATER_T_MAX_K": 450,
+      "P_SURF_MAX_bar": 200
+    }
+  },
+  "affectedSet": [
+    {
+      "preset": "Frozen (airless)",
+      "Rcanonical": 0.5,
+      "g": 0.28,
+      "nStamp": 147,
+      "tExp": 4.5,
+      "coverage": 0.4423265089850196,
+      "expectedNStamp": 147
+    },
+    {
+      "preset": "Mars (arid rocky)",
+      "Rcanonical": 0.53,
+      "g": 0.38091847632609466,
+      "nStamp": 132,
+      "tExp": 4.5,
+      "coverage": 0.4039061027602618,
+      "expectedNStamp": 132
+    },
+    {
+      "preset": "Moon/Mercury (impact-airless)",
+      "Rcanonical": 0.38,
+      "g": 0.2770083102493075,
+      "nStamp": 147,
+      "tExp": 4.5,
+      "coverage": 0.42855235463394475,
+      "expectedNStamp": 147
+    },
+    {
+      "preset": "Crystal (faceted)",
+      "Rcanonical": 0.8,
+      "g": 0.7812499999999999,
+      "nStamp": 104,
+      "tExp": 4.5,
+      "coverage": 0.33729185079928314,
+      "expectedNStamp": 104
+    }
+  ],
+  "nearCliff": [
+    {
+      "preset": "Titan (methane seas)",
+      "fired": true,
+      "nStamp": 0,
+      "tExp": 1,
+      "inDomain": false
+    },
+    {
+      "preset": "Europa (icy moon)",
+      "fired": true,
+      "nStamp": 0,
+      "tExp": 0.005119015510868598,
+      "inDomain": false
+    }
+  ],
+  "nullPath": {
+    "gateYesNoStamp": [
+      {
+        "preset": "Rocky (Earthlike)",
+        "fired": true,
+        "nStamp": 0,
+        "tExp": 0.1
+      },
+      {
+        "preset": "Ocean (temperate)",
+        "fired": true,
+        "nStamp": 0,
+        "tExp": 0.1
+      },
+      {
+        "preset": "Titan (methane seas)",
+        "fired": true,
+        "nStamp": 0,
+        "tExp": 1
+      },
+      {
+        "preset": "Europa (icy moon)",
+        "fired": true,
+        "nStamp": 0,
+        "tExp": 0.005119015510868598
+      },
+      {
+        "preset": "Eyeball (locked temperate)",
+        "fired": true,
+        "nStamp": 0,
+        "tExp": 0.10413889629432152
+      }
+    ],
+    "gateNo": [
+      {
+        "preset": "Lava (hot airless)",
+        "T_eq": 950,
+        "pressure": 0
+      },
+      {
+        "preset": "Gas giant (Jovian)",
+        "T_eq": 125,
+        "pressure": 1000
+      },
+      {
+        "preset": "Gas giant (Saturnian)",
+        "T_eq": 95,
+        "pressure": 1000
+      },
+      {
+        "preset": "Ice giant (Neptunian)",
+        "T_eq": 55,
+        "pressure": 1000
+      },
+      {
+        "preset": "Venus (sulfuric shroud)",
+        "T_eq": 737,
+        "pressure": 92
+      },
+      {
+        "preset": "Sub-Neptune (hazy)",
+        "T_eq": 550,
+        "pressure": 1000
+      },
+      {
+        "preset": "Hot Jupiter (locked giant)",
+        "T_eq": 1400,
+        "pressure": 1000
+      },
+      {
+        "preset": "Magma (K2-141b)",
+        "T_eq": 2000,
+        "pressure": 0
+      },
+      {
+        "preset": "Carbon (high C/O)",
+        "T_eq": 600,
+        "pressure": 0
+      }
+    ]
+  },
+  "allPresets": [
+    {
+      "preset": "Rocky (Earthlike)",
+      "named": false,
+      "Rcanonical": 1,
+      "g": 0.9,
+      "T_eq": 288,
+      "pressure": 1,
+      "isImpactSurface": true,
+      "fired": true,
+      "nStamp": 0,
+      "tExp": 0.1,
+      "coverage": 0.000014544985847755942,
+      "inDomain": false
+    },
+    {
+      "preset": "Lava (hot airless)",
+      "named": false,
+      "Rcanonical": 0.9,
+      "g": 0.8024691358024691,
+      "T_eq": 950,
+      "pressure": 0,
+      "isImpactSurface": false,
+      "fired": false,
+      "nStamp": 0,
+      "tExp": 0,
+      "coverage": 0,
+      "inDomain": false
+    },
+    {
+      "preset": "Ocean (temperate)",
+      "named": false,
+      "Rcanonical": 1.1,
+      "g": 1.0743801652892562,
+      "T_eq": 295,
+      "pressure": 1.5,
+      "isImpactSurface": true,
+      "fired": true,
+      "nStamp": 0,
+      "tExp": 0.1,
+      "coverage": 0.000013888872358853142,
+      "inDomain": false
+    },
+    {
+      "preset": "Titan (methane seas)",
+      "named": true,
+      "Rcanonical": 0.4,
+      "g": 0.15624999999999997,
+      "T_eq": 94,
+      "pressure": 1.5,
+      "isImpactSurface": true,
+      "fired": true,
+      "nStamp": 0,
+      "tExp": 1,
+      "coverage": 0.00022764393210664786,
+      "inDomain": false
+    },
+    {
+      "preset": "Frozen (airless)",
+      "named": false,
+      "Rcanonical": 0.5,
+      "g": 0.28,
+      "T_eq": 60,
+      "pressure": 0,
+      "isImpactSurface": true,
+      "fired": true,
+      "nStamp": 147,
+      "tExp": 4.5,
+      "coverage": 0.4423265089850196,
+      "inDomain": true
+    },
+    {
+      "preset": "Europa (icy moon)",
+      "named": true,
+      "Rcanonical": 0.5,
+      "g": 0.28,
+      "T_eq": 110,
+      "pressure": 0,
+      "isImpactSurface": true,
+      "fired": true,
+      "nStamp": 0,
+      "tExp": 0.005119015510868598,
+      "coverage": 9.959571168506027e-7,
+      "inDomain": false
+    },
+    {
+      "preset": "Gas giant (Jovian)",
+      "named": false,
+      "Rcanonical": 11.2,
+      "g": 2.5334821428571432,
+      "T_eq": 125,
+      "pressure": 1000,
+      "isImpactSurface": false,
+      "fired": false,
+      "nStamp": 0,
+      "tExp": 0,
+      "coverage": 0,
+      "inDomain": false
+    },
+    {
+      "preset": "Gas giant (Saturnian)",
+      "named": false,
+      "Rcanonical": 9.4,
+      "g": 1.0774105930285196,
+      "T_eq": 95,
+      "pressure": 1000,
+      "isImpactSurface": false,
+      "fired": false,
+      "nStamp": 0,
+      "tExp": 0,
+      "coverage": 0,
+      "inDomain": false
+    },
+    {
+      "preset": "Ice giant (Neptunian)",
+      "named": false,
+      "Rcanonical": 3.9,
+      "g": 1.124260355029586,
+      "T_eq": 55,
+      "pressure": 1000,
+      "isImpactSurface": false,
+      "fired": false,
+      "nStamp": 0,
+      "tExp": 0,
+      "coverage": 0,
+      "inDomain": false
+    },
+    {
+      "preset": "Venus (sulfuric shroud)",
+      "named": true,
+      "Rcanonical": 0.95,
+      "g": 0.9030470914127423,
+      "T_eq": 737,
+      "pressure": 92,
+      "isImpactSurface": false,
+      "fired": false,
+      "nStamp": 0,
+      "tExp": 0,
+      "coverage": 0,
+      "inDomain": false
+    },
+    {
+      "preset": "Sub-Neptune (hazy)",
+      "named": false,
+      "Rcanonical": 2.7,
+      "g": 1.1248285322359395,
+      "T_eq": 550,
+      "pressure": 1000,
+      "isImpactSurface": false,
+      "fired": false,
+      "nStamp": 0,
+      "tExp": 0,
+      "coverage": 0,
+      "inDomain": false
+    },
+    {
+      "preset": "Eyeball (locked temperate)",
+      "named": false,
+      "Rcanonical": 1,
+      "g": 1,
+      "T_eq": 270,
+      "pressure": 1,
+      "isImpactSurface": true,
+      "fired": true,
+      "nStamp": 0,
+      "tExp": 0.10413889629432152,
+      "coverage": 0.000014643532702746111,
+      "inDomain": false
+    },
+    {
+      "preset": "Hot Jupiter (locked giant)",
+      "named": true,
+      "Rcanonical": 13,
+      "g": 2.366863905325444,
+      "T_eq": 1400,
+      "pressure": 1000,
+      "isImpactSurface": false,
+      "fired": false,
+      "nStamp": 0,
+      "tExp": 0,
+      "coverage": 0,
+      "inDomain": false
+    },
+    {
+      "preset": "Mars (arid rocky)",
+      "named": true,
+      "Rcanonical": 0.53,
+      "g": 0.38091847632609466,
+      "T_eq": 210,
+      "pressure": 0.01,
+      "isImpactSurface": true,
+      "fired": true,
+      "nStamp": 132,
+      "tExp": 4.5,
+      "coverage": 0.4039061027602618,
+      "inDomain": true
+    },
+    {
+      "preset": "Moon/Mercury (impact-airless)",
+      "named": true,
+      "Rcanonical": 0.38,
+      "g": 0.2770083102493075,
+      "T_eq": 235,
+      "pressure": 0,
+      "isImpactSurface": true,
+      "fired": true,
+      "nStamp": 147,
+      "tExp": 4.5,
+      "coverage": 0.42855235463394475,
+      "inDomain": true
+    },
+    {
+      "preset": "Magma (K2-141b)",
+      "named": true,
+      "Rcanonical": 1.5,
+      "g": 2.2222222222222223,
+      "T_eq": 2000,
+      "pressure": 0,
+      "isImpactSurface": false,
+      "fired": false,
+      "nStamp": 0,
+      "tExp": 0,
+      "coverage": 0,
+      "inDomain": false
+    },
+    {
+      "preset": "Carbon (high C/O)",
+      "named": false,
+      "Rcanonical": 1.1,
+      "g": 1.1570247933884295,
+      "T_eq": 600,
+      "pressure": 0,
+      "isImpactSurface": false,
+      "fired": false,
+      "nStamp": 0,
+      "tExp": 0,
+      "coverage": 0,
+      "inDomain": false
+    },
+    {
+      "preset": "Crystal (faceted)",
+      "named": false,
+      "Rcanonical": 0.8,
+      "g": 0.7812499999999999,
+      "T_eq": 150,
+      "pressure": 0,
+      "isImpactSurface": true,
+      "fired": true,
+      "nStamp": 104,
+      "tExp": 4.5,
+      "coverage": 0.33729185079928314,
+      "inDomain": true
+    }
+  ],
+  "assertions": {
+    "affectedCountsMatch": true,
+    "nearCliffMatch": true,
+    "partitionComplete": true,
+    "failures": []
+  }
+}

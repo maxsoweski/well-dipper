@@ -1,0 +1,260 @@
+{
+  "meta": {
+    "workstream": "world-engine-inc3b-relief-budget-2026-07-21",
+    "slice": "S0.6",
+    "artifact": "read-gate-thresholds.json",
+    "purpose": "ALL AC-READ bars, FROZEN before any S2/S4 capture. feedback_perceptual-read-gate-before-uat: no post-hoc tuning, ever.",
+    "frozenAt": "2026-07-23",
+    "frozenAtNote": "workstream build seam (BUILD-PLAN, 2026-07-23) — NOT a wall-clock timestamp; this file re-generates byte-identical.",
+    "generatedBy": "calibration/read-gate-thresholds.mjs (deterministic: reads the 3 committed source artifacts + adds structural specs; re-run reproduces byte-identical).",
+    "sourceArtifacts": {
+      "bake-attenuation-model.json": "S0.5/S0.5a — arc ≥1-band magnitude (MODEL-DERIVED), population fraction (JUSTIFIED) + size gate (GUESSED) copied verbatim, light staging (displayChain), RNG-neutral centre probe, shadow re-baseline protocol.",
+      "relic-lambda-band.json": "S0.1/S0.1a — the anchor-swept per-world f_I band (copied).",
+      "relief-budget-fit.json": "S0.2/S0.2a/S0.6 — Mars real-hypsometry f_I gate [0.3,0.8]; realized model f_I per world (cross-reference).",
+      "planet-lod-lab.html": "state defaults grep-verified this session — :2006 lightAzimuthDeg=40.6, :2007 lightElevationDeg=20.79 (the source of displayChain az/el)."
+    },
+    "noPostHocTuning": {
+      "declaration": "Every bar below is FROZEN at the S0 seam, BEFORE the first S2 capture. No number here may be re-chosen, relaxed, or re-tagged after any render is viewed — the verdict is recorded whichever way it falls, and Max is pinged only after.",
+      "honestyTags": "status:MODEL-DERIVED = a calibration-model output; status:JUSTIFIED = an acceptance convention carrying an explicit statistical justification; status:GUESSED = an acceptance convention carrying a written resolutionPath. NONE is a taste constant."
+    }
+  },
+  "lightStaging": {
+    "lightAzimuthDeg": 40.6,
+    "lightElevationDeg": 20.79,
+    "incidenceDeg": 69.21000000000001,
+    "faceTexels": 256,
+    "posterizeLevels": 6,
+    "bandLuminance": 0.16666666666666666,
+    "appliesTo": "ALL oblique captures — arc-asymmetry, blind-read, and surface-class — at S2 (flip alone) and S4 (post-S3 / re-run), seed 1 + 2 re-rolls.",
+    "fullPhaseException": "The fullPhaseControl capture (below) is the ONE capture NOT at this oblique light — it is a face-on / zero-phase control. All other captures use exactly these az/el.",
+    "justification": "Pinned to exact numbers (BUILD-PLAN §0.5: pin the az/el, not \"~70°\"). Numbers verified against planet-lod-lab.html state defaults by grep this session (:2006/:2007); incidence derived 90 − elevation = 69.21°. Frozen so every capture and the reference share one lighting geometry."
+  },
+  "arc": {
+    "barStatement": "≥ populationFraction of the ≥-median lit-disc stamps show a light-consistent wall-half luminance asymmetry of ≥ geqOneBandMagnitude (1 posterize band), centres from the RNG-neutral probe, at the staged oblique light — AND the post-flip dark-clip guard holds.",
+    "geqOneBandMagnitude": {
+      "value": 0.16666666666666666,
+      "trueContrastToClear": 0.31746031746031744,
+      "setOn": "conservative tail (p05), not the mean",
+      "status": "MODEL-DERIVED",
+      "frozenPreCapture": true,
+      "justification": "The ONLY model output of the bake+Lambert+posterize chain in this bar. Set on the conservative p05 tail of the per-stamp attenuation distribution (a 256²-cube 1.11° wall has a sub-texel phase → the realized attenuation is a distribution, not a point; a threshold set on the mean is systematically wrong for the tails). Source: bake-attenuation-model.json.arcAsymmetryBar.modelDerived (S0.5a).",
+      "source": "bake-attenuation-model.json.arcAsymmetryBar.modelDerived"
+    },
+    "populationFraction": {
+      "value": 0.7,
+      "status": "JUSTIFIED",
+      "justification": "binomial: null p0=0.5, N≈73 (≥-median subset of nStamp=147); α=0.05 one-sided significance floor = 0.5 + 1.645·√(0.25/73) = 0.596; 0.70 chosen above that floor with power ≈ 0.973 against a true 0.70 asymmetry fraction.",
+      "significanceFloor": 0.5962663435688174,
+      "powerAt070": 0.9734476102603861,
+      "notModelOutput": true
+    },
+    "sizeGate": {
+      "rule": ">=median lit-disc stamp size",
+      "status": "GUESSED",
+      "rationale": "median is a convenient proxy for \"resolvable\" (larger crater ⇒ larger θ_wall ⇒ more likely ≥ THETA_FLOOR_DEG); it avoids diluting the fraction with sub-floor stamps.",
+      "resolutionPath": "Replace the median proxy with the EXACT per-stamp partition θ_wall ≥ THETA_FLOOR_DEG (θ_wall from the RNG-neutral probe, §E). Then no arbitrary median cut is needed and the size gate becomes the same geometric floor S3.a already uses."
+    },
+    "centresVia": {
+      "method": "RNG-neutral centre-export probe — writer records per-stamp centres/depths/D_km/θ_wall with ZERO added RNG draws and NO reordering (byte-fence-safe).",
+      "source": "bake-attenuation-model.json.rngNeutralProbeSpec",
+      "note": "The arc test reads REAL geometry (centres already placed by writeBombardment), not a re-sampled population — so the bar is not confounded by measurement RNG."
+    },
+    "darkClipGuard": {
+      "protocol": "re-baseline-after-flip (bake-attenuation-model.json.shadowRebaselineProtocol): record darkClipFrac0 pre-flip, RE-BASELINE darkClipFrac1 once at the S1 seam, then HOLD it for S3/S4.",
+      "source": "bake-attenuation-model.json.shadowRebaselineProtocol",
+      "toleranceFrac": {
+        "value": 0.01,
+        "status": "GUESSED",
+        "rationale": "A per-capture growth bound: post-flip darkClipFrac must not EXCEED the re-baselined darkClipFrac1 by more than this fraction of disc pixels newly clipping to black (which would erase arc asymmetry). bake-attenuation-model.json.shadowRebaselineProtocol step 4 explicitly defers this number to read-gate-thresholds.json (S0.6); it cannot be derived from S0 alone because darkClipFrac1 is not measured until the S1 flip.",
+        "resolutionPath": "At the S1 re-baseline seam (before any S2/S3/S4 capture), measure darkClipFrac1 and its per-reroll sampling spread σ across seed 1 + 2 re-rolls at the staged light; set toleranceFrac = max(k·σ (k=2), dither-noise floor). Replace this GUESS with that derived value, then FREEZE and hold (do not re-baseline per capture — that would launder a regression)."
+      },
+      "note": "The dark-clip guard is a REGRESSION guard on the arc bar, not an independent read bar."
+    },
+    "geometryContext": {
+      "measuredEdgeDeg": 1.11,
+      "thetaFloorDeg": 0.37000000000000005,
+      "note": "Included so the arc bar is self-contained; both numbers are read from bake-attenuation-model.json (S0.5)."
+    },
+    "frozenPreCapture": true
+  },
+  "blindRead": {
+    "barStatement": "A SINGLE caption is a coin flip in both directions (\"cratered\" for any pocked sphere = false pass; \"noisy rock\" for a genuinely cratered one under heavy dither = false fail). So the bar is discriminative only as N≥3 independent fresh-context captions PLUS a forced-choice against distractor terrains.",
+    "captions": {
+      "N": 3,
+      "independence": "Each caption produced by a fresh-context agent with NO prior knowledge of the render, NO impact/crater vocabulary in the prompt.",
+      "vocabSet": [
+        "crater",
+        "cratered",
+        "impact",
+        "basin",
+        "pocked",
+        "pitted"
+      ],
+      "passRule": "majority (>= 2 of 3) captions spontaneously use a vocabSet term without it appearing in the prompt",
+      "role": "CORROBORATING (secondary), not the primary statistical discriminator",
+      "status": "JUSTIFIED",
+      "justification": "Majority-of-independent-N guards the m-6 single-agent coin flip. Stated honestly: under the null p=0.5 per caption, P(≥2 of 3 use the vocab) = 0.5 — so caption majority is NOT a strong statistical bar on its own; it corroborates the forced-choice. That is exactly why the forced-choice below is the PRIMARY bar."
+    },
+    "forcedChoice": {
+      "prompt": "Present the render among a distractor set and ask, unprompted, \"which is the cratered body?\"",
+      "distractorSetStructure": {
+        "distractorCount": 3,
+        "rule": "K distinct NON-crater-dominated relief classes rendered through the IDENTICAL posterize/dither/pixelScale pipeline at the SAME staged light (az 40.6°/el 20.79°), same N=40k mesh, from lab presets OUTSIDE the crater-dominated in-domain set — so the discriminating cue is terrain STRUCTURE, not art style or palette.",
+        "exampleDistractors": [
+          "tectonic-ridged (Rocky / Earthlike)",
+          "fluvial-margin / shelf (Ocean)",
+          "chaos-lineated icy (Europa)"
+        ],
+        "note": "Distractors carry relief but NOT circular impact structure; a genuinely cratered target is separable by structure alone."
+      },
+      "rendersPerVerdict": 3,
+      "passRule": "the cratered target is correctly identified on ALL 3 renders (seed 1 + 2 re-rolls)",
+      "nullProbabilitySingle": 0.25,
+      "nullProbabilityCombined": 0.015625,
+      "role": "PRIMARY statistical discriminator",
+      "status": "JUSTIFIED",
+      "justification": "K=3 distractors give a 4-way choice with per-render null 1/4; requiring correct identification on all 3 rerolls gives combined null (1/4)^3 = 0.015625 < α=0.05 (assuming the 3 re-rolled target images are independent — medium-confidence). This makes the blind read a real statistical bar, not a single agent's whim (m-6)."
+    },
+    "passRule": "PASS iff forcedChoice passes (primary) AND captions majority passes (corroborating).",
+    "frozenPreCapture": true,
+    "anchor": "BUILD-PLAN §1.S2 (ii) + §2 AC-READ; lens-log m-6."
+  },
+  "surfaceClass": {
+    "barStatement": "R2 makes our render PRE-ALBEDO (relief only — no maria/highland contrast, no rays). The shared posterize/dither pipeline does NOT strip albedo, so matching against an albedo-bearing Moon photo is confounded (toothless OR biased-to-fail). Pin a RELIEF-DOMINATED reference with the same information content as the pre-albedo render; read the verdict off RELIEF STRUCTURE.",
+    "referencePrimary": {
+      "pick": "LRO/LOLA shaded-relief DEM at matched sun az/el",
+      "dataset": "LOLA (Lunar Orbiter Laser Altimeter) gridded lunar DEM (e.g. the LDEM elevation product)",
+      "instrument": "LOLA aboard NASA Lunar Reconnaissance Orbiter (LRO)",
+      "distributionNode": "NASA PDS Geosciences Node (LOLA archive)",
+      "renderAs": "HILLSHADE at sun azimuth 40.6°, elevation 20.79° (matched to lightStaging)",
+      "whyThisPick": "A DEM hillshade is relief-ONLY by construction → identical information content to the pre-albedo render (the MF-4 requirement), and sun az/el is a free hillshade parameter so it matches the staged light EXACTLY. This is the only reference that eliminates the albedo confound outright rather than bounding it.",
+      "status": "JUSTIFIED"
+    },
+    "referenceFallback": {
+      "pick": "Cassini Mimas global mosaic (near-albedo-uniform — the contract's own alternative)",
+      "dataset": "Cassini ISS global mosaic of Mimas",
+      "instrument": "Cassini ISS Narrow-Angle Camera (NAC)",
+      "distributionNode": "NASA PDS Imaging Node (Cassini archive)",
+      "useWhen": "a matched-az/el LOLA hillshade cannot be acquired live at S2 time",
+      "caveat": "sun az/el is FIXED by the acquisition geometry (cannot be matched to 40.6°/20.79°); annotate the lighting mismatch when used.",
+      "status": "JUSTIFIED"
+    },
+    "acquisition": {
+      "rule": "The S2/S4 driver searches for the named dataset+instrument LIVE (WebSearch/WebFetch). NO invented URL is frozen here (feedback_no-invented-urls) — only the dataset + instrument + node names above."
+    },
+    "pipeline": "Push the reference through the SAME posterize (6 levels) / dither / pixelScale pipeline as the render BEFORE comparison.",
+    "verdictRule": {
+      "readOff": "RELIEF STRUCTURE (crater density + texture), NOT albedo patches.",
+      "densityTextureClause": "verdict \"same surface class: heavily cratered\" requires a matching density/texture read, not merely \"a lumpy sphere\"."
+    },
+    "fullAlbedoPhotoFallback": {
+      "allowed": false,
+      "note": "If a full-albedo photo (e.g. LRO last-quarter Moon) is used instead of a relief-dominated reference, S0 must BOUND and annotate the terminator-phase albedo contamination, and the \"same surface class\" verdict is still read off relief structure, not albedo. Preferred path is the relief-dominated reference above, which needs no such bound."
+    },
+    "frozenPreCapture": true,
+    "anchor": "BUILD-PLAN §1.S2 (iii) + §2 AC-READ; lens-log MF-4; brief §2.5 R5."
+  },
+  "fullPhaseControl": {
+    "required": true,
+    "isGate": false,
+    "role": "CONTROL, not a pass/fail bar.",
+    "lighting": "face-on lit disc at zero phase angle (sun behind camera) — a DIFFERENT lighting from the oblique staged light; see lightStaging.fullPhaseException.",
+    "reviewedAs": "the honest PRE-ALBEDO state: pre-albedo/rays, a full-phase lit disc reads NEAR-FEATURELESS (a real full Moon is albedo, not relief). This is disclosed to Max as the honest state, not scored.",
+    "justification": "Required by R2 (the render is pre-albedo) + Max decision #2 (full-phase flatness accepted; albedo/ejecta deferred to the exogenic increment) + brief R7 (bind UAT lighting AND file the full-phase control). Filed so lighting freedom does not surprise Max at UAT.",
+    "frozenPreCapture": true,
+    "anchor": "BUILD-PLAN §1.S2 (iv), §1.S4; brief §3b decision #2, R7."
+  },
+  "crispnessRatio": {
+    "isGate": false,
+    "role": "DIAGNOSTIC-ONLY.",
+    "justification": "R5: crispnessRatio was BLIND to a 2.375× amplitude change, so it is demoted to a diagnostic and NEVER a pass/fail gate. If it is computed against any reference, the reference is first pushed through the SAME posterize/dither/pixelScale pipeline.",
+    "frozenPreCapture": true,
+    "anchor": "BUILD-PLAN §1.S2 (v); brief §2.5 R5."
+  },
+  "fIBand": {
+    "source": "relic-lambda-band.json.fI_band (S0.1a anchor-swept band)",
+    "method": "per-world [min,max] of f_I across baseline/-20%/+20% (within-uncertainty); x2 is extreme witness only",
+    "perWorld": {
+      "Moon/Mercury (impact-airless)": {
+        "lo": 0.9621375594896154,
+        "hi": 0.9658256926971414,
+        "width": 0.0036881332075259232
+      },
+      "Frozen (airless)": {
+        "lo": 0.9653110636535495,
+        "hi": 0.9757427209567655,
+        "width": 0.010431657303216046
+      },
+      "Crystal (faceted)": {
+        "lo": 0.9597901794765458,
+        "hi": 0.9903027379484918,
+        "width": 0.030512558471946005
+      },
+      "Mars (arid rocky)": {
+        "lo": 0.9568683297006202,
+        "hi": 0.9748334451151058,
+        "width": 0.017965115414485644
+      }
+    },
+    "overall": {
+      "lo": 0.9568683297006202,
+      "hi": 0.9903027379484918,
+      "width": 0.03343440824787158
+    },
+    "marsGate": {
+      "gate": [
+        0.3,
+        0.8
+      ],
+      "source": "real-Mars hypsometry (training-sourced, medium confidence)",
+      "note": "Mars acceptance gate is real-Mars-hypsometry f_I in [0.3,0.8] (S0.6), NOT this relic-law value"
+    },
+    "realizedModelFI_crossReference": {
+      "note": "The frozen band above is the anchor-swept RELIC band (domain-honesty band on the relic-flat σ_imp reference). The REALIZED model f_I (from per-world realized σ_imp) lives in relief-budget-fit.json.fIByWorld — quoted here only for cross-reference; the AC-BUDGET check uses those in relief-budget-fit.json, this file freezes the read-gate reference band.",
+      "Moon/Mercury (impact-airless)": 0.9640928333043023,
+      "Frozen (airless)": 0.9592865164419571,
+      "Mars (arid rocky)": 0.9267057017464356,
+      "Crystal (faceted)": 0.6640511496265264
+    },
+    "frozenPreCapture": true,
+    "anchor": "BUILD-PLAN §1.S0 S0.6, S0.1a; §2 AC-BUDGET row."
+  },
+  "rerollSpec": {
+    "varietyDriver": {
+      "control": "🌍 \"new planet (re-roll all)\"",
+      "site": "planet-lod-lab.html:3871 newPlanet()",
+      "mechanism": "re-rolls worldSeed → macroSeed (:3874, \"draw:macro:\"+worldSeed), which drives crater PLACEMENT via forEachCrater(cond, macroSeed, …) (bombardment.js:305). THIS is the layout-variety driver."
+    },
+    "notTheDriver": {
+      "control": "🎲 \"reroll radius\"",
+      "site": "planet-lod-lab.html:3861 rerollRadius()",
+      "whyNot": "bumps radiusSeed ONLY — a no-op for layout, and (pre-R3) a no-op for canonical-locked Moon/Mercury radius. Driving 🎲 on Moon/Mercury shows ZERO layout variety and re-triggers Max's \"they do not vary\" (m-4)."
+    },
+    "controls": {
+      "moonMercuryMacroSeeds": {
+        "count": 3,
+        "via": "🌍 newPlanet() macroSeed re-roll",
+        "assert": "layout differs across the 3 macroSeeds (robust variety signal)."
+      },
+      "frozenRadiusDraws": {
+        "count": 2,
+        "via": "drawPresetRadius(..., { labUnlock: true })",
+        "radiusDrawRange": [
+          0.27,
+          0.38
+        ],
+        "assert": "radius draws land in [0.27,0.38] and vary; Frozen g-mediated deltas differ across radius draws."
+      }
+    },
+    "largestBasinSpread": {
+      "reporting": "MEASURED, not promised (m-5)",
+      "note": "With ~147 draws from a truncated Pareto the max basin often pins near the D_HI truncation, so largest-basin variety may be a WEAK signal. S4 computes the expected max-basin spread from the truncated SFD; if below a just-noticeable threshold, AC-REROLL rests on LAYOUT variety (robust) and reports biggest-basin variety as measured, not sold."
+    },
+    "stampedCountRInvariance": {
+      "statedAs": "a mesh-floor INSTRUMENT LIMIT, NOT sold as variety (A4).",
+      "note": "nStamp is R-invariant (147=147 measured); this is disclosed to Max plainly, not dressed up as re-roll variety."
+    },
+    "frozenPreCapture": true,
+    "anchor": "BUILD-PLAN §1.S4 + §2 AC-REROLL row; lens-log m-4, m-5; brief A4."
+  }
+}
