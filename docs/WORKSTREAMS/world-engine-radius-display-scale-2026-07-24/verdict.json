@@ -1,0 +1,68 @@
+{
+  "workstream": "world-engine-radius-display-scale-2026-07-24",
+  "commit": "5cef327",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC-0",
+      "result": "PASS",
+      "evidence": "Given finding (unit, adversarial 1/1 sufficient): sVis derivation reads exactly `state.planetRadiusEarth`, no label/archetype/regime read, no new *Enabled key, named consumer chain documented in BUILD-NOTES.md, denylist grep 0 hits, 23/23 new tests + 56/56 taxonomy/drift-guard tests + golden byte-identity + full-suite baseline all independently re-run in that finding.",
+      "adversarialVotes": "1/1 sufficient"
+    },
+    {
+      "id": "AC-VIS-MONO",
+      "result": "PASS",
+      "evidence": "Independently re-run at this synthesis (`npx vitest run tests/planet-vis-scale.test.js tests/vis-scale-fence.test.js` -> 2 files / 23 tests passed). Read the test source directly: describe block `visScaleOf \u2014 AC-VIS-MONO (mapping shape)` asserts identity at 1 RE, exponent 0.5, worked points 0.3->0.5477 and 16->4.0, and 200-point strict-monotonicity sweep \u2014 matches the AC statement exactly.",
+      "adversarialVotes": "not run this pass \u2014 single-session direct test execution + source read, not multi-agent adversarial"
+    },
+    {
+      "id": "AC-SCALE-LIVE",
+      "result": "PASS",
+      "evidence": "evidence/AC-LIVE-RESULT.md (working-Claude live drive on :5175, commit 5cef327, console clean) + visually confirmed by directly viewing AC-SCALE-r0.5.png (small ~80px disc) vs AC-SCALE-r8.png (disc spans ~875-1130px, clearly much larger) myself. Measured: 0.5->79px, 2->163px (ratio 2.063 vs expected 2.0), 8->327px (ratio 2.006 vs expected 2.0) \u2014 strictly increasing, each step far above the 5% bar. Moon/Mercury reroll: draw1 57px -> draw2 (larger radius) 69px, ratio 1.211 vs expected 1.172. All 5 referenced screenshots present on disk.",
+      "adversarialVotes": "not run this pass \u2014 live evidence taken from working-Claude's prior drive, spot-checked visually by this synthesis, not independently re-driven or adversarially reviewed"
+    },
+    {
+      "id": "AC-LOD-KEY",
+      "result": "PASS",
+      "evidence": "Independently re-run: 23/23 pass includes `AC-LOD-KEY \u2014 logical distance keying identity` (reduces to state.distance exactly at sVis=1; is state.distance/4 at sVis=4) and vis-scale-fence.test.js's `AC-LOD-KEY \u2014 the four lab call sites key on logical distance (source pins)` (logicalDist definition, lodRampOf/lodHysteresis/autoOctaves pins) \u2014 read directly, matches AC statement.",
+      "adversarialVotes": "not run this pass \u2014 direct test execution + source read"
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "result": "PASS",
+      "evidence": "Independently re-run: `npm run verify-golden` -> PASS, canonical-scenario-v1 matches golden 40c18aad, 1200/1200 samples; denylist grep `visScaleOf|\\bsVis\\b|VIS_SCALE_EXP` over src/worldengine/, GLSL files, tests/golden-trajectories/ -> 0 hits; full suite held at the exact pre-existing 4-test-failure baseline (2312 passed/4 failed = 2289 baseline + 23 new). vis-scale-fence.test.js source read directly confirms dedicated AC-ZERO-CLOBBER describe blocks (procgen-surface scan, GLSL-region scan, featureFrequencyFromKm arg check, height-uniform-bundle check).",
+      "adversarialVotes": "not run this pass \u2014 direct command execution, not multi-agent adversarial"
+    },
+    {
+      "id": "AC-CLAMP",
+      "result": "PASS",
+      "evidence": "Unit half independently re-run (planet-vis-scale.test.js `minCameraDistance \u2014 AC-CLAMP` describe block: margin >sVis*1.05 at every design radius, worked point 16 RE -> 4.4). Live half from evidence/AC-LIVE-RESULT.md: radius 16 (sVis=4.0), forced distance 1.1, frame-loop clamp raised to 4.4 > 4.2 bar; visually confirmed AC-CLAMP-r16-minzoom.png myself \u2014 continuous rendered surface fills the frame, no near-plane clip-through/void.",
+      "adversarialVotes": "not run this pass \u2014 unit half direct test execution; live half taken from prior drive, spot-checked visually"
+    },
+    {
+      "id": "AC-OVERLAY",
+      "result": "PASS",
+      "evidence": "evidence/AC-LIVE-RESULT.md: Rocky at 2 RE, province overlay hugs the scaled disc with clean circular limb and on-surface boundaries; rivers ride the terrain on-surface; haze rim scales with sVis. Visually confirmed myself via AC-OVERLAY-r2-provinces-rivers.png \u2014 colored province regions and red river ribbons sit flush on a clean-edged disc, no floating/detached shell visible.",
+      "adversarialVotes": "not run this pass \u2014 taken from prior drive, spot-checked visually"
+    },
+    {
+      "id": "AC-STAGE-DOC",
+      "result": "PASS",
+      "evidence": "Read BUILD-NOTES.md directly at this synthesis: section 'AC-STAGE-DOC \u2014 read-gate / UAT staging consequence (REQUIRED)' states disc size is now radius-dependent, explains the invalidated fixed-disc-crop assumption, and directs future recipes to pin either radius or disc fraction explicitly \u2014 names the affected harness pattern ('the disc-crop capture'). Matches the AC statement verbatim.",
+      "adversarialVotes": "not run this pass \u2014 direct document read"
+    },
+    {
+      "id": "AC-UAT",
+      "result": "deferred-to-max",
+      "evidence": "Max's holistic acceptance gate \u2014 no agent may pass this. Deferred per invariant.",
+      "adversarialVotes": "N/A \u2014 uat layer is never agent-adjudicated"
+    }
+  ],
+  "overall": "Integration PASS \u2014 UAT deferred to Max",
+  "summaryForMax": "Feature-to-outcome line: this closes the gap from your inc3b UAT verbatim (\"when I move that radius slider to the right, I want to see the planet on my screen get bigger\"). Unit layer (spine-conformance AC-0, mapping shape AC-VIS-MONO, LOD re-keying AC-LOD-KEY, display-only fence AC-ZERO-CLOBBER, staging-doc AC-STAGE-DOC) is PASS \u2014 independently re-run: 23/23 new tests, golden byte-identical (40c18aad), full suite exactly at the pre-existing 4-failure baseline, zero denylist hits. Integration layer (AC-SCALE-LIVE, AC-CLAMP, AC-OVERLAY) is PASS \u2014 driven live on :5175 at commit 5cef327 with console clean; I spot-checked the screenshots myself and the disc visibly grows (~80px at 0.5 RE to ~250px+ at 8 RE) with no clipping at min-zoom and overlays/rivers tracking the disc surface.\n\nWhat's left is AC-UAT, and only you can close it. To render your verdict: open the lab at http://localhost:5175/planet-lod-lab.html (dev server, or start it if it's not already up), pick the Rocky (Earthlike) preset, and drag the radius slider through increasing values (e.g. 0.5 -> 2 -> 8) \u2014 the planet disc on screen should visibly get bigger at each step, at a fixed camera-wheel position. Then switch to the Moon/Mercury (impact-airless) preset and click \"New planet (re-roll both)\" a couple of times \u2014 the disc size should visibly shift because each reroll draws a different radius. Two things to judge alongside that: (1) the known, in-contract non-goal \u2014 craters/terrain features scale WITH the disc (they do NOT get relatively smaller on a bigger world; the size cue is the disc itself, not shrinking craters) \u2014 carried into this build verbatim from inc3b; (2) an R1 side-effect flagged in BUILD-NOTES: at non-1 radius, live relief amplitude and cloud specks shift with apparent size (intended as \"detail tracks apparent size\") \u2014 worth a look alongside the main slider check since it's part of the same increment. If either of those doesn't read right to you, that's a UAT finding, not a bug in what was built to spec.",
+  "verifiedBy": "verify-workstream light wf_73e55471-62e (2026-07-24)"
+}
