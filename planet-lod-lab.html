@@ -178,6 +178,7 @@
     import { assessProvinceAssociation, provinceStats, classProportions } from './src/worldengine/base/province.js';   // V2-4 slice-4: the province honesty instrument (read-only) for _lab.provinceProbe()
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
     import { createFieldSampler, describeSample } from './src/worldengine/instrument/fieldSampler.js';   // nonvisual-analysis-channel: live float-RTT field readback (reuses the rivers height sampler) + the descriptor pack. READ-ONLY instrument; console _lab API only (no GUI binding ⇒ taxonomy-exempt, AC-0 check 3).
+    import { responseCurve as _sweepResponseCurve, planSweep as _sweepPlan } from './src/worldengine/instrument/sweep.js';   // nonvisual-analysis-channel AC-CURVE: M-seed driver sweep → mean±SEM per point + fitted exponent. Pure orchestration; the lab supplies setPoint/measure.
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
     import { resolveStormE, bakeStormEAttributes, chromophoreColor } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp
     import { drawGiantConditions, deriveGiantDrivers } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation) — replaces the frozen DRIVER_BUNDLES constants per seed
@@ -6773,20 +6774,97 @@
                     fieldProbe(opts){
                       const sample = window._lab.sampleField(opts);
                       const d = describeSample(sample);
+                      const sVisNow = visScaleOf(sample.radiusEarth);
                       return {
                         ...d,
-                        preset: state.preset,
-                        macroSeed: state.macroSeed,
-                        radiusEarth: sample.radiusEarth,
-                        visScale: visScaleOf(sample.radiusEarth),
-                        // On-screen size = angular size x disc scale. Surfaced so the display-frame
-                        // reading is a number in the probe rather than arithmetic someone has to
-                        // remember to do (and to get wrong).
-                        screenWavelengthProxy: d.angular.dominantWavelength != null
-                          ? d.angular.dominantWavelength * visScaleOf(sample.radiusEarth)
-                          : d.angular.autocorrWavelength * visScaleOf(sample.radiusEarth),
-                        sampledAt: { mode: (opts && opts.mode) || 'equirect', latDeg: (opts && opts.latDeg) || 0, lonDeg: (opts && opts.lonDeg) || 0 },
+                        // BOOKKEEPING lives under `meta` so a sweep cannot mistake it for a
+                        // measurement. The first live pilot swept `macroSeed` as a descriptor and
+                        // reported its 54% noise floor — true, and meaningless, since we are the ones
+                        // varying it. sweep.js excludes this namespace structurally.
+                        meta: {
+                          preset: state.preset,
+                          macroSeed: state.macroSeed,
+                          detailSeed: state.detailSeed,
+                          radiusEarth: sample.radiusEarth,
+                          visScale: sVisNow,
+                          mode: (opts && opts.mode) || 'equirect',
+                          latDeg: (opts && opts.latDeg) || 0,
+                          lonDeg: (opts && opts.lonDeg) || 0,
+                        },
+                        // On-screen size = angular size x disc scale. A real measurement (it is what
+                        // the eye gets), so it stays out of meta.
+                        screenWavelengthProxy: d.angular.formWavelength != null
+                          ? d.angular.formWavelength * sVisNow
+                          : d.angular.autocorrWavelength * sVisNow,
                       };
+                    },
+                    // ── AC-CURVE — the RESPONSE CURVE ──────────────────────────────────────────────
+                    // Sweeps a driver across N values at M seeds and returns, per descriptor, a mean
+                    // with its standard error at every point plus a fitted exponent with ITS standard
+                    // error. This is the call that answers "does tectonics/bombardment/relief respond
+                    // to radius, and how" with a number and an error bar instead of an impression.
+                    //
+                    // M SEEDS IS THE POINT. A procedural field re-keys completely on reseed, so ONE
+                    // reading per radius measures the seed as much as the radius — the exact trap the
+                    // 2026-07-24 read-gate fell into (25% instrument noise vs a 15% effect). Run
+                    // _lab.planSweep() first to size M from the measured noise before trusting a bar.
+                    //
+                    // RESTORES STATE. Radius and seeds are put back and re-derived on the way out,
+                    // including on failure, so a sweep never leaves the lab somewhere else.
+                    //
+                    // Usage on :9223 —
+                    //   await _lab.planSweep({ seeds:[1,2,3,4,5] })        // how many seeds do I need?
+                    //   await _lab.responseCurve({ values:[2,4,8], seeds:[1,2,3,4,5] })
+                    async responseCurve(opts){
+                      const o = opts || {};
+                      const values = o.values || [0.5, 1, 2, 4, 8, 16];
+                      const seeds = o.seeds || [1, 2, 3];
+                      const settleMs = o.settleMs != null ? o.settleMs : 700;   // > the 220ms applyDrivers debounce
+                      const probe = o.probe || { mode: 'patch', latDeg: 10, lonDeg: 20, spanKm: 2000, width: 128, height: 128 };
+                      const prev = { R: state.planetRadiusEarth, macro: state.macroSeed, detail: state.detailSeed };
+                      try {
+                        return await _sweepResponseCurve({
+                          values, seeds,
+                          setPoint: async ({ value, seed }) => {
+                            window._lab.setSeed(seed, seed);
+                            state.planetRadiusEarth = value;      // the swept driver (radius is the only one wired this increment)
+                            applyDrivers();
+                            await new Promise((r) => setTimeout(r, settleMs));
+                          },
+                          measure: async () => window._lab.fieldProbe(probe),
+                          onProgress: o.onProgress || null,
+                        });
+                      } finally {
+                        state.planetRadiusEarth = prev.R;
+                        window._lab.setSeed(prev.macro, prev.detail);
+                        applyDrivers();
+                      }
+                    },
+                    // Pilot ensemble at ONE fixed radius — where the driver effect is zero by
+                    // construction, so all spread is instrument noise. Returns the seeds needed to
+                    // measure and to RESOLVE a given effect. Run this BEFORE setting any bar.
+                    async planSweep(opts){
+                      const o = opts || {};
+                      const seeds = o.seeds || [1, 2, 3, 4, 5];
+                      const at = o.at != null ? o.at : state.planetRadiusEarth;
+                      const settleMs = o.settleMs != null ? o.settleMs : 700;
+                      const probe = o.probe || { mode: 'patch', latDeg: 10, lonDeg: 20, spanKm: 2000, width: 128, height: 128 };
+                      const prev = { R: state.planetRadiusEarth, macro: state.macroSeed, detail: state.detailSeed };
+                      const pilot = [];
+                      try {
+                        for (const seed of seeds) {
+                          window._lab.setSeed(seed, seed);
+                          state.planetRadiusEarth = at;
+                          applyDrivers();
+                          await new Promise((r) => setTimeout(r, settleMs));
+                          pilot.push(window._lab.fieldProbe(probe));
+                        }
+                      } finally {
+                        state.planetRadiusEarth = prev.R;
+                        window._lab.setSeed(prev.macro, prev.detail);
+                        applyDrivers();
+                      }
+                      return { at, ..._sweepPlan(pilot, { targetFraction: o.targetFraction || 0.15, effectFraction: o.effectFraction || null }) };
                     },
                     // V2-1 Slice D (AC5) — lab-only seeded-regime WEIGHT override (console/_lab API ONLY; no
                     // dat.GUI binding ⇒ no planet-archetypes.js taxonomy registration, AC-0 check 3). Mirrors

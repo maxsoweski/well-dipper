@@ -97,10 +97,10 @@
     },
     {
       "id": "AC-REAL",
-      "statement": "\"Is this planet plausible at all?\" — generated descriptors are compared against curated real-body reference values (Earth, Mars, the Moon), each reference figure carrying its source citation, reporting where the generated world sits relative to real planetary data.",
+      "statement": "\"Is this planet plausible at all?\" — generated descriptors are compared against curated real-body reference values (Earth, Mars, the Moon), each reference figure carrying its source citation, reporting where the generated world sits relative to real planetary data. SCOPED TO HORIZONTALLY-CALIBRATED DESCRIPTORS ONLY (crater size-frequency, drainage density, form wavelengths, hypsometric integral, band count) per the AC-SAMPLE finding that the lab has no vertical km calibration; relief-magnitude comparisons are reported as blocked-on-calibration and are the subject of the named follow-on workstream, not silently omitted.",
       "verifyVia": {
         "input": "Run the realism comparison for a rocky preset against the curated reference set.",
-        "observable": "A table placing each generated descriptor against the real-body range with the source cited per figure; bodies outside the real range are named as such rather than silently passed."
+        "observable": "A table placing each horizontally-calibrated descriptor against the real-body range with the source cited per figure; bodies outside the real range are named as such rather than silently passed; every vertical-magnitude comparison appears explicitly as blocked-on-calibration rather than being absent."
       },
       "layer": "integration",
       "live": true

@@ -92,6 +92,13 @@ world fields — so the DOES table reads one column over.
 
 ## Scope boundaries
 
+- **Vertical km calibration is a FOLLOW-ON workstream** (Max's call, 2026-07-24, after the
+  AC-SAMPLE finding). The lab's height axis has no physical calibration — relief is shaded not
+  displaced, amplitudes are dimensionless, and the km-named knobs do not drive the live write
+  (`evidence/AC-SAMPLE-live.md` finding 1). This workstream stays **read-only and horizontal-only**;
+  a separate build will wire the km knobs through to the live amplitudes so the lab has real
+  kilometres on the height axis. Until then no descriptor reports fake vertical km, and AC-REAL's
+  relief comparisons are reported as blocked-on-calibration rather than omitted.
 - **Game-side pipeline telemetry is a FOLLOW-ON workstream** (Max's call). The "and once outside of
   the lab, ditto" clause of the directive is real and stays open; it gets scoped once the lab
   channel has proven it catches a real defect. This workstream is lab-only.

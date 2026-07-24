@@ -98,9 +98,19 @@ export function fitPowerLaw(points, { z = DEFAULT_Z } = {}) {
   for (let i = 0; i < n; i++) { const r = Y[i] - (a + b * X[i]); chi2 += W[i] * r * r; }
   const dof = Math.max(n - 2, 1);
   const seB = Math.sqrt((sw / denom) * (chi2 / dof));
-  const meanY = Y.reduce((s, y) => s + y, 0) / n;
+  // r^2 must use the SAME weights as the fit. Computed unweighted it can come back strongly negative
+  // for a perfectly good weighted fit — one noisy point that the fit correctly ignores still counts
+  // full freight in an unweighted residual sum, and the reader sees "r2 = -1.46" beside an exponent
+  // that is in fact accurate. (Observed on the first live radius sweep, where the R=2 point had 40x
+  // the standard error of the others.)
+  let wMeanY = 0;
+  for (let i = 0; i < n; i++) wMeanY += W[i] * Y[i];
+  wMeanY /= sw;
   let ssTot = 0, ssRes = 0;
-  for (let i = 0; i < n; i++) { ssTot += (Y[i] - meanY) ** 2; ssRes += (Y[i] - (a + b * X[i])) ** 2; }
+  for (let i = 0; i < n; i++) {
+    ssTot += W[i] * (Y[i] - wMeanY) ** 2;
+    ssRes += W[i] * (Y[i] - (a + b * X[i])) ** 2;
+  }
   return {
     exponent: b, exponentSE: seB, coefficient: Math.exp(a),
     r2: ssTot > 0 ? 1 - ssRes / ssTot : NaN,
