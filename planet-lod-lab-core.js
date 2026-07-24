@@ -34,6 +34,28 @@ export function lodHysteresis(distanceRadii, prevActive) {
   return distanceRadii < 18.0;                  // only activate once we're inside 18
 }
 
+// ── Radius → visual DISPLAY scale (radius-display-scale-2026-07-24) ───────────
+// DISPLAY-ONLY: sVis is applied to the rendered sphere's transform (planet.scale)
+// so a bigger-radius world reads bigger on screen. It NEVER feeds procgen, height,
+// schedules, featureFrequencyFromKm, or any headless/golden path — the height noise
+// is evaluated in object space (pre-scale), so the fence holds structurally.
+// sqrt keeps the 0.3–16 RE span (53×) inside the fixed camera: 1 RE → 1 exactly,
+// 0.3 → 0.5477, 16 → 4.0. Reference radius is 1 RE, so the normalization is the identity.
+// VIS_SCALE_EXP is the ONE UAT-tunable knob (Math.pow bound to it, not a hard-coded 0.5).
+export const VIS_SCALE_EXP = 0.5;
+export function visScaleOf(radiusEarth) {
+  return Math.pow(radiusEarth, VIS_SCALE_EXP);   // pow(1,·) === 1 exactly (zero-change at 1 RE)
+}
+
+// Camera min-distance guard: the camera must never enter the scaled sphere. The floor
+// scales WITH the disc so the surface-skim margin is radius-invariant. At sVis=1 this is
+// 1.1 — bit-identical to the lab's existing wheel floor (planet-lod-lab.html :5588), so
+// every pre-increment path is untouched. 1.1 > 1.05 satisfies minDistance > sVis·1.05.
+export const CAMERA_CLEARANCE = 1.1;
+export function minCameraDistance(sVis) {
+  return sVis * CAMERA_CLEARANCE;
+}
+
 // qualityTier 0 (mobile/cheap) -> 1 (desktop/full). Scales the cost knobs (spec §2.E).
 export function qualityKnobs(qualityTier) {
   return {

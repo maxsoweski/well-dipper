@@ -148,7 +148,7 @@
   <script type="module">
     import * as THREE from 'three';
     import GUI from 'lil-gui';
-    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, reliefEnvelope, animationRateFactor, CRATER_DEPTH } from './planet-lod-lab-core.js';
+    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, reliefEnvelope, animationRateFactor, CRATER_DEPTH, visScaleOf, VIS_SCALE_EXP, minCameraDistance } from './planet-lod-lab-core.js';
     import { RADIUS_RANGES_EARTH } from './src/core/ScaleConstants.js';   // AC5/AC6: single-source archetype radius ranges (game + lab)
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
     import { ASSOCIATIONS, DEFAULT_DRESSING } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature; DEFAULT_DRESSING = ratified boot dressing (defaults rescope 2026-07-15)
@@ -5213,7 +5213,7 @@
       const restore = captureEnables();              // operator's prior enables — restored at end
       const prevFreeze = _sweepFreeze, baseT = t, baseYaw = state.yaw, baseDist = state.distance;
       _sweepFreeze = true;                           // freeze auto-spin; we drive t + yaw by hand below
-      state.distance = SWEEP_DISTANCE;               // pin coverage scale (see SWEEP_DISTANCE note above)
+      state.distance = SWEEP_DISTANCE * sVis;        // pin LOGICAL coverage scale — the disc is sVis× bigger, so the absolute distance must scale to hold the same angular coverage the .sweep-raw.json baseline was calibrated at (radius 1 ⇒ ×1). Stays outside the sphere (2.6·sVis > 1.1·sVis).
       const nextFrame = () => new Promise(r => requestAnimationFrame(r));
       const settle = async n => { for (let i = 0; i < n; i++) await nextFrame(); };
       const N = sceneTarget.width * sceneTarget.height;
@@ -5583,9 +5583,11 @@
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       if (e.ctrlKey) return;   // Ctrl+wheel = browser-zoom intent; block it (preventDefault above) but don't move the camera
-      // multiplicative => even feel across the range; clamp surface-skim(1.1)..overview(30)
+      // multiplicative => even feel across the range; clamp surface-skim..overview(30).
+      // Floor scales with the disc (minCameraDistance(sVis)); at sVis=1 it's 1.1 — the
+      // original surface-skim floor, so radius-1 wheel behaviour is bit-identical.
       const factor = Math.exp(Math.sign(e.deltaY) * 0.12);
-      state.distance = Math.max(1.1, Math.min(30, state.distance * factor));
+      state.distance = Math.max(minCameraDistance(sVis), Math.min(30, state.distance * factor));
     }, { passive: false });
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -5628,6 +5630,11 @@
     const SPIN_AXIS = new THREE.Vector3(0, 1, 0);
     const thermalObj = new THREE.Vector3();
     let t = 0;
+    // DISPLAY-ONLY visual radius scale (radius-display-scale-2026-07-24). Recomputed
+    // every frame from state.planetRadiusEarth; the wheel handler (:5588) and the sweep
+    // (:5216) read this module-scope binding so the camera floor / coverage pin track
+    // the current disc size. 1.0 until the first frame runs → identity at radius 1.
+    let sVis = 1.0;
 
     // Render-delta sweep freeze (Phase 2.5): when true, t + rotation stop advancing
     // so the A/B sweep isolates a feature's pixel contribution — only the enable
@@ -5639,6 +5646,31 @@
       planet.rotation.y += state.spinSpeed;   // 0 = stopped; 0.000375 (slider center) = the original rate
       }
 
+      // ── DISPLAY-ONLY visual radius scale (radius-display-scale-2026-07-24) ──────
+      // sVis = visScaleOf(state.planetRadiusEarth) — the ONLY input is the real radius
+      // (AC-0: no label/archetype/regime read). Applied to the rendered sphere's
+      // transform so a bigger world reads bigger on screen; the height noise is sampled
+      // in OBJECT space (pre-scale), so procgen/goldens/headless never see sVis (the
+      // fence holds structurally). Identity at radius 1 ⇒ bit-identical to pre-increment.
+      sVis = visScaleOf(state.planetRadiusEarth);
+      planet.scale.setScalar(sVis);                  // the disc genuinely grows (camera dist stays absolute)
+      hazeShell.scale.setScalar(sVis);               // scene-space halo shell — not a planet child, scale by hand
+      ring.scale.setScalar(sVis);                    // scene-space ring impostor — track the disc
+      if (ringCloud) {
+        ringCloud.scale.setScalar(sVis);             // scene-space particle cloud — track the disc
+        // The cloud's near-tier LOD keys on SCALED camera-space distance (length(mvPos)),
+        // so its absolute resolve/cull thresholds must track sVis too — same apparent-size
+        // principle as logicalDist below. state.ring* stays source-of-truth (sliders still
+        // tune it); sVis is a per-frame display multiplier layered on top. Identity at sVis=1.
+        ringCloud.material.uniforms.uDResolve.value = state.ringDResolve * sVis;
+        ringCloud.material.uniforms.uDCull.value    = state.ringDCull    * sVis;
+      }
+      // Camera-never-enters-the-scaled-sphere guard (authoritative — catches non-wheel
+      // setters: applySettings loads, restores). Only ever RAISES distance; idempotent;
+      // shares minCameraDistance with the wheel so they can't fight. minCameraDistance(1)=1.1.
+      const _minDist = minCameraDistance(sVis);
+      if (state.distance < _minDist) state.distance = _minDist;
+
       // Camera orbits the origin (yaw/pitch/distance) — mouse-driven, mirrors CameraController.
       const dist = state.distance * R;
       const cp = Math.cos(state.pitch), sp = Math.sin(state.pitch);
@@ -5649,10 +5681,15 @@
       );
       camera.lookAt(0, 0, 0);
 
-      const lod = lodRampOf(state.distance);
-      const oct = state.octAuto ? autoOctaves(lod) : state.octaves;
+      // LOD keys on LOGICAL distance-in-planet-radii (state.distance / sVis) so detail
+      // tracks APPARENT size — a scaled-up disc resolves as if the camera were that much
+      // closer. At sVis=1, state.distance/1 === state.distance exactly, so lodRampOf /
+      // autoOctaves (via lod) / lodHysteresis receive bit-identical inputs to pre-increment.
+      const logicalDist = state.distance / sVis;
+      const lod = lodRampOf(logicalDist);
+      const oct = state.octAuto ? autoOctaves(lod) : state.octaves;   // octaves re-key transitively via lod
       // Discrete which-body-is-LOD2 flag, hysteresis-guarded (enter 18 / exit 22) to stop flicker.
-      state._lod2Active = lodHysteresis(state.distance, state._lod2Active ?? false);
+      state._lod2Active = lodHysteresis(logicalDist, state._lod2Active ?? false);
 
       // Light dir into object space (sphere rotates; lighting math is object-space)
       invQuat.copy(planet.quaternion).invert();
@@ -6244,6 +6281,8 @@
 
     // Expose for chrome-devtools verification (set state, read a frame)
     window._lab = { state, uniforms, planet, camera, lodRampOf, autoOctaves, rebuildTarget,
+                    visScaleOf,   // radius-display-scale: pure mapping, for the live AC-SCALE-LIVE / AC-CLAMP drives
+                    get sVis(){ return sVis; },   // the live visual scale the main session reads/measures against the disc
                     settingsBlob, applySettings, driverUI, applyDrivers,
                     setPreset(name){ if (DRIVER_PRESETS[name]) { driverUI.preset = name; applyDrivers(); applyWorldDefaults(); } return state._derived; },   // lab-ux: presets arrive judgment-ready via the API too (hand-set enables after setPreset still win)
                     setQuality(q){ driverUI.qualityTier = q; applyDrivers(); return state._derived; },
