@@ -1,0 +1,146 @@
+{
+  "workstream": "nonvisual-analysis-channel-2026-07-24",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "statusNote": "SCOPED 2026-07-24 off RESEARCH.md (5 tooling families surveyed fresh + repo inventory). Max's directive: a non-visual analysis channel for the lab (game-side pipeline telemetry = FOLLOW-ON workstream, his call). Max selected all four question-channels: regression / law-audit / diagnostic / realism. Sequencing: this instrument is the verification channel FOR the radius-systems work — AC-CENSUS output becomes that workstream's scope artifact. Working-Claude decisions taken without asking (recorded here): physical units not pixels; positive control as a build gate; both an API and a written report. Carve-out: tooling workstream — ACs are deliverable-interface shaped per reference.md.",
+  "programRef": "docs/WORKSTREAMS/world-engine-radius-display-scale-2026-07-24/contract.json",
+  "designDecisions": [
+    "PHYSICAL UNITS, NOT PIXELS. Every descriptor is expressed in km of relief, km of wavelength, counts per 10^6 km^2, or dimensionless ratios. Pixel-space measurement is what produced the read-gate's ~25% noise floor (evidence/readgate-diagnosis/DIAGNOSIS.md) — pixels conflate the quantity with the draw scale, which is precisely the variable under test.",
+    "SEED NOISE IS DESIGNED OUT, NOT DISCOVERED LATER. Descriptors are whole-field statistics (distribution moments, counts per area, autocorrelation wavelength) rather than comparisons between different random patterns. This is DIAGNOSIS.md recommendation #3 generalised. Every reported value carries mean +/- SEM over M seeds, and M is chosen from the measured noise so the SEM sits below the effect being resolved.",
+    "READ-ONLY ON GENERATION CODE. The instrument observes writers at arm's length exactly as the existing _lab probes do (plateProbe/shellProbe/magmaProbe/stagnantLidProbe/mixedProbe/e1Probe/provinceProbe/grainProbe). It never becomes a writer. Sole exception: AC-POSCTRL, which deliberately unwires a driver and restores it.",
+    "POSITIVE CONTROL IS A BUILD GATE, NOT A NICETY. An instrument that has never caught a known defect is unproven. AC-POSCTRL requires demonstrating detection of a deliberately-broken driver and clean restoration.",
+    "AOV READBACK IS THE MECHANISM (research Family B). Float render target + readPixels, the documented WebGL2 technique since GLSL has no printf. The lab already does this for the tributary patch (planet-lod-lab.html:245, :1467) — this generalises existing in-house machinery rather than importing new.",
+    "GOLDEN/PERCEPTUAL-DIFF (Family C) IS EXPLICITLY NOT THE ANSWER. It reports change, never correctness, and procgen re-keys legitimately. The existing goldens + renderDeltaSweep stay untouched and keep their own job.",
+    "REALISM CHANNEL CARRIES A DATA DEPENDENCY. Real-body reference values (Earth/Mars/Moon hypsometry, published crater SFDs) must be curated and each figure source-cited. In scope; the natural last slice."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-MATH",
+      "statement": "The descriptor math is correct on fields whose right answer is known in advance: a synthetic ridge field of known wavelength, a synthetic crater population of known size-frequency slope, and a synthetic elevation field of known hypsometric integral each return their true value within a stated tolerance.",
+      "verifyVia": {
+        "input": "Headless vitest run over describeField() against synthetic fixture fields with analytically known descriptor values.",
+        "observable": "Each descriptor recovers the fixture's known value within the tolerance declared in the test; failures name which descriptor and by how much."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-SAMPLE",
+      "statement": "_lab.sampleField() reads the live lab field into physical units and is deterministic: the same seed and drivers return byte-identical samples, and Earth-preset relief lands in a physically sane km range rather than arbitrary shader units.",
+      "verifyVia": {
+        "input": "In the running lab, call _lab.sampleField({mode:'equirect'}) and _lab.sampleField({mode:'patch', latlon, spanKm}) twice at a fixed seed, then once at a changed seed.",
+        "observable": "Identical seed returns identical arrays; changed seed differs; Earth-preset RMS relief reports in km within the range the codebase's own relief law predicts."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-CURVE",
+      "statement": "_lab.responseCurve() sweeps a driver across N values at M seeds and returns, per system, a mean and SEM at each point plus a fitted exponent — with M derived from the measured noise so the SEM is stated, not implied.",
+      "verifyVia": {
+        "input": "Run _lab.responseCurve({driver:'radius', values:[0.5,1,2,4,8,16], seeds:M}) in the running lab.",
+        "observable": "Returns a per-system table of mean +/- SEM per radius and a fitted exponent with its uncertainty; the report states M and the measured per-descriptor noise floor that set it."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-POSCTRL",
+      "statement": "The instrument demonstrably catches a defect it was not told about: with a known driver deliberately unwired (crater count detached from gravity), the law audit reports FAIL on that law and names it; with the wiring restored, it reports PASS and the full test baseline returns to exact.",
+      "verifyVia": {
+        "input": "Temporarily detach the crater-count-from-gravity coupling, run the law audit, restore, re-run the audit and the full suite.",
+        "observable": "Broken state: audit FAILs and identifies the crater/gravity law specifically, not a generic alarm. Restored state: audit PASSes and the full vitest suite returns to the exact 2333/4 baseline with no residue in the diff."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-REGRESS",
+      "statement": "\"Did this change break anything?\" — a descriptor baseline can be snapshotted per preset and re-compared, flagging what moved beyond seed noise, with no false alarms on a no-op change.",
+      "verifyVia": {
+        "input": "Snapshot a baseline across presets, re-run after a no-op change, then re-run after a seeded deliberate change to one system.",
+        "observable": "No-op run flags nothing. Seeded-change run flags the affected system's descriptors and leaves the unaffected ones quiet; the report names which descriptor moved and by how many SEM."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-LAWS",
+      "statement": "\"Does it obey the laws we claimed?\" — every scaling law this codebase states (crater count proportional to g^0.34, relief/R proportional to g^-0.58 via Q_RELIEF, Rhines band count vs rotation) gets an explicit verdict, including an honest UNRESOLVABLE verdict when the sweep's resolution cannot decide it.",
+      "verifyVia": {
+        "input": "Run _lab.auditLaws() over the registered law set at the sweep resolution the curve harness supports.",
+        "observable": "Each law returns PASS / FAIL / UNRESOLVABLE-at-this-N with its measured exponent, the claimed exponent, and the resolving power that justified the verdict — never a bare pass."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-DIAG",
+      "statement": "\"Why does it look wrong here?\" — given a lat/lon on the planet, the instrument dumps every contributing field's value at that point and names the writer that produced each, so a visual complaint resolves to a specific number from a specific system.",
+      "verifyVia": {
+        "input": "In the running lab, call _lab.diagnoseAt({lat, lon}) on a location Max or Claude has flagged as looking wrong.",
+        "observable": "Returns each contributing field's value at that point with the producing writer named; the values reconcile with the corresponding driver probe (plateProbe/magmaProbe/etc.) for the same body."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-REAL",
+      "statement": "\"Is this planet plausible at all?\" — generated descriptors are compared against curated real-body reference values (Earth, Mars, the Moon), each reference figure carrying its source citation, reporting where the generated world sits relative to real planetary data.",
+      "verifyVia": {
+        "input": "Run the realism comparison for a rocky preset against the curated reference set.",
+        "observable": "A table placing each generated descriptor against the real-body range with the source cited per figure; bodies outside the real range are named as such rather than silently passed."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-CENSUS",
+      "statement": "The instrument's first real output: a per-system radius census covering substrate/relief, tectonics/plates, bombardment, volcanism, rivers and atmosphere, marking each WIRED (with its measured response exponent and error bar), DEFERRED (named), or IRRELEVANT (with the reason) — answering Max's \"I can tell that's not happening across the board\" with numbers.",
+      "verifyVia": {
+        "input": "Run the radius sweep across all six systems and generate the census report into the workstream's evidence directory.",
+        "observable": "A committed report table: one row per system, each carrying a measured response to radius with its uncertainty, or an explicit named reason for DEFERRED / IRRELEVANT. No row is left as an assertion without a measurement or a stated reason."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-TRUST",
+      "statement": "Reading the census report, Max can tell whether radius is reaching all the systems — and trusts the answer enough to scope the radius-systems work off it instead of off what he sees on screen.",
+      "verifyVia": {
+        "input": "Max reads the committed census report and the instrument's stated limits.",
+        "observable": "Max's holistic judgement — does this answer the question he asked, in a form he believes? Deferred to Max; no agent renders this."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "planet-lod-lab.html live state + applyDrivers() output (the driven uniforms actually reaching the writers)",
+      "planet-lod-lab-core.js CPU mirrors: deriveUniforms, craterProfile, ejectaProfile, reliefEnvelope, featureFrequencyFromKm, reliefAmplitudeFromKm, radiusFromT/tFromRadius, R_EARTH_KM",
+      "Existing FloatType RTT machinery already in the lab (planet-lod-lab.html:245 tributary patch, :1467 live height-field read)",
+      "Existing _lab driver probes as the input-side cross-check: plateProbe, shellProbe, magmaProbe, stagnantLidProbe, mixedProbe, e1Probe, provinceProbe, grainProbe",
+      "v2-6 gravity coherence laws as the law registry's first entries: crater count ~ g^0.34, Q_RELIEF=0.58 relief envelope, RELIEF_FLOOR/RELIEF_CEIL bounds",
+      "driver-presets.js DRIVER_PRESETS + drawPresetRadius (the preset space the sweeps run over)",
+      "Curated real-body reference data (Earth/Mars/Moon hypsometry, published crater SFDs) — to be sourced for AC-REAL"
+    ],
+    "outputs": [
+      "_lab.sampleField / describeField / responseCurve / auditLaws / diagnoseAt / snapshotBaseline / compareBaseline — the Claude-facing API",
+      "Markdown reports written into docs/WORKSTREAMS/nonvisual-analysis-channel-2026-07-24/evidence/ — the Max-facing artifact",
+      "The radius census table (AC-CENSUS), which becomes the scope artifact for the radius-across-all-systems workstream",
+      "A descriptor baseline store for the regression channel",
+      "A registry of the codebase's stated scaling laws, machine-readable, for the law audit"
+    ],
+    "mustStayWorking": [
+      "Full vitest suite at the EXACT baseline: 2333 pass / 4 known failures (GalacticFeatures x1, KnownObjects x3); 17 vendor motion-test-kit FILE-level failures contribute 0 tests",
+      "verify-golden hash 40c18aad and v2-0 byte-identity 83 — NO re-capture, ever",
+      "inc3b physics pins 136/136",
+      "src/worldengine writers untouched — the instrument is read-only; a non-empty src/worldengine diff is a scope violation outside AC-POSCTRL's temporary break",
+      "Existing _lab probe API unchanged in shape and return values (the instrument adds siblings, it does not rewrite them)",
+      "renderDeltaSweep() and the render-audit path unchanged — Family C keeps its own job",
+      "Headless inertness: instrument code must not change any rendered output when not invoked (uDispDomainScale headless default 1.0 and equivalents stay inert)",
+      "NOT-OURS working-tree files never staged: src/auto/CameraChoreographer.js, src/debug/LabMode.js"
+    ]
+  }
+}
