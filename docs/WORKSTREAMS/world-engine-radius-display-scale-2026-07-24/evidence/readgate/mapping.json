@@ -1,0 +1,57 @@
+{
+  "_warning": "TRUTH FILE — blind scorers MUST NOT read this. Contains the radius->label mapping and pair identities.",
+  "capturedBy": "capture agent (readgate-fix)",
+  "date": "2026-07-24",
+  "build": {
+    "branch": "feature/world-engine-production-L1",
+    "workingTree": "post-build (Slices A-D landed): planet-lod-lab.html, planet-lod-height.glsl.js, planet-lod-lab-core.js, planet-lod-uniforms.js, tests/vis-scale-fence.test.js modified",
+    "sliceD_mechanism": "bake->synth crossover (bakeReliefCrossover, BAKE_CROSS_SPAN=1.0) — the FIX-PLAN fallback, not the route re-bake",
+    "url": "http://localhost:5175/well-dipper/planet-lod-lab.html"
+  },
+  "staging": {
+    "preset": "Rocky (Earthlike)",
+    "seed": { "macro": 1234, "detail": 5678 },
+    "camera": { "yaw": 0.337, "pitch": 0.205, "distance": 6.0 },
+    "lod": { "octAuto": false, "octaves": 8 },
+    "reliefBakeStrength_base": 1.0,
+    "spinSpeed": 0,
+    "frameClockFrozen": "uTime pinned to 12.0 (equivalent to _sweepFreeze for animation reproducibility)",
+    "canvas": "900x900 CSS (DPR 1.25 -> 1125x1127 device px); crops are identical centered 1100x1100",
+    "chromeHidden": ".lil-gui / #hud / #help / #helpBtn hidden during every disc capture (S2 no-radius-leak rule)"
+  },
+  "sizeOrderingCrops": {
+    "_note": "Gate (a): blind agents order by planet size from pixels alone. Disc sVis = R^0.5.",
+    "X.png": { "planetRadiusEarth": 2.0,  "sVis": 1.4142135623730951, "uReliefBakeStrength_effective": 0.5, "uDispDomainScale": 1.4142135623730951 },
+    "Y.png": { "planetRadiusEarth": 8.0,  "sVis": 2.8284271247461903, "uReliefBakeStrength_effective": 0.0, "uDispDomainScale": 2.8284271247461903 },
+    "Z.png": { "planetRadiusEarth": 0.5,  "sVis": 0.7071067811865476, "uReliefBakeStrength_effective": 0.5, "uDispDomainScale": 0.7071067811865476 },
+    "trueSizeOrder_smallToLarge": ["Z.png (r0.5)", "X.png (r2)", "Y.png (r8)"]
+  },
+  "discriminationPair": {
+    "_note": "Gate (c): matched-disc (both r=8, sVis=2.828, identical disc px). Only the MACRO form-keying differs.",
+    "radius": 8.0,
+    "sVis": 2.8284271247461903,
+    "pairA.png": {
+      "identity": "UNIFORM/OLD behavior (kill-switch override): forms GROW with the disc = 'camera moved closer' cue",
+      "override": "uDispDomainScale pinned to 1.0 (Slice C off) + uReliefBakeStrength pinned to base 1.0 (Slice D crossover cancelled) => baked continental cube shown at full strength, angular-fixed => continents grow 1:1 with the disc",
+      "expectedRead": "few, huge continents filling the disc"
+    },
+    "pairB.png": {
+      "identity": "FIXED build as-is: forms CONSTANT on screen => relatively smaller / more numerous = 'a bigger planet' cue",
+      "override": "none (live frame writes: uDispDomainScale=sVis=2.828, uReliefBakeStrength effective=0 -> analytic domain-scaled body)",
+      "expectedRead": "many, small continents/basins tiled across the disc"
+    },
+    "correctCall": "pairB = the bigger planet; pairA = the camera moved closer",
+    "caveat_D3_residue": "The two pair renders differ in continent CHARACTER as well as size (baked plate-Voronoi macro body in pairA vs analytic FBM body in pairB) because the build's Slice-D mechanism is a bake->synth crossover that swaps the body source as sVis departs 1. This is the disclosed D3 residue ('continent PATTERN morphs across the fade'). The SIZE-of-forms discrimination (few-large vs many-small) is nonetheless clearly present and is what gate (c) scores."
+  },
+  "trustedSliderDrag": {
+    "_note": "Real CDP pointer drags (Input.dispatchMouseEvent) on the lil-gui log slider track — NOT synthetic PointerEvents. This is the drag-profile the prior AC never exercised (it only drove state.planetRadiusEarth + applyDrivers programmatically).",
+    "mechanism": "drag FROM the .lil-slider element TO injected drop-targets at 1/4 and 3/4 track x (1/2 = drag to the slider's own centre). lil-gui's pointerdown+window pointermove path registered each drag.",
+    "sliderTrack": { "x": 108.4875, "width": 78.7125, "yCenter": 458.34 },
+    "samples": [
+      { "targetFraction": 0.25, "t_landed": 0.248, "radiusEarth": 0.8042979082874387, "sVis": 0.8968265764836805 },
+      { "targetFraction": 0.50, "t_landed": 0.489, "radiusEarth": 2.0971216929544925, "sVis": 1.4481442238100777 },
+      { "targetFraction": 0.75, "t_landed": 0.743, "radiusEarth": 5.758127931066787,  "sVis": 2.3996099539439295 }
+    ],
+    "result": "monotonic increase 0.80 -> 2.10 -> 5.76 RE across the track; the real pointer-drag reliably moves the radius up (addresses the UAT 'does not reliably go up' complaint at the pointer-capture layer). Log map gives a usable, non-violent response across the whole 0.3-16 span."
+  }
+}

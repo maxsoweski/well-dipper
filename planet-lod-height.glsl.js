@@ -11,6 +11,7 @@ export const HEIGHT_GLSL = /* glsl */ `
       varying float vSubstellarAngle;   // canonical shared varying (index §1) — see vertex shader
 
       uniform float uNoiseScale;
+      uniform float uDispDomainScale;   // radius display-scale (Slice C): global macro/province domain multiplier (the live lab writes the display scale here; 1.0 headless/golden → identity). Uniform NAME only — the display-scale token never enters this string (fence).
       uniform float uOctaves;       // effective octave count
       uniform float uLodRamp;       // 0 (far) .. 1 (closest) — one scalar drives all complexity
       uniform float uLevels;        // posterize levels
@@ -627,6 +628,7 @@ export const HEIGHT_GLSL = /* glsl */ `
 
       // ── computeHeight + perturbNormalFromNoise — VERBATIM (the path we replace) ──
       float computeHeight(vec3 pos){
+        pos *= uDispDomainScale;   // radius display-scale (Slice C): scale the sample domain so the macro body's on-screen frequency tracks the display scale. computeHeight feeds perturbFiniteDiff, whose finite differences pick up the chain-rule factor for free. Identity at 1.0.
         float h  = snoise(pos * uNoiseScale * 0.3 + uMacroOffset)  * 0.5;
         h += snoise(pos * uNoiseScale       + uMacroOffset)  * 0.35;
         h += snoise(pos * uNoiseScale * 2.0 + uDetailOffset) * 0.2;
@@ -750,7 +752,7 @@ export const HEIGHT_GLSL = /* glsl */ `
       // octaves = mix(4,9,lodRamp); fractional trailing-octave weight = pop-free ramp;
       // fwidth clamp fades sub-pixel octaves to their mean (kills dither shimmer).
       vec4 fbmd(vec3 pos, float octaves, float fwBase){
-        float freq = uNoiseScale * 0.3;     // matches computeHeight's largest feature scale
+        float freq = uNoiseScale * 0.3 * uDispDomainScale;     // matches computeHeight's largest feature scale
         float amp  = 0.5;
         float h = 0.0;
         vec3 grad = vec3(0.0);
@@ -835,6 +837,7 @@ export const HEIGHT_GLSL = /* glsl */ `
       const int PROV_CLOUDOPTICS = 47;  // F39 — neutral (antisolar backscatter glory, not geology): the colored rings follow sun + camera over the LIT cloud deck, never the rock provinces (FROST-row pattern, like airglow F38 / aurora F37)
       vec3 gProvince = vec3(0.5);   // base fields (tectonic, volcanic, ancient) — set per fragment
       void initProvinces(vec3 pos){
+        pos *= uDispDomainScale;   // radius display-scale (Slice C): scale the partition domain so region scale tracks the display scale → more, smaller provinces on the growing disc. Provinces read only .x (no gradient consumers), so a pos scale is sufficient. Identity at 1.0.
         // two octaves per field (spike-validated recipe); uMacroOffset ties provinces to the
         // planet seed so every world partitions differently
         vec4 a1 = noised(pos * 0.75 + uMacroOffset + vec3(17.3, -9.1, 4.7));
@@ -968,6 +971,10 @@ export const HEIGHT_GLSL = /* glsl */ `
         vec2 xzS = dot(xz0, ax) * ax + (dot(xz0, pe) * stretch) * pe;
         vec3 q = vec3(xzS.x, pos.y, xzS.y);
 
+        // radius display-scale (fix): NO uDispDomainScale here. fbmdRidged is consumed ONLY by
+        // mountainCombiner via fbmdRidged(pos*uMountainScale), and uMountainScale already carries the
+        // display factor (P5b). Scaling the internal freq too would double-count (display^2); the
+        // single display scale lives in the outer uMountainScale.
         float freq = uNoiseScale * 0.3;
         float amp = 0.5;
         float weight = 1.0;                                       // Musgrave: octave 0 unweighted
@@ -2144,6 +2151,9 @@ export const HEIGHT_GLSL = /* glsl */ `
       // fbmdRidged's weight, so the gradient is the standard fbmd chain rule scaled by
       // the weight. Carries fbmd's trailing-octave + fwidth fade (anti-shimmer, §5.3).
       vec4 fbmdHetero(vec3 pos, float octaves, float fwBase, float offset){
+        // radius display-scale (fix): NO uDispDomainScale — fbmdHetero is consumed ONLY by
+        // plateauCombiner via fbmdHetero(pos*uPlateauScale); the display factor lives in the outer
+        // uPlateauScale (P5b). Internal-freq scaling too would double-count (display^2).
         float freq = uNoiseScale * 0.3;
         float amp  = 0.5;
         vec4 n0 = noised(pos * freq + uMacroOffset + uPlateauDomainOffset);
@@ -2175,6 +2185,9 @@ export const HEIGHT_GLSL = /* glsl */ `
       // chain rule scaled by that weight — NO new finite-diff oracle (it reweights the §5.4-pinned
       // noised() octaves). Carries fbmd's trailing-octave + fwidth anti-shimmer fade.
       vec4 fbmdDamped(vec3 pos, float octaves, float fwBase, float damp){
+        // radius display-scale (fix): NO uDispDomainScale — fbmdDamped is consumed ONLY by
+        // glacialCombiner via fbmdDamped(pos*uGlacialScale); the display factor lives in the outer
+        // uGlacialScale (P5b). Internal-freq scaling too would double-count (display^2).
         float freq = uNoiseScale * 0.3;
         float amp  = 0.5;
         float h = 0.0;
@@ -2734,7 +2747,11 @@ export const HEIGHT_GLSL = /* glsl */ `
       // coverage: low-freq FBM thresholded by maturity (scattered patches → full grid).
       // uMacroOffset ties the pattern to the seed (every combiner convention); NO time in the spatial mask.
       float machCoverageMask(vec3 p){
-        float f = 0.5 + 0.5 * fbmd(p * uMachDistrictScale * 0.5 + uMacroOffset, 3.0, 0.0).x;
+        // radius display-scale (fix): divide by uDispDomainScale so this shared-fbmd call is NOT
+        // double-scaled. fbmd's internal freq carries uDispDomainScale (needed for the base body); the
+        // district's display factor already lives in the outer uMachDistrictScale (P5b), so cancel the
+        // internal factor here -> single display scale. Identity when uDispDomainScale = 1.
+        float f = 0.5 + 0.5 * fbmd(p * uMachDistrictScale * 0.5 / uDispDomainScale + uMacroOffset, 3.0, 0.0).x;
         float t = mix(0.75, 0.05, uMachCoverage);   // high maturity lowers threshold (patches merge)
         return smoothstep(t, t + 0.15, f);
       }
@@ -2757,7 +2774,10 @@ export const HEIGHT_GLSL = /* glsl */ `
       // Low-freq FBM thresholded by uEcuCoverage; HIGH coverage ⇒ near-zero threshold ⇒ planet-covering.
       // uMacroOffset ties the pattern to the seed (every combiner convention); NO time in the spatial mask.
       float ecuCoverageMask(vec3 p){
-        float f = 0.5 + 0.5 * fbmd(p * uEcuDistrictScale * 0.5 + uMacroOffset, 3.0, 0.0).x;
+        // radius display-scale (fix): divide by uDispDomainScale — same shared-fbmd de-double-scale as
+        // machCoverageMask. The district's display factor lives in the outer uEcuDistrictScale (P5);
+        // cancel fbmd's internal uDispDomainScale here -> single display scale. Identity at scale 1.
+        float f = 0.5 + 0.5 * fbmd(p * uEcuDistrictScale * 0.5 / uDispDomainScale + uMacroOffset, 3.0, 0.0).x;
         float t = mix(0.55, 0.02, uEcuCoverage);   // LOWER ceiling than F47's 0.05: F49 saturates to full coverage
         return smoothstep(t, t + 0.12, f);
       }

@@ -1,11 +1,21 @@
-// Radius display-scale — DISPLAY-ONLY fence (AC-ZERO-CLOBBER) + AC-LOD-KEY source pins.
+// Radius display-scale — DISPLAY-FREQUENCY fence (AC-ZERO-CLOBBER) + AC-LOD-KEY source pins.
 // Workstream: world-engine-radius-display-scale-2026-07-24.
 //
-// The feature's hard invariant: sVis / visScaleOf / VIS_SCALE_EXP is a DISPLAY term
-// only. It must NEVER appear in any procgen / height-GLSL / schedule / worldengine /
-// featureFrequencyFromKm / headless-golden surface. This suite codifies the denylist
-// grep the task runs by hand, and pins the four LOD-keying call sites in the lab source.
+// RE-SCOPED at Slice B (D1). The bar "hold surface forms constant while the disc grows" is
+// satisfiable ONLY by freq_render ∝ sVis, which necessarily puts sVis into named display-
+// frequency terms at the LIVE lab write. So the invariant is no longer "sVis touches no
+// frequency anywhere" — it is:
+//   sVis MAY set a NAMED display-frequency term at the live lab frame write — the P4 synth-
+//   crater scale, the P5b fixed-uniform relief combiners, and (Slice C) one uDispDomainScale
+//   lever (allowlist below). It must STILL never appear in: the height/river GLSL strings,
+//   run-golden.mjs, canonical-scenario.js, or ANY src/worldengine/** file; and no physics-
+//   frequency surface may key featureFrequencyFromKm on the display scale. sVis=1 (radius 1
+//   R⊕) is identity everywhere, so goldens/headless stay byte-identical by construction.
+// This suite codifies that fence and pins the four LOD-keying call sites in the lab source.
 import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
+import { featureFrequencyFromKm, visScaleOf, bakeReliefCrossover, BAKE_CROSS_SPAN } from '../planet-lod-lab-core.js';
+import { makeUniforms } from '../planet-lod-uniforms.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -39,6 +49,10 @@ describe('AC-ZERO-CLOBBER — display-only fence (procgen surfaces are sVis-free
     'planet-lod-river-amplifier.glsl.js',
     'tests/golden-trajectories/run-golden.mjs',
     'tests/golden-trajectories/canonical-scenario.js',
+    // Slice D (lens #9): planet-lod-rivers.js hosts route()/compositeMargins/the relief-cube
+    // bake. The Slice-D crossover is lab-side (re-weights the blend uniform), so rivers.js stays
+    // sVis-token-free — lock that: the display scale never enters the bake/route/budget module.
+    'planet-lod-rivers.js',
   ];
 
   for (const rel of procgenSurfaces) {
@@ -89,18 +103,61 @@ describe('AC-ZERO-CLOBBER — the lab GLSL regions are sVis-free (breach only al
     expect(offending).toEqual([]);
   });
 
-  it('never passes sVis to featureFrequencyFromKm (procgen frequency stays on real radius)', () => {
-    const lab = read('planet-lod-lab.html');
-    // no featureFrequencyFromKm(...) call whose argument list mentions sVis
-    expect(lab).not.toMatch(/featureFrequencyFromKm\([^)]*sVis/);
+  it('the physics-frequency surfaces never key featureFrequencyFromKm on sVis (real-R only)', () => {
+    // RE-ANCHORED (was: "lab never passes sVis to featureFrequencyFromKm"). P5 now
+    // DELIBERATELY passes the display radius (_dispR === sVis) into featureFrequencyFromKm
+    // at the LIVE lab write — that is the display-frequency keying that holds km-texture
+    // forms constant. The real-R guarantee moves onto the surfaces that MUST stay physics-
+    // exact: the golden harness, the canonical scenario, and the whole worldengine tree.
+    // None may key a frequency on the display scale, and none may carry the token at all.
+    const ffkSvis = /featureFrequencyFromKm\([^)]*\bsVis\b/;
+    const realRSurfaces = [
+      'tests/golden-trajectories/run-golden.mjs',
+      'tests/golden-trajectories/canonical-scenario.js',
+      ...jsFilesUnder('src/worldengine'),
+    ];
+    for (const rel of realRSurfaces) {
+      const src = read(rel);
+      expect(src).not.toMatch(ffkSvis);
+      expect(src).not.toMatch(DENY);
+    }
   });
 
-  it('never feeds sVis into the planet height uniform bundle (only the ring-cloud display material)', () => {
+  it('only the display-frequency allowlist may carry sVis in a planet uniform write', () => {
     const lab = read('planet-lod-lab.html');
-    // The ONLY uniform writes touching sVis are the ring cloud's own material (a
-    // separate display shader). Assert the planet `uniforms.` bundle never takes sVis.
-    const planetUniformWithSvis = /(?<!ringCloud\.material\.)uniforms\.\w+\.value\s*=\s*[^;]*\bsVis\b/;
-    expect(lab).not.toMatch(planetUniformWithSvis);
+    // Re-scope (D1): sVis MAY set a NAMED display-frequency term at the live frame write.
+    // The allowlist = P4 synth craters + the P5b fixed-uniform relief combiners (incl. warp
+    // partners) + Slice C's single uDispDomainScale lever + the P5 km-keyed writes (which
+    // take _dispR === sVis today, so they don't literally carry the token, but are listed
+    // for forward-safety). EVERY OTHER planet uniform write must stay sVis-free — physics /
+    // amplitude / mask / strength / width content never keys on the display scale.
+    const ALLOW = new Set([
+      // Slice C global macro-domain lever (forward-declared; not yet written)
+      'uDispDomainScale',
+      // Slice D — bake→synth crossover: a display-BLEND term (not a frequency), but a legitimate
+      // display-only sVis-driven planet-uniform write. effective = base · bakeReliefCrossover(sVis)
+      // fades the baked cube out and the Slice-C domain-scaled synth body in as the disc departs 1.
+      'uReliefBakeStrength',
+      // P4 — synth sub-floor craters (·sVis on the real-R value)
+      'uCraterScale',
+      // P5b — fixed-uniform relief combiners + their warp-domain partners
+      'uMountainScale', 'uScarpFreq', 'uScarpWarpFreq', 'uPlateauScale',
+      'uTesseraFreq', 'uTesseraWarpFreq', 'uWrinkleFreq', 'uDoubleRidgeFreq',
+      'uGroovedBandFreq', 'uBladeFreq', 'uGlacialScale', 'uLineationFreq',
+      'uLineationWarpFreq', 'uMachDistrictScale', 'uMachBlockScale', 'uCityScale',
+      // P5 — km-keyed texture writes (pass _dispR today; allowlisted for forward-safety)
+      'uOutflowFreq', 'uKarstDolineFreq', 'uDuneFreq', 'uFacetScale', 'uHexScale',
+      'uShatScale', 'uEcuDistrictScale', 'uEcuBlockScale', 'uEdificeScale', 'uLavaScale',
+      'uCrackScale', 'uChaosCellScale', 'uSubPitScale', 'uSubPolyScale', 'uFluvialFreq',
+    ]);
+    // Every planet `uniforms.<name>.value = <expr with sVis>` (ringCloud.material excluded).
+    const re = /(?<!ringCloud\.material\.)uniforms\.(\w+)\.value\s*=\s*[^;]*\bsVis\b/g;
+    const found = [...lab.matchAll(re)].map((m) => m[1]);
+    const offenders = found.filter((n) => !ALLOW.has(n));
+    expect(offenders).toEqual([]);
+    // sanity: the scan actually finds the P4 + P5b display writes (guards against the regex
+    // silently matching nothing and passing vacuously).
+    expect(found.length).toBeGreaterThanOrEqual(15);
   });
 });
 
@@ -127,5 +184,126 @@ describe('AC-0 — sVis derivation reads ONLY state.planetRadiusEarth (spine con
   });
   it('visScaleOf is never called on a label / archetype / regime field', () => {
     expect(lab).not.toMatch(/visScaleOf\([^)]*\.(label|archetype|regime|rendersOn)/);
+  });
+});
+
+describe('P4/P5/P5b — display-frequency keying is identity at sVis=1 (Slice B)', () => {
+  const lab = read('planet-lod-lab.html');
+
+  it('featureFrequencyFromKm(sVis=1, …) === the real-R value at radius 1 (identity)', () => {
+    // visScaleOf(1) === 1 exactly, so the P5 pseudo-radius swap is a no-op at radius 1 R⊕ —
+    // the km-texture render frequency is bit-identical to the pre-increment real-R value.
+    const sizeKm = 398, C = 1.0;
+    expect(visScaleOf(1)).toBe(1);
+    expect(featureFrequencyFromKm(visScaleOf(1), sizeKm, C))
+      .toBe(featureFrequencyFromKm(1, sizeKm, C));
+  });
+
+  it('featureFrequencyFromKm(sVis, …) scales ∝ sVis at sVis>1 (holds the form constant)', () => {
+    // freq_render ∝ sVis ⇒ θ ∝ 1/sVis ⇒ on-screen size S = θ·sVis is CONSTANT as the disc
+    // grows. featureFrequencyFromKm is linear in its radius arg, so the ratio is exactly sVis.
+    const sizeKm = 398, C = 1.0;
+    const base = featureFrequencyFromKm(1, sizeKm, C);
+    for (const sVis of [Math.SQRT2, 2, 2 * Math.SQRT2, 4]) {   // discs 1.41× / 2× / 2.83× / 4×
+      expect(featureFrequencyFromKm(sVis, sizeKm, C)).toBeCloseTo(base * sVis, 6);
+    }
+  });
+
+  it('P5 keys km-texture writes on the _dispR pseudo-radius, defined as sVis (D2 = hold-constant)', () => {
+    // The D2 knob: _dispR === sVis holds forms constant; flipping it to state.planetRadiusEarth
+    // in ONE line restores the inc3b ∝R "finer texture on a bigger world" read.
+    expect(lab).toMatch(/const\s+_dispR\s*=\s*sVis\s*;/);
+    expect(lab).toMatch(/featureFrequencyFromKm\(_dispR,/);
+  });
+
+  it('uShatSubFreq is NOT ·sVis-scaled — it rides shatQ=pos·uShatScale (no double-scale)', () => {
+    // uShatScale is a P5 write (already ∝sVis via _dispR); the sub-fracture octave samples
+    // shatQ·uShatSubFreq, so uShatScale's scaling already propagates. Scaling uShatSubFreq too
+    // would give the sub-fracture ∝sVis² (over-held, shrinks). It stays the real ratio.
+    expect(lab).toMatch(/uShatSubFreq\.value\s*=\s*state\.shatSubFreq\s*;/);
+  });
+});
+
+describe('Slice C — uDispDomainScale global macro/province domain lever (P1+P3)', () => {
+  const WORLD_LIGHT = new THREE.Vector3(1, 0, 0);
+  const lab = read('planet-lod-lab.html');
+  const heightGlsl = read('planet-lod-height.glsl.js');
+
+  it('uDispDomainScale defaults to 1.0 (identity ⇒ headless/golden byte-identical)', () => {
+    // The golden/headless bake path (CPU writeHeightSphere) never writes this uniform, so the
+    // default is the value it renders at → sVis=1 identity → no carrier byte moves.
+    const u = makeUniforms(WORLD_LIGHT);
+    expect(u.uDispDomainScale).toBeDefined();
+    expect(u.uDispDomainScale.value).toBe(1.0);
+  });
+
+  it('the shared height GLSL declares uDispDomainScale and threads it into the macro domain', () => {
+    // Uniform-NAME indirection: the display lever lives in the GLSL as a uniform name; the
+    // JS writes it. The sVis TOKEN never enters the shader string (fence, asserted below).
+    expect(heightGlsl).toMatch(/uniform\s+float\s+uDispDomainScale\s*;/);
+    // Threading is real, not vacuous: the macro FBM base freq carries the factor, and the
+    // computeHeight + initProvinces sample domains are pre-scaled by it.
+    expect(heightGlsl).toMatch(/uNoiseScale\s*\*\s*0\.3\s*\*\s*uDispDomainScale/);
+    const posScales = [...heightGlsl.matchAll(/pos\s*\*=\s*uDispDomainScale\s*;/g)];
+    expect(posScales.length).toBe(2);   // computeHeight + initProvinces
+    // still carries no display-scale TOKEN (re-assert the fence at the Slice-C surface)
+    expect(heightGlsl).not.toMatch(DENY);
+  });
+
+  it('the lab frame loop is the ONLY writer of uDispDomainScale, and it writes sVis', () => {
+    // "the ONLY write, lab-side, display-only" — a single feed keeps the lever display-only
+    // and greppable; nothing else may set it (a second writer would break the AC-0 chain).
+    expect(lab).toMatch(/uniforms\.uDispDomainScale\.value\s*=\s*sVis\s*;/);
+    const writes = [...lab.matchAll(/uDispDomainScale\.value\s*=/g)];
+    expect(writes.length).toBe(1);
+  });
+});
+
+describe('Slice D — bake→synth crossover (P2 reaches the live bake=1 default)', () => {
+  const lab = read('planet-lod-lab.html');
+
+  it('bakeReliefCrossover(1) === 1 exactly (identity ⇒ byte-identical at radius 1 R⊕)', () => {
+    // sVis=1 ⇒ |log2(1)|=0 ⇒ smoothstep(0,SPAN,0)=0 ⇒ crossover=1. The frame write is then
+    // base·1 = base = the value applyReliefBake already set, so radius 1 is behavior-identical.
+    expect(bakeReliefCrossover(1)).toBe(1);
+    expect(visScaleOf(1)).toBe(1);   // and the input at radius 1 is exactly 1
+  });
+
+  it('fades toward 0 as the disc departs 1, symmetric in disc-doublings (|log2 sVis|)', () => {
+    // NB: the arg is sVis (the disc factor), NOT radius. Monotone non-increasing in |log2 sVis|;
+    // grow (sVis>1) and shrink (sVis<1) fade equally. Sample INSIDE the fade band |log2 sVis|<SPAN
+    // (with SPAN=1.0 that is sVis ∈ (0.5, 2)); beyond the band it clamps to 0.
+    expect(bakeReliefCrossover(1.5)).toBeCloseTo(bakeReliefCrossover(1 / 1.5), 12);  // symmetry grow vs shrink
+    expect(bakeReliefCrossover(Math.SQRT2)).toBeCloseTo(bakeReliefCrossover(Math.SQRT1_2), 12);
+    expect(bakeReliefCrossover(1.2)).toBeLessThan(bakeReliefCrossover(1));           // any disc growth ⇒ more synth
+    expect(bakeReliefCrossover(1.5)).toBeLessThan(bakeReliefCrossover(1.2));         // farther out ⇒ more synth
+    // fully synth once |log2 sVis| ≥ SPAN (clamped): pick a disc well past the span both ways.
+    const farUp = Math.pow(2, BAKE_CROSS_SPAN + 1), farDn = Math.pow(2, -(BAKE_CROSS_SPAN + 1));
+    expect(bakeReliefCrossover(farUp)).toBe(0);
+    expect(bakeReliefCrossover(farDn)).toBe(0);
+  });
+
+  it('stays within [0,1] across the whole radius span (a valid blend weight)', () => {
+    for (const R of [0.3, 0.5, 1, 2, 4, 8, 16]) {
+      const c = bakeReliefCrossover(visScaleOf(R));
+      expect(c).toBeGreaterThanOrEqual(0);
+      expect(c).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('the frame loop re-weights uReliefBakeStrength by the crossover (base · crossover(sVis))', () => {
+    // The mechanism reaches the render: the effective bake strength is the live base times the
+    // sVis crossover, so the baked cube fades out and the Slice-C synth body fades in as R grows.
+    expect(lab).toMatch(
+      /uniforms\.uReliefBakeStrength\.value\s*=\s*grainCarveUI\.reliefBakeStrength\s*\*\s*bakeReliefCrossover\(\s*sVis\s*\)\s*;/,
+    );
+  });
+
+  it('the crossover is byte-safe: it edits NO src/worldengine/** file (no re-bake)', () => {
+    // The whole point of the crossover vs a route-rebake: it re-weights an existing blend uniform
+    // lab-side, so every worldengine height writer (and its byte-goldens) is untouched. Re-assert
+    // the worldengine tree carries no display-scale token at the Slice-D surface.
+    const files = jsFilesUnder('src/worldengine');
+    expect(files.filter((f) => DENY.test(read(f)))).toEqual([]);
   });
 });

@@ -8,6 +8,13 @@ import * as THREE from 'three';
 export function makeUniforms(WORLD_LIGHT) {
   return {
       uNoiseScale: { value: 4.0 },
+      // Radius display-scale WS (Slice C, P1+P3). Global macro/province domain lever: the
+      // height GLSL samples pos·uDispDomainScale so the analytic macro body + province
+      // partition frequencies scale together ∝ sVis, holding the continents' on-screen size
+      // constant as the disc grows. Default 1.0 = identity → the headless/golden path (which
+      // never writes it — CPU writeHeightSphere, not this uniform) is byte-identical. The lab
+      // frame loop is the ONLY writer (= sVis); sVis=1 (radius 1 R⊕) → uDispDomainScale=1.
+      uDispDomainScale: { value: 1.0 },
       uOctaves:    { value: 4.0 },
       uLodRamp:    { value: 0.0 },
       uLevels:     { value: 6.0 },

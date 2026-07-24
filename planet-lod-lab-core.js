@@ -56,6 +56,57 @@ export function minCameraDistance(sVis) {
   return sVis * CAMERA_CLEARANCE;
 }
 
+// ── Radius slider LOG-position map (radius-display-scale-2026-07-24, Slice A) ──
+// lil-gui has no native log slider, so the lab drives the radius through a [0,1]
+// proxy track `t` that exp-maps onto planetRadiusEarth. This is a pure UI/ERGONOMICS
+// term — it NEVER feeds procgen/height/schedules; the physics still reads
+// state.planetRadiusEarth. The point is perceptual uniformity: because
+// radiusFromT(t) = MIN·(MAX/MIN)^t, equal slider travel Δt is a constant MULTIPLICATIVE
+// step in radius everywhere on the track (radiusFromT(t+dt)/radiusFromT(t) = (MAX/MIN)^dt,
+// independent of t) — killing the linear slider's 0.2 RE/px left-edge violence and
+// right-edge dead zone (DIAGNOSIS Finding 1). Endpoints: t=0 → 0.3, t=1 → 16.
+export const RADIUS_SLIDER_MIN = 0.3;   // Moon-class draw floor (RE)
+export const RADIUS_SLIDER_MAX = 16;    // Sub-Neptune ceiling (RE)
+export function radiusFromT(t) {
+  return RADIUS_SLIDER_MIN * Math.pow(RADIUS_SLIDER_MAX / RADIUS_SLIDER_MIN, t);
+}
+export function tFromRadius(r) {
+  return Math.log(r / RADIUS_SLIDER_MIN) / Math.log(RADIUS_SLIDER_MAX / RADIUS_SLIDER_MIN);
+}
+
+// ── Slice D — bake→synth crossover (radius-display-scale-2026-07-24) ───────────
+// PROBLEM: the live default renders the macro body from the BAKED relief cube
+// (reliefBakeStrength = 1). That cube is angular-fixed geometry — its continents GROW
+// with the disc under planet.scale (θ const ⇒ S = θ·sVis) — and it CANNOT be re-keyed by a
+// display frequency: the read-gate/UAT preset (Rocky/Earthlike) bakes its body from the
+// plate-Voronoi partition (writePlateUpliftSphere), whose feature size is set by plate COUNT
+// + boundary-stress geometry, NOT a noise frequency there is no domain hook for. (The plan's
+// route-rebake targeted writeHeightSphere, which the Earthlike preset does not even use —
+// see BUILD-NOTES Slice D.) MECHANISM: rather than re-bake, cross-fade the EFFECTIVE bake
+// strength 1 → 0 as the disc departs sVis = 1, handing the macro body to the Slice-C
+// domain-scaled analytic path (fbmd · uDispDomainScale), which IS constant-on-screen and is
+// preset-AGNOSTIC (every preset's shader shares the same fbmd body). Byte-safe: touches no
+// src/worldengine/** and needs NO re-bake — it only re-weights the existing blend uniform.
+//   effective uReliefBakeStrength = base · bakeReliefCrossover(sVis)
+// At sVis = 1 the factor is EXACTLY 1 (fully baked) ⇒ the frame write re-affirms the base ⇒
+// identity ⇒ byte-identical to today. Symmetric in disc-doublings (|log2 sVis|) so growing
+// AND shrinking both hand off to the constant-size synth body. RESIDUE (disclosed, D3): the
+// baked continent PATTERN (incl. stamped basins) morphs into the analytic body across the
+// fade — a visible change in continent CHARACTER, not size; the size-constancy bar is met.
+// BAKE_CROSS_SPAN = the |log2 sVis| distance (disc-doublings) over which the bake fades fully
+// to synth. It is a READ-GATE TUNABLE: the form-constancy gate (b) over the {0.5, 2, 8} trio
+// picks the final value (a no-browser builder cannot run that gate). Default 1.0 = fully synth
+// by radius 4 (grow) / 0.25 (shrink); ≈half-blend at radius 2 / 0.5. If (b) fails at radius 2
+// (forms still visibly growing), reduce toward ~0.5 so the fade completes sooner.
+export const BAKE_CROSS_SPAN = 1.0;
+export function bakeReliefCrossover(sVis) {
+  // smoothstep ease: zero slope at sVis = 1 (a tiny nudge off radius 1 barely morphs), easing
+  // to pure synth by BAKE_CROSS_SPAN. smoothstep(0, SPAN, 0) === 0 exactly ⇒ returns 1 exactly
+  // at sVis = 1 (byte-identity guard). clamp inside smoothstep keeps the result in [0, 1].
+  const d = Math.abs(Math.log2(sVis));   // sVis = 1 → 0 exactly
+  return 1 - smoothstep(0, BAKE_CROSS_SPAN, d);
+}
+
 // qualityTier 0 (mobile/cheap) -> 1 (desktop/full). Scales the cost knobs (spec §2.E).
 export function qualityKnobs(qualityTier) {
   return {

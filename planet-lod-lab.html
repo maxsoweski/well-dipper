@@ -148,7 +148,7 @@
   <script type="module">
     import * as THREE from 'three';
     import GUI from 'lil-gui';
-    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, reliefEnvelope, animationRateFactor, CRATER_DEPTH, visScaleOf, VIS_SCALE_EXP, minCameraDistance } from './planet-lod-lab-core.js';
+    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, reliefEnvelope, animationRateFactor, CRATER_DEPTH, visScaleOf, VIS_SCALE_EXP, minCameraDistance, radiusFromT, tFromRadius, bakeReliefCrossover } from './planet-lod-lab-core.js';
     import { RADIUS_RANGES_EARTH } from './src/core/ScaleConstants.js';   // AC5/AC6: single-source archetype radius ranges (game + lab)
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
     import { ASSOCIATIONS, DEFAULT_DRESSING } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature; DEFAULT_DRESSING = ratified boot dressing (defaults rescope 2026-07-15)
@@ -3898,8 +3898,30 @@
     const fDrivers = guiLeft.addFolder('Drivers'); fDrivers.open();
     // preset picker moved up to the top-of-panel World folder (added below).
     fDrivers.add(driverUI, 'qualityTier', 0, 1, 0.01).name('qualityTier').onChange(applyDrivers);
-    // Real-units scale: planet radius (RE) + a live km readout (Earth = 6371 km).
-    fDrivers.add(state, 'planetRadiusEarth', 0.3, 16, 0.01).name('planet radius (RE)').listen().onChange(()=>applyDrivers());
+    // Real-units scale: planet radius driven through a LOG-position proxy (Slice A
+    // ergonomics, radius-display-scale-2026-07-24). lil-gui has no native log slider, so a
+    // [0,1] proxy `t` exp-maps onto planetRadiusEarth (radiusFromT/tFromRadius, pure
+    // lab-core exports) → equal slider travel = a constant ~+4%/1%-of-track RATIO step
+    // across the whole 0.3–16 RE (53×) span. This kills the old linear slider's left-edge
+    // violence (0.2 RE/px) and right-edge dead zone (DIAGNOSIS Finding 1). Pure UI: physics
+    // still reads state.planetRadiusEarth. The disabled RE + km readouts restore the numeric
+    // legibility the old RE-labelled slider carried.
+    const radiusProxy = {
+      get t(){ return tFromRadius(state.planetRadiusEarth); },
+      set t(v){ state.planetRadiusEarth = radiusFromT(v); },
+    };
+    // Trailing 220 ms debounce on the re-derive (the riverRerouteDebounced idiom, :3890):
+    // a drag re-derives applyDrivers() ONCE on settle, not per onChange tick (~100–170 ms
+    // route + ~500 ms terrain), removing the "nothing happens / then it jumps" lag. The disc
+    // itself still grows in REAL TIME — planet.scale reads state.planetRadiusEarth every
+    // frame, ungated by applyDrivers.
+    let _radiusApplyTimer = 0;
+    function radiusApplyDebounced(){
+      clearTimeout(_radiusApplyTimer);
+      _radiusApplyTimer = setTimeout(() => applyDrivers(), 220);
+    }
+    fDrivers.add(radiusProxy, 't', 0, 1, 0.001).name('planet radius (log)').listen().onChange(radiusApplyDebounced);
+    fDrivers.add({ get re(){ return state.planetRadiusEarth.toFixed(2); } }, 're').name('radius (RE)').listen().disable();
     fDrivers.add({ get km(){ return (state.planetRadiusEarth*6371).toFixed(0)+' km'; } }, 'km').name('radius (km)').listen().disable();
     // AC5 seeded radius source: a seed field + reroll redraw the archetype-range radius (named
     // bodies stay canonical). rerollRadius() bumps the seed, flags a one-shot redraw, then runs
@@ -5691,12 +5713,37 @@
       // Discrete which-body-is-LOD2 flag, hysteresis-guarded (enter 18 / exit 22) to stop flicker.
       state._lod2Active = lodHysteresis(logicalDist, state._lod2Active ?? false);
 
-      // Light dir into object space (sphere rotates; lighting math is object-space)
+      // ── P5 display radius (radius display-scale WS, Slice B / D2 = "hold surface forms
+      // constant"). The km-keyed featureFrequencyFromKm(...) writes below take _dispR as a
+      // PSEUDO-radius instead of state.planetRadiusEarth so their render frequency scales
+      // ∝ sVis (θ ∝ 1/sVis) → the fixed-km texture form's on-screen size S = θ·sVis stays
+      // CONSTANT as the disc grows, instead of shrinking ∝ R^-0.5 on real radius. Identity
+      // at sVis=1 (radius 1 R⊕), so goldens/headless are untouched (they never run frame()).
+      // D2 knob: set _dispR = state.planetRadiusEarth to restore the inc3b ∝R "finer texture
+      // on a bigger world" read in ONE line. sVis is display-only; physics stays real-R.
+      const _dispR = sVis;
       invQuat.copy(planet.quaternion).invert();
       lightObj.copy(WORLD_LIGHT).applyQuaternion(invQuat);
 
       uniforms.uOctaves.value = oct;
       uniforms.uLodRamp.value = lod;
+      // ── Slice C (P1+P3): global macro/province display-domain lever. The height GLSL samples
+      // pos·uDispDomainScale, so the analytic macro FBM body (computeHeight/fbmd/fbmdRidged/
+      // fbmdHetero/fbmdDamped) AND the province partition scale their frequencies together ∝ sVis
+      // → continents/regions hold their on-screen size (θ ∝ 1/sVis ⇒ S = θ·sVis constant) while
+      // the disc grows. This is the ONLY writer; display-only; identity at sVis=1 (radius 1 R⊕),
+      // so the CPU/headless/golden bake path (which never runs frame()) is byte-identical.
+      uniforms.uDispDomainScale.value = sVis;
+      // ── Slice D (P2): bake→synth crossover. At the live default the macro body is the BAKED
+      // relief cube (grainCarveUI.reliefBakeStrength = 1), which is angular-fixed and grows with
+      // the disc — and it can't be re-keyed by a display frequency (the Earthlike body is a
+      // plate-Voronoi partition, not a noise freq; see lab-core bakeReliefCrossover + BUILD-NOTES
+      // Slice D). So fade the EFFECTIVE bake strength 1 → 0 as the disc departs sVis=1, handing the
+      // body to the Slice-C domain-scaled analytic path (fbmd·uDispDomainScale = constant-on-screen,
+      // preset-agnostic). base = the live GUI/UI strength; the crossover only re-weights it. Identity
+      // at sVis=1 (bakeReliefCrossover(1) === 1 exactly ⇒ re-affirms the base ⇒ byte-identical to
+      // today; goldens/headless never run frame()). No re-bake, no worldengine touch (byte-safe).
+      uniforms.uReliefBakeStrength.value = grainCarveUI.reliefBakeStrength * bakeReliefCrossover(sVis);
       uniforms.uLevels.value = state.levels;
       // ── AC3/AC4 scale factors (computed once per frame from the live radius + gravity) ──
       // _animRate ∝ 1/radius — big worlds animate slower (lava breathing, churn, storm drift,
@@ -5801,7 +5848,7 @@
       uniforms.uOutflowActivity.value   = state.outflowActivity;
       uniforms.uOutflowWidth.value      = state.outflowWidth;
       uniforms.uOutflowDepth.value      = state.outflowDepth;
-      uniforms.uOutflowFreq.value       = featureFrequencyFromKm(state.planetRadiusEarth, state.outflowSizeKm, C_OUTFLOW);
+      uniforms.uOutflowFreq.value       = featureFrequencyFromKm(_dispR, state.outflowSizeKm, C_OUTFLOW);   // P5 display-radius (∝sVis, hold constant)
       uniforms.uOutflowWarpAmt.value    = state.outflowWarp;
       uniforms.uOutflowIslands.value    = state.outflowIslands;
       uniforms.uOutflowGrooveFreq.value = state.outflowGrooveFreq;
@@ -5810,7 +5857,7 @@
       // F21 karst — karstEnabled gates density→0 (early-out), preserving the slider value.
       uniforms.uKarstDensity.value     = state.karstEnabled ? state.karstDensity : 0.0;   // ✓ enable gate
       uniforms.uKarstMaturity.value    = state.karstMaturity;
-      uniforms.uKarstDolineFreq.value  = featureFrequencyFromKm(state.planetRadiusEarth, state.karstDolineSizeKm, C_KARST);
+      uniforms.uKarstDolineFreq.value  = featureFrequencyFromKm(_dispR, state.karstDolineSizeKm, C_KARST);   // P5 display-radius (∝sVis, hold constant)
       uniforms.uKarstDolineR.value     = state.karstDolineR;
       uniforms.uKarstDolineDepth.value = state.karstDolineDepth;
       uniforms.uKarstMazeFreq.value    = state.karstMazeFreq;
@@ -5820,7 +5867,7 @@
       // F15 dunes — dunesEnabled gates density→0 (early-out), preserving the slider value.
       uniforms.uDuneDensity.value = state.dunesEnabled ? state.duneDensity : 0.0;   // ✓ enable gate
       uniforms.uDuneAmp.value     = state.duneAmp;
-      uniforms.uDuneFreq.value    = featureFrequencyFromKm(state.planetRadiusEarth, state.duneSizeKm, C_DUNE);
+      uniforms.uDuneFreq.value    = featureFrequencyFromKm(_dispR, state.duneSizeKm, C_DUNE);   // P5 display-radius (∝sVis, hold constant)
       uniforms.uDuneWarp.value    = state.duneWarp;
       uniforms.uDuneBelt.value    = state.duneBelt;
       uniforms.uDuneOffset.value.set(state.duneOffset[0], state.duneOffset[1], state.duneOffset[2]);
@@ -5971,7 +6018,7 @@
       // writer is the SOLE owner of the F43 uniforms (no second write site).
       uniforms.uFacetStrength.value  = state.facetsEnabled ? state.facetStrength : 0.0;   // ✓ enable gate
       uniforms.uFacetCoverage.value  = state.facetCoverage;
-      uniforms.uFacetScale.value     = featureFrequencyFromKm(state.planetRadiusEarth, state.facetSizeKm, C_FACET);
+      uniforms.uFacetScale.value     = featureFrequencyFromKm(_dispR, state.facetSizeKm, C_FACET);   // P5 display-radius (∝sVis, hold constant)
       uniforms.uFacetAmp.value       = state.facetAmp;
       // F44 hex crust — hexTessEnabled gates the master strength→0 (border troughs + domed
       // interiors ALL key on uHexStrength > 0, so ONE gate kills the family: byte-identical
@@ -5980,7 +6027,7 @@
       // writer is the SOLE owner of the F44 uniforms (no second write site).
       uniforms.uHexStrength.value    = state.hexTessEnabled ? state.featureRelevant.hexTess : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (zeros force-enable on non-member worlds; 1.0 on Frozen — its member world)
       uniforms.uHexRegularity.value  = state.hexRegularity;
-      uniforms.uHexScale.value       = featureFrequencyFromKm(state.planetRadiusEarth, state.hexSizeKm, C_HEX);
+      uniforms.uHexScale.value       = featureFrequencyFromKm(_dispR, state.hexSizeKm, C_HEX);   // P5 display-radius (∝sVis, hold constant)
       uniforms.uHexBorderDepth.value = state.hexBorderDepth;
       uniforms.uHexBorderWidth.value = state.hexBorderWidth;
       uniforms.uHexDome.value        = state.hexDome;
@@ -5988,7 +6035,7 @@
       // crevasses, sub-fracture ALL key on uShatStrength>0, so ONE gate kills the family:
       // byte-identical pre-F45 output). No driver derivation (no preset). Sole F45 write site.
       uniforms.uShatStrength.value    = state.shatterEnabled ? state.featureRelevant.shatter : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (zeros force-enable on non-member worlds; 1.0 on Frozen — its member world)
-      uniforms.uShatScale.value       = featureFrequencyFromKm(state.planetRadiusEarth, state.shatSizeKm, C_SHAT);
+      uniforms.uShatScale.value       = featureFrequencyFromKm(_dispR, state.shatSizeKm, C_SHAT);   // P5 display-radius (∝sVis). NB: uShatSubFreq below rides shatQ=pos·uShatScale, so it is DELIBERATELY left real (scaling it too would double-scale the sub-fracture octave).
       uniforms.uShatBlockJitter.value = state.shatBlockJitter;
       uniforms.uShatBorderDepth.value = state.shatBorderDepth;
       uniforms.uShatBorderWidth.value = state.shatBorderWidth;
@@ -6000,8 +6047,8 @@
       // composite + glow guarded on uMachCoverage>0): ONE gate kills the family, byte-identical
       // pre-F47 output. Sole F47 write site.
       uniforms.uMachCoverage.value      = state.machineEnabled ? state.machCoverage * state.habGate * state.featureRelevant.machine : 0.0;   // ✓ enable gate × D15 habitability gate × per-feature relevance hard-gate (Thread B idiom) — zeros Mars leak (technogenic declared Rocky/Ocean/Eye only; dormant: default-OFF, gated for audit cleanliness)
-      uniforms.uMachDistrictScale.value = state.machDistrictScale;
-      uniforms.uMachBlockScale.value    = state.machBlockScale;
+      uniforms.uMachDistrictScale.value = state.machDistrictScale * sVis;   // P5b ·sVis (hold machine districts constant; fbmd(p·uMachDistrictScale) independent; identity at sVis=1)
+      uniforms.uMachBlockScale.value    = state.machBlockScale * sVis;   // P5b ·sVis (hold machine blocks constant; machGridSDF(pos,uMachBlockScale) keys raw pos, independent of district → no double-scale)
       uniforms.uMachSeamWidth.value     = state.machSeamWidth;
       uniforms.uMachBevel.value         = state.machBevel;
       uniforms.uMachGlowIntensity.value = state.machGlowIntensity;
@@ -6011,15 +6058,15 @@
       // F48 city lights — uCityMaturity is the SOLE gate: enable off ⇒ 0 ⇒ cityC vec3(0) ⇒ byte-identical bare Stage-6 base.
       uniforms.uCityMaturity.value   = state.cityLightsEnabled ? state.cityMaturity * state.habGate : 0.0;   // × D15 habitability gate (no cities on uninhabitable worlds)
       uniforms.uCityIntensity.value  = state.cityIntensity;
-      uniforms.uCityScale.value      = state.cityScale;
+      uniforms.uCityScale.value      = state.cityScale * sVis;   // P5b ·sVis (hold city grid constant; identity at sVis=1)
       uniforms.uCityCoastBoost.value = state.cityCoastBoost;
       uniforms.uCityColor.value.setRGB(state.cityColor[0], state.cityColor[1], state.cityColor[2]);
       // F49 ecumenopolis — uEcuCoverage is the SOLE gate: enable off ⇒ 0 ⇒ relief early-outs + albedo
       // crossfade mix(...,0) + ecuC vec3(0) ⇒ byte-identical bare Stage-6 base. Sole F49 write site.
       uniforms.uEcuCoverage.value      = state.ecumenopolisEnabled ? state.ecuCoverage * state.habGate : 0.0;   // ✓ enable gate × D15 habitability gate (no planet-city on uninhabitable worlds)
       uniforms.uEcuGlowIntensity.value = state.ecuGlowIntensity;
-      uniforms.uEcuDistrictScale.value = featureFrequencyFromKm(state.planetRadiusEarth, state.ecuDistrictSizeKm, C_ECUD);
-      uniforms.uEcuBlockScale.value    = featureFrequencyFromKm(state.planetRadiusEarth, state.ecuBlockSizeKm, C_ECUB);
+      uniforms.uEcuDistrictScale.value = featureFrequencyFromKm(_dispR, state.ecuDistrictSizeKm, C_ECUD);   // P5 display-radius (∝sVis, hold constant)
+      uniforms.uEcuBlockScale.value    = featureFrequencyFromKm(_dispR, state.ecuBlockSizeKm, C_ECUB);   // P5 display-radius (∝sVis; district+block both key raw pos, independent → no double-scale)
       uniforms.uEcuCanyonDepth.value   = state.ecuCanyonDepth;   // Inc-3: relief envelope rides ONCE via uPerturb (was × reliefNorm here too, which squared it)
       uniforms.uEcuSeamWidth.value     = state.ecuSeamWidth;
       uniforms.uEcuWarpAmt.value       = state.ecuWarpAmt;
@@ -6056,7 +6103,7 @@
       uniforms.uCraterComplexD.value   = state.craterComplexD;
       uniforms.uCraterRelaxation.value = state.craterRelaxation;
       uniforms.uTerraceCount.value     = state.terraceCount;
-      uniforms.uCraterScale.value      = featureFrequencyFromKm(state.planetRadiusEarth, state.craterSizeKm, C_CRATER);
+      uniforms.uCraterScale.value      = featureFrequencyFromKm(state.planetRadiusEarth, state.craterSizeKm, C_CRATER) * sVis;   // P4: DISPLAY ·sVis holds synth sub-floor craters constant on the growing disc. Real-R arg preserved → inc3b synth-law pin (featureFrequencyFromKm(RE,D_char,C_CRATER)) is blind to this. Identity at sVis=1.
       uniforms.uCraterAmp.value        = state.craterAmp;   // Inc-3: relief envelope rides ONCE via uPerturb (was × reliefNorm here too, which squared it)
       // F3 ejecta & rays — strength/rampart/ray-brightness driven; amp/lump/count/sharp lab.
       uniforms.uEjectaStrength.value   = state.ejectaEnabled ? state.ejectaStrength * state.craterRelevance : 0.0;   // ✓ enable gate × condition-derived relevance (inc3b S3-fix F7: ejecta wraps the SAME synth craters, so it shares craterRelevanceOf — rendersOn dropped from the gate); strength→0 early-outs the ejecta pass on non-impact worlds
@@ -6072,7 +6119,7 @@
       uniforms.uRidgeGain.value        = state.ridgeGain;
       uniforms.uOrogenyStrength.value  = state.orogenyStrength;
       uniforms.uOrogenyAxis.value.set(Math.cos(state.orogenyAngle), Math.sin(state.orogenyAngle));
-      uniforms.uMountainScale.value    = state.mountainScale;
+      uniforms.uMountainScale.value    = state.mountainScale * sVis;   // P5b ·sVis: angular-fixed relief-combiner freq (fbmdRidged(pos·uMountainScale)) → hold mountains constant on the growing disc. state stays real-R; identity at sVis=1.
       // F4 canyons — depth/count/width/floor driven+lab; axes set in applyDrivers (seed prop).
       uniforms.uChasmaDepth.value      = state.canyonsEnabled ? state.chasmaDepth * state.featureRelevant.canyons : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom)
       uniforms.uChasmaCount.value      = state.chasmaCount | 0;
@@ -6082,24 +6129,24 @@
       uniforms.uScarpStrength.value    = state.scarpsEnabled ? state.scarpStrength * state.featureRelevant.scarps : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom)
       uniforms.uScarpStyle.value       = state.scarpStyle;
       uniforms.uScarpWidth.value       = state.scarpWidth;
-      uniforms.uScarpFreq.value        = state.scarpFreq;
+      uniforms.uScarpFreq.value        = state.scarpFreq * sVis;   // P5b ·sVis (hold scarps constant; identity at sVis=1)
       uniforms.uScarpWarp.value        = state.scarpWarp;
-      uniforms.uScarpWarpFreq.value    = state.scarpWarpFreq;
+      uniforms.uScarpWarpFreq.value    = state.scarpWarpFreq * sVis;   // P5b ·sVis (warp domain freq tracks its base uScarpFreq)
       // F6 plateaus — strength driven; scale/offset/levels/softness lab-tunable.
       uniforms.uPlateauStrength.value  = state.plateausEnabled ? state.plateauStrength * state.featureRelevant.plateaus : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom)
-      uniforms.uPlateauScale.value     = state.plateauScale;
+      uniforms.uPlateauScale.value     = state.plateauScale * sVis;   // P5b ·sVis (hold plateaus constant; identity at sVis=1)
       uniforms.uPlateauOffset.value    = state.plateauOffset;
       uniforms.uPlateauLevels.value    = state.plateauLevels;
       uniforms.uPlateauSoftness.value  = state.plateauSoftness;
       uniforms.uTesseraStrength.value  = state.tesseraEnabled ? state.tesseraStrength * state.featureRelevant.tessera : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom)
-      uniforms.uTesseraFreq.value      = state.tesseraFreq;
+      uniforms.uTesseraFreq.value      = state.tesseraFreq * sVis;   // P5b ·sVis (hold tessera constant; identity at sVis=1)
       uniforms.uTesseraWarp.value      = state.tesseraWarp;
-      uniforms.uTesseraWarpFreq.value  = state.tesseraWarpFreq;
+      uniforms.uTesseraWarpFreq.value  = state.tesseraWarpFreq * sVis;   // P5b ·sVis (warp domain freq tracks its base uTesseraFreq)
       // F7 edifices — volcanism/height/viscosity driven; scale/amp/caldera lab-tunable.
       uniforms.uVolcanismStrength.value = state.edificesEnabled ? state.volcanismStrength : 0.0;   // ✓ enable gate
       uniforms.uEdificeMaxHeight.value = state.edificeMaxHeight;
       uniforms.uShieldStratoMix.value  = state.shieldStratoMix;
-      uniforms.uEdificeScale.value     = featureFrequencyFromKm(state.planetRadiusEarth, state.edificeSizeKm, C_EDIFICE);
+      uniforms.uEdificeScale.value     = featureFrequencyFromKm(_dispR, state.edificeSizeKm, C_EDIFICE);   // P5 display-radius (∝sVis, hold constant)
       uniforms.uEdificeAmp.value       = state.edificeAmp;   // Inc-3: dropped × reliefNorm(…, 1.0) (the (1/RE) radius term) — edifice radius now flows via the uPerturb envelope (g^-0.58 bulk cap) × uEdificeMaxHeight (∝1/g volcano-buoyancy); composed g^-1.58 is an accepted DISTINCT-effect composition (strength-cap × buoyancy), not the footnote-14 same-effect double-dip (BUILD-NOTES derivation)
       uniforms.uEdificeCaldera.value   = state.edificeCaldera;
       // F8 lava plains — coverage (SMOOTHS relief, gates region) + activity (emissive cracks)
@@ -6108,25 +6155,25 @@
       uniforms.uLavaCoverage.value = state.lavaEnabled ? state.lavaCoverage : 0.0;   // ✓ enable gate
       uniforms.uLavaActivity.value = state.lavaEnabled ? state.lavaActivity : 0.0;   // ✓ enable gate (cracks dark)
       uniforms.uLavaAxis.value.set(state.lavaAxis[0], state.lavaAxis[1], state.lavaAxis[2]);
-      uniforms.uLavaScale.value    = featureFrequencyFromKm(state.planetRadiusEarth, state.lavaSizeKm, C_LAVA);
+      uniforms.uLavaScale.value    = featureFrequencyFromKm(_dispR, state.lavaSizeKm, C_LAVA);   // P5 display-radius (∝sVis, hold constant)
       uniforms.uWrinkleAmp.value   = state.wrinkleAmp;
-      uniforms.uWrinkleFreq.value  = state.wrinkleFreq;
+      uniforms.uWrinkleFreq.value  = state.wrinkleFreq * sVis;   // P5b ·sVis (hold wrinkle ridges constant; field=dot(pos,ax)·uWrinkleFreq is independent; identity at sVis=1)
       uniforms.uWrinkleWarp.value  = state.wrinkleWarp;
-      uniforms.uCrackScale.value   = featureFrequencyFromKm(state.planetRadiusEarth, state.crackSizeKm, C_CRACK);
+      uniforms.uCrackScale.value   = featureFrequencyFromKm(_dispR, state.crackSizeKm, C_CRACK);   // P5 display-radius (∝sVis, hold constant)
       uniforms.uCrackWidth.value   = state.crackWidth;
       uniforms.uLavaGlowRate.value = state.lavaGlowRate * _animRate;   // AC4 lava "breathing" slows on big bodies
       // F9/F10 icy terrain — uCryoActivity is the SHARED seam (lab-knob stub, owner Cryo; gates
       // BOTH combiners' early-out). Per-feature enables zero each feature's OWN amplitude for
       // independent A/B (chaos → jitter+matrixRough to 0; ridges → amp to 0); SHAPE is driven.
       uniforms.uCryoActivity.value     = state.cryoActivity;
-      uniforms.uChaosCellScale.value   = featureFrequencyFromKm(state.planetRadiusEarth, state.chaosSizeKm, C_CHAOS);
+      uniforms.uChaosCellScale.value   = featureFrequencyFromKm(_dispR, state.chaosSizeKm, C_CHAOS);   // P5 display-radius (∝sVis, hold constant)
       uniforms.uChaosRaftJitter.value  = state.chaosEnabled ? state.chaosRaftJitter : 0.0;   // ✓ enable gate
       uniforms.uChaosMatrixRough.value = state.chaosEnabled ? state.chaosMatrixRough : 0.0;  // ✓ enable gate
       uniforms.uChaosMaskScale.value   = state.chaosMaskScale;
-      uniforms.uDoubleRidgeFreq.value  = state.doubleRidgeFreq;
+      uniforms.uDoubleRidgeFreq.value  = state.doubleRidgeFreq * sVis;   // P5b ·sVis (hold cryo double-ridges constant; identity at sVis=1)
       uniforms.uCryoRidgeOffset.value  = state.cryoRidgeOffset;
       uniforms.uCryoRidgeWidth.value   = state.cryoRidgeWidth;
-      uniforms.uGroovedBandFreq.value  = state.groovedBandFreq;
+      uniforms.uGroovedBandFreq.value  = state.groovedBandFreq * sVis;   // P5b ·sVis (hold grooved bands constant; bfield=dot(pos,ax1)·uGroovedBandFreq is independent; identity at sVis=1)
       uniforms.uCryoRidgeAmp.value     = state.cryoRidgeEnabled ? state.cryoRidgeAmp : 0.0;   // ✓ enable gate
       uniforms.uCryoRidgeWarp.value    = state.cryoRidgeWarp;
       uniforms.uCryoRidgeAxis0.value.set(state.cryoRidgeAxis0[0], state.cryoRidgeAxis0[1], state.cryoRidgeAxis0[2]);
@@ -6152,23 +6199,23 @@
       uniforms.uSubStrength.value        = state.subEnabled ? state.subStrength : 0.0;   // ✓ enable gate
       uniforms.uVolatileSpecies.value    = state.volatileSpecies;
       uniforms.uSubAmp.value             = state.subAmp;
-      uniforms.uSubPitScale.value        = featureFrequencyFromKm(state.planetRadiusEarth, state.subPitSizeKm, C_SUBPIT);
-      uniforms.uSubPolyScale.value       = featureFrequencyFromKm(state.planetRadiusEarth, state.subPolySizeKm, C_SUBPOLY);
+      uniforms.uSubPitScale.value        = featureFrequencyFromKm(_dispR, state.subPitSizeKm, C_SUBPIT);   // P5 display-radius (∝sVis, hold constant)
+      uniforms.uSubPolyScale.value       = featureFrequencyFromKm(_dispR, state.subPolySizeKm, C_SUBPOLY);   // P5 display-radius (∝sVis, hold constant)
       uniforms.uSubFloorFrac.value       = state.subFloorFrac;
       uniforms.uSubPitDensity.value      = state.subPitDensity;
-      uniforms.uBladeFreq.value          = state.bladeFreq;
+      uniforms.uBladeFreq.value          = state.bladeFreq * sVis;   // P5b ·sVis (hold blades constant; identity at sVis=1)
       uniforms.uBladeSharp.value         = state.bladeSharp;
       uniforms.uSubColdGate.value        = state.subColdGate;
       uniforms.uGlacialStrength.value    = state.glacialEnabled ? state.glacialStrength : 0.0;   // ✓ enable gate
       uniforms.uGlacialFlowVigor.value   = state.glacialFlowVigor;
       uniforms.uGlacialAmp.value         = state.glacialAmp;
-      uniforms.uGlacialScale.value       = state.glacialScale;
+      uniforms.uGlacialScale.value       = state.glacialScale * sVis;   // P5b ·sVis (hold glacial fbmd constant; fbmdDamped(pos·uGlacialScale) is independent; identity at sVis=1)
       uniforms.uGlacialSlopeDamp.value   = state.glacialSlopeDamp;
       uniforms.uGlacialBasinThresh.value = state.glacialBasinThresh;
       uniforms.uLineationAmp.value       = state.lineationAmp;
-      uniforms.uLineationFreq.value      = state.lineationFreq;
+      uniforms.uLineationFreq.value      = state.lineationFreq * sVis;   // P5b ·sVis (hold lineations constant; identity at sVis=1)
       uniforms.uLineationWarp.value      = state.lineationWarp;
-      uniforms.uLineationWarpFreq.value  = state.lineationWarpFreq;
+      uniforms.uLineationWarpFreq.value  = state.lineationWarpFreq * sVis;   // P5b ·sVis (warp domain freq tracks its base uLineationFreq — DEVIATION: plan enumerated uLineationFreq but omitted this warp partner; added per plan's own "warp freqs scale with base" rule, matching uScarpWarpFreq/uTesseraWarpFreq)
       uniforms.uGlacialColdGate.value    = state.glacialColdGate;
       // 🎲 per-feature domain offsets (axes are written directly by the 🎲 handlers / applyDrivers)
       uniforms.uCraterOffset.value.set(state.craterOffset[0], state.craterOffset[1], state.craterOffset[2]);
@@ -6194,7 +6241,7 @@
       uniforms.uFluvialDepth.value    = state.fluvialDepth;
       uniforms.uFluvialMeander.value  = state.fluvialMeander;
       uniforms.uFluvialWidth.value    = state.fluvialWidth;
-      uniforms.uFluvialFreq.value     = featureFrequencyFromKm(state.planetRadiusEarth, state.fluvialSizeKm, C_FLUVIAL);
+      uniforms.uFluvialFreq.value     = featureFrequencyFromKm(_dispR, state.fluvialSizeKm, C_FLUVIAL);   // P5 display-radius (∝sVis, hold constant)
       uniforms.uFluvialWarpAmt.value  = state.fluvialWarp;
       uniforms.uFluvialLowBias.value  = state.fluvialLowBias;
       uniforms.uFluvialOffset.value.set(state.fluvialOffset[0], state.fluvialOffset[1], state.fluvialOffset[2]);
