@@ -1,0 +1,62 @@
+{
+  "_purpose": "Read-gate FAIL diagnosis captures. Discriminates three candidate causes of the gate-(b) form-size-constancy miss (22.5% > 15%): C1 instrument seed-variance, C2 baked-stamp contamination, C3 real un-keyed analytic form. See task brief + READGATE-VERDICT.md.",
+  "capturedBy": "capture agent (readgate-diagnosis)",
+  "date": "2026-07-24",
+  "build": {
+    "branch": "feature/world-engine-production-L1",
+    "HEAD": "8c8a0d8 (radius-scale-fix build; gates green, verify PASS)",
+    "sliceD_mechanism": "bake->synth crossover (bakeReliefCrossover, BAKE_CROSS_SPAN=1.0) — the FIX-PLAN fallback, not the route re-bake",
+    "url": "http://localhost:5175/well-dipper/planet-lod-lab.html (served via HMR = HEAD)"
+  },
+  "commonStaging": {
+    "preset": "Rocky (Earthlike)",
+    "presetSetVia": "_lab.setPreset('Rocky (Earthlike)') once at init",
+    "seed_default": { "macro": 1234, "detail": 5678 },
+    "seedSetVia": "_lab.setSeed(macro, detail) -> reseedGiant(); followed by _lab.applyDrivers() which re-routes (ensureNetworkRouted) and re-bakes the plate-Voronoi relief cube for THAT seed (confirmed: reliefBakeCount increments per capture)",
+    "camera": { "yaw": 0.337, "pitch": 0.205, "distance": 6.0 },
+    "lod": { "octAuto": false, "octaves": 8 },
+    "spinSpeed": 0,
+    "frameClockFrozen": "uTime pinned to 12.0 via Object.defineProperty on _lab.uniforms.uTime (getter returns 12.0, setter swallows frame()'s per-frame `uniforms.uTime.value = t` write). This is the faithful equivalent of _sweepFreeze: the script is type=module so the closure-local `_sweepFreeze`/`t` are not reachable from evaluate_script. Rocky terrain macro-relief is uTime-INVARIANT (uTime drives only clouds/aurora/gas-band churn per height glsl), so the pin only freezes clouds for reproducibility; the measured terrain bands are unaffected by the pin mechanism.",
+    "chromeHidden": ".lil-gui / #hud / #help / #helpBtn set display:none !important before every capture (S2 no-radius-leak rule); re-hidden inside each stage call",
+    "canvas": "resize_page(900,900) -> canvas 900x902 CSS, DPR 1.25 -> 1125x1127 device px (matches original gate staging exactly)",
+    "crop": "viewport screenshot 1125x1127 -> center-crop to 1100x1100 (box left=12, top=13), matching the original readgate crops (X/Y/Z.png are 1100x1100). Disc is origin-centered (camera.lookAt(0,0,0)).",
+    "stageSequencePerCapture": "setSeed(macro,detail) -> set radius/octaves/camera/spin -> applyDrivers() [re-routes + re-bakes cube for seed] -> reliefBakeStrength(base) LAST [applyDrivers does NOT touch grainCarveUI.reliefBakeStrength] -> re-hide chrome -> 1200ms settle -> screenshot"
+  },
+  "bakeMechanism": {
+    "note": "frame() OVERWRITES uniforms.uReliefBakeStrength every frame with grainCarveUI.reliefBakeStrength * bakeReliefCrossover(sVis) (planet-lod-lab.html:5746). So the controllable input is the BASE grainCarveUI.reliefBakeStrength (set via _lab.reliefBakeStrength(v)); the live/effective uniform is base * crossover(sVis).",
+    "bakeReliefCrossover": "1 - smoothstep(0, BAKE_CROSS_SPAN=1.0, |log2(sVis)|). sVis=visScaleOf(r)=r^0.5. Values: r0.5->sVis0.707->crossover0.5; r2->sVis1.414->crossover0.5; r8->sVis2.828->crossover0.0.",
+    "effectiveBake_byRadius": {
+      "base0": { "r0.5": 0.0, "r2": 0.0, "r8": 0.0 },
+      "base1": { "r0.5": 0.5, "r2": 0.5, "r8": 0.0 }
+    },
+    "base0_meaning": "reliefBakeStrength base = 0 -> effective 0 at ALL radii -> pure Slice-C domain-scaled ANALYTIC body (fbmd * uDispDomainScale=sVis). Isolates the analytic mechanism (C2/C3 discriminator).",
+    "base1_meaning": "reliefBakeStrength base = 1.0 -> effective = crossover -> the SHIPPED live-default population inside the scanline (matches the original FAILING gate). At r8 crossover=0 so base1-r8 is byte-identical to base0-r8 (both pure analytic)."
+  },
+  "captures": {
+    "_setA_bake0_trio": "reliefBakeStrength base=0, seed 1234/5678, radius {0.5,2,8}. C2/C3 discriminator: isolates the analytic mechanism.",
+    "bake0-r0.5.png": { "reliefBakeStrength_base": 0.0, "radius": 0.5, "macroSeed": 1234, "detailSeed": 5678, "sVis": 0.7071067811865476, "crossoverFactor": 0.5, "uReliefBakeStrength_effective_live": 0.0, "uDispDomainScale_live": 0.7071067811865476, "uTime_live": 12, "camera": { "yaw": 0.337, "pitch": 0.205, "distance": 6.0 }, "octAuto": false, "octaves": 8, "spinSpeed": 0, "reliefBakeCount": 9 },
+    "bake0-r2.png": { "reliefBakeStrength_base": 0.0, "radius": 2.0, "macroSeed": 1234, "detailSeed": 5678, "sVis": 1.4142135623730951, "crossoverFactor": 0.5, "uReliefBakeStrength_effective_live": 0.0, "uDispDomainScale_live": 1.4142135623730951, "uTime_live": 12, "camera": { "yaw": 0.337, "pitch": 0.205, "distance": 6.0 }, "octAuto": false, "octaves": 8, "spinSpeed": 0, "reliefBakeCount": 10 },
+    "bake0-r8.png": { "reliefBakeStrength_base": 0.0, "radius": 8.0, "macroSeed": 1234, "detailSeed": 5678, "sVis": 2.8284271247461903, "crossoverFactor": 0.0, "uReliefBakeStrength_effective_live": 0.0, "uDispDomainScale_live": 2.8284271247461903, "uTime_live": 12, "camera": { "yaw": 0.337, "pitch": 0.205, "distance": 6.0 }, "octAuto": false, "octaves": 8, "spinSpeed": 0, "reliefBakeCount": 11 },
+
+    "_setB_seed_ensemble": "reliefBakeStrength base=1.0, radius FIXED at 2, macro seeds {1234,777,4242,9001,31337}, detail 5678. C1 discriminator: pure instrument seed-variance at ONE fixed radius (zero radius effect). All 5 renders confirmed distinct (per-seed re-bake).",
+    "seeds-s1234.png": { "reliefBakeStrength_base": 1.0, "radius": 2.0, "macroSeed": 1234, "detailSeed": 5678, "sVis": 1.4142135623730951, "crossoverFactor": 0.5, "uReliefBakeStrength_effective_live": 0.5, "uDispDomainScale_live": 1.4142135623730951, "uTime_live": 12, "camera": { "yaw": 0.337, "pitch": 0.205, "distance": 6.0 }, "octAuto": false, "octaves": 8, "spinSpeed": 0, "reliefBakeCount": 4, "note": "byte-identical staging to bake1-r2.png (same params) -> byte-identical render (confirmed)" },
+    "seeds-s777.png": { "reliefBakeStrength_base": 1.0, "radius": 2.0, "macroSeed": 777, "detailSeed": 5678, "sVis": 1.4142135623730951, "crossoverFactor": 0.5, "uReliefBakeStrength_effective_live": 0.5, "uDispDomainScale_live": 1.4142135623730951, "uTime_live": 12, "camera": { "yaw": 0.337, "pitch": 0.205, "distance": 6.0 }, "octAuto": false, "octaves": 8, "spinSpeed": 0, "reliefBakeCount": 5 },
+    "seeds-s4242.png": { "reliefBakeStrength_base": 1.0, "radius": 2.0, "macroSeed": 4242, "detailSeed": 5678, "sVis": 1.4142135623730951, "crossoverFactor": 0.5, "uReliefBakeStrength_effective_live": 0.5, "uDispDomainScale_live": 1.4142135623730951, "uTime_live": 12, "camera": { "yaw": 0.337, "pitch": 0.205, "distance": 6.0 }, "octAuto": false, "octaves": 8, "spinSpeed": 0, "reliefBakeCount": 6 },
+    "seeds-s9001.png": { "reliefBakeStrength_base": 1.0, "radius": 2.0, "macroSeed": 9001, "detailSeed": 5678, "sVis": 1.4142135623730951, "crossoverFactor": 0.5, "uReliefBakeStrength_effective_live": 0.5, "uDispDomainScale_live": 1.4142135623730951, "uTime_live": 12, "camera": { "yaw": 0.337, "pitch": 0.205, "distance": 6.0 }, "octAuto": false, "octaves": 8, "spinSpeed": 0, "reliefBakeCount": 7 },
+    "seeds-s31337.png": { "reliefBakeStrength_base": 1.0, "radius": 2.0, "macroSeed": 31337, "detailSeed": 5678, "sVis": 1.4142135623730951, "crossoverFactor": 0.5, "uReliefBakeStrength_effective_live": 0.5, "uDispDomainScale_live": 1.4142135623730951, "uTime_live": 12, "camera": { "yaw": 0.337, "pitch": 0.205, "distance": 6.0 }, "octAuto": false, "octaves": 8, "spinSpeed": 0, "reliefBakeCount": 8 },
+
+    "_setC_bake1_trio": "reliefBakeStrength base=1.0, seed 1234/5678, radius {0.5,2,8} — SAME staging as the original FAILING gate. Sanity anchor: should reproduce the original band-width miss.",
+    "bake1-r0.5.png": { "reliefBakeStrength_base": 1.0, "radius": 0.5, "macroSeed": 1234, "detailSeed": 5678, "sVis": 0.7071067811865476, "crossoverFactor": 0.5, "uReliefBakeStrength_effective_live": 0.5, "uDispDomainScale_live": 0.7071067811865476, "uTime_live": 12, "camera": { "yaw": 0.337, "pitch": 0.205, "distance": 6.0 }, "octAuto": false, "octaves": 8, "spinSpeed": 0, "reliefBakeCount": 12 },
+    "bake1-r2.png": { "reliefBakeStrength_base": 1.0, "radius": 2.0, "macroSeed": 1234, "detailSeed": 5678, "sVis": 1.4142135623730951, "crossoverFactor": 0.5, "uReliefBakeStrength_effective_live": 0.5, "uDispDomainScale_live": 1.4142135623730951, "uTime_live": 12, "camera": { "yaw": 0.337, "pitch": 0.205, "distance": 6.0 }, "octAuto": false, "octaves": 8, "spinSpeed": 0, "reliefBakeCount": 13, "note": "byte-identical to seeds-s1234.png (confirmed)" },
+    "bake1-r8.png": { "reliefBakeStrength_base": 1.0, "radius": 8.0, "macroSeed": 1234, "detailSeed": 5678, "sVis": 2.8284271247461903, "crossoverFactor": 0.0, "uReliefBakeStrength_effective_live": 0.0, "uDispDomainScale_live": 2.8284271247461903, "uTime_live": 12, "camera": { "yaw": 0.337, "pitch": 0.205, "distance": 6.0 }, "octAuto": false, "octaves": 8, "spinSpeed": 0, "reliefBakeCount": 14, "note": "crossover=0 at sVis2.828 -> pure analytic -> byte-identical to bake0-r8.png (confirmed)" }
+  },
+  "verification": {
+    "seed_ensemble_all_distinct": true,
+    "seed_ensemble_md5_12": { "seeds-s1234": "2eed48dab0cc", "seeds-s777": "e63bc699d1df", "seeds-s4242": "a551934be951", "seeds-s9001": "4b1b30f8cff5", "seeds-s31337": "1d29f90027d9" },
+    "r8_pair_bake0_eq_bake1": true,
+    "r8_pair_md5_12": "2a3938752d2f",
+    "bake0_r2_ne_bake1_r2": true,
+    "note": "Ensemble distinctness confirms setSeed+applyDrivers genuinely re-bakes a new plate-Voronoi body per seed (the baked half at r2 varies with seed, so the C1 seed-variance estimate captures full-render variance, not just the analytic half). The r8 identity confirms the crossover fully faded the bake to synth by sVis=2.828 as designed."
+  },
+  "cropDetails": { "rawDevicePx": [1125, 1127], "cropBox_ltrb": [12, 13, 1112, 1113], "finalPx": [1100, 1100] }
+}
