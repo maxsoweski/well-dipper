@@ -1,0 +1,110 @@
+{
+  "workstream": "world-engine-radius-display-scale-2026-07-24",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "statusNote": "Scoped + building 2026-07-24 under Max's standing greenlight ('push, then continue with the next increment via workflows') from his inc3b UAT verbatim: 'I want, when I move that radius slider to the right, to see the planet on my screen get bigger. It's fine that the base mesh doesn't change size.' Settled defaults (Max redirects at UAT): sqrt mapping VIS_SCALE_EXP=0.5 normalized sVis(1 RE)=1 (0.3->0.548, 16->4.0; linear 53x cannot fit the fixed camera); planet.scale uniform + ABSOLUTE camera distance (disc grows); LOD/octaves re-keyed on state.distance/sVis; DISPLAY-ONLY fence (sVis never touches procgen/height/featureFrequencyFromKm/headless). Driver enumeration + known non-goal (craters scale WITH the disc; mesh-floor R-invariance stands, Max-accepted) in intent.md per feedback_wire-relevant-drivers-before-uat. Crystal excluded (parking lot, standing).",
+  "programRef": "docs/FEATURES/planet-lod-CHARTER.md; docs/WORKSTREAMS/world-engine-inc3b-relief-budget-2026-07-21/ (predecessor: the UAT that specified this want); docs/WORKSTREAMS/world-engine-history-program-2026-06-27/SPINE-CONFORMANCE.md (Rule 15 AC-0)",
+  "designDecisions": [
+    "MAPPING SETTLED-BY-DEFAULT: sVis = planetRadiusEarth^0.5 normalized to 1 at 1 RE. VIS_SCALE_EXP is ONE lab constant, UAT-tunable; do not invent additional knobs.",
+    "CAMERA SETTLED: camera distance stays ABSOLUTE (state.distance * R). Scaling distance in planet-radii would exactly cancel the visual effect and is barred.",
+    "FENCE (hard): sVis is display-only. It must not appear in any procgen, height, schedule, featureFrequencyFromKm, or headless-harness path. Goldens 83/83 byte-identical, full suite at the exact 4-failure baseline.",
+    "AT 1 RE, ZERO CHANGE: sVis(1)=1 exactly; lodRampOf/autoOctaves/lodHysteresis inputs unchanged at sVis=1 (bit-identical frame behavior for every canonical-radius preset).",
+    "Crystal excluded from all staging/evidence/UAT presentation (parking lot, Max standing directive #2, 2026-07-24).",
+    "Known non-goal carried into the UAT recipe verbatim: craters render bigger WITH the disc (angular sizes mesh-floor R-invariant); 'bigger world -> relatively smaller craters' is NOT this increment."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15): the display scale reads state.planetRadiusEarth ONLY (no label/archetype/regime reads, no new drivers invented); named consumer chain documented (planetRadiusEarth -> sVis -> planet.scale + LOD keying); no new *Enabled keys; taxonomy/drift guards stay green.",
+      "verifyVia": {
+        "input": "Source inspection of the sVis derivation + the existing worldengine guard suites at HEAD.",
+        "observable": "sVis derivation contains exactly one input (planetRadiusEarth); guard suites pass unchanged; consumer chain documented in BUILD-NOTES.md."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-VIS-MONO",
+      "statement": "The mapping is a pure exported function visScaleOf(radiusEarth): strictly monotonic over [0.3, 16], visScaleOf(1) === 1 exactly, worked points visScaleOf(0.3)=0.5477+-1e-3 and visScaleOf(16)=4.0+-1e-9.",
+      "verifyVia": {
+        "input": "Unit test on the pure helper (lab-core module so tests import it; the lab HTML consumes the same export).",
+        "observable": "Monotonicity over a 200-point sweep + the three worked points assert green."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-SCALE-LIVE",
+      "statement": "At a fixed camera wheel position, driving the radius slider 0.5 -> 2 -> 8 strictly increases the rendered disc pixel diameter; Moon/Mercury re-roll draws [0.27,0.38] move disc size correspondingly.",
+      "verifyVia": {
+        "input": "Live drive on the running lab (chrome-devtools): set slider values via the GUI, screenshot, measure disc diameter in pixels.",
+        "observable": "diam(0.5) < diam(2) < diam(8) with each step > 5% larger; two successive Moon/Mercury re-rolls with different radius draws show measurably different disc diameters."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-LOD-KEY",
+      "statement": "LOD/octave/hysteresis machinery keys on logical distance-in-planet-radii (state.distance / sVis); at sVis=1 all three call sites receive bit-identical inputs to pre-increment behavior.",
+      "verifyVia": {
+        "input": "Unit test of the keying expression + a source-pattern pin on the three call sites (lodRampOf, autoOctaves via lodRamp, lodHysteresis).",
+        "observable": "At sVis=1 the expressions reduce to state.distance exactly; at sVis=4 the logical distance is state.distance/4; pins match the shipped source."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "statement": "Display-only fence holds: goldens 83/83 byte-identical with NO re-capture; full suite at the exact 4-failure baseline; grep-gate proves sVis/visScaleOf never appears in src/worldengine/**, height GLSL, schedule derivations, or featureFrequencyFromKm arguments.",
+      "verifyVia": {
+        "input": "Full test suite + golden byte-identity run + a denylist grep over the procgen surfaces.",
+        "observable": "2289-passed/4-failure baseline exact; goldens untouched; denylist grep returns zero hits outside the display wiring."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-CLAMP",
+      "statement": "The camera can never enter the scaled sphere: the minimum wheel distance clamps to > sVis with margin at every radius in [0.3,16]; no near-plane clipping of the disc at 16 RE at default view.",
+      "verifyVia": {
+        "input": "Unit test of the clamp expression at radius extremes + live spot-check at 16 RE (wheel to minimum, screenshot).",
+        "observable": "clamp(minDistance) > sVis * 1.05 for all radii; 16 RE min-zoom screenshot shows an unclipped disc."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-OVERLAY",
+      "statement": "Attached display geometry tracks the scaled sphere: province overlay shell and river/tributary ribbons sit on the surface (no floating/embedded shells) at non-1 sVis.",
+      "verifyVia": {
+        "input": "Live drive: plate-world preset at 2 RE with province overlay + rivers enabled, screenshot.",
+        "observable": "Overlay hugs the disc edge (shell gap <= the 1.0015 design offset scaled); ribbons render on-surface, not detached."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-STAGE-DOC",
+      "statement": "Read-gate staging consequence documented: BUILD-NOTES.md states that disc size is now radius-dependent and future read-gate/UAT recipes must pin either the radius or the disc fraction explicitly.",
+      "verifyVia": {
+        "input": "BUILD-NOTES.md at the close-out commit.",
+        "observable": "The staging paragraph exists and names the affected harness pattern (disc-crop capture)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max's holistic gate: moving the radius slider right makes the planet on screen get bigger; the size cue reads across re-rolls. Recipe carries the known non-goal verbatim (craters scale WITH the disc).",
+      "verifyVia": {
+        "input": "Max drives the slider + Moon/Mercury re-rolls in the lab.",
+        "observable": "Max's verdict."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": [
+    "planet-lod-lab.html:196 R=1.0 unit sphere + :5643 dist = state.distance * R (the absolute-distance camera this design relies on)",
+    "planet-lod-lab.html:3902 radius slider (applyDrivers) + :2987 drawPresetRadius labUnlock draws (inc3b R3) — the two producers of state.planetRadiusEarth this feature expresses",
+    "lodRampOf / autoOctaves / lodHysteresis (:5652-5655) — re-keyed on logical distance",
+    "provinceOverlayMesh (:1507) + riverOverlay/tributaryPatch ribbons (:1549-1550) — must track planet.scale",
+    "planet-lod-lab-core.js — home of the pure visScaleOf export (CPU-testable, lab imports it)",
+    "inc3b read-gate staging convention (S4-VERDICT recipe pins '~70% disc') — AC-STAGE-DOC documents the new radius dependence"
+  ]
+}
