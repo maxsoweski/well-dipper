@@ -1,0 +1,68 @@
+{
+  "workstream": "world-engine-inc3b-relief-budget-2026-07-21",
+  "commit": "6b84561",
+  "verifiedAt": "2026-07-24",
+  "workflow": "verify-workstream FULL wf_d5690f7e-7da (43 agents, 3x adversarial per AC) + working-Claude live closures + main-session adjudications (this file is the transparent record)",
+  "perLayer": {
+    "unit": "PASS (after the AC-BUDGET reconciliation below)",
+    "integration": "PASS (live closures driven by working-Claude at HEAD)",
+    "uat": "deferred-to-max"
+  },
+  "perAC": {
+    "AC-0": {
+      "result": "PASS",
+      "votes": "3/3"
+    },
+    "AC-BUDGET": {
+      "result": "PASS (RECONCILED)",
+      "votes": "0/3 as-written -> reconciled",
+      "adjudication": "The workflow correctly found Moon/Mercury f_I=0.9577 below the relic-flat band [0.9621,0.9658] and correctly refused to pass it against the contract's original text. Root cause was already adjudicated at the S1 seam (two-referent split: condition-pure leaf vs relic-flat band; statusNote + leaf-law.json) but the contract text was never amended -- an audit-trail gap, now closed: AC-BUDGET amended 2026-07-24 to name the leaf-law.json condition-pure referent (asserted to 1e-12 by the S1 unit test), relic band retained as the domain-honesty reference. Crater-dominance (the AC's substance) holds under BOTH referents: 0.9577 >> 0.5, ratio inverted 1.3e-4 -> 0.9577, raw-MS band preserved to 1e-14. Listed in the UAT packet for Max's review."
+    },
+    "AC-FENCE": {
+      "result": "PASS",
+      "votes": "3/3"
+    },
+    "AC-IDENTITY": {
+      "result": "PASS",
+      "votes": "3/3"
+    },
+    "AC-NULLPATH": {
+      "result": "PASS",
+      "votes": "3/3"
+    },
+    "AC-ORACLE": {
+      "result": "PASS",
+      "votes": "3/3"
+    },
+    "AC-FROZEN": {
+      "result": "PASS",
+      "votes": "3/3"
+    },
+    "AC-READ": {
+      "result": "RECORDED (bars mixed, verdict filed) + LIVE-CONFIRMED",
+      "votes": "0/3 static -> closed by working-Claude live drive",
+      "adjudication": "The AC's observable is bars EVALUATED AND RECORDED at the frozen thresholds, verdict recorded whichever way it falls -- done at S2 (TEXTURE-FAIL) and S4 (S4-VERDICT.md): blind PRIMARY bar PASS 3/3 (S2's failure mode gone), surface-class qualified PASS, darkClip PASS, arc bar FAIL exactly as S3-DIAGNOSIS predicts (stamped walls sub-mesh; every display remedy empirically falsified; residual quantified in BUILD-NOTES). Working-Claude live closure at HEAD post-boot-enable-fix: Moon seed1 boots armed at the staged light with no forcing (uCraterDensity 0.604, corrected amp 0.0061, radius 0.273 == S4 evidence; verify-close-moon-seed1.png), and the frozen rerollSpec's variety driver fires live (worldSeed 1 -> 3269071669, craterOffset [0,0,0] -> moved, radius 0.273 -> 0.283 in-band). Per feedback_perceptual-read-gate-before-uat the evidence shows the read PRESENT with a documented residual -- presentable to Max."
+    },
+    "AC-REROLL": {
+      "result": "PASS",
+      "votes": "3/3"
+    },
+    "AC-MARS": {
+      "result": "PASS (LIVE-CONFIRMED, honesty caveat filed)",
+      "votes": "0/3 static -> closed by working-Claude live drive",
+      "adjudication": "Live at HEAD: Mars auto-enables via the condition gate (no forcing) with craterDensity 0.5697661333 + craterAmp 0.0041302975 == the committed schedule-derived law to full precision; Crystal 0.5470743394. f_I is route-internal (not exposed live); the live cross-check is the SAME condition-vector path deriving the density/amp values that match headless exactly, plus the passing unit assert f_I=0.4262 in [0.3,0.8]. Ride-along captures are synth-on/off A/Bs of the current tree, NOT before/after (no pre-inc3b capture exists) -- disclosed per R1 in BUILD-NOTES/S4-VERDICT; a literal before/after would need a second server on f7bbcb5 (offered to Max as an option, not faked)."
+    },
+    "AC-UAT": {
+      "result": "deferred-to-max",
+      "votes": "n/a",
+      "recipe": "S4-VERDICT.md (pinned light, 🌍 control, Frozen finding, ride-alongs, known-deferred list)"
+    }
+  },
+  "overall": "VERIFIED_PENDING_MAX 6b84561 -- unit + integration green after the recorded reconciliations; sole open gate = Max's AC-UAT.",
+  "maxDecisionItems": [
+    "AC-BUDGET referent amendment (condition-pure leaf-law.json vs the original relic-flat band) -- review the audit trail in the contract statement.",
+    "Arc-bar residual: stamped-crater wall shading is sub-mesh (S3-DIAGNOSIS + falsifier); accept the current read or fund a mesh-density / stamped-wall increment.",
+    "Raw-mean-square 'preserved total band' lets the visible about-mean band grow ~+31% on budgeted worlds (BUILD-NOTES) -- judge the look at UAT.",
+    "Mars/Crystal true before/after gap: A/Bs are synth-only; a second server on f7bbcb5 can produce true befores if wanted."
+  ]
+}
