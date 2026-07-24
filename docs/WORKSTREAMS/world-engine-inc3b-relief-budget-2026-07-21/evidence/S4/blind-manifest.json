@@ -1,0 +1,12 @@
+{
+  "purpose": "S4 blind-read stimulus manifest (set dirs were byte-copies of the committed crops; removed after the run — this manifest + crops/*.crop.png are the record).",
+  "captionImage": "crops/target-seed1.crop.png",
+  "sets": {
+    "set1": { "imgA": "distractor-rocky", "imgB": "target-seed1", "imgC": "distractor-ocean", "imgD": "distractor-europa", "targetLetter": "B", "pick": "B", "correct": true },
+    "set2": { "imgA": "distractor-ocean", "imgB": "distractor-europa", "imgC": "distractor-rocky", "imgD": "target-reroll1", "targetLetter": "D", "pick": "D", "correct": true },
+    "set3": { "imgA": "target-reroll2", "imgB": "distractor-europa", "imgC": "distractor-rocky", "imgD": "distractor-ocean", "targetLetter": "A", "pick": "A", "correct": true }
+  },
+  "captionsVocabHits": "3/3",
+  "forcedChoice": "3/3 (PRIMARY bar PASS; combined null 0.015625) — the S2 failure mode (reroll target lost to the Europa distractor) is gone with the synth band in place",
+  "stimulusDiscipline": "disc-only crops, GUI-free (all 4 corners luminance 0 verified) — the S2 contamination lesson applied by protocol"
+}

@@ -1,0 +1,33 @@
+{
+  "note": "synth A/B pixel diff (cratersEnabled true vs false, all else identical) — full viewport. Disc ~16.5% of viewport; changedGt12 concentrated on the lit disc = the in-shader synth crater texture band.",
+  "moonMercury_seed1": {
+    "w": 2463,
+    "h": 1060,
+    "diffPxAny": 60809,
+    "diffFracAny": 0.02329,
+    "changedGt12": 60614,
+    "changedGt12Frac": 0.02322,
+    "meanAbsSumRGB": 1.0291,
+    "maxAbsSumRGB": 213
+  },
+  "mars": {
+    "w": 2463,
+    "h": 1060,
+    "diffPxAny": 51134,
+    "diffFracAny": 0.01959,
+    "changedGt12": 50993,
+    "changedGt12Frac": 0.01953,
+    "meanAbsSumRGB": 0.873,
+    "maxAbsSumRGB": 297
+  },
+  "crystal": {
+    "w": 2463,
+    "h": 1060,
+    "diffPxAny": 36987,
+    "diffFracAny": 0.01417,
+    "changedGt12": 36295,
+    "changedGt12Frac": 0.0139,
+    "meanAbsSumRGB": 0.5585,
+    "maxAbsSumRGB": 169
+  }
+}

@@ -5101,6 +5101,17 @@
       for (const k of Object.keys(FEATURES)) {
         if (FEATURES[k].provenance === 'writer' && (ASSOCIATIONS[k]?.rendersOn || []).includes(preset)) set.add(k);
       }
+      // inc3b S3-fix: the crater synth channel is CONDITION-derived (craterRelevanceOf; the rendersOn
+      // name-add is barred by AC-0), so its judgment-ready boot enable derives from the SAME leaf — not
+      // the placeholder rendersOn list, and not state.craterRelevance (set at route time ~500ms later;
+      // reading it here on a preset change would see the PREVIOUS world). Canonical radius suffices: the
+      // relevance predicate is a domain class (impact surface + schedule fired), R-stable within a preset.
+      // Without this, applyWorldDefaults cleared cratersEnabled on every impact preset and the synth band
+      // never rendered on plain preset selection (S4 capture finding). ejecta stays opt-in (deferral).
+      {
+        const _fp = DRIVER_PRESETS[preset];
+        if (_fp && craterRelevanceOf(deriveConditionVector(_fp, deriveUniforms(_fp, driverUI.qualityTier), _fp.radiusEarth)) > 0) set.add('craters');
+      }
       for (const k of (DEFAULT_DRESSING[preset] || [])) {
         if (!(ASSOCIATIONS[k]?.rendersOn || []).includes(preset)) {   // table drifted from the manifest — enable nothing silently wrong
           console.warn(`DEFAULT_DRESSING drift: '${k}' is not in rendersOn for '${preset}' — skipped`);

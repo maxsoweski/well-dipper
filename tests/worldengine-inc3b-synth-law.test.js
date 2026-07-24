@@ -144,6 +144,10 @@ describe('Inc-3b S3-fix — the SHIPPED lab source carries the derivation (not j
     expect(lab).toMatch(/0\.18\s*\*\s*0\.18\s*\+\s*0\.18\s*\*\s*0\.37/); // CELL_CRATER_AREA closed form
     expect(lab).toMatch(/2\.0\s*\*\s*0\.55/);                            // _HASH_TAIL_MAX
     expect(lab).toMatch(/craterRelevanceOf\(_bodyDrivers\.condition\)/);  // F1 relevance leaf call
+    // Boot-enable: applyWorldDefaults must derive the crater enable from the SAME condition leaf (the
+    // rendersOn name-add is barred), else preset selection clears cratersEnabled and the synth never
+    // renders on plain selection (S4 capture finding).
+    expect(lab).toMatch(/craterRelevanceOf\(deriveConditionVector\(/);
   });
   it('the frame gate reads state.craterRelevance (NOT featureRelevant.craters) on the crater + ejecta paths', () => {
     expect(lab).toMatch(/uCraterDensity\.value\s*=\s*state\.cratersEnabled\s*\?\s*state\.craterDensity\s*\*\s*state\.craterRelevance/);

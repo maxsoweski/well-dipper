@@ -1,0 +1,382 @@
+{
+  "meta": {
+    "workstream": "world-engine-inc3b-relief-budget-2026-07-21",
+    "slice": "S4",
+    "ac": "AC-REROLL",
+    "harness": "calibration/inc3b-reroll-sweep.mjs",
+    "control": "🌍 newPlanet() (re-roll all) — worldSeed → macroSeed drives forEachCrater placement (m-4: NOT 🎲 reroll-radius)",
+    "meshN": 40000,
+    "note": "deterministic; no wall-clock in payload"
+  },
+  "gates": {
+    "groundTruthDerivation": true,
+    "layoutVariety": true,
+    "radiusDraws": true,
+    "frozenGMediated": true,
+    "angularSFDInvariance": true,
+    "craterOffsetRider": true
+  },
+  "groundTruth": [
+    {
+      "capture": "target-seed1",
+      "isBootDefault": true,
+      "worldSeed": 1,
+      "recorded": {
+        "macroSeed": 1,
+        "radiusSeed": 1,
+        "detailSeed": 1,
+        "planetRadiusEarth": 0.2729641867568717,
+        "craterOffset": [
+          0,
+          0,
+          0
+        ]
+      },
+      "derivedFromWorldSeed": {
+        "macroSeed": 7892,
+        "radiusSeed": 115737138,
+        "detailSeed": 7106,
+        "craterOffset": [
+          84.0777559876442,
+          164.22238750196993,
+          98.48066625650972
+        ]
+      },
+      "radiusFromRecordedRadiusSeed": 0.2729641867568717,
+      "radiusMatchesRecorded": true,
+      "seedsMatchDerivation": false,
+      "craterOffsetMatchesDerivation": false
+    },
+    {
+      "capture": "target-reroll1",
+      "isBootDefault": false,
+      "worldSeed": 1030846533,
+      "recorded": {
+        "macroSeed": 4582,
+        "radiusSeed": 831775821,
+        "detailSeed": 8178,
+        "planetRadiusEarth": 0.2891491725970991,
+        "craterOffset": [
+          86.53450392745435,
+          171.34836026281118,
+          155.28045088797808
+        ]
+      },
+      "derivedFromWorldSeed": {
+        "macroSeed": 4582,
+        "radiusSeed": 831775821,
+        "detailSeed": 8178,
+        "craterOffset": [
+          86.53450392745435,
+          171.34836026281118,
+          155.28045088797808
+        ]
+      },
+      "radiusFromRecordedRadiusSeed": 0.2891491725970991,
+      "radiusMatchesRecorded": true,
+      "seedsMatchDerivation": true,
+      "craterOffsetMatchesDerivation": true
+    },
+    {
+      "capture": "target-reroll2",
+      "isBootDefault": false,
+      "worldSeed": 4214370270,
+      "recorded": {
+        "macroSeed": 106,
+        "radiusSeed": 717639837,
+        "detailSeed": 5069,
+        "planetRadiusEarth": 0.305630863965489,
+        "craterOffset": [
+          19.229955645278096,
+          187.83877824712545,
+          139.02752153761685
+        ]
+      },
+      "derivedFromWorldSeed": {
+        "macroSeed": 106,
+        "radiusSeed": 717639837,
+        "detailSeed": 5069,
+        "craterOffset": [
+          19.229955645278096,
+          187.83877824712545,
+          139.02752153761685
+        ]
+      },
+      "radiusFromRecordedRadiusSeed": 0.305630863965489,
+      "radiusMatchesRecorded": true,
+      "seedsMatchDerivation": true,
+      "craterOffsetMatchesDerivation": true
+    }
+  ],
+  "layoutVariety": {
+    "primary": "macroSeed drives forEachCrater centre placement; the R-FIXED control isolates it from radius.",
+    "macroSeeds": [
+      1,
+      4582,
+      106
+    ],
+    "canonicalRUsedForFixedControl": 0.38,
+    "nStampAtFixedR": 147,
+    "rFixedControl": [
+      {
+        "pair": [
+          1,
+          4582
+        ],
+        "nA": 147,
+        "nB": 147,
+        "jaccard": 0,
+        "crossNearestRad": 0.15734,
+        "withinNearestRad": 0.13321,
+        "displacementRatio": 1.1812
+      },
+      {
+        "pair": [
+          1,
+          106
+        ],
+        "nA": 147,
+        "nB": 147,
+        "jaccard": 0,
+        "crossNearestRad": 0.14476,
+        "withinNearestRad": 0.13321,
+        "displacementRatio": 1.0867
+      },
+      {
+        "pair": [
+          4582,
+          106
+        ],
+        "nA": 147,
+        "nB": 147,
+        "jaccard": 0.00342,
+        "crossNearestRad": 0.14319,
+        "withinNearestRad": 0.14357,
+        "displacementRatio": 0.9973
+      }
+    ],
+    "asCaptured": [
+      {
+        "pair": [
+          "target-seed1",
+          "target-reroll1"
+        ],
+        "macroSeeds": [
+          1,
+          4582
+        ],
+        "jaccard": 0,
+        "crossNearestRad": 0.14772,
+        "displacementRatio": 1.1483
+      },
+      {
+        "pair": [
+          "target-seed1",
+          "target-reroll2"
+        ],
+        "macroSeeds": [
+          1,
+          106
+        ],
+        "jaccard": 0,
+        "crossNearestRad": 0.13976,
+        "displacementRatio": 1.0864
+      },
+      {
+        "pair": [
+          "target-reroll1",
+          "target-reroll2"
+        ],
+        "macroSeeds": [
+          4582,
+          106
+        ],
+        "jaccard": 0.00313,
+        "crossNearestRad": 0.14385,
+        "displacementRatio": 1.0505
+      }
+    ],
+    "interpretation": "crossNearestRad ≈ withinNearestRad (displacementRatio ~O(1)) ⇒ each macroSeed places craters independently; near-zero Jaccard ⇒ centre-index sets are disjoint. Layout variety is the ROBUST signal AC-REROLL rests on."
+  },
+  "largestBasin": {
+    "reporting": "MEASURED, not promised (m-5).",
+    "expectedFromTruncatedSFD": {
+      "method": "max of nStamp=147 bounded-Pareto draws over [L_trunc=133.15, D_HI=2420.98] km (B=2), 4000 synthetic macroSeeds at fixed canonical cond",
+      "maxMeanKm": 1543.787,
+      "maxStdKm": 433.648,
+      "maxP05Km": 878.712,
+      "maxP95Km": 2290.047,
+      "expected3SeedSpreadKm": 744.715,
+      "truncationCapKm": 2420.98
+    },
+    "measured3Seed": {
+      "perCapture": [
+        {
+          "capture": "target-seed1",
+          "R": 0.273,
+          "largestBasinKm": 1506.201
+        },
+        {
+          "capture": "target-reroll1",
+          "R": 0.2891,
+          "largestBasinKm": 1059.754
+        },
+        {
+          "capture": "target-reroll2",
+          "R": 0.3056,
+          "largestBasinKm": 970.056
+        }
+      ],
+      "spreadKm": 536.145,
+      "note": "each capture has a DIFFERENT R, so D_HI (∝R) co-varies the cap — measured spread mixes R and macroSeed."
+    },
+    "justNoticeableThresholdKm": 433.648,
+    "verdict": "largest-basin spread EXCEEDS the SFD 1σ threshold ⇒ a visible contribution; still reported as measured, not promised."
+  },
+  "radiusDraws": {
+    "band": [
+      0.27,
+      0.38
+    ],
+    "labUnlock": {
+      "inBand": true,
+      "variance": 0.0015898129500867863,
+      "draws": [
+        {
+          "seed": 1,
+          "R": 0.272964
+        },
+        {
+          "seed": 831775821,
+          "R": 0.289149
+        },
+        {
+          "seed": 717639837,
+          "R": 0.305631
+        },
+        {
+          "seed": 1,
+          "R": 0.272964
+        },
+        {
+          "seed": 2,
+          "R": 0.34408
+        },
+        {
+          "seed": 3,
+          "R": 0.375819
+        },
+        {
+          "seed": 42,
+          "R": 0.281828
+        },
+        {
+          "seed": 12345,
+          "R": 0.36787
+        }
+      ]
+    },
+    "flagless": {
+      "allCanonical": true,
+      "canonical": 0.38,
+      "allBitIdentical": true
+    },
+    "note": "labUnlock:true is the LAB-only opt-in path; the flagless path (headless/goldens/probe) stays canonical 0.38 — the hard constraint, asserted here."
+  },
+  "frozenGMediated": {
+    "labUnlockIsNoopForFrozen": true,
+    "archetypeBand": "ice [0.4,1.2] R⊕ (Frozen draws its own archetype range; labUnlock only unlocks Moon/Mercury)",
+    "draws": [
+      {
+        "seed": 101,
+        "R": 0.748572,
+        "g": 0.4192,
+        "nStamp": 128,
+        "sizeMul": 1.030417,
+        "D_t_km": 7.395,
+        "D_HI_km": 4769.153,
+        "coverage": 0.408466
+      },
+      {
+        "seed": 202,
+        "R": 0.992809,
+        "g": 0.555973,
+        "nStamp": 116,
+        "sizeMul": 0.982123,
+        "D_t_km": 5.576,
+        "D_HI_km": 6325.188,
+        "coverage": 0.385599
+      }
+    ],
+    "deltas": {
+      "dR": 0.244237,
+      "dG": 0.136773,
+      "dSizeMul": -0.048295,
+      "dD_t_km": -1.819,
+      "dNStamp": -12
+    },
+    "interpretation": "distinct drawn radii → distinct g=g_c·(R/R_c) → distinct crater schedule (sizeMul=g^-K_GS, D_t=K_DT/g, D_HI∝R, coverage). g-mediation confirmed."
+  },
+  "stampedCountRInvariance": {
+    "statedAs": "a mesh-floor INSTRUMENT LIMIT, NOT variety (A4) — disclosed to Max plainly.",
+    "angularSFDBand": {
+      "deltaFloorRad": 0.055,
+      "deltaMaxRad": 1,
+      "invariant": true,
+      "mechanism": "δ = D_km·radPerKm(R); D_FLOOR_KM·rpk = MESH_FLOOR_RAD and D_HI_KM·rpk = C_BASIN — R cancels at both truncation edges, so the ANGULAR crater-size band you SEE is pinned by the mesh, independent of R."
+    },
+    "nStampPerRadius": [
+      {
+        "R": 0.272964,
+        "nStamp": 165
+      },
+      {
+        "R": 0.289149,
+        "nStamp": 162
+      },
+      {
+        "R": 0.305631,
+        "nStamp": 159
+      },
+      {
+        "R": 0.38,
+        "nStamp": 147
+      }
+    ],
+    "nStampWeaklyRDependent": true,
+    "note": "nStamp drifts weakly with R (via screen/chronN second-order terms) but is NOT a re-roll variety lever — the angular SFD it draws from is R-invariant. Count is NOT sold as variety."
+  },
+  "craterOffsetRider": {
+    "rider": "S3-fix: newPlanet() seeds craterOffset = seedOffset(worldSeed·φ+97) so a 🌍 re-roll MOVES the synth crater/ejecta domain (was [0,0,0] = re-roll-invariant before the fix).",
+    "deterministic": true,
+    "variesAcrossWorldSeeds": true,
+    "perWorldSeed": [
+      {
+        "worldSeed": 1,
+        "craterOffset": [
+          84.077756,
+          164.222388,
+          98.480666
+        ]
+      },
+      {
+        "worldSeed": 1030846533,
+        "craterOffset": [
+          86.534504,
+          171.34836,
+          155.280451
+        ]
+      },
+      {
+        "worldSeed": 4214370270,
+        "craterOffset": [
+          19.229956,
+          187.838778,
+          139.027522
+        ]
+      }
+    ],
+    "crossCheckedAgainstCaptures": "reroll1/reroll2 recorded craterOffsets reproduced bit-for-bit (see groundTruth[].craterOffsetMatchesDerivation); seed1 recorded [0,0,0] is the BOOT default (pre-newPlanet), disclosed."
+  },
+  "failures": []
+}

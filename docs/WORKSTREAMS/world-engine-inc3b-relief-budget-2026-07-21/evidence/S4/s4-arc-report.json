@@ -1,0 +1,327 @@
+{
+  "meta": {
+    "workstream": "world-engine-inc3b-relief-budget-2026-07-21",
+    "slice": "S4",
+    "gate": "arc-asymmetry re-gate (post S1-budget + S3-fix synth channel)",
+    "generated": "deterministic (no wall-clock in payload)",
+    "frozenBar": {
+      "source": "calibration/read-gate-thresholds.json .arc (applied AS FROZEN, no re-tune)",
+      "geqOneBandMagnitude_8bit": 42.5,
+      "populationFraction": 0.7,
+      "sizeGate": ">=median lit-disc stamp size"
+    },
+    "darkClipGuard": {
+      "source": "read-gate-thresholds.json .arc.darkClipGuard (DERIVED, held from S1 seam)",
+      "darkClipFrac1_baseline": 0.034654,
+      "toleranceFrac": 0.144402,
+      "bound": 0.179056,
+      "rule": "per-capture darkClipFrac <= darkClipFrac1 + toleranceFrac (growth bound)"
+    },
+    "metricProvenance": "projector+disc-mask+RAW-mean bar+richMeasure(detrend/peak)+flat control+RNG-neutral forEachCrater re-enum adapted verbatim from evidence/S2/arc-analysis.mjs. Thresholds READ from the frozen calibration file.",
+    "meshN": 40000
+  },
+  "result": {
+    "evaluable": true,
+    "arcVerdict": "FAIL",
+    "seed1Fraction": 0.1,
+    "bar": 0.7,
+    "seed1Pass": false,
+    "rerollFractions": [
+      {
+        "capture": "target-reroll1",
+        "fraction": 0.25,
+        "pass": false
+      },
+      {
+        "capture": "target-reroll2",
+        "fraction": 0.0968,
+        "pass": false
+      }
+    ],
+    "darkClipGuardVerdict": "PASS",
+    "alignmentSanityOK": true,
+    "s2Continuity": [
+      {
+        "capture": "target-seed1",
+        "S4_fraction": 0.1,
+        "S2_fraction": 0.1,
+        "delta": 0
+      },
+      {
+        "capture": "target-reroll1",
+        "S4_fraction": 0.25,
+        "S2_fraction": 0.1739,
+        "delta": 0.0761
+      },
+      {
+        "capture": "target-reroll2",
+        "S4_fraction": 0.0968,
+        "S2_fraction": 0.2414,
+        "delta": -0.1446
+      }
+    ]
+  },
+  "renders": [
+    {
+      "capture": "target-seed1",
+      "W": 2463,
+      "H": 1060,
+      "worldSeed": 1,
+      "macroSeedRecorded": 1,
+      "macroSeedDerived": 7892,
+      "macroSeedMatchesDerivation": false,
+      "planetRadiusEarth": 0.2729641867568717,
+      "gravity": 0.199,
+      "isImpactSurface": true,
+      "schedule": {
+        "fired": true,
+        "nStamp": 165,
+        "R_km": 1739.1
+      },
+      "stampCounts": {
+        "total": 165,
+        "visible": 60,
+        "litDisc": 59,
+        "geMedian": 30,
+        "measured": 30,
+        "discardedUnmeasurable": 0
+      },
+      "medianDeltaDeg": 4.656,
+      "arcBar": {
+        "counted": 3,
+        "denom": 30,
+        "fraction": 0.1,
+        "bar": 0.7,
+        "pass": false
+      },
+      "rawMeanDiff": {
+        "median_255": 7.875,
+        "mean_255": 13.372
+      },
+      "detrendPeak": {
+        "note": "DIAGNOSTIC (continuity with S2/S3). detrend = LS-plane-subtracted anti-sun−sun half-mean; peak = p90(anti-sun)−p10(sun).",
+        "detrendHalfMean_crater_mean_255": 0.815,
+        "detrendHalfMean_crater_median_255": 0.138,
+        "detrendHalfMean_crater_fracGe1band": 0,
+        "detrendHalfMean_crater_fracPositiveSign": 0.567,
+        "detrendHalfMean_flatControl_mean_255": 0.036,
+        "peakDiff_crater_median_255": 80.212,
+        "peakDiff_crater_fracGe1band": 0.8,
+        "peakDiff_flatControl_fracGe1band": 0.12,
+        "peakDiff_craterExcess": 0.68,
+        "controlN": 200
+      },
+      "darkClip": {
+        "discPixels": 485682,
+        "darkDiscPixels": 18481,
+        "darkClipFrac": 0.038052,
+        "ditherBand1Frac": 0.151126
+      },
+      "darkClipGuard": {
+        "frac1_baseline": 0.034654,
+        "toleranceFrac": 0.144402,
+        "bound": 0.179056,
+        "growthVsBaseline": 0.003398,
+        "pass": true
+      },
+      "largestBasinLand": {
+        "centre": 26977,
+        "D_km": 625.2,
+        "cx": 967.9,
+        "cy": 765.6,
+        "rProj": 65.7,
+        "onDisc": true,
+        "rawDiff_255": 11.96,
+        "detrendDiff_255": 14.33,
+        "peakDiff_255": 80.1,
+        "downLightDarker": false
+      },
+      "projectionSelfTestResidualPx": 0
+    },
+    {
+      "capture": "target-reroll1",
+      "W": 2463,
+      "H": 1060,
+      "worldSeed": 1030846533,
+      "macroSeedRecorded": 4582,
+      "macroSeedDerived": 4582,
+      "macroSeedMatchesDerivation": true,
+      "planetRadiusEarth": 0.2891491725970991,
+      "gravity": 0.2108,
+      "isImpactSurface": true,
+      "schedule": {
+        "fired": true,
+        "nStamp": 162,
+        "R_km": 1842.2
+      },
+      "stampCounts": {
+        "total": 162,
+        "visible": 63,
+        "litDisc": 63,
+        "geMedian": 32,
+        "measured": 32,
+        "discardedUnmeasurable": 0
+      },
+      "medianDeltaDeg": 4.283,
+      "arcBar": {
+        "counted": 8,
+        "denom": 32,
+        "fraction": 0.25,
+        "bar": 0.7,
+        "pass": false
+      },
+      "rawMeanDiff": {
+        "median_255": 19.581,
+        "mean_255": 24.069
+      },
+      "detrendPeak": {
+        "note": "DIAGNOSTIC (continuity with S2/S3). detrend = LS-plane-subtracted anti-sun−sun half-mean; peak = p90(anti-sun)−p10(sun).",
+        "detrendHalfMean_crater_mean_255": 1.624,
+        "detrendHalfMean_crater_median_255": 0.695,
+        "detrendHalfMean_crater_fracGe1band": 0,
+        "detrendHalfMean_crater_fracPositiveSign": 0.625,
+        "detrendHalfMean_flatControl_mean_255": 0.008,
+        "peakDiff_crater_median_255": 80.098,
+        "peakDiff_crater_fracGe1band": 1,
+        "peakDiff_flatControl_fracGe1band": 0.13,
+        "peakDiff_craterExcess": 0.87,
+        "controlN": 200
+      },
+      "darkClip": {
+        "discPixels": 485682,
+        "darkDiscPixels": 16725,
+        "darkClipFrac": 0.034436,
+        "ditherBand1Frac": 0.165631
+      },
+      "darkClipGuard": {
+        "frac1_baseline": 0.034654,
+        "toleranceFrac": 0.144402,
+        "bound": 0.179056,
+        "growthVsBaseline": -0.000218,
+        "pass": true
+      },
+      "largestBasinLand": {
+        "centre": 20494,
+        "D_km": 1059.8,
+        "cx": 1621.5,
+        "cy": 574.7,
+        "rProj": 76.3,
+        "onDisc": true,
+        "rawDiff_255": -12.95,
+        "detrendDiff_255": -2.03,
+        "peakDiff_255": 55.56,
+        "downLightDarker": false
+      },
+      "projectionSelfTestResidualPx": 0
+    },
+    {
+      "capture": "target-reroll2",
+      "W": 2463,
+      "H": 1060,
+      "worldSeed": 4214370270,
+      "macroSeedRecorded": 106,
+      "macroSeedDerived": 106,
+      "macroSeedMatchesDerivation": true,
+      "planetRadiusEarth": 0.305630863965489,
+      "gravity": 0.2228,
+      "isImpactSurface": true,
+      "schedule": {
+        "fired": true,
+        "nStamp": 159,
+        "R_km": 1947.2
+      },
+      "stampCounts": {
+        "total": 159,
+        "visible": 61,
+        "litDisc": 60,
+        "geMedian": 31,
+        "measured": 31,
+        "discardedUnmeasurable": 0
+      },
+      "medianDeltaDeg": 4.267,
+      "arcBar": {
+        "counted": 3,
+        "denom": 31,
+        "fraction": 0.0968,
+        "bar": 0.7,
+        "pass": false
+      },
+      "rawMeanDiff": {
+        "median_255": 8.65,
+        "mean_255": 14.161
+      },
+      "detrendPeak": {
+        "note": "DIAGNOSTIC (continuity with S2/S3). detrend = LS-plane-subtracted anti-sun−sun half-mean; peak = p90(anti-sun)−p10(sun).",
+        "detrendHalfMean_crater_mean_255": 0.134,
+        "detrendHalfMean_crater_median_255": -0.484,
+        "detrendHalfMean_crater_fracGe1band": 0,
+        "detrendHalfMean_crater_fracPositiveSign": 0.419,
+        "detrendHalfMean_flatControl_mean_255": -0.053,
+        "peakDiff_crater_median_255": 66.711,
+        "peakDiff_crater_fracGe1band": 0.871,
+        "peakDiff_flatControl_fracGe1band": 0.18,
+        "peakDiff_craterExcess": 0.691,
+        "controlN": 200
+      },
+      "darkClip": {
+        "discPixels": 485682,
+        "darkDiscPixels": 16870,
+        "darkClipFrac": 0.034735,
+        "ditherBand1Frac": 0.14751
+      },
+      "darkClipGuard": {
+        "frac1_baseline": 0.034654,
+        "toleranceFrac": 0.144402,
+        "bound": 0.179056,
+        "growthVsBaseline": 0.000081,
+        "pass": true
+      },
+      "largestBasinLand": {
+        "centre": 6527,
+        "D_km": 808.8,
+        "cx": 1449.4,
+        "cy": 268.4,
+        "rProj": 78.5,
+        "onDisc": true,
+        "rawDiff_255": 2.76,
+        "detrendDiff_255": 0.87,
+        "peakDiff_255": 42.7,
+        "downLightDarker": false
+      },
+      "projectionSelfTestResidualPx": 0
+    }
+  ],
+  "newChannelObservables": {
+    "note": "synth-on = target-seed1.png (cratersEnabled true) vs synth-off = synth-off.png (cratersEnabled false), IDENTICAL seed/staging. Diff restricted to the ray-sphere disc (GUI excluded by geometry).",
+    "discDiff": {
+      "discPixels": 485682,
+      "changedAnyFrac": 0.12496,
+      "changedGt12Frac": 0.12456,
+      "changedGt12Count": 60495,
+      "meanAbsSumRGB": 5.5186,
+      "maxAbsSumRGB": 213,
+      "interpretation": "fraction of DISC pixels whose colour changes when the synth crater-texture channel is toggled — the in-shader texture footprint on the lit disc."
+    },
+    "textureDensityDelta_wholeDisc": {
+      "synthOn_meanLocalDetail_255": 2.6994,
+      "synthOff_meanLocalDetail_255": 2.3744,
+      "delta_255": 0.325,
+      "ratio": 1.137,
+      "note": "mean |lum − local 3×3 mean| over ALL disc pixels — high-frequency structure energy. on/off delta = texture the synth channel injects."
+    },
+    "subFloorTextureBand_sunFacingExpanse": {
+      "definition": "sun-facing relief-smooth expanse = disc pixels with surface-normal·L > 0.6 (brightly lit, low incidence) AND outside 1.2× any ≥-median stamp footprint — i.e. the smooth plains S2 flagged as relief-smooth in the surface-class read.",
+      "expansePixels": 179931,
+      "synthOn_meanLocalDetail_255": 2.2214,
+      "synthOff_meanLocalDetail_255": 1.977,
+      "delta_255": 0.2444,
+      "ratio": 1.124,
+      "changedGt12Frac_inExpanse": 0.1266,
+      "changedGt12Frac_discWide": 0.12456,
+      "coverageComparableToDiscWide": true,
+      "bandPresent": true,
+      "amplitudeNote": "coverage in the sun-facing expanse (changedGt12Frac_inExpanse) is essentially EQUAL to disc-wide coverage — the synth channel paints the previously relief-smooth expanse at the same density as the rest of the disc. The local-detail ENERGY lift is real but MODEST (delta ~0.24/255, ratio ~1.12): the added peppering in the smooth plains is lower-amplitude than in crater-rich zones, and the pre-existing dither floor dilutes the mean-detail metric. Reported honestly: band PRESENT by coverage, SUBTLE by amplitude.",
+      "interpretation": "the sub-floor crater-texture band is PRESENT in the sun-facing expanse S2 flagged as relief-smooth: the synth channel repaints ~12.7% of that expanse (matching disc-wide ~12.5%) and raises local high-frequency detail (positive delta). Amplitude is modest, not dramatic — see amplitudeNote."
+    }
+  }
+}
