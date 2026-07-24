@@ -76,3 +76,34 @@ worldSeed-seeded `craterOffset`; single density law; provinceWeight decision; `r
 **Legacy-F2 adoption is NOT pre-authorized** (Max decision #4 mechanism applies only as the diagnosis-backed
 substitution). Metric-dilution findings route to the frozen sizeGate's own recorded resolutionPath at S4
 re-freeze — never silently.
+
+---
+
+## ADDENDUM 2026-07-24 — S3.b falsifier RUN: final conviction **CONTENT (mesh-level sub-sampling)**
+
+Falsifier executed live (workflow `wf_b617a430-b47`; evidence `evidence/S3/falsifier/`; control condition
+reproduces the S2 seed-1 measurement EXACTLY — 0.10 = 3/30, largest-basin raw 11.25 in [11,13] — so the
+deltas are interpretable). One knob per condition at bit-identical staging:
+
+| Condition | Δ median detrend (/255) | Δ median peak | Δ largest-basin detrend | Reading |
+|---|---|---|---|---|
+| bake 256→512 | +0.09 | 0.00 | +0.06 | flat within noise |
+| bake 256→1024 | +0.09 | −0.11 | +0.07 | flat at 4× — **bake falsified as binding** |
+| posterize 6→16 | +0.65 | −2.03 | −0.52 | nudges mean, drops peak, unlocks nothing |
+| perturb ×2 | +1.18 | +4.79 | +2.00 | the only coherent lift — governs the resolved residual |
+
+**Key mechanism finding:** bake 512/1024 provably re-rasterized the frame (0.30/0.33% pixel change) yet
+recovered no wall slope — because the walls are **sub-MESH (40k vertex spacing 1.02°)**, not merely
+sub-bake-texel: more bake texels cannot carry slope the mesh never held. And the hard ceiling: every knob's
+movement is ~10× below the 42.5 one-band bar (perturb ×2 leaves the frozen fraction at 0.13 vs 0.70) — **no
+display-side knob unlocks the walls.** The instrument residual is real but shading-scale-governed and small;
+the deficit majority is content in the strict plan sense: the crater-wall texture band is unresolvable at
+this mesh/display scale.
+
+**CONVICTED LAYER → FIX (S3.b build): the peppering path** — the in-shader analytic crater-texture channel
+(fragment-shader synthesis is resolution-independent, bypassing mesh and bake sampling entirely), per Max
+decision #4 (F2-adapted as the diagnosis-backed substitution), carrying ALL mandatory riders enumerated
+above. Display/bake/mesh resolution changes are NOT part of the fix (falsified / not binding). The
+diagnosis-instrumentation `__reliefBakeSize` override stays in `planet-lod-rivers.js` (guarded, unset in
+production/headless; full suite at the 4-failure baseline with it in place) — it is the falsifier's
+committed apparatus, and S4's re-gate can reuse it.

@@ -1,0 +1,825 @@
+{
+  "meta": {
+    "workstream": "world-engine-inc3b-relief-budget-2026-07-21",
+    "slice": "S3.b",
+    "gate": "binding-layer falsifier (GPU-in-loop A/B, live captures re-measured with committed S3/S2 metric)",
+    "generated": "deterministic (no wall-clock in payload)",
+    "meshN": 40000,
+    "meshBuildMs": 829,
+    "metricProvenance": "projector+rawMeanBar+richMeasure(detrend/peak)+flatControl adapted verbatim from evidence/S2/arc-analysis.mjs; theta_wall/SAMPLING_FLOOR/effTilt from evidence/S3/s3-diagnosis.mjs",
+    "band_levels6_255": 42.5,
+    "band_levels16_255": 15.9375,
+    "samplingFloorDeg": 2.22,
+    "captureMethod": "chrome-devtools compositor screenshot (canvas toDataURL blank: renderer preserveDrawingBuffer=false). Native canvas 2463x1060 @ dpr1.25 == S2. Staging (projectionMatrix/matrixWorldInverse/camera.position/canvas/planetRadiusEarth) byte-identical to evidence/S2/target-seed1.state.json across ALL conditions; only ONE knob varies per condition.",
+    "conditions": {
+      "cond0-baseline": "bake 256 (override unset), levels 6, perturb 0.55 — the S2 seed-1 control",
+      "cond1-bake512": "__reliefBakeSize=512, force re-route+re-bake; else identical to cond0",
+      "cond1b-bake1024": "__reliefBakeSize=1024, force re-route+re-bake; else identical to cond0",
+      "cond2-posterize16": "levels=16 (GUI max; true off unreachable), bake 256, perturb 0.55",
+      "cond3-perturb2x": "perturb=1.10 (2x default), levels 6, bake 256"
+    },
+    "pixelDiffVsCond0_sanity": {
+      "cond1-bake512": "0.30% px >12/255 (maxAbs 212)",
+      "cond1b-bake1024": "0.33% (maxAbs 212)",
+      "cond2-posterize16": "17.81% (maxAbs 78)",
+      "cond3-perturb2x": "6.01% (maxAbs 169)"
+    }
+  },
+  "controlReproducesS2": {
+    "s2_rawMeanFrac_geMedian": 0.1,
+    "cond0_rawMeanFrac_geMedian": 0.1,
+    "cond0_rawMeanCount": 3,
+    "cond0_geMedianN": 30,
+    "fracWithinReason": true,
+    "s2_largestBasin_detrend_255_range": [
+      11,
+      13
+    ],
+    "cond0_largestBasin_detrend_255": 14.22,
+    "cond0_largestBasin_rawDiff_255": 11.25,
+    "largestBasinWithinReason": true
+  },
+  "measures": [
+    {
+      "key": "cond0-baseline",
+      "stampCounts": {
+        "total": 165,
+        "litDisc": 59,
+        "geMedian": 30,
+        "measurableRaw": 30,
+        "measurableDetrend": 30,
+        "resolvable_geMedian": 7,
+        "controlN": 200
+      },
+      "staging": {
+        "macroSeed": 1,
+        "planetRadiusEarth": 0.2729641867568717,
+        "reliefBakeSize": 256,
+        "posterizeLevels": 6,
+        "perturb": 0.55,
+        "reliefAmp": 1.403,
+        "lightAz": 40.6,
+        "lightEl": 20.79,
+        "schedule": {
+          "fired": true,
+          "nStamp": 165
+        }
+      },
+      "geMedian": {
+        "rawMeanFrac_ge1band": 0.1,
+        "rawMeanCount": 3,
+        "detrendFrac_ge1band": 0,
+        "detrendCount": 0,
+        "medianRawDiff_255": 7.51,
+        "medianDetrendDiff_255": 0.09,
+        "medianAbsDetrendDiff_255": 1.93,
+        "medianPeakDiff_255": 80.21,
+        "medianEffTiltDeg": 0.324,
+        "detrendFracPositiveSign": 0.533
+      },
+      "resolvablePartition": {
+        "n": 7,
+        "rawMeanFrac_ge1band": 0.1429,
+        "detrendFrac_ge1band": 0,
+        "medianRawDiff_255": 6.63,
+        "medianDetrendDiff_255": 1.44,
+        "medianAbsDetrendDiff_255": 1.44
+      },
+      "peak": {
+        "crater_fracGe1band": 0.8,
+        "flatControl_fracGe1band": 0.12,
+        "craterExcess": 0.68,
+        "crater_medianPeak_255": 80.21,
+        "flatControl_medianPeak_255": 12.86,
+        "flatControl_medianDetrend_255": 0.08
+      },
+      "largestBasin": {
+        "centre": 26977,
+        "D_km": 625.15,
+        "thetaWallDeg": 5.149,
+        "resolvable": true,
+        "rawDiff_255": 11.25,
+        "detrendDiff_255": 14.22,
+        "peakDiff_255": 80.1
+      }
+    },
+    {
+      "key": "cond1-bake512",
+      "stampCounts": {
+        "total": 165,
+        "litDisc": 59,
+        "geMedian": 30,
+        "measurableRaw": 30,
+        "measurableDetrend": 30,
+        "resolvable_geMedian": 7,
+        "controlN": 200
+      },
+      "staging": {
+        "macroSeed": 1,
+        "planetRadiusEarth": 0.2729641867568717,
+        "reliefBakeSize": 512,
+        "posterizeLevels": 6,
+        "perturb": 0.55,
+        "reliefAmp": 1.403,
+        "lightAz": 40.6,
+        "lightEl": 20.79,
+        "schedule": {
+          "fired": true,
+          "nStamp": 165
+        }
+      },
+      "geMedian": {
+        "rawMeanFrac_ge1band": 0.1,
+        "rawMeanCount": 3,
+        "detrendFrac_ge1band": 0,
+        "detrendCount": 0,
+        "medianRawDiff_255": 7.51,
+        "medianDetrendDiff_255": 0.32,
+        "medianAbsDetrendDiff_255": 2.02,
+        "medianPeakDiff_255": 80.21,
+        "medianEffTiltDeg": 0.345,
+        "detrendFracPositiveSign": 0.567
+      },
+      "resolvablePartition": {
+        "n": 7,
+        "rawMeanFrac_ge1band": 0.1429,
+        "detrendFrac_ge1band": 0,
+        "medianRawDiff_255": 6.25,
+        "medianDetrendDiff_255": 1.35,
+        "medianAbsDetrendDiff_255": 1.35
+      },
+      "peak": {
+        "crater_fracGe1band": 0.8,
+        "flatControl_fracGe1band": 0.1,
+        "craterExcess": 0.7,
+        "crater_medianPeak_255": 80.21,
+        "flatControl_medianPeak_255": 14.76,
+        "flatControl_medianDetrend_255": 0.07
+      },
+      "largestBasin": {
+        "centre": 26977,
+        "D_km": 625.15,
+        "thetaWallDeg": 5.149,
+        "resolvable": true,
+        "rawDiff_255": 10.94,
+        "detrendDiff_255": 14.28,
+        "peakDiff_255": 80.1
+      }
+    },
+    {
+      "key": "cond1b-bake1024",
+      "stampCounts": {
+        "total": 165,
+        "litDisc": 59,
+        "geMedian": 30,
+        "measurableRaw": 30,
+        "measurableDetrend": 30,
+        "resolvable_geMedian": 7,
+        "controlN": 200
+      },
+      "staging": {
+        "macroSeed": 1,
+        "planetRadiusEarth": 0.2729641867568717,
+        "reliefBakeSize": 1024,
+        "posterizeLevels": 6,
+        "perturb": 0.55,
+        "reliefAmp": 1.403,
+        "lightAz": 40.6,
+        "lightEl": 20.79,
+        "schedule": {
+          "fired": true,
+          "nStamp": 165
+        }
+      },
+      "geMedian": {
+        "rawMeanFrac_ge1band": 0.1,
+        "rawMeanCount": 3,
+        "detrendFrac_ge1band": 0,
+        "detrendCount": 0,
+        "medianRawDiff_255": 7.29,
+        "medianDetrendDiff_255": 0.05,
+        "medianAbsDetrendDiff_255": 2.02,
+        "medianPeakDiff_255": 80.1,
+        "medianEffTiltDeg": 0.351,
+        "detrendFracPositiveSign": 0.533
+      },
+      "resolvablePartition": {
+        "n": 7,
+        "rawMeanFrac_ge1band": 0.1429,
+        "detrendFrac_ge1band": 0,
+        "medianRawDiff_255": 6.47,
+        "medianDetrendDiff_255": 1.37,
+        "medianAbsDetrendDiff_255": 1.37
+      },
+      "peak": {
+        "crater_fracGe1band": 0.8,
+        "flatControl_fracGe1band": 0.15,
+        "craterExcess": 0.65,
+        "crater_medianPeak_255": 80.1,
+        "flatControl_medianPeak_255": 12.56,
+        "flatControl_medianDetrend_255": -0.02
+      },
+      "largestBasin": {
+        "centre": 26977,
+        "D_km": 625.15,
+        "thetaWallDeg": 5.149,
+        "resolvable": true,
+        "rawDiff_255": 10.92,
+        "detrendDiff_255": 14.29,
+        "peakDiff_255": 80.1
+      }
+    },
+    {
+      "key": "cond2-posterize16",
+      "stampCounts": {
+        "total": 165,
+        "litDisc": 59,
+        "geMedian": 30,
+        "measurableRaw": 30,
+        "measurableDetrend": 30,
+        "resolvable_geMedian": 7,
+        "controlN": 200
+      },
+      "staging": {
+        "macroSeed": 1,
+        "planetRadiusEarth": 0.2729641867568717,
+        "reliefBakeSize": 256,
+        "posterizeLevels": 16,
+        "perturb": 0.55,
+        "reliefAmp": 1.403,
+        "lightAz": 40.6,
+        "lightEl": 20.79,
+        "schedule": {
+          "fired": true,
+          "nStamp": 165
+        }
+      },
+      "geMedian": {
+        "rawMeanFrac_ge1band": 0.1,
+        "rawMeanCount": 3,
+        "detrendFrac_ge1band": 0,
+        "detrendCount": 0,
+        "medianRawDiff_255": 9.77,
+        "medianDetrendDiff_255": 0.14,
+        "medianAbsDetrendDiff_255": 2.58,
+        "medianPeakDiff_255": 78.18,
+        "medianEffTiltDeg": 0.486,
+        "detrendFracPositiveSign": 0.533
+      },
+      "resolvablePartition": {
+        "n": 7,
+        "rawMeanFrac_ge1band": 0.1429,
+        "detrendFrac_ge1band": 0,
+        "medianRawDiff_255": 8.24,
+        "medianDetrendDiff_255": 0.64,
+        "medianAbsDetrendDiff_255": 2.09
+      },
+      "peak": {
+        "crater_fracGe1band": 0.833,
+        "flatControl_fracGe1band": 0.1,
+        "craterExcess": 0.733,
+        "crater_medianPeak_255": 78.18,
+        "flatControl_medianPeak_255": 14.18,
+        "flatControl_medianDetrend_255": -0.01
+      },
+      "largestBasin": {
+        "centre": 26977,
+        "D_km": 625.15,
+        "thetaWallDeg": 5.149,
+        "resolvable": true,
+        "rawDiff_255": 10.34,
+        "detrendDiff_255": 13.7,
+        "peakDiff_255": 68.78
+      },
+      "levels16": {
+        "band16_255": 15.9375,
+        "rawMeanFrac_ge1band16": 0.4,
+        "detrendFrac_ge1band16": 0,
+        "peak_crater_fracGe1band16": 1,
+        "peak_flatControl_fracGe1band16": 0.37,
+        "note": "levels-16 band = 255/16 = 15.94. Falsifier question is whether CONTINUOUS wall contrast rises when quantization relaxes (medianRawDiff/medianDetrend above), not whether it clears the levels-6 (42.5) bar."
+      }
+    },
+    {
+      "key": "cond3-perturb2x",
+      "stampCounts": {
+        "total": 165,
+        "litDisc": 59,
+        "geMedian": 30,
+        "measurableRaw": 30,
+        "measurableDetrend": 30,
+        "resolvable_geMedian": 7,
+        "controlN": 200
+      },
+      "staging": {
+        "macroSeed": 1,
+        "planetRadiusEarth": 0.2729641867568717,
+        "reliefBakeSize": 256,
+        "posterizeLevels": 6,
+        "perturb": 1.1,
+        "reliefAmp": 2.806,
+        "lightAz": 40.6,
+        "lightEl": 20.79,
+        "schedule": {
+          "fired": true,
+          "nStamp": 165
+        }
+      },
+      "geMedian": {
+        "rawMeanFrac_ge1band": 0.1333,
+        "rawMeanCount": 4,
+        "detrendFrac_ge1band": 0,
+        "detrendCount": 0,
+        "medianRawDiff_255": 7.42,
+        "medianDetrendDiff_255": 0.36,
+        "medianAbsDetrendDiff_255": 3.11,
+        "medianPeakDiff_255": 85,
+        "medianEffTiltDeg": 0.498,
+        "detrendFracPositiveSign": 0.533
+      },
+      "resolvablePartition": {
+        "n": 7,
+        "rawMeanFrac_ge1band": 0.1429,
+        "detrendFrac_ge1band": 0,
+        "medianRawDiff_255": 7.42,
+        "medianDetrendDiff_255": 2.31,
+        "medianAbsDetrendDiff_255": 3.15
+      },
+      "peak": {
+        "crater_fracGe1band": 0.9,
+        "flatControl_fracGe1band": 0.245,
+        "craterExcess": 0.655,
+        "crater_medianPeak_255": 85,
+        "flatControl_medianPeak_255": 24.65,
+        "flatControl_medianDetrend_255": 0.03
+      },
+      "largestBasin": {
+        "centre": 26977,
+        "D_km": 625.15,
+        "thetaWallDeg": 5.149,
+        "resolvable": true,
+        "rawDiff_255": 12.03,
+        "detrendDiff_255": 16.22,
+        "peakDiff_255": 80.1
+      }
+    }
+  ],
+  "deltasVsBaseline": [
+    {
+      "key": "cond1-bake512",
+      "d_rawMeanFrac_geMedian": 0,
+      "d_detrendFrac_geMedian": 0,
+      "d_medianRawDiff_255": 0,
+      "d_medianDetrendDiff_255": 0.23,
+      "d_medianAbsDetrendDiff_255": 0.09,
+      "d_medianPeakDiff_255": 0,
+      "d_medianEffTiltDeg": 0.021,
+      "d_resolvable_rawMeanFrac": 0,
+      "d_resolvable_medianAbsDetrend_255": -0.09,
+      "d_peak_craterExcess": 0.02,
+      "d_largestBasin_detrend_255": 0.06,
+      "d_largestBasin_rawDiff_255": -0.31,
+      "d_largestBasin_peak_255": 0
+    },
+    {
+      "key": "cond1b-bake1024",
+      "d_rawMeanFrac_geMedian": 0,
+      "d_detrendFrac_geMedian": 0,
+      "d_medianRawDiff_255": -0.22,
+      "d_medianDetrendDiff_255": -0.04,
+      "d_medianAbsDetrendDiff_255": 0.09,
+      "d_medianPeakDiff_255": -0.11,
+      "d_medianEffTiltDeg": 0.027,
+      "d_resolvable_rawMeanFrac": 0,
+      "d_resolvable_medianAbsDetrend_255": -0.07,
+      "d_peak_craterExcess": -0.03,
+      "d_largestBasin_detrend_255": 0.07,
+      "d_largestBasin_rawDiff_255": -0.33,
+      "d_largestBasin_peak_255": 0
+    },
+    {
+      "key": "cond2-posterize16",
+      "d_rawMeanFrac_geMedian": 0,
+      "d_detrendFrac_geMedian": 0,
+      "d_medianRawDiff_255": 2.26,
+      "d_medianDetrendDiff_255": 0.05,
+      "d_medianAbsDetrendDiff_255": 0.65,
+      "d_medianPeakDiff_255": -2.03,
+      "d_medianEffTiltDeg": 0.162,
+      "d_resolvable_rawMeanFrac": 0,
+      "d_resolvable_medianAbsDetrend_255": 0.65,
+      "d_peak_craterExcess": 0.053,
+      "d_largestBasin_detrend_255": -0.52,
+      "d_largestBasin_rawDiff_255": -0.91,
+      "d_largestBasin_peak_255": -11.32
+    },
+    {
+      "key": "cond3-perturb2x",
+      "d_rawMeanFrac_geMedian": 0.033,
+      "d_detrendFrac_geMedian": 0,
+      "d_medianRawDiff_255": -0.09,
+      "d_medianDetrendDiff_255": 0.27,
+      "d_medianAbsDetrendDiff_255": 1.18,
+      "d_medianPeakDiff_255": 4.79,
+      "d_medianEffTiltDeg": 0.174,
+      "d_resolvable_rawMeanFrac": 0,
+      "d_resolvable_medianAbsDetrend_255": 1.71,
+      "d_peak_craterExcess": -0.025,
+      "d_largestBasin_detrend_255": 2,
+      "d_largestBasin_rawDiff_255": 0.78,
+      "d_largestBasin_peak_255": 0
+    }
+  ],
+  "perGe_cond0": [
+    {
+      "centre": 26977,
+      "D_km": 625.15,
+      "deltaDeg": 20.597,
+      "thetaWallDeg": 5.1491,
+      "resolvable": true,
+      "incidenceDeg": 69.75,
+      "rProj": 65.7,
+      "rawDiff": 11.25,
+      "detrendDiff": 14.22,
+      "peakDiff": 80.1,
+      "effTiltDeg": 1.703
+    },
+    {
+      "centre": 10960,
+      "D_km": 155.96,
+      "deltaDeg": 5.138,
+      "thetaWallDeg": 1.2846,
+      "resolvable": false,
+      "incidenceDeg": 68.5,
+      "rProj": 14,
+      "rawDiff": -0.94,
+      "detrendDiff": -4.19,
+      "peakDiff": 85,
+      "effTiltDeg": 0.506
+    },
+    {
+      "centre": 28959,
+      "D_km": 203.94,
+      "deltaDeg": 6.719,
+      "thetaWallDeg": 1.6797,
+      "resolvable": false,
+      "incidenceDeg": 89.11,
+      "rProj": 16.9,
+      "rawDiff": 14.14,
+      "detrendDiff": 11.41,
+      "peakDiff": 85,
+      "effTiltDeg": 1.282
+    },
+    {
+      "centre": 2862,
+      "D_km": 161.05,
+      "deltaDeg": 5.306,
+      "thetaWallDeg": 1.3265,
+      "resolvable": false,
+      "incidenceDeg": 40.27,
+      "rProj": 16.1,
+      "rawDiff": 25.26,
+      "detrendDiff": -1.93,
+      "peakDiff": 67.88,
+      "effTiltDeg": 0.335
+    },
+    {
+      "centre": 35284,
+      "D_km": 254.45,
+      "deltaDeg": 8.383,
+      "thetaWallDeg": 2.0958,
+      "resolvable": false,
+      "incidenceDeg": 85.54,
+      "rProj": 21.6,
+      "rawDiff": 0.51,
+      "detrendDiff": 0.91,
+      "peakDiff": 42,
+      "effTiltDeg": 0.103
+    },
+    {
+      "centre": 31181,
+      "D_km": 183.98,
+      "deltaDeg": 6.061,
+      "thetaWallDeg": 1.5154,
+      "resolvable": false,
+      "incidenceDeg": 57.97,
+      "rProj": 16.9,
+      "rawDiff": 5.84,
+      "detrendDiff": -4.26,
+      "peakDiff": 85,
+      "effTiltDeg": 0.564
+    },
+    {
+      "centre": 30817,
+      "D_km": 347.54,
+      "deltaDeg": 11.45,
+      "thetaWallDeg": 2.8626,
+      "resolvable": true,
+      "incidenceDeg": 61.98,
+      "rProj": 29.2,
+      "rawDiff": 5.48,
+      "detrendDiff": 1.44,
+      "peakDiff": 85,
+      "effTiltDeg": 0.183
+    },
+    {
+      "centre": 23542,
+      "D_km": 195.51,
+      "deltaDeg": 6.441,
+      "thetaWallDeg": 1.6103,
+      "resolvable": false,
+      "incidenceDeg": 48.83,
+      "rProj": 26.4,
+      "rawDiff": 60.68,
+      "detrendDiff": 3.83,
+      "peakDiff": 97.56,
+      "effTiltDeg": 0.571
+    },
+    {
+      "centre": 33396,
+      "D_km": 141.32,
+      "deltaDeg": 4.656,
+      "thetaWallDeg": 1.164,
+      "resolvable": false,
+      "incidenceDeg": 62.87,
+      "rProj": 12.8,
+      "rawDiff": 9.93,
+      "detrendDiff": -7.2,
+      "peakDiff": 97.56,
+      "effTiltDeg": 0.909
+    },
+    {
+      "centre": 4886,
+      "D_km": 411,
+      "deltaDeg": 13.541,
+      "thetaWallDeg": 3.3852,
+      "resolvable": true,
+      "incidenceDeg": 50.79,
+      "rProj": 44.5,
+      "rawDiff": 6.63,
+      "detrendDiff": -1.14,
+      "peakDiff": 97.56,
+      "effTiltDeg": 0.165
+    },
+    {
+      "centre": 3414,
+      "D_km": 329.67,
+      "deltaDeg": 10.861,
+      "thetaWallDeg": 2.7154,
+      "resolvable": true,
+      "incidenceDeg": 45.08,
+      "rProj": 27,
+      "rawDiff": -5.41,
+      "detrendDiff": -1.18,
+      "peakDiff": 73.08,
+      "effTiltDeg": 0.187
+    },
+    {
+      "centre": 20136,
+      "D_km": 341.27,
+      "deltaDeg": 11.244,
+      "thetaWallDeg": 2.8109,
+      "resolvable": true,
+      "incidenceDeg": 50.51,
+      "rProj": 45.6,
+      "rawDiff": 56.56,
+      "detrendDiff": 5.6,
+      "peakDiff": 97.56,
+      "effTiltDeg": 0.815
+    },
+    {
+      "centre": 9653,
+      "D_km": 183.37,
+      "deltaDeg": 6.041,
+      "thetaWallDeg": 1.5103,
+      "resolvable": false,
+      "incidenceDeg": 12.11,
+      "rProj": 23.4,
+      "rawDiff": 7.01,
+      "detrendDiff": 0.3,
+      "peakDiff": 25.18,
+      "effTiltDeg": 0.158
+    },
+    {
+      "centre": 8234,
+      "D_km": 174.02,
+      "deltaDeg": 5.733,
+      "thetaWallDeg": 1.4333,
+      "resolvable": false,
+      "incidenceDeg": 17.79,
+      "rProj": 20.9,
+      "rawDiff": 13.56,
+      "detrendDiff": 0.88,
+      "peakDiff": 42.7,
+      "effTiltDeg": 0.324
+    },
+    {
+      "centre": 36530,
+      "D_km": 261.76,
+      "deltaDeg": 8.624,
+      "thetaWallDeg": 2.156,
+      "resolvable": false,
+      "incidenceDeg": 80.5,
+      "rProj": 18.3,
+      "rawDiff": 7.51,
+      "detrendDiff": -0.68,
+      "peakDiff": 42,
+      "effTiltDeg": 0.077
+    },
+    {
+      "centre": 9601,
+      "D_km": 147.51,
+      "deltaDeg": 4.86,
+      "thetaWallDeg": 1.215,
+      "resolvable": false,
+      "incidenceDeg": 39.48,
+      "rProj": 19.9,
+      "rawDiff": 49.64,
+      "detrendDiff": 2.65,
+      "peakDiff": 85,
+      "effTiltDeg": 0.469
+    },
+    {
+      "centre": 9289,
+      "D_km": 333.54,
+      "deltaDeg": 10.989,
+      "thetaWallDeg": 2.7472,
+      "resolvable": true,
+      "incidenceDeg": 21.09,
+      "rProj": 36.5,
+      "rawDiff": 16.43,
+      "detrendDiff": 3.75,
+      "peakDiff": 42.7,
+      "effTiltDeg": 1.169
+    },
+    {
+      "centre": 3805,
+      "D_km": 159.42,
+      "deltaDeg": 5.252,
+      "thetaWallDeg": 1.3131,
+      "resolvable": false,
+      "incidenceDeg": 71.92,
+      "rProj": 11.8,
+      "rawDiff": -12.54,
+      "detrendDiff": -0.13,
+      "peakDiff": 42,
+      "effTiltDeg": 0.016
+    },
+    {
+      "centre": 3904,
+      "D_km": 244.79,
+      "deltaDeg": 8.065,
+      "thetaWallDeg": 2.0162,
+      "resolvable": false,
+      "incidenceDeg": 36.52,
+      "rProj": 26.8,
+      "rawDiff": 31.96,
+      "detrendDiff": -0.17,
+      "peakDiff": 55.56,
+      "effTiltDeg": 0.033
+    },
+    {
+      "centre": 5223,
+      "D_km": 190.61,
+      "deltaDeg": 6.28,
+      "thetaWallDeg": 1.57,
+      "resolvable": false,
+      "incidenceDeg": 45.83,
+      "rProj": 13.6,
+      "rawDiff": 0.8,
+      "detrendDiff": 1.78,
+      "peakDiff": 55.56,
+      "effTiltDeg": 0.279
+    },
+    {
+      "centre": 9653,
+      "D_km": 161.18,
+      "deltaDeg": 5.31,
+      "thetaWallDeg": 1.3276,
+      "resolvable": false,
+      "incidenceDeg": 12.11,
+      "rProj": 20.6,
+      "rawDiff": 7.69,
+      "detrendDiff": 0.09,
+      "peakDiff": 17.46,
+      "effTiltDeg": 0.048
+    },
+    {
+      "centre": 30469,
+      "D_km": 157.24,
+      "deltaDeg": 5.181,
+      "thetaWallDeg": 1.2951,
+      "resolvable": false,
+      "incidenceDeg": 52.63,
+      "rProj": 16,
+      "rawDiff": 17.6,
+      "detrendDiff": -5.21,
+      "peakDiff": 97.56,
+      "effTiltDeg": 0.737
+    },
+    {
+      "centre": 13243,
+      "D_km": 173.89,
+      "deltaDeg": 5.729,
+      "thetaWallDeg": 1.4322,
+      "resolvable": false,
+      "incidenceDeg": 79.48,
+      "rProj": 12.8,
+      "rawDiff": -3.01,
+      "detrendDiff": -2.15,
+      "peakDiff": 42,
+      "effTiltDeg": 0.245
+    },
+    {
+      "centre": 922,
+      "D_km": 150.25,
+      "deltaDeg": 4.95,
+      "thetaWallDeg": 1.2376,
+      "resolvable": false,
+      "incidenceDeg": 51.93,
+      "rProj": 12.5,
+      "rawDiff": 0.81,
+      "detrendDiff": -4.98,
+      "peakDiff": 85,
+      "effTiltDeg": 0.71
+    },
+    {
+      "centre": 27718,
+      "D_km": 178.03,
+      "deltaDeg": 5.865,
+      "thetaWallDeg": 1.4663,
+      "resolvable": false,
+      "incidenceDeg": 81.57,
+      "rProj": 16.1,
+      "rawDiff": -28.44,
+      "detrendDiff": 7.08,
+      "peakDiff": 80.1,
+      "effTiltDeg": 0.804
+    },
+    {
+      "centre": 959,
+      "D_km": 514.19,
+      "deltaDeg": 16.941,
+      "thetaWallDeg": 4.2352,
+      "resolvable": true,
+      "incidenceDeg": 61.46,
+      "rProj": 42.9,
+      "rawDiff": 4.66,
+      "detrendDiff": -0.03,
+      "peakDiff": 85,
+      "effTiltDeg": 0.004
+    },
+    {
+      "centre": 20539,
+      "D_km": 201.17,
+      "deltaDeg": 6.628,
+      "thetaWallDeg": 1.6569,
+      "resolvable": false,
+      "incidenceDeg": 31.41,
+      "rProj": 30.6,
+      "rawDiff": 40.74,
+      "detrendDiff": 0.58,
+      "peakDiff": 80.21,
+      "effTiltDeg": 0.125
+    },
+    {
+      "centre": 30294,
+      "D_km": 175.88,
+      "deltaDeg": 5.795,
+      "thetaWallDeg": 1.4487,
+      "resolvable": false,
+      "incidenceDeg": 71.11,
+      "rProj": 17.8,
+      "rawDiff": 25.11,
+      "detrendDiff": 7.69,
+      "peakDiff": 85,
+      "effTiltDeg": 0.913
+    },
+    {
+      "centre": 32671,
+      "D_km": 147.44,
+      "deltaDeg": 4.858,
+      "thetaWallDeg": 1.2144,
+      "resolvable": false,
+      "incidenceDeg": 64.58,
+      "rProj": 13.8,
+      "rawDiff": 31.83,
+      "detrendDiff": 1.02,
+      "peakDiff": 85,
+      "effTiltDeg": 0.127
+    },
+    {
+      "centre": 3674,
+      "D_km": 155.17,
+      "deltaDeg": 5.112,
+      "thetaWallDeg": 1.2781,
+      "resolvable": false,
+      "incidenceDeg": 64.05,
+      "rProj": 13.7,
+      "rawDiff": -2.66,
+      "detrendDiff": -4.81,
+      "peakDiff": 85,
+      "effTiltDeg": 0.601
+    }
+  ]
+}

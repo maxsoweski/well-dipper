@@ -1266,7 +1266,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
   // Baked-relief Phase B: the HEIGHT cube (whole-sphere E6 relief field) + its own bake counter.
   // Same lazy-once lifecycle + once-per-route cadence as the grain cube (bake-once AC). The DATA
   // source is the sphere-native carrier.height (writeHeightSphere), NOT the in-shader sampler read.
-  let heightCube = null, heightBakeCount = 0;
+  let heightCube = null, heightBakeCount = 0, heightCubeSize = 0;
   const ribbon = new THREE.Mesh(
     new THREE.BufferGeometry(),
     new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, depthWrite: false }),
@@ -1290,7 +1290,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     grainCube = makeGrainCube({ renderer, size: params.GRAIN_CUBE_SIZE });
     // Baked-relief Phase B: the HEIGHT cube rides the same lazy-once lifecycle (built on first route(),
     // reused thereafter). createHeightCube is the real CubeCamera RTT baker; RELIEF_CUBE_SIZE = 256.
-    heightCube = createHeightCube({ renderer, size: RELIEF_CUBE_SIZE });
+    heightCube = createHeightCube({ renderer, size: RELIEF_CUBE_SIZE }); heightCubeSize = RELIEF_CUBE_SIZE;
     meshMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
   }
 
@@ -1399,6 +1399,14 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // cadence as grain. source = sphere-native E6 DATA, NOT sampler.read() (the §B.5 SPLIT-TRAP #3
     // guard). This is the cube the renderer (Phase C) displaces from; the router reads the identical
     // carrier.height (Phase D) — single source, gated by the same uReliefBakeStrength uniform.
+    // inc3b S3.b diagnosis instrumentation: lab-only bake-size override for the GPU-in-loop falsifier
+    // (set globalThis.__reliefBakeSize, e.g. 512, then re-route). Unset ⇒ RELIEF_CUBE_SIZE. Production
+    // and headless paths never set it; heightCube may be null headless (guarded, as for the bake below).
+    const _bakeSizeWant = ((typeof globalThis !== 'undefined' && globalThis.__reliefBakeSize) | 0) || RELIEF_CUBE_SIZE;
+    if (heightCube && _bakeSizeWant !== heightCubeSize) {
+      heightCube.dispose();
+      heightCube = createHeightCube({ renderer, size: _bakeSizeWant }); heightCubeSize = _bakeSizeWant;
+    }
     bakeHeightCube({ mesh, height: marginHeight, grad: marginGrad, heightCube });   // V2-4 s3: margin-composited (identical to carrier.height/reliefGrad on non-margin worlds)
     heightBakeCount++;
     const totalMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
