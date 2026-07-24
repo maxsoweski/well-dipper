@@ -16,6 +16,16 @@
   ],
   "acceptanceCriteria": [
     {
+      "id": "AC-0",
+      "statement": "Spine conformance (Rule 15): the instrument introduces no new drivers and routes on no archetype string (it reads the uniform set deriveUniforms already produced from D-slots, plus published law constants); every descriptor it emits has a named consumer inside this contract; and it registers no lab feature card, staying taxonomy-exempt as console-only _lab API with the archetype drift guards green.",
+      "verifyVia": {
+        "input": "Audit the instrument's reads against the D-slot set, its emissions against the consumers named in this contract, and run tests/planet-archetypes.test.js.",
+        "observable": "No read lacks a D-slot or named derivation; no descriptor lacks a consumer; planet-archetypes drift guards pass and no state.*Enabled entry was added."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
       "id": "AC-MATH",
       "statement": "The descriptor math is correct on fields whose right answer is known in advance: a synthetic ridge field of known wavelength, a synthetic crater population of known size-frequency slope, and a synthetic elevation field of known hypsometric integral each return their true value within a stated tolerance.",
       "verifyVia": {

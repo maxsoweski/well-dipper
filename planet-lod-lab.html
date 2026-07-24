@@ -177,6 +177,7 @@
     import { radPerKm } from './src/worldengine/base/baseStep.js';   // inc3b S3-fix: km→angular scalar for the normalized crater-depth law (uCraterAmp = D_D_SIMPLE·radPerKm(R)·D_char). Pure.
     import { assessProvinceAssociation, provinceStats, classProportions } from './src/worldengine/base/province.js';   // V2-4 slice-4: the province honesty instrument (read-only) for _lab.provinceProbe()
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
+    import { createFieldSampler, describeSample } from './src/worldengine/instrument/fieldSampler.js';   // nonvisual-analysis-channel: live float-RTT field readback (reuses the rivers height sampler) + the descriptor pack. READ-ONLY instrument; console _lab API only (no GUI binding ⇒ taxonomy-exempt, AC-0 check 3).
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
     import { resolveStormE, bakeStormEAttributes, chromophoreColor } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp
     import { drawGiantConditions, deriveGiantDrivers } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation) — replaces the frozen DRIVER_BUNDLES constants per seed
@@ -1519,6 +1520,15 @@
     // in-patch trunk outlets, and bakes valley depth into a 2D ortho RTT unioned into sampleCarve.
     // On-demand (static camera); bake via the GUI button / window._lab.bakeTributaryPatch().
     const tributaryPatch = createTributaryPatch({ renderer, uniforms, octaves: 12 });
+    // ── nonvisual-analysis-channel: the field probe's sampler, built LAZILY on first _lab.sampleField()
+    // call. Lazy on purpose: it allocates a float render target per sample geometry, and a lab session
+    // that never asks a measurement question should pay nothing for the instrument. Sharing `uniforms`
+    // is the whole coupling — what it measures is what the planet is rendering, live.
+    let _fieldSampler = null;
+    function _ensureFieldSampler() {
+      if (!_fieldSampler) _fieldSampler = createFieldSampler({ renderer, uniforms, octavesDuringRead: 9 });
+      return _fieldSampler;
+    }
     // §2 Fork C — the fine-ribbon mesh (the LOD legibility channel), parented to `planet` like the
     // trunk ribbon so it co-rotates. Hidden until a bake raises patchStrength > 0 (managed below).
     planet.add(tributaryPatch.fineRibbon);
@@ -6732,6 +6742,52 @@
                     },
                     provinceOverlay(on){ setProvinceOverlay(on !== false); return provinceOverlayUI.show; },
                     rebuildProvinceOverlay(){ return !!buildProvinceOverlay(); },
+                    // ── nonvisual-analysis-channel (AC-SAMPLE) — the FIELD PROBE ────────────────────
+                    // Reads the LIVE height field back off the GPU at chosen sample points and returns
+                    // NUMBERS IN PHYSICAL UNITS, so "what is this planet doing" stops being a question
+                    // that can only be answered by looking at it. Read-only: the underlying sampler
+                    // pins uOctaves for a deterministic LOD and restores every uniform it touches, so
+                    // calling this never changes the rendered frame.
+                    //
+                    // Two frames come back on every call and BOTH must be quoted (sampling.js header):
+                    //   physical — km on the real body. What the generation systems should answer.
+                    //   angular  — degrees of arc. Times the disc scale, this is what the eye sees,
+                    //              and it is what the shipped display keying (_dispR = sVis) holds
+                    //              constant. A form constant on SCREEN is not constant in KM.
+                    //
+                    // Usage on :9223 —
+                    //   _lab.fieldProbe()                                   whole sphere, current body
+                    //   _lab.fieldProbe({mode:'patch', latDeg:20, lonDeg:-45, spanKm:2000})
+                    //   _lab.sampleField()                                  raw arrays, for custom math
+                    sampleField(opts){
+                      const o = opts || {};
+                      const radiusEarth = o.radiusEarth != null ? +o.radiusEarth : state.planetRadiusEarth;
+                      const s = _ensureFieldSampler();
+                      return o.mode === 'patch'
+                        ? s.samplePatch({ latDeg: o.latDeg || 0, lonDeg: o.lonDeg || 0, spanKm: o.spanKm || 2000,
+                                          width: o.width || 128, height: o.height || 128, radiusEarth })
+                        : s.sampleEquirect({ width: o.width || 256, height: o.height || 128, radiusEarth });
+                    },
+                    // The descriptor pack over a fresh sample. This is the call that answers "how big
+                    // are the forms / how rough is it / how many bands" without a screenshot.
+                    fieldProbe(opts){
+                      const sample = window._lab.sampleField(opts);
+                      const d = describeSample(sample);
+                      return {
+                        ...d,
+                        preset: state.preset,
+                        macroSeed: state.macroSeed,
+                        radiusEarth: sample.radiusEarth,
+                        visScale: visScaleOf(sample.radiusEarth),
+                        // On-screen size = angular size x disc scale. Surfaced so the display-frame
+                        // reading is a number in the probe rather than arithmetic someone has to
+                        // remember to do (and to get wrong).
+                        screenWavelengthProxy: d.angular.dominantWavelength != null
+                          ? d.angular.dominantWavelength * visScaleOf(sample.radiusEarth)
+                          : d.angular.autocorrWavelength * visScaleOf(sample.radiusEarth),
+                        sampledAt: { mode: (opts && opts.mode) || 'equirect', latDeg: (opts && opts.latDeg) || 0, lonDeg: (opts && opts.lonDeg) || 0 },
+                      };
+                    },
                     // V2-1 Slice D (AC5) — lab-only seeded-regime WEIGHT override (console/_lab API ONLY; no
                     // dat.GUI binding ⇒ no planet-archetypes.js taxonomy registration, AC-0 check 3). Mirrors
                     // _driverAbMode: replaces the FROZEN E1_REGIME_WEIGHTS base used for the in-band temperate-wet
