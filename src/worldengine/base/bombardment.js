@@ -206,6 +206,23 @@ export function craterSchedule(condition) {
     R_km, D_LO_KM, D_HI_KM: H, D_FLOOR_KM, L_trunc, regolithRoughness };
 }
 
+// craterRelevanceOf(condition) — the S3-fix crater/ejecta RELEVANCE leaf (BUILD-PLAN §1.S3.b render-skeptic
+// rider). The condition-derived 0/1 gate that REPLACES the preset-NAME featureRelevant.craters lookup in the
+// lab crater+ejecta uniform path (a `craters.rendersOn` name-add is BARRED — the manifest at
+// planet-feature-associations.js:74 stays byte-unmodified). TOTAL, never throws, e1-BLIND (imports no regime
+// module — the shadow-audit passes by construction), identity(0) outside the impact domain. A world is
+// crater-relevant iff it is an impact surface whose schedule FIRED and retained SOME crater population —
+// either a discrete stamped one (nStamp>0) or a sub-floor analytic texture band (regolithRoughness>0). The
+// physical AMOUNT rendered is carried downstream by the single density law (uCraterDensity ∝ regolithRoughness),
+// so a temperate/eroded world passes this domain gate but derives a near-0 density (its sub-floor coverage is
+// vanishing) — a heavily-eroded temperate world therefore auto-renders NO visible craters, by the coverage,
+// not by a name lookup.
+export function craterRelevanceOf(condition) {
+  if (!isImpactSurface(condition)) return 0;
+  const sch = craterSchedule(condition);
+  return (sch.fired && (sch.nStamp > 0 || sch.regolithRoughness > 0)) ? 1 : 0;
+}
+
 // drawBoundedPareto(u, L, H, B) — bounded-Pareto inverse-CDF: P(D≤x) = (L^−B − x^−B)/(L^−B − H^−B) on [L,H]
 // (cumulative N(>D) ∝ D^−B). u∈[0,1). The V2-5 drawPowerLaw was this with L=D_MIN_RAD, H=D_MAX_RAD.
 export function drawBoundedPareto(u, L, H, B) {

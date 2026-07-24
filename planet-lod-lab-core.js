@@ -153,7 +153,8 @@ export function emissiveBlackbody(tempK) {
 //   terraces   morphology-gated cos rings on the inner wall (slumped terrace look)
 //   relaxation multiplies the whole profile → faint palimpsest (icy/old, F2.a)
 // Beyond r≈2 every term has decayed to ~0 (distant cells don't bleed in).
-const CRATER_DEPTH = 0.2, CRATER_RIM_H = 0.05, CRATER_PEAK_H = 0.14, CRATER_TERRACE_H = 0.02;
+export const CRATER_DEPTH = 0.2;   // profile SHAPE depth factor — exported so the synth amp law can divide it out (inc3b S3-fix: composed depth must equal Pike D_D_SIMPLE once, not twice)
+const CRATER_RIM_H = 0.05, CRATER_PEAK_H = 0.14, CRATER_TERRACE_H = 0.02;
 export function craterProfile(r, opts = {}) {
   const morphology = opts.morphology ?? 0;
   const relaxation = opts.relaxation ?? 0;

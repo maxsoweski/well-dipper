@@ -148,7 +148,7 @@
   <script type="module">
     import * as THREE from 'three';
     import GUI from 'lil-gui';
-    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, reliefEnvelope, animationRateFactor } from './planet-lod-lab-core.js';
+    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, reliefEnvelope, animationRateFactor, CRATER_DEPTH } from './planet-lod-lab-core.js';
     import { RADIUS_RANGES_EARTH } from './src/core/ScaleConstants.js';   // AC5/AC6: single-source archetype radius ranges (game + lab)
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
     import { ASSOCIATIONS, DEFAULT_DRESSING } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature; DEFAULT_DRESSING = ratified boot dressing (defaults rescope 2026-07-15)
@@ -173,6 +173,8 @@
     import { deriveConditionVector } from './body-condition-vector.js';   // V2-0 Slice C: pure _fp→condition vector, attached NESTED as bodyDrivers.condition (shadow-mode; V2-1 E1 read surface; SAME derive the headless AC1 harness uses)
     import { computeE1 } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment).
     import { icenessOf } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3: condition-derived icy-material fraction → drives uIcenessMix (Stage-6 albedo). Pure scalar, imports nothing.
+    import { craterSchedule, craterRelevanceOf, D_D_SIMPLE } from './src/worldengine/base/bombardment.js';   // inc3b S3-fix: schedule-derived single crater law (sub-floor texture band) + the condition-derived crater/ejecta relevance gate (replaces the preset-name featureRelevant.craters lookup). e1-blind, pure.
+    import { radPerKm } from './src/worldengine/base/baseStep.js';   // inc3b S3-fix: km→angular scalar for the normalized crater-depth law (uCraterAmp = D_D_SIMPLE·radPerKm(R)·D_char). Pure.
     import { assessProvinceAssociation, provinceStats, classProportions } from './src/worldengine/base/province.js';   // V2-4 slice-4: the province honesty instrument (read-only) for _lab.provinceProbe()
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
@@ -2237,6 +2239,7 @@
       // ── F2 craters (Stage-C step 3, Relief) — derived (density/complexD/relaxation/
       // terraceCount, set by applyDrivers from the preset) + lab-tunable (scale/amp) ──
       craterDensity: 0.0,
+      craterRelevance: 0.0,   // inc3b S3-fix (F1/F7): condition-derived 0/1 crater+ejecta relevance, set at route time (craterRelevanceOf); default 0 so the frame gate reads a number before the first route
       craterComplexD: 0.6,
       craterRelaxation: 0.0,
       terraceCount: 4.0,
@@ -2389,7 +2392,7 @@
       glacialOffset: [0,0,0],
       // ── Per-feature ENABLE toggles (GUI ergonomics) — default true; gate the early-out
       // uniform in the frame loop so the slider VALUE is preserved while a feature is off. ──
-      cratersEnabled: false,
+      cratersEnabled: true,   // inc3b S3-fix (F7): default ON = the DEBUG force-OFF toggle; the real per-world gate is the condition-derived state.craterRelevance (craterRelevanceOf), so craters auto-render on impact surfaces (Moon/Mercury/Mars/Frozen/Crystal) and derive 0 elsewhere
       ejectaEnabled: false,
       mountainsEnabled: false,
       canyonsEnabled: false,
@@ -3244,28 +3247,12 @@
       state.repose = Math.min(2.2, Math.max(0.5, 0.9 / Math.pow(Math.max(_g, 0.05), 0.4)));
       const _coldGround = 1.0 - _ss(150, 260, _fp.T_eq ?? 288);
       state.ldaFat = _clamp01((_fp.composition?.volatileFraction ?? 0) * 2.0) * _coldGround;
-      // ── F2 crater PRESERVATION (apply marker, lab audit 2026-06-15) ──────────────
-      // Physics: craters are PRESERVED on airless/old/cold worlds (no wind/water to
-      // soften, no tectonics to bury) and ERASED on atmosphere'd/active worlds. One
-      // _craterWeathering ∈ [0,1] blends the three erasers (all reuse helpers above):
-      //   • atmosphere weathering: retained-atmosphere pressure ramp _ss(0.02,1.5,_press)
-      //     — airless ⇒ 0 (_press is 0 when !_hadLiquid); Mars 0.01 bar ≈ 0 (thin → still
-      //     preserved highlands); Earth 1.0 high; Venus 92 saturates.
-      //   • recorded erosion D11: _ss(0.0,0.6,_erosion).
-      //   • resurfacing (tectonics/volcanism buries craters): _ss(0.1,0.9,resurfacingRate).
-      // High W ⇒ erased: LOWER density+amp, HIGHER relaxation (palimpsest flatten).
-      // Low W (airless) ⇒ preserved: HIGHER density+amp, LOWER relaxation. Continuous,
-      // no hard switch. Outcomes — Frozen W≈.02 (numerous/large/sharp); Rocky W≈.63,
-      // Ocean W≈.91, Venus W≈1.0 (sparse/subtle/soft); Mars W≈.19 (preserved, thin air).
-      const _atmoWx     = _hadLiquid ? _ss(0.02, 1.5, _press) : 0.0;
-      const _resurfRate = _fp.surfaceHistory?.resurfacingRate ?? 0;
-      const _craterWeathering = _clamp01(0.55 * _atmoWx
-                                       + 0.30 * _ss(0.0, 0.6, _erosion)
-                                       + 0.40 * _ss(0.1, 0.9, _resurfRate));
-      const _preserved = 1.0 - _craterWeathering;
-      state.craterDensity    = _clamp01(state._craterDensityBase * (0.45 + 0.55 * _preserved));
-      state.craterAmp        = state._craterAmpBase * (0.5 + 0.7 * _preserved);
-      state.craterRelaxation = _clamp01(state.craterRelaxation + 0.85 * _craterWeathering);
+      // ── F2 crater PRESERVATION — RETIRED (inc3b S3-fix, F6). The weathering/erosion/resurfacing
+      // modulation that lived here (a _craterWeathering blend of atmosphere/erosion/resurfacing driving
+      // craterDensity/craterAmp/craterRelaxation) is SUPERSEDED by the schedule-derived SINGLE law in
+      // ensureNetworkRouted() (near the state.iceness idiom): its physics (retention/erosion) already
+      // lives in craterSchedule's tExp, so there is one law, not two. state._craterDensityBase /
+      // state._craterAmpBase (stashed above) are now inert. ──
       // ── F24 zonal belts — gas-giant banding (Bands step 4b; derivation lives HERE
       // per the F11 precedent — core.js untouched). Master gate: an h2-he envelope IS
       // the visible surface, so bandStrength is 1 on gas worlds and 0 on EVERY solid
@@ -3692,6 +3679,65 @@
       const _bodyDrivers = buildBodyDrivers(_u, _fp);
       state._lastBodyDrivers = _bodyDrivers;   // surfaced by _lab.plateProbe() (the values that reached the writer)
       state.iceness = icenessOf(_bodyDrivers.condition);   // V2-6 S3: drive the Stage-6 iceness albedo from the SAME condition vector the writer reads (frame() syncs → uIcenessMix)
+      // ── inc3b S3-fix: schedule-derived SINGLE crater law (the sub-floor crater-texture band, rendered
+      // analytically in-shader so it is resolution-independent — bypassing the mesh + bake the diagnosis
+      // convicted as unable to carry the wall slope). SAME derived-state idiom as state.iceness above:
+      // craterSchedule reads the SAME condition vector the writer reads; frame() writes state.crater* to the
+      // uCrater* uniforms. This REPLACES the deleted preservation-chain modulation (F6) — one law, no taste
+      // constants; every number carries its derivation. (A local clamp — _clamp01 lives inside applyDrivers,
+      // out of scope here.)
+      {
+        const _clamp01c = (x) => Math.max(0, Math.min(1, x));
+        const _sch = craterSchedule(_bodyDrivers.condition);
+        const _RE  = Math.max(1e-6, _bodyDrivers.condition.radiusEarth ?? 1.0);
+        // F1: condition-derived 0/1 relevance (bombardment.js leaf; e1-blind, replaces featureRelevant.craters).
+        state.craterRelevance = craterRelevanceOf(_bodyDrivers.condition);
+        // F2: D_char = geometric mean of the sub-floor band [L, D_FLOOR_KM] (L = the scaled low SFD edge the
+        //   schedule draws from = D_LO_KM·sizeMul). F3 anti-double-render CLAMP: the shader hashes each synth
+        //   crater's radius as mix(0.18,0.55) cell units (glsl :1962), so its diameter is 2·[0.18..0.55] and
+        //   D_km = diameter·D_char; the 0.55 tail ⇒ max diameter 2·0.55 = 1.10 cell units ⇒ D_km_max = 1.10·D_char.
+        //   Forcing D_km_max ≤ D_FLOOR_KM keeps every synth crater AT/below the mesh floor so the synth never
+        //   double-renders the discrete stamped population (which is D ≥ D_FLOOR_KM) ⇒ D_char ≤ D_FLOOR_KM/1.10.
+        const _HASH_TAIL_MAX = 2.0 * 0.55;                                   // max synth diameter (cell units), glsl mix(0.18,0.55)
+        const _L = _sch.D_LO_KM * _sch.sizeMul;
+        const _Dgeo = Math.sqrt(Math.max(_L, 1e-9) * Math.max(_sch.D_FLOOR_KM, 1e-9));
+        const _Dchar = Math.min(_Dgeo, _sch.D_FLOOR_KM / _HASH_TAIL_MAX);    // F3 clamp
+        state.craterSizeKm = _Dchar > 0 ? _Dchar : state.craterSizeKm;       // uCraterScale = RE·6371/D_char (featureFrequencyFromKm, C_CRATER=1, :5958)
+        // uCraterDensity: the host-cell fraction that REPRODUCES the schedule's sub-floor areal coverage
+        //   (regolithRoughness = fraction of the surface the never-stamped craters cover). In the synth, each
+        //   hosted unit voronoi cell places ONE crater of radius craterRadius = mix(0.18,0.55) cell units,
+        //   covering area π·craterRadius² of its unit cell; averaged over the uniform hash,
+        //   E[craterRadius²] = ∫₀¹(0.18+0.37u)²du = 0.18² + 0.18·0.37 + 0.37²/3 = 0.1446333. So the covered
+        //   fraction = density·π·E[craterRadius²] ⇒ density = regolithRoughness / (π·0.1446333) (= /0.4543790).
+        //   Temperate/eroded worlds (regolithRoughness ~1e-5) thus derive a near-0 density and render nothing.
+        const _CELL_CRATER_AREA = Math.PI * (0.18 * 0.18 + 0.18 * 0.37 + 0.37 * 0.37 / 3);
+        state.craterDensity = _clamp01c(_sch.regolithRoughness / _CELL_CRATER_AREA);
+        // uCraterAmp: the fresh-simple depth-SCALE amplitude. radPerKm(RE)·D_char = D_char/(6371·RE) = the crater
+        //   diameter as a unit-sphere fraction. The craterProfile cavity (planet-lod-height.glsl.js:1931 =
+        //   CRATER_DEPTH·(r²−1), CPU mirror planet-lod-lab-core.js) applies the SHAPE depth factor internally, so
+        //   the COMPOSED on-screen floor depth = CRATER_DEPTH·uCraterAmp. For the composed depth to honor the Pike
+        //   simple-bowl law exactly ONCE (d/D = D_D_SIMPLE, bombardment.js — the same law the stamped population
+        //   uses), the amp divides the profile's shape factor OUT: amp = (D_D_SIMPLE/CRATER_DEPTH)·δ_char. Both
+        //   constants are 0.20 today so amp = δ_char exactly, but the law is written so a change to either constant
+        //   keeps composed depth ≡ Pike (single density law, no double-count — the S3-fix build's first cut carried
+        //   D_D_SIMPLE·δ here, composing to d/D≈0.04, a double-application corrected at the adjudication seam).
+        //   Sub-floor ≪ D_t ⇒ pure simple bowls (no complex roll-off). Envelope-free — rides uPerturb ONCE via
+        //   reliefAmp (F6, kept bare at :5959).
+        state.craterAmp = (D_D_SIMPLE / CRATER_DEPTH) * radPerKm(_RE) * _Dchar;
+        // uCraterComplexD: morphology = smoothstep(uCraterComplexD·0.6, uCraterComplexD, diameter) must be 0 for
+        //   EVERY synth crater (all sub-floor craters are simple). The largest synth diameter is _HASH_TAIL_MAX
+        //   cell units, so the smoothstep lower edge uCraterComplexD·0.6 ≥ _HASH_TAIL_MAX ⇒ uCraterComplexD ≥
+        //   _HASH_TAIL_MAX/0.6 forces morphology≡0.
+        state.craterComplexD = _HASH_TAIL_MAX / 0.6;
+        // uCraterRelaxation: the schedule-derived palimpsest fraction that REPLACES the deleted _craterWeathering.
+        //   tExp is the schedule's retained exposure age (min of the physical age cap, tidal- and erosion-
+        //   truncation); the fraction of the surface age LOST to active resurfacing/erosion, 1 − tExp/ageEff,
+        //   degrades the surviving craters. Airless dead worlds retain the whole age (tExp = ageEff ⇒ 0, sharp);
+        //   eroded/tidal worlds truncate it (⇒ higher relaxation). ageEff uses the schedule's OWN caps
+        //   (AGE_MAX 4.6, AGE_REF 4.0 default — bombardment.js).
+        const _ageEff = Math.min(4.6, Math.max(0, _bodyDrivers.condition.age ?? 4.0));
+        state.craterRelaxation = (_sch.tExp > 0 && _ageEff > 0) ? _clamp01c(1 - _sch.tExp / _ageEff) : 0;
+      }
       // V2-1 Slice D (SHADOW): compute the E1 regime tuple from the SAME condition vector + macroSeed and
       // stash it for _lab.e1Probe() (AC7). DATA-ONLY — state._lastE1 is NEVER threaded into route() below
       // (archetype stays PRESET_ARCHETYPE), so E1 has ZERO routing influence this increment. The lab-only
@@ -3876,7 +3922,16 @@
       state._radiusDirty = true;
       reseedGiant();
       applyDrivers();
+      // inc3b S3-fix rider: seed the crater/ejecta/ray domain offset from the RE-ROLLED world seed so a
+      // 🌍 re-roll MOVES the synth crater field (the field was [0,0,0] = re-roll-invariant before). Uses the
+      // existing seedOffset() hash (the macro/detail-offset pattern, :2461) into a scratch Vector3, distinct
+      // seed namespace ('crater:'+worldSeed) so it decorrelates from the macro/detail continents. Seeded AFTER
+      // applyDrivers() because applyDrivers resets craterOffset to [0,0,0] (the transient-🎲-discard contract);
+      // the 🎲 randOffset() button still applies a manual scramble on top.
+      seedOffset(state.worldSeed * 1.6180339887 + 97.0, _craterOffScratch);   // golden-ratio-scaled + prime shift ⇒ decorrelated from the raw macro/detail seeds
+      state.craterOffset = [_craterOffScratch.x, _craterOffScratch.y, _craterOffScratch.z];
     }
+    const _craterOffScratch = new THREE.Vector3();
     fDrivers.add({ roll(){ newPlanet(); } }, 'roll').name('🌍 new planet (re-roll all)');
 
     // ── Increment 2 (plate driver-response) bodyDrivers overrides ────────────────────
@@ -5949,14 +6004,14 @@
       uniforms.uLimbBypass.value = state.limbBypass ? 1 : 0;
       uniforms.uTermBypass.value = state.termBypass ? 1 : 0;   // F35
       uniforms.uTime.value = t;   // clouds drift + aurora rays animate (Task 7)
-      uniforms.uCraterDensity.value    = state.cratersEnabled ? state.craterDensity * state.featureRelevant.craters : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — density→0 early-outs the crater pass on non-members (Carbon/Crystal/gas)
+      uniforms.uCraterDensity.value    = state.cratersEnabled ? state.craterDensity * state.craterRelevance : 0.0;   // ✓ debug force-off gate × condition-derived relevance (inc3b S3-fix F7: craterRelevanceOf replaces the preset-name featureRelevant.craters — Moon/Mercury lack the rendersOn membership; density→0 early-outs the crater pass on non-impact worlds)
       uniforms.uCraterComplexD.value   = state.craterComplexD;
       uniforms.uCraterRelaxation.value = state.craterRelaxation;
       uniforms.uTerraceCount.value     = state.terraceCount;
       uniforms.uCraterScale.value      = featureFrequencyFromKm(state.planetRadiusEarth, state.craterSizeKm, C_CRATER);
       uniforms.uCraterAmp.value        = state.craterAmp;   // Inc-3: relief envelope rides ONCE via uPerturb (was × reliefNorm here too, which squared it)
       // F3 ejecta & rays — strength/rampart/ray-brightness driven; amp/lump/count/sharp lab.
-      uniforms.uEjectaStrength.value   = state.ejectaEnabled ? state.ejectaStrength * state.featureRelevant.ejecta : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — strength→0 early-outs the ejecta pass on non-members (Carbon/Crystal/gas)
+      uniforms.uEjectaStrength.value   = state.ejectaEnabled ? state.ejectaStrength * state.craterRelevance : 0.0;   // ✓ enable gate × condition-derived relevance (inc3b S3-fix F7: ejecta wraps the SAME synth craters, so it shares craterRelevanceOf — rendersOn dropped from the gate); strength→0 early-outs the ejecta pass on non-impact worlds
       uniforms.uEjectaRampart.value    = state.ejectaRampart;
       uniforms.uEjectaAmp.value        = state.ejectaAmp;
       uniforms.uEjectaLump.value       = state.ejectaLump;
