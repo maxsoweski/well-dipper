@@ -14,8 +14,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   hypsometricIntegral, rmsReliefKm, slopeStats, radialPSD, autocorrWavelengthKm,
-  craterSFD, networkLengthKm, drainageDensity, bandCount, distributionMoments,
-  totalAreaKm2, cellAreaKm2, rowLatDeg, countDensity, PER_AREA,
+  craterSFD, networkLengthKm, drainageDensity, bandCount, distributionMoments, spectralExcessPeak,
+  totalAreaKm2, cellAreaKm2, rowLatDeg, countDensity, PER_AREA, fft,
 } from '../src/worldengine/instrument/descriptors.js';
 import {
   meanSEM, requiredSeeds, seedsToResolve, fitPowerLaw, lawVerdict, shiftSignificance,
@@ -138,6 +138,106 @@ describe('spectral form size', () => {
 
   it('radialPSD refuses an equirect grid rather than measuring the latitude seam', () => {
     expect(() => radialPSD(new Float64Array(64), equirect(8, 8))).toThrow(/patch grid/);
+  });
+
+  // The metric that replaced "most energetic bin" after the live check showed the latter always
+  // returns the window size on natural (red-noise) terrain. These fixtures encode both halves of
+  // the claim: it finds a band-limited population buried in red noise, and it declines to invent
+  // one when the field is pure red noise.
+  it('spectralExcessPeak finds a band-limited form buried in a red-noise background', () => {
+    const g = patch(128, 128, 640, 640);
+    const cycles = 16;                                   // form wavelength = 640/16 = 40 km
+    const f = new Float64Array(g.width * g.height);
+    // Red-noise background built by summing decaying low-k harmonics, plus a strong 16-cycle form.
+    for (let j = 0; j < g.height; j++) {
+      for (let i = 0; i < g.width; i++) {
+        let v = 0;
+        for (let k = 1; k <= 6; k++) {
+          v += (1 / (k * k)) * Math.sin((2 * Math.PI * k * i) / g.width + k)
+             + (1 / (k * k)) * Math.cos((2 * Math.PI * k * j) / g.height + k * 0.7);
+        }
+        v += 0.25 * Math.sin((2 * Math.PI * cycles * i) / g.width) * Math.sin((2 * Math.PI * cycles * j) / g.height);
+        f[j * g.width + i] = v;
+      }
+    }
+    const peak = spectralExcessPeak(f, g);
+    expect(peak.detected).toBe(true);
+    // The plain most-energetic-bin metric returns the window size here; the excess metric must not.
+    expect(radialPSD(f, g).dominantWavelengthKm).toBeGreaterThan(200);
+    // The form is a PRODUCT sin(kx)*sin(ky), whose energy sits at (kx,ky) = (+/-16, +/-16) — radial
+    // wavenumber 16*sqrt(2), not 16. So the true repeat scale along the radial direction is
+    // 640/(16*sqrt(2)) ~ 28.3 km, and that is what a correct metric reports. (The first version of
+    // this test asserted 40 km by treating the product as a single 16-cycle wave; the metric was
+    // right and the expectation was wrong.)
+    const trueRadialWavelength = 640 / (cycles * Math.SQRT2);
+    expect(peak.wavelength).toBeCloseTo(trueRadialWavelength, 0);
+  });
+
+  it('spectralExcessPeak tracks the form size when the form changes size', () => {
+    const g = patch(128, 128, 640, 640);
+    const build = (cycles) => {
+      const f = new Float64Array(g.width * g.height);
+      for (let j = 0; j < g.height; j++) {
+        for (let i = 0; i < g.width; i++) {
+          let v = 0;
+          for (let k = 1; k <= 6; k++) v += (1 / (k * k)) * Math.sin((2 * Math.PI * k * i) / g.width + k);
+          v += 0.25 * Math.sin((2 * Math.PI * cycles * i) / g.width) * Math.sin((2 * Math.PI * cycles * j) / g.height);
+          f[j * g.width + i] = v;
+        }
+      }
+      return spectralExcessPeak(f, g).wavelength;
+    };
+    const w8 = build(8), w16 = build(16), w32 = build(32);
+    expect(w8).toBeGreaterThan(w16);
+    expect(w16).toBeGreaterThan(w32);
+    expect(w8 / w16).toBeCloseTo(2, 0);                  // halving the form size halves the reported wavelength
+  });
+
+  it('declines to report a form size for pure scale-free noise', () => {
+    // A clean power-law field has no band-limited population. The metric must say so rather than
+    // return the largest bin and let a caller read it as "the forms are window-sized".
+    //
+    // The fixture is built IN THE FREQUENCY DOMAIN — isotropic amplitude k^-1.5 with deterministic
+    // (hash-derived, no RNG) phases, inverse-transformed — so it is scale-free by construction
+    // rather than by hope. An earlier version summed axis-aligned harmonics, which is neither
+    // isotropic nor smooth in the radial bins and so grew a spurious "feature".
+    const N = 128;
+    const g = patch(N, N, 640, 640);
+    const re = new Float64Array(N * N), im = new Float64Array(N * N);
+    const phase = (a, b) => {                       // deterministic pseudo-phase in [0, 2pi)
+      const h = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+      return (h - Math.floor(h)) * 2 * Math.PI;
+    };
+    for (let j = 0; j < N; j++) {
+      const ky = j <= N / 2 ? j : j - N;
+      for (let i = 0; i < N; i++) {
+        const kx = i <= N / 2 ? i : i - N;
+        const k = Math.hypot(kx, ky);
+        if (k < 1) continue;
+        const amp = Math.pow(k, -1.5);
+        const ph = phase(Math.abs(kx), Math.abs(ky)) * (kx < 0 ? -1 : 1);
+        re[j * N + i] = amp * Math.cos(ph);
+        im[j * N + i] = amp * Math.sin(ph);
+      }
+    }
+    // Proper 2D inverse: transform every row, then every column.
+    const rowRe = new Float64Array(N), rowIm = new Float64Array(N);
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) { rowRe[i] = re[j * N + i]; rowIm[i] = im[j * N + i]; }
+      fft(rowRe, rowIm, true);
+      for (let i = 0; i < N; i++) { re[j * N + i] = rowRe[i]; im[j * N + i] = rowIm[i]; }
+    }
+    const colRe = new Float64Array(N), colIm = new Float64Array(N);
+    for (let i = 0; i < N; i++) {
+      for (let j = 0; j < N; j++) { colRe[j] = re[j * N + i]; colIm[j] = im[j * N + i]; }
+      fft(colRe, colIm, true);
+      for (let j = 0; j < N; j++) { re[j * N + i] = colRe[j]; im[j * N + i] = colIm[j]; }
+    }
+    const f = new Float64Array(N * N);
+    for (let k = 0; k < N * N; k++) f[k] = re[k];
+    const peak = spectralExcessPeak(f, g, { minExcessRatio: 3 });
+    expect(peak.detected).toBe(false);
+    expect(Number.isFinite(peak.spectralSlope)).toBe(true);
   });
 
   it('autocorrWavelength recovers the same wavelength independently of the FFT', () => {

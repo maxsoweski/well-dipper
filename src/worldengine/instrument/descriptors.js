@@ -317,6 +317,53 @@ export function radialPSD(field, grid) {
   return { dominantWavelengthKm: spanKm / peak.k, spectralSlope: slope, spectrum };
 }
 
+/**
+ * The form-size metric that actually works on terrain: the wavelength of maximum EXCESS power over
+ * the field's own power-law background.
+ *
+ * WHY THIS EXISTS. A plain "dominant wavelength = most energetic bin" is useless on natural terrain.
+ * Terrain spectra are scale-free red noise (measured spectral slope on the live lab field: about
+ * -3.9), so the largest resolvable wavelength always holds the most power and the metric just returns
+ * the window size — it reported exactly the patch span, every time, for every setting. That would
+ * have been a form-size number that never moves, which is worse than no metric at all: it would have
+ * silently "confirmed" that forms hold constant under any change whatsoever.
+ *
+ * A BAND-LIMITED feature population — craters of a characteristic diameter, ridges at a spacing,
+ * convection cells — deposits power in a narrow range of scales, appearing as a BUMP above the
+ * power-law trend. So: fit the trend in log-log, subtract it, and report where the residual peaks.
+ * That number tracks the size of the actual forms and is blind to the background roughness.
+ *
+ * Returns the peak wavelength, its excess as a ratio over the fitted trend (1.0 = no excess at all,
+ * i.e. no detectable feature population), and the trend slope. A caller must check `excessRatio`
+ * before trusting `wavelength`: a field with no band-limited population has no form size to report.
+ */
+export function spectralExcessPeak(field, grid, { minExcessRatio = 1.05 } = {}) {
+  const psd = radialPSD(field, grid);
+  const spec = psd.spectrum;
+  if (!spec || spec.length < 4) {
+    return { wavelength: NaN, excessRatio: NaN, spectralSlope: psd.spectralSlope, detected: false };
+  }
+  const xs = spec.map((s) => Math.log10(s.k));
+  const ys = spec.map((s) => Math.log10(Math.max(s.power, Number.MIN_VALUE)));
+  const slope = leastSquaresSlope(xs, ys);
+  const meanX = xs.reduce((a, b) => a + b, 0) / xs.length;
+  const meanY = ys.reduce((a, b) => a + b, 0) / ys.length;
+  const intercept = meanY - slope * meanX;
+  let best = null;
+  for (let i = 0; i < spec.length; i++) {
+    const residual = ys[i] - (intercept + slope * xs[i]);       // log10 excess over the trend
+    if (!best || residual > best.residual) best = { residual, k: spec[i].k };
+  }
+  const spanKm = (grid.spanKmX + grid.spanKmY) / 2;
+  const excessRatio = Math.pow(10, best.residual);
+  return {
+    wavelength: spanKm / best.k,
+    excessRatio,
+    spectralSlope: slope,
+    detected: excessRatio >= minExcessRatio,
+  };
+}
+
 /** Ordinary least-squares slope of y on x. Shared by the PSD and SFD fits. */
 export function leastSquaresSlope(xs, ys) {
   const n = xs.length;
