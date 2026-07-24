@@ -43,6 +43,7 @@ import { writeProvince } from './src/worldengine/base/province.js';   // V2-4 sl
 import { deriveFigureDescriptor } from './src/worldengine/base/bodyFigure.js';   // V2-4 slice-5: E2-figure descriptor (pure fn of the condition vector; rides on relief.figure — no carrier array, no RNG)
 import { writeBombardment, craterSchedule } from './src/worldengine/base/bombardment.js';   // V2-5: exogenic crater-population host channel (universal call, self-gates on condition scalars; writes only the unhashed craterField). V2-6 S3: craterSchedule feeds deriveSurfaceMaterial (sub-floor regolith).
 import { deriveSurfaceMaterial } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3/S4: condition-derived material channel (iceness + crystallizationPotential + regolithRoughness) — pure, imports nothing
+import { deriveReliefBudget } from './src/worldengine/base/reliefBudget.js';   // Inc-3b S1: condition-pure relief-variance budget (model f_I ratio target); RMS-preserving w_e/w_i scale solved in compositeMargins. Return-object idiom (no carrier array, no RNG ⇒ byte-inert), same as relief.surfaceMaterial. Import line is OUTSIDE the dispatch-oracle's sliced region (precedes writeBodyRelief).
 // V2-2b-2a Slice C — the LAB-ONLY mixed-interior render seam (MF1 Option B). route() forwards a hand-set E1
 // coordinate through the V2-2a lid-response router (classifyLidPath → the mixed composer WRITES carrier.height),
 // and injects the Π=C·F instrument (one-way: rivers.js is the route/lab boundary, NOT a base/ writer, so the
@@ -207,7 +208,23 @@ export function computeAdjGradient(carrier, heightOverride = null) {
 // future carrier reaching route() without the field must not TypeError, and the early-out still short-
 // circuits to null when only shelfDepth is populated (or neither is). Exported for the V2-5 slice-2
 // composite value-identity unit test (route() below is the sole runtime caller).
-export function compositeMargins(carrier) {
+// Inc-3b S1.3: the frozen identity budget — the default second argument. w_e=w_i=1 ⇒ the literal
+// pre-budget loop runs, so all pre-Inc-3b callers (1 runtime + 8 test, all one-arg) reproduce h+sd+cf
+// byte-for-byte with ZERO edits (AC-FENCE / AC-IDENTITY, provable by inspection).
+export const IDENTITY_BUDGET = Object.freeze({ inDomain: false, w_e: 1, w_i: 1 });
+// Inc-3b S1.3: ε_Vcf identity clamp (relief-budget-fit.json.epsilonVcf) — the smallest single-stamp raw
+// mean-square the shipped schedule can produce. When realized V_cf < ε the RMS-preserving solve would emit
+// an unbounded w_i (V_cf→0 blow-up, S0.2a #3), so we fall back to the literal identity loop instead.
+const EPSILON_VCF = 1.1814295123540973e-8;
+
+// V2-4 slice-3 margin composite. Inc-3b S1.3: extended to compositeMargins(carrier, budget = IDENTITY_BUDGET).
+// Outside the budget domain (or the frozen identity budget) the LITERAL pre-budget loop runs (same float op
+// order as pre-Inc-3b — AC-IDENTITY provable by inspection; 1.0*x===x is not merely relied upon). In-domain,
+// the RMS-preserving w_e/w_i are solved HERE from the REALIZED channel raw-mean-square norms (adopted §6-T2
+// option (ii)+S0.2a): the leaf emits only the model ratio target f_I (condition-pure — a realized-norm f_I
+// collapses to identity), and this seam supplies the absolute scale. Frozen variance definition = RAW
+// mean-square V = mean(x²) (relief-budget-fit.json). shelfDepth stays weight 1. Never mutates carrier.height.
+export function compositeMargins(carrier, budget = IDENTITY_BUDGET) {
   const sd = carrier.shelfDepth;
   if (!sd) return null;
   const cf = carrier.craterField;
@@ -216,7 +233,28 @@ export function compositeMargins(carrier) {
   if (!any) return null;
   const h = carrier.height;
   const out = new Float32Array(h.length);
-  for (let i = 0; i < h.length; i++) out[i] = h[i] + sd[i] + (cf ? cf[i] : 0);
+  const n = h.length;
+  // Identity path: the literal pre-budget loop, byte-identical op order to pre-Inc-3b.
+  if (!budget || !budget.inDomain) {
+    for (let i = 0; i < n; i++) out[i] = h[i] + sd[i] + (cf ? cf[i] : 0);
+    return out;
+  }
+  // In-domain: solve the RMS-preserving scale from realized RAW mean-square norms.
+  //   r = f_I/(1−f_I); w_e² = (V_h+V_cf)/(V_h·(1+r)); w_i² = r·w_e²·V_h/V_cf  (S0.2a closed form)
+  let msH = 0, msCf = 0;
+  for (let i = 0; i < n; i++) { const hv = h[i]; msH += hv * hv; const c = cf ? cf[i] : 0; msCf += c * c; }
+  const V_h = msH / n, V_cf = msCf / n;
+  const f_I = budget.f_I;
+  // Fall back to the literal identity loop when the solve is ill-posed: V_cf below the ε clamp (unbounded
+  // w_i, S0.2a #3), V_h non-positive, or f_I not a valid interior ratio. Preserves total band, no blow-up.
+  if (!(V_cf >= EPSILON_VCF) || !(V_h > 0) || !(f_I > 0) || !(f_I < 1)) {
+    for (let i = 0; i < n; i++) out[i] = h[i] + sd[i] + (cf ? cf[i] : 0);
+    return out;
+  }
+  const r = f_I / (1 - f_I);
+  const w_e = Math.sqrt((V_h + V_cf) / (V_h * (1 + r)));
+  const w_i = Math.sqrt(r * w_e * w_e * V_h / V_cf);
+  for (let i = 0; i < n; i++) out[i] = w_e * h[i] + sd[i] + w_i * (cf ? cf[i] : 0);
   return out;
 }
 
@@ -567,6 +605,7 @@ export function writeBodyRelief(carrier, {
     writeBombardment(carrier, cond, { macroSeed });   // V2-5: UNIVERSAL — self-gates on cond scalars (airless+dead+cold); writes only the unhashed signed craterField (byte-inert; new alea 'bombard:' stream); route() composites at render
     relief.figure = deriveFigureDescriptor(cond);   // slice 5: E2-figure descriptor — a return-object field (NOT a carrier array), pure fn of the condition vector, draws no RNG ⇒ byte-inert; populated on EVERY dispatch path
     relief.surfaceMaterial = deriveSurfaceMaterial(cond, craterSchedule(cond));   // V2-6 S3/S4: material channel { iceness, crystallizationPotential, regolithRoughness } — same return-object idiom as relief.figure (no carrier array, no RNG ⇒ byte-inert), populated on EVERY dispatch path. S4 (§1F): crystallizationPotential rides here as a downstream driver; the lab facet-wiring flip is deferred-to-adjudication (Lens L9)
+    relief.reliefBudget = deriveReliefBudget(cond, craterSchedule(cond));   // Inc-3b S1: condition-pure relief-variance budget { inDomain, f_I, w_e, w_i } — same return-object idiom (no carrier array, no RNG ⇒ byte-inert), TOTAL (identity outside domain, never throws). route() threads it into compositeMargins(carrier, budget) at the composite seam; craterSchedule(cond) is pure so calling it twice here is byte-identical.
     return relief;
   }
   throw new Error('writeBodyRelief: bodyDrivers.condition is required — the PRESET_ARCHETYPE migration bridge was retired (world-engine-preset-archetype-retirement, 2026-07-13). Every production/lab caller must pass a condition-bearing bundle.');
@@ -1319,7 +1358,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     //    (feeding composited height but the stale pre-shelf reliefGrad would displace-without-reshading).
     //    null on non-margin worlds ⇒ reuse carrier.height/reliefGrad ⇒ byte-identical (AC-LAB c). Never
     //    mutates carrier.height (own-channel discipline; the 75-golden bypasses route()).
-    const composited = compositeMargins(carrier);
+    const composited = compositeMargins(carrier, relief.reliefBudget);   // Inc-3b S1.4: thread the condition-pure budget (identity outside its domain ⇒ byte-identical to pre-Inc-3b)
     const marginHeight = composited || carrier.height;
     const marginGrad = composited ? computeAdjGradient(carrier, composited) : reliefGrad;
     // ── Phase D re-point (SPLIT-TRAP #5 guard): the router's height source is gated on the SAME

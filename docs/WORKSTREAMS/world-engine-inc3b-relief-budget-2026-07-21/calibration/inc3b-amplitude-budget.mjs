@@ -196,43 +196,85 @@ for (const w of worlds.values()) {
   console.log(`  ${w.name.padEnd(32)} ${cov.toExponential(4).padStart(12)}   ${corr.toFixed(5).padStart(10)}   ${sh.toExponential(3)}   ${scf.toExponential(3)}`);
 }
 
-// ── FORWARD-COMPATIBILITY: post-budget preserved-band check (S1 wires reliefBudget.js) ────────────────
-// Pre-budget path above does NOT depend on this. Guarded dynamic import: today the leaf does not exist.
+// ── POST-BUDGET preserved-band + crater-dominance check (S1 has wired reliefBudget.js) ────────────────
+// Pre-budget path above does NOT depend on this. Guarded dynamic import so the harness still runs standalone.
+//
+// API NOTE (BUILD-PLAN §6-T2 option (ii)+S0.2a, ADOPTED): the S1 leaf emits ONLY the condition-pure RATIO
+// target f_I (a realized-norm f_I collapses the budget to identity — relief-budget-fit.json.identityCollapse);
+// the RMS-preserving w_e/w_i SCALE is solved inside compositeMargins from the REALIZED raw-mean-square norms.
+// The pre-S1 forward-compat stub here GUESSED the leaf would emit w_e/w_i and read them off the object — that
+// mismatches the adopted API (the leaf returns the identity defaults w_e=w_i=1). FIXED HERE (harness = ours,
+// per the S1 task): derive w_e/w_i via the SAME S0.2a closed form compositeMargins uses (frozen RAW mean-square
+// definition, ε_Vcf identity clamp), report them, and confirm the SHIPPED compositeMargins(carrier, budget)
+// produces the identical post array. Reports f_I, w_e/w_i, the preserved channel raw-MS band, and the inverted
+// crater share. NO leaf edit was made to fit this harness.
+const EPSILON_VCF = 1.1814295123540973e-8;   // relief-budget-fit.json.epsilonVcf (smallest single-stamp raw-MS the schedule can produce)
 const RELIEF_BUDGET_PATH = join(REPO, 'src', 'worldengine', 'base', 'reliefBudget.js');
-console.log(`\n── post-budget preserved-band check (forward-compat; requires src/worldengine/base/reliefBudget.js) ──`);
+console.log(`\n── post-budget preserved-band + crater-dominance check (S0.2a solve; frozen RAW-MS definition) ──`);
+let budgetOk = true;
 let budgetSection = null;
 if (existsSync(RELIEF_BUDGET_PATH)) {
   const mod = await import(pathToFileURL(RELIEF_BUDGET_PATH).href);
   const deriveReliefBudget = mod.deriveReliefBudget;
   if (typeof deriveReliefBudget !== 'function') {
-    console.log(`  reliefBudget.js exists but exports no deriveReliefBudget(cond, schedule) — cannot report f_I/w_e/w_i.`);
+    console.log(`  reliefBudget.js exists but exports no deriveReliefBudget(cond, schedule) — cannot report f_I.`);
+    budgetOk = false;
   } else {
-    console.log('  world                            inDomain   f_I        w_e        w_i        preRMS       postRMS      Δ%');
+    console.log('  world                            inDomain   f_I       w_e       w_i        sumΔ%     preShare    postShare   inv?');
     budgetSection = [];
     for (const w of worlds.values()) {
       const budget = deriveReliefBudget(w.cond, craterSchedule(w.cond));
-      const { inDomain = false, f_I = 0, w_e = 1, w_i = 1 } = budget ?? {};
-      // pre-budget total composite (h + sd + cf) and post-budget (w_e·h + sd + w_i·cf), same channels.
+      const inDomain = !!(budget && budget.inDomain);
+      const f_I = budget?.f_I ?? 0;
       const h = w.height, sd = w.shelfDepth, cf = w.craterField;
-      const pre = new Float32Array(h.length), post = new Float32Array(h.length);
-      for (let i = 0; i < h.length; i++) {
-        const s = sd ? sd[i] : 0, c = cf ? cf[i] : 0;
-        pre[i]  = h[i] + s + c;
-        post[i] = w_e * h[i] + s + w_i * c;
+      // realized RAW mean-square norms (the FROZEN variance definition) — exactly what compositeMargins reads.
+      const V_h = meanSquare(h), V_cf = meanSquare(cf);
+      // S0.2a closed-form solve, with the ε_Vcf identity clamp (V_cf→0 blow-up guard). Ill-posed ⇒ identity.
+      let w_e = 1, w_i = 1;
+      if (inDomain && V_cf >= EPSILON_VCF && V_h > 0 && f_I > 0 && f_I < 1) {
+        const r = f_I / (1 - f_I);
+        w_e = Math.sqrt((V_h + V_cf) / (V_h * (1 + r)));
+        w_i = Math.sqrt(r * w_e * w_e * V_h / V_cf);
       }
-      const preRMS = std(pre), postRMS = std(post);
-      const dPct = preRMS > 0 ? (postRMS - preRMS) / preRMS * 100 : 0;
-      budgetSection.push({ name: w.name, inDomain, f_I, w_e, w_i, preRMS, postRMS, dPct });
+      // preserved channel raw-MS band: w_e²V_h + w_i²V_cf vs V_h + V_cf (the exact S0.2a identity).
+      const sumPre = V_h + V_cf, sumPost = w_e * w_e * V_h + w_i * w_i * V_cf;
+      const sumDeltaPct = sumPre > 0 ? (sumPost - sumPre) / sumPre * 100 : 0;
+      // crater share (raw-MS): pre = V_cf/(V_h+V_cf) (the ~1.5% diagnosis); post = w_i²V_cf/sumPost (== f_I in-domain).
+      const preShare = sumPre > 0 ? V_cf / sumPre : 0;
+      const postShare = sumPost > 0 ? (w_i * w_i * V_cf) / sumPost : 0;
+      // "inverted" = variance reallocated UPWARD toward craters, achieving the model ratio target f_I.
+      // Dead-lid worlds land crater-DOMINANT (postShare>0.5); Mars deliberately lands at its [0.3,0.8]
+      // hypsometry-gated f_I (~0.43, "cratered highlands Mars, not Moon"), so dominance is NOT the bar —
+      // the bar is: share grew from the ~0 endo-dominated pre-state to exactly f_I.
+      const inverted = inDomain ? (postShare > preShare && Math.abs(postShare - f_I) < 1e-9) : (postShare === preShare);
+      // confirm the SHIPPED seam produces the identical post array (end-to-end, not a re-implementation).
+      const carrierLike = { count: w.count, height: h, shelfDepth: sd, craterField: cf };
+      const seamOut = compositeMargins(carrierLike, budget);
+      let seamMatch = true;
+      if (inDomain && V_cf >= EPSILON_VCF && V_h > 0 && f_I > 0 && f_I < 1) {
+        for (let i = 0; i < h.length; i++) {
+          if (seamOut[i] !== Math.fround(w_e * h[i] + (sd ? sd[i] : 0) + w_i * (cf ? cf[i] : 0))) { seamMatch = false; break; }
+        }
+      }
+      if (inDomain && (!(Math.abs(sumDeltaPct) < 1e-6) || !inverted || !seamMatch)) budgetOk = false;
+      budgetSection.push({ name: w.name, inDomain, f_I, w_e, w_i, sumDeltaPct, preShare, postShare, inverted, seamMatch });
       console.log(
         `  ${w.name.padEnd(32)} ${(inDomain ? 'yes' : 'no ').padEnd(8)} ` +
-        `${f_I.toFixed(4).padStart(8)}  ${w_e.toFixed(4).padStart(8)}  ${w_i.toFixed(4).padStart(8)}  ` +
-        `${preRMS.toExponential(3)}  ${postRMS.toExponential(3)}  ${dPct.toFixed(3)}%`,
+        `${f_I.toFixed(4).padStart(7)}  ${w_e.toFixed(4).padStart(7)}  ${w_i.toFixed(3).padStart(8)}  ` +
+        `${sumDeltaPct.toExponential(2).padStart(9)}  ${preShare.toExponential(3)}  ${postShare.toFixed(4).padStart(8)}   ${inverted ? 'YES' : 'no'}`,
       );
     }
+    // the BOOT WORKED POINT (Moon/Mercury, PRIMARY) must land crater-DOMINANT (the ~1.5% diagnosis inverted).
+    const primaryRow = budgetSection.find((b) => b.name === PRIMARY);
+    const primaryDominant = !!(primaryRow && primaryRow.inDomain && primaryRow.postShare > 0.5);
+    if (!primaryDominant) budgetOk = false;
+    console.log(`\n  boot worked point ${PRIMARY}: post crater share ${primaryRow ? primaryRow.postShare.toFixed(4) : '?'} > 0.5 (crater-DOMINANT): ${primaryDominant ? 'YES' : 'NO'}`);
+    console.log(`  (sumΔ% = preserved channel raw-MS band; postShare = crater share of the reallocated channel-sum, == f_I in-domain;`);
+    console.log(`   the shipped compositeMargins(carrier, budget) post array matched the S0.2a solve for every in-domain world: ${budgetSection.every((b) => b.seamMatch)}.)`);
   }
 } else {
-  console.log(`  budget not yet wired (pre-S1) — src/worldengine/base/reliefBudget.js does not exist.`);
-  console.log(`  (When S1 ships the leaf, this section reports f_I, w_e, w_i, and post-budget vs pre-budget total composite RMS.)`);
+  console.log(`  budget not wired — src/worldengine/base/reliefBudget.js does not exist.`);
+  budgetOk = false;
 }
 
 // ── exit ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -240,5 +282,9 @@ if (reproducers.length === 0) {
   console.log(`\nFAIL — the recorded ~1.14% crater:base ratio was NOT reproduced under either variance definition.`);
   process.exit(1);
 }
-console.log(`\nOK — recorded crater:base ratio reproduced (${reproducers.join(', ')}); independence premise measured; forward-compat slot present.`);
+if (!budgetOk) {
+  console.log(`\nFAIL — post-budget preserved-band / crater-dominance check did not hold (see the table above).`);
+  process.exit(1);
+}
+console.log(`\nOK — recorded crater:base ratio reproduced (${reproducers.join(', ')}); independence measured; post-budget band preserved + crater-dominance inverted.`);
 process.exit(0);

@@ -2981,7 +2981,7 @@
       // persist until the next preset/reroll. Named bodies lock to canonical; generic archetypes
       // draw a seeded radius from RADIUS_RANGES_EARTH.
       if (driverUI.preset !== state._lastPreset || state._radiusDirty) {
-        state.planetRadiusEarth = drawPresetRadius(driverUI.preset, state.radiusSeed);
+        state.planetRadiusEarth = drawPresetRadius(driverUI.preset, state.radiusSeed, { labUnlock: true });   // Inc-3b R3: LAB-only Moon/Mercury radius unlock (opt-in; headless/goldens/probe stay flagless → canonical)
         state._lastPreset = driverUI.preset;
         state._radiusDirty = false;
       }

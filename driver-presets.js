@@ -246,9 +246,24 @@ export const NAMED_BODY = new Set([
 // draw from the archetype range (falls back to the preset's own radiusEarth if no mapping).
 // V2-6 slice-5: the draw PRNG is alea('draw:radius:'+seed) — mulberry32 retired for new draws
 // (its definition survives in the lab as the storm-e envelope guard; see §1H).
-export function drawPresetRadius(presetName, seed) {
+// Inc-3b S1.5 (R3, §6-T1 LAB-only opt-in): Moon/Mercury's own radius-draw band — NOT the PRESET_ARCHETYPE
+// table (the preset is archetype-null, so a Set-removal would fall through to canonical anyway) and NOT
+// RADIUS_RANGES_EARTH. Consumed ONLY on the opt-in labUnlock path below, so headless/test/probe callers
+// (which omit the flag) keep the canonical NAMED_BODY radius — the hard constraint. [0.27,0.38] R⊕ band.
+export const LAB_UNLOCKED_RANGES = {
+  'Moon/Mercury (impact-airless)': [0.27, 0.38],
+};
+
+export function drawPresetRadius(presetName, seed, { labUnlock = false } = {}) {
   const preset = DRIVER_PRESETS[presetName];
   const canonical = preset.radiusEarth ?? 1.0;
+  // Inc-3b R3: LAB-only opt-in draw BEFORE the NAMED_BODY lock — Moon/Mercury STAYS in NAMED_BODY, so every
+  // flagless caller (headless calibration, goldens, the _lab probe) keeps canonical; only the lab boot/reroll
+  // draw site passes { labUnlock: true } and draws its own [0.27,0.38] band.
+  if (labUnlock && LAB_UNLOCKED_RANGES[presetName]) {
+    const [lo, hi] = LAB_UNLOCKED_RANGES[presetName];
+    return lo + alea('draw:radius:' + (seed >>> 0))() * (hi - lo);
+  }
   if (NAMED_BODY.has(presetName)) return canonical;
   const arch = PRESET_ARCHETYPE[presetName];
   const range = arch && RADIUS_RANGES_EARTH[arch];
