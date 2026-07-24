@@ -1,0 +1,31 @@
+{
+  "purpose": "Manifest of the blind-read stimulus sets. The set directories held byte-copies of committed captures/crops and were removed after the run (this manifest + the committed source images ARE the record); the raw LOLA DEM was removed after hillshade generation (provenance below).",
+  "run1_INVALIDATED": {
+    "status": "CONTAMINATED — full-viewport screenshots with the lab GUI preset label legible in-frame; discarded per S2-VERDICT.md",
+    "captionImage": "copy of target-seed1.png (full viewport)",
+    "sets": {
+      "set1": { "imgA": "distractor-rocky.png", "imgB": "distractor-ocean.png", "imgC": "distractor-europa.png", "imgD": "target-seed1.png", "targetLetter": "D" },
+      "set2": { "imgA": "distractor-europa.png", "imgB": "target-reroll1.png", "imgC": "distractor-rocky.png", "imgD": "distractor-ocean.png", "targetLetter": "B" },
+      "set3": { "imgA": "distractor-ocean.png", "imgB": "distractor-rocky.png", "imgC": "distractor-europa.png", "imgD": "target-reroll2.png", "targetLetter": "D" },
+      "note": "run1 letter assignment reconstructed from the workflow prep agent's deterministic shuffle ((k*2+1) mod 4) and its returned answerKey {set1:D, set2:B, set3:D}; distractor ordering within each set was the prep agent's; picks were D/B/D (3/3) — DISCARDED as contaminated."
+    }
+  },
+  "run2_CLEAN_evidence_of_record": {
+    "status": "disc-only crops (blind2/*.crop.png, committed), GUI excluded; 6 fresh sonnet agents",
+    "captionImage": "blind2/target-seed1.crop.png",
+    "sets": {
+      "set1": { "imgA": "blind2/distractor-rocky.crop.png", "imgB": "blind2/distractor-europa.crop.png", "imgC": "blind2/target-seed1.crop.png", "imgD": "blind2/distractor-ocean.crop.png", "targetLetter": "C", "pick": "C", "correct": true },
+      "set2": { "imgA": "blind2/target-reroll1.crop.png", "imgB": "blind2/distractor-ocean.crop.png", "imgC": "blind2/distractor-rocky.crop.png", "imgD": "blind2/distractor-europa.crop.png", "targetLetter": "A", "pick": "D", "correct": false },
+      "set3": { "imgA": "blind2/distractor-europa.crop.png", "imgB": "blind2/target-reroll2.crop.png", "imgC": "blind2/distractor-ocean.crop.png", "imgD": "blind2/distractor-rocky.crop.png", "targetLetter": "B", "pick": "B", "correct": true }
+    },
+    "captionsVocabHits": "3/3",
+    "forcedChoice": "2/3 vs frozen all-3 rule -> blindRead FAIL"
+  },
+  "ldem_16.img": {
+    "removedAfterUse": true,
+    "reFetch": "NASA PDS Geosciences Node, pds-geosciences.wustl.edu, lro-l-lola-3-rdr-v1/lola_gdr/cylindrical/img/ldem_16.img",
+    "bytes": 33177600,
+    "md5": "87d937cf968462a61043e1e5b3166d65",
+    "consumedBy": "reference-hillshade.mjs (re-run requires re-fetch; derived PNGs are committed)"
+  }
+}
