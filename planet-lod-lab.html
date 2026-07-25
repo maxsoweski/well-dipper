@@ -2853,7 +2853,14 @@
       const drivers = {
         ..._gd,                                                                            // per-seed triple OVERRIDES the frozen DRIVER_BUNDLES (resolveParams merges caller drivers on top)
         rotationRate: (9.9 / (_fp.rotationHours ?? 24)) * (state.e5RotationScale ?? 1),   // Jupiter 9.9h → 1.0
-        radius: (_fp.radiusEarth ?? 1) / 11.2,                                            // Jupiter 11.2 → 1.0
+        // radius-live-feed R1 (2026-07-25): reads the CONDITION VECTOR (_gcond.radiusEarth = the DRAWN
+        // state.planetRadiusEarth, :2851), not the frozen preset constant. The slider writes
+        // state.planetRadiusEarth and applyDrivers() re-runs rebakeE5Bands() on a 220 ms debounce, so the
+        // Rhines band law (N = RHINES_K·√(a·Ω/U), climate-e5.js:121 — physics already correct) finally gets
+        // a live `a`. Bit-inert at canonical radius: R === R_c ⇒ the same number goes in. The condition
+        // vector is preferred over a raw state read because it is the single source that already carries
+        // BOTH the drawn radius and the coherent gravity g = g_c·(R/R_c) (body-condition-vector.js:37).
+        radius: (_gcond.radiusEarth ?? 1) / 11.2,                                         // Jupiter 11.2 → 1.0
       };
       if (state.e5Obliquity > 0) drivers.obliquityDeg = state.e5Obliquity;                // else regime default
       const pos = geometry.attributes.position;
@@ -2932,7 +2939,12 @@
       const _stormDrivers = {
         ..._sgd,                                     // per-seed triple (consumer c — vortices)
         rotationRate: (9.9 / (_fp.rotationHours ?? 24)) * (state.e5RotationScale ?? 1),
-        radius: (_fp.radiusEarth ?? 1) / 11.2,
+        // radius-live-feed R1 (2026-07-25): DRAWN radius via the condition vector (_scond, :2930) — the
+        // SAME live value rebakeE5Bands() feeds the band/mask bake. These two MUST move together: the
+        // storm writer places vortices on the shear argmax of the PV staircase the band bake produced, so
+        // a frozen radius here against a live radius there would put vortices at latitudes the bands no
+        // longer sit at. Bit-inert at canonical radius (R === R_c).
+        radius: (_scond.radiusEarth ?? 1) / 11.2,
         composition: _fp.atmosphere?.composition,   // the gas gate (designDecision-5)
         T_eq: _fp.T_eq ?? 288,                       // the deck-personality ramp
       };
@@ -3275,7 +3287,31 @@
       // Jovian 11.2R/9.9h → 14; Saturnian 9.4R/10.7h → 11; Neptunian 3.9R/16.1h → 3.
       // Terrestrial presets omit rotationHours (default 24 h) — inert behind strength 0.
       const _rotH = _fp.rotationHours ?? 24;
-      state.bandCount = Math.min(16, Math.max(3, Math.round(12 * (_fp.radiusEarth ?? 1) / _rotH)));
+      // radius-live-feed R1 (2026-07-25): reads the DRAWN state.planetRadiusEarth, not the frozen
+      // preset constant. applyDrivers() has NO condition vector in scope (buildBodyDrivers/:2804 and
+      // rebakeE5Bands/:2851 each derive their own; state._lastBodyDrivers.condition is debounce-stale
+      // here), so this site reads the state field directly — deliberate, per the workstream's "where a
+      // site has no condition vector in scope, use state.planetRadiusEarth and say so" rule.
+      // WHY THIS IS NOT DEAD WIRE (evidence/G1-ubandcount-liveness.md): uBandCount is NOT retired. The
+      // atmo increment retired only the band-VALUE consumer (the visible stripe count now comes from
+      // climate-e5's Rhines zero-crossings via aBand → state.e5BandCount). state.bandCount survives as
+      // the F25 JET stripe ladder — planet-lod-height.glsl.js:1518 jetU, :1530 jetShearGate, :1570 the
+      // festoon window — all reachable behind uJetStrength > 0 (gas preset AND the Jets checkbox), via
+      // two independent roots (zonalBandCol :668 and the jets-solo path :680, which bypasses bandMask).
+      // Measured leverage: Jovian frozen 14 vs drawn-range 7..16 shifts jetU's warp rotation by 0.711 rad
+      // — 0.91× the finest warp octave's period, i.e. a visible-scale change, NOT a rounding wobble.
+      // COHERENCE — CORRECTED 2026-07-25 (lens round). The earlier note here claimed the two ladders
+      // were rewired together so the jet/band mismatch would not vary with the drawn radius. THAT IS
+      // FALSE and measurement refutes it: this ladder is LINEAR in R (12·R/rotH) while the Rhines
+      // wavenumber is ∝ √R, so their ratio still varies — it just varies as √R instead of 1/√R.
+      // Measured, Jovian @ macroSeed 7, this ladder ÷ the Rhines m: R=0.3 → 1.500, R=2 → 0.600,
+      // R=8 → 0.909, R=16 → 1.067 (a ~2.5× swing across the slider). PRE-rewire BOTH were frozen, so
+      // the ratio was CONSTANT at 1.077 for every drawn radius. The honest reason to rewire both is
+      // therefore NOT ratio stability: it is that leaving one frozen leaves a live quantity dead
+      // (Max's directive), and a frozen jet ladder against a live band bake pins the jets to ONE
+      // radius' geometry while the bands move. Holding the ratio fixed would require changing one of
+      // the two LAWS — out of scope for R1 (the feed, not the physics) and named as an R2 candidate.
+      state.bandCount = Math.min(16, Math.max(3, Math.round(12 * (state.planetRadiusEarth ?? 1) / _rotH)));
       // Contrast AND festooning track convective vigor on one T_eq ramp 55→130 K
       // (D1/interior heat): a warm interior churns vivid scalloped bands (Jupiter);
       // a cold CH4-haze ice giant goes near-bland blue (Neptune). The 0.08 floor
@@ -3367,7 +3403,27 @@
       // band stack itself (regime 1 reserved), riding the low patchy deck.
       let _cloudRegime = 0;
       if (_fp.atmosphere?.composition === 'co2' && (_fp.atmosphere?.pressure ?? 0) > 10) _cloudRegime = 3;
-      else if (_gas && (_fp.radiusEarth ?? 1) < 6 && (_fp.massEarth ?? 1) < 10) _cloudRegime = 2;
+      // radius-live-feed R1 (2026-07-25): the RADIUS term reads the DRAWN state.planetRadiusEarth (no
+      // condition vector in applyDrivers scope — same rule as the bandCount site above). Threshold 6 RE
+      // is unchanged; only the number fed to it moves. Sub-Neptune (2.7 RE, 8.2 ME) is the one preset the
+      // gate can flip on: dragging it past 6 RE now drops it out of the hazy regime, as the card intends.
+      // KNOWN, DELIBERATE DIVERGENCE (R2 candidate, NOT fixed here): the CO-DRIVER `massEarth` stays
+      // frozen. Under the ratified V2-6 frame the slider means "a bigger body of the same composition",
+      // so a coherent mass would be M_c·(R/R_c)³ — but the condition vector does not surface massEarth,
+      // and re-deriving it here would change this gate's stated semantics (AC-REGIME names the radius
+      // term only). Consequence: the pair (R, M) this gate sees is physically incoherent away from
+      // canonical radius.
+      // CORRECTED 2026-07-25 (lens round — the earlier note here claimed the divergence "does not
+      // change any outcome today" and lived "at large drawn radii". BOTH were wrong, and measurement
+      // refuted them): swapping the frozen mass for the coherent M_c·(R/R_c)³ CHANGES this gate's
+      // verdict on every gas preset, and the difference lives BELOW the 6 RE radius term, not above
+      // it. Measured over 4001 log-spaced radii on the slider's own travel — the radii where the two
+      // disagree: Neptunian [0.300, 3.261], Sub-Neptune [2.885, 5.998], Jovian [0.300, 3.534],
+      // Saturnian [0.300, 4.433], Hot Jupiter [0.300, 3.800]. Both ice-giant-class presets draw from
+      // [2.5, 4.0], so the disagreement band is reachable by an ordinary reroll, not just by dragging.
+      // The frozen mass is kept anyway (scope: R1 rewires the FEED, not the law) — recorded, and
+      // pinned by tests/radius-live-feed.test.js -> "frozen massEarth co-driver".
+      else if (_gas && (state.planetRadiusEarth ?? 1) < 6 && (_fp.massEarth ?? 1) < 10) _cloudRegime = 2;
       else if (_fp.tidalState?.locked && _fp.atmosphere?.retained && !_gas) _cloudRegime = 4;
       state.cloudRegime = _cloudRegime;
       // Coverage rebalance (F26 §7 taste fork c — this card's flagged job): post-
@@ -3515,9 +3571,53 @@
       // 0.10 (regime-2 featureless intent, reviewer NOTE 2). Recomputed, not
       // reused — core's u.auroraIntensity used the UNBOOSTED field (hasAtmo
       // true on every h2-he preset).
-      // Radius cutoff 3.5: includes the ice giant (Neptune's dynamo is ionic-
-      // water, also invisible to the iron model; r 3.9), still excludes
-      // Sub-Neptune (r 2.7, regime-2 featureless). Verify fix cycle 1.
+      // Radius cutoff 3.5 — HISTORICAL INTENT, AND IT IS NO LONGER A DISCRIMINATION THE RADIUS CAN
+      // MAKE (measured; see the block below). It was chosen against CANONICAL radii, to include the
+      // ice giant (Neptune's dynamo is ionic-water, also invisible to the iron model; canonical 3.9)
+      // and still exclude Sub-Neptune (canonical 2.7, regime-2 featureless). Verify fix cycle 1.
+      // radius-live-feed R1 (2026-07-25): the gate now reads the DRAWN state.planetRadiusEarth (no
+      // condition vector in applyDrivers scope). The constant 3.5 is unchanged; only the number fed to
+      // it moves. A metallic-/ionic-envelope dynamo is a SIZE claim, so it keys on the size the world
+      // is actually drawn at: dragging Sub-Neptune past 3.5 now lights the giant dynamo, and shrinking
+      // a Jovian below 3.5 now extinguishes it.
+      // *** MEASURED, DISCLOSED, NOT SILENTLY ACCEPTED (lens round, 2026-07-25) ***
+      // 'Ice giant (Neptunian)' and 'Sub-Neptune (hazy)' share the PRESET_ARCHETYPE key 'sub-neptune'
+      // (driver-presets.js — a deliberate SHARED taxonomy identity, V2-3 AC-TAXONOMY-NEPTUNE), so both
+      // draw from RADIUS_RANGES_EARTH['sub-neptune'] = [2.5, 4.0] off the SAME alea key. At any given
+      // radiusSeed the two presets receive a BIT-IDENTICAL drawn radius (2001/2001 seeds measured), so
+      // this gate now returns the SAME verdict for both at EVERY seed. The 3.5 cutoff can no longer
+      // perform the inclusion/exclusion the paragraph above describes; that separation only survives
+      // when the radius sits at or near canonical.
+      // At the shipped default radiusSeed 1 both draw 2.5404, so the Neptunian dynamo boots OFF where
+      // the canonical intent had it ON. Because this preset's derived magneticField is exactly 0.05
+      // and the next line's guard is a STRICT '>', losing the 0.6 boost does not dim the aurora — it
+      // ZEROES it (0.6 -> 0.0, ring lat 0.82 -> 0.71, width 0.102 -> 0.146). Over 2001 radius seeds
+      // the Neptunian verdict differs from its canonical one 67.5% of the time and the Sub-Neptune
+      // verdict 32.5%; Jovian / Saturnian / Hot Jupiter never differ (draw band [6.0, 14.0], and Hot
+      // Jupiter is a named-body 13.0 lock — all wholly above 3.5).
+      // DISPOSITION (working-Claude, 2026-07-25, AMENDING the in-flight R1 build): this site reads the
+      // CANONICAL radius. That is not a retreat from the workstream's goal — it follows from it.
+      //   The ratified V2-6 frame is "the slider draws a BIGGER BODY OF THE SAME COMPOSITION" (mass
+      //   M_c·(R/R_c)³, gravity g_c·(R/R_c) — body-condition-vector.js:37). Composition is precisely
+      //   what the slider HOLDS FIXED. This gate's job, per the paragraph above, is to decide which
+      //   INTERIOR COMPOSITION a world has (metallic-/ionic-envelope dynamo vs regime-2 featureless).
+      //   Deriving that from the drawn size infers composition FROM size — i.e. it reads off the one
+      //   quantity the frame guarantees carries no composition information. It is a category error,
+      //   independent of the aurora regression, and the shared-archetype collapse measured above is
+      //   that error becoming observable: two DIFFERENT compositions, one identical drawn radius, so
+      //   a size-keyed discriminator must return the same answer for both. It cannot do otherwise.
+      //   So the correct R1 disposition is the same one AC-CRATERBOOT reached on evidence: a
+      //   CLASSIFIER reads canonical; a PHYSICS INPUT reads drawn. The three genuine physics inputs
+      //   in this workstream (:2863 Rhines band radius, :2947 storm drivers, :3306 jet stripe ladder)
+      //   read the drawn radius and are unaffected by this line.
+      // NOT CLAIMED: that dynamo strength is radius-independent. It is not — a larger ionic-water
+      //   envelope plausibly drives a stronger dynamo. But expressing that needs a discriminator that
+      //   reads composition/mass AND responds to size, which is a physics edit (R2). Feeding drawn
+      //   radius to a size-only proxy does not approximate that model; it destroys the discrimination
+      //   the proxy existed to make. R2 item recorded in BUILD-NOTES §10.
+      // Pinned by tests/radius-live-feed.test.js -> "AT THE RADIUS THE LAB ACTUALLY DRAWS" (Neptunian
+      // keeps its aurora at the boot seed and across the 2001-seed sweep) and allowlisted, with this
+      // derivation as its recorded reason, in tests/radius-live-feed-fence.test.js.
       const _giantDynamo = _gas && (_fp.radiusEarth ?? 1) >= 3.5;
       const _mag = _giantDynamo ? Math.max(u.magneticField, 0.6) : u.magneticField;
       state.auroraIntensity = _mag > 0.05 ? (_giantDynamo ? _mag : u.auroraIntensity) : 0.0;
@@ -5137,10 +5237,31 @@
       // inc3b S3-fix: the crater synth channel is CONDITION-derived (craterRelevanceOf; the rendersOn
       // name-add is barred by AC-0), so its judgment-ready boot enable derives from the SAME leaf — not
       // the placeholder rendersOn list, and not state.craterRelevance (set at route time ~500ms later;
-      // reading it here on a preset change would see the PREVIOUS world). Canonical radius suffices: the
-      // relevance predicate is a domain class (impact surface + schedule fired), R-stable within a preset.
+      // reading it here on a preset change would see the PREVIOUS world).
       // Without this, applyWorldDefaults cleared cratersEnabled on every impact preset and the synth band
       // never rendered on plain preset selection (S4 capture finding). ejecta stays opt-in (deferral).
+      //
+      // RADIUS-CANONICAL-BY-PROOF — this is the ONE site the radius-live-feed R1 rewire deliberately did
+      // NOT touch, and the reason is a measurement, not a judgement call.
+      // Evidence: docs/WORKSTREAMS/world-engine-radius-live-feed-2026-07-25/evidence/G2-craterboot-sweep.md
+      // (harness: calibration/craterboot-radius-sweep.mjs; pinned by tests/radius-live-feed.test.js).
+      // MECHANISM (not just "R-stable"): craterRelevanceOf = isImpactSurface AND schedule.fired AND
+      // (nStamp > 0 OR regolithRoughness > 0). Over the REACHABLE radius range [0.27, 16] RE it REDUCES
+      // to `isImpactSurface(c) && t_exp > 0`, both of which are radius-blind (isImpactSurface reads only
+      // T_eq and atmosphere.pressure). The reduction holds because the mesh crater floor D_FLOOR_KM(R)
+      // exceeds the largest admissible crater size L for every R above R_flip_max =
+      // L_max/(MESH_FLOOR_RAD·6371) = 0.133 RE — a bound over the predicate's ENTIRE admissible input
+      // domain, derived from its own clamps (craterSchedule floors gravity at 1e-6; isImpactSurface caps
+      // pressure at P_SURF_MAX). Measured: 18 presets × 501 log-spaced radii over [0.27, 16], zero flips.
+      // FLOOR CORRECTED 2026-07-25 (lens round): the margin was previously stated as 2.26× against
+      // RADIUS_SLIDER_MIN = 0.3, but state.planetRadiusEarth is NOT floored at 0.3 — the lab's own draw
+      // site passes { labUnlock: true }, and LAB_UNLOCKED_RANGES['Moon/Mercury (impact-airless)'] is
+      // [0.27, 0.38], of which 27.1% of seeds land below 0.3. The true reachable floor is 0.27, so the
+      // headroom is 2.03×, not 2.26×. The conclusion is unchanged (0.27 > 0.133); the number was wrong.
+      // NOT UNCONDITIONAL: the bound depends on K_GS, MESH_FLOOR_RAD, C_BASIN, D_SFD_MIN_KM, G_REF, the
+      // 1e-6 gravity clamp and the reachable radius floor. A planted defect of K_GS 0.17 → 15 alone flips
+      // nine presets and makes this canonical read WRONG on four of them — which is why it is a live
+      // test, not a dated note. Feeding the drawn radius here would be churn against measured evidence.
       {
         const _fp = DRIVER_PRESETS[preset];
         if (_fp && craterRelevanceOf(deriveConditionVector(_fp, deriveUniforms(_fp, driverUI.qualityTier), _fp.radiusEarth)) > 0) set.add('craters');
