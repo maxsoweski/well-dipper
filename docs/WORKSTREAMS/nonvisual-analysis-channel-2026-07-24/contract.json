@@ -57,10 +57,10 @@
     },
     {
       "id": "AC-POSCTRL",
-      "statement": "The instrument demonstrably catches a defect it was not told about: with a known driver deliberately unwired (crater count detached from gravity), the law audit reports FAIL on that law and names it; with the wiring restored, it reports PASS and the full test baseline returns to exact.",
+      "statement": "The instrument demonstrably catches defects it was not told about: with a coupling deliberately planted or removed, the law audit reports FAIL on that law and NAMES IT SPECIFICALLY (a generic alarm is not a detection); unrelated laws stay PASS; restoring the real implementation restores a clean audit. AMENDED 2026-07-24: the planted break is injected through the registry's dependency seam rather than by editing source, which is strictly stronger (no broken build ever lands on disk, and the control re-runs on every CI run instead of once by hand); the one guarantee source-editing offered that injection does not — that the audit is wired to the shipping functions and not a stale copy — is closed by explicit identity assertions.",
       "verifyVia": {
-        "input": "Temporarily detach the crater-count-from-gravity coupling, run the law audit, restore, re-run the audit and the full suite.",
-        "observable": "Broken state: audit FAILs and identifies the crater/gravity law specifically, not a generic alarm. Restored state: audit PASSes and the full vitest suite returns to the exact 2333/4 baseline with no residue in the diff."
+        "input": "Run tests/instrument-laws.test.js: inject a re-introduced gravity-count coupling, a flattened size law, a linearised areal count, a mesh floor stripped of radius dependence, and both a gross and a subtle (0.58 -> 0.52) relief-envelope retune.",
+        "observable": "Each planted defect FAILs exactly the corresponding law and no other; the measured exponent matches the planted one; identity assertions confirm the registry calls the real bombardment/lab-core exports; a thrown measurement reports UNRESOLVABLE rather than PASS; the real dependencies audit clean."
       },
       "layer": "integration",
       "live": true
@@ -77,7 +77,7 @@
     },
     {
       "id": "AC-LAWS",
-      "statement": "\"Does it obey the laws we claimed?\" — every scaling law this codebase states (crater count proportional to g^0.34, relief/R proportional to g^-0.58 via Q_RELIEF, Rhines band count vs rotation) gets an explicit verdict, including an honest UNRESOLVABLE verdict when the sweep's resolution cannot decide it.",
+      "statement": "\"Does it obey the laws we claimed?\" — every scaling law this codebase states gets an explicit verdict, including an honest UNRESOLVABLE verdict when the resolution cannot decide it. CORRECTION 2026-07-24: this AC was scoped citing \"crater count proportional to g^0.34\", which this contract, the lane handoff and the program memory all carried. IT IS NOT A LIVE LAW — bombardment.js records that the gravity COUNT factor was removed as unphysical (primary impact flux does not depend on target surface gravity, footnote 1) and comments the surviving behaviour as \"count is g-independent\". The registry was therefore built by reading source, and asserts the laws that actually exist: crater size ~ g^-0.17 (K_GS), crater count g-INDEPENDENT (a null law, registered with the removed g^0.34 coupling as the alternative it must be distinguishable from), crater count ~ R^2, mesh floor ~ R^1 (the inc3b R-invariance, registered so it can never be silently lost), basin cap ~ R^1, relief envelope ~ g^-0.58 (Q_RELIEF, swept strictly inside its clamp band). Layer limit stated in the module: auditing the pure functions that DEFINE a law is a drift guard, not independent physical validation, and not evidence the law reaches the render — that claim belongs to the field layer.",
       "verifyVia": {
         "input": "Run _lab.auditLaws() over the registered law set at the sweep resolution the curve harness supports.",
         "observable": "Each law returns PASS / FAIL / UNRESOLVABLE-at-this-N with its measured exponent, the claimed exponent, and the resolving power that justified the verdict — never a bare pass."

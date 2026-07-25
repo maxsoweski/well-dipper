@@ -139,7 +139,13 @@ export function lawVerdict({ measured, measuredSE, claimed, nullValue = 0, z = D
   }
   const dClaim = Math.abs(measured - claimed);
   const dNull = Math.abs(measured - nullValue);
-  const tol = z * measuredSE;
+  // NUMERICAL FLOOR ON THE TOLERANCE. A noiseless fit — which is the normal case when auditing a
+  // deterministic pure function, where every point lies exactly on the law — returns SE = 0, so
+  // z*SE collapses to zero and a floating-point residue of ~1e-16 registers as a FAIL. The first
+  // law-registry run did exactly this: three laws measured their claimed exponent to four decimal
+  // places and were reported FAIL. The floor is scaled to the magnitude being compared so it stays
+  // a float-noise allowance and never becomes a meaningful slack.
+  const tol = Math.max(z * measuredSE, 1e-9 * Math.max(1, Math.abs(claimed), Math.abs(measured)));
   if (dClaim > tol) {
     return {
       ...base, verdict: 'FAIL',
