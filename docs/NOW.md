@@ -1007,7 +1007,22 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
-> **▶▶ RADIUS LIVE FEED (R1 of Max's radius directive) — ★ ALL OBJECTIVE ACs GREEN `6d120c4`; SOLE GATE = Max's UAT.**
+> **▶▶ RADIUS LIVE FEED (R1) — 🔴 UAT FAILED 2026-07-25, INCOMPLETE. Pushed + in sync `a4fa092`. PAUSED for token budget → RESUME TUESDAY 2026-07-28.**
+> Max verbatim: **"it increases the roughness of bands edges but does not increase the number of bands."** All 8 objective
+> ACs measured green and the visible read still is not there. ⭐ **PRIME SUSPECT (UNVERIFIED — no diagnostic run):** the
+> KNOWN DEFERRED belt-visibility issue in `world-engine-e5-bands-jets-2026-06-30` — the smoothstep **0.34/0.66 dead-zone**
+> (~5-6 visible belts vs ~14 zero-crossing readout on Jovian; "the physics/field is correct, only the display threshold is
+> a knob"). Predicts Max's exact report: field gains bands (aBand rebaked + needsUpdate verified), display throttles the
+> visible count; the roughness he DID see rides `uBandCount` via jetShearGate/festoon (measured 4→16).
+> 🔴 **PROCESS LESSON:** AC-BANDS was closed on `state.e5BandCount`, a zero-crossing DIAGNOSTIC the e5-bands contract
+> already says does NOT match visible belts. **Three quantities conflated: bandCount (diagnostic) ≠ rhinesWavenumber (law)
+> ≠ RENDERED belt count (post-smoothstep).** A visible-read AC must close on the RENDERED one — re-spec AC-BANDS that way
+> BEFORE rebuilding. **Tuesday step 1 = verify the suspect by measuring rendered belts across radius; do not build first.**
+> **What stands (keep):** frozen-feed fix + fence; the CLASSIFIER-reads-canonical / PHYSICS-INPUT-reads-drawn rule + 2
+> allowlisted sites; 85 tests w/ planted-defect controls; the ice-giant aurora regression caught+prevented; 4 durable
+> findings (uBandCount NOT retired; river population radius-blind; rivers = on-screen-constancy frame; crater boot R-stable).
+>
+> *(build detail, still accurate)* **RADIUS LIVE FEED — objective ACs green `6d120c4`.**
 > Scoped `710f8a2` off the radius census (Max's ruling: SPLIT R1 feed-fix / R2 couplings; UAT bar =
 > "visible where it can be, measured where it can't"). Built via workflow wf_fa5b81cb-be8 (8 opus agents:
 > 3 ground-truth → rewire → 3 adversarial lenses → fix round). **Six frozen sites adjudicated, not
