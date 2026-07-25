@@ -1007,6 +1007,41 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
+> **▶▶ RADIUS LIVE FEED (R1 of Max's radius directive) — ★ ALL OBJECTIVE ACs GREEN `6d120c4`; SOLE GATE = Max's UAT.**
+> Scoped `710f8a2` off the radius census (Max's ruling: SPLIT R1 feed-fix / R2 couplings; UAT bar =
+> "visible where it can be, measured where it can't"). Built via workflow wf_fa5b81cb-be8 (8 opus agents:
+> 3 ground-truth → rewire → 3 adversarial lenses → fix round). **Six frozen sites adjudicated, not
+> uniformly rewired:** four now read the drawn radius (Rhines band driver, storm/vortex driver, F25 jet
+> ladder, cloud-regime gate); **two read canonical on measured proof** (crater boot-enable; giant dynamo).
+> **RULE ADOPTED: a CLASSIFIER reads canonical; a PHYSICS INPUT reads drawn.**
+> ⚠ **AC-REGIME AMENDED mid-build** (audit trail in `contract.json → amendments[]`): rewiring the dynamo
+> gate was a DEFECT all three lenses caught. `PRESET_ARCHETYPE` deliberately maps Neptunian and
+> Sub-Neptune to the same `'sub-neptune'` key and `drawPresetRadius` keys its PRNG on `'draw:radius:'+seed`
+> with NO preset name ⇒ **bit-identical drawn radii at every seed (2001/2001)**, so a size-keyed
+> discriminator provably cannot separate them — and it EXTINGUISHED the ice giant's aurora (0.6→0.0,
+> strict `>` guard against magneticField exactly 0.05) on **67.5% of seeds incl. the shipped default**.
+> Live evidence (`evidence/LIVE-ACS.md`, isolated context, page closed): **AC-BANDS** Jovian band count
+> **5 → 14** across R 3→16 at fixed seed (r² 0.991), previously constant — and the *law* audits at
+> exponent **0.500000** unrounded (0.49647 ± 0.00925 as shipped, dof 38). ⚠ `bandCount` (zero-crossing
+> diagnostic, R^0.632) ≠ `rhinesWavenumber` (the law, √a) — conflating them nearly produced a false
+> law-failure verdict. **AC-REGIME** cloud regime flips exactly once in [5.848, 6.510] (threshold 6);
+> Neptunian aurora constant 0.6 and Sub-Neptune 0.1 across R 1→16 — invariant AND still separated.
+> **AC-RIVERS** width law measured live at **−1.00003 ± 0.00058** (r² 0.999997), frame = on-screen
+> constancy; **NEW: river POPULATION is radius-blind** (channelCount 5215 flat across 9.6× R, LOD steps)
+> — same class as volcanism → R2. Gates: golden `40c18aad` unchanged NO re-capture; full suite
+> **4 failed / 2533 passed** = 2452 exact baseline + 85 new tests, every one with a stated pass/fail
+> criterion and planted-defect control. **UAT recipe: lab :5175 → Jovian or Saturnian (the two with
+> leverage; Neptunian/Sub-Neptune/HotJ sit at the clamp floor) → JETS ON (else zero visible difference)
+> → drag radius. Judge band COUNT and arrangement, NOT form size — the display keying holds that
+> constant by your own ratification.** Adjudicable: if you want the dynamo to answer the slider, the
+> honest route is R2's composition-aware model, not re-pointing the size proxy.
+> ⚠ **`uBandCount` is NOT retired** (the 2026-07-20 entry below says it is). It still drives the F25
+> jet/shear/festoon geometry behind `uJetStrength > 0`; only the band-VALUE consumer was retired.
+> R2 (unscoped): volcanism population, 5 radius-blind tectonics modules, river population, composition-
+> aware dynamo. Then vertical km calibration (Max's stated item 2).
+
+<details><summary>Prior active entry — non-visual analysis channel (kept as record)</summary>
+
 > **▶ NON-VISUAL ANALYSIS CHANNEL — instrument build, 4/10 ACs green (2026-07-24, `70f2829`, NOT pushed).**
 > Max's directive: "a way other than visual for you to be able to analyse what's happening in the lab."
 > Research + proposal → scoped (`dev-collab-scope`) → building. **AC-0 / AC-MATH / AC-SAMPLE / AC-CURVE
@@ -1026,6 +1061,9 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 > Two named follow-on workstreams (Max's calls): vertical km calibration; game-side pipeline telemetry.
 > Still open upstream: Max's radius-across-all-systems directive
 > (`~/briefings/handoff-lane-A-radius-systems-2026-07-24.md`) — the census is its scope artifact.
+> **(2026-07-25: R1 of that directive is built — see the active entry above.)**
+
+</details>
 
 <details><summary>Earlier active entries (kept as record)</summary>
 
