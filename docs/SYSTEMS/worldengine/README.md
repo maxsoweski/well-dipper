@@ -48,6 +48,11 @@ relief writer through a 9-way rule chain, then runs the V2-4 shared-substrate po
 - `src/worldengine/base/climate-e5.js`
 - `src/worldengine/base/emission-e.js`
 - `src/worldengine/base/fieldViz.js`
+- `src/worldengine/instrument/descriptors.js`
+- `src/worldengine/instrument/stats.js`
+- `src/worldengine/instrument/sampling.js`
+- `src/worldengine/instrument/fieldSampler.js`
+- `src/worldengine/instrument/sweep.js`
 
 *(Bare paths per Rule 14 — `doc-graph.js` parses this list strictly. What each module is:
 regime selection = e1Regime/adaptL0/baseStep/mathutil/verify; relief writers =
@@ -60,7 +65,14 @@ exogenic = bombardment (V2-5 crater schedule; inc3b added `craterRelevanceOf`, t
 condition-derived crater/ejecta enable that replaced the preset-name `rendersOn` gate) +
 reliefBudget (inc3b condition-pure f_I — reallocates composite relief variance so craters
 dominate on impact surfaces, consumed by the lab's `compositeMargins`);
-atmosphere family = climate-e5 (#3a), emission-e (#2), fieldViz harness.)*
+atmosphere family = climate-e5 (#3a), emission-e (#2), fieldViz harness;
+**instrument/** = the non-visual analysis channel (2026-07-24) — READ-ONLY measurement, never a
+writer: descriptors (hypsometry, slope, radial PSD / spectral-excess form size, crater SFD,
+metric-exact drainage & boundary density, band count), stats (mean±SEM, weighted power-law fit,
+three-valued PASS/FAIL/**UNRESOLVABLE** law verdicts), sampling (sphere geometry + the physical /
+angular reporting frames), fieldSampler (live float-RTT readback via the rivers `createHeightSampler`),
+sweep (N values × M seeds response curves + pre-flight ensemble sizing) — records in
+[`nonvisual-analysis-channel`](../../WORKSTREAMS/nonvisual-analysis-channel-2026-07-24/).)*
 
 ## Tier(s) served
 
