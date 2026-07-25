@@ -1021,7 +1021,7 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 > NO vertical km calibration (relief is shaded not displaced; vertical reports height-units — a named
 > follow-on workstream), and "most energetic spectral bin" is a dead form-size metric on scale-free
 > terrain. Artifacts + evidence: `docs/WORKSTREAMS/nonvisual-analysis-channel-2026-07-24/`.
-> Handoff: `~/briefings/handoff-lane-A-nonvisual-instrument-2026-07-24.md`.
+> Handoff: `~/briefings/handoff-lane-A-nonvisual-instrument-2026-07-25.md` (supersedes the 07-24 one).
 > **NEXT = AC-POSCTRL** (plant a known defect, prove the audit names it) → AC-LAWS → census.
 > Two named follow-on workstreams (Max's calls): vertical km calibration; game-side pipeline telemetry.
 > Still open upstream: Max's radius-across-all-systems directive
