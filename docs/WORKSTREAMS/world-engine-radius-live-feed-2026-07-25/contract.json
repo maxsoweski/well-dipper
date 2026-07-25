@@ -1,0 +1,128 @@
+{
+  "workstream": "world-engine-radius-live-feed-2026-07-25",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "statusNote": "SCOPED 2026-07-25 off RADIUS-CENSUS.md (the non-visual instrument's first real output). Max's directive: 'Tectonics, craters, everything need to adjust to the new radius when adjusted. I can tell that's not happening across the board.' Census decomposed that into THREE problems; this contract takes ONE — the broken feed. Max's two scope rulings this session: (1) SPLIT R1 (feed) / R2 (missing couplings) rather than one gate, so the wiring fix reaches his UAT without waiting on the tectonics physics derivation; (2) UAT bar = 'visible where it can be, measured where it can't' — he judges the reads that genuinely show on screen (band count), and the threshold-flip consumers (cloud regime, giant dynamo) are proven by instrument numbers in the verdict rather than by eye. Working-Claude decisions taken WITHOUT asking, per feedback_physics-first-worldengine-scoping (physics-derivable questions are Claude's, not interview forks) — recorded in designDecisions below: the frame question, the condition-vector-as-single-source fix shape, and the :5146 crater-boot site being settled by MEASUREMENT rather than by a design call. R2 (volcanism population + 5 radius-blind tectonics modules) and vertical km calibration are named non-goals in intent.md.",
+  "programRef": "docs/WORKSTREAMS/nonvisual-analysis-channel-2026-07-24/evidence/RADIUS-CENSUS.md",
+  "designDecisions": [
+    "THE FRAME IS ALREADY RULED — NOT AN OPEN DESIGN CALL. The census listed 'physical km vs on-screen' as Max's call. It is not: two of his existing rulings compose to answer it. body-condition-vector.js:37 derives surfaceGravity = g_c*(R/R_c) from M proportional to rho*R^3 (V2-6 gravity coherence), so the slider means 'a bigger body of the same composition', mass ~R^3 and gravity ~R. His ratified display model is 'planet bigger, forms same size, that's it'. Composed: physics responds in the PHYSICAL km frame, the display keying holds on-screen form size constant. Visible signature of working radius = a change in feature COUNT and ARRANGEMENT, never in individual on-screen form size.",
+    "THE CONDITION VECTOR IS THE SINGLE SOURCE; THE FIX IS TO READ IT. Every frozen site reads _fp = DRIVER_PRESETS[preset] directly. The condition vector already carries the drawn radius and the coherent gravity, and the very same functions already pass state.planetRadiusEarth into deriveConditionVector one line away (planet-lod-lab.html:2851, :2930). So the fix is not 'thread the slider into five places' but 'stop bypassing the source that already has it'. This is a spine-conformance repair (driver connectivity, Rule 15), which is why AC-0 is not ceremonial here.",
+    "THE :5146 CRATER-BOOT SITE IS SETTLED BY MEASUREMENT, NOT BY A DESIGN CALL. Its source comment asserts 'Canonical radius suffices: the relevance predicate is a domain class, R-stable within a preset.' That is a testable claim about craterRelevanceOf, not a taste question. AC-CRATERBOOT sweeps radius across the full slider range for all presets and lets the evidence decide: never flips => stays canonical with a pinned test recording WHY; flips anywhere => it was a defect and gets the live feed. Either outcome is a PASS; an unmeasured assumption is not.",
+    "BYTE-IDENTITY AT CANONICAL RADIUS IS THE SAFETY MECHANISM, MIRRORING V2-6. Every golden / NAMED_BODY / headless path passes R === R_c, so R/R_c = 1.0 exactly in float64 and the rewire is bit-for-bit inert there. This is the same fence V2-6 used to land gravity coherence without re-capturing fixtures, and it is what makes a five-site rewire safe to do at once rather than in nervous slices.",
+    "uBandCount IS LIVE, CONTRARY TO THE 'RETIRED' NOTE. NOW.md records uBandCount as retired by the atmo increment, but planet-lod-height.glsl.js:1518/1530/1570 still read it and planet-lod-lab.html:5904 still feeds it from the frozen :3278. Either it reaches the render (and the frozen feed is visible) or those shader branches are dead (and the uniform should actually go). The build must establish which BEFORE rewiring :3278, because the answer changes whether AC-BANDS can even read a difference there.",
+    "RIVERS ARE A FRAME QUESTION, NOT A WIRING ONE. Their feed is already live (planet-lod-lab.html:3761 passes state.planetRadiusEarth). But widthRadiusFactor is proportional to refRadius/radiusEarth — an ON-SCREEN-CONSTANCY law, the opposite frame from craters' physical count ~R^2. Under the ruled frame that is arguably correct (it is display keying, expressed inside the river module instead of in the display layer), but it has never been measured. AC-RIVERS measures it and states which frame it is in; it does not silently 'fix' it to match craters."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance per Rule 15: every rewired consumer is a NAMED consumer of a connected driver, the DOES/UNLOCKS card is written, and the taxonomy registration is present. This increment is specifically a driver-connectivity repair, so the AC-0 audit is the substance rather than a formality.",
+      "verifyVia": {
+        "input": "Run the SPINE-CONFORMANCE.md audit over the diff.",
+        "observable": "Each of the rewired sites is named in the DOES/UNLOCKS card with the driver it now reads; no consumer reads a driver it is not registered against; doc-rot clean (Rule 14 Module(s) registration for any new src file)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-BANDS",
+      "statement": "Max's headline read: on a gas giant, moving the radius slider changes the banding. At fixed preset and fixed seed, sweeping radius across its range produces a monotonic, measurable change in band count consistent with the Rhines law's sqrt(a) scaling — where today it produces no change at all.",
+      "verifyVia": {
+        "input": "Load the lab on a giant preset (Jovian), hold worldSeed and preset fixed, sweep the radius slider across its range.",
+        "observable": "Band count changes across the sweep and the fitted exponent is consistent with N proportional to sqrt(R) within the instrument's error bars (fit over enough radius VALUES that dof = N-2 supports the interval — per the review correction, more driver values, not more seeds). Baseline capture at HEAD must show the flat no-response for contrast."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-NOFROZEN",
+      "statement": "'Not happening across the board' stops being true of the feed, and stays untrue. A fence test asserts that no lab consumer derives a live quantity from DRIVER_PRESETS[...].radiusEarth; the only surviving reads are an explicit allowlist of deliberately-canonical sites, each carrying its recorded justification.",
+      "verifyVia": {
+        "input": "Run the new fence test over planet-lod-lab.html.",
+        "observable": "Fence passes; the allowlist is non-empty only for sites whose canonical-radius behaviour was PROVEN (AC-CRATERBOOT) rather than assumed; a deliberately re-frozen site fails the fence (negative check, so the fence is not vacuously green)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-REGIME",
+      "statement": "The two threshold consumers answer the drawn radius — proven by measurement rather than by eye, per Max's 'measured where it can't be seen' bar. Cloud regime (gas AND radiusEarth < 6) and the giant dynamo gate (gas AND radiusEarth >= 3.5) each flip state when the slider crosses their threshold, and hold otherwise.",
+      "verifyVia": {
+        "input": "Sweep radius across each threshold on a giant preset at fixed seed; probe the derived state on both sides.",
+        "observable": "state.cloudRegime and the giant-dynamo/aurora branch each change at the documented threshold and nowhere else; the crossing radius matches the constant in source. Reported as numbers in the verdict, not as a screenshot."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-CRATERBOOT",
+      "statement": "The :5146 'R-stable within a preset' claim is measured, not assumed: craterRelevanceOf is evaluated across the full slider radius range for every preset, and the site's disposition follows the evidence.",
+      "verifyVia": {
+        "input": "Headless sweep of craterRelevanceOf(deriveConditionVector(fp, u, R)) over the slider's R range for all presets.",
+        "observable": "A table of relevance vs R per preset is produced and committed. If no preset flips, :5146 stays canonical and a test pins the table as the reason. If any preset flips, that is a defect and the site is rewired to the live feed, with the flip captured as a regression test."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-RIVERS",
+      "statement": "Rivers stop being a SOURCE-TRACED claim. The width law is both law-audited against its stated form and field-measured through the instrument, and the census row records which FRAME it is in (on-screen constancy vs physical km) rather than implying it matches craters.",
+      "verifyVia": {
+        "input": "Law-audit widthRadiusFactor / paramsForRadius against the asserted refRadius/radiusEarth form; then run the instrument's response curve on a channel observable across radius at fixed seed.",
+        "observable": "Measured exponent with error bars, stated against the predicted one, plus an explicit sentence naming the frame. A planted defect in the width law is caught by the audit (positive control, per feedback_measurement-channels-need-planted-defects)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-BYTE",
+      "statement": "Nothing that worked before breaks. At canonical radius (R === R_c, every golden / NAMED_BODY / headless path) the rewire is bit-for-bit inert: goldens byte-identical with NO re-capture, and the full suite exactly at the known 4-failure baseline.",
+      "verifyVia": {
+        "input": "Run the golden byte-identity harness and the full test suite at HEAD after the rewire.",
+        "observable": "83/83 byte-identity with goldens UNCHANGED on disk; verify-golden hash still 40c18aad; full suite exactly 4 failures (GalacticFeatures x1, KnownObjects x3) plus the 17 vendor motion-test-kit file-level failures, with the instrument tests still green."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-CENSUS",
+      "statement": "The census is updated to reflect what is now known, so it stays the honest scope artifact for R2 rather than drifting into a stale snapshot. The atmosphere row moves off 'FEED BROKEN' with evidence; the rivers row carries its measured exponent and frame; the crater-boot disposition is recorded.",
+      "verifyVia": {
+        "input": "Read RADIUS-CENSUS.md after the build.",
+        "observable": "Atmosphere, rivers and the co-consumer table are updated with their new evidence class and a link to the evidence; rows this workstream did NOT touch (volcanism, tectonics) are unchanged and still explicitly flagged as R2."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max's gate, his words: moving the radius slider makes the systems answer it, and it reads as a bigger world rather than a closer one. Judged on a gas giant (banding) with a rocky world as the no-regression check.",
+      "verifyVia": {
+        "input": "Max loads the lab, picks a giant, holds the seed, and drags the radius slider across its range; then repeats on a rocky preset.",
+        "observable": "Max's holistic judgement. Known carve-out to state up front so it is not read as failure: individual form size is HELD CONSTANT on screen by design (his own ratified 'planet bigger, forms same size'), so what should change is how MANY bands there are and how they are arranged — not how big anything looks. Volcanism and tectonics are still radius-blind here; that is R2, not a defect of this build."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "state.planetRadiusEarth — the drawn radius the slider writes (planet-lod-lab.html:2258); the value every frozen site is currently failing to read",
+      "deriveConditionVector(fp, derived, radiusEarth) — body-condition-vector.js:23; the ratified single source of drawn radius AND coherent gravity (surfaceGravity = g_c*(R/R_c), :37)",
+      "climate-e5.js Rhines band law (N = RHINES_K*sqrt(a*Omega/U), :23/:119-120) — correct physics, currently starved of a live 'a'",
+      "craterRelevanceOf (bombardment.js leaf) — the 0/1 domain predicate behind the :5146 boot-enable set",
+      "planet-lod-rivers.js widthRadiusFactor / paramsForRadius — already live-fed, law unverified",
+      "The non-visual instrument (src/worldengine/instrument/*, _lab.sampleField / fieldProbe / responseCurve / planSweep) — the measurement channel every objective AC here is verified through"
+    ],
+    "outputs": [
+      "Gas-giant banding that responds to the radius slider (the visible headline)",
+      "Cloud regime and giant-dynamo/aurora state that track the drawn radius across their thresholds",
+      "A fence test that keeps the frozen-preset feed from silently returning",
+      "A measured rivers row and a measured crater-boot disposition table",
+      "An updated RADIUS-CENSUS.md that remains the scope artifact for R2"
+    ],
+    "mustStayWorking": [
+      "GOLDEN BYTE-IDENTITY — 83/83, hash 40c18aad, NEVER re-captured. The rewire must be provably inert at R === R_c.",
+      "Full suite at EXACTLY the 4-failure baseline (GalacticFeatures x1 + KnownObjects x3) plus 17 vendor motion-test-kit file-level failures contributing 0 tests",
+      "The radius-display-scale keying (visScaleOf / sVis / uDispDomainScale, VERIFIED_PENDING_MAX 8c8a0d8) — this workstream changes what radius FEEDS, never how it is DRAWN. If on-screen form size starts moving, that is a regression of the display model, not a success of this one.",
+      "vis-scale-fence.test.js greps src/worldengine/** for visScaleOf|sVis|VIS_SCALE_EXP INCLUDING COMMENTS — reword prose, do NOT add an allowlist entry",
+      "The instrument stays READ-ONLY on generation code (its own AC-POSCTRL discipline: defects planted by dependency injection, never by editing source)",
+      "inc3b relief-budget physics and the crater schedule — untouched; craters are already the strongest-wired system in the census and must not be perturbed",
+      "NOT-OURS working-tree mods: src/auto/CameraChoreographer.js, src/debug/LabMode.js — never stage"
+    ]
+  }
+}
