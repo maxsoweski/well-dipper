@@ -1,5 +1,29 @@
 # AC-SAMPLE — live verification + two findings
 
+> ## ⚠ CORRECTION (2026-07-25, adversarial review) — one claim below was false
+>
+> This document says of the R = 0.5 and R = 1 rows: *"the low-radius end of this table is not a
+> measurement of form size — it is the metric declining, correctly."* **It was not declining.** The
+> shipped `spectralExcessPeak` default (`minExcessRatio = 1.05`) sat BELOW the measured null floor,
+> so `detected` returned **true** for those rows and for 100% of featureless red-noise fields. Because
+> OLS residuals sum to zero, `excessRatio >= 1` unconditionally — the threshold was mathematically
+> incapable of rejecting anything. The unit test only appeared to cover this because it hand-passed
+> `{ minExcessRatio: 3 }`; the live caller used the default.
+>
+> The 1000 km readings at R = 0.5 / R = 1 were therefore **false positives at the window scale** —
+> exactly the artefact the function was written to eliminate — not honest refusals.
+>
+> **Fixed:** detection is now a significance test against a noise scale MEASURED from the field's own
+> residuals (median absolute deviation), with the `sqrt(modes)` weighting inside the residual so
+> low-wavenumber bins cannot win the argmax on noise. Validated at the live probe geometry:
+> **0/60 false positives on pure power-law fields** (was 40/40), while a planted population is still
+> detected 20/20 down to weak amplitudes. Pinned by `tests/instrument-review-fixes.test.js` **at the
+> shipped defaults**, and `wavelengthMeaningful` now states when a wavelength must not be read.
+>
+> An analytic noise model was tried first (0.4343/√modes) and was wrong by ~3×, still detecting 40/40.
+> That is recorded because it is the more tempting fix and it does not work.
+
+
 **Date:** 2026-07-24 · lab on `:5175`, isolated browser context, page closed after · Earth-like preset
 
 ## Verdict

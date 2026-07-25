@@ -1,5 +1,21 @@
 # AC-CENSUS — does radius reach every system?
 
+> ## ⚠ CORRECTION (2026-07-25, adversarial review) — the MEASURED row's error bar was understated
+>
+> The substrate/relief row cites **R^0.458 ± 0.015**. The point estimate stands, but the interval was
+> quoted at z = 2 on a three-radius fit (**dof = 1**), where the correct 95% multiplier is t = 12.71.
+> The honest interval is roughly **±0.19**, which contains 0.5. So:
+>
+> - The substrate/relief row remains **WIRED** — the response is unambiguous and the `radiusEarth`
+>   control fits exactly 1.000.
+> - Any reading of "0.458 is measurably different from √R" is **withdrawn**. It is not.
+> - Tightening it needs more driver values (dof scales as N − 2), not more seeds.
+>
+> Every other row is LAW-AUDITED or SOURCE-TRACED and is unaffected — in particular the atmosphere
+> frozen-feed finding is a source fact, not a statistical one. Details: `AC-CURVE-live.md` correction
+> block; fixes pinned by `tests/instrument-review-fixes.test.js`.
+
+
 **Date:** 2026-07-25 · Lane A · the instrument's first real output
 **Answers:** Max, verbatim — *"We need to get the radius adjustment working with all other systems.
 Tectonics, craters, everything need to adjust to the new radius when adjusted. **I can tell that's

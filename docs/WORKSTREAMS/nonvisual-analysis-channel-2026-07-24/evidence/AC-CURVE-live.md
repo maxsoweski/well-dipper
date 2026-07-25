@@ -1,5 +1,30 @@
 # AC-CURVE — live response curves, with error bars
 
+> ## ⚠ CORRECTION (2026-07-25, adversarial review) — the significance claims below are WRONG
+>
+> An adversarial review workflow confirmed a defect in `fitPowerLaw`/`lawVerdict`: **z = 2 was quoted
+> as ~95%, but that is only the large-sample limit.** A power-law fit over N driver values has
+> dof = N − 2, so this sweep — three radii — ran at **dof = 1, where the true 95% multiplier is
+> t = 12.71, not 2.** A Monte-Carlo over the module's own code showed a law that is EXACTLY TRUE
+> reported FAIL 34% of the time at three values.
+>
+> **What that invalidates in this document:**
+> - "the screen constancy is 2.8σ from exact" — **NOT significant.** At dof = 1 the interval is
+>   ±0.19, which contains zero comfortably. The on-screen exponent is consistent with exactly constant.
+> - "the physical exponent 0.4583 ± 0.0148 is 2.8σ below an exactly-0.5 law, so this sweep says FAIL"
+>   — **withdrawn.** 0.5 sits well inside the corrected interval. There is no measured departure
+>   from √R.
+>
+> **What survives unchanged:** the point estimates and their SEMs, the noise-floor table, the
+> `radiusEarth` control at exactly 1.000, and the qualitative reading (physical form size grows,
+> angular shrinks, on-screen ≈ constant). Only the *significance* statements were wrong.
+>
+> The bin-quantisation caveat already flagged below was correct, but it was the *second* reason the
+> drift is not reportable; this is the first, and it was missed. Fixed in `stats.js` (`tCritical95`,
+> `dof` returned from `fitPowerLaw`, `lawVerdict` accepting `dof`); pinned by
+> `tests/instrument-review-fixes.test.js`.
+
+
 **Date:** 2026-07-24 · lab `:5175`, isolated context, page closed after · Earth-like preset
 · 2000 km patch at (10°, 20°) · M = 5 seeds per radius
 

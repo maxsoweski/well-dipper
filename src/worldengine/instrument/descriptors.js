@@ -305,7 +305,10 @@ export function radialPSD(field, grid) {
     }
   }
   const spectrum = [];
-  for (let r = 1; r <= maxR; r++) if (count[r] > 0) spectrum.push({ k: r, power: power[r] / count[r] });
+  // `modes` (the number of FFT bins averaged into this radial bin) is returned because the SCATTER of
+  // a radial bin's mean falls as 1/sqrt(modes): ~8 modes at k=1 versus ~380 at k=60. Any search for an
+  // excess over the trend must divide by that scatter, or it is systematically drawn to low k.
+  for (let r = 1; r <= maxR; r++) if (count[r] > 0) spectrum.push({ k: r, power: power[r] / count[r], modes: count[r] });
   if (!spectrum.length) return { dominantWavelengthKm: NaN, spectralSlope: NaN, spectrum };
   // The domain's physical diagonal scale: use the mean span so a non-square patch still reports sanely.
   const spanKm = (grid.spanKmX + grid.spanKmY) / 2;
@@ -337,11 +340,11 @@ export function radialPSD(field, grid) {
  * i.e. no detectable feature population), and the trend slope. A caller must check `excessRatio`
  * before trusting `wavelength`: a field with no band-limited population has no form size to report.
  */
-export function spectralExcessPeak(field, grid, { minExcessRatio = 1.05 } = {}) {
+export function spectralExcessPeak(field, grid, { minSigma = 4.5, minExcessRatio = null } = {}) {
   const psd = radialPSD(field, grid);
   const spec = psd.spectrum;
   if (!spec || spec.length < 4) {
-    return { wavelength: NaN, excessRatio: NaN, spectralSlope: psd.spectralSlope, detected: false };
+    return { wavelength: NaN, excessRatio: NaN, peakSigma: NaN, spectralSlope: psd.spectralSlope, detected: false };
   }
   const xs = spec.map((s) => Math.log10(s.k));
   const ys = spec.map((s) => Math.log10(Math.max(s.power, Number.MIN_VALUE)));
@@ -349,19 +352,60 @@ export function spectralExcessPeak(field, grid, { minExcessRatio = 1.05 } = {}) 
   const meanX = xs.reduce((a, b) => a + b, 0) / xs.length;
   const meanY = ys.reduce((a, b) => a + b, 0) / ys.length;
   const intercept = meanY - slope * meanX;
+  // THE NOISE SCALE IS MEASURED, NOT MODELLED. The obvious analytic model — a periodogram bin is
+  // exponential, so averaging `modes` of them scatters by 0.4343/sqrt(modes) in log10 — was tried and
+  // is WRONG BY ~3x in practice: on synthetic pure power-law fields it still declared a detection on
+  // 40/40 at a median 7.8 "sigma". Two effects it omits: the radial average of an isotropic power law
+  // is not exactly straight in log-log (bin geometry leaves structured residuals), and the statistic
+  // is a MAX over ~60 bins, whose null expectation is ~2.7 sigma rather than 0.
+  //
+  // So the scale is taken from THIS FIELD's own residuals via the median absolute deviation, which is
+  // robust to the handful of bins a genuine feature population occupies (an RMS scale would be
+  // inflated by the very signal it is meant to detect). The sqrt(modes) weighting stays INSIDE the
+  // residual so low-k bins — averaged over far fewer FFT modes — cannot dominate the argmax, which
+  // was the second half of the original defect.
+  const weighted = spec.map((s, i) => (ys[i] - (intercept + slope * xs[i])) * Math.sqrt(Math.max(1, s.modes)));
+  const med = median(weighted);
+  const mad = median(weighted.map((r) => Math.abs(r - med)));
+  const scale = mad > 0 ? 1.4826 * mad : NaN;
   let best = null;
   for (let i = 0; i < spec.length; i++) {
     const residual = ys[i] - (intercept + slope * xs[i]);       // log10 excess over the trend
-    if (!best || residual > best.residual) best = { residual, k: spec[i].k };
+    const sigma = Number.isFinite(scale) ? (weighted[i] - med) / scale : NaN;
+    if (!best || sigma > best.sigma) best = { residual, sigma, k: spec[i].k };
   }
   const spanKm = (grid.spanKmX + grid.spanKmY) / 2;
   const excessRatio = Math.pow(10, best.residual);
+  // Detection is a SIGNIFICANCE test, not a ratio threshold. Two bugs lived in the old ratio form:
+  //   1. OLS residuals sum to zero, so max(residual) >= 0 always and excessRatio >= 1 always — the old
+  //      1.05 default sat BELOW the null floor (measured null range 1.29-5.21 at the live probe
+  //      geometry), so `detected` was true on 100% of featureless red-noise fields. The unit test only
+  //      passed because it hand-overrode minExcessRatio: 3; the live caller used the default.
+  //   2. The argmax was unweighted, so it was pulled toward low k (74% of null peaks at k<=3) —
+  //      recreating the very window-size artefact this function was written to eliminate.
+  // Dividing by each bin's own expected scatter fixes both: it is a per-bin z-score, so a genuine
+  // band-limited population competes on significance rather than on raw excess.
+  const detected = minExcessRatio != null
+    ? excessRatio >= minExcessRatio                       // legacy ratio form, opt-in only
+    : best.sigma >= minSigma;
   return {
     wavelength: spanKm / best.k,
     excessRatio,
+    peakSigma: best.sigma,
     spectralSlope: slope,
-    detected: excessRatio >= minExcessRatio,
+    detected,
+    // Wavelength is meaningless when nothing was detected — say so rather than letting a caller read
+    // the null's favourite bin as a form size.
+    wavelengthMeaningful: detected,
   };
+}
+
+/** Median of a numeric array (non-mutating). Used for the robust MAD noise scale. */
+function median(arr) {
+  const v = Array.from(arr).filter(Number.isFinite).sort((a, b) => a - b);
+  if (!v.length) return NaN;
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
 }
 
 /** Ordinary least-squares slope of y on x. Shared by the PSD and SFD fits. */
