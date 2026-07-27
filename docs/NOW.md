@@ -1007,7 +1007,9 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
-> **▶▶ RADIUS LIVE FEED (R1) — 🔴 UAT FAILED 2026-07-25, INCOMPLETE. Pushed + in sync `a4fa092`. PAUSED for token budget → RESUME TUESDAY 2026-07-28.**
+> **▶▶ RADIUS LIVE FEED (R1) — 🔴 UAT FAILED 2026-07-25, INCOMPLETE. Pushed + in sync `f6b8dcf`.**
+> ⭐ **HANDOFF (read FIRST): `~/briefings/handoff-lane-A-radius-r1-uat-fail-2026-07-27.md`** — the one job is to VERIFY
+> the rendered-belt suspect before rebuilding. ⚠ Max is conserving tokens: no broad workflows.
 > Max verbatim: **"it increases the roughness of bands edges but does not increase the number of bands."** All 8 objective
 > ACs measured green and the visible read still is not there. ⭐ **PRIME SUSPECT (UNVERIFIED — no diagnostic run):** the
 > KNOWN DEFERRED belt-visibility issue in `world-engine-e5-bands-jets-2026-06-30` — the smoothstep **0.34/0.66 dead-zone**
