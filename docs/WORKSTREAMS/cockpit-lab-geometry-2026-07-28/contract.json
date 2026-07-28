@@ -1,0 +1,106 @@
+{
+  "workstream": "cockpit-lab-geometry-2026-07-28",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md — HELM cockpit program (lane E), increment 1 of 6",
+  "statusNote": "Lane E worktree ~/projects/well-dipper-cockpit, branch feature/cockpit off master 6163bb3, dev server port :5179 (Max starts it). Lab-only increment: no src/ file is modified, so the game cannot regress.",
+  "designDecisions": [
+    "GLB metric convention: eye-point at origin, 1 unit = 1 m, Y-up, NO scale normalisation. Deliberately not the ships pipeline's mesh.scale.setScalar(1/radius) — that is a ships-manifest convention and wrong for the one object whose real-world size matters. In-game scaling happens at the 5th-pass cockpit camera.",
+    "Cockpit render resolution (match the world's pixelScale=3 third-res chunk vs. crisper) is deferred to increment 2, where both can be shown side by side for Max to judge by eye.",
+    "Screens are at the four CORNERS of the canopy (two upper, two lower), superseding the program memory's earlier 'four screens in a row above the median'. Max, this session.",
+    "No interior console/dash. The space below the median is the ship's own nose — exterior hull geometry, lit by the world rather than shadowed like the interior frame. Max, this session.",
+    "Content-to-panel assignment is NOT locked here; corners are peripheral vision, so it gets re-checked in increment 2 once the panels are legible."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-FORM",
+      "statement": "The committed Blender script emits cockpit geometry in the agreed form language: four screen mounting planes, one in each quadrant of the canopy aperture (two upper, two lower), each plane's normal pointing within 20 degrees of the vector from that plane's centre to the eye-point at the origin — i.e. genuinely angled toward the pilot, not merely tilted; plus ship-nose hull geometry below the median and forward of the eye, whose authored extents are a script-declared fraction of the Bible §8A ~20 m house-sized hull so a future full ship exterior can match it.",
+      "verifyVia": {
+        "input": "Headless parse of the exported GLB (accessor min/max + node transforms, no browser): compute each screen plane's centroid and normal, and the nose section's bounding extents; read the hull reference length the script declares as a named constant.",
+        "observable": "Exactly four screen planes, one per canopy quadrant; every plane's normal within 20 degrees of its centre-to-eye vector; nose geometry present with min Y below the eye plane and max Z forward of the eye; declared hull reference length present and the nose extents stated as a fraction of it."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-METRIC",
+      "statement": "The GLB carries the agreed metric convention: 1 unit = 1 metre, Y-up, the pilot's eye-point at exactly (0,0,0), and no scale normalisation anywhere in the exported node hierarchy. The exported bounding box matches the dimensions the script declares in metres.",
+      "verifyVia": {
+        "input": "Headless parse of the GLB JSON chunk + accessors: read every node's scale, the scene bounding box from accessor min/max, and compare against the script's declared metre constants.",
+        "observable": "Every node scale is (1,1,1) within 1e-6; the eye-point is at the origin within 1e-4 m; the scene bounding box equals the script's declared metre dimensions within 1e-3 m; the asset is Y-up (export_yup)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-REPRO",
+      "statement": "The geometry is reproducible from the committed script — re-running it headless from a clean checkout produces the same mesh, so proportions can be re-authored by editing the script rather than by hand-modelling. Byte-identity of the GLB file is NOT asserted (the glTF exporter may vary metadata); geometric identity is.",
+      "verifyVia": {
+        "input": "Run the committed Blender script headless twice into separate output paths; decode the vertex-position and index buffers from each GLB and hash them.",
+        "observable": "SHA-256 of the decoded position buffer and of the index buffer are identical across the two runs, for every mesh in the file."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-FRAME",
+      "statement": "\"Classic cockpit\" is a measured number, not a vibe: from the eye-point at the origin, at the game's real 70 degree FOV (src/ui/Settings.js:40) and 16:9 aspect, looking straight down the view axis, the cockpit geometry occludes 25-30% of the frame.",
+      "verifyVia": {
+        "input": "chrome-devtools on cockpit-lab.html at :5179 — snap to the eye view, set aspect 16:9 and fov 70, render the cockpit against a flat contrasting background, and read back the framebuffer pixel counts via evaluate_script.",
+        "observable": "Occluded-pixel fraction lands in [0.25, 0.30]. Outside that band is a FAIL, not a judgement call."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-LAB",
+      "statement": "cockpit-lab.html loads on the :5179 dev server and gives Max both views of the model: free orbit to spin and inspect it from outside, and an \"eye\" button that snaps the camera to the origin at 70 degree FOV to see it from the pilot's seat, with a placeholder background visible through the canopy aperture so the opening reads. No console errors.",
+      "verifyVia": {
+        "input": "chrome-devtools: load http://localhost:5179/cockpit-lab.html, drag to orbit, click the eye button, list console messages.",
+        "observable": "GLB loads and renders; orbit changes the camera pose; the eye button puts the camera at the origin with camera.fov === 70; background is visible through the aperture; zero console errors and zero failed network requests."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-NOGAME",
+      "statement": "The lab-first gate: this increment cannot break the game. No existing file under src/ is modified (new files are permitted; none are expected), every existing *-lab.html still loads, and the vitest suite stays at its 1616-passing baseline.",
+      "verifyVia": {
+        "input": "git diff --stat master...feature/cockpit filtered to src/; npx vitest run from the worktree directory.",
+        "observable": "Zero modified pre-existing files under src/; 1616 tests passing (the 15 vendor/motion-test-kit collection errors are known pre-existing noise and are excluded)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max spins the model in the lab and drops into the pilot's seat, and judges whether it reads as the angular cockpit he asked for — whether the framing at 70 degrees is something he'd want the default screensaver to play inside for long stretches, and whether the four corner screens sit where he'd actually look.",
+      "verifyVia": {
+        "input": "Max opens cockpit-lab.html at :5179, orbits the model, and switches to the eye view.",
+        "observable": "Max's holistic judgement — does this read as a cockpit he wants to be inside, and does it earn the \"woah, this is a real game\" reaction he scoped it for? Deferred to Max; no agent renders this."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "Blender 5.1.2 headless via '/mnt/c/Program Files/Blender Foundation/Blender 5.1/blender.exe' --background --python (needs dangerouslyDisableSandbox and a Windows-form /mnt/c/ script path); io_scene_gltf2 ships enabled",
+      "src/ui/Settings.js:40 — fov: 70, the FOV the framing is judged against",
+      "docs/ARCHIVE/GAME_BIBLE_LEGACY.md §8A — player hull ~20 m (house-sized); the nose section must be a stated fraction of this",
+      "public/assets/ GLB serving convention (ShipLoader.js:4 SHIPS_BASE = 'assets/ships/'); the cockpit GLB lands at public/assets/cockpit/",
+      "Root-level *-lab.html convention with bare 'three' imports served by the project's Vite dev server (planet-lod-lab.html precedent); three pinned at 0.183.1",
+      "scripts/blender-export-snippet.py — the repo's existing glTF export reference (export_format='GLB', export_yup=True, export_apply=True)"
+    ],
+    "outputs": [
+      "Increment 2 (Phosphor CRT screen system): the four screen mounting planes are the surfaces the CRT material and its render targets attach to; their measured angles determine legibility",
+      "Increment 3 (glass canopy): the canopy aperture edge is the boundary the screen-space refraction pass needs",
+      "Increment 4 (in-game 5th pass): consumes the GLB at 1 unit = 1 m with the eye at the origin — the metric convention is the contract between the lab and the composited cockpit camera",
+      "First player-ship EXTERIOR geometry in the project (Ship.js is orientation-only; no hull mesh exists anywhere). The nose authored here is the reference a future full ship exterior must match",
+      "The committed script is the re-author surface: Max changes proportions by editing constants and re-running, not by re-modelling"
+    ],
+    "mustStayWorking": [
+      "vitest baseline 1616/1616 from the worktree directory (15 vendor/motion-test-kit collection errors pre-date this work and are excluded)",
+      "Every existing root-level *-lab.html still loads on the dev server — the new lab must not disturb shared asset or import paths",
+      "No pre-existing file under src/ is modified — AC-NOGAME is the gate, and it is what makes this increment unable to regress the game",
+      "ShipLoader.js's assets/ships/ manifest convention and the ships GLB pipeline are untouched; the cockpit deliberately does NOT adopt its 1/radius normalisation",
+      "public/ static asset serving (the cockpit GLB is a new sibling directory, not a change to how assets resolve)"
+    ]
+  }
+}
