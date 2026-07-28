@@ -1,5 +1,42 @@
 # AC-DOWNSTREAM — the live integration leg (2026-07-28)
 
+> **RE-DRIVEN AT `56198f9`** after verify round 3 declined to count a run recorded at an ancestor
+> commit. Correct call by protocol. The re-run also fixed a genuine coverage hole in the first pass:
+> it had only exercised `Moon/Mercury`, whose draw band is [0.27, 0.38] — **entirely below 1 R⊕**, so
+> it tested only the `R^(4/3)` branch and never touched the super-Earth branch this whole workstream
+> exists for. See §6.
+
+## 6. Round-2 live run — both branches, and the gate in both directions (`56198f9`)
+
+Same method (`rerollRadius()` → the lab's real `applyDrivers`; gravity read off the condition vector
+the lab built; expectations from literal exponents).
+
+| preset | class | radii drawn | samples R > 1 | matches SHIPPED | matches RETIRED |
+|---|---|---|---|---|---|
+| Rocky (Earthlike) | rocky | 0.927 – 1.428 | 7/10 | **10/10** | 0/10 |
+| Ocean (temperate) | rocky | 0.933 – 1.731 | 7/10 | **10/10** | 0/10 |
+| Moon/Mercury (impact-airless) | rocky | 0.273 – 0.378 | 0/14 | **14/14** | 0/14 |
+| Gas giant (Jovian) | gas | 6.876 – 13.118 | 10/10 | 0/10 | **10/10** ← gated out, correct |
+| Frozen (airless) | icy | 0.638 – 1.163 | 1/10 | 0/10 | **10/10** ← gated out, correct |
+
+Worked example on the high branch — `Rocky (Earthlike)` at R = 1.35383:
+`g = 1.50625691`, shipped-law expectation `1.50625691`, retired-law expectation `1.21844290`.
+
+⚠ **`Magma (K2-141b)` matched BOTH laws 10/10 and is therefore non-informative.** It is
+canonical-locked and drew R = 1.5 ≡ R_c on every sample, so the ratio is exactly 1.0 under either
+exponent. That is the byte-identity property appearing live — not a confirmation of the law, and it
+is excluded from the table above rather than counted as five more passes.
+
+`state.surfaceGravity` stayed pinned across every preset and every draw in this run too.
+
+**What this adds over the first pass:** the super-Earth branch (`R^1.70`) is now exercised on 14
+real draws above 1 R⊕ across two presets, and the composition gate is demonstrated in **both**
+directions — rocky bodies follow the new law, gas and icy bodies provably do not.
+
+---
+
+## (first pass, `7d29e22` — retained; superseded on coverage by §6 above)
+
 Driven by working-Claude against the running lab on `:5175`, in an **isolated browser context**, one
 page, **closed after**. Max's own tab (page 2) was never touched. This is *integration* testing —
 objective assertions on the wired system — **not UAT**, which stays Max's alone.
