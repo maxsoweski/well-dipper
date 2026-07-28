@@ -1,8 +1,7 @@
 # world-engine-gravity-selfcompression-2026-07-28 — intent
 
-> **Status: DRAFT awaiting Max's greenlight.** The "Why we care" below is Max's, quoted from the
-> record. The success criteria are working-Claude's encoding of what the grounding established —
-> they have NOT yet been through Max's words. Read §"Open for Max" before treating this as scoped.
+> **Status: UAT FAILED 2026-07-28 — see §"Max's UAT result".** Success criteria are now Max's own
+> (below). The "Why we care" is his, quoted from the record.
 
 ## Why we care
 
@@ -26,7 +25,32 @@ the super-Earth relief work is expressed in terms of it. Fixing it at the source
 pre-distorting each downstream law, and it is independently correct — it does not depend on any
 contested part of the relief derivation, which is still NEEDS-FIX.
 
-## Success criteria (working-Claude's encoding — pending Max's words)
+## Success criteria — MAX'S WORDS (2026-07-28, verbatim)
+
+> *"'Works' means we have a coherent model that determines the effects of gravity on terrain
+> features/atmosphere according to scientific principles/models"*
+
+⚠️ **This is broader than this workstream, and the gap is deliberate, not an oversight.** Three
+things his sentence asks for that the shipped increment does not deliver:
+
+1. **"coherent model"** — singular, and spanning consumers. This increment fixes `g(R)` at the source
+   but leaves each downstream consumer to interpret `g` on its own terms. Coherence is a property of
+   the *set* of laws, so it cannot be closed by any one of them. It is closed by the law registry
+   covering every consumer, which it does not yet.
+2. **"terrain features"** — plural and concrete. His UAT below shows the terrain consumer he actually
+   looked at (craters) is not modelled from scientific principles at all; it applies a gravity
+   multiplier to a size that has no impactor physics behind it.
+3. **"/atmosphere"** — ⭐ **entirely outside this workstream and outside the relief programme.** No
+   atmosphere law reads the corrected gravity. Scale height `H = kT/(μg)` is the obvious first
+   consumer and is not wired. **This is new scope, surfaced by his criterion, and it is not tracked
+   anywhere yet.**
+
+The measure of done is therefore **not** "gravity got the right exponent" — it is "a reader can point
+at each thing gravity affects and find a cited model behind it." Working-Claude's original encoding
+below is retained because the contract's ACs were written against it; read it as *what was verified*,
+not as *what Max asked for*.
+
+## Success criteria (working-Claude's original encoding — what the ACs actually test)
 
 - Drag the radius slider past Earth on a rocky world and the planet's **gravity** rises the way a
   real super-Earth's does, not the way a constant-density toy does.
@@ -92,10 +116,40 @@ see Non-goals).
 - **Taxonomy (Rule 15 check 3): N/A.** The exponents are literature constants, not drivers; there is
   no new GUI knob and the composition gate is not a selectable regime. Declared, not skipped.
 
+## Max's UAT result — 2026-07-28: **FAILED, with a diagnosis**
+
+Recipe run: lab `:5175` → `Moon/Mercury (impact-airless)` → hold seed → drag radius. The carve-out
+(global relief amplitude will not move — `uPerturb` reads a canonical radius-blind gravity) was stated
+up front. He did not report on relief amplitude. He reported on **craters**, verbatim:
+
+> *"The craters are still staying consistent in size, scaling up and down with the radius. Not how it
+> should work; the size of objects impacting planets should be a random/probabilistic distribution
+> creating impact craters varying in size depending on the size/mass/speed of the impacting object
+> and all of the possible attributes of the planets themselves; also below about 0.04 radius the
+> craters disappear completely"*
+
+Two distinct findings, and they are **not** the same defect:
+
+| | finding | kind |
+|---|---|---|
+| **U1** | Crater apparent size is invariant under radius — craters scale *with* the planet instead of holding a physical absolute size | **Design gap.** The DOES card claims "fewer, smaller craters … as a rocky world grows" via `sizeMul = (G_REF/g)^K_GS`. Either that multiplier is not reaching the render, or it is applied in a space that already scales with R, cancelling it. Under investigation. |
+| **U2** | Craters vanish entirely below ~0.04 on the radius control | **Suspected bug.** Real bodies at that size (Mimas, Enceladus, Vesta, Phobos) are saturated with craters. A total absence is not a physical result. |
+
+⚠️ **U1 is the deeper one and it indicts the model, not just the wiring.** Max's sentence is a
+specification: crater size should follow from a *drawn impactor* (size, mass, speed) against the
+*target's* properties. The engine has no impactor at all — it has a crater size with a gravity
+correction bolted on. Closing U1 as a wiring fix would satisfy the AC and miss what he asked for.
+The right shape is pi-group crater scaling (Holsapple/Schmidt–Housen) fed by a sampled impactor SFD.
+
+**Consequence for status:** this workstream does **not** advance to Shipped. It stays at
+`VERIFIED_PENDING_MAX` with UAT recorded as failed. The six unit ACs remain PASS — they tested what
+they claimed to test; the criteria were too narrow, which is exactly the risk §"Success criteria"
+above now names.
+
 ## Open for Max
 
-1. **The success criteria above are mine, not his.** They need his words before the contract is
-   more than a draft.
+1. ~~**The success criteria above are mine, not his.**~~ ✅ **CLOSED 2026-07-28** — his words are
+   recorded above, and they widened the scope. See the three gaps they open.
 2. **A decision on record has changed shape.** It was *"does the g = 1 relief break render as a hard
    kink or a smoothed `min()`?"* — but the Melosh chapter, now retrieved
    (`research/superearth-relief-law-citations-resolved-2026-07-28.md`), shows the data cannot locate
