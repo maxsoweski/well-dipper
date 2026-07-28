@@ -123,6 +123,48 @@ describe('resolveFocusedBody — SURVEY\'s feed (AC-PANEL-CONTENT)', () => {
     expect(resolveFocusedBody(sys, focus(0, 0)).name).toBe('Moon 1');
   });
 
+  it('reports the planet, not a star, when focusStarIndex is left over from before a warp', () => {
+    // spawnSystem writes focusIndex and focusMoonIndex in all three of its
+    // focus-setting blocks and NEVER writes focusStarIndex. So after focusStar(0)
+    // and a warp, focusStarIndex is still 0 while focusIndex is the new system's
+    // hero index. A resolver that dispatched on `focusStarIndex >= 0` would
+    // report a star while a planet is focused, on the first frame after a warp.
+    // Only focusIndex === -2 is a safe discriminator.
+    const sys = makeSystem();
+
+    expect(resolveFocusedBody(sys, focus(1, -1, 0)).kind).toBe('planet');
+    expect(resolveFocusedBody(sys, focus(1, -1, 0)).name).toBe('Aletheia II');
+    expect(resolveFocusedBody(sys, focus(-1, -1, 0))).toBeNull();
+  });
+
+  it('handles both moon shapes — spawnSystem builds two different ones', () => {
+    // Regular moons are BodyRenderer.createMoon(moonData, null, …) — the second
+    // argument is a literal null, so .physics is null and there is nothing to
+    // show. Planet-class moons are a plain object literal { mesh, data,
+    // isPlanetMoon, planet, orbitAngle, addTo, dispose } with NO .physics key at
+    // all — calling getPhysicsSummary() on one would throw.
+    //
+    // Both therefore read blank, and that is deliberate rather than incidental:
+    // a planet-class moon's nested planetData IS generated with physics, but
+    // PlanetGenerator.generate is called for it with a hardcoded 1.0 AU, so its
+    // T_eq and composition describe an orbit the moon is not in.
+    const sys = makeSystem();
+    sys.planets[0].moons = [
+      { mesh: {}, data: { type: 'rock', radius: 0.01 }, physics: null },
+      { mesh: {}, data: { type: 'terrestrial', radius: 0.02, planetData: { T_eq: 288, type: 'terrestrial' } },
+        isPlanetMoon: true, planet: {}, orbitAngle: 0 },
+    ];
+
+    const regular = resolveFocusedBody(sys, focus(0, 0));
+    const planetClass = resolveFocusedBody(sys, focus(0, 1));
+
+    expect(regular.kind).toBe('moon');
+    expect(regular.physics).toBeNull();
+    expect(planetClass.kind).toBe('moon');
+    expect(planetClass.physics).toBeNull();
+    expect(planetClass.data.T_eq).toBeUndefined();  // the meaningful one is nested, and stays there
+  });
+
   it('reports a deep-sky location as nothing focused', () => {
     // findClosestBody early-returns for `system.type !== 'star-system'`; those
     // systems have no star/planets to read a dossier from.
