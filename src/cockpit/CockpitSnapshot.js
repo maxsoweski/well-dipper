@@ -15,8 +15,15 @@
  * the leak hazard is concrete:
  *   - `BodyRenderer`'s constructor does `this.physics = physicsData` and
  *     `this._composition = physicsData?.composition || null`, so `body.physics`
- *     and every field `getPhysicsSummary()` returns are live references into the
- *     object `PhysicsEngine` produced and the renderer still reads.
+ *     and everything under it are live references into the object `PhysicsEngine`
+ *     produced. Worse, `scenePlanetData = { ...entry.planetData, … }` is a
+ *     SHALLOW copy, so `system._systemData.planets[i].planetData.composition`,
+ *     `planet.data.composition` and `planet.physics.composition` are all ONE
+ *     object — and `window._systemData` makes it globally reachable.
+ *     (Read `body.physics`, not `getPhysicsSummary()`: the accessor has zero
+ *     production callers, `DebugPanel` reads the field directly, and
+ *     AC-PANEL-CONTENT names the field as the thing to match. The accessor also
+ *     does not exist on planet-class moons, which are a plain object literal.)
  *   - `scModel.position` is a `THREE.Vector3` the sim integrates every tick.
  *   - `system.planets[i]` entries are torn down by `_hideCurrentSystem()` at every
  *     warp, so holding one across a warp holds a corpse.
