@@ -423,14 +423,43 @@ MEMBER_SEAM_TOL    = 1e-6     # metres a member's centreline may stray from a re
                               # the panel mesh have diverged and one of them is lying.
 
 # ---- Screen units (Screen_* display face + ScreenBody_* box) ---------------
-SCREEN_W           = 0.30     # display face. Max set this in cockpit-section-lab.html; at the
-SCREEN_H           = 0.25     # distances above it subtends 21.5 deg / 20.5 deg, i.e. BIGGER
-                              # in the view than the 0.45 m panels it replaces, which sat at
-                              # 1.60 m and subtended 16 deg. See the AC-FORM(c) note: that AC
-                              # floors the face by AREA, which measures the wrong thing once
-                              # the screens move from 1.60 m to 0.8 m.
-SCREEN_BEZEL       = 1.0 * INCH   # bezel all round the display face  -> body 0.5008 x 0.3508
-SCREEN_BODY_DEPTH  = 2.0 * INCH   # backing depth behind the bezel plane
+# ---- WHAT MAX APPROVED, and how it is preserved ----------------------------
+# These six numbers are option A exactly as he set and accepted it: a 0.30 x 0.25 m face at
+# 0.79 / 0.83 m, in a 1 inch bezel with a 2 inch body. He evaluated it and said yes.
+#
+# THEY DO NOT FIT, and that is not a matter of taste. The lab he chose them on modelled the
+# section as a SUPERELLIPSE while the generator builds a FACETED profile with a flat roof --
+# up to 89 mm roomier through the shoulder band, which is exactly where the screens sit. It
+# also checked the display FACE and not the housing. Measured against the built hull, the
+# bezel corners are 92 mm outside and the back plates 135 mm. Even a bare zero-thickness face
+# at 0.79 m is 62 mm out. See the section lab's own comment for the table.
+SCREEN_APPROVED_W       = 0.30
+SCREEN_APPROVED_H       = 0.25
+SCREEN_APPROVED_DIST_UP = 0.79
+SCREEN_APPROVED_DIST_DN = 0.83
+SCREEN_APPROVED_BEZEL   = 1.0 * INCH
+SCREEN_APPROVED_DEPTH   = 2.0 * INCH
+
+# SO THE WHOLE ASSEMBLY IS SCALED UNIFORMLY TOWARD THE EYE, and that is the point: a uniform
+# scale on (face, bezel, body, distance) moves NOTHING that Max can see. Angular size and
+# bearing are both invariant under it -- 2*atan((w*k/2)/(d*k)) == 2*atan((w/2)/d) -- so the
+# screens still subtend 21.50 deg and 20.49 deg at tan x 0.91 / 0.88 and +/-9 deg elevation,
+# to the digit. What changes is only the metric size, which he never chose directly, never
+# sees, and which lane F is indifferent to: its UVs run over the unit square and the seam test
+# asserts face AREA while saying in its own comment that "aspect ratio stays the generator's
+# business". Holding the metres instead would have been holding the one number he did NOT
+# evaluate, at the cost of the two he did.
+#
+# 0.82 is solved, not chosen: it is the largest scale at which every screen, body and arm
+# vertex stays inside the built shell with room to spare. The margin at 0.82 is +0.0219 m; at
+# 0.85 it is -0.0043 and the units are back outside. analyse() re-derives the approved angles
+# from the constants above and raises if this scaling has drifted from preserving them.
+SCREEN_FIT_SCALE   = 0.82
+
+SCREEN_W           = SCREEN_APPROVED_W * SCREEN_FIT_SCALE       # 0.2460
+SCREEN_H           = SCREEN_APPROVED_H * SCREEN_FIT_SCALE       # 0.2050
+SCREEN_BEZEL       = SCREEN_APPROVED_BEZEL * SCREEN_FIT_SCALE   # bezel all round the face
+SCREEN_BODY_DEPTH  = SCREEN_APPROVED_DEPTH * SCREEN_FIT_SCALE   # backing behind the bezel
 SCREEN_FACE_RECESS = 0.004    # display face sits this far BEHIND the bezel plane
 SCREEN_FACE_GAP    = 0.0015   # and this far in FRONT of the pocket floor, so neither z-fights
 # WHERE THE SCREENS GO -- all six numbers are Max's, set in cockpit-section-lab.html.
@@ -446,12 +475,15 @@ SCREEN_FACE_GAP    = 0.0015   # and this far in FRONT of the pocket floor, so ne
 # the screens straight into tan space and never asked whether they were inside the cabin --
 # the same blind spot that let four monitors on lamp-posts pass 48/48 in this file's own
 # ancestor. Shown the three ways out, Max chose to keep the ANGLES and pull the DISTANCES in.
-SCREEN_TAN_X_UP    = 0.91     # upper pair, outboard
-SCREEN_TAN_Z_UP    = 0.22     # ...and its height, about +9 deg
-SCREEN_DIST_UP     = 0.79     # ...at arm's length, which is where a real cockpit puts an MFD
-SCREEN_TAN_X_DOWN  = 0.88     # lower pair, outboard
-SCREEN_TAN_Z_DOWN  = -0.21    # ...and its height, about -9 deg
-SCREEN_DIST_DOWN   = 0.83
+SCREEN_TAN_X_UP    = 0.91     # upper pair, outboard   -- HIS, untouched
+SCREEN_TAN_Z_UP    = 0.22     # ...and its height, about +9 deg   -- HIS, untouched
+SCREEN_DIST_UP     = SCREEN_APPROVED_DIST_UP * SCREEN_FIT_SCALE   # 0.6478
+SCREEN_TAN_X_DOWN  = 0.88     # lower pair, outboard   -- HIS, untouched
+SCREEN_TAN_Z_DOWN  = -0.21    # ...and its height, about -9 deg   -- HIS, untouched
+SCREEN_DIST_DOWN   = SCREEN_APPROVED_DIST_DN * SCREEN_FIT_SCALE   # 0.6806
+# The two TAN pairs are the BEARINGS and are not scaled, because a bearing has no length in
+# it. Scaling the distances alone slides each unit along its own sightline, which is why the
+# composition Max set survives untouched.
 
 # (suffix, tan x, tan z, distance). Left/right are the PILOT's: left is -X, up is +Z.
 SCREEN_QUADRANTS = (
@@ -480,17 +512,61 @@ SCREEN_QUADRANTS = (
 # ribs; the LOWER pair reach up off the RAILS, which is the heaviest member in the model and
 # the natural place to hang weight. Indices are ring vertices -- see LONGITUDINAL_NAMES.
 ARM_MOUNT_PROFILE  = {"UL": 4, "UR": 7, "LL": 3, "LR": 8}
-ARM_MOUNT_Y        = 0.95     # where along its member each arm bolts on. Chosen AFT of the
-                              # screens (whose faces sit near y = 1.23) so every arm reaches
-                              # FORWARD to its screen -- an arm rooted level with its own
-                              # screen runs flat across the view, which is what made the old
-                              # struts read as poles rather than as mounts.
+ARM_MOUNT_Y        = 0.90     # where along its member each arm bolts on.
+                              #
+                              # THE OLD RULE HERE WAS "AFT OF THE SCREENS, so every arm
+                              # reaches FORWARD", and it is now UNACHIEVABLE rather than
+                              # merely restated. The faces used to sit near y = 1.23 and this
+                              # was 0.95; option A moved them to y ~ 0.48, so "aft" now means
+                              # y < 0.48 -- and every such root FAILS arm_in_front_of_box().
+                              # Measured, the crossing boundary is between 0.56 and 0.58: at
+                              # 0.56 an arm swings 12 mm in front of its own bezel, at 0.45
+                              # 87 mm. The reason is structural, not tunable. From a root that
+                              # far aft the run to the attach is a long CHORD, and a chord
+                              # between two points at similar radius dips nearer the eye than
+                              # both ends -- straight through the bezel plane it has to stay
+                              # behind. Shortening ARM_BOOM_A_LEN cut it tenfold and still
+                              # left 3-14 mm, which is where tuning was stopped.
+                              #
+                              # So the rule's INTENT is what carries, and it is now three
+                              # measured properties instead of one authored number: the root
+                              # is on a real rib (ARM_MOUNT_TOL), the arm never crosses in
+                              # front of a bezel (arm_in_front_of_box), and the pilot can
+                              # actually SEE it (ARM_VISIBLE_MIN, new -- Max: "we need to
+                              # model their arms though").
+                              #
+                              # 0.90 is chosen on that third one. Visible arm, as a fraction
+                              # of the frame beyond its own screen box:
+                              #     mount_y   upper    lower
+                              #       0.90    0.477%   0.345%   <- balanced
+                              #       0.80    0.253%   0.612%
+                              #       0.65    0.054%   1.549%   <- uppers all but vanish
+                              # The upper pair hangs off the SHOULDER ribs and the lower off
+                              # the RAILS, which sit lower and further outboard, so the two
+                              # pairs trade visibility as the root moves. 0.90 is where they
+                              # balance, and it is 0.32 clear of the crossing boundary.
 ARM_MOUNT_TOL      = 1e-6     # metres the arm root may sit off its member's inboard face.
                               # Essentially zero: rib_mount_point() places it there, so any
                               # gap means ARM_MOUNT_PROFILE names a member the arm never
                               # reaches -- which is the lamp-post defect in its purest form.
-ARM_ATTACH_U       = 0.65     # where the arm lands on the back plate, as a fraction of its
-ARM_ATTACH_W       = 0.55     # half-extents, toward the OUTBOARD-FAR corner
+ARM_ATTACH_U       = 0.45     # where the arm lands on the back plate, as a fraction of its
+ARM_ATTACH_W       = 0.55     # half-extents: INBOARD in u, and in w toward the side the arm
+                              # comes from (up for the upper pair, down for the lower).
+                              #
+                              # IT USED TO AIM AT THE OUTBOARD-FAR CORNER, and that single
+                              # sign was what jammed the whole fitting. Measured clearance
+                              # from the housing to the hull, per direction, on the upper
+                              # units: outboard 0.037 m, up 0.093, straight back 0.123,
+                              # INBOARD 0.497. The old rule put the arm head in the tightest
+                              # gap in the cabin and then asked why it did not fit. Flipping
+                              # u inboard removes the arm from the binding constraint set
+                              # entirely -- the solved fit scale is identical with the arms
+                              # present and absent, i.e. the HOUSING is now the limit.
+                              #
+                              # It costs no visible arm. The length a pilot sees is the run
+                              # between the rib and the screen's outboard edge, which is set
+                              # by where the arm is ROOTED; past that edge it is behind the
+                              # box either way. Landing inboard only moves the hidden part.
 ARM_EMBED          = 0.010    # tip pushed this far into the box, so there is no seam gap
 # Cross-section: raised from (0.035, 0.045) root / (0.020, 0.026) tip, which read as sticks.
 # Max's first reference shows short CHUNKY brackets, so the strut is now roughly a 100 x 124
@@ -514,9 +590,17 @@ ARM_BOOM_B_HALF_W  = 0.019
 ARM_ELBOW_RADIUS   = 0.038    # the hinge puck. Fatter than either boom on purpose -- that
 ARM_ELBOW_HALF_LEN = 0.030    # step in section is what reads as a JOINT rather than a bend,
 ARM_ELBOW_SIDES    = 8        # and eight sides keeps it faceted rather than turned
-ARM_HEAD_LEN       = 0.075    # the tilt head: runs along the screen's own normal into the
+ARM_HEAD_LEN       = 0.060    # the tilt head: runs along the screen's own normal into the
 ARM_HEAD_HALF_U    = 0.026    # back plate, which is what keeps every arm behind its bezel
 ARM_HEAD_HALF_W    = 0.021
+ARM_VISIBLE_MIN    = 0.0005   # each arm must occlude at least this fraction of the frame
+                              # BEYOND its own screen box. Max asked for the arms to be
+                              # modelled; an arm hidden entirely behind the panel it holds is
+                              # not modelled, it is deleted with extra steps. Measured as
+                              # marginal coverage over the box, so hiding behind the screen
+                              # does not count and neither does hiding outside the frame --
+                              # which is exactly how the retired "root outside the frustum"
+                              # rule let four monitors ship on invisible lamp-posts.
 ARM_MIN_BEND_DEG   = 15.0     # below this the two booms are effectively one straight stick and
                               # the arm has stopped reading as articulated -- which is the
                               # exact defect this shape exists to fix, so it is an error
@@ -1024,6 +1108,75 @@ def incident_panel_normals():
     return acc
 
 
+def _panel_triangle_normals(bay, seg, grid):
+    """Inward normals of the triangles of ONE shell panel, in the exporter's own fan order."""
+    if bay < 0 or bay >= N_BAYS:
+        return []
+    j = seg % N_ARCH
+    jn = (j + 1) % N_ARCH
+    quad = ((bay, j), (bay, jn), (bay + 1, jn), (bay + 1, j))
+    return [panel_normal_in((quad[0], quad[t], quad[t + 1]), grid)
+            for t in range(1, len(quad) - 1)]
+
+
+def seam_span_planes(kind, index, n_pts):
+    """The panels adjacent to a seam OVER EACH SPAN -- one list per span, not per vertex.
+
+    WHY THIS EXISTS, AND WHAT IT REPLACES. member_sections() has to solve each section's
+    standoff against the panels the member could poke through between its neighbours. That
+    was previously done by unioning `planes[k-1] + planes[k] + planes[k+1]`, where planes[v]
+    is every triangle touching VERTEX v. Vertex incidence is the wrong relation and it is
+    wrong in both directions:
+
+      TOO LITTLE. A quad fans into (0,1,2) and (0,2,3), so the triangle (i,j)(i,j+1)(i+1,j+1)
+      touches (i,j) but NOT (i+1,j). A longitudinal member's far section was therefore never
+      constrained against a triangle it lies directly under. That is the mid-span bulge
+      finding 3 of 10d5878 chased, and unioning the neighbours hid it rather than fixing it.
+
+      TOO MUCH, and this is the one that shipped a defect. planes[k+1] also carries panels
+      hanging off the FAR side of vertex k+1, which the member never approaches. At the roof
+      edge of a transverse arch that pulls in the opposite shoulder panel, which is nearly
+      edge-on to the member's inward direction: denom = -dot(m, w) came out at 0.0122, so a
+      2 mm clearance demand was divided by 0.0122 and became a 0.51 m standoff. Arch_Mid's
+      roof corners were hauled half a metre into the cabin -- its top sat at z = 0.455 with
+      the roof at 0.700, floating in mid-air with nothing touching it.
+
+      NEITHER EXISTING CHECK COULD SEE IT. member_seam_residual() measures the SEAM, and the
+      seam points are exact by construction whatever the standoff does. member_inboard_margin()
+      only asks whether a member has broken OUT through the shell, and a member dragged too
+      far IN is trivially inside. It took the test suite measuring the member's own VERTICES
+      against the shell's folds. Recorded in full because the class of error -- a check that
+      is blind to the direction the defect actually went -- is this file's recurring one.
+
+    The relation that IS correct is SPAN incidence: over the stretch of seam between vertex k
+    and k+1, the member lies on exactly the two panels meeting along that stretch, and every
+    triangle of both is a real constraint on both end sections. Constraint satisfaction stays
+    linear in the corners, so bounding the two ends still bounds the whole span exactly --
+    finding 3's argument is preserved, it is just applied to the right set.
+    """
+    grid = ring_grid()
+    spans = []
+    if kind == "long":
+        # seam runs fore-aft at ring index `index`; span b joins station b to b+1. The two
+        # panels meeting along it are the segments either side of that ring line.
+        for b in range(n_pts - 1):
+            spans.append(_panel_triangle_normals(b, index - 1, grid)
+                         + _panel_triangle_normals(b, index, grid))
+    elif kind == "trans":
+        # seam runs around ring station `index`; span j joins ring vertex j to j+1 (offset by
+        # the glass span's start). The two panels meeting along it are the same ring segment
+        # in the bay ahead and the bay behind -- and at the bow and aft stations one of those
+        # does not exist, which _panel_triangle_normals() returns empty for.
+        lo, _hi = RING_GLASS_SPAN
+        for s in range(n_pts - 1):
+            seg = lo + s
+            spans.append(_panel_triangle_normals(index - 1, seg, grid)
+                         + _panel_triangle_normals(index, seg, grid))
+    else:
+        raise ValueError("unknown seam family %r" % (kind,))
+    return spans
+
+
 def seam_points(kind, index):
     """One seam: its polyline, the outward normal at each vertex, and the panels meeting there."""
     grid = ring_grid()
@@ -1065,7 +1218,7 @@ def _tangents(pts):
     return out
 
 
-def member_sections(pts, norms, planes, width, depth):
+def member_sections(pts, norms, planes, width, depth, spans=None):
     """Four-corner cross-sections for a member lying ON a seam.
 
     At each seam vertex the frame is (c, n_out, t): t is the seam tangent, n_out the averaged
@@ -1096,6 +1249,11 @@ def member_sections(pts, norms, planes, width, depth):
     rib bolted to the OUTSIDE of the canopy measured identical to one correctly inboard, and
     48/48 tests passed a build with the structure on the wrong side of the glass.
     """
+    if spans is None:
+        raise ValueError(
+            "member_sections() needs the SPAN panel sets; passing only per-vertex `planes` is "
+            "the incidence relation that pulled Arch_Mid's roof corners 0.51 m into the cabin. "
+            "See seam_span_planes().")
     tans = _tangents(pts)
     hw = width * 0.5
     sections = []
@@ -1113,12 +1271,19 @@ def member_sections(pts, norms, planes, width, depth):
     # in between satisfies it as well. Taking the union with both neighbours is therefore not
     # a safety margin, it is the exact condition -- and it costs a fraction of a millimetre of
     # extra standoff rather than the blanket RIB_GLASS_GAP increase that would have hidden it.
+    # Each section answers for the panels adjacent to the spans it bounds -- see
+    # seam_span_planes() for why VERTEX incidence was both too little and far too much.
     span_planes = []
     for k in range(len(pts)):
-        acc = list(planes[k])
-        for nb in (k - 1, k + 1):
-            if 0 <= nb < len(pts):
-                acc.extend(planes[nb])
+        acc = []
+        for s in (k - 1, k):
+            if 0 <= s < len(spans):
+                acc.extend(spans[s])
+        if not acc:
+            raise ValueError(
+                "seam vertex %d bounds no span, so its section would be solved against no "
+                "panels at all and its standoff would be whatever RIB_GLASS_GAP says. A seam "
+                "with fewer than two points is not a member." % k)
         span_planes.append(acc)
 
     for k, p in enumerate(pts):
@@ -1160,7 +1325,8 @@ def seam_members():
     for j in sorted(LONGITUDINAL_NAMES):
         name, (width, depth) = LONGITUDINAL_NAMES[j]
         pts, norms, planes = seam_points("long", j)
-        secs, standoffs = member_sections(pts, norms, planes, width, depth)
+        secs, standoffs = member_sections(pts, norms, planes, width, depth,
+                                          seam_span_planes("long", j, len(pts)))
         verts, faces = loft(secs)
         members.append({
             "name": name, "kind": "long", "seamIndex": j,
@@ -1172,7 +1338,8 @@ def seam_members():
     for i in sorted(TRANSVERSE_NAMES):
         name, (width, depth) = TRANSVERSE_NAMES[i]
         pts, norms, planes = seam_points("trans", i)
-        secs, standoffs = member_sections(pts, norms, planes, width, depth)
+        secs, standoffs = member_sections(pts, norms, planes, width, depth,
+                                          seam_span_planes("trans", i, len(pts)))
         verts, faces = loft(secs)
         members.append({
             "name": name, "kind": "trans", "seamIndex": i,
@@ -1951,7 +2118,8 @@ def rib_mount_point(profile_index, y):
     """
     pts, norms, planes = seam_points("long", profile_index)
     _name, (width, depth) = LONGITUDINAL_NAMES[profile_index]
-    _secs, standoffs = member_sections(pts, norms, planes, width, depth)
+    _secs, standoffs = member_sections(pts, norms, planes, width, depth,
+                                       seam_span_planes("long", profile_index, len(pts)))
     ys = [p[1] for p in pts]           # stations run bow -> aft, i.e. DECREASING y
     if y > ys[0] or y < ys[-1]:
         raise ValueError(
@@ -1993,7 +2161,9 @@ def arm_endpoints(centre, n, u, w, tan_x, tan_z, suffix):
     Hw = SCREEN_H * 0.5 + SCREEN_BEZEL
     bezel_c = v_add(centre, v_mul(n, SCREEN_FACE_RECESS))
     back_c = v_sub(bezel_c, v_mul(n, SCREEN_BODY_DEPTH))
-    attach = v_add(back_c, v_add(v_mul(u, sx * ARM_ATTACH_U * Hu),
+    # -sx is INBOARD. See ARM_ATTACH_U: the outboard-far corner has 37 mm to the hull and the
+    # inboard one has 497 mm, and aiming at the former is what made the arms unfittable.
+    attach = v_add(back_c, v_add(v_mul(u, -sx * ARM_ATTACH_U * Hu),
                                  v_mul(w, sz * ARM_ATTACH_W * Hw)))
     return root, attach, seam_p, inward, profile_index, mount_standoff
 
@@ -2487,6 +2657,45 @@ def analyse(units=None):
             % (MEMBER_PLANT_OFFSET, blind_inboard[0]["name"],
                blind_inboard[0]["inboardMarginPlantedDefect"]))
 
+    # ---- Is the composition Max approved still the composition being built? --
+    # SCREEN_FIT_SCALE shrinks the whole screen assembly toward the eye so it fits inside the
+    # hull. That is only legitimate because a uniform scale is invisible: angular size and
+    # bearing are both invariant under it. This checks that claim against the approved numbers
+    # instead of trusting the arithmetic, so that scaling one term and forgetting another --
+    # the face but not the distance, say -- is a build error rather than a silent change to
+    # something he chose by eye.
+    approved = []
+    for (suffix, tan_x, tan_z, dist) in SCREEN_QUADRANTS:
+        up = tan_z >= 0.0
+        want_dist = (SCREEN_APPROVED_DIST_UP if up else SCREEN_APPROVED_DIST_DN)
+        want_deg = 2.0 * math.degrees(math.atan((SCREEN_APPROVED_W * 0.5) / want_dist))
+        got_deg = 2.0 * math.degrees(math.atan((SCREEN_W * 0.5) / dist))
+        want_h = 2.0 * math.degrees(math.atan((SCREEN_APPROVED_H * 0.5) / want_dist))
+        got_h = 2.0 * math.degrees(math.atan((SCREEN_H * 0.5) / dist))
+        approved.append({"name": SCREEN_PREFIX + suffix,
+                         "approvedWidthDeg": want_deg, "widthDeg": got_deg,
+                         "approvedHeightDeg": want_h, "heightDeg": got_h,
+                         "tanX": tan_x, "tanZ": tan_z,
+                         "approvedDistance": want_dist, "distance": dist,
+                         "scale": SCREEN_FIT_SCALE})
+    drift = [a for a in approved
+             if abs(a["widthDeg"] - a["approvedWidthDeg"]) > 1e-6
+             or abs(a["heightDeg"] - a["approvedHeightDeg"]) > 1e-6]
+    if drift:
+        raise ValueError(
+            "the screens no longer subtend what Max approved. A uniform SCREEN_FIT_SCALE is "
+            "invisible to him precisely BECAUSE it holds these angles; if they have moved, "
+            "something was scaled that should not have been, or not scaled that should:\n%s\n"
+            "  Fix: SCREEN_W/H, SCREEN_BEZEL, SCREEN_BODY_DEPTH and both SCREEN_DIST_* must "
+            "ALL carry the same SCREEN_FIT_SCALE (%.4f); the two TAN pairs must carry none."
+            % ("\n".join("    %s subtends %.4f deg wide, approved %.4f"
+                         % (a["name"], a["widthDeg"], a["approvedWidthDeg"]) for a in drift),
+               SCREEN_FIT_SCALE))
+    if SCREEN_FIT_SCALE > 1.0 + 1e-9:
+        raise ValueError(
+            "SCREEN_FIT_SCALE is %.4f. Scaling the assembly UP past what Max set is not a fit "
+            "correction, it is a redesign of his composition." % SCREEN_FIT_SCALE)
+
     # ---- Screens (display face + body) and arms ----
     screen_polys = []
     arm_polys = []
@@ -2576,6 +2785,21 @@ def analyse(units=None):
             "ARM_MOUNT_Y (%.3f) falls outside that member's run."
             % ("\n".join("    %s sits %.4f m off %s (tolerance %.4f m)"
                           % (nm, gap, mem, ARM_MOUNT_TOL) for (nm, mem, gap) in arm_failures),
+               ARM_MOUNT_Y))
+
+    invisible = [d for d in arm_detail if d["occlusionBeyondItsScreen"] < ARM_VISIBLE_MIN]
+    if invisible:
+        raise ValueError(
+            "an arm is not VISIBLE -- it adds nothing to the frame beyond the screen box it "
+            "holds, so the pilot cannot see there is a mount there at all:\n%s\n"
+            "  Max asked for the arms to be modelled, and an arm hidden entirely behind its "
+            "own panel is not modelled. Move ARM_MOUNT_Y (currently %.3f) so the root sits "
+            "further from its screen's tan footprint -- the upper pair gains visibility as it "
+            "moves FORWARD along the shoulder rib, the lower pair as it moves AFT along the "
+            "rail, so the two trade and there is a balance point."
+            % ("\n".join("    %s adds %.4f%% of the frame (floor %.4f%%)"
+                         % (d["name"], 100.0 * d["occlusionBeyondItsScreen"],
+                            100.0 * ARM_VISIBLE_MIN) for d in invisible),
                ARM_MOUNT_Y))
 
     crossers = [d for d in arm_detail if d["inFrontOfBoxBy"] > 1e-6]

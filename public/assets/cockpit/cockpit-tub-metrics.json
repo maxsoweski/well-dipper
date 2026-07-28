@@ -105,14 +105,14 @@
     "ENCLOSURE_SECTOR_MIN": 0.97,
     "MEMBER_SEAM_TOL": 1e-06,
     "MEMBER_PLANT_OFFSET": 0.05,
-    "SCREEN_W": 0.3,
-    "SCREEN_H": 0.25,
-    "SCREEN_BEZEL": 0.0254,
-    "SCREEN_BODY_DEPTH": 0.0508,
+    "SCREEN_W": 0.24599999999999997,
+    "SCREEN_H": 0.205,
+    "SCREEN_BEZEL": 0.020828,
+    "SCREEN_BODY_DEPTH": 0.041656,
     "SCREEN_FACE_RECESS": 0.004,
     "SCREEN_FACE_GAP": 0.0015,
-    "SCREEN_DIST_UP": 0.79,
-    "SCREEN_DIST_DOWN": 0.83,
+    "SCREEN_DIST_UP": 0.6478,
+    "SCREEN_DIST_DOWN": 0.6805999999999999,
     "SCREEN_TAN_X_UP": 0.91,
     "SCREEN_TAN_X_DOWN": 0.88,
     "SCREEN_TAN_Z_UP": 0.22,
@@ -123,9 +123,9 @@
       "LL": 3,
       "LR": 8
     },
-    "ARM_MOUNT_Y": 0.95,
+    "ARM_MOUNT_Y": 0.9,
     "ARM_MOUNT_TOL": 1e-06,
-    "ARM_ATTACH_U": 0.65,
+    "ARM_ATTACH_U": 0.45,
     "ARM_ATTACH_W": 0.55,
     "ARM_EMBED": 0.01,
     "ARM_MOUNT_HALF_U": 0.05,
@@ -139,7 +139,7 @@
     "ARM_ELBOW_RADIUS": 0.038,
     "ARM_ELBOW_HALF_LEN": 0.03,
     "ARM_ELBOW_SIDES": 8,
-    "ARM_HEAD_LEN": 0.075,
+    "ARM_HEAD_LEN": 0.06,
     "ARM_HEAD_HALF_U": 0.026,
     "ARM_HEAD_HALF_W": 0.021,
     "ARM_MIN_BEND_DEG": 15.0,
@@ -235,24 +235,24 @@
   },
   "screenUnit": {
     "displayFace": [
-      0.3,
-      0.25
+      0.246,
+      0.205
     ],
-    "displayFaceArea": 0.075,
+    "displayFaceArea": 0.05043,
     "previousDisplayFace": [
       0.3,
       0.2
     ],
-    "displayAreaRatioVsPrevious": 1.25,
-    "bezelWidth": 0.0254,
-    "bezelInches": 1.0,
-    "bodyDepth": 0.0508,
-    "bodyDepthInches": 2.0,
+    "displayAreaRatioVsPrevious": 0.8405,
+    "bezelWidth": 0.020828,
+    "bezelInches": 0.82,
+    "bodyDepth": 0.041656,
+    "bodyDepthInches": 1.64,
     "faceRecess": 0.004,
     "bodyOuterSize": [
-      0.3508,
-      0.3008,
-      0.0508
+      0.287656,
+      0.246656,
+      0.041656
     ]
   },
   "canopy": {
@@ -395,8 +395,8 @@
       "name": "Dash_Shelf",
       "frontY": 1.608,
       "aftY": 1.05,
-      "halfWidthFront": 0.5066815245484401,
-      "halfWidthAft": 0.5651854593441272,
+      "halfWidthFront": 0.506954430336047,
+      "halfWidthAft": 0.5653636627502138,
       "topZ": -0.34,
       "bottomZ": -0.385,
       "depth": 0.558,
@@ -407,7 +407,7 @@
       "insideMarginPlantedDefect": -0.11566026237662541,
       "probesConstrained": 162,
       "probesUnconstrained": 0,
-      "ownOcclusion": 0.037667517930465466,
+      "ownOcclusion": 0.03768780618482248,
       "marginalOcclusion": 0.0,
       "what": "the glare shield lying on top of Coaming_Bow -- a PLACEHOLDER SURFACE with nothing on it, reserving the volume a dashboard would occupy. Max's words were 'a basic panel in front of the player on the bottom half of the canopy', which admitted two readings; asked, he chose the shelf over a raked panel standing up into the windscreen. Content is increment 2's problem. Note it reverses his increment-1 ruling 'we shouldn't need a separate dash' -- the four screens stay; what he wants here is the SPACE."
     }
@@ -416,12 +416,12 @@
     "min": [
       -0.76,
       -1.2,
-      -1.662
+      -1.662052
     ],
     "max": [
       0.76,
       0.7,
-      0.996811
+      0.997084
     ]
   },
   "objects": [
@@ -509,12 +509,12 @@
       "faceCount": 12,
       "boundingBox": {
         "min": [
-          -0.506682,
+          -0.506954,
           -0.385,
           -1.608
         ],
         "max": [
-          0.506682,
+          0.506954,
           -0.34,
           -1.05
         ]
@@ -529,13 +529,13 @@
       "boundingBox": {
         "min": [
           -0.7575,
-          -0.387103,
-          -1.619748
+          -0.387086,
+          -1.619775
         ],
         "max": [
-          -0.498271,
-          -0.297914,
-          0.969395
+          -0.498682,
+          -0.297889,
+          0.969476
         ]
       }
     },
@@ -548,13 +548,13 @@
       "boundingBox": {
         "min": [
           -0.699451,
-          -0.016481,
-          -1.619552
+          -0.016456,
+          -1.61956
         ],
         "max": [
-          -0.473567,
-          0.117735,
-          0.969826
+          -0.474053,
+          0.117886,
+          0.969914
         ]
       }
     },
@@ -586,8 +586,8 @@
       "boundingBox": {
         "min": [
           0.205873,
-          0.457275,
-          -1.617887
+          0.460619,
+          -1.61835
         ],
         "max": [
           0.35284,
@@ -604,14 +604,14 @@
       "faceCount": 20,
       "boundingBox": {
         "min": [
-          0.473595,
-          -0.016722,
-          -1.619472
+          0.474234,
+          -0.016457,
+          -1.61956
         ],
         "max": [
           0.699463,
-          0.117744,
-          0.969831
+          0.117943,
+          0.969947
         ]
       }
     },
@@ -623,14 +623,14 @@
       "faceCount": 20,
       "boundingBox": {
         "min": [
-          0.498275,
-          -0.387104,
-          -1.619746
+          0.498699,
+          -0.387086,
+          -1.619774
         ],
         "max": [
           0.757501,
-          -0.297914,
-          0.969396
+          -0.297888,
+          0.969479
         ]
       }
     },
@@ -642,14 +642,14 @@
       "faceCount": 44,
       "boundingBox": {
         "min": [
-          -0.591741,
-          -0.349679,
-          -1.662
+          -0.592295,
+          -0.349607,
+          -1.662052
         ],
         "max": [
-          0.591809,
-          0.520049,
-          -1.519218
+          0.592306,
+          0.522093,
+          -1.569178
         ]
       }
     },
@@ -661,14 +661,14 @@
       "faceCount": 44,
       "boundingBox": {
         "min": [
-          -0.754656,
-          -0.347405,
-          -0.02973
+          -0.755064,
+          -0.347348,
+          -0.029712
         ],
         "max": [
-          0.754709,
-          0.454881,
-          0.042641
+          0.75509,
+          0.69368,
+          0.028986
         ]
       }
     },
@@ -680,14 +680,14 @@
       "faceCount": 44,
       "boundingBox": {
         "min": [
-          -0.572616,
-          -0.34574,
-          0.933383
+          -0.572854,
+          -0.345468,
+          0.933884
         ],
         "max": [
-          0.570256,
-          0.694086,
-          0.996811
+          0.572872,
+          0.697375,
+          0.997084
         ]
       }
     }
@@ -709,7 +709,7 @@
       "bendAnglesDeg": [
         17.073164
       ],
-      "ownOcclusion": 0.037357
+      "ownOcclusion": 0.03735
     },
     {
       "name": "Rib_Shoulder_L",
@@ -727,7 +727,7 @@
       "bendAnglesDeg": [
         15.947489
       ],
-      "ownOcclusion": 0.019409
+      "ownOcclusion": 0.019408
     },
     {
       "name": "Rib_RoofEdge_L",
@@ -763,7 +763,7 @@
       "bendAnglesDeg": [
         9.989314
       ],
-      "ownOcclusion": 0.006149
+      "ownOcclusion": 0.006108
     },
     {
       "name": "Rib_Shoulder_R",
@@ -781,7 +781,7 @@
       "bendAnglesDeg": [
         15.947489
       ],
-      "ownOcclusion": 0.019423
+      "ownOcclusion": 0.019408
     },
     {
       "name": "Rail_R",
@@ -799,7 +799,7 @@
       "bendAnglesDeg": [
         17.073164
       ],
-      "ownOcclusion": 0.037358
+      "ownOcclusion": 0.03735
     },
     {
       "name": "Arch_Bow",
@@ -812,7 +812,7 @@
       "vertices": 6,
       "seamResidual": 0.0,
       "seamResidualPlantedDefect": 0.05,
-      "inboardMargin": 0.006021,
+      "inboardMargin": 0.004866,
       "inboardMarginPlantedDefect": -0.11017,
       "bendAnglesDeg": [
         21.626211,
@@ -820,7 +820,7 @@
         60.928819,
         21.626211
       ],
-      "ownOcclusion": 0.019459
+      "ownOcclusion": 0.024029
     },
     {
       "name": "Arch_Mid",
@@ -833,7 +833,7 @@
       "vertices": 6,
       "seamResidual": 0.0,
       "seamResidualPlantedDefect": 0.05,
-      "inboardMargin": 0.00251,
+      "inboardMargin": 0.002049,
       "inboardMarginPlantedDefect": -0.052427,
       "bendAnglesDeg": [
         22.708639,
@@ -854,7 +854,7 @@
       "vertices": 6,
       "seamResidual": 0.0,
       "seamResidualPlantedDefect": 0.05,
-      "inboardMargin": 0.004151,
+      "inboardMargin": 0.003742,
       "inboardMarginPlantedDefect": -0.078606,
       "bendAnglesDeg": [
         17.987666,
@@ -869,14 +869,14 @@
   "screens": [],
   "arms": [],
   "armsNote": "AC-FORM(d): arms are AFFIXED TO RIBS, and each is five parts -- Mount, BoomA, Elbow, BoomB, Head -- not a tapered stick. mountedOn names the seam member the plate bolts to and mountGap is how far off that member's inboard face the root actually sits; it must be ~0. The retired rule (root outside the view frustum) is deliberately absent: empty space satisfies it, which is how the previous build passed with four monitors on two lamp-posts.",
-  "predictedOcclusionFraction": 0.343304,
+  "predictedOcclusionFraction": 0.347158,
   "occlusion": {
     "method": "analytic scanline rasterisation of the projected silhouettes at GAME_FOV_DEG / GAME_ASPECT, 2160 rows, union of overlapping occluders",
     "excludes": [
       "Canopy_Glass"
     ],
     "excludesWhy": "Canopy_Glass is see-through by design -- and with an enclosure that matters far more than it did with a window, because the vault now wraps the pilot and would otherwise count as near-total occlusion",
-    "total": 0.343304,
+    "total": 0.347158,
     "marginalOrder": [
       "seamMembers",
       "bulkheadAndFloor",
@@ -884,13 +884,13 @@
       "arms"
     ],
     "marginal": {
-      "seamMembers": 0.143584,
-      "bulkheadAndFloor": 0.199721,
+      "seamMembers": 0.147385,
+      "bulkheadAndFloor": 0.199773,
       "screensAndBodies": 0.0,
       "arms": 0.0
     },
     "own": {
-      "seamMembers": 0.143584,
+      "seamMembers": 0.147385,
       "bulkheadAndFloor": 0.250317,
       "screensAndBodies": 0.0,
       "arms": 0.0
@@ -917,7 +917,7 @@
     },
     "enclosureSectorMin": 0.97,
     "worstMemberSeamResidual": 0.0,
-    "worstMemberInboardMargin": 0.00215,
+    "worstMemberInboardMargin": 0.002049,
     "minMemberBendAngleDeg": 9.989314,
     "seamResidualPlantedDefectMin": 0.05,
     "inboardMarginPlantedDefectMax": -0.052427,
