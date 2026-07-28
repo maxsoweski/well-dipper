@@ -1350,6 +1350,47 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
       }
     });
 
+    it('gives every display face a unit-square UV, so screen content can bind to it', () => {
+      // ── A CROSS-LANE CONTRACT, not an internal detail ─────────────────────
+      // The screen-content work (menus, notifications, the Phosphor CRT) draws into a render
+      // target and needs somewhere to put it. A quad with no TEXCOORD_0 cannot carry one, and
+      // that lane cannot fix it from its side: the generator is this lane's file.
+      //
+      // It is asserted here because the two lanes run CONCURRENTLY and the screens are still
+      // being re-fitted to the pilot's sightlines. Their POSITIONS will move; this contract
+      // must not. A silent regression here would surface as "the screens went black" in a
+      // session that has no visibility into why.
+      for (const name of SCREEN_NAMES) {
+        const { node } = GLB.requireNode(gltf, name);
+        const mesh = gltf.meshes[node.mesh];
+        for (const prim of mesh.primitives ?? []) {
+          expect(
+            prim.attributes?.TEXCOORD_0,
+            `${name} has no TEXCOORD_0. Screen content binds a render target to this quad and cannot `
+            + 'do so without UVs — see SCREEN_FACE_UV in scripts/cockpit-gen.py.',
+          ).toBeDefined();
+          const uv = GLB.readAccessor(gltf, bin, prim.attributes.TEXCOORD_0);
+          const pairs = [];
+          for (let i = 0; i < uv.count; i++) pairs.push([uv.array[i * 2], uv.array[i * 2 + 1]]);
+          // A unit square: every corner present exactly once, spanning the full 0..1 range.
+          const corners = pairs.map(([a, b]) => `${a.toFixed(3)},${b.toFixed(3)}`).sort();
+          expect(
+            corners,
+            `${name}'s UVs are ${corners.join(' / ')} — the display face must map the full unit square, or `
+            + 'content drawn onto it is cropped or tiled',
+          ).toEqual(['0.000,0.000', '0.000,1.000', '1.000,0.000', '1.000,1.000']);
+        }
+      }
+
+      // ...and the sidecar must DECLARE the orientation, because "which corner is (0,0)?" is
+      // exactly the thing the other lane would otherwise have to discover by trial and error.
+      for (const s of metrics.screens ?? []) {
+        expect(s.uv, `cockpit-metrics.json declares no uv for ${s.name}`).toEqual([
+          [0, 0], [1, 0], [1, 1], [0, 1],
+        ]);
+      }
+    });
+
     it('matches the display-face centres, normals and sizes the sidecar declares', () => {
       // NEAR-TAUTOLOGY, by construction. The sidecar is written by the SAME run from the
       // SAME vertex lists, so this compares the script against its own arithmetic. What it

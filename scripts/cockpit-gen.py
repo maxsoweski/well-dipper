@@ -1475,6 +1475,19 @@ def _rect(centre, u, w, hu, hw):
     ]
 
 
+# Display-face UVs, in the SAME corner order _rect() emits: (-u,-w) (+u,-w) (+u,+w) (-u,+w).
+# So (0,0) is the pilot's LOWER-LEFT of the panel and (1,1) its upper-right.
+#
+# WHY THIS EXISTS AT ALL. Increment 2's Phosphor CRT and increment 5's screen content both
+# need to draw a render target onto these quads, and a mesh with no TEXCOORD_0 cannot carry
+# one. Emitting the layer here rather than making the content lane rebuild its own quads
+# keeps ONE definition of where a screen is: the content lane binds a texture, and where
+# that surface sits in space stays this script's business. That seam is what lets the two
+# lanes move independently -- the screens' POSITIONS are still being re-fitted, and nothing
+# downstream should have to care.
+SCREEN_FACE_UV = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
+
+
 def build_screen_face(centre, n, u, w):
     """Screen_*: the display face alone -- one quad, wound so its normal is n (at the eye)."""
     verts = _rect(centre, u, w, SCREEN_W * 0.5, SCREEN_H * 0.5)
@@ -1760,7 +1773,8 @@ def build_all():
     units = screen_units()
     for un in units:
         parts.append({"name": SCREEN_PREFIX + un["suffix"], "verts": un["faceVerts"],
-                      "faces": un["faceFaces"], "material": "Mat_Screen", "kind": "screen"})
+                      "faces": un["faceFaces"], "material": "Mat_Screen", "kind": "screen",
+                      "uv": list(SCREEN_FACE_UV)})
     for un in units:
         parts.append({"name": BODY_PREFIX + un["suffix"], "verts": un["bodyVerts"],
                       "faces": un["bodyFaces"], "material": "Mat_Body", "kind": "body"})
@@ -2367,12 +2381,21 @@ def make_material(name, rgb, roughness, metallic=0.0, double_sided=False, alpha=
     return mat
 
 
-def make_mesh_object(name, verts, faces, material):
+def make_mesh_object(name, verts, faces, material, uv=None):
     mesh = bpy.data.meshes.new(name + "_mesh")
     mesh.from_pydata([tuple(float(c) for c in v) for v in verts], [], [tuple(f) for f in faces])
     if mesh.validate(verbose=False):
         print("  WARNING: mesh.validate() altered %s -- check the vertex/face lists" % name)
     mesh.update()
+    if uv is not None:
+        # PER-VERTEX uv assigned through the loops. Every vertex of a display face carries one
+        # and only one uv (it is a single quad), so a loop-indexed write is unambiguous and
+        # survives triangulate() splitting the quad -- both triangles index the same corners.
+        if len(uv) != len(verts):
+            raise ValueError("%s: %d uvs for %d vertices" % (name, len(uv), len(verts)))
+        layer = mesh.uv_layers.new(name="UVMap")
+        for loop in mesh.loops:
+            layer.data[loop.index].uv = tuple(float(c) for c in uv[loop.vertex_index])
     if hasattr(mesh, "shade_flat"):
         mesh.shade_flat()
     else:
@@ -2491,6 +2514,13 @@ def build_metrics(parts, units, analysis):
             "bodyOuterSize": [r6(SCREEN_W + 2.0 * SCREEN_BEZEL),
                               r6(SCREEN_H + 2.0 * SCREEN_BEZEL),
                               r6(SCREEN_BODY_DEPTH)],
+            "uv": [list(c) for c in SCREEN_FACE_UV],
+            "uvNote": ("TEXCOORD_0 on the display face, (0,0) at the pilot's LOWER-LEFT corner "
+                       "and (1,1) at the upper-right, in the face's own (widthAxis, heightAxis) "
+                       "frame. This is the seam the screen-content work binds to: it does not "
+                       "need to know where the panel sits, only that it is a unit-square UV "
+                       "surface 0.45 x 0.30 m. Screen POSITIONS are still being re-fitted; this "
+                       "contract is not."),
         })
 
     adet = {d["name"]: d for d in analysis["armDetail"]}
@@ -3140,7 +3170,8 @@ def main():
     make_eye_point()
     parts, units = build_all()
     for part in parts:
-        make_mesh_object(part["name"], part["verts"], part["faces"], mats[part["material"]])
+        make_mesh_object(part["name"], part["verts"], part["faces"], mats[part["material"]],
+                         uv=part.get("uv"))
 
     analysis = analyse(units)
     metrics = build_metrics(parts, units, analysis)
