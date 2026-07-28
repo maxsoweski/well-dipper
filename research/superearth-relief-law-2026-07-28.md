@@ -31,7 +31,9 @@ The Solar System contains **exactly one body at or above 0.9 g** (Earth). So:
 20 load-bearing citations retrieved and checked: every DOI/arXiv ID resolved to the correct paper
 with matching authors, year, venue; every reachable verbatim quote matched. **No fabrications.**
 
-Three flagged, and one carries real load:
+Three flagged, and one carries real load. **Two of the three are now RETRIEVED** — see
+`research/superearth-relief-law-citations-resolved-2026-07-28.md`, which supersedes items 1 and 2
+below and changes conclusions in both cases:
 
 1. **Melosh 2011 lunar quote — UNVERIFIED and load-bearing.** *"Evidently strength is not the major
    factor limiting the Moon's topography: History must play a role"* could not be retrieved
@@ -61,6 +63,16 @@ A 1.5 R⊕ planet is **4.5 M⊕ and 1.99 g** — not 1.5 g. `a ∈ [0.5, 1.0]` i
 Earth-composition planet above 1 R⊕. This propagates into every downstream law.
 
 ## ⭐ Finding 1 — the codebase's gravity is wrong for super-Earths (the most actionable result)
+
+> ✅ **FIXED 2026-07-28** — `docs/WORKSTREAMS/world-engine-gravity-selfcompression-2026-07-28/`.
+> Two corrections to what this section says. (1) **The path below is wrong**: the file is at the
+> **repo root**, `body-condition-vector.js` — there is no `src/worldengine/base/` copy, and that
+> wrong path propagated into a handoff and three grounding lenses before it was caught. The line
+> number 37 was correct. (2) **The shipped fix is not a single exponent.** It is piecewise in
+> ABSOLUTE R (`R^(4/3)` below 1 R⊕ per Valencia+2006, `R^1.70` above per Zeng+2016) and gated to
+> the **rocky class only** — a bare `^1.70` would have fixed super-Earths by breaking Mars, Mercury,
+> Europa and Titan, because 8 of the 13 rocky/icy presets have a canonical radius below 1 and an
+> anchored ratio only agrees with an absolute piecewise law when R and R_c share a branch.
 
 `src/worldengine/base/body-condition-vector.js:37` sets `surfaceGravity = g_c·(R/R_c)`, and its own
 comment states the assumption: *"M_derived(R) = M_c·(R/R_c)³ ⇒ g = g_c·(R/R_c)"* — constant density,

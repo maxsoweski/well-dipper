@@ -25,6 +25,7 @@ import {
   K_GS, B_SFD, CRATER_SAT_N,
 } from '../src/worldengine/base/bombardment.js';
 import { radPerKm } from '../src/worldengine/base/baseStep.js';
+import { deriveConditionVector } from '../body-condition-vector.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -65,9 +66,21 @@ describe('V2-6 AC-GCOUNT — impact flux is gravity-independent (K_GD removed); 
 // ══════════════════════════════════════════════════════════════════════════════════════════════════
 describe('V2-6 AC-RADIUS-LAW — count ∝ R² (analytic, strict), size ∝ 1/R, coverage in the pinned band', () => {
   const Rs = [0.2, 0.38, 0.5, 0.8, 1.2, 2.0];
-  // coherent gravity across the sweep: g = g_c·(R/R_c) (the S1 gravity-coherence law), R_c = 0.38, g_c = 0.277.
+  // Coherent gravity across the sweep, R_c = 0.38, g_c = 0.277 (the impact-airless anchor).
+  //
+  // REWIRED 2026-07-28 (gravity-selfcompression). This line used to re-implement the gravity law
+  // harness-side as `g_c * (R / R_c)`. That is a LATENT MEASUREMENT DEFECT, not a shortcut: when
+  // production's law changed, this test kept passing while silently measuring a law the engine no
+  // longer implements — the same failure mode as this program's four earlier instrument bugs, every
+  // one of which returned a plausible number rather than crashing. It now calls the SHIPPED
+  // derivation, so a future change to the gravity law reaches these crater assertions by itself.
   const R_c = 0.38, g_c = 0.277;
-  const schedFor = (R) => craterSchedule(cond({ g: g_c * (R / R_c), R }));
+  const GRAVITY_FP = {
+    radiusEarth: R_c, massEarth: g_c * R_c * R_c,          // ⇒ bodySurfaceGravity(fp) === g_c
+    composition: { volatileFraction: 0.02, density: 4.5 }, // same body cond() describes ⇒ classifies rocky
+    age: 4.5, T_eq: 235,
+  };
+  const schedFor = (R) => craterSchedule(cond({ g: deriveConditionVector(GRAVITY_FP, null, R).surfaceGravity, R }));
 
   it('N_analytic ∝ R² STRICTLY (pre-round analytic value; no cap, no round ties)', () => {
     let perR2 = null;

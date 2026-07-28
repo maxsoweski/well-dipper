@@ -49,7 +49,8 @@ import { dirname, join } from 'node:path';
 import { bodySurfaceGravity } from '../../../../src/worldengine/base/baseStep.js';
 import { craterSchedule, isImpactSurface, writeBombardment } from '../../../../src/worldengine/base/bombardment.js';
 import { DRIVER_PRESETS, PRESET_ARCHETYPE, PRESET_NAMES, NAMED_BODY, drawPresetRadius } from '../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
+import { deriveConditionVector, gravityRadiusShape } from '../../../../body-condition-vector.js';
+import { compositionClass } from '../../../../src/worldengine/base/e1Regime.js';
 import { deriveUniforms, reliefEnvelope, Q_RELIEF, RELIEF_FLOOR, RELIEF_CEIL } from '../../../../planet-lod-lab-core.js';
 import { computeE1 } from '../../../../src/worldengine/base/e1Regime.js';
 import { buildIrregularSphere } from '../../../../planet-lod-rivers.js';
@@ -166,13 +167,25 @@ for (const name of SWEPT) {
     coverages.push(sched.coverage);
 
     // 1. physics invariants ──────────────────────────────────────────────────
-    const gExpected = gCanon * (R / R_c);
+    // gravity-selfcompression-2026-07-28: the law this invariant pins is no longer the plain ratio.
+    // It is g = g_c·f(R)/f(R_c) with f piecewise in ABSOLUTE R (R^(4/3) below 1, R^1.70 above), on the
+    // ROCKY class only. Re-derived from the shipped shape rather than re-implemented inline, so this
+    // harness cannot drift from production again the way it just did.
+    const gExpected = gCanon * (compositionClass(cond) === 'rocky'
+      ? gravityRadiusShape(R) / gravityRadiusShape(R_c)
+      : R / R_c);
     if (cond.surfaceGravity !== gExpected)
-      failures.push(`${name} seed ${s}: surfaceGravity ${cond.surfaceGravity} !== g_canon·(R/R_c) ${gExpected}`);
+      failures.push(`${name} seed ${s}: surfaceGravity ${cond.surfaceGravity} !== g_canon·f(R)/f(R_c) ${gExpected}`);
     const massRoundTrip = cond.surfaceGravity * cond.radiusEarth * cond.radiusEarth;
-    const mDerived = M_c * (R / R_c) ** 3;
+    // gravity-selfcompression-2026-07-28: massEarthOf = g·R² carries the gravity exponent PLUS 2,
+    // so on the rocky branch the implied mass law is M_c·(R/R_c)^3.7 above 1 R⊕ and ^(10/3) below,
+    // not a flat ^3. Derived from the same shipped shape as the gravity check above.
+    const _shape = compositionClass(cond) === 'rocky'
+      ? gravityRadiusShape(R) / gravityRadiusShape(R_c)
+      : R / R_c;
+    const mDerived = M_c * _shape * (R / R_c) ** 2;
     if (!closeRel(massRoundTrip, mDerived))
-      failures.push(`${name} seed ${s}: massEarthOf round-trip ${massRoundTrip} !≈ M_c·(R/R_c)³ ${mDerived}`);
+      failures.push(`${name} seed ${s}: massEarthOf round-trip ${massRoundTrip} !≈ M_c·f(R)/f(R_c)·(R/R_c)² ${mDerived}`);
     if (!finiteAll(cond))
       failures.push(`${name} seed ${s}: non-finite field in condition vector`);
     if (!Number.isFinite(sched.coverage) || !Number.isFinite(sched.nAnalytic))

@@ -1,8 +1,17 @@
 // tests/worldengine-v2-6-gcohere.test.js — World Engine V2-6 slice 1 (AC-GCOHERE + §1B radPerKm).
 //
-// The root fix: deriveConditionVector's `surfaceGravity` field derives g from the DRAWN radius via the
-// normalized-at-canonical ratio form g = g_c·(R/R_c) — the ONLY form byte-exact at canonical while making g
-// coherent with drawn R off-canonical. This suite pins the four properties the slice contract names:
+// The root fix: deriveConditionVector's `surfaceGravity` field derives g from the DRAWN radius via a
+// normalized-at-canonical RATIO form — the only shape byte-exact at canonical while making g coherent
+// with drawn R off-canonical.
+//
+// ⚠ THE EXPONENT MOVED (gravity-selfcompression-2026-07-28). V2-6 shipped the constant-density law
+// g = g_c·(R/R_c). It is now g = g_c·f(R)/f(R_c), f piecewise in ABSOLUTE Earth radii — R^(4/3) below
+// 1 R⊕ (Valencia+2006) and R^1.70 above (Zeng+2016) — applied to the ROCKY class only; gas, icy and
+// carbon bodies keep the retired exponent. The RATIO FORM and every byte-identity property below are
+// unchanged; only the exponent is. The assertions in this file were re-pinned rather than deleted, and
+// they still discriminate: reverting the source exponents to 1 fails them.
+//
+// This suite pins the four properties the slice contract names:
 //   1. canonical bit-identity — new expression === legacy expression (both derived-present and fallback branch),
 //      for every DRIVER_PRESETS entry, when R === R_c (the golden/NAMED_BODY/headless invariant). FENCE 1/2 proof.
 //   2. drawn-R sweep — g = M_derived/R² exact-as-computed (g_c·R/R_c), monotone increasing in R, per preset.
@@ -12,9 +21,10 @@
 // Plus a small radPerKm unit (the §1B shared km→angular scalar this slice adds to baseStep.js).
 import { describe, it, expect } from 'vitest';
 
-import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveConditionVector, gravityRadiusShape } from '../body-condition-vector.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
 import { bodySurfaceGravity, radPerKm, KM_PER_EARTH_RADIUS } from '../src/worldengine/base/baseStep.js';
+import { compositionClass } from '../src/worldengine/base/e1Regime.js';
 
 const PRESETS = Object.entries(DRIVER_PRESETS);
 // R sweep spans small showcase bodies through super-Earths / giants — deliberately away from canonical.
@@ -56,14 +66,26 @@ describe('V2-6 AC-GCOHERE — canonical bit-identity (R === R_c)', () => {
   });
 });
 
-describe('V2-6 AC-GCOHERE — drawn-R sweep g = g_c·(R/R_c)', () => {
+describe('V2-6 AC-GCOHERE — drawn-R sweep g = g_c·f(R)/f(R_c)', () => {
+  // RE-PINNED 2026-07-28 (gravity-selfcompression). This assertion previously read
+  //   expect(cv.surfaceGravity).toBe(g_c * (R / R_c))
+  // which pinned the CONSTANT-DENSITY law (M ∝ R³ ⇒ g ∝ R¹). That law is false above 1 R⊕ —
+  // self-compression makes larger rocky planets denser — so the assertion is rewritten onto the
+  // shipped law rather than deleted. It still discriminates: reverting the source exponents to 1
+  // makes every rocky preset fail here.
   it('surfaceGravity equals the coherence law as computed, exactly, across the R sweep', () => {
     for (const [name, fp] of PRESETS) {
       const R_c = fp.radiusEarth ?? 1.0;
       const g_c = bodySurfaceGravity(fp);
+      const cls = compositionClass(deriveConditionVector(fp, null, R_c));
       for (const R of R_SWEEP) {
         const cv = deriveConditionVector(fp, null, R);
-        expect(cv.surfaceGravity, `${name} @R=${R}`).toBe(g_c * (R / R_c));
+        // Non-rocky classes are gated OUT of the self-compression law and keep the plain ratio,
+        // byte-for-byte. Asserting both branches here is what makes the gate falsifiable.
+        const expected = cls === 'rocky'
+          ? g_c * (gravityRadiusShape(R) / gravityRadiusShape(R_c))
+          : g_c * (R / R_c);
+        expect(cv.surfaceGravity, `${name} [${cls}] @R=${R}`).toBe(expected);
         expect(cv.radiusEarth, `${name} @R=${R}`).toBe(R); // the drawn radius is carried on the vector
       }
     }
@@ -82,18 +104,48 @@ describe('V2-6 AC-GCOHERE — drawn-R sweep g = g_c·(R/R_c)', () => {
 });
 
 describe('V2-6 AC-GCOHERE — massEarthOf round-trip (g·d² === M_derived)', () => {
-  // massEarthOf(cv) = cv.surfaceGravity · cv.radiusEarth² (e1Regime.js). It must reconstruct
-  // M_derived = M_c·(R/R_c)³, with M_c = g_c·R_c² the preset's canonical mass, within float64 ulp.
-  it('reconstructs M_c·(R/R_c)³ across the R sweep for every preset', () => {
+  // massEarthOf(cv) = cv.surfaceGravity · cv.radiusEarth² (e1Regime.js). It must reconstruct the
+  // IMPLIED mass law, with M_c = g_c·R_c² the preset's canonical mass, within float64 ulp.
+  //
+  // RE-PINNED 2026-07-28 (gravity-selfcompression) — and this is the physically load-bearing one.
+  // massEarthOf is g·R², so it carries the gravity exponent plus 2. When g moved from R^1 to the
+  // piecewise (4/3, 1.70), the mass law these consumers see moved from a flat M ∝ R³ to
+  // M ∝ R^(10/3) below 1 R⊕ and M ∝ R^3.7 above it. Nothing in e1Regime or giant-drivers was
+  // edited — they reconstruct mass from a gravity that changed underneath them — so if this
+  // assertion is not updated it silently certifies a mass law production no longer implements.
+  it('reconstructs the implied mass law across the R sweep for every preset', () => {
     for (const [name, fp] of PRESETS) {
       const R_c = fp.radiusEarth ?? 1.0;
       const g_c = bodySurfaceGravity(fp);
       const M_c = g_c * R_c * R_c; // === fp.massEarth up to float round-trip; g_c already = massEarth/R_c²
+      const cls = compositionClass(deriveConditionVector(fp, null, R_c));
       for (const R of R_SWEEP) {
         const cv = deriveConditionVector(fp, null, R);
         const massEarthOf = cv.surfaceGravity * cv.radiusEarth * cv.radiusEarth;
-        const M_derived = M_c * (R / R_c) ** 3;
-        expect(closeRel(massEarthOf, M_derived), `${name} @R=${R}`).toBe(true);
+        // M = g·R² = M_c · [f(R)/f(R_c)] · (R/R_c)²  — the gravity shape times the areal term.
+        const shapeRatio = cls === 'rocky'
+          ? gravityRadiusShape(R) / gravityRadiusShape(R_c)
+          : R / R_c;
+        const M_derived = M_c * shapeRatio * (R / R_c) ** 2;
+        expect(closeRel(massEarthOf, M_derived), `${name} [${cls}] @R=${R}`).toBe(true);
+      }
+    }
+  });
+
+  // The exponent stated in prose above, asserted numerically so the prose cannot rot. On the rocky
+  // branch, well inside each domain, d(ln M)/d(ln R) must be 3+4/3 = 10/3 below 1 and 3.7 above it.
+  it('the implied rocky mass exponent is 10/3 below 1 R⊕ and 3.7 above it', () => {
+    const rocky = PRESETS.filter(([, fp]) =>
+      compositionClass(deriveConditionVector(fp, null, fp.radiusEarth ?? 1.0)) === 'rocky');
+    expect(rocky.length).toBe(8);
+    const massAt = (fp, R) => {
+      const cv = deriveConditionVector(fp, null, R);
+      return cv.surfaceGravity * cv.radiusEarth * cv.radiusEarth;
+    };
+    for (const [name, fp] of rocky) {
+      for (const [lo, hi, want] of [[0.5, 0.9, 10 / 3], [1.1, 1.7, 3.7]]) {
+        const slope = Math.log(massAt(fp, hi) / massAt(fp, lo)) / Math.log(hi / lo);
+        expect(Math.abs(slope - want), `${name} on [${lo},${hi}]`).toBeLessThan(1e-9);
       }
     }
   });

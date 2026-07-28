@@ -32,7 +32,22 @@ import {
   G_REF, K_GS, B_SFD, C_BASIN,
 } from '../base/bombardment.js';
 import { reliefEnvelope, Q_RELIEF, RELIEF_FLOOR, RELIEF_CEIL } from '../../../planet-lod-lab-core.js';
+import { deriveConditionVector, GRAV_R_EXP_SUB, GRAV_R_EXP_SUPER } from '../../../body-condition-vector.js';
 import { fitPowerLaw, lawVerdict, DEFAULT_Z } from './stats.js';
+
+/**
+ * A synthetic rocky preset for the gravity laws below. Deliberately NOT a real DRIVER_PRESETS entry:
+ * the law under audit is the radius→gravity SHAPE, and anchoring it at R_c = 1, g_c = 1 makes the
+ * measured exponent read directly off the returned value. density 5.5 with no h2-he atmosphere and
+ * C:O = 0 classifies `rocky`, so the self-compression branch is the one exercised.
+ */
+const ROCKY_FP = Object.freeze({
+  radiusEarth: 1.0,
+  massEarth: 1.0,
+  composition: Object.freeze({ density: 5.5 }),
+  age: 4.5,
+  T_eq: 288,
+});
 
 /**
  * A baseline condition that passes `isImpactSurface` — cold enough and with a thin enough atmosphere
@@ -129,11 +144,73 @@ export const LAW_REGISTRY = [
     nullValue: 0,
     measure: (c, deps) => deps.reliefEnvelope(c.radiusEarth, c.surfaceGravity),
   },
+
+  // ── The two gravity-vs-radius laws (gravity-selfcompression-2026-07-28). ──────────────────────
+  //
+  // Every law above pins something gravity DRIVES. Nothing pinned what drives GRAVITY, so the
+  // mass-radius relation underneath the whole registry was unguarded and could be retuned silently.
+  // These two close that.
+  //
+  // WHY TWO ENTRIES AND NOT ONE. The law is piecewise in ABSOLUTE radius, so a single entry would
+  // have a hidden breakpoint and any sweep spanning it would measure the blend rather than either
+  // branch. (Measured: a [0.5 … 4.0] sweep returns 1.507 ± 0.070, which FAILS a claim of 1.70 —
+  // the law is fine, the sweep is wrong.) Each entry therefore sweeps strictly inside its own
+  // branch, the same discipline relief-envelope-vs-gravity uses to stay inside its clamp.
+  //
+  // WHY nullValue IS 1.0 AND NOT 0. "gravity ignores radius" is not a state this code can reach —
+  // g = M/R² is radius-driven under any mass law — so a null of 0 guards nothing and a
+  // resolution-poor sweep would return a false PASS. The alternative each law must be separable
+  // FROM is the law it replaced: the constant-density g ∝ R^1. Same construction as
+  // crater-count-independent-of-gravity, whose null is the removed g^0.34 coupling rather than 0.
+  //
+  // CALIBRATION vs DERIVATION: there is no measured super-Earth gravity and no measured
+  // super-Earth topography anywhere in this chain. Both exponents come from interior-structure
+  // MODELS. The high branch is derivation; the low branch is derivation plus an acknowledged
+  // extrapolation off an iron-rich family (see body-condition-vector.js for the full account).
+  {
+    id: 'gravity-vs-radius-selfcompression-super',
+    claim: `above 1 R⊕ surface gravity scales as R^${GRAV_R_EXP_SUPER} on the drawn-radius axis — `
+         + 'the rocky mass-radius relation M ∝ R^3.7 (self-compression at fixed composition) '
+         + 'divided by the R² in g = M/R², replacing the constant-density M ∝ R³ form that gave R^1',
+    source: 'body-condition-vector.js (REPO ROOT, not src/worldengine/base/) — gravityRadiusShape(R) '
+          + `= R^${GRAV_R_EXP_SUPER} for R > 1; Zeng, Sasselov & Jacobsen 2016, ApJ 819:127 `
+          + '(arXiv:1512.08827), R/R⊕ = (1.07 − 0.21·CMF)·(M/M⊕)^(1/3.7), applicable 1–8 M⊕ and '
+          + 'CMF 0.0–0.4. The CMF prefactor cancels in the normalized-at-canonical ratio form, so '
+          + 'the exponent is composition-blind WITHIN the rocky class.',
+    driver: 'radiusEarth',
+    // Strictly inside Zeng's own validity band: 1–8 M⊕ maps to R ∈ [1.000, 1.754] at CMF = 1/3
+    // (8^(1/3.7) = 1.7542). Sweeping past 1.754 would audit the law against an extrapolation of
+    // the fit it cites.
+    values: [1.05, 1.15, 1.25, 1.35, 1.45, 1.60, 1.75],
+    claimedExponent: GRAV_R_EXP_SUPER,
+    nullValue: 1.0,
+    nullMeaning: 'the retired constant-density law g = g_c·(R/R_c)^1 (M ∝ R³, density held fixed)',
+    measure: (c, deps) => deps.deriveConditionVector(ROCKY_FP, null, c.radiusEarth).surfaceGravity,
+  },
+  {
+    id: 'gravity-vs-radius-selfcompression-sub',
+    claim: `below 1 R⊕ surface gravity scales as R^${GRAV_R_EXP_SUB.toFixed(4)} — self-compression `
+         + 'weakens as mass falls, so the exponent drops TOWARD the incompressible value of 1 '
+         + 'without reaching it',
+    source: 'body-condition-vector.js — gravityRadiusShape(R) = R^(4/3) for R ≤ 1; Valencia, '
+          + "O'Connell & Sasselov 2006 (arXiv:astro-ph/0511150, Icarus 181:545) Table 2, five "
+          + 'fitted β = 0.2991–0.3094 ⇒ n = 1/β − 2 = 1.23–1.34. INFERENCE FLAG: that family is '
+          + 'Super-MERCURIES (CMF 50/65/80%); extrapolating to Earth-like CMF is ours, not theirs. '
+          + '4/3 is the top of the defensible bracket, chosen for being exact and rational.',
+    driver: 'radiusEarth',
+    // Strictly below the R = 1 branch join. 0.98 rather than 1.0 as the top point so the sweep
+    // never touches the breakpoint itself.
+    values: [0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.98],
+    claimedExponent: GRAV_R_EXP_SUB,
+    nullValue: 1.0,
+    nullMeaning: 'the retired constant-density law g = g_c·(R/R_c)^1 (M ∝ R³, density held fixed)',
+    measure: (c, deps) => deps.deriveConditionVector(ROCKY_FP, null, c.radiusEarth).surfaceGravity,
+  },
 ];
 
 /** The real implementations. The positive control replaces one of these to plant a defect. */
 export function defaultDeps() {
-  return { craterSchedule, reliefEnvelope, isImpactSurface };
+  return { craterSchedule, reliefEnvelope, isImpactSurface, deriveConditionVector };
 }
 
 /**

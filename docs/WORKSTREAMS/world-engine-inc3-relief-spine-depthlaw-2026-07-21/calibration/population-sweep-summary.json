@@ -1,11 +1,11 @@
 {
   "meta": {
-    "generated": "2026-07-21T12:57:28.323Z",
+    "generated": "2026-07-28T15:34:06.821Z",
     "workstream": "world-engine-inc3-relief-spine-depthlaw-2026-07-21",
     "nSeeds": 64,
     "sweptPresets": 11,
     "meshN": 10000,
-    "totalMs": 2155,
+    "totalMs": 1046,
     "budgetMs": 600000
   },
   "gates": {
@@ -39,9 +39,9 @@
     "refReliefIllustrative": 0.003,
     "nPoints": 704,
     "multMin": 0.5125557518910179,
-    "multMax": 2.3746710565263482,
+    "multMax": 2.6451938883842363,
     "apparentMinIllustrative": 0.0015376672556730536,
-    "apparentMaxIllustrative": 0.007124013169579045,
+    "apparentMaxIllustrative": 0.00793558166515271,
     "boundOK": true,
     "monotoneViolations": 0,
     "radiusLeaks": 0,
@@ -170,8 +170,8 @@
         "variance": 0.04377570386158056
       },
       "coverage": {
-        "mean": 0.000014247153027522314,
-        "variance": 3.171503300374776e-13
+        "mean": 0.000013886981783104495,
+        "variance": 1.096188911242432e-12
       },
       "matureSeeds": 0,
       "e1": {
@@ -182,9 +182,9 @@
           "rocky/stagnant"
         ],
         "counts": {
-          "rocky/mobile": 43,
-          "rocky/episodic": 15,
-          "rocky/stagnant": 6
+          "rocky/mobile": 49,
+          "rocky/stagnant": 6,
+          "rocky/episodic": 9
         }
       },
       "carrier": {
@@ -193,12 +193,12 @@
         "flatBad": 0
       },
       "env": {
-        "multMin": 0.8404122652225142,
-        "multMax": 1.2083655445977168,
-        "apparentMin": 0.0025212367956675428,
-        "apparentMax": 0.0036250966337931507
+        "multMin": 0.7129507139172772,
+        "multMax": 1.2611052379917087,
+        "apparentMin": 0.0021388521417518313,
+        "apparentMax": 0.003783315713975126
       },
-      "ms": 258
+      "ms": 169
     },
     {
       "name": "Lava (hot airless)",
@@ -229,12 +229,12 @@
         "flatBad": 0
       },
       "env": {
-        "multMin": 1.0691070223049344,
-        "multMax": 2.1414159049244117,
-        "apparentMin": 0.003207321066914803,
-        "apparentMax": 0.0064242477147732355
+        "multMin": 1.0476536285909865,
+        "multMax": 2.6451938883842363,
+        "apparentMin": 0.0031429608857729595,
+        "apparentMax": 0.00793558166515271
       },
-      "ms": 2
+      "ms": 0
     },
     {
       "name": "Ocean (temperate)",
@@ -246,8 +246,8 @@
         "variance": 0.08933817114608283
       },
       "coverage": {
-        "mean": 0.000013576612503782172,
-        "variance": 4.86358094256401e-13
+        "mean": 0.000013241121213783408,
+        "variance": 1.7843675924157492e-12
       },
       "matureSeeds": 0,
       "e1": {
@@ -258,8 +258,8 @@
           "rocky/stagnant"
         ],
         "counts": {
-          "rocky/mobile": 54,
-          "rocky/stagnant": 6,
+          "rocky/mobile": 55,
+          "rocky/stagnant": 5,
           "rocky/episodic": 4
         }
       },
@@ -269,12 +269,12 @@
         "flatBad": 0
       },
       "env": {
-        "multMin": 0.7210749702869175,
-        "multMax": 1.1517554450327703,
-        "apparentMin": 0.0021632249108607523,
-        "apparentMax": 0.003455266335098311
+        "multMin": 0.5904958584302157,
+        "multMax": 1.249224288852876,
+        "apparentMin": 0.0017714875752906471,
+        "apparentMax": 0.003747672866558628
       },
-      "ms": 59
+      "ms": 23
     },
     {
       "name": "Frozen (airless)",
@@ -310,7 +310,7 @@
         "apparentMin": 0.0037789391289714453,
         "apparentMax": 0.007124013169579045
       },
-      "ms": 120
+      "ms": 106
     },
     {
       "name": "Gas giant (Jovian)",
@@ -346,7 +346,7 @@
         "apparentMin": 0.0015376672556730536,
         "apparentMax": 0.0025081171181449507
       },
-      "ms": 0
+      "ms": 1
     },
     {
       "name": "Gas giant (Saturnian)",
@@ -466,8 +466,8 @@
         "variance": 0.02233454278652071
       },
       "coverage": {
-        "mean": 0.000014580669593386549,
-        "variance": 1.9634854494751103e-13
+        "mean": 0.000014431842432191004,
+        "variance": 6.389978568435796e-13
       },
       "matureSeeds": 0,
       "e1": {
@@ -478,9 +478,9 @@
           "rocky/stagnant"
         ],
         "counts": {
-          "rocky/mobile": 37,
-          "rocky/episodic": 21,
-          "rocky/stagnant": 6
+          "rocky/mobile": 40,
+          "rocky/episodic": 19,
+          "rocky/stagnant": 5
         }
       },
       "carrier": {
@@ -489,12 +489,12 @@
         "flatBad": 0
       },
       "env": {
-        "multMin": 0.858981293481482,
-        "multMax": 1.137144544477418,
-        "apparentMin": 0.002576943880444446,
-        "apparentMax": 0.003411433633432254
+        "multMin": 0.7722755764434577,
+        "multMax": 1.186918492167215,
+        "apparentMin": 0.002316826729330373,
+        "apparentMax": 0.0035607554765016446
       },
-      "ms": 27
+      "ms": 14
     },
     {
       "name": "Carbon (high C/O)",
@@ -566,7 +566,7 @@
         "apparentMin": 0.003462726408669359,
         "apparentMax": 0.006099869740460453
       },
-      "ms": 94
+      "ms": 99
     }
   ],
   "failures": []

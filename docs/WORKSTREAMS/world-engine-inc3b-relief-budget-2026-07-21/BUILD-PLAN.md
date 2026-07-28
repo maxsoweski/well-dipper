@@ -141,7 +141,10 @@ return range[0] + r * (range[1] - range[0]);
    "headless/test paths keep canonical radius."** See §6-T1 for the resolution
    (LAB-only opt-in param; Moon/Mercury **stays** in `NAMED_BODY`).
 
-3. **The g-coherence R3 relies on is real:** `body-condition-vector.js:37`
+3. **The g-coherence R3 relies on is real:** `body-condition-vector.js`
+> ⚠ **SUPERSEDED IN PART (gravity-selfcompression-2026-07-28).** The expression quoted here was the CONSTANT-DENSITY law `g = g_c·(R/R_c)`. It is now the piecewise self-compression law `g = g_c·f(R)/f(R_c)` — `f(R) = R^(4/3)` below 1 R⊕, `R^1.70` above — applied to the **rocky class only**. Byte-exactness at canonical is unchanged and is still the load-bearing property. The reasoning in this section is unaffected; only the exponent is. See `body-condition-vector.js` and `docs/WORKSTREAMS/world-engine-gravity-selfcompression-2026-07-28/`.
+
+   (as written at the time of this plan:)
    `surfaceGravity = (derived.surfaceGravity ?? bodySurfaceGravity(fp)) * ((radiusEarth ?? R_c) / (fp.radiusEarth ?? 1.0))`
    — i.e. `g = g_c·(R/R_c)`, **byte-exact at canonical** (`R === R_c ⇒ R/R_c = 1.0`
    float-exact, :35–36). A drawn `R∈[0.27,0.38]` with `R_c=0.38` yields a coherent

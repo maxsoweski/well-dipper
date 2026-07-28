@@ -20,6 +20,9 @@ import {
 } from '../src/worldengine/instrument/laws.js';
 import { craterSchedule, isImpactSurface, G_REF, K_GS } from '../src/worldengine/base/bombardment.js';
 import { reliefEnvelope, Q_RELIEF } from '../planet-lod-lab-core.js';
+import {
+  deriveConditionVector, GRAV_R_EXP_SUB, GRAV_R_EXP_SUPER,
+} from '../body-condition-vector.js';
 
 describe('the audit is wired to the shipping functions', () => {
   // Closes the only gap dependency-injection leaves versus editing the source: if the registry ever
@@ -29,6 +32,7 @@ describe('the audit is wired to the shipping functions', () => {
     expect(deps.craterSchedule).toBe(craterSchedule);
     expect(deps.reliefEnvelope).toBe(reliefEnvelope);
     expect(deps.isImpactSurface).toBe(isImpactSurface);
+    expect(deps.deriveConditionVector).toBe(deriveConditionVector);
   });
 
   it('audits against a condition that actually fires the impact-surface gate', () => {
@@ -183,5 +187,77 @@ describe('the verdict tolerance handles a noiseless fit', () => {
     const r = auditLaw(LAW_REGISTRY.find((l) => l.id === 'mesh-floor-vs-radius'));
     expect(r.measuredSE).toBeCloseTo(0, 12);
     expect(r.verdict).toBe('PASS');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+describe('AC-POSCTRL — the two gravity-vs-radius laws (gravity-selfcompression-2026-07-28)', () => {
+  const SUPER = 'gravity-vs-radius-selfcompression-super';
+  const SUB = 'gravity-vs-radius-selfcompression-sub';
+
+  /**
+   * Inject the RETIRED constant-density law — g = g_c·(R/R_c)^1 — in place of the shipped
+   * derivation. This is the exact regression the two entries exist to guard, and it is what the
+   * registry measured before the fix landed (1.000 against claims of 1.700 and 1.333).
+   */
+  const retiredGravity = (fp, derived, radiusEarth) => {
+    const cv = deriveConditionVector(fp, derived, radiusEarth);
+    const R_c = fp.radiusEarth ?? 1.0;
+    const g_c = (fp.massEarth ?? 1.0) / (R_c * R_c);
+    return { ...cv, surfaceGravity: g_c * ((radiusEarth ?? R_c) / R_c) };
+  };
+
+  it('both laws PASS against the shipped derivation', () => {
+    const audit = auditLaws();
+    const s = audit.results.find((x) => x.id === SUPER);
+    const b = audit.results.find((x) => x.id === SUB);
+    expect(s.verdict).toBe('PASS');
+    expect(b.verdict).toBe('PASS');
+    expect(s.measuredExponent).toBeCloseTo(GRAV_R_EXP_SUPER, 8);
+    expect(b.measuredExponent).toBeCloseTo(GRAV_R_EXP_SUB, 8);
+  });
+
+  it('reinstating the constant-density law fails BOTH, and nothing else', () => {
+    // A generic alarm is not a detection. The regression is in gravity, so exactly the two gravity
+    // laws must light up — the crater and relief laws sweep their own synthetic conditions and are
+    // untouched by how the condition vector derives g.
+    const audit = auditLaws({ deps: { ...defaultDeps(), deriveConditionVector: retiredGravity } });
+    expect(audit.summary.fail.sort()).toEqual([SUB, SUPER].sort());
+    expect(audit.results.find((x) => x.id === SUPER).measuredExponent).toBeCloseTo(1, 8);
+    expect(audit.results.find((x) => x.id === SUB).measuredExponent).toBeCloseTo(1, 8);
+  });
+
+  it('the null is the retired law (1.0), not "no response" (0) — so a null of 0 cannot false-PASS', () => {
+    // g = M/R² is radius-driven under ANY mass law, so "gravity ignores radius" is unreachable and
+    // a nullValue of 0 would guard nothing. Pinned here because it is the one design choice in
+    // these entries that a future editor is most likely to "correct".
+    for (const id of [SUPER, SUB]) {
+      const law = LAW_REGISTRY.find((l) => l.id === id);
+      expect(law.nullValue).toBe(1.0);
+      expect(law.driver).toBe('radiusEarth');
+    }
+  });
+
+  it('each entry sweeps strictly inside its own branch — never across the R = 1 join', () => {
+    // A sweep spanning the join measures the BLEND and would FAIL a correct law. This is why there
+    // are two entries rather than one; the constraint is asserted so a future edit cannot widen a
+    // sweep and then read the resulting failure as a physics regression.
+    const sup = LAW_REGISTRY.find((l) => l.id === SUPER);
+    const sub = LAW_REGISTRY.find((l) => l.id === SUB);
+    expect(Math.min(...sup.values)).toBeGreaterThan(1);
+    expect(Math.max(...sup.values)).toBeLessThanOrEqual(1.7542);  // Zeng's 8 M⊕ ceiling in radius
+    expect(Math.max(...sub.values)).toBeLessThan(1);
+  });
+
+  it('a SUBTLE exponent retune is caught — 1.70 -> 1.60 is invisible to any screenshot', () => {
+    const retuned = (fp, derived, radiusEarth) => {
+      const cv = deriveConditionVector(fp, derived, radiusEarth);
+      const R_c = fp.radiusEarth ?? 1.0, R = radiusEarth ?? R_c;
+      const g_c = (fp.massEarth ?? 1.0) / (R_c * R_c);
+      const f = (r) => (r <= 1 ? Math.pow(r, GRAV_R_EXP_SUB) : Math.pow(r, 1.60));
+      return { ...cv, surfaceGravity: g_c * (f(R) / f(R_c)) };
+    };
+    const audit = auditLaws({ deps: { ...defaultDeps(), deriveConditionVector: retuned } });
+    expect(audit.summary.fail).toEqual([SUPER]);   // ONLY the high branch — the low one is untouched
   });
 });

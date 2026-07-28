@@ -663,9 +663,11 @@ wrong, and the site is now corrected.
    entire recorded purpose is to separate exactly those two. Feeding it the drawn radius did not
    make it more responsive; it reduced its discriminating power to zero.
 2. **Frame-derived.** The ratified V2-6 model is "a bigger body of the **same composition**"
-   (`body-condition-vector.js:37`). Composition is the quantity the slider holds fixed, so the drawn
+   (`body-condition-vector.js`). Composition is the quantity the slider holds fixed, so the drawn
    radius carries no composition information by construction. Keying a *composition classifier* on it
    infers composition from size — a category error independent of the aurora consequence.
+
+> ⚠ **SUPERSEDED IN PART (gravity-selfcompression-2026-07-28).** The expression quoted here was the CONSTANT-DENSITY law `g = g_c·(R/R_c)`. It is now the piecewise self-compression law `g = g_c·f(R)/f(R_c)` — `f(R) = R^(4/3)` below 1 R⊕, `R^1.70` above — applied to the **rocky class only**. Byte-exactness at canonical is unchanged and is still the load-bearing property. The reasoning in this section is unaffected; only the exponent is. See `body-condition-vector.js` and `docs/WORKSTREAMS/world-engine-gravity-selfcompression-2026-07-28/`.
 
 **The consequence that made it visible.** The Neptunian's derived `magneticField` is exactly `0.05`
 and the intensity guard is a strict `>`, so losing the 0.6 dynamo boost did not dim the aurora — it

@@ -27,7 +27,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { DRIVER_PRESETS, drawPresetRadius, LAB_UNLOCKED_RANGES, NAMED_BODY } from '../driver-presets.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveConditionVector, gravityRadiusShape } from '../body-condition-vector.js';
+import { compositionClass } from '../src/worldengine/base/e1Regime.js';
 import { deriveUniforms, radiusFromT, RADIUS_SLIDER_MIN, RADIUS_SLIDER_MAX } from '../planet-lod-lab-core.js';
 import { PHYS, E5_REGIME, rhinesWavenumber, amplitudeLaw, resolveParams,
          bakeClimateE5Attributes } from '../src/worldengine/base/climate-e5.js';
@@ -823,15 +824,26 @@ describe('AC-CRATERBOOT — the :5206 canonical read is justified by measurement
   });
 
   it('the gravity channel IS exercised — this is not a sweep over a dead input', () => {
-    // The predicate reaches radius through surfaceGravity = g_c·(R/R_c) (body-condition-vector.js:37)
-    // and craterSchedule's sizeMul = (G_REF/g)^K_GS. If g were constant the null result would be
-    // vacuous. CRITERION: g spans (R_max/R_min) = 53.3× on every preset, to 1e-9 relative.
-    const span = RADIUS_SLIDER_MAX / RADIUS_SLIDER_MIN;
+    // The predicate reaches radius through the condition vector's surfaceGravity
+    // (body-condition-vector.js) and craterSchedule's sizeMul = (G_REF/g)^K_GS. If g were constant
+    // the null result above would be vacuous. This is a LIVENESS guard, not a physics pin — it
+    // asserts the channel moves, and the law itself is pinned in worldengine-v2-6-gcohere.test.js
+    // and in the instrument's LAW_REGISTRY.
+    //
+    // RE-PINNED 2026-07-28 (gravity-selfcompression). The span was previously R_max/R_min = 53.3×
+    // on every preset, because g was ∝ R¹ everywhere. Now rocky bodies carry the self-compression
+    // shape, so the expected span is f(R_max)/f(R_min) — 862.8× on rocky, still 53.3× on the gated
+    // classes. CRITERION unchanged in spirit: g must span its predicted range to 1e-9 relative.
     for (const p of PRESETS) {
       const fp = DRIVER_PRESETS[p], d = deriveUniforms(fp, TIER);
       const gLo = deriveConditionVector(fp, d, RADIUS_SLIDER_MIN).surfaceGravity;
       const gHi = deriveConditionVector(fp, d, RADIUS_SLIDER_MAX).surfaceGravity;
-      expect(Math.abs(gHi / gLo - span) / span).toBeLessThan(1e-9);
+      const cls = compositionClass(deriveConditionVector(fp, d, fp.radiusEarth ?? 1.0));
+      const span = cls === 'rocky'
+        ? gravityRadiusShape(RADIUS_SLIDER_MAX) / gravityRadiusShape(RADIUS_SLIDER_MIN)
+        : RADIUS_SLIDER_MAX / RADIUS_SLIDER_MIN;
+      expect(Math.abs(gHi / gLo - span) / span, `${p} [${cls}]`).toBeLessThan(1e-9);
+      expect(span, `${p} span is a real spread`).toBeGreaterThan(10);
     }
   });
 

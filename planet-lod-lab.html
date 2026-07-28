@@ -2860,7 +2860,10 @@
         // Rhines band law (N = RHINES_K·√(a·Ω/U), climate-e5.js:121 — physics already correct) finally gets
         // a live `a`. Bit-inert at canonical radius: R === R_c ⇒ the same number goes in. The condition
         // vector is preferred over a raw state read because it is the single source that already carries
-        // BOTH the drawn radius and the coherent gravity g = g_c·(R/R_c) (body-condition-vector.js:37).
+        // BOTH the drawn radius and the coherent gravity g = g_c·f(R)/f(R_c) (body-condition-vector.js;
+        // f is the piecewise self-compression shape as of gravity-selfcompression-2026-07-28 — it was
+        // the plain ratio R/R_c when this comment was written, and this preset class is gated OUT of
+        // the new law anyway, so the value reaching this line is unchanged).
         radius: (_gcond.radiusEarth ?? 1) / 11.2,                                         // Jupiter 11.2 → 1.0
       };
       if (state.e5Obliquity > 0) drivers.obliquityDeg = state.e5Obliquity;                // else regime default
@@ -3598,8 +3601,11 @@
       // Jupiter is a named-body 13.0 lock — all wholly above 3.5).
       // DISPOSITION (working-Claude, 2026-07-25, AMENDING the in-flight R1 build): this site reads the
       // CANONICAL radius. That is not a retreat from the workstream's goal — it follows from it.
-      //   The ratified V2-6 frame is "the slider draws a BIGGER BODY OF THE SAME COMPOSITION" (mass
-      //   M_c·(R/R_c)³, gravity g_c·(R/R_c) — body-condition-vector.js:37). Composition is precisely
+      //   The ratified V2-6 frame is "the slider draws a BIGGER BODY OF THE SAME COMPOSITION" (as of
+      //   gravity-selfcompression-2026-07-28 that body self-compresses, so on the ROCKY branch mass is
+      //   M_c·(R/R_c)^3.7 and gravity g_c·f(R)/f(R_c) rather than the constant-density ^3 / ^1 this
+      //   comment originally cited — see body-condition-vector.js. The frame is unchanged and the
+      //   argument below is unaffected; giants are gated out of the new law entirely). Composition is precisely
       //   what the slider HOLDS FIXED. This gate's job, per the paragraph above, is to decide which
       //   INTERIOR COMPOSITION a world has (metallic-/ionic-envelope dynamo vs regime-2 featureless).
       //   Deriving that from the drawn size infers composition FROM size — i.e. it reads off the one

@@ -1,10 +1,10 @@
 {
   "meta": {
-    "generated": "2026-07-20T12:55:45.345Z",
+    "generated": "2026-07-28T15:34:08.428Z",
     "nSeeds": 64,
     "sweptPresets": 11,
     "meshN": 10000,
-    "totalMs": 1734,
+    "totalMs": 1533,
     "budgetMs": 600000
   },
   "gates": {
@@ -142,8 +142,8 @@
         "variance": 0.04377570386158056
       },
       "coverage": {
-        "mean": 0.000014247153027522314,
-        "variance": 3.171503300374776e-13
+        "mean": 0.000013886981783104495,
+        "variance": 1.096188911242432e-12
       },
       "matureSeeds": 0,
       "e1": {
@@ -154,9 +154,9 @@
           "rocky/stagnant"
         ],
         "counts": {
-          "rocky/mobile": 43,
-          "rocky/episodic": 15,
-          "rocky/stagnant": 6
+          "rocky/mobile": 49,
+          "rocky/stagnant": 6,
+          "rocky/episodic": 9
         }
       },
       "carrier": {
@@ -164,7 +164,7 @@
         "naN": 0,
         "flatBad": 0
       },
-      "ms": 267
+      "ms": 169
     },
     {
       "name": "Lava (hot airless)",
@@ -206,8 +206,8 @@
         "variance": 0.08933817114608283
       },
       "coverage": {
-        "mean": 0.000013576612503782172,
-        "variance": 4.86358094256401e-13
+        "mean": 0.000013241121213783408,
+        "variance": 1.7843675924157492e-12
       },
       "matureSeeds": 0,
       "e1": {
@@ -218,8 +218,8 @@
           "rocky/stagnant"
         ],
         "counts": {
-          "rocky/mobile": 54,
-          "rocky/stagnant": 6,
+          "rocky/mobile": 55,
+          "rocky/stagnant": 5,
           "rocky/episodic": 4
         }
       },
@@ -228,7 +228,7 @@
         "naN": 0,
         "flatBad": 0
       },
-      "ms": 42
+      "ms": 36
     },
     {
       "name": "Frozen (airless)",
@@ -258,7 +258,7 @@
         "naN": 0,
         "flatBad": 0
       },
-      "ms": 86
+      "ms": 112
     },
     {
       "name": "Gas giant (Jovian)",
@@ -390,8 +390,8 @@
         "variance": 0.02233454278652071
       },
       "coverage": {
-        "mean": 0.000014580669593386549,
-        "variance": 1.9634854494751103e-13
+        "mean": 0.000014431842432191004,
+        "variance": 6.389978568435796e-13
       },
       "matureSeeds": 0,
       "e1": {
@@ -402,9 +402,9 @@
           "rocky/stagnant"
         ],
         "counts": {
-          "rocky/mobile": 37,
-          "rocky/episodic": 21,
-          "rocky/stagnant": 6
+          "rocky/mobile": 40,
+          "rocky/episodic": 19,
+          "rocky/stagnant": 5
         }
       },
       "carrier": {
@@ -412,7 +412,7 @@
         "naN": 0,
         "flatBad": 0
       },
-      "ms": 17
+      "ms": 27
     },
     {
       "name": "Carbon (high C/O)",
@@ -442,7 +442,7 @@
         "naN": 0,
         "flatBad": 0
       },
-      "ms": 2
+      "ms": 1
     },
     {
       "name": "Crystal (faceted)",
@@ -472,7 +472,7 @@
         "naN": 0,
         "flatBad": 0
       },
-      "ms": 73
+      "ms": 98
     }
   ],
   "failures": []

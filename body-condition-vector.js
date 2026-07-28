@@ -13,6 +13,80 @@
 // flat `d.age`); nesting keeps `condition.age` invisible to it. R4: shellThickness is surfaced AS-IS —
 // NO d³ mantle-depth transform is baked here; the semantic split (z/D/d triple-duty) is V2-1's job.
 import { bodyShellThickness, bodyRawTidal, bodySurfaceGravity } from './src/worldengine/base/baseStep.js'; // Slice B helpers + AC6 surfaceGravity
+import { compositionClass } from './src/worldengine/base/e1Regime.js'; // gravity-selfcompression: the rocky/icy/gas/carbon gate (imports only alea + mathutil — no cycle)
+
+// ── The mass-radius shape behind surface gravity (gravity-selfcompression-2026-07-28) ─────────────
+//
+// WHAT THIS REPLACES. Until now this file asserted, in its own comment, that
+// "M_derived(R) = M_c·(R/R_c)³ ⇒ g = g_c·(R/R_c)" — CONSTANT DENSITY. That is false above 1 R⊕:
+// larger rocky planets self-compress and get denser, so gravity rises faster than radius. The lab
+// under-read a 1.6 R⊕ super-Earth's gravity by 39% (and the impact-airless preset by 174%).
+//
+// ⚠ WHAT KIND OF KNOWLEDGE THIS IS. There is NO measured super-Earth gravity and NO measured
+// super-Earth topography — no rocky exoplanet surface has ever been spatially resolved. Both
+// exponents below come from interior-structure MODELS. Everything at or below 1 g is anchored to
+// Solar System bodies and is CALIBRATION; everything above is DERIVATION. A future reader must not
+// conflate them, which is why they are two named constants with two separate sources rather than
+// one fitted number.
+//
+// HIGH BRANCH — Zeng, Sasselov & Jacobsen 2016, ApJ 819:127 (arXiv:1512.08827):
+//     R/R⊕ = (1.07 − 0.21·CMF)·(M/M⊕)^(1/3.7),  applicable 1–8 M⊕ and CMF 0.0–0.4.
+// M ∝ R^3.7 ⇒ g = M/R² ∝ R^(3.7−2) = R^1.70, EXACTLY, at every R and every CMF: the prefactor
+// enters g only as a multiplicative constant and cancels identically in the ratio form used below.
+// So no CMF / iron-fraction plumbing is needed — the exponent is composition-blind WITHIN the rocky
+// class. Validity in radius terms: R ∈ [1.000, 1.754] (8^(1/3.7) = 1.7542). Beyond that this is
+// extrapolation of the cited fit, and the reachable radius domain runs to 16.
+//
+// LOW BRANCH — Valencia, O'Connell & Sasselov 2006 (arXiv:astro-ph/0511150, Icarus 181:545),
+// Table 2: five fitted β = dlnR/dlnM in 0.2991–0.3094 ⇒ n = 1/β − 2 = 1.23–1.34. Self-compression
+// weakens as mass falls, so the exponent drops TOWARD the incompressible value of 1 — it does NOT
+// reach it, and using 1.0 here (the naive constant-density value) would be wrong by ~33% across the
+// band where most of the preset table lives.
+// ⚠ INFERENCE FLAG, stated because it is ours and not the paper's: Valencia's sub-Earth family is
+// Super-MERCURIES (core mass fractions 50/65/80%), not Earth composition. Extrapolating their CMF
+// trend down to Earth-like CMF is our step. 4/3 is the top of the defensible bracket, chosen for
+// being exact and rational rather than for being more precise than the evidence.
+export const GRAV_R_EXP_SUB = 4 / 3;   // R ≤ 1 — Valencia+2006 (inference, see flag above)
+export const GRAV_R_EXP_SUPER = 1.70;  // R > 1 — Zeng+2016, exact given M ∝ R^3.7
+
+/**
+ * f(R) — the mass-radius shape in ABSOLUTE Earth radii, continuous at the R = 1 join (1^a = 1 on
+ * both branches). The value is continuous; the DERIVATIVE is not, and that kink is real physics
+ * (the compression regime genuinely changes), not an artifact to smooth away. A smooth blend was
+ * considered and rejected: it needs a sharpness parameter that nothing in the literature constrains,
+ * and it lands within ~5% of this everywhere.
+ *
+ * ⚠ IT MUST BE ABSOLUTE, NOT A RATIO POWER. Gravity below is an anchored ratio f(R)/f(R_c), and an
+ * anchored ratio agrees with a piecewise-in-absolute-R law ONLY when R and R_c sit on the same
+ * branch. 8 of the 13 rocky/icy presets have R_c < 1, so for them a single ratio power is wrong at
+ * every off-canonical radius — it would fix super-Earths by breaking Mars, Mercury, Europa and Titan
+ * (56% high at Mars, R = 4).
+ */
+export function gravityRadiusShape(radiusEarth) {
+  const r = Math.max(radiusEarth, 1e-6);  // degenerate ~0 radius cannot produce a non-finite shape
+  return r <= 1 ? Math.pow(r, GRAV_R_EXP_SUB) : Math.pow(r, GRAV_R_EXP_SUPER);
+}
+
+/**
+ * The multiplier on the canonical gravity g_c, normalized at the preset's canonical radius.
+ *
+ * BYTE-IDENTITY AT CANONICAL is the reason this stays a RATIO rather than an absolute re-derivation
+ * from a Zeng M(R): when R === R_c the numerator and denominator are the same float, so x/x is
+ * exactly 1.0 and g_c · 1.0 === g_c bit-for-bit — every golden, NAMED_BODY and headless path passes
+ * R === R_c, so no fixture moves. An absolute re-derivation would give g(1 R⊕) = 0.99355 instead of
+ * 1.000 and would move all 75 carrier rows.
+ *
+ * THE GATE: the self-compression law applies to the ROCKY class only. Zeng is a two-layer
+ * iron/silicate fit; it has no standing for h2-he envelopes (whose real dg/dR is flat-to-negative —
+ * measured between preset pairs: Neptunian→Saturnian −0.048, Jovian→Hot Jupiter −0.456), for ice
+ * mantles (a different EOS family), or for carbon worlds. Those keep the retired exponent of 1 —
+ * not because 1 is right for them, but because it is the status quo and changing it would be a
+ * retune with no citation behind it. That debt is declared, not hidden.
+ */
+export function gravityRadiusRatio(radiusEarth, canonicalRadiusEarth, compClass) {
+  if (compClass !== 'rocky') return radiusEarth / canonicalRadiusEarth;  // byte-identical to the retired law
+  return gravityRadiusShape(radiusEarth) / gravityRadiusShape(canonicalRadiusEarth);
+}
 
 // deriveConditionVector(fp, derived, radiusEarth) — pure, no side effects.
 //   fp           = the raw DRIVER_PRESETS entry (composition, age, radiusEarth, eccentricity, …).
@@ -20,26 +94,46 @@ import { bodyShellThickness, bodyRawTidal, bodySurfaceGravity } from './src/worl
 //                  its live `u`, the harness passes the same fresh derive.
 //   radiusEarth  = the DRAWN render radius (state.planetRadiusEarth in the lab; fp.radiusEarth headless
 //                  fallback) — R5: canonical for NAMED_BODY, seeded for archetypes.
-export function deriveConditionVector(fp, derived, radiusEarth) { return {
-  density:         fp.composition?.density ?? 5.5,       // composition/density
-  composition:     fp.composition ?? null,               // D2 volatile / D9 iron / D10 C:O passthrough
+export function deriveConditionVector(fp, derived, radiusEarth) {
+  // The three fields the composition gate reads, hoisted so the gate classifies EXACTLY the values
+  // the vector carries. Deriving them twice would let the gate drift from the body it is judging.
+  const _density     = fp.composition?.density ?? 5.5;
+  const _composition = fp.composition ?? null;
+  const _atmosphere  = fp.atmosphere ?? null;
+  // D14 gravity: R_c = canonical preset radius, R = the drawn 3rd arg (both with the legacy fallback
+  // chain, unchanged). The class decides WHICH mass-radius law applies — see gravityRadiusRatio.
+  const _R_c   = fp.radiusEarth ?? 1.0;
+  const _R     = radiusEarth ?? _R_c;
+  const _class = compositionClass({ atmosphere: _atmosphere, composition: _composition, density: _density });
+
+  return {
+  density:         _density,                             // composition/density
+  composition:     _composition,                         // D2 volatile / D9 iron / D10 C:O passthrough
   age:             fp.age ?? 4.5,                        // D16 (age0 fallback)
-  radiusEarth:     radiusEarth ?? fp.radiusEarth ?? 1.0, // radius (drawn value; fp fallback headless — R5)
+  radiusEarth:     _R,                                   // radius (drawn value; fp fallback headless — R5)
   eccentricity:    fp.eccentricity ?? 0,                 // D12 input
   // ── V2-1 AC6 plumbing (gate-1 GAP-1/GAP-2): the two scalars E1's L/Φ/gMod need, missing today. ──
   T_eq:            fp.T_eq ?? 288,                        // SURFACE temperature (D3-MF2 — NOT equilibrium temp); raw-preset read (baseStep reads T_eq internally but never returns it). 288 = lab route default; fallback unreached (all 17 presets define T_eq).
-  // D14 — gravity coherence (V2-6 §1A / AC-GCOHERE). g_c = today's expression unchanged (canonical-preset g,
-  // EXPOSED from baseStep deriveBodyScalars g=M/R², never re-derived inline). The drawn radius R now scales it:
-  // g = g_c·(R/R_c) — the normalized-at-canonical ratio form of M=(ρ/ρ⊕)·R³ per composition class (M_derived(R) =
-  // M_c·(R/R_c)³ ⇒ g = M_derived/R² = g_c·(R/R_c)). R_c = fp.radiusEarth ?? 1.0 (canonical), R = the drawn 3rd arg
-  // (radiusEarth ?? R_c). BYTE-EXACT at canonical: every golden/NAMED_BODY/headless path passes R === R_c, so
-  // R/R_c = 1.0 exactly (float64 x/x) and g_c·1.0 === g_c bit-for-bit — no fixture re-capture (FENCE 1/2).
-  surfaceGravity:  (derived?.surfaceGravity ?? bodySurfaceGravity(fp)) * ((radiusEarth ?? fp.radiusEarth ?? 1.0) / (fp.radiusEarth ?? 1.0)),
+  // D14 — gravity coherence (V2-6 §1A / AC-GCOHERE, exponent corrected by
+  // gravity-selfcompression-2026-07-28). g_c = today's expression unchanged (canonical-preset g,
+  // EXPOSED from baseStep deriveBodyScalars g=M/R², never re-derived inline). The drawn radius R
+  // scales it through the mass-radius SHAPE defined at the top of this file:
+  //     g = g_c · f(R)/f(R_c),   f(R) = R^(4/3) for R ≤ 1,  R^1.70 for R > 1,  ROCKY CLASS ONLY.
+  // The retired form was g = g_c·(R/R_c), i.e. constant density M ∝ R³ — false above 1 R⊕, where
+  // self-compression makes larger rocky planets denser. Non-rocky classes keep the retired exponent
+  // (see gravityRadiusRatio for why that is status quo rather than endorsement).
+  // BYTE-EXACT at canonical, unchanged from before: every golden/NAMED_BODY/headless path passes
+  // R === R_c, so f(R)/f(R_c) is x/x on the identical float = 1.0 exactly and g_c·1.0 === g_c
+  // bit-for-bit — no fixture re-capture (FENCE 1/2).
+  // ⚠ CONSEQUENCE WORTH NAMING HERE because it is invisible at this line: e1Regime.massEarthOf and
+  // giant-drivers both reconstruct M = g·R², so on the rocky branch the mass law they see is now
+  // M_c·(R/R_c)^3.7, not ^3.
+  surfaceGravity:  (derived?.surfaceGravity ?? bodySurfaceGravity(fp)) * gravityRadiusRatio(_R, _R_c, _class),
   // ── V2-1 Slice B addendum (compositionClass gas terminal): E1's Stage-A reads atmosphere.composition
   //    ('h2-he' → 'gas', BUILD-PLAN §4.4). GAP not enumerated by gate-1 (which only sized L's inputs), so
   //    Slice A did not plumb it; surfaced here as a THIRD nested passthrough (same byte-safe discipline as
   //    T_eq/surfaceGravity — nested under condition, invisible to the flat-key tune builders, AC1-inert).
-  atmosphere:      fp.atmosphere ?? null,                // atmosphere passthrough (composition read by compositionClass; null for airless presets, handled by ?.composition)
+  atmosphere:      _atmosphere,                          // atmosphere passthrough (composition read by compositionClass; null for airless presets, handled by ?.composition)
   // ── V2-3 AC-PLUMB-RECONCILE (a): the writeBodyRelief dispatch's locked-awareness (eyeball-despun + T_ss)
   //    reads condition.tidalState.locked — the V2-1 BUILD-PLAN §4.5 gap. NESTED (byte-safe like T_eq /
   //    surfaceGravity — invisible to the flat-key tune builders → AC1-inert). computeE1 stays locked-BLIND;
@@ -58,4 +152,5 @@ export function deriveConditionVector(fp, derived, radiusEarth) { return {
   shellThickness:  bodyShellThickness(fp),               // baseStep helper (Slice B) — raw scalar, NO d³ transform (R4)
   magneticField:   fp.magneticField,                     // D13 data-only (undefined for lab presets)
   metallicity:     fp.metallicity,                       // metallicity data-only (undefined for lab presets)
-};}
+  };
+}

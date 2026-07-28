@@ -1087,17 +1087,40 @@ export function reliefGravityFactor(surfaceGravity) {
 // ── Inc-3 relief-scale envelope (2026-07-21) — the DERIVED, strength-capped replacement for the
 // lab's retired reliefNorm = (1/RE)·reliefGravityFactor(g). The (1/RE) term was UNCAPPED and blew
 // apparent relief/radius to ~7× at low radius (R=0.27,g=0.28 → 7.0×; → ∞ as R → 0), which the
-// v2-6 UAT read as "molten waves" (MATH-CHECK-2026-07-21). Post-v2-6 deriveConditionVector sets
-// surfaceGravity = g_c·(R/R_c), so g is MONOTONIC in the drawn radius at fixed composition — g
-// ALREADY carries the radius signal. Radius therefore flows through g exactly ONCE (the audit
-// footnote-14 double-dip resolved) and the explicit 1/RE is DROPPED. surfaceGravity is floored at
+// v2-6 UAT read as "molten waves" (MATH-CHECK-2026-07-21). deriveConditionVector derives
+// surfaceGravity from the drawn radius (g = g_c·f(R)/f(R_c) since gravity-selfcompression-2026-07-28;
+// it was g_c·(R/R_c) when this comment was written), so g is MONOTONIC in the drawn radius at fixed
+// composition — g ALREADY carries the radius signal. Radius therefore flows through g exactly ONCE
+// (the audit footnote-14 double-dip resolved) and the explicit 1/RE is DROPPED.
+//
+// ⚠ THAT ARGUMENT IS TRUE OF THE CONDITION VECTOR AND FALSE AT THIS FUNCTION'S BIGGEST CALL SITE.
+// planet-lod-lab.html:5908 computes uPerturb from `state.surfaceGravity`, whose sole writer
+// (:3016) is deriveUniforms' CANONICAL, radius-blind g — not the condition vector's. So for the
+// global relief-amplitude uniform the radius signal never arrives, and dropping 1/RE removed the
+// only radius term that consumer had. Filed, with the full trace and why fixing it is sequenced
+// after the v2 relief law rather than bundled into the gravity fix:
+//   docs/WORKSTREAMS/world-engine-gravity-selfcompression-2026-07-28/evidence/FINDING-uperturb-radius-blind.md
+// Do NOT read the paragraph above as a statement about what uPerturb currently does.
+//
+// surfaceGravity is floored at
 // 1e-3 before the power so a degenerate near-zero g caps the multiplier at (1e-3)^-Q ≈ 55 (≤ the
 // Phobos strength extreme) instead of blowing up. Q_RELIEF/RELIEF_FLOOR/RELIEF_CEIL are anchor-fit
 // in the workstream's calibration/relief-envelope.mjs (least squares through the real-body
 // relief/radius anchors Earth/Mercury/Mars/Moon/Mimas, forced Earth=1). radiusEarth is accepted
 // for call-site symmetry with the old reliefNorm signature but is UNUSED in the return (radius via
 // g). Sign kept: lower g ⇒ higher relief/R.
-export const Q_RELIEF = 0.58;      // relief/R ∝ g^-Q_RELIEF; 2-sig-fig least-squares fit (calibration)
+// ⚠ Q_RELIEF IS CALIBRATION, AND IT DISAGREES WITH THE STRENGTH MODEL. It is a least-squares fit
+// through Solar System anchors — all of them at or below 1 g, because Earth is the only body in the
+// system at ≥ 0.9 g. Melosh 2011 ch.3 (eq. 3.17, and Figure 3.5 at book p.69) gives the competing
+// STRENGTH-MODEL line, fractional relief ∝ R̄^-2; refitting these same anchors gives R̄^-0.86
+// (g^-0.559, which is where 0.58 comes from). The model wants a size dependence ~2.3× steeper in
+// log-slope than the bodies actually show, and Melosh attributes the gap to history rather than
+// strength. Two further cautions before anyone retunes this: Mimas (R = 198 km) sits ON his
+// frictional/strength regime break at R̄ ≈ 200 km, so including it fits across two regimes
+// (excluding it moves 0.559 → 0.699); and there is NO measured super-Earth topography at all, so
+// nothing above 1 g is calibration. Full record + verbatim quotes:
+//   research/superearth-relief-law-citations-resolved-2026-07-28.md
+export const Q_RELIEF = 0.58;      // relief/R ∝ g^-Q_RELIEF; 2-sig-fig least-squares fit (CALIBRATION, g ≤ 1 only)
 export const RELIEF_FLOOR = 0.40;  // inherited from the reliefGravityFactor floor; binds only g ≳ 4.85
 export const RELIEF_CEIL = 133;    // apparent-0.40 ceiling as a multiplier; never binds (g-floor caps ≈ 55)
 export function reliefEnvelope(radiusEarth, surfaceGravity) {
