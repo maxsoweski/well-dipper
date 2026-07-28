@@ -1007,8 +1007,22 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
-> **▶▶ RADIUS LIVE FEED (R1) — ✅ CLOSED OUT 2026-07-28. ★ VERIFIED_PENDING_MAX on a RE-SPECIFIED AC-BANDS.
-> SOLE OPEN GATE = Max's RE-UAT, and it needs the console pin (below).**
+> **▶▶ RADIUS LIVE FEED (R1) — ✅ SHIPPED 2026-07-28. Max re-UAT PASSED: _"okay, passes"_.**
+> Re-UAT ran on the new **"hold apparent size (radius read)"** toggle; the headline promise — drag radius, see the
+> banding answer — is delivered. **Two Max observations raised at the same moment, both FILED not folded:**
+> ⚠ **(a) His hypothesis for the composite gap**, verbatim: _"i do suspect that many of these legacy shader systems are
+> not fully wired up into our proc gen model though, based on what you're saying about the band channel."_ Concrete
+> anchor already in the lab: the WE panel's provenance line reads **"relief: LEGACY synth (carrier off)"** whenever
+> `carrierOn` is false (`planet-lod-lab.html:4294` — needs `reliefBakeStrength > 0` AND `heightSource === 'carrier'`).
+> → routed to the **R2 scope** and the **38-finding triage** as a named question.
+> ⚠ **(b) Parking-lot item — tectonics turns to noise past a certain radius.** ROOT CAUSE FOUND FROM SOURCE (derived,
+> unmeasured): `bakeReliefCrossover(sVis) = 1 − smoothstep(0, 1.0, |log2 sVis|)` fades the **baked** relief to zero as
+> the disc departs `sVis=1`; with `sVis=√R` that is **half gone at R=2, entirely gone at R≥4**. On Rocky/Earthlike the
+> baked cube is exactly where the plate-Voronoi tectonics lives; `fbmd` replacing it is generic fBm. Disclosed tradeoff
+> of radius-display-scale ("continent CHARACTER, not size"), but never weighed against tectonics needing to *express*.
+> Max's ordering note is the diagnosis: **tectonics predates the radius system.** Filed to the campaign-tracker
+> parking-lot with the scope question. *(prior: the close-out that produced the pass — ★ VERIFIED_PENDING_MAX on a
+> RE-SPECIFIED AC-BANDS.)*
 > No code changed since `6d120c4` — what changed is that the AC had been closed on the **wrong quantity**.
 > **The dead-zone suspect is KILLED** (`evidence/G4-rendered-belt-count.md`): the RENDERED belt count *does* rise with
 > radius, 4→12 on Jovian across R=2–16, fitted **R^0.532 ± 0.029** (n=7, dof=5, t95=2.571, r²=0.986) — PASS vs the Rhines

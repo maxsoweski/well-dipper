@@ -173,6 +173,30 @@ Ideas captured for a future campaign feature (dossier card + §13.4 heavy loop),
 **NOT to be built inline** during a fix/triage session. Promote to the Feature
 index + a launch card when Max greenlights scoping.
 
+- **Tectonics survives the radius fade** (logged 2026-07-28, Max, during the radius-R1 re-UAT) —
+  verbatim: *"rocky/earthlike planets' tectonics seem to turn into noise after the planet radius
+  gets beyond a certain size; not sure if that's intentional, especially given we created the
+  tectonics system before implementing the new radius system."*
+  **Root cause identified from source the same session (DERIVED, not yet measured):**
+  `bakeReliefCrossover(sVis) = 1 − smoothstep(0, BAKE_CROSS_SPAN=1.0, |log2 sVis|)`
+  (`planet-lod-lab-core.js`) deliberately crossfades the **baked** relief to zero as the disc
+  departs `sVis = 1`, handing the macro body to the analytic `fbmd` path. With `sVis = √R`,
+  `|log2 sVis| = 0.5·|log2 R|` ⇒ the bake is **half faded at R = 2** and **entirely gone at R ≥ 4**
+  (and at R ≤ 0.25). On Rocky/Earthlike the baked cube is exactly where the plate-Voronoi tectonics
+  lives (`writePlateUpliftSphere` — continents, plate boundaries, provinces); `fbmd` is generic fBm.
+  So above R ≈ 4 the tectonic structure is replaced with noise **by construction**.
+  **It was a disclosed tradeoff**, not an accident — the source comment reads *"RESIDUE (disclosed,
+  D3): the baked continent PATTERN morphs into the analytic body across the fade — a visible change
+  in continent CHARACTER, not size; the size-constancy bar is met."* What was never weighed is that
+  character loss against the world engine's purpose, which is that tectonics should *express*.
+  Max's ordering note is the diagnosis: tectonics predates the radius system.
+  **Scope question (not a fix):** how does plate-scale structure hold its identity while individual
+  form size stays constant on screen? Candidates — domain-scale the plate partition the way `fbmd`
+  is domain-scaled rather than fading it; re-bake at the new scale; or split the crossover so
+  macro (plate) structure is exempt from the fade while micro relief hands off. Needs measurement
+  of where it *reads* as noise (the R ≥ 4 figure is the code's behaviour, not the perceptual bar).
+  Related: the R2 "5 radius-blind tectonics modules" row in `RADIUS-CENSUS.md`.
+
 - **Outpost worlds** (logged 2026-06-15) — Mars/Venus-type sparse **nightside outpost
   lights**: a few scattered points/clusters, distinct from the dense `ecumenopolis`
   city-glow and `cityLights` features. The visual: a not-yet-civilized world showing
