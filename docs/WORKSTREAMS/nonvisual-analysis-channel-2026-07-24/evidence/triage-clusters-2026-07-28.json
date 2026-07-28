@@ -1,0 +1,252 @@
+[
+ {
+  "key": "fieldSampler",
+  "files": [
+   "fieldSampler.js"
+  ],
+  "findings": [
+   {
+    "id": 1,
+    "severity": "high",
+    "title": "The instrument samples the synth FBM body, not the baked relief the planet actually renders at the live default"
+   },
+   {
+    "id": 4,
+    "severity": "high",
+    "title": "The read-only / uniform-restoration invariant is asserted only in comments — no test, and a reachable path violates it"
+   },
+   {
+    "id": 5,
+    "severity": "high",
+    "title": "describeSample is pure, headlessly testable, and the sole enforcer of the \"no km without kmPerUnit\" invariant — with zero tests"
+   },
+   {
+    "id": 13,
+    "severity": "medium",
+    "title": "Angular-frame slope divides a vertical by a horizontal in different units and reports the result as an angle in degrees"
+   },
+   {
+    "id": 15,
+    "severity": "medium",
+    "title": "Readback pins uOctaves/uFwClamp but NOT uLodRamp — measurements are camera-dependent, and a radius sweep drives uLodRamp as a monotone function of the swept variable"
+   },
+   {
+    "id": 17,
+    "severity": "medium",
+    "title": "The swept driver `radiusEarth` leaks out of the meta namespace and is fitted as a descriptor"
+   },
+   {
+    "id": 29,
+    "severity": "low",
+    "title": "physical and angular rmsRelief / hypsometricIntegral are the same number by construction, so the frame split duplicates them into the sweep"
+   },
+   {
+    "id": 30,
+    "severity": "low",
+    "title": "Sampler cache never evicts and its dispose() is unreachable from the lab — GPU memory grows monotonically for the page's lifetime"
+   },
+   {
+    "id": 34,
+    "severity": "low",
+    "title": "The patch sampler cache is keyed on radiusEarth and the lab exposes no way to dispose it"
+   }
+  ]
+ },
+ {
+  "key": "descriptors",
+  "files": [
+   "descriptors.js"
+  ],
+  "findings": [
+   {
+    "id": 0,
+    "severity": "high",
+    "title": "autocorrWavelengthKm pools all latitudes but converts lag→km with a single equatorial spacing, inflating equirect wavelengths ~12%"
+   },
+   {
+    "id": 6,
+    "severity": "medium",
+    "title": "bandCount discards short runs instead of folding them, so single-row noise splits one band into two"
+   },
+   {
+    "id": 7,
+    "severity": "medium",
+    "title": "radialPSD and spectralExcessPeak use the mean of the two spans on a non-square patch, so x- and y-features of different true size report the same wavelength"
+   },
+   {
+    "id": 8,
+    "severity": "medium",
+    "title": "networkLengthKm counts only 4-connected pairs, so a diagonal one-cell-wide channel measures exactly zero length"
+   },
+   {
+    "id": 9,
+    "severity": "medium",
+    "title": "autocorrWavelengthKm on an equirect grid averages lag products across all latitudes with equal weight, then converts with the mid-row spacing"
+   },
+   {
+    "id": 26,
+    "severity": "low",
+    "title": "cellAreaKm2 uses the midpoint rule but its docstring claims the sum is exactly 4πR²"
+   },
+   {
+    "id": 27,
+    "severity": "low",
+    "title": "radialPSD bins by cycles-per-domain and converts with the mean span, silently assuming an isotropic patch that physicalPatchGrid does not enforce"
+   }
+  ]
+ },
+ {
+  "key": "instrument-tests",
+  "files": [
+   "tests/instrument-descriptors.test.js",
+   "tests/instrument-sweep.test.js",
+   "tests/instrument-laws.test.js"
+  ],
+  "findings": [
+   {
+    "id": 3,
+    "severity": "high",
+    "title": "The \"declines to invent a form size on pure noise\" test only passes because it overrides the shipped threshold"
+   },
+   {
+    "id": 21,
+    "severity": "medium",
+    "title": "cos(lat) area weighting — the module's stated rule #2 — is never exercised in a way that could fail"
+   },
+   {
+    "id": 22,
+    "severity": "medium",
+    "title": "bandCount's noise-rejection claim is false, and the fixtures contain no noise to reject"
+   },
+   {
+    "id": 23,
+    "severity": "medium",
+    "title": "The buried-form spectral test sits at 92% of its tolerance, one radial bin from failing"
+   },
+   {
+    "id": 37,
+    "severity": "low",
+    "title": "The crater-SFD shallow-slope test admits any answer above -1.8 for a population whose true slope is -1.5"
+   },
+   {
+    "id": 20,
+    "severity": "medium",
+    "title": "The UNRESOLVABLE sweep fixture sits 0.7% inside the FAIL boundary — the verdict is a lucky LCG draw"
+   },
+   {
+    "id": 36,
+    "severity": "low",
+    "title": "The planted-defect tests prove containment, not specificity — each defect is surgically confined to one output by construction"
+   }
+  ]
+ },
+ {
+  "key": "lab-api",
+  "files": [
+   "planet-lod-lab.html"
+  ],
+  "findings": [
+   {
+    "id": 2,
+    "severity": "high",
+    "title": "responseCurve's settle is a wall-clock setTimeout, but the radius -> field coupling is written only by the rAF frame loop"
+   },
+   {
+    "id": 18,
+    "severity": "medium",
+    "title": "responseCurve/planSweep restore radius and seeds but not the camera distance the sweep pushed out"
+   },
+   {
+    "id": 31,
+    "severity": "low",
+    "title": "responseCurve and planSweep have no in-flight guard — concurrent invocations corrupt each other's measurements and their save/restore of radius and seeds"
+   },
+   {
+    "id": 33,
+    "severity": "low",
+    "title": "sampleField's radiusEarth override changes the reporting frame without changing the field it reports on"
+   }
+  ]
+ },
+ {
+  "key": "stats",
+  "files": [
+   "src/worldengine/instrument/stats.js"
+  ],
+  "findings": [
+   {
+    "id": 10,
+    "severity": "medium",
+    "title": "seedsToResolve under-sizes the ensemble by 2x relative to the module's own two-ensemble comparison rule"
+   },
+   {
+    "id": 25,
+    "severity": "low",
+    "title": "The degeneracy guard in fitPowerLaw uses an absolute threshold on a weight-scaled quantity, so identical x values can produce a fabricated exponent"
+   },
+   {
+    "id": 35,
+    "severity": "low",
+    "title": "shiftSignificance on single-sample ensembles reports sigma = Infinity, and no test covers it"
+   }
+  ]
+ },
+ {
+  "key": "sweep",
+  "files": [
+   "src/worldengine/instrument/sweep.js"
+  ],
+  "findings": [
+   {
+    "id": 11,
+    "severity": "medium",
+    "title": "cvIsMeaningful's |mean| > sd cut-off removes the noisiest descriptors from the headline seed count, so planSweep systematically under-sizes the ensemble"
+   },
+   {
+    "id": 12,
+    "severity": "medium",
+    "title": "planSweep's seed counts carry no uncertainty of their own, and the lab's default 5-seed pilot makes them accurate only to about a factor of 2"
+   },
+   {
+    "id": 24,
+    "severity": "low",
+    "title": "planSweep silently returns NaN seed counts for zero-variance descriptors without listing them as unreportable"
+   }
+  ]
+ },
+ {
+  "key": "sampling-laws-rivers",
+  "files": [
+   "src/worldengine/instrument/sampling.js",
+   "src/worldengine/instrument/laws.js",
+   "planet-lod-rivers.js"
+  ],
+  "findings": [
+   {
+    "id": 14,
+    "severity": "medium",
+    "title": "patchDirections' \"east\" basis vector points toward DECREASING longitude, mirroring the patch x-axis relative to equirectDirections"
+   },
+   {
+    "id": 28,
+    "severity": "low",
+    "title": "The patch's \"no gnomonic stretch\" km-scale claim is tested at 400 km but the lab's default sweep runs 2000 km down to radiusEarth 0.5, where the column spacing compresses ~4.8%"
+   },
+   {
+    "id": 19,
+    "severity": "medium",
+    "title": "laws.js injects isImpactSurface as a dependency that no law can read and no stub can affect"
+   },
+   {
+    "id": 32,
+    "severity": "low",
+    "title": "auditLaw's reported `points` count overstates how many points the fit actually used"
+   },
+   {
+    "id": 16,
+    "severity": "medium",
+    "title": "createHeightSampler.read() has no try/finally — a throw mid-read permanently changes the lab's clear colour, breaking the READ-ONLY invariant"
+   }
+  ]
+ }
+]
