@@ -112,6 +112,7 @@
     <button class="btn" id="bFlat">   <span>FORCE FLAT SHADING</span><span class="key">F</span></button>
     <button class="btn" id="bWire">   <span>WIREFRAME</span><span class="key">W</span></button>
     <button class="btn on" id="bBg">  <span>BACKGROUND</span><span class="key">B</span></button>
+    <button class="btn on" id="bCabin"><span>CABIN LIGHT</span><span class="key">L</span></button>
     <button class="btn" id="bReset">  <span>RECENTRE VIEW</span><span class="key">R</span></button>
     <div class="hint">
       ORBIT: drag to spin, scroll to zoom.<br />
@@ -191,6 +192,18 @@
     const fillLight = new THREE.DirectionalLight(0x6f8ab0, 0.30);
     fillLight.position.set(24, -8, 34);    // dim bounce from behind/below the pilot
     scene.add(fillLight);
+
+    // CABIN LIGHT — a LAB AID, not part of the shipped look. With key+fill alone the
+    // interior frame faces are almost black (correct: the only light source is outside
+    // the ship), which is honest but leaves the form unjudgeable — you cannot evaluate
+    // an "angular cockpit" you cannot see. This point light sits just behind and above
+    // the eye, inside the cabin, so it rakes the inner pillar faces and the screen
+    // bezels while its distance falloff leaves the exterior nose to the key light.
+    // Toggle it OFF (L) to see the true unlit read. In increment 2 the four CRT panels
+    // become the real in-cabin light source and this goes away.
+    const cabinLight = new THREE.PointLight(0xc8d4e0, 2.6, 6.0, 2.0);
+    cabinLight.position.set(0, 0.30, 0.40);
+    scene.add(cabinLight);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Placeholder background — stars + faint horizon grid + one distant body.
@@ -422,6 +435,7 @@
       bFlat: document.getElementById('bFlat'),
       bWire: document.getElementById('bWire'),
       bBg: document.getElementById('bBg'),
+      bCabin: document.getElementById('bCabin'),
       bReset: document.getElementById('bReset'),
     };
 
@@ -438,7 +452,7 @@
     }
     function toggleMode() { return setMode(mode === 'orbit' ? 'eye' : 'orbit'); }
 
-    const state = { screens: false, flat: false, wire: false, bg: true };
+    const state = { screens: false, flat: false, wire: false, bg: true, cabin: true };
 
     function applyScreens() {
       for (const m of screenMats) {
@@ -460,6 +474,12 @@
     function applyBg() {
       bgGroup.visible = state.bg;
       el.bBg.classList.toggle('on', state.bg);
+    };
+
+    // Lab aid, not the shipped look — see the cabinLight comment above.
+    const applyCabin = () => {
+      cabinLight.visible = state.cabin;
+      el.bCabin.classList.toggle('on', state.cabin);
     }
     function recentre() {
       if (mode === 'eye') { eyeYaw = 0; eyePitch = 0; }
@@ -473,6 +493,7 @@
     el.bFlat.onclick    = () => { state.flat    = !state.flat;    applyFlat(); };
     el.bWire.onclick    = () => { state.wire    = !state.wire;    applyWire(); };
     el.bBg.onclick      = () => { state.bg      = !state.bg;      applyBg(); };
+    el.bCabin.onclick   = () => { state.cabin   = !state.cabin;   applyCabin(); };
     el.bReset.onclick   = recentre;
 
     // Sync the DOM to the initial mode so the status line and the button label can
@@ -490,6 +511,7 @@
         case 'f': el.bFlat.onclick(); break;
         case 'w': el.bWire.onclick(); break;
         case 'b': el.bBg.onclick(); break;
+        case 'l': el.bCabin.onclick(); break;
         case 'r': recentre(); break;
       }
     });
