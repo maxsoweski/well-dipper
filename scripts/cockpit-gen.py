@@ -286,9 +286,23 @@ RAIL_Z             = -0.34    # THE WAISTLINE. Solid hull below, glass above. Co
 # widening it adds almost nothing. RAIL HEIGHT is the term that actually costs view -- 46.1%
 # down to 4.8% over -0.15 to -0.75. So width became a free choice and Max made it on feel.
 #
-# All three numbers below are his, read straight off the lab.
+# All three half-widths below are his, read straight off the lab.
+#
+# WHY THE ROOF TAPERS. The first tub carried roof z = 0.70 at all three stations, which made
+# the canopy a SHED -- a flat lid over a narrowing tub. Max: "taper the roof toward the bow."
+# The taper is asymmetric on purpose. MID stays at 0.70 because that is where the pilot's head
+# is (headroom = 0.70 - head radius), so it is not a free number; AFT stays at 0.70 because the
+# bulkhead is behind the head and dropping it would only shrink the cabin. Only the BOW moves,
+# which is what "toward the bow" means and also what a real canopy does: flat over the seat,
+# sloping down over the nose. The 3-station loft turns that into a flat rear bay and a sloping
+# forward bay for free -- no extra station needed.
+#
+# The cost is measured, not assumed: the bow rim is the top edge of the forward aperture, so
+# lowering it brings structure DOWN into the forward view. 0.70 -> 0.52 moves that edge from
+# 23.4 deg to 17.8 deg above the horizon, still well inside the 35 deg frame edge. See
+# canopy_frame_landing(), which reports it every run.
 STATIONS = (
-    ("bow",  1.62, 0.59, 0.70),
+    ("bow",  1.62, 0.59, 0.52),
     ("mid",  0.00, 0.76, 0.70),
     ("aft", -0.97, 0.57, 0.70),
 )
@@ -323,13 +337,24 @@ CANOPY_HALF = (
 SEG_HULL, SEG_GLASS = "hull", "glass"
 
 # (width across the seam, depth standing inboard toward the eye)
-RAIL_SECTION       = (0.130, 0.100)   # the canopy rail: the heaviest member in the model and
-                                      # the one the pilot's hands would rest on. Max set its
-                                      # height in the lab.
-RIB_SECTION        = (0.075, 0.058)   # "fairly thin" is the brief, and it is a judgement call
-ARCH_SECTION       = (0.085, 0.070)   # the transverse arches: mid and aft
-BOW_SECTION        = (0.130, 0.105)   # the forward rim -- the member the pilot reads as
-                                      # "the frame". Max set its width in the lab.
+#
+# THINNED 0.65x ACROSS THE BOARD. Max, looking at the first tub: "the ribs are too thick."
+# All four families moved, not just the two called Rib_*, because in the render they read as
+# one visual family and the RAIL was the fattest thing in the view -- 130 mm across, occluding
+# 5.64% per side against a rib's 3.02%. The earlier comments here claimed Max set the rail
+# height and the bow width in cockpit-section-lab.html; he did not. His `max` preset carries
+# railCap 0.100 / bowSec 0.130 / pillarSec 0.085 UNCHANGED from the `game` preset it was
+# copied off, so those three were defaults he never moved, not choices. They were free.
+#
+# One uniform factor rather than four independent guesses, so the HIERARCHY survives: rail and
+# bow rim stay the heavy members, the arches sit between, the ribs stay lightest. That is the
+# part that reads as structure; the absolute thickness is what read as clutter.
+RAIL_SECTION       = (0.085, 0.065)   # the canopy rail: still the heaviest member in the model
+                                      # and the one the pilot's hands would rest on
+RIB_SECTION        = (0.049, 0.038)   # "fairly thin" is the brief, and it is a judgement call
+ARCH_SECTION       = (0.055, 0.046)   # the transverse arches: mid and aft
+BOW_SECTION        = (0.085, 0.068)   # the forward rim -- the member the pilot reads as
+                                      # "the frame", so it keeps the rail's weight
 RIB_GLASS_GAP      = 0.002    # air held between a member's outer face and the panels it lies
                               # on, so nothing z-fights against the glass it is bolted to.
 

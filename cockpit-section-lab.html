@@ -116,29 +116,40 @@ const BODY = {
   kneeY:       0.46,  toeY:     0.74
 };
 
+// The three member-section knobs MIRROR the generator's constants block, and it is worth
+// naming which is which because they were silently out of sync once already: railCap ->
+// RAIL_SECTION width, bowSec -> BOW_SECTION width, pillarSec -> RIB_SECTION width. The
+// generator's fourth family, ARCH_SECTION (the mid and aft transverse arches), has no
+// slider here — the side elevation does not draw it.
 const P = {
   hwBow:0.59, hwMid:0.76, hwAft:0.57,
-  railZ:-0.34, floorZ:-1.20, roofZ:0.70, bowY:1.62, aftY:-0.97,
-  archN:2.60, railCap:0.100, bowSec:0.130, pillarSec:0.085,
+  railZ:-0.34, floorZ:-1.20, roofZ:0.70, roofZBow:0.52, bowY:1.62, aftY:-0.97,
+  archN:2.60, railCap:0.085, bowSec:0.085, pillarSec:0.049,
   scW:0.30, scH:0.25,
   upTanX:0.91, upTanZ:0.22, upDist:0.79,
   loTanX:0.88, loTanZ:-0.21, loDist:0.83
 };
 
 const PRESETS = {
+  // The four reference presets predate the roof taper, so each carries roofZBow == its own
+  // roofZ: a flat lid, which is what they actually described.
   current: { hwBow:2.14, hwMid:2.30, hwAft:1.90, railZ:-1.08, floorZ:-1.08, roofZ:1.32,
+    roofZBow:1.32,
     bowY:1.80, aftY:-1.10, archN:2.2, railCap:0.11, bowSec:0.15, pillarSec:0.075,
     scW:0.45, scH:0.30, upTanX:0.74, upTanZ:0.35, upDist:1.60,
     loTanX:0.74, loTanZ:-0.37, loDist:1.60 },
   fighter: { hwBow:0.46, hwMid:0.52, hwAft:0.48, railZ:-0.22, floorZ:-1.18, roofZ:0.58,
+    roofZBow:0.58,
     bowY:0.86, aftY:-0.52, archN:2.1, railCap:0.07, bowSec:0.09, pillarSec:0.055,
     scW:0.24, scH:0.16, upTanX:0.55, upTanZ:0.10, upDist:0.82,
     loTanX:0.42, loTanZ:-0.38, loDist:0.74 },
   game: { hwBow:0.62, hwMid:0.85, hwAft:0.70, railZ:-0.30, floorZ:-1.20, roofZ:0.70,
+    roofZBow:0.70,
     bowY:1.15, aftY:-0.65, archN:2.6, railCap:0.10, bowSec:0.13, pillarSec:0.085,
     scW:0.38, scH:0.25, upTanX:0.86, upTanZ:0.18, upDist:1.35,
     loTanX:0.68, loTanZ:-0.34, loDist:1.15 },
   tourer: { hwBow:0.95, hwMid:1.25, hwAft:1.05, railZ:-0.34, floorZ:-1.22, roofZ:0.86,
+    roofZBow:0.86,
     bowY:1.45, aftY:-0.85, archN:3.0, railCap:0.12, bowSec:0.15, pillarSec:0.095,
     scW:0.50, scH:0.33, upTanX:0.90, upTanZ:0.20, upDist:1.60,
     loTanX:0.74, loTanZ:-0.32, loDist:1.35 },
@@ -146,8 +157,14 @@ const PRESETS = {
   // his screen ANGLES exactly as he set them, with the screen DISTANCES pulled
   // from 1.32/1.26 to 0.79/0.83 so all four units sit inside the hull. This is
   // what the generator gets built to.
+  //
+  // AMENDED after he saw the first tub: roofZBow 0.52 (was 0.70 -- "taper the roof toward
+  // the bow"), and the three member sections thinned 0.65x ("the ribs are too thick").
+  // Those three numbers used to sit here UNCHANGED from the `game` preset they were copied
+  // off, i.e. they were never choices of his, which is why they were free to move.
   max: { hwBow:0.59, hwMid:0.76, hwAft:0.57, railZ:-0.34, floorZ:-1.20, roofZ:0.70,
-    bowY:1.62, aftY:-0.97, archN:2.60, railCap:0.100, bowSec:0.130, pillarSec:0.085,
+    roofZBow:0.52,
+    bowY:1.62, aftY:-0.97, archN:2.60, railCap:0.085, bowSec:0.085, pillarSec:0.049,
     scW:0.30, scH:0.25, upTanX:0.91, upTanZ:0.22, upDist:0.79,
     loTanX:0.88, loTanZ:-0.21, loDist:0.83 }
 };
@@ -163,7 +180,8 @@ const SLIDERS = [
     ["aftY","bulkhead, behind eye",-1.40,-0.35,0.01]
   ]],
   ["THE CANOPY", [
-    ["roofZ","roof, above eye",0.30,1.60,0.01],
+    ["roofZ","roof over the head",0.30,1.60,0.01],
+    ["roofZBow","roof at the bow — the TAPER",0.20,1.60,0.01],
     ["archN","cross-section squareness",1.6,4.5,0.05],
     ["railCap","rail member height",0.03,0.20,0.005],
     ["bowSec","bow arch width",0.04,0.25,0.005],
@@ -190,8 +208,17 @@ function halfAt(y){
   if (y >= 0) return P.hwMid + (P.hwBow - P.hwMid) * (y / P.bowY);
   return P.hwMid + (P.hwAft - P.hwMid) * (y / P.aftY);
 }
+// The roof is NOT one number any more. Max: "taper the roof toward the bow" — the
+// generator's STATIONS table holds mid and aft at roofZ and drops only the bow, so the
+// rear bay is flat over the pilot's head and the forward bay slopes down over the nose.
+// Mirrors halfAt() exactly, including the "flat behind the mid station" half.
+function roofAt(y){
+  if (y >= P.bowY) return P.roofZBow;
+  if (y <= 0) return P.roofZ;
+  return P.roofZ + (P.roofZBow - P.roofZ) * (y / P.bowY);
+}
 function canopyHalf(y, z){
-  const span = P.roofZ - P.railZ;
+  const span = roofAt(y) - P.railZ;
   if (span <= 1e-6) return 0;
   const u = (z - P.railZ) / span;
   if (u <= 0) return halfAt(y);
@@ -421,17 +448,21 @@ function drawSide(){
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cw,ch);
   const ymin = Math.min(P.aftY, -0.45) - 0.28;
   const ymax = Math.max(P.bowY, BODY.toeY) + 0.30;
-  const zmin = Math.min(P.floorZ, BODY.heelZ) - 0.20, zmax = P.roofZ + 0.20;
+  const zmin = Math.min(P.floorZ, BODY.heelZ) - 0.20;
+  const zmax = Math.max(P.roofZ, P.roofZBow) + 0.20;
   const M = mapper(cw, ch, ymin, ymax, zmin, zmax, 52*dpr); if (!M) return;
   grid(ctx, M, ymin, ymax, zmin, zmax);
 
-  // glass — canopy from rail to roof
-  const zSh = P.railZ + (P.roofZ - P.railZ) * 0.34;
+  // glass — canopy from rail to roof. The roofline is the generator's own three-station
+  // one: FLAT from the bulkhead forward to the mid station (that bay is over the pilot's
+  // head, so its height is set by headroom, not taste), then sloping to roofZBow at the
+  // bow. This used to be a fixed decorative taper starting at bowY*0.40 with no knob
+  // behind it, which meant the lab drew a shape the generator could not build.
   ctx.beginPath();
   ctx.moveTo(M.X(P.aftY), M.Z(P.railZ));
   ctx.lineTo(M.X(P.aftY), M.Z(P.roofZ));
-  ctx.lineTo(M.X(P.bowY * 0.40), M.Z(P.roofZ));
-  ctx.lineTo(M.X(P.bowY), M.Z(zSh));
+  ctx.lineTo(M.X(0),      M.Z(P.roofZ));
+  ctx.lineTo(M.X(P.bowY), M.Z(P.roofZBow));
   ctx.lineTo(M.X(P.bowY), M.Z(P.railZ));
   ctx.closePath();
   ctx.fillStyle = "rgba(96,168,196,0.10)"; ctx.fill();
