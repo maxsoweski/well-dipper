@@ -1,0 +1,139 @@
+{
+  "workstream": "world-engine-gravity-selfcompression-2026-07-28",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "statusNote": "DRAFT AWAITING MAX'S GREENLIGHT — do NOT build against this yet. Scoped 2026-07-28 off the grounding at evidence/GROUNDING-2026-07-28.md (36 agents: 5 lenses, adversarial refute-by-default on every finding, synthesis; 14 findings refuted or corrected). The grounding's verdict on the fix AS THE HANDOFF PROPOSED IT was NEEDS-FIX, for two reasons; this contract resolves one and declares the other a non-goal. (1) RESOLVED HERE: the proposed edit was ungated, and shipping ^1.70 unconditionally would fix super-Earths by breaking Mars, Mercury, Europa and Titan — at Mars (R_c=0.53) the pure ratio power is 56% above the piecewise form at R=4. Hence the composition gate and the piecewise-in-absolute-R form, both recorded in designDecisions. (2) DECLARED A NON-GOAL: the global relief-amplitude uniform uPerturb does not read this field at all — it is fed the canonical, radius-blind u.surfaceGravity (planet-lod-lab.html:3016 <- planet-lod-lab-core.js:609-611), and reliefEnvelope discards its radiusEarth argument outright (planet-lod-lab-core.js:1103-1105). This directly contradicts the comment at planet-lod-lab-core.js:1090-1093 that justified dropping the explicit 1/RE term on the grounds that 'g ALREADY carries the radius signal'. At the live wiring it carries nothing. Same family as the census's frozen-_fp finding and Max's own R1-ship observation (a) about legacy shader systems not being wired to procgen. Filed as a finding, NOT fixed here, because the handoff is explicit that the gravity fix goes 'first and alone'. THE THIRD CITATION IS NOW CLOSED: Valencia+2006 (astro-ph/0511150) was retrieved during grounding; its Table 2 puts the SUB-Earth exponent near 1.30 (five fitted beta -> n = 1.27-1.34), NOT the 1.0 incompressible asymptote the handoff implicitly assumed — so the low branch is 4/3, not 1. Separately, Melosh 2011 ch.3 and Kite+2009 were retrieved and read in full (research/superearth-relief-law-citations-resolved-2026-07-28.md); they bear on the v2 relief derivation, not on this workstream, EXCEPT that Melosh independently confirms h = 2Y/(rho_c g) is his eq 3.17 rearranged.",
+  "programRef": "docs/WORKSTREAMS/world-engine-gravity-selfcompression-2026-07-28/evidence/GROUNDING-2026-07-28.md",
+  "scope": {
+    "paths": [
+      "body-condition-vector.js",
+      "src/worldengine/instrument/laws.js",
+      "tests/instrument-laws.test.js",
+      "tests/worldengine-v2-6-gcohere.test.js",
+      "tests/radius-live-feed.test.js",
+      "tests/worldengine-v2-6-craters.test.js",
+      "docs/WORKSTREAMS/world-engine-gravity-selfcompression-2026-07-28/*"
+    ],
+    "systems": ["worldengine"]
+  },
+  "designDecisions": [
+    "COMPOSITION GATE = three-way via compositionClass (e1Regime.js:67), NOT ungated and NOT an h2-he-only gate. Taken WITHOUT asking Max, per feedback_physics-first-worldengine-scoping (physics-derivable questions are working-Claude's, not interview forks). Zeng+2016 is a rocky two-layer PREM fit valid 1-8 M_E and CMF 0.0-0.4; it has no standing for the 5 h2-he presets (Jovian 11.2, Hot Jupiter 13.0, Saturnian 9.4, Neptunian 3.9, Sub-Neptune 2.7) NOR for the 4 icy ones (Titan 0.4, Frozen 0.5, Europa 0.5, Crystal 0.8), whose ice EOS is a different family. Measured evidence against the ungated form: fitting dln g/dln R between preset pairs gives Sub-Neptune->Neptunian -0.001, Neptunian->Saturnian -0.048, Jovian->Hot Jupiter -0.456 — the real sign is flat-to-NEGATIVE. Frozen carries the single largest ungated error, +84.6% at R=1.2. Gated-out classes keep exponent 1.0, i.e. the status quo: no regression, and the debt is DECLARED rather than silently papered over. compositionClass is importable without a cycle (e1Regime.js imports only alea + mathutil and never reads surfaceGravity).",
+    "SUB-EARTH BRANCH = piecewise in ABSOLUTE R with n_lo = 4/3, n_hi = 1.70, continuous at R = 1. Taken without asking, same rule. The handoff's implicit n_lo = 1.0 is the M -> 0 INCOMPRESSIBLE ASYMPTOTE, not the sub-Earth value: Valencia, O'Connell & Sasselov 2006 (arXiv:astro-ph/0511150, Icarus 181:545) Table 2 gives five fitted beta = 0.2991-0.3094 -> n = 1/beta - 2 = 1.23-1.34. n_lo = 1.0 would be wrong by ~33% in the exponent across the band where 8 of 13 rocky/icy presets live. HONESTY FLAG that must reach the code comment: Valencia's sub-Earth family is Super-MERCURIES (CMF 50/65/80%), so extrapolating to Earth's CMF 32.6% is OUR inference, not their result; the defensible bracket is n_lo in [1.23, 1.34] and 4/3 is its top end chosen for being exact and rational. Valencia's own framing is that the exponent falls TOWARD the constant-density value without reaching it — do not restate this as 'it is not 1.0'.",
+    "THE FORM STAYS THE NORMALIZED-AT-CANONICAL RATIO g = g_c * f(R)/f(R_c), with f piecewise in absolute Earth radii. NOT an absolute re-derivation from a Zeng M(R). This is load-bearing for byte-identity: f(R_c)/f(R_c) is x/x on the identical float = exactly 1.0, so g_c*1.0 === g_c bit-for-bit for any exponent. An absolute Zeng re-derivation gives g(1 R_E) = 0.99355 rather than 1.000 and would move all 75 carrier rows plus tests/worldengine-base-condition-vector.test.js:141. Measured, not argued: a matched control/mutation pair run under a scratchpad vitest config (repo untouched) held verify-golden 40c18aad and all 83 byte-identity test cases green.",
+    "THE RATIO-FORM TRAP IS WHY THE PIECEWISE MUST BE IN ABSOLUTE R, NOT A RATIO POWER. An anchored ratio and a piecewise-in-absolute-R law agree ONLY if R and R_c sit on the same branch. 8 of 13 rocky/icy presets have R_c < 1 (Moon/Mercury 0.38, Titan 0.40, Frozen 0.50, Europa 0.50, Mars 0.53, Crystal 0.80, Lava 0.90, Venus 0.95), so they never agree at any off-canonical radius. Carbon's ENTIRE draw band ['carbon': 0.4-0.9] sits below 1 despite R_c = 1.1.",
+    "REGISTER THE LAW BEFORE CHANGING THE CODE, so the registry is the falsification instrument rather than a rubber stamp. Verified red-then-green during grounding: the drafted measure against CURRENT code returns exponent 1.000 against a claimed 1.700. The registry's nullValue is 1.0 (the retired constant-density law), NOT 0 — 'g ignores radius' is not a state this code can reach, so a null of 0 guards nothing and a resolution-poor sweep would return a false PASS. Same construction as crater-count-independent-of-gravity, whose null is the removed g^0.34 coupling. Because the law is piecewise, register TWO entries (one per branch, each swept strictly inside its own validity band), not one with a hidden breakpoint.",
+    "THE EXPONENT IS COMPOSITION-BLIND WITHIN THE ROCKY CLASS, so no CMF / ironFraction plumbing is needed. Zeng's prefactor (1.07 - 0.21*CMF) enters g only as a multiplicative constant k^-3.7 and cancels identically in the normalized ratio form. Confirmed numerically: a CMF sweep 0->1 reproduces (R/R_c)^1.7 to <= 2e-15. radiusEarth is already the third argument to deriveConditionVector."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-0",
+      "statement": "Spine conformance per Rule 15. (1) Driver connectivity: radiusEarth is already D-slot-backed and g_c comes from deriveBodyScalars (baseStep.js:20); the exponents 4/3 and 1.70 are the one new class of scalar and are LITERATURE CONSTANTS, not drivers, so each is declared as such with its source and validity band rather than being smuggled in as a tuned number. (2) Named consumer: no new emitted field, but the AC must state honestly that e1Regime.js:90-92 and giant-drivers.js:176 reconstruct M = g*R^2, so the mass law they see silently becomes M_c*(R/R_c)^3.7 on the rocky branch. (3) Taxonomy: N/A unless the exponent becomes a GUI knob or the composition gate becomes a selectable regime — declare it so explicitly. Plus the DOES/UNLOCKS card in intent.md.",
+      "verifyVia": {
+        "input": "Run the SPINE-CONFORMANCE.md audit over the diff.",
+        "observable": "Both exponents are declared constants naming their source and validity band; the M -> R^3.7 consequence is named in the card rather than discovered later; no consumer reads a driver it is not registered against; doc-rot does not grow past its 163-flag baseline at 169e8e1."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-LAW",
+      "statement": "Gravity on the drawn-radius axis obeys the self-compression law where the literature covers it: g = g_c * f(R)/f(R_c) with f(R) = R^(4/3) for R <= 1 and R^1.70 for R > 1, on the rocky class only. Two LAW_REGISTRY entries (one per branch) are registered in src/worldengine/instrument/laws.js BEFORE the code change and each is swept strictly inside its own validity band — the high branch inside R in [1.000, 1.754] (Zeng's 1-8 M_E at CMF 1/3), never across the R = 1 breakpoint, because a sweep that crosses the break measures the BLEND and not the law (measured during grounding: a [0.5 .. 4.0] sweep returns 1.507 +/- 0.070, which FAILS a claim of 1.70).",
+      "verifyVia": {
+        "input": "npx vitest run tests/instrument-laws.test.js, and the registry audit via auditLaws().",
+        "observable": "Both entries PASS at the shipped exponents. Red-then-green is demonstrated: against the PRE-change code the high-branch entry measures 1.000 and FAILS its claim of 1.700. A planted-defect positive control injecting a ^1.0 deriveConditionVector makes audit.summary.fail equal exactly the two new law ids and nothing else — a generic alarm is not a detection."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-GATE",
+      "statement": "The rocky exponent reaches ONLY the rocky class. All 5 h2-he presets (Jovian, Hot Jupiter, Saturnian, Neptunian, Sub-Neptune) and all 4 icy presets (Titan, Frozen, Europa, Crystal) retain exponent 1.0 exactly, byte-for-byte identical to pre-change output at every radius across their full draw ranges. The gate reads compositionClass, not a hand-rolled density threshold, so the boundary constants stay single-sourced.",
+      "verifyVia": {
+        "input": "Sweep all 18 presets across their real draw ranges (and the lab-unlocked floor of 0.27 for Moon/Mercury) under pre- and post-change deriveConditionVector.",
+        "observable": "The 9 gated presets return bit-identical surfaceGravity at every sampled radius. The rocky presets differ everywhere off-canonical and agree exactly at R === R_c. No preset returns NaN, Infinity, or a negative g anywhere in [0.27, 16]."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-BYTE",
+      "statement": "The change is provably inert at the canonical radius. verify-golden hash 40c18aad unchanged and NEVER re-captured; all 75 carrier fixture rows and the 83 byte-identity test cases green; tests/worldengine-base-condition-vector.test.js:141 (which pins surfaceGravity to massEarth/radiusEarth^2) still passes. The ratio form is what buys this and must not be traded for an absolute re-derivation.",
+      "verifyVia": {
+        "input": "npm run verify-golden && npx vitest run tests/v2-0-byte-identity.test.js tests/worldengine-base-condition-vector.test.js",
+        "observable": "PASS - canonical-scenario-v1 matches golden 40c18aad, samples 1200. 83 byte-identity tests pass. No fixture is re-captured; a re-capture is a FAIL of this AC, not a fix for it."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-BASELINE",
+      "statement": "The full suite returns to EXACTLY the 4-failure baseline (GalacticFeatures x1, KnownObjects x3) plus the 17 vendor motion-test-kit file-level failures contributing 0 tests. The three assertions that encode the retired law are REWRITTEN to the new law, never deleted: tests/worldengine-v2-6-gcohere.test.js:66 (the law pin, g_c*(R/R_c) -> the piecewise form), tests/worldengine-v2-6-gcohere.test.js:96 (the massEarthOf round-trip — the physically load-bearing one, since the implied mass law moves from M ~ R^3 to R^3.7 on the rocky branch), and tests/radius-live-feed.test.js:834 (a non-vacuity guard, span -> span^n). Additionally tests/worldengine-v2-6-craters.test.js:70 is rewired to import deriveConditionVector instead of re-implementing g_c*(R/R_c) harness-side, because as written it will keep passing while silently measuring a law production no longer implements.",
+      "verifyVia": {
+        "input": "npx vitest run (full suite), before and after, on the same config.",
+        "observable": "Post-change failure set is identical to the pre-change baseline set — same 4 tests, same names. Each rewritten assertion still discriminates: reverting the source exponent to 1.0 makes it FAIL again. The craters helper now fails when deriveConditionVector's law changes."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-CONTINUITY",
+      "statement": "g is continuous and strictly monotonic in R across the entire reachable domain [0.27, 16] for every preset, with no discontinuity at the R = 1 branch join and no clamp or floor surprise. The derivative kink at R = 1 (slope 4/3 -> 1.70) is expected and disclosed; a VALUE discontinuity is a defect.",
+      "verifyVia": {
+        "input": "Dense radius sweep per preset through deriveConditionVector, checking |g(R+eps) - g(R-eps)| at the join and the sign of successive differences across the range.",
+        "observable": "Max value-discontinuity at R = 1 is at float-noise scale (< 1e-12 relative). g is strictly increasing in R for every preset over the whole range. A planted defect (e.g. n_lo applied above 1) produces a visible value jump at the join and is caught."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-DOWNSTREAM",
+      "statement": "The gravity-keyed consumers that actually reach the render move by the amounts the grounding predicted, measured through the non-visual instrument rather than by eye. On Moon/Mercury (the only preset family with a live stamped crater population) at R = 1.6: crater nStamp 90 -> 64, sizeMul -15.7%, regolithRoughness -27.1%, and the reliefBudget f_I feeding compositeMargins -36.1%. Consumers the grounding classified INERT stay inert and are re-checked rather than assumed: the E5 giant path (drawGiantConditions back-solves g away at giant-drivers.js:234), tectonic.js:137/:207 (reads DEFAULT_GRAIN_DRIVERS, which carries no gravity key, so reliefGravityFactor(1) === 1.0), and the gravity-slider override path (planet-lod-lab.html:2812).",
+      "verifyVia": {
+        "input": "Run the real exported functions (craterSchedule, deriveReliefBudget, deriveFigureDescriptor) and the instrument sweep at both exponents; then drive the lab on an isolated context and read the crater/relief channels via _lab.fieldProbe / responseCurve.",
+        "observable": "Each measured quantity lands within tolerance of the predicted value with its own stated pass/fail criterion. Every consumer marked inert returns bit-identical output. Any consumer that moves and was NOT predicted is reported as a finding rather than absorbed."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-PROVENANCE",
+      "statement": "The code stops asserting the retired law and starts distinguishing knowledge kinds. body-condition-vector.js:32-36's justifying comment is rewritten; the CALIBRATION vs DERIVATION line is explicit (there is no measured super-Earth gravity and no measured super-Earth topography anywhere in this chain — the high branch is derivation from interior-structure models, and ~86-95% of the reachable radius domain is extrapolation beyond Zeng's own 1-8 M_E band, metric-dependent); the sub-Earth n_lo is labelled an inference from Valencia's Super-Mercury family rather than a result of it. The six other in-repo prose sites that name g = g_c*(R/R_c) are updated or annotated. vis-scale-fence.test.js stays green WITHOUT an allowlist entry — note the most natural sentence in a gravity fix ('the physical radius, not sVis') is exactly what the fence bans inside src/worldengine/**, so refer to the display layer by description only.",
+      "verifyVia": {
+        "input": "npx vitest run tests/vis-scale-fence.test.js tests/radius-live-feed-fence.test.js, plus a grep for the retired law's prose form across the repo.",
+        "observable": "Both fences green with no allowlist growth. No remaining comment or doc asserts g = g_c*(R/R_c) as current behaviour on the rocky branch. Each exponent's comment names its source, its validity band, and whether it is calibration or derivation."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "MAX'S GATE ALONE — no agent drives or passes this. On a rocky world, does the planet read as GETTING HEAVIER as it gets bigger, in the way the surface tells you about the world? DISCLOSED CARVE-OUT, stated up front so Max is not sent looking for something that cannot happen: the GLOBAL relief amplitude will NOT move, because uPerturb is fed the canonical radius-blind gravity and reliefEnvelope discards its radius argument (see statusNote non-goal). What SHOULD respond is the crater population on Moon/Mercury — fewer, smaller craters and less regolith roughness as the body grows — and the relief margin weights on rocky bodies. If the honest answer is 'I cannot see any of this', that is a legitimate UAT outcome and it means the visible payoff is gated behind the uPerturb wiring fix, which would then be the next thing to scope.",
+      "verifyVia": {
+        "input": "Lab on :5175, Moon/Mercury (impact-airless) preset, hold seed, drag the planet radius slider across its track pausing for the 220 ms debounce.",
+        "observable": "Max's judgment, in his words, on whether the body reads as a heavier world. Recorded verbatim in statusNote either way."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "deriveConditionVector(fp, derived, radiusEarth) — body-condition-vector.js:23, REPO ROOT (the handoff and research/superearth-relief-law-2026-07-28.md:64 both cite src/worldengine/base/, which does not exist). Line 37 is the single expression under change.",
+      "state.planetRadiusEarth — the drawn radius the slider writes; reachable domain [0.27, 16] R_E, floor 0.27 not 0.30 via LAB_UNLOCKED_RANGES + { labUnlock: true } (driver-presets.js:254, documented at planet-lod-lab.html:5268-5271)",
+      "g_c from deriveBodyScalars (baseStep.js:20, surfaceGravity = massEarth / radiusEarth^2) — the canonical-preset gravity, EXPOSED not re-derived inline",
+      "compositionClass (e1Regime.js:67) — the h2-he / icy / rocky terminal that becomes the gate; imports only alea + mathutil, never reads surfaceGravity, so no cycle",
+      "Zeng, Sasselov & Jacobsen 2016 (ApJ 819:127, arXiv:1512.08827) R/R_E = (1.07 - 0.21*CMF)*(M/M_E)^(1/3.7), applicable 1-8 M_E and CMF 0.0-0.4 — the high branch",
+      "Valencia, O'Connell & Sasselov 2006 (arXiv:astro-ph/0511150, Icarus 181:545) Table 2 — the low branch, via an acknowledged extrapolation off their Super-Mercury family"
+    ],
+    "outputs": [
+      "condition.surfaceGravity — consumed by bombardment.js (crater size/count/regolith/ice-relaxation), reliefBudget.js (sigma_imp, sigma_endo, phiPeak, f_I -> compositeMargins), bodyFigure.js (flattening ~ 1/g), e1Regime.js (lidStrength gMod, massEarthOf, the seeded mass band)",
+      "The implied MASS law seen by e1Regime.js:90-92 and giant-drivers.js:176, which reconstruct M = g*R^2 and therefore silently move from M_c*(R/R_c)^3 to ^3.7 on the rocky branch",
+      "Two new LAW_REGISTRY entries in src/worldengine/instrument/laws.js — the first laws in the registry that pin what DRIVES gravity rather than what gravity drives",
+      "A corrected in-source account of the mass-radius relation that the v2 relief derivation can express its exponents against"
+    ],
+    "mustStayWorking": [
+      "GOLDEN BYTE-IDENTITY — verify-golden hash 40c18aad and the 75 carrier fixture rows / 83 test cases. NEVER re-captured; a re-capture is a FAIL, not a fix. The normalized-at-canonical ratio form is what buys this.",
+      "Full suite at EXACTLY the 4-failure baseline (GalacticFeatures x1 + KnownObjects x3) plus 17 vendor motion-test-kit file-level failures contributing 0 tests. The measured delta of this change is +3, all legitimate re-pins.",
+      "vis-scale-fence.test.js greps src/worldengine/** for visScaleOf|\\bsVis\\b|VIS_SCALE_EXP INCLUDING COMMENTS — reword prose, do NOT add an allowlist entry. body-condition-vector.js is at repo root and is NOT scanned, but laws.js is.",
+      "radius-live-feed-fence.test.js — scoped to planet-lod-lab.html, comment-inclusive, denies (_fp|fp|DRIVER_PRESETS[..]).radiusEarth outside its two allowlisted sites",
+      "The 9 gas + icy presets stay bit-identical: this workstream must not become a silent retune of bodies it has no citation for",
+      "The radius-display-scale keying (visScaleOf / sVis / VIS_SCALE_EXP) — this workstream changes what radius FEEDS, never how it is DRAWN",
+      "The instrument stays READ-ONLY on generation code — defects planted by dependency injection, never by editing source (its own AC-POSCTRL discipline)",
+      "NOT-OURS working-tree mods: src/auto/CameraChoreographer.js, src/debug/LabMode.js — never stage",
+      "Crystal stays in the parking lot — excluded from every UAT packet (it is gated out by the icy branch here regardless)"
+    ]
+  }
+}
