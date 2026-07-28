@@ -2,9 +2,9 @@
   "workstream": "cockpit-lab-geometry-2026-07-28",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "verified",
+  "status": "building",
   "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md — HELM cockpit program (lane E), increment 1 of 6",
-  "statusNote": "VERIFIED_PENDING_MAX 1056f30. Unit layer PASS (verify-workstream, 3/3 adversarial on AC-FORM/AC-METRIC/AC-REPRO/AC-NOGAME). Integration layer PASS driven live by working-Claude via chrome-devtools — evidence at evidence/AC-LIVE-RESULT.md (AC-FRAME measured 27.573% vs 27.575% analytic, in band; AC-LAB 7/7 nodes, zero console errors). verdict.json records AC-FRAME/AC-LAB as INSUFFICIENT because the workflow ran with liveBranch:'main' and deliberately drives no browser; the evidence file is the measurement it declined to take on trust. AWAITING MAX'S UAT — that gate alone decides Shipped. Lane E worktree ~/projects/well-dipper-cockpit, branch feature/cockpit, port :5179.",
+  "statusNote": "RE-SPEC 2026-07-28 after Max's UAT on 1056f30. He replaced the form language: screens 50% bigger and BOXY (1in bezel, 2in backing) on ARMS rooted outside the player's POV; canopy frame reduced to TWO VERTICAL RIBS revealing the canopy's protruding shape; NOSE REMOVED; cabin light off by default. Increment 1 rebuild in progress. Prior verified state (octagonal frame + nose + flat panels) is commit 1056f30 with evidence at evidence/AC-LIVE-RESULT.md — kept as the record of what that form measured, not as the target.",
   "designDecisions": [
     "GLB metric convention: eye-point at origin, 1 unit = 1 m, Y-up, NO scale normalisation. Deliberately not the ships pipeline's mesh.scale.setScalar(1/radius) — that is a ships-manifest convention and wrong for the one object whose real-world size matters. In-game scaling happens at the 5th-pass cockpit camera.",
     "Cockpit render resolution (match the world's pixelScale=3 third-res chunk vs. crisper) is deferred to increment 2, where both can be shown side by side for Max to judge by eye.",
@@ -15,10 +15,10 @@
   "acceptanceCriteria": [
     {
       "id": "AC-FORM",
-      "statement": "The committed Blender script emits cockpit geometry in the agreed form language: four screen mounting planes, one in each quadrant of the canopy aperture (two upper, two lower), each plane's normal pointing within 20 degrees of the vector from that plane's centre to the eye-point at the origin — i.e. genuinely angled toward the pilot, not merely tilted; plus ship-nose hull geometry below the median and forward of the eye, whose authored extents are a script-declared fraction of the Bible §8A ~20 m house-sized hull so a future full ship exterior can match it.",
+      "statement": "The committed Blender script emits cockpit geometry in Max's re-specified form language: (a) FOUR SCREEN UNITS, one per quadrant of the canopy opening, each a BOX not a flat panel — a display face 50% larger than the previous 0.30x0.20 m panel, surrounded by a ~1 inch bezel and backed by a ~2 inch deep body, with the display face recessed so the bezel reads; each display face's normal points within 20 degrees of the vector from its centre to the eye-point at the origin; (b) each screen carried by an ARM whose root lies demonstrably OUTSIDE the 70 degree / 16:9 view frustum, so the arms read as reaching in from beyond the player's field of view; (c) the canopy frame reduced to TWO VERTICAL RIBS following the canopy shell's surface, conveying its forward-protruding shape; (d) a Canopy_Glass shell node present as the surface increment 3 turns into glass. NO ship nose — removed at Max's instruction; any Hull_Nose node is a failure.",
       "verifyVia": {
-        "input": "Headless parse of the exported GLB (accessor min/max + node transforms, no browser): compute each screen plane's centroid and normal, and the nose section's bounding extents; read the hull reference length the script declares as a named constant.",
-        "observable": "Exactly four screen planes, one per canopy quadrant; every plane's normal within 20 degrees of its centre-to-eye vector; nose geometry present with min Y below the eye plane and max Z forward of the eye; declared hull reference length present and the nose extents stated as a fraction of it."
+        "input": "Headless parse of the exported GLB (accessor min/max + node transforms, no browser): per screen, the display-face centroid and normal, the bezel width and body depth from the box geometry, and the arm root vertices projected into tan-space at fov 70 / 16:9; plus node presence checks; plus the script's declared sidecar constants.",
+        "observable": "Four display faces, one per quadrant, each normal within 20 degrees of its centre-to-eye vector; display face area >= 1.5x the previous 0.30x0.20 m; bezel and body depth match the script's declared inch-derived constants; every arm has at least one root vertex outside the tan-space frame rectangle; exactly two rib nodes present and following the canopy surface; Canopy_Glass present; NO node named Hull_Nose anywhere in the file."
       },
       "layer": "unit"
     },
@@ -42,17 +42,17 @@
     },
     {
       "id": "AC-FRAME",
-      "statement": "\"Classic cockpit\" is a measured number, not a vibe: from the eye-point at the origin, at the game's real 70 degree FOV (src/ui/Settings.js:40) and 16:9 aspect, looking straight down the view axis, the cockpit geometry occludes 25-30% of the frame.",
+      "statement": "Occlusion is MEASURED AND REPORTED rather than asserted against a pre-set band. The prior [0.25, 0.30] band was derived from a design Max has since replaced (full octagonal frame plus ship nose, together 27.57%); carrying it forward would force geometry to be inflated to hit a number that no longer describes the wanted form. So: from the eye-point at the origin, at the game's real 70 degree FOV (src/ui/Settings.js:40) and 16:9 aspect, the occluded fraction is measured live and recorded, counting the ribs, screen boxes and arms but EXCLUDING Canopy_Glass (see-through by design). The band is re-set from that measurement with Max's agreement before this AC can PASS.",
       "verifyVia": {
-        "input": "chrome-devtools on cockpit-lab.html at :5179 — snap to the eye view, set aspect 16:9 and fov 70, render the cockpit against a flat contrasting background, and read back the framebuffer pixel counts via evaluate_script.",
-        "observable": "Occluded-pixel fraction lands in [0.25, 0.30]. Outside that band is a FAIL, not a judgement call."
+        "input": "chrome-devtools on cockpit-lab.html at :5179 — snap to the eye view, fov 70 / aspect 16:9, render the cockpit alone (Canopy_Glass hidden) against a flat background, read back framebuffer pixel counts via evaluate_script.",
+        "observable": "A reported occluded-pixel fraction, recorded in evidence/AC-LIVE-RESULT.md alongside the analytic prediction. PASS requires Max to have accepted a band around that figure; until he does, this AC is measured-but-open, not PASS."
       },
       "layer": "integration",
       "live": true
     },
     {
       "id": "AC-LAB",
-      "statement": "cockpit-lab.html loads on the :5179 dev server and gives Max both views of the model: free orbit to spin and inspect it from outside, and an \"eye\" button that snaps the camera to the origin at 70 degree FOV to see it from the pilot's seat, with a placeholder background visible through the canopy aperture so the opening reads. No console errors.",
+      "statement": "cockpit-lab.html loads on the :5179 dev server and gives Max both views of the model: free orbit to spin and inspect it from outside, and an \"eye\" view that snaps the camera to the origin at 70 degree FOV to see it from the pilot's seat, with a placeholder background visible through the canopy opening so it reads as an opening. The CABIN LIGHT is OFF by default (Max, this session) and toggleable on. No console errors.",
       "verifyVia": {
         "input": "chrome-devtools: load http://localhost:5179/well-dipper/cockpit-lab.html (vite.config.js sets base: '/well-dipper/', so the root path 404s), await window._cockpitLab.ready, drag to orbit, switch to eye mode, list console messages.",
         "observable": "GLB loads and renders; orbit changes the camera pose; the eye button puts the camera at the origin with camera.fov === 70; background is visible through the aperture; zero console errors and zero failed network requests."
@@ -85,6 +85,12 @@
       "ac": "AC-LAB",
       "change": "Corrected the verification URL from http://localhost:5179/cockpit-lab.html to http://localhost:5179/well-dipper/cockpit-lab.html, and added 'await window._cockpitLab.ready' to the input.",
       "why": "vite.config.js:7 sets base: '/well-dipper/', so the root-path URL 404s — the original input would have produced a spurious FAIL against working code. The added await is because evaluate_script otherwise races GLTFLoader. Factual correction to the verification method; the AC's substance is unchanged, so it was not re-greenlit."
+    },
+    {
+      "date": "2026-07-28",
+      "ac": "AC-FORM, AC-FRAME, AC-LAB",
+      "change": "Re-spec after Max's UAT on 1056f30. AC-FORM rewritten to boxy screens (1in bezel / 2in backing) 50% larger, carried on arms rooted outside the view frustum, two vertical canopy ribs plus a Canopy_Glass shell, and NO ship nose. AC-FRAME converted from a fixed [0.25,0.30] band to measure-and-report with the band re-set from the new form. AC-LAB now requires the cabin light off by default.",
+      "why": "Max replaced the form language at UAT: screens 50% bigger and boxy on arms from outside his POV, canopy frame reduced to two vertical strips showing its protruding shape, nose removed, cabin light off. The old AC-FRAME band was working-Claude's operationalisation of 'classic cockpit' and was derived from the frame+nose design now deleted — keeping it would have forced geometry to be padded to hit a stale number. The AC's PURPOSE (stop 'classic cockpit' being unfalsifiable vibes) is preserved as a required measurement."
     }
   ],
   "architecturalConnections": {
