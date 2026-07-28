@@ -73,8 +73,25 @@
   <link rel="icon" href="data:," />
   <title>Cockpit Lab — Well Dipper</title>
   <style>
+    /* ------------------------------------------------------------------
+       PHOSPHOR PALETTE. Max, this session: "I do want to adopt the white ui
+       of phosphor (with options to toggle the color to something else of
+       course)". The ink is Well Dipper's Phosphor spec -- #EDE8DE, a WARM
+       OFF-WHITE, deliberately not pure white -- on black. Every colour below
+       is a variable so [P] can recolour the whole lab at once, and so the
+       increment-2 CRT panels can be driven from the same four values instead
+       of a second, drifting set. See scan-phosphor-style.md.
+       ------------------------------------------------------------------ */
+    :root {
+      --ink:      #EDE8DE;   /* body text, borders, the phosphor itself     */
+      --ink-hi:   #FFFFFF;   /* values and active states: hotter than ink   */
+      --ink-dim:  #7C776E;   /* labels, hints, keycaps                      */
+      --ink-glow: 237, 232, 222;   /* rgb triple for the translucent fills  */
+      --warn:     #FFC46B;
+      --err:      #FF7A6B;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; background: #000; color: #0f0; font-family: monospace; overflow: hidden; }
+    html, body { height: 100%; background: #000; color: var(--ink); font-family: monospace; overflow: hidden; }
     canvas { display: block; width: 100vw; height: 100vh; }
 
     #hud {
@@ -82,12 +99,12 @@
       font-size: 13px; line-height: 1.55;
       text-shadow: 0 0 8px #000; pointer-events: none; z-index: 10; white-space: pre;
     }
-    #hud .k    { color: #6f6; }
-    #hud .v    { color: #fff; }
-    #hud .dim  { color: #585; }
-    #hud .pass { color: #6f6; }
-    #hud .fail { color: #fc6; }
-    #hud .err  { color: #f66; }
+    #hud .k    { color: var(--ink); }
+    #hud .v    { color: var(--ink-hi); }
+    #hud .dim  { color: var(--ink-dim); }
+    #hud .pass { color: var(--ink); }
+    #hud .fail { color: var(--warn); }
+    #hud .err  { color: var(--err); }
 
     #controls {
       position: fixed; bottom: 12px; left: 12px;
@@ -95,28 +112,28 @@
       padding: 10px 12px; font-size: 12px; line-height: 1.7; z-index: 10;
       width: 250px;
     }
-    #controls h3 { font-size: 12px; color: #6f6; margin-bottom: 6px; font-weight: normal; letter-spacing: 1px; }
+    #controls h3 { font-size: 12px; color: var(--ink); margin-bottom: 6px; font-weight: normal; letter-spacing: 1px; }
     .btn {
-      background: rgba(0, 255, 0, 0.1); border: 1px solid #0f0;
-      color: #0f0; padding: 4px 9px; cursor: pointer; margin: 2px 0;
+      background: rgba(var(--ink-glow), 0.09); border: 1px solid var(--ink);
+      color: var(--ink); padding: 4px 9px; cursor: pointer; margin: 2px 0;
       font-family: inherit; font-size: 12px; width: 100%;
       display: flex; justify-content: space-between; gap: 8px;
     }
-    .btn:hover { background: rgba(0, 255, 0, 0.22); }
-    .btn.on { background: rgba(0, 255, 0, 0.4); color: #fff; }
-    .btn .key { color: #585; }
-    .btn.on .key { color: #cfc; }
+    .btn:hover { background: rgba(var(--ink-glow), 0.20); }
+    .btn.on { background: rgba(var(--ink-glow), 0.38); color: #000; }
+    .btn .key { color: var(--ink-dim); }
+    .btn.on .key { color: #000; }
     /* Current mode is stated separately from the button, which states its DESTINATION —
        so "GO TO EYE VIEW" can never be misread as "you are in eye view". */
-    .now { color: #585; font-size: 11px; letter-spacing: 1px; margin-bottom: 4px; }
-    .now span { color: #fff; }
-    .hint { color: #585; font-size: 11px; margin-top: 8px; line-height: 1.5; }
+    .now { color: var(--ink-dim); font-size: 11px; letter-spacing: 1px; margin-bottom: 4px; }
+    .now span { color: var(--ink-hi); }
+    .hint { color: var(--ink-dim); font-size: 11px; margin-top: 8px; line-height: 1.5; }
 
     /* Eye-mode reticle — DOM only, cannot affect the GL occlusion readback. */
     #reticle { position: fixed; inset: 0; z-index: 9; pointer-events: none; display: none; }
     #reticle.on { display: block; }
     #reticle i {
-      position: absolute; background: rgba(0, 255, 0, 0.35);
+      position: absolute; background: rgba(var(--ink-glow), 0.35);
       left: 50%; top: 50%;
     }
     #reticle i.h { width: 18px; height: 1px; margin-left: -9px; }
@@ -139,6 +156,7 @@
     <button class="btn on" id="bBg">  <span>BACKGROUND</span><span class="key">B</span></button>
     <button class="btn" id="bCabin"> <span>CABIN LIGHT</span><span class="key">L</span></button>
     <button class="btn" id="bReset">  <span>RECENTRE VIEW</span><span class="key">R</span></button>
+    <button class="btn" id="bPhosphor"><span id="bPhosphorLabel">PHOSPHOR: WHITE</span><span class="key">P</span></button>
     <div class="hint">
       ORBIT: drag to spin, scroll to zoom.<br />
       EYE: camera locked at (0,0,0), fov 70,
@@ -147,7 +165,10 @@
       [G] hides the canopy shell to judge the
       ribs and screens alone.<br />
       [L] CABIN LIGHT is OFF by default — it is
-      a lab-only fill, not the shipped look.
+      a lab-only fill, not the shipped look.<br />
+      [P] cycles the PHOSPHOR colour. White
+      (#EDE8DE on black) is Well Dipper's spec
+      and the default; the others are options.
     </div>
   </div>
 
@@ -155,6 +176,43 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PHOSPHOR PALETTE
+    //
+    // Max, this session: "I do want to adopt the white ui of phosphor (with options to
+    // toggle the color to something else of course)."
+    //
+    // WHITE IS THE DEFAULT AND IT IS NOT PURE WHITE. #EDE8DE is Well Dipper's Phosphor ink
+    // — a warm off-white on black (scan-phosphor-style.md). The lab was previously hardcoded
+    // to terminal green, which is also what both of Max's form references show, and the
+    // handoff flagged that as a live risk of green drifting into the project palette by
+    // accident. Making white the default and the others an explicit, labelled toggle is what
+    // stops that: choosing green is now a choice rather than an inheritance.
+    //
+    // These four values are the SINGLE source of the lab's colour. Increment 2's CRT panels
+    // should read them rather than growing a second set that drifts from this one.
+    // ─────────────────────────────────────────────────────────────────────────
+    const PHOSPHORS = [
+      { name: 'WHITE',  ink: '#EDE8DE', hi: '#FFFFFF', dim: '#7C776E', glow: '237, 232, 222' },
+      { name: 'AMBER',  ink: '#FFB454', hi: '#FFE0A8', dim: '#8A6432', glow: '255, 180, 84' },
+      { name: 'GREEN',  ink: '#7CFF9E', hi: '#D8FFE4', dim: '#3F7A50', glow: '124, 255, 158' },
+      { name: 'ICE',    ink: '#9FD8FF', hi: '#E2F3FF', dim: '#4E6C86', glow: '159, 216, 255' },
+    ];
+    let phosphorIndex = 0;
+
+    function applyPhosphor(index) {
+      phosphorIndex = ((index % PHOSPHORS.length) + PHOSPHORS.length) % PHOSPHORS.length;
+      const p = PHOSPHORS[phosphorIndex];
+      const r = document.documentElement.style;
+      r.setProperty('--ink', p.ink);
+      r.setProperty('--ink-hi', p.hi);
+      r.setProperty('--ink-dim', p.dim);
+      r.setProperty('--ink-glow', p.glow);
+      const label = document.getElementById('bPhosphorLabel');
+      if (label) label.textContent = 'PHOSPHOR: ' + p.name;
+      return p;
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constants
@@ -570,6 +628,7 @@
       bBg: document.getElementById('bBg'),
       bCabin: document.getElementById('bCabin'),
       bReset: document.getElementById('bReset'),
+      bPhosphor: document.getElementById('bPhosphor'),
     };
 
     function setMode(next) {
@@ -641,6 +700,10 @@
     el.bBg.onclick      = () => { state.bg      = !state.bg;      applyBg(); };
     el.bCabin.onclick   = () => { state.cabin   = !state.cabin;   applyCabin(); };
     el.bReset.onclick   = recentre;
+    // Cycles the phosphor colour. Not a toggle button: it has four states, so it never gets
+    // the .on class — its label states which one is live.
+    el.bPhosphor.onclick = () => { applyPhosphor(phosphorIndex + 1); };
+    applyPhosphor(0);
 
     // Sync the DOM to the initial state so the status line and the button lit-states can
     // never disagree with the actual scene, even if the markup defaults drift. The cabin
@@ -660,6 +723,7 @@
         case 's': el.bScreens.onclick(); break;
         case 'f': el.bFlat.onclick(); break;
         case 'w': el.bWire.onclick(); break;
+        case 'p': el.bPhosphor.onclick(); break;
         case 'g': el.bGlass.onclick(); break;
         case 'b': el.bBg.onclick(); break;
         case 'l': el.bCabin.onclick(); break;
@@ -882,6 +946,21 @@
       setMode,
       setGlass(on) { state.glass = !!on; applyGlass(); return state.glass; },
       setCabinLight(on) { state.cabin = !!on; applyCabin(); return state.cabin; },
+      // Drive the EYE look-around from a script, in degrees. The render loop owns eyeYaw /
+      // eyePitch and rewrites the camera every frame, so setting camera.rotation directly
+      // from the console silently does nothing — this is the supported way in.
+      //
+      // It exists because judging an ENCLOSURE requires turning the head: the whole
+      // correction this increment answers is that the previous build was a window, and you
+      // cannot see that from one forward screenshot. The camera never leaves the origin.
+      setLook(yawDeg, pitchDeg) {
+        eyeYaw = THREE.MathUtils.degToRad(yawDeg);
+        eyePitch = Math.max(-PITCH_LIMIT,
+                            Math.min(PITCH_LIMIT, THREE.MathUtils.degToRad(pitchDeg)));
+        return { yawDeg: THREE.MathUtils.radToDeg(eyeYaw),
+                 pitchDeg: THREE.MathUtils.radToDeg(eyePitch),
+                 pitchClampedAtDeg: THREE.MathUtils.radToDeg(PITCH_LIMIT) };
+      },
       ready,
       get loaded() { return !!model; },
       get error() { return loadError; },

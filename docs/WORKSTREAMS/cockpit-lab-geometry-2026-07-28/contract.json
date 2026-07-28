@@ -4,13 +4,18 @@
   "project": "well-dipper",
   "status": "building",
   "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md — HELM cockpit program (lane E), increment 1 of 6",
-  "statusNote": "RE-SPEC #2, 2026-07-28, after Max reviewed ceb277e. His three corrections: (1) the canopy must be a faceted fighter-style ENCLOSURE — canopy above, in front, and to BOTH SIDES of the pilot — with the ribs running along the SEAMS between its flat panels. What is built is a flat WINDOW, which is why the ribs read as decoration lying on a pane: they have no seams to be. (2) The arms must be properly modelled, monitor-arm style, AFFIXED TO THE RIBS. (3) Occlusion is explicitly NOT a concern at this stage — Max wants general shape/composition right first. Handed off to a fresh session; see ~/briefings/handoff-lane-E-cockpit-enclosure-2026-07-28.md.",
+  "statusNote": "ENCLOSURE REBUILT 2026-07-28. Root cause of the rejected form found and fixed: the canopy was a HEIGHT FIELD y=f(x,z), which cannot represent a shell that wraps past the pilot's shoulders because such a shell doubles back in y. No re-tuning of those constants could ever have produced what Max asked for -- it was a parameterisation bug, not a proportions bug. Rebuilt as a faceted VAULT swept between three transverse arch rings; every fold is a SEAM and every structural member is GENERATED FROM one, so 'a rib not on a seam' is now unrepresentable rather than merely tested for. Arms are five parts (Mount/BoomA/Elbow/BoomB/Head) bolted to named ribs. Bulkhead and floor pan close the enclosure aft and below (Max approved both; he deferred a seat). Enclosure measured: above 100%, left/right 99.1%, behind 100%, ahead 21.2% (the aperture, open by design). VERIFIED_PENDING_MAX.",
   "designDecisions": [
     "GLB metric convention: eye-point at origin, 1 unit = 1 m, Y-up, NO scale normalisation. Deliberately not the ships pipeline's mesh.scale.setScalar(1/radius) — that is a ships-manifest convention and wrong for the one object whose real-world size matters. In-game scaling happens at the 5th-pass cockpit camera.",
     "Cockpit render resolution (match the world's pixelScale=3 third-res chunk vs. crisper) is deferred to increment 2, where both can be shown side by side for Max to judge by eye.",
     "Screens are at the four CORNERS of the canopy (two upper, two lower), superseding the program memory's earlier 'four screens in a row above the median'. Max, this session.",
     "No interior console/dash. The space below the median is the ship's own nose — exterior hull geometry, lit by the world rather than shadowed like the interior frame. Max, this session.",
-    "Content-to-panel assignment is NOT locked here; corners are peripheral vision, so it gets re-checked in increment 2 once the panels are legible."
+    "Content-to-panel assignment is NOT locked here; corners are peripheral vision, so it gets re-checked in increment 2 once the panels are legible.",
+    "Canopy parameterisation: a swept VAULT (arch rings x fore-aft stations), NOT a height field. The height field is what made the previous build a window and no constant could have fixed it. Working-Claude, 2026-07-28, recorded because it is the root cause of two rejected iterations.",
+    "Bow ring sized in TAN SPACE to land just inside the 70deg/16:9 frame edge, so the forward view stays a generous opening and the enclosure proper lives OUTSIDE the forward frustum where it costs nothing looking ahead. This is why the canopy is 4.3 m across rather than fighter-realistic.",
+    "Bulkhead_Aft and Floor_Pan added. Max approved both this session ('That's fine'). Floor_Pan is NOT the deleted Hull_Nose -- that was exterior hull forward of the pilot; this is the cabin floor, and without it looking down finds empty space and 'enclosure' is false in one direction.",
+    "NO SEAT / headrest. Max, this session: 'No need for a seat at this point; we can build stuff like that in later.' Deliberately absent, not overlooked.",
+    "Lab palette: Phosphor WHITE #EDE8DE on black is the default, with [P] cycling AMBER / GREEN / ICE. Max, this session: 'I do want to adopt the white ui of phosphor (with options to toggle the color to something else of course).' This also closes the green-drift risk the handoff flagged -- choosing green is now an explicit toggle rather than an inheritance from the reference images."
   ],
   "acceptanceCriteria": [
     {
@@ -97,6 +102,12 @@
       "ac": "AC-FORM, AC-FRAME",
       "change": "AC-FORM rewritten from a flat-window form to a faceted fighter-style ENCLOSURE (canopy above/ahead/both sides) with ribs required to lie on panel-to-panel SEAMS and arms required to be properly modelled and AFFIXED TO THE RIBS. The 'arm roots outside the frustum' clause is retired. AC-FRAME's band is held open explicitly rather than left implicitly pending.",
       "why": "Max's review of ceb277e. (1) He identified that ribs are structurally SEAMS between flat canopy panels — the build had ribs lying on a near-flat pane with no seams to follow, which is why they read as decoration. He wants a fighter-pilot enclosure: canopy above, in front and to either side. (2) He asked for real monitor-arm modelling affixed to the ribs, which RESOLVES the ambiguity working-Claude had flagged: 'outside the player's POV' means the origin is hidden by structure, not beyond the frustum. (3) He explicitly deprioritised occlusion at this stage in favour of shape and composition."
+    },
+    {
+      "date": "2026-07-28",
+      "ac": "AC-FORM, AC-METRIC",
+      "change": "AC-FORM(a) is now measured as SOLID-ANGLE COVERAGE around the eye per sector, not as a description. The AC-METRIC sub-assertion 'the whole canopy sits forward of the eye (z<0)' is REPLACED by 'the vault straddles the eye plane'.",
+      "why": "(1) 'Turning the head finds canopy rather than empty space' was the wording, and a flat pane passed every dimensional assertion in the suite while failing exactly that. Ray-casting the sphere makes it a number, with the forward aperture asserted OPEN as the anti-vacuity pin. (2) 'The canopy sits forward of the eye' was true of a window and is false of an enclosure BY DEFINITION -- a shell wrapping past the shoulders must reach behind them. Keeping it would have made a correct enclosure permanently unbuildable, so it is replaced rather than relaxed. Both are working-Claude corrections to verification method, not changes to what Max asked for."
     }
   ],
   "architecturalConnections": {
