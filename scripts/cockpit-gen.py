@@ -409,6 +409,76 @@ DASH_BOW_GAP       = 0.002    # the front face sits this far AFT of Coaming_Bow'
                               # before anything was exported.
 DASH_PROBE_N       = 9        # containment probes per axis on the slab's faces
 
+# ---- The seated pilot: the datum every height in this file rests on --------
+# These have governed the whole build since the tub proportions were settled -- RAIL_Z is at
+# chest height BECAUSE the chest is at -0.35, and the roof is at 0.70 BECAUSE the head needs
+# clearance -- but they have only ever existed in cockpit-section-lab.html, cited in prose
+# over here. Written down now because the seat is the one part whose entire job is to put
+# this body where the rest of the model already assumes it is, and a seat authored against
+# remembered numbers is a seat that drifts.
+#
+# 50th-percentile seated adult, lightly reclined, eye at the origin by the GLB convention.
+# NOT TUNABLE. If these move, the cabin moves, not the seat.
+BODY_SEAT_Z        = -0.80
+BODY_WAIST_Z       = -0.52
+BODY_CHEST_Z       = -0.35
+BODY_SHOULDER_Z    = -0.20
+BODY_HEEL_Z        = -1.18
+BODY_KNEE_Y        = 0.46
+BODY_TOE_Y         = 0.74
+BODY_HIP_HALF      = 0.19
+BODY_SHOULDER_HALF = 0.24
+BODY_HEAD_R        = 0.105
+
+# ---- The seat -------------------------------------------------------------
+# Max asked for it directly ("if you can model the seat...I guess, why not"), which REVERSES
+# his earlier "no seat/headrest -- we can build stuff like that in later" for the second
+# time. It has been form language since he corrected the build order: "a seat against a
+# bulkhead" is WHY Bulkhead_Aft is full height. Now the seat itself exists.
+#
+# NOTHING HERE IS A FREE CHOICE, and that is the point of doing it last rather than first.
+# THE ANTHROPOMETRY IS THE DATUM: the eye is pinned at the origin by the GLB convention, so
+# a seated pilot fixes every height in the cabin. The seat is the one object in the model
+# whose entire job is to put that body where it already is. Every number below is read off
+# the body, not authored:
+#     seat pan    z = -0.80   the pilot sits ON it
+#     waist       z = -0.52
+#     chest       z = -0.35
+#     shoulder    z = -0.20   the backrest tops out just above this
+#     knee        y = +0.46   the pan front stops well short of it
+#     hip half-width 0.19 / shoulder half-width 0.24 -- the pan and back clear both
+#
+# It costs nothing in the view and that is checked, not assumed: the pan sits 0.80 m below
+# an eye that is looking forward, so it projects to tan_z = -2.7 at the knees against a
+# frame edge of 0.70, and the backrest is behind the eye entirely.
+NAME_SEAT_PAN      = "Seat_Pan"
+NAME_SEAT_BACK     = "Seat_Back"
+NAME_SEAT_BASE     = "Seat_Base"
+SEAT_PAN_Z         = BODY_SEAT_Z          # -0.80, the body's own seat height
+SEAT_PAN_FRONT_Y   = 0.30     # front lip. Short of the knees at y = 0.46, so the pan
+                              # supports the thigh without fouling the knee bend.
+SEAT_PAN_BACK_Y    = -0.22    # where the pan meets the backrest, just behind the spine
+SEAT_PAN_HALF      = 0.24     # hip half-width is 0.19; the extra 50 mm is the bolster
+SEAT_PAN_THICK     = 0.055
+SEAT_BACK_TOP_Z    = -0.08    # just above the shoulder at -0.20, so it reads as a seat
+                              # back rather than a headrest. Max ruled headrests out and
+                              # has not un-ruled them.
+SEAT_BACK_RAKE_Y   = -0.14    # how far further AFT the top of the backrest sits than its
+                              # root: a reclined seat, which is what the eye height and the
+                              # -0.20 shoulder already imply
+SEAT_BACK_HALF     = 0.26     # shoulder half-width is 0.24
+SEAT_BACK_THICK    = 0.06
+SEAT_BASE_HALF     = 0.15     # the pedestal, narrower than the pan so the pan reads as
+                              # cantilevered rather than as a block
+SEAT_BASE_FRONT_Y  = 0.10
+SEAT_BASE_BACK_Y   = -0.20
+SEAT_FLOOR_GAP     = 0.005    # air between the pedestal's foot and the cabin floor. Without
+                              # it the foot is coplanar with the hull, which both z-fights and
+                              # reads to the signed eye-ray containment check as 3 mm OUTSIDE
+                              # -- a surface exactly on the shell is not reliably inside it.
+                              # Same idiom, same reason, as RIB_GLASS_GAP and DASH_BOW_GAP.
+SEAT_PROBE_N       = 7        # containment probes per axis, per seat part
+
 # ---- What makes it an ENCLOSURE rather than a window -----------------------
 ENCLOSURE_SECTOR_MIN = 0.97   # minimum solid-angle coverage in the ABOVE / LEFT / RIGHT /
                               # BEHIND sectors. AHEAD is deliberately NOT in that list: the
@@ -1467,6 +1537,145 @@ def dash_extents():
     return y_front, y_back, hf, hb, DASH_TOP_Z, DASH_TOP_Z - DASH_THICK
 
 
+def tub_floor_z(x, y):
+    """Height of the cabin floor at (x, y), read off the TUB_HALF profile.
+
+    The floor is DISHED -- TUB_HALF puts the chine 10% of the way up the tub's height -- so a
+    pedestal dropped to a flat FLOOR_Z would hang in the air at the centreline and bury itself
+    at the edges. Derived rather than authored for the same reason the rail clearance is: it
+    re-fits itself if anyone re-authors the profile or the station half-widths.
+    """
+    half_w = station_half_width(y)
+    tub_h = RAIL_Z - FLOOR_Z
+    ax = abs(x)
+    for k in range(len(TUB_HALF) - 1):
+        (_n0, fx0, fz0), (_n1, fx1, fz1) = TUB_HALF[k], TUB_HALF[k + 1]
+        x0, x1 = fx0 * half_w, fx1 * half_w
+        if x0 - 1e-9 <= ax <= x1 + 1e-9:
+            t = 0.0 if abs(x1 - x0) < 1e-12 else (ax - x0) / (x1 - x0)
+            return FLOOR_Z + (fz0 + (fz1 - fz0) * t) * tub_h
+    raise ValueError(
+        "x = %.4f is outside the tub's half-width %.4f at y = %.4f, so there is no floor "
+        "under it" % (x, half_w, y))
+
+
+def build_seat():
+    """Seat_Pan / Seat_Back / Seat_Base -- the pilot's seat, against the bulkhead.
+
+    Three parts rather than one, because they are three different structural ideas and the
+    flat shading in the lab reads the folds between them: a pan you sit on, a back you lean
+    against, and a pedestal carrying both to the floor.
+
+    EVERY DIMENSION COMES OFF THE BODY (see the BODY_* block). The pan is at BODY_SEAT_Z and
+    stops short of BODY_KNEE_Y; the back tops out just above BODY_SHOULDER_Z and is wider than
+    BODY_SHOULDER_HALF; the pedestal lands on the DISHED floor via tub_floor_z() rather than on
+    a flat FLOOR_Z it does not have.
+
+    NO HEADREST. Max ruled headrests out when he ruled the seat out, and only the seat has
+    been un-ruled. The back stops at the shoulder line on purpose.
+    """
+    parts = []
+
+    # ---- pan: a slab under the thighs, tilted very slightly nose-up so the pilot is held
+    # rather than sliding forward. The tilt is 0.02 m over its length, i.e. about 2 degrees.
+    pan_front_z = SEAT_PAN_Z + 0.02
+    pan_back_z = SEAT_PAN_Z
+    parts.append((NAME_SEAT_PAN,) + _extrude_profile(
+        [(SEAT_PAN_FRONT_Y, pan_front_z), (SEAT_PAN_BACK_Y, pan_back_z)],
+        SEAT_PAN_HALF, SEAT_PAN_THICK, down=True))
+
+    # ---- back: from the pan's rear edge up and AFT to SEAT_BACK_TOP_Z
+    parts.append((NAME_SEAT_BACK,) + _extrude_profile(
+        [(SEAT_PAN_BACK_Y, pan_back_z),
+         (SEAT_PAN_BACK_Y + SEAT_BACK_RAKE_Y, SEAT_BACK_TOP_Z)],
+        SEAT_BACK_HALF, SEAT_BACK_THICK, down=False))
+
+    # ---- base: pedestal from under the pan down to the floor. Its underside follows the
+    # dish, so the seat rests ON the tub instead of intersecting or floating over it.
+    # MAX, not min, over the footprint. The floor dishes DOWN toward the centreline, so a
+    # flat-bottomed pedestal dropped to the deepest point it spans (-1.200 at x=0) would push
+    # its outer corners 24 mm THROUGH the hull, where the floor is only -1.176. Resting it on
+    # the highest point instead leaves a lens of air under the middle of the pedestal, which
+    # is entirely enclosed by the seat and the floor and can never be seen.
+    z_lo = max(tub_floor_z(SEAT_BASE_HALF, SEAT_BASE_FRONT_Y),
+               tub_floor_z(SEAT_BASE_HALF, SEAT_BASE_BACK_Y),
+               tub_floor_z(0.0, SEAT_BASE_FRONT_Y),
+               tub_floor_z(0.0, SEAT_BASE_BACK_Y)) + SEAT_FLOOR_GAP
+    z_hi = pan_back_z
+    if z_lo >= z_hi - 1e-6:
+        raise ValueError(
+            "the cabin floor at %.4f is at or above the seat pan at %.4f, so the pedestal has "
+            "no height. FLOOR_Z and BODY_SEAT_Z have crossed." % (z_lo, z_hi))
+    verts = [
+        (-SEAT_BASE_HALF, SEAT_BASE_FRONT_Y, z_lo), (SEAT_BASE_HALF, SEAT_BASE_FRONT_Y, z_lo),
+        (SEAT_BASE_HALF, SEAT_BASE_BACK_Y, z_lo), (-SEAT_BASE_HALF, SEAT_BASE_BACK_Y, z_lo),
+        (-SEAT_BASE_HALF, SEAT_BASE_FRONT_Y, z_hi), (SEAT_BASE_HALF, SEAT_BASE_FRONT_Y, z_hi),
+        (SEAT_BASE_HALF, SEAT_BASE_BACK_Y, z_hi), (-SEAT_BASE_HALF, SEAT_BASE_BACK_Y, z_hi),
+    ]
+    faces = _orient_outward(verts, [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4),
+                                    (3, 2, 6, 7), (1, 2, 6, 5), (0, 3, 7, 4)])
+    parts.append((NAME_SEAT_BASE, verts, faces))
+    return parts
+
+
+def _orient_outward(verts, faces):
+    """Wind every face so its Newell normal points away from the solid's centroid."""
+    cx = sum(v[0] for v in verts) / len(verts)
+    cy = sum(v[1] for v in verts) / len(verts)
+    cz = sum(v[2] for v in verts) / len(verts)
+    out = []
+    for f in faces:
+        n = _newell_normal(verts, f)
+        c = [sum(verts[k][i] for k in f) / len(f) for i in range(3)]
+        if v_dot(n, v_sub(c, (cx, cy, cz))) < 0.0:
+            f = tuple(reversed(f))
+        out.append(f)
+    return out
+
+
+def _extrude_profile(spine, half, thick, down):
+    """A slab following a (y, z) spine, `half` wide either side of the centreline.
+
+    `down=True` puts the thickness BELOW the spine (the pan: you sit on the spine), False puts
+    it BEHIND (the backrest: you lean on the spine). Returns (verts, faces) for a closed solid.
+    """
+    (y0, z0), (y1, z1) = spine[0], spine[-1]
+    dy, dz = y1 - y0, z1 - z0
+    ln = math.hypot(dy, dz)
+    if ln < 1e-9:
+        raise ValueError("seat slab has zero length; its two spine points coincide")
+    # offset direction: perpendicular to the spine in the y-z plane, pointing away from
+    # the pilot -- down for the pan, aft for the back.
+    ox, oz = (0.0, -1.0) if down else (-dz / ln, dy / ln)
+    if not down and ox > 0.0:
+        ox, oz = -ox, -oz
+    top = [(y0, z0), (y1, z1)]
+    bot = [(y + ox * thick, z + oz * thick) for (y, z) in top]
+    verts = []
+    for (y, z) in top + bot:
+        verts.append((-half, y, z))
+        verts.append((half, y, z))
+    # verts: 0,1 = top front L/R | 2,3 = top back | 4,5 = bot front | 6,7 = bot back
+    faces = [(0, 1, 3, 2), (4, 5, 7, 6), (0, 1, 5, 4), (2, 3, 7, 6), (1, 3, 7, 5), (0, 2, 6, 4)]
+    return verts, _orient_outward(verts, faces)
+
+
+def seat_probe_points():
+    """A grid over every seat part's surface, for the containment check."""
+    pts = []
+    for (_nm, verts, _faces) in build_seat():
+        lo = [min(v[i] for v in verts) for i in range(3)]
+        hi = [max(v[i] for v in verts) for i in range(3)]
+        for a in range(SEAT_PROBE_N):
+            for b in range(SEAT_PROBE_N):
+                for c in range(2):
+                    fa, fb = a / (SEAT_PROBE_N - 1.0), b / (SEAT_PROBE_N - 1.0)
+                    pts.append((lo[0] + (hi[0] - lo[0]) * fa,
+                                lo[1] + (hi[1] - lo[1]) * fb,
+                                lo[2] + (hi[2] - lo[2]) * c))
+    return pts
+
+
 def build_dash():
     """Dash_Shelf: the glare shield lying on the coaming. A placeholder surface, no content.
 
@@ -1484,16 +1693,8 @@ def build_dash():
         (-hf, y_front, top), (hf, y_front, top), (hf, y_back, top), (-hf, y_back, top),
         (-hf, y_front, bot), (hf, y_front, bot), (hf, y_back, bot), (-hf, y_back, bot),
     ]
-    raw = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4),
-           (3, 2, 6, 7), (1, 2, 6, 5), (0, 3, 7, 4)]
-    centre = (0.0, (y_front + y_back) * 0.5, (top + bot) * 0.5)
-    faces = []
-    for f in raw:
-        n = _newell_normal(verts, f)
-        c = [sum(verts[k][i] for k in f) / len(f) for i in range(3)]
-        if v_dot(n, v_sub(c, centre)) < 0.0:
-            f = tuple(reversed(f))
-        faces.append(f)
+    faces = _orient_outward(verts, [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4),
+                                    (3, 2, 6, 7), (1, 2, 6, 5), (0, 3, 7, 4)])
     return verts, faces
 
 
@@ -2343,6 +2544,9 @@ def build_all():
     dv, df = build_dash()
     parts.append({"name": NAME_DASH, "verts": dv, "faces": df,
                   "material": "Mat_Hull", "kind": "hull"})
+    for (snm, sv, sf) in build_seat():
+        parts.append({"name": snm, "verts": sv, "faces": sf,
+                      "material": "Mat_Body", "kind": "seat"})
     for mem in seam_members():
         parts.append({"name": mem["name"], "verts": mem["verts"], "faces": mem["faces"],
                       "material": "Mat_Frame", "kind": "member"})
@@ -2950,6 +3154,38 @@ def analyse(units=None):
             "rail. dash_extents() and build_dash() have diverged."
             % (NAME_DASH, dash_rail_gap, DASH_SIDE_GAP))
 
+    # ---- The seat: inside the tub, and clear of the pilot ---------------------
+    # Same signed eye-ray instrument as the dash and the fittings. The seat is the one part
+    # whose position is fully determined by the body, so the interesting check is not "did I
+    # place it well" but "does the cabin still contain the thing the cabin was sized for".
+    seat_outside = []
+    seat_worst = None
+    seat_constrained = 0
+    seat_unconstrained = 0
+    for p in seat_probe_points():
+        m = inside_margin(p, tris)
+        if m is None:
+            seat_unconstrained += 1
+            continue
+        seat_constrained += 1
+        if seat_worst is None or m < seat_worst:
+            seat_worst = m
+        if m < 0.0:
+            seat_outside.append((p, m))
+    if seat_outside:
+        p, m = min(seat_outside, key=lambda t: t[1])
+        raise ValueError(
+            "%d probe points on the seat are OUTSIDE the enclosure -- worst at "
+            "(%.4f, %.4f, %.4f), %.4f m through the hull.\n"
+            "  The seat is placed FROM the anthropometry, so this means the cabin no longer "
+            "contains the pilot it was proportioned around -- check STATIONS and FLOOR_Z "
+            "before touching any SEAT_* constant."
+            % (len(seat_outside), p[0], p[1], p[2], -m))
+    if seat_constrained == 0:
+        raise ValueError(
+            "the seat containment check measured NOTHING: every probe projects through the "
+            "open bow aperture. A pass that measured nothing is not a pass.")
+
     # ---- Occlusion. Canopy_Glass is NOT in any of these lists, by design: the pilot sees
     # through it. The opaque structure is the seam members, the aft bulkhead and THE TUB --
     # which is new and is the single biggest term now. The marginal order is
@@ -2980,6 +3216,19 @@ def analyse(units=None):
     dash_own = coverage_fraction(dash_polys)
     dash_marginal = coverage_fraction(hull_polys + dash_polys) - coverage_fraction(hull_polys)
     hull_polys.extend(dash_polys)
+
+    # The seat, likewise measured separately before being folded in. It sits 0.80 m BELOW an
+    # eye that is looking forward, so the expectation is zero and this is where that is
+    # checked rather than asserted.
+    seat_polys = []
+    for (_snm, sv, sf) in build_seat():
+        for f in sf:
+            poly = silhouette_tan([sv[k] for k in f], [tuple(range(len(f)))])
+            if len(poly) >= 3:
+                seat_polys.append(poly)
+    seat_own = coverage_fraction(seat_polys)
+    seat_marginal = coverage_fraction(hull_polys + seat_polys) - coverage_fraction(hull_polys)
+    hull_polys.extend(seat_polys)
 
     members_own = coverage_fraction(member_polys)
     hull_own = coverage_fraction(hull_polys)
@@ -3030,6 +3279,20 @@ def analyse(units=None):
             "probesUnconstrained": dash_unconstrained,
             "ownOcclusion": dash_own,
             "marginalOcclusion": dash_marginal,
+        },
+
+        "seat": {
+            "parts": [nm for (nm, _v, _f) in build_seat()],
+            "panZ": SEAT_PAN_Z, "backTopZ": SEAT_BACK_TOP_Z,
+            "panFrontY": SEAT_PAN_FRONT_Y, "backRakeY": SEAT_BACK_RAKE_Y,
+            "worstInsideMargin": seat_worst,
+            "probesConstrained": seat_constrained,
+            "probesUnconstrained": seat_unconstrained,
+            "ownOcclusion": seat_own,
+            "marginalOcclusion": seat_marginal,
+            "body": {"seatZ": BODY_SEAT_Z, "chestZ": BODY_CHEST_Z,
+                     "shoulderZ": BODY_SHOULDER_Z, "kneeY": BODY_KNEE_Y,
+                     "hipHalf": BODY_HIP_HALF, "shoulderHalf": BODY_SHOULDER_HALF},
         },
 
         "memberDetail": member_detail,
@@ -3535,6 +3798,12 @@ def build_metrics(parts, units, analysis):
                        "language when he corrected the build order, which is why the bulkhead "
                        "is now full height -- but whether the seat is MODELLED or merely "
                        "implied by the tub has not been asked yet. Deliberately absent."),
+            "seat": dict(analysis["seat"], what=(
+                "the pilot's seat -- pan, back and pedestal. Max asked for it directly, which "
+                "reverses 'no seat/headrest' for the second time; it has been FORM language "
+                "since he corrected the build order ('a seat against a bulkhead' is why "
+                "Bulkhead_Aft is full height). Every dimension is read off the BODY_* "
+                "anthropometry rather than authored. No headrest: only the seat was un-ruled.")),
             "dash": dict(analysis["dash"], what=(
                 "the glare shield lying on top of Coaming_Bow -- a PLACEHOLDER SURFACE with "
                 "nothing on it, reserving the volume a dashboard would occupy. Max's words "
@@ -3803,6 +4072,27 @@ def print_summary(metrics, analysis, glb_path, metrics_path):
              metrics["closures"]["bulkhead"]["what"]))
     print("    Floor_Pan      RETIRED -- the floor is now part of Hull_Tub")
     d = metrics["closures"]["dash"]
+    print("")
+    st = metrics["closures"]["seat"]
+    print("  THE SEAT -- placed FROM the anthropometry, which is the datum the cabin was")
+    print("  proportioned around. Not a free choice: the eye is the origin, so a seated pilot")
+    print("  fixes every height, and the seat's job is to put that body where the model")
+    print("  already assumes it is.")
+    print("    parts: %s" % ", ".join(st["parts"]))
+    print("    pan at z %.3f (the body's seat height) | back tops out at %.3f, just above the"
+          % (st["panZ"], st["backTopZ"]))
+    print("      shoulder at %.3f -- a seat back, NOT a headrest, which Max ruled out"
+          % st["body"]["shoulderZ"])
+    print("    pan front at y %.3f, short of the knees at %.3f; back raked %.3f m aft"
+          % (st["panFrontY"], st["body"]["kneeY"], -st["backRakeY"]))
+    print("    pedestal foot follows the DISHED floor via tub_floor_z(), resting on the")
+    print("      highest point it spans -- a flat foot at the deepest point would push its")
+    print("      outer corners through the hull")
+    print("    inside the tub: worst margin %+.4f m over %d probes, %d unconstrained"
+          % (st["worstInsideMargin"], st["probesConstrained"], st["probesUnconstrained"]))
+    print("    COSTS NOTHING IN THE VIEW: own silhouette %.4f%%, marginal %.4f%% -- it sits"
+          % (100.0 * st["ownOcclusion"], 100.0 * st["marginalOcclusion"]))
+    print("      0.80 m BELOW an eye that is looking forward. Measured, not assumed.")
     print("")
     print("  DASH SHELF -- the glare shield on the coaming. A placeholder surface, no content.")
     print("    %-14s %.3f m across x %.3f m deep, %.0f mm thick, top face IN the rail plane"

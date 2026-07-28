@@ -212,6 +212,11 @@ const TUB_NAME = 'Hull_Tub';
 const COAMING_NAME = 'Coaming_Bow';
 const DASH_NAME = 'Dash_Shelf';
 const HULL_NAMES = [TUB_NAME, BULKHEAD_NAME, COAMING_NAME, DASH_NAME];
+// The seat. Max reversed "no seat/headrest — we can build stuff like that in later" when he
+// asked for it directly; it had already been FORM language since "a seat against a bulkhead",
+// which is why Bulkhead_Aft is full height. NO headrest node: only the seat was un-ruled, and
+// Seat_Back stopping at the shoulder line is what encodes that.
+const SEAT_NAMES = ['Seat_Pan', 'Seat_Back', 'Seat_Base'];
 // The opaque shell a member has to stay INBOARD of is no longer the glass alone: with a
 // closed profile the rails and the lower arches lie on the hull half, and measuring them
 // against Canopy_Glass finds the nearest GLASS fold instead of their own — which reads as
@@ -220,7 +225,8 @@ const SHELL_NAMES = [GLASS_NAME, TUB_NAME];
 const FRAME_MATERIAL = 'Mat_Frame';
 const EYE_NODE_NAME = 'Eye_Point';
 const PART_NAMES = [
-  ...SCREEN_NAMES, ...BODY_NAMES, ...ARM_NAMES, ...MEMBER_NAMES, ...HULL_NAMES, GLASS_NAME,
+  ...SCREEN_NAMES, ...BODY_NAMES, ...ARM_NAMES, ...MEMBER_NAMES, ...HULL_NAMES, ...SEAT_NAMES,
+  GLASS_NAME,
 ];
 
 // EXHAUSTIVE. Every node the exported file may contain — nothing else is allowed, not

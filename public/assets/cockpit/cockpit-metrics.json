@@ -391,6 +391,31 @@
     },
     "floorPanRetired": "Floor_Pan is GONE and is not replaced. With the ring profile closed, the cabin floor is segments 0 and 10 of Hull_Tub, so a separate pan would be a second surface in the same place. This is a supersession, not a deletion like Hull_Nose.",
     "noSeat": "Still deferred. Max reintroduced 'a seat against a bulkhead' as FORM language when he corrected the build order, which is why the bulkhead is now full height -- but whether the seat is MODELLED or merely implied by the tub has not been asked yet. Deliberately absent.",
+    "seat": {
+      "parts": [
+        "Seat_Pan",
+        "Seat_Back",
+        "Seat_Base"
+      ],
+      "panZ": -0.8,
+      "backTopZ": -0.08,
+      "panFrontY": 0.3,
+      "backRakeY": -0.14,
+      "worstInsideMargin": 0.0018457692293083472,
+      "probesConstrained": 294,
+      "probesUnconstrained": 0,
+      "ownOcclusion": 0.0,
+      "marginalOcclusion": 0.0,
+      "body": {
+        "seatZ": -0.8,
+        "chestZ": -0.35,
+        "shoulderZ": -0.2,
+        "kneeY": 0.46,
+        "hipHalf": 0.19,
+        "shoulderHalf": 0.24
+      },
+      "what": "the pilot's seat -- pan, back and pedestal. Max asked for it directly, which reverses 'no seat/headrest' for the second time; it has been FORM language since he corrected the build order ('a seat against a bulkhead' is why Bulkhead_Aft is full height). Every dimension is read off the BODY_* anthropometry rather than authored. No headrest: only the seat was un-ruled."
+    },
     "dash": {
       "name": "Dash_Shelf",
       "frontY": 1.608,
@@ -517,6 +542,63 @@
           0.506954,
           -0.34,
           -1.05
+        ]
+      }
+    },
+    {
+      "name": "Seat_Pan",
+      "kind": "seat",
+      "material": "Mat_Body",
+      "vertexCount": 8,
+      "faceCount": 12,
+      "boundingBox": {
+        "min": [
+          -0.24,
+          -0.855,
+          -0.3
+        ],
+        "max": [
+          0.24,
+          -0.78,
+          0.22
+        ]
+      }
+    },
+    {
+      "name": "Seat_Back",
+      "kind": "seat",
+      "material": "Mat_Body",
+      "vertexCount": 8,
+      "faceCount": 12,
+      "boundingBox": {
+        "min": [
+          -0.26,
+          -0.811452,
+          0.22
+        ],
+        "max": [
+          0.26,
+          -0.08,
+          0.418897
+        ]
+      }
+    },
+    {
+      "name": "Seat_Base",
+      "kind": "seat",
+      "material": "Mat_Body",
+      "vertexCount": 8,
+      "faceCount": 12,
+      "boundingBox": {
+        "min": [
+          -0.15,
+          -1.170144,
+          -0.1
+        ],
+        "max": [
+          0.15,
+          -0.8,
+          0.2
         ]
       }
     },
