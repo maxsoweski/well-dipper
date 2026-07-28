@@ -24,24 +24,24 @@
     "INCH": 0.0254,
     "HULL_REF_LENGTH": 20.0,
     "FLOOR_Z": -1.2,
-    "RAIL_Z": -0.34,
+    "RAIL_Z": -0.26,
     "STATIONS": [
       [
         "bow",
-        1.62,
+        1.61,
         0.59,
         0.52
       ],
       [
         "mid",
         0.0,
-        0.76,
+        1.28,
         0.7
       ],
       [
         "aft",
         -0.97,
-        0.57,
+        0.59,
         0.7
       ]
     ],
@@ -75,55 +75,55 @@
       ],
       [
         "shoulder",
-        0.92,
+        0.88,
         0.42
       ],
       [
         "roofedge",
-        0.45,
+        0.3,
         1.0
       ]
     ],
     "RAIL_SECTION": [
-      0.085,
-      0.065
+      0.03,
+      0.023
     ],
     "RIB_SECTION": [
-      0.049,
-      0.038
+      0.03,
+      0.023
     ],
     "ARCH_SECTION": [
-      0.055,
-      0.046
+      0.035,
+      0.029
     ],
     "BOW_SECTION": [
-      0.085,
-      0.068
+      0.04,
+      0.032
     ],
     "RIB_GLASS_GAP": 0.002,
     "BULKHEAD_INSET": 0.01,
     "ENCLOSURE_SECTOR_MIN": 0.97,
     "MEMBER_SEAM_TOL": 1e-06,
     "MEMBER_PLANT_OFFSET": 0.05,
-    "SCREEN_W": 0.24599999999999997,
-    "SCREEN_H": 0.205,
-    "SCREEN_BEZEL": 0.020828,
-    "SCREEN_BODY_DEPTH": 0.041656,
+    "SCREEN_W": 0.252,
+    "SCREEN_H": 0.21,
+    "SCREEN_BEZEL": 0.021336,
+    "SCREEN_BODY_DEPTH": 0.042672,
     "SCREEN_FACE_RECESS": 0.004,
     "SCREEN_FACE_GAP": 0.0015,
-    "SCREEN_DIST_UP": 0.6478,
-    "SCREEN_DIST_DOWN": 0.6805999999999999,
-    "SCREEN_TAN_X_UP": 0.91,
-    "SCREEN_TAN_X_DOWN": 0.88,
-    "SCREEN_TAN_Z_UP": 0.22,
-    "SCREEN_TAN_Z_DOWN": -0.21,
+    "SCREEN_DIST_UP": 0.84,
+    "SCREEN_DIST_DOWN": 0.7812,
+    "SCREEN_TAN_X_UP": 0.83,
+    "SCREEN_TAN_X_DOWN": 0.82,
+    "SCREEN_TAN_Z_UP": 0.31,
+    "SCREEN_TAN_Z_DOWN": -0.19,
     "ARM_MOUNT_PROFILE": {
       "UL": 4,
       "UR": 7,
       "LL": 3,
       "LR": 8
     },
-    "ARM_MOUNT_Y": 0.9,
+    "ARM_MOUNT_Y": 0.7,
     "ARM_MOUNT_TOL": 1e-06,
     "ARM_ATTACH_U": 0.45,
     "ARM_ATTACH_W": 0.55,
@@ -235,24 +235,24 @@
   },
   "screenUnit": {
     "displayFace": [
-      0.246,
-      0.205
+      0.252,
+      0.21
     ],
-    "displayFaceArea": 0.05043,
+    "displayFaceArea": 0.05292,
     "previousDisplayFace": [
       0.3,
       0.2
     ],
-    "displayAreaRatioVsPrevious": 0.8405,
-    "bezelWidth": 0.020828,
-    "bezelInches": 0.82,
-    "bodyDepth": 0.041656,
-    "bodyDepthInches": 1.64,
+    "displayAreaRatioVsPrevious": 0.882,
+    "bezelWidth": 0.021336,
+    "bezelInches": 0.84,
+    "bodyDepth": 0.042672,
+    "bodyDepthInches": 1.68,
     "faceRecess": 0.004,
     "bodyOuterSize": [
-      0.287656,
-      0.246656,
-      0.041656
+      0.294672,
+      0.252672,
+      0.042672
     ]
   },
   "canopy": {
@@ -261,25 +261,25 @@
     "stations": [
       {
         "label": "bow",
-        "y": 1.62,
+        "y": 1.61,
         "halfWidth": 0.59,
         "topZ": 0.52
       },
       {
         "label": "mid",
         "y": 0.0,
-        "halfWidth": 0.76,
+        "halfWidth": 1.28,
         "topZ": 0.7
       },
       {
         "label": "aft",
         "y": -0.97,
-        "halfWidth": 0.57,
+        "halfWidth": 0.59,
         "topZ": 0.7
       }
     ],
     "floorZ": -1.2,
-    "railZ": -0.34,
+    "railZ": -0.26,
     "tubProfileHalf": [
       [
         "floor",
@@ -310,12 +310,12 @@
       ],
       [
         "shoulder",
-        0.92,
+        0.88,
         0.42
       ],
       [
         "roofedge",
-        0.45,
+        0.3,
         1.0
       ]
     ],
@@ -323,37 +323,37 @@
     "bays": 2,
     "panelCount": 22,
     "panelNormalsFaceEye": {
-      "worstDot": 0.636478,
-      "flippedWindingDot": -0.636478,
+      "worstDot": 0.68877,
+      "flippedWindingDot": -0.68877,
       "note": "every panel normal points at the pilot. The flipped figure is the planted defect: reversing the winding must read clearly negative, or the orientation test cannot fail and proves nothing."
     },
     "bowRimLanding": {
       "right": {
-        "tan": 0.364198,
+        "tan": 0.36646,
         "frameTan": 1.244813,
-        "insideBy": 0.880616,
-        "halfAngleDeg": 20.011499,
+        "insideBy": 0.878354,
+        "halfAngleDeg": 20.125846,
         "frameHalfAngleDeg": 51.223929
       },
       "left": {
-        "tan": 0.364198,
+        "tan": 0.36646,
         "frameTan": 1.244813,
-        "insideBy": 0.880616,
-        "halfAngleDeg": 20.011499,
+        "insideBy": 0.878354,
+        "halfAngleDeg": 20.125846,
         "frameHalfAngleDeg": 51.223929
       },
       "top": {
-        "tan": 0.320988,
+        "tan": 0.322981,
         "frameTan": 0.700208,
-        "insideBy": 0.37922,
-        "halfAngleDeg": 17.795989,
+        "insideBy": 0.377226,
+        "halfAngleDeg": 17.89949,
         "frameHalfAngleDeg": 35.0
       },
       "bottom": {
-        "tan": 0.209877,
+        "tan": 0.161491,
         "frameTan": 0.700208,
-        "insideBy": 0.490331,
-        "halfAngleDeg": 11.853004,
+        "insideBy": 0.538717,
+        "halfAngleDeg": 9.173535,
         "frameHalfAngleDeg": 35.0
       }
     },
@@ -363,9 +363,9 @@
   },
   "enclosure": {
     "what": "AC-FORM(a) as a measurement. Rays are cast from the eye over the whole sphere and asked whether they find cockpit or empty space, solid-angle weighted. A window scores near zero everywhere but ahead; an enclosure scores near one everywhere but through its aperture. This is the number that separates what Max rejected from what he asked for.",
-    "sphereFraction": 0.976593,
+    "sphereFraction": 0.980393,
     "sectors": {
-      "ahead": 0.838251,
+      "ahead": 0.864508,
       "above": 1.0,
       "left": 1.0,
       "right": 1.0,
@@ -401,7 +401,7 @@
       "backTopZ": -0.08,
       "panFrontY": 0.3,
       "backRakeY": -0.14,
-      "worstInsideMargin": 0.0018457692293083472,
+      "worstInsideMargin": 0.005002847359767193,
       "probesConstrained": 294,
       "probesUnconstrained": 0,
       "ownOcclusion": 0.0,
@@ -418,35 +418,35 @@
     },
     "dash": {
       "name": "Dash_Shelf",
-      "frontY": 1.608,
+      "frontY": 1.598,
       "aftY": 1.05,
-      "halfWidthFront": 0.506954430336047,
-      "halfWidthAft": 0.5653636627502138,
-      "topZ": -0.34,
-      "bottomZ": -0.385,
-      "depth": 0.558,
+      "halfWidthFront": 0.5556204804054761,
+      "halfWidthAft": 0.7894270824533745,
+      "topZ": -0.26,
+      "bottomZ": -0.305,
+      "depth": 0.548,
       "railClearance": 0.01200000000000001,
       "railClearanceAuthored": 0.012,
-      "nearEdgeElevationDeg": -17.942447089158676,
-      "worstInsideMargin": 0.0020442192169931594,
-      "insideMarginPlantedDefect": -0.11566026237662541,
+      "nearEdgeElevationDeg": -13.9077778098547,
+      "worstInsideMargin": 0.0020262994740272156,
+      "insideMarginPlantedDefect": -0.07079143195060889,
       "probesConstrained": 162,
       "probesUnconstrained": 0,
-      "ownOcclusion": 0.03768780618482248,
+      "ownOcclusion": 0.034353582802072256,
       "marginalOcclusion": 0.0,
       "what": "the glare shield lying on top of Coaming_Bow -- a PLACEHOLDER SURFACE with nothing on it, reserving the volume a dashboard would occupy. Max's words were 'a basic panel in front of the player on the bottom half of the canopy', which admitted two readings; asked, he chose the shelf over a raked panel standing up into the windscreen. Content is increment 2's problem. Note it reverses his increment-1 ruling 'we shouldn't need a separate dash' -- the four screens stay; what he wants here is the SPACE."
     }
   },
   "sceneBoundingBox": {
     "min": [
-      -0.76,
+      -1.28,
       -1.2,
-      -1.662052
+      -1.62901
     ],
     "max": [
-      0.76,
+      1.28,
       0.7,
-      0.997084
+      0.98638
     ]
   },
   "objects": [
@@ -458,13 +458,13 @@
       "faceCount": 24,
       "boundingBox": {
         "min": [
-          -0.76,
+          -1.28,
           -1.2,
-          -1.62
+          -1.61
         ],
         "max": [
-          0.76,
-          -0.34,
+          1.28,
+          -0.26,
           0.97
         ]
       }
@@ -477,12 +477,12 @@
       "faceCount": 20,
       "boundingBox": {
         "min": [
-          -0.76,
-          -0.34,
-          -1.62
+          -1.28,
+          -0.26,
+          -1.61
         ],
         "max": [
-          0.76,
+          1.28,
           0.7,
           0.97
         ]
@@ -496,12 +496,12 @@
       "faceCount": 9,
       "boundingBox": {
         "min": [
-          -0.57,
+          -0.59,
           -1.2,
           0.96
         ],
         "max": [
-          0.57,
+          0.59,
           0.7,
           0.96
         ]
@@ -517,12 +517,12 @@
         "min": [
           -0.59,
           -1.2,
-          -1.61
+          -1.6
         ],
         "max": [
           0.59,
-          -0.34,
-          -1.61
+          -0.26,
+          -1.6
         ]
       }
     },
@@ -534,13 +534,13 @@
       "faceCount": 12,
       "boundingBox": {
         "min": [
-          -0.506954,
-          -0.385,
-          -1.608
+          -0.55562,
+          -0.305,
+          -1.598
         ],
         "max": [
-          0.506954,
-          -0.34,
+          0.55562,
+          -0.26,
           -1.05
         ]
       }
@@ -592,7 +592,7 @@
       "boundingBox": {
         "min": [
           -0.15,
-          -1.170144,
+          -1.169253,
           -0.1
         ],
         "max": [
@@ -610,14 +610,14 @@
       "faceCount": 20,
       "boundingBox": {
         "min": [
-          -0.7575,
-          -0.387086,
-          -1.619775
+          -1.27626,
+          -0.278986,
+          -1.608843
         ],
         "max": [
-          -0.498682,
-          -0.297889,
-          0.969476
+          -0.562557,
+          -0.245672,
+          0.968066
         ]
       }
     },
@@ -629,14 +629,14 @@
       "faceCount": 20,
       "boundingBox": {
         "min": [
-          -0.699451,
-          -0.016456,
-          -1.61956
+          -1.126656,
+          0.039111,
+          -1.609703
         ],
         "max": [
-          -0.474053,
-          0.117886,
-          0.969914
+          -0.487451,
+          0.151948,
+          0.969081
         ]
       }
     },
@@ -648,14 +648,14 @@
       "faceCount": 20,
       "boundingBox": {
         "min": [
-          -0.352728,
-          0.460594,
-          -1.618347
+          -0.392353,
+          0.482721,
+          -1.609454
         ],
         "max": [
-          -0.20581,
-          0.696066,
-          0.970942
+          -0.149009,
+          0.693124,
+          0.971688
         ]
       }
     },
@@ -667,14 +667,14 @@
       "faceCount": 20,
       "boundingBox": {
         "min": [
-          0.205873,
-          0.460619,
-          -1.61835
+          0.1494,
+          0.482732,
+          -1.609455
         ],
         "max": [
-          0.35284,
-          0.696169,
-          0.970948
+          0.392698,
+          0.694038,
+          0.971771
         ]
       }
     },
@@ -686,14 +686,14 @@
       "faceCount": 20,
       "boundingBox": {
         "min": [
-          0.474234,
-          -0.016457,
-          -1.61956
+          0.487103,
+          0.038888,
+          -1.609561
         ],
         "max": [
-          0.699463,
-          0.117943,
-          0.969947
+          1.12677,
+          0.152846,
+          0.969992
         ]
       }
     },
@@ -705,14 +705,14 @@
       "faceCount": 20,
       "boundingBox": {
         "min": [
-          0.498699,
-          -0.387086,
-          -1.619774
+          0.562501,
+          -0.278979,
+          -1.608819
         ],
         "max": [
-          0.757501,
-          -0.297888,
-          0.969479
+          1.276312,
+          -0.24565,
+          0.968177
         ]
       }
     },
@@ -724,14 +724,14 @@
       "faceCount": 44,
       "boundingBox": {
         "min": [
-          -0.592295,
-          -0.349607,
-          -1.662052
+          -0.595118,
+          -0.2684,
+          -1.62901
         ],
         "max": [
-          0.592306,
-          0.522093,
-          -1.569178
+          0.595018,
+          0.52003,
+          -1.578195
         ]
       }
     },
@@ -743,14 +743,14 @@
       "faceCount": 44,
       "boundingBox": {
         "min": [
-          -0.755064,
-          -0.347348,
-          -0.029712
+          -1.270418,
+          -0.275241,
+          -0.021782
         ],
         "max": [
-          0.75509,
-          0.69368,
-          0.028986
+          1.270553,
+          0.691245,
+          0.018083
         ]
       }
     },
@@ -762,14 +762,14 @@
       "faceCount": 44,
       "boundingBox": {
         "min": [
-          -0.572854,
-          -0.345468,
-          0.933884
+          -0.597187,
+          -0.266295,
+          0.937417
         ],
         "max": [
-          0.572872,
-          0.697375,
-          0.997084
+          0.597428,
+          0.69755,
+          0.98638
         ]
       }
     }
@@ -780,148 +780,148 @@
       "seamFamily": "long",
       "seamIndex": 3,
       "edgeFamily": "fold",
-      "width": 0.085,
-      "depth": 0.065,
+      "width": 0.03,
+      "depth": 0.023,
       "glassGap": 0.002,
       "vertices": 3,
       "seamResidual": 0.0,
       "seamResidualPlantedDefect": 0.05,
-      "inboardMargin": 0.002311,
-      "inboardMarginPlantedDefect": -0.058234,
+      "inboardMargin": 0.002341,
+      "inboardMarginPlantedDefect": -0.057731,
       "bendAnglesDeg": [
-        17.073164
+        58.624363
       ],
-      "ownOcclusion": 0.03735
+      "ownOcclusion": 0.009177
     },
     {
       "name": "Rib_Shoulder_L",
       "seamFamily": "long",
       "seamIndex": 4,
       "edgeFamily": "fold",
-      "width": 0.049,
-      "depth": 0.038,
+      "width": 0.03,
+      "depth": 0.023,
       "glassGap": 0.002,
       "vertices": 3,
       "seamResidual": 0.0,
       "seamResidualPlantedDefect": 0.05,
-      "inboardMargin": 0.002152,
-      "inboardMarginPlantedDefect": -0.052736,
+      "inboardMargin": 0.002921,
+      "inboardMarginPlantedDefect": -0.059641,
       "bendAnglesDeg": [
-        15.947489
+        52.751367
       ],
-      "ownOcclusion": 0.019408
+      "ownOcclusion": 0.010356
     },
     {
       "name": "Rib_RoofEdge_L",
       "seamFamily": "long",
       "seamIndex": 5,
       "edgeFamily": "fold",
-      "width": 0.049,
-      "depth": 0.038,
+      "width": 0.03,
+      "depth": 0.023,
       "glassGap": 0.002,
       "vertices": 3,
       "seamResidual": 0.0,
       "seamResidualPlantedDefect": 0.05,
-      "inboardMargin": 0.005146,
-      "inboardMarginPlantedDefect": -0.052441,
+      "inboardMargin": 0.005092,
+      "inboardMarginPlantedDefect": -0.05282,
       "bendAnglesDeg": [
-        9.989314
+        20.342149
       ],
-      "ownOcclusion": 0.006109
+      "ownOcclusion": 0.003828
     },
     {
       "name": "Rib_RoofEdge_R",
       "seamFamily": "long",
       "seamIndex": 6,
       "edgeFamily": "fold",
-      "width": 0.049,
-      "depth": 0.038,
+      "width": 0.03,
+      "depth": 0.023,
       "glassGap": 0.002,
       "vertices": 3,
       "seamResidual": 0.0,
       "seamResidualPlantedDefect": 0.05,
-      "inboardMargin": 0.002654,
-      "inboardMarginPlantedDefect": -0.052427,
+      "inboardMargin": 0.002352,
+      "inboardMarginPlantedDefect": -0.05282,
       "bendAnglesDeg": [
-        9.989314
+        20.342149
       ],
-      "ownOcclusion": 0.006108
+      "ownOcclusion": 0.003825
     },
     {
       "name": "Rib_Shoulder_R",
       "seamFamily": "long",
       "seamIndex": 7,
       "edgeFamily": "fold",
-      "width": 0.049,
-      "depth": 0.038,
+      "width": 0.03,
+      "depth": 0.023,
       "glassGap": 0.002,
       "vertices": 3,
       "seamResidual": 0.0,
       "seamResidualPlantedDefect": 0.05,
-      "inboardMargin": 0.00215,
-      "inboardMarginPlantedDefect": -0.052836,
+      "inboardMargin": 0.002236,
+      "inboardMarginPlantedDefect": -0.067194,
       "bendAnglesDeg": [
-        15.947489
+        52.751367
       ],
-      "ownOcclusion": 0.019408
+      "ownOcclusion": 0.010359
     },
     {
       "name": "Rail_R",
       "seamFamily": "long",
       "seamIndex": 8,
       "edgeFamily": "fold",
-      "width": 0.085,
-      "depth": 0.065,
+      "width": 0.03,
+      "depth": 0.023,
       "glassGap": 0.002,
       "vertices": 3,
       "seamResidual": 0.0,
       "seamResidualPlantedDefect": 0.05,
-      "inboardMargin": 0.002311,
-      "inboardMarginPlantedDefect": -0.05827,
+      "inboardMargin": 0.002496,
+      "inboardMarginPlantedDefect": -0.05939,
       "bendAnglesDeg": [
-        17.073164
+        58.624363
       ],
-      "ownOcclusion": 0.03735
+      "ownOcclusion": 0.009177
     },
     {
       "name": "Arch_Bow",
       "seamFamily": "trans",
       "seamIndex": 0,
       "edgeFamily": "rim",
-      "width": 0.085,
-      "depth": 0.068,
+      "width": 0.04,
+      "depth": 0.032,
       "glassGap": 0.002,
       "vertices": 6,
       "seamResidual": 0.0,
       "seamResidualPlantedDefect": 0.05,
-      "inboardMargin": 0.004866,
-      "inboardMarginPlantedDefect": -0.11017,
+      "inboardMargin": 0.004086,
+      "inboardMarginPlantedDefect": -0.076482,
       "bendAnglesDeg": [
-        21.626211,
-        60.928819,
-        60.928819,
-        21.626211
+        24.909185,
+        52.895765,
+        52.895765,
+        24.909185
       ],
-      "ownOcclusion": 0.024029
+      "ownOcclusion": 0.011282
     },
     {
       "name": "Arch_Mid",
       "seamFamily": "trans",
       "seamIndex": 1,
       "edgeFamily": "fold",
-      "width": 0.055,
-      "depth": 0.046,
+      "width": 0.035,
+      "depth": 0.029,
       "glassGap": 0.002,
       "vertices": 6,
       "seamResidual": 0.0,
       "seamResidualPlantedDefect": 0.05,
-      "inboardMargin": 0.002049,
-      "inboardMarginPlantedDefect": -0.052427,
+      "inboardMargin": 0.001462,
+      "inboardMarginPlantedDefect": -0.05282,
       "bendAnglesDeg": [
-        22.708639,
-        59.36704,
-        59.36704,
-        22.708639
+        32.275644,
+        36.869898,
+        36.869898,
+        32.275644
       ],
       "ownOcclusion": 0.0
     },
@@ -930,19 +930,19 @@
       "seamFamily": "trans",
       "seamIndex": 2,
       "edgeFamily": "rim",
-      "width": 0.055,
-      "depth": 0.046,
+      "width": 0.035,
+      "depth": 0.029,
       "glassGap": 0.002,
       "vertices": 6,
       "seamResidual": 0.0,
       "seamResidualPlantedDefect": 0.05,
-      "inboardMargin": 0.003742,
-      "inboardMarginPlantedDefect": -0.078606,
+      "inboardMargin": 0.00337,
+      "inboardMarginPlantedDefect": -0.057731,
       "bendAnglesDeg": [
-        17.987666,
-        66.052495,
-        66.052495,
-        17.987666
+        21.614857,
+        58.425809,
+        58.425809,
+        21.614857
       ],
       "ownOcclusion": 0.0
     }
@@ -951,14 +951,14 @@
   "screens": [],
   "arms": [],
   "armsNote": "AC-FORM(d): arms are AFFIXED TO RIBS, and each is five parts -- Mount, BoomA, Elbow, BoomB, Head -- not a tapered stick. mountedOn names the seam member the plate bolts to and mountGap is how far off that member's inboard face the root actually sits; it must be ~0. The retired rule (root outside the view frustum) is deliberately absent: empty space satisfies it, which is how the previous build passed with four monitors on two lamp-posts.",
-  "predictedOcclusionFraction": 0.347158,
+  "predictedOcclusionFraction": 0.384655,
   "occlusion": {
     "method": "analytic scanline rasterisation of the projected silhouettes at GAME_FOV_DEG / GAME_ASPECT, 2160 rows, union of overlapping occluders",
     "excludes": [
       "Canopy_Glass"
     ],
     "excludesWhy": "Canopy_Glass is see-through by design -- and with an enclosure that matters far more than it did with a window, because the vault now wraps the pilot and would otherwise count as near-total occlusion",
-    "total": 0.347158,
+    "total": 0.384655,
     "marginalOrder": [
       "seamMembers",
       "bulkheadAndFloor",
@@ -966,14 +966,14 @@
       "arms"
     ],
     "marginal": {
-      "seamMembers": 0.147385,
-      "bulkheadAndFloor": 0.199773,
+      "seamMembers": 0.057365,
+      "bulkheadAndFloor": 0.32729,
       "screensAndBodies": 0.0,
       "arms": 0.0
     },
     "own": {
-      "seamMembers": 0.147385,
-      "bulkheadAndFloor": 0.250317,
+      "seamMembers": 0.057365,
+      "bulkheadAndFloor": 0.339474,
       "screensAndBodies": 0.0,
       "arms": 0.0
     },
@@ -988,9 +988,9 @@
       0.700208
     ],
     "maxScreenOrArmDistance": 0.0,
-    "enclosureSphereFraction": 0.976593,
+    "enclosureSphereFraction": 0.980393,
     "enclosureSectors": {
-      "ahead": 0.838251,
+      "ahead": 0.864508,
       "above": 1.0,
       "left": 1.0,
       "right": 1.0,
@@ -999,13 +999,13 @@
     },
     "enclosureSectorMin": 0.97,
     "worstMemberSeamResidual": 0.0,
-    "worstMemberInboardMargin": 0.002049,
-    "minMemberBendAngleDeg": 9.989314,
+    "worstMemberInboardMargin": 0.001462,
+    "minMemberBendAngleDeg": 20.342149,
     "seamResidualPlantedDefectMin": 0.05,
-    "inboardMarginPlantedDefectMax": -0.052427,
+    "inboardMarginPlantedDefectMax": -0.05282,
     "plantedDefectOffset": 0.05,
-    "panelFacesEyeWorstDot": 0.636478,
-    "panelFacesEyeFlippedDot": -0.636478,
+    "panelFacesEyeWorstDot": 0.68877,
+    "panelFacesEyeFlippedDot": -0.68877,
     "worstScreenOrArmInsideMargin": null,
     "screenOrArmVerticesUnconstrained": 0,
     "unconstrainedWhy": "vertices whose eye ray leaves through the OPEN bow aperture have no shell to be inside of. Reported rather than hidden: if this were the whole count, the containment check would have measured nothing and its pass would be worthless.",

@@ -57,7 +57,8 @@
   <h1>Cockpit Section Lab</h1>
   <span class="sub">eye at origin &middot; 1 unit = 1 m &middot; game FOV 70&deg; vertical, 16:9</span>
   <div class="presets">
-    <button data-preset="max" class="on">Max 2026-07-28</button>
+    <button data-preset="max" class="on">Max 2026-07-28 (wide)</button>
+    <button data-preset="maxTub1">Max 2026-07-28 (first tub)</button>
     <button data-preset="current">Current build 567bcf9</button>
     <button data-preset="fighter">Fighter (tight)</button>
     <button data-preset="game">Game cockpit</button>
@@ -122,16 +123,16 @@ const BODY = {
 // generator's fourth family, ARCH_SECTION (the mid and aft transverse arches), has no
 // slider here — the side elevation does not draw it.
 const P = {
-  hwBow:0.59, hwMid:0.76, hwAft:0.57,
-  railZ:-0.34, floorZ:-1.20, roofZ:0.70, roofZBow:0.52, bowY:1.62, aftY:-0.97,
-  shoulderX:0.92, roofEdgeX:0.45, railCap:0.085, bowSec:0.085, pillarSec:0.049,
+  hwBow:0.59, hwMid:1.28, hwAft:0.59,
+  railZ:-0.26, floorZ:-1.20, roofZ:0.70, roofZBow:0.52, bowY:1.61, aftY:-0.97,
+  shoulderX:0.88, roofEdgeX:0.30, railCap:0.030, bowSec:0.040, pillarSec:0.030,
   // The screen HOUSING, mirroring SCREEN_BEZEL / SCREEN_BODY_DEPTH, plus how far behind the
   // back plate an arm head reaches (ARM_HEAD_LEN + its section half-diagonal). These exist
   // because the containment check now tests the unit rather than the display face.
   scBezel:0.0254, scDepth:0.0508, armReach:0.108,
   scW:0.30, scH:0.25,
-  upTanX:0.91, upTanZ:0.22, upDist:0.79,
-  loTanX:0.88, loTanZ:-0.21, loDist:0.83
+  upTanX:0.83, upTanZ:0.31, upDist:1.00,
+  loTanX:0.82, loTanZ:-0.19, loDist:0.93
 };
 
 const PRESETS = {
@@ -157,16 +158,25 @@ const PRESETS = {
     bowY:1.45, aftY:-0.85, shoulderX:0.92, roofEdgeX:0.45, railCap:0.12, bowSec:0.15, pillarSec:0.095,
     scW:0.50, scH:0.33, upTanX:0.90, upTanZ:0.20, upDist:1.60,
     loTanX:0.74, loTanZ:-0.32, loDist:1.35 },
-  // Max's settings, 2026-07-28, with option A applied: his tub proportions and
-  // his screen ANGLES exactly as he set them, with the screen DISTANCES pulled
-  // from 1.32/1.26 to 0.79/0.83 so all four units sit inside the hull. This is
-  // what the generator gets built to.
+  // MAX'S SECOND LAB PASS, 2026-07-28 -- the numbers he read off these sliders, verbatim.
+  // The cabin doubled at the shoulders (0.76 -> 1.28), the rail came UP 80 mm, the roof
+  // pane narrowed (roofEdgeX 0.45 -> 0.30), all three member sections went to their slider
+  // MINIMUM, and both screen pairs moved inboard in bearing and further away.
   //
-  // AMENDED after he saw the first tub: roofZBow 0.52 (was 0.70 -- "taper the roof toward
-  // the bow"), and the three member sections thinned 0.65x ("the ribs are too thick").
-  // Those three numbers used to sit here UNCHANGED from the `game` preset they were copied
-  // off, i.e. they were never choices of his, which is why they were free to move.
-  max: { hwBow:0.59, hwMid:0.76, hwAft:0.57, railZ:-0.34, floorZ:-1.20, roofZ:0.70,
+  // ⚠ THE UPPER PAIR DOES NOT FIT AT upDist 1.00 -- this preset draws them RED, on purpose.
+  // The lab is not wrong and neither is he: the binding constraint is the canopy profile
+  // above the shoulder, which roofEdgeX 0.30 narrowed. The generator builds this composition
+  // by scaling the whole assembly toward the eye (SCREEN_FIT_SCALE), which holds the ANGLES
+  // he set here and gives up only the metres. maxDistArm in the readout is the honest number:
+  // 0.72 m on this bearing. Widen roofEdgeX and it climbs -- 0.45 -> 0.79 m, 0.75 -> 0.94 m.
+  max: { hwBow:0.59, hwMid:1.28, hwAft:0.59, railZ:-0.26, floorZ:-1.20, roofZ:0.70,
+    roofZBow:0.52,
+    bowY:1.61, aftY:-0.97, shoulderX:0.88, roofEdgeX:0.30, railCap:0.030, bowSec:0.040, pillarSec:0.030,
+    scW:0.30, scH:0.25, upTanX:0.83, upTanZ:0.31, upDist:1.00,
+    loTanX:0.82, loTanZ:-0.19, loDist:0.93 },
+  // The FIRST tub, kept so the two can be flipped between. Everything the generator has
+  // built until now was this: a 1.52 m cabin with the rail at chest height.
+  maxTub1: { hwBow:0.59, hwMid:0.76, hwAft:0.57, railZ:-0.34, floorZ:-1.20, roofZ:0.70,
     roofZBow:0.52,
     bowY:1.62, aftY:-0.97, shoulderX:0.92, roofEdgeX:0.45, railCap:0.085, bowSec:0.085, pillarSec:0.049,
     scW:0.30, scH:0.25, upTanX:0.91, upTanZ:0.22, upDist:0.79,
