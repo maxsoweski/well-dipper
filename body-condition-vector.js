@@ -125,9 +125,12 @@ export function deriveConditionVector(fp, derived, radiusEarth) {
   // BYTE-EXACT at canonical, unchanged from before: every golden/NAMED_BODY/headless path passes
   // R === R_c, so f(R)/f(R_c) is x/x on the identical float = 1.0 exactly and g_c·1.0 === g_c
   // bit-for-bit — no fixture re-capture (FENCE 1/2).
-  // ⚠ CONSEQUENCE WORTH NAMING HERE because it is invisible at this line: e1Regime.massEarthOf and
-  // giant-drivers both reconstruct M = g·R², so on the rocky branch the mass law they see is now
-  // M_c·(R/R_c)^3.7, not ^3.
+  // ⚠ CONSEQUENCE WORTH NAMING HERE because it is invisible at this line: e1Regime.massEarthOf
+  // reconstructs M = g·R², so on the rocky branch the mass law IT sees is now M_c·(R/R_c)^3.7 above
+  // 1 R⊕ and ^(10/3) below, not a flat ^3. e1Regime.js was not edited; what it reads changed.
+  // NOT giant-drivers: giant-drivers.js:234 back-solves surfaceGravity = drawnMass/(R*R) from a
+  // PINNED mass, so it never reads this law on any reachable path. An earlier version of this
+  // comment claimed it did; that was wrong and is corrected here rather than quietly dropped.
   surfaceGravity:  (derived?.surfaceGravity ?? bodySurfaceGravity(fp)) * gravityRadiusRatio(_R, _R_c, _class),
   // ── V2-1 Slice B addendum (compositionClass gas terminal): E1's Stage-A reads atmosphere.composition
   //    ('h2-he' → 'gas', BUILD-PLAN §4.4). GAP not enumerated by gate-1 (which only sized L's inputs), so
