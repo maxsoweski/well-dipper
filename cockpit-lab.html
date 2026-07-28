@@ -219,7 +219,12 @@
     // ─────────────────────────────────────────────────────────────────────────
     // public/ is the Vite static root, so this relative URL resolves under
     // whatever base the dev server is on (vite.config.js sets base '/well-dipper/').
-    const GLB_URL      = 'assets/cockpit/cockpit.glb';
+    // ?glb=<name> loads a sibling asset instead of the default. Added so a --no-fittings
+    // build can be looked at WITHOUT regenerating cockpit.glb, which lane F binds to for its
+    // Screen_* UV contract (d528f6c). Max asked to see the tub with nothing on it; forking the
+    // asset it consumes to arrange that would have broken the other lane to demo this one.
+    const GLB_NAME     = new URLSearchParams(location.search).get('glb') || 'cockpit';
+    const GLB_URL      = `assets/cockpit/${GLB_NAME.replace(/[^A-Za-z0-9._-]/g, '')}.glb`;
     const GAME_FOV     = 70;          // src/ui/Settings.js:40 — the FOV the framing is judged at
     const GAME_ASPECT  = 16 / 9;      // AC-FRAME is defined at 16:9
     const ORBIT_FOV    = 50;          // inspection FOV — NOT the game FOV, and never used in EYE mode

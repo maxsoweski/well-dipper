@@ -250,62 +250,96 @@ HULL_REF_LENGTH    = 20.0     # Bible S8A player hull, house-sized. Sanity scale
 # are not drawn ON a surface and then checked; they are GENERATED FROM the seam polylines,
 # so "a rib not lying on a seam" is unrepresentable rather than merely tested for. That is
 # the structural answer to Max's "the ribs read as decoration": they had nothing to be.
-SILL_Z             = -1.08    # the sill line. Constant fore-aft: the vault's lower edge, and
-                              # the height the floor pan closes at.
+# WHY THE PROFILE IS NOW CLOSED, AND WHY THAT IS THE WHOLE CHANGE.
+# The previous revision's ring was an OPEN arch: sill -> shoulder -> roof, mirrored, with a
+# flat Floor_Pan slapped underneath and nothing between the two. From the seat there was no
+# near surface anywhere below chest height, which is why it read as a barn rather than a
+# cockpit. Max's correction was to make the SOLID TUB the primary form -- "a seat against a
+# bulkhead; below the waist of the pilot there's no canopy, it's solid and curves around him;
+# the canopy begins around chest/shoulder height, extending around and above."
+#
+# Asked of the parameterisation FIRST, per the lesson from the height-field failure: can it
+# express that at all? An open arch cannot -- it has no below. A CLOSED section can, and it
+# costs nothing else: the ring simply continues past the rail, down the tub wall and across
+# the floor, and every existing piece of vault machinery keeps working unchanged, because all
+# of it is written against panels and seams rather than against "canopy".
+#
+# The payoff is that THE RAIL BECOMES A REAL SEAM. Where the hull meets the glass is a fold
+# like any other, so the canopy rail is GENERATED from it exactly as the ribs are, rather than
+# being authored as trim. That is the same structural argument that killed Canopy_Frame.
+FLOOR_Z            = -1.20    # cabin floor. Below the pilot's heel line at -1.18.
+RAIL_Z             = -0.34    # THE WAISTLINE. Solid hull below, glass above. Constant
+                              # fore-aft, so the rail reads as one continuous line.
+                              #
+                              # This number is Max's, chosen in cockpit-section-lab.html, and
+                              # it lands AT CHEST HEIGHT -- the seated pilot's chest is at
+                              # -0.35 with the eye at the origin. That is what "the canopy
+                              # begins around chest/shoulder height" resolves to in metres.
 
 # (label, y, half-width, roof z). Ordered BOW -> AFT, i.e. DECREASING y.
 #
-# WHY THE BOW RING IS 4.28 m ACROSS, which is not fighter-realistic.
-# At the game's 70 deg / 16:9 the frame edge sits at tan 1.2448 horizontally, 0.7002
-# vertically. A realistically-scaled canopy a metre ahead of the pilot's face subtends about
-# 27 deg and would fill most of the view with metal. So the BOW ring is sized in TAN SPACE
-# to land just INSIDE the frame edge: the forward view stays a generous opening with
-# structure only at its extreme edges, and the enclosure proper -- the side and roof panels
-# -- lives OUTSIDE the forward frustum, where it costs the pilot nothing looking ahead and is
-# exactly what the head finds on turning. canopy_frame_landing() prints where each rim
-# actually lands, in tan and in degrees, so this claim is measured and not asserted.
+# WHY THIS IS 1.52 m ACROSS AND NOT 4.3 m. The old bow ring was sized in TAN SPACE to sit
+# just inside the 70 deg frame edge, on the reasoning that a realistically-scaled canopy close
+# to the face fills the view with metal. Sweeping the section lab shows that reasoning buys
+# very little: cabin width moves the occluded fraction only 29.7% -> 37.6% across 1.04 m to
+# 4.6 m and saturates by about 2.1 m, because once the tub spans the lower field of view,
+# widening it adds almost nothing. RAIL HEIGHT is the term that actually costs view -- 46.1%
+# down to 4.8% over -0.15 to -0.75. So width became a free choice and Max made it on feel.
 #
-# The MID ring is the widest and tallest. That is the canopy's bulge, and unlike the previous
-# revision's forward-only bulge it now protrudes sideways and upward too.
-CANOPY_STATIONS = (
-    ("bow",  1.80, 2.14, 1.20),
-    ("mid",  0.30, 2.30, 1.32),
-    ("aft", -1.10, 1.90, 1.15),
+# All three numbers below are his, read straight off the lab.
+STATIONS = (
+    ("bow",  1.62, 0.59, 0.70),
+    ("mid",  0.00, 0.76, 0.70),
+    ("aft", -0.97, 0.57, 0.70),
 )
 
-# Arch profile, RIGHT HALF ONLY, ordered SILL -> ROOF. Mirrored to make a full ring, so the
-# canopy is symmetric by construction and cannot drift.
+# THE TUB half-section, RIGHT HALF ONLY, ordered CENTRELINE -> OUTBOARD.
 #   x fraction  of that station's half-width
-#   z fraction  from SILL_Z up to that station's roof z
-# Three points per half -> six per ring -> FIVE facets across. Fewer, larger facets read as
-# folded metal; more, smaller ones read as a curve, which is the opposite of the brief.
+#   z fraction  from FLOOR_Z up to RAIL_Z
+# The first entry sits on the centreline and is SHARED between the two halves, so the floor
+# is one continuous pane and there is no seam running down the middle of the footwell.
+TUB_HALF = (
+    ("floor",  0.00, 0.00),
+    ("chine",  0.72, 0.10),   # the floor's outboard edge, very slightly dished
+    ("wall",   1.00, 0.52),   # the wall turns up here -- this fold is the tub's hard chine
+    ("rail",   1.00, 1.00),   # ...and arrives at the rail, full half-width
+)
+
+# THE CANOPY half-section, RIGHT HALF ONLY, ordered RAIL -> ROOF.
+#   z fraction  from RAIL_Z up to that station's roof z
+# Entry 0 is the SAME POINT as TUB_HALF's last entry; it is listed in both tables because the
+# rail is where the two materials meet, and it is spliced once in station_ring().
 # The roof pair sits at +/-0.45 rather than at 0, so the centre roof panel is ONE flat pane
 # and there is no seam running down the middle of the pilot's upward view.
-CANOPY_ARCH_HALF = (
-    ("sill",     1.00, 0.00),
-    ("shoulder", 0.92, 0.55),
+CANOPY_HALF = (
+    ("rail",     1.00, 0.00),
+    ("shoulder", 0.92, 0.42),
     ("roofedge", 0.45, 1.00),
 )
 
-# Which profile indices carry a LONGITUDINAL member, and how heavy each one is.
-# Index 0 and 5 are the vault's outer edges -- those are the SILL RAILS, the heaviest
-# fore-aft members. 1/4 and 2/3 are interior folds and carry the thinner ribs.
+# Which of the 11 ring segments are HULL and which are GLASS. Indexed by segment, where
+# segment k joins ring vertex k to vertex k+1 and the last wraps back to 0. This single
+# table is what splits the shell into two meshes; nothing else in the file decides it.
+SEG_HULL, SEG_GLASS = "hull", "glass"
+
 # (width across the seam, depth standing inboard toward the eye)
-SILL_SECTION       = (0.150, 0.110)
+RAIL_SECTION       = (0.130, 0.100)   # the canopy rail: the heaviest member in the model and
+                                      # the one the pilot's hands would rest on. Max set its
+                                      # height in the lab.
 RIB_SECTION        = (0.075, 0.058)   # "fairly thin" is the brief, and it is a judgement call
-ARCH_SECTION       = (0.095, 0.075)   # the transverse arches: mid and aft
-BOW_SECTION        = (0.150, 0.120)   # the forward rim -- the chunkiest member in the model,
-                                      # because it is the one the pilot reads as "the frame"
+ARCH_SECTION       = (0.085, 0.070)   # the transverse arches: mid and aft
+BOW_SECTION        = (0.130, 0.105)   # the forward rim -- the member the pilot reads as
+                                      # "the frame". Max set its width in the lab.
 RIB_GLASS_GAP      = 0.002    # air held between a member's outer face and the panels it lies
                               # on, so nothing z-fights against the glass it is bolted to.
 
-# ---- Bulkhead and floor pan ------------------------------------------------
-# The two closures that make "enclosure" true in every direction rather than in three of
-# them. Max approved both this session; he explicitly deferred a seat/headrest.
+# ---- Bulkhead --------------------------------------------------------------
+# The aft closure: full height, floor to roof, because Max's form language is "a seat against
+# a bulkhead". Floor_Pan is RETIRED -- not deleted in disgrace like Hull_Nose, simply
+# subsumed: the floor is now segments 0 and 10 of the ring, so a separate pan would be a
+# second surface in the same place.
 BULKHEAD_INSET     = 0.010    # the aft panel sits this far forward of the aft ring plane, so
                               # it beds inside Arch_Aft instead of being coplanar with it
-FLOOR_INSET        = 0.008    # ...and the floor pan this far above SILL_Z, for the same
-                              # reason against the two sill rails.
 
 # ---- What makes it an ENCLOSURE rather than a window -----------------------
 ENCLOSURE_SECTOR_MIN = 0.97   # minimum solid-angle coverage in the ABOVE / LEFT / RIGHT /
@@ -321,24 +355,42 @@ MEMBER_SEAM_TOL    = 1e-6     # metres a member's centreline may stray from a re
                               # the panel mesh have diverged and one of them is lying.
 
 # ---- Screen units (Screen_* display face + ScreenBody_* box) ---------------
-SCREEN_W           = 0.45     # display face, 50% larger than the previous 0.30 x 0.20 m panel
-SCREEN_H           = 0.30
+SCREEN_W           = 0.30     # display face. Max set this in cockpit-section-lab.html; at the
+SCREEN_H           = 0.25     # distances above it subtends 21.5 deg / 20.5 deg, i.e. BIGGER
+                              # in the view than the 0.45 m panels it replaces, which sat at
+                              # 1.60 m and subtended 16 deg. See the AC-FORM(c) note: that AC
+                              # floors the face by AREA, which measures the wrong thing once
+                              # the screens move from 1.60 m to 0.8 m.
 SCREEN_BEZEL       = 1.0 * INCH   # bezel all round the display face  -> body 0.5008 x 0.3508
 SCREEN_BODY_DEPTH  = 2.0 * INCH   # backing depth behind the bezel plane
 SCREEN_FACE_RECESS = 0.004    # display face sits this far BEHIND the bezel plane
 SCREEN_FACE_GAP    = 0.0015   # and this far in FRONT of the pocket floor, so neither z-fights
-SCREEN_DIST        = 1.60     # eye -> display-face centre. Held at the previous revision's
-                              # screen distance on purpose: see TUNING NOTES.
-SCREEN_TAN_X       = 0.74     # where the display-face centres sit in tan-space...
-SCREEN_TAN_Z_UP    = 0.35     # ...upper pair
-SCREEN_TAN_Z_DOWN  = -0.37    # ...lower pair (a little lower: that is where instruments live)
+# WHERE THE SCREENS GO -- all six numbers are Max's, set in cockpit-section-lab.html.
+#
+# He placed both pairs at nearly the same outboard angle and split them symmetrically about
+# eye level: two vertical stacks flanking the view at +9 deg and -9 deg. That RESOLVES the
+# ambiguity in "the screens should be oriented around the eye level of the pilot" -- it means
+# positioned AROUND eye level, not sitting low on the coaming angled up.
+#
+# THE DISTANCES ARE NOT THE ONES HE FIRST SET, and that is deliberate. At his original 1.32 /
+# 1.26 m all four units sat 40 cm OUTSIDE the hull: the centres reach x = +/-0.88 where the
+# canopy is only 0.60 m out at that height. The section lab did not catch it because it drew
+# the screens straight into tan space and never asked whether they were inside the cabin --
+# the same blind spot that let four monitors on lamp-posts pass 48/48 in this file's own
+# ancestor. Shown the three ways out, Max chose to keep the ANGLES and pull the DISTANCES in.
+SCREEN_TAN_X_UP    = 0.91     # upper pair, outboard
+SCREEN_TAN_Z_UP    = 0.22     # ...and its height, about +9 deg
+SCREEN_DIST_UP     = 0.79     # ...at arm's length, which is where a real cockpit puts an MFD
+SCREEN_TAN_X_DOWN  = 0.88     # lower pair, outboard
+SCREEN_TAN_Z_DOWN  = -0.21    # ...and its height, about -9 deg
+SCREEN_DIST_DOWN   = 0.83
 
-# (suffix, tan x, tan z). Left/right are the PILOT's: left is -X, up is +Z.
+# (suffix, tan x, tan z, distance). Left/right are the PILOT's: left is -X, up is +Z.
 SCREEN_QUADRANTS = (
-    ("UL", -SCREEN_TAN_X, SCREEN_TAN_Z_UP),
-    ("UR",  SCREEN_TAN_X, SCREEN_TAN_Z_UP),
-    ("LL", -SCREEN_TAN_X, SCREEN_TAN_Z_DOWN),
-    ("LR",  SCREEN_TAN_X, SCREEN_TAN_Z_DOWN),
+    ("UL", -SCREEN_TAN_X_UP,   SCREEN_TAN_Z_UP,   SCREEN_DIST_UP),
+    ("UR",  SCREEN_TAN_X_UP,   SCREEN_TAN_Z_UP,   SCREEN_DIST_UP),
+    ("LL", -SCREEN_TAN_X_DOWN, SCREEN_TAN_Z_DOWN, SCREEN_DIST_DOWN),
+    ("LR",  SCREEN_TAN_X_DOWN, SCREEN_TAN_Z_DOWN, SCREEN_DIST_DOWN),
 )
 
 # ---- Support arms (Arm_*) --------------------------------------------------
@@ -356,8 +408,11 @@ SCREEN_QUADRANTS = (
 # arrangement Max's first reference shows. Lower screens come off the SHOULDER rib rather
 # than the sill rail: same reach, but it keeps the sill clear as a visual edge and gives the
 # lower arms a mount at a readable height instead of at the pilot's feet.
-ARM_MOUNT_PROFILE  = {"UL": 2, "UR": 3, "LL": 1, "LR": 4}
-ARM_MOUNT_Y        = 1.25     # where along its member each arm bolts on. Chosen AFT of the
+# Which longitudinal member each arm bolts to. The UPPER pair reach down from the SHOULDER
+# ribs; the LOWER pair reach up off the RAILS, which is the heaviest member in the model and
+# the natural place to hang weight. Indices are ring vertices -- see LONGITUDINAL_NAMES.
+ARM_MOUNT_PROFILE  = {"UL": 4, "UR": 7, "LL": 3, "LR": 8}
+ARM_MOUNT_Y        = 0.95     # where along its member each arm bolts on. Chosen AFT of the
                               # screens (whose faces sit near y = 1.23) so every arm reaches
                               # FORWARD to its screen -- an arm rooted level with its own
                               # screen runs flat across the view, which is what made the old
@@ -380,20 +435,20 @@ ARM_EMBED          = 0.010    # tip pushed this far into the box, so there is no
 # makes it monotonically WORSE. The articulated form removes the problem rather than tuning it
 # -- ARM_HEAD runs parallel to the screen normal, so it lies behind the bezel plane by
 # construction, and BoomB approaches from behind the back plate instead of around the side.
-ARM_MOUNT_HALF_U   = 0.075    # the bolt-on plate: a flat pad lying on the rib's inner face
-ARM_MOUNT_HALF_W   = 0.055
-ARM_MOUNT_THICK    = 0.022
-ARM_BOOM_A_LEN     = 0.30     # first boom, straight off the mounting face
-ARM_BOOM_A_HALF_U  = 0.038    # booms are rectangular sections, not cylinders: six flat faces
-ARM_BOOM_A_HALF_W  = 0.030    # each, so they read angular under the lab's flat shading
-ARM_BOOM_B_HALF_U  = 0.032
-ARM_BOOM_B_HALF_W  = 0.026
-ARM_ELBOW_RADIUS   = 0.052    # the hinge puck. Fatter than either boom on purpose -- that
-ARM_ELBOW_HALF_LEN = 0.040    # step in section is what reads as a JOINT rather than a bend,
+ARM_MOUNT_HALF_U   = 0.050    # the bolt-on plate: a flat pad lying on the rib's inner face
+ARM_MOUNT_HALF_W   = 0.038
+ARM_MOUNT_THICK    = 0.018
+ARM_BOOM_A_LEN     = 0.13     # first boom, straight off the mounting face
+ARM_BOOM_A_HALF_U  = 0.028    # booms are rectangular sections, not cylinders: six flat faces
+ARM_BOOM_A_HALF_W  = 0.022    # each, so they read angular under the lab's flat shading
+ARM_BOOM_B_HALF_U  = 0.024
+ARM_BOOM_B_HALF_W  = 0.019
+ARM_ELBOW_RADIUS   = 0.038    # the hinge puck. Fatter than either boom on purpose -- that
+ARM_ELBOW_HALF_LEN = 0.030    # step in section is what reads as a JOINT rather than a bend,
 ARM_ELBOW_SIDES    = 8        # and eight sides keeps it faceted rather than turned
-ARM_HEAD_LEN       = 0.105    # the tilt head: runs along the screen's own normal into the
-ARM_HEAD_HALF_U    = 0.034    # back plate, which is what keeps every arm behind its bezel
-ARM_HEAD_HALF_W    = 0.028
+ARM_HEAD_LEN       = 0.075    # the tilt head: runs along the screen's own normal into the
+ARM_HEAD_HALF_U    = 0.026    # back plate, which is what keeps every arm behind its bezel
+ARM_HEAD_HALF_W    = 0.021
 ARM_MIN_BEND_DEG   = 15.0     # below this the two booms are effectively one straight stick and
                               # the arm has stopped reading as articulated -- which is the
                               # exact defect this shape exists to fix, so it is an error
@@ -447,30 +502,57 @@ MAT_GLASS_ALPHA    = 0.12     # so the lab can see THROUGH the shell. Increment 
 # Node names. The headless tests key off these -- do not rename without updating the tests.
 NAME_EYE           = "Eye_Point"
 NAME_GLASS         = "Canopy_Glass"
+NAME_HULL          = "Hull_Tub"      # the solid tub: floor, chine and both walls, one mesh
 NAME_BULKHEAD      = "Bulkhead_Aft"
-NAME_FLOOR         = "Floor_Pan"
+NAME_COAMING       = "Coaming_Bow"   # the tub's forward wall, below the rail
 
-# Every member is named for the SEAM it lies on, because that is now what decides where it
-# is. (node name, kind, section) keyed by the seam it is generated from -- see seam_members().
+# Ring vertex indices. Written out rather than computed so the member tables below can be
+# read without simulating station_ring() in your head.
+#   0  floor centreline
+#   1  L chine      2  L wall      3  L RAIL      4  L shoulder   5  L roof edge
+#   6  R roof edge  7  R shoulder  8  R RAIL      9  R wall      10  R chine
+RING_FLOOR_C = 0
+RING_RAIL_L, RING_RAIL_R = 3, 8
+RING_GLASS_SPAN = (RING_RAIL_L, RING_RAIL_R)   # transverse arches span rail -> roof -> rail
+
+# Every member is named for the SEAM it lies on, because that is what decides where it is.
+# NOTE WHAT IS AND IS NOT HERE. The two RAILS are members on the hull/glass fold -- that fold
+# exists only because the profile closed, and it is the structural reason the rail does not
+# have to be authored as trim the way Canopy_Frame was. The tub's chine folds (1/2 and 9/10)
+# carry NOTHING: a pressed tub has no internal framing, and adding ribs down there would be
+# decorating a surface rather than expressing one.
 LONGITUDINAL_NAMES = {
-    0: ("Sill_L",          SILL_SECTION),
-    1: ("Rib_Shoulder_L",  RIB_SECTION),
-    2: ("Rib_RoofEdge_L",  RIB_SECTION),
-    3: ("Rib_RoofEdge_R",  RIB_SECTION),
-    4: ("Rib_Shoulder_R",  RIB_SECTION),
-    5: ("Sill_R",          SILL_SECTION),
+    3: ("Rail_L",          RAIL_SECTION),
+    4: ("Rib_Shoulder_L",  RIB_SECTION),
+    5: ("Rib_RoofEdge_L",  RIB_SECTION),
+    6: ("Rib_RoofEdge_R",  RIB_SECTION),
+    7: ("Rib_Shoulder_R",  RIB_SECTION),
+    8: ("Rail_R",          RAIL_SECTION),
 }
 TRANSVERSE_NAMES = {
     0: ("Arch_Bow", BOW_SECTION),
     1: ("Arch_Mid", ARCH_SECTION),
     2: ("Arch_Aft", ARCH_SECTION),
 }
-NAME_DELETED       = ("Hull_Nose", "Cockpit_Frame", "Canopy_Frame")
+NAME_DELETED       = ("Hull_Nose", "Cockpit_Frame", "Canopy_Frame",
+                      "Sill_L", "Sill_R", "Floor_Pan")
                               # Hull_Nose and Cockpit_Frame Max deleted at UAT on 1056f30.
                               # Canopy_Frame was the flat perimeter BAND of ceb277e -- the
                               # window-edge trim. An enclosure has no such thing: its edge is
-                              # Arch_Bow, a real structural rim on a real seam. If any of the
-                              # three reappears that is an AC-FORM failure, not a naming slip.
+                              # Arch_Bow, a real structural rim on a real seam.
+                              # Sill_L/R and Floor_Pan are the OPEN-ARCH build's bottom edge
+                              # and its flat pan. They are not failures, they are superseded:
+                              # a closed profile has no free lower edge to rail, and its floor
+                              # is part of the shell. If one reappears, the ring has come open
+                              # again and the tub has silently gone back to being a vault.
+# THE FITTINGS SWITCH. Max's ordering correction was "begin by building the enclosure of the
+# cockpit, then we'll fit the canopy, ribs, and screens to that" -- and he asked to see the tub
+# with nothing on it before anything is hung off it. So the screens and their arms can be left
+# out of a build without deleting them from the file, which keeps lane F's Screen_* UV contract
+# (d528f6c) intact: the DEFAULT build still carries them, and only an explicit --no-fittings
+# omits them. Set by parse_args(); read by build_all().
+INCLUDE_FITTINGS   = True
+
 SCREEN_PREFIX      = "Screen_"
 BODY_PREFIX        = "ScreenBody_"
 ARM_PREFIX         = "Arm_"
@@ -654,48 +736,89 @@ def edges_of(faces):
 # so the metrics sidecar and the exported mesh are computed from the SAME lists.
 # =============================================================================
 
-def canopy_ring(index):
-    """The six points of one transverse arch ring, ordered LEFT sill -> roof -> RIGHT sill.
+def station_ring(index):
+    """The eleven points of one transverse ring, as a CLOSED loop.
 
-    Built by MIRRORING CANOPY_ARCH_HALF rather than by listing both halves, so the canopy is
-    symmetric by construction. A re-author cannot accidentally make the left side differ from
-    the right, which is the kind of drift a table of twelve numbers invites.
+    Order, starting on the floor centreline and going up the LEFT side, across the roof and
+    down the RIGHT side:
+        0 floor_c | 1 L chine | 2 L wall | 3 L RAIL | 4 L shoulder | 5 L roof edge
+                  | 6 R roof edge | 7 R shoulder | 8 R RAIL | 9 R wall | 10 R chine
+    and segment 10 wraps back to 0 across the other half of the floor.
+
+    Built by MIRRORING the two half-tables rather than by listing both sides, so the section
+    is symmetric by construction. A re-author cannot accidentally make the left differ from
+    the right, which is the kind of drift a table of twenty numbers invites.
+
+    The rail point appears in both TUB_HALF and CANOPY_HALF and is spliced here exactly once
+    -- CANOPY_HALF[0] is skipped. If it were emitted twice the ring would carry a zero-length
+    segment, which has no tangent, and member_sections() would raise on it rather than
+    silently produce a degenerate rail.
     """
-    _label, y, half_w, top_z = CANOPY_STATIONS[index]
-    height = top_z - SILL_Z
-    pts = []
-    # LEFT half runs sill -> roof, then the RIGHT half runs roof -> sill, so the ring reads
-    # continuously around the arch. Getting this backwards makes the segment between the two
-    # sill points a "panel", i.e. it puts a sheet of canopy glass across the cockpit FLOOR.
-    for (_nm, fx, fz) in CANOPY_ARCH_HALF:
-        pts.append((-fx * half_w, y, SILL_Z + fz * height))
-    for (_nm, fx, fz) in reversed(CANOPY_ARCH_HALF):
-        pts.append((fx * half_w, y, SILL_Z + fz * height))
-    return pts
+    _label, y, half_w, top_z = STATIONS[index]
+    tub_h = RAIL_Z - FLOOR_Z
+    can_h = top_z - RAIL_Z
+
+    def right_half():
+        pts = [(fx * half_w, y, FLOOR_Z + fz * tub_h) for (_nm, fx, fz) in TUB_HALF]
+        pts += [(fx * half_w, y, RAIL_Z + fz * can_h) for (_nm, fx, fz) in CANOPY_HALF[1:]]
+        return pts
+
+    right = right_half()                       # floor_c, chine, wall, rail, shoulder, roofedge
+    left = [(-p[0], p[1], p[2]) for p in right]
+    # right[0] is the shared centreline point; left[0] is the same point mirrored, i.e. itself.
+    #
+    # LEFT half first, then the RIGHT half in reverse. That circulation direction is not a
+    # style choice: with stations ordered bow -> aft, panel_quads()' winding only produces
+    # INWARD (eye-facing) normals for this handedness. Going up the right side instead flips
+    # every panel in the model, and panel_normals_face_eye() raises on it -- which is how this
+    # was caught rather than shipped.
+    return [right[0]] + left[1:] + list(reversed(right[1:]))
 
 
 def ring_grid():
-    """rings[i][j] -- every vault vertex. i indexes stations bow->aft, j the arch, left->right."""
-    return [canopy_ring(i) for i in range(len(CANOPY_STATIONS))]
+    """rings[i][j] -- every shell vertex. i indexes stations bow->aft, j the ring, closed."""
+    return [station_ring(i) for i in range(len(STATIONS))]
 
 
-N_ARCH = 2 * len(CANOPY_ARCH_HALF)          # points per ring
-N_BAYS = len(CANOPY_STATIONS) - 1           # fore-aft bays
-N_FACETS = N_ARCH - 1                       # facets across one bay
+N_ARCH = 2 * len(TUB_HALF) + 2 * (len(CANOPY_HALF) - 1) - 1   # 11 points per ring
+N_BAYS = len(STATIONS) - 1                                    # fore-aft bays
+N_FACETS = N_ARCH                                             # CLOSED: one facet per segment
 
 
-def panel_quads():
-    """Every vault panel as four (station, arch) index pairs.
+def segment_materials():
+    """Material of each of the N_ARCH ring segments, segment k joining vertex k to k+1.
+
+    Derived from the ring layout rather than typed out, so it cannot fall out of step with
+    station_ring() when either half-table is re-authored. Everything strictly between the two
+    RAIL vertices going up over the roof is glass; everything else -- the walls, the chine and
+    the floor -- is solid hull.
+    """
+    mats = []
+    for k in range(N_ARCH):
+        mats.append(SEG_GLASS if RING_RAIL_L <= k < RING_RAIL_R else SEG_HULL)
+    return mats
+
+
+def panel_quads(material=None):
+    """Every shell panel as four (station, ring) index pairs, optionally filtered by material.
 
     Winding is (i,j) (i,j+1) (i+1,j+1) (i+1,j), which puts every panel normal on the INSIDE
     of the shell -- pointing at the pilot. That is deliberate and it is the same convention
     the screens use: the face the pilot sees is the face whose normal reaches them. It is
     verified rather than assumed -- see panel_normals_face_eye().
+
+    The ring is CLOSED, so j+1 wraps. That wrap is the segment across the footwell floor, and
+    it is the one facet the open-arch build could not have: it is what turns a vault into a
+    tub. If N_FACETS ever goes back to N_ARCH-1 the floor opens up again.
     """
+    mats = segment_materials()
     out = []
     for i in range(N_BAYS):
         for j in range(N_FACETS):
-            out.append(((i, j), (i, j + 1), (i + 1, j + 1), (i + 1, j)))
+            if material is not None and mats[j] != material:
+                continue
+            jn = (j + 1) % N_ARCH
+            out.append(((i, j), (i, jn), (i + 1, jn), (i + 1, j)))
     return out
 
 
@@ -703,13 +826,27 @@ def _grid_index(i, j):
     return i * N_ARCH + j
 
 
-def build_canopy():
-    """Canopy_Glass: the whole faceted vault as one mesh, flat quads only."""
+def build_shell(material):
+    """One material's worth of the shell as its own mesh, flat quads only.
+
+    Called twice -- Canopy_Glass and Hull_Tub -- off the SAME ring grid and the same winding,
+    so the two meshes meet exactly along the rail with no crack and no overlap. Vertices are
+    remapped rather than shared, because the two are separate glTF nodes with separate
+    materials and only one of them is see-through.
+    """
     grid = ring_grid()
+    remap = {}
     verts = []
-    for ring in grid:
-        verts.extend(ring)
-    faces = [tuple(_grid_index(i, j) for (i, j) in quad) for quad in panel_quads()]
+    faces = []
+    for quad in panel_quads(material):
+        face = []
+        for (i, j) in quad:
+            key = (i, j)
+            if key not in remap:
+                remap[key] = len(verts)
+                verts.append(grid[i][j])
+            face.append(remap[key])
+        faces.append(tuple(face))
     return verts, faces
 
 
@@ -769,12 +906,12 @@ def vertex_normals_out():
     fixed by panel_quads(), so the result is deterministic to the last bit.
     """
     grid = ring_grid()
-    acc = [[(0.0, 0.0, 0.0)] * N_ARCH for _ in range(len(CANOPY_STATIONS))]
+    acc = [[(0.0, 0.0, 0.0)] * N_ARCH for _ in range(len(STATIONS))]
     for quad in panel_quads():
         n_out = v_mul(panel_normal_in(quad, grid), -1.0)
         for (i, j) in quad:
             acc[i][j] = v_add(acc[i][j], n_out)
-    return [[v_norm(acc[i][j]) for j in range(N_ARCH)] for i in range(len(CANOPY_STATIONS))]
+    return [[v_norm(acc[i][j]) for j in range(N_ARCH)] for i in range(len(STATIONS))]
 
 
 # =============================================================================
@@ -793,13 +930,29 @@ def incident_panel_normals():
     A member lying on a fold has to clear BOTH panels that make the fold, and those are the
     only surfaces it can break through locally -- so the containment solve is a handful of
     plane inequalities rather than a search.
+
+    THESE ARE TRIANGLE PLANES, NOT QUAD PLANES, and the distinction is load-bearing here in a
+    way it was not in the open-arch build. A lofted quad between two stations of DIFFERENT
+    half-width is not planar -- the shoulder panels in this build are warped by about 80 mm --
+    so its Newell normal describes an average surface that the exported mesh does not actually
+    have. triangulate() fans every quad from its first vertex, and THAT is the surface the
+    glass really is. Solving against the average instead put the roof-edge ribs 1.1 mm through
+    the glass, and gave the giveaway symptom: the residual differed LEFT from RIGHT, on a model
+    that is mirror-symmetric by construction, because the fan diagonal is mirrored too.
+
+    So the split rule is read from the same place the exporter reads it. triangulate()'s
+    docstring already claimed "the rib clearances are solved against specific triangles"; it is
+    true now.
     """
     grid = ring_grid()
-    acc = [[[] for _ in range(N_ARCH)] for _ in range(len(CANOPY_STATIONS))]
+    acc = [[[] for _ in range(N_ARCH)] for _ in range(len(STATIONS))]
     for quad in panel_quads():
-        n_in = panel_normal_in(quad, grid)
-        for (i, j) in quad:
-            acc[i][j].append(n_in)
+        # same fan as triangulate(): (0,1,2), (0,2,3)
+        for t in range(1, len(quad) - 1):
+            tri = (quad[0], quad[t], quad[t + 1])
+            n_in = panel_normal_in(tri, grid)
+            for (i, j) in tri:
+                acc[i][j].append(n_in)
     return acc
 
 
@@ -809,12 +962,18 @@ def seam_points(kind, index):
     norms = vertex_normals_out()
     inc = incident_panel_normals()
     if kind == "long":
-        rng = range(len(CANOPY_STATIONS))
+        rng = range(len(STATIONS))
         pts = [grid[i][index] for i in rng]
         ns = [norms[i][index] for i in rng]
         planes = [inc[i][index] for i in rng]
     elif kind == "trans":
-        rng = range(N_ARCH)
+        # An arch runs RAIL -> roof -> RAIL and stops there. Now that the ring is closed it
+        # would otherwise carry on down the tub walls and across the footwell floor, which is
+        # a member no aircraft has: an arch is what holds the CANOPY up. The span is the glass
+        # run, so the arch lands exactly on the two rails and is bounded by the same fold that
+        # decides the material.
+        lo, hi = RING_GLASS_SPAN
+        rng = range(lo, hi + 1)
         pts = [grid[index][j] for j in rng]
         ns = [norms[index][j] for j in rng]
         planes = [inc[index][j] for j in rng]
@@ -851,7 +1010,7 @@ def member_sections(pts, norms, planes, width, depth):
     tangent plane has its two outer corners POKING THROUGH the panels either side -- by 21 mm
     for the ribs here and 217 mm for the sill rails, measured. Authoring a single constant gap
     cannot fix that, because the required depth depends on the fold angle, which differs at
-    every vertex and changes the moment anyone re-authors CANOPY_STATIONS.
+    every vertex and changes the moment anyone re-authors STATIONS.
 
     So it is solved per vertex, in closed form, against the actual incident panel planes:
     for each panel (inward normal m) and each corner offset u, the corner
@@ -873,6 +1032,27 @@ def member_sections(pts, norms, planes, width, depth):
     hw = width * 0.5
     sections = []
     standoffs = []
+
+    # SOLVE EACH VERTEX AGAINST ITS NEIGHBOURS' PLANES TOO, and the reason is not caution.
+    # The solve is exact AT a vertex, but the member between two vertices is a RULED surface
+    # -- loft() interpolates the two sections linearly -- while the panels it lies on are flat
+    # quads whose fold angle changes from station to station. So a member can clear both of
+    # its end vertices and still bulge out mid-span, which is precisely what the roof-edge
+    # ribs did here: 1.1 mm through the glass, invisible at every vertex.
+    #
+    # Constraint satisfaction is LINEAR in the section corners, so if section k and section
+    # k+1 both satisfy every plane incident to the span between them, every interpolated point
+    # in between satisfies it as well. Taking the union with both neighbours is therefore not
+    # a safety margin, it is the exact condition -- and it costs a fraction of a millimetre of
+    # extra standoff rather than the blanket RIB_GLASS_GAP increase that would have hidden it.
+    span_planes = []
+    for k in range(len(pts)):
+        acc = list(planes[k])
+        for nb in (k - 1, k + 1):
+            if 0 <= nb < len(pts):
+                acc.extend(planes[nb])
+        span_planes.append(acc)
+
     for k, p in enumerate(pts):
         n_out = norms[k]
         t = tans[k]
@@ -884,7 +1064,7 @@ def member_sections(pts, norms, planes, width, depth):
         c = v_norm(c)
         w = v_norm(v_cross(t, c))    # re-orthogonalised n_out, square to the seam
         need = RIB_GLASS_GAP
-        for m in planes[k]:
+        for m in span_planes[k]:
             denom = -v_dot(m, w)
             if denom <= 1e-9:
                 # this panel does not face the member; it cannot constrain it
@@ -937,17 +1117,19 @@ def seam_members():
 
 
 def build_bulkhead():
-    """Bulkhead_Aft: the flat closure behind the pilot's shoulders.
+    """Bulkhead_Aft: the closure behind the pilot, floor to roof.
 
-    This is what makes the enclosure true BEHIND as well as above, ahead and to the sides.
-    Max approved it this session and explicitly deferred a seat/headrest, so it is one plain
-    panel and nothing else. Its normal faces the eye, matching every other inward surface.
+    Max's form language is "a seat against a bulkhead", so this is full height rather than the
+    shoulder-high panel the open-arch build carried: it is the surface the seat is bolted to.
+    The ring is closed, so the aft station's eleven points already ARE the outline -- there is
+    no separate sill line to close along any more. Wound so the normal comes out +Y, i.e. at
+    the eye, matching every other inward surface.
+
+    Floor_Pan is gone and is not replaced here. The floor is segments 0 and 10 of the shell.
     """
-    ring = canopy_ring(len(CANOPY_STATIONS) - 1)
+    ring = station_ring(len(STATIONS) - 1)
     y = ring[0][1] + BULKHEAD_INSET
     verts = [(p[0], y, p[2]) for p in ring]
-    # ring runs LEFT sill -> roof -> RIGHT sill; closing 5->0 along the sill line makes the
-    # hexagon. Wound so the normal comes out +Y, i.e. at the eye.
     faces = [tuple(range(N_ARCH))]
     n = _newell_normal(verts, faces[0])
     if n[1] < 0.0:
@@ -955,27 +1137,32 @@ def build_bulkhead():
     return verts, faces
 
 
-def build_floor():
-    """Floor_Pan: the flat closure below the sill, between the two sill rails.
+def build_coaming():
+    """Coaming_Bow: the forward closure BELOW the rail -- the tub's front wall.
 
-    Max: "That's fine." It is NOT the Hull_Nose he deleted -- that was exterior hull seen
-    over the bonnet, forward of the pilot. This is the cabin's own floor, and without it
-    looking down finds empty space and the word "enclosure" is false in one direction.
+    WHY THIS EXISTS AT ALL, since the open-arch build had no such thing. A loft between three
+    stations is an open-ended trough: it has walls and a floor but no end caps. That was
+    harmless when the sill sat 1.08 m below the eye, because the hole under the bow rim was
+    far outside a 70 deg frame and nobody could look through it. With the rail at -0.34 the
+    same hole lands in the LOWER CENTRE OF THE FORWARD VIEW, and the first render showed stars
+    through the middle of the coaming.
+
+    Worth noting how it was caught, because the instruments did not catch it: enclosure
+    coverage read 100% below and "ahead 67.5%, open by design", so the hole was absorbed into
+    the aperture the AC deliberately does not constrain. It took looking at the thing.
+
+    Spans the HULL half of the ring -- rail, down the wall, across the floor, up the far wall,
+    rail -- and closes rail-to-rail along the top. That top edge IS the rail line, so the
+    coaming meets both rails exactly and needs no separate trim.
     """
-    grid = ring_grid()
-    z = SILL_Z + FLOOR_INSET
-    verts = []
-    for i in range(len(CANOPY_STATIONS)):
-        verts.append((grid[i][0][0], grid[i][0][1], z))
-        verts.append((grid[i][N_ARCH - 1][0], grid[i][N_ARCH - 1][1], z))
-    faces = []
-    for i in range(N_BAYS):
-        a, b = 2 * i, 2 * i + 1
-        c, d = 2 * (i + 1), 2 * (i + 1) + 1
-        quad = (a, b, d, c)
-        if _newell_normal(verts, quad)[2] < 0.0:
-            quad = tuple(reversed(quad))
-        faces.append(quad)
+    ring = station_ring(0)
+    y = ring[0][1] - BULKHEAD_INSET          # inset AFT of the bow plane, same reason
+    order = list(range(RING_RAIL_R, N_ARCH)) + list(range(0, RING_RAIL_L + 1))
+    verts = [(ring[k][0], y, ring[k][2]) for k in order]
+    faces = [tuple(range(len(order)))]
+    n = _newell_normal(verts, faces[0])
+    if n[1] > 0.0:                            # inward normal must point AFT, at the pilot
+        faces = [tuple(reversed(range(len(order))))]
     return verts, faces
 
 
@@ -1001,27 +1188,32 @@ def _newell_normal(verts, face):
 # aperture hit nothing, and correctly impose no constraint -- that is the windscreen.
 # =============================================================================
 
-def shell_triangles(include_hull=True):
+def shell_triangles(include_closures=True):
     """Surfaces a ray from the eye could cross, as world triangles.
 
-    include_hull=True  the whole enclosure: vault panels, bulkhead and floor pan. This is what
-                       "is the pilot enclosed?" and "is this screen inside the cabin?" mean.
-    include_hull=False the VAULT PANELS ALONE. This is what a seam member must be inboard of:
-                       a sill rail lies on the vault's bottom edge and legitimately hangs a
-                       little BELOW the floor pan, the way an edge beam sits under a floor.
-                       Measuring it against the floor would report a defect that is not one.
+    include_closures=True   the whole enclosure: every shell panel, glass and hull, plus the
+                            aft bulkhead. This is what "is the pilot enclosed?" and "is this
+                            screen inside the cabin?" mean.
+    include_closures=False  the SHELL PANELS ALONE, still both materials. This is what a seam
+                            member must be inboard of, and it is now the more natural of the
+                            two: with the profile closed, a member's incident panels can be
+                            one glass and one hull -- that is exactly what the RAIL is -- so
+                            splitting the shell by material here would measure the rail
+                            against half of the surface it lies on.
+
+    The open-arch build drew this line between glass and hull instead, because a sill rail sat
+    on the vault's free bottom edge and legitimately hung below the separate floor pan. There
+    is no free edge and no separate pan any more, so that exemption is gone with them.
     """
     tris = []
-    gv, gf = build_canopy()
-    for f in triangulate(gf):
-        tris.append((gv[f[0]], gv[f[1]], gv[f[2]]))
-    if include_hull:
-        bv, bf = build_bulkhead()
-        for f in triangulate(bf):
-            tris.append((bv[f[0]], bv[f[1]], bv[f[2]]))
-        fv, ff = build_floor()
-        for f in triangulate(ff):
-            tris.append((fv[f[0]], fv[f[1]], fv[f[2]]))
+    for material in (SEG_GLASS, SEG_HULL):
+        sv, sf = build_shell(material)
+        for f in triangulate(sf):
+            tris.append((sv[f[0]], sv[f[1]], sv[f[2]]))
+    if include_closures:
+        for (cv, cf) in (build_bulkhead(), build_coaming()):
+            for f in triangulate(cf):
+                tris.append((cv[f[0]], cv[f[1]], cv[f[2]]))
     return tris
 
 
@@ -1156,15 +1348,17 @@ def canopy_frame_landing():
     pre-ceb277e build have no visible enclosure at all.
     """
     tan_h, tan_v = frame_tangents()
-    ring = canopy_ring(0)
-    y = CANOPY_STATIONS[0][1]
-    half_w = CANOPY_STATIONS[0][2]
-    top_z = CANOPY_STATIONS[0][3]
+    ring = station_ring(0)
+    y = STATIONS[0][1]
+    half_w = STATIONS[0][2]
+    top_z = STATIONS[0][3]
     out = {}
+    # The aperture's lower bound is now THE RAIL, not the old sill. Below the rail the bow is
+    # solid coaming, so measuring down to the floor would report an opening that is hull.
     for (nm, val, limit) in (("right", half_w / y, tan_h),
                              ("left", half_w / y, tan_h),
                              ("top", top_z / y, tan_v),
-                             ("bottom", -SILL_Z / y, tan_v)):
+                             ("bottom", -RAIL_Z / y, tan_v)):
         out[nm] = {
             "tan": val,
             "frameTan": limit,
@@ -1214,7 +1408,7 @@ def member_inboard_margin(member, tris=None):
     negative, or this instrument is not discriminating and its pass means nothing.
     """
     if tris is None:
-        tris = shell_triangles(include_hull=False)
+        tris = shell_triangles(include_closures=False)
     worst = None
     worst_planted = None
     secs = member["sections"]
@@ -1274,8 +1468,11 @@ def member_seam_family(member):
     cannot leave a stale declaration behind.
     """
     if member["kind"] == "long":
-        return "rim" if member["seamIndex"] in (0, N_ARCH - 1) else "fold"
-    return "rim" if member["seamIndex"] in (0, len(CANOPY_STATIONS) - 1) else "fold"
+        # The ring is CLOSED, so no longitudinal seam is an outer edge any more -- every one
+        # of them is an interior fold between two panels. That is the point: the rail is a
+        # fold between hull and glass, not a free rim that needs trimming.
+        return "fold"
+    return "rim" if member["seamIndex"] in (0, len(STATIONS) - 1) else "fold"
 
 
 def _point_segment_distance(p, a, b):
@@ -1443,7 +1640,7 @@ def _tri_grid(p0, p1, p2, n):
     return pts
 
 
-def screen_frame(tan_x, tan_z):
+def screen_frame(tan_x, tan_z, dist):
     """Orthonormal frame for one screen unit, from its tan-space position.
 
     The display face's normal IS the centre->eye direction -- never a hand-tuned Euler angle
@@ -1454,7 +1651,7 @@ def screen_frame(tan_x, tan_z):
     u is screen-right (+X-ish), w is screen-up, and u x w == n.
     """
     d = v_norm((tan_x, 1.0, tan_z))
-    centre = v_mul(d, SCREEN_DIST)
+    centre = v_mul(d, dist)
     n = v_mul(d, -1.0)
     side = v_cross(BLENDER_UP, n)
     if v_len(side) < 1e-9:
@@ -1723,8 +1920,8 @@ def screen_units():
     can never disagree about where a screen is, because there is only one place it is decided.
     """
     units = []
-    for (suffix, tan_x, tan_z) in SCREEN_QUADRANTS:
-        centre, n, u, w = screen_frame(tan_x, tan_z)
+    for (suffix, tan_x, tan_z, dist) in SCREEN_QUADRANTS:
+        centre, n, u, w = screen_frame(tan_x, tan_z, dist)
         face_v, face_f = build_screen_face(centre, n, u, w)
         body_v, body_f = build_screen_body(centre, n, u, w)
         box_v, box_f = screen_outer_box(centre, n, u, w)
@@ -1740,6 +1937,7 @@ def screen_units():
             "armMountInward": inward,
             "tanX": tan_x,
             "tanZ": tan_z,
+            "dist": dist,
             "centre": centre,
             "normal": n,
             "u": u,
@@ -1758,18 +1956,25 @@ def screen_units():
 def build_all():
     """Every mesh, in a fixed order. Returns a list of dicts (name, verts, faces, material)."""
     parts = []
-    gv, gf = build_canopy()
+    hv, hf = build_shell(SEG_HULL)
+    parts.append({"name": NAME_HULL, "verts": hv, "faces": hf,
+                  "material": "Mat_Hull", "kind": "hull"})
+    gv, gf = build_shell(SEG_GLASS)
     parts.append({"name": NAME_GLASS, "verts": gv, "faces": gf,
                   "material": "Mat_Glass", "kind": "glass"})
     bv, bf = build_bulkhead()
     parts.append({"name": NAME_BULKHEAD, "verts": bv, "faces": bf,
                   "material": "Mat_Hull", "kind": "hull"})
-    fv, ff = build_floor()
-    parts.append({"name": NAME_FLOOR, "verts": fv, "faces": ff,
+    cv, cf = build_coaming()
+    parts.append({"name": NAME_COAMING, "verts": cv, "faces": cf,
                   "material": "Mat_Hull", "kind": "hull"})
     for mem in seam_members():
         parts.append({"name": mem["name"], "verts": mem["verts"], "faces": mem["faces"],
                       "material": "Mat_Frame", "kind": "member"})
+    if not INCLUDE_FITTINGS:
+        for part in parts:
+            part["faces"] = triangulate(part["faces"])
+        return parts, ()
     units = screen_units()
     for un in units:
         parts.append({"name": SCREEN_PREFIX + un["suffix"], "verts": un["faceVerts"],
@@ -1981,7 +2186,7 @@ def analyse(units=None):
     # into six solid-angle numbers by casting rays from the eye in every direction, so
     # "turning the head finds canopy rather than empty space" is checked, not asserted.
     tris = shell_triangles()
-    glass_tris = shell_triangles(include_hull=False)
+    glass_tris = shell_triangles(include_closures=False)
     coverage = enclosure_coverage()
     landing = canopy_frame_landing()
     panel_dot, panel_dot_flipped = panel_normals_face_eye()
@@ -2004,7 +2209,7 @@ def analyse(units=None):
             "AC-FORM(a): this is a WINDOW, not an ENCLOSURE. Within %.0f degrees of %s the "
             "pilot finds empty space rather than cockpit:\n%s\n"
             "  Every sector: %s\n"
-            "  Fix: widen CANOPY_STATIONS' half-widths / roof heights, or extend the station "
+            "  Fix: widen STATIONS' half-widths / roof heights, or extend the station "
             "list aft -- the vault has to wrap past the shoulders, which is the whole "
             "difference between what Max rejected and what he asked for."
             % (SECTOR_HALF_ANGLE, ", ".join(missing),
@@ -2217,21 +2422,34 @@ def analyse(units=None):
         raise ValueError(
             "%d vertices of the screen units / arms have punched THROUGH the enclosure -- "
             "worst is %s at (%.4f, %.4f, %.4f), %.4f m outside.\n"
-            "  Fix: lower SCREEN_DIST, or push the vault out by widening CANOPY_STATIONS."
+            "  Fix: lower SCREEN_DIST, or push the vault out by widening STATIONS."
             % (len(outside), nm, v[0], v[1], v[2], -m))
-    if worst_inside is None:
+    if worst_inside is None and units:
         raise ValueError(
             "the containment check measured NOTHING: every screen and arm vertex projects "
             "through the open bow aperture, so nothing was actually tested. A pass that "
             "measured nothing is not a pass.")
+    # `and units` is the ONLY exemption, and it is narrow on purpose. A --no-fittings build
+    # has no screens and no arms to contain, so there is genuinely nothing to measure and the
+    # guard would be reporting the absence of a test rather than the absence of a defect. With
+    # fittings present the guard still fires, which is the case it was written for: every
+    # vertex projecting through the open bow aperture means the instrument is blind, not that
+    # the geometry is good.
 
     # ---- Occlusion. Canopy_Glass is NOT in any of these lists, by design: the pilot sees
-    # through it. The opaque structure is the seam members, the bulkhead and the floor pan.
-    # The marginal order is members -> hull -> screens -> arms.
+    # through it. The opaque structure is the seam members, the aft bulkhead and THE TUB --
+    # which is new and is the single biggest term now. The marginal order is
+    # members -> hull -> screens -> arms.
+    #
+    # Hull_Tub replaces the old Floor_Pan here, and it is not a like-for-like swap: a flat pan
+    # 1.08 m down projected almost nothing into the frame, whereas a tub whose rail sits 0.34 m
+    # below the eye fills the lower third of it. The section lab predicts about 32% for these
+    # constants; this is the independent analytic check of that.
     hull_polys = []
     bkv, bkf = build_bulkhead()
-    flv, flf = build_floor()
-    for (hv, hf) in ((bkv, bkf), (flv, flf)):
+    cmv, cmf = build_coaming()
+    tbv, tbf = build_shell(SEG_HULL)
+    for (hv, hf) in ((bkv, bkf), (cmv, cmf), (tbv, tbf)):
         for f in hf:
             poly = silhouette_tan([hv[k] for k in f], [tuple(range(len(f)))])
             if len(poly) >= 3:
@@ -2264,8 +2482,9 @@ def analyse(units=None):
         "panelFacesEyeWorstDot": panel_dot,
         "panelFacesEyeFlippedDot": panel_dot_flipped,
         "stations": [{"label": s[0], "y": s[1], "halfWidth": s[2], "topZ": s[3]}
-                     for s in CANOPY_STATIONS],
-        "sillZ": SILL_Z,
+                     for s in STATIONS],
+        "floorZ": FLOOR_Z,
+        "railZ": RAIL_Z,
         "panelCount": len(panel_quads()),
         "facetsAcross": N_FACETS,
         "bays": N_BAYS,
@@ -2463,6 +2682,15 @@ def export_glb(path):
 # Metrics sidecar
 # =============================================================================
 
+def _agg(fn, rows, key):
+    """min/max over a fittings list, or None when the build has no fittings.
+
+    Never 0.0. A zero in one of these slots reads as "measured, and perfect", which is exactly
+    the false pass the containment vacuity guard exists to prevent.
+    """
+    return r6(fn(d[key] for d in rows)) if rows else None
+
+
 def build_metrics(parts, units, analysis):
     """Everything the headless tests assert on, expressed in glTF axes.
 
@@ -2601,17 +2829,18 @@ def build_metrics(parts, units, analysis):
         "constants": {
             "INCH": INCH,
             "HULL_REF_LENGTH": HULL_REF_LENGTH,
-            "SILL_Z": SILL_Z,
-            "CANOPY_STATIONS": [[s[0], r6(s[1]), r6(s[2]), r6(s[3])]
-                                for s in CANOPY_STATIONS],
-            "CANOPY_ARCH_HALF": [[a[0], r6(a[1]), r6(a[2])] for a in CANOPY_ARCH_HALF],
-            "SILL_SECTION": [r6(x) for x in SILL_SECTION],
+            "FLOOR_Z": FLOOR_Z,
+            "RAIL_Z": RAIL_Z,
+            "STATIONS": [[s[0], r6(s[1]), r6(s[2]), r6(s[3])]
+                                for s in STATIONS],
+            "TUB_HALF": [[a[0], r6(a[1]), r6(a[2])] for a in TUB_HALF],
+            "CANOPY_HALF": [[a[0], r6(a[1]), r6(a[2])] for a in CANOPY_HALF],
+            "RAIL_SECTION": [r6(x) for x in RAIL_SECTION],
             "RIB_SECTION": [r6(x) for x in RIB_SECTION],
             "ARCH_SECTION": [r6(x) for x in ARCH_SECTION],
             "BOW_SECTION": [r6(x) for x in BOW_SECTION],
             "RIB_GLASS_GAP": RIB_GLASS_GAP,
             "BULKHEAD_INSET": BULKHEAD_INSET,
-            "FLOOR_INSET": FLOOR_INSET,
             "ENCLOSURE_SECTOR_MIN": ENCLOSURE_SECTOR_MIN,
             "MEMBER_SEAM_TOL": MEMBER_SEAM_TOL,
             "MEMBER_PLANT_OFFSET": MEMBER_PLANT_OFFSET,
@@ -2621,8 +2850,10 @@ def build_metrics(parts, units, analysis):
             "SCREEN_BODY_DEPTH": r6(SCREEN_BODY_DEPTH),
             "SCREEN_FACE_RECESS": SCREEN_FACE_RECESS,
             "SCREEN_FACE_GAP": SCREEN_FACE_GAP,
-            "SCREEN_DIST": SCREEN_DIST,
-            "SCREEN_TAN_X": SCREEN_TAN_X,
+            "SCREEN_DIST_UP": SCREEN_DIST_UP,
+            "SCREEN_DIST_DOWN": SCREEN_DIST_DOWN,
+            "SCREEN_TAN_X_UP": SCREEN_TAN_X_UP,
+            "SCREEN_TAN_X_DOWN": SCREEN_TAN_X_DOWN,
             "SCREEN_TAN_Z_UP": SCREEN_TAN_Z_UP,
             "SCREEN_TAN_Z_DOWN": SCREEN_TAN_Z_DOWN,
             "ARM_MOUNT_PROFILE": dict(ARM_MOUNT_PROFILE),
@@ -2659,7 +2890,7 @@ def build_metrics(parts, units, analysis):
                           "metallic": MAT_FRAME_METAL,
                           "usedBy": [m["name"] for m in seam_members()]},
             "Mat_Hull": {"baseColorLinear": list(MAT_HULL_RGB), "roughness": MAT_HULL_ROUGH,
-                         "metallic": MAT_HULL_METAL, "usedBy": [NAME_BULKHEAD, NAME_FLOOR]},
+                         "metallic": MAT_HULL_METAL, "usedBy": [NAME_BULKHEAD, NAME_COAMING, NAME_HULL]},
             "Mat_Body": {"baseColorLinear": list(MAT_BODY_RGB), "roughness": MAT_BODY_ROUGH,
                          "metallic": MAT_BODY_METAL, "usedBy": [BODY_PREFIX + "*"]},
             "Mat_Arm": {"baseColorLinear": list(MAT_ARM_RGB), "roughness": MAT_ARM_ROUGH,
@@ -2702,8 +2933,10 @@ def build_metrics(parts, units, analysis):
             "stations": [{"label": s["label"], "y": r6(s["y"]),
                           "halfWidth": r6(s["halfWidth"]), "topZ": r6(s["topZ"])}
                          for s in analysis["stations"]],
-            "sillZ": r6(SILL_Z),
-            "archProfileHalf": [[a[0], r6(a[1]), r6(a[2])] for a in CANOPY_ARCH_HALF],
+            "floorZ": r6(FLOOR_Z),
+            "railZ": r6(RAIL_Z),
+            "tubProfileHalf": [[a[0], r6(a[1]), r6(a[2])] for a in TUB_HALF],
+            "canopyProfileHalf": [[a[0], r6(a[1]), r6(a[2])] for a in CANOPY_HALF],
             "facetsAcross": analysis["facetsAcross"],
             "bays": analysis["bays"],
             "panelCount": analysis["panelCount"],
@@ -2748,13 +2981,17 @@ def build_metrics(parts, units, analysis):
 
         "closures": {
             "bulkhead": {"name": NAME_BULKHEAD, "inset": r6(BULKHEAD_INSET),
-                         "what": "the flat aft closure behind the pilot's shoulders"},
-            "floor": {"name": NAME_FLOOR, "inset": r6(FLOOR_INSET),
-                      "what": ("the cabin floor between the two sill rails. NOT the deleted "
-                               "Hull_Nose, which was exterior hull forward of the pilot; "
-                               "without this, looking down finds empty space.")},
-            "noSeat": ("Max, this session: 'No need for a seat at this point; we can build "
-                       "stuff like that in later.' Deliberately absent, not overlooked."),
+                         "what": ("the aft closure behind the pilot, FLOOR TO ROOF -- Max's "
+                                  "form language is 'a seat against a bulkhead', so it is the "
+                                  "surface a seat would bolt to, not a shoulder-high panel")},
+            "floorPanRetired": ("Floor_Pan is GONE and is not replaced. With the ring profile "
+                                "closed, the cabin floor is segments 0 and 10 of Hull_Tub, so "
+                                "a separate pan would be a second surface in the same place. "
+                                "This is a supersession, not a deletion like Hull_Nose."),
+            "noSeat": ("Still deferred. Max reintroduced 'a seat against a bulkhead' as FORM "
+                       "language when he corrected the build order, which is why the bulkhead "
+                       "is now full height -- but whether the seat is MODELLED or merely "
+                       "implied by the tub has not been asked yet. Deliberately absent."),
         },
 
         "sceneBoundingBox": {"min": r6v(scene_lo), "max": r6v(scene_hi)},
@@ -2843,7 +3080,8 @@ def build_metrics(parts, units, analysis):
             "panelFacesEyeFlippedDot": r6(analysis["panelFacesEyeFlippedDot"]),
 
             # ---- containment: nothing has punched out of the cabin ----
-            "worstScreenOrArmInsideMargin": r6(analysis["worstInsideMargin"]),
+            "worstScreenOrArmInsideMargin": (r6(analysis["worstInsideMargin"])
+                                         if analysis["worstInsideMargin"] is not None else None),
             "screenOrArmVerticesUnconstrained": analysis["unconstrainedVertices"],
             "unconstrainedWhy": ("vertices whose eye ray leaves through the OPEN bow aperture "
                                  "have no shell to be inside of. Reported rather than hidden: "
@@ -2851,14 +3089,19 @@ def build_metrics(parts, units, analysis):
                                  "have measured nothing and its pass would be worthless."),
 
             # ---- arms are on ribs, and behind their own bezels ----
-            "worstArmMountGap": r6(max(d["mountGap"] for d in analysis["armDetail"])),
+            # Every one of these aggregates is over the FITTINGS, so a --no-fittings build has
+            # nothing to reduce. They report null rather than 0.0: a zero here would read as a
+            # measured perfect score, which is the same lie the vacuity guard above exists to
+            # prevent. Absent and good are different answers.
+            "fittingsIncluded": bool(INCLUDE_FITTINGS),
+            "worstArmMountGap": _agg(max, analysis["armDetail"], "mountGap"),
             "armMountTol": r6(ARM_MOUNT_TOL),
-            "minArmElbowBendDeg": r6(min(d["elbowBendDeg"] for d in analysis["armDetail"])),
-            "armPartsEach": len(analysis["armDetail"][0]["parts"]),
-            "minScreenVisibleFraction": r6(min(d["faceVisibleFraction"]
-                                               for d in analysis["screenDetail"])),
-            "worstArmInFrontOfScreenBox": r6(max(d["inFrontOfBoxBy"]
-                                                 for d in analysis["armDetail"])),
+            "minArmElbowBendDeg": _agg(min, analysis["armDetail"], "elbowBendDeg"),
+            "armPartsEach": (len(analysis["armDetail"][0]["parts"])
+                             if analysis["armDetail"] else None),
+            "minScreenVisibleFraction": _agg(min, analysis["screenDetail"],
+                                             "faceVisibleFraction"),
+            "worstArmInFrontOfScreenBox": _agg(max, analysis["armDetail"], "inFrontOfBoxBy"),
             "armDepthSamplesChecked": sum(d["depthSamplesOverlappingABox"]
                                           for d in analysis["armDetail"]),
             "armVisibilityBeyondItsScreen": [
@@ -2874,7 +3117,10 @@ def build_metrics(parts, units, analysis):
 # =============================================================================
 
 def parse_args(argv):
+    global INCLUDE_FITTINGS
     tail = argv[argv.index("--") + 1:] if "--" in argv else []
+    if "--no-fittings" in tail or "--no-fittings" in argv:
+        INCLUDE_FITTINGS = False
     out = None
     metrics = None
     i = 0
@@ -2949,15 +3195,19 @@ def print_summary(metrics, analysis, glb_path, metrics_path):
     print("     word ENCLOSURE means; the previous flat-window build scored ~0%% in all of")
     print("     them, which is exactly the correction Max made.)")
     print("")
-    print("  Canopy_Glass -- a faceted VAULT (EXCLUDED from occlusion, see-through by design)")
-    print("    %d panels = %d facets across x %d bays fore-aft; sill at z = %+.3f m"
-          % (cp["panelCount"], cp["facetsAcross"], cp["bays"], cp["sillZ"]))
+    print("  THE SHELL -- one CLOSED profile per station, split by material at the rail")
+    print("    %d panels = %d segments around x %d bays fore-aft"
+          % (cp["panelCount"], cp["facetsAcross"], cp["bays"]))
+    print("    floor z = %+.3f m   RAIL z = %+.3f m  <- hull below, glass above"
+          % (cp["floorZ"], cp["railZ"]))
     print("    %-6s %9s %12s %10s" % ("ring", "y", "half-width", "roof z"))
     for s in cp["stations"]:
         print("    %-6s %+8.3fm %11.3fm %+9.3fm"
               % (s["label"], s["y"], s["halfWidth"], s["topZ"]))
-    print("    arch profile (right half, sill -> roof): %s"
-          % ", ".join("%s (%.2f, %.2f)" % (a[0], a[1], a[2]) for a in cp["archProfileHalf"]))
+    print("    tub profile    (right half, centreline -> rail): %s"
+          % ", ".join("%s (%.2f, %.2f)" % (a[0], a[1], a[2]) for a in cp["tubProfileHalf"]))
+    print("    canopy profile (right half, rail -> roof):       %s"
+          % ", ".join("%s (%.2f, %.2f)" % (a[0], a[1], a[2]) for a in cp["canopyProfileHalf"]))
     print("    panel normals face the eye: worst dot %+.4f  (flipped winding %+.4f = the"
           % (cp["panelNormalsFaceEye"]["worstDot"],
              cp["panelNormalsFaceEye"]["flippedWindingDot"]))
@@ -2995,14 +3245,21 @@ def print_summary(metrics, analysis, glb_path, metrics_path):
             print("      %-17s %s" % (m["name"],
                                       ", ".join("%.1f deg" % a for a in m["bendAnglesDeg"])))
     print("")
-    print("  Closures (Max approved both this session; a seat is deliberately deferred)")
+    print("  Closures")
     print("    %-14s inset %.3f m -- %s"
           % (metrics["closures"]["bulkhead"]["name"],
              metrics["closures"]["bulkhead"]["inset"],
              metrics["closures"]["bulkhead"]["what"]))
-    print("    %-14s inset %.3f m -- the cabin floor between the two sill rails"
-          % (metrics["closures"]["floor"]["name"], metrics["closures"]["floor"]["inset"]))
+    print("    Floor_Pan      RETIRED -- the floor is now part of Hull_Tub")
     print("")
+    if not metrics["diagnostics"]["fittingsIncluded"]:
+        print("  FITTINGS OMITTED -- this is a --no-fittings build.")
+        print("    No screens and no arms were generated, so every screen/arm measurement")
+        print("    below is ABSENT rather than passing. Max asked to see the tub with")
+        print("    nothing on it before anything is fitted to it; this is that build.")
+        print("")
+        print_footer(metrics, analysis, glb_path, metrics_path)
+        return
     su = metrics["screenUnit"]
     print("  Screen units (boxy: bezel + backing, display face recessed)")
     print("    display face  %.3f x %.3f m = %.4f m2  (%.2fx the previous %.2f x %.2f m)"
@@ -3044,6 +3301,12 @@ def print_summary(metrics, analysis, glb_path, metrics_path):
                                      100.0 * d["occlusionBeyondItsScreen"])
                       for d in analysis["armDetail"]))
     print("")
+    print_footer(metrics, analysis, glb_path, metrics_path)
+
+
+def print_footer(metrics, analysis, glb_path, metrics_path):
+    """Occlusion table and the checks block. Split out of print_summary() so a --no-fittings
+    build can reach it after skipping the screen and arm sections, rather than duplicating it."""
     print("  OCCLUSION at %.0f deg / %.4f aspect  (analytic, %d scanlines; Canopy_Glass "
           "EXCLUDED)" % (GAME_FOV_DEG, GAME_ASPECT, OCC_SCANLINES))
     occ = metrics["occlusion"]
@@ -3085,22 +3348,25 @@ def print_summary(metrics, analysis, glb_path, metrics_path):
           % (dg["panelFacesEyeWorstDot"], dg["panelFacesEyeFlippedDot"]))
     print("    members read as folded, not curved        : smallest bend %.1f deg"
           % dg["minMemberBendAngleDeg"])
-    print("    nothing has punched out of the cabin      : worst margin %+.4f m "
-          "(%d vertices project through the open" % (dg["worstScreenOrArmInsideMargin"],
-                                                     dg["screenOrArmVerticesUnconstrained"]))
-    print("                                                aperture and are correctly "
-          "unconstrained)")
-    print("    every arm is ON its rib                   : worst gap %.8f m "
-          "(tolerance %.0e m)" % (dg["worstArmMountGap"], dg["armMountTol"]))
-    print("    every arm is articulated                  : %d parts each, smallest elbow "
-          "bend %.1f deg" % (dg["armPartsEach"], dg["minArmElbowBendDeg"]))
-    wa = dg["worstArmInFrontOfScreenBox"]
-    print("    no arm crosses in front of a screen       : %s (%d samples overlapped a box; "
-          "nearest stays %.4f m behind)"
-          % ("yes" if wa <= 0.0 else "NO", dg["armDepthSamplesChecked"], -wa))
-    mv = dg["minScreenVisibleFraction"]
-    print("    least-visible display face                : %.1f%% inside the frame%s"
-          % (100.0 * mv, "" if mv >= 0.999 else "   <- part of a screen falls off-screen"))
+    if dg["fittingsIncluded"]:
+        print("    nothing has punched out of the cabin      : worst margin %+.4f m "
+              "(%d vertices project through the open"
+              % (dg["worstScreenOrArmInsideMargin"],
+                 dg["screenOrArmVerticesUnconstrained"]))
+        print("                                                aperture and are correctly "
+              "unconstrained)")
+    if dg["fittingsIncluded"]:
+        print("    every arm is ON its rib                   : worst gap %.8f m "
+              "(tolerance %.0e m)" % (dg["worstArmMountGap"], dg["armMountTol"]))
+        print("    every arm is articulated                  : %d parts each, smallest elbow "
+              "bend %.1f deg" % (dg["armPartsEach"], dg["minArmElbowBendDeg"]))
+        wa = dg["worstArmInFrontOfScreenBox"]
+        print("    no arm crosses in front of a screen       : %s (%d samples overlapped a box; "
+              "nearest stays %.4f m behind)"
+              % ("yes" if wa <= 0.0 else "NO", dg["armDepthSamplesChecked"], -wa))
+        mv = dg["minScreenVisibleFraction"]
+        print("    least-visible display face                : %.1f%% inside the frame%s"
+              % (100.0 * mv, "" if mv >= 0.999 else "   <- part of a screen falls off-screen"))
     print("    no Hull_Nose / Cockpit_Frame / Canopy_Frame: %s"
           % ("yes" if not any(o["name"] in NAME_DELETED for o in metrics["objects"])
              else "NO - a deleted node is back"))
@@ -3121,6 +3387,9 @@ def analyse_only():
     read the occlusion and the visibility diagnostics, repeat -- no Blender, no dev server, no
     browser round-trip. Blender is only needed to turn the same vertex lists into a GLB.
     """
+    global INCLUDE_FITTINGS
+    if "--no-fittings" in sys.argv:
+        INCLUDE_FITTINGS = False
     parts, units = build_all()
     analysis = analyse(units)
     metrics = build_metrics(parts, units, analysis)
