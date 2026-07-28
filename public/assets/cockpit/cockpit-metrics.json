@@ -1,0 +1,289 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "scripts/cockpit-gen.py",
+  "workstream": "cockpit-lab-geometry-2026-07-28",
+  "units": "metres",
+  "axes": "glTF / three.js: +X right, +Y up, forward is -Z, eye at the origin. Authored in Blender (+X right, +Y forward, +Z up) and converted by export_yup=True, which maps Blender (x, y, z) -> glTF (x, z, -y).",
+  "scaleNormalisation": "none - every node is identity, 1 unit = 1 metre",
+  "eyePoint": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "eyePointNodeName": "Eye_Point",
+  "constants": {
+    "HULL_REF_LENGTH": 20.0,
+    "CANOPY_Y": 1.2,
+    "APERTURE_HALF_W": 1.4557,
+    "APERTURE_TOP_Z": 0.7615,
+    "APERTURE_BOT_Z": -0.8528,
+    "BEVEL_X": 0.79,
+    "BEVEL_Z": 0.51,
+    "FRAME_DEPTH": 0.45,
+    "FRAME_FLARE": 1.34,
+    "FRAME_WALL": 0.1,
+    "SCREEN_W": 0.3,
+    "SCREEN_H": 0.2,
+    "SCREEN_MOUNT_DEPTH": 0.1,
+    "SCREEN_MARGIN": 0.004,
+    "NOSE_NEAR_Y": 1.2,
+    "NOSE_NEAR_Z": -0.8528,
+    "NOSE_FAR_Y": 3.0,
+    "NOSE_FAR_Z": -1.618,
+    "NOSE_HALF_W_NEAR": 1.3,
+    "NOSE_HALF_W_FAR": 0.62,
+    "NOSE_THICKNESS": 0.3,
+    "GAME_FOV_DEG": 70.0,
+    "GAME_ASPECT": 1.777778
+  },
+  "hullReferenceLength": 20.0,
+  "noseVisibleLength": 1.8,
+  "noseFractionOfHull": 0.09,
+  "noseSlopeLength": 1.955896,
+  "noseTipDistanceFromEye": 3.0,
+  "noseTipFractionOfHull": 0.15,
+  "noseDropFromLip": 0.7652,
+  "apertureWidth": 2.9114,
+  "apertureHeight": 1.6143,
+  "apertureHalfAnglesDeg": {
+    "leftRight": 50.499683,
+    "up": 32.398531,
+    "down": 35.400139
+  },
+  "sceneBoundingBox": {
+    "min": [
+      -2.084638,
+      -1.918,
+      -3.0
+    ],
+    "max": [
+      2.084638,
+      1.15441,
+      -0.75
+    ]
+  },
+  "objects": [
+    {
+      "name": "Cockpit_Frame",
+      "material": "Mat_Frame",
+      "vertexCount": 32,
+      "faceCount": 32,
+      "boundingBox": {
+        "min": [
+          -2.084638,
+          -1.276752,
+          -1.2
+        ],
+        "max": [
+          2.084638,
+          1.15441,
+          -0.75
+        ]
+      }
+    },
+    {
+      "name": "Screen_UL",
+      "material": "Mat_Screen",
+      "vertexCount": 4,
+      "faceCount": 1,
+      "boundingBox": {
+        "min": [
+          -1.236298,
+          0.319788,
+          -1.165247
+        ],
+        "max": [
+          -0.975367,
+          0.661289,
+          -0.937132
+        ]
+      }
+    },
+    {
+      "name": "Screen_UR",
+      "material": "Mat_Screen",
+      "vertexCount": 4,
+      "faceCount": 1,
+      "boundingBox": {
+        "min": [
+          0.975367,
+          0.319788,
+          -1.165247
+        ],
+        "max": [
+          1.236298,
+          0.661289,
+          -0.937132
+        ]
+      }
+    },
+    {
+      "name": "Screen_LL",
+      "material": "Mat_Screen",
+      "vertexCount": 4,
+      "faceCount": 1,
+      "boundingBox": {
+        "min": [
+          -1.245331,
+          -0.766483,
+          -1.168183
+        ],
+        "max": [
+          -0.979774,
+          -0.43181,
+          -0.946889
+        ]
+      }
+    },
+    {
+      "name": "Screen_LR",
+      "material": "Mat_Screen",
+      "vertexCount": 4,
+      "faceCount": 1,
+      "boundingBox": {
+        "min": [
+          0.979774,
+          -0.766483,
+          -1.168183
+        ],
+        "max": [
+          1.245331,
+          -0.43181,
+          -0.946889
+        ]
+      }
+    },
+    {
+      "name": "Hull_Nose",
+      "material": "Mat_Hull",
+      "vertexCount": 8,
+      "faceCount": 6,
+      "boundingBox": {
+        "min": [
+          -1.3,
+          -1.918,
+          -3.0
+        ],
+        "max": [
+          1.3,
+          -0.8528,
+          -1.2
+        ]
+      }
+    }
+  ],
+  "screens": [
+    {
+      "name": "Screen_UL",
+      "centre": [
+        -1.105832,
+        0.490539,
+        -1.05119
+      ],
+      "normal": [
+        0.690002,
+        -0.306079,
+        0.655906
+      ],
+      "width": 0.3,
+      "height": 0.2,
+      "mountDepth": 0.1,
+      "standoffFromMountFace": 0.080926,
+      "tiltOffMountFaceDeg": 25.944272
+    },
+    {
+      "name": "Screen_UR",
+      "centre": [
+        1.105832,
+        0.490539,
+        -1.05119
+      ],
+      "normal": [
+        -0.690002,
+        -0.306079,
+        0.655906
+      ],
+      "width": 0.3,
+      "height": 0.2,
+      "mountDepth": 0.1,
+      "standoffFromMountFace": 0.080926,
+      "tiltOffMountFaceDeg": 25.944272
+    },
+    {
+      "name": "Screen_LL",
+      "centre": [
+        -1.112553,
+        -0.599147,
+        -1.057536
+      ],
+      "normal": [
+        0.675188,
+        0.363612,
+        0.6418
+      ],
+      "width": 0.3,
+      "height": 0.2,
+      "mountDepth": 0.1,
+      "standoffFromMountFace": 0.067258,
+      "tiltOffMountFaceDeg": 22.166397
+    },
+    {
+      "name": "Screen_LR",
+      "centre": [
+        1.112553,
+        -0.599147,
+        -1.057536
+      ],
+      "normal": [
+        -0.675188,
+        0.363612,
+        0.6418
+      ],
+      "width": 0.3,
+      "height": 0.2,
+      "mountDepth": 0.1,
+      "standoffFromMountFace": 0.067258,
+      "tiltOffMountFaceDeg": 22.166397
+    }
+  ],
+  "predictedOcclusionFraction": 0.275749,
+  "predictedOcclusionNote": "Analytic estimate at GAME_FOV_DEG / GAME_ASPECT from the authored polygons. AC-FRAME's browser measurement is authoritative; this exists so proportions can be tuned without a render round-trip.",
+  "diagnostics": {
+    "predictedOcclusionByFrame": 0.227754,
+    "predictedOcclusionByNose": 0.047994,
+    "predictedOcclusionByScreens": 2e-06,
+    "frameHalfAngleHorizontalDeg": 51.223929,
+    "frameHalfAngleVerticalDeg": 35.0,
+    "noseTipHalfAngleDownDeg": 28.339465,
+    "borderFullyCoveredByFlaredRing": true,
+    "screenForwardOfCanopyPlane": 0.0,
+    "screenOutsidePillarInnerFace": 0.0,
+    "screenOutsideGameFrame": 0.074422,
+    "screenDetail": [
+      {
+        "name": "Screen_UL",
+        "standoff": 0.080926,
+        "visibleFraction": 0.956829,
+        "overWindowFraction": 3.2e-05
+      },
+      {
+        "name": "Screen_UR",
+        "standoff": 0.080926,
+        "visibleFraction": 0.956829,
+        "overWindowFraction": 3.2e-05
+      },
+      {
+        "name": "Screen_LL",
+        "standoff": 0.067258,
+        "visibleFraction": 0.923147,
+        "overWindowFraction": 0.0
+      },
+      {
+        "name": "Screen_LR",
+        "standoff": 0.067258,
+        "visibleFraction": 0.923147,
+        "overWindowFraction": 0.0
+      }
+    ]
+  }
+}

@@ -1,0 +1,670 @@
+<!doctype html>
+<!--
+  COCKPIT LAB — HELM cockpit, increment 1 (geometry only)
+  =======================================================
+  Isolated harness for the cockpit GLB authored by scripts/cockpit-gen.py.
+  Workstream: docs/WORKSTREAMS/cockpit-lab-geometry-2026-07-28/  (contract.json, intent.md)
+
+  URL:  http://localhost:5179/well-dipper/cockpit-lab.html
+        (vite.config.js sets base: '/well-dipper/' — the lab is NOT served at the root.)
+
+  SCOPE (this increment):
+    - Load public/assets/cockpit/cockpit.glb EXACTLY as authored: 1 unit = 1 metre,
+      Y-up, pilot's eye at the origin, NO scale normalisation, NO re-centring.
+      (Deliberately NOT the ships pipeline's mesh.scale.setScalar(1/radius) — that is a
+      ships-manifest convention and is wrong for the one object whose real size matters.)
+    - Two camera modes so Max can judge the form AND the framing:
+        ORBIT — free spin around the model, OrbitControls, target = model centroid.
+        EYE   — camera pinned at exactly (0,0,0), fov 70 (the game's real FOV,
+                src/ui/Settings.js:40), looking down -Z. Drag to look around; the
+                camera NEVER leaves the origin. Rendered LETTERBOXED to 16:9 so what
+                Max sees is the same framing AC-FRAME measures.
+    - Placeholder background (stars + faint horizon grid + one distant body) so the
+      canopy aperture reads as an opening, and so the frame/nose read as occluders.
+    - AC-FRAME instrument: window._cockpitLab.measureOcclusion() renders the cockpit
+      ALONE into an offscreen RGBA target at 1920x1080 / fov 70 with clear alpha 0 and
+      counts covered pixels. Pure measurement — it force-neutralises any operator
+      toggle that would change coverage (wireframe), restores every piece of state it
+      touches in a finally block, and returns null (never a bogus 0) before the GLB
+      has resolved. Await window._cockpitLab.ready first.
+
+  DEFERRED:
+    - Phosphor CRT screen shader + render targets (increment 2). Mat_Screen renders as
+      the near-black placeholder it is; [S] tints the screen quads so their placement
+      is judgeable in the meantime.
+    - Glass / refraction / any transmissive material (increment 3).
+    - Head–hull decoupling, the in-game 5th render pass, HELM gating (increment 4).
+    - Screen data plumbing (increment 5), zoom-to-panel (increment 6).
+    - Cockpit render resolution (match pixelScale=3 vs. crisper) — a taste call for
+      increment 2, shown side by side. Not baked in here.
+
+  LAB-ONLY: this file and the GLB are new; no pre-existing file under src/ is touched
+  (AC-NOGAME). Served via the project's Vite dev server on :5179 (bare `three` import,
+  like the other *-lab.html files). Max runs the server; verify via chrome-devtools.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />
+  <title>Cockpit Lab — Well Dipper</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: #000; color: #0f0; font-family: monospace; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+
+    #hud {
+      position: fixed; top: 12px; left: 12px;
+      font-size: 13px; line-height: 1.55;
+      text-shadow: 0 0 8px #000; pointer-events: none; z-index: 10; white-space: pre;
+    }
+    #hud .k    { color: #6f6; }
+    #hud .v    { color: #fff; }
+    #hud .dim  { color: #585; }
+    #hud .pass { color: #6f6; }
+    #hud .fail { color: #fc6; }
+    #hud .err  { color: #f66; }
+
+    #controls {
+      position: fixed; bottom: 12px; left: 12px;
+      background: rgba(0, 0, 0, 0.78);
+      padding: 10px 12px; font-size: 12px; line-height: 1.7; z-index: 10;
+      width: 250px;
+    }
+    #controls h3 { font-size: 12px; color: #6f6; margin-bottom: 6px; font-weight: normal; letter-spacing: 1px; }
+    .btn {
+      background: rgba(0, 255, 0, 0.1); border: 1px solid #0f0;
+      color: #0f0; padding: 4px 9px; cursor: pointer; margin: 2px 0;
+      font-family: inherit; font-size: 12px; width: 100%;
+      display: flex; justify-content: space-between; gap: 8px;
+    }
+    .btn:hover { background: rgba(0, 255, 0, 0.22); }
+    .btn.on { background: rgba(0, 255, 0, 0.4); color: #fff; }
+    .btn .key { color: #585; }
+    .btn.on .key { color: #cfc; }
+    /* Current mode is stated separately from the button, which states its DESTINATION —
+       so "GO TO EYE VIEW" can never be misread as "you are in eye view". */
+    .now { color: #585; font-size: 11px; letter-spacing: 1px; margin-bottom: 4px; }
+    .now span { color: #fff; }
+    .hint { color: #585; font-size: 11px; margin-top: 8px; line-height: 1.5; }
+
+    /* Eye-mode reticle — DOM only, cannot affect the GL occlusion readback. */
+    #reticle { position: fixed; inset: 0; z-index: 9; pointer-events: none; display: none; }
+    #reticle.on { display: block; }
+    #reticle i {
+      position: absolute; background: rgba(0, 255, 0, 0.35);
+      left: 50%; top: 50%;
+    }
+    #reticle i.h { width: 18px; height: 1px; margin-left: -9px; }
+    #reticle i.v { width: 1px; height: 18px; margin-top: -9px; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hud">booting…</div>
+  <div id="reticle"><i class="h"></i><i class="v"></i></div>
+  <div id="controls">
+    <h3>COCKPIT LAB — INC 1</h3>
+    <div class="now">NOW VIEWING: <span id="bModeNow">ORBIT</span></div>
+    <button class="btn" id="bMode">  <span id="bModeLabel">GO TO EYE VIEW</span><span class="key">C</span></button>
+    <button class="btn" id="bMeasure"><span>MEASURE OCCLUSION</span><span class="key">M</span></button>
+    <button class="btn" id="bScreens"><span>HILITE SCREENS</span><span class="key">S</span></button>
+    <button class="btn" id="bFlat">   <span>FORCE FLAT SHADING</span><span class="key">F</span></button>
+    <button class="btn" id="bWire">   <span>WIREFRAME</span><span class="key">W</span></button>
+    <button class="btn on" id="bBg">  <span>BACKGROUND</span><span class="key">B</span></button>
+    <button class="btn" id="bReset">  <span>RECENTRE VIEW</span><span class="key">R</span></button>
+    <div class="hint">
+      ORBIT: drag to spin, scroll to zoom.<br />
+      EYE: camera locked at (0,0,0), fov 70,
+      letterboxed to 16:9 so the framing you
+      see is the framing AC-FRAME measures.
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Constants
+    // ─────────────────────────────────────────────────────────────────────────
+    // public/ is the Vite static root, so this relative URL resolves under
+    // whatever base the dev server is on (vite.config.js sets base '/well-dipper/').
+    const GLB_URL      = 'assets/cockpit/cockpit.glb';
+    const GAME_FOV     = 70;          // src/ui/Settings.js:40 — the FOV the framing is judged at
+    const GAME_ASPECT  = 16 / 9;      // AC-FRAME is defined at 16:9
+    const OCC_TARGET   = [0.25, 0.30]; // AC-FRAME pass band
+    const ORBIT_FOV    = 50;          // inspection FOV — NOT the game FOV, and never used in EYE mode
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Renderer / scene
+    // ─────────────────────────────────────────────────────────────────────────
+    const canvas   = document.getElementById('canvas');
+    // No alpha on the canvas context: the visible pass always clears to opaque black.
+    // The occlusion pass does NOT need it — it renders into a WebGLRenderTarget whose
+    // own RGBAFormat attachment carries the alpha channel it reads back, which is
+    // independent of the default framebuffer's context attributes.
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000000, 1);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
+
+    const scene = new THREE.Scene();   // background stays null; the clear colour is the black
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Cameras — two distinct objects so OrbitControls can never touch the eye cam
+    // ─────────────────────────────────────────────────────────────────────────
+    const orbitCam = new THREE.PerspectiveCamera(ORBIT_FOV, window.innerWidth / window.innerHeight, 0.01, 8000);
+    orbitCam.position.set(2.6, 1.8, 4.2);
+
+    const eyeCam = new THREE.PerspectiveCamera(GAME_FOV, GAME_ASPECT, 0.01, 8000);
+    eyeCam.position.set(0, 0, 0);          // the pilot's eye. Never moved. Ever.
+    eyeCam.rotation.order = 'YXZ';
+
+    // Offscreen measurement camera — never in the scene graph, never displayed.
+    const occCam = new THREE.PerspectiveCamera(GAME_FOV, GAME_ASPECT, 0.01, 8000);
+
+    const controls = new OrbitControls(orbitCam, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 0, -0.6);
+
+    let mode = 'orbit';                    // 'orbit' | 'eye'
+    let eyeYaw = 0, eyePitch = 0;          // EYE look-around, applied as YXZ rotation only
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Lighting — key + fill + low ambient, angled so the EXTERIOR nose catches the
+    // light (its top face points up-and-forward) while the INTERIOR frame faces,
+    // which point back toward the eye, sit in shadow. Standard materials only;
+    // no shader work in this increment.
+    // ─────────────────────────────────────────────────────────────────────────
+    const ambient = new THREE.AmbientLight(0xaebccc, 0.22);
+    scene.add(ambient);
+
+    const keyLight = new THREE.DirectionalLight(0xfff2e0, 2.4);
+    keyLight.position.set(-30, 50, -60);   // ahead, above, port side — rakes the nose
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x6f8ab0, 0.30);
+    fillLight.position.set(24, -8, 34);    // dim bounce from behind/below the pilot
+    scene.add(fillLight);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Placeholder background — stars + faint horizon grid + one distant body.
+    // Grouped so measureOcclusion() can hide it and count ONLY the cockpit.
+    // ─────────────────────────────────────────────────────────────────────────
+    const bgGroup = new THREE.Group();
+    bgGroup.name = '__background';
+    scene.add(bgGroup);
+
+    (function buildStars() {
+      const N = 4000, R = 900;
+      const pos = new Float32Array(N * 3);
+      const col = new Float32Array(N * 3);
+      // Deterministic LCG so the backdrop is the same every load (screenshots diff cleanly).
+      let s = 0x2f6e2b1;
+      const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+      for (let i = 0; i < N; i++) {
+        const u = rnd() * 2 - 1, th = rnd() * Math.PI * 2, r = Math.sqrt(Math.max(0, 1 - u * u));
+        pos[i * 3 + 0] = Math.cos(th) * r * R;
+        pos[i * 3 + 1] = u * R;
+        pos[i * 3 + 2] = Math.sin(th) * r * R;
+        const b = 0.30 + rnd() * rnd() * 0.70;
+        col[i * 3 + 0] = b * (0.90 + rnd() * 0.10);
+        col[i * 3 + 1] = b * (0.94 + rnd() * 0.06);
+        col[i * 3 + 2] = b;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      const stars = new THREE.Points(g, new THREE.PointsMaterial({
+        size: 2, sizeAttenuation: false, vertexColors: true, depthWrite: false,
+      }));
+      stars.name = '__stars';
+      bgGroup.add(stars);
+    })();
+
+    (function buildHorizon() {
+      const grid = new THREE.GridHelper(2400, 80, 0x2b5a86, 0x16283c);
+      grid.position.y = -30;                       // well below the nose, reads as a distant floor
+      grid.material.transparent = true;
+      grid.material.opacity = 0.40;
+      grid.material.depthWrite = false;
+      grid.name = '__horizonGrid';
+      bgGroup.add(grid);
+    })();
+
+    (function buildDistantBody() {
+      // One lit sphere so the aperture frames SOMETHING with shape, not just points.
+      const body = new THREE.Mesh(
+        new THREE.SphereGeometry(26, 48, 32),
+        new THREE.MeshStandardMaterial({ color: 0x51708f, roughness: 1.0, metalness: 0.0 })
+      );
+      body.position.set(38, -4, -155);
+      body.name = '__distantBody';
+      bgGroup.add(body);
+    })();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Load the cockpit GLB — as authored. No scale, no reposition, no re-centre.
+    // ─────────────────────────────────────────────────────────────────────────
+    let model = null;
+    let objectNames = [];
+    let bbox = null;
+    let loadError = null;
+    const screenMats = [];   // materials on nodes named Screen_* — for the HILITE toggle
+    const allMats = new Set();
+    const baseEmissive = new Map();
+
+    const ready = new Promise((resolve) => {
+      new GLTFLoader().load(
+        GLB_URL,
+        (gltf) => {
+          model = gltf.scene;
+          scene.add(model);                       // ← no .scale, no .position, no centring
+          model.updateMatrixWorld(true);
+
+          model.traverse((o) => {
+            if (o !== model && o.name) objectNames.push(o.name);
+            if (!o.isMesh) return;
+            const mats = Array.isArray(o.material) ? o.material : [o.material];
+            for (const m of mats) {
+              if (!m) continue;
+              allMats.add(m);
+              if (m.emissive && !baseEmissive.has(m)) baseEmissive.set(m, m.emissive.clone());
+              if (/^Screen_/i.test(o.name) && !screenMats.includes(m)) screenMats.push(m);
+            }
+          });
+          objectNames.sort();
+
+          bbox = new THREE.Box3().setFromObject(model);
+          frameOrbitCamera();
+          resolve({ loaded: true, error: null });
+        },
+        undefined,
+        (err) => {
+          // Handle it here so GLTFLoader does not console.error — a missing GLB is a
+          // legible HUD message, not a stack trace. AC-LAB wants a clean console.
+          loadError = (err && (err.message || String(err))) || 'unknown load error';
+          resolve({ loaded: false, error: loadError });
+        }
+      );
+    });
+
+    function frameOrbitCamera() {
+      const centre = bbox.getCenter(new THREE.Vector3());
+      const size   = bbox.getSize(new THREE.Vector3());
+      const dist   = Math.max(size.x, size.y, size.z) * 1.9 || 6;
+      controls.target.copy(centre);
+      // Behind / above / starboard three-quarter: shows the open rear of the frame
+      // shell, the aperture beyond it, and the nose falling away forward.
+      orbitCam.position.copy(centre).add(
+        new THREE.Vector3(0.62, 0.44, 0.95).normalize().multiplyScalar(dist)
+      );
+      controls.update();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // AC-FRAME instrument — offscreen, pure, does not disturb the visible view
+    // ─────────────────────────────────────────────────────────────────────────
+    let occRT = null;
+    let occBuf = null;
+    let lastOcclusion = null;
+    let occNote = null;        // why there is no number, when there is no number
+
+    /**
+     * Render the cockpit ALONE into an offscreen RGBA target and count covered pixels.
+     *
+     * Returns the covered fraction in [0,1], or NULL if the GLB has not resolved yet —
+     * never a bogus 0, which a verifier who forgot to `await ready` would otherwise
+     * read as a confident "0.00% OUT OF BAND".
+     *
+     * The measurement is an INSTRUMENT, so it is deliberately hermetic:
+     *   - it force-neutralises operator toggles that change alpha coverage (wireframe
+     *     draws the model as lines, collapsing coverage to a few percent of the truth);
+     *   - every piece of global renderer/scene state it touches is restored in a
+     *     `finally`, so a throw mid-measurement cannot leave the lab visually broken
+     *     (black background, wrong render target, scissor stuck on) for the session.
+     */
+    function measureOcclusion({ width = 1920, height = 1080, fov = GAME_FOV } = {}) {
+      if (!model) {
+        lastOcclusion = null;
+        occNote = loadError ? 'GLB failed to load — nothing to measure'
+                            : 'GLB not loaded yet — await window._cockpitLab.ready';
+        return null;
+      }
+
+      width = Math.max(1, Math.floor(width));
+      height = Math.max(1, Math.floor(height));
+
+      if (!occRT || occRT.width !== width || occRT.height !== height) {
+        const stale = occRT;
+        // Assign only once both allocations succeed, so a throw here cannot leave
+        // occRT pointing at a disposed target or occBuf at the wrong length.
+        const rt = new THREE.WebGLRenderTarget(width, height, {
+          format: THREE.RGBAFormat,
+          type: THREE.UnsignedByteType,
+          minFilter: THREE.NearestFilter,
+          magFilter: THREE.NearestFilter,
+          depthBuffer: true,
+          stencilBuffer: false,
+        });
+        occBuf = new Uint8Array(width * height * 4);
+        occRT = rt;
+        if (stale) stale.dispose();
+      }
+
+      // Camera at the eye-point, looking straight down -Z (identity rotation).
+      occCam.fov = fov;
+      occCam.aspect = width / height;
+      occCam.position.set(0, 0, 0);
+      occCam.rotation.set(0, 0, 0);
+      occCam.updateProjectionMatrix();
+      occCam.updateMatrixWorld(true);
+
+      // ── Save every piece of state this function mutates, BEFORE mutating any of it.
+      const prevBgVisible = bgGroup.visible;
+      const prevSceneBg   = scene.background;
+      const prevTarget    = renderer.getRenderTarget();
+      const prevColor     = renderer.getClearColor(new THREE.Color());
+      const prevAlpha     = renderer.getClearAlpha();
+      const prevScissor   = renderer.getScissorTest();
+      // Coverage-changing operator toggles, captured per material (not from `state`,
+      // so the restore is exact even if something set a material directly).
+      const prevWire = new Map();
+      for (const m of allMats) prevWire.set(m, m.wireframe);
+
+      try {
+        // Wireframe would draw the model as 1px lines — the instrument would then
+        // report a confident wrong number. Neutralise it for the duration.
+        for (const m of allMats) m.wireframe = false;
+
+        // Cockpit only, cleared to fully transparent → alpha > 0 == covered by geometry.
+        bgGroup.visible = false;
+        scene.background = null;
+        renderer.setScissorTest(false);
+        renderer.setClearColor(0x000000, 0);
+        renderer.setRenderTarget(occRT);
+        renderer.clear(true, true, true);
+        renderer.render(scene, occCam);
+        renderer.readRenderTargetPixels(occRT, 0, 0, width, height, occBuf);
+      } finally {
+        // Restore everything the visible pass depends on — on the throw path too.
+        renderer.setRenderTarget(prevTarget);
+        renderer.setClearColor(prevColor, prevAlpha);
+        renderer.setScissorTest(prevScissor);
+        scene.background = prevSceneBg;
+        bgGroup.visible = prevBgVisible;
+        for (const [m, w] of prevWire) m.wireframe = w;
+      }
+
+      let covered = 0;
+      for (let i = 3; i < occBuf.length; i += 4) if (occBuf[i] > 0) covered++;
+      lastOcclusion = covered / (width * height);
+      occNote = null;
+      return lastOcclusion;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Modes + toggles
+    // ─────────────────────────────────────────────────────────────────────────
+    const el = {
+      hud: document.getElementById('hud'),
+      reticle: document.getElementById('reticle'),
+      bMode: document.getElementById('bMode'),
+      bModeLabel: document.getElementById('bModeLabel'),
+      bModeNow: document.getElementById('bModeNow'),
+      bMeasure: document.getElementById('bMeasure'),
+      bScreens: document.getElementById('bScreens'),
+      bFlat: document.getElementById('bFlat'),
+      bWire: document.getElementById('bWire'),
+      bBg: document.getElementById('bBg'),
+      bReset: document.getElementById('bReset'),
+    };
+
+    function setMode(next) {
+      mode = (next === 'eye') ? 'eye' : 'orbit';
+      controls.enabled = (mode === 'orbit');
+      // The status line states WHERE YOU ARE; the button states WHERE IT TAKES YOU.
+      // Never both on the same element — "MODE: ORBIT" on a button is ambiguous.
+      el.bModeNow.textContent   = mode.toUpperCase();
+      el.bModeLabel.textContent = (mode === 'orbit') ? 'GO TO EYE VIEW' : 'GO TO ORBIT VIEW';
+      el.bMode.classList.toggle('on', mode === 'eye');
+      el.reticle.classList.toggle('on', mode === 'eye');
+      return mode;
+    }
+    function toggleMode() { return setMode(mode === 'orbit' ? 'eye' : 'orbit'); }
+
+    const state = { screens: false, flat: false, wire: false, bg: true };
+
+    function applyScreens() {
+      for (const m of screenMats) {
+        if (!m.emissive) continue;
+        if (state.screens) m.emissive.setHex(0x1f6f3a);
+        else m.emissive.copy(baseEmissive.get(m) || new THREE.Color(0x000000));
+        m.needsUpdate = true;
+      }
+      el.bScreens.classList.toggle('on', state.screens);
+    }
+    function applyFlat() {
+      for (const m of allMats) { m.flatShading = state.flat; m.needsUpdate = true; }
+      el.bFlat.classList.toggle('on', state.flat);
+    }
+    function applyWire() {
+      for (const m of allMats) m.wireframe = state.wire;
+      el.bWire.classList.toggle('on', state.wire);
+    }
+    function applyBg() {
+      bgGroup.visible = state.bg;
+      el.bBg.classList.toggle('on', state.bg);
+    }
+    function recentre() {
+      if (mode === 'eye') { eyeYaw = 0; eyePitch = 0; }
+      else if (bbox) frameOrbitCamera();
+    }
+    function doMeasure() { measureOcclusion(); }
+
+    el.bMode.onclick    = toggleMode;
+    el.bMeasure.onclick = doMeasure;
+    el.bScreens.onclick = () => { state.screens = !state.screens; applyScreens(); };
+    el.bFlat.onclick    = () => { state.flat    = !state.flat;    applyFlat(); };
+    el.bWire.onclick    = () => { state.wire    = !state.wire;    applyWire(); };
+    el.bBg.onclick      = () => { state.bg      = !state.bg;      applyBg(); };
+    el.bReset.onclick   = recentre;
+
+    // Sync the DOM to the initial mode so the status line and the button label can
+    // never disagree with `mode`, even if the markup defaults drift.
+    setMode(mode);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+      switch (e.key.toLowerCase()) {
+        case 'c': toggleMode(); break;
+        case 'm': doMeasure(); break;
+        case 's': el.bScreens.onclick(); break;
+        case 'f': el.bFlat.onclick(); break;
+        case 'w': el.bWire.onclick(); break;
+        case 'b': el.bBg.onclick(); break;
+        case 'r': recentre(); break;
+      }
+    });
+
+    // EYE look-around — rotation only. The camera position is never written here.
+    let dragging = false, lastX = 0, lastY = 0;
+    const LOOK_SPEED = 0.0026;
+    const PITCH_LIMIT = THREE.MathUtils.degToRad(85);
+    canvas.addEventListener('pointerdown', (e) => {
+      if (mode !== 'eye') return;
+      dragging = true; lastX = e.clientX; lastY = e.clientY;
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!dragging || mode !== 'eye') return;
+      eyeYaw   -= (e.clientX - lastX) * LOOK_SPEED;
+      eyePitch -= (e.clientY - lastY) * LOOK_SPEED;
+      eyePitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, eyePitch));
+      lastX = e.clientX; lastY = e.clientY;
+    });
+    const endDrag = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    };
+    canvas.addEventListener('pointerup', endDrag);
+    canvas.addEventListener('pointercancel', endDrag);
+
+    window.addEventListener('resize', () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      orbitCam.aspect = window.innerWidth / window.innerHeight;
+      orbitCam.updateProjectionMatrix();
+      // eyeCam stays locked at 16:9 — it is letterboxed, not stretched.
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HUD
+    // ─────────────────────────────────────────────────────────────────────────
+    // `+ 0` folds -0 to 0: without it, `-0 >= 0` is true in JS, so a negative zero got the
+    // sign-column space AND kept its minus, printing " -0.000" and knocking the column out.
+    const f3 = (n) => { const v = n + 0; return (v >= 0 ? ' ' : '') + v.toFixed(3); };
+    const vec3 = (v) => `[${f3(v.x)}, ${f3(v.y)}, ${f3(v.z)}]`;
+
+    function updateHud() {
+      const L = [];
+      L.push(`<span class="k">COCKPIT LAB</span> <span class="dim">— increment 1, geometry only</span>`);
+
+      if (loadError) {
+        L.push(`<span class="err">GLB LOAD FAILED</span> <span class="dim">${GLB_URL}</span>`);
+        L.push(`<span class="err">${loadError}</span>`);
+        L.push(`<span class="dim">Run scripts/cockpit-gen.py in Blender to author the asset.</span>`);
+      } else if (!model) {
+        L.push(`<span class="dim">loading ${GLB_URL} …</span>`);
+      } else {
+        const size = bbox.getSize(new THREE.Vector3());
+        L.push(`<span class="k">nodes  </span> <span class="v">${objectNames.join(', ')}</span>`);
+        L.push(`<span class="k">bbox m </span> min ${vec3(bbox.min)}`);
+        L.push(`<span class="k">       </span> max ${vec3(bbox.max)}`);
+        L.push(`<span class="k">size m </span> ${vec3(size)}`);
+      }
+
+      const cam = (mode === 'eye') ? eyeCam : orbitCam;
+      L.push(`<span class="k">mode   </span> <span class="v">${mode.toUpperCase()}</span>` +
+             (mode === 'eye' ? ` <span class="dim">— eye at origin, 16:9 letterbox</span>` : ''));
+      L.push(`<span class="k">camera </span> pos ${vec3(cam.position)}  fov <span class="v">${cam.fov.toFixed(0)}</span>  aspect ${cam.aspect.toFixed(3)}`);
+
+      if (lastOcclusion === null) {
+        // Never render a null as "0.00% [OUT OF BAND]" — say WHY there is no number.
+        L.push(occNote
+          ? `<span class="k">occlus </span> <span class="fail">n/a</span> <span class="dim">— ${occNote}</span>`
+          : `<span class="k">occlus </span> <span class="dim">— press M to measure (1920x1080, fov 70)</span>`);
+      } else {
+        const pct = (lastOcclusion * 100).toFixed(2);
+        const ok = lastOcclusion >= OCC_TARGET[0] && lastOcclusion <= OCC_TARGET[1];
+        L.push(`<span class="k">occlus </span> <span class="${ok ? 'pass' : 'fail'}">${pct}%</span>` +
+               ` <span class="dim">target ${(OCC_TARGET[0] * 100).toFixed(0)}–${(OCC_TARGET[1] * 100).toFixed(0)}%  [AC-FRAME ${ok ? 'PASS' : 'OUT OF BAND'}]</span>`);
+      }
+      el.hud.innerHTML = L.join('\n');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Render loop
+    // ─────────────────────────────────────────────────────────────────────────
+    function renderFrame() {
+      const W = window.innerWidth, H = window.innerHeight;
+      if (mode === 'orbit') {
+        controls.update();
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, W, H);
+        renderer.render(scene, orbitCam);
+      } else {
+        // Pin the eye at the origin every frame — belt and braces, so no code path
+        // can ever drift it. Rotation is the only thing look-around writes.
+        eyeCam.position.set(0, 0, 0);
+        eyeCam.rotation.set(eyePitch, eyeYaw, 0, 'YXZ');
+        eyeCam.fov = GAME_FOV;
+        eyeCam.aspect = GAME_ASPECT;
+        eyeCam.updateProjectionMatrix();
+
+        // Letterbox to 16:9 so what Max judges == what measureOcclusion() counts.
+        let w = W, h = Math.round(W / GAME_ASPECT);
+        if (h > H) { h = H; w = Math.round(H * GAME_ASPECT); }
+        const x = Math.round((W - w) / 2), y = Math.round((H - h) / 2);
+
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, W, H);
+        renderer.setScissor(0, 0, W, H);
+        renderer.clear(true, true, true);            // black bars
+
+        renderer.setViewport(x, y, w, h);
+        renderer.setScissor(x, y, w, h);
+        renderer.setScissorTest(true);
+        renderer.render(scene, eyeCam);
+        renderer.setScissorTest(false);
+      }
+    }
+
+    let measuredOnce = false;
+    let hudAt = 0;
+    function tick(t) {
+      requestAnimationFrame(tick);
+      renderFrame();
+      // First measurement after the model is in and one frame has drawn (shaders compiled).
+      if (!measuredOnce && model) { measuredOnce = true; measureOcclusion(); }
+      // HUD at ~10 Hz — a full innerHTML rewrite every frame is needless reflow.
+      if (t === undefined || t - hudAt > 100) { hudAt = t || 0; updateHud(); }
+    }
+    tick();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Verification surface (AC-FRAME / AC-LAB, asserted without screenshots)
+    // ─────────────────────────────────────────────────────────────────────────
+    function getInfo() {
+      const cam = (mode === 'eye') ? eyeCam : orbitCam;
+      return {
+        objects: objectNames.slice(),
+        boundingBox: bbox ? {
+          min:  [bbox.min.x, bbox.min.y, bbox.min.z],
+          max:  [bbox.max.x, bbox.max.y, bbox.max.z],
+          size: [bbox.max.x - bbox.min.x, bbox.max.y - bbox.min.y, bbox.max.z - bbox.min.z],
+        } : null,
+        mode,
+        cameraFov: cam.fov,
+        cameraPosition: [cam.position.x, cam.position.y, cam.position.z],
+        glbUrl: GLB_URL,
+        loaded: !!model,
+        loadError,
+        lastOcclusion,          // number in [0,1], or null if never successfully measured
+        occlusionNote: occNote, // why lastOcclusion is null, when it is
+      };
+    }
+
+    // ── window._cockpitLab — the verification surface.
+    //   ready                     Promise, resolves {loaded, error} on success OR failure.
+    //                             NEVER rejects. Await it before measuring.
+    //   measureOcclusion(opts?)   → covered fraction in [0,1], or null if the GLB has
+    //                             not resolved. opts: {width=1920, height=1080, fov=70}.
+    //   getInfo()                 → {objects, boundingBox, mode, cameraFov,
+    //                                cameraPosition, glbUrl, loaded, loadError,
+    //                                lastOcclusion, occlusionNote}
+    //   setMode('orbit'|'eye')    → the mode actually set.
+    //   loaded / error            getters.
+    //   THREE, scene, renderer, controls, model, cameras.{orbit,eye}  escape hatches.
+    window._cockpitLab = {
+      measureOcclusion,
+      getInfo,
+      setMode,
+      ready,
+      get loaded() { return !!model; },
+      get error() { return loadError; },
+      // escape hatches for chrome-devtools poking
+      THREE, scene, renderer, controls,
+      get model() { return model; },
+      cameras: { orbit: orbitCam, eye: eyeCam },
+    };
+  </script>
+</body>
+</html>
