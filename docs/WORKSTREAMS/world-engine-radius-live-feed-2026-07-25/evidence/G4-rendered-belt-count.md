@@ -137,32 +137,59 @@ behaviour to compare against. This is the charter's deliberate lab≠game split
 artifact of a knob whose own source comment calls it "the ONE UAT-tunable knob"
 (`planet-lod-lab-core.js:44`).
 
-### Close-out read-gate — framebuffer pixels, at pinned angular size (2026-07-28)
+### Close-out re-measurement — amplitude-independent, at pinned angular size (2026-07-28)
 
-The Limitations section above says this probe measured the baked attribute through the shader's
-smoothstep, **not framebuffer pixels**. That gap is now closed, at two radii.
+Run live at HEAD in the lab (isolated context, page closed after; Max's own tab untouched),
+Jovian / macroSeed 1 / jets ON, spin frozen, disc held at a constant apparent size by the new
+**"hold apparent size"** toggle (logical distance 3.0 at both radii, verified):
 
-Working-Claude, isolated browser context on :5175 (page closed after; Max's own tab untouched),
-Jovian / macroSeed 1 / jets ON, with the angular-size pin installed
-(`state.distance = 3.0 * sVis` re-applied every frame):
-
-| | R = 4 | R = 16 | Δ |
+| | R = 4 | R = 16 | ratio |
 |---|---|---|---|
-| disc size on screen | 807 × 804 px | 807 × 804 px | **0 px — the pin holds exactly** |
-| dark/light runs, detrended central strip | 11 | 15 | **+36%** |
-| detrended contrast RMS | 23.1 | 40.4 | **+75%** |
+| method A — plateau-aware runs | 7 | 11 | 1.57 |
+| method B — **spectral peak** (cycles across the disc) | 2 | 7 | — |
+| method B — **spectral centroid** (cycles, power-weighted) | **3.03** | **6.01** | **1.983** |
 
-Images: `evidence/G4-pinned/pinned-R4-jovian.png`, `pinned-R16-jovian.png` (disc crops, same scale).
+A 4× radius change against a centroid ratio of 1.983 is **R^0.494** — the Rhines √R exponent,
+independently reproduced by a method that shares nothing with the 7-point fit above except the
+underlying field. Method B is **amplitude-independent** by construction (power-normalised), which
+matters because contrast also rises with radius and would otherwise contaminate a count.
 
-Method: luminance of a ±3%-width vertical strip through the disc centre, detrended against a
-22%-height moving average (removes the limb/lighting gradient), runs counted with the same ≥6/500
-of disc height minimum as the attribute probe.
+**Planted-defect control** (`feedback_measurement-channels-need-planted-defects`): the estimator was
+first run on synthetic profiles of known cycle count at a 5× amplitude spread — it recovered 6 and 12
+cycles exactly at both amplitudes. Without that control the amplitude confound below would have gone
+unnoticed a second time.
 
-**Standing:** corroboration, not a competing measurement — two radii, one strip, with the F31
-clouds/haze/great-spot dressing in frame. It agrees in sign and magnitude-direction with the 7-point
-attribute fit and it is measured on the pixels Max actually looks at. The contrast rise (+75%) says
-part of what reads at the large-R end is *legibility*, not only *count* — the F31 muting flagged in
-Limitations, seen from the other side.
+#### WITHDRAWN — a framebuffer-pixel claim that was wrong (recorded, not deleted)
+
+An earlier version of this section reported "dark/light runs 11 → 15 (+36%)" measured off screenshot
+pixels along a single central strip, and that number reached `contract.json`, `NOW.md` and the
+program memory before it was checked. **It is withdrawn.** Repeat captures of the *same* state gave
+13 → 14, and the 9-strip mean went the other way (14.2 → 12.7). Two independent defects:
+
+- **Amplitude confound.** Run counting is not a frequency measure. A low-contrast noisy profile
+  (R = 4, detrended RMS 19.7) crosses its mean *more* often than a clean high-contrast one
+  (R = 16, RMS 34.8). The metric partly counts noise.
+- **Longitude sensitivity.** The lab auto-spins; each capture sat at a different longitude, worth
+  ±2 runs on a single strip.
+
+The F31-haze hypothesis it was used to support is also dead: re-measured with clouds, haze and limb
+glow **off**, the pixel spectrum is unchanged (centroid 5.85 → 5.23 vs 5.92 → 5.24 with dressing on).
+
+**Still open, stated rather than resolved:** the same amplitude-independent estimator applied to
+screenshot pixels does *not* reproduce the doubling (peak 3 → 4 cycles, centroid 5.9 → 5.2), while
+the in-page band channel does (3.03 → 6.01) — and at R = 4 the two agree exactly (3 cycles ≈ 6 belts).
+So something between the band channel and the composited frame — lighting gradient, the F25 jet
+turbulence riding R^1.0, the 6-level Bayer posterize, or the perspective foreshortening the flat
+sin(lat) binning ignores — is not carrying the full response at the high-R end. **This is not
+adjudicated and no claim is made in either direction.** The honest statement for the re-UAT is that
+the band channel doubles; how much of that survives to the composite is exactly what Max's eye is
+being asked to judge.
+
+**Process note of record:** this was a hand-rolled screenshot metric written *beside* a purpose-built
+non-visual instrument (`src/worldengine/instrument/*`) that this same workstream commissioned. Max's
+correction, verbatim: *"didn't we put controls in place that can mathmatically read what's being
+rendered? You visually verifying stuff is usually inefficient"*. The rule is now in memory as
+`feedback_use-the-built-instrument-not-a-hand-rolled-one`.
 
 ### Recommended disposition (Max's call)
 

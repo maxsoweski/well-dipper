@@ -148,7 +148,7 @@
   <script type="module">
     import * as THREE from 'three';
     import GUI from 'lil-gui';
-    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, reliefEnvelope, animationRateFactor, CRATER_DEPTH, visScaleOf, VIS_SCALE_EXP, minCameraDistance, radiusFromT, tFromRadius, bakeReliefCrossover } from './planet-lod-lab-core.js';
+    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, reliefEnvelope, animationRateFactor, CRATER_DEPTH, visScaleOf, VIS_SCALE_EXP, minCameraDistance, holdApparentDistance, radiusFromT, tFromRadius, bakeReliefCrossover } from './planet-lod-lab-core.js';
     import { RADIUS_RANGES_EARTH } from './src/core/ScaleConstants.js';   // AC5/AC6: single-source archetype radius ranges (game + lab)
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
     import { ASSOCIATIONS, DEFAULT_DRESSING } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature; DEFAULT_DRESSING = ratified boot dressing (defaults rescope 2026-07-15)
@@ -2256,6 +2256,7 @@
       terraceCount: 4.0,
       craterScale: 6.0,    // legacy hand-set cell density (superseded by real-units derive)
       planetRadiusEarth: 1.0,  // real-units scale: planet radius in Earth radii (6371 km = 1 RE)
+      holdApparentSize: false, // VIEWING AID (R1 close-out): pull the camera out with the disc so apparent size is held while radius moves. OFF = pre-existing behaviour exactly.
       craterSizeKm: 530,       // real-units scale: characteristic crater diameter in km
       craterAmp: 0.9,
       // ── AC3 relief HEIGHTS (km) — physically-plausible authored relief depth/height. ──
@@ -4034,6 +4035,16 @@
     fDrivers.add(radiusProxy, 't', 0, 1, 0.001).name('planet radius (log)').listen().onChange(radiusApplyDebounced);
     fDrivers.add({ get re(){ return state.planetRadiusEarth.toFixed(2); } }, 're').name('radius (RE)').listen().disable();
     fDrivers.add({ get km(){ return (state.planetRadiusEarth*6371).toFixed(0)+' km'; } }, 'km').name('radius (km)').listen().disable();
+    // VIEWING AID, sits with the radius slider because that is the only place it matters
+    // (radius-live-feed R1 close-out, 2026-07-28). At a fixed camera the Rhines band law
+    // (R^0.5) and the display scale visScaleOf (R^0.5) cancel exactly, so the disc grows at
+    // the rate the bands multiply and dragging radius shows NO change in band count — the
+    // 2026-07-25 UAT failure, measured and fitted in evidence/G4-rendered-belt-count.md.
+    // Ticking this holds the disc's APPARENT size while radius moves, which is the viewing
+    // condition the re-specified AC-BANDS is judged under. It changes only the camera; the
+    // physics, the draw and every headless/golden path are untouched (frame()-only, and OFF
+    // by default). Not a workaround — the invisibility at a fixed camera IS the finding.
+    fDrivers.add(state, 'holdApparentSize').name('hold apparent size (radius read)').listen();
     // AC5 seeded radius source: a seed field + reroll redraw the archetype-range radius (named
     // bodies stay canonical). rerollRadius() bumps the seed, flags a one-shot redraw, then runs
     // applyDrivers() — which (with the bug fix) is the ONLY place that re-samples the radius.
@@ -5806,7 +5817,16 @@
       // transform so a bigger world reads bigger on screen; the height noise is sampled
       // in OBJECT space (pre-scale), so procgen/goldens/headless never see sVis (the
       // fence holds structurally). Identity at radius 1 ⇒ bit-identical to pre-increment.
+      const _sVisPrev = sVis;
       sVis = visScaleOf(state.planetRadiusEarth);
+      // ── Hold apparent size (radius-live-feed R1 close-out, 2026-07-28) ──────────
+      // OFF by default ⇒ every pre-existing path is untouched. ON: pull the camera out with
+      // the disc so its APPARENT size is held while radius moves, which is the only viewing
+      // condition under which the radius→band-count response is visible at all — Rhines
+      // R^0.5 and visScaleOf R^0.5 cancel exactly at a fixed camera (AC-BANDS, re-specified
+      // 2026-07-28). Wheel zoom stays fully live: the invariant is the LOGICAL distance
+      // distance/sVis, so a wheel change sets a new one and this preserves it from there.
+      if (state.holdApparentSize) state.distance = holdApparentDistance(state.distance, _sVisPrev, sVis);
       planet.scale.setScalar(sVis);                  // the disc genuinely grows (camera dist stays absolute)
       hazeShell.scale.setScalar(sVis);               // scene-space halo shell — not a planet child, scale by hand
       ring.scale.setScalar(sVis);                    // scene-space ring impostor — track the disc

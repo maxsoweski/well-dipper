@@ -1019,19 +1019,31 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 > consumes `aBand`/`HEIGHT_GLSL`, and the game bands from hard-coded literals (`src/objects/Planet.js:256`).
 > ⭐ **Max accepted the disposition ("that seems fine to me"): do NOT retune `VIS_SCALE_EXP`; judge band count at PINNED
 > ANGULAR SIZE.** AC-BANDS re-specified accordingly (`contract.json → amendments[]`).
-> **Close-out read-gate (working-Claude, isolated context, page closed after):** pin installed, Jovian seed 1 jets ON —
-> R=4 vs R=16 at an identical 807×804 px disc show **11→15 belt runs (+36%)** and contrast RMS **23.1→40.4 (+75%)**.
-> That closes G4's own "not measured on framebuffer pixels" limitation. Images `evidence/G4-pinned/`.
-> ⭐ **RE-UAT RECIPE:** lab :5175 → F12 console → paste
-> `const L=window._lab,s=L.state; if(window.__pin)cancelAnimationFrame(window.__pin); (function p(){s.distance=3.0*L.sVis; window.__pin=requestAnimationFrame(p);})();`
-> → **Gas giant (Jovian) or (Saturnian) ONLY** → **JETS ON** → hold seed → drag "planet radius (log)", pausing for the
-> **220 ms** debounce. Wheel-zoom is disabled while pinned (change the `3.0`; stop with `cancelAnimationFrame(window.__pin)`).
-> **Without the pin the effect is invisible by construction — that is the finding, not a workaround.**
-> ⚠ Carve-outs to expect: form size is held constant on screen *by design*; and F31 clouds/haze mute the small-R end, so
-> part of the change reads as "bands got more legible", not purely "more bands".
-> 🔴 **PROCESS LESSON (promoted):** a visible-read AC must close on the RENDERED quantity, under a stated viewing
-> condition — `bandCount` (diagnostic) ≠ `rhinesWavenumber` (law) ≠ RENDERED belt count. New rule
-> `memory/feedback_measure-the-quantity-the-user-sees.md`; generalises `feedback_perceptual-read-gate-before-uat`.
+> **Close-out re-measurement (in-page at HEAD, isolated context, page closed after):** disc held at constant apparent
+> size, Jovian seed 1 jets ON, spin frozen — the rendered band channel goes **3.03 → 6.01 cycles** across the disc for
+> R=4→16 by an **amplitude-independent spectral estimator** (planted-defect control passed first). Ratio 1.983 over a 4×
+> radius change = **R^0.494** — the Rhines exponent, reproduced by a method sharing nothing with the 7-point fit.
+> ⭐ **SHIPPED THE UAT AFFORDANCE, not a console paste** (`feedback_uat-keybind-design`): new **"hold apparent size
+> (radius read)"** checkbox in the Drivers folder under the radius readouts. OFF by default, `frame()`-only, pure camera —
+> it preserves the LOGICAL distance `distance/sVis`, so **wheel zoom stays fully live**. Pure helper
+> `holdApparentDistance` in `planet-lod-lab-core.js`; `tests/hold-apparent-size.test.js` (incl. a planted no-op control).
+> ⭐ **RE-UAT RECIPE:** lab :5175 → **Drivers → tick "hold apparent size (radius read)"** → **Gas giant (Jovian) or
+> (Saturnian) ONLY** → **JETS ON** → hold seed → drag "planet radius (log)", pausing for the **220 ms** debounce.
+> **Without the toggle the effect is invisible by construction — that is the finding, not a workaround.**
+> ⚠ Carve-outs: form size is held constant on screen *by design*; contrast also rises, so part of the change may read as
+> "bands got more legible" rather than purely "more bands".
+> ❌ **WITHDRAWN (was committed in `0b9f133`, corrected same session):** a framebuffer claim of "11→15 runs (+36%)". It
+> was a hand-rolled single-strip run count — **amplitude-confounded** (run counting is not a frequency measure) and
+> longitude-sensitive (the lab auto-spins). Repeats of the same state gave 13→14; the 9-strip mean went the *other* way.
+> The F31-haze hypothesis it supported is dead too (dressing OFF changes nothing: 5.85→5.23 vs 5.92→5.24).
+> ⚠ **OPEN, stated not resolved:** that same estimator on screenshot *pixels* does not reproduce the doubling at the
+> high-R end (3→4 cycles) while the in-page band channel does — at R=4 they agree exactly. Cause unadjudicated (lighting /
+> F25 jets ∝R¹ / Bayer posterize / foreshortening). No claim either way; it is named in AC-UAT so Max's eye judges it.
+> 🔴 **PROCESS LESSONS (both promoted):** (1) a visible-read AC must close on the RENDERED quantity under a stated
+> viewing condition — `bandCount` (diagnostic) ≠ `rhinesWavenumber` (law) ≠ RENDERED belt count →
+> `memory/feedback_measure-the-quantity-the-user-sees.md`. (2) **Use the built instrument, don't hand-roll one beside it**
+> (Max: *"didn't we put controls in place that can mathmatically read what's being rendered? You visually verifying stuff
+> is usually inefficient"*) → `memory/feedback_use-the-built-instrument-not-a-hand-rolled-one.md`.
 > **What stands (keep):** frozen-feed fix + fence; the CLASSIFIER-reads-canonical / PHYSICS-INPUT-reads-drawn rule + 2
 > allowlisted sites; 85 tests w/ planted-defect controls; the ice-giant aurora regression caught+prevented; 4 durable
 > findings (uBandCount NOT retired; river population radius-blind; rivers = on-screen-constancy frame; crater boot R-stable).

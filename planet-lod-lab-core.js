@@ -56,6 +56,29 @@ export function minCameraDistance(sVis) {
   return sVis * CAMERA_CLEARANCE;
 }
 
+// ── Hold-apparent-size compensation (radius-live-feed R1 close-out, 2026-07-28) ─
+// WHY THIS EXISTS: the Rhines band count goes as R^0.5 and visScaleOf goes as R^0.5, so
+// dragging the radius slider at a FIXED camera grows the disc at exactly the rate the bands
+// multiply — on-screen band DENSITY is invariant (measured +0.031 ± 0.029, i.e. zero) and the
+// radius→banding response is invisible BY CONSTRUCTION. Evidence:
+// docs/WORKSTREAMS/world-engine-radius-live-feed-2026-07-25/evidence/G4-rendered-belt-count.md.
+// The fix for the READ (not for the physics — Max ruled VIS_SCALE_EXP stays 0.5) is to hold the
+// disc at a constant apparent size while radius moves, which is the same discipline
+// renderDeltaSweep applies to its captures (SWEEP_DISTANCE * sVis, planet-lod-lab.html).
+// MECHANISM: the invariant held is the LOGICAL distance distance/sVis — the camera's distance in
+// scaled-planet-radii, the same quantity the LOD already keys on. Scaling absolute distance by
+// the sVis ratio keeps it fixed, so the wheel stays fully live (it sets a new logical distance,
+// which is then preserved) and only radius-driven scale changes are compensated.
+// Identity when sVis does not change, so a still frame is bit-unchanged whether the toggle is on
+// or off; returns distance untouched on any non-finite / non-positive input rather than emitting
+// a NaN camera position.
+export function holdApparentDistance(distance, sVisPrev, sVisNext) {
+  if (!Number.isFinite(distance) || !Number.isFinite(sVisPrev) || !Number.isFinite(sVisNext)) return distance;
+  if (sVisPrev <= 0 || sVisNext <= 0) return distance;
+  if (sVisNext === sVisPrev) return distance;            // exact identity — no float drift on still frames
+  return distance * (sVisNext / sVisPrev);
+}
+
 // ── Radius slider LOG-position map (radius-display-scale-2026-07-24, Slice A) ──
 // lil-gui has no native log slider, so the lab drives the radius through a [0,1]
 // proxy track `t` that exp-maps onto planetRadiusEarth. This is a pure UI/ERGONOMICS
