@@ -1007,22 +1007,37 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
-> **▶▶ RADIUS LIVE FEED (R1) — 🔴 UAT FAILED 2026-07-25, INCOMPLETE. Pushed + in sync `f6b8dcf`.**
-> ⭐ **HANDOFF (read FIRST): `~/briefings/handoff-lane-A-radius-r1-uat-fail-2026-07-27.md`** — the one job is to VERIFY
-> the rendered-belt suspect before rebuilding. ⚠ Max is conserving tokens: no broad workflows.
-> Max verbatim: **"it increases the roughness of bands edges but does not increase the number of bands."** All 8 objective
-> ACs measured green and the visible read still is not there. ⭐ **PRIME SUSPECT (UNVERIFIED — no diagnostic run):** the
-> KNOWN DEFERRED belt-visibility issue in `world-engine-e5-bands-jets-2026-06-30` — the smoothstep **0.34/0.66 dead-zone**
-> (~5-6 visible belts vs ~14 zero-crossing readout on Jovian; "the physics/field is correct, only the display threshold is
-> a knob"). Predicts Max's exact report: field gains bands (aBand rebaked + needsUpdate verified), display throttles the
-> visible count; the roughness he DID see rides `uBandCount` via jetShearGate/festoon (measured 4→16).
-> 🔴 **PROCESS LESSON:** AC-BANDS was closed on `state.e5BandCount`, a zero-crossing DIAGNOSTIC the e5-bands contract
-> already says does NOT match visible belts. **Three quantities conflated: bandCount (diagnostic) ≠ rhinesWavenumber (law)
-> ≠ RENDERED belt count (post-smoothstep).** A visible-read AC must close on the RENDERED one — re-spec AC-BANDS that way
-> BEFORE rebuilding. **Tuesday step 1 = verify the suspect by measuring rendered belts across radius; do not build first.**
+> **▶▶ RADIUS LIVE FEED (R1) — ✅ CLOSED OUT 2026-07-28. ★ VERIFIED_PENDING_MAX on a RE-SPECIFIED AC-BANDS.
+> SOLE OPEN GATE = Max's RE-UAT, and it needs the console pin (below).**
+> No code changed since `6d120c4` — what changed is that the AC had been closed on the **wrong quantity**.
+> **The dead-zone suspect is KILLED** (`evidence/G4-rendered-belt-count.md`): the RENDERED belt count *does* rise with
+> radius, 4→12 on Jovian across R=2–16, fitted **R^0.532 ± 0.029** (n=7, dof=5, t95=2.571, r²=0.986) — PASS vs the Rhines
+> 0.5 and separable from null. The real mechanism is an **exponent collision**: Rhines ∝ R^0.5 *and* the lab display scale
+> `visScaleOf` ∝ R^0.5 (`VIS_SCALE_EXP=0.5`), so at a fixed camera on-screen band **density is invariant** (+0.031 ± 0.029
+> ≈ 0) while the roughness Max *did* see rides `uBandCount` ∝ R^1.0 (+0.361 ± 0.040). Those two fits are the two halves of
+> his sentence. **Lab-only — the game has no stake:** zero `visScaleOf`/`VIS_SCALE_EXP` in `src/`, nothing in `src/`
+> consumes `aBand`/`HEIGHT_GLSL`, and the game bands from hard-coded literals (`src/objects/Planet.js:256`).
+> ⭐ **Max accepted the disposition ("that seems fine to me"): do NOT retune `VIS_SCALE_EXP`; judge band count at PINNED
+> ANGULAR SIZE.** AC-BANDS re-specified accordingly (`contract.json → amendments[]`).
+> **Close-out read-gate (working-Claude, isolated context, page closed after):** pin installed, Jovian seed 1 jets ON —
+> R=4 vs R=16 at an identical 807×804 px disc show **11→15 belt runs (+36%)** and contrast RMS **23.1→40.4 (+75%)**.
+> That closes G4's own "not measured on framebuffer pixels" limitation. Images `evidence/G4-pinned/`.
+> ⭐ **RE-UAT RECIPE:** lab :5175 → F12 console → paste
+> `const L=window._lab,s=L.state; if(window.__pin)cancelAnimationFrame(window.__pin); (function p(){s.distance=3.0*L.sVis; window.__pin=requestAnimationFrame(p);})();`
+> → **Gas giant (Jovian) or (Saturnian) ONLY** → **JETS ON** → hold seed → drag "planet radius (log)", pausing for the
+> **220 ms** debounce. Wheel-zoom is disabled while pinned (change the `3.0`; stop with `cancelAnimationFrame(window.__pin)`).
+> **Without the pin the effect is invisible by construction — that is the finding, not a workaround.**
+> ⚠ Carve-outs to expect: form size is held constant on screen *by design*; and F31 clouds/haze mute the small-R end, so
+> part of the change reads as "bands got more legible", not purely "more bands".
+> 🔴 **PROCESS LESSON (promoted):** a visible-read AC must close on the RENDERED quantity, under a stated viewing
+> condition — `bandCount` (diagnostic) ≠ `rhinesWavenumber` (law) ≠ RENDERED belt count. New rule
+> `memory/feedback_measure-the-quantity-the-user-sees.md`; generalises `feedback_perceptual-read-gate-before-uat`.
 > **What stands (keep):** frozen-feed fix + fence; the CLASSIFIER-reads-canonical / PHYSICS-INPUT-reads-drawn rule + 2
 > allowlisted sites; 85 tests w/ planted-defect controls; the ice-giant aurora regression caught+prevented; 4 durable
 > findings (uBandCount NOT retired; river population radius-blind; rivers = on-screen-constancy frame; crater boot R-stable).
+> **▶ QUEUE (Max's order, unchanged):** (1) **triage the 38 capped-unverified review findings BEFORE features** —
+> `docs/WORKSTREAMS/nonvisual-analysis-channel-2026-07-24/evidence/review-2026-07-25-adversarial-findings.json`;
+> (2) **R2 — the missing couplings** (scope artifact = `RADIUS-CENSUS.md`); (3) **vertical km calibration**.
 >
 > *(build detail, still accurate)* **RADIUS LIVE FEED — objective ACs green `6d120c4`.**
 > Scoped `710f8a2` off the radius census (Max's ruling: SPLIT R1 feed-fix / R2 couplings; UAT bar =

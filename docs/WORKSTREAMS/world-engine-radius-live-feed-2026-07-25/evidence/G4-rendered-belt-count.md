@@ -62,6 +62,26 @@ round(12·R/rotationHours)))` (`planet-lod-lab.html:3314`) ∝ **R^1.0** (clampe
 `jetU` / `jetShearGate` / the festoon window (`planet-lod-height.glsl.js:1518/1530/1570`). Growing
 ∝R against a disc growing ∝√R means visibly finer edge turbulence — the one change that reads.
 
+## Fitted exponents (added at close-out, 2026-07-28)
+
+The table above, run through the instrument's own `fitPowerLaw` / `lawVerdict`
+(`src/worldengine/instrument/stats.js`, uniform weighting, n=7, **dof=5 ⇒ t95 = 2.571** — not z=2,
+per the 2026-07-25 review correction):
+
+| Quantity | Fitted exponent | r² | Verdict |
+|---|---|---|---|
+| **RENDERED belt count vs R** | **+0.532 ± 0.029** | 0.986 | **PASS** vs the Rhines claim 0.5 — consistent with √R *and* distinguishable from the null 0 (resolving power 0.073) |
+| bands per screen height vs R | **+0.031 ± 0.029** | 0.20 | consistent with **ZERO** — the invariance, quantified. |0.031| < t95·SE = 0.073 |
+| roughness per screen height vs R | **+0.361 ± 0.040** | 0.943 | significantly **non-zero** (0.361 ≫ 0.102) — the change Max *did* see |
+
+That is Max's UAT sentence in three numbers: the belt count obeys the physical law (0.532 ≈ 0.5),
+the on-screen belt *density* he was looking at does not move (0.031 ≈ 0), and the edge roughness
+does (0.361). Fit script: `scratchpad/g4fit.mjs` pattern — inputs are the seven rows above verbatim.
+
+Caveat carried: the belt counts are the rendered post-smoothstep quantity but derived from the baked
+attribute, not from framebuffer pixels (see Limitations). The exponent therefore certifies the
+*field-through-shader* count, and the size-normalized screenshots corroborate it qualitatively.
+
 ## Corroboration in pixels
 
 Screenshots at **fixed camera** (Max's UAT condition), R=4 vs R=16: disc grows, stripe texture
@@ -116,6 +136,33 @@ behaviour to compare against. This is the charter's deliberate lab≠game split
 **Consequence:** the R1 UAT failure has zero shipped-game impact today. It is a lab-viewing
 artifact of a knob whose own source comment calls it "the ONE UAT-tunable knob"
 (`planet-lod-lab-core.js:44`).
+
+### Close-out read-gate — framebuffer pixels, at pinned angular size (2026-07-28)
+
+The Limitations section above says this probe measured the baked attribute through the shader's
+smoothstep, **not framebuffer pixels**. That gap is now closed, at two radii.
+
+Working-Claude, isolated browser context on :5175 (page closed after; Max's own tab untouched),
+Jovian / macroSeed 1 / jets ON, with the angular-size pin installed
+(`state.distance = 3.0 * sVis` re-applied every frame):
+
+| | R = 4 | R = 16 | Δ |
+|---|---|---|---|
+| disc size on screen | 807 × 804 px | 807 × 804 px | **0 px — the pin holds exactly** |
+| dark/light runs, detrended central strip | 11 | 15 | **+36%** |
+| detrended contrast RMS | 23.1 | 40.4 | **+75%** |
+
+Images: `evidence/G4-pinned/pinned-R4-jovian.png`, `pinned-R16-jovian.png` (disc crops, same scale).
+
+Method: luminance of a ±3%-width vertical strip through the disc centre, detrended against a
+22%-height moving average (removes the limb/lighting gradient), runs counted with the same ≥6/500
+of disc height minimum as the attribute probe.
+
+**Standing:** corroboration, not a competing measurement — two radii, one strip, with the F31
+clouds/haze/great-spot dressing in frame. It agrees in sign and magnitude-direction with the 7-point
+attribute fit and it is measured on the pixels Max actually looks at. The contrast rise (+75%) says
+part of what reads at the large-R end is *legibility*, not only *count* — the F31 muting flagged in
+Limitations, seen from the other side.
 
 ### Recommended disposition (Max's call)
 
