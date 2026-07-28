@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cockpit Section Lab — Well Dipper</title>
+<style>
+  :root{
+    --ink:#EDE8DE; --dim:#8b8880; --faint:#4a4844; --bg:#000;
+    --hull:#23262c; --body:#6fa9bd; --screen:#d8b25a; --warn:#e0705a; --ok:#7fc08a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:12px}
+  header{padding:9px 14px;border-bottom:1px solid var(--faint);display:flex;
+    align-items:baseline;gap:16px;flex-wrap:wrap}
+  h1{font-size:13px;margin:0;letter-spacing:.14em;text-transform:uppercase;font-weight:600}
+  .sub{color:var(--dim);font-size:11px}
+  .presets{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+  button{background:#111;color:var(--ink);border:1px solid var(--faint);
+    padding:5px 10px;font:inherit;font-size:11px;cursor:pointer;letter-spacing:.04em}
+  button:hover{border-color:var(--ink)}
+  button.on{background:var(--ink);color:#000;border-color:var(--ink)}
+  main{display:grid;grid-template-columns:262px 1fr;height:calc(100vh - 44px)}
+  #rail{border-right:1px solid var(--faint);overflow-y:auto;padding:10px 12px 40px}
+  #stage{overflow-y:auto;padding:10px 14px 40px}
+  .grp{margin-bottom:13px}
+  .grp h2{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);
+    margin:0 0 6px;font-weight:600;border-bottom:1px solid #1c1c1c;padding-bottom:4px}
+  .row{display:grid;grid-template-columns:1fr 50px;gap:6px;align-items:center}
+  .row label{color:var(--dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row output{text-align:right;font-variant-numeric:tabular-nums;font-size:11px}
+  input[type=range]{width:100%;height:13px;accent-color:var(--ink);background:transparent;
+    margin:0 0 5px;display:block}
+  .panel{border:1px solid var(--faint);background:#050505;position:relative;margin-bottom:12px}
+  .panel .cap{position:absolute;top:6px;left:9px;font-size:10px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--dim);pointer-events:none;z-index:2}
+  .panel .note{position:absolute;bottom:6px;left:9px;right:9px;font-size:10px;
+    color:var(--faint);pointer-events:none;z-index:2;line-height:1.4}
+  .panels{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  canvas{display:block;width:100%}
+  #readouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(146px,1fr));
+    border:1px solid var(--faint)}
+  .ro{padding:7px 10px;border-right:1px solid #1c1c1c}
+  .ro:last-child{border-right:none}
+  .ro .k{color:var(--dim);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+  .ro .v{font-size:15px;font-variant-numeric:tabular-nums;margin-top:2px}
+  .ro .v small{font-size:10px;color:var(--dim);letter-spacing:0}
+  .ro.bad .v{color:var(--warn)}
+  .legend{color:var(--dim);font-size:11px;line-height:1.6;margin-bottom:9px}
+  .legend b{color:var(--ink);font-weight:600}
+  .sw{display:inline-block;width:9px;height:9px;vertical-align:-1px;margin-right:3px;border:1px solid #555}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Cockpit Section Lab</h1>
+  <span class="sub">eye at origin &middot; 1 unit = 1 m &middot; game FOV 70&deg; vertical, 16:9</span>
+  <div class="presets">
+    <button data-preset="current">Current build 567bcf9</button>
+    <button data-preset="fighter">Fighter (tight)</button>
+    <button data-preset="game" class="on">Game cockpit</button>
+    <button data-preset="tourer">Wide tourer</button>
+  </div>
+</header>
+
+<main>
+  <div id="rail"></div>
+  <div id="stage">
+    <div class="legend">
+      <span class="sw" style="background:#23262c"></span><b>solid hull</b> &mdash; the tub &nbsp;
+      <span class="sw" style="background:rgba(96,168,196,.25)"></span><b>glass</b> &mdash; canopy, does not occlude &nbsp;
+      <span class="sw" style="background:#EDE8DE"></span><b>canopy rail</b> &nbsp;
+      <span class="sw" style="background:#6fa9bd"></span><b>pilot</b> &mdash; seated, eye pinned at the origin &nbsp;
+      <span class="sw" style="background:#d8b25a"></span><b>screens</b>
+    </div>
+
+    <div class="panel">
+      <div class="cap">C &middot; the pilot's view &nbsp;<span style="color:var(--faint)">70&deg; / 16:9 &mdash; what the tub actually costs you</span></div>
+      <canvas id="cvView" width="1600" height="900"></canvas>
+      <div class="note" id="noteView"></div>
+    </div>
+
+    <div id="readouts"></div>
+
+    <div class="panels" style="margin-top:12px">
+      <div class="panel">
+        <div class="cap">A &middot; front section &nbsp;<span style="color:var(--faint)">looking forward, shoulder station</span></div>
+        <canvas id="cvFront" width="1000" height="700"></canvas>
+        <div class="note" id="noteFront"></div>
+      </div>
+      <div class="panel">
+        <div class="cap">B &middot; side elevation &nbsp;<span style="color:var(--faint)">x = 0, pilot in profile</span></div>
+        <canvas id="cvSide" width="1000" height="700"></canvas>
+        <div class="note" id="noteSide"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+"use strict";
+
+/* ===========================================================================
+   ANTHROPOMETRY — the fixed datum, NOT tunable.
+   The eye is pinned at the origin (the GLB's metric convention), so a seated
+   pilot fixes every other height in the cabin. These are what the words
+   "waist", "chest" and "shoulder" in the brief actually mean, in metres
+   relative to the eye. 50th-percentile seated adult, lightly reclined seat.
+   =========================================================================== */
+const BODY = {
+  seatZ:      -0.80,  waistZ:  -0.52,  chestZ:    -0.35,  shoulderZ: -0.20,
+  kneeZ:      -0.58,  heelZ:   -1.18,
+  shoulderHalf:0.24,  elbowHalf:0.32,  hipHalf:    0.19,  headR:      0.105,
+  kneeY:       0.46,  toeY:     0.74
+};
+
+const P = {
+  hwBow:0.62, hwMid:0.85, hwAft:0.70,
+  railZ:-0.30, floorZ:-1.20, roofZ:0.70, bowY:1.15, aftY:-0.65,
+  archN:2.6, railCap:0.10, bowSec:0.13, pillarSec:0.085,
+  scW:0.38, scH:0.25,
+  upTanX:0.86, upTanZ:0.18, upDist:1.35,
+  loTanX:0.68, loTanZ:-0.34, loDist:1.15
+};
+
+const PRESETS = {
+  current: { hwBow:2.14, hwMid:2.30, hwAft:1.90, railZ:-1.08, floorZ:-1.08, roofZ:1.32,
+    bowY:1.80, aftY:-1.10, archN:2.2, railCap:0.11, bowSec:0.15, pillarSec:0.075,
+    scW:0.45, scH:0.30, upTanX:0.74, upTanZ:0.35, upDist:1.60,
+    loTanX:0.74, loTanZ:-0.37, loDist:1.60 },
+  fighter: { hwBow:0.46, hwMid:0.52, hwAft:0.48, railZ:-0.22, floorZ:-1.18, roofZ:0.58,
+    bowY:0.86, aftY:-0.52, archN:2.1, railCap:0.07, bowSec:0.09, pillarSec:0.055,
+    scW:0.24, scH:0.16, upTanX:0.55, upTanZ:0.10, upDist:0.82,
+    loTanX:0.42, loTanZ:-0.38, loDist:0.74 },
+  game: { hwBow:0.62, hwMid:0.85, hwAft:0.70, railZ:-0.30, floorZ:-1.20, roofZ:0.70,
+    bowY:1.15, aftY:-0.65, archN:2.6, railCap:0.10, bowSec:0.13, pillarSec:0.085,
+    scW:0.38, scH:0.25, upTanX:0.86, upTanZ:0.18, upDist:1.35,
+    loTanX:0.68, loTanZ:-0.34, loDist:1.15 },
+  tourer: { hwBow:0.95, hwMid:1.25, hwAft:1.05, railZ:-0.34, floorZ:-1.22, roofZ:0.86,
+    bowY:1.45, aftY:-0.85, archN:3.0, railCap:0.12, bowSec:0.15, pillarSec:0.095,
+    scW:0.50, scH:0.33, upTanX:0.90, upTanZ:0.20, upDist:1.60,
+    loTanX:0.74, loTanZ:-0.32, loDist:1.35 }
+};
+
+const SLIDERS = [
+  ["THE TUB", [
+    ["hwMid","half-width @ shoulders",0.35,2.40,0.01],
+    ["hwBow","half-width @ bow",0.30,2.30,0.01],
+    ["hwAft","half-width @ bulkhead",0.30,2.10,0.01],
+    ["railZ","canopy rail, below eye",-1.10,-0.05,0.01],
+    ["floorZ","floor, below eye",-1.45,-0.95,0.01],
+    ["bowY","coaming, ahead of eye",0.55,2.20,0.01],
+    ["aftY","bulkhead, behind eye",-1.40,-0.35,0.01]
+  ]],
+  ["THE CANOPY", [
+    ["roofZ","roof, above eye",0.30,1.60,0.01],
+    ["archN","cross-section squareness",1.6,4.5,0.05],
+    ["railCap","rail member height",0.03,0.20,0.005],
+    ["bowSec","bow arch width",0.04,0.25,0.005],
+    ["pillarSec","pillar width",0.03,0.18,0.005]
+  ]],
+  ["SCREENS — upper pair", [
+    ["scW","display face width",0.14,0.70,0.01],
+    ["scH","display face height",0.09,0.48,0.01],
+    ["upTanX","outboard (tan x)",0.20,1.25,0.01],
+    ["upTanZ","height (tan z)",-0.30,0.70,0.01],
+    ["upDist","distance from eye",0.55,2.20,0.01]
+  ]],
+  ["SCREENS — lower pair", [
+    ["loTanX","outboard (tan x)",0.15,1.25,0.01],
+    ["loTanZ","height (tan z)",-0.70,0.20,0.01],
+    ["loDist","distance from eye",0.45,2.20,0.01]
+  ]]
+];
+
+/* ---- Geometry ------------------------------------------------------------ */
+function halfAt(y){
+  if (y >= P.bowY) return P.hwBow;
+  if (y <= P.aftY) return P.hwAft;
+  if (y >= 0) return P.hwMid + (P.hwBow - P.hwMid) * (y / P.bowY);
+  return P.hwMid + (P.hwAft - P.hwMid) * (y / P.aftY);
+}
+function canopyHalf(y, z){
+  const span = P.roofZ - P.railZ;
+  if (span <= 1e-6) return 0;
+  const u = (z - P.railZ) / span;
+  if (u <= 0) return halfAt(y);
+  if (u >= 1) return 0;
+  return halfAt(y) * Math.pow(1 - Math.pow(u, P.archN), 1 / P.archN);
+}
+const railTop = () => P.railZ + P.railCap;
+
+/* THE OCCLUSION TEST — exact, O(1) per ray.
+   A forward ray d=(tx,1,tz) leaves the eye, which sits ABOVE the rail.
+   tz>=0  : it never drops below the rail; the tub cannot block it.
+   tz<0   : it crosses the rail plane at t = railTop/tz. If that happens before
+            the coaming AND it is still inside the tub's footprint there, then
+            everything beyond is solid hull -> blocked. Otherwise it has already
+            passed outboard of, or forward of, the tub -> open sky. */
+function tubBlocks(tx, tz){
+  if (tz >= -1e-9) return false;
+  const t = railTop() / tz;
+  if (t <= 0 || t >= P.bowY) return false;
+  return Math.abs(t * tx) < halfAt(t);
+}
+
+const FOV = 70, ASPECT = 16/9;
+const TAN_Z = Math.tan(FOV * Math.PI / 360);
+const TAN_X = TAN_Z * ASPECT;
+const DEG = 180 / Math.PI;
+
+function screenQuad(tanx, tanz, dist, w, h){
+  const L = Math.hypot(tanx, 1, tanz);
+  const c = [dist*tanx/L, dist/L, dist*tanz/L];
+  const n = [-c[0]/dist, -c[1]/dist, -c[2]/dist];
+  let r = [n[1], -n[0], 0];
+  const rl = Math.hypot(r[0], r[1], r[2]) || 1; r = r.map(v => v/rl);
+  const u = [ r[1]*n[2]-r[2]*n[1], r[2]*n[0]-r[0]*n[2], r[0]*n[1]-r[1]*n[0] ];
+  const hw = w/2, hh = h/2;
+  const mk = (a,b) => [ c[0]+a*r[0]+b*u[0], c[1]+a*r[1]+b*u[1], c[2]+a*r[2]+b*u[2] ];
+  return { c, n, r, u,
+    corners: [ mk(-hw,-hh), mk(hw,-hh), mk(hw,hh), mk(-hw,hh) ],
+    elevationDeg: Math.atan2(c[2], Math.hypot(c[0], c[1])) * DEG,
+    widthDeg: 2*Math.atan((w/2)/dist) * DEG };
+}
+const screens = () => [
+  {id:"UL", ...screenQuad(-P.upTanX, P.upTanZ, P.upDist, P.scW, P.scH)},
+  {id:"UR", ...screenQuad( P.upTanX, P.upTanZ, P.upDist, P.scW, P.scH)},
+  {id:"LL", ...screenQuad(-P.loTanX, P.loTanZ, P.loDist, P.scW, P.scH)},
+  {id:"LR", ...screenQuad( P.loTanX, P.loTanZ, P.loDist, P.scW, P.scH)}
+];
+
+/* ---- Canvas plumbing ----------------------------------------------------- */
+const g = id => document.getElementById(id);
+const cView = g("cvView"),  xView  = cView.getContext("2d");
+const cFront= g("cvFront"), xFront = cFront.getContext("2d");
+const cSide = g("cvSide"),  xSide  = cSide.getContext("2d");
+[cView, cFront, cSide].forEach(c => c.dataset.ar = (c.height / c.width).toString());
+
+const OW = 1280, OH = 720;
+const offVis  = document.createElement("canvas"); offVis.width = OW;  offVis.height = OH;
+const offMask = document.createElement("canvas"); offMask.width = OW; offMask.height = OH;
+const xVis  = offVis.getContext("2d",  { willReadFrequently:true });
+const xMask = offMask.getContext("2d", { willReadFrequently:true });
+
+function fitDPR(c){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const rw = c.getBoundingClientRect().width;
+  if (!(rw > 40)) return 0;                       // not laid out yet — skip this pass
+  const w = Math.max(200, Math.round(rw * dpr));
+  const h = Math.max(140, Math.round(w * (+c.dataset.ar || 0.6)));
+  if (c.width !== w || c.height !== h){ c.width = w; c.height = h; }
+  return dpr;
+}
+
+function mapper(cw, ch, xmin, xmax, zmin, zmax, pad){
+  const dx = xmax - xmin, dz = zmax - zmin;
+  const availW = cw - 2*pad, availH = ch - 2*pad;
+  if (!(dx > 1e-6 && dz > 1e-6 && availW > 10 && availH > 10)) return null;
+  const s = Math.min(availW / dx, availH / dz);
+  if (!(s > 0) || !isFinite(s)) return null;
+  const ox = pad + (availW - s*dx)/2 - s*xmin;
+  const oz = ch - pad - (availH - s*dz)/2 + s*zmin;
+  return { s, X: x => ox + s*x, Z: z => oz - s*z };
+}
+
+function grid(ctx, M, xmin, xmax, zmin, zmax){
+  ctx.save(); ctx.strokeStyle = "#131313"; ctx.lineWidth = 1;
+  for (let v = Math.ceil(xmin*2)/2; v <= xmax; v += 0.5){
+    ctx.beginPath(); ctx.moveTo(M.X(v), M.Z(zmin)); ctx.lineTo(M.X(v), M.Z(zmax)); ctx.stroke(); }
+  for (let v = Math.ceil(zmin*2)/2; v <= zmax; v += 0.5){
+    ctx.beginPath(); ctx.moveTo(M.X(xmin), M.Z(v)); ctx.lineTo(M.X(xmax), M.Z(v)); ctx.stroke(); }
+  ctx.restore();
+}
+
+function hline(ctx, M, x0, x1, z, label, col, dash, dpr){
+  ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 1*dpr;
+  if (dash) ctx.setLineDash(dash.map(v => v*dpr));
+  ctx.beginPath(); ctx.moveTo(M.X(x0), M.Z(z)); ctx.lineTo(M.X(x1), M.Z(z)); ctx.stroke();
+  ctx.setLineDash([]);
+  if (label){ ctx.fillStyle = col; ctx.font = `${10.5*dpr}px ui-monospace,monospace`;
+    ctx.textAlign = "left"; ctx.fillText(label, M.X(x1) + 5*dpr, M.Z(z) + 3.5*dpr); }
+  ctx.restore();
+}
+
+function nearestLandmark(z){
+  const marks = [["shoulder",BODY.shoulderZ],["chest",BODY.chestZ],["waist",BODY.waistZ],
+                 ["seat pan",BODY.seatZ],["knee",BODY.kneeZ],["floor",BODY.heelZ]];
+  let best = marks[0], bd = 1e9;
+  for (const m of marks){ const d = Math.abs(m[1] - z); if (d < bd){ bd = d; best = m; } }
+  return (bd < 0.055 ? "at " : "near ") + best[0] + " height";
+}
+
+/* ---- Panel A : front section --------------------------------------------- */
+function drawFront(){
+  const dpr = fitDPR(cFront); if (!dpr) return;
+  const ctx = xFront, cw = cFront.width, ch = cFront.height;
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cw,ch);
+  const lim  = Math.max(P.hwMid, BODY.elbowHalf + 0.20) * 1.75;
+  const zmin = Math.min(P.floorZ, BODY.heelZ) - 0.20, zmax = P.roofZ + 0.20;
+  const M = mapper(cw, ch, -lim, lim, zmin, zmax, 52*dpr); if (!M) return;
+  grid(ctx, M, -lim, lim, zmin, zmax);
+  const hw = halfAt(0);
+
+  // glass — canopy arch above the rail
+  const arch = [];
+  for (let i = 0; i <= 48; i++){
+    const z = P.railZ + (i/48) * (P.roofZ - P.railZ);
+    arch.push([canopyHalf(0, z), z]);
+  }
+  ctx.beginPath();
+  ctx.moveTo(M.X(-hw), M.Z(P.railZ));
+  for (let i = arch.length - 1; i >= 0; i--) ctx.lineTo(M.X(-arch[i][0]), M.Z(arch[i][1]));
+  for (let i = 0; i < arch.length; i++)      ctx.lineTo(M.X( arch[i][0]), M.Z(arch[i][1]));
+  ctx.closePath();
+  ctx.fillStyle = "rgba(96,168,196,0.10)"; ctx.fill();
+  ctx.strokeStyle = "rgba(120,190,220,0.55)"; ctx.lineWidth = 2*dpr; ctx.stroke();
+
+  // solid — the tub, floor to rail
+  const fil = Math.min(0.18, hw * 0.35);
+  ctx.beginPath();
+  ctx.moveTo(M.X(-hw), M.Z(P.railZ));
+  ctx.lineTo(M.X(-hw), M.Z(P.floorZ + fil));
+  ctx.quadraticCurveTo(M.X(-hw), M.Z(P.floorZ), M.X(-hw + fil), M.Z(P.floorZ));
+  ctx.lineTo(M.X( hw - fil), M.Z(P.floorZ));
+  ctx.quadraticCurveTo(M.X( hw), M.Z(P.floorZ), M.X( hw), M.Z(P.floorZ + fil));
+  ctx.lineTo(M.X( hw), M.Z(P.railZ));
+  ctx.closePath();
+  ctx.fillStyle = "#23262c"; ctx.fill();
+  ctx.strokeStyle = "#5b626d"; ctx.lineWidth = 2.2*dpr; ctx.stroke();
+
+  // the rail member
+  ctx.fillStyle = "#EDE8DE";
+  const rw = Math.max(P.bowSec, 0.08);
+  [-1, 1].forEach(sg => ctx.fillRect(M.X(sg*hw - rw/2), M.Z(railTop()),
+                                     M.s*rw, M.s*P.railCap));
+
+  // the pilot, front view
+  ctx.save();
+  ctx.strokeStyle = "#6fa9bd"; ctx.fillStyle = "rgba(111,169,189,0.14)"; ctx.lineWidth = 2*dpr;
+  ctx.beginPath();
+  ctx.moveTo(M.X(-BODY.shoulderHalf),      M.Z(BODY.shoulderZ));
+  ctx.lineTo(M.X(-BODY.elbowHalf),         M.Z(BODY.shoulderZ - 0.24));
+  ctx.lineTo(M.X(-BODY.hipHalf - 0.04),    M.Z(BODY.waistZ));
+  ctx.lineTo(M.X(-BODY.hipHalf),           M.Z(BODY.seatZ));
+  ctx.lineTo(M.X( BODY.hipHalf),           M.Z(BODY.seatZ));
+  ctx.lineTo(M.X( BODY.hipHalf + 0.04),    M.Z(BODY.waistZ));
+  ctx.lineTo(M.X( BODY.elbowHalf),         M.Z(BODY.shoulderZ - 0.24));
+  ctx.lineTo(M.X( BODY.shoulderHalf),      M.Z(BODY.shoulderZ));
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(M.X(0), M.Z(-0.01), Math.max(2, M.s*BODY.headR), 0, 7);
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
+
+  // landmarks
+  const x1 = Math.max(hw, BODY.elbowHalf) + 0.06;
+  hline(ctx, M, -x1, x1, 0,               "EYE  0.00",       "rgba(237,232,222,0.85)", [5,4], dpr);
+  hline(ctx, M, -x1, x1, BODY.shoulderZ,  "shoulder −0.20",  "rgba(111,169,189,0.75)", [2,4], dpr);
+  hline(ctx, M, -x1, x1, BODY.chestZ,     "chest −0.35",     "rgba(111,169,189,0.75)", [2,4], dpr);
+  hline(ctx, M, -x1, x1, BODY.waistZ,     "waist −0.52",     "rgba(111,169,189,0.75)", [2,4], dpr);
+  hline(ctx, M, -x1, x1, BODY.seatZ,      "seat −0.80",      "rgba(111,169,189,0.75)", [2,4], dpr);
+
+  ctx.fillStyle = "#EDE8DE";
+  ctx.beginPath(); ctx.arc(M.X(0), M.Z(0), 3.5*dpr, 0, 7); ctx.fill();
+  ctx.font = `${11*dpr}px ui-monospace,monospace`; ctx.textAlign = "center";
+  ctx.fillStyle = "#8b8880";
+  ctx.fillText(`${(hw*2).toFixed(2)} m across`, M.X(0), M.Z(P.floorZ) + 22*dpr);
+
+  const clear = P.hwMid - BODY.elbowHalf;
+  g("noteFront").innerHTML =
+    `rail sits <b style="color:var(--ink)">${Math.abs(P.railZ).toFixed(2)} m</b> below the eye — ` +
+    `<b style="color:var(--ink)">${nearestLandmark(P.railZ)}</b> &middot; elbow clearance ` +
+    `<b style="color:${clear < 0.03 ? "var(--warn)" : "var(--ink)"}">${clear.toFixed(2)} m</b> each side`;
+}
+
+/* ---- Panel B : side elevation -------------------------------------------- */
+function drawSide(){
+  const dpr = fitDPR(cSide); if (!dpr) return;
+  const ctx = xSide, cw = cSide.width, ch = cSide.height;
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cw,ch);
+  const ymin = Math.min(P.aftY, -0.45) - 0.28;
+  const ymax = Math.max(P.bowY, BODY.toeY) + 0.30;
+  const zmin = Math.min(P.floorZ, BODY.heelZ) - 0.20, zmax = P.roofZ + 0.20;
+  const M = mapper(cw, ch, ymin, ymax, zmin, zmax, 52*dpr); if (!M) return;
+  grid(ctx, M, ymin, ymax, zmin, zmax);
+
+  // glass — canopy from rail to roof
+  const zSh = P.railZ + (P.roofZ - P.railZ) * 0.34;
+  ctx.beginPath();
+  ctx.moveTo(M.X(P.aftY), M.Z(P.railZ));
+  ctx.lineTo(M.X(P.aftY), M.Z(P.roofZ));
+  ctx.lineTo(M.X(P.bowY * 0.40), M.Z(P.roofZ));
+  ctx.lineTo(M.X(P.bowY), M.Z(zSh));
+  ctx.lineTo(M.X(P.bowY), M.Z(P.railZ));
+  ctx.closePath();
+  ctx.fillStyle = "rgba(96,168,196,0.10)"; ctx.fill();
+  ctx.strokeStyle = "rgba(120,190,220,0.55)"; ctx.lineWidth = 2*dpr; ctx.stroke();
+
+  // solid — floor, coaming, bulkhead
+  ctx.beginPath();
+  ctx.moveTo(M.X(P.aftY), M.Z(P.roofZ));
+  ctx.lineTo(M.X(P.aftY), M.Z(P.floorZ));
+  ctx.lineTo(M.X(P.bowY), M.Z(P.floorZ));
+  ctx.lineTo(M.X(P.bowY), M.Z(P.railZ));
+  ctx.lineTo(M.X(P.aftY), M.Z(P.railZ));
+  ctx.closePath();
+  ctx.fillStyle = "#23262c"; ctx.fill();
+  ctx.strokeStyle = "#5b626d"; ctx.lineWidth = 2.2*dpr; ctx.stroke();
+
+  // rail member
+  ctx.fillStyle = "#EDE8DE";
+  ctx.fillRect(M.X(P.aftY), M.Z(railTop()), M.s*(P.bowY - P.aftY), M.s*P.railCap);
+
+  // 70 deg vertical FOV wedge
+  ctx.save(); ctx.strokeStyle = "rgba(237,232,222,0.20)"; ctx.lineWidth = 1.4*dpr;
+  ctx.setLineDash([7*dpr, 5*dpr]);
+  [TAN_Z, -TAN_Z].forEach(t => { ctx.beginPath(); ctx.moveTo(M.X(0), M.Z(0));
+    ctx.lineTo(M.X(ymax), M.Z(ymax*t)); ctx.stroke(); });
+  ctx.setLineDash([]); ctx.restore();
+
+  // the seat
+  ctx.save(); ctx.strokeStyle = "rgba(111,169,189,0.45)"; ctx.lineWidth = 4*dpr;
+  ctx.lineCap = "round"; ctx.beginPath();
+  ctx.moveTo(M.X(0.30), M.Z(BODY.seatZ)); ctx.lineTo(M.X(-0.20), M.Z(BODY.seatZ - 0.02));
+  ctx.lineTo(M.X(-0.34), M.Z(BODY.shoulderZ + 0.12)); ctx.stroke(); ctx.restore();
+
+  // the pilot, in profile — outline traced front-down-back-up
+  ctx.save();
+  ctx.strokeStyle = "#6fa9bd"; ctx.fillStyle = "rgba(111,169,189,0.14)"; ctx.lineWidth = 2.2*dpr;
+  const OUT = [
+    [-0.03,-0.17],[ 0.10,-0.20],[ 0.14,-0.35],[ 0.16,-0.55],[ 0.14,-0.72],
+    [ BODY.kneeY, BODY.kneeZ],[ 0.53,-0.90],[ 0.58,-1.14],[ BODY.toeY, BODY.heelZ],
+    [ 0.56,-1.18],[ 0.48,-0.92],[ 0.40,-0.66],[ 0.00,-0.78],[-0.18,-0.79],
+    [-0.22,-0.60],[-0.26,-0.30],[-0.20,-0.19],[-0.08,-0.16]
+  ];
+  ctx.beginPath(); ctx.moveTo(M.X(OUT[0][0]), M.Z(OUT[0][1]));
+  OUT.slice(1).forEach(p => ctx.lineTo(M.X(p[0]), M.Z(p[1])));
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(M.X(-0.06), M.Z(0.00), Math.max(2, M.s*BODY.headR), 0, 7);
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
+
+  // screens in profile: the face, plus the sightline from the eye
+  screens().forEach(s => {
+    if (s.c[1] <= 0.02) return;
+    ctx.save();
+    ctx.strokeStyle = "rgba(216,178,90,0.30)"; ctx.lineWidth = 1*dpr; ctx.setLineDash([3*dpr,4*dpr]);
+    ctx.beginPath(); ctx.moveTo(M.X(0), M.Z(0)); ctx.lineTo(M.X(s.c[1]), M.Z(s.c[2])); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = "#d8b25a"; ctx.lineWidth = 3.4*dpr; ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(M.X(s.c[1] - s.u[1]*P.scH/2), M.Z(s.c[2] - s.u[2]*P.scH/2));
+    ctx.lineTo(M.X(s.c[1] + s.u[1]*P.scH/2), M.Z(s.c[2] + s.u[2]*P.scH/2));
+    ctx.stroke(); ctx.restore();
+  });
+
+  hline(ctx, M, ymin, ymax, 0, "", "rgba(237,232,222,0.28)", [5,4], dpr);
+  ctx.fillStyle = "#EDE8DE";
+  ctx.beginPath(); ctx.arc(M.X(0), M.Z(0), 3.5*dpr, 0, 7); ctx.fill();
+  ctx.font = `${10.5*dpr}px ui-monospace,monospace`; ctx.textAlign = "left";
+  ctx.fillStyle = "#8b8880";
+  ctx.fillText("eye", M.X(0) + 8*dpr, M.Z(0) - 8*dpr);
+  ctx.textAlign = "right"; ctx.fillText("coaming", M.X(P.bowY) - 6*dpr, M.Z(P.railZ) - 9*dpr);
+  ctx.textAlign = "left";  ctx.fillText("bulkhead", M.X(P.aftY) + 6*dpr, M.Z(P.roofZ) + 15*dpr);
+
+  const S = screens(), legroom = P.bowY - BODY.toeY;
+  const fmt = e => `${Math.abs(e).toFixed(0)}&deg; ${e >= 0 ? "above" : "below"} eye`;
+  g("noteSide").innerHTML =
+    `upper pair <b style="color:var(--ink)">${fmt(S[0].elevationDeg)}</b> &middot; ` +
+    `lower pair <b style="color:var(--ink)">${fmt(S[2].elevationDeg)}</b> &middot; ` +
+    `legroom to coaming <b style="color:${legroom < 0.05 ? "var(--warn)" : "var(--ink)"}">` +
+    `${legroom.toFixed(2)} m</b>`;
+}
+
+/* ---- Panel C : the pilot's view, and the occlusion number ----------------- */
+function tanToPx(){
+  return { X: tx => (tx / TAN_X * 0.5 + 0.5) * OW,
+           Z: tz => (0.5 - tz / TAN_Z * 0.5) * OH };
+}
+const projTan = p => (p[1] > 1e-6) ? [p[0]/p[1], p[2]/p[1]] : null;
+
+// Draw the vector structure (bow arch, pillars, screens) onto one context.
+// Called twice: once with real colours for the picture, once flat-white for
+// the 1-bit mask the occlusion fraction is counted from. Same paths both times,
+// so the number and the picture cannot disagree.
+function drawStructure(ctx, flat){
+  const T = tanToPx();
+  const px = p => { const q = projTan(p); return q ? [T.X(q[0]), T.Z(q[1])] : null; };
+  ctx.save(); ctx.lineJoin = "round"; ctx.lineCap = "round";
+
+  // A member is a TUBE, so its apparent thickness falls off with its own depth.
+  // Two corrections over the naive version:
+  //  1. Depth is TRUE RANGE |P|, not the forward component Py. Using Py badly
+  //     under-reads depth for anything off to the side, which fattened the
+  //     pillars into wedges.
+  //  2. Tan space stretches by 1/cos^2 away from the axis, so the tan-space
+  //     half-width is (sec/2)*|P|/Py^2 — equal to sec/(2|P|cos^2 theta).
+  //     On axis that reduces to the familiar sec/(2d).
+  // Anything past the tan bound is off-frame; drop it rather than let a vertex
+  // beside the pilot's ear sprawl a 9 cm bar across the whole viewport.
+  const TAN_BOUND = 2.4;
+  const strokePoly = (pts, sec, col) => {
+    ctx.fillStyle = flat ? "#fff" : col;
+    const V = [];
+    for (const p of pts){
+      if (p[1] < 0.10){ V.push(null); continue; }        // at or behind the head
+      const q = projTan(p);
+      if (Math.abs(q[0]) > TAN_BOUND * ASPECT || Math.abs(q[1]) > TAN_BOUND){
+        V.push(null); continue;
+      }
+      const range = Math.hypot(p[0], p[1], p[2]);
+      const hwTan = (sec/2) * range / (p[1]*p[1]);
+      V.push({ x: T.X(q[0]), y: T.Z(q[1]),
+               hw: Math.min(OW*0.25, Math.max(0.6, hwTan / (2*TAN_X) * OW)) });
+    }
+    for (let i = 0; i < V.length - 1; i++){
+      const a = V[i], b = V[i+1];
+      if (!a || !b) continue;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const L = Math.hypot(dx, dy);
+      if (!(L > 1e-6) || !isFinite(L)) continue;
+      const nx = -dy/L, ny = dx/L;
+      ctx.beginPath();
+      ctx.moveTo(a.x + nx*a.hw, a.y + ny*a.hw);
+      ctx.lineTo(b.x + nx*b.hw, b.y + ny*b.hw);
+      ctx.lineTo(b.x - nx*b.hw, b.y - ny*b.hw);
+      ctx.lineTo(a.x - nx*a.hw, a.y - ny*a.hw);
+      ctx.closePath(); ctx.fill();
+    }
+    for (const v of V){                                   // round the joints
+      if (!v || v.hw > OW) continue;
+      ctx.beginPath(); ctx.arc(v.x, v.y, v.hw, 0, 7); ctx.fill();
+    }
+  };
+
+  // bow arch — the canopy's forward frame, rail up over the top and down
+  const archPts = [];
+  for (let i = 0; i <= 40; i++){
+    const z = P.railZ + (i/40)*(P.roofZ - P.railZ);
+    archPts.push([-canopyHalf(P.bowY, z), P.bowY, z]);
+  }
+  for (let i = 40; i >= 0; i--){
+    const z = P.railZ + (i/40)*(P.roofZ - P.railZ);
+    archPts.push([ canopyHalf(P.bowY, z), P.bowY, z]);
+  }
+  strokePoly(archPts, P.bowSec, "#464c57");
+
+  // two pillars — bow shoulder running aft to the roof edge, sampled densely so
+  // the run that leaves the frame is dropped vertex-by-vertex, not as a chunk
+  const zSh = P.railZ + (P.roofZ - P.railZ)*0.42;
+  const zRe = P.railZ + (P.roofZ - P.railZ)*0.86;
+  [-1, 1].forEach(sg => {
+    const pts = [];
+    for (let i = 0; i <= 80; i++){
+      const s = i/80;
+      const y = P.bowY + s*(P.aftY*0.5 - P.bowY);
+      const z = zSh + s*(zRe - zSh);
+      pts.push([sg*canopyHalf(y, z), y, z]);
+    }
+    strokePoly(pts, P.pillarSec, "#464c57");
+  });
+
+  // screens
+  screens().forEach(s => {
+    const q = s.corners.map(px);
+    if (q.some(v => !v)) return;
+    ctx.beginPath(); ctx.moveTo(q[0][0], q[0][1]);
+    q.slice(1).forEach(v => ctx.lineTo(v[0], v[1]));
+    ctx.closePath();
+    ctx.fillStyle = flat ? "#fff" : "#0d0e0f"; ctx.fill();
+    ctx.strokeStyle = flat ? "#fff" : "#d8b25a";
+    // 1 inch bezel, same true-range / tan-stretch correction as the members
+    const rng = Math.hypot(s.c[0], s.c[1], s.c[2]);
+    ctx.lineWidth = Math.max(1.4, (0.0254 * rng / (s.c[1]*s.c[1])) / (2*TAN_X) * OW);
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
+function drawView(){
+  // --- rasterise the tub, plus a faint horizon grid so the opening reads open
+  const img = xVis.createImageData(OW, OH), d = img.data;
+  const mimg = xMask.createImageData(OW, OH), m = mimg.data;
+  let tubPx = 0;
+  for (let j = 0; j < OH; j++){
+    const tz = TAN_Z * (1 - 2*(j + 0.5)/OH);
+    for (let i = 0; i < OW; i++){
+      const tx = TAN_X * (2*(i + 0.5)/OW - 1);
+      const k = (j*OW + i) * 4;
+      m[k+3] = 255;
+      if (tubBlocks(tx, tz)){
+        d[k] = 0x23; d[k+1] = 0x26; d[k+2] = 0x2c; d[k+3] = 255;
+        m[k] = m[k+1] = m[k+2] = 255;
+        tubPx++;
+      } else {
+        let v = 3;
+        if (tz < -1e-4){
+          const gy = 1 / -tz;
+          if (gy > 0.3 && gy < 70){
+            const gx = gy * tx, f = Math.min(1, 5/gy);
+            if (Math.abs(((gx % 2) + 2) % 2 - 1) > 1 - 0.05/f ||
+                Math.abs(((gy % 2) + 2) % 2 - 1) > 1 - 0.05/f) v = 14 + 20*f;
+          }
+        }
+        d[k] = v*0.75|0; d[k+1] = v*0.85|0; d[k+2] = v*1.2|0; d[k+3] = 255;
+      }
+    }
+  }
+  xVis.putImageData(img, 0, 0);
+  xMask.putImageData(mimg, 0, 0);
+
+  drawStructure(xVis,  false);
+  drawStructure(xMask, true);
+
+  // --- count from the 1-bit mask
+  const mm = xMask.getImageData(0, 0, OW, OH).data;
+  let occ = 0;
+  for (let k = 0; k < mm.length; k += 4) if (mm[k] > 96) occ++;
+  const frac = occ / (OW*OH);
+
+  // --- blit
+  const dpr = fitDPR(cView); if (!dpr) return { frac, tubFrac: tubPx/(OW*OH) };
+  const ctx = xView, cw = cView.width, ch = cView.height;
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cw,ch);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+  const vh = Math.round(cw / ASPECT);
+  ctx.drawImage(offVis, 0, 0, OW, OH, 0, Math.round((ch - vh)/2), cw, vh);
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(237,232,222,0.16)"; ctx.lineWidth = 1*dpr;
+  ctx.setLineDash([5*dpr, 6*dpr]);
+  ctx.beginPath(); ctx.moveTo(0, ch/2); ctx.lineTo(cw, ch/2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle = "rgba(237,232,222,0.45)";
+  ctx.beginPath();
+  ctx.moveTo(cw/2, ch/2 - 11*dpr); ctx.lineTo(cw/2, ch/2 + 11*dpr);
+  ctx.moveTo(cw/2 - 11*dpr, ch/2); ctx.lineTo(cw/2 + 11*dpr, ch/2); ctx.stroke();
+  ctx.fillStyle = "rgba(237,232,222,0.40)"; ctx.font = `${11*dpr}px ui-monospace,monospace`;
+  ctx.fillText("eye level", 12*dpr, ch/2 - 7*dpr);
+  ctx.restore();
+
+  g("noteView").innerHTML =
+    `dark grey = solid hull you cannot see through &middot; the horizon grid is only there so the ` +
+    `aperture reads as an aperture &middot; glass is treated as fully transparent`;
+  return { frac, tubFrac: tubPx/(OW*OH) };
+}
+
+/* ---- Readouts ------------------------------------------------------------ */
+function readouts(occ){
+  const S = screens();
+  const clear = P.hwMid - BODY.elbowHalf;
+  const legroom = P.bowY - BODY.toeY;
+  const headroom = P.roofZ - BODY.headR - 0.02;
+  const fmt = e => `${Math.abs(e).toFixed(0)}° ${e >= 0 ? "above" : "below"}`;
+  const cells = [
+    { k:"cabin width", v:(P.hwMid*2).toFixed(2), u:"m at the shoulders" },
+    { k:"rail below eye", v:Math.abs(P.railZ).toFixed(2), u:"m — " + nearestLandmark(P.railZ) },
+    { k:"view occluded", v:(occ.frac*100).toFixed(1)+"%",
+      u:`tub ${(occ.tubFrac*100).toFixed(1)}% + frame/screens ${((occ.frac-occ.tubFrac)*100).toFixed(1)}%` },
+    { k:"upper screens", v:S[0].widthDeg.toFixed(0)+"°", u:"wide — " + fmt(S[0].elevationDeg) },
+    { k:"lower screens", v:S[2].widthDeg.toFixed(0)+"°", u:"wide — " + fmt(S[2].elevationDeg) },
+    { k:"elbow clearance", v:clear.toFixed(2), u:"m each side", bad: clear < 0.03 },
+    { k:"legroom", v:legroom.toFixed(2), u:"m to the coaming", bad: legroom < 0.05 },
+    { k:"headroom", v:headroom.toFixed(2), u:"m over the head", bad: headroom < 0.05 }
+  ];
+  g("readouts").innerHTML = cells.map(c =>
+    `<div class="ro ${c.bad ? "bad" : ""}"><div class="k">${c.k}</div>` +
+    `<div class="v">${c.v} <small>${c.u}</small></div></div>`).join("");
+}
+
+/* ---- Wire-up ------------------------------------------------------------- */
+function buildRail(){
+  g("rail").innerHTML = SLIDERS.map(([title, rows]) =>
+    `<div class="grp"><h2>${title}</h2>` + rows.map(([key,label,min,max,step]) =>
+      `<div class="row"><label title="${label}">${label}</label><output id="o_${key}"></output></div>` +
+      `<input type="range" id="s_${key}" min="${min}" max="${max}" step="${step}">`).join("") +
+    `</div>`).join("") +
+    `<div class="grp"><h2>fixed datum</h2><div style="color:var(--dim);line-height:1.7">` +
+    `Body landmarks are not tunable. The eye is the origin, so a seated pilot ` +
+    `determines every other height in the cabin.<br><br>` +
+    `shoulder −0.20<br>chest −0.35<br>waist −0.52<br>seat pan −0.80<br>heels −1.18` +
+    `</div></div>`;
+  SLIDERS.flatMap(x => x[1]).forEach(([key]) => {
+    const el = g("s_"+key);
+    el.value = P[key];
+    el.addEventListener("input", () => { P[key] = +el.value; render(); });
+  });
+}
+
+function syncRail(){
+  SLIDERS.flatMap(x => x[1]).forEach(([key,,,,step]) => {
+    const el = g("s_"+key); if (el.value != P[key]) el.value = P[key];
+    g("o_"+key).textContent = P[key].toFixed(step < 0.01 ? 3 : 2);
+  });
+}
+
+function applyPreset(name){
+  Object.assign(P, PRESETS[name]);
+  document.querySelectorAll("[data-preset]").forEach(b =>
+    b.classList.toggle("on", b.dataset.preset === name));
+  render();
+}
+
+let queued = false;
+function render(){
+  if (queued) return;
+  queued = true;
+  requestAnimationFrame(() => {
+    queued = false;
+    try { syncRail(); }  catch(e){ console.error("syncRail", e); }
+    let occ = { frac:0, tubFrac:0 };
+    try { occ = drawView(); } catch(e){ console.error("panel C", e); }
+    try { readouts(occ); }   catch(e){ console.error("readouts", e); }
+    try { drawFront(); }     catch(e){ console.error("panel A", e); }
+    try { drawSide(); }      catch(e){ console.error("panel B", e); }
+  });
+}
+
+document.querySelectorAll("[data-preset]").forEach(b =>
+  b.addEventListener("click", () => applyPreset(b.dataset.preset)));
+window.addEventListener("resize", render);
+
+buildRail();
+render();
+
+/* Console API so this can also be driven headlessly from chrome-devtools. */
+window._section = {
+  get params(){ return {...P}; },
+  set(patch){ Object.assign(P, patch); render(); return {...P}; },
+  preset(n){ applyPreset(n); return {...P}; },
+  measure(){
+    const o = drawView(), S = screens();
+    return {
+      cabinWidth:        +(P.hwMid*2).toFixed(3),
+      railBelowEye:      +Math.abs(P.railZ).toFixed(3),
+      railLandmark:      nearestLandmark(P.railZ),
+      occludedFraction:  +o.frac.toFixed(4),
+      tubFraction:       +o.tubFrac.toFixed(4),
+      upperScreenDeg:    +S[0].widthDeg.toFixed(2),
+      upperElevationDeg: +S[0].elevationDeg.toFixed(2),
+      lowerScreenDeg:    +S[2].widthDeg.toFixed(2),
+      lowerElevationDeg: +S[2].elevationDeg.toFixed(2),
+      elbowClearance:    +(P.hwMid - BODY.elbowHalf).toFixed(3),
+      legroom:           +(P.bowY - BODY.toeY).toFixed(3),
+      headroom:          +(P.roofZ - BODY.headR - 0.02).toFixed(3)
+    };
+  },
+  ready: true
+};
+</script>
+</body>
+</html>
