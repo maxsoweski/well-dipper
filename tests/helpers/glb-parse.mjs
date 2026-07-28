@@ -17,8 +17,26 @@
 //                             bezel can be measured as a difference of extents
 //   tanSpaceProject         — where does a point land in the pilot's view, so "outside the
 //                             player's POV" is a number
-//   distanceToTriangleList  — is this rib actually lying on that shell
+//   distanceToTriangleList  — is this rib actually lying on that shell (UNSIGNED: see below)
 //   rayTriangleListHits     — is this screen inside the canopy or poking through it
+//   insideShellFromEye      — SIDED containment: is this vertex reached before the shell is,
+//                             i.e. inboard of the glass rather than bolted to its outside
+//   distanceToSegmentList   — does this band follow that rim polyline
+//   polylineLength          — how long is the run a perimeter frame has to cover
+//   closedMeshVolume        — how much material is in a closed solid, so a band's
+//                             cross-section can be recovered as volume / run
+//   sampleSegments          — densify a rim so "is the band here?" can be asked from the
+//                             edge's side, where the answer is (a four-sided frame has no
+//                             vertices at all along the middle of its bottom run)
+//   principalAxisEnds       — which vertices are the two ENDS of a long thin part
+//
+// A NOTE ON SIDEDNESS, because it is the difference between a test and a decoration:
+// distanceToTriangleList is UNSIGNED (Math.hypot of the closest-point difference). A rib
+// bolted to the OUTSIDE of the canopy measures exactly the same as one lying correctly
+// inboard, so proximity alone can only ever say "near the shell", never "inside it".
+// insideShellFromEye is the sided companion — it answers "inboard" from the pilot's own
+// ray, independently of the shell's winding. Use BOTH: proximity for "follows the
+// surface", sidedness for "on the right side of it".
 //
 // WHY NOT three.js GLTFLoader: it is a browser loader. Headless it needs DOM/URL/
 // ImageBitmap shims and a fake FileLoader, and it silently normalises/merges data on
@@ -934,6 +952,137 @@ export function rayTriangleListHits(origin, direction, tris, { eps = 1e-12, minT
     if (t > minT) hits.push(t);
   }
   return hits.sort((x, y) => x - y);
+}
+
+/**
+ * SIDED containment against an open shell, decided by a ray from the eye.
+ *
+ * WHY THIS EXISTS: distanceToTriangleList is unsigned, so "0.05 m from the canopy" is
+ * the same number for a rib lying correctly inboard, a rib bolted to the OUTSIDE of the
+ * glass, and a rib punched half-way through it. Sidedness has to come from somewhere
+ * else. It comes from the pilot: walk from the eye towards each point and ask whether
+ * the point is reached BEFORE the shell is. That is winding-independent (the shell's
+ * face orientation never enters into it) and it is the same question the render answers,
+ * which is why the same predicate serves the screen units and the canopy structure.
+ *
+ * Points whose eye-ray misses the shell entirely are SKIPPED, not counted as inside:
+ * they are outside the glazed cone, which is legitimate near the rim. That makes the
+ * measurement partial by construction, so `tested` is reported and callers must assert
+ * it is non-zero rather than let a silently-empty result read as a pass.
+ *
+ * @returns {{tested:number, skipped:number, worst:{over:number, point:number[]|null, hit:number|null}}}
+ *   `over` = (distance from eye to the point) - (distance from eye to the nearest shell
+ *   hit). Positive means the point is BEYOND the shell — outboard, i.e. wrong side.
+ */
+export function insideShellFromEye(shellTris, points, { eye = [0, 0, 0] } = {}) {
+  let tested = 0;
+  let skipped = 0;
+  let worst = { over: -Infinity, point: null, hit: null };
+  for (const p of points) {
+    const dir = sub3(p, eye);
+    const range = len3(dir);
+    if (range < 1e-9) { skipped += 1; continue; }
+    const hits = rayTriangleListHits(eye, dir, shellTris);
+    if (!hits.length) { skipped += 1; continue; }
+    tested += 1;
+    const over = range - hits[0];
+    if (over > worst.over) worst = { over, point: p, hit: hits[0] };
+  }
+  return { tested, skipped, worst };
+}
+
+/**
+ * Distance from a point to the nearest point on a list of segments ({a,b} pairs) — the
+ * form boundaryEdges returns, so "does this band follow the shell's rim?" is answerable
+ * against the rim itself rather than against a bounding box that would also accept a
+ * plate covering the whole opening.
+ * @returns {{distance:number, point:number[]|null}}
+ */
+export function distanceToSegmentList(segments, p) {
+  let distance = Infinity;
+  let point = null;
+  for (const { a, b } of segments) {
+    const ab = sub3(b, a);
+    const l2 = dot3(ab, ab);
+    let t = l2 > 1e-18 ? dot3(sub3(p, a), ab) / l2 : 0;
+    t = t < 0 ? 0 : (t > 1 ? 1 : t);
+    const q = [a[0] + ab[0] * t, a[1] + ab[1] * t, a[2] + ab[2] * t];
+    const d = Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
+    if (d < distance) { distance = d; point = q; }
+  }
+  return { distance, point };
+}
+
+/** Total length of a segment list — e.g. the run a perimeter frame has to cover. */
+export function polylineLength(segments) {
+  let total = 0;
+  for (const { a, b } of segments) total += len3(sub3(b, a));
+  return total;
+}
+
+/**
+ * Enclosed volume of a CLOSED triangle mesh (divergence theorem, summed about the
+ * origin), returned unsigned so the mesh's winding does not decide the answer.
+ *
+ * Meaningless for an open shell — check boundaryEdges(tris).length === 0 first. Its use
+ * here is to recover a band's CROSS-SECTION without knowing how the band was authored:
+ * for a solid of roughly constant section, volume / run = cross-sectional area, so
+ * sqrt(volume / run) is the band's equivalent side. That is how "fairly thin" gets
+ * measured on a closed perimeter frame, whose bounding box says nothing about its width.
+ */
+export function closedMeshVolume(tris) {
+  let sixV = 0;
+  for (const { a, b, c } of tris) sixV += dot3(a, cross3(b, c));
+  return Math.abs(sixV) / 6;
+}
+
+/**
+ * Points sampled along a segment list, at most `spacing` metres apart, endpoints
+ * included.
+ *
+ * WHY: "does this band follow the canopy edge the whole way round?" cannot be asked from
+ * the BAND's side. A four-sided frame has vertices only at its corners — there is no
+ * geometry at all along the middle of its bottom run — so any per-vertex histogram
+ * reports a perfectly good frame as full of holes. Densifying the RIM and asking "is
+ * there frame near this point?" for every sample asks the question from the side that
+ * has the answer, and names WHERE the gap is when there is one.
+ */
+export function sampleSegments(segments, { spacing = 0.05 } = {}) {
+  const out = [];
+  for (const { a, b } of segments) {
+    const d = sub3(b, a);
+    const steps = Math.max(1, Math.ceil(len3(d) / spacing));
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      out.push([a[0] + d[0] * t, a[1] + d[1] * t, a[2] + d[2] * t]);
+    }
+  }
+  return out;
+}
+
+/**
+ * The two END regions of a long thin part, along its own dominant axis.
+ *
+ * Which axis is "along the part" is derived from the geometry (the largest bounding
+ * extent), not from a label, so a re-authored rib that runs diagonally is still measured
+ * end-to-end. `fraction` is the share of the total run treated as an end.
+ *
+ * @returns {{axis:number, min:number, max:number, span:number, low:number[][], high:number[][]}|null}
+ */
+export function principalAxisEnds(points, { fraction = 0.05, axis = null } = {}) {
+  const box = boundsOfPoints(points);
+  if (!box) return null;
+  const ax = axis ?? box.size.indexOf(Math.max(...box.size));
+  const span = box.max[ax] - box.min[ax];
+  const cut = fraction * span;
+  return {
+    axis: ax,
+    min: box.min[ax],
+    max: box.max[ax],
+    span,
+    low: points.filter((p) => p[ax] <= box.min[ax] + cut),
+    high: points.filter((p) => p[ax] >= box.max[ax] - cut),
+  };
 }
 
 /** Distance from a point to an axis-aligned box ({min,max}); 0 when inside. */

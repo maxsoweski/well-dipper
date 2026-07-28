@@ -15,25 +15,25 @@
     "Hull_Nose",
     "Cockpit_Frame"
   ],
-  "removedWhy": "Max removed the ship nose and replaced the octagonal canopy frame with two vertical ribs at UAT on 1056f30. Either node reappearing is an AC-FORM failure.",
+  "removedWhy": "Max removed the ship nose and the free-standing octagonal frame at UAT on 1056f30. Either node reappearing is an AC-FORM failure. Canopy_Frame is NOT a revival of Cockpit_Frame: it is a thin band on the canopy's own edge, not a ring standing in the cabin, and it carries nothing. build_all() refuses to emit either deleted name.",
   "constants": {
     "INCH": 0.0254,
     "HULL_REF_LENGTH": 20.0,
     "CANOPY_Y_EDGE": 1.7,
     "CANOPY_BULGE": 0.6,
-    "CANOPY_HALF_W": 2.35,
-    "CANOPY_TOP_Z": 1.38,
-    "CANOPY_BOT_Z": -1.54,
+    "CANOPY_HALF_W": 2.02,
+    "CANOPY_TOP_Z": 1.12,
+    "CANOPY_BOT_Z": -1.04,
     "CANOPY_RIB_X": 1.38,
-    "CANOPY_SHOULDER_X": 1.82,
+    "CANOPY_SHOULDER_X": 1.72,
     "CANOPY_SHOULDER_F": 0.45,
     "CANOPY_COLUMNS": [
       [
-        -2.35,
+        -2.02,
         0.0
       ],
       [
-        -1.82,
+        -1.72,
         0.45
       ],
       [
@@ -45,21 +45,21 @@
         1.0
       ],
       [
-        1.82,
+        1.72,
         0.45
       ],
       [
-        2.35,
+        2.02,
         0.0
       ]
     ],
     "CANOPY_ROWS": [
       [
-        -1.54,
+        -1.04,
         0.0
       ],
       [
-        -0.82,
+        -0.6,
         0.62
       ],
       [
@@ -67,11 +67,11 @@
         1.0
       ],
       [
-        0.62,
+        0.48,
         0.7
       ],
       [
-        1.38,
+        1.12,
         0.0
       ]
     ],
@@ -79,9 +79,23 @@
       2,
       3
     ],
+    "FRAME_WIDTH": 0.16,
+    "FRAME_SILL_WIDTH": 0.24,
+    "FRAME_OVERLAP": 0.025,
+    "FRAME_DEPTH": 0.1,
+    "FRAME_CHAMFER_IN": 0.22,
+    "FRAME_CHAMFER_OUT": 0.1,
+    "FRAME_GLASS_GAP": 0.0015,
+    "FRAME_FOOT_SAMPLES": 7,
     "RIB_WIDTH": 0.065,
     "RIB_DEPTH": 0.05,
     "RIB_GLASS_GAP": 0.002,
+    "RIB_KINK_Z": [
+      -0.55,
+      0.05
+    ],
+    "RIB_END_OVERRUN": 0.04,
+    "RIB_FRAME_JOIN_TOL": 0.012,
     "SCREEN_W": 0.45,
     "SCREEN_H": 0.3,
     "SCREEN_BEZEL": 0.0254,
@@ -92,21 +106,86 @@
     "SCREEN_TAN_X": 0.74,
     "SCREEN_TAN_Z_UP": 0.35,
     "SCREEN_TAN_Z_DOWN": -0.37,
-    "ARM_ROOT_Y": 0.95,
+    "ARM_ROOT_Y": 1.05,
     "ARM_ROOT_TAN_X": 1.55,
     "ARM_ROOT_TAN_Z": 0.92,
     "ARM_ROOT_CLEARANCE_MIN": 0.05,
     "ARM_ATTACH_U": 0.65,
     "ARM_ATTACH_W": 0.55,
     "ARM_EMBED": 0.01,
-    "ARM_ROOT_HALF_U": 0.035,
-    "ARM_ROOT_HALF_W": 0.045,
-    "ARM_TIP_HALF_U": 0.02,
-    "ARM_TIP_HALF_W": 0.026,
+    "ARM_ROOT_HALF_U": 0.05,
+    "ARM_ROOT_HALF_W": 0.062,
+    "ARM_TIP_HALF_U": 0.032,
+    "ARM_TIP_HALF_W": 0.04,
     "GAME_FOV_DEG": 70.0,
     "GAME_ASPECT": 1.777778,
     "OCC_SCANLINES": 2160,
     "OCC_NEAR_Y": 0.05
+  },
+  "materials": {
+    "Mat_Frame": {
+      "baseColorLinear": [
+        0.155,
+        0.16,
+        0.172
+      ],
+      "roughness": 0.42,
+      "metallic": 0.15,
+      "usedBy": [
+        "Canopy_Frame",
+        "Canopy_Rib_L",
+        "Canopy_Rib_R"
+      ]
+    },
+    "Mat_Body": {
+      "baseColorLinear": [
+        0.205,
+        0.208,
+        0.22
+      ],
+      "roughness": 0.38,
+      "metallic": 0.1,
+      "usedBy": [
+        "ScreenBody_*"
+      ]
+    },
+    "Mat_Arm": {
+      "baseColorLinear": [
+        0.128,
+        0.13,
+        0.14
+      ],
+      "roughness": 0.34,
+      "metallic": 0.3,
+      "usedBy": [
+        "Arm_*"
+      ]
+    },
+    "Mat_Screen": {
+      "baseColorLinear": [
+        0.01,
+        0.012,
+        0.011
+      ],
+      "roughness": 0.28,
+      "metallic": 0.0,
+      "usedBy": [
+        "Screen_*"
+      ]
+    },
+    "Mat_Glass": {
+      "baseColorLinear": [
+        0.03,
+        0.045,
+        0.055
+      ],
+      "roughness": 0.08,
+      "alpha": 0.12,
+      "usedBy": [
+        "Canopy_Glass"
+      ]
+    },
+    "note": "Raised out of near-black (0.042 - 0.085 linear) because the lab's cabin light is off by default and the structure could not be told from empty space. Metalness is kept low on purpose: with no environment map a metal has nothing to reflect and renders darker, not shinier. Mat_Screen stays near-black -- it is an unlit CRT until increment 2."
   },
   "screenUnit": {
     "displayFace": [
@@ -135,34 +214,36 @@
     "rimY": 1.7,
     "crestY": 2.3,
     "protrusionDepth": 0.6,
-    "rimWidth": 4.7,
-    "rimHeight": 2.92,
+    "rimWidth": 4.04,
+    "rimHeight": 2.16,
     "facetColumns": 6,
     "facetRows": 5,
     "ridgeX": [
       -1.38,
       1.38
     ],
-    "coversGameFrame": true,
-    "minDistanceFromEye": 2.588204,
+    "coversGameFrame": false,
+    "coversGameFrameNote": "false by design as of this revision: the CLEAR OPENING now sits just inside the 70 deg frame on every side so that Canopy_Frame is visible from the seat. What must hold is assemblyCoversGameFrame below -- glass plus band, with no gap for the pilot to see through.",
+    "assemblyCoversGameFrame": true,
+    "minDistanceFromEye": 2.424046,
     "halfAnglesDeg": {
-      "leftRight": 54.117863,
-      "up": 39.068473,
-      "down": 42.172875
+      "leftRight": 49.916566,
+      "up": 33.377832,
+      "down": 31.456823
     },
     "excludedFromOcclusion": true,
     "excludedWhy": "see-through by design; increment 3 replaces this placeholder with real glass, and AC-FRAME counts only opaque structure"
   },
   "sceneBoundingBox": {
     "min": [
-      -2.35,
-      -1.54,
+      -2.18,
+      -1.28,
       -2.3
     ],
     "max": [
-      2.35,
-      1.38,
-      -0.907043
+      2.18,
+      1.28,
+      -0.994497
     ]
   },
   "objects": [
@@ -174,14 +255,33 @@
       "faceCount": 40,
       "boundingBox": {
         "min": [
-          -2.35,
-          -1.54,
+          -2.02,
+          -1.04,
           -2.3
         ],
         "max": [
-          2.35,
-          1.38,
+          2.02,
+          1.12,
           -1.7
+        ]
+      }
+    },
+    {
+      "name": "Canopy_Frame",
+      "kind": "frame",
+      "material": "Mat_Frame",
+      "vertexCount": 32,
+      "faceCount": 64,
+      "boundingBox": {
+        "min": [
+          -2.18,
+          -1.28,
+          -1.6985
+        ],
+        "max": [
+          2.18,
+          1.28,
+          -1.5985
         ]
       }
     },
@@ -189,18 +289,18 @@
       "name": "Canopy_Rib_L",
       "kind": "rib",
       "material": "Mat_Frame",
-      "vertexCount": 20,
-      "faceCount": 36,
+      "vertexCount": 24,
+      "faceCount": 44,
       "boundingBox": {
         "min": [
-          -1.396616,
-          -1.534721,
-          -2.297935
+          -1.395375,
+          -1.065717,
+          -2.250354
         ],
         "max": [
-          -1.313629,
-          1.376136,
-          -1.636619
+          -1.307584,
+          1.144659,
+          -1.622219
         ]
       }
     },
@@ -208,18 +308,18 @@
       "name": "Canopy_Rib_R",
       "kind": "rib",
       "material": "Mat_Frame",
-      "vertexCount": 20,
-      "faceCount": 36,
+      "vertexCount": 24,
+      "faceCount": 44,
       "boundingBox": {
         "min": [
-          1.313629,
-          -1.534721,
-          -2.297935
+          1.307584,
+          -1.065717,
+          -2.250354
         ],
         "max": [
-          1.396616,
-          1.376136,
-          -1.636619
+          1.395375,
+          1.144659,
+          -1.622219
         ]
       }
     },
@@ -383,14 +483,14 @@
       "faceCount": 12,
       "boundingBox": {
         "min": [
-          -1.511393,
-          0.515131,
-          -1.173356
+          -1.67221,
+          0.503957,
+          -1.184292
         ],
         "max": [
-          -1.030167,
-          0.910395,
-          -0.907043
+          -1.023742,
+          1.015914,
+          -0.994497
         ]
       }
     },
@@ -402,14 +502,14 @@
       "faceCount": 12,
       "boundingBox": {
         "min": [
-          1.030167,
-          0.515131,
-          -1.173356
+          1.023742,
+          0.503957,
+          -1.184292
         ],
         "max": [
-          1.511393,
-          0.910395,
-          -0.907043
+          1.67221,
+          1.015914,
+          -0.994497
         ]
       }
     },
@@ -421,14 +521,14 @@
       "faceCount": 12,
       "boundingBox": {
         "min": [
-          -1.509876,
-          -0.911291,
-          -1.166428
+          -1.670234,
+          -1.016956,
+          -1.177389
         ],
         "max": [
-          -1.026208,
-          -0.537539,
-          -0.907729
+          -1.020181,
+          -0.52621,
+          -0.995073
         ]
       }
     },
@@ -440,18 +540,112 @@
       "faceCount": 12,
       "boundingBox": {
         "min": [
-          1.026208,
-          -0.911291,
-          -1.166428
+          1.020181,
+          -1.016956,
+          -1.177389
         ],
         "max": [
-          1.509876,
-          -0.537539,
-          -0.907729
+          1.670234,
+          -0.52621,
+          -0.995073
         ]
       }
     }
   ],
+  "canopyFrame": {
+    "name": "Canopy_Frame",
+    "what": "the band where the glass meets the hull: a closed faceted ring on the canopy's own edge, the whole way round INCLUDING THE BOTTOM. This is the 'fairly thin' frame Max asked for, and its lower run is the simple sill his second reference shows under the screens.",
+    "notCockpitFrame": "distinct from the deleted Cockpit_Frame, which was a chunky free-standing octagonal ring carrying the screen pads",
+    "runWidth": 0.16,
+    "sillWidth": 0.24,
+    "glassOverlap": 0.025,
+    "depth": 0.1,
+    "chamferInner": 0.22,
+    "chamferOuter": 0.1,
+    "glassGap": 0.0015,
+    "stations": 8,
+    "straightRuns": 4,
+    "cornerBreaks": 4,
+    "innerBoundary": [
+      [
+        1.775,
+        -1.015
+      ],
+      [
+        -1.775,
+        -1.015
+      ],
+      [
+        -1.995,
+        -0.795
+      ],
+      [
+        -1.995,
+        0.875
+      ],
+      [
+        -1.775,
+        1.095
+      ],
+      [
+        1.775,
+        1.095
+      ],
+      [
+        1.995,
+        0.875
+      ],
+      [
+        1.995,
+        -0.795
+      ]
+    ],
+    "outerBoundary": [
+      [
+        2.08,
+        -1.28
+      ],
+      [
+        -2.08,
+        -1.28
+      ],
+      [
+        -2.18,
+        -1.18
+      ],
+      [
+        -2.18,
+        1.18
+      ],
+      [
+        -2.08,
+        1.28
+      ],
+      [
+        2.08,
+        1.28
+      ],
+      [
+        2.18,
+        1.18
+      ],
+      [
+        2.18,
+        -1.18
+      ]
+    ],
+    "standoffFromRimMin": 0.0015,
+    "standoffFromRimMax": 0.0015,
+    "measuredGlassClearance": 0.0015,
+    "outerBoundaryCoversGameFrame": true,
+    "innerEdgeAsFractionOfHalfFrame": {
+      "bottom": 0.853441,
+      "left": 0.943568,
+      "top": 0.920708,
+      "right": 0.943568
+    },
+    "widthNote": "innerEdgeAsFractionOfHalfFrame is what 'fairly thin' means from the seat: 0.94 says the band covers the outer 6% of that side of the view. 1.0 or more would mean the run is outside the 70 deg frame entirely and the pilot cannot see it -- the defect this revision fixes. The metric width alone cannot tell you that."
+  },
   "ribs": [
     {
       "name": "Canopy_Rib_L",
@@ -459,13 +653,42 @@
       "width": 0.065,
       "depth": 0.05,
       "glassGap": 0.002,
-      "standoffFromRidgeMin": 0.0219,
-      "standoffFromRidgeMax": 0.023145,
+      "stations": 6,
+      "stationZ": [
+        -1.08,
+        -1.04,
+        -0.55,
+        0.05,
+        1.12,
+        1.16
+      ],
+      "kinkAnglesDeg": [
+        38.858889,
+        24.04805,
+        42.160715,
+        27.349876
+      ],
+      "standoffFromRidgeMin": 0.023312,
+      "standoffFromRidgeMax": 0.032771,
       "measuredGlassClearance": 0.002,
-      "angleAtRimDeg": 39.068473,
-      "angleAtCrestDeg": 30.963757,
-      "bowDeg": 8.104717,
-      "bowTanSpace": 0.211765
+      "angleAtFootDeg": 39.068473,
+      "angleAtCrestDeg": 31.483086,
+      "bowDeg": 7.585387,
+      "bowTanSpace": 0.19937,
+      "endsOnFrame": [
+        {
+          "end": "foot",
+          "centreOutsideFrameBy": -0.038391,
+          "worstCornerOutsideFrameBy": -0.0005,
+          "plantedDefectOutsideFrameBy": 0.647382
+        },
+        {
+          "end": "head",
+          "centreOutsideFrameBy": -0.037955,
+          "worstCornerOutsideFrameBy": -0.0005,
+          "plantedDefectOutsideFrameBy": 0.647174
+        }
+      ]
     },
     {
       "name": "Canopy_Rib_R",
@@ -473,13 +696,42 @@
       "width": 0.065,
       "depth": 0.05,
       "glassGap": 0.002,
-      "standoffFromRidgeMin": 0.0219,
-      "standoffFromRidgeMax": 0.023145,
+      "stations": 6,
+      "stationZ": [
+        -1.08,
+        -1.04,
+        -0.55,
+        0.05,
+        1.12,
+        1.16
+      ],
+      "kinkAnglesDeg": [
+        38.858889,
+        24.04805,
+        42.160715,
+        27.349876
+      ],
+      "standoffFromRidgeMin": 0.023312,
+      "standoffFromRidgeMax": 0.032771,
       "measuredGlassClearance": 0.002,
-      "angleAtRimDeg": 39.068473,
-      "angleAtCrestDeg": 30.963757,
-      "bowDeg": 8.104717,
-      "bowTanSpace": 0.211765
+      "angleAtFootDeg": 39.068473,
+      "angleAtCrestDeg": 31.483086,
+      "bowDeg": 7.585387,
+      "bowTanSpace": 0.19937,
+      "endsOnFrame": [
+        {
+          "end": "foot",
+          "centreOutsideFrameBy": -0.038391,
+          "worstCornerOutsideFrameBy": -0.0005,
+          "plantedDefectOutsideFrameBy": 0.647382
+        },
+        {
+          "end": "head",
+          "centreOutsideFrameBy": -0.037955,
+          "worstCornerOutsideFrameBy": -0.0005,
+          "plantedDefectOutsideFrameBy": 0.647174
+        }
+      ]
     }
   ],
   "screens": [
@@ -649,9 +901,9 @@
       "name": "Arm_UL",
       "screenName": "Screen_UL",
       "root": [
-        -1.4725,
-        0.874,
-        -0.95
+        -1.6275,
+        0.966,
+        -1.05
       ],
       "tip": [
         -1.052543,
@@ -662,27 +914,27 @@
         -1.55,
         0.92
       ],
-      "length": 0.574453,
+      "length": 0.724629,
       "outsideFrustum": true,
       "frustumClearanceMetres": {
-        "right": -1.662814,
-        "left": 0.181575,
-        "top": 0.171041,
-        "bottom": -1.260837
+        "right": -1.837847,
+        "left": 0.200688,
+        "top": 0.189046,
+        "bottom": -1.393556
       },
       "nearestFrustumPlane": "left",
-      "nearestFrustumClearance": 0.181575,
-      "inFrontOfAnyScreenBoxBy": -0.019214,
-      "depthSamplesOverlappingABox": 27,
-      "occlusionBeyondItsScreen": 0.004654
+      "nearestFrustumClearance": 0.200688,
+      "inFrontOfAnyScreenBoxBy": -0.011831,
+      "depthSamplesOverlappingABox": 22,
+      "occlusionBeyondItsScreen": 0.006242
     },
     {
       "name": "Arm_UR",
       "screenName": "Screen_UR",
       "root": [
-        1.4725,
-        0.874,
-        -0.95
+        1.6275,
+        0.966,
+        -1.05
       ],
       "tip": [
         1.052543,
@@ -693,27 +945,27 @@
         1.55,
         0.92
       ],
-      "length": 0.574453,
+      "length": 0.724629,
       "outsideFrustum": true,
       "frustumClearanceMetres": {
-        "right": 0.181575,
-        "left": -1.662814,
-        "top": 0.171041,
-        "bottom": -1.260837
+        "right": 0.200688,
+        "left": -1.837847,
+        "top": 0.189046,
+        "bottom": -1.393556
       },
       "nearestFrustumPlane": "right",
-      "nearestFrustumClearance": 0.181575,
-      "inFrontOfAnyScreenBoxBy": -0.019214,
-      "depthSamplesOverlappingABox": 27,
-      "occlusionBeyondItsScreen": 0.004654
+      "nearestFrustumClearance": 0.200688,
+      "inFrontOfAnyScreenBoxBy": -0.011831,
+      "depthSamplesOverlappingABox": 22,
+      "occlusionBeyondItsScreen": 0.006242
     },
     {
       "name": "Arm_LL",
       "screenName": "Screen_LL",
       "root": [
-        -1.4725,
-        -0.874,
-        -0.95
+        -1.6275,
+        -0.966,
+        -1.05
       ],
       "tip": [
         -1.047711,
@@ -724,27 +976,27 @@
         -1.55,
         -0.92
       ],
-      "length": 0.562637,
+      "length": 0.714309,
       "outsideFrustum": true,
       "frustumClearanceMetres": {
-        "right": -1.662814,
-        "left": 0.181575,
-        "top": -1.260837,
-        "bottom": 0.171041
+        "right": -1.837847,
+        "left": 0.200688,
+        "top": -1.393556,
+        "bottom": 0.189046
       },
       "nearestFrustumPlane": "left",
-      "nearestFrustumClearance": 0.181575,
-      "inFrontOfAnyScreenBoxBy": -0.018996,
-      "depthSamplesOverlappingABox": 29,
-      "occlusionBeyondItsScreen": 0.004293
+      "nearestFrustumClearance": 0.200688,
+      "inFrontOfAnyScreenBoxBy": -0.012993,
+      "depthSamplesOverlappingABox": 23,
+      "occlusionBeyondItsScreen": 0.005558
     },
     {
       "name": "Arm_LR",
       "screenName": "Screen_LR",
       "root": [
-        1.4725,
-        -0.874,
-        -0.95
+        1.6275,
+        -0.966,
+        -1.05
       ],
       "tip": [
         1.047711,
@@ -755,40 +1007,42 @@
         1.55,
         -0.92
       ],
-      "length": 0.562637,
+      "length": 0.714309,
       "outsideFrustum": true,
       "frustumClearanceMetres": {
-        "right": 0.181575,
-        "left": -1.662814,
-        "top": -1.260837,
-        "bottom": 0.171041
+        "right": 0.200688,
+        "left": -1.837847,
+        "top": -1.393556,
+        "bottom": 0.189046
       },
       "nearestFrustumPlane": "right",
-      "nearestFrustumClearance": 0.181575,
-      "inFrontOfAnyScreenBoxBy": -0.018996,
-      "depthSamplesOverlappingABox": 29,
-      "occlusionBeyondItsScreen": 0.004293
+      "nearestFrustumClearance": 0.200688,
+      "inFrontOfAnyScreenBoxBy": -0.012993,
+      "depthSamplesOverlappingABox": 23,
+      "occlusionBeyondItsScreen": 0.005558
     }
   ],
-  "predictedOcclusionFraction": 0.212981,
+  "predictedOcclusionFraction": 0.369444,
   "occlusion": {
     "method": "analytic scanline rasterisation of the projected silhouettes at GAME_FOV_DEG / GAME_ASPECT, 2160 rows, union of overlapping occluders",
     "excludes": [
       "Canopy_Glass"
     ],
     "excludesWhy": "Canopy_Glass is see-through by design",
-    "total": 0.212981,
+    "total": 0.369444,
     "marginal": {
-      "ribs": 0.030757,
-      "screensAndBodies": 0.164329,
-      "arms": 0.017895
+      "ribs": 0.031127,
+      "canopyFrame": 0.170521,
+      "screensAndBodies": 0.1624,
+      "arms": 0.005396
     },
     "own": {
-      "ribs": 0.030757,
+      "ribs": 0.031127,
+      "canopyFrame": 0.17264,
       "screensAndBodies": 0.177398,
-      "arms": 0.027423
+      "arms": 0.037573
     },
-    "note": "Marginal figures are measured in the fixed order ribs -> screens -> arms and sum to the total; 'own' figures are each category in isolation and overlap, so they do not. AC-FRAME's browser measurement is authoritative; this exists so proportions can be tuned without a render round-trip, and no geometry is padded to hit a number."
+    "note": "Marginal figures are measured in the fixed order ribs -> frame -> screens -> arms and sum to the total; 'own' figures are each category in isolation and overlap, so they do not. AC-FRAME's browser measurement is authoritative; this exists so proportions can be tuned without a render round-trip, and no geometry is padded to hit a number. Canopy_Frame is new in this revision and is the reason the total is above the 21.30% the frameless build measured; that rise is the enclosure Max asked for, not padding."
   },
   "diagnostics": {
     "predictedOcclusionByCanopyGlass": 0.0,
@@ -798,31 +1052,44 @@
       1.244813,
       0.700208
     ],
-    "canopyCoversGameFrame": true,
-    "maxScreenOrArmDistance": 1.989546,
-    "canopyMinDistance": 2.588204,
+    "canopyCoversGameFrame": false,
+    "assemblyCoversGameFrame": true,
+    "maxScreenOrArmDistance": 2.197787,
+    "canopyMinDistance": 2.424046,
     "minRibGlassClearance": 0.002,
+    "frameGlassClearance": 0.0015,
+    "minScreenOrArmClearanceOfFrame": 0.377409,
+    "worstRibEndOutsideFrame": -0.0005,
+    "worstRibEndCentreOutsideFrame": -0.037955,
+    "ribEndJoinPlantedDefectMin": 0.647174,
+    "frameInnerEdgeAsFractionOfHalfFrame": {
+      "bottom": 0.853441,
+      "left": 0.943568,
+      "top": 0.920708,
+      "right": 0.943568
+    },
+    "minRibKinkAngleDeg": 24.04805,
     "everyArmRootOutsideFrustum": true,
-    "minArmRootClearance": 0.181575,
+    "minArmRootClearance": 0.200688,
     "minScreenVisibleFraction": 1.0,
-    "worstArmInFrontOfScreenBox": -0.018996,
-    "armDepthSamplesChecked": 112,
+    "worstArmInFrontOfScreenBox": -0.011831,
+    "armDepthSamplesChecked": 90,
     "armVisibilityBeyondItsScreen": [
       {
         "name": "Arm_UL",
-        "occlusion": 0.004654
+        "occlusion": 0.006242
       },
       {
         "name": "Arm_UR",
-        "occlusion": 0.004654
+        "occlusion": 0.006242
       },
       {
         "name": "Arm_LL",
-        "occlusion": 0.004293
+        "occlusion": 0.005558
       },
       {
         "name": "Arm_LR",
-        "occlusion": 0.004293
+        "occlusion": 0.005558
       }
     ]
   }

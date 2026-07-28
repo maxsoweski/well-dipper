@@ -8,7 +8,7 @@ WHAT THIS BUILDS
     the GLB should contain. Objects:
 
         Eye_Point          an empty at the world origin: the pilot's eye.
-        Canopy_Glass       a FACETED SHELL that spans the view opening and PROTRUDES
+        Canopy_Glass       a FACETED SHELL that spans the CLEAR OPENING and PROTRUDES
                            FORWARD: its rim is a planar rectangle at CANOPY_Y_EDGE and its
                            centre is pushed CANOPY_BULGE metres further forward, so the
                            surface bows away from the pilot. Its facet layout puts two
@@ -17,12 +17,34 @@ WHAT THIS BUILDS
                            ridges are what the ribs sit on. Placeholder material; increment 3
                            makes it real glass. EXCLUDED from the occlusion measurement
                            because it is see-through by design.
-        Canopy_Rib_L/_R    the two vertical strips. Thin solid straps swept along the
-                           shell's ridges from the bottom rim, up over the bulge, to the top
-                           rim. They are the ONLY frame structure in the cockpit -- there is
-                           no octagonal ring. Because the ridge protrudes, each rib bows
-                           INWARD on screen as it crosses the bulge, and that bow is the cue
-                           that reads as "the canopy sticks out in front of me".
+        Canopy_Frame       the PERIMETER BAND where the glass meets the hull: a closed,
+                           faceted ring that follows the shell's rim the whole way round --
+                           INCLUDING THE BOTTOM, whose lower run IS the simple sill Max's
+                           second reference (No Man's Sky) shows under the screens. This is
+                           the "fairly thin" frame Max asked for: its runs are FRAME_WIDTH
+                           across, the same ballpark as RIB_WIDTH, and from the seat it
+                           shows only as a narrow edge hugging the border of the view. Eight
+                           straight runs meeting at eight visible corner breaks -- folded
+                           metal, not a moulded ring. Its inner boundary overlaps the glass
+                           by FRAME_OVERLAP so there is no seam; its outer boundary reaches
+                           PAST the 70 deg / 16:9 frame edge so the pilot never sees a hole
+                           where the cockpit should be. It is what makes the model read as
+                           an enclosure you are sitting inside rather than as four monitors
+                           on two posts.
+
+                           IT IS NOT the deleted Cockpit_Frame. That node was a chunky
+                           octagonal ring standing free in the cabin and carrying the screen
+                           pads; Max deleted it at UAT on 1056f30 and it stays deleted. This
+                           is a thin band lying on the canopy's own edge. A node named
+                           Cockpit_Frame reappearing is still an AC-FORM failure.
+        Canopy_Rib_L/_R    the two vertical strips. Thin solid straps running from the
+                           frame's LOWER run, up and forward over the shell's bulge, to its
+                           UPPER run -- so each rib terminates ON the perimeter frame at
+                           both ends rather than floating (rib_end_joins() is the check).
+                           They are built as THREE STRAIGHT SEGMENTS meeting at two visible
+                           KINKS, not as a swept curve: both of Max's references show
+                           structural members that BEND as they rise, and it is the bend,
+                           not curvature, that conveys the canopy's protruding shape.
         Screen_UL/UR/LL/LR the DISPLAY FACE of each screen unit: one flat quad, SCREEN_W x
                            SCREEN_H, normal pointing exactly at the eye by construction.
                            Kept as its own node because increment 2's phosphor CRT shader
@@ -37,9 +59,10 @@ WHAT THIS BUILDS
                            box, so the arms read as monitor arms reaching in from beyond the
                            player's field of view and disappearing out of frame.
 
-    There is NO ship nose and no octagonal canopy frame. Both were in the previous revision
-    (commit 1056f30) and Max deleted them at UAT. If a node named Hull_Nose or Cockpit_Frame
-    reappears anywhere, that is an AC-FORM failure, not a merge artefact.
+    There is NO ship nose, no interior console or dash, and no free-standing octagonal ring.
+    All were in the previous revision (commit 1056f30) and Max deleted them at UAT. If a node
+    named Hull_Nose or Cockpit_Frame reappears anywhere, that is an AC-FORM failure, not a
+    merge artefact. Canopy_Frame is a different object with a different job -- see above.
 
 COORDINATE CONVENTION -- the single easiest thing to get wrong
     Authored in BLENDER axes:  +X right, +Y FORWARD, +Z up, eye at (0, 0, 0), 1 unit = 1 m.
@@ -72,10 +95,42 @@ OCCLUSION IS MEASURED, NOT TARGETED
 
     Because the occluders overlap in projection (an arm hides behind its own screen box), the
     breakdown is reported two ways: each category's OWN silhouette area, and its MARGINAL
-    contribution in the fixed order ribs -> screens -> arms. Only the marginal numbers sum to
-    the total; the "own" numbers say how big each category is in isolation.
+    contribution in the fixed order ribs -> frame -> screens -> arms. Only the marginal
+    numbers sum to the total; the "own" numbers say how big each category is in isolation.
 
 ASSUMPTIONS the spec did not pin down
+    Where the frame is    The previous revision's opening subtended MORE than the game's
+                          70 deg / 16:9 frame in every direction, which meant any band drawn
+                          on its rim projected entirely outside the pilot's view: an
+                          enclosure the pilot could never see. So the CLEAR OPENING was
+                          brought in until its rim sits just inside the frame edge
+                          (CANOPY_HALF_W / CANOPY_TOP_Z / CANOPY_BOT_Z), and the band was
+                          hung outboard of it. The opening is now the thing sized against the
+                          view; the band is what closes the remaining margin. The bottom came
+                          in furthest, which is what gives the sill Max asked for.
+    FRAME_WIDTH etc.      "Fairly thin" is the brief and it is a judgement call, so it is
+                          three named constants, not one: FRAME_WIDTH for the sides and top,
+                          FRAME_SILL_WIDTH for the lower run (a sill is deeper than a
+                          mullion on every real canopy, and it has further to reach to cover
+                          the bottom of the frame), and FRAME_OVERLAP for how far the band
+                          laps INSIDE the glass edge so there is no seam. Read the apparent
+                          width, not the metric one: the run prints what fraction of the
+                          frame each side of the band actually covers.
+    FRAME_CHAMFER_IN/_OUT The corner breaks. The INNER chamfer is the big one -- it is the
+                          visible faceting, and it is what stops the opening reading as a
+                          plain rectangle. The OUTER chamfer is small on purpose: the outer
+                          boundary has to keep containing the frame's own corners, so it can
+                          only be cut a little. The difference between them is why the
+                          corners read as gussets, which is what Max's first reference shows.
+    FRAME_DEPTH           How far the band stands toward the pilot. Deeper than RIB_DEPTH
+                          because it is the outer structure and its inner wall is what gives
+                          the opening a visible thickness from the seat.
+    FRAME_GLASS_GAP       As RIB_GLASS_GAP, and derived the same way -- see frame_front_y().
+    RIB_KINK_Z            Where the two rib kinks sit. Two named heights, three straight
+                          runs. Fewer, longer runs with sharper joints read as a bent
+                          structural member; more, shorter ones read as a curve.
+    RIB_END_OVERRUN       How far each rib runs PAST the glass rim into the band, so the
+                          joint is an embedded one rather than two surfaces touching.
     RIB_WIDTH / RIB_DEPTH   Max said "fairly thin". 0.065 m across and 0.050 m deep is a
                             structural canopy rail at this scale; it is a named constant
                             precisely because it is a judgement call.
@@ -87,6 +142,15 @@ ASSUMPTIONS the spec did not pin down
                             width axis is perpendicular to both the rib's own direction and
                             the eye ray -- which is what gives it a stable apparent width all
                             the way along.
+    Material values       The previous revision's base colours (0.04 - 0.085 linear) were
+                          near-black, and with the cabin light OFF -- which is what Max asked
+                          for and is now the lab default -- the structure could not be
+                          told from empty space, so its form could not be judged at all.
+                          Raised to 0.13 - 0.21 linear, which reads under the lab's key light
+                          alone. NOTE the low metalness: the lab has no environment map, so a
+                          metal surface has nothing to reflect and goes BLACKER, not
+                          brighter. The form is carried by the diffuse term; roughness is
+                          what decides whether a facet catches the key as a highlight.
     SCREEN_FACE_GAP         The body is a CLOSED solid, so its pocket has a floor. The
                             display face sits 1.5 mm in front of that floor rather than on
                             it, so the two never z-fight.
@@ -124,6 +188,19 @@ re-measure; the bpy import is guarded so analyse() works with no Blender)
         Moving the ribs inboard makes the bow more visible but narrows the clear centre.
       * CANOPY_BULGE is the whole "protruding shape" cue. At zero the ribs are straight lines
         and the canopy reads as a flat pane. The run prints the bow in degrees.
+      * CANOPY_HALF_W / CANOPY_TOP_Z / CANOPY_BOT_Z are now the FRAMING lever, not just the
+        shell's size: they set how much of the 70 deg view is clear opening and how much is
+        perimeter band. The run prints each side of the band as a percentage of the frame's
+        half-extent -- that percentage, not the width in metres, is what "fairly thin" means
+        from the seat. Push a rim outboard past the frame edge and that side of the band
+        disappears from the pilot's view entirely (which is the defect this revision fixes);
+        pull it in and the band grows into a visor.
+      * FRAME_WIDTH / FRAME_SILL_WIDTH must keep the band's OUTER boundary outside the frame
+        edge, or the pilot sees a hole between the band and the edge of the screen. The run
+        asserts that rather than trusting it -- see frame_covers_game_frame().
+      * RIB_KINK_Z is the rib's shape. The run prints each rib's kink angles; if they fall
+        below a few degrees the rib is reading as a curve again, which is the thing Max
+        rejected.
 
 SCOPE -- what this increment deliberately does NOT do
     No CRT/phosphor shader (increment 2). No real glass or refraction (increment 3) -- the
@@ -154,16 +231,22 @@ INCH               = 0.0254   # metres. Max specified the bezel and the backing 
                               # so they are derived from this rather than written as decimals.
 HULL_REF_LENGTH    = 20.0     # Bible S8A player hull, house-sized. Sanity scale for the cabin.
 
-# ---- Canopy shell (Canopy_Glass) -------------------------------------------
+# ---- Canopy shell (Canopy_Glass) -- the CLEAR OPENING ----------------------
+# The rim is sized against the GAME FRAME, not against the cabin: it sits just INSIDE the
+# 70 deg / 16:9 view on every side, so that the perimeter band hung outboard of it is
+# visible from the seat as a thin edge. The previous revision's rim (2.35 / 1.38 / -1.54)
+# subtended more than the frame in every direction, which is why that build had no visible
+# enclosure at all. frame_side_coverage() prints where each rim actually lands.
 CANOPY_Y_EDGE      = 1.70     # +Y of the shell's RIM -- its rearmost ring, a planar rectangle
 CANOPY_BULGE       = 0.60     # extra +Y at the centre. THIS is the forward protrusion.
-CANOPY_HALF_W      = 2.35     # rim half-width  (+/-X)
-CANOPY_TOP_Z       = 1.38     # rim top
-CANOPY_BOT_Z       = -1.54    # rim bottom
+CANOPY_HALF_W      = 2.02     # rim half-width  (+/-X)
+CANOPY_TOP_Z       = 1.12     # rim top
+CANOPY_BOT_Z       = -1.04    # rim bottom -- highest of the three relative to the frame, so
+                              # the band's lower run reads as a SILL under the screens
 CANOPY_RIB_X       = 1.38     # |X| of the two vertical RIDGES. The centre panel is flat in X
                               # out to here; outboard of it the shell rakes back. That change
                               # of slope IS the ridge, and the ribs sit on it.
-CANOPY_SHOULDER_X  = 1.82     # a second, shallower fold outboard of the ridge: extra faceting
+CANOPY_SHOULDER_X  = 1.72     # a second, shallower fold outboard of the ridge: extra faceting
 CANOPY_SHOULDER_F  = 0.45     # so the quarter panels read angular rather than as a single
                               # flat rake. No rib sits here.
 
@@ -186,11 +269,41 @@ CANOPY_RIB_COLUMNS = (2, 3)   # indices into CANOPY_COLUMNS; asserted against +/
 # visibly inside it.
 CANOPY_ROWS = (
     (CANOPY_BOT_Z, 0.00),
-    (-0.82,        0.62),
+    (-0.60,        0.62),
     (-0.10,        1.00),
-    ( 0.62,        0.70),
+    ( 0.48,        0.70),
     (CANOPY_TOP_Z, 0.00),
 )
+
+# ---- Canopy perimeter frame (Canopy_Frame) ---------------------------------
+# A closed faceted ring lying on the shell's rim: the band where the glass meets the hull.
+# INNER boundary  the rim rectangle pulled FRAME_OVERLAP into the opening, with a big corner
+#                 chamfer -- this is the edge the pilot actually sees, and the chamfer is the
+#                 visible faceting.
+# OUTER boundary  the rim rectangle pushed out by FRAME_WIDTH (FRAME_SILL_WIDTH at the
+#                 bottom), with a SMALL corner chamfer -- it has to keep containing the
+#                 game frame's own corners, so it can only be cut a little.
+# The two chamfers differing is what makes the corners read as gussets rather than as a
+# constant-width bevel, which is the structure Max's first reference shows.
+FRAME_WIDTH        = 0.16     # outward run of the band at the sides and the top
+FRAME_SILL_WIDTH   = 0.24     # ...and at the bottom. A sill is deeper than a mullion, and it
+                              # has further to reach: CANOPY_BOT_Z is the rim closest in.
+FRAME_OVERLAP      = 0.025    # how far the band laps INSIDE the glass edge, so the glass runs
+                              # under the band instead of butting against it and showing a
+                              # hairline of background at the join
+FRAME_DEPTH        = 0.100    # how far the band stands toward the pilot. Its inner wall is
+                              # what gives the opening a visible thickness from the seat.
+FRAME_CHAMFER_IN   = 0.22     # corner cut on the inner boundary -- the visible corner break
+FRAME_CHAMFER_OUT  = 0.10     # ...and on the outer one. Kept small: see frame_covers_game_frame()
+FRAME_GLASS_GAP    = 0.0015   # air held between the band's front face and the shell surface.
+                              # As with the ribs, the STANDOFF that holds it is derived per
+                              # station against the exported surface -- see frame_front_y().
+                              # Deliberately SMALLER than RIB_GLASS_GAP: both are held behind
+                              # the same flat rim, so equal gaps would leave the band's front
+                              # face exactly coplanar with each rib's where the two overlap.
+                              # Half a millimetre of difference puts the rib ends properly
+                              # inside the band instead of flush with its skin.
+FRAME_FOOT_SAMPLES = 7        # grid resolution when walking a band quad's footprint
 
 # ---- Canopy ribs (Canopy_Rib_L / Canopy_Rib_R) -----------------------------
 RIB_WIDTH          = 0.065    # across the strap. "Fairly thin" is the brief.
@@ -198,8 +311,23 @@ RIB_DEPTH          = 0.050    # how far the strap stands inboard of the glass, t
 RIB_GLASS_GAP      = 0.002    # air held between the strap's outer face and the shell surface.
                               # HOW FAR the strap must stand off to hold that gap everywhere
                               # is derived per station, not authored -- see rib_sections().
+RIB_KINK_Z         = (-0.55, 0.05)   # the two KINKS, in shell z. With the two ends below,
+                              # that is four stations and THREE straight runs. Max's
+                              # references show members that BEND as they rise; the bend is
+                              # the protrusion cue, so the joints are few and sharp rather
+                              # than many and shallow. rib_kink_angles() prints what they
+                              # actually came out as.
+RIB_END_OVERRUN    = 0.040    # how far each end runs PAST the glass rim, into the band, so
+                              # the joint is embedded rather than merely touching
+RIB_FRAME_JOIN_TOL = 0.012    # how far a rib end's outermost corner may sit outside the band
+                              # solid before the joint stops reading as a joint
 RIB_SOLVE_MAX_ITERS = 64
 RIB_SOLVE_TOL      = 1e-12
+RIB_PROBE_U        = (-1.0, -0.5, 0.0, 0.5, 1.0)     # across the strap, as fractions of its
+RIB_PROBE_T        = (0.25, 0.5, 0.75)               # half-width, and along the ruled face
+                              # toward each neighbouring station. The standoff solver walks
+                              # this patch rather than only the station's two corners -- see
+                              # violation() in rib_sections().
 
 # ---- Screen units (Screen_* display face + ScreenBody_* box) ---------------
 SCREEN_W           = 0.45     # display face, 50% larger than the previous 0.30 x 0.20 m panel
@@ -223,11 +351,15 @@ SCREEN_QUADRANTS = (
 )
 
 # ---- Support arms (Arm_*) --------------------------------------------------
-ARM_ROOT_Y         = 0.95     # depth of the root plane, forward of the eye. Deep enough that
+ARM_ROOT_Y         = 1.05     # depth of the root plane, forward of the eye. Deep enough that
                               # the WHOLE arm sits further from the eye than its screen's front
                               # face -- a shallower root swings the strut around in front of
                               # its own bezel, which reads as a bug rather than as a mount.
                               # arm_in_front_of_box() below is the check that catches it.
+                              # Raised from 0.95 with the chunkier cross-section: a thicker
+                              # strut swings its corners further from its own axis, which ate
+                              # the margin (19 mm -> 6 mm). At 1.05 it is back to 12 mm, the
+                              # frustum clearance improves too, and the arm reads longer.
 ARM_ROOT_TAN_X     = 1.55     # root position expressed in TAN COORDINATES at that depth, so
 ARM_ROOT_TAN_Z     = 0.92     # "outside the frustum" is stated in the units it is checked in
                               # (the 70 deg / 16:9 frame is tan 1.2448 x 0.7002). Clearance
@@ -237,10 +369,13 @@ ARM_ROOT_CLEARANCE_MIN = 0.05  # metres the root must clear the nearest frustum 
 ARM_ATTACH_U       = 0.65     # where the arm lands on the back plate, as a fraction of its
 ARM_ATTACH_W       = 0.55     # half-extents, toward the OUTBOARD-FAR corner
 ARM_EMBED          = 0.010    # tip pushed this far into the box, so there is no seam gap
-ARM_ROOT_HALF_U    = 0.035    # tapered rectangular strut: half-extents at the root...
-ARM_ROOT_HALF_W    = 0.045
-ARM_TIP_HALF_U     = 0.020    # ...and at the tip
-ARM_TIP_HALF_W     = 0.026
+# Cross-section: raised from (0.035, 0.045) root / (0.020, 0.026) tip, which read as sticks.
+# Max's first reference shows short CHUNKY brackets, so the strut is now roughly a 100 x 124
+# mm section at the root tapering to 64 x 80 mm. Still tapered, still six flat faces.
+ARM_ROOT_HALF_U    = 0.050    # tapered rectangular strut: half-extents at the root...
+ARM_ROOT_HALF_W    = 0.062
+ARM_TIP_HALF_U     = 0.032    # ...and at the tip
+ARM_TIP_HALF_W     = 0.040
 
 # The cockpit is judged against the game's real camera (src/ui/Settings.js:40).
 GAME_FOV_DEG       = 70.0     # vertical FOV
@@ -255,19 +390,42 @@ OCC_NEAR_Y         = 0.05     # occluders are clipped to y >= this before projec
 
 BLENDER_UP         = (0.0, 0.0, 1.0)
 
-# Material base colours, linear RGB.
-MAT_FRAME_RGB      = (0.055, 0.058, 0.062)   # ribs: dark structural grey
-MAT_SCREEN_RGB     = (0.010, 0.012, 0.011)   # display faces (increment 2 replaces this)
-MAT_BODY_RGB       = (0.085, 0.087, 0.092)   # screen boxes: a shade lighter, so the bezel reads
-MAT_ARM_RGB        = (0.042, 0.043, 0.047)   # arms: darker, semi-metallic
+# Material base colours (linear RGB), roughness and metalness.
+#
+# WHY THESE ARE NOT NEAR-BLACK ANY MORE. The previous revision sat at 0.042 - 0.085 linear.
+# The lab's cabin light is OFF by default (Max, this session) and the only remaining sources
+# are a key, a weak fill and 0.22 of ambient, so every surface facing away from the key
+# rendered at roughly ambient x albedo -- which at 0.055 is indistinguishable from empty
+# space. The structure could not be judged because it could not be seen. Max's references are
+# dark but READABLE: their form comes off specular and edge highlights under a bright key.
+#
+# WHY THE METALNESS IS LOW. The lab has no environment map. A metallic surface has no diffuse
+# term and nothing to reflect except three analytic lights, so raising metalness makes a part
+# DARKER and flatter, not shinier -- which is part of why the old arms read as thin sticks at
+# metalness 0.6. Form is carried by diffuse; roughness decides which facets catch the key.
+MAT_FRAME_RGB      = (0.155, 0.160, 0.172)   # ribs + perimeter band: cool structural grey.
+MAT_FRAME_ROUGH    = 0.42                    # satin: each facet takes a different share of
+MAT_FRAME_METAL    = 0.15                    # the key, so the folds read as folds
+MAT_SCREEN_RGB     = (0.010, 0.012, 0.011)   # display faces: STAYS near-black -- it is an
+MAT_SCREEN_ROUGH   = 0.28                    # unlit CRT until increment 2 lights it
+MAT_SCREEN_METAL   = 0.0
+MAT_BODY_RGB       = (0.205, 0.208, 0.220)   # screen boxes: lighter than the frame, so the
+MAT_BODY_ROUGH     = 0.38                    # bezel reads as a bezel against the structure
+MAT_BODY_METAL     = 0.10                    # behind it and the near-black display face in it
+MAT_ARM_RGB        = (0.128, 0.130, 0.140)   # arms: darker than the frame so the brackets
+MAT_ARM_ROUGH      = 0.34                    # read as separate parts, and the smoothest of
+MAT_ARM_METAL      = 0.30                    # the three so a machined highlight runs the edge
 MAT_GLASS_RGB      = (0.030, 0.045, 0.055)   # canopy shell placeholder
+MAT_GLASS_ROUGH    = 0.08
 MAT_GLASS_ALPHA    = 0.12     # so the lab can see THROUGH the shell. Increment 3 replaces the
                               # whole material with real transmissive glass.
 
 # Node names. The headless tests key off these -- do not rename without updating the tests.
 NAME_EYE           = "Eye_Point"
 NAME_GLASS         = "Canopy_Glass"
+NAME_FRAME         = "Canopy_Frame"     # NOT the deleted "Cockpit_Frame" -- see the docstring
 NAME_RIBS          = ("Canopy_Rib_L", "Canopy_Rib_R")   # order matches CANOPY_RIB_COLUMNS
+NAME_DELETED       = ("Hull_Nose", "Cockpit_Frame")     # must never come back
 SCREEN_PREFIX      = "Screen_"
 BODY_PREFIX        = "ScreenBody_"
 ARM_PREFIX         = "Arm_"
@@ -599,8 +757,396 @@ def build_canopy():
     return verts, faces
 
 
+# =============================================================================
+# Canopy_Frame -- the perimeter band where the glass meets the hull
+# =============================================================================
+
+def _chamfered_ring(half_w, top_z, bot_z, chamfer):
+    """A rectangle with its four corners cut off, as an ordered list of (x, z).
+
+    Eight vertices, eight straight runs, eight corner breaks -- folded metal rather than a
+    moulded ring. The traversal order is fixed and is NOT arbitrary: it is the order for
+    which (U, W, T) comes out right-handed at every station, with U the outward direction in
+    the rim plane, W = -Y (toward the pilot) and T the direction of travel. That is what lets
+    build_frame() wind every face outward without a per-face orientation test, exactly as
+    loft() does for the ribs.
+
+        bottom run travels -X, left run +Z, top run +X, right run -Z.
+    """
+    if chamfer <= 0.0:
+        raise ValueError("a chamfer of %.4f m would leave the ring's corners square, and a "
+                         "square corner puts two stations at the same point" % chamfer)
+    if 2.0 * chamfer >= min(2.0 * half_w, top_z - bot_z):
+        raise ValueError(
+            "chamfer %.4f m is at least half the ring it is cutting (%.4f x %.4f m); the "
+            "straight runs between the corners would vanish" % (chamfer, 2.0 * half_w,
+                                                                top_z - bot_z))
+    return (
+        ( half_w - chamfer, bot_z),            # bottom run, right end   (travel -X)
+        (-half_w + chamfer, bot_z),            # bottom run, left end
+        (-half_w,           bot_z + chamfer),  # bottom-left break       (travel +Z)
+        (-half_w,           top_z - chamfer),  # left run, top end
+        (-half_w + chamfer, top_z),            # top-left break          (travel +X)
+        ( half_w - chamfer, top_z),            # top run, right end
+        ( half_w,           top_z - chamfer),  # top-right break         (travel -Z)
+        ( half_w,           bot_z + chamfer),  # right run, bottom end
+    )
+
+
+def frame_polygons():
+    """The band's inner and outer (x, z) boundaries, matched station for station.
+
+    Inner: the rim pulled FRAME_OVERLAP INTO the opening, so the glass runs under the band.
+    Outer: the rim pushed out by FRAME_WIDTH (FRAME_SILL_WIDTH at the bottom).
+
+    Both are chamfered, but by different amounts, and that difference is the design: a big
+    inner chamfer is the visible corner break, while the outer one has to stay small because
+    the outer boundary is what closes the pilot's view at the corners.
+    """
+    inner = _chamfered_ring(CANOPY_HALF_W - FRAME_OVERLAP,
+                            CANOPY_TOP_Z - FRAME_OVERLAP,
+                            CANOPY_BOT_Z + FRAME_OVERLAP,
+                            FRAME_CHAMFER_IN)
+    outer = _chamfered_ring(CANOPY_HALF_W + FRAME_WIDTH,
+                            CANOPY_TOP_Z + FRAME_WIDTH,
+                            CANOPY_BOT_Z - FRAME_SILL_WIDTH,
+                            FRAME_CHAMFER_OUT)
+    if len(inner) != len(outer):
+        raise ValueError("the band's two boundaries have different station counts")
+    for j in range(len(inner)):
+        if (inner[j][0] - outer[j][0]) ** 2 + (inner[j][1] - outer[j][1]) ** 2 < 1e-12:
+            raise ValueError("band station %d has zero width: the inner and outer boundaries "
+                             "meet at (%.4f, %.4f)" % (j, inner[j][0], inner[j][1]))
+    return inner, outer
+
+
+def frame_front_y():
+    """The y of the band's FRONT face at each station -- DERIVED, never authored.
+
+    The band has to sit behind the shell everywhere it laps over it, and "everywhere" has to
+    include the INTERIOR of each quad, not just its stations: the quads are metres long and
+    the shell is folded, so two clear stations can straddle a bulge that is not.
+
+    So each station takes the minimum of (surface - FRAME_GLASS_GAP) over the footprints of
+    BOTH quads it belongs to. That is what makes the guarantee airtight rather than likely:
+    for the quad between stations j and j+1, both endpoints are then <= the minimum over that
+    quad's own footprint, and the front face is ruled between them, so no point on it can
+    rise above the surface. frame_glass_clearance() re-measures the finished mesh
+    independently, so a wrong derivation shows up there rather than being confirmed by its
+    own arithmetic.
+
+    HONEST NOTE ON WHAT THIS BOUGHT AT THE SHIPPED CONSTANTS: nothing visible. Every station
+    comes out at exactly CANOPY_Y_EDGE - FRAME_GLASS_GAP, because every footprint reaches
+    OUTBOARD of the rim, where the shell has ended and canopy_surface_y() clamps to the rim
+    plane -- so the flat rim is what binds, at every station, and a hand-written 2 mm gap
+    would have produced the same numbers. That is the right answer rather than a missing one,
+    and the derivation is not decoration: move the band's whole footprint inboard onto the
+    bulge (which is what a re-author widening FRAME_OVERLAP past FRAME_WIDTH would do) and
+    the stations spread out over ~75 mm to follow the surface, with the independent walk in
+    frame_glass_clearance() still reporting the full FRAME_GLASS_GAP. The point of deriving
+    it is that the constants block is meant to be re-authored -- same reasoning as
+    canopy_surface_y()'s note about the twist.
+    """
+    inner, outer = frame_polygons()
+    n = len(inner)
+
+    def quad_min(j):
+        k = (j + 1) % n
+        worst = None
+        for a in range(FRAME_FOOT_SAMPLES):
+            ta = a / float(FRAME_FOOT_SAMPLES - 1)
+            i_edge = (inner[j][0] + ta * (inner[k][0] - inner[j][0]),
+                      inner[j][1] + ta * (inner[k][1] - inner[j][1]))
+            o_edge = (outer[j][0] + ta * (outer[k][0] - outer[j][0]),
+                      outer[j][1] + ta * (outer[k][1] - outer[j][1]))
+            for b in range(FRAME_FOOT_SAMPLES):
+                tb = b / float(FRAME_FOOT_SAMPLES - 1)
+                x = i_edge[0] + tb * (o_edge[0] - i_edge[0])
+                z = i_edge[1] + tb * (o_edge[1] - i_edge[1])
+                v = canopy_surface_y(x, z) - FRAME_GLASS_GAP
+                if worst is None or v < worst:
+                    worst = v
+        return worst
+
+    quads = [quad_min(j) for j in range(n)]
+    return [min(quads[j - 1], quads[j]) for j in range(n)]
+
+
+def frame_stations():
+    """(inner_point, outer_point, front_y) per station, in Blender coordinates."""
+    inner, outer = frame_polygons()
+    ys = frame_front_y()
+    out = []
+    for j in range(len(inner)):
+        out.append(((inner[j][0], ys[j], inner[j][1]),
+                    (outer[j][0], ys[j], outer[j][1]),
+                    ys[j]))
+    return out
+
+
+def build_frame():
+    """Canopy_Frame: a CLOSED, consistently wound ring solid.
+
+    Four vertices per station -- inner and outer, front and back -- and four quads per run:
+    front, back, outer wall, inner wall. No caps: the ring closes on itself, which is what
+    makes it one solid rather than eight bars laid end to end.
+
+    Winding: U (outward, in the rim plane), W = -Y (toward the pilot) and T (the direction of
+    travel) are right-handed in the station order _chamfered_ring() returns, so writing the
+    faces in the fixed order below puts every normal OUT of the solid. There is no
+    orientation test here for the same reason there is none in loft(): the basis decides it.
+    """
+    stations = frame_stations()
+    n = len(stations)
+    verts = []
+    for (i_pt, o_pt, _y) in stations:
+        verts.append(i_pt)                                        # 4j + 0  inner front
+        verts.append(o_pt)                                        # 4j + 1  outer front
+        verts.append((o_pt[0], o_pt[1] - FRAME_DEPTH, o_pt[2]))   # 4j + 2  outer back
+        verts.append((i_pt[0], i_pt[1] - FRAME_DEPTH, i_pt[2]))   # 4j + 3  inner back
+    faces = []
+    for j in range(n):
+        a = 4 * j
+        b = 4 * ((j + 1) % n)
+        faces.append((a + 0, a + 1, b + 1, b + 0))   # front  -> +Y, away from the eye
+        faces.append((b + 3, b + 2, a + 2, a + 3))   # back   -> toward the eye
+        faces.append((a + 1, a + 2, b + 2, b + 1))   # outer wall -> outward
+        faces.append((b + 0, b + 3, a + 3, a + 0))   # inner wall -> into the opening
+    return verts, faces
+
+
+def frame_segments():
+    """One convex piece per run. Predictor and containment test only, never exported.
+
+    A ring is not convex, so its silhouette cannot be taken as one hull -- but each run
+    between two stations is a prismatoid between two planar quads, and its hull IS its
+    silhouette. Same reasoning as loft_segments() for a bowed rib.
+    """
+    stations = frame_stations()
+    n = len(stations)
+    segs = []
+    for j in range(n):
+        k = (j + 1) % n
+        v = []
+        for idx in (j, k):
+            i_pt, o_pt, _y = stations[idx]
+            v.append(i_pt)
+            v.append(o_pt)
+            v.append((o_pt[0], o_pt[1] - FRAME_DEPTH, o_pt[2]))
+            v.append((i_pt[0], i_pt[1] - FRAME_DEPTH, i_pt[2]))
+        f = [(0, 1, 2, 3), (7, 6, 5, 4),
+             (0, 4, 5, 1), (1, 5, 6, 2), (2, 6, 7, 3), (3, 7, 4, 0)]
+        segs.append((v, f))
+    return segs
+
+
+FRAME_CHECK_SAMPLES = 10   # subdivisions per barycentric axis when walking the band's front
+
+
+def frame_glass_clearance():
+    """Smallest gap between the band's finished FRONT face and the exported shell, in metres.
+
+    Independent of frame_front_y()'s solver on purpose: it walks the triangles that actually
+    ship, sampling their interiors rather than only their corners. Negative means the band
+    has broken through the glass.
+
+    Conservative outboard of the rim, where canopy_surface_y() clamps to CANOPY_Y_EDGE and so
+    reports glass over a stretch of bare hull. That is the safe direction for a clearance.
+    """
+    stations = frame_stations()
+    n = len(stations)
+    worst = None
+    for j in range(n):
+        k = (j + 1) % n
+        i_a, o_a, _ya = stations[j]
+        i_b, o_b, _yb = stations[k]
+        for tri in ((i_a, o_a, o_b), (i_a, o_b, i_b)):
+            for p in _tri_grid(tri[0], tri[1], tri[2], FRAME_CHECK_SAMPLES):
+                clr = canopy_surface_y(p[0], p[2]) - p[1]
+                if worst is None or clr < worst:
+                    worst = clr
+    return worst if worst is not None else 0.0
+
+
+def _newell_planes(verts, faces):
+    """Outward-facing planes (normal, offset) of a convex-ish solid.
+
+    Newell's method, so a quad that twists by a fraction of a millimetre still yields a
+    stable plane, and each plane is then flipped if it puts the solid's own centroid outside
+    -- which makes the result independent of face winding. The band's runs twist only where
+    the derived standoff steps between stations, which is sub-millimetre at these constants.
+    """
+    cx = sum(v[0] for v in verts) / len(verts)
+    cy = sum(v[1] for v in verts) / len(verts)
+    cz = sum(v[2] for v in verts) / len(verts)
+    centre = (cx, cy, cz)
+    planes = []
+    for f in faces:
+        nx = ny = nz = 0.0
+        m = len(f)
+        for i in range(m):
+            a = verts[f[i]]
+            b = verts[f[(i + 1) % m]]
+            nx += (a[1] - b[1]) * (a[2] + b[2])
+            ny += (a[2] - b[2]) * (a[0] + b[0])
+            nz += (a[0] - b[0]) * (a[1] + b[1])
+        nrm = (nx, ny, nz)
+        if v_len(nrm) < 1e-12:
+            continue
+        nrm = v_norm(nrm)
+        d = v_dot(nrm, verts[f[0]])
+        if v_dot(nrm, centre) - d > 0.0:
+            nrm = v_mul(nrm, -1.0)
+            d = -d
+        planes.append((nrm, d))
+    return planes
+
+
+def _outside_distance(planes, p):
+    """How far p lies outside a convex solid: <= 0 means inside.
+
+    The max over the bounding half-spaces. Exact for a point over a face; near an edge or a
+    corner it UNDER-reports the true distance, which is stated here because it matters for
+    how the result is read: "inside" (<= 0) is exact and unambiguous, while a small positive
+    number is a lower bound on how far out the point really is.
+    """
+    worst = None
+    for (nrm, d) in planes:
+        s = v_dot(nrm, p) - d
+        if worst is None or s > worst:
+            worst = s
+    return worst if worst is not None else 0.0
+
+
+def frame_solid_distance(p):
+    """Smallest _outside_distance over the band's runs. <= 0 means p is inside the band."""
+    best = None
+    for (v, f) in frame_segments():
+        s = _outside_distance(_newell_planes(v, f), p)
+        if best is None or s < best:
+            best = s
+    return best if best is not None else 0.0
+
+
+def frame_covers_game_frame():
+    """Does the band's outer boundary close the pilot's view at all four corners?
+
+    If it does not, there is a strip of nothing between the edge of the cockpit and the edge
+    of the screen -- the pilot looks past the ship and sees background where hull should be.
+    The check is against the band's FRONT ring, which is the conservative choice: the back
+    ring is nearer the eye and so projects further out.
+
+    The outer boundary is convex, so its projected hull is exactly its silhouette and the
+    test is exact rather than approximate.
+    """
+    tan_h, tan_v = frame_tangents()
+    corners = [(-tan_h, -tan_v), (tan_h, -tan_v), (tan_h, tan_v), (-tan_h, tan_v)]
+    hull = convex_hull_2d([project_tan(o_pt) for (_i, o_pt, _y) in frame_stations()])
+    return all(point_in_convex_ccw(hull, c) for c in corners), hull
+
+
+# Which stations bound each straight run of the ring, in _chamfered_ring()'s fixed order,
+# and which tan axis that run is measured on. The corner chamfers between them are excluded
+# on purpose: a gusset reaching further in is a different fact from a run being thick.
+FRAME_RUNS = (
+    ("bottom", 0, 1, "v"),
+    ("left",   2, 3, "h"),
+    ("top",    4, 5, "v"),
+    ("right",  6, 7, "h"),
+)
+
+
+def frame_side_coverage():
+    """Where each straight run of the band lands in the pilot's frame.
+
+    The number that decides whether "fairly thin" was achieved is not the width in metres --
+    it is how much of the view the band eats. This reports, per run, the tan position of its
+    INNER edge as a fraction of the frame's half-extent on that axis. 0.94 means the band
+    covers the outer 6% of that side; 1.0 or more means the run is entirely outside the view
+    and the pilot cannot see it at all -- which is precisely the defect this revision exists
+    to fix, and why the constant that decides it (the rim) is now sized against the frame.
+
+    Measured on the FRONT ring. tan = coordinate / y, so the front edge (largest y) is the
+    innermost point of the silhouette and therefore the one the pilot sees the band begin at.
+    """
+    tan_h, tan_v = frame_tangents()
+    stations = frame_stations()
+    out = {}
+    for (label, a, b, axis) in FRAME_RUNS:
+        ta = project_tan(stations[a][0])
+        tb = project_tan(stations[b][0])
+        if axis == "h":
+            out[label] = min(abs(ta[0]), abs(tb[0])) / tan_h
+        else:
+            out[label] = min(abs(ta[1]), abs(tb[1])) / tan_v
+    return out
+
+
+def rib_station_z():
+    """The rib's stations in shell z, bottom to top.
+
+    THREE long runs -- rim to kink, kink to kink, kink to rim -- which is the shape Max asked
+    for, plus a short FLAT stub at each end that runs RIB_END_OVERRUN past the glass rim into
+    the perimeter band, so each rib terminates INSIDE the frame solid rather than stopping at
+    its face. A rib that stops short reads as floating, which is half of the defect this
+    revision is fixing, so rib_end_joins() measures the joint rather than trusting it.
+
+    The stubs have to be FLAT, and that is not cosmetic. Outside the rim the shell's row
+    profile clamps, so canopy_y() is level at CANOPY_Y_EDGE there. A stub that ran straight
+    from below the rim up to the first kink would climb while the surface under it stayed
+    level, and would come out ~30 mm in FRONT of the glass -- which is exactly what
+    rib_glass_clearance() caught on the first build of this revision. Landing the rib on the
+    rim first and only then running the stub out level keeps every run behind the surface it
+    follows.
+    """
+    zs = ((CANOPY_BOT_Z - RIB_END_OVERRUN, CANOPY_BOT_Z) + tuple(RIB_KINK_Z)
+          + (CANOPY_TOP_Z, CANOPY_TOP_Z + RIB_END_OVERRUN))
+    for i in range(len(zs) - 1):
+        if zs[i + 1] <= zs[i]:
+            raise ValueError(
+                "the rib's stations must climb: station %d is at z = %.4f and station %d is "
+                "at z = %.4f. Check RIB_KINK_Z (%s) against CANOPY_BOT_Z / CANOPY_TOP_Z."
+                % (i, zs[i], i + 1, zs[i + 1], ", ".join("%.3f" % z for z in RIB_KINK_Z)))
+    for z in RIB_KINK_Z:
+        if not (CANOPY_BOT_Z < z < CANOPY_TOP_Z):
+            raise ValueError(
+                "rib kink at z = %.4f is outside the canopy opening (%.4f .. %.4f), so it "
+                "would sit on clamped profile and produce no kink at all"
+                % (z, CANOPY_BOT_Z, CANOPY_TOP_Z))
+    return zs
+
+
+def rib_path(col_index):
+    """The rib's centre-line: one point per station, lying on the shell.
+
+    Short and explicit. Three straight runs between four stations, which is what makes the
+    two joints read as KINKS; the previous revision took one station per canopy row and the
+    result read as a swept curve, which Max rejected.
+
+    x is held on the ridge (CANOPY_RIB_X), so the strap still lies along the shell's sharpest
+    crease and the standoff solver still has a well-defined surface under it. The shape comes
+    from z and from the bulge the shell gives each z -- "up and forward over the crest".
+    """
+    _check_rib_columns()
+    x = CANOPY_COLUMNS[col_index][0]
+    return [(x, canopy_y(x, z), z) for z in rib_station_z()]
+
+
+def rib_kink_angles(col_index):
+    """Turn angle in degrees at each interior station. A curve measures near zero at each."""
+    pts = rib_path(col_index)
+    out = []
+    for j in range(1, len(pts) - 1):
+        a = v_norm(v_sub(pts[j], pts[j - 1]))
+        b = v_norm(v_sub(pts[j + 1], pts[j]))
+        c = v_dot(a, b)
+        c = -1.0 if c < -1.0 else (1.0 if c > 1.0 else c)
+        out.append(math.degrees(math.acos(c)))
+    return out
+
+
 def rib_sections(col_index):
-    """Cross-sections of one rib, one per canopy row, following that column's ridge.
+    """Cross-sections of one rib, one per station, following that column's ridge.
 
     Frame at each station:
         V  eye -> point (the view ray)
@@ -622,12 +1168,16 @@ def rib_sections(col_index):
     both corners sit RIB_GLASS_GAP behind the surface. It re-derives itself the moment
     RIB_WIDTH, the ridge position or the bulge changes; there is no clearance literal here
     to go stale when Max re-authors the constants.
+
+    T is a CENTRAL difference at the interior stations, which mitres each joint: the two runs
+    meeting there keep their own orientations and their faces meet at an angle. That is what
+    makes a kink visible as a crease rather than as a smooth blend.
     """
-    grid = canopy_grid()
-    pts = grid[col_index]
+    pts = rib_path(col_index)
     nr = len(pts)
     hw = RIB_WIDTH * 0.5
-    sections = []
+
+    frames = []
     for j in range(nr):
         if j == 0:
             T = v_sub(pts[1], pts[0])
@@ -639,16 +1189,44 @@ def rib_sections(col_index):
         V = v_norm(pts[j])
         W = v_mul(V, -1.0)
         U = v_norm(v_cross(W, T))
+        frames.append((pts[j], W, U))
 
-        def violation(s):
-            """How far the worse corner is IN FRONT of where it is allowed to be, in metres."""
-            base = v_add(pts[j], v_mul(W, s))
+    sections = []
+    for j in range(nr):
+        P, W, U = frames[j]
+        neighbours = []
+        if j > 0:
+            neighbours.append(frames[j - 1])
+        if j < nr - 1:
+            neighbours.append(frames[j + 1])
+
+        def violation(s, _P=P, _W=W, _U=U, _n=neighbours):
+            """How far the worst point of this station's front face is IN FRONT of where it
+            is allowed to be, in metres.
+
+            Samples the ruled face TOWARD each neighbour, not just the station's own two
+            corners. The face between two stations is a ruled quad and the shell under it is
+            folded, so both ends can clear while the middle does not: the first build of this
+            revision solved corner-only and came out with 0.5 mm where it had asked for 2 mm.
+            The neighbour is probed at this station's own standoff, which is an approximation
+            (its solved value differs by a fraction of a millimetre here) -- so
+            rib_glass_clearance() still walks the finished mesh independently, and that walk
+            is what the assertion in analyse() reads.
+            """
             worst = None
-            for sgn in (1.0, -1.0):
-                c = v_add(base, v_mul(U, sgn * hw))
-                gap = c[1] + RIB_GLASS_GAP - canopy_surface_y(c[0], c[2])
-                if worst is None or gap > worst:
-                    worst = gap
+            base = v_add(_P, v_mul(_W, s))
+            for f in RIB_PROBE_U:
+                c = v_add(base, v_mul(_U, f * hw))
+                probes = [c]
+                for (Pk, Wk, Uk) in _n:
+                    ck = v_add(v_add(Pk, v_mul(Wk, s)), v_mul(Uk, f * hw))
+                    d = v_sub(ck, c)
+                    for t in RIB_PROBE_T:
+                        probes.append(v_add(c, v_mul(d, t)))
+                for p in probes:
+                    gap = p[1] + RIB_GLASS_GAP - canopy_surface_y(p[0], p[2])
+                    if worst is None or gap > worst:
+                        worst = gap
             return worst
 
         rate = -W[1]    # metres of retreat in y bought per metre of standoff
@@ -671,7 +1249,7 @@ def rib_sections(col_index):
         if standoff < RIB_GLASS_GAP:
             standoff = RIB_GLASS_GAP   # never let the strap sit flush and z-fight the shell
 
-        base = v_add(pts[j], v_mul(W, standoff))
+        base = v_add(P, v_mul(W, standoff))
         out = v_add(base, v_mul(U, hw))
         inn = v_add(base, v_mul(U, -hw))
         sections.append((
@@ -790,6 +1368,40 @@ def rib_glass_clearance(col_index):
 
 def build_rib(col_index):
     return loft(rib_sections(col_index))
+
+
+def rib_end_joins(col_index):
+    """Does each end of this rib actually terminate ON the perimeter band?
+
+    A rib that stops short of the frame reads as a bar hanging in space -- which is half of
+    the defect this revision exists to fix -- and nothing else in this script would notice,
+    because a floating rib still clears the glass, still bows, and still occludes. So it gets
+    its own measurement: for each end cross-section, how far its corners and its centroid lie
+    OUTSIDE the band solid. Zero or negative is embedded.
+
+    The instrument is checked against a PLANTED DEFECT in the same call: the same end
+    section, translated one metre back along the rib toward the crest, must read as clearly
+    outside. A containment test that cannot fail is not a test -- see
+    feedback_measurement-channels-need-planted-defects.md.
+    """
+    secs = rib_sections(col_index)
+    pts = rib_path(col_index)
+    out = []
+    for (label, idx, toward) in (("foot", 0, 1), ("head", len(secs) - 1, len(secs) - 2)):
+        sec = secs[idx]
+        centroid = v_mul((sec[0][0] + sec[1][0] + sec[2][0] + sec[3][0],
+                          sec[0][1] + sec[1][1] + sec[2][1] + sec[3][1],
+                          sec[0][2] + sec[1][2] + sec[2][2] + sec[3][2]), 0.25)
+        corner_worst = max(frame_solid_distance(c) for c in sec)
+        inward = v_norm(v_sub(pts[toward], pts[idx]))
+        planted = frame_solid_distance(v_add(centroid, v_mul(inward, 1.0)))
+        out.append({
+            "end": label,
+            "centroidOutsideBy": frame_solid_distance(centroid),
+            "worstCornerOutsideBy": corner_worst,
+            "plantedDefectOutsideBy": planted,
+        })
+    return out
 
 
 def screen_frame(tan_x, tan_z):
@@ -979,6 +1591,9 @@ def build_all():
     gv, gf = build_canopy()
     parts.append({"name": NAME_GLASS, "verts": gv, "faces": gf,
                   "material": "Mat_Glass", "kind": "glass"})
+    fv, ff = build_frame()
+    parts.append({"name": NAME_FRAME, "verts": fv, "faces": ff,
+                  "material": "Mat_Frame", "kind": "frame"})
     for k, col in enumerate(CANOPY_RIB_COLUMNS):
         rv, rf = build_rib(col)
         parts.append({"name": NAME_RIBS[k], "verts": rv, "faces": rf,
@@ -994,6 +1609,13 @@ def build_all():
         parts.append({"name": ARM_PREFIX + un["suffix"], "verts": un["armVerts"],
                       "faces": un["armFaces"], "material": "Mat_Arm", "kind": "arm"})
     for part in parts:
+        if part["name"] in NAME_DELETED:
+            raise ValueError(
+                "part %r is one of the nodes Max deleted at UAT on 1056f30 (%s). Canopy_Frame "
+                "is the perimeter band on the canopy's own edge and is NOT a revival of the "
+                "free-standing octagonal ring; if a build ever emits one of the deleted names "
+                "again that is an AC-FORM failure, not a naming accident."
+                % (part["name"], ", ".join(NAME_DELETED)))
         part["faces"] = triangulate(part["faces"])
     return parts, units
 
@@ -1174,11 +1796,51 @@ def analyse(units=None):
     tan_h, tan_v = frame_tangents()
     frame_rect = [(-tan_h, -tan_v), (tan_h, -tan_v), (tan_h, tan_v), (-tan_h, tan_v)]
 
-    # ---- Canopy shell: excluded from occlusion, but it must actually span the opening ----
+    # ---- Canopy shell: excluded from occlusion, but it must actually span the OPENING ----
+    # NOTE what changed with the perimeter band: the shell alone no longer covers the whole
+    # game frame, and is not supposed to. The clear opening now sits just inside the frame
+    # edge and Canopy_Frame closes the remaining margin. What must still hold is that the
+    # ASSEMBLY leaves no gap -- see frame_covers_game_frame(), asserted below.
     gv, gf = build_canopy()
     glass_hull = convex_hull_2d([project_tan(p) for p in gv])
     glass_covers_frame = all(point_in_convex_ccw(glass_hull, c) for c in frame_rect)
     glass_min_dist = min(v_len(p) for p in gv)
+
+    # ---- Canopy_Frame: the perimeter band ----
+    frame_polys = [silhouette_tan(sv, sf) for (sv, sf) in frame_segments()]
+    frame_clearance = frame_glass_clearance()
+    if frame_clearance < 0.0:
+        raise ValueError(
+            "Canopy_Frame breaks through Canopy_Glass by %.4f m. The band's front face is "
+            "held behind the shell by a standoff derived per station in frame_front_y(), so "
+            "either FRAME_OVERLAP (%.4f m) now laps far enough inboard to reach a fold the "
+            "footprint sampling steps over, or FRAME_FOOT_SAMPLES (%d) is too coarse for the "
+            "facet it is walking. Raise FRAME_FOOT_SAMPLES or reduce FRAME_OVERLAP."
+            % (-frame_clearance, FRAME_OVERLAP, FRAME_FOOT_SAMPLES))
+
+    frame_covers, _frame_hull = frame_covers_game_frame()
+    if not frame_covers:
+        raise ValueError(
+            "Canopy_Frame's outer boundary does not close the %.0f deg / %.4f view at every "
+            "corner, so the pilot would see background in the gap between the edge of the "
+            "cockpit and the edge of the screen.\n"
+            "  Fix: widen FRAME_WIDTH (%.3f m) / FRAME_SILL_WIDTH (%.3f m), or cut less off "
+            "the corners with FRAME_CHAMFER_OUT (%.3f m) -- the outer chamfer is the usual "
+            "culprit, because it is the corners that run out of cover first."
+            % (GAME_FOV_DEG, GAME_ASPECT, FRAME_WIDTH, FRAME_SILL_WIDTH, FRAME_CHAMFER_OUT))
+
+    frame_stns = frame_stations()
+    frame_standoffs = [CANOPY_Y_EDGE - y for (_i, _o, y) in frame_stns]
+    frame_detail = {
+        "name": NAME_FRAME,
+        "stations": len(frame_stns),
+        "standoffMin": min(frame_standoffs),
+        "standoffMax": max(frame_standoffs),
+        "glassClearance": frame_clearance,
+        "coversGameFrame": frame_covers,
+        "sideCoverage": frame_side_coverage(),
+        "ownOcclusion": coverage_fraction(frame_polys),
+    }
 
     # ---- Ribs ----
     rib_polys = []
@@ -1187,20 +1849,24 @@ def analyse(units=None):
         secs = rib_sections(col)
         polys = [silhouette_tan(sv, sf) for (sv, sf) in loft_segments(secs)]
         rib_polys.extend(polys)
-        ridge = [canopy_grid()[col][j] for j in range(len(CANOPY_ROWS))]
-        tans = [project_tan(p) for p in ridge]
-        standoffs = [v_len(v_sub(v_mul(v_add(s[0], s[3]), 0.5), ridge[j]))
+        path = rib_path(col)
+        tans = [project_tan(p) for p in path]
+        inner = min(range(len(tans)), key=lambda i: abs(tans[i][0]))
+        standoffs = [v_len(v_sub(v_mul(v_add(s[0], s[3]), 0.5), path[j]))
                      for j, s in enumerate(secs)]
         rib_detail.append({
             "name": NAME_RIBS[k],
             "columnIndex": col,
-            "tanXAtRim": tans[0][0],
-            "tanXAtCrest": tans[len(tans) // 2][0],
-            "angleAtRimDeg": math.degrees(math.atan(abs(tans[0][0]))),
-            "angleAtCrestDeg": math.degrees(math.atan(abs(tans[len(tans) // 2][0]))),
+            "stations": len(path),
+            "tanXAtFoot": tans[0][0],
+            "tanXAtCrest": tans[inner][0],
+            "angleAtFootDeg": math.degrees(math.atan(abs(tans[0][0]))),
+            "angleAtCrestDeg": math.degrees(math.atan(abs(tans[inner][0]))),
+            "kinkAnglesDeg": rib_kink_angles(col),
             "standoffMin": min(standoffs),
             "standoffMax": max(standoffs),
             "glassClearance": rib_glass_clearance(col),
+            "joins": rib_end_joins(col),
             "ownOcclusion": coverage_fraction(polys),
         })
 
@@ -1214,6 +1880,36 @@ def analyse(units=None):
             "either it failed to converge or RIB_WIDTH (%.4f m) is too wide for the facet at "
             "that station. Narrow RIB_WIDTH or move CANOPY_RIB_X."
             % ("\n".join(lines), RIB_WIDTH))
+
+    # A rib must land ON the band at both ends, or it reads as a bar hanging in space -- the
+    # "monitors on lamp-posts" defect. Checked, not assumed.
+    floating = []
+    for d in rib_detail:
+        for j in d["joins"]:
+            if j["centroidOutsideBy"] > 0.0 or j["worstCornerOutsideBy"] > RIB_FRAME_JOIN_TOL:
+                floating.append((d["name"], j))
+    if floating:
+        lines = ["    %s %s end: centre %.4f m outside the band, worst corner %.4f m "
+                 "(tolerance %.4f m)"
+                 % (nm, j["end"], j["centroidOutsideBy"], j["worstCornerOutsideBy"],
+                    RIB_FRAME_JOIN_TOL) for (nm, j) in floating]
+        raise ValueError(
+            "a canopy rib does not terminate on Canopy_Frame:\n%s\n"
+            "  Fix: raise RIB_END_OVERRUN (currently %.3f m) so the end runs further into the "
+            "band, or widen the band on that side -- a rib that stops short of the frame is "
+            "the floating-bar look Max rejected."
+            % ("\n".join(lines), RIB_END_OVERRUN))
+
+    # The containment test's own planted defect: the same end section, displaced a metre up
+    # the rib, must read as clearly outside. A check that cannot fail proves nothing.
+    blind = [(d["name"], j) for d in rib_detail for j in d["joins"]
+             if j["plantedDefectOutsideBy"] < 0.10]
+    if blind:
+        raise ValueError(
+            "the rib-to-frame containment test is not discriminating: a point planted 1.0 m "
+            "away from the joint still reads as only %.4f m outside the band (%s %s end). "
+            "frame_solid_distance() is not measuring what it claims to."
+            % (blind[0][1]["plantedDefectOutsideBy"], blind[0][0], blind[0][1]["end"]))
 
     # ---- Screens (display face + body) and arms ----
     screen_polys = []
@@ -1316,6 +2012,31 @@ def analyse(units=None):
             "ARM_ATTACH_U / ARM_ATTACH_W so the strut lands closer to the middle of the back "
             "plate and approaches from further behind." % ("\n".join(lines), ARM_ROOT_Y))
 
+    # Nothing may be inside the band. The screens and arms live well inboard of it, but the
+    # band is new geometry and "well inboard" is an assumption, not a measurement -- and a
+    # screen box pushed outboard by a re-author would otherwise disappear into the hull
+    # silently, because the union counts overlapping occluders once either way.
+    in_frame = []
+    for un in units:
+        for (nm, vs) in ((BODY_PREFIX + un["suffix"], un["bodyVerts"]),
+                         (SCREEN_PREFIX + un["suffix"], un["faceVerts"]),
+                         (ARM_PREFIX + un["suffix"], un["armVerts"])):
+            for v in vs:
+                d = frame_solid_distance(v)
+                if d <= 0.0:
+                    in_frame.append((nm, v, d))
+    if in_frame:
+        nm, v, d = in_frame[0]
+        raise ValueError(
+            "%d vertices of the screen units / arms are buried inside Canopy_Frame -- e.g. %s "
+            "at (%.4f, %.4f, %.4f), %.4f m in. They would be swallowed by the hull band.\n"
+            "  Fix: pull the units inboard (lower SCREEN_TAN_X / SCREEN_TAN_Z_*), or move the "
+            "band outboard by widening the opening."
+            % (len(in_frame), nm, v[0], v[1], v[2], -d))
+    min_clear_of_frame = min(frame_solid_distance(v)
+                             for un in units
+                             for v in (un["bodyVerts"] + un["faceVerts"] + un["armVerts"]))
+
     if max_unit_dist >= glass_min_dist:
         raise ValueError(
             "a screen unit or arm reaches %.4f m from the eye, but the nearest point of "
@@ -1323,15 +2044,20 @@ def analyse(units=None):
             "Lower SCREEN_DIST, or push the shell out with CANOPY_Y_EDGE / CANOPY_BULGE."
             % (max_unit_dist, glass_min_dist))
 
-    # ---- Occlusion. Canopy_Glass is NOT in any of these lists, by design. ----
+    # ---- Occlusion. Canopy_Glass is NOT in any of these lists, by design. Canopy_Frame IS:
+    # it is opaque hull, and it is the single biggest change this revision makes to what the
+    # pilot sees. The marginal order is ribs -> frame -> screens -> arms.
     ribs_own = coverage_fraction(rib_polys)
+    frame_own = coverage_fraction(frame_polys)
     screens_own = coverage_fraction(screen_polys)
     arms_own = coverage_fraction(arm_polys)
     ribs_marginal = ribs_own
-    ribs_screens = coverage_fraction(rib_polys + screen_polys)
-    screens_marginal = ribs_screens - ribs_own
-    total = coverage_fraction(rib_polys + screen_polys + arm_polys)
-    arms_marginal = total - ribs_screens
+    ribs_frame = coverage_fraction(rib_polys + frame_polys)
+    frame_marginal = ribs_frame - ribs_own
+    ribs_frame_screens = coverage_fraction(rib_polys + frame_polys + screen_polys)
+    screens_marginal = ribs_frame_screens - ribs_frame
+    total = coverage_fraction(rib_polys + frame_polys + screen_polys + arm_polys)
+    arms_marginal = total - ribs_frame_screens
 
     return {
         "fovDeg": GAME_FOV_DEG,
@@ -1347,22 +2073,27 @@ def analyse(units=None):
         "canopyCrestY": CANOPY_Y_EDGE + CANOPY_BULGE,
         "canopyMinDistance": glass_min_dist,
         "canopyCoversFrame": glass_covers_frame,
+        "assemblyCoversFrame": frame_covers,
         "canopyHalfAnglesDeg": {
             "leftRight": math.degrees(math.atan(CANOPY_HALF_W / CANOPY_Y_EDGE)),
             "up": math.degrees(math.atan(CANOPY_TOP_Z / CANOPY_Y_EDGE)),
             "down": math.degrees(math.atan(-CANOPY_BOT_Z / CANOPY_Y_EDGE)),
         },
 
+        "frameDetail": frame_detail,
         "ribDetail": rib_detail,
         "screenDetail": screen_detail,
         "armDetail": arm_detail,
         "maxUnitDistance": max_unit_dist,
+        "minUnitClearanceOfFrame": min_clear_of_frame,
 
         "occlusionTotal": total,
         "occlusionRibsOwn": ribs_own,
+        "occlusionFrameOwn": frame_own,
         "occlusionScreensOwn": screens_own,
         "occlusionArmsOwn": arms_own,
         "occlusionRibsMarginal": ribs_marginal,
+        "occlusionFrameMarginal": frame_marginal,
         "occlusionScreensMarginal": screens_marginal,
         "occlusionArmsMarginal": arms_marginal,
         "occlusionExcludes": [NAME_GLASS],
@@ -1407,8 +2138,9 @@ def make_material(name, rgb, roughness, metallic=0.0, double_sided=False, alpha=
     every mesh here:
 
         ScreenBody_* / Arm_*  closed solids -- single-sided is correct and cheaper.
-        Canopy_Rib_*          closed solids too, but the lab orbits outside the cockpit, so
-                              they are double-sided to avoid reading as "the ribs vanished".
+        Canopy_Rib_* /        closed solids too, but the lab orbits outside the cockpit, so
+        Canopy_Frame          Mat_Frame is double-sided to avoid the structure reading as
+                              "the ribs and the band vanished" from half the orbit.
         Screen_*              single quads. Single-sided would make all four disappear the
                               moment the orbit camera swings behind them.
         Canopy_Glass          an open shell with two visible sides, by definition.
@@ -1616,14 +2348,58 @@ def build_metrics(parts, units, analysis):
             "width": r6(RIB_WIDTH),
             "depth": r6(RIB_DEPTH),
             "glassGap": r6(RIB_GLASS_GAP),
+            "stations": d["stations"],
+            "stationZ": [r6(z) for z in rib_station_z()],
+            "kinkAnglesDeg": [r6(a) for a in d["kinkAnglesDeg"]],
             "standoffFromRidgeMin": r6(d["standoffMin"]),
             "standoffFromRidgeMax": r6(d["standoffMax"]),
             "measuredGlassClearance": r6(d["glassClearance"]),
-            "angleAtRimDeg": r6(d["angleAtRimDeg"]),
+            "angleAtFootDeg": r6(d["angleAtFootDeg"]),
             "angleAtCrestDeg": r6(d["angleAtCrestDeg"]),
-            "bowDeg": r6(d["angleAtRimDeg"] - d["angleAtCrestDeg"]),
-            "bowTanSpace": r6(abs(d["tanXAtRim"]) - abs(d["tanXAtCrest"])),
+            "bowDeg": r6(d["angleAtFootDeg"] - d["angleAtCrestDeg"]),
+            "bowTanSpace": r6(abs(d["tanXAtFoot"]) - abs(d["tanXAtCrest"])),
+            "endsOnFrame": [
+                {"end": j["end"],
+                 "centreOutsideFrameBy": r6(j["centroidOutsideBy"]),
+                 "worstCornerOutsideFrameBy": r6(j["worstCornerOutsideBy"]),
+                 "plantedDefectOutsideFrameBy": r6(j["plantedDefectOutsideBy"])}
+                for j in d["joins"]
+            ],
         })
+
+    fd = analysis["frameDetail"]
+    inner_ring, outer_ring = frame_polygons()
+    canopy_frame = {
+        "name": NAME_FRAME,
+        "what": ("the band where the glass meets the hull: a closed faceted ring on the "
+                 "canopy's own edge, the whole way round INCLUDING THE BOTTOM. This is the "
+                 "'fairly thin' frame Max asked for, and its lower run is the simple sill "
+                 "his second reference shows under the screens."),
+        "notCockpitFrame": ("distinct from the deleted Cockpit_Frame, which was a chunky "
+                            "free-standing octagonal ring carrying the screen pads"),
+        "runWidth": r6(FRAME_WIDTH),
+        "sillWidth": r6(FRAME_SILL_WIDTH),
+        "glassOverlap": r6(FRAME_OVERLAP),
+        "depth": r6(FRAME_DEPTH),
+        "chamferInner": r6(FRAME_CHAMFER_IN),
+        "chamferOuter": r6(FRAME_CHAMFER_OUT),
+        "glassGap": r6(FRAME_GLASS_GAP),
+        "stations": fd["stations"],
+        "straightRuns": len(FRAME_RUNS),
+        "cornerBreaks": fd["stations"] - len(FRAME_RUNS),
+        "innerBoundary": [[r6(x), r6(z)] for (x, z) in inner_ring],
+        "outerBoundary": [[r6(x), r6(z)] for (x, z) in outer_ring],
+        "standoffFromRimMin": r6(fd["standoffMin"]),
+        "standoffFromRimMax": r6(fd["standoffMax"]),
+        "measuredGlassClearance": r6(fd["glassClearance"]),
+        "outerBoundaryCoversGameFrame": fd["coversGameFrame"],
+        "innerEdgeAsFractionOfHalfFrame": {k: r6(v) for (k, v) in fd["sideCoverage"].items()},
+        "widthNote": ("innerEdgeAsFractionOfHalfFrame is what 'fairly thin' means from the "
+                      "seat: 0.94 says the band covers the outer 6% of that side of the "
+                      "view. 1.0 or more would mean the run is outside the 70 deg frame "
+                      "entirely and the pilot cannot see it -- the defect this revision "
+                      "fixes. The metric width alone cannot tell you that."),
+    }
 
     return {
         "schemaVersion": 2,
@@ -1636,10 +2412,12 @@ def build_metrics(parts, units, analysis):
         "scaleNormalisation": "none - every node is identity, 1 unit = 1 metre",
         "eyePoint": [0.0, 0.0, 0.0],
         "eyePointNodeName": NAME_EYE,
-        "removedInThisRevision": ["Hull_Nose", "Cockpit_Frame"],
-        "removedWhy": ("Max removed the ship nose and replaced the octagonal canopy frame "
-                       "with two vertical ribs at UAT on 1056f30. Either node reappearing "
-                       "is an AC-FORM failure."),
+        "removedInThisRevision": list(NAME_DELETED),
+        "removedWhy": ("Max removed the ship nose and the free-standing octagonal frame at "
+                       "UAT on 1056f30. Either node reappearing is an AC-FORM failure. "
+                       "Canopy_Frame is NOT a revival of Cockpit_Frame: it is a thin band on "
+                       "the canopy's own edge, not a ring standing in the cabin, and it "
+                       "carries nothing. build_all() refuses to emit either deleted name."),
 
         "constants": {
             "INCH": INCH,
@@ -1655,9 +2433,20 @@ def build_metrics(parts, units, analysis):
             "CANOPY_COLUMNS": [[r6(x), r6(f)] for (x, f) in CANOPY_COLUMNS],
             "CANOPY_ROWS": [[r6(z), r6(f)] for (z, f) in CANOPY_ROWS],
             "CANOPY_RIB_COLUMNS": list(CANOPY_RIB_COLUMNS),
+            "FRAME_WIDTH": FRAME_WIDTH,
+            "FRAME_SILL_WIDTH": FRAME_SILL_WIDTH,
+            "FRAME_OVERLAP": FRAME_OVERLAP,
+            "FRAME_DEPTH": FRAME_DEPTH,
+            "FRAME_CHAMFER_IN": FRAME_CHAMFER_IN,
+            "FRAME_CHAMFER_OUT": FRAME_CHAMFER_OUT,
+            "FRAME_GLASS_GAP": FRAME_GLASS_GAP,
+            "FRAME_FOOT_SAMPLES": FRAME_FOOT_SAMPLES,
             "RIB_WIDTH": RIB_WIDTH,
             "RIB_DEPTH": RIB_DEPTH,
             "RIB_GLASS_GAP": RIB_GLASS_GAP,
+            "RIB_KINK_Z": [r6(z) for z in RIB_KINK_Z],
+            "RIB_END_OVERRUN": RIB_END_OVERRUN,
+            "RIB_FRAME_JOIN_TOL": RIB_FRAME_JOIN_TOL,
             "SCREEN_W": SCREEN_W,
             "SCREEN_H": SCREEN_H,
             "SCREEN_BEZEL": r6(SCREEN_BEZEL),
@@ -1683,6 +2472,27 @@ def build_metrics(parts, units, analysis):
             "GAME_ASPECT": r6(GAME_ASPECT),
             "OCC_SCANLINES": OCC_SCANLINES,
             "OCC_NEAR_Y": OCC_NEAR_Y,
+        },
+
+        # Declared so increments 2-4 (and any re-author) can see what the surfaces were
+        # actually set to, and why they are no longer near-black. See the constants block.
+        "materials": {
+            "Mat_Frame": {"baseColorLinear": list(MAT_FRAME_RGB), "roughness": MAT_FRAME_ROUGH,
+                          "metallic": MAT_FRAME_METAL, "usedBy": [NAME_FRAME] + list(NAME_RIBS)},
+            "Mat_Body": {"baseColorLinear": list(MAT_BODY_RGB), "roughness": MAT_BODY_ROUGH,
+                         "metallic": MAT_BODY_METAL, "usedBy": [BODY_PREFIX + "*"]},
+            "Mat_Arm": {"baseColorLinear": list(MAT_ARM_RGB), "roughness": MAT_ARM_ROUGH,
+                        "metallic": MAT_ARM_METAL, "usedBy": [ARM_PREFIX + "*"]},
+            "Mat_Screen": {"baseColorLinear": list(MAT_SCREEN_RGB),
+                           "roughness": MAT_SCREEN_ROUGH, "metallic": MAT_SCREEN_METAL,
+                           "usedBy": [SCREEN_PREFIX + "*"]},
+            "Mat_Glass": {"baseColorLinear": list(MAT_GLASS_RGB), "roughness": MAT_GLASS_ROUGH,
+                          "alpha": MAT_GLASS_ALPHA, "usedBy": [NAME_GLASS]},
+            "note": ("Raised out of near-black (0.042 - 0.085 linear) because the lab's cabin "
+                     "light is off by default and the structure could not be told from empty "
+                     "space. Metalness is kept low on purpose: with no environment map a "
+                     "metal has nothing to reflect and renders darker, not shinier. "
+                     "Mat_Screen stays near-black -- it is an unlit CRT until increment 2."),
         },
 
         "screenUnit": {
@@ -1711,6 +2521,12 @@ def build_metrics(parts, units, analysis):
             "facetRows": len(CANOPY_ROWS),
             "ridgeX": [r6(-CANOPY_RIB_X), r6(CANOPY_RIB_X)],
             "coversGameFrame": analysis["canopyCoversFrame"],
+            "coversGameFrameNote": ("false by design as of this revision: the CLEAR OPENING "
+                                    "now sits just inside the 70 deg frame on every side so "
+                                    "that Canopy_Frame is visible from the seat. What must "
+                                    "hold is assemblyCoversGameFrame below -- glass plus "
+                                    "band, with no gap for the pilot to see through."),
+            "assemblyCoversGameFrame": analysis["assemblyCoversFrame"],
             "minDistanceFromEye": r6(analysis["canopyMinDistance"]),
             "halfAnglesDeg": {
                 "leftRight": r6(analysis["canopyHalfAnglesDeg"]["leftRight"]),
@@ -1724,6 +2540,7 @@ def build_metrics(parts, units, analysis):
 
         "sceneBoundingBox": {"min": r6v(scene_lo), "max": r6v(scene_hi)},
         "objects": objects,
+        "canopyFrame": canopy_frame,
         "ribs": ribs,
         "screens": screens,
         "arms": arms,
@@ -1743,19 +2560,24 @@ def build_metrics(parts, units, analysis):
             "total": r6(analysis["occlusionTotal"]),
             "marginal": {
                 "ribs": r6(analysis["occlusionRibsMarginal"]),
+                "canopyFrame": r6(analysis["occlusionFrameMarginal"]),
                 "screensAndBodies": r6(analysis["occlusionScreensMarginal"]),
                 "arms": r6(analysis["occlusionArmsMarginal"]),
             },
             "own": {
                 "ribs": r6(analysis["occlusionRibsOwn"]),
+                "canopyFrame": r6(analysis["occlusionFrameOwn"]),
                 "screensAndBodies": r6(analysis["occlusionScreensOwn"]),
                 "arms": r6(analysis["occlusionArmsOwn"]),
             },
-            "note": ("Marginal figures are measured in the fixed order ribs -> screens -> "
-                     "arms and sum to the total; 'own' figures are each category in "
-                     "isolation and overlap, so they do not. AC-FRAME's browser measurement "
-                     "is authoritative; this exists so proportions can be tuned without a "
-                     "render round-trip, and no geometry is padded to hit a number."),
+            "note": ("Marginal figures are measured in the fixed order ribs -> frame -> "
+                     "screens -> arms and sum to the total; 'own' figures are each category "
+                     "in isolation and overlap, so they do not. AC-FRAME's browser "
+                     "measurement is authoritative; this exists so proportions can be tuned "
+                     "without a render round-trip, and no geometry is padded to hit a "
+                     "number. Canopy_Frame is new in this revision and is the reason the "
+                     "total is above the 21.30% the frameless build measured; that rise is "
+                     "the enclosure Max asked for, not padding."),
         },
 
         "diagnostics": {
@@ -1767,10 +2589,31 @@ def build_metrics(parts, units, analysis):
             "frameHalfAngleVerticalDeg": r6(analysis["halfAngleVerticalDeg"]),
             "frameTanHalfExtents": [r6(analysis["tanH"]), r6(analysis["tanV"])],
             "canopyCoversGameFrame": analysis["canopyCoversFrame"],
+            "assemblyCoversGameFrame": analysis["assemblyCoversFrame"],
             "maxScreenOrArmDistance": r6(analysis["maxUnitDistance"]),
             "canopyMinDistance": r6(analysis["canopyMinDistance"]),
             "minRibGlassClearance": r6(min(d["glassClearance"]
                                            for d in analysis["ribDetail"])),
+            "frameGlassClearance": r6(analysis["frameDetail"]["glassClearance"]),
+            "minScreenOrArmClearanceOfFrame": r6(analysis["minUnitClearanceOfFrame"]),
+            # Every rib end is inside the band, so these are <= 0. Stated as a number rather
+            # than a boolean so a joint that is merely grazing the band shows up as a joint
+            # that is merely grazing the band.
+            "worstRibEndOutsideFrame": r6(max(j["worstCornerOutsideBy"]
+                                              for d in analysis["ribDetail"]
+                                              for j in d["joins"])),
+            "worstRibEndCentreOutsideFrame": r6(max(j["centroidOutsideBy"]
+                                                    for d in analysis["ribDetail"]
+                                                    for j in d["joins"])),
+            # The containment instrument's planted defect: a point 1 m off the joint must
+            # read as clearly outside, or "the rib ends on the frame" is unfalsifiable.
+            "ribEndJoinPlantedDefectMin": r6(min(j["plantedDefectOutsideBy"]
+                                                 for d in analysis["ribDetail"]
+                                                 for j in d["joins"])),
+            "frameInnerEdgeAsFractionOfHalfFrame": {
+                k: r6(v) for (k, v) in analysis["frameDetail"]["sideCoverage"].items()},
+            "minRibKinkAngleDeg": r6(min(a for d in analysis["ribDetail"]
+                                         for a in d["kinkAnglesDeg"])),
             "everyArmRootOutsideFrustum": all(d["outsideFrustum"]
                                               for d in analysis["armDetail"]),
             "minArmRootClearance": r6(min(d["clearanceBest"][1]
@@ -1854,7 +2697,8 @@ def print_summary(metrics, analysis, glb_path, metrics_path):
     print("                tan half-extents %.4f x %.4f" % (analysis["tanH"], analysis["tanV"]))
     print("")
     cp = metrics["canopy"]
-    print("  Canopy shell (Canopy_Glass -- EXCLUDED from occlusion, see-through by design)")
+    print("  Canopy shell (Canopy_Glass -- the CLEAR OPENING; EXCLUDED from occlusion,")
+    print("                see-through by design)")
     print("    rim plane %.3f m forward, crest %.3f m forward -> PROTRUDES %.3f m"
           % (cp["rimY"], cp["crestY"], cp["protrusionDepth"]))
     print("    rim %.3f x %.3f m; %d facet columns x %d rows; ridges at x = %+.3f / %+.3f"
@@ -1864,18 +2708,57 @@ def print_summary(metrics, analysis, glb_path, metrics_path):
           % (cp["halfAnglesDeg"]["leftRight"], cp["halfAnglesDeg"]["up"],
              cp["halfAnglesDeg"]["down"]))
     print("")
-    print("  Ribs (the two vertical strips -- the ONLY frame structure)")
-    print("    %-16s %8s %8s %9s %9s %8s %18s" % ("name", "width", "depth", "at rim",
+    cf = metrics["canopyFrame"]
+    cov = cf["innerEdgeAsFractionOfHalfFrame"]
+    print("  Canopy_Frame -- the perimeter band where the glass meets the hull")
+    print("    the whole way round INCLUDING THE BOTTOM, whose lower run IS the sill")
+    print("    %d stations = %d straight runs + %d corner breaks; depth %.3f m toward the eye"
+          % (cf["stations"], cf["straightRuns"], cf["cornerBreaks"], cf["depth"]))
+    print("    runs %.3f m across, sill %.3f m, lapping %.3f m under the glass"
+          % (cf["runWidth"], cf["sillWidth"], cf["glassOverlap"]))
+    print("    corner chamfers: inner %.3f m (the visible break), outer %.3f m (kept small "
+          "so the" % (cf["chamferInner"], cf["chamferOuter"]))
+    print("      outer boundary still closes the view at the corners)")
+    print("    standoff from the rim plane %.4f-%.4f m (derived per station, not authored --"
+          % (cf["standoffFromRimMin"], cf["standoffFromRimMax"]))
+    print("      a single value is the correct answer while the band straddles the rim, since")
+    print("      the flat rim binds at every station; it spreads out if the band moves inboard)")
+    print("    APPARENT WIDTH from the seat -- inner edge as a fraction of the frame's own")
+    print("    half-extent, which is what 'fairly thin' means here:")
+    print("      left %.3f   right %.3f   top %.3f   bottom (sill) %.3f"
+          % (cov["left"], cov["right"], cov["top"], cov["bottom"]))
+    print("      i.e. the band covers the outer %.1f%% at the sides, %.1f%% at the top and "
+          "%.1f%% at" % (100.0 * (1.0 - cov["left"]), 100.0 * (1.0 - cov["top"]),
+                         100.0 * (1.0 - cov["bottom"])))
+    print("      the bottom. At 1.000 a run would be outside the 70 deg frame entirely and")
+    print("      the pilot could not see it -- which is what the previous revision measured.")
+    print("")
+    print("  Ribs (the two vertical strips: three straight runs, two kinks, both ends")
+    print("        terminating INSIDE Canopy_Frame)")
+    print("    %-16s %8s %8s %9s %9s %8s %18s" % ("name", "width", "depth", "at foot",
                                                   "at crest", "bow", "standoff (derived)"))
     for r in metrics["ribs"]:
         print("    %-16s %7.3fm %7.3fm %8.2fd %8.2fd %7.2fd  %.4f-%.4f m"
-              % (r["name"], r["width"], r["depth"], r["angleAtRimDeg"],
+              % (r["name"], r["width"], r["depth"], r["angleAtFootDeg"],
                  r["angleAtCrestDeg"], r["bowDeg"], r["standoffFromRidgeMin"],
                  r["standoffFromRidgeMax"]))
+    for r in metrics["ribs"]:
+        print("    %-16s stations z = %s" % (r["name"],
+                                             ", ".join("%+.3f" % z for z in r["stationZ"])))
+        print("    %-16s kinks       %s" % ("", ", ".join("%.1f deg" % a
+                                                          for a in r["kinkAnglesDeg"])))
+        print("    %-16s ends        %s" % ("", ", ".join(
+            "%s %s the band by %.4f m (worst corner %.4f m)"
+            % (e["end"], "inside" if e["centreOutsideFrameBy"] <= 0 else "OUTSIDE",
+               abs(e["centreOutsideFrameBy"]), e["worstCornerOutsideFrameBy"])
+            for e in r["endsOnFrame"])))
     print("    (bow = how far the rib swings toward the centre-line as it crosses the bulge;")
     print("     that swing IS the cue that reads as 'the canopy sticks out in front of me'.")
-    print("     standoff is solved per station so the strap's corners clear the glass, not")
-    print("     authored -- it re-derives itself when RIB_WIDTH or the bulge changes)")
+    print("     The KINKS are the other half of it: Max's references show members that bend")
+    print("     as they rise, so the runs are few and the joints sharp. The first and last")
+    print("     kinks are the flat stubs that land each end inside the band -- see")
+    print("     rib_station_z(). standoff is solved per station so the strap clears the")
+    print("     glass; it re-derives itself when RIB_WIDTH or the bulge changes)")
     print("")
     su = metrics["screenUnit"]
     print("  Screen units (boxy: bezel + backing, display face recessed)")
@@ -1927,30 +2810,57 @@ def print_summary(metrics, analysis, glb_path, metrics_path):
     print("    %-22s %10s %10s" % ("", "marginal", "own"))
     print("    %-22s %9.2f%% %9.2f%%" % ("ribs", 100.0 * occ["marginal"]["ribs"],
                                          100.0 * occ["own"]["ribs"]))
+    print("    %-22s %9.2f%% %9.2f%%" % ("canopy frame",
+                                         100.0 * occ["marginal"]["canopyFrame"],
+                                         100.0 * occ["own"]["canopyFrame"]))
     print("    %-22s %9.2f%% %9.2f%%" % ("screens + bodies",
                                          100.0 * occ["marginal"]["screensAndBodies"],
                                          100.0 * occ["own"]["screensAndBodies"]))
     print("    %-22s %9.2f%% %9.2f%%" % ("arms", 100.0 * occ["marginal"]["arms"],
                                          100.0 * occ["own"]["arms"]))
     print("    %-22s %9.2f%%" % ("TOTAL (union)", 100.0 * occ["total"]))
-    print("    Marginal columns are measured in the order ribs -> screens -> arms and sum to")
-    print("    the TOTAL. 'Own' columns are each category alone and overlap, so they do not.")
-    print("    AC-FRAME is measure-and-report: this number describes the form Max asked for,")
-    print("    it is not a target the geometry was tuned to hit.")
+    print("    Marginal columns are measured in the order ribs -> frame -> screens -> arms")
+    print("    and sum to the TOTAL. 'Own' columns are each category alone and overlap, so")
+    print("    they do not. AC-FRAME is measure-and-report: this number describes the form")
+    print("    Max asked for, it is not a target the geometry was tuned to hit. The rise")
+    print("    over the 21.30% the frameless build measured IS the enclosure he asked for.")
     print("")
     print("  Checks")
     dg = metrics["diagnostics"]
-    print("    canopy shell spans the whole game frame : %s"
-          % ("yes" if dg["canopyCoversGameFrame"] else "NO - a frame corner sees past the glass"))
+    print("    glass + frame close the whole view      : %s"
+          % ("yes" if dg["assemblyCoversGameFrame"]
+             else "NO - the pilot sees background past the cockpit edge"))
+    print("    (the shell ALONE covers the frame: %s -- false is correct now, the opening is"
+          % ("yes" if dg["canopyCoversGameFrame"] else "no"))
+    print("     deliberately inside the view so the band is visible from the seat)")
     rc = dg["minRibGlassClearance"]
     print("    ribs stay behind the glass they follow  : %s (measured on the finished mesh, "
           "min gap %.4f m)" % ("yes" if rc >= 0.0 else "NO - a rib breaks through", rc))
+    fc = dg["frameGlassClearance"]
+    print("    frame stays behind the glass it laps    : %s (measured on the finished mesh, "
+          "min gap %.4f m)" % ("yes" if fc >= 0.0 else "NO - the band breaks through", fc))
+    re_ = dg["worstRibEndOutsideFrame"]
+    rec = dg["worstRibEndCentreOutsideFrame"]
+    print("    both ribs terminate ON the frame        : %s (worst end centre %.4f m inside "
+          "the band," % ("yes" if rec <= 0.0 and re_ <= RIB_FRAME_JOIN_TOL else "NO", -rec))
+    print("                                              worst corner %+.4f m vs tolerance "
+          "%.3f m)" % (re_, RIB_FRAME_JOIN_TOL))
+    print("      instrument planted-defect check       : a point 1.0 m off the joint reads "
+          "%.3f m OUTSIDE" % dg["ribEndJoinPlantedDefectMin"])
+    print("                                              (so the containment test can "
+          "actually fail)")
+    print("    ribs read as kinked, not curved         : smallest turn %.1f deg across %d "
+          "joints" % (dg["minRibKinkAngleDeg"],
+                      sum(len(r["kinkAnglesDeg"]) for r in metrics["ribs"])))
     print("    every arm root outside the frustum      : %s (min clearance %.3f m, "
           "floor %.3f m)" % ("yes" if dg["everyArmRootOutsideFrustum"] else "NO",
                              dg["minArmRootClearance"], ARM_ROOT_CLEARANCE_MIN))
     print("    screens+arms stay inboard of the glass  : %s (farthest %.3f m vs nearest "
           "glass %.3f m)" % ("yes" if dg["maxScreenOrArmDistance"] < dg["canopyMinDistance"]
                              else "NO", dg["maxScreenOrArmDistance"], dg["canopyMinDistance"]))
+    print("    screens+arms stay clear of the band     : %s (nearest vertex %.3f m outside "
+          "it)" % ("yes" if dg["minScreenOrArmClearanceOfFrame"] > 0.0 else "NO",
+                   dg["minScreenOrArmClearanceOfFrame"]))
     wa = dg["worstArmInFrontOfScreenBox"]
     print("    no arm crosses in front of a screen     : %s (%d samples overlapped a box; "
           "nearest stays %.4f m behind it)"
@@ -1959,8 +2869,11 @@ def print_summary(metrics, analysis, glb_path, metrics_path):
     print("    least-visible display face              : %.1f%% inside the frame%s"
           % (100.0 * mv, "" if mv >= 0.999 else "   <- part of a screen falls off-screen"))
     print("    no Hull_Nose, no Cockpit_Frame          : %s"
-          % ("yes" if not any(o["name"] in ("Hull_Nose", "Cockpit_Frame")
-                              for o in metrics["objects"]) else "NO - a deleted node is back"))
+          % ("yes" if not any(o["name"] in NAME_DELETED
+                              for o in metrics["objects"])
+             else "NO - a deleted node is back"))
+    print("                                              (Canopy_Frame is the band on the")
+    print("                                               canopy's edge, not the deleted ring)")
     print("=" * 82)
     print("")
 
@@ -2002,15 +2915,17 @@ def main():
     purge_scene()
 
     mats = {
-        "Mat_Frame": make_material("Mat_Frame", MAT_FRAME_RGB, roughness=0.55,
-                                   double_sided=True),
-        "Mat_Screen": make_material("Mat_Screen", MAT_SCREEN_RGB, roughness=0.28,
-                                    double_sided=True),
-        "Mat_Body": make_material("Mat_Body", MAT_BODY_RGB, roughness=0.48,
-                                  double_sided=False),
-        "Mat_Arm": make_material("Mat_Arm", MAT_ARM_RGB, roughness=0.40, metallic=0.6,
-                                 double_sided=False),
-        "Mat_Glass": make_material("Mat_Glass", MAT_GLASS_RGB, roughness=0.08,
+        # Mat_Frame is shared by the ribs and the perimeter band on purpose: they are the
+        # same structure, and Max named one material for the frame.
+        "Mat_Frame": make_material("Mat_Frame", MAT_FRAME_RGB, roughness=MAT_FRAME_ROUGH,
+                                   metallic=MAT_FRAME_METAL, double_sided=True),
+        "Mat_Screen": make_material("Mat_Screen", MAT_SCREEN_RGB, roughness=MAT_SCREEN_ROUGH,
+                                    metallic=MAT_SCREEN_METAL, double_sided=True),
+        "Mat_Body": make_material("Mat_Body", MAT_BODY_RGB, roughness=MAT_BODY_ROUGH,
+                                  metallic=MAT_BODY_METAL, double_sided=False),
+        "Mat_Arm": make_material("Mat_Arm", MAT_ARM_RGB, roughness=MAT_ARM_ROUGH,
+                                 metallic=MAT_ARM_METAL, double_sided=False),
+        "Mat_Glass": make_material("Mat_Glass", MAT_GLASS_RGB, roughness=MAT_GLASS_ROUGH,
                                    double_sided=True, alpha=MAT_GLASS_ALPHA),
     }
 

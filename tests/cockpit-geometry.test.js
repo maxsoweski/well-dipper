@@ -16,8 +16,35 @@
 //   mounting  seated on a pillar -> carried on ARMS whose roots are outside the
 //                                  70 deg / 16:9 view frustum
 //   frame     octagonal ring     -> TWO vertical ribs lying on a forward-protruding
-//                                  Canopy_Glass shell
+//                                  Canopy_Glass shell, PLUS a thin faceted perimeter
+//                                  band (Canopy_Frame) around the canopy opening
 //   nose      Hull_Nose          -> DELETED. Its presence is now an AC-FORM failure.
+//
+// ── THE PERIMETER FRAME (added 2026-07-28, after the reference images) ───────
+// Max's two form references both show a clear faceted edge where the glass meets the
+// hull, and it is that edge — including a plain lower SILL under the screens — that makes
+// the thing read as a cockpit rather than as four monitors on two lamp-posts. "Fairly
+// thin" was mis-briefed as "absent". Canopy_Frame is the band; the ribs now terminate ON
+// it at both ends instead of floating. See the workstream's reference/README.md.
+//
+// ── WHAT AN ADVERSARIAL REVIEW FOUND, AND WHAT REPLACED IT ───────────────────
+// Three assertions here could not fail. Each is now written so a planted defect makes it
+// red, and each planted defect is exercised by a self-test in this file:
+//
+//   1. the node inventory was SUBSET-shaped ("these must be present"), so a stray Cube,
+//      a duplicated ScreenBody_UL_001 or a leftover datablock node was unconstrained.
+//      It is now an EXHAUSTIVE set comparison, in both directions, and so is
+//      metrics.objects. Self-test: "reports extra, missing and duplicated names".
+//   2. the rib-on-shell check used GLB.distanceToTriangleList, which is UNSIGNED, so a
+//      rib bolted to the OUTSIDE of the canopy or punched through it measured exactly
+//      the same as one lying correctly inboard and the fraction stayed 1.0. Sidedness
+//      now comes from a ray out of the pilot's eye (GLB.insideShellFromEye), the same
+//      predicate the screen units use. Self-test: "decides sidedness from the eye".
+//   3. the glass-exclusion check filtered diagnostics for a key matching /glass/i AND
+//      /occl/i and looped over the result — with no such key the loop body never ran and
+//      the test passed. Confirmed against a sidecar carrying no glass key at all. The key
+//      is now REQUIRED to exist before it is required to be zero. Self-test: "treats a
+//      missing glass-occlusion term as absent, not as satisfied".
 //
 // The screen containment checks that used to measure against the frame ring's inner
 // cavity are replaced by containment against the canopy shell (a ray from the eye
@@ -151,7 +178,18 @@ const BODY_NAMES = QUADRANT_SUFFIXES.map((q) => `ScreenBody_${q}`);
 const ARM_NAMES = QUADRANT_SUFFIXES.map((q) => `Arm_${q}`);
 const RIB_NAMES = ['Canopy_Rib_L', 'Canopy_Rib_R'];
 const GLASS_NAME = 'Canopy_Glass';
-const PART_NAMES = [...SCREEN_NAMES, ...BODY_NAMES, ...ARM_NAMES, ...RIB_NAMES, GLASS_NAME];
+const FRAME_NAME = 'Canopy_Frame';
+const FRAME_MATERIAL = 'Mat_Frame';
+const EYE_NODE_NAME = 'Eye_Point';
+const PART_NAMES = [...SCREEN_NAMES, ...BODY_NAMES, ...ARM_NAMES, ...RIB_NAMES, GLASS_NAME, FRAME_NAME];
+
+// EXHAUSTIVE. Every node the exported file may contain — nothing else is allowed, not
+// "nothing else named Screen_*". The whole inventory is enumerated here because the
+// failure mode this replaces is a node nobody thought to name: a stray Cube from an
+// interactive Blender session, a ScreenBody_UL_001 duplicated by a partial re-run, an
+// empty left behind by a deleted parent. Extras are not cosmetic — they are rendered in
+// the lab, counted by the occlusion predictor, and shipped in the GLB.
+const EXPECTED_NODE_NAMES = [EYE_NODE_NAME, ...PART_NAMES];
 
 // Expected sign of (x, y) for each screen centre in glTF axes. Left/right are the
 // PILOT's. Looking forward down -Z with +Y up, the pilot's right hand points along +X
@@ -211,9 +249,121 @@ const RIB_ON_SHELL_FRACTION = 0.9;
 const ARM_ATTACH_TOL = 0.10;
 // Root end of an arm = vertices at least this fraction of the way out from its screen.
 const ARM_ROOT_FRACTION = 0.75;
+// Fraction of a rib's vertices whose eye-ray must actually meet the shell before the
+// SIDED containment result means anything. Not 0.9: a rib that runs onto the perimeter
+// frame at its ends legitimately leaves the glazed cone there, and those vertices are
+// skipped rather than counted either way.
+const RIB_SIDED_MIN_FRACTION = 0.5;
 // Minimum forward bulge of the canopy shell beyond its own rim for "protruding" to mean
 // anything. A flat shell spanning the opening measures 0 here.
 const MIN_CANOPY_PROTRUSION = 0.02;
+
+// ── Canopy_Frame, the perimeter band ────────────────────────────────────────
+// Spacing at which the canopy rim is sampled before asking "is there frame here?". The
+// band's own VERTICES cluster at its corners — a perfectly good four-sided frame has
+// none at all along the middle of its bottom run — so the question has to be asked from
+// the rim's side, densely, not from the frame's.
+const RIM_SAMPLE_SPACING = 0.05;
+// How far a rim sample may be from the frame solid, and vice versa. GENEROUS on purpose:
+// this is a TOPOLOGY check ("is there frame along this stretch of the edge at all?"), not
+// a joinery spec, and the defect it exists for — a missing bottom sill on a 2.9 m opening
+// — is more than a metre, an order of magnitude clear of this.
+const FRAME_RIM_TOL = 0.25;
+// Share of the frame's own geometry that must sit near the rim, so a "frame" that is
+// really a plate across the opening fails even though it covers the rim. A plate spanning
+// this canopy measures exactly 0.80 (its eight corners and the eight side-face centroids
+// are on the rim; only the four centroids of its front and back faces are not), so the
+// floor is set above that rather than at it.
+const FRAME_ON_RIM_FRACTION = 0.85;
+// How far the frame's bounding box may fall short of the rim's on any axis. The band
+// straddles the rim, so it normally OVERSHOOTS by half its width.
+const FRAME_RIM_SPAN_TOL = 0.10;
+// "Fairly thin", as a ratio: the band's equivalent cross-section side (recovered as
+// sqrt(volume / run), since a closed ring's bounding box says nothing about its width)
+// against the run it covers. 0.02 of a ~15 m perimeter is a 0.30 m section — a ceiling,
+// not a target. The declared-constant check below is the sharper of the two.
+const FRAME_THIN_RATIO = 0.02;
+// Max briefed the frame's width as "a named constant in the same ballpark as RIB_WIDTH".
+// This is the test file being the AUTHORITY, in the same idiom as the inch check: a
+// generator that declared a 0.5 m "thin band" and built one would otherwise satisfy every
+// geometry-vs-sidecar comparison in this file.
+const FRAME_WIDTH_VS_RIB = [0.5, 3.0];
+// And the measured section against that declaration. Wide because the section is
+// recovered as sqrt(width x depth) — a band 0.065 wide and 0.25 deep measures 1.96x its
+// declared WIDTH and is still a thin band.
+const FRAME_SECTION_VS_DECLARED = [0.4, 2.5];
+// insideShellFromEye measures overshoot ALONG THE RAY, so a depth error at the corner of
+// the opening is amplified by 1/cos of the angle off the view axis — at this canopy's rim
+// corner (2.35, 1.54, -1.70) that is 1.93x. A band straddling the shell may therefore read
+// up to ~2x its own section outboard while being correctly placed. 3x leaves headroom and
+// still fires on a band bolted 0.1 m proud of the glass.
+const FRAME_SIDED_RAY_FACTOR = 3.0;
+// Admissible spellings for the two width constants the frame is judged by. The generator
+// names its own constants; the contract names the QUANTITY.
+const FRAME_WIDTH_NAMES = [
+  'CANOPY_FRAME_WIDTH', 'FRAME_WIDTH', 'PERIMETER_FRAME_WIDTH', 'PERIMETER_WIDTH',
+  'FRAME_BAND_WIDTH', 'FRAME_W', 'SILL_WIDTH',
+];
+const RIB_WIDTH_NAMES = ['RIB_WIDTH', 'CANOPY_RIB_WIDTH', 'RIB_W'];
+// Share of a rib's run treated as its end region when asking whether it lands on the
+// frame. 5% of a ~2.9 m rib is ~0.15 m of end.
+const RIB_END_FRACTION = 0.05;
+// How close a rib's end must come to the frame solid to count as terminating ON it. The
+// rib stands off inboard of the glass by its own depth, so a rib butted against a band
+// sitting at the rim reads a few centimetres out even when correctly joined. The defect
+// this exists for — ribs that reach nothing, the "monitors on two lamp-posts" read — is
+// the full standoff from the rim, not centimetres.
+const RIB_TERMINATION_TOL = 0.10;
+
+/**
+ * EXACT set comparison in both directions, plus duplicates.
+ *
+ * Written as a pure function rather than inline so the planted defect it exists for can
+ * be exercised directly (see the self-test below). The version this replaces asked only
+ * "is each expected name present?", which is satisfied by a file containing anything at
+ * all as long as it also contains the right things.
+ */
+function compareNameSets(actual, expected) {
+  const counts = new Map();
+  for (const n of actual) counts.set(n, (counts.get(n) ?? 0) + 1);
+  const expectedSet = new Set(expected);
+  return {
+    missing: expected.filter((n) => !counts.has(n)).slice().sort(),
+    unexpected: [...counts.keys()].filter((n) => !expectedSet.has(n)).sort(),
+    duplicates: [...counts.entries()].filter(([, c]) => c > 1).map(([n, c]) => `${n} x${c}`).sort(),
+  };
+}
+
+const NO_NAME_DIFF = { missing: [], unexpected: [], duplicates: [] };
+
+/** Human-readable form of a compareNameSets result, for the failure message. */
+function describeNameDiff(diff) {
+  const lines = [];
+  if (diff.missing.length) lines.push(`  MISSING (expected, not found): ${diff.missing.join(', ')}`);
+  if (diff.unexpected.length) lines.push(`  UNEXPECTED (found, not expected): ${diff.unexpected.join(', ')}`);
+  if (diff.duplicates.length) lines.push(`  DUPLICATED: ${diff.duplicates.join(', ')}`);
+  return lines.join('\n') || '  (no difference)';
+}
+
+// Spellings the generator might plausibly use for its per-part glass occlusion term. Only
+// used to make the failure message actionable — the check itself is a pattern match, so a
+// spelling not on this list is fine as long as it names the glass and its occlusion.
+const GLASS_OCCLUSION_KEY_EXAMPLES = [
+  'predictedOcclusionByCanopyGlass', 'canopyGlassOcclusion', 'occlusionFromGlass',
+];
+
+/**
+ * The generator's own per-part occlusion term(s) for the canopy glass.
+ *
+ * Pure, and returning a LIST rather than looping internally, because the bug this
+ * replaces was that an empty list read as success: the old inline version filtered
+ * diagnostics and looped over the result, so a sidecar declaring no glass key at all
+ * passed vacuously. The caller must assert the list is non-empty first.
+ */
+function glassOcclusionTerms(metrics) {
+  return Object.entries(metrics?.diagnostics ?? {})
+    .filter(([k, v]) => /glass/i.test(k) && /occl/i.test(k) && typeof v === 'number');
+}
 
 /**
  * Read a script-declared constant out of the sidecar, tolerating SCREAMING_SNAKE or
@@ -565,6 +715,96 @@ describe('GLB parse harness (instrument self-test — runs with or without the c
     expect(GLB.distanceToBox({ min: [-1, -1, -1], max: [1, 1, 1] }, [1, 1, 4])).toBeCloseTo(3, 9);
   });
 
+  it('decides sidedness from the eye, which unsigned distance cannot', () => {
+    // PLANTED-DEFECT PROOF for the rib and perimeter-frame containment checks.
+    //
+    // The two probes below are the SAME unsigned distance from the shell — one 0.1 m
+    // inboard, one 0.1 m outboard, i.e. bolted to the outside of the canopy. That is
+    // exactly the pair the old distanceToTriangleList check could not tell apart, and
+    // why "the fraction stayed 1.0" for a rib on the wrong side of the glass.
+    const shell = rectangleTriangles(4, 4, -3);
+    expect(GLB.distanceToTriangleList(shell, [0, 0, -2.9]).distance,
+      'unsigned distance reads the same for inboard...').toBeCloseTo(0.1, 9);
+    expect(GLB.distanceToTriangleList(shell, [0, 0, -3.1]).distance,
+      '...and for outboard. This is the blindness being fixed.').toBeCloseTo(0.1, 9);
+
+    expect(GLB.insideShellFromEye(shell, [[0, 0, -2.9]]).worst.over,
+      'inboard is NEGATIVE: reached 0.1 m before the shell').toBeCloseTo(-0.1, 9);
+    expect(GLB.insideShellFromEye(shell, [[0, 0, -3.1]]).worst.over,
+      'outboard is POSITIVE: reached 0.1 m after the shell').toBeCloseTo(0.1, 9);
+
+    // A part punched THROUGH the shell has vertices on both sides; `worst` reports the
+    // one that is furthest out, so a partial penetration is as red as a total one.
+    const punched = GLB.insideShellFromEye(shell, [[0, 0, -2.9], [0, 0, -3.05], [0.1, 0.1, -3.2]]);
+    expect(punched.tested).toBe(3);
+    expect(punched.worst.over).toBeGreaterThan(0.19);
+
+    // A vertex whose eye-ray misses the shell is SKIPPED, never silently counted inside.
+    const past = GLB.insideShellFromEye(shell, [[10, 0, -1]]);
+    expect(past.tested).toBe(0);
+    expect(past.skipped).toBe(1);
+    expect(past.worst.over).toBe(-Infinity);
+  });
+
+  it('measures a rim run, the distance to it, and the volume of a closed band', () => {
+    // The instruments behind "fairly thin": a perimeter frame's bounding box says nothing
+    // about its width, so the section is recovered as volume / run.
+    const rim = GLB.boundaryEdges(rectangleTriangles(4, 2, -1.7));
+    expect(rim).toHaveLength(4);
+    expect(GLB.polylineLength(rim), 'a 4 x 2 m opening has a 12 m perimeter').toBeCloseTo(12, 9);
+    expect(GLB.distanceToSegmentList(rim, [0, 1.05, -1.7]).distance,
+      'just outside the top edge').toBeCloseTo(0.05, 9);
+    expect(GLB.distanceToSegmentList(rim, [0, 0, -1.7]).distance,
+      'the middle of the opening is a metre from the nearest edge').toBeCloseTo(1, 9);
+    expect(GLB.closedMeshVolume(boxTriangles([-1, -1, -1], [1, 1, 1])),
+      'a 2 m cube holds 8 m^3').toBeCloseTo(8, 9);
+    expect(GLB.closedMeshVolume(boxTriangles([-1, -1, -1], [1, 1, 1], { flip: true })),
+      'winding does not change how much material is in a solid').toBeCloseTo(8, 9);
+    // volume / run recovers the section of a band: a 12 m run of 0.06 x 0.05 section.
+    expect(Math.sqrt((12 * 0.06 * 0.05) / 12)).toBeCloseTo(Math.sqrt(0.003), 12);
+  });
+
+  it('samples a rim densely enough to notice a missing bottom run', () => {
+    // PLANTED-DEFECT PROOF for "the frame follows the canopy edge the whole way round
+    // INCLUDING THE BOTTOM". Asking the question from the FRAME's side does not work: a
+    // four-sided band has vertices only at its corners, so any angular or per-vertex
+    // histogram reports a perfectly good frame as full of holes. Asking it from the RIM's
+    // side does: every sampled point along the edge must have frame near it.
+    const rim = GLB.boundaryEdges(rectangleTriangles(4, 2, -1.7));
+    const samples = GLB.sampleSegments(rim, { spacing: RIM_SAMPLE_SPACING });
+    expect(samples.length, 'a 12 m rim at 5 cm spacing').toBeGreaterThan(200);
+    const worstFull = Math.max(...samples.map((p) => GLB.distanceToSegmentList(rim, p).distance));
+    expect(worstFull, 'a band covering the whole rim leaves no sample stranded').toBeLessThan(1e-9);
+
+    // The defect: delete the lower run — the "no sill" cockpit.
+    const noSill = rim.filter((e) => !(e.a[1] < -0.99 && e.b[1] < -0.99));
+    expect(noSill).toHaveLength(3);
+    const worstHoled = Math.max(...samples.map((p) => GLB.distanceToSegmentList(noSill, p).distance));
+    expect(worstHoled, 'the missing sill strands rim samples 2 m from any frame').toBeGreaterThan(1.9);
+    // ...while the bounding box is untouched, which is why a bbox check would not do.
+    const ends = (segs) => GLB.boundsOfPoints(segs.flatMap((e) => [e.a, e.b]));
+    expect(ends(noSill).min, 'the C-shape still reaches the bottom corners').toEqual(ends(rim).min);
+  });
+
+  it('finds the two ends of a long thin part along its own dominant axis', () => {
+    // Behind "both ribs terminate ON the frame". The axis is derived from the geometry,
+    // so a re-authored rib that kinks forward is still measured end-to-end.
+    const bar = [];
+    for (let i = 0; i <= 20; i++) {
+      const y = -1.5 + (i * 3) / 20;
+      bar.push([0.03, y, -1.2], [-0.03, y, -1.2 - 0.2 * Math.sin((i / 20) * Math.PI)]);
+    }
+    const ends = GLB.principalAxisEnds(bar, { fraction: 0.05 });
+    expect(ends.axis, 'the bar runs in Y, not in the Z it bows through').toBe(1);
+    expect(ends.span).toBeCloseTo(3, 9);
+    expect(ends.low.length).toBeGreaterThan(0);
+    expect(ends.high.length).toBeGreaterThan(0);
+    expect(ends.low.every((p) => p[1] <= -1.35), 'the low end is the bottom 5%').toBe(true);
+    expect(ends.high.every((p) => p[1] >= 1.35), 'the high end is the top 5%').toBe(true);
+    expect(ends.low.some((p) => p[1] > 1), 'the two ends must not overlap').toBe(false);
+    expect(GLB.principalAxisEnds([]), 'no points has no ends').toBeNull();
+  });
+
   it('hashes geometry stably, and the hash actually responds to a moved vertex', () => {
     const a = GLB.hashGeometry(bytes);
     expect(a.positions).toMatch(/^[0-9a-f]{64}$/);
@@ -580,6 +820,49 @@ describe('GLB parse harness (instrument self-test — runs with or without the c
 
   it('rejects a non-GLB buffer with a diagnosable error', () => {
     expect(() => GLB.parseGLB(new Uint8Array(64))).toThrow(/Not a GLB/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The two pure helpers behind the assertions an adversarial review found could not fail.
+// Both are exercised here against the exact defect that used to slip through, so the
+// claim "this now catches it" is itself tested rather than asserted in a comment.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('assertion helpers (planted-defect self-test — the checks that used to be unfalsifiable)', () => {
+  it('reports extra, missing and duplicated names, not just missing ones', () => {
+    // PLANTED DEFECT: the subset-shaped inventory this replaces accepted a file that
+    // contained everything expected AND a stray "Cube" AND a "ScreenBody_UL_001" left
+    // behind by a partial re-run. Only "missing" was ever computed.
+    expect(compareNameSets(['A', 'B'], ['A', 'B'])).toEqual(NO_NAME_DIFF);
+    expect(compareNameSets(['B', 'A'], ['A', 'B']), 'order is not part of the inventory').toEqual(NO_NAME_DIFF);
+
+    const dirty = compareNameSets(['A', 'B', 'B', 'Cube', 'ScreenBody_UL_001'], ['A', 'B', 'C']);
+    expect(dirty.missing, 'the old check saw this much and no more').toEqual(['C']);
+    expect(dirty.unexpected, 'and was blind to exactly this').toEqual(['Cube', 'ScreenBody_UL_001']);
+    expect(dirty.duplicates, 'a name used twice is two nodes, not one').toEqual(['B x2']);
+    expect(describeNameDiff(dirty)).toMatch(/UNEXPECTED .*Cube/);
+    expect(describeNameDiff(NO_NAME_DIFF)).toBe('  (no difference)');
+  });
+
+  it('treats a missing glass-occlusion term as absent, not as satisfied', () => {
+    // PLANTED DEFECT: the old inline version filtered diagnostics for /glass/i AND
+    // /occl/i and looped over the result. Given the sidecar below — real diagnostics, no
+    // glass key anywhere — the loop body never executed and the test reported green,
+    // which is how "the predictor excludes the glass" could be believed of a predictor
+    // that said nothing about the glass at all.
+    expect(
+      glassOcclusionTerms({ diagnostics: { frameHalfAngleHorizontalDeg: 54, canopyMinDistance: 2.58 } }),
+      'no glass term must read as ZERO terms — the caller has to fail on that, not iterate it',
+    ).toEqual([]);
+    expect(glassOcclusionTerms({}), 'no diagnostics object at all is also zero terms').toEqual([]);
+    expect(glassOcclusionTerms(null)).toEqual([]);
+    expect(
+      glassOcclusionTerms({ diagnostics: { predictedOcclusionByCanopyGlass: '0' } }),
+      'a string is a claim, not a measurement',
+    ).toEqual([]);
+    expect(glassOcclusionTerms({ diagnostics: { canopyGlassOcclusionFraction: 0, ribOcclusion: 0.03 } }),
+      'and a real term is found whatever the exact spelling').toEqual([['canopyGlassOcclusionFraction', 0]]);
   });
 });
 
@@ -628,6 +911,28 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
   const glass = () => {
     if (!glassTris) glassTris = partTris(GLASS_NAME);
     return glassTris;
+  };
+  /** Material names on a named part's own primitives, for the Mat_Frame check. */
+  const partMaterials = (name) => {
+    const { node } = GLB.requireNode(gltf, name);
+    const mesh = (gltf.meshes ?? [])[node.mesh];
+    return (mesh?.primitives ?? []).map((p) => (
+      p.material === undefined ? '<no material>' : (gltf.materials?.[p.material]?.name ?? `<material #${p.material}>`)
+    ));
+  };
+  /** The Canopy_Glass rim: its open boundary, and points sampled densely along it. */
+  let rimCache;
+  const rim = () => {
+    if (!rimCache) {
+      const edges = GLB.boundaryEdges(glass());
+      rimCache = {
+        edges,
+        samples: GLB.sampleSegments(edges, { spacing: RIM_SAMPLE_SPACING }),
+        run: GLB.polylineLength(edges),
+        bounds: GLB.boundsOfPoints(edges.flatMap((e) => [e.a, e.b])),
+      };
+    }
+    return rimCache;
   };
 
   /** World centroid + winding normal of a named display-face quad. */
@@ -685,16 +990,28 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
   //  reduced to TWO VERTICAL RIBS following the canopy shell's surface ... (d) a
   //  Canopy_Glass shell node present ... NO ship nose — any Hull_Nose node is a failure."
   describe('AC-FORM — form language: boxy corner screens on arms, two canopy ribs, no nose', () => {
-    it('has exactly the four named display-face nodes and no others', () => {
-      for (const name of SCREEN_NAMES) {
-        const hits = GLB.listNodes(gltf).filter((n) => n.name === name);
-        expect(hits.length, `expected exactly one node named "${name}", found ${hits.length}`).toBe(1);
-      }
-      const screenish = GLB.listNodes(gltf).filter((n) => /^Screen_/.test(n.name ?? '')).map((n) => n.name);
-      expect(screenish.slice().sort(), 'no extra Screen_* nodes may exist').toEqual(SCREEN_NAMES.slice().sort());
+    it('contains EXACTLY the expected node inventory — nothing missing, nothing extra, nothing duplicated', () => {
+      // INDEPENDENT, and EXHAUSTIVE. This replaces a subset-shaped check that only ever
+      // asked "is each expected node present?" — so a stray Cube, a ScreenBody_UL_001
+      // duplicated by a partial re-run, or a leftover empty was unconstrained unless it
+      // happened to be named Screen_*, Canopy_Rib* or /nose/i. An extra node is not
+      // cosmetic: it renders in the lab, it is counted by the occlusion predictor, and it
+      // ships in the GLB.
+      //
+      // Unnamed nodes are listed as <unnamed #i> and are themselves unexpected: every
+      // node in this file is a part the increments downstream address by name.
+      const nodes = GLB.listNodes(gltf);
+      const names = nodes.map((n) => n.name ?? `<unnamed #${n.index}>`);
+      const diff = compareNameSets(names, EXPECTED_NODE_NAMES);
+      expect(
+        diff,
+        `the GLB node set is not the expected inventory.\n${describeNameDiff(diff)}\n\n`
+        + `expected exactly (${EXPECTED_NODE_NAMES.length}): ${EXPECTED_NODE_NAMES.join(', ')}\n`
+        + `found (${names.length}): ${names.join(', ')}`,
+      ).toEqual(NO_NAME_DIFF);
     });
 
-    it('carries every named part on its own node: a body and an arm per screen, two ribs, one glass', () => {
+    it('carries every named part on its own node: a body and an arm per screen, two ribs, glass, perimeter frame', () => {
       const nodes = GLB.listNodes(gltf);
       const byName = new Map(nodes.filter((n) => n.name).map((n) => [n.name, n]));
       for (const name of PART_NAMES) {
@@ -735,21 +1052,26 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
       }
     });
 
-    it('contains no ship nose anywhere — it was removed at Max\'s instruction', () => {
-      // INDEPENDENT and deliberately broader than the exact name: Hull_Nose_001, a
-      // stray nose mesh datablock or a nose material would all still put the deleted
-      // geometry in the file. The re-spec removes the nose entirely; increment 1 has no
-      // exterior hull.
+    it('contains no ship nose and no octagonal Cockpit_Frame ring — both were deleted at Max\'s instruction', () => {
+      // INDEPENDENT and deliberately broader than the node inventory above: Hull_Nose_001,
+      // a stray nose mesh DATABLOCK or a nose material would all still put the deleted
+      // geometry in the file, and a datablock is not a node. The re-spec removes the nose
+      // entirely (increment 1 has no exterior hull) and the octagonal ring (the perimeter
+      // band that replaces it is Canopy_Frame, a different thing: an edge, not a ring
+      // standing in front of the glass).
       const named = [
         ...(gltf.nodes ?? []).map((n) => ['node', n.name]),
         ...(gltf.meshes ?? []).map((m) => ['mesh', m.name]),
         ...(gltf.materials ?? []).map((m) => ['material', m.name]),
       ].filter(([, n]) => typeof n === 'string');
-      const offenders = named.filter(([, n]) => /nose/i.test(n)).map(([kind, n]) => `${kind} "${n}"`);
+      const offenders = named
+        .filter(([, n]) => /nose/i.test(n) || /cockpit[_ -]?frame/i.test(n))
+        .map(([kind, n]) => `${kind} "${n}"`);
       expect(
         offenders,
-        `the GLB still contains ${offenders.join(', ')}. Max removed the nose at UAT; AC-FORM now `
-        + 'fails on its presence. Delete the nose build from scripts/cockpit-gen.py and regenerate.',
+        `the GLB still contains ${offenders.join(', ')}. Max removed the nose and the octagonal ring at `
+        + 'UAT; AC-FORM now fails on their presence. Delete them from scripts/cockpit-gen.py and '
+        + `regenerate. (The perimeter band added since is "${FRAME_NAME}" — do not rename it back.)`,
       ).toEqual([]);
       for (const key of ['noseVisibleLength', 'noseFractionOfHull', 'noseSlopeLength',
         'noseTipDistanceFromEye', 'noseTipFractionOfHull', 'noseDropFromLip']) {
@@ -1069,12 +1391,22 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
       }
     });
 
-    it('lays both ribs on the Canopy_Glass surface', () => {
-      // INDEPENDENT. A rib floating off the shell does not read as a canopy rib — it reads
-      // as a bar hanging in space, and it is exactly what conveys the protruding shape if
-      // it follows the surface. The tolerance is derived from each rib's OWN measured
-      // thickness (a strip laid on a shell stands off by its own thickness) plus a margin,
-      // so it adapts to a re-authored rib without admitting a floating one.
+    it('lays both ribs on the Canopy_Glass surface — near it, and INBOARD of it', () => {
+      // INDEPENDENT, and now SIDED. A rib floating off the shell does not read as a canopy
+      // rib — it reads as a bar hanging in space — and it is exactly what conveys the
+      // protruding shape if it follows the surface. Proximity tolerance is derived from
+      // each rib's OWN measured thickness (a strip laid on a shell stands off by its own
+      // thickness) plus a margin, so it adapts to a re-authored rib without admitting a
+      // floating one.
+      //
+      // BLOCKING FIX. Proximity alone was the WHOLE check, and GLB.distanceToTriangleList
+      // is Math.hypot of the closest-point difference — unsigned. A rib bolted to the
+      // OUTSIDE of the canopy, or punched clean through it, measured identically to one
+      // lying correctly inboard: the fraction stayed 1.0 and the test passed. Sidedness
+      // cannot come from a distance, so it comes from the pilot: every rib vertex whose
+      // eye-ray meets the shell must be reached BEFORE the shell is. Same predicate as
+      // the screen-unit containment below; see the "decides sidedness from the eye"
+      // self-test, which pins two probes at identical unsigned distance on opposite sides.
       const shell = glass();
       expect(shell.length, 'Canopy_Glass carries no triangles to lie on').toBeGreaterThan(0);
       for (const name of RIB_NAMES) {
@@ -1093,7 +1425,247 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
           + `plus ${RIB_ON_SHELL_MARGIN} m). The furthest is ${worst.toFixed(3)} m off the shell — a rib that `
           + 'floats does not convey the canopy\'s shape.',
         ).toBeGreaterThanOrEqual(RIB_ON_SHELL_FRACTION);
+
+        const sided = GLB.insideShellFromEye(shell, verts);
+        expect(
+          sided.tested,
+          `${name}: only ${sided.tested} of its ${verts.length} vertices lie along an eye-ray that meets `
+          + `Canopy_Glass at all (${sided.skipped} skipped), so "is it inboard of the glass?" is barely being `
+          + 'asked. Either the rib has left the glazed cone or the shell no longer spans the opening — '
+          + 'establish which before relaxing this.',
+        ).toBeGreaterThanOrEqual(Math.ceil(RIB_SIDED_MIN_FRACTION * verts.length));
+        expect(
+          sided.worst.over,
+          `${name} has a vertex at [${sided.worst.point?.map((v) => v.toFixed(4))}] that is `
+          + `${sided.worst.over?.toFixed(4)} m FURTHER from the eye than Canopy_Glass along the same ray `
+          + `(glass at ${sided.worst.hit?.toFixed(4)} m). The rib is on the OUTSIDE of the canopy, or `
+          + 'punched through it. Unsigned distance to the shell cannot see this — it reads the same either '
+          + 'side — which is why this assertion exists separately from the proximity one above.',
+        ).toBeLessThanOrEqual(VERTEX_TOL);
       }
+    });
+
+    // ── Canopy_Frame ─────────────────────────────────────────────────────────
+    // Added 2026-07-28 after Max's form references. "I want the canopy's frame to be
+    // fairly thin, two strips running vertically" was briefed to the generator as "two
+    // vertical ribs are the ONLY frame structure, there is no ring any more" — but a thin
+    // frame is not an absent frame, and with the ring gone the model read in the orbit
+    // view as four monitors mounted on two lamp-posts floating in space. Both references
+    // show a clear faceted perimeter where the glass meets the hull, including a plain
+    // lower sill under the screens. Canopy_Frame is that edge.
+    describe('Canopy_Frame — the perimeter band where the glass meets the hull', () => {
+      let frameTrisCache;
+      const frame = () => {
+        if (!frameTrisCache) frameTrisCache = partTris(FRAME_NAME);
+        return frameTrisCache;
+      };
+      /**
+       * The band's equivalent cross-section side, in metres.
+       *
+       * A closed ring's BOUNDING BOX says nothing about how thick the ring is — a 4.7 m
+       * opening framed in dental floss and one framed in railway sleepers measure the
+       * same box. Volume divided by the run it covers is the cross-sectional AREA of a
+       * band of roughly constant section, so its square root is the equivalent side.
+       */
+      const frameSection = () => Math.sqrt(GLB.closedMeshVolume(frame()) / rim().run);
+
+      it('carries a closed Canopy_Frame solid, in Mat_Frame', () => {
+        // INDEPENDENT. Closure is load-bearing for everything below it: an unclosed band
+        // has no volume, so it has no measurable cross-section, and a band with an open
+        // end is a strip that stops rather than a perimeter that closes.
+        const tris = frame();
+        expect(tris.length, `${FRAME_NAME} carries no triangles`).toBeGreaterThan(0);
+        const open = GLB.boundaryEdges(tris);
+        expect(
+          open.length,
+          `${FRAME_NAME} has ${open.length} open boundary edges — it is a shell or an unclosed strip, not a `
+          + 'closed solid, so its volume (and the cross-section measured from it) is meaningless. The first '
+          + `open edge runs [${open[0]?.a.map((v) => v.toFixed(3))}] -> [${open[0]?.b.map((v) => v.toFixed(3))}].`,
+        ).toBe(0);
+        const mats = [...new Set(partMaterials(FRAME_NAME))];
+        expect(
+          mats,
+          `${FRAME_NAME} uses ${mats.join(', ')}. The brief assigns it the existing "${FRAME_MATERIAL}": the `
+          + 'band and the ribs are the same folded metal, and increment 2 lights them as one.',
+        ).toEqual([FRAME_MATERIAL]);
+      });
+
+      it('runs the whole way round the canopy edge, INCLUDING the bottom sill', () => {
+        // INDEPENDENT, and the assertion Max's second reference is about — "bottom can be
+        // simpler, more like this" is simpler, not absent. Asked from the RIM's side and
+        // densely: a four-sided band has no vertices at all along the middle of its bottom
+        // run, so any per-vertex or angular histogram would report a perfectly good frame
+        // as full of holes. See the "samples a rim densely enough" self-test, where
+        // deleting the bottom run strands rim samples 2 m from any frame while leaving the
+        // bounding box untouched.
+        const { samples, bounds: rimBox, edges } = rim();
+        expect(edges.length, 'Canopy_Glass has no open rim for the frame to follow').toBeGreaterThanOrEqual(3);
+        const tris = frame();
+
+        const gaps = samples.map((p) => ({ p, d: GLB.distanceToTriangleList(tris, p).distance }));
+        const worst = gaps.reduce((a, b) => (b.d > a.d ? b : a));
+        const midY = (rimBox.min[1] + rimBox.max[1]) / 2;
+        const worstLower = gaps.filter((g) => g.p[1] < midY).reduce((a, b) => (b.d > a.d ? b : a), { d: -1, p: null });
+        expect(
+          worst.d,
+          `the canopy rim is UNFRAMED at [${worst.p.map((v) => v.toFixed(3))}]: the nearest ${FRAME_NAME} `
+          + `geometry is ${worst.d.toFixed(3)} m away (limit ${FRAME_RIM_TOL} m). The worst gap along the `
+          + `LOWER half of the rim is ${worstLower.d.toFixed(3)} m at y=${worstLower.p?.[1]?.toFixed(3)} — if `
+          + 'that is the one failing, the sill is missing, and the sill is what puts a floor under the '
+          + 'screens instead of leaving them hanging in space.',
+        ).toBeLessThanOrEqual(FRAME_RIM_TOL);
+
+        // ...and the band's own extent must REACH the rim's, or it is a smaller ring
+        // sitting inside the opening that the sampling above cannot distinguish from a
+        // correctly placed one if the tolerance ever grows.
+        const frameBox = partBounds(FRAME_NAME);
+        for (const [axis, label] of [[0, 'X (across)'], [1, 'Y (up)']]) {
+          expect(
+            frameBox.min[axis] - rimBox.min[axis],
+            `${FRAME_NAME} stops at ${label} = ${frameBox.min[axis].toFixed(3)} but the canopy rim reaches `
+            + `${rimBox.min[axis].toFixed(3)} — the band does not cover the opening`,
+          ).toBeLessThanOrEqual(FRAME_RIM_SPAN_TOL);
+          expect(
+            rimBox.max[axis] - frameBox.max[axis],
+            `${FRAME_NAME} stops at ${label} = ${frameBox.max[axis].toFixed(3)} but the canopy rim reaches `
+            + `${rimBox.max[axis].toFixed(3)} — the band does not cover the opening`,
+          ).toBeLessThanOrEqual(FRAME_RIM_SPAN_TOL);
+        }
+
+        // ...and the band must BE the edge rather than a plate across the opening that
+        // happens to touch it. Face centroids as well as vertices, so a plate's interior
+        // is counted (its vertices are all at the rim).
+        const probes = [...partVerts(FRAME_NAME), ...tris.map((t) => GLB.triangleListCentroid([t]))];
+        const near = probes.filter((p) => GLB.distanceToSegmentList(edges, p).distance <= FRAME_RIM_TOL).length;
+        const fraction = near / probes.length;
+        expect(
+          fraction,
+          `only ${(fraction * 100).toFixed(1)}% of ${FRAME_NAME}'s geometry (${probes.length} vertices and `
+          + `face centroids) lies within ${FRAME_RIM_TOL} m of the Canopy_Glass rim. A perimeter band hugs `
+          + 'the edge; anything reaching across the opening is a panel, and Max asked for none.',
+        ).toBeGreaterThanOrEqual(FRAME_ON_RIM_FRACTION);
+      });
+
+      it('keeps the band FAIRLY THIN — the brief that was mis-read as "absent"', () => {
+        // INDEPENDENT on the measurement, AUTHORITATIVE on the declaration, in the same
+        // two-step idiom as the inch check: a generator that declared a 0.5 m "thin band"
+        // and faithfully built one would satisfy every geometry-vs-sidecar comparison in
+        // this file, so the declared constant is itself checked — against RIB_WIDTH, which
+        // is the ballpark Max named for it.
+        const run = rim().run;
+        const volume = GLB.closedMeshVolume(frame());
+        expect(run, 'the canopy rim has no length to run around').toBeGreaterThan(1);
+        expect(volume, `${FRAME_NAME} encloses no volume — it is not a solid band`).toBeGreaterThan(0);
+        const section = Math.sqrt(volume / run);
+        expect(
+          section / run,
+          `${FRAME_NAME} holds ${volume.toFixed(4)} m^3 over a ${run.toFixed(2)} m run, an equivalent section `
+          + `of ${(section * 1000).toFixed(0)} mm — ${((section / run) * 100).toFixed(2)}% of the run it `
+          + `covers, against a ceiling of ${FRAME_THIN_RATIO * 100}%. That is a chunky ring, not the thin `
+          + 'faceted edge in Max\'s references.',
+        ).toBeLessThanOrEqual(FRAME_THIN_RATIO);
+
+        const declRib = declaredAny(metrics, RIB_WIDTH_NAMES, { label: 'the canopy rib width in metres' });
+        const declFrame = declaredAny(metrics, FRAME_WIDTH_NAMES, { label: 'the perimeter frame width in metres' });
+        const ratio = declFrame / declRib;
+        expect(
+          ratio,
+          `the declared frame width is ${declFrame} m against a declared rib width of ${declRib} m — `
+          + `${ratio.toFixed(2)}x. Max briefed it as "a named constant in the same ballpark as RIB_WIDTH", `
+          + `so the admissible range is ${FRAME_WIDTH_VS_RIB[0]}x to ${FRAME_WIDTH_VS_RIB[1]}x.`,
+        ).toBeGreaterThanOrEqual(FRAME_WIDTH_VS_RIB[0]);
+        expect(ratio).toBeLessThanOrEqual(FRAME_WIDTH_VS_RIB[1]);
+
+        const built = section / declFrame;
+        expect(
+          built,
+          `${FRAME_NAME} measures an equivalent section of ${(section * 1000).toFixed(1)} mm but the script `
+          + `declares a width of ${(declFrame * 1000).toFixed(1)} mm — ${built.toFixed(2)}x. The section is `
+          + 'sqrt(width x depth), so a band deeper than it is wide reads above 1; this range admits that and '
+          + 'still rejects a declaration the geometry does not honour.',
+        ).toBeGreaterThanOrEqual(FRAME_SECTION_VS_DECLARED[0]);
+        expect(built).toBeLessThanOrEqual(FRAME_SECTION_VS_DECLARED[1]);
+      });
+
+      it('keeps the band off the OUTSIDE of the glass', () => {
+        // INDEPENDENT and SIDED, the same predicate the ribs and screen units use, for the
+        // same reason: unsigned distance to the shell reads identically for a band lying
+        // on the inboard face of the canopy and one bolted to its outboard face. The
+        // tolerance is derived from the band's OWN measured section — it straddles the
+        // surface, so part of it legitimately sits outboard by up to that much — times the
+        // ray-angle amplification at the corner of the opening. Unlike the ribs, which are
+        // held to zero because they lie flat ON the inboard face, the band has no inboard
+        // side to lie on: it IS the edge.
+        const shell = glass();
+        const verts = partVerts(FRAME_NAME);
+        const tol = FRAME_SIDED_RAY_FACTOR * frameSection() + VERTEX_TOL;
+        const sided = GLB.insideShellFromEye(shell, verts, { eye: EYE });
+        expect(
+          sided.tested,
+          `none of ${FRAME_NAME}'s ${verts.length} vertices lies along an eye-ray that meets Canopy_Glass, so `
+          + 'nothing about which side of the shell it is on is being tested. The band is supposed to sit ON '
+          + 'the rim, half of it inside the glazed cone — if it has been moved entirely outboard of the '
+          + 'glass, say so deliberately rather than leaving this measuring nothing.',
+        ).toBeGreaterThan(0);
+        expect(
+          sided.worst.over,
+          `${FRAME_NAME} has a vertex at [${sided.worst.point?.map((v) => v.toFixed(4))}] that is `
+          + `${sided.worst.over?.toFixed(4)} m FURTHER from the eye than Canopy_Glass along the same ray `
+          + `(glass at ${sided.worst.hit?.toFixed(4)} m), against a tolerance of ${tol.toFixed(4)} m — `
+          + `${FRAME_SIDED_RAY_FACTOR}x its own ${(frameSection() * 1000).toFixed(0)} mm section. The band is `
+          + 'on the outside of the canopy, where it would read as an exterior rib rather than as the edge.',
+        ).toBeLessThanOrEqual(tol);
+      });
+
+      it('terminates BOTH ribs on the band — one end on its lower run, one on its upper', () => {
+        // INDEPENDENT, and THE assertion that would have caught what Max saw in the orbit
+        // view: two ribs and four screen boxes with nothing joining them to anything, so
+        // the model read as "four monitors mounted on two lamp-posts floating in space".
+        //
+        // PLANTED DEFECTS VERIFIED AGAINST (both fire, see the task record):
+        //   * a rib scaled to 0.8 of its length about its own centre, so both ends stop
+        //     ~0.29 m short of the band — the distance half goes red, naming the rib and
+        //     the gap.
+        //   * a rib translated so both of its end regions sit against the band's UPPER run
+        //     — the lower/upper half goes red even though both ends are touching frame.
+        // Neither is caught by any other assertion in this file.
+        const tris = frame();
+        const rimBox = rim().bounds;
+        const midY = (rimBox.min[1] + rimBox.max[1]) / 2;
+        for (const name of RIB_NAMES) {
+          const verts = partVerts(name);
+          const ends = GLB.principalAxisEnds(verts, { fraction: RIB_END_FRACTION });
+          expect(ends, `${name} carries no vertices`).not.toBeNull();
+          expect(
+            ends.axis,
+            `${name}'s longest extent is along ${'XYZ'[ends.axis]}, not Y — its "ends" are not the ends of a `
+            + 'vertical strip, so this measurement would be meaningless (see the vertical-strip check above)',
+          ).toBe(1);
+
+          for (const [label, group, wantAbove] of [['lower', ends.low, false], ['upper', ends.high, true]]) {
+            expect(group.length, `${name} has no ${label} end region`).toBeGreaterThan(0);
+            let best = { distance: Infinity, point: null, from: null };
+            for (const p of group) {
+              const hit = GLB.distanceToTriangleList(tris, p);
+              if (hit.distance < best.distance) best = { ...hit, from: p };
+            }
+            expect(
+              best.distance,
+              `${name}'s ${label} end never comes closer than ${best.distance.toFixed(3)} m to ${FRAME_NAME} `
+              + `(limit ${RIB_TERMINATION_TOL} m). Its nearest end vertex is at `
+              + `[${best.from?.map((v) => v.toFixed(3))}]. A rib that terminates on nothing is a lamp-post: `
+              + 'run it from the band\'s lower run, up and forward over the crest, to its upper run.',
+            ).toBeLessThanOrEqual(RIB_TERMINATION_TOL);
+            const landedY = best.point[1];
+            expect(
+              wantAbove ? landedY > midY : landedY < midY,
+              `${name}'s ${label} end lands on ${FRAME_NAME} at y=${landedY.toFixed(3)}, on the wrong side of `
+              + `the opening's mid-height (y=${midY.toFixed(3)}). Each rib must bridge the band's LOWER run to `
+              + 'its UPPER run — both ends on the same run is a staple, not an A-pillar.',
+            ).toBe(true);
+          }
+        }
+      });
     });
 
     it('bulges the Canopy_Glass forward of its own rim', () => {
@@ -1136,14 +1708,10 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
       let worst = { over: -Infinity, name: null, vertex: null, hit: null };
       for (const suffix of QUADRANT_SUFFIXES) {
         for (const name of [`Screen_${suffix}`, `ScreenBody_${suffix}`]) {
-          for (const v of partVerts(name)) {
-            const range = Math.hypot(v[0], v[1], v[2]);
-            if (range < 1e-6) continue;
-            const hits = GLB.rayTriangleListHits(EYE, v, shell);
-            if (!hits.length) continue;
-            tested += 1;
-            const over = range - hits[0];
-            if (over > worst.over) worst = { over, name, vertex: v, hit: hits[0] };
+          const r = GLB.insideShellFromEye(shell, partVerts(name), { eye: EYE });
+          tested += r.tested;
+          if (r.worst.over > worst.over) {
+            worst = { over: r.worst.over, name, vertex: r.worst.point, hit: r.worst.hit };
           }
         }
       }
@@ -1170,6 +1738,18 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
       // fails here. The sidecar is what increments 2-4 read to place their materials
       // and cameras, so a part missing from it is a real gap.
       expect(Array.isArray(metrics.objects), 'cockpit-metrics.json must declare an objects array').toBe(true);
+      // EXACT, not superset. The old form asked only "is each part declared?", so an
+      // object entry for geometry that no longer exists — a deleted nose, a renamed rib,
+      // a duplicate — sat in the sidecar unchallenged, and increments 2-4 read this
+      // sidecar to place their materials and cameras.
+      const objectDiff = compareNameSets(metrics.objects.map((o) => o.name), PART_NAMES);
+      expect(
+        objectDiff,
+        `cockpit-metrics.json's objects array is not the exported part list.\n${describeNameDiff(objectDiff)}\n\n`
+        + `expected exactly (${PART_NAMES.length}): ${PART_NAMES.join(', ')}\n`
+        + `declared (${metrics.objects.length}): ${metrics.objects.map((o) => o.name).join(', ')}`,
+      ).toEqual(NO_NAME_DIFF);
+
       const declaredObjects = new Map(metrics.objects.map((o) => [o.name, o]));
       for (const name of PART_NAMES) {
         const decl = declaredObjects.get(name);
@@ -1231,10 +1811,21 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
       ).toBeGreaterThan(0);
       expect(fraction).toBeLessThan(1);
 
-      // Canopy_Glass is see-through by design and must not be counted. If the generator
-      // reports a per-part occlusion term for it, that term has to be zero.
-      const glassTerms = Object.entries(metrics.diagnostics ?? {})
-        .filter(([k, v]) => /glass/i.test(k) && /occl/i.test(k) && typeof v === 'number');
+      // BLOCKING FIX. Canopy_Glass is see-through by design and must not be counted — and
+      // this used to be an OPT-IN check: it filtered diagnostics for a key matching
+      // /glass/i AND /occl/i and looped over the result, so a generator that declared no
+      // such key never entered the loop and the test passed. Confirmed against a sidecar
+      // carrying no glass key at all. The generator's own statement that it gave the glass
+      // zero credit is now REQUIRED to exist before it is required to be zero.
+      const glassTerms = glassOcclusionTerms(metrics);
+      const diagKeys = Object.keys(metrics.diagnostics ?? {});
+      expect(
+        glassTerms.length,
+        'cockpit-metrics.json declares no numeric diagnostics key naming BOTH the glass and its occlusion '
+        + `contribution (e.g. ${GLASS_OCCLUSION_KEY_EXAMPLES.join(' / ')}). Without it there is no evidence `
+        + 'in the sidecar that the predictor excluded Canopy_Glass — and an absent key used to pass this '
+        + `test vacuously.\ndiagnostics keys present: ${diagKeys.join(', ') || '(none)'}`,
+      ).toBeGreaterThan(0);
       for (const [key, value] of glassTerms) {
         expect(
           value,
@@ -1242,6 +1833,29 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
           + '(see-through by design), so its contribution must be zero',
         ).toBe(0);
       }
+    });
+
+    it('excludes ONLY the glass — the new perimeter frame must be counted', () => {
+      // INDEPENDENT of the fraction itself, and the guard on the other half of the
+      // exclusion rule. Canopy_Frame is opaque structure sitting right on the edge of the
+      // opening; a predictor that quietly dropped it would under-report the occlusion and
+      // disagree with the browser measurement AC-FRAME is actually settled on. This
+      // asserts what the generator DECLARES it excluded; that the frame contributes a
+      // positive amount is the live measurement's business, not a headless one's.
+      const excludes = metrics.occlusion?.excludes;
+      expect(
+        Array.isArray(excludes),
+        'cockpit-metrics.json must declare occlusion.excludes — the list of parts the analytic predictor '
+        + 'left out. AC-FRAME excludes exactly one thing (the see-through shell) and the sidecar has to say '
+        + `so in its own words. metrics.occlusion = ${JSON.stringify(metrics.occlusion)}`,
+      ).toBe(true);
+      const diff = compareNameSets(excludes, [GLASS_NAME]);
+      expect(
+        diff,
+        `the predictor's exclusion list is not exactly [${GLASS_NAME}].\n${describeNameDiff(diff)}\n`
+        + `declared: ${excludes.join(', ') || '(empty)'}. Anything else listed here is opaque structure `
+        + 'being given away for free — most importantly Canopy_Frame, which is the band around the opening.',
+      ).toEqual(NO_NAME_DIFF);
     });
   });
 
@@ -1502,10 +2116,16 @@ describe('AC-REPRO — geometric identity across two independent generator runs'
     // digests and report the AC green.
     const { json } = GLB.parseGLB(REPRO.glbA);
     expect((json.meshes ?? []).length, 'the generated GLB contains no meshes').toBeGreaterThan(0);
-    const named = GLB.listNodes(json).map((n) => n.name);
-    for (const expected of [...PART_NAMES, 'Eye_Point']) {
-      expect(named, `a freshly generated GLB is missing node "${expected}"`).toContain(expected);
-    }
+    const nodes = GLB.listNodes(json);
+    const named = nodes.map((n) => n.name ?? `<unnamed #${n.index}>`);
+    // EXHAUSTIVE here too — a fresh run that emits an extra node is a fresh run whose
+    // geometry nobody has measured, and the committed-artefact checks above never see it.
+    const diff = compareNameSets(named, EXPECTED_NODE_NAMES);
+    expect(
+      diff,
+      `a freshly generated GLB does not carry the expected node inventory.\n${describeNameDiff(diff)}\n`
+      + `found (${named.length}): ${named.join(', ')}`,
+    ).toEqual(NO_NAME_DIFF);
     expect(
       named.filter((n) => /nose/i.test(n ?? '')),
       'a freshly generated GLB still contains nose geometry, which the re-spec deleted',
