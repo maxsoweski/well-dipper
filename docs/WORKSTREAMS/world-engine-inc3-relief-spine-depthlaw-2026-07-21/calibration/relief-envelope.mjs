@@ -23,6 +23,11 @@
 // live AC-LAB-READ metric confirms the render. The multiplier law itself is EXACT and is what the lab bakes.
 
 // ── the CURRENT (defective) gravity cap, transcribed from planet-lod-lab-core.js reliefGravityFactor ──────────
+// ⚠ SUPERSEDED IN PART (gravity-selfcompression-2026-07-28): references below to
+//    g = g_c*(R/R_c) record the CONSTANT-DENSITY law live when this file was written.
+//    Gravity is now g = g_c*f(R)/f(R_c), f piecewise in absolute Earth radii
+//    (R^(4/3) below 1 R_E, R^1.70 above), ROCKY class only. Kept for audit trail.
+
 const G_CAP_FLOOR = 0.4, G_CAP_CEIL = 2.5;
 function reliefGravityFactor(g) {                       // KEPT untouched in core (tectonic/magmatism share the form)
   const f = Math.pow(Math.max(g, 1e-3), -0.5);

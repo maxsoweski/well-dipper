@@ -53,6 +53,40 @@ contested part of the relief derivation, which is still NEEDS-FIX.
   question). Sequenced after this. This workstream changes what `g` **is**, never what consumes it.
 - **`bakeReliefCrossover` demotion** and **R2 / vertical-km calibration** — all still behind this.
 
+## DOES / UNLOCKS card
+
+Per the standing world-engine convention (Claude memory `feedback_worldengine-does-unlocks-map`,
+linked not pasted per Rule 12). This increment emits **no new field**. It changes the VALUE of one
+scalar every rocky-body law already reads, so the DOES table is a table of consequences.
+
+**What it DOES**
+
+| Changes | Mechanism | What it lets someone see |
+|---|---|---|
+| `condition.surfaceGravity` on the 8 rocky presets | `g = g_c·f(R)/f(R_c)`, `f` piecewise in absolute R (`R^(4/3)` ≤ 1, `R^1.70` > 1) | a super-Earth that actually weighs what a super-Earth weighs — 1.6 R⊕ reads **2.238 g**, not 1.166 |
+| crater size, stamped count, regolith roughness | `bombardment.js` `sizeMul = (G_REF/g)^K_GS`, `D_t = 3.1/g` | fewer, smaller craters and a smoother regolith as a rocky world grows |
+| relief-margin weights `w_e` / `w_i` | `reliefBudget.js` `f_I` (impact fraction of the budget) | endogenic relief taking a larger share of the budget on heavier worlds |
+| body flattening descriptor | `bodyFigure.js` `f ∝ 1/g` | a heavier world is rounder at the same spin |
+| the IMPLIED mass law seen by `e1Regime.massEarthOf` and `giant-drivers` | both reconstruct `M = g·R²`, so they inherit the exponent + 2 | `M ∝ R^3.7` above 1 R⊕ and `R^(10/3)` below — **nothing in those files was edited**; they changed because gravity did |
+| two `LAW_REGISTRY` entries | `instrument/laws.js` | the first laws in the registry that pin what **drives** gravity rather than what gravity drives |
+
+**Explicitly does NOT change** — the 5 gas, 4 icy and 1 carbon presets (bit-identical to the retired
+law at every radius), anything at the canonical radius (bit-identical, which is what holds the
+goldens), and the **global relief amplitude** (`uPerturb` reads a canonical radius-blind gravity —
+see Non-goals).
+
+**What it UNLOCKS**
+
+- **The v2 relief-law derivation** — every exponent in it is expressed in terms of `g`, so it could
+  not be written against a gravity known to be wrong. This is the reason the gravity fix was pulled
+  out and sequenced first.
+- **`RELIEF_FLOOR` re-derivation** — the audit's finding that 0.40 binds at R = 1.40 R⊕ is only
+  computable once `g(R)` is correct.
+- **The `uPerturb` wiring fix** — once the relief law and its floor are settled, connecting that feed
+  becomes a decision with a known consequence rather than a surprise.
+- **Taxonomy (Rule 15 check 3): N/A.** The exponents are literature constants, not drivers; there is
+  no new GUI knob and the composition gate is not a selectable regime. Declared, not skipped.
+
 ## Open for Max
 
 1. **The success criteria above are mine, not his.** They need his words before the contract is

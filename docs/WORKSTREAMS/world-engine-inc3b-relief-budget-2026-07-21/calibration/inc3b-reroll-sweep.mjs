@@ -40,6 +40,11 @@
 // Machine-readable summary → inc3b-reroll-sweep-summary.json (deterministic; NO timing fields). Nonzero exit on any
 // assert failure. Pure `node`, no network.
 
+// ⚠ SUPERSEDED IN PART (gravity-selfcompression-2026-07-28): references below to
+//    g = g_c*(R/R_c) record the CONSTANT-DENSITY law live when this file was written.
+//    Gravity is now g = g_c*f(R)/f(R_c), f piecewise in absolute Earth radii
+//    (R^(4/3) below 1 R_E, R^1.70 above), ROCKY class only. Kept for audit trail.
+
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

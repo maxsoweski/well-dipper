@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { DRIVER_PRESETS, drawPresetRadius, LAB_UNLOCKED_RANGES, NAMED_BODY } from '../driver-presets.js';
-import { deriveConditionVector, gravityRadiusShape } from '../body-condition-vector.js';
+import { deriveConditionVector } from '../body-condition-vector.js';
 import { compositionClass } from '../src/worldengine/base/e1Regime.js';
 import { deriveUniforms, radiusFromT, RADIUS_SLIDER_MIN, RADIUS_SLIDER_MAX } from '../planet-lod-lab-core.js';
 import { PHYS, E5_REGIME, rhinesWavenumber, amplitudeLaw, resolveParams,
@@ -839,8 +839,12 @@ describe('AC-CRATERBOOT — the :5206 canonical read is justified by measurement
       const gLo = deriveConditionVector(fp, d, RADIUS_SLIDER_MIN).surfaceGravity;
       const gHi = deriveConditionVector(fp, d, RADIUS_SLIDER_MAX).surfaceGravity;
       const cls = compositionClass(deriveConditionVector(fp, d, fp.radiusEarth ?? 1.0));
+      // LITERAL exponents, not production's gravityRadiusShape — computing the expected span from
+      // the same helper under test makes this tautological in the exponent (proved by the
+      // verify-workstream mutation pass; see tests/worldengine-v2-6-gcohere.test.js shapeLiteral).
+      const shapeLiteral = (r) => (r <= 1 ? Math.pow(r, 4 / 3) : Math.pow(r, 1.70));
       const span = cls === 'rocky'
-        ? gravityRadiusShape(RADIUS_SLIDER_MAX) / gravityRadiusShape(RADIUS_SLIDER_MIN)
+        ? shapeLiteral(RADIUS_SLIDER_MAX) / shapeLiteral(RADIUS_SLIDER_MIN)
         : RADIUS_SLIDER_MAX / RADIUS_SLIDER_MIN;
       expect(Math.abs(gHi / gLo - span) / span, `${p} [${cls}]`).toBeLessThan(1e-9);
       expect(span, `${p} span is a real spread`).toBeGreaterThan(10);

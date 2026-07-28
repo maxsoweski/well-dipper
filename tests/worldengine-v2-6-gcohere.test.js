@@ -21,7 +21,7 @@
 // Plus a small radPerKm unit (the §1B shared km→angular scalar this slice adds to baseStep.js).
 import { describe, it, expect } from 'vitest';
 
-import { deriveConditionVector, gravityRadiusShape } from '../body-condition-vector.js';
+import { deriveConditionVector } from '../body-condition-vector.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
 import { bodySurfaceGravity, radPerKm, KM_PER_EARTH_RADIUS } from '../src/worldengine/base/baseStep.js';
 import { compositionClass } from '../src/worldengine/base/e1Regime.js';
@@ -37,6 +37,24 @@ const legacyG = (fp, derived) => derived?.surfaceGravity ?? bodySurfaceGravity(f
 // algebraically equal but differ in float64 operation order, so the round-trip is asserted "within ulp".
 const closeRel = (a, b, relEps = 1e-12) =>
   Math.abs(a - b) <= relEps * Math.max(Math.abs(a), Math.abs(b), Number.MIN_VALUE);
+
+// ⚠ INDEPENDENT re-implementation of the mass-radius shape, with the exponents written as LITERALS.
+//
+// Deliberately NOT production's gravityRadiusShape(), and deliberately not the imported
+// GRAV_R_EXP_* constants. Computing the expected value from the same helper (or the same constants)
+// production uses makes every assertion below TAUTOLOGICAL IN THE EXPONENT: revert the source to
+// the retired ^1 law and both sides move together, so the test passes while the law it claims to
+// pin is gone.
+//
+// That is exactly what happened. The first version of this re-pin called gravityRadiusShape(), the
+// commit message asserted "reverting the source exponents to 1 fails them", and the
+// verify-workstream mutation pass proved otherwise: 2 of the 3 re-pinned assertions still passed
+// under the mutation. Same failure mode as the two calibration harnesses this workstream rewired
+// for re-implementing the law inline — reintroduced in its own regression guard. This is the fix.
+//
+// The cost of a literal duplicate is that these numbers must be updated by hand when the law
+// changes. That is the POINT: a guard that updates itself guards nothing.
+const shapeLiteral = (r) => (r <= 1 ? Math.pow(r, 4 / 3) : Math.pow(r, 1.70));
 
 describe('V2-6 AC-GCOHERE — canonical bit-identity (R === R_c)', () => {
   it('new surfaceGravity === legacy expression at canonical R, every preset, fallback branch (derived=null)', () => {
@@ -83,7 +101,7 @@ describe('V2-6 AC-GCOHERE — drawn-R sweep g = g_c·f(R)/f(R_c)', () => {
         // Non-rocky classes are gated OUT of the self-compression law and keep the plain ratio,
         // byte-for-byte. Asserting both branches here is what makes the gate falsifiable.
         const expected = cls === 'rocky'
-          ? g_c * (gravityRadiusShape(R) / gravityRadiusShape(R_c))
+          ? g_c * (shapeLiteral(R) / shapeLiteral(R_c))    // literal exponents — see shapeLiteral
           : g_c * (R / R_c);
         expect(cv.surfaceGravity, `${name} [${cls}] @R=${R}`).toBe(expected);
         expect(cv.radiusEarth, `${name} @R=${R}`).toBe(R); // the drawn radius is carried on the vector
@@ -124,7 +142,7 @@ describe('V2-6 AC-GCOHERE — massEarthOf round-trip (g·d² === M_derived)', ()
         const massEarthOf = cv.surfaceGravity * cv.radiusEarth * cv.radiusEarth;
         // M = g·R² = M_c · [f(R)/f(R_c)] · (R/R_c)²  — the gravity shape times the areal term.
         const shapeRatio = cls === 'rocky'
-          ? gravityRadiusShape(R) / gravityRadiusShape(R_c)
+          ? shapeLiteral(R) / shapeLiteral(R_c)            // literal exponents — see shapeLiteral
           : R / R_c;
         const M_derived = M_c * shapeRatio * (R / R_c) ** 2;
         expect(closeRel(massEarthOf, M_derived), `${name} [${cls}] @R=${R}`).toBe(true);

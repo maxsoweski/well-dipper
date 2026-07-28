@@ -166,8 +166,8 @@
           4582
         ],
         "jaccard": 0,
-        "crossNearestRad": 0.14772,
-        "displacementRatio": 1.1483
+        "crossNearestRad": 0.14822,
+        "displacementRatio": 1.1762
       },
       {
         "pair": [
@@ -179,8 +179,8 @@
           106
         ],
         "jaccard": 0,
-        "crossNearestRad": 0.13976,
-        "displacementRatio": 1.0864
+        "crossNearestRad": 0.13932,
+        "displacementRatio": 1.1055
       },
       {
         "pair": [
@@ -191,9 +191,9 @@
           4582,
           106
         ],
-        "jaccard": 0.00313,
-        "crossNearestRad": 0.14385,
-        "displacementRatio": 1.0505
+        "jaccard": 0.00306,
+        "crossNearestRad": 0.14049,
+        "displacementRatio": 1.0502
       }
     ],
     "interpretation": "crossNearestRad ≈ withinNearestRad (displacementRatio ~O(1)) ⇒ each macroSeed places craters independently; near-zero Jaccard ⇒ centre-index sets are disjoint. Layout variety is the ROBUST signal AC-REROLL rests on."
@@ -328,15 +328,15 @@
     "nStampPerRadius": [
       {
         "R": 0.272964,
-        "nStamp": 165
+        "nStamp": 171
       },
       {
         "R": 0.289149,
-        "nStamp": 162
+        "nStamp": 167
       },
       {
         "R": 0.305631,
-        "nStamp": 159
+        "nStamp": 163
       },
       {
         "R": 0.38,

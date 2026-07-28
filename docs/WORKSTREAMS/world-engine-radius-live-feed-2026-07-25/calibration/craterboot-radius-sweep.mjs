@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// ⚠ SUPERSEDED IN PART (gravity-selfcompression-2026-07-28): references below to
+//    g = g_c*(R/R_c) record the CONSTANT-DENSITY law live when this file was written.
+//    Gravity is now g = g_c*f(R)/f(R_c), f piecewise in absolute Earth radii
+//    (R^(4/3) below 1 R_E, R^1.70 above), ROCKY class only. Kept for audit trail.
+
 // docs/WORKSTREAMS/world-engine-radius-live-feed-2026-07-25/calibration/craterboot-radius-sweep.mjs
 //
 // AC-CRATERBOOT measurement harness (WS world-engine-radius-live-feed-2026-07-25).
