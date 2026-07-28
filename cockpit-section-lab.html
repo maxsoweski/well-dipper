@@ -121,8 +121,8 @@ const P = {
   railZ:-0.34, floorZ:-1.20, roofZ:0.70, bowY:1.62, aftY:-0.97,
   archN:2.60, railCap:0.100, bowSec:0.130, pillarSec:0.085,
   scW:0.30, scH:0.25,
-  upTanX:0.91, upTanZ:0.22, upDist:1.32,
-  loTanX:0.88, loTanZ:-0.21, loDist:1.26
+  upTanX:0.91, upTanZ:0.22, upDist:0.79,
+  loTanX:0.88, loTanZ:-0.21, loDist:0.83
 };
 
 const PRESETS = {
@@ -142,12 +142,14 @@ const PRESETS = {
     bowY:1.45, aftY:-0.85, archN:3.0, railCap:0.12, bowSec:0.15, pillarSec:0.095,
     scW:0.50, scH:0.33, upTanX:0.90, upTanZ:0.20, upDist:1.60,
     loTanX:0.74, loTanZ:-0.32, loDist:1.35 },
-  // Max's settings, 2026-07-28. The tub proportions are his call and are what
-  // the generator gets built to; the screen placement still clips the canopy.
+  // Max's settings, 2026-07-28, with option A applied: his tub proportions and
+  // his screen ANGLES exactly as he set them, with the screen DISTANCES pulled
+  // from 1.32/1.26 to 0.79/0.83 so all four units sit inside the hull. This is
+  // what the generator gets built to.
   max: { hwBow:0.59, hwMid:0.76, hwAft:0.57, railZ:-0.34, floorZ:-1.20, roofZ:0.70,
     bowY:1.62, aftY:-0.97, archN:2.60, railCap:0.100, bowSec:0.130, pillarSec:0.085,
-    scW:0.30, scH:0.25, upTanX:0.91, upTanZ:0.22, upDist:1.32,
-    loTanX:0.88, loTanZ:-0.21, loDist:1.26 }
+    scW:0.30, scH:0.25, upTanX:0.91, upTanZ:0.22, upDist:0.79,
+    loTanX:0.88, loTanZ:-0.21, loDist:0.83 }
 };
 
 const SLIDERS = [
