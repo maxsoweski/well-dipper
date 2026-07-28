@@ -59,6 +59,68 @@ function plainVec3(v) {
 }
 
 /**
+ * Resolve main.js's focus triple to the body SURVEY should show.
+ *
+ * "Which body is focused" is not one number. main.js tracks it as
+ * (focusIndex, focusMoonIndex, focusStarIndex), where `focusIndex` carries a
+ * sentinel: -1 = system overview, **-2 = a star** (set by `focusStar()`, and
+ * guarded elsewhere as `focusIndex === -2 && focusStarIndex >= 0`), 0+ = a planet.
+ * Treating -2 as an array index is how SURVEY would end up reading nothing while
+ * the camera sits on a star.
+ *
+ * Names follow `_makeTarget` in src/main.js exactly, fallbacks included, so the
+ * panel and the targeting reticle can never disagree about what a body is called.
+ *
+ * NOTE: the returned `data` and `physics` are LIVE references. This function is
+ * the INPUT to buildCockpitSnapshot, which is what copies them. Nothing else may
+ * call it and hand the result to a panel.
+ *
+ * @param {object|null} system the live `system` (replaced wholesale each warp)
+ * @param {{focusIndex:number, focusMoonIndex:number, focusStarIndex:number}} focus
+ * @returns {{kind:string, name:string, data:object, physics:object|null}|null}
+ */
+export function resolveFocusedBody(system, focus = {}) {
+  if (!system) return null;
+  // Deep sky has no star/planets to read a dossier from — the same early return
+  // `findClosestBody()` makes.
+  if (system.type && system.type !== 'star-system') return null;
+
+  const { focusIndex = -1, focusMoonIndex = -1, focusStarIndex = -1 } = focus;
+
+  if (focusIndex === -2) {
+    if (focusStarIndex < 0) return null;
+    const starObj = focusStarIndex === 1 && system.star2 ? system.star2 : system.star;
+    if (!starObj?.data) return null;
+    const name = focusStarIndex === 1 ? system.names?.star2 : system.names?.star;
+    return { kind: 'star', name: name || 'Star', data: starObj.data, physics: starObj.physics ?? null };
+  }
+
+  if (focusIndex < 0) return null;
+
+  const entry = system.planets?.[focusIndex];
+  if (!entry) return null;
+
+  if (focusMoonIndex >= 0) {
+    const moon = entry.moons?.[focusMoonIndex];
+    if (!moon?.data) return null;
+    return {
+      kind: 'moon',
+      name: system.names?.planets?.[focusIndex]?.moons?.[focusMoonIndex] || `Moon ${focusMoonIndex + 1}`,
+      data: moon.data,
+      physics: moon.physics ?? null,
+    };
+  }
+
+  if (!entry.planet?.data) return null;
+  return {
+    kind: 'planet',
+    name: system.names?.planets?.[focusIndex]?.name || `Planet ${focusIndex + 1}`,
+    data: entry.planet.data,
+    physics: entry.planet.physics ?? null,
+  };
+}
+
+/**
  * Build one frame's snapshot from live game state.
  *
  * Every argument is read, never retained. The returned object is composed
