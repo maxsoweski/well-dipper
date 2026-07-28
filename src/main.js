@@ -2465,7 +2465,15 @@ const _cockpitSnapshotProvider = new CockpitSnapshotProvider((frame) => ({
   drop: frame.drop ?? null,
   massLockHint: _massLockHintFrames > 0,
 
-  focusedBody: resolveFocusedBody(system, { focusIndex, focusMoonIndex, focusStarIndex }),
+  // Short-circuited while warping: `system` is never nulled (one assignment in
+  // this file, the declaration), and _hideCurrentSystem() runs at FOLD→ENTER,
+  // potentially many frames before spawnSystem() reassigns it — so mid-warp
+  // this would walk BodyRenderers whose GPU resources are about to be disposed.
+  // buildCockpitSnapshot blanks SURVEY on the same condition; this just avoids
+  // the walk.
+  focusedBody: warpEffect.isActive
+    ? null
+    : resolveFocusedBody(system, { focusIndex, focusMoonIndex, focusStarIndex }),
 
   navLevel: _navComputer ? _navComputer.level : null,
   galacticPos: playerGalacticPos,

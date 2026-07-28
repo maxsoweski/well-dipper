@@ -189,6 +189,24 @@ describe('buildCockpitSnapshot — read-only feed (AC-SNAPSHOT)', () => {
     expect(none.survey.name).toBeNull();
   });
 
+  it('reads SURVEY blank during a warp, because the system is already torn down', () => {
+    // `system` is NEVER nulled — grep finds one assignment, the declaration.
+    // _hideCurrentSystem() runs at the FOLD→ENTER and ENTER→HYPER transitions,
+    // potentially many frames before spawnSystem() reassigns `system`. In that
+    // window `system` still points at BodyRenderers whose meshes are out of the
+    // scene and whose GPU resources spawnSystem is about to dispose. A dossier
+    // read then describes a system that no longer exists.
+    const warping = buildCockpitSnapshot(makeLiveSources({ warping: true }));
+
+    expect(warping.survey).toEqual({
+      kind: null, name: null, type: null, tEq: null,
+      composition: null, atmosphere: null, tidalState: null, surfaceHistory: null,
+    });
+    // The rest of the frame still reports — the ship is still flying.
+    expect(warping.drive.speed).toBe(3.25);
+    expect(warping.regime.warping).toBe(true);
+  });
+
   it('carries the warp leg as primitives and never the live warpTarget', () => {
     const sources = makeLiveSources({
       warpState: 'hyper', warpProgress: 0.42, warping: true, pilotPhase: 'CRUISE',

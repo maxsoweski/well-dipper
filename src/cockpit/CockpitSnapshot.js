@@ -160,8 +160,16 @@ export function buildCockpitSnapshot(sources = {}) {
     pilotPhase = null,
   } = sources;
 
-  const physics = focusedBody?.physics ?? null;
-  const bodyData = focusedBody?.data ?? null;
+  // `system` is NEVER nulled — there is exactly one assignment in main.js, the
+  // declaration. `_hideCurrentSystem()` runs at the FOLD→ENTER and ENTER→HYPER
+  // transitions, potentially many frames before `spawnSystem()` reassigns it, so
+  // across a warp `system` still points at BodyRenderers whose meshes are out of
+  // the scene and whose GPU resources are about to be disposed. Reading a
+  // dossier then describes a system that no longer exists, so SURVEY goes blank
+  // for the duration. The rest of the frame still reports — the ship is flying.
+  const body = warping ? null : focusedBody;
+  const physics = body?.physics ?? null;
+  const bodyData = body?.data ?? null;
 
   return {
     // `t` is the SIM clock — replay-deterministic, and it repeats across RAFs on
@@ -218,8 +226,8 @@ export function buildCockpitSnapshot(sources = {}) {
     // T_eq is written onto PLANET data only — moons and stars carry none, so this
     // reads null for them rather than a stale or zeroed number.
     survey: {
-      kind: focusedBody?.kind ?? null,
-      name: focusedBody?.name ?? null,
+      kind: body?.kind ?? null,
+      name: body?.name ?? null,
       type: bodyData?.type ?? null,
       tEq: typeof bodyData?.T_eq === 'number' ? bodyData.T_eq : null,
       composition: plainCopy(physics?.composition ?? null),
