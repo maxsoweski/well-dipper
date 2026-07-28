@@ -54,7 +54,7 @@
       "id": "AC-LAB",
       "statement": "cockpit-lab.html loads on the :5179 dev server and gives Max both views of the model: free orbit to spin and inspect it from outside, and an \"eye\" button that snaps the camera to the origin at 70 degree FOV to see it from the pilot's seat, with a placeholder background visible through the canopy aperture so the opening reads. No console errors.",
       "verifyVia": {
-        "input": "chrome-devtools: load http://localhost:5179/cockpit-lab.html, drag to orbit, click the eye button, list console messages.",
+        "input": "chrome-devtools: load http://localhost:5179/well-dipper/cockpit-lab.html (vite.config.js sets base: '/well-dipper/', so the root path 404s), await window._cockpitLab.ready, drag to orbit, switch to eye mode, list console messages.",
         "observable": "GLB loads and renders; orbit changes the camera pose; the eye button puts the camera at the origin with camera.fov === 70; background is visible through the aperture; zero console errors and zero failed network requests."
       },
       "layer": "integration",
@@ -77,6 +77,14 @@
         "observable": "Max's holistic judgement — does this read as a cockpit he wants to be inside, and does it earn the \"woah, this is a real game\" reaction he scoped it for? Deferred to Max; no agent renders this."
       },
       "layer": "uat"
+    }
+  ],
+  "amendments": [
+    {
+      "date": "2026-07-28",
+      "ac": "AC-LAB",
+      "change": "Corrected the verification URL from http://localhost:5179/cockpit-lab.html to http://localhost:5179/well-dipper/cockpit-lab.html, and added 'await window._cockpitLab.ready' to the input.",
+      "why": "vite.config.js:7 sets base: '/well-dipper/', so the root-path URL 404s — the original input would have produced a spurious FAIL against working code. The added await is because evaluate_script otherwise races GLTFLoader. Factual correction to the verification method; the AC's substance is unchanged, so it was not re-greenlit."
     }
   ],
   "architecturalConnections": {
