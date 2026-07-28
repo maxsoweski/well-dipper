@@ -124,7 +124,11 @@ const BODY = {
 const P = {
   hwBow:0.59, hwMid:0.76, hwAft:0.57,
   railZ:-0.34, floorZ:-1.20, roofZ:0.70, roofZBow:0.52, bowY:1.62, aftY:-0.97,
-  archN:2.60, railCap:0.085, bowSec:0.085, pillarSec:0.049,
+  shoulderX:0.92, roofEdgeX:0.45, railCap:0.085, bowSec:0.085, pillarSec:0.049,
+  // The screen HOUSING, mirroring SCREEN_BEZEL / SCREEN_BODY_DEPTH, plus how far behind the
+  // back plate an arm head reaches (ARM_HEAD_LEN + its section half-diagonal). These exist
+  // because the containment check now tests the unit rather than the display face.
+  scBezel:0.0254, scDepth:0.0508, armReach:0.108,
   scW:0.30, scH:0.25,
   upTanX:0.91, upTanZ:0.22, upDist:0.79,
   loTanX:0.88, loTanZ:-0.21, loDist:0.83
@@ -135,22 +139,22 @@ const PRESETS = {
   // roofZ: a flat lid, which is what they actually described.
   current: { hwBow:2.14, hwMid:2.30, hwAft:1.90, railZ:-1.08, floorZ:-1.08, roofZ:1.32,
     roofZBow:1.32,
-    bowY:1.80, aftY:-1.10, archN:2.2, railCap:0.11, bowSec:0.15, pillarSec:0.075,
+    bowY:1.80, aftY:-1.10, shoulderX:0.92, roofEdgeX:0.45, railCap:0.11, bowSec:0.15, pillarSec:0.075,
     scW:0.45, scH:0.30, upTanX:0.74, upTanZ:0.35, upDist:1.60,
     loTanX:0.74, loTanZ:-0.37, loDist:1.60 },
   fighter: { hwBow:0.46, hwMid:0.52, hwAft:0.48, railZ:-0.22, floorZ:-1.18, roofZ:0.58,
     roofZBow:0.58,
-    bowY:0.86, aftY:-0.52, archN:2.1, railCap:0.07, bowSec:0.09, pillarSec:0.055,
+    bowY:0.86, aftY:-0.52, shoulderX:0.92, roofEdgeX:0.45, railCap:0.07, bowSec:0.09, pillarSec:0.055,
     scW:0.24, scH:0.16, upTanX:0.55, upTanZ:0.10, upDist:0.82,
     loTanX:0.42, loTanZ:-0.38, loDist:0.74 },
   game: { hwBow:0.62, hwMid:0.85, hwAft:0.70, railZ:-0.30, floorZ:-1.20, roofZ:0.70,
     roofZBow:0.70,
-    bowY:1.15, aftY:-0.65, archN:2.6, railCap:0.10, bowSec:0.13, pillarSec:0.085,
+    bowY:1.15, aftY:-0.65, shoulderX:0.92, roofEdgeX:0.45, railCap:0.10, bowSec:0.13, pillarSec:0.085,
     scW:0.38, scH:0.25, upTanX:0.86, upTanZ:0.18, upDist:1.35,
     loTanX:0.68, loTanZ:-0.34, loDist:1.15 },
   tourer: { hwBow:0.95, hwMid:1.25, hwAft:1.05, railZ:-0.34, floorZ:-1.22, roofZ:0.86,
     roofZBow:0.86,
-    bowY:1.45, aftY:-0.85, archN:3.0, railCap:0.12, bowSec:0.15, pillarSec:0.095,
+    bowY:1.45, aftY:-0.85, shoulderX:0.92, roofEdgeX:0.45, railCap:0.12, bowSec:0.15, pillarSec:0.095,
     scW:0.50, scH:0.33, upTanX:0.90, upTanZ:0.20, upDist:1.60,
     loTanX:0.74, loTanZ:-0.32, loDist:1.35 },
   // Max's settings, 2026-07-28, with option A applied: his tub proportions and
@@ -164,7 +168,7 @@ const PRESETS = {
   // off, i.e. they were never choices of his, which is why they were free to move.
   max: { hwBow:0.59, hwMid:0.76, hwAft:0.57, railZ:-0.34, floorZ:-1.20, roofZ:0.70,
     roofZBow:0.52,
-    bowY:1.62, aftY:-0.97, archN:2.60, railCap:0.085, bowSec:0.085, pillarSec:0.049,
+    bowY:1.62, aftY:-0.97, shoulderX:0.92, roofEdgeX:0.45, railCap:0.085, bowSec:0.085, pillarSec:0.049,
     scW:0.30, scH:0.25, upTanX:0.91, upTanZ:0.22, upDist:0.79,
     loTanX:0.88, loTanZ:-0.21, loDist:0.83 }
 };
@@ -182,10 +186,16 @@ const SLIDERS = [
   ["THE CANOPY", [
     ["roofZ","roof over the head",0.30,1.60,0.01],
     ["roofZBow","roof at the bow — the TAPER",0.20,1.60,0.01],
-    ["archN","cross-section squareness",1.6,4.5,0.05],
+    ["shoulderX","shoulder, x-frac of half-width",0.55,1.00,0.01],
+    ["roofEdgeX","roof edge, x-frac — the FLAT roof pane",0.10,0.95,0.01],
     ["railCap","rail member height",0.03,0.20,0.005],
     ["bowSec","bow arch width",0.04,0.25,0.005],
     ["pillarSec","pillar width",0.03,0.18,0.005]
+  ]],
+  ["SCREEN HOUSING — what actually has to fit", [
+    ["scBezel","bezel, all round",0.000,0.040,0.001],
+    ["scDepth","body depth behind the bezel",0.005,0.070,0.001],
+    ["armReach","arm head, behind the back plate",0.000,0.150,0.005]
   ]],
   ["SCREENS — upper pair", [
     ["scW","display face width",0.14,0.70,0.01],
@@ -217,14 +227,66 @@ function roofAt(y){
   if (y <= 0) return P.roofZ;
   return P.roofZ + (P.roofZBow - P.roofZ) * (y / P.bowY);
 }
-function canopyHalf(y, z){
+/* THE CROSS-SECTION. These two tables MIRROR cockpit-gen.py's TUB_HALF and CANOPY_HALF —
+   right half only, (fraction of the station's half-width, fraction of that band's height) —
+   and they are the whole reason this lab can be trusted about whether a thing fits.
+
+   WHAT WAS HERE BEFORE, AND WHY IT WAS WRONG. This lab used to model the section as a
+   SUPERELLIPSE, |x/hw|^n + |z/span|^n = 1, with n on a "cross-section squareness" slider.
+   The generator does not build that and never did: it builds a FACETED profile, straight
+   segments between four authored points, with a FLAT ROOF. The two shapes disagree badly
+   exactly where it matters —
+
+       height up the canopy    0.20   0.42   0.48   0.60   0.80   1.00
+       superellipse (old)     0.756  0.728  0.715  0.675  0.554  0.000
+       faceted (built)        0.731  0.699  0.662  0.588  0.465  0.342
+       lab was roomier by     0.025  0.029  0.052  0.087  0.089  (-0.342)
+
+   — so through the shoulder band, which is precisely where the four screens sit, the lab was
+   telling us there was up to 89 mm more cabin than the ship has. That is how "option A" got
+   chosen: the screens were pulled to 0.79 / 0.83 m against THIS envelope, the check went
+   green at +0.011 m, and in the built hull every screen BODY is up to 135 mm outside. Even a
+   bare zero-bezel display face at 0.79 m is 62 mm out.
+
+   The lesson is the one this project keeps relearning in new clothes: an instrument that
+   does not model what gets built will pass what gets built. archN is retired; the shape
+   knobs are now the generator's own profile fractions. */
+const TUB_HALF = [    // centreline -> rail, over the band FLOOR_Z .. RAIL_Z
+  [0.00, 0.00],       // floor centre
+  [0.72, 0.10],       // chine
+  [1.00, 0.52],       // the wall turns up here
+  [1.00, 1.00],       // ...and arrives at the rail
+];
+const canopyHalfTable = () => [   // rail -> roof, over RAIL_Z .. roofAt(y)
+  [1.00, 0.00],                   // rail
+  [P.shoulderX, 0.42],            // shoulder
+  [P.roofEdgeX, 1.00],            // roof edge — NOT zero: the roof is a flat pane
+];
+// Piecewise-linear lookup through a (xFrac, zFrac) table. Same evaluation the generator's
+// station_ring() performs when it lofts the profile, so the two cannot drift in shape.
+function profileFrac(table, u){
+  if (u <= table[0][1]) return table[0][0];
+  for (let k = 0; k < table.length - 1; k++){
+    const [x0, z0] = table[k], [x1, z1] = table[k + 1];
+    if (u <= z1){ const t = (z1 - z0) < 1e-9 ? 0 : (u - z0) / (z1 - z0);
+                  return x0 + (x1 - x0) * t; }
+  }
+  return table[table.length - 1][0];
+}
+// Half-width of the cabin at (y, z) — tub below the rail, canopy above it. One function for
+// both bands, because the ring is one CLOSED profile in the generator and splitting it here
+// is what let the tub half go unchecked.
+function cabinHalf(y, z){
+  if (z <= P.railZ){
+    const band = P.railZ - P.floorZ;
+    if (band <= 1e-6) return 0;
+    return halfAt(y) * profileFrac(TUB_HALF, (z - P.floorZ) / band);
+  }
   const span = roofAt(y) - P.railZ;
   if (span <= 1e-6) return 0;
-  const u = (z - P.railZ) / span;
-  if (u <= 0) return halfAt(y);
-  if (u >= 1) return 0;
-  return halfAt(y) * Math.pow(1 - Math.pow(u, P.archN), 1 / P.archN);
+  return halfAt(y) * profileFrac(canopyHalfTable(), (z - P.railZ) / span);
 }
+const canopyHalf = (y, z) => cabinHalf(y, z);
 const railTop = () => P.railZ + P.railCap;
 
 /* CONTAINMENT — does a thing actually fit inside the cabin?
@@ -235,23 +297,43 @@ const railTop = () => P.railZ + P.railCap;
    or the glass. */
 function cabinMargin(p){
   const [x, y, z] = p;
-  const half = (z < P.railZ) ? halfAt(y) : canopyHalf(y, z);
-  return Math.min(half - Math.abs(x), y - P.aftY, P.bowY - y,
-                  z - P.floorZ, P.roofZ - z);
+  return Math.min(cabinHalf(y, z) - Math.abs(x), y - P.aftY, P.bowY - y,
+                  z - P.floorZ, roofAt(y) - z);
 }
-function screenMargin(tanx, tanz, dist, w, h){
+/* WHAT GETS TESTED IS THE WHOLE UNIT, NOT THE DISPLAY FACE.
+   The old check sampled the face's four corners and its centre. A screen is not a face: it
+   is a housing SCREEN_BEZEL wider all round and SCREEN_BODY_DEPTH deep behind, and an arm
+   has to reach further behind that still. Measuring the face alone is the same shape of
+   blind spot as measuring nothing — it green-lit four units whose back plates sit 135 mm
+   outside the hull. Sample the bezel rectangle at the front AND the back plate, and
+   optionally the plane an arm head would reach.
+   `back` is measured along -n, i.e. AWAY from the eye, which for a screen facing the pilot
+   is straight outboard. That is why depth costs so much more here than width. */
+function unitProbePoints(q, w, h, extraBehind){
+  const Hu = w/2 + P.scBezel, Hw = h/2 + P.scBezel;
+  const depth = P.scDepth + (extraBehind || 0);
+  const at = (d, a, b) => [
+    q.c[0] - q.n[0]*d + a*q.r[0] + b*q.u[0],
+    q.c[1] - q.n[1]*d + a*q.r[1] + b*q.u[1],
+    q.c[2] - q.n[2]*d + a*q.r[2] + b*q.u[2]];
+  const pts = [];
+  for (const d of [0, depth])
+    for (const [a, b] of [[-Hu,-Hw],[Hu,-Hw],[Hu,Hw],[-Hu,Hw],[0,0]]) pts.push(at(d, a, b));
+  return pts;
+}
+function screenMargin(tanx, tanz, dist, w, h, extraBehind){
   const q = screenQuad(tanx, tanz, dist, w, h);
   let worst = Infinity;
-  for (const c of q.corners) worst = Math.min(worst, cabinMargin(c));
-  return Math.min(worst, cabinMargin(q.c));
+  for (const p of unitProbePoints(q, w, h, extraBehind)) worst = Math.min(worst, cabinMargin(p));
+  return worst;
 }
-// Largest distance along this direction that still keeps the whole face inside.
-function maxSafeDist(tanx, tanz, w, h){
+// Largest distance along this direction that still keeps the whole unit inside.
+function maxSafeDist(tanx, tanz, w, h, extraBehind){
   let lo = 0.15, hi = 4.0;
-  if (screenMargin(tanx, tanz, lo, w, h) < 0) return 0;
+  if (screenMargin(tanx, tanz, lo, w, h, extraBehind) < 0) return 0;
   for (let i = 0; i < 40; i++){
     const mid = (lo + hi) / 2;
-    if (screenMargin(tanx, tanz, mid, w, h) >= 0) lo = mid; else hi = mid;
+    if (screenMargin(tanx, tanz, mid, w, h, extraBehind) >= 0) lo = mid; else hi = mid;
   }
   return lo;
 }
@@ -294,8 +376,10 @@ const screens = () => [
   ["LL", -P.loTanX, P.loTanZ, P.loDist], ["LR",  P.loTanX, P.loTanZ, P.loDist]
 ].map(([id, tx, tz, d]) => ({
   id, ...screenQuad(tx, tz, d, P.scW, P.scH),
-  margin:  screenMargin(tx, tz, d, P.scW, P.scH),
-  maxDist: maxSafeDist(tx, tz, P.scW, P.scH)
+  margin:     screenMargin(tx, tz, d, P.scW, P.scH),
+  marginArm:  screenMargin(tx, tz, d, P.scW, P.scH, P.armReach),
+  maxDist:    maxSafeDist(tx, tz, P.scW, P.scH),
+  maxDistArm: maxSafeDist(tx, tz, P.scW, P.scH, P.armReach)
 }));
 
 /* ---- Canvas plumbing ----------------------------------------------------- */
@@ -731,6 +815,7 @@ function readouts(occ){
   const headroom = P.roofZ - BODY.headR - 0.02;
   const fmt = e => `${Math.abs(e).toFixed(0)}° ${e >= 0 ? "above" : "below"}`;
   const worst = Math.min(...S.map(s => s.margin));
+  const worstArm = Math.min(...S.map(s => s.marginArm));
   const cells = [
     { k:"cabin width", v:(P.hwMid*2).toFixed(2), u:"m at the shoulders" },
     { k:"rail below eye", v:Math.abs(P.railZ).toFixed(2), u:"m — " + nearestLandmark(P.railZ) },
@@ -738,11 +823,16 @@ function readouts(occ){
       u:`tub ${(occ.tubFrac*100).toFixed(1)}% + frame/screens ${((occ.frac-occ.tubFrac)*100).toFixed(1)}%` },
     { k:"upper screens", v:S[0].widthDeg.toFixed(0)+"°", u:"wide — " + fmt(S[0].elevationDeg) },
     { k:"lower screens", v:S[2].widthDeg.toFixed(0)+"°", u:"wide — " + fmt(S[2].elevationDeg) },
-    { k:"screens in hull",
+    { k:"units in hull",
       v: worst >= 0 ? "inside" : (worst*100).toFixed(0) + " cm",
-      u: worst >= 0 ? `${(worst*100).toFixed(0)} cm clearance`
-                    : `outside — max dist ${S[0].maxDist.toFixed(2)}/${S[2].maxDist.toFixed(2)} m`,
+      u: worst >= 0 ? `${(worst*100).toFixed(0)} cm — housing, not just the face`
+                    : `outside — fits at ${S[0].maxDist.toFixed(2)}/${S[2].maxDist.toFixed(2)} m`,
       bad: worst < 0 },
+    { k:"…with arms too",
+      v: worstArm >= 0 ? "inside" : (worstArm*100).toFixed(0) + " cm",
+      u: worstArm >= 0 ? `${(worstArm*100).toFixed(0)} cm behind the back plate`
+                       : `fits at ${S[0].maxDistArm.toFixed(2)}/${S[2].maxDistArm.toFixed(2)} m`,
+      bad: worstArm < 0 },
     { k:"elbow clearance", v:clear.toFixed(2), u:"m each side", bad: clear < 0.03 },
     { k:"legroom", v:legroom.toFixed(2), u:"m to the coaming", bad: legroom < 0.05 },
     { k:"headroom", v:headroom.toFixed(2), u:"m over the head", bad: headroom < 0.05 }
@@ -827,12 +917,19 @@ window._section = {
       elbowClearance:    +(P.hwMid - BODY.elbowHalf).toFixed(3),
       legroom:           +(P.bowY - BODY.toeY).toFixed(3),
       headroom:          +(P.roofZ - BODY.headR - 0.02).toFixed(3),
+      // NOTE the change of meaning: these margins are now measured on the whole UNIT --
+      // bezel rectangle front and back plate -- not on the display face. The face-only
+      // version read +0.011 m at 0.79 m against a superellipse envelope the ship does not
+      // have; this reads the housing against the faceted profile the generator builds.
       screenMarginM:     +Math.min(...S.map(s => s.margin)).toFixed(3),
+      screenMarginArmM:  +Math.min(...S.map(s => s.marginArm)).toFixed(3),
       upperMaxDist:      +S[0].maxDist.toFixed(3),
       lowerMaxDist:      +S[2].maxDist.toFixed(3),
+      upperMaxDistArm:   +S[0].maxDistArm.toFixed(3),
+      lowerMaxDistArm:   +S[2].maxDistArm.toFixed(3),
       screenCentres:     S.map(s => ({ id:s.id,
                            x:+s.c[0].toFixed(3), y:+s.c[1].toFixed(3), z:+s.c[2].toFixed(3),
-                           margin:+s.margin.toFixed(3) }))
+                           margin:+s.margin.toFixed(3), marginArm:+s.marginArm.toFixed(3) }))
     };
   },
   ready: true
