@@ -5,9 +5,31 @@
 // Covers the three unit-layer ACs — AC-FORM, AC-METRIC, AC-REPRO — by parsing the
 // exported GLB directly (tests/helpers/glb-parse.mjs; no three.js, no browser, no DOM).
 //
-// DEFERRED to live verification by working-Claude: AC-FRAME (occlusion percentage at
-// 70 degrees / 16:9, measured in chrome-devtools) and AC-LAB (the lab page loads and
-// the eye button works). Neither is assertable from the container alone.
+// ── WHAT THE RE-SPEC CHANGED (2026-07-28) ────────────────────────────────────
+// Max replaced the form language at UAT on 1056f30. The old suite asserted an
+// octagonal Cockpit_Frame ring, flat 0.30 x 0.20 m screen panels mounted on its bevel
+// pads, and a Hull_Nose. All three are gone:
+//
+//   screens   flat quad          -> a BOX: a display face 50% larger (0.45 x 0.30 m),
+//                                  a ~1 inch bezel around it, a ~2 inch deep body
+//                                  behind it, and the face RECESSED so the bezel reads
+//   mounting  seated on a pillar -> carried on ARMS whose roots are outside the
+//                                  70 deg / 16:9 view frustum
+//   frame     octagonal ring     -> TWO vertical ribs lying on a forward-protruding
+//                                  Canopy_Glass shell
+//   nose      Hull_Nose          -> DELETED. Its presence is now an AC-FORM failure.
+//
+// The screen containment checks that used to measure against the frame ring's inner
+// cavity are replaced by containment against the canopy shell (a ray from the eye
+// through each screen vertex must reach that vertex before it reaches the glass).
+//
+// DEFERRED to live verification by working-Claude: AC-FRAME (the occluded fraction at
+// 70 degrees / 16:9, measured in chrome-devtools) and AC-LAB (the lab page loads, the
+// eye button works, the cabin light is off by default). Neither is assertable from the
+// container alone. NOTE that AC-FRAME is now MEASURE-AND-REPORT: the old [0.25, 0.30]
+// band was derived from the frame-plus-nose design Max deleted, and the amended
+// contract retires it rather than have geometry padded to hit a stale number. Nothing
+// in this file asserts an occlusion band, on purpose.
 //
 // ── MISSING ARTEFACTS ARE A FAILURE, NOT A SKIP ──────────────────────────────
 // If public/assets/cockpit/cockpit.glb or cockpit-metrics.json is absent, this suite
@@ -41,6 +63,11 @@
 // constant in the script retunes the expectation with it. But note what that class of
 // check can and cannot catch — see the "NEAR-TAUTOLOGY" comments below. The checks
 // that are independent of the generator's self-report are marked INDEPENDENT.
+//
+// The one place the test file is the AUTHORITY rather than the sidecar is the inch
+// derivation: a generator that declared a 0.5 m "bezel" and built one would satisfy
+// every geometry-vs-sidecar comparison, so the declared constants are themselves
+// checked against the inches Max named.
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
@@ -118,23 +145,75 @@ if (missing.length) {
 // glTF axes: +X right, +Y up, forward is -Z. Blender's +Y forward maps to glTF -Z
 // under export_yup=True, so a forward distance F metres in the script is z = -F here.
 const EYE = [0, 0, 0];
-const SCREEN_NAMES = ['Screen_UL', 'Screen_UR', 'Screen_LL', 'Screen_LR'];
+const QUADRANT_SUFFIXES = ['UL', 'UR', 'LL', 'LR'];
+const SCREEN_NAMES = QUADRANT_SUFFIXES.map((q) => `Screen_${q}`);
+const BODY_NAMES = QUADRANT_SUFFIXES.map((q) => `ScreenBody_${q}`);
+const ARM_NAMES = QUADRANT_SUFFIXES.map((q) => `Arm_${q}`);
+const RIB_NAMES = ['Canopy_Rib_L', 'Canopy_Rib_R'];
+const GLASS_NAME = 'Canopy_Glass';
+const PART_NAMES = [...SCREEN_NAMES, ...BODY_NAMES, ...ARM_NAMES, ...RIB_NAMES, GLASS_NAME];
+
 // Expected sign of (x, y) for each screen centre in glTF axes. Left/right are the
 // PILOT's. Looking forward down -Z with +Y up, the pilot's right hand points along +X
 // and their left along -X — so "UL" (upper-left) sits at (-x, +y) and "LR"
-// (lower-right) at (+x, -y).
+// (lower-right) at (+x, -y). Same convention names the ribs: Canopy_Rib_L is at -x.
 const QUADRANTS = {
   Screen_UL: [-1, +1],
   Screen_UR: [+1, +1],
   Screen_LL: [-1, -1],
   Screen_LR: [+1, -1],
 };
+const RIB_SIDES = { Canopy_Rib_L: -1, Canopy_Rib_R: +1 };
+
 const MAX_SCREEN_ANGLE_DEG = 20; // contract AC-FORM
+
+// The FOV the framing is judged against, from src/ui/Settings.js:40 via the contract.
+// These are the TEST's authority, not the sidecar's: a generator that quietly retuned
+// its own GAME_FOV_DEG would otherwise move the goalposts for the arm-root check.
+const GAME_FOV_DEG = 70;
+const GAME_ASPECT = 16 / 9;
+const FRUSTUM = GLB.frustumTanExtents(GAME_FOV_DEG, GAME_ASPECT);
+
+// Max's re-spec, in the units he used. The test file owns these because they are the
+// spec, not an output: "screens about 50% bigger", "about one inch bezel and two inches
+// thick backing".
+const INCH = 0.0254;
+const PREV_FACE_W = 0.30;
+const PREV_FACE_H = 0.20;
+const MIN_FACE_AREA = 1.5 * PREV_FACE_W * PREV_FACE_H; // 0.09 m^2
+// How far a DECLARED constant may drift from the inch Max named before the declaration
+// itself is wrong (as opposed to the geometry disagreeing with it). Wide on purpose —
+// "about one inch" is not "exactly 25.4 mm" — but nowhere near wide enough to admit a
+// bezel that reads as a frame or a body that reads as a panel.
+const INCH_BAND = 0.5;
+
 // Vertex-level containment slack, metres. Coordinates are float32 at ~1.5 m, so the
 // storage noise floor is ~1e-7 m; 0.1 mm is generous for "flush against the surface"
 // while still nearly three orders of magnitude tighter than the authoring mistake this
 // was written against (92 mm through the canopy plane, 87 mm through the pillar).
 const VERTEX_TOL = 1e-4;
+// Agreement between a measured dimension and the constant the script declares for it.
+// 1 mm: three orders of magnitude above float32 noise, an order of magnitude below the
+// smallest thing being measured (a 25 mm bezel).
+const DIMENSION_TOL = 1e-3;
+// Thickness of the slab of body vertices treated as lying on the front (bezel) plane.
+const FRONT_SLAB_TOL = 1e-3;
+// A rib is a strip laid ON the shell, so its far face stands off by its own thickness.
+// The tolerance is derived per-rib from that measured thickness plus this margin, rather
+// than being a literal — a rib floating 0.3 m off the canopy still fails loudly.
+const RIB_ON_SHELL_MARGIN = 0.02;
+// Fraction of a rib's vertices that must lie on the shell. Not 100%: a rib that runs a
+// little past the glass onto the hull at its foot is legitimate, a rib that floats is not.
+const RIB_ON_SHELL_FRACTION = 0.9;
+// How close an arm must come to the screen box it carries. Generous: this is an
+// anti-vacuity check (an arm floating in space outside the frustum would otherwise
+// satisfy the root-outside-the-frame assertion trivially), not a joinery spec.
+const ARM_ATTACH_TOL = 0.10;
+// Root end of an arm = vertices at least this fraction of the way out from its screen.
+const ARM_ROOT_FRACTION = 0.75;
+// Minimum forward bulge of the canopy shell beyond its own rim for "protruding" to mean
+// anything. A flat shell spanning the opening measures 0 here.
+const MIN_CANOPY_PROTRUSION = 0.02;
 
 /**
  * Read a script-declared constant out of the sidecar, tolerating SCREAMING_SNAKE or
@@ -151,11 +230,39 @@ function declared(metrics, name) {
       if (typeof pool[key] === 'number') return pool[key];
     }
   }
+  return undefined;
+}
+
+/**
+ * The first of several admissible spellings the sidecar actually declares.
+ *
+ * The generator names its own constants; the contract names the QUANTITY ("a ~1 inch
+ * bezel", "a ~2 inch deep body"). Accepting a small set of spellings keeps the test
+ * asserting the quantity rather than a spelling, and the error names every spelling it
+ * tried so a rename is a two-second fix rather than a mystery.
+ *
+ * `extra` is searched first: per-screen sidecar entries may carry the value locally.
+ */
+function declaredAny(metrics, names, { label, extra = null } = {}) {
+  if (extra && typeof extra === 'object') {
+    for (const key of Object.keys(extra)) {
+      const norm = key.toLowerCase();
+      for (const n of names) {
+        if (norm === n.toLowerCase().replace(/_/g, '') || norm === n.toLowerCase()) {
+          if (typeof extra[key] === 'number') return extra[key];
+        }
+      }
+    }
+  }
+  for (const n of names) {
+    const v = declared(metrics, n);
+    if (v !== undefined) return v;
+  }
   throw new Error(
-    `cockpit-metrics.json does not declare "${name}" (tried ${candidates.join(', ')}, `
-    + 'at the top level and under .constants/.declared). The Blender script must write '
-    + 'every named constant to the sidecar — the tests assert against script-declared '
-    + 'values, not hard-coded literals.',
+    `cockpit-metrics.json does not declare ${label ?? names[0]}. Tried: ${names.join(', ')} `
+    + '(top level, .constants, .declared, camelCase, and the per-screen entry). The Blender '
+    + 'script must write every named constant to the sidecar — the tests assert geometry '
+    + 'against script-declared values, not against literals copied into a test file.',
   );
 }
 
@@ -214,7 +321,7 @@ function buildSyntheticGLB() {
 /**
  * Axis-aligned box as a world-space triangle list, wound so every face normal points
  * OUT of the box (or, with `flip`, into it — the convention a ring solid's inner wall
- * uses, and the one the frame-containment check below relies on).
+ * uses, and the one the half-space containment self-test below relies on).
  */
 function boxTriangles(min, max, { flip = false } = {}) {
   const tris = [];
@@ -239,6 +346,20 @@ function boxTriangles(min, max, { flip = false } = {}) {
     }
   }
   return tris;
+}
+
+/** A rectangle in the z = `atZ` plane, `w` x `h`, rotated by `roll` about its normal. */
+function rectangleTriangles(w, h, atZ, roll = 0) {
+  const cos = Math.cos(roll);
+  const sin = Math.sin(roll);
+  const at = (sx, sy) => {
+    const x = (sx * w) / 2;
+    const y = (sy * h) / 2;
+    return [x * cos - y * sin, x * sin + y * cos, atZ];
+  };
+  const p00 = at(-1, -1); const p10 = at(1, -1); const p11 = at(1, 1); const p01 = at(-1, 1);
+  // CCW seen from +Z, so the winding normal is +Z.
+  return [{ a: p00, b: p10, c: p11 }, { a: p00, b: p11, c: p01 }];
 }
 
 describe('GLB parse harness (instrument self-test — runs with or without the cockpit artefacts)', () => {
@@ -330,16 +451,118 @@ describe('GLB parse harness (instrument self-test — runs with or without the c
       'a point outside the box must be outside at least one face').toBe(true);
   });
 
-  it('reads an inward-wound shell as a cavity (the frame-containment convention)', () => {
-    // A ring solid's INNER wall faces the hole, so its winding normals point into the
-    // cavity and "inside" is the intersection of the positive half-spaces. This is
-    // exactly the predicate the screen-containment check below applies to the real frame.
+  it('reads an inward-wound shell as a cavity (the enclosure convention)', () => {
+    // A shell wound so its normals point into the hole makes "inside" the intersection
+    // of the POSITIVE half-spaces. Kept as documentation of the convention even though
+    // the frame ring that used it is gone: it is what any future enclosure check reads.
     const planes = GLB.trianglePlanes(boxTriangles([-1, -1, -1], [1, 1, 1], { flip: true }));
     expect(planes).toHaveLength(6);
     const inside = (p) => planes.every((pl) => GLB.signedDistanceToPlane(pl, p) >= 0);
     expect(inside([0, 0, 0])).toBe(true);
     expect(inside([0.9, -0.9, 0.9])).toBe(true);
     expect(inside([1.1, 0, 0]), 'a point through the wall must read as outside').toBe(false);
+  });
+
+  it('measures triangle-list area, which is how a display face is sized', () => {
+    expect(GLB.triangleListArea(rectangleTriangles(0.45, 0.30, -1.2))).toBeCloseTo(0.135, 9);
+    expect(GLB.triangleListArea(rectangleTriangles(0.45, 0.30, -1.2, 0.7)),
+      'area is orientation-independent — a rolled panel is not a bigger panel').toBeCloseTo(0.135, 9);
+    expect(GLB.triangleListArea(boxTriangles([0, 0, 0], [2, 2, 2])),
+      'a 2 m cube has six 4 m^2 faces').toBeCloseTo(24, 9);
+  });
+
+  it('finds the open boundary of a shell, and reports none for a closed solid', () => {
+    // A quad split into two triangles: the shared diagonal is used twice and drops out,
+    // leaving exactly the four sides. That is what lets planarFrame recover a panel's
+    // own axes instead of its diagonal.
+    const quad = GLB.boundaryEdges(rectangleTriangles(0.4, 0.2, 0));
+    expect(quad).toHaveLength(4);
+    const lengths = quad.map((e) => Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1], e.b[2] - e.a[2]))
+      .map((v) => Math.round(v * 1e6) / 1e6).sort((a, b) => a - b);
+    expect(lengths).toEqual([0.2, 0.2, 0.4, 0.4]);
+    expect(GLB.boundaryEdges(boxTriangles([0, 0, 0], [1, 1, 1])),
+      'a closed box has no rim').toHaveLength(0);
+  });
+
+  it('recovers a panel\'s own oriented rectangle, whatever its roll', () => {
+    // INSTRUMENT PROOF for the bezel measurement: the frame must come out the same for a
+    // rolled panel as for an axis-aligned one, or a "bezel" would just be measuring tilt.
+    for (const roll of [0, 0.35, 1.2, -0.9]) {
+      const frame = GLB.planarFrame(rectangleTriangles(0.45, 0.30, -1.2, roll));
+      expect(frame.halfU, `roll ${roll}: long half-extent`).toBeCloseTo(0.225, 6);
+      expect(frame.halfW, `roll ${roll}: short half-extent`).toBeCloseTo(0.150, 6);
+      expect(frame.centre[2]).toBeCloseTo(-1.2, 9);
+      expect(GLB.angleBetweenDegrees(frame.normal, [0, 0, 1]), 'winding normal is +Z').toBeCloseTo(0, 6);
+      // u, w, normal are right-handed and mutually perpendicular.
+      expect(frame.u[0] * frame.w[0] + frame.u[1] * frame.w[1] + frame.u[2] * frame.w[2]).toBeCloseTo(0, 9);
+    }
+    // frameCoords/frameExtents put a bigger concentric rectangle symmetrically outside.
+    const frame = GLB.planarFrame(rectangleTriangles(0.45, 0.30, -1.2, 0.4));
+    const outer = rectangleTriangles(0.45 + 2 * INCH, 0.30 + 2 * INCH, -1.2, 0.4)
+      .flatMap((t) => [t.a, t.b, t.c]);
+    const ext = GLB.frameExtents(frame, outer);
+    expect(ext.u.max - 0.225, 'a 1-inch surround reads as 1 inch on every side').toBeCloseTo(INCH, 6);
+    expect(ext.w.max - 0.150).toBeCloseTo(INCH, 6);
+    expect(ext.n.max, 'a coplanar rectangle has no depth in this frame').toBeCloseTo(0, 6);
+  });
+
+  it('projects into the pilot\'s tan-space and classifies the view frame', () => {
+    expect(GLB.tanSpaceProject([0, 0, -2]), 'straight ahead is the centre of the frame').toEqual([0, 0]);
+    expect(GLB.tanSpaceProject([1, 0.5, -1])).toEqual([1, 0.5]);
+    expect(GLB.tanSpaceProject([2, 1, -2]), 'tan-space is scale-invariant along the ray').toEqual([1, 0.5]);
+    expect(GLB.tanSpaceProject([0, 0, 0]), 'a point AT the eye has no projection').toBeNull();
+    expect(GLB.tanSpaceProject([0.2, 0, 0.5]), 'a point behind the eye has no projection').toBeNull();
+
+    const f = GLB.frustumTanExtents(70, 16 / 9);
+    expect(f.tanV).toBeCloseTo(Math.tan((35 * Math.PI) / 180), 12);
+    expect(f.tanH).toBeCloseTo(f.tanV * (16 / 9), 12);
+    expect(GLB.insideTanFrame([0, 0, -1], f)).toBe(true);
+    expect(GLB.insideTanFrame([f.tanH * 0.99, 0, -1], f)).toBe(true);
+    expect(GLB.insideTanFrame([f.tanH * 1.01, 0, -1], f), 'past the left/right edge').toBe(false);
+    expect(GLB.insideTanFrame([0, f.tanV * 1.01, -1], f), 'past the top edge').toBe(false);
+    expect(GLB.insideTanFrame([0, 0, 0.5], f), 'behind the eye is out of view at any FOV').toBe(false);
+  });
+
+  it('measures distance to a surface, in the face, edge and vertex cases', () => {
+    const tri = [{ a: [0, 0, 0], b: [1, 0, 0], c: [0, 1, 0] }];
+    expect(GLB.distanceToTriangleList(tri, [0.2, 0.2, 0.5]).distance,
+      'hovering over the face').toBeCloseTo(0.5, 9);
+    expect(GLB.distanceToTriangleList(tri, [-1, 0, 0]).distance,
+      'beyond a vertex, in the plane').toBeCloseTo(1, 9);
+    expect(GLB.distanceToTriangleList(tri, [0.5, -1, 0]).distance,
+      'beyond an edge, in the plane').toBeCloseTo(1, 9);
+    expect(GLB.distanceToTriangleList(tri, [0.25, 0.25, 0]).distance,
+      'a point on the surface is at zero').toBeCloseTo(0, 9);
+    const shell = rectangleTriangles(1, 1, -1.5);
+    expect(GLB.distanceToTriangleList(shell, [0, 0, -1.47]).distance).toBeCloseTo(0.03, 9);
+    expect(GLB.distanceToTriangleList(shell, [0, 0, -1.0]).distance,
+      'a rib floating 0.5 m off the shell reads as 0.5 m').toBeCloseTo(0.5, 9);
+  });
+
+  it('casts a ray at a surface, which is how "inside the canopy" is decided', () => {
+    const shell = rectangleTriangles(2, 2, -3);
+    const straight = GLB.rayTriangleListHits(EYE, [0, 0, -1], shell);
+    // A ray landing exactly on the diagonal the quad was split along registers against
+    // BOTH triangles — inclusive edge tests are what stop a ray leaking through a seam.
+    // Harmless here and everywhere it is used, because callers read the NEAREST hit.
+    expect(straight.length).toBeGreaterThanOrEqual(1);
+    expect(straight[0], 'nearest hit is the shell, 3 m ahead').toBeCloseTo(3, 9);
+    const offCentre = GLB.rayTriangleListHits(EYE, [0.3, 0.2, -1], shell);
+    expect(offCentre, 'a ray through one triangle\'s interior hits once').toHaveLength(1);
+    expect(offCentre[0]).toBeCloseTo(Math.hypot(0.9, 0.6, 3), 9);
+    expect(GLB.rayTriangleListHits(EYE, [0, 1, 0], shell), 'a miss returns nothing').toEqual([]);
+    expect(GLB.rayTriangleListHits(EYE, [0, 0, 1], shell),
+      'the shell is behind the ray, not in front of it').toEqual([]);
+    // Off the seam on purpose (an axial ray would cross both faces' split diagonals and
+    // register four times, per the note above).
+    const box = boxTriangles([-1, -1, -4], [1, 1, -2]);
+    const through = GLB.rayTriangleListHits(EYE, [0.1, 0.05, -1], box);
+    expect(through, 'a ray through a solid enters and exits').toHaveLength(2);
+    expect(through[0], 'entering the near face').toBeCloseTo(Math.hypot(0.2, 0.1, 2), 9);
+    expect(through[1], 'leaving the far face').toBeCloseTo(Math.hypot(0.4, 0.2, 4), 9);
+    expect(GLB.distanceToBox({ min: [-1, -1, -1], max: [1, 1, 1] }, [0, 0, 0]),
+      'inside a box is zero distance from it').toBe(0);
+    expect(GLB.distanceToBox({ min: [-1, -1, -1], max: [1, 1, 1] }, [1, 1, 4])).toBeCloseTo(3, 9);
   });
 
   it('hashes geometry stably, and the hash actually responds to a moved vertex', () => {
@@ -381,11 +604,12 @@ describe('cockpit artefacts — the gate that stops this suite reporting green o
 // whole story of a green run.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry', () => {
+describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-spec)', () => {
   let glbBytes;
   let gltf;
   let bin;
   let metrics;
+  let glassTris;
 
   beforeAll(() => {
     glbBytes = readFileSync(GLB_PATH);
@@ -395,52 +619,143 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry', () =
     metrics = JSON.parse(readFileSync(METRICS_PATH, 'utf8'));
   });
 
-  /** World centroid + winding normal of a named screen quad. */
-  const screen = (name) => {
-    const node = GLB.requireNode(gltf, name);
-    const tris = GLB.nodeWorldTriangles(gltf, bin, node.index);
-    return { node, tris, centre: GLB.triangleListCentroid(tris), normal: GLB.triangleListNormal(tris) };
+  // Every part is read NON-recursively. The named nodes each carry their own mesh (the
+  // inventory test below pins that), so a recursive walk could only ever mix a screen
+  // face into its body or an arm into its screen and make the measurements meaningless.
+  const partTris = (name) => GLB.nodeWorldTriangles(gltf, bin, GLB.requireNode(gltf, name).index, { recursive: false });
+  const partVerts = (name) => GLB.nodeWorldPositions(gltf, bin, GLB.requireNode(gltf, name).index, { recursive: false });
+  const partBounds = (name) => GLB.boundsOfPoints(partVerts(name));
+  const glass = () => {
+    if (!glassTris) glassTris = partTris(GLASS_NAME);
+    return glassTris;
   };
 
+  /** World centroid + winding normal of a named display-face quad. */
+  const screen = (name) => {
+    const tris = partTris(name);
+    return { tris, centre: GLB.triangleListCentroid(tris), normal: GLB.triangleListNormal(tris) };
+  };
+
+  /** The sidecar's own entry for a screen, or undefined. */
+  const screenDecl = (name) => (metrics.screens ?? []).find((s) => s.name === name);
+
   /**
-   * INDEPENDENT. The half-spaces bounding the canopy frame's inner cavity, measured
-   * from the exported frame mesh — not reconstructed from the generator's constants,
-   * which would only prove the generator agrees with itself.
+   * INDEPENDENT. Every dimension of one screen unit, measured in the display face's OWN
+   * oriented frame rather than in world axes — the units are rotated to face the pilot,
+   * so a world-axis bounding box would report the tilt, not the bezel.
    *
-   * How the classification works: the frame is a ring solid, so the area-weighted
-   * centroid of its surface lands in the HOLE, not in the material. Faces whose
-   * winding normal points towards that interior point are the inner wall; the outer
-   * wall and both rims point away from it and drop out. The rims dropping out is
-   * what makes the result a laterally-bounding, depth-unbounded prism: a screen
-   * retracted behind the rear rim is still legitimately inside the cockpit, whereas
-   * a screen pushed through a pillar is not.
-   *
-   * If a future frame stops being a ring, this classification stops being meaningful
-   * — the lateral-closure probe in the test below is what turns that into a loud
-   * failure rather than a silent pass.
+   * Frame axes: `u` the face's long side, `w` its short side, `n` its winding normal,
+   * which AC-FORM requires to point at the eye. So along `n`, LARGER is nearer the
+   * pilot: the body's max-n slab is its front (bezel) plane and the display face, which
+   * sits at n = 0 by construction of the frame, must be behind it.
    */
-  const frameCavity = () => {
-    const tris = GLB.nodeWorldTriangles(gltf, bin, GLB.requireNode(gltf, 'Cockpit_Frame').index);
-    const interior = GLB.triangleListCentroid(tris);
-    const planes = GLB.trianglePlanes(tris);
-    const inward = planes.filter((p) => GLB.signedDistanceToPlane(p, interior) > 0);
-    return { interior, planes, inward };
+  const unit = (suffix) => {
+    const faceTris = partTris(`Screen_${suffix}`);
+    const frame = GLB.planarFrame(faceTris);
+    const faceVerts = partVerts(`Screen_${suffix}`);
+    const bodyVerts = partVerts(`ScreenBody_${suffix}`);
+    const face = GLB.frameExtents(frame, faceVerts);
+    const body = GLB.frameExtents(frame, bodyVerts);
+    const frontSlab = bodyVerts.filter((p) => body.n.max - GLB.frameCoords(frame, p)[2] <= FRONT_SLAB_TOL);
+    const front = frontSlab.length >= 3 ? GLB.frameExtents(frame, frontSlab) : null;
+    return {
+      frame, faceTris, faceVerts, bodyVerts, face, body, front,
+      frontSlabCount: frontSlab.length,
+      faceWidth: 2 * frame.halfU,
+      faceHeight: 2 * frame.halfW,
+      faceArea: GLB.triangleListArea(faceTris),
+      bodyDepth: body.n.max - body.n.min,
+      recess: body.n.max - face.n.max,
+      bezels: front ? {
+        left: face.u.min - front.u.min,
+        right: front.u.max - face.u.max,
+        bottom: face.w.min - front.w.min,
+        top: front.w.max - face.w.max,
+      } : null,
+    };
   };
 
   // ── AC-FORM ────────────────────────────────────────────────────────────────
-  // "four screen mounting planes, one in each quadrant of the canopy aperture (two
-  //  upper, two lower), each plane's normal pointing within 20 degrees of the vector
-  //  from that plane's centre to the eye-point at the origin ... plus ship-nose hull
-  //  geometry below the median and forward of the eye, whose authored extents are a
-  //  script-declared fraction of the Bible section 8A ~20 m house-sized hull."
-  describe('AC-FORM — form language: four eye-facing corner screens plus the ship nose', () => {
-    it('has exactly the four named screen nodes and no others', () => {
+  // "(a) FOUR SCREEN UNITS, one per quadrant ... each a BOX not a flat panel — a display
+  //  face 50% larger than the previous 0.30x0.20 m panel, surrounded by a ~1 inch bezel
+  //  and backed by a ~2 inch deep body, with the display face recessed so the bezel
+  //  reads; each display face's normal points within 20 degrees of the vector from its
+  //  centre to the eye-point ... (b) each screen carried by an ARM whose root lies
+  //  demonstrably OUTSIDE the 70 degree / 16:9 view frustum ... (c) the canopy frame
+  //  reduced to TWO VERTICAL RIBS following the canopy shell's surface ... (d) a
+  //  Canopy_Glass shell node present ... NO ship nose — any Hull_Nose node is a failure."
+  describe('AC-FORM — form language: boxy corner screens on arms, two canopy ribs, no nose', () => {
+    it('has exactly the four named display-face nodes and no others', () => {
       for (const name of SCREEN_NAMES) {
         const hits = GLB.listNodes(gltf).filter((n) => n.name === name);
         expect(hits.length, `expected exactly one node named "${name}", found ${hits.length}`).toBe(1);
       }
       const screenish = GLB.listNodes(gltf).filter((n) => /^Screen_/.test(n.name ?? '')).map((n) => n.name);
       expect(screenish.slice().sort(), 'no extra Screen_* nodes may exist').toEqual(SCREEN_NAMES.slice().sort());
+    });
+
+    it('carries every named part on its own node: a body and an arm per screen, two ribs, one glass', () => {
+      const nodes = GLB.listNodes(gltf);
+      const byName = new Map(nodes.filter((n) => n.name).map((n) => [n.name, n]));
+      for (const name of PART_NAMES) {
+        const hits = nodes.filter((n) => n.name === name);
+        expect(
+          hits.length,
+          `expected exactly one node named "${name}", found ${hits.length}. Nodes present: `
+          + `${nodes.map((n) => n.name ?? `<unnamed #${n.index}>`).join(', ')}`,
+        ).toBe(1);
+        // The mesh must hang off the named node itself. Increment 2's CRT material
+        // targets Screen_* by name, and every measurement below reads each part
+        // non-recursively — a part whose geometry lived on an unnamed child would
+        // measure as empty rather than wrong.
+        expect(
+          hits[0].node.mesh,
+          `node "${name}" carries no mesh of its own (geometry parented to a child would make `
+          + 'every measurement below silently empty)',
+        ).toBeDefined();
+      }
+      for (const [outer, inner] of [['Canopy_Rib_L', 'Canopy_Rib_R']]) {
+        expect(byName.get(outer).index, `${outer}/${inner} must be distinct nodes`)
+          .not.toBe(byName.get(inner).index);
+      }
+      // Exactly two ribs — "two strips running vertically", not three, not a full frame.
+      const ribs = nodes.filter((n) => /^Canopy_Rib/.test(n.name ?? '')).map((n) => n.name);
+      expect(ribs.slice().sort(), 'the canopy frame is exactly two vertical ribs')
+        .toEqual(RIB_NAMES.slice().sort());
+      // No named part may be a descendant of another, or non-recursive reads would be
+      // reading a different subtree than the recursive scene walk does.
+      const parents = GLB.buildParentMap(gltf);
+      for (const name of PART_NAMES) {
+        const p = parents[byName.get(name).index];
+        const parentName = p === -1 ? null : gltf.nodes[p]?.name;
+        expect(
+          PART_NAMES.includes(parentName ?? ''),
+          `"${name}" is parented to "${parentName}" — named parts must be siblings, not nested`,
+        ).toBe(false);
+      }
+    });
+
+    it('contains no ship nose anywhere — it was removed at Max\'s instruction', () => {
+      // INDEPENDENT and deliberately broader than the exact name: Hull_Nose_001, a
+      // stray nose mesh datablock or a nose material would all still put the deleted
+      // geometry in the file. The re-spec removes the nose entirely; increment 1 has no
+      // exterior hull.
+      const named = [
+        ...(gltf.nodes ?? []).map((n) => ['node', n.name]),
+        ...(gltf.meshes ?? []).map((m) => ['mesh', m.name]),
+        ...(gltf.materials ?? []).map((m) => ['material', m.name]),
+      ].filter(([, n]) => typeof n === 'string');
+      const offenders = named.filter(([, n]) => /nose/i.test(n)).map(([kind, n]) => `${kind} "${n}"`);
+      expect(
+        offenders,
+        `the GLB still contains ${offenders.join(', ')}. Max removed the nose at UAT; AC-FORM now `
+        + 'fails on its presence. Delete the nose build from scripts/cockpit-gen.py and regenerate.',
+      ).toEqual([]);
+      for (const key of ['noseVisibleLength', 'noseFractionOfHull', 'noseSlopeLength',
+        'noseTipDistanceFromEye', 'noseTipFractionOfHull', 'noseDropFromLip']) {
+        expect(metrics[key], `cockpit-metrics.json still declares "${key}" for deleted geometry`)
+          .toBeUndefined();
+      }
     });
 
     it('places one screen in each quadrant of the canopy aperture', () => {
@@ -453,75 +768,161 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry', () =
       }
     });
 
-    it('keeps every screen VERTEX forward of the eye and behind the canopy plane', () => {
-      // INDEPENDENT, and vertex-level on purpose. A centroid-only version of this check
-      // passed while every quad poked 92 mm through the canopy plane: a quad tilted to
-      // face the eye spans ~0.19 m in Z, so its centroid can sit comfortably inside
-      // while its corners hang out through the front of the ship.
-      const canopyZ = -declared(metrics, 'CANOPY_Y'); // Blender +Y forward -> glTF -Z
-      for (const name of SCREEN_NAMES) {
-        const box = GLB.nodeWorldBounds(gltf, bin, GLB.requireNode(gltf, name).index);
-        expect(box, `${name} carries no geometry`).not.toBeNull();
-        expect(
-          box.max[2],
-          `${name} has a vertex at z=${box.max[2].toFixed(4)}, at or behind the eye — screens live forward of the pilot`,
-        ).toBeLessThan(0);
-        // forward is -Z, so min[2] is the MOST forward vertex.
-        expect(
-          box.min[2] - canopyZ,
-          `${name} pokes ${(canopyZ - box.min[2]).toFixed(4)} m through the canopy plane: its most-forward `
-          + `vertex is at z=${box.min[2].toFixed(4)}, the plane is at z=${canopyZ.toFixed(4)}. Increase `
-          + 'SCREEN_STANDOFF (or shrink the quad) until the whole quad clears it.',
-        ).toBeGreaterThanOrEqual(-VERTEX_TOL);
+    it('keeps every screen-unit vertex forward of the eye', () => {
+      // INDEPENDENT, and vertex-level on purpose: a box tilted to face the eye spans
+      // ~0.05 m in Z, so a centroid-only version of this check would pass while a corner
+      // sat level with the pilot's head. The arms are exempt — their roots are supposed
+      // to be aft of the eye, which is the whole point of them.
+      for (const suffix of QUADRANT_SUFFIXES) {
+        for (const name of [`Screen_${suffix}`, `ScreenBody_${suffix}`]) {
+          const box = partBounds(name);
+          expect(box, `${name} carries no geometry`).not.toBeNull();
+          expect(
+            box.max[2],
+            `${name} has a vertex at z=${box.max[2].toFixed(4)}, at or behind the eye — screen units `
+            + 'live forward of the pilot',
+          ).toBeLessThan(0);
+        }
       }
     });
 
-    it('keeps every screen vertex inside the frame\'s inner face', () => {
-      // INDEPENDENT. The other half of the same defect: the quads were also hanging
-      // 87 mm outside the pillar they are mounted on, i.e. buried in / through the hull.
-      const { interior, inward } = frameCavity();
-      expect(
-        inward.length,
-        'no inward-facing frame walls were found — Cockpit_Frame is not a ring solid any more, so this '
-        + 'containment check cannot mean anything. Re-derive it against the new frame topology.',
-      ).toBeGreaterThanOrEqual(3);
-
-      // Lateral-closure probe: prove the half-space set actually encloses something in
-      // every direction before trusting it to reject anything. Without this, an empty or
-      // one-sided plane set would make the assertion below unfailable.
-      for (const dir of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0]]) {
-        const far = [interior[0] + dir[0] * 100, interior[1] + dir[1] * 100, interior[2]];
-        expect(
-          inward.some((p) => GLB.signedDistanceToPlane(p, far) < 0),
-          `the frame's inner walls do not bound the cavity towards [${dir}] — the containment check is vacuous`,
-        ).toBe(true);
-      }
-
+    it('sizes every display face at least 1.5x the panel it replaces', () => {
+      // INDEPENDENT. Max: "screens about 50% bigger". The previous panel was
+      // 0.30 x 0.20 m = 0.06 m^2, so the floor is 0.09 m^2; the re-spec's 0.45 x 0.30 m
+      // is 0.135 m^2, comfortably clear of it. Area rather than width-and-height so the
+      // aspect ratio stays the generator's business.
       for (const name of SCREEN_NAMES) {
-        const verts = GLB.nodeWorldPositions(gltf, bin, GLB.requireNode(gltf, name).index);
-        expect(verts.length, `${name} carries no vertices`).toBeGreaterThan(0);
-        let worst = { distance: Infinity, vertex: null, normal: null };
-        for (const v of verts) {
-          for (const plane of inward) {
-            const distance = GLB.signedDistanceToPlane(plane, v);
-            if (distance < worst.distance) worst = { distance, vertex: v, normal: plane.normal };
-          }
+        const area = GLB.triangleListArea(partTris(name));
+        expect(
+          area,
+          `${name} display face is ${area.toFixed(4)} m^2. The old panel was `
+          + `${PREV_FACE_W} x ${PREV_FACE_H} = ${(PREV_FACE_W * PREV_FACE_H).toFixed(4)} m^2 and Max asked `
+          + `for ~50% bigger, so the floor is ${MIN_FACE_AREA.toFixed(4)} m^2.`,
+        ).toBeGreaterThanOrEqual(MIN_FACE_AREA - VERTEX_TOL);
+      }
+    });
+
+    it('encloses every display face inside its ScreenBody box', () => {
+      // INDEPENDENT. "Boxy, not flat panel" means the face is the front of a solid, not a
+      // quad floating near one. Measured in the face's own frame, so a body that is
+      // correctly sized but rotated relative to its face fails here rather than silently
+      // widening the bezel measurement below.
+      for (const suffix of QUADRANT_SUFFIXES) {
+        const u = unit(suffix);
+        expect(u.bodyVerts.length, `ScreenBody_${suffix} carries no vertices`).toBeGreaterThan(0);
+        expect(
+          u.bodyDepth,
+          `ScreenBody_${suffix} has depth ${u.bodyDepth.toFixed(5)} m along its face normal — it is a `
+          + 'flat panel, not a box',
+        ).toBeGreaterThan(0.005);
+        for (const [axis, f, b] of [['u', u.face.u, u.body.u], ['w', u.face.w, u.body.w], ['n', u.face.n, u.body.n]]) {
+          expect(
+            f.min - b.min,
+            `Screen_${suffix} overhangs ScreenBody_${suffix} on the -${axis} side by `
+            + `${(b.min - f.min).toFixed(5)} m`,
+          ).toBeGreaterThanOrEqual(-VERTEX_TOL);
+          expect(
+            b.max - f.max,
+            `Screen_${suffix} overhangs ScreenBody_${suffix} on the +${axis} side by `
+            + `${(f.max - b.max).toFixed(5)} m`,
+          ).toBeGreaterThanOrEqual(-VERTEX_TOL);
+        }
+      }
+    });
+
+    it('measures a ~1 inch bezel and a ~2 inch body depth, matching the script\'s declared constants', () => {
+      // INDEPENDENT of the generator's arithmetic in the direction that matters: the
+      // bezel is (front-plane extent - display-face extent) read off the exported mesh,
+      // on all four sides separately, so an off-centre display or a bezel authored on
+      // two sides only fails here.
+      //
+      // The DECLARED constant is then checked against the inch Max named. Without that
+      // second step a generator could declare BEZEL = 0.5 m, build it, and satisfy every
+      // geometry-vs-sidecar comparison in this file.
+      const bezelNames = ['SCREEN_BEZEL', 'SCREEN_BEZEL_W', 'SCREEN_BEZEL_WIDTH', 'BEZEL_W', 'BEZEL_WIDTH', 'BEZEL'];
+      const depthNames = ['SCREEN_BODY_DEPTH', 'SCREEN_BACKING_DEPTH', 'BODY_DEPTH', 'BACKING_DEPTH', 'SCREEN_DEPTH'];
+
+      for (const suffix of QUADRANT_SUFFIXES) {
+        const u = unit(suffix);
+        const decl = screenDecl(`Screen_${suffix}`);
+        const declBezel = declaredAny(metrics, bezelNames, { label: 'the screen bezel width in metres', extra: decl });
+        const declDepth = declaredAny(metrics, depthNames, { label: 'the screen body depth in metres', extra: decl });
+
+        expect(
+          declBezel,
+          `the declared bezel is ${declBezel} m = ${(declBezel / INCH).toFixed(2)} inch. Max asked for `
+          + '"about one inch"; a declaration this far off is wrong even if the geometry matches it.',
+        ).toBeGreaterThan(INCH * (1 - INCH_BAND));
+        expect(declBezel).toBeLessThan(INCH * (1 + INCH_BAND));
+        expect(
+          declDepth,
+          `the declared body depth is ${declDepth} m = ${(declDepth / INCH).toFixed(2)} inch. Max asked for `
+          + '"two inches thick backing".',
+        ).toBeGreaterThan(2 * INCH * (1 - INCH_BAND));
+        expect(declDepth).toBeLessThan(2 * INCH * (1 + INCH_BAND));
+
+        expect(
+          u.frontSlabCount,
+          `ScreenBody_${suffix} has no identifiable front face (only ${u.frontSlabCount} vertices within `
+          + `${FRONT_SLAB_TOL} m of its most eye-ward extent) — there is no bezel plane to measure`,
+        ).toBeGreaterThanOrEqual(3);
+
+        for (const [side, measured] of Object.entries(u.bezels)) {
+          expect(
+            Math.abs(measured - declBezel),
+            `ScreenBody_${suffix} ${side} bezel measures ${measured.toFixed(5)} m, script declares `
+            + `${declBezel} m (${(declBezel / INCH).toFixed(2)} inch)`,
+          ).toBeLessThanOrEqual(DIMENSION_TOL);
         }
         expect(
-          worst.distance,
-          `${name} vertex [${worst.vertex?.map((v) => v.toFixed(4))}] lies `
-          + `${(-worst.distance).toFixed(4)} m OUTSIDE the frame's inner wall `
-          + `(wall normal [${worst.normal?.map((v) => v.toFixed(3))}]) — the screen is inside/through the `
-          + 'pillar it is mounted on, so it would be clipped by the hull from the seat and visible poking '
-          + 'out of the ship from the orbit view.',
-        ).toBeGreaterThanOrEqual(-VERTEX_TOL);
+          Math.abs(u.bodyDepth - declDepth),
+          `ScreenBody_${suffix} measures ${u.bodyDepth.toFixed(5)} m deep along the face normal, script `
+          + `declares ${declDepth} m (${(declDepth / INCH).toFixed(2)} inch)`,
+        ).toBeLessThanOrEqual(DIMENSION_TOL);
       }
     });
 
-    it(`angles every screen at the pilot's eye, within ${MAX_SCREEN_ANGLE_DEG} degrees`, () => {
-      // NEAR-TAUTOLOGY, read the green carefully. The generator builds each quad's basis
+    it('recesses every display face behind its bezel plane — not flush, not proud', () => {
+      // INDEPENDENT. The recess is what makes the bezel read as a bezel from the seat: a
+      // flush face is a sticker on a box, a proud face is a panel with a frame behind it.
+      for (const suffix of QUADRANT_SUFFIXES) {
+        const u = unit(suffix);
+        const decl = screenDecl(`Screen_${suffix}`);
+        const hint = u.recess < 0
+          ? ' A NEGATIVE recess means the face sits in FRONT of the body, or the face winding is '
+            + 'inverted so its normal points away from the eye (see the 20-degree angle check).'
+          : '';
+        expect(
+          u.recess,
+          `Screen_${suffix} sits ${(u.recess * 1000).toFixed(2)} mm behind the ScreenBody_${suffix} front `
+          + `plane. Flush (0) makes the bezel invisible from the seat.${hint}`,
+        ).toBeGreaterThan(0.001);
+        expect(
+          u.recess,
+          `Screen_${suffix} is recessed ${(u.recess * 1000).toFixed(2)} mm into a body only `
+          + `${(u.bodyDepth * 1000).toFixed(2)} mm deep — the display has been pushed out the back`,
+        ).toBeLessThan(u.bodyDepth - 0.001);
+
+        // If the script declares a recess constant, the geometry must match it. Absent is
+        // acceptable: the contract names the bezel and the backing in inches, not this.
+        let declRecess;
+        try {
+          declRecess = declaredAny(metrics, ['SCREEN_RECESS', 'SCREEN_FACE_RECESS', 'FACE_RECESS', 'RECESS_DEPTH', 'RECESS'],
+            { extra: decl });
+        } catch { declRecess = undefined; }
+        if (declRecess !== undefined) {
+          expect(
+            Math.abs(u.recess - declRecess),
+            `Screen_${suffix} recess measures ${u.recess.toFixed(5)} m, script declares ${declRecess} m`,
+          ).toBeLessThanOrEqual(DIMENSION_TOL);
+        }
+      }
+    });
+
+    it(`angles every display face at the pilot's eye, within ${MAX_SCREEN_ANGLE_DEG} degrees`, () => {
+      // NEAR-TAUTOLOGY, read the green carefully. The generator builds each face's basis
       // FROM the centre->eye vector, so the measured angle is ~0 by construction and the
-      // 20-degree band cannot be approached by any change to the aperture or bevel
+      // 20-degree band cannot be approached by any change to the aperture or mounting
       // constants. What this can still catch: a winding flip (~180 degrees, hinted below),
       // an axis-conversion bug in the export, and a future generator that goes back to
       // hand-tuned Euler angles. It is NOT evidence that the angle was designed well.
@@ -530,7 +931,7 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry', () =
         const toEye = [EYE[0] - centre[0], EYE[1] - centre[1], EYE[2] - centre[2]];
         const angle = GLB.angleBetweenDegrees(normal, toEye);
         const hint = angle > 90
-          ? ` The quad faces AWAY from the eye — its winding is inverted; reverse the face index order. `
+          ? ` The face points AWAY from the eye — its winding is inverted; reverse the face index order. `
             + `Unoriented misalignment is only ${(180 - angle).toFixed(2)} degrees.`
           : '';
         expect(
@@ -541,7 +942,7 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry', () =
       }
     });
 
-    it('matches the screen centres and normals the sidecar declares', () => {
+    it('matches the display-face centres, normals and sizes the sidecar declares', () => {
       // NEAR-TAUTOLOGY, by construction. The sidecar is written by the SAME run from the
       // SAME vertex lists, so this compares the script against its own arithmetic. What it
       // genuinely exercises is the path BETWEEN them: the Blender scene build, the
@@ -564,74 +965,283 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry', () =
           `${decl.name} normal: measured [${normal.map((v) => v.toFixed(3))}], declared `
           + `[${decl.normal}] — ${drift.toFixed(2)} degrees apart (sidecar values must be in glTF axes)`,
         ).toBeLessThanOrEqual(1);
+
+        const u = unit(decl.name.slice('Screen_'.length));
+        for (const [key, measured] of [['width', u.faceWidth], ['height', u.faceHeight]]) {
+          if (typeof decl[key] !== 'number') continue;
+          const pair = [u.faceWidth, u.faceHeight];
+          expect(
+            pair.some((v) => Math.abs(v - decl[key]) <= DIMENSION_TOL),
+            `${decl.name} declares ${key}=${decl[key]} m; the exported face measures `
+            + `${u.faceWidth.toFixed(4)} x ${u.faceHeight.toFixed(4)} m (measured ${key} ${measured.toFixed(4)})`,
+          ).toBe(true);
+        }
       }
     });
 
-    it('agrees with the clearance the generator claims it achieved', () => {
-      // CROSS-CHECK, not a measurement: these are the generator's OWN clearance numbers,
-      // so this asserts the script knows it got it right. The two vertex-level checks
-      // above are the independent evidence; this one exists so a regression names itself
-      // in the generator's language ("SCREEN_STANDOFF is too small") rather than only in
-      // the GLB's. Both are cheap; keeping both means a disagreement between them is
-      // itself informative.
-      const diag = metrics.diagnostics ?? {};
-      for (const key of ['screenForwardOfCanopyPlane', 'screenOutsidePillarInnerFace']) {
-        expect(typeof diag[key], `cockpit-metrics.json must declare diagnostics.${key}`).toBe('number');
+    it('roots every arm outside the 70 degree / 16:9 view frustum', () => {
+      // INDEPENDENT, and the machine-checkable form of Max's "screens on arms coming from
+      // outside the player's POV". The root end is identified geometrically — the vertices
+      // furthest from the screen box the arm carries — so it does not depend on the
+      // generator labelling which end is which.
+      //
+      // "Outside" includes AT OR BEHIND the eye plane: an arm rooted slightly aft of the
+      // pilot has no tan-space projection at all, and that is out of view at any FOV.
+      for (const suffix of QUADRANT_SUFFIXES) {
+        const armName = `Arm_${suffix}`;
+        const verts = partVerts(armName);
+        expect(verts.length, `${armName} carries no vertices`).toBeGreaterThan(0);
+        const bodyBox = partBounds(`ScreenBody_${suffix}`);
+        const anchor = [0, 1, 2].map((i) => (bodyBox.min[i] + bodyBox.max[i]) / 2);
+
+        const withDistance = verts.map((v) => ({
+          v, d: Math.hypot(v[0] - anchor[0], v[1] - anchor[1], v[2] - anchor[2]),
+        }));
+        const maxD = Math.max(...withDistance.map((e) => e.d));
+        const root = withDistance.filter((e) => e.d >= ARM_ROOT_FRACTION * maxD);
+        expect(root.length, `${armName} has no identifiable root end`).toBeGreaterThan(0);
+
+        const outside = root.filter((e) => !GLB.insideTanFrame(e.v, FRUSTUM));
+        const worst = root.reduce((best, e) => {
+          const t = GLB.tanSpaceProject(e.v);
+          if (!t) return { over: Infinity, at: e.v };
+          const over = Math.max(Math.abs(t[0]) / FRUSTUM.tanH, Math.abs(t[1]) / FRUSTUM.tanV);
+          return over > best.over ? { over, at: e.v } : best;
+        }, { over: -Infinity, at: null });
+
         expect(
-          diag[key],
-          `the generator reports diagnostics.${key} = ${diag[key]} m of overshoot; it must author the `
-          + 'screens clear of the frame, not merely report that they are not',
+          outside.length,
+          `${armName}: none of its ${root.length} root vertices (the ones furthest from `
+          + `ScreenBody_${suffix}, up to ${maxD.toFixed(3)} m away) lie outside the ${GAME_FOV_DEG} degree / `
+          + `${GAME_ASPECT.toFixed(3)} frame. The furthest out reaches `
+          + `${Number.isFinite(worst.over) ? `${(worst.over * 100).toFixed(1)}% of the frame half-extent` : 'behind the eye'} `
+          + `at [${worst.at?.map((v) => v.toFixed(3))}]. Max asked for arms "coming from outside the player's `
+          + 'POV" — root them further outboard, or further aft of the eye.',
+        ).toBeGreaterThan(0);
+      }
+    });
+
+    it('reaches each arm all the way to the screen box it carries', () => {
+      // ANTI-VACUITY for the check above: an arm authored as a stick floating somewhere
+      // out of frame would satisfy "a root vertex is outside the frustum" trivially while
+      // carrying nothing. The arms must actually meet their boxes.
+      for (const suffix of QUADRANT_SUFFIXES) {
+        const armVerts = partVerts(`Arm_${suffix}`);
+        const bodyBox = partBounds(`ScreenBody_${suffix}`);
+        const nearest = Math.min(...armVerts.map((v) => GLB.distanceToBox(bodyBox, v)));
+        expect(
+          nearest,
+          `Arm_${suffix} never comes closer than ${nearest.toFixed(4)} m to ScreenBody_${suffix} — it is not `
+          + 'carrying the screen, so "the arm root is outside the frustum" says nothing about the screen',
+        ).toBeLessThanOrEqual(ARM_ATTACH_TOL);
+      }
+    });
+
+    it('makes the two canopy ribs thin, vertical, and one to each side', () => {
+      // INDEPENDENT. Max: "fairly thin — two strips running vertically". Thin is measured
+      // as the ratio of the rib's smallest bounding extent to its longest; vertical as Y
+      // dominating the world-axis extents (which, under export_yup, is also evidence the
+      // export ran — see the AC-METRIC Y-up check).
+      for (const name of RIB_NAMES) {
+        const box = partBounds(name);
+        expect(box, `${name} carries no geometry`).not.toBeNull();
+        const [sx, sy, sz] = box.size;
+        const longest = Math.max(sx, sy, sz);
+        const thinnest = Math.min(sx, sy, sz);
+        expect(
+          thinnest / longest,
+          `${name} measures ${sx.toFixed(3)} x ${sy.toFixed(3)} x ${sz.toFixed(3)} m — its thinnest extent is `
+          + `${((thinnest / longest) * 100).toFixed(1)}% of its longest, which is a slab, not a strip`,
+        ).toBeLessThanOrEqual(0.25);
+        expect(
+          sy,
+          `${name} runs ${sy.toFixed(3)} m vertically but ${sx.toFixed(3)} m across and ${sz.toFixed(3)} m `
+          + 'fore-aft — a "strip running vertically" must be tallest in Y',
+        ).toBeGreaterThan(Math.max(sx, sz));
+
+        const centroid = GLB.triangleListCentroid(partTris(name));
+        const side = RIB_SIDES[name];
+        expect(
+          centroid[0] * side,
+          `${name} is centred at x=${centroid[0].toFixed(4)}; the pilot's left is -X and their right is +X, `
+          + 'so the L and R ribs look swapped',
+        ).toBeGreaterThan(1e-3);
+      }
+    });
+
+    it('lays both ribs on the Canopy_Glass surface', () => {
+      // INDEPENDENT. A rib floating off the shell does not read as a canopy rib — it reads
+      // as a bar hanging in space, and it is exactly what conveys the protruding shape if
+      // it follows the surface. The tolerance is derived from each rib's OWN measured
+      // thickness (a strip laid on a shell stands off by its own thickness) plus a margin,
+      // so it adapts to a re-authored rib without admitting a floating one.
+      const shell = glass();
+      expect(shell.length, 'Canopy_Glass carries no triangles to lie on').toBeGreaterThan(0);
+      for (const name of RIB_NAMES) {
+        const box = partBounds(name);
+        const thickness = Math.min(...box.size);
+        const tol = thickness + RIB_ON_SHELL_MARGIN;
+        const verts = partVerts(name);
+        const distances = verts.map((v) => GLB.distanceToTriangleList(shell, v).distance);
+        const on = distances.filter((d) => d <= tol).length;
+        const fraction = on / verts.length;
+        const worst = Math.max(...distances);
+        expect(
+          fraction,
+          `${name}: only ${(fraction * 100).toFixed(1)}% of its ${verts.length} vertices lie within `
+          + `${tol.toFixed(3)} m of the Canopy_Glass surface (its own thickness ${thickness.toFixed(3)} m `
+          + `plus ${RIB_ON_SHELL_MARGIN} m). The furthest is ${worst.toFixed(3)} m off the shell — a rib that `
+          + 'floats does not convey the canopy\'s shape.',
+        ).toBeGreaterThanOrEqual(RIB_ON_SHELL_FRACTION);
+      }
+    });
+
+    it('bulges the Canopy_Glass forward of its own rim', () => {
+      // INDEPENDENT, and the geometric meaning of Max's "giving you a sense of the
+      // canopy's protruding shape": a shell that merely spans the opening has its
+      // most-forward point ON the rim. A protruding one reaches past it.
+      const shell = glass();
+      const rim = GLB.boundaryEdges(shell);
+      expect(
+        rim.length,
+        'Canopy_Glass has no open boundary — it is a closed solid, not a shell spanning the canopy '
+        + 'opening, so "does it bulge past its own rim?" has no answer',
+      ).toBeGreaterThanOrEqual(3);
+
+      const rimPoints = rim.flatMap((e) => [e.a, e.b]);
+      const shellMinZ = Math.min(...partVerts(GLASS_NAME).map((p) => p[2]));
+      const rimMinZ = Math.min(...rimPoints.map((p) => p[2]));
+      const protrusion = rimMinZ - shellMinZ; // forward is -Z, so a bulge is more negative
+      expect(
+        protrusion,
+        `Canopy_Glass reaches z=${shellMinZ.toFixed(4)} at its most forward point and z=${rimMinZ.toFixed(4)} `
+        + `at its rim: it protrudes ${(protrusion * 1000).toFixed(1)} mm. A flat shell measures 0 here. `
+        + `The floor for "protruding" is ${MIN_CANOPY_PROTRUSION * 1000} mm — this is a floor, not a design target.`,
+      ).toBeGreaterThanOrEqual(MIN_CANOPY_PROTRUSION);
+    });
+
+    it('keeps the screen units inside the canopy, not poking through the glass', () => {
+      // INDEPENDENT. Replaces the two frame-ring containment checks the re-spec deleted,
+      // and catches the same defect class they were written against (screens hanging 92 mm
+      // out through the canopy plane). Ray-based rather than plane-based because the shell
+      // now curves: for each screen-unit vertex, walk from the eye towards it and require
+      // it to be reached BEFORE the glass is.
+      //
+      // Vertices whose eye-ray misses the shell entirely are not counted — they are
+      // outside the glazed cone, which is legitimate for a corner unit. That makes the
+      // check partial by construction, so the tested count is asserted non-zero rather
+      // than left to be quietly zero.
+      const shell = glass();
+      let tested = 0;
+      let worst = { over: -Infinity, name: null, vertex: null, hit: null };
+      for (const suffix of QUADRANT_SUFFIXES) {
+        for (const name of [`Screen_${suffix}`, `ScreenBody_${suffix}`]) {
+          for (const v of partVerts(name)) {
+            const range = Math.hypot(v[0], v[1], v[2]);
+            if (range < 1e-6) continue;
+            const hits = GLB.rayTriangleListHits(EYE, v, shell);
+            if (!hits.length) continue;
+            tested += 1;
+            const over = range - hits[0];
+            if (over > worst.over) worst = { over, name, vertex: v, hit: hits[0] };
+          }
+        }
+      }
+      expect(
+        tested,
+        'no screen-unit vertex lies along a ray that meets Canopy_Glass at all. Either the shell does not '
+        + 'span the canopy opening or the screens sit entirely outside it — establish which before '
+        + 'relaxing this test; as written it would otherwise be measuring nothing.',
+      ).toBeGreaterThan(0);
+      expect(
+        worst.over,
+        `${worst.name} has a vertex at [${worst.vertex?.map((v) => v.toFixed(4))}], `
+        + `${worst.over?.toFixed(4)} m FURTHER from the eye than the Canopy_Glass surface along the same ray `
+        + `(glass at ${worst.hit?.toFixed(4)} m). The screen unit is through the canopy — it would be visible `
+        + 'hanging outside the ship from the orbit view.',
+      ).toBeLessThanOrEqual(VERTEX_TOL);
+    });
+
+    it('declares every exported part in the sidecar, and reports no overshoot of its own', () => {
+      // NEAR-TAUTOLOGY on the dimensions (the sidecar and the GLB come from the same
+      // vertex lists, so this exercises the Blender build and the export_yup conversion
+      // rather than the authoring) but NOT vacuous on the inventory: a part that was
+      // built and exported without being declared, or declared without being built,
+      // fails here. The sidecar is what increments 2-4 read to place their materials
+      // and cameras, so a part missing from it is a real gap.
+      expect(Array.isArray(metrics.objects), 'cockpit-metrics.json must declare an objects array').toBe(true);
+      const declaredObjects = new Map(metrics.objects.map((o) => [o.name, o]));
+      for (const name of PART_NAMES) {
+        const decl = declaredObjects.get(name);
+        expect(
+          decl,
+          `cockpit-metrics.json declares no object entry for "${name}". Declared: `
+          + `${[...declaredObjects.keys()].join(', ')}`,
+        ).toBeDefined();
+        const box = partBounds(name);
+        for (let i = 0; i < 3; i++) {
+          expect(
+            Math.abs(box.min[i] - decl.boundingBox.min[i]),
+            `${name} bbox min axis ${i}: measured ${box.min[i].toFixed(5)}, declared ${decl.boundingBox.min[i]}`,
+          ).toBeLessThanOrEqual(1e-3);
+          expect(
+            Math.abs(box.max[i] - decl.boundingBox.max[i]),
+            `${name} bbox max axis ${i}: measured ${box.max[i].toFixed(5)}, declared ${decl.boundingBox.max[i]}`,
+          ).toBeLessThanOrEqual(1e-3);
+        }
+      }
+
+      // CROSS-CHECK, empty-tolerant by design: any diagnostics key the generator names
+      // "*Overshoot" or "*Penetration" is its own report of how far something ran past a
+      // limit it set. The geometric checks above are the independent evidence; this
+      // exists so a generator that KNOWS it failed cannot ship green, and so a regression
+      // names itself in the generator's language as well as the GLB's.
+      const diag = metrics.diagnostics ?? {};
+      expect(typeof diag, 'cockpit-metrics.json must declare a diagnostics object').toBe('object');
+      expect(Object.keys(diag).length, 'the diagnostics object is empty').toBeGreaterThan(0);
+      for (const [key, value] of Object.entries(diag)) {
+        if (typeof value !== 'number' || !/overshoot|penetrat/i.test(key)) continue;
+        expect(
+          value,
+          `the generator reports diagnostics.${key} = ${value} m of overshoot; it must author the geometry `
+          + 'clear of its limits, not merely report that it did not',
         ).toBeLessThanOrEqual(VERTEX_TOL);
       }
     });
+  });
 
-    it('puts the ship nose below the median, forward of the canopy plane, and nowhere behind the eye', () => {
-      const nose = GLB.requireNode(gltf, 'Hull_Nose');
-      const box = GLB.nodeWorldBounds(gltf, bin, nose.index);
-      expect(box, 'Hull_Nose carries no geometry').not.toBeNull();
-      expect(box.min[1], 'Hull_Nose must reach below the eye plane (y < 0)').toBeLessThan(0);
-      const canopyZ = -declared(metrics, 'CANOPY_Y');
+  // ── AC-FRAME, headless half ────────────────────────────────────────────────
+  // The AC is MEASURE-AND-REPORT: the amended contract retired the [0.25, 0.30] band
+  // because it was derived from the frame-plus-nose design Max deleted, and the new band
+  // is re-set from the live chrome-devtools measurement with Max's agreement. So nothing
+  // here asserts a band. What IS assertable headless is that the analytic predictor still
+  // exists and still excludes the see-through shell.
+  describe('AC-FRAME — the predictor is present and excludes the glass (the band is live-measured)', () => {
+    it('declares an analytic occlusion fraction that gives Canopy_Glass no credit', () => {
+      const fraction = declaredAny(
+        metrics,
+        ['predictedOcclusionFraction', 'occlusionFraction', 'predictedOcclusion'],
+        { label: 'the analytic occlusion fraction' },
+      );
       expect(
-        box.min[2],
-        `Hull_Nose must extend forward past the canopy plane (z < ${canopyZ}); measured min z ${box.min[2].toFixed(4)}`,
-      ).toBeLessThan(canopyZ);
-      // INDEPENDENT. Without this, a nose that ALSO ran BACKWARDS past the eye would pass
-      // both checks above — exterior hull at z > 0 is geometry inside the pilot's head.
-      expect(
-        box.max[2],
-        `Hull_Nose reaches back to z=${box.max[2].toFixed(4)}, at or behind the eye at the origin. `
-        + 'The whole nose is exterior hull in front of the pilot; nothing may sit level with or behind them.',
-      ).toBeLessThan(0);
-    });
+        fraction,
+        `predicted occlusion is ${fraction}. A cockpit that occludes none of the frame is not a cockpit, `
+        + 'and one that occludes all of it is a wall. NOTE: no band is asserted here on purpose — AC-FRAME '
+        + 'is measure-and-report until Max accepts one.',
+      ).toBeGreaterThan(0);
+      expect(fraction).toBeLessThan(1);
 
-    it('states the nose extent as a fraction of the declared ~20 m hull reference', () => {
-      expect(typeof metrics.hullReferenceLength, 'sidecar must declare hullReferenceLength').toBe('number');
-      expect(typeof metrics.noseVisibleLength, 'sidecar must declare noseVisibleLength').toBe('number');
-      expect(typeof metrics.noseFractionOfHull, 'sidecar must declare noseFractionOfHull').toBe('number');
-      expect(metrics.hullReferenceLength).toBeGreaterThan(0);
-      expect(metrics.noseVisibleLength).toBeGreaterThan(0);
-      // TAUTOLOGY WITHIN THE SIDECAR: this is arithmetic on three numbers the same file
-      // declared, so it only catches an internally inconsistent sidecar. The measured
-      // cross-check below is the part that touches the GLB.
-      expect(
-        metrics.noseFractionOfHull,
-        'noseFractionOfHull must equal noseVisibleLength / hullReferenceLength',
-      ).toBeCloseTo(metrics.noseVisibleLength / metrics.hullReferenceLength, 9);
-      expect(metrics.noseFractionOfHull, 'the visible nose must be a fraction of the whole hull').toBeLessThan(1);
-
-      // INDEPENDENT. The declared length must correspond to something actually exported,
-      // not a number invented in the sidecar. Two readings of "visible length" are
-      // admissible and both are checked: the nose's own forward run, and its reach from
-      // the eye.
-      const box = GLB.nodeWorldBounds(gltf, bin, GLB.requireNode(gltf, 'Hull_Nose').index);
-      const forwardSpan = box.max[2] - box.min[2];
-      const reachFromEye = Math.abs(box.min[2]);
-      const ok = [forwardSpan, reachFromEye].some((v) => Math.abs(v - metrics.noseVisibleLength) <= 1e-3);
-      expect(
-        ok,
-        `declared noseVisibleLength=${metrics.noseVisibleLength} m matches neither measured extent of `
-        + `Hull_Nose (forward span ${forwardSpan.toFixed(4)} m, reach from the eye ${reachFromEye.toFixed(4)} m)`,
-      ).toBe(true);
+      // Canopy_Glass is see-through by design and must not be counted. If the generator
+      // reports a per-part occlusion term for it, that term has to be zero.
+      const glassTerms = Object.entries(metrics.diagnostics ?? {})
+        .filter(([k, v]) => /glass/i.test(k) && /occl/i.test(k) && typeof v === 'number');
+      for (const [key, value] of glassTerms) {
+        expect(
+          value,
+          `diagnostics.${key} = ${value}: Canopy_Glass is excluded from the occlusion measurement `
+          + '(see-through by design), so its contribution must be zero',
+        ).toBe(0);
+      }
     });
   });
 
@@ -696,19 +1306,30 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry', () =
         .toBeLessThan(20);
     });
 
-    it('is Y-up: the canopy sits forward at negative z and the nose hangs below y=0', () => {
+    it('is Y-up: the canopy sits forward at negative z and the ribs run up the Y axis', () => {
       // INDEPENDENT. Only true if export_yup ran. Without it, Blender's +Z up would leave
-      // the frame stacked in +Z and the nose at negative Y-forward, and these flip.
-      const frame = GLB.nodeWorldBounds(gltf, bin, GLB.requireNode(gltf, 'Cockpit_Frame').index);
-      expect(frame, 'Cockpit_Frame carries no geometry').not.toBeNull();
-      expect(frame.max[2], 'the whole canopy frame must sit forward of the eye (z < 0)').toBeLessThan(0);
-      const canopyZ = -declared(metrics, 'CANOPY_Y');
+      // the canopy stacked in +Z, the ribs running fore-aft in the exported Z, and the
+      // screens' up/down split flattened onto the wrong axis. (This used to be checked via
+      // the frame ring and the nose; both were deleted in the re-spec.)
+      const shell = partBounds(GLASS_NAME);
+      expect(shell, 'Canopy_Glass carries no geometry').not.toBeNull();
       expect(
-        frame.min[2],
-        `the frame must reach the canopy plane at z=${canopyZ}; measured min z ${frame.min[2].toFixed(4)}`,
-      ).toBeLessThanOrEqual(canopyZ + 1e-3);
-      const nose = GLB.nodeWorldBounds(gltf, bin, GLB.requireNode(gltf, 'Hull_Nose').index);
-      expect(nose.min[1], 'the nose must hang below the eye plane (y < 0)').toBeLessThan(0);
+        shell.max[2],
+        `Canopy_Glass reaches back to z=${shell.max[2].toFixed(4)} — the whole canopy must sit forward of `
+        + 'the eye (z < 0)',
+      ).toBeLessThan(0);
+      for (const name of RIB_NAMES) {
+        const rib = partBounds(name);
+        expect(
+          rib.size[1],
+          `${name} spans ${rib.size[1].toFixed(3)} m in Y and ${rib.size[2].toFixed(3)} m in Z — under `
+          + "Blender's +Z up without export_yup these would be swapped",
+        ).toBeGreaterThan(rib.size[2]);
+      }
+      const upper = partBounds('Screen_UL');
+      const lower = partBounds('Screen_LL');
+      expect(upper.min[1], 'the upper screens must sit entirely above the eye plane').toBeGreaterThan(0);
+      expect(lower.max[1], 'the lower screens must sit entirely below the eye plane').toBeLessThan(0);
     });
   });
 
@@ -882,9 +1503,13 @@ describe('AC-REPRO — geometric identity across two independent generator runs'
     const { json } = GLB.parseGLB(REPRO.glbA);
     expect((json.meshes ?? []).length, 'the generated GLB contains no meshes').toBeGreaterThan(0);
     const named = GLB.listNodes(json).map((n) => n.name);
-    for (const expected of [...SCREEN_NAMES, 'Cockpit_Frame', 'Hull_Nose']) {
+    for (const expected of [...PART_NAMES, 'Eye_Point']) {
       expect(named, `a freshly generated GLB is missing node "${expected}"`).toContain(expected);
     }
+    expect(
+      named.filter((n) => /nose/i.test(n ?? '')),
+      'a freshly generated GLB still contains nose geometry, which the re-spec deleted',
+    ).toEqual([]);
   });
 
   it('declares identical metrics from both runs', (ctx) => {

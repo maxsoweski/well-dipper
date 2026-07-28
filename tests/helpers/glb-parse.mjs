@@ -9,6 +9,17 @@
 // "is this vertex inside that shell?" is answerable from the mesh itself rather than
 // from constants copied out of the generator.
 //
+// The MEASUREMENT section adds the primitives the increment-1 re-spec needs, all of
+// them answering a question about the exported mesh rather than about the script:
+//   triangleListArea        — how big is this display face, really
+//   boundaryEdges           — where does an open shell end (its rim), and is it open at all
+//   planarFrame             — the oriented rectangle a flat quad actually occupies, so a
+//                             bezel can be measured as a difference of extents
+//   tanSpaceProject         — where does a point land in the pilot's view, so "outside the
+//                             player's POV" is a number
+//   distanceToTriangleList  — is this rib actually lying on that shell
+//   rayTriangleListHits     — is this screen inside the canopy or poking through it
+//
 // WHY NOT three.js GLTFLoader: it is a browser loader. Headless it needs DOM/URL/
 // ImageBitmap shims and a fake FileLoader, and it silently normalises/merges data on
 // the way in. For "assert exactly what the exporter wrote" the raw container is both
@@ -620,6 +631,319 @@ export function trianglePlanes(tris, { cosEps = 1e-5, distEps = 1e-4, minArea = 
  */
 export function signedDistanceToPlane(plane, p) {
   return plane.normal[0] * p[0] + plane.normal[1] * p[1] + plane.normal[2] * p[2] - plane.d;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Measurement
+//
+// Everything below takes world-space triangles or points and returns a number about
+// them. Nothing here reads the generator's constants — that is the whole point: a
+// bezel measured as (body extent - face extent) can disagree with the constant the
+// script declares, and a rib measured against the shell it is supposed to sit on can
+// be found floating in mid-air.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Module-local vector arithmetic. Deliberately not exported: the public surface is
+// "questions about a mesh", not a linear-algebra library.
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a, b) => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+];
+const len3 = (a) => Math.hypot(a[0], a[1], a[2]);
+
+/** Total surface area of a triangle list, in square metres. */
+export function triangleListArea(tris) {
+  let total = 0;
+  for (const { a, b, c } of tris) {
+    const e1 = sub3(b, a);
+    const e2 = sub3(c, a);
+    total += 0.5 * len3(cross3(e1, e2));
+  }
+  return total;
+}
+
+/** Every distinct vertex position in a triangle list, welded at `weld` metres. */
+export function uniquePoints(tris, { weld = 1e-6 } = {}) {
+  const seen = new Map();
+  for (const t of [...tris]) {
+    for (const p of [t.a, t.b, t.c]) {
+      const k = `${Math.round(p[0] / weld)},${Math.round(p[1] / weld)},${Math.round(p[2] / weld)}`;
+      if (!seen.has(k)) seen.set(k, p);
+    }
+  }
+  return [...seen.values()];
+}
+
+/**
+ * The edges of a triangle list used by exactly ONE triangle — i.e. the open boundary.
+ *
+ * A closed solid has none. An open shell's boundary is its rim, which is what makes
+ * "does this shell bulge forward of its own rim?" answerable, and what separates a
+ * quad's four sides from the diagonal the exporter split it along (the diagonal is
+ * shared by both triangles, so it drops out).
+ *
+ * Vertices are welded at `weld` metres before edges are keyed, so an indexed mesh and
+ * a de-indexed one give the same answer. Insertion order is preserved, so the result
+ * is deterministic for a given mesh.
+ *
+ * @returns {{a:number[], b:number[]}[]}
+ */
+export function boundaryEdges(tris, { weld = 1e-6 } = {}) {
+  const key = (p) => `${Math.round(p[0] / weld)},${Math.round(p[1] / weld)},${Math.round(p[2] / weld)}`;
+  const edges = new Map();
+  for (const t of tris) {
+    const pts = [t.a, t.b, t.c];
+    for (let i = 0; i < 3; i++) {
+      const p = pts[i];
+      const q = pts[(i + 1) % 3];
+      const kp = key(p);
+      const kq = key(q);
+      if (kp === kq) continue; // degenerate edge contributes no boundary
+      const ek = kp < kq ? `${kp}|${kq}` : `${kq}|${kp}`;
+      const hit = edges.get(ek);
+      if (hit) hit.count += 1;
+      else edges.set(ek, { a: p, b: q, count: 1 });
+    }
+  }
+  return [...edges.values()].filter((e) => e.count === 1).map(({ a, b }) => ({ a, b }));
+}
+
+/**
+ * The oriented rectangle a (roughly planar) triangle list occupies.
+ *
+ * WHY NOT AN AABB: a corner screen is rotated to face the pilot, so its world-axis
+ * bounding box is bigger than the panel and grows with the tilt. Measuring a 1-inch
+ * bezel as a difference of two AABBs would be measuring the tilt, not the bezel.
+ *
+ * The in-plane axes are chosen by minimum bounding-rectangle area over the boundary-edge
+ * directions — the standard result that a minimum-area enclosing rectangle is flush with
+ * an edge of the convex hull. For an authored rectangle that recovers its own sides
+ * exactly, whether or not the exporter split it along a diagonal or welded its corners.
+ *
+ * `u` is always the LONGER axis, `w = normal x u`, and `u`'s sign is pinned to its
+ * first significant component so two runs agree. `centre` is the rectangle's centre,
+ * not the area centroid (they coincide for a rectangle).
+ *
+ * @returns {{normal:number[], centre:number[], u:number[], w:number[], halfU:number, halfW:number}}
+ */
+export function planarFrame(tris, { normal = null, points = null } = {}) {
+  if (!tris.length) throw new Error('planarFrame: empty triangle list');
+  const n = normalize(normal ?? triangleListNormal(tris));
+  const pts = points ?? tris.flatMap((t) => [t.a, t.b, t.c]);
+  if (!pts.length) throw new Error('planarFrame: no points to bound');
+  const seed = triangleListCentroid(tris);
+
+  const candidates = [];
+  for (const e of boundaryEdges(tris)) {
+    const d = sub3(e.b, e.a);
+    const k = dot3(d, n);
+    const flat = [d[0] - n[0] * k, d[1] - n[1] * k, d[2] - n[2] * k];
+    if (len3(flat) > 1e-9) candidates.push(normalize(flat));
+  }
+  if (!candidates.length) {
+    // No open boundary (a closed shell): fall back to any stable in-plane axis. The
+    // extents are then orientation-dependent, which callers measuring a rectangle
+    // should never hit — a rectangle always has a boundary.
+    const seedAxis = Math.abs(n[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+    candidates.push(normalize(cross3(n, seedAxis)));
+  }
+
+  let best = null;
+  for (const u0 of candidates) {
+    const w0 = normalize(cross3(n, u0));
+    let uMin = Infinity; let uMax = -Infinity; let wMin = Infinity; let wMax = -Infinity;
+    for (const p of pts) {
+      const r = sub3(p, seed);
+      const cu = dot3(r, u0);
+      const cw = dot3(r, w0);
+      if (cu < uMin) uMin = cu;
+      if (cu > uMax) uMax = cu;
+      if (cw < wMin) wMin = cw;
+      if (cw > wMax) wMax = cw;
+    }
+    const area = (uMax - uMin) * (wMax - wMin);
+    if (!best || area < best.area - 1e-12) best = { u: u0, w: w0, uMin, uMax, wMin, wMax, area };
+  }
+
+  const midU = (best.uMin + best.uMax) / 2;
+  const midW = (best.wMin + best.wMax) / 2;
+  const centre = [
+    seed[0] + best.u[0] * midU + best.w[0] * midW,
+    seed[1] + best.u[1] * midU + best.w[1] * midW,
+    seed[2] + best.u[2] * midU + best.w[2] * midW,
+  ];
+  let u = best.u;
+  let halfU = (best.uMax - best.uMin) / 2;
+  let halfW = (best.wMax - best.wMin) / 2;
+  if (halfW > halfU) {
+    // Long axis must be u. w = n x u already, and n x (n x u) = -u, so swapping to
+    // (u, w) := (w, -u) keeps the frame right-handed; w is recomputed below anyway.
+    u = best.w;
+    const t = halfU; halfU = halfW; halfW = t;
+  }
+  const ref = Math.abs(u[0]) > 1e-6 ? 0 : (Math.abs(u[1]) > 1e-6 ? 1 : 2);
+  if (u[ref] < 0) u = [-u[0], -u[1], -u[2]];
+  return { normal: n, centre, u, w: normalize(cross3(n, u)), halfU, halfW };
+}
+
+/** A point's (along-u, along-w, along-normal) coordinates in a planarFrame, metres. */
+export function frameCoords(frame, p) {
+  const r = sub3(p, frame.centre);
+  return [dot3(r, frame.u), dot3(r, frame.w), dot3(r, frame.normal)];
+}
+
+/** Min/max of a point set in a frame's coordinates: {u:{min,max}, w:{...}, n:{...}}. */
+export function frameExtents(frame, points) {
+  const acc = [
+    { min: Infinity, max: -Infinity },
+    { min: Infinity, max: -Infinity },
+    { min: Infinity, max: -Infinity },
+  ];
+  for (const p of points) {
+    const c = frameCoords(frame, p);
+    for (let i = 0; i < 3; i++) {
+      if (c[i] < acc[i].min) acc[i].min = c[i];
+      if (c[i] > acc[i].max) acc[i].max = c[i];
+    }
+  }
+  return { u: acc[0], w: acc[1], n: acc[2] };
+}
+
+/**
+ * Where a point lands in the pilot's view, as (tan of horizontal angle, tan of vertical
+ * angle) from the eye at the origin looking down -Z.
+ *
+ * A perspective camera maps directions linearly onto this plane, so a comparison here IS
+ * the on-screen comparison. Returns null for a point at or BEHIND the eye plane — which
+ * is not a measurement failure but a real answer: such a point is out of view whatever
+ * the FOV is, and callers asking "is this outside the frame?" must treat null as yes.
+ *
+ * @returns {number[]|null} [tanX, tanY]
+ */
+export function tanSpaceProject(p, { eps = 1e-9 } = {}) {
+  const depth = -p[2];
+  if (depth <= eps) return null;
+  return [p[0] / depth, p[1] / depth];
+}
+
+/** Half-extents of a view frustum in tan-space. `fovDeg` is VERTICAL, as three.js uses. */
+export function frustumTanExtents(fovDeg, aspect) {
+  const tanV = Math.tan((fovDeg * Math.PI) / 360);
+  return { tanH: tanV * aspect, tanV };
+}
+
+/** Is a world point inside the view frame? A point at/behind the eye is never inside. */
+export function insideTanFrame(p, { tanH, tanV }, { slack = 0 } = {}) {
+  const t = tanSpaceProject(p);
+  if (!t) return false;
+  return Math.abs(t[0]) <= tanH + slack && Math.abs(t[1]) <= tanV + slack;
+}
+
+/**
+ * Closest point on one triangle to `p` (Ericson, Real-Time Collision Detection §5.1.5).
+ * Handles the vertex, edge and face regions, so it is exact for a point beyond a corner
+ * as well as one hovering over the middle.
+ */
+export function closestPointOnTriangle(tri, p) {
+  const { a, b, c } = tri;
+  const ab = sub3(b, a);
+  const ac = sub3(c, a);
+  const ap = sub3(p, a);
+  const d1 = dot3(ab, ap);
+  const d2 = dot3(ac, ap);
+  if (d1 <= 0 && d2 <= 0) return a;
+
+  const bp = sub3(p, b);
+  const d3 = dot3(ab, bp);
+  const d4 = dot3(ac, bp);
+  if (d3 >= 0 && d4 <= d3) return b;
+
+  const vc = d1 * d4 - d3 * d2;
+  if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+    const v = d1 / (d1 - d3);
+    return [a[0] + ab[0] * v, a[1] + ab[1] * v, a[2] + ab[2] * v];
+  }
+
+  const cp = sub3(p, c);
+  const d5 = dot3(ab, cp);
+  const d6 = dot3(ac, cp);
+  if (d6 >= 0 && d5 <= d6) return c;
+
+  const vb = d5 * d2 - d1 * d6;
+  if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+    const w = d2 / (d2 - d6);
+    return [a[0] + ac[0] * w, a[1] + ac[1] * w, a[2] + ac[2] * w];
+  }
+
+  const va = d3 * d6 - d5 * d4;
+  if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) {
+    const w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+    return [b[0] + (c[0] - b[0]) * w, b[1] + (c[1] - b[1]) * w, b[2] + (c[2] - b[2]) * w];
+  }
+
+  const denom = 1 / (va + vb + vc);
+  const v = vb * denom;
+  const w = vc * denom;
+  return [
+    a[0] + ab[0] * v + ac[0] * w,
+    a[1] + ab[1] * v + ac[1] * w,
+    a[2] + ab[2] * v + ac[2] * w,
+  ];
+}
+
+/**
+ * Distance from a point to the nearest surface point of a triangle list.
+ * @returns {{distance:number, point:number[]|null}}
+ */
+export function distanceToTriangleList(tris, p) {
+  let distance = Infinity;
+  let point = null;
+  for (const t of tris) {
+    const q = closestPointOnTriangle(t, p);
+    const d = Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
+    if (d < distance) { distance = d; point = q; }
+  }
+  return { distance, point };
+}
+
+/**
+ * Ray/triangle-list intersection (Möller–Trumbore), two-sided so a shell's winding does
+ * not decide whether it is hit.
+ * @returns {number[]} hit distances along the NORMALISED direction, ascending.
+ */
+export function rayTriangleListHits(origin, direction, tris, { eps = 1e-12, minT = 1e-6 } = {}) {
+  const dir = normalize(direction);
+  const hits = [];
+  for (const { a, b, c } of tris) {
+    const e1 = sub3(b, a);
+    const e2 = sub3(c, a);
+    const pv = cross3(dir, e2);
+    const det = dot3(e1, pv);
+    if (Math.abs(det) < eps) continue; // ray parallel to the triangle's plane
+    const inv = 1 / det;
+    const tv = sub3(origin, a);
+    const u = dot3(tv, pv) * inv;
+    if (u < -1e-9 || u > 1 + 1e-9) continue;
+    const qv = cross3(tv, e1);
+    const v = dot3(dir, qv) * inv;
+    if (v < -1e-9 || u + v > 1 + 1e-9) continue;
+    const t = dot3(e2, qv) * inv;
+    if (t > minT) hits.push(t);
+  }
+  return hits.sort((x, y) => x - y);
+}
+
+/** Distance from a point to an axis-aligned box ({min,max}); 0 when inside. */
+export function distanceToBox(box, p) {
+  let sum = 0;
+  for (let i = 0; i < 3; i++) {
+    const over = Math.max(box.min[i] - p[i], 0, p[i] - box.max[i]);
+    sum += over * over;
+  }
+  return Math.sqrt(sum);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

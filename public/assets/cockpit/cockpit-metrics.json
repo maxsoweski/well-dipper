@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "generatedBy": "scripts/cockpit-gen.py",
   "workstream": "cockpit-lab-geometry-2026-07-28",
   "units": "metres",
@@ -11,278 +11,818 @@
     0.0
   ],
   "eyePointNodeName": "Eye_Point",
+  "removedInThisRevision": [
+    "Hull_Nose",
+    "Cockpit_Frame"
+  ],
+  "removedWhy": "Max removed the ship nose and replaced the octagonal canopy frame with two vertical ribs at UAT on 1056f30. Either node reappearing is an AC-FORM failure.",
   "constants": {
+    "INCH": 0.0254,
     "HULL_REF_LENGTH": 20.0,
-    "CANOPY_Y": 1.2,
-    "APERTURE_HALF_W": 1.4557,
-    "APERTURE_TOP_Z": 0.7615,
-    "APERTURE_BOT_Z": -0.8528,
-    "BEVEL_X": 0.79,
-    "BEVEL_Z": 0.51,
-    "FRAME_DEPTH": 0.45,
-    "FRAME_FLARE": 1.34,
-    "FRAME_WALL": 0.1,
-    "SCREEN_W": 0.3,
-    "SCREEN_H": 0.2,
-    "SCREEN_MOUNT_DEPTH": 0.1,
-    "SCREEN_MARGIN": 0.004,
-    "NOSE_NEAR_Y": 1.2,
-    "NOSE_NEAR_Z": -0.8528,
-    "NOSE_FAR_Y": 3.0,
-    "NOSE_FAR_Z": -1.618,
-    "NOSE_HALF_W_NEAR": 1.3,
-    "NOSE_HALF_W_FAR": 0.62,
-    "NOSE_THICKNESS": 0.3,
+    "CANOPY_Y_EDGE": 1.7,
+    "CANOPY_BULGE": 0.6,
+    "CANOPY_HALF_W": 2.35,
+    "CANOPY_TOP_Z": 1.38,
+    "CANOPY_BOT_Z": -1.54,
+    "CANOPY_RIB_X": 1.38,
+    "CANOPY_SHOULDER_X": 1.82,
+    "CANOPY_SHOULDER_F": 0.45,
+    "CANOPY_COLUMNS": [
+      [
+        -2.35,
+        0.0
+      ],
+      [
+        -1.82,
+        0.45
+      ],
+      [
+        -1.38,
+        1.0
+      ],
+      [
+        1.38,
+        1.0
+      ],
+      [
+        1.82,
+        0.45
+      ],
+      [
+        2.35,
+        0.0
+      ]
+    ],
+    "CANOPY_ROWS": [
+      [
+        -1.54,
+        0.0
+      ],
+      [
+        -0.82,
+        0.62
+      ],
+      [
+        -0.1,
+        1.0
+      ],
+      [
+        0.62,
+        0.7
+      ],
+      [
+        1.38,
+        0.0
+      ]
+    ],
+    "CANOPY_RIB_COLUMNS": [
+      2,
+      3
+    ],
+    "RIB_WIDTH": 0.065,
+    "RIB_DEPTH": 0.05,
+    "RIB_GLASS_GAP": 0.002,
+    "SCREEN_W": 0.45,
+    "SCREEN_H": 0.3,
+    "SCREEN_BEZEL": 0.0254,
+    "SCREEN_BODY_DEPTH": 0.0508,
+    "SCREEN_FACE_RECESS": 0.004,
+    "SCREEN_FACE_GAP": 0.0015,
+    "SCREEN_DIST": 1.6,
+    "SCREEN_TAN_X": 0.74,
+    "SCREEN_TAN_Z_UP": 0.35,
+    "SCREEN_TAN_Z_DOWN": -0.37,
+    "ARM_ROOT_Y": 0.95,
+    "ARM_ROOT_TAN_X": 1.55,
+    "ARM_ROOT_TAN_Z": 0.92,
+    "ARM_ROOT_CLEARANCE_MIN": 0.05,
+    "ARM_ATTACH_U": 0.65,
+    "ARM_ATTACH_W": 0.55,
+    "ARM_EMBED": 0.01,
+    "ARM_ROOT_HALF_U": 0.035,
+    "ARM_ROOT_HALF_W": 0.045,
+    "ARM_TIP_HALF_U": 0.02,
+    "ARM_TIP_HALF_W": 0.026,
     "GAME_FOV_DEG": 70.0,
-    "GAME_ASPECT": 1.777778
+    "GAME_ASPECT": 1.777778,
+    "OCC_SCANLINES": 2160,
+    "OCC_NEAR_Y": 0.05
   },
-  "hullReferenceLength": 20.0,
-  "noseVisibleLength": 1.8,
-  "noseFractionOfHull": 0.09,
-  "noseSlopeLength": 1.955896,
-  "noseTipDistanceFromEye": 3.0,
-  "noseTipFractionOfHull": 0.15,
-  "noseDropFromLip": 0.7652,
-  "apertureWidth": 2.9114,
-  "apertureHeight": 1.6143,
-  "apertureHalfAnglesDeg": {
-    "leftRight": 50.499683,
-    "up": 32.398531,
-    "down": 35.400139
+  "screenUnit": {
+    "displayFace": [
+      0.45,
+      0.3
+    ],
+    "displayFaceArea": 0.135,
+    "previousDisplayFace": [
+      0.3,
+      0.2
+    ],
+    "displayAreaRatioVsPrevious": 2.25,
+    "bezelWidth": 0.0254,
+    "bezelInches": 1.0,
+    "bodyDepth": 0.0508,
+    "bodyDepthInches": 2.0,
+    "faceRecess": 0.004,
+    "bodyOuterSize": [
+      0.5008,
+      0.3508,
+      0.0508
+    ]
+  },
+  "canopy": {
+    "name": "Canopy_Glass",
+    "rimY": 1.7,
+    "crestY": 2.3,
+    "protrusionDepth": 0.6,
+    "rimWidth": 4.7,
+    "rimHeight": 2.92,
+    "facetColumns": 6,
+    "facetRows": 5,
+    "ridgeX": [
+      -1.38,
+      1.38
+    ],
+    "coversGameFrame": true,
+    "minDistanceFromEye": 2.588204,
+    "halfAnglesDeg": {
+      "leftRight": 54.117863,
+      "up": 39.068473,
+      "down": 42.172875
+    },
+    "excludedFromOcclusion": true,
+    "excludedWhy": "see-through by design; increment 3 replaces this placeholder with real glass, and AC-FRAME counts only opaque structure"
   },
   "sceneBoundingBox": {
     "min": [
-      -2.084638,
-      -1.918,
-      -3.0
+      -2.35,
+      -1.54,
+      -2.3
     ],
     "max": [
-      2.084638,
-      1.15441,
-      -0.75
+      2.35,
+      1.38,
+      -0.907043
     ]
   },
   "objects": [
     {
-      "name": "Cockpit_Frame",
-      "material": "Mat_Frame",
-      "vertexCount": 32,
-      "faceCount": 32,
+      "name": "Canopy_Glass",
+      "kind": "glass",
+      "material": "Mat_Glass",
+      "vertexCount": 30,
+      "faceCount": 40,
       "boundingBox": {
         "min": [
-          -2.084638,
-          -1.276752,
-          -1.2
+          -2.35,
+          -1.54,
+          -2.3
         ],
         "max": [
-          2.084638,
-          1.15441,
-          -0.75
+          2.35,
+          1.38,
+          -1.7
+        ]
+      }
+    },
+    {
+      "name": "Canopy_Rib_L",
+      "kind": "rib",
+      "material": "Mat_Frame",
+      "vertexCount": 20,
+      "faceCount": 36,
+      "boundingBox": {
+        "min": [
+          -1.396616,
+          -1.534721,
+          -2.297935
+        ],
+        "max": [
+          -1.313629,
+          1.376136,
+          -1.636619
+        ]
+      }
+    },
+    {
+      "name": "Canopy_Rib_R",
+      "kind": "rib",
+      "material": "Mat_Frame",
+      "vertexCount": 20,
+      "faceCount": 36,
+      "boundingBox": {
+        "min": [
+          1.313629,
+          -1.534721,
+          -2.297935
+        ],
+        "max": [
+          1.396616,
+          1.376136,
+          -1.636619
         ]
       }
     },
     {
       "name": "Screen_UL",
+      "kind": "screen",
       "material": "Mat_Screen",
       "vertexCount": 4,
-      "faceCount": 1,
+      "faceCount": 2,
       "boundingBox": {
         "min": [
-          -1.236298,
-          0.319788,
-          -1.165247
+          -1.121209,
+          0.288934,
+          -1.404575
         ],
         "max": [
-          -0.975367,
-          0.661289,
-          -0.937132
+          -0.71115,
+          0.577722,
+          -1.071585
         ]
       }
     },
     {
       "name": "Screen_UR",
+      "kind": "screen",
       "material": "Mat_Screen",
       "vertexCount": 4,
-      "faceCount": 1,
+      "faceCount": 2,
       "boundingBox": {
         "min": [
-          0.975367,
-          0.319788,
-          -1.165247
+          0.71115,
+          0.288934,
+          -1.404575
         ],
         "max": [
-          1.236298,
-          0.661289,
-          -0.937132
+          1.121209,
+          0.577722,
+          -1.071585
         ]
       }
     },
     {
       "name": "Screen_LL",
+      "kind": "screen",
       "material": "Mat_Screen",
       "vertexCount": 4,
-      "faceCount": 1,
+      "faceCount": 2,
       "boundingBox": {
         "min": [
-          -1.245331,
-          -0.766483,
-          -1.168183
+          -1.118556,
+          -0.599903,
+          -1.40099
         ],
         "max": [
-          -0.979774,
-          -0.43181,
-          -0.946889
+          -0.705954,
+          -0.312352,
+          -1.064563
         ]
       }
     },
     {
       "name": "Screen_LR",
+      "kind": "screen",
       "material": "Mat_Screen",
       "vertexCount": 4,
-      "faceCount": 1,
+      "faceCount": 2,
       "boundingBox": {
         "min": [
-          0.979774,
-          -0.766483,
-          -1.168183
+          0.705954,
+          -0.599903,
+          -1.40099
         ],
         "max": [
-          1.245331,
-          -0.43181,
-          -0.946889
+          1.118556,
+          -0.312352,
+          -1.064563
         ]
       }
     },
     {
-      "name": "Hull_Nose",
-      "material": "Mat_Hull",
-      "vertexCount": 8,
-      "faceCount": 6,
+      "name": "ScreenBody_UL",
+      "kind": "body",
+      "material": "Mat_Body",
+      "vertexCount": 16,
+      "faceCount": 28,
       "boundingBox": {
         "min": [
-          -1.3,
-          -1.918,
-          -3.0
+          -1.172517,
+          0.2634,
+          -1.461428
         ],
         "max": [
-          1.3,
-          -0.8528,
-          -1.2
+          -0.68435,
+          0.614848,
+          -1.047851
         ]
       }
+    },
+    {
+      "name": "ScreenBody_UR",
+      "kind": "body",
+      "material": "Mat_Body",
+      "vertexCount": 16,
+      "faceCount": 28,
+      "boundingBox": {
+        "min": [
+          0.68435,
+          0.2634,
+          -1.461428
+        ],
+        "max": [
+          1.172517,
+          0.614848,
+          -1.047851
+        ]
+      }
+    },
+    {
+      "name": "ScreenBody_LL",
+      "kind": "body",
+      "material": "Mat_Body",
+      "vertexCount": 16,
+      "faceCount": 28,
+      "boundingBox": {
+        "min": [
+          -1.169964,
+          -0.637591,
+          -1.457979
+        ],
+        "max": [
+          -0.678948,
+          -0.286866,
+          -1.040552
+        ]
+      }
+    },
+    {
+      "name": "ScreenBody_LR",
+      "kind": "body",
+      "material": "Mat_Body",
+      "vertexCount": 16,
+      "faceCount": 28,
+      "boundingBox": {
+        "min": [
+          0.678948,
+          -0.637591,
+          -1.457979
+        ],
+        "max": [
+          1.169964,
+          -0.286866,
+          -1.040552
+        ]
+      }
+    },
+    {
+      "name": "Arm_UL",
+      "kind": "arm",
+      "material": "Mat_Arm",
+      "vertexCount": 8,
+      "faceCount": 12,
+      "boundingBox": {
+        "min": [
+          -1.511393,
+          0.515131,
+          -1.173356
+        ],
+        "max": [
+          -1.030167,
+          0.910395,
+          -0.907043
+        ]
+      }
+    },
+    {
+      "name": "Arm_UR",
+      "kind": "arm",
+      "material": "Mat_Arm",
+      "vertexCount": 8,
+      "faceCount": 12,
+      "boundingBox": {
+        "min": [
+          1.030167,
+          0.515131,
+          -1.173356
+        ],
+        "max": [
+          1.511393,
+          0.910395,
+          -0.907043
+        ]
+      }
+    },
+    {
+      "name": "Arm_LL",
+      "kind": "arm",
+      "material": "Mat_Arm",
+      "vertexCount": 8,
+      "faceCount": 12,
+      "boundingBox": {
+        "min": [
+          -1.509876,
+          -0.911291,
+          -1.166428
+        ],
+        "max": [
+          -1.026208,
+          -0.537539,
+          -0.907729
+        ]
+      }
+    },
+    {
+      "name": "Arm_LR",
+      "kind": "arm",
+      "material": "Mat_Arm",
+      "vertexCount": 8,
+      "faceCount": 12,
+      "boundingBox": {
+        "min": [
+          1.026208,
+          -0.911291,
+          -1.166428
+        ],
+        "max": [
+          1.509876,
+          -0.537539,
+          -0.907729
+        ]
+      }
+    }
+  ],
+  "ribs": [
+    {
+      "name": "Canopy_Rib_L",
+      "ridgeX": -1.38,
+      "width": 0.065,
+      "depth": 0.05,
+      "glassGap": 0.002,
+      "standoffFromRidgeMin": 0.0219,
+      "standoffFromRidgeMax": 0.023145,
+      "measuredGlassClearance": 0.002,
+      "angleAtRimDeg": 39.068473,
+      "angleAtCrestDeg": 30.963757,
+      "bowDeg": 8.104717,
+      "bowTanSpace": 0.211765
+    },
+    {
+      "name": "Canopy_Rib_R",
+      "ridgeX": 1.38,
+      "width": 0.065,
+      "depth": 0.05,
+      "glassGap": 0.002,
+      "standoffFromRidgeMin": 0.0219,
+      "standoffFromRidgeMax": 0.023145,
+      "measuredGlassClearance": 0.002,
+      "angleAtRimDeg": 39.068473,
+      "angleAtCrestDeg": 30.963757,
+      "bowDeg": 8.104717,
+      "bowTanSpace": 0.211765
     }
   ],
   "screens": [
     {
       "name": "Screen_UL",
+      "bodyName": "ScreenBody_UL",
+      "armName": "Arm_UL",
       "centre": [
-        -1.105832,
-        0.490539,
-        -1.05119
+        -0.916179,
+        0.433328,
+        -1.23808
       ],
       "normal": [
-        0.690002,
-        -0.306079,
-        0.655906
+        0.572612,
+        -0.27083,
+        0.7738
       ],
-      "width": 0.3,
-      "height": 0.2,
-      "mountDepth": 0.1,
-      "standoffFromMountFace": 0.080926,
-      "tiltOffMountFaceDeg": 25.944272
+      "widthAxis": [
+        0.803842,
+        0.0,
+        -0.594843
+      ],
+      "heightAxis": [
+        0.161101,
+        0.962627,
+        0.217705
+      ],
+      "width": 0.45,
+      "height": 0.3,
+      "displayArea": 0.135,
+      "distanceFromEye": 1.6,
+      "tanCentre": [
+        -0.74,
+        0.35
+      ],
+      "visibleFraction": 1.0,
+      "bodyVisibleFraction": 1.0,
+      "bodyOuterSize": [
+        0.5008,
+        0.3508,
+        0.0508
+      ]
     },
     {
       "name": "Screen_UR",
+      "bodyName": "ScreenBody_UR",
+      "armName": "Arm_UR",
       "centre": [
-        1.105832,
-        0.490539,
-        -1.05119
+        0.916179,
+        0.433328,
+        -1.23808
       ],
       "normal": [
-        -0.690002,
-        -0.306079,
-        0.655906
+        -0.572612,
+        -0.27083,
+        0.7738
       ],
-      "width": 0.3,
-      "height": 0.2,
-      "mountDepth": 0.1,
-      "standoffFromMountFace": 0.080926,
-      "tiltOffMountFaceDeg": 25.944272
+      "widthAxis": [
+        0.803842,
+        0.0,
+        0.594843
+      ],
+      "heightAxis": [
+        -0.161101,
+        0.962627,
+        0.217705
+      ],
+      "width": 0.45,
+      "height": 0.3,
+      "displayArea": 0.135,
+      "distanceFromEye": 1.6,
+      "tanCentre": [
+        0.74,
+        0.35
+      ],
+      "visibleFraction": 1.0,
+      "bodyVisibleFraction": 1.0,
+      "bodyOuterSize": [
+        0.5008,
+        0.3508,
+        0.0508
+      ]
     },
     {
       "name": "Screen_LL",
+      "bodyName": "ScreenBody_LL",
+      "armName": "Arm_LL",
       "centre": [
-        -1.112553,
-        -0.599147,
-        -1.057536
+        -0.912255,
+        -0.456127,
+        -1.232777
       ],
       "normal": [
-        0.675188,
-        0.363612,
-        0.6418
+        0.570159,
+        0.28508,
+        0.770486
       ],
-      "width": 0.3,
-      "height": 0.2,
-      "mountDepth": 0.1,
-      "standoffFromMountFace": 0.067258,
-      "tiltOffMountFaceDeg": 22.166397
+      "widthAxis": [
+        0.803842,
+        0.0,
+        -0.594843
+      ],
+      "heightAxis": [
+        -0.169578,
+        0.958504,
+        -0.229159
+      ],
+      "width": 0.45,
+      "height": 0.3,
+      "displayArea": 0.135,
+      "distanceFromEye": 1.6,
+      "tanCentre": [
+        -0.74,
+        -0.37
+      ],
+      "visibleFraction": 1.0,
+      "bodyVisibleFraction": 1.0,
+      "bodyOuterSize": [
+        0.5008,
+        0.3508,
+        0.0508
+      ]
     },
     {
       "name": "Screen_LR",
+      "bodyName": "ScreenBody_LR",
+      "armName": "Arm_LR",
       "centre": [
-        1.112553,
-        -0.599147,
-        -1.057536
+        0.912255,
+        -0.456127,
+        -1.232777
       ],
       "normal": [
-        -0.675188,
-        0.363612,
-        0.6418
+        -0.570159,
+        0.28508,
+        0.770486
       ],
-      "width": 0.3,
-      "height": 0.2,
-      "mountDepth": 0.1,
-      "standoffFromMountFace": 0.067258,
-      "tiltOffMountFaceDeg": 22.166397
+      "widthAxis": [
+        0.803842,
+        0.0,
+        0.594843
+      ],
+      "heightAxis": [
+        0.169578,
+        0.958504,
+        -0.229159
+      ],
+      "width": 0.45,
+      "height": 0.3,
+      "displayArea": 0.135,
+      "distanceFromEye": 1.6,
+      "tanCentre": [
+        0.74,
+        -0.37
+      ],
+      "visibleFraction": 1.0,
+      "bodyVisibleFraction": 1.0,
+      "bodyOuterSize": [
+        0.5008,
+        0.3508,
+        0.0508
+      ]
     }
   ],
-  "predictedOcclusionFraction": 0.275749,
-  "predictedOcclusionNote": "Analytic estimate at GAME_FOV_DEG / GAME_ASPECT from the authored polygons. AC-FRAME's browser measurement is authoritative; this exists so proportions can be tuned without a render round-trip.",
+  "arms": [
+    {
+      "name": "Arm_UL",
+      "screenName": "Screen_UL",
+      "root": [
+        -1.4725,
+        0.874,
+        -0.95
+      ],
+      "tip": [
+        -1.052543,
+        0.536159,
+        -1.148737
+      ],
+      "rootTanSpace": [
+        -1.55,
+        0.92
+      ],
+      "length": 0.574453,
+      "outsideFrustum": true,
+      "frustumClearanceMetres": {
+        "right": -1.662814,
+        "left": 0.181575,
+        "top": 0.171041,
+        "bottom": -1.260837
+      },
+      "nearestFrustumPlane": "left",
+      "nearestFrustumClearance": 0.181575,
+      "inFrontOfAnyScreenBoxBy": -0.019214,
+      "depthSamplesOverlappingABox": 27,
+      "occlusionBeyondItsScreen": 0.004654
+    },
+    {
+      "name": "Arm_UR",
+      "screenName": "Screen_UR",
+      "root": [
+        1.4725,
+        0.874,
+        -0.95
+      ],
+      "tip": [
+        1.052543,
+        0.536159,
+        -1.148737
+      ],
+      "rootTanSpace": [
+        1.55,
+        0.92
+      ],
+      "length": 0.574453,
+      "outsideFrustum": true,
+      "frustumClearanceMetres": {
+        "right": 0.181575,
+        "left": -1.662814,
+        "top": 0.171041,
+        "bottom": -1.260837
+      },
+      "nearestFrustumPlane": "right",
+      "nearestFrustumClearance": 0.181575,
+      "inFrontOfAnyScreenBoxBy": -0.019214,
+      "depthSamplesOverlappingABox": 27,
+      "occlusionBeyondItsScreen": 0.004654
+    },
+    {
+      "name": "Arm_LL",
+      "screenName": "Screen_LL",
+      "root": [
+        -1.4725,
+        -0.874,
+        -0.95
+      ],
+      "tip": [
+        -1.047711,
+        -0.559085,
+        -1.142207
+      ],
+      "rootTanSpace": [
+        -1.55,
+        -0.92
+      ],
+      "length": 0.562637,
+      "outsideFrustum": true,
+      "frustumClearanceMetres": {
+        "right": -1.662814,
+        "left": 0.181575,
+        "top": -1.260837,
+        "bottom": 0.171041
+      },
+      "nearestFrustumPlane": "left",
+      "nearestFrustumClearance": 0.181575,
+      "inFrontOfAnyScreenBoxBy": -0.018996,
+      "depthSamplesOverlappingABox": 29,
+      "occlusionBeyondItsScreen": 0.004293
+    },
+    {
+      "name": "Arm_LR",
+      "screenName": "Screen_LR",
+      "root": [
+        1.4725,
+        -0.874,
+        -0.95
+      ],
+      "tip": [
+        1.047711,
+        -0.559085,
+        -1.142207
+      ],
+      "rootTanSpace": [
+        1.55,
+        -0.92
+      ],
+      "length": 0.562637,
+      "outsideFrustum": true,
+      "frustumClearanceMetres": {
+        "right": 0.181575,
+        "left": -1.662814,
+        "top": -1.260837,
+        "bottom": 0.171041
+      },
+      "nearestFrustumPlane": "right",
+      "nearestFrustumClearance": 0.181575,
+      "inFrontOfAnyScreenBoxBy": -0.018996,
+      "depthSamplesOverlappingABox": 29,
+      "occlusionBeyondItsScreen": 0.004293
+    }
+  ],
+  "predictedOcclusionFraction": 0.212981,
+  "occlusion": {
+    "method": "analytic scanline rasterisation of the projected silhouettes at GAME_FOV_DEG / GAME_ASPECT, 2160 rows, union of overlapping occluders",
+    "excludes": [
+      "Canopy_Glass"
+    ],
+    "excludesWhy": "Canopy_Glass is see-through by design",
+    "total": 0.212981,
+    "marginal": {
+      "ribs": 0.030757,
+      "screensAndBodies": 0.164329,
+      "arms": 0.017895
+    },
+    "own": {
+      "ribs": 0.030757,
+      "screensAndBodies": 0.177398,
+      "arms": 0.027423
+    },
+    "note": "Marginal figures are measured in the fixed order ribs -> screens -> arms and sum to the total; 'own' figures are each category in isolation and overlap, so they do not. AC-FRAME's browser measurement is authoritative; this exists so proportions can be tuned without a render round-trip, and no geometry is padded to hit a number."
+  },
   "diagnostics": {
-    "predictedOcclusionByFrame": 0.227754,
-    "predictedOcclusionByNose": 0.047994,
-    "predictedOcclusionByScreens": 2e-06,
+    "predictedOcclusionByCanopyGlass": 0.0,
     "frameHalfAngleHorizontalDeg": 51.223929,
     "frameHalfAngleVerticalDeg": 35.0,
-    "noseTipHalfAngleDownDeg": 28.339465,
-    "borderFullyCoveredByFlaredRing": true,
-    "screenForwardOfCanopyPlane": 0.0,
-    "screenOutsidePillarInnerFace": 0.0,
-    "screenOutsideGameFrame": 0.074422,
-    "screenDetail": [
+    "frameTanHalfExtents": [
+      1.244813,
+      0.700208
+    ],
+    "canopyCoversGameFrame": true,
+    "maxScreenOrArmDistance": 1.989546,
+    "canopyMinDistance": 2.588204,
+    "minRibGlassClearance": 0.002,
+    "everyArmRootOutsideFrustum": true,
+    "minArmRootClearance": 0.181575,
+    "minScreenVisibleFraction": 1.0,
+    "worstArmInFrontOfScreenBox": -0.018996,
+    "armDepthSamplesChecked": 112,
+    "armVisibilityBeyondItsScreen": [
       {
-        "name": "Screen_UL",
-        "standoff": 0.080926,
-        "visibleFraction": 0.956829,
-        "overWindowFraction": 3.2e-05
+        "name": "Arm_UL",
+        "occlusion": 0.004654
       },
       {
-        "name": "Screen_UR",
-        "standoff": 0.080926,
-        "visibleFraction": 0.956829,
-        "overWindowFraction": 3.2e-05
+        "name": "Arm_UR",
+        "occlusion": 0.004654
       },
       {
-        "name": "Screen_LL",
-        "standoff": 0.067258,
-        "visibleFraction": 0.923147,
-        "overWindowFraction": 0.0
+        "name": "Arm_LL",
+        "occlusion": 0.004293
       },
       {
-        "name": "Screen_LR",
-        "standoff": 0.067258,
-        "visibleFraction": 0.923147,
-        "overWindowFraction": 0.0
+        "name": "Arm_LR",
+        "occlusion": 0.004293
       }
     ]
   }
