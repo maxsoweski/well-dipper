@@ -366,6 +366,49 @@ RIB_GLASS_GAP      = 0.002    # air held between a member's outer face and the p
 BULKHEAD_INSET     = 0.010    # the aft panel sits this far forward of the aft ring plane, so
                               # it beds inside Arch_Aft instead of being coplanar with it
 
+# ---- Dash shelf ------------------------------------------------------------
+# Max, after seeing the tub: "we need to have a space where a dashboard WOULD go even though
+# we're not putting anything on it yet; so we need to place a basic panel in front of the
+# player on the bottom half of the canopy." That sentence had two readings with different
+# geometry -- a raked panel standing UP into the lower windscreen, or a horizontal glare
+# shield lying ON the coaming -- and asked, he chose the SHELF. So this is a flat placeholder
+# surface with nothing on it, reserving the volume. Content is increment 2's problem.
+#
+# NOTE THIS REVERSES an earlier ruling of his, deliberately: at increment-1 scoping he said
+# "we shouldn't need a separate dash since we have these 4 screens". The four screens stay;
+# what he now wants is the SPACE, not instruments.
+#
+# IT COSTS NOTHING IN THE FORWARD VIEW, and that is a property of where it sits rather than
+# luck. Its top face lies in the rail plane, and Coaming_Bow already fills everything below
+# the rail line at the bow. A ray from the eye that reaches the shelf has already dropped
+# below -11.85 deg, which is where the coaming starts, so the shelf projects into a part of
+# the frame that was opaque anyway. analyse() MEASURES that rather than assuming it -- if
+# total occlusion moves when the shelf is added, this paragraph is wrong.
+NAME_DASH          = "Dash_Shelf"
+DASH_TOP_Z         = RAIL_Z   # the top surface lies IN the rail plane, so the shelf reads as
+                              # the rail line carried across the bow rather than as a slab
+                              # floating in the tub.
+DASH_AFT_Y         = 1.05     # the near edge -- how far the shelf cantilevers back toward the
+                              # pilot. 1.10 m from the eye along the sightline, so it is
+                              # within arm's reach, and 17.9 deg below the horizon, so you
+                              # look DOWN at it, which is the whole point of the reading Max
+                              # chose. Clear of the pilot by a wide margin: the knees are at
+                              # z ~= -0.72, 0.38 m below this surface.
+DASH_THICK         = 0.045    # slab depth. A real glare shield is a shell; this is a
+                              # placeholder, and six flat faces read correctly under the lab's
+                              # flat shading, which a shell would not.
+DASH_SIDE_GAP      = 0.012    # air between the shelf's outboard edge and the rail member's
+                              # inboard face, so the two neither intersect nor z-fight.
+DASH_BOW_GAP       = 0.002    # the front face sits this far AFT of Coaming_Bow's plane, so
+                              # the shelf beds against the coaming without being coplanar with
+                              # it. It is NOT the ARM_EMBED idiom, and that was the first
+                              # thing tried: an arm embeds into a screen BOX, which is a solid
+                              # with more solid behind it, whereas the coaming is the hull's
+                              # own front wall -- embedding 10 mm through it pushed nine probe
+                              # points OUTSIDE THE SHIP, and the containment check said so
+                              # before anything was exported.
+DASH_PROBE_N       = 9        # containment probes per axis on the slab's faces
+
 # ---- What makes it an ENCLOSURE rather than a window -----------------------
 ENCLOSURE_SECTOR_MIN = 0.97   # minimum solid-angle coverage in the ABOVE / LEFT / RIGHT /
                               # BEHIND sectors. AHEAD is deliberately NOT in that list: the
@@ -1191,6 +1234,122 @@ def build_coaming():
     return verts, faces
 
 
+def _station_bracket(y):
+    """(index of the station just FORWARD of y, index just AFT, blend t in [0,1] toward aft)."""
+    for k in range(len(STATIONS) - 1):
+        hi, lo = STATIONS[k][1], STATIONS[k + 1][1]
+        if lo - 1e-9 <= y <= hi + 1e-9:
+            span = hi - lo
+            return k, k + 1, 0.0 if span < 1e-12 else (hi - y) / span
+    raise ValueError(
+        "y = %.4f is outside the station range %.4f .. %.4f, so there is no shell there to "
+        "measure against" % (y, STATIONS[-1][1], STATIONS[0][1]))
+
+
+def station_half_width(y):
+    """The tub's half-width at station y, i.e. where the wall is -- NOT where the rail is."""
+    a, b, t = _station_bracket(y)
+    return STATIONS[a][2] + (STATIONS[b][2] - STATIONS[a][2]) * t
+
+
+def rail_inboard_x(y):
+    """The innermost |x| the rail members reach at station y, read off the BUILT sections.
+
+    The shelf has to stop short of the rails or it grows through them, and the rails do NOT sit
+    at the tub's half-width: member_sections() stands each one inboard by a standoff SOLVED
+    against the fold angle, which changes the moment anyone re-authors STATIONS or
+    RAIL_SECTION. Reading the clearance back off the generated geometry means the shelf follows
+    the rail instead of following a number typed next to it -- the same reason screen standoffs
+    are derived rather than authored.
+
+    Exact anywhere in a bay, not an approximation: loft() interpolates sections linearly, so
+    linear interpolation between the two bounding sections IS the built surface.
+    """
+    a, b, t = _station_bracket(y)
+    best = None
+    for mem in seam_members():
+        if mem["kind"] != "long" or mem["seamIndex"] not in (RING_RAIL_L, RING_RAIL_R):
+            continue
+        for (ca, cb) in zip(mem["sections"][a], mem["sections"][b]):
+            x = abs(ca[0] + (cb[0] - ca[0]) * t)
+            if best is None or x < best:
+                best = x
+    if best is None:
+        raise ValueError(
+            "no rail member was found at ring indices %d / %d, so the dash shelf has nothing "
+            "to clear. LONGITUDINAL_NAMES and RING_RAIL_L/R have diverged."
+            % (RING_RAIL_L, RING_RAIL_R))
+    return best
+
+
+def dash_extents():
+    """(y_front, y_back, half-width at each, top z, bottom z) for the dash shelf."""
+    y_front = STATIONS[0][1] - BULKHEAD_INSET - DASH_BOW_GAP
+    y_back = DASH_AFT_Y
+    if y_back >= y_front - 1e-6:
+        raise ValueError(
+            "DASH_AFT_Y (%.3f) is at or ahead of the coaming (%.3f), so the shelf has no depth"
+            % (y_back, y_front))
+    hf = rail_inboard_x(min(y_front, STATIONS[0][1])) - DASH_SIDE_GAP
+    hb = rail_inboard_x(y_back) - DASH_SIDE_GAP
+    if min(hf, hb) <= 0.0:
+        raise ValueError(
+            "the rails meet on the centreline at the dash shelf (half-widths %.4f / %.4f after "
+            "DASH_SIDE_GAP %.4f), so there is no room for a shelf between them"
+            % (hf, hb, DASH_SIDE_GAP))
+    return y_front, y_back, hf, hb, DASH_TOP_Z, DASH_TOP_Z - DASH_THICK
+
+
+def build_dash():
+    """Dash_Shelf: the glare shield lying on the coaming. A placeholder surface, no content.
+
+    Trapezoidal in plan rather than rectangular, because the tub narrows toward the bow and a
+    rectangle would either overhang the rails at the front or waste 6 cm a side at the back.
+    Its outboard edges track rail_inboard_x(), so the shelf re-fits itself whenever the cabin
+    is re-proportioned.
+
+    Every face is oriented OUTWARD by measuring its Newell normal against the slab centre
+    rather than by hand-winding eight vertices, which is the class of mistake that flipped every
+    panel in the model once already (see station_ring()).
+    """
+    y_front, y_back, hf, hb, top, bot = dash_extents()
+    verts = [
+        (-hf, y_front, top), (hf, y_front, top), (hf, y_back, top), (-hf, y_back, top),
+        (-hf, y_front, bot), (hf, y_front, bot), (hf, y_back, bot), (-hf, y_back, bot),
+    ]
+    raw = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4),
+           (3, 2, 6, 7), (1, 2, 6, 5), (0, 3, 7, 4)]
+    centre = (0.0, (y_front + y_back) * 0.5, (top + bot) * 0.5)
+    faces = []
+    for f in raw:
+        n = _newell_normal(verts, f)
+        c = [sum(verts[k][i] for k in f) / len(f) for i in range(3)]
+        if v_dot(n, v_sub(c, centre)) < 0.0:
+            f = tuple(reversed(f))
+        faces.append(f)
+    return verts, faces
+
+
+def dash_probe_points():
+    """Points across the shelf's top and bottom faces, for the containment check.
+
+    The eight corners alone would be a weak test: the shelf is a ruled surface between two
+    stations, and the tub wall it has to stay inside of is too, so the two can only cross where
+    they are checked. A grid catches a mid-span crossing that the corners would clear.
+    """
+    y_front, y_back, hf, hb, top, bot = dash_extents()
+    pts = []
+    for i in range(DASH_PROBE_N):
+        s = i / (DASH_PROBE_N - 1.0)
+        y = y_front + (y_back - y_front) * s
+        half = hf + (hb - hf) * s
+        for j in range(DASH_PROBE_N):
+            u = -1.0 + 2.0 * j / (DASH_PROBE_N - 1.0)
+            for z in (top, bot):
+                pts.append((u * half, y, z))
+    return pts
+
+
 def _newell_normal(verts, face):
     nx = ny = nz = 0.0
     for k in range(len(face)):
@@ -1978,6 +2137,24 @@ def screen_units():
     return tuple(units)
 
 
+def _assert_no_deleted_names(parts):
+    """No part may carry a name Max deleted at UAT.
+
+    Hoisted out of build_all()'s tail because the --no-fittings path returned BEFORE reaching
+    it, so the one guard that catches Floor_Pan and Sill_L/R coming back was silently inactive
+    in exactly the build mode the tub work has been using. The names it watches for are shell
+    parts, not fittings, so it belongs on both paths.
+    """
+    for part in parts:
+        if part["name"] in NAME_DELETED:
+            raise ValueError(
+                "part %r is one of the nodes Max deleted at UAT on 1056f30 (%s). Canopy_Frame "
+                "is the perimeter band on the canopy's own edge and is NOT a revival of the "
+                "free-standing octagonal ring; if a build ever emits one of the deleted names "
+                "again that is an AC-FORM failure, not a naming accident."
+                % (part["name"], ", ".join(NAME_DELETED)))
+
+
 def build_all():
     """Every mesh, in a fixed order. Returns a list of dicts (name, verts, faces, material)."""
     parts = []
@@ -1993,10 +2170,14 @@ def build_all():
     cv, cf = build_coaming()
     parts.append({"name": NAME_COAMING, "verts": cv, "faces": cf,
                   "material": "Mat_Hull", "kind": "hull"})
+    dv, df = build_dash()
+    parts.append({"name": NAME_DASH, "verts": dv, "faces": df,
+                  "material": "Mat_Hull", "kind": "hull"})
     for mem in seam_members():
         parts.append({"name": mem["name"], "verts": mem["verts"], "faces": mem["faces"],
                       "material": "Mat_Frame", "kind": "member"})
     if not INCLUDE_FITTINGS:
+        _assert_no_deleted_names(parts)
         for part in parts:
             part["faces"] = triangulate(part["faces"])
         return parts, ()
@@ -2013,14 +2194,8 @@ def build_all():
             parts.append({"name": "%s%s_%s" % (ARM_PREFIX, un["suffix"], pname),
                           "verts": pv, "faces": pf,
                           "material": "Mat_Arm", "kind": "arm"})
+    _assert_no_deleted_names(parts)
     for part in parts:
-        if part["name"] in NAME_DELETED:
-            raise ValueError(
-                "part %r is one of the nodes Max deleted at UAT on 1056f30 (%s). Canopy_Frame "
-                "is the perimeter band on the canopy's own edge and is NOT a revival of the "
-                "free-standing octagonal ring; if a build ever emits one of the deleted names "
-                "again that is an AC-FORM failure, not a naming accident."
-                % (part["name"], ", ".join(NAME_DELETED)))
         part["faces"] = triangulate(part["faces"])
     return parts, units
 
@@ -2461,6 +2636,96 @@ def analyse(units=None):
     # vertex projecting through the open bow aperture means the instrument is blind, not that
     # the geometry is good.
 
+    # ---- The dash shelf: is it actually inside the tub? ----------------------
+    # Same instrument as the screens and arms -- a per-vertex ray from the eye, signed -- and
+    # for the same reason: the shelf's outboard edge is placed by rail_inboard_x(), and this
+    # re-measures the finished geometry against the finished shell rather than confirming that
+    # arithmetic with itself. Points whose ray leaves through the open bow aperture return None
+    # and constrain nothing; the shelf's forward corners do exactly that, which is why the
+    # count of what was actually constrained is reported and not just the worst margin.
+    dash_verts, dash_faces = build_dash()
+    dash_outside = []
+    dash_worst = None
+    dash_unconstrained = 0
+    dash_constrained = 0
+    for p in dash_probe_points():
+        m = inside_margin(p, tris)
+        if m is None:
+            dash_unconstrained += 1
+            continue
+        dash_constrained += 1
+        if dash_worst is None or m < dash_worst:
+            dash_worst = m
+        if m < 0.0:
+            dash_outside.append((p, m))
+    if dash_outside:
+        p, m = min(dash_outside, key=lambda t: t[1])
+        raise ValueError(
+            "%d probe points on %s are OUTSIDE the enclosure -- worst at (%.4f, %.4f, %.4f), "
+            "%.4f m through the hull.\n"
+            "  Fix: raise DASH_SIDE_GAP (%.4f m), or move DASH_AFT_Y (%.3f) forward so the "
+            "shelf spans less of the bay where the tub is narrowing."
+            % (len(dash_outside), NAME_DASH, p[0], p[1], p[2], -m, DASH_SIDE_GAP, DASH_AFT_Y))
+    if dash_constrained == 0:
+        raise ValueError(
+            "the dash-shelf containment check measured NOTHING: every probe projects through "
+            "the open bow aperture, so the shelf was not actually tested. A pass that measured "
+            "nothing is not a pass.")
+    # ...and the instrument has to be shown to fire, exactly as the member checks are.
+    #
+    # THE FIRST VERSION OF THIS PLANTED DEFECT WAS WRONG, and the way it was wrong is worth
+    # keeping. It widened the shelf past the RAILS and expected inside_margin() to go negative.
+    # It does not, and it should not: the rails stand a solved standoff INBOARD of the tub
+    # wall, so a shelf 50 mm wider than the rails is still comfortably inside the hull, and the
+    # instrument was reporting that correctly. Two different properties -- "inside the shell"
+    # and "clear of the rails" -- had been collapsed into one check with one instrument. The
+    # planted defect for a hull-containment test has to breach the HULL.
+    _yf, _yb, _hf, _hb, _tz, _bz = dash_extents()
+    dash_planted = None
+    for i in range(DASH_PROBE_N):
+        s = i / (DASH_PROBE_N - 1.0)
+        y = _yf + (_yb - _yf) * s
+        wall = station_half_width(y) + MEMBER_PLANT_OFFSET
+        for z in (_tz, _bz):
+            for x in (-wall, wall):
+                m = inside_margin((x, y, z), tris)
+                if m is not None and (dash_planted is None or m < dash_planted):
+                    dash_planted = m
+    if dash_planted is None or dash_planted > -MEMBER_PLANT_OFFSET * 0.25:
+        raise ValueError(
+            "the dash-shelf containment check is not discriminating: a probe planted %.3f m "
+            "OUTSIDE the tub wall still reads %s. inside_margin() is not measuring what it "
+            "claims to for this part."
+            % (MEMBER_PLANT_OFFSET,
+               "nothing at all" if dash_planted is None else "%.4f m inside" % dash_planted))
+
+    # ---- ...and separately, is it clear of the RAILS? ------------------------
+    # A different property needing a different check. This one is a CONSTRUCTION check, not an
+    # independent one, and saying so is the point: build_dash() places the outboard edge at
+    # rail_inboard_x() - DASH_SIDE_GAP, and this reads the gap back off the emitted vertices to
+    # confirm the builder actually applied it. What makes it more than a restatement is that
+    # measuring the two ENDS bounds the whole span: the shelf edge and the rail's inboard face
+    # are both linear in y across the bay, so their separation is linear too and cannot dip
+    # between the points checked. Same argument as the span-planes union in member_sections().
+    dash_rail_gap = None
+    for (y, half) in ((_yf, _hf), (_yb, _hb)):
+        emitted = max(abs(v[0]) for v in dash_verts if abs(v[1] - y) < 1e-9)
+        gap = rail_inboard_x(min(y, STATIONS[0][1])) - emitted
+        if dash_rail_gap is None or gap < dash_rail_gap:
+            dash_rail_gap = gap
+    if dash_rail_gap < 0.0:
+        raise ValueError(
+            "%s grows THROUGH the canopy rails by %.4f m. build_dash() did not apply the "
+            "clearance rail_inboard_x() gives it.\n"
+            "  Fix: raise DASH_SIDE_GAP (%.4f m), or thin RAIL_SECTION so the rails reach less "
+            "far inboard." % (NAME_DASH, -dash_rail_gap, DASH_SIDE_GAP))
+    if dash_rail_gap > DASH_SIDE_GAP + 1e-6:
+        raise ValueError(
+            "%s sits %.4f m clear of the rails but DASH_SIDE_GAP asks for %.4f m, so the shelf "
+            "is narrower than it was authored to be and there is a visible slot along each "
+            "rail. dash_extents() and build_dash() have diverged."
+            % (NAME_DASH, dash_rail_gap, DASH_SIDE_GAP))
+
     # ---- Occlusion. Canopy_Glass is NOT in any of these lists, by design: the pilot sees
     # through it. The opaque structure is the seam members, the aft bulkhead and THE TUB --
     # which is new and is the single biggest term now. The marginal order is
@@ -2479,6 +2744,18 @@ def analyse(units=None):
             poly = silhouette_tan([hv[k] for k in f], [tuple(range(len(f)))])
             if len(poly) >= 3:
                 hull_polys.append(poly)
+
+    # The dash shelf is measured SEPARATELY from the rest of the hull and then folded in, so
+    # its marginal cost is a number rather than a claim. The constants block asserts it is
+    # zero -- the shelf lies in the coaming's shadow -- and this is where that gets checked.
+    dash_polys = []
+    for f in dash_faces:
+        poly = silhouette_tan([dash_verts[k] for k in f], [tuple(range(len(f)))])
+        if len(poly) >= 3:
+            dash_polys.append(poly)
+    dash_own = coverage_fraction(dash_polys)
+    dash_marginal = coverage_fraction(hull_polys + dash_polys) - coverage_fraction(hull_polys)
+    hull_polys.extend(dash_polys)
 
     members_own = coverage_fraction(member_polys)
     hull_own = coverage_fraction(hull_polys)
@@ -2513,6 +2790,23 @@ def analyse(units=None):
         "panelCount": len(panel_quads()),
         "facetsAcross": N_FACETS,
         "bays": N_BAYS,
+
+        "dash": {
+            "name": NAME_DASH,
+            "frontY": _yf, "aftY": _yb,
+            "halfWidthFront": _hf, "halfWidthAft": _hb,
+            "topZ": _tz, "bottomZ": _bz,
+            "depth": _yf - _yb,
+            "railClearance": dash_rail_gap,
+            "railClearanceAuthored": DASH_SIDE_GAP,
+            "nearEdgeElevationDeg": math.degrees(math.atan(_tz / _yb)),
+            "worstInsideMargin": dash_worst,
+            "insideMarginPlantedDefect": dash_planted,
+            "probesConstrained": dash_constrained,
+            "probesUnconstrained": dash_unconstrained,
+            "ownOcclusion": dash_own,
+            "marginalOcclusion": dash_marginal,
+        },
 
         "memberDetail": member_detail,
         "screenDetail": screen_detail,
@@ -3017,6 +3311,14 @@ def build_metrics(parts, units, analysis):
                        "language when he corrected the build order, which is why the bulkhead "
                        "is now full height -- but whether the seat is MODELLED or merely "
                        "implied by the tub has not been asked yet. Deliberately absent."),
+            "dash": dict(analysis["dash"], what=(
+                "the glare shield lying on top of Coaming_Bow -- a PLACEHOLDER SURFACE with "
+                "nothing on it, reserving the volume a dashboard would occupy. Max's words "
+                "were 'a basic panel in front of the player on the bottom half of the canopy', "
+                "which admitted two readings; asked, he chose the shelf over a raked panel "
+                "standing up into the windscreen. Content is increment 2's problem. Note it "
+                "reverses his increment-1 ruling 'we shouldn't need a separate dash' -- the "
+                "four screens stay; what he wants here is the SPACE.")),
         },
 
         "sceneBoundingBox": {"min": r6v(scene_lo), "max": r6v(scene_hi)},
@@ -3276,6 +3578,30 @@ def print_summary(metrics, analysis, glb_path, metrics_path):
              metrics["closures"]["bulkhead"]["inset"],
              metrics["closures"]["bulkhead"]["what"]))
     print("    Floor_Pan      RETIRED -- the floor is now part of Hull_Tub")
+    d = metrics["closures"]["dash"]
+    print("")
+    print("  DASH SHELF -- the glare shield on the coaming. A placeholder surface, no content.")
+    print("    %-14s %.3f m across x %.3f m deep, %.0f mm thick, top face IN the rail plane"
+          % (d["name"], d["halfWidthAft"] * 2.0, d["depth"],
+             (d["topZ"] - d["bottomZ"]) * 1000.0))
+    print("      spans y %.3f (against the coaming) back to %.3f, half-width %.3f -> %.3f"
+          % (d["frontY"], d["aftY"], d["halfWidthFront"], d["halfWidthAft"]))
+    print("      near edge sits %.1f deg BELOW the horizon -- the pilot looks DOWN at it"
+          % -d["nearEdgeElevationDeg"])
+    print("      clear of the rails by %.4f m (authored %.4f; outboard edge tracks"
+          % (d["railClearance"], d["railClearanceAuthored"]))
+    print("        rail_inboard_x(), so it re-fits itself if the cabin is re-proportioned)")
+    print("      inside the tub: worst margin %+.4f m over %d probes, %d unconstrained"
+          % (d["worstInsideMargin"], d["probesConstrained"], d["probesUnconstrained"]))
+    print("        instrument planted-defect check: a probe %.3f m outside the tub wall"
+          % MEMBER_PLANT_OFFSET)
+    print("        reads %.4f m (negative = outside)" % d["insideMarginPlantedDefect"])
+    print("      COSTS NOTHING IN THE VIEW: own silhouette %.2f%%, but marginal over the rest"
+          % (100.0 * d["ownOcclusion"]))
+    print("        of the hull %.2f%% -- it lies entirely in Coaming_Bow's shadow, because its"
+          % (100.0 * d["marginalOcclusion"]))
+    print("        top face is in the rail plane and the coaming already fills everything")
+    print("        below the rail line at the bow. Measured, not assumed.")
     print("")
     if not metrics["diagnostics"]["fittingsIncluded"]:
         print("  FITTINGS OMITTED -- this is a --no-fittings build.")

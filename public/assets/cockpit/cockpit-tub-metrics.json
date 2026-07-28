@@ -390,7 +390,27 @@
       "what": "the aft closure behind the pilot, FLOOR TO ROOF -- Max's form language is 'a seat against a bulkhead', so it is the surface a seat would bolt to, not a shoulder-high panel"
     },
     "floorPanRetired": "Floor_Pan is GONE and is not replaced. With the ring profile closed, the cabin floor is segments 0 and 10 of Hull_Tub, so a separate pan would be a second surface in the same place. This is a supersession, not a deletion like Hull_Nose.",
-    "noSeat": "Still deferred. Max reintroduced 'a seat against a bulkhead' as FORM language when he corrected the build order, which is why the bulkhead is now full height -- but whether the seat is MODELLED or merely implied by the tub has not been asked yet. Deliberately absent."
+    "noSeat": "Still deferred. Max reintroduced 'a seat against a bulkhead' as FORM language when he corrected the build order, which is why the bulkhead is now full height -- but whether the seat is MODELLED or merely implied by the tub has not been asked yet. Deliberately absent.",
+    "dash": {
+      "name": "Dash_Shelf",
+      "frontY": 1.608,
+      "aftY": 1.05,
+      "halfWidthFront": 0.5066815245484401,
+      "halfWidthAft": 0.5651854593441272,
+      "topZ": -0.34,
+      "bottomZ": -0.385,
+      "depth": 0.558,
+      "railClearance": 0.01200000000000001,
+      "railClearanceAuthored": 0.012,
+      "nearEdgeElevationDeg": -17.942447089158676,
+      "worstInsideMargin": 0.0020442192169931594,
+      "insideMarginPlantedDefect": -0.11566026237662541,
+      "probesConstrained": 162,
+      "probesUnconstrained": 0,
+      "ownOcclusion": 0.037667517930465466,
+      "marginalOcclusion": 0.0,
+      "what": "the glare shield lying on top of Coaming_Bow -- a PLACEHOLDER SURFACE with nothing on it, reserving the volume a dashboard would occupy. Max's words were 'a basic panel in front of the player on the bottom half of the canopy', which admitted two readings; asked, he chose the shelf over a raked panel standing up into the windscreen. Content is increment 2's problem. Note it reverses his increment-1 ruling 'we shouldn't need a separate dash' -- the four screens stay; what he wants here is the SPACE."
+    }
   },
   "sceneBoundingBox": {
     "min": [
@@ -478,6 +498,25 @@
           0.59,
           -0.34,
           -1.61
+        ]
+      }
+    },
+    {
+      "name": "Dash_Shelf",
+      "kind": "hull",
+      "material": "Mat_Hull",
+      "vertexCount": 8,
+      "faceCount": 12,
+      "boundingBox": {
+        "min": [
+          -0.506682,
+          -0.385,
+          -1.608
+        ],
+        "max": [
+          0.506682,
+          -0.34,
+          -1.05
         ]
       }
     },
