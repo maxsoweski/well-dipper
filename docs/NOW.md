@@ -1492,3 +1492,23 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
 - **Working-Claude updates at session end** per CLAUDE.md session-end protocol
 - **Max edits** when priorities shift, when items move in/out of queue, when deferred status changes
 - Don't let this file grow past one screen.
+
+## 2026-07-28 (later) — gravity self-compression: VERIFIED_PENDING_MAX 06b0030
+
+**Active workstream:** `world-engine-gravity-selfcompression-2026-07-28` — status `verified`,
+awaiting Max's UAT. JOURNEY milestone: the world engine's physics-first premise (laws derived, not
+chosen). PLAYER_EXPERIENCE tier: world generation fidelity.
+
+Surface gravity moved off the constant-density law `g = g_c·(R/R_c)` onto the piecewise
+self-compression law `g = g_c·f(R)/f(R_c)` — `R^(4/3)` below 1 R⊕, `R^1.70` above — **rocky class
+only**. A 1.6 R⊕ world reads 2.22 g, not 1.60. Goldens untouched.
+
+**Next 1–3:**
+1. **v2 relief-law derivation** — handoff `~/briefings/handoff-lane-A-v2-relief-law-2026-07-28.md`.
+   All three citations now retrieved; Melosh undercuts the g=1 break, so Max's open decision changed
+   shape ("should there be a g-break at all?").
+2. **`uPerturb` wiring fix** — filed at the workstream's `evidence/FINDING-uperturb-radius-blind.md`,
+   deliberately sequenced after the v2 law.
+3. **R2 / vertical km calibration** — unchanged, still behind both.
+
+**Owed by Max:** success criteria in his own words, and AC-UAT.
