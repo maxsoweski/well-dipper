@@ -75,6 +75,15 @@ function makeLiveSources(overrides = {}) {
     galacticPos: { x: -120.5, y: 3.25, z: 88.0 },
     systemName: 'Kepler',
 
+    // `warpTarget` is a module-level CONST mutated in place, exposed as
+    // window._warpTarget, and simStep gates flight on `!warpTarget.turning` —
+    // so a leaked reference here really does move the ship.
+    warpTarget: { name: 'Vega', destType: 'star-system', turning: false, blinkOn: true,
+      direction: { x: 0, y: 0, z: -1 }, featureData: { owner: 'galacticMap' } },
+    warpState: 'idle',
+    warpProgress: 0,
+    pilotPhase: 'IDLE',
+
     ...overrides,
   };
 }
@@ -117,7 +126,7 @@ describe('buildCockpitSnapshot — read-only feed (AC-SNAPSHOT)', () => {
 
     const s = buildCockpitSnapshot(sources);
 
-    expect(s.regime).toEqual({ helm: true, flightMode: 'ASSIST', tour: false, warping: false });
+    expect(s.regime).toEqual({ helm: true, flightMode: 'ASSIST', tour: false, warping: false, pilotPhase: 'IDLE' });
     expect(s.drive).toEqual({
       speed: 3.25, commandedSpeed: 7.5, throttle: 0.6, driveOn: true,
       sublightCap: 0.5, speedCap: 12.5, turnRateCap: 0.8,
@@ -137,6 +146,17 @@ describe('buildCockpitSnapshot — read-only feed (AC-SNAPSHOT)', () => {
       level: 'prism', galacticPos: { x: -120.5, y: 3.25, z: 88.0 }, systemName: 'Kepler',
     });
     expect(s.t).toBe(4242);
+  });
+
+  it('carries render-cadence dt alongside the sim clock, because t repeats above 60 Hz', () => {
+    // `t` is simClockMs(), which advances only in simUpdate. On a 240 Hz display
+    // three RAFs in four run zero sim ticks, so a panel integrating dt from `t`
+    // alone would stall. renderDt is already computed at the top of renderFrame.
+    const s = buildCockpitSnapshot(makeLiveSources({ simClockMs: 1000, renderDt: 1 / 240 }));
+
+    expect(s.t).toBe(1000);
+    expect(s.renderDt).toBeCloseTo(1 / 240, 8);
+    expect(buildCockpitSnapshot({}).renderDt).toBe(0);
   });
 
   it('drops a class instance rather than copying it, so no renderer object can ride along', () => {
@@ -168,6 +188,26 @@ describe('buildCockpitSnapshot — read-only feed (AC-SNAPSHOT)', () => {
     expect(none.survey.tEq).toBeNull();
     expect(none.survey.name).toBeNull();
   });
+
+  it('carries the warp leg as primitives and never the live warpTarget', () => {
+    const sources = makeLiveSources({
+      warpState: 'hyper', warpProgress: 0.42, warping: true, pilotPhase: 'CRUISE',
+      warpTarget: { name: 'Vega', destType: 'star-system', turning: true, blinkOn: false,
+        direction: { x: 0, y: 0, z: -1 }, featureData: { owner: 'galacticMap' } },
+    });
+
+    const s = buildCockpitSnapshot(sources);
+
+    expect(s.warp).toEqual({
+      active: true, state: 'hyper', progress: 0.42,
+      targetName: 'Vega', destType: 'star-system', turning: true,
+    });
+    expect(s.regime.pilotPhase).toBe('CRUISE');
+    // The whole point: simStep reads `!warpTarget.turning`, so nothing reachable
+    // from the snapshot may BE warpTarget or anything it owns.
+    const live = reachableObjects(sources.warpTarget);
+    expect([...reachableObjects(s)].filter((o) => live.has(o))).toEqual([]);
+  });
 });
 
 describe('CockpitSnapshotProvider — one feed, taken once a frame (AC-SNAPSHOT)', () => {
@@ -189,6 +229,24 @@ describe('CockpitSnapshotProvider — one feed, taken once a frame (AC-SNAPSHOT)
     provider.get(); provider.get(); provider.get(); provider.get();
 
     expect(reads).toBe(1);
+  });
+
+  it('passes the frame\'s own locals through to the source reader', () => {
+    // _scDrop, _scTargetPos and _aimOnTarget are `const` locals computed inside
+    // renderFrame for scHud.update. The provider must be handed those exact
+    // values rather than recompute _scDropState() — recomputing re-runs
+    // _resolveSelectedBody() plus a distanceTo and can diverge from the 2D HUD.
+    let seen = null;
+    const provider = new CockpitSnapshotProvider((frame) => {
+      seen = frame;
+      return makeLiveSources({ drop: frame.drop, aimOnTarget: frame.aimOnTarget });
+    });
+
+    const s = provider.update({ drop: { state: 'too-fast', dropMaxSpeed: 0.2, captureSphere: 0.5 }, aimOnTarget: false });
+
+    expect(seen).toEqual({ drop: { state: 'too-fast', dropMaxSpeed: 0.2, captureSphere: 0.5 }, aimOnTarget: false });
+    expect(s.target.dropState).toBe('too-fast');
+    expect(s.target.aimOnTarget).toBe(false);
   });
 
   it('hands all four panels the same object between updates, so one frame is coherent', () => {

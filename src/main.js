@@ -88,7 +88,8 @@ import {
 import { CameraInterpolator } from './core/CameraInterpolator.js';
 import { createAccumulator } from 'motion-test-kit/core/loop/accumulator';
 import { bindToRAF } from 'motion-test-kit/adapters/three/three-loop-binding';
-import { _advanceSimClock } from './core/SimClock.js';
+import { _advanceSimClock, simClockMs } from './core/SimClock.js';
+import { CockpitSnapshotProvider, resolveFocusedBody } from './cockpit/CockpitSnapshot.js';
 import { simRandom, simRandomSeed } from './core/SimRandom.js';
 import {
   initRecording, initReplay, recordingTick, replayTickPre,
@@ -2424,6 +2425,61 @@ const warpTarget = {
   lockBlinkFrames: 0, // frame counter for rapid lock-on blink
 };
 window._warpTarget = warpTarget;  // DEBUG: expose warp target for Playwright driving
+
+// ── Cockpit screens: the ONE read-only feed (cockpit-screen-content-2026-07-28,
+//    AC-SNAPSHOT) ────────────────────────────────────────────────────────────
+// Every screen feed (`system`, `focusIndex`, `_selectedTarget`,
+// `playerGalacticPos`, `scModel.speed/throttle`, `warpTarget`, `_navComputer`) is
+// a module-level `let` here with no export and no store. Rather than let four
+// panels each reach in, the reader below gathers them once per frame and
+// buildCockpitSnapshot copies them to plain data. NO PANEL MAY REACH PAST THIS.
+//
+// The reader is a FUNCTION, not a bag of references: `system`, `_selectedTarget`
+// and `playerGalacticPos` are reassigned wholesale (`system` at every
+// spawnSystem), so a captured reference would go stale at the first warp.
+//
+// `frame` carries the values that exist only as renderFrame locals — the
+// `_scDrop` / `_scTargetPos` / `_aimOnTarget` consts already computed for
+// scHud.update. Passed in rather than recomputed so the panels and the 2D HUD
+// cannot disagree within one frame.
+const _cockpitSnapshotProvider = new CockpitSnapshotProvider((frame) => ({
+  simClockMs: simClockMs(),
+  renderDt: frame.renderDt ?? 0,
+
+  helm: _scManual,
+  // Mirrors the gate scHud.update and scControls.host.flightMode already use.
+  flightMode: _scManual ? _flightMode : null,
+  tour: autoNav.isActive,
+  warping: warpEffect.isActive,
+  pilotPhase: scPilot.phase,
+
+  scModel,
+  sublightCap: SC_TUNING.SUBLIGHT_CAP,
+  commandedSpeed: scModel.driveOn
+    ? scModel.throttle * scModel.speedCap()
+    : scModel.throttle * SC_TUNING.SUBLIGHT_CAP,
+
+  selectedTarget: _selectedTarget,
+  targetDistance: frame.targetDistance ?? null,
+  aimOnTarget: frame.aimOnTarget ?? false,
+  drop: frame.drop ?? null,
+  massLockHint: _massLockHintFrames > 0,
+
+  focusedBody: resolveFocusedBody(system, { focusIndex, focusMoonIndex, focusStarIndex }),
+
+  navLevel: _navComputer ? _navComputer.level : null,
+  galacticPos: playerGalacticPos,
+  systemName: _currentSystemName || null,
+
+  warpTarget,
+  warpState: warpEffect.state,
+  warpProgress: warpEffect.progress,
+}));
+// DEBUG (cockpit-screen-content-2026-07-28 AC-SNAPSHOT): the only console reach
+// to the screen feeds. A probe function returning the frame's plain snapshot —
+// deliberately NOT a live handle like window._warpTarget above, in a lane whose
+// whole AC is "no live handles" (and a handle would go stale every frame anyway).
+window._cockpitSnapshot = () => _cockpitSnapshotProvider.get();
 
 // When the tour visits every body, use the nav computer for a cinematic warp sequence.
 // The nav computer opens, drills down through galaxy levels, picks a star, and warps.
@@ -9274,6 +9330,22 @@ function renderFrame(alpha) {
   });
   _updateCommitBurnButton();
   _updateModeSwapButton();
+
+  // ── Cockpit screens: take this frame's snapshot (AC-SNAPSHOT) ──
+  // Here, and only here. `renderFrame` is bindToRAF's `render` callback, so it
+  // runs EXACTLY once per RAF; `simStep` runs 0..6 times per RAF and would give
+  // a panel a stuttering feed. This point is also after the per-frame aim
+  // hit-test that writes `_hoverTarget`, and after the camera/mesh alpha
+  // interpolation — so the panels see the same state the frame is about to draw.
+  // It is deliberately NOT gated on cockpit visibility, `_hudVisible` or
+  // `system`: a null system (splash, title, deep sky, mid-warp teardown) is a
+  // normal state that must produce a well-formed snapshot, not a skipped frame.
+  _cockpitSnapshotProvider.update({
+    renderDt,
+    drop: _scDrop,
+    targetDistance: _scTargetPos ? scModel.position.distanceTo(_scTargetPos) : null,
+    aimOnTarget: _aimOnTarget,
+  });
 
   // ── HUD (yaw + system map + gravity well) ──
   // During flythrough, compute yaw from camera position relative to origin.

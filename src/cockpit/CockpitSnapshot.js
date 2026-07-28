@@ -132,6 +132,7 @@ export function resolveFocusedBody(system, focus = {}) {
 export function buildCockpitSnapshot(sources = {}) {
   const {
     simClockMs = 0,
+    renderDt = 0,
     helm = false,
     flightMode = null,
     tour = false,
@@ -152,19 +153,45 @@ export function buildCockpitSnapshot(sources = {}) {
     navLevel = null,
     galacticPos = null,
     systemName = null,
+
+    warpTarget = null,
+    warpState = 'idle',
+    warpProgress = 0,
+    pilotPhase = null,
   } = sources;
 
   const physics = focusedBody?.physics ?? null;
   const bodyData = focusedBody?.data ?? null;
 
   return {
+    // `t` is the SIM clock — replay-deterministic, and it repeats across RAFs on
+    // a display above 60 Hz, which is exactly the "no sim tick happened" signal a
+    // panel wants before re-rasterising an expensive CRT texture. `renderDt` is
+    // the render-cadence delta for anything that must animate every frame.
     t: simClockMs,
+    renderDt,
 
     regime: {
       helm: !!helm,
       flightMode: flightMode ?? null,
       tour: !!tour,
       warping: !!warping,
+      pilotPhase: pilotPhase ?? null,
+    },
+
+    // `warpTarget` is a module-level CONST mutated in place and exposed as
+    // window._warpTarget, and simStep gates flight on `!warpTarget.turning` —
+    // so this block is named-field copying, never a pass-through. Its
+    // `.direction` (a THREE.Vector3), `.featureData` and `.galaxyData`
+    // (GalacticMap-owned) are deliberately not carried at all: no panel in the
+    // charter shows them, and each is a live reference.
+    warp: {
+      active: !!warping,
+      state: warpState ?? 'idle',
+      progress: warpProgress ?? 0,
+      targetName: warpTarget?.name ?? null,
+      destType: warpTarget?.destType ?? null,
+      turning: !!warpTarget?.turning,
     },
 
     drive: {
@@ -229,9 +256,19 @@ export class CockpitSnapshotProvider {
     this._snapshot = buildCockpitSnapshot({});
   }
 
-  /** Take this frame's snapshot. Call once per frame, from main.js only. */
-  update() {
-    this._snapshot = buildCockpitSnapshot(this._readSources() ?? {});
+  /**
+   * Take this frame's snapshot. Call once per frame, from main.js only.
+   *
+   * `frame` carries the values that exist ONLY as `renderFrame` locals — the
+   * `_scDrop` / `_scTargetPos` / `_aimOnTarget` consts computed for
+   * `scHud.update`. They are passed in rather than recomputed because
+   * recomputing `_scDropState()` re-runs `_resolveSelectedBody()` and a
+   * `distanceTo`, and could diverge from what the 2D HUD shows in the same frame.
+   *
+   * @param {object} [frame] this frame's locals, handed to the source reader
+   */
+  update(frame = {}) {
+    this._snapshot = buildCockpitSnapshot(this._readSources(frame) ?? {});
     return this._snapshot;
   }
 

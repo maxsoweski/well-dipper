@@ -217,6 +217,20 @@ export class NavComputer {
   // PUBLIC
   // ════════════════════════════════════════════════════
 
+  /**
+   * The current view level as a word: 'galaxy' | 'sector' | 'region' | 'prism' |
+   * 'system', or 'unknown' if `_levelIndex` is out of range.
+   *
+   * Added for the cockpit NAV panel (lane F, cockpit-screen-content-2026-07-28),
+   * whose read-only snapshot needs the level as a string. `LEVELS` is a private
+   * module const with no importers; letting the class name its own level is the
+   * only option that does not put a second copy of that array somewhere it can
+   * silently drift out of lockstep. Read-only — it sets nothing.
+   */
+  get level() {
+    return LEVELS[this._levelIndex] ?? 'unknown';
+  }
+
   activate() {
     document.addEventListener('keydown', this._onKeyDown, true);
     document.addEventListener('keyup', this._onKeyUp, true);
