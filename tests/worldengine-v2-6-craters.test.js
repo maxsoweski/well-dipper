@@ -82,6 +82,36 @@ describe('V2-6 AC-RADIUS-LAW — count ∝ R² (analytic, strict), size ∝ 1/R,
   };
   const schedFor = (R) => craterSchedule(cond({ g: deriveConditionVector(GRAVITY_FP, null, R).surfaceGravity, R }));
 
+  // ⚠ WHY THIS TEST EXISTS (added after verify-workstream round 2 FAILED AC-BASELINE).
+  //
+  // Rewiring schedFor through deriveConditionVector made the gravity feed LIVE, but the verify pass
+  // proved that none of the 9 assertions in this file actually DISCRIMINATE it: mutation-testing the
+  // gravity law to the retired R^1 form left all of them passing. Live wiring is not coverage —
+  // N_analytic is g-independent by design, the angular-size assertion only checks a direction (which
+  // holds under either law), and the coverage band is far too wide to notice. So the rewire fixed a
+  // latent measurement defect and left a latent COVERAGE defect exactly where the first one had been.
+  //
+  // This pins the gravity actually reaching the schedule, against LITERAL exponents (never
+  // gravityRadiusShape — see tests/worldengine-v2-6-gcohere.test.js shapeLiteral for why).
+  it('the gravity feeding these schedules obeys the shipped piecewise law — the file DISCRIMINATES', () => {
+    const shapeLiteral = (r) => (r <= 1 ? Math.pow(r, 4 / 3) : Math.pow(r, 1.70));
+    for (const R of Rs) {
+      const g = deriveConditionVector(GRAVITY_FP, null, R).surfaceGravity;
+      expect(g, `g @R=${R}`).toBeCloseTo(g_c * (shapeLiteral(R) / shapeLiteral(R_c)), 12);
+      // ...and it is NOT the retired constant-density law anywhere off canonical.
+      if (R !== R_c) {
+        expect(Math.abs(g - g_c * (R / R_c)) / g, `g @R=${R} must differ from the retired law`)
+          .toBeGreaterThan(1e-6);
+      }
+    }
+    // The gravity difference must actually MOVE the crater schedule, or pinning g here would still
+    // leave this file blind to the law. sizeMul = (G_REF/g)^K_GS, so a 2x gravity change is visible.
+    const sizeMulAt = (g) => craterSchedule(cond({ g, R: 2.0 })).sizeMul;
+    const gShipped = deriveConditionVector(GRAVITY_FP, null, 2.0).surfaceGravity;
+    const gRetired = g_c * (2.0 / R_c);
+    expect(Math.abs(sizeMulAt(gShipped) - sizeMulAt(gRetired)) / sizeMulAt(gRetired)).toBeGreaterThan(0.05);
+  });
+
   it('N_analytic ∝ R² STRICTLY (pre-round analytic value; no cap, no round ties)', () => {
     let perR2 = null;
     for (const R of Rs) {

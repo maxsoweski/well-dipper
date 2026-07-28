@@ -67,7 +67,12 @@ scalar every rocky-body law already reads, so the DOES table is a table of conse
 | crater size, stamped count, regolith roughness | `bombardment.js` `sizeMul = (G_REF/g)^K_GS`, `D_t = 3.1/g` | fewer, smaller craters and a smoother regolith as a rocky world grows |
 | relief-margin weights `w_e` / `w_i` | `reliefBudget.js` `f_I` (impact fraction of the budget) | endogenic relief taking a larger share of the budget on heavier worlds |
 | body flattening descriptor | `bodyFigure.js` `f ∝ 1/g` | a heavier world is rounder at the same spin |
-| the IMPLIED mass law seen by `e1Regime.massEarthOf` and `giant-drivers` | both reconstruct `M = g·R²`, so they inherit the exponent + 2 | `M ∝ R^3.7` above 1 R⊕ and `R^(10/3)` below — **nothing in those files was edited**; they changed because gravity did |
+| the IMPLIED mass law seen by `e1Regime.massEarthOf` | it reconstructs `M = g·R²`, so it inherits the exponent + 2 | `M ∝ R^3.7` above 1 R⊕ and `R^(10/3)` below — **`e1Regime.js` was not edited**; the mass law it sees changed because gravity did |
+
+⚠ **Correction to an earlier draft of this card, which listed `giant-drivers.js` alongside
+`e1Regime`.** That was wrong and overstated the reach. `giant-drivers.js:234` *back-solves* gravity
+from a pinned mass (`surfaceGravity = drawnMass / (R*R)`) and never reads this law at all — it is
+genuinely inert, as AC-DOWNSTREAM correctly states. Only `e1Regime.massEarthOf` inherits the change.
 | two `LAW_REGISTRY` entries | `instrument/laws.js` | the first laws in the registry that pin what **drives** gravity rather than what gravity drives |
 
 **Explicitly does NOT change** — the 5 gas, 4 icy and 1 carbon presets (bit-identical to the retired

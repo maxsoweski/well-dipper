@@ -182,7 +182,13 @@ export const LAW_REGISTRY = [
     // (8^(1/3.7) = 1.7542). Sweeping past 1.754 would audit the law against an extrapolation of
     // the fit it cites.
     values: [1.05, 1.15, 1.25, 1.35, 1.45, 1.60, 1.75],
-    claimedExponent: GRAV_R_EXP_SUPER,
+    // ⚠ LITERAL, deliberately NOT GRAV_R_EXP_SUPER. If the claim is read from the same constant
+    // production uses, a silent retune of that constant moves the claim and the measurement
+    // together and this audit degrades to UNRESOLVABLE instead of FAIL — it stops being a guard.
+    // Verified: with the constants zeroed to 1.0 and claimedExponent bound to them, the audit
+    // reported UNRESOLVABLE. Same defect class as a test that re-derives its expected value
+    // from the function under test; it bit this workstream twice before this line was written.
+    claimedExponent: 1.70,
     nullValue: 1.0,
     nullMeaning: 'the retired constant-density law g = g_c·(R/R_c)^1 (M ∝ R³, density held fixed)',
     measure: (c, deps) => deps.deriveConditionVector(ROCKY_FP, null, c.radiusEarth).surfaceGravity,
@@ -201,7 +207,7 @@ export const LAW_REGISTRY = [
     // Strictly below the R = 1 branch join. 0.98 rather than 1.0 as the top point so the sweep
     // never touches the breakpoint itself.
     values: [0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.98],
-    claimedExponent: GRAV_R_EXP_SUB,
+    claimedExponent: 4 / 3,   // LITERAL, not GRAV_R_EXP_SUB — see the note on the super branch
     nullValue: 1.0,
     nullMeaning: 'the retired constant-density law g = g_c·(R/R_c)^1 (M ∝ R³, density held fixed)',
     measure: (c, deps) => deps.deriveConditionVector(ROCKY_FP, null, c.radiusEarth).surfaceGravity,

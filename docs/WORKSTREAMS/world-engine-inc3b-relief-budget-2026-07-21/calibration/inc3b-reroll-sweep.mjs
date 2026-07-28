@@ -1,3 +1,10 @@
+// ⚠⚠ SUPERSEDED IN PART (gravity-selfcompression-2026-07-28) — THIS BANNER COVERS THE WHOLE FILE,
+//    INCLUDING THE HEADER COMMENT BELOW. Any statement here that surfaceGravity = g_c*(R/R_c),
+//    or that g is monotonic in R by that law, records the CONSTANT-DENSITY law live when this
+//    file was written. Gravity is now g = g_c*f(R)/f(R_c), f piecewise in ABSOLUTE Earth radii
+//    (R^(4/3) below 1 R_E, R^1.70 above), ROCKY class only; gas/icy/carbon are unchanged.
+//    Byte-exactness at canonical is unchanged. Kept as written for audit trail.
+
 // calibration/inc3b-reroll-sweep.mjs — World Engine Inc-3b SLICE-4 acceptance harness (AC-REROLL).
 //
 // LINEAGE: the predecessor population-sweep pattern (docs/WORKSTREAMS/world-engine-inc3-relief-spine-depthlaw-
@@ -40,10 +47,6 @@
 // Machine-readable summary → inc3b-reroll-sweep-summary.json (deterministic; NO timing fields). Nonzero exit on any
 // assert failure. Pure `node`, no network.
 
-// ⚠ SUPERSEDED IN PART (gravity-selfcompression-2026-07-28): references below to
-//    g = g_c*(R/R_c) record the CONSTANT-DENSITY law live when this file was written.
-//    Gravity is now g = g_c*f(R)/f(R_c), f piecewise in absolute Earth radii
-//    (R^(4/3) below 1 R_E, R^1.70 above), ROCKY class only. Kept for audit trail.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
