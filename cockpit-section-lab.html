@@ -57,9 +57,10 @@
   <h1>Cockpit Section Lab</h1>
   <span class="sub">eye at origin &middot; 1 unit = 1 m &middot; game FOV 70&deg; vertical, 16:9</span>
   <div class="presets">
+    <button data-preset="max" class="on">Max 2026-07-28</button>
     <button data-preset="current">Current build 567bcf9</button>
     <button data-preset="fighter">Fighter (tight)</button>
-    <button data-preset="game" class="on">Game cockpit</button>
+    <button data-preset="game">Game cockpit</button>
     <button data-preset="tourer">Wide tourer</button>
   </div>
 </header>
@@ -116,12 +117,12 @@ const BODY = {
 };
 
 const P = {
-  hwBow:0.62, hwMid:0.85, hwAft:0.70,
-  railZ:-0.30, floorZ:-1.20, roofZ:0.70, bowY:1.15, aftY:-0.65,
-  archN:2.6, railCap:0.10, bowSec:0.13, pillarSec:0.085,
-  scW:0.38, scH:0.25,
-  upTanX:0.86, upTanZ:0.18, upDist:1.35,
-  loTanX:0.68, loTanZ:-0.34, loDist:1.15
+  hwBow:0.59, hwMid:0.76, hwAft:0.57,
+  railZ:-0.34, floorZ:-1.20, roofZ:0.70, bowY:1.62, aftY:-0.97,
+  archN:2.60, railCap:0.100, bowSec:0.130, pillarSec:0.085,
+  scW:0.30, scH:0.25,
+  upTanX:0.91, upTanZ:0.22, upDist:1.32,
+  loTanX:0.88, loTanZ:-0.21, loDist:1.26
 };
 
 const PRESETS = {
@@ -140,7 +141,13 @@ const PRESETS = {
   tourer: { hwBow:0.95, hwMid:1.25, hwAft:1.05, railZ:-0.34, floorZ:-1.22, roofZ:0.86,
     bowY:1.45, aftY:-0.85, archN:3.0, railCap:0.12, bowSec:0.15, pillarSec:0.095,
     scW:0.50, scH:0.33, upTanX:0.90, upTanZ:0.20, upDist:1.60,
-    loTanX:0.74, loTanZ:-0.32, loDist:1.35 }
+    loTanX:0.74, loTanZ:-0.32, loDist:1.35 },
+  // Max's settings, 2026-07-28. The tub proportions are his call and are what
+  // the generator gets built to; the screen placement still clips the canopy.
+  max: { hwBow:0.59, hwMid:0.76, hwAft:0.57, railZ:-0.34, floorZ:-1.20, roofZ:0.70,
+    bowY:1.62, aftY:-0.97, archN:2.60, railCap:0.100, bowSec:0.130, pillarSec:0.085,
+    scW:0.30, scH:0.25, upTanX:0.91, upTanZ:0.22, upDist:1.32,
+    loTanX:0.88, loTanZ:-0.21, loDist:1.26 }
 };
 
 const SLIDERS = [
@@ -191,6 +198,35 @@ function canopyHalf(y, z){
 }
 const railTop = () => P.railZ + P.railCap;
 
+/* CONTAINMENT — does a thing actually fit inside the cabin?
+   The first version of this lab drew the screens straight into tan space and
+   never asked. That is the same blind spot that let four monitors on lamp-posts
+   pass 48/48 in the generator: empty space satisfies an angular placement rule.
+   Signed margin, metres. Positive = inside, negative = poking through the hull
+   or the glass. */
+function cabinMargin(p){
+  const [x, y, z] = p;
+  const half = (z < P.railZ) ? halfAt(y) : canopyHalf(y, z);
+  return Math.min(half - Math.abs(x), y - P.aftY, P.bowY - y,
+                  z - P.floorZ, P.roofZ - z);
+}
+function screenMargin(tanx, tanz, dist, w, h){
+  const q = screenQuad(tanx, tanz, dist, w, h);
+  let worst = Infinity;
+  for (const c of q.corners) worst = Math.min(worst, cabinMargin(c));
+  return Math.min(worst, cabinMargin(q.c));
+}
+// Largest distance along this direction that still keeps the whole face inside.
+function maxSafeDist(tanx, tanz, w, h){
+  let lo = 0.15, hi = 4.0;
+  if (screenMargin(tanx, tanz, lo, w, h) < 0) return 0;
+  for (let i = 0; i < 40; i++){
+    const mid = (lo + hi) / 2;
+    if (screenMargin(tanx, tanz, mid, w, h) >= 0) lo = mid; else hi = mid;
+  }
+  return lo;
+}
+
 /* THE OCCLUSION TEST — exact, O(1) per ray.
    A forward ray d=(tx,1,tz) leaves the eye, which sits ABOVE the rail.
    tz>=0  : it never drops below the rail; the tub cannot block it.
@@ -225,11 +261,13 @@ function screenQuad(tanx, tanz, dist, w, h){
     widthDeg: 2*Math.atan((w/2)/dist) * DEG };
 }
 const screens = () => [
-  {id:"UL", ...screenQuad(-P.upTanX, P.upTanZ, P.upDist, P.scW, P.scH)},
-  {id:"UR", ...screenQuad( P.upTanX, P.upTanZ, P.upDist, P.scW, P.scH)},
-  {id:"LL", ...screenQuad(-P.loTanX, P.loTanZ, P.loDist, P.scW, P.scH)},
-  {id:"LR", ...screenQuad( P.loTanX, P.loTanZ, P.loDist, P.scW, P.scH)}
-];
+  ["UL", -P.upTanX, P.upTanZ, P.upDist], ["UR",  P.upTanX, P.upTanZ, P.upDist],
+  ["LL", -P.loTanX, P.loTanZ, P.loDist], ["LR",  P.loTanX, P.loTanZ, P.loDist]
+].map(([id, tx, tz, d]) => ({
+  id, ...screenQuad(tx, tz, d, P.scW, P.scH),
+  margin:  screenMargin(tx, tz, d, P.scW, P.scH),
+  maxDist: maxSafeDist(tx, tz, P.scW, P.scH)
+}));
 
 /* ---- Canvas plumbing ----------------------------------------------------- */
 const g = id => document.getElementById(id);
@@ -569,11 +607,17 @@ function drawStructure(ctx, flat){
     q.slice(1).forEach(v => ctx.lineTo(v[0], v[1]));
     ctx.closePath();
     ctx.fillStyle = flat ? "#fff" : "#0d0e0f"; ctx.fill();
-    ctx.strokeStyle = flat ? "#fff" : "#d8b25a";
+    // a screen outside the hull is drawn red — it is not a bezel colour choice,
+    // it is the model telling you the unit is floating out in space
+    ctx.strokeStyle = flat ? "#fff" : (s.margin < 0 ? "#e0705a" : "#d8b25a");
     // 1 inch bezel, same true-range / tan-stretch correction as the members
     const rng = Math.hypot(s.c[0], s.c[1], s.c[2]);
     ctx.lineWidth = Math.max(1.4, (0.0254 * rng / (s.c[1]*s.c[1])) / (2*TAN_X) * OW);
     ctx.stroke();
+    if (!flat && s.margin < 0){
+      ctx.save(); ctx.setLineDash([9, 7]); ctx.strokeStyle = "#e0705a";
+      ctx.lineWidth = Math.max(1, ctx.lineWidth * 0.4); ctx.stroke(); ctx.restore();
+    }
   });
   ctx.restore();
 }
@@ -653,6 +697,7 @@ function readouts(occ){
   const legroom = P.bowY - BODY.toeY;
   const headroom = P.roofZ - BODY.headR - 0.02;
   const fmt = e => `${Math.abs(e).toFixed(0)}° ${e >= 0 ? "above" : "below"}`;
+  const worst = Math.min(...S.map(s => s.margin));
   const cells = [
     { k:"cabin width", v:(P.hwMid*2).toFixed(2), u:"m at the shoulders" },
     { k:"rail below eye", v:Math.abs(P.railZ).toFixed(2), u:"m — " + nearestLandmark(P.railZ) },
@@ -660,6 +705,11 @@ function readouts(occ){
       u:`tub ${(occ.tubFrac*100).toFixed(1)}% + frame/screens ${((occ.frac-occ.tubFrac)*100).toFixed(1)}%` },
     { k:"upper screens", v:S[0].widthDeg.toFixed(0)+"°", u:"wide — " + fmt(S[0].elevationDeg) },
     { k:"lower screens", v:S[2].widthDeg.toFixed(0)+"°", u:"wide — " + fmt(S[2].elevationDeg) },
+    { k:"screens in hull",
+      v: worst >= 0 ? "inside" : (worst*100).toFixed(0) + " cm",
+      u: worst >= 0 ? `${(worst*100).toFixed(0)} cm clearance`
+                    : `outside — max dist ${S[0].maxDist.toFixed(2)}/${S[2].maxDist.toFixed(2)} m`,
+      bad: worst < 0 },
     { k:"elbow clearance", v:clear.toFixed(2), u:"m each side", bad: clear < 0.03 },
     { k:"legroom", v:legroom.toFixed(2), u:"m to the coaming", bad: legroom < 0.05 },
     { k:"headroom", v:headroom.toFixed(2), u:"m over the head", bad: headroom < 0.05 }
@@ -743,7 +793,13 @@ window._section = {
       lowerElevationDeg: +S[2].elevationDeg.toFixed(2),
       elbowClearance:    +(P.hwMid - BODY.elbowHalf).toFixed(3),
       legroom:           +(P.bowY - BODY.toeY).toFixed(3),
-      headroom:          +(P.roofZ - BODY.headR - 0.02).toFixed(3)
+      headroom:          +(P.roofZ - BODY.headR - 0.02).toFixed(3),
+      screenMarginM:     +Math.min(...S.map(s => s.margin)).toFixed(3),
+      upperMaxDist:      +S[0].maxDist.toFixed(3),
+      lowerMaxDist:      +S[2].maxDist.toFixed(3),
+      screenCentres:     S.map(s => ({ id:s.id,
+                           x:+s.c[0].toFixed(3), y:+s.c[1].toFixed(3), z:+s.c[2].toFixed(3),
+                           margin:+s.margin.toFixed(3) }))
     };
   },
   ready: true
