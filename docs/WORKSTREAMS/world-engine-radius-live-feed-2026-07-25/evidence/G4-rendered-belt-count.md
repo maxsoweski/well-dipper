@@ -94,10 +94,35 @@ the instrument had no planted-defect control, so a broken counter read as a find
 ## What this means for R1
 
 R1's remaining work is **not** a display-threshold tweak in charted territory. The band read is
-correct; the radius→band-count response is live and measurable. What is in question is whether the
-lab's `VIS_SCALE_EXP = 0.5` display compression should be allowed to cancel a physical law it was
-never scoped against. Note this may be **lab-only**: in-game, where a body renders at its true
-size (∝R), the exponents do not cancel and the band-count change should be visible. Not verified
-in-game — that check is unrun.
+correct; the radius→band-count response is live and measurable.
 
-Scope decision is Max's.
+### The lab-only question — resolved at source (2026-07-27), no in-game run needed
+
+Both halves of the collision are **lab-only**, and the game has no stake in it at all:
+
+- `visScaleOf` / `VIS_SCALE_EXP` appear **only** in `planet-lod-lab-core.js`, `planet-lod-lab.html`
+  and `tests/` — **zero occurrences in `src/`**.
+- The E5 band deck is equally lab-only: nothing in `src/` consumes `aBand`, `zonalBandCol` or
+  `HEIGHT_GLSL` (the sole `src/` hit is a comment in `emission-e.js:251`). `climate-e5.js` and
+  `storm-e.js` are *writers*; the only render seam is the lab.
+- The game still bands planets from **hard-coded literal frequencies** in `src/objects/Planet.js`
+  — `sin(lat * 3.5)` (gas giant, :256), `sin(lat*2.5) + sin(lat*5.0)` (hot Jupiter, :268),
+  `sin(lat*3.0) + sin(lat*6.0)` (sub-Neptune, :280). **No Rhines law, no radius term whatsoever.**
+
+So the exponent collision cannot reach the game, and there is no in-game radius→band-count
+behaviour to compare against. This is the charter's deliberate lab≠game split
+(`docs/FEATURES/planet-lod-CHARTER.md`), not a regression.
+
+**Consequence:** the R1 UAT failure has zero shipped-game impact today. It is a lab-viewing
+artifact of a knob whose own source comment calls it "the ONE UAT-tunable knob"
+(`planet-lod-lab-core.js:44`).
+
+### Recommended disposition (Max's call)
+
+Do **not** change `VIS_SCALE_EXP` to chase this. Instead re-spec AC-BANDS to judge band count at
+**pinned angular size** (camera distance ∝ sVis — the discipline `renderDeltaSweep` already
+applies via `SWEEP_DISTANCE * sVis`, `planet-lod-lab.html:5370`). At pinned angular size the
+radius→band response is plainly visible, as the size-normalized screenshots above show. The
+alternative — retuning the display scale so the exponents stop cancelling — trades a physical
+law's legibility against every other radius-scaled read in the lab, which is a much larger blast
+radius for a lab-only viewing convenience.
