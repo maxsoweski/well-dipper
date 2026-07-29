@@ -1633,6 +1633,23 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
     //                            report what LANDED on the nav computer so a
     //                            sweep cannot pass by reading its own input back.
     //   THREE, scene, renderer, host, model   escape hatches.
+    //
+    //   ── increment 6, the ZOOM surface. Full argument in its own header below.
+    //   zoomState() / zoomPanel(role) / dismissZoom() / settleZoom(ms)
+    //                            drive and read the mover. Requested knob values
+    //                            are labelled `requested*`; everything else is
+    //                            read back off the mover.
+    //   measurePanel(role)       the panel's pose and on-screen silhouette,
+    //                            measured off the MESH and projected by hand —
+    //                            never from the mover's solve or panelPose.js.
+    //   viewport()               the letterbox rect, and which end its y is from.
+    //   navTextCensus(frames)    async; text the live nav computer actually drew,
+    //                            over a window known to contain a repaint.
+    //   navProbe() / pointerCensus() / resetPointerCensus()
+    //                            nav state off the instance, and how many events
+    //                            reached the pointer adapter.
+    //   clickGlass(role, u, v)   async; press a point in PANEL coordinates.
+    //   zoom                     an ALIAS namespace over the same functions.
     // ─────────────────────────────────────────────────────────────────────────
     function getInfo() {
       const cam = (mode === 'eye') ? eyeCam : orbitCam;
@@ -1765,6 +1782,985 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
       };
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // THE ZOOM PROBE SURFACE — increment 6, `cockpit-zoom-to-panel-2026-07-29`.
+    //
+    // Eight of that workstream's acceptance criteria can only be settled LIVE, by
+    // a script driving this page through a browser. Everything below exists so
+    // that script can read NUMBERS instead of squinting at a screenshot — and,
+    // more importantly, so the numbers it reads are MEASUREMENTS rather than the
+    // page handing back what it was asked for.
+    //
+    // ⭐ THE RULE THE WHOLE SECTION IS SHAPED AROUND, inherited verbatim from
+    // `setSystemFill`/`setSystemZoom` above: report what LANDED, never what was
+    // REQUESTED. Where a requested value appears here it is named `requested*`
+    // and it is context, not evidence.
+    //
+    // ⭐ AND THE ONE THAT COST THIS LANE 31 GREEN TESTS: AN INSTRUMENT CANNOT BE
+    // ITS OWN CONTROL. `PanelMover`'s orientation test measured the landed panel
+    // with `measureQuadBasis` — the same function the mover SOLVES with — and a
+    // consistent error cancelled perfectly: a planted v-flip, a planted u-mirror
+    // and a planted reversed normal all left 31 tests green. So NOTHING below is
+    // allowed to reach for `panelPose.js`, `PanelLayout.js` or the mover's own
+    // target pose to work out where a panel is or how much of the view it fills.
+    // `measurePanel` reads the MESH — its `position` and `uv` attributes through
+    // its own `matrixWorld` — and projects through the camera by hand. If the
+    // mover's solve and this disagree, that disagreement is the finding.
+    //
+    // ⭐ AND LESSON 3: a passing assertion over a state that DREW NOTHING is not
+    // coverage. `navTextCensus` therefore reports `repainted` separately from the
+    // text counts, so a zero that means "no text drew" is distinguishable from a
+    // zero that means "nothing drew at all".
+    //
+    // INSTALLED LAZILY, ALWAYS. Every wrapper below goes on at the first probe
+    // call that needs it and comes back off when that call is done (the context
+    // census) or stays on for the session (the pointer counters, which must not
+    // miss an event that happens between two probe calls). A session Max drives by
+    // hand touches none of it.
+    //
+    // NO NEW IMPORTS FROM `src/cockpit/`. That is the point: this surface has to
+    // be able to contradict those modules.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** One animation frame. Resolves AFTER `tick()` — see `settleZoom`. */
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+
+    /**
+     * Every counter the probe keeps, in one place so a census can diff a baseline
+     * against a total instead of zeroing shared state that another in-flight call
+     * is also reading. Monotonic; only `resetPointerCensus` ever winds one back.
+     */
+    const probeCount = {
+      fillText: 0, strokeText: 0, drawOps: 0, navRenders: 0,
+      pointerDown: 0, pointerMove: 0, pointerUp: 0, pointerLastRole: null,
+    };
+    /** Live string collectors, one per in-flight `navTextCensus`. */
+    const probeStringSinks = new Set();
+
+    // ── The nav computer's 2D context ────────────────────────────────────────
+    //
+    // Instrumented ON `navSource.nav._ctx` and not on a context fetched fresh from
+    // the canvas. They are the same object today — `getContext('2d')` is idempotent
+    // for a given canvas, and `NavSource._holdBuffer`'s width assignment resets the
+    // context's STATE but not its identity — and reading it off the instance is the
+    // statement that what is being counted is the surface the nav computer actually
+    // draws through, rather than a surface we went and found that we hope it uses.
+    //
+    // The wrappers are OWN PROPERTIES shadowing `CanvasRenderingContext2D.prototype`
+    // — the same technique `NavSource` uses on `_resizeCanvas` and `PanelPointer`
+    // uses on `_getCanvasPos`, for the same reason: nothing is edited, and removing
+    // the own property puts the prototype method straight back.
+    const PROBE_TEXT_OPS = ['fillText', 'strokeText'];
+    const PROBE_DRAW_OPS = ['fillRect', 'strokeRect', 'clearRect', 'drawImage', 'fill', 'stroke'];
+    let navCtxProbe = null;   // { ctx, saved:Map, refs }
+
+    function acquireNavCtxProbe() {
+      const ctx = navSource && navSource.nav && navSource.nav._ctx;
+      if (!ctx) return false;
+      // Re-entrancy AND re-identification in one guard. Two overlapping censuses
+      // must share one set of wrappers (double-wrapping would count every call
+      // twice, and the second unwrap would restore the FIRST wrapper rather than
+      // the prototype); a context that is no longer the one we wrapped must be
+      // re-wrapped rather than silently counted against the old one.
+      if (navCtxProbe && navCtxProbe.ctx === ctx) { navCtxProbe.refs += 1; return true; }
+      if (navCtxProbe) releaseNavCtxProbe(true);
+      const saved = new Map();
+      for (const name of PROBE_TEXT_OPS.concat(PROBE_DRAW_OPS)) {
+        const original = ctx[name];
+        if (typeof original !== 'function') continue;
+        const isText = PROBE_TEXT_OPS.includes(name);
+        saved.set(name, { original, hadOwn: Object.prototype.hasOwnProperty.call(ctx, name) });
+        ctx[name] = function probeWrapped(...args) {
+          if (isText) {
+            probeCount[name] += 1;
+            const s = String(args[0]);
+            for (const sink of probeStringSinks) sink.add(s);
+          } else {
+            probeCount.drawOps += 1;
+          }
+          return original.apply(this, args);
+        };
+      }
+      navCtxProbe = { ctx, saved, refs: 1 };
+      return true;
+    }
+
+    function releaseNavCtxProbe(force = false) {
+      if (!navCtxProbe) return;
+      if (!force) {
+        navCtxProbe.refs -= 1;
+        if (navCtxProbe.refs > 0) return;
+      }
+      for (const [name, { original, hadOwn }] of navCtxProbe.saved) {
+        if (hadOwn) navCtxProbe.ctx[name] = original;
+        else delete navCtxProbe.ctx[name];
+      }
+      navCtxProbe = null;
+    }
+
+    // ── The repaint signal ───────────────────────────────────────────────────
+    //
+    // `NavSource.render()` is what the NAV painter calls, once per repaint, and
+    // counting it is INDEPENDENT of anything being drawn — which is the whole
+    // point. "Zero text calls" over a window in which the panel never repainted is
+    // not evidence of a chrome-less frame; it is evidence of no frame.
+    //
+    // `PanelHost` repaints on its own ambient tier (80 ms), and there is no public
+    // way to force one, so every wait below is a wait for the tier rather than a
+    // fixed number of frames.
+    let navRenderProbe = null;   // { source, original, hadOwn, refs }
+
+    function acquireNavRenderProbe() {
+      if (!navSource) return false;
+      if (navRenderProbe && navRenderProbe.source === navSource) { navRenderProbe.refs += 1; return true; }
+      if (navRenderProbe) releaseNavRenderProbe(true);
+      const original = navSource.render;
+      const hadOwn = Object.prototype.hasOwnProperty.call(navSource, 'render');
+      navSource.render = function probeWrappedRender(...args) {
+        probeCount.navRenders += 1;
+        return original.apply(this, args);
+      };
+      navRenderProbe = { source: navSource, original, hadOwn, refs: 1 };
+      return true;
+    }
+
+    function releaseNavRenderProbe(force = false) {
+      if (!navRenderProbe) return;
+      if (!force) {
+        navRenderProbe.refs -= 1;
+        if (navRenderProbe.refs > 0) return;
+      }
+      if (navRenderProbe.hadOwn) navRenderProbe.source.render = navRenderProbe.original;
+      else delete navRenderProbe.source.render;
+      navRenderProbe = null;
+    }
+
+    /** Wait for a REAL repaint, not for N frames. See the block above. */
+    async function waitForNavRepaint(timeoutMs = 800) {
+      if (!acquireNavRenderProbe()) {
+        await nextFrame(); await nextFrame();
+        return { repainted: false, frames: 2, instrumented: false, timedOut: false };
+      }
+      const base = probeCount.navRenders;
+      const started = performance.now();
+      let frames = 0;
+      try {
+        while (probeCount.navRenders === base) {
+          if (performance.now() - started > timeoutMs) {
+            return { repainted: false, frames, instrumented: true, timedOut: true };
+          }
+          await nextFrame();
+          frames += 1;
+        }
+        return { repainted: true, frames, instrumented: true, timedOut: false };
+      } finally {
+        releaseNavRenderProbe();
+      }
+    }
+
+    // ── The pointer counters ─────────────────────────────────────────────────
+    //
+    // Wrapped on `PanelPointerAdapter.prototype`, NOT on the instance, and that is
+    // the load-bearing choice. `ensureNavAdapter()` builds the adapter lazily and
+    // will build a NEW one if the nav computer is ever replaced, so an instance
+    // wrapper installed by a probe call would stop counting at the rebuild — and
+    // the rebuild happens inside a pointer handler, which is exactly when events
+    // are flowing. The prototype wrapper cannot be outrun by a rebuild.
+    //
+    // Idempotent by flag, so a second install is a no-op rather than a second
+    // count of every call. Never removed: an event that happens between two probe
+    // calls is precisely the event AC-ONLY-NAV-ZOOMS is asking about.
+    let pointerProbeInstalled = false;
+
+    /** Which bound panel a raycast hit belongs to — resolved from the MESH. */
+    function roleForHit(hit) {
+      const obj = hit && hit.object;
+      if (!obj || !host) return null;
+      const found = host.panels.find((p) => p.mesh === obj);
+      return found ? found.role : null;
+    }
+
+    function installPointerProbe() {
+      if (pointerProbeInstalled) return true;
+      const proto = PanelPointerAdapter.prototype;
+      for (const [name, key] of [['pointerDown', 'pointerDown'], ['pointerMove', 'pointerMove'], ['pointerUp', 'pointerUp']]) {
+        const original = proto[name];
+        if (typeof original !== 'function' || original._probeWrapped) continue;
+        const wrapped = function probeWrappedPointer(hit) {
+          probeCount[key] += 1;
+          const role = roleForHit(hit);
+          if (role) probeCount.pointerLastRole = role;
+          return original.call(this, hit);
+        };
+        wrapped._probeWrapped = true;
+        proto[name] = wrapped;
+      }
+      pointerProbeInstalled = true;
+      return true;
+    }
+
+    /**
+     * How many events have reached the nav computer's pointer adapter.
+     *
+     * AC-ONLY-NAV-ZOOMS is not only "the other three panels did not move" — it is
+     * that clicking DRIVE, TARGET or INFO does not silently start forwarding
+     * clicks into painters that were never written to receive them. That is an
+     * assertion about calls, not about pixels, so it needs a call counter.
+     *
+     * `lastRole` is resolved from the hit's MESH against the bound panels, so it
+     * says which piece of glass the forwarded event actually came off — not which
+     * one the caller believed it was aiming at.
+     */
+    function pointerCensus() {
+      installPointerProbe();
+      return {
+        down: probeCount.pointerDown,
+        move: probeCount.pointerMove,
+        up: probeCount.pointerUp,
+        lastRole: probeCount.pointerLastRole,
+        installed: pointerProbeInstalled,
+      };
+    }
+
+    function resetPointerCensus() {
+      installPointerProbe();
+      probeCount.pointerDown = 0;
+      probeCount.pointerMove = 0;
+      probeCount.pointerUp = 0;
+      probeCount.pointerLastRole = null;
+      return pointerCensus();
+    }
+
+    /**
+     * Count the text the LIVE nav computer actually draws, over a window that is
+     * known to contain a repaint.
+     *
+     * Two acceptance criteria are phrased as "the drawn text count is greater than
+     * zero at SYSTEM" and "is zero", and both are trivially satisfiable by a frame
+     * that drew nothing at all. `frames` is therefore a MINIMUM, not a duration:
+     * the wait ends when a repaint has been SEEN and at least that many frames
+     * have passed. `repainted` and `drawCalls` are reported beside the text counts
+     * so a zero can be read honestly — no repaint, or a repaint that drew nothing,
+     * or a repaint that drew a picture with no words in it are three different
+     * findings and only the third one is chrome-less.
+     *
+     * The wrappers come OFF again when the call finishes, so nothing Max does
+     * afterwards runs through them. Overlapping calls share one set of wrappers
+     * and diff their own baselines rather than zeroing each other's counters.
+     *
+     * @param {number} [frames=3] minimum animation frames to wait
+     * @param {number} [timeoutMs=1500] give up waiting for the 80 ms repaint tier
+     */
+    async function navTextCensus(frames = 3, timeoutMs = 1500) {
+      if (!navSource || !navSource.nav) {
+        return {
+          fillTextCalls: 0, strokeTextCalls: 0, strings: [], repainted: false,
+          framesWaited: 0, repaints: 0, drawCalls: 0, timedOut: false, live: false,
+          reason: navError || 'no nav source is mounted, so nothing draws text',
+        };
+      }
+      const instrumented = acquireNavCtxProbe();
+      const counting = acquireNavRenderProbe();
+      const sink = new Set();
+      probeStringSinks.add(sink);
+      const base = {
+        fillText: probeCount.fillText,
+        strokeText: probeCount.strokeText,
+        drawOps: probeCount.drawOps,
+        navRenders: probeCount.navRenders,
+      };
+      const minFrames = Math.max(1, Math.floor(Number.isFinite(frames) ? frames : 3));
+      const started = performance.now();
+      let waited = 0;
+      let timedOut = false;
+      try {
+        for (;;) {
+          await nextFrame();
+          waited += 1;
+          const repaints = probeCount.navRenders - base.navRenders;
+          if (waited >= minFrames && (repaints > 0 || !counting)) break;
+          if (performance.now() - started > timeoutMs) { timedOut = true; break; }
+        }
+        const nav = navSource.nav;
+        return {
+          fillTextCalls: probeCount.fillText - base.fillText,
+          strokeTextCalls: probeCount.strokeText - base.strokeText,
+          strings: [...sink],
+          // The honest zero. `repainted` false with zero text means the window
+          // contained no frame; true with zero draw calls means the frame drew
+          // nothing; true with draw calls and no text is the chrome-less claim.
+          repainted: (probeCount.navRenders - base.navRenders) > 0,
+          repaints: probeCount.navRenders - base.navRenders,
+          drawCalls: probeCount.drawOps - base.drawOps,
+          framesWaited: waited,
+          timedOut,
+          instrumented,
+          repaintCounted: counting,
+          live: true,
+          reason: null,
+          // The state the census was taken IN, so a checker cannot read a zero
+          // from GALAXY and file it against the SYSTEM criterion.
+          level: nav.level,
+          levelIndex: nav._levelIndex,
+          bare: !!nav._bare,
+          chromelessIntent: !!nav.chromeless,
+          zoomedRole: mover ? mover.zoomedRole : null,
+          moverState: mover ? mover.state : null,
+        };
+      } finally {
+        probeStringSinks.delete(sink);
+        if (instrumented) releaseNavCtxProbe();
+        if (counting) releaseNavRenderProbe();
+      }
+    }
+
+    // ── The nav computer's own state ─────────────────────────────────────────
+    //
+    // Two of the six controls AC-ZOOMED-IS-OPERABLE names write NOTHING to the
+    // instance. `_handleClick`'s autopilot branch is
+    // `if (this._onAutopilotToggle) this._onAutopilotToggle(!this._autopilotActive)`
+    // and its COMMIT branch is `if (this._onCommit) this._onCommit(this._commitAction)`;
+    // `_autopilotActive` is a mirror written only by `setAutopilotState`, and
+    // `_pendingAction` is written only by main.js's commit handler. This page
+    // installs neither callback, so after a successful autopilot click EVERY
+    // readable field is byte-identical — which is lesson 3 in a new costume: a
+    // check reading the instance cannot tell "the button worked" from "the ray
+    // missed the rect" from "the click was rejected as a drag".
+    //
+    // So the probe installs RECORDERS on the three empty callback slots, and only
+    // on slots that are empty — a host-installed callback is never clobbered. The
+    // behaviour change is that three `if (…)` branches that used to skip now call
+    // a function that appends to an array and does nothing else.
+    const navSpyCalls = { autopilotToggle: [], commit: [], sound: [] };
+    const navSpySlots = { autopilotToggle: 'absent', commit: 'absent', sound: 'absent' };
+    let navSpiesInstalled = false;
+
+    /** A callback argument, flattened to something a checker can read over CDP. */
+    function describeArg(a) {
+      if (a === null || typeof a !== 'object') return a;
+      const out = {};
+      for (const k of Object.keys(a)) {
+        const v = a[k];
+        if (v === null || v === undefined) out[k] = v;
+        else if (typeof v !== 'object') out[k] = v;
+        else out[k] = `[${(v.constructor && v.constructor.name) || 'object'}]`;
+      }
+      return out;
+    }
+
+    function installNavSpies() {
+      const nav = navSource && navSource.nav;
+      if (!nav || navSpiesInstalled) return navSpiesInstalled;
+      for (const [bucket, field] of [
+        ['autopilotToggle', '_onAutopilotToggle'],
+        ['commit', '_onCommit'],
+        ['sound', '_onSound'],
+      ]) {
+        if (typeof nav[field] === 'function') { navSpySlots[bucket] = 'host'; continue; }
+        nav[field] = (...args) => {
+          navSpyCalls[bucket].push({ atMs: performance.now(), args: args.map(describeArg) });
+        };
+        navSpySlots[bucket] = 'probe';
+      }
+      navSpiesInstalled = true;
+      return true;
+    }
+
+    /**
+     * The nav computer's state, read straight off the instance.
+     *
+     * Every field is read from `navSource.nav`, never recomputed here from the
+     * lab's own idea of the level — `getInfo().nav` already explains at length why
+     * a probe that derives the answer agrees with itself no matter what the panel
+     * did. `chromeless` (the INTENT the painter writes) and `_bare` (the EFFECTIVE
+     * state, intent AND level) are both published for the same reason.
+     *
+     * ⚠ `anim` AND `systemZoomAnim` ARE THE ONES TO WATCH. Both are stamped with
+     * `simClockMs()`, and this page runs no sim tick, so that clock reads 0
+     * forever: an animation started by a CLICK can never complete. A non-null
+     * `anim` here means `_handleClick`'s first line (`if (this._anim) return`) is
+     * discarding every further click on the panel, silently, until [V] /
+     * `setNavLevel()` nulls it. A live check that sees its clicks stop landing
+     * should read this field before concluding the forwarding broke.
+     */
+    function navProbe({ reset = false } = {}) {
+      if (reset) { navSpyCalls.autopilotToggle.length = 0; navSpyCalls.commit.length = 0; navSpyCalls.sound.length = 0; }
+      if (!navSource || !navSource.nav) {
+        return { live: false, error: navError || 'no nav source is mounted' };
+      }
+      installNavSpies();
+      const nav = navSource.nav;
+      const rect = (r) => (r ? { x: r.x, y: r.y, w: r.w, h: r.h } : null);
+      return {
+        live: true,
+        error: null,
+        level: nav.level,
+        levelIndex: nav._levelIndex,
+        bare: !!nav._bare,
+        chromelessIntent: !!nav.chromeless,
+        // The animations, and their stamps. See the warning above.
+        anim: nav._anim ? { active: true, startTime: nav._anim.startTime, duration: nav._anim.duration, toLevel: nav._anim.toLevel } : null,
+        systemZoomAnim: nav._systemZoomAnim
+          ? { active: true, startTime: nav._systemZoomAnim.startTime, duration: nav._systemZoomAnim.duration }
+          : null,
+        tiltAnim: nav._tiltAnim ? { active: true, startTime: nav._tiltAnim.startTime, duration: nav._tiltAnim.duration } : null,
+        // SYSTEM-view state — what a body/tab/chip click is supposed to move.
+        systemMode: nav._systemMode,
+        selectedPlanetIdx: nav._selectedPlanetIdx,
+        selectedComponentIdx: nav._selectedComponentIdx,
+        selectedBody: nav._selectedBody ? { ...nav._selectedBody } : null,
+        commitAction: nav._commitAction ? describeArg(nav._commitAction) : null,
+        pendingAction: nav._pendingAction ? describeArg(nav._pendingAction) : null,
+        systemStarName: nav._systemStar ? (nav._systemStar.name ?? null) : null,
+        selectedNavStarName: nav._selectedNavStar ? (nav._selectedNavStar.name ?? null) : null,
+        pendingComponentSelect: nav._pendingComponentSelect,
+        autopilotActive: !!nav._autopilotActive,
+        systemZoom: Number.isFinite(nav._systemZoom) ? nav._systemZoom : null,
+        systemFillFactor: Number.isFinite(nav.systemFillFactor) ? nav.systemFillFactor : null,
+        // The 2D view, which `_updateAnim` re-pins every frame while `_anim` is
+        // stuck — a frozen pair here beside a non-null `anim` is that finding.
+        viewCenter: { x: nav._viewCenter.x, z: nav._viewCenter.z },
+        viewSize: nav._viewSize,
+        // Hover state, which is recomputed only inside `render()` from
+        // `_mouseX/_mouseY` — every body click reads it, and nothing but a
+        // pointer MOVE writes the coordinates it is computed from.
+        mouse: { x: nav._mouseX, y: nav._mouseY },
+        hoveredBody: nav._hoveredBody ? { type: nav._hoveredBody.type, index: nav._hoveredBody.index } : null,
+        hoveredLocalStar: nav._hoveredLocalStar ? (nav._hoveredLocalStar.star?.name ?? true) : null,
+        dragging: !!nav._dragging,
+        localStars: Array.isArray(nav._localStars) ? nav._localStars.length : 0,
+        // Published hit regions. Null while bare — that is the withdrawal the zoom
+        // exists to undo, so it is worth reading rather than assuming.
+        commitButtonRect: rect(nav._commitButtonRect),
+        autopilotButtonRect: rect(nav._autopilotButtonRect),
+        farChipRects: Array.isArray(nav._farChipRects) ? nav._farChipRects.length : 0,
+        bufferWidth: nav._canvas ? nav._canvas.width : 0,
+        bufferHeight: nav._canvas ? nav._canvas.height : 0,
+        // The two controls that write nothing to the instance.
+        spies: { ...navSpySlots },
+        calls: {
+          autopilotToggle: navSpyCalls.autopilotToggle.length,
+          commit: navSpyCalls.commit.length,
+          sound: navSpyCalls.sound.length,
+          lastAutopilotToggle: navSpyCalls.autopilotToggle.at(-1) ?? null,
+          lastCommit: navSpyCalls.commit.at(-1) ?? null,
+        },
+      };
+    }
+
+    // ── The mover, and the geometry ──────────────────────────────────────────
+
+    /** Which roles the mover actually rigged — asked of the mover, not assumed. */
+    function riggedRoles() {
+      if (!mover || !host) return [];
+      return host.panels.filter((p) => !!mover.pivotFor(p.role)).map((p) => p.role);
+    }
+
+    /**
+     * The zoom state machine, as it stands this instant.
+     *
+     * `state` / `zoomedRole` / `isMoving` / `progress` come off the mover. The
+     * three knobs appear TWICE and the pairing is the point: `requested*` is what
+     * this page's slider says, `mover*` is what landed on the mover. A check that
+     * read only the first would prove a slider moved.
+     *
+     * `zoomedRole` is NON-NULL THROUGHOUT BOTH TRAVELS — `PanelMover` returns
+     * `_role` for any state but 'rest' — so a fill measurement keyed off it rather
+     * than off `state === 'zoomed'` lands wherever the ease happened to be. That is
+     * why `isMoving` and `state` are both here and why `settleZoom` exists.
+     *
+     * `buttonLabel` and `activeElementTag` are the page's chrome, not the mover's
+     * state, and they are here because two known lab-harness traps are invisible
+     * without them: the ZOOM button's label is not refreshed when [B] rebuilds the
+     * rig, and the keydown handler returns early for INPUT targets — so an ESC sent
+     * after dragging a slider is swallowed before it reaches `mover.dismiss()`.
+     */
+    function zoomState() {
+      return {
+        available: !!mover,
+        state: mover ? mover.state : null,
+        zoomedRole: mover ? mover.zoomedRole : null,
+        isMoving: mover ? mover.isMoving : false,
+        progress: mover ? mover.progress : null,
+        // REQUESTED — the knobs, as this page holds them. Context, not evidence.
+        requestedFill: zoomView.fill,
+        requestedDurationMs: zoomView.durationMs,
+        requestedFollowHead: zoomView.followHead,
+        // LANDED — the same three read back off the mover.
+        moverFill: mover ? mover.fill : null,
+        moverDurationMs: mover ? mover.durationMs : null,
+        moverFollowCamera: mover ? mover.followCamera : null,
+        zoomableRoles: ZOOMABLE_ROLES.slice(),
+        riggedRoles: riggedRoles(),
+        navIsZoomed: navIsZoomed(),
+        cameraMode: mode,
+        buttonLabel: el.bZoomLabel ? el.bZoomLabel.textContent : null,
+        activeElementTag: document.activeElement ? document.activeElement.tagName : null,
+      };
+    }
+
+    /**
+     * Zoom a panel THROUGH THE MOVER, bypassing the click path's restriction.
+     *
+     * AC-ONLY-NAV-ZOOMS has two halves and they pull in opposite directions: the
+     * CLICK path must be restricted to NAV, and the MECHANISM must still be
+     * generic — Max's ruling was "only necessary for the upper-left monitor", and
+     * widening it is meant to be a one-entry edit to `ZOOMABLE_ROLES`. Proving the
+     * second half needs a route that is not the click, which is this.
+     *
+     * A refusal is REPORTED, never silent. `PanelMover.zoom` throws on an unrigged
+     * role and is a deliberate no-op when the panel is already zooming or zoomed,
+     * and both of those read identically from outside — "the panel did not move" —
+     * unless somebody says which happened.
+     *
+     * `accepted` is MEASURED from the mover afterwards, not inferred from the call
+     * having been made.
+     */
+    function zoomPanel(role) {
+      if (!mover) {
+        return { role, accepted: false, reason: 'no mover — the host bound no panels, so nothing is rigged' };
+      }
+      const wasRole = mover.zoomedRole;
+      const wasState = mover.state;
+      try {
+        mover.zoom(role, eyeCam);
+      } catch (err) {
+        return { role, accepted: false, reason: (err && err.message) || String(err) };
+      }
+      const accepted = mover.zoomedRole === role && (mover.state === 'toZoom' || mover.state === 'zoomed');
+      const noop = accepted && wasRole === role && (wasState === 'toZoom' || wasState === 'zoomed');
+      return {
+        role,
+        accepted,
+        reason: noop
+          ? 'already zoomed or zooming on this role — PanelMover.zoom is a no-op there, so nothing restarted'
+          : (accepted ? null : `the mover is ${mover.state} on ${JSON.stringify(mover.zoomedRole)} after the call`),
+        state: mover.state,
+        zoomedRole: mover.zoomedRole,
+        wasState,
+        // The pose is solved from the camera being rendered through. In ORBIT mode
+        // `renderFrame` never re-pins the eye camera, so the panel would be aimed
+        // at wherever the eye last was — worth seeing rather than guessing at.
+        cameraMode: mode,
+      };
+    }
+
+    /** Dismiss, reported the same way round: refusals named, result measured. */
+    function dismissZoom() {
+      if (!mover) return { accepted: false, reason: 'no mover — nothing is rigged', state: null, zoomedRole: null };
+      const wasState = mover.state;
+      if (wasState === 'rest') {
+        return {
+          accepted: false,
+          reason: 'nothing is zoomed — PanelMover.dismiss() returns immediately at rest, so a pass here would be over a page where nothing ever travelled',
+          state: mover.state,
+          zoomedRole: mover.zoomedRole,
+          wasState,
+        };
+      }
+      mover.dismiss();
+      const accepted = mover.state === 'toRest' || mover.state === 'rest';
+      return {
+        accepted,
+        reason: accepted ? null : `the mover is ${mover.state} after dismiss()`,
+        state: mover.state,
+        zoomedRole: mover.zoomedRole,
+        wasState,
+      };
+    }
+
+    /**
+     * Wait until the travel is over.
+     *
+     * A fixed `setTimeout` measures a MOVING panel whenever the machine is loaded
+     * and reads the result as a wrong pose — and the travel is up to 1200 ms on the
+     * slider, so the window is wide. This waits on `requestAnimationFrame` until
+     * `mover.isMoving` is false.
+     *
+     * The frame ordering is not luck: `tick()` re-registers itself as its FIRST
+     * statement, so a callback registered from here is always behind it in the same
+     * frame's queue — by the time this resolves, `mover.update()` for that frame has
+     * already run.
+     */
+    async function settleZoom(timeoutMs = 3000) {
+      if (!mover) return { settled: false, frames: 0, state: null, timedOut: false, reason: 'no mover — nothing is rigged' };
+      const started = performance.now();
+      let frames = 0;
+      while (mover && mover.isMoving) {
+        if (performance.now() - started > timeoutMs) {
+          return {
+            settled: false, frames, state: mover.state, elapsedMs: performance.now() - started,
+            timedOut: true, reason: `still ${mover.state} at ${timeoutMs} ms — progress ${mover.progress}`,
+          };
+        }
+        await nextFrame();
+        frames += 1;
+      }
+      return {
+        settled: true, frames, state: mover ? mover.state : null,
+        elapsedMs: performance.now() - started, timedOut: false, reason: null,
+      };
+    }
+
+    /**
+     * The letterboxed rectangle, in CSS pixels, plus the answer to the question
+     * the two consumers of it disagree about.
+     *
+     * `eyeViewport()` returns one `y`. `PanelPicker.viewportNdc` uses it TOP-DOWN
+     * (`(py - y) / height`, against `e.clientY`); `renderer.setViewport` uses it
+     * BOTTOM-UP. They agree only because the box is CENTRED, which makes the top
+     * gap equal the bottom gap — so `yFrom` here is 'top', `glY` is the same number
+     * read the other way, and `yConventionsAgree` says whether they currently
+     * coincide. A live checker must not have to guess, and if anyone ever
+     * off-centres the render this field turns false instead of the picks quietly
+     * drifting down the glass.
+     *
+     * Everything `measurePanel` and `clickGlass` report in screen pixels is
+     * relative to the TOP-LEFT of this rectangle's page position — i.e. they are
+     * `clientX`/`clientY` values, directly usable as pointer coordinates.
+     */
+    function labViewport() {
+      const vp = eyeViewport();
+      const H = window.innerHeight;
+      const glY = H - vp.height - vp.y;
+      return {
+        x: vp.x, y: vp.y, width: vp.width, height: vp.height,
+        yFrom: 'top',
+        glY,
+        yConventionsAgree: glY === vp.y,
+        windowInnerWidth: window.innerWidth,
+        windowInnerHeight: H,
+        aspect: vp.height > 0 ? vp.width / vp.height : null,
+        cameraMode: mode,
+        note: 'x/y/width/height are CSS pixels with y measured from the TOP of the '
+          + 'window, which is the convention PanelPicker reads clientY against. '
+          + 'renderer.setViewport reads the same y from the BOTTOM; the two coincide '
+          + 'only while the letterbox is centred, and yConventionsAgree says so.',
+      };
+    }
+
+    /**
+     * Where a panel IS and how much of the view it fills — measured, not solved.
+     *
+     * ⭐ NOTHING HERE COMES FROM THE MOVER OR FROM `panelPose.js`. The corners are
+     * read off `geometry.attributes.position` through the mesh's own `matrixWorld`;
+     * the edges, the normal, the sizes and the projection are all computed here.
+     * That independence is the whole value: `PanelMover`'s own orientation test
+     * measured its landed panel with the same function it solves with, and a
+     * planted v-flip, a planted u-mirror and a planted reversed normal all passed.
+     *
+     * ⭐ CORNERS ARE RESOLVED FROM THE UVs, never from which corner is highest. A
+     * panel that has been flipped is still a panel with a top and a bottom corner
+     * in space; only its uv says which is which, and only a uv-keyed reading can
+     * therefore SEE the flip. v = 0 is the TOP — the convention
+     * `uvToPanelPixels` maps through and `createPanelTexture`'s `flipY = false`
+     * establishes. `uvDistance` reports how far each chosen vertex actually was
+     * from its uv corner, so a remapped or collapsed quad is legible rather than
+     * quietly picking the same vertex four times.
+     *
+     * The NORMAL is `(bottomLeft - topLeft) × (topRight - topLeft)`, which points
+     * OUT of the screen toward the pilot: with `right` = +x and `down` = -y,
+     * down × right = +z. A normal pointing away means the quad's uv winding is
+     * mirrored — the exact defect the mover's own test could not see.
+     *
+     * Screen space is CSS pixels relative to the TOP-LEFT of the window, i.e.
+     * `clientX`/`clientY`, measured against `viewport()`'s rectangle. `inFront` is
+     * decided in VIEW space (three cameras look down -Z, so a visible point has
+     * negative view z) rather than by inspecting the projected numbers, because a
+     * point behind the camera projects to a finite, plausible, MIRRORED pixel and
+     * nothing about the number says so.
+     *
+     * @param {string} role a bound panel role
+     */
+    function measurePanelRaw(role) {
+      if (!host) return { role, error: 'no panel host — the model has not loaded, or binding failed' };
+      const panel = host.panel(role);
+      if (!panel) {
+        const bound = host.panels.map((p) => p.role).join(', ') || '(none)';
+        throw new Error(
+          `measurePanel: no panel is bound for role ${JSON.stringify(role)}. Bound roles: ${bound}. ` +
+          `Returning zeros for an unknown role would let a sweep report a panel that does not exist.`,
+        );
+      }
+      const geo = panel.mesh.geometry;
+      const pos = geo && geo.attributes && geo.attributes.position;
+      const uv = geo && geo.attributes && geo.attributes.uv;
+      if (!pos || !uv) {
+        return { role, node: panel.nodeName, error: 'the screen mesh has no position and uv attributes, so its corners cannot be keyed by uv' };
+      }
+
+      // Live world matrix, every call. A cached one leaves a zoomed panel measured
+      // where it used to be — which is the reading `getInfo().panels[]` gives,
+      // because `panel.metrics` is taken once at bind time and never re-measured.
+      panel.mesh.updateWorldMatrix(true, false);
+
+      const WANT = [['topLeft', 0, 0], ['topRight', 1, 0], ['bottomLeft', 0, 1], ['bottomRight', 1, 1]];
+      const corner = {};
+      for (const [name, wu, wv] of WANT) {
+        let best = -1, bestD = Infinity;
+        for (let i = 0; i < pos.count; i++) {
+          const du = uv.getX(i) - wu, dv = uv.getY(i) - wv;
+          const d = du * du + dv * dv;
+          if (d < bestD) { bestD = d; best = i; }
+        }
+        corner[name] = {
+          index: best,
+          uvDistance: Math.sqrt(bestD),
+          point: new THREE.Vector3(pos.getX(best), pos.getY(best), pos.getZ(best)).applyMatrix4(panel.mesh.matrixWorld),
+        };
+      }
+      const idx = WANT.map(([n]) => corner[n].index);
+      const distinctCorners = new Set(idx).size === 4;
+
+      const TL = corner.topLeft.point, TR = corner.topRight.point;
+      const BL = corner.bottomLeft.point, BR = corner.bottomRight.point;
+      const centre = TL.clone().add(TR).add(BL).add(BR).multiplyScalar(0.25);
+      const right = TR.clone().sub(TL);
+      const down = BL.clone().sub(TL);
+      const normal = down.clone().cross(right).normalize();
+      // Both opposite edges averaged: a quad that is not quite planar or not quite
+      // rectangular then reports its actual mean rather than one lucky edge.
+      const widthM = (right.length() + BR.clone().sub(BL).length()) / 2;
+      const heightM = (down.length() + BR.clone().sub(TR).length()) / 2;
+
+      // The eye camera, refreshed. `renderFrame` pins its position, orientation,
+      // fov and aspect every EYE frame; this only recomposes the matrices from
+      // what is already there, so it writes nothing the render loop owns.
+      eyeCam.updateMatrixWorld(true);
+      eyeCam.matrixWorldInverse.copy(eyeCam.matrixWorld).invert();
+      const vp = labViewport();
+
+      const project = (p) => {
+        const view = p.clone().applyMatrix4(eyeCam.matrixWorldInverse);
+        const ndc = p.clone().project(eyeCam);
+        const px = vp.x + (ndc.x * 0.5 + 0.5) * vp.width;
+        const py = vp.y + (0.5 - ndc.y * 0.5) * vp.height;
+        return {
+          px, py, ndc: [ndc.x, ndc.y, ndc.z], viewZ: view.z,
+          inFront: view.z < 0,
+          finite: Number.isFinite(px) && Number.isFinite(py),
+        };
+      };
+
+      const projected = {};
+      for (const [name] of WANT) projected[name] = project(corner[name].point);
+      const all = WANT.map(([n]) => projected[n]);
+      const allInFront = all.every((p) => p.inFront);
+      const allFinite = all.every((p) => p.finite);
+      const usable = allInFront && allFinite;
+
+      const xs = all.map((p) => p.px), ys = all.map((p) => p.py);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const sw = maxX - minX, sh = maxY - minY;
+
+      const screenCorners = {};
+      for (const [name] of WANT) screenCorners[name] = [projected[name].px, projected[name].py];
+
+      const vertical = usable && vp.height > 0 ? sh / vp.height : null;
+      const horizontal = usable && vp.width > 0 ? sw / vp.width : null;
+
+      return {
+        role: panel.role,
+        node: panel.nodeName,
+        corners: {
+          topLeft: TL.toArray(), topRight: TR.toArray(),
+          bottomLeft: BL.toArray(), bottomRight: BR.toArray(),
+        },
+        cornerUvDistance: {
+          topLeft: corner.topLeft.uvDistance, topRight: corner.topRight.uvDistance,
+          bottomLeft: corner.bottomLeft.uvDistance, bottomRight: corner.bottomRight.uvDistance,
+        },
+        distinctCorners,
+        centre: centre.toArray(),
+        normal: normal.toArray(),
+        widthM,
+        heightM,
+        aspect: heightM > 0 ? widthM / heightM : null,
+        // Distance from the pilot's eye to the panel centre — the number that
+        // actually moves when the mover travels, and the one `getInfo().panels[]`
+        // cannot report because its metrics are frozen at bind time.
+        rangeM: centre.distanceTo(eyeCam.position),
+        screen: {
+          corners: screenCorners,
+          minX: usable ? minX : null,
+          minY: usable ? minY : null,
+          maxX: usable ? maxX : null,
+          maxY: usable ? maxY : null,
+          width: usable ? sw : null,
+          height: usable ? sh : null,
+          centreX: usable ? (minX + maxX) / 2 : null,
+          centreY: usable ? (minY + maxY) / 2 : null,
+          aspect: usable && sh > 0 ? sw / sh : null,
+          allInFront,
+          allFinite,
+          valid: usable,
+          reason: usable ? null
+            : (!allInFront
+              ? 'at least one corner is BEHIND the eye camera — a point behind the camera still projects to a finite, mirrored pixel, so the silhouette numbers are withheld rather than returned as plausible nonsense'
+              : 'at least one projected corner is not finite (a corner on the camera plane divides by zero)'),
+          viewportCentre: [vp.x + vp.width / 2, vp.y + vp.height / 2],
+          offsetFromViewportCentre: usable
+            ? [(minX + maxX) / 2 - (vp.x + vp.width / 2), (minY + maxY) / 2 - (vp.y + vp.height / 2)]
+            : null,
+        },
+        coverage: {
+          vertical,
+          horizontal,
+          // Whichever axis fills MORE is the one the fill solve bound against.
+          binding: usable ? (vertical >= horizontal ? 'vertical' : 'horizontal') : null,
+        },
+        viewport: vp,
+        camera: {
+          mode,
+          fov: eyeCam.fov,
+          aspect: eyeCam.aspect,
+          position: eyeCam.position.toArray(),
+          note: mode === 'eye' ? null
+            : 'the lab is in ORBIT mode, where renderFrame never re-pins the eye camera — '
+              + 'these numbers describe the last EYE pose, not what is on screen',
+        },
+        _v: { TL, TR, BL, BR, vp },   // for clickGlass; stripped by measurePanel()
+      };
+    }
+
+    /** `measurePanelRaw` with the three.js objects stripped, so it serialises. */
+    function measurePanel(role) {
+      const m = measurePanelRaw(role);
+      const { _v, ...rest } = m;   // eslint-disable-line no-unused-vars
+      return rest;
+    }
+
+    /**
+     * Press a point on a panel, in the panel's OWN normalised coordinates.
+     *
+     * u and v run 0..1 with v = 0 at the TOP, the same convention
+     * `uvToPanelPixels` maps through — so the level-tab strip along the bottom
+     * edge is around v = 0.97 and the COMMIT button is wherever the nav computer
+     * drew it, expressed as a fraction of the buffer. The world point is a bilinear
+     * blend of the four MEASURED corners, projected to a screen pixel by the same
+     * arithmetic `measurePanel` uses, and dispatched as real PointerEvents on the
+     * cockpit canvas — so the click goes through the page's own routing, the real
+     * picker and the real adapter, not around them.
+     *
+     * ⭐ IT ASKS THE PICKER WHETHER IT AGREES. If the raycast at that pixel does not
+     * return this panel, the click landed somewhere else — on another panel, on a
+     * black bar, on nothing — and a checker must SEE that rather than record a
+     * press into empty space as a press on a button.
+     *
+     * ⭐ THE GESTURE IS down → move → WAIT FOR A REPAINT → up, and it is not
+     * ceremony. Every body click in `_handleClick` reads `_hoveredBody` /
+     * `_hoveredLocalStar`, which nothing but `render()` writes, from `_mouseX/_mouseY`,
+     * which nothing but a pointer MOVE writes. A down/up with no move in between
+     * hover-picks against a stale cursor at (0, 0) and falls through to "clicked
+     * empty space — clear selection", which additionally throws away the previous
+     * click's selection. A move with no repaint after it fares no better: the panel
+     * repaints on an 80 ms ambient tier, so a fast synthetic gesture can contain no
+     * render at all.
+     *
+     * ⭐ AND POINTER CAPTURE IS STUBBED FOR THE DURATION. A synthetic PointerEvent
+     * creates no active pointer, so `canvas.setPointerCapture(e.pointerId)` throws
+     * NotFoundError — and it is called in the routing handler BETWEEN `panelDrag =
+     * true` and `adapter.pointerDown(...)`, so the throw would leave the page
+     * believing a drag is in progress while delivering no press, and the exception
+     * would go to `window.onerror` where nothing is looking. The stub is a
+     * probe-only accommodation, reported in the result, and it is put back
+     * immediately after the release.
+     */
+    async function clickGlass(role, u, v, { repaintTimeoutMs = 800, move = true } = {}) {
+      const out = { role, u, v, hit: false, reason: null };
+      if (!Number.isFinite(u) || !Number.isFinite(v)) {
+        throw new TypeError(`clickGlass: u and v must be finite numbers in 0..1 (v = 0 is the TOP), got ${JSON.stringify(u)}, ${JSON.stringify(v)}.`);
+      }
+      const m = measurePanelRaw(role);
+      if (m.error) return { ...out, reason: m.error };
+      if (mode !== 'eye') {
+        return { ...out, reason: 'the lab is in ORBIT mode; pointer routing returns early there, so a click would reach nothing. Call setMode("eye") first.' };
+      }
+      if (!m.screen.valid) return { ...out, reason: m.screen.reason, measured: measurePanel(role) };
+
+      const { TL, TR, BL, BR, vp } = m._v;
+      const top = TL.clone().lerp(TR, u);
+      const bottom = BL.clone().lerp(BR, u);
+      const world = top.lerp(bottom, v);
+
+      eyeCam.updateMatrixWorld(true);
+      eyeCam.matrixWorldInverse.copy(eyeCam.matrixWorld).invert();
+      const view = world.clone().applyMatrix4(eyeCam.matrixWorldInverse);
+      const ndc = world.clone().project(eyeCam);
+      const px = vp.x + (ndc.x * 0.5 + 0.5) * vp.width;
+      const py = vp.y + (0.5 - ndc.y * 0.5) * vp.height;
+      out.worldPoint = world.toArray();
+      out.screenPx = [px, py];
+      out.inFront = view.z < 0;
+      out.insideViewport = px >= vp.x && px <= vp.x + vp.width && py >= vp.y && py <= vp.y + vp.height;
+      if (!out.inFront || !Number.isFinite(px) || !Number.isFinite(py)) {
+        return { ...out, reason: 'that point is behind the eye camera, so there is no pixel to press' };
+      }
+      if (!out.insideViewport) {
+        return { ...out, reason: 'that point projects onto the letterbox bar, outside the rendered rectangle — the picker answers null there by design' };
+      }
+
+      // Does the page's own picker agree? Asked BEFORE the press, so a disagreement
+      // is reported even when the press then lands somewhere plausible.
+      const got = picker ? picker.pick(px, py, { camera: eyeCam, viewport: vp }) : null;
+      out.pickedRole = got ? got.role : null;
+      out.pickerAgrees = !!got && got.role === role;
+      out.pickedUv = got && got.hit && got.hit.uv ? [got.hit.uv.x, got.hit.uv.y] : null;
+      out.uvError = out.pickedUv ? [out.pickedUv[0] - u, out.pickedUv[1] - v] : null;
+      out.hit = out.pickerAgrees;
+      if (!out.pickerAgrees) {
+        out.reason = got
+          ? `the picker says that pixel is on ${got.role}, not ${role} — the press was not dispatched`
+          : 'the picker says that pixel is on no panel at all — the press was not dispatched';
+        return out;
+      }
+
+      installPointerProbe();
+      const before = { down: probeCount.pointerDown, move: probeCount.pointerMove, up: probeCount.pointerUp };
+      out.moverBefore = { state: mover ? mover.state : null, zoomedRole: mover ? mover.zoomedRole : null };
+
+      const savedCapture = [];
+      for (const name of ['setPointerCapture', 'releasePointerCapture']) {
+        savedCapture.push([name, canvas[name], Object.prototype.hasOwnProperty.call(canvas, name)]);
+        canvas[name] = () => {};
+      }
+      const fire = (type, buttons) => canvas.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true,
+        pointerId: 7331, pointerType: 'mouse', isPrimary: true,
+        button: type === 'pointermove' ? -1 : 0,
+        buttons,
+        clientX: px, clientY: py,
+      }));
+      try {
+        fire('pointerdown', 1);
+        if (move) fire('pointermove', 1);
+        out.repaint = await waitForNavRepaint(repaintTimeoutMs);
+        fire('pointerup', 0);
+      } finally {
+        for (const [name, fn, hadOwn] of savedCapture) {
+          if (hadOwn) canvas[name] = fn; else delete canvas[name];
+        }
+      }
+      out.pointerCaptureStubbed = true;
+
+      // One more frame so the tick that follows the release has run before a
+      // caller reads state back.
+      await nextFrame();
+      out.forwarded = {
+        down: probeCount.pointerDown - before.down,
+        move: probeCount.pointerMove - before.move,
+        up: probeCount.pointerUp - before.up,
+      };
+      out.moverAfter = { state: mover ? mover.state : null, zoomedRole: mover ? mover.zoomedRole : null };
+      // Nothing forwarded and the mover started travelling is the ZOOM branch of
+      // the routing, not a lost click — worth naming so it is not read as one.
+      out.routedTo = out.forwarded.down > 0
+        ? 'nav adapter'
+        : (out.moverAfter.zoomedRole !== out.moverBefore.zoomedRole ? 'mover (zoom)' : 'neither');
+      return out;
+    }
+
     window._cockpitScreensLab = {
       ready,
       getInfo,
@@ -1809,6 +2805,34 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
         eyeYaw = THREE.MathUtils.degToRad(yawDeg);
         eyePitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, THREE.MathUtils.degToRad(pitchDeg)));
         return { yawDeg, pitchDeg: THREE.MathUtils.radToDeg(eyePitch) };
+      },
+      // ── The zoom surface (increment 6). See its own header above for the
+      // argument; the short form is that every number here is MEASURED.
+      zoomState,
+      zoomPanel,
+      dismissZoom,
+      settleZoom,
+      measurePanel,
+      viewport: labViewport,
+      navTextCensus,
+      navProbe,
+      pointerCensus,
+      resetPointerCensus,
+      clickGlass,
+      /**
+       * An ALIAS NAMESPACE, not a second implementation — the same function
+       * objects under shorter names, because a script driving a zoom reads better
+       * as `zoom.settle()` than as `settleZoom()`. Aliases rather than copies so
+       * there is exactly one place a behaviour can change.
+       */
+      zoom: {
+        state: zoomState,
+        panel: zoomPanel,
+        dismiss: dismissZoom,
+        settle: settleZoom,
+        measure: measurePanel,
+        viewport: labViewport,
+        click: clickGlass,
       },
       THREE, scene, renderer, controls,
       get host() { return host; },
