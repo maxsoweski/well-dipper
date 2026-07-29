@@ -283,7 +283,32 @@ RAIL_Z             = -0.26    # THE WAISTLINE. Solid hull below, glass above. Co
                               # so 80 mm up costs several points of view. It was chosen on the
                               # lab's live occlusion readout with that cost on screen.
 
-# (label, y, half-width, roof z). Ordered BOW -> AFT, i.e. DECREASING y.
+# (label, y, half-width, roof z, RAIL z). Ordered BOW -> AFT, i.e. DECREASING y.
+#
+# WHY THE RAIL NOW TAPERS TOO, and why it is the BOW value that is not free. Max, looking at
+# the wide tub: "make the dash shape closer to the player and also slope down as it approaches
+# the canopy so that it gives us more view back. Make the shape like a horizontally inverted
+# version of the canopy right above it."
+#
+# THE DASH CANNOT DELIVER THAT AND THE GEOMETRY SAYS SO. Its top face lies in the rail plane,
+# so from the eye it subtends tan_z = RAIL_Z / y -- which is MORE negative the closer it comes.
+# The forward aperture's lower bound is the rail at the BOW, at RAIL_Z / 1.61. So a shelf at
+# rail height is below the coaming's edge for every y, at every depth, in every plan shape:
+# it was measured at exactly 0.00% marginal occlusion and no reshaping of it can return a
+# pixel. What bounds the view is the RAIL LINE, and that is the thing that had to move.
+#
+# So the rail is now a taper like the roof, and the bow number is the roof's EXACT MIRROR about
+# the eye plane: roof +0.52 at the bow, rail -0.52 at the bow. That makes "a horizontally
+# inverted version of the canopy right above it" literal and measurable rather than a gesture --
+# the forward aperture becomes SYMMETRIC, 17.90 deg above the horizon and 17.90 deg below it,
+# where it used to be 17.90 above and 9.17 below.
+#
+# MID AND AFT DO NOT MIRROR, deliberately. Mirroring the roof there would put the rail at -0.70,
+# below the pilot's waist at -0.52, and "below the waist there's no canopy, it's solid" is the
+# form language the whole tub was rebuilt around. Mid and aft keep the -0.26 Max set. Only the
+# bow moves -- which is the same asymmetry the roof taper already has, and for the same reason:
+# the middle of the cabin is where the body is, and the body is not a free number.
+STATIONS_NOTE = "col 4 = roof z, col 5 = rail z; both taper toward the bow, mirrored"
 #
 # WHY WIDTH IS A FREE CHOICE, AND WHY IT MOVED 1.52 m -> 2.56 m. The old bow ring was sized
 # in TAN SPACE to sit just inside the 70 deg frame edge, on the reasoning that a
@@ -318,9 +343,9 @@ RAIL_Z             = -0.26    # THE WAISTLINE. Solid hull below, glass above. Co
 # 23.4 deg to 17.8 deg above the horizon, still well inside the 35 deg frame edge. See
 # canopy_frame_landing(), which reports it every run.
 STATIONS = (
-    ("bow",  1.61, 0.59, 0.52),
-    ("mid",  0.00, 1.28, 0.70),
-    ("aft", -0.97, 0.59, 0.70),
+    ("bow",  1.61, 0.59, 0.52, -0.52),
+    ("mid",  0.00, 1.28, 0.70, -0.26),
+    ("aft", -0.97, 0.59, 0.70, -0.26),
 )
 
 # THE TUB half-section, RIGHT HALF ONLY, ordered CENTRELINE -> OUTBOARD.
@@ -418,15 +443,19 @@ BULKHEAD_INSET     = 0.010    # the aft panel sits this far forward of the aft r
 # the frame that was opaque anyway. analyse() MEASURES that rather than assuming it -- if
 # total occlusion moves when the shelf is added, this paragraph is wrong.
 NAME_DASH          = "Dash_Shelf"
-DASH_TOP_Z         = RAIL_Z   # the top surface lies IN the rail plane, so the shelf reads as
-                              # the rail line carried across the bow rather than as a slab
-                              # floating in the tub.
-DASH_AFT_Y         = 1.05     # the near edge -- how far the shelf cantilevers back toward the
-                              # pilot. 1.10 m from the eye along the sightline, so it is
-                              # within arm's reach, and 17.9 deg below the horizon, so you
-                              # look DOWN at it, which is the whole point of the reading Max
-                              # chose. Clear of the pilot by a wide margin: the knees are at
-                              # z ~= -0.72, 0.38 m below this surface.
+# THERE IS NO DASH_TOP_Z ANY MORE. The top face lies IN the RAIL SURFACE, and that surface
+# now SLOPES, so there is no single height to author: dash_extents() reads station_rail_z() at
+# each edge and the shelf rakes with the rail. The constant is deleted rather than pinned to
+# the mid value, because a level shelf under a raking rail is exactly the thing Max asked to
+# stop -- and a number typed here would drift the moment the taper is re-authored.
+DASH_AFT_Y         = 0.80     # the near edge -- how far the shelf cantilevers back toward the
+                              # pilot. Max: "make the dash shape closer to the player." Moved
+                              # 1.05 -> 0.80, which is as close as the BODY allows: the toe
+                              # line is at y = 0.74 and the knees at 0.46, so 0.80 stops just
+                              # ahead of the pilot's feet rather than over them. It costs
+                              # nothing in the view and cannot -- see the STATIONS block: a
+                              # surface in the rail plane subtends RAIL/y, which is always
+                              # below the aperture's lower bound however close it comes.
 DASH_THICK         = 0.045    # slab depth. A real glare shield is a shell; this is a
                               # placeholder, and six flat faces read correctly under the lab's
                               # flat shading, which a shell would not.
@@ -572,14 +601,25 @@ SCREEN_APPROVED_DEPTH   = 2.0 * INCH
 # (17.06 -> 23.51 deg) and so changes something he can see, which is the thing the standing
 # ruling says not to do.
 #
-# 0.84 is solved, not chosen: the largest scale at which every screen, body and arm vertex
-# stays inside the built shell is 0.8420, and it is rounded down for margin. analyse()
+# 0.80 is solved, not chosen: the largest scale at which every screen, body and arm vertex
+# stays inside the built shell is 0.8010, and it is rounded down for margin. analyse()
 # re-derives the approved angles from the constants above and raises if this scaling has
 # drifted from preserving them.
-SCREEN_FIT_SCALE   = 0.84
+#
+# IT MOVED 0.84 -> 0.80 WHEN THE RAIL STARTED TO TAPER, and that is worth naming because it
+# looks like a cost and is mostly a purchase. Dropping the rail toward the bow lengthens the
+# canopy band there, and the profile fractions are measured up that band, so the shell pinches
+# in slightly sooner at the height the screens hang. Measured across the taper, with the scale
+# re-solved at each step:
+#     bow rail   -0.26    -0.35    -0.44    -0.52
+#     max scale   0.842    0.827    0.813    0.801
+#     occlusion  64.74%   63.12%   60.90%   58.72%
+# So the full mirror costs 4.9% of the assembly's METRES -- which is invisible, being a uniform
+# scale -- and returns 6.0 points of the view. Max sees the second number and not the first.
+SCREEN_FIT_SCALE   = 0.80
 
-SCREEN_W           = SCREEN_APPROVED_W * SCREEN_FIT_SCALE       # 0.2520
-SCREEN_H           = SCREEN_APPROVED_H * SCREEN_FIT_SCALE       # 0.2100
+SCREEN_W           = SCREEN_APPROVED_W * SCREEN_FIT_SCALE       # 0.2400
+SCREEN_H           = SCREEN_APPROVED_H * SCREEN_FIT_SCALE       # 0.2000
 SCREEN_BEZEL       = SCREEN_APPROVED_BEZEL * SCREEN_FIT_SCALE   # bezel all round the face
 SCREEN_BODY_DEPTH  = SCREEN_APPROVED_DEPTH * SCREEN_FIT_SCALE   # backing behind the bezel
 SCREEN_FACE_RECESS = 0.004    # display face sits this far BEHIND the bezel plane
@@ -608,10 +648,10 @@ SCREEN_FACE_GAP    = 0.0015   # and this far in FRONT of the pocket floor, so ne
 # room than the frame does.
 SCREEN_TAN_X_UP    = 0.83     # upper pair, outboard   -- HIS, untouched
 SCREEN_TAN_Z_UP    = 0.31     # ...and its height, about +13.4 deg -- HIS, untouched
-SCREEN_DIST_UP     = SCREEN_APPROVED_DIST_UP * SCREEN_FIT_SCALE   # 0.8400
+SCREEN_DIST_UP     = SCREEN_APPROVED_DIST_UP * SCREEN_FIT_SCALE   # 0.8000
 SCREEN_TAN_X_DOWN  = 0.82     # lower pair, outboard   -- HIS, untouched
 SCREEN_TAN_Z_DOWN  = -0.19    # ...and its height, about -8.4 deg -- HIS, untouched
-SCREEN_DIST_DOWN   = SCREEN_APPROVED_DIST_DN * SCREEN_FIT_SCALE   # 0.7812
+SCREEN_DIST_DOWN   = SCREEN_APPROVED_DIST_DN * SCREEN_FIT_SCALE   # 0.7440
 # The two TAN pairs are the BEARINGS and are not scaled, because a bearing has no length in
 # it. Scaling the distances alone slides each unit along its own sightline, which is why the
 # composition Max set survives untouched.
@@ -1037,13 +1077,13 @@ def station_ring(index):
     segment, which has no tangent, and member_sections() would raise on it rather than
     silently produce a degenerate rail.
     """
-    _label, y, half_w, top_z = STATIONS[index]
-    tub_h = RAIL_Z - FLOOR_Z
-    can_h = top_z - RAIL_Z
+    _label, y, half_w, top_z, rail_z = STATIONS[index]
+    tub_h = rail_z - FLOOR_Z
+    can_h = top_z - rail_z
 
     def right_half():
         pts = [(fx * half_w, y, FLOOR_Z + fz * tub_h) for (_nm, fx, fz) in TUB_HALF]
-        pts += [(fx * half_w, y, RAIL_Z + fz * can_h) for (_nm, fx, fz) in CANOPY_HALF[1:]]
+        pts += [(fx * half_w, y, rail_z + fz * can_h) for (_nm, fx, fz) in CANOPY_HALF[1:]]
         return pts
 
     right = right_half()                       # floor_c, chine, wall, rail, shoulder, roofedge
@@ -1550,6 +1590,16 @@ def station_half_width(y):
     return STATIONS[a][2] + (STATIONS[b][2] - STATIONS[a][2]) * t
 
 
+def station_rail_z(y):
+    """The rail's height at station y. The waistline is a sloping line now, not a level one.
+
+    Linear between stations, which IS the built surface: loft() interpolates ring vertices
+    linearly, so anything that reads the rail off this agrees with the mesh exactly.
+    """
+    a, b, t = _station_bracket(y)
+    return STATIONS[a][4] + (STATIONS[b][4] - STATIONS[a][4]) * t
+
+
 def rail_inboard_x(y):
     """The innermost |x| the rail members reach at station y, read off the BUILT sections.
 
@@ -1595,7 +1645,12 @@ def dash_extents():
             "the rails meet on the centreline at the dash shelf (half-widths %.4f / %.4f after "
             "DASH_SIDE_GAP %.4f), so there is no room for a shelf between them"
             % (hf, hb, DASH_SIDE_GAP))
-    return y_front, y_back, hf, hb, DASH_TOP_Z, DASH_TOP_Z - DASH_THICK
+    # THE SHELF NOW RAKES. Its top face lies IN the rail surface, and that surface slopes, so
+    # the front and back edges sit at different heights -- which is Max's "slope down as it
+    # approaches the canopy" and is derived from the rail rather than authored beside it.
+    top_front = station_rail_z(y_front)
+    top_back = station_rail_z(y_back)
+    return y_front, y_back, hf, hb, top_front, top_back
 
 
 def hull_floor_z(x, y, tris=None):
@@ -1625,7 +1680,10 @@ def hull_floor_z(x, y, tris=None):
     """
     if tris is None:
         tris = shell_triangles(include_closures=False)
-    origin = (x, y, RAIL_Z)          # start above the floor, inside the tub, and drop
+    origin_z = 0.0                   # the EYE PLANE, which is inside the cabin by definition.
+                                     # NOT the rail: the rail slopes below it toward the bow,
+                                     # so a rail-plane origin is outside the shell up there.
+    origin = (x, y, origin_z)        # ...then drop
     best = None                      # nearest hit going down == the floor under (x, y)
     for tri in tris:
         t = _ray_tri(origin, (0.0, 0.0, -1.0), tri)
@@ -1635,7 +1693,7 @@ def hull_floor_z(x, y, tris=None):
         raise ValueError(
             "no floor under (%.4f, %.4f): a ray dropped from the rail plane never met the "
             "shell, so this point is outside the tub" % (x, y))
-    return RAIL_Z - best
+    return origin_z - best
 
 
 def build_seat():
@@ -1768,14 +1826,20 @@ def build_dash():
     Its outboard edges track rail_inboard_x(), so the shelf re-fits itself whenever the cabin
     is re-proportioned.
 
+    RAKED, not level: the top face lies in the RAIL SURFACE, which slopes down toward the bow,
+    so the shelf drops away from the pilot exactly as the canopy drops away above him. Both
+    edges come off station_rail_z(), so if the rail taper is re-authored the shelf follows it
+    rather than needing to be re-typed -- the same rule its outboard edges already obey.
+
     Every face is oriented OUTWARD by measuring its Newell normal against the slab centre
     rather than by hand-winding eight vertices, which is the class of mistake that flipped every
     panel in the model once already (see station_ring()).
     """
-    y_front, y_back, hf, hb, top, bot = dash_extents()
+    y_front, y_back, hf, hb, top_f, top_b = dash_extents()
     verts = [
-        (-hf, y_front, top), (hf, y_front, top), (hf, y_back, top), (-hf, y_back, top),
-        (-hf, y_front, bot), (hf, y_front, bot), (hf, y_back, bot), (-hf, y_back, bot),
+        (-hf, y_front, top_f), (hf, y_front, top_f), (hf, y_back, top_b), (-hf, y_back, top_b),
+        (-hf, y_front, top_f - DASH_THICK), (hf, y_front, top_f - DASH_THICK),
+        (hf, y_back, top_b - DASH_THICK), (-hf, y_back, top_b - DASH_THICK),
     ]
     faces = _orient_outward(verts, [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4),
                                     (3, 2, 6, 7), (1, 2, 6, 5), (0, 3, 7, 4)])
@@ -1789,15 +1853,19 @@ def dash_probe_points():
     stations, and the tub wall it has to stay inside of is too, so the two can only cross where
     they are checked. A grid catches a mid-span crossing that the corners would clear.
     """
-    y_front, y_back, hf, hb, top, bot = dash_extents()
+    y_front, y_back, hf, hb, top_f, top_b = dash_extents()
     pts = []
     for i in range(DASH_PROBE_N):
         s = i / (DASH_PROBE_N - 1.0)
         y = y_front + (y_back - y_front) * s
         half = hf + (hb - hf) * s
+        # The shelf RAKES, so its top is a different height at every station along it. Probing
+        # one z would sample a plane the shelf does not lie in and could clear a wall the shelf
+        # actually crosses.
+        top = top_f + (top_b - top_f) * s
         for j in range(DASH_PROBE_N):
             u = -1.0 + 2.0 * j / (DASH_PROBE_N - 1.0)
-            for z in (top, bot):
+            for z in (top, top - DASH_THICK):
                 pts.append((u * half, y, z))
     return pts
 
@@ -1994,7 +2062,7 @@ def canopy_frame_landing():
     for (nm, val, limit) in (("right", half_w / y, tan_h),
                              ("left", half_w / y, tan_h),
                              ("top", top_z / y, tan_v),
-                             ("bottom", -RAIL_Z / y, tan_v)):
+                             ("bottom", -STATIONS[0][4] / y, tan_v)):
         out[nm] = {
             "tan": val,
             "frameTan": limit,
@@ -3192,13 +3260,14 @@ def analyse(units=None):
     # instrument was reporting that correctly. Two different properties -- "inside the shell"
     # and "clear of the rails" -- had been collapsed into one check with one instrument. The
     # planted defect for a hull-containment test has to breach the HULL.
-    _yf, _yb, _hf, _hb, _tz, _bz = dash_extents()
+    _yf, _yb, _hf, _hb, _tf, _tb = dash_extents()
     dash_planted = None
     for i in range(DASH_PROBE_N):
         s = i / (DASH_PROBE_N - 1.0)
         y = _yf + (_yb - _yf) * s
         wall = station_half_width(y) + MEMBER_PLANT_OFFSET
-        for z in (_tz, _bz):
+        _t = _tf + (_tb - _tf) * s
+        for z in (_t, _t - DASH_THICK):
             for x in (-wall, wall):
                 m = inside_margin((x, y, z), tris)
                 if m is not None and (dash_planted is None or m < dash_planted):
@@ -3340,7 +3409,7 @@ def analyse(units=None):
         "bowRimLanding": landing,
         "panelFacesEyeWorstDot": panel_dot,
         "panelFacesEyeFlippedDot": panel_dot_flipped,
-        "stations": [{"label": s[0], "y": s[1], "halfWidth": s[2], "topZ": s[3]}
+        "stations": [{"label": s[0], "y": s[1], "halfWidth": s[2], "topZ": s[3], "railZ": s[4]}
                      for s in STATIONS],
         "floorZ": FLOOR_Z,
         "railZ": RAIL_Z,
@@ -3352,11 +3421,14 @@ def analyse(units=None):
             "name": NAME_DASH,
             "frontY": _yf, "aftY": _yb,
             "halfWidthFront": _hf, "halfWidthAft": _hb,
-            "topZ": _tz, "bottomZ": _bz,
+            "topZFront": _tf, "topZAft": _tb,
+            "rakeDrop": _tb - _tf,
+            "thickness": DASH_THICK,
             "depth": _yf - _yb,
             "railClearance": dash_rail_gap,
             "railClearanceAuthored": DASH_SIDE_GAP,
-            "nearEdgeElevationDeg": math.degrees(math.atan(_tz / _yb)),
+            "nearEdgeElevationDeg": math.degrees(math.atan(_tb / _yb)),
+            "farEdgeElevationDeg": math.degrees(math.atan(_tf / _yf)),
             "worstInsideMargin": dash_worst,
             "insideMarginPlantedDefect": dash_planted,
             "probesConstrained": dash_constrained,
@@ -3821,7 +3893,8 @@ def build_metrics(parts, units, analysis):
                      "bug, not a proportions bug, and no re-tuning of those constants could "
                      "ever have produced what Max asked for."),
             "stations": [{"label": s["label"], "y": r6(s["y"]),
-                          "halfWidth": r6(s["halfWidth"]), "topZ": r6(s["topZ"])}
+                          "halfWidth": r6(s["halfWidth"]), "topZ": r6(s["topZ"]),
+                          "railZ": r6(s["railZ"])}
                          for s in analysis["stations"]],
             "floorZ": r6(FLOOR_Z),
             "railZ": r6(RAIL_Z),
@@ -4102,12 +4175,14 @@ def print_summary(metrics, analysis, glb_path, metrics_path):
     print("  THE SHELL -- one CLOSED profile per station, split by material at the rail")
     print("    %d panels = %d segments around x %d bays fore-aft"
           % (cp["panelCount"], cp["facetsAcross"], cp["bays"]))
-    print("    floor z = %+.3f m   RAIL z = %+.3f m  <- hull below, glass above"
+    print("    floor z = %+.3f m   RAIL z at the pilot = %+.3f m  <- hull below, glass above"
           % (cp["floorZ"], cp["railZ"]))
-    print("    %-6s %9s %12s %10s" % ("ring", "y", "half-width", "roof z"))
+    print("    BOTH THE ROOF AND THE RAIL TAPER toward the bow, and the bow pair MIRROR each")
+    print("      other about the eye plane, so the forward aperture is symmetric:")
+    print("    %-6s %9s %12s %10s %10s" % ("ring", "y", "half-width", "roof z", "rail z"))
     for s in cp["stations"]:
-        print("    %-6s %+8.3fm %11.3fm %+9.3fm"
-              % (s["label"], s["y"], s["halfWidth"], s["topZ"]))
+        print("    %-6s %+8.3fm %11.3fm %+9.3fm %+9.3fm"
+              % (s["label"], s["y"], s["halfWidth"], s["topZ"], s["railZ"]))
     print("    tub profile    (right half, centreline -> rail): %s"
           % ", ".join("%s (%.2f, %.2f)" % (a[0], a[1], a[2]) for a in cp["tubProfileHalf"]))
     print("    canopy profile (right half, rail -> roof):       %s"
@@ -4182,13 +4257,19 @@ def print_summary(metrics, analysis, glb_path, metrics_path):
     print("      0.80 m BELOW an eye that is looking forward. Measured, not assumed.")
     print("")
     print("  DASH SHELF -- the glare shield on the coaming. A placeholder surface, no content.")
-    print("    %-14s %.3f m across x %.3f m deep, %.0f mm thick, top face IN the rail plane"
-          % (d["name"], d["halfWidthAft"] * 2.0, d["depth"],
-             (d["topZ"] - d["bottomZ"]) * 1000.0))
+    print("    %-14s %.3f m across x %.3f m deep, %.0f mm thick, top face IN the RAIL SURFACE"
+          % (d["name"], d["halfWidthAft"] * 2.0, d["depth"], d["thickness"] * 1000.0))
     print("      spans y %.3f (against the coaming) back to %.3f, half-width %.3f -> %.3f"
           % (d["frontY"], d["aftY"], d["halfWidthFront"], d["halfWidthAft"]))
-    print("      near edge sits %.1f deg BELOW the horizon -- the pilot looks DOWN at it"
-          % -d["nearEdgeElevationDeg"])
+    print("      RAKED: the top face drops %.0f mm from the near edge (z %+.3f) to the"
+          % (d["rakeDrop"] * 1000.0, d["topZAft"]))
+    print("        coaming (z %+.3f) -- Max's 'slope down as it approaches the canopy'."
+          % d["topZFront"])
+    print("        Derived from station_rail_z(), not authored, so it follows the rail taper")
+    print("      near edge %.1f deg below the horizon, far edge %.1f deg -- the pilot looks"
+          % (-d["nearEdgeElevationDeg"], -d["farEdgeElevationDeg"]))
+    print("        DOWN at all of it, and it stays below the aperture's lower bound at every")
+    print("        station, which is why no reshaping of the shelf can return a pixel")
     print("      clear of the rails by %.4f m (authored %.4f; outboard edge tracks"
           % (d["railClearance"], d["railClearanceAuthored"]))
     print("        rail_inboard_x(), so it re-fits itself if the cabin is re-proportioned)")

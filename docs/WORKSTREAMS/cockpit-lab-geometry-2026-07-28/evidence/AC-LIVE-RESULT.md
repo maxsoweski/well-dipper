@@ -1,12 +1,102 @@
 # Live integration evidence — AC-FRAME and AC-LAB
 
-**Commit:** `70f2e87` — the WIDE TUB (Max's second lab pass) · **Driven by:** working-Claude via
-chrome-devtools, in-thread · **Date:** 2026-07-28
-**URL:** `http://localhost:5179/well-dipper/cockpit-lab.html`
+**Commit:** the MIRRORED RAIL · **Driven by:** working-Claude via chrome-devtools, in-thread
+**Date:** 2026-07-28 · **URL:** `http://localhost:5179/well-dipper/cockpit-lab.html`
 
-Supersedes everything below the fold. The `567bcf9` section that used to head this file measured
-a 1.52 m cabin with the rail at −0.34; this build is a **2.56 m cabin with the rail at −0.26**,
-so the enclosure and occlusion numbers are not comparable to it category by category.
+Supersedes everything below the fold, including the wide-tub section at `70f2e87`, which had
+the same cabin but a LEVEL rail.
+
+## What changed and why the dash could not do it
+
+Max: *"make the dash shape closer to the player and also slope down as it approaches the canopy
+so that it gives us more view back. Make the shape like a horizontally inverted version of the
+canopy right above it."*
+
+**The shelf cannot return view and the geometry says so.** Its top face lies in the rail plane,
+so from the eye it subtends `RAIL_Z / y` — which is *more* negative the closer it comes. The
+forward aperture's lower bound is the rail at the bow, `RAIL_Z / 1.61`. So a shelf at rail
+height sits below that bound at every station, at every depth, in every plan shape. It measured
+**0.00% marginal occlusion** before this change and **0.013%** after, at more than double the
+silhouette. What bounds the view is the **rail line**, so that is what moved.
+
+The rail now tapers like the roof, and the bow value is the roof's **exact mirror about the eye
+plane**: roof **+0.52**, rail **−0.52**. That makes "a horizontally inverted version of the
+canopy right above it" literal and measurable rather than a gesture.
+
+## AC-FRAME — measured live, and the aperture is now symmetric
+
+| | |
+|---|---|
+| **browser readback** | **0.5872135416666666** |
+| analytic predictor | 0.587202 |
+| gap | **0.001 pp** |
+
+The 0.015 pp gap flagged at `70f2e87` has closed to 0.001 pp with the members unchanged, which
+**weakens the thin-member explanation offered there**. The honest statement is that the gap
+tracks the hull silhouette and is immaterial at this resolution; no cause is demonstrated.
+
+| | level rail (`70f2e87`) | **mirrored rail** |
+|---|---|---|
+| aperture bottom / top | 9.17° / 17.90° | **17.90° / 17.90°** |
+| **occlusion, total** | 64.74% | **58.72%** |
+| — seam members | 5.74% | 6.01% |
+| — bulkhead + floor | **32.73%** | **21.15%** |
+| — screens + bodies | 24.97% | 30.67% |
+| — arms | 1.30% | 0.89% |
+
+⚠ **Screens appear to have grown and have not.** Their *own* silhouette is 31.92% → 31.94%,
+unchanged. Marginal is measured in the order members → hull → screens → arms, so removing hull
+re-attributes overlap to the screens. Reading the marginal column as growth is a mistake this
+table invites.
+
+## The cost, and why Max does not see it
+
+Dropping the rail lengthens the canopy band at the bow, and the profile fractions are measured
+up that band, so the shell pinches in slightly sooner at the height the screens hang. The
+assembly scale re-solved **0.842 → 0.801**, built at **0.80**:
+
+| bow rail | −0.26 | −0.35 | −0.44 | **−0.52** |
+|---|---|---|---|---|
+| max scale | 0.842 | 0.827 | 0.813 | **0.801** |
+| occlusion | 64.74% | 63.12% | 60.90% | **58.72%** |
+
+The scale is a **uniform** scale, so the screens still subtend **17.06° / 18.32°** at the same
+bearings — face 0.240 × 0.200 m at 0.800 / 0.744 m. All four remain identical to each other and
+**100% inside the frame**, which is what Max asked for (*"the monitors to be the same size and
+dimensions"*). 4.9% of invisible metres bought 6.0 points of view.
+
+## AC-FORM(a) — still an enclosure
+
+above / left / right / behind all **100.0%**, floor 97%, **ahead 82.2%** (was 86.5% — the
+aperture is genuinely bigger). Sphere coverage 97.4%.
+
+## AC-LAB — the lab works, and the SECTION lab was taught the taper
+
+Hard-reloaded, 46 nodes re-fetched, zero console errors. Screenshots:
+`v11-mirrored-rail-eye-clean.png` (pilot's seat, overlays hidden) and
+`v11-mirrored-rail-orbit.png`.
+
+`cockpit-section-lab.html` gained `railZBow` and a `railAt(y)` function, and **every** place
+that read `P.railZ` as a level plane now reads it — including `tubBlocks()`, whose closed-form
+crossing became `t = (railZ + railCap) / (tz − k)` with `k` the rail's slope. Leaving one of
+them level would have been the superellipse mistake wearing a different hat.
+
+⚠ **One known, deliberate divergence, documented in the lab:** its `armReach` probe reserves a
+volume straight behind each panel, but `ARM_ATTACH` was flipped **inboard** last session, so the
+real arms never occupy it. Expect `marginArm` to read ≈ **−0.042 m** on builds the generator
+accepts. The generator's vertex-level check is the authority. If they ever disagree the *other*
+way — the lab passing where the generator fails — that is the bug worth chasing.
+
+## Defect found in this change
+
+`hull_floor_z()` was moved to start its ray at the eye plane (the rail is no longer inside the
+shell at the bow) but still converted the hit back using `RAIL_Z − t`. It reported the floor at
+−1.4447 m instead of −1.1847 m, and the seat check caught it immediately — 49 probes, worst
+0.2543 m through the hull. Caught before any build shipped.
+
+---
+
+# Superseded — the `70f2e87` wide tub, level rail
 
 ## Why this file exists
 
