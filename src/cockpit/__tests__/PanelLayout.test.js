@@ -5,17 +5,17 @@
  * down nothing about how big a screen is, what shape it is, or where it sits —
  * that is measured off whatever model is loaded, at load.
  *
- * That rule is not theoretical. Measured 2026-07-28 across the two models that
- * exist right now:
+ * That rule is not theoretical. Measured across the two models that exist:
  *
- *            this worktree's model     lane E's alpha        the docs claim
- *   size     0.5408 x 0.4500 m         0.3124 x 0.2400 m     0.45 x 0.30
- *   aspect   1.202                     1.302                 1.5  (3:2)
- *   centre   (+-0.916, +0.433, -1.238) (+-0.497, +0.186, -0.599)   --
+ *            this worktree's model     lane E's alpha
+ *   size     0.450 x 0.300 m           0.240 x 0.200 m
+ *   aspect   1.500  (3:2)              1.200  (6:5)
  *
- * Three different answers, and the documented one matches NEITHER model. Reading
- * the numbers out of cockpit-metrics.json is the same hard-coding one indirection
- * out, and would have been wrong for both.
+ * The ASPECT changed, not just the scale, so a panel built for 3:2 comes out
+ * STRETCHED on lane E's cockpit rather than merely small. The face has taken five
+ * different values as the cabin was re-proportioned; cockpit-metrics.json still
+ * describes the older one. Reading the sidecar is the same hard-coding one
+ * indirection out.
  *
  * Lane F owns this file. Lane E's tests/cockpit-geometry.test.js is not touched,
  * and its describe.skipIf pattern is deliberately NOT copied: lane E defends that

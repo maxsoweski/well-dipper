@@ -13,14 +13,19 @@
  *    measured off whatever model is loaded, at load. Measured 2026-07-28 across
  *    the two cockpit models that exist:
  *
- *                 this worktree's model        lane E's alpha
- *      size       0.5408 x 0.4500 m            0.3124 x 0.2400 m
- *      aspect     1.202                        1.302
- *      centre     (±0.916, +0.433, -1.238)     (±0.497, +0.186, -0.599)
+ *                 this worktree's model        lane E's alpha (2026-07-28)
+ *      size       0.450 x 0.300 m              0.240 x 0.200 m
+ *      aspect     1.500  (3:2)                 1.200  (6:5)
  *
- *    and `cockpit-metrics.json` declares 0.45 x 0.30 at 3:2, which matches
- *    NEITHER. So reading the sidecar is not a shortcut to the truth — it is the
- *    same hard-coding one indirection out, and it would have been wrong twice.
+ *    The ASPECT changed, not just the scale — so a panel built for 3:2 does not
+ *    merely come out small on lane E's cockpit, it comes out STRETCHED. The face
+ *    has been 0.45x0.30, then 0.30x0.20, then 0.246x0.205, then 0.252x0.210, now
+ *    0.240x0.200: five values, because the metres are the output of a fit solver
+ *    that re-runs every time the cabin is re-proportioned. What is stable is that
+ *    the surface is a unit-square UV quad. Read the shape off the mesh.
+ *
+ *    (cockpit-metrics.json currently agrees with the OLDER model and is stale for
+ *    the newer one. Reading it is the same hard-coding one indirection out.)
  *
  * The measurement is a PURE function over vertex positions, fed from two sides:
  * the raw-GLB parser in tests, and three.js BufferGeometry at runtime. One place
