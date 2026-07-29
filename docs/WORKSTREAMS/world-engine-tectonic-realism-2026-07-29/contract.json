@@ -65,6 +65,26 @@
       "live": true
     },
     {
+      "id": "AC-PLATESCALE",
+      "statement": "Plate STRUCTURE responds to planet radius through a derived law. driversToTune (plates.js:128-163) maps gravity -> uplift/rift gain, volatiles -> continental fraction and tidal heating -> plate count, but RADIUS NEVER ENTERS: plateCount = PLATE_COUNT_MIN + floor(rng*PLATE_COUNT_SPAN) is 7-13 regardless of size, so a 16 R-earth world gets Earth's plate count with each plate covering ~256x Earth's area. That radius-blindness is what the Slice-D display crossfade exists to hide -- fixed-angular-size continents read wrong as the disc grows, so the whole baked partition is faded to noise instead. A display-side fade compensating for a procgen term that was never written is exactly what 'programmatically generated and not patched on' forbids. THE LAW MUST BE DERIVED, NOT PICKED: plate size is set by lithospheric thickness and convective wavelength, and inventing a scaling would reproduce the very defect this AC closes.",
+      "verifyVia": {
+        "input": "Sweep radius across the band on the plate-path presets and inspect the emitted plate partition; run the new law's LAW_REGISTRY entry through auditLaw.",
+        "observable": "Plate count and characteristic plate size track radius by the derived law, cited to literature and pinned by a registry entry with hand-duplicated literals. Byte-identical at the Earth anchor (driversToTune must still return null there, its AC2 identity guard). If a resolution gate is still needed because the baked cube is 256^3 and a fixed-resolution cube cannot cover an arbitrarily large disc, that gate keys on CUBE RESOLUTION VERSUS FEATURE ANGULAR SIZE -- a derived condition -- never on the magic |log2 sVis| span of 1.0 that planet-lod-lab-core.js:117-123 itself calls a placeholder READ-GATE TUNABLE."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-ONEBODY",
+      "statement": "The rivers are routed on the body the planet displays. Today route() gates its height source on a BOOLEAN -- bakedOn = uReliefBakeStrength > 0 (planet-lod-rivers.js:1399) -- and then takes 100% carrier, while the renderer BLENDS CONTINUOUSLY: baked*s + synth*(1-s) with s = base * bakeReliefCrossover(sVis) (planet-lod-lab.html:385, :5942). Those agreed while strength was only ever 0 or 1; Slice D made it continuous and silently invalidated the Phase-D comment at planet-lod-rivers.js:1393-1397 that still asserts 'single source, no surface-vs-rivers split'. So at R = 2 the drainage is cut into 100% carrier while the planet shows 50/50 -- a different body at every radius except 1. The Slice-D crater fix conserved the crater term across that split and did not conserve the body. EXPECTED TO CLOSE AS A CONSEQUENCE OF AC-PLATESCALE rather than by its own fix: if plate structure becomes radius-responsive and the crossfade is retired, uReliefBakeStrength sits at 1, renderer and router both take the baked/carrier field, and uCraterBakeRestore (= base - effective) falls to 0 and goes inert. That chain is READ FROM SOURCE, NOT TESTED -- if it does not hold, this AC needs its own fix at the route() gate.",
+      "verifyVia": {
+        "input": "At R = 0.5, 1, 2 and 3 on a plate-path preset, compare the field route() routes on against the field the planet renders.",
+        "observable": "The two agree at every radius in the band, not only at R = 1. Rivers sit in valleys that are visibly there. If a residual difference remains by design, it is declared with its grounds rather than left as an undocumented split."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
       "id": "AC-EXAG",
       "statement": "Max's words: \"I want honest numbers and honest renders.\" The render's vertical exaggeration becomes ONE declared, derived, tested constant, stated in the readout next to the true km -- exaggerating on the record rather than by drift. Today it is ~160x, reached through state.perturb = 0.55, a GUI slider with no derivation, no justifying comment and no test pinning it. HYPOTHESIS TO TEST FIRST, NOT ASSUME: that the 160x is compensating for absent structure (real province material, correct coastlines, terminator shadowing), in which case the needed factor falls once AC-PROVINCE and AC-HYPSO land. Pick the number after the structure, not before.",
       "verifyVia": {
@@ -112,6 +132,15 @@
         "observable": "Max judges whether the features read as they would from space -- coastlines and shelves in believable places, mountain belts with believable plan-form running the right way, the whole thing cohering as a planet rather than as noise with a height map. Carve-out stated up front so he is not sent hunting: everything in the lab is orbital; the camera floor is low orbit, not aerial, so sub-km surface detail is out of frame by construction."
       },
       "layer": "uat"
+    }
+  ],
+  "amendments": [
+    {
+      "date": "2026-07-29",
+      "added": ["AC-PLATESCALE", "AC-ONEBODY"],
+      "grounds": "The AC-SAMPLER adversarial gate surfaced a blocker outside that AC's scope: the router and the renderer take different bodies across the whole interior radius band. Working-Claude's first recommendation was to FILE it and keep the workstream on measurement. Max rejected that framing -- 'why not fold it in at the most appropriate place (given inputs outputs of the system)?' -- and he was right on the project's own rule: that recommendation was justified on blast radius, i.e. ECONOMY, which the scoping reference says is a tiebreaker AFTER the feature question and never the framing that shapes it. Rivers cut into a body the viewer is not looking at is a direct hit on 'features read realistically as they would from space'.",
+      "seamAnalysis": "The appropriate seam is NOT the route() gate. It is driversToTune, where radius is missing from the driver -> plate-parameter map. The crossfade is a display-side compensation for that missing term, and it is the common cause of three separately-observed defects: Max's 'tectonics become noise at 3.26 R-earth', the router/renderer body split, and the unmet half of parent goal 1 ('plate tectonics work across all sizes of planets'). Fixing the symptom at the router gate would have left the cause in place -- the patch-on-top behaviour parent goal 3 forbids.",
+      "confirmedBy": "Max, 2026-07-29"
     }
   ],
   "architecturalConnections": {
