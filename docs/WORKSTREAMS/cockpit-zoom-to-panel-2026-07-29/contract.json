@@ -1,0 +1,220 @@
+{
+  "workstream": "cockpit-zoom-to-panel-2026-07-29",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md — HELM cockpit program, lane F. This workstream is increment 6 of the 6-increment ladder: zoom-to-panel. It is the last increment before the cockpit is wired into the game, and it is load-bearing rather than a nicety: Max reversed the H4 dither decision on 2026-07-29 so NAV draws chrome-less at rest, which means the zoom is now the ONLY route to the nav computer's text, tab strip and warp commit.",
+  "status": "building",
+  "statusNote": "SCOPED 2026-07-29 from an in-thread design session with Max. Opened as its own workstream rather than an amendment to cockpit-screen-content-2026-07-28, because that contract still has AC-NOTHING-I-HAD-GOT-LOST open at the uat layer and folding new work in would make it unclosable. Three decisions were taken by Max in-thread and are NOT re-litigable: (1) the WHOLE MONITOR travels — Screen_UL plus ScreenBody_UL — chosen from three mock-ups, with the arm left behind; (2) ESC is unwired from level navigation EVERYWHERE, panel and ORRERY overlay alike, so ESC means dismiss and levels are click-only via the tab strip; (3) the mechanism is built generically for all four panels but wired to NAV alone. Two decisions were taken by working-Claude and stated rather than asked: NavComputer.activate() is not called on zoom (search is a DOM overlay that cannot build on a panel canvas, and activate() swallows WASD), and the zoomed panel PARKS in cockpit space rather than welding to the head — exposed as a lab toggle so Max judges by eye.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-POSE-DERIVED",
+      "statement": "The target pose is SOLVED from the panel's own measured shape and the camera's own optics, never typed. Given a panel's metrics and a fill fraction f, the pose function returns a distance d = (height/2) / tan(f × fov/2), so the panel subtends exactly f of the vertical field of view. Feeding it a panel of a different size or aspect must move the distance proportionally, and feeding it a different FOV must too — a function that returns the same number for a 0.240 m panel and a 0.450 m panel has a constant hidden in it. This is Max's flexibility constraint stated at the smallest scale where it can be proved. It is a PURE function with no three.js import, because the maths must be provable without a browser and the same maths must be what the game runs.",
+      "verifyVia": {
+        "input": "Call the pose solver headless with the two panel sizes that have actually shipped on this project (0.450 × 0.300 m, 3:2 and 0.240 × 0.200 m, 6:5), at the game's 70° FOV, across fill fractions.",
+        "observable": "Each returned distance re-projects to the requested fill fraction within 1e-6. The two panel sizes return DIFFERENT distances in the ratio of their heights. Changing the FOV alone changes the distance. No literal distance, centre, normal or corner id appears anywhere in the module."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-PIVOT-IDENTITY",
+      "statement": "Rigging a panel for motion does not move it. Every node in cockpit.glb is a flat root with world-baked vertices and no transform, so wrapping a screen in a pivot group at its measured centre and reparenting the mesh must leave the panel's world position bit-unchanged — rest pose is identity by construction, not by a remembered constant. Measured the only way that proves it: re-run measureQuad on the rigged mesh's world vertices and compare against the pre-rig measurement. This is what makes 're-fit the screens and nothing needs re-typing' true rather than aspirational.",
+      "verifyVia": {
+        "input": "Measure each Screen_* quad, rig it (pivot group + reparent, glass AND its ScreenBody_* housing), then measure again through the same measureQuad path — and separately, rig a panel, zoom it, dismiss it, and measure a third time.",
+        "observable": "width, height, aspect, centre and normal are identical before and after rigging, and identical again after a full zoom-and-dismiss round trip. The pivot group's transform is identity at rest."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-CLICK-FORWARDED",
+      "statement": "The pointer adapter delivers _handleClick, which is the single gap that blocks 'interact with the full menu' — PanelPointer.js currently forwards only _handleMouseDown/Move/Up, and _handleClick is the sole route to the level tabs, the SYSTEM sub-views, the autopilot toggle and the BURN/WARP commit. The click fires AFTER the release (preserving the existing load-bearing ordering, which exists because _place throws on a zero-sized buffer and must never take the drag hostage) but with the panel pixel already placed, because _handleClick reads _dragStartX/_dragStartY to reject drags. It must NOT fire when the gesture was a drag: NavComputer's own threshold is 25 px², so a press-move-release beyond that produces zero clicks.",
+      "verifyVia": {
+        "input": "Against a NavComputer-shaped stub, headless: (a) press, release, at one uv — expect a click; (b) press, move 20 px, release — expect NO click; (c) press, then a ray that MISSES — expect a release and no click; (d) a hit whose geometry has lost its UVs — expect the throw, with the drag still released."
+      ,
+        "observable": "Case (a) logs exactly one _handleClick with the position already equal to uv × buffer size. Case (b) logs none. Case (c) logs exactly one _handleMouseUp and no click, and does not repeat on subsequent misses. Case (d) throws and _dragging is false."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-EASE-LANDS-EXACTLY",
+      "statement": "The travel is cubic-out and it LANDS — at t=1 the pose equals the target exactly, with no overshoot and no residual offset that leaves the panel a millimetre off where it was solved to be. Cubic-out rather than smoothstep is the house taste datum, recorded when Max evaluated curves for AutopilotMotion and chose it for its firmer terminal landing; smoothstep's asymptotic tail read as mushy. Duration, fill fraction and the park-vs-head-lock choice are all knobs, not constants, because they are judge-by-eye questions and the lab is where Max answers those.",
+      "verifyVia": {
+        "input": "Step the mover headless from rest to zoomed across the full duration at fixed dt, then past the end; then step it back."
+      ,
+        "observable": "Position and orientation at t=1 equal the solved target to floating-point tolerance; no sample overshoots past the target; stepping beyond the duration changes nothing further. The reverse trip lands on the measured rest pose, not on a cached copy of it. The easing samples match a cubic-out curve, not smoothstep."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-NO-STUCK-STATE",
+      "statement": "Unwiring ESC from level navigation must not create a dead end. With ESC no longer walking the stack, the tab strip becomes the ONLY route back up a level (system → prism → region → sector → galaxy), and the two SYSTEM sub-views must still have a click route out — planet detail returns on a click in empty space, component detail returns on any click. Every level and every sub-view is reachable and escapable by mouse alone. This is checked as a graph, exhaustively, because 'you can get in but not out' is exactly the failure a hand-driven spot check misses.",
+      "verifyVia": {
+        "input": "Enumerate every (level, systemMode) state the nav computer can reach and, for each, the click that leaves it — driven against the real class with ESC unwired."
+      ,
+        "observable": "Every state has at least one outbound click route, and following routes from any state reaches the at-rest state in finite steps. No state's only exit was ESC."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-ESC-DISMISSES-EVERYWHERE",
+      "statement": "ESC has ONE meaning wherever the nav computer is drawn: dismiss it. Max ruled this on 2026-07-29 and ruled it to apply to the ORRERY full-screen overlay as well as the cockpit panel, so handleEscape() no longer walks the level stack anywhere. On the panel, ESC retracts the monitor to its measured rest pose. In the overlay, ESC closes it from ANY level rather than only from GALAXY. This deliberately supersedes the previous workstream's AC-NAV-OVERLAY-UNCHANGED for the escape path alone — a requirement Max changed, not a regression — and everything else about the overlay stays as it was.",
+      "verifyVia": {
+        "input": "In the lab: zoom NAV, drill to a planet detail, press ESC. Then repeat from each of the five levels. In the game's ORRERY overlay: open the nav computer, drill to level 4, press ESC."
+      ,
+        "observable": "One ESC always dismisses, from every level and both sub-views, and the nav LEVEL is unchanged by the press — it is not walked back one step first. In ORRERY the overlay closes from any level. Nothing else about the overlay's behaviour differs from before the change."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-STRINGS-TELL-THE-TRUTH",
+      "statement": "No text on the glass tells the player ESC does something it no longer does. Five strings in NavComputer.js promise it — 'SELECT BODY TO NAVIGATE · DRAG TO ROTATE · ESC TO RETURN' and 'SELECT STAR TO WARP · CLICK PLANET FOR DETAIL · ESC TO RETURN' at the system view, and three 'ESC TO GO BACK' variants across planet and component detail. Every one of them is gated behind !this._bare, which means they appear EXACTLY when the panel is zoomed — the one state where a player reads them. They must name the real affordance: click empty space, or the tab strip.",
+      "verifyVia": {
+        "input": "Scan NavComputer.js for on-glass strings mentioning ESC, then read the zoomed panel's rendered buffer at the system view, planet detail and component detail."
+      ,
+        "observable": "No drawn string claims ESC changes the nav level. The strings that replace them name a click affordance that actually exists at that state, cross-checked against AC-NO-STUCK-STATE's route graph."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-ZOOM-FILLS-THE-VIEW",
+      "statement": "Clicking the upper-left monitor brings it to the eye, centred, at the size it was solved for — Max's 'move up to fill the player's view, centered'. Measured off the RENDERED FRAME at the game's 70° FOV and 16:9 letterbox, not off the mover's intent, because the intent is exactly the thing that can be right while the picture is wrong. One number worth knowing before looking: the panel is 6:5 and the view is 16:9, so height is the binding constraint — the panel fills top-to-bottom and leaves side margins. It cannot fill edge-to-edge without stretching the content, and it must not try.",
+      "verifyVia": {
+        "input": "In cockpit-screens-lab.html at the eye camera, click the NAV screen and let the travel finish."
+      ,
+        "observable": "The panel's rendered silhouette is centred in the letterboxed viewport within a pixel or two, and its vertical extent matches the requested fill fraction within tolerance. Its aspect on screen is 1.200 — the content is not stretched. The other three panels have not moved."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-ZOOMED-IS-OPERABLE",
+      "statement": "The zoomed screen is the whole nav computer and it WORKS — Max's 'so we can interact with the full menu'. Zooming clears the chromeless intent, so the panel draws its tab strip, header, labels and buttons instead of the bare orrery it shows at rest. Then every one of those controls responds to a click on the glass: the level tabs change level, a star at PRISM drills to SYSTEM, a planet opens planet detail, a far-companion chip opens component detail, the autopilot button toggles, and the COMMIT button fires its action. Three of these have never been seen by a human on the glass — both SYSTEM sub-views and the mid-frame level flip that a prism-star click starts — so each is exercised, not assumed.",
+      "verifyVia": {
+        "input": "Zoom NAV in the lab, then click in turn: each of the five level tabs; a star at PRISM; a planet at SYSTEM; a far-companion chip on a system that has one; the autopilot button; the COMMIT button."
+      ,
+        "observable": "_bare is false while zoomed and the drawn text count is greater than zero at SYSTEM. Each click produces its documented state change, read from the live instance. The prism→system click completes its _systemZoomAnim and the first SYSTEM frame after it draws WITH chrome — the mid-frame level flip does not produce a bare frame while zoomed. Zero console errors across the sequence."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-REST-IS-RESTORED",
+      "statement": "Dismissing puts the monitor back exactly where it was and returns it to its glanceable state — Max's 'retracting it back to its original position'. Position is compared against a fresh measurement of the mesh, not against a value cached at zoom time, so a mover that quietly drifts by a fraction of a millimetre per round trip is caught. The chromeless intent is re-asserted, so the corner returns to the bare full-colour system view rather than staying a chromed nav computer shrunk into the corner.",
+      "verifyVia": {
+        "input": "In the lab, zoom NAV and dismiss it ten times in a row, measuring the panel's world pose and the drawn text count after each cycle."
+      ,
+        "observable": "After every cycle the measured centre and normal equal the original measurement to floating-point tolerance — no cumulative drift across ten round trips. _bare is true again and the drawn text count at SYSTEM is zero. The housing is back in its bezel with the glass."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-MOTION-FOLLOWS-THE-MODEL",
+      "statement": "Max's flexibility constraint, proved the only way that counts: change where the screens are and the motion follows with NO edit to the motion code. Lane E is still re-fitting cockpit geometry, so this is a live risk rather than a hypothetical one — the panel face has already been five different sizes and has changed ASPECT once. The precedent is AC-SEAM-DERIVED in the previous workstream, which passed by swapping models under an unedited host; this is the same test applied to the mover. Any hard-coded centre, normal, tilt, distance or corner id fails it by construction.",
+      "verifyVia": {
+        "input": "Run the zoom against a cockpit whose screens sit somewhere else — a perturbed or alternate GLB with different screen positions and a different face aspect — with the mover's source unchanged and git-clean."
+      ,
+        "observable": "The panel still travels from its new rest pose to a correctly-solved centred pose, still fills the requested fraction, and still returns exactly. The mover's source file is byte-identical to the run against the shipped model."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-ONLY-NAV-ZOOMS",
+      "statement": "Max: 'This is only necessary for the upper-left monitor.' The mechanism is generic — it reads panel.metrics like every other piece of lane F, so building it for one panel and building it for four cost the same — but only NAV is wired to a trigger. Clicking DRIVE, TARGET or INFO does nothing at all: they do not travel, and they do not silently start forwarding clicks into painters that were never written to receive them.",
+      "verifyVia": {
+        "input": "In the lab, click each of the four screens in turn, at several points on each face."
+      ,
+        "observable": "Only Screen_UL travels. The other three panels' world poses are unchanged to floating-point tolerance and their painters report no pointer events. The generic path is still present and exercisable — zooming a non-NAV panel through the probe API works, proving the restriction is wiring and not a hard-coded corner."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-BASELINE-GREEN",
+      "statement": "Nothing a headless run can see got worse. The suite still comes back with 2094-or-more passing and 4 skipped, alongside the 15 known vendor/motion-test-kit collection errors that predate this lane. No test is newly skipped, focused or otherwise disabled — this matters more than usual here, because this workstream EDITS a test that pins source text (NavPanel.test.js pins the exact line `if (nav) nav.chromeless = true;` and guts it to prove the pin bites). That edit is legitimate and required, and it is also exactly what a silent weakening of the pin would look like, so the amended test must still fail when the new conditional write is removed.",
+      "verifyVia": {
+        "input": "`npx vitest run` from the worktree; then plant the defect the amended NavPanel pin exists to catch (remove the chromeless write entirely) and run again."
+      ,
+        "observable": "Clean run: 2094+ passed, 4 skipped, no new skips or focus helpers, only the 15 known vendor collection errors. Planted run: the amended pin turns RED. A pin that stays green with the write removed has been laundered rather than updated."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-FLIGHT-AND-ORRERY-SURVIVE",
+      "statement": "Adding motion and click-forwarding does not let the nav computer eat the ship. NavComputer.activate() is deliberately NOT called on zoom — it registers capture-phase key handlers that swallow W, A, S, D, R and F, which are the pilot's own controls — so the flight keys keep working whether the panel is at rest or zoomed. The new raycast picker must not swallow pointer events meant for flight either: a click that misses all four screens reaches whatever it would have reached before.",
+      "verifyVia": {
+        "input": "With the panel at rest and again while zoomed, press each flight key and click in empty space away from the screens."
+      ,
+        "observable": "Every flight key still registers with the ship's own handlers in both states. A click that hits no screen produces no panel pointer event and is not consumed. The ORRERY DOM readouts the previous workstream left alone are still present and updating."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-IT-FEELS-LIKE-A-COCKPIT",
+      "statement": "With every AC above green, Max brings the monitor up, works the nav computer on the glass, commits a warp, and puts the screen back — and says whether it reads as operating a machine in a cockpit or as a menu pretending to be one. Holistic and his alone. The specific things to look at, because they are the ones no measurement settles: whether the travel lands firmly or mushily; whether the whole monitor swinging in reads better than the pane of glass he declined; whether the empty arm left behind in the corner looks deliberate or looks broken; whether the parked pose is right or whether it should have been welded to the head after all; and what the fill fraction should actually be, which is a slider waiting for his eye.",
+      "verifyVia": {
+        "input": "Max drives the lab himself at the eye camera, with the fill-fraction, duration and park-vs-head-lock knobs live, against a recording per the Shipped-gate protocol.",
+        "observable": "Max's judgment. No agent drives or passes this."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "PanelHost.js — the panel record {role, nodeName, mesh, metrics, canvas, ctx, texture} built at bind time (PanelHost.js:482). `metrics` is the whole basis of the motion: change the GLB and it changes itself.",
+      "PanelLayout.js:114 measureQuad — {width, height, aspect, centre, normal} derived from the mesh's WORLD vertices. The pure measurement both the tests and the game run.",
+      "PanelLayout.js:46 DEFAULT_PANEL_ROLES — NAV → Screen_UL. The mover must ask the role table which node is NAV rather than naming a corner.",
+      "cockpit.glb — 46 flat root nodes with world-baked vertices and no transforms. Screen_UL/UR/LL/LR (the glass), ScreenBody_UL/UR/LL/LR (the housings), Arm_UL_* (five nodes, left behind), Eye_Point at the origin.",
+      "The eye camera's live FOV, aspect and orientation — read per solve, never captured as a constant. In the lab this is eyeCam at GAME_FOV 70 with yaw/pitch composed on top of Eye_Point's own orientation.",
+      "PanelPointer.js — uvToPanelPixels, PANEL_POINTER_EVENT and PanelPointerAdapter, which already own the uv→pixel convention and the once-only drag release.",
+      "NavComputer.js — _handleClick (:4019), handleEscape (:1116), the _bare getter (:310) and the chromeless intent."
+    ],
+    "outputs": [
+      "src/cockpit/panelPose.js — NEW. Pure pose solver, no three.js import, so the maths is provable headless and the proved maths is what ships.",
+      "src/cockpit/PanelMover.js — NEW. Pivot rigging, the zoom/dismiss state machine, and the cubic-out tween. Owns the three.js side and nothing else.",
+      "A raycast picker wiring pointer events to the four screen meshes — the first Raycaster in src/cockpit/, and the thing that finally drives PanelPointerAdapter live rather than only in tests.",
+      "PanelPointer.js gains pointerClick — the forwarding of _handleClick that unblocks the whole menu.",
+      "NavPanel.js:175 — the chromeless intent becomes conditional on zoom state instead of unconditionally true.",
+      "cockpit-screens-lab.html — click-to-zoom, and sliders for fill fraction, travel duration and park-vs-head-lock.",
+      "Increment 4's in-game integration consumes all of this: the mover runs in the cockpit's own scene at the origin, and the picker is where Shift+1..4 and the free-look cursor land."
+    ],
+    "mustStayWorking": [
+      "The rest pose of all four panels. Rigging must not move them, and ten zoom/dismiss round trips must not drift them. Regression here is invisible until someone re-measures.",
+      "NavComputer's byte-equality on the default path — with chromeless unset the class must still draw identically. The previous workstream proved this at pixel level and the proof cost three wrong measurements; do not re-open it casually.",
+      "The chromeless level gate. `_bare` = chromeless && level === 'system', resolved at DRAW time inside the class, because render() writes _levelIndex = 4 MID-FRAME in the _systemZoomAnim completion block. Zooming changes the INTENT; it must not move the gate back out to the host.",
+      "Max's ruling that the autopilot star-pick drill keeps its chrome — chrome-lessness is a SYSTEM-level property only, so levels 0–3 are unaffected however the host sets the intent.",
+      "AutopilotNavSequence — act two of the screensaver performs the nav computer to pick the next star. It must not be disturbed by the panel being zoomable, and it must not start driving a zoomed panel.",
+      "NavSource's _resizeCanvas override. It is the only thing between the panel and a 0×0 buffer, and it must survive whatever the mover does to the mesh.",
+      "The ORRERY DOM HUD, which Max ruled stays as it is — the ESC change is the ONE deliberate exception, and it touches the escape path only.",
+      "The ship's flight keys (W/A/S/D/R/F) in both panel states, which is why activate() is not called.",
+      "The 15 known vendor/motion-test-kit collection errors stay exactly 15 — they are pre-existing noise, not a budget."
+    ]
+  },
+  "designDecisions": [
+    "WHOLE MONITOR TRAVELS, ARM STAYS. Max chose this on 2026-07-29 from three mock-ups, over glass-only (which leaves a dark empty socket) and over a non-moving expanded copy (which contradicts his standing ruling that the SCREEN travels to the eye, and would pay for the nav render twice). The preview he selected showed the arm left behind as a stub, so that is accepted rather than open.",
+    "PIVOT GROUPS, NOT GEOMETRY EDITS. Every GLB node is a flat root with world-baked vertices, so a pivot group at metrics.centre with the mesh at local −centre reproduces the rest pose exactly and makes identity the resting transform. This is why 're-fit the screens and nothing needs re-typing' is structural rather than a discipline anyone has to remember.",
+    "HEIGHT BINDS, NOT WIDTH. Panel aspect 1.200 against a 16:9 view: a 6:5 panel physically cannot fill the view edge-to-edge without stretching its content. It fills top-to-bottom with side margins. Worth stating in the contract so 'it doesn't fill the whole screen' is not later filed as a bug.",
+    "CUBIC-OUT, ~400 ms. Cubic-out is the recorded house taste datum — Max evaluated curves for AutopilotMotion and chose it over smoothstep for the firmer terminal landing. ~400 ms matches NavComputer's own drill animations (350/400/500 ms), so the panel's travel and the map's drills feel like one machine. Both are knobs.",
+    "PARKED, NOT HEAD-LOCKED — with a toggle. The target pose is solved from the camera at the instant of zoom and then held in cockpit space, so increment 4's head-sway gives the panel parallax instead of welding a screen to the pilot's face. Exposed as a lab toggle because it is a judge-by-eye question and Max is the judge.",
+    "activate() IS NOT CALLED. It would buy keyboard navigation and the search box, but _ensureSearchDom returns early on a canvas with no parentElement so search cannot work on glass anyway, and activate() registers capture-phase handlers that swallow the pilot's own W/A/S/D/R/F. Mouse alone reaches the entire menu. Recorded as a non-goal, not an oversight.",
+    "GENERIC MECHANISM, NAV-ONLY WIRING. Max's 'only necessary for the upper-left' and his 'make the system flexible' pull in opposite directions if both are read as scope. They are not the same requirement: 'flexible' is about screen POSITIONS moving, which the metrics-derived design answers by construction; 'only the upper-left' is about which panel the player can zoom, which is wiring. Building the mechanism for four costs nothing over building it for one.",
+    "THE ESC CHANGE SUPERSEDES AC-NAV-OVERLAY-UNCHANGED, FOR THE ESCAPE PATH ONLY. That AC is green in cockpit-screen-content-2026-07-28 and this workstream deliberately breaks part of it, on Max's explicit 2026-07-29 ruling that ESC should mean dismiss everywhere. A requirement Max changed is not a regression — but it is recorded here rather than left for someone to discover as a contradiction between two contracts.",
+    "NavPanel.test.js's SOURCE PIN MUST BE AMENDED, NOT LOOSENED. It pins the literal line `if (nav) nav.chromeless = true;` and gutting that line is how it proves it bites. The conditional write requires updating the pin, which is indistinguishable in a diff from quietly weakening it — so AC-BASELINE-GREEN requires the amended pin to still turn red when the write is removed."
+  ],
+  "openForMax": [
+    "The FILL FRACTION — how much of the view the zoomed panel should occupy. Deliberately not chosen: it is a judge-by-eye question and it ships as a lab slider, like the section lab's proportions did.",
+    "PARKED vs HEAD-LOCKED. Built parked, exposed as a toggle. If free-look while zoomed turns out to matter, this is the knob that answers it.",
+    "TRAVEL DURATION. Defaulted to ~400 ms to match the nav computer's own drills; a slider.",
+    "Whether the empty arm left behind in the corner reads as deliberate. If it does not, the fix is either bringing the arm head along or hiding the stub — both cheap, neither worth building on speculation.",
+    "Carried forward from the previous workstream and still unanswered: whether the density background matters for the ZOOMED nav state, which was unanswerable until a zoomed state existed. It exists now."
+  ]
+}
