@@ -1991,11 +1991,28 @@
     // cancelled in here/ref. The (1/RE) term was UNCAPPED and drove apparent relief/radius to ~7×
     // at low radius (MATH-CHECK-2026-07-21); worse, because uPerturb ALSO carried it while scaling
     // the whole accumulated gradient, the families that carried it in their own amp too were
-    // SQUARED (~49×). Both are replaced by the DERIVED, strength-capped reliefEnvelope(RE, g) =
-    // clamp(g^-0.58, 0.40, 133) in planet-lod-lab-core.js, applied EXACTLY ONCE via uPerturb (the
-    // universal perturbAnalytic strength that scales every family's grad). Radius flows through g
-    // (post-v2-6 g ∝ R at fixed composition), resolving the audit footnote-14 double-dip. See the
-    // workstream BUILD-NOTES §1 (the derivation note) for the full family-by-family ledger.
+    // SQUARED (~49×). Both are replaced by the DERIVED, strength-capped reliefEnvelope(RE, g) in
+    // planet-lod-lab-core.js, applied EXACTLY ONCE via uPerturb (the universal perturbAnalytic
+    // strength that scales every family's grad). Radius flows through g, resolving the audit
+    // footnote-14 double-dip. See the workstream BUILD-NOTES §1 for the family-by-family ledger.
+    //
+    // ⚠ THIS COMMENT PREVIOUSLY STATED THE LAW AS clamp(g^-0.58, 0.40, 133). BOTH HALVES WERE
+    // FALSE after world-engine-v2-relief-law-2026-07-28 (85cf3f0) and are corrected here. The
+    // shipped law is PIECEWISE at a DATA boundary g = 1 (Max's amended ruling — "calibration
+    // below, derivation above"; it is not a physical transition, it is where measured relief
+    // stops):
+    //     g <  1 : g^-Q_RELIEF          Q_RELIEF = 0.58            CALIBRATED (5-body fit)
+    //     g >= 1 : g^-Q_RELIEF_DERIVED  Q_RELIEF_DERIVED = 1.678…  DERIVED (Guimond+2022 slope
+    //                                                              1.09 + 1/1.70 radius conversion)
+    // clamped to [RELIEF_FLOOR, RELIEF_CEIL] = [0.01, 133]. The FLOOR moved 0.40 → 0.01 and is now
+    // a degenerate-safety guard, NOT a physics clamp: at 0.40 it bound at R = 1.4669 on Rocky,
+    // INSIDE that preset's own seeded draw band, which would have silently re-imposed constant
+    // relief while citing the falling law. Do not restore 0.40.
+    // Also stale in the old text: "g ∝ R at fixed composition" — since gravity-selfcompression
+    // (2026-07-28) the shape is PIECEWISE, R^(4/3) below 1 R⊕ and R^1.70 above, and it is gated on
+    // the ROCKY composition class (body-condition-vector.js). The 10 non-rocky presets remain on
+    // the linear R/R_c ratio, so they receive a delivered absolute exponent of -0.678, not -1.09.
+    // That is a DECLARED, inherited debt of the predecessor workstream — not a claim of coverage.
 
     // ── AC5 size-source — seeded radius draw + canonical lock (planet-scale-normalization) ──
     // Named real bodies are SIZE-LOCKED to their canonical radiusEarth (their identity IS their
@@ -6341,7 +6358,22 @@
       uniforms.uEdificeMaxHeight.value = state.edificeMaxHeight;
       uniforms.uShieldStratoMix.value  = state.shieldStratoMix;
       uniforms.uEdificeScale.value     = featureFrequencyFromKm(_dispR, state.edificeSizeKm, C_EDIFICE);   // P5 display-radius (∝sVis, hold constant)
-      uniforms.uEdificeAmp.value       = state.edificeAmp;   // Inc-3: dropped × reliefNorm(…, 1.0) (the (1/RE) radius term) — edifice radius now flows via the uPerturb envelope (g^-0.58 bulk cap) × uEdificeMaxHeight (∝1/g volcano-buoyancy); composed g^-1.58 is an accepted DISTINCT-effect composition (strength-cap × buoyancy), not the footnote-14 same-effect double-dip (BUILD-NOTES derivation)
+      // Inc-3: dropped × reliefNorm(…, 1.0) (the (1/RE) radius term) — edifice relief now flows via
+      // the uPerturb envelope (bulk cap) × uEdificeMaxHeight (∝1/g volcano-buoyancy). That pairing
+      // was reviewed and ACCEPTED as a DISTINCT-effect composition (strength-cap × buoyancy), not
+      // the footnote-14 same-effect double-dip (BUILD-NOTES derivation).
+      // ⚠ THE ACCEPTED NUMBER IS STALE AND THE REASONING BEHIND IT NO LONGER HOLDS UNCHANGED.
+      // The acceptance was recorded as "g^-0.58 bulk cap × 1/g ⇒ composed g^-1.58". After
+      // world-engine-v2-relief-law-2026-07-28 (85cf3f0) the bulk cap ABOVE the g = 1 seam is
+      // g^-1.678, so the shipped composition there is g^-2.678 (below the seam it is unchanged at
+      // g^-1.58). Worse for the original argument: since 6779af3 the two factors no longer read the
+      // SAME gravity — reliefEnvelope takes the radius-aware condition gravity while
+      // edificeMaxHeight still takes the canonical one — so the single-variable reasoning the
+      // acceptance rested on has dissolved even where the exponent is unchanged. On Jovian the
+      // composed factor is up to 3.5× away from what the original note documents.
+      // NOT re-adjudicated here: this is Max's call, not a silent retune. Recorded so the stale
+      // acceptance cannot be read as still-reviewed. See the workstream report, defect 3.
+      uniforms.uEdificeAmp.value       = state.edificeAmp;
       uniforms.uEdificeCaldera.value   = state.edificeCaldera;
       // F8 lava plains — coverage (SMOOTHS relief, gates region) + activity (emissive cracks)
       // driven; wrinkle/crack/glow lab-tunable. The enable toggle gates BOTH the early-outs
