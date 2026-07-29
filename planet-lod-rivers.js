@@ -428,7 +428,61 @@ export function buildIrregularSphere(targetN, lloydIters) {
 // rivers track the live preset/dials. read() pins uOctaves (a fixed high LOD → deterministic,
 // detailed routing) and disables uFwClamp (no screen-space octave fade in the 1-px RTT),
 // saving/restoring both so the planet render is unaffected.
-export function createHeightSampler({ renderer, uniforms, verts, octavesDuringRead = 9 }) {
+//
+// ── AC-SAMPLER (world-engine-tectonic-realism-2026-07-29): the OPTIONAL `tapProgram` ────────────
+// OMITTED — the default and the only shape route() and the tributary patch ever use — this renders
+// HEIGHT_VERT + HEIGHT_FRAG (= HEIGHT_GLSL + ROUTER_MAIN) exactly as it always has. Those callers
+// are byte-inert: nothing below their path changed, including which uniforms get written.
+//
+// SUPPLIED — `{ material, vertexShader, renderedMaterial }` — this renders the CALLER'S OWN program:
+// the fragment source is `material.fragmentShader` (the same JS string the planet's material holds,
+// not a copy or a concat) and the vertex source is the caller's derived point-cloud shader.
+// read(tapPoint) then drives that program's uniform-gated tap.
+//
+// AND `renderedMaterial` IS NOT OPTIONAL, because without it every guard below is a TAUTOLOGY. The
+// first shipped form compared `material.fragmentShader` against a string captured from THAT SAME
+// material — both sides one object, true by construction, blind to a caller who simply handed in a
+// different material. `renderedMaterial` is a resolver that returns the material THE SCENE ACTUALLY
+// RENDERS WITH, evaluated at read time, so the reference comes from a different source than the
+// thing it guards. The ONE case where no such resolver can exist — the L4 gradBase mutant, a program
+// deliberately not the rendered one — must say so by name via `notTheRenderedProgram`, so silence
+// can never be mistaken for compliance.
+//
+// THERE IS DELIBERATELY NO DEFAULT ON THE TAP PATH. The round-3 review's blocker 2: if the tap
+// program were an OPTIONAL parameter defaulting to HEIGHT_FRAG, then dropping it at the call site —
+// a renamed options bag, an extracted helper, a lost merge line — would silently revert the
+// instrument to measuring bare fbmd with no cube fetch, which IS the defect AC-SAMPLER exists to
+// close, while adding no token anywhere for a grep fence to catch. So:
+//   · read(tapPoint !== 0) THROWS when the sampler was built without a tapProgram;
+//   · a partial tapProgram (either half missing) THROWS at construction;
+//   · a tapProgram whose material binds a DIFFERENT uniforms object THROWS at construction;
+//   · and read() RE-ASSERTS `material.fragmentShader === <the string we compiled>` on EVERY call
+//     (round-3 blocker 3 — the identity check used to live only in the control leg, so the actual
+//     measurement path ran unguarded and could report numbers off a drifted program).
+// An omission is therefore a loud throw at the first measurement, never a quiet wrong number.
+export function createHeightSampler({ renderer, uniforms, verts, octavesDuringRead = 9,
+                                      tapProgram = null, extraAttributes = null }) {
+  if (tapProgram) {
+    const { material: tapMaterial, vertexShader: tapVertexShader } = tapProgram;
+    if (!tapMaterial || typeof tapMaterial.fragmentShader !== 'string' || !tapMaterial.fragmentShader.length) {
+      throw new Error('createHeightSampler: tapProgram.material must be the caller\'s own ShaderMaterial (its fragmentShader string IS the program). No default is provided on purpose.');
+    }
+    if (typeof tapVertexShader !== 'string' || !tapVertexShader.length) {
+      throw new Error('createHeightSampler: tapProgram.vertexShader is required (the derived point-cloud vertex source). No default is provided on purpose.');
+    }
+    if (tapMaterial.uniforms !== uniforms) {
+      throw new Error('createHeightSampler: tapProgram.material.uniforms must BE the uniforms object passed in (reference identity). Two uniform objects means two fields.');
+    }
+    // Order matters: a SUPPLIED-BUT-WRONG-SHAPE resolver is a different mistake from an absent one,
+    // and the caller needs to be told which. A pre-resolved value is checked first precisely because
+    // it looks like compliance.
+    if (tapProgram.renderedMaterial != null && typeof tapProgram.renderedMaterial !== 'function') {
+      throw new Error('createHeightSampler: tapProgram.renderedMaterial must be a FUNCTION (resolved at read time). A pre-resolved value is a snapshot the caller chose, which is the tautology this parameter exists to break.');
+    }
+    if (typeof tapProgram.renderedMaterial !== 'function' && typeof tapProgram.notTheRenderedProgram !== 'string') {
+      throw new Error('createHeightSampler: tapProgram.renderedMaterial is REQUIRED — a function resolving the material THE SCENE ACTUALLY RENDERS WITH, at read time. Without it every identity check here compares the tap material against a value taken FROM that same material, which is true by construction and cannot detect a substituted program. If this program is deliberately NOT the rendered one (the L4 gradBase mutant is the only such case in this repo), declare it by name with `notTheRenderedProgram: "<why>"`.');
+    }
+  }
   const N = verts.length;
   const W = Math.ceil(Math.sqrt(N));
   const Hh = Math.ceil(N / W);
@@ -444,8 +498,26 @@ export function createHeightSampler({ renderer, uniforms, verts, octavesDuringRe
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geo.setAttribute('aDir', new THREE.BufferAttribute(dirs, 3));
+  // AC-SAMPLER: zero-filled stand-ins for attributes the caller's own vertex shader declares but a
+  // point cloud has no natural value for (the lab's aBand/aShear/aMush/aStorm gas-deck fields). They
+  // reach Stage-6 albedo only, never h or grad, so the solid field is unaffected — but the geometry
+  // must satisfy the attribute set or the program will not link.
+  if (extraAttributes) {
+    for (const name of Object.keys(extraAttributes)) {
+      const itemSize = extraAttributes[name] | 0;
+      geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(N * itemSize), itemSize));
+    }
+  }
+  // The program. With no tapProgram this is the router program, byte for byte as before. With one,
+  // the fragment source is the caller's material's OWN string reference — no copy, no concat, so
+  // `mat.fragmentShader === tapProgram.material.fragmentShader` is checkable with ===.
+  const fragmentShader = tapProgram ? tapProgram.material.fragmentShader : HEIGHT_FRAG;
+  const vertexShader = tapProgram ? tapProgram.vertexShader : HEIGHT_VERT;
+  // The vertex source the derivation was run against, snapshotted so read() can tell a recompiled /
+  // hot-reloaded planet material from the one this tap shader was derived from.
+  const srcVertexShader = tapProgram ? tapProgram.material.vertexShader : null;
   const mat = new THREE.ShaderMaterial({
-    vertexShader: HEIGHT_VERT, fragmentShader: HEIGHT_FRAG, uniforms,
+    vertexShader, fragmentShader, uniforms,
     glslVersion: null,   // GLSL1 (the lab shader is ES100-style: gl_FragColor)
   });
   const points = new THREE.Points(geo, mat);
@@ -457,21 +529,70 @@ export function createHeightSampler({ renderer, uniforms, verts, octavesDuringRe
     depthBuffer: false, stencilBuffer: false,
   });
   const _prevClear = new THREE.Color();
+  // The scene-graph reference, resolved fresh on every read. Null ONLY for a program that declared
+  // itself deliberately not-the-rendered-one at construction.
+  const renderedMaterialRef = typeof tapProgram?.renderedMaterial === 'function' ? tapProgram.renderedMaterial : null;
+  // AC-SAMPLER — THE GUARD THAT RUNS ON EVERY MEASUREMENT (round-3 blocker 3). The identity claim
+  // ("the instrument compiles the planet's own program") is only worth anything if it is checked
+  // where the number is produced, not in a console leg someone has to remember to run. Called at the
+  // top of every read() on a tapped sampler, before any GL work.
+  //
+  // THE FIRST CLAUSE IS THE ONE THAT MATTERS, and it is first because the others cannot substitute
+  // for it: `renderedMaterialRef()` asks the SCENE what it is drawing with; `tapProgram.material` is
+  // what this sampler compiled. Different sources, so the comparison can actually fail. The clauses
+  // below it compare the compiled sources against the material they came from — which detects
+  // IN-PLACE mutation of that one object and nothing else. Read together they cover substitution
+  // (clause 1) and drift (clauses 2-4); either alone is half a guard.
+  function assertProgramIdentity() {
+    if (renderedMaterialRef) {
+      const live = renderedMaterialRef();
+      if (live !== tapProgram.material) {
+        throw new Error('createHeightSampler.read: RENDERED-PROGRAM SUBSTITUTION — the scene is rendering with a DIFFERENT material object than the one this sampler compiled its tap from. Refusing to measure a program nothing draws with. (This is the check that string comparison against the sampler\'s own cached source cannot make: both sides of that comparison come from one object.)');
+      }
+    }
+    if (tapProgram.material.fragmentShader !== fragmentShader) {
+      throw new Error('createHeightSampler.read: PROGRAM IDENTITY DRIFT — the material\'s fragmentShader is no longer the string this sampler compiled. Refusing to measure a field the planet is not rendering. Rebuild the sampler.');
+    }
+    if (tapProgram.material.vertexShader !== srcVertexShader) {
+      throw new Error('createHeightSampler.read: PROGRAM IDENTITY DRIFT — the material\'s vertexShader changed since the tap vertex source was derived from it. Refusing to measure. Rebuild the sampler.');
+    }
+    if (tapProgram.material.uniforms !== uniforms) {
+      throw new Error('createHeightSampler.read: UNIFORM IDENTITY DRIFT — the material no longer binds the uniforms object this sampler reads. Refusing to measure.');
+    }
+  }
   // returns { height:Float32Array(N), grad:Float32Array(N*3) }
-  function read() {
+  // tapPoint: 0 (default, every pre-existing caller) renders the program as-is. Nonzero drives the
+  // caller's own uFieldTap-gated tap and REQUIRES a tapProgram — there is no router fallback.
+  function read(tapPoint = 0) {
+    if (tapPoint !== 0 && !tapProgram) {
+      throw new Error(`createHeightSampler.read: tapPoint ${tapPoint} was requested but this sampler was built with NO tapProgram, so it renders the router program (bare fbmd, no baked-cube blend, no crater restore). That is the AC-SAMPLER defect. Refusing to fall back.`);
+    }
+    if (tapProgram) assertProgramIdentity();
     const prevOct = uniforms.uOctaves.value, prevFw = uniforms.uFwClamp.value;
-    uniforms.uOctaves.value = octavesDuringRead;
-    uniforms.uFwClamp.value = 0;
+    // The tap uniform is only touched on the tapped path, so the router/tributary read() writes the
+    // exact same uniform set it always did. `finally` matters here in a way it did not before: this
+    // uniform lives on the material the PLANET renders with, and leaving it nonzero would paint raw
+    // float field data onto the planet.
+    const tapU = tapProgram ? uniforms.uFieldTap : null;
+    if (tapProgram && !tapU) throw new Error('createHeightSampler.read: the tapProgram\'s uniforms carry no uFieldTap — the tap is not present in this program.');
+    const prevTap = tapU ? tapU.value : 0;
     const prevTarget = renderer.getRenderTarget();
     renderer.getClearColor(_prevClear); const prevAlpha = renderer.getClearAlpha();
-    renderer.setRenderTarget(target);
-    renderer.setClearColor(0x000000, 0); renderer.clear();
-    renderer.render(rttScene, rttCam);
     const buf = new Float32Array(W * Hh * 4);
-    renderer.readRenderTargetPixels(target, 0, 0, W, Hh, buf);
-    renderer.setRenderTarget(prevTarget);
-    renderer.setClearColor(_prevClear, prevAlpha);
-    uniforms.uOctaves.value = prevOct; uniforms.uFwClamp.value = prevFw;
+    try {
+      uniforms.uOctaves.value = octavesDuringRead;
+      uniforms.uFwClamp.value = 0;
+      if (tapU) tapU.value = tapPoint;
+      renderer.setRenderTarget(target);
+      renderer.setClearColor(0x000000, 0); renderer.clear();
+      renderer.render(rttScene, rttCam);
+      renderer.readRenderTargetPixels(target, 0, 0, W, Hh, buf);
+    } finally {
+      renderer.setRenderTarget(prevTarget);
+      renderer.setClearColor(_prevClear, prevAlpha);
+      uniforms.uOctaves.value = prevOct; uniforms.uFwClamp.value = prevFw;
+      if (tapU) tapU.value = prevTap;
+    }
     const height = new Float32Array(N), grad = new Float32Array(N * 3);
     for (let i = 0; i < N; i++) {
       height[i] = buf[i * 4];
@@ -480,7 +601,9 @@ export function createHeightSampler({ renderer, uniforms, verts, octavesDuringRe
     return { height, grad };
   }
   function dispose() { geo.dispose(); mat.dispose(); target.dispose(); }
-  return { read, dispose, W, Hh };
+  // `fragmentShader` is exposed so a caller can re-check identity itself (defence in depth — the
+  // instrument does exactly that around its own measurement wrapper).
+  return { read, dispose, W, Hh, get fragmentShader() { return fragmentShader; }, get isTapped() { return !!tapProgram; } };
 }
 
 // ───────────── ocean mask from the real level-set (h < seaLevel) ─────────────

@@ -177,7 +177,7 @@
     import { radPerKm } from './src/worldengine/base/baseStep.js';   // inc3b S3-fix: km→angular scalar for the normalized crater-depth law (uCraterAmp = D_D_SIMPLE·radPerKm(R)·D_char). Pure.
     import { assessProvinceAssociation, provinceStats, classProportions } from './src/worldengine/base/province.js';   // V2-4 slice-4: the province honesty instrument (read-only) for _lab.provinceProbe()
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
-    import { createFieldSampler, describeSample } from './src/worldengine/instrument/fieldSampler.js';   // nonvisual-analysis-channel: live float-RTT field readback (reuses the rivers height sampler) + the descriptor pack. READ-ONLY instrument; console _lab API only (no GUI binding ⇒ taxonomy-exempt, AC-0 check 3).
+    import { createFieldSampler, createTapControl, describeSample, TAP_COMPOSITE, TAP_SOLID, TAP_LIQUID } from './src/worldengine/instrument/fieldSampler.js';   // nonvisual-analysis-channel: live float-RTT field readback (AC-SAMPLER: renders the PLANET'S OWN fragment shader through a uniform-gated tap) + the descriptor pack + the live control legs. READ-ONLY instrument; console _lab API only (no GUI binding ⇒ taxonomy-exempt, AC-0 check 3).
     import { responseCurve as _sweepResponseCurve, planSweep as _sweepPlan } from './src/worldengine/instrument/sweep.js';   // nonvisual-analysis-channel AC-CURVE: M-seed driver sweep → mean±SEM per point + fitted exponent. Pure orchestration; the lab supplies setPoint/measure.
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
     import { resolveStormE, bakeStormEAttributes, chromophoreColor } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp
@@ -255,6 +255,10 @@
       uniform vec3  uRiverCarvePatchV;        // local-frame tangent (UV +y / sv axis)
       uniform float uRiverCarvePatchAngular;  // cap half-angle (radians)
       uniform float uRiverCarvePatchStrength; // 0 ⇒ patch off (regression-safe); GUI-owned
+      // ── AC-SAMPLER instrument tap. 0 = render (every branch below is dead); 1 = composite body;
+      // 2 = solid surface (post-carve, pre-liquid); 3 = post-liquid. Uniform-gated early return, so
+      // the taken path at 0 is unchanged token for token. The instrument compiles THIS string.
+      uniform int uFieldTap;
       // GNOMONIC-TANGENT inverse projection — byte-aligned with projectToPatch() in
       // planet-lod-tributary-patch.js. Returns the patch valley depth at object-space dir D (0 outside
       // the cap / when strength is off), already faded by the angular smoothstep falloff.
@@ -395,6 +399,7 @@
             vec4 cr = sampleBakedCraters(vObjN);
             hd += vec4(cr.x * uCraterBakeRestore, cr.yzw * uCraterBakeRestore);
           }
+          if (uFieldTap == 1){ gl_FragColor = hd; return; }   // AC-SAMPLER tap: composited body, pre-combiner
           float h = hd.x;
           vec3 grad = hd.yzw;
           // F19 — base-FBM gradient snapshot: massWastCombiner subtracts it from the running
@@ -482,6 +487,7 @@
             h    -= carveDepth * uRiverCarveDepth;              // lower the floor → F14 floods it
             grad += -carveGrad * cr * uRiverCarveStrength;      // bend the walls into the V
           }
+          if (uFieldTap == 2){ gl_FragColor = vec4(h, grad); return; }   // AC-SAMPLER tap: solid surface
           // ── Stage 4 (F14): standing-liquid level-set cut (card §4) — AFTER all relief so
           // fluvial channels + basins flood for free off the accumulated h. Inside the mask
           // the height clamps to the equipotential and the gradient flattens to the geometric
@@ -494,6 +500,7 @@
             h    = mix(h, uSeaLevel, liquidMask);
             grad = mix(grad, vec3(0.0), liquidMask);
           }
+          if (uFieldTap == 3){ gl_FragColor = vec4(h, grad); return; }   // AC-SAMPLER tap: post-liquid surface
           // ── F20 coastlines (card §6.5) — signed shore distance + three pre-posterize
           // luminance signals, computed AFTER the F14 cut (the land side is untouched by
           // the cut, so h/grad here still carry the land-side field; the liquid side is
@@ -1463,6 +1470,16 @@
     uniforms.uRiverCarvePatchV        = { value: new THREE.Vector3(0, 1, 0) };  // local-frame tangent (sv)
     uniforms.uRiverCarvePatchAngular  = { value: 0.14 };  // ~8° half-angle cap
     uniforms.uRiverCarvePatchStrength = { value: 0.0 };   // 0 ⇒ patch off (regression-safe default)
+    // ── AC-SAMPLER instrument tap. 0 = render; the three taps are uniform-gated early returns in the
+    // fragment shader above, so at 0 every one of them is a not-taken branch. Lab-side ONLY: the
+    // router program never declares it, and planet-lod-uniforms.js makeUniforms is deliberately
+    // untouched so the headless/golden uniform set is unchanged. Writers of .value are
+    // createHeightSampler.read()'s set/restore pair and fieldSampler's epsilonTripletProbes — BOTH
+    // finally-blocked, which is the invariant that matters. (An earlier comment here claimed read()
+    // was the ONLY writer; it was already false when written. Left as a caution: a leaked non-zero
+    // value is how the planet ends up rendering raw float field data as colour, so any NEW writer
+    // must restore in a finally, and the count is not the guarantee — the finally is.)
+    uniforms.uFieldTap = { value: 0 };   // AC-SAMPLER instrument tap (0 = render)
 
     const geometry = new THREE.SphereGeometry(R, 256, 256);  // 256 for surface-skimming silhouette
     // ── #3a E5 gas-giant band/jet writer attributes (default 0 = flat; refilled by rebakeE5Bands()
@@ -1537,12 +1554,39 @@
     const tributaryPatch = createTributaryPatch({ renderer, uniforms, octaves: 12 });
     // ── nonvisual-analysis-channel: the field probe's sampler, built LAZILY on first _lab.sampleField()
     // call. Lazy on purpose: it allocates a float render target per sample geometry, and a lab session
-    // that never asks a measurement question should pay nothing for the instrument. Sharing `uniforms`
-    // is the whole coupling — what it measures is what the planet is rendering, live.
+    // that never asks a measurement question should pay nothing for the instrument.
+    //
+    // AC-SAMPLER: it is handed the PLANET MESH — the scene node — and deliberately NOT a material or
+    // a uniforms object. The instrument resolves `planet.material` by walking this mesh to the Scene,
+    // at construction AND at every measurement, so its reference for "what am I supposed to be
+    // sampling" comes from the RENDERER'S current choice rather than from an argument this call site
+    // picked. That is what makes the guards non-tautological: a material passed in here could be
+    // substituted (round-2 counterexample 1 did exactly that — a reduced program that kept the three
+    // taps verbatim passed every check, including the pinned call-site token); a mesh in the scene
+    // cannot be, because the guard re-reads what the scene draws with. There is likewise no default
+    // program to fall back to: dropping this argument throws instead of silently reverting to the
+    // router program.
     let _fieldSampler = null;
+    let _tapControl = null;
     function _ensureFieldSampler() {
-      if (!_fieldSampler) _fieldSampler = createFieldSampler({ renderer, uniforms, octavesDuringRead: 9 });
+      if (!_fieldSampler) _fieldSampler = createFieldSampler({ renderer, planet, octavesDuringRead: 9 });
       return _fieldSampler;
+    }
+    function _ensureTapControl() {
+      if (!_tapControl) {
+        _tapControl = createTapControl({
+          sampler: _ensureFieldSampler(), THREE, planet, camera,
+          // L2's absolute anchor: the CPU carrier the relief cube was baked from. Under
+          // uReliefBakeStrength > 0 route() re-points height/grad onto exactly the margin-composited
+          // arrays bakeHeightCube consumed, so these ARE the cube's own source data.
+          getBakedCarrier: () => (riverOverlay.mesh
+            ? { verts: riverOverlay.mesh.verts, height: riverOverlay.height, grad: riverOverlay.grad,
+                heightSource: riverOverlay.heightSource }
+            : null),
+          log: (m) => console.log('[AC-SAMPLER]', m),
+        });
+      }
+      return _tapControl;
     }
     // §2 Fork C — the fine-ribbon mesh (the LOD legibility channel), parented to `planet` like the
     // trunk ribbon so it co-rotates. Hidden until a bake raises patchStrength > 0 (managed below).
@@ -6563,6 +6607,15 @@
                     get soloMode(){ return _soloMode; }, set soloMode(m){ filterUI.soloMode = (m === 'bare') ? 'bare' : 'context'; setSoloMode(m); },
                     enableAllFeatures(){ _preSoloEnables = null; _soloKey = null; setFeatureEnables(null); },
                     renderDeltaSweep(opts){ return renderDeltaSweep(opts); },
+                    // AC-SAMPLER inertness capture. renderDeltaSweep already freezes the animation
+                    // clock + auto-spin internally (so an A/B isolates a feature's pixel contribution
+                    // and never animation); the before/after byte-comparison this AC rests on needs
+                    // the same freeze held ACROSS two page loads, which nothing exposed. Console-only,
+                    // defaults off ⇒ the rendered frame is unchanged until someone asks for it.
+                    freezeAnimation(on){ _sweepFreeze = on !== false; return _sweepFreeze; },
+                    get animationFrozen(){ return _sweepFreeze; },
+                    get animationClock(){ return t; },
+                    setAnimationClock(v){ t = +v; return t; },
                     setFilter(on){ filterUI.filter = on; applyArchetypeFilter(); },
                     featureVisible(key){ return !featureFolders[key]._hidden; },
                     featureEnabled(key){ return !!state[FEATURES[key].enableKey]; },
@@ -6975,15 +7028,34 @@
                     //   _lab.fieldProbe()                                   whole sphere, current body
                     //   _lab.fieldProbe({mode:'patch', latDeg:20, lonDeg:-45, spanKm:2000})
                     //   _lab.sampleField()                                  raw arrays, for custom math
+                    // AC-SAMPLER: `tapPoint` selects WHICH field. Default TAP_SOLID (2) — the solid
+                    // surface the planet displays: after the AC2 bake/synth composite, after the
+                    // crater restore, after the whole combiner chain and the AC4 carve, before the
+                    // F14 sea cut. TAP_COMPOSITE (1) is the body before any combiner (the bake
+                    // diagnostic); TAP_LIQUID (3) is after the cut. Hypsometry wants TAP_SOLID: past
+                    // the cut every submerged sample equals uSeaLevel exactly, which would replace
+                    // the lower mode with a delta spike.
                     sampleField(opts){
                       const o = opts || {};
                       const radiusEarth = o.radiusEarth != null ? +o.radiusEarth : state.planetRadiusEarth;
+                      const tapPoint = o.tapPoint != null ? (o.tapPoint | 0) : TAP_SOLID;
                       const s = _ensureFieldSampler();
                       return o.mode === 'patch'
                         ? s.samplePatch({ latDeg: o.latDeg || 0, lonDeg: o.lonDeg || 0, spanKm: o.spanKm || 2000,
-                                          width: o.width || 128, height: o.height || 128, radiusEarth })
-                        : s.sampleEquirect({ width: o.width || 256, height: o.height || 128, radiusEarth });
+                                          width: o.width || 128, height: o.height || 128, radiusEarth, tapPoint })
+                        : s.sampleEquirect({ width: o.width || 256, height: o.height || 128, radiusEarth, tapPoint });
                     },
+                    // ── AC-SAMPLER — THE LIVE CONTROL. Runs L2-L5 plus the gradBase mutation in one
+                    // synchronous call and returns a JSON verdict: the per-gate coverage table, the
+                    // R² figures, fadeGap, and the recorded env (live vs pinned octaves, uLodRamp,
+                    // uRiverCarvePatchStrength). L1's structural half runs headless in
+                    // tests/instrument-tap-fence.test.js; this half needs a GPU and therefore a human.
+                    // Console-only, no GUI binding ⇒ taxonomy-exempt under AC-0 check 3, exactly as
+                    // sampleField / fieldProbe already are.
+                    tapControl(opts){ return _ensureTapControl().run(opts || {}); },
+                    get TAP_COMPOSITE(){ return TAP_COMPOSITE; },
+                    get TAP_SOLID(){ return TAP_SOLID; },
+                    get TAP_LIQUID(){ return TAP_LIQUID; },
                     // The descriptor pack over a fresh sample. This is the call that answers "how big
                     // are the forms / how rough is it / how many bands" without a screenshot.
                     fieldProbe(opts){
