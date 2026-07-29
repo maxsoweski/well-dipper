@@ -1,0 +1,150 @@
+{
+  "workstream": "world-engine-tectonic-realism-2026-07-29",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-SAMPLER",
+      "statement": "The field sampler measures the field that is actually being rendered. Today createHeightSampler renders ROUTER_MAIN (bare fbmd, no baked-cube blend, no crater restore) while the lab's live default is uReliefBakeStrength = 1 -- a pure BAKED body. Every number downstream of the instrument currently describes a field nobody looks at. This blocks every other AC and lands first.",
+      "verifyVia": {
+        "input": "Run _lab.sampleField on Rocky (Earthlike) at default settings (bake strength 1), then plant a change in the baked relief cube and sample again.",
+        "observable": "The first sample's statistics match the baked body, not bare fBm; the planted change moves the sampled field. A planted-defect control is mandatory -- a sampler that silently reads the wrong field is exactly the failure this AC exists to close, and it already fooled one prior session."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-KMUNIT",
+      "statement": "The vertical axis carries a real unit: kmPerUnitOf(radiusEarth, surfaceGravity, path) exists as a DERIVED function, not a literal, because the quantity demonstrably is one -- it scales as reliefEnvelope(R,g)*R, differs 3.85x between the baked and synth paths, and ranges 10-107 km/unit across presets. It reproduces the two independent anchor routes (the 19.9 km design anchor, and reliefBudget's relic-lambda law plus MOLA hypsometry) within their measured spread at R=1 on the rocky plate path.",
+      "verifyVia": {
+        "input": "Call kmPerUnitOf across the radius band and the 8 in-scope presets; run its LAW_REGISTRY entry through auditLaw.",
+        "observable": "Returns ~16 +/- 3 km/unit at R=1 rocky, matching both anchor routes; auditLaw resolves the claimed exponent rather than returning UNRESOLVABLE. The guard's expectations are HAND-DUPLICATED LITERALS, never read from the constants they guard, and the guard is mutation-tested -- five instances of that exact defect appeared in one prior session."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-MEASURE",
+      "statement": "Max's words: \"We should be able to measure the height of mountains.\" A km figure for mountain relief that describes the rendered body. Today state.mountainHeightKm = 9.0 is a dead constant with zero consumers reaching a pixel, and craterDepthKm / edificeHeightKm / canyonDepthKm have none at all. Note this is FINISHING an unfinished path, not connecting a disconnected one: the intended formula at planet-lod-lab.html:2294 names K_* constants that were never written.",
+      "verifyVia": {
+        "input": "Sample the field on Rocky (Earthlike) at R = 1.00 (slider t = 0.303) and read the scale-readout panel.",
+        "observable": "Mountain relief and total peak-to-trough report in km and land inside the Earth sanity bound of roughly 12-30 km total relief -- NOT the ~3200 km the current shading chain implies, and not a dead 9.0 that never changes. The readout tracks radius when the slider moves."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-HYPSO",
+      "statement": "The elevation distribution is bimodal the way a two-crust world's is, because that -- not total relief -- is what makes coastlines and continental shelves land in the right places when the existing sea level cuts the field. Total peak-to-trough relief is explicitly NOT a criterion here: Moon ~19.9 km (one plate, airless) versus Earth ~19.8 km versus Mars ~29-30 km (one plate) means it has no relationship to tectonic regime.",
+      "verifyVia": {
+        "input": "Build the area-weighted elevation histogram (equal-area grid or cos-latitude weighting -- an unweighted lat/lon histogram will fake or destroy modes) at 50-100 m bins for a plate-path preset, then repeat after subtracting degree-0 and degree-1 spherical harmonics.",
+        "observable": "Hartigan's dip test rejects unimodality; modal separation 4.3-5.0 km; upper mode centre 0.0 to +0.3 km holding 0.35-0.45 of surface area (the CRUSTAL fraction, not the 29% land fraction); inter-modal trough under 10% of area. The bimodality SURVIVES the centre-of-figure re-reference -- Earth's does, Mars's collapses (Aharonson et al. 2001), and that step is what separates a real two-crust world from one big volcanic province. Negative control REQUIRED: a despun-path preset must FAIL this test."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC-PROVINCE",
+      "statement": "Max's words: \"The tectonics system exists to do more than create terrain height variation.\" The real craton/orogen/basin province field drives gProvince in place of the three FBM noise fields of position that gate ~48 features' amplitude and albedo today. This is the largest single step from 'tectonics makes bumps' to 'tectonics makes places', and the source already calls it out at planet-lod-lab.html:1500 as a separate job.",
+      "verifyVia": {
+        "input": "On a plate-path preset, compare feature placement against the province field shown in the (currently hidden) debug overlay; then plant a change in the province field and re-render.",
+        "observable": "Feature placement follows the real craton/orogen/basin partition and moves when it is perturbed; the FBM province fields are no longer read by the gated features. Blast radius is the risk here -- ~48 features change behaviour, so the 10 out-of-scope presets must be checked for unintended movement."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-STRIKE",
+      "statement": "Mountain belts run ALONG their plate boundaries. Today the grain cube that orients mountains, canyons, scarps, tessera and lava on EVERY dispatch path -- including the plate path -- is baked from the despun latitude-band stress model, which knows nothing about plate boundaries. The per-edge boundary normal and tangent needed to fix this are computed at plates.js:289-291 and discarded. Correctly placed, arbitrarily oriented ranges are the clearest symptom of the two disconnected tectonic models.",
+      "verifyVia": {
+        "input": "On a plate-path preset, measure the local structure-tensor orientation of the height field along an extracted orogenic belt and compare it to the belt's own boundary tangent.",
+        "observable": "Belt strike correlates with boundary tangent rather than with latitude. Ranges visibly run along their belts instead of across them."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-EXAG",
+      "statement": "Max's words: \"I want honest numbers and honest renders.\" The render's vertical exaggeration becomes ONE declared, derived, tested constant, stated in the readout next to the true km -- exaggerating on the record rather than by drift. Today it is ~160x, reached through state.perturb = 0.55, a GUI slider with no derivation, no justifying comment and no test pinning it. HYPOTHESIS TO TEST FIRST, NOT ASSUME: that the 160x is compensating for absent structure (real province material, correct coastlines, terminator shadowing), in which case the needed factor falls once AC-PROVINCE and AC-HYPSO land. Pick the number after the structure, not before.",
+      "verifyVia": {
+        "input": "Render a plate-path preset at a terminator sun angle with the structure ACs landed, at several candidate exaggeration factors; and separately render the same body through both shading paths.",
+        "observable": "One named constant governs implied relief; the readout states both true km and the exaggeration factor. The analytic path (strength*0.6 on the combiner field) and the finite-diff regression path (strength*0.025 on computeHeight) agree -- they currently disagree by ~24x, so a calibration valid for one is wrong for the other. NOTE: there is NO pixel-level regression test anywhere in this repo, so this AC has no automated net; a fixed-camera fixed-seed before/after capture set is the substitute."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-NOCLAMP",
+      "statement": "Max's words: \"Plate tectonics work across all sizes of planets\" and \"make sure these are all being programmatically generated and aren't being patched on.\" No magic clamp stands in for physics in the tectonic chain. clamp(0.4, 2.5, (g/g0)^-0.5) appears at plates.js:136, magmatism.js:120 and shellRelief.js:144; its lower bound is reached at g = 5.625, i.e. R = 2.762, above which plate uplift and rifting stop responding to planet size entirely. Also in scope: stagnantLid.js:144 carries the same shape with K_G = 0, i.e. the gravity term switched off as a byte-safety placeholder.",
+      "verifyVia": {
+        "input": "Sweep radius across the band on each in-scope preset and measure the delivered tectonic gain and the end-to-end relief exponent.",
+        "observable": "Tectonic and volcanic content keeps responding to radius across the whole band -- no plateau at R = 2.762. Every bound that survives is DERIVED with its physical basis stated, or explicitly declared as a modelling choice with its grounds; neither is left as a bare magic number."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-DERIVED",
+      "statement": "Rule 15 spine conformance for everything this workstream adds: driver connectivity, a named consumer, taxonomy registration. Every derived law lands with a LAW_REGISTRY entry so a future retune fails a named test instead of drifting silently.",
+      "verifyVia": {
+        "input": "Run the spine-conformance and registry audits over the new laws; mutation-test every new guard.",
+        "observable": "Each new law has a registry entry that auditLaw RESOLVES (not UNRESOLVABLE); each new guard discriminates under mutation; no guard derives its expectation from the thing it guards. That last one is the recurring defect of this program -- five instances in one prior session, and fixing each did not prevent the next."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-NOREGRESS",
+      "statement": "The 10 presets outside the tectonic set keep rendering as they do today, and the test baseline holds. IMPORTANT CORRECTION carried into this contract: golden hash 40c18aad is a fixed-timestep accumulator + Mulberry32 RNG hash over a synthetic moving anchor, importing only from vendor/motion-test-kit. It CANNOT see relief or shading. Prior sessions cited 'golden untouched' as evidence that relief changes were safe; that claim was vacuous. Relief is baselined by fence-baseline.json and l0-baseline.json instead -- those are the artifacts that matter here.",
+      "verifyVia": {
+        "input": "Run the full suite, verify-golden, and a render pass over all 18 presets.",
+        "observable": "Suite at EXACTLY the 4 named failures (GalacticFeatures x1, KnownObjects x3) = 17 failed FILES (15 vendor + the 2 holding the real 4); anything else is ours. verify-golden passes at 40c18aad with NO re-capture. The CPU relief baselines either hold or their movement is declared with grounds. The 10 out-of-scope presets show no unintended change from the gProvince rewire."
+      },
+      "layer": "integration",
+      "live": false
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max's criterion, verbatim: \"success here means simply that we can model earth-like planets (or any planet that has tectonic activity) in a way that makes the features read realistically as they would from space. This is the basis for all sorts of downstream systems, e.g., water cycle.\" Holds when zooming in -- \"from space we can zoom in and look more closely at these features.\" MAX'S GATE ALONE. No agent drives or PASSes this; it is always deferred-to-max, and it presupposes every objective AC above is GREEN.",
+      "verifyVia": {
+        "input": "Lab at :5175. Rocky (Earthlike) and Ocean (temperate) first, then the shell/volcanic/stagnant presets. Drag 'planet radius (log)' -- it is a 0-to-1 log POSITION t, NOT radius; watch the 'radius (RE)' readout. Reference stops: t = 0.128 / 0.303 / 0.477 / 0.579 = R 0.5 / 1.0 / 2.0 / 3.0. Wait >= 500 ms after the slider settles (220 ms debounce + 220 ms river reroute). Do NOT touch the 'gravity (g)' override slider -- it desynchronises the writers from the readout. Zoom to the camera floor (1.1 radii from centre, ~637 km altitude at Earth scale).",
+        "observable": "Max judges whether the features read as they would from space -- coastlines and shelves in believable places, mountain belts with believable plan-form running the right way, the whole thing cohering as a planet rather than as noise with a height map. Carve-out stated up front so he is not sent hunting: everything in the lab is orbital; the camera floor is low orbit, not aerial, so sub-km surface detail is out of frame by construction."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "body-condition-vector.js (REPO ROOT, not src/worldengine/base/) -- surfaceGravity, radiusEarth, compositionClass, volatileFraction, T_eq",
+      "body-drivers.js (REPO ROOT) -- massGravity, repointed to the radius-aware condition gravity at 6779af3",
+      "driver-presets.js -- the 18 presets; 8 reach a tectonic writer and are in scope",
+      "src/worldengine/base/e1Regime.js computeE1 -- the geodynamic regime tuple that selects the writer",
+      "planet-lod-rivers.js:575-607 -- the regime -> writer dispatch (NOT modified by this workstream; the Mars reroute is deliberately deferred)",
+      "planet-lod-lab-core.js reliefEnvelope -- the v2 relief law (g^-0.58 below the seam, g^-1.678235294117647 above), shipped at 85cf3f0 and NOT reopened here",
+      "macroSeed and the alea seed namespaces"
+    ],
+    "outputs": [
+      "kmPerUnitOf(radiusEarth, surfaceGravity, path) -- the derived vertical calibration, plus its LAW_REGISTRY entry",
+      "a corrected createHeightSampler that reads the rendered (baked + crater-restored) field",
+      "km-honest readouts for mountain relief, crater depth, edifice height and canyon depth, replacing four dead constants",
+      "a bimodal-hypsometry validator with a centre-of-figure re-reference step and a despun-preset negative control",
+      "gProvince fed by the real craton/orogen/basin field from src/worldengine/base/province.js instead of FBM noise",
+      "range strike derived from the plate boundary tangent computed at plates.js:289-291 (currently discarded)",
+      "one declared vertical-exaggeration constant, stated in the readout beside the true km"
+    ],
+    "mustStayWorking": [
+      "Suite baseline of EXACTLY 4 named failures (GalacticFeatures x1, KnownObjects x3) = 17 failed FILES (15 vendor + 2 real)",
+      "verify-golden 40c18aad -- NO re-capture ever; note it guards fixed-timestep determinism, NOT relief",
+      "fence-baseline.json and l0-baseline.json -- these are the artifacts that actually baseline relief",
+      "Q_RELIEF = 0.58 must never be edited in place; reliefBudget.js:30 imports it and :91 pairs it with C_RELIC, a fit solved AT 0.58",
+      "K_DT = 3.1 and D_D_SIMPLE = 0.20 -- correct as shipped, do not touch",
+      "The 10 out-of-scope presets (despun and gas paths) -- highest regression risk is the gProvince rewire, which touches ~48 gated features globally",
+      "uCraterBakeRestore = reliefBakeStrength - uReliefBakeStrength, the complement that keeps craters present as the bake fades (fixed at f88c2c6)",
+      "The river router (routeAndOrder reads height/grad/isOcean) and the passive-margin shelf channel, both of which consume carrier.height",
+      "tests/vis-scale-fence.test.js greps visScaleOf | sVis | VIS_SCALE_EXP INCLUDING COMMENTS across planet-lod-height.glsl.js, planet-lod-rivers.js, run-golden.mjs, canonical-scenario.js and all of src/worldengine/** -- three of four failures in one prior session were the word sVis in a comment",
+      "The two standing NOT-OURS working-tree mods (src/auto/CameraChoreographer.js, src/debug/LabMode.js) -- never stage, never revert; use explicit paths in git add",
+      "Lab :5175 page 2 is Max's tab -- never touch it; use an isolated context and close pages afterwards"
+    ]
+  }
+}
