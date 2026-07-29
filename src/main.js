@@ -9724,8 +9724,22 @@ window.addEventListener('keydown', (e) => {
       return;
     }
     if (_navComputerOpen) {
-      if (_navComputer && _navComputer.handleEscape()) return; // back one level
-      toggleNavComputer(); // close if already at galaxy level
+      // ESC DISMISSES. It used to walk back one nav level per press and only
+      // close at GALAXY; Max ruled on 2026-07-29 that it should "just dismiss it"
+      // and that levels are navigated by clicking the tab strip. Asked whether
+      // that meant the cockpit panel alone or here too, he chose EVERYWHERE, so
+      // ESC now means one thing wherever the nav computer is drawn.
+      //
+      // This deliberately supersedes part of AC-NAV-OVERLAY-UNCHANGED in
+      // docs/WORKSTREAMS/cockpit-screen-content-2026-07-28 — for the escape path
+      // only. A requirement Max changed, not a regression.
+      //
+      // `handleEscape()` is NOT deleted: right-click-to-go-back still calls it
+      // (NavComputer._handleClick, `e.button === 2`), which Max did not ask to
+      // change. Every level and both SYSTEM sub-views keep a click route out —
+      // enumerated and driven against the real class in
+      // src/ui/__tests__/NavComputer.escape.test.js, AC-NO-STUCK-STATE.
+      toggleNavComputer();
       return;
     }
     if (_settingsOpen) {

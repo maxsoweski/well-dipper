@@ -61,7 +61,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * regression is an explosion naming itself instead of a silent Infinity.
  */
 function makeNavComputerStub(bufferWidth, bufferHeight) {
-  const seen = { down: [], move: [], rectCalls: 0 };
+  const seen = { down: [], move: [], click: [], order: [], rectCalls: 0 };
 
   const target = {
     _canvas: {
@@ -80,7 +80,11 @@ function makeNavComputerStub(bufferWidth, bufferHeight) {
 
   target._handleMouseDown = vi.fn((e) => { seen.down.push({ e, pos: target._getCanvasPos(e) }); });
   target._handleMouseMove = vi.fn((e) => { seen.move.push({ e, pos: target._getCanvasPos(e) }); });
-  target._handleMouseUp = vi.fn();
+  target._handleMouseUp = vi.fn(() => { seen.order.push('up'); });
+  target._handleClick = vi.fn((e) => {
+    seen.order.push('click');
+    seen.click.push({ e, pos: target._getCanvasPos(e) });
+  });
 
   return { target, seen };
 }
@@ -101,6 +105,154 @@ const SIZES = [
   { width: 512, height: 256 },
   { width: 300, height: 900 },
 ];
+
+/**
+ * ── CLICK FORWARDING (AC-CLICK-FORWARDED) ──────────────────────────────────
+ *
+ * This adapter shipped forwarding press, drag and release, and DELIBERATELY not
+ * click — the header lists drill-down as a non-goal because it "wants its own
+ * decisions about what clicking a screen from the pilot seat means". Increment 6
+ * is where those decisions got made, because `_handleClick` turns out to be the
+ * only route in NavComputer to the level-tab strip, both SYSTEM sub-views, the
+ * autopilot toggle and the [ BURN ] / [ WARP ] commit. Max's "so we can interact
+ * with the full menu" is blocked on precisely this one method.
+ *
+ * ⭐ THE DRAG REJECTION IS DELIBERATELY *NOT* REIMPLEMENTED HERE. NavComputer
+ * already owns it: `_handleClick` compares the release position against
+ * `_dragStartX/_dragStartY` (set by `_handleMouseDown`) and bails past 25 px².
+ * A browser fires `click` after `mouseup` regardless and lets that check decide,
+ * so forwarding unconditionally is the FAITHFUL port — and putting a second
+ * threshold in this adapter would give the same rule two homes to drift between.
+ *
+ * What this file can honestly prove is the adapter's own half, and it is the half
+ * that makes NavComputer's check work at all: the press is delivered first (so
+ * `_dragStartX/Y` exist to compare against), the position is placed before the
+ * click reads it, and a click is delivered only when press AND release both
+ * landed on the glass. The threshold itself is exercised against the real class
+ * live, under AC-ZOOMED-IS-OPERABLE.
+ */
+for (const size of SIZES) {
+  const { width: W, height: H } = size;
+
+  describe(`PanelPointer click forwarding at ${W}x${H} (AC-CLICK-FORWARDED)`, () => {
+    it('delivers exactly one click for a press and release on the glass', () => {
+      const { target, seen } = makeNavComputerStub(W, H);
+      const adapter = new PanelPointerAdapter(target);
+
+      adapter.pointerDown(hitAt(0.25, 0.75));
+      const clicked = adapter.pointerUp(hitAt(0.25, 0.75));
+
+      expect(target._handleClick).toHaveBeenCalledTimes(1);
+      expect(clicked, 'pointerUp did not report that it delivered a click').toBe(true);
+      expect(seen.click[0].pos).toEqual({ x: 0.25 * W, y: 0.75 * H });
+      expect(seen.click[0].e).toBe(PANEL_POINTER_EVENT);
+      expect(seen.rectCalls, 'the click took the DOM path').toBe(0);
+    });
+
+    it('places the position BEFORE the click reads it', () => {
+      // `_handleClick`'s first act is `this._getCanvasPos(e)`, and it compares the
+      // result against `_dragStartX/Y`. A click delivered before the release
+      // position was placed compares the new click against the OLD coordinates —
+      // so a click far from the last one reads as a drag and is silently dropped,
+      // and a click near it works. Intermittent by construction.
+      const { target, seen } = makeNavComputerStub(W, H);
+      const adapter = new PanelPointerAdapter(target);
+
+      adapter.pointerDown(hitAt(0.1, 0.1));
+      adapter.pointerUp(hitAt(0.9, 0.4));
+      expect(seen.click[0].pos).toEqual({ x: 0.9 * W, y: 0.4 * H });
+    });
+
+    it('releases the drag BEFORE it clicks, and the order is load-bearing', () => {
+      // The release must come first for the reason already documented on
+      // `pointerUp`: `_place` throws on a zero-sized buffer or on geometry that
+      // has lost its UVs, and both are states a live panel reaches for a frame.
+      // A throw on the way to the release leaves `_dragging` true forever and
+      // welds the map to the cursor. Clicking first would reintroduce that.
+      const { target, seen } = makeNavComputerStub(W, H);
+      const adapter = new PanelPointerAdapter(target);
+
+      adapter.pointerDown(hitAt(0.5, 0.5));
+      adapter.pointerUp(hitAt(0.5, 0.5));
+      expect(seen.order).toEqual(['up', 'click']);
+    });
+
+    it('delivers the press first, so the drag threshold has something to compare against', () => {
+      const { target } = makeNavComputerStub(W, H);
+      const adapter = new PanelPointerAdapter(target);
+      adapter.pointerDown(hitAt(0.3, 0.3));
+      expect(target._handleMouseDown).toHaveBeenCalledTimes(1);
+      expect(target._handleClick).not.toHaveBeenCalled();
+      adapter.pointerUp(hitAt(0.3, 0.3));
+      expect(target._handleMouseDown.mock.invocationCallOrder[0])
+        .toBeLessThan(target._handleClick.mock.invocationCallOrder[0]);
+    });
+
+    it('does NOT click when the release missed the quad', () => {
+      // The player pressed on the screen and let go pointing at the canopy. In the
+      // DOM that is a mouseleave, and it has never been a click.
+      const { target } = makeNavComputerStub(W, H);
+      const adapter = new PanelPointerAdapter(target);
+      adapter.pointerDown(hitAt(0.5, 0.5));
+      const clicked = adapter.pointerUp(null);
+      expect(target._handleMouseUp).toHaveBeenCalledTimes(1);
+      expect(target._handleClick).not.toHaveBeenCalled();
+      expect(clicked).toBe(false);
+    });
+
+    it('does NOT click when the press never landed on the quad', () => {
+      // Clicking past the screens and happening to release over one must not
+      // operate the nav computer. `_pressed` is what makes this true, and it is
+      // the same flag that already guarantees the once-only release.
+      const { target } = makeNavComputerStub(W, H);
+      const adapter = new PanelPointerAdapter(target);
+      adapter.pointerDown(null);
+      const clicked = adapter.pointerUp(hitAt(0.5, 0.5));
+      expect(target._handleClick).not.toHaveBeenCalled();
+      expect(clicked).toBe(false);
+    });
+
+    it('does NOT click after the ray already slid off and released the drag', () => {
+      // Press, drag off the quad (which releases), then let go back over it. The
+      // release has already been spent; a click here would fire on a gesture the
+      // adapter has already told the target was over.
+      const { target } = makeNavComputerStub(W, H);
+      const adapter = new PanelPointerAdapter(target);
+      adapter.pointerDown(hitAt(0.5, 0.5));
+      adapter.pointerMove(null);
+      expect(target._handleMouseUp).toHaveBeenCalledTimes(1);
+      const clicked = adapter.pointerUp(hitAt(0.5, 0.5));
+      expect(target._handleClick).not.toHaveBeenCalled();
+      expect(clicked).toBe(false);
+      expect(target._handleMouseUp).toHaveBeenCalledTimes(1);
+    });
+
+    it('still releases the drag when placing the release position throws', () => {
+      // The existing guarantee, re-asserted now that a click sits on the same
+      // path. A buffer that has collapsed to zero must not take the drag hostage
+      // on its way past, and it must not fabricate a click either.
+      const { target } = makeNavComputerStub(W, H);
+      const adapter = new PanelPointerAdapter(target);
+      adapter.pointerDown(hitAt(0.5, 0.5));
+      target._canvas.width = 0;
+      expect(() => adapter.pointerUp(hitAt(0.5, 0.5))).toThrow(/positive and finite/);
+      expect(target._handleMouseUp).toHaveBeenCalledTimes(1);
+      expect(target._handleClick).not.toHaveBeenCalled();
+    });
+
+    it('drives a target that has no _handleClick at all, without throwing', () => {
+      // The three one-ink painters are not NavComputer-shaped and never will be.
+      // A panel that can be pointed at but has nothing to click must be a no-op,
+      // not a crash inside the render loop.
+      const { target } = makeNavComputerStub(W, H);
+      delete target._handleClick;
+      const adapter = new PanelPointerAdapter(target);
+      adapter.pointerDown(hitAt(0.5, 0.5));
+      expect(() => adapter.pointerUp(hitAt(0.5, 0.5))).not.toThrow();
+      expect(target._handleMouseUp).toHaveBeenCalledTimes(1);
+    });
+  });
+}
 
 for (const size of SIZES) {
   const { width: W, height: H } = size;

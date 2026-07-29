@@ -333,7 +333,37 @@ export class PanelPointerAdapter {
   }
 
   /**
-   * Button up. The hit, if there is one, still updates the final position.
+   * Button up — and, if the gesture belongs to this panel, the click.
+   *
+   * ── THE CLICK, ADDED IN INCREMENT 6 ────────────────────────────────────────
+   *
+   * This adapter shipped without click forwarding, and the header above still
+   * lists drill-down as a deliberate non-goal "wanting its own decisions about
+   * what clicking a screen from the pilot seat means". Those decisions are made
+   * now (workstream `cockpit-zoom-to-panel-2026-07-29`), because `_handleClick`
+   * is the ONLY route in NavComputer to the level-tab strip, both SYSTEM
+   * sub-views, the autopilot toggle and the [ BURN ] / [ WARP ] commit. Max's
+   * "so we can interact with the full menu" is blocked on this one method.
+   *
+   * ⭐ THE DRAG REJECTION IS NOT REIMPLEMENTED HERE, ON PURPOSE. NavComputer
+   * already owns it: `_handleClick` compares the release position against
+   * `_dragStartX/_dragStartY` — which `_handleMouseDown` set — and bails past
+   * 25 px². A browser fires `click` after `mouseup` regardless and lets that
+   * check decide, so forwarding unconditionally is the faithful port. A second
+   * threshold in here would give one rule two homes to drift between, and the
+   * drift would show up as clicks that work at the centre of a pan and not at
+   * its edges.
+   *
+   * What this method DOES own is that the click belongs to this panel at all:
+   * it fires only when the press landed on the glass AND the release did too.
+   * A press that started past the screens, or a drag that already slid off and
+   * spent its release, must not operate the nav computer.
+   *
+   * ⚠ THE RETURN VALUE CHANGED MEANING with this addition: it now reports
+   * whether a CLICK was delivered, not whether a release was. There were no
+   * consumers at the time — nothing raycasts yet, this adapter existed only
+   * under test — so the better meaning was taken while it was free. `release()`
+   * still returns the release, for anyone who needs that.
    *
    * The RELEASE GOES FIRST, and the order is load-bearing rather than stylistic.
    * `_place` throws by design — on a zero-sized buffer, or on a hit whose
@@ -353,8 +383,17 @@ export class PanelPointerAdapter {
    */
   pointerUp(hit) {
     const released = this.release();
-    if (hit) this._place(hit);
-    return released;
+    if (!hit) return false;
+    // Placed BEFORE the click, because `_handleClick`'s first act is to ask for
+    // the position and compare it against the drag start. A click delivered
+    // against the previous position reads as a drag whenever the player clicks
+    // far from where they last pointed, and as a click when they do not —
+    // intermittent by construction, and impossible to reproduce on demand.
+    this._place(hit);
+    if (!released) return false;
+    if (typeof this.target._handleClick !== 'function') return false;
+    this.target._handleClick(PANEL_POINTER_EVENT);
+    return true;
   }
 
   /**

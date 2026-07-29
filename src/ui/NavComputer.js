@@ -2723,16 +2723,16 @@ export class NavComputer {
       // Hint below button
       ctx.font = '10px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
-      ctx.fillText('DRAG TO ROTATE · ESC TO RETURN', w / 2, drawH - 8);
+      ctx.fillText('DRAG TO ROTATE · TABS TO CHANGE VIEW', w / 2, drawH - 8);
     } else {
       this._commitButtonRect = null;
       ctx.font = '10px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.textAlign = 'center';
       if (isCurrent) {
-        if (!this._bare) ctx.fillText('SELECT BODY TO NAVIGATE · DRAG TO ROTATE · ESC TO RETURN', w / 2, drawH - 8);
+        if (!this._bare) ctx.fillText('SELECT BODY TO NAVIGATE · DRAG TO ROTATE · TABS TO CHANGE VIEW', w / 2, drawH - 8);
       } else {
-        if (!this._bare) ctx.fillText('SELECT STAR TO WARP · CLICK PLANET FOR DETAIL · ESC TO RETURN', w / 2, drawH - 8);
+        if (!this._bare) ctx.fillText('SELECT STAR TO WARP · CLICK PLANET FOR DETAIL · TABS TO CHANGE VIEW', w / 2, drawH - 8);
       }
     }
     ctx.textAlign = 'left';
@@ -2881,7 +2881,7 @@ export class NavComputer {
     ctx.font = '8px "DotGothic16", monospace';
     ctx.fillStyle = 'rgba(150, 175, 215, 0.55)';
     ctx.textAlign = 'center';
-    if (!this._bare) ctx.fillText('VIEW ONLY · ESC TO GO BACK', w / 2, drawH - 8);
+    if (!this._bare) ctx.fillText('VIEW ONLY · CLICK TO GO BACK', w / 2, drawH - 8);
     ctx.textAlign = 'left';
   }
 
@@ -3155,15 +3155,15 @@ export class NavComputer {
 
       ctx.font = '10px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
-      ctx.fillText('ESC TO GO BACK', w / 2, drawH - 8);
+      ctx.fillText('CLICK EMPTY SPACE TO GO BACK', w / 2, drawH - 8);
     } else {
       this._commitButtonRect = null;
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.textAlign = 'center';
       if (isCurrent) {
-        if (!this._bare) ctx.fillText('SELECT MOON TO NAVIGATE · ESC TO GO BACK', w / 2, drawH - 8);
+        if (!this._bare) ctx.fillText('SELECT MOON TO NAVIGATE · CLICK EMPTY SPACE TO GO BACK', w / 2, drawH - 8);
       } else {
-        if (!this._bare) ctx.fillText('VIEW ONLY · ESC TO GO BACK', w / 2, drawH - 8);
+        if (!this._bare) ctx.fillText('VIEW ONLY · CLICK TO GO BACK', w / 2, drawH - 8);
       }
     }
     ctx.textAlign = 'left';
