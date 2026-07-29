@@ -152,7 +152,10 @@ export function weightedPercentiles(values, weights, qs) {
 
 /**
  * Area-weighted RMS relief about the area-weighted mean, in km. The plainest roughness number there is,
- * and the one the relief envelope law (Q_RELIEF) makes a prediction about.
+ * and the one the relief envelope law makes a prediction about. That law is two-branch as of
+ * world-engine-v2-relief-law-2026-07-28, split at a g = 1 DATA boundary (calibration below,
+ * derivation above): relief/R goes as g^-Q_RELIEF below the seam (the 5-body Solar-System fit) and
+ * g^-Q_RELIEF_DERIVED above it (Guimond+2022's absolute slope 1.09 converted to fractional).
  */
 export function rmsReliefKm(heightsKm, grid) {
   const w = areaWeights(grid);

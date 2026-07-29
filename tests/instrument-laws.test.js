@@ -19,7 +19,7 @@ import {
   LAW_REGISTRY, auditLaw, auditLaws, defaultDeps, baselineCondition,
 } from '../src/worldengine/instrument/laws.js';
 import { craterSchedule, isImpactSurface, G_REF, K_GS } from '../src/worldengine/base/bombardment.js';
-import { reliefEnvelope, Q_RELIEF } from '../planet-lod-lab-core.js';
+import { reliefEnvelope } from '../planet-lod-lab-core.js';
 import {
   deriveConditionVector, GRAV_R_EXP_SUB, GRAV_R_EXP_SUPER,
 } from '../body-condition-vector.js';
@@ -52,7 +52,9 @@ describe('AC-LAWS — every registered law is checked against its stated exponen
     expect(ids).toContain('crater-count-independent-of-gravity');
     expect(ids).toContain('crater-count-vs-radius');
     expect(ids).toContain('mesh-floor-vs-radius');
-    expect(ids).toContain('relief-envelope-vs-gravity');
+    expect(ids).toContain('relief-envelope-vs-gravity-calibrated');
+    expect(ids).toContain('relief-envelope-vs-gravity-derived');
+    expect(ids).toContain('relief-absolute-vs-radius');
   });
 
   it('every law carries a source citation to the line that states it', () => {
@@ -73,7 +75,11 @@ describe('AC-LAWS — every registered law is checked against its stated exponen
     expect(by['crater-size-vs-gravity'].measuredExponent).toBeCloseTo(-K_GS, 6);
     expect(by['crater-count-vs-radius'].measuredExponent).toBeCloseTo(2, 6);
     expect(by['mesh-floor-vs-radius'].measuredExponent).toBeCloseTo(1, 6);
-    expect(by['relief-envelope-vs-gravity'].measuredExponent).toBeCloseTo(-Q_RELIEF, 6);
+    // HAND-DUPLICATED literals, NOT the imported constants: a guard that reads its expectation from
+    // the constant it guards degrades to UNRESOLVABLE (or silently PASSes) on a retune.
+    expect(by['relief-envelope-vs-gravity-calibrated'].measuredExponent).toBeCloseTo(-0.58, 6);
+    expect(by['relief-envelope-vs-gravity-derived'].measuredExponent).toBeCloseTo(-1.678235294117647, 6);
+    expect(by['relief-absolute-vs-radius'].measuredExponent).toBeCloseTo(-1.853, 6);
   });
 
   it('records that crater count is g-INDEPENDENT — the removed g^0.34 factor is not a live law', () => {
@@ -122,7 +128,7 @@ describe('AC-POSCTRL — the audit catches planted defects, and names the right 
     expect(audit.summary.fail).toEqual(['crater-count-independent-of-gravity']);
     expect(audit.summary.pass).toContain('crater-size-vs-gravity');
     expect(audit.summary.pass).toContain('mesh-floor-vs-radius');
-    expect(audit.summary.pass).toContain('relief-envelope-vs-gravity');
+    expect(audit.summary.pass).toContain('relief-envelope-vs-gravity-calibrated');
   });
 
   it('catches the gravity SIZE law being flattened', () => {
@@ -149,13 +155,21 @@ describe('AC-POSCTRL — the audit catches planted defects, and names the right 
   });
 
   it('catches the relief envelope exponent being retuned', () => {
+    // The stub is a single radius-blind power of g — i.e. the seam removed AND the derived branch
+    // gone. All THREE relief entries must name it: the calibrated branch (wrong exponent), the
+    // derived branch (wrong exponent), and the absolute-vs-radius entry (whose h = E*R then rises
+    // with radius instead of falling). Listed in registry order.
     const deps = {
       ...defaultDeps(),
       reliefEnvelope: (R, g) => Math.pow(Math.max(g, 1e-3), -0.3),   // was -0.58
     };
     const audit = auditLaws({ deps });
-    expect(audit.summary.fail).toEqual(['relief-envelope-vs-gravity']);
-    const r = audit.results.find((x) => x.id === 'relief-envelope-vs-gravity');
+    expect(audit.summary.fail).toEqual([
+      'relief-envelope-vs-gravity-calibrated',
+      'relief-envelope-vs-gravity-derived',
+      'relief-absolute-vs-radius',
+    ]);
+    const r = audit.results.find((x) => x.id === 'relief-envelope-vs-gravity-calibrated');
     expect(r.measuredExponent).toBeCloseTo(-0.3, 4);
   });
 
@@ -163,7 +177,11 @@ describe('AC-POSCTRL — the audit catches planted defects, and names the right 
     // 0.58 -> 0.52 is a ~10% change that no screenshot would ever reveal.
     const deps = { ...defaultDeps(), reliefEnvelope: (R, g) => Math.pow(Math.max(g, 1e-3), -0.52) };
     const audit = auditLaws({ deps });
-    expect(audit.summary.fail).toEqual(['relief-envelope-vs-gravity']);
+    expect(audit.summary.fail).toEqual([
+      'relief-envelope-vs-gravity-calibrated',
+      'relief-envelope-vs-gravity-derived',
+      'relief-absolute-vs-radius',
+    ]);
   });
 
   it('restoring the real dependencies restores a clean audit', () => {
@@ -194,6 +212,9 @@ describe('the verdict tolerance handles a noiseless fit', () => {
 describe('AC-POSCTRL — the two gravity-vs-radius laws (gravity-selfcompression-2026-07-28)', () => {
   const SUPER = 'gravity-vs-radius-selfcompression-super';
   const SUB = 'gravity-vs-radius-selfcompression-sub';
+  // v2 relief law 2026-07-28: absolute relief is the COMPOSITION of the envelope with the gravity
+  // shape, so it is the one relief entry a gravity regression legitimately falsifies.
+  const ABS = 'relief-absolute-vs-radius';
 
   /**
    * Inject the RETIRED constant-density law — g = g_c·(R/R_c)^1 — in place of the shipped
@@ -217,14 +238,21 @@ describe('AC-POSCTRL — the two gravity-vs-radius laws (gravity-selfcompression
     expect(b.measuredExponent).toBeCloseTo(GRAV_R_EXP_SUB, 8);
   });
 
-  it('reinstating the constant-density law fails BOTH, and nothing else', () => {
-    // A generic alarm is not a detection. The regression is in gravity, so exactly the two gravity
-    // laws must light up — the crater and relief laws sweep their own synthetic conditions and are
-    // untouched by how the condition vector derives g.
+  it('reinstating the constant-density law fails BOTH gravity laws + the absolute-relief law', () => {
+    // A generic alarm is not a detection, so the fail set is asserted EXACTLY. Three entries, and
+    // the third is not noise: relief-absolute-vs-radius (v2 relief law, 2026-07-28) states
+    // h = E*R ~ R^(1 - 1.70*Q_RELIEF_DERIVED), which CITES the 1.70 this stub replaces with 1. Its
+    // claim is genuinely falsified by a broken gravity shape, so naming it is correct detection.
+    // The two vs-gravity relief entries are NOT in the set — they sweep surfaceGravity directly and
+    // remain untouched by how the condition vector derives g, which is the discrimination that
+    // makes this a detection rather than an alarm.
     const audit = auditLaws({ deps: { ...defaultDeps(), deriveConditionVector: retiredGravity } });
-    expect(audit.summary.fail.sort()).toEqual([SUB, SUPER].sort());
+    expect(audit.summary.fail.sort()).toEqual([SUB, SUPER, ABS].sort());
     expect(audit.results.find((x) => x.id === SUPER).measuredExponent).toBeCloseTo(1, 8);
     expect(audit.results.find((x) => x.id === SUB).measuredExponent).toBeCloseTo(1, 8);
+    // 1 - 1*1.678235294117647, hand-computed: the retired g ~ R^1 leaves absolute relief far
+    // shallower than the ruled -1.853.
+    expect(audit.results.find((x) => x.id === ABS).measuredExponent).toBeCloseTo(-0.678235294117647, 8);
   });
 
   it('the null is the retired law (1.0), not "no response" (0) — so a null of 0 cannot false-PASS', () => {
@@ -258,6 +286,10 @@ describe('AC-POSCTRL — the two gravity-vs-radius laws (gravity-selfcompression
       return { ...cv, surfaceGravity: g_c * (f(R) / f(R_c)) };
     };
     const audit = auditLaws({ deps: { ...defaultDeps(), deriveConditionVector: retuned } });
-    expect(audit.summary.fail).toEqual([SUPER]);   // ONLY the high branch — the low one is untouched
+    // Registry order. ONLY the HIGH gravity branch — the low one is untouched by the 1.60 stub —
+    // plus the absolute-relief law, which cites the high branch's 1.70 in its own claim.
+    expect(audit.summary.fail).toEqual([ABS, SUPER]);
+    // 1 - 1.60*1.678235294117647, hand-computed.
+    expect(audit.results.find((x) => x.id === ABS).measuredExponent).toBeCloseTo(-1.685176470588235, 8);
   });
 });

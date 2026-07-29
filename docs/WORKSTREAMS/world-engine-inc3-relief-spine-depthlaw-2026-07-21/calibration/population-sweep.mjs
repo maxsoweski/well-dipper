@@ -26,7 +26,8 @@
 //   5. GOLDENS STABLE:                    the byte-identity suite (tests/v2-0-byte-identity.test.js) is green.
 //   6. RUNTIME BUDGET:                    < 10 min single-threaded; per-preset wall time in the JSON summary.
 //
-//   7. ★ INC-3 ENVELOPE GATE (NEW, §3 S3-step-1 / AC-ENVELOPE population layer / lens physics MF1): across the SAME
+//   7. ★ INC-3 ENVELOPE GATE (NEW, §3 S3-step-1 / AC-ENVELOPE population layer / lens physics MF1), EXTENDED by
+//      world-engine-v2-relief-law-2026-07-28 with gate (d): across the SAME
 //      drawn population, the EXACT relief MULTIPLIER reliefEnvelope(R_drawn, g_drawn) is
 //        (a) BOUNDED — every drawn multiplier ≤ the Phobos strength ceiling PHOBOS_MULT (the g-floored cap
 //            reliefEnvelope(_, 1e-3) ≈ 54.95): "no draw exceeds the most-extreme real body" — the exact, defensible
@@ -35,6 +36,15 @@
 //            ⇒ higher relief/R), the clamp permitting ties;
 //        (c) RADIUS-INDEPENDENT — reliefEnvelope(R,g) === reliefEnvelope(R·k,g) for a perturbed k at the same g
 //            (radius flows THROUGH g, the footnote-14 double-dip resolution — a structural spy, not a fit).
+//            ★ v2 relief law: this gate is KEPT, not rewritten. The adopted two-branch form still carries no
+//            radius term (the seam-normalising radius cancels identically along every trajectory), so (c) is a
+//            TRUE and load-bearing statement about the v2 law, not a leftover from the v1 one.
+//        (d) ★ v2 ABSOLUTE RELIEF — for each ROCKY-class preset with ≥3 seeded draws above the g = 1 seam, the
+//            log-log slope of ABSOLUTE relief h = reliefEnvelope(R,g)·R against R must be -1.853 (= 1 - 1.70·
+//            1.678235294117647, hand-written). This is the gate (a)-(c) cannot buy: (c) says the MULTIPLIER
+//            ignores radius, which was equally true of the shipped pre-v2 law; only h = E·R can tell the two
+//            apart. On the same Rocky (Earthlike) draws the shipped law measures +0.014 — that separation IS
+//            the v2 relief law reaching the drawn population.
 //      The `·REF_RELIEF` apparent band is reported as a SOFT ILLUSTRATIVE signal ONLY (lens physics MF1: the linear
 //      model cannot reproduce the convicting 0.70 and is NOT the render proof). The in-band RENDER claim is the
 //      coordinator's live AC-LAB-READ, NOT this gate. This gate proves the MULTIPLIER LAW the lab bakes is bounded.
@@ -51,7 +61,7 @@ import { craterSchedule, isImpactSurface, writeBombardment } from '../../../../s
 import { DRIVER_PRESETS, PRESET_ARCHETYPE, PRESET_NAMES, NAMED_BODY, drawPresetRadius } from '../../../../driver-presets.js';
 import { deriveConditionVector, gravityRadiusShape } from '../../../../body-condition-vector.js';
 import { compositionClass } from '../../../../src/worldengine/base/e1Regime.js';
-import { deriveUniforms, reliefEnvelope, Q_RELIEF, RELIEF_FLOOR, RELIEF_CEIL } from '../../../../planet-lod-lab-core.js';
+import { deriveUniforms, reliefEnvelope, Q_RELIEF, Q_RELIEF_DERIVED, RELIEF_FLOOR, RELIEF_CEIL } from '../../../../planet-lod-lab-core.js';
 import { computeE1 } from '../../../../src/worldengine/base/e1Regime.js';
 import { buildIrregularSphere } from '../../../../planet-lod-rivers.js';
 import { makeSphereField } from '../../../../src/worldengine/base/sphereField.js';
@@ -72,7 +82,11 @@ const RUNTIME_BUDGET_MS = 10 * 60 * 1000;
 // PHOBOS_MULT: the g-floored cap reliefEnvelope(_, 1e-3). The shipped reliefEnvelope floors g at 1e-3 before g^-Q,
 // so NO g (however degenerate) can drive a multiplier past this — it is Phobos' real g=0.00058 already floored, and
 // = the strength ceiling the calibration reports (relief-envelope.mjs). Assert every drawn multiplier ≤ this.
-const PHOBOS_MULT     = reliefEnvelope(1, 1e-3);          // ≈ 54.9541 = (1e-3)^-0.58, clamped ∈ [FLOOR,CEIL]
+// ≈ 54.95408738576244 = (1e-3)^-0.58. HAND-COMPUTED, deliberately NOT reliefEnvelope(1, 1e-3): a gate whose
+// threshold is produced by calling the function under test moves with that function and stops being a gate.
+// g = 1e-3 is far BELOW the v2 seam at g = 1, so this rides the calibrated branch and the v2 relief law
+// (world-engine-v2-relief-law-2026-07-28) leaves it exactly where it was.
+const PHOBOS_MULT     = Math.pow(1e-3, -0.58);
 const ENV_MULT_TOL    = 1e-9;                              // float slack on the ≤ bound (the function is clamped ⇒ exact)
 const REF_RELIEF      = 0.003;                             // Earth rendered relief/R at multiplier 1.0 (ILLUSTRATIVE only)
 
@@ -195,7 +209,7 @@ for (const name of SWEPT) {
     const mult = reliefEnvelope(R, cond.surfaceGravity);
     if (!Number.isFinite(mult)) failures.push(`${name} seed ${s}: reliefEnvelope non-finite (R=${R}, g=${cond.surfaceGravity})`);
     mults.push(mult);
-    envPoints.push({ name, seed: s, R, g: cond.surfaceGravity, mult });
+    envPoints.push({ name, seed: s, R, g: cond.surfaceGravity, mult, cls: compositionClass(cond) });
 
     // E1 regime label ─────────────────────────────────────────────────────────
     const e1 = computeE1(cond, s);
@@ -299,7 +313,37 @@ for (const p of envPoints) {
 if (envRadiusLeaks) {
   failures.push(`envelope gate (radius-independence): ${envRadiusLeaks} point(s) where reliefEnvelope changed when only R moved (radius leak — footnote-14 double-dip NOT resolved) — e.g. ${worstLeak.name} seed ${worstLeak.seed}: ${worstLeak.mult} vs ${worstLeak.perturbed}`);
 }
-const envGateGreen = envOverCap.length === 0 && envMonoViolations === 0 && envRadiusLeaks === 0;
+// (d) ★ v2 ABSOLUTE RELIEF: h = mult·R must fall as R^-1.853 along each rocky preset's own above-seam draws.
+//     ABS_EXP is HAND-WRITTEN (= 1 - 1.70·1.678235294117647); deriving it from the shipped constants would let a
+//     joint retune move the claim and the measurement together, which is the defect this workstream keeps hitting.
+const ABS_EXP = -1.853, ABS_TOL = 1e-6, ABS_MIN_PTS = 3;
+function logLogSlope(pts) {                       // unweighted least squares on (log R, log h)
+  const n = pts.length;
+  const lx = pts.map((p) => Math.log(p.R)), ly = pts.map((p) => Math.log(p.h));
+  const mx = lx.reduce((a, b) => a + b, 0) / n, my = ly.reduce((a, b) => a + b, 0) / n;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) { num += (lx[i] - mx) * (ly[i] - my); den += (lx[i] - mx) ** 2; }
+  return den > 0 ? num / den : NaN;
+}
+const absRows = [];
+for (const name of SWEPT) {
+  // Above the seam AND on the rocky SUPER branch (R > 1): the ruled exponent is stated for R^1.70 gravity, and
+  // a fit straddling the R = 1 join would measure the blend — the same discipline the LAW_REGISTRY entries use.
+  const pts = envPoints.filter((p) => p.name === name && p.cls === 'rocky' && p.g >= 1 && p.R > 1)
+                       .map((p) => ({ R: p.R, h: p.mult * p.R }));
+  if (pts.length < ABS_MIN_PTS) { absRows.push({ name, n: pts.length, slope: null, skipped: true }); continue; }
+  const slope = logLogSlope(pts);
+  absRows.push({ name, n: pts.length, slope, skipped: false });
+  if (!(Math.abs(slope - ABS_EXP) <= ABS_TOL))
+    failures.push(`envelope gate (absolute relief): ${name} absolute-relief slope ${slope.toFixed(6)} != ${ABS_EXP} (tol ${ABS_TOL}) over ${pts.length} above-seam rocky draws`);
+}
+const absQualified = absRows.filter((r) => !r.skipped);
+// NON-VACUITY: a gate that silently qualifies zero presets passes forever. Assert at least one measured.
+if (absQualified.length === 0)
+  failures.push(`envelope gate (absolute relief): NO preset had >=${ABS_MIN_PTS} above-seam rocky draws — the gate measured nothing`);
+const envAbsGreen = absQualified.length > 0 && absQualified.every((r) => Math.abs(r.slope - ABS_EXP) <= ABS_TOL);
+
+const envGateGreen = envOverCap.length === 0 && envMonoViolations === 0 && envRadiusLeaks === 0 && envAbsGreen;
 
 // ── AC-LAB-LEGIBLE envelope + Moon/Mercury boot retained count (for BUILD-NOTES) ────────────────────────
 function bootLegibility() {
@@ -359,11 +403,15 @@ const esBy = {};
 for (const e of erosionSuppressed) esBy[e.name] = (esBy[e.name] || 0) + 1;
 console.log(`  ${Object.entries(esBy).map(([k, v]) => `${k}×${v} (t_exp≈${erosionSuppressed.find((e) => e.name === k).tExp.toFixed(2)}Ga)`).join(', ')}`);
 
-console.log(`\n★ INC-3 ENVELOPE GATE (exact multiplier reliefEnvelope(R,g)=clamp(g^-${Q_RELIEF},${RELIEF_FLOOR},${RELIEF_CEIL})):`);
+console.log(`\n★ INC-3 ENVELOPE GATE (exact multiplier reliefEnvelope(R,g)=clamp(g^-${Q_RELIEF} for g<1 | g^-${Q_RELIEF_DERIVED} for g>=1, ${RELIEF_FLOOR}, ${RELIEF_CEIL})):`);
 console.log(`  drawn multiplier ∈ [${envMinMult.toFixed(4)}, ${envMaxMult.toFixed(4)}]  over ${envPoints.length} points (${SWEPT.length} presets × ${N_SEEDS} seeds)`);
 console.log(`  (a) bound     : max ${envMaxMult.toFixed(4)} ≤ PHOBOS_MULT ${PHOBOS_MULT.toFixed(4)} ⇒ ${envOverCap.length === 0 ? 'OK' : `FAIL (${envOverCap.length} over)`}`);
 console.log(`  (b) monotone  : ${envMonoViolations} sign violation(s) (higher g ⇒ higher mult) ⇒ ${envMonoViolations === 0 ? 'OK' : 'FAIL'}`);
 console.log(`  (c) R-indep   : ${envRadiusLeaks} radius leak(s) (mult moved when only R moved) ⇒ ${envRadiusLeaks === 0 ? 'OK' : 'FAIL'}`);
+console.log(`  (d) absolute  : h = mult·R vs R over above-seam ROCKY draws, claim ${ABS_EXP} (tol ${ABS_TOL}) ⇒ ${envAbsGreen ? 'OK' : 'FAIL'}`);
+for (const r of absRows) {
+  console.log(`        ${r.name.padEnd(30)} ${r.skipped ? `n=${r.n} (skipped, <${ABS_MIN_PTS} above-seam rocky draws)` : `n=${r.n} slope=${r.slope.toFixed(6)}`}`);
+}
 console.log(`  soft/illustrative apparent (REF_RELIEF=${REF_RELIEF}·mult, NOT a gate — lens physics MF1): ∈ [${(REF_RELIEF * envMinMult).toFixed(4)}, ${(REF_RELIEF * envMaxMult).toFixed(4)}]`);
 console.log(`  in-band RENDER claim = coordinator's live AC-LAB-READ, NOT this gate.`);
 
@@ -392,11 +440,12 @@ const summary = {
   },
   coverage: { band: [COV_LO, COV_HI], inBandMin: COV_INBAND_MIN, matureN, matureInBand, matureInBandFrac, matureCovVariance: matureCovVar },
   envelope: {                                  // ★ INC-3
-    law: `reliefEnvelope(R,g)=clamp(g^-${Q_RELIEF}, ${RELIEF_FLOOR}, ${RELIEF_CEIL}); radius via g (unused)`,
-    Q_RELIEF, RELIEF_FLOOR, RELIEF_CEIL, phobosMult: PHOBOS_MULT, refReliefIllustrative: REF_RELIEF,
+    law: `reliefEnvelope(R,g)=clamp(g^-${Q_RELIEF} for g<1 (CALIBRATION) | g^-${Q_RELIEF_DERIVED} for g>=1 (DERIVATION), ${RELIEF_FLOOR}, ${RELIEF_CEIL}); radiusEarth argument accepted but UNUSED (radius via g)`,
+    Q_RELIEF, Q_RELIEF_DERIVED, RELIEF_FLOOR, RELIEF_CEIL, phobosMult: PHOBOS_MULT, refReliefIllustrative: REF_RELIEF,
     nPoints: envPoints.length, multMin: envMinMult, multMax: envMaxMult,
     apparentMinIllustrative: REF_RELIEF * envMinMult, apparentMaxIllustrative: REF_RELIEF * envMaxMult,
     boundOK: envOverCap.length === 0, monotoneViolations: envMonoViolations, radiusLeaks: envRadiusLeaks,
+    absoluteRelief: { claimedExponent: ABS_EXP, tol: ABS_TOL, minPoints: ABS_MIN_PTS, ok: envAbsGreen, rows: absRows },
     wiring: envWiring,
     note: 'The MULTIPLIER bound+monotone+radius-independence is the exact defensible invariant. The apparent band is illustrative only (lens physics MF1); the in-band RENDER claim is the coordinator live AC-LAB-READ.',
   },

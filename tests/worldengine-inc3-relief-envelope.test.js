@@ -10,8 +10,9 @@
 // scalar) — no label/regime reads — satisfying the AC-0 driver-connectivity discipline structurally.
 import { describe, it, expect } from 'vitest';
 import {
-  reliefEnvelope, reliefGravityFactor, Q_RELIEF, RELIEF_FLOOR, RELIEF_CEIL,
+  reliefEnvelope, reliefGravityFactor, Q_RELIEF, Q_RELIEF_DERIVED, RELIEF_FLOOR, RELIEF_CEIL,
 } from '../planet-lod-lab-core.js';
+import { GRAV_R_EXP_SUPER } from '../body-condition-vector.js';
 
 // The old (retired) lab law, reconstructed from its documented closed form for the collapse proof:
 //   reliefNorm(RE, g) = (1/RE)·reliefGravityFactor(g)  (heightKm cancelled in here/ref).
@@ -30,14 +31,25 @@ const ANCHORS = [
   { name: 'Phobos',  R: 0.00174, g: 0.00058,  mult: 54.9541 }, // g-floored ⇒ strength ceiling ~55
 ];
 const WORKED = { R: 0.27, g: 0.28 }; // math-check convicted worked point (Moon/Mercury draw)
-const PHOBOS_MULT = Math.pow(1e-3, -Q_RELIEF); // ≈54.95 — the g-floored cap = most-extreme real body
+// ≈54.95408738576244 — the g-floored cap = most-extreme real body. The 0.58 is HAND-DUPLICATED, not
+// -Q_RELIEF: a bound derived from the constant it bounds moves with it and stops being a bound. g =
+// 1e-3 is far BELOW the v2 seam at g = 1, so this rides the calibrated branch and is unchanged by
+// the v2 relief law.
+const PHOBOS_MULT = Math.pow(1e-3, -0.58);
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════════
 describe('Inc-3 AC-ENVELOPE — exported constants match the calibration (relief-envelope.mjs)', () => {
   it('Q_RELIEF / RELIEF_FLOOR / RELIEF_CEIL are the calibration-solved constants', () => {
     expect(Q_RELIEF).toBe(0.58);       // 2-sig-fig least-squares fit through the distributed-relief anchors
-    expect(RELIEF_FLOOR).toBe(0.40);   // inherited from the reliefGravityFactor floor
+    // v2 relief law 2026-07-28: no longer a physics clamp. It is a degenerate-safety guard — on the
+    // rocky curve it first binds at R = 5.0236 / g = 15.5499 / M = 392.4 M⊕, and it binds on no
+    // seeded draw of any preset (worst is Jovian at R ≈ 13.99 → 0.14459, clearing it by 14.46x).
+    expect(RELIEF_FLOOR).toBe(0.01);
     expect(RELIEF_CEIL).toBe(133);     // apparent-0.40 ceiling as a multiplier (documentation constant)
+    expect(Q_RELIEF_DERIVED).toBe(1.678235294117647);   // hand-duplicated literal
+    expect(GRAV_R_EXP_SUPER).toBe(1.70);                // hand-duplicated literal
+    // the COUPLING, written from literals only so a joint retune of either constant fails here:
+    expect(Q_RELIEF_DERIVED).toBe(1.09 + 1 / 1.70);     // Guimond slope / rocky super exponent
   });
 
   it('reliefEnvelope reproduces the calibration "new×" multiplier column at every anchor', () => {
@@ -89,10 +101,14 @@ describe('Inc-3 AC-ENVELOPE — clamps behave; reference is a no-op (byte-safe a
     expect(reliefEnvelope(1, 1)).toBe(1);
   });
 
-  it('FLOOR binds only for high-g worlds (g ≳ 4.85); a 10-g world clamps to RELIEF_FLOOR', () => {
-    expect(reliefEnvelope(1, 10)).toBe(RELIEF_FLOOR);
-    // just above the crossover g ≈ 4.854 the floor is reached; just below it the law is still live:
-    expect(reliefEnvelope(1, 3)).toBeGreaterThan(RELIEF_FLOOR);
+  it('FLOOR is a degenerate-safety guard, not a physics clamp: it first binds past g ≈ 15.55', () => {
+    // hand-computed from the shipped law, NOT read back from it:
+    //   0.01^(-1/1.678235294117647) = 15.549914506203871  →  R = 5.0236 / M = 392.4 M⊕ on the rocky curve
+    expect(reliefEnvelope(1, 20)).toBe(0.01);
+    expect(reliefEnvelope(1, 16)).toBe(0.01);
+    expect(reliefEnvelope(1, 15)).toBe(0.010622876683111848);
+    expect(reliefEnvelope(1, 10)).toBe(0.02097803018046096);
+    expect(reliefEnvelope(1, 3)).toBe(0.15822615361106382);
   });
 
   it('CEIL never binds — the internal g-floor caps the multiplier well under RELIEF_CEIL', () => {
@@ -104,11 +120,70 @@ describe('Inc-3 AC-ENVELOPE — clamps behave; reference is a no-op (byte-safe a
   });
 });
 
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// v2 relief law (world-engine-v2-relief-law-2026-07-28) — the g = 1 SEAM.
+// "Calibration below, derivation above": a DATA boundary, not a physical transition. Every expected
+// value below is a HAND-WRITTEN LITERAL — read once off the shipped build and transcribed, never
+// recomputed from the constants under test, so perturbing Q_RELIEF / Q_RELIEF_DERIVED / RELIEF_FLOOR
+// makes these FAIL rather than move with the code (mutation-verified at build time).
+describe('v2 seam — calibration below g = 1, derivation above', () => {
+  it('(AC-SEAM) every measured body below the seam is BIT-IDENTICAL to the shipped build', () => {
+    // (R, g) pairs read off the real presets via deriveConditionVector; the expected multipliers are
+    // the shipped g^-0.58 values. All five sit below g = 1, so the v2 law must not move any of them.
+    expect(reliefEnvelope(0.27, 0.1756303990741334)).toBe(2.7424087181502013);   // Moon/Mercury @ R=0.27
+    expect(reliefEnvelope(0.38, 0.2770083102493075)).toBe(2.1054948190870233);   // Moon/Mercury canonical
+    expect(reliefEnvelope(0.53, 0.38091847632609466)).toBe(1.7503198484819087);  // Mars canonical
+    expect(reliefEnvelope(0.40, 0.15624999999999997)).toBe(2.9348396980002267);  // Titan canonical
+    expect(reliefEnvelope(0.95, 0.9030470914127423)).toBe(1.0609330264979282);   // Venus canonical
+    expect(reliefEnvelope(1.00, 0.9)).toBe(1.0630148818083676);                  // Rocky (Earthlike) canonical
+    // (AC-NOWAVES) nowhere near the 24.666 the UNAMENDED (no-seam, Earth-anchored g^-1.09/R) law
+    // would have produced at R = 0.27 — 3.5x the 7.0x that was rejected as "molten waves".
+    expect(reliefEnvelope(0.27, 0.1756303990741334)).toBeLessThan(3);
+  });
+
+  it('(AC-CONTINUOUS) the seam is continuous at every reachable radius, for ANY radius', () => {
+    // Math.pow(1, ±anything) === 1, so the two branches meet at exactly 1 independently of R. The
+    // radii include the seam radii of the presets whose seeded draw bands straddle g = 1 (Jovian
+    // 4.4208, Saturnian 8.7246) plus the rocky sub-branch corner at 0.92.
+    for (const R of [0.27, 0.92, 1.0, 1.5, 4.4208, 8.7246, 14]) {
+      expect(reliefEnvelope(R, 1)).toBe(1);
+      expect(reliefEnvelope(R, 1 - 1e-9) / reliefEnvelope(R, 1 + 1e-9)).toBeCloseTo(1, 8);
+    }
+  });
+
+  it('the DERIVED branch is pinned above the seam', () => {
+    expect(reliefEnvelope(1, 2)).toBe(0.3124646105577125);
+    expect(reliefEnvelope(1, 2)).toBe(Math.pow(2, -1.678235294117647));
+  });
+
+  it('(AC-LAW) absolute relief h = E*R follows g^-1.09 on the rocky super-Earth branch', () => {
+    // On the synthetic Earth-anchored curve g = R^1.70 (R_c = 1, g_c = 1), log(E*R)/log(g) IS the
+    // delivered absolute exponent — no log-log fit needed. The 1.70 is hand-duplicated from
+    // GRAV_R_EXP_SUPER; the pin above asserts they agree.
+    for (const R of [1.02, 1.05, 1.2, 1.5, 2, 3, 4]) {
+      const g = Math.pow(R, 1.70);
+      expect(Math.log(reliefEnvelope(R, g) * R) / Math.log(g)).toBeCloseTo(-1.09, 9);
+    }
+  });
+
+  it('the DECLARED RESIDUAL is pinned so it cannot silently change', () => {
+    // Non-rocky classes keep the linear radius-gravity ratio (their g goes as R^1, not R^1.70),
+    // so they receive an absolute exponent of -0.678235294117647, not -1.09. That is
+    // body-condition-vector.js's declared non-rocky debt surfacing here, NOT a defect in this
+    // function: no two-argument (R, g) form can repair it and stay continuous at the seam.
+    for (const R of [2, 3, 5]) {
+      expect(Math.log(reliefEnvelope(R, R) * R) / Math.log(R)).toBeCloseTo(-0.678235294117647, 9);
+    }
+  });
+});
+
 describe('Inc-3 AC-ENVELOPE + AC-0 — radius flows via g ONLY (the footnote-14 double-dip is gone)', () => {
   it('reliefEnvelope return is INDEPENDENT of radiusEarth at fixed g (no explicit 1/RE term)', () => {
     // The whole convicted defect was the uncapped explicit 1/RE. The replacement must not read R:
     // hold g fixed, vary R across five orders of magnitude — the multiplier must not move.
-    for (const g of [1.0, 0.28, 0.00648]) {
+    // v2: the g list spans BOTH branches (12 and 2.5 are above the seam, 1.0 is on it) so this is a
+    // statement about the adopted form as a whole, not just its calibrated half.
+    for (const g of [12, 2.5, 1.0, 0.28, 0.00648]) {
       const base = reliefEnvelope(1, g);
       for (const R of [1e-3, 0.03, 0.27, 1.0, 16, 1e3]) {
         expect(reliefEnvelope(R, g)).toBe(base);

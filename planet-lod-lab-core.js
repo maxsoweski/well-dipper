@@ -1093,20 +1093,50 @@ export function reliefGravityFactor(surfaceGravity) {
 // composition — g ALREADY carries the radius signal. Radius therefore flows through g exactly ONCE
 // (the audit footnote-14 double-dip resolved) and the explicit 1/RE is DROPPED.
 //
-// ⚠ THAT ARGUMENT IS TRUE OF THE CONDITION VECTOR AND FALSE AT THIS FUNCTION'S BIGGEST CALL SITE.
-// planet-lod-lab.html:5908 computes uPerturb from `state.surfaceGravity`, whose sole writer
-// (:3016) is deriveUniforms' CANONICAL, radius-blind g — not the condition vector's. So for the
-// global relief-amplitude uniform the radius signal never arrives, and dropping 1/RE removed the
-// only radius term that consumer had. Filed, with the full trace and why fixing it is sequenced
-// after the v2 relief law rather than bundled into the gravity fix:
+// THAT ARGUMENT IS NOW TRUE AT THIS FUNCTION'S BIGGEST CALL SITE TOO (v2-relief-law-2026-07-28).
+// It used to be false there: planet-lod-lab.html computed uPerturb from `state.surfaceGravity`,
+// whose sole writer took deriveUniforms' CANONICAL, radius-blind g rather than the condition
+// vector's, so for the global relief-amplitude uniform the radius signal never arrived. That
+// writer (planet-lod-lab.html:3033) now assigns deriveConditionVector(...).surfaceGravity, so the
+// radius signal does arrive and the "radius flows through g exactly once" argument covers the
+// uniform as well as the vector. The historical record of the defect, kept because it explains
+// why the fix had to ship in the same commit as the law:
 //   docs/WORKSTREAMS/world-engine-gravity-selfcompression-2026-07-28/evidence/FINDING-uperturb-radius-blind.md
-// Do NOT read the paragraph above as a statement about what uPerturb currently does.
+//
+// ── THE SEAM AT g = 1 (v2 relief law, 2026-07-28). CALIBRATION BELOW, DERIVATION ABOVE. ───────
+// This is a DATA boundary, NOT a physical transition. Nothing changes about the rock at 1 g; what
+// changes is whether there is anything to fit. Earth is the only Solar-System body at ≥ 0.9 g, so
+// the measurements the calibration rests on simply stop there. Two branches, both in g only:
+//   g <  1  →  g^-Q_RELIEF          the shipped 5-body least-squares fit, UNCHANGED and
+//                                   bit-identical to the pre-v2 build at every reachable point.
+//   g >= 1  →  g^-Q_RELIEF_DERIVED  Guimond+2022's ABSOLUTE slope 1.09, converted to fractional
+//                                   relief/R, so absolute relief h = E·R follows g^-1.09 ON THE
+//                                   ROCKY SUPER-EARTH BRANCH (where gravity goes as R^1.70).
+// Continuous by construction: Math.pow(1, ±anything) === 1, so both branches meet at exactly 1 for
+// ANY radius. The conversion factor that makes the derived branch fractional is the radius at which
+// a body's own curve crosses 1 g, and that radius cancels against the body's radius identically —
+// which is why this function still needs no radius term and radiusEarth stays unused.
+//
+// TWO RESIDUALS, DECLARED RATHER THAN HIDDEN:
+//  (1) NON-ROCKY classes above the seam receive an absolute exponent of -0.678235294117647, not
+//      -1.09 (37.8% shallow). Reachable inside the seeded draw bands (Jovian and Sub-Neptune draw
+//      wholly above the seam; Saturnian and Neptunian partly). The cause is NOT this function: it
+//      is body-condition-vector.js's declared debt, where gravityRadiusRatio gates the
+//      self-compression shape on the rocky class and leaves every other class on the linear ratio
+//      R/R_c — a status quo held deliberately because Zeng has no standing for h2-he envelopes,
+//      ice mantles or carbon worlds. No two-argument (R, g) form can repair it and stay continuous.
+//  (2) The ROCKY SUB-BRANCH CORNER (drawn R < 1 while g ≥ 1) receives -0.928235294117647, because
+//      below 1 R⊕ gravity goes as R^(4/3) and the conversion exponent is 0.75, not 0.5882. Worst
+//      magnitude error ≈1.8%. Reachable on exactly two presets and only by dragging the radius
+//      slider, never by a seeded draw: Magma R ∈ [0.9214, 1) and Moon/Mercury R ∈ [0.9952, 1).
 //
 // surfaceGravity is floored at
 // 1e-3 before the power so a degenerate near-zero g caps the multiplier at (1e-3)^-Q ≈ 55 (≤ the
-// Phobos strength extreme) instead of blowing up. Q_RELIEF/RELIEF_FLOOR/RELIEF_CEIL are anchor-fit
+// Phobos strength extreme) instead of blowing up. Q_RELIEF and RELIEF_CEIL are anchor-fit
 // in the workstream's calibration/relief-envelope.mjs (least squares through the real-body
-// relief/radius anchors Earth/Mercury/Mars/Moon/Mimas, forced Earth=1). radiusEarth is accepted
+// relief/radius anchors Earth/Mercury/Mars/Moon/Mimas, forced Earth=1); RELIEF_FLOOR is NOT — it
+// was inherited from reliefGravityFactor's 0.40 and was moved to 0.01 by the v2 relief law, where
+// it stopped being a physics clamp and became a degenerate-safety guard. radiusEarth is accepted
 // for call-site symmetry with the old reliefNorm signature but is UNUSED in the return (radius via
 // g). Sign kept: lower g ⇒ higher relief/R.
 // ⚠ Q_RELIEF IS CALIBRATION, AND IT DISAGREES WITH THE STRENGTH MODEL. It is a least-squares fit
@@ -1120,11 +1150,23 @@ export function reliefGravityFactor(surfaceGravity) {
 // (excluding it moves 0.559 → 0.699); and there is NO measured super-Earth topography at all, so
 // nothing above 1 g is calibration. Full record + verbatim quotes:
 //   research/superearth-relief-law-citations-resolved-2026-07-28.md
-export const Q_RELIEF = 0.58;      // relief/R ∝ g^-Q_RELIEF; 2-sig-fig least-squares fit (CALIBRATION, g ≤ 1 only)
-export const RELIEF_FLOOR = 0.40;  // inherited from the reliefGravityFactor floor; binds only g ≳ 4.85
+export const Q_RELIEF = 0.58;      // relief/R ∝ g^-Q_RELIEF BELOW the seam; 2-sig-fig least-squares fit (CALIBRATION, g ≤ 1 only)
+// ⚠ HAND-WRITTEN LITERAL, deliberately NOT imported/derived. = 1.09 + 1/GRAV_R_EXP_SUPER
+// = 1.09 + 1/1.70, exact in IEEE. Guimond, Rudge & Shorttle 2022 (doi:10.3847/PSJ/ac562e) give
+// the ABSOLUTE slope 1.09; dividing through by the rocky radius→gravity exponent 1.70 converts it
+// to the fractional relief/R this function returns. Importing GRAV_R_EXP_SUPER to derive it would
+// turn this zero-import leaf module into one that pulls baseStep/alea/simplex-noise; the coupling
+// is guarded instead by a cross-module consistency test in
+// tests/worldengine-inc3-relief-envelope.test.js, which hand-writes BOTH numbers.
+export const Q_RELIEF_DERIVED = 1.678235294117647;
+export const RELIEF_FLOOR = 0.01;  // DEGENERATE-SAFETY GUARD, not a physics clamp. It names no binding
+                                   // gravity: on the rocky curve it first binds at R = 5.0236 / M = 392 M⊕,
+                                   // ~78x past Guimond's cited 5 M⊕ upper domain edge, and it does not bind
+                                   // on any seeded draw of any preset (worst is Jovian at R≈14 → 0.14459).
 export const RELIEF_CEIL = 133;    // apparent-0.40 ceiling as a multiplier; never binds (g-floor caps ≈ 55)
 export function reliefEnvelope(radiusEarth, surfaceGravity) {
-  return Math.min(RELIEF_CEIL, Math.max(RELIEF_FLOOR, Math.pow(Math.max(surfaceGravity, 1e-3), -Q_RELIEF)));
+  const g = Math.max(surfaceGravity, 1e-3);
+  return Math.min(RELIEF_CEIL, Math.max(RELIEF_FLOOR, Math.pow(g, g >= 1 ? -Q_RELIEF_DERIVED : -Q_RELIEF)));
 }
 
 // Animation-rate factor. Bounded, ∝ 1/radiusEarth relative to a reference radius: big worlds

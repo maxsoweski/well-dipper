@@ -31,7 +31,7 @@ import {
   craterSchedule, isImpactSurface,
   G_REF, K_GS, B_SFD, C_BASIN,
 } from '../base/bombardment.js';
-import { reliefEnvelope, Q_RELIEF, RELIEF_FLOOR, RELIEF_CEIL } from '../../../planet-lod-lab-core.js';
+import { reliefEnvelope, Q_RELIEF, Q_RELIEF_DERIVED, RELIEF_FLOOR, RELIEF_CEIL } from '../../../planet-lod-lab-core.js';
 import { deriveConditionVector, GRAV_R_EXP_SUB, GRAV_R_EXP_SUPER } from '../../../body-condition-vector.js';
 import { fitPowerLaw, lawVerdict, DEFAULT_Z } from './stats.js';
 
@@ -133,16 +133,66 @@ export const LAW_REGISTRY = [
     measure: (c, deps) => deps.craterSchedule(c).D_HI_KM,
   },
   {
-    id: 'relief-envelope-vs-gravity',
-    claim: `relief/R scales as g^-Q_RELIEF (Q_RELIEF = ${Q_RELIEF}), clamped to [${RELIEF_FLOOR}, ${RELIEF_CEIL}]`,
-    source: 'planet-lod-lab-core.js — reliefEnvelope(R, g) = clamp(g^-Q_RELIEF, FLOOR, CEIL)',
+    id: 'relief-envelope-vs-gravity-calibrated',
+    claim: `BELOW the g = 1 seam, relief/R scales as g^-Q_RELIEF (Q_RELIEF = ${Q_RELIEF}) — the 5-body `
+         + 'Solar-System least-squares CALIBRATION, unchanged by the v2 law and bit-identical to the '
+         + `shipped build. Clamped to [${RELIEF_FLOOR}, ${RELIEF_CEIL}].`,
+    source: 'planet-lod-lab-core.js — reliefEnvelope(R, g) = clamp(g^-Q_RELIEF, FLOOR, CEIL) for g < 1',
     driver: 'surfaceGravity',
-    // Swept strictly INSIDE the clamp band: the floor binds at g >~ 4.85, and a law audit that
-    // sweeps across its own clamp measures the clamp, not the law.
-    values: [0.15, 0.25, 0.4, 0.6, 1.0, 1.6, 2.5],
-    claimedExponent: -Q_RELIEF,
+    // Swept strictly BELOW the seam. A sweep spanning g = 1 measures the BLEND of two branches, not
+    // either law — the identical defect the two gravity-vs-radius entries below document for their
+    // own R = 1 join. MEASURED: the pre-split [0.15 … 2.5] sweep returns -0.889 +/- 0.109 (r2 0.930)
+    // against a claim of -1.678, i.e. FAIL by construction. Also strictly inside the clamp: this
+    // branch tops out at 0.15^-0.58 = 3.005, far under CEIL, and never approaches FLOOR.
+    values: [0.15, 0.25, 0.35, 0.45, 0.60, 0.80, 0.95],
+    // ⚠ LITERAL, deliberately NOT -Q_RELIEF — see the note on gravity-vs-radius-selfcompression-super.
+    claimedExponent: -0.58,
     nullValue: 0,
     measure: (c, deps) => deps.reliefEnvelope(c.radiusEarth, c.surfaceGravity),
+  },
+  {
+    id: 'relief-envelope-vs-gravity-derived',
+    claim: `ABOVE the g = 1 seam, relief/R scales as g^-Q_RELIEF_DERIVED (= ${Q_RELIEF_DERIVED}) — `
+         + 'Guimond, Rudge & Shorttle 2022 (doi:10.3847/PSJ/ac562e) ABSOLUTE slope 1.09 divided by '
+         + 'the rocky radius-to-gravity exponent 1.70, so absolute relief h = E*R follows g^-1.09 on '
+         + "the rocky super-Earth branch. Amplitude is Earth's observed 19.9 km, never the paper's.",
+    source: 'planet-lod-lab-core.js — reliefEnvelope(R, g) = clamp(g^-Q_RELIEF_DERIVED, FLOOR, CEIL) for g >= 1',
+    driver: 'surfaceGravity',
+    // Strictly ABOVE the seam and strictly inside the clamp: these points span [0.0976, 0.9214];
+    // FLOOR 0.01 first binds at g = 15.5499.
+    values: [1.05, 1.30, 1.60, 2.00, 2.50, 3.20, 4.00],
+    // ⚠ LITERAL, deliberately NOT -Q_RELIEF_DERIVED — same reason as the gravity entries below.
+    claimedExponent: -1.678235294117647,
+    // The alternative this branch must be separable FROM is not "no response to g" — it is the
+    // CALIBRATED branch simply continuing across the seam, i.e. the pre-v2 shipped law. Same
+    // construction as crater-count-independent-of-gravity, whose null is the removed g^0.34 coupling.
+    nullValue: -0.58,
+    nullMeaning: 'the calibrated branch g^-0.58 continuing above the seam (the pre-v2 shipped law)',
+    measure: (c, deps) => deps.reliefEnvelope(c.radiusEarth, c.surfaceGravity),
+  },
+  {
+    id: 'relief-absolute-vs-radius',
+    claim: 'ABSOLUTE relief h = reliefEnvelope(R, g(R))*R falls as R^-1.853 along a rocky body\'s own '
+         + 'radius trajectory above the seam — the ruled h ~ g^-1.09 expressed in the variable the '
+         + 'render actually moves. This is the ONLY registry entry that can see the ruled exponent: '
+         + 'the two vs-gravity entries hold radiusEarth at 1.0 and are structurally blind to it.',
+    source: 'planet-lod-lab-core.js reliefEnvelope x body-condition-vector.js gravityRadiusShape — '
+          + 'h ~ R^(1 - 1.70*1.678235294117647) = R^-1.853',
+    driver: 'radiusEarth',
+    // Strictly above the R = 1 join AND above the g = 1 seam (on ROCKY_FP, g = R^1.70, so g >= 1 iff
+    // R >= 1). The top point 1.54 stays inside BOTH cited domains: Zeng's 8 M-earth (R <= 1.7542)
+    // and Guimond's 5 M-earth (R <= 1.5449). Far short of the FLOOR bind at R = 5.0236.
+    values: [1.05, 1.12, 1.20, 1.28, 1.36, 1.45, 1.54],
+    claimedExponent: -1.853,   // LITERAL — see the note on gravity-vs-radius-selfcompression-super
+    // "the envelope ignores radius" is NOT unreachable here — it is the state at HEAD, where the
+    // shipped g^-0.58 law leaves absolute relief near-flat in radius (MEASURED +0.014 on these exact
+    // points). So the null is that measured value, not 0.
+    nullValue: 0.014,
+    nullMeaning: 'the shipped pre-v2 law, whose absolute relief is near-flat in radius (R^+0.014)',
+    measure: (c, deps) => {
+      const cond = deps.deriveConditionVector(ROCKY_FP, null, c.radiusEarth);
+      return deps.reliefEnvelope(cond.radiusEarth, cond.surfaceGravity) * cond.radiusEarth;
+    },
   },
 
   // ── The two gravity-vs-radius laws (gravity-selfcompression-2026-07-28). ──────────────────────

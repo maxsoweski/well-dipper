@@ -3030,7 +3030,10 @@
         state._radiusDirty = false;
       }
       // Stash surface gravity for the AC3 relief-gravity factor + the AC7 readout panel.
-      state.surfaceGravity = u.surfaceGravity;
+      // The radius-aware condition gravity, NOT deriveUniforms' canonical radius-blind g. This is
+      // the sole writer of state.surfaceGravity, read by the uPerturb envelope (:5937) and the
+      // AC7 "surface gravity" readout (:4283); both were radius-deaf until this line changed.
+      state.surfaceGravity = deriveConditionVector(DRIVER_PRESETS[driverUI.preset], u, state.planetRadiusEarth).surfaceGravity;
       // D15 habitability (P27/P28 biotic+technogenic driver) — stored so the per-frame
       // overlay writers can gate bio/city/machine/ecu coverage to 0 on uninhabitable
       // worlds (catalog re-base 2026-06-14 declared these driven by habitability, but
@@ -5933,7 +5936,10 @@
       uniforms.uLevels.value = state.levels;
       // ── AC3/AC4 scale factors (computed once per frame from the live radius + gravity) ──
       // _animRate ∝ 1/radius — big worlds animate slower (lava breathing, churn, storm drift,
-      // city flash). _gNow is the stashed surface gravity read by reliefEnvelope() (the relief cap).
+      // city flash). _gNow is the RADIUS-AWARE condition gravity stashed by applyDrivers(), read by
+      // reliefEnvelope() (the relief cap). It lags a live radius drag by applyDrivers()' 220 ms
+      // trailing debounce — the lab's standard terrain-re-derive idiom, and harmless here because
+      // the envelope is bounded and carries no radius term that could run away between frames.
       const _RE = state.planetRadiusEarth, _gNow = state.surfaceGravity ?? 1.0;
       const _animRate = animationRateFactor(_RE);
       // AC3 global relief (perturb) — the ONE relief-envelope application (Inc-3): the planet-wide

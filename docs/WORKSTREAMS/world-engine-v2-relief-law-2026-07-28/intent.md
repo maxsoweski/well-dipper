@@ -39,13 +39,20 @@ citing the falling law that replaced it.** The brief calls that the single worst
 Splitting the workstream is what would make that mistake possible, so the ordering is an AC.
 
 ⭐ **THERE ARE THREE SEAMS, NOT TWO — and the third one is inside this workstream.** The rulings file
-lists two. The settlement found a third and it is not optional: the new envelope form carries a `1/R`
-term, and `planet-lod-lab.html:5937` feeds it `state.surfaceGravity`, whose sole writer (`:3033`)
-takes `deriveUniforms`' **canonical, radius-blind** `g`. Ship the new form against a frozen `g` and
-the envelope degenerates to **bare uncapped `1/R`**, making `h = 19.9·g_c^−1.09` — *constant in
-radius*, which is the exact worst outcome the ordering exists to prevent, arrived at from the other
-direction. **The `uPerturb` feed fix must land in the same commit as the law**, not after it.
+lists two. The settlement found a third: `planet-lod-lab.html:5937` feeds the envelope
+`state.surfaceGravity`, whose sole writer (`:3033`) took `deriveUniforms`' **canonical, radius-blind**
+`g`. **The `uPerturb` feed fix lands in the same commit as the law.**
 `bodyDrivers.massGravity` can keep its place in the queue; this cannot.
+
+> ⚠ **CORRECTED DURING BUILD 2026-07-28.** This paragraph originally justified that ordering by
+> asserting *"the new envelope form carries a `1/R` term … ship the new form against a frozen `g`
+> and the envelope degenerates to bare uncapped `1/R`."* **The adopted form has no radius term**, so
+> that hazard is **structurally unreachable**, not merely avoided by ordering. (Along any physical
+> trajectory the seam-normalising radius cancels identically — see the AC-CONTINUOUS annotation in
+> `contract.json` — so every continuous candidate is a `g`-only law.) The feed fix still lands in the
+> same commit, for the **other** ordering reason: the `RELIEF_FLOOR` = 0.40 clamp. Measured, with the
+> new law against the old floor, the clamp binds at **R = 1.3787** on a `g_c = 1` rocky body and
+> **R = 1.4669** on Rocky (Earthlike) — *inside* Rocky's own seeded draw band `[0.8, 1.5]`.
 
 ## Success criteria (Max's language)
 
@@ -91,6 +98,17 @@ Concretely, for this workstream:
   but **not automatically elsewhere on the g = 1 locus**, because g = 1 does not imply R = 1 for
   presets whose canonical radius is not 1. Deriving the continuous form is a build task with
   continuity as an acceptance criterion — it is not hand-waved here.
+
+  > **RESOLVED DURING BUILD 2026-07-28: there is no `/R` form.** The `/R` cancels identically.
+  > Along any physical trajectory `g = g_c·(R/R_c)^n`, the radius `R_s` at which that body's own
+  > gravity crosses 1 satisfies `R_s/R = g^(−1/n)` exactly — both `R_c` and `g_c` cancel, for every
+  > composition class — so the seam-normalised form `E = (R_s/R)·g^−1.09` collapses to the
+  > **`g`-only** law `g^−(1.09 + 1/n)`. Pinning `n = 1.70` (the rocky super-Earth branch) gives
+  > `Q_RELIEF_DERIVED = 1.09 + 1/1.70 = 1.678235294117647`, exact in IEEE. Continuity is then
+  > structural rather than fitted — `Math.pow(1, ±anything) === 1`, so the branches meet at exactly
+  > 1 for **any** radius — and `reliefEnvelope` keeps its unused `radiusEarth` argument. Measured:
+  > one-sided ratio at `g = 1 ± 1e-9` is `1.0000000023` at every preset seam radius; 0 mismatches
+  > below the seam over 363 points across all 18 presets.
 - **`RELIEF_FLOOR` no longer binds inside the super-Earth population.** Whatever it becomes, it must
   not silently re-impose constant relief on the branch the law was adopted to describe.
 
@@ -108,6 +126,14 @@ Concretely, for this workstream:
   above R = 1. The shipped implied absolute exponent is **+0.0082** — relief is flat, then *rises*
   once the floor bites. The failure mode the ruling worried about is not a risk being avoided; it is
   the status quo being corrected, and its cause is the exponent, not the clamp.
+
+  > **CORRECTED DURING BUILD 2026-07-28 — the `+0.0082` is an exponent IN GRAVITY, not in radius.**
+  > `1/1.70 − 0.58 = 0.008235294117647118` is the shipped absolute-relief slope measured against
+  > `g`. Expressed against **radius** — the variable the slider and the render actually move — the
+  > same fact is **+0.014000000000000123** (`1 − 1.70·0.58`), measured `+0.013999999999999834` by
+  > the real `auditLaw` on the `relief-absolute-vs-radius` sweep points. Any radius-driven guard's
+  > `nullValue` must therefore be **+0.014**, not +0.0082, or it cannot separate the adopted law
+  > (`−1.853`) from the shipped one.
 - Dragging the radius slider right on a rocky world **visibly subdues relief** — a heavier world's
   mountains are crushed toward the datum — and dragging left exaggerates it (the Olympus-Mons read).
   Today the slider does nothing at all to global relief amplitude on any preset.
@@ -117,10 +143,19 @@ Concretely, for this workstream:
   ⚠️ **Correction to this criterion as first drafted.** It originally read *"and at the canonical
   radius the change is bit-for-bit invisible."* **That sentence was false and is struck.** It was
   inherited from the gravity workstream, where it held because `gravityRadiusRatio` is `x/x` at
-  canonical. Here, **17 of 18 presets change at their own canonical radius** (Titan 2.935 → 18.909;
-  Mars 1.750 → 5.403; even Rocky/Earthlike 1.063 → 1.122, because its `g_c` is 0.90, not 1.0). Only
-  Eyeball (`R_c = 1, g_c = 1`) is invariant. Recorded rather than quietly deleted, because it was
-  about to become an AC that could not be passed.
+  canonical. Here, **8 of 18 presets change at their own canonical radius** — exactly the `g_c > 1`
+  set: Ocean 1.0744, Jovian 2.5335, Saturnian 1.0774, Neptunian 1.1243, Sub-Neptune 1.1248,
+  Hot Jupiter 2.3669, Magma 2.2222, Carbon 1.1570. Recorded rather than quietly deleted, because it
+  was about to become an AC that could not be passed.
+
+  > **CORRECTED DURING BUILD 2026-07-28.** The replacement sentence, as first written, was itself
+  > wrong: it said **17 of 18** and cited *"Titan 2.935 → 18.909; Mars 1.750 → 5.403; even
+  > Rocky/Earthlike 1.063 → 1.122."* Those are the **unamended** no-seam law's numbers. Under the
+  > amended (seam) ruling only bodies at or above `g = 1` move at all, so it is **8 of 18**.
+  > Measured, unchanged: Titan stays `2.9348396980002267`, Mars stays `1.7503198484819087`, Venus
+  > stays `1.0609330264979282`, Moon/Mercury stays `2.1054948190870233`, and Rocky/Earthlike stays
+  > `1.0630148818083676` — its `g_c` is 0.90, **below** the seam. Eyeball (`R_c = 1, g_c = 1`) sits
+  > exactly on the seam and returns 1.0 on either branch, so it does not move either.
 
   **Goldens hold for a different reason than that sentence claimed:** `reliefEnvelope` is not
   imported anywhere in the bake path (only `src/worldengine/instrument/laws.js:34` and
@@ -134,6 +169,18 @@ Concretely, for this workstream:
   misidentified by 12–21×**; `p_C = 0` is *chosen against underdetermined physics*, not derived), and
   the `Q_RELIEF` block's "g already carries the radius signal" argument must stop being stated as
   true of a call site where it is false.
+
+  > **BLOCKED DURING BUILD 2026-07-28 — the `p_C` half was NOT actioned.** A repo-wide grep of every
+  > `.js`/`.html`/`.mjs` outside `docs/` and `research/` for `p_C`, `P_C`, `Landais`, `flexur`,
+  > "spectral break", "scale break", "texture exponent" and "elastic thickness" returns **zero**
+  > hits for the texture-scale material. **There is no `p_C` constant in the code**, so there is no
+  > comment citing the Landais break to strike; the material lives only in
+  > `research/superearth-v2-{decision-brief,rulings}-2026-07-28.md`. Writing a *new* `p_C` comment
+  > to satisfy the AC would be inventing the thing the AC asks to correct, and `p_C` belongs to
+  > **ruling 2 (terrain texture scale)**, which this workstream does not implement. **Needs a scope
+  > decision from Max:** drop item (1) from AC-HONEST, or move it to a ruling-2 workstream that
+  > actually introduces `p_C`. The second correction (the "g already carries the radius signal"
+  > argument) **is** actioned, in `planet-lod-lab-core.js`.
 
 ## Non-goals (named, so they don't creep in)
 
