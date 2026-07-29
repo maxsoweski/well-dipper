@@ -46,6 +46,14 @@ The literature that reaches above 1 g, with everything converted to h ∝ g^−q
 
 2. **The escape hatch for constant relief is gone.** The lens report proposed that if brittle strength Y itself scales with gravity (Heap, Byrne & Mikhail 2017), the 1/g cancels and you get constant absolute relief — a defensible route to your preferred answer. The referee retrieved Heap in full and killed it. Heap's *own* explanation for Mars's tall volcanoes is lithospheric **thickness**, which on a super-Earth goes the wrong way (higher g → thinner brittle layer → *less* support). And closing Melosh self-consistently with Coulomb friction gives h = 2Y₀/[ρg(1−2μ)] — still 1/g, with friction only in the prefactor. Melosh's own Coulomb branch confirms this. **There is currently no published mechanism supporting constant absolute relief above 1 g.**
 
+> ⚠️ **CORRECTION 2026-07-28 (post-ruling, by the settlement workflow): item 3 below is WRONG on its
+> arithmetic and its conclusion.** It compares a *fractional* clamp against the *absolute* exponent.
+> The floor binds at **R = 1.379 R⊕ / g = 1.726 / M = 3.28 M⊕**, not R = 1.64 — *earlier* than the
+> v1 estimate of 1.40, so moving it is **more** urgent, not less. This page self-refutes: the table
+> at line 23 gives 0.31× fractional at 1.5 R⊕, already below 0.40. The RECOMMENDATION (move the
+> floor) is unaffected and is now `RELIEF_FLOOR = 0.01`. See
+> `docs/WORKSTREAMS/world-engine-v2-relief-law-2026-07-28/`.
+
 3. **`RELIEF_FLOOR = 0.40` must move — and the reason is the opposite of what was first argued.** At q = 1.09 the floor binds at g = 2.32, i.e. **R = 1.64 R⊕**. That is *later* than the v1 estimate (R = 1.40), so adopting the shallower exponent makes it less urgent, not more. But it still binds inside the super-Earth population, and above that radius it would clamp the whole branch flat — **accidentally implementing constant relief while claiming to implement the derived law**. That is the single worst outcome available: your preferred answer wearing the wrong citation.
 
 **Also adopt: drop the piecewise-in-g break entirely.** Melosh's data cannot locate a break in g (Mars and Mercury sit at identical gravity a factor of 3 apart in observed/ceiling ratio). Guimond's law is *continuous* in M across 0.1–5 M⊕ — it spans both sides of the proposed break with one exponent. If you want a low-g deviation, the models say it belongs at the *low* end (Moon, Mercury: obs/ceiling 0.41 and 0.53), where relief is *below* the model. That inverts the piecewise's current sense.

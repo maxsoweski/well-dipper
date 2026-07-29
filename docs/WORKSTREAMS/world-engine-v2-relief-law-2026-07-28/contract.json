@@ -1,0 +1,155 @@
+{
+  "workstream": "world-engine-v2-relief-law-2026-07-28",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "summary": "Adopt the v2 relief law (h proportional to g^-1.09, Guimond+2022) above g=1 with the calibrated g^-0.58 fit retained below as a labelled data boundary; move RELIEF_FLOOR off 0.40; connect the two radius-blind gravity feeds (uPerturb and the flat bodyDrivers.massGravity D14 slot) so the adopted physics reaches the screen. Ordering is load-bearing and is an acceptance criterion.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-LAW",
+      "statement": "Relief follows the ruled law where it was derived: absolute relief h proportional to g^-1.09 for g >= 1, cited to Guimond+2022 (doi:10.3847/PSJ/ac562e), with the SLOPE from the paper and the AMPLITUDE anchored to Earth's observed 19.9 km. The paper's own amplitude is never used (it under-predicts Solar-System relief ~3x).",
+      "verifyVia": {
+        "input": "Evaluate the new envelope across g >= 1 at fixed composition and back out the delivered ABSOLUTE exponent as log(E*R)/log(g).",
+        "observable": "Delivered absolute exponent is -1.09 across the whole g >= 1 range (not -1.09 at one point and something else elsewhere), and the envelope returns exactly 1.0 at the Earth point R=1, g=1."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-SEAM",
+      "statement": "Max's amended ruling: derived above 1 g, calibrated fit below, labelled 'calibration below, derivation above' as a DATA boundary rather than a physical transition. Every measured Solar-System body renders exactly as it does today.",
+      "verifyVia": {
+        "input": "Evaluate the envelope at the canonical R and g of all 18 presets, and at the Moon/Mercury/Mars/Venus anchor points, before and after the change.",
+        "observable": "Every body with g < 1 returns a BIT-IDENTICAL value to the shipped g^-0.58 law. The Moon does NOT read 141.8 km, Mercury does NOT read 57.6 km. The relief multiplier at R=0.27 stays at its shipped 2.75 and does not approach 24.66."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-CONTINUOUS",
+      "statement": "The seam is continuous. The two branches are in different variables (shipped fit is fractional-in-g with no radius term; derived law is absolute-in-g converted to fractional via 1/R), so they agree at the Earth point but not automatically along the rest of the g = 1 locus. The shipped form must have no jump anywhere reachable.",
+      "verifyVia": {
+        "input": "Sweep g across 1.0 from below and above, at every preset's canonical radius AND across each preset's full seeded radius draw band; also sweep R at fixed g across the boundary.",
+        "observable": "No discontinuity at the seam on any preset or any reachable (R, g) pair: the one-sided limits agree to floating-point tolerance. A jump anywhere in the reachable space is a FAIL, not a rounding note."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-FLOOR",
+      "statement": "RELIEF_FLOOR moves off 0.40 to 0.01 and becomes a degenerate-safety guard rather than a physics clamp. It must not bind on any seeded draw of any preset.",
+      "verifyVia": {
+        "input": "Compute the envelope across every preset's full seeded radius draw band and find the minimum value reached.",
+        "observable": "The floor never binds. Worst case across all 18 presets (Jovian at R=14) is 0.02033, clearing 0.01 by 2.03x. The floor's first bind on the rocky curve is at R = 5.02 / M = 392 M-earth, 78x past Guimond's cited upper domain edge, proving it is a guard. The comment states that, and no longer names a binding gravity."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-CEIL",
+      "statement": "RELIEF_CEIL stays 133. It remains the derived CEIL_APPARENT / REF_RELIEF = 0.40 / 0.003 and must not be lowered to hide the low-g magnitudes.",
+      "verifyVia": {
+        "input": "Run the shipped auditLaw for relief-envelope-vs-gravity with claimedExponent updated, at candidate ceilings.",
+        "observable": "At CEIL=133 the audit measures the law (exponent recovered exactly, SE 0). Lowering it below ~7.91 makes the audit sweep inside its own clamp -- the exact failure laws.js:140-141 exists to prevent -- and at CEIL=4 five presets return the same constant across a 2.44x spread in g, relocating 'constant relief while citing the falling law' to the low-g end."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-GOLDEN",
+      "statement": "Goldens hold byte-identical at hash 40c18aad with NO re-capture, and the full suite stays at exactly its 4-failure baseline (GalacticFeatures x1, KnownObjects x3 = 17 failed files).",
+      "verifyVia": {
+        "input": "npm run verify-golden and the full npm test suite at the build commit.",
+        "observable": "Golden hash unchanged at 40c18aad. Suite reports exactly 4 failed tests by those names and no others. Achieved by adding the new exponent as a NEW constant and leaving Q_RELIEF = 0.58 untouched, because reliefBudget.js:91 pairs it with C_RELIC = 0.00014558245419776515, a fit solved at 0.58."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-ORDER",
+      "statement": "The ordering constraint holds in the landed commits: the law and the floor move together with the uPerturb feed fix, and at no commit does the tree contain a state where the new law runs against a radius-blind gravity or where a connected feed runs against RELIEF_FLOOR = 0.40.",
+      "verifyVia": {
+        "input": "Walk each commit of this workstream and evaluate the envelope + its actual input g at that tree state.",
+        "observable": "No intermediate commit produces either failure mode: (a) floor still 0.40 while a radius-aware g reaches the envelope (clamps every super-Earth flat), or (b) new 1/R form fed a frozen canonical g (degenerates to bare uncapped 1/R, making relief constant in radius). Both are the 'worst outcome available' from opposite directions."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC-FEED",
+      "statement": "The two radius-blind gravity feeds are connected, so the adopted physics actually reaches the screen. Today a 4.5 M-earth super-Earth's uplift field is bit-identical to Earth's.",
+      "verifyVia": {
+        "input": "Drag the radius slider on a rocky preset in the lab at :5175 and read back the envelope input g, uPerturb, and the four world-engine writers' effective gravity.",
+        "observable": "uPerturb moves with the radius slider (it is currently inert on every preset), and the flat bodyDrivers.massGravity D14 slot delivers the radius-aware condition.surfaceGravity to all four readers -- shellRelief.js:138, stagnantLid.js:133, plates.js:131, magmatism.js:119 -- rather than the canonical value."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-VISIBLE",
+      "statement": "Dragging the radius slider right on a rocky world visibly subdues relief, and dragging left exaggerates it. This is the observable consequence of the law that the whole ordering exists to deliver.",
+      "verifyVia": {
+        "input": "In the lab at :5175, hold the seed and drag the radius slider across the rocky range, capturing frames at R = 0.5, 1.0, 2.0, 3.0.",
+        "observable": "Relief visibly falls as radius rises -- 19.9 km at Earth down to ~5.5 km at 2 R-earth and ~2.6 km at 3 R-earth -- with no clamping plateau anywhere in the band, and no discontinuity as the seam at g = 1 is crossed."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-NOWAVES",
+      "statement": "The small-radius end does not regress into the 'molten waves' look Max rejected at the 2026-07-21 UAT. This is the specific risk the amended ruling exists to eliminate, so it is checked rather than assumed.",
+      "verifyVia": {
+        "input": "Render Moon/Mercury (impact-airless) at R = 0.27, the worst reachable seeded draw, and compare against the same preset at the pre-change commit.",
+        "observable": "The render is visually indistinguishable from the shipped build at that radius, and the envelope multiplier reads its shipped 2.75 -- NOT the 24.66 the unamended law would have produced, which is 3.5x the 7.0x that caused the original rejection."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-HONEST",
+      "statement": "The code stops telling a future reader something false. Comment corrections that ride along because they live in this law's own block and would otherwise outlive the code they describe.",
+      "verifyVia": {
+        "input": "Read the amended comment block in planet-lod-lab-core.js and the p_C justification.",
+        "observable": "Three corrections present: (1) the p_C = 0 justification no longer cites the Landais ~10 km break (mechanism misidentified by 12-21x) and states that p_C = 0 is CHOSEN against underdetermined physics, not derived; (2) the 'g already carries the radius signal' argument no longer asserts what is false at its call site; (3) the calibration-vs-derivation boundary at g = 1 is labelled as a data boundary, with the note that Earth is the only Solar-System body at >= 0.9 g."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-REGISTRY",
+      "statement": "The engine can prove the new law rather than assert it, and the guards that check it do not derive their expectations from the thing they guard.",
+      "verifyVia": {
+        "input": "Inspect the LAW_REGISTRY entries and the calibration gate, and mutation-test each guard by perturbing the constant it pins.",
+        "observable": "laws.js carries a relief-envelope-vs-gravity entry at the new exponent AND a second relief-envelope-vs-radius entry (claimedExponent -1), because the existing audit runs at radiusEarth = 1.0 and cannot see the 1/R term. population-sweep.mjs's radius-independence gate is REWRITTEN to assert E(R*k, g) === E(R,g)/k rather than deleted. instrument-laws.test.js:76 is repointed off -Q_RELIEF so it does not silently start pinning the budget exponent. Every guard fails when its pinned constant is perturbed."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max's holistic gate: does a super-Earth read as a coherent world whose terrain follows from its gravity, and does the whole radius range still hang together as one family rather than two laws stitched at a seam?",
+      "verifyVia": {
+        "input": "Max drives the lab at :5175 across the full radius range on rocky presets, including crossing g = 1 in both directions.",
+        "observable": "Max's acceptance judgement. Never driven or passed by any agent; the verify workflow marks this deferred-to-max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "body-condition-vector.js deriveConditionVector -> condition.surfaceGravity, the radius-aware g fixed by the predecessor workstream (gravityRadiusShape, piecewise R^(4/3) below 1 R-earth and R^1.70 above)",
+      "planet-lod-lab-core.js deriveUniforms -> u.surfaceGravity, the CANONICAL radius-blind g that both broken feeds currently read",
+      "state.planetRadiusEarth, the drawn radius from the lab's radius slider",
+      "Guimond, Rudge & Shorttle 2022 (doi:10.3847/PSJ/ac562e) slope 1.09, domain 0.1-5 M-earth; Earth's observed 19.9 km total relief as the amplitude anchor",
+      "The existing 5-body least-squares fit (Earth/Mars/Moon/Venus/Mercury, all <= 1 g) that produced Q_RELIEF = 0.58 and is RETAINED below the seam"
+    ],
+    "outputs": [
+      "reliefEnvelope(radiusEarth, surfaceGravity) -- now actually uses its radiusEarth argument, reversing the Inc-3 'drop the 1/RE' decision",
+      "uniforms.uPerturb (planet-lod-lab.html:5937) -- the global relief-amplitude uniform, currently inert on every preset",
+      "bodyDrivers.massGravity, the flat D14 slot read by shellRelief.js:138, stagnantLid.js:133, plates.js:131 and magmatism.js:119 -- all four go live simultaneously",
+      "LAW_REGISTRY entries in src/worldengine/instrument/laws.js (two: vs-gravity and vs-radius)"
+    ],
+    "mustStayWorking": [
+      "Goldens at hash 40c18aad -- NO re-capture, ever",
+      "Full suite at exactly its 4-failure baseline (GalacticFeatures x1, KnownObjects x3; 17 failed files)",
+      "Q_RELIEF = 0.58 must remain untouched: reliefBudget.js:30 imports it and :91 pairs it with C_RELIC = 0.00014558245419776515, a Mercury+Moon fit solved at that value. The new exponent is a NEW constant.",
+      "K_DT = 3.1 and D_D_SIMPLE = 0.20 are correct as shipped and are not touched",
+      "tests/vis-scale-fence.test.js greps visScaleOf|sVis|VIS_SCALE_EXP INCLUDING COMMENTS across planet-lod-height.glsl.js, planet-lod-rivers.js, run-golden.mjs, canonical-scenario.js and all of src/worldengine/** -- three of four failures in a prior session were the word sVis in a comment. Prefer deriving new weights by subtraction over growing the uniform-write allowlist.",
+      "doc-rot baseline 163; new src/ files need Rule 14 registration",
+      "The two standing NOT-OURS working-tree mods (src/auto/CameraChoreographer.js, src/debug/LabMode.js) must NEVER be staged",
+      "The gravity self-compression workstream is CLOSED at VERIFIED_PENDING_MAX 06b0030 and must not be re-verified; the U2 crater fix is shipped at f88c2c6 and must not be re-run",
+      "Every body below the g = 1 seam must stay bit-identical to today -- that is the entire point of the amended ruling"
+    ]
+  }
+}

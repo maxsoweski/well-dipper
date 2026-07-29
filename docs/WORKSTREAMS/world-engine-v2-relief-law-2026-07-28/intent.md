@@ -38,6 +38,15 @@ super-Earth flat — **accidentally implementing the constant relief Max origina
 citing the falling law that replaced it.** The brief calls that the single worst outcome available.
 Splitting the workstream is what would make that mistake possible, so the ordering is an AC.
 
+⭐ **THERE ARE THREE SEAMS, NOT TWO — and the third one is inside this workstream.** The rulings file
+lists two. The settlement found a third and it is not optional: the new envelope form carries a `1/R`
+term, and `planet-lod-lab.html:5937` feeds it `state.surfaceGravity`, whose sole writer (`:3033`)
+takes `deriveUniforms`' **canonical, radius-blind** `g`. Ship the new form against a frozen `g` and
+the envelope degenerates to **bare uncapped `1/R`**, making `h = 19.9·g_c^−1.09` — *constant in
+radius*, which is the exact worst outcome the ordering exists to prevent, arrived at from the other
+direction. **The `uPerturb` feed fix must land in the same commit as the law**, not after it.
+`bodyDrivers.massGravity` can keep its place in the queue; this cannot.
+
 ## Success criteria (Max's language)
 
 The measure of done, verbatim, from the predecessor workstream's intent:
@@ -52,16 +61,73 @@ unwired and tracked nowhere. That is separate scope his words opened; it is surf
 Concretely, for this workstream:
 
 - The relief law is the one he ruled: **`h ∝ g^−1.09`** (Guimond+2022), **slope from the paper,
-  amplitude from Earth's observed 19.9 km — never the paper's amplitude**, and **no piecewise-in-g
-  break** in the relief law itself.
+  amplitude from Earth's observed 19.9 km — never the paper's amplitude** — applied **above g = 1**.
+
+  ⭐ **RULING 1 AMENDED 2026-07-28, by Max, after the derivation was costed.** The original rider was
+  *"drop the piecewise-in-g break entirely."* The settlement showed what that costs at the **low**-g
+  end, which nobody had computed when the ruling was made: an Earth-anchored `19.9·g^−1.09` predicts
+  **141.8 km for the Moon** (7.1× its observed 19.9), **57.6 km for Mercury** (5.9× observed 9.8) and
+  **57.3 km for Mars** (1.95× observed 29.4) — i.e. it knowingly regresses *the only relief
+  measurements that exist* in order to be right where none do. Worse, the relief multiplier at
+  R = 0.27 goes **2.75 (today) → 24.66**, which is **3.5× the 7.0× that produced the "molten waves"
+  look Max rejected at the 2026-07-21 UAT**. Max's call, given those numbers:
+
+  > **Derived above 1 g, keep the calibrated fit below** — labelled *"calibration below, derivation
+  > above"*, i.e. a **data boundary, not a physical transition**.
+
+  This does not contradict the original reasoning, it completes it. The reason for dropping the break
+  was that no *physical* break can be located in g (Melosh's Mars/Mercury sit at identical gravity a
+  factor of 3 apart). A calibration/derivation boundary is a statement about **where measurements
+  stop**, which is exactly true at g = 1: Earth is the only Solar-System body at ≥ 0.9 g. The seam
+  was the recommendation on the table before the ruling (predecessor intent, "Open for Max" §2).
+
+  Consequence: **every measured body renders exactly as it does today** (zero low-g regression, no
+  re-UAT at small radii), and the derived law governs only the branch where there is no data to
+  contradict it.
+
+- **The seam is continuous.** The two branches are expressed in different variables — the shipped
+  fit is fractional-in-g (`g^−0.58`, no radius term), the derived law is absolute-in-g converted to
+  fractional (`g^−1.09 / R`). They agree at the Earth point (both return exactly 1 at R = 1, g = 1)
+  but **not automatically elsewhere on the g = 1 locus**, because g = 1 does not imply R = 1 for
+  presets whose canonical radius is not 1. Deriving the continuous form is a build task with
+  continuity as an acceptance criterion — it is not hand-waved here.
 - **`RELIEF_FLOOR` no longer binds inside the super-Earth population.** Whatever it becomes, it must
   not silently re-impose constant relief on the branch the law was adopted to describe.
+
+  ⚠️ **A number under the ruling moved.** Both the decision brief (`:49`, `:417`) and the rulings
+  file (`:30`) say the floor binds at **R = 1.64 R⊕** and conclude that this makes moving it *"less
+  urgent, not more."* **That is wrong** — it compared a *fractional* clamp against the *absolute*
+  exponent. The correct bind point is **R = 1.379 R⊕ / g = 1.726 / M = 3.28 M⊕**, which is
+  *marginally earlier* than the v1 estimate of 1.40, so the conclusion **inverts**: it is more
+  urgent, not less. Max's ruling ("must move off 0.40") stands and is strengthened. The brief
+  self-refutes on this — its own table at `:23` gives 0.31× fractional at 1.5 R⊕, already below 0.40
+  at a radius the same page calls 0.14 R⊕ short of binding.
+
+- **The shipped law already IS constant relief.** `Q_RELIEF = 0.58` against
+  `1/GRAV_R_EXP_SUPER = 0.5882`: `Q = 1/n` is exactly the condition for constant *absolute* relief
+  above R = 1. The shipped implied absolute exponent is **+0.0082** — relief is flat, then *rises*
+  once the floor bites. The failure mode the ruling worried about is not a risk being avoided; it is
+  the status quo being corrected, and its cause is the exponent, not the clamp.
 - Dragging the radius slider right on a rocky world **visibly subdues relief** — a heavier world's
   mountains are crushed toward the datum — and dragging left exaggerates it (the Olympus-Mons read).
   Today the slider does nothing at all to global relief amplitude on any preset.
 - **Nothing that was already correct moves.** Goldens hold byte-identical (hash `40c18aad`, never
-  re-captured), the suite stays at its exact 4-failure baseline, and at the canonical radius the
-  change is bit-for-bit invisible.
+  re-captured) and the suite stays at its exact 4-failure baseline.
+
+  ⚠️ **Correction to this criterion as first drafted.** It originally read *"and at the canonical
+  radius the change is bit-for-bit invisible."* **That sentence was false and is struck.** It was
+  inherited from the gravity workstream, where it held because `gravityRadiusRatio` is `x/x` at
+  canonical. Here, **17 of 18 presets change at their own canonical radius** (Titan 2.935 → 18.909;
+  Mars 1.750 → 5.403; even Rocky/Earthlike 1.063 → 1.122, because its `g_c` is 0.90, not 1.0). Only
+  Eyeball (`R_c = 1, g_c = 1`) is invariant. Recorded rather than quietly deleted, because it was
+  about to become an AC that could not be passed.
+
+  **Goldens hold for a different reason than that sentence claimed:** `reliefEnvelope` is not
+  imported anywhere in the bake path (only `src/worldengine/instrument/laws.js:34` and
+  `planet-lod-lab.html:151`). Byte-identity therefore survives **only if the new exponent is added as
+  a new constant and `Q_RELIEF = 0.58` is left alone** — `src/worldengine/base/reliefBudget.js:30`
+  imports it and `:91` uses it with `C_RELIC = 0.00014558245419776515`, a Mercury+Moon fit solved
+  **at 0.58**. Editing `Q_RELIEF` in place goes stale and moves the goldens.
 - The code **stops telling a future reader something false.** Two comment corrections ride along
   because they are in this law's own comment block and would otherwise outlive the code they
   describe: the `p_C = 0` justification must stop citing the Landais ~10 km break (**mechanism

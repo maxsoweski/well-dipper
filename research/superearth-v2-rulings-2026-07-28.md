@@ -23,11 +23,35 @@ domain 0.1–5 M⊕). Bracket **[0.74, 1.61]** labelled an inference back-out fr
 stated result. Fractional-relief exponent `Q = q + 0.588`.
 
 Riders that travel with it:
-- **Drop the piecewise-in-g break entirely.** Guimond's law is continuous across the whole range;
-  Melosh's data cannot locate a break anywhere in g.
+- ~~**Drop the piecewise-in-g break entirely.** Guimond's law is continuous across the whole range;
+  Melosh's data cannot locate a break anywhere in g.~~
+  ⭐ **AMENDED BY MAX, 2026-07-28 (same day), after the derivation was costed.** This rider was
+  written before anyone computed what the unbroken law does at the **low**-g end. Earth-anchored
+  `19.9·g^−1.09` predicts **141.8 km for the Moon** (7.1× its observed 19.9), **57.6 km for Mercury**
+  (5.9× observed 9.8), **57.3 km for Mars** (1.95× observed 29.4) — it regresses *the only relief
+  measurements that exist* to be right where none do. And the relief multiplier at R = 0.27 goes
+  **2.75 (today) → 24.66**, which is **3.5× the 7.0× that produced the "molten waves" look Max
+  rejected at the 2026-07-21 UAT**. Presented with those numbers, his call:
+  > **Derived above 1 g, keep the calibrated fit below** — *"calibration below, derivation above"*,
+  > a **data boundary, not a physical transition**.
+
+  The original reasoning is not overturned, it is completed: no *physical* break can be located in g
+  (Mars and Mercury sit at identical gravity a factor of 3 apart), but a calibration/derivation
+  boundary states **where measurements stop**, and that is exactly true at g = 1 — Earth is the only
+  Solar-System body at ≥ 0.9 g. This was the recommendation on the table before the ruling
+  (gravity-selfcompression intent, "Open for Max" §2). Consequence: every measured body renders
+  exactly as today, and the derived law governs only the branch with no data to contradict it.
+  Scoped in `docs/WORKSTREAMS/world-engine-v2-relief-law-2026-07-28/`.
 - **Use the published SLOPE, never the published AMPLITUDE.** Guimond under-predicts observed
   Solar-System relief ~3×. Keep Earth's observed 19.9 km as the anchor and scale it.
-- **`RELIEF_FLOOR` must move off 0.40** — at q = 1.09 it binds at R = 1.64 R⊕. Leaving it would
+- **`RELIEF_FLOOR` must move off 0.40** — ~~at q = 1.09 it binds at R = 1.64 R⊕~~.
+  ⚠️ **CORRECTED 2026-07-28: it binds at R = 1.379 R⊕ / g = 1.726 / M = 3.28 M⊕.** The 1.64 figure
+  was inherited from the decision brief (`:49`, `:417`), which compared a **fractional** clamp
+  against the **absolute** exponent. The brief self-refutes on this: its own table at `:23` gives
+  0.31× fractional at 1.5 R⊕, already below 0.40 at a radius the same page calls 0.14 R⊕ short of
+  binding. The brief concluded the shallower exponent made moving the floor *"less urgent, not
+  more"* — **that conclusion inverts**: 1.379 is marginally *earlier* than the v1 estimate of 1.40.
+  The ruling itself ("must move off 0.40") stands and is strengthened. Leaving it would
   accidentally implement constant relief while claiming to implement the derived law: Max's
   original preference wearing the wrong citation. The worst outcome available.
 
