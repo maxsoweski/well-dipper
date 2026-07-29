@@ -41,6 +41,39 @@ const ASSET_DIR = join(REPO, 'public', 'assets', 'cockpit');
 
 const glbFiles = () => readdirSync(ASSET_DIR).filter((f) => f.endsWith('.glb'));
 
+/**
+ * Is this file disabling any of its own tests?
+ *
+ * Comments are stripped first: this file DISCUSSES lane E's skipIf in its header,
+ * and the pattern is assembled from fragments, because a literal one would match
+ * itself. Either would fail a file that is in fact clean. The check is about code,
+ * not prose.
+ *
+ * `.only` is scanned alongside `.skip` because it is the same failure wearing a
+ * friendlier name: one focused test silently disables all the others.
+ *
+ * WHY THIS SITS AT MODULE SCOPE AND THROWS, rather than living only inside an it().
+ * Measured on the sibling ScreenUV.test.js, not assumed: putting `it.only` on one
+ * test made vitest report "1 passed | 6 skipped" and exit GREEN — because the scan
+ * was one of the tests it skipped. A self-scan that only runs as a test cannot see a
+ * helper that stops it running. Module scope executes during collection, before the
+ * runner can honour any `.only`, so the throw below fires whatever the helpers say.
+ */
+const SELF_CODE = readFileSync(join(HERE, 'PanelLayout.test.js'), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '');
+const DISABLED_RE = new RegExp(
+  ['describe', 'it', 'test'].flatMap((k) => [k + '\\.skip', k + '\\.only']).join('|'),
+);
+const SELF_DISABLES_TESTS = DISABLED_RE.test(SELF_CODE);
+if (SELF_DISABLES_TESTS) {
+  throw new Error(
+    'PanelLayout.test.js disables one of its own tests (a skip or focus helper is present in ' +
+    'its code). Lane F asserts against assets that can go missing, so a disabled test here ' +
+    'reads as "the panels bind fine" when nothing was measured at all. Remove the helper.',
+  );
+}
+
 /** Every Screen_* node in a GLB, with its own world-space vertex positions. */
 function screensOf(file) {
   const { json, bin } = parseGLB(readFileSync(join(ASSET_DIR, file)));
@@ -185,15 +218,9 @@ describe('PanelLayout — roles are config, geometry is derived (AC-PANEL-BINDIN
     }
   });
 
-  it('contains no skip helper, so a deleted asset can never make it green', () => {
-    // Comments stripped first: this file DISCUSSES lane E's skipIf in its header,
-    // and the pattern is built from fragments, because a literal one would match
-    // itself. Both would fail a file that is in fact clean. The check is about
-    // code, not prose.
-    const code = readFileSync(join(HERE, 'PanelLayout.test.js'), 'utf8')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/^\s*\/\/.*$/gm, '');
-    const skip = new RegExp(['describe', 'it', 'test'].map((k) => k + '\\.skip').join('|'));
-    expect(skip.test(code)).toBe(false);
+  it('contains no skip or focus helper, so a deleted asset can never make it green', () => {
+    // The real guard runs at module scope below — see the comment there for why an
+    // in-test version cannot work. This restates the guarantee by name in the report.
+    expect(SELF_DISABLES_TESTS).toBe(false);
   });
 });

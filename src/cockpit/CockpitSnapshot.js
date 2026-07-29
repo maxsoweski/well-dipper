@@ -232,6 +232,21 @@ export function buildCockpitSnapshot(sources = {}) {
 
     // T_eq is written onto PLANET data only — moons and stars carry none, so this
     // reads null for them rather than a stale or zeroed number.
+    //
+    // `surfaceHistory` is deliberately NOT carried, though BodyRenderer holds it
+    // and DebugPanel prints it. It carries no information about the body you are
+    // looking at: PlanetGenerator calls computeSurfaceHistory(ageGyr, false,
+    // false, atmoRetained, 0) with nearBelt, nearGiant and tidalHeatingRate
+    // hard-coded at the call site, so bombardmentIntensity and resurfacingRate
+    // are pure functions of the SYSTEM's age — identical for every planet in it —
+    // and erosionLevel additionally depends only on atmospheric retention, which
+    // the atmosphere field already reports. Measured on seed 'test-alpha', all
+    // three planets return { bombardmentIntensity: 0, erosionLevel:
+    // 0.6820007091595458, resurfacingRate: 0.1 } as three DISTINCT objects — not
+    // a reference leak, the generator simply produces the same values. T_eq over
+    // the same three reads 410 / 374 / 305 K, falling with orbit distance.
+    // Max agreed to the drop. A snapshot that carries data no panel reads grows a
+    // second, undocumented contract, so the field goes rather than lingers.
     survey: {
       kind: body?.kind ?? null,
       name: body?.name ?? null,
@@ -240,7 +255,6 @@ export function buildCockpitSnapshot(sources = {}) {
       composition: plainCopy(physics?.composition ?? null),
       atmosphere: plainCopy(physics?.atmosphere ?? null),
       tidalState: plainCopy(physics?.tidalState ?? null),
-      surfaceHistory: plainCopy(physics?.surfaceHistory ?? null),
     },
 
     nav: {

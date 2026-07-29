@@ -135,17 +135,41 @@ describe('buildCockpitSnapshot — read-only feed (AC-SNAPSHOT)', () => {
       kind: 'planet', name: 'Kepler II', distance: 12.5, aimOnTarget: true,
       dropState: 'in-window', dropMaxSpeed: 0.16, captureSphere: 0.4, massLockHint: false,
     });
+    // toEqual is exact, so this also asserts what survey does NOT carry:
+    // makeLiveSources still puts a surfaceHistory on the live physics (on
+    // purpose — the leak tests need it there), and an extra key here would fail.
     expect(s.survey).toEqual({
       kind: 'planet', name: 'Kepler II', type: 'terrestrial', tEq: 288,
       composition: { surfaceType: 'silicate', ironFraction: 0.31 },
       atmosphere: { retained: true, composition: 'co2-n2', surfacePressureBar: 1.4 },
       tidalState: { locked: true, lockType: 'synchronous' },
-      surfaceHistory: { bombardmentIntensity: 0.42, erosionLevel: 0.17 },
     });
     expect(s.nav).toEqual({
       level: 'prism', galacticPos: { x: -120.5, y: 3.25, z: 88.0 }, systemName: 'Kepler',
     });
     expect(s.t).toBe(4242);
+  });
+
+  it('does not carry surfaceHistory, which the generator makes identical across a system', () => {
+    // Dropped on purpose, and this asserts it stays dropped rather than merely
+    // omitting to check. PlanetGenerator calls computeSurfaceHistory(ageGyr,
+    // false, false, atmoRetained, 0) — nearBelt, nearGiant and tidalHeatingRate
+    // are hard-coded at the call site — so bombardmentIntensity and
+    // resurfacingRate depend only on the SYSTEM's age and erosionLevel only on
+    // atmospheric retention, which `atmosphere` already reports. Measured on
+    // seed 'test-alpha', all three planets return { bombardmentIntensity: 0,
+    // erosionLevel: 0.6820007091595458, resurfacingRate: 0.1 } as three DISTINCT
+    // objects. T_eq over the same three reads 410 / 374 / 305 K.
+    //
+    // The live physics handed in still HAS a surfaceHistory — that is what makes
+    // this a real check rather than a vacuous one.
+    const sources = makeLiveSources();
+    expect(sources.focusedBody.physics.surfaceHistory).toBeTruthy();
+
+    const s = buildCockpitSnapshot(sources);
+
+    expect('surfaceHistory' in s.survey).toBe(false);
+    expect(JSON.stringify(s)).not.toMatch(/surfaceHistory|bombardmentIntensity/);
   });
 
   it('carries render-cadence dt alongside the sim clock, because t repeats above 60 Hz', () => {
@@ -200,7 +224,7 @@ describe('buildCockpitSnapshot — read-only feed (AC-SNAPSHOT)', () => {
 
     expect(warping.survey).toEqual({
       kind: null, name: null, type: null, tEq: null,
-      composition: null, atmosphere: null, tidalState: null, surfaceHistory: null,
+      composition: null, atmosphere: null, tidalState: null,
     });
     // The rest of the frame still reports — the ship is still flying.
     expect(warping.drive.speed).toBe(3.25);
