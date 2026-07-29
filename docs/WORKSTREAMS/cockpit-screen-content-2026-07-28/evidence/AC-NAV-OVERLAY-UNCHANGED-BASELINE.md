@@ -57,6 +57,32 @@ suppressed — it is therefore *unexercised by this hash*. A wide-binary system 
 separately to prove both that the chips are gone when chrome-less and that they are unchanged when
 not. Do not read `d7986730` as covering it.
 
+### Which systems actually have far companions — do not go looking for one
+
+`farCompanions` is **never** produced by procgen. It reaches `systemData` only from the real-system
+overlay: `RealSystemOverlay.js:164` reads `tableEntry.farCompanions`, and
+`StarSystemGenerator.js:857` only populates it when `galaxyContext.farCompanions` is non-empty.
+So no amount of sampling procgen stars will ever find one — a sweep that comes back empty proves
+nothing except that the sweep was pointed at procgen space.
+
+The source table is `src/generation/data/stellarCompanions.js`, and **exactly three entries in the
+whole game carry the field**:
+
+| system | far companion | class | separation |
+|---|---|---|---|
+| **Alpha Centauri** | Proxima Centauri | M5.5Ve | 13,000 AU |
+| **36 Ophiuchi** | HD 156026 | K5V | ~4,400 AU |
+| **Zeta Reticuli** (ζ¹ Ret) | Zet-2 Ret | G1V | ~3,750 AU |
+
+Drive **Alpha Centauri** — it is the one the existing generation tests use
+(`RealSystemOverlay.test.js:102-105`, `KnownSystemAuthoring.test.js:81`), so a disagreement there is
+a real signal rather than an unfamiliar-data-path artefact.
+
+⚠ The lab's default prism is nowhere near Sol and had **no real star catalog loaded at all**
+(`_navComputer._realStarCatalog` was falsy at capture time), which is the other half of why the
+baseline system has none. Getting to Alpha Centauri means moving the nav computer there, not
+hunting for a lucky procgen roll.
+
 ## The stronger check that supersedes this one
 
 A cross-page-load hash comparison assumes two loads generate the same system. That assumption is
