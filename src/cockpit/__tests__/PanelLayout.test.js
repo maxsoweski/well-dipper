@@ -32,7 +32,7 @@ import {
   nodeWorldTriangles,
 } from '../../../tests/helpers/glb-parse.mjs';
 import {
-  DEFAULT_PANEL_ROLES, measureQuad, resolvePanelRoles, SCREEN_NODE_RE,
+  DEFAULT_PANEL_ROLES, measureQuad, measureQuadBasis, resolvePanelRoles, SCREEN_NODE_RE,
 } from '../PanelLayout.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -222,5 +222,107 @@ describe('PanelLayout — roles are config, geometry is derived (AC-PANEL-BINDIN
     // The real guard runs at module scope below — see the comment there for why an
     // in-test version cannot work. This restates the guarantee by name in the report.
     expect(SELF_DISABLES_TESTS).toBe(false);
+  });
+});
+
+/**
+ * measureQuadBasis — which way is up, tested WITHOUT going through a mover.
+ *
+ * This block exists because of a specific near-miss. The mover's own suite checked
+ * the landed panel's orientation by calling this function — the same one the mover
+ * solves with — so a consistent error in here cancelled itself out end to end.
+ * Planting a v-flip, a u-mirror and a reversed normal left every one of those 31
+ * tests green. An instrument cannot be its own control.
+ *
+ * So here the basis is checked against geometry whose answer is known by
+ * construction: a quad is built FROM a chosen frame, and the function has to
+ * recover that frame. Nothing downstream is involved, and nothing here calls
+ * anything that also consumes the result.
+ */
+describe('measureQuadBasis — recovering a frame the fixture already knows', () => {
+  /**
+   * Build a quad's (position, uv) pairs from a frame chosen in advance.
+   *
+   * uv (0,0) is the pilot's TOP-LEFT on these faces, so the corner at
+   * (-w/2 right, +h/2 up) is the one that carries it.
+   */
+  function quadFrom({ centre, right, up, w, h }) {
+    const n = (v) => { const l = Math.hypot(...v); return v.map((c) => c / l); };
+    const R = n(right);
+    // Gram-Schmidt, so the fixture's own frame is exactly orthonormal and its
+    // stated expectation is the truth rather than approximately the truth. Chosen
+    // over hand-picking perpendicular vectors because `measureQuadBasis`
+    // deliberately orthonormalises what it recovers — a fixture that is a degree
+    // out of square would report that correct behaviour as an error, which is how
+    // a good test gets "fixed" into a bad one.
+    const d = up[0] * R[0] + up[1] * R[1] + up[2] * R[2];
+    const U = n(up.map((c, k) => c - d * R[k]));
+    const at = (su, sv) => [0, 1, 2].map((k) => centre[k] + R[k] * su * w / 2 + U[k] * sv * h / 2);
+    return {
+      points: [at(-1, 1), at(1, 1), at(-1, -1), at(1, -1)],
+      uvs: [[0, 0], [1, 0], [0, 1], [1, 1]],
+      expect: { right: R, up: U },
+    };
+  }
+
+  const dot = (a, b) => a.x * b[0] + a.y * b[1] + a.z * b[2];
+  const cross3 = (a, b) => [
+    a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0],
+  ];
+
+  /** Frames chosen so no axis is a world axis — an axis-aligned fixture hides sign errors. */
+  const FRAMES = [
+    { label: 'facing the pilot, level', centre: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0], w: 0.24, h: 0.2 },
+    { label: 'yawed and pitched', centre: [-0.9, 0.55, -1.4], right: [0.8, 0.1, 0.6], up: [-0.05, 0.98, -0.12], w: 0.6, h: 0.2 },
+    { label: 'rolled hard', centre: [0.7, -0.4, -1.1], right: [0.3, 0.9, 0.2], up: [-0.9, 0.32, 0.1], w: 0.3, h: 0.45 },
+    { label: 'mounted upside down', centre: [0, 0.8, -1.2], right: [-1, 0, 0], up: [0, -1, 0], w: 0.25, h: 0.25 },
+  ];
+
+  for (const f of FRAMES) {
+    it(`recovers right, up and normal — ${f.label}`, () => {
+      const q = quadFrom(f);
+      const b = measureQuadBasis(q.points, q.uvs);
+      expect(dot(b.right, q.expect.right), 'right').toBeCloseTo(1, 9);
+      expect(dot(b.up, q.expect.up), 'up').toBeCloseTo(1, 9);
+      // right x up, so the normal comes out of the FRONT of the screen.
+      expect(dot(b.normal, cross3(q.expect.right, q.expect.up)), 'normal').toBeCloseTo(1, 9);
+    });
+  }
+
+  it('returns an orthonormal frame even when the fixture is slightly out of square', () => {
+    // A real exported quad is planar to float precision, not exactly.
+    const q = quadFrom(FRAMES[1]);
+    q.points[3][1] += 1e-4;
+    const b = measureQuadBasis(q.points, q.uvs);
+    for (const v of [b.right, b.up, b.normal]) {
+      expect(Math.hypot(v.x, v.y, v.z), 'not unit length').toBeCloseTo(1, 9);
+    }
+    expect(b.right.x * b.up.x + b.right.y * b.up.y + b.right.z * b.up.z, 'right and up not square')
+      .toBeCloseTo(0, 9);
+    expect(b.up.x * b.normal.x + b.up.y * b.normal.y + b.up.z * b.normal.z, 'up and normal not square')
+      .toBeCloseTo(0, 9);
+  });
+
+  it('the mounting does not decide which edge is the top — the uvs do', () => {
+    // The tempting shortcut is "the highest corner is the top". It is right for
+    // every panel in the cockpit as it stands and it is a fact about this
+    // mounting, not about panels. An inverted mount proves the difference: here
+    // the uv-top edge is BELOW the uv-bottom edge in world Y, and the recovered
+    // up must still point along the panel's own up, which is world -Y.
+    const q = quadFrom(FRAMES[3]);
+    const b = measureQuadBasis(q.points, q.uvs);
+    expect(b.up.y, 'up followed gravity instead of the uvs').toBeCloseTo(-1, 9);
+  });
+
+  it('refuses geometry it cannot orient, rather than emitting NaNs', () => {
+    const q = quadFrom(FRAMES[0]);
+    expect(() => measureQuadBasis(q.points, null)).toThrow(/uv/);
+    expect(() => measureQuadBasis(q.points, q.uvs.slice(0, 2))).toThrow(/uv/);
+    // Every uv on one side of centre: the face has lost its unit-square mapping.
+    expect(() => measureQuadBasis(q.points, [[0, 0], [0, 0], [0, 0], [0, 0]]))
+      .toThrow(/unit square/);
+    // A collapsed quad has no axes to recover.
+    expect(() => measureQuadBasis([[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]], q.uvs))
+      .toThrow(/no length/);
   });
 });

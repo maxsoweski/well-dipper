@@ -115,6 +115,114 @@ export function measureQuad(points) {
 }
 
 /**
+ * The panel's own axes — which way is up, which way is right, which way is out.
+ *
+ * `measureQuad` above answers "how big and where"; this answers "which way round",
+ * and they are genuinely different questions. Nothing in size, place or plane
+ * normal says which edge is the top, so a mover that only had `measureQuad` could
+ * bring a screen perfectly centred to the pilot's eye and perfectly upside down.
+ *
+ * ── WHY THE UVs ARE THE SOURCE, AND NOT THE WORLD'S UP AXIS ─────────────────
+ *
+ * The obvious shortcut is to call whichever edge is highest off the deck "the
+ * top". It happens to be right for all four panels in the cockpit as it stands
+ * today, and it is not a fact about panels — it is a fact about this particular
+ * mounting. It would silently invert an inverted-mount screen, an overhead panel,
+ * or anything lane E hangs at a steeper angle later. The UVs, by contrast, ARE the
+ * panel's own statement about its orientation: v = 0 is the top edge and u grows
+ * to the pilot's right. That convention is already load-bearing in two other
+ * places — `PanelPointer`'s uv-to-pixel mapping and `createPanelTexture`'s
+ * flipY = false — and it is pinned per vertex against the mesh by AC-UV-ORIENTATION.
+ * Reading orientation from the same place they do means all three agree or all
+ * three fail together, rather than two of them agreeing and the third quietly not.
+ *
+ * ── THE NORMAL HERE IS BETTER THAN NEWELL'S, AND DELIBERATELY DIFFERENT ─────
+ *
+ * `measureQuad`'s normal comes from the winding order, so its SIGN depends on how
+ * the exporter happened to wind the quad — fine for "what plane is this in",
+ * useless for "which side faces the pilot". This one is `right x up`, so it is
+ * pinned to the UV layout instead: it always points out of the front of the
+ * screen, the face the picture is on. The two are the same axis and may be
+ * opposite signs, and that is expected rather than a discrepancy to reconcile.
+ *
+ * @param {Array<[number,number,number]>} points world-space vertices
+ * @param {Array<[number,number]>} uvs the uv of each point, in the SAME order
+ * @returns {{right:{x,y,z}, up:{x,y,z}, normal:{x,y,z}}} an orthonormal frame
+ */
+export function measureQuadBasis(points, uvs) {
+  const pts = points || [];
+  const uv = uvs || [];
+  if (pts.length < 3 || pts.length !== uv.length) {
+    throw new Error(
+      `measureQuadBasis: needs at least 3 vertices each paired with a uv, got ` +
+      `${pts.length} positions and ${uv.length} uvs. The pairing is the whole ` +
+      `input — a position list on its own cannot say which edge is the top, and ` +
+      `guessing would flip screens on any mounting but today's.`,
+    );
+  }
+
+  // The midpoint of the edge at each extreme of a uv axis. Averaging rather than
+  // picking one vertex so a quad that is subdivided, or triangulated with repeated
+  // corners, gives the same answer as a bare four-vertex one.
+  const mid = (pick) => {
+    let x = 0, y = 0, z = 0, n = 0;
+    for (let i = 0; i < pts.length; i++) {
+      if (!pick(uv[i])) continue;
+      x += pts[i][0]; y += pts[i][1]; z += pts[i][2]; n += 1;
+    }
+    return n ? [x / n, y / n, z / n] : null;
+  };
+
+  const top = mid((t) => t[1] < 0.5);
+  const bottom = mid((t) => t[1] > 0.5);
+  const left = mid((t) => t[0] < 0.5);
+  const right = mid((t) => t[0] > 0.5);
+  if (!top || !bottom || !left || !right) {
+    throw new Error(
+      `measureQuadBasis: the uvs do not span the unit square — no vertex on one ` +
+      `side of an axis. These faces carry TEXCOORD_0 over the full unit square; a ` +
+      `quad whose uvs are all on one side of centre has lost them or been remapped, ` +
+      `and its orientation cannot be recovered.`,
+    );
+  }
+
+  // v = 0 is the TOP, so up runs from the bottom edge to the top edge.
+  const rawUp = norm(sub(top, bottom), 'up');
+  const rawRight = norm(sub(right, left), 'right');
+  // right x up points out of the front face, in three's right-handed world.
+  const normal = norm(cross(rawRight, rawUp), 'normal');
+  // Re-derive up from the other two so the frame is exactly orthonormal even
+  // when float noise or a slightly non-planar quad leaves the raw pair a hair off
+  // square. An un-orthonormalised basis becomes a rotation matrix with a shear in
+  // it, and the panel arrives at the eye very slightly skewed.
+  const up = norm(cross(normal, rawRight), 'up');
+  const rightOrtho = cross(up, normal);
+
+  return { right: vec(rightOrtho), up: vec(up), normal: vec(normal) };
+}
+
+const cross = (a, b) => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+];
+
+const vec = (v) => ({ x: v[0], y: v[1], z: v[2] });
+
+/** Normalise, refusing a zero-length axis by name rather than emitting NaNs. */
+function norm(v, which) {
+  const l = len(v);
+  if (!(l > 1e-12)) {
+    throw new Error(
+      `measureQuadBasis: the ${which} axis has no length. The quad is degenerate ` +
+      `or its uvs are collapsed; every direction derived from it would be NaN, and ` +
+      `a NaN rotation puts the panel nowhere with nothing to say why.`,
+    );
+  }
+  return [v[0] / l, v[1] / l, v[2] / l];
+}
+
+/**
  * Bind roles to the screen nodes actually present in the loaded model.
  *
  * Throws — naming the missing node — rather than returning a short list. A
