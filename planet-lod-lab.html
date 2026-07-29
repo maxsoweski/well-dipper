@@ -2826,7 +2826,9 @@
       if (useOv('gravity')) _cond.surfaceGravity = driverOv.gravity;
       if (useOv('age'))     _cond.age = driverOv.age;
       return {
-        massGravity:      useOv('gravity')   ? driverOv.gravity   : base.massGravity,
+        // D14: the radius-aware condition gravity, not body-drivers.js:24's canonical u.surfaceGravity.
+        // _cond already carries the gravity override (:2826), so the ternary collapses.
+        massGravity:      _cond.surfaceGravity,
         volatileFraction: useOv('volatiles') ? driverOv.volatiles : base.volatileFraction,
         tidalHeating:     useOv('tidal')     ? driverOv.tidal     : base.tidalHeating,
         // Inc.4-M volcanic thermal drive: ONLY when the thermal slider is dragged (override) do we inject a
