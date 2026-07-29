@@ -4508,9 +4508,24 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     // Physics data for the BodyRenderer (composition, atmosphere, tidal, surface history)
     const planetPhysics = {
       composition: entry.planetData.composition || null,
-      atmosphere: entry.planetData.atmosphereRetained !== undefined
-        ? { retained: entry.planetData.atmosphereRetained }
-        : null,
+      // `atmosphereRetained` NEVER EXISTED on planet data. PlanetGenerator's return
+      // literal has no such key — the only occurrence in that file is a PARAMETER
+      // NAME passed into habitabilityScore(). So this read was `undefined !== undefined`
+      // on every planet ever generated: planetPhysics.atmosphere has been null
+      // game-wide, BodyRenderer.hasAtmosphere() permanently false, and the debug HUD's
+      // atmosphere row has never once drawn. Found 2026-07-28 building the cockpit INFO
+      // panel, whose ATMO row would have been blank on every world in the galaxy.
+      //
+      // The real record is planetData.atmosphere.physics — the computeAtmosphere()
+      // result {retained, type, composition, pressure, jeansH2/N2/CO2} that
+      // PlanetGenerator parks inside the visual atmosphere object. Note it only exists
+      // when the atmosphere is RETAINED; an airless world carries no physics record at
+      // all, so this reads null and a readout shows blank rather than claiming "none"
+      // it cannot actually distinguish from "unknown".
+      //
+      // Safe to change: nothing calls hasAtmosphere(), and atmosphere RENDERING reads
+      // planetData.atmosphere directly (TexturedBodyShader / Moon.js), never this field.
+      atmosphere: entry.planetData.atmosphere?.physics ?? null,
       tidalState: entry.planetData.tidalState || null,
       surfaceHistory: entry.planetData.surfaceHistory || null,
     };
