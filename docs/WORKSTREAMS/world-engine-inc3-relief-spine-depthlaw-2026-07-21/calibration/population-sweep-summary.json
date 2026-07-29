@@ -1,11 +1,11 @@
 {
   "meta": {
-    "generated": "2026-07-28T15:34:06.821Z",
+    "generated": "2026-07-29T04:34:39.627Z",
     "workstream": "world-engine-inc3-relief-spine-depthlaw-2026-07-21",
     "nSeeds": 64,
     "sweptPresets": 11,
     "meshN": 10000,
-    "totalMs": 1046,
+    "totalMs": 959,
     "budgetMs": 600000
   },
   "gates": {
@@ -31,24 +31,99 @@
     "matureCovVariance": 0.0010126130011595103
   },
   "envelope": {
-    "law": "reliefEnvelope(R,g)=clamp(g^-0.58, 0.4, 133); radius via g (unused)",
+    "law": "reliefEnvelope(R,g)=clamp(g^-0.58 for g<1 (CALIBRATION) | g^-1.678235294117647 for g>=1 (DERIVATION), 0.01, 133); radiusEarth argument accepted but UNUSED (radius via g)",
     "Q_RELIEF": 0.58,
-    "RELIEF_FLOOR": 0.4,
+    "Q_RELIEF_DERIVED": 1.678235294117647,
+    "RELIEF_FLOOR": 0.01,
     "RELIEF_CEIL": 133,
     "phobosMult": 54.95408738576244,
     "refReliefIllustrative": 0.003,
     "nPoints": 704,
-    "multMin": 0.5125557518910179,
+    "multMin": 0.14458833504142768,
     "multMax": 2.6451938883842363,
-    "apparentMinIllustrative": 0.0015376672556730536,
+    "apparentMinIllustrative": 0.00043376500512428307,
     "apparentMaxIllustrative": 0.00793558166515271,
     "boundOK": true,
     "monotoneViolations": 0,
     "radiusLeaks": 0,
+    "absoluteRelief": {
+      "claimedExponent": -1.853,
+      "tol": 0.000001,
+      "minPoints": 3,
+      "ok": true,
+      "rows": [
+        {
+          "name": "Rocky (Earthlike)",
+          "n": 37,
+          "slope": -1.8530000000000013,
+          "skipped": false
+        },
+        {
+          "name": "Lava (hot airless)",
+          "n": 0,
+          "slope": null,
+          "skipped": true
+        },
+        {
+          "name": "Ocean (temperate)",
+          "n": 44,
+          "slope": -1.8530000000000002,
+          "skipped": false
+        },
+        {
+          "name": "Frozen (airless)",
+          "n": 0,
+          "slope": null,
+          "skipped": true
+        },
+        {
+          "name": "Gas giant (Jovian)",
+          "n": 0,
+          "slope": null,
+          "skipped": true
+        },
+        {
+          "name": "Gas giant (Saturnian)",
+          "n": 0,
+          "slope": null,
+          "skipped": true
+        },
+        {
+          "name": "Ice giant (Neptunian)",
+          "n": 0,
+          "slope": null,
+          "skipped": true
+        },
+        {
+          "name": "Sub-Neptune (hazy)",
+          "n": 0,
+          "slope": null,
+          "skipped": true
+        },
+        {
+          "name": "Eyeball (locked temperate)",
+          "n": 36,
+          "slope": -1.853,
+          "skipped": false
+        },
+        {
+          "name": "Carbon (high C/O)",
+          "n": 0,
+          "slope": null,
+          "skipped": true
+        },
+        {
+          "name": "Crystal (faceted)",
+          "n": 0,
+          "slope": null,
+          "skipped": true
+        }
+      ]
+    },
     "wiring": {
       "ok": true,
       "uPerturbEnv": 1,
-      "reliefEnvelopeRefs": 5,
+      "reliefEnvelopeRefs": 6,
       "reliefNormDefs": 0
     },
     "note": "The MULTIPLIER bound+monotone+radius-independence is the exact defensible invariant. The apparent band is illustrative only (lens physics MF1); the in-band RENDER claim is the coordinator live AC-LAB-READ."
@@ -193,12 +268,12 @@
         "flatBad": 0
       },
       "env": {
-        "multMin": 0.7129507139172772,
+        "multMin": 0.3756871544293146,
         "multMax": 1.2611052379917087,
-        "apparentMin": 0.0021388521417518313,
+        "apparentMin": 0.0011270614632879438,
         "apparentMax": 0.003783315713975126
       },
-      "ms": 169
+      "ms": 148
     },
     {
       "name": "Lava (hot airless)",
@@ -234,7 +309,7 @@
         "apparentMin": 0.0031429608857729595,
         "apparentMax": 0.00793558166515271
       },
-      "ms": 0
+      "ms": 1
     },
     {
       "name": "Ocean (temperate)",
@@ -269,12 +344,12 @@
         "flatBad": 0
       },
       "env": {
-        "multMin": 0.5904958584302157,
+        "multMin": 0.21777793947997354,
         "multMax": 1.249224288852876,
-        "apparentMin": 0.0017714875752906471,
+        "apparentMin": 0.0006533338184399206,
         "apparentMax": 0.003747672866558628
       },
-      "ms": 23
+      "ms": 29
     },
     {
       "name": "Frozen (airless)",
@@ -310,7 +385,7 @@
         "apparentMin": 0.0037789391289714453,
         "apparentMax": 0.007124013169579045
       },
-      "ms": 106
+      "ms": 110
     },
     {
       "name": "Gas giant (Jovian)",
@@ -341,10 +416,10 @@
         "flatBad": 0
       },
       "env": {
-        "multMin": 0.5125557518910179,
-        "multMax": 0.8360390393816503,
-        "apparentMin": 0.0015376672556730536,
-        "apparentMax": 0.0025081171181449507
+        "multMin": 0.14458833504142768,
+        "multMax": 0.5956097993656294,
+        "apparentMin": 0.00043376500512428307,
+        "apparentMax": 0.0017868293980968883
       },
       "ms": 1
     },
@@ -377,9 +452,9 @@
         "flatBad": 0
       },
       "env": {
-        "multMin": 0.7602983450359687,
+        "multMin": 0.45250798611071485,
         "multMax": 1.2401365035553877,
-        "apparentMin": 0.0022808950351079064,
+        "apparentMin": 0.0013575239583321446,
         "apparentMax": 0.0037204095106661635
       },
       "ms": 1
@@ -413,12 +488,12 @@
         "flatBad": 0
       },
       "env": {
-        "multMin": 0.9208501350372832,
+        "multMin": 0.7877354997978211,
         "multMax": 1.2081837924869219,
-        "apparentMin": 0.00276255040511185,
+        "apparentMin": 0.0023632064993934633,
         "apparentMax": 0.0036245513774607655
       },
-      "ms": 1
+      "ms": 0
     },
     {
       "name": "Sub-Neptune (hazy)",
@@ -449,10 +524,10 @@
         "flatBad": 0
       },
       "env": {
-        "multMin": 0.7437640780311908,
-        "multMax": 0.9758414212263548,
-        "apparentMin": 0.0022312922340935724,
-        "apparentMax": 0.002927524263679064
+        "multMin": 0.4246162155620426,
+        "multMax": 0.9316842603071891,
+        "apparentMin": 0.0012738486466861278,
+        "apparentMax": 0.0027950527809215676
       },
       "ms": 1
     },
@@ -489,12 +564,12 @@
         "flatBad": 0
       },
       "env": {
-        "multMin": 0.7722755764434577,
+        "multMin": 0.4734434652410524,
         "multMax": 1.186918492167215,
-        "apparentMin": 0.002316826729330373,
+        "apparentMin": 0.0014203303957231572,
         "apparentMax": 0.0035607554765016446
       },
-      "ms": 14
+      "ms": 22
     },
     {
       "name": "Carbon (high C/O)",
@@ -530,7 +605,7 @@
         "apparentMin": 0.0030976472242670197,
         "apparentMax": 0.0049477962824317386
       },
-      "ms": 1
+      "ms": 0
     },
     {
       "name": "Crystal (faceted)",
@@ -566,7 +641,7 @@
         "apparentMin": 0.003462726408669359,
         "apparentMax": 0.006099869740460453
       },
-      "ms": 99
+      "ms": 93
     }
   ],
   "failures": []
