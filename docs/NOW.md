@@ -28,6 +28,48 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](FEATURES/world-engine-architecture-spine.md).
 
+> **▶▶ ACTIVE (2026-07-29 session B — AC-SAMPLER's FIRST LIVE EVIDENCE `50ccf2d`; NEXT = JOB 2, the plate work).**
+> Workstream `docs/WORKSTREAMS/world-engine-tectonic-realism-2026-07-29/` (14 ACs, status `building`). The tap
+> shipped headlessly at `a2e36de` and **nothing had come out of the instrument**; both remaining obligations needed
+> a GPU and both have now run. `50ccf2d` is **evidence only — no source file changed**. Handoff:
+> `~/briefings/handoff-tectonic-realism-2026-07-29b.md`.
+> **INERTNESS — 5/5 AFTER/BEFORE pairs byte-identical, at a floor that was MEASURED not assumed.** The plan never
+> pinned `levels`; at the lab default 6 `posterize()` is a *six-step* quantizer and a perturbation ladder showed
+> that config blind below ~1e-5 in field units — three orders short of the 1-ULP risk the plan itself named. Re-run
+> at `levels = 255` (step == the 8-bit output step): detects 1e-7, blind at 1e-8, and one float32 ULP at
+> `uPerturb ≈ 0.682` is ~6e-8, so the config used sits at ~1-ULP sensitivity. Three controls make it mean something
+> — NULL (repeatable), **LIVENESS** (`uFieldTap=2` moves 84.78% of pixels, so the branches are real code and were
+> not folded away by the driver — without this, byte-identity is trivially true AND the instrument broken), RESTORE
+> (returns to the exact baseline hash). 5 distinct pair hashes. Limits filed: not bit-exactness (8-bit floor), one
+> driver (ANGLE/NVIDIA RTX 5080/D3D11), bake textures matched by construction not hashed.
+> **LEGS — all five executed across 4 configurations** (Rocky preset, Rocky all-features, Eyeball locked, Europa).
+> **L1 PASS ×4. L2 PASS ×4** — height R² 0.9975–0.9998, gradient R² 0.9963–0.9987, `gpuRms` nonzero everywhere,
+> against a pre-AC-SAMPLER sampler that regressed near **R² 0**: the AC's core indictment answered, and
+> counterexample (c) closed live rather than only structurally. **L5's plumbing is EXACT** — R² 0.999999 / rms
+> 2.27e-4 on the very body it "failed" on, once only the sampling grid changes; the whole failure is **one grazing
+> pixel** (cos incidence 0.0029, ray/sphere disc 8.4e-6), and `0.342773/√191 = 0.024801` reproduces the reported
+> rms `0.0248031` to five digits. One mechanism (residual = angular error × local gradient) also explains why
+> Europa/Eyeball passed on the identical grid — so the cross-body ordering and the grid sensitivity are ONE finding.
+> **L3 is mostly an expectation-table error** (it asserts "must move its tap" for albedo/limb/specular gates that
+> cannot touch `h`); coverage 4 → 23 under `enableAllFeatures` proves the relief-gate misses were configuration
+> scope. **L4 never passes on any body** — separation from its own `gradBase` mutant is 0.022–0.036 against a
+> required 0.1, so it cannot catch the counterexample it exists for; and its Eyeball/Europa nulls are **not** a bug
+> but the documented `floorUnusable` branch firing on calibration floors of 0.882/0.871 vs `L4_FLOOR_MIN_R2 = 0.9`
+> — on a relation exact by construction that measures **the probe, not the field** (Rocky's 0.962 only just clears,
+> so the probe is marginal everywhere). ⚠ AC-SAMPLER is **NOT** marked closed; `fieldSampler`'s refusal to emit km
+> stays in force until AC-KMUNIT lands. 64/64 fence tests pass. **7 commits unpushed — push confirm owed.**
+> **▶ NEXT — JOB 2, both ACs already ruled by Max** (statements in `contract.json`, `amendments[1]` for the
+> inversion): AC-PLATESCALE — do **NOT** add a radius term to plate count (literature says radius-invariant,
+> N ~ R^-0.07; shipped 7–13 is correct); the undeclared law is in the **DISPLAY** path, `uDispDomainScale = sVis`
+> handing exponent 1 uncited off `VIS_SCALE_EXP = 0.5` → name and derive it or remove it; retire
+> `bakeReliefCrossover` for the derived Nyquist gate, where **the mesh pitch binds (1.9046e-2 rad), not the 256³
+> cube (7.8e-3)**. AC-PLATECOMP — plate count from core mass fraction via mantle-depth fraction, `Γ` declared an
+> Earth **calibration** not a derivation, Earth byte-identical, and Max is owed an **enumerated** before/after list
+> for the non-Earth rocky presets. ⛔ A replacement law was already REJECTED on 6 blockers — its belt term drove
+> belts below the mesh Nyquist across most of the band, re-creating "tectonics become noise at 3.26 R⊕" in geometry
+> while the registry reported PASS. Do not rebuild it. Leg polish (L5 incidence-rejection → L3 expectation table →
+> L4 probe calibration) is queued BEHIND JOB 2.
+>
 > **▶▶ ACTIVE (2026-07-29 — v2 RELIEF LAW LANDED `63102e5`; NEXT PROGRAM = tectonics + craters at ALL sizes, per Max).**
 > Law shipped in two ordering-critical commits: `85cf3f0` (law + RELIEF_FLOOR guard + uPerturb feed, ATOMIC) and
 > `6779af3` (bodyDrivers.massGravity repointed to the radius-aware condition gravity), plus `63102e5` (two stale
