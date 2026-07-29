@@ -147,6 +147,24 @@ describe('PanelLayout — roles are config, geometry is derived (AC-PANEL-BINDIN
     }
   });
 
+  it('holds Max\'s ruling that all four monitors are the same size', () => {
+    // Lane E handoff, Max this session: "I want the monitors to be the same size
+    // and dimensions." A future model that solves a layout problem by making one
+    // pair bigger must fail here rather than ship asymmetric screens.
+    const files = glbFiles().filter((f) => screensOf(f).screens.length > 0);
+    expect(files.length).toBeGreaterThan(0);
+
+    for (const file of files) {
+      const sizes = screensOf(file).screens.map((s) => measureQuad(s.points));
+      const first = sizes[0];
+      for (const m of sizes.slice(1)) {
+        expect(m.width).toBeCloseTo(first.width, 5);
+        expect(m.height).toBeCloseTo(first.height, 5);
+        expect(m.aspect).toBeCloseTo(first.aspect, 5);
+      }
+    }
+  });
+
   it('writes down no panel dimension anywhere in lane F\'s source', () => {
     // Not directly, and not by reading them back out of cockpit-metrics.json —
     // which is the same hard-coding one indirection out, and is currently wrong
