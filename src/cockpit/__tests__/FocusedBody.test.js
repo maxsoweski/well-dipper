@@ -1,11 +1,11 @@
 /**
  * resolveFocusedBody — lane F (cockpit-screen-content-2026-07-28).
  *
- * SURVEY's feed. "Which body is focused" is not one number: main.js tracks it as
+ * The INFO panel's feed. "Which body is focused" is not one number: main.js tracks it as
  * the triple (focusIndex, focusMoonIndex, focusStarIndex), and the star case uses
  * a sentinel — `focusIndex = -2` in focusStar(), guarded elsewhere as
  * `focusIndex === -2 && focusStarIndex >= 0`. Getting that domain wrong is how
- * SURVEY ends up reading a planet's dossier while the camera is on a star.
+ * INFO ends up reading a planet's dossier while the camera is on a star.
  *
  * Naming follows _makeTarget in src/main.js exactly, including its fallbacks, so
  * the panel and the reticle can never disagree about what a body is called.
@@ -55,7 +55,7 @@ function makeSystem({ named = true, star2 = false } = {}) {
 const focus = (focusIndex, focusMoonIndex = -1, focusStarIndex = -1) =>
   ({ focusIndex, focusMoonIndex, focusStarIndex });
 
-describe('resolveFocusedBody — SURVEY\'s feed (AC-PANEL-CONTENT)', () => {
+describe('resolveFocusedBody — the INFO panel\'s feed (AC-PANEL-CONTENT)', () => {
   it('resolves a focused planet to its name, data and physics', () => {
     const sys = makeSystem();
 

@@ -295,7 +295,7 @@ describe('InfoReadout — missing means blank, never stale, never zero', () => {
     expect(byLabel(buildInfoRows(snapshotFor(null))).BODY).toBe(BLANK);
   });
 
-  it('reads SURVEY blank during a warp, because the system is already torn down', () => {
+  it('reads the survey block blank during a warp, because the system is already torn down', () => {
     const rows = buildInfoRows(buildCockpitSnapshot({ focusedBody: PLANET, warping: true }));
 
     // Row count first: `.every()` on an empty array is TRUE, so a builder that

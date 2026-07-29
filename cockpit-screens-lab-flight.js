@@ -137,7 +137,7 @@ export const FLIGHT_SEGMENTS = Object.freeze([
     note: 'the drive refuses to re-engage → TOO CLOSE (fast blink)' },
 ].map((s) => Object.freeze(s)));
 
-/** Which body the SURVEY/INFO panel is looking at, over time. */
+/** Which body the INFO panel is looking at, over time. */
 const FOCUS_SCHEDULE = Object.freeze([
   { from: 0, to: 14, focus: 'planetA' },
   { from: 14, to: 26, focus: 'moon' },     // T_eq / composition / tidal all blank
@@ -492,7 +492,7 @@ export function flightSourcesAt(tSec, world, renderDtSec = 1 / 60) {
     helm: true,
     flightMode: flightModeAt(t),
     tour: false,
-    // No warp in this script. The snapshot blanks the whole SURVEY block during
+    // No warp in this script. The snapshot blanks its whole `survey` block during
     // one (the system it would describe has already been torn down), and staging
     // that would spend a leg of the flight showing an INFO panel that is blank
     // BY DESIGN — indistinguishable, on the glass, from an INFO panel that is

@@ -17,119 +17,75 @@
  * type scale, the balance and the legibility would be about the wrong picture —
  * which is the single most expensive way a demo surface can lie.
  *
- * ── THE ONE THING THIS FILE ACTUALLY DOES: AN ADAPTER ───────────────────────
+ * ── THE ADAPTER USED TO LIVE HERE. IT LIVES IN src/ NOW. ────────────────────
  *
- * Two contracts meet here and they are NOT the same shape:
+ * Two contracts meet when a painter is mounted on a panel, and they are NOT the
+ * same shape: `PanelHost.setPainter` takes `fn(panel, snapshot, nowMs)` where the
+ * panel carries `ctx`, `canvas` and `metrics`, while the shipped painters take
+ * `fn(screen, snapshot, nowMs)` where `screen` is a `PhosphorScreen`. Something
+ * has to bridge them, and that bridge used to be a private function in THIS FILE.
  *
- *   PanelHost.setPainter takes    fn(panel, snapshot, nowMs)
- *                                 where `panel` carries `ctx`, `canvas`, `metrics`
- *   the shipped painters take     fn(screen, snapshot, nowMs)
- *                                 where `screen` is a PhosphorScreen
+ * That was wrong, and the earlier version of this header said so in as many
+ * words: "when the game wires these panels in, it will need the same bridge". A
+ * seam that only exists in the lab is a seam the game reinvents — and reinventing
+ * it is silent, because handing a painter the PANEL instead of a kit means
+ * `PhosphorScreen`'s constructor is never reached, the first symptom is
+ * `screen.clear is not a function` thrown inside `PanelHost`'s painter catch, and
+ * that catch reports ONCE and then leaves black rectangles in the cockpit.
  *
- * The gap is deliberate on both sides. The host must not construct a
- * `PhosphorScreen`, because that would mean the host choosing a palette and a
- * type scale — and its header is explicit that it owns neither (it will not even
- * fill an unclaimed panel's background, because a fill needs a colour). The
- * painters must not take a raw panel, because then every one of them would have
- * to build its own kit and could build it wrong.
+ * So `panelPainter` is now `src/cockpit/panelPainter.js`, with its own test, and
+ * this file imports it. There is exactly one bridge and the lab is proving the
+ * same one the game will use. That is the point of the lab: a demo surface that
+ * exercises a private copy of the wiring is demonstrating something that will
+ * never ship.
  *
- * So somebody has to bridge them, and `panelPainter` is that bridge. It is four
- * lines and it is worth naming rather than inlining, because getting it wrong is
- * silent: hand a painter the PANEL instead of a kit and `PhosphorScreen`'s
- * constructor is never reached, so the first symptom is `screen.clear is not a
- * function` from inside the host's painter catch — reported once, then a frozen
- * screen with nothing to say why.
- *
- * WHEN THE GAME WIRES THESE PANELS IN, IT WILL NEED THE SAME BRIDGE. That is
- * worth knowing: this is not lab scaffolding that disappears, it is the seam
- * showing up for the first time in the first place that mounts both halves. If a
- * `panelPainter` lands in `src/cockpit/` later, this file should import it and
- * delete its own.
- *
- * ── THE KIT IS BUILT PER PAINT, NOT CACHED ─────────────────────────────────
- *
- * A `PhosphorScreen` holds no state between calls — it is a context plus a type
- * scale derived from the buffer height — and the lab's BUFFER RESOLUTION control
- * tears every panel down and rebuilds it at a different height. A cached kit is
- * therefore a cache with an invalidation rule to get wrong, and getting it wrong
- * means type sized for the OLD buffer: correct-looking, wrong-sized, no error.
- * The cost of not caching is five divisions per panel per repaint, twelve and a
- * half times a second.
+ * (The promoted version also CACHES the kit per panel, which this file's copy
+ * deliberately did not. The invalidation rule that made caching look unattractive
+ * — the lab's own BUFFER RESOLUTION control rebuilds every panel at a new height —
+ * is handled there and tested there, against exactly that case.)
  */
 
-import { PhosphorScreen } from './src/cockpit/PhosphorScreen.js';
+import { panelPainter } from './src/cockpit/panelPainter.js';
 import { paintDrive } from './src/cockpit/panels/DrivePanel.js';
 import { paintTarget } from './src/cockpit/panels/TargetPanel.js';
 import { paintInfo } from './src/cockpit/panels/InfoPanel.js';
+import { makeNavPainter } from './src/cockpit/panels/NavPanel.js';
 
 /**
- * What the NAV panel says while the nav computer is not part of this rung.
+ * What the NAV panel says when this page has NO NAV SOURCE ATTACHED.
+ *
+ * It used to say DEFERRED, because the nav computer was not part of that rung.
+ * It is part of this one: `src/cockpit/panels/NavPanel.js` renders the real
+ * `NavComputer` through the Phosphor dither, and the lab mounts it over this card
+ * as soon as the source is built. So the card is no longer the plan — it is the
+ * FAILURE STATE, and the words had to change with the meaning. "NO SOURCE" says
+ * the one true thing: the nav computer could not be built on this page. The lab's
+ * chrome prints the reason verbatim beside it.
  *
  * Exported so the lab's HUD and this file's test name the same strings rather
  * than each spelling them out.
  */
-export const NAV_HOLDING_TEXT = Object.freeze({ TITLE: 'NAV', NOTE: 'DEFERRED' });
+export const NAV_HOLDING_TEXT = Object.freeze({ TITLE: 'NAV', NOTE: 'NO SOURCE' });
 
 /** Where the two words sit, as fractions of the buffer height. */
 const NAV_LAYOUT = Object.freeze({ TITLE_BASELINE: 0.42, NOTE_BASELINE: 0.58 });
 
 /**
- * Build the drawing kit for one panel's buffer.
- *
- * The dimensions come off the PANEL'S OWN CANVAS, never from a constant. That
- * canvas was sized by `PanelHost` from the face's MEASURED aspect times the
- * chosen buffer height, so reading it here is what carries the derived-from-the-
- * mesh property all the way to the type scale. A hard-coded height here would
- * mean the type stopped tracking the resolution knob — the panel would look
- * right at one setting and half-size at the next, with nothing to say so.
- */
-function screenForPanel(panel) {
-  if (!panel || !panel.ctx || !panel.canvas) {
-    throw new Error(
-      'screenForPanel: needs a PanelHost panel carrying a `ctx` and a `canvas`. Passing the ' +
-      'painter something else fails deep inside a draw call, which the host catches, reports ' +
-      'once and then leaves as a frozen screen.',
-    );
-  }
-  return new PhosphorScreen(panel.ctx, {
-    width: panel.canvas.width,
-    height: panel.canvas.height,
-  });
-}
-
-/**
- * Adapt a `(screen, snapshot, nowMs)` painter to `PanelHost`'s
- * `(panel, snapshot, nowMs)` contract. See the header for why the two differ.
- *
- * @param {(screen:object, snapshot:object, nowMs:number) => void} paint
- * @returns {(panel:object, snapshot:object, nowMs:number) => void}
- */
-export function panelPainter(paint) {
-  if (typeof paint !== 'function') {
-    throw new Error(
-      `panelPainter: needs a painter function, got ${typeof paint}. A non-function registered ` +
-      `through setPainter would throw on the first repaint, inside the host's catch, and that ` +
-      `screen would then simply stay as it was.`,
-    );
-  }
-  return (panel, snapshot, nowMs) => paint(screenForPanel(panel), snapshot, nowMs);
-}
-
-/**
- * NAV — a holding card, because the nav computer is not part of this increment.
+ * NAV's fallback card — shown ONLY when no nav computer could be built.
  *
  * Two words and nothing else, on purpose. Leaving the glass dark was the
- * alternative and it was rejected: a dark panel among three lit ones reads as a
- * panel that FAILED, and the first minutes of the demo would go on working out
- * what broke. A card that says DEFERRED carries the same information without the
- * false alarm.
+ * alternative and it was rejected: a dark panel among three lit ones is
+ * indistinguishable from a panel whose painter threw, and the first minutes of
+ * the demo would go on working out which. A card that says NO SOURCE carries the
+ * cause without the guesswork.
  *
  * IT READS NOTHING FROM THE SNAPSHOT, and that restraint is the whole design.
  * The system name and the nav level are both right there on the frame, and
  * putting either on this panel would make it look like a working nav computer —
  * the one impression it must not give, because AC-PANEL-CONTENT's NAV clause is
  * about the real thing being live from the first frame after boot, and a
- * plausible-looking placeholder is how that gets ticked off by mistake.
+ * plausible-looking placeholder is how that gets ticked off by mistake. That
+ * argument is the reason the card is two flat words and not, say, a level name.
  *
  * Same `(screen, snapshot, nowMs)` shape as the three shipped painters, so all
  * four register interchangeably; a painter with a different arity is a wiring
@@ -176,3 +132,27 @@ export const LAB_PAINTERS = Object.freeze({
   TARGET: panelPainter(paintTarget),
   INFO: panelPainter(paintInfo),
 });
+
+/**
+ * The REAL NAV painter, in `PanelHost.setPainter` form, over a nav source.
+ *
+ * Why this is not in `LAB_PAINTERS`: that map is built at module load, and a nav
+ * source cannot be. Building one means building a `NavComputer`, which needs a
+ * canvas, a `GalacticMap` and a WebGL renderer — and, crucially, it needs the NAV
+ * PANEL'S BUFFER SIZE, which does not exist until `PanelHost.fromRoot` has bound
+ * the panels off the loaded model. So the page mounts the four static painters
+ * first and then puts this one over NAV, which also means the fallback card is
+ * what shows if the source could not be built.
+ *
+ * It is here rather than inline in the page for the same reason the adapter was
+ * promoted out of this file: the game will need exactly this composition —
+ * `panelPainter(makeNavPainter(source, knob))` — and a composition that only ever
+ * existed inside a `<script type="module">` is one the game reinvents, silently.
+ *
+ * @param {import('./src/cockpit/NavSource.js').NavSource} source
+ * @param {() => {threshold?:number, gamma?:number}} readKnob read every paint
+ * @returns {(panel:object, snapshot:object, nowMs:number) => void}
+ */
+export function labNavPainter(source, readKnob) {
+  return panelPainter(makeNavPainter(source, readKnob));
+}

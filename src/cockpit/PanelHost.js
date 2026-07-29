@@ -114,17 +114,19 @@
  *
  * ── 5. LIFECYCLE: WHAT THE GLASS DOES DURING A WARP ─────────────────────────
  *
- * During a warp the snapshot deliberately blanks the SURVEY block — `system` is
- * never nulled in main.js, so mid-warp it still points at BodyRenderers whose
- * meshes have already left the scene, and a dossier read from it describes a
- * system that no longer exists. Read the comment in CockpitSnapshot.js.
+ * During a warp the snapshot deliberately blanks its `survey` block — the dossier
+ * the INFO panel draws from. `system` is never nulled in main.js, so mid-warp it
+ * still points at BodyRenderers whose meshes have already left the scene, and a
+ * dossier read from it describes a system that no longer exists. Read the comment
+ * in CockpitSnapshot.js.
  *
  * CHOSEN: keep painting, every panel, every warp frame — and FORCE a repaint of
  * every panel on the frame `regime.warping` changes, ahead of the ambient tick.
  *
  * Why: the snapshot is already the thing that decides what is untrustworthy, and
- * it blanks exactly the block that is (survey) and nothing else. Speed, flight
- * mode, warp progress and the destination name are all still TRUE during a warp,
+ * it blanks exactly the block that is — `survey`, the one INFO draws — and nothing
+ * else. Speed, flight mode, warp progress and the destination name are all still
+ * TRUE during a warp,
  * and a warp is the moment a pilot most wants to read them. The forced repaint
  * exists because the ambient tier alone would leave the just-invalidated dossier
  * sitting on the glass for up to one ambient period — brief, but it is literally

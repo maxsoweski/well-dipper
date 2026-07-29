@@ -66,13 +66,13 @@ function plainVec3(v) {
 }
 
 /**
- * Resolve main.js's focus triple to the body SURVEY should show.
+ * Resolve main.js's focus triple to the body the INFO panel should show.
  *
  * "Which body is focused" is not one number. main.js tracks it as
  * (focusIndex, focusMoonIndex, focusStarIndex), where `focusIndex` carries a
  * sentinel: -1 = system overview, **-2 = a star** (set by `focusStar()`, and
  * guarded elsewhere as `focusIndex === -2 && focusStarIndex >= 0`), 0+ = a planet.
- * Treating -2 as an array index is how SURVEY would end up reading nothing while
+ * Treating -2 as an array index is how INFO would end up reading nothing while
  * the camera sits on a star.
  *
  * Names follow `_makeTarget` in src/main.js exactly, fallbacks included, so the
@@ -172,8 +172,9 @@ export function buildCockpitSnapshot(sources = {}) {
   // transitions, potentially many frames before `spawnSystem()` reassigns it, so
   // across a warp `system` still points at BodyRenderers whose meshes are out of
   // the scene and whose GPU resources are about to be disposed. Reading a
-  // dossier then describes a system that no longer exists, so SURVEY goes blank
-  // for the duration. The rest of the frame still reports — the ship is flying.
+  // dossier then describes a system that no longer exists, so the `survey` block
+  // below — and with it the INFO panel that draws from it — goes blank for the
+  // duration. The rest of the frame still reports — the ship is flying.
   const body = warping ? null : focusedBody;
   const physics = body?.physics ?? null;
   const bodyData = body?.data ?? null;

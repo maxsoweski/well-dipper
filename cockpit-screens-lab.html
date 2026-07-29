@@ -34,17 +34,23 @@
        those come off the mesh — and a claim like that should be readable, not
        inferred from a screenshot.
 
+  4. IT PUTS THE REAL NAV COMPUTER ON THE FOURTH SCREEN. `src/ui/NavComputer.js`
+     — the same four thousand lines the game's full-screen overlay runs — draws
+     into a buffer of the NAV panel's own size and is quantised to one ink by
+     `src/cockpit/PhosphorDither.js`. [V] steps the level and two sliders sweep
+     the dither. That is the H4 fork, and whether it READS or turns to mud is
+     Max's gate; this page exists so he can answer it. NAV falls back to a card
+     that says NO SOURCE only when the nav computer could not be BUILT, and the
+     chrome prints the reason verbatim beside it — the card is the failure state,
+     not the plan, and the two must never be confused for one another.
+
   ── WHAT IS NOT IN HERE ────────────────────────────────────────────────────
 
-  NAV. The nav computer is a later increment, so that panel draws a holding card
-  that says DEFERRED. It reads nothing from the snapshot on purpose: a
-  plausible-looking placeholder is how "NAV is live from the first frame" gets
-  ticked off by mistake.
-
-  A WARP. The snapshot deliberately blanks the whole SURVEY block during one —
-  the system it would describe has already been torn down — so a warp leg would
-  spend eight seconds showing a panel that is blank BY DESIGN, which on the glass
-  is indistinguishable from a panel that is blank because it is broken. That
+  A WARP. The snapshot deliberately blanks its whole `survey` block during one —
+  the block the INFO panel draws from — because the system it would describe has
+  already been torn down. So a warp leg would spend eight seconds showing an INFO
+  panel that is blank BY DESIGN, which on the glass is indistinguishable from an
+  INFO panel that is blank because it is broken. That
   deserves its own demonstration, not a silent stretch of this one.
 
   ── THE ?glb= SWITCH IS LOAD-BEARING, NOT A CONVENIENCE ────────────────────
@@ -138,6 +144,15 @@
     .now span { color: var(--ink-hi); }
     .hint { color: var(--ink-dim); font-size: 11px; margin-top: 8px; line-height: 1.5; }
 
+    /* The NAV fork's own controls, fenced off from the page-wide ones above. */
+    .group {
+      color: var(--ink-dim); font-size: 11px; letter-spacing: 1px;
+      margin: 10px 0 4px; padding-top: 8px; border-top: 1px solid rgba(var(--ink-glow), 0.28);
+    }
+    .slider { display: block; color: var(--ink-dim); font-size: 11px; margin: 6px 0 2px; }
+    .slider .num { color: var(--ink-hi); float: right; }
+    .slider input[type=range] { width: 100%; accent-color: var(--ink); margin-top: 2px; }
+
     /* The transport. Bottom-centre and wide, because scrubbing to a frame and
        looking at it is the single most-used control on this page. IN THE PAGE
        CHROME, NEVER ON THE GLASS — nothing a pilot would not see goes inside
@@ -180,6 +195,18 @@
     <button class="btn on" id="bGlass"><span>CANOPY GLASS</span><span class="key">G</span></button>
     <button class="btn" id="bCabin"><span>CABIN LIGHT</span><span class="key">L</span></button>
     <button class="btn" id="bReset"><span>RECENTRE VIEW</span><span class="key">R</span></button>
+
+    <!-- The NAV fork's controls. Separated by a rule because they steer ONE
+         panel, where everything above steers the page or all four. -->
+    <div class="group">NAV — REAL NAV COMPUTER, DITHERED</div>
+    <button class="btn" id="bNavLevel"><span id="bNavLevelLabel">NAV LEVEL: GALAXY</span><span class="key">V</span></button>
+    <label class="slider">BLACK POINT <span class="num" id="bThresholdLabel">0.060</span>
+      <input type="range" id="dThreshold" />
+    </label>
+    <label class="slider">MID GAIN <span class="num" id="bGammaLabel">1.00</span>
+      <input type="range" id="dGamma" />
+    </label>
+
     <div class="hint">
       EYE: camera at the model's Eye_Point,
       fov 70, letterboxed 16:9 — the framing
@@ -194,7 +221,17 @@
       [L] CABIN LIGHT is OFF by default: the
       CRTs are meant to be the cabin's own
       light source, and that is the thing
-      being looked at.
+      being looked at.<br />
+      [V] steps the NAV panel through
+      galaxy → sector → region → prism →
+      system. The two sliders are the ONLY
+      knob the dither has: BLACK POINT is
+      the luminance below which nothing
+      lights (raise it until the backdrop
+      stops snowing), MID GAIN is how much
+      of the rest lights up. Both ends are
+      reachable on purpose — sweep to each
+      and pick a middle.
     </div>
   </div>
 
@@ -214,7 +251,11 @@
     import { SCREEN_NODE_RE, DEFAULT_PANEL_ROLES } from './src/cockpit/PanelLayout.js';
     import { buildCockpitSnapshot } from './src/cockpit/CockpitSnapshot.js';
     import { buildFlightReadout, flightReadoutStateFromSnapshot } from './src/cockpit/FlightReadout.js';
-    import { LAB_PAINTERS } from './cockpit-screens-lab-panels.js';
+    import { LAB_PAINTERS, labNavPainter } from './cockpit-screens-lab-panels.js';
+    import { NavSource } from './src/cockpit/NavSource.js';
+    import { DEFAULT_DITHER } from './src/cockpit/PhosphorDither.js';
+    import { NavComputer } from './src/ui/NavComputer.js';
+    import { GalacticMap } from './src/generation/GalacticMap.js';
     import {
       FLIGHT_DURATION_S, buildLabWorld, flightSourcesAt, segmentAt, dropWindowFor,
     } from './cockpit-screens-lab-flight.js';
@@ -297,6 +338,70 @@
     /** Canopy_Glass placeholder opacity. It is NOT glass yet; see the header. */
     const GLASS_OPACITY = 0.10;
     const RE_GLASS = /^Canopy_Glass/i;
+
+    // ── The NAV panel: the real nav computer, dithered ────────────────────────
+
+    /**
+     * The galaxy master seed. THE SAME STRING main.js uses, so the sectors, the
+     * density field and the star names on the NAV panel are the ones the game
+     * generates. A different seed here would show Max a galaxy that does not
+     * exist, and every judgement about whether it reads would be about it.
+     */
+    const NAV_MASTER_SEED = 'well-dipper-galaxy-1';
+
+    /** NavComputer's own level order — its `LEVELS` const has no importers. */
+    const NAV_LEVEL_NAMES = ['GALAXY', 'SECTOR', 'REGION', 'PRISM', 'SYSTEM'];
+
+    /**
+     * WHERE THE SHIP IS, IN GALACTIC KPC — and this is a SEPARATE TABLE from
+     * LAB_SEEDS' positions on purpose, which is worth stating because merging
+     * them is the obvious-looking edit and it would break the panel silently.
+     *
+     * LAB_SEEDS' coordinates are a NAMING input: `generateSystemNames` derives a
+     * system's designation injectively from a canonical position, and those
+     * numbers are in that space, not in galactic kiloparsecs. The galaxy is about
+     * 44 kpc across and the sun sits at x = 8, so feeding `{x: 1420.5, …}` to
+     * `setPlayerPosition` would park the ship roughly thirty galaxy-diameters
+     * outside it. Nothing would error. The nav map would simply be empty, on
+     * every level, and the fork would be judged on a blank screen.
+     *
+     * These five are spread across the disc so that [N] moves the nav picture as
+     * well as the dossier — a density field that never changes is a weak thing to
+     * judge a dither against.
+     */
+    const NAV_GALACTIC_POS = [
+      { x: 8.0,  y: 0.00,  z: 0.0 },
+      { x: 6.2,  y: 0.05,  z: 3.1 },
+      { x: 11.4, y: -0.12, z: -2.6 },
+      { x: 8.5,  y: 0.02,  z: 1.2 },
+      { x: 4.0,  y: -0.03, z: -5.5 },
+    ];
+
+    /**
+     * The level the NAV panel opens on.
+     *
+     * GALAXY, not NavComputer's own default of PRISM, and the choice is about
+     * what is being judged. The galaxy level is the hardest case for the dither
+     * by a wide margin — it is a GPU-rendered continuous density image, all
+     * gradient and no line art — so it is where "does this read or does it turn
+     * to mud" gets its most honest answer. The other four are one keypress away.
+     */
+    const NAV_START_LEVEL = 0;
+
+    /**
+     * The dither knob's sweep range for the two sliders.
+     *
+     * The DEFAULTS are imported, never retyped, so the first thing Max sees is
+     * whatever the shipped starting point actually is even after it is retuned.
+     * The ranges are wide enough to reach both failure modes on purpose: a black
+     * point of 0 shows the near-black backdrop snowing, and a gamma of 4 shows the
+     * picture collapsing to only its brightest marks. Seeing both ends is how a
+     * middle gets chosen.
+     */
+    const DITHER_RANGE = Object.freeze({
+      threshold: { min: 0, max: 0.5, step: 0.005 },
+      gamma: { min: 0.25, max: 4, step: 0.05 },
+    });
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene
@@ -400,6 +505,20 @@
     let seedIndex = 0;
     let world = null;
     let worldError = null;
+
+    // ── NAV state ────────────────────────────────────────────────────────────
+    let galacticMap = null;        // built lazily; see ensureNavSource()
+    let navSource = null;          // the hosted NavComputer, or null if it failed
+    let navError = null;           // why it failed — shown VERBATIM in the chrome
+    let navLevel = NAV_START_LEVEL;
+    /**
+     * The dither setting, MUTATED IN PLACE by the sliders and read fresh by the
+     * painter every paint. That freshness is the whole point of the control: a
+     * value captured when the painter was wired would make the slider appear to
+     * do nothing, and this slider is the one Max is meant to sweep while looking
+     * at the glass.
+     */
+    const dither = { threshold: DEFAULT_DITHER.threshold, gamma: DEFAULT_DITHER.gamma };
 
     let timeS = 0;
     let playing = true;
@@ -536,10 +655,130 @@
         for (const role of Object.keys(DEFAULT_PANEL_ROLES)) {
           host.setPainter(role, LAB_PAINTERS[role]);
         }
+        // THEN the real thing over NAV. Registered after the four static painters
+        // rather than instead of one of them, so that a nav source which could not
+        // be built leaves the NO SOURCE card on the glass — and the reason beside
+        // it in the chrome — instead of a black rectangle nobody can account for.
+        mountNav();
         applyPhosphorToGlass();
       } catch (err) {
         hostError = (err && err.message) || String(err);
       }
+    }
+
+    /**
+     * Build the nav computer once, and put the real NAV painter on the glass.
+     *
+     * ── WHY IT IS BUILT HERE AND NOT AT LOAD ──
+     *
+     * The source draws into a buffer of the NAV PANEL'S OWN SIZE, and that size is
+     * `PanelHost`'s to decide — it derives every panel's shape from the face's
+     * measured aspect times the buffer-height knob. So there is nothing to size a
+     * nav computer against until the panels are bound.
+     *
+     * ── WHY IT IS BUILT ONLY ONCE ──
+     *
+     * [B] tears the host down and rebuilds every panel at a new resolution. The
+     * NAV SOURCE deliberately does not follow: constructing a `NavComputer`
+     * regenerates the sector table and reloads a prism's worth of stars, which
+     * would stall the page on every press and reset the view Max was looking at.
+     * `NavSource.resize` is the whole of what a resolution change needs, and the
+     * painter calls it from the panel's own current size on every paint.
+     *
+     * A failure here is CAUGHT AND NAMED rather than allowed to take the page
+     * down with it: the other three panels are still worth looking at, and
+     * `navError` is printed verbatim in the chrome beside a NAV panel that says
+     * NO SOURCE. What must not happen is a plausible-looking NAV panel with no
+     * nav computer behind it.
+     */
+    function mountNav() {
+      if (!host || !host.panel('NAV')) return;
+
+      if (!navSource && !navError) {
+        try {
+          // The map is the expensive part and nothing else on this page needs it,
+          // so it is built at the first mount rather than at import.
+          if (!galacticMap) galacticMap = new GalacticMap(NAV_MASTER_SEED);
+          const { canvas: navCanvas } = host.panel('NAV');
+          navSource = NavSource.mount({
+            width: navCanvas.width,
+            height: navCanvas.height,
+            makeNav: (surface) => {
+              // The lab's own renderer, exactly as main.js hands NavComputer the
+              // game's. That is what enables the GPU galaxy image — the hardest
+              // thing in the frame for a two-colour quantiser, and therefore the
+              // thing most worth having in front of Max. NavGalaxyRenderer
+              // restores the previous render target, so it does not disturb us.
+              const nav = new NavComputer(surface, galacticMap, renderer);
+              nav.setPlayerPosition(NAV_GALACTIC_POS[seedIndex % NAV_GALACTIC_POS.length]);
+              return nav;
+            },
+          });
+          setNavLevel(navLevel);
+        } catch (err) {
+          navSource = null;
+          navError = (err && err.message) || String(err);
+        }
+      }
+
+      if (navSource) host.setPainter('NAV', labNavPainter(navSource, () => dither));
+    }
+
+    /**
+     * Put the nav computer on a level, WITHOUT a drill animation.
+     *
+     * The animation is skipped deliberately and it is not laziness. NavComputer's
+     * `_startDrillAnim` stamps `simClockMs()` and `_updateAnim` clears `_anim`
+     * only once that clock has advanced past the duration — and `src/core/SimClock.js`
+     * is advanced exclusively by the sim tick, which this page does not run. So a
+     * drill started here would never complete: the level would never change, and
+     * `_handleClick`'s `if (this._anim) return` would deaden the panel's input for
+     * good. Setting the index and applying the view is the honest thing to do on a
+     * page with no sim.
+     *
+     * SYSTEM goes through `openToCurrentSystem()` — the real entry path, so what
+     * shows is what warping there would show. It returns early when no star has
+     * been found yet (the prism's star load is on demand), so the index is set
+     * afterwards regardless; an empty system view is the truthful picture of a
+     * level whose data has not arrived.
+     */
+    function setNavLevel(index) {
+      const n = NAV_LEVEL_NAMES.length;
+      // Reject anything that is not a whole number BEFORE it reaches _levelIndex.
+      // Found the hard way while driving this lab from the console: passing the
+      // level's NAME ('galaxy') instead of its index makes `index % n` NaN, which
+      // lands NaN on nav._levelIndex — and NavComputer's render branches all test
+      // it numerically (`> 0 && <= 2`, `=== 3`, `=== 4`), so EVERY branch fails,
+      // every level falls through to the galaxy density background, and all five
+      // levels draw the identical picture with no error anywhere. It reads exactly
+      // like "the nav computer is hosted but the drill is broken". Throwing here
+      // turns twenty minutes of misdiagnosis into one line of console output.
+      if (!Number.isInteger(index)) {
+        throw new TypeError(
+          `setNavLevel expects an integer index 0..${n - 1} (${NAV_LEVEL_NAMES.join(', ')}), ` +
+          `got ${JSON.stringify(index)}. A non-integer becomes NaN on NavComputer._levelIndex, ` +
+          `where it silently renders every level identically instead of failing.`,
+        );
+      }
+      navLevel = ((index % n) + n) % n;
+      el.bNavLevelLabel.textContent = `NAV LEVEL: ${NAV_LEVEL_NAMES[navLevel]}`;
+      const nav = navSource && navSource.nav;
+      if (!nav) return navLevel;
+      nav._anim = null;
+      nav._systemZoomAnim = null;
+      nav._tiltAnim = null;
+      if (navLevel === NAV_LEVEL_NAMES.indexOf('SYSTEM')) nav.openToCurrentSystem();
+      nav._levelIndex = navLevel;
+      nav._applyLevelView();
+      return navLevel;
+    }
+
+    /** Move the dither knob. The painter reads `dither` fresh, so this is all it takes. */
+    function applyDither() {
+      el.bThresholdLabel.textContent = dither.threshold.toFixed(3);
+      el.bGammaLabel.textContent = dither.gamma.toFixed(2);
+      el.dThreshold.value = String(dither.threshold);
+      el.dGamma.value = String(dither.gamma);
     }
 
     /**
@@ -599,6 +838,12 @@
       bGlass: document.getElementById('bGlass'),
       bCabin: document.getElementById('bCabin'),
       bReset: document.getElementById('bReset'),
+      bNavLevel: document.getElementById('bNavLevel'),
+      bNavLevelLabel: document.getElementById('bNavLevelLabel'),
+      bThresholdLabel: document.getElementById('bThresholdLabel'),
+      bGammaLabel: document.getElementById('bGammaLabel'),
+      dThreshold: document.getElementById('dThreshold'),
+      dGamma: document.getElementById('dGamma'),
       bPlay: document.getElementById('bPlay'),
       scrub: document.getElementById('scrub'),
       tTime: document.getElementById('tTime'),
@@ -656,6 +901,14 @@
       seedIndex = (seedIndex + delta + LAB_SEEDS.length) % LAB_SEEDS.length;
       el.bSeedLabel.textContent = `SYSTEM: ${seedIndex + 1}/${LAB_SEEDS.length}`;
       loadWorld();
+      // Move the SHIP too, in galactic kpc — see NAV_GALACTIC_POS for why that is
+      // a separate table from the seed's naming position. `setPlayerPosition`
+      // resets the prism's on-demand star load, which is exactly right here and
+      // exactly why the painter must never call it.
+      if (navSource) {
+        navSource.nav.setPlayerPosition(NAV_GALACTIC_POS[seedIndex % NAV_GALACTIC_POS.length]);
+        setNavLevel(navLevel);
+      }
       return LAB_SEEDS[seedIndex][0];
     }
 
@@ -679,7 +932,19 @@
     el.bGlass.onclick = () => { state.glass = !state.glass; applyGlass(); };
     el.bCabin.onclick = () => { state.cabin = !state.cabin; applyCabin(); };
     el.bReset.onclick = recentre;
+    el.bNavLevel.onclick = () => setNavLevel(navLevel + 1);
     el.bPlay.onclick = () => setPlaying(!playing);
+
+    // The slider bounds come from DITHER_RANGE rather than from the markup, so
+    // the range and the reason for it live in one place with the comment that
+    // explains it, instead of as six bare numbers in an attribute.
+    for (const [key, input] of [['threshold', el.dThreshold], ['gamma', el.dGamma]]) {
+      const r = DITHER_RANGE[key];
+      input.min = String(r.min);
+      input.max = String(r.max);
+      input.step = String(r.step);
+      input.oninput = () => { dither[key] = parseFloat(input.value); applyDither(); };
+    }
     // Scrubbing PAUSES. Dragging the handle on a running clock fights the
     // playhead and the frame under the cursor is never the frame you let go on,
     // which makes the one control that exists for stopping-and-looking unusable
@@ -690,6 +955,8 @@
     setPlaying(playing);
     applyPhosphor(0);
     applyCabin();
+    applyDither();
+    setNavLevel(navLevel);
     el.bBufferLabel.textContent = `BUFFER: ${BUFFER_HEIGHTS[bufferIndex]} px`;
     el.bSeedLabel.textContent = `SYSTEM: ${seedIndex + 1}/${LAB_SEEDS.length}`;
 
@@ -706,6 +973,7 @@
         case 'g': el.bGlass.onclick(); break;
         case 'l': el.bCabin.onclick(); break;
         case 'r': recentre(); break;
+        case 'v': setNavLevel(navLevel + (e.shiftKey ? -1 : 1)); break;
         // Nudge a paused frame one step at a time, for looking at a transition.
         case 'arrowleft': setPlaying(false); setTime(timeS - 0.25); break;
         case 'arrowright': setPlaying(false); setTime(timeS + 0.25); break;
@@ -892,6 +1160,29 @@
                `<span class="dim">— that is a bug, not the tub case.</span>`);
       }
 
+      // WHAT THE NAV PANEL IS ACTUALLY SHOWING, said in words, because the two
+      // states are hard to tell apart from a screenshot and confusing them is how
+      // "the nav computer is live" gets ticked off against a holding card.
+      if (navError) {
+        L.push(`<span class="k">nav    </span> <span class="err">NO SOURCE — the NAV panel is a holding ` +
+               `card, not the nav computer</span>`);
+        L.push(`<span class="dim">       ${esc(navError)}</span>`);
+      } else if (navSource) {
+        const nav = navSource.nav;
+        const p = NAV_GALACTIC_POS[seedIndex % NAV_GALACTIC_POS.length];
+        L.push(`<span class="k">nav    </span> <span class="v">LIVE NavComputer</span> ` +
+               `<span class="dim">level</span> <span class="v">${esc(nav.level.toUpperCase())}</span> ` +
+               `<span class="dim">buffer</span> <span class="v">${navSource.canvas.width}x${navSource.canvas.height}</span> ` +
+               `<span class="dim">ship [${f3(p.x)}, ${f3(p.y)}, ${f3(p.z)}] kpc, stars ` +
+               `${nav._localStars ? nav._localStars.length : 0}</span>`);
+        L.push(`<span class="k">dither </span> <span class="dim">black point</span> ` +
+               `<span class="v">${dither.threshold.toFixed(3)}</span> ` +
+               `<span class="dim">mid gain</span> <span class="v">${dither.gamma.toFixed(2)}</span> ` +
+               `<span class="dim">— one ink on black; the setting is the judge-by-eye question</span>`);
+      } else if (host && host.panel('NAV')) {
+        L.push(`<span class="k">nav    </span> <span class="warn">not mounted yet</span>`);
+      }
+
       L.push(`<span class="k">eye    </span> ${eyeFound
         ? `<span class="v">${EYE_NODE_NAME}</span> at [${f3(eyePos.x)}, ${f3(eyePos.y)}, ${f3(eyePos.z)}]`
         : `<span class="warn">no ${EYE_NODE_NAME} node — falling back to the origin</span>`} ` +
@@ -942,11 +1233,21 @@
         L.push(`<span class="k">       </span> TARGET <span class="v">${esc(snapshot.target.name ?? '—')}</span>` +
                ` · eta ${esc(readout.eta ?? '—')}` +
                ` · <span class="warn">${esc(readout.drop ? readout.drop.text : '—')}</span>`);
-        L.push(`<span class="k">       </span> SURVEY <span class="v">${esc(snapshot.survey.name ?? '—')}</span>` +
+        L.push(`<span class="k">       </span> INFO <span class="v">${esc(snapshot.survey.name ?? '—')}</span>` +
                ` (${esc(snapshot.survey.kind ?? 'nothing focused')})` +
                ` · <span class="warn">${esc(readout.massLock ? readout.massLock.text : '—')}</span>`);
-        L.push(`<span class="k">       </span> NAV <span class="dim">holding card — the nav computer is a later ` +
-               `increment and is deliberately not on this panel</span>`);
+        // NAV's digest line must AGREE with the nav block printed above. It used
+        // to say "holding card — a later increment", which was true of the rung
+        // before this one and is now the opposite of what the panel is doing —
+        // and a HUD that calls a live nav computer a placeholder is the same
+        // class of error as one that calls a placeholder live. Both make the
+        // screenshot unreadable as evidence.
+        L.push(`<span class="k">       </span> NAV ${navError
+          ? `<span class="err">NO SOURCE — holding card, not the nav computer</span>`
+          : navSource
+            ? `<span class="v">${esc(navSource.nav.level.toUpperCase())}</span>` +
+              ` <span class="dim">— the real NavComputer, dithered to one ink</span>`
+            : `<span class="warn">not mounted yet</span>`}`);
       }
 
       el.hud.innerHTML = L.join('\n');
@@ -1014,6 +1315,37 @@
           durationS: FLIGHT_DURATION_S,
           segment: segmentAt(timeS).name,
         },
+        /**
+         * WHAT THE NAV PANEL IS, AS DATA — because AC-NAV-BUFFER is a TWO-SAMPLE
+         * check and a headless sampler needs something better than the HUD's HTML
+         * to read it out of.
+         *
+         * `bufferWidth`/`bufferHeight` are the live dimensions OF THE NAV
+         * COMPUTER'S OWN CANVAS, read fresh on every call. They are the whole
+         * criterion: an implementation that injected the size once at setup
+         * reports these correctly on the first sample and 0 x 0 five seconds
+         * later. Reading them off `navSource.canvas` rather than off the pinned
+         * `width`/`height` fields is deliberate — the fields are what NavSource
+         * INTENDED, the canvas is what actually happened, and only the second one
+         * can disagree with the first.
+         *
+         * `live` is true only when a real NavComputer is behind the glass.
+         * `error` carries the reason when it is not. A checker must never have to
+         * infer which of the two states it is looking at, because a NO SOURCE card
+         * and a working nav map are one screenshot apart and confusing them is how
+         * "NAV is live from the first frame" gets ticked off by mistake.
+         */
+        nav: {
+          live: !!navSource,
+          error: navError,
+          level: navSource ? navSource.nav.level : null,
+          levelIndex: navLevel,
+          bufferWidth: navSource ? navSource.canvas.width : 0,
+          bufferHeight: navSource ? navSource.canvas.height : 0,
+          shipGalacticKpc: NAV_GALACTIC_POS[seedIndex % NAV_GALACTIC_POS.length],
+          loadedStars: navSource && navSource.nav._localStars ? navSource.nav._localStars.length : 0,
+          dither: { threshold: dither.threshold, gamma: dither.gamma },
+        },
         // What the glass is saying this instant, in the readout's own words.
         content: readout ? {
           driveSpeed: readout.speedText,
@@ -1044,6 +1376,26 @@
         return cycleBuffer(1);
       },
       setMode,
+      /**
+       * Drive the NAV level and the dither knob from a script.
+       *
+       * Both exist so the live pass can sweep what Max sweeps by hand — five
+       * levels and two sliders is a lot of clicking to ask of a checker, and a
+       * check that only ever sees the opening frame would judge the fork on the
+       * galaxy level alone.
+       *
+       * `setDither` MUTATES the same object the painter reads, rather than
+       * replacing it. The painter holds `() => dither`; assigning a new object
+       * here would leave it reading the old one and the sweep would silently
+       * stop reaching the glass.
+       */
+      setNavLevel(i) { return NAV_LEVEL_NAMES[setNavLevel(i)]; },
+      setDither(knob) {
+        if (knob && Number.isFinite(knob.threshold)) dither.threshold = knob.threshold;
+        if (knob && Number.isFinite(knob.gamma)) dither.gamma = knob.gamma;
+        applyDither();
+        return { threshold: dither.threshold, gamma: dither.gamma };
+      },
       setPhosphor(i) { return applyPhosphor(i).name; },
       setSeed(i) { seedIndex = ((i % LAB_SEEDS.length) + LAB_SEEDS.length - 1) % LAB_SEEDS.length; return cycleSeed(1); },
       setLook(yawDeg, pitchDeg) {

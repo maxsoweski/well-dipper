@@ -74,9 +74,9 @@
  *
  * Those right-hand numbers are the ORIGINAL design intent, unchanged. Only the
  * ratios moved, by 260/220 ≈ 1.18, so that the intent is what actually reaches
- * the eye. Seven INFO rows at lead H/10 span 0.7H and still clear the glass,
- * which was checked in the lab rather than assumed — the previous scale left
- * roughly the bottom 40% of every panel empty.
+ * the eye. Seven INFO rows at lead H/11 span roughly 0.64H and still clear the
+ * glass, which was checked in the lab rather than assumed — the previous scale
+ * left roughly the bottom 40% of every panel empty.
  *
  * H/20 — about 11 screen pixels — IS THE FLOOR, and both text sizes are at or
  * above it. Eleven pixels of cap height is roughly where a bold monospace glyph
@@ -630,12 +630,15 @@ export class PhosphorScreen {
    *     negative. This is SpeedFormat.sublightBarFrac's output, which is signed
    *     precisely so a reversing ship reads as reverse.
    *
-   * `ticks` and `pin` are read in WHICHEVER domain the bar is in, so a caller
-   * cannot mix a signed bar with an unsigned marker without noticing. (See the
-   * report accompanying this module: FlightReadout currently computes
-   * `commandedFrac` with `speedToBarFrac` unconditionally, so in the bipolar case
-   * it is handing an unsigned log fraction to a signed linear bar. That is a
-   * caller-side mismatch this kit cannot fix, only refuse to paper over.)
+   * `ticks` and `pin` are read in WHICHEVER domain the bar is in. That mismatch
+   * is not hypothetical and this kit cannot detect it: it is handed a number and
+   * has no way to know which rule produced it. FlightReadout used to compute
+   * `commandedFrac` with `speedToBarFrac` unconditionally, so a reversing
+   * sublight ship handed an unsigned log fraction to a signed linear bar and the
+   * pin sat at DEAD CENTRE — reading "full stop" — while the fill said half
+   * astern. It is fixed in the caller, which is the only place it can be fixed;
+   * see FlightReadout's header, divergence 2. src/ui/SupercruiseHud.js, the
+   * full-screen overlay, still has it.
    *
    * A NON-FINITE `frac` DRAWS THE FRAME AND NO FILL. An empty bar reads as "no
    * reading", which is the truth. The alternatives are both lies: clamping NaN to

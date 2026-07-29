@@ -52,8 +52,14 @@ import {
   flightSourcesAt, segmentAt, labPhysicsForPlanet,
 } from '../cockpit-screens-lab-flight.js';
 import {
-  LAB_PAINTERS, SCREEN_PAINTERS, NAV_HOLDING_TEXT, panelPainter,
+  LAB_PAINTERS, SCREEN_PAINTERS, NAV_HOLDING_TEXT, labNavPainter,
 } from '../cockpit-screens-lab-panels.js';
+// The bridge is SHIPPED code, not lab code — imported from src for the same
+// reason the painters are. Its own guarantees (the per-panel kit cache and its
+// invalidation, the size coming off the canvas) are pinned in
+// src/cockpit/__tests__/panelPainter.test.js; what belongs here is only that the
+// lab really mounts THAT bridge rather than a private copy of it.
+import { panelPainter } from '../src/cockpit/panelPainter.js';
 
 import { buildCockpitSnapshot } from '../src/cockpit/CockpitSnapshot.js';
 import { buildFlightReadout, flightReadoutStateFromSnapshot } from '../src/cockpit/FlightReadout.js';
@@ -449,25 +455,43 @@ describe('lab panels — the shipped painters on the lab\'s glass', () => {
     expect(SCREEN_PAINTERS.DRIVE.name).toBe('paintDrive');
     expect(SCREEN_PAINTERS.TARGET.name).toBe('paintTarget');
     expect(SCREEN_PAINTERS.INFO.name).toBe('paintInfo');
-    // NAV is the lab's own, because there is no shipped nav painter yet.
+    // NAV's entry in these two maps is the FALLBACK, not the plan. The real NAV
+    // painter is shipped — src/cockpit/panels/NavPanel.js, the whole nav computer
+    // through the Phosphor dither — but it needs a live NavSource sized to the
+    // bound panel, which does not exist at module load. So the page mounts these
+    // four and then puts `labNavPainter(source, knob)` over NAV; this card is what
+    // remains on the glass when that source could not be built.
     expect(SCREEN_PAINTERS.NAV.name).toBe('paintNavHoldingCard');
+    // The real one is composed HERE rather than inline in the page, so the game
+    // inherits the composition instead of reinventing it.
+    expect(labNavPainter).toBeInstanceOf(Function);
     // And every role in the host's config table has a painter, so no screen can
     // silently come up blank.
     expect(Object.keys(LAB_PAINTERS).sort()).toEqual(Object.keys(DEFAULT_PANEL_ROLES).sort());
   });
 
-  it('adapts PanelHost\'s panel to the painters\' screen, and refuses anything else', () => {
-    // The seam this file exists for. The two contracts differ by one argument —
-    // a panel carrying a ctx versus a ready-made PhosphorScreen — and getting it
-    // wrong is silent: the painter would throw inside the host's catch, be
-    // reported once, and leave a frozen screen with nothing to explain it.
+  it('mounts the SHIPPED bridge too, with no private copy of it left here', () => {
+    // The seam the lab exists to prove. The two contracts differ by one argument
+    // — a panel carrying a ctx versus a ready-made PhosphorScreen — and getting
+    // it wrong is silent: the painter throws inside the host's catch, is reported
+    // once, and leaves a frozen screen with nothing to explain it.
+    //
+    // The bridge itself now lives in src/cockpit/panelPainter.js, so this asserts
+    // the LAB-side property: that the adapter really reaches the glass, and that
+    // this file has not kept a second implementation of it. A private copy is the
+    // whole failure being designed out — the lab would go on working while the
+    // game, mounting its own version, could get it wrong with no test anywhere.
     const panel = makePanel('NAV');
     expect(() => LAB_PAINTERS.NAV(panel, frames[0].snapshot, 0)).not.toThrow();
     expect(panel.rec.texts.length).toBeGreaterThan(0);
+    expect(panelPainter(() => {})).toBeInstanceOf(Function);
 
-    expect(() => panelPainter(null)).toThrow(/needs a painter function/);
-    const wired = panelPainter(() => {});
-    expect(() => wired({ role: 'NAV' }, {}, 0)).toThrow(/ctx/);
+    const labSource = readFileSync(join(HERE, '..', 'cockpit-screens-lab-panels.js'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    expect(labSource, 'the lab builds its own drawing kit again').not.toMatch(/new PhosphorScreen/);
+    expect(labSource, 'the lab no longer imports the shipped bridge')
+      .toMatch(/from '\.\/src\/cockpit\/panelPainter\.js'/);
   });
 
   it('sets exactly two colours across every panel and every frame of the flight', () => {
@@ -643,12 +667,14 @@ describe('lab panels — the shipped painters on the lab\'s glass', () => {
     expect(fwdStrings.some((s) => /^\d+:\d\d$/.test(s))).toBe(true);
   });
 
-  it('keeps NAV a holding card — two words, and nothing from the snapshot', () => {
-    // A NAV panel showing the system name would look like a working nav
-    // computer, which is the one impression it must not give while the nav
-    // computer is not part of this rung — AC-PANEL-CONTENT's NAV clause is about
-    // the real thing being live, and a plausible placeholder is how that gets
-    // ticked off by mistake.
+  it('keeps NAV\'s FALLBACK card two words, and nothing from the snapshot', () => {
+    // The real NAV painter is elsewhere and is exercised in
+    // src/cockpit/__tests__/NavPanel.test.js. THIS is the card that shows when no
+    // nav computer could be built, and the rule it has to keep is the same one it
+    // has always kept: a NAV panel showing the system name would look like a
+    // WORKING nav computer, which is the one impression a failure state must not
+    // give. AC-PANEL-CONTENT's NAV clause is about the real thing being live, and
+    // a plausible placeholder is exactly how that gets ticked off by mistake.
     for (const { t, snapshot } of frames) {
       const strings = drawnStrings(paint('NAV', snapshot, t * 1000));
       expect(strings, `@ ${t}s`).toEqual([NAV_HOLDING_TEXT.TITLE, NAV_HOLDING_TEXT.NOTE]);

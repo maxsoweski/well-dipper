@@ -19,7 +19,16 @@
  * sampling of them — and it decides only how to SAY them. The glass and the
  * full-screen HUD therefore cannot disagree within a frame.
  *
- * ── THE ONE DELIBERATE DIVERGENCE FROM THE OVERLAY ──────────────────────────
+ * ── THE TWO DELIBERATE DIVERGENCES FROM THE OVERLAY ─────────────────────────
+ *
+ * "Recomputes nothing" is about the NUMBERS. It is not a vow to reproduce every
+ * line of the overlay's drawing code, and twice it would be wrong to. Both
+ * divergences below are asserted AS divergences in the test: the panel's rule
+ * pinned, and the overlay's CURRENT form pinned beside it — so the day somebody
+ * edits the overlay, these paragraphs get flagged as stale by a red test instead
+ * of quietly turning into lies.
+ *
+ * ── 1. THE PROJECTION GATE IS DROPPED ──
  *
  * The overlay draws the ETA and both drop labels ANCHORED TO THE BODY: it calls
  * `this._project(state.targetPos)` and, when that returns null — the target is
@@ -36,6 +45,59 @@
  * module therefore has no camera, does no projection, and knows nothing about
  * screen space; that is enforced by a source scan in the test rather than left as
  * an intention.
+ *
+ * ── 2. THE BAR'S MARKS ARE COMPUTED IN THE BAR'S OWN DOMAIN ──
+ *
+ * The speed bar has TWO SCALES and which one is live depends on the drive.
+ * Supercruise uses `speedToBarFrac`: unsigned, 0..1, logarithmic over four
+ * decades. Sublight uses `sublightBarFrac`: SIGNED, -1..+1, linear in the
+ * sublight cap, filling from a centre zero so that reverse reads as reverse.
+ *
+ * The overlay switches the FILL between the two (SupercruiseHud lines ~107-120)
+ * and then computes the commanded pin and the drop tick OUTSIDE that branch,
+ * with `speedToBarFrac`, unconditionally. Sublight it therefore draws two marks
+ * against a scale they were not measured against. This is not a hypothesis;
+ * it was read off the running game with the ship reversing sublight:
+ *
+ *     speed -0.00105625, sublightCap 0.002  → fill  -0.528  (half astern)
+ *     commandedSpeed -0.00105625            → pin    0      (DEAD CENTRE)
+ *     dropMaxSpeed 0.1                      → tick   0.274
+ *
+ * The pin is the mark that says what the ship has been ASKED to do, and at 0 on
+ * a centre-zero bar it says "commanding a full stop" while the pilot is holding
+ * full reverse. So sublight the pin is computed with `sublightBarFrac` and the
+ * same substituted cap as the fill, and it tracks the fill the way it is meant
+ * to.
+ *
+ * THE DROP TICK IS NOT RESCALED, IT IS DROPPED, and the reason is not the
+ * arithmetic. `dropMaxSpeed` is the ceiling for DROPPING OUT OF SUPERCRUISE.
+ * `driveOn === false` means the ship is ALREADY sublight — there is no drop-out
+ * to be under the ceiling of, so the mark has no referent at all. It is not
+ * mis-placed; it is a safety cue for a manoeuvre the pilot is not performing,
+ * and moving it somewhere honest on the scale would still leave it meaning
+ * nothing. (The arithmetic agrees, incidentally: that frame's ceiling of 0.1 is
+ * FIFTY TIMES the 0.002 cap, so any faithful rescaling pins it hard right
+ * forever.) `null` is this module's word for DO NOT DRAW, and both
+ * `PhosphorScreen.bar` and DrivePanel already honour it — a non-finite tick is
+ * skipped rather than drawn at zero.
+ *
+ * THE OVERLAY IS LEFT ALONE, deliberately. src/ui/SupercruiseHud.js has this
+ * same defect today and fixing it would change what the pilot sees on the live
+ * full-screen HUD, in a system this workstream does not own. That is Max's call,
+ * not this module's, and the test pins the overlay's present form so the day it
+ * is made this comment cannot go quietly out of date.
+ *
+ * AND THE BAND IS DELIBERATELY *NOT* GIVEN THE SAME TREATMENT, which is worth
+ * saying out loud because the argument above appears to demand it. `inWindow`
+ * below reads `speed <= dropMaxSpeed` with no `driveOn` gate at all, so on that
+ * same measured frame it calls a ship reversing sublight "in-window" off a
+ * ceiling that — by the paragraph above — has no referent there. The reasoning
+ * is identical; the treatment is not, for two reasons that are about scope and
+ * not about the argument. The band is a faithful port of the overlay's colour
+ * rule and no panel reads it yet (DrivePanel and TargetPanel both ignore it), so
+ * nothing wrong reaches the glass through it; and gating it would be a THIRD
+ * divergence, invented rather than forced by something visible in flight. If a
+ * panel ever draws the band, gate it here before it does.
  *
  * ── WHAT THIS MODULE DELIBERATELY DOES NOT DO ──────────────────────────────
  *
@@ -142,6 +204,13 @@ function formatEta(seconds) {
  *   massLock: {text:string, blink:string}|null,
  *   modeLine: string|null,
  * }}
+ *
+ * READING `bar`: `bipolar` is not decoration, it names the DOMAIN the other
+ * three fields are in. False → `frac` and `commandedFrac` are unsigned 0..1 log
+ * fractions and `dropTickFrac` may be one too. True → they are signed -1..+1
+ * linear fractions of the sublight cap, and `dropTickFrac` is always null. A
+ * consumer that ignores `bipolar` and assumes one domain will be right half the
+ * time and confidently wrong the other half.
  */
 export function buildFlightReadout(state = {}) {
   const speed = state.speed || 0;
@@ -174,15 +243,44 @@ export function buildFlightReadout(state = {}) {
     ? sublightBarFrac(speed, state.sublightCap || 1)
     : speedToBarFrac(Math.abs(speed));
 
-  // The commanded pin is NOT abs'd, and that is the overlay's behaviour, not an
-  // oversight: a negative commanded speed pins the marker at the empty end,
-  // which is where "you have asked for reverse" belongs on a forward-only scale.
-  const commandedFrac = speedToBarFrac(state.commandedSpeed || 0);
+  // THE PIN IS COMPUTED IN WHICHEVER DOMAIN THE BAR IS IN. The three lines above
+  // just chose between a signed linear scale and an unsigned log one; a pin
+  // produced by the other rule is a mark drawn against a scale it was never
+  // measured against, and the bar has no way to tell. Divergence 2 in the header
+  // has the frame this was read off: the overlay's unconditional form puts the
+  // pin at dead centre — "full stop" — while the ship is commanding full reverse.
+  //
+  // `state.sublightCap || 1` is repeated here rather than hoisted, and it must
+  // stay IDENTICAL to the fill's: substituting a cap on one of the two lines and
+  // not the other puts the fill and the pin on scales that differ by a factor of
+  // the cap, which is this same defect arriving by a quieter door.
+  //
+  // UNIPOLAR, the commanded speed is deliberately NOT abs'd — that is the
+  // overlay's behaviour and not an oversight. A negative command clamps to the
+  // empty end, which is where "you have asked for reverse" belongs on a
+  // forward-only scale. BIPOLAR there is nothing to throw away: the scale has a
+  // left-hand side, and having one is the entire reason it exists.
+  const commandedFrac = bipolar
+    ? sublightBarFrac(state.commandedSpeed || 0, state.sublightCap || 1)
+    : speedToBarFrac(state.commandedSpeed || 0);
 
-  // The drop tick marks the ceiling a drop-out will take at. No target, or no
-  // ceiling computed for it, and there is no tick — not a tick at zero, which
-  // would read as "you must be stopped".
-  const dropTickFrac = hasTarget && dropMaxSpeed != null
+  // The drop tick marks the speed ceiling a drop-out will take at. Three ways it
+  // is absent, and the third is the one that is not obvious:
+  //
+  //   - no target selected, so there is nothing to drop toward;
+  //   - a target, but no ceiling computed for it yet;
+  //   - THE DRIVE IS ALREADY DOWN. `dropMaxSpeed` is the ceiling for DROPPING
+  //     OUT OF SUPERCRUISE; `driveOn === false` says the ship is already
+  //     sublight. The mark is not merely mis-scaled there, it has no referent —
+  //     it is a safety cue for a manoeuvre the pilot is not performing, so
+  //     rescaling it into the bipolar domain would place it precisely and still
+  //     say nothing true. Dropping it is the only honest answer.
+  //
+  // null, never 0. A tick at zero reads as a real limit — "you must be stopped
+  // to drop" — which is an instruction, and an invented one. PhosphorScreen.bar
+  // skips a non-finite tick and DrivePanel forwards it untouched, so no caller
+  // needs a branch for this.
+  const dropTickFrac = !bipolar && hasTarget && dropMaxSpeed != null
     ? speedToBarFrac(dropMaxSpeed)
     : null;
 

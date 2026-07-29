@@ -753,8 +753,9 @@ describe('PanelHost — which clock the panels run on', () => {
 
 describe('PanelHost — what the glass does during a warp', () => {
   it('forces a repaint on the frame the warp starts, ahead of the ambient tick', () => {
-    // The snapshot blanks SURVEY the moment a warp begins, because `system` still
-    // points at BodyRenderers whose meshes have left the scene. Waiting for the
+    // The snapshot blanks its `survey` block — the dossier the INFO panel draws
+    // from — the moment a warp begins, because `system` still points at
+    // BodyRenderers whose meshes have left the scene. Waiting for the
     // ambient tick would leave the dossier of the system just departed on the
     // glass for up to a tenth of a second.
     const { root } = syntheticCockpit();

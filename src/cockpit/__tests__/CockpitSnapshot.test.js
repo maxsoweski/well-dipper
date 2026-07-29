@@ -213,7 +213,7 @@ describe('buildCockpitSnapshot — read-only feed (AC-SNAPSHOT)', () => {
     expect(none.survey.name).toBeNull();
   });
 
-  it('reads SURVEY blank during a warp, because the system is already torn down', () => {
+  it('reads the survey block blank during a warp, because the system is already torn down', () => {
     // `system` is NEVER nulled — grep finds one assignment, the declaration.
     // _hideCurrentSystem() runs at the FOLD→ENTER and ENTER→HYPER transitions,
     // potentially many frames before spawnSystem() reassigns `system`. In that

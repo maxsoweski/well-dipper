@@ -15,7 +15,7 @@
  * self-consistent. Every row was checked against what the overlay's own
  * expressions produce for the same inputs.
  *
- * FOUR THINGS THIS FILE EXISTS TO CATCH, each of which is a plausible edit:
+ * FIVE THINGS THIS FILE EXISTS TO CATCH, each of which is a plausible edit:
  *
  *   1. speedToBarFrac(speed) instead of speedToBarFrac(Math.abs(speed)). The
  *      function is not abs-safe — it takes log10 — so a reversing ship's bar
@@ -29,8 +29,15 @@
  *      forward at half light. Right number, direction gone.
  *   4. A colour riding along. The glass is Phosphor — one ink — and the overlay
  *      distinguishes these same states with six different fillStyles.
+ *   5. THE BAR'S MARKS COMPUTED IN THE WRONG DOMAIN. The bar runs on two scales
+ *      — unsigned log in supercruise, signed linear sublight — and the pin and
+ *      the tick have to be in whichever one `frac` is in. The overlay computes
+ *      both OUTSIDE its own driveOn branch and therefore gets this wrong today;
+ *      the panel deliberately does not. The whole of section "── The bar's two
+ *      domains" below exists for this, including a guard that reads the
+ *      overlay's source so the divergence cannot silently go stale.
  *
- * All four are PLANTED AND WATCHED TO FAIL before this file was considered done;
+ * All five are PLANTED AND WATCHED TO FAIL before this file was considered done;
  * a green assertion nobody has seen go red proves nothing.
  *
  * No skip helper appears anywhere below, and that is enforced at MODULE SCOPE —
@@ -58,6 +65,40 @@ function codeOf(path) {
   return readFileSync(path, 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')      // block comments
     .replace(/^\s*\/\/.*$/gm, '');         // line comments
+}
+
+/** Where SupercruiseHud.js lives, relative to this file. */
+const HUD_PATH = join(HERE, '..', '..', 'ui', 'SupercruiseHud.js');
+
+/**
+ * The character offset of the brace that closes the block containing `from`.
+ *
+ * Used to establish WHERE IN THE OVERLAY'S CODE something sits, which is the
+ * substance of the bar-domain divergence: the overlay's pin and tick are wrong
+ * precisely because they are computed OUTSIDE its driveOn branch, and "outside"
+ * is a structural claim that a text match cannot make. Depth starts at zero and
+ * the first `}` that would take it negative is the one that closes the block.
+ *
+ * Braces inside strings and template literals would confuse this. The only span
+ * it is ever pointed at is SupercruiseHud's speed-bar branch, which contains
+ * none — and it throws rather than returning a guess if the braces do not
+ * balance, so a future edit that introduces one is a loud failure here rather
+ * than a quietly wrong offset.
+ */
+function closingBraceAfter(code, from) {
+  let depth = 0;
+  for (let i = from; i < code.length; i++) {
+    if (code[i] === '{') depth++;
+    else if (code[i] === '}') {
+      if (depth === 0) return i;
+      depth--;
+    }
+  }
+  throw new Error(
+    `closingBraceAfter: no closing brace after offset ${from}. The overlay's speed-bar ` +
+    `branch could not be located, so the divergence guard below would be asserting ` +
+    `nothing. Re-read SupercruiseHud.js before touching this test.`,
+  );
 }
 
 /**
@@ -128,6 +169,28 @@ const CEILING = 0.05;
  * is a faithful stand-in.
  */
 const TARGET = { x: 0, y: 0, z: -5 };
+
+/**
+ * A REAL FRAME, READ OFF THE RUNNING GAME. Lab at t=66 s, ship reversing under
+ * sublight, target selected. Not a constructed case — these are the values the
+ * builder was actually handed, which is why they are ugly and why they are here
+ * verbatim rather than rounded into something tidier.
+ *
+ * What the old code did with them is the whole reason the bar-domain tests exist:
+ * the fill sat at -0.528 (half astern) while the commanded pin computed to 0,
+ * dead centre on a centre-zero bar, reading "commanding a full stop"; and the
+ * drop tick — the SAFETY mark — landed 27% right of centre off a ceiling FIFTY
+ * TIMES the sublight cap.
+ */
+const MEASURED = Object.freeze({
+  speed: -0.00105625,
+  sublightCap: 0.002,
+  commandedSpeed: -0.00105625,
+  dropMaxSpeed: 0.1,
+});
+
+/** What that frame's fill fraction is: -0.00105625 / 0.002, exactly. */
+const MEASURED_FRAC = -0.528125;
 
 /** The three cue objects, written out as literals rather than imported. */
 const SAFE = { text: 'SAFE TO DROP', blink: 'steady' };
@@ -434,7 +497,12 @@ describe('FlightReadout — the overlay\'s drive/target readout, ported without 
     expect(buildFlightReadout({ speed: SLOW, driveOn: false }).sublightTag).toBe('SUBLIGHT');
   });
 
-  it('pins the commanded marker un-abs\'d, and the drop tick only when there is one', () => {
+  it('pins the commanded marker un-abs\'d in supercruise, and the drop tick only when there is one', () => {
+    // SUPERCRUISE ONLY — every case below leaves `driveOn` true or absent, so the
+    // bar is unipolar throughout. The sublight half of the same two fields is the
+    // section further down; the two domains have different right answers and
+    // conflating them is the defect that section exists for.
+    //
     // The commanded pin is deliberately NOT abs'd: a reverse command pins at the
     // empty end, which is where "you asked for reverse" belongs on a log scale.
     const r = buildFlightReadout({ speed: FAST, commandedSpeed: FAST, driveOn: true });
@@ -454,6 +522,204 @@ describe('FlightReadout — the overlay\'s drive/target readout, ported without 
     expect(buildFlightReadout({ speed: FAST, targetPos: TARGET }).bar.dropTickFrac).toBeNull();
     expect(buildFlightReadout({ speed: FAST, dropMaxSpeed: CEILING }).bar.dropTickFrac).toBeNull();
     expect(speedToBarFrac(CEILING)).toBeGreaterThan(0);   // fixture: a visible tick
+  });
+
+  // ── The bar's two domains ─────────────────────────────────────────────────
+  //
+  // THE DEFECT THESE WERE WRITTEN FOR, stated once so every test below can be
+  // short. `bar.frac` is computed by one of two functions depending on the drive:
+  // `speedToBarFrac` (unsigned, 0..1, logarithmic) in supercruise, and
+  // `sublightBarFrac` (SIGNED, -1..+1, linear in the cap) sublight. The pin and
+  // the tick used to be computed with `speedToBarFrac` unconditionally — so
+  // whenever the bar went bipolar, the fill was on one scale and the two marks
+  // beside it were on another, and nothing anywhere could notice, because all
+  // three are just numbers by the time PhosphorScreen.bar sees them.
+  //
+  // These tests are about SAFETY CUES, not tidiness. The pin says what the ship
+  // has been asked to do and the tick is the drop ceiling. Both were pointing at
+  // the wrong place on the glass, in a regime the pilot is in constantly.
+
+  it('THE MEASURED FRAME: reversing sublight, the pin tracks the fill and the tick is gone', () => {
+    // The real frame from the lab, verbatim — see MEASURED. This is the exact
+    // reading that started the fix, so it is pinned as itself rather than
+    // generalised into something prettier that might not be the failing case.
+    const bar = buildFlightReadout({
+      speed: MEASURED.speed,
+      commandedSpeed: MEASURED.commandedSpeed,
+      driveOn: false,
+      sublightCap: MEASURED.sublightCap,
+      targetPos: TARGET,
+      dropMaxSpeed: MEASURED.dropMaxSpeed,
+      dropState: 'none',
+    }).bar;
+
+    expect(bar.bipolar, 'the drive is down, so the bar is the signed sublight one').toBe(true);
+    expect(bar.frac).toBeCloseTo(MEASURED_FRAC, 12);
+
+    // The pin, in the SAME domain as the fill. This frame commanded exactly the
+    // speed it had, so the two coincide — written as the literal rather than as
+    // `bar.frac` so that a builder returning one field twice cannot satisfy it.
+    expect(bar.commandedFrac, 'the commanded pin is not on the fill\'s scale')
+      .toBeCloseTo(MEASURED_FRAC, 12);
+
+    // And the ceiling mark is simply absent: the ship is already sublight, so
+    // there is no drop-out for it to be the ceiling of.
+    expect(bar.dropTickFrac, 'a drop-out ceiling was marked on a ship already sublight')
+      .toBeNull();
+
+    // ── What the OLD form produced, spelled out. ──
+    // These two are fixture checks on SpeedFormat, not on the builder: they are
+    // what makes the assertions above non-obvious. Without them a reader has to
+    // take it on trust that 0 and 0.274 were ever the answers.
+    expect(speedToBarFrac(MEASURED.commandedSpeed),
+      'fixture: the log domain really does clamp a reverse command to dead centre')
+      .toBe(0);
+    expect(speedToBarFrac(MEASURED.dropMaxSpeed),
+      'fixture: and really did put the safety tick 27% right of centre')
+      .toBeCloseTo(0.2738, 3);
+    // The named restatement, so the failure says what went wrong rather than
+    // just printing two numbers: a pin near zero means the log domain leaked back.
+    expect(bar.commandedFrac, 'the pin is back at dead centre — full reverse reading as full stop')
+      .toBeLessThan(-0.4);
+  });
+
+  it('puts the pin the other side of centre when the command opposes the motion', () => {
+    // The case the measured frame cannot cover, because there the command and the
+    // motion agreed. Reversing at half the cap while the throttle asks for
+    // three-quarters AHEAD: fill left of zero, pin right of it. That opposition is
+    // the single most useful thing a centre-zero bar can show — it is what
+    // "decelerating out of a reverse" looks like — and the old form could not
+    // draw it at all.
+    const bar = buildFlightReadout({
+      speed: -0.001, commandedSpeed: 0.0015, driveOn: false, sublightCap: 0.002,
+    }).bar;
+
+    expect(bar.frac).toBeCloseTo(-0.5, 12);
+    expect(bar.commandedFrac).toBeCloseTo(0.75, 12);
+    expect(bar.commandedFrac, 'the forward command collapsed toward the zero mark')
+      .toBeGreaterThan(0.5);
+
+    // Sign alone would NOT catch the old form here — speedToBarFrac(0.0015) is a
+    // small POSITIVE number, so it lands on the correct side of centre and merely
+    // understates the command by a factor of thirty. That near-miss is why this
+    // test asserts the magnitude and not just Math.sign.
+    expect(speedToBarFrac(0.0015), 'fixture: the old form was positive here too, just tiny')
+      .toBeLessThan(0.05);
+  });
+
+  it('puts the pin exactly on the zero mark when a stop is commanded, sublight', () => {
+    const stop = buildFlightReadout({
+      speed: -0.001, commandedSpeed: 0, driveOn: false, sublightCap: 0.002,
+    }).bar;
+    expect(stop.frac).toBeCloseTo(-0.5, 12);
+    expect(stop.commandedFrac).toBe(0);
+
+    // No commanded field at all is a commanded zero, not NaN — `|| 0`, same as
+    // the supercruise path.
+    const absent = buildFlightReadout({ speed: -0.001, driveOn: false, sublightCap: 0.002 }).bar;
+    expect(absent.commandedFrac).toBe(0);
+
+    // THE WEAKNESS OF THIS ROW, said out loud rather than left for a reader to
+    // discover: the OLD form also returns 0 here, so neither assertion above can
+    // fail on the domain bug. It earns its place anyway — 0 was the answer the
+    // broken code gave for EVERY sublight command, and this is the one frame
+    // where 0 is the truth. Without it, "the fix moved the wrongness rather than
+    // removing it" has nothing standing against it.
+    expect(speedToBarFrac(0), 'fixture: both domains agree on a commanded stop').toBe(0);
+  });
+
+  it('leaves supercruise entirely alone — fill, pin and tick all still unsigned log', () => {
+    // The other direction of the same mistake, and the more dangerous one to
+    // ship, because supercruise is where the drop tick actually means something.
+    // A bipolar rule leaking up here would put a SIGNED fraction on a bar that
+    // fills from the left edge, where everything negative clamps to empty.
+    const bar = buildFlightReadout({
+      speed: FAST, commandedSpeed: FAST * 0.5, driveOn: true,
+      targetPos: TARGET, dropMaxSpeed: CEILING, dropState: 'none',
+    }).bar;
+
+    expect(bar.bipolar).toBe(false);
+    expect(bar.frac).toBeCloseTo(speedToBarFrac(FAST), 12);
+    expect(bar.commandedFrac).toBeCloseTo(speedToBarFrac(FAST * 0.5), 12);
+    expect(bar.dropTickFrac).toBeCloseTo(speedToBarFrac(CEILING), 12);
+
+    for (const [name, v] of Object.entries({
+      frac: bar.frac, commandedFrac: bar.commandedFrac, dropTickFrac: bar.dropTickFrac,
+    })) {
+      expect(v, `${name} is outside the unipolar 0..1 domain`).toBeGreaterThanOrEqual(0);
+      expect(v, `${name} is outside the unipolar 0..1 domain`).toBeLessThanOrEqual(1);
+    }
+
+    // A reverse COMMAND in supercruise still pins at the empty end, un-abs'd —
+    // the behaviour the overlay has and the one row that dies immediately if the
+    // signed rule is applied unconditionally.
+    expect(buildFlightReadout({ speed: FAST, commandedSpeed: -FAST, driveOn: true })
+      .bar.commandedFrac, 'a reverse command in supercruise must clamp to the empty end')
+      .toBe(0);
+
+    // Non-vacuity: the two domains genuinely disagree about this speed, so the
+    // assertions above are distinguishing something rather than agreeing by luck.
+    expect(speedToBarFrac(FAST * 0.5)).not.toBeCloseTo(sublightBarFrac(FAST * 0.5, 1), 6);
+  });
+
+  it('substitutes the SAME missing cap for the pin as for the fill', () => {
+    // `sublightBarFrac` returns 0 for a non-positive cap, so both the overlay and
+    // this module substitute 1. The trap is substituting on ONE of the two lines:
+    // the fill and the pin then sit on scales that differ by a factor of the cap,
+    // which is the same defect arriving through a quieter door. Asserted as a
+    // RATIO as well as two values, because the ratio is the thing that survives
+    // whatever substitute is chosen.
+    for (const cap of [0, undefined, null]) {
+      const label = `sublightCap ${cap}`;
+      const bar = buildFlightReadout({
+        speed: 0.5, commandedSpeed: 0.25, driveOn: false, sublightCap: cap,
+      }).bar;
+
+      expect(bar.bipolar, label).toBe(true);
+      expect(Number.isFinite(bar.frac), `${label}: fill is not a number`).toBe(true);
+      expect(Number.isFinite(bar.commandedFrac), `${label}: pin is not a number`).toBe(true);
+      expect(bar.frac, label).toBeCloseTo(sublightBarFrac(0.5, 1), 12);
+      expect(bar.commandedFrac, label).toBeCloseTo(sublightBarFrac(0.25, 1), 12);
+      expect(bar.commandedFrac / bar.frac,
+        `${label}: the pin and the fill are on different scales`).toBeCloseTo(0.5, 12);
+    }
+
+    // And a cap that IS present is honoured for both, so the loop above is about
+    // the substitution and not about the cap being ignored.
+    const real = buildFlightReadout({
+      speed: 0.001, commandedSpeed: 0.0005, driveOn: false, sublightCap: 0.002,
+    }).bar;
+    expect(real.frac).toBeCloseTo(0.5, 12);
+    expect(real.commandedFrac).toBeCloseTo(0.25, 12);
+  });
+
+  it('emits no drop tick sublight, whatever the target and ceiling say', () => {
+    // The tick's THIRD absence condition, exhaustively: with a ceiling, without
+    // one, with a target, without one. All null, because `driveOn === false` is
+    // on its own sufficient — there is no drop-out to have a ceiling for.
+    const sublight = (extra) => buildFlightReadout({
+      speed: -0.001, commandedSpeed: -0.001, driveOn: false, sublightCap: 0.002,
+      dropState: 'none', ...extra,
+    }).bar.dropTickFrac;
+
+    expect(sublight({ targetPos: TARGET, dropMaxSpeed: CEILING }),
+      'a target and a ceiling still produce no tick once the drive is down').toBeNull();
+    expect(sublight({ targetPos: TARGET, dropMaxSpeed: MEASURED.dropMaxSpeed })).toBeNull();
+    expect(sublight({ targetPos: TARGET, dropMaxSpeed: null })).toBeNull();
+    expect(sublight({ targetPos: TARGET })).toBeNull();
+    expect(sublight({ dropMaxSpeed: CEILING })).toBeNull();
+    expect(sublight({})).toBeNull();
+
+    // NULL, NOT ZERO, and the distinction is the instruction: PhosphorScreen.bar
+    // skips a non-finite tick, but 0 is perfectly finite and would be drawn — at
+    // the centre of a bipolar bar, reading "you must be stopped".
+    expect(sublight({ targetPos: TARGET, dropMaxSpeed: CEILING })).not.toBe(0);
+
+    // The same target and the same ceiling DO produce a tick with the drive up,
+    // so every row above is the drive's doing and not a broken fixture.
+    expect(buildFlightReadout({
+      speed: FAST, driveOn: true, targetPos: TARGET, dropMaxSpeed: CEILING, dropState: 'none',
+    }).bar.dropTickFrac, 'fixture: the tick exists at all').toBeCloseTo(speedToBarFrac(CEILING), 12);
   });
 
   it('keeps the LABEL on the raw drop state and the BAND on the wider rule', () => {
@@ -592,11 +858,92 @@ describe('FlightReadout — the overlay\'s drive/target readout, ported without 
 
     // The gate we are diverging FROM is really there — if the overlay ever drops
     // it, this comment and this test have gone stale and should be revisited.
-    const hud = codeOf(join(HERE, '..', '..', 'ui', 'SupercruiseHud.js'));
+    const hud = codeOf(HUD_PATH);
     expect(hud, 'SupercruiseHud no longer projects the target position')
       .toMatch(/const p = this\._project\(state\.targetPos\)/);
     expect(hud, 'SupercruiseHud no longer gates its cue block on the projection')
       .toMatch(/if \(p\) \{/);
+  });
+
+  it('DIVERGES from the overlay: the bar\'s marks are read in the bar\'s own domain', () => {
+    // THE OVERLAY DOES X HERE AND THE PANEL DELIBERATELY DOES Y.
+    //
+    // X: SupercruiseHud switches its speed-bar FILL between the two scales inside
+    //    an `if (state.driveOn === false) { … } else { … }`, and then computes the
+    //    commanded pin and the drop tick AFTER that block, with speedToBarFrac,
+    //    unconditionally. Sublight it therefore draws both marks against a scale
+    //    they were not computed for — pin at dead centre for a full-reverse
+    //    command, drop tick placed off a supercruise ceiling that is fifty times
+    //    the sublight cap.
+    //
+    // Y: this module computes the pin with sublightBarFrac when the bar is
+    //    bipolar, and emits NO drop tick at all, because `dropMaxSpeed` is the
+    //    ceiling for dropping OUT of supercruise and a ship with the drive down
+    //    is not performing that manoeuvre.
+    //
+    // WHY THE OVERLAY IS NOT ALSO FIXED: it is the live full-screen HUD. Changing
+    // it changes what Max sees the next time he flies, in a system this
+    // workstream does not own, and the workstream's own contract pins the port as
+    // faithful (AC-BASELINE-GREEN). It is his call, and it is written up in the
+    // report rather than done quietly here.
+    const sublight = {
+      speed: MEASURED.speed, commandedSpeed: MEASURED.commandedSpeed,
+      driveOn: false, sublightCap: MEASURED.sublightCap,
+      targetPos: TARGET, dropMaxSpeed: MEASURED.dropMaxSpeed, dropState: 'none',
+    };
+    const bar = buildFlightReadout(sublight).bar;
+    expect(bar.commandedFrac).toBeCloseTo(MEASURED_FRAC, 12);
+    expect(bar.dropTickFrac).toBeNull();
+
+    // ── THE STALENESS GUARD ──
+    // Everything above is only a DIVERGENCE while the overlay still has the old
+    // form. The day somebody fixes SupercruiseHud, the three paragraphs above and
+    // FlightReadout's divergence-2 header stop being true — and a comment that has
+    // quietly become a lie is worse than no comment, because the next reader
+    // trusts it. So the overlay's present shape is asserted here, the same way the
+    // _project() divergence above asserts the projection gate is really there.
+    const hud = codeOf(HUD_PATH);
+
+    expect(hud, 'the overlay no longer computes its commanded pin with the log fraction')
+      .toMatch(/const pinX = lx \+ barW \* speedToBarFrac\(commandedSpeed\)/);
+    expect(hud, 'the overlay no longer computes its drop tick with the log fraction')
+      .toMatch(/const tickX = lx \+ barW \* speedToBarFrac\(dropMaxSpeed\)/);
+
+    // ONE call to the signed scale in the whole overlay — the fill, and nothing
+    // else. This is the assertion that survives a rewrite of either line above:
+    // any real fix to the overlay's pin has to reach for sublightBarFrac, and
+    // reaching for it a second time trips this. (The import names it too, but
+    // without a paren, so the count is of CALLS.)
+    const signedCalls = hud.match(/sublightBarFrac\(/g) || [];
+    expect(signedCalls.length,
+      'SupercruiseHud now calls the signed scale more than once — it has probably ' +
+      'grown a bipolar pin or tick, which means the divergence documented in ' +
+      'FlightReadout.js is stale and both comments need revisiting')
+      .toBe(1);
+
+    // And the structural half: both marks sit AFTER the whole driveOn if/else,
+    // which is what "computed outside the branch" means and what a text match
+    // cannot say. Located from the overlay's own source rather than by line
+    // number, so an unrelated edit above does not fail this.
+    const fillCall = hud.indexOf('sublightBarFrac(speed');
+    expect(fillCall, 'the overlay has no bipolar sublight fill any more').toBeGreaterThan(-1);
+    const ifArmEnd = closingBraceAfter(hud, fillCall);        // closes `if (driveOn === false) {`
+    const elseArmOpen = hud.indexOf('{', ifArmEnd);           // opens `else {`
+    const branchEnd = closingBraceAfter(hud, elseArmOpen + 1);
+
+    expect(hud.indexOf('const pinX'),
+      'the overlay now computes its pin INSIDE the driveOn branch — it may have been ' +
+      'fixed, in which case this divergence no longer exists')
+      .toBeGreaterThan(branchEnd);
+    expect(hud.indexOf('const tickX'),
+      'the overlay now computes its drop tick INSIDE the driveOn branch — see above')
+      .toBeGreaterThan(branchEnd);
+
+    // Non-vacuity for the offsets themselves: a `-1` from a failed indexOf is
+    // greater than nothing and would make the two checks above meaningless.
+    expect(fillCall).toBeLessThan(ifArmEnd);
+    expect(ifArmEnd).toBeLessThan(branchEnd);
+    expect(branchEnd).toBeLessThan(hud.length);
   });
 
   it('has no camera, no projection and no screen space in it at all', () => {
@@ -703,7 +1050,7 @@ describe('FlightReadout — the overlay\'s drive/target readout, ported without 
     // document.createElement and this suite runs in plain node with no DOM.
     // Comments stripped so we match what the overlay DRAWS, not what its prose
     // mentions — the file discusses "REV" in a comment two lines above the code.
-    const hud = codeOf(join(HERE, '..', '..', 'ui', 'SupercruiseHud.js'));
+    const hud = codeOf(HUD_PATH);
 
     expect(hud, 'the overlay no longer draws SUBLIGHT').toMatch(/fillText\(\s*'SUBLIGHT'/);
     expect(hud, 'the overlay\'s REV prefix changed').toContain("'REV '");
