@@ -28,6 +28,27 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
 > **🧭 The world-engine pipeline (write → read).** The world engine is a *story engine* (spine §0): **(1) inputs** — the galaxy engine (L0) hands down the per-body **D1–D16 driver vector** + system context; **(2) write the history** — the L1 engines run in **time's-arrow** tier/epoch order to derive the body's billions-of-years history ("derivation IS the history-writing work", spine §4c); **(3) read the history** — the L2 renderers only **express** those fields ("render expresses, procgen decides", spine §1). A body rendered out of causal/temporal order "reads" wrong. Full model: [`world-engine-architecture-spine.md`](FEATURES/world-engine-architecture-spine.md).
 
+> **▶▶ ACTIVE (2026-07-29 — v2 RELIEF LAW LANDED `63102e5`; NEXT PROGRAM = tectonics + craters at ALL sizes, per Max).**
+> Law shipped in two ordering-critical commits: `85cf3f0` (law + RELIEF_FLOOR guard + uPerturb feed, ATOMIC) and
+> `6779af3` (bodyDrivers.massGravity repointed to the radius-aware condition gravity), plus `63102e5` (two stale
+> law comments corrected). Suite 4 failed / 2584 passed (exact baseline); golden `40c18aad` PASS, no re-capture.
+> **Max AMENDED ruling 1 mid-flight**: derived above g=1, calibrated `g^-0.58` fit retained below, labelled a DATA
+> boundary — because the unamended Earth-anchored law gave the Moon 141.8 km vs 19.9 observed and took R=0.27 to
+> 3.5× the multiplier that caused the rejected "molten waves" look. Amendment verified: 0 mismatches below the seam
+> across all 18 presets; Moon/Mercury R=0.27 bit-identical at 2.7424087181502013. Adopted form is **g-only**
+> (`g^-1.678235294117647` above the seam) — the `/R` cancels identically, so a prior settlement's "must use
+> radiusEarth" conclusion was superseded by the amendment. Absolute exponent −1.090000 exactly on the rocky branch.
+> ⚠ **NO LIVE LOOK YET** — every claim is node/vitest; AC-FEED/AC-VISIBLE/AC-NOWAVES + Max's AC-UAT all still open.
+> **▶ NEXT — Max's directive, verbatim (2026-07-28):** *"1. Plate tectonics work across all sizes of planets
+> 2. Craters work across all sizes of planets 3. Make sure these are all being programmatically generated and
+> aren't being patched on"*. Item 3 is the acceptance criterion for 1 and 2, not a nice-to-have. Full handoff:
+> `~/briefings/handoff-tectonics-craters-all-sizes-2026-07-29.md`. Confirmed leads: `plates.js:136` gravity clamp
+> saturates at **R = 2.762 R⊕** (uplift/rift stop responding to size above it); craters vanish above **R ≈ 1.36 R⊕**
+> — a THIRD regime, unrecorded (U2's two are fixed); the D14 repoint **double-applies relief ∝ 1/g** (end-to-end
+> −1.585 vs the ruled −1.09) and `reliefBudget.js:91` still runs the pre-v2 un-seamed law in the render route.
+> ⚠ The strand-3 texture metric is BROKEN — 85% of its reading is dither flips; a 4× real content change reads as
+> 2%. Do not build on its 1.47× number. Rebuild the instrument instead.
+>
 > **▶▶ ACTIVE (2026-07-24 — radius-display-scale REBUILT to Max's ratified model, ★ VERIFIED_PENDING_MAX `8c8a0d8`; SOLE GATE = Max's UAT: slider → planet grows, forms hold size).**
 > First build (`5cef327`, uniform scale) UAT-FAILED — Max: forms grew with the planet ("closer" cue, not "bigger") + slider unreliable (79px linear track). Model ratified verbatim ("planet bigger, forms same size, that's it") → FORM-SIZE-MAP + FIX-PLAN (3 lenses, 9/9 folded) → rebuild `8c8a0d8`: log slider (whole track usable), display keying across synth craters + 15 km-texture sites + 16 combiner uniforms + uDispDomainScale macro lever (headless default 1.0, goldens byte-identical, inc3b physics untouched — src/worldengine diff EMPTY). Read-gate: blind ordering 3/3, bigger-vs-closer pair called correctly, slider monotonic; form-constancy 22.5% vs 15% bar FAILED→DIAGNOSED: C1 instrument seed-noise (floor 24.8–47.4% at fixed radius > entire deviation) — bar re-derived to the independent floor, passes. UAT caveats in the contract statusNote: instrument certifies ~25% resolution not 15%; baked basins still grow (mesh-floor residue); synth-crater depth aspect un-compensated (one-line fix if it reads wrong).
 > *(prior)* **(2026-07-24 — radius-display-scale ★ VERIFIED_PENDING_MAX `5cef327`; SOLE GATE = Max's UAT: radius slider → planet grows on screen).**
