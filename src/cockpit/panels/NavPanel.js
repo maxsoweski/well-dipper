@@ -137,7 +137,14 @@
  * @param {import('../NavSource.js').NavSource} source the hosted nav computer
  * @returns {(screen:object, snapshot:object, nowMs:number) => void}
  */
-export function makeNavPainter(source) {
+export function makeNavPainter(source, { isZoomed = () => false } = {}) {
+  if (typeof isZoomed !== 'function') {
+    throw new Error(
+      `makeNavPainter: isZoomed must be a function, got ${typeof isZoomed}. It is read on every ` +
+      `paint because the panel can be zoomed and dismissed between any two of them; a plain ` +
+      `boolean captured at wiring time would freeze the panel in whichever state it was built in.`,
+    );
+  }
   if (!source || typeof source.render !== 'function' || typeof source.readPixels !== 'function') {
     throw new Error(
       'makeNavPainter: needs a NavSource — something that can render a nav frame and hand ' +
@@ -153,26 +160,45 @@ export function makeNavPainter(source) {
     // still looks like a working nav computer.
     screen.clear();
 
-    // AN INTENT, WRITTEN UNCONDITIONALLY AND WITHOUT LOOKING AT ANYTHING. It says
-    // "this host wants a bare screen wherever bare makes sense", and nothing more.
-    // Which frames are actually bare is settled inside the nav computer, at the
-    // moment it draws, because that is the only moment the level is true — see the
-    // header: `render()` moves the level part-way through the frame, so a gate
-    // computed HERE is computed from a level the frame has already left behind.
+    // AN INTENT, AND STILL ONLY AN INTENT. It says "this host wants a bare screen
+    // wherever bare makes sense", and nothing more. WHICH FRAMES ARE ACTUALLY BARE
+    // is settled inside the nav computer at the moment it draws, because that is
+    // the only moment the level is true — see the header: `render()` moves the
+    // level part-way through the frame, so a gate computed HERE is computed from a
+    // level the frame has already left behind.
     //
-    // It is still written on EVERY paint rather than once at wiring time. The same
-    // instance is the game's full-screen overlay under main.js's future wiring, and
-    // whoever hands it to the overlay is entitled to clear this flag; re-stating it
-    // per paint means the cockpit's intent cannot be silently lost, and re-stating
-    // an unconditional truth cannot itself go stale.
+    // ── WHY THIS IS NO LONGER THE LITERAL `true` ──────────────────────────────
+    //
+    // Increment 6 (`cockpit-zoom-to-panel-2026-07-29`). Max's reason for the zoom
+    // is "so we can interact with the full menu": the level-tab strip, both SYSTEM
+    // sub-views, the autopilot toggle and the [ BURN ] / [ WARP ] commit. Every one
+    // of those hit regions is WITHDRAWN while the panel is bare — `_commitButtonRect`
+    // and `_autopilotButtonRect` nulled, `_farChipRects` emptied, the tab strip
+    // gated. That is right at rest, where a glanceable corner screen must not carry
+    // invisible live buttons, and it is exactly wrong the moment the screen is at
+    // his eye and he is trying to press them. So zooming must CLEAR the intent, not
+    // merely move the mesh.
+    //
+    // ⚠ THIS IS NOT THE RETURN OF THE GATE THIS FILE WAS CORRECTED FOR. The 2026-07-29
+    // correction was that the panel must not read the LEVEL, because the level moves
+    // mid-frame. Zoom state does not: it is a property of the HOST, changing only
+    // when the player triggers it, and it is the same on both sides of `render()`.
+    // The level rule stays where it belongs, in `NavComputer.get _bare()`, ANDed
+    // with whatever this line asks for.
+    //
+    // Read on EVERY paint, never captured: the panel can be zoomed and dismissed
+    // between any two paints. Re-stating it per paint also means the cockpit's
+    // intent cannot be silently lost if something else writes the flag — the same
+    // instance is the game's full-screen overlay under main.js's wiring.
     //
     // `source.nav` is a public field on NavSource but it is NOT part of the duck
     // type guarded above, and every stand-in in the tests goes without one. No nav
     // object means there is nothing to write the flag on, which is the correct
     // no-op rather than a throw: the flag is additive and default-off, so a source
     // that cannot receive it draws exactly as it would have.
+    const zoomed = !!isZoomed();
     const nav = source.nav;
-    if (nav) nav.chromeless = true;
+    if (nav) nav.chromeless = !zoomed;
 
     // The panel may have been rebuilt at a new buffer height under us. The source
     // is NOT rebuilt with it — building one means building a NavComputer, which
