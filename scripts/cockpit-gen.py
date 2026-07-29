@@ -3705,12 +3705,21 @@ def build_metrics(parts, units, analysis):
                               r6(SCREEN_H + 2.0 * SCREEN_BEZEL),
                               r6(SCREEN_BODY_DEPTH)],
             "uv": [list(c) for c in SCREEN_FACE_UV],
-            "uvNote": ("TEXCOORD_0 on the display face, (0,0) at the pilot's LOWER-LEFT corner "
-                       "and (1,1) at the upper-right, in the face's own (widthAxis, heightAxis) "
-                       "frame. This is the seam the screen-content work binds to: it does not "
-                       "need to know where the panel sits, only that it is a unit-square UV "
-                       "surface 0.45 x 0.30 m. Screen POSITIONS are still being re-fitted; this "
-                       "contract is not."),
+            "uvNote": ("TEXCOORD_0 on the display face, spanning the full unit square. "
+                       "(0,0) is the pilot's UPPER-LEFT corner and (1,1) the lower-right: "
+                       "v = 0 is the TOP edge, which is glTF's own y-down UV convention and "
+                       "what three.js's GLTFLoader already assumes. MEASURED FROM THE EXPORTED "
+                       "GLB, not inferred -- on every face the highest-y vertex carries v = 0. "
+                       "This note said LOWER-LEFT until 2026-07-28 and was wrong; a reader who "
+                       "trusted it would have flipped every panel vertically. Consequences for "
+                       "the content side, both one-liners: texture.flipY = false (canvas row 0 "
+                       "and v = 0 are both the top, so they line up directly), and a raycast "
+                       "maps as y = uv.v * height, NOT (1 - uv.v). "
+                       "This is the seam the screen-content work binds to: it does not need to "
+                       "know where the panel sits, only that it is a unit-square UV surface. "
+                       "Bind to the SURFACE, never the POSE -- screen positions have been "
+                       "re-fitted three times and the face is currently %.3f x %.3f m, which is "
+                       "also not a number to hard-code." % (SCREEN_W, SCREEN_H)),
         })
 
     adet = {d["name"]: d for d in analysis["armDetail"]}
