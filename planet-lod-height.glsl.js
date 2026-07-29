@@ -149,6 +149,16 @@ export const HEIGHT_GLSL = /* glsl */ `
       uniform float       uReliefBakeStrength;      // 0 = baked relief OFF (byte-identical fallback gate)
       uniform samplerCube uReliefBakeCube;          // baked low-freq height cube (R=height, GBA=gradient)
       vec4 sampleBakedRelief(vec3 dir){ return textureCube(uReliefBakeCube, normalize(dir)); } // .x=height, .yzw=grad
+      // ── Slice D-fix (2026-07-28): crater-overlay restore channel. uReliefBakeCube carries the macro
+      // body AND the crater stamps under ONE weight, and the Slice-D display crossover fades that
+      // weight to hand the BODY to the analytic path — taking the craters with it. This cube carries
+      // the crater overlay alone; uCraterBakeRestore = base·(1 − crossover) adds back exactly the
+      // fraction the crossover removed, so total crater contribution = base at EVERY radius.
+      // At radius 1 R⊕ the crossover is exactly 1 ⇒ restore is exactly 0 ⇒ byte-identical (and the
+      // branch below never fetches this cube, matching the uReliefBakeStrength fallback contract).
+      uniform float       uCraterBakeRestore;       // 0 = nothing to restore (byte-identical gate)
+      uniform samplerCube uCraterBakeCube;          // crater overlay ONLY (R=height, GBA=gradient)
+      vec4 sampleBakedCraters(vec3 dir){ return textureCube(uCraterBakeCube, normalize(dir)); }
       vec3 sampleGrainStrike(vec3 dir){
         vec3 d = normalize(dir);
         vec2 g = textureCube(uTectonicGrainCube, d).rg;          // packed world strike (xy dominant)

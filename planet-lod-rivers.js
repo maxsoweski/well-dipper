@@ -224,7 +224,13 @@ const EPSILON_VCF = 1.1814295123540973e-8;
 // option (ii)+S0.2a): the leaf emits only the model ratio target f_I (condition-pure — a realized-norm f_I
 // collapses to identity), and this seam supplies the absolute scale. Frozen variance definition = RAW
 // mean-square V = mean(x²) (relief-budget-fit.json). shelfDepth stays weight 1. Never mutates carrier.height.
-export function compositeMargins(carrier, budget = IDENTITY_BUDGET) {
+// Slice D-fix (2026-07-28): OPTIONAL third arg `craterOut` — a caller-supplied Float32Array that
+// receives the EXACT crater term this composite added (cf on the identity/fallback paths, w_i·cf
+// in-domain). It exists so the display crossover can restore the crater channel it fades out
+// (planet-lod-lab.html uCraterBakeRestore) WITHOUT a second implementation of the w_i solve — the
+// weight is applied in exactly one place, here. Writing it never touches `out[i]`, so every
+// existing 1- and 2-arg caller stays byte-identical BY INSPECTION (the arithmetic is untouched).
+export function compositeMargins(carrier, budget = IDENTITY_BUDGET, craterOut = null) {
   const sd = carrier.shelfDepth;
   if (!sd) return null;
   const cf = carrier.craterField;
@@ -237,6 +243,7 @@ export function compositeMargins(carrier, budget = IDENTITY_BUDGET) {
   // Identity path: the literal pre-budget loop, byte-identical op order to pre-Inc-3b.
   if (!budget || !budget.inDomain) {
     for (let i = 0; i < n; i++) out[i] = h[i] + sd[i] + (cf ? cf[i] : 0);
+    if (craterOut) for (let i = 0; i < n; i++) craterOut[i] = (cf ? cf[i] : 0);
     return out;
   }
   // In-domain: solve the RMS-preserving scale from realized RAW mean-square norms.
@@ -249,12 +256,14 @@ export function compositeMargins(carrier, budget = IDENTITY_BUDGET) {
   // w_i, S0.2a #3), V_h non-positive, or f_I not a valid interior ratio. Preserves total band, no blow-up.
   if (!(V_cf >= EPSILON_VCF) || !(V_h > 0) || !(f_I > 0) || !(f_I < 1)) {
     for (let i = 0; i < n; i++) out[i] = h[i] + sd[i] + (cf ? cf[i] : 0);
+    if (craterOut) for (let i = 0; i < n; i++) craterOut[i] = (cf ? cf[i] : 0);
     return out;
   }
   const r = f_I / (1 - f_I);
   const w_e = Math.sqrt((V_h + V_cf) / (V_h * (1 + r)));
   const w_i = Math.sqrt(r * w_e * w_e * V_h / V_cf);
   for (let i = 0; i < n; i++) out[i] = w_e * h[i] + sd[i] + w_i * (cf ? cf[i] : 0);
+  if (craterOut) for (let i = 0; i < n; i++) craterOut[i] = w_i * (cf ? cf[i] : 0);
   return out;
 }
 
@@ -1267,6 +1276,17 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
   // Same lazy-once lifecycle + once-per-route cadence as the grain cube (bake-once AC). The DATA
   // source is the sphere-native carrier.height (writeHeightSphere), NOT the in-shader sampler read.
   let heightCube = null, heightBakeCount = 0, heightCubeSize = 0;
+  // Slice D-fix (2026-07-28) — the CRATER cube. Same shape/lifecycle/cadence as heightCube, but it
+  // carries ONLY the exogenic crater overlay (carrier.craterField at its composite weight) and its
+  // gradient. WHY IT EXISTS: uReliefBakeStrength is a single blend weight over a cube that holds the
+  // macro body AND the craters, and the Slice-D display crossover fades that weight to hand the BODY
+  // to the analytic path — silently taking the craters with it. Every impact-cratered preset lives
+  // below 1 R⊕ (Moon/Mercury 0.27–0.38, Mars 0.53), where the crossover eats ~78% of the crater
+  // signal at boot, and above 4 R⊕ it eats 100%. Max's UAT, verbatim: "below about 0.04 radius the
+  // craters disappear completely". Craters are an ADDITIVE signed overlay (bowl<0, rim/ejecta>0) by
+  // design, so they ride correctly on whichever body is showing — the fix is to stop them riding the
+  // fade at all, not to change the fade. Zero-cost at radius 1 R⊕: the restore weight is 0 there.
+  let craterCube = null, craterCubeSize = 0, craterOverlay = null;
   const ribbon = new THREE.Mesh(
     new THREE.BufferGeometry(),
     new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, depthWrite: false }),
@@ -1291,6 +1311,9 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // Baked-relief Phase B: the HEIGHT cube rides the same lazy-once lifecycle (built on first route(),
     // reused thereafter). createHeightCube is the real CubeCamera RTT baker; RELIEF_CUBE_SIZE = 256.
     heightCube = createHeightCube({ renderer, size: RELIEF_CUBE_SIZE }); heightCubeSize = RELIEF_CUBE_SIZE;
+    // Slice D-fix: the crater cube rides the identical lazy-once lifecycle and the identical baker
+    // (same RGBA pack: R = overlay height, GBA = its tangent gradient).
+    craterCube = createHeightCube({ renderer, size: RELIEF_CUBE_SIZE }); craterCubeSize = RELIEF_CUBE_SIZE;
     meshMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
   }
 
@@ -1358,7 +1381,13 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     //    (feeding composited height but the stale pre-shelf reliefGrad would displace-without-reshading).
     //    null on non-margin worlds ⇒ reuse carrier.height/reliefGrad ⇒ byte-identical (AC-LAB c). Never
     //    mutates carrier.height (own-channel discipline; the 75-golden bypasses route()).
-    const composited = compositeMargins(carrier, relief.reliefBudget);   // Inc-3b S1.4: thread the condition-pure budget (identity outside its domain ⇒ byte-identical to pre-Inc-3b)
+    // Slice D-fix: hand compositeMargins a buffer for the crater term it adds, so the display
+    // crossover can restore exactly that term without re-deriving the w_i weight (one weight, one
+    // place). Reused across routes; zeroed first so a preset with no craters bakes a CLEAN cube
+    // rather than inheriting the previous preset's stamps.
+    if (!craterOverlay || craterOverlay.length !== carrier.height.length) craterOverlay = new Float32Array(carrier.height.length);
+    else craterOverlay.fill(0);
+    const composited = compositeMargins(carrier, relief.reliefBudget, craterOverlay);   // Inc-3b S1.4: thread the condition-pure budget (identity outside its domain ⇒ byte-identical to pre-Inc-3b)
     const marginHeight = composited || carrier.height;
     const marginGrad = composited ? computeAdjGradient(carrier, composited) : reliefGrad;
     // ── Phase D re-point (SPLIT-TRAP #5 guard): the router's height source is gated on the SAME
@@ -1409,6 +1438,18 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     }
     bakeHeightCube({ mesh, height: marginHeight, grad: marginGrad, heightCube });   // V2-4 s3: margin-composited (identical to carrier.height/reliefGrad on non-margin worlds)
     heightBakeCount++;
+    // ── Slice D-fix: bake the CRATER overlay alone into its own cube, same cadence, same baker.
+    // The gradient operator here is linear in the height array, so grad(h+sd+cf) = grad(h+sd)+grad(cf);
+    // that is what lets the shader's restore term recompose EXACTLY what the crossover removed, in
+    // both displacement and shading. Baked unconditionally (never skipped on no-crater worlds) so the
+    // cube can't carry a previous preset's stamps — an all-zero overlay bakes an all-zero cube, which
+    // contributes nothing. craterCube may be null headless, guarded inside bakeHeightCube as above.
+    const craterGrad = computeAdjGradient(carrier, craterOverlay);
+    if (craterCube && _bakeSizeWant !== craterCubeSize) {
+      craterCube.dispose();
+      craterCube = createHeightCube({ renderer, size: _bakeSizeWant }); craterCubeSize = _bakeSizeWant;
+    }
+    bakeHeightCube({ mesh, height: craterOverlay, grad: craterGrad, heightCube: craterCube });
     const totalMs = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : 0) - t0;
     stats = buildStats({ routed, height, N, faces: mesh.faces.length, seaLevel, oceanCount, ribGeo, label, totalMs });
     stats.meshMs = +meshMs.toFixed(0);
@@ -1447,6 +1488,9 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // bake counter (bake-once: unchanged on camera/time, +1 per preset/seed/sea change via route()).
     get reliefTexture() { return heightCube ? heightCube.texture : null; },
     get reliefBakeCount() { return heightBakeCount; },
-    dispose() { if (sampler) sampler.dispose(); if (carve) carve.dispose(); if (grainCube && grainCube.dispose) grainCube.dispose(); if (heightCube && heightCube.dispose) heightCube.dispose(); ribbon.geometry.dispose(); ribbon.material.dispose(); },
+    // Slice D-fix: the crater-only overlay cube (host pushes it to uCraterBakeCube). Shares
+    // reliefBakeCount — it is baked in the same once-per-route block, never independently.
+    get craterTexture() { return craterCube ? craterCube.texture : null; },
+    dispose() { if (sampler) sampler.dispose(); if (carve) carve.dispose(); if (grainCube && grainCube.dispose) grainCube.dispose(); if (heightCube && heightCube.dispose) heightCube.dispose(); if (craterCube && craterCube.dispose) craterCube.dispose(); ribbon.geometry.dispose(); ribbon.material.dispose(); },
   };
 }

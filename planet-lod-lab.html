@@ -386,6 +386,15 @@
           } else {
             hd = fbmd(vPos, uOctaves, fwBase);              // VERBATIM pre-AC2 path, NO cube fetch
           }
+          // ── Slice D-fix: restore the crater overlay the display crossover faded out of the blend
+          // above. BRANCH-guarded exactly like the bake gate (SPLIT-TRAP #4: if, NEVER mix()-to-0), so
+          // restore 0 ⇒ no cube fetch ⇒ byte-identical. Craters are a signed ADDITIVE overlay by
+          // design (bowl < 0, rim/ejecta > 0), so this composites correctly onto whichever body won
+          // the blend — baked, analytic, or any mix. Gradient rides along so rims/bowls keep shading.
+          if (uCraterBakeRestore > 0.0) {
+            vec4 cr = sampleBakedCraters(vObjN);
+            hd += vec4(cr.x * uCraterBakeRestore, cr.yzw * uCraterBakeRestore);
+          }
           float h = hd.x;
           vec3 grad = hd.yzw;
           // F19 — base-FBM gradient snapshot: massWastCombiner subtracts it from the running
@@ -1437,6 +1446,11 @@
     const _dummyReliefCube = makeDummyCubeTexture();
     uniforms.uReliefBakeCube     = { value: _dummyReliefCube };
     uniforms.uReliefBakeStrength = { value: 0.0 };   // default 0 ⇒ byte-identical (prod uniforms.js default also stays 0)
+    // ── Slice D-fix: the crater-overlay restore pair. Same belt-and-braces as above (always-bound
+    // dummy cube + branch-guarded strength defaulting to 0). The frame loop is the only writer of
+    // the restore weight; at radius 1 R⊕ it is exactly 0, so this pair is inert at the golden point.
+    uniforms.uCraterBakeCube     = { value: _dummyReliefCube };
+    uniforms.uCraterBakeRestore  = { value: 0.0 };
     uniforms.uRiverCarveStrength = { value: 0.0 };
     uniforms.uRiverCarveFloor    = { value: 0.0 };
     uniforms.uRiverCarveDepth    = { value: 0.0 };   // Option B: h-units the floor is lowered (→ F14 floods)
@@ -3896,6 +3910,8 @@
       // riverOverlay.reliefTexture). Falls back to the dummy until the first bake. Strength still
       // gates the fetch (default 0), so nothing changes visibly until uReliefBakeStrength>0.
       uniforms.uReliefBakeCube.value = riverOverlay.reliefTexture || _dummyReliefCube;
+      // Slice D-fix: same for the crater-only overlay cube, baked in the same once-per-route block.
+      uniforms.uCraterBakeCube.value = riverOverlay.craterTexture || _dummyReliefCube;
       uniforms.uRiverCarveGateHi.value = riverOverlayState.carveGateHi;
       applyCarveAmounts();                 // (re)apply the enabled && carve-gated gouging amounts
       riverOverlayState.status = `ocean ${stats.oceanPct}% · ord ${stats.maxStrahler} · R_b ${stats.bifurcationRatio} · w×${stats.widthRadiusFactor}r/${stats.widthSeedFactor}s · ${stats.totalMs}ms`;
@@ -5902,6 +5918,18 @@
       // at sVis=1 (bakeReliefCrossover(1) === 1 exactly ⇒ re-affirms the base ⇒ byte-identical to
       // today; goldens/headless never run frame()). No re-bake, no worldengine touch (byte-safe).
       uniforms.uReliefBakeStrength.value = grainCarveUI.reliefBakeStrength * bakeReliefCrossover(sVis);
+      // ── Slice D-fix (2026-07-28): the crossover above is a DISPLAY size-constancy device for the
+      // macro BODY, but it weights a cube that also carries the crater stamps — so it silently
+      // deleted craters. Max's UAT: "below about 0.04 radius the craters disappear completely".
+      // Restore exactly the fraction it removed, from the crater-only cube, so the total crater
+      // contribution is `base` at EVERY radius: base·c (in the blend) + base·(1−c) (here) = base.
+      // Derived by SUBTRACTING the weight just written above rather than by recomputing the
+      // crossover, for two reasons: (1) it is structurally the exact complement of the weight
+      // actually applied, so the two can never drift apart under a future edit to either line;
+      // (2) it keeps the display-scale token out of this write, so the AC-ZERO-CLOBBER uniform
+      // allowlist does not have to grow — the fence stays as tight as it was. At radius 1 R⊕ the
+      // crossover is exactly 1, so this is base − base = 0 EXACTLY ⇒ no fetch ⇒ byte-identical.
+      uniforms.uCraterBakeRestore.value = grainCarveUI.reliefBakeStrength - uniforms.uReliefBakeStrength.value;
       uniforms.uLevels.value = state.levels;
       // ── AC3/AC4 scale factors (computed once per frame from the live radius + gravity) ──
       // _animRate ∝ 1/radius — big worlds animate slower (lava breathing, churn, storm drift,
