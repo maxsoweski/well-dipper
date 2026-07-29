@@ -350,6 +350,34 @@ export class PanelMover {
   }
 
   /**
+   * Re-solve where the zoomed panel should be, and put it there at once.
+   *
+   * For the knobs. `fill` is a judge-by-eye question and the lab exposes it as a
+   * slider; a slider whose effect only appears on the NEXT zoom is one Max has to
+   * guess at and re-trigger to see, which is not a knob you can judge anything by.
+   *
+   * NO TWEEN, on purpose. The slider is already the animation — a 400 ms ease
+   * chasing every input event lags the drag and reads as a laggy control rather
+   * than a moving panel.
+   *
+   * A NO-OP unless the panel is fully settled. Mid-travel it would teleport a
+   * screen that is still moving, and at rest there is nothing to reframe.
+   *
+   * @param {object} camera the camera being rendered through
+   */
+  reframe(camera) {
+    if (this._state !== 'zoomed') return false;
+    const rig = this._rigs.get(this._role);
+    if (!rig || !camera || !camera.matrixWorld) return false;
+    this._camera = camera;
+    this._to = this._solveTarget(rig, camera);
+    rig.pivot.position.copy(this._to.position);
+    rig.pivot.quaternion.copy(this._to.quaternion);
+    rig.pivot.updateMatrixWorld(true);
+    return true;
+  }
+
+  /**
    * Send the panel back to its mount.
    *
    * From wherever it currently is — see the header. The destination is the rig's

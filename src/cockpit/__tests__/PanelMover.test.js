@@ -660,3 +660,90 @@ describe('PanelMover — the source carries no cockpit geometry', () => {
     expect(CODE).toMatch(/solveFillDistance/);
   });
 });
+
+describe('PanelMover.reframe — re-solving under a live slider', () => {
+  const build = syntheticCockpit;
+
+  it('re-solves the zoomed pose immediately when the fill changes', () => {
+    // The lab's ZOOM FILL slider is a judge-by-eye knob, and a knob whose effect
+    // only appears on the NEXT zoom is one Max has to guess at and re-trigger to
+    // see. `reframe` is what makes dragging it move the panel under his eye.
+    const { root } = build();
+    const panels = panelsOf(root);
+    const mover = new PanelMover({ panels, root, fill: 0.85 });
+    const cam = makeCamera();
+    mover.zoom(panels[0].role, cam);
+    runToRest(mover);
+
+    const toCam = new THREE.Matrix4().copy(cam.matrixWorld).invert();
+    const distAt = () => -V(measure(panels[0].mesh).centre).applyMatrix4(toCam).z;
+    const before = distAt();
+
+    mover.fill = 0.5;
+    mover.reframe(cam);
+    const after = distAt();
+    // A smaller fill means a smaller panel, which means further away.
+    expect(after).toBeGreaterThan(before);
+
+    const m = measure(panels[0].mesh);
+    const halfV = Math.tan((cam.fov * Math.PI) / 180 / 2);
+    // The BINDING axis, not the vertical one. This panel is 2.95:1 against a
+    // 16:9 view, so WIDTH binds — asserting vertical coverage here read 0.301
+    // against an expected 0.5 and looked like a reframe bug. It was the test
+    // assuming the shape of a panel it had itself made deliberately unusual.
+    const cover = Math.max(
+      (m.height / 2) / (after * halfV),
+      (m.width / 2) / (after * halfV * cam.aspect),
+    );
+    expect(cover).toBeCloseTo(0.5, 6);
+    mover.dispose();
+  });
+
+  it('lands exactly, with no tween, so a drag does not lag the slider', () => {
+    const { root } = build();
+    const panels = panelsOf(root);
+    const mover = new PanelMover({ panels, root, fill: 0.85 });
+    const cam = makeCamera();
+    mover.zoom(panels[0].role, cam);
+    runToRest(mover);
+
+    mover.fill = 0.6;
+    mover.reframe(cam);
+    expect(mover.state, 'reframe restarted the travel instead of re-solving').toBe('zoomed');
+    expect(mover.isMoving).toBe(false);
+    // And it is where it was put, not somewhere on the way there.
+    const pivot = mover.pivotFor(panels[0].role);
+    expect(pivot.position.distanceTo(mover.zoomTargetPosition)).toBeLessThan(1e-12);
+    mover.dispose();
+  });
+
+  it('is a no-op when nothing is zoomed, and does not throw', () => {
+    const { root } = build();
+    const panels = panelsOf(root);
+    const before = panels.map((p) => measure(p.mesh));
+    const mover = new PanelMover({ panels, root });
+    expect(() => mover.reframe(makeCamera())).not.toThrow();
+    expect(mover.state).toBe('rest');
+    panels.forEach((p, i) => {
+      expect(V(measure(p.mesh).centre).distanceTo(V(before[i].centre))).toBeLessThan(1e-12);
+    });
+    mover.dispose();
+  });
+
+  it('is a no-op MID-TRAVEL, so a slider drag cannot teleport a moving panel', () => {
+    const { root } = build();
+    const panels = panelsOf(root);
+    const mover = new PanelMover({ panels, root, durationMs: 400 });
+    const cam = makeCamera();
+    mover.zoom(panels[0].role, cam);
+    for (let i = 0; i < 10; i++) mover.update(8);
+    const mid = V(measure(panels[0].mesh).centre);
+    mover.fill = 0.4;
+    mover.reframe(cam);
+    expect(V(measure(panels[0].mesh).centre).distanceTo(mid),
+      'reframe snapped a panel that was still travelling').toBeLessThan(1e-12);
+    expect(mover.state).toBe('toZoom');
+    mover.dispose();
+  });
+});
+

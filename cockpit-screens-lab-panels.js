@@ -164,6 +164,6 @@ export const LAB_PAINTERS = Object.freeze({
  * @param {import('./src/cockpit/NavSource.js').NavSource} source
  * @returns {(panel:object, snapshot:object, nowMs:number) => void}
  */
-export function labNavPainter(source) {
-  return panelPainter(makeNavPainter(source));
+export function labNavPainter(source, options) {
+  return panelPainter(makeNavPainter(source, options));
 }

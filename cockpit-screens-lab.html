@@ -214,6 +214,20 @@
       <input type="range" id="dSystemZoom" />
     </label>
 
+    <!-- Increment 6. The three judge-by-eye knobs for zoom-to-panel: how much of
+         the view the screen fills, how long it takes to get there, and whether it
+         parks in the cockpit or stays welded to the head. None of these is a
+         decision this page makes for Max. -->
+    <div class="group">ZOOM TO PANEL</div>
+    <button class="btn" id="bZoom"><span id="bZoomLabel">ZOOM NAV</span><span class="key">&#8679;1</span></button>
+    <label class="slider">ZOOM FILL <span class="num" id="bZoomFillLabel">0.85</span>
+      <input type="range" id="dZoomFill" />
+    </label>
+    <label class="slider">ZOOM TIME <span class="num" id="bZoomTimeLabel">400 ms</span>
+      <input type="range" id="dZoomTime" />
+    </label>
+    <button class="btn" id="bZoomFollow"><span id="bZoomFollowLabel">ZOOM: PARKED</span><span class="key">H</span></button>
+
     <div class="hint">
       EYE: camera at the model's Eye_Point,
       fov 70, letterboxed 16:9 — the framing
@@ -266,6 +280,9 @@
     import { buildFlightReadout, flightReadoutStateFromSnapshot } from './src/cockpit/FlightReadout.js';
     import { LAB_PAINTERS, labNavPainter } from './cockpit-screens-lab-panels.js';
     import { NavSource } from './src/cockpit/NavSource.js';
+import { PanelMover, DEFAULT_FILL, DEFAULT_DURATION_MS } from './src/cockpit/PanelMover.js';
+import { PanelPicker } from './src/cockpit/PanelPicker.js';
+import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
     import { NavComputer } from './src/ui/NavComputer.js';
     import { GalacticMap } from './src/generation/GalacticMap.js';
     import {
@@ -540,6 +557,20 @@
     let world = null;
     let worldError = null;
 
+    // ── ZOOM-TO-PANEL state (increment 6) ────────────────────────────────────
+    //
+    // Max: "a system by which the screen will move up to fill the player's view,
+    // centered, so we can interact with the full menu ... only necessary for the
+    // upper-left monitor." The MECHANISM is generic — the mover and the picker are
+    // built over every panel — and only NAV is wired to a trigger, which is what
+    // ZOOMABLE_ROLES says. Widening it is a one-entry edit, by design.
+    let mover = null;
+    let picker = null;
+    let navAdapter = null;
+    const ZOOMABLE_ROLES = ['NAV'];
+    /** The three judge-by-eye knobs. Defaults come from the module, not from here. */
+    const zoomView = { fill: DEFAULT_FILL, durationMs: DEFAULT_DURATION_MS, followHead: false };
+
     // ── NAV state ────────────────────────────────────────────────────────────
     let galacticMap = null;        // built lazily; see ensureNavSource()
     let navSource = null;          // the hosted NavComputer, or null if it failed
@@ -695,6 +726,12 @@
         for (const role of Object.keys(DEFAULT_PANEL_ROLES)) {
           host.setPainter(role, LAB_PAINTERS[role]);
         }
+        // The motion rig and the picker are built over EVERY bound panel, then
+        // wired to one. Rigging is free of side effects — the pivot sits at the
+        // measured centre and the mesh carries the compensating offset, so the
+        // composition is identity and nothing moves.
+        buildZoomRig();
+
         // THEN the real thing over NAV. Registered after the four static painters
         // rather than instead of one of them, so that a nav source which could not
         // be built leaves the NO SOURCE card on the glass — and the reason beside
@@ -731,6 +768,66 @@
      * NO SOURCE. What must not happen is a plausible-looking NAV panel with no
      * nav computer behind it.
      */
+    /**
+     * Rebuild the mover and the picker over whatever panels are bound now.
+     *
+     * Torn down and rebuilt with the host, because [B] rebuilds every panel at a
+     * new buffer height and a rig holding meshes from the previous host would keep
+     * a dead pivot in the scene and move nothing.
+     */
+    function buildZoomRig() {
+      if (mover) { mover.dispose(); mover = null; }
+      picker = null;
+      if (!host || host.panels.length === 0) return;
+      const panels = host.panels;
+      mover = new PanelMover({
+        panels,
+        root: model,
+        fill: zoomView.fill,
+        durationMs: zoomView.durationMs,
+        followCamera: zoomView.followHead,
+      });
+      // The picker sees ALL panels, not just the zoomable one: a click has to be
+      // able to land on the zoomed NAV screen and also to be recognised as NOT
+      // landing on it, and a picker that could only ever return NAV would report
+      // a click on DRIVE as a click on nothing.
+      picker = new PanelPicker({ panels });
+    }
+
+    /**
+     * The rendered rectangle, in CSS pixels.
+     *
+     * The SAME arithmetic `renderFrame` letterboxes with, deliberately shared
+     * rather than repeated: the picker converts pointer positions against this
+     * rectangle, and if the two ever disagreed the cursor would line up at the
+     * centre of the screen and drift toward the edges — which lands exactly on the
+     * NAV panel's level-tab strip along its bottom edge.
+     */
+    function eyeViewport() {
+      const W = window.innerWidth, H = window.innerHeight;
+      let w = W, h = Math.round(W / GAME_ASPECT);
+      if (h > H) { h = H; w = Math.round(H * GAME_ASPECT); }
+      return { x: Math.round((W - w) / 2), y: Math.round((H - h) / 2), width: w, height: h };
+    }
+
+    /** Whether NAV is fully zoomed — what the painter asks before it draws. */
+    function navIsZoomed() {
+      return !!mover && mover.zoomedRole === 'NAV';
+    }
+
+    /** The pointer adapter over the live nav computer, built on demand. */
+    function ensureNavAdapter() {
+      if (navAdapter && navAdapter.target === (navSource && navSource.nav)) return navAdapter;
+      if (navAdapter) { navAdapter.detach(); navAdapter = null; }
+      if (!navSource || !navSource.nav) return null;
+      const panel = host && host.panel('NAV');
+      if (!panel) return null;
+      navAdapter = new PanelPointerAdapter(navSource.nav, {
+        size: { width: panel.canvas.width, height: panel.canvas.height },
+      });
+      return navAdapter;
+    }
+
     function mountNav() {
       if (!host || !host.panel('NAV')) return;
 
@@ -771,7 +868,10 @@
         }
       }
 
-      if (navSource) host.setPainter('NAV', labNavPainter(navSource));
+      // `isZoomed` is read on EVERY paint. Zooming has to clear the chrome-less
+      // intent: the level tabs, the autopilot toggle and BURN/WARP are all
+      // withdrawn while bare, which is right in the corner and wrong at the eye.
+      if (navSource) host.setPainter('NAV', labNavPainter(navSource, { isZoomed: navIsZoomed }));
     }
 
     /**
@@ -961,6 +1061,14 @@
       bSystemZoomLabel: document.getElementById('bSystemZoomLabel'),
       dSystemFill: document.getElementById('dSystemFill'),
       dSystemZoom: document.getElementById('dSystemZoom'),
+      bZoom: document.getElementById('bZoom'),
+      bZoomLabel: document.getElementById('bZoomLabel'),
+      bZoomFillLabel: document.getElementById('bZoomFillLabel'),
+      dZoomFill: document.getElementById('dZoomFill'),
+      bZoomTimeLabel: document.getElementById('bZoomTimeLabel'),
+      dZoomTime: document.getElementById('dZoomTime'),
+      bZoomFollow: document.getElementById('bZoomFollow'),
+      bZoomFollowLabel: document.getElementById('bZoomFollowLabel'),
       bPlay: document.getElementById('bPlay'),
       scrub: document.getElementById('scrub'),
       tTime: document.getElementById('tTime'),
@@ -1055,6 +1163,44 @@
     // The slider bounds come from NAV_VIEW_RANGE rather than from the markup, so
     // the range and the reason for it live in one place with the comment that
     // explains it, instead of as six bare numbers in an attribute.
+    // ── The three zoom knobs. Ranges are generous on purpose so the extremes are
+    // reachable: Max settles this kind of question by sweeping to both ends and
+    // picking a middle, exactly as he did with the section lab's proportions.
+    Object.assign(el.dZoomFill, { min: '0.3', max: '1.2', step: '0.01', value: String(zoomView.fill) });
+    Object.assign(el.dZoomTime, { min: '80', max: '1200', step: '10', value: String(zoomView.durationMs) });
+    el.dZoomFill.addEventListener('input', () => {
+      zoomView.fill = Number(el.dZoomFill.value);
+      if (mover) mover.fill = zoomView.fill;
+      updateZoomLabels();
+      // Re-solve while the slider is being dragged, rather than only on the next
+      // zoom. That is the difference between a knob Max can judge by eye and one
+      // he has to guess at and then re-trigger to see.
+      if (mover && mover.state === 'zoomed') mover.reframe(eyeCam);
+    });
+    el.dZoomTime.addEventListener('input', () => {
+      zoomView.durationMs = Number(el.dZoomTime.value);
+      if (mover) mover.durationMs = zoomView.durationMs;
+      updateZoomLabels();
+    });
+    el.bZoom.onclick = () => {
+      if (!mover) return;
+      if (mover.zoomedRole) mover.dismiss(); else mover.zoom(ZOOMABLE_ROLES[0], eyeCam);
+      updateZoomLabels();
+    };
+    el.bZoomFollow.onclick = () => {
+      zoomView.followHead = !zoomView.followHead;
+      if (mover) mover.followCamera = zoomView.followHead;
+      updateZoomLabels();
+    };
+
+    function updateZoomLabels() {
+      el.bZoomFillLabel.textContent = zoomView.fill.toFixed(2);
+      el.bZoomTimeLabel.textContent = `${Math.round(zoomView.durationMs)} ms`;
+      el.bZoomFollowLabel.textContent = zoomView.followHead ? 'ZOOM: HEAD-LOCKED' : 'ZOOM: PARKED';
+      el.bZoomLabel.textContent = mover && mover.zoomedRole ? 'DISMISS (ESC)' : 'ZOOM NAV';
+    }
+    updateZoomLabels();
+
     for (const [key, input] of [['systemFillFactor', el.dSystemFill], ['systemZoom', el.dSystemZoom]]) {
       const r = NAV_VIEW_RANGE[key];
       input.min = String(r.min);
@@ -1082,6 +1228,19 @@
       const t = e.target;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
       if (e.key === ' ') { e.preventDefault(); setPlaying(!playing); return; }
+      // ESC DISMISSES, and does nothing else. Max ruled on 2026-07-29 that it is
+      // no longer wired to nav-level navigation anywhere — levels are changed by
+      // clicking the tab strip. See main.js's Escape cascade for the other half.
+      if (e.key === 'Escape') { if (mover) mover.dismiss(); return; }
+      // Shift+1..4 are the spatial panel hotkeys (1=UL, 2=UR, 3=LL, 4=LR). Only
+      // the zoomable ones do anything, which today is NAV alone.
+      if (e.shiftKey && ['1', '2', '3', '4'].includes(e.key)) {
+        const roleAt = ['NAV', 'DRIVE', 'INFO', 'TARGET'][Number(e.key) - 1];
+        if (mover && ZOOMABLE_ROLES.includes(roleAt)) {
+          if (mover.zoomedRole === roleAt) mover.dismiss(); else mover.zoom(roleAt, eyeCam);
+        }
+        return;
+      }
       switch (e.key.toLowerCase()) {
         case 'c': el.bMode.onclick(); break;
         case 'b': cycleBuffer(e.shiftKey ? -1 : 1); break;
@@ -1090,6 +1249,7 @@
         case 'g': el.bGlass.onclick(); break;
         case 'l': el.bCabin.onclick(); break;
         case 'r': recentre(); break;
+        case 'h': el.bZoomFollow.onclick(); break;
         case 'v': setNavLevel(navLevel + (e.shiftKey ? -1 : 1)); break;
         // Nudge a paused frame one step at a time, for looking at a transition.
         case 'arrowleft': setPlaying(false); setTime(timeS - 0.25); break;
@@ -1101,19 +1261,74 @@
     // here; it is re-pinned to the eye point every frame in renderFrame().
     let dragging = false, lastX = 0, lastY = 0;
     const LOOK_SPEED = 0.0026;
+    // ── POINTER ROUTING ─────────────────────────────────────────────────────
+    //
+    // One pointer, three jobs, and the order between them is the whole design:
+    //
+    //   1. If NAV is ZOOMED and the pointer is on it, the nav computer gets the
+    //      event. That is the point of zooming — Max wants to work the menu — and
+    //      the map's own drag-to-rotate must beat look-around while he is doing it.
+    //   2. Otherwise, a press on a ZOOMABLE panel zooms it.
+    //   3. Otherwise, look around.
+    //
+    // Rule 1 above rule 3 is what stops a drag across the nav map from also
+    // swinging the pilot's head, which would make the orrery impossible to rotate.
+    let panelDrag = false;
+
+    /** What the pointer is over right now, or null. */
+    function pickAt(e) {
+      if (!picker || mode !== 'eye') return null;
+      return picker.pick(e.clientX, e.clientY, { camera: eyeCam, viewport: eyeViewport() });
+    }
+
     canvas.addEventListener('pointerdown', (e) => {
       if (mode !== 'eye') return;
+      const got = pickAt(e);
+
+      if (got && navIsZoomed() && got.role === 'NAV') {
+        const adapter = ensureNavAdapter();
+        if (adapter) {
+          panelDrag = true;
+          canvas.setPointerCapture(e.pointerId);
+          adapter.pointerDown(got.hit);
+          return;
+        }
+      }
+
+      if (got && ZOOMABLE_ROLES.includes(got.role) && mover && !navIsZoomed()) {
+        mover.zoom(got.role, eyeCam);
+        return;
+      }
+
       dragging = true; lastX = e.clientX; lastY = e.clientY;
       canvas.setPointerCapture(e.pointerId);
     });
+
     canvas.addEventListener('pointermove', (e) => {
+      if (panelDrag) {
+        const adapter = ensureNavAdapter();
+        // A miss while pressed is the 3D form of the cursor leaving the canvas,
+        // and the adapter has always treated that as a release.
+        if (adapter) adapter.pointerMove(pickAt(e)?.hit ?? null);
+        return;
+      }
       if (!dragging || mode !== 'eye') return;
       eyeYaw -= (e.clientX - lastX) * LOOK_SPEED;
       eyePitch -= (e.clientY - lastY) * LOOK_SPEED;
       eyePitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, eyePitch));
       lastX = e.clientX; lastY = e.clientY;
     });
+
     const endDrag = (e) => {
+      if (panelDrag) {
+        panelDrag = false;
+        const adapter = ensureNavAdapter();
+        // This is the call that finally forwards `_handleClick` — the level tabs,
+        // the SYSTEM sub-views, the autopilot toggle and BURN/WARP all hang off it.
+        if (adapter) adapter.pointerUp(pickAt(e)?.hit ?? null);
+        try { canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+        return;
+      }
       if (!dragging) return;
       dragging = false;
       try { canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
@@ -1199,6 +1414,15 @@
       // `nowMs` and not the sim clock: a blink phased on sim time stutters above
       // 60 Hz and FREEZES on a pause, and an alarm that has stopped moving reads
       // as no alarm. The host's own header makes the same argument at length.
+      // The travel is advanced in REAL milliseconds, like the panel repaint clock
+      // and for the same reason: a tween phased on sim time freezes when the page
+      // is paused, and a screen stuck half-way to the eye reads as a hang.
+      if (mover) {
+        const wasZoomed = !!mover.zoomedRole;
+        mover.update(lastFrameMs == null ? 16 : dtSec * 1000);
+        if (!!mover.zoomedRole !== wasZoomed) updateZoomLabels();
+      }
+
       if (host) host.update(snapshot, nowMs);
 
       renderFrame();
