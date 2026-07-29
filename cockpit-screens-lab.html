@@ -285,6 +285,7 @@ import { PanelPicker } from './src/cockpit/PanelPicker.js';
 import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
     import { NavComputer } from './src/ui/NavComputer.js';
     import { GalacticMap } from './src/generation/GalacticMap.js';
+    import { _advanceSimClock } from './src/core/SimClock.js';
     import {
       FLIGHT_DURATION_S, buildLabWorld, flightSourcesAt, segmentAt, dropWindowFor,
     } from './cockpit-screens-lab-flight.js';
@@ -571,6 +572,37 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
     /** The three judge-by-eye knobs. Defaults come from the module, not from here. */
     const zoomView = { fill: DEFAULT_FILL, durationMs: DEFAULT_DURATION_MS, followHead: false };
 
+    /**
+     * Whether `el` — the control table — has been built yet.
+     *
+     * DECLARED UP HERE, WITH THE STATE, and that placement is the whole point of
+     * the flag. `mountPanels()` wants to refresh the ZOOM button's label after it
+     * rebuilds the rig, and `updateZoomLabels()` reads `el`, which is a `const`
+     * declared several hundred lines further down. A `typeof` guard cannot help
+     * with a `const` in its temporal dead zone — reading it AT ALL before its
+     * declaration is evaluated throws a ReferenceError, `typeof` included. This
+     * flag is initialised during the first statements of module evaluation, so it
+     * is always safe to read, and it is only flipped once `el` exists.
+     *
+     * In practice the GLB load is async and module evaluation has always finished
+     * by the time `mountPanels()` first runs. "In practice" is exactly the kind of
+     * claim that stops being true when someone caches the model.
+     */
+    let chromeReady = false;
+    /**
+     * The last (state, role) pair the ZOOM button's label was drawn for.
+     *
+     * `tick()` used to watch `!!mover.zoomedRole !== wasZoomed`, which CAN NEVER
+     * FIRE: `PanelMover.zoom()` sets `_role` and `_state` synchronously, so by the
+     * time the next tick reads `wasZoomed` the transition has already happened
+     * inside the pointer handler. Result, measured 2026-07-29: zooming by clicking
+     * the glass — the ordinary way — left the button reading 'ZOOM NAV' over a
+     * fully zoomed panel. Watching the pair for CHANGE cannot be outrun that way,
+     * because the comparison is against what was last PAINTED, not against what
+     * was true one frame ago.
+     */
+    let zoomLabelKey = null;
+
     // ── NAV state ────────────────────────────────────────────────────────────
     let galacticMap = null;        // built lazily; see ensureNavSource()
     let navSource = null;          // the hosted NavComputer, or null if it failed
@@ -719,6 +751,17 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
      * broken pairing between config and asset and it has a name attached.
      */
     function mountPanels() {
+      // THE RIG COMES DOWN FIRST, BEFORE the host re-measures. `buildZoomRig()`
+      // also disposes the mover, so this looks redundant and is not: while a panel
+      // is rigged its mesh hangs off `PanelPivot_<role>` rather than off the
+      // model, and if it is ZOOMED the mesh is physically at the pilot's eye.
+      // `PanelHost.fromRoot` measures world-space vertices, so re-binding while
+      // that is true would freeze `panel.metrics.centre` at the eye — and
+      // `subtendedBy()` would then report the NAV panel as 0.17 m away at every
+      // buffer setting, for the rest of the session, with nothing to say why.
+      // Tearing down first puts every mesh back at its own identity pose, which is
+      // the state the measurement is supposed to be of.
+      if (mover) { mover.dispose(); mover = null; picker = null; }
       if (host) { host.dispose(); host = null; }
       hostError = null;
       try {
@@ -741,6 +784,15 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
       } catch (err) {
         hostError = (err && err.message) || String(err);
       }
+      // THE BUTTON'S LABEL, AFTER THE RIG CHANGED. `buildZoomRig()` throws away a
+      // mover that may have been mid-zoom and builds a fresh one at rest, so a
+      // label left saying 'DISMISS (ESC)' is now describing a panel that is back
+      // at its mount — and pressing it ZOOMS instead of dismissing, which is the
+      // opposite of what it says. Measured 2026-07-29 by pressing [B] while NAV
+      // was zoomed. Outside the try/catch on purpose: a host that failed to bind
+      // leaves no mover at all, which is exactly when the stale 'DISMISS' is most
+      // misleading. See `chromeReady` for why this is guarded rather than direct.
+      if (chromeReady) updateZoomLabels();
     }
 
     /**
@@ -778,6 +830,9 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
     function buildZoomRig() {
       if (mover) { mover.dispose(); mover = null; }
       picker = null;
+      // Forget what the ZOOM button was last labelled for, so the next `tick()`
+      // repaints it against the new rig rather than against the old one's state.
+      zoomLabelKey = null;
       if (!host || host.panels.length === 0) return;
       const panels = host.panels;
       mover = new PanelMover({
@@ -797,11 +852,26 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
     /**
      * The rendered rectangle, in CSS pixels.
      *
-     * The SAME arithmetic `renderFrame` letterboxes with, deliberately shared
-     * rather than repeated: the picker converts pointer positions against this
-     * rectangle, and if the two ever disagreed the cursor would line up at the
-     * centre of the screen and drift toward the edges — which lands exactly on the
-     * NAV panel's level-tab strip along its bottom edge.
+     * THE function `renderFrame` letterboxes with — it calls this one, rather than
+     * repeating the four expressions. The picker converts pointer positions
+     * against this same rectangle, and if the two ever disagreed the cursor would
+     * line up at the centre of the screen and drift toward the edges, which lands
+     * exactly on the NAV panel's level-tab strip along its bottom edge.
+     *
+     * That sharing is new as of 2026-07-29. Until then this header ASSERTED the
+     * property and the code did not have it: `renderFrame` computed w/h/x/y from
+     * its own copy of the same four expressions. They agreed at every window shape
+     * measured, so unifying them changed nothing — which is the only condition
+     * under which a docstring is allowed to be made true by editing the code
+     * instead of the docstring.
+     *
+     * ⚠ ONE KNOWN LIMIT, and it is not fixed here. `PanelPicker` reads this `y`
+     * top-down against `clientY`; `renderer.setViewport` reads it bottom-up. They
+     * coincide only while the rounded top bar equals the rounded bottom bar, and a
+     * sweep of 14408 window sizes found 3664 (25.4%) where they differ by one
+     * pixel. `labViewport().yConventionsAgree` reports it per-size. Rounding the
+     * two bars into agreement is a change to what is PAINTED, not a refactor, so
+     * it is Max's call rather than this edit's.
      */
     function eyeViewport() {
       const W = window.innerWidth, H = window.innerHeight;
@@ -815,16 +885,51 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
       return !!mover && mover.zoomedRole === 'NAV';
     }
 
-    /** The pointer adapter over the live nav computer, built on demand. */
+    /**
+     * The pointer adapter over the live nav computer, built on demand.
+     *
+     * ⚠ THE CACHE KEY IS THE TARGET **AND** THE BUFFER SIZE. The size is a
+     * SNAPSHOT taken at construction — `PanelPointerAdapter` stores whatever
+     * `options.size` object it was handed and maps every uv through it — so an
+     * adapter cached on identity alone survives a resolution change that its
+     * numbers do not.
+     *
+     * Measured 2026-07-29, and this is why identity is not enough: at buffer 384
+     * the NAV panel is 461x384 and a click at the panel's centre landed on nav
+     * pixel (230.5, 192), exactly right. [B] to 512 rebuilt the host to 614x512
+     * but DELIBERATELY KEEPS THE SAME NavComputer (see `mountNav`'s header), so
+     * `navAdapter.target === navSource.nav` still held, the cache hit, and the
+     * same centre click kept landing on (230.5, 192) instead of (307, 256). The
+     * error is the buffer ratio on both axes — 0.75 here — so it is zero at the
+     * top-left corner and grows toward the bottom-right: a press aimed at the
+     * level-tab strip at v = 0.95 arrived at 71% down the buffer, well clear of
+     * the tabs. It reads as "the cursor drifts", not as a stale cache.
+     *
+     * ⭐ AND IT IS INVISIBLE TO `clickGlass`'s `uvError`, which was 2.8e-16 on
+     * every one of those presses. The PICK is exact; the ADAPTER mis-maps it
+     * afterwards. Only a comparison against the LIVE panel canvas can see it,
+     * which is what this does — and it reads the size back off the adapter with
+     * `bufferSize()` (what LANDED) rather than from a variable this page kept
+     * beside it (what was REQUESTED).
+     */
     function ensureNavAdapter() {
-      if (navAdapter && navAdapter.target === (navSource && navSource.nav)) return navAdapter;
-      if (navAdapter) { navAdapter.detach(); navAdapter = null; }
-      if (!navSource || !navSource.nav) return null;
+      const nav = navSource && navSource.nav;
       const panel = host && host.panel('NAV');
-      if (!panel) return null;
-      navAdapter = new PanelPointerAdapter(navSource.nav, {
-        size: { width: panel.canvas.width, height: panel.canvas.height },
-      });
+      if (!nav || !panel || !panel.canvas) {
+        if (navAdapter) { navAdapter.detach(); navAdapter = null; }
+        return null;
+      }
+      const want = { width: panel.canvas.width, height: panel.canvas.height };
+      if (navAdapter && navAdapter.target === nav) {
+        let got = null;
+        // `bufferSize()` throws when it has nothing to measure in. An adapter that
+        // cannot say what size it is mapping through is one to rebuild, not one to
+        // keep and hope about.
+        try { got = navAdapter.bufferSize(); } catch { got = null; }
+        if (got && got.width === want.width && got.height === want.height) return navAdapter;
+      }
+      if (navAdapter) { navAdapter.detach(); navAdapter = null; }
+      navAdapter = new PanelPointerAdapter(nav, { size: want });
       return navAdapter;
     }
 
@@ -877,14 +982,23 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
     /**
      * Put the nav computer on a level, WITHOUT a drill animation.
      *
-     * The animation is skipped deliberately and it is not laziness. NavComputer's
-     * `_startDrillAnim` stamps `simClockMs()` and `_updateAnim` clears `_anim`
-     * only once that clock has advanced past the duration — and `src/core/SimClock.js`
-     * is advanced exclusively by the sim tick, which this page does not run. So a
-     * drill started here would never complete: the level would never change, and
-     * `_handleClick`'s `if (this._anim) return` would deaden the panel's input for
-     * good. Setting the index and applying the view is the honest thing to do on a
-     * page with no sim.
+     * The animation is skipped deliberately and it is not laziness — and the three
+     * `= null` lines below STAY even now that `tick()` advances the sim clock.
+     *
+     * The original argument was that a drill started here could never complete,
+     * because `_startDrillAnim` stamps `simClockMs()` and this page never moved
+     * that clock. That half is fixed: `tick()` now calls `_advanceSimClock()`, so
+     * a drill STARTED BY A CLICK eases and lands like the game's.
+     *
+     * This is not that. `setNavLevel` is a SCRIPTED LEVEL JUMP — [V], [N],
+     * start-up, and the probe's `setNavLevel(i)`. It says "be at SYSTEM", not
+     * "travel to SYSTEM", and it is called by checks that read `_levelIndex`
+     * synchronously on the next line. Leaving an in-flight `_anim` alive across it
+     * would let `_updateAnim` overwrite `_viewCenter`/`_viewSize` on the next
+     * repaint and then snap `_levelIndex` back to the animation's own `toLevel` —
+     * a jump to GALAXY that silently lands on SECTOR because a click was still
+     * easing when the key was pressed. Clearing all three is what makes the jump
+     * mean what it says.
      *
      * SYSTEM goes through `openToCurrentSystem()` — the real entry path, so what
      * shows is what warping there would show. It returns early when no star has
@@ -1200,6 +1314,10 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
       el.bZoomLabel.textContent = mover && mover.zoomedRole ? 'DISMISS (ESC)' : 'ZOOM NAV';
     }
     updateZoomLabels();
+    // `el` exists and has just been read successfully, so `mountPanels()` may now
+    // refresh the ZOOM button after a rig rebuild. Set HERE rather than beside the
+    // `el` literal so it cannot be true while an id in that table is still null.
+    chromeReady = true;
 
     for (const [key, input] of [['systemFillFactor', el.dSystemFill], ['systemZoom', el.dSystemZoom]]) {
       const r = NAV_VIEW_RANGE[key];
@@ -1226,12 +1344,42 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
-      if (e.key === ' ') { e.preventDefault(); setPlaying(!playing); return; }
+      // ⭐ ESCAPE IS HANDLED **ABOVE** THE INPUT/TEXTAREA EARLY RETURN, and that
+      // ordering is the fix, not a tidy-up. The everyday path to a zoomed panel
+      // goes straight through a focused slider: Max drags ZOOM FILL to judge the
+      // framing, which leaves the slider as `document.activeElement`, and a
+      // keydown then targets the INPUT rather than the body. Measured 2026-07-29:
+      // with the slider focused, Escape left the mover 'zoomed' with the monitor
+      // still at the eye — checked immediately, two frames later and 700 ms later
+      // — while the identical event on a blurred page dismissed instantly. The
+      // one key that means "get me out of this" was the one the text-input guard
+      // ate.
+      //
       // ESC DISMISSES, and does nothing else. Max ruled on 2026-07-29 that it is
       // no longer wired to nav-level navigation anywhere — levels are changed by
       // clicking the tab strip. See main.js's Escape cascade for the other half.
-      if (e.key === 'Escape') { if (mover) mover.dismiss(); return; }
+      if (e.key === 'Escape') {
+        // ⚠ AUTO-REPEAT IS IGNORED, and this is not cosmetic. `PanelMover.dismiss()`
+        // guards only on `state === 'rest'`, so every repeat re-read the current
+        // pose as the new `_from` and reset `_t = 0`. Measured 2026-07-29 with a
+        // 30 ms repeat: the mover sat in 'toRest' for the whole 2100 ms burst,
+        // progress resetting 0 → 0.05 → 0 → …, and only landed ~500 ms AFTER the
+        // key came up. Geometric convergence meant the panel was parked at its
+        // mount within ~1.4 s while the state machine still said 'toRest' — so it
+        // was painted with the AT-THE-EYE chrome in the corner, and a click on it
+        // was routed into the nav computer instead of re-zooming it.
+        if (e.repeat) return;
+        // AND IT GIVES THE KEYBOARD BACK. Blurring the slider is a deliberate
+        // extra that Max will feel: without it he dismisses the panel and the
+        // arrow keys still nudge the slider he last touched instead of scrubbing
+        // the flight, because every subsequent keydown still targets that INPUT.
+        // Escape means "out of this control" as much as "out of this panel".
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') && typeof t.blur === 'function') t.blur();
+        if (mover) mover.dismiss();
+        return;
+      }
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+      if (e.key === ' ') { e.preventDefault(); setPlaying(!playing); return; }
       // Shift+1..4 are the spatial panel hotkeys (1=UL, 2=UR, 3=LL, 4=LR). Only
       // the zoomable ones do anything, which today is NAV alone.
       if (e.shiftKey && ['1', '2', '3', '4'].includes(e.key)) {
@@ -1265,15 +1413,61 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
     //
     // One pointer, three jobs, and the order between them is the whole design:
     //
-    //   1. If NAV is ZOOMED and the pointer is on it, the nav computer gets the
-    //      event. That is the point of zooming — Max wants to work the menu — and
-    //      the map's own drag-to-rotate must beat look-around while he is doing it.
+    //   1. If NAV has LANDED at the eye and the pointer is on it, the nav computer
+    //      gets the event. That is the point of zooming — Max wants to work the
+    //      menu — and the map's own drag-to-rotate must beat look-around while he
+    //      is doing it.
     //   2. Otherwise, a press on a ZOOMABLE panel zooms it.
     //   3. Otherwise, look around.
     //
     // Rule 1 above rule 3 is what stops a drag across the nav map from also
     // swinging the pilot's head, which would make the orrery impossible to rotate.
+    //
+    // ⭐ THE PRESS TRUTH TABLE — all four mover states x what the ray hit.
+    // "the panel" below means the panel the mover is currently moving.
+    //
+    //   state    hit NAV (the zoomable one)     hit another panel   hit nothing
+    //   ───────  ─────────────────────────────  ──────────────────  ───────────
+    //   rest     zoom it                        look-drag           look-drag
+    //   toZoom   NOTHING — it is already        look-drag           look-drag
+    //            coming to you; a press on a
+    //            panel in flight must not
+    //            restart it, dismiss it, or
+    //            poke a nav computer that is
+    //            not yet readable
+    //   zoomed   forward to the nav adapter;    look-drag           look-drag
+    //            if there is no adapter (no
+    //            nav source at all) do NOTHING
+    //            rather than swing the head
+    //            behind a panel filling the view
+    //   toRest   RE-ZOOM it — Max changed his   look-drag           look-drag
+    //            mind mid-retraction, and
+    //            PanelMover.dismiss/zoom both
+    //            tween from the CURRENT pose,
+    //            so it turns round smoothly
+    //
+    // ⚠ WHAT THIS FIXES, measured 2026-07-29. `navIsZoomed()` is
+    // `mover.zoomedRole === 'NAV'`, and `PanelMover.zoomedRole` is non-null
+    // THROUGHOUT BOTH TRAVELS — so rule 1 fired at progress 0. A press 21% of the
+    // way through a 1200 ms zoom was forwarded into the nav computer while the
+    // monitor was mid-air; the panel then slid 427 px across the screen under a
+    // stationary cursor before the release, so NavComputer's own 25 px-squared
+    // drag rejection threw the click away. The harm is a LOST press rather than a
+    // wrong one, but during `toRest` it is worse than lost: a click on the
+    // retracting monitor could not re-zoom it and was poked instead into a nav
+    // computer Max can no longer read. The window is 400 ms by default and 1200 ms
+    // at the slider's maximum.
+    //
+    // ⚠ THE PAINTER STILL USES `navIsZoomed()`, deliberately. Which chrome the nav
+    // panel draws is a question about the whole travel — the tabs and the
+    // autopilot toggle appear as it comes and stay until it is home — not about
+    // whether the tween has landed. Only ROUTING needs the landed test.
     let panelDrag = false;
+
+    /** NAV is at the eye AND finished travelling — the only state a press routes in. */
+    function navZoomLanded() {
+      return !!mover && mover.state === 'zoomed' && mover.zoomedRole === 'NAV';
+    }
 
     /** What the pointer is over right now, or null. */
     function pickAt(e) {
@@ -1283,23 +1477,41 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
 
     canvas.addEventListener('pointerdown', (e) => {
       if (mode !== 'eye') return;
+      // ⭐ PRIMARY BUTTON ONLY, and nothing else falls through to anything.
+      // Measured 2026-07-29: a right-click on the glass ZOOMED the panel, and a
+      // right-button down/move/up gesture on a zoomed NAV fired the autopilot
+      // toggle — because neither this handler nor `PanelPointerAdapter` looked at
+      // `e.button` anywhere. `button === 0` is the primary button for a mouse, a
+      // pen tip and a touch contact alike, so this is not a mouse-only test.
+      // No `contextmenu` handler is added: suppressing the browser menu is a
+      // separate decision and Max has not asked for it.
+      if (e.button !== 0) return;
       const got = pickAt(e);
 
-      if (got && navIsZoomed() && got.role === 'NAV') {
+      // 1. LANDED at the eye, and the press is on its glass.
+      if (got && got.role === 'NAV' && navZoomLanded()) {
         const adapter = ensureNavAdapter();
         if (adapter) {
           panelDrag = true;
           canvas.setPointerCapture(e.pointerId);
           adapter.pointerDown(got.hit);
-          return;
         }
-      }
-
-      if (got && ZOOMABLE_ROLES.includes(got.role) && mover && !navIsZoomed()) {
-        mover.zoom(got.role, eyeCam);
+        // Deliberately NOT falling through when there is no adapter — see the
+        // table. A look-drag started from a panel filling the view swings the head
+        // behind it, which reads as the cockpit having come loose.
         return;
       }
 
+      // 2. A zoomable panel. `mover.state` decides which of the three things a
+      //    press on it means; the table above is the whole of the rule.
+      if (got && ZOOMABLE_ROLES.includes(got.role) && mover) {
+        const settledOrArriving = mover.zoomedRole === got.role
+          && (mover.state === 'zoomed' || mover.state === 'toZoom');
+        if (!settledOrArriving) mover.zoom(got.role, eyeCam);
+        return;
+      }
+
+      // 3. Look around.
       dragging = true; lastX = e.clientX; lastY = e.clientY;
       canvas.setPointerCapture(e.pointerId);
     });
@@ -1319,6 +1531,12 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
       lastX = e.clientX; lastY = e.clientY;
     });
 
+    // NOT gated on `e.button`, unlike the press. A drag can only ever have been
+    // STARTED by the primary button now, so there is nothing here for a secondary
+    // button to trigger — and a release that refused to end a drag because it
+    // carried the wrong button number would strand `panelDrag` true, which is the
+    // "believing a drag is in progress while delivering no press" state that leaks
+    // an unmatched pointerUp into the nav computer.
     const endDrag = (e) => {
       if (panelDrag) {
         panelDrag = false;
@@ -1349,6 +1567,39 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
     const _lookEuler = new THREE.Euler(0, 0, 0, 'YXZ');
     const _lookQuat = new THREE.Quaternion();
 
+    /**
+     * Put the eye camera where the pilot's head is, looking where he is looking.
+     *
+     * ── WHY THIS IS ITS OWN FUNCTION, AND WHY IT IS CALLED TWICE A FRAME ──
+     *
+     * It used to be the first block of `renderFrame()`, which is the LAST thing
+     * `tick()` does. Everything upstream of it therefore ran against the PREVIOUS
+     * frame's camera — including `mover.update()`, which in HEAD-LOCKED mode
+     * re-solves the zoomed panel's pose from the camera's orientation every
+     * frame. So the panel was always aimed one frame of yaw behind the head: a
+     * constant 40.5 px offset from the view centre at a moderate 800 px/s of
+     * look, 143 px (7.5% of the viewport) on a flick, vanishing within one frame
+     * of the head stopping. `tick()` now calls this BEFORE the mover updates.
+     *
+     * `renderFrame()` still calls it too, so it stays correct when called on its
+     * own — the probe surface and any future screenshot path do exactly that. It
+     * is a pure function of `eyePos`/`eyeQuat`/`eyeYaw`/`eyePitch` and writes
+     * nothing else, so running it twice in a frame is the same as running it once.
+     *
+     * Look-around is composed ON TOP of the node's own orientation rather than
+     * replacing it, so a model that faces the seat somewhere other than -Z still
+     * looks the right way.
+     */
+    function pinEyeCamera() {
+      eyeCam.position.copy(eyePos);
+      _lookEuler.set(eyePitch, eyeYaw, 0, 'YXZ');
+      _lookQuat.setFromEuler(_lookEuler);
+      eyeCam.quaternion.copy(eyeQuat).multiply(_lookQuat);
+      eyeCam.fov = GAME_FOV;
+      eyeCam.aspect = GAME_ASPECT;
+      eyeCam.updateProjectionMatrix();
+    }
+
     function renderFrame() {
       const W = window.innerWidth, H = window.innerHeight;
       if (mode === 'orbit') {
@@ -1359,25 +1610,24 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
         return;
       }
 
-      // Re-pin the eye every frame, belt and braces, so no code path can drift
-      // it. Look-around is composed ON TOP of the node's own orientation rather
-      // than replacing it, so a model that faces the seat somewhere other than
-      // -Z still looks the right way.
-      eyeCam.position.copy(eyePos);
-      _lookEuler.set(eyePitch, eyeYaw, 0, 'YXZ');
-      _lookQuat.setFromEuler(_lookEuler);
-      eyeCam.quaternion.copy(eyeQuat).multiply(_lookQuat);
-      eyeCam.fov = GAME_FOV;
-      eyeCam.aspect = GAME_ASPECT;
-      eyeCam.updateProjectionMatrix();
+      // Re-pin the eye every frame, belt and braces, so no code path can drift it.
+      pinEyeCamera();
 
       // Letterbox to 16:9, so the fraction of Max's view a panel occupies is the
       // fraction it will occupy in the game. Without this the panels subtend
       // whatever his window happens to be shaped like, and the one question this
       // page exists to answer gets a different answer on every monitor.
-      let w = W, h = Math.round(W / GAME_ASPECT);
-      if (h > H) { h = H; w = Math.round(H * GAME_ASPECT); }
-      const x = Math.round((W - w) / 2), y = Math.round((H - h) / 2);
+      //
+      // ⭐ THE RECTANGLE COMES FROM `eyeViewport()` — the same call the picker
+      // converts pointer positions against. It used to be recomputed here from
+      // the same four expressions, and `eyeViewport()`'s own header claimed the
+      // arithmetic was "deliberately shared rather than repeated", which was the
+      // one thing it was not. Verified equal before unifying, so this is a
+      // refactor and not a behaviour change: at 1975x1066, 1102x1002 (taller than
+      // 16:9, so the bars are horizontal and y is non-zero), 1602x602 and
+      // 1000x998, the rectangle computed here and the one `eyeViewport()`
+      // returned were identical in all four fields.
+      const { x, y, width: w, height: h } = eyeViewport();
 
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, W, H);
@@ -1417,10 +1667,60 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
       // The travel is advanced in REAL milliseconds, like the panel repaint clock
       // and for the same reason: a tween phased on sim time freezes when the page
       // is paused, and a screen stuck half-way to the eye reads as a hang.
+      //
+      // ── THE SIM CLOCK, ADVANCED — and this page has to advance it ────────────
+      //
+      // A page that DRAWS the nav computer and FORWARDS REAL CLICKS INTO IT must
+      // also run the clock those clicks animate against, exactly as the game does
+      // (`src/main.js` calls `_advanceSimClock(stepMs)` once per sim tick inside
+      // `bindToRAF`'s `simUpdate`). Without it `src/core/SimClock.js` reads 0
+      // forever, every `_startDrillAnim` stamps `startTime: 0`, `_updateAnim`
+      // never sees `elapsed >= duration` — and `_handleClick`'s first line,
+      // `if (this._anim) return`, then swallows EVERY subsequent click on the
+      // panel. Measured 2026-07-29: one click on the SECTOR tab wedged the level
+      // at GALAXY permanently and a perfectly-aimed autopilot press afterwards
+      // fired nothing at all.
+      //
+      // The alternative — nulling `_anim` from this page — was rejected: it would
+      // make the lab diverge from the game precisely where Max is judging feel,
+      // by deleting the 350/400/500 ms drill eases the panel is supposed to have.
+      //
+      // ⚠ REAL MILLISECONDS, NOT A FIXED SIM STEP, and NOT gated on `playing` —
+      // the same argument the mover's travel makes two lines down. A nav
+      // animation phased on a clock that stops when the flight scrub is paused
+      // leaves a half-drilled map on the glass, which reads as a hang rather than
+      // as a pause. This is a LAB clock: the determinism guarantee SimClock.js's
+      // header is about belongs to replay, and this page replays nothing.
+      //
+      // WHAT ELSE THIS STARTS MOVING — checked across the whole import graph of
+      // this page (61 modules); `NavComputer` is the ONLY module in it that reads
+      // `simClockMs()`. Three things that were frozen now run:
+      //   • `_anim`           — the drill ease between levels (350/400/500 ms)
+      //   • `_systemZoomAnim` — PRISM → SYSTEM, the 400 ms fall into a star
+      //   • `_tiltAnim`       — REGION → PRISM, the 600 ms tilt from edge-on
+      //                         (`_applyLevelView` builds it with startTime null;
+      //                         it was pinned at its `from` value, i.e. flat)
+      // `CockpitSnapshot` also carries a `simClockMs` field, but it is a SOURCE
+      // ARGUMENT this page passes (`cockpit-screens-lab-flight.js` sends
+      // `t * 1000`), not a read of this module — the flight scrub keeps owning it.
+      _advanceSimClock(dtSec * 1000);
+      // ⭐ THE EYE IS PINNED BEFORE THE MOVER SOLVES, AND THE ORDER IS THE FIX.
+      // `pinEyeCamera()` used to live inside `renderFrame()`, which runs AFTER
+      // this block — so on a HEAD-LOCKED zoom `mover.update()` re-solved the
+      // panel's pose against LAST frame's camera orientation and the panel
+      // trailed the head by exactly one frame of yaw. Measured 2026-07-29: a
+      // constant 40.5 px offset at 800 px/s of look (1.99 deg/frame), 143 px at
+      // 2800 px/s, identical on every frame of a 12-frame sweep and back to 0.000
+      // one frame after the head stopped. Solving against the camera THIS frame
+      // will be rendered through removes the lag by construction.
+      // `renderFrame()` still calls it as well, so it remains correct on its own.
+      if (mode === 'eye') pinEyeCamera();
       if (mover) {
-        const wasZoomed = !!mover.zoomedRole;
         mover.update(lastFrameMs == null ? 16 : dtSec * 1000);
-        if (!!mover.zoomedRole !== wasZoomed) updateZoomLabels();
+        // Repaint the ZOOM button whenever the pair CHANGES — see `zoomLabelKey`
+        // for why the old `!!zoomedRole !== wasZoomed` test could never fire.
+        const key = `${mover.state}|${mover.zoomedRole}`;
+        if (key !== zoomLabelKey) { zoomLabelKey = key; updateZoomLabels(); }
       }
 
       if (host) host.update(snapshot, nowMs);
@@ -1649,6 +1949,11 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
     //                            nav state off the instance, and how many events
     //                            reached the pointer adapter.
     //   clickGlass(role, u, v)   async; press a point in PANEL coordinates.
+    //   perturbScreens(opts)     bake a move + rotation + NON-UNIFORM in-plane
+    //                            scale into every Screen_*/ScreenBody_* GEOMETRY
+    //                            and re-mount, producing the alternate cockpit
+    //                            AC-MOTION-FOLLOWS-THE-MODEL needs and no GLB
+    //                            provides. Reversible: {restore: true}.
     //   zoom                     an ALIAS namespace over the same functions.
     // ─────────────────────────────────────────────────────────────────────────
     function getInfo() {
@@ -1668,6 +1973,30 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
         cameraPosition: [cam.position.x, cam.position.y, cam.position.z],
         bufferHeightPx: BUFFER_HEIGHTS[bufferIndex],
         phosphor: PHOSPHORS[phosphorIndex].name,
+        /**
+         * ⚠ EVERY GEOMETRIC FIGURE IN HERE IS FROZEN AT BIND TIME. NOT A POSE.
+         *
+         * `panel.metrics` is `measureQuad`'s answer from the moment `PanelHost`
+         * bound the mesh, and `subtendedBy()` is derived from `metrics.centre`, so
+         * `rangeM`, `subtendsVDeg` and `screenPxAt1080` are frozen with it. The
+         * panel MOVES — that is what increment 6 is — and none of these numbers
+         * move with it. Measured 2026-07-29: `getInfo().panels[NAV]` before a zoom
+         * and after it settled were byte-identical under `JSON.stringify`, both
+         * still reading `rangeM: 0.800`, while over the same interval
+         * `measurePanel('NAV')` went 0.800 → 0.168 m and 31% → 85% of the view.
+         *
+         * ⭐ THE FALSE PASSES THIS FIELD EXISTS TO PREVENT, both live:
+         *   • AC-ONLY-NAV-ZOOMS reads "DRIVE/INFO/TARGET did not move" off these
+         *     and PASSES — but it would pass identically if all three HAD moved,
+         *     because these numbers cannot report motion at all.
+         *   • The matching check on NAV reads "it did not move" and FAILS a zoom
+         *     that worked perfectly.
+         * A pose check must use `measurePanel(role)`, which re-reads
+         * `geometry.attributes.position` through `mesh.matrixWorld` every call.
+         * These stay for what they are actually evidence of: what the host
+         * MEASURED and what buffer it derived, which is AC-SEAM-DERIVED's question
+         * and is genuinely a bind-time fact.
+         */
         panels: host ? host.panels.map((p) => {
           // The subtended figures ride along so a headless check can read the
           // legibility budget back as a NUMBER instead of inferring it from a
@@ -1684,6 +2013,15 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
             rangeM: sub.rangeM,
             subtendsVDeg: sub.vDeg,
             screenPxAt1080: sub.screenPx,
+            // Carried on EVERY entry rather than stated once at the top of the
+            // block, because a checker reads one panel's row and never sees the
+            // block. Named fields, not prose, so an assertion can refuse to run
+            // against them.
+            metricsMeasuredAt: 'bind',
+            metricsFrozen: true,
+            movesWithThePanel: false,
+            poseOracle: 'measurePanel(role)',
+            poseFieldsFrozenHere: ['rangeM', 'subtendsVDeg', 'screenPxAt1080'],
           };
         }) : [],
         flight: {
@@ -2269,11 +2607,20 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
      * than off `state === 'zoomed'` lands wherever the ease happened to be. That is
      * why `isMoving` and `state` are both here and why `settleZoom` exists.
      *
+     * `navZoomLanded` is THE ROUTING TEST, and it is published beside `navIsZoomed`
+     * rather than instead of it because the two differ exactly where the bug was:
+     * `navIsZoomed` is true throughout both travels, `navZoomLanded` only once the
+     * tween has finished. A press routes into the nav computer on the second, and
+     * the painter still draws its chrome on the first.
+     *
      * `buttonLabel` and `activeElementTag` are the page's chrome, not the mover's
-     * state, and they are here because two known lab-harness traps are invisible
-     * without them: the ZOOM button's label is not refreshed when [B] rebuilds the
-     * rig, and the keydown handler returns early for INPUT targets — so an ESC sent
-     * after dragging a slider is swallowed before it reaches `mover.dismiss()`.
+     * state. They were added because two lab-harness traps were invisible without
+     * them: a ZOOM button label left stale by a rig rebuild, and an ESC swallowed
+     * by the keydown handler's INPUT early return after a slider drag. BOTH ARE
+     * FIXED as of 2026-07-29 — the label is refreshed on every state change and
+     * Escape is handled above the INPUT guard — and both fields STAY, because a
+     * fixed defect with no instrument left pointing at it is a defect nobody will
+     * notice coming back.
      */
     function zoomState() {
       return {
@@ -2293,6 +2640,7 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
         zoomableRoles: ZOOMABLE_ROLES.slice(),
         riggedRoles: riggedRoles(),
         navIsZoomed: navIsZoomed(),
+        navZoomLanded: navZoomLanded(),
         cameraMode: mode,
         buttonLabel: el.bZoomLabel ? el.bZoomLabel.textContent : null,
         activeElementTag: document.activeElement ? document.activeElement.tagName : null,
@@ -2472,6 +2820,83 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
      *
      * @param {string} role a bound panel role
      */
+    /** The four uv corners, in the order every reader below iterates them. */
+    const QUAD_UV_CORNERS = [['topLeft', 0, 0], ['topRight', 1, 0], ['bottomLeft', 0, 1], ['bottomRight', 1, 1]];
+
+    /**
+     * A screen mesh's four corners in WORLD space, keyed by uv.
+     *
+     * Extracted from `measurePanelRaw` so that `perturbScreens` measures a face
+     * the same way `measurePanel` does — one method, one place it can be wrong,
+     * and a perturbation that is built from the same reading a checker verifies
+     * against. It does not know what a "panel" is: it takes a mesh, so it also
+     * works on a `Screen_*` node the role table never bound.
+     *
+     * Live world matrix, every call. A cached one leaves a zoomed panel measured
+     * where it used to be — which is the reading `getInfo().panels[]` gives,
+     * because `panel.metrics` is taken once at bind time and never re-measured.
+     */
+    function uvKeyedCorners(mesh) {
+      const geo = mesh && mesh.geometry;
+      const pos = geo && geo.attributes && geo.attributes.position;
+      const uv = geo && geo.attributes && geo.attributes.uv;
+      if (!pos || !uv) {
+        return { error: 'the screen mesh has no position and uv attributes, so its corners cannot be keyed by uv' };
+      }
+      mesh.updateWorldMatrix(true, false);
+      const corner = {};
+      for (const [name, wu, wv] of QUAD_UV_CORNERS) {
+        let best = -1, bestD = Infinity;
+        for (let i = 0; i < pos.count; i++) {
+          const du = uv.getX(i) - wu, dv = uv.getY(i) - wv;
+          const d = du * du + dv * dv;
+          if (d < bestD) { bestD = d; best = i; }
+        }
+        corner[name] = {
+          index: best,
+          uvDistance: Math.sqrt(bestD),
+          point: new THREE.Vector3(pos.getX(best), pos.getY(best), pos.getZ(best)).applyMatrix4(mesh.matrixWorld),
+        };
+      }
+      const distinctCorners = new Set(QUAD_UV_CORNERS.map(([n]) => corner[n].index)).size === 4;
+      return { corner, distinctCorners, error: null };
+    }
+
+    /**
+     * The face frame of one screen mesh: centre, right / up / normal, and size.
+     *
+     * The same construction `measurePanelRaw` reports — `right` = TR − TL, `down`
+     * = BL − TL, `normal` = down × right, which points OUT toward the pilot — but
+     * orthonormalised and handed back as three unit vectors, because that is what
+     * a transform expressed IN THE FACE PLANE has to be built from.
+     */
+    function faceFrame(mesh) {
+      const found = uvKeyedCorners(mesh);
+      if (found.error) return { error: found.error };
+      const TL = found.corner.topLeft.point, TR = found.corner.topRight.point;
+      const BL = found.corner.bottomLeft.point, BR = found.corner.bottomRight.point;
+      const centre = TL.clone().add(TR).add(BL).add(BR).multiplyScalar(0.25);
+      const rightV = TR.clone().sub(TL);
+      const downV = BL.clone().sub(TL);
+      const widthM = (rightV.length() + BR.clone().sub(BL).length()) / 2;
+      const heightM = (downV.length() + BR.clone().sub(TR).length()) / 2;
+      if (!(widthM > 0) || !(heightM > 0)) {
+        return { error: `the face measures ${widthM} x ${heightM} m — a collapsed quad has no plane to scale in` };
+      }
+      const right = rightV.clone().normalize();
+      const normal = downV.clone().cross(rightV).normalize();
+      // Re-derived from the other two rather than taken as −down, so the three are
+      // exactly orthonormal even when the quad is very slightly non-planar. A
+      // basis that is not orthonormal makes B⁻¹ ≠ Bᵀ and the "scale in the face
+      // plane" below quietly becomes a shear.
+      const up = normal.clone().cross(right).normalize();
+      return {
+        error: null, centre, right, up, normal, widthM, heightM,
+        aspect: widthM / heightM,
+        distinctCorners: found.distinctCorners,
+      };
+    }
+
     function measurePanelRaw(role) {
       if (!host) return { role, error: 'no panel host — the model has not loaded, or binding failed' };
       const panel = host.panel(role);
@@ -2482,35 +2907,14 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
           `Returning zeros for an unknown role would let a sweep report a panel that does not exist.`,
         );
       }
-      const geo = panel.mesh.geometry;
-      const pos = geo && geo.attributes && geo.attributes.position;
-      const uv = geo && geo.attributes && geo.attributes.uv;
-      if (!pos || !uv) {
-        return { role, node: panel.nodeName, error: 'the screen mesh has no position and uv attributes, so its corners cannot be keyed by uv' };
-      }
-
-      // Live world matrix, every call. A cached one leaves a zoomed panel measured
-      // where it used to be — which is the reading `getInfo().panels[]` gives,
-      // because `panel.metrics` is taken once at bind time and never re-measured.
-      panel.mesh.updateWorldMatrix(true, false);
-
-      const WANT = [['topLeft', 0, 0], ['topRight', 1, 0], ['bottomLeft', 0, 1], ['bottomRight', 1, 1]];
-      const corner = {};
-      for (const [name, wu, wv] of WANT) {
-        let best = -1, bestD = Infinity;
-        for (let i = 0; i < pos.count; i++) {
-          const du = uv.getX(i) - wu, dv = uv.getY(i) - wv;
-          const d = du * du + dv * dv;
-          if (d < bestD) { bestD = d; best = i; }
-        }
-        corner[name] = {
-          index: best,
-          uvDistance: Math.sqrt(bestD),
-          point: new THREE.Vector3(pos.getX(best), pos.getY(best), pos.getZ(best)).applyMatrix4(panel.mesh.matrixWorld),
-        };
-      }
-      const idx = WANT.map(([n]) => corner[n].index);
-      const distinctCorners = new Set(idx).size === 4;
+      // The corners come from `uvKeyedCorners`, which re-reads the mesh's own
+      // `position` and `uv` attributes through its live `matrixWorld`. Shared with
+      // `perturbScreens` so a perturbation and the check on it cannot be measuring
+      // the face two different ways.
+      const WANT = QUAD_UV_CORNERS;
+      const found = uvKeyedCorners(panel.mesh);
+      if (found.error) return { role, node: panel.nodeName, error: found.error };
+      const { corner, distinctCorners } = found;
 
       const TL = corner.topLeft.point, TR = corner.topRight.point;
       const BL = corner.bottomLeft.point, BR = corner.bottomRight.point;
@@ -2755,10 +3159,424 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
       out.moverAfter = { state: mover ? mover.state : null, zoomedRole: mover ? mover.zoomedRole : null };
       // Nothing forwarded and the mover started travelling is the ZOOM branch of
       // the routing, not a lost click — worth naming so it is not read as one.
+      //
+      // A CHANGE OF ROLE IS NOT THE ONLY SIGNATURE OF THAT BRANCH. Since the
+      // routing table gained "a press during toRest RE-ZOOMS", the mover can take
+      // the zoom branch with `zoomedRole` unchanged — it was already 'NAV', on its
+      // way home. `toRest` → `toZoom`/`zoomed` across one gesture cannot happen on
+      // its own (an uninterrupted retraction only ever reaches 'rest'), so it is a
+      // sound second signature rather than a guess.
+      const restartedFromRetraction = out.moverBefore.state === 'toRest'
+        && (out.moverAfter.state === 'toZoom' || out.moverAfter.state === 'zoomed');
+      out.zoomRestartedFromRetraction = restartedFromRetraction;
       out.routedTo = out.forwarded.down > 0
         ? 'nav adapter'
-        : (out.moverAfter.zoomedRole !== out.moverBefore.zoomedRole ? 'mover (zoom)' : 'neither');
+        : ((out.moverAfter.zoomedRole !== out.moverBefore.zoomedRole || restartedFromRetraction)
+          ? 'mover (zoom)' : 'neither');
       return out;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // THE MODEL PERTURBATION — AC-MOTION-FOLLOWS-THE-MODEL.
+    //
+    // The criterion asks for the zoom run "against a cockpit whose screens sit
+    // somewhere else — a perturbed or alternate GLB with different screen
+    // positions AND A DIFFERENT FACE ASPECT — with the mover's source unchanged
+    // and git-clean". There is no such GLB to load: `public/assets/cockpit/` holds
+    // `cockpit.glb`, whose four screens are the ones every number on this page was
+    // measured against, and `cockpit-tub.glb`, which has ZERO screens and
+    // therefore cannot exercise a mover at all. So the alternate model has to be
+    // MADE, at runtime, and this makes one.
+    //
+    // ⭐ IT PERTURBS THE GEOMETRY, NOT THE NODE TRANSFORM, and that distinction is
+    // the whole test. `PanelMover`'s rig depends on a property of this asset — 46
+    // flat root nodes with their vertices baked in world space and no transforms —
+    // and putting a rotation on the NODE would leave the vertices exactly where
+    // the mover last saw them while changing what `matrixWorld` does to them.
+    // Every measurement in the pipeline (`PanelHost.meshWorldPositions`,
+    // `PanelMover.worldPoints`, `uvKeyedCorners` here) reads vertices THROUGH the
+    // world matrix, so a node-level perturbation would be seen by all three and
+    // would prove very little. Baking into `geometry.attributes.position` produces
+    // a model that is genuinely shaped differently — the same thing a blender
+    // re-fit would hand over — and then the ONLY thing that can make the zoom land
+    // correctly is re-measurement.
+    //
+    // ⭐ AND IT CHANGES THE ASPECT, which is the part with teeth. The face's shape
+    // is what `solveFillDistance` divides by; a mover carrying any assumption
+    // about a 1.2:1 screen lands a 2:1 one at the wrong distance, and nothing about
+    // a hard-coded distance looks wrong until the shape changes under it. The
+    // panel face has already changed aspect once, during lane E's re-fitting.
+    //
+    // ⭐ NOTHING IN HERE TOUCHES `src/`. The perturbation goes onto the loaded
+    // three.js objects and then calls `mountPanels()` — the page's ordinary mount
+    // path, the same one [B] uses — so the host re-binds, re-measures, re-derives
+    // every buffer, and `buildZoomRig()` reconstitutes the rig around whatever
+    // shape it now finds. If the zoom still lands centred and square, it landed
+    // there by measuring.
+    //
+    // The EYE is deliberately left alone. Moving the seat as well would confound
+    // "the mover re-measured the panel" with "the mover re-read the camera", and
+    // only the first is what this criterion is about.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * The default perturbation — large enough that a hard-coded pose is obvious.
+     *
+     * `translateInWidths` is a MULTIPLE OF EACH PANEL'S OWN MEASURED WIDTH rather
+     * than a distance in metres, so "further than a panel width" holds by
+     * construction on any model rather than by a number that happened to be right
+     * for this one. 2.0 widths is ~0.48 m on today's 0.24 m screens.
+     *
+     * `scaleU` / `scaleV` are the non-uniform pair, applied IN THE FACE PLANE
+     * along the panel's own u and v axes. 1.35 / 0.80 multiplies the aspect by
+     * 1.6875 — a 69% change, against the 25% the criterion asks for.
+     *
+     * The rotations are expressed in the FACE'S OWN FRAME: `roll` about the face
+     * normal, which is the one that can put a screen at the eye upside down and is
+     * therefore the one worth being generous with; `yaw` and `pitch` about the
+     * face's up and right axes, kept small ON PURPOSE so the glass still faces
+     * roughly toward the pilot and the picker's raycast can still reach it. A
+     * perturbation that turned the screens away from the seat would test nothing
+     * except that a ray misses a back face.
+     */
+    const PERTURB_DEFAULTS = Object.freeze({
+      translateInWidths: 2.0,
+      direction: [0.60, -0.55, 0.58],   // normalised at call time; +z is toward the eye
+      rollDeg: 22,
+      yawDeg: 12,
+      pitchDeg: -8,
+      scaleU: 1.35,
+      scaleV: 0.80,
+    });
+
+    /**
+     * Every mesh whose geometry has been swapped for a perturbed clone, against
+     * the ORIGINAL geometry object. This is what makes the perturbation
+     * REVERSIBLE: nothing is edited in place, so putting it back is one property
+     * assignment per mesh rather than an inverse transform that would accumulate
+     * float drift over a sweep.
+     */
+    const perturbSaved = new Map();
+
+    /** Whether a matrix is the identity, to float tolerance. */
+    function isIdentityMatrix(m, eps = 1e-9) {
+      const I = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+      return m.elements.every((v, i) => Math.abs(v - I[i]) <= eps);
+    }
+
+    /** Every mesh at or under a node — a companion housing may be either. */
+    function meshesUnder(node) {
+      const out = [];
+      if (!node) return out;
+      if (node.isMesh) out.push(node);
+      else if (typeof node.traverse === 'function') node.traverse((o) => { if (o !== node && o.isMesh) out.push(o); });
+      return out;
+    }
+
+    /**
+     * Bake a WORLD-space transform into one mesh's geometry.
+     *
+     * The matrix arrives in world space because that is the space the face was
+     * measured in, and it is converted to the mesh's own local space here —
+     * `local = W⁻¹ · M · W` — rather than applied directly. On today's cockpit
+     * every W is the identity and the two are the same thing; the conversion is
+     * what stops that from being an unstated assumption, and
+     * `nodeTransformIsIdentity` reports whether it held.
+     */
+    function bakeIntoGeometry(mesh, worldM) {
+      // ONE BAKE PER MESH PER PASS. A housing shared between two screen nodes
+      // would otherwise be transformed twice and, worse, the second call would
+      // record the FIRST call's clone as the "original" — so the restore would put
+      // back a half-perturbed geometry and the round trip would silently not close.
+      if (perturbSaved.has(mesh)) {
+        return { node: mesh.name || '(unnamed)', baked: false, reason: 'already baked in this pass — a mesh reached by two screen nodes is transformed once, not twice' };
+      }
+      const original = mesh.geometry;
+      if (!original || typeof original.clone !== 'function' || typeof original.applyMatrix4 !== 'function') {
+        return { node: mesh.name || '(unnamed)', baked: false, reason: 'no cloneable BufferGeometry on this mesh' };
+      }
+      mesh.updateWorldMatrix(true, false);
+      const W = mesh.matrixWorld.clone();
+      const local = new THREE.Matrix4().copy(W).invert().multiply(worldM).multiply(W);
+      const clone = original.clone();
+      clone.applyMatrix4(local);
+      // Explicitly, rather than trusting `applyMatrix4` to have refreshed whatever
+      // happened to be computed already. `Mesh.raycast` culls against the bounding
+      // sphere first, so a stale one makes a correctly-moved panel unclickable —
+      // which would look exactly like the picker being broken by the perturbation.
+      clone.computeBoundingBox();
+      clone.computeBoundingSphere();
+      perturbSaved.set(mesh, original);
+      mesh.geometry = clone;
+      return { node: mesh.name || '(unnamed)', baked: true, nodeTransformIsIdentity: isIdentityMatrix(W) };
+    }
+
+    /** Compact per-panel metrics, MEASURED off the mesh — see `measurePanelRaw`. */
+    function perturbPanelSnapshot() {
+      const out = {};
+      if (!host) return out;
+      for (const p of host.panels) {
+        let m = null;
+        try { m = measurePanel(p.role); } catch (err) {
+          out[p.role] = { error: (err && err.message) || String(err) };
+          continue;
+        }
+        out[p.role] = {
+          node: p.nodeName,
+          widthM: m.widthM,
+          heightM: m.heightM,
+          aspect: m.aspect,
+          centre: m.centre,
+          normal: m.normal,
+          rangeM: m.rangeM,
+          coverageVertical: m.coverage ? m.coverage.vertical : null,
+          // The buffer PanelHost derived from its OWN re-measurement, beside the
+          // aspect measured here. Two independent readings of the same face: if
+          // the host did not re-measure, these two disagree and say so.
+          bufferWidth: p.canvas.width,
+          bufferHeight: p.canvas.height,
+          hostMeasuredAspect: p.metrics.aspect,
+        };
+      }
+      return out;
+    }
+
+    /** before/after, differenced into the numbers the criterion is phrased in. */
+    function perturbDelta(before, after) {
+      const roles = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort();
+      return roles.map((role) => {
+        const b = before[role] || null, a = after[role] || null;
+        const moved = (b && a && b.centre && a.centre)
+          ? Math.hypot(a.centre[0] - b.centre[0], a.centre[1] - b.centre[1], a.centre[2] - b.centre[2])
+          : null;
+        const ratio = (b && a && b.aspect > 0) ? a.aspect / b.aspect : null;
+        return {
+          role,
+          before: b,
+          after: a,
+          centreMovedM: moved,
+          movedInPanelWidths: (moved != null && b && b.widthM > 0) ? moved / b.widthM : null,
+          aspectRatio: ratio,
+          aspectChangePct: ratio != null ? (ratio - 1) * 100 : null,
+          // The two things a checker is actually asserting, said as booleans so it
+          // cannot accidentally assert over a null.
+          movedMoreThanAPanelWidth: (moved != null && b && b.widthM > 0) ? moved > b.widthM : false,
+          aspectChangedAtLeast25pct: ratio != null ? Math.abs(ratio - 1) >= 0.25 : false,
+        };
+      });
+    }
+
+    /**
+     * Move every screen and change its shape, then re-mount through the normal path.
+     *
+     * ⚠ ONE-WAY UNTIL RESTORED, AND REVERSIBLE WITHOUT A RELOAD. Call
+     * `perturbScreens({ restore: true })` to put the original geometry back; the
+     * page does not need reloading either way. A second perturbation on top of a
+     * first is REFUSED rather than compounded, because a checker that called it
+     * twice would otherwise be verifying a 2.8x aspect change while reading the
+     * defaults and believing it was 1.7x.
+     *
+     * @param {object}  [opts]
+     * @param {boolean} [opts.restore=false] undo instead, putting every geometry back
+     * @param {number}  [opts.translateInWidths] how far to move, in panel widths
+     * @param {number[]}[opts.direction] the direction to move in; normalised here
+     * @param {number}  [opts.rollDeg] rotation about the face normal
+     * @param {number}  [opts.yawDeg] rotation about the face's up axis
+     * @param {number}  [opts.pitchDeg] rotation about the face's right axis
+     * @param {number}  [opts.scaleU] in-plane scale along the face's u axis
+     * @param {number}  [opts.scaleV] in-plane scale along the face's v axis
+     * @param {(nodeName:string)=>string[]} [opts.companions] what travels with the glass
+     */
+    function perturbScreens(opts = {}) {
+      const { restore = false, companions, ...knobs } = opts;
+      if (!model) {
+        return { applied: false, restored: false, reason: 'the cockpit model has not loaded, so there is nothing to perturb' };
+      }
+      if (restore) return restoreScreens();
+      if (perturbSaved.size > 0) {
+        return {
+          applied: false,
+          restored: false,
+          reason: `the screens are already perturbed (${perturbSaved.size} meshes hold a perturbed geometry). `
+            + 'Compounding is refused rather than silently doubled — call perturbScreens({ restore: true }) first.',
+          perturbedMeshes: perturbSaved.size,
+        };
+      }
+      const o = { ...PERTURB_DEFAULTS, ...knobs };
+      for (const key of ['translateInWidths', 'rollDeg', 'yawDeg', 'pitchDeg', 'scaleU', 'scaleV']) {
+        if (!Number.isFinite(o[key])) {
+          throw new TypeError(`perturbScreens: ${key} must be a finite number, got ${JSON.stringify(o[key])}.`);
+        }
+      }
+      if (!(o.scaleU > 0) || !(o.scaleV > 0)) {
+        throw new RangeError(
+          `perturbScreens: scaleU and scaleV must be positive, got ${o.scaleU} and ${o.scaleV}. `
+          + 'A zero collapses the face to a line and a negative mirrors its winding, which is a '
+          + 'different experiment (see measurePanel on why a mirrored uv is invisible to a solver).',
+        );
+      }
+      const dir = new THREE.Vector3(...o.direction);
+      if (!(dir.lengthSq() > 0)) throw new RangeError('perturbScreens: direction must be a non-zero 3-vector.');
+      dir.normalize();
+
+      // ── 1. THE RIG COMES DOWN FIRST ──────────────────────────────────────
+      // Not tidiness. While a panel is rigged its mesh hangs off the pivot, and
+      // if it is ZOOMED its world matrix puts it at the pilot's eye — so a face
+      // measured now would be measured at the eye and the perturbation would be
+      // baked relative to a pose the panel is about to leave. `mover.dispose()`
+      // restores every member's saved local transform immediately, with no tween.
+      const moverStateBefore = mover ? mover.state : null;
+      const zoomedRoleBefore = mover ? mover.zoomedRole : null;
+      if (mover) { mover.dispose(); mover = null; picker = null; zoomLabelKey = null; }
+
+      const before = perturbPanelSnapshot();
+
+      // ── 2. BAKE ──────────────────────────────────────────────────────────
+      // Driven off the MODEL'S OWN Screen_* census, not off the bound panels, so
+      // a screen the role table never named is perturbed too — otherwise a model
+      // with a fifth screen would come back half-moved.
+      const companionOf = typeof companions === 'function'
+        // Spelled out here rather than imported from PanelMover. The probe surface
+        // is not allowed to reach into the modules it has to be able to contradict:
+        // if the mover's own companion rule ever diverges from this one, the
+        // perturbation moves a housing the mover does not, and that disagreement is
+        // a finding rather than something to be papered over by sharing a constant.
+        ? companions : (nodeName) => [nodeName.replace(/^Screen_/, 'ScreenBody_')];
+
+      const screenNodes = [];
+      model.traverse((node) => { if (SCREEN_NODE_RE.test(node?.name || '')) screenNodes.push(node); });
+
+      const touched = [];
+      const warnings = [];
+      const predicted = {};
+      for (const node of screenNodes) {
+        const face = meshesUnder(node)[0] || null;
+        if (!face) { warnings.push(`${node.name}: matches the screen pattern but carries no mesh — skipped`); continue; }
+        const f = faceFrame(face);
+        if (f.error) { warnings.push(`${node.name}: ${f.error} — skipped`); continue; }
+
+        const t = dir.clone().multiplyScalar(o.translateInWidths * f.widthM);
+        const B = new THREE.Matrix4().makeBasis(f.right, f.up, f.normal);
+        // `.invert()` rather than `.transpose()`, even though `faceFrame` hands
+        // back an orthonormal basis — the inverse is right whether or not that
+        // holds, and this is a page whose whole discipline is not assuming.
+        const Binv = new THREE.Matrix4().copy(B).invert();
+        const R = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(
+          THREE.MathUtils.degToRad(o.pitchDeg),
+          THREE.MathUtils.degToRad(o.yawDeg),
+          THREE.MathUtils.degToRad(o.rollDeg),
+          'XYZ',
+        ));
+        const S = new THREE.Matrix4().makeScale(o.scaleU, o.scaleV, 1);
+        // In the FACE's frame: scale in the plane, then rotate. Conjugated by B so
+        // it acts on world coordinates, and wrapped in translations about the
+        // face's own centre so the rotation and the scale pivot on the panel
+        // rather than on the world origin — which would fling it across the cabin.
+        const worldM = new THREE.Matrix4()
+          .makeTranslation(f.centre.x + t.x, f.centre.y + t.y, f.centre.z + t.z)
+          .multiply(B).multiply(R).multiply(S).multiply(Binv)
+          .multiply(new THREE.Matrix4().makeTranslation(-f.centre.x, -f.centre.y, -f.centre.z));
+
+        // What the OPTIONS say should happen, recorded before anything moves. A
+        // rotation preserves lengths and the scale is axis-aligned in the face
+        // plane, so these are exact — and they are computed from the KNOBS while
+        // the `after` block is MEASURED off the mesh, which is the only way the
+        // two can disagree and thereby say something.
+        predicted[node.name] = {
+          widthM: f.widthM * o.scaleU,
+          heightM: f.heightM * o.scaleV,
+          aspect: (f.widthM * o.scaleU) / (f.heightM * o.scaleV),
+          aspectRatio: o.scaleU / o.scaleV,
+          centre: [f.centre.x + t.x, f.centre.y + t.y, f.centre.z + t.z],
+          translationM: t.length(),
+        };
+
+        const members = [face];
+        for (const name of companionOf(node.name)) {
+          const found = typeof model.getObjectByName === 'function' ? model.getObjectByName(name) : null;
+          // A missing housing is NOT an error — the same ruling `PanelMover._rig`
+          // makes. A cockpit may legitimately mount bare glass.
+          if (found) members.push(...meshesUnder(found).filter((m) => m !== face));
+          else warnings.push(`${node.name}: no companion named ${name} — its glass moves without a housing`);
+        }
+        for (const m of members) touched.push({ screen: node.name, ...bakeIntoGeometry(m, worldM) });
+      }
+
+      // ── 3. RE-MOUNT THROUGH THE ORDINARY PATH ────────────────────────────
+      // `mountPanels()` and nothing else: PanelHost re-binds and re-measures every
+      // face, `derivePanelBuffer` re-derives every canvas from the NEW aspect, and
+      // `buildZoomRig()` builds a fresh PanelMover over whatever it now finds.
+      // This is the same call [B] makes. No module under src/ is told anything.
+      mountPanels();
+
+      const after = perturbPanelSnapshot();
+      return {
+        applied: true,
+        restored: false,
+        reversible: true,
+        howToUndo: 'perturbScreens({ restore: true }) — no page reload needed; the original BufferGeometry objects are held, not recomputed',
+        options: { ...o, direction: dir.toArray(), companionsOverridden: typeof companions === 'function' },
+        screenNodes: screenNodes.map((n) => n.name),
+        meshesBaked: touched.filter((t2) => t2.baked).length,
+        touched,
+        warnings,
+        predicted,
+        panels: perturbDelta(before, after),
+        hostError,
+        rig: {
+          moverStateBefore,
+          zoomedRoleBefore,
+          // Read back off the NEW mover, so "the rig reconstituted itself" is
+          // measured rather than assumed from mountPanels() having been called.
+          riggedRoles: riggedRoles(),
+          state: mover ? mover.state : null,
+          zoomedRole: mover ? mover.zoomedRole : null,
+        },
+        note: 'the geometry moved, not the node transform — every Screen_*/ScreenBody_* mesh carries a '
+          + 'perturbed clone of its own BufferGeometry, so anything that reads vertices sees a differently '
+          + 'shaped cockpit. Eye_Point is untouched on purpose.',
+      };
+    }
+
+    /** Put every perturbed geometry back, and re-mount the same way. */
+    function restoreScreens() {
+      if (perturbSaved.size === 0) {
+        return {
+          applied: false,
+          restored: false,
+          reason: 'nothing has been perturbed, so there is nothing to restore — a pass here would be over a '
+            + 'cockpit that never changed shape',
+        };
+      }
+      // The rig comes down BEFORE the `before` reading, for the reason
+      // `perturbScreens` gives at length: a zoomed panel measured while rigged is
+      // measured at the pilot's eye, and the delta would then describe the zoom
+      // rather than the restore.
+      if (mover) { mover.dispose(); mover = null; picker = null; zoomLabelKey = null; }
+      const before = perturbPanelSnapshot();
+      const put = [];
+      for (const [mesh, original] of perturbSaved) {
+        const perturbedGeo = mesh.geometry;
+        mesh.geometry = original;
+        // The clone was made here and is referenced by nothing else, so it is this
+        // function's to release. The ORIGINAL is never disposed — it is the model's.
+        if (perturbedGeo && perturbedGeo !== original && typeof perturbedGeo.dispose === 'function') perturbedGeo.dispose();
+        put.push(mesh.name || '(unnamed)');
+      }
+      perturbSaved.clear();
+      mountPanels();
+      const after = perturbPanelSnapshot();
+      return {
+        applied: false,
+        restored: true,
+        meshesRestored: put.length,
+        meshes: put,
+        panels: perturbDelta(before, after),
+        hostError,
+        rig: { riggedRoles: riggedRoles(), state: mover ? mover.state : null, zoomedRole: mover ? mover.zoomedRole : null },
+        note: 'the original BufferGeometry objects were put back by reference, not by applying an inverse '
+          + 'transform — so a perturb/restore cycle cannot accumulate float drift however many times it is run',
+      };
     }
 
     window._cockpitScreensLab = {
@@ -2819,6 +3637,7 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
       pointerCensus,
       resetPointerCensus,
       clickGlass,
+      perturbScreens,
       /**
        * An ALIAS NAMESPACE, not a second implementation — the same function
        * objects under shorter names, because a script driving a zoom reads better
@@ -2833,6 +3652,7 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
         measure: measurePanel,
         viewport: labViewport,
         click: clickGlass,
+        perturb: perturbScreens,
       },
       THREE, scene, renderer, controls,
       get host() { return host; },
