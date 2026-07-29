@@ -1,0 +1,1062 @@
+<!doctype html>
+<!--
+  COCKPIT SCREENS LAB — HELM cockpit, lane F: live data on the four CRTs
+  =====================================================================
+  Workstream: docs/WORKSTREAMS/cockpit-screen-content-2026-07-28/
+
+  URL:  http://localhost:5179/well-dipper/cockpit-screens-lab.html
+        (vite.config.js sets base: '/well-dipper/' — the root path 404s.
+         Use whichever port Max's dev server actually reports.)
+
+  WHAT THIS IS FOR, IN ONE SENTENCE: the cockpit is not in the game scene yet, so
+  this page is the only place the four panels can be looked at, and Max's first
+  sight of them happens here.
+
+  That single fact sets everything below. A lab that merely PROVED the panels
+  render would be a page with four rectangles on it. What is actually being asked
+  is a judgement — do these read at seventeen degrees of arc, is the type scale
+  right, does one ink carry a warning — and a judgement needs something to judge.
+  So the page does three things and they are all in service of that:
+
+    1. IT PUTS THE CAMERA WHERE THE PILOT'S HEAD IS. The eye view is pinned to
+       the model's own Eye_Point node at the game's 70-degree FOV, letterboxed to
+       16:9, so the panels subtend on Max's monitor exactly what they will
+       subtend in the game. The whole legibility question is only answerable from
+       there. ORBIT exists for inspection and is deliberately NOT the default.
+    2. IT FLIES A SHIP. `cockpit-screens-lab-flight.js` scripts a loop that
+       climbs through km/s → Mm/s → c, closes on a REAL generated planet through
+       the drop window, drops to sublight, reverses, and gets mass-locked, while
+       the focus cycles planet → moon → nothing. Every dossier on the INFO panel
+       is a real body out of StarSystemGenerator. Nothing on the glass is a
+       mock-up.
+    3. IT SHOWS THE DERIVED NUMBERS. Every panel's measured size, aspect and
+       buffer are printed in the chrome, because the claim lane F makes is that
+       those come off the mesh — and a claim like that should be readable, not
+       inferred from a screenshot.
+
+  ── WHAT IS NOT IN HERE ────────────────────────────────────────────────────
+
+  NAV. The nav computer is a later increment, so that panel draws a holding card
+  that says DEFERRED. It reads nothing from the snapshot on purpose: a
+  plausible-looking placeholder is how "NAV is live from the first frame" gets
+  ticked off by mistake.
+
+  A WARP. The snapshot deliberately blanks the whole SURVEY block during one —
+  the system it would describe has already been torn down — so a warp leg would
+  spend eight seconds showing a panel that is blank BY DESIGN, which on the glass
+  is indistinguishable from a panel that is blank because it is broken. That
+  deserves its own demonstration, not a silent stretch of this one.
+
+  ── THE ?glb= SWITCH IS LOAD-BEARING, NOT A CONVENIENCE ────────────────────
+
+  Copied verbatim from cockpit-lab.html, because AC-SEAM-DERIVED is proved by
+  loading THREE different models through ONE unedited host:
+
+      ?glb=cockpit        four panels, each filling its own Screen_* quad
+      ?glb=<scaled>       a variant whose Screen_* vertices were scaled — the
+                          panels follow, and the reported width/height/aspect
+                          change by the same factors
+      ?glb=cockpit-tub    ZERO Screen_* nodes. Zero panels, no errors. That is
+                          the CORRECT outcome and the page says so on screen in
+                          those words, rather than looking broken.
+
+  Nothing in lane F's runtime knows a panel dimension in metres. Everything on
+  the glass is sized from the vertices of whatever model is loaded.
+
+  ── LAB-ONLY MATERIAL OVERRIDES, NAMED SO THEY ARE NOT MISTAKEN FOR THE LOOK ─
+
+  Two, both borrowed from cockpit-lab.html and both toggleable:
+    · Canopy_Glass is drawn faint with depthWrite off. It is a PLACEHOLDER, not
+      real glass (that is a later increment); without the override it can hide
+      the very screens this page exists to show. [G] removes it entirely.
+    · The cabin light is OFF by default, because it is off in the shipped look —
+      the CRTs are meant to be the cabin's own light source, and this page is the
+      first chance to see whether they actually are. [L] is a lab aid for
+      inspecting the bezels, not part of the picture being judged.
+
+  LAB-ONLY: this file, cockpit-screens-lab-flight.js and
+  cockpit-screens-lab-panels.js are new. cockpit-lab.html and everything under
+  public/assets/cockpit/ belong to lane E and are READ ONLY here.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />
+  <title>Cockpit Screens Lab — Well Dipper</title>
+  <style>
+    /* ------------------------------------------------------------------
+       PHOSPHOR PALETTE for the PAGE CHROME. The ink is Well Dipper's
+       Phosphor spec — #EDE8DE, a warm off-white, deliberately not pure
+       white — on black. Every colour is a variable so [P] can recolour the
+       chrome in one write, and the same [P] press retints the glass by
+       changing the panels' EMITTER colour. See applyPhosphor() for why
+       those are two different mechanisms and have to be.
+       ------------------------------------------------------------------ */
+    :root {
+      --ink:      #EDE8DE;
+      --ink-hi:   #FFFFFF;
+      --ink-dim:  #7C776E;
+      --ink-glow: 237, 232, 222;
+      --warn:     #FFC46B;
+      --err:      #FF7A6B;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: #000; color: var(--ink); font-family: monospace; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+
+    #hud {
+      position: fixed; top: 12px; left: 12px;
+      font-size: 12px; line-height: 1.5;
+      text-shadow: 0 0 8px #000; pointer-events: none; z-index: 10; white-space: pre;
+      max-width: 62vw;
+    }
+    #hud .k    { color: var(--ink); }
+    #hud .v    { color: var(--ink-hi); }
+    #hud .dim  { color: var(--ink-dim); }
+    #hud .warn { color: var(--warn); }
+    #hud .err  { color: var(--err); }
+
+    #controls {
+      position: fixed; bottom: 12px; left: 12px;
+      background: rgba(0, 0, 0, 0.82);
+      padding: 10px 12px; font-size: 12px; line-height: 1.6; z-index: 10;
+      width: 260px;
+    }
+    #controls h3 { font-size: 12px; color: var(--ink); margin-bottom: 6px; font-weight: normal; letter-spacing: 1px; }
+    .btn {
+      background: rgba(var(--ink-glow), 0.09); border: 1px solid var(--ink);
+      color: var(--ink); padding: 4px 9px; cursor: pointer; margin: 2px 0;
+      font-family: inherit; font-size: 12px; width: 100%;
+      display: flex; justify-content: space-between; gap: 8px;
+    }
+    .btn:hover { background: rgba(var(--ink-glow), 0.20); }
+    .btn.on { background: rgba(var(--ink-glow), 0.38); color: #000; }
+    .btn .key { color: var(--ink-dim); }
+    .btn.on .key { color: #000; }
+    .now { color: var(--ink-dim); font-size: 11px; letter-spacing: 1px; margin-bottom: 4px; }
+    .now span { color: var(--ink-hi); }
+    .hint { color: var(--ink-dim); font-size: 11px; margin-top: 8px; line-height: 1.5; }
+
+    /* The transport. Bottom-centre and wide, because scrubbing to a frame and
+       looking at it is the single most-used control on this page. IN THE PAGE
+       CHROME, NEVER ON THE GLASS — nothing a pilot would not see goes inside
+       the cockpit, or the thing being judged is not the thing being shipped. */
+    #transport {
+      position: fixed; bottom: 12px; left: 290px; right: 12px;
+      background: rgba(0, 0, 0, 0.82); padding: 10px 14px; z-index: 10;
+      display: flex; align-items: center; gap: 12px; font-size: 12px;
+    }
+    #transport button {
+      background: rgba(var(--ink-glow), 0.09); border: 1px solid var(--ink);
+      color: var(--ink); padding: 4px 12px; cursor: pointer;
+      font-family: inherit; font-size: 12px; min-width: 84px;
+    }
+    #transport input[type=range] { flex: 1; accent-color: var(--ink); }
+    #transport .t { color: var(--ink-hi); min-width: 108px; }
+    #transport .seg { color: var(--ink-dim); min-width: 34ch; }
+
+    /* Eye-mode reticle — DOM only, so it can never end up in a screenshot of
+       the glass or affect anything the renderer does. */
+    #reticle { position: fixed; inset: 0; z-index: 9; pointer-events: none; display: none; }
+    #reticle.on { display: block; }
+    #reticle i { position: absolute; background: rgba(var(--ink-glow), 0.30); left: 50%; top: 50%; }
+    #reticle i.h { width: 18px; height: 1px; margin-left: -9px; }
+    #reticle i.v { width: 1px; height: 18px; margin-top: -9px; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hud">booting…</div>
+  <div id="reticle"><i class="h"></i><i class="v"></i></div>
+
+  <div id="controls">
+    <h3>COCKPIT SCREENS LAB — LANE F</h3>
+    <div class="now">NOW VIEWING: <span id="bModeNow">EYE</span></div>
+    <button class="btn" id="bMode"><span id="bModeLabel">GO TO ORBIT VIEW</span><span class="key">C</span></button>
+    <button class="btn" id="bBuffer"><span id="bBufferLabel">BUFFER: 512 px</span><span class="key">B</span></button>
+    <button class="btn" id="bPhosphor"><span id="bPhosphorLabel">PHOSPHOR: WHITE</span><span class="key">P</span></button>
+    <button class="btn" id="bSeed"><span id="bSeedLabel">SYSTEM: 1/5</span><span class="key">N</span></button>
+    <button class="btn on" id="bGlass"><span>CANOPY GLASS</span><span class="key">G</span></button>
+    <button class="btn" id="bCabin"><span>CABIN LIGHT</span><span class="key">L</span></button>
+    <button class="btn" id="bReset"><span>RECENTRE VIEW</span><span class="key">R</span></button>
+    <div class="hint">
+      EYE: camera at the model's Eye_Point,
+      fov 70, letterboxed 16:9 — the framing
+      the pilot gets. Drag to look around;
+      the camera never leaves the eye point.<br />
+      ORBIT: drag to spin, scroll to zoom.<br />
+      [B] rebuilds the panels at a different
+      buffer height — judge the resolution
+      knob by eye.<br />
+      [P] retints the GLASS (the emitter
+      colour) and the chrome together.<br />
+      [L] CABIN LIGHT is OFF by default: the
+      CRTs are meant to be the cabin's own
+      light source, and that is the thing
+      being looked at.
+    </div>
+  </div>
+
+  <div id="transport">
+    <button id="bPlay">PAUSE</button>
+    <input type="range" id="scrub" min="0" max="72" step="0.05" value="0" />
+    <span class="t" id="tTime">0.00 / 72 s</span>
+    <span class="seg" id="tSeg">SUBLIGHT IDLE</span>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    import { PanelHost, DEFAULT_PANEL_BUFFER_HEIGHT_PX } from './src/cockpit/PanelHost.js';
+    import { SCREEN_NODE_RE, DEFAULT_PANEL_ROLES } from './src/cockpit/PanelLayout.js';
+    import { buildCockpitSnapshot } from './src/cockpit/CockpitSnapshot.js';
+    import { buildFlightReadout, flightReadoutStateFromSnapshot } from './src/cockpit/FlightReadout.js';
+    import { LAB_PAINTERS } from './cockpit-screens-lab-panels.js';
+    import {
+      FLIGHT_DURATION_S, buildLabWorld, flightSourcesAt, segmentAt, dropWindowFor,
+    } from './cockpit-screens-lab-flight.js';
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Constants
+    // ─────────────────────────────────────────────────────────────────────────
+    // public/ is Vite's static root, so this relative URL resolves under
+    // whatever base the dev server is on (vite.config.js sets '/well-dipper/').
+    // The ?glb= switch and its sanitiser are copied from cockpit-lab.html
+    // deliberately — AC-SEAM-DERIVED is proved by loading three different models
+    // through ONE unedited host, and a second spelling of the switch would be a
+    // second thing to keep in step.
+    const GLB_NAME = new URLSearchParams(location.search).get('glb') || 'cockpit';
+    const GLB_URL  = `assets/cockpit/${GLB_NAME.replace(/[^A-Za-z0-9._-]/g, '')}.glb`;
+
+    const GAME_FOV    = 70;        // src/ui/Settings.js:40 — the FOV the framing is judged at
+    const GAME_ASPECT = 16 / 9;
+    const ORBIT_FOV   = 50;        // inspection only; never used in EYE mode
+
+    /** The node the pilot's head sits on. Found, never assumed — see mountEye(). */
+    const EYE_NODE_NAME = 'Eye_Point';
+
+    /**
+     * The buffer heights [B] cycles, in pixels.
+     *
+     * The list STARTS at the host's own default — imported, not retyped, so the
+     * first thing Max sees is whatever the game would actually ship even if that
+     * default is retuned later. The rest exist because the resolution knob is a
+     * DEFERRED decision and the only way to settle it is to look: a panel
+     * occupies about 260 screen pixels, so 256 is roughly native, 512 is 2x
+     * supersampled, and 1024 is where each doubling has quadrupled the
+     * rasterising cost AND the per-repaint texture upload, four times over
+     * because there are four panels — for a difference that may or may not be
+     * visible at all. That last clause is the whole question.
+     */
+    const BUFFER_HEIGHTS = [DEFAULT_PANEL_BUFFER_HEIGHT_PX, 256, 384, 768, 1024]
+      .filter((h, i, a) => a.indexOf(h) === i);
+
+    /**
+     * The lab worlds, by seed. Real generated systems — [N] cycles them so the
+     * INFO panel can be judged against several genuinely different dossiers
+     * rather than one lucky planet.
+     *
+     * The galactic positions differ because the naming generator derives a
+     * system's designation from where it sits; identical positions would produce
+     * identically-named systems and the panel would look like it was showing a
+     * constant.
+     */
+    const LAB_SEEDS = [
+      ['well-dipper-lane-F', { x: 1420.5, y: -88.25, z: 3311.75 }],
+      ['test-alpha',         { x: -900.25, y: 12.5, z: 640.0 }],
+      ['Aletheia',           { x: 4110.0, y: -220.75, z: -1503.25 }],
+      ['Sol',                { x: 0, y: 0, z: 0 }],
+      ['phosphor',           { x: 77.5, y: 640.25, z: -2200.0 }],
+    ];
+
+    /**
+     * PHOSPHOR OPTIONS — and the two halves of this need keeping apart.
+     *
+     * `ink` recolours the PAGE CHROME through CSS variables. That is cosmetic.
+     *
+     * `emitter` retints THE GLASS, and it does it by changing the panel
+     * material's emissive colour, NOT by changing what the painters draw. That
+     * is the only correct mechanism available and it is also the physically
+     * honest one: `PhosphorScreen.PHOSPHOR` is a frozen module constant by
+     * design — one ink is a property of the code, not a runtime setting — so the
+     * canvas is always warm off-white on black, and the tube's emitter colour is
+     * what multiplies it. A green CRT is a green phosphor behind the same
+     * picture, which is exactly what this does. Black stays black either way,
+     * because zero times anything is zero.
+     */
+    const PHOSPHORS = [
+      { name: 'WHITE', ink: '#EDE8DE', hi: '#FFFFFF', dim: '#7C776E', glow: '237, 232, 222', emitter: 0xFFFFFF },
+      { name: 'AMBER', ink: '#FFB454', hi: '#FFE0A8', dim: '#8A6432', glow: '255, 180, 84',  emitter: 0xFFB454 },
+      { name: 'GREEN', ink: '#7CFF9E', hi: '#D8FFE4', dim: '#3F7A50', glow: '124, 255, 158', emitter: 0x7CFF9E },
+      { name: 'ICE',   ink: '#9FD8FF', hi: '#E2F3FF', dim: '#4E6C86', glow: '159, 216, 255', emitter: 0x9FD8FF },
+    ];
+
+    /** Canopy_Glass placeholder opacity. It is NOT glass yet; see the header. */
+    const GLASS_OPACITY = 0.10;
+    const RE_GLASS = /^Canopy_Glass/i;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Renderer / scene
+    // ─────────────────────────────────────────────────────────────────────────
+    const canvas = document.getElementById('canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000000, 1);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
+
+    const scene = new THREE.Scene();
+
+    const orbitCam = new THREE.PerspectiveCamera(ORBIT_FOV, window.innerWidth / window.innerHeight, 0.01, 8000);
+    orbitCam.position.set(2.6, 1.8, 4.2);
+
+    const eyeCam = new THREE.PerspectiveCamera(GAME_FOV, GAME_ASPECT, 0.005, 8000);
+    eyeCam.rotation.order = 'YXZ';
+
+    const controls = new OrbitControls(orbitCam, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 0, -0.6);
+
+    // EYE is the DEFAULT, and that is a deliberate choice rather than an
+    // oversight. The question this page exists to answer is "can you read these
+    // from the pilot's seat", and an orbit view of four glowing rectangles
+    // answers a different and much easier question very convincingly.
+    let mode = 'eye';
+    let eyeYaw = 0, eyePitch = 0;
+    const PITCH_LIMIT = THREE.MathUtils.degToRad(85);
+
+    // Key + fill, angled from ahead/above/port so they rake the outward-facing
+    // surfaces. The inward-facing ones sit dark, which is physically correct —
+    // the only light source is outside the ship — and is precisely why the CRTs
+    // being their own light source is the thing to look at.
+    scene.add(new THREE.AmbientLight(0xaebccc, 0.16));
+    const keyLight = new THREE.DirectionalLight(0xfff2e0, 2.2);
+    keyLight.position.set(-30, 50, -60);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0x6f8ab0, 0.26);
+    fillLight.position.set(24, -8, 34);
+    scene.add(fillLight);
+
+    // LAB AID, OFF BY DEFAULT. Not part of the shipped look.
+    const cabinLight = new THREE.PointLight(0xc8d4e0, 2.4, 6.0, 2.0);
+    cabinLight.position.set(0, 0.30, 0.40);
+    cabinLight.visible = false;
+    scene.add(cabinLight);
+
+    // A backdrop, so the canopy aperture reads as an opening rather than as a
+    // hole into nothing, and so the panels have something to be brighter than.
+    const bgGroup = new THREE.Group();
+    bgGroup.name = '__background';
+    scene.add(bgGroup);
+    (function buildStars() {
+      const N = 3000, R = 900;
+      const pos = new Float32Array(N * 3);
+      const col = new Float32Array(N * 3);
+      // Deterministic LCG, so the backdrop is identical every load and two
+      // screenshots of the same frame diff cleanly.
+      let s = 0x2f6e2b1;
+      const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+      for (let i = 0; i < N; i++) {
+        const u = rnd() * 2 - 1, th = rnd() * Math.PI * 2, r = Math.sqrt(Math.max(0, 1 - u * u));
+        pos[i * 3 + 0] = Math.cos(th) * r * R;
+        pos[i * 3 + 1] = u * R;
+        pos[i * 3 + 2] = Math.sin(th) * r * R;
+        const b = 0.30 + rnd() * rnd() * 0.70;
+        col[i * 3 + 0] = b * 0.95; col[i * 3 + 1] = b * 0.97; col[i * 3 + 2] = b;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      bgGroup.add(new THREE.Points(g, new THREE.PointsMaterial({
+        size: 2, sizeAttenuation: false, vertexColors: true, depthWrite: false,
+      })));
+      const body = new THREE.Mesh(
+        new THREE.SphereGeometry(26, 48, 32),
+        new THREE.MeshStandardMaterial({ color: 0x51708f, roughness: 1.0, metalness: 0.0 }),
+      );
+      body.position.set(38, -4, -155);
+      bgGroup.add(body);
+    })();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // State
+    // ─────────────────────────────────────────────────────────────────────────
+    let model = null;
+    let loadError = null;
+    let host = null;
+    let hostError = null;          // PanelHost refused to bind — shown verbatim
+    let screenNodeNames = [];      // the /^Screen_/ census, taken independently
+    let eyeFound = false;
+    const glassNodes = [];
+    const glassMats = new Set();
+
+    let bufferIndex = 0;
+    let phosphorIndex = 0;
+    let seedIndex = 0;
+    let world = null;
+    let worldError = null;
+
+    let timeS = 0;
+    let playing = true;
+    let lastFrameMs = null;
+    let snapshot = buildCockpitSnapshot({});   // a valid empty frame until we fly
+
+    const state = { glass: true, cabin: false };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Load the cockpit — as authored. No scale, no reposition, no re-centring.
+    // ─────────────────────────────────────────────────────────────────────────
+    const ready = new Promise((resolve) => {
+      new GLTFLoader().load(
+        GLB_URL,
+        (gltf) => {
+          model = gltf.scene;
+          scene.add(model);
+          model.updateMatrixWorld(true);
+
+          // The Screen_* census, taken by NAME and independently of PanelHost.
+          // Independence is the point: if the host binds zero panels, this is
+          // what distinguishes "the model has no screens" (correct, and the
+          // tub's normal state) from "the model has screens and the host failed
+          // to bind them" (a bug). Conflating those two is exactly how a broken
+          // load gets read as a clean one.
+          model.traverse((o) => {
+            const name = o?.name || '';
+            if (SCREEN_NODE_RE.test(name)) screenNodeNames.push(name);
+            if (RE_GLASS.test(name)) glassNodes.push(o);
+          });
+          screenNodeNames.sort();
+
+          // Canopy_Glass is a PLACEHOLDER (real glass is a later increment), so
+          // it must not pretend otherwise — and here it must not HIDE the four
+          // screens this page exists to show. Faint, and no depth write.
+          for (const n of glassNodes) {
+            n.traverse((o) => {
+              if (!o.isMesh) return;
+              for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+                if (m) glassMats.add(m);
+              }
+            });
+          }
+          for (const m of glassMats) {
+            m.transparent = true;
+            m.opacity = GLASS_OPACITY;
+            m.depthWrite = false;
+            m.side = THREE.DoubleSide;
+            m.needsUpdate = true;
+          }
+
+          mountEye();
+          frameOrbitCamera();
+          mountPanels();
+          applyGlass();
+          resolve({ loaded: true, error: null });
+        },
+        undefined,
+        (err) => {
+          // Handled here so GLTFLoader does not console.error — a missing GLB is
+          // a legible message in the chrome, not a stack trace.
+          loadError = (err && (err.message || String(err))) || 'unknown load error';
+          resolve({ loaded: false, error: loadError });
+        },
+      );
+    });
+
+    /**
+     * Put the eye camera on the model's own Eye_Point node.
+     *
+     * FOUND, NOT ASSUMED. Eye_Point sits at the origin in both cockpit GLBs
+     * today, so hard-coding (0,0,0) would look correct right up until lane E
+     * re-fits the cabin and moves the seat — at which point every judgement made
+     * on this page about how the panels subtend would be about the wrong
+     * viewpoint, with nothing anywhere to say so. The node is the model's
+     * statement of where the pilot's head is; reading it is the same
+     * derive-from-the-asset rule the panels themselves follow.
+     *
+     * Its world QUATERNION is taken too, so a future model that faces the seat
+     * somewhere other than -Z still works. With today's identity rotation this
+     * composes to exactly the behaviour cockpit-lab.html has.
+     *
+     * A missing node falls back to the origin AND SAYS SO in the chrome. Silent
+     * fallback is the failure being avoided: the picture would look plausible.
+     */
+    let eyePos = new THREE.Vector3(0, 0, 0);
+    let eyeQuat = new THREE.Quaternion();
+    function mountEye() {
+      const node = model.getObjectByName(EYE_NODE_NAME);
+      eyeFound = !!node;
+      if (node) {
+        node.getWorldPosition(eyePos);
+        node.getWorldQuaternion(eyeQuat);
+      } else {
+        eyePos.set(0, 0, 0);
+        eyeQuat.identity();
+      }
+    }
+
+    function frameOrbitCamera() {
+      const bbox = new THREE.Box3().setFromObject(model);
+      const centre = bbox.getCenter(new THREE.Vector3());
+      const size = bbox.getSize(new THREE.Vector3());
+      const dist = Math.max(size.x, size.y, size.z) * 1.9 || 6;
+      controls.target.copy(centre);
+      orbitCam.position.copy(centre).add(
+        new THREE.Vector3(0.62, 0.44, 0.95).normalize().multiplyScalar(dist),
+      );
+      controls.update();
+    }
+
+    /**
+     * Build (or rebuild) the panel host and register the four painters.
+     *
+     * REBUILD IS THE WHOLE REASON THIS IS A FUNCTION. The buffer-resolution
+     * control changes the one knob `PanelHost` takes, and the buffer is created
+     * at bind time — so changing it means tearing the host down and building a
+     * new one. `dispose()` puts the model's own materials back and releases the
+     * four canvas textures; skipping it would leak a GPU allocation per panel
+     * per press and leave the meshes wearing clones that point at disposed
+     * textures.
+     *
+     * A cockpit with NO Screen_* nodes binds zero panels, throws nothing, and
+     * prints nothing — cockpit-tub.glb is exactly that today. A cockpit that has
+     * screens but not the ones the role table names DOES throw, and the message
+     * is shown verbatim in the chrome rather than swallowed, because that is a
+     * broken pairing between config and asset and it has a name attached.
+     */
+    function mountPanels() {
+      if (host) { host.dispose(); host = null; }
+      hostError = null;
+      try {
+        host = PanelHost.fromRoot(model, { bufferHeightPx: BUFFER_HEIGHTS[bufferIndex] });
+        for (const role of Object.keys(DEFAULT_PANEL_ROLES)) {
+          host.setPainter(role, LAB_PAINTERS[role]);
+        }
+        applyPhosphorToGlass();
+      } catch (err) {
+        hostError = (err && err.message) || String(err);
+      }
+    }
+
+    /**
+     * Retint the glass by changing each panel's EMITTER colour.
+     *
+     * `PanelHost` gives every panel its own material clone (the four faces share
+     * `Mat_Screen` in the model, so assigning to the shared instance would leave
+     * all four showing whichever canvas was written last) and sets its emissive
+     * to white. Writing a hue there multiplies the canvas: the warm off-white
+     * ink becomes the chosen colour, and black stays black. `color` is set to
+     * match so the tint survives if the cabin light is switched on and the
+     * diffuse term starts contributing.
+     *
+     * Nothing here touches what the painters draw. One ink is a property of
+     * PhosphorScreen's frozen constants, and it stays one ink at any tint.
+     */
+    function applyPhosphorToGlass() {
+      if (!host) return;
+      const emitter = PHOSPHORS[phosphorIndex].emitter;
+      for (const panel of host.panels) {
+        const m = panel.mesh && panel.mesh.material;
+        if (!m) continue;
+        if (m.emissive) m.emissive.setHex(emitter);
+        if (m.color) m.color.setHex(emitter);
+        m.needsUpdate = true;
+      }
+    }
+
+    /** Generate (and cache) the lab world for the current seed. */
+    function loadWorld() {
+      const [seed, pos] = LAB_SEEDS[seedIndex];
+      worldError = null;
+      try {
+        world = buildLabWorld(seed, pos);
+      } catch (err) {
+        world = null;
+        worldError = (err && err.message) || String(err);
+      }
+    }
+    loadWorld();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Controls
+    // ─────────────────────────────────────────────────────────────────────────
+    const el = {
+      hud: document.getElementById('hud'),
+      reticle: document.getElementById('reticle'),
+      bMode: document.getElementById('bMode'),
+      bModeLabel: document.getElementById('bModeLabel'),
+      bModeNow: document.getElementById('bModeNow'),
+      bBuffer: document.getElementById('bBuffer'),
+      bBufferLabel: document.getElementById('bBufferLabel'),
+      bPhosphor: document.getElementById('bPhosphor'),
+      bPhosphorLabel: document.getElementById('bPhosphorLabel'),
+      bSeed: document.getElementById('bSeed'),
+      bSeedLabel: document.getElementById('bSeedLabel'),
+      bGlass: document.getElementById('bGlass'),
+      bCabin: document.getElementById('bCabin'),
+      bReset: document.getElementById('bReset'),
+      bPlay: document.getElementById('bPlay'),
+      scrub: document.getElementById('scrub'),
+      tTime: document.getElementById('tTime'),
+      tSeg: document.getElementById('tSeg'),
+    };
+
+    el.scrub.max = String(FLIGHT_DURATION_S);
+
+    function setMode(next) {
+      mode = (next === 'orbit') ? 'orbit' : 'eye';
+      controls.enabled = (mode === 'orbit');
+      // The status line states WHERE YOU ARE; the button states WHERE IT TAKES
+      // YOU. Never both on one element — "MODE: EYE" on a button is ambiguous.
+      el.bModeNow.textContent = mode.toUpperCase();
+      el.bModeLabel.textContent = (mode === 'eye') ? 'GO TO ORBIT VIEW' : 'GO TO EYE VIEW';
+      el.bMode.classList.toggle('on', mode === 'eye');
+      el.reticle.classList.toggle('on', mode === 'eye');
+      return mode;
+    }
+
+    function setPlaying(on) {
+      playing = !!on;
+      el.bPlay.textContent = playing ? 'PAUSE' : 'PLAY';
+      return playing;
+    }
+
+    function setTime(t) {
+      const span = FLIGHT_DURATION_S;
+      timeS = ((t % span) + span) % span;
+      el.scrub.value = String(timeS);
+      return timeS;
+    }
+
+    function cycleBuffer(delta = 1) {
+      bufferIndex = (bufferIndex + delta + BUFFER_HEIGHTS.length) % BUFFER_HEIGHTS.length;
+      el.bBufferLabel.textContent = `BUFFER: ${BUFFER_HEIGHTS[bufferIndex]} px`;
+      if (model) mountPanels();
+      return BUFFER_HEIGHTS[bufferIndex];
+    }
+
+    function applyPhosphor(index) {
+      phosphorIndex = ((index % PHOSPHORS.length) + PHOSPHORS.length) % PHOSPHORS.length;
+      const p = PHOSPHORS[phosphorIndex];
+      const r = document.documentElement.style;
+      r.setProperty('--ink', p.ink);
+      r.setProperty('--ink-hi', p.hi);
+      r.setProperty('--ink-dim', p.dim);
+      r.setProperty('--ink-glow', p.glow);
+      el.bPhosphorLabel.textContent = `PHOSPHOR: ${p.name}`;
+      applyPhosphorToGlass();
+      return p;
+    }
+
+    function cycleSeed(delta = 1) {
+      seedIndex = (seedIndex + delta + LAB_SEEDS.length) % LAB_SEEDS.length;
+      el.bSeedLabel.textContent = `SYSTEM: ${seedIndex + 1}/${LAB_SEEDS.length}`;
+      loadWorld();
+      return LAB_SEEDS[seedIndex][0];
+    }
+
+    function applyGlass() {
+      for (const n of glassNodes) n.visible = state.glass;
+      el.bGlass.classList.toggle('on', state.glass);
+    }
+    function applyCabin() {
+      cabinLight.visible = state.cabin;
+      el.bCabin.classList.toggle('on', state.cabin);
+    }
+    function recentre() {
+      if (mode === 'eye') { eyeYaw = 0; eyePitch = 0; }
+      else if (model) frameOrbitCamera();
+    }
+
+    el.bMode.onclick = () => setMode(mode === 'eye' ? 'orbit' : 'eye');
+    el.bBuffer.onclick = () => cycleBuffer(1);
+    el.bPhosphor.onclick = () => applyPhosphor(phosphorIndex + 1);
+    el.bSeed.onclick = () => cycleSeed(1);
+    el.bGlass.onclick = () => { state.glass = !state.glass; applyGlass(); };
+    el.bCabin.onclick = () => { state.cabin = !state.cabin; applyCabin(); };
+    el.bReset.onclick = recentre;
+    el.bPlay.onclick = () => setPlaying(!playing);
+    // Scrubbing PAUSES. Dragging the handle on a running clock fights the
+    // playhead and the frame under the cursor is never the frame you let go on,
+    // which makes the one control that exists for stopping-and-looking unusable
+    // for exactly that.
+    el.scrub.oninput = () => { setPlaying(false); setTime(parseFloat(el.scrub.value)); };
+
+    setMode(mode);
+    setPlaying(playing);
+    applyPhosphor(0);
+    applyCabin();
+    el.bBufferLabel.textContent = `BUFFER: ${BUFFER_HEIGHTS[bufferIndex]} px`;
+    el.bSeedLabel.textContent = `SYSTEM: ${seedIndex + 1}/${LAB_SEEDS.length}`;
+
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+      if (e.key === ' ') { e.preventDefault(); setPlaying(!playing); return; }
+      switch (e.key.toLowerCase()) {
+        case 'c': el.bMode.onclick(); break;
+        case 'b': cycleBuffer(e.shiftKey ? -1 : 1); break;
+        case 'p': applyPhosphor(phosphorIndex + 1); break;
+        case 'n': cycleSeed(e.shiftKey ? -1 : 1); break;
+        case 'g': el.bGlass.onclick(); break;
+        case 'l': el.bCabin.onclick(); break;
+        case 'r': recentre(); break;
+        // Nudge a paused frame one step at a time, for looking at a transition.
+        case 'arrowleft': setPlaying(false); setTime(timeS - 0.25); break;
+        case 'arrowright': setPlaying(false); setTime(timeS + 0.25); break;
+      }
+    });
+
+    // EYE look-around — ROTATION ONLY. The camera position is never written
+    // here; it is re-pinned to the eye point every frame in renderFrame().
+    let dragging = false, lastX = 0, lastY = 0;
+    const LOOK_SPEED = 0.0026;
+    canvas.addEventListener('pointerdown', (e) => {
+      if (mode !== 'eye') return;
+      dragging = true; lastX = e.clientX; lastY = e.clientY;
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!dragging || mode !== 'eye') return;
+      eyeYaw -= (e.clientX - lastX) * LOOK_SPEED;
+      eyePitch -= (e.clientY - lastY) * LOOK_SPEED;
+      eyePitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, eyePitch));
+      lastX = e.clientX; lastY = e.clientY;
+    });
+    const endDrag = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    };
+    canvas.addEventListener('pointerup', endDrag);
+    canvas.addEventListener('pointercancel', endDrag);
+
+    window.addEventListener('resize', () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      orbitCam.aspect = window.innerWidth / window.innerHeight;
+      orbitCam.updateProjectionMatrix();
+      // eyeCam stays at 16:9 — it is letterboxed, not stretched.
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Render
+    // ─────────────────────────────────────────────────────────────────────────
+    const _lookEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+    const _lookQuat = new THREE.Quaternion();
+
+    function renderFrame() {
+      const W = window.innerWidth, H = window.innerHeight;
+      if (mode === 'orbit') {
+        controls.update();
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, W, H);
+        renderer.render(scene, orbitCam);
+        return;
+      }
+
+      // Re-pin the eye every frame, belt and braces, so no code path can drift
+      // it. Look-around is composed ON TOP of the node's own orientation rather
+      // than replacing it, so a model that faces the seat somewhere other than
+      // -Z still looks the right way.
+      eyeCam.position.copy(eyePos);
+      _lookEuler.set(eyePitch, eyeYaw, 0, 'YXZ');
+      _lookQuat.setFromEuler(_lookEuler);
+      eyeCam.quaternion.copy(eyeQuat).multiply(_lookQuat);
+      eyeCam.fov = GAME_FOV;
+      eyeCam.aspect = GAME_ASPECT;
+      eyeCam.updateProjectionMatrix();
+
+      // Letterbox to 16:9, so the fraction of Max's view a panel occupies is the
+      // fraction it will occupy in the game. Without this the panels subtend
+      // whatever his window happens to be shaped like, and the one question this
+      // page exists to answer gets a different answer on every monitor.
+      let w = W, h = Math.round(W / GAME_ASPECT);
+      if (h > H) { h = H; w = Math.round(H * GAME_ASPECT); }
+      const x = Math.round((W - w) / 2), y = Math.round((H - h) / 2);
+
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, W, H);
+      renderer.setScissor(0, 0, W, H);
+      renderer.clear(true, true, true);
+      renderer.setViewport(x, y, w, h);
+      renderer.setScissor(x, y, w, h);
+      renderer.setScissorTest(true);
+      renderer.render(scene, eyeCam);
+      renderer.setScissorTest(false);
+    }
+
+    let hudAt = 0;
+    function tick(nowMs) {
+      requestAnimationFrame(tick);
+      const dtSec = lastFrameMs == null ? 1 / 60 : Math.min(0.25, (nowMs - lastFrameMs) / 1000);
+      lastFrameMs = nowMs;
+
+      if (playing) setTime(timeS + dtSec);
+
+      if (world) {
+        // ONE snapshot per frame, read by all four panels — the same rule the
+        // game follows. Four independently-sampled frames would let the DRIVE
+        // screen show a speed from a different instant than TARGET's distance,
+        // and a pilot cross-reading two panels would see numbers that never
+        // quite agree.
+        snapshot = buildCockpitSnapshot(flightSourcesAt(timeS, world, dtSec));
+      }
+      // `nowMs` and not the sim clock: a blink phased on sim time stutters above
+      // 60 Hz and FREEZES on a pause, and an alarm that has stopped moving reads
+      // as no alarm. The host's own header makes the same argument at length.
+      if (host) host.update(snapshot, nowMs);
+
+      renderFrame();
+
+      if (nowMs - hudAt > 100) { hudAt = nowMs; updateHud(); }
+    }
+    requestAnimationFrame(tick);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // The chrome readout
+    // ─────────────────────────────────────────────────────────────────────────
+    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const f3 = (n) => (Number.isFinite(n) ? n.toFixed(3) : '—');
+
+    /**
+     * The numbers PhosphorScreen's type scale was sized against, quoted here so
+     * the panel table can be compared with them ON SCREEN rather than in a
+     * header comment. They are NOT imported, deliberately: they are not
+     * constants that module exports, they are the arithmetic in its prose, and
+     * writing them out is what makes a disagreement visible instead of
+     * self-consistent.
+     */
+    const LEGIBILITY = Object.freeze({
+      REF_DISPLAY_PX: 1080,   // the display height the budget is quoted against
+      SCREEN_PX: 260,         // what 17 degrees of a 70-degree FOV comes to there
+      FLOOR_PX: 11,           // H/24 of that — the legibility floor the kit enforces
+    });
+
+    /**
+     * How big one panel actually LOOKS from the pilot's eye.
+     *
+     * Derived, like everything else on this page, from the measured face and the
+     * model's own Eye_Point — never from the 17-degree figure the type scale
+     * assumes. That is the whole point: if the two disagree, this is where it
+     * shows up. `metrics.centre` is the world-space centre `measureQuad` returns
+     * and `eyePos` is the world position of the eye node, so the range between
+     * them is a real distance in metres.
+     *
+     * Face-on, and honestly so: a panel at forty degrees off the forward axis is
+     * additionally foreshortened, so the true on-screen height is SMALLER than
+     * this. Reporting the face-on figure keeps the number comparable with the
+     * budget it is being checked against, which is also a face-on figure.
+     */
+    function subtendedBy(panel) {
+      const c = panel && panel.metrics && panel.metrics.centre;
+      const h = panel && panel.metrics && panel.metrics.height;
+      if (!c || !Number.isFinite(h)) return { rangeM: NaN, vDeg: NaN, screenPx: NaN };
+      const rangeM = Math.hypot(c.x - eyePos.x, c.y - eyePos.y, c.z - eyePos.z);
+      const vDeg = 2 * Math.atan((h / 2) / rangeM) * (180 / Math.PI);
+      return { rangeM, vDeg, screenPx: vDeg * (LEGIBILITY.REF_DISPLAY_PX / GAME_FOV) };
+    }
+
+    function updateHud() {
+      const L = [];
+      L.push(`<span class="k">COCKPIT SCREENS LAB</span> <span class="dim">— lane F, live data on the glass</span>`);
+      L.push(`<span class="k">glb    </span> <span class="v">${esc(GLB_URL)}</span> <span class="dim">(?glb=&lt;name&gt; to swap models)</span>`);
+
+      if (loadError) {
+        L.push(`<span class="err">GLB LOAD FAILED</span> <span class="err">${esc(loadError)}</span>`);
+        L.push(`<span class="dim">Nothing can be judged from this page until the asset loads. Check the name, ` +
+               `and that the dev server is serving under /well-dipper/.</span>`);
+        el.hud.innerHTML = L.join('\n');
+        return;
+      }
+      if (!model) {
+        L.push(`<span class="dim">loading …</span>`);
+        el.hud.innerHTML = L.join('\n');
+        return;
+      }
+
+      // The three outcomes AC-SEAM-DERIVED distinguishes, said in words so a
+      // screenshot of this page records WHICH one happened.
+      if (hostError) {
+        L.push(`<span class="err">PANELS NOT BOUND</span> <span class="err">${esc(hostError)}</span>`);
+      } else if (screenNodeNames.length === 0) {
+        L.push(`<span class="warn">ZERO Screen_* NODES — and that is the CORRECT outcome for this model.</span>`);
+        L.push(`<span class="dim">A cockpit with no screens in it is a legitimate cockpit. Zero panels, no ` +
+               `errors, nothing on the console. cockpit-tub.glb ships exactly this.</span>`);
+      } else if (!host || host.panels.length === 0) {
+        L.push(`<span class="err">${screenNodeNames.length} Screen_* NODE(S) FOUND BUT NO PANELS BOUND</span> ` +
+               `<span class="dim">— that is a bug, not the tub case.</span>`);
+      }
+
+      L.push(`<span class="k">eye    </span> ${eyeFound
+        ? `<span class="v">${EYE_NODE_NAME}</span> at [${f3(eyePos.x)}, ${f3(eyePos.y)}, ${f3(eyePos.z)}]`
+        : `<span class="warn">no ${EYE_NODE_NAME} node — falling back to the origin</span>`} ` +
+        `<span class="dim">fov ${GAME_FOV}, 16:9 letterbox</span>`);
+
+      if (host && host.panels.length) {
+        L.push(`<span class="k">panels </span> <span class="dim">role → node        size (m)          aspect   buffer (px)   range (m)  subtends   ~screen px</span>`);
+        for (const p of host.panels) {
+          const sub = subtendedBy(p);
+          L.push(`<span class="k">       </span> ${esc(p.role.padEnd(6))} ${esc(p.nodeName.padEnd(12))} ` +
+                 `<span class="v">${f3(p.metrics.width)} x ${f3(p.metrics.height)}</span>   ` +
+                 `<span class="v">${f3(p.metrics.aspect)}</span>    ` +
+                 `<span class="v">${String(p.canvas.width + ' x ' + p.canvas.height).padEnd(11)}</span>   ` +
+                 `<span class="v">${f3(sub.rangeM).padEnd(9)}</span> ` +
+                 `<span class="v">${sub.vDeg.toFixed(1)}&deg; V</span>    ` +
+                 `<span class="${sub.screenPx < LEGIBILITY.SCREEN_PX ? 'warn' : 'v'}">${Math.round(sub.screenPx)}</span>`);
+        }
+        L.push(`<span class="k">       </span> <span class="dim">every one of those is MEASURED off this GLB's own ` +
+               `vertices; width = round(height x aspect)</span>`);
+        // THE NUMBER THIS PAGE EXISTS FOR, and it was the one derived value not
+        // being shown. Size, aspect and buffer say how big the panel is; none of
+        // them says how big it LOOKS, which is the entire question — the type
+        // scale in PhosphorScreen is sized off an assumed 17 degrees of the
+        // 70-degree FOV, i.e. about 260 screen pixels on a 1080-tall display,
+        // and the legibility floor of H/24 is about 11 of those pixels. If the
+        // measured column above disagrees with that assumption, every size
+        // decision downstream was made against the wrong number, and there was
+        // nothing anywhere on this page to say so. Printed, not asserted: what
+        // to do about a disagreement is Max's call, not this page's.
+        L.push(`<span class="k">       </span> <span class="dim">~screen px = the panel's HEIGHT on a ` +
+               `${LEGIBILITY.REF_DISPLAY_PX}-tall display at fov ${GAME_FOV}. PhosphorScreen's type scale ` +
+               `assumes ${LEGIBILITY.SCREEN_PX}; its H/24 floor is ~${LEGIBILITY.FLOOR_PX} screen px of cap height.</span>`);
+      }
+
+      if (worldError) {
+        L.push(`<span class="err">NO FLIGHT</span> <span class="err">${esc(worldError)}</span>`);
+      } else if (world) {
+        const { captureSphere, dropMaxSpeed } = dropWindowFor(world.target.radiusScene);
+        const readout = buildFlightReadout(flightReadoutStateFromSnapshot(snapshot));
+        L.push(`<span class="k">system </span> <span class="v">${esc(world.systemName)}</span> ` +
+               `<span class="dim">seed ${esc(world.seed)} · target ${esc(world.target.name)} · ` +
+               `capture sphere ${f3(captureSphere)} u · drop ceiling ${f3(dropMaxSpeed)} u/s</span>`);
+        // A digest of what the four panels are SAYING, so the glass can be
+        // cross-read against the chrome without squinting at a screenshot.
+        L.push(`<span class="k">glass  </span> DRIVE <span class="v">${esc(readout.speedText)}</span>` +
+               `${readout.sublightTag ? ` <span class="v">${esc(readout.sublightTag)}</span>` : ''}` +
+               ` · ${esc(readout.modeLine || '—')}`);
+        L.push(`<span class="k">       </span> TARGET <span class="v">${esc(snapshot.target.name ?? '—')}</span>` +
+               ` · eta ${esc(readout.eta ?? '—')}` +
+               ` · <span class="warn">${esc(readout.drop ? readout.drop.text : '—')}</span>`);
+        L.push(`<span class="k">       </span> SURVEY <span class="v">${esc(snapshot.survey.name ?? '—')}</span>` +
+               ` (${esc(snapshot.survey.kind ?? 'nothing focused')})` +
+               ` · <span class="warn">${esc(readout.massLock ? readout.massLock.text : '—')}</span>`);
+        L.push(`<span class="k">       </span> NAV <span class="dim">holding card — the nav computer is a later ` +
+               `increment and is deliberately not on this panel</span>`);
+      }
+
+      el.hud.innerHTML = L.join('\n');
+      el.tTime.textContent = `${timeS.toFixed(2)} / ${FLIGHT_DURATION_S} s`;
+      const seg = segmentAt(timeS);
+      el.tSeg.textContent = `${seg.name} — ${seg.note}`;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // window._cockpitScreensLab — the verification surface.
+    //
+    //   ready                    Promise, resolves {loaded, error} on success OR
+    //                            failure. NEVER rejects. Await it before reading.
+    //   getInfo()                everything a headless check needs: the glb URL,
+    //                            the Screen_* census, per-panel role/node/
+    //                            measured size/aspect/buffer, the eye point, the
+    //                            current time and segment, and the four panels'
+    //                            content digest. This is what AC-SEAM-DERIVED
+    //                            reads back across three models.
+    //   setTime(s) / setPlaying(b) / setBufferHeight(px) / setMode(m) /
+    //   setPhosphor(i) / setSeed(i)   drive it from a script.
+    //   THREE, scene, renderer, host, model   escape hatches.
+    // ─────────────────────────────────────────────────────────────────────────
+    function getInfo() {
+      const cam = (mode === 'eye') ? eyeCam : orbitCam;
+      const readout = world ? buildFlightReadout(flightReadoutStateFromSnapshot(snapshot)) : null;
+      return {
+        glbUrl: GLB_URL,
+        loaded: !!model,
+        loadError,
+        hostError,
+        // The independent census. `screenNodes.length === 0 && panels.length === 0`
+        // is the tub's correct outcome; a non-empty census with zero panels is a bug.
+        screenNodes: screenNodeNames.slice(),
+        eye: { found: eyeFound, node: EYE_NODE_NAME, position: [eyePos.x, eyePos.y, eyePos.z] },
+        mode,
+        cameraFov: cam.fov,
+        cameraPosition: [cam.position.x, cam.position.y, cam.position.z],
+        bufferHeightPx: BUFFER_HEIGHTS[bufferIndex],
+        phosphor: PHOSPHORS[phosphorIndex].name,
+        panels: host ? host.panels.map((p) => {
+          // The subtended figures ride along so a headless check can read the
+          // legibility budget back as a NUMBER instead of inferring it from a
+          // screenshot — same reason the size and aspect are here.
+          const sub = subtendedBy(p);
+          return {
+            role: p.role,
+            node: p.nodeName,
+            widthM: p.metrics.width,
+            heightM: p.metrics.height,
+            aspect: p.metrics.aspect,
+            bufferWidth: p.canvas.width,
+            bufferHeight: p.canvas.height,
+            rangeM: sub.rangeM,
+            subtendsVDeg: sub.vDeg,
+            screenPxAt1080: sub.screenPx,
+          };
+        }) : [],
+        flight: {
+          seed: world ? world.seed : null,
+          systemName: world ? world.systemName : null,
+          worldError,
+          timeS,
+          playing,
+          durationS: FLIGHT_DURATION_S,
+          segment: segmentAt(timeS).name,
+        },
+        // What the glass is saying this instant, in the readout's own words.
+        content: readout ? {
+          driveSpeed: readout.speedText,
+          sublightTag: readout.sublightTag,
+          modeLine: readout.modeLine,
+          targetName: snapshot.target.name,
+          targetDistance: snapshot.target.distance,
+          eta: readout.eta,
+          dropCue: readout.drop ? readout.drop.text : null,
+          dropBlink: readout.drop ? readout.drop.blink : null,
+          massLockCue: readout.massLock ? readout.massLock.text : null,
+          surveyName: snapshot.survey.name,
+          surveyKind: snapshot.survey.kind,
+          surveyTEq: snapshot.survey.tEq,
+        } : null,
+      };
+    }
+
+    window._cockpitScreensLab = {
+      ready,
+      getInfo,
+      setTime(s) { setPlaying(false); return setTime(s); },
+      setPlaying,
+      setBufferHeight(px) {
+        const i = BUFFER_HEIGHTS.indexOf(px);
+        if (i < 0) throw new Error(`setBufferHeight: ${px} is not one of ${BUFFER_HEIGHTS.join(', ')}.`);
+        bufferIndex = i - 1 < 0 ? BUFFER_HEIGHTS.length - 1 : i - 1;
+        return cycleBuffer(1);
+      },
+      setMode,
+      setPhosphor(i) { return applyPhosphor(i).name; },
+      setSeed(i) { seedIndex = ((i % LAB_SEEDS.length) + LAB_SEEDS.length - 1) % LAB_SEEDS.length; return cycleSeed(1); },
+      setLook(yawDeg, pitchDeg) {
+        eyeYaw = THREE.MathUtils.degToRad(yawDeg);
+        eyePitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, THREE.MathUtils.degToRad(pitchDeg)));
+        return { yawDeg, pitchDeg: THREE.MathUtils.radToDeg(eyePitch) };
+      },
+      THREE, scene, renderer, controls,
+      get host() { return host; },
+      get model() { return model; },
+      get snapshot() { return snapshot; },
+      cameras: { orbit: orbitCam, eye: eyeCam },
+    };
+  </script>
+</body>
+</html>

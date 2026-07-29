@@ -69,7 +69,7 @@
  * reading it once at construction is a stale-size bug waiting for the first
  * resolution change.
  */
-import { CanvasTexture, LinearFilter } from 'three';
+import { CanvasTexture, LinearFilter, SRGBColorSpace } from 'three';
 
 /**
  * The event object handed to the target's handlers.
@@ -197,6 +197,15 @@ export function assertTopLeftOrigin(mapFn, size) {
  * omitting this line does not leave the setting "unset" — it actively flips the
  * image and inverts the screens.
  *
+ * colorSpace = SRGBColorSpace is the second load-bearing line, and it was
+ * missing until it was seen on the glass. A CanvasTexture in three r0.183
+ * defaults to NoColorSpace, so the renderer samples the canvas as LINEAR data
+ * and skips the sRGB->linear decode. The Phosphor ink #EDE8DE is sRGB 0.93;
+ * read as linear 0.93 it comes out far brighter and flatter than authored, and
+ * the warm off-white that is the whole point of the palette renders as flat
+ * pure white. Observed directly in cockpit-screens-lab.html: the panel BUFFER
+ * drew warm cream while the same pixels in the 3D view were blown out.
+ *
  * Mipmaps are off and the min filter is linear because these canvases are
  * redrawn every frame; regenerating a mip chain per frame per panel is real
  * cost for a surface the pilot views close to head-on. Revisit if the screens
@@ -214,6 +223,7 @@ export function createPanelTexture(image) {
   }
   const texture = new CanvasTexture(image);
   texture.flipY = false;
+  texture.colorSpace = SRGBColorSpace;
   texture.generateMipmaps = false;
   texture.minFilter = LinearFilter;
   return texture;
