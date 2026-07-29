@@ -268,23 +268,64 @@ HULL_REF_LENGTH    = 20.0     # Bible S8A player hull, house-sized. Sanity scale
 # like any other, so the canopy rail is GENERATED from it exactly as the ribs are, rather than
 # being authored as trim. That is the same structural argument that killed Canopy_Frame.
 FLOOR_Z            = -1.20    # cabin floor. Below the pilot's heel line at -1.18.
-RAIL_Z             = -0.34    # THE WAISTLINE. Solid hull below, glass above. Constant
+RAIL_Z             = -0.26    # THE WAISTLINE. Solid hull below, glass above. Constant
                               # fore-aft, so the rail reads as one continuous line.
                               #
-                              # This number is Max's, chosen in cockpit-section-lab.html, and
-                              # it lands AT CHEST HEIGHT -- the seated pilot's chest is at
-                              # -0.35 with the eye at the origin. That is what "the canopy
-                              # begins around chest/shoulder height" resolves to in metres.
+                              # This number is Max's, chosen in cockpit-section-lab.html. It
+                              # sits BETWEEN CHEST AND SHOULDER -- the seated pilot's chest is
+                              # at -0.35 and the shoulder at -0.20 with the eye at the origin.
+                              # That is what "the canopy begins around chest/shoulder height"
+                              # resolves to in metres, now toward the shoulder end of it.
+                              #
+                              # RAISED FROM -0.34 (2026-07-28, second lab pass). This is the
+                              # one number in the file the occlusion sweep says is expensive:
+                              # -0.15 -> -0.75 moves the tub's share of the view 46.1% -> 4.8%,
+                              # so 80 mm up costs several points of view. It was chosen on the
+                              # lab's live occlusion readout with that cost on screen.
 
-# (label, y, half-width, roof z). Ordered BOW -> AFT, i.e. DECREASING y.
+# (label, y, half-width, roof z, RAIL z). Ordered BOW -> AFT, i.e. DECREASING y.
 #
-# WHY THIS IS 1.52 m ACROSS AND NOT 4.3 m. The old bow ring was sized in TAN SPACE to sit
-# just inside the 70 deg frame edge, on the reasoning that a realistically-scaled canopy close
-# to the face fills the view with metal. Sweeping the section lab shows that reasoning buys
-# very little: cabin width moves the occluded fraction only 29.7% -> 37.6% across 1.04 m to
-# 4.6 m and saturates by about 2.1 m, because once the tub spans the lower field of view,
-# widening it adds almost nothing. RAIL HEIGHT is the term that actually costs view -- 46.1%
-# down to 4.8% over -0.15 to -0.75. So width became a free choice and Max made it on feel.
+# WHY THE RAIL NOW TAPERS TOO, and why it is the BOW value that is not free. Max, looking at
+# the wide tub: "make the dash shape closer to the player and also slope down as it approaches
+# the canopy so that it gives us more view back. Make the shape like a horizontally inverted
+# version of the canopy right above it."
+#
+# THE DASH CANNOT DELIVER THAT AND THE GEOMETRY SAYS SO. Its top face lies in the rail plane,
+# so from the eye it subtends tan_z = RAIL_Z / y -- which is MORE negative the closer it comes.
+# The forward aperture's lower bound is the rail at the BOW, at RAIL_Z / 1.61. So a shelf at
+# rail height is below the coaming's edge for every y, at every depth, in every plan shape:
+# it was measured at exactly 0.00% marginal occlusion and no reshaping of it can return a
+# pixel. What bounds the view is the RAIL LINE, and that is the thing that had to move.
+#
+# So the rail is now a taper like the roof, and the bow number is the roof's EXACT MIRROR about
+# the eye plane: roof +0.52 at the bow, rail -0.52 at the bow. That makes "a horizontally
+# inverted version of the canopy right above it" literal and measurable rather than a gesture --
+# the forward aperture becomes SYMMETRIC, 17.90 deg above the horizon and 17.90 deg below it,
+# where it used to be 17.90 above and 9.17 below.
+#
+# MID AND AFT DO NOT MIRROR, deliberately. Mirroring the roof there would put the rail at -0.70,
+# below the pilot's waist at -0.52, and "below the waist there's no canopy, it's solid" is the
+# form language the whole tub was rebuilt around. Mid and aft keep the -0.26 Max set. Only the
+# bow moves -- which is the same asymmetry the roof taper already has, and for the same reason:
+# the middle of the cabin is where the body is, and the body is not a free number.
+STATIONS_NOTE = "col 4 = roof z, col 5 = rail z; both taper toward the bow, mirrored"
+#
+# WHY WIDTH IS A FREE CHOICE, AND WHY IT MOVED 1.52 m -> 2.56 m. The old bow ring was sized
+# in TAN SPACE to sit just inside the 70 deg frame edge, on the reasoning that a
+# realistically-scaled canopy close to the face fills the view with metal. Sweeping the
+# section lab shows that reasoning buys very little: cabin width moves the occluded fraction
+# only 29.7% -> 37.6% across 1.04 m to 4.6 m and saturates by about 2.1 m, because once the
+# tub spans the lower field of view, widening it adds almost nothing. RAIL HEIGHT is the term
+# that actually costs view -- 46.1% down to 4.8% over -0.15 to -0.75. So width is nearly free
+# and Max made it on feel, twice: 0.76 at the first lab pass, 1.28 at the second.
+#
+# THE WIDTH IS WHAT BOUGHT THE SCREENS BACK. At 0.76 the shoulder band could not hold a
+# 0.30 x 0.25 m unit at any distance he liked, which is why the previous build shrank the
+# whole assembly by SCREEN_FIT_SCALE. At 1.28 the units fit at full size -- see the screen
+# block below. That is the trade this station table encodes: a wider cabin, spent on screens.
+#
+# It is no longer a fighter tub at the shoulders -- 2.56 m across is a cabin, not a cockpit
+# he wears -- while the bow and bulkhead stay where they were, so it tapers hard fore and aft.
 #
 # All three half-widths below are his, read straight off the lab.
 #
@@ -302,9 +343,9 @@ RAIL_Z             = -0.34    # THE WAISTLINE. Solid hull below, glass above. Co
 # 23.4 deg to 17.8 deg above the horizon, still well inside the 35 deg frame edge. See
 # canopy_frame_landing(), which reports it every run.
 STATIONS = (
-    ("bow",  1.62, 0.59, 0.52),
-    ("mid",  0.00, 0.76, 0.70),
-    ("aft", -0.97, 0.57, 0.70),
+    ("bow",  1.61, 0.59, 0.52, -0.52),
+    ("mid",  0.00, 1.28, 0.70, -0.26),
+    ("aft", -0.97, 0.59, 0.70, -0.26),
 )
 
 # THE TUB half-section, RIGHT HALF ONLY, ordered CENTRELINE -> OUTBOARD.
@@ -323,12 +364,17 @@ TUB_HALF = (
 #   z fraction  from RAIL_Z up to that station's roof z
 # Entry 0 is the SAME POINT as TUB_HALF's last entry; it is listed in both tables because the
 # rail is where the two materials meet, and it is spliced once in station_ring().
-# The roof pair sits at +/-0.45 rather than at 0, so the centre roof panel is ONE flat pane
+# The roof pair sits at +/-0.30 rather than at 0, so the centre roof panel is ONE flat pane
 # and there is no seam running down the middle of the pilot's upward view.
+#
+# BOTH X FRACTIONS ARE MAX'S, second lab pass: shoulder 0.92 -> 0.88 and roof edge 0.45 ->
+# 0.30. On a cabin that just doubled in width these are not cosmetic -- the roof edge fraction
+# is what decides how wide the flat roof pane is and how fast the shell pinches in above the
+# shoulder, which is the band the screens hang in.
 CANOPY_HALF = (
     ("rail",     1.00, 0.00),
-    ("shoulder", 0.92, 0.42),
-    ("roofedge", 0.45, 1.00),
+    ("shoulder", 0.88, 0.42),
+    ("roofedge", 0.30, 1.00),
 )
 
 # Which of the 11 ring segments are HULL and which are GLASS. Indexed by segment, where
@@ -346,15 +392,27 @@ SEG_HULL, SEG_GLASS = "hull", "glass"
 # railCap 0.100 / bowSec 0.130 / pillarSec 0.085 UNCHANGED from the `game` preset it was
 # copied off, so those three were defaults he never moved, not choices. They were free.
 #
-# One uniform factor rather than four independent guesses, so the HIERARCHY survives: rail and
-# bow rim stay the heavy members, the arches sit between, the ribs stay lightest. That is the
-# part that reads as structure; the absolute thickness is what read as clutter.
-RAIL_SECTION       = (0.085, 0.065)   # the canopy rail: still the heaviest member in the model
-                                      # and the one the pilot's hands would rest on
-RIB_SECTION        = (0.049, 0.038)   # "fairly thin" is the brief, and it is a judgement call
-ARCH_SECTION       = (0.055, 0.046)   # the transverse arches: mid and aft
-BOW_SECTION        = (0.085, 0.068)   # the forward rim -- the member the pilot reads as
-                                      # "the frame", so it keeps the rail's weight
+# THINNED AGAIN 2026-07-28, and this time they ARE his numbers, set on the lab's three member
+# sliders: rail 0.085 -> 0.030, bow rim 0.085 -> 0.040, ribs 0.049 -> 0.030. All three sit at
+# the sliders' own MINIMUM, so the reading is "as thin as that instrument would let me" rather
+# than "0.030 is right" -- if he wants them thinner still, the slider floors move first.
+#
+# ⚠ THIS FLATTENS THE HIERARCHY the 0.65x pass preserved. The rail is no longer the heavy
+# member; it is now exactly as thin as a rib, and the bow rim is the only heavy one left. That
+# is a legible choice on a 2.56 m cabin -- the wider the shell, the longer every member reads,
+# and length is what makes thickness expensive in the view -- but it is a change of intent,
+# not a rescale, so the old "rail and bow rim stay the heavy members" claim is retired.
+#
+# ARCH_SECTION HAS NO SLIDER (the side elevation does not draw the transverse arches), so it
+# is the one family Max did not set. It is placed BETWEEN rib and bow rim, which is where it
+# has always sat in the hierarchy, at the same depth:width ratio it already had.
+RAIL_SECTION       = (0.030, 0.023)   # the canopy rail: the member the pilot's hands would
+                                      # rest on -- now no heavier than a rib
+RIB_SECTION        = (0.030, 0.023)   # "fairly thin" is the brief, and it is a judgement call
+ARCH_SECTION       = (0.035, 0.029)   # the transverse arches: mid and aft. Interpolated, not
+                                      # authored -- no slider exists for it
+BOW_SECTION        = (0.040, 0.032)   # the forward rim -- the member the pilot reads as
+                                      # "the frame", and the only heavy member left
 RIB_GLASS_GAP      = 0.002    # air held between a member's outer face and the panels it lies
                               # on, so nothing z-fights against the glass it is bolted to.
 
@@ -385,15 +443,19 @@ BULKHEAD_INSET     = 0.010    # the aft panel sits this far forward of the aft r
 # the frame that was opaque anyway. analyse() MEASURES that rather than assuming it -- if
 # total occlusion moves when the shelf is added, this paragraph is wrong.
 NAME_DASH          = "Dash_Shelf"
-DASH_TOP_Z         = RAIL_Z   # the top surface lies IN the rail plane, so the shelf reads as
-                              # the rail line carried across the bow rather than as a slab
-                              # floating in the tub.
-DASH_AFT_Y         = 1.05     # the near edge -- how far the shelf cantilevers back toward the
-                              # pilot. 1.10 m from the eye along the sightline, so it is
-                              # within arm's reach, and 17.9 deg below the horizon, so you
-                              # look DOWN at it, which is the whole point of the reading Max
-                              # chose. Clear of the pilot by a wide margin: the knees are at
-                              # z ~= -0.72, 0.38 m below this surface.
+# THERE IS NO DASH_TOP_Z ANY MORE. The top face lies IN the RAIL SURFACE, and that surface
+# now SLOPES, so there is no single height to author: dash_extents() reads station_rail_z() at
+# each edge and the shelf rakes with the rail. The constant is deleted rather than pinned to
+# the mid value, because a level shelf under a raking rail is exactly the thing Max asked to
+# stop -- and a number typed here would drift the moment the taper is re-authored.
+DASH_AFT_Y         = 0.80     # the near edge -- how far the shelf cantilevers back toward the
+                              # pilot. Max: "make the dash shape closer to the player." Moved
+                              # 1.05 -> 0.80, which is as close as the BODY allows: the toe
+                              # line is at y = 0.74 and the knees at 0.46, so 0.80 stops just
+                              # ahead of the pilot's feet rather than over them. It costs
+                              # nothing in the view and cannot -- see the STATIONS block: a
+                              # surface in the rail plane subtends RAIL/y, which is always
+                              # below the aperture's lower bound however close it comes.
 DASH_THICK         = 0.045    # slab depth. A real glare shield is a shell; this is a
                               # placeholder, and six flat faces read correctly under the lab's
                               # flat shading, which a shell would not.
@@ -409,6 +471,76 @@ DASH_BOW_GAP       = 0.002    # the front face sits this far AFT of Coaming_Bow'
                               # before anything was exported.
 DASH_PROBE_N       = 9        # containment probes per axis on the slab's faces
 
+# ---- The seated pilot: the datum every height in this file rests on --------
+# These have governed the whole build since the tub proportions were settled -- RAIL_Z is at
+# chest height BECAUSE the chest is at -0.35, and the roof is at 0.70 BECAUSE the head needs
+# clearance -- but they have only ever existed in cockpit-section-lab.html, cited in prose
+# over here. Written down now because the seat is the one part whose entire job is to put
+# this body where the rest of the model already assumes it is, and a seat authored against
+# remembered numbers is a seat that drifts.
+#
+# 50th-percentile seated adult, lightly reclined, eye at the origin by the GLB convention.
+# NOT TUNABLE. If these move, the cabin moves, not the seat.
+BODY_SEAT_Z        = -0.80
+BODY_WAIST_Z       = -0.52
+BODY_CHEST_Z       = -0.35
+BODY_SHOULDER_Z    = -0.20
+BODY_HEEL_Z        = -1.18
+BODY_KNEE_Y        = 0.46
+BODY_TOE_Y         = 0.74
+BODY_HIP_HALF      = 0.19
+BODY_SHOULDER_HALF = 0.24
+BODY_HEAD_R        = 0.105
+
+# ---- The seat -------------------------------------------------------------
+# Max asked for it directly ("if you can model the seat...I guess, why not"), which REVERSES
+# his earlier "no seat/headrest -- we can build stuff like that in later" for the second
+# time. It has been form language since he corrected the build order: "a seat against a
+# bulkhead" is WHY Bulkhead_Aft is full height. Now the seat itself exists.
+#
+# NOTHING HERE IS A FREE CHOICE, and that is the point of doing it last rather than first.
+# THE ANTHROPOMETRY IS THE DATUM: the eye is pinned at the origin by the GLB convention, so
+# a seated pilot fixes every height in the cabin. The seat is the one object in the model
+# whose entire job is to put that body where it already is. Every number below is read off
+# the body, not authored:
+#     seat pan    z = -0.80   the pilot sits ON it
+#     waist       z = -0.52
+#     chest       z = -0.35
+#     shoulder    z = -0.20   the backrest tops out just above this
+#     knee        y = +0.46   the pan front stops well short of it
+#     hip half-width 0.19 / shoulder half-width 0.24 -- the pan and back clear both
+#
+# It costs nothing in the view and that is checked, not assumed: the pan sits 0.80 m below
+# an eye that is looking forward, so it projects to tan_z = -2.7 at the knees against a
+# frame edge of 0.70, and the backrest is behind the eye entirely.
+NAME_SEAT_PAN      = "Seat_Pan"
+NAME_SEAT_BACK     = "Seat_Back"
+NAME_SEAT_BASE     = "Seat_Base"
+SEAT_PAN_Z         = BODY_SEAT_Z          # -0.80, the body's own seat height
+SEAT_PAN_FRONT_Y   = 0.30     # front lip. Short of the knees at y = 0.46, so the pan
+                              # supports the thigh without fouling the knee bend.
+SEAT_PAN_BACK_Y    = -0.22    # where the pan meets the backrest, just behind the spine
+SEAT_PAN_HALF      = 0.24     # hip half-width is 0.19; the extra 50 mm is the bolster
+SEAT_PAN_THICK     = 0.055
+SEAT_BACK_TOP_Z    = -0.08    # just above the shoulder at -0.20, so it reads as a seat
+                              # back rather than a headrest. Max ruled headrests out and
+                              # has not un-ruled them.
+SEAT_BACK_RAKE_Y   = -0.14    # how far further AFT the top of the backrest sits than its
+                              # root: a reclined seat, which is what the eye height and the
+                              # -0.20 shoulder already imply
+SEAT_BACK_HALF     = 0.26     # shoulder half-width is 0.24
+SEAT_BACK_THICK    = 0.06
+SEAT_BASE_HALF     = 0.15     # the pedestal, narrower than the pan so the pan reads as
+                              # cantilevered rather than as a block
+SEAT_BASE_FRONT_Y  = 0.10
+SEAT_BASE_BACK_Y   = -0.20
+SEAT_FLOOR_GAP     = 0.005    # air between the pedestal's foot and the cabin floor. Without
+                              # it the foot is coplanar with the hull, which both z-fights and
+                              # reads to the signed eye-ray containment check as 3 mm OUTSIDE
+                              # -- a surface exactly on the shell is not reliably inside it.
+                              # Same idiom, same reason, as RIB_GLASS_GAP and DASH_BOW_GAP.
+SEAT_PROBE_N       = 7        # containment probes per axis, per seat part
+
 # ---- What makes it an ENCLOSURE rather than a window -----------------------
 ENCLOSURE_SECTOR_MIN = 0.97   # minimum solid-angle coverage in the ABOVE / LEFT / RIGHT /
                               # BEHIND sectors. AHEAD is deliberately NOT in that list: the
@@ -423,35 +555,106 @@ MEMBER_SEAM_TOL    = 1e-6     # metres a member's centreline may stray from a re
                               # the panel mesh have diverged and one of them is lying.
 
 # ---- Screen units (Screen_* display face + ScreenBody_* box) ---------------
-SCREEN_W           = 0.30     # display face. Max set this in cockpit-section-lab.html; at the
-SCREEN_H           = 0.25     # distances above it subtends 21.5 deg / 20.5 deg, i.e. BIGGER
-                              # in the view than the 0.45 m panels it replaces, which sat at
-                              # 1.60 m and subtended 16 deg. See the AC-FORM(c) note: that AC
-                              # floors the face by AREA, which measures the wrong thing once
-                              # the screens move from 1.60 m to 0.8 m.
-SCREEN_BEZEL       = 1.0 * INCH   # bezel all round the display face  -> body 0.5008 x 0.3508
-SCREEN_BODY_DEPTH  = 2.0 * INCH   # backing depth behind the bezel plane
+# ---- WHAT MAX APPROVED, and how it is preserved ----------------------------
+# These six numbers are what he set on the section lab's sliders, second pass 2026-07-28: a
+# 0.30 x 0.25 m face at 1.00 / 0.93 m, in a 1 inch bezel with a 2 inch body. They subtend
+# 17.06 deg and 18.32 deg, which is the composition he was looking at in the lab's pilot view.
+#
+# THE UPPER PAIR DOES NOT FIT AT 1.00 m, and this time it is NOT an instrument bug -- the lab
+# and the generator now AGREE, to within their different probe sets (lab -0.196 m at the
+# housing, generator -0.170 m at the nearest mesh vertex). The two were reconciled in 7e04a38
+# and they have stayed reconciled through a re-proportioning, which is the first evidence that
+# the fix took.
+#
+# WHAT EVICTED THE SCREENS WAS ONE OF HIS OWN OTHER NUMBERS. The binding corner is the
+# OUTBOARD-UP one, and the constraint it hits is the canopy profile above the shoulder -- set
+# by CANOPY_HALF's roof-edge fraction, which he moved 0.45 -> 0.30 in the same lab pass. That
+# narrowing is what removed the room at the height he raised the screens to. Measured, holding
+# everything else of his fixed:
+#     roof-edge x-frac   0.30    0.45    0.55    0.65    0.75    0.99
+#     upper pair fits to 0.72 m 0.79 m 0.83 m 0.88 m 0.94 m 1.00 m   (arm reach included)
+# So his 1.00 m is reachable, but only with a roof pane so wide the canopy walls run nearly
+# straight up -- which is a different silhouette from the one he just chose. The cabin width
+# he set is NOT the binding term: at 2.56 m the LOWER pair fits at his 0.93 m with 52 mm to
+# spare, where at 1.52 m it fitted nowhere near.
+SCREEN_APPROVED_W       = 0.30
+SCREEN_APPROVED_H       = 0.25
+SCREEN_APPROVED_DIST_UP = 1.00
+SCREEN_APPROVED_DIST_DN = 0.93
+SCREEN_APPROVED_BEZEL   = 1.0 * INCH
+SCREEN_APPROVED_DEPTH   = 2.0 * INCH
+
+# SO THE WHOLE ASSEMBLY IS SCALED UNIFORMLY TOWARD THE EYE, and that is the point: a uniform
+# scale on (face, bezel, body, distance) moves NOTHING that Max can see. Angular size and
+# bearing are both invariant under it -- 2*atan((w*k/2)/(d*k)) == 2*atan((w/2)/d) -- so the
+# screens still subtend 17.06 deg and 18.32 deg at tan x 0.83 / 0.82 and +13.4 / -8.4 deg
+# elevation, to the digit. What changes is only the metric size, which he never chose directly,
+# never sees, and which lane F is indifferent to: its UVs run over the unit square and the seam
+# test asserts face AREA while saying in its own comment that "aspect ratio stays the
+# generator's business". Holding the metres instead would have been holding the one number he
+# did NOT evaluate, at the cost of the two he did.
+#
+# THIS IS THE SECOND TIME THIS MECHANISM HAS RUN, and it ran without a new decision from him
+# because he already made this one: shown three ways out of the first fit failure, he chose to
+# keep the ANGLES and give up the metres. The alternative here would have been to pull only the
+# upper distance to 0.72 m, which fits at the FULL 0.30 m face -- but that CHANGES an angle
+# (17.06 -> 23.51 deg) and so changes something he can see, which is the thing the standing
+# ruling says not to do.
+#
+# 0.80 is solved, not chosen: the largest scale at which every screen, body and arm vertex
+# stays inside the built shell is 0.8010, and it is rounded down for margin. analyse()
+# re-derives the approved angles from the constants above and raises if this scaling has
+# drifted from preserving them.
+#
+# IT MOVED 0.84 -> 0.80 WHEN THE RAIL STARTED TO TAPER, and that is worth naming because it
+# looks like a cost and is mostly a purchase. Dropping the rail toward the bow lengthens the
+# canopy band there, and the profile fractions are measured up that band, so the shell pinches
+# in slightly sooner at the height the screens hang. Measured across the taper, with the scale
+# re-solved at each step:
+#     bow rail   -0.26    -0.35    -0.44    -0.52
+#     max scale   0.842    0.827    0.813    0.801
+#     occlusion  64.74%   63.12%   60.90%   58.72%
+# So the full mirror costs 4.9% of the assembly's METRES -- which is invisible, being a uniform
+# scale -- and returns 6.0 points of the view. Max sees the second number and not the first.
+SCREEN_FIT_SCALE   = 0.80
+
+SCREEN_W           = SCREEN_APPROVED_W * SCREEN_FIT_SCALE       # 0.2400
+SCREEN_H           = SCREEN_APPROVED_H * SCREEN_FIT_SCALE       # 0.2000
+SCREEN_BEZEL       = SCREEN_APPROVED_BEZEL * SCREEN_FIT_SCALE   # bezel all round the face
+SCREEN_BODY_DEPTH  = SCREEN_APPROVED_DEPTH * SCREEN_FIT_SCALE   # backing behind the bezel
 SCREEN_FACE_RECESS = 0.004    # display face sits this far BEHIND the bezel plane
 SCREEN_FACE_GAP    = 0.0015   # and this far in FRONT of the pocket floor, so neither z-fights
 # WHERE THE SCREENS GO -- all six numbers are Max's, set in cockpit-section-lab.html.
 #
-# He placed both pairs at nearly the same outboard angle and split them symmetrically about
-# eye level: two vertical stacks flanking the view at +9 deg and -9 deg. That RESOLVES the
-# ambiguity in "the screens should be oriented around the eye level of the pilot" -- it means
-# positioned AROUND eye level, not sitting low on the coaming angled up.
+# He placed both pairs at nearly the same outboard angle and split them about eye level: two
+# vertical stacks flanking the view, now at +13.4 deg and -8.4 deg. That RESOLVES the ambiguity
+# in "the screens should be oriented around the eye level of the pilot" -- it means positioned
+# AROUND eye level, not sitting low on the coaming angled up.
 #
-# THE DISTANCES ARE NOT THE ONES HE FIRST SET, and that is deliberate. At his original 1.32 /
-# 1.26 m all four units sat 40 cm OUTSIDE the hull: the centres reach x = +/-0.88 where the
-# canopy is only 0.60 m out at that height. The section lab did not catch it because it drew
-# the screens straight into tan space and never asked whether they were inside the cabin --
-# the same blind spot that let four monitors on lamp-posts pass 48/48 in this file's own
-# ancestor. Shown the three ways out, Max chose to keep the ANGLES and pull the DISTANCES in.
-SCREEN_TAN_X_UP    = 0.91     # upper pair, outboard
-SCREEN_TAN_Z_UP    = 0.22     # ...and its height, about +9 deg
-SCREEN_DIST_UP     = 0.79     # ...at arm's length, which is where a real cockpit puts an MFD
-SCREEN_TAN_X_DOWN  = 0.88     # lower pair, outboard
-SCREEN_TAN_Z_DOWN  = -0.21    # ...and its height, about -9 deg
-SCREEN_DIST_DOWN   = 0.83
+# THE SPLIT IS NO LONGER SYMMETRIC, second lab pass: he raised the upper pair (tan z 0.22 ->
+# 0.31) and left the lower roughly where it was (-0.21 -> -0.19), so the stacks now sit high.
+# He also brought both pairs INBOARD in bearing (tan x 0.91/0.88 -> 0.83/0.82) and pushed them
+# FURTHER AWAY (0.79/0.83 -> 1.00/0.93 before fitting). Further away at the same face size is
+# angularly SMALLER -- 21.50/20.49 deg becomes 17.06/18.32 -- and it is also much cheaper in
+# the view, because a screen's tan-space footprint falls as 1/dist^2. That trade is his to
+# make and this is him making it; increment 2 has to make 17 deg legible.
+#
+# THE DISTANCES ARE NOT THE ONES HE SET, and that is deliberate -- see SCREEN_FIT_SCALE above.
+# The pattern has now repeated across a complete re-proportioning: he sets the composition in
+# tan space, the housing turns out not to fit the shell, and the assembly is scaled to hold the
+# angles. The tan-space blind spot that started it (the lab drew screens without ever asking
+# whether they were inside the cabin -- the same blind spot that let four monitors on lamp-posts
+# pass 48/48 in this file's own ancestor) is fixed; what remains is simply that a cabin has less
+# room than the frame does.
+SCREEN_TAN_X_UP    = 0.83     # upper pair, outboard   -- HIS, untouched
+SCREEN_TAN_Z_UP    = 0.31     # ...and its height, about +13.4 deg -- HIS, untouched
+SCREEN_DIST_UP     = SCREEN_APPROVED_DIST_UP * SCREEN_FIT_SCALE   # 0.8000
+SCREEN_TAN_X_DOWN  = 0.82     # lower pair, outboard   -- HIS, untouched
+SCREEN_TAN_Z_DOWN  = -0.19    # ...and its height, about -8.4 deg -- HIS, untouched
+SCREEN_DIST_DOWN   = SCREEN_APPROVED_DIST_DN * SCREEN_FIT_SCALE   # 0.7440
+# The two TAN pairs are the BEARINGS and are not scaled, because a bearing has no length in
+# it. Scaling the distances alone slides each unit along its own sightline, which is why the
+# composition Max set survives untouched.
 
 # (suffix, tan x, tan z, distance). Left/right are the PILOT's: left is -X, up is +Z.
 SCREEN_QUADRANTS = (
@@ -480,17 +683,61 @@ SCREEN_QUADRANTS = (
 # ribs; the LOWER pair reach up off the RAILS, which is the heaviest member in the model and
 # the natural place to hang weight. Indices are ring vertices -- see LONGITUDINAL_NAMES.
 ARM_MOUNT_PROFILE  = {"UL": 4, "UR": 7, "LL": 3, "LR": 8}
-ARM_MOUNT_Y        = 0.95     # where along its member each arm bolts on. Chosen AFT of the
-                              # screens (whose faces sit near y = 1.23) so every arm reaches
-                              # FORWARD to its screen -- an arm rooted level with its own
-                              # screen runs flat across the view, which is what made the old
-                              # struts read as poles rather than as mounts.
+ARM_MOUNT_Y        = 0.70     # where along its member each arm bolts on.
+                              #
+                              # THE OLD RULE HERE WAS "AFT OF THE SCREENS, so every arm
+                              # reaches FORWARD", and it is now UNACHIEVABLE rather than
+                              # merely restated. The faces used to sit near y = 1.23 and this
+                              # was 0.95; option A moved them to y ~ 0.48, so "aft" now means
+                              # y < 0.48 -- and every such root FAILS arm_in_front_of_box().
+                              # Measured, the crossing boundary is between 0.56 and 0.58: at
+                              # 0.56 an arm swings 12 mm in front of its own bezel, at 0.45
+                              # 87 mm. The reason is structural, not tunable. From a root that
+                              # far aft the run to the attach is a long CHORD, and a chord
+                              # between two points at similar radius dips nearer the eye than
+                              # both ends -- straight through the bezel plane it has to stay
+                              # behind. Shortening ARM_BOOM_A_LEN cut it tenfold and still
+                              # left 3-14 mm, which is where tuning was stopped.
+                              #
+                              # So the rule's INTENT is what carries, and it is now three
+                              # measured properties instead of one authored number: the root
+                              # is on a real rib (ARM_MOUNT_TOL), the arm never crosses in
+                              # front of a bezel (arm_in_front_of_box), and the pilot can
+                              # actually SEE it (ARM_VISIBLE_MIN, new -- Max: "we need to
+                              # model their arms though").
+                              #
+                              # 0.90 is chosen on that third one. Visible arm, as a fraction
+                              # of the frame beyond its own screen box:
+                              #     mount_y   upper    lower
+                              #       0.90    0.477%   0.345%   <- balanced
+                              #       0.80    0.253%   0.612%
+                              #       0.65    0.054%   1.549%   <- uppers all but vanish
+                              # The upper pair hangs off the SHOULDER ribs and the lower off
+                              # the RAILS, which sit lower and further outboard, so the two
+                              # pairs trade visibility as the root moves. 0.90 is where they
+                              # balance, and it is 0.32 clear of the crossing boundary.
 ARM_MOUNT_TOL      = 1e-6     # metres the arm root may sit off its member's inboard face.
                               # Essentially zero: rib_mount_point() places it there, so any
                               # gap means ARM_MOUNT_PROFILE names a member the arm never
                               # reaches -- which is the lamp-post defect in its purest form.
-ARM_ATTACH_U       = 0.65     # where the arm lands on the back plate, as a fraction of its
-ARM_ATTACH_W       = 0.55     # half-extents, toward the OUTBOARD-FAR corner
+ARM_ATTACH_U       = 0.45     # where the arm lands on the back plate, as a fraction of its
+ARM_ATTACH_W       = 0.55     # half-extents: INBOARD in u, and in w toward the side the arm
+                              # comes from (up for the upper pair, down for the lower).
+                              #
+                              # IT USED TO AIM AT THE OUTBOARD-FAR CORNER, and that single
+                              # sign was what jammed the whole fitting. Measured clearance
+                              # from the housing to the hull, per direction, on the upper
+                              # units: outboard 0.037 m, up 0.093, straight back 0.123,
+                              # INBOARD 0.497. The old rule put the arm head in the tightest
+                              # gap in the cabin and then asked why it did not fit. Flipping
+                              # u inboard removes the arm from the binding constraint set
+                              # entirely -- the solved fit scale is identical with the arms
+                              # present and absent, i.e. the HOUSING is now the limit.
+                              #
+                              # It costs no visible arm. The length a pilot sees is the run
+                              # between the rib and the screen's outboard edge, which is set
+                              # by where the arm is ROOTED; past that edge it is behind the
+                              # box either way. Landing inboard only moves the hidden part.
 ARM_EMBED          = 0.010    # tip pushed this far into the box, so there is no seam gap
 # Cross-section: raised from (0.035, 0.045) root / (0.020, 0.026) tip, which read as sticks.
 # Max's first reference shows short CHUNKY brackets, so the strut is now roughly a 100 x 124
@@ -514,9 +761,17 @@ ARM_BOOM_B_HALF_W  = 0.019
 ARM_ELBOW_RADIUS   = 0.038    # the hinge puck. Fatter than either boom on purpose -- that
 ARM_ELBOW_HALF_LEN = 0.030    # step in section is what reads as a JOINT rather than a bend,
 ARM_ELBOW_SIDES    = 8        # and eight sides keeps it faceted rather than turned
-ARM_HEAD_LEN       = 0.075    # the tilt head: runs along the screen's own normal into the
+ARM_HEAD_LEN       = 0.060    # the tilt head: runs along the screen's own normal into the
 ARM_HEAD_HALF_U    = 0.026    # back plate, which is what keeps every arm behind its bezel
 ARM_HEAD_HALF_W    = 0.021
+ARM_VISIBLE_MIN    = 0.0005   # each arm must occlude at least this fraction of the frame
+                              # BEYOND its own screen box. Max asked for the arms to be
+                              # modelled; an arm hidden entirely behind the panel it holds is
+                              # not modelled, it is deleted with extra steps. Measured as
+                              # marginal coverage over the box, so hiding behind the screen
+                              # does not count and neither does hiding outside the frame --
+                              # which is exactly how the retired "root outside the frustum"
+                              # rule let four monitors ship on invisible lamp-posts.
 ARM_MIN_BEND_DEG   = 15.0     # below this the two booms are effectively one straight stick and
                               # the arm has stopped reading as articulated -- which is the
                               # exact defect this shape exists to fix, so it is an error
@@ -822,13 +1077,13 @@ def station_ring(index):
     segment, which has no tangent, and member_sections() would raise on it rather than
     silently produce a degenerate rail.
     """
-    _label, y, half_w, top_z = STATIONS[index]
-    tub_h = RAIL_Z - FLOOR_Z
-    can_h = top_z - RAIL_Z
+    _label, y, half_w, top_z, rail_z = STATIONS[index]
+    tub_h = rail_z - FLOOR_Z
+    can_h = top_z - rail_z
 
     def right_half():
         pts = [(fx * half_w, y, FLOOR_Z + fz * tub_h) for (_nm, fx, fz) in TUB_HALF]
-        pts += [(fx * half_w, y, RAIL_Z + fz * can_h) for (_nm, fx, fz) in CANOPY_HALF[1:]]
+        pts += [(fx * half_w, y, rail_z + fz * can_h) for (_nm, fx, fz) in CANOPY_HALF[1:]]
         return pts
 
     right = right_half()                       # floor_c, chine, wall, rail, shoulder, roofedge
@@ -1024,6 +1279,75 @@ def incident_panel_normals():
     return acc
 
 
+def _panel_triangle_normals(bay, seg, grid):
+    """Inward normals of the triangles of ONE shell panel, in the exporter's own fan order."""
+    if bay < 0 or bay >= N_BAYS:
+        return []
+    j = seg % N_ARCH
+    jn = (j + 1) % N_ARCH
+    quad = ((bay, j), (bay, jn), (bay + 1, jn), (bay + 1, j))
+    return [panel_normal_in((quad[0], quad[t], quad[t + 1]), grid)
+            for t in range(1, len(quad) - 1)]
+
+
+def seam_span_planes(kind, index, n_pts):
+    """The panels adjacent to a seam OVER EACH SPAN -- one list per span, not per vertex.
+
+    WHY THIS EXISTS, AND WHAT IT REPLACES. member_sections() has to solve each section's
+    standoff against the panels the member could poke through between its neighbours. That
+    was previously done by unioning `planes[k-1] + planes[k] + planes[k+1]`, where planes[v]
+    is every triangle touching VERTEX v. Vertex incidence is the wrong relation and it is
+    wrong in both directions:
+
+      TOO LITTLE. A quad fans into (0,1,2) and (0,2,3), so the triangle (i,j)(i,j+1)(i+1,j+1)
+      touches (i,j) but NOT (i+1,j). A longitudinal member's far section was therefore never
+      constrained against a triangle it lies directly under. That is the mid-span bulge
+      finding 3 of 10d5878 chased, and unioning the neighbours hid it rather than fixing it.
+
+      TOO MUCH, and this is the one that shipped a defect. planes[k+1] also carries panels
+      hanging off the FAR side of vertex k+1, which the member never approaches. At the roof
+      edge of a transverse arch that pulls in the opposite shoulder panel, which is nearly
+      edge-on to the member's inward direction: denom = -dot(m, w) came out at 0.0122, so a
+      2 mm clearance demand was divided by 0.0122 and became a 0.51 m standoff. Arch_Mid's
+      roof corners were hauled half a metre into the cabin -- its top sat at z = 0.455 with
+      the roof at 0.700, floating in mid-air with nothing touching it.
+
+      NEITHER EXISTING CHECK COULD SEE IT. member_seam_residual() measures the SEAM, and the
+      seam points are exact by construction whatever the standoff does. member_inboard_margin()
+      only asks whether a member has broken OUT through the shell, and a member dragged too
+      far IN is trivially inside. It took the test suite measuring the member's own VERTICES
+      against the shell's folds. Recorded in full because the class of error -- a check that
+      is blind to the direction the defect actually went -- is this file's recurring one.
+
+    The relation that IS correct is SPAN incidence: over the stretch of seam between vertex k
+    and k+1, the member lies on exactly the two panels meeting along that stretch, and every
+    triangle of both is a real constraint on both end sections. Constraint satisfaction stays
+    linear in the corners, so bounding the two ends still bounds the whole span exactly --
+    finding 3's argument is preserved, it is just applied to the right set.
+    """
+    grid = ring_grid()
+    spans = []
+    if kind == "long":
+        # seam runs fore-aft at ring index `index`; span b joins station b to b+1. The two
+        # panels meeting along it are the segments either side of that ring line.
+        for b in range(n_pts - 1):
+            spans.append(_panel_triangle_normals(b, index - 1, grid)
+                         + _panel_triangle_normals(b, index, grid))
+    elif kind == "trans":
+        # seam runs around ring station `index`; span j joins ring vertex j to j+1 (offset by
+        # the glass span's start). The two panels meeting along it are the same ring segment
+        # in the bay ahead and the bay behind -- and at the bow and aft stations one of those
+        # does not exist, which _panel_triangle_normals() returns empty for.
+        lo, _hi = RING_GLASS_SPAN
+        for s in range(n_pts - 1):
+            seg = lo + s
+            spans.append(_panel_triangle_normals(index - 1, seg, grid)
+                         + _panel_triangle_normals(index, seg, grid))
+    else:
+        raise ValueError("unknown seam family %r" % (kind,))
+    return spans
+
+
 def seam_points(kind, index):
     """One seam: its polyline, the outward normal at each vertex, and the panels meeting there."""
     grid = ring_grid()
@@ -1065,7 +1389,7 @@ def _tangents(pts):
     return out
 
 
-def member_sections(pts, norms, planes, width, depth):
+def member_sections(pts, norms, planes, width, depth, spans=None):
     """Four-corner cross-sections for a member lying ON a seam.
 
     At each seam vertex the frame is (c, n_out, t): t is the seam tangent, n_out the averaged
@@ -1096,6 +1420,11 @@ def member_sections(pts, norms, planes, width, depth):
     rib bolted to the OUTSIDE of the canopy measured identical to one correctly inboard, and
     48/48 tests passed a build with the structure on the wrong side of the glass.
     """
+    if spans is None:
+        raise ValueError(
+            "member_sections() needs the SPAN panel sets; passing only per-vertex `planes` is "
+            "the incidence relation that pulled Arch_Mid's roof corners 0.51 m into the cabin. "
+            "See seam_span_planes().")
     tans = _tangents(pts)
     hw = width * 0.5
     sections = []
@@ -1113,12 +1442,19 @@ def member_sections(pts, norms, planes, width, depth):
     # in between satisfies it as well. Taking the union with both neighbours is therefore not
     # a safety margin, it is the exact condition -- and it costs a fraction of a millimetre of
     # extra standoff rather than the blanket RIB_GLASS_GAP increase that would have hidden it.
+    # Each section answers for the panels adjacent to the spans it bounds -- see
+    # seam_span_planes() for why VERTEX incidence was both too little and far too much.
     span_planes = []
     for k in range(len(pts)):
-        acc = list(planes[k])
-        for nb in (k - 1, k + 1):
-            if 0 <= nb < len(pts):
-                acc.extend(planes[nb])
+        acc = []
+        for s in (k - 1, k):
+            if 0 <= s < len(spans):
+                acc.extend(spans[s])
+        if not acc:
+            raise ValueError(
+                "seam vertex %d bounds no span, so its section would be solved against no "
+                "panels at all and its standoff would be whatever RIB_GLASS_GAP says. A seam "
+                "with fewer than two points is not a member." % k)
         span_planes.append(acc)
 
     for k, p in enumerate(pts):
@@ -1160,7 +1496,8 @@ def seam_members():
     for j in sorted(LONGITUDINAL_NAMES):
         name, (width, depth) = LONGITUDINAL_NAMES[j]
         pts, norms, planes = seam_points("long", j)
-        secs, standoffs = member_sections(pts, norms, planes, width, depth)
+        secs, standoffs = member_sections(pts, norms, planes, width, depth,
+                                          seam_span_planes("long", j, len(pts)))
         verts, faces = loft(secs)
         members.append({
             "name": name, "kind": "long", "seamIndex": j,
@@ -1172,7 +1509,8 @@ def seam_members():
     for i in sorted(TRANSVERSE_NAMES):
         name, (width, depth) = TRANSVERSE_NAMES[i]
         pts, norms, planes = seam_points("trans", i)
-        secs, standoffs = member_sections(pts, norms, planes, width, depth)
+        secs, standoffs = member_sections(pts, norms, planes, width, depth,
+                                          seam_span_planes("trans", i, len(pts)))
         verts, faces = loft(secs)
         members.append({
             "name": name, "kind": "trans", "seamIndex": i,
@@ -1252,6 +1590,16 @@ def station_half_width(y):
     return STATIONS[a][2] + (STATIONS[b][2] - STATIONS[a][2]) * t
 
 
+def station_rail_z(y):
+    """The rail's height at station y. The waistline is a sloping line now, not a level one.
+
+    Linear between stations, which IS the built surface: loft() interpolates ring vertices
+    linearly, so anything that reads the rail off this agrees with the mesh exactly.
+    """
+    a, b, t = _station_bracket(y)
+    return STATIONS[a][4] + (STATIONS[b][4] - STATIONS[a][4]) * t
+
+
 def rail_inboard_x(y):
     """The innermost |x| the rail members reach at station y, read off the BUILT sections.
 
@@ -1297,7 +1645,177 @@ def dash_extents():
             "the rails meet on the centreline at the dash shelf (half-widths %.4f / %.4f after "
             "DASH_SIDE_GAP %.4f), so there is no room for a shelf between them"
             % (hf, hb, DASH_SIDE_GAP))
-    return y_front, y_back, hf, hb, DASH_TOP_Z, DASH_TOP_Z - DASH_THICK
+    # THE SHELF NOW RAKES. Its top face lies IN the rail surface, and that surface slopes, so
+    # the front and back edges sit at different heights -- which is Max's "slope down as it
+    # approaches the canopy" and is derived from the rail rather than authored beside it.
+    top_front = station_rail_z(y_front)
+    top_back = station_rail_z(y_back)
+    return y_front, y_back, hf, hb, top_front, top_back
+
+
+def hull_floor_z(x, y, tris=None):
+    """Height of the cabin floor at (x, y) ON THE EXPORTED MESH, by dropping a ray onto it.
+
+    THE FLOOR IS DISHED -- TUB_HALF puts the chine 10% of the way up the tub's height -- so a
+    pedestal dropped to a flat FLOOR_Z would hang in the air at the centreline and bury itself
+    at the edges. Something has to answer "how high is the floor here", and the obvious answer
+    is to evaluate TUB_HALF at the station half-width interpolated to y. THAT ANSWER IS WRONG,
+    and a function that gave it stood here until 2026-07-28.
+
+    The mesh does not evaluate the profile: loft() interpolates the ring VERTICES linearly, and
+    the chine vertex
+    slides outboard as the cabin widens, so a lofted floor quad between two stations of
+    different half-width is WARPED -- and warped quads get TRIANGULATED, along a fan diagonal
+    the profile knows nothing about. The two agree only where the taper is gentle.
+
+    That is why the seat fell through the floor when the cabin went 1.52 m -> 2.56 m: the mid
+    station's chine moved to x = 0.92 while the aft station's stayed at 0.42, and across that
+    taper the triangulated surface stands up to 3.5 mm ABOVE what the profile predicts under
+    the pedestal. The profile was never wrong about the profile; it was answering a question
+    about a surface that is not the one we export.
+
+    This is the same lesson as the triangles-not-quads finding on the member solve, arriving in
+    new clothes: READ THE FAN THE EXPORTER READS. Anything that has to touch the hull without
+    passing through it asks the mesh, not the parameterisation.
+    """
+    if tris is None:
+        tris = shell_triangles(include_closures=False)
+    origin_z = 0.0                   # the EYE PLANE, which is inside the cabin by definition.
+                                     # NOT the rail: the rail slopes below it toward the bow,
+                                     # so a rail-plane origin is outside the shell up there.
+    origin = (x, y, origin_z)        # ...then drop
+    best = None                      # nearest hit going down == the floor under (x, y)
+    for tri in tris:
+        t = _ray_tri(origin, (0.0, 0.0, -1.0), tri)
+        if t is not None and (best is None or t < best):
+            best = t
+    if best is None:
+        raise ValueError(
+            "no floor under (%.4f, %.4f): a ray dropped from the rail plane never met the "
+            "shell, so this point is outside the tub" % (x, y))
+    return origin_z - best
+
+
+def build_seat():
+    """Seat_Pan / Seat_Back / Seat_Base -- the pilot's seat, against the bulkhead.
+
+    Three parts rather than one, because they are three different structural ideas and the
+    flat shading in the lab reads the folds between them: a pan you sit on, a back you lean
+    against, and a pedestal carrying both to the floor.
+
+    EVERY DIMENSION COMES OFF THE BODY (see the BODY_* block). The pan is at BODY_SEAT_Z and
+    stops short of BODY_KNEE_Y; the back tops out just above BODY_SHOULDER_Z and is wider than
+    BODY_SHOULDER_HALF; the pedestal lands on the DISHED floor via hull_floor_z() rather than on
+    a flat FLOOR_Z it does not have.
+
+    NO HEADREST. Max ruled headrests out when he ruled the seat out, and only the seat has
+    been un-ruled. The back stops at the shoulder line on purpose.
+    """
+    parts = []
+
+    # ---- pan: a slab under the thighs, tilted very slightly nose-up so the pilot is held
+    # rather than sliding forward. The tilt is 0.02 m over its length, i.e. about 2 degrees.
+    pan_front_z = SEAT_PAN_Z + 0.02
+    pan_back_z = SEAT_PAN_Z
+    parts.append((NAME_SEAT_PAN,) + _extrude_profile(
+        [(SEAT_PAN_FRONT_Y, pan_front_z), (SEAT_PAN_BACK_Y, pan_back_z)],
+        SEAT_PAN_HALF, SEAT_PAN_THICK, down=True))
+
+    # ---- back: from the pan's rear edge up and AFT to SEAT_BACK_TOP_Z
+    parts.append((NAME_SEAT_BACK,) + _extrude_profile(
+        [(SEAT_PAN_BACK_Y, pan_back_z),
+         (SEAT_PAN_BACK_Y + SEAT_BACK_RAKE_Y, SEAT_BACK_TOP_Z)],
+        SEAT_BACK_HALF, SEAT_BACK_THICK, down=False))
+
+    # ---- base: pedestal from under the pan down to the floor. Its underside follows the
+    # dish, so the seat rests ON the tub instead of intersecting or floating over it.
+    # MAX, not min, over the footprint. The floor dishes DOWN toward the centreline, so a
+    # flat-bottomed pedestal dropped to the deepest point it spans (-1.200 at x=0) would push
+    # its outer corners 24 mm THROUGH the hull, where the floor is only -1.176. Resting it on
+    # the highest point instead leaves a lens of air under the middle of the pedestal, which
+    # is entirely enclosed by the seat and the floor and can never be seen.
+    # SAMPLED OVER THE WHOLE FOOTPRINT, not at four corners. On a triangulated warped quad the
+    # highest point of the floor under the pedestal can lie along the fan DIAGONAL, in the
+    # middle of the footprint, where no corner samples it.
+    tris = shell_triangles(include_closures=False)
+    z_lo = max(
+        hull_floor_z(SEAT_BASE_HALF * (2.0 * a / (SEAT_PROBE_N - 1.0) - 1.0),
+                     SEAT_BASE_BACK_Y + (SEAT_BASE_FRONT_Y - SEAT_BASE_BACK_Y)
+                     * (b / (SEAT_PROBE_N - 1.0)), tris)
+        for a in range(SEAT_PROBE_N) for b in range(SEAT_PROBE_N)) + SEAT_FLOOR_GAP
+    z_hi = pan_back_z
+    if z_lo >= z_hi - 1e-6:
+        raise ValueError(
+            "the cabin floor at %.4f is at or above the seat pan at %.4f, so the pedestal has "
+            "no height. FLOOR_Z and BODY_SEAT_Z have crossed." % (z_lo, z_hi))
+    verts = [
+        (-SEAT_BASE_HALF, SEAT_BASE_FRONT_Y, z_lo), (SEAT_BASE_HALF, SEAT_BASE_FRONT_Y, z_lo),
+        (SEAT_BASE_HALF, SEAT_BASE_BACK_Y, z_lo), (-SEAT_BASE_HALF, SEAT_BASE_BACK_Y, z_lo),
+        (-SEAT_BASE_HALF, SEAT_BASE_FRONT_Y, z_hi), (SEAT_BASE_HALF, SEAT_BASE_FRONT_Y, z_hi),
+        (SEAT_BASE_HALF, SEAT_BASE_BACK_Y, z_hi), (-SEAT_BASE_HALF, SEAT_BASE_BACK_Y, z_hi),
+    ]
+    faces = _orient_outward(verts, [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4),
+                                    (3, 2, 6, 7), (1, 2, 6, 5), (0, 3, 7, 4)])
+    parts.append((NAME_SEAT_BASE, verts, faces))
+    return parts
+
+
+def _orient_outward(verts, faces):
+    """Wind every face so its Newell normal points away from the solid's centroid."""
+    cx = sum(v[0] for v in verts) / len(verts)
+    cy = sum(v[1] for v in verts) / len(verts)
+    cz = sum(v[2] for v in verts) / len(verts)
+    out = []
+    for f in faces:
+        n = _newell_normal(verts, f)
+        c = [sum(verts[k][i] for k in f) / len(f) for i in range(3)]
+        if v_dot(n, v_sub(c, (cx, cy, cz))) < 0.0:
+            f = tuple(reversed(f))
+        out.append(f)
+    return out
+
+
+def _extrude_profile(spine, half, thick, down):
+    """A slab following a (y, z) spine, `half` wide either side of the centreline.
+
+    `down=True` puts the thickness BELOW the spine (the pan: you sit on the spine), False puts
+    it BEHIND (the backrest: you lean on the spine). Returns (verts, faces) for a closed solid.
+    """
+    (y0, z0), (y1, z1) = spine[0], spine[-1]
+    dy, dz = y1 - y0, z1 - z0
+    ln = math.hypot(dy, dz)
+    if ln < 1e-9:
+        raise ValueError("seat slab has zero length; its two spine points coincide")
+    # offset direction: perpendicular to the spine in the y-z plane, pointing away from
+    # the pilot -- down for the pan, aft for the back.
+    ox, oz = (0.0, -1.0) if down else (-dz / ln, dy / ln)
+    if not down and ox > 0.0:
+        ox, oz = -ox, -oz
+    top = [(y0, z0), (y1, z1)]
+    bot = [(y + ox * thick, z + oz * thick) for (y, z) in top]
+    verts = []
+    for (y, z) in top + bot:
+        verts.append((-half, y, z))
+        verts.append((half, y, z))
+    # verts: 0,1 = top front L/R | 2,3 = top back | 4,5 = bot front | 6,7 = bot back
+    faces = [(0, 1, 3, 2), (4, 5, 7, 6), (0, 1, 5, 4), (2, 3, 7, 6), (1, 3, 7, 5), (0, 2, 6, 4)]
+    return verts, _orient_outward(verts, faces)
+
+
+def seat_probe_points():
+    """A grid over every seat part's surface, for the containment check."""
+    pts = []
+    for (_nm, verts, _faces) in build_seat():
+        lo = [min(v[i] for v in verts) for i in range(3)]
+        hi = [max(v[i] for v in verts) for i in range(3)]
+        for a in range(SEAT_PROBE_N):
+            for b in range(SEAT_PROBE_N):
+                for c in range(2):
+                    fa, fb = a / (SEAT_PROBE_N - 1.0), b / (SEAT_PROBE_N - 1.0)
+                    pts.append((lo[0] + (hi[0] - lo[0]) * fa,
+                                lo[1] + (hi[1] - lo[1]) * fb,
+                                lo[2] + (hi[2] - lo[2]) * c))
+    return pts
 
 
 def build_dash():
@@ -1308,25 +1826,23 @@ def build_dash():
     Its outboard edges track rail_inboard_x(), so the shelf re-fits itself whenever the cabin
     is re-proportioned.
 
+    RAKED, not level: the top face lies in the RAIL SURFACE, which slopes down toward the bow,
+    so the shelf drops away from the pilot exactly as the canopy drops away above him. Both
+    edges come off station_rail_z(), so if the rail taper is re-authored the shelf follows it
+    rather than needing to be re-typed -- the same rule its outboard edges already obey.
+
     Every face is oriented OUTWARD by measuring its Newell normal against the slab centre
     rather than by hand-winding eight vertices, which is the class of mistake that flipped every
     panel in the model once already (see station_ring()).
     """
-    y_front, y_back, hf, hb, top, bot = dash_extents()
+    y_front, y_back, hf, hb, top_f, top_b = dash_extents()
     verts = [
-        (-hf, y_front, top), (hf, y_front, top), (hf, y_back, top), (-hf, y_back, top),
-        (-hf, y_front, bot), (hf, y_front, bot), (hf, y_back, bot), (-hf, y_back, bot),
+        (-hf, y_front, top_f), (hf, y_front, top_f), (hf, y_back, top_b), (-hf, y_back, top_b),
+        (-hf, y_front, top_f - DASH_THICK), (hf, y_front, top_f - DASH_THICK),
+        (hf, y_back, top_b - DASH_THICK), (-hf, y_back, top_b - DASH_THICK),
     ]
-    raw = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4),
-           (3, 2, 6, 7), (1, 2, 6, 5), (0, 3, 7, 4)]
-    centre = (0.0, (y_front + y_back) * 0.5, (top + bot) * 0.5)
-    faces = []
-    for f in raw:
-        n = _newell_normal(verts, f)
-        c = [sum(verts[k][i] for k in f) / len(f) for i in range(3)]
-        if v_dot(n, v_sub(c, centre)) < 0.0:
-            f = tuple(reversed(f))
-        faces.append(f)
+    faces = _orient_outward(verts, [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4),
+                                    (3, 2, 6, 7), (1, 2, 6, 5), (0, 3, 7, 4)])
     return verts, faces
 
 
@@ -1337,15 +1853,19 @@ def dash_probe_points():
     stations, and the tub wall it has to stay inside of is too, so the two can only cross where
     they are checked. A grid catches a mid-span crossing that the corners would clear.
     """
-    y_front, y_back, hf, hb, top, bot = dash_extents()
+    y_front, y_back, hf, hb, top_f, top_b = dash_extents()
     pts = []
     for i in range(DASH_PROBE_N):
         s = i / (DASH_PROBE_N - 1.0)
         y = y_front + (y_back - y_front) * s
         half = hf + (hb - hf) * s
+        # The shelf RAKES, so its top is a different height at every station along it. Probing
+        # one z would sample a plane the shelf does not lie in and could clear a wall the shelf
+        # actually crosses.
+        top = top_f + (top_b - top_f) * s
         for j in range(DASH_PROBE_N):
             u = -1.0 + 2.0 * j / (DASH_PROBE_N - 1.0)
-            for z in (top, bot):
+            for z in (top, top - DASH_THICK):
                 pts.append((u * half, y, z))
     return pts
 
@@ -1542,7 +2062,7 @@ def canopy_frame_landing():
     for (nm, val, limit) in (("right", half_w / y, tan_h),
                              ("left", half_w / y, tan_h),
                              ("top", top_z / y, tan_v),
-                             ("bottom", -RAIL_Z / y, tan_v)):
+                             ("bottom", -STATIONS[0][4] / y, tan_v)):
         out[nm] = {
             "tan": val,
             "frameTan": limit,
@@ -1951,7 +2471,8 @@ def rib_mount_point(profile_index, y):
     """
     pts, norms, planes = seam_points("long", profile_index)
     _name, (width, depth) = LONGITUDINAL_NAMES[profile_index]
-    _secs, standoffs = member_sections(pts, norms, planes, width, depth)
+    _secs, standoffs = member_sections(pts, norms, planes, width, depth,
+                                       seam_span_planes("long", profile_index, len(pts)))
     ys = [p[1] for p in pts]           # stations run bow -> aft, i.e. DECREASING y
     if y > ys[0] or y < ys[-1]:
         raise ValueError(
@@ -1993,7 +2514,9 @@ def arm_endpoints(centre, n, u, w, tan_x, tan_z, suffix):
     Hw = SCREEN_H * 0.5 + SCREEN_BEZEL
     bezel_c = v_add(centre, v_mul(n, SCREEN_FACE_RECESS))
     back_c = v_sub(bezel_c, v_mul(n, SCREEN_BODY_DEPTH))
-    attach = v_add(back_c, v_add(v_mul(u, sx * ARM_ATTACH_U * Hu),
+    # -sx is INBOARD. See ARM_ATTACH_U: the outboard-far corner has 37 mm to the hull and the
+    # inboard one has 497 mm, and aiming at the former is what made the arms unfittable.
+    attach = v_add(back_c, v_add(v_mul(u, -sx * ARM_ATTACH_U * Hu),
                                  v_mul(w, sz * ARM_ATTACH_W * Hw)))
     return root, attach, seam_p, inward, profile_index, mount_standoff
 
@@ -2173,6 +2696,9 @@ def build_all():
     dv, df = build_dash()
     parts.append({"name": NAME_DASH, "verts": dv, "faces": df,
                   "material": "Mat_Hull", "kind": "hull"})
+    for (snm, sv, sf) in build_seat():
+        parts.append({"name": snm, "verts": sv, "faces": sf,
+                      "material": "Mat_Body", "kind": "seat"})
     for mem in seam_members():
         parts.append({"name": mem["name"], "verts": mem["verts"], "faces": mem["faces"],
                       "material": "Mat_Frame", "kind": "member"})
@@ -2487,6 +3013,45 @@ def analyse(units=None):
             % (MEMBER_PLANT_OFFSET, blind_inboard[0]["name"],
                blind_inboard[0]["inboardMarginPlantedDefect"]))
 
+    # ---- Is the composition Max approved still the composition being built? --
+    # SCREEN_FIT_SCALE shrinks the whole screen assembly toward the eye so it fits inside the
+    # hull. That is only legitimate because a uniform scale is invisible: angular size and
+    # bearing are both invariant under it. This checks that claim against the approved numbers
+    # instead of trusting the arithmetic, so that scaling one term and forgetting another --
+    # the face but not the distance, say -- is a build error rather than a silent change to
+    # something he chose by eye.
+    approved = []
+    for (suffix, tan_x, tan_z, dist) in SCREEN_QUADRANTS:
+        up = tan_z >= 0.0
+        want_dist = (SCREEN_APPROVED_DIST_UP if up else SCREEN_APPROVED_DIST_DN)
+        want_deg = 2.0 * math.degrees(math.atan((SCREEN_APPROVED_W * 0.5) / want_dist))
+        got_deg = 2.0 * math.degrees(math.atan((SCREEN_W * 0.5) / dist))
+        want_h = 2.0 * math.degrees(math.atan((SCREEN_APPROVED_H * 0.5) / want_dist))
+        got_h = 2.0 * math.degrees(math.atan((SCREEN_H * 0.5) / dist))
+        approved.append({"name": SCREEN_PREFIX + suffix,
+                         "approvedWidthDeg": want_deg, "widthDeg": got_deg,
+                         "approvedHeightDeg": want_h, "heightDeg": got_h,
+                         "tanX": tan_x, "tanZ": tan_z,
+                         "approvedDistance": want_dist, "distance": dist,
+                         "scale": SCREEN_FIT_SCALE})
+    drift = [a for a in approved
+             if abs(a["widthDeg"] - a["approvedWidthDeg"]) > 1e-6
+             or abs(a["heightDeg"] - a["approvedHeightDeg"]) > 1e-6]
+    if drift:
+        raise ValueError(
+            "the screens no longer subtend what Max approved. A uniform SCREEN_FIT_SCALE is "
+            "invisible to him precisely BECAUSE it holds these angles; if they have moved, "
+            "something was scaled that should not have been, or not scaled that should:\n%s\n"
+            "  Fix: SCREEN_W/H, SCREEN_BEZEL, SCREEN_BODY_DEPTH and both SCREEN_DIST_* must "
+            "ALL carry the same SCREEN_FIT_SCALE (%.4f); the two TAN pairs must carry none."
+            % ("\n".join("    %s subtends %.4f deg wide, approved %.4f"
+                         % (a["name"], a["widthDeg"], a["approvedWidthDeg"]) for a in drift),
+               SCREEN_FIT_SCALE))
+    if SCREEN_FIT_SCALE > 1.0 + 1e-9:
+        raise ValueError(
+            "SCREEN_FIT_SCALE is %.4f. Scaling the assembly UP past what Max set is not a fit "
+            "correction, it is a redesign of his composition." % SCREEN_FIT_SCALE)
+
     # ---- Screens (display face + body) and arms ----
     screen_polys = []
     arm_polys = []
@@ -2576,6 +3141,21 @@ def analyse(units=None):
             "ARM_MOUNT_Y (%.3f) falls outside that member's run."
             % ("\n".join("    %s sits %.4f m off %s (tolerance %.4f m)"
                           % (nm, gap, mem, ARM_MOUNT_TOL) for (nm, mem, gap) in arm_failures),
+               ARM_MOUNT_Y))
+
+    invisible = [d for d in arm_detail if d["occlusionBeyondItsScreen"] < ARM_VISIBLE_MIN]
+    if invisible:
+        raise ValueError(
+            "an arm is not VISIBLE -- it adds nothing to the frame beyond the screen box it "
+            "holds, so the pilot cannot see there is a mount there at all:\n%s\n"
+            "  Max asked for the arms to be modelled, and an arm hidden entirely behind its "
+            "own panel is not modelled. Move ARM_MOUNT_Y (currently %.3f) so the root sits "
+            "further from its screen's tan footprint -- the upper pair gains visibility as it "
+            "moves FORWARD along the shoulder rib, the lower pair as it moves AFT along the "
+            "rail, so the two trade and there is a balance point."
+            % ("\n".join("    %s adds %.4f%% of the frame (floor %.4f%%)"
+                         % (d["name"], 100.0 * d["occlusionBeyondItsScreen"],
+                            100.0 * ARM_VISIBLE_MIN) for d in invisible),
                ARM_MOUNT_Y))
 
     crossers = [d for d in arm_detail if d["inFrontOfBoxBy"] > 1e-6]
@@ -2680,13 +3260,14 @@ def analyse(units=None):
     # instrument was reporting that correctly. Two different properties -- "inside the shell"
     # and "clear of the rails" -- had been collapsed into one check with one instrument. The
     # planted defect for a hull-containment test has to breach the HULL.
-    _yf, _yb, _hf, _hb, _tz, _bz = dash_extents()
+    _yf, _yb, _hf, _hb, _tf, _tb = dash_extents()
     dash_planted = None
     for i in range(DASH_PROBE_N):
         s = i / (DASH_PROBE_N - 1.0)
         y = _yf + (_yb - _yf) * s
         wall = station_half_width(y) + MEMBER_PLANT_OFFSET
-        for z in (_tz, _bz):
+        _t = _tf + (_tb - _tf) * s
+        for z in (_t, _t - DASH_THICK):
             for x in (-wall, wall):
                 m = inside_margin((x, y, z), tris)
                 if m is not None and (dash_planted is None or m < dash_planted):
@@ -2726,6 +3307,38 @@ def analyse(units=None):
             "rail. dash_extents() and build_dash() have diverged."
             % (NAME_DASH, dash_rail_gap, DASH_SIDE_GAP))
 
+    # ---- The seat: inside the tub, and clear of the pilot ---------------------
+    # Same signed eye-ray instrument as the dash and the fittings. The seat is the one part
+    # whose position is fully determined by the body, so the interesting check is not "did I
+    # place it well" but "does the cabin still contain the thing the cabin was sized for".
+    seat_outside = []
+    seat_worst = None
+    seat_constrained = 0
+    seat_unconstrained = 0
+    for p in seat_probe_points():
+        m = inside_margin(p, tris)
+        if m is None:
+            seat_unconstrained += 1
+            continue
+        seat_constrained += 1
+        if seat_worst is None or m < seat_worst:
+            seat_worst = m
+        if m < 0.0:
+            seat_outside.append((p, m))
+    if seat_outside:
+        p, m = min(seat_outside, key=lambda t: t[1])
+        raise ValueError(
+            "%d probe points on the seat are OUTSIDE the enclosure -- worst at "
+            "(%.4f, %.4f, %.4f), %.4f m through the hull.\n"
+            "  The seat is placed FROM the anthropometry, so this means the cabin no longer "
+            "contains the pilot it was proportioned around -- check STATIONS and FLOOR_Z "
+            "before touching any SEAT_* constant."
+            % (len(seat_outside), p[0], p[1], p[2], -m))
+    if seat_constrained == 0:
+        raise ValueError(
+            "the seat containment check measured NOTHING: every probe projects through the "
+            "open bow aperture. A pass that measured nothing is not a pass.")
+
     # ---- Occlusion. Canopy_Glass is NOT in any of these lists, by design: the pilot sees
     # through it. The opaque structure is the seam members, the aft bulkhead and THE TUB --
     # which is new and is the single biggest term now. The marginal order is
@@ -2757,6 +3370,19 @@ def analyse(units=None):
     dash_marginal = coverage_fraction(hull_polys + dash_polys) - coverage_fraction(hull_polys)
     hull_polys.extend(dash_polys)
 
+    # The seat, likewise measured separately before being folded in. It sits 0.80 m BELOW an
+    # eye that is looking forward, so the expectation is zero and this is where that is
+    # checked rather than asserted.
+    seat_polys = []
+    for (_snm, sv, sf) in build_seat():
+        for f in sf:
+            poly = silhouette_tan([sv[k] for k in f], [tuple(range(len(f)))])
+            if len(poly) >= 3:
+                seat_polys.append(poly)
+    seat_own = coverage_fraction(seat_polys)
+    seat_marginal = coverage_fraction(hull_polys + seat_polys) - coverage_fraction(hull_polys)
+    hull_polys.extend(seat_polys)
+
     members_own = coverage_fraction(member_polys)
     hull_own = coverage_fraction(hull_polys)
     screens_own = coverage_fraction(screen_polys)
@@ -2783,7 +3409,7 @@ def analyse(units=None):
         "bowRimLanding": landing,
         "panelFacesEyeWorstDot": panel_dot,
         "panelFacesEyeFlippedDot": panel_dot_flipped,
-        "stations": [{"label": s[0], "y": s[1], "halfWidth": s[2], "topZ": s[3]}
+        "stations": [{"label": s[0], "y": s[1], "halfWidth": s[2], "topZ": s[3], "railZ": s[4]}
                      for s in STATIONS],
         "floorZ": FLOOR_Z,
         "railZ": RAIL_Z,
@@ -2795,17 +3421,34 @@ def analyse(units=None):
             "name": NAME_DASH,
             "frontY": _yf, "aftY": _yb,
             "halfWidthFront": _hf, "halfWidthAft": _hb,
-            "topZ": _tz, "bottomZ": _bz,
+            "topZFront": _tf, "topZAft": _tb,
+            "rakeDrop": _tb - _tf,
+            "thickness": DASH_THICK,
             "depth": _yf - _yb,
             "railClearance": dash_rail_gap,
             "railClearanceAuthored": DASH_SIDE_GAP,
-            "nearEdgeElevationDeg": math.degrees(math.atan(_tz / _yb)),
+            "nearEdgeElevationDeg": math.degrees(math.atan(_tb / _yb)),
+            "farEdgeElevationDeg": math.degrees(math.atan(_tf / _yf)),
             "worstInsideMargin": dash_worst,
             "insideMarginPlantedDefect": dash_planted,
             "probesConstrained": dash_constrained,
             "probesUnconstrained": dash_unconstrained,
             "ownOcclusion": dash_own,
             "marginalOcclusion": dash_marginal,
+        },
+
+        "seat": {
+            "parts": [nm for (nm, _v, _f) in build_seat()],
+            "panZ": SEAT_PAN_Z, "backTopZ": SEAT_BACK_TOP_Z,
+            "panFrontY": SEAT_PAN_FRONT_Y, "backRakeY": SEAT_BACK_RAKE_Y,
+            "worstInsideMargin": seat_worst,
+            "probesConstrained": seat_constrained,
+            "probesUnconstrained": seat_unconstrained,
+            "ownOcclusion": seat_own,
+            "marginalOcclusion": seat_marginal,
+            "body": {"seatZ": BODY_SEAT_Z, "chestZ": BODY_CHEST_Z,
+                     "shoulderZ": BODY_SHOULDER_Z, "kneeY": BODY_KNEE_Y,
+                     "hipHalf": BODY_HIP_HALF, "shoulderHalf": BODY_SHOULDER_HALF},
         },
 
         "memberDetail": member_detail,
@@ -3062,12 +3705,21 @@ def build_metrics(parts, units, analysis):
                               r6(SCREEN_H + 2.0 * SCREEN_BEZEL),
                               r6(SCREEN_BODY_DEPTH)],
             "uv": [list(c) for c in SCREEN_FACE_UV],
-            "uvNote": ("TEXCOORD_0 on the display face, (0,0) at the pilot's LOWER-LEFT corner "
-                       "and (1,1) at the upper-right, in the face's own (widthAxis, heightAxis) "
-                       "frame. This is the seam the screen-content work binds to: it does not "
-                       "need to know where the panel sits, only that it is a unit-square UV "
-                       "surface 0.45 x 0.30 m. Screen POSITIONS are still being re-fitted; this "
-                       "contract is not."),
+            "uvNote": ("TEXCOORD_0 on the display face, spanning the full unit square. "
+                       "(0,0) is the pilot's UPPER-LEFT corner and (1,1) the lower-right: "
+                       "v = 0 is the TOP edge, which is glTF's own y-down UV convention and "
+                       "what three.js's GLTFLoader already assumes. MEASURED FROM THE EXPORTED "
+                       "GLB, not inferred -- on every face the highest-y vertex carries v = 0. "
+                       "This note said LOWER-LEFT until 2026-07-28 and was wrong; a reader who "
+                       "trusted it would have flipped every panel vertically. Consequences for "
+                       "the content side, both one-liners: texture.flipY = false (canvas row 0 "
+                       "and v = 0 are both the top, so they line up directly), and a raycast "
+                       "maps as y = uv.v * height, NOT (1 - uv.v). "
+                       "This is the seam the screen-content work binds to: it does not need to "
+                       "know where the panel sits, only that it is a unit-square UV surface. "
+                       "Bind to the SURFACE, never the POSE -- screen positions have been "
+                       "re-fitted three times and the face is currently %.3f x %.3f m, which is "
+                       "also not a number to hard-code." % (SCREEN_W, SCREEN_H)),
         })
 
     adet = {d["name"]: d for d in analysis["armDetail"]}
@@ -3250,7 +3902,8 @@ def build_metrics(parts, units, analysis):
                      "bug, not a proportions bug, and no re-tuning of those constants could "
                      "ever have produced what Max asked for."),
             "stations": [{"label": s["label"], "y": r6(s["y"]),
-                          "halfWidth": r6(s["halfWidth"]), "topZ": r6(s["topZ"])}
+                          "halfWidth": r6(s["halfWidth"]), "topZ": r6(s["topZ"]),
+                          "railZ": r6(s["railZ"])}
                          for s in analysis["stations"]],
             "floorZ": r6(FLOOR_Z),
             "railZ": r6(RAIL_Z),
@@ -3311,6 +3964,12 @@ def build_metrics(parts, units, analysis):
                        "language when he corrected the build order, which is why the bulkhead "
                        "is now full height -- but whether the seat is MODELLED or merely "
                        "implied by the tub has not been asked yet. Deliberately absent."),
+            "seat": dict(analysis["seat"], what=(
+                "the pilot's seat -- pan, back and pedestal. Max asked for it directly, which "
+                "reverses 'no seat/headrest' for the second time; it has been FORM language "
+                "since he corrected the build order ('a seat against a bulkhead' is why "
+                "Bulkhead_Aft is full height). Every dimension is read off the BODY_* "
+                "anthropometry rather than authored. No headrest: only the seat was un-ruled.")),
             "dash": dict(analysis["dash"], what=(
                 "the glare shield lying on top of Coaming_Bow -- a PLACEHOLDER SURFACE with "
                 "nothing on it, reserving the volume a dashboard would occupy. Max's words "
@@ -3525,12 +4184,14 @@ def print_summary(metrics, analysis, glb_path, metrics_path):
     print("  THE SHELL -- one CLOSED profile per station, split by material at the rail")
     print("    %d panels = %d segments around x %d bays fore-aft"
           % (cp["panelCount"], cp["facetsAcross"], cp["bays"]))
-    print("    floor z = %+.3f m   RAIL z = %+.3f m  <- hull below, glass above"
+    print("    floor z = %+.3f m   RAIL z at the pilot = %+.3f m  <- hull below, glass above"
           % (cp["floorZ"], cp["railZ"]))
-    print("    %-6s %9s %12s %10s" % ("ring", "y", "half-width", "roof z"))
+    print("    BOTH THE ROOF AND THE RAIL TAPER toward the bow, and the bow pair MIRROR each")
+    print("      other about the eye plane, so the forward aperture is symmetric:")
+    print("    %-6s %9s %12s %10s %10s" % ("ring", "y", "half-width", "roof z", "rail z"))
     for s in cp["stations"]:
-        print("    %-6s %+8.3fm %11.3fm %+9.3fm"
-              % (s["label"], s["y"], s["halfWidth"], s["topZ"]))
+        print("    %-6s %+8.3fm %11.3fm %+9.3fm %+9.3fm"
+              % (s["label"], s["y"], s["halfWidth"], s["topZ"], s["railZ"]))
     print("    tub profile    (right half, centreline -> rail): %s"
           % ", ".join("%s (%.2f, %.2f)" % (a[0], a[1], a[2]) for a in cp["tubProfileHalf"]))
     print("    canopy profile (right half, rail -> roof):       %s"
@@ -3580,14 +4241,44 @@ def print_summary(metrics, analysis, glb_path, metrics_path):
     print("    Floor_Pan      RETIRED -- the floor is now part of Hull_Tub")
     d = metrics["closures"]["dash"]
     print("")
+    st = metrics["closures"]["seat"]
+    print("  THE SEAT -- placed FROM the anthropometry, which is the datum the cabin was")
+    print("  proportioned around. Not a free choice: the eye is the origin, so a seated pilot")
+    print("  fixes every height, and the seat's job is to put that body where the model")
+    print("  already assumes it is.")
+    print("    parts: %s" % ", ".join(st["parts"]))
+    print("    pan at z %.3f (the body's seat height) | back tops out at %.3f, just above the"
+          % (st["panZ"], st["backTopZ"]))
+    print("      shoulder at %.3f -- a seat back, NOT a headrest, which Max ruled out"
+          % st["body"]["shoulderZ"])
+    print("    pan front at y %.3f, short of the knees at %.3f; back raked %.3f m aft"
+          % (st["panFrontY"], st["body"]["kneeY"], -st["backRakeY"]))
+    print("    pedestal foot follows the DISHED floor via hull_floor_z(), which drops a ray")
+    print("      onto the EXPORTED TRIANGLES rather than evaluating the profile -- across a")
+    print("      taper the warped floor quads stand above what the profile predicts, and the")
+    print("      seat fell 3.5 mm through the hull when the cabin widened. It rests on the")
+    print("      highest point it spans, sampled over the whole footprint, because on a")
+    print("      triangulated quad that point can sit on the fan diagonal, not at a corner")
+    print("    inside the tub: worst margin %+.4f m over %d probes, %d unconstrained"
+          % (st["worstInsideMargin"], st["probesConstrained"], st["probesUnconstrained"]))
+    print("    COSTS NOTHING IN THE VIEW: own silhouette %.4f%%, marginal %.4f%% -- it sits"
+          % (100.0 * st["ownOcclusion"], 100.0 * st["marginalOcclusion"]))
+    print("      0.80 m BELOW an eye that is looking forward. Measured, not assumed.")
+    print("")
     print("  DASH SHELF -- the glare shield on the coaming. A placeholder surface, no content.")
-    print("    %-14s %.3f m across x %.3f m deep, %.0f mm thick, top face IN the rail plane"
-          % (d["name"], d["halfWidthAft"] * 2.0, d["depth"],
-             (d["topZ"] - d["bottomZ"]) * 1000.0))
+    print("    %-14s %.3f m across x %.3f m deep, %.0f mm thick, top face IN the RAIL SURFACE"
+          % (d["name"], d["halfWidthAft"] * 2.0, d["depth"], d["thickness"] * 1000.0))
     print("      spans y %.3f (against the coaming) back to %.3f, half-width %.3f -> %.3f"
           % (d["frontY"], d["aftY"], d["halfWidthFront"], d["halfWidthAft"]))
-    print("      near edge sits %.1f deg BELOW the horizon -- the pilot looks DOWN at it"
-          % -d["nearEdgeElevationDeg"])
+    print("      RAKED: the top face drops %.0f mm from the near edge (z %+.3f) to the"
+          % (d["rakeDrop"] * 1000.0, d["topZAft"]))
+    print("        coaming (z %+.3f) -- Max's 'slope down as it approaches the canopy'."
+          % d["topZFront"])
+    print("        Derived from station_rail_z(), not authored, so it follows the rail taper")
+    print("      near edge %.1f deg below the horizon, far edge %.1f deg -- the pilot looks"
+          % (-d["nearEdgeElevationDeg"], -d["farEdgeElevationDeg"]))
+    print("        DOWN at all of it, and it stays below the aperture's lower bound at every")
+    print("        station, which is why no reshaping of the shelf can return a pixel")
     print("      clear of the rails by %.4f m (authored %.4f; outboard edge tracks"
           % (d["railClearance"], d["railClearanceAuthored"]))
     print("        rail_inboard_x(), so it re-fits itself if the cabin is re-proportioned)")

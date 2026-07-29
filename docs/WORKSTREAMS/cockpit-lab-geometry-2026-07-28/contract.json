@@ -108,6 +108,12 @@
       "ac": "AC-FORM, AC-METRIC",
       "change": "AC-FORM(a) is now measured as SOLID-ANGLE COVERAGE around the eye per sector, not as a description. The AC-METRIC sub-assertion 'the whole canopy sits forward of the eye (z<0)' is REPLACED by 'the vault straddles the eye plane'.",
       "why": "(1) 'Turning the head finds canopy rather than empty space' was the wording, and a flat pane passed every dimensional assertion in the suite while failing exactly that. Ray-casting the sphere makes it a number, with the forward aperture asserted OPEN as the anti-vacuity pin. (2) 'The canopy sits forward of the eye' was true of a window and is false of an enclosure BY DEFINITION -- a shell wrapping past the shoulders must reach behind them. Keeping it would have made a correct enclosure permanently unbuildable, so it is replaced rather than relaxed. Both are working-Claude corrections to verification method, not changes to what Max asked for."
+    },
+    {
+      "date": "2026-07-28",
+      "ac": "AC-FORM, AC-FRAME",
+      "change": "Re-proportioned to Max's SECOND section-lab pass, applied verbatim: cabin 1.52 m -> 2.56 m at the shoulders, rail -0.34 -> -0.26, roof-edge x-frac 0.45 -> 0.30, all three member sections to their slider minimums, both screen pairs re-aimed. No AC TEXT changes -- the form language (closed profile, faceted enclosure, tub below the rail and canopy above) is unchanged and only the scale moved. Recorded here because two decisions inside it are not re-derivable from the numbers. (1) His upper screen distance of 1.00 m DOES NOT FIT: lab and generator agree (-0.196 m / -0.170 m), and the binding constraint is his own roof-edge x-frac of 0.30, which narrows the canopy exactly where he raised the screens to. Built on his standing ruling from the first fit failure -- keep the ANGLES, give up the metres -- via SCREEN_FIT_SCALE solved to 0.84. The screens subtend 17.06 / 18.32 deg exactly as he set them. DO NOT restore 1.00 m without also widening the roof pane; the alternative he has NOT been asked to choose is pulling only the upper distance to 0.72 m at the full 0.30 m face, which fits but changes an angle he can see. (2) AC-FORM(c)'s angular floor of 16.06 deg now passes at 17.06 deg rather than 21.50 -- still a pass, with less headroom, and the shrink is his choice (further away buys view back as 1/dist^2), not a regression.",
+      "evidence": "evidence/AC-LIVE-RESULT.md at 70f2e87"
     }
   ],
   "architecturalConnections": {

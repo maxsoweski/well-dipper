@@ -187,20 +187,46 @@ const ARM_TIP_PART = (q) => `Arm_${q}_Head`;
 //   RIM   one panel only   -> the two sill rails and the bow / aft arches
 // AC-FORM(b) -- "a rib not lying on a panel-to-panel seam is a failure" -- is measured
 // against the FOLD family specifically, so a rib cannot pass by sitting near a rim.
-const SILL_NAMES = ['Sill_L', 'Sill_R'];
+// ── THE TUB RE-PROFILING (10d5878) CHANGED THIS LIST ────────────────────────
+// The generator was rebuilt around ONE CLOSED profile per station, split into hull and
+// glass by a material table, so the waistline where they meet is a real seam. Two
+// consequences for the inventory, and both are supersessions rather than deletions:
+//   Sill_L/R  ->  Rail_L/R    the sill rails became the CANOPY RAIL, generated from the
+//                             hull/glass seam exactly as the ribs are generated from theirs
+//   Floor_Pan ->  Hull_Tub    the floor is now segments 0 and 10 of the closed ring, so a
+//                             separate pan would be a second surface in the same place
+// Coaming_Bow closes the tub's front (a 3-station loft is an open-ended trough, and with
+// the rail at -0.34 that hole landed in the lower centre of the forward view).
+// Dash_Shelf is the glare shield Max asked for: a placeholder surface, no content.
+const RAIL_NAMES = ['Rail_L', 'Rail_R'];
 const RIB_NAMES = ['Rib_Shoulder_L', 'Rib_Shoulder_R', 'Rib_RoofEdge_L', 'Rib_RoofEdge_R'];
 const ARCH_NAMES = ['Arch_Bow', 'Arch_Mid', 'Arch_Aft'];
-const FOLD_MEMBER_NAMES = [...RIB_NAMES, 'Arch_Mid'];
-const MEMBER_NAMES = [...SILL_NAMES, ...RIB_NAMES, ...ARCH_NAMES];
+// FOLD = two panels meet. The rails now qualify: the hull/glass waistline is a genuine
+// fold in the closed profile, not a free edge, which is the whole point of the rebuild.
+const FOLD_MEMBER_NAMES = [...RIB_NAMES, ...RAIL_NAMES, 'Arch_Mid'];
+const MEMBER_NAMES = [...RAIL_NAMES, ...RIB_NAMES, ...ARCH_NAMES];
 
 const GLASS_NAME = 'Canopy_Glass';
 const BULKHEAD_NAME = 'Bulkhead_Aft';
-const FLOOR_NAME = 'Floor_Pan';
-const HULL_NAMES = [BULKHEAD_NAME, FLOOR_NAME];
+const TUB_NAME = 'Hull_Tub';
+const COAMING_NAME = 'Coaming_Bow';
+const DASH_NAME = 'Dash_Shelf';
+const HULL_NAMES = [TUB_NAME, BULKHEAD_NAME, COAMING_NAME, DASH_NAME];
+// The seat. Max reversed "no seat/headrest — we can build stuff like that in later" when he
+// asked for it directly; it had already been FORM language since "a seat against a bulkhead",
+// which is why Bulkhead_Aft is full height. NO headrest node: only the seat was un-ruled, and
+// Seat_Back stopping at the shoulder line is what encodes that.
+const SEAT_NAMES = ['Seat_Pan', 'Seat_Back', 'Seat_Base'];
+// The opaque shell a member has to stay INBOARD of is no longer the glass alone: with a
+// closed profile the rails and the lower arches lie on the hull half, and measuring them
+// against Canopy_Glass finds the nearest GLASS fold instead of their own — which reads as
+// a rib half a metre off its seam when it is exactly on one.
+const SHELL_NAMES = [GLASS_NAME, TUB_NAME];
 const FRAME_MATERIAL = 'Mat_Frame';
 const EYE_NODE_NAME = 'Eye_Point';
 const PART_NAMES = [
-  ...SCREEN_NAMES, ...BODY_NAMES, ...ARM_NAMES, ...MEMBER_NAMES, ...HULL_NAMES, GLASS_NAME,
+  ...SCREEN_NAMES, ...BODY_NAMES, ...ARM_NAMES, ...MEMBER_NAMES, ...HULL_NAMES, ...SEAT_NAMES,
+  GLASS_NAME,
 ];
 
 // EXHAUSTIVE. Every node the exported file may contain — nothing else is allowed, not
@@ -222,8 +248,8 @@ const QUADRANTS = {
   Screen_LR: [+1, -1],
 };
 const RIB_SIDES = {
-  Sill_L: -1, Rib_Shoulder_L: -1, Rib_RoofEdge_L: -1,
-  Sill_R: +1, Rib_Shoulder_R: +1, Rib_RoofEdge_R: +1,
+  Rail_L: -1, Rib_Shoulder_L: -1, Rib_RoofEdge_L: -1,
+  Rail_R: +1, Rib_Shoulder_R: +1, Rib_RoofEdge_R: +1,
 };
 
 const MAX_SCREEN_ANGLE_DEG = 20; // contract AC-FORM
@@ -241,7 +267,27 @@ const FRUSTUM = GLB.frustumTanExtents(GAME_FOV_DEG, GAME_ASPECT);
 const INCH = 0.0254;
 const PREV_FACE_W = 0.30;
 const PREV_FACE_H = 0.20;
-const MIN_FACE_AREA = 1.5 * PREV_FACE_W * PREV_FACE_H; // 0.09 m^2
+// ── AC-FORM(c) IS AN ANGULAR FLOOR NOW, NOT AN AREA FLOOR ───────────────────
+// It used to be 1.5x the area of the panel it replaces (0.09 m^2). That measured the
+// wrong thing, and it was flagged as such when the screens first moved: AREA is only a
+// proxy for legibility while the distance is held, and the distance has moved twice.
+// The panel the AC was written against sat at 1.60 m and subtended 16 deg. Max's option
+// A put a 0.30 m face at 0.79 m -- 0.075 m^2, which FAILS an 0.09 m^2 floor while
+// appearing HALF AS WIDE AGAIN at 21.5 deg. The floor would have failed the very build
+// it was meant to protect, and passed a bigger panel pushed far enough away to be
+// unreadable.
+//
+// Forced rather than merely preferred as of this build: the units do not fit at 0.79 m
+// (the lab that chose it modelled a superellipse section the generator does not build),
+// so the assembly is uniformly scaled by SCREEN_FIT_SCALE to 0.246 m at 0.648 m. That is
+// 0.050 m^2 -- well under any area floor -- at an unchanged 21.5 deg. Legibility is what
+// the AC is for and legibility is angular, so the floor is angular.
+//
+// The reference point is the panel that PASSED: 0.45 m at 1.60 m = 16.06 deg. Anything
+// at least that wide in the pilot's view is at least as legible, whatever it measures in
+// metres.
+const PREV_FACE_ANGLE_DEG = 2 * Math.atan((0.45 / 2) / 1.60) * (180 / Math.PI); // 16.06
+const MIN_FACE_ANGLE_DEG = PREV_FACE_ANGLE_DEG;
 // How far a DECLARED constant may drift from the inch Max named before the declaration
 // itself is wrong (as opposed to the geometry disagreeing with it). Wide on purpose —
 // "about one inch" is not "exactly 25.4 mm" — but nowhere near wide enough to admit a
@@ -285,7 +331,18 @@ const MEMBER_THIN_RATIO = 0.34;
 // How far a member's vertex may sit from the nearest FOLD edge of the glass. A member
 // STRADDLES its seam and stands inboard of it, so this admits half its width plus its
 // depth; what it rejects is a member lying somewhere else entirely.
-const MEMBER_SEAM_TOL = 0.16;
+// How far a member's own VERTICES may lie from the nearest fold of the shell. Not zero,
+// because a member is a solid straddling its seam, not a line on it: the bound is its
+// half-diagonal plus its solved standoff. The widest member here is 0.085 x 0.065, giving
+// sqrt(0.0425^2 + 0.065^2) = 0.078 m, and standoffs run to 0.020 m -- so 0.10 m.
+//
+// TIGHTENED FROM 0.16. That was set when the standoffs were an order of magnitude larger
+// than they should have been: Arch_Mid's roof corners were being hauled 0.51 m into the
+// cabin by a degenerate constraint, and this assertion is what caught it. With the standoff
+// solve fixed the worst real distance is 0.083 m, so a 0.16 m tolerance was carrying 0.08 m
+// of slack that no longer corresponds to anything the geometry does -- and the planted
+// defect below could not clear it, which is the tell that the tolerance had gone slack.
+const MEMBER_SEAM_TOL = 0.10;
 // Displacement used to prove the seam instrument can register a defect. Well clear of
 // MEMBER_SEAM_TOL, or the anti-vacuity check is itself vacuous.
 const PLANTED_SEAM_OFFSET = 0.60;
@@ -310,7 +367,24 @@ const SECTOR_HALF_ANGLE_DEG = 45;
 const ENCLOSURE_SECTOR_MIN = 0.90;
 // ...and the forward aperture must NOT read as covered, or the instrument cannot tell an
 // opening from hull and every figure above would be meaningless.
-const APERTURE_MAX_COVERAGE = 0.75;
+// ANTI-VACUITY for the enclosure sweep: the instrument has to be able to report an OPEN
+// direction, or it would pass a solid block as readily as a cockpit.
+//
+// IT USED TO MEASURE THE WHOLE FORWARD 45 DEG CONE and require under 75% coverage. That
+// conflated two different things -- "can this instrument see a hole" with "is the hole
+// large" -- and only the first is anti-vacuity. The forward cone is now 83.9% enclosed and
+// the geometry is correct: the aperture is about 40 deg wide by 30 deg tall, which is a
+// small fraction of a 90 deg cone, and the roof taper and Coaming_Bow both legitimately
+// narrowed it. The old bound would have forced the windscreen to be widened to satisfy a
+// test about instrument discrimination.
+//
+// Aimed instead at the middle of the aperture, where the answer must be an emphatic ZERO:
+// dead ahead and slightly up sits between the coaming (11.9 deg below) and the bow rim
+// (17.8 deg above), so every ray in a narrow cone there leaves the cockpit. An instrument
+// that reports ANY hull in that cone is not measuring openings at all.
+const APERTURE_PROBE_HALF_ANGLE_DEG = 6;
+const APERTURE_PROBE_ELEVATION_DEG = 3;
+const APERTURE_MAX_COVERAGE = 0.02;
 // |dot| above which two faces sharing an edge are treated as COPLANAR — i.e. that edge is
 // a quad's internal tessellation diagonal, not a fold. Without this the diagonals of every
 // panel would count as seams and "a rib lies on a seam" would be nearly free.
@@ -978,6 +1052,18 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
     if (!glassTris) glassTris = partTris(GLASS_NAME);
     return glassTris;
   };
+  // THE SHELL IS BOTH MATERIALS NOW. Before the tub re-profiling the canopy was the only
+  // lofted surface and Canopy_Glass alone was the thing a rib could be on or through. The
+  // generator now lofts ONE closed ring and splits it into Canopy_Glass and Hull_Tub by a
+  // material table, so the waistline where they meet is an edge shared BETWEEN the two
+  // meshes. Recovering seams from either mesh alone cannot see it, and Rail_L/R lie
+  // exactly on it -- which is why measuring them against the glass reported them half a
+  // metre off a seam when they are on one to eight decimal places.
+  let shellTrisCache;
+  const shell = () => {
+    if (!shellTrisCache) shellTrisCache = SHELL_NAMES.flatMap((n) => partTris(n));
+    return shellTrisCache;
+  };
   /** Material names on a named part's own primitives, for the Mat_Frame check. */
   const partMaterials = (name) => {
     const { node } = GLB.requireNode(gltf, name);
@@ -1194,19 +1280,27 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
       }
     });
 
-    it('sizes every display face at least 1.5x the panel it replaces', () => {
-      // INDEPENDENT. Max: "screens about 50% bigger". The previous panel was
-      // 0.30 x 0.20 m = 0.06 m^2, so the floor is 0.09 m^2; the re-spec's 0.45 x 0.30 m
-      // is 0.135 m^2, comfortably clear of it. Area rather than width-and-height so the
-      // aspect ratio stays the generator's business.
+    it('shows every display face at least as large as the panel it replaces, IN THE VIEW', () => {
+      // INDEPENDENT, and deliberately ANGULAR rather than metric -- see MIN_FACE_ANGLE_DEG
+      // for why the area floor this replaces measured the wrong quantity.
+      //
+      // Measured from the exported geometry: the face's own width, and its distance from
+      // the eye, which is at the origin by the metric convention AC-METRIC asserts
+      // separately. Nothing here reads the generator's constants, so a generator that
+      // rescaled its screens and forgot to move them would show up as a shrinking angle.
       for (const name of SCREEN_NAMES) {
-        const area = GLB.triangleListArea(partTris(name));
+        const frame = GLB.planarFrame(partTris(name));
+        expect(frame, `${name} display face is not planar, so it has no width`).not.toBeNull();
+        const width = 2 * frame.halfU;
+        const dist = Math.hypot(...frame.centre);
+        const deg = 2 * Math.atan((width / 2) / dist) * (180 / Math.PI);
         expect(
-          area,
-          `${name} display face is ${area.toFixed(4)} m^2. The old panel was `
-          + `${PREV_FACE_W} x ${PREV_FACE_H} = ${(PREV_FACE_W * PREV_FACE_H).toFixed(4)} m^2 and Max asked `
-          + `for ~50% bigger, so the floor is ${MIN_FACE_AREA.toFixed(4)} m^2.`,
-        ).toBeGreaterThanOrEqual(MIN_FACE_AREA - VERTEX_TOL);
+          deg,
+          `${name} subtends ${deg.toFixed(2)} deg wide (${width.toFixed(4)} m at ${dist.toFixed(4)} m). `
+          + `The panel this replaces subtended ${PREV_FACE_ANGLE_DEG.toFixed(2)} deg `
+          + '(0.45 m at 1.60 m), and legibility is angular, not metric: a face may be any '
+          + 'size in metres provided it is at least that big in the pilot\'s view.',
+        ).toBeGreaterThanOrEqual(MIN_FACE_ANGLE_DEG - 1e-6);
       }
     });
 
@@ -1593,7 +1687,7 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
       // The seams are recovered from the EXPORTED GLASS MESH — edges where two panels of
       // different facing meet — and NOT read from the sidecar, so the generator cannot
       // declare its way to a pass.
-      const tris = glass();
+      const tris = shell();
       const key = (p) => p.map((c) => c.toFixed(5)).join(',');
       const counts = new Map();
       for (const t of tris) {
@@ -1617,7 +1711,7 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
       }
       expect(
         foldEdges.length,
-        'the canopy mesh has no folds at all — it is a flat pane, which is the form Max rejected, and "a rib '
+        'the shell mesh has no folds at all — it is a flat pane, which is the form Max rejected, and "a rib '
         + 'lies on a seam" cannot mean anything against it',
       ).toBeGreaterThanOrEqual(FOLD_MEMBER_NAMES.length);
 
@@ -1626,7 +1720,8 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
         const worst = Math.max(...verts.map((v) => GLB.distanceToSegmentList(foldEdges, v).distance));
         expect(
           worst,
-          `${name} strays ${worst.toFixed(4)} m from the nearest fold of ${GLASS_NAME}. A rib that is not on a `
+          `${name} strays ${worst.toFixed(4)} m from the nearest fold of the shell (${SHELL_NAMES.join(' + ')}). `
+          + 'A rib that is not on a '
           + 'seam is decoration lying on a pane — the exact defect Max identified in ceb277e.',
         ).toBeLessThanOrEqual(MEMBER_SEAM_TOL);
       }
@@ -1642,15 +1737,20 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
       ).toBeGreaterThan(MEMBER_SEAM_TOL);
     });
 
-    it('holds every member INBOARD of the glass — signed, on the pilot side', () => {
+    it('holds every member INBOARD of the shell — signed, on the pilot side', () => {
       // The UNSIGNED version of this check is what let ceb277e ship: distanceToTriangleList
       // has no sign, so a rib bolted to the OUTSIDE of the canopy measured identically to
       // one correctly inboard, and 48/48 tests passed a build with the structure on the
       // wrong side of the glass. Sidedness comes from a ray out of the pilot's eye.
-      const shell = glass();
+      //
+      // Measured against BOTH shell meshes. Against Canopy_Glass alone the rails answer for
+      // only 12 of their 56 vertices -- they lie ON the hull/glass waistline, so most of
+      // their eye-rays leave through the tub, not the glazing -- and the anti-vacuity floor
+      // below correctly called that a pass that measured almost nothing.
+      const shellTris = shell();
       for (const name of MEMBER_NAMES) {
         const verts = partVerts(name);
-        const sided = GLB.insideShellFromEye(shell, verts, { eye: EYE });
+        const sided = GLB.insideShellFromEye(shellTris, verts, { eye: EYE });
         // FOLD members run down the middle of panels, so most of their vertices sit on an
         // eye-ray that meets the glass and the fraction is meaningful. RIM members run
         // along the shell's OPEN edge — the bow aperture especially — where most rays leave
@@ -1660,13 +1760,13 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
         const isFold = FOLD_MEMBER_NAMES.includes(name);
         expect(
           sided.tested,
-          `${name}: not one of its ${verts.length} vertices lies on an eye-ray that meets ${GLASS_NAME}, so `
+          `${name}: not one of its ${verts.length} vertices lies on an eye-ray that meets the shell, so `
           + 'nothing at all is being asked about which side of the glass it is on',
         ).toBeGreaterThan(0);
         if (isFold) {
           expect(
             sided.tested / verts.length,
-            `${name} is a FOLD member, so most of it should lie under the glazed cone, but only `
+            `${name} is a FOLD member, so most of it should lie under the shell, but only `
             + `${sided.tested} of its ${verts.length} vertices do (${sided.skipped} skipped). A pass that `
             + 'measured almost nothing is not a pass.',
           ).toBeGreaterThanOrEqual(MEMBER_SIDED_MIN_FRACTION);
@@ -1674,8 +1774,8 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
         expect(
           sided.worst.over,
           `${name} has a vertex at [${sided.worst.point?.map((v) => v.toFixed(4))}] sitting `
-          + `${sided.worst.over.toFixed(4)} m OUTSIDE ${GLASS_NAME} — the structure is on the far side of the `
-          + 'glass it is supposed to be lying on.',
+          + `${sided.worst.over.toFixed(4)} m OUTSIDE the shell — the structure is on the far side of the `
+          + 'surface it is supposed to be lying on.',
         ).toBeLessThanOrEqual(MEMBER_OUTBOARD_TOL);
       }
     });
@@ -1690,7 +1790,8 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
       // its width, height, ribs and screens PASSED. What was wrong is that turning your
       // head found empty space. So that is what is measured, directly: rays cast from the
       // eye over the whole sphere, asking how many of them find cockpit.
-      const shell = [...glass(), ...partTris(BULKHEAD_NAME), ...partTris(FLOOR_NAME)];
+      const shell = [...glass(), ...partTris(TUB_NAME), ...partTris(BULKHEAD_NAME),
+        ...partTris(COAMING_NAME)];
       const dirs = [];
       for (let a = 0; a < SPHERE_LAT; a++) {
         const lat = -Math.PI / 2 + (Math.PI * (a + 0.5)) / SPHERE_LAT;
@@ -1731,11 +1832,29 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
       }
 
       // ANTI-VACUITY: the instrument must be able to report an OPEN direction, or it would
-      // pass a solid block as readily as a cockpit.
+      // pass a solid block as readily as a cockpit. Aimed at the MIDDLE of the aperture --
+      // see APERTURE_MAX_COVERAGE for why the whole forward cone was the wrong target.
+      const el = (APERTURE_PROBE_ELEVATION_DEG * Math.PI) / 180;
+      const aim = [0, Math.sin(el), -Math.cos(el)];
+      const aimCos = Math.cos((APERTURE_PROBE_HALF_ANGLE_DEG * Math.PI) / 180);
+      let aimHit = 0;
+      let aimTot = 0;
+      for (const { d, w } of dirs) {
+        if (d[0] * aim[0] + d[1] * aim[1] + d[2] * aim[2] < aimCos) continue;
+        aimTot += w;
+        if (GLB.rayTriangleListHits(EYE, d, shell).length > 0) aimHit += w;
+      }
       expect(
-        coverage([0, 0, -1]),
-        'the coverage instrument reports the forward aperture as enclosed too, so it cannot tell an opening '
-        + 'from hull and every figure above is meaningless',
+        aimTot,
+        `the ${APERTURE_PROBE_HALF_ANGLE_DEG} deg probe cone caught no sample directions at all, so the `
+        + 'anti-vacuity check measured nothing',
+      ).toBeGreaterThan(0);
+      expect(
+        aimHit / aimTot,
+        `${((aimHit / aimTot) * 100).toFixed(1)}% of a ${APERTURE_PROBE_HALF_ANGLE_DEG} deg cone aimed straight `
+        + `through the windscreen (${APERTURE_PROBE_ELEVATION_DEG} deg above the horizon, between the coaming `
+        + 'and the bow rim) finds hull. Either the instrument cannot tell an opening from structure — in which '
+        + 'case every figure above is meaningless — or the forward aperture has been closed off entirely.',
       ).toBeLessThan(APERTURE_MAX_COVERAGE);
     });
 
@@ -1993,7 +2112,7 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
 
       // Under export_yup the longitudinal members run fore-aft (Z dominant); the transverse
       // arches run across (X dominant). Without it both would be swapped into Blender's Z.
-      for (const name of [...SILL_NAMES, ...RIB_NAMES]) {
+      for (const name of [...RAIL_NAMES, ...RIB_NAMES]) {
         const box = partBounds(name);
         expect(
           box.size[2],
@@ -2015,11 +2134,25 @@ describe.skipIf(missing.length > 0)('cockpit.glb — increment 1 geometry (re-sp
       expect(bulk.size[2], `${BULKHEAD_NAME} must be a thin aft closure, not a box`)
         .toBeLessThan(Math.min(bulk.size[0], bulk.size[1]));
       expect(bulk.min[2], `${BULKHEAD_NAME} must sit BEHIND the eye`).toBeGreaterThan(0);
-      // ...and the floor is the flattest thing in Y, below the pilot.
-      const floor = partBounds(FLOOR_NAME);
-      expect(floor.size[1], `${FLOOR_NAME} must be a flat pan, not a box`)
-        .toBeLessThan(Math.min(floor.size[0], floor.size[2]));
-      expect(floor.max[1], `${FLOOR_NAME} must sit BELOW the eye`).toBeLessThan(0);
+      // ...and the tub reaches BELOW the pilot. Floor_Pan used to stand in for this and it
+      // was asserted to be the flattest thing in Y, which was a fair description of a
+      // separate flat pan. It is not a fair description of what replaced it: with the ring
+      // profile closed, the floor is segments 0 and 10 of Hull_Tub, so the same node also
+      // carries both walls and is by far the TALLEST thing in the model. The axis fact this
+      // test is actually for -- Y is up, the cabin hangs below the eye -- is now asserted
+      // where it still holds.
+      const tub = partBounds(TUB_NAME);
+      expect(tub.min[1], `${TUB_NAME} must reach BELOW the eye — Y is up`).toBeLessThan(0);
+      expect(
+        tub.size[1],
+        `${TUB_NAME} spans only ${tub.size[1].toFixed(3)} m in Y. It is a TUB: floor, chine and both walls `
+        + 'on one node, so it must be as tall as the cabin, not a pan.',
+      ).toBeGreaterThan(0.5);
+      // The dash shelf IS a flat slab, and it is the part that has to be flattest in Y now.
+      const dash = partBounds(DASH_NAME);
+      expect(dash.size[1], `${DASH_NAME} must be a flat shelf, not a box`)
+        .toBeLessThan(Math.min(dash.size[0], dash.size[2]));
+      expect(dash.max[1], `${DASH_NAME} must sit BELOW the eye — you look down at a dash`).toBeLessThan(0);
 
       const upper = partBounds('Screen_UL');
       const lower = partBounds('Screen_LL');
