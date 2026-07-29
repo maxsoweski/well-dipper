@@ -8,8 +8,11 @@
  * One `NavComputer`, one canvas of its own at the NAV panel's buffer size, and
  * the single piece of surgery that lets the first draw into the second FOREVER
  * rather than for about five seconds. It draws nothing itself and knows nothing
- * about Phosphor: the picture it produces is full colour, and turning that into
- * one ink is `PhosphorDither`'s job, called by the NAV painter. This file's only
+ * about Phosphor: the picture it produces is full colour, and what happens to it
+ * afterwards is the NAV painter's business. (It used to be quantised to one ink
+ * by `PhosphorDither`; Max ruled the monotone too crude for the nav view on
+ * 2026-07-29 and NAV now goes to the glass in colour. Nothing in THIS file
+ * changed with that, which is the point of the separation.) This file's only
  * subject is the buffer.
  *
  * ── THE TRAP, WHICH IS THE WHOLE REASON THIS FILE EXISTS ────────────────────

@@ -1,5 +1,8 @@
 /**
- * NavPanel — lane F (cockpit-screen-content-2026-07-28), AC-NAV-BUFFER.
+ * NavPanel — lane F (cockpit-screen-content-2026-07-28), AC-NAV-BUFFER,
+ * AC-NAV-CHROMELESS-SYSTEM, AC-NAV-FULL-COLOUR. AC-NAV-LEVEL-POLICY is no longer
+ * this file's: the SYSTEM-only gate moved into `NavComputer` on 2026-07-29 and is
+ * tested in `src/ui/__tests__/NavComputer.chromeless.test.js`.
  *
  * ── WHAT CAN BE TESTED HERE, AND WHY MORE THAN YOU WOULD EXPECT ─────────────
  *
@@ -19,17 +22,31 @@
  *      showing its last good nav map — still legible, no longer true, and
  *      indistinguishable at a glance from a working one. Clearing first turns
  *      that into a black panel with a cause in the log.
- *   2. THE KNOB IS READ EVERY PAINT. The dither setting is the thing Max is
- *      judging, swept while he watches the glass. A value captured at wiring time
- *      would make the control appear to do nothing — the one failure that would
- *      waste the whole exercise.
+ *   2. THE CHROME-LESS INTENT IS STATED EVERY PAINT, UNCONDITIONALLY, and before
+ *      the source renders. It says "this host wants a bare screen wherever bare
+ *      makes sense"; WHICH frames are bare is settled inside `NavComputer` at draw
+ *      time. The painter used to decide that itself, from `nav.level`, and that was
+ *      unsound: `render()` moves the level part-way through the frame, so the gate
+ *      was fixed from a level the frame had already left behind and the first
+ *      SYSTEM frame of a zoom drew fully chromed. A level read here is therefore a
+ *      REGRESSION, and one of the module-scope claims below is that there is none.
  *   3. THE SOURCE IS RESIZED FROM THE PANEL. `PanelHost` rebuilds its canvases
  *      when the buffer-height knob moves; the nav source is not rebuilt with them
  *      (building one means building a NavComputer) so it has to be told, every
  *      paint, from the panel's own current size.
  *
- * WHAT IS NOT HERE: whether the dithered nav computer reads as a CRT. That is the
- * whole question the H4 fork exists to answer, it is Max's gate, and there are no
+ * ── WHAT THE ONE-INK TESTS BECAME ──────────────────────────────────────────
+ *
+ * This file used to assert that what reached the glass held nothing but the two
+ * Phosphor colours. Max looked at the dithered nav computer on 2026-07-29 and
+ * ruled it too crude for this view, so NAV — alone among the four panels — is
+ * full colour now. The set-equality test is gone rather than loosened, and its
+ * replacement asserts the opposite property: that the SOURCE'S OWN PIXELS reach
+ * the glass unaltered. `PhosphorDither` and its test are untouched; three panels
+ * still use it.
+ *
+ * WHAT IS NOT HERE: whether a full-colour NAV beside three one-ink panels reads
+ * as one instrument or as two different devices. That is Max's gate, there are no
  * pixels in this environment and no eye to judge them with.
  */
 import { describe, it, expect } from 'vitest';
@@ -37,7 +54,6 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { makeNavPainter } from '../panels/NavPanel.js';
-import { PHOSPHOR_RGB } from '../PhosphorDither.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MODULE_CODE = readFileSync(join(HERE, '..', 'panels', 'NavPanel.js'), 'utf8')
@@ -46,22 +62,104 @@ const MODULE_CODE = readFileSync(join(HERE, '..', 'panels', 'NavPanel.js'), 'utf
 
 /**
  * Is this file disabling any of its own tests? At MODULE SCOPE and throwing —
- * measured on a sibling lane-F file, where an `it.only` made the run report GREEN
+ * measured on a sibling lane-F file, where a focus helper made the run report GREEN
  * because the self-scan was one of the tests it skipped. Comments are stripped and
  * the pattern is assembled from fragments so this header cannot match itself.
+ *
+ * THE PATTERN HAS TEETH IT DID NOT HAVE BEFORE. It used to be the concatenation of
+ * six fixed strings, which matched `it.only` and missed everything vitest also
+ * honours: the CHAINED forms above all — `it.concurrent.only`, `describe.each.only`,
+ * `it.extend(...).only` — plus `todo` and `fails`. Measured, not argued: with the
+ * flag write deleted from NavPanel.js and one `concurrent` focus helper on a test
+ * in this file, the run reported one passed and twenty skipped, GREEN, with the
+ * feature entirely absent. So the middle of the chain is now `[\w.]*` and the tail
+ * is the full set of vitest's own disabling suffixes.
  */
 const SELF_CODE = readFileSync(join(HERE, 'NavPanel.test.js'), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, '')
   .replace(/^\s*\/\/.*$/gm, '');
+const RUNNERS = ['describe', 'it', 'test'];
+const DISABLERS = ['only', 'skip', 'todo', 'fails'];
 const DISABLED_RE = new RegExp(
-  ['describe', 'it', 'test'].flatMap((k) => [k + '\\.skip', k + '\\.only']).join('|'),
+  '\\b(?:' + RUNNERS.join('|') + ')\\b(?:[\\w.]|\\([^()]*\\))*\\.(?:' + DISABLERS.join('|') + ')\\s*\\(',
 );
 if (DISABLED_RE.test(SELF_CODE)) {
   throw new Error(
     'NavPanel.test.js disables one of its own tests (a skip or focus helper is present in its ' +
-    'code). A disabled test here reads as "the NAV panel draws the real nav computer, one ink, ' +
-    'and fails visibly" when nothing was checked. Remove it.',
+    'code). A disabled test here reads as "the NAV panel draws the real nav computer, full ' +
+    'colour, chrome-less at SYSTEM, and fails visibly" when nothing was checked. Remove it.',
   );
+}
+
+/**
+ * ── THE SUBJECT IS PRESENT, CHECKED AT COLLECTION ──────────────────────────
+ *
+ * This file had no module-scope claim about NAVPANEL.JS ITSELF, only about its own
+ * focus helpers, and that was the hole a focus helper walked through: every claim
+ * about the subject lived inside an `it()`, so skipping the tests skipped the
+ * subject too. A test file whose subject has been deleted must not be able to
+ * report green, and "must not be able to" means the check has to run during
+ * COLLECTION, before any skip or focus helper is honoured.
+ *
+ * These are the four things about `NavPanel.js` that, if they went missing, would
+ * leave every remaining test in this file still passing while the feature was gone:
+ *
+ *   1. The intent is actually written. Without it `NavComputer.chromeless` stays at
+ *      its constructor default and NAV draws with all its chrome — the symptom
+ *      being "the panel looks exactly as it did before", which is the one symptom
+ *      nobody investigates.
+ *   2. It is written UNCONDITIONALLY. The literal `true`, not an expression: the
+ *      whole correction of 2026-07-29 is that this side does not get to compute it.
+ *   3. It reads no level. A `.level` read here is the race back — the value would be
+ *      taken before `render()`, and `render()` moves the level mid-frame.
+ *   4. It carries no second copy of the SYSTEM-only rule. There is one definition,
+ *      in `NavComputer.js`, where it is applied at draw time. A copy here is a copy
+ *      that can drift, and drift reads as "the file you open says one thing and the
+ *      file that runs says another".
+ */
+const SUBJECT_CLAIMS = [
+  {
+    what: 'writes the chrome-less intent onto the nav computer at all',
+    re: /nav\.chromeless\s*=\s*true\s*;/,
+    why: 'without it the flag keeps its constructor default and NAV draws fully chromed, which ' +
+      'looks exactly like the panel before this workstream existed',
+  },
+  {
+    what: 'writes it unconditionally — the literal true, not a computed expression',
+    re: /if\s*\(\s*nav\s*\)\s*nav\.chromeless\s*=\s*true\s*;/,
+    why: 'the correction of 2026-07-29 is that the panel states an intent and does not compute ' +
+      'the gate; a computed value here is computed on the wrong side of the render boundary',
+  },
+];
+const SUBJECT_PROHIBITIONS = [
+  {
+    what: 'reads a level',
+    re: /\.level\b/,
+    why: 'NavComputer.render() moves `_levelIndex` to 4 part-way through the frame, so any level ' +
+      'read taken here is fixed from the level the frame has already left — the first SYSTEM ' +
+      'frame of a zoom then draws fully chromed, autopilot button rectangle and all',
+  },
+  {
+    what: 'keeps a second copy of the SYSTEM-only rule',
+    re: /navChromelessForLevel/,
+    why: 'there is one definition, in NavComputer.js, where the gate is applied at draw time',
+  },
+];
+{
+  const missing = SUBJECT_CLAIMS.filter((c) => !c.re.test(MODULE_CODE));
+  const present = SUBJECT_PROHIBITIONS.filter((c) => c.re.test(MODULE_CODE));
+  if (missing.length > 0 || present.length > 0) {
+    throw new Error(
+      'NavPanel.js no longer matches what NavPanel.test.js is testing:\n  - ' +
+      [
+        ...missing.map((c) => `it no longer ${c.what} — ${c.why}`),
+        ...present.map((c) => `it ${c.what} again — ${c.why}`),
+      ].join('\n  - ') +
+      '\n\nThis check runs at module scope, during collection, so that it cannot be turned off by ' +
+      'a focus or skip helper on some other test in this file. A test file whose subject has been ' +
+      'deleted must go RED, not report the tests that happen to survive.',
+    );
+  }
 }
 
 // ── Stand-ins ──────────────────────────────────────────────────────────────
@@ -72,6 +170,11 @@ if (DISABLED_RE.test(SELF_CODE)) {
  * `clear` is recorded rather than performed, because the assertion is about the
  * ORDER of the calls — that is the thing that decides what a failed panel looks
  * like — not about pixels this environment has no way to show.
+ *
+ * It still offers `createImageData`, even though the painter no longer has any
+ * reason to call it. That is deliberate: an intermediate surface reintroduced by
+ * accident would then SHOW UP in the log rather than being invisible, and one of
+ * the tests below asserts it never appears.
  */
 function makeScreen(width = 64, height = 48) {
   const log = [];
@@ -117,15 +220,49 @@ function makeSource(width = 64, height = 48, shade = (x, y) => [(x * 4) % 256, (
   return src;
 }
 
+/**
+ * Hang a NavComputer-shaped stub off a source, recording every write of
+ * `chromeless` INTO THE SOURCE'S OWN LOG — so the assertion can be about ordering
+ * against `render`, which is the property that matters. An intent written after the
+ * frame has drawn arrives one paint late, and one paint late is invisible on a
+ * 12.5 Hz ambient repaint.
+ *
+ * It also exposes `level` as a THROWING getter and a real `_bare` gate. Both are
+ * traps for the same regression, from opposite sides. The painter must not read the
+ * level — the value is not stable across `render()` — and it must not read the gate
+ * either: the gate is the nav computer's answer about the frame it is drawing, not
+ * an input to the frame. If either is ever touched again, this stub says so by
+ * name instead of leaving a passing test.
+ */
+function withNav(source, level = 'galaxy') {
+  const nav = {
+    _level: level,
+    _chromeless: false,
+    get level() {
+      throw new Error(
+        'NavPanel read nav.level. The level is NOT stable across the render boundary — ' +
+        'NavComputer.render() moves _levelIndex to 4 part-way through the frame — so a gate ' +
+        'computed here is computed from a level the frame has already left behind.',
+      );
+    },
+    get _bare() { return nav._chromeless && nav._level === 'system'; },
+    get chromeless() { return nav._chromeless; },
+    set chromeless(v) { source.log.push({ op: 'setChromeless', v }); nav._chromeless = v; },
+  };
+  source.nav = nav;
+  return nav;
+}
+
 /** The ops of a log, as a list of names. */
 const names = (log) => log.map((e) => e.op);
 
-/** What fraction of a put surface is ink. */
-function inkFraction(surface) {
-  let lit = 0;
-  const n = surface.width * surface.height;
-  for (let p = 0; p < n; p++) if (surface.data[p * 4] === PHOSPHOR_RGB.INK[0]) lit += 1;
-  return lit / n;
+/** Every distinct RGBA tuple in a put surface. */
+function coloursIn(surface) {
+  const seen = new Set();
+  for (let i = 0; i < surface.width * surface.height * 4; i += 4) {
+    seen.add(`${surface.data[i]},${surface.data[i + 1]},${surface.data[i + 2]},${surface.data[i + 3]}`);
+  }
+  return seen;
 }
 
 // ── 0. Self-guard ──────────────────────────────────────────────────────────
@@ -133,6 +270,47 @@ function inkFraction(surface) {
 describe('NavPanel.test.js — this file does not disable itself', () => {
   it('contains no skip or focus helper (also enforced at module scope)', () => {
     expect(DISABLED_RE.test(SELF_CODE)).toBe(false);
+  });
+
+  it('recognises the CHAINED focus helpers, which are the ones that got through', () => {
+    // Negative controls for the instrument itself. The predecessor of this pattern
+    // was six fixed strings; `it.concurrent.only` matched none of them, and that
+    // one omission was enough to make this file report GREEN with the flag write
+    // deleted from NavPanel.js.
+    // ASSEMBLED, NEVER WRITTEN OUT. A literal here would sit in this file's own
+    // source, where the module-scope scan reads it — strings are deliberately kept
+    // in that view — and the file would refuse to collect while accusing itself.
+    const CHAINS = ['', '.concurrent', '.sequential', '.each([1])', '.concurrent.shuffle'];
+    for (const runner of RUNNERS) {
+      for (const chain of CHAINS) {
+        for (const suffix of DISABLERS) {
+          const bad = `${runner}${chain}.${suffix}(`;
+          expect(DISABLED_RE.test(bad), bad).toBe(true);
+          expect(DISABLED_RE.test(`  ${bad.slice(0, -1)} (x)`), bad + ' with a space').toBe(true);
+        }
+      }
+    }
+    // And it does not fire on the ordinary shapes this file is written in, which is
+    // what stops it being disabled later as a nuisance.
+    for (const fine of [
+      'it(', 'describe(', 'test(', 'RE.test(', 'expect(x).toBe(',
+      `it${'.each([1])'}(`, 'expect(RE.test(sample), sample).toBe(true)',
+      'onlySkip.todo', 'audit(fails)',
+    ]) {
+      expect(DISABLED_RE.test(fine), fine).toBe(false);
+    }
+  });
+
+  it('goes red when its subject loses the intent write (also enforced at module scope)', () => {
+    // The module-scope block above is the enforcement; this restates it by name in
+    // the report and, more usefully, proves the CLAIMS THEMSELVES have teeth by
+    // running them against a NavPanel.js with the write taken out.
+    const gutted = MODULE_CODE.replace(/if\s*\(\s*nav\s*\)\s*nav\.chromeless\s*=\s*true\s*;/, '');
+    expect(gutted, 'the deletion did not take, so this control proves nothing').not.toBe(MODULE_CODE);
+    expect(SUBJECT_CLAIMS.every((c) => c.re.test(gutted))).toBe(false);
+    // And the real file satisfies every one of them.
+    for (const c of SUBJECT_CLAIMS) expect(MODULE_CODE, c.what).toMatch(c.re);
+    for (const c of SUBJECT_PROHIBITIONS) expect(MODULE_CODE, c.what).not.toMatch(c.re);
   });
 });
 
@@ -144,7 +322,7 @@ describe('the paint, in the order the failure modes require', () => {
     const source = makeSource(32, 24);          // deliberately the wrong size
     makeNavPainter(source)(screen, null, 0);
 
-    expect(names(screen.log)).toEqual(['clear', 'createImageData', 'putImageData']);
+    expect(names(screen.log)).toEqual(['clear', 'putImageData']);
     expect(names(source.log)).toEqual(['resize', 'render', 'readPixels']);
     // The size came off the PANEL, never a constant — that is what carries the
     // measured-from-the-mesh buffer shape through to the nav picture.
@@ -176,33 +354,6 @@ describe('the paint, in the order the failure modes require', () => {
     // message that names the mechanism is exactly what we want kept.
     expect(MODULE_CODE, 'the painter catches its own errors').not.toMatch(/\bcatch\s*[({]/);
   });
-});
-
-// ── 2. THE KNOB REACHES THE GLASS ──────────────────────────────────────────
-
-describe('the dither knob is read fresh every paint', () => {
-  it('changes what is drawn when the knob moves between paints', () => {
-    // The whole point of the control is that Max sweeps it while looking at the
-    // glass. A setting captured at wiring time is a slider that does nothing.
-    const screen = makeScreen(64, 48);
-    const source = makeSource(64, 48, () => [128, 128, 128]);
-    let knob = { threshold: 0, gamma: 0.5 };
-    const paint = makeNavPainter(source, () => knob);
-
-    paint(screen, null, 0);
-    const bright = inkFraction(screen.log.at(-1).surface);
-
-    knob = { threshold: 0, gamma: 4 };
-    paint(screen, null, 16);
-    const dark = inkFraction(screen.log.at(-1).surface);
-
-    expect(bright, 'the knob did not reach the glass').toBeGreaterThan(dark);
-    expect(dark).toBeGreaterThan(0);
-  });
-
-  it('refuses a knob that is not a function, at wiring time', () => {
-    expect(() => makeNavPainter(makeSource(), { threshold: 0.2 })).toThrow(/must be a function/);
-  });
 
   it('refuses to wire without a source, rather than failing on the first repaint', () => {
     expect(() => makeNavPainter(null)).toThrow(/needs a NavSource/);
@@ -210,75 +361,186 @@ describe('the dither knob is read fresh every paint', () => {
   });
 });
 
-// ── 3. THE OUTPUT SURFACE ──────────────────────────────────────────────────
+// ── 2. THE LEVEL GATE IS NOT HERE (AC-NAV-LEVEL-POLICY) ────────────────────
+//
+// There used to be a `navChromelessForLevel` in NavPanel.js and a block of tests
+// here for it. Both are gone, and the deletion is the fix rather than a tidy-up.
+// The gate has to be evaluated at DRAW time, inside NavComputer, because
+// `render()` moves `_levelIndex` to 4 part-way through the frame — so a gate this
+// file computed was computed from the level the frame had already left, and the
+// first SYSTEM frame of a prism-to-system zoom drew fully chromed.
+//
+// The gate and its policy are now tested where they live:
+// `src/ui/__tests__/NavComputer.chromeless.test.js`, against the real class and
+// its real `get level()`. What is left HERE is the only claim this file can still
+// make honestly: that the painter states an intent, unconditionally, before the
+// frame draws, and reads nothing it has no business reading.
 
-describe('the dithered surface is reused, and remade when the panel is', () => {
-  it('allocates once across many paints at one size', () => {
-    // A full RGBA buffer the size of the panel, allocated per repaint, is real
-    // garbage on the paint path for a buffer that is overwritten every time.
+// ── 3. THE INTENT REACHES THE NAV COMPUTER (AC-NAV-CHROMELESS-SYSTEM) ──────
+
+describe('the chrome-less intent is stated every paint, before the frame draws', () => {
+  it('states it whatever level the computer happens to be on', () => {
+    // Unconditional is the point. The panel is not claiming this frame is bare —
+    // it is claiming this HOST wants bare wherever bare makes sense, and the nav
+    // computer decides where that is. A conditional here is the race back.
+    const screen = makeScreen(64, 48);
+    for (const level of ['system', 'prism', 'region', 'sector', 'galaxy', 'unknown']) {
+      const source = makeSource(64, 48);
+      const nav = withNav(source, level);
+      makeNavPainter(source)(screen, null, 0);
+      expect(nav.chromeless, level).toBe(true);
+    }
+  });
+
+  it('reads neither the level nor the gate — the stub throws if it ever does again', () => {
+    // Two traps, from opposite sides. `level` is not stable across the render
+    // boundary. `_bare` is the nav computer's ANSWER about the frame it is drawing,
+    // so reading it here would be reading a result as though it were an input, one
+    // frame stale by construction.
+    const source = makeSource(64, 48);
+    const nav = withNav(source, 'prism');
+    let bareReads = 0;
+    Object.defineProperty(nav, '_bare', { get() { bareReads++; return false; } });
+    expect(() => makeNavPainter(source)(makeScreen(64, 48), null, 0)).not.toThrow();
+    expect(bareReads, 'the painter read the draw-time gate').toBe(0);
+  });
+
+  it('writes it on EVERY paint, not just once at wiring time', () => {
+    // The same NavComputer instance is the game's full-screen overlay under
+    // main.js's future wiring, and whoever hands it over is entitled to clear the
+    // flag. Re-stating it per paint means the cockpit's intent cannot be silently
+    // lost between frames.
+    const source = makeSource(64, 48);
+    const nav = withNav(source, 'system');
+    const paint = makeNavPainter(source);
+    const screen = makeScreen(64, 48);
+    for (let i = 0; i < 3; i++) {
+      nav._chromeless = false;                 // somebody else cleared it
+      paint(screen, null, i * 80);
+      expect(nav.chromeless, `paint ${i}`).toBe(true);
+    }
+    expect(source.log.filter((e) => e.op === 'setChromeless').length).toBe(3);
+  });
+
+  it('writes it BEFORE render, so the frame it affects is this one', () => {
+    // One paint late is invisible at the host's 12.5 Hz ambient repaint, and it
+    // would show up as the panel keeping its chrome for one frame after entering
+    // SYSTEM — which reads as a flicker nobody can reproduce.
+    const source = makeSource(64, 48);
+    withNav(source, 'system');
+    makeNavPainter(source)(makeScreen(64, 48), null, 0);
+    expect(names(source.log)).toEqual(['setChromeless', 'resize', 'render', 'readPixels']);
+  });
+
+  it('survives the level moving mid-frame, because it never looked at the level', () => {
+    // THE REGRESSION THIS FILE'S HALF OF THE FIX EXISTS FOR. `render()` flips the
+    // level to SYSTEM part-way through drawing. The painter has already run; if it
+    // had fixed a boolean from the pre-transition level, that boolean would now be
+    // wrong for the frame being drawn. An unconditional intent cannot be.
+    const source = makeSource(64, 48);
+    const nav = withNav(source, 'prism');
+    source.render = () => {
+      source.log.push({ op: 'render' });
+      nav._level = 'system';                   // the mid-frame transition
+      // The gate is re-read here, as NavComputer re-reads it per draw call.
+      source.log.push({ op: 'bareMidFrame', v: nav._bare });
+    };
+    makeNavPainter(source)(makeScreen(64, 48), null, 0);
+    const mid = source.log.find((e) => e.op === 'bareMidFrame');
+    expect(mid.v, 'the frame that became SYSTEM mid-draw kept its chrome').toBe(true);
+    expect(nav.chromeless, 'the intent changed because the level did').toBe(true);
+  });
+
+  it('paints a source that carries no nav computer at all, rather than throwing', () => {
+    // `source.nav` is a public field on NavSource but it is NOT part of the duck
+    // type the factory guards, and the stand-ins here go without one. No nav means
+    // nothing to write the flag on, and since the flag is additive and default-off
+    // that is the correct no-op — a throw would take out the panel over a
+    // presentation detail.
     const screen = makeScreen(64, 48);
     const source = makeSource(64, 48);
-    const paint = makeNavPainter(source);
-    for (let i = 0; i < 25; i++) paint(screen, null, i * 80);
-    expect(screen.log.filter((e) => e.op === 'createImageData').length).toBe(1);
-    expect(screen.log.filter((e) => e.op === 'putImageData').length).toBe(25);
-  });
-
-  it('makes a new one when the panel is rebuilt at another buffer height', () => {
-    // A cache that only asked "have we made one yet" would hand back a surface of
-    // the old size, and the dither would reject it — correctly, but only after the
-    // panel had already stopped drawing.
-    const source = makeSource(64, 48);
-    const paint = makeNavPainter(source);
-
-    const small = makeScreen(64, 48);
-    paint(small, null, 0);
-    const large = makeScreen(128, 96);
-    paint(large, null, 80);
-
-    expect(large.log.filter((e) => e.op === 'createImageData')).toEqual([
-      { op: 'createImageData', w: 128, h: 96 },
-    ]);
-    expect(large.log.at(-1).surface.width).toBe(128);
-  });
-
-  it('says so when the panel context cannot make one', () => {
-    const screen = makeScreen();
-    screen.ctx.createImageData = undefined;
-    expect(() => makeNavPainter(makeSource())(screen, null, 0)).toThrow(/createImageData/);
+    expect(() => makeNavPainter(source)(screen, null, 0)).not.toThrow();
+    expect(names(screen.log)).toEqual(['clear', 'putImageData']);
   });
 });
 
-// ── 4. ONE INK ─────────────────────────────────────────────────────────────
+// ── 4. FULL COLOUR (AC-NAV-FULL-COLOUR) ────────────────────────────────────
 
-describe('what reaches the glass is one ink on black', () => {
-  it('puts a surface holding nothing but the two Phosphor colours', () => {
+describe('what reaches the glass is the nav computer\'s own picture, unaltered', () => {
+  it('puts the very ImageData the source handed back', () => {
+    // Identity, not equivalence. Anything in between — a quantiser, a tint, a
+    // copy — is a place the picture can be changed without the change being
+    // visible in a diff of this file.
+    const screen = makeScreen(64, 48);
+    const source = makeSource(64, 48);
+    makeNavPainter(source)(screen, null, 0);
+
+    const put = screen.log.at(-1);
+    expect(put.op).toBe('putImageData');
+    expect(put.x).toBe(0);
+    expect(put.y).toBe(0);
+
+    const again = source.readPixels();
+    expect(put.surface.width).toBe(again.width);
+    expect(put.surface.height).toBe(again.height);
+    expect([...put.surface.data]).toEqual([...again.data]);
+  });
+
+  it('carries far more than two colours through, which is the whole reversal', () => {
+    // The predecessor of this test asserted set-equality against the two Phosphor
+    // colours. Max ruled the monotone too crude for this view on 2026-07-29, so
+    // the assertion is inverted rather than relaxed: if this ever collapses to two
+    // colours again, the dither has crept back onto NAV.
+    const screen = makeScreen(64, 48);
+    makeNavPainter(makeSource(64, 48))(screen, null, 0);
+    expect(coloursIn(screen.log.at(-1).surface).size).toBeGreaterThan(2);
+  });
+
+  it('makes no intermediate surface — there is nothing left to write into one', () => {
     const screen = makeScreen(64, 48);
     const paint = makeNavPainter(makeSource(64, 48));
-    paint(screen, null, 0);
+    for (let i = 0; i < 5; i++) paint(screen, null, i * 80);
+    expect(screen.log.filter((e) => e.op === 'createImageData')).toEqual([]);
+    expect(screen.log.filter((e) => e.op === 'putImageData').length).toBe(5);
+  });
 
-    const { surface } = screen.log.at(-1);
-    const seen = new Set();
-    for (let i = 0; i < surface.width * surface.height * 4; i += 4) {
-      seen.add(`${surface.data[i]},${surface.data[i + 1]},${surface.data[i + 2]},${surface.data[i + 3]}`);
-    }
-    const ink = `${PHOSPHOR_RGB.INK.join(',')},255`;
-    const back = `${PHOSPHOR_RGB.BACK.join(',')},255`;
-    expect([...seen].sort()).toEqual([back, ink].sort());
+  it('says so when the source\'s pixels are not the panel\'s size', () => {
+    // The dither used to compare the two and throw a named error. putImageData
+    // does not: hand it the wrong size and it writes the overlap and returns,
+    // leaving a nav map anchored to the top-left with black down two sides. That
+    // reads as "the nav computer is drawing badly", which is the wrong place to
+    // start looking, so the check is kept explicitly at the seam that lost it.
+    const screen = makeScreen(64, 48);
+    const source = makeSource(64, 48);
+    source.resize = () => true;                       // a resize that does not take
+    source.readPixels = () => ({ width: 32, height: 24, data: new Array(32 * 24 * 4).fill(0) });
+    expect(() => makeNavPainter(source)(screen, null, 0)).toThrow(/32 x 24 .* 64 x 48/);
   });
 
   it('carries no colour literal and sets no canvas style of its own', () => {
+    // The nav computer owns every colour on this panel. A literal here would be a
+    // second opinion about what the map looks like, in the one file whose job is
+    // to move pixels rather than choose them.
     expect(MODULE_CODE, 'a hex colour literal').not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(MODULE_CODE, 'an rgb()/hsl() literal').not.toMatch(/\b(rgba?|hsla?)\s*\(/);
     expect(MODULE_CODE, 'a 0x colour literal').not.toMatch(/0x[0-9a-fA-F]{6}/);
     expect(MODULE_CODE, 'sets a canvas style directly').not.toMatch(/fillStyle|strokeStyle/);
   });
 
-  it('puts pixels rather than drawing an image, so nothing is smoothed into grey', () => {
-    // drawImage would blend neighbouring ink and background under any smoothing or
-    // transform, and a blend of the two colours is a THIRD colour.
+  it('puts pixels rather than drawing an image, so nothing is resampled', () => {
+    // drawImage would blur the nav computer's one-pixel orbit ellipses and its
+    // smallest type at any scale but exactly 1:1, and the size guard above is what
+    // makes 1:1 a fact rather than an assumption.
     expect(MODULE_CODE).toMatch(/putImageData/);
     expect(MODULE_CODE).not.toMatch(/drawImage/);
+  });
+
+  it('no longer reaches for the dither, and takes no knob to pretend it does', () => {
+    // A parameter that is accepted and ignored is exactly the failure its own
+    // doc-comment used to warn about — a control that appears to do nothing —
+    // with the evidence hidden. It was removed, not defaulted.
+    expect(MODULE_CODE).not.toMatch(/PhosphorDither|ditherToPhosphor|DEFAULT_DITHER/);
+    expect(makeNavPainter.length, 'makeNavPainter still takes a second argument').toBe(1);
   });
 
   it('shows no holding card and reads nothing from the snapshot', () => {
@@ -291,7 +553,7 @@ describe('what reaches the glass is one ink on black', () => {
     const paint = makeNavPainter(source);
     const snapshot = { nav: { level: 'prism' }, system: { name: 'Nowhere' } };
     paint(screen, snapshot, 0);
-    expect(names(screen.log)).toEqual(['clear', 'createImageData', 'putImageData']);
+    expect(names(screen.log)).toEqual(['clear', 'putImageData']);
     expect(MODULE_CODE).not.toMatch(/snapshot\s*[.?[]/);
   });
 });

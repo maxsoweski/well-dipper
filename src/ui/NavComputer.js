@@ -45,6 +45,29 @@ function gridNForLevel(levelIndex) {
   return levelIndex === 2 ? 16 : 8; // region = 16x16, sector = 8x8
 }
 
+/**
+ * Should the NAV panel draw chrome-less at this view level?
+ *
+ * Max's ruling, 2026-07-29: chrome-lessness is a property of the SYSTEM view and
+ * nowhere else. `AutopilotNavSequence` drives `_levelIndex` 0 → 1 → 2 → 3 during
+ * its star-pick drill, and stripped of their labels SECTOR and REGION are a bare
+ * grid — you would be watching the ship pick a star whose name you cannot read.
+ * So levels 0-3 keep their chrome and need no new code at all.
+ *
+ * Lives here, exported and pure, so the policy is testable without a canvas and
+ * so there is exactly ONE place that knows which level goes bare. It is applied
+ * INSIDE this class by the `_bare` getter, at draw time — a caller that ran it
+ * before `render()` would be testing a level `render()` has not finished moving
+ * (see `_bare`). Callers set `chromeless` and nothing else.
+ *
+ * @param {string} level - a value from the `level` getter ('galaxy' | 'sector' |
+ *   'region' | 'prism' | 'system' | 'unknown').
+ * @returns {boolean}
+ */
+export function navChromelessForLevel(level) {
+  return level === 'system';
+}
+
 export class NavComputer {
   constructor(canvas, galacticMap, webglRenderer) {
     this._canvas = canvas;
@@ -107,6 +130,35 @@ export class NavComputer {
     this._pendingComponentSelect = null; // far-member marker name awaiting _systemData (entry b)
     this._componentView = null;      // deriveComponentView cache for the drilled frame
     this._systemZoom = 1.0;         // zoom multiplier for system view
+
+    // ── Chrome-less draw flag (cockpit NAV panel, cockpit-screen-content-2026-07-28) ──
+    // PUBLIC and additive. `false` is not just a default, it is a contract: every
+    // guard below is written so that with this flag unset the emitted pixels are
+    // byte-identical to what the full-screen overlay has always drawn. That is the
+    // only reason it is safe to put a second draw mode into live game code — the
+    // overlay is still built on this class and is not being forked.
+    //
+    // When true the SYSTEM view drops every word and every clickable control and
+    // keeps the graphics: star, orbit ellipses, habitable-zone ring, belt annuli,
+    // planet discs, moons, the green ship diamond and the dashed trajectory line.
+    // The rule is graphics stay, words go.
+    //
+    // This flag is an INTENT — "this host wants a bare screen wherever bare makes
+    // sense" — not a verdict. The LEVEL POLICY that turns it into a verdict is
+    // THIS CLASS'S JOB, applied at draw time by the `_bare` getter, and no guard
+    // below reads this field directly. That is not a style choice: `render()`
+    // moves `this._levelIndex` to 4 mid-frame when the prism→system zoom lands,
+    // so any level test a caller makes before calling `render()` is already stale
+    // when the painter runs, and the first SYSTEM frame of that zoom draws fully
+    // chromed with a live invisible autopilot button on it. Hosts set this true
+    // and stop thinking about levels.
+    this.chromeless = false;
+    // Fraction of the panel the orrery fills once the 50 px chrome reserve is
+    // reclaimed. Consulted ONLY on the bare path — the default path keeps its
+    // hard-coded 0.85 so byte-equality cannot be broken by retuning this. Read it
+    // through `_systemFill`, never directly: it is public, the lab writes it every
+    // frame, and a non-finite write NaNs the whole projection.
+    this.systemFillFactor = 0.95;
 
     // ── COMMIT BURN / WARP ──
     this._selectedBody = null;       // { type: 'star'|'planet'|'moon', index }
@@ -229,6 +281,47 @@ export class NavComputer {
    */
   get level() {
     return LEVELS[this._levelIndex] ?? 'unknown';
+  }
+
+  /**
+   * Is THIS frame drawing bare? — the `chromeless` intent resolved against the
+   * level that is live at the moment the painter asks, not at the moment the
+   * host set the flag.
+   *
+   * The distinction is the whole reason this getter exists. `render()` writes
+   * `this._levelIndex = 4` MID-FRAME, in the `_systemZoomAnim` completion block,
+   * so a host that read `level`, ran `navChromelessForLevel` and stored a boolean
+   * before calling `render()` has fixed the answer from the PRE-transition level.
+   * The first SYSTEM frame of a prism→system zoom then paints fully chromed: 12
+   * text calls and a published `_autopilotButtonRect` — a live invisible button
+   * on a panel whose contract is that it has no controls. Resolving here makes
+   * that race unrepresentable.
+   *
+   * It also enforces Max's ruling with no cooperation required: at levels 0-3
+   * this is false whatever the host asked for, so the autopilot star-pick drill
+   * keeps the labels that are the only reason it is watchable.
+   *
+   * Total, and false whenever `chromeless` is falsy — which is what preserves
+   * byte-equality on the default path. The ternary rather than `&&` so the answer
+   * is a real boolean even if a host assigns `undefined`; `&&` would hand that
+   * `undefined` straight back to every guard, and a guard that reads `undefined`
+   * is one refactor away from being read as "not yet known".
+   */
+  get _bare() {
+    return this.chromeless ? navChromelessForLevel(this.level) : false;
+  }
+
+  /**
+   * The bare fill factor, defended against the field it reads.
+   *
+   * `systemFillFactor` is public and the lab rewrites it from outside on every
+   * frame. One `undefined` write makes `viewSize` NaN, and with it every arc()
+   * coordinate — the panel goes BLANK, which passes a "no words on the glass"
+   * check for entirely the wrong reason. Non-finite falls back to the documented
+   * 0.95 default instead of propagating into the projection.
+   */
+  get _systemFill() {
+    return Number.isFinite(this.systemFillFactor) ? this.systemFillFactor : 0.95;
   }
 
   activate() {
@@ -632,6 +725,13 @@ export class NavComputer {
   _drawFarCompanionChips(ctx, w, drawH) {
     this._farChipRects = [];
     this._hoveredFarChip = null;
+    // Chrome-less: the whole method is chrome — chip box, swatch, three text
+    // lines, AND the hover tooltip at the bottom (which is the one live hover
+    // path the cockpit panel already forwards, so guarding only the chip loop
+    // would leave a text box floating on a wordless panel). Bailing AFTER the two
+    // resets above is deliberate: it also unpublishes `_farChipRects`, so the
+    // panel cannot carry invisible hit regions for chips it never drew.
+    if (this._bare) return;
     const fars = this._systemData?.farCompanions;
     if (!Array.isArray(fars) || fars.length === 0) return;
 
@@ -1993,7 +2093,11 @@ export class NavComputer {
   // ════════════════════════════════════════════════════
 
   _renderSystem(ctx, w, h) {
-    const drawH = h - 50;
+    // The 50 px reserve exists to hold the commit button and the footer hint.
+    // Chrome-less draws neither, so keeping the reserve would leave a dead strip
+    // and shrink the orrery for nothing — on a 614x512 panel the picture is only
+    // 77% of the height. Reclaiming it is the whole of what "expanded" means.
+    const drawH = this._bare ? h : h - 50;
 
     // Generate system data on first render
     if (!this._systemData && this._systemStar) {
@@ -2070,7 +2174,13 @@ export class NavComputer {
     // ── 3D projection setup ──
     const cosX = Math.cos(this._systemRotX), sinX = Math.sin(this._systemRotX);
     const cosY = Math.cos(this._systemRotY), sinY = Math.sin(this._systemRotY);
-    const viewSize = Math.min(w, drawH) * 0.85;
+    // 0.85 left the orrery ringed by margin that used to read as breathing room
+    // around the header and footer. With those gone the margin is just loss, so
+    // the bare path takes the fill factor from a knob Max sets by eye. The literal
+    // 0.85 stays on the default path — one number, one meaning, no retuning risk.
+    // `_systemFill`, not the raw field: a non-finite factor NaNs every projected
+    // coordinate and blanks the panel, which a "no words" check reads as a pass.
+    const viewSize = Math.min(w, drawH) * (this._bare ? this._systemFill : 0.85);
     const centerSX = w / 2, centerSY = drawH / 2;
 
     // Scale: sqrt(AU) compression so inner + outer planets both visible
@@ -2187,7 +2297,11 @@ export class NavComputer {
       ctx.font = '8px "DotGothic16", monospace';
       ctx.fillStyle = labelColor;
       ctx.textAlign = 'center';
-      ctx.fillText(belt.isKuiper ? 'KUIPER BELT' : 'ASTEROID BELT', labelP.x, labelP.y - 6);
+      // Chrome-less keeps the annulus and drops its name. Guarding the fillText
+      // rather than the whole label block is the pattern used at every site in
+      // this file: canvas state assignments emit no pixels, so leaving them
+      // outside the guard keeps the flag-off diff to zero re-indented lines.
+      if (!this._bare) ctx.fillText(belt.isKuiper ? 'KUIPER BELT' : 'ASTEROID BELT', labelP.x, labelP.y - 6);
     }
 
     // ── Orbit circles (wireframe) ──
@@ -2362,7 +2476,7 @@ export class NavComputer {
       ctx.font = '9px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.textAlign = 'center';
-      ctx.fillText(this._planetDisplayName(i, systemName), sp.x, sp.y + baseR + 12);
+      if (!this._bare) ctx.fillText(this._planetDisplayName(i, systemName), sp.x, sp.y + baseR + 12);
 
       // Hover detection
       const mdx = this._mouseX - sp.x, mdy = this._mouseY - sp.y;
@@ -2423,7 +2537,14 @@ export class NavComputer {
         ];
         if (sys.isBinary) lines.push('Binary system');
       }
-      this._drawLeaderCallout(ctx, hb.sx, hb.sy, title, lines, w, drawH);
+      // Guard the CALL, not the `if (this._hoveredBody)` block it sits in. The
+      // block also computes the hover highlight ring (a survivor) and, more
+      // importantly, `_hoveredBody` feeds the dashed trajectory line below — an
+      // over-wide guard here would silently stop the trajectory responding to
+      // hover, losing a survivor without touching a single word. The callout's
+      // anchor dot, leader line and tick go with the words: a leader line that
+      // points at nothing is worse than no leader line.
+      if (!this._bare) this._drawLeaderCallout(ctx, hb.sx, hb.sy, title, lines, w, drawH);
     }
 
     // ── Ship position indicator + trajectory line ──
@@ -2474,11 +2595,13 @@ export class NavComputer {
         ctx.fill();
         ctx.stroke();
 
-        // Small "SHIP" label
+        // Small "SHIP" label — the WORD goes, the diamond above stays. Player
+        // position is the one thing Max named as must-keep, and the glyph is
+        // what carries it; the label only names what the glyph already shows.
         ctx.font = '7px "DotGothic16", monospace';
         ctx.fillStyle = 'rgba(0, 255, 128, 0.6)';
         ctx.textAlign = 'center';
-        ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
+        if (!this._bare) ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
         ctx.textAlign = 'left';
 
         // ── Trajectory line from ship to hovered/selected body ──
@@ -2535,9 +2658,13 @@ export class NavComputer {
     }
 
     // ── Header (AC3: system-identity title + component annotation) ──
-    this._drawSystemHeader(ctx, sys, starName, planets.length);
+    // One call site, but up to THREE text lines inside (title, `via <component>`
+    // annotation, type/planet-count/age) — guarding the call covers all three.
+    if (!this._bare) this._drawSystemHeader(ctx, sys, starName, planets.length);
 
     // ── Far-companion edge chips (AC4: wide members the orrery can't place) ──
+    // Called unconditionally on purpose: the method's own chrome-less guard runs
+    // after it clears `_farChipRects`, so the hit regions are unpublished too.
     this._drawFarCompanionChips(ctx, w, drawH);
 
     // ── Selection ring on selected body ──
@@ -2569,7 +2696,14 @@ export class NavComputer {
       this._commitAction = this._buildCommitAction();
       this._selectedNavStar = this._systemStar;
     }
-    if (this._selectedBody && this._commitAction) {
+    // NOTE the guard starts HERE and not at the `!isCurrent` block above: that
+    // block is STATE, not drawing — it force-selects the star and builds the
+    // commit action that `getSelectedStar()` / `getCommitAction()` hand to the
+    // warp path. Chrome-less must change what the nav computer DRAWS, never what
+    // it REPORTS. Falling through to the else branch is also deliberate: it nulls
+    // `_commitButtonRect`, so a chrome-less panel cannot carry an unlabelled live
+    // region that commits a WARP on click.
+    if (this._selectedBody && this._commitAction && !this._bare) {
       // Draw commit button — click commits the pending action
       const btnText = isCurrent ? '[ BURN ]' : '[ WARP ]';
       const btnColor = isCurrent ? '#00ff80' : 'rgba(100, 180, 255, 0.9)';
@@ -2596,9 +2730,9 @@ export class NavComputer {
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.textAlign = 'center';
       if (isCurrent) {
-        ctx.fillText('SELECT BODY TO NAVIGATE · DRAG TO ROTATE · ESC TO RETURN', w / 2, drawH - 8);
+        if (!this._bare) ctx.fillText('SELECT BODY TO NAVIGATE · DRAG TO ROTATE · ESC TO RETURN', w / 2, drawH - 8);
       } else {
-        ctx.fillText('SELECT STAR TO WARP · CLICK PLANET FOR DETAIL · ESC TO RETURN', w / 2, drawH - 8);
+        if (!this._bare) ctx.fillText('SELECT STAR TO WARP · CLICK PLANET FOR DETAIL · ESC TO RETURN', w / 2, drawH - 8);
       }
     }
     ctx.textAlign = 'left';
@@ -2613,7 +2747,12 @@ export class NavComputer {
   // Increment B's. Publishes its OWN _labelRects so the AC6 live non-overlap
   // handle measures THIS view, not stale prism rects (fable M2).
   _renderComponentDetail(ctx, w, h) {
-    const drawH = h - 50;
+    // Same reserve reclamation as `_renderSystem`. This sub-view rides INSIDE
+    // level 'system' (`_systemMode` is independent of `_levelIndex`, and the
+    // `level` getter says 'system' for all three modes), so it is on the bare
+    // path too — and its chrome is already suppressed below. Keeping the 50 px
+    // would leave the orrery shrunk above a dead strip that draws nothing.
+    const drawH = this._bare ? h : h - 50;
     const view = deriveComponentView(
       this._systemData, this._selectedComponentIdx, this._systemStar?.name);
     this._componentView = view;
@@ -2630,23 +2769,34 @@ export class NavComputer {
     const planets = sys.planets || [];
 
     // ── Header: title (clause 1), annotation (clause 3), breadcrumb (clause 4) ──
+    // This sub-view is guarded even though the cockpit panel cannot reach it
+    // today (PanelPointer forwards mousedown/move/up but never click, and click
+    // is the only thing that sets `_systemMode`). It needs guarding anyway
+    // because `_systemMode` is INDEPENDENT of `_levelIndex`: the `level` getter
+    // returns 'system' in all three sub-modes, so `_bare` is true in here too.
+    // One wiring change — a shared instance, or increment 6 forwarding clicks —
+    // and an unguarded sub-view would draw a fully chromed screen.
     ctx.textAlign = 'center';
     ctx.font = '14px "DotGothic16", monospace';
     ctx.fillStyle = 'rgba(160, 210, 255, 0.95)';
-    ctx.fillText(view.title, w / 2, 24);
+    if (!this._bare) ctx.fillText(view.title, w / 2, 24);
     if (view.annotation) {
       ctx.font = '9px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(120, 180, 255, 0.75)';
-      ctx.fillText(view.annotation, w / 2, 38);
+      if (!this._bare) ctx.fillText(view.annotation, w / 2, 38);
     }
     ctx.font = '9px "DotGothic16", monospace';
     ctx.fillStyle = 'rgba(150, 175, 215, 0.6)';
-    ctx.fillText(view.breadcrumb, w / 2, 50);
+    if (!this._bare) ctx.fillText(view.breadcrumb, w / 2, 50);
 
     // ── SYSTEM-scale orrery over the payload (the _renderSystem projection) ──
     const cosX = Math.cos(this._systemRotX), sinX = Math.sin(this._systemRotX);
     const cosY = Math.cos(this._systemRotY), sinY = Math.sin(this._systemRotY);
-    const viewSize = Math.min(w, drawH) * 0.8;
+    // 0.8 was picked to sit beside `_renderSystem`'s 0.85, so it takes the slider
+    // as a RATIO against that 0.85 rather than the raw value — otherwise dragging
+    // the knob would grow the system view and shrink this one. Default path keeps
+    // the bare literal 0.8.
+    const viewSize = Math.min(w, drawH) * (this._bare ? 0.8 * (this._systemFill / 0.85) : 0.8);
     const centerSX = w / 2, centerSY = drawH / 2 + 10;
     const maxOrbitAU = planets.length > 0
       ? Math.max(...planets.map(p => p.orbitRadiusAU))
@@ -2716,22 +2866,31 @@ export class NavComputer {
       ctx.fillStyle = p.known ? 'rgba(120, 200, 255, 0.75)' : 'rgba(255,255,255,0.4)';
       ctx.textAlign = 'center';
       const labelY = sp.y + baseR + 12;
-      ctx.fillText(label, sp.x, labelY);
-      const labelW = ctx.measureText(label).width;
-      this._labelRects.push({ x: sp.x - labelW / 2, y: labelY - 8, w: labelW, h: 10, name: label });
+      // The `_labelRects` push goes inside the guard, not just the draw: those
+      // rects are the AC6 non-overlap handle and describe label boxes. Publishing
+      // boxes for labels that were never drawn would report a layout that isn't
+      // on the glass.
+      if (!this._bare) {
+        ctx.fillText(label, sp.x, labelY);
+        const labelW = ctx.measureText(label).width;
+        this._labelRects.push({ x: sp.x - labelW / 2, y: labelY - 8, w: labelW, h: 10, name: label });
+      }
     }
 
     // ── Footer: view-only affordance ──
     ctx.font = '8px "DotGothic16", monospace';
     ctx.fillStyle = 'rgba(150, 175, 215, 0.55)';
     ctx.textAlign = 'center';
-    ctx.fillText('VIEW ONLY · ESC TO GO BACK', w / 2, drawH - 8);
+    if (!this._bare) ctx.fillText('VIEW ONLY · ESC TO GO BACK', w / 2, drawH - 8);
     ctx.textAlign = 'left';
   }
 
   // ── Planet detail sub-view ──
   _renderPlanetDetail(ctx, w, h) {
-    const drawH = h - 50;
+    // Reclaimed for the same reason as `_renderComponentDetail`: `_systemMode`
+    // rides inside level 'system', so this sub-view is on the bare path and its
+    // 50 px reserve holds a BURN button and a hint that the bare path never draws.
+    const drawH = this._bare ? h : h - 50;
     const sys = this._systemData;
     const planets = sys.planets || [];
     const idx = this._selectedPlanetIdx;
@@ -2748,7 +2907,9 @@ export class NavComputer {
     // ── 3D projection (same as system view) ──
     const cosX = Math.cos(this._systemRotX), sinX = Math.sin(this._systemRotX);
     const cosY = Math.cos(this._systemRotY), sinY = Math.sin(this._systemRotY);
-    const viewSize = Math.min(w, drawH) * 0.7;
+    // Same ratio-against-0.85 treatment as `_renderComponentDetail`, so one knob
+    // moves all three pictures together. Default path keeps the bare literal 0.7.
+    const viewSize = Math.min(w, drawH) * (this._bare ? 0.7 * (this._systemFill / 0.85) : 0.7);
     const centerSX = w / 2, centerSY = drawH / 2;
 
     // Scale based on outermost moon orbit
@@ -2830,7 +2991,9 @@ export class NavComputer {
       ctx.font = '8px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.textAlign = 'center';
-      ctx.fillText(moon.type || 'moon', moonP.x, moonP.y + moonR + 10);
+      // Same reasoning as _renderComponentDetail's header: `_systemMode` rides
+      // inside level 'system', so `_bare` can be true in here.
+      if (!this._bare) ctx.fillText(moon.type || 'moon', moonP.x, moonP.y + moonR + 10);
 
       // Moon hover
       const mdx = this._mouseX - moonP.x, mdy = this._mouseY - moonP.y;
@@ -2838,8 +3001,10 @@ export class NavComputer {
         this._hoveredBody = { type: 'moon', index: m, sx: moonP.x, sy: moonP.y };
       }
     }
-    // Moon hover tooltip
-    if (this._hoveredBody && this._hoveredBody.type === 'moon') {
+    // Moon hover tooltip — guarding the whole block is safe here (unlike the
+    // system view's callout) because nothing downstream reads `lines`, and
+    // `_hoveredBody` is set in the loop above, outside this block.
+    if (this._hoveredBody && this._hoveredBody.type === 'moon' && !this._bare) {
       const moon = moons[this._hoveredBody.index];
       const lines = [
         moon.type || 'moon',
@@ -2884,7 +3049,7 @@ export class NavComputer {
         ctx.font = '7px "DotGothic16", monospace';
         ctx.fillStyle = 'rgba(0, 255, 128, 0.6)';
         ctx.textAlign = 'center';
-        ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
+        if (!this._bare) ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
         ctx.textAlign = 'left';
 
         // Trajectory line to hovered/selected moon
@@ -2940,13 +3105,13 @@ export class NavComputer {
     ctx.font = '14px "DotGothic16", monospace';
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'left';
-    ctx.fillText(this._planetDisplayName(idx, systemName), 16, 24);
+    if (!this._bare) ctx.fillText(this._planetDisplayName(idx, systemName), 16, 24);
     ctx.font = '11px "DotGothic16", monospace';
     ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
-    ctx.fillText(`${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕ · ${(p.orbitRadiusAU).toFixed(2)} AU · ${moons.length} moon${moons.length !== 1 ? 's' : ''}`, 16, 42);
+    if (!this._bare) ctx.fillText(`${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕ · ${(p.orbitRadiusAU).toFixed(2)} AU · ${moons.length} moon${moons.length !== 1 ? 's' : ''}`, 16, 42);
     if (pd.T_eq) {
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.fillText(`${Math.round(pd.T_eq)} K${pd.habitability > 0.3 ? ' · Habitable' : ''}`, 16, 58);
+      if (!this._bare) ctx.fillText(`${Math.round(pd.T_eq)} K${pd.habitability > 0.3 ? ' · Habitable' : ''}`, 16, 58);
     }
 
     // ── Selection ring on selected moon ──
@@ -2970,7 +3135,10 @@ export class NavComputer {
     // ── Hint ──
     ctx.font = '10px "DotGothic16", monospace';
     // ── BURN button + hint ──
-    if (isCurrent && this._selectedBody && this._commitAction) {
+    // Same shape as the SYSTEM view's commit block: chrome-less falls through to
+    // the else branch so `_commitButtonRect` is nulled rather than left pointing
+    // at a button nobody can see.
+    if (isCurrent && this._selectedBody && this._commitAction && !this._bare) {
       const btnText = '[ BURN ]';
       const btnW = 180, btnH = 28;
       const btnX = (w - btnW) / 2, btnY = drawH - 52;
@@ -2993,9 +3161,9 @@ export class NavComputer {
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.textAlign = 'center';
       if (isCurrent) {
-        ctx.fillText('SELECT MOON TO NAVIGATE · ESC TO GO BACK', w / 2, drawH - 8);
+        if (!this._bare) ctx.fillText('SELECT MOON TO NAVIGATE · ESC TO GO BACK', w / 2, drawH - 8);
       } else {
-        ctx.fillText('VIEW ONLY · ESC TO GO BACK', w / 2, drawH - 8);
+        if (!this._bare) ctx.fillText('VIEW ONLY · ESC TO GO BACK', w / 2, drawH - 8);
       }
     }
     ctx.textAlign = 'left';
@@ -3602,6 +3770,14 @@ export class NavComputer {
   // ════════════════════════════════════════════════════
 
   _renderLevelTabs(ctx, w, h) {
+    // Whole method is chrome — five boxes with five words in them. `render()`
+    // calls this after EVERY level's render, so the guard has to be `_bare` and
+    // not the raw flag: `_bare` is false at levels 0-3 however the host set
+    // `chromeless`, which is what keeps the tabs under the autopilot star-pick
+    // drill Max ruled must stay legible. The matching hit region in
+    // `_handleClick` is withdrawn on the same test — drawing nothing here while
+    // leaving that live is five invisible buttons.
+    if (this._bare) return;
     const tabH = 32;
     const tabY = h - tabH;
     const tabW = w / LEVELS.length;
@@ -3631,8 +3807,15 @@ export class NavComputer {
   _renderHUD(ctx, w, h) {
     ctx.font = '14px "DotGothic16", monospace';
 
-    // System name (top-left) — hide when system view draws its own header
-    if (this._currentSystemName && this._levelIndex !== 4) {
+    // _renderHUD is MIXED — the autopilot crosshair at the bottom is a wordless
+    // graphic and survives — so it is guarded block by block, not wholesale.
+    //
+    // System name (top-left) — hide when system view draws its own header.
+    // The `!== 4` test already suppresses this at SYSTEM and `_bare` is only ever
+    // true AT SYSTEM, so the added test cannot change a pixel. Kept anyway: it
+    // makes the block declare its own chrome-lessness, so moving the level policy
+    // (say, to bare the PRISM view) does not silently reprint this name.
+    if (this._currentSystemName && this._levelIndex !== 4 && !this._bare) {
       ctx.fillStyle = '#00ff80';
       ctx.fillText('CURRENT SYSTEM', 16, 24);
       ctx.font = '16px "DotGothic16", monospace';
@@ -3640,15 +3823,19 @@ export class NavComputer {
       ctx.fillText(this._currentSystemName, 16, 44);
     }
 
-    // Sector name
-    if (this._currentSector && this._levelIndex !== 4) {
+    // Sector name — already suppressed at SYSTEM; `_bare` test added for the same
+    // reason as above, and equally unable to change a pixel today.
+    if (this._currentSector && this._levelIndex !== 4 && !this._bare) {
       ctx.font = '11px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
       ctx.fillText(this._currentSector.name, 16, 60);
     }
 
-    // Autopilot toggle button (bottom-left, above tabs)
-    {
+    // Autopilot toggle button (bottom-left, above tabs). This one is NOT already
+    // suppressed — it sits in a bare block with no level test, so it draws over
+    // the SYSTEM orrery today. Guarding it also stops `_autopilotButtonRect`
+    // being published, which would otherwise leave an invisible live toggle.
+    if (!this._bare) {
       const tabH = 32;
       const btnText = this._autopilotActive ? '▶ AUTOPILOT ON' : '▷ AUTOPILOT OFF';
       const btnColor = this._autopilotActive ? '#00ff80' : 'rgba(255,255,255,0.35)';
@@ -3664,15 +3851,21 @@ export class NavComputer {
       ctx.textAlign = 'left';
       ctx.fillText(btnText, btnX + 8, btnY + 16);
       this._autopilotButtonRect = { x: btnX, y: btnY, w: btnW, h: btnH };
+    } else {
+      // Drop any rect a previous chromed frame published, so a click cannot land
+      // on an autopilot toggle that is no longer on the glass.
+      this._autopilotButtonRect = null;
     }
 
     // Level info (top-right)
     ctx.font = '12px "DotGothic16", monospace';
     ctx.textAlign = 'right';
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillText(LEVEL_NAMES[this._levelIndex], w - 16, 24);
+    if (!this._bare) ctx.fillText(LEVEL_NAMES[this._levelIndex], w - 16, 24);
 
-    if (this._levelIndex === 3 && this._localStars.length > 0) {
+    // Prism stats block — already gated to level 3, where `_bare` is false by
+    // construction; test kept for symmetry with the two HUD blocks above.
+    if (this._levelIndex === 3 && this._localStars.length > 0 && !this._bare) {
       const est = this._estimatedBlockStars;
       const estLabel = est != null ? `~${est.toLocaleString()} SYSTEMS IN BLOCK` : '';
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
@@ -3836,10 +4029,18 @@ export class NavComputer {
       }
     }
 
-    // Check tab clicks
+    // Check tab clicks — withdrawn on the bare path, where `_renderLevelTabs`
+    // bailed and the reclaimed `drawH` paints the orrery straight through this
+    // strip. Left ungated it is five INVISIBLE LIVE BUTTONS across the bottom of
+    // the panel: a click meant for an outer planet changes the nav level instead.
+    // Every other interactive rect is already withdrawn here (`_commitButtonRect`
+    // and `_autopilotButtonRect` nulled, `_farChipRects` emptied, `_labelRects`
+    // not pushed); this one is geometry rather than a rect, which is how it got
+    // missed. Falling through instead of returning is deliberate — the click now
+    // reaches the body picker that owns those pixels.
     const tabH = 32;
     const tabY = this._canvas.height - tabH;
-    if (p.y >= tabY) {
+    if (!this._bare && p.y >= tabY) {
       const tabW = this._canvas.width / LEVELS.length;
       const idx = Math.floor(p.x / tabW);
       if (idx >= 0 && idx < LEVELS.length) {

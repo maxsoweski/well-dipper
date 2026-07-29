@@ -457,9 +457,9 @@ describe('lab panels — the shipped painters on the lab\'s glass', () => {
     expect(SCREEN_PAINTERS.INFO.name).toBe('paintInfo');
     // NAV's entry in these two maps is the FALLBACK, not the plan. The real NAV
     // painter is shipped — src/cockpit/panels/NavPanel.js, the whole nav computer
-    // through the Phosphor dither — but it needs a live NavSource sized to the
-    // bound panel, which does not exist at module load. So the page mounts these
-    // four and then puts `labNavPainter(source, knob)` over NAV; this card is what
+    // in full colour, chrome-less at SYSTEM — but it needs a live NavSource sized
+    // to the bound panel, which does not exist at module load. So the page mounts
+    // these four and then puts `labNavPainter(source)` over NAV; this card is what
     // remains on the glass when that source could not be built.
     expect(SCREEN_PAINTERS.NAV.name).toBe('paintNavHoldingCard');
     // The real one is composed HERE rather than inline in the page, so the game

@@ -56,7 +56,7 @@ import { makeNavPainter } from './src/cockpit/panels/NavPanel.js';
  *
  * It used to say DEFERRED, because the nav computer was not part of that rung.
  * It is part of this one: `src/cockpit/panels/NavPanel.js` renders the real
- * `NavComputer` through the Phosphor dither, and the lab mounts it over this card
+ * `NavComputer` in full colour, and the lab mounts it over this card
  * as soon as the source is built. So the card is no longer the plan — it is the
  * FAILURE STATE, and the words had to change with the meaning. "NO SOURCE" says
  * the one true thing: the nav computer could not be built on this page. The lab's
@@ -146,13 +146,24 @@ export const LAB_PAINTERS = Object.freeze({
  *
  * It is here rather than inline in the page for the same reason the adapter was
  * promoted out of this file: the game will need exactly this composition —
- * `panelPainter(makeNavPainter(source, knob))` — and a composition that only ever
+ * `panelPainter(makeNavPainter(source))` — and a composition that only ever
  * existed inside a `<script type="module">` is one the game reinvents, silently.
  *
+ * ── IT TOOK A DITHER KNOB UNTIL 2026-07-29, AND NOW TAKES NOTHING ELSE ──────
+ *
+ * The second argument was a `() => {threshold, gamma}` read fresh every paint.
+ * Max ruled the monotone too crude for the nav view, NAV went full colour, and
+ * the parameter went with it rather than being left accepting-and-ignoring — a
+ * knob that silently does nothing is the one failure its own doc-comment named.
+ *
+ * The two knobs that replaced it, SYSTEM FILL and SYSTEM ZOOM, are FIELDS ON THE
+ * NAV COMPUTER (`systemFillFactor` and `_systemZoom`), not painter arguments. So
+ * whoever owns the instance writes them — the lab, from its render loop — and
+ * this composition does not need to know they exist.
+ *
  * @param {import('./src/cockpit/NavSource.js').NavSource} source
- * @param {() => {threshold?:number, gamma?:number}} readKnob read every paint
  * @returns {(panel:object, snapshot:object, nowMs:number) => void}
  */
-export function labNavPainter(source, readKnob) {
-  return panelPainter(makeNavPainter(source, readKnob));
+export function labNavPainter(source) {
+  return panelPainter(makeNavPainter(source));
 }

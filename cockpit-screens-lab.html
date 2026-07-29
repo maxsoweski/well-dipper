@@ -34,12 +34,19 @@
        those come off the mesh — and a claim like that should be readable, not
        inferred from a screenshot.
 
-  4. IT PUTS THE REAL NAV COMPUTER ON THE FOURTH SCREEN. `src/ui/NavComputer.js`
-     — the same four thousand lines the game's full-screen overlay runs — draws
-     into a buffer of the NAV panel's own size and is quantised to one ink by
-     `src/cockpit/PhosphorDither.js`. [V] steps the level and two sliders sweep
-     the dither. That is the H4 fork, and whether it READS or turns to mud is
-     Max's gate; this page exists so he can answer it. NAV falls back to a card
+  4. IT PUTS THE REAL NAV COMPUTER ON THE FOURTH SCREEN, IN FULL COLOUR.
+     `src/ui/NavComputer.js` — the same four thousand lines the game's full-screen
+     overlay runs — draws into a buffer of the NAV panel's own size and its pixels
+     go straight to the glass. NAV IS THE ONE PANEL THAT IS NOT DITHERED: Max
+     looked at the one-ink version on 2026-07-29 and ruled the monotone too crude
+     for this view. DRIVE, TARGET and INFO are unchanged and still one ink, so
+     this page is now showing TWO treatments side by side and whether they read as
+     one instrument is the thing to judge.
+     At the SYSTEM level the panel also drops its chrome — tabs, buttons, labels,
+     names — leaving the orrery, the orbits and the ship. That is a SYSTEM-ONLY
+     rule: [V] steps through galaxy → sector → region → prism with all their
+     chrome intact, because that is what the autopilot's star-pick drill shows.
+     Two sliders size the chrome-less picture. NAV falls back to a card
      that says NO SOURCE only when the nav computer could not be BUILT, and the
      chrome prints the reason verbatim beside it — the card is the failure state,
      not the plan, and the two must never be confused for one another.
@@ -198,13 +205,13 @@
 
     <!-- The NAV fork's controls. Separated by a rule because they steer ONE
          panel, where everything above steers the page or all four. -->
-    <div class="group">NAV — REAL NAV COMPUTER, DITHERED</div>
+    <div class="group">NAV — REAL NAV COMPUTER, FULL COLOUR</div>
     <button class="btn" id="bNavLevel"><span id="bNavLevelLabel">NAV LEVEL: GALAXY</span><span class="key">V</span></button>
-    <label class="slider">BLACK POINT <span class="num" id="bThresholdLabel">0.060</span>
-      <input type="range" id="dThreshold" />
+    <label class="slider">SYSTEM FILL <span class="num" id="bSystemFillLabel">0.95</span>
+      <input type="range" id="dSystemFill" />
     </label>
-    <label class="slider">MID GAIN <span class="num" id="bGammaLabel">1.00</span>
-      <input type="range" id="dGamma" />
+    <label class="slider">SYSTEM ZOOM <span class="num" id="bSystemZoomLabel">1.00</span>
+      <input type="range" id="dSystemZoom" />
     </label>
 
     <div class="hint">
@@ -224,14 +231,20 @@
       being looked at.<br />
       [V] steps the NAV panel through
       galaxy → sector → region → prism →
-      system. The two sliders are the ONLY
-      knob the dither has: BLACK POINT is
-      the luminance below which nothing
-      lights (raise it until the backdrop
-      stops snowing), MID GAIN is how much
-      of the rest lights up. Both ends are
-      reachable on purpose — sweep to each
-      and pick a middle.
+      system. Only SYSTEM drops its chrome;
+      the other four keep tabs, buttons and
+      names, which is what the autopilot's
+      star-pick drill shows.<br />
+      The two sliders only bite at SYSTEM.
+      SYSTEM FILL is how much of the panel
+      the orrery uses now that the 50 px
+      chrome reserve is reclaimed — 0.85 is
+      what the chromed view had. SYSTEM
+      ZOOM pushes past the point where the
+      outermost orbit still fits, so the
+      inner planets are readable. Both
+      reach their extremes on purpose —
+      sweep to each and pick a middle.
     </div>
   </div>
 
@@ -253,7 +266,6 @@
     import { buildFlightReadout, flightReadoutStateFromSnapshot } from './src/cockpit/FlightReadout.js';
     import { LAB_PAINTERS, labNavPainter } from './cockpit-screens-lab-panels.js';
     import { NavSource } from './src/cockpit/NavSource.js';
-    import { DEFAULT_DITHER } from './src/cockpit/PhosphorDither.js';
     import { NavComputer } from './src/ui/NavComputer.js';
     import { GalacticMap } from './src/generation/GalacticMap.js';
     import {
@@ -339,7 +351,7 @@
     const GLASS_OPACITY = 0.10;
     const RE_GLASS = /^Canopy_Glass/i;
 
-    // ── The NAV panel: the real nav computer, dithered ────────────────────────
+    // ── The NAV panel: the real nav computer, full colour ─────────────────────
 
     /**
      * The galaxy master seed. THE SAME STRING main.js uses, so the sectors, the
@@ -366,8 +378,9 @@
      * every level, and the fork would be judged on a blank screen.
      *
      * These five are spread across the disc so that [N] moves the nav picture as
-     * well as the dossier — a density field that never changes is a weak thing to
-     * judge a dither against.
+     * well as the dossier — a nav map that never changes is a weak thing to judge
+     * the panel against, and each one also lands the ship in a DIFFERENT system,
+     * which is what puts a different orrery under the chrome-less SYSTEM view.
      */
     const NAV_GALACTIC_POS = [
       { x: 8.0,  y: 0.00,  z: 0.0 },
@@ -380,28 +393,49 @@
     /**
      * The level the NAV panel opens on.
      *
-     * GALAXY, not NavComputer's own default of PRISM, and the choice is about
-     * what is being judged. The galaxy level is the hardest case for the dither
-     * by a wide margin — it is a GPU-rendered continuous density image, all
-     * gradient and no line art — so it is where "does this read or does it turn
-     * to mud" gets its most honest answer. The other four are one keypress away.
+     * GALAXY, not NavComputer's own default of PRISM. It was chosen when this page
+     * was judging a dither, because the GPU density image was that quantiser's
+     * hardest case. It is KEPT for a different reason: the panel is chrome-less at
+     * SYSTEM and chromed everywhere else, and opening on a chromed level means the
+     * first thing seen is the ordinary nav computer — so the chrome-less view is a
+     * VISIBLE CHANGE from it rather than the only state ever looked at. Four
+     * presses of [V] gets to SYSTEM.
      */
     const NAV_START_LEVEL = 0;
 
     /**
-     * The dither knob's sweep range for the two sliders.
+     * The sweep ranges for the two SYSTEM-view sliders.
      *
-     * The DEFAULTS are imported, never retyped, so the first thing Max sees is
-     * whatever the shipped starting point actually is even after it is retuned.
-     * The ranges are wide enough to reach both failure modes on purpose: a black
-     * point of 0 shows the near-black backdrop snowing, and a gamma of 4 shows the
-     * picture collapsing to only its brightest marks. Seeing both ends is how a
-     * middle gets chosen.
+     * Bounds live here and never in the markup, so the range and the reason for it
+     * sit together instead of as six bare numbers in an attribute.
+     *
+     * `systemFillFactor` is how much of the panel the orrery uses once chrome-less
+     * has reclaimed `_renderSystem`'s 50 px bottom reserve. 0.85 is what the
+     * chromed view uses, and it is inside the range ON PURPOSE: it is the number to
+     * sweep away from and back to. Above 1 the outermost orbit runs off the glass,
+     * which is a legitimate place to end up — the outer ice giants are usually
+     * empty sky — so the top of the range is past it.
+     *
+     * `_systemZoom`'s bounds are NOT a taste decision. NavComputer clamps its own
+     * wheel zoom to 0.3–5.0 (`_handleWheel`), and a slider that went outside that
+     * would move a value the nav computer then silently refuses, which is the
+     * "slider appears to do nothing" failure with an extra step. Matched exactly.
      */
-    const DITHER_RANGE = Object.freeze({
-      threshold: { min: 0, max: 0.5, step: 0.005 },
-      gamma: { min: 0.25, max: 4, step: 0.05 },
+    const NAV_VIEW_RANGE = Object.freeze({
+      systemFillFactor: { min: 0.5, max: 1.4, step: 0.01 },
+      systemZoom: { min: 0.3, max: 5.0, step: 0.05 },
     });
+
+    /**
+     * Where the two sliders START — and they are a FALLBACK, not the source of
+     * truth. `mountNav` reads the live values off the nav computer the moment one
+     * is built and overwrites these, so what Max sees first is whatever
+     * `NavComputer`'s constructor actually initialises, even after it is retuned.
+     * That is the same argument the dither knob's imported defaults made; the
+     * values cannot be imported here because they are instance fields, not module
+     * constants, so they are read off the instance instead.
+     */
+    const NAV_VIEW_FALLBACK = Object.freeze({ systemFillFactor: 0.95, systemZoom: 1.0 });
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene
@@ -512,13 +546,19 @@
     let navError = null;           // why it failed — shown VERBATIM in the chrome
     let navLevel = NAV_START_LEVEL;
     /**
-     * The dither setting, MUTATED IN PLACE by the sliders and read fresh by the
-     * painter every paint. That freshness is the whole point of the control: a
-     * value captured when the painter was wired would make the slider appear to
-     * do nothing, and this slider is the one Max is meant to sweep while looking
-     * at the glass.
+     * The two SYSTEM-view knobs, MUTATED IN PLACE by the sliders and PUSHED ONTO
+     * THE NAV COMPUTER EVERY FRAME by `pushNavView()` in the render loop.
+     *
+     * Every frame, not once when the slider moves, and that is not belt-and-braces
+     * — it is the only thing that works. `openToCurrentSystem()` sets
+     * `_systemZoom = 1.0` on entry, and this page calls it every single time it
+     * reaches SYSTEM: from [V], from [N] (`cycleSeed`), and at start-up. A zoom
+     * written only on `oninput` would therefore be wiped the next time Max pressed
+     * a key, the slider would still show his value, and the glass would disagree
+     * with the control — which is worse than a slider that plainly does nothing,
+     * because it lies about which state it is in.
      */
-    const dither = { threshold: DEFAULT_DITHER.threshold, gamma: DEFAULT_DITHER.gamma };
+    const navView = { ...NAV_VIEW_FALLBACK };
 
     let timeS = 0;
     let playing = true;
@@ -715,13 +755,23 @@
             },
           });
           setNavLevel(navLevel);
+          // Adopt the nav computer's OWN starting values for the two knobs, so the
+          // sliders open on whatever it actually initialises rather than on a
+          // number copied into this page that can silently drift from it. Guarded
+          // on finiteness because `systemFillFactor` is an additive field: on a
+          // build that predates it, the fallback stands and the slider still works
+          // — it just has nothing reading it yet.
+          const nav = navSource.nav;
+          if (Number.isFinite(nav.systemFillFactor)) navView.systemFillFactor = nav.systemFillFactor;
+          if (Number.isFinite(nav._systemZoom)) navView.systemZoom = nav._systemZoom;
+          applyNavView();
         } catch (err) {
           navSource = null;
           navError = (err && err.message) || String(err);
         }
       }
 
-      if (navSource) host.setPainter('NAV', labNavPainter(navSource, () => dither));
+      if (navSource) host.setPainter('NAV', labNavPainter(navSource));
     }
 
     /**
@@ -770,15 +820,82 @@
       if (navLevel === NAV_LEVEL_NAMES.indexOf('SYSTEM')) nav.openToCurrentSystem();
       nav._levelIndex = navLevel;
       nav._applyLevelView();
+      // `openToCurrentSystem()` has just reset `_systemZoom` to 1.0, and
+      // `_applyLevelView()` may have moved the view as well. Re-asserting here
+      // rather than waiting for the next frame keeps the nav computer's state
+      // consistent for anything that reads it synchronously after this call — the
+      // probe's `getInfo()` does exactly that.
+      pushNavView();
       return navLevel;
     }
 
-    /** Move the dither knob. The painter reads `dither` fresh, so this is all it takes. */
-    function applyDither() {
-      el.bThresholdLabel.textContent = dither.threshold.toFixed(3);
-      el.bGammaLabel.textContent = dither.gamma.toFixed(2);
-      el.dThreshold.value = String(dither.threshold);
-      el.dGamma.value = String(dither.gamma);
+    /**
+     * Write the two SYSTEM-view knobs onto the nav computer.
+     *
+     * Called from the render loop, every frame, BEFORE `host.update()` — see
+     * `navView`'s comment for why once-per-`oninput` is not enough. It is cheap
+     * (two property writes) and it is idempotent, so calling it on a frame where
+     * the panel does not repaint costs nothing and loses nothing.
+     *
+     * `_systemZoom` is written through its underscore, which is a private field,
+     * and that is worth being explicit about rather than quiet: there is no public
+     * setter for it — NavComputer's only writer is its own wheel handler — and
+     * this page is a LAB whose whole job is putting a knob on things Max has not
+     * decided about yet. Nothing routes pointer events at the NAV panel here, so
+     * there is no wheel handler for this to fight. When the cockpit does route
+     * them, this line is the one that has to go.
+     */
+    function pushNavView() {
+      const nav = navSource && navSource.nav;
+      if (!nav) return;
+      nav.systemFillFactor = navView.systemFillFactor;
+      nav._systemZoom = navView.systemZoom;
+    }
+
+    /**
+     * Move the two sliders' LABELS and HANDLES to match `navView`, and push the
+     * values through immediately.
+     *
+     * The handles are written back as well as read, so that a programmatic
+     * `setSystemFill`/`setSystemZoom` from the probe moves the visible control.
+     * A script-driven sweep that left the handle where it was would make every
+     * screenshot of the chrome disagree with the glass.
+     */
+    function applyNavView() {
+      el.bSystemFillLabel.textContent = navView.systemFillFactor.toFixed(2);
+      el.bSystemZoomLabel.textContent = navView.systemZoom.toFixed(2);
+      el.dSystemFill.value = String(navView.systemFillFactor);
+      el.dSystemZoom.value = String(navView.systemZoom);
+      pushNavView();
+    }
+
+    /**
+     * Set one of the two knobs from a script, exactly as the slider would.
+     *
+     * CLAMPED TO THE SLIDER'S OWN RANGE, and throwing rather than coercing on
+     * anything that is not a number — the same argument `setNavLevel`'s integer
+     * guard makes. A probe that could set a value the UI cannot reach is a probe
+     * verifying a state Max can never see, and `_systemZoom` outside 0.3–5.0 is a
+     * value NavComputer's own wheel handler would refuse anyway.
+     *
+     * It reports back what LANDED ON THE NAV COMPUTER, not just what it stored.
+     * A sweep that only read its own input back would report success while
+     * reaching no glass at all.
+     */
+    function setNavViewKnob(key, value) {
+      const r = NAV_VIEW_RANGE[key];
+      if (!Number.isFinite(value)) {
+        throw new TypeError(
+          `setNavViewKnob(${key}): expects a finite number in [${r.min}, ${r.max}], got ` +
+          `${JSON.stringify(value)}. A non-number lands NaN on the nav computer, where every ` +
+          `size derived from it collapses and the orrery simply stops drawing, silently.`,
+        );
+      }
+      navView[key] = Math.max(r.min, Math.min(r.max, value));
+      applyNavView();
+      const nav = navSource && navSource.nav;
+      const onNav = nav ? (key === 'systemZoom' ? nav._systemZoom : nav.systemFillFactor) : null;
+      return { requested: value, applied: navView[key], onNav: onNav ?? null };
     }
 
     /**
@@ -840,10 +957,10 @@
       bReset: document.getElementById('bReset'),
       bNavLevel: document.getElementById('bNavLevel'),
       bNavLevelLabel: document.getElementById('bNavLevelLabel'),
-      bThresholdLabel: document.getElementById('bThresholdLabel'),
-      bGammaLabel: document.getElementById('bGammaLabel'),
-      dThreshold: document.getElementById('dThreshold'),
-      dGamma: document.getElementById('dGamma'),
+      bSystemFillLabel: document.getElementById('bSystemFillLabel'),
+      bSystemZoomLabel: document.getElementById('bSystemZoomLabel'),
+      dSystemFill: document.getElementById('dSystemFill'),
+      dSystemZoom: document.getElementById('dSystemZoom'),
       bPlay: document.getElementById('bPlay'),
       scrub: document.getElementById('scrub'),
       tTime: document.getElementById('tTime'),
@@ -935,15 +1052,15 @@
     el.bNavLevel.onclick = () => setNavLevel(navLevel + 1);
     el.bPlay.onclick = () => setPlaying(!playing);
 
-    // The slider bounds come from DITHER_RANGE rather than from the markup, so
+    // The slider bounds come from NAV_VIEW_RANGE rather than from the markup, so
     // the range and the reason for it live in one place with the comment that
     // explains it, instead of as six bare numbers in an attribute.
-    for (const [key, input] of [['threshold', el.dThreshold], ['gamma', el.dGamma]]) {
-      const r = DITHER_RANGE[key];
+    for (const [key, input] of [['systemFillFactor', el.dSystemFill], ['systemZoom', el.dSystemZoom]]) {
+      const r = NAV_VIEW_RANGE[key];
       input.min = String(r.min);
       input.max = String(r.max);
       input.step = String(r.step);
-      input.oninput = () => { dither[key] = parseFloat(input.value); applyDither(); };
+      input.oninput = () => { navView[key] = parseFloat(input.value); applyNavView(); };
     }
     // Scrubbing PAUSES. Dragging the handle on a running clock fights the
     // playhead and the frame under the cursor is never the frame you let go on,
@@ -955,7 +1072,7 @@
     setPlaying(playing);
     applyPhosphor(0);
     applyCabin();
-    applyDither();
+    applyNavView();
     setNavLevel(navLevel);
     el.bBufferLabel.textContent = `BUFFER: ${BUFFER_HEIGHTS[bufferIndex]} px`;
     el.bSeedLabel.textContent = `SYSTEM: ${seedIndex + 1}/${LAB_SEEDS.length}`;
@@ -1074,6 +1191,11 @@
         // quite agree.
         snapshot = buildCockpitSnapshot(flightSourcesAt(timeS, world, dtSec));
       }
+      // The two SYSTEM-view knobs, re-asserted BEFORE the panels repaint. The nav
+      // computer resets `_systemZoom` on every entry to the system view, so this
+      // is what keeps the slider's value and the glass agreeing after [V] or [N].
+      // Cheap, idempotent, and on a frame with no repaint it costs two writes.
+      pushNavView();
       // `nowMs` and not the sim clock: a blink phased on sim time stutters above
       // 60 Hz and FREEZES on a pause, and an alarm that has stopped moving reads
       // as no alarm. The host's own header makes the same argument at length.
@@ -1175,10 +1297,20 @@
                `<span class="dim">buffer</span> <span class="v">${navSource.canvas.width}x${navSource.canvas.height}</span> ` +
                `<span class="dim">ship [${f3(p.x)}, ${f3(p.y)}, ${f3(p.z)}] kpc, stars ` +
                `${nav._localStars ? nav._localStars.length : 0}</span>`);
-        L.push(`<span class="k">dither </span> <span class="dim">black point</span> ` +
-               `<span class="v">${dither.threshold.toFixed(3)}</span> ` +
-               `<span class="dim">mid gain</span> <span class="v">${dither.gamma.toFixed(2)}</span> ` +
-               `<span class="dim">— one ink on black; the setting is the judge-by-eye question</span>`);
+        // The chrome-less state is read BACK OFF THE NAV COMPUTER, never off this
+        // page's own idea of the level. The painter is the only thing that writes
+        // the flag, so this line is the one place a policy that stopped firing —
+        // or one that welded on after leaving SYSTEM — becomes visible without a
+        // screenshot. Same for the two knobs: printing `navView` would only prove
+        // the slider moved, printing the instance's fields proves they landed.
+        const fill = nav.systemFillFactor;
+        const zoom = nav._systemZoom;
+        L.push(`<span class="k">navview</span> <span class="dim">chrome</span> ` +
+               `<span class="v">${nav._bare ? 'SUPPRESSED (system)' : 'DRAWN'}</span> ` +
+               `<span class="dim">system fill</span> ` +
+               `<span class="${Number.isFinite(fill) ? 'v' : 'warn'}">${Number.isFinite(fill) ? fill.toFixed(2) : 'not on this NavComputer'}</span> ` +
+               `<span class="dim">system zoom</span> <span class="v">${f3(zoom)}</span> ` +
+               `<span class="dim">— full colour; the two sliders bite at SYSTEM only</span>`);
       } else if (host && host.panel('NAV')) {
         L.push(`<span class="k">nav    </span> <span class="warn">not mounted yet</span>`);
       }
@@ -1246,7 +1378,8 @@
           ? `<span class="err">NO SOURCE — holding card, not the nav computer</span>`
           : navSource
             ? `<span class="v">${esc(navSource.nav.level.toUpperCase())}</span>` +
-              ` <span class="dim">— the real NavComputer, dithered to one ink</span>`
+              ` <span class="dim">— the real NavComputer, full colour,` +
+              `${navSource.nav._bare ? ' chrome suppressed' : ' with its chrome'}</span>`
             : `<span class="warn">not mounted yet</span>`}`);
       }
 
@@ -1269,6 +1402,12 @@
     //                            reads back across three models.
     //   setTime(s) / setPlaying(b) / setBufferHeight(px) / setMode(m) /
     //   setPhosphor(i) / setSeed(i)   drive it from a script.
+    //   setNavLevel(i) -> 'SYSTEM'    the NAV level, by index; returns the name.
+    //   setSystemFill(n) / setSystemZoom(n) -> {requested, applied, onNav}
+    //                            the two SYSTEM-view knobs. Clamped to the
+    //                            slider's range, throw on a non-number, and
+    //                            report what LANDED on the nav computer so a
+    //                            sweep cannot pass by reading its own input back.
     //   THREE, scene, renderer, host, model   escape hatches.
     // ─────────────────────────────────────────────────────────────────────────
     function getInfo() {
@@ -1344,7 +1483,45 @@
           bufferHeight: navSource ? navSource.canvas.height : 0,
           shipGalacticKpc: NAV_GALACTIC_POS[seedIndex % NAV_GALACTIC_POS.length],
           loadedStars: navSource && navSource.nav._localStars ? navSource.nav._localStars.length : 0,
-          dither: { threshold: dither.threshold, gamma: dither.gamma },
+          /**
+           * THE CHROME-LESS STATE, READ OFF THE NAV COMPUTER — not recomputed here
+           * from `level`. A checker that derived it from the level would agree with
+           * itself no matter what the painter did. `null` when there is no source,
+           * which is distinguishable from `false`.
+           *
+           * ⚠ READ `_bare`, NOT `chromeless`. They stopped being the same thing when
+           * the level gate moved inside NavComputer. `chromeless` is now an INTENT
+           * that `NavPanel` writes unconditionally true on every paint; `_bare` is
+           * the EFFECTIVE state, `chromeless && level === 'system'`, resolved at draw
+           * time. Reading the intent here made this probe report SUPPRESSED at all
+           * five levels — including the four where the panel visibly draws its tab
+           * bar, its autopilot toggle and its level label — so it agreed with itself
+           * exactly when it was most wrong. Both are published below because telling
+           * "the panel does not want chrome" apart from "the panel is not drawing
+           * chrome" is the whole point of a probe on this seam.
+           *
+           * `chromelessExpected` is this page's INDEPENDENT reading of the same rule,
+           * so a live check can assert the two agree rather than trusting either.
+           * They come from different places on purpose: `_bare` from
+           * `src/ui/NavComputer.js`, this from the lab's own level index.
+           */
+          chromeless: navSource ? !!navSource.nav._bare : null,
+          chromelessIntent: navSource ? !!navSource.nav.chromeless : null,
+          chromelessExpected: navLevel === NAV_LEVEL_NAMES.indexOf('SYSTEM'),
+          /**
+           * The two knobs AS THEY LANDED ON THE INSTANCE, with the slider's own
+           * values beside them. Printing only `navView` would prove the slider
+           * moved and nothing about whether the value reached the nav computer —
+           * which is precisely the failure the dither knob's doc-comment warned
+           * about, in probe form. `systemFillFactor` is `undefined` on a
+           * NavComputer that predates the field; reported as `null` rather than
+           * silently defaulted, so the disagreement is legible.
+           */
+          systemFillFactor: navSource && Number.isFinite(navSource.nav.systemFillFactor)
+            ? navSource.nav.systemFillFactor : null,
+          systemZoom: navSource && Number.isFinite(navSource.nav._systemZoom)
+            ? navSource.nav._systemZoom : null,
+          sliders: { systemFillFactor: navView.systemFillFactor, systemZoom: navView.systemZoom },
         },
         // What the glass is saying this instant, in the readout's own words.
         content: readout ? {
@@ -1377,25 +1554,31 @@
       },
       setMode,
       /**
-       * Drive the NAV level and the dither knob from a script.
+       * Drive the NAV level and the two SYSTEM-view knobs from a script.
        *
-       * Both exist so the live pass can sweep what Max sweeps by hand — five
+       * All three exist so the live pass can sweep what Max sweeps by hand — five
        * levels and two sliders is a lot of clicking to ask of a checker, and a
-       * check that only ever sees the opening frame would judge the fork on the
+       * check that only ever sees the opening frame would judge the panel on the
        * galaxy level alone.
        *
-       * `setDither` MUTATES the same object the painter reads, rather than
-       * replacing it. The painter holds `() => dither`; assigning a new object
-       * here would leave it reading the old one and the sweep would silently
-       * stop reaching the glass.
+       * `setDither` USED TO BE HERE and has been REMOVED, not left throwing and
+       * not left mutating a dead object. NAV was the only panel that ever read the
+       * dither knob; DRIVE, TARGET and INFO are still one ink but they are drawn
+       * with `PhosphorScreen`'s own frozen colours and never had a knob. A
+       * `setDither` that still existed and still moved a number would report
+       * success to a script sweeping it while reaching no glass at all — the exact
+       * failure the knob's own doc-comment named, with the evidence hidden.
+       *
+       * Both setters go through `applyNavView()`, so the visible slider handle
+       * moves with a script-driven sweep and every screenshot's chrome agrees with
+       * its glass. Both clamp to the slider's own range rather than accepting
+       * anything finite: `_systemZoom` outside 0.3–5.0 is a value NavComputer's
+       * wheel handler would refuse, and a probe that could set what the UI cannot
+       * is a probe that verifies a state Max can never reach.
        */
       setNavLevel(i) { return NAV_LEVEL_NAMES[setNavLevel(i)]; },
-      setDither(knob) {
-        if (knob && Number.isFinite(knob.threshold)) dither.threshold = knob.threshold;
-        if (knob && Number.isFinite(knob.gamma)) dither.gamma = knob.gamma;
-        applyDither();
-        return { threshold: dither.threshold, gamma: dither.gamma };
-      },
+      setSystemFill(v) { return setNavViewKnob('systemFillFactor', v); },
+      setSystemZoom(v) { return setNavViewKnob('systemZoom', v); },
       setPhosphor(i) { return applyPhosphor(i).name; },
       setSeed(i) { seedIndex = ((i % LAB_SEEDS.length) + LAB_SEEDS.length - 1) % LAB_SEEDS.length; return cycleSeed(1); },
       setLook(yawDeg, pitchDeg) {
