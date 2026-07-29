@@ -1,11 +1,115 @@
 # Live integration evidence — AC-FRAME and AC-LAB
 
-**Commit:** the ENCLOSURE rebuild (see git log) · **Driven by:** working-Claude via chrome-devtools, in-thread
-**Date:** 2026-07-28 · **URL:** `http://localhost:5179/well-dipper/cockpit-lab.html`
+**Commit:** `70f2e87` — the WIDE TUB (Max's second lab pass) · **Driven by:** working-Claude via
+chrome-devtools, in-thread · **Date:** 2026-07-28
+**URL:** `http://localhost:5179/well-dipper/cockpit-lab.html`
 
-Supersedes the `1056f30` results below the fold. That build was a flat **window**; this one is
-the faceted **enclosure** Max asked for, so most of the numbers are not comparable — the
-categories themselves changed.
+Supersedes everything below the fold. The `567bcf9` section that used to head this file measured
+a 1.52 m cabin with the rail at −0.34; this build is a **2.56 m cabin with the rail at −0.26**,
+so the enclosure and occlusion numbers are not comparable to it category by category.
+
+## Why this file exists
+
+`verify-workstream` with `liveBranch:"main"` deliberately does **not** drive a browser, so it
+records every `live:true` AC as `INSUFFICIENT` and its adversarial pass correctly refuses commit
+-message prose as evidence. A claim in a commit message does not close a live AC. This file is
+the measurement.
+
+## AC-FORM(a) — is it still an enclosure at the new proportions?
+
+Solid-angle coverage around the eye, 16200 ray samples, from `cockpit-metrics.json`:
+
+| sector (within 45° of axis) | coverage | required |
+|---|---|---|
+| **above** | **100.0%** | ≥ 97% |
+| **left** | **100.0%** | ≥ 97% |
+| **right** | **100.0%** | ≥ 97% |
+| **behind** | **100.0%** | ≥ 97% |
+| below | 100.0% | — |
+| ahead | 86.5% | *the aperture — open by design, and the anti-vacuity check* |
+| whole sphere | **98.0%** | — |
+
+Every required sector improved to 100.0% (they were 99.1% at `567bcf9`). Widening the cabin
+closed the last gaps at left and right: the shell now wraps past the shoulders with room to
+spare rather than just reaching them.
+
+## AC-FRAME — measured, no band
+
+Driven live in the browser at eye view, 70° / 16:9 letterbox:
+
+| | |
+|---|---|
+| **browser readback** | **0.6475728202160493** |
+| analytic predictor | 0.647421 |
+| gap | **0.015 pp** |
+
+⚠ **This is the first build where the two do NOT agree to nine decimals.** The previous build
+read 0.66969 against 66.97% analytic. 0.015 pp is 1.5 parts in ten thousand of the frame — about
+300 px at 1920×1080, i.e. an edge-length effect, which is consistent with this build having
+much thinner members (0.030 m where the last had 0.085 m) sampled by scanline analytically and
+by rasteriser in the browser. **That is a plausible cause, not a demonstrated one.** It is
+recorded rather than explained because AC-FRAME is measure-and-report and 0.015 pp changes
+nothing; if a future build needs the predictor to be trustworthy at that resolution, this is
+the thread to pull.
+
+Composition, which moved much more than the 66.97% → 64.74% total suggests:
+
+| category | marginal, previous build | marginal, this build |
+|---|---|---|
+| seam members | 14.74% | **5.74%** |
+| bulkhead + floor | 19.98% | **32.73%** |
+| screens + bodies | 31.67% | **24.97%** |
+| arms | 0.58% | 1.30% |
+| **TOTAL (union)** | **66.97%** | **64.74%** |
+
+The member thinning and the screen distance both paid; the raised rail spent most of it. The
+section lab's sweep predicted exactly that — rail height moves the tub's share of the view
+46.1% → 4.8% over −0.15 to −0.75, and this build moved it 80 mm the expensive way.
+
+## AC-FORM(c) — the screens are legible-sized, and now fully in frame
+
+| | previous build | this build |
+|---|---|---|
+| display face | 0.246 × 0.205 m | **0.252 × 0.210 m** |
+| distance (upper / lower) | 0.648 / 0.681 m | **0.840 / 0.781 m** |
+| subtends (upper / lower) | 21.50° / 20.49° | **17.06° / 18.32°** |
+| least-visible face | **85.4% inside the frame** | **100.0%** |
+
+The angular floor AC-FORM(c) was amended to is 16.06°, so both pairs pass — with less headroom
+than before. **The screens got angularly smaller and that is Max's choice, not a regression:**
+he moved them further out in the lab, and a screen's tan-space footprint falls as 1/dist², which
+is where 6.7 pp of the occlusion saving came from. Increment 2 has to make 17° legible.
+
+## AC-LAB — the lab works
+
+Hard-reloaded, GLB re-fetched (46 nodes / 45 meshes; the tub-only build is 18 / 17). Both views
+driven from the console: `setMode('eye')` + `setLook(0,0)` for the pilot's seat, orbit for the
+form. **Zero console errors.** Screenshots:
+
+- `v10-wide-tub-forward.png` — orbit, the whole model
+- `v10-wide-tub-eye.png` — pilot's seat with the lab's own readout visible (occlusion 64.76%)
+- `v10-wide-tub-eye-clean.png` — pilot's seat with the DOM overlays hidden, for judging composition
+
+## Defects this build found
+
+1. **The seat fell 3.5 mm through the floor.** Not a tuning miss — `tub_floor_z()` evaluated the
+   *profile*, and the exported mesh triangulates warped floor quads across a taper. Invisible at
+   1.52 m, 3.5 mm at 2.56 m. Fixed by `hull_floor_z()`, which drops a ray onto the exported
+   triangles; the old function is deleted rather than left dead.
+2. **Both lower arms went fully invisible** behind their own screen boxes (0.0000% of frame
+   against a 0.0500% floor) and the suite refused the build. `ARM_MOUNT_Y` 0.90 → 0.70.
+
+Both were caught by instruments, not by looking — which is the point of having them.
+
+## Test status
+
+58 cockpit tests passed, **0 skipped** — AC-REPRO genuinely re-ran Blender twice and compared.
+Full suite **1674 passed**; the 15 `vendor/motion-test-kit` collection errors are the documented
+pre-existing baseline.
+
+---
+
+# Superseded — the `567bcf9` enclosure build
 
 ## Why this file exists
 
