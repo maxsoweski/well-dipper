@@ -144,10 +144,111 @@ Mars fixture", that needs a separate archetype entry, not a change to the lock.
 
 ## Notes for the game port
 
-**STATUS 2026-07-30 (updated): SLICE 1 OF THE PORT IS IN THE GAME AND RENDERING.** Rocky and
-terrestrial land colour is now condition-derived in `src/objects/Planet.js`. Blockers B and the
-density unit bug are fixed at the seam; blocker A is resolved by wiring the LAND PATH ONLY; blocker C
-is **WITHDRAWN** — it was my own measurement error, see below.
+**STATUS 2026-07-30 (updated): SLICES 1 AND 2 OF THE PORT ARE IN THE GAME AND RENDERING.** Rocky,
+terrestrial, ice and lava land colour is now condition-derived in `src/objects/Planet.js`. Blockers B
+and the density unit bug are fixed at the seam; blocker A is resolved by wiring the LAND PATH ONLY;
+blocker C is **WITHDRAWN** — it was my own measurement error, see below.
+
+### ⛔⛔ SLICE 2 FOUND TWO DEFECTS THAT WERE ALREADY LIVE IN SLICE 1. Read this before trusting any
+### measurement taken before 2026-07-30 evening.
+
+Both were found by the same habit that found the first two: **measure the law across the whole
+population before wiring it.** Neither is cosmetic, and neither was visible from the code.
+
+**1. `atmosphere.pressure` was `undefined` — so EVERY BODY IN THE GAME reached the engine as airless.**
+
+The two sides nest the field at different depths and, once again, the names do not warn you:
+
+    engine / lab  atmosphere = { color, retained, pressure, composition }              <- FLAT
+    game          atmosphere = { color, strength, physics: { retained, pressure, … } } <- WRAPPED
+
+`PlanetGenerator` computes `atmoPhysics = computeAtmosphere(...)` and then wraps it in a VISUAL object
+for the renderer. The seam passed that wrapper straight through, so `cond.atmosphere.pressure` was
+`undefined` and every consumer's `?? 0` fallback hardened it into a zero. Measured across 330 swept
+bodies (11 orbits x 6 metallicities x 5 types): **pressure 0.000 .. 0.000 bar, including a 90-bar
+Venus and a 1.25-bar Earthlike.** What that silently did:
+
+    erosionOf            -> 0 everywhere     (its gate is smoothstep(0, 0.5, P))
+    airlessnessOf        -> 1 everywhere     => full space weathering on every world in the game
+    biosphereOf          -> 0 everywhere     (its air gate never opens)
+    surfaceTemperatureOf -> a NO-OP          => blocker B's greenhouse fix was installed but had
+                                               NEVER ONCE FIRED on real game data (T_surf == T_eq to
+                                               three decimals, all 330 bodies)
+
+So the palette slice 1 shipped was derived from a body the engine believed was airless. Fixed with
+`atmosphereFromPlanet()` in `conditionFromPlanet.js`; a null atmosphere stays null and an already-flat
+one passes through untouched, so lab presets and hand-authored fixtures are unaffected.
+
+**2. The game's bulk-density law used the WRONG MIXING RULE, so the generator contained no icy bodies
+at all.** `deriveComposition` had `density = 3500 + iron*5000 - volatileFraction*2000`. Densities do
+not mix by mass-weighted average — VOLUMES add, so bulk density is the harmonic mean weighted by mass
+fraction, `1/rho = f_ice/rho_ice + (1-f_ice)/rho_rock`. Ice is ~5x less dense than rock, so 6% ice BY
+MASS is already ~25% of the body BY VOLUME, and the linear form cannot express that. Brute-forced over
+the ENTIRE input domain (metallicity -1..0.6, orbit 0.05..40 AU, every rng draw) its minimum output was
+**2.86 g/cc**; over a realistic population it never fell below **3.5 g/cc**. Real icy bodies sit at
+1.6-2.0 (Enceladus 1.61, Pluto 1.85, Titan 1.88, Ganymede 1.94). A body 43% ice by mass came out
+denser than the Moon. Fixed to the volumetric mixture; dry inner bodies move -3%, which is the point.
+
+> ⚠⚠ **CORRECTION TO THE 07-30 HANDOFF, which said `icenessOf()` "now works on game bodies".** It does
+> not, and did not, on GENERATED bodies. That claim was verified on a HAND-CONSTRUCTED body
+> (volatileFraction 0.5, density 2.0 g/cc, 110 K). The kg/m^3 -> g/cc unit fix was real and necessary,
+> but it only removed a 1000x error on top of a density that could never get low enough anyway.
+> Measured after the unit fix and before the mixing-rule fix: **iceness 0.000 on all 330 bodies.**
+> After the mixing-rule fix: **0.000 .. 0.986, with 12/66 outer bodies reading icy.** Lesson, and it is
+> a new one for this lane: **a gate verified on a synthetic fixture is not a gate verified on the
+> population.** The fixture proves the law runs; only the population proves the law fires.
+
+Blast radius of the density change is small and was checked before making it: `composition.density` is
+read in exactly two places outside `PhysicsEngine.js` — the surfaced `planetDensity` HUD field and the
+engine seam. `estimateMassEarth` is a pure mass-radius relation, so mass, gravity, escape velocity and
+atmosphere retention are all untouched. The `l0-baseline.json` fixture drifted on `composition.density`
+and NOTHING ELSE (23 keys x 10 bodies checked), which is the fixture's sanctioned regen case.
+
+> ⚠ **DO NOT run `regen-l0-baseline.mjs` for this.** It re-bakes EVERY key it finds, which widened
+> `BASELINE_KEYS` from 23 to 33 and froze this session's ADDITIVE keys (`landPalette`, `iceness`,
+> `iceColor`, `lavaGlowColor`, `lavaCrustColor`) as regression baselines — the one thing that file's own
+> header tells you not to do, and it trips the `toHaveLength(23)` guard. Patch the single drifted value
+> instead.
+
+### ✅ Slice 2 — the ice and lava land paths
+
+- **Ice merged INTO the rocky branch, deleting a type test.** `planetType == 0 || planetType == 2` now
+  share one condition-derived path: the bedrock ramp, then `mix(ground, uIceColor, uIcenessMix)` where
+  `uIcenessMix = icenessOf(cond)` — the same construction as the lab's Stage-6 mix. Verified live: a
+  body LABELLED 'ice' at 0.1 AU (962 K) renders as hot bare rock and does not respond to the ice dial
+  at all, while a body labelled 'rocky' at 9 AU renders icy. The label is not what decides.
+- **Lava cracks are blackbody, sampled TWICE.** `uLavaGlow` = `emissiveBlackbody(meltTemperatureOf(cond))`
+  at the liquidus, `uLavaCrust` = the same curve at the chilled skin (`MELT_CRUST_FRACTION` 0.62). This
+  replaces a 15-entry hand-picked table that offered violet, magenta, cyan and green "lava".
+  New engine laws: `meltTemperatureOf` + `crustTemperatureOf` in `surfaceMaterial.js`. The melt
+  temperature is the LIQUIDUS, not the ambient — Io's surface is 130 K while its lavas run 1600 K, so a
+  glow keyed on T_eq would render every cool-orbit volcanic world's cracks black.
+- **Lava cracks are now SELF-LUMINOUS** (an added emissive term next to the existing carbon-glint
+  precedent), so they survive into the night side. Deriving a colour from a melt temperature and then
+  only showing it in sunlight would be incoherent. ⚠ This is a visible change Max has not UAT'd.
+
+> ⭐ **MEASUREMENT THAT CHANGED THE DESIGN — the "port reduces variety" trap, caught a second time.**
+> Across 66 swept bodies of type 'lava' the melt temperature spans only **1538-1669 K**, which the
+> blackbody ramp turns into **seven indistinguishable oranges**. Shipping the hot colour alone would
+> have replaced 15 varied (if fictional) lava tones with ONE flat orange for every volcanic world —
+> the exact shape of withdrawn blocker C. The fix was NOT to invent between-world spread the physics
+> does not have: the real range in a lava field is WITHIN one body (open vent at the liquidus, flow
+> twenty metres away skinned over and hundreds of kelvin cooler). Two samples of the same curve, so a
+> crack has a hot core and a cooling margin. Between-world variety for lava worlds now comes from the
+> CRUST (65/66 distinct), not the glow.
+
+### 🔶 Recorded, NOT fixed — the honest palette flattens elevation banding on ~45% of bodies
+
+Now that pressure arrives, atmospheric worlds get erosion ~1, which kills oxidation (it rides
+`1 - erosion`) and airlessness, which kills space weathering. Both alteration stages therefore produce
+nothing and **`fresh` comes out EQUAL to `weathered`** — physically right (a heavily eroded world
+re-exposes fresh rock everywhere) but it merges the shader's highland and peak bands. Measured over
+330 bodies: the current `{fresh, weathered, sediment}` binding gives 3 distinct colours on only
+**183/330**. Swapping `craton` in for `weathered` lifts that to **210/330** — a marginal win for a
+uniform plus a semantic change to the highland band, so it was recorded rather than taken. The lab does
+not have this problem because it layers relief, province, frost and dust on top; the game's ROCKY_BODY
+has only these three colours. **The real answer is slice 3 (the relief / province GLSL), not a fourth
+colour.** Between-WORLD variety is unaffected (61-65 distinct weathered tones per 66 bodies).
 
 ### Built and landed
 

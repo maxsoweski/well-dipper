@@ -415,9 +415,33 @@ export function deriveComposition(metallicity, orbitAU, frostLineAU, rngFloat) {
     surfaceType = 'silicate';
   }
 
-  // Bulk density (kg/m³) — rough estimate
-  const baseDensity = 3500 + ironFraction * 5000 - volatileFraction * 2000;
-  const density = Math.max(1000, Math.min(8000, baseDensity));
+  // Bulk density (kg/m³) — a two-component ice/rock VOLUMETRIC mixture.
+  //
+  // ⚠ THIS WAS `3500 + iron*5000 - volatileFraction*2000` — the WRONG MIXING RULE, and it made the
+  // whole ice/rock axis of the generator unreachable. Densities do not mix by mass-weighted average;
+  // VOLUMES add, so the bulk density of a mixture is the harmonic mean of the component densities
+  // weighted by mass fraction:  1/rho = f_ice/rho_ice + (1 - f_ice)/rho_rock.
+  //
+  // Ice is ~5x less dense than rock, so 6% ice BY MASS is already ~25% of the body BY VOLUME. The old
+  // linear form could not express that: brute-forced over the entire input domain (metallicity -1..0.6,
+  // orbit 0.05..40 AU, every rng draw) its minimum output was 2.86 g/cc, and over a realistic population
+  // it never once fell below 3.5 g/cc. Real icy bodies sit at 1.6-2.0 (Enceladus 1.61, Pluto 1.85,
+  // Titan 1.88, Ganymede 1.94). The generator therefore had NO icy bodies in it at all, whatever the
+  // volatile budget said — a body 43% ice by mass still came out at 4.04 g/cc, denser than the Moon.
+  //
+  // Consequence that surfaced this: the world engine's `icenessOf(cond)` reads density against
+  // DENS_ICE_HI 2.0 / DENS_ROCK_LO 3.5, so it measured 0.000 on all 330 bodies of a swept population —
+  // the icy gate had never opened for any planet in the game. That gate drives the bombardment
+  // ice-relaxation term and the surface ice albedo, so this is not a HUD cosmetic.
+  //
+  // Dry inner bodies barely move (vf 0.01, iron 0.28: 4880 -> 4717 kg/m^3, -3%), which is the point —
+  // the rule only diverges where the old one was lying. Mass, gravity, escape velocity and atmosphere
+  // retention do NOT read this field (estimateMassEarth is a pure mass-radius relation), so the change
+  // is confined to the surfaced planetDensity and the world-engine condition vector.
+  const ICE_DENSITY = 1000;   // kg/m^3 — water ice, standing in for the whole volatile inventory
+  const rockDensity = 3500 + ironFraction * 5000;   // the silicate + iron trend, unchanged
+  const specificVolume = volatileFraction / ICE_DENSITY + (1 - volatileFraction) / rockDensity;
+  const density = Math.max(1000, Math.min(8000, 1 / specificVolume));
 
   return { carbonToOxygen, ironFraction, volatileFraction, surfaceType, density };
 }

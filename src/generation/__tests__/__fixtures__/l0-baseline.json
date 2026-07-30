@@ -35,7 +35,7 @@
       "ironFraction": 0.25845224784687165,
       "volatileFraction": 0.02422612392343581,
       "surfaceType": "silicate",
-      "density": 4743.8089913874865
+      "density": 4389.03292484803
     },
     "T_eq": 1039.3524443465117,
     "tidalState": {
@@ -125,7 +125,7 @@
       "ironFraction": 0.307342278463766,
       "volatileFraction": 0.048671139231882994,
       "surfaceType": "silicate",
-      "density": 4939.369113855064
+      "density": 4209.638137255071
     },
     "T_eq": 734.9331614402322,
     "tidalState": {
@@ -207,7 +207,7 @@
       "ironFraction": 0.24991198479663584,
       "volatileFraction": 0.019955992398317905,
       "surfaceType": "silicate",
-      "density": 4709.647939186543
+      "density": 4418.909746606991
     },
     "T_eq": 1272.9415757817023,
     "tidalState": {
@@ -290,7 +290,7 @@
       "ironFraction": 0.31681192682124676,
       "volatileFraction": 0.053405963410623376,
       "surfaceType": "silicate",
-      "density": 4977.247707284987
+      "density": 4173.717095498528
     },
     "T_eq": 254.58831515634046,
     "tidalState": {
@@ -375,7 +375,7 @@
       "ironFraction": 0.24325837124604735,
       "volatileFraction": 0.016629185623023658,
       "surfaceType": "silicate",
-      "density": 4683.033484984189
+      "density": 4441.793850666314
     },
     "T_eq": 232.40627181393674,
     "tidalState": {
@@ -459,7 +459,7 @@
       "ironFraction": 0.31617284651845695,
       "volatileFraction": 0.05308642325922847,
       "surfaceType": "silicate",
-      "density": 4974.691386073828
+      "density": 4176.149522979929
     },
     "T_eq": 304.29123787709915,
     "tidalState": {
@@ -533,7 +533,7 @@
       "ironFraction": 0.29374745620414616,
       "volatileFraction": 0.21004375250044244,
       "surfaceType": "silicate",
-      "density": 4548.649776019845
+      "density": 2709.8136592842093
     },
     "T_eq": 180.02112405790623,
     "tidalState": {
@@ -606,7 +606,7 @@
       "ironFraction": 0.23291141350753608,
       "volatileFraction": 0.3918003023964249,
       "surfaceType": "silicate",
-      "density": 3880.956462744831
+      "density": 1915.0200229244392
     },
     "T_eq": 111.64436171486685,
     "tidalState": {
@@ -689,7 +689,7 @@
       "ironFraction": 0.23203733067028226,
       "volatileFraction": 0.5464817751147266,
       "surfaceType": "ice-rock",
-      "density": 3567.223103121958
+      "density": 1553.278900091938
     },
     "T_eq": 90.01056202895312,
     "tidalState": {
@@ -764,7 +764,7 @@
       "ironFraction": 0.24422598375938837,
       "volatileFraction": 0.5642259837593884,
       "surfaceType": "ice-rock",
-      "density": 3592.677951278165
+      "density": 1523.1622156196893
     },
     "T_eq": 73.49331614402323,
     "tidalState": {

@@ -219,6 +219,63 @@ export const T_MELT_HI      = 1400;  // K — at/above this the surface reads as
 
 const mix3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
+// ── ice-surface albedo — the colour `icenessOf` mixes the ground TOWARD. ──────────────────────────────────────
+// A DISPLAY value, already in the post-transfer domain (it is the lab's uIcenessAlbedo uniform default). It must
+// NOT be pushed through applyAlbedoTransfer with the rock palette: that curve is solved from the WEATHERED
+// bedrock endmember to lift dark rock, and running an already-bright ice tone through it clips it to white.
+// Held constant rather than derived, exactly as the lab holds it: what varies with condition is HOW MUCH ice
+// there is (icenessOf), not what water ice looks like.
+export const ICE_ALBEDO = [0.86, 0.90, 0.95];
+
+// ── melt-temperature priors — the LAVA GLOW law. ──────────────────────────────────────────────────────────────
+// Exposed melt does not glow at the AMBIENT surface temperature; it glows at its own LIQUIDUS. Io's surface sits
+// at ~130 K while its lavas run ~1600 K, so a glow colour keyed on T_eq would render every cool-orbit volcanic
+// world's cracks black. The ambient only takes over once the WORLD is hotter than the melt (a 2400 K lava world's
+// surface is itself incandescent), which is why the two terms combine with a max rather than a blend.
+//
+// The liquidus itself is not one number. A body with a strong endogenic heat engine melts deeper and hotter,
+// yielding MgO-rich komatiitic melt rather than ordinary basalt — the difference between a dull red crack and a
+// white-hot one. That thermal drive is RESTATED here from magmatism.js's magmaThermal (cited, NOT imported — this
+// module is a leaf, the same discipline as the erosionOf waterWindow constants restated from deriveBodyScalars).
+//
+// ⚠ WHY THIS MATTERS FOR THE PORT, measured: of 66 swept game bodies of type 'lava', only 7 have a surface
+// temperature at or above 900 K. Without the endogenic term every one of the other 59 would pin to exactly the
+// same liquidus and glow an IDENTICAL orange — reproducing, in derived clothing, the very defect the port exists
+// to remove (a hand-picked accent colour per body). The tidal + age term is what makes the law produce a
+// population, not a constant.
+export const T_LIQUIDUS_BASALT     = 1400;  // K — tholeiitic basalt liquidus; an ordinary volcanic crust
+export const T_LIQUIDUS_ULTRAMAFIC = 1900;  // K — komatiitic / Io-class melt from a hard-driven mantle
+export const AGE_RADIOGENIC_REF    = 10;    // Ga — radiogenic drive falloff (magmaThermal's own divisor)
+
+// ⚠ MEASURED, AND IT CHANGED THE DESIGN: across 66 swept game bodies of type 'lava' the melt temperature spans
+// only 1538-1669 K, which the blackbody ramp turns into SEVEN INDISTINGUISHABLE ORANGES. Shipping the hot
+// colour alone would have replaced 15 hand-picked lava tones with one flat orange for every volcanic world in
+// the game — the "port reduces visible variety" failure this lane has already had to withdraw a blocker over.
+//
+// The fix is not to invent between-world spread the physics does not have. It is that the real range in a lava
+// field is WITHIN one body, not between bodies: an open vent radiates at the liquidus while the flow twenty
+// metres away has skinned over and dropped hundreds of kelvin toward the Draper point, where incandescence
+// fades to a dull red. Sampling the SAME curve at two temperatures gives a crack a hot core and a cooling
+// margin, which is both what lava looks like and where the visible richness actually lives.
+export const MELT_CRUST_FRACTION = 0.62;    // crusted-flow surface as a fraction of the melt's own temperature
+
+// crustTemperatureOf(cond) — temperature of the chilled skin on an exposed flow. Same curve, cooler sample.
+export function crustTemperatureOf(cond) {
+  return meltTemperatureOf(cond) * MELT_CRUST_FRACTION;
+}
+
+// meltTemperatureOf(cond) — absolute Kelvin temperature of exposed melt. Feed to emissiveBlackbody() for the
+// crack/vent colour. Reads T_eq + rawTidalIoRatio + age only; no label / archetype / regime read.
+export function meltTemperatureOf(cond) {
+  const T   = cond?.T_eq ?? 288;
+  const td  = cond?.rawTidalIoRatio ?? 0;
+  const age = cond?.age ?? AGE_RES_REF;
+  // endogenic thermal drive H in [0,1] — young + tidally heated reads high (magmaThermal's form).
+  const thermal = clamp01(0.5 * clamp01(td) + 0.5 * (1 - clamp01(age / AGE_RADIOGENIC_REF)));
+  const liquidus = T_LIQUIDUS_BASALT + thermal * (T_LIQUIDUS_ULTRAMAFIC - T_LIQUIDUS_BASALT);
+  return Math.max(liquidus, T);
+}
+
 // ── sediment priors — transported, comminuted, sorted material. Physically it is BRIGHTER and LESS SATURATED
 //    than the in-place weathered rock it derives from: grinding multiplies surface area (more scattering), and
 //    fluvial/aeolian sorting concentrates light quartz+feldspar while the dark mafic minerals weather out first.

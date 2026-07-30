@@ -16,6 +16,10 @@ uniform vec3 baseColor;
 uniform vec3 uFreshColor;      // unweathered rock — exposed on peaks and fresh scarps
 uniform vec3 uWeatheredColor;  // the area-dominant weathered background
 uniform vec3 uSedColor;        // sediment — that surface ground up and moved into the lows
+uniform float uIcenessMix;     // icenessOf(cond) — how much of the ground is ice, not bedrock
+uniform vec3 uIceColor;        // the ice tone the ground mixes toward (a display value, untransferred)
+uniform vec3 uLavaGlow;        // blackbody chromaticity at the melt's liquidus — the crack CORE
+uniform vec3 uLavaCrust;       // the same curve sampled at the chilled skin — the crack MARGIN
 uniform vec3 accentColor;
 uniform float noiseScale;
 uniform float noiseDetail;
@@ -546,16 +550,41 @@ void main() {
     // Diamond glints: bright white specular points
     float glint = smoothstep(0.85, 0.95, val);
     surfaceColor += vec3(0.8, 0.85, 0.9) * glint;
-  } else if (planetType == 0) {
-    // Rocky: condition-derived bedrock. A dry airless-to-thin-air world IS its ground, so the whole
-    // surface is the palette — weathered background, fresh rock where relief exposes it, sediment
-    // pooling in the lows. Ice and lava deliberately stay on baseColor/accentColor below: their
-    // visible surface is ice or melt, not bedrock, and those layers are not ported yet.
+  } else if (planetType == 0 || planetType == 2) {
+    // Rocky AND ice share ONE condition-derived path. This branch used to be rocky-only, with ice
+    // falling through to the legacy mix(baseColor, accentColor) below; merging them DELETES a type
+    // branch rather than adding one, which is the whole point of the condition-first engine.
+    //
+    // The ground is the derived bedrock palette — weathered background, fresh rock where relief
+    // exposes it, sediment pooling in the lows — and then uIcenessMix (= icenessOf(cond)) decides how
+    // much of that ground is ICE instead. Nothing here asks what the planet is CALLED: a cold,
+    // volatile-rich, low-density body reads icy because of its density, volatile budget and
+    // temperature, and a body labelled 'ice' sitting at 1100 K correctly reads as bare hot rock.
+    // Same construction as the lab's Stage-6 mix(albedoCol, uIcenessAlbedo, uIcenessMix).
+    // (No backticks in this comment on purpose: it lives inside a JS template literal, and a stray
+    // one terminates the shader string and breaks the whole module with a bare SyntaxError.)
     float h = pattern * 0.5 + 0.5;
     vec3 rock = mix(uWeatheredColor, uFreshColor, smoothstep(0.45, 0.8, h));
-    surfaceColor = mix(uSedColor, rock, smoothstep(0.15, 0.42, h));
+    vec3 ground = mix(uSedColor, rock, smoothstep(0.15, 0.42, h));
+    surfaceColor = mix(ground, uIceColor, uIcenessMix);
+  } else if (planetType == 3) {
+    // Lava: dark crust cut by incandescent cracks. Both colours are now derived.
+    //
+    // The CRUST is the same bedrock palette every other rocky surface uses — and it needs no special
+    // darkening here, because surfaceMaterial's melt stage already mixes the whole palette toward
+    // quenched melt glass above 900 K, so a genuinely molten world's rock arrives dark on its own.
+    //
+    // The CRACKS are the blackbody curve sampled TWICE — uLavaCrust at the chilled skin on the crack
+    // margin, uLavaGlow at the liquidus in its core — replacing a 15-entry hand-picked table that
+    // offered violet, magenta, cyan and green "lava". Two samples because the measured between-world
+    // melt spread is tiny; the range that reads as lava is the one across a single crack. The crack
+    // MASK is the legacy curve, unchanged, so this swaps hue without moving the pattern.
+    float h = pattern * 0.5 + 0.5;
+    vec3 crust = mix(uWeatheredColor, uFreshColor, smoothstep(0.45, 0.8, h));
+    vec3 melt = mix(uLavaCrust, uLavaGlow, smoothstep(0.62, 0.95, h));
+    surfaceColor = mix(crust, melt, smoothstep(0.3, 0.7, h));
   } else {
-    // Default: smooth blend between base and accent (ice, lava)
+    // Default: smooth blend between base and accent (any rocky-family type not derived above)
     float mixFactor = smoothstep(0.3, 0.7, pattern * 0.5 + 0.5);
     surfaceColor = mix(baseColor, accentColor, mixFactor);
   }
@@ -594,6 +623,17 @@ void main() {
     crystal = pow(max(crystal, 0.0), 8.0);
     float glint = smoothstep(0.85, 0.95, crystal * 0.6 + 0.4 + snoise(vPosition * noiseScale) * 0.15);
     finalColor += vec3(0.5, 0.55, 0.6) * glint * 0.3;
+  }
+
+  // Lava: the cracks are SELF-LUMINOUS, so they survive into the night side (same construction as the
+  // carbon glints above). Deriving the crack colour from a melt temperature and then only showing it
+  // in sunlight would be incoherent — incandescence is exactly the thing that does not need a star.
+  // Gated on the same crack mask the surface colour uses, so the glow lands on the cracks and nowhere
+  // else, and kept subtle enough that the day side still reads as lit rock rather than a light bulb.
+  if (planetType == 3) {
+    float h = pattern * 0.5 + 0.5;
+    float crackGlow = smoothstep(0.55, 0.95, h);
+    finalColor += mix(uLavaCrust, uLavaGlow, smoothstep(0.62, 0.95, h)) * crackGlow * 0.45;
   }
 
   // ── Cloud / weather layer (animated) ──
@@ -1060,6 +1100,13 @@ export class Planet {
         uFreshColor: { value: new THREE.Vector3(...(d.landPalette?.fresh || [0.6, 0.58, 0.55])) },
         uWeatheredColor: { value: new THREE.Vector3(...(d.landPalette?.weathered || [0.42, 0.38, 0.34])) },
         uSedColor: { value: new THREE.Vector3(...(d.landPalette?.sediment || [0.48, 0.42, 0.30])) },
+        // Slice-2 surface material. Fallbacks keep a hand-authored fixture (one with no world-engine
+        // fields) rendering exactly as it did: iceness 0 => the pure bedrock ramp, and the lava glow
+        // falls back to accentColor, which is what the legacy lava branch used.
+        uIcenessMix: { value: d.iceness ?? 0.0 },
+        uIceColor: { value: new THREE.Vector3(...(d.iceColor || [0.86, 0.90, 0.95])) },
+        uLavaGlow: { value: new THREE.Vector3(...(d.lavaGlowColor || d.accentColor || [1.0, 0.42, 0.10])) },
+        uLavaCrust: { value: new THREE.Vector3(...(d.lavaCrustColor || d.accentColor || [1.0, 0.18, 0.05])) },
         noiseScale: { value: d.noiseScale },
         noiseDetail: { value: d.noiseDetail },
         lightDir: { value: this._lightDir },

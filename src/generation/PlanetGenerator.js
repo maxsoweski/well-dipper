@@ -1,6 +1,7 @@
 import { conditionFromPlanet } from '../worldengine/port/conditionFromPlanet.js';
-import { surfacePaletteOf } from '../worldengine/base/surfaceMaterial.js';
+import { surfacePaletteOf, icenessOf, meltTemperatureOf, crustTemperatureOf, ICE_ALBEDO } from '../worldengine/base/surfaceMaterial.js';
 import { applyAlbedoTransfer } from '../worldengine/display/albedoTransfer.js';
+import { emissiveBlackbody } from '../worldengine/base/emission-e.js';
 import { earthRadiiToScene, RADIUS_RANGES_EARTH } from '../core/ScaleConstants.js';
 import {
   estimateMassEarth, computeAtmosphere, deriveComposition,
@@ -722,14 +723,37 @@ export class PlanetGenerator {
     //
     // applyAlbedoTransfer is REQUIRED, not optional polish: surfaceMaterial.js returns physically
     // honest albedos, which render ~2.5x too dark without the display curve.
-    const landPalette = applyAlbedoTransfer(surfacePaletteOf(conditionFromPlanet({
+    const condition = conditionFromPlanet({
       radiusEarth, massEarth, composition, T_eq, age: ageGyr,
       atmosphere, tidalState, surfaceHistory, eccentricity,
-    })));
+    });
+    const landPalette = applyAlbedoTransfer(surfacePaletteOf(condition));
+
+    // ── World-engine surface material (V2-10 port slice 2) ────────────────────────────────────────
+    // Two more condition-derived surface properties, replacing the last two hand-picked colour tables
+    // in the rocky-shader family (the 13-entry `ice` list and the 15-entry `lava` list, which between
+    // them offered violet, cyan and green "lava").
+    //
+    // `iceness` is how much of the ground is ICE rather than bedrock. It is deliberately surfaced for
+    // EVERY body, not just type 'ice': a cold, volatile-rich, low-density world reads icy because of
+    // what it IS, and the shader consumes it without a type test. (It reads ~0 on a hot body whatever
+    // its label, which is the same statement from the other side.)
+    //
+    // `lavaGlowColor` / `lavaCrustColor` are blackbody chromaticity at the melt's own liquidus and at
+    // its chilled skin — ONE curve shared with the lab's F32/F33/F41 render, pinned CPU-to-GLSL by a
+    // parity test, so the game cannot drift from it. Two samples, not one, because the measured
+    // between-world melt spread is only 1538-1669 K; see the note on MELT_CRUST_FRACTION.
+    const iceness = icenessOf(condition);
+    const lavaGlowColor = emissiveBlackbody(meltTemperatureOf(condition));
+    const lavaCrustColor = emissiveBlackbody(crustTemperatureOf(condition));
 
     return {
       type,
       landPalette,
+      iceness,
+      iceColor: ICE_ALBEDO,
+      lavaGlowColor,
+      lavaCrustColor,
       // Physical unit — radius in Earth radii
       radiusEarth,
       // Scene unit — for realistic 3D rendering
