@@ -70,6 +70,53 @@ function weld(points, eps = 1e-6) {
   return out;
 }
 
+/**
+ * HOW FAR OFF SQUARE A FACE MAY BE AND STILL BE CALLED A RECTANGLE: 1e-3 radians,
+ * which is 0.0573 degrees.
+ *
+ * The number is not taste, and it is not a placeholder. It comes from this file's own
+ * premise, stated in the header: the surface is "a unit-square UV quad", "a flat
+ * rectangular panel". A rectangle's u and v axes are exactly perpendicular and its
+ * edges run exactly along them, so ANY deviation a real face can show here is float
+ * noise. The only question the threshold answers is how much noise there is.
+ *
+ * THE FLOOR — how much noise is possible. GLB stores POSITION as float32, so a vertex
+ * at cockpit scale (order 1 m from the origin) is quantised to about 6e-8 m. An axis
+ * recovered from two midpoints a panel-edge apart therefore carries roughly
+ * 6e-8 / 0.2 = 3e-7 rad of direction error. 1e-3 rad is 3000x that, so the guard keeps
+ * its headroom down to a face a thousandth the area of these ones before quantisation
+ * alone could trip it.
+ *
+ * THE CEILING — why 0.0573 degrees cannot be a real shape. At that angle a corner of a
+ * 0.200 m face is 0.2 mm out of square. The cabin's own dimensions are the output of a
+ * fit solver working in whole millimetres; nothing in it expresses a deliberate skew
+ * five times finer than that. Anything under this line is noise, and anything over it
+ * is a shape whose width and height are not the numbers this function returns.
+ *
+ * MEASURED ON THE FACES THAT SHIP, off public/assets/cockpit/cockpit.glb, 2026-07-29:
+ *
+ *              1 - cos(u edge, u axis)   1 - cos(v edge, v axis)   |dot(uAxis, vAxis)|
+ *   Screen_UL          1.110e-16                 0                      7.843e-9
+ *   Screen_UR          1.110e-16                 0                      7.843e-9
+ *   Screen_LL         -2.220e-16              5.551e-15                 2.748e-8
+ *   Screen_LR         -2.220e-16              5.551e-15                 2.748e-8
+ *
+ * The worst of the four is 2.748e-8 rad off square — 1.6e-6 degrees — against a
+ * threshold of 1e-3. A margin of 36,000x, on the record rather than hoped for, and
+ * re-measured every run by "every shipped face is square to its own uvs, and by this
+ * margin" in PanelLayout.test.js. If a future model lands near this line, that is a
+ * finding about the exporter and not a reason to widen the number.
+ *
+ * WHAT IT REPLACED: a threshold of 0.5, compared against ratios that are COSINES — so
+ * SIXTY DEGREES — under a message that said the edges "do not run along its own uv
+ * axes". A 30-degree parallelogram went straight through it.
+ */
+const MAX_OFF_AXIS_RAD = 1e-3;
+/** cos(1e-3) = 1 - 5.000e-7. An edge this far off its own axis is not an edge of a rectangle. */
+const MIN_AXIS_COS = Math.cos(MAX_OFF_AXIS_RAD);
+/** sin(1e-3) = 1.000e-3. |dot| between two unit axes IS the sine of their skew. */
+const MAX_AXIS_SKEW = Math.sin(MAX_OFF_AXIS_RAD);
+
 /** Newell's method — robust for any planar polygon, unlike a single cross product. */
 function newellNormal(pts) {
   let nx = 0, ny = 0, nz = 0;
@@ -125,6 +172,29 @@ function newellNormal(pts) {
  * face the returned floats are unchanged to the last bit — which is a test, not a
  * hope: see "leaves the shipped cockpit's numbers alone" in PanelLayout.test.js.
  *
+ * ── `width` AND `height` ARE EDGE LENGTHS, NOT SPANS — AND THAT IS EXACT HERE ──
+ *
+ * They are the raw distances between corners, not the span of the point set projected
+ * onto the recovered u and v axes. For a rectangle those are the same number. For a
+ * quad that leans they differ by cos(shear), so the distinction is worth stating
+ * rather than leaving for a reader to discover from the arithmetic.
+ *
+ * It is bounded, and the bound IS the guard below: nothing reaches the return
+ * statement more than MAX_OFF_AXIS_RAD = 1e-3 rad off square, so the two can disagree
+ * by at most 1 - cos(1e-3) = 5.0e-7 relative — 0.12 microns on a 0.24 m face, two
+ * orders below the 1e-6 m at which `weld` above calls two vertices the same vertex.
+ * Inside the contract this function enforces, "edge length" and "span" are the same
+ * measurement.
+ *
+ * REPORTING SPANS INSTEAD WAS MEASURED AND REJECTED. On cockpit.glb's four faces it
+ * moves six of the eight returned floats — Screen_UL height 0.20000001120374561 ->
+ * 0.20000001308599100, Screen_LR height 0.19999999563652421 -> 0.20000000253440109,
+ * up to 6.9e-9 m — because a span is a max-minus-min over projections and an edge
+ * length is a hypot, and they round differently. That is exactly what the Object.is
+ * pin in PanelLayout.test.js exists to forbid. A sub-micron accuracy gain nothing
+ * downstream can observe is not worth moving the numbers the shipped cockpit runs on,
+ * so the extents stay edge lengths and this paragraph is the disclosure instead.
+ *
  * @param {Array<[number,number,number]>} points world-space vertices
  * @param {Array<[number,number]>} uvs the uv of each point, in the SAME order
  * @returns {{width:number, height:number, aspect:number,
@@ -153,15 +223,44 @@ export function measureQuad(points, uvs) {
   const [uEdge, vEdge] = alongU(others[0]) >= alongU(others[1])
     ? [others[0], others[1]]
     : [others[1], others[0]];
-  // A rectangle's edges lie along the uv axes. If neither does — a sheared or
-  // rhombic face — the two extents are not "width and height" in any sense a panel
-  // renderer can use, and quietly picking one is how a wrong texture shape ships.
-  if (!(alongU(uEdge) > 0.5) || !(Math.abs(dot(sub(vEdge.p, p0), axes.rawUp)) / vEdge.d > 0.5)) {
+  // ── IS THIS ACTUALLY A RECTANGLE MAPPED TO THE UNIT SQUARE ────────────────────
+  //
+  // TWO properties, and it takes both. Either one alone is half a guard, because each
+  // is blind to exactly the shape the other catches:
+  //
+  //  (a) EACH EDGE RUNS ALONG ITS OWN UV AXIS. Catches a trapezoid — narrow the top
+  //      edge and the recovered axes stay perfectly square while two "edges" no longer
+  //      run along them.
+  //
+  //  (b) THE TWO UV AXES ARE SQUARE TO EACH OTHER. Catches SHEAR, which (a) CANNOT SEE
+  //      AT ALL, at any threshold. `uvAxes` builds rawUp from the midpoints of the top
+  //      and bottom edges, so on a parallelogram it comes back running exactly along
+  //      the leaning v edge: both cosines are 1.0 to twelve decimal places on a face
+  //      sheared 5 degrees. The skew lands here instead, as |dot| = sin(shear).
+  //      Pinned by "refuses a parallelogram sheared 5 degrees, whose cosines are BOTH
+  //      exactly 1" in PanelLayout.test.js.
+  //
+  // The old check was (a) alone, at a threshold of 0.5 — a cosine, so sixty degrees.
+  // It admitted every parallelogram there is and every trapezoid up to a right angle,
+  // and reported the raw edge lengths as though they were a rectangle's width and
+  // height. Quietly picking one is how a wrong texture shape ships.
+  const uCos = alongU(uEdge);
+  const vCos = Math.abs(dot(sub(vEdge.p, p0), axes.rawUp)) / vEdge.d;
+  const skew = Math.abs(dot(axes.rawRight, axes.rawUp));
+  // Written as negated `>=` / `<=` so a NaN — from a degenerate edge — throws here
+  // rather than being waved through by a comparison that is false either way.
+  if (!(uCos >= MIN_AXIS_COS) || !(vCos >= MIN_AXIS_COS) || !(skew <= MAX_AXIS_SKEW)) {
+    const asDeg = (rad) => ((rad * 180) / Math.PI).toPrecision(4);
+    const clamp = (x) => Math.min(1, Math.max(-1, x));
     throw new Error(
-      `measureQuad: the quad's edges do not run along its own uv axes — it is sheared ` +
-      `relative to its texture rather than a rectangle mapped to the unit square. There ` +
-      `is no single width and height to report, and choosing one would put a stretched ` +
-      `readout on the glass with nothing to say why.`,
+      `measureQuad: this quad is sheared relative to its own uv axes rather than being ` +
+      `a rectangle mapped to the unit square. Off square by more than ` +
+      `${asDeg(MAX_OFF_AXIS_RAD)} deg: u edge ${asDeg(Math.acos(clamp(uCos)))} deg off ` +
+      `the u axis, v edge ${asDeg(Math.acos(clamp(vCos)))} deg off the v axis, and the ` +
+      `two axes ${asDeg(Math.asin(clamp(skew)))} deg out of square with each other. ` +
+      `There is no single width and height to report — the edge lengths are not the ` +
+      `extents along those axes once the shape leans — and choosing one anyway would ` +
+      `put a stretched readout on the glass with nothing to say why.`,
     );
   }
   const width = uEdge.d;

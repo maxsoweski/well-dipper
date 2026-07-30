@@ -569,3 +569,274 @@ describe('measureQuad — the uvs say which extent is the width', () => {
       .toThrow(/unit square/);
   });
 });
+
+/**
+ * measureQuad's rectangle guard — the third round of the SAME defect species.
+ *
+ * ⭐ WHAT THIS BLOCK EXISTS FOR. Twice now this file has carried a message that
+ * asserted a property the code did not have. `measureQuadBasis` claimed to make "no
+ * assumption about which way the quad is oriented" while assuming the highest edge
+ * was the top. `measureQuad` claimed the same while assuming the longer edge was the
+ * width. The commit that fixed the second one wrote a third: a guard whose message
+ * says the quad's "edges do not run along its own uv axes", sitting on a threshold of
+ * 0.5 — and those ratios are COSINES, so 0.5 is SIXTY DEGREES.
+ *
+ * The guard was also, measured rather than assumed, entirely untested. Deleting it
+ * outright left the suite bit-identical at 2244 passed, and the string 'sheared' did
+ * not appear anywhere else in the repo. So this block is the control the guard never
+ * had, and every test in it was written and run RED before the threshold moved.
+ *
+ * TWO SEPARATE PROPERTIES ARE BEING GUARDED, and it took building the fixtures to see
+ * that the old check could only ever have tested one of them:
+ *
+ *   (a) each edge runs along its own uv axis. A trapezoid violates this.
+ *   (b) the two uv axes are square to each other. A parallelogram violates this —
+ *       and (a) CANNOT SEE IT AT ALL, at any threshold. `uvAxes` builds rawUp from
+ *       the midpoints of the top and bottom edges, so on a sheared quad rawUp comes
+ *       back running exactly along the leaning v edge: cos = 1.0 for a 30-degree
+ *       shear, ten decimal places of perfect agreement, on a face that is not a
+ *       rectangle. Tightening (a) alone would have left the headline defect alive.
+ */
+describe('measureQuad — a quad that is not a rectangle is refused, not measured', () => {
+  /**
+   * THE THRESHOLD, restated here as a literal on purpose.
+   *
+   * `MAX_OFF_AXIS_RAD` in PanelLayout.js is the source of truth; this is deliberately
+   * NOT imported from it. An imported constant makes the boundary tests below follow
+   * whatever the source says, which is precisely the property a boundary test must not
+   * have — it would go green on a threshold quietly widened back to 0.5. Restating it
+   * means moving the line is a two-file act, done on purpose, with this comment in the
+   * diff. 1e-3 rad = 0.0573 degrees.
+   */
+  const MAX_OFF_AXIS_RAD = 1e-3;
+  const deg = (rad) => `${((rad * 180) / Math.PI).toFixed(4)} deg`;
+
+  /** Gram-Schmidt, so the fixture's own frame is exactly square and 0 shear means 0. */
+  function frameOf({ right, up }) {
+    const n = (v) => { const l = Math.hypot(...v); return v.map((c) => c / l); };
+    const R = n(right);
+    const d = up[0] * R[0] + up[1] * R[1] + up[2] * R[2];
+    return { R, U: n(up.map((c, k) => c - d * R[k])) };
+  }
+
+  /**
+   * A PARALLELOGRAM: a w x h rectangle whose two v edges have been tipped `shearRad`
+   * towards +u, its u edges left horizontal. shearRad = 0 gives the rectangle back
+   * exactly, which is what makes the boundary pair below a fair comparison.
+   *
+   * This is the shape the old guard could not see: rawRight comes out along R and
+   * rawUp comes out along the LEANING edge, so both cosines are 1.0 and the skew
+   * between the axes — sin(shearRad) — is the only place the shape shows up.
+   */
+  function shearedQuad({ centre, right, up, w, h }, shearRad) {
+    const { R, U } = frameOf({ right, up });
+    const k = Math.tan(shearRad);
+    const at = (su, sv) => [0, 1, 2].map((i) =>
+      centre[i] + R[i] * ((su * w) / 2 + (k * sv * h) / 2) + U[i] * ((sv * h) / 2));
+    return { points: [at(-1, 1), at(1, 1), at(-1, -1), at(1, -1)], uvs: [[0, 0], [1, 0], [0, 1], [1, 1]] };
+  }
+
+  /**
+   * A TRAPEZOID: top edge narrowed and bottom widened so each v edge leans `tiltRad`
+   * off the v axis, while the recovered axes stay exactly square to each other.
+   * The complement of the parallelogram — it is invisible to (b) and only (a) sees it.
+   */
+  function taperedQuad({ centre, right, up, w, h }, tiltRad) {
+    const { R, U } = frameOf({ right, up });
+    const half = (Math.tan(tiltRad) * h) / 2;          // top loses it, bottom gains it
+    const at = (su, sv) => [0, 1, 2].map((i) =>
+      centre[i] + R[i] * su * (w / 2 - sv * half) + U[i] * ((sv * h) / 2));
+    return { points: [at(-1, 1), at(1, 1), at(-1, -1), at(1, -1)], uvs: [[0, 0], [1, 0], [0, 1], [1, 1]] };
+  }
+
+  const LEVEL = { centre: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0] };
+  const ROLLED = { centre: [0.7, -0.4, -1.1], right: [0.3, 0.9, 0.2], up: [-0.9, 0.32, 0.1] };
+
+  /**
+   * The two off-square angles of a quad, measured HERE rather than by asking the code
+   * under test — an instrument cannot be its own control. Mirrors measureQuad's own
+   * edge selection so the numbers refer to the same two edges it labels.
+   */
+  function offAxisAngles(points, uvs) {
+    const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const len = (v) => Math.hypot(v[0], v[1], v[2]);
+    const nrm = (v) => { const l = len(v); return [v[0] / l, v[1] / l, v[2] / l]; };
+    const pts = [];
+    for (const p of points) if (!pts.some((q) => len(sub(p, q)) < 1e-6)) pts.push(p);
+    const mid = (pick) => {
+      const hit = points.filter((_, i) => pick(uvs[i]));
+      return [0, 1, 2].map((k) => hit.reduce((s, p) => s + p[k], 0) / hit.length);
+    };
+    const rawUp = nrm(sub(mid((t) => t[1] < 0.5), mid((t) => t[1] > 0.5)));
+    const rawRight = nrm(sub(mid((t) => t[0] > 0.5), mid((t) => t[0] < 0.5)));
+    const p0 = pts[0];
+    const others = pts.slice(1).map((p) => ({ p, d: len(sub(p, p0)) })).sort((a, b) => a.d - b.d);
+    const cosU = (e) => Math.abs(dot(sub(e.p, p0), rawRight)) / e.d;
+    const [uE, vE] = cosU(others[0]) >= cosU(others[1]) ? [others[0], others[1]] : [others[1], others[0]];
+    const clamp = (x) => Math.min(1, Math.max(-1, x));
+    return {
+      uEdge: Math.acos(clamp(cosU(uE))),
+      vEdge: Math.acos(clamp(Math.abs(dot(sub(vE.p, p0), rawUp)) / vE.d)),
+      axisSkew: Math.asin(clamp(Math.abs(dot(rawRight, rawUp)))),
+      cosU: cosU(uE),
+      cosV: Math.abs(dot(sub(vE.p, p0), rawUp)) / vE.d,
+      skew: Math.abs(dot(rawRight, rawUp)),
+    };
+  }
+
+  it('refuses a parallelogram sheared 30 degrees — the case the 0.5 threshold admitted', () => {
+    // ⭐ THE HEADLINE. 30 degrees is not float noise and not a debatable margin: it is
+    // half the 60 degrees the old cosine threshold of 0.5 allowed through, and on a
+    // 0.240 x 0.200 face it slides the top edge 58 mm sideways over the bottom one.
+    const SHEAR = Math.PI / 6;                                  // 30.0000 deg
+    const q = shearedQuad({ ...LEVEL, w: 0.24, h: 0.20 }, SHEAR);
+
+    // The shear shows up in the axis skew — exactly sin(30) — and that is the ONLY
+    // place it reliably shows up. See the 5-degree test below for the demonstration
+    // that the two cosines are 1.0 on a parallelogram.
+    const a = offAxisAngles(q.points, q.uvs);
+    expect(a.skew, 'the axes are sin(30) out of square').toBeCloseTo(Math.sin(SHEAR), 12);
+    expect(a.axisSkew, `shear angle is ${deg(SHEAR)}`).toBeCloseTo(SHEAR, 12);
+
+    // A SECOND defect this fixture exposes, recorded because it is not obvious and it
+    // is not what the guard fixes. measureQuad picks its two edges as "the two
+    // shortest of the three distances from a corner, because the diagonal is always
+    // the largest". At 30 degrees that premise fails outright: TL->TR is 0.240000,
+    // TL->BL is 0.230940, and the DIAGONAL TL->BR is 0.235601 — shorter than an edge.
+    // So the function takes the diagonal for an edge, and the ratio the old guard then
+    // measured was 0.5286: above 0.5, hence green. The guard below refuses the shape
+    // before any of that matters, which is the right place to stop; if a caller ever
+    // needs a sheared quad measured, the edge selection needs rewriting too, not just
+    // the threshold relaxing.
+    expect(a.cosU, 'the diagonal got taken for the u edge at this much shear')
+      .toBeCloseTo(0.5285634820385609, 12);
+    expect(a.cosU, 'and it cleared the old threshold of 0.5, which is why this shipped')
+      .toBeGreaterThan(0.5);
+
+    expect(() => measureQuad(q.points, q.uvs)).toThrow(/sheared/);
+    expect(() => measureQuad(q.points, q.uvs)).toThrow(/rectangle/);
+  });
+
+  it('refuses a parallelogram sheared 5 degrees, whose cosines are BOTH exactly 1', () => {
+    // ⭐ THE PROOF THAT NO COSINE THRESHOLD COULD EVER HAVE CAUGHT SHEAR. At 5 degrees
+    // the edge selection still works (the diagonal is genuinely the longest), and both
+    // ratios the old guard measured come back at 1.0 to twelve decimal places — a
+    // perfect score, on a face that is not a rectangle. rawUp is built from the
+    // midpoints of the top and bottom edges, so it leans over with the v edge and
+    // agrees with it exactly, by construction, at every shear angle.
+    //
+    // 5 degrees is not subtle either: it puts a 0.200 m edge 17.5 mm out of plumb.
+    const SHEAR = (5 * Math.PI) / 180;
+    const q = shearedQuad({ ...ROLLED, w: 0.24, h: 0.20 }, SHEAR);
+
+    const a = offAxisAngles(q.points, q.uvs);
+    expect(a.cosU, 'the u edge is exactly along the u axis even on a parallelogram')
+      .toBeCloseTo(1, 12);
+    expect(a.cosV, 'rawUp is built from the leaning edge, so this cosine is 1.0 too')
+      .toBeCloseTo(1, 12);
+    expect(a.axisSkew, `shear angle is ${deg(SHEAR)}`).toBeCloseTo(SHEAR, 12);
+
+    expect(() => measureQuad(q.points, q.uvs)).toThrow(/sheared/);
+  });
+
+  it('refuses a trapezoid whose v edges leave the v axis by 30 degrees', () => {
+    // The other half of "a rectangle mapped to the unit square", and the one the old
+    // check was actually shaped to test — it just tested it at sixty degrees. Here the
+    // two axes ARE square to each other, so the skew test cannot see this one: the
+    // guard needs both halves or it is half a guard.
+    const TILT = Math.PI / 6;
+    const q = taperedQuad({ ...LEVEL, w: 0.24, h: 0.20 }, TILT);
+
+    const a = offAxisAngles(q.points, q.uvs);
+    expect(a.skew, 'a taper leaves the axes square — invisible to the skew test')
+      .toBeCloseTo(0, 12);
+    expect(a.vEdge, `the v edges lean ${deg(TILT)} off the v axis`).toBeCloseTo(TILT, 9);
+
+    expect(() => measureQuad(q.points, q.uvs)).toThrow(/sheared/);
+  });
+
+  it('pins the boundary: 0.0516 deg of shear passes, 0.0630 deg does not', () => {
+    // The threshold is a number in the source, so it is pinned here from both sides
+    // rather than implied by whichever fixtures happen to exist. +/-10 % of
+    // MAX_OFF_AXIS_RAD: far enough apart that no float noise in the fixture reaches
+    // the line (the fixtures are square to ~1e-16), close enough that neither side
+    // would survive the threshold moving by a factor of two, let alone to 0.5.
+    const inside = MAX_OFF_AXIS_RAD * 0.9;
+    const outside = MAX_OFF_AXIS_RAD * 1.1;
+
+    for (const [label, build] of [['sheared', shearedQuad], ['tapered', taperedQuad]]) {
+      for (const frame of [LEVEL, ROLLED]) {
+        const ok = build({ ...frame, w: 0.24, h: 0.20 }, inside);
+        expect(() => measureQuad(ok.points, ok.uvs), `${label} ${deg(inside)} must pass`)
+          .not.toThrow();
+
+        const bad = build({ ...frame, w: 0.24, h: 0.20 }, outside);
+        expect(() => measureQuad(bad.points, bad.uvs), `${label} ${deg(outside)} must throw`)
+          .toThrow(/sheared/);
+      }
+    }
+  });
+
+  it('a rectangle at exactly zero shear is still measured, and correctly', () => {
+    // The guard must not have become a wall. Zero is the case the whole file is for.
+    const q = shearedQuad({ ...ROLLED, w: 0.24, h: 0.20 }, 0);
+    const m = measureQuad(q.points, q.uvs);
+    expect(m.width).toBeCloseTo(0.24, 12);
+    expect(m.height).toBeCloseTo(0.20, 12);
+  });
+
+  it('every shipped face is square to its own uvs, and by this margin', () => {
+    // ⭐ THE MARGIN IS A FACT ON THE RECORD, NOT A HOPE. Measured off the GLBs on disk
+    // 2026-07-29, cockpit.glb's four faces:
+    //
+    //             cos(u edge, u axis)   cos(v edge, v axis)   |dot(u axis, v axis)|
+    //   Screen_UL   1 - 1.110e-16         1 - 0                 7.843e-9
+    //   Screen_UR   1 - 1.110e-16         1 - 0                 7.843e-9
+    //   Screen_LL   1 + 2.220e-16         1 - 5.551e-15         2.748e-8
+    //   Screen_LR   1 + 2.220e-16         1 - 5.551e-15         2.748e-8
+    //
+    // The worst of them is 2.748e-8 rad off square — 1.6e-6 degrees — against a
+    // threshold of 1e-3 rad. A factor of 36,000. If a future model lands nearer the
+    // line than the bounds below, that is a finding about the MODEL and the answer is
+    // to look at the exporter, not to widen the number in PanelLayout.js.
+    const files = glbFiles().filter((f) => screensOf(f).screens.length > 0);
+    expect(files.length).toBeGreaterThan(0);
+
+    let checked = 0;
+    for (const file of files) {
+      for (const s of screensOf(file).screens) {
+        const a = offAxisAngles(s.points, s.uvs);
+        const where = `${file}/${s.name}`;
+        expect(() => measureQuad(s.points, s.uvs), `${where} was refused as sheared`).not.toThrow();
+        expect(1 - a.cosU, `${where}: u edge 1-cos = ${1 - a.cosU}`).toBeLessThan(1e-13);
+        expect(1 - a.cosV, `${where}: v edge 1-cos = ${1 - a.cosV}`).toBeLessThan(1e-13);
+        expect(a.skew, `${where}: axis skew = ${a.skew} rad`).toBeLessThan(1e-7);
+        // And the margin itself, stated as the ratio it is.
+        expect(a.axisSkew, `${where} sits within a ten-thousandth of the threshold`)
+          .toBeLessThan(MAX_OFF_AXIS_RAD / 1000);
+        checked += 1;
+      }
+    }
+    expect(checked, 'no shipped face was measured').toBeGreaterThanOrEqual(4);
+  });
+
+  it('refuses anything that is not four corners, however plausible its uvs', () => {
+    // ALSO UNTESTED until now: relaxing `pts.length !== 4` to `pts.length < 4` left
+    // the whole suite green, and a subdivided face then came back through the same
+    // arithmetic as a transposed, half-size, mislocated panel — measured, not feared.
+    // Five corners is the case that mutation lets through, so it is the case pinned
+    // first; three is the other side of the same door.
+    const q = shearedQuad({ ...LEVEL, w: 0.24, h: 0.20 }, 0);
+
+    // A face subdivided once along its bottom edge: still flat, still uv-mapped over
+    // the unit square, still emphatically not a quad this function can measure.
+    const fivePoints = [...q.points, [0, -0.1, -1]];
+    const fiveUvs = [...q.uvs, [0.5, 1]];
+    expect(() => measureQuad(fivePoints, fiveUvs)).toThrow(/4-corner/);
+    expect(() => measureQuad(fivePoints, fiveUvs)).toThrow(/5 unique vertices/);
+
+    // And a triangle, which an exporter can emit for a clipped face.
+    expect(() => measureQuad(q.points.slice(0, 3), q.uvs.slice(0, 3))).toThrow(/4-corner/);
+  });
+});

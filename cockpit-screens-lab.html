@@ -3855,8 +3855,31 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
      * for this one. 2.0 widths is ~0.48 m on today's 0.24 m screens.
      *
      * `scaleU` / `scaleV` are the non-uniform pair, applied IN THE FACE PLANE
-     * along the panel's own u and v axes. 1.35 / 0.80 multiplies the aspect by
-     * 1.6875 — a 69% change, against the 25% the criterion asks for.
+     * along the panel's own u and v axes. 0.6 / 1.5 multiplies the aspect by 0.4 —
+     * a 60% change, against the 25% the criterion asks for.
+     *
+     * ⭐ WHY THE DEFAULT MAKES THE FACE PORTRAIT, AND MUST KEEP DOING SO.
+     *
+     * These were 1.35 / 0.80, which multiplied the aspect by 1.6875 and took the
+     * 0.240 x 0.200 face to 0.324 x 0.160 — MORE landscape than it started. That is
+     * a big number pointing in the safe direction. Every face this cockpit has ever
+     * shipped is landscape, and landscape is the shape under which the axis-crossing
+     * defect in `measureQuad` was invisible for the whole life of the function: it
+     * took the LONGER edge as the width, which is right for every landscape face and
+     * wrong for every portrait one. A portrait face came back with its axes crossed,
+     * `solveFillDistance` received (height, width) and placed the panel at u/v of the
+     * correct distance — a 9:16 face at fill 0.85 landing at 1.51 of the view.
+     *
+     * So the old default perturbed hard along the one axis that could not fail. A run
+     * of AC-MOTION-FOLLOWS-THE-MODEL against it would have gone green over a
+     * 51%-overflowing panel and reported that the mover re-measures.
+     *
+     * 0.6 / 1.5 takes the same face to 0.144 x 0.300 — aspect 0.48, PORTRAIT, the
+     * shape the live run used and the shape the bug lived in. The default is the
+     * hard case on purpose: a default that exercises the easy path is a default that
+     * lets the hard one rot, and it rots silently, because the suite stays green
+     * while it happens. Anyone widening this back toward landscape is removing the
+     * only routine coverage the crossed-axis case has.
      *
      * The rotations are expressed in the FACE'S OWN FRAME: `roll` about the face
      * normal, which is the one that can put a screen at the eye upside down and is
@@ -3872,8 +3895,8 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
       rollDeg: 22,
       yawDeg: 12,
       pitchDeg: -8,
-      scaleU: 1.35,
-      scaleV: 0.80,
+      scaleU: 0.6,    // 0.240 -> 0.144 m
+      scaleV: 1.5,    // 0.200 -> 0.300 m, so the face lands PORTRAIT at aspect 0.48
     });
 
     /**
