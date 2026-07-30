@@ -219,3 +219,60 @@ describe('the rig keeps its hands off the renderer and the clock', () => {
     expect(src).toContain('makeNav');
   });
 });
+
+describe('the pointer router — the hover channel must survive the extraction', () => {
+  /** A rig with a stubbed adapter, so the router is tested and nothing else is. */
+  function routed({ landed = true, role = 'NAV', lookDragging = false } = {}) {
+    const calls = [];
+    const rig = new CockpitRig({ ...hostOpts(), isLookDragging: () => lookDragging });
+    rig.mover = { zoomedRole: landed ? 'NAV' : null, state: landed ? 'zoomed' : 'rest', zoom: (r) => calls.push(`zoom:${r}`), dismiss: () => calls.push('dismiss') };
+    rig.pickAt = () => (role ? { role, hit: { uv: { u: 0.5, v: 0.5 } } } : null);
+    rig.ensureNavAdapter = () => ({
+      pointerDown: () => calls.push('down'),
+      pointerMove: () => calls.push('move'),
+      pointerUp: () => calls.push('up'),
+      pointerHover: (h) => calls.push(`hover:${h ? 'hit' : 'miss'}`),
+    });
+    return { rig, calls };
+  }
+
+  it('forwards UNPRESSED moves as hover — the whole of Max\'s "press and hold" bug', () => {
+    const { rig, calls } = routed();
+    rig.pointer.move(10, 10);
+    expect(calls).toEqual(['hover:hit']);
+  });
+
+  it('passes a hit on ANOTHER panel as a MISS, so its uv never lands in NAV pixel space', () => {
+    const { rig, calls } = routed({ role: 'DRIVE' });
+    rig.pointer.move(10, 10);
+    expect(calls).toEqual(['hover:miss']);
+  });
+
+  it('does not hover while the host is look-dragging, or before the panel has landed', () => {
+    const a = routed({ lookDragging: true });
+    a.rig.pointer.move(10, 10);
+    expect(a.calls).toEqual([]);
+    const b = routed({ landed: false });
+    b.rig.pointer.move(10, 10);
+    expect(b.calls).toEqual([]);
+  });
+
+  it('a press on the landed panel routes to the nav computer, and its moves are DRAG not hover', () => {
+    const { rig, calls } = routed();
+    expect(rig.pointer.down(10, 10)).toBe('nav');
+    rig.pointer.move(11, 11);
+    expect(rig.pointer.up(11, 11)).toBe(true);
+    expect(calls).toEqual(['down', 'move', 'up']);
+  });
+
+  it('a release with no press outstanding is not consumed, so the host keeps its own drag', () => {
+    const { rig } = routed();
+    expect(rig.pointer.up(10, 10)).toBe(false);
+  });
+
+  it('a press on a zoomable panel at rest zooms it instead of poking the nav computer', () => {
+    const { rig, calls } = routed({ landed: false });
+    expect(rig.pointer.down(10, 10)).toBe('zoom');
+    expect(calls).toEqual(['zoom:NAV']);
+  });
+});

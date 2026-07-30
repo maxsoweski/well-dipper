@@ -219,7 +219,11 @@ export class CockpitRig {
     };
     this.zoomableRoles = opts.zoomableRoles ?? DEFAULT_ZOOMABLE_ROLES;
 
-    this.scene = new THREE.Scene();
+    // The scene is INJECTABLE: the lab already has one at module-evaluation time
+    // (its backdrop and cabin light go in before the GLB resolves) and the game
+    // manages its own cockpit scene for the render pass. The rig owns the
+    // ASSEMBLY, not the container.
+    this.scene = opts.scene ?? new THREE.Scene();
     this.model = null;
     this.host = null;
     this.mover = null;
@@ -272,7 +276,19 @@ export class CockpitRig {
    */
   static load(opts = {}) {
     const rig = new CockpitRig(opts);
-    const url = opts.glbUrl ?? COCKPIT_GLB_URL;
+    return rig.loadModel();
+  }
+
+  /**
+   * Load the model into an already-constructed rig.
+   *
+   * Split from `load()` so a host can hold `rig.scene` BEFORE the model arrives —
+   * the lab adds its backdrop and cabin light to that scene at module-evaluation
+   * time, long before the GLB resolves.
+   */
+  loadModel() {
+    const rig = this;
+    const url = rig.opts.glbUrl ?? COCKPIT_GLB_URL;
     return new Promise((resolve) => {
       new GLTFLoader().load(
         url,
