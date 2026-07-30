@@ -173,6 +173,7 @@
     import { deriveConditionVector } from './body-condition-vector.js';   // V2-0 Slice C: pure _fp→condition vector, attached NESTED as bodyDrivers.condition (shadow-mode; V2-1 E1 read surface; SAME derive the headless AC1 harness uses)
     import { computeE1 } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment).
     import { icenessOf, surfacePaletteOf, biosphereOf, BIO_PIGMENT } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3: condition-derived icy-material fraction → drives uIcenessMix (Stage-6 albedo). Pure scalar, imports nothing. · surfacePaletteOf: condition-derived GROUND PALETTE {fresh, weathered, sediment} → drives uFreshColor/uBaseColor/uSedColor (was a single hard-coded rocky tone for all 18 presets, uniform across every world's whole surface).
+    import { applyAlbedoTransfer } from './src/worldengine/display/albedoTransfer.js';   // the albedo DISPLAY transfer, shared with the game port (one copy, by design — see that file's header).
     import { atmosphereOpticsOf } from './src/worldengine/base/atmosphereOptics.js';   // V2-7: condition-derived limb/terminator hue -> retires LIMB_COLOR_BY_PRESET + TERM_COLOR_BY_PRESET (the last name-keyed lookups in the colour path). Pure scalar, imports nothing.
     import { craterSchedule, craterRelevanceOf, D_D_SIMPLE } from './src/worldengine/base/bombardment.js';   // inc3b S3-fix: schedule-derived single crater law (sub-floor texture band) + the condition-derived crater/ejecta relevance gate (replaces the preset-name featureRelevant.craters lookup). e1-blind, pure.
     import { radPerKm } from './src/worldengine/base/baseStep.js';   // inc3b S3-fix: km→angular scalar for the normalized crater-depth law (uCraterAmp = D_D_SIMPLE·radPerKm(R)·D_char). Pure.
@@ -3988,19 +3989,13 @@
       // province read as a paint job rather than as geology. Exposure is a property of the WORLD, not of each
       // material on it, so the scale is solved once from the area-dominant weathered background and every
       // endmember is multiplied by it. Ratios between endmembers are then preserved exactly.
-      const ALBEDO_TONE_K = 4.176;
-      const _lumOf = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-      const _rawPalette = surfacePaletteOf(_bodyDrivers.condition);
-      const _refLum = _lumOf(_rawPalette.weathered);
-      const _paletteScale = _refLum > 1e-6 ? (ALBEDO_TONE_K / (1 + ALBEDO_TONE_K * _refLum)) : 1;
-      const _gain = (a) => a.map(x => Math.min(1, x * _paletteScale));
-      state.surfacePalette = {
-        fresh:     _gain(_rawPalette.fresh),
-        weathered: _gain(_rawPalette.weathered),
-        craton:    _gain(_rawPalette.craton),
-        sediment:  _gain(_rawPalette.sediment),
-        pigment:   _gain(BIO_PIGMENT),
-      };
+      // The curve itself now lives in src/worldengine/display/albedoTransfer.js so the GAME imports the
+      // SAME one — the register named this transfer as the single most likely thing to be lost in the
+      // port, and one shared module is what makes losing it impossible rather than merely warned about.
+      // The rationale that used to sit here (Reinhard-on-luminance, one scale for the whole palette,
+      // solved from the weathered endmember) moved with it and is unabridged in that file.
+      state.surfacePalette = applyAlbedoTransfer(surfacePaletteOf(_bodyDrivers.condition),
+                                                { extra: { pigment: BIO_PIGMENT } });
       // ── inc3b S3-fix: schedule-derived SINGLE crater law (the sub-floor crater-texture band, rendered
       // analytically in-shader so it is resolution-independent — bypassing the mesh + bake the diagnosis
       // convicted as unable to carry the wall slope). SAME derived-state idiom as state.iceness above:

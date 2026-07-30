@@ -144,7 +144,69 @@ Mars fixture", that needs a separate archetype entry, not a change to the lock.
 
 ## Notes for the game port
 
-The port is the actual destination, so these matter more than the polish items above.
+**STATUS 2026-07-30: the seam is built; the colour swap is BLOCKED on three findings. Read these
+before attempting the port again — the naive version is a regression, and it was measured, not
+guessed.**
+
+### Built and landed
+
+- **`src/worldengine/display/albedoTransfer.js`** — the albedo display transfer, extracted out of the
+  lab's `applyDrivers` into ONE shared module the lab and the game both import. This section used to
+  warn that the transfer was "the single most likely thing to be lost in the port"; it is now
+  structurally impossible to lose instead of merely warned about. The extraction is byte-identical
+  across all 18 presets x 5 endmembers x 3 channels (verified, max delta exactly 0).
+- **`src/worldengine/port/conditionFromPlanet.js`** — the ONE named seam where game data enters the
+  engine. It reads `planetData.type` for **nothing**, deliberately: if a future edit needs the label to
+  make something come out right, the LAW is underspecified — add the missing condition scalar instead.
+  It also carries the greenhouse correction described in blocker B.
+
+### ⛔ Blocker A — `baseColor` and `surfacePaletteOf()` are NOT the same quantity
+
+`surfacePaletteOf()` returns **land bedrock** endmembers (fresh / weathered / craton / sediment). The
+game's `baseColor` is a **whole-body** colour, and the shaders consume it as such:
+`vec3 deepOcean = baseColor * 0.8`, `surfaceColor = mix(baseColor, accentColor, zoneMask)` for gas
+bands, and the ice path likewise. Substituting one for the other turns **every ocean brown and every
+gas giant tan**. Measured across 11 types x 2 orbits: every derived colour landed in a narrow
+brown/tan band (#69–#84), because that is what bedrock IS.
+
+**What the port actually needs:** wire the derived palette into the **land path only** — the game's
+`ROCKY_BODY` land branch — and leave the ocean, ice, cloud and gas-band layers on their own colours,
+exactly as the lab does (the lab's ocean/ice/cloud layers are separate from `uBaseColor` too). The
+lab's architecture already has this right; the port has to preserve the layering, not flatten it.
+
+### ⛔ Blocker B — the two sides disagree about what `T_eq` means (FIXED at the seam)
+
+  game   `PlanetGenerator.T_eq` = `equilibriumTemperature(luminosityRel, orbitAU)` — bare radiative
+         balance, **no greenhouse**. There is no surface-temperature field anywhere in game planet data.
+  engine `condition.T_eq`       = **SURFACE** temperature (`body-condition-vector.js` says so; the lab's
+         Venus preset is 737, its surface value).
+
+Same field name, different physical quantity, and nothing warns you. Passing it straight through hands
+every temperature-gated law the wrong number: a game Venus arrives at ~329 K instead of 737 K, so the
+erosion water-window, iceness, biosphere, crater and atmosphere-optics gates all read it as temperate.
+
+**Fixed** in `conditionFromPlanet.js` with a grey-greenhouse conversion,
+`T_surf = T_eq*(1 + 0.75*tau)^0.25`, `tau = 0.84*P^1.124`. Two constants solved from Earth and Venus;
+checked against four bodies that were NOT fitted: Mars +0.1%, Titan +3.7%, Moon and Europa exact
+(airless is exact by construction, P=0 => factor 1).
+
+### ⛔ Blocker C — the game's bodies are barely differentiated in condition space
+
+At a given orbit, **every type gets the same `T_eq`** (329 K at 0.6 AU, 147 K at 3.0 AU — it is a pure
+function of orbit and luminosity, with no type, albedo or greenhouse input), and `ironFraction`
+clusters in 0.23–0.33 for everything. The lab's presets span `T_eq` 55–2000 K and iron 0.03–0.70.
+
+**Consequence, and it is the uncomfortable one:** even after Blocker A is fixed, condition-derived
+colour in the game would vary *less* than the current hand-picked `PALETTES` table, because the
+conditions feeding it barely vary. **The port as a straight swap would reduce visible variety — the
+opposite of the goal.** Blocker C is really a defect in `PlanetGenerator`'s composition/temperature
+generation that the port merely exposes. Fixing it means making the game's generated bodies as rich in
+condition space as the lab's presets are, and that is a decision for Max about scope, not a mechanical
+port step.
+
+---
+
+### Original notes (still valid)
 
 - **All of this lives in `src/worldengine/**` and is framework-free and deterministic** —
   `surfaceMaterial.js` imports nothing, reads only condition scalars, and contains no label /
