@@ -1469,7 +1469,20 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
 
 ## Recently shipped
 
-- **world-engine port (lane L1), slice 3 rungs 0–1** (2026-07-30) — ⚠ **AWAITING MAX UAT.**
+- **world-engine port (lane L1), slice 3 rung 2** (2026-07-30) — `2b89132` **`uReliefOctaves` ramps
+  4→9 with distance**, using the lab's own law imported not copied
+  (`autoOctaves(lodRampOf(d))` = `mix(4,9,smoothstep(20,6,d))`, d in body radii). Driven by the
+  CONTINUOUS ratio `LODManager` already computes, **not** the discrete `lodLevel` tier — a
+  tier-driven ramp would pop five octaves in one frame. Octaves buy more relief than the gain raise
+  did (rocky +312%, ice +137%; terrestrial/lava +19–23%, the same self-limiting shape). Pinned by
+  `tests/relief-octave-lod-ramp.test.js` (7 cases, mutation-checked) because the ramp **cannot be
+  exercised by flying** — every Sol body is 10⁵–10⁷ radii away and the world rebases around a
+  near-origin camera. Contact sheet: `~/briefings/relief-octave-ramp-closeup-2026-07-30.png`.
+  **Next rung is a decision, not code**: transcribe further vs import the lab shader wholesale
+  (blocked on per-planet `ShaderMaterial` × 343 uniforms — measure first).
+
+- **world-engine port (lane L1), slice 3 rungs 0–1** (2026-07-30) — ✅ **MAX UAT PASSED** on the 6×
+  relief raise (_"I'm fine with it btw it looks good to me"_).
   `f77d9ff` **the hoist**: `hash3`/`noised`/`fbmd` now live only in
   `src/worldengine/shaders/heightNoise.glsl.js` and are spliced back into `HEIGHT_GLSL` at the two
   (non-contiguous) points they occupied — resolved string **byte-identical, 265 920 bytes**; the
