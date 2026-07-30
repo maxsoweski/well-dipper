@@ -81,6 +81,9 @@ export const HEIGHT_GLSL = /* glsl */ `
       uniform float uTime;            // animation clock (clouds drift, aurora rays)
       uniform vec3  uLightDir;      // object-space light dir
       uniform vec3  uBaseColor;
+      uniform vec3  uFreshColor;        // unaltered-bedrock ground endmember (steep slopes strip to it)
+      uniform vec3  uSedColor;          // transported-fines ground endmember (flat lows accumulate it)
+      uniform float uTerrainAlbedoMix;  // 0..1 dial; 0 ⇒ single-colour ground (pre-palette behaviour)
       uniform vec3  uMacroOffset;   // macro seed -> noise-domain offset (octaves 0..2)
       uniform vec3  uDetailOffset;  // detail seed -> noise-domain offset (octaves 3+)
       // ── voronoi3d spike debug (index §5 risk #1 seam gate) ──

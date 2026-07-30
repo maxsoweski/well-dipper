@@ -172,7 +172,7 @@
     import { presetDriverDefaults, buildNeutralBodyDrivers } from './body-drivers.js';   // V2-0 Slice A: neutral (no-slider-override) driver construction the lab overlays overrides on (presetDriverDefaults also used by resetDriverOverrides)
     import { deriveConditionVector } from './body-condition-vector.js';   // V2-0 Slice C: pure _fp→condition vector, attached NESTED as bodyDrivers.condition (shadow-mode; V2-1 E1 read surface; SAME derive the headless AC1 harness uses)
     import { computeE1 } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment).
-    import { icenessOf, surfaceAlbedoOf } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3: condition-derived icy-material fraction → drives uIcenessMix (Stage-6 albedo). Pure scalar, imports nothing. · surfaceAlbedoOf: condition-derived BASE GROUND COLOUR → drives uBaseColor (was a single hard-coded rocky tone for all 18 presets).
+    import { icenessOf, surfacePaletteOf } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3: condition-derived icy-material fraction → drives uIcenessMix (Stage-6 albedo). Pure scalar, imports nothing. · surfacePaletteOf: condition-derived GROUND PALETTE {fresh, weathered, sediment} → drives uFreshColor/uBaseColor/uSedColor (was a single hard-coded rocky tone for all 18 presets, uniform across every world's whole surface).
     import { craterSchedule, craterRelevanceOf, D_D_SIMPLE } from './src/worldengine/base/bombardment.js';   // inc3b S3-fix: schedule-derived single crater law (sub-floor texture band) + the condition-derived crater/ejecta relevance gate (replaces the preset-name featureRelevant.craters lookup). e1-blind, pure.
     import { radPerKm } from './src/worldengine/base/baseStep.js';   // inc3b S3-fix: km→angular scalar for the normalized crater-depth law (uCraterAmp = D_D_SIMPLE·radPerKm(R)·D_char). Pure.
     import { assessProvinceAssociation, provinceStats, classProportions } from './src/worldengine/base/province.js';   // V2-4 slice-4: the province honesty instrument (read-only) for _lab.provinceProbe()
@@ -371,6 +371,13 @@
         // facetCombiner in the analytic branch, consumed by the post-posterize F43 per-facet
         // spark. 0.0 here covers the finite-diff path (facet sparks inert there — review NOTE 1).
         float fctMask   = 0.0;
+        // Terrain-material signals — the local geology the Stage-6 ground palette selects on. Set in the analytic
+        // branch from the ACCUMULATED relief (post-combiners), consumed at Stage 6. Defaults cover the finite-diff
+        // path, where the palette collapses to the weathered endmember — the same treatment carbTar/fctMask get
+        // (review NOTE 1). This is deliberate, not an oversight: the two normalMode paths render different fields
+        // (finite-diff sees only computeHeight; analytic sees the baked plate cube + fbmd + the combiner chain),
+        // so a slope threshold calibrated on one is meaningless on the other.
+        float surfElev  = 0.0;   // accumulated relief height at this pixel (signed, field units)
         if (uNormalMode == 1){
           // Production finite-diff path (regression reference)
           shadeN = perturbFiniteDiff(N, vPos, uPerturb);
@@ -554,6 +561,11 @@
             strandLine *= gentle * uStrandStrength * coastW;
           }
           float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);
+          // Snapshot the accumulated relief height for the Stage-6 ground palette, at the same point the normal is
+          // bent from it — so colour and shading read the SAME surface. Slope is NOT taken from grad here: it is
+          // recovered at Stage 6 as the deviation of shadeN from N, which is dimensionless, bounded, needs no
+          // calibration against field units, and is valid on BOTH normalMode paths since both write shadeN.
+          surfElev  = h;
           shadeN = perturbAnalytic(N, grad, reliefAmp);
           // F24 gas flattening — a banded gas deck has no terrain to light: relax the
           // perturbed normal back to the geometric sphere as uBandStrength rises. The
@@ -629,7 +641,28 @@
         // cold (sea ice; the eyeball ice-ring falls out of the latitude lapse for free).
         // Water = dark cool fill; methane/ethane = darker warm fill (Titan radar-dark).
         vec3 liquidCol = (uLiquidSpecies == 1) ? vec3(0.11, 0.07, 0.03) : vec3(0.04, 0.10, 0.22);
-        vec3 albedoCol = mix(uBaseColor, liquidCol, liquidMask);
+        // ── Ground palette (terrain-driven). The BODY's condition picked the three endmembers (surfacePaletteOf);
+        // the LOCAL geology picks where between them this pixel sits. Two real processes, no hand-painting:
+        //   steep  → fresh bedrock. Mass wasting strips regolith faster than weathering forms it, so slopes and
+        //            crests expose unaltered rock. This is why fresh Martian scarps read grey under the rust.
+        //   lowFlat→ transported fines. Sediment is deposited where gradient dies and there is somewhere to put
+        //            it, i.e. flat LOW ground; a flat CREST is stripped, not filled, so the elevation term gates it.
+        // Slope is the deviation of the relief-perturbed normal from the geometric one — bounded [0,1], needs no
+        // field-unit calibration, and valid on both normalMode paths since both write shadeN.
+        // uTerrainAlbedoMix = 0 ⇒ collapses to the single uBaseColor (pre-palette behaviour, regression-safe).
+        const float TERRAIN_SLOPE_GAIN = 3.0;    // 1-dot(shadeN,N) is 0.134 at a 30° tilt, 0.293 at 45° — this
+                                                 // gain puts the fresh-rock transition across normal hillslopes
+                                                 // rather than only on near-vertical faces. CALIBRATED LIVE.
+        const float TERRAIN_ELEV_LO    = -0.35;  // field units — below this the ground reads as basin floor
+        const float TERRAIN_ELEV_HI    =  0.05;  // above this no sediment fill at all (a flat CREST is stripped,
+                                                 // not filled). CALIBRATED LIVE against the real height spread.
+        float terrSteep   = clamp((1.0 - dot(shadeN, N)) * TERRAIN_SLOPE_GAIN, 0.0, 1.0);
+        float terrLow     = 1.0 - smoothstep(TERRAIN_ELEV_LO, TERRAIN_ELEV_HI, surfElev);
+        float terrLowFlat = (1.0 - terrSteep) * terrLow;
+        vec3 groundCol = uBaseColor;
+        groundCol = mix(groundCol, uFreshColor, terrSteep   * uTerrainAlbedoMix);
+        groundCol = mix(groundCol, uSedColor,   terrLowFlat * uTerrainAlbedoMix);
+        vec3 albedoCol = mix(groundCol, liquidCol, liquidMask);
         // ── V2-6 S3 iceness material (BUILD-PLAN §1E) — an icy body's BASE ground reads as ice (bluish-white),
         // not rock-brown. Condition-derived (uIcenessMix = icenessOf(cond), driven in applyDrivers); pre-posterize
         // so the ice band survives quantization; uIcenessMix=0 ⇒ bare rock ramp (byte-identical Stage-6 base).
@@ -2439,7 +2472,7 @@
       frostAlbedo: [0.93,0.94,0.96],
       frostLocked: 0,
       iceness: 0,   // V2-6 S3: condition-derived icy-material fraction (icenessOf(cond)); frame() syncs → uIcenessMix
-      baseColor: null,   // condition-derived base ground colour (surfaceAlbedoOf(cond)); frame() syncs → uBaseColor. null ⇒ the uniform keeps its factory default (pre-applyDrivers boot frames).
+      surfacePalette: null,   // condition-derived ground endmembers {fresh, weathered, sediment} (surfacePaletteOf(cond)); frame() syncs → uFreshColor/uBaseColor/uSedColor. null ⇒ the uniforms keep their factory default (pre-applyDrivers boot frames).
       tempEq: 280.0,
       frostLatChill: 0.35,
       frostLapseRate: 0.3,
@@ -3883,10 +3916,38 @@
       const _bodyDrivers = buildBodyDrivers(_u, _fp);
       state._lastBodyDrivers = _bodyDrivers;   // surfaced by _lab.plateProbe() (the values that reached the writer)
       state.iceness = icenessOf(_bodyDrivers.condition);   // V2-6 S3: drive the Stage-6 iceness albedo from the SAME condition vector the writer reads (frame() syncs → uIcenessMix)
-      // Base ground colour, SAME derived-state idiom as state.iceness above: the colour the whole Stage-6 albedo
-      // chain starts from (`albedoCol = mix(uBaseColor, liquidCol, liquidMask)`) is now derived from the condition
-      // vector instead of being one hard-coded rocky tone shared by all 18 presets. frame() syncs → uBaseColor.
-      state.baseColor = surfaceAlbedoOf(_bodyDrivers.condition);
+      // Ground palette, SAME derived-state idiom as state.iceness above. The condition vector picks the three
+      // ground endmembers; the shader's Stage 6 picks between them per pixel on local slope + elevation. Replaces
+      // the single hard-coded rocky tone that every world and every point on every world used to share.
+      // frame() syncs → uFreshColor / uBaseColor / uSedColor.
+      // ⚠ DECLARED DISPLAY TRANSFER — read this before touching the constant.
+      // surfacePaletteOf emits TRUE PHYSICAL ALBEDOS (Earthlike land 0.165, Mars 0.251, Moon 0.084 — all matching
+      // observation). This renderer's lighting and its ~48 feature layers were tuned against a uBaseColor of
+      // (0.46, 0.40, 0.34) = linear luminance 0.408, which is ~2.5x brighter than physical Earthlike land. Feeding
+      // raw albedo therefore renders Earthlike worlds nearly black — verified live by A/B against this constant.
+      // The renderer is not physically exposed, so albedo→display needs a gain. It is applied HERE, render-side,
+      // and NOT folded into the endmember constants: surfaceMaterial.js stays physically honest (it also feeds the
+      // non-visual bombardment gate), and the fudge stays visible instead of hiding inside a colour table.
+      // The curve is a Reinhard soft-clip on LUMINANCE, with the RGB triple scaled by the same ratio so HUE is
+      // preserved exactly — only exposure moves. It must not be a linear gain: Earthlike land is one of the
+      // DARKEST surfaces in the set, so a linear gain anchored there blows out every brighter world. Measured —
+      // at a flat 2.47x, Mars's fresh-bedrock endmember clipped to #fffdf1, destroying exactly the fresh-vs-
+      // weathered distinction this feature exists to produce. Reinhard asymptotes to 1 and never clips.
+      // ALBEDO_TONE_K is solved so Rocky (Earthlike) lands on the legacy 0.408: k = 0.408/(0.165·(1−0.408)).
+      const ALBEDO_TONE_K = 4.176;
+      const _lumOf = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+      const _rawPalette = surfacePaletteOf(_bodyDrivers.condition);
+      const _gain = (a) => {
+        const L = _lumOf(a);
+        if (L <= 1e-6) return a.slice();
+        const scale = (ALBEDO_TONE_K / (1 + ALBEDO_TONE_K * L));   // = toneMap(L)/L, hue-preserving
+        return a.map(x => Math.min(1, x * scale));
+      };
+      state.surfacePalette = {
+        fresh:     _gain(_rawPalette.fresh),
+        weathered: _gain(_rawPalette.weathered),
+        sediment:  _gain(_rawPalette.sediment),
+      };
       // ── inc3b S3-fix: schedule-derived SINGLE crater law (the sub-floor crater-texture band, rendered
       // analytically in-shader so it is resolution-independent — bypassing the mesh + bake the diagnosis
       // convicted as unable to carry the wall slope). SAME derived-state idiom as state.iceness above:
@@ -6488,7 +6549,12 @@
       uniforms.uFrostLatitudeBias.value  = state.frostLatitudeBias;
       uniforms.uFrostAlbedo.value.setRGB(state.frostAlbedo[0], state.frostAlbedo[1], state.frostAlbedo[2]);
       uniforms.uIcenessMix.value         = state.iceness;   // V2-6 S3: condition-derived icy-material albedo mix (Stage-6, pre-frost)
-      if (state.baseColor) uniforms.uBaseColor.value.setRGB(state.baseColor[0], state.baseColor[1], state.baseColor[2]);   // condition-derived base ground colour (was a constant rocky tone)
+      if (state.surfacePalette) {   // condition-derived ground palette (was one constant rocky tone everywhere)
+        const _sp = state.surfacePalette;
+        uniforms.uBaseColor.value.setRGB(_sp.weathered[0], _sp.weathered[1], _sp.weathered[2]);
+        uniforms.uFreshColor.value.setRGB(_sp.fresh[0],    _sp.fresh[1],    _sp.fresh[2]);
+        uniforms.uSedColor.value.setRGB(_sp.sediment[0],   _sp.sediment[1], _sp.sediment[2]);
+      }
       uniforms.uPlanetTempEq.value       = state.tempEq;
       uniforms.uFrostLocked.value        = state.frostLocked;
       uniforms.uFrostLatChill.value      = state.frostLatChill;

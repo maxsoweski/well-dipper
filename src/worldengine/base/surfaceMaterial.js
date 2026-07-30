@@ -160,12 +160,45 @@ export const T_MELT_HI      = 1400;  // K — at/above this the surface reads as
 
 const mix3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
-// surfaceAlbedoOf(cond) — condition-derived base ground colour, linear RGB triple in [0,1].
+// ── sediment priors — transported, comminuted, sorted material. Physically it is BRIGHTER and LESS SATURATED
+//    than the in-place weathered rock it derives from: grinding multiplies surface area (more scattering), and
+//    fluvial/aeolian sorting concentrates light quartz+feldspar while the dark mafic minerals weather out first.
+export const SED_LIGHTEN   = 0.30;  // fraction mixed toward a neutral light fines tone
+export const SED_FINES     = [0.52, 0.48, 0.42];  // sorted quartz/feldspar fines — light warm neutral
+
+// surfacePaletteOf(cond) — the three ground endmembers a world's surface is built from, each a linear-RGB triple
+// in [0,1]. The BODY's condition picks the palette; the LOCAL geology field (slope, elevation, later province)
+// picks where in it each pixel sits. That split is the whole point: it is what lets one world show fresh scarps,
+// weathered uplands and pale basin fill without any of the three being painted on by hand.
+//
+//   fresh     — unaltered bedrock. What a steep slope or a freshly uplifted crest exposes, because mass wasting
+//               strips regolith faster than it forms. Skips oxidation and space weathering entirely.
+//   weathered — the mature in-place surface: oxidised, space-weathered. The area-dominant background.
+//   sediment  — transported and deposited fines. Accumulates on flat low ground.
+//
 // Chain, in application order: mafic/felsic base → oxidation reddening → space weathering → carbon → melt.
+// Carbon and melt apply to ALL THREE endmembers — a carbide crust or a quenched melt sheet is a property of the
+// rock itself, not an alteration state, so a "fresh" exposure of it is still black.
 // Reads composition scalars, atmosphere pressure, T_eq and age only — no label / archetype / regime read.
 // ICE IS DELIBERATELY NOT HERE: `icenessOf` already drives the Stage-6 mix toward uIcenessAlbedo downstream, and
 // duplicating it here would double-count the same condition scalars.
-export function surfaceAlbedoOf(cond) {
+export function surfacePaletteOf(cond) {
+  const weathered = surfaceAlbedoOf(cond);
+  const fresh     = surfaceAlbedoOf(cond, { altered: false });
+  // Sediment derives FROM the weathered surface (it is that surface, ground up and moved), so it inherits the
+  // world's oxidation state — a rusty world gets pale rusty basins, not generically beige ones. It is lightened
+  // INSIDE the chain, before the carbon and melt stages, so those still swamp it: quartz/feldspar sorting has no
+  // meaning on a carbide world, and graphite fines stay black however finely they are ground.
+  const sediment  = surfaceAlbedoOf(cond, { sediment: true });
+  return { fresh, weathered, sediment };
+}
+
+// surfaceAlbedoOf(cond, opts) — condition-derived ground colour, linear RGB triple in [0,1]. Defaults to the
+// WEATHERED endmember, which is what the single-colour caller wants and preserves the pre-palette behaviour.
+// `opts.altered = false` skips the oxidation + space-weathering stages to yield the FRESH bedrock endmember.
+export function surfaceAlbedoOf(cond, opts) {
+  const altered  = opts?.altered !== false;
+  const asFines  = opts?.sediment === true;
   const iron    = cond?.composition?.ironFraction ?? 0.3;
   const vf      = cond?.composition?.volatileFraction ?? 0;
   const co      = cond?.composition?.carbonToOxygen ?? 0;
@@ -191,7 +224,7 @@ export function surfaceAlbedoOf(cond) {
   //          oxidised crust; Earth's rain and wind continuously bury and re-expose fresh rock, Mars's near-vacuum
   //          lets an oxidised dust mantle accumulate and stay.
   const palaeoWater = smoothstep(OX_T_LO, OX_T_HI, T);
-  const oxidation = clamp01(
+  const oxidation = !altered ? 0 : clamp01(
     smoothstep(OX_FE_LO, OX_FE_HI, iron) *
     smoothstep(OX_VOL_LO, OX_VOL_HI, vf) *
     (1 - icenessOf(cond)) *
@@ -202,10 +235,14 @@ export function surfaceAlbedoOf(cond) {
   // 3. space weathering — nanophase iron on an airless, un-eroded, un-repaved crust. Applied as a MULTIPLICATIVE
   //    darkening with a red spectral tilt (blue attenuates most), NOT a mix toward a neutral dark: real space
   //    weathering darkens AND steepens the red slope, whereas mixing toward grey desaturates and washed Mars out.
-  const weathering = clamp01(airless * (1 - erosion) * (1 - resurfacingRateOf(cond)) * maturity) * SW_STRENGTH;
+  const weathering = !altered ? 0 : clamp01(airless * (1 - erosion) * (1 - resurfacingRateOf(cond)) * maturity) * SW_STRENGTH;
   col = [col[0] * (1 - weathering * SW_TILT_R),
          col[1] * (1 - weathering * SW_TILT_G),
          col[2] * (1 - weathering * SW_TILT_B)];
+
+  // 3b. sediment — comminution + sorting. Applied HERE, after alteration but before the carbon/melt rock-property
+  //     stages, so those still swamp it (see surfacePaletteOf).
+  if (asFines) col = mix3(col, SED_FINES, SED_LIGHTEN);
 
   // 4. carbon — a C:O > 1 crust is graphite/carbide, and swamps every silicate term above it.
   col = mix3(col, CARBON_CRUST, smoothstep(1.0, 1.3, co));

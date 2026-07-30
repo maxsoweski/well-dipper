@@ -123,7 +123,13 @@ export function makeUniforms(WORLD_LIGHT) {
       uEcuWarpAmt:        { value: 0.30 },                                 // F49 domain-warp amount (organic block network)
       uTime:           { value: 0.0 },   // animation clock (driven from frame())
       uLightDir:     { value: new THREE.Vector3().copy(WORLD_LIGHT) },
-      uBaseColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },  // rocky tone
+      uBaseColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },  // WEATHERED ground endmember (driven: surfacePaletteOf(cond).weathered; the factory value is the pre-derivation rocky tone)
+      // Terrain-material palette — the other two ground endmembers the Stage-6 albedo selects between per pixel
+      // using local slope + elevation. Body condition picks the PALETTE; local geology picks WHERE IN IT a pixel
+      // sits. uTerrainAlbedoMix = 0 collapses the whole thing back to the single uBaseColor (regression-safe).
+      uFreshColor:   { value: new THREE.Color(0.46, 0.40, 0.34) },  // unaltered bedrock — what steep slopes expose
+      uSedColor:     { value: new THREE.Color(0.46, 0.40, 0.34) },  // transported fines — accumulates on flat lows
+      uTerrainAlbedoMix: { value: 1.0 },   // 0..1 master dial on the terrain-driven ground palette
       uMacroOffset:  { value: new THREE.Vector3() },                // set from macroSeed
       uDetailOffset: { value: new THREE.Vector3() },                // set from detailSeed
       // ── voronoi3d spike debug (risk #1 seam gate) ──
