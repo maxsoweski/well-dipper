@@ -16,7 +16,8 @@
  *
  * ── THE BOUNDARY, AND WHY IT IS DRAWN HERE ──────────────────────────────────
  *
- * SHARED (in here): the scene, the three lights, the GLB load and its Screen_*
+ * SHARED (in here): the scene, the three lights (the KEY of which the host may
+ * aim at the system's star — see `setStarLight`), the GLB load and its Screen_*
  * census, the glass placeholder override, the Eye_Point resolution, the panel
  * host and its four painters, the mover, the picker, the nav adapter, the
  * pointer router, and the per-frame update order.
@@ -136,10 +137,19 @@ export const DEFAULT_GLASS = Object.freeze({ opacity: 0.10, depthWrite: false, d
  * wrong and the AC has failed.
  */
 export const DEFAULT_COCKPIT_LIGHTS = Object.freeze([
-  Object.freeze({ type: 'ambient', color: 0xaebccc, intensity: 0.16 }),
-  Object.freeze({ type: 'directional', color: 0xfff2e0, intensity: 2.2, position: Object.freeze([-30, 50, -60]) }),
-  Object.freeze({ type: 'directional', color: 0x6f8ab0, intensity: 0.26, position: Object.freeze([24, -8, 34]) }),
+  Object.freeze({ role: 'ambient', type: 'ambient', color: 0xaebccc, intensity: 0.16 }),
+  Object.freeze({ role: 'key', type: 'directional', color: 0xfff2e0, intensity: 2.2, position: Object.freeze([-30, 50, -60]) }),
+  Object.freeze({ role: 'fill', type: 'directional', color: 0x6f8ab0, intensity: 0.26, position: Object.freeze([24, -8, 34]) }),
 ]);
+
+/**
+ * How far out the key light is parked once the star drives it.
+ *
+ * A DirectionalLight has no falloff — only `position - target` matters — so this
+ * is arbitrary and exists solely to keep the direction numerically comfortable
+ * against a cabin about 2.5 m across.
+ */
+export const KEY_LIGHT_DISTANCE = 100;
 
 /**
  * The four default painters, in `PanelHost.setPainter` form.
@@ -260,7 +270,51 @@ export class CockpitRig {
       if (!light) continue;
       this.scene.add(light);
       this._lightObjects.push(light);
+      // ⭐ FOUND BY ROLE, NOT BY INDEX. `setStarLight` needs the key, and an
+      // index would silently drive the ambient the first time somebody reorders
+      // this list or a host passes `lights:` of its own — a cabin lit flat from
+      // everywhere, which raises nothing and looks like the feature not working.
+      if (spec.role === 'key') this.keyLight = light;
     }
+  }
+
+  /**
+   * Point the key light at the system's star, and tint it to the star's colour.
+   *
+   * ⭐ THIS IS THE ONLY THING IN THE COCKPIT PASS THAT KNOWS THE WORLD EXISTS,
+   * and it is deliberately a direction and a colour rather than a scene
+   * reference. The cockpit scene is origin-anchored precisely so it never has to
+   * reason about a world where 1 m = 6.7e-9 units; handing it a unit vector
+   * keeps that true.
+   *
+   * `dir` is FROM the pilot TOWARD the star, in cockpit space — see
+   * `starLight.js`, which owns the frame algebra and the reason the ship's
+   * heading belongs in it.
+   *
+   * ⚠ A NULL `dir` LEAVES THE AUTHORED DEFAULT ALONE rather than blanking the
+   * light. There is no star direction during the deep-sky preview, between
+   * systems, or in the lab before a host supplies one, and a cabin that goes
+   * black in those states reads as a bug. The fallback being the SAME key light
+   * the rig has always shipped is what makes "the star is not driving it yet"
+   * and "the star is driving it" look like the same feature at two settings.
+   *
+   * @param {{dir?: THREE.Vector3|null, color?: {r:number,g:number,b:number}|null,
+   *          intensity?: number|null}} p
+   */
+  setStarLight({ dir = null, color = null, intensity = null } = {}) {
+    const key = this.keyLight;
+    if (!key) return;
+    if (dir) {
+      key.position.copy(dir).multiplyScalar(KEY_LIGHT_DISTANCE);
+      // three reads the target's matrixWorld, and a target that was never added
+      // to a scene is never updated by the renderer. Flushing it here is what
+      // keeps the light aimed at the cabin origin rather than wherever an
+      // un-flushed matrix happens to say.
+      key.target.position.set(0, 0, 0);
+      key.target.updateMatrixWorld();
+    }
+    if (color) key.color.setRGB(color.r, color.g, color.b);
+    if (Number.isFinite(intensity)) key.intensity = intensity;
   }
 
   /**
@@ -600,8 +654,15 @@ export class CockpitRig {
    * @param {object} p.snapshot the one read-only frame all four panels read
    * @param {number} p.nowMs real time, for repaint and blink phase
    * @param {number} p.dtMs real elapsed ms, for the travel
+   * @param {object} [p.starLight] optional `{dir, color, intensity}` for
+   *        `setStarLight` — the system's star, in cockpit space. Omitted by a
+   *        host that has no star to report; the key light then keeps whatever it
+   *        was last given, which at boot is the authored default.
    */
-  update({ snapshot, nowMs, dtMs }) {
+  update({ snapshot, nowMs, dtMs, starLight }) {
+    // Before the pin, because it changes nothing the pin reads and putting it
+    // after would leave one frame of the old direction on a regime entry.
+    if (starLight) this.setStarLight(starLight);
     this._pinCamera();
     if (this.mover) this.mover.update(Number.isFinite(dtMs) ? dtMs : 16);
     if (this.host) this.host.update(snapshot, nowMs);

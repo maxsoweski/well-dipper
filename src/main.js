@@ -92,6 +92,7 @@ import { _advanceSimClock, simClockMs } from './core/SimClock.js';
 import { CockpitSnapshotProvider, resolveFocusedBody } from './cockpit/CockpitSnapshot.js';
 import { CockpitRig, EYE_FOV, EYE_NEAR, EYE_FAR, COCKPIT_TONE_EXPOSURE } from './cockpit/CockpitRig.js';
 import { cockpitEyeQuat } from './cockpit/cockpitEyePose.js';
+import { starDirInCockpit, starLightColor } from './cockpit/starLight.js';
 import { simRandom, simRandomSeed } from './core/SimRandom.js';
 import {
   initRecording, initReplay, recordingTick, replayTickPre,
@@ -2648,11 +2649,51 @@ let _cockpitReady = false;
  * both halves of "the view should be locked to the centre of the cockpit, and we
  * should always fly forward from the cockpit's POV". See `cockpitEyePose.js`.
  */
+/** Preallocated — this is written every frame the cockpit renders. */
+const _cockpitStarDir = new THREE.Vector3();
+
 function _poseCockpitCamera() {
   if (!_cockpitRig) return;
   _cockpitCamera.position.copy(_cockpitRig.eyePos);
   cockpitEyeQuat(_cockpitCamera.quaternion, _cockpitRig.eyeQuat, scHead.yaw, scHead.pitch);
   _cockpitCamera.updateMatrixWorld(true);
+}
+
+/**
+ * The system's star, as the cockpit's key light. Null when there is no star.
+ *
+ * ⭐ WHY THE SHIP AND NOT THE CAMERA. `starDirInCockpit` takes `scModel` —
+ * the HULL's position and orientation — and never touches `camera`. The
+ * neighbouring `_poseCockpitCamera` is the exact opposite: the ship's heading
+ * MUST NOT reach the cockpit camera (`b5e0d30`: a 119° turn swung the whole
+ * cabin around the pilot) and it MUST reach the light, because the star really
+ * does move across the cabin when the hull turns. That contrast is the whole
+ * reason the algebra lives in its own module with its own tests.
+ *
+ * ⚠ `system.star.mesh.position` IS THE STAR, INCLUDING FOR A BINARY. The shadow
+ * uniforms nearby special-case binaries into `_star1Pos`/`_star2Pos` and set
+ * BOTH to the origin for a single star; that is a shader convention, not a
+ * position, and reading it here would light every single-star cabin from
+ * whatever direction the scene origin happens to lie in after a rebase. The
+ * secondary of a binary is deliberately ignored for now — one key light, the
+ * brighter star. Named as a knob rather than left as an accident.
+ *
+ * ⚠ The intensity is CONSTANT — no inverse-square falloff. Physically wrong and
+ * deliberately so: a cabin that goes black at the system's edge is a worse first
+ * impression than one that does not change brightness, and how much it *should*
+ * fall off is Max's eye, not a formula. The knob to turn is here.
+ */
+function _cockpitStarLight() {
+  if (!system || !system.star || !system.star.mesh || !_cockpitRig) return null;
+  const dir = starDirInCockpit(
+    _cockpitStarDir,
+    system.star.mesh.position,
+    scModel.position,
+    scModel.orientation,
+    _cockpitRig.eyeQuat,
+  );
+  if (!dir) return null;
+  return { dir, color: starLightColor(system.star.data) };
 }
 
 /** HELM only. The regime is read fresh, never cached — see AC-HELM-ONLY. */
@@ -2799,6 +2840,36 @@ window._headPose = () => {
     cockpitCamOffAxisDeg: deg(q.w),
     shipOffAxisDeg: deg(s.w),
     headOffAxisDeg: Math.hypot(scHead.yaw, scHead.pitch) * 180 / Math.PI,
+  };
+};
+
+/**
+ * ⭐ WHAT THE KEY LIGHT IS ACTUALLY DOING — read off the LIGHT, never off the
+ * inputs that were meant to have aimed it.
+ *
+ * `_cockpitStarLight()` returns what main.js DECIDED. This returns what the
+ * renderer will use. The two disagree the moment `setStarLight` is not reached,
+ * the role tag stops matching, or a host passes `lights:` of its own — and every
+ * one of those looks, from the computed side, exactly like success. Seventh time
+ * this lane has needed the distinction; naming it for what it MEASURES rather
+ * than for the feature is the other half of the rule.
+ *
+ * `dirFromPilot` is the unit direction the light arrives from, in cabin space:
+ * (0,0,-1) is straight out through the canopy, (-1,0,0) is off the port beam.
+ * `offNoseDeg` is that as one number, which is the thing to watch while turning.
+ */
+window._cockpitKeyLight = () => {
+  const key = _cockpitRig && _cockpitRig.keyLight;
+  if (!key) return { keyLight: null, why: _cockpitRig ? 'no light tagged role:key' : 'no rig' };
+  const d = key.position.clone().normalize();
+  return {
+    dirFromPilot: d.toArray(),
+    offNoseDeg: d.angleTo(new THREE.Vector3(0, 0, -1)) * 180 / Math.PI,
+    color: key.color.getHexString(),
+    intensity: key.intensity,
+    targetAt: key.target.position.toArray(),
+    starPresent: !!(system && system.star && system.star.mesh),
+    shipOffAxisDeg: 2 * Math.acos(Math.min(1, Math.abs(scModel.orientation.w))) * 180 / Math.PI,
   };
 };
 
@@ -9976,6 +10047,7 @@ function renderFrame(alpha) {
       snapshot: _cockpitSnapshotProvider.get(),
       nowMs: performance.now(),
       dtMs: renderDt * 1000,
+      starLight: _cockpitStarLight(),
     });
     retroRenderer.setCockpit(_cockpitRig.scene, _cockpitCamera);
   } else {
