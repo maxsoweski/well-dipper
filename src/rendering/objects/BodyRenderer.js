@@ -4,6 +4,11 @@ import { Moon } from '../../objects/Moon.js';
 import { KNOWN_BODY_PROFILES } from '../../data/KnownBodyProfiles.js';
 import { createTexturedBodyMaterial } from '../shaders/TexturedBodyShader.js';
 import { LODColorExtractor } from '../LODColorExtractor.js';
+// The relief octave ramp is the LAB'S law, imported rather than re-derived: lodRampOf is
+// smoothstep(20,6,distanceInRadii) and autoOctaves is mix(4,9,ramp). planet-lod-lab-core.js is a
+// pure module (45 exports, zero imports, no top-level side effects) so this tree-shakes to the two
+// functions. Copying the law instead would be the same mistake the hash3/noised/fbmd copy was.
+import { lodRampOf, autoOctaves } from '../../../planet-lod-lab-core.js';
 
 /**
  * BodyRenderer — unified planet/moon renderer with physics data awareness.
@@ -173,6 +178,31 @@ export class BodyRenderer {
     const surface = this._delegate.surface || this._delegate.mesh;
     if (!surface?.material?.uniforms?.lodLevel) return;
     surface.material.uniforms.lodLevel.value = tier;
+  }
+
+  /**
+   * Ramp the fbmd relief octave count with distance — the game's half of the lab's LOD ramp.
+   *
+   * ⚠ DELIBERATELY NOT KEYED ON THE LOD TIER. setLOD's tier is discrete (0/1/2) and early-returns
+   * when unchanged, so driving octaves from it would step 4 -> 9 in one frame and POP: five octaves
+   * of relief appearing at once. This takes the CONTINUOUS distance-in-radii that LODManager
+   * already computes for the tier test and runs it through the lab's own smoothstep, so the count
+   * is fractional and moves smoothly. fbmd is built for exactly that — its trailing-octave weight
+   * `clamp(octaves - i, 0, 1)` fades the newest octave in from zero, which is what makes a
+   * fractional count pop-free rather than merely non-integer.
+   *
+   * Cost is bounded by geometry, not by body count: lodRampOf is smoothstep(20,6,d), so a body
+   * pays more than the flat 4.0 only inside 20 radii, and the full 9 only inside 6. Distant bodies
+   * are left at exactly RELIEF_OCTAVES and so are bit-identical to before this existed.
+   *
+   * @param {number} distanceRadii — camera distance to the body, in body radii
+   */
+  setReliefDetail(distanceRadii) {
+    const surface = this._delegate.surface || this._delegate.mesh;
+    const u = surface?.material?.uniforms?.uReliefOctaves;
+    if (!u) return;                                  // moons, textured swaps, gas variants
+    const next = autoOctaves(lodRampOf(distanceRadii));
+    if (u.value !== next) u.value = next;
   }
 
   // ── LOD1 ↔ LOD2 downscaling pipeline ──

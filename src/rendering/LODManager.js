@@ -96,6 +96,10 @@ export class LODManager {
       }
 
       body.setLOD(targetTier);
+      // Relief octaves ramp on the CONTINUOUS ratio, not on targetTier — see
+      // BodyRenderer.setReliefDetail. setLOD early-returns when the tier is unchanged, so this
+      // must be its own call or the ramp would only ever update on tier boundaries.
+      body.setReliefDetail?.(ratio);
     }
   }
 

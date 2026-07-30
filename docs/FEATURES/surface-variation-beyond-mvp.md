@@ -398,7 +398,12 @@ overwrites `n` and has `perturbStrength 0`, so it must not move a pixel, and it 
   stacks). Only their normals changed. Whether they should is a design question, not a port step.
 - The ~40-stage combiner chain in the lab's `main()` — the actual slice-3 payload — is untouched.
 
-### ✅ SLICE 3, SECOND INCREMENT — SHIPPED (2026-07-30). Relief strength raised 6×.
+### ✅ SLICE 3, SECOND INCREMENT — SHIPPED + **MAX UAT PASSED** (2026-07-30). Relief strength raised 6×.
+
+> ✅ **Max UAT, verbatim: _"I'm fine with it btw it looks good to me."_** Judged on the
+> `~/briefings/relief-strength-6x-2026-07-30.png` contact sheet. The 6× value is ACCEPTED, not
+> provisional — `RELIEF_NORMAL_GAIN 39.24` is now the shipped look, and 8× stays available as
+> headroom rather than as a pending decision.
 
 **What changed.** One constant: `RELIEF_NORMAL_GAIN` 6.54 → **39.24**. Nothing else. 6.54 was the
 PARITY value — chosen so the fbmd swap could ship without moving anything uncommanded. That job is
@@ -481,6 +486,68 @@ population/mask the earlier harness used. **What both agree on is PARITY, which 
 claim**: measured through one identical probe inserted into BOTH normal paths, legacy and analytic
 at gain 6.54 agree within 0.2° on every body (rocky 6.03 vs 5.92, terrestrial 5.81 vs 5.81). The
 absolute figure is not reconciled and should not be quoted as if it were.
+
+### ✅ SLICE 3, THIRD INCREMENT — SHIPPED (2026-07-30). `uReliefOctaves` ramps with distance.
+
+**What changed.** `uReliefOctaves` was a flat `4.0` on every body at every distance. It now ramps
+`4 → 9` as the camera closes, using **the lab's own law, imported not copied**:
+`autoOctaves(lodRampOf(d))` from `planet-lod-lab-core.js`, i.e. `mix(4, 9, smoothstep(20, 6, d))`
+where `d` is distance in body radii. `LODManager` already computed exactly that ratio for its tier
+test, so this is one new call and one new method.
+
+⛔ **NOT driven by the LOD tier, deliberately.** The obvious wiring — `lodLevel` is already a live
+per-body uniform — is wrong twice over: the tier is discrete `0/1/2`, so it would step 4 → 9 in one
+frame and **pop five octaves of relief into existence at once**, and `setLOD` early-returns when the
+tier is unchanged, so the ramp would only ever move at tier boundaries. Taking the CONTINUOUS ratio
+instead gives a fractional octave count, which is precisely what fbmd's trailing-octave weight
+(`clamp(octaves - i, 0, 1)`) is built to consume: the newest octave fades in from zero.
+
+#### Measured — octaves buy MORE relief than the gain raise did
+
+Mean local |∇L| (same metric as the second increment), body rendered at fixed screen size:
+
+    type           oct 4     oct 5.5    oct 7    oct 9     lift 4->9
+    rocky           2.80      4.98      8.95    11.53       +312%
+    ice             6.47      9.50     12.69    15.34       +137%
+    lava           12.54     13.73     14.61    15.45        +23%
+    terrestrial    13.68     14.66     15.43    16.24        +19%
+
+**Same self-limiting shape as the gain raise** — the flat types gain most, the types whose colour
+stacks already carry contrast gain least. Pixels-changed vs oct 4 climbs smoothly (24% → 34% → 41%),
+no discontinuity anywhere on the ramp.
+
+⚠ **Read the contact sheets at the right size.** `~/briefings/relief-octave-ramp-2026-07-30.png` is
+a 320 px thumbnail grid and **overstates the graininess** — at fixed octaves, more pixels per feature
+reads smoother. `~/briefings/relief-octave-ramp-closeup-2026-07-30.png` renders at ~370 px body
+radius, which is representative of an actual close approach, and there oct 9 reads as rugged terrain
+rather than sandpaper. Character note: it is UNIFORM roughness, because this is still bare fbmd —
+the landform combiners (mountains, craters, canyons) are ladder rungs 4–6 and are what replace
+uniform roughness with structure.
+
+#### Cost — bounded by geometry, and no new measurement was faked
+
+`lodRampOf` is `smoothstep(20, 6, d)`, so a body pays more than 4.0 only inside 20 radii and the
+full 9.0 only inside 6. The budget was already measured in the first increment (12 land bodies
+filling 3840×2160: oct4 2.5 ms, oct9 3.4 ms ≈ legacy 3.3 ms), and **this ramp is strictly cheaper
+than that measurement**, which assumed every body at once. ⛔ No new frame-cost number is quoted
+here: the first increment recorded that at 1280×720 the comparison is below the noise floor, and the
+offscreen probe used this session runs at 320², so measuring there would have produced a number that
+looks like evidence and is not.
+
+#### Verification — and why it is a test, not an in-game check
+
+⚠ **The ramp cannot be exercised by flying.** Verified live that `LODManager` *does* run — every Sol
+body flips from the `lodLevel` initializer `1` to tier `0` within a frame — but every body in Sol
+sits **10⁵–10⁷ radii** from the camera, so the ramp correctly returns a flat 4.0 and the interesting
+part of the curve is unreachable. (Nor can the camera be teleported to force it: the game rebases
+the world around a near-origin camera, so a written camera position is absorbed by the rebase.)
+
+So it is pinned in `tests/relief-octave-lod-ramp.test.js` (7 cases): LODManager hands
+`setReliefDetail` the ratio **not** the tier, it is called every update rather than on tier change,
+absent implementations are tolerated, the law is flat 4.0 at ≥20 radii and exactly 9.0 at ≤6, and
+the ramp is monotonic with max step < 0.15 octaves — a tier-driven ramp would step 5.0.
+⭐ **Mutation-checked**: swapping `ratio` for `targetTier` at the call site turns the suite red on
+exactly the tier-vs-ratio case, so the test is not passing vacuously.
 
 ### 🔶 Recorded, PARTLY ADDRESSED — the honest palette flattens elevation banding on ~45% of bodies
 
