@@ -224,38 +224,59 @@ describe('P4/P5/P5b — display-frequency keying is identity at sVis=1 (Slice B)
   });
 });
 
-describe('Slice C — uDispDomainScale global macro/province domain lever (P1+P3)', () => {
+describe('Slice C RETIRED — uDispDomainScale is pinned at 1.0 (AC-PLATESCALE item 2)', () => {
   const WORLD_LIGHT = new THREE.Vector3(1, 0, 0);
   const lab = read('planet-lod-lab.html');
   const heightGlsl = read('planet-lod-height.glsl.js');
 
-  it('uDispDomainScale defaults to 1.0 (identity ⇒ headless/golden byte-identical)', () => {
-    // The golden/headless bake path (CPU writeHeightSphere) never writes this uniform, so the
-    // default is the value it renders at → sVis=1 identity → no carrier byte moves.
+  it('uDispDomainScale defaults to 1.0 — now the value it renders at on EVERY path', () => {
+    // Was "identity ⇒ headless/golden byte-identical" when the frame loop wrote sVis over it. With
+    // the writer gone this default is no longer just the headless value; it is the ONLY value, so
+    // this test became the load-bearing pin for the whole retirement.
     const u = makeUniforms(WORLD_LIGHT);
     expect(u.uDispDomainScale).toBeDefined();
     expect(u.uDispDomainScale.value).toBe(1.0);
   });
 
-  it('the shared height GLSL declares uDispDomainScale and threads it into the macro domain', () => {
-    // Uniform-NAME indirection: the display lever lives in the GLSL as a uniform name; the
-    // JS writes it. The sVis TOKEN never enters the shader string (fence, asserted below).
+  it('the GLSL read sites are RETAINED as exact no-ops (so the shader binary cannot shift)', () => {
+    // DELIBERATE non-goal: the retirement is a JS-write deletion ONLY. Stripping `* uDispDomainScale`
+    // out of the shader would remove a multiply, which can change GLSL FMA/reassociation and lose the
+    // bit-for-bit-identical compiled program that makes the byte-identity claim airtight. At 1.0 every
+    // site below is an exact IEEE no-op (x*1.0 === x, x/1.0 === x), so keeping them costs nothing.
     expect(heightGlsl).toMatch(/uniform\s+float\s+uDispDomainScale\s*;/);
-    // Threading is real, not vacuous: the macro FBM base freq carries the factor, and the
-    // computeHeight + initProvinces sample domains are pre-scaled by it.
     expect(heightGlsl).toMatch(/uNoiseScale\s*\*\s*0\.3\s*\*\s*uDispDomainScale/);
     const posScales = [...heightGlsl.matchAll(/pos\s*\*=\s*uDispDomainScale\s*;/g)];
     expect(posScales.length).toBe(2);   // computeHeight + initProvinces
+    // the two de-double-scale DIVISIONS (F47 machCoverageMask, F49 ecuCoverageMask) also stay
+    const divisions = [...heightGlsl.matchAll(/\/\s*uDispDomainScale/g)];
+    expect(divisions.length).toBe(2);
     // still carries no display-scale TOKEN (re-assert the fence at the Slice-C surface)
     expect(heightGlsl).not.toMatch(DENY);
   });
 
-  it('the lab frame loop is the ONLY writer of uDispDomainScale, and it writes sVis', () => {
-    // "the ONLY write, lab-side, display-only" — a single feed keeps the lever display-only
-    // and greppable; nothing else may set it (a second writer would break the AC-0 chain).
-    expect(lab).toMatch(/uniforms\.uDispDomainScale\.value\s*=\s*sVis\s*;/);
+  it('NOTHING writes uDispDomainScale — the exponent-1 display law is retired (AC-PLATESCALE item 2)', () => {
+    // INVERTED 2026-07-29. This assertion used to REQUIRE `uDispDomainScale.value = sVis` — i.e. the
+    // fence was pinning the invented law IN PLACE. The literature falsified its premise (plate
+    // structure is angularly radius-invariant, N ~ R^-0.07; contract.json amendments[1]), so Max
+    // ruled the law REMOVED rather than derived. The regression guard therefore inverts: any write
+    // at all re-introduces a radius→macro-frequency coupling, and the exponent it would introduce is
+    // an algebraic side effect of the CAMERA constant VIS_SCALE_EXP, not a physical claim.
     const writes = [...lab.matchAll(/uDispDomainScale\.value\s*=/g)];
-    expect(writes.length).toBe(1);
+    expect(writes.length).toBe(0);
+    // and specifically not the retired sVis feed, whatever else may change around it
+    expect(lab).not.toMatch(/uniforms\.uDispDomainScale\.value\s*=\s*sVis\s*;/);
+  });
+
+  it('the uniform therefore renders at its 1.0 initializer at EVERY radius, not just the anchor', () => {
+    // With no writer, makeUniforms' default is the value the shader sees for the whole 0.27–16 R⊕
+    // band. That is what makes the 5 GLSL read sites exact no-ops rather than merely identity-at-1.
+    const u = makeUniforms(WORLD_LIGHT);
+    expect(u.uDispDomainScale.value).toBe(1.0);
+    // No assignment by ANY spelling — bracket access or Object.assign would evade the `.value =`
+    // regex above. Deliberately not a ban on the identifier itself: the retirement is DOCUMENTED at
+    // the old write site, so prose mentions must stay legal or the record could not be kept.
+    expect(lab).not.toMatch(/uDispDomainScale\s*(?:\.value|\[\s*['"]value['"]\s*\])\s*=[^=]/);
+    expect(lab).not.toMatch(/Object\.assign\s*\(\s*uniforms\.uDispDomainScale/);
   });
 });
 

@@ -5967,13 +5967,37 @@
 
       uniforms.uOctaves.value = oct;
       uniforms.uLodRamp.value = lod;
-      // ── Slice C (P1+P3): global macro/province display-domain lever. The height GLSL samples
-      // pos·uDispDomainScale, so the analytic macro FBM body (computeHeight/fbmd/fbmdRidged/
-      // fbmdHetero/fbmdDamped) AND the province partition scale their frequencies together ∝ sVis
-      // → continents/regions hold their on-screen size (θ ∝ 1/sVis ⇒ S = θ·sVis constant) while
-      // the disc grows. This is the ONLY writer; display-only; identity at sVis=1 (radius 1 R⊕),
-      // so the CPU/headless/golden bake path (which never runs frame()) is byte-identical.
-      uniforms.uDispDomainScale.value = sVis;
+      // ── Slice C RETIRED (AC-PLATESCALE item 2, 2026-07-29). There is deliberately NO WRITE to
+      // uDispDomainScale here. It keeps its 1.0 initializer (planet-lod-uniforms.js:17) forever,
+      // which makes all 5 GLSL read sites exact no-ops (:641 pos, :765 freq, :850 provinces, and
+      // the two de-double-scale divisions :2764/:2790).
+      //
+      // WHY IT WENT. The old write was `uDispDomainScale = sVis`, sold as display-only size
+      // constancy: continents hold on-screen size (θ ∝ 1/sVis ⇒ S = θ·sVis const) as the disc
+      // grows. But θ ∝ R^-0.5 means feature COUNT ∝ 1/θ² ∝ R^1 — an uncited plate-scaling law of
+      // exponent 1, arriving as an algebraic side effect of the CAMERA constant VIS_SCALE_EXP=0.5
+      // (planet-lod-lab-core.js:45). Nobody chose the 1. The literature says plate structure is
+      // angularly radius-INVARIANT (N ~ R^-0.07; Bird 2003 writes plate size in STERADIANS, so it
+      // is dimensionless by construction) — see contract.json amendments[1]. The baked body is
+      // already exponent 0, i.e. correct; so bakeReliefCrossover was fading a CORRECT body into an
+      // INVENTED one. Max ruled REMOVE over derive-and-name, 2026-07-29.
+      //
+      // WHAT THIS DELIBERATELY DOES NOT DO (non-goals, so the next reader does not over-read it):
+      //   · It does NOT make the display path sVis-free. 18 of the 19 sVis-carrying planet-uniform
+      //     writes in this file survive (uCraterScale, uMountainScale, uMachDistrictScale,
+      //     uCityScale, uScarpFreq, …). This retires the MACRO BODY's law, nothing else.
+      //   · It does NOT retire bakeReliefCrossover (:5986). That is AC-PLATESCALE item 3, kept
+      //     separate because it silently widens fieldSampler's l2AnchorGate (see that AC). With
+      //     the law gone, baked and synth are BOTH exponent 0, so the surviving crossfade is now
+      //     only a continent-CHARACTER morph — the residue already disclosed at lab-core:116-118.
+      //   · It does NOT touch the GLSL string. The shader source is unchanged, so the compiled
+      //     program is bit-for-bit identical and no FMA/reassociation decision can shift.
+      // Byte-identity at radius 1 R⊕ is MEASURED, not just derived: visScaleOf(1) === 1 exactly, so
+      // the deleted line wrote 1.0 into a uniform already holding 1.0. md5-equal frames are filed at
+      // evidence/platescale-B/AC-PLATESCALE-item2-BEFORE.md §3 (NULL control).
+      // Side effect, wanted: `screenF = fwBase * freq` (planet-lod-height.glsl.js:772-775) stops
+      // carrying sVis, so trailing octaves stop being tapered ~sVis× harder at large radius — more
+      // fine detail survives on big worlds. Same direction as the frequency change.
       // ── Slice D (P2): bake→synth crossover. At the live default the macro body is the BAKED
       // relief cube (grainCarveUI.reliefBakeStrength = 1), which is angular-fixed and grows with
       // the disc — and it can't be re-keyed by a display frequency (the Earthlike body is a

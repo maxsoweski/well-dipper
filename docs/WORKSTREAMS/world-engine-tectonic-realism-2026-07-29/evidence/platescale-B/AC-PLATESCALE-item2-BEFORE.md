@@ -155,6 +155,103 @@ off the fixed-camera set.** The `ld3` and `AB` sets exist because of this.
 
 ---
 
+## 4b. THE EDIT, AND ITS VERIFICATION (added after the edit landed)
+
+The edit: `planet-lod-lab.html` — the frame-loop write `uniforms.uDispDomainScale.value = sVis` is
+deleted, replaced by a comment recording why and what it deliberately does not do. The uniform keeps
+its `1.0` initializer (`planet-lod-uniforms.js:17`) at every radius. **The GLSL string is untouched**,
+so the compiled shader program is bit-for-bit the same binary and no FMA/reassociation decision can
+shift. Test: `tests/vis-scale-fence.test.js` — the Slice C block is INVERTED (it used to *require* the
+`sVis` write, i.e. the fence was pinning the invented law in place) and now asserts zero writers by any
+spelling, plus that the two GLSL divisions are retained as no-ops.
+
+### ⚠ A FAILED VERIFICATION, AND THE METHODOLOGY ERROR BEHIND IT
+
+The first AFTER pass compared post-edit screenshots against the §3/§4 BEFORE PNGs. **All three byte
+predictions failed, including the anchor identity that must hold by construction.** Every fingerprint
+field matched, so the cause was outside the fingerprint. It was `uTime`:
+
+`freezeAnimation(true)` stops the clock ADVANCING but leaves it at whatever value it had reached —
+here `18.2175` — which depends on how long the page sat open before freezing. `cloudsEnabled` is true
+on this preset, and F31 clouds read `uTime`. So across a page reload the clock differed and every
+pixel differed. **A cross-session byte comparison of this lab is invalid unless the clock is pinned to
+a fixed value, not merely frozen.** `_lab.setAnimationClock(0)` does that; with it pinned, three
+consecutive GPU readbacks of the same state hash identically (`169fe9e9`), so the frame is
+deterministic given state + clock.
+
+### The valid comparison — the handoff's two-page recipe
+
+`git show HEAD:planet-lod-lab.html > planet-lod-lab.BEFORE.html`, served from the same origin, both
+pages driven to the same state with the clock pinned to 0, compared by a **GPU readback hash** of the
+centre 256×256 (`gl.readPixels` + FNV-1a, plus a pixel sum) rather than a screenshot, so GUI chrome
+cannot confound it. Both canvases forced to **1750×1375** — an initial 2 px width mismatch (1752 vs
+1750) changed the aspect ratio *and* shifted the centred readback window, which alone made the hashes
+differ; that had to be equalised before any comparison meant anything.
+
+| R | BEFORE `uDispDomainScale` | BEFORE hash / sum | AFTER `uDispDomainScale` | AFTER hash / sum | result |
+|---|---|---|---|---|---|
+| 1 | 1 | `4d76e86e` / 33185803 | 1 | `4d76e86e` / 33185803 | **BYTE-IDENTICAL ✓** |
+| 4 | 2 | `ff195d2a` / 24755837 | 1 | `b3de3e3d` / 33933144 | differs ✓ |
+| 16 | 4 | `c13e0bc0` / 26807601 | 1 | `4a58a92c` / 33929991 | differs ✓ |
+
+Two different HTML files, two isolated pages, matched canvas, pinned clock — **bit-identical at the
+anchor.** That is the byte-identity claim actually verified rather than derived.
+
+**A quantitative signature of radius-invariance, beyond eyeballing the frames:** AFTER's pixel sums at
+R = 4 and R = 16 agree to **0.01%** (33933144 vs 33929991), where BEFORE's differed by **8%**
+(24755837 vs 26807601). The rendered macro structure is now near-invariant across a 4× radius span,
+which is what the literature's exponent-0 predicts. Screenshots of the same three states are filed as
+`AFTER-ld3-R{1,4,16}.png` — note those were taken in the *first*, unpinned-clock pass, so they are
+illustrative only; **the load-bearing AFTER numbers are the hashes in this table.**
+
+### Tests
+
+`vis-scale-fence` + `instrument-tap-fence` + `relief-router-repoint` + `planet-vis-scale`: **80/80 pass.**
+Full suite: 20661 passed, 4 failed, 32 skipped across 1308 files. **The 4 failures are pre-existing and
+unrelated** — verified by stashing the edit and re-running the same 3 files, which fail identically at
+HEAD: `src/generation/__tests__/KnownObjects.test.js` (×3) and `GalacticFeatures.test.js` (×1), plus 13
+`vendor/motion-test-kit/tests/*` files that error with "No test suite found in file". Nothing in those
+files references anything this edit touches.
+
+### What this edit does NOT close
+
+- **AC-PLATESCALE observable (1)** — the registry entry pinning plate-count radius-invariance. Not
+  written here, deliberately. Plate count is a seeded draw with no radius term
+  (`src/worldengine/base/plates.js:227`, `PLATE_COUNT_MIN + floor(rng·PLATE_COUNT_SPAN)`), so a
+  radius-only entry would either measure a CPU function that ignores radius — a tautology, the same
+  objection that ruled out outcome A — or require standing up a mesh-building harness inside the
+  THREE-free laws registry. The entry belongs with **AC-PLATECOMP**, where count becomes *derived*
+  from core mass fraction and radius-invariance is the co-claim with real content. The actual
+  regression guard for item 2 is the inverted fence test (zero writers), which is in and green.
+  Note also that `src/worldengine/**` is token-banned from `visScaleOf` / `sVis` / `VIS_SCALE_EXP`
+  (`tests/vis-scale-fence.test.js:64-69`), so any such entry's prose must avoid those spellings.
+- **AC-PLATESCALE observable (3)** — the Nyquist gate / retiring `bakeReliefCrossover`. Item 3, kept
+  separate on purpose: retiring the crossover with `base = 1` makes `bake == 1` at every radius, which
+  silently widens `fieldSampler.js:764`'s `l2AnchorGate` from "opens at R = 1 only" to "opens across
+  the whole band" **with no test turning red**. Also corrected: the AC's `meshPitch = 1.90463e-2` is
+  the *idealized* value and equals the measured MEAN (1.93776e-2), but the measured WORST-CASE local
+  edge angle on the real carrier mesh is **2.53520e-2**, 33% coarser. For a Nyquist floor the worst
+  case governs — a feature sitting exactly on the AC's Shannon floor of 2 is delivered at n_s ≈ 1.50
+  in the coarsest patches while the gate would report PASS. The closed form `sqrt(4π/N)` is worse
+  still (1.77245e-2), so there is no cheap formula fix; the honest move is a measured constant with
+  the measurement recorded.
+- **The display path is NOT sVis-free.** 18 of the 19 sVis-carrying planet-uniform writes survive
+  (`uCraterScale`, `uMountainScale`, `uMachDistrictScale`, `uCityScale`, `uScarpFreq`, …). This
+  retires the MACRO BODY's law only.
+
+### Wider footprint than continents, disclosed
+
+Six animated decks call `fbmd` and inherit its internal `uDispDomainScale` factor, so their **cell
+sizes** revert too: F31 clouds (`planet-lod-lab.html:869`), F33 silicate night deck (`:1131`), F40 dust
+shreds (`:825-830`), F24 band warp, F25 jet turbulence, F26 weather warp. An earlier claim that their
+DRIFT SPEEDS also change was **refuted** on verification: the `uTime` term sits inside the `fbmd`
+argument and is multiplied by `freq` along with the spatial term, so object-space advection velocity is
+scale-invariant; only cell size moves. The F47/F49 coverage masks are net-unchanged in frequency (the
+`/uDispDomainScale` division cancels the internal factor exactly) but their `uMacroOffset` seed-phase
+term stops being scaled.
+
+---
+
 ## 5. Known limitations of this evidence
 
 - `levels = 6` throughout (the shipped look). Correct for visual judgement; **not** valid for any

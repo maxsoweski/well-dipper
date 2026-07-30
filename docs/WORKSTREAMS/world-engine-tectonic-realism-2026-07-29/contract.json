@@ -72,7 +72,17 @@
         "observable": "(1) Plate angular size and count are radius-invariant within the literature's ~13% band, pinned by a registry entry with hand-duplicated literals -- and plate LINEAR size therefore scales as R for free, because the partition is angular. (2) The exponent-1 law in the display path is either NAMED and derived with a citation, or removed. It must not remain an unnamed side effect of a camera constant. (3) bakeReliefCrossover(sVis) is RETIRED and replaced by the derived Nyquist gate: n_s(R) = theta_feature / max(meshPitch, cubePitch) with a Shannon floor of 2, where meshPitch = sqrt(2*(4*PI/TARGET_N)/sqrt(3)) at TARGET_N = 40000 and cubePitch = 2/RELIEF_CUBE_SIZE at 256. NOTE THE MESH BINDS, NOT THE CUBE (1.9046e-2 rad vs 7.8e-3) -- the 256^3 texture was never the constraint. Every term reads an existing constant and none of them is sVis. Closes 'tectonics become noise at 3.26 R-earth' at its cause."
       },
       "layer": "unit",
-      "live": false
+      "live": false,
+      "itemStatus": {
+        "item1_noRadiusTermInPlateCount": "HELD — nothing added. plateCount stays the seeded draw at src/worldengine/base/plates.js:227.",
+        "item2_nameOrRemoveTheDisplayLaw": "DONE 2026-07-30 (removed). The frame-loop write of uDispDomainScale is deleted; the uniform is pinned at its 1.0 initializer. Byte-identity at the anchor VERIFIED by two-page GPU-readback hash equality, not merely derived. Evidence: evidence/platescale-B/AC-PLATESCALE-item2-BEFORE.md §4b.",
+        "item3_retireBakeReliefCrossoverForNyquistGate": "OPEN — deliberately not bundled. See amendments[2]."
+      },
+      "observableStatus": {
+        "1_registryEntryPinningRadiusInvariance": "OPEN — deferred to AC-PLATECOMP on purpose; a radius-only entry would be tautological. Reasoning recorded in the evidence file.",
+        "2_lawNamedOrRemoved": "MET — removed.",
+        "3_nyquistGateReplacesBakeReliefCrossover": "OPEN — and the AC's own meshPitch literal needs correcting first. See amendments[2]."
+      }
     },
     {
       "id": "AC-PLATECOMP",
@@ -147,19 +157,45 @@
   "amendments": [
     {
       "date": "2026-07-29",
-      "added": ["AC-PLATESCALE", "AC-ONEBODY"],
+      "added": [
+        "AC-PLATESCALE",
+        "AC-ONEBODY"
+      ],
       "grounds": "The AC-SAMPLER adversarial gate surfaced a blocker outside that AC's scope: the router and the renderer take different bodies across the whole interior radius band. Working-Claude's first recommendation was to FILE it and keep the workstream on measurement. Max rejected that framing -- 'why not fold it in at the most appropriate place (given inputs outputs of the system)?' -- and he was right on the project's own rule: that recommendation was justified on blast radius, i.e. ECONOMY, which the scoping reference says is a tiebreaker AFTER the feature question and never the framing that shapes it. Rivers cut into a body the viewer is not looking at is a direct hit on 'features read realistically as they would from space'.",
       "seamAnalysis": "The appropriate seam is NOT the route() gate. It is driversToTune, where radius is missing from the driver -> plate-parameter map. The crossfade is a display-side compensation for that missing term, and it is the common cause of three separately-observed defects: Max's 'tectonics become noise at 3.26 R-earth', the router/renderer body split, and the unmet half of parent goal 1 ('plate tectonics work across all sizes of planets'). Fixing the symptom at the router gate would have left the cause in place -- the patch-on-top behaviour parent goal 3 forbids.",
       "confirmedBy": "Max, 2026-07-29"
     },
     {
       "date": "2026-07-29",
-      "inverted": ["AC-PLATESCALE"],
-      "added": ["AC-PLATECOMP"],
+      "inverted": [
+        "AC-PLATESCALE"
+      ],
+      "added": [
+        "AC-PLATECOMP"
+      ],
       "grounds": "THE PREMISE OF AC-PLATESCALE WAS FALSIFIED BY THE LITERATURE IT ASKED FOR. Working-Claude's reasoning -- 'driversToTune has no radius term, that is the gap, and the crossfade is a display-side patch for it' -- was wrong, and Max had confirmed amendment[0] on the strength of it. Two independent routes give plate count as radius-INVARIANT (N ~ R^-0.07, under one plate across the band), and Bird 2003's plate-size law is written in steradians, hence dimensionless. The shipped plateCount = 7-13 is correct as it stands.",
       "whatSurvived": "The DIRECTION was right and the research relocated it. There IS an undeclared, uncited scaling law patched on -- exponent 1, in the DISPLAY path via uDispDomainScale = sVis, arriving as an algebraic side effect of the camera constant VIS_SCALE_EXP = 0.5. The crossfade therefore fades a physically-correct exponent-0 body into an invented exponent-1 one. The research also produced a DERIVED replacement for the crossover (a Nyquist gate on delivered samples per feature) and established that the MESH pitch binds, not the 256^3 cube.",
       "alsoRejected": "The workflow's own proposed replacement law was rejected by adversarial review, 6 blockers. The sharpest: its belt term would have driven belts below the mesh Nyquist limit across most of the band -- re-creating 'tectonics become noise at 3.26 R-earth' in geometry -- while the registry entry kept reporting PASS.",
       "confirmedBy": "Max, 2026-07-29 — chose 'invert it fully' and 'open the composition channel', both over the alternatives"
+    },
+    {
+      "date": "2026-07-30",
+      "resolves": [
+        "AC-PLATESCALE item 2"
+      ],
+      "ruling": "Max chose outcome B — REMOVE the undeclared exponent-1 display law — over outcome A (name it and derive it with a citation), after being shown that A's only available derivation is a CAMERA-FRAMING one and that the law is unauditable by the instrument built to audit laws: the registry's measure() must call a real CPU function, and this law exists only in GLSL plus one JS write.",
+      "whatLanded": "planet-lod-lab.html: the sole write `uniforms.uDispDomainScale.value = sVis` is deleted; the uniform holds its 1.0 initializer at every radius, making all 5 GLSL read sites exact no-ops. The GLSL string is deliberately UNTOUCHED so the compiled program stays bit-identical. tests/vis-scale-fence.test.js: the Slice C block is INVERTED — it previously REQUIRED the write, i.e. the fence was pinning the invented law in place.",
+      "verification": "Two-page recipe (git show HEAD:planet-lod-lab.html served alongside the edited page), both driven to the same state with the animation clock PINNED to 0 and canvases equalised at 1750x1375, compared by GPU readback hash of the centre 256x256. R=1 BYTE-IDENTICAL (4d76e86e, sum 33185803 on both). R=4 and R=16 differ as required. Quantitative invariance signature: AFTER pixel sums at R=4 and R=16 agree to 0.01% where BEFORE differed by 8%. Tests 80/80 on the four relevant suites; the 4 full-suite failures are pre-existing and were baselined by stashing the edit.",
+      "methodologyCorrectionForFutureSessions": "freezeAnimation(true) stops the clock ADVANCING but leaves it at an arbitrary reached value (measured 18.2175). Clouds read uTime, so ANY cross-session byte comparison of this lab is invalid unless the clock is PINNED via _lab.setAnimationClock(0). The first AFTER pass failed all three byte predictions for this reason alone. Also: a 2px canvas mismatch changes the aspect ratio and shifts a centred readback window — equalise canvas dimensions before comparing.",
+      "correctionsToThisACsOwnText": [
+        "meshPitch: the AC asserts 1.90463e-2 rad and calls it the binding pitch. That is the IDEALIZED hex-lattice closed form and it equals the MEASURED MEAN (1.93776e-2, over 119994 edges of the real buildIrregularSphere(40000,4) carrier). The measured WORST-CASE local edge angle is 2.53520e-2 — 33% coarser. For a Nyquist FLOOR the worst case governs: a feature sitting exactly on the AC's Shannon floor of 2 is delivered at n_s = 1.50 in the coarsest patches while the gate reports PASS, which is the same defect class already rejected once (amendments[1].alsoRejected). sqrt(4*pi/N) = 1.77245e-2 is MORE optimistic, so there is no cheap closed-form fix; use a measured constant and record the measurement.",
+        "The mesh is correctly identified but is NOT where the AC implies: TARGET_N=40000 / LLOYD_ITERS=4 come from the frozen DEFAULT_PARAMS at planet-lod-rivers.js:59-60, consumed at :1423 inside createRiverOverlay's ensureMesh. rivers-lab.html:38 is a different lab. The lab's render mesh, SphereGeometry(R,256,256) at planet-lod-lab.html:1484, is NOT the relevant grid at all.",
+        "Relief is SHADED, NOT DISPLACED (planet-lod-lab.html:1603 states it; the vertex shader at :204-226 leaves `position` untouched). The render mesh therefore never samples the height field, and the ANALYTIC body has no fixed angular Nyquist limit — it is pixel-rate and camera-driven via fwidth, with uOctaves swinging the top frequency 32x on camera distance alone. The gate formula can only apply to the BAKED body. The cube term survives intact: 2/256 = 7.8125e-3 rad is the face-centre value and a genuine upper bound (3.68e-3 at a corner).",
+        "The 256x256 render mesh is NOT inert, though: it binds the E5 gas-giant per-vertex fields aBand/aShear/aMush/aStorm, CPU-baked from geometry.attributes.position and linearly interpolated. A render-mesh Nyquist term is meaningful for that field — just not for rock relief."
+      ],
+      "whyItem3IsSeparate": "Retiring bakeReliefCrossover with base = 1 makes uReliefBakeStrength == 1 at EVERY radius, which silently widens fieldSampler.js:764's l2AnchorGate from 'opens at R = 1 only' to 'opens across the whole band' — and NO TEST TURNS RED. It also strands the crater cube as a dead per-route GPU bake. Both need handling deliberately. Note item 3's ORIGINAL rationale is now partly moot: with the display law gone, the baked body was already exponent 0 and the analytic body becomes so too, so there is no radius-driven noise-ification left from this mechanism. The surviving justification for a gate is a FEATURE-SCALE guard (the carrier mesh's worst-case pitch is radius-independent), not a radius guard.",
+      "sideEffectOnAC_ONEBODY": "Measuring the crossover band quantified the renderer/router split: in 1 < R < 4 the renderer draws a BLEND while route() picks ONE source and picks the pure baked carrier throughout — worst at R=3, where rivers route onto a body contributing 11.1% of what is drawn. At R >= 4 they agree on the relief BODY but NOT on craters: the router takes sampler.read() ('bare fbmd, no baked-cube blend, no crater restore', fieldSampler.js:771) while the renderer shows fbmd + C*base. A third case — a stale latched heightSource — was REFUTED: the 'route() never re-runs' comment at planet-lod-rivers.js:1542-1544 predates the radius slider; the real wiring re-routes on radius through a 220ms+220ms debounce chain, making it a bounded transient.",
+      "confirmedBy": "Max, 2026-07-29 — \"go with b, your rec\""
     }
   ],
   "architecturalConnections": {
