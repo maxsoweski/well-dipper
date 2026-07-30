@@ -102,14 +102,28 @@ describe('PanelPointerAdapter.pointerWheel — scrolling the map on the glass', 
     expect(nav._systemZoom).toBe(1.0);
   });
 
-  it('does NOT move the hover position — the hover channel owns that', async () => {
+  it('does NOT move the pointer position — the hover channel owns that', async () => {
     // A wheel reads no coordinate. Placing on it would let a scroll re-resolve
     // what the map thinks is under the cursor without a move ever arriving,
     // which is the stale-hover failure of increment 6 wearing a new hat.
+    //
+    // ⚠ THE OBSERVABLE HERE IS `_getCanvasPos`, AND THE FIRST DRAFT GOT IT
+    // WRONG — a planted `_place(hit)` on the wheel path left this test GREEN.
+    // It read `nav._mouseX`/`_mouseY`, which `_place` never writes: those two
+    // are written only by `_handleMouseMove`, so the assertion held whether the
+    // adapter placed or not. `_place` writes the adapter's `_pos`, and `_pos` is
+    // read back through the `_getCanvasPos` override the constructor installs —
+    // which is the same surface every handler on the target reads. Sixth
+    // instance of this lane's rule that an instrument blind to the defect is
+    // not a control.
     const nav = await systemLevelNav();
     const adapter = new PanelPointerAdapter(nav);
-    const before = { x: nav._mouseX, y: nav._mouseY };
+    const before = nav._getCanvasPos({});
     adapter.pointerWheel(ON_GLASS, -100);
-    expect({ x: nav._mouseX, y: nav._mouseY }).toEqual(before);
+    expect(nav._getCanvasPos({})).toEqual(before);
+    // ...and prove the observable can move at all, or the assertion above is
+    // satisfied by a position nothing in this module is capable of changing.
+    adapter.pointerHover(ON_GLASS);
+    expect(nav._getCanvasPos({})).not.toEqual(before);
   });
 });
