@@ -162,6 +162,14 @@ export const HEIGHT_GLSL = /* glsl */ `
       uniform float       uCraterBakeRestore;       // 0 = nothing to restore (byte-identical gate)
       uniform samplerCube uCraterBakeCube;          // crater overlay ONLY (R=height, GBA=gradient)
       vec4 sampleBakedCraters(vec3 dir){ return textureCube(uCraterBakeCube, normalize(dir)); }
+      // ── V2-4 province → ground palette. carrier.province {craton, orogen, basin} baked as interpolated
+      // one-hot WEIGHTS (see createProvinceCube). RGB = weights, A = coverage: the cube clears to
+      // (0,0,0,0), so A distinguishes "nothing baked for this direction" from a genuine craton (which is
+      // also R=1,G=0,B=0 — but with A=1). Callers MUST gate on A or an un-baked world reads as all-craton.
+      uniform samplerCube uProvinceCube;
+      uniform vec3  uCratonColor;        // ancient stable shield — deeply weathered, erosion-unrefreshed
+      uniform float uProvinceColorMix;   // 0..1 dial; 0 ⇒ province ignored (pre-province behaviour)
+      vec4 sampleProvince(vec3 dir){ return textureCube(uProvinceCube, normalize(dir)); }
       vec3 sampleGrainStrike(vec3 dir){
         vec3 d = normalize(dir);
         vec2 g = textureCube(uTectonicGrainCube, d).rg;          // packed world strike (xy dominant)

@@ -140,6 +140,12 @@ export const OX_VOL_HI     = 0.12;  // at/above which the oxidiser budget is sat
 export const OX_FE_LO      = 0.02;  // even an iron-poor rocky crust has ample Fe to rust — this saturates fast
 export const OX_FE_HI      = 0.10;
 export const AGE_OX_REF    = 4.5;   // Ga — exposure time at which oxidation/space-weathering maturity saturates
+// Ceiling on the oxide MIX FRACTION. Without it a fully mature, fully stable surface (every factor at 1 — which
+// is exactly what a cratonic Earthlike shield derives) becomes PURE hematite, and renders as a garish orange
+// twice as bright as the surrounding land. Real deep-weathering profiles do not get there: laterite is
+// iron-ENRICHED, but the parent rock's quartz and kaolinite persist through the profile, so residual silicate
+// always shows. The cap keeps the endmember a weathered ROCK rather than a pigment.
+export const OX_MAX        = 0.60;
 export const OX_T_LO       = 150;   // K — PALAEO liquid-water gate, low edge. Deliberately colder + wider than
 export const OX_T_HI       = 250;   // K — erosionOf's present-climate band: rust records a wet PAST (Mars, 210 K
                                     // today) that Europa (~102 K) and Titan (~94 K) never had.
@@ -190,7 +196,12 @@ export function surfacePaletteOf(cond) {
   // INSIDE the chain, before the carbon and melt stages, so those still swamp it: quartz/feldspar sorting has no
   // meaning on a carbide world, and graphite fines stay black however finely they are ground.
   const sediment  = surfaceAlbedoOf(cond, { sediment: true });
-  return { fresh, weathered, sediment };
+  // craton — the ancient stable shield. Same chain as `weathered` but without the erosional-refresh brake, so a
+  // world whose global erosion suppresses oxidation still shows deep weathering on the ground that has not been
+  // structurally refreshed in gigayears. On worlds where erosion is already ~0 (Mars, the Moon) this is
+  // identical to `weathered` by construction — the distinction only appears where it physically should.
+  const craton    = surfaceAlbedoOf(cond, { stable: true });
+  return { fresh, weathered, craton, sediment };
 }
 
 // surfaceAlbedoOf(cond, opts) — condition-derived ground colour, linear RGB triple in [0,1]. Defaults to the
@@ -199,6 +210,13 @@ export function surfacePaletteOf(cond) {
 export function surfaceAlbedoOf(cond, opts) {
   const altered  = opts?.altered !== false;
   const asFines  = opts?.sediment === true;
+  // `stable` = a cratonic surface: ancient, tectonically quiet, not being structurally refreshed. It suppresses
+  // the (1 − erosion) brake on oxidation. That brake is right for the planet as a WHOLE — Mars keeps its rust
+  // because nothing washes it away — but it is wrong for a craton, which is deeply weathered BECAUSE it has sat
+  // exposed for gigayears. Earth is the case that exposes the conflation: global erosion is high, so the whole-
+  // planet law drives oxidation to zero, yet Earth's shields carry some of the deepest lateritic weathering
+  // profiles anywhere. Erosion refreshes OROGENS, not cratons.
+  const stable   = opts?.stable === true;
   const iron    = cond?.composition?.ironFraction ?? 0.3;
   const vf      = cond?.composition?.volatileFraction ?? 0;
   const co      = cond?.composition?.carbonToOxygen ?? 0;
@@ -224,11 +242,11 @@ export function surfaceAlbedoOf(cond, opts) {
   //          oxidised crust; Earth's rain and wind continuously bury and re-expose fresh rock, Mars's near-vacuum
   //          lets an oxidised dust mantle accumulate and stay.
   const palaeoWater = smoothstep(OX_T_LO, OX_T_HI, T);
-  const oxidation = !altered ? 0 : clamp01(
+  const oxidation = !altered ? 0 : OX_MAX * clamp01(
     smoothstep(OX_FE_LO, OX_FE_HI, iron) *
     smoothstep(OX_VOL_LO, OX_VOL_HI, vf) *
     (1 - icenessOf(cond)) *
-    palaeoWater * maturity * (1 - erosion)
+    palaeoWater * maturity * (stable ? 1 : (1 - erosion))
   );
   col = mix3(col, OXIDE_RUST, oxidation);
 

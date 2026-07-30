@@ -26,6 +26,7 @@ import { bakeTectonicGrain, buildGrainCubeGeometry, createGrainCube } from './pl
 // The height DATA comes from the sphere-native E6 writer (writeHeightSphere) over the same carrier
 // the grain bake uses (makeSphereField). RELIEF_CUBE_SIZE = 256 (same class as GRAIN_CUBE_SIZE).
 import { createHeightCube, buildHeightCubeGeometry, bakeHeightCube, RELIEF_CUBE_SIZE } from './planet-lod-tectonic.js';
+import { createProvinceCube, bakeProvinceCube, PROVINCE_CUBE_SIZE } from './planet-lod-tectonic.js';   // V2-4 province -> GPU: carries carrier.province (craton/orogen/basin) to the renderer as one-hot weights
 import { writeHeightSphere, writeGrainSphere } from './src/worldengine/base/tectonic.js';
 import { writePlateUpliftSphere, driversToTune } from './src/worldengine/base/plates.js';
 import { writeShellReliefSphere, shellRegimeOf, shellDriversToTune } from './src/worldengine/base/shellRelief.js';
@@ -1399,6 +1400,10 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
   // Same lazy-once lifecycle + once-per-route cadence as the grain cube (bake-once AC). The DATA
   // source is the sphere-native carrier.height (writeHeightSphere), NOT the in-shader sampler read.
   let heightCube = null, heightBakeCount = 0, heightCubeSize = 0;
+  // The PROVINCE cube (whole-sphere craton/orogen/basin partition). Same lazy-once lifecycle and
+  // once-per-route cadence as grain + height. writeProvince() already ran on the carrier by this point
+  // (it is called universally, before the bakes), so carrier.province is always populated here.
+  let provinceCube = null, provinceBakeCount = 0;
   // Slice D-fix (2026-07-28) — the CRATER cube. Same shape/lifecycle/cadence as heightCube, but it
   // carries ONLY the exogenic crater overlay (carrier.craterField at its composite weight) and its
   // gradient. WHY IT EXISTS: uReliefBakeStrength is a single blend weight over a cube that holds the
@@ -1434,6 +1439,7 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // Baked-relief Phase B: the HEIGHT cube rides the same lazy-once lifecycle (built on first route(),
     // reused thereafter). createHeightCube is the real CubeCamera RTT baker; RELIEF_CUBE_SIZE = 256.
     heightCube = createHeightCube({ renderer, size: RELIEF_CUBE_SIZE }); heightCubeSize = RELIEF_CUBE_SIZE;
+    provinceCube = createProvinceCube({ renderer, size: PROVINCE_CUBE_SIZE });
     // Slice D-fix: the crater cube rides the identical lazy-once lifecycle and the identical baker
     // (same RGBA pack: R = overlay height, GBA = its tangent gradient).
     craterCube = createHeightCube({ renderer, size: RELIEF_CUBE_SIZE }); craterCubeSize = RELIEF_CUBE_SIZE;
@@ -1546,6 +1552,11 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // bundle until WS1's driver vector wires through.
     bakeGrainCube({ mesh, drivers: grainDrivers, macroSeed, grainCube });
     grainBakeCount++;
+    // V2-4 province -> GPU, same once-per-route cadence. carrier.province is the history-derived
+    // {craton, orogen, basin} labelling; the cube carries it as interpolated one-hot WEIGHTS so the
+    // shader gets soft province margins rather than a mesh-resolution staircase (see the baker's note).
+    bakeProvinceCube({ mesh, province: carrier.province, provinceCube });
+    provinceBakeCount++;
     // ── Baked-relief Phase B: bake the sphere-native E6 height field (the SAME `carrier` built above,
     // the SAME array the router re-points to under bakedOn) to the HEIGHT cube — same once-per-route
     // cadence as grain. source = sphere-native E6 DATA, NOT sampler.read() (the §B.5 SPLIT-TRAP #3
@@ -1607,6 +1618,8 @@ export function createRiverOverlay({ renderer, uniforms, params = DEFAULT_PARAMS
     // counter (the bake-once live AC reads it: unchanged on camera/time, +1 per preset/seed/sea change).
     get grainTexture() { return grainCube ? grainCube.texture : null; },
     get grainBakeCount() { return grainBakeCount; },
+    get provinceTexture() { return provinceCube && provinceCube.texture; },
+    get provinceBakeCount() { return provinceBakeCount; },
     // Baked-relief Phase B: the baked HEIGHT cube texture (the host pushes it to uReliefBakeCube) + its
     // bake counter (bake-once: unchanged on camera/time, +1 per preset/seed/sea change via route()).
     get reliefTexture() { return heightCube ? heightCube.texture : null; },

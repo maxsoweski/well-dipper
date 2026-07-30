@@ -130,6 +130,15 @@ export function makeUniforms(WORLD_LIGHT) {
       uFreshColor:   { value: new THREE.Color(0.46, 0.40, 0.34) },  // unaltered bedrock — what steep slopes expose
       uSedColor:     { value: new THREE.Color(0.46, 0.40, 0.34) },  // transported fines — accumulates on flat lows
       uTerrainAlbedoMix: { value: 1.0 },   // 0..1 master dial on the terrain-driven ground palette
+      uCratonColor:  { value: new THREE.Color(0.46, 0.40, 0.34) },  // ancient stable shield (driven: surfacePaletteOf(cond).craton)
+      // 0..1 dial on the V2-4 province ground selection (0 = province ignored). NOT 1.0, and the reason is
+      // semantic rather than taste: writeProvince classifies by RANKED thresholds (OROGEN_CUT 0.86,
+      // BASIN_CUT 0.72), so craton is the area-dominant class by construction — roughly 70% of the
+      // surface. At mix 1.0 the craton endmember therefore REPLACES the weathered background across most
+      // of the planet, and an Earthlike world renders orange end to end. `weathered` is the planet-average
+      // surface and province says how each region DEVIATES from it, so a partial mix is what expresses the
+      // model correctly.
+      uProvinceColorMix: { value: 0.65 },
       uMacroOffset:  { value: new THREE.Vector3() },                // set from macroSeed
       uDetailOffset: { value: new THREE.Vector3() },                // set from detailSeed
       // ── voronoi3d spike debug (risk #1 seam gate) ──

@@ -659,7 +659,29 @@
         float terrSteep   = clamp((1.0 - dot(shadeN, N)) * TERRAIN_SLOPE_GAIN, 0.0, 1.0);
         float terrLow     = 1.0 - smoothstep(TERRAIN_ELEV_LO, TERRAIN_ELEV_HI, surfElev);
         float terrLowFlat = (1.0 - terrSteep) * terrLow;
+        // ── V2-4 province ground. This is the HISTORY-derived selector, and it runs FIRST, beneath the
+        // slope/elevation terms: province says what KIND of crust this is (an ancient shield, an active
+        // deformation belt, a sediment sink — decided on the CPU from fault density, structural grain and
+        // accommodation, then relaxed), while slope and elevation then say what the LOCAL surface is doing
+        // on top of it. A steep scarp exposes fresh rock whether it is cut into a craton or an orogen, so
+        // those modulate afterwards rather than competing.
+        //   craton → uCratonColor  (deeply weathered, erosion-unrefreshed)
+        //   orogen → uFreshColor   (uplifting, stripped to bedrock)
+        //   basin  → uSedColor     (the sink; fill)
+        // ⚠ GATE ON THE WEIGHT SUM, NOT ON ALPHA. The real cube clears to (0,0,0,0), so alpha looks like a
+        // natural coverage flag — but the BOOT-TIME dummy bound before route() ever bakes is a 1x1 canvas
+        // filled with '#000', which is OPAQUE black: alpha 1, rgb 0. An alpha gate passes it, the weights
+        // normalize to zero, and the planet renders BLACK until the first route. The rgb sum is the honest
+        // coverage test: the dummy fails it, and any genuinely baked direction sums to ~1 by construction.
+        // (Sum, not any single channel: craton is R=1,G=0,B=0, indistinguishable from the dummy per-channel.)
         vec3 groundCol = uBaseColor;
+        vec4 provS = sampleProvince(vObjN);
+        float provSum = provS.r + provS.g + provS.b;
+        if (provSum > 0.001 && uProvinceColorMix > 0.0) {
+          vec3 pw = provS.rgb / provSum;                         // renormalize: interpolation is not partition-safe
+          vec3 provCol = pw.r * uCratonColor + pw.g * uFreshColor + pw.b * uSedColor;
+          groundCol = mix(groundCol, provCol, uProvinceColorMix * clamp(provSum, 0.0, 1.0));
+        }
         groundCol = mix(groundCol, uFreshColor, terrSteep   * uTerrainAlbedoMix);
         groundCol = mix(groundCol, uSedColor,   terrLowFlat * uTerrainAlbedoMix);
         vec3 albedoCol = mix(groundCol, liquidCol, liquidMask);
@@ -1490,6 +1512,9 @@
     // dummy cube + branch-guarded strength defaulting to 0). The frame loop is the only writer of
     // the restore weight; at radius 1 R⊕ it is exactly 0, so this pair is inert at the golden point.
     uniforms.uCraterBakeCube     = { value: _dummyReliefCube };
+    // V2-4 province cube. Bound to the same 1x1 dummy until route() bakes the real one. The dummy is
+    // OPAQUE black (alpha 1, rgb 0) — the shader's coverage test is the rgb SUM for exactly that reason.
+    uniforms.uProvinceCube       = { value: _dummyReliefCube };
     uniforms.uCraterBakeRestore  = { value: 0.0 };
     uniforms.uRiverCarveStrength = { value: 0.0 };
     uniforms.uRiverCarveFloor    = { value: 0.0 };
@@ -3946,18 +3971,24 @@
       // at a flat 2.47x, Mars's fresh-bedrock endmember clipped to #fffdf1, destroying exactly the fresh-vs-
       // weathered distinction this feature exists to produce. Reinhard asymptotes to 1 and never clips.
       // ALBEDO_TONE_K is solved so Rocky (Earthlike) lands on the legacy 0.408: k = 0.408/(0.165·(1−0.408)).
+      // ⚠ ONE SCALE FOR THE WHOLE PALETTE, solved from the WEATHERED endmember alone.
+      // Applying the curve to each endmember by its OWN luminance is wrong and was visibly wrong: the tone
+      // curve is non-linear, so per-endmember scaling compresses the bright ones less than the dark ones and
+      // silently rewrites the RELATIVE relationships the physics just derived. Live, that turned Earthlike's
+      // craton from a lateritic #c28d6c into a garish #fdb78c orange while its orogen barely moved — the
+      // province read as a paint job rather than as geology. Exposure is a property of the WORLD, not of each
+      // material on it, so the scale is solved once from the area-dominant weathered background and every
+      // endmember is multiplied by it. Ratios between endmembers are then preserved exactly.
       const ALBEDO_TONE_K = 4.176;
       const _lumOf = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
       const _rawPalette = surfacePaletteOf(_bodyDrivers.condition);
-      const _gain = (a) => {
-        const L = _lumOf(a);
-        if (L <= 1e-6) return a.slice();
-        const scale = (ALBEDO_TONE_K / (1 + ALBEDO_TONE_K * L));   // = toneMap(L)/L, hue-preserving
-        return a.map(x => Math.min(1, x * scale));
-      };
+      const _refLum = _lumOf(_rawPalette.weathered);
+      const _paletteScale = _refLum > 1e-6 ? (ALBEDO_TONE_K / (1 + ALBEDO_TONE_K * _refLum)) : 1;
+      const _gain = (a) => a.map(x => Math.min(1, x * _paletteScale));
       state.surfacePalette = {
         fresh:     _gain(_rawPalette.fresh),
         weathered: _gain(_rawPalette.weathered),
+        craton:    _gain(_rawPalette.craton),
         sediment:  _gain(_rawPalette.sediment),
       };
       // ── inc3b S3-fix: schedule-derived SINGLE crater law (the sub-floor crater-texture band, rendered
@@ -4059,6 +4090,7 @@
       // riverOverlay.reliefTexture). Falls back to the dummy until the first bake. Strength still
       // gates the fetch (default 0), so nothing changes visibly until uReliefBakeStrength>0.
       uniforms.uReliefBakeCube.value = riverOverlay.reliefTexture || _dummyReliefCube;
+      uniforms.uProvinceCube.value = riverOverlay.provinceTexture || _dummyReliefCube;   // V2-4 province -> ground palette
       // Slice D-fix: same for the crater-only overlay cube, baked in the same once-per-route block.
       uniforms.uCraterBakeCube.value = riverOverlay.craterTexture || _dummyReliefCube;
       uniforms.uRiverCarveGateHi.value = riverOverlayState.carveGateHi;
@@ -6566,6 +6598,7 @@
         uniforms.uBaseColor.value.setRGB(_sp.weathered[0], _sp.weathered[1], _sp.weathered[2]);
         uniforms.uFreshColor.value.setRGB(_sp.fresh[0],    _sp.fresh[1],    _sp.fresh[2]);
         uniforms.uSedColor.value.setRGB(_sp.sediment[0],   _sp.sediment[1], _sp.sediment[2]);
+        uniforms.uCratonColor.value.setRGB(_sp.craton[0],  _sp.craton[1],   _sp.craton[2]);
       }
       uniforms.uPlanetTempEq.value       = state.tempEq;
       uniforms.uFrostLocked.value        = state.frostLocked;
