@@ -11,6 +11,11 @@ import { assignBodyName } from '../util/scene-naming.js';
 const FRAG_HEADER = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
 uniform vec3 baseColor;
+// ── World-engine land palette (V2-10 port slice 1). BEDROCK endmembers, condition-derived per body.
+// NOT whole-body colours: oceans, ice caps, clouds and gas bands keep baseColor/accentColor.
+uniform vec3 uFreshColor;      // unweathered rock — exposed on peaks and fresh scarps
+uniform vec3 uWeatheredColor;  // the area-dominant weathered background
+uniform vec3 uSedColor;        // sediment — that surface ground up and moved into the lows
 uniform vec3 accentColor;
 uniform float noiseScale;
 uniform float noiseDetail;
@@ -485,12 +490,15 @@ void main() {
     float landElev = smoothstep(seaLevel, seaLevel + 0.35, height);
     // Coastal lowlands: green vegetation
     vec3 lowland = accentColor;
-    // Mid-elevation: brown/tan (dry grassland, scrub)
-    vec3 midland = accentColor * 0.6 + vec3(0.18, 0.14, 0.06);
-    // Highland: grey-brown rock
-    vec3 highland = vec3(0.42, 0.38, 0.34);
-    // Peaks: light grey/white rock
-    vec3 peak = vec3(0.6, 0.58, 0.55);
+    // Mid-elevation: sediment — the weathered surface ground up and moved downhill. Derived, so it
+    // inherits this world's oxidation state (a rusty world gets pale rusty basins, not beige ones).
+    vec3 midland = uSedColor;
+    // Highland: the weathered bedrock background. WAS a hard-coded vec3(0.42,0.38,0.34) shared by
+    // every planet in the game — the same defect the lab retired for uBaseColor.
+    vec3 highland = uWeatheredColor;
+    // Peaks: fresh unweathered rock, exposed where erosion strips the weathering rind. WAS a
+    // hard-coded vec3(0.6,0.58,0.55).
+    vec3 peak = uFreshColor;
 
     // Blend through zones
     vec3 land = lowland;
@@ -538,8 +546,16 @@ void main() {
     // Diamond glints: bright white specular points
     float glint = smoothstep(0.85, 0.95, val);
     surfaceColor += vec3(0.8, 0.85, 0.9) * glint;
+  } else if (planetType == 0) {
+    // Rocky: condition-derived bedrock. A dry airless-to-thin-air world IS its ground, so the whole
+    // surface is the palette — weathered background, fresh rock where relief exposes it, sediment
+    // pooling in the lows. Ice and lava deliberately stay on baseColor/accentColor below: their
+    // visible surface is ice or melt, not bedrock, and those layers are not ported yet.
+    float h = pattern * 0.5 + 0.5;
+    vec3 rock = mix(uWeatheredColor, uFreshColor, smoothstep(0.45, 0.8, h));
+    surfaceColor = mix(uSedColor, rock, smoothstep(0.15, 0.42, h));
   } else {
-    // Default: smooth blend between base and accent (rocky, ocean, ice, lava)
+    // Default: smooth blend between base and accent (ice, lava)
     float mixFactor = smoothstep(0.3, 0.7, pattern * 0.5 + 0.5);
     surfaceColor = mix(baseColor, accentColor, mixFactor);
   }
@@ -1039,6 +1055,11 @@ export class Planet {
       uniforms: {
         baseColor: { value: new THREE.Vector3(...d.baseColor) },
         accentColor: { value: new THREE.Vector3(...d.accentColor) },
+        // World-engine land palette. Falls back to the legacy hard-coded constants when a body
+        // predates the derive (e.g. a hand-authored fixture), so nothing renders black.
+        uFreshColor: { value: new THREE.Vector3(...(d.landPalette?.fresh || [0.6, 0.58, 0.55])) },
+        uWeatheredColor: { value: new THREE.Vector3(...(d.landPalette?.weathered || [0.42, 0.38, 0.34])) },
+        uSedColor: { value: new THREE.Vector3(...(d.landPalette?.sediment || [0.48, 0.42, 0.30])) },
         noiseScale: { value: d.noiseScale },
         noiseDetail: { value: d.noiseDetail },
         lightDir: { value: this._lightDir },

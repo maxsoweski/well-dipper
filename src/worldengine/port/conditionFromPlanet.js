@@ -49,6 +49,25 @@ export function surfaceTemperatureOf(T_eq, pressureBar) {
   return T_eq * Math.pow(1 + 0.75 * tau, 0.25);
 }
 
+// ── THE DENSITY UNIT CONVERSION — the seam's second silent-disagreement fix. ───────────────────────
+// ⚠ THE TWO SIDES USE DIFFERENT UNITS FOR `density`, and again the names do not warn you.
+//   game   deriveComposition() returns `density` in kg/m^3 (PhysicsEngine.js: 3500 + iron*5000 - ...,
+//          clamped to 1000..8000).
+//   engine surfaceMaterial.js compares density against DENS_ICE_HI = 2.0 and DENS_ROCK_LO = 3.5,
+//          i.e. g/cc, and driver-presets.js writes 5.5 for Earth.
+// A factor of 1000. Passed straight through, EVERY game body reads as maximally rocky and the icy
+// gate never opens. Measured on a genuinely icy body (volatileFraction 0.5, 110 K):
+//     density 2000 (game units)  -> icenessOf = 0.000   <- total gate failure
+//     density 2.0  (engine units) -> icenessOf = 1.000
+// That gate feeds the bombardment ice-relaxation term and the uIcenessMix albedo uniform, so the bug
+// is not cosmetic. Converting here rather than changing PhysicsEngine keeps the game's own physics
+// (which uses kg/m^3 consistently elsewhere) untouched.
+const KG_M3_TO_G_CC = 1e-3;
+
+export function densityToGramsPerCC(gameDensity) {
+  return (gameDensity ?? 5500) * KG_M3_TO_G_CC;
+}
+
 export function conditionFromPlanet(planetData) {
   const d = planetData || {};
   const comp = d.composition || {};
@@ -59,7 +78,8 @@ export function conditionFromPlanet(planetData) {
     massEarth:   d.massEarth ?? 1.0,
     composition: {
       ironFraction:     comp.ironFraction ?? 0.32,
-      density:          comp.density ?? 5.5,
+      // NOT comp.density — see densityToGramsPerCC above. The game stores kg/m^3, the engine wants g/cc.
+      density:          densityToGramsPerCC(comp.density),
       volatileFraction: comp.volatileFraction ?? 0.15,
       ...(comp.carbonToOxygen != null ? { carbonToOxygen: comp.carbonToOxygen } : {}),
     },

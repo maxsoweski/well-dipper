@@ -1,3 +1,6 @@
+import { conditionFromPlanet } from '../worldengine/port/conditionFromPlanet.js';
+import { surfacePaletteOf } from '../worldengine/base/surfaceMaterial.js';
+import { applyAlbedoTransfer } from '../worldengine/display/albedoTransfer.js';
 import { earthRadiiToScene, RADIUS_RANGES_EARTH } from '../core/ScaleConstants.js';
 import {
   estimateMassEarth, computeAtmosphere, deriveComposition,
@@ -705,8 +708,28 @@ export class PlanetGenerator {
       ];
     }
 
+    // ── World-engine land palette (V2-10 port slice 1) ────────────────────────────────────────────
+    // The GROUND's colour, derived from this body's own condition rather than picked at random from
+    // PALETTES. `highland` and `peak` in the rocky shader were hard-coded constants shared by every
+    // planet in the game — the exact defect the lab retired for uBaseColor. These four endmembers
+    // replace them.
+    //
+    // ⚠ THIS IS BEDROCK, NOT A WHOLE-BODY COLOUR. It is deliberately NOT used for oceans, ice caps,
+    // clouds or gas bands — those are separate layers with their own colours, in the game as in the
+    // lab. `baseColor`/`accentColor` below are untouched and still drive them. Substituting this
+    // palette for baseColor turns every ocean brown and every gas giant tan (measured; see
+    // docs/FEATURES/surface-variation-beyond-mvp.md, port blocker A).
+    //
+    // applyAlbedoTransfer is REQUIRED, not optional polish: surfaceMaterial.js returns physically
+    // honest albedos, which render ~2.5x too dark without the display curve.
+    const landPalette = applyAlbedoTransfer(surfacePaletteOf(conditionFromPlanet({
+      radiusEarth, massEarth, composition, T_eq, age: ageGyr,
+      atmosphere, tidalState, surfaceHistory, eccentricity,
+    })));
+
     return {
       type,
+      landPalette,
       // Physical unit — radius in Earth radii
       radiusEarth,
       // Scene unit — for realistic 3D rendering

@@ -144,9 +144,10 @@ Mars fixture", that needs a separate archetype entry, not a change to the lock.
 
 ## Notes for the game port
 
-**STATUS 2026-07-30: the seam is built; the colour swap is BLOCKED on three findings. Read these
-before attempting the port again — the naive version is a regression, and it was measured, not
-guessed.**
+**STATUS 2026-07-30 (updated): SLICE 1 OF THE PORT IS IN THE GAME AND RENDERING.** Rocky and
+terrestrial land colour is now condition-derived in `src/objects/Planet.js`. Blockers B and the
+density unit bug are fixed at the seam; blocker A is resolved by wiring the LAND PATH ONLY; blocker C
+is **WITHDRAWN** — it was my own measurement error, see below.
 
 ### Built and landed
 
@@ -160,7 +161,30 @@ guessed.**
   make something come out right, the LAW is underspecified — add the missing condition scalar instead.
   It also carries the greenhouse correction described in blocker B.
 
-### ⛔ Blocker A — `baseColor` and `surfacePaletteOf()` are NOT the same quantity
+### ✅ Blocker A — RESOLVED by wiring the land path only
+
+`baseColor` and `surfacePaletteOf()` are NOT the same quantity, and the fix was to respect that rather
+than reconcile it. What shipped:
+
+- `PlanetGenerator` now attaches `landPalette` (fresh / weathered / craton / sediment) to every planet,
+  derived through `conditionFromPlanet` -> `surfacePaletteOf` -> `applyAlbedoTransfer`.
+- `Planet.js` gained `uFreshColor` / `uWeatheredColor` / `uSedColor`, with fallbacks to the old
+  constants so a hand-authored fixture never renders black.
+- **Terrestrial (type 5):** `highland` and `peak` WERE hard-coded `vec3(0.42,0.38,0.34)` and
+  `vec3(0.6,0.58,0.55)` — shared by every planet in the game, the exact defect the lab retired for
+  `uBaseColor`. They are now `uWeatheredColor` and `uFreshColor`; `midland` is `uSedColor`.
+- **Rocky (type 0):** got its own branch — a dry world IS its bedrock, so the whole surface is the
+  palette (sediment in the lows, weathered background, fresh rock where relief exposes it).
+- **Deliberately NOT ported:** ocean water, ice caps, clouds, gas bands, venus, carbon, lava. Those are
+  separate layers with their own colours in the game as in the lab, and they still read
+  `baseColor`/`accentColor`. That layering is the whole reason blocker A existed.
+
+Verified in the game (port 5175 root — NOT 5173, which is the supercruise worktree): shader compiles
+clean (glError 0, no diagnostics), and two rocky bodies at the same orbit now render visibly different
+by iron fraction (0.10 -> pale #9f856c, 0.42 -> dark #544135). Before, both were a random pick from the
+same 13-entry list.
+
+### Original blocker A note (kept — it is why the layering must be preserved)
 
 `surfacePaletteOf()` returns **land bedrock** endmembers (fresh / weathered / craton / sediment). The
 game's `baseColor` is a **whole-body** colour, and the shaders consume it as such:
@@ -190,7 +214,29 @@ erosion water-window, iceness, biosphere, crater and atmosphere-optics gates all
 checked against four bodies that were NOT fitted: Mars +0.1%, Titan +3.7%, Moon and Europa exact
 (airless is exact by construction, P=0 => factor 1).
 
-### ⛔ Blocker C — the game's bodies are barely differentiated in condition space
+### ❌ Blocker C — WITHDRAWN. It was a measurement error of mine, recorded so nobody re-derives it.
+
+I originally reported that the game's bodies barely vary in condition space and that the port would
+therefore REDUCE visible variety. **That was wrong, and it was wrong because I measured a two-orbit
+slice at fixed metallicity.** Over a realistic population (11 orbits x 6 metallicities, n=66):
+
+    T_eq   43 - 657 K        iron   0.10 - 0.51
+    vf     0.013 - 0.65      C/O    0.20 - 1.00
+
+and the derived bedrock gives **17 distinct colours over 21 rocky bodies**. The game's population is
+well differentiated and the derive tracks it. The lesson is the one this lane keeps relearning: a
+spread measured at fixed parameters is not the population's spread.
+
+**Two real (smaller) defects did survive the re-measurement:**
+
+1. **`deriveComposition` uses ONE `rngFloat` scalar for all three composition axes**, so
+   `ironFraction` and `carbonToOxygen` are correlated at **r = 1.000** — a 3-D composition space
+   collapsed onto a line. (`volatileFraction` is independent, r = 0.03, because the frost-line term
+   dominates it.) Worth fixing; does not block the port.
+2. **`T_eq` has no albedo term**, so at a given orbit every type gets an identical value (329 K at
+   0.6 AU). Physically the spread should be ~±15% across albedo 0.1-0.7. Minor.
+
+### Original blocker C note (superseded by the above)
 
 At a given orbit, **every type gets the same `T_eq`** (329 K at 0.6 AU, 147 K at 3.0 AU — it is a pure
 function of orbit and luminosity, with no type, albedo or greenhouse input), and `ironFraction`
