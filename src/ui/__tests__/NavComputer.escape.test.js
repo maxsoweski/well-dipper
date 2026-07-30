@@ -20,6 +20,13 @@
  * question "can the player still get back" is exactly the kind that a source scan
  * answers confidently and wrongly.
  *
+ * And it drives it BY CLICKING. Reaching a state by assigning `_systemMode` is
+ * the same shape of mistake one level down: it answers "is this state all
+ * right" while quietly assuming the state is still reachable, so it cannot go
+ * red when the route to it disappears. See the census in
+ * AC-STRINGS-TELL-THE-TRUTH, which claimed five reachable footers on that basis
+ * and had four.
+ *
  * ── WHAT IS DELIBERATELY *NOT* CHANGED ─────────────────────────────────────
  *
  * RIGHT-CLICK. `_handleClick` treats `e.button === 2` as an escape and calls
@@ -38,7 +45,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
-  makeHeadlessNav, fakeStar, clickAt, tabCentre, TAB_H,
+  makeHeadlessNav, fakeStar, clickAt, hoverAt, findHoverPoint, tabCentre, TAB_H,
 } from './helpers/headlessNav.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -63,6 +70,80 @@ if (DISABLED_RE.test(SELF_CODE)) {
     'helper skips — measured on a sibling file, which reported "1 passed | 6 skipped" and ' +
     'exited green.',
   );
+}
+
+// ── REACHING A STATE THE WAY A PLAYER REACHES IT ───────────────────────────
+//
+// Everything below drives states by CLICKING INTO THEM. The alternative — and
+// what this file did until 2026-07-29 — is `nav._systemMode = 'planet'`, which
+// looks equivalent and is not: an assignment reaches states no click route
+// produces, so a census built on it cannot go red when a click route
+// DISAPPEARS, which is the only regression the census exists to catch. It
+// reported five reachable footers on that basis; four of them are real.
+//
+// The cost of honesty is that a body has to be FOUND before it can be clicked,
+// because `_hoveredBody` — the only thing `_handleClick` consults for bodies —
+// is computed inside the render from NavComputer's own projection. See
+// `findHoverPoint` in the harness.
+
+/** Predicates over `_hoveredBody`, named so the failure messages read. */
+const A_STAR = (hb) => hb.type === 'star';
+const A_MOON = (hb) => hb.type === 'moon';
+const A_PLANET_WITH_MOONS = (hb, n) =>
+  hb.type === 'planet' && (n._systemData?.planets?.[hb.index]?.moons?.length ?? 0) > 0;
+const A_MOONLESS_PLANET = (hb, n) =>
+  hb.type === 'planet' && (n._systemData?.planets?.[hb.index]?.moons?.length ?? 0) === 0;
+
+/**
+ * Where the sweep found each kind of body last time.
+ *
+ * A speed-up, never an oracle: the point is re-hovered on the new instance and
+ * only used if THAT instance agrees a matching body is under it, otherwise the
+ * sweep runs again. Sound because the geometry is deterministic — the fixture
+ * star is fixed, `orbitAngle`/`startAngle` are static, and nothing here rotates
+ * the view — but a cache that is trusted without checking is how a test starts
+ * clicking empty space and reporting a branch as covered.
+ */
+const HIT_CACHE = new Map();
+
+/** Put the cursor on a body of the named kind. Returns the point, hover live. */
+function hoverBody(nav, key, pred) {
+  const cached = HIT_CACHE.get(key);
+  if (cached) {
+    const hb = hoverAt(nav, cached.x, cached.y);
+    if (hb && pred(hb, nav)) return cached;
+  }
+  const found = findHoverPoint(nav, pred);
+  if (!found) {
+    throw new Error(
+      `no point on the panel hovers ${key} — either the system has no such body ` +
+      `or the class stopped publishing hover, and every click route through ${key} ` +
+      `below is now clicking nothing`,
+    );
+  }
+  HIT_CACHE.set(key, { x: found.x, y: found.y });
+  return found;
+}
+
+/** Hover a body of the named kind and click it, as a player would. */
+function clickBody(nav, key, pred) {
+  const p = hoverBody(nav, key, pred);
+  clickAt(nav, p.x, p.y);
+  return p;
+}
+
+/**
+ * Click somewhere with nothing under it.
+ *
+ * The move + frame is the whole point: `_handleClick` reads the hover the LAST
+ * FRAME resolved, so clicking a corner without moving there first re-clicks the
+ * body the cursor is still parked on. That mistake keeps a state alive that the
+ * test believes it just left.
+ */
+function clickEmptySpace(nav, x = 24, y = 64) {
+  const hb = hoverAt(nav, x, y);
+  if (hb) throw new Error(`(${x},${y}) is not empty — a ${hb.type} is under it`);
+  clickAt(nav, x, y);
 }
 
 describe('the escape rework — ESC is unwired from level navigation', () => {
@@ -127,10 +208,12 @@ describe('AC-NO-STUCK-STATE — every state has a click route out', () => {
 
   it('planet detail returns to the system view on a click in empty space — FOREIGN system', () => {
     nav.openToCurrentSystem(fakeStar());
-    nav._systemMode = 'planet';
-    nav._selectedPlanetIdx = 0;
-    nav._hoveredBody = null; // empty space
-    clickAt(nav, nav._canvas.width / 2, 60);
+    // The first frame generates the system; before it nothing is projected and
+    // nothing can be hovered, so the drill-in click would land on an empty panel.
+    nav.render();
+    clickBody(nav, 'a planet with moons', A_PLANET_WITH_MOONS);
+    expect(nav._systemMode, 'clicking a planet in a foreign system did not drill in').toBe('planet');
+    clickEmptySpace(nav);
     expect(nav._systemMode, 'planet detail is a dead end without ESC').toBe('system');
   });
 
@@ -143,14 +226,22 @@ describe('AC-NO-STUCK-STATE — every state has a click route out', () => {
     nav.openToCurrentSystem(star);
     nav._playerX = star.wx; nav._playerY = star.wy; nav._playerZ = star.wz;
     expect(nav._isCurrentSystem(), 'the fixture is not actually the current system').toBe(true);
-    nav._systemMode = 'planet';
-    nav._selectedPlanetIdx = 0;
-    nav._hoveredBody = null;
-    clickAt(nav, nav._canvas.width / 2, 60);
+    nav.render();
+    // Clicked in, not assigned in: the current-system arm only drills for a
+    // planet that HAS moons, so a state reached by assignment is one the arm
+    // under test would never have produced.
+    clickBody(nav, 'a planet with moons', A_PLANET_WITH_MOONS);
+    expect(nav._systemMode, 'clicking a moon-bearing planet at home did not drill in').toBe('planet');
+    clickEmptySpace(nav);
     expect(nav._systemMode, 'planet detail is a dead end in the current system').toBe('system');
   });
 
   it('component detail returns to the system view on a click', () => {
+    // ASSIGNED, and it has to be: component detail needs a system carrying
+    // `componentSystems` and no seed tried produces one headless, so there is no
+    // click route to drive. What is being checked is the EXIT, which is real
+    // code either way; the entry being synthetic is why this state is named in
+    // the census's UNREACHABLE list rather than counted as covered.
     nav.openToCurrentSystem(fakeStar());
     nav._systemMode = 'component';
     nav._selectedComponentIdx = 0;
@@ -164,6 +255,13 @@ describe('AC-NO-STUCK-STATE — every state has a click route out', () => {
     // (level, systemMode) pair the class can be in, apply that state's documented
     // click, and require that it left the state. A future sub-view added without
     // a click route out fails here.
+    //
+    // This one ASSIGNS its states on purpose, and is the only place left that
+    // does. It is a walk of the state MATRIX, including combinations no click
+    // route produces — that is what makes it catch a sub-view whose entry is
+    // wired before its exit is. The census above must never be built this way:
+    // there, the whole question is whether the route still exists, and an
+    // assignment answers it by not asking.
     const STATES = [
       { level: 4, mode: 'planet', click: (n) => { n._hoveredBody = null; clickAt(n, n._canvas.width / 2, 60); } },
       { level: 4, mode: 'component', click: (n) => clickAt(n, n._canvas.width / 2, 60) },
@@ -202,123 +300,269 @@ describe('AC-NO-STUCK-STATE — every state has a click route out', () => {
 });
 
 describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () => {
+  const FOOTER_RE = /GO BACK|CHANGE VIEW|TO RETURN/i;
+
   /**
-   * Render one state on a FRESH instance and return every string it emitted.
+   * Drive one state on a FRESH instance and return what it drew.
    *
-   * Fresh every time, not reused: rendering mutates state (`_renderSystem` writes
-   * on its first frame, and `_selectedBody`/`_commitAction` persist), so a shared
-   * instance leaks the previous case's setup into the next one and reports a
-   * branch as covered that was never entered. Caught while writing this file —
-   * a reused instance showed planet-detail drawing the SELECTED-body footer with
-   * nothing selected.
+   * Fresh every time, not reused: rendering mutates state (`_renderSystem`
+   * writes on its first frame, and `_selectedBody`/`_commitAction` persist), so
+   * a shared instance leaks the previous case's route into the next one and
+   * reports a branch as covered that was never entered. Caught while writing
+   * this file — a reused instance showed planet-detail drawing the
+   * SELECTED-body footer with nothing selected.
    *
-   * `current` puts the player AT the star, which is the only way to reach the
-   * `isCurrent` arms of both footers — four of the seven strings live there.
+   * `current` puts the player AT the star. That is a direct write and stays one:
+   * it is the SHIP'S POSITION, not the state under observation, and there is no
+   * click that moves the ship. Everything the footer actually branches on —
+   * which sub-view, what is selected — is arrived at by clicking below.
    */
-  async function textAt(setup, { current = false } = {}) {
+  async function drive(state) {
     const { nav, rec } = await makeHeadlessNav();
     nav.chromeless = false; // chromed, i.e. zoomed — the state the text appears in
     const star = fakeStar();
+    // `openToCurrentSystem` is the documented public entry and is how main.js
+    // opens the panel; the click route INTO it (prism star click) needs a loaded
+    // star field and is a different AC's business.
     nav.openToCurrentSystem(star);
-    if (current) {
+    if (state.current) {
       // `_isCurrentSystem()` measures against POSITION_MATCH_TOL (0.1 pc), so the
-      // player has to be on top of it, not merely near.
+      // player has to be on top of it, not merely near. Set before the warm-up:
+      // the first frame GENERATES the system and asks `_isCurrentSystem()` while
+      // doing it.
       nav._playerX = star.wx; nav._playerY = star.wy; nav._playerZ = star.wz;
     }
     // ⚠ WARM-UP RENDER, AND IT IS LOAD-BEARING. `_renderSystem` GENERATES the
-    // system on its first frame and returns before it reaches the footer, so a
-    // single render measures a state the player never sees. Found by the census
-    // below, which came back one footer short — the same shape of trap the
-    // previous workstream hit three times over, where unequal render counts made
-    // a byte-equality check compare two different amounts of work and read as a
-    // pass. Warming up BEFORE `setup` also matches the real sequence: a player
-    // can only drill into a planet once the system has drawn.
+    // system on its first frame, and until it has, nothing is projected and no
+    // body can be hovered — so a route driven without it clicks an empty panel
+    // and every state collapses to the same one. It is also the real sequence: a
+    // player can only drill into a planet once the system has drawn.
     nav.render();
-    setup(nav);
+    state.route(nav);
     rec.text.length = 0;
     nav.render();
-    return rec.text.map((t) => t.text);
+    return { nav, drawn: rec.text.map((t) => t.text) };
   }
 
+  /**
+   * Every footer state a player can get to, and the clicks that get there.
+   *
+   * `footer` is asserted PER STATE, not just pooled into the census set. Pooling
+   * alone is too weak to catch a lost route: delete the moon-click branch and
+   * the moon-selected state falls back into the plain planet-detail state, which
+   * draws the same string — the pooled set never notices. The per-state
+   * expectation is what makes a deleted route show up as this state stopped
+   * being this state.
+   */
   const STATES = [
-    { label: 'system view, foreign', setup: () => {} },
-    { label: 'system view, foreign, nothing selected', setup: (n) => {
-      // Reaching this branch takes an explicit clear. Entering SYSTEM on a
-      // foreign star leaves a WARP commit action standing, so the no-selection
-      // footer is only drawn once the player has cleared it — which they do by
-      // clicking empty space. Without this the branch is unreachable from a
-      // fresh instance and its string would go unexercised.
-      n._selectedBody = null;
-      n._commitAction = null;
-    } },
-    { label: 'system view, current', setup: () => {}, current: true },
-    { label: 'system view, current, body selected', current: true, setup: (n) => {
-      n._selectedBody = { type: 'planet', planetIndex: 0 };
-      n._commitAction = { kind: 'burn', label: 'BURN' };
-    } },
-    { label: 'planet detail, foreign', setup: (n) => { n._systemMode = 'planet'; n._selectedPlanetIdx = 0; } },
-    { label: 'planet detail, current', current: true, setup: (n) => {
-      n._systemMode = 'planet'; n._selectedPlanetIdx = 0;
-    } },
-    { label: 'planet detail, current, moon selected', current: true, setup: (n) => {
-      n._systemMode = 'planet';
-      n._selectedPlanetIdx = 0;
-      n._selectedBody = { type: 'moon', planetIndex: 0, moonIndex: 0 };
-      n._commitAction = { kind: 'burn', label: 'BURN' };
-    } },
-    { label: 'component detail', setup: (n) => { n._systemMode = 'component'; n._selectedComponentIdx = 0; } },
+    {
+      label: 'system view, current, nothing selected',
+      current: true,
+      route: () => {},
+      mode: 'system',
+      footer: 'SELECT BODY TO NAVIGATE · DRAG TO ROTATE · TABS TO CHANGE VIEW',
+    },
+    {
+      label: 'system view, current, planet selected — clicked a moonless planet',
+      current: true,
+      // A MOONLESS planet on purpose: with moons the same click drills into
+      // planet detail (`hasMoons` at the current-system arm), so this is the
+      // only click that selects a body and STAYS in the system view.
+      route: (n) => clickBody(n, 'a moonless planet', A_MOONLESS_PLANET),
+      mode: 'system',
+      footer: 'DRAG TO ROTATE · TABS TO CHANGE VIEW',
+      check: (n) => expect(n._selectedBody?.type, 'the planet click selected nothing').toBe('planet'),
+    },
+    {
+      label: 'system view, current, star selected — clicked the star',
+      current: true,
+      route: (n) => clickBody(n, 'the star', A_STAR),
+      mode: 'system',
+      footer: 'DRAG TO ROTATE · TABS TO CHANGE VIEW',
+      check: (n) => expect(n._selectedBody?.type, 'the star click selected nothing').toBe('star'),
+    },
+    {
+      label: 'system view, foreign',
+      route: () => {},
+      mode: 'system',
+      // Foreign entry force-selects the star and builds the WARP commit action on
+      // the first frame, so this state has a selection without anyone clicking.
+      footer: 'DRAG TO ROTATE · TABS TO CHANGE VIEW',
+    },
+    {
+      label: 'planet detail, current — clicked a planet with moons',
+      current: true,
+      route: (n) => clickBody(n, 'a planet with moons', A_PLANET_WITH_MOONS),
+      mode: 'planet',
+      footer: 'CLICK EMPTY SPACE TO GO BACK',
+    },
+    {
+      label: 'planet detail, current, moon selected — clicked the moon',
+      current: true,
+      route: (n) => {
+        clickBody(n, 'a planet with moons', A_PLANET_WITH_MOONS);
+        clickBody(n, 'a moon', A_MOON);
+      },
+      mode: 'planet',
+      footer: 'CLICK EMPTY SPACE TO GO BACK',
+      check: (n) => expect(n._selectedBody?.type, 'the moon click did not select the moon')
+        .toBe('moon'),
+    },
+    {
+      label: 'planet detail, foreign — clicked a planet',
+      route: (n) => clickBody(n, 'a planet with moons', A_PLANET_WITH_MOONS),
+      mode: 'planet',
+      footer: 'VIEW ONLY · CLICK TO GO BACK',
+    },
+    {
+      label: 'system view, current, after backing out of planet detail',
+      current: true,
+      // The exit is a state in its own right, not just a transition: backing out
+      // CLEARS the selection, so the system view it returns to is a different
+      // frame from the one the player drilled from. Deleting the current-system
+      // arm of that exit leaves the panel in planet detail and this goes red —
+      // 1a9628d records that exact deletion surviving a suite that only ever
+      // drove the foreign arm.
+      route: (n) => {
+        clickBody(n, 'a planet with moons', A_PLANET_WITH_MOONS);
+        clickEmptySpace(n);
+      },
+      mode: 'system',
+      footer: 'SELECT BODY TO NAVIGATE · DRAG TO ROTATE · TABS TO CHANGE VIEW',
+      check: (n) => expect(n._selectedBody, 'backing out kept the burn target selected').toBe(null),
+    },
+    {
+      label: 'system view, foreign, after backing out of planet detail',
+      route: (n) => {
+        clickBody(n, 'a planet with moons', A_PLANET_WITH_MOONS);
+        clickEmptySpace(n);
+      },
+      mode: 'system',
+      footer: 'DRAG TO ROTATE · TABS TO CHANGE VIEW',
+    },
+  ];
+
+  /**
+   * The footers no click route reaches, each with the reason it does not.
+   *
+   * Named so the next reader can tell "we chose not to cover this" from "we
+   * forgot", and pinned against the source below so the naming cannot go stale.
+   */
+  const UNREACHABLE = [
+    {
+      text: 'SELECT MOON TO NAVIGATE · CLICK EMPTY SPACE TO GO BACK',
+      // NavComputer.js:3164. STRUCTURALLY DEAD, and this census used to claim it
+      // as reached — by assigning `_systemMode = 'planet'`, which is the one way
+      // to be in current-system planet detail with nothing selected. The only
+      // click route in is the current-system planet arm of `_handleClick`, which
+      // sets `_selectedBody` and `_commitAction` in the same breath as
+      // `_systemMode = 'planet'`; `_buildCommitAction` cannot return null there
+      // because it and `_isCurrentSystem()` guard on the same `_systemStar`. And
+      // no click that stays in planet detail clears the selection — moon and
+      // planet clicks re-select, and the empty-space click leaves the sub-view.
+      // So the `isCurrent` arm of the else-branch draws only when `_bare` is
+      // true, and `_bare` suppresses the draw.
+      reason: 'no click route reaches current-system planet detail with no selection',
+    },
+    {
+      text: 'SELECT STAR TO WARP · CLICK PLANET FOR DETAIL · TABS TO CHANGE VIEW',
+      // Entering SYSTEM on a foreign star leaves a WARP commit action standing,
+      // and `_renderSystem` REBUILDS it every frame (`!isCurrent && !_commitAction`)
+      // — so no click can leave the foreign system view unselected long enough
+      // for a frame to draw this.
+      reason: 'the foreign system view re-selects the star every frame',
+    },
+    {
+      text: 'VIEW ONLY · CLICK TO GO BACK',
+      // Drawn from TWO sites. The foreign planet-detail one IS reached above; the
+      // COMPONENT DETAIL one is not — `deriveComponentView` needs a system
+      // carrying `componentSystems` and 400 consecutive seeds produced none, so
+      // the sub-view degrades back to the system view before it draws. The
+      // string is therefore in the observed set for the wrong site, which is
+      // exactly the kind of thing that reads as coverage and is not.
+      reason: 'component detail degrades away — the string is observed from the foreign planet site only',
+      alsoReachable: true,
+    },
   ];
 
   for (const s of STATES) {
     it(`draws no ESC promise — ${s.label}`, async () => {
-      const drawn = await textAt(s.setup, { current: s.current });
+      const { drawn } = await drive(s);
       const offenders = drawn.filter((t) => /\bESC\b/i.test(t));
       expect(offenders, `these strings still promise ESC: ${JSON.stringify(offenders)}`)
         .toEqual([]);
     });
   }
 
+  for (const s of STATES) {
+    it(`gets there by clicking, and draws that state's footer — ${s.label}`, async () => {
+      // ⭐ THE ROUTE, ASSERTED. This is what the census rests on: the state was
+      // ARRIVED AT, and it is the state it claims to be. Delete any click branch
+      // these routes use and the state it led to collapses into a neighbouring
+      // one — which the pooled set below would not notice, because the
+      // neighbouring state draws a string the pool already contains.
+      const { nav, drawn } = await drive(s);
+      expect(nav._systemMode, `the route did not land in ${s.mode}`).toBe(s.mode);
+      if (s.check) s.check(nav);
+      expect(drawn.filter((t) => FOOTER_RE.test(t)), `${s.label} drew the wrong footer`)
+        .toEqual([s.footer]);
+    });
+  }
+
   it('records WHICH footers were reached behaviourally, and which were not', async () => {
-    // ⭐ THE HONEST-COVERAGE TEST. Seven footer strings were reworded. A suite of
-    // "no state drew ESC" assertions passes just as well on a state that drew
-    // NOTHING, so the count of states proves nothing on its own — this pins the
-    // actual set of footers observed coming out of the real class.
+    // ⭐ THE HONEST-COVERAGE TEST. Seven footer draws were reworded, six distinct
+    // strings. A suite of "no state drew ESC" assertions passes just as well on a
+    // state that drew NOTHING, so the count of states proves nothing on its own —
+    // this pins the actual set of footers observed coming out of the real class,
+    // every one of them from a state a click route reached.
     //
-    // It also RECORDS THE GAPS rather than implying there aren't any. TWO of the
-    // seven reworded strings are not reachable from a fresh headless instance,
-    // and both were found by this test coming back short rather than by
-    // inspection:
-    //
-    //   1. COMPONENT DETAIL's footer. `deriveComponentView` needs a system
-    //      carrying `componentSystems`; 400 consecutive seeds produced none, so
-    //      the sub-view degrades straight back to the system view before drawing.
-    //   2. THE FOREIGN, NOTHING-SELECTED system footer ('SELECT STAR TO WARP …').
-    //      Entering SYSTEM on a foreign star leaves a WARP commit action standing,
-    //      and `_renderSystem` REBUILDS it every frame — so clearing it in setup
-    //      does not survive to the draw. It is reachable in the game by clicking
-    //      empty space; it is not reachable by assignment.
-    //
-    // Both are covered by the source scan below and by AC-ZOOMED-IS-OPERABLE
-    // live, and by nothing in between. Written down so the next reader does not
-    // have to re-derive it from a suite that passes.
+    // It used to claim FIVE, and got its fifth by assigning `_systemMode`. An
+    // assignment can reach states the game cannot, so a census built on one
+    // cannot go red when a click route disappears — which is the whole job. The
+    // set is four; the fifth is named in UNREACHABLE with the code that kills it.
     const seen = new Set();
     for (const s of STATES) {
-      for (const t of await textAt(s.setup, { current: s.current })) {
-        if (/GO BACK|CHANGE VIEW|TO RETURN/i.test(t)) seen.add(t);
-      }
+      for (const t of (await drive(s)).drawn) if (FOOTER_RE.test(t)) seen.add(t);
     }
     expect([...seen].sort()).toEqual([
       'CLICK EMPTY SPACE TO GO BACK',
       'DRAG TO ROTATE · TABS TO CHANGE VIEW',
       'SELECT BODY TO NAVIGATE · DRAG TO ROTATE · TABS TO CHANGE VIEW',
-      'SELECT MOON TO NAVIGATE · CLICK EMPTY SPACE TO GO BACK',
       'VIEW ONLY · CLICK TO GO BACK',
     ]);
-    // FIVE of the seven, and the exact number is the point of the assertion. If a
-    // future change makes a sixth reachable this goes red and someone adds it; if
-    // a change makes one of these five UNreachable it also goes red, instead of
-    // the suite quietly asserting "no ESC" over a state that no longer draws.
-    expect(seen.size).toBe(5);
+    // FOUR, and the exact number is the point of the assertion. If a future
+    // change makes a fifth reachable this goes red and someone adds it; if a
+    // change makes one of these four UNreachable it also goes red, instead of the
+    // suite quietly asserting "no ESC" over a state that no longer draws.
+    expect(seen.size).toBe(4);
+  });
+
+  it('accounts for EVERY footer in the source as reached or named-unreachable', async () => {
+    // The closure over the two lists above. Without it the census is only a
+    // claim about the states it happens to know: a footer added to NavComputer
+    // and reachable by a route nobody wrote would sit there unexercised, and a
+    // footer DELETED would take its census line with it. Here, either list can
+    // absorb a change, but the union has to keep matching the source.
+    const src = readFileSync(join(REPO, 'src', 'ui', 'NavComputer.js'), 'utf8');
+    const inSource = [...new Set(
+      [...src.matchAll(/fillText\(\s*'([^']*)'/g)].map((m) => m[1]).filter((t) => FOOTER_RE.test(t)),
+    )].sort();
+    const seen = new Set();
+    for (const s of STATES) {
+      for (const t of (await drive(s)).drawn) if (FOOTER_RE.test(t)) seen.add(t);
+    }
+    const accounted = [...new Set([...seen, ...UNREACHABLE.map((u) => u.text)])].sort();
+    expect(accounted, 'a footer exists that is neither reached by a click route nor named unreachable')
+      .toEqual(inSource);
+    // And the naming cannot rot into a description of code that is gone.
+    for (const u of UNREACHABLE) {
+      expect(inSource, `UNREACHABLE names "${u.text}" (${u.reason}) but nothing draws it any more`)
+        .toContain(u.text);
+      if (!u.alsoReachable) {
+        expect([...seen], `"${u.text}" is named unreachable but a route reached it`)
+          .not.toContain(u.text);
+      }
+    }
   });
 
   it('still tells the player how to get back — the hint was replaced, not deleted', () => {

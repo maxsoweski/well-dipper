@@ -157,3 +157,48 @@ export function tabCentre(nav, index, levels = 5) {
   const w = nav._canvas.width / levels;
   return { x: w * (index + 0.5), y: nav._canvas.height - TAB_H / 2 };
 }
+
+/**
+ * Move the pointer there, then let a FRAME decide what is under it.
+ *
+ * `_handleMouseMove` does not set `_hoveredBody` at level 4 — it only records
+ * `_mouseX`/`_mouseY`. The hover is resolved inside the RENDER, by proximity to
+ * where that frame just projected each body (`_renderSystem` clears it and
+ * re-tests every planet and star; `_renderPlanetDetail` does the same for
+ * moons). So "the cursor is over a planet" is a fact about the last frame, and a
+ * test that moves without rendering clicks whatever the PREVIOUS frame decided
+ * was under the cursor — which is how a click meant for empty space lands on the
+ * moon the cursor used to be over.
+ *
+ * Returns the resolved `_hoveredBody`, so a caller can assert what it is holding
+ * rather than assume.
+ */
+export function hoverAt(nav, x, y) {
+  nav._handleMouseMove({ clientX: x, clientY: y });
+  nav.render();
+  return nav._hoveredBody;
+}
+
+/**
+ * Sweep the panel for a point that hovers a body matching `pred`.
+ *
+ * The bodies' screen positions come out of NavComputer's own projection, which
+ * a test has no honest way to predict — recomputing the projection here would
+ * duplicate the production maths and go stale silently. So this looks for the
+ * body the way a player does: put the cursor somewhere, see what lights up.
+ *
+ * `step` 8 against the class's own hit radii (14 px for a planet, 10 for a moon)
+ * guarantees a grid point within 5.66 px of any body centre, so a body that is
+ * drawn at all is found. On return the pointer IS at the reported point and a
+ * frame has resolved the hover, so the caller can click immediately.
+ */
+export function findHoverPoint(nav, pred, { step = 8, inset = 16 } = {}) {
+  const bottom = nav._canvas.height - TAB_H - inset; // never sweep the tab strip
+  for (let y = inset; y < bottom; y += step) {
+    for (let x = inset; x < nav._canvas.width - inset; x += step) {
+      const hb = hoverAt(nav, x, y);
+      if (hb && pred(hb, nav)) return { x, y, body: { ...hb } };
+    }
+  }
+  return null;
+}
