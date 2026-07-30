@@ -11,6 +11,129 @@
  * overlay too, he chose EVERYWHERE — one meaning for ESC wherever the nav
  * computer is drawn.
  *
+ * ── ⭐ WHO THIS GUARD IS DEFENDING AGAINST, AND WHEN IT IS DONE ────────────
+ *
+ * Three rounds have now gone into AC-STRINGS-TELL-THE-TRUTH. Each round a
+ * skeptic found a cleverer way to get the letters E-S-C onto the glass, and each
+ * round the answer was to widen the net. That can run forever, because an
+ * unbounded adversary always beats a static check. It ran this long for one
+ * reason: NOBODY HAD WRITTEN DOWN WHO THE GUARD IS DEFENDING AGAINST, so there
+ * was no way to tell a hole from a non-hole and every finding looked like a hole.
+ *
+ * THE ADVERSARY IS A FUTURE SESSION OF THIS PROJECT, WORKING IN GOOD FAITH.
+ *
+ * Concretely: six months from now someone reworks the system view, wants to tell
+ * the player how to get back out of it, and writes the most natural sentence
+ * there is. Max ruled that ESC means DISMISS and nothing else. This guard exists
+ * so that natural, well-meant sentence turns the suite red instead of shipping a
+ * lie to the player.
+ *
+ * The adversary is NOT someone trying to beat the check. A commit that spells the
+ * word with a Cyrillic Е, or assembles it from character codes, has a worse
+ * problem in it than a stale ESC promise, and a string check is not the thing
+ * that catches that.
+ *
+ * ── COVERED — WHAT A GOOD-FAITH AUTHOR PLAUSIBLY WRITES ────────────────────
+ *
+ *   'PRESS ESC TO RETURN'              the base case
+ *   'PRESS ESCAPE TO RETURN'           `\bESC\b` CANNOT match ESCAPE — the
+ *                                      trailing boundary fails against the A
+ *   'press the escape key to go back'  lower case, spelled out, mid-sentence
+ *   'PRESS ⎋ TO RETURN'                U+238B is the standard escape-key glyph
+ *                                      and a reasonable typographic choice
+ *   `…, w / 2, drawH-8)`               any formatter writes this, and it used to
+ *                                      drop a site out of THREE checks at once
+ *   `export const BACK_HINT = …` in a  a plausible refactor, and invisible to a
+ *   sibling, imported and drawn        scan that reads one file
+ *   'PRESS ES' + 'C TO RETURN'         two static literals — one sentence on the
+ *                                      glass, so read as one
+ *
+ * ── DECLINED — WHAT ONLY AN EVADER WRITES ──────────────────────────────────
+ *
+ * Declining these was measured, not assumed: each was planted and the suite run.
+ * Doing that turned up a distinction worth keeping, because the two halves of
+ * this guard decline different things.
+ *
+ * DECLINED BY BOTH HALVES — the letters that reach the glass are not the letters
+ * any pattern is looking for, so neither reading the source nor reading the
+ * render finds them:
+ *
+ *   Cyrillic Е (U+0415), or any homoglyph substitution.  PLANTED as a live draw
+ *     in `_renderSystem` beside the :2726 footer, 44/44 green.
+ *   a zero-width space (U+200B) inside the word — same species: the string that
+ *     reaches the glass genuinely is not the word. PLANTED the same way, 44/44
+ *     green.
+ *
+ * DECLINED BY THE SOURCE HALF ONLY — the value is never written down as a
+ * literal, so no source read reaches it; but the census reads what the class
+ * actually DREW, so a runtime-assembled promise is caught anywhere a click route
+ * goes:
+ *
+ *   String.fromCharCode(80,82,69,83,83,32,69,83,67).  PLANTED behind a branch no
+ *     route enters, 44/44 green — and that guard is what made it green.
+ *   `PRESS ES${''}C TO RETURN` — an interpolation whose only job is to split the
+ *     word. PLANTED as a live draw beside :2726 it goes RED on four census states,
+ *     because 'PRESS ESC TO RETURN' is what landed on the glass. It survives only
+ *     at a draw site the census cannot reach: the three rows in UNREACHABLE, and
+ *     levels 0–3.
+ *   Note the asymmetry inside this one: a `${}` carrying a REAL word IS caught by
+ *     the source half too, because the const resolver reads the interpolated
+ *     value as a fragment. Only a word-HALF escapes, and nobody splits a word in
+ *     half by accident.
+ *
+ * The practical reading: to get a runtime-assembled ESC promise onto the glass
+ * unseen, a commit has to put it somewhere no player can go — which is a strange
+ * thing to do by accident, and not a thing a wider pattern would fix.
+ *
+ * DECLINING IS NOT LOSING. A guard that names its limits is worth more than one
+ * that implies it has none: the reader of a bounded guard knows what is still
+ * theirs to check, and the reader of an unbounded claim believes it is covered.
+ * The failure this lane has spent the whole session correcting is a comment
+ * asserting a property the code does not have — two of them lived in this file
+ * and its helper, both named in b86ea59, both disproved by a plant. Widening the
+ * net without extending this list is how a fourth one gets written.
+ *
+ * ── THE MODEL IS AN INTENT TEST; THE IMPLEMENTATION IS A LOCATION TEST ─────
+ *
+ * Worth stating plainly, because it is the honest shape of what is here and a
+ * skeptic found it by reading the two against each other. Everything above talks
+ * about WHO writes the string. What the code actually checks is WHERE it lives:
+ * NavComputer.js, the modules NavComputer imports, and whatever the headless
+ * census causes the class to render. Three consequences follow, and none of them
+ * needs any evasion at all — a good-faith author reaches them by walking in a
+ * direction the scan does not look:
+ *
+ *   INBOUND VALUES. A hint handed to the class from outside — a constructor
+ *     option, a setter, a config object assembled in main.js — is a plain literal
+ *     in a file nothing here reads. PLANTED: `opts.backHint` passed from main.js
+ *     and drawn as `this._backHint`, with the literal 'PRESS ESC TO RETURN' on the
+ *     glass, 44/44 green. The scan is scoped OUTBOUND (this file plus its
+ *     imports); a caller is upstream of that and always will be.
+ *   NON-JS PLAYER SURFACES. index.html already carries a keybinds row —
+ *     `<span class="kb-key">ESC</span><span class="kb-desc">Close menu / deselect
+ *     target</span>`. It is TRUTHFUL today, so this is not a live defect. But it
+ *     is the most natural place for a future session to write "ESC — back one nav
+ *     level", and nothing here reads HTML.
+ *   THE POSITIONAL PIN MISDIRECTS. An ESC promise added at the footer baseline
+ *     reddens the "a draw site at the footer baseline computes its text" pin,
+ *     whose message says nothing about ESC and tells the reader to add a pin
+ *     entry. Doing exactly what it says returns green with the promise live.
+ *
+ * ── AND IT IS STRICTER THAN THE AC IT GUARDS ───────────────────────────────
+ *
+ * The AC forbids text that tells the player ESC does something it NO LONGER DOES.
+ * This forbids naming the escape key at all — including truthfully. 'PRESS ESC TO
+ * DISMISS' is accurate and still goes red. That is deliberate: whether a sentence
+ * about ESC is true is a judgement about the design, and a regex cannot make it.
+ * The cost is that restoring a legitimate ESC hint requires editing this guard,
+ * which is the right amount of friction for a thing Max ruled on.
+ *
+ * SO THIS GUARD IS DONE WHEN THE COVERED LIST HOLDS. A finding that lands in the
+ * declined list is not a defect in it, and the right response to one is a line in
+ * that list, not a wider pattern. The three location gaps above are the honest
+ * remainder: they are named rather than closed, because closing them means
+ * scanning the whole app and the HTML, which is a different guard than this one.
+ *
  * ── THIS FILE DRIVES THE REAL CLASS ────────────────────────────────────────
  *
  * Not a stub, not a source scan. `helpers/headlessNav.mjs` builds an actual
@@ -36,8 +159,18 @@
  * census entirely. An ESC promise added to any of those is invisible to a
  * behavioural test and obvious to a source read. So both halves stay, and the
  * trade is explicit: BEHAVIOUR proves a string is reachable and belongs to the
- * state it claims; SOURCE proves no string exists anywhere that would break the
- * rule if it ever did draw.
+ * state it claims; SOURCE proves that no string which would break the rule is
+ * WRITTEN DOWN AS A LITERAL in NavComputer.js or in the modules NavComputer
+ * imports.
+ *
+ * That second clause used to read "no string exists anywhere that would break the
+ * rule if it ever did draw" — which is exactly the kind of sentence this lane
+ * keeps having to take back, and which a plant disproved. It is bounded twice
+ * over, both times on purpose. Bounded by FILE: one hop of imports, so a constant
+ * two modules away, or re-exported through a sibling, is not read. Bounded by
+ * SHAPE: a value assembled at runtime is written down nowhere, so no source read
+ * reaches it. The threat model above says why those bounds are the right ones and
+ * not a to-do list.
  *
  * What changed 2026-07-29 is the INSTRUMENT. Every source scan here used to be
  * `/fillText\('([^']*)'/` — sensitive to a quote character, which a skeptic used
@@ -62,11 +195,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import {
   makeHeadlessNav, fakeStar, clickAt, hoverAt, findHoverPoint, tabCentre, TAB_H,
 } from './helpers/headlessNav.mjs';
-import { collectDrawSites, collectStringLiterals } from './helpers/drawnText.mjs';
+import { collectDrawSites, collectStringLiterals, localImportPaths } from './helpers/drawnText.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..', '..');
@@ -322,6 +455,64 @@ describe('AC-NO-STUCK-STATE — every state has a click route out', () => {
 });
 
 describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () => {
+  // ── ⭐ WHAT COUNTS AS AN ESC PROMISE ─────────────────────────────────────
+  //
+  // This used to be `/\bESC\b/i`, written inline at all three check sites — one
+  // pattern, three copies, and the narrowest reading of the rule there is. It
+  // cannot match ESCAPE at all: the trailing `\b` needs a non-word character
+  // after the C and finds an A. So 'PRESS ESCAPE TO RETURN' — the FIRST thing
+  // most people would write, and a promise in plain English — was green, and so
+  // was the lower-case spelled-out form, and so was the ⎋ glyph 16 px above the
+  // live footer.
+  //
+  // The axis is not the three letters. It is NAMING THE ESCAPE KEY, which a
+  // good-faith author writes several ways, all covered by three patterns:
+  //
+  //   \bESC\b     the abbreviation
+  //   \bESCAPE\b  the word, any case, anywhere in a sentence — which also covers
+  //               "the escape key", "escape to go back", "Escape"
+  //   U+238B ⎋    the standard escape-key glyph. No `\b` around it: it is not a
+  //               word character, so a word boundary next to it is never where a
+  //               reader expects it to be. Matched bare, which is right — the
+  //               glyph has no other meaning.
+  //
+  // ── AND WHERE IT DELIBERATELY DOES NOT FIRE ──────────────────────────────
+  //
+  // Widening a pattern is how a guard starts crying wolf, and a guard that cries
+  // wolf gets deleted by the person it wakes up. Two narrowings, both measured
+  // against the file as it stands rather than imagined:
+  //
+  // 1. ESCAPE VELOCITY. `escape` is an ordinary English word and this is a space
+  //    game whose nav computer already draws physics text (`_ pc`, masses, radii,
+  //    periods). 'ESCAPE VELOCITY 4.2 KM/S' is a plausible thing to draw and is
+  //    not an affordance hint — the word is an adjective on a speed there, not
+  //    the name of a key. Stripped before the test rather than exempted after it,
+  //    so a string that says BOTH things still trips on the other one — measured
+  //    both ways: 'ESCAPE VELOCITY 4.2 KM/S' planted at a live footer runs 44/44
+  //    green, and 'ESCAPE VELOCITY 4.2 KM/S · PRESS ESCAPE TO RETURN' goes red on
+  //    six.
+  //    Nothing in NavComputer draws it today; this is a carve-out written before
+  //    it is needed, on the grounds that the alternative is a red suite landing on
+  //    someone who did nothing wrong.
+  // 2. The `KeyboardEvent.code` literal — handled at the literal-net check below,
+  //    where it lives, and narrowed by SHAPE rather than by value.
+  //
+  // Every other appearance of the word is left to fire. The carve-out list is
+  // deliberately this short: extend it only for a term where `escape` is
+  // demonstrably not the key, and never to quiet a string that a player reads as
+  // an instruction.
+  //
+  // MEASURED, on the file as committed: across NavComputer's 60 draw sites and
+  // 63 resolvable fragments this pattern matches NOTHING, and across all 718
+  // strings the net sweeps out of the file it matches exactly one — the
+  // key-event code at :461 — which is why that one is narrowed by shape and
+  // pinned below rather than waved through. Across the 18 modules NavComputer
+  // imports, 647 strings, it matches nothing at all. So widening the axis cost
+  // no false positive anywhere in the surface it covers.
+  const ESC_PROMISE = /\bESC\b|\bESCAPE\b|⎋/i;
+  const NOT_THE_KEY = /\bESCAPE\s+VELOCITY\b/gi;
+  const promisesEscape = (s) => ESC_PROMISE.test(String(s).replace(NOT_THE_KEY, ''));
+
   // ── WHAT COUNTS AS A FOOTER ──────────────────────────────────────────────
   //
   // BY POSITION, NOT BY WORDING. This used to be
@@ -346,8 +537,21 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
   const footerY = (nav) => nav._canvas.height - DRAW_H_INSET - FOOTER_UP;
   const footersOf = (nav, rec) => rec.text.filter((t) => t.y === footerY(nav)).map((t) => t.text);
 
-  /** The y expression a footer draw is written with, as source text. */
-  const FOOTER_Y_SRC = `drawH - ${FOOTER_UP}`;
+  /**
+   * The baseline a footer draw sits on, read from the AST rather than matched
+   * as text.
+   *
+   * This was `s.ySrc === 'drawH - 8'` — an exact comparison against a source
+   * SLICE, so `drawH-8` matched nothing while drawing the identical pixel row.
+   * That one keystroke took a site out of `footerSites()`, out of the
+   * computed-baseline pin and out of the bottom-strip tripwire simultaneously,
+   * and any formatter with an opinion about binary operators writes it. Same
+   * species as the quote-sensitive regex the source half already threw out: a
+   * check on how the code is TYPED rather than on what it MEANS. `yBase`/`yOffset`
+   * come off the two AST operands, so spacing is not representable.
+   */
+  const FOOTER_BASE = 'drawH';
+  const atFooterBaseline = (s) => s.yBase === FOOTER_BASE && s.yOffset === FOOTER_UP;
 
   /**
    * The footer draw sites in NavComputer.js, read out of the parsed file.
@@ -361,7 +565,7 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
    * variable cannot slip out of the ledger.
    */
   const footerSites = () => collectDrawSites(navSrc())
-    .filter((s) => s.ySrc === FOOTER_Y_SRC && s.wholeLiteral);
+    .filter((s) => atFooterBaseline(s) && s.wholeLiteral);
 
   /**
    * Drive one state on a FRESH instance and return what it drew.
@@ -608,7 +812,7 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
   for (const s of STATES) {
     it(`draws no ESC promise — ${s.label}`, async () => {
       const { drawn } = await drive(s);
-      const offenders = drawn.filter((t) => /\bESC\b/i.test(t));
+      const offenders = drawn.filter(promisesEscape);
       expect(offenders, `these strings still promise ESC: ${JSON.stringify(offenders)}`)
         .toEqual([]);
     });
@@ -696,7 +900,7 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
       expect(d, `NavComputer computes drawH as \`${d}\`; this file assumes h - ${DRAW_H_INSET}`)
         .toMatch(new RegExp(`(^|\\s)h - ${DRAW_H_INSET}$`));
     }
-    expect(footerSites().length, `no draw site with y \`${FOOTER_Y_SRC}\` — the footer moved`)
+    expect(footerSites().length, `no draw site at \`${FOOTER_BASE}\` - ${FOOTER_UP} — the footer moved`)
       .toBeGreaterThanOrEqual(5);
   });
 
@@ -707,7 +911,7 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
     // than its line, so ordinary edits above it do not disturb it and a genuine
     // footer moving behind a variable does.
     const computed = collectDrawSites(navSrc())
-      .filter((s) => s.ySrc === FOOTER_Y_SRC && !s.wholeLiteral)
+      .filter((s) => atFooterBaseline(s) && !s.wholeLiteral)
       .map((s) => s.argSrc);
     expect(computed, 'a draw site at the footer baseline computes its text — if that is a ' +
       'real footer it is now outside the closure above, and needs to be made a literal or ' +
@@ -726,10 +930,12 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
     //  14 — DEBUG HUD last line, and the prism-map altitude readout
     //  24 — 'WARP TARGET' caption above the star name
     //  30, 46 — DEBUG HUD upper lines
+    // Read off the AST, not off the source text: the old form matched
+    // `/^drawH - \d+$/` against the slice, so a reformatted `drawH-20` was not a
+    // bottom-strip baseline as far as this tripwire was concerned either.
     const offsets = [...new Set(collectDrawSites(navSrc())
-      .map((s) => s.ySrc)
-      .filter((y) => y && /^drawH - \d+$/.test(y))
-      .map((y) => Number(y.slice('drawH - '.length))))].sort((a, b) => a - b);
+      .filter((s) => s.yBase === FOOTER_BASE)
+      .map((s) => s.yOffset))].sort((a, b) => a - b);
     expect(offsets, 'NavComputer draws on a bottom-strip baseline this file has never seen — ' +
       'if it is a footer, the census and the closure both need to know')
       .toEqual([8, 14, 24, 30, 46]);
@@ -751,11 +957,48 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
       .toBeGreaterThanOrEqual(50);
     for (const s of sites) {
       for (const f of s.fragments) {
-        expect(f, `NavComputer.js:${s.line} draws a string promising ESC: "${f}"`)
-          .not.toMatch(/\bESC\b/i);
+        expect(promisesEscape(f), `NavComputer.js:${s.line} draws a string naming the escape `
+          + `key: "${f}". Max ruled ESC means DISMISS and is not wired to level navigation, and `
+          + `the on-glass hints were reworded to name CLICK affordances instead.\n`
+          + `⚠ THIS CHECK IS DELIBERATELY STRICTER THAN THE AC, and it will fire on a string `
+          + `that is TRUE. "PRESS ESC TO DISMISS" is accurate — ESC does dismiss — and it still `
+          + `goes red here, because deciding whether a given sentence about ESC is true is a `
+          + `judgement about the design, not something a regex can make. If you want an ESC `
+          + `hint back on the glass, that is a decision for Max and it belongs in the contract `
+          + `first; widening this pattern to let it through is how the guard stops guarding.`)
+          .toBe(false);
       }
     }
   });
+
+  /**
+   * The one literal in this code that names the escape key and MUST.
+   *
+   * `if (e.code === 'Escape')` at NavComputer.js:461 — the DOM's own name for the
+   * key, inside a comparison, nowhere near the glass. Widening the pattern to
+   * cover the spelled-out word makes it the ONE match across all 716 literals in
+   * the file, and reddening on it would make the guard wrong about the single
+   * string it has no business objecting to. That is how a guard gets deleted.
+   *
+   * NARROWED BY SHAPE, NOT BY VALUE. A blanket "the value 'Escape' is fine" would
+   * also wave through `this._hint = 'Escape'` drawn later through a member
+   * access — dynamic to the draw-site scan, and then invisible here too, which is
+   * a hole in exactly the place the net exists to cover. So the exemption also
+   * requires the literal to sit on a line COMPARING a key code. A bare 'Escape'
+   * anywhere else still goes red, and a second key handler written some other way
+   * goes red and gets read by a human.
+   *
+   * Not extended to 'Esc', 'Escape ' or any near-miss: no DOM API is called those.
+   */
+  const KEY_EVENT_CODE = /\b(?:code|key)\s*===\s*['"`]Escape['"`]/;
+  const isKeyEventCode = (l, lines) =>
+    l.value === 'Escape' && KEY_EVENT_CODE.test(lines[l.line - 1] ?? '');
+
+  /** Every literal in a source that names the escape key, key-event codes aside. */
+  const offendingLiterals = (src) => {
+    const lines = src.split('\n');
+    return collectStringLiterals(src).filter((l) => promisesEscape(l.value) && !isKeyEventCode(l, lines));
+  };
 
   it('and neither does any string in the file, drawn or not', () => {
     // ⭐ THE NET. 21 of the 60 draw sites hand `fillText` something no source
@@ -772,12 +1015,68 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
     // It does not trip on NavComputer's several `// … after ESC` comments,
     // because the parser does not treat comments as strings — the old regex
     // scans had to strip them by hand and one of them stripped the wrong thing.
-    const literals = collectStringLiterals(navSrc());
+    const src = navSrc();
+    const literals = collectStringLiterals(src);
     expect(literals.length, 'the literal sweep found almost nothing — it has stopped working')
       .toBeGreaterThanOrEqual(400);
-    const offenders = literals.filter((l) => /\bESC\b/i.test(l.value));
+    const offenders = offendingLiterals(src);
     expect(offenders.map((l) => `${l.line}: ${l.value}`),
-      'a string in NavComputer.js promises ESC — if it is never drawn, say so here')
+      'a string in NavComputer.js names the escape key — if it is never drawn, say so here')
+      .toEqual([]);
+    // The one carve-out, EXERCISED rather than merely declared. If the key
+    // handler is rewritten into a shape `KEY_EVENT_CODE` does not recognise the
+    // net catches it as an offender and says so; if the handler is DELETED the
+    // net stays green and the carve-out becomes dead code nobody notices. This
+    // line is what makes that second case visible.
+    const lines = src.split('\n');
+    const exempted = literals.filter((l) => isKeyEventCode(l, lines));
+    expect(exempted.map((l) => l.line),
+      'the KeyboardEvent-code carve-out matches a different number of literals than the one '
+      + 'key comparison it was written for — read them and decide, do not widen it')
+      .toHaveLength(1);
+  });
+
+  it('and neither does any string in the modules NavComputer imports', () => {
+    // ⭐ THE CROSS-MODULE HOLE. Every source check above reads ONE file, so
+    // `export const BACK_HINT = 'PRESS ESC TO RETURN'` in a sibling, imported and
+    // drawn, was invisible to all of them — measured with the literal forbidden
+    // string, plain ASCII, no trick, 43/43 green. That is a refactor a good-faith
+    // author actually performs, which is what puts it inside the threat model
+    // rather than in the declined list.
+    //
+    // ONE HOP, and `helpers/drawnText.mjs`'s `localImportPaths` argues the scope:
+    // anything NavComputer draws it must first import, so its import list is the
+    // whole one-hop surface, including a `navHints.js` written tomorrow. A
+    // `src/ui/**` sweep would add nothing there and would cost correctness —
+    // Max ruled ESC DISMISSES, so an unrelated UI module telling the player
+    // "ESC to dismiss" is telling the TRUTH, and reddening on it is the crying-
+    // wolf failure. The limit is stated in the header: a constant two modules
+    // away, or re-exported through a sibling, is not read.
+    const mods = localImportPaths(navSrc(), NAV_SRC_PATH);
+    expect(mods.length, 'NavComputer appears to import almost nothing from the repo — the '
+      + 'cross-module scan has stopped finding modules and is passing vacuously')
+      .toBeGreaterThanOrEqual(15);
+    // The ui/ helpers whose RETURN VALUES NavComputer draws are what this scan is
+    // for. Named, so the module list cannot quietly shrink to the generation/
+    // modules and still satisfy the count above.
+    for (const m of ['systemIdentity.js', 'componentIdentity.js', 'farCompanionChips.js', 'prismMembership.js']) {
+      expect(mods.some((p) => p.endsWith(m)),
+        `NavComputer no longer imports ${m} — if its strings still reach the glass by some `
+        + 'other route, this scan has stopped covering them')
+        .toBe(true);
+    }
+    let total = 0;
+    const offenders = [];
+    for (const p of mods) {
+      const src = readFileSync(p, 'utf8');
+      total += collectStringLiterals(src).length;
+      for (const l of offendingLiterals(src)) offenders.push(`${relative(REPO, p)}:${l.line}: ${l.value}`);
+    }
+    expect(total, 'the sibling sweep read almost no strings — it has stopped working')
+      .toBeGreaterThanOrEqual(400);
+    expect(offenders, 'a module NavComputer imports carries a string naming the escape key. '
+      + 'NavComputer draws what these modules return, so a hint constant here reaches the '
+      + 'glass exactly as if it were written inline.')
       .toEqual([]);
   });
 
