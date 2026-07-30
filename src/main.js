@@ -90,6 +90,7 @@ import { createAccumulator } from 'motion-test-kit/core/loop/accumulator';
 import { bindToRAF } from 'motion-test-kit/adapters/three/three-loop-binding';
 import { _advanceSimClock, simClockMs } from './core/SimClock.js';
 import { CockpitSnapshotProvider, resolveFocusedBody } from './cockpit/CockpitSnapshot.js';
+import { CockpitRig, EYE_FOV, EYE_NEAR, EYE_FAR, COCKPIT_TONE_EXPOSURE } from './cockpit/CockpitRig.js';
 import { simRandom, simRandomSeed } from './core/SimRandom.js';
 import {
   initRecording, initReplay, recordingTick, replayTickPre,
@@ -2488,6 +2489,86 @@ const _cockpitSnapshotProvider = new CockpitSnapshotProvider((frame) => ({
 // deliberately NOT a live handle like window._warpTarget above, in a lane whose
 // whole AC is "no live handles" (and a handle would go stale every frame anyway).
 window._cockpitSnapshot = () => _cockpitSnapshotProvider.get();
+
+// ── THE COCKPIT ITSELF (increment 7, cockpit-into-helm-2026-07-30) ──────────
+//
+// Six increments built a cockpit that only existed in a lab. This is where it
+// enters the game. `CockpitRig` is the SAME module the lab constructs — one
+// assembly, two hosts — so anything that changes the cockpit changes it here
+// and there together, which is what AC-ONE-RIG-TWO-HOSTS is for.
+//
+// ⭐ ITS OWN CAMERA, NOT THE WORLD CAMERA, and the reason is scale. The world
+// camera works in scene units where 1 m = 6.7e-9, and a zoomed panel lands
+// ~0.17 m from the eye; sharing one camera would either clip the cockpit or
+// z-fight it. This one is built from the RIG's optics (EYE_FOV/NEAR/FAR) so the
+// framing Max judged in the lab is the framing he gets here — three's own
+// default is 50 degrees, and PanelMover re-solves the zoom fill from the live
+// fov, so an unspecified fov lands the zoomed panel at a size he has never seen.
+//
+// It is posed FROM the world camera every frame — the cockpit sits at the
+// origin of its own scene and only its ORIENTATION follows the ship, which is
+// what makes the precision question vanish. `scModel` is never touched:
+// HeadMount.test.js asserts the trajectory is bit-identical with and without
+// look input, and nothing here writes it.
+const _cockpitCamera = new THREE.PerspectiveCamera(EYE_FOV, window.innerWidth / window.innerHeight, EYE_NEAR, EYE_FAR);
+_cockpitCamera.rotation.order = 'YXZ';
+let _cockpitRig = null;
+let _cockpitReady = false;
+
+/** Orientation from the ship's head, position pinned at the rig's eye point. */
+function _poseCockpitCamera() {
+  if (!_cockpitRig) return;
+  _cockpitCamera.position.copy(_cockpitRig.eyePos);
+  _cockpitCamera.quaternion.copy(camera.quaternion);
+  _cockpitCamera.updateMatrixWorld(true);
+}
+
+/** HELM only. The regime is read fresh, never cached — see AC-HELM-ONLY. */
+function _cockpitShouldRender() {
+  return _scManual && _cockpitReady && !!_cockpitRig && !_cockpitRig.loadError;
+}
+
+CockpitRig.load({
+  glbUrl: 'assets/cockpit/cockpit.glb',
+  renderer: retroRenderer.renderer,
+  camera: _cockpitCamera,
+  pinCamera: () => _poseCockpitCamera(),
+  // The cockpit target is full-screen, so the picker's rect is the whole canvas.
+  getViewport: () => ({ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }),
+  bufferHeightPx: 512,
+  // followCamera stays FALSE: head decoupling is its own increment and must not
+  // arrive by default.
+  zoom: { followCamera: false },
+  makeNav: (surface) => {
+    // ⚠ A SECOND NavComputer. The DOM overlay's instance is built at
+    // `_initNavComputer`; this one draws on the glass. Wiring the callbacks and
+    // the catalogues onto it is increment 7 step 5+, not this step — until then
+    // it renders and is not yet operable.
+    const nav = new NavComputer(surface, galacticMap, retroRenderer.renderer);
+    return nav;
+  },
+}).then((rig) => {
+  _cockpitRig = rig;
+  _cockpitReady = true;
+  if (rig.loadError) console.warn('[COCKPIT] model failed to load:', rig.loadError);
+  else if (rig.hostError) console.warn('[COCKPIT] panels failed to bind:', rig.hostError);
+  else console.log(`[COCKPIT] rig ready — ${rig.host ? rig.host.panels.length : 0} panels, eye ${rig.eyeFound ? 'found' : 'MISSING'}`);
+});
+
+/** Probe surface, mirroring the lab's. Read-only. */
+window._cockpit = () => (_cockpitRig ? {
+  ready: _cockpitReady,
+  loadError: _cockpitRig.loadError,
+  hostError: _cockpitRig.hostError,
+  navError: _cockpitRig.navError,
+  panels: _cockpitRig.host ? _cockpitRig.host.panels.map((p) => p.role) : [],
+  eyeFound: _cockpitRig.eyeFound,
+  screens: _cockpitRig.screenNodeNames,
+  rendering: _cockpitShouldRender(),
+  regime: _scManual ? 'helm' : 'orrery',
+  moverState: _cockpitRig.mover ? _cockpitRig.mover.state : null,
+  zoomedRole: _cockpitRig.mover ? _cockpitRig.mover.zoomedRole : null,
+} : { ready: false });
 
 // When the tour visits every body, use the nav computer for a cinematic warp sequence.
 // The nav computer opens, drills down through galaxy levels, picks a star, and warps.
@@ -9370,6 +9451,21 @@ function renderFrame(alpha) {
     aimOnTarget: _aimOnTarget,
   });
 
+  // ── The cockpit: same snapshot, same frame (AC-PANELS-READ-THE-REAL-FLIGHT) ──
+  // Fed the provider's own frame rather than a second read, so the four screens
+  // and anything else reading the snapshot cannot disagree about the instant.
+  if (_cockpitShouldRender()) {
+    _cockpitRig.update({
+      snapshot: _cockpitSnapshotProvider.get(),
+      nowMs: performance.now(),
+      dtMs: renderDt * 1000,
+    });
+    retroRenderer.setCockpit(_cockpitRig.scene, _cockpitCamera);
+  } else {
+    // NO PASS AT ALL in ORRERY — not a transparent one. See AC-HELM-ONLY.
+    retroRenderer.setCockpit(null, null);
+  }
+
   // ── HUD (yaw + system map + gravity well) ──
   // During flythrough, compute yaw from camera position relative to origin.
   const hudYaw = cameraController.bypassed
@@ -9426,7 +9522,15 @@ const _animateController = bindToRAF({
 _replayReady.then(() => _animateController.start());
 
 // ── Handle Window Resize ──
-window.addEventListener('resize', () => retroRenderer.resize());
+window.addEventListener('resize', () => {
+  retroRenderer.resize();
+  // The cockpit camera is not RetroRenderer's, so `resize()` does not touch it.
+  // Left unfixed, the canopy stretches on every window change while the world
+  // behind it does not — and the panels' subtended size, the one thing this
+  // whole program is judged on, drifts with the window shape.
+  _cockpitCamera.aspect = window.innerWidth / window.innerHeight;
+  _cockpitCamera.updateProjectionMatrix();
+});
 
 // ── Flight engage/exit, MECHANICALLY EXTRACTED from the F-handler ──────────
 // (supercruise-control-harness-2026-06-26 Task 3 Option-A.) The ENGAGE body

@@ -61,6 +61,9 @@ export class RetroRenderer {
     // Render targets (created in resize())
     this.bgTarget = null;    // Full-res starfield
     this.sceneTarget = null; // Low-res scene objects
+    this.cockpitTarget = null; // Full-res cockpit interior (increment 7)
+    this._cockpitScene = null;
+    this._cockpitCamera = null;
     this.hudTarget = null;   // Small HUD overlay
 
     // ── Composite pass (blends starfield + scene + HUD) ──
@@ -94,6 +97,19 @@ export class RetroRenderer {
    * @param {THREE.Scene} scene
    * @param {THREE.Camera} camera
    */
+  /**
+   * Hand the cockpit its scene and camera, or `null, null` to switch it off.
+   *
+   * ⚠ OFF MEANS NO PASS AT ALL, not a transparent one. AC-HELM-ONLY asks for the
+   * cockpit to be "absent in ORRERY (not merely transparent — no pass, no cost)",
+   * and a null scene here is what delivers that: `render()` skips the target
+   * entirely and the composite branch is compiled out by the uniform.
+   */
+  setCockpit(scene, camera) {
+    this._cockpitScene = scene || null;
+    this._cockpitCamera = camera || null;
+  }
+
   setHud(scene, camera) {
     this._hudScene = scene;
     this._hudCamera = camera;
@@ -232,6 +248,19 @@ export class RetroRenderer {
         bgTexture: { value: null },
         sceneTexture: { value: null },
         hudTexture: { value: null },
+        // ── THE COCKPIT LAYER (increment 7, AC-COCKPIT-IS-THERE) ──
+        // Its own full-resolution target, composited OVER the world and UNDER
+        // the palette remap. Full-res rather than the world's 1/3 chunk because
+        // the panels carry text the pilot has to read at 17 degrees.
+        cockpitTexture: { value: null },
+        cockpitEnabled: { value: 0 },
+        // ⭐ THE TONE CURVE THREE WILL NOT APPLY FOR US. three r0.183 forces
+        // NoToneMapping for anything rendered into a TARGET rather than to the
+        // canvas, so the ACES curve the cockpit was lit and judged under in the
+        // lab silently does not happen here. Applying it to the cockpit SAMPLE —
+        // and only to it — is what makes the two hosts one cockpit. The numbers
+        // come from CockpitRig (COCKPIT_TONE_EXPOSURE), so they cannot drift.
+        cockpitExposure: { value: 1.25 },
         hudRect: { value: new THREE.Vector4(0.73, 0.02, 0.255, 0.255) },
         hudEnabled: { value: 0 },
         resolution: { value: new THREE.Vector2(1, 1) },
@@ -276,6 +305,9 @@ export class RetroRenderer {
         uniform sampler2D sceneTexture;
         uniform sampler2D hudTexture;
         uniform vec4 hudRect;
+        uniform sampler2D cockpitTexture;
+        uniform float cockpitEnabled;
+        uniform float cockpitExposure;
         uniform float hudEnabled;
         uniform vec2 resolution;
         // Warp uniforms
@@ -742,6 +774,21 @@ export class RetroRenderer {
             result += (grain - 0.5) * uGrainStrength;
           }
 
+          // ── THE COCKPIT, OVER THE WORLD AND UNDER THE PALETTE ──
+          // Under the palette deliberately: the cockpit is part of the picture
+          // the retro remap is applied TO, not a decal on top of it. Over the
+          // world because the pilot is inside it — the canopy aperture is the
+          // cockpit's own alpha, so the world shows through where the model has
+          // no geometry, which is what makes it read as an opening.
+          if (cockpitEnabled > 0.5) {
+            vec4 cockpit = texture2D(cockpitTexture, vUv);
+            // ACES, applied here because three refuses to for a render target.
+            // The same curve and exposure the lab renders the rig under.
+            vec3 c = cockpit.rgb * cockpitExposure;
+            c = clamp((c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);
+            result = mix(result, c, cockpit.a);
+          }
+
           result = applyPalette(result, uColorPalette);
           gl_FragColor = vec4(result, 1.0);
         }
@@ -769,6 +816,7 @@ export class RetroRenderer {
     if (this.bgTarget) this.bgTarget.dispose();
     if (this.sceneTarget) this.sceneTarget.dispose();
     if (this.hudTarget) this.hudTarget.dispose();
+    if (this.cockpitTarget) this.cockpitTarget.dispose();
 
     this.bgTarget = new THREE.WebGLRenderTarget(width, height, {
       minFilter: THREE.NearestFilter,
@@ -791,10 +839,19 @@ export class RetroRenderer {
       magFilter: THREE.NearestFilter,
     });
 
+    // Full resolution, and with its own depth: the cockpit is a solid 3D object
+    // that must self-occlude. Alpha is what lets the world through the canopy.
+    this.cockpitTarget = new THREE.WebGLRenderTarget(width, height, {
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+      depthBuffer: true,
+    });
+
     const u = this._compositeMesh.material.uniforms;
     u.bgTexture.value = this.bgTarget.texture;
     u.sceneTexture.value = this.sceneTarget.texture;
     u.hudTexture.value = this.hudTarget.texture;
+    u.cockpitTexture.value = this.cockpitTarget.texture;
     u.resolution.value.set(width, height);
 
     // Adjust HUD position/size based on orientation
@@ -892,6 +949,20 @@ export class RetroRenderer {
       u.hudEnabled.value = 0;
     }
 
+    // Pass 3.5: the cockpit, at full resolution, into its own target.
+    // AFTER the world (it composites over it) and BEFORE the composite pass.
+    // `autoClear = false` is NOT wanted here: the cockpit owns this target
+    // outright and a stale frame behind a transparent canopy would ghost.
+    if (this._cockpitScene && this._cockpitCamera) {
+      r.setRenderTarget(this.cockpitTarget);
+      r.setClearColor(0x000000, 0);
+      r.clear();
+      r.render(this._cockpitScene, this._cockpitCamera);
+      u.cockpitEnabled.value = 1;
+    } else {
+      u.cockpitEnabled.value = 0;
+    }
+
     // Pass 4: Composite all layers to screen
     r.setRenderTarget(null);
     r.clear();
@@ -902,6 +973,7 @@ export class RetroRenderer {
     if (this.bgTarget) this.bgTarget.dispose();
     if (this.sceneTarget) this.sceneTarget.dispose();
     if (this.hudTarget) this.hudTarget.dispose();
+    if (this.cockpitTarget) this.cockpitTarget.dispose();
     this._compositeMesh.geometry.dispose();
     this._compositeMesh.material.dispose();
     this.renderer.dispose();
