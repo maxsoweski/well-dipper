@@ -1,24 +1,29 @@
-// ── Analytic-derivative height noise, transcribed from the world-engine lab ──
+// ── Analytic-derivative height noise — THE source of these three functions ────────────────
 //
-// SOURCE OF TRUTH: planet-lod-height.glsl.js (repo root). The three functions below are a
-// VERBATIM copy of hash3(), noised() and fbmd() from that file.
+// hash3(), noised() and fbmd() live here and NOWHERE else. Both consumers import them:
+//   • planet-lod-height.glsl.js (the lab / river-router 260 KB height GLSL) splices them back
+//     into HEIGHT_GLSL at the two points they used to occupy.
+//   • src/objects/Planet.js injects HEIGHT_NOISE_GLSL into the game's planet shader, which
+//     needs these three and none of the other ~200 functions in that string.
 //
-// Why a copy and not an import: the lab string exports one 239 KB GLSL blob and imports
-// nothing, so pulling it in to reach 3 KB of noise would add ~76 KB gzip to the game bundle
-// for a 60x waste. The structurally clean fix — hoisting these primitives into a module both
-// sides import — requires EDITING planet-lod-height.glsl.js, which is being rewritten right
-// now on feature/world-engine-atmo-3b (+320 lines). Editing it would manufacture a merge
-// conflict for no gain, so the copy stands until that lane lands.
+// HISTORY, so the shape makes sense. Until 2026-07-30 this file held a VERBATIM COPY guarded by
+// tests/height-noise-transcription.test.js, which re-extracted the functions from the lab file
+// and asserted byte-identity. That copy existed for ONE reason: planet-lod-height.glsl.js was
+// being rewritten concurrently on feature/world-engine-atmo-3b, so editing it would have
+// manufactured a merge conflict. That lane merged (c854c09) and the file is no longer contested,
+// so the copy and its drift-guard are gone and this is a plain shared module.
 //
-// The copy cannot drift silently: tests/height-noise-transcription.test.js re-extracts these
-// same three functions from planet-lod-height.glsl.js by brace matching and asserts
-// byte-identity. Edit the lab file and this repo's suite fails until the copy is re-synced.
+// WHY THE SPLIT IS TWO CONSTANTS AND NOT ONE. In HEIGHT_GLSL these functions are NOT contiguous:
+// the voronoi3d keystone (with its own, differently-signed hash33) and emissiveBlackbody sit
+// between noised and fbmd. Splicing one combined block would REORDER that file's declarations.
+// Two constants splice back exactly where the originals were, which is what keeps the resolved
+// HEIGHT_GLSL byte-identical to the pre-hoist string that six tests read.
 //
 // fbmd() returns vec4(height, gradient.xyz) — the gradient is ANALYTIC (chain-ruled through
 // every octave), which is what lets the game drop the 3-sample finite-difference normal.
 
 // The five uniforms fbmd() reads. The lab declares these in its own header; the game has to
-// declare them itself because only the function bodies are transcribed.
+// declare them itself because it injects only the function bodies.
 //   uNoiseScale       per-planet base feature frequency (the game mirrors its own noiseScale)
 //   uDispDomainScale  global domain multiplier; 1.0 = identity, which is what the game uses
 //   uFwClamp          1 = fade sub-pixel octaves to their mean (anti-shimmer)
@@ -32,17 +37,15 @@ uniform vec3  uMacroOffset;
 uniform vec3  uDetailOffset;
 `;
 
-// VERBATIM from planet-lod-height.glsl.js — do not hand-edit; re-run the transcription and
-// keep the drift-guard green instead.
-export const HEIGHT_NOISE_GLSL = /* glsl */ `
-vec3 hash3(vec3 p){
+// ── hash3 + noised. IQ analytic-derivative gradient noise: value in .x, gradient in .yzw. ──
+// https://iquilezles.org/articles/gradientnoise/
+export const HASH3_NOISED_GLSL = /* glsl */ `vec3 hash3(vec3 p){
         p = vec3( dot(p, vec3(127.1, 311.7,  74.7)),
                   dot(p, vec3(269.5, 183.3, 246.1)),
                   dot(p, vec3(113.5, 271.9, 124.6)) );
         return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
       }
-
-vec4 noised(vec3 x){
+      vec4 noised(vec3 x){
         vec3 p = floor(x);
         vec3 w = fract(x);
         vec3 u  = w*w*w*(w*(w*6.0-15.0)+10.0);      // quintic fade
@@ -76,9 +79,12 @@ vec4 noised(vec3 x){
                  + u.zxy*vec3(va-vb-ve+vf, va-vb-vc+vd, va-vc-ve+vg)
                  + u.yzx*u.zxy*(-va+vb+vc-vd+ve-vf-vg+vh) );
         return vec4(v, d);
-      }
+      }`;
 
-vec4 fbmd(vec3 pos, float octaves, float fwBase){
+// ── fbmd — variable-octave analytic FBM. Returns vec4(height, gradient.xyz). ──
+// octaves = mix(4,9,lodRamp); fractional trailing-octave weight = pop-free ramp;
+// fwidth clamp fades sub-pixel octaves to their mean (kills dither shimmer).
+export const FBMD_GLSL = /* glsl */ `vec4 fbmd(vec3 pos, float octaves, float fwBase){
         float freq = uNoiseScale * 0.3 * uDispDomainScale;     // matches computeHeight's largest feature scale
         float amp  = 0.5;
         float h = 0.0;
@@ -100,13 +106,8 @@ vec4 fbmd(vec3 pos, float octaves, float fwBase){
           freq *= 2.0;
         }
         return vec4(h, grad);
-      }
-`;
+      }`;
 
-// The exact signatures the drift-guard extracts, exported so the test and this module can
-// never disagree about what "these three functions" means.
-export const HEIGHT_NOISE_SIGNATURES = [
-  'vec3 hash3(vec3 p){',
-  'vec4 noised(vec3 x){',
-  'vec4 fbmd(vec3 pos, float octaves, float fwBase){',
-];
+// What the game injects: all three, in dependency order. The lab does NOT use this — it splices
+// the two constants above individually, at their original positions.
+export const HEIGHT_NOISE_GLSL = HASH3_NOISED_GLSL + '\n\n' + FBMD_GLSL;

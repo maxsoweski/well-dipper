@@ -4,6 +4,14 @@
 // Consumed by BOTH the lab planet shader and the river router so there is one h(pos).
 // Each consumer supplies its own main(): the lab does lighting; the router omits the
 // F11 fluvialCombiner call, sets fwBase=0, and outputs vec4(h, grad). Edit HERE, not copies.
+// The three analytic-derivative noise primitives (hash3 / noised / fbmd) are HOISTED into
+// src/worldengine/shaders/heightNoise.glsl.js and spliced back in below, because the GAME's
+// planet shader needs exactly those three and nothing else in this 260 KB string. They used to
+// be duplicated there behind a byte-identity drift-guard; the guard existed only because this
+// file was contested by a second lane. That lane merged (c854c09), so there is one copy again.
+// Edit them THERE.
+import { HASH3_NOISED_GLSL, FBMD_GLSL } from './src/worldengine/shaders/heightNoise.glsl.js';
+
 export const HEIGHT_GLSL = /* glsl */ `
       precision highp float;
       varying vec3 vPos;
@@ -704,47 +712,7 @@ export const HEIGHT_GLSL = /* glsl */ `
 
       // ── NEW: IQ analytic-derivative gradient noise — value in .x, gradient in .yzw ──
       // https://iquilezles.org/articles/gradientnoise/
-      vec3 hash3(vec3 p){
-        p = vec3( dot(p, vec3(127.1, 311.7,  74.7)),
-                  dot(p, vec3(269.5, 183.3, 246.1)),
-                  dot(p, vec3(113.5, 271.9, 124.6)) );
-        return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
-      }
-      vec4 noised(vec3 x){
-        vec3 p = floor(x);
-        vec3 w = fract(x);
-        vec3 u  = w*w*w*(w*(w*6.0-15.0)+10.0);      // quintic fade
-        vec3 du = 30.0*w*w*(w*(w-2.0)+1.0);
-        vec3 ga = hash3(p+vec3(0.0,0.0,0.0));
-        vec3 gb = hash3(p+vec3(1.0,0.0,0.0));
-        vec3 gc = hash3(p+vec3(0.0,1.0,0.0));
-        vec3 gd = hash3(p+vec3(1.0,1.0,0.0));
-        vec3 ge = hash3(p+vec3(0.0,0.0,1.0));
-        vec3 gf = hash3(p+vec3(1.0,0.0,1.0));
-        vec3 gg = hash3(p+vec3(0.0,1.0,1.0));
-        vec3 gh = hash3(p+vec3(1.0,1.0,1.0));
-        float va = dot(ga, w-vec3(0.0,0.0,0.0));
-        float vb = dot(gb, w-vec3(1.0,0.0,0.0));
-        float vc = dot(gc, w-vec3(0.0,1.0,0.0));
-        float vd = dot(gd, w-vec3(1.0,1.0,0.0));
-        float ve = dot(ge, w-vec3(0.0,0.0,1.0));
-        float vf = dot(gf, w-vec3(1.0,0.0,1.0));
-        float vg = dot(gg, w-vec3(0.0,1.0,1.0));
-        float vh = dot(gh, w-vec3(1.0,1.0,1.0));
-        float v = va
-          + u.x*(vb-va) + u.y*(vc-va) + u.z*(ve-va)
-          + u.x*u.y*(va-vb-vc+vd) + u.y*u.z*(va-vc-ve+vg) + u.z*u.x*(va-vb-ve+vf)
-          + u.x*u.y*u.z*(-va+vb+vc-vd+ve-vf-vg+vh);
-        vec3 d = ga
-          + u.x*(gb-ga) + u.y*(gc-ga) + u.z*(ge-ga)
-          + u.x*u.y*(ga-gb-gc+gd) + u.y*u.z*(ga-gc-ge+gg) + u.z*u.x*(ga-gb-ge+gf)
-          + u.x*u.y*u.z*(-ga+gb+gc-gd+ge-gf-gg+gh)
-          + du * ( vec3(vb-va, vc-va, ve-va)
-                 + u.yzx*vec3(va-vb-vc+vd, va-vc-ve+vg, va-vb-ve+vf)
-                 + u.zxy*vec3(va-vb-ve+vf, va-vb-vc+vd, va-vc-ve+vg)
-                 + u.yzx*u.zxy*(-va+vb+vc-vd+ve-vf-vg+vh) );
-        return vec4(v, d);
-      }
+      ${HASH3_NOISED_GLSL}
 
       // ── voronoi3d — KEYSTONE shared primitive (integration-index §1) ──
       // 3D-domain cellular noise sampled on vPos: inherently seam-free on the
@@ -801,29 +769,7 @@ export const HEIGHT_GLSL = /* glsl */ `
       // ── NEW: variable-octave analytic FBM. Returns vec4(height, gradient.xyz). ──
       // octaves = mix(4,9,lodRamp); fractional trailing-octave weight = pop-free ramp;
       // fwidth clamp fades sub-pixel octaves to their mean (kills dither shimmer).
-      vec4 fbmd(vec3 pos, float octaves, float fwBase){
-        float freq = uNoiseScale * 0.3 * uDispDomainScale;     // matches computeHeight's largest feature scale
-        float amp  = 0.5;
-        float h = 0.0;
-        vec3 grad = vec3(0.0);
-        for (int i = 0; i < 12; i++){
-          if (float(i) >= octaves) break;
-          float w = clamp(octaves - float(i), 0.0, 1.0);    // trailing-octave fade
-          if (uFwClamp == 1){
-            float screenF = fwBase * freq;                  // per-octave screen-space freq
-            w *= 1.0 - smoothstep(0.4, 0.8, screenF);
-          }
-          // macro seed drives the big-feature octaves (0..2), detail seed the rest.
-          // A constant offset leaves the analytic gradient untouched (chain rule).
-          vec3 off = (i < 3) ? uMacroOffset : uDetailOffset;
-          vec4 n = noised(pos * freq + off);
-          h    += amp * w * n.x;
-          grad += amp * w * freq * n.yzw;                   // chain rule for d/dpos
-          amp  *= 0.5;
-          freq *= 2.0;
-        }
-        return vec4(h, grad);
-      }
+      ${FBMD_GLSL}
 
       // ── Stage-D provinces (index §8 — LIVE 2026-06-10) — the shared large-scale partition ──
       // Declared BEFORE every combiner (fluvial is the earliest consumer in source order).

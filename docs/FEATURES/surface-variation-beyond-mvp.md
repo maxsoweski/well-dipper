@@ -293,14 +293,28 @@ continents, venus banding and carbon facets all still run; only what each branch
 was swapped. `uReliefMix` is the A/B dial and the safety valve: at 0.0 every body renders exactly
 as it did in slice 2.
 
-**How the code got there without touching the atmo-3b lane.** `hash3` / `noised` / `fbmd` are a
-VERBATIM copy in `src/worldengine/shaders/heightNoise.glsl.js`. Importing `HEIGHT_GLSL` instead
-would have cost ~76 KB gzip in the game bundle to reach 3 KB of noise, and hoisting the primitives
-into a shared module would have meant EDITING `planet-lod-height.glsl.js` — the file atmo-3b is
-rewriting. The copy cannot drift silently: `tests/height-noise-transcription.test.js` re-extracts
-the three functions from the source file by brace matching and asserts byte-identity, so editing
-the lab file turns this repo's suite red. ⭐ **When atmo-3b lands: do the hoist, delete the copy,
-delete that test.**
+**How the code got there without touching the atmo-3b lane** — ✅ **RESOLVED 2026-07-30, the copy
+is gone.** `hash3` / `noised` / `fbmd` were a VERBATIM copy in
+`src/worldengine/shaders/heightNoise.glsl.js`, guarded by a byte-identity drift-guard
+(`tests/height-noise-transcription.test.js`), because importing `HEIGHT_GLSL` would have cost
+~76 KB gzip in the game bundle to reach 3 KB of noise, and hoisting the primitives properly meant
+EDITING `planet-lod-height.glsl.js` — the file atmo-3b was rewriting. **That lane merged
+(`c854c09`), so the hoist was done:** the three functions now live ONLY in
+`heightNoise.glsl.js`, and `planet-lod-height.glsl.js` imports and splices them back at the two
+points they used to occupy. The copy and its drift-guard are deleted.
+
+⭐ **Why two constants and not one** (`HASH3_NOISED_GLSL` + `FBMD_GLSL`): in `HEIGHT_GLSL` these
+functions are NOT contiguous — the `voronoi3d` keystone (with its own, differently-signed
+`hash33`) and `emissiveBlackbody` sit between `noised` and `fbmd`. One combined block would
+REORDER that file's declarations. Two splice back exactly where the originals were, which is what
+made the resolved `HEIGHT_GLSL` **byte-identical, 265 920 bytes before and after** — the property
+that matters, because six tests read that string and the lab shader must not shift.
+
+⚠ **One guard had to be re-pointed, not dropped.** `tests/vis-scale-fence.test.js` pinned fbmd's
+`uNoiseScale * 0.3 * uDispDomainScale` read site by grepping the RAW lab file, so the hoist turned
+it red. It now asserts against the RESOLVED `HEIGHT_GLSL` — which is what its own comment says it
+is protecting ("the shader binary cannot shift") — and keeps a second assertion against the raw
+source for the prose-level token fence. Strictly stronger, and immune to the next hoist.
 
 **⛔ `computeHeight()` was NOT wired in**, per the recon above. It is still the legacy finite-difference
 height and is still what runs at `uReliefMix 0`.

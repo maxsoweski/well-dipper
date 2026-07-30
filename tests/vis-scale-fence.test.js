@@ -16,6 +16,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { featureFrequencyFromKm, visScaleOf, bakeReliefCrossover, BAKE_CROSS_SPAN } from '../planet-lod-lab-core.js';
 import { makeUniforms } from '../planet-lod-uniforms.js';
+import { HEIGHT_GLSL } from '../planet-lod-height.glsl.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -227,7 +228,13 @@ describe('P4/P5/P5b — display-frequency keying is identity at sVis=1 (Slice B)
 describe('Slice C RETIRED — uDispDomainScale is pinned at 1.0 (AC-PLATESCALE item 2)', () => {
   const WORLD_LIGHT = new THREE.Vector3(1, 0, 0);
   const lab = read('planet-lod-lab.html');
-  const heightGlsl = read('planet-lod-height.glsl.js');
+  // RESOLVED, not raw source. These assertions are about the shader that actually COMPILES, and
+  // as of the hash3/noised/fbmd hoist (2026-07-30) one of the read sites below — fbmd's
+  // `uNoiseScale * 0.3 * uDispDomainScale` — lives in src/worldengine/shaders/heightNoise.glsl.js
+  // and is spliced in. Reading the raw file was always a proxy for the compiled string; reading
+  // HEIGHT_GLSL is the thing itself, and stays correct wherever the text is hoisted to next.
+  const heightGlsl = HEIGHT_GLSL;
+  const heightGlslSrc = read('planet-lod-height.glsl.js');
 
   it('uDispDomainScale defaults to 1.0 — now the value it renders at on EVERY path', () => {
     // Was "identity ⇒ headless/golden byte-identical" when the frame loop wrote sVis over it. With
@@ -250,8 +257,10 @@ describe('Slice C RETIRED — uDispDomainScale is pinned at 1.0 (AC-PLATESCALE i
     // the two de-double-scale DIVISIONS (F47 machCoverageMask, F49 ecuCoverageMask) also stay
     const divisions = [...heightGlsl.matchAll(/\/\s*uDispDomainScale/g)];
     expect(divisions.length).toBe(2);
-    // still carries no display-scale TOKEN (re-assert the fence at the Slice-C surface)
+    // still carries no display-scale TOKEN (re-assert the fence at the Slice-C surface).
+    // Both surfaces: the compiled string AND the raw source file, whose PROSE is fenced too.
     expect(heightGlsl).not.toMatch(DENY);
+    expect(heightGlslSrc).not.toMatch(DENY);
   });
 
   it('NOTHING writes uDispDomainScale — the exponent-1 display law is retired (AC-PLATESCALE item 2)', () => {
