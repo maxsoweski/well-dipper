@@ -254,6 +254,71 @@ export const LAB_UNLOCKED_RANGES = {
   'Moon/Mercury (impact-airless)': [0.27, 0.38],
 };
 
+// ── Per-seed CONDITION draw for solid bodies (the derive-not-freeze pattern, extended off the giants) ────────
+// Radius already varied per seed; every other condition scalar was frozen, so two Rocky worlds differed in size
+// and in nothing else — same iron, same volatiles, same age, same temperature, therefore the same colour, the
+// same iceness, the same erosion, the same plate count. This draws them, so a seed produces a genuinely
+// different WORLD rather than a re-rolled noise field on identical physics.
+//
+// It lives HERE, in the preset layer, and not in src/worldengine/base/: the draw has to know whether a preset is
+// a named-body lock, and that is a LABEL read, which the worldengine writers are forbidden to do (AC-0 grep
+// discipline). The preset layer is exactly where "which fixture is this, and does it draw?" belongs.
+//
+// TWO GATES, both deliberate:
+//   NAMED_BODY              — Mars stays Mars. A named world is a fixture of a REAL body; drawing its iron
+//                             content would make it stop being that body. Same set the radius draw locks.
+//   CONDITION_DRAW_EXCLUDED — the giants already draw their conditions through drawGiantConditions() with their
+//                             own calibrated spreads and their own alea namespace. Drawing here too would
+//                             double-perturb them.
+export const CONDITION_DRAW_EXCLUDED = new Set([
+  'Gas giant (Jovian)', 'Gas giant (Saturnian)', 'Ice giant (Neptunian)', 'Sub-Neptune (hazy)',
+]);
+
+// Uniform ±S about the preset value. S_AGE and S_TEQ deliberately match GIANT_DRAW so the two draw laws agree
+// where they overlap. S_DENS is TIGHTER than the giants' 0.28: rocky mean density is pinned by the silicate/iron
+// mix and clusters 3-6 g/cc, whereas a giant's is a free envelope parameter.
+export const SOLID_DRAW = Object.freeze({
+  S_IRON: 0.20,  // ±20% bulk iron — real bodies span Mercury 0.7 to Moon 0.4 to Earth 0.32; ±20% is within-class
+  S_VOL:  0.30,  // ±30% volatiles — delivery is stochastic (migration, late accretion), so the real spread is wide
+  S_AGE:  0.30,  // ±30% age  (matches GIANT_DRAW.S_AGE)
+  S_TEQ:  0.10,  // ±10% T_eq (matches GIANT_DRAW.S_TEQ) — orbital-distance spread within a class
+  S_DENS: 0.15,  // ±15% mean density
+});
+
+const _clamp01 = (x) => Math.max(0, Math.min(1, x));
+
+// drawPresetConditions(presetName, seed) — a per-seed perturbed COPY of the preset's condition scalars, or the
+// preset itself, unmodified, for a locked/excluded one. NEVER mutates DRIVER_PRESETS (tests deep-equal it).
+// Fixed draw order on one alea namespace ⇒ byte-deterministic for a given (preset, seed).
+export function drawPresetConditions(presetName, seed) {
+  const preset = DRIVER_PRESETS[presetName];
+  if (!preset) return preset;
+  if (NAMED_BODY.has(presetName) || CONDITION_DRAW_EXCLUDED.has(presetName)) return preset;
+
+  const rng = alea('draw:cond:' + presetName + ':' + (seed >>> 0));
+  const fIron = 1 + (rng() - 0.5) * 2 * SOLID_DRAW.S_IRON;   // fixed order → byte-deterministic
+  const fVol  = 1 + (rng() - 0.5) * 2 * SOLID_DRAW.S_VOL;
+  const fAge  = 1 + (rng() - 0.5) * 2 * SOLID_DRAW.S_AGE;
+  const fTeq  = 1 + (rng() - 0.5) * 2 * SOLID_DRAW.S_TEQ;
+  const fDens = 1 + (rng() - 0.5) * 2 * SOLID_DRAW.S_DENS;
+
+  const c = preset.composition || {};
+  const out = {
+    ...preset,
+    composition: {
+      ...c,
+      ironFraction:     _clamp01((c.ironFraction ?? 0.3) * fIron),
+      volatileFraction: _clamp01((c.volatileFraction ?? 0) * fVol),
+      density:          Math.max(0.5, (c.density ?? 5.5) * fDens),
+    },
+    T_eq: Math.max(3, (preset.T_eq ?? 288) * fTeq),
+  };
+  // age is only perturbed where the preset actually declares it — several presets omit it deliberately so the
+  // writer's ageTerm gates to 0 (the AC4 age-less guard). Inventing an age here would silently switch that on.
+  if (preset.age !== undefined) out.age = Math.max(0.1, preset.age * fAge);
+  return out;
+}
+
 export function drawPresetRadius(presetName, seed, { labUnlock = false } = {}) {
   const preset = DRIVER_PRESETS[presetName];
   const canonical = preset.radiusEarth ?? 1.0;
