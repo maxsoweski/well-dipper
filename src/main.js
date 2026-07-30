@@ -2560,6 +2560,11 @@ CockpitRig.load({
     // Whatever has loaded by now. The loaders push to this instance for
     // whatever has not — the two halves of the fan-out.
     _applyCatalogsTo(nav);
+    // The SAME four callbacks the overlay's instance gets. Increment 6 shipped a
+    // NAV panel whose autopilot button reported `true` on every press and whose
+    // COMMIT invoked a callback nothing installed — not a defect in the panel,
+    // just an instance the game had never wired.
+    _installNavCallbacks(nav);
     return nav;
   },
 }).then((rig) => {
@@ -2646,7 +2651,10 @@ autoNav.onTourComplete = () => {
   // Initialize the nav sequence if needed
   if (!_autopilotNavSequence) {
     _autopilotNavSequence = new AutopilotNavSequence({
-      navComputer: _domNavComputer,
+      // The LIVE instance — in HELM that is the glass, and the sequence
+      // performs on it. It is refreshed below on every tour completion because
+      // the regime can have flipped since the sequence was constructed.
+      navComputer: liveNavComputer(),
       galacticMap: galacticMap,
       openNavComputer: openNavComputer,
       closeNavComputer: closeNavComputer,
@@ -2674,12 +2682,14 @@ autoNav.onTourComplete = () => {
     });
   }
 
-  // Ensure nav computer is initialized
-  if (!_domNavComputer) _initNavComputer();
+  // Ensure THE LIVE ONE is initialized. In HELM the cockpit's instance already
+  // exists, and building the DOM overlay's here would be a second nav computer
+  // constructed for a surface nobody is going to see.
+  if (!liveNavComputer()) _initNavComputer();
 
   // Update player position for destination picking
   _autopilotNavSequence._playerPos = playerGalacticPos || { x: 8, y: 0, z: 0 };
-  _autopilotNavSequence._nav = _domNavComputer;
+  _autopilotNavSequence._nav = liveNavComputer();
 
   // Start the cinematic sequence
   _autopilotNavSequence.start();
@@ -3031,6 +3041,125 @@ function _applyCatalogsTo(nav) {
 }
 
 /**
+ * Whether the cockpit's NAV panel is the thing currently at the pilot's eye.
+ * "Open", on the glass, means zoomed — there is no overlay to show.
+ */
+function _cockpitNavZoomed() {
+  return !!(_cockpitRig && _cockpitRig.mover && _cockpitRig.mover.zoomedRole === 'NAV');
+}
+
+/**
+ * Read the pending action off an instance, null it, dispatch it.
+ *
+ * ⚠ THIS EXISTS BECAUSE MIRRORING THE OVERLAY'S COMMIT WIRING IS SILENTLY DEAD.
+ * The overlay's callback is `_pendingAction = action; closeNavComputer()`, and
+ * `closeNavComputer` returns at its first line when the overlay is not open — so
+ * on the glass, where there is no overlay, the action would be stored and never
+ * read. COMMIT would light up, sound, retract the panel, and do nothing. Found
+ * by the design review, not by a test; the read is explicit here so it cannot
+ * hide behind a close that did not happen.
+ */
+function _dispatchPendingNavAction(nav) {
+  if (!nav) return;
+  const action = nav._pendingAction || null;
+  nav._pendingAction = null;
+  dispatchNavAction(action);
+}
+
+/**
+ * The star entry the nav computer opens to.
+ *
+ * Built from `currentGalaxyStar` rather than searched for: it bypasses the async
+ * `_localStars` lookup, which is what guarantees the nav opens to the system the
+ * pilot is IN and not to whatever the sector load happens to have finished.
+ */
+function _buildCurrentStarEntry() {
+  if (!currentGalaxyStar) return null;
+  const gs = currentGalaxyStar;
+  return {
+    wx: gs.worldX, wy: gs.worldY, wz: gs.worldZ,
+    name: _currentSystemName || '',
+    spectral: gs.type || system?._systemData?.star?.type || 'G',
+    seed: gs.seed, dist: 0, distPc: '0',
+  };
+}
+
+/** The warp target, or the absence of one, as the nav computer wants it. */
+function _syncNavExternalTarget(nav) {
+  if (!nav) return;
+  if (warpTarget.direction && galacticMap) nav.setExternalTarget(_resolveWarpTargetGalacticPos(), warpTarget.name || null);
+  else nav.setExternalTarget(null);
+}
+
+/**
+ * ⭐ ARRIVAL. Everything that is true because the ship is somewhere ELSE now.
+ *
+ * ⚠ THE SPLIT FROM `_applyNavFocus` IS THE POINT, and it is not stylistic.
+ * `setPlayerPosition` is DESTRUCTIVE, not a sync (`NavComputer.js:912-930`): it
+ * empties `_localStars`, calls `_resetPrismLoad()` and nulls `_selectedNavStar`.
+ * The overlay could afford that because it ran once per open, on an instance
+ * nobody was looking at a moment earlier. The cockpit's instance is ALWAYS live,
+ * so wiring this to the four focus sites — Tab, 1-9, a body click, a tour leg —
+ * would wipe the pilot's PRISM selection out from under them mid-drill, and
+ * inside `AutopilotNavSequence`'s 20x300 ms retry it would dead-end the
+ * screensaver with no error at all.
+ *
+ * `openToCurrentSystem` lives here too, and it has to. It is what sets
+ * `_systemStar`, `_systemData`, `_currentSystemData`, `_systemMode` and
+ * `_levelIndex` — and it was called from EXACTLY ONE place, `openNavComputer`,
+ * which the cockpit's instance never goes through. Without it `_systemData`
+ * stays null, "a planet opens planet detail" cannot pass, and after every warp
+ * the glass describes the PREVIOUS system.
+ */
+function _applyNavArrival(nav) {
+  if (!nav) return;
+  nav.setPlayerPosition(playerGalacticPos || { x: 8, y: 0, z: 0 });
+  nav._currentSystemName = _currentSystemName || 'Unknown';
+  nav.openToCurrentSystem(_buildCurrentStarEntry(), system?._systemData || null);
+  _syncNavExternalTarget(nav);
+}
+
+/** FOCUS. The only thing a Tab, a 1-9, a body click or a tour leg may touch. */
+function _applyNavFocus(nav) {
+  if (!nav) return;
+  nav.setCurrentBody(focusIndex, focusMoonIndex);
+}
+
+/**
+ * The four callbacks, installed the SAME way on both instances.
+ *
+ * Increment 6 shipped a cockpit NAV whose autopilot button reported `true` on
+ * every press and whose COMMIT invoked a callback nothing installed. Neither was
+ * a bug in the panel: the game simply never wired the second instance. One
+ * installer means a fifth callback cannot arrive on one instance only.
+ */
+function _installNavCallbacks(nav) {
+  // COMMIT. The overlay closes and dispatches on the way out; the glass has
+  // nothing to close, so it retracts the panel and dispatches explicitly. Same
+  // sound either way — `navClose` is what pressing WARP has always sounded like.
+  nav.setCommitCallback((action) => {
+    nav._pendingAction = action;
+    if (nav === _domNavComputer && _navComputerOpen) { closeNavComputer(); return; }
+    soundEngine.play('navClose');
+    if (_cockpitRig && _cockpitRig.mover) _cockpitRig.mover.dismiss();
+    _dispatchPendingNavAction(nav);
+  });
+
+  nav.setDrillSoundCallback((levelIdx) => soundEngine.play(`navDrill${levelIdx}`));
+  nav.setSoundCallback((name) => soundEngine.play(name));
+
+  // AUTOPILOT. `_armAutopilotWithCockpit` rather than `startFlythrough` — see
+  // its header. The mirror is written back so the on-glass label follows the
+  // press immediately rather than waiting for the next frame's sync.
+  nav.setOnAutopilotToggle((enable) => {
+    if (enable) _armAutopilotWithCockpit();
+    else if (nav === _cockpitNavComputer) _disarmAutopilotKeepingCockpit();
+    else stopFlythrough();
+    nav.setAutopilotState(enable);
+  });
+}
+
+/**
  * DEBUG probe: which instances exist, which is live, and what each one HAS.
  *
  * Named per instance on purpose. A probe that reported "the nav computer has the
@@ -3087,27 +3216,36 @@ function _initNavComputer() {
   const navCanvas = document.getElementById('nav-computer-canvas');
   _domNavComputer = new NavComputer(navCanvas, galacticMap, retroRenderer.renderer);
   _applyCatalogsTo(_domNavComputer); // Inc-4 AC2: class-(c) structures search
+  _installNavCallbacks(_domNavComputer);
+}
 
-  // COMMIT button → request close (action retrieved via nav.close())
-  _domNavComputer.setCommitCallback((action) => {
-    // Store the action, then close — dispatchNavAction reads it
-    _domNavComputer._pendingAction = action;
-    closeNavComputer();
-  });
-
-  // Audio bridges
-  _domNavComputer.setDrillSoundCallback((levelIdx) => soundEngine.play(`navDrill${levelIdx}`));
-  _domNavComputer.setSoundCallback((name) => soundEngine.play(name));
-
-  // Autopilot toggle from nav computer
-  _domNavComputer.setOnAutopilotToggle((enable) => {
-    if (enable) startFlythrough();
-    else stopFlythrough();
-    _domNavComputer.setAutopilotState(enable);
-  });
+/**
+ * ⭐ IN HELM THE NAV COMPUTER IS ON THE GLASS, so "open" means bring that panel
+ * to the eye. There is no overlay to show and nothing to build — the cockpit's
+ * instance has been live and drawing in its corner since the GLB loaded.
+ *
+ * This is the single door every caller already goes through: the N key, the
+ * mobile dock's `nav` action, and — the one that matters — `AutopilotNavSequence`,
+ * 671 lines of screensaver act two that performs the nav computer with weighted
+ * styles, a faked cursor and real drills. It calls `openNavComputer` /
+ * `closeNavComputer` and knows nothing else, so redirecting HERE is what puts
+ * the whole performance on the glass instead of on a DOM overlay covering it.
+ */
+function _openCockpitNav() {
+  if (!_cockpitRig || !_cockpitRig.mover) return;
+  if (_cockpitNavZoomed()) return;
+  soundEngine.play('navOpen');
+  // ⚠ NOT `_applyNavArrival` — see its header. Opening is not arriving, and
+  // `setPlayerPosition` would wipe a PRISM selection the pilot is mid-drill on.
+  // Only the two cheap, non-destructive syncs belong on an open.
+  _cockpitNavComputer?.setAutopilotState(autoNav.isActive || _autopilotEnabled);
+  _syncNavExternalTarget(_cockpitNavComputer);
+  _cockpitRig.mover.zoom('NAV', _cockpitRig.cameraNow());
 }
 
 function openNavComputer() {
+  if (_cockpitNavComputer && _cockpitShouldRender()) { _openCockpitNav(); return; }
+
   const el = document.getElementById('nav-computer-overlay');
   if (!el || _navComputerOpen) return;
   _navComputerOpen = true;
@@ -3116,54 +3254,39 @@ function openNavComputer() {
 
   if (!_domNavComputer) _initNavComputer();
 
-  // Sync state
-  _domNavComputer.setPlayerPosition(playerGalacticPos || { x: 8, y: 0, z: 0 }, null);
-  _domNavComputer._currentSystemName = _currentSystemName || 'Unknown';
-  _domNavComputer.setCurrentBody(focusIndex, focusMoonIndex);
-
-  // Build star entry from currentGalaxyStar — bypasses async _localStars search.
-  // This guarantees the nav opens to the correct system immediately.
-  let currentStar = null;
-  const sysData = system?._systemData || null;
-  if (currentGalaxyStar) {
-    const gs = currentGalaxyStar;
-    currentStar = {
-      wx: gs.worldX, wy: gs.worldY, wz: gs.worldZ,
-      name: _currentSystemName || '',
-      spectral: gs.type || sysData?.star?.type || 'G',
-      seed: gs.seed, dist: 0, distPc: '0',
-    };
-  }
+  // The overlay opens fresh every time, on an instance nobody was looking at a
+  // moment ago, so the destructive applier is exactly right here — this IS its
+  // original home. The glass gets it at system arrival instead.
+  _applyNavArrival(_domNavComputer);
+  _applyNavFocus(_domNavComputer);
   _domNavComputer.setAutopilotState(autoNav.isActive || _autopilotEnabled);
-  _domNavComputer.openToCurrentSystem(currentStar, sysData);
-
-  // Pass existing warp target for display
-  if (warpTarget.direction && galacticMap) {
-    const targetWorldPos = _resolveWarpTargetGalacticPos();
-    _domNavComputer.setExternalTarget(targetWorldPos, warpTarget.name || null);
-  } else {
-    _domNavComputer.setExternalTarget(null);
-  }
 
   _domNavComputer.activate();
   _navRenderLoop();
 }
 
 function closeNavComputer() {
-  const el = document.getElementById('nav-computer-overlay');
-  if (!el || !_navComputerOpen) return;
-  _navComputerOpen = false;
-  soundEngine.play('navClose');
+  // The overlay wins when it is up: it is what the pilot is looking at, and in
+  // HELM it should not be up at all (the ORRERY->HELM applier closes it).
+  if (_navComputerOpen) {
+    const el = document.getElementById('nav-computer-overlay');
+    if (!el) return;
+    _navComputerOpen = false;
+    soundEngine.play('navClose');
+    if (_domNavComputer) _domNavComputer.deactivate();
+    el.style.display = 'none';
+    if (_navAnimFrame) { cancelAnimationFrame(_navAnimFrame); _navAnimFrame = null; }
+    _dispatchPendingNavAction(_domNavComputer);
+    return;
+  }
 
-  // Read and dispatch any pending action
-  const action = _domNavComputer?._pendingAction || null;
-  _domNavComputer._pendingAction = null;
-
-  if (_domNavComputer) _domNavComputer.deactivate();
-  el.style.display = 'none';
-  if (_navAnimFrame) { cancelAnimationFrame(_navAnimFrame); _navAnimFrame = null; }
-
-  dispatchNavAction(action);
+  // On the glass, closing is retracting. The dispatch is EXPLICIT — the overlay
+  // got it as a side effect of a close that, here, does not exist.
+  if (_cockpitNavZoomed()) {
+    soundEngine.play('navClose');
+    _cockpitRig.mover.dismiss();
+    _dispatchPendingNavAction(_cockpitNavComputer);
+  }
 }
 
 function dispatchNavAction(action) {
@@ -3203,9 +3326,9 @@ function dispatchNavAction(action) {
   }
 }
 
-// Legacy toggle for keybind compatibility
+// Legacy toggle for keybind compatibility. "Open" is either surface now.
 function toggleNavComputer() {
-  if (_navComputerOpen) closeNavComputer();
+  if (_navComputerOpen || _cockpitNavZoomed()) closeNavComputer();
   else openNavComputer();
 }
 
@@ -5080,6 +5203,23 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     console.log(`  P${i + 1}: ${p.planetData.type} — ${p.planetData.radiusEarth.toFixed(2)} R⊕, orbit ${p.orbitRadiusAU.toFixed(2)} AU${moonDesc}`);
   }
 
+  // ⭐ SYSTEM ARRIVAL — the one place the destructive applier belongs, and the
+  // only reason the cockpit's nav computer ever describes the system the pilot
+  // is actually in. `openToCurrentSystem` used to be reachable from exactly one
+  // place, `openNavComputer`, which the glass never goes through; without this
+  // call `_systemData` stays null there forever and every warp leaves the NAV
+  // panel describing the PREVIOUS system with nothing to say so.
+  //
+  // ⚠ ABOVE `if (forWarp) return;`, NOT at the end of this function. That early
+  // return is why the first attempt did nothing: a WARP arrival — the only kind
+  // that changes system — skips everything below it, so a tail placement fired
+  // on debug spawns and never once on the path that matters. `system` is
+  // assigned above, `_currentSystemName` two lines up, and `playerGalacticPos`
+  // and `currentGalaxyStar` during the fold, so everything arrival reads is
+  // ready here. Both instances — arriving somewhere else is true for whichever
+  // surface is looking. See `_applyNavArrival`.
+  for (const nav of _navComputers()) _applyNavArrival(nav);
+
   // ── During warp, skip camera setup — warpRevealSystem handles that ──
   if (forWarp) return;
 
@@ -5134,7 +5274,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
 
     // Restart autopilot with new system if it was active before
     if (wasAutopilot) {
-      startFlythrough();
+      _armAutopilotWithCockpit(); // AC-AUTOPILOT-ALWAYS-HAS-A-COCKPIT, path 4 of 4
     }
   } else {
     // Debug camera mode: orbit the star, no autopilot, camera set by caller
@@ -5146,6 +5286,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     cameraController.smoothedDistance = viewDist;
     cameraController.autoRotateActive = false;
   }
+
 }
 
 /**
@@ -6378,6 +6519,64 @@ function startFlythrough() {
  * non-star-system branch flies an orrery-style orbit cam that would yank the
  * pilot out of the ship) — mirrors the Z handler's own guard.
  */
+/**
+ * ⭐ ARM AUTOPILOT AND MAKE SURE THERE IS A COCKPIT TO WATCH IT FROM.
+ * AC-AUTOPILOT-ALWAYS-HAS-A-COCKPIT, Max's decision of 2026-07-30.
+ *
+ * Four paths reach `startFlythrough()` and can do it with `_scManual === false`:
+ * the NavComputer autopilot button, the mobile dock's `autonav-toggle`, the
+ * speed-dial's `autonav`, and the post-respawn `wasAutopilot` re-arm. Left bare,
+ * pressing autopilot on the cockpit's OWN nav panel would fly the tour in
+ * ORRERY — which ejects the pilot from the ship they are sitting in, and takes
+ * the panel they just pressed off screen with them. Asked whether to route some
+ * or all, Max said all four.
+ *
+ * ⚠ THIS GENUINELY CHANGES THE REGIME, and two things follow that Max has been
+ * told about: `_updateModeSwapButton` relabels the HUD button, and
+ * `_syncOrbitsToMode` turns the ORRERY orbit lines off. Both are correct — the
+ * station really did change — and neither is this increment inventing behaviour.
+ *
+ * ⚠ AND IT CLOSES THE DOM OVERLAY. Nothing else does when the regime flips, so
+ * pressing autopilot on the ORRERY overlay would leave `#nav-computer-overlay`
+ * full-screen ON TOP of a cockpit that is now rendering underneath it, with its
+ * `_navRenderLoop` still driving the OTHER instance. Found by the design review.
+ */
+function _armAutopilotWithCockpit() {
+  if (!_scManual) {
+    if (_navComputerOpen) closeNavComputer();
+    _seedScPoseFromCameraIfIdle();
+    setScManual(true);
+    cameraController.setCameraMode(CameraMode.FLIGHT);
+    cameraController.bypassed = true;
+  }
+  _beginHandsOffTour();
+}
+
+/**
+ * ⭐ THE OTHER HALF: turn autopilot OFF and STAY in the cockpit.
+ *
+ * `stopFlythrough()` ends with `setScManual(false)` — it drops the whole regime
+ * to ORRERY. That is right for the ORRERY overlay's button (already there) and
+ * for the Z key, and it is exactly wrong for a button ON THE COCKPIT'S OWN NAV
+ * PANEL: the second press would eject the pilot from the ship they are sitting
+ * in and take the panel they just pressed off screen with it.
+ * AC-AUTOPILOT-BUTTON-TOGGLES asks for "the second stops it and the label
+ * returns" — the label can only return if there is still a cockpit to draw it.
+ *
+ * So the cockpit's OFF means what OFF means in a cockpit: the tour stops and the
+ * pilot has the stick. `_enterFlightInternal` is the game's own canonical
+ * hands-on HELM entry — the same door M-swap and R-engage use.
+ *
+ * ⚠ It clears the free-look latch, so the cursor goes and the zoomed panel stops
+ * taking clicks until F is pressed again. That follows from the pre-existing
+ * hand-routing rule (hands on the stick, no pointer), not from anything here.
+ */
+function _disarmAutopilotKeepingCockpit() {
+  const wasHelm = _scManual;
+  stopFlythrough();
+  if (wasHelm && !_scManual) _enterFlightInternal();
+}
+
 function _beginHandsOffTour() {
   if (!system) return;
   if (system.type && system.type !== 'star-system') {
@@ -6775,11 +6974,19 @@ function findClosestBody() {
   return closest;
 }
 
-/** Sync the nav computer's body tracking with current focus (if nav is open). */
+/**
+ * Sync body tracking with the current focus.
+ *
+ * ⚠ FOCUS ONLY — `_applyNavFocus` is `setCurrentBody` and nothing else, and this
+ * is the site that made the split necessary. Tab, 1-9 and a body click all land
+ * here; wiring the destructive arrival applier to them would empty `_localStars`
+ * and null `_selectedNavStar` every time the pilot changed focus, wiping a PRISM
+ * selection mid-drill. The cockpit's instance is unguarded by `_navComputerOpen`
+ * because it is ALWAYS live — it draws in its corner whether or not it is zoomed.
+ */
 function _syncNavBody() {
-  if (_navComputerOpen && _domNavComputer) {
-    _domNavComputer.setCurrentBody(focusIndex, focusMoonIndex);
-  }
+  if (_navComputerOpen) _applyNavFocus(_domNavComputer);
+  if (_cockpitNavComputer) _applyNavFocus(_cockpitNavComputer);
 }
 
 /**
@@ -9614,6 +9821,13 @@ function renderFrame(alpha) {
   // Fed the provider's own frame rather than a second read, so the four screens
   // and anything else reading the snapshot cannot disagree about the instant.
   if (_cockpitShouldRender()) {
+    // The on-glass AUTOPILOT label is a MIRROR (`_autopilotActive`), written
+    // only by `setAutopilotState` — and the overlay's one press-callback was
+    // the only writer, which is why increment 6's button reported `true` every
+    // press. The glass is always visible, so its mirror must track the real
+    // state every frame, not only when something remembers to push it. The
+    // setter is one assignment; this is free.
+    if (_cockpitNavComputer) _cockpitNavComputer.setAutopilotState(autoNav.isActive || _autopilotEnabled);
     _cockpitRig.update({
       snapshot: _cockpitSnapshotProvider.get(),
       nowMs: performance.now(),
@@ -9992,7 +10206,11 @@ window.addEventListener('keydown', (e) => {
     // so it outranks a deselect and outranks the DOM overlay, which cannot be
     // open at the same time anyway (the gate below would have blocked the zoom).
     if (_cockpitRig && _cockpitRig.mover && _cockpitRig.mover.zoomedRole) {
-      _cockpitRig.pointer.dismiss();
+      // NAV goes out through `closeNavComputer` so the retraction carries its
+      // sound AND dispatches any pending COMMIT — a bare `dismiss()` would drop
+      // a warp the pilot had already committed to. Anything else just retracts.
+      if (_cockpitNavZoomed()) closeNavComputer();
+      else _cockpitRig.pointer.dismiss();
       return;
     }
     if (_navComputerOpen) {
@@ -11296,7 +11514,7 @@ if (mobileControls) {
         btn.classList.remove('active');
       } else if (system) {
         idleTimer = 0;
-        startFlythrough();
+        _armAutopilotWithCockpit(); // AC-AUTOPILOT-ALWAYS-HAS-A-COCKPIT, path 2 of 4
         btn.classList.add('active');
       }
     } else if (action === 'prev') {
@@ -11340,7 +11558,7 @@ if (mobileControls) {
         btn.classList.remove('active');
       } else if (system) {
         idleTimer = 0;
-        startFlythrough();
+        _armAutopilotWithCockpit(); // AC-AUTOPILOT-ALWAYS-HAS-A-COCKPIT, path 3 of 4
         btn.classList.add('active');
       }
     } else if (action === 'gyro') {

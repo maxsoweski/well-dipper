@@ -148,7 +148,15 @@ describe('main.js hands the pointer to the cockpit router first', () => {
       const esc = at("if (e.code === 'Escape') {");
       const dismiss = at('_cockpitRig.pointer.dismiss();', esc);
       expect(dismiss).toBeLessThan(at('if (_navComputerOpen) {', esc));
-      expect(SRC.slice(dismiss - 200, dismiss)).toContain('mover.zoomedRole');
+      // Guarded on something actually being zoomed, or ESC would swallow the
+      // deselect and every overlay below it whenever nothing was at the eye.
+      const guard = at('_cockpitRig.mover.zoomedRole', esc);
+      expect(guard).toBeLessThan(dismiss);
+      // NAV leaves through closeNavComputer — a bare dismiss would retract the
+      // panel silently and drop a COMMIT the pilot had already pressed.
+      const navRoute = at('if (_cockpitNavZoomed()) closeNavComputer();', esc);
+      expect(navRoute).toBeGreaterThan(guard);
+      expect(navRoute).toBeLessThan(dismiss);
     });
 
     it('the probe reports the census, so a live check reads the receiver not the caller', () => {
