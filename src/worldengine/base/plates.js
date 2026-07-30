@@ -102,10 +102,79 @@ const EARTH_TIDAL_HEATING =
   (EARTH_ECC * EARTH_ECC * EARTH_STAR_MASS_EARTH * EARTH_STAR_MASS_EARTH
     * Math.pow(EARTH_RADIUS_EARTH, 5) / Math.pow(EARTH_ORBIT_RADIUS_EARTH, 5)) / IO_TIDAL_REF;
 
+// ── AC-PLATECOMP: plate count from INTERIOR STRUCTURE (the mantle-depth fraction) ──────────────
+// WHAT THE LITERATURE GIVES, AND WHAT IT DOES NOT. It gives the SHAPE and nothing else: a plate's
+// width is set in units of MANTLE DEPTH D by an aspect ratio that is a function of rheology alone
+// (Mallard+2016 Nature 535:140; Höink & Lenardic 2010 GJI 180:23), so the number of plates tiling a
+// sphere goes as N ∝ (R/D)², and D/R is mass-invariant at fixed composition because D ∝ M^0.28
+// against L ∝ M^0.28 (Valencia+2007 ApJ 670:L45). Bird 2003 G3 4:1027 writes the plate-size
+// distribution in STERADIANS, i.e. dimensionless — which is why there is deliberately NO radius term
+// here (settled by AC-PLATESCALE; see contract amendments[1]).
+//
+// ⚠ Γ IS ABSENT FROM THIS CODE ON PURPOSE, AND THAT IS THE HONESTY MECHANISM. The full relation
+// N = 4π(R/D)²/Γ² needs an aspect ratio Γ that NO source measures on any body but Earth. Rather than
+// hard-code a calibrated constant where a future reader could mistake it for a measurement, we ship
+// only the EARTH-ANCHORED RATIO — in which 1/Γ² cancels identically. The absolute normalization is
+// already fixed by DEFAULTS.PLATE_COUNT_MIN = 7, which IS the Earth calibration expressed in this
+// file's own units. So the law contributes its EXPONENT and nothing else.
+//   For the record, and reachable by nobody: fitting Γ to Earth gives ≈2.5617 (N = 9.3). Note that
+//   the often-quoted "N = 9.3 matches the 7-9 large plates observed" is NOT a check — Γ is fitted on
+//   Earth, so that comparison cannot fail; it restates the fit. And 9.3 is outside 7-9 anyway.
+//   Using N absolutely would also BREAK Earth byte-identity: round(9.3) = 9 ≠ 7 would trip the AC2
+//   guard's fourth conjunct below. The ratio form dissolves that; only Γ ≈ 2.95 would land 7.
+//
+// EARTH_CORE_RADIUS_FRACTION is an OBSERVED quantity (3480 km core / 6371 km mean radius), not a fit.
+// ⚠ It is a core RADIUS fraction, NOT a core MASS fraction — the two differ (Earth's CMF is ≈0.325)
+// and the relation N ∝ (R/D)² needs the RADIUS one. Plugging a CMF in here gives Earth N ≈ 4.2.
+// Presets author R_core/R directly as reviewable DATA; nothing in the shipped path inverts a CMF, so
+// no core-density calibration is needed either (that would have been a SECOND undeclared constant).
+export const EARTH_CORE_RADIUS_FRACTION = 0.546225;                          // 3480/6371, observed
+export const MANTLE_DEPTH_FRACTION_EARTH = 1 - EARTH_CORE_RADIUS_FRACTION;   // D/R = 0.453775
+// THE ONE NAMED CONSTANT — the whole feature's kill switch. Set to 0 and every body's factor becomes
+// exactly 1, i.e. the pre-AC-PLATECOMP composition-blind behaviour, with no other edit.
+export const PLATE_COUNT_MDF_EXP = -2;
+/**
+ * The CONTINUOUS plate-count target for a body whose mantle depth is `mantleDepthFraction` of its
+ * radius. Earth-anchored: at the Earth mantle-depth fraction this returns DEFAULTS.PLATE_COUNT_MIN
+ * EXACTLY (x/x = 1 on the identical double, then pow(1, k) = 1), which is what makes Earth
+ * byte-identical BY CONSTRUCTION rather than by decimal coincidence.
+ *
+ * ⚠ The registry audits THIS continuous value, never the rounded/clamped integer downstream —
+ * quantization alone destroys the measurement (measured: exponent -2.000 ± 1.3e-15 continuous vs
+ * -1.646 ± 0.125 on the rounded integer, which FAILS). Do not "simplify" the law to read
+ * PLATE_COUNT_MIN.
+ *
+ * DIRECTION, spelled out because it inverts easily: plate WIDTH is a fixed number of mantle depths, so
+ * a THINNER mantle gives NARROWER plates and therefore MORE of them — N ∝ mdf^-2. Big core ⇒ thin
+ * mantle ⇒ many plates; small core ⇒ thick mantle ⇒ few. (The AC's worked example runs the same way:
+ * "a low-core body at R_core/R = 0.30 gives 2.4× fewer plates", a low core being a thick mantle.)
+ *
+ * VALIDITY DOMAIN, declared rather than left to the clamp: N ∝ mdf^-2 diverges as mdf → 0 (a body
+ * whose core fills it). The aspect-ratio framing presumes a mantle thick enough to host convective
+ * cells at all, so a non-positive mantle depth is not a small-N case — it is outside the law. We
+ * THROW there rather than return NaN, because clamp(5, 14, NaN) is NaN, which slips past the AC2
+ * guard and yields a plateCount of NaN and an all-NaN U field with no error raised.
+ */
+export function plateCountTarget(mantleDepthFraction) {
+  if (!Number.isFinite(mantleDepthFraction) || mantleDepthFraction <= 0) {
+    throw new RangeError(
+      `plateCountTarget: mantleDepthFraction must be finite and > 0, got ${mantleDepthFraction}. `
+      + 'A non-positive mantle depth is outside this law\'s validity domain, not a small-N case.',
+    );
+  }
+  return DEFAULTS.PLATE_COUNT_MIN
+    * Math.pow(mantleDepthFraction / MANTLE_DEPTH_FRACTION_EARTH, PLATE_COUNT_MDF_EXP);
+}
+
 export const D_EARTH = Object.freeze({
   massGravity: 0.9,                  // D14 — Rocky surface gravity in g (massEarth 0.9 / radiusEarth² 1.0)
   volatileFraction: 0.15,           // D2  — Earth-like silicate volatile budget (Rocky preset value)
   tidalHeating: EARTH_TIDAL_HEATING, // D12 — derived ≈0.00174 (negligible; bottom of the tidal axis)
+  // AC-PLATECOMP anchor. Present so the existing `?? D_EARTH.x` fallback pattern extends to the new
+  // driver: any bundle omitting it (every preset but Rocky and Ocean) resolves to the anchor ⇒ factor
+  // exactly 1 ⇒ byte-identical. That is the feature's reversibility property — it is opt-in per
+  // preset, one authored literal at a time.
+  coreRadiusFraction: EARTH_CORE_RADIUS_FRACTION,
 });
 // NOTE: D16 age was DESCOPED from this increment (Max UAT 2026-06-28). A static age→continental-crust
 // nudge misrepresents age, which IS history/time — its real home is the epoch/host-editor model (#6,
@@ -131,6 +200,13 @@ export function driversToTune(drivers) {
   const g = (drivers.massGravity ?? D_EARTH.massGravity);
   const vf = (drivers.volatileFraction ?? D_EARTH.volatileFraction);
   const th = (drivers.tidalHeating ?? D_EARTH.tidalHeating);
+  // AC-PLATECOMP: a FLAT key, deliberately. driversToTune must stay blind to drivers.condition —
+  // tests/worldengine-base-condition-vector.test.js:199 fences that for all 18 presets, and the
+  // flat/nested split is the documented byte-safety invariant. The cost, owned rather than hidden:
+  // the value is hand-mirrored in three places (the preset's composition object, body-drivers.js's
+  // neutral bundle, and the lab's explicit buildBodyDrivers literal). A tripwire test pins the
+  // preset copy against this anchor so the pair cannot silently drift apart.
+  const crf = (drivers.coreRadiusFraction ?? D_EARTH.coreRadiusFraction);
 
   // 1. gravity → UPLIFT_GAIN, RIFT_GAIN (multiplicative; g/g0 = 1 ⇒ factor 1 ⇒ default).
   const g0 = D_EARTH.massGravity;
@@ -145,7 +221,12 @@ export function driversToTune(drivers) {
   const th0 = clamp01(D_EARTH.tidalHeating);
   const thp = clamp01(th);
   const countFactor = 1 + 0.8 * (thp - th0);
-  const PLATE_COUNT_MIN = clamp(5, 14, Math.round(DEFAULTS.PLATE_COUNT_MIN * countFactor));
+  // 5. composition → PLATE_COUNT_MIN (AC-PLATECOMP). Multiplicative and INDEPENDENT of the tidal
+  // term above: each factor is exactly 1 at its own anchor, so the two stay separately auditable
+  // rather than becoming one fitted blob. compFactor = (mdf/mdf_Earth)^-2, Γ-free (see the block
+  // above D_EARTH).
+  const compFactor = plateCountTarget(1 - crf) / DEFAULTS.PLATE_COUNT_MIN;
+  const PLATE_COUNT_MIN = clamp(5, 14, Math.round(DEFAULTS.PLATE_COUNT_MIN * countFactor * compFactor));
 
   // AC2 identity guard: if EVERY computed override equals its DEFAULT (the Earth point), return null so
   // the writer's ternary takes the untouched DEFAULTS branch ⇒ byte-identical Earth.

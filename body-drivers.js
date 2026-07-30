@@ -21,5 +21,13 @@ export function presetDriverDefaults(u, fp){
 // untouched fields (thermalState left undefined ⇒ magmaThermal's raw-tidal fallback in the writer).
 export function buildNeutralBodyDrivers(u, fp) {
   const d = presetDriverDefaults(u, fp);
-  return { massGravity: d.gravity, volatileFraction: d.volatiles, tidalHeating: d.tidal, thermalState: undefined };
+  return {
+    massGravity: d.gravity, volatileFraction: d.volatiles, tidalHeating: d.tidal, thermalState: undefined,
+    // AC-PLATECOMP: the FLAT mirror of the preset's authored R_core/R. Flat because driversToTune is
+    // fenced from reading drivers.condition (tests/worldengine-base-condition-vector.test.js:199).
+    // `undefined` when the preset does not author the field ⇒ driversToTune's `?? D_EARTH` fallback
+    // resolves to the anchor ⇒ compFactor exactly 1 ⇒ that preset is byte-identical.
+    coreRadiusFraction: (fp.composition && fp.composition.coreRadiusFraction != null)
+      ? fp.composition.coreRadiusFraction : undefined,
+  };
 }

@@ -26,12 +26,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-import { computeAllHashes, SEEDS, TARGET_N, LLOYD, hashCarrier } from './fixtures/v2-0-carrier-golden.mjs';
+import { computeAllHashes, SEEDS, TARGET_N, LLOYD, hashCarrier, buildBundle } from './fixtures/v2-0-carrier-golden.mjs';
 import { PRESET_ARCHETYPE } from '../driver-presets.js';
 import { D_EARTH, driversToTune } from '../src/worldengine/base/plates.js';
 import { MAGMA_REF, magmaDriversToTune } from '../src/worldengine/base/magmatism.js';
 import { writeGrainSphere, writeHeightSphere } from '../src/worldengine/base/tectonic.js';
-import { buildIrregularSphere, DEFAULT_GRAIN_DRIVERS } from '../planet-lod-rivers.js';
+import { buildIrregularSphere, DEFAULT_GRAIN_DRIVERS, writeBodyRelief } from '../planet-lod-rivers.js';
 import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -39,6 +39,29 @@ const GOLDEN = JSON.parse(readFileSync(path.resolve(__dirname, 'fixtures', 'v2-0
 
 // The ONE preset whose golden rows moved (the adjudicated V2-3 shell→despun reroute).
 const FROZEN = 'Frozen (airless)';
+
+// AC-PLATECOMP CARVE-OUT (Max-accepted 2026-07-29 "go with b, your rec"; contract amendments[3]).
+// The composition→plate-count law moves 'Ocean (temperate)' — PLATE_COUNT_MIN 7 → 6 — and it is the
+// ONLY preset it moves: of the 18 presets, only Rocky and Ocean reach the plate writer at all, and
+// Rocky IS the byte-identity anchor (its authored R_core/R equals EARTH_CORE_RADIUS_FRACTION, so its
+// factor is exactly 1). So this is a ONE-ROW adjudicated divergence.
+const OCEAN = 'Ocean (temperate)';
+
+// anchoredRef — Ocean's carrier hash with the ONE new driver forced back to the Earth anchor, and
+// nothing else changed. WHY THIS AND NOT A RE-CAPTURE: Frozen's carve-out can assert equality against
+// an INDEPENDENT writer (despunRef) because its reroute changed WHICH writer runs. Ocean runs the same
+// plate writer with one tune field different, so it has no independent reference — asserting equality
+// against a fresh run of the code under test would be CIRCULAR, and re-capturing the golden is
+// forbidden (the committed JSON is immutable, see the header). Forcing coreRadiusFraction to the anchor
+// must reproduce the IMMUTABLE golden EXACTLY, which proves the new field is the SOLE cause of the
+// divergence — no other byte moved. That is a non-circular equality half sourced from the fixture.
+function anchoredRef(name, seed) {
+  const bundle = buildBundle(name, seed);
+  bundle.bodyDrivers = { ...bundle.bodyDrivers, coreRadiusFraction: D_EARTH.coreRadiusFraction };
+  const c = makeSphereField(buildIrregularSphere(TARGET_N, LLOYD));
+  writeBodyRelief(c, bundle);
+  return hashCarrier(c);
+}
 
 // despunRef — the DESPUN WRITER'S fresh output at the same seed on a fresh carrier: the EXACT two lines the
 // flipped despun branch runs for Frozen (writeGrainSphere + writeHeightSphere, DEFAULT_GRAIN_DRIVERS,
@@ -75,6 +98,20 @@ describe('V2-0 AC1 — carrier byte-identity vs the captured goldens', () => {
         // never silently matched — if this ever equals the old golden, the flip has been undone).
         it(`carrier hash MOVED off the captured shell golden: "${name}" @ seed ${seed}`, () => {
           expect(recomputed[name][String(seed)]).not.toBe(GOLDEN.hashes[name][String(seed)]);
+        });
+      } else if (name === OCEAN) {
+        // AC-PLATECOMP carve-out, two-sided like Frozen's but with a fixture-sourced reference.
+        // (1) It really MOVED off the captured golden — the composition law is asserted AS a
+        //     divergence, never silently matched. If this ever equals the golden again, either the
+        //     law went inert or Ocean's authored R_core/R drifted to the anchor.
+        it(`carrier hash MOVED off the captured golden (adjudicated AC-PLATECOMP): "${name}" @ seed ${seed}`, () => {
+          expect(recomputed[name][String(seed)]).not.toBe(GOLDEN.hashes[name][String(seed)]);
+        });
+        // (2) …and the new driver is the SOLE cause: pin it back to the Earth anchor and the
+        //     IMMUTABLE golden is reproduced byte-for-byte. This is what rules out the change having
+        //     leaked into anything other than the plate count.
+        it(`anchoring coreRadiusFraction restores the captured golden EXACTLY: "${name}" @ seed ${seed}`, () => {
+          expect(anchoredRef(name, seed)).toBe(GOLDEN.hashes[name][String(seed)]);
         });
       } else {
         it(`carrier hash unchanged: "${name}" @ seed ${seed}`, () => {

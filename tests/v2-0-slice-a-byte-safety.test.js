@@ -43,9 +43,25 @@ describe('V2-0 Slice A — DRIVER_PRESETS extraction is value-preserving', () =>
     // extraction-pin semantics ("the ad156cc 17 are unmutated") are preserved WITHOUT re-capturing the
     // git-diff-empty fixture by asserting each of the 17 snapshot keys per-key — the Mars/Hot-Jupiter-join
     // precedent (a code-level assertion edit, not a golden re-capture).
+    // AC-PLATECOMP (2026-07-29): Rocky and Ocean each gained ONE authored composition key,
+    // `coreRadiusFraction` — the opt-in interior-structure datum. Same treatment as the Mars/Hot-Jupiter
+    // and Moon/Mercury joins above: a code-level assertion edit, NOT a re-capture of the git-diff-empty
+    // fixture. The pin is made STRICTER rather than looser — strip the one adjudicated key and the
+    // descriptor must still deep-equal the frozen snapshot, which proves nothing ELSE moved, and the
+    // added value is then asserted explicitly below.
+    const PLATECOMP_ADDED = { 'Rocky (Earthlike)': 0.546225, 'Ocean (temperate)': 0.506 };
     expect(Object.keys(DP_SNAPSHOT).length).toBe(17);
     for (const key of Object.keys(DP_SNAPSHOT)) {
-      expect(DRIVER_PRESETS[key], key).toEqual(DP_SNAPSHOT[key]);
+      const live = DRIVER_PRESETS[key];
+      if (key in PLATECOMP_ADDED) {
+        const { coreRadiusFraction, ...restComposition } = live.composition;
+        expect(coreRadiusFraction, `${key} authored R_core/R`).toBe(PLATECOMP_ADDED[key]);
+        expect({ ...live, composition: restComposition }, key).toEqual(DP_SNAPSHOT[key]);
+      } else {
+        expect(live, key).toEqual(DP_SNAPSHOT[key]);
+        // every other preset must NOT have opted in — that is what keeps them byte-identical
+        expect(live.composition?.coreRadiusFraction, `${key} must not author R_core/R`).toBeUndefined();
+      }
     }
   });
 });
@@ -78,9 +94,20 @@ describe('V2-0 Slice A — buildNeutralBodyDrivers forward-drift guard (§1 A(3)
       const out = buildNeutralBodyDrivers(deriveUniforms(fp, 1.0), fp);
       // thermalState is a hardcoded undefined in the neutral path (JSON can't hold it — re-asserted here).
       expect(out.thermalState).toBeUndefined();
-      // toEqual ignores the undefined thermalState property, so it matches the 3-field snapshot;
-      // a future non-undefined thermalState (or any drift in the numeric fields) trips this.
-      expect(out).toEqual(NEUTRAL_SNAPSHOT[name]);
+      // AC-PLATECOMP: the neutral bundle gained a flat `coreRadiusFraction` mirror. It is `undefined`
+      // for every preset that does not author the field, and toEqual IGNORES undefined properties — so
+      // 13 of the 15 rows below still match the 3-field snapshot untouched. That is not an accident of
+      // the matcher; it IS the inertness property (no authored field ⇒ driversToTune's `?? D_EARTH`
+      // fallback ⇒ factor exactly 1 ⇒ byte-identical), and it is asserted directly here.
+      const AUTHORED = { 'Rocky (Earthlike)': 0.546225, 'Ocean (temperate)': 0.506 };
+      if (name in AUTHORED) {
+        expect(out.coreRadiusFraction).toBe(AUTHORED[name]);
+      } else {
+        expect(out.coreRadiusFraction, `${name} must stay composition-inert`).toBeUndefined();
+      }
+      // Strip the one new key and the snapshot must still match exactly ⇒ nothing else drifted.
+      const { coreRadiusFraction, ...rest } = out;
+      expect(rest).toEqual(NEUTRAL_SNAPSHOT[name]);
     });
   }
 });

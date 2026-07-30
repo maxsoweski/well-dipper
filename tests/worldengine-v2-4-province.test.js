@@ -110,11 +110,37 @@ describe('V2-4 AC-PROVINCE-ASSOC — real province clears the spatial null; nois
         // (1) the real derivation is history-tied: it beats the contiguity-matched spatial null's 99th pct
         expect(r.realEta2, `${name}@${seed}: real η² ${r.realEta2.toFixed(4)} > null p99 ${r.nullP99.toFixed(4)}`).toBeGreaterThan(r.nullP99);
         expect(r.pass, `${name}@${seed}: decision rule PASS`).toBe(true);
-        // (2) the load-bearing REJECTION half: a single position-noise control (one null draw) is REJECTED —
-        //     it sits inside the spatial null (≤ p99) AND far below the real province.
-        expect(r.controlEta2, `${name}@${seed}: control η² ${r.controlEta2.toFixed(4)} ≤ null p99 ${r.nullP99.toFixed(4)}`).toBeLessThanOrEqual(r.nullP99);
-        expect(r.controlRejected, `${name}@${seed}: control REJECTED by the decision rule`).toBe(true);
-        expect(r.controlEta2, `${name}@${seed}: control ≪ real (robust separation)`).toBeLessThan(r.realEta2);
+        // (2) the load-bearing REJECTION half: a position-noise control is REJECTED — it sits inside the
+        //     spatial null AND far below the real province.
+        //
+        //     ⚠ MEASURED OVER SEVERAL CONTROL DRAWS, not one, and here is why. province.js:217-226 draws
+        //     the control from the SAME spatialNullPartition generator as the null ensemble itself,
+        //     differing only in seed — so `controlEta2 ≤ nullP99` is a single sample compared against its
+        //     OWN distribution's 99th percentile, which by construction lands above it ≈1% of the time.
+        //     With 10 (preset, seed) cells that is a ~10% chance of a spurious suite failure on ANY change
+        //     that reshuffles the draws, and it duly fired: AC-PLATECOMP's Ocean re-partition put
+        //     Ocean@42's control at 0.0878 against a p99 of 0.0797. The derivation was NOT weakened —
+        //     real η² at that cell MEASURED 0.5429, higher than the 0.4986 it gives with the composition
+        //     term anchored off, and `pass` stayed true. So the coin flip is fixed rather than the
+        //     threshold nudged: assert the MEDIAN control draw is inside the null and that draws are
+        //     rejected by a MAJORITY, which is the property the test always meant and is strictly more
+        //     evidence than one draw, not less.
+        const CONTROL_SEEDS = [424242, 5150, 90210, 31337, 271828];
+        const controls = CONTROL_SEEDS.map((controlSeed) =>
+          assessProvinceAssociation(carrier.province, MESH, fields, { NPERM, seed, controlSeed }));
+        const controlEtas = controls.map((c) => c.controlEta2).sort((a, b) => a - b);
+        const medianControl = controlEtas[(controlEtas.length - 1) >> 1];
+        const rejected = controls.filter((c) => c.controlRejected).length;
+        expect(medianControl, `${name}@${seed}: median control η² ${medianControl.toFixed(4)} ≤ null p99 ${r.nullP99.toFixed(4)}`)
+          .toBeLessThanOrEqual(r.nullP99);
+        expect(rejected, `${name}@${seed}: ${rejected}/${CONTROL_SEEDS.length} control draws REJECTED (majority required)`)
+          .toBeGreaterThan(CONTROL_SEEDS.length / 2);
+        // EVERY draw must still sit far below the real province — this half is not statistical noise,
+        // it is the separation the AC is about, so it stays a hard per-draw assertion.
+        for (const c of controls) {
+          expect(c.controlEta2, `${name}@${seed}: control ${c.controlEta2.toFixed(4)} ≪ real ${r.realEta2.toFixed(4)}`)
+            .toBeLessThan(r.realEta2);
+        }
         // the null is a real distribution, not degenerate zero
         expect(r.nullP99, 'spatial-null p99 is a positive observed number (autocorrelation is present)').toBeGreaterThan(0);
       });

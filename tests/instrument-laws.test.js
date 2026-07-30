@@ -80,6 +80,26 @@ describe('AC-LAWS — every registered law is checked against its stated exponen
     expect(by['relief-envelope-vs-gravity-calibrated'].measuredExponent).toBeCloseTo(-0.58, 6);
     expect(by['relief-envelope-vs-gravity-derived'].measuredExponent).toBeCloseTo(-1.678235294117647, 6);
     expect(by['relief-absolute-vs-radius'].measuredExponent).toBeCloseTo(-1.853, 6);
+    // AC-PLATECOMP. Hand-typed -2, deliberately NOT PLATE_COUNT_MDF_EXP — same discipline as above.
+    expect(by['plate-count-vs-mantle-depth-fraction'].measuredExponent).toBeCloseTo(-2, 6);
+    // The fit must be essentially exact: the law is an exact power law in the mantle-depth fraction, so
+    // a materially non-zero SE means the entry has started measuring something quantized or noisy —
+    // measuring the ROUNDED plate count instead of the continuous target gives -1.646 ± 0.125, which
+    // FAILS. This assertion is what stops a future "simplification" from turning the guard into a
+    // coin flip while still looking green.
+    expect(by['plate-count-vs-mantle-depth-fraction'].measuredSE).toBeLessThan(1e-9);
+    expect(by['plate-count-vs-mantle-depth-fraction'].r2).toBeCloseTo(1, 9);
+  });
+
+  it('AC-PLATECOMP: the composition law is separable from the composition-BLIND regression', () => {
+    // nullValue 0 is legitimate here, unlike the gravity entries: exponent 0 IS the shipped
+    // pre-AC-PLATECOMP behaviour (plate count set by seed alone), so it is a REACHABLE regression
+    // rather than an unphysical straw man. Nobody may "fix" a future failure by widening the null.
+    const law = LAW_REGISTRY.find((l) => l.id === 'plate-count-vs-mantle-depth-fraction');
+    expect(law.claimedExponent).toBe(-2);
+    expect(law.nullValue).toBe(0);
+    expect(law.nullMeaning).toMatch(/composition-blind/);
+    expect(law.driver).toBe('mantleDepthFraction');   // NOT the core fraction — N is not a power law in f
   });
 
   it('records that crater count is g-INDEPENDENT — the removed g^0.34 factor is not a live law', () => {

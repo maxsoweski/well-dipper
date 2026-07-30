@@ -1,0 +1,67 @@
+{
+  "_meta": {
+    "what": "AC-PLATECOMP enumerated before/after plate counts. Max accepted a visible change to non-Earth plate-path presets and is owed the specific list rather than a general warning (contract AC-PLATECOMP verifyVia).",
+    "ruledBy": "Max, 2026-07-29 — 'go with b, your rec'",
+    "before": "coreRadiusFraction forced to the Earth anchor (EARTH_CORE_RADIUS_FRACTION) => composition factor exactly 1 => the pre-AC-PLATECOMP behaviour.",
+    "after": "each preset's authored composition.coreRadiusFraction (absent => anchor => unchanged).",
+    "scopeFinding": "Only TWO of the 18 presets reach the plate writer at all, and Rocky IS the byte-identity anchor -- so this list has exactly ONE moved row. Independently measured over 18 presets x 320 radii x 3 seeds during scoping: 0/960 cells for the other 16 presets. The AC's phrase 'non-Earth rocky presets' (plural) overstated the blast radius by six.",
+    "harness": "TARGET_N 700, LLOYD 2, the production-shaped condition-bearing bundle. Recomputed and asserted by tests/worldengine-base-plate-composition.test.js so this file can never silently drift from the code.",
+    "seeds": [
+      1,
+      2,
+      3,
+      7,
+      42
+    ]
+  },
+  "platePathPresets": [
+    "Rocky (Earthlike)",
+    "Ocean (temperate)"
+  ],
+  "rows": {
+    "Rocky (Earthlike)": {
+      "authoredCoreRadiusFraction": 0.546225,
+      "coreRadiusFractionUsed": 0.546225,
+      "mantleDepthFraction": 0.45377500000000004,
+      "N_continuous": 7,
+      "plateCountMinBefore": 7,
+      "plateCountMinAfter": 7,
+      "countsBefore": [
+        10,
+        11,
+        12,
+        7,
+        9
+      ],
+      "countsAfter": [
+        10,
+        11,
+        12,
+        7,
+        9
+      ]
+    },
+    "Ocean (temperate)": {
+      "authoredCoreRadiusFraction": 0.506,
+      "coreRadiusFractionUsed": 0.506,
+      "mantleDepthFraction": 0.494,
+      "N_continuous": 5.906432880292253,
+      "plateCountMinBefore": 7,
+      "plateCountMinAfter": 6,
+      "countsBefore": [
+        10,
+        11,
+        12,
+        7,
+        9
+      ],
+      "countsAfter": [
+        9,
+        10,
+        11,
+        6,
+        8
+      ]
+    }
+  }
+}

@@ -2892,6 +2892,11 @@
         massGravity:      _cond.surfaceGravity,
         volatileFraction: useOv('volatiles') ? driverOv.volatiles : base.volatileFraction,
         tidalHeating:     useOv('tidal')     ? driverOv.tidal     : base.tidalHeating,
+        // AC-PLATECOMP: MANDATORY passthrough. This return is an EXPLICIT literal — it does NOT spread
+        // `base` — so omitting this line would move the headless goldens while leaving the live lab on
+        // the old plate count: exactly the lab/headless drift body-drivers.js exists to prevent. No
+        // slider drives composition, so there is no useOv() branch here.
+        coreRadiusFraction: base.coreRadiusFraction,
         // Inc.4-M volcanic thermal drive: ONLY when the thermal slider is dragged (override) do we inject a
         // normalized thermalState — otherwise base.thermalState (undefined) ⇒ magmaThermal falls back to the raw
         // tidalHeating path (the real preset render). Inert on the plate path (driversToTune ignores unknown fields).

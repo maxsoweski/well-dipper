@@ -33,6 +33,7 @@ import {
 } from '../base/bombardment.js';
 import { reliefEnvelope, Q_RELIEF, Q_RELIEF_DERIVED, RELIEF_FLOOR, RELIEF_CEIL } from '../../../planet-lod-lab-core.js';
 import { deriveConditionVector, GRAV_R_EXP_SUB, GRAV_R_EXP_SUPER } from '../../../body-condition-vector.js';
+import { plateCountTarget } from '../base/plates.js';
 import { fitPowerLaw, lawVerdict, DEFAULT_Z } from './stats.js';
 
 /**
@@ -262,11 +263,45 @@ export const LAW_REGISTRY = [
     nullMeaning: 'the retired constant-density law g = g_c·(R/R_c)^1 (M ∝ R³, density held fixed)',
     measure: (c, deps) => deps.deriveConditionVector(ROCKY_FP, null, c.radiusEarth).surfaceGravity,
   },
+  {
+    id: 'plate-count-vs-mantle-depth-fraction',
+    claim: 'plate count scales as (D/R)^-2 in the MANTLE-DEPTH FRACTION — plate width is a fixed '
+         + 'number of mantle depths (Mallard+2016 Nature 535:140; Höink & Lenardic 2010 GJI 180:23), '
+         + 'so N tiling a sphere goes as (R/D)². Composition, not size: D/R is mass-invariant at '
+         + 'fixed composition (Valencia+2007 ApJ 670:L45) and Bird 2003 G3 4:1027 writes plate size '
+         + 'in steradians, hence dimensionless — there is deliberately NO radius term (AC-PLATESCALE). '
+         + 'The shipped form is an EARTH-ANCHORED RATIO, so the aspect ratio Γ cancels identically and '
+         + 'appears nowhere in the code; the absolute normalization is DEFAULTS.PLATE_COUNT_MIN = 7, '
+         + 'which IS the Earth calibration. This entry therefore audits the EXPONENT only.',
+    source: 'src/worldengine/base/plates.js — plateCountTarget(mdf) = PLATE_COUNT_MIN · '
+          + '(mdf/MANTLE_DEPTH_FRACTION_EARTH)^PLATE_COUNT_MDF_EXP',
+    // REPARAMETERIZED to the mantle-depth fraction ON PURPOSE. N is NOT a power law in the core radius
+    // fraction f: fitting against f gives an exponent that slides from ~0.84 to ~2.24 depending only on
+    // the sweep window, with an r² high enough (>0.93) to look convincing. fitPowerLaw cannot express
+    // that form, and a plausible fit of a non-power-law is exactly the failure this registry exists to
+    // prevent. In mdf the relation is an exact power law.
+    driver: 'mantleDepthFraction',
+    // Spans the declared validity band, straddling Earth's 0.453775 without landing on it.
+    values: [0.32, 0.36, 0.40, 0.4538, 0.50, 0.56, 0.62],
+    // ⚠ HAND-TYPED, deliberately NOT imported from PLATE_COUNT_MDF_EXP. A guard that reads its
+    // expectation out of the constant it guards cannot fail. Same discipline as the two gravity
+    // entries above, which spell their exponents as literals rather than importing them.
+    claimedExponent: -2,
+    // Legitimately 0 here, unlike the gravity entries: exponent 0 IS the shipped pre-AC-PLATECOMP
+    // behaviour (count set by seed alone), so it is a reachable REGRESSION, not an unphysical straw man.
+    nullValue: 0,
+    nullMeaning: 'the composition-blind plate count shipped before AC-PLATECOMP (count set by seed alone)',
+    // ⚠ Measures the CONTINUOUS target, never the rounded/clamped integer that reaches the writer.
+    // Quantization alone destroys the guard: measured -2.000 ± 1.3e-15 (r² = 1) continuous, versus
+    // -1.646 ± 0.125 on round(clamp(...)) over the same window, which FAILS. Do not "simplify" this
+    // to read PLATE_COUNT_MIN.
+    measure: (c, deps) => deps.plateCountTarget(c.mantleDepthFraction),
+  },
 ];
 
 /** The real implementations. The positive control replaces one of these to plant a defect. */
 export function defaultDeps() {
-  return { craterSchedule, reliefEnvelope, isImpactSurface, deriveConditionVector };
+  return { craterSchedule, reliefEnvelope, isImpactSurface, deriveConditionVector, plateCountTarget };
 }
 
 /**
