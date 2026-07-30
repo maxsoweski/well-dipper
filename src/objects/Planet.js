@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { assignBodyName } from '../util/scene-naming.js';
+import {
+  HEIGHT_NOISE_GLSL,
+  HEIGHT_NOISE_UNIFORMS_GLSL,
+} from '../worldengine/shaders/heightNoise.glsl.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fragment shader split into HEADER + per-category BODY + FOOTER.
@@ -23,6 +27,22 @@ uniform vec3 uLavaCrust;       // the same curve sampled at the chilled skin —
 uniform vec3 accentColor;
 uniform float noiseScale;
 uniform float noiseDetail;
+// ── World-engine relief (V2-10 port slice 3, first increment) ──
+// The base surface term on the land path moves from a 2-octave simplex sum to the lab's
+// analytic-derivative FBM. uReliefMix is the A/B dial and the safety valve: at 0.0 every land
+// body renders byte-identically to slice 2, which is what makes the negative control a proof
+// rather than a screenshot. uReliefGain rescales fbmd onto the OLD term's spread so the
+// land/sea threshold does not move (pattern feeds height = pattern*0.5+0.5 against a fixed
+// seaLevel — an unmatched spread would silently drown or beach every continent).
+uniform float uReliefMix;        // 0 = legacy simplex base, 1 = analytic fbmd base
+uniform float uReliefOctaves;    // fbmd octave count; the game pays this on EVERY planet at once
+uniform float uReliefGain;       // fbmd -> legacy spread match, for the default/rocky/ocean base
+uniform float uReliefGainCont;   // fbmd -> legacy spread match, for the terrestrial continent base
+// Matching the VALUE spread does not match the GRADIENT spread — that also depends on the
+// frequency content, which fbmd and the legacy 4-octave stack do not share. So the relief
+// normal carries its own measured constant rather than inheriting uReliefGain.
+uniform float uReliefNormalGain;
+${HEIGHT_NOISE_UNIFORMS_GLSL}
 uniform vec3 lightDir;
 uniform vec3 lightDir2;
 uniform vec3 starColor1;
@@ -206,6 +226,53 @@ vec3 applyAurora(vec3 color, vec3 pos, float pRadius, vec3 lDir, float diff) {
   auroraFinal.r += hueShift;
   auroraFinal.g -= hueShift * 0.5;
   return color + auroraFinal * auroraMask * 0.6;
+}
+
+// ── Analytic-derivative height noise, transcribed from the world-engine lab ──
+// hash3 / noised / fbmd, byte-identical to planet-lod-height.glsl.js and held that way by
+// tests/height-noise-transcription.test.js. fbmd returns vec4(height, gradient.xyz).
+${HEIGHT_NOISE_GLSL}
+
+// The land path computes its base relief ONCE per fragment and both consumers read it here:
+// getSurfacePattern takes .x for colour banding, the normal path takes .yzw for shading.
+// Held RAW — each consumer applies its own measured gain, because the value spread, the
+// continent spread and the gradient spread are three different calibrations and folding them
+// into one constant would make none of them measurable. Zero on shader variants that never
+// call fbmd, which is why the normal path gates on uReliefMix and not on this being non-zero.
+vec4 gReliefD = vec4(0.0);
+
+// ── Relief normal from fbmd's ANALYTIC gradient ──
+// The legacy finite-difference path below pays 3 full computeHeight() evaluations — 12 snoise
+// calls — to APPROXIMATE this gradient. fbmd already accumulated the exact one, chain-ruled
+// per octave, so the land path gets a better normal for less work.
+// Same construction as the finite-difference version: both remove the gradient's tangential
+// component from N. The old one builds an explicit T/B frame and takes two directional
+// derivatives; projecting out the normal component is that same operation with no frame to
+// build, because T and B span exactly the plane being projected onto.
+// ⚠ The gradient is divided by the base frequency, and that division is load-bearing.
+// fbmd's gradient is d(height)/d(position), so it scales LINEARLY with frequency — and this
+// game's noiseScale spans ~100x (generated bodies run 1.5-5.0; hand-authored KnownSystems
+// bodies run 15-332 against a tiny object radius). Feeding the raw gradient through the
+// legacy 0.025 constant deflects the normal 64deg on Ceres against legacy's 17deg: clamped,
+// harsh, and wrong. Dividing by the base frequency makes the term a dimensionless SLOPE, which
+// is what a normal perturbation actually wants, and one constant then fits every body.
+//
+// Why legacy hid this: perturbNormalFromNoise finite-differences with a fixed eps = 0.01 in
+// OBJECT space, and Ceres' whole object radius is 0.00315. The step is larger than the planet,
+// so legacy's "gradient" on those bodies is decorrelated noise, not slope. Its 17deg is an
+// undersampling artifact. This path does not reproduce it — see the register.
+vec3 perturbNormalAnalytic(vec3 N, vec3 grad, float strength) {
+  float baseFreq = uNoiseScale * 0.3 * uDispDomainScale;   // fbmd's octave-0 frequency
+  vec3 gt = (grad - N * dot(grad, N)) / max(baseFreq, 1e-6);
+  float scale = strength * 0.025 * uReliefNormalGain;
+  vec3 perturbed = normalize(N - gt * scale);
+  // Same 60deg clamp as the legacy path: a normal that flips away from the light reads as a
+  // pure black patch, which is worse than under-shaded relief.
+  float deviation = dot(perturbed, N);
+  if (deviation < 0.5) {
+    perturbed = normalize(mix(perturbed, N, 0.5));
+  }
+  return perturbed;
 }
 
 // ── Heightmap normal perturbation from procedural noise ──
@@ -430,8 +497,26 @@ void main() {
 // ─────────────────────────────────────────────────────────────────────────────
 const ROCKY_BODY = /* glsl */ `
 float getSurfacePattern(vec3 pos) {
-  float n = snoise(pos * noiseScale);
-  n += snoise(pos * noiseScale * 2.0) * noiseDetail * 0.5;
+  // ── Slice 3: the analytic-derivative base, computed ONCE for both consumers ──
+  // Deliberately does NOT replace this function. Each per-type branch below carries real
+  // character — lava ridging, ice cracking, continents, venus banding, carbon facets — and
+  // flattening them into one lab-style combiner chain would be a large uncommanded visual
+  // regression. Slice 3's first increment swaps only what each branch uses as its BASE.
+  // Both sides are gated on uReliefMix rather than blended unconditionally. The branch is on a
+  // UNIFORM, so it is perfectly coherent across the draw and costs nothing on the GPU — and it
+  // is what makes the A/B honest: at mix 0 the shader pays the legacy cost and NOT fbmd's, at
+  // mix 1 it pays fbmd's and not the legacy stack's. Blending would have had every planet pay
+  // for both fields forever and would have compared new+old against new+old.
+  gReliefD = (uReliefMix > 0.001) ? fbmd(pos, uReliefOctaves, 0.0) : vec4(0.0);
+
+  float n;
+  if (uReliefMix >= 0.999) {
+    n = gReliefD.x * uReliefGain;
+  } else {
+    float nOld = snoise(pos * noiseScale);
+    nOld += snoise(pos * noiseScale * 2.0) * noiseDetail * 0.5;
+    n = mix(nOld, gReliefD.x * uReliefGain, uReliefMix);
+  }
 
   if (planetType == 3) {
     // Lava: sharp glowing cracks
@@ -443,11 +528,22 @@ float getSurfacePattern(vec3 pos) {
     cracks = pow(cracks, 4.0);
     n = n * 0.3 + 0.5 + cracks * 0.3;
   } else if (planetType == 5) {
-    // Terrestrial: continent-like shapes with ragged coastlines
-    float continent = snoise(pos * noiseScale * 0.7);
-    continent += snoise(pos * noiseScale * 1.5) * 0.3;
-    continent += snoise(pos * noiseScale * 3.0) * 0.15;
-    continent += snoise(pos * noiseScale * 6.0) * 0.08;
+    // Terrestrial: continent-like shapes with ragged coastlines.
+    // This 4-octave stack IS terrestrial's base — it overwrites n entirely — so it is what
+    // slice 3 has to replace here. Swapping only the shared n above would leave every
+    // terrestrial world, the one type where sea level is actually visible, on legacy relief.
+    // Its own gain: this stack is wider than the 2-octave default base, and the sea-level
+    // threshold sits directly on it, so an unmatched spread drowns or beaches the continents.
+    float continent;
+    if (uReliefMix >= 0.999) {
+      continent = gReliefD.x * uReliefGainCont;
+    } else {
+      float cOld = snoise(pos * noiseScale * 0.7);
+      cOld += snoise(pos * noiseScale * 1.5) * 0.3;
+      cOld += snoise(pos * noiseScale * 3.0) * 0.15;
+      cOld += snoise(pos * noiseScale * 6.0) * 0.08;
+      continent = mix(cOld, gReliefD.x * uReliefGainCont, uReliefMix);
+    }
     n = continent;
   } else if (planetType == 8) {
     // Venus: very subtle, slow-moving banding beneath thick clouds
@@ -598,9 +694,18 @@ void main() {
   if (planetType == 8) perturbStrength = 0.0;   // venus: hidden by thick clouds
   // Water is flat from space — only perturb land areas
   perturbStrength *= terrainLandMask;
-  vec3 shadingNormal = perturbStrength > 0.001
-    ? perturbNormalFromNoise(vNormal, vPosition, perturbStrength)
-    : vNormal;
+  // Slice 3: on the land path the relief normal comes from fbmd's analytic gradient, already
+  // accumulated by getSurfacePattern. The legacy finite-difference call stays reachable at
+  // uReliefMix 0 — that is the negative control, and it is also the fallback if a body ever
+  // renders this variant without having run the fbmd base.
+  vec3 shadingNormal;
+  if (perturbStrength <= 0.001) {
+    shadingNormal = vNormal;
+  } else if (uReliefMix > 0.001) {
+    shadingNormal = perturbNormalAnalytic(vNormal, gReliefD.yzw, perturbStrength);
+  } else {
+    shadingNormal = perturbNormalFromNoise(vNormal, vPosition, perturbStrength);
+  }
 
   // ── Dual-star Lighting with Shadows ──
   float diff1 = max(dot(shadingNormal, lightDir), 0.0);
@@ -1038,6 +1143,65 @@ void main() {
 `;
 
 // ── Category routing ──
+// ── Per-body relief seed (V2-10 port slice 3) ──
+// fbmd's macro/detail offsets are what make two planets' relief differ rather than every world
+// wearing the same mountains. They have to be deterministic — same body, same relief on every
+// load — and they must NOT draw from PlanetGenerator's shared rng stream: one extra draw there
+// shifts every downstream value and rewrites the whole generated universe, which is exactly what
+// that file's additive-gate discipline protects (and what would churn l0-baseline.json). So the
+// seed is derived display-side from scalars the body already carries.
+function reliefOffsets(d) {
+  // Fold EVERY stable per-body scalar into one accumulator before hashing, so two bodies that
+  // happen to share a field (many share noiseScale) still land on different relief.
+  const fields = [
+    d.noiseScale, d.noiseDetail, d.radiusEarth, d.massEarth,
+    d.T_eq, d.axialTilt, d.metallicity, d.eccentricity,
+  ];
+  let acc = 0;
+  for (let i = 0; i < fields.length; i++) {
+    const v = Number.isFinite(fields[i]) ? fields[i] : 0;
+    acc = acc * 1.618033988749895 + v * (i + 1) * 7.13;
+  }
+  // Same fract(sin(x)*c) idiom the GLSL side uses. Range is wide enough to decorrelate the
+  // octave bands but small enough that hash3's sin() keeps its precision.
+  const h = (salt) => {
+    const x = Math.sin(acc * 12.9898 + salt * 78.233) * 43758.5453;
+    return (x - Math.floor(x)) * 400.0 - 200.0;
+  };
+  return {
+    macro: new THREE.Vector3(h(1), h(2), h(3)),
+    detail: new THREE.Vector3(h(4), h(5), h(6)),
+  };
+}
+
+// ── Relief calibration constants (V2-10 port slice 3) ──
+// MEASURED, not guessed. fbmd and the legacy simplex stacks have different spreads, and the
+// land/sea threshold sits directly on that spread — an unmatched gain silently drowns or
+// beaches every continent. See docs/FEATURES/surface-variation-beyond-mvp.md for the numbers.
+const RELIEF_MIX = 1.0;           // 0 = legacy base (the negative control), 1 = analytic fbmd
+const RELIEF_OCTAVES = 4.0;       // matches the legacy stack's octave count; the game pays it per planet
+// Measured over 462 generated bodies covering all 7 land types (see the register for the run).
+// fbmd's octave amplitudes (0.5, 0.25, 0.125, ...) sum to a spread ~3.6x NARROWER than raw
+// simplex, and that ratio is a property of the amplitude series, not of the frequency — it held
+// flat across a 5x domain-scale sweep. Ship it uncalibrated and the land/sea threshold moves:
+// terrestrial land fraction goes 0.571 -> 0.818, beaching a quarter of every ocean.
+const RELIEF_GAIN = 3.648;        // fbmd -> default/rocky/ocean base spread (median of 462)
+const RELIEF_GAIN_CONT = 3.744;   // fbmd -> terrestrial continent spread    (median of 462)
+// The GRADIENT needs its own constant: matching the value spread does not match the gradient
+// spread, which also depends on frequency content. Calibrated on DEFLECTION ANGLE rather than
+// on raw gradient magnitude, because the angle is what the eye reads as relief strength.
+// Legacy deflects the normal a median 1.49deg over the 462-body population (p10 1.03, p90 2.10);
+// this holds the analytic path at that same median, so the swap does not read as "the lighting
+// changed". ⚠ Tied to RELIEF_DOMAIN_SCALE — perturbNormalAnalytic divides by the base frequency
+// it implies, so changing one without re-measuring the other moves every planet's relief.
+const RELIEF_NORMAL_GAIN = 6.54; // median over 462 bodies of (legacy deflection / analytic at 1.0)
+// fbmd computes freq = uNoiseScale * 0.3 * uDispDomainScale. The game wants fbmd's FIRST octave
+// to land exactly on the legacy base frequency (noiseScale * 1.0), so the swap changes the noise
+// LAW without changing feature size — 1/0.3 does that. It also tightens how well one gain fits
+// the population (spread across bodies 4.86 -> 3.15), because on the game's small map-radius
+// spheres the un-multiplied first octaves span less than one lattice cell edge to edge.
+const RELIEF_DOMAIN_SCALE = 1.0 / 0.3;
+
 const GAS_TYPES = new Set(['gas-giant', 'hot-jupiter', 'eyeball', 'sub-neptune']);
 const ROCKY_TYPES = new Set(['rocky', 'ice', 'lava', 'ocean', 'terrestrial', 'venus', 'carbon']);
 // Everything else → EXOTIC
@@ -1084,6 +1248,7 @@ export class Planet {
   _createSurface() {
     const geometry = new THREE.IcosahedronGeometry(this.data.radius, 5);
     const d = this.data;
+    const reliefSeed = reliefOffsets(d);
 
     // Pick the shader variant based on planet category
     let fragmentBody;
@@ -1109,6 +1274,22 @@ export class Planet {
         uLavaCrust: { value: new THREE.Vector3(...(d.lavaCrustColor || d.accentColor || [1.0, 0.18, 0.05])) },
         noiseScale: { value: d.noiseScale },
         noiseDetail: { value: d.noiseDetail },
+        // ── World-engine relief (port slice 3) ──
+        // uReliefMix is both the A/B dial and the safety valve: at 0.0 this body renders
+        // byte-identically to slice 2.
+        uReliefMix: { value: RELIEF_MIX },
+        uReliefOctaves: { value: RELIEF_OCTAVES },
+        uReliefGain: { value: RELIEF_GAIN },
+        uReliefGainCont: { value: RELIEF_GAIN_CONT },
+        uReliefNormalGain: { value: RELIEF_NORMAL_GAIN },
+        // fbmd's own inputs. uNoiseScale mirrors the game's per-body noiseScale — the lab's
+        // fbmd reads that name, and the two mean the same thing (base feature frequency).
+        // uDispDomainScale is the lab's global domain multiplier; the game is identity.
+        uNoiseScale: { value: d.noiseScale },
+        uDispDomainScale: { value: RELIEF_DOMAIN_SCALE },
+        uFwClamp: { value: 1 },
+        uMacroOffset: { value: reliefSeed.macro },
+        uDetailOffset: { value: reliefSeed.detail },
         lightDir: { value: this._lightDir },
         lightDir2: { value: this._lightDir2 },
         starColor1: { value: new THREE.Vector3(...this._starColor1) },

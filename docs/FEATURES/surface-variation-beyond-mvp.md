@@ -284,6 +284,106 @@ lines to it. Measured 2026-07-30 via read-only `git merge-tree`: that file and `
 **auto-merge clean**; `planet-lod-lab.html` **conflicts**. Importing these modules from the game
 without editing them adds ZERO new conflict surface — which is the reason to do slice 3 that way.
 
+### ✅ SLICE 3, FIRST INCREMENT — SHIPPED (2026-07-30). The land path's base noise is now `fbmd`.
+
+**What changed.** The land path's base surface term moved from a 2-octave `snoise` sum to the lab's
+analytic-derivative `fbmd`, and the relief normal moved from a 3-sample finite difference to fbmd's
+returned analytic gradient. Per-type branches were NOT flattened — lava ridging, ice cracking,
+continents, venus banding and carbon facets all still run; only what each branch uses as its BASE
+was swapped. `uReliefMix` is the A/B dial and the safety valve: at 0.0 every body renders exactly
+as it did in slice 2.
+
+**How the code got there without touching the atmo-3b lane.** `hash3` / `noised` / `fbmd` are a
+VERBATIM copy in `src/worldengine/shaders/heightNoise.glsl.js`. Importing `HEIGHT_GLSL` instead
+would have cost ~76 KB gzip in the game bundle to reach 3 KB of noise, and hoisting the primitives
+into a shared module would have meant EDITING `planet-lod-height.glsl.js` — the file atmo-3b is
+rewriting. The copy cannot drift silently: `tests/height-noise-transcription.test.js` re-extracts
+the three functions from the source file by brace matching and asserts byte-identity, so editing
+the lab file turns this repo's suite red. ⭐ **When atmo-3b lands: do the hoist, delete the copy,
+delete that test.**
+
+**⛔ `computeHeight()` was NOT wired in**, per the recon above. It is still the legacy finite-difference
+height and is still what runs at `uReliefMix 0`.
+
+#### The calibration, and why it is load-bearing (measured over 462 generated bodies, all 7 land types)
+
+fbmd's octave amplitudes (0.5, 0.25, 0.125, …) sum to a spread **3.6x narrower** than raw simplex.
+That ratio is a property of the amplitude series, not the frequency — it stayed flat across a 5x
+domain-scale sweep. `pattern` feeds `height = pattern*0.5+0.5` against a fixed `seaLevel`, so an
+unmatched spread moves the coastline on every world:
+
+    terrestrial land fraction   legacy 0.571 | calibrated 0.592 (mean |Δ| 0.036) | UNCALIBRATED 0.818 (mean |Δ| 0.247)
+
+Shipping it uncalibrated would have beached a quarter of every ocean. Constants:
+`RELIEF_GAIN 3.648`, `RELIEF_GAIN_CONT 3.744`, `RELIEF_DOMAIN_SCALE 1/0.3` (puts fbmd's first
+octave exactly on the legacy base frequency, so the noise LAW changes without the feature SIZE
+changing; it also tightens how well one gain fits the population, spread 4.86 → 3.15).
+
+#### ⛔ A FOURTH silent-disagreement bug at this seam, as the handoff predicted — this one is UNITS
+
+The register's standing warning was "check units AND semantics AND SHAPE of every same-named
+field; assume a fourth exists." It does, and it is in the game's own pre-existing code:
+
+> **`perturbNormalFromNoise` finite-differences with a fixed `eps = 0.01` in OBJECT space, but
+> `KnownSystems` bodies have object radii of 0.003–0.08.** On Ceres the step is **larger than the
+> entire planet**. Legacy's "gradient" on every hand-authored body is therefore decorrelated noise,
+> not slope — it renders as uniform sandpaper unrelated to the visible surface pattern.
+
+This surfaced because fbmd's gradient is a TRUE derivative and so scales linearly with frequency,
+and `noiseScale` spans ~100x across the game (generated bodies 1.5–5.0; KnownSystems 15–332 against
+a tiny radius). Mean normal deflection, measured:
+
+    body          noiseScale   legacy    analytic RAW   analytic ÷ base frequency (SHIPPED)
+    generated        3.0        1.41°       1.38°                1.44°
+    generated        4.5        2.13°       2.08°                1.45°
+    ceres          332.4       17.15°      64.52°                1.46°
+    haumea         236.8       15.73°      58.15°                1.50°
+    titan           15.7        5.40°       7.42°                1.50°
+
+Raw would have deflected Ceres' normal 64° — clamped and harsh. **So the gradient is divided by
+fbmd's base frequency, making the term a dimensionless SLOPE**, and `RELIEF_NORMAL_GAIN 6.54` is
+calibrated on DEFLECTION ANGLE against the regime where legacy is VALID (generated bodies, radius
+≫ eps): legacy median 1.49° over 462 bodies, analytic 1.44–1.57° across a 100x frequency range.
+
+⚠ **Consequence Max has not UAT'd:** hand-authored `KnownSystems` bodies (Ceres, Haumea, Makemake,
+Eris, Titan) lose that 15–17° sandpaper and render smooth. That is an artifact removal, not a
+regression — but it is a visible change to Sol, and it was NOT commanded. **Surface it if he plays.**
+
+#### Frame cost — it is CHEAPER, with real LOD headroom
+
+12 land bodies filling 3840x2160, median ms/frame, GPU-synced per frame (RTX 5080):
+
+    legacy 3.3 (recheck 3.4) | oct4 2.5 (0.76x) | oct5 2.6 | oct6 2.7 | oct7 2.9 | oct9 3.4 (1.03x) | oct12 4.2 (1.27x)
+
+The shipping config (4 octaves) is **24% cheaper than legacy**, because it deletes 3 full
+`computeHeight` evaluations — 12 snoise calls — and fbmd's gradient comes free with its value.
+**~9 octaves sit at legacy parity**, which is the budget for a later LOD ramp. At 1280x720 the whole
+comparison is below the noise floor, so that resolution cannot be used to judge this.
+
+#### A/B evidence (dial toggled on the real `Planet` class, % of body pixels changed)
+
+    lava 39.13 | ceres-regime 32.75 | terrestrial 29.03 | rocky 23.07 | ocean 23.51 | ice 8.66
+    carbon 2.31 (normal only — it overwrites `n` with its own stack)
+    venus 0.000  ← negative control     gas giant 0.000  ← negative control
+
+Venus is the strong control: same shader variant, same code path, `gReliefD` computed — but it
+overwrites `n` and has `perturbStrength 0`, so it must not move a pixel, and it does not.
+
+#### Deferred, deliberately
+
+- **This increment does NOT fix the band-collapse item below.** It holds relief strength AT the
+  legacy median by design, so it adds no new elevation separation yet. It builds the mechanism
+  (correct law, analytic gradient, 24% cheaper, headroom to 9 octaves); raising relief strength is
+  the next lever and is now nearly free.
+- **Relief strength no longer varies per body.** Normalizing out frequency also normalized out
+  legacy's 1.03–2.13° spread. Restoring variation should drive it from a real condition scalar
+  (roughness / erosion), not from `noiseScale`. Recorded, not taken.
+- **`uReliefOctaves` is a flat 4.0** — no `lodLevel` ramp yet. The lab drives `mix(4,9,lodRamp)` for
+  ONE body; the measured budget above says the game could too.
+- **Venus and carbon never read the fbmd base for colour** (both overwrite `n` with their own
+  stacks). Only their normals changed. Whether they should is a design question, not a port step.
+- The ~40-stage combiner chain in the lab's `main()` — the actual slice-3 payload — is untouched.
+
 ### 🔶 Recorded, NOT fixed — the honest palette flattens elevation banding on ~45% of bodies
 
 Now that pressure arrives, atmospheric worlds get erosion ~1, which kills oxidation (it rides
