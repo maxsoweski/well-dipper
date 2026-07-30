@@ -254,3 +254,66 @@ export function drawGiantConditions(regime = E5_REGIME.GAS_GIANT, baseCondition 
 export function deriveGiantDriversForSeed(regime, baseCondition, macroSeed) {
   return deriveGiantDrivers(drawGiantConditions(regime, baseCondition, macroSeed));
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// S1 — RHINES RADIUS WIRE + ROTATION DRAW (world-engine-atmo-deck-spiral-rhines)
+//
+// The Rhines band-count law (climate-e5 rhinesWavenumber) was already correct; the LAB wire fed it
+// preset CONSTANTS instead of the DRAWN radius/rotation at both call sites. These pure helpers single-
+// source the radius/rotation normalization (killing the two-site divergence) and draw rotation per
+// archetype on the disjoint `giantD:rot:` alea stream. The only entropy is the seed via alea; no
+// wall-clock, no Math.random — same static-source discipline as the deriver above.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Normalize a DRAWN (radiusEarth, rotationHours) into the Jupiter-normalized rotationRate/radius the
+ * writer's DRIVER_BUNDLES override expects (resolveParams merges these over the frozen bundle). Single-
+ * sourced so rebakeE5Bands and applyStormState (the two lab call sites) can never diverge again — the
+ * broken wire that AC-RHINES fixes read (9.9/rotH, R/11.2) off the PRESET, not the drawn state.
+ */
+export function giantDriverScalars(planetRadiusEarth, rotationHours, e5RotationScale = 1) {
+  return {
+    rotationRate: (9.9 / (rotationHours ?? 24)) * (e5RotationScale ?? 1),   // Jupiter 9.9 h → 1.0
+    radius: (planetRadiusEarth ?? 1) / 11.2,                               // Jupiter 11.2 RE → 1.0
+  };
+}
+
+// Per-archetype GAS rotation ranges (hours). NOTE (lens fold F11): there is deliberately NO solid-ice
+// key here — the PRESET_ARCHETYPE map routes BOTH the Neptunian and hazy sub-Neptune presets to the
+// SHARED sub-neptune tag (V2-3 Option-B taxonomy), while the solid-ice tag belongs to airless bodies
+// (Frozen / Europa) that carry no gas rotation range and correctly stay canonical. Only gas-bearing
+// archetypes appear; any body whose tag is absent falls through drawRotationHours to canonical hours.
+export const ROTATION_RANGES_HOURS = Object.freeze({
+  'gas-giant':   [8, 14],    // audit footnote 16
+  'sub-neptune': [12, 20],   // Neptunian + hazy sub-Neptune both ride this shared key
+});
+
+/**
+ * Tidal-lock (pseudo-synchronous) rotation period from the orbit, via Kepler's third law
+ * P = 2π√(a³/GM). `a` in Earth radii, star mass in Earth masses; returns HOURS. Used ONLY for the
+ * hot-Jupiter-class identity below — never for a drawn value.
+ */
+export function tidalLockRotationHours(orbitRadiusEarth, starMassEarth) {
+  const a = (orbitRadiusEarth ?? 0) * 6.371e6;              // m (1 Earth radius = 6.371e6 m)
+  const GM = 6.674e-11 * (starMassEarth ?? 1) * 5.972e24;   // m³/s² (G · M_star, M in Earth masses)
+  return (2 * Math.PI * Math.sqrt((a * a * a) / GM)) / 3600;
+}
+
+/**
+ * Draw a body's rotation period (hours). The hot-Jupiter-CLASS identity — locked AND a hydrogen (h2-he)
+ * envelope, the lab's existing thermalStrength idiom — is DERIVED tidally locked from the orbit, NOT
+ * drawn (lens fold F10: gating on `locked` alone would send every locked SOLID preset down the Kepler
+ * branch, a real behavior change; the hot-Jupiter preset is also ABSENT from PRESET_ARCHETYPE, so the
+ * identity can never be archetype-keyed). Gas archetypes draw uniformly from ROTATION_RANGES_HOURS on
+ * the disjoint `giantD:rot:` alea stream; every other body (no gas range) returns its canonical hours —
+ * locked or not, terrestrial or icy. alea is the ONLY entropy.
+ */
+export function drawRotationHours({ archetype, canonicalHours, locked, hydrogenAtmo,
+                                    orbitRadiusEarth, starMassEarth }, seed) {
+  if (locked && hydrogenAtmo)                               // hot-Jupiter-class identity ONLY
+    return tidalLockRotationHours(orbitRadiusEarth, starMassEarth);   // DERIVED, not drawn
+  const range = ROTATION_RANGES_HOURS[archetype];
+  if (!range) return canonicalHours ?? 24;                 // no gas range ⇒ canonical (solids/terrestrial)
+  const r = alea('giantD:rot:' + archetype + ':' + (seed >>> 0))();
+  return range[0] + r * (range[1] - range[0]);
+}

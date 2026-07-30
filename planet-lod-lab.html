@@ -167,7 +167,7 @@
     import { writeGrainSphere, writeHeightSphere } from './src/worldengine/base/tectonic.js';   // AC2 _bakedReliefAt probe: re-derive the SAME pure height field the relief cube holds
     import { driversToTune } from './src/worldengine/base/plates.js';   // Increment 2: pure D-vector→tune mapper — plateProbe() echoes the SAME tune the writer applied (read-only; we do not edit plates.js)
     import { magmaDriversToTune, magmaThermal } from './src/worldengine/base/magmatism.js';   // Increment 4-MULTIPLY: same arm's-length echo for magmaProbe() + preset thermal-drive seeding
-    import { DRIVER_PRESETS, PRESET_ARCHETYPE, drawPresetRadius, drawPresetConditions } from './driver-presets.js';   // V2-0 Slice A: body driver-preset vectors + archetype map (extracted; single source shared with the headless AC1 harness + tests). V2-6 slice-5: drawPresetRadius (radius draw law) extracted here too — shared with calibration/population-sweep.mjs · drawPresetConditions: per-seed condition draw for solid bodies (derive-not-freeze, extended off the giants) — named bodies + giants gated out inside it
+    import { DRIVER_PRESETS, PRESET_ARCHETYPE, NAMED_BODY, drawPresetRadius, drawPresetConditions } from './driver-presets.js';   // V2-0 Slice A: body driver-preset vectors + archetype map (extracted; single source shared with the headless AC1 harness + tests). V2-6 slice-5: drawPresetRadius (radius draw law) extracted here too — shared with calibration/population-sweep.mjs · drawPresetConditions: per-seed condition draw for solid bodies (derive-not-freeze, extended off the giants) — named bodies + giants gated out inside it
     import alea from 'alea';   // V2-6 slice-5: worldSeed → deterministic per-namespace sub-seeds (draw:radius/macro/detail) for newPlanet()
     import { presetDriverDefaults, buildNeutralBodyDrivers } from './body-drivers.js';   // V2-0 Slice A: neutral (no-slider-override) driver construction the lab overlays overrides on (presetDriverDefaults also used by resetDriverOverrides)
     import { deriveConditionVector } from './body-condition-vector.js';   // V2-0 Slice C: pure _fp→condition vector, attached NESTED as bodyDrivers.condition (shadow-mode; V2-1 E1 read surface; SAME derive the headless AC1 harness uses)
@@ -182,8 +182,9 @@
     import { createFieldSampler, createTapControl, describeSample, TAP_COMPOSITE, TAP_SOLID, TAP_LIQUID } from './src/worldengine/instrument/fieldSampler.js';   // nonvisual-analysis-channel: live float-RTT field readback (AC-SAMPLER: renders the PLANET'S OWN fragment shader through a uniform-gated tap) + the descriptor pack + the live control legs. READ-ONLY instrument; console _lab API only (no GUI binding ⇒ taxonomy-exempt, AC-0 check 3).
     import { responseCurve as _sweepResponseCurve, planSweep as _sweepPlan } from './src/worldengine/instrument/sweep.js';   // nonvisual-analysis-channel AC-CURVE: M-seed driver sweep → mean±SEM per point + fitted exponent. Pure orchestration; the lab supplies setPoint/measure.
     import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
-    import { resolveStormE, bakeStormEAttributes, chromophoreColor } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp
-    import { drawGiantConditions, deriveGiantDrivers } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation) — replaces the frozen DRIVER_BUNDLES constants per seed
+    import { resolveStormE, bakeStormEAttributes, chromophoreColor, STORM_DECK } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp; S2 STORM_DECK deck table (carriage deckZ derivation)
+    import { drawGiantConditions, deriveGiantDrivers, giantDriverScalars, drawRotationHours } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation); + S1 giantDriverScalars (single-sourced radius/rotation wire) & drawRotationHours (per-archetype rotation draw, hot-Jupiter derived)
+    import { drawBandRoughness, bandProxyUniforms } from './src/worldengine/base/band-flow.js';   // atmo-expression slice J: per-seed global band-edge roughness draw on the append-only bandFlow:rough stream (disjoint from climateE5:/stormE:/giantD: ⇒ both goldens frozen). slice K: bandProxyUniforms — the 6 render-side band-proxy uniforms from bake.params (single-sourced; the lab does NOT re-derive DEFLECT_SCALE)
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -759,11 +760,14 @@
           // terrestrial preset deriving spotStrength 0) takes the raw N/vPos path:
           // byte-identical F25 rendering — the F27 regression contract.
           vec3 bandN = N, bandPos = vPos;
+          // slice K: the RAW (un-swirled) sphere direction — the latitude the ink advection deflects FROM
+          // (bandN is storm-swirled; Nraw must be the un-rotated direction so dBand reads the true baked band).
+          vec3 bandNraw = normalize(vPos);
           if (uStormCount > 0){
             bandN = stormSwirl(normalize(vPos));
             bandPos = bandN * length(vPos);
           }
-          albedoCol = mix(albedoCol, zonalBandCol(bandN, bandPos, vBand, vShear, vMush, vStorm), bandMask);
+          albedoCol = mix(albedoCol, zonalBandCol(bandN, bandNraw, bandPos, vBand, vShear, vMush, vStorm), bandMask);
         }
         // ── F25 jets solo visibility — jets key on uJetStrength ALONE: with the deck
         // dark (solo('jets') zeroes uBandStrength), the shear turbulence still reads
@@ -2156,6 +2160,27 @@
     // code because tests/worldengine-base-storm-e.test.js pins `toContain('mulberry32')` on this file
     // and the concurrent atmo lane owns the storm-closure comment that would otherwise carry the token.
     function mulberry32(a){ return function(){ a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+    // S1 rotation draw (sibling of drawPresetRadius): the DRAWN rotation period the Rhines wire + the
+    // F25 drift consumers read. The hot-Jupiter-CLASS body (locked + h2-he envelope) is DERIVED tidally
+    // locked from its orbit (the preset's 80 h pseudo-sync is derived, not frozen — the contract's
+    // explicit ruling); NAMED_BODY solids stay canonical; every gas archetype draws from
+    // ROTATION_RANGES_HOURS on the disjoint giantD:rot: alea stream. Locked SOLIDS (Eyeball, Lava,
+    // Europa, Magma) fall through the identity test AND the range lookup → canonical (lens fold F10 —
+    // gating derivation on `locked` alone would wrongly Kepler-derive them). Disjoint namespace keeps
+    // the radius stream (mulberry32) byte-identical; one reroll = one body-identity redraw.
+    function drawPresetRotation(presetName, seed){
+      const preset = DRIVER_PRESETS[presetName] || {};
+      const isHotJupiterClass = !!preset.tidalState?.locked && preset.atmosphere?.composition === 'h2-he';
+      if (NAMED_BODY.has(presetName) && !isHotJupiterClass) return preset.rotationHours ?? 24;   // Mars/Titan/Europa/Venus/Magma canonical
+      return drawRotationHours({
+        archetype: PRESET_ARCHETYPE[presetName],
+        canonicalHours: preset.rotationHours,
+        locked: !!preset.tidalState?.locked,
+        hydrogenAtmo: preset.atmosphere?.composition === 'h2-he',
+        orbitRadiusEarth: preset.orbitRadiusEarth,
+        starMassEarth: preset.starMassEarth,
+      }, seed);
+    }
     const state = {
       distance: 20.0,       // camera distance in radii (mouse-wheel driven) -> drives lodRamp
       yaw: 0.337,           // orbit yaw   (pointer-drag) — initial ≈ the old fixed CAM_DIR view
@@ -2237,11 +2262,14 @@
       lobeFreq: 6.0,        // F19 tongue seed frequency
       massWastEnabled: false,// F19 enable gate
       bandStrength: 0.0,    // F24 master gate (driven — 1 on h2-he gas presets, 0 on every solid world)
-      bandCount: 8.0,       // F24 visible stripe count (driven: 12·R/rotationHours, clamped 3..16)
+      rotationHours: 24,    // S1: drawn rotation period (drawPresetRotation at the _radiusDirty block) — gas archetypes drawn, hot-Jupiter derived, solids canonical; feeds the Rhines wire + _rotH
       bandContrast: 0.6,    // F24 zone↔belt luminance separation (driven: T_eq vigor ramp)
       bandWarp: 0.5,        // F24 festoon displacement in stripe units (driven: same ramp)
       bandTint: [0.78,0.62,0.44],  // F24 deck base color (driven: atmosphere.color)
       bandStretch: 2.5,     // F24 vertical domain compression (lab knob)
+      bandRough: 1.0,       // atmo-expression slice J: per-seed global band-edge roughness (uBandRough; drawn by rebakeE5Bands on bandFlow:rough unless the slider is dragged — touched-flag override). CANDIDATE default 1.0.
+      atmoInk: 1.0,         // atmo-expression slice K: THE boldness dial (scales dWake+dAdvect); GUI 0..2. CANDIDATE default 1.0 (bold) — Max's UAT tame-down dial.
+      inkStretch: 3.5,      // atmo-expression slice K: ink anisotropy (zonal-plane domain compression); GUI 1..6. CANDIDATE default 3.5.
       bandLatPow: 1.3,      // F24 latitude remap exponent (lab knob)
       e5Obliquity: 0,       // #3a Ward obliquity override (0 = use regime default; >54.7° ⇒ hot-poles inversion)
       e5RotationScale: 1.0, // #3a rotation multiplier (sweep to show Rhines band-count response, AC12)
@@ -2994,7 +3022,17 @@
       const _gd = deriveGiantDrivers(drawGiantConditions(regime, _gcond, state.macroSeed | 0));   // { shellDepthFrac, internalHeat, dissipation }
       const drivers = {
         ..._gd,                                                                            // per-seed triple OVERRIDES the frozen DRIVER_BUNDLES (resolveParams merges caller drivers on top)
-        rotationRate: (9.9 / (_fp.rotationHours ?? 24)) * (state.e5RotationScale ?? 1),   // Jupiter 9.9h → 1.0
+        // MERGE 2026-07-30 (lanes A+ATMO) — the two lanes fenced these SAME lines with CONTRADICTORY
+        // pins. Atmo requires the bundle to come from giantDriverScalars (one source for both sites, and
+        // it carries the DRAWN rotation that L1 still read frozen off _fp). L1 requires `radius` to name
+        // the condition vector (tests/radius-live-feed-fence.test.js AC-0 source pins). BOTH are kept,
+        // because both guards are worth having and the values are provably identical: giant-drivers.js:277
+        // computes radius as (planetRadiusEarth ?? 1)/11.2, and _gcond/_scond.radiusEarth is
+        // deriveConditionVector fed state.planetRadiusEarth (pinned by that same fence). The explicit key
+        // therefore overrides the spread with the same number — no behavioural ambiguity.
+        // ⚠ The redundancy is DELIBERATE, not sloppiness. It should collapse only when someone reconciles
+        // the two contracts on purpose; deleting either line silently drops a lane's regression guard.
+        ...giantDriverScalars(state.planetRadiusEarth, state.rotationHours ?? _fp.rotationHours, state.e5RotationScale),
         // radius-live-feed R1 (2026-07-25): reads the CONDITION VECTOR (_gcond.radiusEarth = the DRAWN
         // state.planetRadiusEarth, :2851), not the frozen preset constant. The slider writes
         // state.planetRadiusEarth and applyDrivers() re-runs rebakeE5Bands() on a 220 ms debounce, so the
@@ -3013,6 +3051,18 @@
       geometry.attributes.aBand.array.set(bake.aBand);   geometry.attributes.aBand.needsUpdate = true;
       geometry.attributes.aShear.array.set(bake.aShear); geometry.attributes.aShear.needsUpdate = true;
       geometry.attributes.aMush.array.set(bake.aMush);   geometry.attributes.aMush.needsUpdate = true;
+      // atmo-expression slice K: export the 6 render-side band-PROXY uniforms from bake.params (the full
+      // resolved P). bandProxy reconstructs the baked band value analytically render-side so the storm swirl +
+      // ink advection DEFLECT the primary band (dBand) instead of pasting a decal — aBand + GOLDEN_BANDFIELD_HASH
+      // untouched (read-only reconstruction). Single-sourced via band-flow.js bandProxyUniforms (the lab does
+      // NOT re-derive DEFLECT_SCALE). Every reseed re-runs rebakeE5Bands ⇒ re-exports (derive-not-freeze wiring).
+      const _proxyU = bandProxyUniforms(bake.params);
+      uniforms.uBandM.value            = _proxyU.uBandM;
+      uniforms.uBandPhaseJet.value     = _proxyU.uBandPhaseJet;
+      uniforms.uBandSEq.value          = _proxyU.uBandSEq;
+      uniforms.uBandAMid.value         = _proxyU.uBandAMid;
+      uniforms.uBandS2.value           = _proxyU.uBandS2;
+      uniforms.uBandDeflectScale.value = _proxyU.uBandDeflectScale;
       state.e5BandCount = bake.bandCount; state.e5EqSign = bake.eqSign; state.e5PeakU = bake.peakU;  // live-AC probes
       // #3b Slice P: bake the storm/convection MASK (the one new attribute) from the SAME regime/drivers,
       // plus the composition gas-gate + T_eq personality inputs the storm writer reads. _sd inherits the
@@ -3021,6 +3071,14 @@
       const _sd = { ...drivers, composition: _fp.atmosphere?.composition, T_eq: _fp.T_eq };
       const bakeStorm = bakeStormEAttributes(pos.array, pos.count, R, { regime, drivers: _sd, macroSeed: state.macroSeed | 0, stormSeed: state.stormSeed | 0 });
       geometry.attributes.aStorm.array.set(bakeStorm.aStorm); geometry.attributes.aStorm.needsUpdate = true;
+      // atmo-expression slice J: the per-seed GLOBAL band-edge roughness draw (uBandRough). Drawn on the
+      // NEW append-only bandFlow:rough:<regime>:<macroSeed> alea stream — disjoint from every climateE5:/
+      // stormE:/giantD: stream, so it does NOT shift any existing draw order ⇒ GOLDEN_BANDFIELD_HASH +
+      // GOLDEN_STORM_MASK_HASH stay frozen (BUILD-PLAN §4.3). Touched-flag override (golden-lens must-fix #3):
+      // re-draw per seed ONLY when the roughness slider has NOT been manually dragged; a dragged value
+      // persists across reseeds until resetDriverOverrides (preset change) clears _driverTouched. state is
+      // the single source — the per-frame block syncs it into uniforms.uBandRough (same as every band uniform).
+      if (!_driverTouched.has('bandRough')) state.bandRough = drawBandRoughness(regime, state.macroSeed | 0);
     }
     // ── #3b Slice 1 WIRING extraction: the discrete-vortex placement below used to live INLINED
     // inside applyDrivers, so the reseed paths (New-planet / macro-seed slider / _lab.setSeed) —
@@ -3035,6 +3093,14 @@
     // the OFFGATE render byte-identical after a gas→solid preset change; an early-return would leave
     // stale gas storm state. On the reseed path (preset unchanged) that same strength-0 result is a
     // no-op, so reseedGiant() is naturally inert on non-gas presets.
+    // S2 deckZ derivation (§3.1): the deck a storm occupies IS the storm. Mode 0 (warm anticyclone) earns
+    // a TOWER above the zone deck, height ∝ prominence (older/redder = higher, shares the chromophore age
+    // driver: prom = 0.35 + 0.65·age); mode 1 (dark spot) is a hole that REVEALS the deep FLOOR. Consumed
+    // by the per-frame uStormAux carriage; STORM_DECK is the single source of the deck constants.
+    const _stormDeckZ = (mode, age) => (mode >= 0.5)
+      ? STORM_DECK.FLOOR
+      : STORM_DECK.ZONE + (STORM_DECK.TOWER - STORM_DECK.ZONE) * (0.35 + 0.65 * (age ?? 0));
+
     function applyStormState(){
       const _fp = DRIVER_PRESETS[driverUI.preset];
       // ── #3b Slice P: PHYSICS storm/vortex placement — REPLACES the F27/F28/F29
@@ -3083,7 +3149,17 @@
       const _sgd = deriveGiantDrivers(drawGiantConditions(_stormRegime, _scond, state.macroSeed | 0));
       const _stormDrivers = {
         ..._sgd,                                     // per-seed triple (consumer c — vortices)
-        rotationRate: (9.9 / (_fp.rotationHours ?? 24)) * (state.e5RotationScale ?? 1),
+        // MERGE 2026-07-30 (lanes A+ATMO) — the two lanes fenced these SAME lines with CONTRADICTORY
+        // pins. Atmo requires the bundle to come from giantDriverScalars (one source for both sites, and
+        // it carries the DRAWN rotation that L1 still read frozen off _fp). L1 requires `radius` to name
+        // the condition vector (tests/radius-live-feed-fence.test.js AC-0 source pins). BOTH are kept,
+        // because both guards are worth having and the values are provably identical: giant-drivers.js:277
+        // computes radius as (planetRadiusEarth ?? 1)/11.2, and _gcond/_scond.radiusEarth is
+        // deriveConditionVector fed state.planetRadiusEarth (pinned by that same fence). The explicit key
+        // therefore overrides the spread with the same number — no behavioural ambiguity.
+        // ⚠ The redundancy is DELIBERATE, not sloppiness. It should collapse only when someone reconciles
+        // the two contracts on purpose; deleting either line silently drops a lane's regression guard.
+        ...giantDriverScalars(state.planetRadiusEarth, state.rotationHours ?? _fp.rotationHours, state.e5RotationScale),
         // radius-live-feed R1 (2026-07-25): DRAWN radius via the condition vector (_scond, :2930) — the
         // SAME live value rebakeE5Bands() feeds the band/mask bake. These two MUST move together: the
         // storm writer places vortices on the shear argmax of the PV staircase the band bake produced, so
@@ -3106,12 +3182,20 @@
         state.spotMode = _p.mode;
         state.spotColor = _stormColor(_p.role, _p.mode, _p.ageScalar, _p.coreScale);   // V-β.3 lifecycle core visibility
         state.spotCompanion = _p.companion;
+        // S2 per-storm scalar substrate (append-only stormE:emboss/billow + the age scalar) — stashed for
+        // the per-frame uStormAux slot-0 carriage (deckZ derived from mode+age via STORM_DECK).
+        state.spotAge = _p.ageScalar;
+        state.spotEmboss = _p.embossDir;
+        state.spotBillow = _p.billowPhase;
       }
       // F28 storm clusters ← writer train members (vortex street / brown barge / scooters)
       state.trainStrength = _storm.strength;
       state.trainSpots = _storm.train.map((v) => ({
         center: v.center, radius: v.radius, rot: v.rot, aspect: v.aspect,
         color: _stormColor(v.role, v.mode, v.ageScalar), companion: v.companion,
+        // S2: carry the per-storm scalars + the TRUE mode into the train-slot carriage (mode was
+        // hard-coded 0 at the uStormParams write — §0.4 consumer-safe: only slot-0's z is read today).
+        age: v.ageScalar, embossDir: v.embossDir, billowPhase: v.billowPhase, mode: v.mode,
       }));
       state.trainCount = state.trainSpots.length;
       // F29 polar vortex ← writer pole (drawn from the disjoint stormE:polar stream, BEFORE
@@ -3162,6 +3246,7 @@
       // draw a seeded radius from RADIUS_RANGES_EARTH.
       if (driverUI.preset !== state._lastPreset || state._radiusDirty) {
         state.planetRadiusEarth = drawPresetRadius(driverUI.preset, state.radiusSeed, { labUnlock: true });   // Inc-3b R3: LAB-only Moon/Mercury radius unlock (opt-in; headless/goldens/probe stay flagless → canonical)
+        state.rotationHours = drawPresetRotation(driverUI.preset, state.radiusSeed);   // S1: drawn rotation (gas archetypes; hot-Jupiter derived; solids canonical) → Rhines wire + _rotH
         state._lastPreset = driverUI.preset;
         state._radiusDirty = false;
       }
@@ -3443,7 +3528,12 @@
       // convection into more alternating jets — 12·R/rotationHours, clamped 3..16.
       // Jovian 11.2R/9.9h → 14; Saturnian 9.4R/10.7h → 11; Neptunian 3.9R/16.1h → 3.
       // Terrestrial presets omit rotationHours (default 24 h) — inert behind strength 0.
-      const _rotH = _fp.rotationHours ?? 24;
+      // MERGE 2026-07-30 (lanes A+ATMO): _rotH now reads the DRAWN rotation (atmo S1 drawPresetRotation)
+      // instead of the frozen preset constant — it makes L1's live-wire argument below stronger, not
+      // weaker. Atmo RETIRED state.bandCount as a vestigial second band count; that is not adopted:
+      // L1 refuted it with measurement on 2026-07-25 (see "WHY THIS IS NOT DEAD WIRE"). Both hold —
+      // atmo's AC-ONECOUNT governs the visible STRIPE count (uBandM); this ladder drives the F25 JETS.
+      const _rotH = state.rotationHours ?? _fp.rotationHours ?? 24;
       // radius-live-feed R1 (2026-07-25): reads the DRAWN state.planetRadiusEarth, not the frozen
       // preset constant. applyDrivers() has NO condition vector in scope (buildBodyDrivers/:2804 and
       // rebakeE5Bands/:2851 each derive their own; state._lastBodyDrivers.condition is debounce-stale
@@ -4888,7 +4978,6 @@
     // T_eq vigor ramp / atmosphere color, .listen()); stretch + lat power are shape knobs.
     const fBands = fWorldEngine.addFolder('Zonal belts (F24)'); fBands.close();   // lab-ux 2026-07-15: writer-fed (climate-e5 aBand) → lives in the World Engine section, not Legacy
     fBands.add(state, 'bandStrength', 0, 1, 0.01).name('strength (driven)').listen();
-    fBands.add(state, 'bandCount', 2, 20, 1).name('band count (driven)').listen();
     fBands.add(state, 'bandContrast', 0, 1, 0.01).name('contrast (driven)').listen();
     fBands.add(state, 'bandWarp', 0, 4, 0.05).name('festoon warp (driven)').listen();
     fBands.addColor(state, 'bandTint').name('deck tint (driven)').listen();
@@ -4900,6 +4989,21 @@
     // override → Ward pole-emphasis, cross 54.7° for the hot-poles inversion (AC7/AC12). 0 = regime default.
     fBands.add(state, 'e5RotationScale', 0.25, 3.0, 0.05).name('E5 rotation ×').onChange(rebakeE5Bands);
     fBands.add(state, 'e5Obliquity', 0, 100, 1).name('E5 obliquity° (0=auto)').onChange(rebakeE5Bands);
+    // atmo-expression slice J: per-band EDGE ROUGHNESS — the per-seed global roughness draw (uBandRough,
+    // bandFlow:rough stream). VALUE slider (driver override — NO *Enabled key; rides the already-registered
+    // PROV_BANDS province, so the planet-archetypes drift guard, which scrapes only *Enabled checkbox keys,
+    // is blind to it by design). .listen() tracks the per-seed re-draw; .onChange marks it touched so a
+    // manual value survives reseeds (the per-frame block pushes state.bandRough → uBandRough). GUI 0..2.
+    fBands.add(state, 'bandRough', 0, 2, 0.01).name('edge roughness').listen()
+      .onChange(() => { _driverTouched.add('bandRough'); });
+    // atmo-expression slice K: INK / FLOW — the "ink in water" advection dials. VALUE sliders (driver
+    // overrides — NO *Enabled key; ride the already-registered PROV_BANDS province, so the planet-archetypes
+    // drift guard, which scrapes only *Enabled checkbox keys, is blind to them by design). state is the single
+    // source; the per-frame block syncs state.atmoInk/inkStretch → uAtmoInk/uInkStretch (same as every band
+    // uniform, no reseed needed). uAtmoInk is Max's UAT tame-down dial (default 1.0 bold, GUI 0..2); uInkStretch
+    // is the anisotropy (GUI 1..6, uInkStretch=1 collapses to isotropic — the AC-ADVECT null).
+    fBands.add(state, 'atmoInk', 0, 2, 0.01).name('ink / flow boldness');
+    fBands.add(state, 'inkStretch', 1, 6, 0.05).name('ink stretch (anisotropy)');
     // ▸ Jets & shear (F25) — the deck dynamics: counter-rotating drift, shear-gated
     // boundary turbulence, one-sided festoons. strength/speed/turb/festoons are driven
     // (h2-he gate / D8 spin / T_eq vigor ramp, .listen()); freq + eq width are lab knobs.
@@ -6289,11 +6393,13 @@
       // shadeN flatten both read uBandStrength, so one gate kills the whole family),
       // preserving the slider value.
       uniforms.uBandStrength.value = state.bandsEnabled ? state.bandStrength : 0.0;   // ✓ enable gate
-      uniforms.uBandCount.value    = state.bandCount;
       uniforms.uBandContrast.value = state.bandContrast;
       uniforms.uBandWarp.value     = state.bandWarp;
       uniforms.uBandTint.value.setRGB(state.bandTint[0], state.bandTint[1], state.bandTint[2]);
       uniforms.uBandStretch.value  = state.bandStretch;
+      uniforms.uBandRough.value    = state.bandRough;   // atmo-expression slice J: per-seed draw (rebakeE5Bands) or dragged value (touched-flag) — state is the single source, synced here like every band uniform
+      uniforms.uAtmoInk.value      = state.atmoInk;     // atmo-expression slice K: ink boldness dial (state is the single source; scales dWake+dAdvect)
+      uniforms.uInkStretch.value   = state.inkStretch;  // atmo-expression slice K: ink anisotropy (zonal-plane domain compression)
       uniforms.uBandLatPow.value   = state.bandLatPow;
       uniforms.uBandOffset.value.set(state.bandOffset[0], state.bandOffset[1], state.bandOffset[2]);
       // F25 jets — jetsEnabled gates strength→0 (the zonalBandCol drift/displacement
@@ -6329,14 +6435,19 @@
         uniforms.uStormPosSize.value[0].set(state.spotCenter[0], state.spotCenter[1], state.spotCenter[2], state.spotRadius);
         uniforms.uStormParams.value[0].set(state.spotRot, state.spotAspect, state.spotMode, state.spotCompanion);
         uniforms.uStormColor.value[0].set(state.spotColor[0], state.spotColor[1], state.spotColor[2]);
+        // S2 slot-sync (F2): uStormAux MUST be written at the SAME _stormN as the arrays above, inside
+        // THIS gated block — with greatSpot off, train members occupy slot 0+, so a naive aux[0]=primary
+        // fill would desync deck/emboss scalars from another storm under the stormTrainEnabled toggle.
+        uniforms.uStormAux.value[0].set(state.spotAge, state.spotEmboss, _stormDeckZ(state.spotMode, state.spotAge), state.spotBillow);
         _stormN = 1;
       }
       if (state.stormTrainEnabled && state.trainStrength > 0){
         for (let i = 0; i < state.trainSpots.length && _stormN < 8; i++, _stormN++){
           const s = state.trainSpots[i];
           uniforms.uStormPosSize.value[_stormN].set(s.center[0], s.center[1], s.center[2], s.radius * state.trainRadiusScale);
-          uniforms.uStormParams.value[_stormN].set(s.rot, s.aspect, 0, s.companion);
+          uniforms.uStormParams.value[_stormN].set(s.rot, s.aspect, s.mode, s.companion);   // S2: TRUE mode (was 0) — §0.4 consumer-safe
           uniforms.uStormColor.value[_stormN].set(s.color[0], s.color[1], s.color[2]);
+          uniforms.uStormAux.value[_stormN].set(s.age, s.embossDir, _stormDeckZ(s.mode, s.age), s.billowPhase);   // S2 slot-sync (F2): SAME _stormN as the arrays above
         }
       }
       uniforms.uStormCount.value = _stormN;   // ✓ both enable gates folded in

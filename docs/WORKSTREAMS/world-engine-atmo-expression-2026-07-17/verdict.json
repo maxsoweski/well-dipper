@@ -1,0 +1,59 @@
+{
+  "workstream": "world-engine-atmo-expression-2026-07-17",
+  "commit": "d2f4689",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "PASS",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC-0",
+      "result": "PASS",
+      "evidence": "Diff (68972f4\u2192d2f4689) touches only planet-lod-height.glsl.js, planet-lod-lab.html, planet-lod-uniforms.js, band-flow.js(+test), tools/atmo-expression-calibrate.mjs, WORKSTREAMS docs \u2014 planet-archetypes.js has zero diff. Automated guards genuinely green: 3 targeted files (73 tests) + full suite 2098/2102 (4 pre-existing failures, unchanged baseline). Spine-conformance substance is sound by direct diff-read: all 9 new uniforms are D-slot-backed/named-derivation/declared-frozen (BUILD-PLAN.md \u00a75 table), each names its DAG consumer, the 3 new GUI dials are plain sliders riding the pre-registered PROV_BANDS province so correctly added zero new *Enabled keys (confirmed via the drift guard's own regex + empty planet-archetypes.js diff). GAP: the AC's own verifyVia deliverable \u2014 a filed BUILD-NOTES.md documenting each field's deriver+consumer \u2014 was never created, despite BUILD-PLAN.md \u00a78 explicitly requiring it and \u00a710 recording it as MINOR-4 '[FOLDED]' (i.e. accepted as a required fix); 5 sibling world-engine workstreams have this file, this one doesn't. Adjacent gap: intent.md has no DOES/UNLOCKS card (Rule 15 / feedback_worldengine-does-unlocks-map.md requirement) \u2014 confirmed absent by grep.",
+      "adversarialVotes": "0/3 sufficient",
+      "adjudication": "ADJUDICATED PASS by working-Claude 2026-07-17: the verifier confirmed the SUBSTANCE green (all 9 uniforms D-slot-backed/named-derivation/declared-frozen, named consumers, zero *Enabled keys, drift guards green) and flagged the un-filed BUILD-NOTES.md deliverable + missing DOES/UNLOCKS card. Both FIXED same pass (BUILD-NOTES.md filed from the plan \u00a75 inventory + slider audit note; DOES/UNLOCKS card added to intent.md) \u2014 the gap was the artifact, not the conformance."
+    },
+    {
+      "id": "AC-ADVECT",
+      "result": "PASS",
+      "evidence": "npx vitest run tests/worldengine-base-band-flow.test.js: 26/26 pass, including all 6 AC-ADVECT-tagged tests \u2014 anisotropy ratio in (1.6,3.2) on every seed\u00d7regime with isotropic-null <1.5 and strictly separated, amplitude-floor rejecting sub-perceptual degenerate case, uAtmoInk linear boldness scaling, byte-equal determinism, and a static-source guard (no Math.random/Date.now/uTime). Independently grep-verified band-flow.js has zero executable uTime/Math.random/Date.now matches. Source-read confirms genuine anisotropic domain compression (sx=dir[0]/stretch, sz=dir[2]/stretch preserving y), not an isotropic noise bump, with a documented deviation note explaining why. Full suite 2098/2102, matches documented pre-existing baseline (4 unrelated failures).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-INTERACT",
+      "result": "PASS",
+      "evidence": "d2f4689 itself is docs/evidence-only; the actual dWake code lives in prior commit 148cec2 \u2014 a near-storm bow term plus a downstream wake/meander whose direction derives from sign(bandProxy(latC)-0.5), wired at the dLat seam so it re-samples the primary bandProxy (the actual decal\u2192deflection architectural fix intent.md calls for), count-gated to exactly 0 with no storms. CPU-mirror test (26/26 pass) confirms wiring/constants/gate/sign-derivation/no-uTime but is explicitly a structural transcription check with no GPU numeric truth. Read the two committed screenshots (storms ON vs OFF): visually consistent with the documented claim (band bulge + downstream smear vs undisturbed band). CAVEAT: this is my read of a prior session's self-reported artifact, not an independent live re-drive by this pass \u2014 per protocol a layer=integration/live=true AC cannot be PASSed from a static-only pass regardless of how compelling that evidence looks.",
+      "adversarialVotes": "0/3 sufficient",
+      "adjudication": "CLOSED by working-Claude live drive (liveBranch rule, same pattern as V2-4/V2-5 AC-LAB): real-GUI storm on/off A/B on pinned Jovian, in-page pixel diff \u2014 1426 diff px in the 2.6R-6R annulus (~0 pre-slice-I), ~3.8:1 downstream concentration = the derived-direction wake; uStormCount=0 exact-zero confirmed. Evidence: evidence/AC-INTERACT-LIVE-RESULT.md + ON/OFF pair, committed d2f4689 (drive ran in THIS session, prior to the verify workflow). RE-VERIFIED on clean evidence at the 2026-07-17 session review: the original A/B toggled ALL storms, so the 4 secondaries' count-gated bodies contaminated the falsifier annulus (confirmed review finding). Clean single-storm falsifier (F28/F29 disabled BOTH sides, only F27 toggles, uStormCount 1\u21c40 verified): annulus 2.6R-6R = 44 px at R=13 px full-disk, split 38:6 toward the in-page-derived downstream (bandProxy(latC=-0.4102)=0.5232 \u21d2 east), beyond-6R = 0, storms-off exact-zero. Evidence: ac-interact-clean-ON/OFF.png + the CLEAN re-drive section in AC-INTERACT-LIVE-RESULT.md (supersedes the 1426-px count as load-bearing)."
+    },
+    {
+      "id": "AC-JAG",
+      "result": "PASS",
+      "evidence": "npx vitest run tests/worldengine-base-band-flow.test.js: 26/26 pass incl. 3 AC-JAG-tagged tests \u2014 belt/zone roughness ratio > floor(30) at every seed\u00d7regime with both centers at wShear\u22480 (rules out boundary-vs-center tautology; measured min ratio 36.7 all-regime, 233 J/S/N-only), zone-center-alone (wShear=0) roughness ===0 proving wShear alone can't key it, and per-seed global draw variance + same-seed byte-equal determinism. Source-read confirms bandRoughness()=pure per-latitude cyc-driven formula and drawBandRoughness()=deterministic seeded alea(), no uTime/Math.random. GLSL mirror constants match by grep, though unlike INK/FOLD/WAKE there's no automated vitest parity pin on the 4 ROUGH_* literals \u2014 a minor coverage gap outside the AC's stated (CPU-mirror) scope, not a failure of it. Full suite unmoved (2098/2102, documented baseline).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-LIVE",
+      "result": "PASS",
+      "evidence": "d2f4689 is docs/evidence-only (7 files, all under docs/WORKSTREAMS/.../world-engine-atmo-expression-2026-07-17/, zero source touched) \u2014 it records a *claimed* prior live drive, not new code. evidence/AC-INTERACT-LIVE-RESULT.md asserts working-Claude already drove :5178 green: reseed state-parity (storm lat/count changed, per-regime bandFlow:rough draws differ), console clean, 3 regime screenshots. Read those 3 PNGs directly: confirm correct preset labels and visually distinct band structure per regime, but at that resolution could not independently confirm the specific claimed pixel-level effects (deflection/wake, ink folds, belt-vs-zone roughness) \u2014 those require the live state-introspection/pixel-diff the AC's verifyVia calls for. Per protocol this static pass cannot credit self-reported live evidence as a PASS on a live:true AC.",
+      "adversarialVotes": "0/3 sufficient",
+      "adjudication": "CLOSED by working-Claude live drive: New-planet button re-ran writers (storm lat -0.399->-0.519, count 5->7, bandFlow:rough 0.756->0.711); Jovian/Saturnian/Neptunian circuit with per-regime draws; console clean throughout. Evidence committed d2f4689."
+    },
+    {
+      "id": "AC-ZERO-CLOBBER",
+      "result": "PASS",
+      "evidence": "Full suite (130 files/2102 tests): 123 passed/2098 tests, 7 failed files match the documented pre-existing baseline exactly (5 missing-package failures unrelated to atmo + GalacticFeatures/KnownObjects catalog drift) \u2014 set not grown. Gate-bundle fence (9 suites incl. climate-e5, storm-e, band-flow): 9/9 files, 279/279 tests, golden hashes (GOLDEN_BANDFIELD_HASH, GOLDEN_STORM_MASK_HASH) re-asserted unchanged, off-gate mask=0\u21d2all new terms exactly 0. Diff audit (68972f4..HEAD): golden-hash literals only appear as additions in new files, never edited in existing hash-asserting test files; tests/fixtures/ diff empty; grep for relief/dispatch/plate/shell/magmatism filenames against the diffstat = zero matches (fence intact); every touched existing file (glsl.js, lab.html, uniforms.js) is strictly additive (\u22641 removed line each, purely signature/call-site plumbing for the new Nraw param).",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC-UAT",
+      "result": "deferred-to-max",
+      "evidence": "contract.json defines AC-UAT as layer=uat (no live/agent key at all \u2014 unlike AC-INTERACT/AC-LIVE's explicit live:true), verifyVia: 'Max drives :5178 solo: re-rolls Jovian/Saturnian/Neptunian, judges the composite read', observable: \"Max's holistic acceptance\". d2f4689 only carries evidence for AC-INTERACT/AC-LIVE (different, integration-layer ACs); AC-UAT itself is untouched by this diff, correctly so \u2014 no agent evidence can substitute for it per the well-dipper UAT invariant (Max's own hands, never an agent watching an agent drive).",
+      "adversarialVotes": "n/a \u2014 UAT is Max-only"
+    }
+  ],
+  "overall": "VERIFIED_PENDING_MAX \u2014 unit AC-ADVECT/AC-JAG/AC-ZERO-CLOBBER PASS 3/3-adv; AC-0 adjudicated PASS (BUILD-NOTES.md + DOES/UNLOCKS filed same pass); AC-INTERACT + AC-LIVE closed by working-Claude live drives (evidence d2f4689). Sole gate: AC-UAT (Max).",
+  "summaryForMax": "Feature\u2192outcome: this closes out the world-engine atmo-expression slice (F24/F27-29 zonal-band jaggedness, ink-like advection, storm\u2194band interaction) \u2014 the visual-quality layer on top of already-shipped atmo mechanics, not new architecture.\n\nEverything agent-closeable is closed: AC-ADVECT / AC-JAG / AC-ZERO-CLOBBER passed headless with 3/3 adversarial agreement; AC-0's missing BUILD-NOTES.md + DOES/UNLOCKS card were filed same pass; AC-INTERACT and AC-LIVE were closed by working-Claude live drives on :5178. A 2026-07-17 adversarial session review (56-agent workflow) then re-checked this work and its fixes are folded in: (1) the original AC-INTERACT pixel-diff had toggled ALL storms, so secondary-storm bodies contaminated the falsifier annulus \u2014 the AC was RE-DRIVEN on a clean single-storm falsifier and HELD (44 annulus px, 38:6 split matching the derived flow direction bandProxy 0.5232 \u21d2 east, zero leakage beyond 6R); (2) the missing slice-J GLSL\u2194mirror parity guard was added (the jag amplitude was previously deletable suite-green); (3) stale calibration tables were refreshed to post-freeze numbers; (4) the F27/F28/F29 folders moved to the World Engine \u2726 section (the merge had flipped their provenance but left the \u2726-badged folders under the Legacy drawer). [Summary reconciled at that review \u2014 the earlier text here predated the adjudications and wrongly listed AC-0 / AC-INTERACT / AC-LIVE as still open.]\n\nThe only open gate is AC-UAT \u2014 yours alone: open :5178 yourself, hit 'New planet' and the macro-seed slider across Jovian/Saturnian/Neptunian a few times each, and judge the composite read holistically \u2014 does the band structure look like bold ink-in-water folds rather than static texture, do belts read visibly rougher/jagged than smooth zones, and do storms visibly deflect/leave a wake in the band beneath them rather than sitting as a pasted-on decal. The ink/flow boldness dial (0..2) is your tame-down; storm controls now live under World Engine \u2726 \u2192 Great spot / Storm clusters / Polar vortex.",
+  "adjudicationNote": "Adjudications by working-Claude 2026-07-17; the raw workflow verdicts are preserved in the evidence fields above each adjudication. summaryForMax reconciled + AC-INTERACT re-verified on clean evidence at the 2026-07-17 session review (review workflow wf_5f6dacc6-343; 7 confirmed findings, all fixed)."
+}
