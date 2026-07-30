@@ -691,7 +691,7 @@ class CockpitPointerRouter {
      * `hover === 0` with `pressedMove` rising, which is press-and-hold working
      * and a quick click doing nothing. AC-A-QUICK-CLICK-IS-ENOUGH reads these.
      */
-    this.census = { down: 0, hover: 0, pressedMove: 0, up: 0, navDown: 0, zoomDown: 0, lastRole: null };
+    this.census = { down: 0, hover: 0, pressedMove: 0, up: 0, wheel: 0, navDown: 0, zoomDown: 0, lastRole: null };
   }
 
   /**
@@ -754,6 +754,43 @@ class CockpitPointerRouter {
 
   _isLookDragging() {
     try { return !!this.rig._isLookDragging(); } catch { return false; }
+  }
+
+  /**
+   * WHEEL — the fourth channel, added 2026-07-30. Max: *"Scroll wheel doesn't
+   * work in the nav menus in game."*
+   *
+   * There was no wheel channel at all. A DOM canvas gets `wheel` from the
+   * browser; an offscreen panel texture gets whatever a router hands it, and
+   * this router handed it press, drag and hover. Third instance in this lane of
+   * the same shape — the wire is absent, so the class looks like it is ignoring
+   * the pilot.
+   *
+   * ⚠ GATED EXACTLY AS HOVER IS, and that is deliberate rather than incidental.
+   * At rest NAV is chrome-less and not a menu the pilot is working; during a
+   * host look-drag the head is turning and the pointer is not theirs to aim. A
+   * wheel channel that disagreed with the hover gate would zoom a map that is
+   * not on the glass in front of them.
+   *
+   * ⚠ A WHEEL OVER ANOTHER PANEL IS NOT FORWARDED AS A MISS. `move` forwards
+   * misses on purpose, because the class has hover state that has to be cleared
+   * by its own proximity tests. A wheel has no such state: it is either ours or
+   * it is the host's, and telling the nav computer about a scroll aimed at the
+   * DRIVE screen would zoom a map the pilot was not pointing at.
+   *
+   * @returns {boolean} whether the router consumed it. The host must honour a
+   *          `true` by suppressing its own camera zoom, or the map and the
+   *          chase distance move together on one gesture.
+   */
+  wheel(clientX, clientY, deltaY) {
+    const rig = this.rig;
+    if (this._isLookDragging() || !rig.navZoomLanded()) return false;
+    const over = rig.pickAt(clientX, clientY);
+    if (!over || over.role !== 'NAV') return false;
+    const adapter = rig.ensureNavAdapter();
+    if (!adapter) return false;
+    this.census.wheel++;
+    return adapter.pointerWheel(over.hit, deltaY);
   }
 
   /** @returns {boolean} whether the router consumed the release. */

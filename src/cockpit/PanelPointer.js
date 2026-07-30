@@ -72,9 +72,13 @@
  *    appears to "fix" it — because the hold is what manufactures the missing move.
  *    `pointerHover` is that channel. See `PanelPointer.hover.test.js`.
  *
- * Deliberate non-goal: wheel/zoom. Press, drag, release, click and hover are what
- * the panel path now owns; a wheel wants its own decision about what scrolling a
- * screen from the pilot seat means and should not be smuggled in here untested.
+ * 5. THE WHEEL, added 2026-07-30 and previously a DELIBERATE NON-GOAL. The old
+ *    note here said a wheel "wants its own decision about what scrolling a screen
+ *    from the pilot seat means". Max made it, by flying the thing: *"Scroll wheel
+ *    doesn't work in the nav menus in game."* Scrolling a zoomed map means what it
+ *    means on the desktop overlay. That premise has changed, so this note is
+ *    REWRITTEN rather than deleted — see `pointerWheel` for the channel and
+ *    `PanelPointer.wheel.test.js` for why it drives a real NavComputer.
  *
  * Panel dimensions are never written down. Buffer size comes from the target's
  * own canvas at the moment of the event, so a resized panel keeps working —
@@ -99,6 +103,9 @@ export const PANEL_POINTER_EVENT = Object.freeze({ fromPanel: true });
  * for why -1 is not, and why this is a distance rather than "just outside".
  */
 const OFF_GLASS = -1e4;
+
+/** `preventDefault` for the synthetic wheel event — see `pointerWheel`. */
+const NOOP = () => {};
 
 /** Coordinate comparison with a little slack, for the contract checks below. */
 function sameCoord(got, want) {
@@ -393,6 +400,41 @@ export class PanelPointerAdapter {
     }
     this._place(hit);
     this.target._handleMouseMove(PANEL_POINTER_EVENT);
+    return true;
+  }
+
+  /**
+   * WHEEL — scroll on the glass, and the fourth channel this joint needs.
+   *
+   * Max, 2026-07-30: *"Scroll wheel doesn't work in the nav menus in game."*
+   * `NavComputer` binds its own wheel handler to its own canvas. The DOM
+   * overlay's instance has a real element and has always worked; this one draws
+   * onto an offscreen texture that can never receive a pointer event, so the
+   * wheel had to be forwarded and nothing forwarded it. Same defect shape as the
+   * hover channel above — an absent wire, not a broken one.
+   *
+   * ⚠ THE EVENT SHAPE IS ITS OWN, AND NOT `PANEL_POINTER_EVENT`. That singleton
+   * is frozen and carries nothing but `fromPanel`, deliberately, so a handler
+   * reaching for client coordinates gets a loud `undefined`. `_handleWheel`'s
+   * FIRST statement is `e.preventDefault()`, and its whole behaviour is a
+   * function of `e.deltaY`. So this channel needs both, and neither can be
+   * hung off the frozen object without unfreezing it for every other channel.
+   *
+   * ⚠ AND IT DOES NOT `_place`. A wheel carries no position; the pilot has not
+   * moved the pointer. Placing here would let a scroll silently re-resolve what
+   * the map believes is under the cursor with no move having arrived — the
+   * stale-hover failure of increment 6, entering by a new door. The hover
+   * channel owns `_pos`; this one only turns the wheel.
+   *
+   * @param {object|null} hit the intersection, or null for "the ray missed"
+   * @param {number} deltaY forwarded UNCHANGED, sign included — `_handleWheel`
+   *        inverts between PRISM and SYSTEM, so a normalised delta is wrong at
+   *        one of the two levels and looks right at the other.
+   * @returns {boolean} whether the wheel was delivered
+   */
+  pointerWheel(hit, deltaY) {
+    if (!hit) return false;
+    this.target._handleWheel({ fromPanel: true, deltaY, preventDefault: NOOP });
     return true;
   }
 

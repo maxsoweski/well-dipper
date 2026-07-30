@@ -11406,6 +11406,37 @@ canvas.addEventListener('mousedown', (e) => {
   }
 });
 
+// ── THE COCKPIT GETS FIRST REFUSAL ON THE WHEEL (2026-07-30) ──
+//
+// Max: *"Scroll wheel doesn't work in the nav menus in game."* The cockpit's
+// NavComputer draws onto an offscreen texture and can never receive a real
+// wheel event, so the router has to forward one — see `CockpitPointerRouter.wheel`.
+//
+// ⚠ WHY THIS IS CAPTURE-PHASE ON `window` AND NOT ANOTHER CANVAS LISTENER.
+// FOUR other handlers bind `wheel` to this same canvas — `CameraController`,
+// `ShipCamera`, `ShipCameraSystem` and the idle-timer one directly below — and
+// same-element same-phase listeners fire in REGISTRATION order, which is a
+// function of construction order across four modules and is not a thing this
+// file can pin. Capture on `window` runs before all of them by the spec, no
+// matter who was built first. That is the same "the cockpit is asked first"
+// rule the mousedown path already follows (`_cockpitRig.pointer.down`), reached
+// by the only mechanism available for an event four other owners want.
+//
+// `stopPropagation` is what actually buys it: without it the wheel would zoom
+// the camera at the same time as the map. `passive: false` is required for
+// `preventDefault` to suppress the browser's own scroll.
+//
+// The idle reset mirrors the mousedown branch — working a menu is activity —
+// and deliberately does NOT call `stopFlythrough()`: scrolling a nav map is not
+// a reason to drop the autopilot, where dragging the world camera is.
+window.addEventListener('wheel', (e) => {
+  if (!_cockpitPointerActive()) return;
+  if (!_cockpitRig.pointer.wheel(e.clientX, e.clientY, e.deltaY)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (!autoNav.isActive) { idleTimer = 0; _deepSkyLingerTimer = -1; }
+}, { capture: true, passive: false });
+
 // Scroll wheel resets idle timer.
 // In TOY_BOX, wheel kills autopilot (old behavior). In FLIGHT, wheel
 // just changes chase distance (handled inside ShipCameraSystem) and

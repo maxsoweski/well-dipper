@@ -232,6 +232,7 @@ describe('the pointer router — the hover channel must survive the extraction',
       pointerMove: () => calls.push('move'),
       pointerUp: () => calls.push('up'),
       pointerHover: (h) => calls.push(`hover:${h ? 'hit' : 'miss'}`),
+      pointerWheel: (h, d) => { calls.push(`wheel:${d}`); return !!h; },
     });
     return { rig, calls };
   }
@@ -313,5 +314,53 @@ describe('the pointer router — the hover channel must survive the extraction',
     const { rig } = routed({ role: null, landed: false });
     rig.pointer.down(1, 1);
     expect(rig.pointer.census.lastRole).toBe(null);
+  });
+
+  // ── THE WHEEL CHANNEL (2026-07-30) — Max: "Scroll wheel doesn't work in the
+  //    nav menus in game." The router had press, drag and hover and no wheel,
+  //    so nothing forwarded one to an offscreen canvas that can never receive
+  //    a real event. Gated EXACTLY as hover is, and for the same reasons. ────
+  it('forwards a wheel over the landed panel, carrying deltaY unchanged', () => {
+    const { rig, calls } = routed();
+    expect(rig.pointer.wheel(10, 10, -120)).toBe(true);
+    expect(calls).toEqual(['wheel:-120']);
+  });
+
+  it('does not forward a wheel over ANOTHER panel — its uv is not NAV pixel space', () => {
+    // Unlike a move, which is forwarded as an explicit MISS so the class can
+    // clear its own hover, a wheel over the wrong panel is simply not ours.
+    // There is nothing to clear and no "the pilot scrolled off the glass" state.
+    const { rig, calls } = routed({ role: 'DRIVE' });
+    expect(rig.pointer.wheel(10, 10, -120)).toBe(false);
+    expect(calls).toEqual([]);
+  });
+
+  it('does not forward a wheel before the panel has landed, or during a look-drag', () => {
+    // At rest NAV is chrome-less and not something the pilot is working; during
+    // a look-drag the head is turning and the pointer is not theirs to aim. Both
+    // are the hover gate, and a wheel channel that disagreed with it would zoom
+    // a map the pilot cannot see.
+    const a = routed({ landed: false });
+    expect(a.rig.pointer.wheel(10, 10, -120)).toBe(false);
+    expect(a.calls).toEqual([]);
+    const b = routed({ lookDragging: true });
+    expect(b.rig.pointer.wheel(10, 10, -120)).toBe(false);
+    expect(b.calls).toEqual([]);
+  });
+
+  it('counts wheels in the census, so "the wire is absent" is distinguishable from "the map ignored it"', () => {
+    // This is the instrument the live pass reads. Increment 6's lesson: hover
+    // at 0 with pressedMove rising is a MISSING CHANNEL, and it looks exactly
+    // like a class that received the event and did nothing with it.
+    const { rig } = routed();
+    rig.pointer.wheel(10, 10, -120);
+    rig.pointer.wheel(10, 10, 120);
+    expect(rig.pointer.census).toMatchObject({ wheel: 2 });
+  });
+
+  it('a wheel with no adapter is not consumed, so the host keeps its own zoom', () => {
+    const { rig } = routed();
+    rig.ensureNavAdapter = () => null;
+    expect(rig.pointer.wheel(10, 10, -120)).toBe(false);
   });
 });

@@ -163,6 +163,44 @@ describe('main.js hands the pointer to the cockpit router first', () => {
       expect(navRoute).toBeLessThan(dismiss);
     });
 
+    // ── THE WHEEL (2026-07-30) ──────────────────────────────────────────────
+    //
+    // ⚠ THIS ONE CANNOT BE A TEXTUAL ORDER ASSERTION, AND THAT IS THE POINT.
+    // The other three channels win by being written above the branches that
+    // would eat them, because they are all listeners on the same canvas and
+    // same-element same-phase listeners fire in REGISTRATION order. The wheel
+    // has FOUR other owners — CameraController, ShipCamera, ShipCameraSystem
+    // and the idle-timer handler — constructed across four modules, so
+    // registration order is not something this file can pin by position.
+    //
+    // What buys first refusal is the CAPTURE PHASE on `window`, which the spec
+    // orders ahead of every canvas listener regardless of who registered first.
+    // So the options object IS the ordering guarantee here, and asserting the
+    // text position instead would be a test that passes while the wheel zooms
+    // the camera out from under a pilot scrolling a map.
+    it('takes the wheel in the CAPTURE phase on window — the only first refusal available', () => {
+      const start = at("window.addEventListener('wheel'");
+      const block = SRC.slice(start, at('canvas.addEventListener(\'wheel\'', start));
+      expect(block).toContain('_cockpitRig.pointer.wheel(');
+      expect(block).toContain('capture: true');
+      // preventDefault is inert on a passive listener, so the browser would
+      // scroll the page under the cockpit while the map zoomed.
+      expect(block).toContain('passive: false');
+    });
+
+    it('suppresses the other four wheel owners when it consumes, and only then', () => {
+      const start = at("window.addEventListener('wheel'");
+      const block = SRC.slice(start, at('canvas.addEventListener(\'wheel\'', start));
+      // Without stopPropagation the map and the chase distance move together on
+      // one gesture — the failure looks like "zooming the map also zooms out".
+      expect(block).toContain('e.stopPropagation();');
+      // ...and the early returns are what keep the world wheel working at all.
+      // A handler that stopped propagation unconditionally would kill camera
+      // zoom everywhere, in ORRERY included, which has no cockpit to justify it.
+      expect(block).toContain('if (!_cockpitPointerActive()) return;');
+      expect(block).toContain('.pointer.wheel(e.clientX, e.clientY, e.deltaY)) return;');
+    });
+
     it('the probe reports the census, so a live check reads the receiver not the caller', () => {
       const probe = SRC.slice(at('window._cockpit = () =>'), at('// When the tour visits every body'));
       expect(probe).toContain('_cockpitRig.pointer.census');
