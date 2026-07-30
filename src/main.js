@@ -11567,6 +11567,29 @@ if (mobileControls) {
       toggleNavComputer();
     } else if (action === 'autonav-toggle') {
       if (autoNav.isActive) {
+        // ⛔ `stopFlythrough()` — DELIBERATELY NOT `_disarmAutopilotKeepingCockpit()`,
+        // and this asymmetry is load-bearing. See the header block above
+        // `_disarmAutopilotKeepingCockpit` for the desktop half of the story.
+        //
+        // Arming from here routes through `_armAutopilotWithCockpit` (Max's
+        // decision of 2026-07-30, all four paths), so ON seats you in the
+        // cockpit while OFF drops the regime to ORRERY. That reads like a bug
+        // and was reported as one on 2026-07-30 — it is not.
+        //
+        // MOBILE HAS NO HANDS-ON STATE TO FALL BACK TO. Three independent
+        // places say so: `setCameraMode` hard-locks mobile to TOY_BOX
+        // ("mobile can never be Flight"), `_toggleMode` refuses ORRERY→HELM
+        // entry on mobile (:10095), and the boot path records
+        // "mobile-HELM = tour by default, AC9" (:6881). The dock carries no
+        // throttle control and there is no F key. So keeping the cockpit here
+        // would strand the pilot at throttle 0 inside a ship they cannot fly
+        // or aim, with the mode-swap button as the only way out — strictly
+        // worse than leaving. On mobile, HELM *is* the tour; ending the tour
+        // is ending HELM.
+        //
+        // ⚠ The adversary for this comment is a future good-faith session that
+        // notices the asymmetry, "fixes" it, and ships that dead state.
+        // `mainNavWiring.test.js` guards it.
         stopFlythrough();
         btn.classList.remove('active');
       } else if (system) {

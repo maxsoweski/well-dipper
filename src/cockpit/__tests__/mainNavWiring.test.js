@@ -251,6 +251,52 @@ describe('autopilot always has a cockpit, and the screensaver stays closed', () 
     ).not.toMatch(/if \(_navComputerOpen\) closeNavComputer\(\);\s*\n\s*else openNavComputer\(\)/);
   });
 
+  it('the mobile autonav buttons STOP the regime rather than keeping the cockpit', () => {
+    // The inverse guard to the one above, and it protects the opposite answer.
+    // Arming from mobile goes through `_armAutopilotWithCockpit`, so ON seats
+    // you in the cockpit and OFF drops to ORRERY. That asymmetry reads like a
+    // bug — it was reported as one on 2026-07-30 — and it is deliberate:
+    // mobile is hard-locked out of hands-on flight (setCameraMode TOY_BOX,
+    // no ORRERY→HELM entry, "mobile-HELM = tour by default"), the dock has no
+    // throttle control and there is no F key. `_disarmAutopilotKeepingCockpit`
+    // here would strand the pilot at throttle 0 in a ship they cannot fly.
+    //
+    // The adversary is a future good-faith session tidying the asymmetry away.
+    const start = at('function handleMobileAction(');
+    const end = at('// Listen on dock and speed dial', start);
+    // ⚠ COMMENTS STRIPPED FIRST. The branch below is commented with the very
+    // identifier this asserts the absence of, and the first draft of this test
+    // went red on its own prose. Same class as the `indexOf` that once matched
+    // a comment quoting the code it was hunting — scan the CODE, not the file.
+    const handler = SRC.slice(start, end).replace(/\/\/[^\n]*/g, '');
+    const disarms = [...handler.matchAll(/_disarmAutopilotKeepingCockpit\(\)/g)];
+    expect(
+      disarms.length,
+      'mobile has no hands-on state to disarm INTO — see the comment on the autonav-toggle branch',
+    ).toBe(0);
+    // …and it must still actually stop, in both branches (dock + speed dial).
+    expect([...handler.matchAll(/stopFlythrough\(\);/g)].length).toBe(2);
+  });
+
+  it('CONTROL: the three facts the mobile ruling rests on are still true', () => {
+    // If any of these stops holding, the ruling above is stale, not passing —
+    // mobile would have somewhere to disarm into and the asymmetry would be a
+    // real bug again.
+    const cam = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), '../../camera/ShipCameraSystem.js'),
+      'utf8',
+    );
+    expect(cam, 'mobile is no longer hard-locked out of Flight camera').toMatch(
+      /if \(this\.isMobile\) mode = CameraMode\.TOY_BOX;/,
+    );
+    expect(SRC, 'mobile is no longer refused ORRERY->HELM entry').toMatch(
+      /if \(_isMobile && !swap\.exitFlight\) return;/,
+    );
+    expect(SRC, 'the mobile dock gained a throttle affordance').not.toMatch(
+      /data-action="throttle"/,
+    );
+  });
+
   it('CONTROL: toggleNavComputer is the predicate that knows about both surfaces', () => {
     // If this ever stops testing the glass, the fix above is hollow.
     expect(fnBody('toggleNavComputer')).toMatch(/_navComputerOpen \|\| _cockpitNavZoomed\(\)/);
