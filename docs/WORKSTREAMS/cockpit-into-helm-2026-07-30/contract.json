@@ -4,7 +4,7 @@
   "project": "well-dipper-cockpit-screens",
   "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md",
   "status": "in-progress",
-  "statusNote": "13 PASS, 0 PARTIAL, 3 not started (steps 8-11, behind Max's hard stop), 1 deferred to Max. All four PARTIALs closed by live drive 2026-07-30. Also this session: the cockpit camera was posed from the WORLD camera, so the ship's heading rotated the whole cabin around the pilot (measured 119 deg off-axis with the head dead-centre); fixed in b5e0d30 and every panel judgement before it was made in a swinging cabin.",
+  "statusNote": "14 PASS, 1 PARTIAL (overlays-retire: the #debug-hud dev rows raised to Max), 1 not started (AC-LETTERBOX-Y-SETTLED-HERE), 1 deferred to Max. Step 8 authorised by Max 2026-07-30 after he flew the frame fix and confirmed the flight mechanics.",
   "acceptanceCriteria": [
     {
       "id": "AC-ONE-RIG-TWO-HOSTS",
@@ -63,8 +63,8 @@
       },
       "layer": "integration",
       "live": true,
-      "status": "NOT-STARTED",
-      "statusNote": "steps 8-11, behind the hard stop"
+      "status": "PARTIAL",
+      "statusNote": "Step 8 landed 2026-07-30 (e22dd02 + this commit). DONE and verified live: SupercruiseHud's flight READOUTS (bottom-left speed/throttle cluster, MODE line) gone in HELM and still on the DRIVE panel; the minimap suppressed in HELM incl. AFTER A WARP (the trap this AC names) and returning in ORRERY; the V-key gravity well still live in HELM; #flight-mode-toast suppressed in HELM; BodyInfo suppressed in HELM; the NavComputer overlay already routed to the glass; #commit-burn-btn ALREADY carried `|| _scManual` and needed no change; #mode-swap-btn's `(!_isMobile || _scManual)` survives. DELIBERATELY KEPT, not retired: the centre steering reticle + deflection dot (a CONTROL - no panel can draw a cross at screen centre, and nothing on the glass replaces it), the mass-lock TOO CLOSE alert, and the at-the-body ETA/drop cue (world-space: says WHICH, where the panel says how far - Max can reverse that one by moving one block under the flag). ⛔ OUTSTANDING: the #debug-hud physics rows. It turned out to be a hidden DEVELOPER overlay (FPS, galactic potential, star evolution), display:none by default and not a player surface, so stripping dev diagnostics for DIEGETIC-ONLY looks like the wrong trade - RAISED TO MAX, not skipped. ⚠ ALSO NOT DRIVEN: #mode-swap-btn on a REAL mobile device; verified by reading only. ⚠ CONTRACT CONTRADICTION, resolved in favour of the corrected text: this AC's own ⚠CORRECTED note says the 320-square retires in HELM ONLY and ORRERY keeps it (citing a prior recorded ruling), while AC-ORRERY-KEEPS-WHAT-IT-OPERATES still says the circle is 'gone in both modes' - pre-correction wording. Implemented per the correction."
     },
     {
       "id": "AC-ORRERY-KEEPS-WHAT-IT-OPERATES",
@@ -75,8 +75,8 @@
       },
       "layer": "integration",
       "live": true,
-      "status": "NOT-STARTED",
-      "statusNote": "steps 8-11, behind the hard stop"
+      "status": "PASS",
+      "statusNote": "Verified live 2026-07-30 by flipping the regime with M and driving each surface. ORRERY: N opens the nav computer and drives it (observed earlier the same day when the screensaver sequence ran on the DOM overlay in ORRERY, which is the correct surface there), and Tab-selecting a body shows BodyInfo (display 'block'). HELM: the same Tab leaves BodyInfo at 'none', and flipping back to ORRERY brings it 'block' again - so the retirement AND the restoration both work, which is the half that is easy to miss. Flight readouts absent in both (scHud only ever drew in HELM, and its readouts are now gated off there). ⚠ See the contradiction noted on AC-OVERLAYS-RETIRE-IN-HELM about the 320-square: this AC's 'gone in both modes' wording predates that AC's own correction and was NOT followed."
     },
     {
       "id": "AC-ZOOM-AND-WORK-THE-MENU-IN-GAME",

@@ -100,6 +100,33 @@ describe('the HUD slot has exactly one decision point', () => {
     expect(body, 'no re-decide on the regime flip').toMatch(/_applyHudSlot\(\)/);
   });
 
+  it('the two retired DOM surfaces are driven from the same flip point', () => {
+    // BodyInfo and FlightModeToast own their own suppression; main.js only says
+    // which station we are at. Gated at the eleven `bodyInfo.show*` call sites
+    // instead, one of them gets forgotten — which is the whole reason the
+    // classes grew a `setSuppressed` rather than main.js growing eleven `if`s.
+    const start = SRC.indexOf('function setScManual(on)');
+    const body = SRC.slice(start, SRC.indexOf('\n}', start));
+    expect(body).toMatch(/_syncRetiredOverlaysToMode\(\)/);
+
+    const sync = SRC.indexOf('function _syncRetiredOverlaysToMode()');
+    expect(sync, 'the sync fn is gone — this scan is stale').toBeGreaterThan(-1);
+    const syncBody = SRC.slice(sync, SRC.indexOf('\n}', sync));
+    expect(syncBody).toMatch(/bodyInfo\.setSuppressed\(_scManual\)/);
+    expect(syncBody).toMatch(/flightModeToast\.setSuppressed\(_scManual\)/);
+  });
+
+  it('CONTROL: the BURN button and the mobile mode-swap were ALREADY correct', () => {
+    // Both are on the retire list and neither needed a change on 2026-07-30.
+    // Pinned so a later edit cannot quietly undo what was verified by reading.
+    const burn = SRC.indexOf('function _updateCommitBurnButton()');
+    const burnBody = SRC.slice(burn, burn + 1600);
+    expect(burnBody, 'the DOM BURN affordance is back beside the cockpit COMMIT')
+      .toMatch(/const burning = [^;]*_scManual/);
+    expect(SRC, '#mode-swap-btn must survive on mobile — it is mobile-HELM\'s only tour exit')
+      .toMatch(/\(!_isMobile \|\| _scManual\)/);
+  });
+
   it('the click and drag dead zones ask the same question the renderer asked', () => {
     // Otherwise HELM keeps a live 320² hole that eats clicks meant for the
     // world over a minimap that is not being drawn.

@@ -617,6 +617,25 @@ function setScManual(on) {
   // re-decides until the next warp or toggle. Same universal-flip-point
   // argument as the two hooks above.
   if (typeof _applyHudSlot === 'function') _applyHudSlot();
+  // AC-ORRERY-KEEPS-WHAT-IT-OPERATES + AC-OVERLAYS-RETIRE-IN-HELM. The two DOM
+  // surfaces the cockpit replaces are retired from the same universal flip
+  // point, for the same reason the three hooks above are: eleven `show*` call
+  // sites gated eleven times is a gate that gets forgotten once. Each class
+  // owns its own suppression; this only tells them which station we are at.
+  if (typeof _syncRetiredOverlaysToMode === 'function') _syncRetiredOverlaysToMode();
+}
+
+/**
+ * Push the regime to the DOM surfaces the cockpit replaces.
+ *
+ * A hoisted function declaration rather than inline statements, so
+ * `setScManual`'s existing forward-reference safety keeps working: `bodyInfo`
+ * and `flightModeToast` are `const`s declared further down, and reaching them
+ * from inside a function body defers the read to call time.
+ */
+function _syncRetiredOverlaysToMode() {
+  bodyInfo.setSuppressed(_scManual);
+  flightModeToast.setSuppressed(_scManual);
 }
 let _flightMode = FlightMode.MANUAL;          // in-flight sub-state (meaningful while _scManual)
 const _alignState = { active: false, mesh: null, t: 0 }; // Mode-B one-time align (Task 5)

@@ -12,8 +12,23 @@ export class FlightModeToast {
     this._hideTimer = null;
     this._holdMs = 1600;
   }
+  /**
+   * ⭐ RETIRED IN HELM — AC-OVERLAYS-RETIRE-IN-HELM, a ruling the prior
+   * workstream already recorded.
+   *
+   * The banner announces the assist mode on entry; the cockpit's DRIVE panel
+   * shows `MODE: <mode>` PERSISTENTLY, which is strictly more than a 1.6 s
+   * flash. Note the asymmetry this produces, and it is the right one: "Flight
+   * ON" fires from `_enterFlightInternal` while `_scManual` is already true, so
+   * it is suppressed — while "Flight OFF" fires from `_exitFlightInternal`
+   * AFTER `setScManual(false)`, so it still shows. You are told you left the
+   * cockpit; you are not told you are in it by a banner over the panel that
+   * says so.
+   */
+  setSuppressed(on) { this._suppressed = !!on; }
+
   show(label, hint) {
-    if (!this._el) return;
+    if (!this._el || this._suppressed) return;
     clearTimeout(this._fadeTimer);
     clearTimeout(this._hideTimer);
     this._labelEl.textContent = label;
