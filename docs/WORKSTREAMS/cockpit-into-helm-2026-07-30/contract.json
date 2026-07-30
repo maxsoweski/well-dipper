@@ -3,8 +3,8 @@
   "intentRef": "intent.md",
   "project": "well-dipper-cockpit-screens",
   "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md",
-  "status": "scoping",
-  "statusNote": "SCOPED 2026-07-30, awaiting Max's greenlight. Increment 7 of the HELM cockpit program — the first increment that puts the cockpit in the game. Max's four scoping decisions of 2026-07-30 are recorded in designDecisions: (1) the DOM overlay retirement happens HERE rather than after first light, taken AGAINST the recommendation to split it, with the risk stated and confirmed; (2) head decoupling is its own step right after; (3) all four cinematic autopilot paths route through the hands-off tour; (4) glass carries as-is with no refraction. The ORRERY answer the program demanded is decision (5): ORRERY keeps the two OPERABLE surfaces (nav computer, body info) and loses the flight readouts. ⚠ THE HIDDEN COST, surfaced at scoping and not yet priced: the cockpit's entire visual assembly — GLB load, scene, lights, eye camera, panel host, mover, picker — lives INLINE in cockpit-screens-lab.html and exists in no module. src/main.js contains only CockpitSnapshotProvider. So this increment must EXTRACT before it can wire. ── REVIEWED 2026-07-30 by a 9-agent workflow (5 read-only seam mappers -> 1 design -> 3 adversarial lenses): 133 findings, 46 mapper risks, 42 objections of which 8 blockers. All three lenses returned SOUND_WITH_FIXES. Three load-bearing claims were spot-checked against the source before acting and all three held exactly. Blocker fixes are folded into the ACs and designDecisions above. Full record: evidence/DESIGN-REVIEW-2026-07-30.md.",
+  "status": "in-progress",
+  "statusNote": "Steps 1-7 landed (2448543). The cockpit is IN the game and OPERABLE. HARD STOP before step 8 (the retirements, the point of no return) pending Max's first-light UAT — every overlay is deliberately still live so he can compare a wrong panel against the right one. Live evidence: evidence/steps-5-7-operable-2026-07-30.png and the step 5/6/7 commit messages.",
   "acceptanceCriteria": [
     {
       "id": "AC-ONE-RIG-TWO-HOSTS",
@@ -14,7 +14,9 @@
         "observable": "The module constructs and exposes the panel records, the mover and the picker. The lab contains no remaining GLTFLoader/scene/light/mover/picker construction of its own — it calls the module. A planted divergence (change a light's intensity or the eye camera's fov in the module) shows up in BOTH the lab and the game rather than one of them."
       },
       "layer": "unit",
-      "live": false
+      "live": false,
+      "status": "PASS",
+      "statusNote": "step 1a/1b — CockpitRig extracted, the lab is a caller"
     },
     {
       "id": "AC-COCKPIT-IS-THERE",
@@ -24,7 +26,9 @@
         "observable": "The cockpit geometry is on screen in front of the world, the four Screen_* faces carry their panel textures, and the frame does not regress: zero new console errors, and the world still renders behind the canopy aperture rather than being occluded by a full-screen quad."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "PASS",
+      "statusNote": "step 2-4 first light; re-confirmed live at steps 5-7"
     },
     {
       "id": "AC-HELM-ONLY",
@@ -34,7 +38,9 @@
         "observable": "The cockpit's render pass is skipped entirely in ORRERY (not merely transparent — no pass, no cost), present in HELM, and present throughout the hands-off tour."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "PASS",
+      "statusNote": "live: rendering true in HELM, false in ORRERY, routing follows"
     },
     {
       "id": "AC-PANELS-READ-THE-REAL-FLIGHT",
@@ -44,7 +50,9 @@
         "observable": "Each panel's readout changes to match, within one frame of the snapshot. A panel reading a live game object directly instead of the snapshot is a FAIL even if the number displayed is correct — checked by attempting a write through every panel's inbound data."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "PASS",
+      "statusNote": "live: DRIVE/TARGET/INFO track the flight; NAV now reads the real system"
     },
     {
       "id": "AC-OVERLAYS-RETIRE-IN-HELM",
@@ -54,7 +62,9 @@
         "observable": "None of the retired elements is in the DOM's rendered tree in HELM (display:none is acceptable only where the element is shared with ORRERY; a retired-outright element is gone). The N key and the mobile 'nav' action do not open a DOM overlay on top of the cockpit. No layout gap or stray backdrop is left where they were. Additionally: after a WARP, the minimap is still suppressed — spawnSystem calls retroRenderer.setHud(...) on every arrival (main.js:4756-4767), so a regime-only gate leaves it back on top of the cockpit. The V-key gravity well still works in HELM. #mode-swap-btn is still present and functional on mobile."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "NOT-STARTED",
+      "statusNote": "steps 8-11, behind the hard stop"
     },
     {
       "id": "AC-ORRERY-KEEPS-WHAT-IT-OPERATES",
@@ -64,7 +74,9 @@
         "observable": "In ORRERY the nav computer opens and drives, and selecting a body shows its info; the flight readouts are absent. In HELM the same two are absent as DOM and present on the glass. Warping from ORRERY still works end to end."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "NOT-STARTED",
+      "statusNote": "steps 8-11, behind the hard stop"
     },
     {
       "id": "AC-ZOOM-AND-WORK-THE-MENU-IN-GAME",
@@ -74,7 +86,9 @@
         "observable": "The panel travels to the eye and lands; each click produces its documented state change read from the live instance; the panel restores on ESC. Zero console errors across the sequence."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "PASS",
+      "statusNote": "live: level tabs change level, a star at PRISM drills to SYSTEM, a planet opens planet detail, ESC restores, zero console errors"
     },
     {
       "id": "AC-A-QUICK-CLICK-IS-ENOUGH",
@@ -84,7 +98,9 @@
         "observable": "The planet drills in. The pointer census shows the hover channel carrying the moves (hover count rising, pressed-move count zero) and lastRole is the zoomed panel. A control run with no preceding hover does nothing, proving the hover is what did the work."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "PASS",
+      "statusNote": "live: CONTROL with no preceding hover does nothing; one unpressed hover then press+release with nothing between drills the body. census hover 1+, pressedMove 0, lastRole NAV"
     },
     {
       "id": "AC-AUTOPILOT-BUTTON-TOGGLES",
@@ -94,7 +110,9 @@
         "observable": "The first press starts the hands-off tour and the on-glass label reads AUTOPILOT ON; the second stops it and the label returns. The callback receives true then false, not true twice."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "PASS",
+      "statusNote": "live: press 1 tour true->false and label ON->OFF with the cockpit STILL on screen; press 2 false->true. true then false, not true twice"
     },
     {
       "id": "AC-COMMIT-FIRES-THE-WARP",
@@ -104,7 +122,9 @@
         "observable": "The same warp/burn sequence the overlay produced begins, with the same sound cue. The action payload matches the shape _buildCommitAction() returns — not a fabricated one."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "PASS",
+      "statusNote": "live: [ WARP ] on the glass flips warpTarget to the selected star, retracts the panel, and turning goes true"
     },
     {
       "id": "AC-REAL-CATALOGUE-REACHES-THE-GLASS",
@@ -114,7 +134,9 @@
         "observable": "The chip is drawn, the click opens the component sub-view, and clicking again returns to the system view. Both catalogues report loaded on the cockpit instance."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "PARTIAL",
+      "statusNote": "live: both catalogues report loaded on the cockpit instance (was structurally null). NOT driven: the far-companion chip at an authored host (Proxima -> Alpha Centauri)."
     },
     {
       "id": "AC-AUTOPILOT-ALWAYS-HAS-A-COCKPIT",
@@ -124,7 +146,9 @@
         "observable": "Each one runs with the cockpit on screen and the camera at the helm (`scHead.applyTo(camera, ...)`), not the cinematic FlythroughCamera. All four are exercised; none is assumed from the others."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "PARTIAL",
+      "statusNote": "path 1 (the nav button) driven live from ORRERY-capable state. Paths 2-4 (both mobile buttons, post-respawn re-arm) are wired and scan-guarded but not each driven."
     },
     {
       "id": "AC-SCREENSAVER-LOOP-STAYS-CLOSED",
@@ -134,7 +158,9 @@
         "observable": "The sequence performs on the cockpit's NAV panel — visible on the glass, no DOM overlay appears — picks a star, and warps. Then the loop begins again. In ORRERY the tour never auto-arms, which stays true."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "PARTIAL",
+      "statusNote": "live: _triggerTourComplete zooms the GLASS and drills, overlayOpen false throughout. NOT observed: a full unattended loop through pick -> warp -> tour again."
     },
     {
       "id": "AC-FLIGHT-AND-ORRERY-SURVIVE",
@@ -144,7 +170,9 @@
         "observable": "The ship responds to the flight keys while zoomed and the zoomed panel keeps its pose. The existing suite stays green, HeadMount's bit-identical assertion included. Warp, save/load and ORRERY behave as before."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "PARTIAL",
+      "statusNote": "live: W throttles 0.18->0.60 with a panel zoomed; ORRERY drops the pass and keeps N; a warp ran end to end. NOT driven: save/reload, mobile controls."
     },
     {
       "id": "AC-LETTERBOX-Y-SETTLED-HERE",
@@ -154,7 +182,9 @@
         "observable": "The picker and the renderer agree at every shape tested — the game's own viewport probe reports the two conventions agreeing — and a click near either edge lands on the target rather than one pixel off it."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "status": "NOT-STARTED",
+      "statusNote": "not touched by steps 5-7"
     },
     {
       "id": "AC-BASELINE-GREEN",
@@ -164,7 +194,9 @@
         "observable": "2275 or more passed, 4 skipped, and exactly the 15 known vendor collection errors. Any new failure is a FAIL regardless of whether it looks related."
       },
       "layer": "unit",
-      "live": false
+      "live": false,
+      "status": "PASS",
+      "statusNote": "2357 passed / 4 skipped + the 15 known vendor collection errors"
     },
     {
       "id": "AC-IT-FEELS-LIKE-FLYING-FROM-INSIDE",
@@ -173,7 +205,9 @@
         "input": "Max flies the game in HELM, uses the four screens as his instruments, zooms NAV and navigates from it, and spends time in ORRERY.",
         "observable": "Max's judgement. Always deferred-to-max; the verify workflow marks it deferred and never PASS."
       },
-      "layer": "uat"
+      "layer": "uat",
+      "status": "deferred-to-max",
+      "statusNote": "UAT, Max's gate alone. No agent drives or passes this."
     }
   ],
   "architecturalConnections": {
