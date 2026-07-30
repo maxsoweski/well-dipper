@@ -1469,6 +1469,22 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
 
 ## Recently shipped
 
+- **world-engine port (lane L1), slice 3 rungs 0–1** (2026-07-30) — ⚠ **AWAITING MAX UAT.**
+  `f77d9ff` **the hoist**: `hash3`/`noised`/`fbmd` now live only in
+  `src/worldengine/shaders/heightNoise.glsl.js` and are spliced back into `HEIGHT_GLSL` at the two
+  (non-contiguous) points they occupied — resolved string **byte-identical, 265 920 bytes**; the
+  duplicate copy and its byte-lock test are gone, and `vis-scale-fence` was re-pointed at the
+  resolved string rather than losing its guard. `bef6bf3` **relief strength ×6**
+  (`RELIEF_NORMAL_GAIN` 6.54 → 39.24), the band-collapse fix the first increment deferred; zero
+  frame cost *provably* (it is a uniform, so the compiled shader is unchanged). The gain
+  self-limits: flattest types +71–120% local contrast, already-varied types +8–17%. 60° clamp fires
+  0.000% even at 12×; Venus and gas-giant controls byte-identical across the whole sweep. Contact
+  sheet `~/briefings/relief-strength-6x-2026-07-30.png`. Register:
+  `docs/FEATURES/surface-variation-beyond-mvp.md` § "SLICE 3, SECOND INCREMENT". Suite = baseline
+  (20773 / 4). **Next rung** (`uReliefOctaves` LOD ramp) deliberately NOT started so the visual
+  change can be UAT'd alone — and it has two open snags: the `lodLevel` tier is discrete so 4→9
+  will pop, and the game passes `fwBase = 0` so fbmd's anti-shimmer clamp is inert.
+
 - **world-origin spawn-once-body centering** (2026-06-04) — single (non-binary)
   system stars, planet orbit rings, and asteroid belts were spawned at the raw
   scene origin and never rewritten per-frame, so in warp-reached systems they
