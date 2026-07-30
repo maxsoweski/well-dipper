@@ -27,6 +27,25 @@
  * AC-STRINGS-TELL-THE-TRUTH, which claimed five reachable footers on that basis
  * and had four.
  *
+ * ── AND IT STILL READS THE SOURCE, ON PURPOSE ──────────────────────────────
+ *
+ * The behavioural half cannot see a string it never causes to be drawn, and
+ * NavComputer has plenty: the SELECT MOON footer is structurally dead, the
+ * SELECT STAR TO WARP footer is overwritten every frame before it can draw,
+ * component detail degrades away headless, and levels 0–3 are outside this
+ * census entirely. An ESC promise added to any of those is invisible to a
+ * behavioural test and obvious to a source read. So both halves stay, and the
+ * trade is explicit: BEHAVIOUR proves a string is reachable and belongs to the
+ * state it claims; SOURCE proves no string exists anywhere that would break the
+ * rule if it ever did draw.
+ *
+ * What changed 2026-07-29 is the INSTRUMENT. Every source scan here used to be
+ * `/fillText\('([^']*)'/` — sensitive to a quote character, which a skeptic used
+ * to walk a double-quoted "PRESS ESC TO RETURN" past all seven of them at a live
+ * draw site. The scans now go through `helpers/drawnText.mjs`, which parses the
+ * file, so a drawn string is read by VALUE and its spelling stops mattering.
+ * That header carries the census of how this file actually spells them.
+ *
  * ── WHAT IS DELIBERATELY *NOT* CHANGED ─────────────────────────────────────
  *
  * RIGHT-CLICK. `_handleClick` treats `e.button === 2` as an escape and calls
@@ -47,9 +66,12 @@ import { dirname, join } from 'node:path';
 import {
   makeHeadlessNav, fakeStar, clickAt, hoverAt, findHoverPoint, tabCentre, TAB_H,
 } from './helpers/headlessNav.mjs';
+import { collectDrawSites, collectStringLiterals } from './helpers/drawnText.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..', '..', '..');
+const NAV_SRC_PATH = join(REPO, 'src', 'ui', 'NavComputer.js');
+const navSrc = () => readFileSync(NAV_SRC_PATH, 'utf8');
 
 const SELF_CODE = readFileSync(join(HERE, 'NavComputer.escape.test.js'), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -300,7 +322,46 @@ describe('AC-NO-STUCK-STATE — every state has a click route out', () => {
 });
 
 describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () => {
-  const FOOTER_RE = /GO BACK|CHANGE VIEW|TO RETURN/i;
+  // ── WHAT COUNTS AS A FOOTER ──────────────────────────────────────────────
+  //
+  // BY POSITION, NOT BY WORDING. This used to be
+  // `/GO BACK|CHANGE VIEW|TO RETURN/i`, which defines the footer as the set of
+  // phrases the footer currently happens to use — so a footer worded outside
+  // those three fragments ('CLICK TO DISMISS', say) is not a footer as far as
+  // the census is concerned. It then falls out of the behavioural set AND out
+  // of the source set at the same time, and the closure test below balances
+  // green with the new string in neither list. A guard that only recognises the
+  // strings already written is not guarding the next string.
+  //
+  // Every footer in NavComputer is drawn at `drawH - 8`, centred, and the
+  // renderers all compute `drawH` the same way. Both constants are duplicated
+  // from production and both are PINNED against the source below, the way TAB_H
+  // already is — a duplicated constant that nothing checks is how a test starts
+  // measuring the wrong row of pixels and reporting silence as a pass.
+  const DRAW_H_INSET = 50; // `const drawH = this._bare ? h : h - 50`
+  const FOOTER_UP = 8; //     `ctx.fillText(…, w / 2, drawH - 8)`
+  // Chromed only: `_bare` frames set drawH = h and draw no footer at all, and
+  // every state below is driven chromed because that is the state the text
+  // appears in.
+  const footerY = (nav) => nav._canvas.height - DRAW_H_INSET - FOOTER_UP;
+  const footersOf = (nav, rec) => rec.text.filter((t) => t.y === footerY(nav)).map((t) => t.text);
+
+  /** The y expression a footer draw is written with, as source text. */
+  const FOOTER_Y_SRC = `drawH - ${FOOTER_UP}`;
+
+  /**
+   * The footer draw sites in NavComputer.js, read out of the parsed file.
+   *
+   * `wholeLiteral` — the first argument is one entire string literal, in any
+   * quote style. A footer is a fixed sentence on the glass; a computed argument
+   * at the footer baseline is something else (today: the PRISM warp-target star
+   * NAME, `s.name || 'Unnamed'` at :1863, which shares the baseline and is data,
+   * not an affordance hint). The computed ones are pinned separately below
+   * rather than filtered away in silence, so a real footer hiding behind a
+   * variable cannot slip out of the ledger.
+   */
+  const footerSites = () => collectDrawSites(navSrc())
+    .filter((s) => s.ySrc === FOOTER_Y_SRC && s.wholeLiteral);
 
   /**
    * Drive one state on a FRESH instance and return what it drew.
@@ -332,16 +393,31 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
       // doing it.
       nav._playerX = star.wx; nav._playerY = star.wy; nav._playerZ = star.wz;
     }
-    // ⚠ WARM-UP RENDER, AND IT IS LOAD-BEARING. `_renderSystem` GENERATES the
-    // system on its first frame, and until it has, nothing is projected and no
-    // body can be hovered — so a route driven without it clicks an empty panel
-    // and every state collapses to the same one. It is also the real sequence: a
-    // player can only drill into a planet once the system has drawn.
+    // WARM-UP RENDER — NOT load-bearing, which this comment used to claim.
+    //
+    // The claim was that without it nothing is projected, no body can be
+    // hovered, and every route collapses to the same state. That was true of the
+    // pre-2026-07-29 shape, where routes reached their states by assignment and
+    // nothing else rendered. It is not true now: routes click, `clickBody` goes
+    // through `hoverAt`, and `hoverAt` renders — so a routed state gets its
+    // first frame from its own first hover whether this line is here or not.
+    // Measured before this comment was rewritten: dropping this call leaves all
+    // ten states' recorded text IDENTICAL, every string, x and y.
+    //
+    // It stays for a smaller and honest reason. The states with no route
+    // (`route: () => {}`) would otherwise be measured on the COLD frame — the
+    // one that generates the system — while routed states are measured warm.
+    // Keeping it means every state in the census is read off a steady-state
+    // frame, so the rows compare like with like.
+    //
+    // What IS load-bearing is the line above it: the player position has to be
+    // written before the FIRST render, because that frame generates the system
+    // and asks `_isCurrentSystem()` while doing it.
     nav.render();
     state.route(nav);
     rec.text.length = 0;
     nav.render();
-    return { nav, drawn: rec.text.map((t) => t.text) };
+    return { nav, drawn: rec.text.map((t) => t.text), footers: footersOf(nav, rec) };
   }
 
   /**
@@ -353,6 +429,26 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
    * draws the same string — the pooled set never notices. The per-state
    * expectation is what makes a deleted route show up as this state stopped
    * being this state.
+   *
+   * ⚠ WHERE THIS CENSUS IS BLIND, WRITTEN DOWN SO THE NEXT SKEPTIC DOES NOT
+   * HAVE TO REDISCOVER IT.
+   *
+   * A deleted click route is caught only if the state it COLLAPSES INTO differs
+   * in something asserted here, and only three things are asserted: the footer
+   * string, `_systemMode`, and the state's own `check`. Two routes that draw the
+   * same footer in the same sub-view are told apart by the `check` alone —
+   * 'planet detail, current' and 'planet detail, current, moon selected' are
+   * exactly that pair, both `planet`, both 'CLICK EMPTY SPACE TO GO BACK', and
+   * only `_selectedBody.type` separates them. A future pair with no
+   * distinguishing observable at all would collapse silently, and the fix when
+   * that happens is a `check`, not another footer string.
+   *
+   * Two further limits, same species:
+   *   • A route that disappears but leaves an EQUIVALENT route in place is not a
+   *     regression this census can see, or should — it reaches the same state.
+   *   • The harness records what the class DREW, never how it looked. A footer
+   *     drawn in the right place with the right text and an invisible colour
+   *     passes everything here. Pixel questions stay live.
    */
   const STATES = [
     {
@@ -440,6 +536,30 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
       mode: 'system',
       footer: 'DRAG TO ROTATE · TABS TO CHANGE VIEW',
     },
+    {
+      label: 'system view, current, selection cleared by a click in empty space',
+      current: true,
+      // NavComputer.js:4196 — `_clearCommitSelection()` on an empty-space click
+      // in the SYSTEM view. A player-visible footer transition in its own right:
+      // with a body selected the panel draws the COMMIT button and the short
+      // 'DRAG TO ROTATE' hint; deselecting puts 'SELECT BODY TO NAVIGATE' back.
+      // No other state drove it — the two "after backing out of planet detail"
+      // rows exit through the PLANET-detail arm at :4129, a different line — so
+      // deleting :4196 was green across the whole suite.
+      //
+      // MOONLESS on purpose, for the same reason as the row above: it is the
+      // only planet click that selects and STAYS in the system view, so the
+      // empty-space click that follows lands in the system-view arm rather than
+      // the planet-detail one.
+      route: (n) => {
+        clickBody(n, 'a moonless planet', A_MOONLESS_PLANET);
+        clickEmptySpace(n);
+      },
+      mode: 'system',
+      footer: 'SELECT BODY TO NAVIGATE · DRAG TO ROTATE · TABS TO CHANGE VIEW',
+      check: (n) => expect(n._selectedBody, 'the empty-space click left the body selected')
+        .toBe(null),
+    },
   ];
 
   /**
@@ -501,11 +621,10 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
       // these routes use and the state it led to collapses into a neighbouring
       // one — which the pooled set below would not notice, because the
       // neighbouring state draws a string the pool already contains.
-      const { nav, drawn } = await drive(s);
+      const { nav, footers } = await drive(s);
       expect(nav._systemMode, `the route did not land in ${s.mode}`).toBe(s.mode);
       if (s.check) s.check(nav);
-      expect(drawn.filter((t) => FOOTER_RE.test(t)), `${s.label} drew the wrong footer`)
-        .toEqual([s.footer]);
+      expect(footers, `${s.label} drew the wrong footer`).toEqual([s.footer]);
     });
   }
 
@@ -521,9 +640,7 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
     // cannot go red when a click route disappears — which is the whole job. The
     // set is four; the fifth is named in UNREACHABLE with the code that kills it.
     const seen = new Set();
-    for (const s of STATES) {
-      for (const t of (await drive(s)).drawn) if (FOOTER_RE.test(t)) seen.add(t);
-    }
+    for (const s of STATES) for (const t of (await drive(s)).footers) seen.add(t);
     expect([...seen].sort()).toEqual([
       'CLICK EMPTY SPACE TO GO BACK',
       'DRAG TO ROTATE · TABS TO CHANGE VIEW',
@@ -543,14 +660,15 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
     // and reachable by a route nobody wrote would sit there unexercised, and a
     // footer DELETED would take its census line with it. Here, either list can
     // absorb a change, but the union has to keep matching the source.
-    const src = readFileSync(join(REPO, 'src', 'ui', 'NavComputer.js'), 'utf8');
-    const inSource = [...new Set(
-      [...src.matchAll(/fillText\(\s*'([^']*)'/g)].map((m) => m[1]).filter((t) => FOOTER_RE.test(t)),
-    )].sort();
+    //
+    // BOTH SIDES ARE NOW POSITIONAL. The source side asks the parser for the
+    // draw calls whose y argument is `drawH - 8` — the footer baseline — instead
+    // of grepping single-quoted literals for three phrases. That is what makes a
+    // newly-added 'CLICK TO DISMISS' land in `inSource` and demand an entry in
+    // one of the two lists, where the phrase-based version simply did not see it.
+    const inSource = [...new Set(footerSites().flatMap((s) => s.fragments))].sort();
     const seen = new Set();
-    for (const s of STATES) {
-      for (const t of (await drive(s)).drawn) if (FOOTER_RE.test(t)) seen.add(t);
-    }
+    for (const s of STATES) for (const t of (await drive(s)).footers) seen.add(t);
     const accounted = [...new Set([...seen, ...UNREACHABLE.map((u) => u.text)])].sort();
     expect(accounted, 'a footer exists that is neither reached by a click route nor named unreachable')
       .toEqual(inSource);
@@ -565,27 +683,114 @@ describe('AC-STRINGS-TELL-THE-TRUTH — nothing on the glass promises ESC', () =
     }
   });
 
+  it('the footer baseline is where this file thinks it is', () => {
+    // The two duplicated constants, pinned — same reason as the TAB_H check at
+    // the bottom of this file. If NavComputer moves the footer up a row, every
+    // positional assertion above starts reading an empty line and reporting
+    // "this state drew no footer" as agreement with an empty expectation.
+    const src = navSrc();
+    const decls = [...src.matchAll(/const\s+drawH\s*=\s*([^;]+);/g)].map((m) => m[1].trim());
+    expect(decls.length, 'no `const drawH` in NavComputer.js — the pin has stopped working')
+      .toBeGreaterThan(0);
+    for (const d of decls) {
+      expect(d, `NavComputer computes drawH as \`${d}\`; this file assumes h - ${DRAW_H_INSET}`)
+        .toMatch(new RegExp(`(^|\\s)h - ${DRAW_H_INSET}$`));
+    }
+    expect(footerSites().length, `no draw site with y \`${FOOTER_Y_SRC}\` — the footer moved`)
+      .toBeGreaterThanOrEqual(5);
+  });
+
+  it('nothing else is drawn on the footer baseline that this census mistakes for a footer', () => {
+    // The other half of "a footer is a fixed sentence at `drawH - 8`": the draw
+    // sites at that baseline whose argument is NOT one whole literal. There is
+    // exactly one today and it is not a footer. Pinned by its source text rather
+    // than its line, so ordinary edits above it do not disturb it and a genuine
+    // footer moving behind a variable does.
+    const computed = collectDrawSites(navSrc())
+      .filter((s) => s.ySrc === FOOTER_Y_SRC && !s.wholeLiteral)
+      .map((s) => s.argSrc);
+    expect(computed, 'a draw site at the footer baseline computes its text — if that is a ' +
+      'real footer it is now outside the closure above, and needs to be made a literal or ' +
+      'given a census row')
+      .toEqual(["s.name || 'Unnamed'"]); // PRISM warp-target banner, level 3 — a star name
+  });
+
+  it('no bottom-strip baseline exists that the footer census does not know about', () => {
+    // The residual the positional definition leaves: a footer drawn at
+    // `drawH - 20` would be neither a footer to this census nor visible to it. It
+    // cannot be closed by guessing at offsets, so it is closed by a tripwire —
+    // the set of bottom-strip baselines NavComputer uses is fixed, and a new one
+    // appearing is read by a human who decides whether it is a footer.
+    //
+    //   8 — the footer baseline, and the selected-star name on PRISM
+    //  14 — DEBUG HUD last line, and the prism-map altitude readout
+    //  24 — 'WARP TARGET' caption above the star name
+    //  30, 46 — DEBUG HUD upper lines
+    const offsets = [...new Set(collectDrawSites(navSrc())
+      .map((s) => s.ySrc)
+      .filter((y) => y && /^drawH - \d+$/.test(y))
+      .map((y) => Number(y.slice('drawH - '.length))))].sort((a, b) => a - b);
+    expect(offsets, 'NavComputer draws on a bottom-strip baseline this file has never seen — ' +
+      'if it is a footer, the census and the closure both need to know')
+      .toEqual([8, 14, 24, 30, 46]);
+  });
+
+  it('no drawn string in the source promises ESC, however it is spelled', () => {
+    // ⭐ THE SCAN THAT USED TO BE A REGEX. `/fillText\(\s*'([^']*)'/` saw 17 of
+    // NavComputer's 60 draw sites — the single-quoted ones — and a skeptic
+    // walked a double-quoted "VIEW ONLY · PRESS ESC TO RETURN" past it at
+    // :2884, a genuine ESC promise at a genuine draw site, with the suite green.
+    // Widening the character class would have closed that one case; the file
+    // spells drawn text six ways (see helpers/drawnText.mjs) and would have
+    // grown a seventh. So the file is PARSED and the strings read by value.
+    const sites = collectDrawSites(navSrc());
+    expect(sites.length, 'the draw-site scan found almost nothing — it has stopped working')
+      .toBeGreaterThanOrEqual(50);
+    const fragments = [...new Set(sites.flatMap((s) => s.fragments))];
+    expect(fragments.length, 'the scan reads no strings out of the draw sites it found')
+      .toBeGreaterThanOrEqual(50);
+    for (const s of sites) {
+      for (const f of s.fragments) {
+        expect(f, `NavComputer.js:${s.line} draws a string promising ESC: "${f}"`)
+          .not.toMatch(/\bESC\b/i);
+      }
+    }
+  });
+
+  it('and neither does any string in the file, drawn or not', () => {
+    // ⭐ THE NET. 21 of the 60 draw sites hand `fillText` something no source
+    // read can resolve — `title`, `chip.name`, `LEVEL_NAMES[i]`, a call. A string
+    // assigned in one method and drawn by another is invisible to the scan above
+    // by construction, so the scan above is not on its own a guarantee.
+    //
+    // This sweeps every string literal and every template chunk in the file
+    // instead. It over-reports on purpose: it cannot tell a drawn string from an
+    // internal one, and for "nothing in this file may promise ESC" that is the
+    // right direction to be wrong in — the cost is a human reading one string,
+    // and the alternative is a hole the width of a variable assignment.
+    //
+    // It does not trip on NavComputer's several `// … after ESC` comments,
+    // because the parser does not treat comments as strings — the old regex
+    // scans had to strip them by hand and one of them stripped the wrong thing.
+    const literals = collectStringLiterals(navSrc());
+    expect(literals.length, 'the literal sweep found almost nothing — it has stopped working')
+      .toBeGreaterThanOrEqual(400);
+    const offenders = literals.filter((l) => /\bESC\b/i.test(l.value));
+    expect(offenders.map((l) => `${l.line}: ${l.value}`),
+      'a string in NavComputer.js promises ESC — if it is never drawn, say so here')
+      .toEqual([]);
+  });
+
   it('still tells the player how to get back — the hint was replaced, not deleted', () => {
-    // Deleting the footer would pass the test above and leave the player with no
-    // affordance named anywhere. The replacement must point at a route
-    // AC-NO-STUCK-STATE proved exists.
-    const src = readFileSync(join(REPO, 'src', 'ui', 'NavComputer.js'), 'utf8');
-    const footers = [...src.matchAll(/fillText\('([^']*(?:GO BACK|TO RETURN|TABS|EMPTY SPACE)[^']*)'/g)]
-      .map((m) => m[1]);
+    // Deleting the footers would pass every test above and leave the player with
+    // no affordance named anywhere: an empty source set and an empty observed set
+    // close over each other perfectly. So the footers are also required to EXIST
+    // and to name a route AC-NO-STUCK-STATE proved is there.
+    const footers = footerSites().flatMap((s) => s.fragments);
     expect(footers.length, 'every "how do I get back" hint was deleted rather than reworded')
       .toBeGreaterThanOrEqual(5);
     for (const f of footers) {
       expect(f, `"${f}" does not name a click affordance`).toMatch(/TAB|CLICK|SELECT/i);
-    }
-  });
-
-  it('the source carries no ESC-navigates-levels claim anywhere it can be drawn', () => {
-    const src = readFileSync(join(REPO, 'src', 'ui', 'NavComputer.js'), 'utf8');
-    const drawnStrings = [...src.matchAll(/fillText\(\s*'([^']*)'/g)].map((m) => m[1]);
-    expect(drawnStrings.length, 'the fillText scan found nothing — it has stopped working')
-      .toBeGreaterThan(5);
-    for (const s of drawnStrings) {
-      expect(s, `a drawn literal still promises ESC: "${s}"`).not.toMatch(/\bESC\b/i);
     }
   });
 });
