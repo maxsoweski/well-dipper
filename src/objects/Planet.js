@@ -1190,11 +1190,42 @@ const RELIEF_GAIN_CONT = 3.744;   // fbmd -> terrestrial continent spread    (me
 // The GRADIENT needs its own constant: matching the value spread does not match the gradient
 // spread, which also depends on frequency content. Calibrated on DEFLECTION ANGLE rather than
 // on raw gradient magnitude, because the angle is what the eye reads as relief strength.
-// Legacy deflects the normal a median 1.49deg over the 462-body population (p10 1.03, p90 2.10);
-// this holds the analytic path at that same median, so the swap does not read as "the lighting
-// changed". ⚠ Tied to RELIEF_DOMAIN_SCALE — perturbNormalAnalytic divides by the base frequency
+//
+// ⭐ RAISED 6.54 -> 39.24 (6x) 2026-07-30. 6.54 was the PARITY value: it held the analytic path
+// at legacy's deflection so the fbmd swap could ship without moving anything uncommanded. That
+// was step one and it is done. This is step two, and it is a DELIBERATE, VISIBLE increase — the
+// fix for the band-collapse item, where ~31% of generated bodies come out with
+// landPalette.fresh EXACTLY EQUAL to landPalette.weathered (erosion ~1 kills oxidation, which
+// rides 1 - erosion) so the palette gives the surface no elevation separation at all. Colour
+// cannot carry that separation on those bodies; shading has to.
+//
+// WHY 6x, measured over 60 bodies (5 collapsed + 5 intact x 6 land types), as mean local
+// luminance gradient over the lit disc with the silhouette eroded 3px — LOCAL contrast, because
+// a global luminance SD is dominated by the disc-scale terminator ramp and does not move at all
+// when relief changes (measured: it is flat to 12x, which is why it is the wrong gate):
+//
+//   type              x1 (6.54)   6x (39.24)   lift
+//   ice/intact           2.58        5.67      +120%   <- flattest, helped most
+//   rocky/intact         2.91        4.99       +71%
+//   terrestrial         10.01       11.70       +17%
+//   ocean                6.63        7.15        +8%   <- already varied, barely moves
+//   lava                 8.22        8.91        +8%
+//   carbon               3.38        3.20        -5%   <- inert; overwrites n with its own stack
+//
+// The gain SELF-LIMITS, and that is the reason to prefer it over a flat brightness/contrast
+// lever: on types whose colour stacks already supply contrast (lava ridging, coastlines,
+// continents) relief shading is a small addition, so they move ~8-17%; on the flat ones it is
+// most of what is there, so they roughly double. It lifts what is flat and leaves alone what
+// is not.
+//
+// SAFETY, measured in-shader by instrumenting the clamp on a throwaway material clone: the 60deg
+// clamp in perturbNormalAnalytic fires on 0.000% of land pixels at 6x — and still 0.000% at 12x.
+// At 6x the deflection runs median 8.5-10.6deg, p99 16-22deg, max 27.6deg, against a 60deg limit.
+// There is headroom left; 8x is the next stop if this reads too subtle.
+// ⚠ Tied to RELIEF_DOMAIN_SCALE — perturbNormalAnalytic divides by the base frequency
 // it implies, so changing one without re-measuring the other moves every planet's relief.
-const RELIEF_NORMAL_GAIN = 6.54; // median over 462 bodies of (legacy deflection / analytic at 1.0)
+// The A/B dial is unchanged: uReliefMix 0 still renders the legacy finite-difference normal.
+const RELIEF_NORMAL_GAIN = 39.24; // 6x the 6.54 legacy-parity value — see the calibration above
 // fbmd computes freq = uNoiseScale * 0.3 * uDispDomainScale. The game wants fbmd's FIRST octave
 // to land exactly on the legacy base frequency (noiseScale * 1.0), so the swap changes the noise
 // LAW without changing feature size — 1/0.3 does that. It also tightens how well one gain fits

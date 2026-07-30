@@ -385,10 +385,10 @@ overwrites `n` and has `perturbStrength 0`, so it must not move a pixel, and it 
 
 #### Deferred, deliberately
 
-- **This increment does NOT fix the band-collapse item below.** It holds relief strength AT the
-  legacy median by design, so it adds no new elevation separation yet. It builds the mechanism
-  (correct law, analytic gradient, 24% cheaper, headroom to 9 octaves); raising relief strength is
-  the next lever and is now nearly free.
+- ~~**This increment does NOT fix the band-collapse item below.**~~ ✅ **TAKEN — see "SLICE 3,
+  SECOND INCREMENT" below.** It held relief strength AT the legacy median by design, building the
+  mechanism (correct law, analytic gradient, 24% cheaper, headroom to 9 octaves). Raising it was
+  the next lever and it has now been pulled: `RELIEF_NORMAL_GAIN` 6.54 → 39.24.
 - **Relief strength no longer varies per body.** Normalizing out frequency also normalized out
   legacy's 1.03–2.13° spread. Restoring variation should drive it from a real condition scalar
   (roughness / erosion), not from `noiseScale`. Recorded, not taken.
@@ -398,7 +398,96 @@ overwrites `n` and has `perturbStrength 0`, so it must not move a pixel, and it 
   stacks). Only their normals changed. Whether they should is a design question, not a port step.
 - The ~40-stage combiner chain in the lab's `main()` — the actual slice-3 payload — is untouched.
 
-### 🔶 Recorded, NOT fixed — the honest palette flattens elevation banding on ~45% of bodies
+### ✅ SLICE 3, SECOND INCREMENT — SHIPPED (2026-07-30). Relief strength raised 6×.
+
+**What changed.** One constant: `RELIEF_NORMAL_GAIN` 6.54 → **39.24**. Nothing else. 6.54 was the
+PARITY value — chosen so the fbmd swap could ship without moving anything uncommanded. That job is
+done; this is the deliberate, visible increase that addresses the band-collapse item below.
+
+⭐ **Zero frame cost, and this is provable rather than measured.** The gain is a UNIFORM
+(`uReliefNormalGain`), not a `#define`. The compiled shader is byte-identical to the previous
+increment's — only a uniform's value differs. There is no work to measure.
+
+#### The gate — and why the two obvious gates are both WRONG
+
+Recorded because both cost real time to rule out:
+
+- **Palette distinctness (the `183/330` measure) will not move**, as the previous handoff warned.
+  Relief adds *shading* separation, not *colour* separation.
+- ⛔ **Global luminance SD will not move either** — a second, less obvious trap. Measured flat, and
+  in places *falling*, all the way to a 12× gain (rocky/collapsed 33.77 → 33.80; ice/collapsed
+  40.63 → 38.63). The disc-scale terminator ramp dominates the luminance histogram and swamps
+  relief entirely. **The working gate is LOCAL contrast**: mean |∇L| over the lit disc with the
+  silhouette eroded 3 px, which isolates relief shading from both the terminator and the limb.
+
+#### The measurement (60 bodies: 5 collapsed + 5 intact × 6 land types)
+
+    type                x1 (6.54)   4x      6x (SHIPPED)   8x      lift at 6x
+    ice/intact             2.58     4.31      5.67        7.09      +120%
+    ice/collapsed          3.18     5.18      6.82        8.50      +114%
+    rocky/collapsed        4.43     6.22      7.77        9.23       +75%
+    rocky/intact           2.91     3.89      4.99        6.07       +71%
+    terrestrial          10.01     10.89     11.70       12.59       +17%
+    ocean                 6.63      6.91      7.15        7.44        +8%
+    lava                  8.22      8.58      8.91        9.34        +8%
+    carbon                3.38      3.21      3.20        3.21        -5%
+
+⭐ **The gain SELF-LIMITS, and that is the reason to prefer it over a global contrast lever.** On
+types whose colour stacks already supply contrast (lava ridging, coastlines, continents) relief
+shading is a small addition, so they move 8–17%. On the flat ones it is most of what is there, so
+they roughly double. **It lifts what is flat and leaves alone what is not.** Confirmed visually:
+`~/briefings/relief-strength-6x-2026-07-30.png` is a legacy / 6.54 / 39.24 contact sheet — ice and
+rocky gain real surface form, terrestrial barely moves, lava is indistinguishable.
+
+⚠ **Note the axis.** Palette collapse turned out NOT to predict flatness — *type* does.
+`rocky/collapsed` (4.43) renders with MORE local contrast than `rocky/intact` (2.91). The collapse
+detector (`landPalette.fresh` exactly equal to `landPalette.weathered`) finds **143/462 = 31%** of
+generated bodies, but the flattest-rendering bodies are `ice/intact` and `rocky/intact`.
+
+#### Safety — the 60° clamp never fires
+
+Measured in-shader by instrumenting the clamp on a THROWAWAY material clone (the real shader file
+untouched), reporting pre-clamp deflection and the clamp flag as pixel channels:
+
+    gain          median      p99        max      clamp fires
+    x1  (6.54)    ~6.0deg    ~7.3deg   ~7.8deg      0.000%
+    x6  (39.24)   8.5-10.6   16-22     27.6deg      0.000%
+    x12 (78.48)   13.3-17.8  30-38     48.9deg      0.000%
+
+**0.000% at 6×, and still 0.000% at 12×.** Max deflection at the shipped gain is 27.6° against a
+60° limit. **8× is the next stop if this reads too subtle**; the headroom is real.
+
+#### Negative controls, at exactly 0.000%
+
+Across the WHOLE gain sweep (×1 → ×12), byte-identical renders:
+
+    venus       local contrast 2.616, unchanged at every gain   (perturbStrength 0)
+    gas giant   local contrast 8.524, unchanged at every gain   (never perturbs)
+
+⚠ **These controls earned their keep.** The first run of this sweep showed the gas giant "changing"
+60% of its pixels — which is impossible. The cause was in the HARNESS, not the shader:
+`Box3.setFromObject` ran before `updateMatrixWorld`, so the FIRST shot of each body was framed from
+stale matrices and every later shot was framed differently. Without a control pinned at exactly
+0.000% that would have been read as "the dial works" and the whole calibration would have been
+built on framing noise. Repeat renders are now asserted byte-identical before any sweep runs.
+
+#### ⚠ An unreconciled number, recorded rather than buried
+
+This session measures legacy's median deflection at **~6.0°** on rendered land pixels; the previous
+increment's note records **1.49°** over the 462-body population. The probe was calibrated (writes a
+known constant, reads it back linear to ±1 LSB across the full range), so it is not a distortion.
+The definitions differ — per-rendered-land-pixel on collapsed bodies here, versus whatever
+population/mask the earlier harness used. **What both agree on is PARITY, which is the load-bearing
+claim**: measured through one identical probe inserted into BOTH normal paths, legacy and analytic
+at gain 6.54 agree within 0.2° on every body (rocky 6.03 vs 5.92, terrestrial 5.81 vs 5.81). The
+absolute figure is not reconciled and should not be quoted as if it were.
+
+### 🔶 Recorded, PARTLY ADDRESSED — the honest palette flattens elevation banding on ~45% of bodies
+
+> **2026-07-30:** the shading half of this is now addressed by the 6× relief raise above — the
+> flat bodies get their elevation form back from *shading*. The COLOUR half stands unchanged:
+> `fresh` still comes out equal to `weathered` on 31% of generated bodies, and the `craton` swap
+> below is still untaken.
 
 Now that pressure arrives, atmospheric worlds get erosion ~1, which kills oxidation (it rides
 `1 - erosion`) and airlessness, which kills space weathering. Both alteration stages therefore produce
