@@ -91,6 +91,7 @@ import { bindToRAF } from 'motion-test-kit/adapters/three/three-loop-binding';
 import { _advanceSimClock, simClockMs } from './core/SimClock.js';
 import { CockpitSnapshotProvider, resolveFocusedBody } from './cockpit/CockpitSnapshot.js';
 import { CockpitRig, EYE_FOV, EYE_NEAR, EYE_FAR, COCKPIT_TONE_EXPOSURE } from './cockpit/CockpitRig.js';
+import { cockpitEyeQuat } from './cockpit/cockpitEyePose.js';
 import { simRandom, simRandomSeed } from './core/SimRandom.js';
 import {
   initRecording, initReplay, recordingTick, replayTickPre,
@@ -2521,11 +2522,22 @@ _cockpitCamera.rotation.order = 'YXZ';
 let _cockpitRig = null;
 let _cockpitReady = false;
 
-/** Orientation from the ship's head, position pinned at the rig's eye point. */
+/**
+ * Position pinned at the rig's eye point, orientation from the PILOT'S HEAD —
+ * in the cockpit's own frame, never the world's.
+ *
+ * ⭐ It used to copy `camera.quaternion`, which is `shipOrientation × headLook`.
+ * The cabin is static at identity in `_cockpitRig.scene`, so feeding it the
+ * ship's heading rotated the whole cockpit around the pilot: on a 119° turn the
+ * canopy ended up out of the side window with the head dead-centre, and
+ * screen-forward — where the ship actually goes — pointed at a bulkhead. That is
+ * both halves of "the view should be locked to the centre of the cockpit, and we
+ * should always fly forward from the cockpit's POV". See `cockpitEyePose.js`.
+ */
 function _poseCockpitCamera() {
   if (!_cockpitRig) return;
   _cockpitCamera.position.copy(_cockpitRig.eyePos);
-  _cockpitCamera.quaternion.copy(camera.quaternion);
+  cockpitEyeQuat(_cockpitCamera.quaternion, _cockpitRig.eyeQuat, scHead.yaw, scHead.pitch);
   _cockpitCamera.updateMatrixWorld(true);
 }
 
@@ -2644,6 +2656,37 @@ window._cockpit = () => (_cockpitRig ? {
   // with `pressedMove` at zero is what a quick click looks like when it works.
   pointer: { ..._cockpitRig.pointer.census, routing: _cockpitPointerActive(), pressUsed: _cockpitPressUsed },
 } : { ready: false });
+
+/**
+ * Head + cockpit-camera pose. Read-only, and DELIBERATELY NOT read off the
+ * cockpit: the cockpit is posed FROM the camera, so anything that asks the
+ * cockpit about the camera is asking the camera about itself (lane rule 1).
+ * Every number here comes from the four primaries — scHead, scModel, camera,
+ * _cockpitCamera — and the derived angles say which axis they are about.
+ *
+ * `cockpitCamOffAxisDeg` is THE number for "does the cockpit sit square in the
+ * frame": the cockpit model is static at identity in its own scene, so the only
+ * thing that can rotate it on screen is this camera's own quaternion. Square
+ * means 0. Head-centred and non-zero means the cockpit is being viewed from a
+ * direction the pilot never chose.
+ */
+window._headPose = () => {
+  const q = _cockpitCamera.quaternion;
+  const s = scModel.orientation;
+  const deg = (x) => 2 * Math.acos(Math.min(1, Math.abs(x))) * 180 / Math.PI;
+  return {
+    yaw: scHead.yaw, pitch: scHead.pitch,
+    held: scHead.held, recentering: scHead.recentering,
+    handsOn: _scManual && !freeLook.latched,
+    freeLookLatched: freeLook.latched,
+    shipQuat: s.toArray(),
+    camQuat: camera.quaternion.toArray(),
+    cockpitCamQuat: q.toArray(),
+    cockpitCamOffAxisDeg: deg(q.w),
+    shipOffAxisDeg: deg(s.w),
+    headOffAxisDeg: Math.hypot(scHead.yaw, scHead.pitch) * 180 / Math.PI,
+  };
+};
 
 // When the tour visits every body, use the nav computer for a cinematic warp sequence.
 // The nav computer opens, drills down through galaxy levels, picks a star, and warps.
