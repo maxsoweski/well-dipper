@@ -20,10 +20,25 @@ system. **This is what the game port consumes** (`src/worldengine/**`, port slic
 Supporting: `planet-lod-lab-core.js` (CPU oracles/mirrors), `planet-lod-height.glsl.js`,
 `planet-lod-uniforms.js`, `planet-lod-rivers.js`.
 
-⛔ **Do not restructure this file while `feature/world-engine-atmo-3b` is in flight.** Measured
-against merge-base `68972f4a0`, exactly three files change in BOTH lanes:
-`planet-lod-height.glsl.js`, `planet-lod-uniforms.js` (both auto-merge clean) and
-**`planet-lod-lab.html` (conflicts)**. Any consolidation that edits this page must wait.
+✅ **The atmo fork is CLOSED (merged 2026-07-30, `c854c09`).** For most of July this same lab ran two
+ways — `:5175` on the port lane and `:5178` on `feature/world-engine-atmo-3b` — and the standing rule
+was "don't restructure this file." That rule is retired: atmo went dormant on 07-21 and its 5 lab
+commits are merged back. **There is one lab again.**
+
+Of the 8 worktrees, only atmo-3b ever carried unique lab work. The rest hold older untouched copies
+and pick the current lab up on their next rebase — they were never forks needing consolidation, and
+their apparent "divergence" is staleness, not conflicting work. Check before assuming otherwise:
+
+    for br in <branches>; do b=$(git merge-base <main-lane> $br)
+      git log --oneline $b..$br -- planet-lod-lab.html | wc -l; done
+
+⚠ **Two contradictory fences now guard the same two driver-assembly lines** (`rebakeE5Bands` and
+`applyStormState`), a scar from the fork: atmo's `worldengine-atmo-deck-spiral-rhines` test pins the
+`giantDriverScalars(state.planetRadiusEarth` call, and L1's `radius-live-feed-fence` pins the
+`radius: (_gcond.radiusEarth ?? 1) / 11.2` read. Both are satisfied deliberately — the spread supplies
+the bundle, the explicit key overrides it with the provably identical value. Do not "tidy" the
+redundancy away without reconciling the two contracts on purpose; deleting either line silently drops
+a lane's regression guard.
 
 ### 2. CPU tectonic/hydrology substrate — `world-engine-relief-lab.html` (DORMANT since 2026-06-23)
 A genuinely different approach: geological *history* rather than appearance. One mutable height
