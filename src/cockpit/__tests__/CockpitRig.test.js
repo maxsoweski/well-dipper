@@ -93,15 +93,32 @@ describe('the boundary — what the rig owns', () => {
     // the colour — two multiplying knobs for one visible quantity is how a lab
     // session ends up unable to say which one it just moved.
     expect(DEFAULT_GLASS.opacity).toBe(1);
-    // The colour is the DIFFUSE albedo of the canopy's inner surface — see
-    // DEFAULT_GLASS for why this is a wash and not a specular glint, and for the
-    // measurement that killed the glint version. Under additive blending it is
-    // added straight onto the world behind, so it must be DIM: a bright value
-    // here is a canopy that whites out the thing it exists to let you see.
+    // ⭐⭐ THE CEILING, AND IT IS A MEASUREMENT RATHER THAN A TASTE BOUND.
+    //
+    // This assertion used to read `< 110`, which is exactly the kind of round
+    // number that looks like a guard and is not one: the value that SHIPPED
+    // BROKEN was 0x4a (74), and it sailed through. Max caught it on his first
+    // flight — "all the window segments except the central one are opaque" —
+    // and the lab measurement said why. Canopy hidden vs shown at a fixed star
+    // angle: the glass lifted the region it covers by a median of 27/255 while
+    // the starfield behind peaks at 4.7/255. Additive light six times brighter
+    // than everything behind it is a wall, not a window.
+    //
+    // 0x18 is where the same measurement puts the sky starting to disappear. A
+    // bound at 110 permits four times that. So the guard is the measured limit,
+    // and a future session that wants a brighter canopy has to move this number
+    // deliberately and re-run the "can I still see stars through a LIT pane"
+    // check in the lab — which is the whole point of it failing.
     const c = DEFAULT_GLASS.glare.color;
     expect(Number.isInteger(c)).toBe(true);
     const [r, g, b] = [(c >> 16) & 255, (c >> 8) & 255, c & 255];
-    expect(Math.max(r, g, b), 'glare F0 must stay dim or the canopy whites out').toBeLessThan(110);
+    expect(
+      Math.max(r, g, b),
+      'the canopy must not out-brighten the starfield behind it — see DEFAULT_GLASS',
+    ).toBeLessThanOrEqual(0x18);
+    // ...and the paired CONTROL, or the bound above is satisfied by a canopy
+    // that contributes nothing at all and the feature is silently gone.
+    expect(Math.max(r, g, b), 'a canopy that adds nothing is not the feature').toBeGreaterThan(0);
     expect(DEFAULT_GLASS.glare.roughness).toBeGreaterThan(0);
     expect(DEFAULT_GLASS.glare.roughness).toBeLessThan(1);
     // metalness 0 IS the feature, not a default that happens to be falsy: a

@@ -179,12 +179,37 @@ export const DEFAULT_GLASS = Object.freeze({
   depthWrite: false,
   doubleSide: true,
   additive: true,
-  // NEUTRAL GREY, deliberately. The tint is the STAR's job — an M dwarf should
-  // wash the cabin amber and an O star blue-white — and a tinted albedo here
-  // multiplies against that, leaving neither legible. 0x4a4a4a is 0.29 as a
-  // level, which is what the lab's GLASS GLOW slider opens on, so the two hosts
-  // agree by construction rather than by two numbers typed beside each other.
-  glare: Object.freeze({ color: 0x4a4a4a, roughness: 0.22, metalness: 0 }),
+  // ⭐⭐ 0x0f, NOT 0x4a — AND THE FACTOR OF ~13 IS THE WHOLE LESSON HERE.
+  //
+  // This shipped at 0x4a4a4a for one session and Max's first flight found it:
+  // *"all the window segments except the central one are opaque."* He was right,
+  // and the reason is a property of THIS GAME rather than of the material.
+  //
+  // Measured in the lab, canopy hidden vs shown at a fixed star angle: the glass
+  // lifted the region it covers by a MEDIAN of 27/255, while the starfield
+  // behind it peaks at 4.7/255. An additive layer six times brighter than the
+  // brightest thing behind it is not glass, it is a wall. And the panes that
+  // went opaque were exactly the ones angled toward the star — the central pane
+  // survived because its inner normal faces the pilot, so `N·L` is negative and
+  // it never lit at all. His description names the mechanism precisely.
+  //
+  // ⚠ THE SKY IS THE CONSTRAINT, AND IT IS DARKER THAN INTUITION ALLOWS FOR.
+  // Anything added to a near-black frame reads as opacity almost immediately;
+  // there is no headroom. At 0x0f the same measurement gives a median lift of
+  // 2/255 — below the stars rather than above them — while the strongly lit
+  // panes still reach 21-60 and remain clearly visible. Most of the canopy stays
+  // clear and a few panes glow, which is the behaviour that was wanted.
+  //
+  // Treat this as a CEILING discovered by measurement, not a taste default.
+  // Raising it is not a matter of preference; past roughly 0x18 the sky starts
+  // disappearing again. The lab's GLASS GLOW slider is the place to re-check,
+  // and the check is "can I still see stars through a lit pane", not "does it
+  // look nice on its own".
+  //
+  // Neutral grey is separate and still deliberate: the tint is the STAR's job —
+  // an M dwarf washes the cabin amber, an O star blue-white — and a tinted
+  // albedo multiplies against that leaving neither legible.
+  glare: Object.freeze({ color: 0x0f0f0f, roughness: 0.22, metalness: 0 }),
 });
 
 /**

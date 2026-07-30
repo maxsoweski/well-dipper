@@ -241,8 +241,14 @@
       <input type="range" id="dStarEl" min="-89" max="89" step="1" value="15" />
     </label>
     <button class="btn" id="bStarSweep"><span id="bStarSweepLabel">STAR: PARKED</span><span class="key">J</span></button>
-    <label class="slider">GLASS GLOW <span class="num" id="bGlassGlareLabel">0.29</span>
-      <input type="range" id="dGlassGlare" min="0" max="1" step="0.01" value="0.29" />
+    <!-- ⚠ THE TOP OF THIS RANGE IS A KNOWN-BAD REGION, kept reachable on
+         purpose so the failure can be seen rather than described. Above ~0.10
+         the canopy stops being glass: it adds more light than the starfield
+         behind it carries, and the panes angled at the star go opaque. That
+         shipped once and Max caught it on his first flight. The test to apply
+         while dragging is "can I still see stars through a LIT pane". -->
+    <label class="slider">GLASS GLOW <span class="num" id="bGlassGlareLabel">0.06</span>
+      <input type="range" id="dGlassGlare" min="0" max="1" step="0.01" value="0.06" />
     </label>
     <!-- GLINT, not roughness. At metalness 0 the canopy is a diffuse wash and
          roughness only governs the 4%-F0 specular nobody can see, so a ROUGHNESS
@@ -1245,9 +1251,10 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
     // GLOW is the inner surface's albedo, expressed as a NEUTRAL grey on
     // purpose: the tint is meant to come from the STAR, and two tints
     // multiplying leaves neither of them legible on the slider that moved.
-    // 0.29 is DEFAULT_GLASS's own 0x2e3a4a read back as a level, so the lab
-    // opens on the shipped value rather than beside it.
-    const labGlass = { glow: 0.29, glint: 0 };
+    // 0.06 is DEFAULT_GLASS's own 0x0f0f0f read back as a level, so the lab
+    // opens on the shipped value rather than beside it — see that constant for
+    // why it is a measured CEILING and not a preference.
+    const labGlass = { glow: 0.06, glint: 0 };
     function applyLabGlass() {
       if (!rig) return;
       const v = Math.round(Math.max(0, Math.min(1, labGlass.glow)) * 255);
