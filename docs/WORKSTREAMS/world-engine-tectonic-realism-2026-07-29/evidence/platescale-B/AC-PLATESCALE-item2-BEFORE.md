@@ -116,6 +116,31 @@ what radius-invariant angular plate structure means.
 
 **This is what outcome B will look like.** It is a preview, not the edit.
 
+### The law has a SECOND effect the frames also contain
+
+`uFwClamp = 1` (`state.fwClamp = true`) in every capture above — the shipped default. The per-octave
+band-limiter is `if (uFwClamp == 1){ float screenF = fwBase * freq; w *= 1.0 - smoothstep(0.4, 0.8, screenF); }`
+(`planet-lod-height.glsl.js:772-775`, and verbatim again in `fbmdRidged` at `:1000`). It is a per-octave
+**amplitude taper**, not a hard octave cutoff — an octave is untouched at `screenF <= 0.4` and fully dead
+at `>= 0.8`, and the weight scales both height and the chain-rule gradient (`:780-781`).
+
+**`freq` carries `uDispDomainScale`.** So the display law does not only move feature size — it also
+multiplies `screenF` by `sVis`, which tapers trailing octaves *more aggressively* at large radius. At a
+held apparent size, `fwBase` is roughly constant, so `screenF ∝ sVis`: at R = 16 the law suppresses fine
+octaves 4× harder than it would at the anchor.
+
+Removing the law therefore does two things at once: features get larger/fewer **and** more fine octaves
+survive the taper. Both push the same way — a bigger planet viewed at the same apparent size shows the
+same angular structure *and* the same angular detail, which is the correct behaviour. The `AB-…lawOFF`
+frames already contain both effects, because only `uDispDomainScale` was changed and the clamp was left
+at its shipped value. **Do not read the count change as the law's sole consequence.**
+
+Note also that `uOctaves` is itself camera-driven and independent of this:
+`autoOctaves(lodRampOf(distance/sVis))` with `lodRampOf = smoothstep(20, 6, d)` and
+`autoOctaves = mix(4, 9, ramp)` (`planet-lod-lab-core.js:20,25`) — a 32× swing in top frequency on camera
+distance alone. Holding logical distance at 3 pins it at 9 for every capture here, which is why that
+framing was used.
+
 ---
 
 ## 4. Whole-disc context captures
