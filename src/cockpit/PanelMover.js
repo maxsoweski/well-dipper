@@ -75,16 +75,27 @@ import { Group, Matrix4, Quaternion, Vector3 } from 'three';
 import { measureQuad, measureQuadBasis } from './PanelLayout.js';
 import { solveFillDistance, cubicOut, GAME_FOV_DEG } from './panelPose.js';
 
-/** How much of the view a zoomed panel covers. A judge-by-eye knob; the lab owns it. */
-export const DEFAULT_FILL = 0.85;
+/**
+ * How much of the view a zoomed panel covers.
+ *
+ * SETTLED BY MAX at increment 6 UAT, 2026-07-30, by sweeping the lab slider:
+ * **0.75**, down from the 0.85 this shipped with. His eye, which is the only
+ * instrument this question has ever had.
+ */
+export const DEFAULT_FILL = 0.75;
 
 /**
  * Travel time in milliseconds.
  *
- * Matched to NavComputer's own drill animations (350 / 400 / 500 ms) so the panel
- * arriving and the map drilling read as one machine rather than two.
+ * SETTLED BY MAX at increment 6 UAT, 2026-07-30: **550 ms**, up from 400.
+ *
+ * ⚠ That 400 was chosen to match NavComputer's own drill animations (350 / 400 /
+ * 500 ms) so the panel arriving and the map drilling would read as one machine.
+ * 550 deliberately leaves that band. He judged the travel by eye and it is his
+ * call; the drill timings are untouched, so if the two ever need to agree again
+ * the knob to move is this one, not theirs.
  */
-export const DEFAULT_DURATION_MS = 400;
+export const DEFAULT_DURATION_MS = 550;
 
 /**
  * Which other nodes travel with a panel's glass.

@@ -59,10 +59,22 @@
  *    private `_dragging`, so the once-only guarantee belongs to the adapter and
  *    holds against any target shaped like NavComputer.
  *
- * Deliberate non-goals: click/drill-down, wheel/zoom, and hover-clear on miss.
- * Press, drag and release are what AC-PANEL-POINTER pins down; the rest wants
- * its own decisions about what "clicking a screen from the pilot seat" means
- * and should not be smuggled in here untested.
+ * 4. THE POINTER MUST REPORT ITSELF WITH NO BUTTON DOWN. This one was missed
+ *    until Max hit it at increment 6 UAT: *"interacting with the nav computer is
+ *    something unresponsive; what seems to fix it is if i press and hold the
+ *    mouse button."* NavComputer resolves body clicks from HOVER state, and that
+ *    state is recomputed inside every render by testing each body's freshly
+ *    projected position against `_mouseX`/`_mouseY` — which only
+ *    `_handleMouseMove` writes. A DOM canvas receives `mousemove` continuously
+ *    with the button up, so hover is always current; a panel receives nothing
+ *    unless someone forwards it. Forward only the pressed moves and a quick click
+ *    resolves against a stale hover and reads as empty space, while press-and-hold
+ *    appears to "fix" it — because the hold is what manufactures the missing move.
+ *    `pointerHover` is that channel. See `PanelPointer.hover.test.js`.
+ *
+ * Deliberate non-goal: wheel/zoom. Press, drag, release, click and hover are what
+ * the panel path now owns; a wheel wants its own decision about what scrolling a
+ * screen from the pilot seat means and should not be smuggled in here untested.
  *
  * Panel dimensions are never written down. Buffer size comes from the target's
  * own canvas at the moment of the event, so a resized panel keeps working —
@@ -79,6 +91,14 @@ import { CanvasTexture, LinearFilter, SRGBColorSpace } from 'three';
  * `{}` in a stack trace is identifiable.
  */
 export const PANEL_POINTER_EVENT = Object.freeze({ fromPanel: true });
+
+/**
+ * Where the pointer is parked when the ray misses the glass.
+ *
+ * Far enough that every proximity test in the target fails — see `pointerHover`
+ * for why -1 is not, and why this is a distance rather than "just outside".
+ */
+const OFF_GLASS = -1e4;
 
 /** Coordinate comparison with a little slack, for the contract checks below. */
 function sameCoord(got, want) {
@@ -330,6 +350,50 @@ export class PanelPointerAdapter {
     this._place(hit);
     this.target._handleMouseMove(PANEL_POINTER_EVENT);
     return false;
+  }
+
+  /**
+   * HOVER — a move with NO button down, which is the channel note 4 describes.
+   *
+   * Everything the player clicks in the map body — a planet, a moon, a star at
+   * PRISM, a galaxy sector, a grid tile — is resolved by `_handleClick` from hover
+   * state, and that state is a fact about the LAST RENDERED FRAME. So this has to
+   * arrive while the button is up, and a frame has to run between it and the
+   * click, or the click resolves against wherever the pointer last was.
+   *
+   * ⭐ A MISS PARKS THE POSITION OFF-GLASS RATHER THAN DOING NOTHING. Left where
+   * it was, the tooltip stays lit on a body the cursor has left, and a click that
+   * lands on the glass but on empty space acts on the stale body instead of
+   * clearing the selection. Forwarding the move with an unreachable position is
+   * what makes the class clear its own hover, using its own proximity tests —
+   * nothing here reaches in and nulls `_hoveredBody`, which would be this module
+   * knowing the internals of a class it is only supposed to drive.
+   *
+   * ⚠ `OFF_GLASS` IS -1e4 AND NOT -1. The class's hit radii are up to 14 px and a
+   * body can be projected into the very corner, so (-1, -1) is still within reach
+   * of a body at (5, 5) and would leave it hovered. The sentinel has to exceed
+   * every radius the class uses, and a value that merely looks "outside the
+   * canvas" does not.
+   *
+   * A press owns the pointer: while one is outstanding this is a no-op and
+   * `pointerMove` is the right call. Letting a hover through mid-press would
+   * deliver a second move per event, and a hover-miss would park the position
+   * 10,000 px away, which the drag arithmetic would read as an enormous pan.
+   *
+   * @param {object|null} hit the intersection, or null for "the ray missed"
+   * @returns {boolean} whether the pointer is over the glass
+   */
+  pointerHover(hit) {
+    if (this._pressed) return false;
+    if (!hit) {
+      this._pos.x = OFF_GLASS;
+      this._pos.y = OFF_GLASS;
+      this.target._handleMouseMove(PANEL_POINTER_EVENT);
+      return false;
+    }
+    this._place(hit);
+    this.target._handleMouseMove(PANEL_POINTER_EVENT);
+    return true;
   }
 
   /**

@@ -220,10 +220,10 @@
          decision this page makes for Max. -->
     <div class="group">ZOOM TO PANEL</div>
     <button class="btn" id="bZoom"><span id="bZoomLabel">ZOOM NAV</span><span class="key">&#8679;1</span></button>
-    <label class="slider">ZOOM FILL <span class="num" id="bZoomFillLabel">0.85</span>
+    <label class="slider">ZOOM FILL <span class="num" id="bZoomFillLabel">0.75</span>
       <input type="range" id="dZoomFill" />
     </label>
-    <label class="slider">ZOOM TIME <span class="num" id="bZoomTimeLabel">400 ms</span>
+    <label class="slider">ZOOM TIME <span class="num" id="bZoomTimeLabel">550 ms</span>
       <input type="range" id="dZoomTime" />
     </label>
     <button class="btn" id="bZoomFollow"><span id="bZoomFollowLabel">ZOOM: PARKED</span><span class="key">H</span></button>
@@ -1567,6 +1567,38 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
         if (adapter) adapter.pointerMove(pickAt(e)?.hit ?? null);
         return;
       }
+
+      // ⭐ HOVER — MOVES WITH NO BUTTON DOWN, and without this the zoomed panel is
+      // the thing Max reported at increment 6 UAT: *"interacting with the nav
+      // computer is something unresponsive; what seems to fix it is if i press and
+      // hold the mouse button for some reason."*
+      //
+      // He was right, and the hold was not a timing fluke. `_handleClick` resolves
+      // every body in the map — planets, moons, stars, a star at PRISM, a galaxy
+      // sector, a grid tile — from HOVER state, which NavComputer recomputes inside
+      // each render by testing bodies against `_mouseX`/`_mouseY`. Only
+      // `_handleMouseMove` writes those. A DOM canvas is sent `mousemove` all the
+      // time with the button up; a panel is sent nothing unless this line sends it.
+      // Forwarding only the PRESSED moves meant a quick click resolved against a
+      // stale hover — `(0, 0)`, the panel's top-left, on a fresh page — and read as
+      // empty space, while holding the button made `panelDrag` true so the smallest
+      // jitter delivered the move the click needed. The hold was manufacturing the
+      // missing channel.
+      //
+      // Gated on `navZoomLanded()` for the same reason the press is: at rest NAV is
+      // chrome-less and not something the player is working, and a raycast per mouse
+      // move is not worth spending when nothing can consume it. Gated on `!dragging`
+      // because during a look-drag the head is turning and hover is meaningless.
+      // The role test matters: a hit on a DIFFERENT panel must arrive as a MISS, or
+      // that panel's uv gets mapped into the nav map's pixel space.
+      if (!dragging && mode === 'eye' && navZoomLanded()) {
+        const adapter = ensureNavAdapter();
+        if (adapter) {
+          const over = pickAt(e);
+          adapter.pointerHover(over && over.role === 'NAV' ? over.hit : null);
+        }
+      }
+
       if (!dragging || mode !== 'eye') return;
       eyeYaw -= (e.clientX - lastX) * LOOK_SPEED;
       eyePitch -= (e.clientY - lastY) * LOOK_SPEED;
@@ -2281,7 +2313,7 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
      */
     const probeCount = {
       fillText: 0, strokeText: 0, drawOps: 0, navRenders: 0,
-      pointerDown: 0, pointerMove: 0, pointerUp: 0, pointerLastRole: null,
+      pointerDown: 0, pointerMove: 0, pointerUp: 0, pointerHover: 0, pointerLastRole: null,
     };
     /** Live string collectors, one per in-flight `navTextCensus`. */
     const probeStringSinks = new Set();
@@ -2432,7 +2464,12 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
     function installPointerProbe() {
       if (pointerProbeInstalled) return true;
       const proto = PanelPointerAdapter.prototype;
-      for (const [name, key] of [['pointerDown', 'pointerDown'], ['pointerMove', 'pointerMove'], ['pointerUp', 'pointerUp']]) {
+      // `pointerHover` is wrapped for the same reason as the other three, and the
+      // reason is sharper for it: hover fires on EVERY mouse move rather than once
+      // per gesture, so a hover forwarded to the wrong panel would be the loudest
+      // version of what AC-ONLY-NAV-ZOOMS forbids — and it was invisible to this
+      // census until the channel existed to count.
+      for (const [name, key] of [['pointerDown', 'pointerDown'], ['pointerMove', 'pointerMove'], ['pointerUp', 'pointerUp'], ['pointerHover', 'pointerHover']]) {
         const original = proto[name];
         if (typeof original !== 'function' || original._probeWrapped) continue;
         const wrapped = function probeWrappedPointer(hit) {
@@ -2466,6 +2503,7 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
         down: probeCount.pointerDown,
         move: probeCount.pointerMove,
         up: probeCount.pointerUp,
+        hover: probeCount.pointerHover,
         lastRole: probeCount.pointerLastRole,
         installed: pointerProbeInstalled,
       };
@@ -2476,6 +2514,7 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
       probeCount.pointerDown = 0;
       probeCount.pointerMove = 0;
       probeCount.pointerUp = 0;
+      probeCount.pointerHover = 0;
       probeCount.pointerLastRole = null;
       return pointerCensus();
     }
@@ -2723,6 +2762,12 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
         error: null,
         level: nav.level,
         levelIndex: nav._levelIndex,
+        // ⭐ THE PAIR THE HOVER BUG IS ABOUT. Every body the player clicks is
+        // resolved from these two numbers at DRAW time, and only `_handleMouseMove`
+        // writes them — so on the panel path they are the whole evidence that a
+        // move with no button down reached the class at all. `-10000` is
+        // `PanelPointer`'s OFF_GLASS park, meaning the last hover MISSED the glass.
+        mouse: { x: nav._mouseX, y: nav._mouseY },
         bare: !!nav._bare,
         chromelessIntent: !!nav.chromeless,
         // ⭐ READ THIS BEFORE BELIEVING ANY ZERO OR ANY NULL BELOW IT. True means
