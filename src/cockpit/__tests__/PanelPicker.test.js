@@ -160,14 +160,20 @@ describe('PanelPicker — hitting the right piece of glass', () => {
       const picker = new PanelPicker({ panels });
 
       for (const p of panels) {
-        const centre = measureQuad(
-          [...Array(p.mesh.geometry.getAttribute('position').count)].map((_, i) => {
-            const v = new THREE.Vector3()
-              .fromBufferAttribute(p.mesh.geometry.getAttribute('position'), i)
-              .applyMatrix4(p.mesh.matrixWorld);
-            return [v.x, v.y, v.z];
-          }),
-        ).centre;
+        // Only `.centre` is wanted here — the pixel to aim a pick at. The uvs still
+        // have to be handed over: `measureQuad` takes one contract, and a second
+        // positions-only entry point for callers that "only want the centre" is how
+        // the crossed path would grow back.
+        const pos = p.mesh.geometry.getAttribute('position');
+        const uv = p.mesh.geometry.getAttribute('uv');
+        const points = [];
+        const uvs = [];
+        for (let i = 0; i < pos.count; i++) {
+          const v = new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(p.mesh.matrixWorld);
+          points.push([v.x, v.y, v.z]);
+          uvs.push([uv.getX(i), uv.getY(i)]);
+        }
+        const centre = measureQuad(points, uvs).centre;
         const pt = screenPointOf(new THREE.Vector3(centre.x, centre.y, centre.z), cam, vp);
         // Nudged a pixel off the exact centre: that one point lies on the quad's
         // triangulation diagonal and is a float boundary for both triangles. See

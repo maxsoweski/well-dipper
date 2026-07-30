@@ -483,6 +483,36 @@ export function nodeWorldPositions(gltf, bin, nodeIndex, { recursive = true } = 
   return points;
 }
 
+/**
+ * Every TEXCOORD_0 uv under a node, in the SAME order `nodeWorldPositions` emits
+ * its points — same subtree walk, same primitive order, same vertex order — so the
+ * two lists pair index-for-index by construction rather than by luck.
+ *
+ * THROWS on a primitive with no TEXCOORD_0 rather than pushing a short array. A
+ * length mismatch between positions and uvs is the same silent-misalignment bug
+ * this helper exists to rule out, one layer down: the caller would pair vertex 4's
+ * position with vertex 0's uv and measure a plausible-looking wrong answer.
+ */
+export function nodeWorldUvs(gltf, bin, nodeIndex, { recursive = true } = {}) {
+  const uvs = [];
+  walkSubtree(gltf, nodeIndex, recursive, (i) => {
+    const node = gltf.nodes[i];
+    if (node.mesh === undefined) return;
+    for (const prim of gltf.meshes[node.mesh].primitives ?? []) {
+      if (prim.attributes.TEXCOORD_0 === undefined) {
+        throw new Error(
+          `nodeWorldUvs: node ${nodeIndex} (${gltf.nodes[nodeIndex].name || 'unnamed'}) has a ` +
+          `primitive with no TEXCOORD_0. Returning the uvs it does have would leave a list ` +
+          `shorter than nodeWorldPositions', and every pair after the gap would be wrong.`,
+        );
+      }
+      const uv = readAccessor(gltf, bin, prim.attributes.TEXCOORD_0);
+      for (let v = 0; v < uv.count; v++) uvs.push([uv.array[v * 2], uv.array[v * 2 + 1]]);
+    }
+  });
+  return uvs;
+}
+
 export function boundsOfPoints(points) {
   if (!points.length) return null;
   const min = [Infinity, Infinity, Infinity];

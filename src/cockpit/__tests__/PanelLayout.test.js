@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   parseGLB, listNodes, requireNode, buildParentMap, nodeWorldMatrix,
-  nodeWorldPositions, planarFrame, frameExtents, triangleListCentroid,
+  nodeWorldPositions, nodeWorldUvs, planarFrame, frameExtents, triangleListCentroid,
   nodeWorldTriangles,
 } from '../../../tests/helpers/glb-parse.mjs';
 import {
@@ -74,16 +74,42 @@ if (SELF_DISABLES_TESTS) {
   );
 }
 
-/** Every Screen_* node in a GLB, with its own world-space vertex positions. */
+/** Every Screen_* node in a GLB, with its own world-space vertex positions and uvs. */
 function screensOf(file) {
   const { json, bin } = parseGLB(readFileSync(join(ASSET_DIR, file)));
   const nodes = listNodes(json);
   const out = [];
   nodes.forEach((n, i) => {
     if (!SCREEN_NODE_RE.test(n.name || '')) return;
-    out.push({ name: n.name, index: i, points: nodeWorldPositions(json, bin, i) });
+    out.push({
+      name: n.name,
+      index: i,
+      points: nodeWorldPositions(json, bin, i),
+      uvs: nodeWorldUvs(json, bin, i),
+    });
   });
   return { json, bin, screens: out };
+}
+
+/**
+ * A face's u and v extents, keyed off the UVs and measured a different way.
+ *
+ * A SECOND OPINION on the labelling, which `planarFrame` / `frameExtents` cannot
+ * give: that pair fits an ARBITRARY in-plane axis and calls it u, so its du and dw
+ * are the right two magnitudes with no idea which is which. This picks the four
+ * corners out by uv quadrant and averages the two edges on each axis — the same
+ * semantics the lab's own probe arrived at independently — so it can disagree with
+ * `measureQuad` about which number is the width, which is the whole point.
+ */
+function uvKeyedExtents(points, uvs) {
+  const at = (u, v) => {
+    const i = points.findIndex((_, k) => (uvs[k][0] < 0.5) === u && (uvs[k][1] < 0.5) === v);
+    if (i < 0) throw new Error(`uvKeyedExtents: no corner at uv quadrant u<0.5=${u} v<0.5=${v}`);
+    return points[i];
+  };
+  const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const tl = at(true, true), tr = at(false, true), bl = at(true, false), br = at(false, false);
+  return { u: (d(tl, tr) + d(bl, br)) / 2, v: (d(tl, bl) + d(tr, br)) / 2 };
 }
 
 describe('PanelLayout — roles are config, geometry is derived (AC-PANEL-BINDING)', () => {
@@ -132,11 +158,15 @@ describe('PanelLayout — roles are config, geometry is derived (AC-PANEL-BINDIN
     expect(() => resolvePanelRoles(DEFAULT_PANEL_ROLES, [])).toThrow(/Screen_UL/);
   });
 
-  it('measures a quad of known size from its vertices alone', () => {
-    // A 0.4 x 0.2 rectangle in the z = -1 plane, facing +z.
+  it('measures a quad of known size from its vertices and uvs', () => {
+    // A 0.4 x 0.2 rectangle in the z = -1 plane, facing +z. LANDSCAPE, and left
+    // exactly as it was: it is half the proof that reading the axes off the uvs
+    // changed no number for a face shaped like the ones the cockpit ships.
     const pts = [[-0.2, -0.1, -1], [0.2, -0.1, -1], [-0.2, 0.1, -1], [0.2, 0.1, -1]];
+    // v = 0 is the top edge, so the y = +0.1 pair carries it.
+    const uvs = [[0, 1], [1, 1], [0, 0], [1, 0]];
 
-    const m = measureQuad(pts);
+    const m = measureQuad(pts, uvs);
 
     expect(m.width).toBeCloseTo(0.4, 6);
     expect(m.height).toBeCloseTo(0.2, 6);
@@ -153,7 +183,7 @@ describe('PanelLayout — roles are config, geometry is derived (AC-PANEL-BINDIN
     for (const file of files) {
       const { json, bin, screens } = screensOf(file);
       for (const s of screens) {
-        const mine = measureQuad(s.points);
+        const mine = measureQuad(s.points, s.uvs);
 
         // Independent measurement straight off the accessor, via the helper's own
         // oriented-rectangle primitive — a second opinion, not the same code twice.
@@ -162,13 +192,28 @@ describe('PanelLayout — roles are config, geometry is derived (AC-PANEL-BINDIN
         const ext = frameExtents(frame, s.points);   // { u:{min,max}, w:{min,max}, n:{min,max} }
         const du = ext.u.max - ext.u.min;
         const dw = ext.w.max - ext.w.min;
-        const w = Math.max(du, dw);
-        const h = Math.min(du, dw);
         const centroid = triangleListCentroid(tris);
 
-        expect(mine.width).toBeCloseTo(w, 4);
-        expect(mine.height).toBeCloseTo(h, 4);
-        expect(mine.aspect).toBeCloseTo(w / h, 4);
+        // `planarFrame` fits an ARBITRARY in-plane axis and calls it u, so this pair
+        // is a genuine second opinion on the two MAGNITUDES and no opinion at all on
+        // which is which. It used to be compared with a Math.max / Math.min of its
+        // own — the identical crossing the code was making, so it could never go red
+        // on a crossed axis. It now checks the magnitudes as an unordered pair, and
+        // the LABELLING is checked below against the uvs, which is the only place
+        // that question has an answer.
+        const magnitudes = [du, dw].sort((a, b) => a - b);
+        const got = [mine.width, mine.height].sort((a, b) => a - b);
+        expect(got[0]).toBeCloseTo(magnitudes[0], 4);
+        expect(got[1]).toBeCloseTo(magnitudes[1], 4);
+
+        // The labelling, keyed off TEXCOORD_0 and measured a different way — corner
+        // by uv quadrant, edges averaged — rather than off a fitted frame.
+        const uvExt = uvKeyedExtents(s.points, s.uvs);
+        expect(mine.width, `${file}/${s.name}: width is not the u extent`)
+          .toBeCloseTo(uvExt.u, 6);
+        expect(mine.height, `${file}/${s.name}: height is not the v extent`)
+          .toBeCloseTo(uvExt.v, 6);
+        expect(mine.aspect).toBeCloseTo(uvExt.u / uvExt.v, 4);
         expect(mine.centre.x).toBeCloseTo(centroid[0], 4);
         expect(mine.centre.y).toBeCloseTo(centroid[1], 4);
         expect(mine.centre.z).toBeCloseTo(centroid[2], 4);
@@ -188,7 +233,7 @@ describe('PanelLayout — roles are config, geometry is derived (AC-PANEL-BINDIN
     expect(files.length).toBeGreaterThan(0);
 
     for (const file of files) {
-      const sizes = screensOf(file).screens.map((s) => measureQuad(s.points));
+      const sizes = screensOf(file).screens.map((s) => measureQuad(s.points, s.uvs));
       const first = sizes[0];
       for (const m of sizes.slice(1)) {
         expect(m.width).toBeCloseTo(first.width, 5);
@@ -324,5 +369,203 @@ describe('measureQuadBasis — recovering a frame the fixture already knows', ()
     // A collapsed quad has no axes to recover.
     expect(() => measureQuadBasis([[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]], q.uvs))
       .toThrow(/no length/);
+  });
+});
+
+/**
+ * measureQuad — WHICH extent is the width, and why it cannot be the longer one.
+ *
+ * ⭐ THIS BLOCK IS THE UNFINISHED HALF OF THE LESSON THE BLOCK ABOVE LEARNED.
+ *
+ * `measureQuadBasis` was corrected once already: it must not call whichever edge is
+ * highest off the deck "the top", because that is a fact about this mounting and not
+ * about panels. `measureQuad` went on making the same class of assumption one
+ * function over — it called whichever edge was LONGER "the width", so its reported
+ * aspect was always >= 1 and a portrait face had its two axes crossed before
+ * anything downstream saw it. A crossed pair reaches `solveFillDistance` as
+ * (height, width) and the panel lands at (u/v) of the right distance: for a 9:16
+ * face at fill 0.85 that is 1.51 of the view, half a screen past the edge.
+ *
+ * The shortcut looked right for the same reason the other one did. Every face in the
+ * cockpit as mounted today is 0.24 x 0.20 landscape, so the longer edge IS the u
+ * edge and max/min returns the correct answer for all four. That is why the suite
+ * was green over it, and it is why the bit-exactness test below matters as much as
+ * the portrait one: the fix must change no number for the cockpit that ships.
+ *
+ * Nothing here goes through a mover or a host. The quads are built FROM a frame
+ * chosen in advance, so the expected answer is known by construction rather than by
+ * asking the code under test what it thinks.
+ */
+describe('measureQuad — the uvs say which extent is the width', () => {
+  /**
+   * A quad `w` across its u axis and `h` along its v axis, in a chosen frame.
+   *
+   * The uv list is a separate argument rather than baked in, because the sharpest
+   * available test hands the SAME positions two different uv layouts: if the answer
+   * changes, the labelling followed the uvs; if it does not, it followed the geometry.
+   */
+  function quadOf({ centre, right, up, w, h }, uvs = [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+    const n = (v) => { const l = Math.hypot(...v); return v.map((c) => c / l); };
+    const R = n(right);
+    const d = up[0] * R[0] + up[1] * R[1] + up[2] * R[2];
+    const U = n(up.map((c, k) => c - d * R[k]));
+    // Corner order TL, TR, BL, BR, matching the default uv list above.
+    const at = (su, sv) => [0, 1, 2].map((k) => centre[k] + R[k] * su * w / 2 + U[k] * sv * h / 2);
+    return { points: [at(-1, 1), at(1, 1), at(-1, -1), at(1, -1)], uvs, R, U };
+  }
+
+  /** The span of a point set along one unit axis. */
+  const spanAlong = (points, a) => {
+    const t = points.map((p) => p[0] * a.x + p[1] * a.y + p[2] * a.z);
+    return Math.max(...t) - Math.min(...t);
+  };
+
+  /**
+   * The measurement as it stood before the uvs were consulted, written out here so
+   * "the shipped numbers did not move" can be an Object.is comparison rather than a
+   * tolerance. Deliberately a copy of the old arithmetic, weld and all: if the fix
+   * re-derives the extents by projecting onto the basis instead of relabelling the
+   * distances it already computed, the last few ulps move and this goes red.
+   */
+  function legacyMeasure(points) {
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    const pts = [];
+    for (const p of points) if (!pts.some((q) => dist(p, q) < 1e-6)) pts.push(p);
+    const others = pts.slice(1).map((p) => dist(pts[0], p)).sort((a, b) => a - b);
+    return { width: Math.max(others[0], others[1]), height: Math.min(others[0], others[1]) };
+  }
+
+  const LEVEL = { centre: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0] };
+  const ROLLED = { centre: [0.7, -0.4, -1.1], right: [0.3, 0.9, 0.2], up: [-0.9, 0.32, 0.1] };
+
+  it('measures a PORTRAIT face as portrait — the taller axis is its height', () => {
+    // 0.20 across, 0.24 tall: the v extent is the larger one. Today's max/min hands
+    // back width 0.24 / height 0.20 and an aspect of 1.2 for a face that is 0.833.
+    const q = quadOf({ ...LEVEL, w: 0.20, h: 0.24 });
+
+    const m = measureQuad(q.points, q.uvs);
+
+    expect(m.width, 'width is the u extent, not the longer edge').toBeCloseTo(0.20, 12);
+    expect(m.height, 'height is the v extent, not the shorter edge').toBeCloseTo(0.24, 12);
+    expect(m.aspect, 'aspect is u/v and is allowed to be less than 1').toBeCloseTo(0.20 / 0.24, 12);
+    expect(m.aspect).toBeLessThan(1);
+  });
+
+  it('takes the uvs as the ONLY tiebreak when the two edges are a hair apart', () => {
+    // u is the SHORTER axis by 1e-7. Small enough that no plausible geometric
+    // heuristic could be expected to get it right, large enough that max/min gets it
+    // measurably wrong — so this bites any implementation that still consults
+    // magnitude to decide the LABEL, rather than only to report it.
+    const q = quadOf({ ...ROLLED, w: 0.2000000, h: 0.2000001 });
+
+    const m = measureQuad(q.points, q.uvs);
+
+    expect(m.width).toBeCloseTo(0.2000000, 12);
+    expect(m.height).toBeCloseTo(0.2000001, 12);
+    expect(m.width, 'the shorter edge is still the width when the uvs say so')
+      .toBeLessThan(m.height);
+  });
+
+  it('an exact square has no tie to break, and the width axis is still the u axis', () => {
+    // The synthetic cockpit already ships one (Screen_LL, 0.18 x 0.18), so this is
+    // not hypothetical geometry. An exactly square quad CANNOT discriminate an
+    // implementation through width and height alone — both answers are the same
+    // number — which is exactly why it is tested for a different property: that it
+    // does not throw, and that the axis it calls `width` is the axis
+    // `measureQuadBasis` calls `right`, under two different uv layouts on ONE set of
+    // positions.
+    const geometry = { ...ROLLED, w: 0.25, h: 0.25 };
+    // Layout B rotates the mapping 90 degrees: u now runs along the frame's up.
+    const rotated = [[1, 0], [1, 1], [0, 0], [0, 1]];
+
+    for (const [label, uvs] of [['as authored', undefined], ['uvs rotated 90 degrees', rotated]]) {
+      const q = quadOf(geometry, uvs);
+      const m = measureQuad(q.points, q.uvs);
+      const b = measureQuadBasis(q.points, q.uvs);
+
+      expect(m.width, label).toBeCloseTo(0.25, 12);
+      // Close, not bit-equal: the fixture's own two edges differ by one ulp once a
+      // rolled frame has been through Gram-Schmidt. Demanding Object.is here would
+      // be asserting something about float arithmetic, not about the labelling.
+      expect(m.height, label).toBeCloseTo(m.width, 12);
+      expect(m.aspect, label).toBeCloseTo(1, 12);
+      expect(spanAlong(q.points, b.right), `${label}: width is not the basis right axis`)
+        .toBeCloseTo(m.width, 12);
+      expect(spanAlong(q.points, b.up), `${label}: height is not the basis up axis`)
+        .toBeCloseTo(m.height, 12);
+    }
+  });
+
+  it('cannot disagree with measureQuadBasis about the same quad', () => {
+    // The standing version of the comment this whole fix is about. The two functions
+    // are called four lines apart in PanelMover._rig and nothing there compares them,
+    // so the one pairing that could have caught the crossing never asked. Now it does.
+    const CASES = [
+      { label: 'landscape, level', ...LEVEL, w: 0.24, h: 0.20 },
+      { label: 'portrait, level', ...LEVEL, w: 0.20, h: 0.24 },
+      { label: 'portrait, rolled hard', ...ROLLED, w: 0.30, h: 0.45 },
+      { label: 'square, rolled hard', ...ROLLED, w: 0.25, h: 0.25 },
+      { label: 'portrait, mounted upside down', centre: [0, 0.8, -1.2], right: [-1, 0, 0], up: [0, -1, 0], w: 0.18, h: 0.44 },
+      { label: 'wide, yawed and pitched', centre: [-0.9, 0.55, -1.4], right: [0.8, 0.1, 0.6], up: [-0.05, 0.98, -0.12], w: 0.62, h: 0.21 },
+    ];
+
+    for (const c of CASES) {
+      const q = quadOf(c);
+      const m = measureQuad(q.points, q.uvs);
+      const b = measureQuadBasis(q.points, q.uvs);
+      expect(spanAlong(q.points, b.right), `${c.label}: width is not the span along right`)
+        .toBeCloseTo(m.width, 12);
+      expect(spanAlong(q.points, b.up), `${c.label}: height is not the span along up`)
+        .toBeCloseTo(m.height, 12);
+    }
+  });
+
+  it('leaves the shipped cockpit\'s numbers alone, to the last bit', () => {
+    // ⭐ THE NO-OP, PROVED RATHER THAN ASSUMED. Every face in every GLB on disk is
+    // landscape, so the u edge IS the longer one and the fix must be a pure
+    // relabelling for all of them — Object.is, not toBeCloseTo, because a tolerance
+    // would accept a re-derivation that quietly shifts the floats the game runs on.
+    const files = glbFiles().filter((f) => screensOf(f).screens.length > 0);
+    expect(files.length).toBeGreaterThan(0);
+
+    let checked = 0;
+    for (const file of files) {
+      for (const s of screensOf(file).screens) {
+        const now = measureQuad(s.points, s.uvs);
+        const before = legacyMeasure(s.points);
+        expect(Object.is(now.width, before.width),
+          `${file}/${s.name}: width moved from ${before.width} to ${now.width}`).toBe(true);
+        expect(Object.is(now.height, before.height),
+          `${file}/${s.name}: height moved from ${before.height} to ${now.height}`).toBe(true);
+        // The premise the assertion rests on: these faces really are landscape, so
+        // agreement is the correct answer here and not a fix that failed to apply.
+        expect(now.width, `${file}/${s.name} is not landscape`).toBeGreaterThan(now.height);
+        checked += 1;
+      }
+    }
+    expect(checked, 'no shipped face was measured').toBeGreaterThanOrEqual(4);
+
+    // And the synthetic landscape case the file has always carried.
+    const q = quadOf({ ...LEVEL, w: 0.4, h: 0.2 });
+    const now = measureQuad(q.points, q.uvs);
+    const before = legacyMeasure(q.points);
+    expect(Object.is(now.width, before.width)).toBe(true);
+    expect(Object.is(now.height, before.height)).toBe(true);
+  });
+
+  it('refuses a positions-only call rather than guessing which axis is which', () => {
+    // The property that makes the rest of this block enforceable: after this, no
+    // caller can receive a crossed answer without an exception first. A flag in the
+    // return value would not do — the docstring has asserted "no assumption about
+    // which way the quad is oriented" for the whole life of the function that was
+    // making exactly that assumption, and 2236 tests went past it.
+    const q = quadOf({ ...LEVEL, w: 0.24, h: 0.20 });
+    expect(() => measureQuad(q.points)).toThrow(/uv/);
+    expect(() => measureQuad(q.points, null)).toThrow(/uv/);
+    expect(() => measureQuad(q.points, q.uvs.slice(0, 2))).toThrow(/uv/);
+    // Every uv on one side of centre: the face has lost its unit-square mapping and
+    // there is no axis to read off it.
+    expect(() => measureQuad(q.points, [[0, 0], [0, 0], [0, 0], [0, 0]]))
+      .toThrow(/unit square/);
   });
 });

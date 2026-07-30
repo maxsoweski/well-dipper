@@ -45,7 +45,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import * as THREE from 'three';
 
-import { parseGLB, listNodes, nodeWorldPositions } from './helpers/glb-parse.mjs';
+import { parseGLB, listNodes, nodeWorldPositions, nodeWorldUvs } from './helpers/glb-parse.mjs';
 
 import {
   FLIGHT_DURATION_S, FLIGHT_SEGMENTS, buildLabWorld, dropWindowFor,
@@ -754,8 +754,13 @@ function cockpitFromGLB(file) {
     // cockpit and not about the mesh's local frame — the same reason PanelHost
     // calls `updateMatrixWorld(true)` before it measures anything.
     const corners = nodeWorldPositions(json, bin, index, { recursive: false });
+    // The uvs come along because the host measures the face's SHAPE off them, not
+    // just its orientation: the buffer's aspect is u/v, and "the longer edge is the
+    // width" is a fact about this mounting rather than about panels.
+    const uvs = nodeWorldUvs(json, bin, index, { recursive: false });
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(corners.flat(), 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs.flat(), 2));
     const mesh = new THREE.Mesh(geometry, shared);
     mesh.name = name;
     root.add(mesh);

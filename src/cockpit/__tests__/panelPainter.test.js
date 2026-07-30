@@ -164,10 +164,15 @@ function fakePanel(width, height, role = 'INFO') {
   return { role, nodeName: 'Screen_LL', canvas, ctx: canvas.getContext('2d') };
 }
 
-/** A four-corner quad mesh, in float32 exactly as a GLTF loader would produce. */
-function quadMesh(name, corners, material) {
+/**
+ * A four-corner quad mesh, in float32 exactly as a GLTF loader would produce —
+ * including its uvs, which the host measures the face's SHAPE off. A screen face
+ * with no unit-square map is not a screen face this project will bind.
+ */
+function quadMesh(name, corners, material, uvs = UVS_BL_BR_TL_TR) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(corners.flat(), 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs.flat(), 2));
   const mesh = new THREE.Mesh(geometry, material);
   mesh.name = name;
   return mesh;
@@ -178,6 +183,8 @@ const ASPECT = 1.2;
 const CORNERS_6_5 = [
   [-0.120, -0.100, -1], [0.120, -0.100, -1], [-0.120, 0.100, -1], [0.120, 0.100, -1],
 ];
+/** Corner order above is BL, BR, TL, TR, and v = 0 is the TOP edge. */
+const UVS_BL_BR_TL_TR = [[0, 1], [1, 1], [0, 0], [1, 0]];
 const shift = (corners, dx, dy) => corners.map(([x, y, z]) => [x + dx, y + dy, z]);
 
 /**

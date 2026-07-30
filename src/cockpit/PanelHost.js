@@ -209,6 +209,12 @@ export const DEFAULT_AMBIENT_REPAINT_MS = 80;
  * coordinate derived from it comes back Infinity. Silently substituting a
  * plausible number would hide which of the two inputs was broken.
  *
+ * `aspect` is u/v and MAY BE LESS THAN 1 — a portrait face gets a portrait buffer,
+ * and must, because `PanelPointer` maps u to x and `createPanelTexture` sets
+ * flipY = false. It read as always >= 1 for a long time only because every face the
+ * cockpit has ever mounted was landscape; see the note on `measureQuad`. Nothing
+ * here needed changing for that, and nothing here may start clamping it.
+ *
  * @param {{aspect:number}} metrics from `measureQuad` — only `aspect` is read
  * @param {number} [heightPx] target buffer height
  * @returns {{width:number, height:number}} integers, both >= 1
@@ -299,6 +305,31 @@ function meshWorldPositions(mesh, label) {
     const x = attr.getX(i), y = attr.getY(i), z = attr.getZ(i);
     out.push(e ? applyMatrix(e, x, y, z) : [x, y, z]);
   }
+  return out;
+}
+
+/**
+ * Every uv of one mesh, in the SAME order `meshWorldPositions` emits its points.
+ *
+ * `measureQuad` needs them, and not only to orient the panel: the buffer's aspect
+ * is u/v by construction — `PanelPointer` maps u to x and `createPanelTexture` sets
+ * flipY = false — so a face measured without its uvs can hand a portrait screen a
+ * landscape canvas and the readout is drawn squashed onto the glass. The same
+ * derive-don't-write-down rule that forbids a hard-coded size forbids a guessed
+ * orientation, and the failure is quieter.
+ */
+function meshWorldUvs(mesh, label) {
+  const attr = mesh?.geometry?.attributes?.uv;
+  if (!attr || typeof attr.getX !== 'function' || !Number.isFinite(attr.count)) {
+    throw new Error(
+      `PanelHost: ${label} has no readable uv attribute, so there is no way to tell ` +
+      `which of its extents is the width. Guessing "the longer one" is right for a ` +
+      `landscape face and silently transposes a portrait one — the buffer comes out ` +
+      `the wrong shape and every pixel drawn on it is stretched.`,
+    );
+  }
+  const out = [];
+  for (let i = 0; i < attr.count; i++) out.push([attr.getX(i), attr.getY(i)]);
   return out;
 }
 
@@ -430,7 +461,7 @@ export class PanelHost {
         );
       }
 
-      const metrics = measureQuad(meshWorldPositions(mesh, label));
+      const metrics = measureQuad(meshWorldPositions(mesh, label), meshWorldUvs(mesh, label));
       const buffer = derivePanelBuffer(metrics, bufferHeightPx);
 
       const canvas = makeCanvas(buffer.width, buffer.height);

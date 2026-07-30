@@ -35,7 +35,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import * as THREE from 'three';
 import {
-  parseGLB, listNodes, nodeWorldPositions, nodeWorldTriangles, planarFrame, frameExtents,
+  parseGLB, listNodes, nodeWorldPositions, nodeWorldUvs, nodeWorldTriangles,
+  planarFrame, frameExtents,
 } from '../../../tests/helpers/glb-parse.mjs';
 import { DEFAULT_PANEL_ROLES, SCREEN_NODE_RE, measureQuad } from '../PanelLayout.js';
 import { buildCockpitSnapshot } from '../CockpitSnapshot.js';
@@ -145,17 +146,29 @@ function stubCanvas(width, height) {
 }
 const makeCanvas = (w, h) => stubCanvas(w, h);
 
-/** A four-corner quad mesh, in float32 exactly as a GLTF loader would produce. */
-function quadMesh(name, corners, material) {
+/**
+ * A four-corner quad mesh, in float32 exactly as a GLTF loader would produce.
+ *
+ * The uv attribute is no longer optional decoration on a screen face: the host
+ * measures the face's SHAPE off it, because the buffer's aspect is u/v and there is
+ * nothing in a bare position list that says which extent is the width. Bezels are
+ * never measured, so they may still be built without one.
+ */
+function quadMesh(name, corners, material, uvs = null) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(corners.flat(), 3));
+  if (uvs) geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs.flat(), 2));
   const mesh = new THREE.Mesh(geometry, material);
   mesh.name = name;
   return mesh;
 }
 
-/** A 2:1 face, offset so the four are in different places. Shape, not size. */
+/** A 2:1 LANDSCAPE face, offset so the four are in different places. Shape, not size. */
 const CORNERS_2_1 = [[-0.2, -0.1, -1], [0.2, -0.1, -1], [-0.2, 0.1, -1], [0.2, 0.1, -1]];
+/** A 1:2 PORTRAIT face — the shape every fixture in this file used to be unable to express. */
+const CORNERS_1_2 = [[-0.1, -0.2, -1], [0.1, -0.2, -1], [-0.1, 0.2, -1], [0.1, 0.2, -1]];
+/** Corner order above is BL, BR, TL, TR, and v = 0 is the TOP edge. */
+const UVS_BL_BR_TL_TR = [[0, 1], [1, 1], [0, 0], [1, 0]];
 const shift = (corners, dx, dy) => corners.map(([x, y, z]) => [x + dx, y + dy, z]);
 
 /**
@@ -163,15 +176,18 @@ const shift = (corners, dx, dy) => corners.map(([x, y, z]) => [x + dx, y + dy, z
  * four bezels sharing another. The shared material is the model's actual shape
  * (asserted against the GLB further down) and is the trap the host has to survive.
  */
-function syntheticCockpit(names = ['Screen_UL', 'Screen_UR', 'Screen_LL', 'Screen_LR']) {
+function syntheticCockpit(
+  names = ['Screen_UL', 'Screen_UR', 'Screen_LL', 'Screen_LR'],
+  corners = CORNERS_2_1,
+) {
   const root = new THREE.Group();
   const screenMaterial = new THREE.MeshStandardMaterial({ name: 'Mat_Screen' });
   const bodyMaterial = new THREE.MeshStandardMaterial({ name: 'Mat_Body' });
   const offsets = [[-0.3, 0.2], [0.3, 0.2], [-0.3, -0.2], [0.3, -0.2]];
   names.forEach((name, i) => {
     const [dx, dy] = offsets[i % offsets.length];
-    root.add(quadMesh(name, shift(CORNERS_2_1, dx, dy), screenMaterial));
-    root.add(quadMesh(name.replace('Screen_', 'ScreenBody_'), shift(CORNERS_2_1, dx, dy), bodyMaterial));
+    root.add(quadMesh(name, shift(corners, dx, dy), screenMaterial, UVS_BL_BR_TL_TR));
+    root.add(quadMesh(name.replace('Screen_', 'ScreenBody_'), shift(corners, dx, dy), bodyMaterial));
   });
   return { root, screenMaterial, bodyMaterial };
 }
@@ -194,6 +210,9 @@ function glbScreenNodes(file) {
         ? (json.meshes[node.mesh].primitives ?? []).map((p) => p.material)
         : [],
       points: nodeWorldPositions(json, bin, index),
+      // Faces carry TEXCOORD_0 and are measured through it. Bezels are never
+      // measured, and a model is free not to give them uvs at all.
+      uvs: SCREEN_NODE_RE.test(name) ? nodeWorldUvs(json, bin, index) : null,
       triangles: node.mesh !== undefined ? nodeWorldTriangles(json, bin, index) : [],
     });
   }
@@ -212,7 +231,7 @@ function cockpitFromGlb(file) {
   const bodyMaterial = new THREE.MeshStandardMaterial({ name: 'Mat_Body' });
   const bezels = [];
   for (const n of nodes) {
-    const mesh = quadMesh(n.name, n.points, n.isFace ? screenMaterial : bodyMaterial);
+    const mesh = quadMesh(n.name, n.points, n.isFace ? screenMaterial : bodyMaterial, n.uvs);
     root.add(mesh);
     if (!n.isFace) bezels.push(mesh);
   }
@@ -220,16 +239,37 @@ function cockpitFromGlb(file) {
 }
 
 /**
- * A SECOND OPINION on a face's aspect, taken straight off the triangles via the
- * helper's oriented-rectangle primitive rather than through `measureQuad`. If the
- * host and this disagree, one of them is measuring something else.
+ * A SECOND OPINION on a face's aspect, taken off the mesh a different way.
+ *
+ * ⭐ THIS USED TO BE `Math.max(du, dw) / Math.min(du, dw)` — the same crossing the
+ * code under test was making, so it anchored the buffer-shape assertion below to a
+ * value that was wrong in exactly the way the host was wrong, and could never go red
+ * on a transposed face. `planarFrame` fits an ARBITRARY in-plane axis and calls it u,
+ * so it has no access to the question at all: its du and dw are the right two
+ * magnitudes with nothing to say about which is the width.
+ *
+ * The aspect a buffer needs is u/v — `PanelPointer` maps u to x and
+ * `createPanelTexture` sets flipY = false — so it is keyed off TEXCOORD_0 here, by
+ * picking the corners out by uv quadrant and averaging the two edges on each axis.
+ * The fitted frame is still used, below, as an independent check on the MAGNITUDES.
  */
 function independentAspect(node) {
+  const at = (u, v) => {
+    const i = node.points.findIndex((_, k) =>
+      (node.uvs[k][0] < 0.5) === u && (node.uvs[k][1] < 0.5) === v);
+    if (i < 0) throw new Error(`independentAspect: ${node.name} has no corner at u<0.5=${u} v<0.5=${v}`);
+    return node.points[i];
+  };
+  const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const tl = at(true, true), tr = at(false, true), bl = at(true, false), br = at(false, false);
+  return ((d(tl, tr) + d(bl, br)) / 2) / ((d(tl, bl) + d(tr, br)) / 2);
+}
+
+/** The two extents as an unordered pair, off the fitted frame — magnitude only. */
+function independentExtents(node) {
   const frame = planarFrame(node.triangles);
   const ext = frameExtents(frame, node.points);
-  const du = ext.u.max - ext.u.min;
-  const dw = ext.w.max - ext.w.min;
-  return Math.max(du, dw) / Math.min(du, dw);
+  return [ext.u.max - ext.u.min, ext.w.max - ext.w.min].sort((a, b) => a - b);
 }
 
 /** The GLBs that actually carry display faces (the tub carries none — by design). */
@@ -442,6 +482,48 @@ describe('PanelHost — binding roles to the nodes a loaded model actually has',
     expect(() => PanelHost.fromRoot(null, { makeCanvas })).toThrow(/loaded cockpit/);
     expect(() => PanelHost.fromRoot({}, { makeCanvas })).toThrow(/loaded cockpit/);
   });
+
+  it('gives a PORTRAIT face a portrait canvas', () => {
+    // ⭐ THE QUIETER HALF OF A DEFECT THE MOVER SHOWED LOUDLY. Nothing in this file
+    // used to test a non-landscape buffer at all — every fixture was 2:1 and every
+    // face in every GLB on disk is 0.24 x 0.20, so a measurement that reported the
+    // LONGER extent as the width was right every time it was asked.
+    //
+    // The consequence here is not a panel in the wrong place, it is a panel drawn
+    // wrong: `derivePanelBuffer`'s aspect is u/v by construction — `PanelPointer`
+    // maps u to x and `createPanelTexture` sets flipY = false — so a transposed
+    // measurement hands a 1:2 face a 2:1 canvas and the nav computer is squashed
+    // onto the glass, at full brightness, with no error anywhere.
+    const { root } = syntheticCockpit(undefined, CORNERS_1_2);
+    const host = PanelHost.fromRoot(root, { makeCanvas });
+
+    expect(host.panels.length).toBe(4);
+    for (const panel of host.panels) {
+      expect(panel.metrics.width, `${panel.role} width`).toBeCloseTo(0.2, 6);
+      expect(panel.metrics.height, `${panel.role} height`).toBeCloseTo(0.4, 6);
+      expect(panel.metrics.aspect, `${panel.role} aspect`).toBeCloseTo(0.5, 6);
+      expect(panel.canvas.height).toBe(DEFAULT_PANEL_BUFFER_HEIGHT_PX);
+      expect(panel.canvas.width)
+        .toBe(Math.round(DEFAULT_PANEL_BUFFER_HEIGHT_PX * (0.2 / 0.4)));
+      expect(panel.canvas.width, `${panel.role} got a landscape buffer`)
+        .toBeLessThan(panel.canvas.height);
+    }
+    host.dispose();
+  });
+
+  it('refuses a screen face with no uvs, rather than guessing which extent is the width', () => {
+    // The project's stance on an unmapped screen face is already settled and loud —
+    // `PanelMover` throws, `ScreenUV.test.js` throws rather than skipping, and
+    // AC-UV-ORIENTATION pins the map per vertex. The host now says the same thing
+    // for the same reason: without uvs the buffer's shape would be a guess, and the
+    // guess is invisible once it is baked into a texture.
+    const root = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ name: 'Mat_Screen' });
+    for (const name of ['Screen_UL', 'Screen_UR', 'Screen_LL', 'Screen_LR']) {
+      root.add(quadMesh(name, CORNERS_2_1, mat));   // no uvs
+    }
+    expect(() => PanelHost.fromRoot(root, { makeCanvas })).toThrow(/uv attribute/);
+  });
 });
 
 describe('PanelHost — measured against the real assets on disk', () => {
@@ -461,8 +543,13 @@ describe('PanelHost — measured against the real assets on disk', () => {
         const node = faces.find((n) => n.name === panel.nodeName);
         const want = independentAspect(node);
         // The host's own measurement agrees with a measurement taken by a
-        // different route off the same triangles.
+        // different route off the same mesh — u/v, keyed off the uvs.
         expect(panel.metrics.aspect, `${file} / ${panel.nodeName}`).toBeCloseTo(want, 3);
+        // And the two magnitudes agree with the fitted frame, as an unordered pair.
+        const mags = independentExtents(node);
+        const got = [panel.metrics.width, panel.metrics.height].sort((a, b) => a - b);
+        expect(got[0], `${file} / ${panel.nodeName}`).toBeCloseTo(mags[0], 3);
+        expect(got[1], `${file} / ${panel.nodeName}`).toBeCloseTo(mags[1], 3);
         // And the buffer is that aspect, at the target height.
         expect(panel.canvas.height).toBe(DEFAULT_PANEL_BUFFER_HEIGHT_PX);
         expect(panel.canvas.width).toBe(Math.round(DEFAULT_PANEL_BUFFER_HEIGHT_PX * want));

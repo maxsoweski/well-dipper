@@ -215,15 +215,49 @@ function worldPoints(mesh) {
   return out;
 }
 
-function measure(mesh) {
-  return measureQuad(worldPoints(mesh));
-}
-
-function basis(mesh) {
+/** A panel's uvs, index-for-index with `worldPoints`. */
+function uvPairs(mesh) {
   const uv = mesh.geometry.getAttribute('uv');
   const pairs = [];
   for (let i = 0; i < uv.count; i++) pairs.push([uv.getX(i), uv.getY(i)]);
-  return measureQuadBasis(worldPoints(mesh), pairs);
+  return pairs;
+}
+
+function measure(mesh) {
+  return measureQuad(worldPoints(mesh), uvPairs(mesh));
+}
+
+function basis(mesh) {
+  return measureQuadBasis(worldPoints(mesh), uvPairs(mesh));
+}
+
+/**
+ * A face's u and v extents, read off the uv and position attributes DIRECTLY.
+ *
+ * ⭐ THE CONTROL FOR THE COVERAGE TEST, AND IT EXISTS FOR THE REASON THIS FILE'S
+ * BANNER AT THE TOP OF THE ORIENTATION BLOCK ALREADY STATES: an instrument cannot
+ * be its own control. The coverage assertion used to compute the landed cover from
+ * `measureQuad`'s width and height — the same pair the mover SOLVED with — so when
+ * that function transposed a portrait face's axes, the solver placed it at (u/v) of
+ * the correct distance, the test divided by the same transposed pair, and the two
+ * errors cancelled exactly. The assertion passed at 1e-6 while the panel hung half a
+ * screen off the edge of the view.
+ *
+ * This never calls `measureQuad`. Corners are keyed by uv quadrant and the two edges
+ * on each axis are averaged, so it can disagree — which is the entire point.
+ */
+function uvExtents(mesh) {
+  mesh.updateWorldMatrix(true, false);
+  const points = worldPoints(mesh);
+  const uvs = uvPairs(mesh);
+  const at = (u, v) => {
+    const i = points.findIndex((_, k) => (uvs[k][0] < 0.5) === u && (uvs[k][1] < 0.5) === v);
+    if (i < 0) throw new Error(`uvExtents: ${mesh.name} has no corner at u<0.5=${u} v<0.5=${v}`);
+    return points[i];
+  };
+  const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const tl = at(true, true), tr = at(false, true), bl = at(true, false), br = at(false, false);
+  return { u: (d(tl, tr) + d(bl, br)) / 2, v: (d(tl, bl) + d(tr, br)) / 2 };
 }
 
 const V = (o) => new THREE.Vector3(o.x, o.y, o.z);
@@ -412,26 +446,55 @@ describe('PanelMover — the zoomed panel lands where it was solved to land', ()
     });
 
     it(`covers the fraction it was asked for, and never overflows the view — ${label}`, () => {
+      // ⭐ MEASURED WITHOUT measureQuad, AND OVER EVERY PANEL, FOR TWO REASONS THAT
+      // WERE BOTH LIVE DEFECTS.
+      //
+      // (1) This assertion used to read the landed size back out of `measureQuad` —
+      // the same function the mover solved with. A transposed width/height cancels
+      // perfectly across that loop: the panel is placed at (u/v) of the right
+      // distance and the cover is divided by the same transposed pair, so a 9:16
+      // face at fill 0.85 landed covering 1.51 of the view and this passed at 1e-6.
+      // The extents now come from the uv and position attributes directly.
+      //
+      // (2) Every zoom test in this file used to zoom panels[0] only, which for the
+      // synthetic cockpit is the LANDSCAPE Screen_UL. The fixture deliberately
+      // carries a portrait Screen_UR and a square Screen_LL to be unlike the shipped
+      // model, and no zoom solve ever touched either — the fixture was stronger than
+      // the assertions using it, which is how it read as covering a case it did not.
       for (const fill of [0.5, 0.85, 1.0]) {
         const { root } = build();
-      const panels = panelsOf(root);
-        const mover = new PanelMover({ panels, root, fill });
-        const cam = makeCamera();
-        mover.zoom(panels[0].role, cam);
-        runToRest(mover);
+        const panels = panelsOf(root);
+        for (const panel of panels) {
+          const mover = new PanelMover({ panels, root, fill });
+          const cam = makeCamera();
+          mover.zoom(panel.role, cam);
+          runToRest(mover);
 
-        const m = measure(panels[0].mesh);
-        const toCam = new THREE.Matrix4().copy(cam.matrixWorld).invert();
-        const d = -V(m.centre).applyMatrix4(toCam).z;
-        const halfV = Math.tan((cam.fov * Math.PI) / 180 / 2);
-        const cover = {
-          v: (m.height / 2) / (d * halfV),
-          h: (m.width / 2) / (d * halfV * cam.aspect),
-        };
-        expect(Math.max(cover.v, cover.h), `fill ${fill}`).toBeCloseTo(fill, 6);
-        expect(cover.v).toBeLessThanOrEqual(fill + 1e-9);
-        expect(cover.h).toBeLessThanOrEqual(fill + 1e-9);
-        mover.dispose();
+          const ext = uvExtents(panel.mesh);
+          const centre = measure(panel.mesh).centre;   // position only — not the extents
+          const toCam = new THREE.Matrix4().copy(cam.matrixWorld).invert();
+          const d = -V(centre).applyMatrix4(toCam).z;
+          const halfV = Math.tan((cam.fov * Math.PI) / 180 / 2);
+          const cover = {
+            v: (ext.v / 2) / (d * halfV),
+            h: (ext.u / 2) / (d * halfV * cam.aspect),
+          };
+          // The overflow slack has to cover MEASUREMENT DISAGREEMENT, not just
+          // arithmetic. The control above takes each extent as the mean of the
+          // face's two opposite edges; the solver used one corner-to-corner
+          // distance. A real exported quad is rectangular only to float precision,
+          // so the two differ in the last ulps — Screen_LR in cockpit.glb by 1.5e-9
+          // m in v, which is 1.3e-9 of coverage. It was 1e-9 while both sides of
+          // this assertion came from the same call, which is exactly the circularity
+          // being removed. 1e-6 relative is invisible to a pilot and 200,000 times
+          // smaller than the 20% a transposed 6:5 face would show.
+          const slack = fill * 1e-6;
+          const where = `${panel.role} at fill ${fill}`;
+          expect(Math.max(cover.v, cover.h), where).toBeCloseTo(fill, 6);
+          expect(cover.v, `${where}: overflows vertically`).toBeLessThanOrEqual(fill + slack);
+          expect(cover.h, `${where}: overflows horizontally`).toBeLessThanOrEqual(fill + slack);
+          mover.dispose();
+        }
       }
     });
 

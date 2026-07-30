@@ -192,7 +192,7 @@ export class PanelMover {
       );
     }
 
-    const metrics = measureQuad(worldPoints(mesh));
+    const metrics = measureQuad(worldPoints(mesh), uvPairs(mesh));
     const basis = measureQuadBasis(worldPoints(mesh), uvPairs(mesh));
 
     const pivot = new Group();
@@ -286,7 +286,11 @@ export class PanelMover {
    * @private
    */
   _solveTarget(rig, camera) {
-    const metrics = measureQuad(worldPoints(rig.mesh));
+    // The uvs go in with the positions because they are what says which extent is
+    // the width. Without them a portrait face arrives here transposed and
+    // `solveFillDistance` places it at (u/v) of the right distance — centred,
+    // square, and hanging off the edge of the view.
+    const metrics = measureQuad(worldPoints(rig.mesh), uvPairs(rig.mesh));
     const { distance } = solveFillDistance({
       width: metrics.width,
       height: metrics.height,
