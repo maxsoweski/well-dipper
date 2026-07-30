@@ -275,4 +275,43 @@ describe('the pointer router — the hover channel must survive the extraction',
     expect(rig.pointer.down(10, 10)).toBe('zoom');
     expect(calls).toEqual(['zoom:NAV']);
   });
+
+  // ── The census (increment 7 step 6) — the instrument AC-A-QUICK-CLICK-IS-
+  //    ENOUGH reads. Counted at the ROUTER, which is the receiver: a host that
+  //    believes it forwards unpressed moves and does not would, if it counted
+  //    for itself, report its own belief. ────────────────────────────────────
+  it('counts a quick click as hover-then-press, with pressedMove at zero', () => {
+    // The shape of a click that WORKS. Hover, then a press and release with
+    // nothing in between — `{ move: false }`, the gesture that has nothing to
+    // manufacture the missing move.
+    const { rig } = routed();
+    rig.pointer.move(10, 10);
+    rig.pointer.down(10, 10);
+    rig.pointer.up(10, 10);
+    expect(rig.pointer.census).toMatchObject({ hover: 1, pressedMove: 0, down: 1, up: 1, navDown: 1, lastRole: 'NAV' });
+  });
+
+  it('counts press-and-hold as pressedMove, which is what the broken shape looked like', () => {
+    const { rig } = routed();
+    rig.pointer.down(10, 10);
+    rig.pointer.move(11, 11);
+    rig.pointer.move(12, 12);
+    rig.pointer.up(12, 12);
+    expect(rig.pointer.census).toMatchObject({ hover: 0, pressedMove: 2 });
+  });
+
+  it('records the role under a press that the router did NOT take, so a miss is legible', () => {
+    // A press on DRIVE at rest: not NAV, not zoomable, so the host looks around.
+    // The census still says what was under it — otherwise "the click did
+    // nothing" and "the click hit the wrong panel" look identical.
+    const { rig } = routed({ role: 'DRIVE', landed: false });
+    expect(rig.pointer.down(10, 10)).toBe('none');
+    expect(rig.pointer.census).toMatchObject({ down: 1, navDown: 0, zoomDown: 0, lastRole: 'DRIVE' });
+  });
+
+  it('records a press on nothing as a null role, not as the last panel touched', () => {
+    const { rig } = routed({ role: null, landed: false });
+    rig.pointer.down(1, 1);
+    expect(rig.pointer.census.lastRole).toBe(null);
+  });
 });

@@ -2545,6 +2545,12 @@ CockpitRig.load({
   // followCamera stays FALSE: head decoupling is its own increment and must not
   // arrive by default.
   zoom: { followCamera: false },
+  // The rig suppresses the HOVER channel while the host is turning its head —
+  // a hover computed mid-look answers a question about where the cursor USED to
+  // be over the map. `scHead.held` is the game's whole look state: it is set by
+  // the free-look LMB grab and by the middle-mouse peek, and it is the same flag
+  // the joystick branch freezes on.
+  isLookDragging: () => scHead.held,
   makeNav: (surface) => {
     // ⚠ THE SECOND NavComputer — the one that draws on the glass. The DOM
     // overlay's is built at `_initNavComputer`. See the two-instance note at the
@@ -2564,6 +2570,58 @@ CockpitRig.load({
   else console.log(`[COCKPIT] rig ready — ${rig.host ? rig.host.panels.length : 0} panels, eye ${rig.eyeFound ? 'found' : 'MISSING'}`);
 });
 
+// ── The pointer, and who gets it first (increment 7, step 6) ───────────────
+//
+// The rig ships `CockpitRig.pointer`, a router whose whole design is the ORDER
+// of three jobs — nav computer, then zoom, then the host's own look-around. The
+// game's job here is only to ASK it first and to honour the answer.
+//
+// ⭐ THE GATE IS CURSOR-VISIBLE HELM, and the cursor half is not a detail. In
+// HELM hands-on the OS cursor is HIDDEN because the mouse IS the flight stick:
+// its distance from screen centre is the turn-rate command, so a press is a
+// steering input and there is no pointer on screen to aim at a panel with.
+// Routing there would poke a panel on every steer. Cursor-visible means free-
+// look latched (F) or ORRERY — and ORRERY has no cockpit — so in practice this
+// reads: the pilot let go of the stick, so the pointer is theirs to aim.
+//
+// ⚠ `_navComputerOpen` is in the gate as belt-and-braces. The DOM overlay is a
+// full-screen element above the canvas, so the canvas should never see the
+// press at all; if that ever stops being true, a click would otherwise drive
+// BOTH nav computers from one gesture.
+function _cockpitPointerActive() {
+  return _cockpitShouldRender()
+    && !!_cockpitRig.host
+    && _pointerCursor !== 'none'
+    && !_navComputerOpen
+    && !splashActive
+    && !titleScreenActive;
+}
+
+/**
+ * What the router did with the CURRENT press, or null between gestures.
+ *
+ * ⚠ THIS IS THE GESTURE LATCH, and it is what keeps a release from doing the
+ * game's work after the router did its own. Without it, pressing a panel and
+ * releasing runs `trySelect(e.clientX, e.clientY)` at the bottom of the canvas
+ * mouseup — so working the nav menu would also re-target whatever body happens
+ * to be behind the monitor.
+ */
+let _cockpitPressUsed = null;
+
+/**
+ * End the gesture the router owns. Idempotent via the latch, because it is
+ * called from BOTH mouseup listeners on purpose: the canvas one does not fire
+ * when the release lands off-canvas or after the window loses the pointer, and a
+ * stranded `panelDrag` would forward every later move into the nav computer with
+ * no button down. Canvas fires first (target phase) and clears the latch; the
+ * window handler then sees null and does nothing.
+ */
+function _releaseCockpitPress(clientX, clientY) {
+  if (!_cockpitPressUsed) return;
+  _cockpitPressUsed = null;
+  if (_cockpitRig) _cockpitRig.pointer.up(clientX, clientY);
+}
+
 /** Probe surface, mirroring the lab's. Read-only. */
 window._cockpit = () => (_cockpitRig ? {
   ready: _cockpitReady,
@@ -2577,6 +2635,9 @@ window._cockpit = () => (_cockpitRig ? {
   regime: _scManual ? 'helm' : 'orrery',
   moverState: _cockpitRig.mover ? _cockpitRig.mover.state : null,
   zoomedRole: _cockpitRig.mover ? _cockpitRig.mover.zoomedRole : null,
+  // The pointer census, counted at the ROUTER — see its comment. `hover` rising
+  // with `pressedMove` at zero is what a quick click looks like when it works.
+  pointer: { ..._cockpitRig.pointer.census, routing: _cockpitPointerActive(), pressUsed: _cockpitPressUsed },
 } : { ready: false });
 
 // When the tour visits every body, use the nav computer for a cinematic warp sequence.
@@ -9925,6 +9986,15 @@ window.addEventListener('keydown', (e) => {
       toggleSoundTest();
       return;
     }
+    // A zoomed cockpit panel is dismissed FIRST, and by the same ESC. Max's
+    // 2026-07-29 ruling was that ESC means DISMISS EVERYWHERE, and while a
+    // monitor fills the view it is the only thing on screen worth dismissing —
+    // so it outranks a deselect and outranks the DOM overlay, which cannot be
+    // open at the same time anyway (the gate below would have blocked the zoom).
+    if (_cockpitRig && _cockpitRig.mover && _cockpitRig.mover.zoomedRole) {
+      _cockpitRig.pointer.dismiss();
+      return;
+    }
     if (_navComputerOpen) {
       // ESC DISMISSES. It used to walk back one nav level per press and only
       // close at GALAXY; Max ruled on 2026-07-29 that it should "just dismiss it"
@@ -10741,6 +10811,29 @@ canvas.addEventListener('mousemove', (e) => {
     _deepSkyLingerTimer = -1; // cancel auto-warp while user is active
   }
 
+  // ── THE HOVER CHANNEL, and it is why a quick click works (step 6) ──
+  //
+  // ⭐ THIS IS THE ONE THAT BIT MAX AT INCREMENT 6 UAT. NavComputer resolves
+  // every body the pilot clicks — a planet, a moon, a star at PRISM, a sector,
+  // a grid tile — from HOVER state, and that state is recomputed inside its
+  // RENDER from `_mouseX`/`_mouseY`, which only `_handleMouseMove` writes. A DOM
+  // canvas gets `mousemove` continuously with no button down; a 3D panel gets
+  // NOTHING unless a router forwards it. Forward only the PRESSED moves and a
+  // quick click resolves against stale hover and reads as empty space — while
+  // press-and-hold appears to work, because the hold manufactures the move.
+  //
+  // ⚠ SO THIS CALL IS UNCONDITIONAL ON BUTTON STATE. The router decides what a
+  // move is for (drag → the adapter, otherwise → hover, and never during a look
+  // drag). It runs BEFORE the freelook and joystick branches below because both
+  // of those `return`, and a hover starved by an early return is exactly the
+  // defect. A consumed move is a panel drag: the map's own drag-to-rotate must
+  // beat look-around while the pilot is working the menu.
+  if (_cockpitPointerActive() && _cockpitRig.pointer.move(e.clientX, e.clientY)) {
+    _mouseX = e.clientX;
+    _mouseY = e.clientY;
+    return;
+  }
+
   // ── Supercruise freelook (hold-to-look, Elite headlook) ──
   // The head LOOKS only while `held` is set, and `held` now follows the mouse
   // BUTTON, not the F-latch (§free-look-interaction-redesign-2026-06-27, Part 2):
@@ -10892,6 +10985,24 @@ canvas.addEventListener('mousedown', (e) => {
   _mouseDown.y = e.clientY;
 
   // Check if clicking on the minimap — start a drag-to-rotate
+  // ── THE COCKPIT GETS FIRST REFUSAL (increment 7, step 6) ──
+  // Before the minimap, before the look-grab, before the autopilot-click latch.
+  // The order is the design: everything below assumes the press is aimed at the
+  // WORLD, and a press aimed at a monitor 0.17 m from the eye is not.
+  //
+  // ⚠ 'none-consumed' is SWALLOWED, not passed through. It means the pilot
+  // pressed a nav panel filling their view and the adapter was not ready — so
+  // the honest answer is nothing at all, rather than swinging the head behind a
+  // panel they cannot see past.
+  if (e.button === 0 && _cockpitPointerActive()) {
+    const used = _cockpitRig.pointer.down(e.clientX, e.clientY);
+    if (used !== 'none') {
+      _cockpitPressUsed = used;
+      if (!autoNav.isActive) { idleTimer = 0; _deepSkyLingerTimer = -1; }
+      return;
+    }
+  }
+
   if (e.button === 0 && systemMap && minimapVisible && !gravityWellVisible) {
     const uv = retroRenderer.getHudUV(e.clientX, e.clientY);
     if (uv) {
@@ -10971,6 +11082,11 @@ canvas.addEventListener('wheel', () => {
 }, { passive: true });
 
 window.addEventListener('mouseup', (e) => {
+  // The off-canvas safety net — see `_releaseCockpitPress`. The canvas listener
+  // below fires first for an on-canvas release and clears the latch, so this is
+  // a no-op then; it only does work when the release landed somewhere the canvas
+  // never heard about, which would otherwise strand `panelDrag`.
+  if (e.button === 0) _releaseCockpitPress(e.clientX, e.clientY);
   if (e.button === 0 && _minimapDragging) {
     _minimapDragging = false;
     _minimapDidDrag = false;
@@ -10995,6 +11111,14 @@ window.addEventListener('mouseup', (e) => {
 
 canvas.addEventListener('mouseup', (e) => {
   if (e.button !== 0) return;
+
+  // The router owned this gesture — release it and stop. Falling through would
+  // run `trySelect` at the bottom of this handler, so working the nav menu would
+  // also re-target whatever body sits behind the monitor.
+  if (_cockpitPressUsed) {
+    _releaseCockpitPress(e.clientX, e.clientY);
+    return;
+  }
 
   // Free-look LMB release (§free-look-interaction-redesign-2026-06-27, Part 2,
   // step 1+4): end the look. The view HOLDS where you dragged it (headReleaseAction

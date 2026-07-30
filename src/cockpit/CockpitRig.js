@@ -682,6 +682,16 @@ class CockpitPointerRouter {
   constructor(rig) {
     this.rig = rig;
     this.panelDrag = false;
+    /**
+     * What this router has actually been handed. Counted HERE, at the receiver,
+     * not at whichever host does the forwarding — a host that believes it
+     * forwards unpressed moves and does not would report its own belief.
+     *
+     * `hover` vs `pressedMove` is the whole point: increment 6's UAT defect was
+     * `hover === 0` with `pressedMove` rising, which is press-and-hold working
+     * and a quick click doing nothing. AC-A-QUICK-CLICK-IS-ENOUGH reads these.
+     */
+    this.census = { down: 0, hover: 0, pressedMove: 0, up: 0, navDown: 0, zoomDown: 0, lastRole: null };
   }
 
   /**
@@ -691,11 +701,14 @@ class CockpitPointerRouter {
   down(clientX, clientY) {
     const rig = this.rig;
     const got = rig.pickAt(clientX, clientY);
+    this.census.down++;
+    this.census.lastRole = got ? got.role : null;
 
     if (got && got.role === 'NAV' && rig.navZoomLanded()) {
       const adapter = rig.ensureNavAdapter();
       if (!adapter) return 'none-consumed';
       this.panelDrag = true;
+      this.census.navDown++;
       adapter.pointerDown(got.hit);
       return 'nav';
     }
@@ -704,6 +717,7 @@ class CockpitPointerRouter {
       const settledOrArriving = rig.mover.zoomedRole === got.role
         && (rig.mover.state === 'zoomed' || rig.mover.state === 'toZoom');
       if (!settledOrArriving) rig.mover.zoom(got.role, rig.cameraNow());
+      this.census.zoomDown++;
       return 'zoom';
     }
 
@@ -715,6 +729,7 @@ class CockpitPointerRouter {
     const rig = this.rig;
     if (this.panelDrag) {
       const adapter = rig.ensureNavAdapter();
+      this.census.pressedMove++;
       // A miss while pressed is the 3D form of the cursor leaving the canvas, and
       // the adapter has always treated that as a release.
       if (adapter) adapter.pointerMove(rig.pickAt(clientX, clientY)?.hit ?? null);
@@ -730,6 +745,7 @@ class CockpitPointerRouter {
       const adapter = rig.ensureNavAdapter();
       if (adapter) {
         const over = rig.pickAt(clientX, clientY);
+        this.census.hover++;
         adapter.pointerHover(over && over.role === 'NAV' ? over.hit : null);
       }
     }
@@ -745,6 +761,7 @@ class CockpitPointerRouter {
     const rig = this.rig;
     if (!this.panelDrag) return false;
     this.panelDrag = false;
+    this.census.up++;
     const adapter = rig.ensureNavAdapter();
     // This is the call that finally forwards `_handleClick` — the level tabs, the
     // SYSTEM sub-views, the autopilot toggle and BURN/WARP all hang off it.
