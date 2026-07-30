@@ -261,14 +261,17 @@ realStarCatalog.load().then(() => {
   StarfieldGenerator.realStarCatalog = realStarCatalog;
   KnownSystems.associate(realStarCatalog, galacticMap);   // derive known-system catalog aliases + inject map for authored-entry ctx (design D7)
   debugPanel.setRealStarCatalog(realStarCatalog);
-  if (_navComputer) _navComputer.setRealStarCatalog(realStarCatalog);
+  // EVERY instance, not "the" one — see `_navComputers()`. The cockpit's is
+  // usually already built by the time this resolves and the DOM overlay's
+  // usually is not; naming either one would silently starve the other.
+  for (const nav of _navComputers()) nav.setRealStarCatalog(realStarCatalog);
   console.log(`Real star catalog loaded: ${realStarCatalog.count} stars`);
 });
 
 // Load real feature catalogs (globular clusters, etc.)
 realFeatureCatalog.load().then(() => {
   debugPanel.setRealFeatureCatalog(realFeatureCatalog);
-  if (_navComputer) _navComputer.setRealFeatureCatalog(realFeatureCatalog); // Inc-4 AC2: class-(c) structures search
+  for (const nav of _navComputers()) nav.setRealFeatureCatalog(realFeatureCatalog); // Inc-4 AC2: class-(c) structures search
   // Make real features available to the hash grid for Plummer density
   HashGridStarfield.realFeatureCatalog = realFeatureCatalog;
   console.log(`Real feature catalog loaded: ${realFeatureCatalog.globularClusters.length} globular clusters`);
@@ -2430,7 +2433,7 @@ window._warpTarget = warpTarget;  // DEBUG: expose warp target for Playwright dr
 // ── Cockpit screens: the ONE read-only feed (cockpit-screen-content-2026-07-28,
 //    AC-SNAPSHOT) ────────────────────────────────────────────────────────────
 // Every screen feed (`system`, `focusIndex`, `_selectedTarget`,
-// `playerGalacticPos`, `scModel.speed/throttle`, `warpTarget`, `_navComputer`) is
+// `playerGalacticPos`, `scModel.speed/throttle`, `warpTarget`, the live nav) is
 // a module-level `let` here with no export and no store. Rather than let four
 // panels each reach in, the reader below gathers them once per frame and
 // buildCockpitSnapshot copies them to plain data. NO PANEL MAY REACH PAST THIS.
@@ -2476,7 +2479,10 @@ const _cockpitSnapshotProvider = new CockpitSnapshotProvider((frame) => ({
     ? null
     : resolveFocusedBody(system, { focusIndex, focusMoonIndex, focusStarIndex }),
 
-  navLevel: _navComputer ? _navComputer.level : null,
+  // The LIVE instance's level, not the overlay's. In HELM the overlay is often
+  // null (N has never been pressed) while the glass is drilled into PRISM; a
+  // holding card reading the overlay would say GALAXY under a PRISM map.
+  navLevel: liveNavComputer()?.level ?? null,
   galacticPos: playerGalacticPos,
   systemName: _currentSystemName || null,
 
@@ -2540,11 +2546,14 @@ CockpitRig.load({
   // arrive by default.
   zoom: { followCamera: false },
   makeNav: (surface) => {
-    // ⚠ A SECOND NavComputer. The DOM overlay's instance is built at
-    // `_initNavComputer`; this one draws on the glass. Wiring the callbacks and
-    // the catalogues onto it is increment 7 step 5+, not this step — until then
-    // it renders and is not yet operable.
+    // ⚠ THE SECOND NavComputer — the one that draws on the glass. The DOM
+    // overlay's is built at `_initNavComputer`. See the two-instance note at the
+    // `// ── Nav Computer ──` block: neither is "the" nav computer.
     const nav = new NavComputer(surface, galacticMap, retroRenderer.renderer);
+    _cockpitNavComputer = nav;
+    // Whatever has loaded by now. The loaders push to this instance for
+    // whatever has not — the two halves of the fan-out.
+    _applyCatalogsTo(nav);
     return nav;
   },
 }).then((rig) => {
@@ -2576,7 +2585,7 @@ autoNav.onTourComplete = () => {
   // Initialize the nav sequence if needed
   if (!_autopilotNavSequence) {
     _autopilotNavSequence = new AutopilotNavSequence({
-      navComputer: _navComputer,
+      navComputer: _domNavComputer,
       galacticMap: galacticMap,
       openNavComputer: openNavComputer,
       closeNavComputer: closeNavComputer,
@@ -2605,11 +2614,11 @@ autoNav.onTourComplete = () => {
   }
 
   // Ensure nav computer is initialized
-  if (!_navComputer) _initNavComputer();
+  if (!_domNavComputer) _initNavComputer();
 
   // Update player position for destination picking
   _autopilotNavSequence._playerPos = playerGalacticPos || { x: 8, y: 0, z: 0 };
-  _autopilotNavSequence._nav = _navComputer;
+  _autopilotNavSequence._nav = _domNavComputer;
 
   // Start the cinematic sequence
   _autopilotNavSequence.start();
@@ -2889,12 +2898,102 @@ function toggleKeybinds() {
 }
 
 // ── Nav Computer ──
+//
+// ⭐ THERE ARE TWO OF THEM, AND THERE IS NO WAY AROUND IT (increment 7 step 5).
+// A NavComputer renders into ONE canvas at ONE size: the DOM overlay's
+// `#nav-computer-canvas`, and the cockpit's 512-px panel buffer. One instance
+// cannot serve both, and sharing one would make every resize tear the other's
+// view down mid-drill.
+//
+// So the bare name `_navComputer` is GONE. [NAMING-RULE] Every call site read "the nav
+// computer" and mean "the only one"; with two, that same line is a coin flip
+// between the surface Max is looking at and one he is not. Both are named
+// explicitly, `liveNavComputer()` answers "the one being operated right now",
+// and `src/cockpit/__tests__/navComputerNaming.test.js` fails the build if the bare name
+// comes back — including in a comment, because a comment that says
+// `_navComputer` is a comment that tells the next reader there is one. [NAMING-RULE]
+// The two occurrences in THIS block carry that tag and are the only ones the
+// scan permits.
 let _navComputerOpen = false;
 let _manualBurnOrbiting = false; // true when camera is in post-burn slow orbit (flythrough active, autoNav off)
 let _autopilotEnabled = false;   // persists through warps (independent of autoNav.isActive)
-let _navComputer = null;
+/** The `#nav-computer-overlay` instance. Built lazily by `_initNavComputer`. */
+let _domNavComputer = null;
+/** The on-the-glass instance. Built by CockpitRig's `makeNav`, once, on GLB load. */
+let _cockpitNavComputer = null;
 let _navAnimFrame = null;
 let _autopilotNavSequence = null; // cinematic nav drill-down for autopilot warps
+
+/**
+ * Every constructed instance. Anything that must reach BOTH fans out over this
+ * rather than naming one — the catalogues are the worked example: they arrive
+ * asynchronously, long after `makeNav` has run and usually long before the DOM
+ * overlay is ever opened, so a loader that named one instance would leave the
+ * other permanently catalogue-less with nothing to say so.
+ */
+function _navComputers() {
+  const out = [];
+  if (_domNavComputer) out.push(_domNavComputer);
+  if (_cockpitNavComputer) out.push(_cockpitNavComputer);
+  return out;
+}
+
+/**
+ * The instance the pilot is actually operating right now.
+ *
+ * ⚠ GATED ON `_cockpitShouldRender()`, NOT ON `_scManual`. If the GLB failed to
+ * load there is no cockpit on screen, so in HELM the DOM overlay is still the
+ * only nav computer the pilot can reach — routing to an invisible instance would
+ * make N do nothing and read as a dead keybind rather than as a failed model.
+ */
+function liveNavComputer() {
+  return (_cockpitNavComputer && _cockpitShouldRender()) ? _cockpitNavComputer : _domNavComputer;
+}
+
+/**
+ * Hand a freshly built instance whatever catalogues have loaded SO FAR.
+ *
+ * The other half of the fan-out: the two `.load().then()` handlers push to
+ * everything that exists, this pulls for something that has just come into
+ * existence. Both halves are needed because either order actually happens — the
+ * cockpit's instance is built when the GLB resolves and the DOM overlay's when N
+ * is first pressed, and neither is ordered against a network fetch.
+ *
+ * Without this, `_realStarCatalog` stays null on the cockpit instance and the
+ * far-companion chip and the component sub-view are structurally unreachable on
+ * the glass — the exact hole AC-REAL-CATALOGUE-REACHES-THE-GLASS names.
+ */
+function _applyCatalogsTo(nav) {
+  if (!nav) return;
+  if (realStarCatalog.loaded) nav.setRealStarCatalog(realStarCatalog);
+  if (realFeatureCatalog.loaded) nav.setRealFeatureCatalog(realFeatureCatalog);
+}
+
+/**
+ * DEBUG probe: which instances exist, which is live, and what each one HAS.
+ *
+ * Named per instance on purpose. A probe that reported "the nav computer has the
+ * catalogue" would pass on the DOM overlay's while the glass had nothing.
+ */
+window._navComputers = () => {
+  const live = liveNavComputer();
+  const describe = (nav) => (nav ? {
+    starCatalog: !!nav._realStarCatalog?.loaded,
+    featureCatalog: !!nav._realFeatureCatalog?.loaded,
+    level: nav.level ?? null,
+    systemData: !!nav._systemData,
+  } : null);
+  return {
+    dom: describe(_domNavComputer),
+    cockpit: describe(_cockpitNavComputer),
+    live: live === _cockpitNavComputer && live ? 'cockpit' : (live ? 'dom' : 'none'),
+    overlayOpen: _navComputerOpen,
+    regime: _scManual ? 'helm' : 'orrery',
+  };
+};
+/** Live handles, for driving a check that must reach past the plain report. */
+window._domNav = () => _domNavComputer;
+window._cockpitNav = () => _cockpitNavComputer;
 
 // ── System ambient music (periodic, with gaps) ──
 let _systemMusicTimer = null;
@@ -2925,26 +3024,25 @@ function _cancelSystemMusic() {
 
 function _initNavComputer() {
   const navCanvas = document.getElementById('nav-computer-canvas');
-  _navComputer = new NavComputer(navCanvas, galacticMap, retroRenderer.renderer);
-  if (realStarCatalog.loaded) _navComputer.setRealStarCatalog(realStarCatalog);
-  if (realFeatureCatalog.loaded) _navComputer.setRealFeatureCatalog(realFeatureCatalog); // Inc-4 AC2: class-(c) structures search
+  _domNavComputer = new NavComputer(navCanvas, galacticMap, retroRenderer.renderer);
+  _applyCatalogsTo(_domNavComputer); // Inc-4 AC2: class-(c) structures search
 
   // COMMIT button → request close (action retrieved via nav.close())
-  _navComputer.setCommitCallback((action) => {
+  _domNavComputer.setCommitCallback((action) => {
     // Store the action, then close — dispatchNavAction reads it
-    _navComputer._pendingAction = action;
+    _domNavComputer._pendingAction = action;
     closeNavComputer();
   });
 
   // Audio bridges
-  _navComputer.setDrillSoundCallback((levelIdx) => soundEngine.play(`navDrill${levelIdx}`));
-  _navComputer.setSoundCallback((name) => soundEngine.play(name));
+  _domNavComputer.setDrillSoundCallback((levelIdx) => soundEngine.play(`navDrill${levelIdx}`));
+  _domNavComputer.setSoundCallback((name) => soundEngine.play(name));
 
   // Autopilot toggle from nav computer
-  _navComputer.setOnAutopilotToggle((enable) => {
+  _domNavComputer.setOnAutopilotToggle((enable) => {
     if (enable) startFlythrough();
     else stopFlythrough();
-    _navComputer.setAutopilotState(enable);
+    _domNavComputer.setAutopilotState(enable);
   });
 }
 
@@ -2955,12 +3053,12 @@ function openNavComputer() {
   soundEngine.play('navOpen');
   el.style.display = 'flex';
 
-  if (!_navComputer) _initNavComputer();
+  if (!_domNavComputer) _initNavComputer();
 
   // Sync state
-  _navComputer.setPlayerPosition(playerGalacticPos || { x: 8, y: 0, z: 0 }, null);
-  _navComputer._currentSystemName = _currentSystemName || 'Unknown';
-  _navComputer.setCurrentBody(focusIndex, focusMoonIndex);
+  _domNavComputer.setPlayerPosition(playerGalacticPos || { x: 8, y: 0, z: 0 }, null);
+  _domNavComputer._currentSystemName = _currentSystemName || 'Unknown';
+  _domNavComputer.setCurrentBody(focusIndex, focusMoonIndex);
 
   // Build star entry from currentGalaxyStar — bypasses async _localStars search.
   // This guarantees the nav opens to the correct system immediately.
@@ -2975,18 +3073,18 @@ function openNavComputer() {
       seed: gs.seed, dist: 0, distPc: '0',
     };
   }
-  _navComputer.setAutopilotState(autoNav.isActive || _autopilotEnabled);
-  _navComputer.openToCurrentSystem(currentStar, sysData);
+  _domNavComputer.setAutopilotState(autoNav.isActive || _autopilotEnabled);
+  _domNavComputer.openToCurrentSystem(currentStar, sysData);
 
   // Pass existing warp target for display
   if (warpTarget.direction && galacticMap) {
     const targetWorldPos = _resolveWarpTargetGalacticPos();
-    _navComputer.setExternalTarget(targetWorldPos, warpTarget.name || null);
+    _domNavComputer.setExternalTarget(targetWorldPos, warpTarget.name || null);
   } else {
-    _navComputer.setExternalTarget(null);
+    _domNavComputer.setExternalTarget(null);
   }
 
-  _navComputer.activate();
+  _domNavComputer.activate();
   _navRenderLoop();
 }
 
@@ -2997,10 +3095,10 @@ function closeNavComputer() {
   soundEngine.play('navClose');
 
   // Read and dispatch any pending action
-  const action = _navComputer?._pendingAction || null;
-  _navComputer._pendingAction = null;
+  const action = _domNavComputer?._pendingAction || null;
+  _domNavComputer._pendingAction = null;
 
-  if (_navComputer) _navComputer.deactivate();
+  if (_domNavComputer) _domNavComputer.deactivate();
   el.style.display = 'none';
   if (_navAnimFrame) { cancelAnimationFrame(_navAnimFrame); _navAnimFrame = null; }
 
@@ -3129,7 +3227,7 @@ function _setWarpTargetFromNavStar(navStar) {
 
 function _navRenderLoop() {
   if (!_navComputerOpen) return;
-  _navComputer.render();
+  _domNavComputer.render();
   _navAnimFrame = requestAnimationFrame(_navRenderLoop);
 }
 
@@ -6618,8 +6716,8 @@ function findClosestBody() {
 
 /** Sync the nav computer's body tracking with current focus (if nav is open). */
 function _syncNavBody() {
-  if (_navComputerOpen && _navComputer) {
-    _navComputer.setCurrentBody(focusIndex, focusMoonIndex);
+  if (_navComputerOpen && _domNavComputer) {
+    _domNavComputer.setCurrentBody(focusIndex, focusMoonIndex);
   }
 }
 
