@@ -394,14 +394,70 @@ function _applyHudVisibility() {
   // Minimap lives inside the RetroRenderer HUD pass, not the DOM — blank it
   // while the HUD is hidden and restore it from the saved minimapVisible
   // state when the HUD comes back.
-  if (!_hudVisible) {
-    retroRenderer.setHud(null, null);
-  } else if (system && !gravityWellVisible && minimapVisible && systemMap) {
-    retroRenderer.setHud(systemMap.scene, systemMap.camera);
-  } else if (system && gravityWellVisible && gravityWell) {
-    retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
-  }
+  _applyHudSlot();
 }
+
+/**
+ * ⭐ THE ONE PLACE THAT DECIDES WHAT IS IN THE HUD SLOT. Read it, don't
+ * reproduce it.
+ *
+ * AC-OVERLAYS-RETIRE-IN-HELM. The 320² circle is a SLOT that hosts two
+ * different scenes, and they retire differently:
+ *
+ *   MINIMAP (`systemMap`) — retires IN HELM ONLY. It is OPERABLE, not a
+ *     readout: clicks inside it hit bodies and call `autoNav.jumpToStar()` /
+ *     `jumpToPlanet()`, and it drags to rotate. So it cannot simply be deleted
+ *     — but in HELM the cockpit's NAV panel is its replacement, and ORRERY,
+ *     which has no cockpit to host anything, keeps it. Matches the ruling
+ *     already recorded in cockpit-screen-content-2026-07-28.
+ *
+ *   GRAVITY WELL (`gravityWell`, V key) — SURVIVES IN BOTH. It has no
+ *     NavComputer level, no cockpit panel and no snapshot field, so there is
+ *     nothing for it to fold into; gating the whole slot off in HELM would
+ *     delete gravity wells outright with no replacement.
+ *
+ * ⚠ WHY ONE FUNCTION AND NOT A GATE AT EACH SITE. Five separate places used to
+ * push a scene into this slot — the H-key toggle, the settings applier, the C
+ * key, `toggleGravityWell`, and `spawnSystem`. That last one runs on EVERY
+ * ARRIVAL, so a regime-only gate written at the other four would put the
+ * minimap straight back on top of the cockpit after the next warp, which is
+ * exactly the failure the contract's own verify step calls out. A single
+ * decision point cannot drift that way; the call sites now only say "re-decide".
+ */
+function _hudSlotScene() {
+  if (!_hudVisible || !system) return null;
+  if (gravityWellVisible && gravityWell) return 'well';
+  if (minimapVisible && systemMap && !_scManual) return 'minimap';
+  return null;
+}
+
+function _applyHudSlot() {
+  const which = _hudSlotScene();
+  if (which === 'well') retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
+  else if (which === 'minimap') retroRenderer.setHud(systemMap.scene, systemMap.camera);
+  else retroRenderer.setHud(null, null);
+}
+
+/**
+ * Hard-blank the slot, overriding the decision.
+ *
+ * Two callers, and both are SUPPRESSION rather than a decision: the warp fold
+ * (`_hideCurrentSystem`) and the object gallery. `system` is still set through
+ * both, so routing them through `_applyHudSlot` would put the minimap straight
+ * back up over a system that is no longer on screen. Named so the guard in
+ * `mainHudSlot.test.js` can tell the two intents apart — a bare
+ * `setHud(null, null)` anywhere else is a second decision point and goes red.
+ */
+function _blankHudSlot() { retroRenderer.setHud(null, null); }
+
+/**
+ * Is the minimap actually ON SCREEN, and therefore clickable/draggable?
+ *
+ * The click and drag handlers must ask the SAME question the renderer asked,
+ * or HELM keeps a live 320² dead zone that swallows clicks meant for the world
+ * over a minimap that is not being drawn.
+ */
+function _minimapLive() { return _hudSlotScene() === 'minimap'; }
 // ── Cursor + flight-HUD steering reticle, BY SUB-MODE (§free-look-interaction
 // -redesign-2026-06-27, Part 1) ──
 // `_showReticle` gates the SupercruiseHud's center cross + joystick deflection
@@ -554,6 +610,13 @@ function setScManual(on) {
   // THE universal regime-flip point, so hooking here covers every HELM<->ORRERY path
   // (same hoisted-forward-reference safety as above).
   if (typeof _syncOrbitsToMode === 'function') _syncOrbitsToMode();
+  // AC-OVERLAYS-RETIRE-IN-HELM: the minimap retires in HELM and returns in
+  // ORRERY, so the REGIME is an input to the slot decision and a flip has to
+  // re-decide. Found live 2026-07-30 — without this the minimap went away on
+  // entering HELM and never came BACK on leaving it, because nothing else
+  // re-decides until the next warp or toggle. Same universal-flip-point
+  // argument as the two hooks above.
+  if (typeof _applyHudSlot === 'function') _applyHudSlot();
 }
 let _flightMode = FlightMode.MANUAL;          // in-flight sub-state (meaningful while _scManual)
 const _alignState = { active: false, mesh: null, t: 0 }; // Mode-B one-time align (Task 5)
@@ -3594,11 +3657,7 @@ function applySettingChange(key, value) {
       break;
     case 'showMinimap':
       minimapVisible = value;
-      if (minimapVisible && systemMap && !gravityWellVisible) {
-        retroRenderer.setHud(systemMap.scene, systemMap.camera);
-      } else if (!minimapVisible && !gravityWellVisible) {
-        retroRenderer.setHud(null, null);
-      }
+      _applyHudSlot();
       break;
     case 'showGravityWells':
       if (gravityWellVisible !== value) toggleGravityWell();
@@ -4690,7 +4749,7 @@ function _hideCurrentSystem() {
     scene.remove(ship.mesh);
   }
   // Hide HUD (don't dispose yet — that happens in spawnSystem during HYPER)
-  retroRenderer.setHud(null, null);
+  _blankHudSlot();
   clickTargets = new Map();
 }
 
@@ -5169,16 +5228,12 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   // Only create the system map if there are planets (empty systems have nothing to map)
   if (systemData.planets.length > 0) {
     systemMap = new SystemMap(systemData, system);
-    if (gravityWellVisible) {
-      retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
-    } else if (minimapVisible) {
-      retroRenderer.setHud(systemMap.scene, systemMap.camera);
-    } else {
-      retroRenderer.setHud(null, null);
-    }
-  } else {
-    retroRenderer.setHud(null, null);
   }
+  // ⚠ THE ARRIVAL RE-DECIDE. This runs on every warp, and it used to reinstate
+  // the minimap unconditionally — which is how a regime gate written anywhere
+  // else would have been silently undone by the next jump. `_applyHudSlot`
+  // handles `systemMap === null` (planetless system) via its own guard.
+  _applyHudSlot();
 
   // ── Build click target map ──
   clickTargets = new Map();
@@ -5772,7 +5827,7 @@ function enterGallery() {
   _setSystemVisible(false);
 
   // Hide HUD (system map / gravity well)
-  retroRenderer.setHud(null, null);
+  _blankHudSlot();
 
   document.getElementById('gallery-overlay').style.display = 'block';
   gallerySpawn();
@@ -5794,14 +5849,9 @@ function exitGallery() {
   // Restore everything in the current system
   _setSystemVisible(true);
 
-  // Restore HUD
-  if (systemMap) {
-    if (gravityWellVisible && gravityWell) {
-      retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
-    } else if (minimapVisible) {
-      retroRenderer.setHud(systemMap.scene, systemMap.camera);
-    }
-  }
+  // Restore HUD — a DECISION (the regime may have changed while the gallery
+  // was up), so it re-decides rather than reinstating what was there before.
+  _applyHudSlot();
 
   cameraController.bypassed = false;
 }
@@ -7625,14 +7675,9 @@ function toggleFullscreen() {
 function toggleGravityWell() {
   gravityWellVisible = !gravityWellVisible;
   soundEngine.play(gravityWellVisible ? 'toggleOn' : 'toggleOff');
-  // Swap HUD between gravity well contour map and system map
-  if (gravityWellVisible && gravityWell) {
-    retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
-  } else if (systemMap && minimapVisible) {
-    retroRenderer.setHud(systemMap.scene, systemMap.camera);
-  } else {
-    retroRenderer.setHud(null, null);
-  }
+  // Swap HUD between gravity well contour map and system map. V stays live in
+  // BOTH regimes — the well has no cockpit replacement to retire into.
+  _applyHudSlot();
 }
 
 // ── Animation Loop ──
@@ -9848,6 +9893,12 @@ function renderFrame(alpha) {
     // hands-on flight; hidden in free-look (the cross/dot don't belong while the
     // player is looking around) — §free-look-interaction-redesign Part 1.
     showReticle: _showReticle,
+    // AC-OVERLAYS-RETIRE-IN-HELM. The speed/throttle cluster and the MODE line
+    // are on the DRIVE panel's glass in HELM — drawing them here too is the
+    // duplication DIEGETIC-ONLY exists to remove. The reticle, the mass-lock
+    // hint and the at-the-body drop cue are NOT readouts and stay; see the
+    // block above `showReadouts` in SupercruiseHud.js for where that line is.
+    showReadouts: !_scManual,
   });
   _updateCommitBurnButton();
   _updateModeSwapButton();
@@ -10539,11 +10590,7 @@ window.addEventListener('keydown', (e) => {
   // C key: toggle minimap (was R; R is now the drive toggle — remapped 2026-06-28).
   if (e.code === 'KeyC') {
     minimapVisible = !minimapVisible;
-    if (minimapVisible && systemMap && !gravityWellVisible) {
-      retroRenderer.setHud(systemMap.scene, systemMap.camera);
-    } else if (!minimapVisible && !gravityWellVisible) {
-      retroRenderer.setHud(null, null);
-    }
+    _applyHudSlot();
     return;
   }
 
@@ -10780,7 +10827,10 @@ function trySelect(clientX, clientY) {
 
   // 0. Check minimap click first (circular HUD region)
   // Any click inside the HUD circle is consumed — dead zone for star selection.
-  if (systemMap && minimapVisible && !gravityWellVisible) {
+  // `_minimapLive()`, not the old three-flag test: the dead zone must vanish
+  // wherever the minimap is not DRAWN, or HELM keeps a 320² hole that eats
+  // clicks meant for the world in front of the canopy.
+  if (_minimapLive()) {
     const uv = retroRenderer.getHudUV(clientX, clientY);
     if (uv) {
       // Inside the minimap circle — try to hit a body, but either way don't
@@ -11272,7 +11322,7 @@ canvas.addEventListener('mousedown', (e) => {
     }
   }
 
-  if (e.button === 0 && systemMap && minimapVisible && !gravityWellVisible) {
+  if (e.button === 0 && _minimapLive()) {
     const uv = retroRenderer.getHudUV(e.clientX, e.clientY);
     if (uv) {
       _minimapDragging = true;
@@ -11652,11 +11702,7 @@ if (mobileControls) {
       }
     } else if (action === 'minimap') {
       minimapVisible = !minimapVisible;
-      if (minimapVisible && systemMap && !gravityWellVisible) {
-        retroRenderer.setHud(systemMap.scene, systemMap.camera);
-      } else if (!minimapVisible && !gravityWellVisible) {
-        retroRenderer.setHud(null, null);
-      }
+      _applyHudSlot();
       btn.classList.toggle('active', minimapVisible);
     } else if (action === 'fullscreen') {
       toggleFullscreen();

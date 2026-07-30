@@ -58,7 +58,11 @@ describe('main.js hands the pointer to the cockpit router first', () => {
     const router = at('_cockpitRig.pointer.down(', start);
 
     it('asks the router before the minimap drag can claim the press', () => {
-      expect(router).toBeLessThan(at('minimapVisible && !gravityWellVisible', start));
+      // Anchor updated 2026-07-30 (step 8): the three-flag test the minimap
+      // drag used to inline is now `_minimapLive()`, the single predicate the
+      // renderer itself asks — see `mainHudSlot.test.js`. The ORDER this pins
+      // is unchanged; only the name of the thing being ordered against moved.
+      expect(router).toBeLessThan(at('e.button === 0 && _minimapLive()', start));
     });
 
     it('asks before the free-look head grab, or a drag on the map swings the view', () => {
