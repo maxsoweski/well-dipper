@@ -117,6 +117,105 @@ export function crystallizationPotential(cond, schedule) {
   return clamp01(airlessness * (1 - erosion) * (1 - resurf) * (1 - bombard));
 }
 
+// ── surface-albedo priors (the BASE GROUND COLOUR law) ────────────────────────────────────────────────────────
+//    Before this, the render used ONE hard-coded `uBaseColor` rocky tone (0.46,0.40,0.34) for all 18 presets —
+//    Mars, the Moon, Venus and a carbon world all stood on the same brown. Every other colour in the pipeline is
+//    a tint mixed ON TOP of it (`albedoCol = mix(uBaseColor, liquidCol, liquidMask)`), so the ground itself never
+//    varied with what the world is made of. This derives it from condition scalars instead.
+//
+//    ⚠ DRIVER-SEMANTICS TRAP this law is built around. `composition.ironFraction` is a BULK-BODY iron fraction
+//    (Moon/Mercury 0.40, Mars 0.10) — NOT surface mineralogy. It is a sound proxy for how MAFIC (dark) the
+//    exposed silicate is: bulk-iron-rich bodies expose dark basaltic/mare crust (lunar Bond albedo ≈0.12) while
+//    iron-poorer ones expose lighter feldspathic/dusty crust (Mars ≈0.25). It is NOT a proxy for REDNESS. Mars is
+//    red because its iron is OXIDISED (Fe³⁺ hematite/goethite), which needs an oxidiser and time — not because it
+//    has more iron. Keying redness on ironFraction inverts both worlds (a red Moon, a grey Mars).
+//
+//    The discriminator that actually separates Mars from Earth is EROSION, not composition: both have oxidised
+//    crust, but Earth's rain and wind continuously bury and re-expose fresh rock, while Mars's near-vacuum lets an
+//    oxidised dust mantle accumulate and stay. So the oxidation term rides (1 − erosion).
+export const IRON_FELSIC   = 0.08;  // bulk iron fraction at/below which the exposed crust reads fully felsic (light)
+export const IRON_MAFIC    = 0.40;  // at/above which it reads fully mafic (dark basalt/mare)
+export const OX_VOL_LO     = 0.03;  // volatile fraction below which there was never enough water to oxidise the crust
+export const OX_VOL_HI     = 0.12;  // at/above which the oxidiser budget is saturated
+export const OX_FE_LO      = 0.02;  // even an iron-poor rocky crust has ample Fe to rust — this saturates fast
+export const OX_FE_HI      = 0.10;
+export const AGE_OX_REF    = 4.5;   // Ga — exposure time at which oxidation/space-weathering maturity saturates
+export const OX_T_LO       = 150;   // K — PALAEO liquid-water gate, low edge. Deliberately colder + wider than
+export const OX_T_HI       = 250;   // K — erosionOf's present-climate band: rust records a wet PAST (Mars, 210 K
+                                    // today) that Europa (~102 K) and Titan (~94 K) never had.
+export const SW_STRENGTH   = 0.65;  // overall space-weathering depth
+export const SW_TILT_R     = 0.35;  // per-channel attenuation — blue attenuates most, so weathering darkens AND
+export const SW_TILT_G     = 0.50;  // reddens (the nanophase-iron spectral slope), instead of desaturating toward
+export const SW_TILT_B     = 0.60;  // a neutral grey.
+
+// Endmember ground colours (LINEAR RGB, pre-posterize), calibrated to observed Bond/geometric albedos.
+export const MAFIC_ROCK     = [0.13, 0.12, 0.11];   // basalt / lunar mare — dark neutral
+export const FELSIC_ROCK    = [0.42, 0.40, 0.36];   // anorthosite / granitic highland — light warm grey
+export const OXIDE_RUST     = [0.55, 0.27, 0.15];   // hematite + goethite dust mantle (Mars)
+export const WEATHERED_DARK = [0.16, 0.13, 0.11];   // nanophase-iron space weathering — darkens AND reddens
+export const CARBON_CRUST   = [0.05, 0.05, 0.055];  // graphite / carbide crust (C:O > 1) — near-black
+export const MELT_GLASS     = [0.14, 0.07, 0.05];   // quenched melt / lava glass on a hot surface
+export const T_MELT_LO      = 900;   // K — below this no melt sheen
+export const T_MELT_HI      = 1400;  // K — at/above this the surface reads as fresh quenched melt
+
+const mix3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+// surfaceAlbedoOf(cond) — condition-derived base ground colour, linear RGB triple in [0,1].
+// Chain, in application order: mafic/felsic base → oxidation reddening → space weathering → carbon → melt.
+// Reads composition scalars, atmosphere pressure, T_eq and age only — no label / archetype / regime read.
+// ICE IS DELIBERATELY NOT HERE: `icenessOf` already drives the Stage-6 mix toward uIcenessAlbedo downstream, and
+// duplicating it here would double-count the same condition scalars.
+export function surfaceAlbedoOf(cond) {
+  const iron    = cond?.composition?.ironFraction ?? 0.3;
+  const vf      = cond?.composition?.volatileFraction ?? 0;
+  const co      = cond?.composition?.carbonToOxygen ?? 0;
+  const T       = cond?.T_eq ?? 288;
+  const age     = cond?.age ?? AGE_OX_REF;
+
+  const maturity   = clamp01(age / AGE_OX_REF);            // exposure time available to weather the crust
+  const erosion    = erosionOf(cond);                       // rain+wind rate — buries/re-exposes fresh rock
+  const airless    = airlessnessOf(cond);                   // solar wind + micrometeorite exposure gate
+
+  // 1. mafic/felsic base — bulk iron as a DARKNESS proxy (see the trap note above).
+  const mafic = smoothstep(IRON_FELSIC, IRON_MAFIC, iron);
+  let col = mix3(FELSIC_ROCK, MAFIC_ROCK, mafic);
+
+  // 2. oxidation — rust needs FIVE things, and dropping any one of them mis-colours a real world:
+  //      (a) iron in the crust (saturates fast — every rocky crust has ample Fe),
+  //      (b) an oxidiser reservoir (volatile budget),
+  //      (c) EXPOSED SILICATE, not an ice shell — without this Europa and Titan come out rust-red,
+  //      (d) a surface that was EVER warm enough for liquid water. This is a PALAEO window (150–250 K), deliberately
+  //          wider and colder than erosionOf's present-climate liquid band: Mars is red because of a wet past it no
+  //          longer has, while Europa (~102 K) and Titan (~94 K) never had one,
+  //      (e) low erosion to preserve the rust — this is the term that actually separates Mars from Earth. Both have
+  //          oxidised crust; Earth's rain and wind continuously bury and re-expose fresh rock, Mars's near-vacuum
+  //          lets an oxidised dust mantle accumulate and stay.
+  const palaeoWater = smoothstep(OX_T_LO, OX_T_HI, T);
+  const oxidation = clamp01(
+    smoothstep(OX_FE_LO, OX_FE_HI, iron) *
+    smoothstep(OX_VOL_LO, OX_VOL_HI, vf) *
+    (1 - icenessOf(cond)) *
+    palaeoWater * maturity * (1 - erosion)
+  );
+  col = mix3(col, OXIDE_RUST, oxidation);
+
+  // 3. space weathering — nanophase iron on an airless, un-eroded, un-repaved crust. Applied as a MULTIPLICATIVE
+  //    darkening with a red spectral tilt (blue attenuates most), NOT a mix toward a neutral dark: real space
+  //    weathering darkens AND steepens the red slope, whereas mixing toward grey desaturates and washed Mars out.
+  const weathering = clamp01(airless * (1 - erosion) * (1 - resurfacingRateOf(cond)) * maturity) * SW_STRENGTH;
+  col = [col[0] * (1 - weathering * SW_TILT_R),
+         col[1] * (1 - weathering * SW_TILT_G),
+         col[2] * (1 - weathering * SW_TILT_B)];
+
+  // 4. carbon — a C:O > 1 crust is graphite/carbide, and swamps every silicate term above it.
+  col = mix3(col, CARBON_CRUST, smoothstep(1.0, 1.3, co));
+
+  // 5. melt — a hot enough surface is quenched glass, not weathered rock.
+  col = mix3(col, MELT_GLASS, smoothstep(T_MELT_LO, T_MELT_HI, T));
+
+  return [clamp01(col[0]), clamp01(col[1]), clamp01(col[2])];
+}
+
 // deriveSurfaceMaterial(cond, schedule) — the material channel returned on relief.surfaceMaterial (a byte-inert
 // return-object field, populated on EVERY dispatch path, drawing no RNG — the relief.figure precedent). SLICE-4
 // SHAPE (restated per Lens L8, declared in-plan not a deviation): exactly

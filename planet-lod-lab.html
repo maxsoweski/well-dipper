@@ -172,7 +172,7 @@
     import { presetDriverDefaults, buildNeutralBodyDrivers } from './body-drivers.js';   // V2-0 Slice A: neutral (no-slider-override) driver construction the lab overlays overrides on (presetDriverDefaults also used by resetDriverOverrides)
     import { deriveConditionVector } from './body-condition-vector.js';   // V2-0 Slice C: pure _fp→condition vector, attached NESTED as bodyDrivers.condition (shadow-mode; V2-1 E1 read surface; SAME derive the headless AC1 harness uses)
     import { computeE1 } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment).
-    import { icenessOf } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3: condition-derived icy-material fraction → drives uIcenessMix (Stage-6 albedo). Pure scalar, imports nothing.
+    import { icenessOf, surfaceAlbedoOf } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3: condition-derived icy-material fraction → drives uIcenessMix (Stage-6 albedo). Pure scalar, imports nothing. · surfaceAlbedoOf: condition-derived BASE GROUND COLOUR → drives uBaseColor (was a single hard-coded rocky tone for all 18 presets).
     import { craterSchedule, craterRelevanceOf, D_D_SIMPLE } from './src/worldengine/base/bombardment.js';   // inc3b S3-fix: schedule-derived single crater law (sub-floor texture band) + the condition-derived crater/ejecta relevance gate (replaces the preset-name featureRelevant.craters lookup). e1-blind, pure.
     import { radPerKm } from './src/worldengine/base/baseStep.js';   // inc3b S3-fix: km→angular scalar for the normalized crater-depth law (uCraterAmp = D_D_SIMPLE·radPerKm(R)·D_char). Pure.
     import { assessProvinceAssociation, provinceStats, classProportions } from './src/worldengine/base/province.js';   // V2-4 slice-4: the province honesty instrument (read-only) for _lab.provinceProbe()
@@ -2439,6 +2439,7 @@
       frostAlbedo: [0.93,0.94,0.96],
       frostLocked: 0,
       iceness: 0,   // V2-6 S3: condition-derived icy-material fraction (icenessOf(cond)); frame() syncs → uIcenessMix
+      baseColor: null,   // condition-derived base ground colour (surfaceAlbedoOf(cond)); frame() syncs → uBaseColor. null ⇒ the uniform keeps its factory default (pre-applyDrivers boot frames).
       tempEq: 280.0,
       frostLatChill: 0.35,
       frostLapseRate: 0.3,
@@ -3882,6 +3883,10 @@
       const _bodyDrivers = buildBodyDrivers(_u, _fp);
       state._lastBodyDrivers = _bodyDrivers;   // surfaced by _lab.plateProbe() (the values that reached the writer)
       state.iceness = icenessOf(_bodyDrivers.condition);   // V2-6 S3: drive the Stage-6 iceness albedo from the SAME condition vector the writer reads (frame() syncs → uIcenessMix)
+      // Base ground colour, SAME derived-state idiom as state.iceness above: the colour the whole Stage-6 albedo
+      // chain starts from (`albedoCol = mix(uBaseColor, liquidCol, liquidMask)`) is now derived from the condition
+      // vector instead of being one hard-coded rocky tone shared by all 18 presets. frame() syncs → uBaseColor.
+      state.baseColor = surfaceAlbedoOf(_bodyDrivers.condition);
       // ── inc3b S3-fix: schedule-derived SINGLE crater law (the sub-floor crater-texture band, rendered
       // analytically in-shader so it is resolution-independent — bypassing the mesh + bake the diagnosis
       // convicted as unable to carry the wall slope). SAME derived-state idiom as state.iceness above:
@@ -6483,6 +6488,7 @@
       uniforms.uFrostLatitudeBias.value  = state.frostLatitudeBias;
       uniforms.uFrostAlbedo.value.setRGB(state.frostAlbedo[0], state.frostAlbedo[1], state.frostAlbedo[2]);
       uniforms.uIcenessMix.value         = state.iceness;   // V2-6 S3: condition-derived icy-material albedo mix (Stage-6, pre-frost)
+      if (state.baseColor) uniforms.uBaseColor.value.setRGB(state.baseColor[0], state.baseColor[1], state.baseColor[2]);   // condition-derived base ground colour (was a constant rocky tone)
       uniforms.uPlanetTempEq.value       = state.tempEq;
       uniforms.uFrostLocked.value        = state.frostLocked;
       uniforms.uFrostLatChill.value      = state.frostLatChill;
