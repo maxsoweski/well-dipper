@@ -237,6 +237,53 @@ and NOTHING ELSE (23 keys x 10 bodies checked), which is the fixture's sanctione
 > crack has a hot core and a cooling margin. Between-world variety for lava worlds now comes from the
 > CRUST (65/66 distinct), not the glow.
 
+### 📐 SLICE 3 RECONNAISSANCE (2026-07-30) — measured, so nobody re-derives it
+
+Done before writing any slice-3 code. **Slice 3 is a MULTI-SESSION port, not a one-sitting slice.**
+
+**What is genuinely importable today, and what is not.**
+
+- `planet-lod-height.glsl.js` exports exactly ONE thing — `HEIGHT_GLSL`, a 3124-line GLSL string — and
+  **imports nothing.** `planet-lod-uniforms.js` exports `makeUniforms(WORLD_LIGHT)`.
+- `HEIGHT_GLSL` declares **343 uniforms**. `makeUniforms()` supplies **340 of them.** The only five
+  missing are the bake handles and their gates: `uReliefBakeCube`, `uReliefBakeStrength`,
+  `uCraterBakeCube`, `uCraterBakeRestore`, `uProvinceCube`. Those are lab-local
+  (`makeDummyCubeTexture()`, `planet-lod-lab.html` ~1506-1535).
+- **The game's planet material currently binds ZERO textures**, so the texture-unit budget the register
+  warned about is a non-issue. The real cost was never units, it is the per-planet BAKE.
+- ⭐ **The bakes are OPTIONAL and the shader says so.** At `uReliefBakeStrength = 0` the renderer
+  **never fetches the cube** — the comment at `planet-lod-height.glsl.js:150` states "the height source
+  stays the verbatim pre-AC2 fbmd line", and `uCraterBakeRestore = 0` is byte-identical the same way.
+  Only 5 cube-sample sites exist, all behind 4 named accessors. **So the game can take the full
+  analytic relief path with dummy cubes and ZERO per-planet bake cost.** Bakes can come later, for the
+  near-LOD body only.
+- ✅ **No coordinate-convention trap here** (checked, because this lane keeps finding them): the lab's
+  `vPos` is `position`, object-space — the same quantity as the game's `vPosition`.
+
+> ⛔ **`computeHeight()` IS NOT THE RELIEF LAW — do not "port slice 3" by wiring it in.** It looks like
+> the entry point and it is not: `planet-lod-height.glsl.js:653` is a plain 4-octave `snoise` stack,
+> barely different from the game's existing 2-octave `getSurfacePattern`. Wiring it would look like
+> progress and buy nothing. The real height source is **`fbmd(vPos, uOctaves, fwBase)`** (line 777, an
+> analytic-derivative FBM, up to 12 octaves with trailing-octave fade — self-contained, needs only
+> `noised()` plus uniforms `makeUniforms` already provides) **plus the long combiner chain composed in
+> the LAB'S `main()`**, roughly `planet-lod-lab.html:350-700`, ~40 feature stages each with its own
+> drivers. That chain is the actual slice-3 payload and it is what "still lab-only is the fragment body
+> inside planet-lod-lab.html" means.
+
+**Suggested first increment (bounded, verifiable the same way slices 1-2 were):** swap the game's base
+`snoise` for `fbmd` INSIDE the existing per-type `getSurfacePattern` branches, and use fbmd's returned
+analytic gradient for the normal perturbation in place of the 3-sample finite-difference
+`perturbNormalFromNoise`. ⚠ Do NOT replace `getSurfacePattern` wholesale — its per-type branches carry
+the lava ridging, ice cracking, terrestrial continents, venus banding and carbon facets, and flattening
+them would be a large uncommanded visual regression. Watch `uOctaves`: the lab drives it
+`mix(4, 9, lodRamp)`, and the game renders many planets at once where the lab renders one.
+
+⛔ **LANE COLLISION — check before starting.** `planet-lod-height.glsl.js` is also being edited by
+`feature/world-engine-atmo-3b` (`~/projects/well-dipper-atmo`, lab on `:5178`), which has added ~320
+lines to it. Measured 2026-07-30 via read-only `git merge-tree`: that file and `planet-lod-uniforms.js`
+**auto-merge clean**; `planet-lod-lab.html` **conflicts**. Importing these modules from the game
+without editing them adds ZERO new conflict surface — which is the reason to do slice 3 that way.
+
 ### 🔶 Recorded, NOT fixed — the honest palette flattens elevation banding on ~45% of bodies
 
 Now that pressure arrives, atmospheric worlds get erosion ~1, which kills oxidation (it rides
