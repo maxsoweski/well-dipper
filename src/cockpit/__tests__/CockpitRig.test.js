@@ -1,0 +1,221 @@
+/**
+ * CockpitRig — the shared assembly's contract.
+ *
+ * Increment 7, `cockpit-into-helm-2026-07-30`, AC-ONE-RIG-TWO-HOSTS.
+ *
+ * ⚠ WHAT THIS FILE CAN AND CANNOT ANSWER. There is no WebGL and no GLB here, so
+ * it cannot say what the cockpit LOOKS like — that is the live pass's job. What
+ * it pins is the BOUNDARY: which values are the rig's (and therefore identical in
+ * both hosts), which are the host's (and therefore must be refused rather than
+ * guessed), and that the module keeps its hands off the renderer.
+ *
+ * The boundary is the thing worth testing because the failure it prevents is
+ * silent. Two hosts constructing the same rig and getting different cockpits
+ * raises no error, fails no assertion anywhere else, and shows up as "the game
+ * looks a bit wrong" months later.
+ */
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import {
+  CockpitRig, EYE_NODE_NAME, EYE_FOV, EYE_NEAR, EYE_FAR,
+  COCKPIT_TONE_MAPPING, COCKPIT_TONE_EXPOSURE,
+  DEFAULT_COCKPIT_LIGHTS, DEFAULT_PANEL_PAINTERS, DEFAULT_ZOOMABLE_ROLES,
+  DEFAULT_GLASS, COCKPIT_GLB_URL,
+} from '../CockpitRig.js';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = join(HERE, '..', 'CockpitRig.js');
+
+/** The minimum a host must supply. Deliberately not a default anywhere. */
+const hostOpts = () => ({
+  camera: { fov: EYE_FOV, isCamera: true },
+  pinCamera: () => {},
+  getViewport: () => ({ x: 0, y: 0, width: 1600, height: 900 }),
+  bufferHeightPx: 512,
+});
+
+describe('the boundary — what the rig owns', () => {
+  it('pins the eye optics, because a host that forgot them would get three\'s 50-degree default', () => {
+    // 70 is the game's own FOV and the one every framing judgement was made at.
+    // three's PerspectiveCamera defaults to 50, which would show a cockpit
+    // subtending far more of the view than Max approved — and PanelMover
+    // re-solves the zoom fill from the camera's LIVE fov, so the zoomed panel
+    // would land at a size he has never seen.
+    expect(EYE_FOV).toBe(70);
+    expect(EYE_NEAR).toBeLessThanOrEqual(0.005); // a zoomed panel lands ~0.17 m out
+    expect(EYE_FAR).toBeGreaterThan(1000);
+  });
+
+  it('owns the tone regime, which is the trap three sets for a two-host rig', () => {
+    // three r0.183 forces NoToneMapping unless the render target is the canvas,
+    // so the lab (to canvas) and the game (to a target) would silently diverge.
+    // Exporting both numbers is what makes the two hosts agree by construction.
+    expect(COCKPIT_TONE_EXPOSURE).toBe(1.25);
+    expect(COCKPIT_TONE_MAPPING).toBeTypeOf('number');
+  });
+
+  it('owns the three lights — the divergence probe the AC names', () => {
+    expect(DEFAULT_COCKPIT_LIGHTS).toHaveLength(3);
+    const [ambient, key, fill] = DEFAULT_COCKPIT_LIGHTS;
+    expect(ambient.type).toBe('ambient');
+    expect(key.type).toBe('directional');
+    expect(key.intensity).toBe(2.2);
+    expect(fill.intensity).toBe(0.26);
+    // Frozen so a host cannot mutate the shared defaults out from under the other.
+    expect(Object.isFrozen(DEFAULT_COCKPIT_LIGHTS)).toBe(true);
+    expect(Object.isFrozen(key)).toBe(true);
+  });
+
+  it('owns the glass placeholder, whose depthWrite is what stops the canopy hiding the screens', () => {
+    expect(DEFAULT_GLASS.depthWrite).toBe(false);
+    expect(DEFAULT_GLASS.opacity).toBeCloseTo(0.10, 6);
+  });
+
+  it('ships all four default painters from src/, so the game never reaches into a lab file', () => {
+    expect(Object.keys(DEFAULT_PANEL_PAINTERS).sort()).toEqual(['DRIVE', 'INFO', 'NAV', 'TARGET']);
+    for (const [role, p] of Object.entries(DEFAULT_PANEL_PAINTERS)) {
+      expect(typeof p, `${role}'s painter`).toBe('function');
+    }
+  });
+
+  it('names the eye node rather than assuming the origin', () => {
+    expect(EYE_NODE_NAME).toBe('Eye_Point');
+    expect(COCKPIT_GLB_URL).toMatch(/cockpit\.glb$/);
+  });
+
+  it('zooms NAV only, and says so in one editable place', () => {
+    expect([...DEFAULT_ZOOMABLE_ROLES]).toEqual(['NAV']);
+  });
+});
+
+describe('the boundary — what the rig refuses to guess', () => {
+  for (const missing of ['camera', 'pinCamera', 'getViewport']) {
+    it(`refuses to construct without \`${missing}\``, () => {
+      const opts = hostOpts();
+      delete opts[missing];
+      // Loudly, and naming the field. The alternative — a plausible default —
+      // is how the two hosts end up with different cockpits: the lab passes its
+      // real one, the game silently gets a stand-in, and nothing reports it.
+      expect(() => new CockpitRig(opts)).toThrow(new RegExp(missing));
+    });
+  }
+
+  it('constructs with the minimum a host supplies, and starts with no model and no errors', () => {
+    const rig = new CockpitRig(hostOpts());
+    expect(rig.model).toBeNull();
+    expect(rig.loadError).toBeNull();
+    expect(rig.hostError).toBeNull();
+    expect(rig.navError).toBeNull();
+    expect(rig.host).toBeNull();
+    expect(rig.mover).toBeNull();
+    expect(rig.eyeFound).toBe(false);
+  });
+
+  it('adds its lights to its own scene and nothing else', () => {
+    const rig = new CockpitRig(hostOpts());
+    expect(rig.scene.children.length).toBe(DEFAULT_COCKPIT_LIGHTS.length);
+  });
+
+  it('takes the zoom knobs from the host and falls back to the module defaults', () => {
+    const rig = new CockpitRig({ ...hostOpts(), zoom: { fill: 0.42, durationMs: 999 } });
+    expect(rig.zoom.fill).toBeCloseTo(0.42, 6);
+    expect(rig.zoom.durationMs).toBe(999);
+    // followCamera is the head-decoupling knob and defaults OFF — head
+    // decoupling is a LATER increment and must not arrive by default.
+    expect(rig.zoom.followCamera).toBe(false);
+  });
+
+  it('remount() is a no-op with no model rather than a throw', () => {
+    const rig = new CockpitRig(hostOpts());
+    expect(() => rig.remount()).not.toThrow();
+    expect(rig.hostError).toBeNull();
+  });
+
+  it('answers navIsZoomed / navZoomLanded false with no mover, and keeps them DISTINCT', () => {
+    const rig = new CockpitRig(hostOpts());
+    expect(rig.navIsZoomed()).toBe(false);
+    expect(rig.navZoomLanded()).toBe(false);
+
+    // The distinction is load-bearing in both directions: the PAINTER asks the
+    // first (chrome appears as the panel travels), ROUTING asks the second (a
+    // press forwarded mid-travel slides under the cursor and is thrown away by
+    // NavComputer's own drag rejection). A rig that collapsed them would pass
+    // every test above and break both behaviours.
+    rig.mover = { zoomedRole: 'NAV', state: 'toZoom' };
+    expect(rig.navIsZoomed()).toBe(true);
+    expect(rig.navZoomLanded()).toBe(false);
+    rig.mover.state = 'zoomed';
+    expect(rig.navZoomLanded()).toBe(true);
+  });
+
+  it('pickAt returns null with no picker instead of throwing at the host', () => {
+    const rig = new CockpitRig(hostOpts());
+    expect(rig.pickAt(10, 10)).toBeNull();
+  });
+
+  it('cameraNow() pins BEFORE handing the camera over', () => {
+    // The invariant lives at this boundary rather than inside PanelMover, which
+    // is handed a camera it does not own. Measured cost of solving against a
+    // stale one: 350 px off centre and 65% larger than the fill knob asked for.
+    const order = [];
+    const opts = hostOpts();
+    opts.pinCamera = () => order.push('pin');
+    const rig = new CockpitRig(opts);
+    const cam = rig.cameraNow();
+    order.push('handed');
+    expect(order).toEqual(['pin', 'handed']);
+    expect(cam).toBe(opts.camera);
+  });
+
+  it('update() pins before the mover solves, and drives both clocks in real ms', () => {
+    const order = [];
+    const opts = hostOpts();
+    opts.pinCamera = () => order.push('pin');
+    const rig = new CockpitRig(opts);
+    rig.mover = { update: (ms) => order.push(`mover:${ms}`) };
+    rig.host = { update: (snap, now) => order.push(`host:${now}`) };
+    rig.update({ snapshot: {}, nowMs: 1234, dtMs: 33 });
+    expect(order).toEqual(['pin', 'mover:33', 'host:1234']);
+  });
+});
+
+describe('the rig keeps its hands off the renderer and the clock', () => {
+  // Source-scanned rather than behaviour-driven, and that is a real limitation:
+  // a scan cannot see a call built from a computed property name. It is here
+  // because the failure it guards is GLOBAL and silent — the game's renderer is
+  // RetroRenderer's, shared with the world pass and the palette remap, so one
+  // stray write retints the entire game rather than just the cockpit.
+  const src = readFileSync(SRC, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+
+  for (const forbidden of [
+    'setSize', 'setPixelRatio', 'setClearColor', 'setViewport', 'setScissor',
+    'toneMappingExposure =', 'renderer.toneMapping =', 'setRenderTarget',
+  ]) {
+    it(`never calls \`${forbidden}\` on the injected renderer`, () => {
+      expect(src).not.toContain(forbidden);
+    });
+  }
+
+  it('never advances SimClock — the hosts already do, and twice runs every drill at 2x', () => {
+    expect(src).not.toContain('_advanceSimClock');
+    expect(src).not.toContain('SimClock');
+  });
+
+  it('never constructs a NavComputer — makeNav is the host\'s injection point for four ACs', () => {
+    expect(src).not.toContain('new NavComputer');
+    expect(src).not.toContain('NavComputer.js');
+  });
+
+  it('the forbidden-list check can actually fail', () => {
+    // Guards the guard. Every assertion above is a `not.toContain`, and a
+    // stripped-to-nothing source would pass all of them.
+    expect(src.length).toBeGreaterThan(2000);
+    expect(src).toContain('class CockpitRig');
+    expect(src).toContain('makeNav');
+  });
+});

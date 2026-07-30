@@ -50,6 +50,7 @@ import { paintDrive } from './src/cockpit/panels/DrivePanel.js';
 import { paintTarget } from './src/cockpit/panels/TargetPanel.js';
 import { paintInfo } from './src/cockpit/panels/InfoPanel.js';
 import { makeNavPainter } from './src/cockpit/panels/NavPanel.js';
+import { paintNavHoldingCard } from './src/cockpit/panels/NavHoldingCard.js';
 
 /**
  * What the NAV panel says when this page has NO NAV SOURCE ATTACHED.
@@ -65,51 +66,13 @@ import { makeNavPainter } from './src/cockpit/panels/NavPanel.js';
  * Exported so the lab's HUD and this file's test name the same strings rather
  * than each spelling them out.
  */
-export const NAV_HOLDING_TEXT = Object.freeze({ TITLE: 'NAV', NOTE: 'NO SOURCE' });
+// ⭐ PROMOTED 2026-07-30 to src/cockpit/panels/NavHoldingCard.js (increment 7,
+// AC-ONE-RIG-TWO-HOSTS). The shared CockpitRig needs all four default painters
+// inside src/, and a rig reaching into a LAB file for one of them is exactly the
+// dependency the extraction exists to remove. Re-exported rather than moved
+// silently, so this file's own test keeps proving ONE implementation.
+export { NAV_HOLDING_TEXT, paintNavHoldingCard } from './src/cockpit/panels/NavHoldingCard.js';
 
-/** Where the two words sit, as fractions of the buffer height. */
-const NAV_LAYOUT = Object.freeze({ TITLE_BASELINE: 0.42, NOTE_BASELINE: 0.58 });
-
-/**
- * NAV's fallback card — shown ONLY when no nav computer could be built.
- *
- * Two words and nothing else, on purpose. Leaving the glass dark was the
- * alternative and it was rejected: a dark panel among three lit ones is
- * indistinguishable from a panel whose painter threw, and the first minutes of
- * the demo would go on working out which. A card that says NO SOURCE carries the
- * cause without the guesswork.
- *
- * IT READS NOTHING FROM THE SNAPSHOT, and that restraint is the whole design.
- * The system name and the nav level are both right there on the frame, and
- * putting either on this panel would make it look like a working nav computer —
- * the one impression it must not give, because AC-PANEL-CONTENT's NAV clause is
- * about the real thing being live from the first frame after boot, and a
- * plausible-looking placeholder is how that gets ticked off by mistake. That
- * argument is the reason the card is two flat words and not, say, a level name.
- *
- * Same `(screen, snapshot, nowMs)` shape as the three shipped painters, so all
- * four register interchangeably; a painter with a different arity is a wiring
- * bug waiting to happen.
- *
- * @param {import('./src/cockpit/PhosphorScreen.js').PhosphorScreen} screen
- */
-export function paintNavHoldingCard(screen) {
-  // The host does not clear before a painter runs — it owns no palette and so
-  // cannot choose a background colour. Same first line as the other three.
-  screen.clear();
-  screen.text(NAV_HOLDING_TEXT.TITLE, screen.width / 2, screen.height * NAV_LAYOUT.TITLE_BASELINE, {
-    size: screen.type.display,
-    align: 'centre',
-  });
-  screen.text(NAV_HOLDING_TEXT.NOTE, screen.width / 2, screen.height * NAV_LAYOUT.NOTE_BASELINE, {
-    align: 'centre',
-  });
-}
-
-/**
- * The raw `(screen, …)` painters by role, before adaptation. Exported for the
- * test, which exercises them against a stand-in kit without a PanelHost.
- */
 export const SCREEN_PAINTERS = Object.freeze({
   NAV: paintNavHoldingCard,
   DRIVE: paintDrive,
