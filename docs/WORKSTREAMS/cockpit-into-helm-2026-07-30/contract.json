@@ -4,7 +4,7 @@
   "project": "well-dipper-cockpit-screens",
   "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md",
   "status": "in-progress",
-  "statusNote": "Steps 1-7 landed (2448543). The cockpit is IN the game and OPERABLE. HARD STOP before step 8 (the retirements, the point of no return) pending Max's first-light UAT — every overlay is deliberately still live so he can compare a wrong panel against the right one. Live evidence: evidence/steps-5-7-operable-2026-07-30.png and the step 5/6/7 commit messages.",
+  "statusNote": "13 PASS, 0 PARTIAL, 3 not started (steps 8-11, behind Max's hard stop), 1 deferred to Max. All four PARTIALs closed by live drive 2026-07-30. Also this session: the cockpit camera was posed from the WORLD camera, so the ship's heading rotated the whole cabin around the pilot (measured 119 deg off-axis with the head dead-centre); fixed in b5e0d30 and every panel judgement before it was made in a swinging cabin.",
   "acceptanceCriteria": [
     {
       "id": "AC-ONE-RIG-TWO-HOSTS",
@@ -135,8 +135,8 @@
       },
       "layer": "integration",
       "live": true,
-      "status": "PARTIAL",
-      "statusNote": "live: both catalogues report loaded on the cockpit instance (was structurally null). NOT driven: the far-companion chip at an authored host (Proxima -> Alpha Centauri)."
+      "status": "PASS",
+      "statusNote": "DRIVEN LIVE 2026-07-30. Warped to Alpha Centauri via the game's own nav path (dispatchNavAction type:'warp' off the real catalogue entry Rigil Kentaurus, not a hand-built warpTarget). On arrival systemData.farCompanions = [{Proxima Centauri, 13000 AU, M5.5Ve}] with 1 componentSystem. Zoomed NAV: the chip IS DRAWN on the glass ('Proxima Centauri / far companion 13,000 AU / planets: b, d'). Clicked it -> _systemMode system->component, _selectedComponentIdx -1->0, sub-view header 'via Proxima Centauri - far companion'. Clicked again -> back to system, -1. Pointer census both times down/up/navDown with pressedMove 0, i.e. quick clicks. Tour stopped first per the parked-panel coordinate trap."
     },
     {
       "id": "AC-AUTOPILOT-ALWAYS-HAS-A-COCKPIT",
@@ -147,8 +147,8 @@
       },
       "layer": "integration",
       "live": true,
-      "status": "PARTIAL",
-      "statusNote": "path 1 (the nav button) driven live from ORRERY-capable state. Paths 2-4 (both mobile buttons, post-respawn re-arm) are wired and scan-guarded but not each driven."
+      "status": "PASS",
+      "statusNote": "ALL FOUR PATHS DRIVEN LIVE 2026-07-30, none assumed from another. Path 1 (nav button) was already done. Path 2 mobile dock autonav-toggle: tour armed, cockpit rendering, camera at the helm. Path 3 speed-dial autonav: fired from ORRERY with _scManual === false - the condition the AC names - flipped to HELM with the cockpit up, 0.000 deg. Path 4 post-respawn wasAutopilot: sampled across a warp, tour went DOWN at t=2.5s and back UP at t=8s with regime helm and rendering true throughout, so the re-arm branch genuinely ran rather than autopilot never stopping. 'At the helm' is measured by composing shipQuat x headLook and comparing to the live camera - the cinematic FlythroughCamera writes its own spline and cannot satisfy it."
     },
     {
       "id": "AC-SCREENSAVER-LOOP-STAYS-CLOSED",
@@ -159,8 +159,8 @@
       },
       "layer": "integration",
       "live": true,
-      "status": "PARTIAL",
-      "statusNote": "live: _triggerTourComplete zooms the GLASS and drills, overlayOpen false throughout. NOT observed: a full unattended loop through pick -> warp -> tour again."
+      "status": "PASS",
+      "statusNote": "FULL LOOP OBSERVED IN HELM 2026-07-30, sampled 2x/sec: t=0.5 tour running, panel at rest; t=3.8 NAV toZoom; t=5.3 NAV zoomed (the sequence performs here); t=12.5 toRest, tour ended; t=16.9 rest; t=25.0 WARP fires; t=37.0 TOUR RUNNING AGAIN - the loop closed. navOverlay was 'none' at every sample and regime helm / rendering true throughout, so the DOM overlay never appeared and the cockpit never left the screen. A second cycle was then observed starting and touring a new system. NOTE: an earlier attempt recorded the sequence running on the DOM overlay - that run was in ORRERY (the arming tap had toggled the boot tour off and dropped the regime), which is the correct surface there; it is not a counter-example."
     },
     {
       "id": "AC-FLIGHT-AND-ORRERY-SURVIVE",
@@ -171,8 +171,8 @@
       },
       "layer": "integration",
       "live": true,
-      "status": "PARTIAL",
-      "statusNote": "live: W throttles 0.18->0.60 with a panel zoomed; ORRERY drops the pass and keeps N; a warp ran end to end. NOT driven: save/reload, mobile controls."
+      "status": "PASS",
+      "statusNote": "Remaining clauses driven live 2026-07-30. Mobile controls: autonav-toggle, autonav, orbits, gravity, prev, next and nav all dispatched through the real touchend handlers with the cockpit rendering and the camera at the helm. Save/reload: there is no game-state save in this project - localStorage holds only well-dipper-settings and wd_cameraMode - so this clause is settings persistence; wd_cameraMode survived reload, and pixelScale now does too. TWO DEFECTS FOUND AND FIXED while driving it (50640f1): (1) the mobile dock's nav action tested _navComputerOpen, which tracks the DOM overlay and is false forever in HELM, so it could open the glass NAV panel and never retract it - desktop was covered by N via toggleNavComputer, mobile has no N; (2) PRE-EXISTING, pixelScale saved but was never restored at boot. Flight keys while zoomed and the bit-identical trajectory were already verified."
     },
     {
       "id": "AC-LETTERBOX-Y-SETTLED-HERE",
