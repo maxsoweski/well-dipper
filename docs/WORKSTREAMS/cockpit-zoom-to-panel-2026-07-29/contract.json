@@ -4,7 +4,7 @@
   "project": "well-dipper",
   "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md — HELM cockpit program, lane F. This workstream is increment 6 of the 6-increment ladder: zoom-to-panel. It is the last increment before the cockpit is wired into the game, and it is load-bearing rather than a nicety: Max reversed the H4 dither decision on 2026-07-29 so NAV draws chrome-less at rest, which means the zoom is now the ONLY route to the nav computer's text, tab strip and warp commit.",
   "status": "VERIFIED_PENDING_MAX 4d9392e",
-  "statusNote": "Integration layer verified live at 4d9392e across five rounds. 2251 passed / 4 skipped; the 15 vendor/motion-test-kit collection errors unchanged and still the only errors.\n\nHOW IT WENT: 36 candidate defects raised by inspection, 16 refuted by source reading, the 20 survivors deduplicated to ten. ALL TEN reproduced in a browser before any fix. Three live agents then verified the eight integration ACs and eight skeptics attacked the results — every skeptic that ran refuted its claim, not for being wrong but for being TRUE WITHOUT MEANING WHAT THE AC ASKED. 58 clause gaps were then closed, which surfaced a real product defect (measureQuad solved a portrait face as landscape, landing it at 1.511 of the view against a 0.85 request). That was fixed, planted against in isolated worktrees (66 plants total across two rounds, 42 red and 24 green, every green one a test that could not fail), and re-confirmed live.\n\nWHERE IT STANDS: 3 of 8 live ACs PASS outright. 5 are PARTIAL, and FOUR of those are PARTIAL because the CONTRACT ASKS FOR SOMETHING THAT DOES NOT EXIST rather than because anything is wrong — see each AC's proposedAmendment. Those amendments are PROPOSED, NOT APPLIED: they change what Max agreed to, so they are his to accept. The far-companion chip, the component sub-view, the COMMIT action and the zoomed-in-game flight keys all need HELM wiring, i.e. increment 7.\n\nAC-IT-FEELS-LIKE-A-COCKPIT is UAT and untouched. No agent marks it.",
+  "statusNote": "Integration layer verified live at 4d9392e across five rounds. 2251 passed / 4 skipped; the 15 vendor/motion-test-kit collection errors unchanged and still the only errors.\n\nHOW IT WENT: 36 candidate defects raised by inspection, 16 refuted by source reading, the 20 survivors deduplicated to ten. ALL TEN reproduced in a browser before any fix. Three live agents then verified the eight integration ACs and eight skeptics attacked the results — every skeptic that ran refuted its claim, not for being wrong but for being TRUE WITHOUT MEANING WHAT THE AC ASKED. 58 clause gaps were then closed, which surfaced a real product defect (measureQuad solved a portrait face as landscape, landing it at 1.511 of the view against a 0.85 request). That was fixed, planted against in isolated worktrees (66 plants total across two rounds, 42 red and 24 green, every green one a test that could not fail), and re-confirmed live.\n\nWHERE IT STANDS: 3 of 8 live ACs PASS outright. 5 are PARTIAL, and FOUR of those are PARTIAL because the CONTRACT ASKS FOR SOMETHING THAT DOES NOT EXIST rather than because anything is wrong — see each AC's proposedAmendment. Those amendments are PROPOSED, NOT APPLIED: they change what Max agreed to, so they are his to accept. The far-companion chip, the component sub-view, the COMMIT action and the zoomed-in-game flight keys all need HELM wiring, i.e. increment 7.\n\nAC-IT-FEELS-LIKE-A-COCKPIT is UAT and untouched. No agent marks it.\n\n── 2026-07-29, AMENDMENTS APPLIED (Max: \"good to apply\"). Five amendments landed; each AC records its own `amendments` entry with the exact before and after text. Four of the five were the contract describing a system slightly different from the one built; the fifth (AC-STRINGS-TELL-THE-TRUTH) also required a real code fix, because the census that guards it was reaching one of its states by assigning _systemMode directly and therefore could not go red when a click route disappeared.\nVerdicts after amendment: AC-ONLY-NAV-ZOOMS, AC-FLIGHT-AND-ORRERY-SURVIVE and AC-ESC-DISMISSES-EVERYWHERE move PARTIAL -> PASS. AC-ZOOMED-IS-OPERABLE stays PARTIAL on ONE clause the approved amendment did not name — the autopilot button toggling, which is the same absent-callback mechanism as the COMMIT action that did move. It was NOT widened to cover it: an approved amendment is applied as approved. That one clause is Max's call.",
   "acceptanceCriteria": [
     {
       "id": "AC-POSE-DERIVED",
@@ -93,7 +93,7 @@
     },
     {
       "id": "AC-ESC-DISMISSES-EVERYWHERE",
-      "statement": "ESC has ONE meaning wherever the nav computer is drawn: dismiss it. Max ruled this on 2026-07-29 and ruled it to apply to the ORRERY full-screen overlay as well as the cockpit panel, so handleEscape() no longer walks the level stack anywhere. On the panel, ESC retracts the monitor to its measured rest pose. In the overlay, ESC closes it from ANY level rather than only from GALAXY. This deliberately supersedes the previous workstream's AC-NAV-OVERLAY-UNCHANGED for the escape path alone — a requirement Max changed, not a regression — and everything else about the overlay stays as it was.",
+      "statement": "ESC has ONE meaning wherever the nav computer is drawn: dismiss it. Max ruled this on 2026-07-29 and ruled it to apply to the ORRERY full-screen overlay as well as the cockpit panel, so the ESC PATH no longer walks the level stack anywhere. ⚠ AMENDED 2026-07-29 AFTER LIVE VERIFICATION: the original wording said handleEscape() itself no longer walks it ANYWHERE, and that is false — right-click-to-go-back still calls handleEscape() and was WATCHED walking level 4 to 3 and planet to system. Max ruled on ESC; intent.md keeps right-click-as-back as a deliberate non-goal he never asked to change, and the method survives with exactly that one caller. The code is right and the absolute was wrong. Recorded rather than reinterpreted because a previous round's agent quietly reinterpreted it instead, which is how the contradiction was found. On the panel, ESC retracts the monitor to its measured rest pose. In the overlay, ESC closes it from ANY level rather than only from GALAXY. This deliberately supersedes the previous workstream's AC-NAV-OVERLAY-UNCHANGED for the escape path alone — a requirement Max changed, not a regression — and everything else about the overlay stays as it was.",
       "verifyVia": {
         "input": "In the lab: zoom NAV, drill to a planet detail, press ESC. Then repeat from each of the five levels. In the game's ORRERY overlay: open the nav computer, drill to level 4, press ESC.",
         "observable": "One ESC always dismisses, from every level and both sub-views, and the nav LEVEL is unchanged by the press — it is not walked back one step first. In ORRERY the overlay closes from any level. Nothing else about the overlay's behaviour differs from before the change."
@@ -101,23 +101,33 @@
       "layer": "integration",
       "live": true,
       "verification": {
-        "verdict": "PARTIAL",
+        "verdict": "PASS",
         "sha": "4d9392e",
         "verifiedOn": "2026-07-29",
-        "evidence": "One ESC dismisses from every level, in the lab and in the game's ORRERY overlay, and the nav LEVEL is unchanged by the press. Verified at this sha on both key paths, including with a lab slider focused — the case that previously swallowed the key silently, which is exactly Max's judging workflow. The retraction is compared on the four UV-keyed corners and the normal, not just the centre.",
+        "evidence": "Amended 2026-07-29. One ESC dismisses from every level, in the lab and in the game's ORRERY overlay, and the nav LEVEL is unchanged by the press. Verified at 4d9392e on both key paths including with a lab slider focused — the case that previously swallowed the key silently, which is exactly Max's judging workflow. The retraction is compared on the four UV-keyed corners and the normal, not just the centre, because centre and range are invariant under a roll or a mirror.",
         "clausesOpen": [
-          "The AC states handleEscape() \"no longer walks the level stack ANYWHERE\". Right-click still calls it and was OBSERVED walking level 4 to 3. Max ruled on ESC; intent.md keeps right-click-as-back as a deliberate non-goal he never asked to change.",
-          "\"Nothing else about the overlay's behaviour differs\" was spot-checked functionally, not A/B'd against the previous workstream's baseline."
+          "\"Nothing else about the overlay's behaviour differs\" was spot-checked functionally across every open and close route reachable, not A/B'd against the previous workstream's recorded baseline."
         ],
-        "proposedAmendment": "Scope the statement to ESC: \"the ESC path no longer walks the level stack anywhere; right-click-to-go-back is unchanged and still does, per intent.md's non-goal.\""
-      }
+        "proposedAmendment": "Scope the statement to ESC: \"the ESC path no longer walks the level stack anywhere; right-click-to-go-back is unchanged and still does, per intent.md's non-goal.\"",
+        "amendedOn": "2026-07-29"
+      },
+      "amendments": [
+        {
+          "on": "2026-07-29",
+          "approvedBy": "Max",
+          "field": "statement",
+          "was": "so handleEscape() no longer walks the level stack anywhere.",
+          "now": "so the ESC PATH no longer walks the level stack anywhere. ⚠ AMENDED 2026-07-29 AFTER LIVE VERIFICATION: the original wording said handleEscape() itself no longer walks it ANYWHERE, and that is false — right-click-to-go-back still calls handleEscape() and was WATCHED walking level 4 to 3 and planet to system. Max ruled on ESC; intent.md keeps right-click-as-back as a deliberate non-goal he never asked to change, and the method survives with exactly that one caller. The code is right and the absolute was wrong. Recorded rather than reinterpreted because a previous round's agent quietly reinterpreted it instead, which is how the contradiction was found.",
+          "why": "The statement asserted an absolute that contradicts intent.md's own non-goal."
+        }
+      ]
     },
     {
       "id": "AC-STRINGS-TELL-THE-TRUTH",
       "statement": "No text on the glass tells the player ESC does something it no longer does. ⚠ AMENDED 2026-07-29 DURING BUILD: there are SEVEN such strings, not the five scoped. The first scan missed NavComputer.js :2726 and :3158 because they sit inside enclosing `!this._bare` blocks rather than carrying the guard inline — the same per-line guard reading that the previous workstream recorded as 'guard laundering' debt. All seven are chrome-gated, so they appear EXACTLY when the panel is zoomed, which is the one state where a player reads them. They must name the real affordance: the tab strip, or a click in empty space. ⚠ TWO of the seven are unreachable from a headless instance and are covered by source scan plus live only — component detail (no seed in 400 produced a system carrying componentSystems) and the foreign nothing-selected system footer (_renderSystem rebuilds the commit action every frame). The test records that gap by name rather than implying coverage.",
       "verifyVia": {
         "input": "Drive a REAL NavComputer headless (src/ui/__tests__/helpers/headlessNav.mjs) through every reachable chromed state — system view foreign and current, with and without a selection, planet detail foreign and current, component detail — recording every string it emits. Plus a scan of every drawn literal in NavComputer.js.",
-        "observable": "No emitted string and no drawn literal matches /\\bESC\\b/. The census returns exactly the five reachable footers by name, so a state that silently stopped drawing turns it red instead of passing vacuously. Every remaining hint names a click affordance that AC-NO-STUCK-STATE proved exists."
+        "observable": "No emitted string and no drawn literal matches /\\bESC\\b/. The census returns exactly the FOUR reachable footers by name — ⚠ AMENDED 2026-07-29: it said five, and only four draw. NavComputer.js:3164 (\"SELECT MOON TO NAVIGATE · CLICK EMPTY SPACE TO GO BACK\") is structurally dead, and worse, the census was REACHING it by assigning _systemMode = 'planet' directly — a state no click route produces — so the device could not go red when a click route to a footer disappeared. Every state is now arrived at the way a player arrives at it, and the unreachable ones are named with their reason — so a state that silently stopped drawing turns it red instead of passing vacuously. Every remaining hint names a click affordance that AC-NO-STUCK-STATE proved exists."
       },
       "layer": "integration",
       "live": true,
@@ -132,7 +142,17 @@
           "NavComputer.js:2884 (component detail) as a LIVE observation — unreachable for the same catalogue reason as AC-ZOOMED-IS-OPERABLE."
         ],
         "proposedAmendment": "Amend the census to FOUR reachable footers, name :3164 as dead, and fix the test to reach its states through click routes rather than by assigning _systemMode directly."
-      }
+      },
+      "amendments": [
+        {
+          "on": "2026-07-29",
+          "approvedBy": "Max",
+          "field": "observable",
+          "was": "The census returns exactly the five reachable footers by name,",
+          "now": "The census returns exactly the FOUR reachable footers by name — ⚠ AMENDED 2026-07-29: it said five, and only four draw. NavComputer.js:3164 (\"SELECT MOON TO NAVIGATE · CLICK EMPTY SPACE TO GO BACK\") is structurally dead, and worse, the census was REACHING it by assigning _systemMode = 'planet' directly — a state no click route produces — so the device could not go red when a click route to a footer disappeared. Every state is now arrived at the way a player arrives at it, and the unreachable ones are named with their reason —",
+          "why": "The AC's own anti-vacuity device could not fail. Amended count, and the test now drives click routes."
+        }
+      ]
     },
     {
       "id": "AC-ZOOM-FILLS-THE-VIEW",
@@ -156,7 +176,7 @@
     },
     {
       "id": "AC-ZOOMED-IS-OPERABLE",
-      "statement": "The zoomed screen is the whole nav computer and it WORKS — Max's 'so we can interact with the full menu'. Zooming clears the chromeless intent, so the panel draws its tab strip, header, labels and buttons instead of the bare orrery it shows at rest. Then every one of those controls responds to a click on the glass: the level tabs change level, a star at PRISM drills to SYSTEM, a planet opens planet detail, a far-companion chip opens component detail, the autopilot button toggles, and the COMMIT button fires its action. Three of these have never been seen by a human on the glass — both SYSTEM sub-views and the mid-frame level flip that a prism-star click starts — so each is exercised, not assumed.",
+      "statement": "The zoomed screen is the whole nav computer and it WORKS — Max's 'so we can interact with the full menu'. Zooming clears the chromeless intent, so the panel draws its tab strip, header, labels and buttons instead of the bare orrery it shows at rest. Then every one of those controls responds to a click on the glass: the level tabs change level, a star at PRISM drills to SYSTEM, a planet opens planet detail, a far-companion chip opens component detail, the autopilot button toggles, and the COMMIT button fires its action. ⚠ AMENDED 2026-07-29 AFTER LIVE VERIFICATION — THREE CLAUSES MOVE TO INCREMENT 7, where HELM wiring gives them a host: the far-companion chip, the component sub-view, and the COMMIT button firing its action. The chip is not unlucky seeding, it is structural — systemData.farCompanions comes only from galaxyContext.farCompanions, whose two producers are the real-catalogue overlay (gated on _realStarCatalog, null at NavComputer.js:204 and written only by src/main.js) and KnownSystemAuthoring (a NAME gate, not a position gate). No galactic seed in this lab reaches either, so no prism marker can BE an authored host. COMMIT moves for the same species of reason: it invokes a callback nothing installs, and the cockpit NavComputer has no host anywhere in src/. Of the rest, three had never been seen by a human on the glass — both SYSTEM sub-views and the mid-frame level flip that a prism-star click starts — so each is exercised, not assumed.",
       "verifyVia": {
         "input": "Zoom NAV in the lab, then click in turn: each of the five level tabs; a star at PRISM; a planet at SYSTEM; a far-companion chip on a system that has one; the autopilot button; the COMMIT button.",
         "observable": "_bare is false while zoomed and the drawn text count is greater than zero at SYSTEM. Each click produces its documented state change, read from the live instance. The prism→system click completes its _systemZoomAnim and the first SYSTEM frame after it draws WITH chrome — the mid-frame level flip does not produce a bare frame while zoomed. Zero console errors across the sequence."
@@ -167,15 +187,23 @@
         "verdict": "PARTIAL",
         "sha": "4d9392e",
         "verifiedOn": "2026-07-29",
-        "evidence": "Zooming clears the chrome-less intent and the controls respond. At this sha, zoomed at a populated SYSTEM: 30 fillText calls, 14 distinct strings including all five level tabs, the star header, [ WARP ] and the autopilot toggle; bare false, chromelessIntent false. Each of the five level tabs selects ITS OWN level, proved with non-adjacent clicks after an earlier round's ten transitions were all +1 mod 5 and could not tell that apart from \"any tab advances one level\". The PRISM star click now completes its _systemZoomAnim — it never could before, because the lab never advanced SimClock. Zero console errors.",
+        "evidence": "Amended 2026-07-29 — three clauses moved to increment 7. Of what remains, all is verified: zooming clears the chrome-less intent (30 fillText calls and 14 distinct strings at a populated SYSTEM, against 0 text with repainted TRUE and drawCalls 24 non-zero at rest); each of the five level tabs selects ITS OWN level, proved with non-adjacent clicks after an earlier round's ten transitions were all +1 mod 5; the PRISM star click completes its _systemZoomAnim, which it could never do before the lab advanced SimClock. Zero console errors.",
         "clausesOpen": [
-          "A far-companion chip opens component detail — STRUCTURALLY UNREACHABLE in the lab. farCompanions comes only from galaxyContext.farCompanions, whose two producers are the real-catalogue overlay (gated on _realStarCatalog, null at NavComputer.js:204 and written only by main.js) and KnownSystemAuthoring (a NAME gate, not a position gate). No galactic seed can reach either.",
-          "The component sub-view (_systemMode === \"component\"), for the same reason. So of the two SYSTEM sub-views the contract calls never-seen-by-a-human, only ONE has now been seen.",
-          "\"The COMMIT button fires its action\" as a change read from the live instance: it invokes a callback nothing installs, and the cockpit NavComputer has no host anywhere in src/ — main.js wires a different instance.",
-          "The autopilot button toggling end-to-end: _autopilotActive is a mirror written only by setAutopilotState, which no lab code calls, so the payload is true on every press."
+          "\"The autopilot button toggles\" remains open and the approved amendment did not name it. It is the SAME mechanism as the COMMIT action that DID move: _autopilotActive is a mirror written only by setAutopilotState, which no lab code calls, so the payload is `true` on every press and the label never reaches AUTOPILOT ON. It almost certainly wants the same treatment — Max's call, not widened here."
         ],
-        "proposedAmendment": "Move the far-companion chip, the component sub-view and the COMMIT action to increment 7, where HELM wiring gives them a host. They are not reachable from a lab that has no real-star catalogue."
-      }
+        "proposedAmendment": "Move the far-companion chip, the component sub-view and the COMMIT action to increment 7, where HELM wiring gives them a host. They are not reachable from a lab that has no real-star catalogue.",
+        "amendedOn": "2026-07-29"
+      },
+      "amendments": [
+        {
+          "on": "2026-07-29",
+          "approvedBy": "Max",
+          "field": "statement",
+          "was": "Three of these have never been seen by a human on the glass",
+          "now": "⚠ AMENDED 2026-07-29 AFTER LIVE VERIFICATION — THREE CLAUSES MOVE TO INCREMENT 7, where HELM wiring gives them a host: the far-companion chip, the component sub-view, and the COMMIT button firing its action. The chip is not unlucky seeding, it is structural — systemData.farCompanions comes only from galaxyContext.farCompanions, whose two producers are the real-catalogue overlay (gated on _realStarCatalog, null at NavComputer.js:204 and written only by src/main.js) and KnownSystemAuthoring (a NAME gate, not a position gate). No galactic seed in this lab reaches either, so no prism marker can BE an authored host. COMMIT moves for the same species of reason: it invokes a callback nothing installs, and the cockpit NavComputer has no host anywhere in src/. Of the rest, three had never been seen by a human on the glass",
+          "why": "Three clauses require a host that does not exist until the cockpit is wired into the game."
+        }
+      ]
     },
     {
       "id": "AC-REST-IS-RESTORED",
@@ -220,7 +248,7 @@
     },
     {
       "id": "AC-ONLY-NAV-ZOOMS",
-      "statement": "Max: 'This is only necessary for the upper-left monitor.' The mechanism is generic — it reads panel.metrics like every other piece of lane F, so building it for one panel and building it for four cost the same — but only NAV is wired to a trigger. Clicking DRIVE, TARGET or INFO does nothing at all: they do not travel, and they do not silently start forwarding clicks into painters that were never written to receive them.",
+      "statement": "Max: 'This is only necessary for the upper-left monitor.' The mechanism is generic — it reads panel.metrics like every other piece of lane F, so building it for one panel and building it for four cost the same — but only NAV is wired to a trigger. Clicking DRIVE, TARGET or INFO does not zoom them and forwards no pointer event into their painters: they do not travel, and they do not silently start feeding painters that were never written to receive them. ⚠ AMENDED 2026-07-29 AFTER LIVE VERIFICATION: this said \"does nothing at all\", which is false — such a press falls through the pointer routing to a LOOK-DRAG, exactly as it did before increment 6. That is the correct behaviour and the wording was the thing that was wrong.",
       "verifyVia": {
         "input": "In the lab, click each of the four screens in turn, at several points on each face.",
         "observable": "Only Screen_UL travels. The other three panels' world poses are unchanged to floating-point tolerance and their painters report no pointer events. The generic path is still present and exercisable — zooming a non-NAV panel through the probe API works, proving the restriction is wiring and not a hard-coded corner."
@@ -228,15 +256,24 @@
       "layer": "integration",
       "live": true,
       "verification": {
-        "verdict": "PARTIAL",
+        "verdict": "PASS",
         "sha": "4d9392e",
         "verifiedOn": "2026-07-29",
-        "evidence": "Only Screen_UL travels. All three zoom triggers exercised — glass click, Shift+1..4, and the ZOOM button — and all three refuse the non-NAV roles. The other three panels proved unmoved with measurePanel rather than getInfo().panels[], whose metrics are frozen at bind time and would have passed vacuously. The generic path proved still live by zooming a non-NAV panel through the probe API, so the restriction is wiring and not a hard-coded corner.",
-        "clausesOpen": [
-          "\"Clicking DRIVE, TARGET or INFO does nothing at all\" is FALSE AS WRITTEN: from rest such a press falls through to a look-drag. Behaviour is correct; the AC's wording is not."
-        ],
-        "proposedAmendment": "Reword to \"does not zoom them and forwards no pointer event into their painters\", which is what the code does and what the intent means."
-      }
+        "evidence": "Amended 2026-07-29. Every clause of the amended statement is verified: only Screen_UL travels, the other three are proved unmoved with measurePanel (not the bind-time-frozen getInfo().panels[]), pointerCensus shows no pointer event reaches them, and the generic path still zooms a non-NAV panel through the probe. All three triggers — glass click, Shift+1..4, the ZOOM button — refuse the non-NAV roles.",
+        "clausesOpen": [],
+        "proposedAmendment": "Reword to \"does not zoom them and forwards no pointer event into their painters\", which is what the code does and what the intent means.",
+        "amendedOn": "2026-07-29"
+      },
+      "amendments": [
+        {
+          "on": "2026-07-29",
+          "approvedBy": "Max",
+          "field": "statement",
+          "was": "Clicking DRIVE, TARGET or INFO does nothing at all: they do not travel, and they do not silently start forwarding clicks into painters that were never written to receive them.",
+          "now": "Clicking DRIVE, TARGET or INFO does not zoom them and forwards no pointer event into their painters: they do not travel, and they do not silently start feeding painters that were never written to receive them. ⚠ AMENDED 2026-07-29 AFTER LIVE VERIFICATION: this said \"does nothing at all\", which is false — such a press falls through the pointer routing to a LOOK-DRAG, exactly as it did before increment 6. That is the correct behaviour and the wording was the thing that was wrong.",
+          "why": "\"Does nothing at all\" was falsified live; the behaviour is right, the wording was not."
+        }
+      ]
     },
     {
       "id": "AC-BASELINE-GREEN",
@@ -257,24 +294,42 @@
     },
     {
       "id": "AC-FLIGHT-AND-ORRERY-SURVIVE",
-      "statement": "Adding motion and click-forwarding does not let the nav computer eat the ship. NavComputer.activate() is deliberately NOT called on zoom — it registers capture-phase key handlers that swallow W, A, S, D, R and F, which are the pilot's own controls — so the flight keys keep working whether the panel is at rest or zoomed. The new raycast picker must not swallow pointer events meant for flight either: a click that misses all four screens reaches whatever it would have reached before.",
+      "statement": "Adding motion and click-forwarding does not let the nav computer eat the ship. NavComputer.activate() is deliberately NOT called on zoom — it registers capture-phase key handlers that swallow W, A, S, D, R and F, which are the pilot's own controls — so the flight keys keep working. ⚠ AMENDED 2026-07-29 AFTER LIVE VERIFICATION — THE \"OR ZOOMED\" HALF MOVES TO INCREMENT 7. The cockpit screens are not wired into the game on this branch: nothing in the game builds a PanelHost or a PanelMover, and NavSource.mount is called only from cockpit-screens-lab.html. So there is no zoomed panel in the game to press a flight key against, and this AC was written against a state that does not exist until HELM wiring. What IS verified here: activate() is not called on any path increment 6 adds, and the flight keys work in the game with the nav computer open and closed. The new raycast picker must not swallow pointer events meant for flight either: a click that misses all four screens reaches whatever it would have reached before.",
       "verifyVia": {
         "input": "With the panel at rest and again while zoomed, press each flight key and click in empty space away from the screens.",
-        "observable": "Every flight key still registers with the ship's own handlers in both states. A click that hits no screen produces no panel pointer event and is not consumed. The ORRERY DOM readouts the previous workstream left alone are still present and updating."
+        "observable": "Every flight key still registers with the ship's own handlers with the nav computer open and closed (the zoomed state moves to increment 7, see the statement). A click that hits no screen produces no panel pointer event and is not consumed. The ORRERY DOM readouts the previous workstream left alone are still present and updating."
       },
       "layer": "integration",
       "live": true,
       "verification": {
-        "verdict": "PARTIAL",
+        "verdict": "PASS",
         "sha": "4d9392e",
         "verifiedOn": "2026-07-29",
-        "evidence": "NavComputer.activate() is not called on any path this increment adds, so the capture-phase handlers that would swallow W/A/S/D/R/F are never registered. The flight keys work in the game with the nav computer open and closed. In the lab a click that misses all four screens produces no panel pointer event, is not consumed, and look-around still works. The ORRERY DOM readouts are present and updating.",
+        "evidence": "Amended 2026-07-29. activate() is not called on any path increment 6 adds, so the capture-phase handlers that would swallow W/A/S/D/R/F are never registered; the flight keys work in the game with the nav computer open and closed; an empty-space click in the lab produces no panel pointer event, is not consumed, and look-around still works; the ORRERY DOM readouts are present and updating.",
         "clausesOpen": [
-          "\"The flight keys keep working whether the panel is at rest or ZOOMED\" — the IN-GAME half CANNOT BE TESTED YET. The cockpit screens are not wired into the game on this branch; nothing in the game builds a PanelHost or PanelMover. The AC was written against a state that does not exist until HELM wiring.",
-          "Lab pointer gestures were synthetic PointerEvents with setPointerCapture stubbed — Chrome throws NotFoundError for a synthetic pointerId, which was measured, so the stub is load-bearing for scripts and the hand-driven path is unaffected."
+          "Lab pointer gestures were synthetic PointerEvents with setPointerCapture stubbed — Chrome throws NotFoundError for a synthetic pointerId, which was measured, so the stub is load-bearing for scripts and the hand-driven path is unaffected. A method caveat, not an unexercised clause."
         ],
-        "proposedAmendment": "Move the zoomed-in-game clauses to increment 7. Until the cockpit is in the game there is no zoomed panel there to press a flight key against."
-      }
+        "proposedAmendment": "Move the zoomed-in-game clauses to increment 7. Until the cockpit is in the game there is no zoomed panel there to press a flight key against.",
+        "amendedOn": "2026-07-29"
+      },
+      "amendments": [
+        {
+          "on": "2026-07-29",
+          "approvedBy": "Max",
+          "field": "statement",
+          "was": "so the flight keys keep working whether the panel is at rest or zoomed.",
+          "now": "so the flight keys keep working. ⚠ AMENDED 2026-07-29 AFTER LIVE VERIFICATION — THE \"OR ZOOMED\" HALF MOVES TO INCREMENT 7. The cockpit screens are not wired into the game on this branch: nothing in the game builds a PanelHost or a PanelMover, and NavSource.mount is called only from cockpit-screens-lab.html. So there is no zoomed panel in the game to press a flight key against, and this AC was written against a state that does not exist until HELM wiring. What IS verified here: activate() is not called on any path increment 6 adds, and the flight keys work in the game with the nav computer open and closed.",
+          "why": "The in-game zoomed clauses need the cockpit wired into the game, which is the next increment."
+        },
+        {
+          "on": "2026-07-29",
+          "approvedBy": "Max",
+          "field": "observable",
+          "was": "Every flight key still registers with the ship's own handlers in both states.",
+          "now": "Every flight key still registers with the ship's own handlers with the nav computer open and closed (the zoomed state moves to increment 7, see the statement).",
+          "why": "Follows the statement amendment."
+        }
+      ]
     },
     {
       "id": "AC-IT-FEELS-LIKE-A-COCKPIT",
