@@ -15,6 +15,7 @@
  * looks a bit wrong" months later.
  */
 import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -95,14 +96,19 @@ describe('the boundary — what the rig owns', () => {
     expect(DEFAULT_GLASS.opacity).toBe(1);
     // ⭐⭐ THE CEILING, AND IT IS A MEASUREMENT RATHER THAN A TASTE BOUND.
     //
-    // This assertion used to read `< 110`, which is exactly the kind of round
-    // number that looks like a guard and is not one: the value that SHIPPED
-    // BROKEN was 0x4a (74), and it sailed through. Max caught it on his first
-    // flight — "all the window segments except the central one are opaque" —
-    // and the lab measurement said why. Canopy hidden vs shown at a fixed star
-    // angle: the glass lifted the region it covers by a median of 27/255 while
-    // the starfield behind peaks at 4.7/255. Additive light six times brighter
-    // than everything behind it is a wall, not a window.
+    // ⚠ BUT IT IS NOT THE GUARD FOR "THE WINDOWS ARE OPAQUE" — that one lives in
+    // the alpha-blending test below, and conflating the two is what let the defect
+    // survive a fix. This assertion was tightened from `< 110` to 0x18 in response
+    // to Max's report, on the theory that brightness was the cause; the symptom
+    // came back verbatim, because the cause was the canopy writing alpha into a
+    // coverage-composited target. Tightening this did no harm and fixed nothing.
+    //
+    // What it does guard is real and independent: with alpha corrected the canopy
+    // truly adds on top of the sky, so too bright an albedo washes the starfield
+    // out even though you can see through it. Canopy hidden vs shown at a fixed
+    // star angle: at 0x4a the glass lifted the region it covers by a median of
+    // 27/255 while the starfield behind peaks at 4.7/255 — six times brighter
+    // than everything behind it. 0x18 is where the sky starts disappearing.
     //
     // 0x18 is where the same measurement puts the sky starting to disappear. A
     // bound at 110 permits four times that. So the guard is the measured limit,
@@ -126,6 +132,48 @@ describe('the boundary — what the rig owns', () => {
     // component that reaches the pilot's eye from inside the canopy.
     expect(DEFAULT_GLASS.glare.metalness).toBe(0);
     expect(Object.isFrozen(DEFAULT_GLASS.glare)).toBe(true);
+  });
+
+  // ⭐⭐ THE REGRESSION THAT COST TWO SESSIONS. Read the failure before the code.
+  //
+  // Max reported the same defect twice, in the same words — *"the windows, except
+  // for the central segment, are all still opaque"* — and the fix in between
+  // changed the canopy's BRIGHTNESS, because that is what "opaque" sounds like.
+  // Every measurement taken to confirm that fix was accurate and none of them
+  // could have caught the bug: the panes were never bright. They were writing
+  // ALPHA into `cockpitTarget`, which is composited over the world by coverage,
+  // so each pane stamped itself fully-covered and replaced the sky with its own
+  // near-black colour. A darker albedo makes that wall darker, never thinner.
+  //
+  // ⚠ THIS IS WHY THE ASSERTION IS ON THE APPLIED MATERIAL AND NOT ON
+  // `DEFAULT_GLASS`. Every other glass test above pins the plain-object contract,
+  // and the object was CORRECT throughout the entire bug — `additive: true` was
+  // exactly what we wanted. The defect lived in the translation from that flag to
+  // three's blend state, which no test reached. A test one level up would have
+  // stayed green through both sessions, as the rest of this file did.
+  it('adds light without CLAIMING the pixel — additive RGB, but alpha left alone', () => {
+    const mat = { isMeshStandardMaterial: true, color: { set() {} } };
+    const rig = Object.create(CockpitRig.prototype);
+    rig._glass = DEFAULT_GLASS;
+    rig.glassMats = new Set([mat]);
+    rig._applyGlass();
+
+    // The RGB pair must remain byte-identical to what `THREE.AdditiveBlending`
+    // would have set, or this "fix" has quietly re-tuned the glare as well and
+    // the next visual judgement is being made against a moved target.
+    expect(mat.blendEquation).toBe(THREE.AddEquation);
+    expect(mat.blendSrc).toBe(THREE.SrcAlphaFactor);
+    expect(mat.blendDst).toBe(THREE.OneFactor);
+
+    // ...and the alpha pair must be a NO-OP on the destination: take none of the
+    // source, keep all of what the world pass already wrote. `(ZERO, ONE)`.
+    expect(mat.blending, 'the named AdditiveBlending constant applies its factors to alpha too — that IS the bug').toBe(THREE.CustomBlending);
+    expect(mat.blendEquationAlpha).toBe(THREE.AddEquation);
+    expect(
+      mat.blendSrcAlpha,
+      'any non-ZERO source-alpha factor lets the canopy accumulate coverage and mask the starfield',
+    ).toBe(THREE.ZeroFactor);
+    expect(mat.blendDstAlpha, 'anything but ONE discards the coverage the world pass wrote').toBe(THREE.OneFactor);
   });
 
   it('ships all four default painters from src/, so the game never reaches into a lab file', () => {

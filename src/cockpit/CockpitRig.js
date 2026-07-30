@@ -179,11 +179,22 @@ export const DEFAULT_GLASS = Object.freeze({
   depthWrite: false,
   doubleSide: true,
   additive: true,
-  // ⭐⭐ 0x0f, NOT 0x4a — AND THE FACTOR OF ~13 IS THE WHOLE LESSON HERE.
+  // ⭐⭐ 0x0f, NOT 0x4a. A REAL CEILING — BUT ⚠ IT IS NOT THE OPACITY FIX, AND
+  // AN EARLIER VERSION OF THIS COMMENT CLAIMED IT WAS.
   //
-  // This shipped at 0x4a4a4a for one session and Max's first flight found it:
-  // *"all the window segments except the central one are opaque."* He was right,
-  // and the reason is a property of THIS GAME rather than of the material.
+  // That claim is corrected here because it is the more expensive error of the
+  // two. Max reported *"all the window segments except the central one are
+  // opaque"*, this value was driven 0x4a → 0x0f in response, and he reported the
+  // identical symptom in the identical words afterwards. The panes were opaque
+  // because the material was writing ALPHA into a target composited by coverage
+  // — see `_applyGlass`, which is where that is actually fixed. No value of this
+  // constant could have solved it; darkening the glass only darkened the wall.
+  //
+  // What survives is a SEPARATE and still-valid constraint: with alpha fixed the
+  // canopy genuinely adds its light on top of the sky, so an albedo bright enough
+  // to out-add the starfield washes it out even though you can now see through
+  // it. That is the measurement below, and it still binds. Two different failures
+  // wearing one word — read the numbers as a brightness ceiling only.
   //
   // Measured in the lab, canopy hidden vs shown at a fixed star angle: the glass
   // lifted the region it covers by a MEDIAN of 27/255, while the starfield
@@ -498,7 +509,48 @@ export class CockpitRig {
       m.opacity = g.opacity;
       m.depthWrite = g.depthWrite;
       if (g.doubleSide) m.side = THREE.DoubleSide;
-      m.blending = g.additive ? THREE.AdditiveBlending : THREE.NormalBlending;
+      if (g.additive) {
+        // ⭐⭐ CUSTOM BLENDING, NOT `THREE.AdditiveBlending`, AND THE ENTIRE
+        // DIFFERENCE IS THE ALPHA CHANNEL. This is the fix for the bug that
+        // survived two sessions and one confident wrong fix; read this before
+        // simplifying it back to the named constant.
+        //
+        // Max, twice, in the same words: *"the windows, except for the central
+        // segment, are all still opaque."* The first fix read that as BRIGHTNESS
+        // and drove the albedo from 0x4a to 0x0f. The measurement said it worked
+        // — the glass added a median 2/255 over a sky peaking at 4.7 — and he
+        // still saw a wall. Both observations were true, because the panes were
+        // never bright. They were OPAQUE, which is a different channel.
+        //
+        // The cockpit renders to its own `cockpitTarget` and is composited over
+        // the world BY ALPHA. `THREE.AdditiveBlending` sets `(SRC_ALPHA, ONE)`
+        // for RGB — which is what we want — but three applies that same pair to
+        // ALPHA unless told otherwise, so every pane accumulated
+        // `a' = a·a + a_dst` toward 1 and stamped itself fully-covered into the
+        // composite. A pane that adds no light still replaces the sky behind it
+        // with its own near-black colour. Lowering the albedo makes that wall
+        // darker; it cannot make it thinner.
+        //
+        // So: keep `(SRC_ALPHA, ONE)` on RGB — identical to AdditiveBlending,
+        // the glare is unchanged — and set alpha to `(ZERO, ONE)`, i.e. leave
+        // the destination's coverage exactly as the world pass wrote it. The
+        // canopy then adds light without ever claiming a pixel.
+        //
+        // ⚠ Verified live in the game, not in the lab: raycast a grid through
+        // `_cockpitScene` and `Canopy_Glass` was the occluder for every sample
+        // outside one central pinhole. That picker is the check to re-run if
+        // this regresses — a brightness measurement will NOT catch it, and did
+        // not, six times.
+        m.blending = THREE.CustomBlending;
+        m.blendEquation = THREE.AddEquation;
+        m.blendSrc = THREE.SrcAlphaFactor;
+        m.blendDst = THREE.OneFactor;
+        m.blendEquationAlpha = THREE.AddEquation;
+        m.blendSrcAlpha = THREE.ZeroFactor;
+        m.blendDstAlpha = THREE.OneFactor;
+      } else {
+        m.blending = THREE.NormalBlending;
+      }
       // ⚠ GUARDED ON THE MATERIAL ACTUALLY HAVING THESE. GLTFLoader gives a
       // MeshStandardMaterial for a glTF PBR material, which does — but a future
       // re-author that hands the canopy a Basic or a custom ShaderMaterial would
