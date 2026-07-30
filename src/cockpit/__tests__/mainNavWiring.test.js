@@ -233,6 +233,29 @@ describe('autopilot always has a cockpit, and the screensaver stays closed', () 
     expect(SRC).toContain('if (!liveNavComputer()) _initNavComputer();');
   });
 
+  it("the mobile dock's nav action can CLOSE the panel, not only open it", () => {
+    // Found live 2026-07-30: the branch tested `_navComputerOpen`, which tracks
+    // the DOM OVERLAY. In HELM the nav computer is on the glass, so that flag is
+    // false forever, the else-branch always ran, and `_openCockpitNav` returns
+    // at its first line when already zoomed. Desktop hid it — N goes through
+    // `toggleNavComputer`, which tests BOTH surfaces. Mobile has no N, so the
+    // panel was unretractable. Anchored on the statement, and on the absence of
+    // the stale predicate anywhere in the mobile handler.
+    const start = at("function handleMobileAction(");
+    const end = at("// Listen on dock and speed dial", start);
+    const handler = SRC.slice(start, end);
+    expect(handler).toMatch(/action === 'nav'\)\s*\{[^}]*toggleNavComputer\(\)/);
+    expect(
+      handler,
+      'the mobile handler must not decide nav visibility from the DOM-overlay flag alone',
+    ).not.toMatch(/if \(_navComputerOpen\) closeNavComputer\(\);\s*\n\s*else openNavComputer\(\)/);
+  });
+
+  it('CONTROL: toggleNavComputer is the predicate that knows about both surfaces', () => {
+    // If this ever stops testing the glass, the fix above is hollow.
+    expect(fnBody('toggleNavComputer')).toMatch(/_navComputerOpen \|\| _cockpitNavZoomed\(\)/);
+  });
+
   it('the on-glass autopilot mirror is re-synced every frame', () => {
     // `_autopilotActive` is written only by setAutopilotState. The overlay could
     // push it at open; the glass is always visible and has no open.

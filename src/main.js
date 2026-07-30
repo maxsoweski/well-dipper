@@ -163,6 +163,14 @@ window._shipSpawner = shipSpawner;  // exposed for integration tests (Unit 3)
 // ── Retro Renderer ──
 const canvas = document.getElementById('canvas');
 const retroRenderer = new RetroRenderer(canvas, scene, camera);
+// ⚠ PRE-EXISTING, found 2026-07-30 while driving AC-FLIGHT-AND-ORRERY-SURVIVE's
+// save/reload clause; it predates the cockpit work (present at pre-cockpit-inc7).
+// `pixelScale` was the one visual setting that SAVED but never RESTORED: the
+// constructor hard-codes 3 (RetroRenderer.js:31), `applySettingChange` writes it
+// on a live drag, and the reset button re-applies it — but nothing read it at
+// boot. Move the slider, reload, and the picture silently came back at 3 with
+// the stored value still 5. Its neighbour on the next line always did this.
+retroRenderer.pixelScale = settings.get('pixelScale');
 retroRenderer.setColorPalette(settings.get('colorPalette'));
 
 // ── Texture Baker (runtime procedural → texture baking) ──
@@ -11549,8 +11557,14 @@ if (mobileControls) {
       autoSelectWarpTarget();
       beginWarpTurn();
     } else if (action === 'nav') {
-      if (_navComputerOpen) closeNavComputer();
-      else openNavComputer();
+      // ⭐ `toggleNavComputer()`, NOT a bare `_navComputerOpen` test. That flag
+      // tracks the DOM OVERLAY, and in HELM the nav computer is on the glass —
+      // so it stays false forever and this branch could only ever OPEN. On
+      // desktop N covers it; on mobile there is no N, so the pilot got a zoomed
+      // NAV panel with no way to retract it. `toggleNavComputer` is the one
+      // predicate that knows about both surfaces (`_navComputerOpen ||
+      // _cockpitNavZoomed()`) and it already existed for exactly this reason.
+      toggleNavComputer();
     } else if (action === 'autonav-toggle') {
       if (autoNav.isActive) {
         stopFlythrough();
