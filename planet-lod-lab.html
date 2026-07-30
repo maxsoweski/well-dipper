@@ -173,6 +173,7 @@
     import { deriveConditionVector } from './body-condition-vector.js';   // V2-0 Slice C: pure _fp→condition vector, attached NESTED as bodyDrivers.condition (shadow-mode; V2-1 E1 read surface; SAME derive the headless AC1 harness uses)
     import { computeE1 } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment).
     import { icenessOf, surfacePaletteOf, biosphereOf, BIO_PIGMENT } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3: condition-derived icy-material fraction → drives uIcenessMix (Stage-6 albedo). Pure scalar, imports nothing. · surfacePaletteOf: condition-derived GROUND PALETTE {fresh, weathered, sediment} → drives uFreshColor/uBaseColor/uSedColor (was a single hard-coded rocky tone for all 18 presets, uniform across every world's whole surface).
+    import { atmosphereOpticsOf } from './src/worldengine/base/atmosphereOptics.js';   // V2-7: condition-derived limb/terminator hue -> retires LIMB_COLOR_BY_PRESET + TERM_COLOR_BY_PRESET (the last name-keyed lookups in the colour path). Pure scalar, imports nothing.
     import { craterSchedule, craterRelevanceOf, D_D_SIMPLE } from './src/worldengine/base/bombardment.js';   // inc3b S3-fix: schedule-derived single crater law (sub-floor texture band) + the condition-derived crater/ejecta relevance gate (replaces the preset-name featureRelevant.craters lookup). e1-blind, pure.
     import { radPerKm } from './src/worldengine/base/baseStep.js';   // inc3b S3-fix: km→angular scalar for the normalized crater-depth law (uCraterAmp = D_D_SIMPLE·radPerKm(R)·D_char). Pure.
     import { assessProvinceAssociation, provinceStats, classProportions } from './src/worldengine/base/province.js';   // V2-4 slice-4: the province honesty instrument (read-only) for _lab.provinceProbe()
@@ -2855,50 +2856,22 @@
     // for the liquidStability/liquidSpecies master gate (§2 #3). "Titan (methane seas)"
     // exercises the cold methane species (1); "Frozen (airless)" proves the airless gate→0.
     // DRIVER_PRESETS (the 17 body driver-preset vectors) moved to ./driver-presets.js (V2-0 Slice A) — imported at the top of this module.
-    // ── F34 limb glow — per-preset rim hue (card §6.5 step 3: "a small per-preset/
-    // archetype map"). The variant spread the old uBaseColor tint could not express:
-    // Earth-blue line on temperate/ocean worlds, Titan tholin orange, Venus pale
-    // sulfur, ice-giant blue, warm gas-deck tans. Airless presets are deliberately
-    // ABSENT — they fall back to uBaseColor and stay inert behind limbStrength 0.
-    // Review N6: the uBaseColor fallback reads a possibly-STALE previous-preset
-    // value during applyDrivers — any NEW atmospheric preset MUST get a row here.
-    const LIMB_COLOR_BY_PRESET = {
-      'Rocky (Earthlike)':          [0.45, 0.65, 1.00],   // Earth's razor-thin layered blue line
-      'Ocean (temperate)':          [0.40, 0.62, 1.00],   // deeper Rayleigh blue over the water world
-      'Eyeball (locked temperate)': [0.50, 0.66, 1.00],   // n2-o2 like Rocky — same blue family
-      'Titan (methane seas)':       [1.00, 0.55, 0.22],   // multi-layer tholin haze orange (Cassini)
-      'Venus (sulfuric shroud)':    [0.95, 0.88, 0.62],   // pale sulfur / H2SO4 cream
-      'Gas giant (Jovian)':         [0.88, 0.72, 0.52],   // warm NH3 deck tan
-      'Gas giant (Saturnian)':      [0.92, 0.84, 0.62],   // paler gold haze
-      'Ice giant (Neptunian)':      [0.45, 0.60, 1.00],   // methane-absorption ice-giant blue
-      'Sub-Neptune (hazy)':         [0.82, 0.74, 0.62],   // photochemical haze warm grey (GJ 1214 b)
-      'Hot Jupiter (locked giant)': [0.80, 0.50, 0.32],   // dusty sodium-scatter warm rim
-      'Mars (arid rocky)':          [0.60, 0.66, 0.88],   // thin dusty blue-grey arc (the razor CO2 line seen on orbital limb shots)
-    };
-    // ── F35 terminator gradient — per-preset twilight-band hue (card §6.5 step 3).
-    // Slant-path reddening differs from the F34 rim hue: the limb is the atmosphere
-    // seen edge-on (its own color); the terminator is sunlight FILTERED through it
-    // (reddened on n2-o2, broad orange through the Venus shroud, cooler on the
-    // cold-haze worlds). Mars rule recorded as DATA for any future thin-dusty-CO2
-    // preset: micron dust forward-scatters blue near the sun — the INVERTED blue
-    // sunset, ~[0.45, 0.60, 1.00]; LIVE since F40 ("Mars (arid rocky)"). Review N6 (F34)
-    // replicated: any NEW atmospheric preset MUST get a row here — the fallback is
-    // a CONSTANT warm orange (no stale-uBaseColor read, but a generic hue that
-    // throws away the preset's composition story). Airless presets are deliberately
-    // ABSENT — they land on the fallback and stay inert behind termStrength 0.
-    const TERM_COLOR_BY_PRESET = {
-      'Rocky (Earthlike)':          [1.00, 0.45, 0.18],   // Earth's orange-red sunset band (ISS twilight)
-      'Ocean (temperate)':          [1.00, 0.42, 0.22],   // same n2-o2 reddening, a touch rosier over water
-      'Eyeball (locked temperate)': [1.00, 0.48, 0.20],   // n2-o2 like Rocky — same warm family
-      'Titan (methane seas)':       [0.72, 0.52, 0.78],   // cold tholin haze — cool mauve twilight
-      'Venus (sulfuric shroud)':    [1.00, 0.62, 0.28],   // broad orange arc (Akatsuki crescent)
-      'Gas giant (Jovian)':         [1.00, 0.58, 0.30],   // warm NH3-deck amber
-      'Gas giant (Saturnian)':      [0.98, 0.72, 0.40],   // paler gold twilight
-      'Ice giant (Neptunian)':      [0.50, 0.55, 0.95],   // cold methane haze — cool blue band
-      'Sub-Neptune (hazy)':         [0.88, 0.62, 0.45],   // muted warm photochemical haze
-      'Hot Jupiter (locked giant)': [1.00, 0.38, 0.22],   // sodium-scatter deep red
-      'Mars (arid rocky)':          [0.45, 0.60, 1.00],   // the recorded thin-dusty-CO2 rule fires AT LAST: micron dust forward-scatters blue near the sun — the famous INVERTED blue Martian sunset
-    };
+    // ── F34/F35 atmosphere hue — RETIRED name-keyed tables (V2-7) ────────────────
+    // LIMB_COLOR_BY_PRESET and TERM_COLOR_BY_PRESET used to live here: two hand-authored
+    // lookups keyed on the PRESET'S NAME, and the last name-keyed entries anywhere in the
+    // colour path. They are replaced by atmosphereOpticsOf(condition) — pure, condition-
+    // scalar-only, in src/worldengine/base/atmosphereOptics.js. Every hue those tables
+    // carried is now DERIVED: the Earth-blue line is Rayleigh scattering in a clear column,
+    // the Titan orange is cold organic haze, the Venus cream is a hot thick sulfurous
+    // shroud, the ice-giant blue / Jovian tan / hot-Jupiter red are one temperature ramp
+    // down a retained hydrogen deck, and the inverted BLUE Martian sunset falls out of the
+    // thin-column forward-scatter term instead of being written down as a special case.
+    // Derived-vs-authored across all 18 presets: worst single channel 0.10 (limb) / 0.11
+    // (terminator), four presets exact. tools/atmosphere-optics-calibrate.mjs prints the table.
+    // This also retires the Review-N6 defect the old code carried: a preset with no row fell
+    // back to a possibly-STALE previous-preset uBaseColor read (limb) or a flat warm orange
+    // (terminator), so a NEW body could not get an atmosphere hue without a code edit. There
+    // is no fallback now — a drawn body gets a hue from its own physics.
     const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
     // ── Increment 2 (plate driver-response) bodyDrivers override state ───────────────
     // bodyDrivers is a SEPARATE channel from grainDrivers (the grain bake is untouched). The four
@@ -3659,6 +3632,13 @@
       // half of the stand-in is retired by F41 below (the magma-class zeroing) —
       // retirement COMPLETE 2026-06-10, both named owners landed.
       if (_hotJup) state.emissive = 0;
+      // ── V2-7 atmosphere optics — the condition-derived hue source for BOTH F34 (limb) and
+      // F35 (terminator). Built off drawPresetConditions(preset, macroSeed) — the SAME per-seed
+      // condition draw the ground palette uses — so two seeds of the same body get atmospheres
+      // that differ in PHYSICS (drawn volatile budget / temperature / gravity), not merely in
+      // noise, and a drawn body that never had a hand-written table row still gets a hue.
+      const _atmoOptics = atmosphereOpticsOf(
+        deriveConditionVector(drawPresetConditions(driverUI.preset, state.macroSeed | 0), u, state.planetRadiusEarth));
       // ── F34 limb / atmosphere rim glow — driver derivation (card §6.5 step 3;
       // post-process HERE per the F11 precedent — core.js untouched). The core's
       // hasAtmo gate stays the master: u.limbStrength is 0.7 on every retained
@@ -3675,9 +3655,7 @@
       if (_thickHaze) state.limbStrength = Math.min(1.0, state.limbStrength * 1.3);
       // Rim hue from the per-preset map; fallback = the uBaseColor rocky tone (the
       // pre-F34 tint — airless presets land here and stay inert behind strength 0).
-      const _lc = LIMB_COLOR_BY_PRESET[driverUI.preset];
-      state.limbColor = _lc ? _lc.slice()
-        : [uniforms.uBaseColor.value.r, uniforms.uBaseColor.value.g, uniforms.uBaseColor.value.b];
+      state.limbColor = _atmoOptics.limbColor.slice();
       // F31e detached haze shell: > 0 ONLY for the thick-haze class, and only when
       // the rim itself fires — every clear/airless preset keeps the mesh invisible
       // (the per-frame writer keys visibility on this value + limbEnabled).
@@ -3701,10 +3679,12 @@
       // width clamps to 0.06 and stays inert behind strength 0.
       const _tp = Math.max(_fp.atmosphere?.pressure ?? 0, 1e-3);
       state.termWidth = Math.min(0.30, Math.max(0.06, 0.12 + 0.09 * Math.log10(_tp)));
-      // Band hue from the per-preset map; fallback = a constant warm orange (NOT
-      // the F34 stale-uBaseColor read — see the N6 note on TERM_COLOR_BY_PRESET).
-      const _tc = TERM_COLOR_BY_PRESET[driverUI.preset];
-      state.termColor = _tc ? _tc.slice() : [1.0, 0.5, 0.2];
+      // Band hue = the TRANSMITTED colour from the V2-7 optics derive: what the slant path
+      // does to sunlight, not what the limb scatters. A clear column reddens (Earth's sunset),
+      // a thick haze transmits broad amber, cold organics transmit mauve, and a thin dusty
+      // column inverts to blue. No per-preset map and no fallback — see the retirement note
+      // where LIMB_COLOR_BY_PRESET / TERM_COLOR_BY_PRESET used to be defined.
+      state.termColor = _atmoOptics.termColor.slice();
       // ── F36 sunglint — driver derivation (card §6.5 steps 2-4; post-process HERE
       // per the F34/F35 precedent — core.js untouched). Liquid master gate: a mirror
       // glint needs an OPEN SEA, i.e. the exact condition that turned on the F14 cut

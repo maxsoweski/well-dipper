@@ -104,7 +104,8 @@ export const DRIVER_PRESETS = {
   // composition derives: pink CO2-dissociation aurora hue, rainFactor 0.2 (faint
   // F26/F30), regime-0 weather deck at low coverage (~0.29 via habitability
   // 0.05), terminator width clamped to the 0.06 hairline — with the recorded
-  // Mars-blue sunset hue now LIVE in TERM_COLOR_BY_PRESET below (review N6).
+  // Mars-blue sunset hue now DERIVED, not tabulated: the 0.01 bar column trips the
+  // thin-column forward-scatter term in atmosphereOptics.js and comes out blue on its own.
   'Mars (arid rocky)': { radiusEarth:0.53, massEarth:0.107, rotationHours:24.6, eccentricity:0.093, starMassEarth:332946, orbitRadiusEarth:35652, axialTilt:25, composition:{ironFraction:0.10,density:3.93,volatileFraction:0.1}, age:4.5, T_eq:210, tidalState:{locked:false}, atmosphere:{color:[0.80,0.58,0.36],retained:true,pressure:0.01,composition:'co2'}, habitability:0.05, surfaceHistory:{erosion:0.35,bombardmentIntensity:0.7,resurfacingRate:0.15} },
   // ── V2-5 bombardment preset (impact-airless dead-rocky; the UAT target) — NON-GOLDEN by design ──
   // "Moon/Mercury (impact-airless)" is the V2-5 carrier: an airless, dead, cold, small rocky body whose

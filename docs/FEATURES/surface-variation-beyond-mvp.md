@@ -30,20 +30,58 @@ each pixel sits; the seed varies the condition.** Anything added here should fit
 
 ## Deferred — ranked by value
 
-### 1. Atmosphere from retention physics (the largest remaining gap)
-`src/generation/PhysicsEngine.js` already has the whole chain — `computeAtmosphere()`,
-`escapeVelocity()`, `jeansParameter()`, `exosphericTemperature()`, `equilibriumTemperature()`. The
-lab imports **exactly one** function from that file (`generateRingPhysics`, for rings). Atmosphere is
-currently faked by two hand-authored lookup tables keyed on the **preset's name**
-(`LIMB_COLOR_BY_PRESET`, `TERM_COLOR_BY_PRESET` in `planet-lod-lab.html`) — the last name-keyed
-lookup left in the colour path.
+### 1. Atmosphere optics — SHIPPED 2026-07-30. Retention itself is CUT, with a reason.
 
-**Why cut:** `computeAtmosphere()` was written against the game's data shape, not the condition
-vector, so it needs an adapter, and its outputs may not map cleanly onto the existing atmosphere
-uniforms. Flagged from the start as the step most likely to be bigger than it looks.
+**Shipped:** `src/worldengine/base/atmosphereOptics.js` (pure, imports nothing, same leaf discipline
+as `surfaceMaterial.js`) now derives the limb and terminator hue from condition scalars.
+`LIMB_COLOR_BY_PRESET` and `TERM_COLOR_BY_PRESET` are **deleted** — the last name-keyed lookups in
+the colour path are gone. Calibration: `tools/atmosphere-optics-calibrate.mjs`.
 
-**Worth knowing:** this is the one remaining item from Max's original "no variations in colour,
-atmosphere, etc. wired in".
+What used to be eleven hand-written rows is now four physical terms: Rayleigh scattering in a clear
+column (the Earth-blue line), organic haze on a cold volatile-rich world (Titan orange), a hot thick
+sulfurous shroud (Venus cream), and a temperature ramp down a retained hydrogen deck (ice-giant blue
+→ Jovian tan → hot-Jupiter red). The inverted BLUE Martian sunset falls out of the thin-column
+forward-scatter term instead of being written down as a special case. Worst single channel vs the
+authored tables: 0.07 limb, 0.11 terminator; four presets exact.
+
+The `type`-string trap named in the 07-30 handoff was avoided rather than adapted around: nothing
+imports `computeAtmosphere()`. The one piece of real escape physics needed is the Jeans parameter,
+and `lambda = m·v_esc²/(2kT_exo)` with `v_esc² = 2gR` needs only `surfaceGravity` and `radiusEarth`,
+both already on the condition vector. That derived scalar replaces the
+`atmosphere.composition === 'h2-he'` string test in the optics path.
+
+**⛔ CUT, and this one will not yield to more effort: deriving `retained` / `pressure` from scratch.**
+A condition-pure retention law **cannot reproduce the Titan/Europa split.** Measured: Titan reads a
+*weaker* Jeans hold than Europa (λ_N2 39 vs 78) and lower gravity, yet Titan is the one with 1.5 bar
+of air and Europa is the airless one. The fact that separates them — Titan accreted an ammonia
+inventory that photolysed to N₂, Europa never had a nitrogen source — is **not carried by any scalar
+on the condition vector**, and no rearrangement of the existing scalars recovers it. The same holds
+for Mars (λ_N2 59, retains fine by Jeans, actually has 0.01 bar because it lost its field).
+
+Picking this up therefore means *adding a condition scalar* (a volatile-species mix, not just
+`volatileFraction`), not writing a better law. Until then `retained`/`pressure` stay preset DATA —
+they are numbers on the condition vector like density and T_eq, not labels, and `surfaceMaterial.js`
++ `bombardment.js` already read `atmosphere.pressure` as a legitimate condition scalar.
+
+**Blast radius if someone tries anyway:** `atmosphere.composition` is load-bearing beyond colour —
+`e1Regime.js:67` terminates the regime on `'h2-he'`, and `bombardment.js` / `surfaceMaterial.js` gate
+on `pressure`. Deriving those moves E1 regimes and crater retention on presets Max has already UAT'd.
+
+**⚠ The change is currently INVISIBLE in the default dressing.** `limbEnabled` is false by default
+(F34 is legacy, "slated for replacement"), and Max **disabled F35 terminator outright on 2026-07-16**
+(`docs/WORKSTREAMS/planet-lod-lab-ux-2026-07-15/GUI-INVENTORY.md`: "doesn't work, and day/night
+shading belongs to the main game's lighting engine"). This increment makes the hue *correct and
+derived*; it does not put it on screen. Verified by enabling `state.limbEnabled` manually. **If the
+atmosphere is meant to be visible in the game, that is a separate decision about F34/F35's future,
+and it is Max's — do not silently re-enable them.**
+
+**Method note worth keeping:** the first haze gate was written at 200 K with a 120 K ramp, so haze
+began appearing below 320 K. It passed calibration against the canonical presets and then turned a
+temperate ocean world tan at macro seed 1, because `drawPresetConditions` draws T_eq (Ocean 295 →
+267 K) and the calibration was reading RAW presets while the render reads the DRAWN condition.
+`tools/atmosphere-optics-calibrate.mjs` now sweeps 24 seeds per preset and reports the widest
+excursion, so this class of error is catchable headlessly. **A law that is right at the canonical
+body and wrong two seeds over is not right.**
 
 ### 2. The two dark surface-material channels
 `deriveSurfaceMaterial(cond, schedule)` returns `{ iceness, crystallizationPotential,
@@ -139,6 +177,6 @@ console would close a whole class of failure that is invisible today.
 
 ## Standing baseline
 
-Full suite: **20684 passed / 4 failed**. The 4 are pre-existing (`KnownObjects` ×3,
+Full suite: **20684-20685 passed / 4 failed** (the passed count drifts by one run to run). The 4 are pre-existing (`KnownObjects` ×3,
 `GalacticFeatures` ×1), plus 13 `vendor/motion-test-kit/*` files that error with "No test suite
 found". Baseline before blaming yourself.
