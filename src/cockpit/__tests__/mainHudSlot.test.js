@@ -1,10 +1,11 @@
 /**
  * AC-OVERLAYS-RETIRE-IN-HELM, the 320² slot half.
  *
- * The slot hosts TWO scenes that retire differently: the MINIMAP goes in HELM
- * (the cockpit's NAV panel replaces it) and stays in ORRERY, which has no
- * cockpit to host anything; the GRAVITY WELL survives in BOTH, because it has
- * no NavComputer level, no cockpit panel and no snapshot field to fold into.
+ * The slot used to host TWO scenes that retired differently. As of 2026-07-30
+ * it hosts ONE: the MINIMAP, which goes in HELM (the cockpit's NAV panel
+ * replaces it) and stays in ORRERY, which has no cockpit to host anything.
+ * The GRAVITY WELL is retired in BOTH modes — see the guard below for why that
+ * reverses this morning's ruling and why "both" rather than "HELM only".
  *
  * ── THE DEFECT THIS PINS ───────────────────────────────────────────────────
  *
@@ -26,7 +27,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
-const RAW = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../main.js'), 'utf8');
+const HERE = dirname(fileURLToPath(import.meta.url));
+const RAW = readFileSync(resolve(HERE, '../../main.js'), 'utf8');
 /** Code only — block and line comments removed. */
 const SRC = RAW.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
@@ -59,22 +61,52 @@ describe('the HUD slot has exactly one decision point', () => {
       `setHud called from ${outside.length} site(s) outside the two — a second `
       + 'decision point is how the minimap comes back after a warp',
     ).toBe(0);
-    expect(all.length, 'three deciding branches plus one blank').toBe(4);
+    // 2026-07-30: was 4 — three deciding branches plus the blank. The gravity
+    // well's branch went with the surface, so the decision point is now
+    // minimap / nothing, plus the blank.
+    expect(all.length, 'two deciding branches plus one blank').toBe(3);
 
     // …and the blank really is a blank, not a smuggled second decision.
     expect(SRC.slice(blankStart, blankEnd)).toMatch(/setHud\(null, null\)/);
     expect(SRC.slice(blankStart, blankEnd)).not.toMatch(/scene/);
   });
 
-  it('the minimap branch is gated on the regime and the gravity well is NOT', () => {
+  // ⭐ REWRITTEN 2026-07-30, NOT FLIPPED. This guard used to assert the exact
+  // opposite of what it asserts now — that the `'well'` line does NOT mention
+  // `_scManual`, on the rationale that the gravity well had no cockpit
+  // replacement so gating it off in HELM would delete it outright. That
+  // reasoning held. Its PREMISE did not survive contact with the pilot: Max,
+  // after flying it, *"We need to retire the gravity wells minimap; doesn't
+  // make sense non-diagetically anymore. We can return to it later and
+  // implement diagetically somehow."* He accepted the trade the old guard
+  // existed to prevent.
+  //
+  // A guard whose premise has changed is STALE, NOT WRONG, and this lane's
+  // convention is to rewrite the rationale rather than quietly invert an
+  // assertion — otherwise the file records a conclusion with no argument, and
+  // the next session cannot tell a ruling from a typo.
+  it('the gravity well is GONE from the slot, and the minimap survives in ORRERY', () => {
     const scene = SRC.slice(SRC.indexOf('function _hudSlotScene()'), SRC.indexOf('function _applyHudSlot()'));
-    const wellLine = scene.split('\n').find((l) => l.includes("'well'"));
+    // ⚠ `SRC` IS ALREADY COMMENT-STRIPPED at module scope, and here that is
+    // load-bearing rather than tidy: `_hudSlotScene`'s doc block now quotes Max
+    // saying "retire the gravity wells" and explains the `'well'` branch that
+    // used to be there. Matched against RAW this guard would go red on its own
+    // rationale — the exact failure this file's header records.
+    expect(scene, 'no branch may put the gravity well in the slot, in EITHER mode').not.toMatch(/'well'/);
+    // CONTROL: the decision point still decides something, or the assertion
+    // above is satisfied by a function that was emptied out.
     const mapLine = scene.split('\n').find((l) => l.includes("'minimap'"));
-    expect(mapLine, 'the minimap must retire in HELM').toMatch(/!_scManual/);
-    expect(
-      wellLine,
-      'the gravity well has no cockpit replacement — gating it off in HELM deletes it outright',
-    ).not.toMatch(/_scManual/);
+    expect(mapLine, 'the minimap retires in HELM and is ORRERY\'s only slot scene').toMatch(/!_scManual/);
+  });
+
+  it('and the affordances went with it — no key, no toggle, no mobile button', () => {
+    // A retired surface with live controls reads as a bug, not a decision. All
+    // four callers of `toggleGravityWell` are gone and so is the function.
+    expect(SRC, 'toggleGravityWell was deleted with the surface it toggled')
+      .not.toMatch(/toggleGravityWell\s*\(/);
+    const HTML = readFileSync(resolve(HERE, '../../../index.html'), 'utf8');
+    expect(HTML.toLowerCase(), 'the V-key row, the settings checkbox and the mobile speed-dial button')
+      .not.toMatch(/gravity/);
   });
 
   it('spawnSystem re-decides on arrival — the warp trap', () => {
@@ -116,15 +148,45 @@ describe('the HUD slot has exactly one decision point', () => {
     expect(syncBody).toMatch(/flightModeToast\.setSuppressed\(_scManual\)/);
   });
 
-  it('CONTROL: the BURN button and the mobile mode-swap were ALREADY correct', () => {
-    // Both are on the retire list and neither needed a change on 2026-07-30.
-    // Pinned so a later edit cannot quietly undo what was verified by reading.
+  it('CONTROL: the BURN button was ALREADY correct', () => {
+    // On the retire list and needed no change on 2026-07-30. Pinned so a later
+    // edit cannot quietly undo what was verified by reading.
     const burn = SRC.indexOf('function _updateCommitBurnButton()');
     const burnBody = SRC.slice(burn, burn + 1600);
     expect(burnBody, 'the DOM BURN affordance is back beside the cockpit COMMIT')
       .toMatch(/const burning = [^;]*_scManual/);
-    expect(SRC, '#mode-swap-btn must survive on mobile — it is mobile-HELM\'s only tour exit')
-      .toMatch(/\(!_isMobile \|\| _scManual\)/);
+  });
+
+  // ⭐ REWRITTEN 2026-07-30 (item 4), NOT FLIPPED — same treatment as the
+  // gravity-well guard above. This used to pin `(!_isMobile || _scManual)`,
+  // i.e. "shown on desktop always, on mobile only in HELM", with the rationale
+  // that #mode-swap-btn must survive on mobile because it is mobile-HELM's only
+  // tour exit and mobile is hard-locked out of hands-on flight, so there is no
+  // keyboard fallback. ⭐ THAT HALF IS UNCHANGED AND STILL THE REASON THE
+  // ELEMENT EXISTS. What changed is the desktop half. Max: *"Now that there's
+  // this stark difference between helm and orrery modes we don't need the
+  // constant label in the upper-right of the screen."*
+  //
+  // So the label retires on DESKTOP, where M swaps and the Options-menu item
+  // still does, and survives on MOBILE-HELM, where it is the only way out.
+  // Retiring the element outright — the reading of "we don't need the label"
+  // that takes one more step than he asked for — strands mobile players in a
+  // tour they cannot leave.
+  it('the mode label is gone on desktop and SURVIVES on mobile-HELM', () => {
+    const start = SRC.indexOf('function _updateModeSwapButton()');
+    expect(start, '_updateModeSwapButton renamed — this scan is stale').toBeGreaterThan(-1);
+    const body = SRC.slice(start, SRC.indexOf('\n}', start));
+    expect(body, 'the desktop label must be gated OFF, not merely relabelled')
+      .toMatch(/_isMobile && _scManual/);
+    expect(body, 'the old always-on-desktop form is what Max asked to retire')
+      .not.toMatch(/!_isMobile \|\| _scManual/);
+    // CONTROL: the element and its label are still built for mobile-HELM. An
+    // assertion that only says "the old expression is gone" passes against a
+    // function whose body was deleted, which is the failure mode that strands
+    // mobile players.
+    expect(body, 'mobile-HELM still gets a labelled, displayable button')
+      .toMatch(/btn\.textContent = _scManual \? 'HELM' : 'ORRERY'/);
+    expect(body).toMatch(/btn\.style\.display = swappable \? 'block' : 'none'/);
   });
 
   it('the click and drag dead zones ask the same question the renderer asked', () => {

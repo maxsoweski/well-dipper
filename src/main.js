@@ -328,7 +328,15 @@ let orbitsVisible = settings.get('showOrbits');
 // toggles them (Settings / O key / HUD button, all via toggleOrbits), after which
 // their choice sticks. Session-scoped.
 let _orbitsUserOverride = false;
-let gravityWellVisible = settings.get('showGravityWells');
+// ⭐ RETIRED 2026-07-30 — see `_hudSlotScene`. Pinned false rather than read
+// from settings because the toggle, the V key and the mobile button are all
+// gone: a persisted `true` would otherwise leave the per-frame well updates
+// (search `gravityWellVisible`) running for a surface nothing draws.
+// ⚠ DEBT, named not hidden: `GravityWellMap` is still CONSTRUCTED on every
+// system spawn. Left in place deliberately — the diegetic replacement Max wants
+// may or may not reuse it, and deleting the build path is a bigger change than
+// the retirement he asked for.
+let gravityWellVisible = false;
 // Default minimap off on mobile (too small to be useful, overlaps controls)
 const _isMobile = 'ontouchstart' in window;
 // Tag the body so mobile-only CSS can key off it. JS guards still apply too.
@@ -411,10 +419,28 @@ function _applyHudVisibility() {
  *     which has no cockpit to host anything, keeps it. Matches the ruling
  *     already recorded in cockpit-screen-content-2026-07-28.
  *
- *   GRAVITY WELL (`gravityWell`, V key) — SURVIVES IN BOTH. It has no
- *     NavComputer level, no cockpit panel and no snapshot field, so there is
- *     nothing for it to fold into; gating the whole slot off in HELM would
- *     delete gravity wells outright with no replacement.
+ *   GRAVITY WELL — ⭐ RETIRED IN BOTH MODES, 2026-07-30. Max, after flying it:
+ *     *"We need to retire the gravity wells minimap; doesn't make sense
+ *     non-diagetically anymore. We can return to it later and implement
+ *     diagetically somehow."*
+ *
+ *     ⚠ THIS REVERSES THE RULING THAT STOOD HERE THIS MORNING, and the old text
+ *     is worth keeping in view: it said the well SURVIVES IN BOTH because it has
+ *     no cockpit replacement, so gating it off would delete it outright with no
+ *     replacement. That reasoning was sound and its PREMISE has changed — Max
+ *     has now accepted exactly that trade, in exchange for the option of a
+ *     diegetic one later. Stale, not wrong.
+ *
+ *     ⭐ WHY BOTH MODES AND NOT HELM ONLY, which is the one judgement call here.
+ *     The reason he gave is diegetic, and only HELM has a cockpit — so "HELM
+ *     only" is a readable interpretation. It is refused because it contradicts a
+ *     ruling he already made: the discriminator for what ORRERY keeps is
+ *     OPERABLE vs READOUT (`AC-ORRERY-KEEPS-WHAT-IT-OPERATES`). The minimap
+ *     stays in ORRERY because clicks inside it JUMP to bodies and it drags to
+ *     rotate — retire it there and ORRERY loses an ability. The gravity well is
+ *     a pure readout: no click target, no drag, nothing it lets you do. Under
+ *     his own discriminator it goes in both, exactly as SupercruiseHud and the
+ *     debug rows did. Reversing this is one line here plus the affordances.
  *
  * ⚠ WHY ONE FUNCTION AND NOT A GATE AT EACH SITE. Five separate places used to
  * push a scene into this slot — the H-key toggle, the settings applier, the C
@@ -426,15 +452,13 @@ function _applyHudVisibility() {
  */
 function _hudSlotScene() {
   if (!_hudVisible || !system) return null;
-  if (gravityWellVisible && gravityWell) return 'well';
   if (minimapVisible && systemMap && !_scManual) return 'minimap';
   return null;
 }
 
 function _applyHudSlot() {
   const which = _hudSlotScene();
-  if (which === 'well') retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
-  else if (which === 'minimap') retroRenderer.setHud(systemMap.scene, systemMap.camera);
+  if (which === 'minimap') retroRenderer.setHud(systemMap.scene, systemMap.camera);
   else retroRenderer.setHud(null, null);
 }
 
@@ -3679,7 +3703,8 @@ function applySettingChange(key, value) {
       _applyHudSlot();
       break;
     case 'showGravityWells':
-      if (gravityWellVisible !== value) toggleGravityWell();
+      // Gravity wells retired 2026-07-30 — the setting no longer has a control
+      // or an effect. Left readable so an old save's value is not an error.
       break;
     case 'fullscreen':
       if (value && !document.fullscreenElement) {
@@ -7691,13 +7716,11 @@ function toggleFullscreen() {
   }
 }
 
-function toggleGravityWell() {
-  gravityWellVisible = !gravityWellVisible;
-  soundEngine.play(gravityWellVisible ? 'toggleOn' : 'toggleOff');
-  // Swap HUD between gravity well contour map and system map. V stays live in
-  // BOTH regimes — the well has no cockpit replacement to retire into.
-  _applyHudSlot();
-}
+// `toggleGravityWell` DELETED 2026-07-30 with the surface it toggled. Its four
+// callers — the V key in both arms of the keydown handler, the mobile dock's
+// `gravity` action, and the settings applier — went with it. Recorded here
+// rather than left as an unexplained absence, because the flag it wrote is
+// still in the file and reads like something ought to set it.
 
 // ── Animation Loop ──
 const timer = new THREE.Timer();
@@ -10207,7 +10230,7 @@ function _updateModeSwapButton() {
   if (!btn) return;
   const swappable = _hudVisible && !splashActive && !titleScreenActive
     && !!system && !(system.type && system.type !== 'star-system')
-    && (!_isMobile || _scManual);
+    && (_isMobile && _scManual);
   btn.style.display = swappable ? 'block' : 'none';
   if (swappable) btn.textContent = _scManual ? 'HELM' : 'ORRERY';
 }
@@ -10787,7 +10810,6 @@ window.addEventListener('keydown', (e) => {
     }
     // O, V still work normally during autopilot
     if (e.code === 'KeyO') toggleOrbits();
-    if (e.code === 'KeyV') toggleGravityWell();
     return;
   }
 
@@ -10820,8 +10842,6 @@ window.addEventListener('keydown', (e) => {
     }
   } else if (e.code === 'KeyO') {
     toggleOrbits();
-  } else if (e.code === 'KeyV') {
-    toggleGravityWell();
   } else if (e.key >= '1' && e.key <= '9') {
     const idx = parseInt(e.key) - 1;
     if (system && idx < system.planets.length) {
@@ -11729,9 +11749,6 @@ if (mobileControls) {
     } else if (action === 'orbits') {
       toggleOrbits();
       btn.classList.toggle('active', orbitsVisible);
-    } else if (action === 'gravity') {
-      toggleGravityWell();
-      btn.classList.toggle('active', gravityWellVisible);
     } else if (action === 'autonav') {
       if (autoNav.isActive) {
         stopFlythrough();
