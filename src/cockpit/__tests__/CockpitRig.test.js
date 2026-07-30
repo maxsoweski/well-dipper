@@ -69,9 +69,46 @@ describe('the boundary — what the rig owns', () => {
     expect(Object.isFrozen(key)).toBe(true);
   });
 
-  it('owns the glass placeholder, whose depthWrite is what stops the canopy hiding the screens', () => {
+  // ⭐ REWRITTEN 2026-07-30, NOT FLIPPED. This pinned `opacity ≈ 0.10`, and the
+  // reason was sound: the canopy was a placeholder alpha-blended OVER the world,
+  // so it had to be faint or it fogged the one thing the canopy exists to let
+  // you see through. That premise is spent. The glass is now ADDITIVE, which
+  // cannot fog anything — it adds light where lit and nothing where it is not —
+  // so the dimming moved to `glare.color` and `opacity` became a master
+  // brightness whose correct value is 1. Pinning 0.10 now would be pinning a
+  // number whose meaning changed underneath it.
+  //
+  // ⚠ `depthWrite: false` IS THE CLAUSE THAT DID NOT CHANGE and the one the
+  // original title was really about: a canopy that writes depth can occlude the
+  // four screens, which looks plausible and raises no error.
+  it('owns the glass, whose depthWrite is what stops the canopy hiding the screens', () => {
     expect(DEFAULT_GLASS.depthWrite).toBe(false);
-    expect(DEFAULT_GLASS.opacity).toBeCloseTo(0.10, 6);
+    expect(DEFAULT_GLASS.doubleSide).toBe(true);
+  });
+
+  it('the canopy ADDS light rather than blending over the world', () => {
+    expect(DEFAULT_GLASS.additive, 'alpha-blending the canopy fogs the view through it').toBe(true);
+    // Under additive blending three multiplies source by alpha before adding, so
+    // opacity is a master on the glare. Dimming belongs to ONE knob, and it is
+    // the colour — two multiplying knobs for one visible quantity is how a lab
+    // session ends up unable to say which one it just moved.
+    expect(DEFAULT_GLASS.opacity).toBe(1);
+    // The colour is the DIFFUSE albedo of the canopy's inner surface — see
+    // DEFAULT_GLASS for why this is a wash and not a specular glint, and for the
+    // measurement that killed the glint version. Under additive blending it is
+    // added straight onto the world behind, so it must be DIM: a bright value
+    // here is a canopy that whites out the thing it exists to let you see.
+    const c = DEFAULT_GLASS.glare.color;
+    expect(Number.isInteger(c)).toBe(true);
+    const [r, g, b] = [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+    expect(Math.max(r, g, b), 'glare F0 must stay dim or the canopy whites out').toBeLessThan(110);
+    expect(DEFAULT_GLASS.glare.roughness).toBeGreaterThan(0);
+    expect(DEFAULT_GLASS.glare.roughness).toBeLessThan(1);
+    // metalness 0 IS the feature, not a default that happens to be falsy: a
+    // metal has no diffuse term, so any value above 0 fades out the only
+    // component that reaches the pilot's eye from inside the canopy.
+    expect(DEFAULT_GLASS.glare.metalness).toBe(0);
+    expect(Object.isFrozen(DEFAULT_GLASS.glare)).toBe(true);
   });
 
   it('ships all four default painters from src/, so the game never reaches into a lab file', () => {

@@ -116,15 +116,76 @@ export const COCKPIT_TONE_MAPPING = THREE.ACESFilmicToneMapping;
 export const COCKPIT_TONE_EXPOSURE = 1.25;
 
 /**
- * The canopy glass placeholder treatment.
+ * The canopy glass treatment.
  *
- * Canopy_Glass is NOT real glass — screen-space refraction is a later increment —
- * and here it must not HIDE the four screens the cockpit exists to show. Faint,
- * and no depth write. ⚠ A host that skipped this gets a canopy that writes depth
- * and can occlude the panels: a first-light failure that looks plausible and
- * raises no error.
+ * ⭐ REWRITTEN 2026-07-30 — it was a 10%-alpha PLACEHOLDER and is now GLARE.
+ * Max's ask at program open was "a glass-like material that interacts with
+ * game-world light while preserving the retro style", and until the key light
+ * followed the system's star there was no game-world light for it to interact
+ * WITH. There is now, so the placeholder's premise is spent.
+ *
+ * ⭐ ADDITIVE, AND THAT IS THE WHOLE IDEA. The old treatment blended 10% of a
+ * lit surface OVER the world, which is a faint white fog across the one thing
+ * the canopy exists to let you see. Additive blending cannot fog anything: it
+ * ADDS light where the glass is lit and adds exactly nothing where it is not.
+ * So the view through the canopy gets *clearer* than before, and a facet
+ * catching the star flares.
+ *
+ * ⭐⭐ IT IS A DIFFUSE WASH, NOT A SPECULAR GLINT — and the first attempt got
+ * this exactly backwards, which is worth writing down because the wrong version
+ * is the intuitive one.
+ *
+ * That attempt used `metalness: 1` with a dim `color`, reasoning that a metal
+ * has no diffuse term so additive blending would add the SPECULAR lobe alone:
+ * pure glare. It rendered almost nothing, and the measurement said why. A
+ * specular highlight needs the reflection of the light to reach the eye — and
+ * the pilot is INSIDE the canopy while the star is OUTSIDE it. There is no
+ * geometry in which an external star reflects off the inner surface into the
+ * seat. That is a transmission problem wearing a reflection's clothes, and
+ * three's standard material does not do transmission.
+ *
+ * What a canopy ACTUALLY does from the seat is let the light through so it falls
+ * on the inside. Measured on the real mesh: all 20 `Canopy_Glass` triangles have
+ * their normals pointing INWARD, at the pilot. So a diffuse term with
+ * `metalness: 0` lights each pane by how squarely the star faces its inner
+ * surface — which means a star off the STARBOARD beam lights the PORT panes,
+ * exactly as sunlight through a window falls on the far wall. Heading-dependent,
+ * legible, and right for the reason rather than by luck.
+ *
+ * `Canopy_Glass` is a FACETED shell (see `scripts/cockpit-gen.py`), so the wash
+ * arrives pane by pane as the star sweeps rather than sliding across one smooth
+ * sheet — cut panes, which is the cassette-futurism reading rather than a
+ * compromise. The pane you look straight through stays clear, because its inner
+ * normal faces you and not the star.
+ *
+ * `glare.metalness` is kept as a knob rather than hard-zeroed: turning it up
+ * trades the wash for the 4%-F0 glint, and that is a taste call for the lab.
+ *
+ * ⚠ `depthWrite: false` STILL DOES THE ORIGINAL JOB and must not be dropped: a
+ * canopy that writes depth can occlude the four screens, which is a first-light
+ * failure that looks plausible and raises no error.
+ *
+ * ⚠ `opacity` NO LONGER MEANS "faint". Under additive blending three multiplies
+ * the source by its alpha before adding, so opacity is now a master brightness
+ * on the glare — and 1 is correct, because the DIMMING is `glare.color`'s job.
+ * Two multiplying knobs for one visible quantity is how a lab session ends up
+ * unable to say which one it just moved.
+ *
+ * Set `additive: false` to get the old alpha-blended placeholder back in one
+ * flag; refraction (increment 3) remains unbuilt and is a different thing again.
  */
-export const DEFAULT_GLASS = Object.freeze({ opacity: 0.10, depthWrite: false, doubleSide: true });
+export const DEFAULT_GLASS = Object.freeze({
+  opacity: 1,
+  depthWrite: false,
+  doubleSide: true,
+  additive: true,
+  // NEUTRAL GREY, deliberately. The tint is the STAR's job — an M dwarf should
+  // wash the cabin amber and an O star blue-white — and a tinted albedo here
+  // multiplies against that, leaving neither legible. 0x4a4a4a is 0.29 as a
+  // level, which is what the lab's GLASS GLOW slider opens on, so the two hosts
+  // agree by construction rather than by two numbers typed beside each other.
+  glare: Object.freeze({ color: 0x4a4a4a, roughness: 0.22, metalness: 0 }),
+});
 
 /**
  * Key + fill, angled from ahead/above/port so they rake the outward-facing
@@ -394,13 +455,54 @@ export class CockpitRig {
         }
       });
     }
+    this._applyGlass();
+  }
+
+  /**
+   * Push the current glass treatment onto every material the census found.
+   *
+   * Split out of `_censusAndGlass` so `setGlass` can re-run it against a live
+   * model — the lab tunes this by eye, and rebuilding the rig to move a slider
+   * would lose the panel state and the nav computer with it.
+   */
+  _applyGlass() {
+    const g = this._glass;
+    if (!g) return;
     for (const m of this.glassMats) {
       m.transparent = true;
-      m.opacity = this._glass.opacity;
-      m.depthWrite = this._glass.depthWrite;
-      if (this._glass.doubleSide) m.side = THREE.DoubleSide;
+      m.opacity = g.opacity;
+      m.depthWrite = g.depthWrite;
+      if (g.doubleSide) m.side = THREE.DoubleSide;
+      m.blending = g.additive ? THREE.AdditiveBlending : THREE.NormalBlending;
+      // ⚠ GUARDED ON THE MATERIAL ACTUALLY HAVING THESE. GLTFLoader gives a
+      // MeshStandardMaterial for a glTF PBR material, which does — but a future
+      // re-author that hands the canopy a Basic or a custom ShaderMaterial would
+      // otherwise get silently ignored properties, and the glass would look
+      // untreated with nothing anywhere to say why.
+      if (g.glare && m.isMeshStandardMaterial) {
+        m.metalness = Number.isFinite(g.glare.metalness) ? g.glare.metalness : 0;
+        m.roughness = g.glare.roughness;
+        m.color.set(g.glare.color);
+      }
       m.needsUpdate = true;
     }
+  }
+
+  /**
+   * Re-tune the canopy on a live rig. Merges, so a caller may pass one field.
+   *
+   * `glare` merges one level deeper, because moving roughness without restating
+   * the colour is the single most common thing a lab session wants to do.
+   */
+  setGlass(next = {}) {
+    const prev = this._glass || {};
+    this._glass = {
+      ...prev,
+      ...next,
+      glare: (next.glare || prev.glare) ? { ...(prev.glare || {}), ...(next.glare || {}) } : null,
+    };
+    this._applyGlass();
+    return this._glass;
   }
 
   /**

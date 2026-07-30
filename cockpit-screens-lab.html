@@ -228,6 +228,31 @@
     </label>
     <button class="btn" id="bZoomFollow"><span id="bZoomFollowLabel">ZOOM: PARKED</span><span class="key">H</span></button>
 
+    <!-- 2026-07-30. THE SYNTHETIC STAR. The game aims the key light at the real
+         system star (`starLight.js`); the lab has no system, so without this the
+         two hosts run DIFFERENT lighting code and AC-ONE-RIG-TWO-HOSTS is
+         broken by omission rather than by a value. These sliders drive the SAME
+         `rig.setStarLight` the game calls, so the lab is the place to judge the
+         glare — instantly, instead of a 35 s boot per look. -->
+    <label class="slider">STAR AZIMUTH <span class="num" id="bStarAzLabel">0&deg;</span>
+      <input type="range" id="dStarAz" min="-180" max="180" step="1" value="0" />
+    </label>
+    <label class="slider">STAR ELEVATION <span class="num" id="bStarElLabel">15&deg;</span>
+      <input type="range" id="dStarEl" min="-89" max="89" step="1" value="15" />
+    </label>
+    <button class="btn" id="bStarSweep"><span id="bStarSweepLabel">STAR: PARKED</span><span class="key">J</span></button>
+    <label class="slider">GLASS GLOW <span class="num" id="bGlassGlareLabel">0.29</span>
+      <input type="range" id="dGlassGlare" min="0" max="1" step="0.01" value="0.29" />
+    </label>
+    <!-- GLINT, not roughness. At metalness 0 the canopy is a diffuse wash and
+         roughness only governs the 4%-F0 specular nobody can see, so a ROUGHNESS
+         slider would be a control that does almost nothing — which is worse than
+         no control, because a lab session spends its time wondering why. This
+         one trades the wash for the glint, which is the actual taste call. -->
+    <label class="slider">GLASS GLINT <span class="num" id="bGlassRoughLabel">0.00</span>
+      <input type="range" id="dGlassRough" min="0" max="1" step="0.01" value="0" />
+    </label>
+
     <div class="hint">
       EYE: camera at the model's Eye_Point,
       fov 70, letterboxed 16:9 — the framing
@@ -695,6 +720,12 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
       syncFromRig();
       if (model) frameOrbitCamera();
       applyGlass();
+      // The canopy treatment and the synthetic star both need a LOADED model —
+      // `glassMats` is empty until the census has run, and setStarLight has no
+      // key light to aim before `_addLights`. Applying them here rather than at
+      // wiring time is why the lab opens showing what the game shows.
+      applyLabGlass();
+      applyLabStar();
       if (chromeReady) updateZoomLabels();
       return { loaded: !rig.loadError, error: rig.loadError };
     });
@@ -1014,6 +1045,16 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
       dZoomTime: document.getElementById('dZoomTime'),
       bZoomFollow: document.getElementById('bZoomFollow'),
       bZoomFollowLabel: document.getElementById('bZoomFollowLabel'),
+      dStarAz: document.getElementById('dStarAz'),
+      bStarAzLabel: document.getElementById('bStarAzLabel'),
+      dStarEl: document.getElementById('dStarEl'),
+      bStarElLabel: document.getElementById('bStarElLabel'),
+      bStarSweep: document.getElementById('bStarSweep'),
+      bStarSweepLabel: document.getElementById('bStarSweepLabel'),
+      dGlassGlare: document.getElementById('dGlassGlare'),
+      bGlassGlareLabel: document.getElementById('bGlassGlareLabel'),
+      dGlassRough: document.getElementById('dGlassRough'),
+      bGlassRoughLabel: document.getElementById('bGlassRoughLabel'),
       bPlay: document.getElementById('bPlay'),
       scrub: document.getElementById('scrub'),
       tTime: document.getElementById('tTime'),
@@ -1141,6 +1182,87 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
       updateZoomLabels();
     };
 
+    // ── THE SYNTHETIC STAR, and why the lab needs one at all ────────────────
+    //
+    // The game aims the cockpit's key light at the system's real star, through
+    // `starDirInCockpit` and `rig.setStarLight`. The lab has no system and no
+    // star. Left alone it would keep the AUTHORED default direction forever —
+    // so the two hosts would render visibly different cabins while every
+    // AC-ONE-RIG-TWO-HOSTS assertion stayed green, because the divergence is an
+    // absent CALL rather than a different value. That is the boundary failure
+    // this program keeps naming, arriving by the one door the tests do not
+    // watch.
+    //
+    // So the lab drives the SAME setter with a star it makes up. Azimuth 0 is
+    // dead ahead through the canopy; +90 is off the starboard beam. Elevation
+    // is positive upward. This is also the fast way to judge the glare: a sweep
+    // here is instant, where the game costs ~35 s of boot and a warp per look.
+    const labStar = { azDeg: 0, elDeg: 15, sweeping: false, color: { r: 1.0, g: 0.96, b: 0.92 } };
+
+    function labStarDir() {
+      const az = labStar.azDeg * Math.PI / 180;
+      const elv = labStar.elDeg * Math.PI / 180;
+      // -Z is dead ahead, matching the cabin's own forward. Azimuth swings
+      // toward +X (starboard) so the slider reads the way the view does.
+      return new THREE.Vector3(
+        Math.sin(az) * Math.cos(elv),
+        Math.sin(elv),
+        -Math.cos(az) * Math.cos(elv),
+      );
+    }
+
+    function applyLabStar() {
+      if (!rig) return;
+      rig.setStarLight({ dir: labStarDir(), color: labStar.color });
+      if (!el.bStarAzLabel) return;
+      el.bStarAzLabel.textContent = `${labStar.azDeg}\u00B0`;
+      el.bStarElLabel.textContent = `${labStar.elDeg}\u00B0`;
+      el.bStarSweepLabel.textContent = labStar.sweeping ? 'STAR: SWEEPING' : 'STAR: PARKED';
+    }
+
+    el.dStarAz.addEventListener('input', () => {
+      labStar.azDeg = Number(el.dStarAz.value); labStar.sweeping = false; applyLabStar();
+    });
+    el.dStarEl.addEventListener('input', () => {
+      labStar.elDeg = Number(el.dStarEl.value); labStar.sweeping = false; applyLabStar();
+    });
+    el.bStarSweep.onclick = () => { labStar.sweeping = !labStar.sweeping; applyLabStar(); };
+
+    // Advanced from the render loop. A slow orbit is the only way to see what a
+    // FACETED canopy does — the flare moves from pane to pane rather than
+    // sliding, and a static slider position cannot show that.
+    function advanceLabStar(dtSec) {
+      if (!labStar.sweeping || !Number.isFinite(dtSec)) return;
+      labStar.azDeg = ((labStar.azDeg + dtSec * 24 + 180) % 360) - 180;
+      el.dStarAz.value = String(Math.round(labStar.azDeg));
+      applyLabStar();
+    }
+
+    // ── THE GLASS. One knob for how much it flares, one for how tight. ──────
+    // `glare` is a grey level fed to the material's F0 (see DEFAULT_GLASS); the
+    // colour is deliberately neutral here so the STAR's colour is what tints the
+    // canopy, rather than two tints multiplying and neither being legible.
+    // GLOW is the inner surface's albedo, expressed as a NEUTRAL grey on
+    // purpose: the tint is meant to come from the STAR, and two tints
+    // multiplying leaves neither of them legible on the slider that moved.
+    // 0.29 is DEFAULT_GLASS's own 0x2e3a4a read back as a level, so the lab
+    // opens on the shipped value rather than beside it.
+    const labGlass = { glow: 0.29, glint: 0 };
+    function applyLabGlass() {
+      if (!rig) return;
+      const v = Math.round(Math.max(0, Math.min(1, labGlass.glow)) * 255);
+      rig.setGlass({ glare: { color: (v << 16) | (v << 8) | v, metalness: labGlass.glint } });
+      if (!el.bGlassGlareLabel) return;
+      el.bGlassGlareLabel.textContent = labGlass.glow.toFixed(2);
+      el.bGlassRoughLabel.textContent = labGlass.glint.toFixed(2);
+    }
+    el.dGlassGlare.addEventListener('input', () => {
+      labGlass.glow = Number(el.dGlassGlare.value); applyLabGlass();
+    });
+    el.dGlassRough.addEventListener('input', () => {
+      labGlass.glint = Number(el.dGlassRough.value); applyLabGlass();
+    });
+
     function updateZoomLabels() {
       el.bZoomFillLabel.textContent = zoomView.fill.toFixed(2);
       el.bZoomTimeLabel.textContent = `${Math.round(zoomView.durationMs)} ms`;
@@ -1232,6 +1354,7 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
         case 'l': el.bCabin.onclick(); break;
         case 'r': recentre(); break;
         case 'h': el.bZoomFollow.onclick(); break;
+        case 'j': el.bStarSweep.onclick(); break;
         case 'v': setNavLevel(navLevel + (e.shiftKey ? -1 : 1)); break;
         // Nudge a paused frame one step at a time, for looking at a transition.
         case 'arrowleft': setPlaying(false); setTime(timeS - 0.25); break;
@@ -1563,6 +1686,7 @@ import { PanelPointerAdapter } from './src/cockpit/PanelPointer.js';
       // BEFORE the mover solves. Pinning after meant a head-locked zoom re-solved
       // against LAST frame's orientation and the panel trailed the head by one
       // frame of yaw — 40.5 px at 800 px/s of look, 143 px at 2800.
+      advanceLabStar(lastFrameMs == null ? 0 : dtSec);
       rig.update({ snapshot, nowMs, dtMs: lastFrameMs == null ? 16 : dtSec * 1000 });
       if (mover) {
         // Repaint the ZOOM button whenever the pair CHANGES — the old
