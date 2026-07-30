@@ -63,6 +63,47 @@ aligned. The raw captures are kept unmodified.
   larger, shallower basin holds more standing water — but it is the most eye-catching single difference
   and it is a judgement call, not something a test covers.
 
+## ⚠ CALIBRATION — and a correction to how this change was first described
+
+Max's read of the side-by-sides was "these look pretty much identical to me — intentional?" He was
+right, and the first description of this change (in the AC-PLATECOMP commit message and the handoff
+report) **oversold it**. Measured on the disc only, against a reseed of the same preset as the natural
+"how big is big" reference:
+
+| change | mean \|Δ\| on the disc | disc pixels moved >32 |
+|---|---|---|
+| composition, 7 → 6 plates (seed 7) | 17.0 / 255 | 17.8% |
+| composition, 10 → 9 plates (seed 1) | 9.8 / 255 | 4.6% |
+| **reseed** — same law, different macroSeed | **39.2–39.9 / 255** | **56.6–57.8%** |
+
+**The composition step yields ≈0.34× the visual difference of simply reseeding** (0.25× at seed 1).
+
+WHAT WAS WRONG IN THE ORIGINAL DESCRIPTION. "35–57% of U nodes move" was accurate about the **field**
+and misleading about the **render**. Plate `U` is one input among many: the rendered body is
+`baked×0.947 + synth×0.053` at Ocean's drawn radius, with the Stage-2 combiners (mountains, canyons,
+coastlines, deltas) layered on top, and ocean covers much of the disc where `U` differences submerge and
+read as flat blue. A large re-partition is therefore substantially masked. The render should have been
+measured before the change was characterised.
+
+WHAT IS GENUINELY INTENTIONAL. Removing one plate of seven is a small structural step. The macro seed
+still sets plate positions, continental fraction and base elevations. The planet is meant to keep its
+identity — coarser tectonic subdivision, not a different world. The diff maps confirm the change is
+STRUCTURAL rather than dither noise: at seed 7 the absorbed landmass appears as a bright rimmed blob and
+the mid-latitude belts light up.
+
+CONSEQUENCE FOR THE AC'S CLAIM. AC-PLATECOMP's stated payoff was "planets differentiating by
+composition rather than only by size." At a third of a reseed's signal — and 4.6% of pixels at seed 1 —
+**composition is not yet a legible differentiator.** The law is correct, declared and auditable; plate
+COUNT is simply a weak channel for legibility. The tempting fix (crank Ocean's authored `R_core/R` until
+the difference shows) is rejected: that tunes a physical datum to manufacture an appearance, the exact
+patch-on-top this workstream forbids. The right homes for "composition reads from space" are **AC-HYPSO**
+and **AC-PROVINCE** — the same gap already filed from the display-law session, where Rocky Earthlike
+reads as a uniform dry tan sphere at whole-disc distance.
+
+**Max's ruling, 2026-07-30:** shown this calibration, "ok to continue" — accepted as built with the
+modest payoff recorded rather than held open. Recorded as acceptance of this AC's visible change, not as
+a broader sign-off on surface legibility, which moves to AC-HYPSO / AC-PROVINCE.
+
 ## Cleanup owed
 
 `planet-lod-lab.BEFORE.html` is a temporary file at the repo root and **must be removed by exact name**
