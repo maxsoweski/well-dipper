@@ -49,7 +49,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, needsHandsOnRecenter, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed } from './flight/flightModes.js';
 import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
 import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR, firstBlockingObstacle, planLegObstacle, obstacleKeepOutRadius } from './flight/tourStandoff.js';
 import { createFreeLook } from './flight/freeLook.js';
@@ -2795,6 +2795,43 @@ function _releaseCockpitPress(clientX, clientY) {
 }
 
 /** Probe surface, mirroring the lab's. Read-only. */
+/**
+ * The PILOT'S HEAD, read from the mount itself. Added 2026-07-30 for the
+ * hands-on head lock.
+ *
+ * ⭐⭐ WHY THIS IS NOT "JUST LOOK AT THE COCKPIT". The cockpit camera is posed
+ * FROM `scHead.yaw/pitch` (`_poseCockpitCamera` → `cockpitEyeQuat`), so a probe
+ * that inspected the cockpit to learn the head's angle would be asking the
+ * camera about itself and could only ever return agreement. It would read
+ * perfect while the lock was completely broken. This lane has been bitten by an
+ * instrument that was its own control six times; `scHead` is the source.
+ *
+ * `handsOn` mirrors the frame loop's own gate exactly (`_scManual &&
+ * !freeLook.latched`) rather than re-deriving it, so a probe that says "locked"
+ * cannot disagree with the code that does the locking.
+ */
+window._head = () => ({
+  yaw: +(scHead.yaw * 180 / Math.PI).toFixed(3),      // degrees, 0 = nose-forward
+  pitch: +(scHead.pitch * 180 / Math.PI).toFixed(3),
+  centered: scHead.centered,
+  held: scHead.held,             // true while the middle-mouse peek is down
+  recentering: scHead.recentering, // true while easing home
+  handsOn: _scManual && !freeLook.latched,
+  tau: scHead.tuning.EXIT_RECENTER_TAU,
+});
+
+/**
+ * Dial the recenter speed live, so Max can find "fast but not jarring" by
+ * flying it instead of by me guessing. `window._headTau(0.06)` etc.; returns the
+ * value in force. Read the EXIT_RECENTER_TAU note in HeadMount before assuming a
+ * smaller number is the answer — if the complaint is the JOLT rather than the
+ * duration, the curve is wrong and no τ fixes it.
+ */
+window._headTau = (s) => {
+  if (Number.isFinite(s) && s > 0) scHead.tuning.EXIT_RECENTER_TAU = s;
+  return scHead.tuning.EXIT_RECENTER_TAU;
+};
+
 window._cockpit = () => (_cockpitRig ? {
   ready: _cockpitReady,
   loadError: _cockpitRig.loadError,
@@ -9243,6 +9280,23 @@ function simStep(deltaTime) {
       // for the bridge is the one-shot recenter on F-EXIT: consumeRecenter() →
       // scHead.beginRecenter() → update() eases yaw/pitch → 0 (EXIT_RECENTER_TAU).
       syncHeadToFreeLook(freeLook, scHead);
+      // ⭐ THE HANDS-ON HEAD LOCK (Max, 2026-07-30): with the stick in your hand
+      // the view is pinned to the cockpit's centre, and the middle-mouse peek is
+      // the only way off it. Asserted here as a per-frame invariant rather than
+      // trusted to the mouseup handler, because every path that can strand the
+      // head off-centre — F-exit mid-drag, a mode flip during a peek, flythrough
+      // clearing its own look state — bypasses that handler entirely. See
+      // `needsHandsOnRecenter` for why a silent failure here is invisible: the
+      // cockpit is posed FROM the head, so it just renders at the wrong angle.
+      // ⚠ MUST run BEFORE update() so the request is honoured this frame.
+      if (needsHandsOnRecenter({
+        handsOn: _scManual && !freeLook.latched,
+        held: scHead.held,
+        recentering: scHead.recentering,
+        centered: scHead.centered,
+      })) {
+        scHead.beginRecenter();
+      }
       scHead.update(deltaTime);
       scHead.applyTo(camera, scModel.position, scModel.orientation);
 

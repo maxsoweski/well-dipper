@@ -100,6 +100,40 @@ export function headReleaseAction({ freeLookLatched } = {}) {
   return freeLookLatched ? 'hold' : 'recenter';
 }
 
+// ⭐ THE HANDS-ON HEAD LOCK. Max, 2026-07-30, on flying with a cockpit around
+// you: *"when we have the 'stick' our view should be locked to the center of the
+// cockpit"* — and, on the peek surviving, *"so long as middle mouse release =
+// snap back to central view angle."*
+//
+// ⚠ WHY THIS EXISTS WHEN `headReleaseAction` ALREADY SAYS 'recenter'. That one
+// answers a QUESTION the mouseup handler asks; this asserts an INVARIANT the
+// frame loop enforces. The difference matters because "recenter on release" only
+// holds for the one path that remembers to ask. The head can be left parked
+// off-centre by any route that never sees a middle-mouse release — exiting
+// free-look while still dragging, a mode flip mid-peek, a flythrough clearing
+// its own look state, or any future caller of `beginLook`. Each of those is a
+// silent failure: the cockpit is posed FROM the head, so it simply renders at
+// the wrong angle with nothing anywhere to say why, and "locked" quietly means
+// "usually centred".
+//
+// So the lock is stated positively and checked every frame: in hands-on, either
+// you are actively peeking, or you are on your way home, or you are home.
+//
+// ⚠ `centered` IS PASSED IN, NOT COMPUTED FROM AN ANGLE THRESHOLD HERE. The head
+// snaps exactly to 0 at `SNAP_EPS`, so `HeadMount.centered` is the authority;
+// re-deriving it against a second epsilon is how the ease and the lock end up
+// disagreeing about whether the return has finished and the recenter re-arms
+// forever, one frame on, one frame off.
+//
+// Pure so the invariant is testable without a camera, a canvas, or a ship.
+// Returns true when the caller should fire `beginRecenter()`.
+export function needsHandsOnRecenter({ handsOn, held, recentering, centered } = {}) {
+  if (!handsOn) return false;   // free-look is SUPPOSED to leave centre — that is how you aim at a panel
+  if (held) return false;       // the peek is the one sanctioned way off-centre
+  if (recentering) return false; // already on the way home; re-requesting would restart the ease
+  return !centered;
+}
+
 // True when the player is actively steering/throttling — cancels a Mode-B align
 // and disengages a Mode-C hold. `stick` is the deadzone-shaped {x,y} (0 inside
 // deadzone), `throttleDir` is -1|0|1 from W/S.
