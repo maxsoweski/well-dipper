@@ -1,40 +1,78 @@
 # Profiles Card — per-type feature validation (Phase 6)
 
-For each Appendix-A type: load/author its lab preset (driver bundle), render on
-:9223, check expected features PRESENT and wrong features ABSENT, sanity-check
-deriveUniforms() driver values, screenshot to shots/PRO-<type>-NN.png, verdict.
-Regression net: npx vitest run tests/planet-archetypes.test.js after any
-registry/preset change. Types are presets over drivers (Appendix A) — a profile
-failure is usually a DRIVER WIRING bug, not a feature bug.
+For each Appendix-A type: load its lab preset (driver bundle), render, check expected features
+PRESENT and wrong features ABSENT, sanity-check derived driver values, verdict.
+Regression net: `npx vitest run tests/planet-archetypes.test.js` after any registry/preset change.
+Types are presets over drivers (Appendix A) — a profile failure is usually a DRIVER WIRING bug, not
+a feature bug.
 
-| Type | Lab preset | Must show | Must NOT show | Verdict |
-|---|---|---|---|---|
-| rocky | Rocky (Earthlike) — verify driver fit, else author "Rocky (airless Mars-like)" | F1 F2 F3 F5 F8 F19 F40(dust) | clouds, rivers, glow | (pending) |
-| terrestrial | Rocky (Earthlike) | F11 F12 F14 F17 F22 F26 F31a F34 F35 F37 (richest) | magma, carbon flats | (pending) |
-| ocean | Ocean (temperate) | F14 F20 F36 F31a F34, low relief | mountain belts, dust storms | (pending) |
-| ice | Europa (icy moon) | F2 F9 F10 F17 F18 F22 | liquid-water seas, lava | (pending) |
-| lava | Lava (hot airless) | F8 F41, emissive cracks | frost, clouds, rivers | (pending) |
-| venus | AUTHOR in Phase 6 | F31d blanket, F7 pancake, F29 polar vortex, F25 | visible surface relief through clouds, city lights | (pending) |
-| carbon | AUTHOR in Phase 6 | F42 dark crust + diamond glints, hydrocarbon flats | water oceans, green biome tints | (pending) |
-| gas-giant | AUTHOR in Phase 6 | F24 F25 F27 F28 F29 F30 | any solid-surface feature | (pending) |
-| hot-jupiter | AUTHOR in Phase 6 | F32 F33 F24 (thermal day/night asymmetry) | frost, surface relief | (pending) |
-| eyeball | AUTHOR in Phase 6 | F31f pupil+ring, F22 nightside cap + terminator melt ring | uniform global weather | (pending) |
-| sub-neptune | AUTHOR in Phase 6 | F31c featureless haze (F31e shells if built) | crisp bands, surface detail | (pending) |
-| hex | AUTHOR in Phase 6 | F44 tiling, F29 hexagon hook | natural fluvial/aeolian forms | (pending) |
-| shattered | AUTHOR in Phase 6 | F45 fracture blocks, F9 | intact smooth plains everywhere | (pending) |
-| crystal | AUTHOR in Phase 6 | F43 facet fields, F3 glints | weather stack | (pending) |
-| fungal | AUTHOR in Phase 6 | F46 mats OVER terrestrial/ocean base (base shows through) | overlay erasing base entirely | (pending) |
-| machine | AUTHOR in Phase 6 | F47 circuit grid OVER rocky base | natural-only surface | (pending) |
-| city-lights | AUTHOR in Phase 6 | F48 nightside cities over terrestrial base | dayside light leakage | (pending) |
-| ecumenopolis | AUTHOR in Phase 6 | F49 whole-surface build-out + glow | raw wilderness patches (unless intended) | (pending) |
+## Pass of 2026-07-30 (12 of 18 rows walked)
 
-Notes:
-- "AUTHOR in Phase 6" = add a named preset (driver bundle) to the lab presets +
-  archetype mapping if missing; presets are data (planet-archetypes.js + lab
-  preset list), keep DATA ONLY per that file's header rule.
-- Appendix-B cross-check: after all rows verdicted, re-read the coverage matrix
-  and confirm no ●/◐ cell contradicts a verdict (e.g. "gas × F-relief = –"
-  must mean gas presets show zero relief).
+**⚠ Read this before trusting any verdict below.**
+
+**The instrument.** Presence is measured by an **A/B pixel diff against the feature's own enable
+key**: toggle `state.<enableKey>` on/off, capture the canvas twice, count pixels differing by >2/255
+in any channel, report the fraction of frame. `PRESENT` = >0.05% of frame changes. This is the
+"A/B against the dial" method — the picture alone is not evidence.
+
+**⛔ Do NOT use `_lab.featureVisible()` for this.** It is `!featureFolders[key]._hidden` — it reports
+whether the **GUI folder** is showing, not whether the feature renders. It returns `true` for
+`craters` and `rivers` on a **gas giant**. An earlier run of this pass used it and scored 12/12; that
+result was an artifact of the wrong instrument and was discarded.
+
+**Instrument limits, stated so nobody reads past them.** A feature that needs a bake/route step, or a
+specific sun/camera geometry, can read `INERT` without being broken. Framing is per-preset: `distance`
+is NOT normalised by radius (Earthlike frames at ~2.1, Jovian needs ~6.5). Screenshots were taken for
+Rocky, Titan, Jovian only — not the full `shots/PRO-<type>-NN.png` set the card originally asked for.
+
+| Type | Lab preset | Must show | Verdict (2026-07-30) |
+|---|---|---|---|
+| rocky | Mars (arid rocky) | F1 F2 F3 F5 F8 F19 F40 | **PASS w/ notes** — F1 .11, F2 .017, F3 .065, F5 .069, F40 .028. F8 lava INERT (`lavaEnabled:false` by dressing — correct for Mars, extinct volcanism; the row's F8 was written for a generic rocky type). F19 mass-wasting INERT (.00006). |
+| terrestrial | Rocky (Earthlike) | F11 F12 F14 F17 F26 F31 F34 F35 F37 | **PASS w/ 1 OPEN** — F14 .011, F26 .128, F31 .0017, F34 .074, F37 .00095. **OPEN: F11 rivers + F12 deltas INERT (.00014/.00015) while drivers derive `fluvialActivity 1.0`, `fluvialDensity 0.578`** — drivers live, pixels don't move. F17 glacial INERT and that is CORRECT: the seed-1 draw is **T_eq 313.9 K (41 °C)**, no ice. F35 terminator INERT — **Max disabled F35 outright 2026-07-16**, expected. |
+| ocean | Ocean (temperate) | F14 F20 F36 F31 F34 | **PASS w/ notes** — F14 .187, F20 .050, F31 .0019, F34 .077. F36 sunglint INERT (.00023) — a specular glint needs the sun in the mirror direction; **not verified either way**, the test geometry probably cannot show it. |
+| ice | Europa (icy moon) | F2 F9 F10 F17 F18 | **PASS** — F9 .094, F10 .112, F17 .117, F18 .047. F2 craters INERT and that is CORRECT: `craterDensity 1.4e-6` on a young resurfaced shell (resurfacingRate 0.6). The condition-derived crater gate is doing its job. |
+| lava | Lava (hot airless) | F8 F41 | **PASS** — F8 .066, F41 .031. |
+| venus | Venus (sulfuric shroud) | F31 F7 F29 F25 | **PASS** — F31 .335 (the blanket dominates the frame, as intended), F7 .062, F29 .054, F25 .055. |
+| carbon | Carbon (high C/O) | F42 | **PASS** — F42 .125. |
+| gas-giant | Gas giant (Jovian) | F24 F25 F27 F28 F29 F30 | **PASS w/ notes** — F24 1.000 (whole-globe), F25 .053, F27 .127. **F28 .0026, F29 .0028, F30 .0028 are PRESENT but FAINT** — barely over the 0.0005 floor. Screenshot reads decently: zonal bands, great spot, secondary storm, polar shading. |
+| hot-jupiter | Hot Jupiter (locked giant) | F32 F33 F24 | **PASS** — all three 1.000 (whole-globe thermal + bands). |
+| eyeball | Eyeball (locked temperate) | F31 (F22) | **PASS** — F31 .030. **F22 DOES NOT EXIST** in the FEATURES registry (see doc bug below). |
+| sub-neptune | Sub-Neptune (hazy) | F31 | **PASS** — F31 .171. |
+| crystal | Crystal (faceted) | F43 F3 | **PASS** — F43 .021, F3 .0069. |
+| hex | — none — | F44 | **BLOCKED — no preset, no archetype.** |
+| shattered | — none — | F45 F9 | **BLOCKED — no preset, no archetype.** |
+| fungal | — none — | F46 | **BLOCKED — no preset, no archetype.** |
+| machine | — none — | F47 | **BLOCKED — no preset, no archetype.** |
+| city-lights | — none — | F48 | **BLOCKED — no preset, no archetype.** |
+| ecumenopolis | — none — | F49 | **BLOCKED — no preset, no archetype.** |
+
+## Corrections to prior claims about this card
+
+- **"AUTHOR in Phase 6" was stale, but "all 18 presets now exist" was ALSO misleading.**
+  `DRIVER_PRESETS` does have 18 entries — but the PROFILES **type** list and the `PRESET_ARCHETYPE`
+  list are different lists that drifted apart. 12 rows are walkable; **6 have no preset at all** and
+  need F44–F49 built first. Those 6 are exotic/artificial types, not "common types", so they are not
+  the gate.
+- **3 presets are absent from `PRESET_ARCHETYPE`** (15 mapped of 18): `Mars (arid rocky)`,
+  `Moon/Mercury (impact-airless)`, `Hot Jupiter (locked giant)`. Walkable by preset name only.
+- **2 archetypes have no PROFILES row:** `volatile` (Titan) and `stagnant-lid` (Venus — the `venus`
+  row reaches it by preset name).
+- **Doc bug: F22 is referenced by the terrestrial, ice and eyeball rows but no feature is labelled
+  `(F22)`** anywhere in the registry. Either the ID is wrong in this card or the feature was never
+  built.
+
+## Open items ranked
+
+1. **F11 rivers / F12 deltas on terrestrial** — the only finding where derived drivers are healthy
+   (`fluvialDensity 0.578`) and the render does not move. Rivers are a separate overlay mesh
+   (`setRiverOverlay` / `createRiverOverlay`), so `riversEnabled` may gate only the shader term while
+   the visible ribbons come from the overlay — i.e. possibly an instrument limit, possibly a real
+   disconnect. **Not yet diagnosed; do not assume either way.**
+2. **F28/F29/F30 faint on Jovian** (~0.3% of frame) — check whether that is intended subtlety.
+3. **F36 sunglint** — needs a sun/camera geometry that can actually produce a specular glint.
+4. The 6 BLOCKED rows — each needs a preset authored AND its F44–F49 feature built.
 
 ## 7. Verdict + tweak log
-(pending)
+2026-07-30 — first real pass. 12 rows walked, 10 PASS / 2 PASS-with-open-item, 6 BLOCKED. One
+methodology correction recorded above (`featureVisible` is not a render probe). No code changed by
+this pass; it is measurement only.
