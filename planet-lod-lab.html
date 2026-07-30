@@ -172,7 +172,7 @@
     import { presetDriverDefaults, buildNeutralBodyDrivers } from './body-drivers.js';   // V2-0 Slice A: neutral (no-slider-override) driver construction the lab overlays overrides on (presetDriverDefaults also used by resetDriverOverrides)
     import { deriveConditionVector } from './body-condition-vector.js';   // V2-0 Slice C: pure _fp→condition vector, attached NESTED as bodyDrivers.condition (shadow-mode; V2-1 E1 read surface; SAME derive the headless AC1 harness uses)
     import { computeE1 } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment).
-    import { icenessOf, surfacePaletteOf } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3: condition-derived icy-material fraction → drives uIcenessMix (Stage-6 albedo). Pure scalar, imports nothing. · surfacePaletteOf: condition-derived GROUND PALETTE {fresh, weathered, sediment} → drives uFreshColor/uBaseColor/uSedColor (was a single hard-coded rocky tone for all 18 presets, uniform across every world's whole surface).
+    import { icenessOf, surfacePaletteOf, biosphereOf, BIO_PIGMENT } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3: condition-derived icy-material fraction → drives uIcenessMix (Stage-6 albedo). Pure scalar, imports nothing. · surfacePaletteOf: condition-derived GROUND PALETTE {fresh, weathered, sediment} → drives uFreshColor/uBaseColor/uSedColor (was a single hard-coded rocky tone for all 18 presets, uniform across every world's whole surface).
     import { craterSchedule, craterRelevanceOf, D_D_SIMPLE } from './src/worldengine/base/bombardment.js';   // inc3b S3-fix: schedule-derived single crater law (sub-floor texture band) + the condition-derived crater/ejecta relevance gate (replaces the preset-name featureRelevant.craters lookup). e1-blind, pure.
     import { radPerKm } from './src/worldengine/base/baseStep.js';   // inc3b S3-fix: km→angular scalar for the normalized crater-depth law (uCraterAmp = D_D_SIMPLE·radPerKm(R)·D_char). Pure.
     import { assessProvinceAssociation, provinceStats, classProportions } from './src/worldengine/base/province.js';   // V2-4 slice-4: the province honesty instrument (read-only) for _lab.provinceProbe()
@@ -656,6 +656,9 @@
         const float TERRAIN_ELEV_LO    = -0.35;  // field units — below this the ground reads as basin floor
         const float TERRAIN_ELEV_HI    =  0.05;  // above this no sediment fill at all (a flat CREST is stripped,
                                                  // not filled). CALIBRATED LIVE against the real height spread.
+        const float VEG_ELEV_LO        = -0.10;  // treeline: cover is full at/below this accumulated-relief height
+        const float VEG_ELEV_HI        =  0.55;  // and gone at/above it. Wide band — a treeline is gradual.
+        const float VEG_BASIN_RICH     =  1.35;  // basins carry ~35% denser cover than shield interiors (water)
         float terrSteep   = clamp((1.0 - dot(shadeN, N)) * TERRAIN_SLOPE_GAIN, 0.0, 1.0);
         float terrLow     = 1.0 - smoothstep(TERRAIN_ELEV_LO, TERRAIN_ELEV_HI, surfElev);
         float terrLowFlat = (1.0 - terrSteep) * terrLow;
@@ -677,13 +680,35 @@
         vec3 groundCol = uBaseColor;
         vec4 provS = sampleProvince(vObjN);
         float provSum = provS.r + provS.g + provS.b;
-        if (provSum > 0.001 && uProvinceColorMix > 0.0) {
+        float provBasin = 0.0;   // hoisted: the biosphere term below reads it (basins hold the water)
+        if (provSum > 0.001) {
           vec3 pw = provS.rgb / provSum;                         // renormalize: interpolation is not partition-safe
-          vec3 provCol = pw.r * uCratonColor + pw.g * uFreshColor + pw.b * uSedColor;
-          groundCol = mix(groundCol, provCol, uProvinceColorMix * clamp(provSum, 0.0, 1.0));
+          provBasin = pw.b;
+          if (uProvinceColorMix > 0.0) {
+            vec3 provCol = pw.r * uCratonColor + pw.g * uFreshColor + pw.b * uSedColor;
+            groundCol = mix(groundCol, provCol, uProvinceColorMix * clamp(provSum, 0.0, 1.0));
+          }
         }
         groundCol = mix(groundCol, uFreshColor, terrSteep   * uTerrainAlbedoMix);
         groundCol = mix(groundCol, uSedColor,   terrLowFlat * uTerrainAlbedoMix);
+        // ── Biosphere ground cover. uBioGroundCover = biosphereOf(cond) — the condition-derived photosynthetic
+        // cover fraction (liquid water × atmosphere × volatiles × time × not-frozen), NOT the preset's authored
+        // authored habitability field (see the law's note on why). Distinct from F46 fungal mats, an EMISSIVE
+        // NIGHTSIDE effect on a lab knob; this is a daylight surface albedo.
+        // Applied AFTER province and terrain (it grows on whatever crust is there) but BEFORE the liquid mix and
+        // the ice/frost overlays, so open water covers it and a seasonal frost cap still wins on top of it.
+        // Three terrain modulations, all real:
+        //   (1 − terrSteep)  — a steep face sheds soil faster than it forms; scarps stay bare rock.
+        //   elevation        — a treeline: cover thins out with altitude.
+        //   basin enrichment — water collects in the sinks, so basins carry denser cover than shield interiors.
+        // Vegetation is DARKER than the rock it grows on (canopy albedo ~0.15–0.25), so a living world's disc
+        // gets darker, not brighter — the opposite of what "add a green tint" would do.
+        if (uBioGroundCover > 0.0) {
+          float vegElev = 1.0 - smoothstep(VEG_ELEV_LO, VEG_ELEV_HI, surfElev);
+          float vegWet  = mix(1.0, VEG_BASIN_RICH, clamp(provBasin, 0.0, 1.0));
+          float veg = clamp(uBioGroundCover * (1.0 - terrSteep) * vegElev * vegWet, 0.0, 1.0);
+          groundCol = mix(groundCol, uBioGroundColor, veg);
+        }
         vec3 albedoCol = mix(groundCol, liquidCol, liquidMask);
         // ── V2-6 S3 iceness material (BUILD-PLAN §1E) — an icy body's BASE ground reads as ice (bluish-white),
         // not rock-brown. Condition-derived (uIcenessMix = icenessOf(cond), driven in applyDrivers); pre-posterize
@@ -2497,7 +2522,8 @@
       frostAlbedo: [0.93,0.94,0.96],
       frostLocked: 0,
       iceness: 0,   // V2-6 S3: condition-derived icy-material fraction (icenessOf(cond)); frame() syncs → uIcenessMix
-      surfacePalette: null,   // condition-derived ground endmembers {fresh, weathered, sediment} (surfacePaletteOf(cond)); frame() syncs → uFreshColor/uBaseColor/uSedColor. null ⇒ the uniforms keep their factory default (pre-applyDrivers boot frames).
+      biosphere: 0,   // condition-derived photosynthetic ground-cover fraction (biosphereOf(cond)); frame() syncs → uBioGroundCover
+            surfacePalette: null,   // condition-derived ground endmembers {fresh, weathered, sediment} (surfacePaletteOf(cond)); frame() syncs → uFreshColor/uBaseColor/uSedColor. null ⇒ the uniforms keep their factory default (pre-applyDrivers boot frames).
       tempEq: 280.0,
       frostLatChill: 0.35,
       frostLapseRate: 0.3,
@@ -3953,6 +3979,9 @@
       const _bodyDrivers = buildBodyDrivers(_u, _fp);
       state._lastBodyDrivers = _bodyDrivers;   // surfaced by _lab.plateProbe() (the values that reached the writer)
       state.iceness = icenessOf(_bodyDrivers.condition);   // V2-6 S3: drive the Stage-6 iceness albedo from the SAME condition vector the writer reads (frame() syncs → uIcenessMix)
+      // Biosphere ground cover, SAME derived-state idiom. Condition-derived (NOT the preset's authored
+      // `habitability` field — see biosphereOf's note), so it inherits the per-seed condition draw for free.
+      state.biosphere = biosphereOf(_bodyDrivers.condition);   // frame() syncs → uBioGroundCover
       // Ground palette, SAME derived-state idiom as state.iceness above. The condition vector picks the three
       // ground endmembers; the shader's Stage 6 picks between them per pixel on local slope + elevation. Replaces
       // the single hard-coded rocky tone that every world and every point on every world used to share.
@@ -3990,6 +4019,7 @@
         weathered: _gain(_rawPalette.weathered),
         craton:    _gain(_rawPalette.craton),
         sediment:  _gain(_rawPalette.sediment),
+        pigment:   _gain(BIO_PIGMENT),
       };
       // ── inc3b S3-fix: schedule-derived SINGLE crater law (the sub-floor crater-texture band, rendered
       // analytically in-shader so it is resolution-independent — bypassing the mesh + bake the diagnosis
@@ -6593,12 +6623,17 @@
       uniforms.uFrostLatitudeBias.value  = state.frostLatitudeBias;
       uniforms.uFrostAlbedo.value.setRGB(state.frostAlbedo[0], state.frostAlbedo[1], state.frostAlbedo[2]);
       uniforms.uIcenessMix.value         = state.iceness;   // V2-6 S3: condition-derived icy-material albedo mix (Stage-6, pre-frost)
+      uniforms.uBioGroundCover.value = state.biosphere ?? 0.0;   // condition-derived photosynthetic ground cover
       if (state.surfacePalette) {   // condition-derived ground palette (was one constant rocky tone everywhere)
         const _sp = state.surfacePalette;
         uniforms.uBaseColor.value.setRGB(_sp.weathered[0], _sp.weathered[1], _sp.weathered[2]);
         uniforms.uFreshColor.value.setRGB(_sp.fresh[0],    _sp.fresh[1],    _sp.fresh[2]);
         uniforms.uSedColor.value.setRGB(_sp.sediment[0],   _sp.sediment[1], _sp.sediment[2]);
         uniforms.uCratonColor.value.setRGB(_sp.craton[0],  _sp.craton[1],   _sp.craton[2]);
+        // Canopy albedo rides the SAME display transfer as the ground endmembers — it is a surface albedo
+        // feeding the same lighting, so exposing it differently would break the darker-than-rock relationship
+        // that makes a living world's disc read correctly. Sourced from BIO_PIGMENT so the value has one home.
+        if (_sp.pigment) uniforms.uBioGroundColor.value.setRGB(_sp.pigment[0], _sp.pigment[1], _sp.pigment[2]);
       }
       uniforms.uPlanetTempEq.value       = state.tempEq;
       uniforms.uFrostLocked.value        = state.frostLocked;

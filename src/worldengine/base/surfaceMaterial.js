@@ -117,6 +117,59 @@ export function crystallizationPotential(cond, schedule) {
   return clamp01(airlessness * (1 - erosion) * (1 - resurf) * (1 - bombard));
 }
 
+// ── biosphere priors (photosynthetic surface cover) ───────────────────────────────────────────────────────────
+//    A world with a biosphere does not look like bare rock, and until now every world here did. This derives the
+//    COVERAGE of a photosynthetic ground cover from condition scalars, the same way every other surface property
+//    in this module is derived.
+//
+//    ⚠ NOT keyed on the preset's `habitability` field, deliberately. That field is an AUTHORED per-preset constant
+//    (Rocky 0.7, Ocean 0.9, ...), so keying on it would (a) smuggle an authored number into a physics-derived
+//    chain and (b) make vegetation seed-INVARIANT, undoing the per-seed condition draw. PhysicsEngine's
+//    habitabilityScore() derives the same idea from drivers, but it is not on the condition vector; these are the
+//    same underlying requirements restated from the scalars actually in hand.
+//
+//    Life as we can currently reason about it needs, all at once: liquid water, an atmosphere to keep it liquid,
+//    a volatile budget to supply it, and time to establish and spread. Any one of them missing ⇒ 0.
+export const BIO_P_LO      = 0.05;  // bar — below this no atmosphere worth the name, so no stable surface liquid
+export const BIO_P_HI      = 0.4;   // bar — at/above this the pressure requirement is satisfied
+export const BIO_VOL_LO    = 0.05;  // volatile fraction — a dry world has no water to build a biosphere from
+export const BIO_VOL_HI    = 0.20;
+export const BIO_AGE_LO    = 0.5;   // Ga — establishment time; a freshly-formed crust has no spread biosphere yet
+export const BIO_AGE_HI    = 2.0;   // Ga — by here the requirement saturates
+export const BIO_T_FREEZE  = 258;   // K — biological activity falls off below this (a little under water's 273:
+export const BIO_T_WARM    = 288;   // K   brines and cold-adapted life push past the pure-water point)
+export const BIO_T_HOT     = 333;   // K — upper comfortable band edge
+export const BIO_T_LIMIT   = 395;   // K — hyperthermophile ceiling; above this no surface cover
+
+// Chlorophyll-analogue ground cover: DARK and strongly green-shifted. Real vegetation canopy albedo is only
+// ~0.15-0.25 in the visible — a forest is darker than the rock it grows on, which is why adding a biosphere
+// should DARKEN a world's disc, not brighten it.
+// NON-GOAL, recorded rather than silently assumed: pigment colour is held fixed. Real photosynthetic pigments
+// track the host star's spectrum (an M-dwarf world plausibly runs darker / IR-shunted rather than green), and
+// the condition vector does carry starMassEarth, so this is derivable later. It is not derived here because
+// picking that mapping needs calibration work this MVP has not done, and an uncalibrated guess would look
+// arbitrary while claiming to be physical.
+export const BIO_PIGMENT   = [0.10, 0.16, 0.06];
+
+// biosphereOf(cond) — continuous [0,1] photosynthetic surface-cover fraction from condition scalars only.
+// No label / archetype / regime read; no RNG.
+export function biosphereOf(cond) {
+  const P   = cond?.atmosphere?.pressure ?? 0;
+  const vf  = cond?.composition?.volatileFraction ?? 0;
+  const T   = cond?.T_eq ?? 288;
+  const age = cond?.age ?? AGE_OX_REF;
+
+  const air     = smoothstep(BIO_P_LO, BIO_P_HI, P);
+  const water   = smoothstep(BIO_VOL_LO, BIO_VOL_HI, vf);
+  const settled = smoothstep(BIO_AGE_LO, BIO_AGE_HI, age);
+  // Temperature band: a plateau between BIO_T_WARM and BIO_T_HOT, falling off to zero at both limits.
+  const warm    = smoothstep(BIO_T_FREEZE, BIO_T_WARM, T) * (1 - smoothstep(BIO_T_HOT, BIO_T_LIMIT, T));
+  // A frozen-over surface has no exposed ground to cover, however habitable the bulk conditions read.
+  const unfrozen = 1 - icenessOf(cond);
+
+  return clamp01(air * water * settled * warm * unfrozen);
+}
+
 // ── surface-albedo priors (the BASE GROUND COLOUR law) ────────────────────────────────────────────────────────
 //    Before this, the render used ONE hard-coded `uBaseColor` rocky tone (0.46,0.40,0.34) for all 18 presets —
 //    Mars, the Moon, Venus and a carbon world all stood on the same brown. Every other colour in the pipeline is

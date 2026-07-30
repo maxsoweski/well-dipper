@@ -169,6 +169,8 @@ export const HEIGHT_GLSL = /* glsl */ `
       uniform samplerCube uProvinceCube;
       uniform vec3  uCratonColor;        // ancient stable shield — deeply weathered, erosion-unrefreshed
       uniform float uProvinceColorMix;   // 0..1 dial; 0 ⇒ province ignored (pre-province behaviour)
+      uniform float uBioGroundCover;     // 0..1 condition-derived photosynthetic surface-cover fraction
+      uniform vec3  uBioGroundColor;     // chlorophyll-analogue canopy albedo (DARK — a forest is darker than rock)
       vec4 sampleProvince(vec3 dir){ return textureCube(uProvinceCube, normalize(dir)); }
       vec3 sampleGrainStrike(vec3 dir){
         vec3 d = normalize(dir);

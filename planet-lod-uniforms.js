@@ -139,6 +139,10 @@ export function makeUniforms(WORLD_LIGHT) {
       // surface and province says how each region DEVIATES from it, so a partial mix is what expresses the
       // model correctly.
       uProvinceColorMix: { value: 0.65 },
+      // Biosphere ground cover (daylight surface albedo). DISTINCT from the F46 uBio* family above, which is
+      // an emissive nightside fungal mat on a lab knob. 0 ⇒ bare rock (every pre-biosphere world).
+      uBioGroundCover: { value: 0.0 },
+      uBioGroundColor: { value: new THREE.Color(0.10, 0.16, 0.06) },   // BOOT default only; driven from BIO_PIGMENT (surfaceMaterial.js) through the same display transfer as the ground endmembers
       uMacroOffset:  { value: new THREE.Vector3() },                // set from macroSeed
       uDetailOffset: { value: new THREE.Vector3() },                // set from detailSeed
       // ── voronoi3d spike debug (risk #1 seam gate) ──
