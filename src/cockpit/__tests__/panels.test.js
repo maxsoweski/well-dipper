@@ -495,6 +495,24 @@ describe('TARGET — the warp destination, once the body selection is gone', () 
     expect(drawn(paint(paintTarget, FLYING, 0).log)).not.toContain('WARP TARGET');
   });
 
+  it('draws the label after the hero, so an overflowing name cannot wipe it', () => {
+    // ⚠ THIS TEST EXISTS BECAUSE THE OBVIOUS ONE CANNOT FAIL, MEASURED NOT
+    // IMAGINED. `WARP_PICKED`'s designation overflows at display size, so
+    // `drawHeroName` takes its re-clear path; a label painted BEFORE that clear
+    // is gone from the glass. But `drawn()` reads the fillText LOG, not pixels,
+    // and a later `clear()` removes nothing from a log — so with the label moved
+    // above `drawHeroName`, every other assertion in this block stayed green.
+    // ORDER against the second clear is the only thing that discriminates.
+    const { log } = paint(paintTarget, WARP_PICKED, 0);
+
+    const clears = fullClears(log);
+    expect(clears.length, 'the fixture no longer overflows; this test proves nothing').toBe(2);
+
+    const label = ops(log, 'fillText').find((e) => e.text === 'WARP TARGET');
+    expect(label, 'the label was never drawn').toBeTruthy();
+    expect(log.indexOf(label)).toBeGreaterThan(log.indexOf(clears[1]));
+  });
+
   it('leaves DIST and ETA blank for a destination that has no in-system range', () => {
     // The load-bearing half of "blank, never zero". A warp destination is a star
     // in the galaxy, not a body in this system: `target.distance` is null and the
