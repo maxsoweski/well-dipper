@@ -4,7 +4,7 @@
   "project": "well-dipper-cockpit-screens",
   "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md",
   "status": "in-progress",
-  "statusNote": "14 PASS, 1 PARTIAL (overlays-retire: the #debug-hud dev rows raised to Max), 1 not started (AC-LETTERBOX-Y-SETTLED-HERE), 1 deferred to Max. Step 8 authorised by Max 2026-07-30 after he flew the frame fix and confirmed the flight mechanics.",
+  "statusNote": "14 PASS, 1 PARTIAL (overlays-retire: the #debug-hud dev rows raised to Max), 1 not started (AC-LETTERBOX-Y-SETTLED-HERE), 1 deferred to Max. Step 8 authorised by Max 2026-07-30 after he flew the frame. 2026-07-30/31, AFTER step 7 and BEFORE step 8, two defects/asks were closed against the flown build and UAT'd by Max (*\"tested; looks good; we should be good to move on\"*): (1) b6514af — the canopy read OPAQUE on every pane but the central one, twice reported in identical words. Root cause was the ALPHA channel, not brightness: THREE.AdditiveBlending applies its factors to alpha too, so the glass stamped full coverage into the alpha-composited cockpitTarget and masked the sky. Two sessions of correct photometric measurement could not see it. Fixed with CustomBlending, RGB identical to additive, alpha (ZERO, ONE). (2) 7d6a4f6 — Max's flight-mechanics ask. 'Always fly forward from the cockpit's POV' was ALREADY fixed by cockpitEyePose.js; what remained was the LOCK, now a per-frame invariant (needsHandsOnRecenter) plus EXIT_RECENTER_TAU 0.18->0.10 and a window._head() probe. ⛔ AC-IT-FEELS-LIKE-FLYING-FROM-INSIDE is NOT closed by that UAT — it is the increment-level gate at step 11 and remains Max's alone.",
   "acceptanceCriteria": [
     {
       "id": "AC-ONE-RIG-TWO-HOSTS",
