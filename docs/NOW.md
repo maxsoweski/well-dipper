@@ -1469,6 +1469,20 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
 
 ## Recently shipped
 
+- **world-engine port (lane L1), rung 3 decided + rung 4 scouted** (2026-07-30) — `bea2438`
+  **rung 3 verdict: keep transcribing**, but the handoff's stated blocker (per-planet
+  `ShaderMaterial` × 343 uniforms) **does not exist** — 18 planets across all 18 types compile to
+  **4 shared programs**, the ROCKY program has 53 active uniforms, and 343-vs-53 upload costs
+  +0.19 ms (1.1% of a 60 fps budget). The real blocker is **cold shader compile: ~29 s wholesale**
+  vs 4.08 s for the game's three variants today (that 4.08 s is a pre-existing, previously
+  unmeasured first-load hitch — async warmup is a cheap open item, `KHR_parallel_shader_compile`
+  is available and the game boots into an intro). Budget rule: **~26–81 ms cold compile per KB of
+  fragment shader**. ⚠ Measuring this is booby-trapped by Chrome's shader disk cache — cache-bust
+  the source or you time the cache. `be073f3` **rung 4 scouted**: 17 fns / 19.4 KB / +1.1–1.6 s;
+  province-neutral is exactly `uProvinceWeight = 0.0`; ⛔ mountains + canyons reach
+  `sampleGrainStrike` → `textureCube`, and the game binds zero textures, so craters+ejecta and
+  plateaus go first.
+
 - **world-engine port (lane L1), slice 3 rung 2** (2026-07-30) — `2b89132` **`uReliefOctaves` ramps
   4→9 with distance**, using the lab's own law imported not copied
   (`autoOctaves(lodRampOf(d))` = `mix(4,9,smoothstep(20,6,d))`, d in body radii). Driven by the
