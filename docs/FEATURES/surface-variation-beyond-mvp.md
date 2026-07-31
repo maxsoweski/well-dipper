@@ -847,6 +847,64 @@ That identity is also why craters are accumulated SEPARATELY from `gReliefD` and
 slope, `fbmd`'s only becomes one after that divide, and folding them early would rescale every crater
 by `noiseScale`, which spans ~100× across this game's bodies.
 
+### ⭐⭐ 2026-07-31 — MAX CHANGED THE TARGET: put the LAB'S PIPELINE in the game, procgen and
+### rendering, asap. The transcription ladder is the wrong vehicle for that. SPIKE MEASURED.
+
+The rung-by-rung ladder (rungs 0–4: `fbmd` base, relief ×6, octave ramp, craters) answers "graft the
+lab's features onto the game's type-branch shader." Max's target is the other option in
+`lab-vs-game-renderer-divergence.md` §4.1 — **replace**. A spike put the lab's ACTUAL material into
+the game page to find the real blockers in one go instead of discovering them one rung at a time.
+
+#### What the spike established
+
+    the lab's shader is fully extractable from the game               ✅
+      Vite's html-proxy module (planet-lod-lab.html?html-proxy&index=0.js), 3.33 M chars;
+      vertexShader 1 661 chars, fragmentShader 101 284 chars, ONE interpolation (${HEIGHT_GLSL}).
+      Resolved: 355.1 KB, 349 uniforms — matches the register's wholesale figure exactly.
+    it COMPILES AND LINKS CLEANLY inside the game page                ✅  LINK_STATUS true, empty log
+    the lab's vertex shader does NOT displace geometry                ✅  plain sphere, so the
+      game's mesh is compatible; it needs 4 zero-filled attributes (aBand/aShear/aMush/aStorm).
+    per-frame render cost                                            ✅  0.51 ms at 384^2
+    cold compile                                                     ⛔  46 750 ms compile+first
+      draw at 384^2 in the spike, against the register's 28 751 ms cache-busted compile-only.
+      Tens of seconds either way. THIS IS THE ONLY REAL BLOCKER.
+    makeUniforms() defaults alone render BLACK                       ⛔  forced-output test says the
+      mesh rasterises 76.21% and the SHADER computes black. The lab overwrites its defaults at route
+      time, so the uniform-driving half is not optional decoration — it IS the procgen work.
+
+⚠ Two harness traps cost time again, both the same shape as the crater probe's NaN world matrix:
+`makeUniforms(WORLD_LIGHT)` takes the light vector, and calling it with no argument yields
+`uLightDir = [null, null, null]`; and a black frame looks exactly like a working negative control.
+**Force a constant fragment output to separate "not rasterising" from "computing black" before
+diagnosing anything else.** That one test would have saved both detours.
+
+#### The consequence for the ladder — a STOP-DOING decision
+
+If the game is going to run the lab's shader, then transcribing the lab's remaining landforms into
+the game's shader is **work that gets deleted**. Rung 4's craters are already shipped and are worth
+keeping as the fallback path, but **rung 4's plateaus, rung 5's provinces, and mountains/canyons
+should NOT be written.** The grain-cube question the last handoff flagged as the next blocker
+dissolves too — under replace, the lab's own `sampleGrainStrike` comes across with everything else,
+and the question becomes the per-planet BAKE, which was always the real cost.
+
+#### The staged plan the measurements imply
+
+    STAGE 0  async compile + swap-on-ready         THE ENABLER — nothing ships without it
+      Render with today's shader; compile the lab shader off the main thread
+      (KHR_parallel_shader_compile is present, three exposes compileAsync); swap the material when
+      it resolves. Turns a ~29 s freeze into a progressive upgrade that never blocks the player, and
+      it also retires the 4 076 ms first-load hitch the game already pays today.
+    STAGE 1  the uniform driver (pure JS, no compile cost)
+      game planetData -> lab `fp` -> deriveUniforms -> the 349 uniforms, extending the existing
+      conditionFromPlanet seam in src/worldengine/port/. This is what turns the black frame into a
+      planet, and it is the "procgen" half of Max's ask.
+    STAGE 2  one land type end-to-end in a procedural system (Caph), bakes gated OFF via their
+      documented byte-identical gates (uTectonicGrainStrength = 0, uProvinceWeight = 0).
+    STAGE 3  the bakes — tectonic grain, crater, river carve. The real per-planet cost, and the
+      thing the slice-3 recon warned about. Deferred until 0–2 land.
+    STAGE 4  moons. src/objects/Moon.js is a THIRD renderer with none of the port; 267 of 277 moons
+      within 25 pc derive a crater record and 0 render one.
+
 ### 🔶 Recorded, PARTLY ADDRESSED — the honest palette flattens elevation banding on ~45% of bodies
 
 > **2026-07-30:** the shading half of this is now addressed by the 6× relief raise above — the
