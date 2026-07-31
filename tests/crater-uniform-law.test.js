@@ -23,7 +23,7 @@ import { dirname, join } from 'node:path';
 
 import {
   craterUniformsFrom, coverageBand, CRATERS_OFF,
-  CELL_CRATER_AREA, CRATER_VIS_FLOOR_RAD, EJECTA_RIM_FRACTION,
+  CELL_CRATER_AREA, RENDERED_CELL_COVERAGE, CRATER_VIS_FLOOR_RAD, EJECTA_RIM_FRACTION,
 } from '../src/worldengine/port/craterUniforms.js';
 import { craterSchedule, transitionDiameterKm } from '../src/worldengine/base/bombardment.js';
 import { radPerKm } from '../src/worldengine/base/baseStep.js';
@@ -85,11 +85,11 @@ describe('crater law — the population, with no type label anywhere', () => {
   // The numbers are the measured ones from tools/port-crater-measure.mjs. Ranges, not point pins:
   // this is a tripwire on the law moving, not a golden.
   const EXPECT = {
-    'sol-mercury': [0.14, 0.18],
-    'sol-moon': [0.11, 0.15],
-    'sol-callisto': [0.14, 0.18],
-    'sol-europa': [0.10, 0.14],
-    'sol-triton': [0.09, 0.13],
+    'sol-mercury': [0.39, 0.47],
+    'sol-moon': [0.31, 0.38],
+    'sol-callisto': [0.39, 0.47],
+    'sol-europa': [0.28, 0.35],
+    'sol-triton': [0.26, 0.32],
   };
   for (const [id, [lo, hi]] of Object.entries(EXPECT)) {
     it(`${id} keeps a crater record (density in [${lo}, ${hi}])`, () => {
@@ -116,6 +116,20 @@ describe('crater law — the population, with no type label anywhere', () => {
   it('CRATERS_OFF has density 0 — the shader gate and the negative control are the same number', () => {
     expect(CRATERS_OFF.density).toBe(0);
     expect(CRATERS_OFF.ejectaStrength).toBe(0);
+  });
+
+  // The density law divides by what the shader MEASURABLY paints, not by the analytic disc area.
+  // If someone "simplifies" this back to CELL_CRATER_AREA every body loses 2.7x of its craters, and
+  // the result still looks like a cratered world — which is exactly why it needs a test.
+  it('density divides by the MEASURED per-cell coverage, not the analytic disc area', () => {
+    expect(RENDERED_CELL_COVERAGE).toBeLessThan(CELL_CRATER_AREA);
+    expect(CELL_CRATER_AREA / RENDERED_CELL_COVERAGE).toBeCloseTo(2.66, 1);
+    const cond = conditionFromPlanet(solBody('sol-moon'));
+    const sch = craterSchedule(cond);
+    const RE = cond.radiusEarth;
+    const lo = Math.max(sch.D_LO_KM * sch.sizeMul, CRATER_VIS_FLOOR_RAD * RE * 6371);
+    const target = coverageBand(sch, radPerKm(RE), lo, sch.D_HI_KM);
+    expect(craterUniformsFrom(cond).density).toBeCloseTo(target / RENDERED_CELL_COVERAGE, 10);
   });
 
   it('same condition in, identical uniforms out', () => {

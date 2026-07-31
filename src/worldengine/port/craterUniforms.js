@@ -25,9 +25,35 @@ import { radPerKm } from '../base/baseStep.js';
 // ── Shader facts. These are not tunables; they are properties of craterRelief.glsl.js. ───────────
 // craterCombiner hashes each crater's radius as mix(0.18, 0.55) cell units.
 const R_LO = 0.18, R_HI = 0.55;
-// Mean per-cell covered area: craterRadius = 0.18 + 0.37u, u ~ U[0,1); area = pi*craterRadius^2;
+// Mean per-cell covered area IF each hosted cell painted a flat disc of its hashed radius:
+// craterRadius = 0.18 + 0.37u, u ~ U[0,1); area = pi*craterRadius^2;
 // E[craterRadius^2] = int_0^1 (0.18 + 0.37u)^2 du = 0.18^2 + 0.18*0.37 + 0.37^2/3.
+// ⚠ THIS IS THE LAB'S NUMBER AND IT IS NOT WHAT THE SHADER DRAWS. Kept because it is the quantity
+// the lab's law is written in, and because the gap between it and the measured value below is the
+// whole finding. Do not use it to derive a density.
 export const CELL_CRATER_AREA = Math.PI * (R_LO * R_LO + R_LO * (R_HI - R_LO) + (R_HI - R_LO) ** 2 / 3);
+
+// ⭐ What a fully-hosted crater field ACTUALLY covers, measured in-shader.
+// voronoi3d partitions a 3D LATTICE, not the surface. Two things follow, and neither is in the
+// analytic disc area above: a crater is a BALL of radius craterRadius about a jittered centre that
+// generally does not sit on the sphere, so the surface sees a cap of radius sqrt(R^2 - z^2), not a
+// disc of radius R — and that cap is then clipped to its own voronoi region, which for the top of
+// the hash range is smaller than the ball. Both shrink the painted area; neither is easy to write
+// down closed-form once they interact.
+//
+// MEASURED at uCraterDensity = 1 (every cell hosts, ~600 craters per visible hemisphere, so this is
+// not the low-density sampling noise that makes coverage/density wander between 0.08 and 0.16):
+//   Moon 0.1495 | Mercury 0.1593 | Callisto 0.1615 | Europa 0.1931 | Ganymede 0.1898
+//   mean 0.1706, sd 0.0175 (10.3% spread — one constant fits the population about as well as
+//   RELIEF_GAIN's did), against the analytic 0.4544. The analytic form over-counts by 2.66x.
+// Offscreen probe, 512^2, ROCKY variant, uCraterScale 7.0711 (identical on every body whose
+// visibility floor binds, which is all of them).
+//
+// ⚠ CONSEQUENCE WORTH NAMING: 0.1706 is also the CEILING. One crater per cell means the game cannot
+// paint more than ~17% crater coverage however bombarded a world is, so a truly saturated surface
+// renders under-cratered. That is the same single-octave limitation recorded in the register, seen
+// from the amplitude side instead of the size side.
+export const RENDERED_CELL_COVERAGE = 0.1706;
 // craterProfile's internal cavity depth factor: `h += 0.2 * (r*r - 1.0)`.
 export const CRATER_DEPTH = 0.2;
 // craterProfile's rim term is `0.05 * gaussian`, peaking at r = 1. The ejecta apron is normalised to
@@ -108,7 +134,7 @@ export function craterUniformsFrom(condition) {
   if (!(H > lo)) return CRATERS_OFF;
 
   const Dchar = Math.sqrt(lo * H);
-  const density = clamp01(coverageBand(sch, rpk, lo, H) / CELL_CRATER_AREA);
+  const density = clamp01(coverageBand(sch, rpk, lo, H) / RENDERED_CELL_COVERAGE);
   if (!(density >= CRATER_MIN_DENSITY)) return CRATERS_OFF;
 
   // uCraterAmp: radPerKm(RE)*D_char is the characteristic crater diameter as a fraction of the

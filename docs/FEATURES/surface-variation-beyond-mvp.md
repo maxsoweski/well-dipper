@@ -771,6 +771,82 @@ forced `perturbNormalAnalytic`'s divide-by-base-frequency. They must therefore b
 SEPARATELY from `gReliefD` and added AFTER that division, in a unit-sphere domain (`normalize(pos)`),
 not in the object-space domain `fbmd` reads.
 
+### ✅ RUNG 4, CRATERS — SHIPPED + LIVE-VERIFIED (2026-07-31). And the density law needed a
+### calibration that no amount of reading the lab source would have produced.
+
+Offscreen probe, 512², ROCKY variant, ANGLE / NVIDIA RTX 5080 / D3D11. Sol's Moon unless stated.
+
+    negative control (crater code textually REMOVED vs uCraterDensity = 0)   0.000000%
+    liveness (craters off -> on)                                                2.95% of pixels
+    local contrast, mean |grad L| over the lit disc, silhouette eroded 3 px    2.971 -> 3.310
+    contrast lift                                                              +11.4%
+    60-degree clamp firing rate                                              0.0000% of lit pixels
+    deflection with craters   p50 10.24 / p90 16.24 / p99 22.59 / max 52.94 degrees
+    deflection terrain only   p50 10.24 / p90 16.24 / p99 21.18 / max 30.00 degrees
+    ROCKY fragment shader          34.59 KB -> 41.16 KB   (+6.57 KB)
+    cold compile, cache-busted     2431 ms -> 2642 ms     (+211 ms, 32.1 ms/KB)
+
+⚠ **The first negative control I ran was 0.000000% AND the liveness was 0.000%, and both were
+artifacts** — the harness was rendering a black frame. Sol's moon records carry no `axialTilt`, so
+`Planet`'s `this.mesh.rotation.z = this.data.axialTilt` wrote `undefined`, the world matrix went NaN
+and nothing drew. A negative control passes trivially on an empty frame. **The probe now asserts a
+lit-pixel floor before any percentage is believed**, and that assertion is the reusable part.
+
+**Cost came in UNDER the scout's estimate: 6.57 KB against 9.6 KB**, because of two divergences the
+port took (both commented at the site in `craterRelief.glsl.js`): the lab's separate crater and
+ejecta combiners were MERGED — they ran two `voronoi3d` calls over an identical domain with identical
+cells, hash, host gate and radius, so merging is exact and halves the dominant 27-`hash33` cost — and
+`provinceWeight` is stubbed to `return 1.0;`, which is what `uProvinceWeight = 0` returns anyway.
+32.1 ms/KB sits at the low end of the register's 26–81 ms/KB model. ⓘ The ROCKY variant is now
+41.16 KB, well past the "~33 KB Chrome/ANGLE compile limit" `Planet.js`'s own header warns about, and
+it compiles clean — on this one driver. That warning is not binding here, but it has only been tested
+against ANGLE/D3D11.
+
+#### ⛔ THE CALIBRATION: the shader paints 2.66× less crater than the law believes
+
+The lab's density law inverts a per-cell area of `pi*E[craterRadius^2] = 0.4544` — the area of a flat
+disc of the hashed radius. **The shader does not paint a disc.** `voronoi3d` partitions a 3D LATTICE:
+a crater is a BALL about a jittered centre that generally does not lie on the sphere, so the surface
+sees a spherical CAP of radius `sqrt(R^2 - z^2)`, and that cap is then clipped to its own voronoi
+region, which for the top of the hash range is smaller than the ball. Measured in-shader, at
+`uCraterDensity = 1` so that every cell hosts and the low-density sampling noise is gone:
+
+    body        rendered cavity coverage at density 1
+    Moon                    0.1495
+    Mercury                 0.1593
+    Callisto                0.1615
+    Europa                  0.1931
+    Ganymede                0.1898
+    ── mean 0.1706, sd 0.0175 (10.3% spread) ──   against the analytic 0.4544
+
+So `RENDERED_CELL_COVERAGE = 0.1706` replaces `CELL_CRATER_AREA` in the density derivation, and every
+body gets 2.66× more craters. Sol's Moon goes 0.128 → 0.342, Mercury 0.161 → 0.430, Mars 0.202 →
+0.538. The visual result is the difference between "a few faint dents" and a crater-scarred world;
+liveness went 1.31% → 2.95% and contrast lift 6.4% → 11.4%.
+
+⚠ **Do NOT calibrate this at low density.** `coverage/density` wanders between 0.082 and 0.160 over a
+0.05→0.4 sweep, because `step(1 - density, hash)` changes WHICH cells host, not just how many, and
+one hemisphere only shows ~40 craters. The `density = 1` anchor has ~600 and is the only stable one.
+
+⚠ **0.1706 is also the CEILING.** One crater per cell means the game cannot paint more than ~17%
+coverage however bombarded a world is, so a genuinely saturated surface renders under-cratered. Same
+single-octave limitation as the band note above, seen from the amplitude side.
+
+#### What did NOT need calibrating, and why that is the interesting half
+
+`uCraterAmp * uCraterScale == 1` EXACTLY — the amplitude is the characteristic crater's angular
+diameter and the scale is its reciprocal — so `craterEjectaCombiner`'s gradient reduces to
+`profile'(r) / craterRadius`, a pure aspect ratio, identical on Ceres and a super-Earth. Measured
+crater slope p50 0.094 / p90 1.349 / p99 2.761 / max 5.459, exactly the profile's own aspect ratio
+and independent of the body. **So `CRATER_RELIEF_GAIN = 1.0` rests on an identity, not on a
+population fit** — unlike `RELIEF_NORMAL_GAIN`, which needed 462 bodies. This is the one quantity at
+this seam that could not disagree with itself.
+
+That identity is also why craters are accumulated SEPARATELY from `gReliefD` and added AFTER
+`perturbNormalAnalytic`'s divide-by-base-frequency: the crater gradient is already a dimensionless
+slope, `fbmd`'s only becomes one after that divide, and folding them early would rescale every crater
+by `noiseScale`, which spans ~100× across this game's bodies.
+
 ### 🔶 Recorded, PARTLY ADDRESSED — the honest palette flattens elevation banding on ~45% of bodies
 
 > **2026-07-30:** the shading half of this is now addressed by the 6× relief raise above — the
