@@ -146,6 +146,13 @@ describe('the HUD slot has exactly one decision point', () => {
     const syncBody = SRC.slice(sync, SRC.indexOf('\n}', sync));
     expect(syncBody).toMatch(/bodyInfo\.setSuppressed\(_scManual\)/);
     expect(syncBody).toMatch(/flightModeToast\.setSuppressed\(_scManual\)/);
+
+    // The third, added 2026-07-31, and the only NARROW one: #debug-hud keeps its
+    // developer rows and loses exactly the three the INFO panel took over. It
+    // rides the same flip point rather than growing its own, because the failure
+    // this whole test guards against is a surface whose gate is written somewhere
+    // main.js does not re-decide on.
+    expect(syncBody).toMatch(/debugPanel\.setSurveySuppressed\(_scManual\)/);
   });
 
   it('CONTROL: the BURN button was ALREADY correct', () => {

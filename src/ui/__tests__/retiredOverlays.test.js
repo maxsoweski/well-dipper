@@ -20,6 +20,7 @@ function makeEl() {
   const el = {
     style: { display: '' },
     textContent: '',
+    innerHTML: '',
     offsetWidth: 1,
     classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
     appendChild: noop,
@@ -79,6 +80,92 @@ describe('BodyInfo.setSuppressed — retired in HELM', () => {
     el.style.display = 'none';
     b.showStar({ type: 'G' }, 'Sol');
     expect(el.style.display, 'ORRERY lost its body readout').not.toBe('none');
+  });
+});
+
+/**
+ * A focused planet with the three physics blocks the debug HUD prints as
+ * COMP / ATMO / TIDAL — the same three the cockpit's INFO panel now shows
+ * (InfoReadout.js:217-219), which is what makes them a duplication in HELM.
+ */
+function focusedPlanetSystem() {
+  return {
+    star: null,
+    planets: [{
+      planet: {
+        data: { type: 'terrestrial' },
+        currentLOD: 2,
+        physics: {
+          composition: { surfaceType: 'silicate', ironFraction: 0.31 },
+          atmosphere: { retained: true },
+          tidalState: { locked: true, lockType: 'synchronous' },
+          surfaceHistory: { bombardmentIntensity: 0.4, erosionLevel: 0.2 },
+        },
+      },
+      moons: [],
+    }],
+  };
+}
+
+describe('DebugPanel.setSurveySuppressed — the three dossier rows, retired in HELM', () => {
+  /**
+   * ⚠ THIS IS A NARROWER GATE THAN ITS TWO NEIGHBOURS, AND DELIBERATELY SO.
+   *
+   * BodyInfo and FlightModeToast retire WHOLE. #debug-hud must not: it is a
+   * developer instrument (FPS, LOD, galactic potential, star evolution) and
+   * those rows have no replacement anywhere. Only COMP / ATMO / TIDAL are
+   * duplicated by the cockpit's INFO panel, and only those three go.
+   *
+   * ⚠ AND IT IS A GATE, NOT A DELETION, for a reason the first reading of this
+   * missed: there is no INFO panel in ORRERY at all, and none in HELM when the
+   * GLB fails to load (`_cockpitShouldRender()`, main.js:2701). Deleting the
+   * rows would strip the diagnostic in both of those states, where nothing
+   * replaces it. Suppression by regime is what every other step-8 retirement
+   * does and it restores on the way out.
+   */
+  it('CONTROL: unsuppressed in ORRERY, the three rows reach the element', async () => {
+    const { DebugPanel } = await import('../DebugPanel.js');
+    const d = new DebugPanel();
+    d.setSystem(focusedPlanetSystem(), {});
+    d.setFocus(0, -1);
+    d.toggleHUD();
+    d.update(0);
+    for (const label of ['COMP', 'ATMO', 'TIDAL']) {
+      expect(el.innerHTML, `${label} never drew at all`).toContain(`>${label}<`);
+    }
+  });
+
+  it('suppressed, the three go and the developer rows stay', async () => {
+    const { DebugPanel } = await import('../DebugPanel.js');
+    const d = new DebugPanel();
+    d.setSystem(focusedPlanetSystem(), {});
+    d.setFocus(0, -1);
+    d.setSurveySuppressed(true);
+    d.toggleHUD();
+    d.update(0);
+
+    for (const label of ['COMP', 'ATMO', 'TIDAL']) {
+      expect(el.innerHTML, `${label} got past the gate`).not.toContain(`>${label}<`);
+    }
+    // The half that makes this a gate rather than a blanking. SURF and FOCUS sit
+    // in the same `if (planet.physics)` neighbourhood and have NO cockpit
+    // equivalent — InfoReadout.js:190-206 excludes surfaceHistory by name — so a
+    // gate that swallowed them would be a deletion wearing a gate's clothes.
+    for (const label of ['FPS', 'FOCUS', 'SURF']) {
+      expect(el.innerHTML, `the gate took ${label}, which nothing replaces`).toContain(`>${label}<`);
+    }
+  });
+
+  it('un-suppressing restores them for ORRERY', async () => {
+    const { DebugPanel } = await import('../DebugPanel.js');
+    const d = new DebugPanel();
+    d.setSystem(focusedPlanetSystem(), {});
+    d.setFocus(0, -1);
+    d.setSurveySuppressed(true);
+    d.setSurveySuppressed(false);
+    d.toggleHUD();
+    d.update(0);
+    expect(el.innerHTML, 'ORRERY lost a dossier row it has no cockpit to replace').toContain('>COMP<');
   });
 });
 

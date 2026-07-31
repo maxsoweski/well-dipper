@@ -661,6 +661,12 @@ function setScManual(on) {
 function _syncRetiredOverlaysToMode() {
   bodyInfo.setSuppressed(_scManual);
   flightModeToast.setSuppressed(_scManual);
+  // ⚠ NARROW, unlike the two above: #debug-hud loses ONLY the three dossier
+  // rows the INFO panel took over (COMP/ATMO/TIDAL) and keeps every developer
+  // row. And it is gated, not deleted as the build order's step 11 asked —
+  // there is no INFO panel in ORRERY, nor in HELM on a GLB load failure, so a
+  // deletion would strip the readings where nothing replaces them.
+  debugPanel.setSurveySuppressed(_scManual);
 }
 let _flightMode = FlightMode.MANUAL;          // in-flight sub-state (meaningful while _scManual)
 const _alignState = { active: false, mesh: null, t: 0 }; // Mode-B one-time align (Task 5)
