@@ -27,35 +27,25 @@ import { generateSolarSystem } from '../src/generation/SolarSystemData.js';
 import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
 import {
   craterSchedule, craterRelevanceOf, isImpactSurface,
-  B_SFD, C_BASIN, MESH_FLOOR_RAD,
+  C_BASIN, MESH_FLOOR_RAD,
 } from '../src/worldengine/base/bombardment.js';
 import { radPerKm } from '../src/worldengine/base/baseStep.js';
+import { coverageBand, CELL_CRATER_AREA } from '../src/worldengine/port/craterUniforms.js';
 
 // The shader hashes a crater's radius as mix(0.18, 0.55) cell units (planet-lod-height.glsl.js,
 // craterCombiner). Diameter = 2·that. Both constants are shader facts, not tunables.
 const HASH_TAIL_MAX = 2.0 * 0.55;
-const CELL_CRATER_AREA = Math.PI * (0.18 * 0.18 + 0.18 * 0.37 + 0.37 * 0.37 / 3);
 // E[craterRadius] over the same hash — the median-ish crater, for reporting an honest on-screen size
 // rather than the D_char the law is written in (D_char is the CELL size, not the crater size).
 const E_CRATER_RADIUS = 0.18 + 0.37 / 2;
 
-// Count of craters in [a,b] and their summed D², under the schedule's own unbounded-tail convention
-// (N(>D) ∝ D^-B normalised so N(>L) = nAnalytic; pdf ∝ D^-(B+1)). At a=L, b=H this reproduces the
-// schedule's own `coverage` field exactly, which is the check that keeps this honest.
-function coverageBand(sch, rpk, a, b) {
-  if (!sch.fired || !(b > a) || !(a > 0)) return { count: 0, coverage: 0 };
-  const L = sch.D_LO_KM * sch.sizeMul;
-  const tail = (x) => Math.pow(L / Math.max(x, 1e-12), B_SFD);
-  const count = sch.nAnalytic * Math.max(0, tail(a) - tail(b));
-  const ED2 = 2 * a * a * Math.log(b / a) / (1 - Math.pow(a / b, 2));
-  return { count, coverage: count * rpk * rpk * ED2 / 16 };
-}
-
 // A candidate band -> the uniform triple the shader wants. `lo`/`hi` in km.
+// coverageBand and CELL_CRATER_AREA are IMPORTED from the shipped law rather than re-derived here —
+// this script exists to price the law, so a second copy of it would price the wrong thing.
 function bandLaw(sch, RE, lo, hi) {
   const rpk = radPerKm(RE);
   const Dchar = Math.sqrt(Math.max(lo, 1e-9) * Math.max(hi, 1e-9));
-  const { coverage } = coverageBand(sch, rpk, lo, hi);
+  const coverage = coverageBand(sch, rpk, lo, hi);
   return {
     Dchar,
     scale: (RE * 6371) / Dchar,                                   // featureFrequencyFromKm, C_CRATER = 1

@@ -4,6 +4,12 @@ import {
   HEIGHT_NOISE_GLSL,
   HEIGHT_NOISE_UNIFORMS_GLSL,
 } from '../worldengine/shaders/heightNoise.glsl.js';
+import {
+  CRATER_RELIEF_GLSL,
+  CRATER_RELIEF_UNIFORMS_GLSL,
+} from '../worldengine/shaders/craterRelief.glsl.js';
+import { conditionFromPlanet } from '../worldengine/port/conditionFromPlanet.js';
+import { craterUniformsFrom, CRATERS_OFF } from '../worldengine/port/craterUniforms.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fragment shader split into HEADER + per-category BODY + FOOTER.
@@ -42,6 +48,16 @@ uniform float uReliefGainCont;   // fbmd -> legacy spread match, for the terrest
 // frequency content, which fbmd and the legacy 4-octave stack do not share. So the relief
 // normal carries its own measured constant rather than inheriting uReliefGain.
 uniform float uReliefNormalGain;
+// ── World-engine impact record (port slice 3, rung 4) ──
+// Declared in the shared header because perturbNormalAnalytic below reads the gate, but the crater
+// FUNCTIONS are spliced into the ROCKY variant only — gas giants and exotics never call them and
+// have no reason to pay ~4KB of cold compile each for them. Unused uniform declarations cost ~1KB
+// and are stripped by the compiler.
+${CRATER_RELIEF_UNIFORMS_GLSL}
+// Craters carry their own gain for the same reason relief does: theirs is a TRUE dimensionless
+// slope already (see craterRelief.glsl.js divergence 3), so it must not inherit uReliefNormalGain's
+// deliberate 6x exaggeration by accident. 1.0 is the physically honest value.
+uniform float uCraterReliefGain;
 ${HEIGHT_NOISE_UNIFORMS_GLSL}
 uniform vec3 lightDir;
 uniform vec3 lightDir2;
@@ -261,9 +277,20 @@ vec4 gReliefD = vec4(0.0);
 // OBJECT space, and Ceres' whole object radius is 0.00315. The step is larger than the planet,
 // so legacy's "gradient" on those bodies is decorrelated noise, not slope. Its 17deg is an
 // undersampling artifact. This path does not reproduce it — see the register.
-vec3 perturbNormalAnalytic(vec3 N, vec3 grad, float strength) {
+//
+// ⚠ craterSlope is NOT summed into grad before the division, and that is load-bearing. fbmd's
+// gradient is d(height)/d(objectPos) and only becomes a slope after dividing by the base frequency;
+// the crater gradient is ALREADY a slope, because uCraterAmp * uCraterScale == 1 exactly (see
+// craterUniforms.js). Adding them early would rescale every crater by noiseScale, which spans ~100x
+// across this game's bodies. The gate is a uniform, so at uCraterDensity 0 this function is
+// bit-identical to the version that had no crater term at all — the negative control.
+vec3 perturbNormalAnalytic(vec3 N, vec3 grad, vec3 craterSlope, float strength) {
   float baseFreq = uNoiseScale * 0.3 * uDispDomainScale;   // fbmd's octave-0 frequency
   vec3 gt = (grad - N * dot(grad, N)) / max(baseFreq, 1e-6);
+  if (uCraterDensity > 0.0) {
+    vec3 cs = craterSlope * uCraterReliefGain;
+    gt += cs - N * dot(cs, N);
+  }
   float scale = strength * 0.025 * uReliefNormalGain;
   vec3 perturbed = normalize(N - gt * scale);
   // Same 60deg clamp as the legacy path: a normal that flips away from the light reads as a
@@ -496,6 +523,14 @@ void main() {
 // Terrain noise, cracks, continents, seas, volcanic glow
 // ─────────────────────────────────────────────────────────────────────────────
 const ROCKY_BODY = /* glsl */ `
+${CRATER_RELIEF_GLSL}
+
+// The impact record's own accumulator. Separate from gReliefD because the two gradients live in
+// different spaces — see perturbNormalAnalytic. Height is in planet radii; slope is dimensionless.
+// Zero on every body whose world-engine schedule keeps no crater record, which is most of them.
+float gCraterH = 0.0;
+vec3  gCraterSlope = vec3(0.0);
+
 float getSurfacePattern(vec3 pos) {
   // ── Slice 3: the analytic-derivative base, computed ONCE for both consumers ──
   // Deliberately does NOT replace this function. Each per-type branch below carries real
@@ -508,6 +543,16 @@ float getSurfacePattern(vec3 pos) {
   // mix 1 it pays fbmd's and not the legacy stack's. Blending would have had every planet pay
   // for both fields forever and would have compared new+old against new+old.
   gReliefD = (uReliefMix > 0.001) ? fbmd(pos, uReliefOctaves, 0.0) : vec4(0.0);
+
+  // ── Rung 4, first landform: the impact record. ──
+  // Its own domain (the unit direction, because the crater law is ANGULAR — uCraterScale is crater
+  // diameters per planet RADIUS) and its own accumulator. The gate is the derived density, so a body
+  // the world engine says kept no craters costs exactly one uniform compare. Deliberately NOT folded
+  // into n: craters here are relief, and relief in this game is read as SHADING — n also carries
+  // the land/sea threshold, and pushing metre-scale crater depth through uReliefGain would move it.
+  if (uCraterDensity > 0.0) {
+    craterEjectaCombiner(normalize(pos), gCraterH, gCraterSlope);
+  }
 
   float n;
   if (uReliefMix >= 0.999) {
@@ -702,7 +747,7 @@ void main() {
   if (perturbStrength <= 0.001) {
     shadingNormal = vNormal;
   } else if (uReliefMix > 0.001) {
-    shadingNormal = perturbNormalAnalytic(vNormal, gReliefD.yzw, perturbStrength);
+    shadingNormal = perturbNormalAnalytic(vNormal, gReliefD.yzw, gCraterSlope, perturbStrength);
   } else {
     shadingNormal = perturbNormalFromNoise(vNormal, vPosition, perturbStrength);
   }
@@ -1168,9 +1213,16 @@ function reliefOffsets(d) {
     const x = Math.sin(acc * 12.9898 + salt * 78.233) * 43758.5453;
     return (x - Math.floor(x)) * 400.0 - 200.0;
   };
+  // The crater field needs its own offset for the same reason fbmd does — two worlds that share a
+  // noiseScale would otherwise wear the same craters in the same places. Held to a quarter of the
+  // relief range: the crater domain is dir * uCraterScale + offset with uCraterScale as low as ~4,
+  // so a large offset spends float32 mantissa on magnitude that the voronoi lattice then needs for
+  // cell-local precision.
+  const hc = (salt) => h(salt) * 0.25;
   return {
     macro: new THREE.Vector3(h(1), h(2), h(3)),
     detail: new THREE.Vector3(h(4), h(5), h(6)),
+    crater: new THREE.Vector3(hc(7), hc(8), hc(9)),
   };
 }
 
@@ -1233,6 +1285,20 @@ const RELIEF_NORMAL_GAIN = 39.24; // 6x the 6.54 legacy-parity value — see the
 // spheres the un-multiplied first octaves span less than one lattice cell edge to edge.
 const RELIEF_DOMAIN_SCALE = 1.0 / 0.3;
 
+// ── Crater relief gain (port slice 3, rung 4) ──
+// 1.0 = the physically honest value, and unlike RELIEF_NORMAL_GAIN it needs no population fit,
+// because the crater slope is body-independent: uCraterAmp * uCraterScale == 1 EXACTLY (the
+// amplitude is the characteristic crater's angular diameter and the scale is its reciprocal), so
+// craterEjectaCombiner's gradient reduces to profile'(r) / craterRadius — a pure aspect ratio, the
+// same on Ceres as on a super-Earth. That is one calibration this seam does NOT get to fight over.
+// It is a separate uniform from uReliefNormalGain on purpose: that one carries a deliberate 6x
+// exaggeration of fbmd's terrain, and craters must not inherit it silently.
+const CRATER_RELIEF_GAIN = 1.0;
+
+// Desktop 3x3x3 voronoi. 9 (centre slab only) is the lossy mobile path; the game has no quality tier
+// wired here yet, so it takes the seam-free one.
+const CRATER_VORO_CELLS = 27;
+
 const GAS_TYPES = new Set(['gas-giant', 'hot-jupiter', 'eyeball', 'sub-neptune']);
 const ROCKY_TYPES = new Set(['rocky', 'ice', 'lava', 'ocean', 'terrestrial', 'venus', 'carbon']);
 // Everything else → EXOTIC
@@ -1281,6 +1347,21 @@ export class Planet {
     const d = this.data;
     const reliefSeed = reliefOffsets(d);
 
+    // ── The impact record (port slice 3, rung 4) ────────────────────────────────────────────────
+    // Derived HERE rather than in PlanetGenerator so that hand-authored bodies get it too: Sol's
+    // Mercury, Moon, Callisto and Ceres never pass through the generator, and they are the bodies in
+    // this game that actually keep a crater record (37/39 Sol bodies do; measured 0/504 generated
+    // ones do, because every rocky body the game generates retains an atmosphere — see the register).
+    // Display-side derivation also means no draw from PlanetGenerator's shared rng stream, the same
+    // discipline reliefOffsets follows. Pure arithmetic, once per material.
+    // Only the ROCKY variant carries the crater code, and a gas giant has no surface to crater — the
+    // schedule's own P_SURF_MAX gate would eventually say so, but only after the defaults it never
+    // gets given (Jupiter derives density 1.0 from a missing mass and a missing pressure). Skipping
+    // the derivation outright keeps a meaningless number out of a uniform.
+    const craters = ROCKY_TYPES.has(d.type)
+      ? craterUniformsFrom(conditionFromPlanet(d))
+      : CRATERS_OFF;
+
     // Pick the shader variant based on planet category
     let fragmentBody;
     if (GAS_TYPES.has(d.type)) fragmentBody = GAS_BODY;
@@ -1321,6 +1402,21 @@ export class Planet {
         uFwClamp: { value: 1 },
         uMacroOffset: { value: reliefSeed.macro },
         uDetailOffset: { value: reliefSeed.detail },
+        // ── Impact record. uCraterDensity is the gate AND the negative control: at 0.0 the shader
+        // early-outs and this body renders byte-identically to the build before rung 4.
+        uCraterDensity: { value: craters.density },
+        uCraterComplexD: { value: craters.complexD },
+        uCraterRelaxation: { value: craters.relaxation },
+        uTerraceCount: { value: craters.terraceCount },
+        uCraterScale: { value: craters.scale },
+        uCraterAmp: { value: craters.amp },
+        uCraterOffset: { value: reliefSeed.crater },
+        uEjectaStrength: { value: craters.ejectaStrength },
+        uEjectaRampart: { value: craters.ejectaRampart },
+        uEjectaAmp: { value: craters.ejectaAmp },
+        uEjectaLump: { value: craters.ejectaLump },
+        uVoroCells: { value: CRATER_VORO_CELLS },
+        uCraterReliefGain: { value: CRATER_RELIEF_GAIN },
         lightDir: { value: this._lightDir },
         lightDir2: { value: this._lightDir2 },
         starColor1: { value: new THREE.Vector3(...this._starColor1) },

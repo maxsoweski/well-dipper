@@ -156,7 +156,12 @@ export function generateSolarSystem() {
       axialTilt: 3.1,          // ~177° (nearly upside down)
       rings: null,
       clouds: null,
-      atmosphere: { color: [0.9, 0.8, 0.5], strength: 0.6 },
+      // ⚠ `physics` is NOT decoration and NOT the visual wrapper. The world engine reads
+      // atmosphere.pressure through conditionFromPlanet; a body carrying only {color, strength}
+      // reads as a VACUUM, which made Sol's Earth derive a heavier crater record than the Moon's.
+      // See docs/FEATURES/surface-variation-beyond-mvp.md, "RUNG 4, CRATERS", finding 2.
+      atmosphere: { color: [0.9, 0.8, 0.5], strength: 0.6,
+        physics: { retained: true, pressure: 92, composition: 'co2' } },   // 92 bar CO2
       moons: [],
       profileId: 'sol-venus',
     },
@@ -175,7 +180,12 @@ export function generateSolarSystem() {
       axialTilt: 0.41,         // 23.4°
       rings: null,
       clouds: { color: [0.95, 0.95, 0.97], density: 0.85, scale: 3.0 },
-      atmosphere: { color: [0.4, 0.6, 1.0], strength: 0.4 },
+      // ⚠ `physics` is NOT decoration and NOT the visual wrapper. The world engine reads
+      // atmosphere.pressure through conditionFromPlanet; a body carrying only {color, strength}
+      // reads as a VACUUM, which made Sol's Earth derive a heavier crater record than the Moon's.
+      // See docs/FEATURES/surface-variation-beyond-mvp.md, "RUNG 4, CRATERS", finding 2.
+      atmosphere: { color: [0.4, 0.6, 1.0], strength: 0.4,
+        physics: { retained: true, pressure: 1.0, composition: 'n2-o2' } },   // 1 bar N2/O2
       profileId: 'sol-earth',
       moons: [
         // The Moon
@@ -206,7 +216,12 @@ export function generateSolarSystem() {
       axialTilt: 0.44,         // 25.2°
       rings: null,
       clouds: null,
-      atmosphere: { color: [0.8, 0.5, 0.3], strength: 0.15 },
+      // ⚠ `physics` is NOT decoration and NOT the visual wrapper. The world engine reads
+      // atmosphere.pressure through conditionFromPlanet; a body carrying only {color, strength}
+      // reads as a VACUUM, which made Sol's Earth derive a heavier crater record than the Moon's.
+      // See docs/FEATURES/surface-variation-beyond-mvp.md, "RUNG 4, CRATERS", finding 2.
+      atmosphere: { color: [0.8, 0.5, 0.3], strength: 0.15,
+        physics: { retained: true, pressure: 0.006, composition: 'co2' } },   // 6 mbar CO2
       profileId: 'sol-mars',
       moons: [
         // Phobos
@@ -413,7 +428,9 @@ export function generateSolarSystem() {
           noiseScale: 2.5,
           inclination: 0.005,
           clouds: null,
-          atmosphere: { color: [0.7, 0.55, 0.3], strength: 0.5 },
+          // See the note on Venus above — visual-only atmospheres read as vacuum to the engine.
+          atmosphere: { color: [0.7, 0.55, 0.3], strength: 0.5,
+            physics: { retained: true, pressure: 1.5, composition: 'n2' } },   // 1.5 bar N2
           profileId: 'sol-titan',
         },
         // Hyperion (irregular, chaotic rotation)
@@ -474,7 +491,11 @@ export function generateSolarSystem() {
         tiltX: 0, tiltZ: 0,
       },
       clouds: null,
-      atmosphere: { color: [0.5, 0.75, 0.85], strength: 0.45 },
+      // Deep H2-He envelope, no reachable solid surface. 1000 bar mirrors what
+      // PhysicsEngine.computeAtmosphere assigns every generated gas giant, and it is what trips the
+      // engine's P_SURF_MAX gate — the same statement, made in the units the engine reads.
+      atmosphere: { color: [0.5, 0.75, 0.85], strength: 0.45,
+        physics: { retained: true, pressure: 1000, composition: 'h2-he' } },
       profileId: 'sol-uranus',
       moons: [
         // Miranda (bizarre patchwork terrain)
@@ -556,7 +577,11 @@ export function generateSolarSystem() {
         tiltX: 0, tiltZ: 0,
       },
       clouds: null,
-      atmosphere: { color: [0.3, 0.5, 0.9], strength: 0.5 },
+      // Deep H2-He envelope, no reachable solid surface. 1000 bar mirrors what
+      // PhysicsEngine.computeAtmosphere assigns every generated gas giant, and it is what trips the
+      // engine's P_SURF_MAX gate — the same statement, made in the units the engine reads.
+      atmosphere: { color: [0.3, 0.5, 0.9], strength: 0.5,
+        physics: { retained: true, pressure: 1000, composition: 'h2-he' } },
       profileId: 'sol-neptune',
       moons: [
         // Proteus (irregularly shaped, dark)
@@ -598,7 +623,9 @@ export function generateSolarSystem() {
       rotationSpeed: rot(-0.04),      // retrograde, 6.4 day period
       axialTilt: 2.14,           // 122.5° — significantly tilted
       rings: null, clouds: null,
-      atmosphere: { color: [0.5, 0.5, 0.6], strength: 0.1 },  // tenuous N2
+      // See the note on Venus above — visual-only atmospheres read as vacuum to the engine.
+      atmosphere: { color: [0.5, 0.5, 0.6], strength: 0.1,
+        physics: { retained: true, pressure: 1e-5, composition: 'n2' } },   // tenuous N2, ~10 ubar
       profileId: 'sol-pluto',
       moons: [
         // Charon (binary companion — 1:8 mass ratio, tidally locked)
