@@ -2856,6 +2856,54 @@ window._cockpit = () => (_cockpitRig ? {
 } : { ready: false });
 
 /**
+ * Dial the panel repaint period live — `window._panelHz(33)` for 30 Hz — so Max
+ * settles "laggy" by flying it, the same way `_headTau` settles the recenter.
+ * Returns the period in force and the rate it works out to.
+ *
+ * ⭐ WHY A KNOB AND NOT AN OPTIMISATION, MEASURED 2026-07-31 IN THIS BUILD.
+ * Profiled at rest in HELM against ORRERY as the control, 6 s each: mean frame
+ * 4.26 ms vs 4.17, p50 4.1 vs 4.2 — the full-res cockpit pass costs ~nothing
+ * here. The whole difference is a BURST: p95 10.5 ms against ORRERY's 4.6, on
+ * the 5% of frames carrying a repaint, because `PanelHost` paints all four
+ * panels on ONE frame by design. Exactly ONE frame in 1403 missed 16.7 ms.
+ *
+ * So there is no framerate problem to fix, and the two named suspects both
+ * measured small: NAV's `getImageData` readback is 0.24 ms (a canvas created
+ * WITH `willReadFrequently` measures 0.20 — the "cheap fix" is worth 0.04 ms),
+ * and the dither everyone costs is dead code with no production call site.
+ * NAV's 3.18 ms/repaint is its DRAWING.
+ *
+ * What is left is the tier itself: the glass updates 12.5 times a second beside
+ * a world updating ~235. That ratio is what reads as lag, and its fix is the
+ * OPPOSITE of optimising — spend more, not less. Hence a knob for his eye.
+ * MEASURED ON THIS MACHINE, hands-on in HELM, 5 s per tier. p50 is 4.2 ms at
+ * EVERY tier — the base frame never moves; all of this is the burst.
+ *
+ *     80 ms (12 Hz, today)   mean 4.39   p95  9.1   max 13.0   0/1134 over 16.7
+ *     33 ms (30 Hz)          mean 4.78   p95 11.7   max 13.6   0/1041 over 16.7
+ *     16 ms (51 Hz actual)   mean 6.44   p95 15.6   max 18.3  10/771  over 16.7
+ *
+ * ⭐ 30 Hz is 2.5x the update rate for +0.39 ms of mean frame time and still
+ * never misses a 60 Hz budget. 60 Hz is where it starts to bite: it cannot even
+ * reach the rate it is asked for — 51 of a requested 62.5 — which is repaint
+ * backpressure, and 1.3% of frames go long.
+ * ⚠ Amortisation beat the naive sum: adding one 6.3 ms burst to a 4.26 ms frame
+ * predicts ~95 fps at 60 Hz and the real figure is 155. Do not re-derive that
+ * estimate; it was wrong in the safe direction.
+ * ⚠ These are ONE machine's numbers. Anything Max likes should be checked on
+ * the slowest one that matters before it becomes the default in
+ * `DEFAULT_AMBIENT_REPAINT_MS` (PanelHost.js), which is where it would land.
+ *
+ * @param {number} [ms] new period; omit to read
+ */
+window._panelHz = (ms) => {
+  const host = _cockpitRig?.host ?? null;
+  if (!host) return { error: 'no cockpit host' };
+  if (Number.isFinite(ms) && ms > 0) host.ambientRepaintMs = ms;
+  return { ambientRepaintMs: host.ambientRepaintMs, hz: +(1000 / host.ambientRepaintMs).toFixed(1) };
+};
+
+/**
  * Head + cockpit-camera pose. Read-only, and DELIBERATELY NOT read off the
  * cockpit: the cockpit is posed FROM the camera, so anything that asks the
  * cockpit about the camera is asking the camera about itself (lane rule 1).
