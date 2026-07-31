@@ -660,6 +660,117 @@ Three ways out, in preference order:
 way `RELIEF_GAIN` did — the register's standing lesson is that a same-named quantity across this
 seam has now produced four silent-disagreement bugs.
 
+### ⛔ RUNG 4, CRATERS — MEASURED BEFORE WRITING (2026-07-31). The shader port is the easy half. The
+### hard half is that the game's generated universe has NO SURFACE THAT KEEPS A CRATER RECORD.
+
+`tools/port-crater-measure.mjs` (run it; it prints all three sections below). The scouting note above
+costed craters in shader KB and called them "fully portable". Both are true and both are beside the
+point: **transcribing the lab's crater law unchanged renders nothing, on almost every body in the
+game, for two independent reasons.** Neither is a bug in the crater law — the law is behaving
+correctly on the inputs it is given. Measure before writing was worth it here.
+
+#### ⛔ Finding 1 — the game generates NO AIRLESS BODIES, so craters are correctly suppressed
+
+Over **504 generated bodies** (7 land types × 6 orbits 0.4–12 AU × 12 seeds), the bombardment
+schedule FIRES on 418 and `craterRelevanceOf` returns 1 on all 418 — the domain gate opens fine. The
+crater record then evaporates in the exposure age:
+
+    type          impact  fired  relevant  median tExp   median coverage
+    rocky          69/72     69        69     1.00e+0        1.78e-4
+    ice            67/72     67        67     1.00e+0        1.55e-4
+    lava           68/72     68        68     1.00e+0        1.60e-4
+    ocean          60/72     60        60     1.00e-1        1.50e-5
+    terrestrial    60/72     60        60     1.09e-1        1.65e-5
+    venus          24/72     24        24     0.00e+0        0.00e+0
+    carbon         70/72     70        70     1.00e+0        1.69e-4
+
+Against the lab's airless presets, whose coverage is **0.26**. That is a **1500×** shortfall, and the
+mechanism is exact: `tExp = min(age, T_RESURF_TIDAL/td, T_RESURF_ERODE/erosion)`, the **erosion term
+binds on 271/288** rocky-family bodies (age binds on 1), and `chronN` is exponential in `tExp` —
+`chronN(4.6)/chronN(1.0) ≈ 4600`. A surface exposed for 1 Ga instead of 4.5 Ga keeps essentially no
+craters. **That is correct physics**: real Earth's ~0.1 Ga continents carry a measured crater coverage
+of ~1e-5, which is what the law returns.
+
+⭐ **The root cause is upstream of the world engine and is not a crater problem at all: every rocky
+body the game generates retains an atmosphere.** Measured over 288 rocky/ice/lava/carbon bodies:
+
+    pressure (bar)   min 0.106   p10 0.328   median 0.779   p90 12.5   max 18.4
+    bodies with P < 0.01 bar (near-airless):   0 / 288
+    atmosphere.physics.retained === true:    288 / 288
+
+There is no Moon, no Mercury, no Ceres anywhere in the generated universe — the minimum atmosphere in
+the game is denser than Mars'. `erosionOf` is `smoothstep(0, 0.5, P) · max(waterWindow, 0.1)`, so a
+floor of 0.106 bar is a floor of 0.0115 on erosion, and the observed median erosion is **exactly
+0.1000** (the `DRY_ER_FLOOR`, i.e. every body is at least a dry-wind-eroded world). ⚠ **This is a
+`PhysicsEngine.computeAtmosphere` finding, NOT a rung-4 one, and it suppresses far more than
+craters** — it also pins `airlessnessOf`, the space-weathering colour stage, and the greenhouse
+correction. Deciding whether the atmosphere model should produce airless worlds is Max's call: the
+blast radius is every planet's atmosphere/cloud read, though NOT the generated universe itself (no
+`rng` draw changes).
+
+#### ✅ Finding 2 — Sol's hand-authored bodies DO keep a crater record, and are where the port lands
+
+Sol's records carry `atmosphere: null` (and the moon builder forces `atmosphere: null` outright), so
+erosion is 0, `tExp` is the full 4.5 Ga, and the schedule returns a real population. Derived density
+(fraction of voronoi cells hosting a crater), full-SFD band:
+
+    Mercury 0.340   Callisto 0.337   Ganymede 0.360   Io 0.272   Europa 0.242
+    Moon    0.263   Triton   0.217   Charon   0.117   Ceres 0.097   small ice moons 0.05-0.14
+
+**37 of 39 Sol bodies render craters.** Those are the right bodies and roughly the right amounts.
+
+⛔ **But three of them are wrong, and the reason is a FOURTH silent-disagreement bug at the same
+adapter seam.** Sol's Earth, Venus and Mars derive densities of **0.704 / 0.677 / 0.437** — Earth
+comes out more cratered than the Moon. Their records carry a VISUAL atmosphere wrapper
+(`{color, strength}`) with no `.physics` block, and `atmosphereFromPlanet` has
+`if (!phys) return gameAtmosphere;` — a branch written for engine-shaped lab presets, which happily
+passes the visual wrapper through as though it were one. `pressure` is then `undefined → 0` and the
+engine reads Earth as a vacuum. The three documented bugs at this seam were `T_eq` semantics, density
+units and `pressure` nesting; **this is the fourth, and it is the same branch that fixed the third.**
+The discriminator is available and needs no new data: an engine-shaped atmosphere HAS a `pressure`
+field, a visual wrapper does not. Sol's records also carry no `T_eq`, no `age`, no `massEarth` and no
+`composition`, so those default to 288 K / 4.5 Ga / 1 M⊕ — which is why Sol's Moon derives a surface
+gravity of 13.4 g instead of 0.165.
+
+#### ⭐ Finding 3 — the band decision: the lab's crater band is SUB-PIXEL in the game
+
+The lab's synth deliberately renders only the **sub-floor** band — every crater too small for the
+lab's display mesh to stamp as real geometry — because the lab's big craters are a per-planet BAKE.
+**The game has no stamp pass and no bake, so it has nothing to avoid double-rendering, and inheriting
+that band hands the game the one part of the distribution it cannot see.** Measured on Sol, as the
+mean crater's diameter in pixels on a planet drawn 400 px across (the `px @200R` column):
+
+    band              med density   med px @200R   what it reads as
+    sub-floor (LAB)      0.0858          0.8       ⛔ sub-pixel — aliasing, not craters
+    full SFD             0.1402          3.5       fine stipple; ~8000 craters/disc
+    vis 0.02 rad         0.0733         20.6       ⭐ ~50 craters/disc at ~20 px — reads as cratered
+    vis 0.05 rad         0.0562         32.6       ~16 craters/disc — sparse, big
+    vis 0.10 rad         0.0432         46.2       a few basins only
+
+**Take the 0.02-rad band.** The law is the same shape as the lab's, with the floor swapped for the
+one that actually binds: the lab clips at its MESH floor (`MESH_FLOOR_RAD = 0.055`), the game clips
+at its RASTER floor. `D_char = geomean(max(L, 0.02·R_km), H)`, `uCraterScale = R_km/D_char`,
+`uCraterDensity = coverage(band)/CELL_CRATER_AREA`, `uCraterAmp = radPerKm·D_char`.
+
+⚠ **Stated limitation, not a defect:** the coverage of a `D^-2` SFD is flat per decade of size, so a
+real cratered surface is self-similar and ONE voronoi octave can only ever show ONE size. The game
+renders the octave its raster resolves; the sub-resolution population is already carried by the
+9-octave `fbmd` relief. A second combiner call at 3× scale would add a size decade for ~2× the
+crater ALU (same KB) — recorded, not built.
+
+⭐ **`uCraterComplexD` must NOT be transcribed.** The lab pins it at `HASH_TAIL_MAX/0.6` to force
+`morphology ≡ 0`, because every sub-floor crater is a simple bowl. The game's craters are ~0.1 R
+across — 245 km on the Moon — which are **complex craters**, and central peaks plus wall terraces are
+most of what makes a big crater read as a crater. The game should feed the real gravity-set
+transition diameter (`transitionDiameterKm(g)`, already exported) in cell units.
+
+⭐ **The crater slope is body-independent, which removes one calibration.** `uCraterAmp · uCraterScale
+= (D_char/R_km) · (R_km/D_char) = 1` exactly, so `craterCombiner`'s gradient reduces to
+`profile' / craterRadius` — a pure aspect ratio. Craters cannot inherit the `noiseScale` spread that
+forced `perturbNormalAnalytic`'s divide-by-base-frequency. They must therefore be accumulated
+SEPARATELY from `gReliefD` and added AFTER that division, in a unit-sphere domain (`normalize(pos)`),
+not in the object-space domain `fbmd` reads.
+
 ### 🔶 Recorded, PARTLY ADDRESSED — the honest palette flattens elevation banding on ~45% of bodies
 
 > **2026-07-30:** the shading half of this is now addressed by the 6× relief raise above — the
