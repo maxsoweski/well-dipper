@@ -549,6 +549,67 @@ the ramp is monotonic with max step < 0.15 octaves — a tier-driven ramp would 
 ⭐ **Mutation-checked**: swapping `ratio` for `targetTier` at the call site turns the suite red on
 exactly the tier-vs-ratio case, so the test is not passing vacuously.
 
+### 📐 RUNG 3 — THE DECISION, MEASURED (2026-07-30). **Verdict: keep transcribing.** But every
+### reason the handoff gave for that was wrong, and the real reason is a different number entirely.
+
+The question: keep porting the lab's relief GLSL function-by-function, or import the lab shader
+wholesale? The handoff named the blocker as *"the game builds a `THREE.ShaderMaterial` PER PLANET
+and the lab shader declares 343 uniforms — wholesale probably needs materials shared per TYPE
+first."* **Measured, that blocker does not exist.** A different one does.
+
+#### The three assumed costs are all non-issues
+
+    measurement                                      result                        verdict
+    programs compiled for 18 planets, all 18 types   4 (shared, usedTimes 7/4/1/7)  NOT a problem
+    active uniforms in the game's ROCKY program      53 (not 343)                   NOT a problem
+    per-frame uniform upload, 343 vs 53 x 18 bodies  +0.19 ms = 1.1% of 60fps       NOT a problem
+    per-fragment render cost, lab vs game shader     1.4x at equal disc coverage    NOT a problem
+
+⭐ **"A material per planet" does NOT mean "a program per planet."** three.js caches compiled
+programs by shader source, and the game has exactly THREE fragment sources (`GAS_BODY`,
+`ROCKY_BODY`, `EXOTIC_BODY`, each appended to one shared `FRAG_HEADER`). 18 planets spanning all 18
+types produced **4 programs**, shared. Sharing materials per TYPE would buy nothing that three.js
+is not already doing.
+
+#### ⛔ The real blocker: COLD SHADER COMPILE, ~29 seconds
+
+    shader                        size      cold compile     warm (Chrome shader cache)
+    GAS_BODY                    22.1 KB        576 ms
+    EXOTIC_BODY                 28.9 KB      1 677 ms
+    ROCKY_BODY                  31.4 KB      1 823 ms
+    -- game total, 3 variants --            4 076 ms
+    LAB wholesale              355.1 KB     28 751 ms                53 ms
+
+Reproduced twice on independently cache-busted sources (28 751 ms / 28 084 ms), against 53 ms for
+the identical source recompiled in a fresh context. **Wholesale import = a ~29-second freeze** the
+first time each variant is seen — on a fresh install, after a driver update, or after any patch
+that changes a shader byte.
+
+⚠ **This nearly went in the register as a wrong number.** The first measurement read the cost as
+33 s of *first draw* at 512², and a follow-up read compile as only 51 ms — both were artifacts of
+Chrome's shader disk cache serving a previously-compiled binary. Only cache-busting the SOURCE
+separates cold compile from everything else. Any future measurement here must cache-bust or it is
+measuring the cache.
+
+#### 🔶 A pre-existing finding, not caused by this lane: the game already pays ~4.1 s
+
+The three shipped variants cost **4 076 ms of cold compile today**, unmeasured until now. That is a
+real first-load hitch on any machine without a warm shader cache. Not fixed here, and worth its own
+item — the mitigation is cheap and the plumbing exists: `KHR_parallel_shader_compile` **is present**
+on this hardware, three.js exposes `compileAsync`, and **the game boots into an intro**, which is
+exactly the window in which to warm the cache off the main thread.
+
+#### The budgeting rule this gives the rest of the ladder
+
+Cold compile runs **~26–81 ms per KB of fragment shader** (GAS 26, ROCKY/EXOTIC 58, lab 81 — mildly
+superlinear, so bigger shaders pay worse per KB). ⭐ **Budget the remaining rungs in shader KB, not
+in uniform count.** Rung 4 (mountains, craters + ejecta, canyons, plateaus) should be costed that
+way before it is written, and only the stages actually used should be transcribed — dead stages
+still cost compile time in every variant that carries them.
+
+⚠ **One GPU, one driver, one browser** (RTX 5080 / Chrome / WSL2). Shader compile time is strongly
+driver-dependent, so treat the ratios as sound and the absolute seconds as indicative.
+
 ### 🔶 Recorded, PARTLY ADDRESSED — the honest palette flattens elevation banding on ~45% of bodies
 
 > **2026-07-30:** the shading half of this is now addressed by the 6× relief raise above — the
