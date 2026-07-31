@@ -457,6 +457,74 @@ describe('TARGET — name, distance, ETA and the approach cue', () => {
   });
 });
 
+// ── 1b. TARGET says where the warp is going ─────────────────────────────────
+
+/**
+ * A warp destination picked out of the sky, with no body selected.
+ *
+ * ⭐ THIS IS NOT A CONTRIVED FRAME — IT IS THE ONLY FRAME THERE IS after a warp
+ * pick. `trySelectWarpTarget` (main.js:11113) opens with
+ * `if (_selectedTarget) scControls.deselect();`, the single-selection invariant,
+ * so choosing a destination NULLS the body this panel's hero reads. Before this
+ * block, the moment a pilot picked where to go the TARGET glass lost its hero and
+ * held two empty rows, and — since BodyInfo, which used to type out "Warp Target",
+ * is suppressed in HELM (main.js:662) — the destination was announced nowhere on
+ * the primary path. The snapshot has carried `warp.targetName`
+ * (CockpitSnapshot.js:208) since increment 6 and no painter has ever read it.
+ */
+const WARP_PICKED = buildCockpitSnapshot({
+  scModel: { speed: 1.0, driveOn: true, throttle: 0.4, speedCap: () => 4000, turnRateCap: () => 0.7 },
+  flightMode: 'manual',
+  warpTarget: { name: 'PVX J4K7Q2M+9XP3RWZ' },
+});
+
+describe('TARGET — the warp destination, once the body selection is gone', () => {
+  it('draws the destination name when a warp target is picked and nothing is selected', () => {
+    expect(drawn(paint(paintTarget, WARP_PICKED, 0).log)).toContain('PVX J4K7Q2M+9XP3RWZ');
+  });
+
+  it('labels it, so a destination cannot be misread as the body under the reticle', () => {
+    // The two states occupy the same hero slot and mean opposite things — one is
+    // what a burn will hit, the other is what a warp will leave for. NavComputer
+    // already calls it WARP TARGET on its own prism view (NavComputer.js:1860);
+    // the same words here mean the glass agrees with itself.
+    const texts = drawn(paint(paintTarget, WARP_PICKED, 0).log);
+    expect(texts).toContain('WARP TARGET');
+    // And the label is absent when there is a body instead — otherwise it is
+    // decoration rather than a discriminator.
+    expect(drawn(paint(paintTarget, FLYING, 0).log)).not.toContain('WARP TARGET');
+  });
+
+  it('leaves DIST and ETA blank for a destination that has no in-system range', () => {
+    // The load-bearing half of "blank, never zero". A warp destination is a star
+    // in the galaxy, not a body in this system: `target.distance` is null and the
+    // ETA model has nothing to divide. A painter that reached for the drive's
+    // numbers here would print a confident reading of the wrong thing.
+    const { log } = paint(paintTarget, WARP_PICKED, 0);
+    expect(rowValue(log, 'DIST')).toBe('');
+    expect(rowValue(log, 'ETA')).toBe('');
+  });
+
+  it('keeps the selected body as the hero if both are somehow set', () => {
+    // ⚠ HONEST LIMIT: the game makes this state unreachable in BOTH directions —
+    // picking a star deselects the body (main.js:11113) and picking a body calls
+    // `_clearWarpTargetSelection()` (main.js:7279). So this pins the painter's
+    // DETERMINISM, not a reachable frame. It is here because the hero slot is
+    // shared: a later edit that swapped the precedence would replace the thing a
+    // burn is about to hit with the thing a warp is about to leave for, and no
+    // other test in this file would notice.
+    const both = buildCockpitSnapshot({
+      selectedTarget: { kind: 'planet', name: 'Veskol b' },
+      targetDistance: 250,
+      warpTarget: { name: 'PVX J4K7Q2M+9XP3RWZ' },
+    });
+    const texts = drawn(paint(paintTarget, both, 0).log);
+    expect(texts).toContain('Veskol b');
+    expect(texts).not.toContain('PVX J4K7Q2M+9XP3RWZ');
+    expect(texts).not.toContain('WARP TARGET');
+  });
+});
+
 describe('INFO — the dossier, straight off the table', () => {
   it('draws every row of buildInfoRows, in order, label and value verbatim', () => {
     const { log } = paint(paintInfo, FLYING, 0);

@@ -85,10 +85,22 @@ import { AU_TO_SCENE } from '../../core/ScaleConstants.js';
  * header for the full argument.
  */
 const LAYOUT = Object.freeze({
+  KIND_BASELINE: 0.10,
   HERO_BASELINE: 0.22,
   ROW_FIRST_BASELINE: 0.50,
   BANNER_BASELINE: 0.88,
 });
+
+/**
+ * What the hero is, when it is not the body under the reticle.
+ *
+ * Drawn only for a warp destination, never for a selected body — a label that
+ * appeared in both states would be decoration rather than a discriminator. The
+ * words are NavComputer's own (`NavComputer.js:1860` draws `WARP TARGET` over
+ * its prism view), so the two surfaces that can name a destination name it
+ * identically.
+ */
+const WARP_KIND = 'WARP TARGET';
 
 /** Below this many km the reading is written in km. */
 const KM_TIER_MAX_KM = 1000;
@@ -199,13 +211,40 @@ export function paintTarget(screen, snapshot, nowMs) {
   const readout = buildFlightReadout(flightReadoutStateFromSnapshot(snapshot ?? {}));
   const target = snapshot?.target ?? {};
 
+  // ── WHO OWNS THE HERO SLOT ────────────────────────────────────────────────
+  //
+  // The body under the reticle wins, because it is the thing a burn will hit.
+  // With no body, the warp destination takes the slot. That is not a nicety: the
+  // two are mutually exclusive BY THE GAME'S OWN INVARIANT and the transition
+  // runs one way round more often than the other. `trySelectWarpTarget`
+  // (main.js:11113) opens with `if (_selectedTarget) scControls.deselect();`, so
+  // choosing where to go DELETES what this panel was showing — and BodyInfo,
+  // which used to type out "Warp Target" on that same click, is suppressed in
+  // HELM (main.js:662, AC-OVERLAYS-RETIRE-IN-HELM). Without this, picking a
+  // destination emptied the glass and announced the destination nowhere.
+  //
+  // ⚠ The snapshot has carried `warp.targetName` since increment 6
+  // (CockpitSnapshot.js:208) and no painter read it. PanelHost's own header
+  // (PanelHost.js:128-129) asserts the destination name "is still TRUE during a
+  // warp" — a documented intent that was contradicted by every painter.
+  const warpName = target.name ? null : (snapshot?.warp?.targetName || null);
+
   const H = screen.height;
   const t = screen.type;
 
   screen.clear();
 
   // FIRST, always — `drawHeroName` may clear again. See the header.
-  drawHeroName(screen, target.name);
+  drawHeroName(screen, target.name || warpName);
+
+  // AFTER the hero, and the ordering is load-bearing for the same reason: the
+  // overflow path re-clears the whole buffer, so a label painted first would
+  // vanish on exactly the long designations that most need saying what they are.
+  if (warpName) {
+    screen.text(WARP_KIND, screen.width / 2, H * LAYOUT.KIND_BASELINE, {
+      size: t.label, align: 'centre',
+    });
+  }
 
   // ── The two readings ──
   // DIST is the raw distance; ETA is the model's, verbatim. `readout.eta` is
