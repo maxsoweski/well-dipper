@@ -610,6 +610,56 @@ still cost compile time in every variant that carries them.
 ⚠ **One GPU, one driver, one browser** (RTX 5080 / Chrome / WSL2). Shader compile time is strongly
 driver-dependent, so treat the ratios as sound and the absolute seconds as indicative.
 
+### 📐 RUNG 4 SCOUTED, NOT STARTED (2026-07-30) — the big four landforms, costed before writing
+
+Applying rung 3's own rule: **cost it in shader KB first.** Transitive call-graph closure of the
+four combiners inside `HEIGHT_GLSL`, excluding `hash3`/`noised`/`fbmd` (already in the game):
+
+    group        fns   KB     new dependencies pulled in
+    mountains     5    8.5    fbmdRidged, grainProvinceRotate2, provinceWeight, sampleGrainStrike
+    craters       7    9.6    craterProfile, ejectaProfile, hash33, provinceWeight, voronoi3d
+    canyons       5    7.1    grabenProfile, grainProvinceRotate, provinceWeight, sampleGrainStrike
+    plateaus      4    6.6    fbmdHetero, provinceWeight, terraceProfile
+    ── UNION, deduped ──  17 fns, 19.4 KB  (province gating is 4.8 KB of that)
+
+**Verdict: affordable.** `ROCKY_BODY` goes 31.4 KB → 50.8 KB, i.e. **+1.1 to +1.6 s of cold compile**
+on that variant (at the measured 58–81 ms/KB). Against a current whole-game total of 4.08 s that is
+real but not disqualifying — and it makes the async-shader-warmup item above more worth doing.
+
+#### Two findings that change how rung 4 should be written
+
+⭐ **"Province weight pinned neutral" has an exact mechanism, no stubbing needed.**
+`provinceWeight` ends `return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);` — so
+**`uProvinceWeight = 0.0` returns exactly 1.0** for every feature id, `gProvince` never needs
+initialising, and `initProvinces` need not be ported at all. (Optionally stub `provinceWeight` to
+`return 1.0;` in the game copy to save the 4.8 KB and the ~50 `PROV_*` constants until rung 5 —
+worth ~0.3–0.4 s of compile.)
+
+⛔ **Mountains and canyons depend on a BAKED CUBE TEXTURE — and the game binds zero textures.**
+Both reach `sampleGrainStrike`, which does `textureCube(uTectonicGrainCube, d).rg` to get the
+tectonic strike direction that makes ranges read as *ranges* rather than blobs. None of the other
+rung-4 dependencies touch a texture (verified: `fbmdRidged`, `fbmdHetero`, `craterProfile`,
+`ejectaProfile`, `grabenProfile`, `terraceProfile`, `grainProvinceRotate*` are all texture-free).
+**So craters + ejecta and plateaus are portable today; mountains and canyons are not, as written.**
+Three ways out, in preference order:
+
+1. ⭐ **Compute the strike analytically.** The grain cube's own header says it "stores a smooth
+   WORLD-space strike that is a pure function of |lat| (latitude bands — it carries ZERO
+   within-body longitudinal structure)". **A pure function of latitude does not need a bake.** If
+   that comment is accurate, the game can evaluate the strike in-shader for free and skip the
+   texture entirely. Verify the claim against the baker before relying on it.
+2. **Grain off**: `uTectonicGrainStrength = 0` is a documented byte-identical fallback gate, and
+   `sampleGrainStrike` also falls back to the dir-tangent on a degenerate/black cube. Cheapest, but
+   mountains lose their strike alignment and read as blobs — a visible downgrade.
+3. **Do the per-planet bake.** The slice-3 recon already warned this is the real cost of the lab
+   path ("the real cost was never units, it is the per-planet BAKE"). Last resort.
+
+**Suggested order for rung 4:** craters + ejecta first (fully portable, most visually distinctive,
+9.6 KB), then plateaus (6.6 KB, also portable), then resolve the grain question and take mountains
++ canyons. ⚠ Expect each to need its own amplitude calibration against the game's height scale, the
+way `RELIEF_GAIN` did — the register's standing lesson is that a same-named quantity across this
+seam has now produced four silent-disagreement bugs.
+
 ### 🔶 Recorded, PARTLY ADDRESSED — the honest palette flattens elevation banding on ~45% of bodies
 
 > **2026-07-30:** the shading half of this is now addressed by the 6× relief raise above — the
