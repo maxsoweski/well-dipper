@@ -76,6 +76,31 @@ off when pointed away, while a head-on approach still drops you (capture). Subli
 maneuvering with a hard collision barrier (never fly through a body) shipped in the
 same arc.
 
+**Update 2026-08-01 — the ORRERY station shipped (a second, deliberately
+non-screensaver way to be in the build):** where HELM diverged from the passive
+spec by giving the player the stick, ORRERY diverges the other way — it is
+god's-eye *viewing* in which **nothing ever flies you**. Entry is an instant
+framed cut with no warp cinematic; the title-end and nebula-linger auto-warp
+timers never fire, so ORRERY idles indefinitely; BURN never renders and no path
+silently swaps you to HELM. Bodies are browsed by click-1 to select, click-2 to
+glide the *view* (a two-phase centre-then-fly: rotate until the target is
+centred, then translate straight in — never a side-slide). Warping between
+systems arrives by zooming **in** from a far spawn rather than teleporting in and
+zooming out, and D-hold at the chooser skips the whole boot ceremony straight
+into Sol in either station.
+
+Two consequences worth recording because they read as UX, not internals: orbit
+lines are drawn by a screen-space conic field rather than per-ring geometry, so
+they now survive being viewed edge-on (the old renderer painted nothing within
+~6° of the orbit plane); and the camera-proximity fade is **retired** on Max's
+2026-08-01 ruling — orbit lines no longer disappear as you approach a planet.
+That fade was mitigation for a renderer that no longer exists, and its cutoff
+scaled with the *orbit's* radius rather than the body being approached, so lines
+vanished while the planet was still a dot.
+
+Shipped on `feature/supercruise-freelook`, UAT-passed 2026-08-01, merged to
+**local master only — not deployed**.
+
 ---
 
 ## ENRICHED tier (Layer 2)
