@@ -847,6 +847,86 @@ That identity is also why craters are accumulated SEPARATELY from `gReliefD` and
 slope, `fbmd`'s only becomes one after that divide, and folding them early would rescale every crater
 by `noiseScale`, which spans ~100× across this game's bodies.
 
+### ⭐⭐ 2026-08-01 — STAGE 0 SHIPPED + LIVE-MEASURED: the freeze is gone, and the render target
+### turned out to be worth 10×
+
+Stage 0 is the enabler for everything below — nothing from the lab's pipeline can land while its
+shader costs ~29–47 s of cold compile. It shipped as `src/rendering/ShaderWarmup.js`, fired from
+main.js on the title screen (which spawns a **nebula**, so no planet material has ever been built
+there and the player is reading a logo with nothing waiting on it). Commits `9da286b` (build) and
+`d87a8fe` (measurement + a fix the measurement forced).
+
+**The mechanism in one line:** three programs, not eighteen. The planet TYPE only chooses which
+fragment BODY is concatenated onto the shared header, and three caches GPU programs by shader
+SOURCE — so warming three programs warms every planet in the game. `PLANET_SHADER_VARIANTS` is
+exported from `Planet.js` rather than retyped in the warm-up, because "same source" IS the whole
+mechanism.
+
+#### The measurement — four ways into a system, worst frame recorded
+
+rAF confirmed at 240 fps *before* trusting anything (a backgrounded Chrome throttles to ~1 fps while
+`document.hidden` reports false). `window.__shaderCacheBust` changes the shader SOURCE, so "cold"
+means cold rather than served out of Chrome's shader disk cache.
+
+    cell  warm-up            bound target      worst frame
+    ----  -----------------  ----------------  -----------
+      2   none               —                 5 424.5 ms     <- what the game paid before this
+      3   yes                canvas (WRONG)      606.5 ms
+      4   yes                sceneTarget          58.7 ms
+      1   title-screen auto  sceneTarget         137.8 ms      (first-ever Sol entry, so it also
+                                                                carries texture + geometry work)
+
+**5 366 ms of a 5 424 ms freeze removed — 99%.** Median frame is 4.2 ms in every cell; the entire
+cost is one frame. Warm entry has now measured 58.7 / 66.1 / 137.8 ms across three runs and has
+never produced a frame over 500 ms; cold has never produced fewer than exactly one.
+
+⭐ **The render-target binding is worth 10.3×, and is now a number rather than an inherited warning.**
+Cell 3 is cell 4 with one line changed. The program cache key bakes in `toneMapping` +
+`outputColorSpace`, both read from the **currently-bound target**, so warming against the canvas
+links a program the game never asks for. It is not a total loss — 606 ms against 5 424 — and that is
+precisely what makes it dangerous: **it looks mostly fixed.** main.js's warp gate documents this trap
+as "Goal 3b"; this is the first time the lane has measured it.
+
+⚠ **Cold cost is a RANGE, not a constant:** 5 424 ms on a page's first cold link, 2 563 ms later in
+the same page once ANGLE's own translation caches are warm. The first-ever link is the worst case,
+and the first-ever link is the one a player hits. Report it as 2.5–5.4 s.
+
+⚠ **Sol is a legitimate vehicle for THIS measurement** even though it is the wrong place to judge
+surface look. The program is chosen by body TYPE, not by system, so compile cost is
+system-independent. Do not generalise that to any look measurement.
+
+#### What the measurement forced: the warm-up was serialized
+
+It awaited each variant before starting the next, so the driver never had more than one link in
+flight and the total was the SUM rather than roughly the longest.
+`KHR_parallel_shader_compile` exists to overlap them.
+
+    serialized   4 263 ms
+    parallel     2 667 / 2 701 / 2 728 ms      (three runs, fresh source each)
+
+1.6×. The per-variant figures now **overlap** (rocky 2 663 / exotic 2 658 resolving together), which
+is the direct evidence of concurrent linking rather than merely a faster total. Kickoff is still one
+variant per animation frame — three ~100 KB synchronous hand-offs in one frame is a visible
+title-screen stutter, the exact thing this module exists to remove. This matters because the title
+screen is not infinite: a player who dismisses it fast gets only the variants that finished, so
+sum-vs-max is a difference in how much of the win actually lands.
+
+#### The other half of Stage 0, built but not yet exercised
+
+`swapMaterialWhenReady()` — render with the shader we have, link the target shader off the main
+thread, swap the material in when the promise resolves. Nothing calls it yet; it is what Stage 2
+will use to bring the lab's material in without a freeze. ⚠ It is a **different axis** from
+`BodyRenderer.setLOD`'s procedural↔textured swap, which has a standing rule that it never returns to
+procedural. This one is procedural→procedural (cold→warm) and must not be routed through that path.
+
+#### The one invariant with no runtime failure signal
+
+`tests/shader-warmup-source-parity.test.js` (7 tests). If the warm-up's source ever stops matching
+the body's source, the warm-up still runs, still resolves, and **still reports a healthy multi-second
+compile** — while warming a program nothing draws. There is no error, no warning, and no symptom
+except that the win quietly disappears. Hence `window.__shaderCacheBust` is read inside the single
+shared accessor `planetShaderSource()`, so a measurement run cannot bust one path and not the other.
+
 ### ⭐⭐ 2026-07-31 — MAX CHANGED THE TARGET: put the LAB'S PIPELINE in the game, procgen and
 ### rendering, asap. The transcription ladder is the wrong vehicle for that. SPIKE MEASURED.
 
