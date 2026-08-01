@@ -31,32 +31,51 @@
  *   2. `turnRateCap` — likewise absent from the HUD's state, and in radians per
  *      second, which is not a unit anybody flies by. Converted to degrees per
  *      second here, rounded to whole degrees; see TURN_ROW below.
- *   3. The throttle. The charter asks DRIVE to show it and the model deliberately
- *      does not: FlightReadout's header rules the throttle bar out as a STEERING
- *      indicator. What it DOES return is `bar.commandedFrac` — the speed the
- *      throttle is asking for, on the same scale as the speed the ship has — and
- *      that is what this panel draws, as the pin above the bar. A numeric "THR
- *      72%" row was considered and dropped for a specific reason: the snapshot
- *      writes `scModel?.throttle ?? 0`, so a frame with no drive model at all
- *      reports a throttle of zero, and the row could not tell "stick at rest"
- *      from "no drive data". It would print an authoritative 0% on a blank frame,
- *      which is the one thing every readout in lane F is forbidden to do. The pin
- *      says the same thing without ever having to fabricate a number.
+ *   3. ⭐ NOTHING. THE THROTTLE IS BACK IN THE MODEL — this item used to explain
+ *      why it was not, and the explanation is worth keeping because both halves
+ *      of it were fixed rather than overruled (2026-07-31, Max in UAT: *"let's
+ *      make sure the throttle bar is represented on one of the screens"*).
+ *
+ *      It said: FlightReadout rules the throttle out as a STEERING indicator, so
+ *      the panel draws `bar.commandedFrac` — the speed the throttle is asking for
+ *      — as the pin instead; and a numeric "THR 72%" row was dropped because the
+ *      snapshot writes `scModel?.throttle ?? 0`, so a frame with no drive model
+ *      reports a throttle of zero and the row could not tell "lever at rest" from
+ *      "no drive data". Printing an authoritative 0% on a blank frame is the one
+ *      thing every readout in lane F is forbidden to do.
+ *
+ *      That second argument was sound and it was an argument against the `?? 0`,
+ *      not against the throttle. The snapshot now writes null; the kit draws a
+ *      non-finite fraction as an empty frame, which is "no reading" said exactly.
+ *      The first argument was a misfiling: a lever position is not a steering
+ *      input — it persists with nobody's hand on it. See FlightReadout's header.
+ *
+ *      AND `commandedFrac` DOES NOT COVER IT, which is why the pin was not
+ *      already the answer. Commanded speed is throttle × the LIVE speed cap, so
+ *      the pin moves under gravity with the pilot's hand perfectly still. The
+ *      pin says what the ship was asked to do; the bar says where the hand is.
  *
  * ── WHAT IS ON THE GLASS, AND WHY SO LITTLE OF IT ───────────────────────────
  *
  * The panel subtends about 17 degrees of a 70-degree field of view — roughly 260
  * SCREEN pixels top to bottom whatever the buffer resolution is. That is the hard
- * constraint, so this is five elements and not a dashboard:
+ * constraint, so this is six elements and not a dashboard:
  *
  *     the speed, huge          the one number a glance is for
  *     SUBLIGHT, when it is     absent means supercruise; the model only emits the
  *                              tag on `driveOn === false`, strictly
- *     the bar                  fill = current speed, pin above = commanded,
+ *     the speed bar            fill = current speed, pin above = commanded,
  *                              tick below = the drop ceiling
+ *     THR + its bar            the lever, always bipolar, no pin — added
+ *                              2026-07-31; see item 3 above for why it was not
+ *                              here before and what changed
  *     CAP and TURN             the two ceilings, small, right-aligned
  *     MODE: …                  the string the HUD renders, uppercased, unchanged
  *     the mass-lock banner     inverted, blinking, no colour
+ *
+ * ⚠ SIX IS THE CEILING, not a new baseline. The sixth cost a re-check of every
+ * clearance on the glass (LAYOUT below has the arithmetic) and it fits because it
+ * is a bar with no pin and no ticks. A seventh does not obviously fit anywhere.
  *
  * WHICH WARNING LIVES HERE. `buildFlightReadout` returns two cues and this panel
  * draws exactly one of them. Mass-lock — "TOO CLOSE — SUBLIGHT ONLY" — is a
@@ -99,10 +118,36 @@ const LAYOUT = Object.freeze({
   TAG_BASELINE: 0.28,
   BAR_TOP: 0.33,
   BAR_HEIGHT: 0.07,
-  ROW_FIRST_BASELINE: 0.52,
+  // ⭐ THE THROTTLE, added 2026-07-31 (Max's UAT). The clearances above and below
+  // it are the whole reason these three numbers are what they are, and a hairline
+  // is `body/8` = H/136 ≈ 0.0074H, with the bar's ticks and pin reaching three of
+  // them (0.022H) outside the frame:
+  //
+  //   ABOVE — the speed bar's frame bottoms at 0.400 and its DROP TICK hangs to
+  //     0.422. The throttle bar's top at 0.435 clears that by 0.013H, which is
+  //     the same clearance the original layout's tightest seam already ran at.
+  //   BELOW — no tick, no pin, so 0.485 is the last ink. `ROW_FIRST_BASELINE`
+  //     moved 0.52 → 0.545 to keep its 0.013H (a body-size row's ink top is
+  //     `baseline - 0.8 × H/17` = 0.498).
+  //
+  // The rows moving pushed nothing else: the second row's descender now bottoms
+  // at 0.651 and MODE's ink starts at 0.713, so that gap grew rather than shrank.
+  THR_BAR_TOP: 0.435,
+  THR_BAR_HEIGHT: 0.05,
+  ROW_FIRST_BASELINE: 0.545,
   MODE_BASELINE: 0.76,
   BANNER_BASELINE: 0.92,
 });
+
+/**
+ * The gap between the THR label and the bar that follows it, in hairlines.
+ *
+ * The bar starts from the label's MEASURED ink box, not from a guessed width —
+ * `screen.text` hands its box back for exactly this. A hard-coded x would be
+ * wrong at any buffer height but the one it was eyeballed at, which is the same
+ * mistake writing this layout in pixels would have been.
+ */
+const THR_LABEL_GAP_HAIRS = 2;
 
 /** radians per second → degrees per second. */
 const RAD_TO_DEG = 180 / Math.PI;
@@ -198,6 +243,45 @@ export function paintDrive(screen, snapshot, nowMs) {
       ticks: [{ frac: readout.bar.dropTickFrac }],
       pin: readout.bar.commandedFrac,
     },
+  );
+
+  // ── The throttle ──
+  // The lever's own position, always bipolar: fill right of the centre zero for
+  // forward, left for reverse. The overlay says that difference with cyan vs
+  // amber and one ink cannot, so the DIRECTION of the fill carries it — which is
+  // the same substitution the sublight speed bar already makes.
+  //
+  // NO PIN. The overlay draws one at `tbCenterX + (tbW/2)*throttle`, which is
+  // precisely where its own fill ends — a marker on the tip of the thing it
+  // marks. On black glass the fill's edge already is that mark, so the pin would
+  // be redundant ink, and the 0.022H it reaches ABOVE the frame is exactly the
+  // clearance this row does not have.
+  //
+  // A null frac draws the FRAME AND NOTHING INSIDE — no fill, and no zero mark
+  // either, since the kit puts the zero mark inside its finite branch. That is
+  // the reading this panel needs and could not previously have: an empty
+  // instrument says "no throttle data", a centre zero mark says "the lever is at
+  // rest", and before the snapshot started writing null those were the same
+  // picture. See CockpitSnapshot's `drive.throttle`.
+  const thrY = H * LAYOUT.THR_BAR_TOP;
+  const thrH = H * LAYOUT.THR_BAR_HEIGHT;
+  // Vertically centre the label's ink on the bar rather than sharing a baseline
+  // with it: a bar has no baseline, and a label sitting on its bottom edge reads
+  // as belonging to whatever is below.
+  const thrLabelBaseline = thrY + (thrH + t.label * (0.8 - 0.25)) / 2;
+  const thrLabel = screen.text('THR', t.pad, thrLabelBaseline, { size: t.label });
+  // `text` returns null for an empty string only; 'THR' always draws. The
+  // fallback keeps the bar on the glass rather than at NaN if that ever changes.
+  const thrBarX = thrLabel
+    ? thrLabel.x + thrLabel.w + screen.hair * THR_LABEL_GAP_HAIRS
+    : t.pad;
+  screen.bar(
+    thrBarX,
+    thrY,
+    W - t.pad - thrBarX,
+    thrH,
+    readout.throttleFrac,
+    { bipolar: true },
   );
 
   // ── The two ceilings ──

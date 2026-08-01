@@ -213,7 +213,24 @@ export function buildCockpitSnapshot(sources = {}) {
     drive: {
       speed: scModel?.speed ?? 0,
       commandedSpeed: commandedSpeed ?? 0,
-      throttle: scModel?.throttle ?? 0,
+      // ⭐ null, NOT 0, and it is the ONE field in this block that changed on
+      // 2026-07-31 — because it is now DRAWN, and the two defaults answer a
+      // different question the moment anything reads it.
+      //
+      // `?? 0` said "no drive model means the lever is at rest". That is a
+      // reading, and an authoritative one: a bipolar bar would show its centre
+      // zero mark and a pilot would see a throttle sitting at neutral on a frame
+      // where there is no throttle to sit anywhere. `speedCap` two lines down
+      // already settled this argument for the same block — "the snapshot writes
+      // null, not 0, precisely so this case is distinguishable" — and the
+      // DrivePanel header records the throttle ROW being dropped in an earlier
+      // increment for exactly this reason, with the `?? 0` cited as the blocker.
+      //
+      // So the blocker is removed rather than worked around. `PhosphorScreen.bar`
+      // draws a non-finite fraction as an EMPTY FRAME — "no reading", which is
+      // the truth — and it already distinguishes that from a bar at rest, which
+      // draws the zero mark. Nothing else reads this field.
+      throttle: scModel?.throttle ?? null,
       driveOn: scModel?.driveOn ?? false,
       sublightCap: sublightCap ?? 0,
       speedCap: typeof scModel?.speedCap === 'function' ? scModel.speedCap() : null,

@@ -420,11 +420,19 @@ const stateOf = (row) => ({ ...row.state, ...(row.stateExtra || {}) });
 describe('FlightReadout — the overlay\'s drive/target readout, ported without colour', () => {
   it('says exactly the right thing for every row of the truth table', () => {
     for (const row of ROWS) {
-      const { bar, ...text } = buildFlightReadout(stateOf(row));
+      const { bar, throttleFrac, ...text } = buildFlightReadout(stateOf(row));
       expect(text, row.name).toEqual(row.expect);
       // The bar is always present, even on rows that assert nothing about it —
       // otherwise a destructure of a missing field would quietly pass above.
       expect(typeof bar, row.name).toBe('object');
+      // ⭐ `throttleFrac` is destructured out rather than written into all 18
+      // `expect` blocks, and this line is why that is not a dodge: NOT ONE ROW
+      // IN THIS TABLE SETS A THROTTLE, so the assertion they would all carry is
+      // the same one, and it is the one that matters — a state with no throttle
+      // field reads null, never 0. `?? 0` anywhere on the path from the snapshot
+      // to here turns every row of this table red at once. The throttle's own
+      // truth table is its own describe block below.
+      expect(throttleFrac, row.name).toBeNull();
     }
     expect(ROWS.length).toBe(18);   // the whole table ran, not a subset
   });
@@ -1069,6 +1077,76 @@ describe('FlightReadout — the overlay\'s drive/target readout, ported without 
     expect(new Set(Object.values(SPEED_BAND)).size).toBe(3);
   });
 
+  // ── The throttle ──────────────────────────────────────────────────────────
+  //
+  // Added 2026-07-31 on Max's UAT call. The field is one clamp and a
+  // `Number.isFinite`, and every assertion below is about the null — because the
+  // reason the throttle was NOT on the glass for two increments was that the
+  // snapshot wrote `?? 0`, and a throttle bar reading a confident dead-centre
+  // zero on a frame with no ship is the exact failure lane F is built to refuse.
+
+  describe('throttleFrac — the lever, and the difference between 0 and nothing', () => {
+    const frac = (throttle) => buildFlightReadout({ speed: FAST, driveOn: true, throttle }).throttleFrac;
+
+    it('carries the lever straight through, signed', () => {
+      // Signed, not magnitude: the model allows reverse throttle and the panel
+      // draws a bipolar bar, so the sign IS the direction the fill goes.
+      expect(frac(0.72)).toBe(0.72);
+      expect(frac(-0.5)).toBe(-0.5);
+      expect(frac(1)).toBe(1);
+      expect(frac(-1)).toBe(-1);
+    });
+
+    it('AT REST IS 0 AND IS NOT NOTHING', () => {
+      // The pair this whole field is careful about. Both draw a bar; only one of
+      // them draws a mark in it, and a test that only checked "falsy" would call
+      // these the same.
+      expect(frac(0), 'a lever held at neutral is a reading').toBe(0);
+      expect(frac(undefined), 'no drive model is not a lever at neutral').toBeNull();
+      expect(frac(null)).toBeNull();
+      expect(frac(NaN)).toBeNull();
+      expect(Object.is(frac(0), 0), 'must be 0, not null — the kit branches on finite').toBe(true);
+    });
+
+    it('clamps in THIS module, so the number handed out is one it means', () => {
+      // PhosphorScreen.bar clamps for drawing, so an out-of-domain 1.4 would
+      // paint identically to 1.0 and this module would have published a
+      // fraction outside its own stated -1..+1 domain. Nothing downstream could
+      // tell. Clamping here is what makes the returned value honest.
+      expect(frac(1.4)).toBe(1);
+      expect(frac(-3)).toBe(-1);
+      expect(frac(Infinity), 'not finite — no reading, rather than a clamp to 1').toBeNull();
+    });
+
+    it('is independent of the drive, unlike the speed bar beside it', () => {
+      // The speed bar switches domain on `driveOn`; this one never does. A
+      // throttle scale that changed meaning with the drive would be the one
+      // instrument on the glass a pilot has to think about before reading.
+      const sup = buildFlightReadout({ speed: FAST, driveOn: true, throttle: -0.5 });
+      const sub = buildFlightReadout({ speed: -0.001, driveOn: false, sublightCap: CAP, throttle: -0.5 });
+      expect(sup.bar.bipolar, 'CONTROL: the speed bar really does differ here').toBe(false);
+      expect(sub.bar.bipolar).toBe(true);
+      expect(sup.throttleFrac).toBe(-0.5);
+      expect(sub.throttleFrac).toBe(-0.5);
+    });
+
+    it('the snapshot writes null for a frame with no drive model, and it survives the adapter', () => {
+      // The two-hop path the `?? 0` used to break: CockpitSnapshot writes the
+      // null, `flightReadoutStateFromSnapshot` must not overwrite it on the way
+      // past, and the builder must not either. Asserted end to end because a
+      // `?? 0` at EITHER hop produces the same wrong picture.
+      const noShip = buildCockpitSnapshot({});
+      expect(noShip.drive.throttle, 'the snapshot fabricated a lever position').toBeNull();
+      expect(flightReadoutStateFromSnapshot(noShip).throttle, 'the adapter fabricated one').toBeNull();
+      expect(buildFlightReadout(flightReadoutStateFromSnapshot(noShip)).throttleFrac).toBeNull();
+
+      // CONTROL: a frame WITH a model still reads, or the three nulls above are
+      // satisfied by a path that never carries the field at all.
+      const flying = buildCockpitSnapshot({ scModel: { speed: FAST, throttle: 0.4, driveOn: true } });
+      expect(buildFlightReadout(flightReadoutStateFromSnapshot(flying)).throttleFrac).toBe(0.4);
+    });
+  });
+
   // ── The adapter ───────────────────────────────────────────────────────────
 
   it('feeds the same builder from a CockpitSnapshot, field for field', () => {
@@ -1090,11 +1168,18 @@ describe('FlightReadout — the overlay\'s drive/target readout, ported without 
     const viaSnapshot = buildFlightReadout(flightReadoutStateFromSnapshot(snapshot));
     const direct = buildFlightReadout({
       speed: FAST, commandedSpeed: FAST, driveOn: true, sublightCap: CAP,
+      // ⭐ Added 2026-07-31 with the throttle bar, and the failure it caught on
+      // the way in is the whole point of this test: without it `direct` read
+      // null while `viaSnapshot` read 0.8, i.e. the adapter carried a field the
+      // hand-written state did not. That is exactly the drift this assertion
+      // exists to find, arriving the first time a new field was added.
+      throttle: 0.8,
       targetPos: TARGET, targetDistance: 100, aimOnTarget: true,
       dropState: 'too-fast', dropMaxSpeed: CEILING, massLockHint: false,
       flightMode: 'assist',
     });
     expect(viaSnapshot).toEqual(direct);
+    expect(viaSnapshot.throttleFrac).toBe(0.8);
     expect(viaSnapshot.drop).toEqual(SLOW_DOWN);
     expect(viaSnapshot.eta).toBe('1:40');
     expect(viaSnapshot.modeLine).toBe('MODE: ASSIST');

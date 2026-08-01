@@ -670,6 +670,12 @@ describe('INFO — the dossier, straight off the table', () => {
  */
 function findBarFrame(log, screen) {
   const barW = screen.width - screen.type.pad * 2;
+  // ⚠ THE FULL-WIDTH TEST BECAME LOad-BEARING ON 2026-07-31, when DRIVE grew a
+  // SECOND bar. The throttle bar starts after its `THR` label, so it is narrower
+  // than the margins by exactly the label's measured ink plus a gap — which is
+  // why this still finds two edges and not four. If the label is ever dropped
+  // and the throttle bar goes full width, this helper silently starts returning
+  // a frame spanning both bars; the count check below is what would catch it.
   const edges = ops(log, 'fillRect')
     .filter((r) => Math.abs(r.w - barW) < 1e-9 && Math.abs(r.h - screen.hair) < 1e-9);
   if (edges.length !== 2) {
@@ -689,11 +695,93 @@ function findBarFrame(log, screen) {
  * to `hair * 3` outside the frame, so the window is opened by twice that: wide
  * enough to catch every mark, tight enough to exclude the mode line and the banner.
  */
-function barRegionRects(log, screen, frame) {
+function barRegionRects(log, screen, frame, bounds = {}) {
   const slack = screen.hair * 6;
+  const top = frame.y - slack;
+  const bottom = frame.y + frame.h + slack;
   return ops(log, 'fillRect')
-    .filter((r) => r.y >= frame.y - slack && r.y + r.h <= frame.y + frame.h + slack)
-    .map((r) => [r.x, r.y, r.w, r.h, r.fillStyle]);
+    .filter((r) => {
+      // The outer window is unchanged and still asks for CONTAINMENT — that is
+      // what keeps the full-buffer clear and the full-width banner out.
+      if (!(r.y >= top && r.y + r.h <= bottom)) return false;
+      // ⭐ THE SPLIT IS DECIDED ON THE RECT'S CENTRE, and that is the whole
+      // difference between this guard working and not. A containment test at the
+      // split loses any mark that STRADDLES it — and one does: a pin drawn on
+      // the throttle bar reaches `hair * 3` above its frame, across the midline,
+      // so it was contained in neither region and both oracles agreed with a
+      // panel that had drawn an extra mark. Planted and confirmed: it was the
+      // one defect of nine that survived the first version of this file.
+      //
+      // Every mark belongs to exactly one bar, so assigning it by which side its
+      // MIDDLE falls on is both total and unambiguous. The speed bar's drop tick
+      // hangs down across the same line and lands, correctly, on the speed side.
+      const mid = r.y + r.h / 2;
+      return mid >= (bounds.notAbove ?? -Infinity) && mid <= (bounds.notBelow ?? Infinity);
+    })
+    .map((r) => [q(r.x), q(r.y), q(r.w), q(r.h), r.fillStyle]);
+}
+
+/**
+ * Quantise a coordinate to a nanometre of a pixel, for the comparison above.
+ *
+ * ⚠ NOT SLOP, AND ADDED FOR A MEASURED REASON (2026-07-31). The frames here are
+ * RECOVERED from the draw log — `h` is `bottom.y + bottom.h - top.y` — so the
+ * oracle is handed a height that has been through an addition and a subtraction
+ * the panel never did. On the throttle bar that round-trip lands on
+ * 25.599999999999994 where the panel drew 25.6, and `toEqual` reported a
+ * fifteenth-decimal-place difference as a failed assertion about a bar.
+ *
+ * A defect this comparison exists to catch — a dropped `bipolar`, a fill from
+ * the wrong edge, a pin that should not be there — moves ink by PIXELS. Nothing
+ * real hides in the ninth decimal place. Rounding there keeps the assertion
+ * exact where exactness means something.
+ */
+function q(v) {
+  return Math.round(v * 1e9) / 1e9;
+}
+
+/**
+ * The THROTTLE bar's rectangle, recovered the same way and by elimination.
+ *
+ * Added 2026-07-31. `PhosphorScreen.bar` is the only thing on DRIVE that draws a
+ * rect exactly one hairline tall, and there are now two bars, so there are
+ * exactly four such rects: this one takes the pair that is NOT full width. That
+ * is the same trick `findBarFrame` uses, run the other way round, and it means
+ * neither helper has to be told a single layout number.
+ */
+function findThrottleFrame(log, screen) {
+  const barW = screen.width - screen.type.pad * 2;
+  const edges = ops(log, 'fillRect')
+    .filter((r) => Math.abs(r.h - screen.hair) < 1e-9 && r.w < barW - 1e-9);
+  if (edges.length !== 2) {
+    throw new Error(
+      `expected the throttle bar's two horizontal frame edges, found ${edges.length}. ` +
+      `Deleting the screen.bar() call for the throttle lands here — without this ` +
+      `throw the oracle comparison would be trivially true on an empty region.`,
+    );
+  }
+  const [top, bottom] = edges.sort((a, b) => a.y - b.y);
+  return { x: top.x, y: top.y, w: top.w, h: bottom.y + bottom.h - top.y };
+}
+
+/**
+ * The y that separates the two bars' regions.
+ *
+ * ⚠ WHY A SPLIT IS NEEDED AT ALL, since it is not obvious and it is how this
+ * block first went red: `barRegionRects` opens its window `hair * 6` beyond the
+ * frame, which is deliberately more than the `hair * 3` a tick or a pin can
+ * reach. With one bar that slack was free. With two, the speed bar's window
+ * reaches 0.444H and the throttle bar's frame starts at 0.435H — so the speed
+ * bar's "region" swallowed the throttle bar's frame edges and every oracle
+ * comparison failed against rects the oracle was never asked to draw.
+ *
+ * Splitting at the midpoint is the honest fix rather than shrinking the slack:
+ * shrinking it below `hair * 3` would stop catching the marks the comparison
+ * exists to check, and the two windows would still overlap at these distances.
+ * Each bar owns the glass down to halfway to its neighbour.
+ */
+function barSplitY(speedFrame, throttleFrame) {
+  return (speedFrame.y + speedFrame.h + throttleFrame.y) / 2;
 }
 
 describe('DRIVE — the bar is drawn from the model, in the model\'s own domain', () => {
@@ -704,6 +792,7 @@ describe('DRIVE — the bar is drawn from the model, in the model\'s own domain'
   const expectBarMatchesModel = (snapshot, why) => {
     const { log, screen } = paint(paintDrive, snapshot, 0);
     const frame = findBarFrame(log, screen);
+    const split = barSplitY(frame, findThrottleFrame(log, screen));
     const model = buildFlightReadout(flightReadoutStateFromSnapshot(snapshot));
 
     // The oracle: the kit, driven by the model, at the geometry the panel used.
@@ -715,8 +804,30 @@ describe('DRIVE — the bar is drawn from the model, in the model\'s own domain'
       pin: model.bar.commandedFrac,
     });
 
-    expect(barRegionRects(log, screen, frame), `the ${why} bar is not the model's`)
-      .toEqual(barRegionRects(oracleCtx.log, oracle, frame));
+    expect(barRegionRects(log, screen, frame, { notBelow: split }), `the ${why} bar is not the model's`)
+      .toEqual(barRegionRects(oracleCtx.log, oracle, frame, { notBelow: split }));
+  };
+
+  /**
+   * The same oracle comparison for the THROTTLE bar. Added 2026-07-31.
+   *
+   * Bipolar unconditionally, no ticks, no pin — and the `{}` is asserted by
+   * being the oracle's whole options object rather than by a comment: a painter
+   * that started passing a pin would put ink in the region that the oracle does
+   * not have, and this goes red.
+   */
+  const expectThrottleMatchesModel = (snapshot, why) => {
+    const { log, screen } = paint(paintDrive, snapshot, 0);
+    const frame = findThrottleFrame(log, screen);
+    const split = barSplitY(findBarFrame(log, screen), frame);
+    const model = buildFlightReadout(flightReadoutStateFromSnapshot(snapshot));
+
+    const oracleCtx = makeRecordingCtx();
+    const oracle = new PhosphorScreen(oracleCtx, { width: PANEL_W, height: PANEL_H });
+    oracle.bar(frame.x, frame.y, frame.w, frame.h, model.throttleFrac, { bipolar: true });
+
+    expect(barRegionRects(log, screen, frame, { notAbove: split }), `the ${why} throttle bar is not the model's`)
+      .toEqual(barRegionRects(oracleCtx.log, oracle, frame, { notAbove: split }));
   };
 
   it('matches the model in supercruise — log fill, drop tick, commanded pin', () => {
@@ -763,6 +874,87 @@ describe('DRIVE — the bar is drawn from the model, in the model\'s own domain'
       .toBe(barRegionRects(withTick.log, withTick.screen, tickFrame).length);
 
     expectBarMatchesModel(noTarget, 'no-target');
+  });
+
+  // ── The throttle bar, added 2026-07-31 on Max's UAT call ──
+  //
+  // Same oracle discipline as the speed bar above, and it exists for the same
+  // measured reason: a bar draws no text, so every string assertion in this file
+  // is silent about it. The specific thing being guarded is the null — the
+  // throttle was kept OFF the glass for two increments because the snapshot
+  // wrote `?? 0`, and a bar sitting at a confident dead centre on a frame with
+  // no ship is the failure that argument was about.
+
+  it('the throttle bar is the model\'s, forward and reversing', () => {
+    // FLYING carries a forward throttle; the reversing fixture a negative one.
+    // Both go through the oracle, because a painter that dropped `bipolar: true`
+    // would draw -0.5 as an EMPTY unipolar bar — "lever at rest" — while the
+    // ship backs up, and no string on the panel would disagree with it.
+    expect(FLYING_READOUT.throttleFrac, 'CONTROL: FLYING has a lever position').not.toBeNull();
+    expectThrottleMatchesModel(FLYING, 'forward');
+
+    const reversing = buildCockpitSnapshot({
+      scModel: { speed: -0.001, driveOn: false, throttle: -0.5, speedCap: () => 0.01, turnRateCap: () => 0.7 },
+      commandedSpeed: -0.0015,
+      sublightCap: 0.002,
+    });
+    expect(buildFlightReadout(flightReadoutStateFromSnapshot(reversing)).throttleFrac).toBe(-0.5);
+    expectThrottleMatchesModel(reversing, 'reversing');
+  });
+
+  it('ALWAYS bipolar — it does not follow the speed bar into the unipolar domain', () => {
+    // The bar beside it switches domain on `driveOn` and this one must not. The
+    // check is geometric rather than a re-statement of the flag: in a bipolar
+    // bar the fill for a positive fraction STARTS at the centre; in a unipolar
+    // one it starts at the left inset. A painter that forwarded `bipolar` from
+    // `readout.bar` instead of hard-coding true passes every other assertion in
+    // this file and fails here, in supercruise, which is the common case.
+    const { log, screen } = paint(paintDrive, FLYING, 0);
+    const frame = findThrottleFrame(log, screen);
+    const split = barSplitY(findBarFrame(log, screen), frame);
+    const rects = barRegionRects(log, screen, frame, { notAbove: split });
+
+    const centreX = frame.x + frame.w / 2;
+    const inner = rects.filter(([x, , w]) => w > 0 && x > frame.x + 1e-9 && x + w < frame.x + frame.w - 1e-9);
+    expect(inner.length, 'expected a fill and the centre zero mark').toBeGreaterThanOrEqual(2);
+    expect(
+      inner.some(([x]) => Math.abs(x - centreX) < screen.hair),
+      'nothing starts at the centre — this bar filled from the left edge, i.e. unipolar',
+    ).toBe(true);
+  });
+
+  it('AN ABSENT LEVER DRAWS THE FRAME AND NOTHING IN IT — not a zero', () => {
+    // ⭐ THE ASSERTION THE WHOLE FIELD EXISTS FOR. EMPTY is a frame with no
+    // supercruise model, which the snapshot reports as `throttle: null`. The kit
+    // puts BOTH the fill and the centre zero mark inside its `Number.isFinite`
+    // branch, so "no reading" and "lever at neutral" are genuinely different
+    // pictures — an empty box versus a box with a mark in the middle of it.
+    //
+    // Asserted against the AT-REST case rather than in isolation, because
+    // "drew fewer rects" would also pass if the bar had stopped drawing at all,
+    // and because the pair is the thing that has to stay distinguishable.
+    expect(buildFlightReadout(flightReadoutStateFromSnapshot(EMPTY)).throttleFrac).toBeNull();
+
+    const absent = paint(paintDrive, EMPTY, 0);
+    const absentFrame = findThrottleFrame(absent.log, absent.screen);
+    const absentSplit = barSplitY(findBarFrame(absent.log, absent.screen), absentFrame);
+    const absentInk = barRegionRects(absent.log, absent.screen, absentFrame, { notAbove: absentSplit });
+
+    const atRest = buildCockpitSnapshot({ scModel: { speed: 0, driveOn: true, throttle: 0 } });
+    expect(buildFlightReadout(flightReadoutStateFromSnapshot(atRest)).throttleFrac).toBe(0);
+    const rest = paint(paintDrive, atRest, 0);
+    const restFrame = findThrottleFrame(rest.log, rest.screen);
+    const restSplit = barSplitY(findBarFrame(rest.log, rest.screen), restFrame);
+    const restInk = barRegionRects(rest.log, rest.screen, restFrame, { notAbove: restSplit });
+
+    // The frame itself is four rects and is present in both — the instrument is
+    // on the glass either way, which is the point of drawing an empty one.
+    expect(absentInk.length, 'the absent-lever bar drew no frame at all').toBe(4);
+    // …and at rest it has exactly one more: the centre zero mark, no fill.
+    expect(restInk.length, 'at rest the zero mark must be there and the fill must not').toBe(5);
+
+    expectThrottleMatchesModel(EMPTY, 'absent-lever');
+    expectThrottleMatchesModel(atRest, 'at-rest');
   });
 });
 
@@ -865,7 +1057,12 @@ describe('all three panels — a frame with nothing in it draws no numbers', () 
     // Pinned as an EXACT list rather than as "contains no zero", because the
     // interesting failure is a plausible-looking fabricated reading — "0.0 km",
     // "0:00", "0 K", "0 deg/s" — and any of those would slip past a looser check.
-    expect(drawn(paint(paintDrive, EMPTY, 0).log)).toEqual(['0.0 km/s', 'SUBLIGHT', 'CAP', 'TURN']);
+    // 'THR' joined the list 2026-07-31. It is a LABEL, not a reading — the bar
+    // beside it draws empty on this frame — and that is exactly why it belongs
+    // in this assertion: an instrument that is present and blank is the honest
+    // picture, and a label that vanished with its reading would be a seventh
+    // element appearing and disappearing on the glass.
+    expect(drawn(paint(paintDrive, EMPTY, 0).log)).toEqual(['0.0 km/s', 'SUBLIGHT', 'THR', 'CAP', 'TURN']);
     expect(drawn(paint(paintTarget, EMPTY, 0).log)).toEqual(['DIST', 'ETA']);
     expect(drawn(paint(paintInfo, EMPTY, 0).log)).toEqual(INFO_ROWS.map((r) => r.label));
   });

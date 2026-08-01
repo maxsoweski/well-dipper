@@ -108,12 +108,29 @@
  *     like in one ink — and the two warnings come from AlertCue.js, which is the
  *     module that owns the words-and-a-blink form. Enforced by a recursive walk
  *     in the test, not by a rule in a design doc.
- *   - NO THROTTLE BAR, no deflection dot, no steering reticle, no capture-sphere
- *     ring. The overlay draws all of those and they are not in this readout. They
- *     are STEERING indicators tied to where the player is pointing right now,
- *     which is the canopy's job, not a panel's; adding them is a scoping decision
- *     for a later AC, made deliberately, not a thing that leaks in because the
- *     input object happens to carry `throttle` and `deflection`.
+ *   - NO DEFLECTION DOT, no steering reticle, no capture-sphere ring. The overlay
+ *     draws all three and they are not in this readout. They are STEERING
+ *     indicators tied to where the player is pointing RIGHT NOW, which is the
+ *     canopy's job, not a panel's — a cross drawn at screen centre cannot be
+ *     drawn anywhere else, and a panel is not at screen centre.
+ *
+ *     ⭐ THE THROTTLE USED TO BE IN THAT LIST AND CAME OUT ON 2026-07-31, on
+ *     Max's UAT call — *"let's make sure the throttle bar is represented on one
+ *     of the screens"*. The old text ruled it out as a fourth steering indicator,
+ *     and that grouping is what was wrong: THE THROTTLE IS NOT A STEERING INPUT.
+ *     Deflection is where the stick is being held this instant and dies the
+ *     moment it is released; the throttle is a LEVER POSITION that persists with
+ *     nobody touching it, and a lever you cannot see the position of is the one
+ *     thing a real cockpit never has. It is a statement about the drive, on the
+ *     drive's own screen. The three above are unaffected and stay out.
+ *
+ *     ⚠ `commandedFrac` IS NOT THE SAME READING and does not make this
+ *     redundant, which is the objection to answer since DrivePanel already draws
+ *     it. Commanded speed is the throttle TIMES the live speed cap, so it says
+ *     what the ship was asked to DO; the same lever reads at a different place on
+ *     the bar as the cap changes under gravity, with the pilot's hand still. The
+ *     throttle says where the HAND is. Two facts, and the pilot needs both to
+ *     tell "I am asking for less" from "the well is allowing less".
  *   - NO `visible` GATE. The overlay early-returns on `!state.visible` because it
  *     is a full-screen layer over the game and has to get out of the way (the H
  *     key, warp cutscenes). The glass in the cabin is always physically there, so
@@ -199,6 +216,7 @@ function formatEta(seconds) {
  *   sublightTag: string|null,
  *   band: 'normal'|'in-window'|'too-fast',
  *   bar: {frac:number, bipolar:boolean, commandedFrac:number, dropTickFrac:number|null},
+ *   throttleFrac: number|null,
  *   eta: string|null,
  *   drop: {text:string, blink:string}|null,
  *   massLock: {text:string, blink:string}|null,
@@ -284,6 +302,28 @@ export function buildFlightReadout(state = {}) {
     ? speedToBarFrac(dropMaxSpeed)
     : null;
 
+  // ── The throttle ──
+  // The lever, -1..+1, ALWAYS bipolar — unlike the speed bar above, which
+  // switches domain with the drive. The model allows reverse throttle in both
+  // regimes, so there is no regime in which a forward-only throttle scale is the
+  // truth, and a scale that changed meaning with the drive would be the one
+  // instrument on the glass the pilot has to think about before reading.
+  //
+  // CLAMPED HERE rather than left to the kit. `PhosphorScreen.bar` clamps for
+  // drawing, so an out-of-domain 1.4 would paint identically to 1.0 and this
+  // module would have handed out a number it does not mean. The contract of this
+  // file is that its outputs are true in their stated domain.
+  //
+  // null IN, null OUT — the whole reason this field can exist at all. The
+  // snapshot writes null when there is no drive model (see CockpitSnapshot's
+  // `drive.throttle`), and `Number.isFinite` is what keeps that from becoming a
+  // confident 0. A throttle bar showing a hard centre zero on a frame with no
+  // ship is a lie about a control surface, which is the class of error this
+  // module exists to prevent.
+  const throttleFrac = Number.isFinite(state.throttle)
+    ? Math.min(1, Math.max(-1, state.throttle))
+    : null;
+
   // ── The band ──
   // The overlay's `inWindow` is DELIBERATELY WIDER than the raw dropState: it is
   // also true when a target is selected and the ship is already under the drop
@@ -329,6 +369,12 @@ export function buildFlightReadout(state = {}) {
     sublightTag,
     band,
     bar: { frac, bipolar, commandedFrac, dropTickFrac },
+    // A SIBLING OF `bar`, not a field inside it, and deliberately so: everything
+    // in `bar` shares one domain that `bar.bipolar` names, and this one is
+    // always bipolar regardless. Putting it in there would put a second domain
+    // under a flag that does not describe it — the exact confusion `bipolar`'s
+    // own doc warns a consumer about.
+    throttleFrac,
     eta,
     // Gated on hasTarget only: no target, no approach label. The cue object
     // itself is AlertCue's shared frozen value, handed straight back so a panel
@@ -401,7 +447,12 @@ export function flightReadoutStateFromSnapshot(snapshot = {}) {
     // ship does not have is the reading that misleads.
     driveOn: drive.driveOn ?? false,
     sublightCap: drive.sublightCap ?? 0,
-    throttle: drive.throttle ?? 0,
+    // ⭐ `?? null`, and it is the ONE default in this adapter that is not the
+    // conservative-looking zero. The snapshot already writes null for "no drive
+    // model" and this line used to overwrite that with 0 on the way past — the
+    // missing reading was destroyed one function before anything could notice.
+    // Left as `?? 0` this would defeat the whole null path in the builder.
+    throttle: drive.throttle ?? null,
 
     targetPos: hasTarget ? TARGET_PRESENT : null,
     targetDistance: target.distance ?? null,
