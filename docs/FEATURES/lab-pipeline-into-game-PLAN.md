@@ -112,6 +112,41 @@ guessed.
 - **MVP bias:** if the full split is large, ship the smallest independently-verifiable slice that
   gets a real game planet rendering through lab-derived uniforms, and record what it defers.
 
+#### ✅ Step 1 MVP SHIPPED — the limb — `f8a0b1e`
+
+⭐ **The lesson: check whether the seam already exists before extracting anything.** The recon
+proposed pulling a new air-optics module out of `applyDrivers`. It was unnecessary —
+`src/worldengine/base/atmosphereOptics.js` is **already** a shared module the lab imports
+(`planet-lod-lab.html:177`), it already returns `limbColor` and a continuous `limbExponent`, and
+every input it reads is already on the vector `conditionFromPlanet()` returns. **The game just never
+called it.** Shipped with no extraction and no lab edit.
+
+Measured on generated bodies (3 seeds, 8 planets with atmospheres): exponent spans **1.8 → 3.5**,
+the law's full range, where all 8 previously drew exactly `3.0`; **4 distinct rim colours**; no NaN;
+and the live compiled fragment shader declares and uses all three uniforms. `LIMB_MIX = 0` restores
+the old rim byte-identically — exact by construction, since `mix(x, y, 0.0) == x`.
+
+⛔ **Not proven: an on-screen pixel difference.** Two measurement attempts were wrong and were
+discarded (a 500 ms settle let planets orbit — motion floor 48% against a 50% "signal"; and a
+`useProgram` probe that also failed to find the shipped `uReliefMix`/`uCraterDensity`). Re-run
+back-to-back against a 1.64% motion floor, two of three dial transitions showed nothing. Cause is
+almost certainly scale — planets are a few pixels at the spawn distance. **Closing it needs the
+camera flown to a body**; teleporting does not work (the world rebases around the camera). Look is
+Max's UAT gate anyway.
+
+⭐ New debug surface: **`window._lab.spawnProceduralSystem(seed)`**. Sol's major bodies render
+through `BodyRenderer`'s *textured* path and never touch this shader, so measuring any port work
+there produces confident wrong numbers. Use this for every look measurement from now on.
+
+⚠ **Drift found, deliberately not fixed: the lab overrides the module it imports.**
+`planet-lod-lab.html:3749` computes a **binary** `_thickHaze ? 1.8 : 3.5` and discards the
+**continuous** `limbExponent` that `atmosphereOpticsOf` returns. The game takes the module's value —
+the module is the shared law. Reconciling the lab changes the lab's look and must be byte-gated.
+
+**Deferred from this slice:** `uTermStrength/Width/Color`, `uAirglowIntensity`, `uShellIntensity`
+(same inputs, one more shader block — the natural slice 2), the thick-haze `limbStrength × 1.3`, and
+everything in bands/jets/weather/storm/thermal/aurora/dust/magma/carbon/facets.
+
 ### Step 2 — extract the shaders into `.glsl.js` modules — `TODO`
 
 Same pattern, `heightNoise.glsl.js` precedent. After this, **a lab shader edit is a game shader edit**
