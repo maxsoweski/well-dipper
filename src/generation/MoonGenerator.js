@@ -302,11 +302,26 @@ export class MoonGenerator {
     const startAngle = rng.range(0, Math.PI * 2);
 
     // Override planet data with moon-appropriate radius
+    // ⚠ MASS MUST BE RESCALED WITH THE RADIUS. pData is a FULL PLANET generated at 1 AU, and the
+    // three lines below shrink it to moon scale by overriding radiusEarth. Overriding radius
+    // without mass leaves a planet's mass inside a moon's volume: measured worst case 27.6 M⊕ at
+    // 0.89 R⊕, i.e. denser than any real rocky body, reported as ~35 g by
+    // conditionFromPlanet's surfaceGravity (M/R²) — which then drives reliefEnvelope and every
+    // other gravity-dependent law on the 14-in-1120 bodies that render through Planet.js.
+    //
+    // Cubing the radius ratio preserves pData's DENSITY exactly, which is the physically correct
+    // invariant here: it is the same material, less of it. That also keeps composition.density
+    // valid, since it was derived for this body's material and not for its size.
+    //
+    // ⛔ Deliberately pure arithmetic on values already drawn — NO rng call. Adding a draw to this
+    // shared stream would rewrite the generated universe.
+    const massScale = pData.radiusEarth > 0 ? (radiusEarth / pData.radiusEarth) ** 3 : 1;
     const scaledPlanetData = {
       ...pData,
       radiusEarth,
       radiusScene,
       radius,
+      massEarth: (pData.massEarth ?? 1) * massScale,
       // No moons of moons
       moonCount: 0,
     };

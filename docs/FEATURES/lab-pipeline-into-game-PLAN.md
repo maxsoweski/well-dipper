@@ -102,20 +102,34 @@ Discovered 2026-08-01. It did not exist as a concept before the moon measurement
 resurfacingRate:0}`, `T_eq ?? 288`, `ironFraction ?? 0.32`. Nothing throws. So nothing upstream can
 distinguish a measured world from a fabricated one.
 
-**MEASURED, 540 generated moons:**
+**MEASURED, 1120 generated moons (corrected 2026-08-01 — see the correction note below):**
 
-    airless (no atmosphere object)   540   100.0%
-    carry a surfaceHistory             0     0.0%
-    carry an age                       0     0.0%
-    conditionFromPlanet failures       0
+    plain moons   -> Moon.js, ZERO worldengine imports   1106   never reach conditionFromPlanet
+    planet-class  -> Planet.js -> conditionFromPlanet       14   the only moons in the port's path
+    carry a surfaceHistory / age (plain moons)               0   0.0%
+    conditionFromPlanet failures                             0
 
-Zero failures is the finding, not the reassurance. For a moon of radius 0.0157 R⊕ the vector returns
-**`surfaceGravity: 4042.6`** — that is `1.0 / 0.0157²`, matching to every digit, because
-`massEarth` defaulted to one Earth mass. **Every moon in the game reports a 4000 g body.**
-`reliefEnvelope(radiusEarth, surfaceGravity)` and every other gravity-dependent law is therefore
-wrong by ~4000× on the entire moon population.
+⚠⚠ **CORRECTION, AND IT IS THE BEST EVIDENCE IN THIS FILE FOR WHY LAYER 0 EXISTS.** The first
+version of this section claimed *"every moon in the game reports a 4000 g body"*, citing
+`surfaceGravity: 4042.6` on a 0.0157 R⊕ moon. **That number was an artifact of the measuring script,
+not a live bug.** The harness read the top-level object `MoonGenerator.generate()` returns, which is
+not what gets rendered; it carries no `massEarth`, so `conditionFromPlanet` defaulted to 1.0 and
+divided by a moon-sized radius. The real rendered population measures **0–35 g**, and only 14 bodies
+reach that path at all.
 
-⛔ **This is the mechanism behind every "confidently wrong" result this lane has produced.**
+⛔ **`conditionFromPlanet` answered a malformed input with a confident, plausible 4042 instead of
+signalling that mass was missing — and it fooled the author of this file into writing a wrong claim
+into the plan of record.** That is the fabrication failure mode doing its work on the very session
+that discovered it. No consumer, human or code, can currently distinguish a measured body from an
+invented one. **That is what layer 0 fixes.**
+
+**The real defect this uncovered — ✅ FIXED, see the fix commit.** `_generatePlanetMoon` built a
+planet-class moon by generating a FULL PLANET at 1 AU and then overriding `radiusEarth` with 10–25%
+of the parent's radius **without touching `massEarth`** — a planet's mass inside a moon's volume.
+Worst case measured: **27.6 M⊕ at 0.89 R⊕ ≈ 213 g/cc**, about 20× the density of osmium, reported as
+~35 g. Fixed by scaling mass with the cube of the radius ratio, which preserves the body's density
+exactly (same material, less of it) and keeps `composition.density` valid. Gravity now spans
+**0–2 g**. Fence: `tests/moon-mass-radius-consistency.test.js`.
 
 **The fix is NOT to remove the defaults** — a body genuinely missing mass still has to render. It is
 to make the vector **carry its own provenance**: which fields were measured, which were defaulted.
@@ -383,10 +397,16 @@ invalidate the architecture.
 `src/objects/Moon.js` is a **third renderer with none of the port** — no palette, no relief, no
 craters, still the March-2026 `snoise` shader.
 
-⚠ **Moons are not the easy first slice they look like.** They have the *varied population*
-(100% airless) but a *fabricated contract* (0% carry age or surface history, and every one reports
-4000 g). Rocky planets are the inverse: real contract, degenerate population. **Layer 0 must land
-before moons are worth touching.**
+⚠ **Moons are not the easy first slice they look like**, but not for the reason first recorded here.
+**1106 of 1120 generated moons render through `Moon.js`, which has ZERO worldengine imports** — so
+for them the condition contract does not need fixing, it needs *building from nothing*: they carry no
+age, no surface history, no composition, no mass. The other 14 are planet-class moons that already go
+through `Planet.js`; their mass/radius inconsistency is fixed, and they are the natural first target
+because the plumbing already exists.
+
+Their advantage is real though: **100% are airless**, so they are the one population where
+`airlessnessOf`, crater rays, space weathering and crystal facets can vary *today*, without waiting
+on layer 1. Rocky planets are the inverse — real contract, degenerate population.
 
 ---
 
