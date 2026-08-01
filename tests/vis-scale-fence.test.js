@@ -22,7 +22,11 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
+// ⚠ The lab's two shaders were EXTRACTED to planet-lod-shaders.glsl.js (so the game imports the
+// SAME source the lab renders). The lab's source text is therefore the HTML *plus* that module —
+// this fence reads both as one corpus so its assertions keep testing what the lab compiles.
+const read = (rel) => readFileSync(join(ROOT, rel), 'utf8')
+  + (rel === 'planet-lod-lab.html' ? '\n' + readFileSync(join(ROOT, 'planet-lod-shaders.glsl.js'), 'utf8') : '');
 
 // The three tokens that carry the display scale. \bsVis\b so it can't match e.g. a
 // substring; the pure-fn names are distinctive enough to match plainly.

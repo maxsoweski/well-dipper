@@ -29,8 +29,12 @@ const GD_SRC = src('../src/worldengine/base/giant-drivers.js');
 const GD_CODE = strip(GD_SRC);
 const GLSL_CODE = strip(src('../planet-lod-height.glsl.js'));
 const UNIF_CODE = strip(src('../planet-lod-uniforms.js'));
-const LAB_CODE = strip(src('../planet-lod-lab.html'));
-const LAB_RAW = src('../planet-lod-lab.html');
+// ⚠ The lab's two shaders were EXTRACTED to planet-lod-shaders.glsl.js (so the game imports the
+// SAME source the lab renders). The lab's source text is therefore the HTML *plus* that module —
+// this fence reads both as one corpus so its assertions keep testing what the lab compiles.
+const LAB_SRC_TEXT = src('../planet-lod-lab.html') + '\n' + src('../planet-lod-shaders.glsl.js');
+const LAB_CODE = strip(LAB_SRC_TEXT);
+const LAB_RAW = LAB_SRC_TEXT;
 const STORM_SRC = src('../src/worldengine/base/storm-e.js');
 
 // balanced-brace body extractor over comment-stripped code (defn found by a signature substring).

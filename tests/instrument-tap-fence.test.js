@@ -45,7 +45,10 @@ import * as RIVERS from '../planet-lod-rivers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const read = (rel) => readFileSync(path.resolve(__dirname, '..', rel), 'utf8');
-const labSrc = read('planet-lod-lab.html');
+// ⚠ The lab's two shaders were EXTRACTED to planet-lod-shaders.glsl.js (so the game imports the
+// SAME source the lab renders). The lab's source text is therefore the HTML *plus* that module —
+// this fence reads both as one corpus so its assertions keep testing what the lab compiles.
+const labSrc = read('planet-lod-lab.html') + '\n' + read('planet-lod-shaders.glsl.js');
 const samplerSrc = read('src/worldengine/instrument/fieldSampler.js');
 const riversSrc = read('planet-lod-rivers.js');
 
@@ -66,8 +69,13 @@ function stripGlslComments(src) {
 
 // Pull a /* glsl */ `…` template body out of the lab by the JS const that holds it.
 function labShaderSource(constName) {
-  const at = labSrc.indexOf(`const ${constName} = /* glsl */ \``);
-  expect(at, `const ${constName} = /* glsl */ \` must be present in planet-lod-lab.html`).toBeGreaterThanOrEqual(0);
+  // The two shaders were extracted to planet-lod-shaders.glsl.js, where they are exported under
+  // module-scoped names. The lab still holds `const vertexShader = LAB_VERTEX_SHADER`, so the
+  // literal body now lives under the export name — same text, same corpus, different const.
+  const EXTRACTED = { vertexShader: 'LAB_VERTEX_SHADER', fragmentShader: 'LAB_FRAGMENT_SHADER' };
+  const declName = EXTRACTED[constName] || constName;
+  const at = labSrc.indexOf(`const ${declName} = /* glsl */ \``);
+  expect(at, `const ${declName} = /* glsl */ \` must be present in the lab source`).toBeGreaterThanOrEqual(0);
   const open = labSrc.indexOf('`', at);
   let k = open + 1;
   while (k < labSrc.length) {

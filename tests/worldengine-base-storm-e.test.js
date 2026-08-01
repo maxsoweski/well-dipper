@@ -26,7 +26,11 @@ const SEEDS = [1, 2, 7, 42];
 const SRC = readFileSync(fileURLToPath(new URL('../src/worldengine/base/storm-e.js', import.meta.url)), 'utf8');
 // source with comments stripped — static guards must inspect CODE, not documentation prose
 const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-const LAB = readFileSync(fileURLToPath(new URL('../planet-lod-lab.html', import.meta.url)), 'utf8');
+// ⚠ The lab's two shaders were EXTRACTED to planet-lod-shaders.glsl.js (so the game imports the
+// SAME source the lab renders). The lab's source text is therefore the HTML *plus* that module —
+// this fence reads both as one corpus so its assertions keep testing what the lab compiles.
+const LAB = readFileSync(fileURLToPath(new URL('../planet-lod-lab.html', import.meta.url)), 'utf8')
+  + '\n' + readFileSync(fileURLToPath(new URL('../planet-lod-shaders.glsl.js', import.meta.url)), 'utf8');
 // deterministic int32 hash over a Float32Array (byte-stable since the field is deterministic)
 const hashField = (f) => { let h = 0x811c9dc5 | 0; for (let i = 0; i < f.length; i++) h = (Math.imul(h, 31) + Math.round(f[i] * 1e6)) | 0; return h; };
 const run = (regime, macroSeed, stormSeed = 1234, drivers = GAS) => resolveStormE(regime, drivers, macroSeed, stormSeed);

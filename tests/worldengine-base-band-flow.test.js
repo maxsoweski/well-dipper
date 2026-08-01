@@ -265,7 +265,11 @@ describe('worldengine base — band-flow atmo-expression CPU mirrors (atmo-expre
 // the dBand deflection + the 7-param signature, and — DIFF-SCOPED to the two added helper bodies — contains no
 // uTime / animated-warp path (F1 static place-once; a whole-file grep false-trips on the legacy F25 jets path).
 const GLSL = readFileSync(fileURLToPath(new URL('../planet-lod-height.glsl.js', import.meta.url)), 'utf8');
-const LAB  = readFileSync(fileURLToPath(new URL('../planet-lod-lab.html', import.meta.url)), 'utf8');
+// ⚠ The lab's two shaders were EXTRACTED to planet-lod-shaders.glsl.js (so the game imports the
+// SAME source the lab renders). The lab's source text is therefore the HTML *plus* that module —
+// this fence reads both as one corpus so its assertions keep testing what the lab compiles.
+const LAB  = readFileSync(fileURLToPath(new URL('../planet-lod-lab.html', import.meta.url)), 'utf8')
+  + '\n' + readFileSync(fileURLToPath(new URL('../planet-lod-shaders.glsl.js', import.meta.url)), 'utf8');
 // the two added slice-K helper bodies ONLY (diff-scoped): from bandProxy's def to the F24 comment that
 // precedes zonalBandCol. Comments stripped so the F1 no-uTime grep inspects CODE, not the doc prose that
 // legitimately names uTime/ph0/… (the climate-e5 idiom used for the mirror above).
