@@ -97,7 +97,8 @@ import { createTexturedBodyMaterial } from './rendering/shaders/TexturedBodyShad
 import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/MaterialBodyShader.js';
 import { PretextLab } from './ui/PretextLab.js';
 import * as LabMode from './debug/LabMode.js';
-import { warmPlanetPrograms } from './rendering/ShaderWarmup.js';
+import { warmPlanetPrograms, swapMaterialWhenReady } from './rendering/ShaderWarmup.js';
+import { buildLabPlanetMaterial, ensureLabAttributes } from './rendering/LabPlanetMaterial.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -1782,6 +1783,64 @@ window._lab = {
     sysData._destType = 'star-system';
     spawnSystem({ forWarp: false, systemData: sysData });
     return { ok: true, seed, planetCount: sysData.planets?.length ?? 0 };
+  },
+
+  /**
+   * Put the LAB'S OWN material on a game planet, compiled off the main thread.
+   *
+   * The join point of the port: the lab's shader module (Step 2) + the lab's 349 uniform defaults,
+   * swapped in through Stage 0's swap-on-ready so the multi-second link never freezes a frame.
+   *
+   * Defaults only — no condition driving. The open question this answers is whether the undriven
+   * floor is BLACK (in which case the uniform driver is a hard prerequisite) or merely flat.
+   *
+   * @param {number} [index] planet index
+   * @returns {Promise<object>} diagnostics
+   */
+  async tryLabShader(index = 0) {
+    // Resolve the surface by walking the live scene rather than by assuming the object graph.
+    // The surface is an UNNAMED child mesh of a `body.planet.*` group, so neither the BodyRenderer
+    // nor the Planet delegate exposes it under a stable path — an earlier version of this hook
+    // guessed `_delegate.surface` and simply reported "no surface mesh". The game's procedural
+    // planet material is identifiable by its own uniform set, which is a fact about the thing
+    // rather than about the tree.
+    const surfaces = [];
+    const walk = (o) => {
+      if (o?.material?.uniforms?.noiseScale && o.geometry) {
+        const owner = o.name || o.parent?.name || '';
+        if (owner.startsWith('body.planet.')) surfaces.push(o);
+      }
+      (o?.children || []).forEach(walk);
+    };
+    walk(scene);
+    const mesh = surfaces[index];
+    if (!mesh) {
+      return { ok: false, reason: `no planet surface at index ${index} (found ${surfaces.length})` };
+    }
+
+    const attrs = ensureLabAttributes(mesh.geometry);
+    // The body's own sun direction, not the lab's constant — the game's light is where it is.
+    const lightDir = mesh.material.uniforms.lightDir?.value || undefined;
+    const built = buildLabPlanetMaterial({ lightDir });
+
+    const t0 = performance.now();
+    const swapped = await swapMaterialWhenReady({
+      renderer: retroRenderer.renderer,
+      camera,
+      target: retroRenderer.sceneTarget,
+      mesh,
+      material: built.material,
+    });
+    return {
+      ok: swapped,
+      compileMs: +(performance.now() - t0).toFixed(1),
+      attributesAdded: attrs.added,
+      vertexCount: attrs.vertexCount,
+      uniformCount: built.uniformCount,
+      lightDir: built.lightDir,
+      meshName: mesh.name || mesh.parent?.name || '?',
+      surfacesFound: surfaces.length,
+    };
   },
 
   /** Whether the in-system gameplay loop is active (post-splash, post-title). */
