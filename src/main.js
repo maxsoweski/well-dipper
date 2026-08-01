@@ -97,6 +97,7 @@ import { createTexturedBodyMaterial } from './rendering/shaders/TexturedBodyShad
 import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/MaterialBodyShader.js';
 import { PretextLab } from './ui/PretextLab.js';
 import * as LabMode from './debug/LabMode.js';
+import { warmPlanetPrograms } from './rendering/ShaderWarmup.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -1756,6 +1757,29 @@ window._lab = {
   /** Whether the in-system gameplay loop is active (post-splash, post-title). */
   isInSystem() {
     return !splashActive && !titleScreenActive && !!system;
+  },
+
+  /**
+   * Compile the planet-surface programs on demand and report per-variant cost.
+   *
+   * The measurement surface for the title-screen warm-up. Import cannot be used from an evaluated
+   * page script — it resolves to a DIFFERENT module instance than the running app, so a probe that
+   * imported ShaderWarmup would warm a program cache the game never reads. This is the seam.
+   *
+   * ⛔ To measure a genuine COLD compile, set `window.__shaderCacheBust` to something unique FIRST.
+   * Chrome's shader disk cache serves linked binaries across page loads, so an un-busted run times
+   * the cache and reports any warm-up, working or broken, as free.
+   *
+   * @param {{variants?: string[], force?: boolean, toCanvas?: boolean}} [opts]
+   *   toCanvas is the negative control for the target-binding trap: warming against the canvas
+   *   should leave the real first draw just as expensive as no warm-up at all.
+   */
+  async warmShaders(opts = {}) {
+    const { toCanvas = false, ...rest } = opts;
+    return warmPlanetPrograms(retroRenderer.renderer, camera, {
+      target: toCanvas ? null : retroRenderer.sceneTarget,
+      ...rest,
+    });
   },
 
   /** Stop autopilot + autopilotMotion + supercruise pilot in one call. Used by scenario 5. */
@@ -3590,6 +3614,25 @@ function hitTestBodies(clientX, clientY, minThresholdPx = 24) {
     layer.brightnessShape = 0;
   }
   spawnSystem({ systemData: titleData });
+
+  // ── Warm the planet-surface programs while the player reads the logo ──
+  // The title screen spawns a NEBULA, so no planet material has ever been built at this point and
+  // all three planet-surface programs are cold. The game pays their link cost — measured 4 076 ms
+  // total, cache-busted — on the first frame that draws a planet, i.e. on first arrival in a star
+  // system. The warp path already buries that inside the tunnel, but burying is not removing: it
+  // still extends the cruise through HYPER's load-adaptive emergence gate, and the debug/known-system
+  // entry paths don't have a tunnel to bury it in at all.
+  //
+  // Here there is nothing to hide it behind and nothing waiting on it — the title screen is idle
+  // time by construction. Fire-and-forget: the promise is never awaited, a failure is logged and
+  // degrades to exactly today's behaviour, and even a warm-up still in flight when the player
+  // dismisses the title is a win (the driver keeps linking; the first draw waits out the remainder
+  // instead of the whole thing).
+  //
+  // ⛔ sceneTarget, not the canvas: the program cache key bakes in toneMapping + outputColorSpace,
+  // both read from the bound target, and RetroRenderer draws the scene into sceneTarget. See
+  // ShaderWarmup's note 2 — warming against the canvas warms a variant that is never drawn.
+  warmPlanetPrograms(retroRenderer.renderer, camera, { target: retroRenderer.sceneTarget });
 
   const r = titleData.radius || 200;
   const orbitCenter = new THREE.Vector3(0, 0, 0);

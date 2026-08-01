@@ -1303,6 +1303,89 @@ const GAS_TYPES = new Set(['gas-giant', 'hot-jupiter', 'eyeball', 'sub-neptune']
 const ROCKY_TYPES = new Set(['rocky', 'ice', 'lava', 'ocean', 'terrestrial', 'venus', 'carbon']);
 // Everything else → EXOTIC
 
+// ── The surface vertex shader ───────────────────────────────────────────────────────────────────
+// Hoisted to module scope (was inline in _createSurface) so the warm-up path can build a material
+// from the SAME SOURCE STRING the real bodies use. three caches GPU programs by shader source, so
+// "same source" is the whole mechanism — a warm-up that retyped this shader would compile a second
+// program and warm nothing.
+const SURFACE_VERTEX = /* glsl */ `
+        #include <common>
+        #include <logdepthbuf_pars_vertex>
+        varying vec3 vNormal;
+        varying vec3 vPosition;
+        varying vec3 vWorldPos;
+        varying vec3 vViewDir;
+
+        void main() {
+          // World-space normal (independent of camera rotation)
+          vNormal = normalize(mat3(modelMatrix) * normal);
+          vPosition = position;  // object space — for noise sampling
+          vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;  // world space — for lighting
+          vViewDir = cameraPosition - vWorldPos;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          #include <logdepthbuf_vertex>
+        }
+      `;
+
+/**
+ * The three planet-surface shader variants, by source.
+ *
+ * Every planet in the game renders one of these three programs — 18 planet TYPES collapse to 3
+ * programs because the type only chooses which fragment BODY is concatenated onto the shared
+ * header. That is why warming three programs warms the whole game.
+ *
+ * Source only, deliberately: no uniforms, no geometry, no THREE objects. The consumer that wants a
+ * material builds one; the consumer that wants to measure a compile does not need one.
+ */
+export const PLANET_SHADER_VARIANTS = {
+  gas: { vertexShader: SURFACE_VERTEX, fragmentShader: FRAG_HEADER + GAS_BODY },
+  rocky: { vertexShader: SURFACE_VERTEX, fragmentShader: FRAG_HEADER + ROCKY_BODY },
+  exotic: { vertexShader: SURFACE_VERTEX, fragmentShader: FRAG_HEADER + EXOTIC_BODY },
+};
+
+/**
+ * Which of the three programs a body of this type will render.
+ * Mirrors the branch in _createSurface — keep the two in step.
+ * @param {string} type — planetData.type
+ * @returns {'gas'|'rocky'|'exotic'}
+ */
+export function shaderVariantFor(type) {
+  if (GAS_TYPES.has(type)) return 'gas';
+  if (ROCKY_TYPES.has(type)) return 'rocky';
+  return 'exotic';
+}
+
+/**
+ * The shader source a body of this variant renders, with the measurement cache-bust applied.
+ *
+ * ⛔ WHY THE CACHE-BUST EXISTS. Chrome keeps a shader DISK cache that serves previously linked
+ * binaries across GL contexts *and across page loads*. Any before/after compile-cost measurement on
+ * unmodified source therefore times the cache, not the compiler, and will report a warm-up as
+ * "free" whether or not it works. Setting window.__shaderCacheBust to anything unique, before
+ * the bodies are built prepends a comment to the source, which makes the program genuinely cold.
+ *
+ * It is read HERE, in the one place both the real bodies and ShaderWarmup's probes go through, so a
+ * measurement run cannot accidentally bust one and not the other — which would have the warm-up
+ * link a program nothing ever draws, and look like a total failure.
+ *
+ * Off unless explicitly set; costs one property read per material.
+ * ⚠ Assembled with concatenation, not a template literal: the backtick audit on this file
+ * (grep -c for backtick LINES, expected 14) exists because a stray backtick inside the GLSL literals
+ * breaks the module, and a new literal here would move the number for an unrelated reason.
+ *
+ * @param {'gas'|'rocky'|'exotic'} variantKey
+ * @returns {{vertexShader: string, fragmentShader: string}}
+ */
+export function planetShaderSource(variantKey) {
+  const variant = PLANET_SHADER_VARIANTS[variantKey];
+  const bust = (typeof window !== 'undefined' && window.__shaderCacheBust) || null;
+  if (!bust) return variant;
+  return {
+    vertexShader: variant.vertexShader,
+    fragmentShader: '// cachebust ' + bust + '\n' + variant.fragmentShader,
+  };
+}
+
 /**
  * Planet — a sphere with a procedural noise-based surface, optional
  * cloud layer, atmosphere rim glow, and ring system.
@@ -1363,10 +1446,7 @@ export class Planet {
       : CRATERS_OFF;
 
     // Pick the shader variant based on planet category
-    let fragmentBody;
-    if (GAS_TYPES.has(d.type)) fragmentBody = GAS_BODY;
-    else if (ROCKY_TYPES.has(d.type)) fragmentBody = ROCKY_BODY;
-    else fragmentBody = EXOTIC_BODY;
+    const variant = planetShaderSource(shaderVariantFor(d.type));
 
     const material = new THREE.ShaderMaterial({
       uniforms: {
@@ -1453,26 +1533,8 @@ export class Planet {
         lodLevel: { value: 1 },
       },
 
-      vertexShader: /* glsl */ `
-        #include <common>
-        #include <logdepthbuf_pars_vertex>
-        varying vec3 vNormal;
-        varying vec3 vPosition;
-        varying vec3 vWorldPos;
-        varying vec3 vViewDir;
-
-        void main() {
-          // World-space normal (independent of camera rotation)
-          vNormal = normalize(mat3(modelMatrix) * normal);
-          vPosition = position;  // object space — for noise sampling
-          vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;  // world space — for lighting
-          vViewDir = cameraPosition - vWorldPos;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          #include <logdepthbuf_vertex>
-        }
-      `,
-
-      fragmentShader: FRAG_HEADER + fragmentBody,
+      vertexShader: variant.vertexShader,
+      fragmentShader: variant.fragmentShader,
     });
 
     return new THREE.Mesh(geometry, material);
