@@ -143,9 +143,42 @@ there produces confident wrong numbers. Use this for every look measurement from
 **continuous** `limbExponent` that `atmosphereOpticsOf` returns. The game takes the module's value —
 the module is the shared law. Reconciling the lab changes the lab's look and must be byte-gated.
 
-**Deferred from this slice:** `uTermStrength/Width/Color`, `uAirglowIntensity`, `uShellIntensity`
-(same inputs, one more shader block — the natural slice 2), the thick-haze `limbStrength × 1.3`, and
-everything in bands/jets/weather/storm/thermal/aurora/dust/magma/carbon/facets.
+**Deferred from this slice:** `uAirglowIntensity`, `uShellIntensity`, the thick-haze
+`limbStrength × 1.3`, and everything in bands/jets/weather/storm/thermal/aurora/dust/magma/carbon/
+facets.
+
+#### ✅ Slice 2 SHIPPED — biosphere cover + terminator hue — `66cc231`
+
+**The module-gap audit that produced this is the reusable part.** Question asked: how much of the
+lab is already in `src/worldengine/` and unused by the game? The answer split in two, and the
+*negative* half is the more useful one:
+
+- ⛔ **Nine modules are NOT free** — `band-flow`, `e1Regime`, `giant-drivers`, `magmatism`, `plates`,
+  `province`, `sphereField`, `storm-e`, `tectonic`. Imported by the lab, not reached by the game even
+  transitively. Nearly all are **bake-side** (they write spheres/cubes, or produce vertex
+  attributes); `e1Regime` is data-only and renders nothing. **They are Step 4 in disguise.** This is
+  why measuring one bake is now the highest-value unknown in the program.
+- ✅ **The free wins were in *partially-consumed* modules** the game already imports. Two found and
+  taken: `biosphereOf` + `BIO_PIGMENT` (never called), and `termColor` + `columnFraction` (already
+  computed in the object the game reads for `limbColor`, and thrown away).
+
+Measured on **36 bodies across 8 generated systems**: biosphere on 6 of 36, 7 distinct values, max
+1.0; terminator on 36 of 36 with 16 distinct hues. No NaN.
+
+⛔⛔ **THE TERMINATOR'S STRENGTH CAME OUT DEGENERATE — EXACTLY 1.0 ON ALL 36 BODIES, range [1,1].**
+Not a wiring bug. `columnFraction = smoothstep(0.003, 0.3, pressure)` and **every generated planet
+retains an atmosphere** (min 0.310 bar), so every planet sits above the law's 0.3 bar saturation
+point. The model is right; the population is wrong. **This is the second feature in two days
+flattened by the one unmade `computeAtmosphere` decision** — craters were the first. No code change
+fixes it, and swapping in a proxy that happens to vary would be hiding it.
+
+⚠ `uTermStrength` / `uTermWidth` are **not the lab's law yet** — the lab drives them from
+`state.termStrength` / `state.termWidth` inside `applyDrivers`, unextracted. `columnFraction` makes
+the *gate* correct (0 for airless) while the scale stays provisional.
+
+Also fixed by this slice: the game's terrestrial branch had `vec3 lowland = accentColor` under the
+comment *"green vegetation"* — a per-planet **random colour** standing in for a biosphere on every
+terrestrial world, habitable or not.
 
 ### Step 2 — extract the shaders into `.glsl.js` modules — `TODO`
 
