@@ -139,3 +139,60 @@ cull it out.
 intended near-field experience), then a sub-feature implementation.
 Cross-feature scope — touches galactic-feature rendering AND any
 other large galactic-scale phenomena that share the same gate.
+
+---
+
+## P5 — Orbit ring cap: support procedurally complex systems
+
+**Originating workstream:** `orbit-ring-conic-2026-07-21` (Max, 2026-08-01,
+off the back of the AC7 inventory-swap drive).
+
+**Want:** the proc engine free to spawn systems with many planets and moons
+without the orbit renderer silently dropping rings.
+
+**The limit.** `OrbitConicField` packs every ring into one RGBA32F DataTexture
+sized `CONIC_MAX = 64` wide x `CONIC_TEX_ROWS` tall. `update()` clamps to
+`Math.min(descriptors.length, CONIC_MAX)`, so a system with >64 orbiting bodies
+loses rings — by design least-visible sub-pixel moons first (R9), but still a
+hard ceiling on system complexity. Richest system observed to date: Sol at 39
+rings; procedurals ran 2-11.
+
+**⛔ NOT the problem — do not "fix" this.** Stale per-ring data from the previous
+system persists in `_source` after a warp (measured: 38 non-zero entries past
+`uCount`, indices 2-60). This costs NOTHING — the fragment shader's constant-
+bound loop breaks at `i >= uCount` (`OrbitConicField.js:177-178`) so those slots
+are never sampled, and the buffer is allocated once and reused for the whole
+session. Clearing on swap would ADD a per-warp memory write for zero observable
+benefit — a pessimization. Evidence:
+`WORKSTREAMS/orbit-ring-conic-2026-07-21/evidence/live-ac7-inventory-swap-2026-08-01.md`.
+
+**Why raising the cap is cheaper than it looks.** `uCount` is a uniform, so the
+shader's early break is uniform control flow — per-pixel cost tracks the LIVE
+ring count, not `CONIC_MAX`. Raising the constant costs texture memory only
+(64 -> 512 rings is roughly 16 KB -> 128 KB) and nothing at runtime for ordinary
+systems.
+
+**The actual engineering problem.** All rings draw in ONE fullscreen pass, so
+every pixel walks the entire ring list. At ~200 rings that is ~200 conic
+evaluations per pixel, nearly all for rings nowhere near that pixel. This is what
+would make a dense system chug — not the stale data.
+
+**The answer is already specced and unbuilt:** the **R4 bounding-box pre-cull**
+in this workstream's BUILD-PLAN, deliberately kept READY and not built ("not
+needed on evidence"). Complex systems are the evidence.
+
+**What a follow-up would do:**
+1. Raise `CONIC_MAX` and size the DataTexture to match; confirm the packing
+   offsets (`stride = CONIC_MAX * 4`) and `readConic` still address correctly.
+2. Build R4 so cost tracks VISIBLE rings rather than total rings.
+3. Decide whether the cap becomes dynamic (sized to the richest system seen) or
+   simply a much higher constant.
+4. Verify on a deliberately dense generated system — one must be constructed;
+   none encountered in normal play exceeded 39 rings.
+
+**Sequencing (Max, 2026-08-01):** deferred until the lane B UAT ships and the
+merge arc lands. Do NOT touch `OrbitConicField.js` before then — it is the
+renderer under UAT.
+
+**Scope:** single-system (orbit rendering) but with a real perf-architecture
+decision; warrants `dev-collab-scope` before code.
