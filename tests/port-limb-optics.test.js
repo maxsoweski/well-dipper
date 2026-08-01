@@ -17,6 +17,7 @@
 import { describe, it, expect } from 'vitest';
 import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
 import { atmosphereOpticsOf } from '../src/worldengine/base/atmosphereOptics.js';
+import { biosphereOf } from '../src/worldengine/base/surfaceMaterial.js';
 
 // Bodies shaped the way PlanetGenerator emits them. Values are the physically interesting corners of
 // the optics law, not a random sample: a clear column, a hot thick shroud, a cold organic haze, a
@@ -92,11 +93,52 @@ describe('limb optics reach the game from the shared module', () => {
     for (const c of o.limbColor) expect(Number.isFinite(c)).toBe(true);
   });
 
+  it('gives every archetype a distinct TERMINATOR hue too', () => {
+    // The transmitted hue, as opposed to the scattered one at the limb. Same module, and it was
+    // already being computed and thrown away before this slice.
+    const hexes = Object.keys(BODIES).map((k) => opticsFor(k).termColor.map((c) => c.toFixed(4)).join(','));
+    expect(new Set(hexes).size).toBe(Object.keys(BODIES).length);
+  });
+
+  it('gates the terminator OFF for an airless body', () => {
+    // columnFraction drives uTermStrength, and uTermStrength = 0 skips the shader block entirely.
+    // A body with no atmosphere must not get a twilight band.
+    expect(opticsFor('airless').columnFraction).toBe(0);
+    expect(opticsFor('earthlike').columnFraction).toBeGreaterThan(0);
+  });
+
   it('degrades to finite values on a body with no world-engine fields at all', () => {
     // Hand-authored fixtures (Sol's bodies) never pass through PlanetGenerator. conditionFromPlanet
     // is built to degrade rather than throw; this pins that the optics survive the degraded input.
     const o = atmosphereOpticsOf(conditionFromPlanet({}));
     expect(Number.isFinite(o.limbExponent)).toBe(true);
     for (const c of o.limbColor) expect(Number.isFinite(c)).toBe(true);
+  });
+});
+
+describe('biosphere cover reaches the game from the shared module', () => {
+  const bioFor = (key) => biosphereOf(conditionFromPlanet(BODIES[key]));
+
+  it('puts cover on the temperate wet world and nowhere else', () => {
+    // The defect this replaces: the game's terrestrial branch hard-coded "green vegetation" as
+    // accentColor — a per-planet RANDOM colour — on every terrestrial world, habitable or not.
+    expect(bioFor('earthlike')).toBeGreaterThan(0);
+    expect(bioFor('venuslike')).toBe(0);   // 737 K is far past the temperature limit
+    expect(bioFor('titanlike')).toBe(0);   // 94 K, frozen
+    expect(bioFor('airless')).toBe(0);     // no air, no volatiles
+  });
+
+  it('returns a bounded fraction, never a colour or a NaN', () => {
+    for (const k of Object.keys(BODIES)) {
+      const v = bioFor(k);
+      expect(Number.isFinite(v)).toBe(true);
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('is zero for a body with no world-engine fields, so hand-authored fixtures are inert', () => {
+    // uBioCover = 0 skips the shader block, leaving Sol's bodies byte-identical.
+    expect(biosphereOf(conditionFromPlanet({}))).toBe(0);
   });
 });

@@ -10,6 +10,7 @@ import {
 } from '../worldengine/shaders/craterRelief.glsl.js';
 import { conditionFromPlanet } from '../worldengine/port/conditionFromPlanet.js';
 import { atmosphereOpticsOf } from '../worldengine/base/atmosphereOptics.js';
+import { biosphereOf, BIO_PIGMENT } from '../worldengine/base/surfaceMaterial.js';
 import { craterUniformsFrom, CRATERS_OFF } from '../worldengine/port/craterUniforms.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -86,6 +87,21 @@ uniform vec3 atmosphereColor;
 uniform float uLimbMix;
 uniform float uLimbExponent;
 uniform vec3 uLimbColor;
+// ── Terminator tint ──
+// The hue a column TRANSMITS at grazing incidence, as opposed to what it scatters at the limb:
+// clear air reddens (sunset), a cold organic haze transmits mauve, a thin dry wisp inverts to blue.
+// Same shared module as the limb. Additive only — it never darkens — and uTermStrength = 0 skips
+// the block entirely, which is the byte-identical off switch (the lab's own F35 contract).
+uniform float uTermStrength;
+uniform float uTermWidth;
+uniform vec3 uTermColor;
+// ── Biosphere ground cover ──
+// uBioCover = biosphereOf(condition): liquid water x atmosphere x volatiles x time x not-frozen.
+// ⚠ Vegetation is DARKER than the rock it grows on (canopy albedo ~0.15-0.25), so a living world's
+// disc gets DARKER, not greener — the opposite of what "add a green tint" would do. uBioCover = 0
+// leaves the land byte-identical.
+uniform float uBioCover;
+uniform vec3 uBioColor;
 // Shadow casters
 uniform vec3 starPos1;
 uniform vec3 starPos2;
@@ -518,6 +534,16 @@ void main() {
     finalColor += mix(atmosphereColor, uLimbColor, uLimbMix) * fresnel * atmosphereStrength * sunFacing * 0.5;
   }
 
+  // ── Terminator tint (port: atmosphereOpticsOf termColor) ──
+  // A gaussian centred on the day/night line: mu = 0 at the terminator, so exp(-tt*tt) peaks
+  // exactly there and falls off into both the lit side and the night side. Additive only, per the
+  // lab's rule that this channel never darkens. uTermStrength = 0 skips it entirely and is the
+  // byte-identical off switch.
+  if (uTermStrength > 0.0) {
+    float tt = diffuse / max(uTermWidth, 1e-3);
+    finalColor += uTermColor * uTermStrength * exp(-tt * tt);
+  }
+
   // ── Aurora (night-side glow near magnetic poles) ──
   finalColor = applyAurora(finalColor, vPosition, planetRadius, lightDir, diffuse);
 
@@ -645,7 +671,10 @@ void main() {
 
     // Land: elevation-based terrain zones
     float landElev = smoothstep(seaLevel, seaLevel + 0.35, height);
-    // Coastal lowlands: green vegetation
+    // Coastal lowlands. WAS commented "green vegetation" and set to accentColor — a per-planet
+    // random colour standing in for a biosphere, on every terrestrial world whether or not one
+    // could live there. The actual cover is now derived below from uBioCover; this stays as the
+    // low-elevation base tone.
     vec3 lowland = accentColor;
     // Mid-elevation: sediment — the weathered surface ground up and moved downhill. Derived, so it
     // inherits this world's oxidation state (a rusty world gets pale rusty basins, not beige ones).
@@ -662,6 +691,18 @@ void main() {
     land = mix(land, midland, smoothstep(0.2, 0.45, landElev));
     land = mix(land, highland, smoothstep(0.5, 0.75, landElev));
     land = mix(land, peak, smoothstep(0.8, 0.95, landElev));
+
+    // ── Biosphere ground cover (port: biosphereOf) ──
+    // Applied AFTER the terrain zones — it grows on whatever crust is there — but BEFORE the ocean
+    // mix and the ice caps, so open water covers it and a polar cap still wins on top of it. That
+    // ordering is the lab's, and it is the reason this sits here rather than at the end.
+    // vegElev is a treeline: cover thins with altitude. The lab also modulates by slope (a steep
+    // face sheds soil faster than it forms) and by basin enrichment (water collects in the sinks);
+    // this branch has neither a slope nor a province term, so both are DEFERRED rather than faked.
+    if (uBioCover > 0.0) {
+      float vegElev = 1.0 - smoothstep(0.55, 0.9, landElev);
+      land = mix(land, uBioColor, clamp(uBioCover * vegElev, 0.0, 1.0));
+    }
 
     // Add local variation so terrain isn't pure bands
     float terrainNoise = snoise(vPosition * noiseScale * 4.0) * 0.08;
@@ -868,6 +909,16 @@ void main() {
     }
 
     finalColor += mix(atmosphereColor, uLimbColor, uLimbMix) * fresnel * atmosphereStrength * sunFacing * 0.5;
+  }
+
+  // ── Terminator tint (port: atmosphereOpticsOf termColor) ──
+  // A gaussian centred on the day/night line: mu = 0 at the terminator, so exp(-tt*tt) peaks
+  // exactly there and falls off into both the lit side and the night side. Additive only, per the
+  // lab's rule that this channel never darkens. uTermStrength = 0 skips it entirely and is the
+  // byte-identical off switch.
+  if (uTermStrength > 0.0) {
+    float tt = diffuse / max(uTermWidth, 1e-3);
+    finalColor += uTermColor * uTermStrength * exp(-tt * tt);
   }
 
   // ── Aurora (night-side glow near magnetic poles) ──
@@ -1188,6 +1239,16 @@ void main() {
     finalColor += mix(atmosphereColor, uLimbColor, uLimbMix) * fresnel * atmosphereStrength * sunFacing * 0.5;
   }
 
+  // ── Terminator tint (port: atmosphereOpticsOf termColor) ──
+  // A gaussian centred on the day/night line: mu = 0 at the terminator, so exp(-tt*tt) peaks
+  // exactly there and falls off into both the lit side and the night side. Additive only, per the
+  // lab's rule that this channel never darkens. uTermStrength = 0 skips it entirely and is the
+  // byte-identical off switch.
+  if (uTermStrength > 0.0) {
+    float tt = diffuse / max(uTermWidth, 1e-3);
+    finalColor += uTermColor * uTermStrength * exp(-tt * tt);
+  }
+
   // ── Aurora (night-side glow near magnetic poles) ──
   finalColor = applyAurora(finalColor, vPosition, planetRadius, lightDir, diffuse);
 
@@ -1316,6 +1377,11 @@ const CRATER_VORO_CELLS = 27;
 // (pow(fresnel, 3.0) tinted by atmosphereColor), byte-identical. Kept as a named constant rather
 // than inlined so the negative control is one edit, and so a bisect has something to grep for.
 const LIMB_MIX = 1.0;
+
+// Terminator gaussian half-width, in units of dot(N, L). PROVISIONAL: the lab's own width comes
+// from applyDrivers (state.termWidth), which is not extracted yet — see the plan of record, Step 1.
+// 0.18 puts the visible tint inside roughly +/- 10 degrees of the day/night line.
+const TERM_WIDTH = 0.18;
 
 const GAS_TYPES = new Set(['gas-giant', 'hot-jupiter', 'eyeball', 'sub-neptune']);
 const ROCKY_TYPES = new Set(['rocky', 'ice', 'lava', 'ocean', 'terrestrial', 'venus', 'carbon']);
@@ -1481,6 +1547,13 @@ export class Planet {
     // change and must be byte-gated, so it is NOT done here.
     const optics = atmosphereOpticsOf(condition);
 
+    // ── Biosphere cover (port: biosphereOf) ────────────────────────────────────────────────────
+    // Another module the game already imported and never called. Pure, and every input it reads —
+    // atmosphere.pressure, composition.volatileFraction, T_eq, age, icenessOf — is already on the
+    // condition vector. Only terrestrial worlds get it: the branch that consumes it is the
+    // ocean/land one, and biosphereOf returns ~0 for anything dry or airless anyway.
+    const bioCover = biosphereOf(condition);
+
     // Pick the shader variant based on planet category
     const variant = planetShaderSource(shaderVariantFor(d.type));
 
@@ -1507,6 +1580,19 @@ export class Planet {
         uLimbMix: { value: LIMB_MIX },
         uLimbExponent: { value: optics.limbExponent },
         uLimbColor: { value: new THREE.Vector3(...optics.limbColor) },
+        // Terminator. The HUE is the shared module's — that is what atmosphereOptics.js owns and
+        // says it owns ("derives the limb and terminator hue from condition scalars").
+        // ⚠ The STRENGTH and WIDTH are not the lab's law yet. The lab drives them from
+        // state.termStrength / state.termWidth, which live in applyDrivers and are not extracted.
+        // columnFraction is used as the strength here because it is the module's own physical
+        // measure of how much column there is to transmit through — 0 for airless, ~1 for a full
+        // atmosphere — which makes the gate correct even though the scale is provisional.
+        uTermStrength: { value: optics.columnFraction ?? 0 },
+        uTermWidth: { value: TERM_WIDTH },
+        uTermColor: { value: new THREE.Vector3(...optics.termColor) },
+        // Biosphere. BIO_PIGMENT is the module's own pigment constant, not a colour picked here.
+        uBioCover: { value: bioCover },
+        uBioColor: { value: new THREE.Vector3(...BIO_PIGMENT) },
         // ── World-engine relief (port slice 3) ──
         // uReliefMix is both the A/B dial and the safety valve: at 0.0 this body renders
         // byte-identically to slice 2.
