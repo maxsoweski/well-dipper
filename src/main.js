@@ -3012,6 +3012,82 @@ window._cockpit = () => (_cockpitRig ? {
 } : { ready: false });
 
 /**
+ * ⭐ HOW MUCH OF THE VIEW THE CABIN ACTUALLY BLOCKS — `window._cockpitOcclusion()`.
+ *
+ * Added 2026-08-01 while live-verifying reticle occlusion, and it exists because
+ * the failure mode is INVISIBLE FROM A SCREENSHOT. If the canopy ever leaks into
+ * the occluder set the answer goes to ~100% and every reticle in the game
+ * disappears — and a cockpit with no reticles in it looks exactly like a cockpit
+ * with nothing to point at. The other direction (an empty list) looks exactly
+ * like the bug Max reported. Neither reads as wrong; both read as "fine".
+ *
+ * So the number is the instrument, and there is an INDEPENDENT figure to check
+ * it against: `public/assets/cockpit/cockpit-metrics.json` reports
+ * `predictedOcclusionFraction` — computed at build time by `cockpit-gen.py`, by
+ * analytic scanline rasterisation of the projected silhouettes, with no
+ * knowledge of this code at all. Two different methods, one number. That is a
+ * far stronger check than any assertion this file could make about itself.
+ *
+ * ⚠ The two are not required to match exactly and should not be tuned to: the
+ * generator rasterises at ITS OWN aspect, and this samples an NDC grid at the
+ * live window's. Same ballpark is the signal; 0.0 or 1.0 is the alarm.
+ *
+ * @param {number} [n] grid resolution per axis
+ */
+const _occProbeDir = new THREE.Vector3();
+
+/**
+ * Does the cabin block THIS point of the screen, and which piece of it?
+ *
+ * `window._cockpitOcclusion.at(ndcX, ndcY)` — the primitive the sweep below is
+ * built from, and the one that answers the question a screenshot cannot: a
+ * reticle that is not drawn looks the same whether the cabin hid it, a planet
+ * hid it, or it was never there. This names the mesh, so the three are
+ * distinguishable at the exact pixel the reticle would have been.
+ *
+ * NDC, not pixels, because that is the frame the projection speaks: (0,0) is
+ * screen centre, (-1,-1) bottom-left, (+1,+1) top-right.
+ */
+function _cockpitOcclusionAt(ndcX, ndcY) {
+  if (!_cockpitOccluders.length) return { blocked: false, by: null, note: 'no cockpit loaded' };
+  _occProbeDir.set(ndcX, ndcY, 0.5)
+    .unproject(_cockpitCamera).sub(_cockpitCamera.position).normalize();
+  _cockpitRaycaster.set(_cockpitCamera.position, _occProbeDir);
+  let best = null;
+  for (let i = 0; i < _cockpitOccluders.length; i++) {
+    _cockpitHits.length = 0;
+    _cockpitRaycaster.intersectObject(_cockpitOccluders[i], false, _cockpitHits);
+    // Nearest wins, so the answer names what the pilot would actually SEE there
+    // rather than whichever mesh happened to be first in traversal order.
+    for (const h of _cockpitHits) {
+      if (!best || h.distance < best.distance) best = { distance: h.distance, name: _cockpitOccluders[i].name };
+    }
+  }
+  return { blocked: !!best, by: best ? best.name : null, distance: best ? +best.distance.toFixed(3) : null };
+}
+
+window._cockpitOcclusion = (n = 61) => {
+  if (!_cockpitOccluders.length) return { occluders: 0, note: 'no cockpit loaded' };
+  let blocked = 0;
+  let total = 0;
+  for (let iy = 0; iy < n; iy++) {
+    for (let ix = 0; ix < n; ix++) {
+      total++;
+      if (_cockpitOcclusionAt((ix / (n - 1)) * 2 - 1, (iy / (n - 1)) * 2 - 1).blocked) blocked++;
+    }
+  }
+  return {
+    occluders: _cockpitOccluders.length,
+    excluded: _cockpitRig?.glassNodes?.map((g) => g.name) ?? [],
+    blockedFraction: +(blocked / total).toFixed(4),
+    samples: total,
+    fovWorld: camera.fov,
+    fovCockpit: _cockpitCamera.fov,
+  };
+};
+window._cockpitOcclusion.at = _cockpitOcclusionAt;
+
+/**
  * Dial the panel repaint period live — `window._panelHz(33)` for 30 Hz — so Max
  * settles "laggy" by flying it, the same way `_headTau` settles the recenter.
  * Returns the period in force and the rate it works out to.
