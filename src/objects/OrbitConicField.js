@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildRingConic } from './ringConic.js';
+import { buildRingConic, CONIC_EXTENT_UNBOUNDED } from './ringConic.js';
 import { proximityFadeFactor } from './OrbitRingSDF.js';
 
 /**
@@ -54,13 +54,15 @@ export const CONIC_MAX = 64;
 // DataTexture is CONIC_MAX wide x CONIC_TEX_ROWS tall, RGBA32F. Per ring (one
 // texel column) the 8 rows carry:
 //   row 0: Cs[0..3]                 row 4: Hinv[4..7]
-//   row 1: Cs[4..7]                 row 5: Hinv[8], _, _, _
+//   row 1: Cs[4..7]                 row 5: Hinv[8], bMinX, bMinY, bMaxX
 //   row 2: Cs[8], radius, camDist, active
-//   row 3: Hinv[0..3]              row 6: rowW[0..2], _
+//   row 3: Hinv[0..3]              row 6: rowW[0..2], bMaxY
 //                                   row 7: color.rgb, alpha
 // (Cs 3 texels + Hinv 3 texels + rowW 1 texel + color/alpha 1 texel = 8; the
 // radius/camDist/active scalars ride the 3 spare slots of the Cs group's last
-// texel, so the plan's 8-texel grouping is honored exactly.)
+// texel, so the plan's 8-texel grouping is honored exactly.) The ring's screen
+// AABB (ringConic.js `bounds`) rides the 4 remaining spare slots of the Hinv/rowW
+// texels — no extra row, no extra texelFetch, since rows 5 and 6 are already read.
 export const CONIC_TEX_ROWS = 8;
 
 // Angular-size fade band: a ring is fully visible (fade 1) once its projected
@@ -194,18 +196,38 @@ void main() {
     float band = 1.0 - smoothstep(uPixelWidth * 0.5, uPixelWidth * 0.5 + uFeatherPx, distPx);
     if (band < 0.01) continue;
 
-    // Front-branch guard + clip-w (byte-mirror of frontBranchOK; row-major Hinv).
     vec4 t3 = texelFetch(uData, ivec2(i, 3), 0);  // Hinv0..3
     vec4 t4 = texelFetch(uData, ivec2(i, 4), 0);  // Hinv4..7
-    vec4 t5 = texelFetch(uData, ivec2(i, 5), 0);  // Hinv8, _, _, _
+    vec4 t5 = texelFetch(uData, ivec2(i, 5), 0);  // Hinv8, bMinX, bMinY, bMaxX
+    vec4 t6 = texelFetch(uData, ivec2(i, 6), 0);  // rowW0..2, bMaxY
+
+    // EXTENT REJECT (byte-mirror of withinRingExtent). A conic has no endpoints:
+    // edge-on, Cs degenerates to a double LINE whose zero set is infinite, so the
+    // band alone paints far beyond the ring. bounds is the ring's true projected
+    // AABB (±CONIC_EXTENT_UNBOUNDED = a no-op when the circle crosses the camera
+    // plane and the projection really is unbounded). Margin = the band's own
+    // half-width + feather + 1px so the extremes are never clipped.
+    float extentMargin = uPixelWidth * 0.5 + uFeatherPx + 1.0;
+    if (p.x < t5.y - extentMargin || p.x > t5.w + extentMargin ||
+        p.y < t5.z - extentMargin || p.y > t6.w + extentMargin) continue;
+
+    // Front-branch guard + clip-w (byte-mirror of frontBranchOK; row-major Hinv).
     vec3 hR0 = vec3(t3.x, t3.y, t3.z);
     vec3 hR1 = vec3(t3.w, t4.x, t4.y);
     vec3 hR2 = vec3(t4.z, t4.w, t5.x);
     vec3 q = vec3(dot(hR0, p), dot(hR1, p), dot(hR2, p));
     vec2 XZ = q.xy / q.z;
-    vec4 t6 = texelFetch(uData, ivec2(i, 6), 0);  // rowW0..2, _
     float wclip = dot(vec3(t6.x, t6.y, t6.z), vec3(XZ, 1.0));
-    if (wclip <= 0.0) continue;
+    if (!(wclip > 0.0)) {
+      // Extent-bounded => the whole circle is in front, so there is no
+      // behind-camera branch to reject; a non-positive w is the edge-on
+      // degeneracy (adj(H) rank-1 => every pixel reconstructs to the same
+      // point at infinity, w -> 0). Fall back to the ring centre's clip w so
+      // the ring is depth-sorted instead of VANISHING.
+      if (t5.y <= ${(-CONIC_EXTENT_UNBOUNDED * 0.5).toExponential(1)}) continue;
+      wclip = t6.z;
+      if (wclip <= 0.0) continue;
+    }
 
     // Angular-size fade + composed alpha.
     float ang = angularFade(t2.y, t2.z);
@@ -311,7 +333,7 @@ export class OrbitConicField {
     // in the hot path (R5). Reused across frames.
     this._scratch = [];
     for (let i = 0; i < CONIC_MAX; i++) {
-      this._scratch.push({ Cs: new Float64Array(9), Hinv: new Float64Array(9), rowW: new Float64Array(3) });
+      this._scratch.push({ Cs: new Float64Array(9), Hinv: new Float64Array(9), rowW: new Float64Array(3), bounds: new Float64Array(4) });
     }
     this._pvm = new THREE.Matrix4();
     this._viewInv = new THREE.Matrix4();
@@ -508,7 +530,7 @@ export class OrbitConicField {
     const o1 = o0 + stride, o2 = o1 + stride, o3 = o2 + stride, o4 = o3 + stride;
     const o5 = o4 + stride, o6 = o5 + stride, o7 = o6 + stride;
     if (conic) {
-      const Cs = conic.Cs, Hi = conic.Hinv, rW = conic.rowW;
+      const Cs = conic.Cs, Hi = conic.Hinv, rW = conic.rowW, bd = conic.bounds;
       // row0: Cs0..3
       src[o0] = Cs[0]; src[o0 + 1] = Cs[1]; src[o0 + 2] = Cs[2]; src[o0 + 3] = Cs[3];
       // row1: Cs4..7
@@ -519,10 +541,10 @@ export class OrbitConicField {
       src[o3] = Hi[0]; src[o3 + 1] = Hi[1]; src[o3 + 2] = Hi[2]; src[o3 + 3] = Hi[3];
       // row4: Hinv4..7
       src[o4] = Hi[4]; src[o4 + 1] = Hi[5]; src[o4 + 2] = Hi[6]; src[o4 + 3] = Hi[7];
-      // row5: Hinv8, _, _, _
-      src[o5] = Hi[8]; src[o5 + 1] = 0; src[o5 + 2] = 0; src[o5 + 3] = 0;
-      // row6: rowW0..2, _
-      src[o6] = rW[0]; src[o6 + 1] = rW[1]; src[o6 + 2] = rW[2]; src[o6 + 3] = 0;
+      // row5: Hinv8, bounds minX, minY, maxX
+      src[o5] = Hi[8]; src[o5 + 1] = bd[0]; src[o5 + 2] = bd[1]; src[o5 + 3] = bd[2];
+      // row6: rowW0..2, bounds maxY
+      src[o6] = rW[0]; src[o6 + 1] = rW[1]; src[o6 + 2] = rW[2]; src[o6 + 3] = bd[3];
     } else {
       // Null conic: zero the conic rows so no stale data lingers; keep radius/
       // camDist for introspection but force active=0 (shader skips it anyway).
@@ -552,8 +574,9 @@ export class OrbitConicField {
     const Cs = new Float32Array([src[o0], src[o0 + 1], src[o0 + 2], src[o0 + 3], src[o1], src[o1 + 1], src[o1 + 2], src[o1 + 3], src[o2]]);
     const Hinv = new Float32Array([src[o3], src[o3 + 1], src[o3 + 2], src[o3 + 3], src[o4], src[o4 + 1], src[o4 + 2], src[o4 + 3], src[o5]]);
     const rowW = new Float32Array([src[o6], src[o6 + 1], src[o6 + 2]]);
+    const bounds = new Float32Array([src[o5 + 1], src[o5 + 2], src[o5 + 3], src[o6 + 3]]);
     return {
-      Cs, Hinv, rowW,
+      Cs, Hinv, rowW, bounds,
       radius: src[o2 + 1], camDist: src[o2 + 2], active: src[o2 + 3],
       color: { r: src[o7], g: src[o7 + 1], b: src[o7 + 2] }, alpha: src[o7 + 3],
     };
