@@ -3,9 +3,8 @@
   "intentRef": "intent.md",
   "project": "well-dipper-cockpit-screens",
   "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md",
-  "status": "building",
-  "statusNote": "Scoped 2026-08-01 from Max's two statements of the ask. Successor to cockpit-into-helm-2026-07-30, which is MAX-PASSED-GATE. Geometry half only — canopy tint / glass-depth parallax / phosphor look are explicitly NOT this work.",
-
+  "status": "verified",
+  "statusNote": "VERIFIED_PENDING_MAX d3dc4cb — unit + integration all PASS. 1 unit AC certified by the verify-workstream workflow (3/3 adversarial); 7 live integration ACs measured in the running game at :5181. The UAT gate AC-READS-AS-ON-THE-GLASS is deferred-to-max by construction and is the only thing between this and Shipped. NOT SHIPPED, NOT PUSHED.",
   "acceptanceCriteria": [
     {
       "id": "AC-CUT-NOT-BLINKED",
@@ -15,7 +14,9 @@
         "observable": "At the frames where a rib crosses the bracket, reading #targeting-overlay's OWN 2D context (never a drawImage copy into a scratch canvas — that returns stale frames) shows a partial bracket: nonzero lit pixels AND nonzero erased pixels inside the bracket's bounding box, with the erased region's boundary tracking the rib's silhouette. `_reticle._lastFrame.entries[0].state` shows the reticle was still DRAWN on those frames."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "result": "PASS",
+      "evidence": "Held pose (0.00px drift), selected reticle at (881.8,450) half 143.6, bbox [734,302,295,296] read from #targeting-overlay's OWN 2D context: mask ON 201 lit, mask OFF same pose 246 lit -> 45 px erased, with entries[0].state=='selected' throughout (drawn, not suppressed). _cockpitOcclusion.at() at the erased corner names Arch_Bow. The erased region is x[1016,1028] y[588,596]; an independent raycast across y=592 puts Arch_Bow at x[1010,1028], clear at 1008 and 1030 -- so the erase edge sits on the rib edge within the 2px scan step. Kept pixels still span the full bbox x-range, which is what makes it a CUT."
     },
     {
       "id": "AC-CANOPY-DOES-NOT-OCCLUDE",
@@ -25,7 +26,9 @@
         "observable": "Census returns zero glass meshes in both fixtures; a mesh that is neither is retained. Headless, no browser."
       },
       "layer": "unit",
-      "live": false
+      "live": false,
+      "result": "PASS",
+      "evidence": "Certified headless by the verify-workstream workflow at d3dc4cb, 3/3 adversarial sufficient. Both required fixtures pass (glass-by-material-not-name; glass-by-name-not-material). The workflow independently confirmed the mask is tagged from the same _cockpitOccluders array collectReticleOccluders built -- no second census exists to drift. Live corroboration: excluded == [\"Canopy_Glass\"], 44 occluders."
     },
     {
       "id": "AC-MASK-AGREES-WITH-THE-ORACLE",
@@ -35,7 +38,9 @@
         "observable": "Mask coverage is within 0.02 absolute of BOTH 0.587202 and the live _cockpitOcclusion() value in that same session. Divergence beyond that fails the AC rather than being explained away."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "result": "PASS",
+      "evidence": "1600x900 CSS (exactly 16:9), dpr 1.0, overlay and mask buffers both 1600x900 1:1, fovWorld 70 / fovCockpit 70, head centred. _cabinMaskCoverage() = 0.5873. vs build-time predictedOcclusionFraction 0.587202 -> delta 0.000098. vs same-session _cockpitOcclusion(61) 0.5778 -> delta 0.0095. Threshold was 0.02 on both. Reproduced identically in THREE independent page sessions. Positive control: hasCabin true, glFailed false, renders increments 1:1 with RAF (462 frames -> 462 renders in 2s). This also settles the DoubleSide judgement call flagged at scope time: coverage lands 0.0001 ABOVE the analytic number, not under, so FrontSide dropping Hull_Tub and the arches is ruled out by measurement rather than by argument."
     },
     {
       "id": "AC-THE-CENTRE-RAY-BLINK-IS-GONE",
@@ -45,7 +50,9 @@
         "observable": "No frame in the sweep has the entry present, then absent, then present again attributable to cabin structure. Concretely: the count of drawn->undrawn->drawn transitions for a continuously-visible body over the sweep is 0, where before the change it was >=1 per rib crossed (three were measured in one sweep)."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "result": "PASS",
+      "evidence": "240-frame sweep (120 at +0.35 yaw, 120 at -0.35, reticle x 882->980->882): 240/240 frames drawn, 0 drawn->undrawn->drawn transitions. POSITIVE CONTROL, which is what makes the zero mean anything: _cockpitOcclusion.wouldBlink().selected was true on 26 of those 240 frames -- the retired gate would have blanked the reticle 26 times over the same sweep. Corner-blocked on 32 frames (Arch_Bow). A second independent session agreed: 260/260 drawn, 0 transitions, wouldBlink true on 27."
     },
     {
       "id": "AC-FULLY-BEHIND-A-MONITOR-STILL-HIDDEN",
@@ -55,7 +62,9 @@
         "observable": "Zero lit pixels in the bracket's bounding box, read from #targeting-overlay's own 2D context."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "result": "PASS",
+      "evidence": "Pose (61.7,597.1) half 21.7, bbox [36,571,51,52]: 49/49 raycast cells inside the bbox name Screen_LL, zero non-monitor cells. mask ON 0 lit / mask OFF 324 lit / mask ON again 0 lit, drift 0.13px and 0.25px across the A/B. Confirmed twice more at half 58.9 and half 30.6 (144/144 monitor cells, 0/324/0). CAVEAT, stated because it is the shape that burned this lane before: the geometry had to be manufactured. The largest fully-solid monitor square on screen is 270px and the star bracket at arrival distance is ~300px, so it does not fit; the ship was moved back along the nose vector (debug drive, no source edit) to shrink it. This system has 0 planets, so no smaller or ghost target existed to use instead."
     },
     {
       "id": "AC-THE-LABEL-IS-CUT-LIKE-EVERYTHING-ELSE",
@@ -65,7 +74,9 @@
         "observable": "The label's glyphs are partially erased along the rib's edge while the bracket remains fully drawn. Both states coexist in a single frame read from #targeting-overlay's own 2D context."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "result": "PASS",
+      "evidence": "One held pose (968.9,329.8) half 131, ship speed pinned to 0. Bracket bbox [834,195,270,270]: ON 284, OFF 284 -> 0 erased, fully drawn. Label box [872,465,193,22]: ON 1222, OFF 1593 -> 371 px of glyph ink erased (23%). The erase spans x 979..1062; a live raycast on the label mid-line reads clear to 982, Arch_Bow 985-1006, clear 1009-1027, Rib_Shoulder_R from 1030 out -- the erase covers exactly those bands. Screenshot shows four intact bracket corners with the label cut mid-glyph. This is the strongest single piece of evidence that the overlay is cut at the real geometry at the real edges."
     },
     {
       "id": "AC-NO-READBACK-NO-FRAME-COST",
@@ -75,7 +86,9 @@
         "observable": "Zero readback calls on the per-frame mask path. p50 frame time with the mask on is within 0.5ms of p50 with it off, measured on the same page in the same session."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "result": "PASS",
+      "evidence": "Static: readPixels appears once, cabinMask.js:191, inside the console-only coverage(); no readRenderTargetPixels/getImageData/toDataURL in cabinMask.js or TargetingReticle._applyCabinMask (TargetingReticle.js:381-417). The bridge is ctx.drawImage(maskCanvas) under destination-out -- a compositor-side copy, not a JS readback. Independently confirmed by the verify-workstream workflow. Live: interleaved ON/OFF/ON/OFF, 900 RAF intervals each, 3600 total, steady flight. ON p50 4.2/4.2ms, OFF p50 4.2/4.2ms -> delta 0.0ms against a 0.5ms threshold. preserveDrawingBuffer measured directly (two throwaway renderers, same scene/camera, 300 iterations x 2 interleaved): true mean 2.2253/2.2267, false mean 2.2217/2.2437 -- no measurable cost. HONEST TAIL NOTE, see openForMax: the tails DO differ. ON p75 4.6 / p95 15.9-16.0 / mean 4.92-5.02 vs OFF p75 4.3 / p95 9.0-9.3 / mean 4.32-4.34. The p50 test proves the median frame stays in budget; it does not prove the mask is free."
     },
     {
       "id": "AC-DEGRADES-WHEN-THERE-IS-NO-CABIN",
@@ -85,7 +98,9 @@
         "observable": "Reticles render whole and uncut, no console error from the mask path, and the mask coverage accessor reports 0. Then with the file restored, the same page shows cut reticles again."
       },
       "layer": "integration",
-      "live": true
+      "live": true,
+      "result": "PASS",
+      "evidence": "Failure genuinely INDUCED, not asserted: cockpit.glb moved aside, producing a real _cockpit().loadError (the dev server served index.html for the missing asset), eyeFound false, panels []. hasCabin false, renders 0, glFailed false; _cabinMaskCoverage() 0; _cockpitOcclusion(31) reports {occluders:0}. Reticle renders whole: bbox lit 324 with the mask enabled AND 324 with it disabled, maskAppliedAt 0 on 6/6 sampled frames. Console carried exactly the expected [COCKPIT] model-failed warning and NO [CABIN-MASK] or [RETICLE] mask-source error. Restored and hash-verified byte-identical (sha256 83a4d531..2181, 77280 bytes); after reload loadError null, hasCabin true, coverage 0.5873, and at an Arch_Bow crossing ON 207 vs OFF 282 -- the cuts came back."
     },
     {
       "id": "AC-READS-AS-ON-THE-GLASS",
@@ -94,10 +109,11 @@
         "input": "Max flies HELM hands-on, sweeps targets across ribs, arches and monitor edges, and looks at the reticles.",
         "observable": "Max's judgment. Deferred-to-max."
       },
-      "layer": "uat"
+      "layer": "uat",
+      "result": "deferred-to-max",
+      "evidence": "UAT layer. No agent drives or PASSes this. All eight objective ACs are green at d3dc4cb, which is the precondition for UAT rather than a substitute for it."
     }
   ],
-
   "architecturalConnections": {
     "inputs": [
       "CockpitRig: rig.model (GLB scene root, ~782 faces, loaded once, rigid at runtime), rig.scene (its OWN THREE.Scene — the cabin never enters the world scene), rig.glassNodes (/glass|canopy/i name matches) and rig.glassMats (materials under those nodes). CockpitRig.js:333, 444-449, 474-495.",
@@ -121,7 +137,6 @@
       "The off-screen ship chevron (_drawShipOffscreenArrow) still draws. NOTE AS A RISK: it lives at the screen edge, which is where cabin structure is densest, so uniform cutting may hide it far more often than the other reticles. This is the correct behaviour under Max's answer and is deliberately NOT special-cased — but it is the element most likely to read wrong, and is the first thing to look at if UAT comes back negative."
     ]
   },
-
   "designDecisions": [
     {
       "decision": "A silhouette mask, not per-part raycasting and not moving the reticles into the WebGL pass.",
@@ -142,6 +157,33 @@
     {
       "decision": "Hard edge by default; softness is a knob, not a scope question.",
       "why": "'Cut by the real geometry at the real edges' is the brief, and a hard edge is the literal reading. Whether a slightly soft edge reads better at a rib's width is a feel judgment Max can only make by looking at it, so it ships as a tunable and gets settled at UAT rather than argued at scope."
+    }
+  ],
+  "liveVerification": {
+    "commit": "d3dc4cb",
+    "where": "running game at http://localhost:5181/well-dipper/, HELM hands-on, driven via chrome-devtools",
+    "methodNotes": [
+      "Every null/zero result carries a positive control, because this lane has three recorded false readings from controls run against an absent subject. The controls used: hasCabin/renders/glFailed before any claim about cuts; wouldBlink() true on >=1 frame before any claim that the blink is gone; _cockpitOcclusion.at() naming a real mesh before any claim about what was in front.",
+      "All overlay pixel reads came from #targeting-overlay's OWN 2D context. A drawImage copy into a scratch canvas returns stale frames and has produced false verdicts in this lane twice."
+    ],
+    "testHarnessCaveats": [
+      "resize_page is a no-op on this window (outer stayed 1298x848); CDP viewport emulation 1600x900x1 was used instead. Side effect worth keeping: changing dpr mid-session left TargetingReticle's canvas at the old dpr (2000x1125 backing) while CabinMask sized 1600x900 from the new devicePixelRatio. The blit still aligned because drawImage scales, but the cut was resampled until a resize event re-synced them. A test artifact, not a product defect -- but it shows the two canvases CAN transiently disagree on dpr and that the mask path tolerates it by softening rather than misregistering.",
+      "The page RAF-throttles to ~1.2fps whenever its window is not frontmost, while document.visibilityState still reads \"visible\" and hasFocus() still returns true. One perf block was silently contaminated (p75 1003ms) and was discarded. Anyone repeating the frame-cost measurement must bring the page to front first; the reported numbers were all taken at 204-230fps.",
+      "Twice the idle timer reverted to autopilot mid-run and once the page reloaded itself to the splash. Both were caught via renders resetting to 0 and _regime().handsOn, and no reported measurement crosses one."
+    ]
+  },
+  "openForMax": [
+    {
+      "item": "The mask is free at the median and not at the tail.",
+      "detail": "p50 is identical with the mask on and off (4.2ms both, delta 0.0), which is what the AC asked for. But p95 roughly doubles, 9.0-9.3ms -> 15.9-16.0ms, and the mean rises ~0.6ms. At the ~240Hz this machine runs, both p95 figures are already over budget, so the mask is making an existing occasional miss worse rather than introducing one. At 60Hz, 16ms is right at the edge. One machine's numbers. Not a blocker, and no fix is proposed until you say it matters."
+    },
+    {
+      "item": "The off-screen ship chevron was flagged at scope time and remains unexercised.",
+      "detail": "It lives at the screen edge, which is where cabin structure is densest, so uniform cutting may hide it far more often than the other reticles. That is CORRECT under your answer and is deliberately not special-cased. No ship was present to test it -- so it is untested, not confirmed-good. First suspect if UAT reads wrong."
+    },
+    {
+      "item": "This system has 0 planets.",
+      "detail": "Every live measurement was taken against a star. Moons and planets exercise smaller brackets, ghost reticles and different label lengths. Worth flying a populated system during UAT."
     }
   ]
 }
