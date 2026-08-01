@@ -125,23 +125,26 @@ const SUBJECT_CLAIMS = [
       'looks exactly like the panel before this workstream existed',
   },
   {
-    what: 'derives the intent from the ZOOM STATE and from nothing else',
-    re: /nav\.chromeless\s*=\s*!zoomed\s*;/,
-    why: 'AMENDED 2026-07-29 for increment 6. This used to pin the literal `true`, and the ' +
-      'principle behind that pin is unchanged: the panel STATES an intent and never computes ' +
-      'the LEVEL gate, which stays inside NavComputer and is resolved at draw time. What ' +
-      'changed is which intent. Zooming has to clear chrome-lessness — Max zooms the panel in ' +
-      'order to press the tab strip and the BURN button, and those hit regions are withdrawn ' +
-      'while bare, which is right at rest and wrong the moment the screen is at his eye. Zoom ' +
-      'state is a property of the HOST, not of the nav level, so reading it here is on the ' +
-      'correct side of the render boundary in a way a level read never is',
+    what: 'states the chrome-less intent UNCONDITIONALLY as false — chromed at all times',
+    re: /nav\.chromeless\s*=\s*false\s*;/,
+    why: 'AMENDED 2026-08-01 by Max\'s ruling: "we no longer need the panel to render ' +
+      'differently when its zoomed vs non zoomed in the system view". The principle behind the ' +
+      'original pin is STILL unchanged across both amendments — the panel STATES an intent and ' +
+      'never computes the LEVEL gate, which lives in NavComputer and resolves at draw time. Only ' +
+      'the intent has changed, twice: literal `true` (inc 5), then `!zoomed` (inc 6, so zooming ' +
+      'restored the tab strip and BURN hit regions), and now literal `false`. Always-chromed was ' +
+      'chosen over always-bare because chrome-less WITHDRAWS the commit button and every label, ' +
+      'so collapsing the other way would have left a panel that cannot be warped from. The ' +
+      '`isZoomed` accessor stays wired and validated but is no longer READ — chrome was its only ' +
+      'consumer.',
   },
   {
-    what: 'takes the zoom state from an injected accessor, not from a mover it imports',
-    re: /zoomed\s*=\s*!!\s*isZoomed\s*\(\s*\)/,
-    why: 'the same dependency-injection seam the nav source already uses. A painter that ' +
-      'imported PanelMover would drag the scene graph into a module whose whole job is pixels, ' +
-      'and would be untestable in plain node for exactly the reason NavSource documents',
+    what: 'still accepts and validates the injected zoom accessor',
+    re: /isZoomed\s*!==\s*'function'/,
+    why: 'AMENDED 2026-08-01. This used to pin the READ (`zoomed = !!isZoomed()`), which is gone ' +
+      'with the chrome decision it fed. The seam itself stays — CockpitRig wires it and zoom is ' +
+      'the obvious axis for a future paint-time decision — so what is pinned now is the ' +
+      'validation, which is the part that keeps an unread seam honest.',
   },
 ];
 const SUBJECT_PROHIBITIONS = [
@@ -326,11 +329,12 @@ describe('NavPanel.test.js — this file does not disable itself', () => {
     // running them against a NavPanel.js with the write taken out.
     // ⚠ THE GUTTING PATTERN HAS TO TRACK THE SUBJECT. It was
     // `nav.chromeless = true;` before increment 6 made the intent conditional on
-    // zoom. Updating a pinned-source claim is indistinguishable in a diff from
+    // zoom, then `nav.chromeless = !zoomed;` until Max ruled it always-chromed on
+    // 2026-08-01 and it became the literal `false`. Updating a pinned-source claim is indistinguishable in a diff from
     // quietly WEAKENING one, so this control is the thing that tells them apart:
     // the amended claims must still fail against a NavPanel.js with the write
     // removed. AC-BASELINE-GREEN requires exactly this.
-    const gutted = MODULE_CODE.replace(/if\s*\(\s*nav\s*\)\s*nav\.chromeless\s*=\s*!zoomed\s*;/, '');
+    const gutted = MODULE_CODE.replace(/nav\.chromeless\s*=\s*false\s*;/, '');
     expect(gutted, 'the deletion did not take, so this control proves nothing').not.toBe(MODULE_CODE);
     expect(SUBJECT_CLAIMS.every((c) => c.re.test(gutted))).toBe(false);
     // And the real file satisfies every one of them.
@@ -413,7 +417,7 @@ describe('the chrome-less intent is stated every paint, before the frame draws',
       const source = makeSource(64, 48);
       const nav = withNav(source, level);
       makeNavPainter(source)(screen, null, 0);
-      expect(nav.chromeless, level).toBe(true);
+      expect(nav.chromeless, level).toBe(false);
     }
   });
 
@@ -440,9 +444,9 @@ describe('the chrome-less intent is stated every paint, before the frame draws',
     const paint = makeNavPainter(source);
     const screen = makeScreen(64, 48);
     for (let i = 0; i < 3; i++) {
-      nav._chromeless = false;                 // somebody else cleared it
+      nav._chromeless = true;                  // somebody else SET it
       paint(screen, null, i * 80);
-      expect(nav.chromeless, `paint ${i}`).toBe(true);
+      expect(nav.chromeless, `paint ${i}`).toBe(false);
     }
     expect(source.log.filter((e) => e.op === 'setChromeless').length).toBe(3);
   });
@@ -472,8 +476,8 @@ describe('the chrome-less intent is stated every paint, before the frame draws',
     };
     makeNavPainter(source)(makeScreen(64, 48), null, 0);
     const mid = source.log.find((e) => e.op === 'bareMidFrame');
-    expect(mid.v, 'the frame that became SYSTEM mid-draw kept its chrome').toBe(true);
-    expect(nav.chromeless, 'the intent changed because the level did').toBe(true);
+    expect(mid.v, 'the frame that became SYSTEM mid-draw went bare').toBe(false);
+    expect(nav.chromeless, 'the intent changed because the level did').toBe(false);
   });
 
   it('paints a source that carries no nav computer at all, rather than throwing', () => {
@@ -595,103 +599,58 @@ describe('what reaches the glass is the nav computer\'s own picture, unaltered',
  * So the zoomed state has to CLEAR `chromeless`, not merely move the mesh. These
  * tests are behavioural; the source pins above only prove the line is present.
  */
-describe('the zoom clears the chrome-less intent', () => {
-  it('asks for a BARE panel while at rest', () => {
-    const screen = makeScreen(8, 6);
-    const source = makeSource(8, 6);
-    const nav = withNav(source);
-    makeNavPainter(source, { isZoomed: () => false })(screen, null, 0);
-    expect(nav.chromeless).toBe(true);
-  });
+describe('chrome no longer depends on the zoom (Max, 2026-08-01)', () => {
+  // RETIRED: 'the zoom clears the chrome-less intent', four tests, which pinned
+  // ambient-bare / zoomed-chromed. Max ruled the panel always-chromed — "we no
+  // longer need the panel to render differently when its zoomed vs non zoomed in
+  // the system view" — so those assertions now describe behaviour that must NOT
+  // happen. Replaced rather than deleted so the reversal is legible in one place.
+  //
+  // Always-chromed was chosen over always-bare because chrome-less WITHDRAWS the
+  // COMMIT button and every planet label, which would leave a panel that cannot
+  // be warped from.
 
-  it('asks for a CHROMED panel while zoomed', () => {
-    const screen = makeScreen(8, 6);
-    const source = makeSource(8, 6);
-    const nav = withNav(source);
-    makeNavPainter(source, { isZoomed: () => true })(screen, null, 0);
-    expect(nav.chromeless, 'the zoomed panel would have no tabs and no BURN button')
-      .toBe(false);
-  });
-
-  it('defaults to bare when no accessor is supplied, so existing callers are unchanged', () => {
-    const screen = makeScreen(8, 6);
-    const source = makeSource(8, 6);
-    const nav = withNav(source);
-    makeNavPainter(source)(screen, null, 0);
-    expect(nav.chromeless).toBe(true);
-  });
-
-  it('re-reads the zoom state on EVERY paint, never captures it', () => {
-    // The panel is zoomed and dismissed between paints; that is the entire
-    // feature. A boolean read once at wiring time freezes the panel in whichever
-    // state it happened to be built in — and since it is built at rest, the
-    // symptom is a zoomed panel with no controls, which reads as "the click
-    // forwarding does not work" and is nothing of the sort.
-    const screen = makeScreen(8, 6);
-    const source = makeSource(8, 6);
-    const nav = withNav(source);
-    let zoomed = false;
-    const paint = makeNavPainter(source, { isZoomed: () => zoomed });
-
-    paint(screen, null, 0);
-    expect(nav.chromeless).toBe(true);
-    zoomed = true;
-    paint(screen, null, 16);
-    expect(nav.chromeless, 'the zoom state was captured at wiring time').toBe(false);
-    zoomed = false;
-    paint(screen, null, 32);
-    expect(nav.chromeless, 'the panel never went back to bare').toBe(true);
-  });
-
-  it('writes the intent BEFORE the frame renders, zoomed as well as at rest', () => {
-    // The existing ordering guarantee, re-asserted on the new path. An intent
-    // written after `render()` arrives one paint late, and one paint late is
-    // invisible at the 12.5 Hz ambient repaint — the panel simply shows the
-    // previous state's chrome, intermittently.
+  it('stays chromed whether the panel is at rest or at the eye', () => {
+    const screen = makeScreen(64, 48);
     for (const zoomed of [false, true]) {
-      const screen = makeScreen(8, 6);
-      const source = makeSource(8, 6);
-      withNav(source);
+      const source = makeSource(64, 48);
+      const nav = withNav(source, 'system');
       makeNavPainter(source, { isZoomed: () => zoomed })(screen, null, 0);
-      const ops = names(source.log);
-      expect(ops.indexOf('setChromeless'), `zoomed=${zoomed}`).toBeGreaterThanOrEqual(0);
-      expect(ops.indexOf('setChromeless'), `zoomed=${zoomed}: intent written after the frame drew`)
-        .toBeLessThan(ops.indexOf('render'));
+      expect(nav.chromeless, `zoomed=${zoomed}`).toBe(false);
     }
   });
 
-  it('coerces whatever the accessor returns to a real boolean', () => {
-    // `chromeless` is read by `get _bare()`, which the previous workstream made
-    // total specifically so a host assigning `undefined` could not hand every
-    // guard a value one refactor away from being read as "not yet known".
-    const screen = makeScreen(8, 6);
-    const source = makeSource(8, 6);
-    const nav = withNav(source);
-    for (const junk of [undefined, null, 0, '', 'yes', 1, NaN]) {
+  it('gives the same answer for every value the accessor can return', () => {
+    // The old code coerced this because the answer STEERED the chrome. It no
+    // longer steers anything, so a junk return must be inert rather than merely
+    // coerced — this is the test that would catch a partial revert.
+    const screen = makeScreen(64, 48);
+    for (const junk of [undefined, null, 0, 1, '', 'yes', NaN, {}]) {
+      const source = makeSource(64, 48);
+      const nav = withNav(source, 'system');
       makeNavPainter(source, { isZoomed: () => junk })(screen, null, 0);
-      expect(typeof nav.chromeless, `isZoomed returned ${JSON.stringify(junk)}`).toBe('boolean');
-      expect(nav.chromeless).toBe(!junk);
+      expect(nav.chromeless, `isZoomed()=${String(junk)}`).toBe(false);
     }
   });
 
-  it('refuses a non-function accessor, naming it', () => {
-    const source = makeSource(8, 6);
+  it('still REJECTS a non-function accessor, since the seam is still wired', () => {
+    // isZoomed remains accepted and validated even though nothing reads it —
+    // CockpitRig passes it and zoom is the obvious axis for a future paint-time
+    // decision. The validation is what keeps that seam honest meanwhile.
+    const source = makeSource(64, 48);
     expect(() => makeNavPainter(source, { isZoomed: true })).toThrow(/isZoomed must be a function/);
     expect(() => makeNavPainter(source, { isZoomed: 'yes' })).toThrow(/isZoomed/);
   });
 
-  it('still reads no level and no gate on the zoomed path either', () => {
-    // `withNav`'s `level` getter throws and `_bare` is the nav computer's answer
-    // about the frame it is drawing, not an input to it. Both traps have to hold
-    // in the zoomed state too — that is the state the whole level-gate correction
-    // of 2026-07-29 was about, and it is the one nobody had exercised.
-    const screen = makeScreen(8, 6);
-    const source = makeSource(8, 6);
+  it('marks the canvas as a DIM SURFACE, which is a separate axis from chrome', () => {
+    // The orbit circles were invisible on the glass because their 0.15 alpha was
+    // tuned for the bright DOM overlay. That is a brightness fact about the
+    // surface, not a chrome policy — conflating them is what made the first fix
+    // wrong when chrome went always-on.
+    const source = makeSource(64, 48);
     const nav = withNav(source, 'system');
-    let bareReads = 0;
-    Object.defineProperty(nav, '_bare', { get() { bareReads++; return false; } });
-    expect(() => makeNavPainter(source, { isZoomed: () => true })(screen, null, 0)).not.toThrow();
-    expect(bareReads, 'the painter read the nav computer\'s own draw-time verdict').toBe(0);
+    makeNavPainter(source)(makeScreen(64, 48), null, 0);
+    expect(nav.dimSurface).toBe(true);
   });
 });
 

@@ -165,6 +165,21 @@ export class NavComputer {
     // chromed with a live invisible autopilot button on it. Hosts set this true
     // and stop thinking about levels.
     this.chromeless = false;
+
+    // ⭐ IS THIS CANVAS BEING SHOWN ON A DIM SURFACE? Independent of `chromeless`
+    // (2026-08-01). These were conflated once and it cost a bug: the orbit
+    // circles were tuned at 0.15 alpha for the BRIGHT full-screen DOM overlay,
+    // and when the same canvas became a texture on an in-world cockpit panel
+    // across a dark cabin, they measured (14,22,31) on the glass — drawn, and
+    // invisible. Max: "there are no orbits on the system nav computer now".
+    //
+    // The fix keyed off `_bare` at first, which was WRONG: it happened to
+    // correlate only because the cockpit was the sole chrome-less caller. Max
+    // then ruled the panel always-chromed, which would have silently restored
+    // the invisible orbits. Brightness is its own axis — a host on a dim surface
+    // says so, whatever chrome it wants.
+    this.dimSurface = false;
+
     // Fraction of the panel the orrery fills once the 50 px chrome reserve is
     // reclaimed. Consulted ONLY on the bare path — the default path keeps its
     // hard-coded 0.85 so byte-equality cannot be broken by retuning this. Read it
@@ -2394,7 +2409,7 @@ export class NavComputer {
     // in-world panel across the cabin, and a 15%-alpha hairline does not survive
     // that trip. The dashes stay; only the ink gets darker-background compensation.
     const ORBIT_SEGS = 48;
-    const orbitAlpha = this._bare ? { on: 0.9, off: 0.45 } : { on: 0.5, off: 0.15 };
+    const orbitAlpha = this.dimSurface ? { on: 0.9, off: 0.45 } : { on: 0.5, off: 0.15 };
     for (let i = 0; i < planets.length; i++) {
       const r = auToScreen(planets[i].orbitRadiusAU);
       const isSelected = i === this._selectedPlanetIdx;

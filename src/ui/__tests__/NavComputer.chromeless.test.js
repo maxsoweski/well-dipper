@@ -701,6 +701,25 @@ function bareAfterPaint(nav) {
 }
 
 /**
+ * The class's draw-time resolution, driven from an EXPLICIT bare intent rather
+ * than from the painter's.
+ *
+ * ⭐ 2026-08-01: the cockpit painter now states `chromeless = false`
+ * unconditionally (Max: "we no longer need the panel to render differently when
+ * its zoomed vs non zoomed in the system view"), so painting can no longer
+ * produce a TRUE verdict and every test that observed the resolution THROUGH the
+ * painter went uniformly false. The resolution rule itself — bare only at
+ * SYSTEM, re-read per draw, never cached across a mid-frame level move — is
+ * unchanged and still worth pinning, so those tests now set the intent directly.
+ * That keeps them about the CLASS, which is this file's actual subject, instead
+ * of about one host's current policy.
+ */
+function bareWithIntent(nav) {
+  nav.chromeless = true;
+  return nav._bare;
+}
+
+/**
  * Everything a level name could arrive as. The strings first, then the shapes an
  * out-of-range index and a missing snapshot actually produce.
  */
@@ -1029,13 +1048,27 @@ describe('the painter states the intent, and the class resolves it per draw', ()
   // These drive the real painter against a real `NavComputer.prototype`, so both
   // halves of the seam are the shipped ones.
   it('states the intent unconditionally, at every level there is', () => {
+    // AMENDED 2026-08-01: the stated intent is now `false` at every level, not
+    // `true`. UNCONDITIONAL is still the property under test — the painter must
+    // not start computing this from the level again.
     for (const i of [0, 1, 2, 3, 4, -1, 99]) {
-      expect(flagAfterPaint(navAtLevelIndex(i)), `level index ${i}`).toBe(true);
+      expect(flagAfterPaint(navAtLevelIndex(i)), `level index ${i}`).toBe(false);
     }
   });
 
-  it('reaches the verdict TRUE only at SYSTEM', () => {
-    expect(bareAfterPaint(navAtLevelIndex(4))).toBe(true);
+  it('never reaches a TRUE verdict through the painter, at any level', () => {
+    // The always-chromed ruling, observed end to end: SYSTEM included.
+    for (const i of [0, 1, 2, 3, 4, -1, 99]) {
+      expect(bareAfterPaint(navAtLevelIndex(i)), `level index ${i}`).toBe(false);
+    }
+  });
+
+  it('still resolves TRUE only at SYSTEM when a host DOES ask for bare', () => {
+    // The class rule is untouched by the host policy change; drive it directly.
+    expect(bareWithIntent(navAtLevelIndex(4)), 'SYSTEM').toBe(true);
+    for (const i of [0, 1, 2, 3, -1, 99]) {
+      expect(bareWithIntent(navAtLevelIndex(i)), `level index ${i}`).toBe(false);
+    }
   });
 
   it('reaches FALSE at every level the autopilot drills through', () => {
@@ -1094,8 +1127,13 @@ describe('the level moving MID-FRAME cannot make the wrong screen draw', () => {
   // exactly what a mid-frame transition is.
 
   it('goes bare on the SAME frame the level becomes SYSTEM', () => {
+    // AMENDED 2026-08-01: the intent is now set DIRECTLY, not via the painter.
+    // The cockpit states `chromeless = false` unconditionally since Max's
+    // always-chromed ruling, so painting can no longer produce a TRUE verdict —
+    // but the mid-frame race this test exists for is a property of the GETTER,
+    // not of any host's policy, and it must stay pinned.
     const nav = navAtLevelIndex(3);
-    flagAfterPaint(nav);                       // the painter has run and returned
+    nav.chromeless = true;                     // a host that genuinely wants bare
     expect(nav._bare, 'PRISM must keep its chrome').toBe(false);
 
     nav._levelIndex = 4;                       // _systemZoomAnim lands, mid-render
@@ -1105,8 +1143,13 @@ describe('the level moving MID-FRAME cannot make the wrong screen draw', () => {
   it('keeps its chrome on the SAME frame the level leaves SYSTEM', () => {
     // The mirror. `handleEscape` and the level tabs both move `_levelIndex` down,
     // and a latched verdict would strip the level it landed on.
+    // AMENDED 2026-08-01: the intent is now set DIRECTLY, not via the painter.
+    // The cockpit states `chromeless = false` unconditionally since Max's
+    // always-chromed ruling, so painting can no longer produce a TRUE verdict —
+    // but the mid-frame race this test exists for is a property of the GETTER,
+    // not of any host's policy, and it must stay pinned.
     const nav = navAtLevelIndex(4);
-    flagAfterPaint(nav);
+    nav.chromeless = true;
     expect(nav._bare).toBe(true);
     nav._levelIndex = 2;
     expect(nav._bare, 'REGION drew stripped, so its labels were gone').toBe(false);
@@ -1116,8 +1159,13 @@ describe('the level moving MID-FRAME cannot make the wrong screen draw', () => {
     // A render that flips the level between two draw calls. Each guard asks again,
     // so the words that come after the transition are suppressed and the ones
     // before it are not — which is precisely what "resolved at draw time" means.
+    // AMENDED 2026-08-01: the intent is now set DIRECTLY, not via the painter.
+    // The cockpit states `chromeless = false` unconditionally since Max's
+    // always-chromed ruling, so painting can no longer produce a TRUE verdict —
+    // but the mid-frame race this test exists for is a property of the GETTER,
+    // not of any host's policy, and it must stay pinned.
     const nav = navAtLevelIndex(3);
-    flagAfterPaint(nav);
+    nav.chromeless = true;
     const seen = [];
     seen.push(nav._bare);          // early in the frame — still PRISM
     nav._levelIndex = 4;           // the zoom completes
@@ -1149,7 +1197,14 @@ describe('the level moving MID-FRAME cannot make the wrong screen draw', () => {
     // sensitivity lives in the class.
     const before = navAtLevelIndex(3);
     const after = navAtLevelIndex(4);
+    // The painter writes the IDENTICAL value either side of the transition — that
+    // claim is unchanged by the always-chromed ruling, only its value is (false
+    // now, true before). This is still the proof that no level sensitivity leaked
+    // into the painter.
     expect(flagAfterPaint(before)).toBe(flagAfterPaint(after));
+    expect(flagAfterPaint(before), 'the painter computed something from the level').toBe(false);
+    // With a host that DOES want bare, all the level sensitivity is the class's.
+    before.chromeless = true; after.chromeless = true;
     expect(before._bare).toBe(false);
     expect(after._bare).toBe(true);
   });

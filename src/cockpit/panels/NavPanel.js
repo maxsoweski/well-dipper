@@ -196,9 +196,35 @@ export function makeNavPainter(source, { isZoomed = () => false } = {}) {
     // object means there is nothing to write the flag on, which is the correct
     // no-op rather than a throw: the flag is additive and default-off, so a source
     // that cannot receive it draws exactly as it would have.
-    const zoomed = !!isZoomed();
+    // ⭐ MAX'S RULING 2026-08-01: "we no longer need the panel to render
+    // differently when its zoomed vs non zoomed in the system view." This was
+    // `!zoomed` — ambient drew bare scenery and zooming swapped in the full
+    // instrument. Now it states `false` unconditionally: chromed at all times,
+    // so planet names, the footer hint and the COMMIT button are always there.
+    //
+    // Chosen over always-bare deliberately. Chrome-less WITHDRAWS the commit
+    // button and every label (`_selectedBody && _commitAction && !this._bare`),
+    // so collapsing the other way would have left a panel you cannot warp from.
+    //
+    // Still written every paint rather than left to the constructor default: the
+    // same NavComputer instance is also the game's full-screen overlay under
+    // main.js's wiring, so re-stating the intent per paint keeps another writer
+    // from silently flipping it.
+    //
+    // ⚠ `isZoomed` IS STILL ACCEPTED AND VALIDATED but is no longer READ here —
+    // chrome was its only consumer. It stays on the signature because CockpitRig
+    // already wires it and zoom is the obvious axis for any future paint-time
+    // decision (resolution, escalation); deleting the seam would cost more than
+    // it saves. If it is still unread when someone next opens this file, delete
+    // it then rather than inventing a use for it.
     const nav = source.nav;
-    if (nav) nav.chromeless = !zoomed;
+    if (nav) {
+      nav.chromeless = false;
+      // Separate axis from chrome — see NavComputer's `dimSurface`. This canvas
+      // ends up as a texture on an in-world panel across a dark cabin, where ink
+      // tuned for the bright DOM overlay disappears.
+      nav.dimSurface = true;
+    }
 
     // The panel may have been rebuilt at a new buffer height under us. The source
     // is NOT rebuilt with it — building one means building a NavComputer, which
