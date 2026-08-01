@@ -308,4 +308,63 @@ describe('autopilot always has a cockpit, and the screensaver stays closed', () 
     const loop = SRC.slice(at('if (_cockpitShouldRender()) {'), at('retroRenderer.setCockpit(_cockpitRig.scene'));
     expect(loop).toContain('_cockpitNavComputer.setAutopilotState(autoNav.isActive || _autopilotEnabled)');
   });
+
+  // ── The keyboard, added 2026-08-01 ────────────────────────────────────────
+  //
+  // Max, in UAT: *"I still can't use the up/down controls to rise and lower
+  // below the galactic plane on the prism menu."* It is defect (2) in this
+  // file's own header, arriving again in a different costume: a wiring that
+  // LOOKS right and does nothing. `attachKeys` is called from `activate()`, and
+  // the cockpit's instance never goes through the path that activates — so R, F
+  // and WASD were listened for on the overlay's instance only.
+
+  describe('WASD / R / F on the glass, and who is allowed to hold them', () => {
+    it('the glass gets the KEYS, never activate()', () => {
+      // ⚠ `activate()` also resizes the canvas from `getBoundingClientRect()`,
+      // which is all zeros on the panel's offscreen canvas — the NAV screen goes
+      // BLACK. It is the obvious fix for Max's report and it trades a dead
+      // keyboard for a dead panel. See NavComputer.prismPan.test.js.
+      expect(SRC, 'the applier is gone — every assertion below is stale')
+        .toMatch(/function _syncCockpitNavKeys\(\)/);
+      const applier = fnBody('_syncCockpitNavKeys');
+      expect(applier).toMatch(/attachKeys\(\)/);
+      expect(applier).toMatch(/detachKeys\(\)/);
+      expect(SRC, 'something reached for activate() on the cockpit instance')
+        .not.toMatch(/_cockpitNavComputer\.activate\(\)/);
+    });
+
+    it('it asks EVERY FRAME rather than at the two moments it is zoomed', () => {
+      // ⭐ THE DEFECT THIS SHAPE PREVENTS, and it is worse than the one it fixes.
+      // The panel un-zooms from more places than it zooms — closeNavComputer,
+      // the Esc cascade, the regime flip's dismiss, the mover's own animation
+      // finishing. Attach/detach written as a pair has to be right at all of
+      // them, and this file's sibling records what happens when the un-set is
+      // the one that gets forgotten (the minimap that never came back). Here
+      // the forgotten un-set leaves a CAPTURE-PHASE keydown handler swallowing
+      // W, A, S, D, R and F before flight ever sees them: the ship stops
+      // answering the throttle, and nothing on screen says why.
+      const loop = SRC.slice(at('scHud.update({'), at('retroRenderer.setCockpit(_cockpitRig.scene'));
+      expect(loop, 'the keyboard owner is not re-decided in the frame loop')
+        .toMatch(/_syncCockpitNavKeys\(\);/);
+    });
+
+    it('the answer is the panel being AT THE EYE, in a cockpit that is really there', () => {
+      // Both halves. `_cockpitNavZoomed()` alone would hand the keys over in
+      // ORRERY, where the mover's role can still read NAV from the last HELM
+      // session; `_cockpitShouldRender()` alone would hand them over whenever a
+      // cockpit exists, which is all of HELM — i.e. the whole of flight.
+      const applier = fnBody('_syncCockpitNavKeys');
+      expect(applier).toMatch(/_cockpitShouldRender\(\)/);
+      expect(applier).toMatch(/_cockpitNavZoomed\(\)/);
+    });
+
+    it('re-applying is a no-op, or the frame loop churns listeners', () => {
+      // Asked once per frame, so it must early-out when nothing changed. The
+      // DOM tolerates a repeated addEventListener with the same reference, but a
+      // detach every frame would ALSO clear `_heldKeys` every frame and no key
+      // would ever appear held — panning would be silently, permanently dead.
+      const applier = fnBody('_syncCockpitNavKeys');
+      expect(applier, 'no early-out on an unchanged answer').toMatch(/if \(want === _cockpitNavKeysHeld\) return;/);
+    });
+  });
 });

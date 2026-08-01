@@ -3448,6 +3448,58 @@ function _cockpitNavZoomed() {
   return !!(_cockpitRig && _cockpitRig.mover && _cockpitRig.mover.zoomedRole === 'NAV');
 }
 
+/** Whether the cockpit nav computer currently holds the WASD/RF keyboard. */
+let _cockpitNavKeysHeld = false;
+
+/**
+ * ⭐ WHO OWNS WASD / R / F RIGHT NOW — ONE DECISION POINT, RE-DECIDED EVERY FRAME.
+ *
+ * Max, in UAT 2026-08-01: *"I still can't use the up/down controls to rise and
+ * lower below the galactic plane on the prism menu."* The cockpit's nav computer
+ * had never been given a keyboard — `NavComputer.attachKeys` is called from
+ * `activate()`, and on the glass there is nothing to activate. See that method
+ * for why calling `activate()` wholesale would blank the panel instead.
+ *
+ * ⚠ WHY AN APPLIER AND NOT A LINE IN `_openCockpitNav`. The panel un-zooms from
+ * more places than it zooms: `closeNavComputer`, the Esc cascade, the regime
+ * flip's dismiss at ~3544, and the mover's own animation completing. A pair of
+ * attach/detach calls has to be right at EVERY one of those, and this file's own
+ * history is that the one that gets forgotten is the un-set — exactly the
+ * minimap-never-came-back bug `_applyHudSlot` exists because of. A capture-phase
+ * keydown handler left attached is worse than a stale minimap: it swallows W, A,
+ * S, D, R and F before the flight controls ever see them, so the ship stops
+ * answering the throttle and the only symptom is that flying is broken.
+ *
+ * So the question is asked from the frame loop and the answer is idempotent.
+ *
+ * ⭐ THE FLIGHT CONFLICT IS REAL AND IT RESOLVES ITSELF, mostly. W/S is throttle,
+ * A/D and the mouse are the stick, R is the drive toggle — but `handRouting`
+ * already routes every one of those to NOTHING when the pilot is hands-OFF, and
+ * cursor-visible-HELM (free-look latched) is the only way to aim at a panel and
+ * pull it to the eye. So in the normal path those keys are already inert and the
+ * map is simply picking up what flight has put down.
+ *
+ * ⚠ THE ONE EXCEPTION, FLAGGED RATHER THAN DECIDED: the N key zooms the panel
+ * without checking free-look, so a hands-ON pilot can have the map at their eye
+ * and will lose the throttle to it until they dismiss. That reads as correct to
+ * me — you put the map down before you fly — and F, which would otherwise take
+ * the stick back, means "lower the view" while the map is up, so N or Esc is the
+ * way out. It is a feel call and it is Max's; the alternative is to latch
+ * free-look on zoom, which is one line in `_openCockpitNav`.
+ */
+function _syncCockpitNavKeys() {
+  const want = !!(_cockpitNavComputer && _cockpitShouldRender() && _cockpitNavZoomed());
+  if (want === _cockpitNavKeysHeld) return;
+  _cockpitNavKeysHeld = want;
+  // `?.` on the detach and not the attach, and the asymmetry is the point: the
+  // attach cannot run without an instance (it is in `want`), while the detach is
+  // reached precisely BECAUSE something went away. A teardown that throws here
+  // would leave the listeners attached with the flag already cleared — flight
+  // silently keyless, and nothing left that would ever try again.
+  if (want) _cockpitNavComputer.attachKeys();
+  else _cockpitNavComputer?.detachKeys();
+}
+
 /**
  * Read the pending action off an instance, null it, dispatch it.
  *
@@ -10230,6 +10282,11 @@ function renderFrame(alpha) {
   // ── The cockpit: same snapshot, same frame (AC-PANELS-READ-THE-REAL-FLIGHT) ──
   // Fed the provider's own frame rather than a second read, so the four screens
   // and anything else reading the snapshot cannot disagree about the instant.
+  // Who owns WASD / R / F this frame. Asked here, beside the cockpit's own
+  // gate, because both answers come from the same two facts and neither may be
+  // decided anywhere a later un-zoom would not re-decide. See the applier.
+  _syncCockpitNavKeys();
+
   if (_cockpitShouldRender()) {
     // The on-glass AUTOPILOT label is a MIRROR (`_autopilotActive`), written
     // only by `setAutopilotState` — and the overlay's one press-callback was

@@ -31,6 +31,18 @@ import { simClockMs } from '../core/SimClock.js';
  * Panning supported at all 2D levels. Player position always visible.
  */
 
+/**
+ * The frame the PRISM pan speed is normalised to, and the largest step one
+ * frame of it may take. See the pan block in `render()`.
+ *
+ * 60 Hz is not arbitrary: it is the rate the overlay's own rAF loop ran at when
+ * the per-call step was tuned, so normalising here leaves the overlay's feel
+ * bit-identical and changes only callers that draw at some other rate — which,
+ * as of the cockpit's NAV panel, is the interesting one.
+ */
+const FRAME_MS = 1000 / 60;
+const MAX_PAN_STEP_MS = 100;
+
 const LEVELS = ['galaxy', 'sector', 'region', 'prism', 'system'];
 const LEVEL_NAMES = ['GALAXY', 'SECTOR', 'REGION', 'PRISM', 'SYSTEM'];
 const GRID_N = 8; // tiles per axis (sector uses 8, region uses 16)
@@ -236,6 +248,8 @@ export class NavComputer {
 
     // WASD panning for local view
     this._heldKeys = new Set();
+    /** sim-clock ms at the last pan step, or null when no gesture is running. */
+    this._lastPanMs = null;
     this._localDebug = false;
     this._localYOffset = 0; // Y offset for viewing above/below the plane
     this._onKeyDown = (e) => {
@@ -324,9 +338,50 @@ export class NavComputer {
     return Number.isFinite(this.systemFillFactor) ? this.systemFillFactor : 0.95;
   }
 
-  activate() {
+  /**
+   * ⭐ THE KEYBOARD, ON ITS OWN — WASD pan, R/F height, backquote debug.
+   *
+   * Split out of `activate()` on 2026-08-01, from Max in UAT: *"I still can't
+   * use the up/down controls to rise and lower below the galactic plane on the
+   * prism menu."* He was looking at the COCKPIT's instance, and it had never had
+   * a keyboard: on the glass "open" means zooming the panel to the eye, so
+   * `_openCockpitNav` never went near `activate()`, and R/F — along with WASD
+   * panning and the debug toggle — simply did not exist there.
+   *
+   * ⚠ AND `activate()` IS NOT THE FIX, which is why this is its own method. It
+   * also calls `_resizeCanvas()`, which reads `getBoundingClientRect()` — on the
+   * panel's OFFSCREEN canvas that returns all zeros, so the buffer would be
+   * resized to 0×0 and the NAV screen would go black. And `_showSearch()` reveals
+   * a DOM input that belongs to the overlay, over a canvas the pilot is looking
+   * at from inside a cockpit. Both are the overlay's business, not the glass's.
+   *
+   * Re-attaching is harmless: `addEventListener` with the same function
+   * reference and the same capture flag is a no-op, which is what lets the
+   * caller drive this from an idempotent applier rather than tracking pairs.
+   */
+  attachKeys() {
     document.addEventListener('keydown', this._onKeyDown, true);
     document.addEventListener('keyup', this._onKeyUp, true);
+  }
+
+  /**
+   * Drop the keyboard, and FORGET WHAT WAS HELD.
+   *
+   * The clear is not tidiness. `_heldKeys` is drained by `keyup`, so a key still
+   * down when the listeners go away is never removed — and `render()` pans on
+   * the SET, not on the events. The map would then drift forever, in a view
+   * nobody is looking at, until the next time those listeners happen to be back
+   * and that key happens to be pressed and released.
+   */
+  detachKeys() {
+    document.removeEventListener('keydown', this._onKeyDown, true);
+    document.removeEventListener('keyup', this._onKeyUp, true);
+    this._heldKeys.clear();
+    this._lastPanMs = null;
+  }
+
+  activate() {
+    this.attachKeys();
     this._resizeCanvas();
     this._showSearch();
   }
@@ -361,10 +416,8 @@ export class NavComputer {
   }
 
   deactivate() {
-    document.removeEventListener('keydown', this._onKeyDown, true);
-    document.removeEventListener('keyup', this._onKeyUp, true);
+    this.detachKeys();
     this._hideSearch();
-    this._heldKeys.clear();
     this._systemZoomAnim = null; // cancel in-flight prism→system zoom so it can't fire after close
     this._pendingComponentSelect = null; // never carry a pre-select across close/reopen (S5-verify)
     this._resetPrismLoad();
@@ -1051,7 +1104,26 @@ export class NavComputer {
 
     // WASD panning in prism view
     if (this._levelIndex === 3 && this._heldKeys.size > 0) {
-      const panSpeed = this._localRadius * 0.01; // slow enough to see individual grid lines move
+      // ⭐ PER UNIT OF TIME, NOT PER CALL (2026-08-01). This used to move a fixed
+      // step every render, which was fine while the only caller was the overlay's
+      // own 60 Hz rAF loop. The cockpit's NAV panel repaints at the AMBIENT PANEL
+      // RATE — 12.5 Hz by default, and live-tunable via `window._panelHz` — so
+      // the same code panned about five times slower on the glass than in the
+      // overlay, off nothing but who was asking it to draw.
+      //
+      // The factor is normalised to a 60 Hz frame, so the overlay's feel is
+      // unchanged to the millisecond and only the glass moves. `simClockMs` is
+      // the clock the animations either side of this block already use; it
+      // advances by sim ticks, so it does not care about repaint rate either.
+      //
+      // dt is CLAMPED. A tab left in the background, a warp stall or a GC pause
+      // would otherwise arrive as one enormous step and teleport the view across
+      // the prism — a pan is a held-key gesture, and no single frame of it should
+      // ever move further than a few frames' worth.
+      const nowPanMs = simClockMs();
+      const dtMs = this._lastPanMs == null ? FRAME_MS : Math.min(nowPanMs - this._lastPanMs, MAX_PAN_STEP_MS);
+      this._lastPanMs = nowPanMs;
+      const panSpeed = this._localRadius * 0.01 * (dtMs / FRAME_MS); // slow enough to see individual grid lines move
       const cosY = Math.cos(this._localRotY);
       const sinY = Math.sin(this._localRotY);
 
@@ -1088,6 +1160,12 @@ export class NavComputer {
         }
         // Don't re-query stars — we have the full block cached
       }
+    } else {
+      // Nothing held (or not at PRISM) — forget when the last step was, so the
+      // FIRST frame of the next gesture is one nominal frame rather than the
+      // whole idle gap clamped down to MAX_PAN_STEP_MS. Without this a press
+      // after any pause opens with a visible lurch.
+      this._lastPanMs = null;
     }
 
     // Update drill-down animation (interpolates view center + size)
