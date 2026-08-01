@@ -207,10 +207,31 @@ against 0.8% of planets. This is the population the crater work was actually bui
 3. **Commit at seams without asking; confirm before `git push`.** Commit messages on this lane are
    long on purpose — they are the lane's memory, and `git log` outranks this file.
 4. **Explain in pipeline terms, never AC-IDs.**
-5. **Sol is a special case and the wrong place to judge surface look** — hand-authored and textured,
-   always will be. Test in procedural systems: `node tools/find-test-systems.mjs 25`. Caph (16.8 pc)
-   is the best single target; Caph + Dalim + Larawag cover all 7 ROCKY-branch land types.
-   ⚠ Sol *is* valid for compile-cost work, since the program is chosen by body type, not by system.
+5. ⭐⭐ **SOL RENDERS FROM REAL NASA PHOTOGRAPHS. IT IS UNIQUE IN THE GALAXY AND CANNOT VALIDATE ANY
+   OF THIS WORK.** (Max, 2026-08-01, having had to say it more than once: *"the rendering process for
+   Sol is unique in the galaxy because we've got actual textures from NASA images."*)
+
+   This is not "Sol is a bit special." `public/assets/textures/bodies/` holds **18 NASA image
+   assets** — Earth, Jupiter, Venus, Titan, Mars, the Moon (LROC colour + LDEM heightmap), and the
+   rest. Bodies with a `KNOWN_BODY_PROFILES` entry load them through `BodyRenderer`'s **textured**
+   path, which by standing rule **never swaps back to procedural**. Sol's bodies also carry **no
+   world-engine condition fields**, so anything condition-derived degrades to defaults there.
+
+   Consequence: a measurement taken in Sol is not merely unrepresentative, it is **confidently
+   wrong** — the code path under test may not execute at all, and where it does its inputs are
+   placeholders. This has already produced one wrong reading on this lane (the limb MVP initially
+   showed 4 identical dwarf planets and a Titan reading clear-Rayleigh-blue instead of tholin haze).
+
+   **Use `window._lab.spawnProceduralSystem(seed)`**, or the named targets from
+   `node tools/find-test-systems.mjs 25` — Caph (16.8 pc) is the best single target; Caph + Dalim +
+   Larawag cover all 7 ROCKY-branch land types.
+
+   ⚠ Sol *is* valid for **system-independent** work — shader compile cost, for instance, since the
+   GPU program is chosen by body TYPE, not by system. Say which class the measurement is in whenever
+   Sol is used at all.
+
+   ⛔ Sol is **permanent**, not a stopgap the procedural pipeline grows into. Do not propose
+   unifying them.
 6. **Stage explicit paths in `git add`** — the tree carries standing NOT-OURS mods
    (`src/auto/CameraChoreographer.js`, `src/debug/LabMode.js`). Never `git add -A`.
 7. `git status --short -uno` — a bare `git status` prints ~450 untracked lines here.
