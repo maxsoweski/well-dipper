@@ -116,6 +116,18 @@ async function _warmPlanetPrograms(renderer, camera, opts = {}) {
   const report = { variants: {}, totalMs: 0, ok: true };
   const t0 = performance.now();
 
+  // ── Kick all three off, THEN await ─────────────────────────────────────────────────────────────
+  // Awaiting each variant before starting the next made the total the SUM of the three links
+  // (measured 4 263 ms) instead of roughly the longest one, because the driver only ever had one
+  // link in flight. KHR_parallel_shader_compile exists precisely to overlap them. The title screen
+  // is not infinite — a player who dismisses it quickly only gets the variants that finished — so
+  // the difference between sum and max is a difference in how much of the win actually lands.
+  //
+  // Still one KICKOFF per animation frame: the synchronous half is small but not free (three
+  // assembles and hands over ~100 KB of GLSL per variant), and three of those in one frame is a
+  // visible title-screen stutter — the exact thing this module exists to remove. Yielding between
+  // kickoffs costs three frames and buys back nothing, because the driver is already working.
+  const inflight = [];
   for (const key of variants) {
     if (!PLANET_SHADER_VARIANTS[key]) continue;
     // Yield first, so the caller's own frame is never the one that pays the synchronous half.
@@ -136,7 +148,20 @@ async function _warmPlanetPrograms(renderer, camera, opts = {}) {
       const pending = renderer.compileAsync(scene, camera);
       renderer.setRenderTarget(prevTarget);
 
+      inflight.push({ key, vt0, pending });
+    } catch (e) {
+      report.ok = false;
+      report.variants[key] = { ms: +(performance.now() - vt0).toFixed(1), ok: false, error: String(e) };
+      console.warn('[SHADER-WARMUP] %s failed (the game will link it on first draw):', key, e);
+    }
+  }
+
+  for (const { key, vt0, pending } of inflight) {
+    try {
       await pending;
+      // Elapsed from this variant's own kickoff. These now OVERLAP, so they no longer sum to
+      // totalMs — that is the point. Read totalMs for wall clock, the per-variant figures for
+      // which shader is the expensive one.
       report.variants[key] = { ms: +(performance.now() - vt0).toFixed(1), ok: true };
     } catch (e) {
       report.ok = false;
