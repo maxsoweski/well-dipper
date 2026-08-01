@@ -3,8 +3,8 @@
   "intentRef": "intent.md",
   "project": "well-dipper-cockpit-screens",
   "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md",
-  "status": "VERIFIED_PENDING_MAX e3a87aa",
-  "statusNote": "VERIFIED_PENDING_MAX e3a87aa (2026-07-31). Integration is green: 15 of 17 ACs PASS, all live-verified in the game on :5181. 1 moot (AC-LETTERBOX-Y-SETTLED-HERE — the game never letterboxes the cockpit, so its premise dissolved when increment 7 shipped; nothing is painted wrong and no click can land wrong). 1 deferred-to-max: AC-IT-FEELS-LIKE-FLYING-FROM-INSIDE, the increment gate, HIS ALONE — no agent drives or passes it. UAT briefing: ~/briefings/uat-lane-F-increment-7-cockpit-into-helm-2026-07-31.md. ⭐ ONE KNOB AWAITS HIS EYE: the on-glass 'lag' he reported is NOT a cost problem (mean frame 4.26 ms in HELM vs 4.17 in ORRERY; 1 frame in 1403 over budget; NAV's getImageData is 0.24 ms and willReadFrequently would buy 0.04) — it is that the glass repaints at 12.5 Hz beside a ~235 Hz world. window._panelHz(ms) dials it live; 30 Hz costs +0.39 ms mean and misses nothing. His pick becomes DEFAULT_AMBIENT_REPAINT_MS. ⚠ RAISED, NOT FIXED, and named in the briefing: the mass-lock warning renders TWICE in HELM (which copy survives is his call); the throttle bar was retired with no replacement, so reverse throttle is unreadable in supercruise; and a GLB load failure in HELM leaves no cockpit AND no readouts, because every retirement gates on _scManual rather than on _cockpitShouldRender(). PRIOR HISTORY: 15 PASS (overlays-retire moved PARTIAL->PASS 2026-07-31: the #debug-hud rows closed as a gate not a deletion, step 9's missing warp-destination half built, and BOTH live-verified in the game on :5181), 1 moot-recommended (AC-LETTERBOX-Y-SETTLED-HERE), 1 moot-recommended (AC-LETTERBOX-Y-SETTLED-HERE — the game never letterboxes the cockpit, so its premise dissolved), 1 deferred to Max. Step 8 authorised by Max 2026-07-30 after he flew the frame. 2026-07-30/31, AFTER step 7 and BEFORE step 8, two defects/asks were closed against the flown build and UAT'd by Max (*\"tested; looks good; we should be good to move on\"*): (1) b6514af — the canopy read OPAQUE on every pane but the central one, twice reported in identical words. Root cause was the ALPHA channel, not brightness: THREE.AdditiveBlending applies its factors to alpha too, so the glass stamped full coverage into the alpha-composited cockpitTarget and masked the sky. Two sessions of correct photometric measurement could not see it. Fixed with CustomBlending, RGB identical to additive, alpha (ZERO, ONE). (2) 7d6a4f6 — Max's flight-mechanics ask. 'Always fly forward from the cockpit's POV' was ALREADY fixed by cockpitEyePose.js; what remained was the LOCK, now a per-frame invariant (needsHandsOnRecenter) plus EXIT_RECENTER_TAU 0.18->0.10 and a window._head() probe. ⛔ AC-IT-FEELS-LIKE-FLYING-FROM-INSIDE is NOT closed by that UAT — it is the increment-level gate at step 11 and remains Max's alone.",
+  "status": "MAX-PASSED-GATE — post-UAT fixes pending live verification",
+  "statusNote": "⭐ 2026-08-01 — MAX PASSED AC-IT-FEELS-LIKE-FLYING-FROM-INSIDE (\"Yep\"). The increment's own gate is closed and 16 of 17 ACs are PASS; the 17th (AC-LETTERBOX-Y-SETTLED-HERE) is MOOT — the game never letterboxes the cockpit, so its premise dissolved when increment 7 shipped. ⚠ NOT YET SHIPPED, and the reason is not the gate: the same UAT produced four defects, all now fixed and committed, of which TWO HAVE NOT BEEN VERIFIED IN THE RUNNING GAME because no dev server has been up since. See postUatFixes. Prior state, for the record: VERIFIED_PENDING_MAX e3a87aa (2026-07-31), 15 of 17 PASS. ⭐ THE PANEL-RATE KNOB STILL AWAITS HIS EYE: the on-glass 'lag' is NOT a cost problem (p50 is 4.2 ms at every tier; NAV's getImageData is 0.24 ms and willReadFrequently would buy 0.04). It is that the glass runs at 12.5 Hz beside a ~235 Hz world. `window._panelHz(ms)` is the live knob; whichever of 80/33/16 he picks becomes DEFAULT_AMBIENT_REPAINT_MS in PanelHost.js, and it should be checked on a slower machine before it becomes the default — the measured table is one machine's numbers.",
   "acceptanceCriteria": [
     {
       "id": "AC-ONE-RIG-TWO-HOSTS",
@@ -206,8 +206,8 @@
         "observable": "Max's judgement. Always deferred-to-max; the verify workflow marks it deferred and never PASS."
       },
       "layer": "uat",
-      "status": "deferred-to-max",
-      "statusNote": "UAT, Max's gate alone. No agent drives or passes this."
+      "status": "PASS",
+      "statusNote": "⭐ PASSED BY MAX, 2026-08-01, in UAT. Asked whether flying the game from inside the cockpit reads as flying from inside a ship, he answered \"Yep\". THIS IS THE INCREMENT GATE AND IT IS CLOSED — recorded here by working-Claude as a transcription of his verdict, not as an agent judgement; no agent drives or passes this AC and none did. ⚠ He passed the FEEL and separately reported four defects in the same breath; passing the gate is not a claim that nothing was wrong, and the four are tracked in postUatFixes below. Two of them are live-verified only by unit + source guards so far and await a dev server for integration verification."
     }
   ],
   "architecturalConnections": {
@@ -295,5 +295,34 @@
     "Routing the four autopilot paths into HELM has two side effects Max has not been shown: setScManual fires _updateModeSwapButton (relabels the HUD button) and _syncOrbitsToMode (turns the ORRERY orbit LINES off). Both follow from the regime genuinely changing, which is what he approved; flagged so neither is a surprise.",
     "THE ARM — unchanged, out of scope, wants its own scoping conversation. He wants it to bend/extend with the monitor; that is generator geometry (one baked mesh, world-space vertices, no transform).",
     "AC-NOTHING-I-HAD-GOT-LOST in cockpit-screen-content-2026-07-28 is still an open UAT gate. No agent can close it."
+  ],
+  "postUatFixes": [
+    {
+      "commit": "29d3be9",
+      "reported": "A GLB load failure in HELM leaves no cockpit AND no readouts. (Raised by working-Claude at the UAT briefing; Max: \"Let's fix that bug.\")",
+      "fix": "All five of AC-OVERLAYS-RETIRE-IN-HELM's gates asked `_scManual` — the STATION — when a retirement claims a TRADE. New `_cockpitReplaces(role)` asks whether the replacement is really on the glass, per role, so a missing NAV/INFO/DRIVE panel leaves its overlay in place. Plus the async half: the rig load settling now re-runs both event-driven appliers, or the fix would have been stale by one tick in both directions.",
+      "verification": "unit + source guards; 8 defects planted, 8 caught. NOT live-verified."
+    },
+    {
+      "commit": "7ade886",
+      "reported": "Max: \"Let's make sure the throttle bar is represented on one of the screens.\"",
+      "fix": "A bipolar THR bar on DRIVE, under the speed bar, no pin. The blocker was never the throttle but the snapshot's `?? 0`, which made a frame with no drive model report a lever at rest; it writes null now, and the kit already draws a non-finite fraction as an empty frame. commandedFrac did not already cover it — that is throttle × the LIVE speed cap, so the pin slides under gravity with the pilot's hand still.",
+      "verification": "unit + oracle comparison; 9 defects planted, 8 caught, the 9th (a redundant tip pin) survived a hole in the test's own region split and is caught now. NOT live-verified."
+    },
+    {
+      "commit": "3c99ad5",
+      "reported": "Max: \"I still can't use the up/down controls to rise and lower below the galactic plane on the prism menu.\"",
+      "fix": "TWO defects. (a) The cockpit's NavComputer had no keyboard at all — attachKeys lived inside activate(), which only the DOM overlay's open path calls. Split out; activate() cannot be used wholesale because its _resizeCanvas() reads getBoundingClientRect() on an OFFSCREEN canvas and would resize the panel buffer to 0×0. (b) The pan step was per render call, so on the panel's 12.5 Hz repaint it moved ~5× slower than in the overlay; now scaled by simClockMs elapsed, normalised to 60 Hz so the overlay's feel is unchanged.",
+      "verification": "unit + source guards; 10 defects planted, 8 caught, 2 more after tightening. NOT live-verified.",
+      "openForMax": "The N key zooms the NAV panel without checking free-look, so a hands-ON pilot can have the map at their eye and loses the throttle to it until they dismiss (N/Esc). Reads as right — put the map down before you fly — but it is a feel call. Alternative: latch free-look on zoom, one line in _openCockpitNav."
+    },
+    {
+      "commit": "5cd1118",
+      "reported": "Max: \"the reticles on the hud that go around worlds/stars in-game are still not being occluded by the monitors/monitor arms, fuselage, or ribs as they should be.\"",
+      "fix": "A ray/triangle cast against the cabin's own 782 faces, in the cockpit camera's frame. The existing test is ray/SPHERE against world bodies and could never answer this. The two passes share only the SCREEN, so the cast converts a DIRECTION (world dir → world camera local → cockpit camera world), not a position, and deliberately not via NDC. Canopy_Glass is the only exclusion — it covers 97.4% of the sphere — reusing the rig's own glass census so treatment and occlusion cannot disagree.",
+      "alsoFixed": "⭐ THE FOV SETTING NEVER REACHED THE COCKPIT CAMERA, and it is older than this work. applySettingChange('fov') wrote camera.fov only; the cabin stayed pinned at EYE_FOV, so the two passes composited into one image that did not line up at any setting but the default 70. Occlusion depends on them agreeing, so it would have been right at 70 and quietly wrong everywhere else. Boot fixed too.",
+      "verification": "the frame change is unit-tested on plain objects (the module imports no three); 15 defects planted, 15 caught. NOT live-verified.",
+      "openForMax": "It is a CENTRE-RAY test, matching what _isReticleOccluded already means for body spheres. A reticle whose body centre passes behind a thin rib vanishes entirely rather than clipping, and near a rib edge it can pop. If that reads badly the fix is a small angular margin, not a different mechanism."
+    }
   ]
 }
