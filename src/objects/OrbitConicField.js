@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { buildRingConic, CONIC_EXTENT_UNBOUNDED } from './ringConic.js';
-import { proximityFadeFactor } from './OrbitRingSDF.js';
 
 /**
  * OrbitConicField — one fullscreen pass that paints every orbit ring's
@@ -348,7 +347,6 @@ export class OrbitConicField {
     this._descView = [];
     this._descCount = 0;
     this._adapterCam = new THREE.Vector3();
-    this._proxCfg = { nearAbs: 0.35, nearRel: 0.02, farMul: 3.0 };
   }
 
   /** Match OrbitLine/OrbitRingSDF.addTo — add the fullscreen mesh to a scene. */
@@ -383,12 +381,11 @@ export class OrbitConicField {
    * (uVisFactor) propagate with zero per-ring draw (R8) — and folds the THREE
    * camera-only channels into the descriptor alpha:
    *
-   *     alpha = uOpacity * uVisFactor * proxFade      (CPU, per ring)
+   *     alpha = uOpacity * uVisFactor                 (CPU, per ring)
    *
-   * where proxFade mirrors the shipped GLSL envelope EXACTLY: the camera is taken
-   * into the ring's object space via its (rigid) matrixWorld columns, circleDist =
-   * hypot(length(camObj.xz) - R, camObj.y), then proximityFadeFactor(). The
-   * angular-size fade is deliberately NOT folded here — it stays IN-SHADER
+   * The third channel, the camera-proximity fade, was RETIRED by Max's UAT ruling
+   * 2026-08-01 (see _appendRing). The angular-size fade is deliberately NOT folded
+   * here — it stays IN-SHADER
    * (angularFade multiplies on top), a three-channel CPU composition + one in-shader
    * channel; folding it CPU-side too would DOUBLE-APPLY it.
    *
@@ -442,32 +439,24 @@ export class OrbitConicField {
     // main.js:4119) — the moon-ring position is written at sim time and its
     // matrixWorld would otherwise lag until the renderer's own updateMatrixWorld.
     ring.mesh.updateMatrixWorld(true);
-    const mw = ring.mesh.matrixWorld, e = mw.elements;
-
-    // Camera in the ring's OBJECT space via the rigid model columns (byte-mirror of
-    // the shipped vertex shader's dot-product-by-columns form). e[12..14] = model
-    // translation; e[0..2]/[4..6]/[8..10] = object X/Y/Z axes in world.
-    const cw = this._adapterCam;
-    const dx = cw.x - e[12], dy = cw.y - e[13], dz = cw.z - e[14];
-    const camObjX = e[0] * dx + e[1] * dy + e[2] * dz;
-    const camObjY = e[4] * dx + e[5] * dy + e[6] * dz;
-    const camObjZ = e[8] * dx + e[9] * dy + e[10] * dz;
-    const radial = Math.hypot(camObjX, camObjZ) - ring.radius;
-    const circleDist = Math.hypot(radial, camObjY);
+    const mw = ring.mesh.matrixWorld;
 
     const u = ring.material.uniforms;
-    const cfg = this._proxCfg;
-    cfg.nearAbs = u.uProxNearAbs.value;
-    cfg.nearRel = u.uProxNearRel.value;
-    cfg.farMul = u.uProxFarMul.value;
-    const proxFade = proximityFadeFactor(circleDist, ring.radius, cfg);
 
     d.matrixWorld = mw;
     d.radius = ring.radius;
     // Live color: OrbitLine surfaces material.color (=== uColor.value, mutated in
     // place by hover); base OrbitRingSDF has only the uColor Vector3.
     d.color = ring.material.color || u.uColor.value;
-    d.alpha = u.uOpacity.value * u.uVisFactor.value * proxFade;
+    // PROXIMITY FADE RETIRED (Max UAT ruling 2026-08-01): "I do not want the lines
+    // to disappear when you get close." The fade was regime-avoidance for the OLD
+    // plane-domain SDF's 0.4R footprint clamp — a renderer Slice D deleted; the
+    // alpha multiply merely survived the rework. Its kill radius scaled with the
+    // ORBIT radius, not the body being approached (near = max(0.35, 0.02*R)), so on
+    // a r=67622 ring the line died 1352 units out while the planet was ~1 unit
+    // across — exactly the reported "disappear way too far away". The in-shader
+    // angular-size fade still retires sub-pixel rings, so AC8 is unaffected.
+    d.alpha = u.uOpacity.value * u.uVisFactor.value;
     d.active = true;
     this._descCount = n + 1;
   }

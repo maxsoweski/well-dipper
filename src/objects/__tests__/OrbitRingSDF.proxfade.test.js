@@ -160,17 +160,25 @@ describe('c4 CPU descriptor alpha = opacity * uVisFactor * proxFade (three-chann
     expect(field.readConic(0).alpha).toBeCloseTo(Math.fround(0.8 * 0.5), 5);
   });
 
-  it('proxFade is a real channel: standing ON the circle zeroes the descriptor alpha', () => {
+  // RETIRED CHANNEL, PIN INVERTED (Max UAT ruling 2026-08-01): "I do not want the
+  // lines to disappear when you get close." This test previously asserted the
+  // opposite — that standing ON the circle zeroed the descriptor alpha. The
+  // proximity fade was regime-avoidance for the OLD plane-domain SDF's 0.4R
+  // footprint clamp, a renderer Slice D deleted; the alpha multiply merely outlived
+  // it. Kept (not deleted) and inverted so the ruling is protected against a
+  // well-meaning reintroduction.
+  it('proximity fade is RETIRED: standing ON the circle leaves the descriptor alpha at full', () => {
     const ring = new OrbitLine(1520, 0x00ff00);
     ring.mesh.visible = true;
     ring.material.opacity = 1.0;
     ring.setVisibilityFactor(1.0);
     const field = new OrbitConicField();
-    // Camera at radius 1520 in the ring's plane -> circleDist 0 -> proxFade 0.
+    // Camera at radius 1520 in the ring's plane -> circleDist 0: the worst case the
+    // old fade zeroed. Alpha must now survive it untouched.
     const cam = new THREE.PerspectiveCamera(FOV, ASPECT, NEAR, FAR);
     cam.position.set(1520, 0, 0); cam.up.set(0, 1, 0); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(true);
     field.updateFromSystem(systemOf(ring), cam, VIEWPORT);
-    expect(field.readConic(0).alpha).toBeCloseTo(0, 5);
+    expect(field.readConic(0).alpha).toBeCloseTo(1.0, 5);
   });
 
   it('uVisFactor is a real channel: setVisibilityFactor(0) zeroes the descriptor alpha', () => {
