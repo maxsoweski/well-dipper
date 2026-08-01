@@ -118,10 +118,17 @@ describe('DebugPanel.setSurveySuppressed — the three dossier rows, retired in 
    *
    * ⚠ AND IT IS A GATE, NOT A DELETION, for a reason the first reading of this
    * missed: there is no INFO panel in ORRERY at all, and none in HELM when the
-   * GLB fails to load (`_cockpitShouldRender()`, main.js:2701). Deleting the
-   * rows would strip the diagnostic in both of those states, where nothing
-   * replaces it. Suppression by regime is what every other step-8 retirement
-   * does and it restores on the way out.
+   * GLB fails to load. Deleting the rows would strip the diagnostic in both of
+   * those states, where nothing replaces it.
+   *
+   * ⭐ THIS PARAGRAPH DESCRIBED A GATE MAIN.JS DID NOT HAVE, until 2026-07-31.
+   * It cited `_cockpitShouldRender()` while the caller actually passed
+   * `_scManual`, so the load-failure case it names was the one case the gate got
+   * wrong — Max found it in UAT. main.js now asks `_cockpitReplaces('INFO')`,
+   * which is `_cockpitShouldRender()` plus "and the INFO screen is really on the
+   * glass". Nothing in THIS file changed: it tests the suppression mechanism,
+   * and who asks for it is main.js's business (guarded in mainHudSlot.test.js).
+   * The line reference is deliberately gone — it was already stale by ~5 lines.
    */
   it('CONTROL: unsuppressed in ORRERY, the three rows reach the element', async () => {
     const { DebugPanel } = await import('../DebugPanel.js');

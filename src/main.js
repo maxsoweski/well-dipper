@@ -453,7 +453,12 @@ function _applyHudVisibility() {
  */
 function _hudSlotScene() {
   if (!_hudVisible || !system) return null;
-  if (minimapVisible && systemMap && !_scManual) return 'minimap';
+  // ⭐ `!_cockpitReplaces('NAV')`, NOT `!_scManual` (2026-07-31, Max's UAT). The
+  // minimap goes because the NAV panel took it over; if there is no NAV panel on
+  // the glass — GLB load failure, or a re-export that renamed `Screen_UL` — then
+  // nothing took it over and retiring it just deletes a CONTROL (it jumps to
+  // bodies, it drags to rotate) with no replacement. See `_cockpitReplaces`.
+  if (minimapVisible && systemMap && !_cockpitReplaces('NAV')) return 'minimap';
   return null;
 }
 
@@ -659,14 +664,26 @@ function setScManual(on) {
  * from inside a function body defers the read to call time.
  */
 function _syncRetiredOverlaysToMode() {
-  bodyInfo.setSuppressed(_scManual);
-  flightModeToast.setSuppressed(_scManual);
+  // ⭐ EACH ONE ASKS ABOUT ITS OWN REPLACEMENT, not about the regime (2026-07-31,
+  // Max's UAT). `_scManual` here meant "HELM, therefore the cockpit has this
+  // covered" — a claim that is simply false when the GLB failed to load. See
+  // `_cockpitReplaces` for the whole argument and the role mapping.
+  //
+  // The names are the mapping: BodyInfo's own header says "the cockpit's INFO
+  // panel is this readout's replacement"; FlightModeToast's says the DRIVE
+  // panel's persistent `MODE:` line is. Reading these three lines now tells you
+  // WHY each surface goes, which `_scManual` three times never did.
+  bodyInfo.setSuppressed(_cockpitReplaces('INFO'));
+  flightModeToast.setSuppressed(_cockpitReplaces('DRIVE'));
   // ⚠ NARROW, unlike the two above: #debug-hud loses ONLY the three dossier
   // rows the INFO panel took over (COMP/ATMO/TIDAL) and keeps every developer
   // row. And it is gated, not deleted as the build order's step 11 asked —
   // there is no INFO panel in ORRERY, nor in HELM on a GLB load failure, so a
-  // deletion would strip the readings where nothing replaces them.
-  debugPanel.setSurveySuppressed(_scManual);
+  // deletion would strip the readings where nothing replaces them. ⭐ That
+  // sentence was already written here on 2026-07-31 and the gate below still
+  // said `_scManual`: the reasoning was right and the code did not implement
+  // it. The load-failure half is now actually true.
+  debugPanel.setSurveySuppressed(_cockpitReplaces('INFO'));
 }
 let _flightMode = FlightMode.MANUAL;          // in-flight sub-state (meaningful while _scManual)
 const _alignState = { active: false, mesh: null, t: 0 }; // Mode-B one-time align (Task 5)
@@ -2707,6 +2724,49 @@ function _cockpitShouldRender() {
   return _scManual && _cockpitReady && !!_cockpitRig && !_cockpitRig.loadError;
 }
 
+/**
+ * ⭐ IS THE COCKPIT ACTUALLY REPLACING `role`'s SURFACE, RIGHT NOW?
+ *
+ * THE ONE QUESTION EVERY RETIREMENT MUST ASK, and until 2026-07-31 none of them
+ * did. AC-OVERLAYS-RETIRE-IN-HELM's five gates all read `_scManual` — "are we in
+ * HELM" — which is a DIFFERENT question, and the two answers come apart in
+ * exactly the case that matters. Found by Max in UAT:
+ *
+ *     the GLB fails to load → `_cockpitShouldRender()` is false, so there is no
+ *     cockpit → but `_scManual` is still true, so the minimap, the body dossier,
+ *     the three survey rows, the mode toast and the whole speed cluster retire
+ *     anyway. THE PLAYER IS LEFT FLYING WITH NO INSTRUMENTS AT ALL.
+ *
+ * A retirement is a TRADE — this surface goes because that one took it over — so
+ * the gate has to be a statement about the replacement, not about the station.
+ * `liveNavComputer()` already knew this and gated on `_cockpitShouldRender()`
+ * rather than `_scManual`; this is that same correction, applied to the other
+ * five and made per-role.
+ *
+ * ⭐ PER-ROLE, AND THAT IS NOT OVER-PRECISION. The four screens are discovered
+ * from the GLB BY MESH NAME (`DEFAULT_PANEL_ROLES`, PanelLayout.js), so a
+ * re-export that renames `Screen_UL` drops the NAV panel and leaves the other
+ * three. A whole-cockpit gate would call that "the cockpit is here" and retire
+ * the minimap into a screen that no longer exists — the same defect arriving by
+ * a quieter door. Asking per role makes the gate say what it means, and every
+ * way it can be wrong now fails in the direction where the OLD overlay comes
+ * back, which is the only survivable direction.
+ *
+ * The mapping is the one the retired classes already document in their own
+ * `setSuppressed` headers, so it is not invented here:
+ *   NAV   ← the 320² minimap
+ *   INFO  ← BodyInfo, and #debug-hud's three dossier rows
+ *   DRIVE ← SupercruiseHud's speed/throttle cluster + MODE line, FlightModeToast
+ *
+ * ⚠ THE GATES ARE EVENT-DRIVEN AND THIS PREDICATE IS NOT. `_cockpitReady` and
+ * `loadError` are written by a PROMISE, so a gate that only re-decides on the
+ * regime flip can be stale in both directions. That is why `CockpitRig.load`'s
+ * `.then` re-runs the appliers; see the note there.
+ */
+function _cockpitReplaces(role) {
+  return _cockpitShouldRender() && !!_cockpitRig.host?.panel(role);
+}
+
 CockpitRig.load({
   glbUrl: 'assets/cockpit/cockpit.glb',
   renderer: retroRenderer.renderer,
@@ -2746,6 +2806,27 @@ CockpitRig.load({
   if (rig.loadError) console.warn('[COCKPIT] model failed to load:', rig.loadError);
   else if (rig.hostError) console.warn('[COCKPIT] panels failed to bind:', rig.hostError);
   else console.log(`[COCKPIT] rig ready — ${rig.host ? rig.host.panels.length : 0} panels, eye ${rig.eyeFound ? 'found' : 'MISSING'}`);
+  // ⭐ RE-DECIDE, BECAUSE THIS LINE IS THE OTHER INPUT TO EVERY RETIREMENT.
+  //
+  // `_cockpitReplaces` reads `_cockpitReady`, `loadError` and the panel table —
+  // all three of which are written HERE, asynchronously, and none of which the
+  // regime flip knows about. The retirement gates re-decide on `setScManual`,
+  // so without this the answer is stale in BOTH directions:
+  //
+  //   load SUCCEEDS while the player is already in HELM → the overlays never
+  //     retire, and the pilot flies with the minimap on top of the cockpit;
+  //   load FAILS while the player is already in HELM → the overlays never come
+  //     BACK, which is the very bug this predicate was written for, surviving
+  //     the fix by arriving one tick late.
+  //
+  // In practice the load resolves during the splash and the player reaches HELM
+  // ~35 s later, so neither is reachable TODAY. That is a timing accident, not a
+  // guarantee: a slow disk, a cold cache or a bigger GLB moves it. The per-frame
+  // `showReadouts` gate self-heals for free and needs nothing here; these two
+  // appliers are the event-driven ones, and they are exactly the pair
+  // `setScManual` already calls for the same reason.
+  _applyHudSlot();
+  _syncRetiredOverlaysToMode();
 });
 
 // ── The pointer, and who gets it first (increment 7, step 6) ───────────────
@@ -10119,7 +10200,13 @@ function renderFrame(alpha) {
     // duplication DIEGETIC-ONLY exists to remove. The reticle, the mass-lock
     // hint and the at-the-body drop cue are NOT readouts and stay; see the
     // block above `showReadouts` in SupercruiseHud.js for where that line is.
-    showReadouts: !_scManual,
+    //
+    // ⭐ `_cockpitReplaces('DRIVE')`, not `_scManual` (2026-07-31, Max's UAT):
+    // "on the DRIVE panel's glass" is a PREMISE, and on a GLB load failure it is
+    // false. This one is asked every frame, so unlike the two event-driven gates
+    // it needs no re-decide hook — it simply starts telling the truth again the
+    // frame the premise changes.
+    showReadouts: !_cockpitReplaces('DRIVE'),
   });
   _updateCommitBurnButton();
   _updateModeSwapButton();

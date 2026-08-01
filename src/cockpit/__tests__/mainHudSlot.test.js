@@ -95,8 +95,19 @@ describe('the HUD slot has exactly one decision point', () => {
     expect(scene, 'no branch may put the gravity well in the slot, in EITHER mode').not.toMatch(/'well'/);
     // CONTROL: the decision point still decides something, or the assertion
     // above is satisfied by a function that was emptied out.
+    //
+    // ⭐ REWRITTEN 2026-07-31, NOT FLIPPED — same treatment as the gravity-well
+    // guard above. This pinned `/!_scManual/`, on the reading that "retires in
+    // HELM" IS the rule. Max found the case where that reading is wrong: with a
+    // failed GLB there is no NAV panel, so `_scManual` retires the minimap into
+    // nothing and HELM has neither. The rule was always "retires because the NAV
+    // panel took it over" — `_scManual` was a proxy for that, and a proxy that
+    // is false in the one state where the difference is fatal.
     const mapLine = scene.split('\n').find((l) => l.includes("'minimap'"));
-    expect(mapLine, 'the minimap retires in HELM and is ORRERY\'s only slot scene').toMatch(/!_scManual/);
+    expect(mapLine, 'the minimap retires to the NAV panel, not to the regime')
+      .toMatch(/!_cockpitReplaces\('NAV'\)/);
+    expect(mapLine, 'the regime proxy is what the UAT bug was made of')
+      .not.toMatch(/_scManual/);
   });
 
   it('and the affordances went with it — no key, no toggle, no mobile button', () => {
@@ -144,15 +155,82 @@ describe('the HUD slot has exactly one decision point', () => {
     const sync = SRC.indexOf('function _syncRetiredOverlaysToMode()');
     expect(sync, 'the sync fn is gone — this scan is stale').toBeGreaterThan(-1);
     const syncBody = SRC.slice(sync, SRC.indexOf('\n}', sync));
-    expect(syncBody).toMatch(/bodyInfo\.setSuppressed\(_scManual\)/);
-    expect(syncBody).toMatch(/flightModeToast\.setSuppressed\(_scManual\)/);
+
+    // ⭐ REWRITTEN 2026-07-31 (Max's UAT), NOT FLIPPED. These three pinned
+    // `(_scManual)` — "retire whenever we are in HELM". Each now names the panel
+    // that actually took the surface over, because that is what the retirement
+    // was a trade FOR, and because `_scManual` is true in the state where no
+    // panel took anything over: a GLB that failed to load.
+    //
+    // The role is asserted per line, not just the helper's presence. Suppressing
+    // BodyInfo on the DRIVE panel's account would be a live defect that a
+    // `/\_cockpitReplaces\(/` scan would happily pass.
+    expect(syncBody).toMatch(/bodyInfo\.setSuppressed\(_cockpitReplaces\('INFO'\)\)/);
+    expect(syncBody).toMatch(/flightModeToast\.setSuppressed\(_cockpitReplaces\('DRIVE'\)\)/);
 
     // The third, added 2026-07-31, and the only NARROW one: #debug-hud keeps its
     // developer rows and loses exactly the three the INFO panel took over. It
     // rides the same flip point rather than growing its own, because the failure
     // this whole test guards against is a surface whose gate is written somewhere
     // main.js does not re-decide on.
-    expect(syncBody).toMatch(/debugPanel\.setSurveySuppressed\(_scManual\)/);
+    expect(syncBody).toMatch(/debugPanel\.setSurveySuppressed\(_cockpitReplaces\('INFO'\)\)/);
+
+    // …and nothing in here asks the regime any more. This is the assertion that
+    // actually fails if somebody "fixes" a stale gate by reaching for `_scManual`
+    // again, which is the shape the whole file is written in.
+    expect(syncBody, 'a regime gate came back — see _cockpitReplaces')
+      .not.toMatch(/_scManual/);
+  });
+
+  // ⭐ NEW 2026-07-31, from Max's UAT: *"a GLB load failure in HELM leaves no
+  // cockpit AND no readouts."* All five retirements gated on `_scManual`, so
+  // HELM stripped the minimap, the body dossier, three survey rows, the mode
+  // toast and the entire speed cluster — and then drew no cockpit to put any of
+  // it back. The player flew with nothing.
+  describe('a retirement asks about its REPLACEMENT, never about the regime', () => {
+    it('CONTROL: the predicate exists and is built from the two things that can fail', () => {
+      expect(SRC, '_cockpitReplaces is gone — every assertion below is stale')
+        .toMatch(/function _cockpitReplaces\(role\)/);
+      const body = SRC.slice(
+        SRC.indexOf('function _cockpitReplaces(role)'),
+        SRC.indexOf('\n}', SRC.indexOf('function _cockpitReplaces(role)')),
+      );
+      // Both halves, and they catch different failures. `_cockpitShouldRender()`
+      // is the load error and the regime; `panel(role)` is the per-screen half —
+      // the GLB loads but `Screen_UL` was renamed in a re-export, so NAV is
+      // absent while the other three are fine.
+      expect(body, 'lost the load-failure half').toMatch(/_cockpitShouldRender\(\)/);
+      expect(body, 'lost the per-role half — a renamed screen mesh goes unnoticed')
+        .toMatch(/\.panel\(role\)/);
+    });
+
+    it('every retirement gate in the file is asked as a replacement question', () => {
+      // The five sites, by the surface each retires. A regex per site rather
+      // than a global "no _scManual anywhere" scan: `_scManual` is the REGIME
+      // and is legitimately read all over this file — it is only wrong as the
+      // subject of a retirement.
+      expect(SRC, 'the minimap').toMatch(/minimapVisible && systemMap && !_cockpitReplaces\('NAV'\)/);
+      expect(SRC, 'BodyInfo').toMatch(/bodyInfo\.setSuppressed\(_cockpitReplaces\('INFO'\)\)/);
+      expect(SRC, 'the mode toast').toMatch(/flightModeToast\.setSuppressed\(_cockpitReplaces\('DRIVE'\)\)/);
+      expect(SRC, 'the three dossier rows').toMatch(/debugPanel\.setSurveySuppressed\(_cockpitReplaces\('INFO'\)\)/);
+      expect(SRC, "SupercruiseHud's speed cluster and MODE line")
+        .toMatch(/showReadouts: !_cockpitReplaces\('DRIVE'\)/);
+    });
+
+    it('the rig load re-decides — the gates are event-driven, the load is not', () => {
+      // `_cockpitReady` and `loadError` are written by a promise. Two of the
+      // five gates only re-run on the regime flip, so a load that settles while
+      // the player is ALREADY in HELM leaves them stale in whichever direction
+      // it settled — including "the overlays never come back", which is this
+      // bug surviving its own fix by one tick.
+      const then = SRC.indexOf('_cockpitReady = true;');
+      expect(then, 'the load handler moved — this scan is stale').toBeGreaterThan(-1);
+      const handler = SRC.slice(then, then + 900);
+      expect(handler, 'the slot never re-decides after the GLB settles')
+        .toMatch(/_applyHudSlot\(\);/);
+      expect(handler, 'the DOM retirements never re-decide after the GLB settles')
+        .toMatch(/_syncRetiredOverlaysToMode\(\);/);
+    });
   });
 
   it('CONTROL: the BURN button was ALREADY correct', () => {
