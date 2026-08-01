@@ -34,6 +34,9 @@ export class DebugPanel {
     this._stellarEvolution = null;
     this._systemData = null;
 
+    // AC-OVERLAYS-RETIRE-IN-HELM. See setSurveySuppressed.
+    this._surveySuppressed = false;
+
     // Create DOM elements
     this._createHUD();
     this._createPanel();
@@ -46,6 +49,43 @@ export class DebugPanel {
     this._systemData = systemData;
     this._stellarEvolution = systemData?.stellarEvolution || null;
   }
+
+  /**
+   * Hide the three dossier rows the cockpit's INFO panel took over —
+   * COMP, ATMO and TIDAL — while leaving every developer row alone.
+   *
+   * AC-OVERLAYS-RETIRE-IN-HELM, and this is the NARROWEST of the retirements
+   * on purpose. BodyInfo and FlightModeToast retire whole; #debug-hud must not.
+   * It is a developer instrument — FPS, LOD, galactic potential, star evolution,
+   * camera distance — and none of that has a replacement anywhere. Exactly three
+   * of its rows are duplicated on the glass (`InfoReadout.js:217-219` reads the
+   * same three fields, and its header says so by name so the two surfaces can
+   * never disagree about one body), and exactly those three go.
+   *
+   * ⚠ A GATE, NOT A DELETION, and the reason is easy to miss: there is no INFO
+   * panel in ORRERY at all, and none in HELM when the GLB fails to load
+   * (`_cockpitShouldRender()`, main.js:2701). Deleting these lines — which is
+   * what the build order's step 11 asked for — would strip the readings in both
+   * of those states, where nothing replaces them. Regime suppression is what
+   * every other step-8 retirement does, and it restores on the way out.
+   *
+   * ⚠ SURF stays under the same `if (planet.physics)` and is NOT gated: it has
+   * no cockpit equivalent, deliberately (`InfoReadout.js:190-206` excludes
+   * surfaceHistory because it is system-age-derived and identical for every
+   * planet in a system, so it says nothing about the body you are looking at).
+   *
+   * ⚠ AND THE TWO SURFACES ARE NOT ACTUALLY REDUNDANT FOR A MOON. This reads the
+   * PARENT planet's physics (`_updateHUD` takes `entry.planet` and never
+   * consults `_focusMoonIndex` for it), while the cockpit switches body
+   * (`CockpitSnapshot.js:110-118`) and moons carry `physics: null` by
+   * construction (`main.js:5222` passes a literal null to `createMoon`). So with
+   * a moon focused the glass goes blank here and this HUD keeps showing the
+   * planet. That is an argument for gating in HELM rather than trusting the
+   * duplication — not an argument against it.
+   *
+   * @param {boolean} on true in HELM, where the cockpit hosts the dossier
+   */
+  setSurveySuppressed(on) { this._surveySuppressed = !!on; }
 
   setPlayerPos(pos) { this._playerPos = pos; }
   getSearchTarget() { return this._searchTarget || null; }
@@ -186,13 +226,16 @@ export class DebugPanel {
       // Physics data from BodyRenderer
       if (planet.physics) {
         const phys = planet.physics;
-        if (phys.composition) {
+        // COMP / ATMO / TIDAL are the cockpit INFO panel's rows too, so they
+        // retire in HELM. SURF below is NOT gated — see setSurveySuppressed.
+        const survey = !this._surveySuppressed;
+        if (survey && phys.composition) {
           lines.push(`<span class="dh-label">COMP</span> <span class="dh-val">${phys.composition.surfaceType || '?'} Fe=${(phys.composition.ironFraction || 0).toFixed(2)}</span>`);
         }
-        if (phys.atmosphere) {
+        if (survey && phys.atmosphere) {
           lines.push(`<span class="dh-label">ATMO</span> <span class="dh-val">${phys.atmosphere.retained ? 'retained' : 'none'}</span>`);
         }
-        if (phys.tidalState) {
+        if (survey && phys.tidalState) {
           lines.push(`<span class="dh-label">TIDAL</span> <span class="dh-val">${phys.tidalState.locked ? phys.tidalState.lockType : 'free'}</span>`);
         }
         if (phys.surfaceHistory) {

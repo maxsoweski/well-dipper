@@ -1,0 +1,143 @@
+{
+  "workstream": "cockpit-lab-geometry-2026-07-28",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md — HELM cockpit program (lane E), increment 1 of 6",
+  "statusNote": "ENCLOSURE REBUILT 2026-07-28. Root cause of the rejected form found and fixed: the canopy was a HEIGHT FIELD y=f(x,z), which cannot represent a shell that wraps past the pilot's shoulders because such a shell doubles back in y. No re-tuning of those constants could ever have produced what Max asked for -- it was a parameterisation bug, not a proportions bug. Rebuilt as a faceted VAULT swept between three transverse arch rings; every fold is a SEAM and every structural member is GENERATED FROM one, so 'a rib not on a seam' is now unrepresentable rather than merely tested for. Arms are five parts (Mount/BoomA/Elbow/BoomB/Head) bolted to named ribs. Bulkhead and floor pan close the enclosure aft and below (Max approved both; he deferred a seat). Enclosure measured: above 100%, left/right 99.1%, behind 100%, ahead 21.2% (the aperture, open by design). VERIFIED_PENDING_MAX.",
+  "designDecisions": [
+    "GLB metric convention: eye-point at origin, 1 unit = 1 m, Y-up, NO scale normalisation. Deliberately not the ships pipeline's mesh.scale.setScalar(1/radius) — that is a ships-manifest convention and wrong for the one object whose real-world size matters. In-game scaling happens at the 5th-pass cockpit camera.",
+    "Cockpit render resolution (match the world's pixelScale=3 third-res chunk vs. crisper) is deferred to increment 2, where both can be shown side by side for Max to judge by eye.",
+    "Screens are at the four CORNERS of the canopy (two upper, two lower), superseding the program memory's earlier 'four screens in a row above the median'. Max, this session.",
+    "No interior console/dash. The space below the median is the ship's own nose — exterior hull geometry, lit by the world rather than shadowed like the interior frame. Max, this session.",
+    "Content-to-panel assignment is NOT locked here; corners are peripheral vision, so it gets re-checked in increment 2 once the panels are legible.",
+    "Canopy parameterisation: a swept VAULT (arch rings x fore-aft stations), NOT a height field. The height field is what made the previous build a window and no constant could have fixed it. Working-Claude, 2026-07-28, recorded because it is the root cause of two rejected iterations.",
+    "Bow ring sized in TAN SPACE to land just inside the 70deg/16:9 frame edge, so the forward view stays a generous opening and the enclosure proper lives OUTSIDE the forward frustum where it costs nothing looking ahead. This is why the canopy is 4.3 m across rather than fighter-realistic.",
+    "Bulkhead_Aft and Floor_Pan added. Max approved both this session ('That's fine'). Floor_Pan is NOT the deleted Hull_Nose -- that was exterior hull forward of the pilot; this is the cabin floor, and without it looking down finds empty space and 'enclosure' is false in one direction.",
+    "NO SEAT / headrest. Max, this session: 'No need for a seat at this point; we can build stuff like that in later.' Deliberately absent, not overlooked.",
+    "Lab palette: Phosphor WHITE #EDE8DE on black is the default, with [P] cycling AMBER / GREEN / ICE. Max, this session: 'I do want to adopt the white ui of phosphor (with options to toggle the color to something else of course).' This also closes the green-drift risk the handoff flagged -- choosing green is now an explicit toggle rather than an inheritance from the reference images."
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-FORM",
+      "statement": "The committed Blender script emits cockpit geometry as a faceted fighter-style ENCLOSURE, not a window: (a) CANOPY — flat faceted panels wrapping the pilot ABOVE, IN FRONT and to BOTH SIDES, so that turning the head in the lab's eye view finds canopy rather than empty space; (b) RIBS — running along the SEAMS where those panels meet, which is what a rib structurally IS; a rib not lying on a panel-to-panel seam is a failure; (c) SCREENS — four units, one per quadrant, each a box with a display face 50% larger than the original 0.30x0.20 m panel, a ~1 inch bezel and ~2 inch deep body, face recessed so the bezel reads, and each display-face normal within 20 degrees of its centre-to-eye vector; (d) ARMS — properly modelled monitor-style arms (segments and joints, not tapered sticks) AFFIXED TO THE RIBS; (e) NO ship nose. [Amended 2026-07-28: the earlier requirement that every arm ROOT lie outside the 70deg/16:9 frustum is RETIRED. Max resolved the ambiguity — 'arms coming from outside the player's POV' means their origin is hidden by structure, not that it sits beyond the view. Arms attach to ribs.]",
+      "verifyVia": {
+        "input": "Headless parse of the exported GLB: canopy panel normals and their angular coverage from the eye; each rib's proximity to a panel-to-panel seam; per screen the display-face centroid/normal, bezel width and body depth against the script's declared inch constants; each arm's attachment proximity to a rib; node inventory.",
+        "observable": "Canopy panels present above, ahead and to both sides, together covering a stated solid angle around the eye well beyond the 70deg/16:9 frustum; every rib lies along a seam within tolerance; four display faces one per quadrant, each normal within 20 degrees of its centre-to-eye vector and area >= 1.5x the original panel; bezel and body depth match declared constants; every arm touches a rib within tolerance; no node named Hull_Nose anywhere."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-METRIC",
+      "statement": "The GLB carries the agreed metric convention: 1 unit = 1 metre, Y-up, the pilot's eye-point at exactly (0,0,0), and no scale normalisation anywhere in the exported node hierarchy. The exported bounding box matches the dimensions the script declares in metres.",
+      "verifyVia": {
+        "input": "Headless parse of the GLB JSON chunk + accessors: read every node's scale, the scene bounding box from accessor min/max, and compare against the script's declared metre constants.",
+        "observable": "Every node scale is (1,1,1) within 1e-6; the eye-point is at the origin within 1e-4 m; the scene bounding box equals the script's declared metre dimensions within 1e-3 m; the asset is Y-up (export_yup)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-REPRO",
+      "statement": "The geometry is reproducible from the committed script — re-running it headless from a clean checkout produces the same mesh, so proportions can be re-authored by editing the script rather than by hand-modelling. Byte-identity of the GLB file is NOT asserted (the glTF exporter may vary metadata); geometric identity is.",
+      "verifyVia": {
+        "input": "Run the committed Blender script headless twice into separate output paths; decode the vertex-position and index buffers from each GLB and hash them.",
+        "observable": "SHA-256 of the decoded position buffer and of the index buffer are identical across the two runs, for every mesh in the file."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-FRAME",
+      "statement": "Occlusion is MEASURED AND REPORTED, and at this stage carries NO pass/fail band. Max, reviewing ceb277e (36.93%): 'I'm not all that worried about it. I more want to get the general shape/composition right at this stage.' The original [0.25, 0.30] band came from a design he has twice replaced and is retired. The measurement is still required — it is what stops 'classic cockpit' being unfalsifiable vibes, and it is the diagnostic that revealed the old canopy rim sat entirely outside the frustum — but a band is only re-set once the enclosure form is settled.",
+      "verifyVia": {
+        "input": "chrome-devtools on cockpit-lab.html at :5179 — snap to the eye view, fov 70 / aspect 16:9, render the cockpit alone (Canopy_Glass hidden) against a flat background, read back framebuffer pixel counts via evaluate_script.",
+        "observable": "A reported occluded-pixel fraction, recorded in evidence/AC-LIVE-RESULT.md alongside the analytic prediction. PASS requires Max to have accepted a band around that figure; until he does, this AC is measured-but-open, not PASS."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-LAB",
+      "statement": "cockpit-lab.html loads on the :5179 dev server and gives Max both views of the model: free orbit to spin and inspect it from outside, and an \"eye\" view that snaps the camera to the origin at 70 degree FOV to see it from the pilot's seat, with a placeholder background visible through the canopy opening so it reads as an opening. The CABIN LIGHT is OFF by default (Max, this session) and toggleable on. No console errors.",
+      "verifyVia": {
+        "input": "chrome-devtools: load http://localhost:5179/well-dipper/cockpit-lab.html (vite.config.js sets base: '/well-dipper/', so the root path 404s), await window._cockpitLab.ready, drag to orbit, switch to eye mode, list console messages.",
+        "observable": "GLB loads and renders; orbit changes the camera pose; the eye button puts the camera at the origin with camera.fov === 70; background is visible through the aperture; zero console errors and zero failed network requests."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-NOGAME",
+      "statement": "The lab-first gate: this increment cannot break the game. No existing file under src/ is modified (new files are permitted; none are expected), every existing *-lab.html still loads, and the vitest suite stays at its 1616-passing baseline.",
+      "verifyVia": {
+        "input": "git diff --stat master...feature/cockpit filtered to src/; npx vitest run from the worktree directory.",
+        "observable": "Zero modified pre-existing files under src/; 1616 tests passing (the 15 vendor/motion-test-kit collection errors are known pre-existing noise and are excluded)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max spins the model in the lab and drops into the pilot's seat, and judges whether it reads as the angular cockpit he asked for — whether the framing at 70 degrees is something he'd want the default screensaver to play inside for long stretches, and whether the four corner screens sit where he'd actually look.",
+      "verifyVia": {
+        "input": "Max opens cockpit-lab.html at :5179, orbits the model, and switches to the eye view.",
+        "observable": "Max's holistic judgement — does this read as a cockpit he wants to be inside, and does it earn the \"woah, this is a real game\" reaction he scoped it for? Deferred to Max; no agent renders this."
+      },
+      "layer": "uat"
+    }
+  ],
+  "amendments": [
+    {
+      "date": "2026-07-28",
+      "ac": "AC-LAB",
+      "change": "Corrected the verification URL from http://localhost:5179/cockpit-lab.html to http://localhost:5179/well-dipper/cockpit-lab.html, and added 'await window._cockpitLab.ready' to the input.",
+      "why": "vite.config.js:7 sets base: '/well-dipper/', so the root-path URL 404s — the original input would have produced a spurious FAIL against working code. The added await is because evaluate_script otherwise races GLTFLoader. Factual correction to the verification method; the AC's substance is unchanged, so it was not re-greenlit."
+    },
+    {
+      "date": "2026-07-28",
+      "ac": "AC-FORM, AC-FRAME, AC-LAB",
+      "change": "Re-spec after Max's UAT on 1056f30. AC-FORM rewritten to boxy screens (1in bezel / 2in backing) 50% larger, carried on arms rooted outside the view frustum, two vertical canopy ribs plus a Canopy_Glass shell, and NO ship nose. AC-FRAME converted from a fixed [0.25,0.30] band to measure-and-report with the band re-set from the new form. AC-LAB now requires the cabin light off by default.",
+      "why": "Max replaced the form language at UAT: screens 50% bigger and boxy on arms from outside his POV, canopy frame reduced to two vertical strips showing its protruding shape, nose removed, cabin light off. The old AC-FRAME band was working-Claude's operationalisation of 'classic cockpit' and was derived from the frame+nose design now deleted — keeping it would have forced geometry to be padded to hit a stale number. The AC's PURPOSE (stop 'classic cockpit' being unfalsifiable vibes) is preserved as a required measurement."
+    },
+    {
+      "date": "2026-07-28",
+      "ac": "AC-FORM, AC-FRAME",
+      "change": "AC-FORM rewritten from a flat-window form to a faceted fighter-style ENCLOSURE (canopy above/ahead/both sides) with ribs required to lie on panel-to-panel SEAMS and arms required to be properly modelled and AFFIXED TO THE RIBS. The 'arm roots outside the frustum' clause is retired. AC-FRAME's band is held open explicitly rather than left implicitly pending.",
+      "why": "Max's review of ceb277e. (1) He identified that ribs are structurally SEAMS between flat canopy panels — the build had ribs lying on a near-flat pane with no seams to follow, which is why they read as decoration. He wants a fighter-pilot enclosure: canopy above, in front and to either side. (2) He asked for real monitor-arm modelling affixed to the ribs, which RESOLVES the ambiguity working-Claude had flagged: 'outside the player's POV' means the origin is hidden by structure, not beyond the frustum. (3) He explicitly deprioritised occlusion at this stage in favour of shape and composition."
+    },
+    {
+      "date": "2026-07-28",
+      "ac": "AC-FORM, AC-METRIC",
+      "change": "AC-FORM(a) is now measured as SOLID-ANGLE COVERAGE around the eye per sector, not as a description. The AC-METRIC sub-assertion 'the whole canopy sits forward of the eye (z<0)' is REPLACED by 'the vault straddles the eye plane'.",
+      "why": "(1) 'Turning the head finds canopy rather than empty space' was the wording, and a flat pane passed every dimensional assertion in the suite while failing exactly that. Ray-casting the sphere makes it a number, with the forward aperture asserted OPEN as the anti-vacuity pin. (2) 'The canopy sits forward of the eye' was true of a window and is false of an enclosure BY DEFINITION -- a shell wrapping past the shoulders must reach behind them. Keeping it would have made a correct enclosure permanently unbuildable, so it is replaced rather than relaxed. Both are working-Claude corrections to verification method, not changes to what Max asked for."
+    },
+    {
+      "date": "2026-07-28",
+      "ac": "AC-FORM, AC-FRAME",
+      "change": "Re-proportioned to Max's SECOND section-lab pass, applied verbatim: cabin 1.52 m -> 2.56 m at the shoulders, rail -0.34 -> -0.26, roof-edge x-frac 0.45 -> 0.30, all three member sections to their slider minimums, both screen pairs re-aimed. No AC TEXT changes -- the form language (closed profile, faceted enclosure, tub below the rail and canopy above) is unchanged and only the scale moved. Recorded here because two decisions inside it are not re-derivable from the numbers. (1) His upper screen distance of 1.00 m DOES NOT FIT: lab and generator agree (-0.196 m / -0.170 m), and the binding constraint is his own roof-edge x-frac of 0.30, which narrows the canopy exactly where he raised the screens to. Built on his standing ruling from the first fit failure -- keep the ANGLES, give up the metres -- via SCREEN_FIT_SCALE solved to 0.84. The screens subtend 17.06 / 18.32 deg exactly as he set them. DO NOT restore 1.00 m without also widening the roof pane; the alternative he has NOT been asked to choose is pulling only the upper distance to 0.72 m at the full 0.30 m face, which fits but changes an angle he can see. (2) AC-FORM(c)'s angular floor of 16.06 deg now passes at 17.06 deg rather than 21.50 -- still a pass, with less headroom, and the shrink is his choice (further away buys view back as 1/dist^2), not a regression.",
+      "evidence": "evidence/AC-LIVE-RESULT.md at 70f2e87"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "Blender 5.1.2 headless via '/mnt/c/Program Files/Blender Foundation/Blender 5.1/blender.exe' --background --python (needs dangerouslyDisableSandbox and a Windows-form /mnt/c/ script path); io_scene_gltf2 ships enabled",
+      "src/ui/Settings.js:40 — fov: 70, the FOV the framing is judged against",
+      "docs/ARCHIVE/GAME_BIBLE_LEGACY.md §8A — player hull ~20 m (house-sized); the nose section must be a stated fraction of this",
+      "public/assets/ GLB serving convention (ShipLoader.js:4 SHIPS_BASE = 'assets/ships/'); the cockpit GLB lands at public/assets/cockpit/",
+      "Root-level *-lab.html convention with bare 'three' imports served by the project's Vite dev server (planet-lod-lab.html precedent); three pinned at 0.183.1",
+      "scripts/blender-export-snippet.py — the repo's existing glTF export reference (export_format='GLB', export_yup=True, export_apply=True)"
+    ],
+    "outputs": [
+      "Increment 2 (Phosphor CRT screen system): the four screen mounting planes are the surfaces the CRT material and its render targets attach to; their measured angles determine legibility",
+      "Increment 3 (glass canopy): the canopy aperture edge is the boundary the screen-space refraction pass needs",
+      "Increment 4 (in-game 5th pass): consumes the GLB at 1 unit = 1 m with the eye at the origin — the metric convention is the contract between the lab and the composited cockpit camera",
+      "First player-ship EXTERIOR geometry in the project (Ship.js is orientation-only; no hull mesh exists anywhere). The nose authored here is the reference a future full ship exterior must match",
+      "The committed script is the re-author surface: Max changes proportions by editing constants and re-running, not by re-modelling"
+    ],
+    "mustStayWorking": [
+      "vitest baseline 1616/1616 from the worktree directory (15 vendor/motion-test-kit collection errors pre-date this work and are excluded)",
+      "Every existing root-level *-lab.html still loads on the dev server — the new lab must not disturb shared asset or import paths",
+      "No pre-existing file under src/ is modified — AC-NOGAME is the gate, and it is what makes this increment unable to regress the game",
+      "ShipLoader.js's assets/ships/ manifest convention and the ships GLB pipeline are untouched; the cockpit deliberately does NOT adopt its 1/radius normalisation",
+      "public/ static asset serving (the cockpit GLB is a new sibling directory, not a change to how assets resolve)"
+    ]
+  }
+}

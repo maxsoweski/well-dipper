@@ -75,7 +75,7 @@ Commit history is supporting evidence only, not authority.
 
 | Feature | Tier | Status | Blocked by | Deep dive |
 |---|---|---|---|---|
-| Targeting reticle — in-system bodies (planets, moons; brackets + labels + off-screen arrows) | F&F-MVP | shipped-code (ghosting fix 30aa1cf 2026-05-09; "pretty good" per Max) | — | — |
+| Targeting reticle — in-system bodies (planets, moons; brackets + labels + off-screen arrows) | F&F-MVP | shipped-code (ghosting fix 30aa1cf 2026-05-09; "pretty good" per Max) — **cabin now cuts the reticle overlay at the cabin's real silhouette edge instead of blinking the whole reticle out** (silhouette mask `src/cockpit/cabinMask.js`, replacing the `5cd1118` centre-ray gate that blanked bracket+label together whole on a ~7px `Arch_Bow` rib); Max UAT-passed 2026-08-01 @ `d3dc4cb` (workstream `reticles-on-the-glass-2026-08-01`) — not yet merged to master / not deployed | — | [WORKSTREAMS/reticles-on-the-glass-2026-08-01](WORKSTREAMS/reticles-on-the-glass-2026-08-01/) |
 | Star reticles rework (sky-side selection behavior + info readout: system preview, distance, type) | F&F-MVP | proposed | — | — |
 | Ship reticle (cyan brackets for ships) | ENRICHED | shipped-code (effectively dormant in F&F — depends on Ship NPC spawning, which is disabled for F&F) | — | — |
 

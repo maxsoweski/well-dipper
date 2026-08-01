@@ -56,7 +56,11 @@ export class SupercruiseHud {
    *   showReticle?: boolean   // gate the center cross + deflection dot (the
    *                           // STEERING indicators). Default true (back-compat);
    *                           // set false in free-look so they hide while looking
-   *                           // around. Speed/throttle readouts always draw.
+   *                           // around.
+   *   showReadouts?: boolean  // gate the NUMBERS — the bottom-left speed/throttle
+   *                           // cluster and the MODE line. Default true; set false
+   *                           // in HELM, where the cockpit's DRIVE panel is their
+   *                           // replacement. See the block below.
    * } */
   update(state) {
     const c = this.ctx; c.clearRect(0, 0, innerWidth, innerHeight);
@@ -70,10 +74,48 @@ export class SupercruiseHud {
     const hasTarget = !!state.targetPos;
     const dropMaxSpeed = state.dropMaxSpeed;
 
+    // ⭐ READOUT vs CONTROL — the line AC-OVERLAYS-RETIRE-IN-HELM is drawn on.
+    //
+    // This canvas draws six things, and DIEGETIC-ONLY retires some of them and
+    // not others. The AC's words are "the DOM/canvas flight READOUTS are gone",
+    // and the discriminator is whether the cockpit can replace it:
+    //
+    //   RETIRED in HELM (`showReadouts: false`) — the bottom-left speed +
+    //     throttle cluster and the top-centre MODE line. Both are duplicated
+    //     verbatim on the DRIVE panel's glass; before this they were on screen
+    //     TWICE at once, which is the exact contradiction DIEGETIC-ONLY exists
+    //     to remove.
+    //
+    //   KEPT — the centre reticle cross and deflection dot, because they are a
+    //     CONTROL, not a readout: they are how the stick is aimed, and no panel
+    //     can draw a cross at screen centre. Retiring the canvas wholesale would
+    //     have taken them, and taking them breaks aiming — the subject of
+    //     AC-IT-FEELS-LIKE-FLYING-FROM-INSIDE.
+    //
+    //   KEPT — the mass-lock "TOO CLOSE" hint (a transient alert with no panel
+    //     equivalent) and the ETA / SAFE-TO-DROP cue, which is drawn AT THE BODY
+    //     in world space. The TARGET panel carries the same words, but not the
+    //     same information: the panel says how far, the world cue says WHICH.
+    //     ⚠ That last one is a judgement call and Max can reverse it by moving
+    //     the `hasTarget` block under this flag — it is one line.
+    const showReadouts = state.showReadouts !== false;
+
+    // Speed-band color: blue-green in the safe drop window, red when too fast,
+    // else cyan. "Safe" is dropState in-window OR (target set and speed under
+    // the drop ceiling) — reproduces Elite's sweet-spot band from real physics.
+    // ⚠ COMPUTED ABOVE THE READOUT GATE ON PURPOSE: `tooFast` also drives the
+    // SLOW DOWN label in the target-cue block, which is KEPT in HELM. Leaving it
+    // inside the gate would put that label in a TDZ the moment the readouts go.
+    const inWindow = state.dropState === 'in-window'
+      || (hasTarget && dropMaxSpeed != null && speed <= dropMaxSpeed);
+    const tooFast = state.dropState === 'too-fast';
+    const speedColor = tooFast ? '#ff7b6b' : inWindow ? '#7bff9e' : '#9fe8ff';
+
     // ── Bottom-left cluster: numeric speed, log speed bar, throttle bar ──
     const lx = 24;                 // left margin of the cluster
     const barW = 180;              // log speed bar width
 
+    if (showReadouts) {
     // (1) Large numeric speed (the "reads 0" bug fix). formatSpeed returns a
     // magnitude (Math.abs), so prefix "REV " when reversing to read clearly.
     const spd = formatSpeed(speed);
@@ -90,14 +132,6 @@ export class SupercruiseHud {
       c.font = '12px monospace';
       c.fillText('SUBLIGHT', lx, innerHeight - 84);
     }
-
-    // Speed-band color: blue-green in the safe drop window, red when too fast,
-    // else cyan. "Safe" is dropState in-window OR (target set and speed under
-    // the drop ceiling) — reproduces Elite's sweet-spot band from real physics.
-    const inWindow = state.dropState === 'in-window'
-      || (hasTarget && dropMaxSpeed != null && speed <= dropMaxSpeed);
-    const tooFast = state.dropState === 'too-fast';
-    const speedColor = tooFast ? '#ff7b6b' : inWindow ? '#7bff9e' : '#9fe8ff';
 
     // (2) Horizontal LOG speed bar: fill to actual magnitude (speedToBarFrac is
     // not abs-safe; speed can be negative in reverse); pin at commanded; drop tick.
@@ -158,6 +192,7 @@ export class SupercruiseHud {
     c.beginPath();
     c.moveTo(tPinX - 3, tbY + tbH + 6); c.lineTo(tPinX + 3, tbY + tbH + 6); c.lineTo(tPinX, tbY + tbH);
     c.closePath(); c.fill();
+    } // end showReadouts — the bottom-left cluster
 
     // ── Center reticle: cross + deflection dot ── (STEERING indicators)
     // Game reticle green (#64ff82 — TargetingReticle's selected-reticle green)
@@ -220,7 +255,7 @@ export class SupercruiseHud {
     // ── Flight-assist mode readout (upper-center, reticle green) ──
     // The toast announces each mode on entry; this is the persistent indicator
     // of which assist mode is live while flying. One fillText, no new layout.
-    if (state.flightMode) {
+    if (state.flightMode && showReadouts) {
       c.fillStyle = '#64ff82';
       c.font = '14px monospace';
       c.textAlign = 'center';

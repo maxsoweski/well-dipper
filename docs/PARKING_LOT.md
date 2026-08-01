@@ -142,6 +142,52 @@ other large galactic-scale phenomena that share the same gate.
 
 ---
 
+## P4 — Reticles should LOOK projected onto the canopy, not just be cut by it
+
+**Origin:** `reticles-on-the-glass-2026-08-01` (SHIPPED `d3dc4cb`,
+Max UAT pass 2026-08-01). **This is the deliberate second half of that
+ask** — Max split the work himself and took the geometry half first.
+Explicitly named a non-goal of that workstream so it could not drift.
+
+**What shipped:** the geometry. `src/cockpit/cabinMask.js` renders the
+cabin's opaque meshes flat-white to an offscreen buffer each frame and
+`TargetingReticle.update()` erases the overlay through it with
+`globalCompositeOperation='destination-out'`. Every reticle is now CUT
+at the real geometry's real edge — mid-glyph on a name label, at a
+rib's own boundary. Canopy glass deliberately does not occlude.
+
+**What is still missing.** Being cut correctly makes a reticle *sit
+behind* the cabin. It does not make it look *painted on the canopy*.
+The remaining tell is that the marks are still clean vector green
+drawn at screen depth. Max's original words, which the geometry half
+only partly answers:
+
+> "what I want is for the moon/planet/star reticles to be occluded by
+> the cockpit so that they look like a HUD on the glass on the cockpit
+> rather than something drawn directly on the player's eye"
+
+**Candidate surfaces** (none scoped, none costed):
+- **Canopy tint** — the glass colours what is drawn on it, so the
+  reticles pick up the pane they sit on rather than being colour-pure.
+- **Glass-depth parallax** — the marks live on a physical surface a
+  short distance from the eye, so they should shift slightly against
+  the world as the head moves. Today they are locked to the world.
+- **Phosphor rather than clean vector** — bloom, scanline interaction,
+  slight persistence, so they read as *emitted by* the canopy layer
+  instead of composited over it.
+
+**Why it is not trivial.** All three want the reticles to participate
+in the render rather than sit in a Canvas2D overlay above it. The
+shipped workstream's `designDecisions` already records that moving
+`TargetingReticle` into the WebGL pass is "the most correct answer and
+the largest change" — deferred there, and this is the item that would
+finally call it due. Expect the honest scoping answer to be a renderer
+question, not an overlay one.
+
+**Scope:** multi-system, premises genuinely open (is this a shader
+pass? a second glass-layer render? a texture the canopy samples?) →
+`dev-collab-scope` before any code, per the same reasoning that
+governed the geometry half.
 ## P5 — Orbit ring cap: support procedurally complex systems
 
 **Originating workstream:** `orbit-ring-conic-2026-07-21` (Max, 2026-08-01,

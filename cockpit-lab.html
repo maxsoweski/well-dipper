@@ -1,0 +1,979 @@
+<!doctype html>
+<!--
+  COCKPIT LAB — HELM cockpit, increment 1 (geometry only) — RE-SPEC BUILD
+  ======================================================================
+  Isolated harness for the cockpit GLB authored by scripts/cockpit-gen.py.
+  Workstream: docs/WORKSTREAMS/cockpit-lab-geometry-2026-07-28/  (contract.json, intent.md)
+
+  URL:  http://localhost:5179/well-dipper/cockpit-lab.html
+        (vite.config.js sets base: '/well-dipper/' — the lab is NOT served at the root.)
+
+  FORM (re-specified by Max at UAT on 1056f30 — this supersedes the octagonal-frame +
+  ship-nose + flat-panel build that measured 27.57%):
+    Canopy_Glass        faceted, forward-PROTRUDING shell over the opening. Placeholder
+                        material only; increment 3 makes it real glass. EXCLUDED from
+                        the occlusion measurement — it is see-through by design.
+    Canopy_Rib_L/R      the two vertical strips running bottom → up → over the forward
+                        bulge, which are what reveal the canopy's protruding shape.
+    Screen_UL/UR/LL/LR  the DISPLAY FACE quad only — 0.45 x 0.30 m, 50% larger than the
+                        old 0.30 x 0.20 m panel, recessed a few mm into its body.
+    ScreenBody_*        the box around each face: ~1 inch bezel, ~2 inch deep backing.
+    Arm_*               support arms rooted outboard/aft of the eye, provably outside
+                        the 70° / 16:9 frustum, so they read as monitor arms reaching
+                        in from beyond the field of view.
+    There is NO Hull_Nose — removed at Max's instruction. If one shows up in the loaded
+    GLB the HUD says so loudly: it means a stale asset, and it is an AC-FORM failure.
+
+  SCOPE (this increment):
+    - Load public/assets/cockpit/cockpit.glb EXACTLY as authored: 1 unit = 1 metre,
+      Y-up, pilot's eye at the origin, NO scale normalisation, NO re-centring.
+      (Deliberately NOT the ships pipeline's mesh.scale.setScalar(1/radius) — that is a
+      ships-manifest convention and is wrong for the one object whose real size matters.)
+    - Two camera modes so Max can judge the form AND the framing:
+        ORBIT — free spin around the model, OrbitControls, target = model centroid.
+        EYE   — camera pinned at exactly (0,0,0), fov 70 (the game's real FOV,
+                src/ui/Settings.js:40), looking down -Z. Drag to look around; the
+                camera NEVER leaves the origin. Rendered LETTERBOXED to 16:9 so what
+                Max sees is the same framing AC-FRAME measures.
+    - Placeholder background (stars + faint horizon grid + one distant body) so the
+      canopy aperture reads as an opening, and so the ribs/screens/arms read as
+      occluders.
+    - AC-FRAME instrument: window._cockpitLab.measureOcclusion() renders the cockpit
+      ALONE into an offscreen RGBA target at 1920x1080 / fov 70 with clear alpha 0 and
+      counts covered pixels, with Canopy_Glass hidden for the duration. Pure
+      measurement — it force-neutralises any operator toggle that would change coverage
+      (wireframe), restores every piece of state it touches in a finally block, and
+      returns null (never a bogus 0) before the GLB has resolved. Await
+      window._cockpitLab.ready first.
+      AC-FRAME is now MEASURE-AND-REPORT: the old [0.25, 0.30] band was derived from the
+      frame+nose design Max has since replaced, so it is retired and the HUD asserts no
+      pass/fail against it. The band gets re-set from this measurement with Max's
+      agreement. Nothing here is padded to hit a number.
+
+  DEFERRED:
+    - Phosphor CRT screen shader + render targets (increment 2). Mat_Screen renders as
+      the near-black placeholder it is; [S] tints the display faces — and only the
+      faces, not their bezels — so their placement is judgeable in the meantime.
+    - Real glass / refraction / any transmissive material (increment 3). Canopy_Glass is
+      drawn here as a deliberately faint, obviously-fake surface; [G] hides it so the
+      ribs and screens can be judged alone.
+    - Head–hull decoupling, the in-game 5th render pass, HELM gating (increment 4).
+    - Screen data plumbing (increment 5), zoom-to-panel (increment 6).
+    - Cockpit render resolution (match pixelScale=3 vs. crisper) — a taste call for
+      increment 2, shown side by side. Not baked in here.
+
+  LAB-ONLY: this file and the GLB are new; no pre-existing file under src/ is touched
+  (AC-NOGAME). Served via the project's Vite dev server on :5179 (bare `three` import,
+  like the other *-lab.html files). Max runs the server; verify via chrome-devtools.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />
+  <title>Cockpit Lab — Well Dipper</title>
+  <style>
+    /* ------------------------------------------------------------------
+       PHOSPHOR PALETTE. Max, this session: "I do want to adopt the white ui
+       of phosphor (with options to toggle the color to something else of
+       course)". The ink is Well Dipper's Phosphor spec -- #EDE8DE, a WARM
+       OFF-WHITE, deliberately not pure white -- on black. Every colour below
+       is a variable so [P] can recolour the whole lab at once, and so the
+       increment-2 CRT panels can be driven from the same four values instead
+       of a second, drifting set. See scan-phosphor-style.md.
+       ------------------------------------------------------------------ */
+    :root {
+      --ink:      #EDE8DE;   /* body text, borders, the phosphor itself     */
+      --ink-hi:   #FFFFFF;   /* values and active states: hotter than ink   */
+      --ink-dim:  #7C776E;   /* labels, hints, keycaps                      */
+      --ink-glow: 237, 232, 222;   /* rgb triple for the translucent fills  */
+      --warn:     #FFC46B;
+      --err:      #FF7A6B;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: #000; color: var(--ink); font-family: monospace; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+
+    #hud {
+      position: fixed; top: 12px; left: 12px;
+      font-size: 13px; line-height: 1.55;
+      text-shadow: 0 0 8px #000; pointer-events: none; z-index: 10; white-space: pre;
+    }
+    #hud .k    { color: var(--ink); }
+    #hud .v    { color: var(--ink-hi); }
+    #hud .dim  { color: var(--ink-dim); }
+    #hud .pass { color: var(--ink); }
+    #hud .fail { color: var(--warn); }
+    #hud .err  { color: var(--err); }
+
+    #controls {
+      position: fixed; bottom: 12px; left: 12px;
+      background: rgba(0, 0, 0, 0.78);
+      padding: 10px 12px; font-size: 12px; line-height: 1.7; z-index: 10;
+      width: 250px;
+    }
+    #controls h3 { font-size: 12px; color: var(--ink); margin-bottom: 6px; font-weight: normal; letter-spacing: 1px; }
+    .btn {
+      background: rgba(var(--ink-glow), 0.09); border: 1px solid var(--ink);
+      color: var(--ink); padding: 4px 9px; cursor: pointer; margin: 2px 0;
+      font-family: inherit; font-size: 12px; width: 100%;
+      display: flex; justify-content: space-between; gap: 8px;
+    }
+    .btn:hover { background: rgba(var(--ink-glow), 0.20); }
+    .btn.on { background: rgba(var(--ink-glow), 0.38); color: #000; }
+    .btn .key { color: var(--ink-dim); }
+    .btn.on .key { color: #000; }
+    /* Current mode is stated separately from the button, which states its DESTINATION —
+       so "GO TO EYE VIEW" can never be misread as "you are in eye view". */
+    .now { color: var(--ink-dim); font-size: 11px; letter-spacing: 1px; margin-bottom: 4px; }
+    .now span { color: var(--ink-hi); }
+    .hint { color: var(--ink-dim); font-size: 11px; margin-top: 8px; line-height: 1.5; }
+
+    /* Eye-mode reticle — DOM only, cannot affect the GL occlusion readback. */
+    #reticle { position: fixed; inset: 0; z-index: 9; pointer-events: none; display: none; }
+    #reticle.on { display: block; }
+    #reticle i {
+      position: absolute; background: rgba(var(--ink-glow), 0.35);
+      left: 50%; top: 50%;
+    }
+    #reticle i.h { width: 18px; height: 1px; margin-left: -9px; }
+    #reticle i.v { width: 1px; height: 18px; margin-top: -9px; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hud">booting…</div>
+  <div id="reticle"><i class="h"></i><i class="v"></i></div>
+  <div id="controls">
+    <h3>COCKPIT LAB — INC 1 (RE-SPEC)</h3>
+    <div class="now">NOW VIEWING: <span id="bModeNow">ORBIT</span></div>
+    <button class="btn" id="bMode">  <span id="bModeLabel">GO TO EYE VIEW</span><span class="key">C</span></button>
+    <button class="btn" id="bMeasure"><span>MEASURE OCCLUSION</span><span class="key">M</span></button>
+    <button class="btn" id="bScreens"><span>HILITE SCREEN FACES</span><span class="key">S</span></button>
+    <button class="btn" id="bFlat">   <span>FORCE FLAT SHADING</span><span class="key">F</span></button>
+    <button class="btn" id="bWire">   <span>WIREFRAME</span><span class="key">W</span></button>
+    <button class="btn on" id="bGlass"><span>CANOPY GLASS</span><span class="key">G</span></button>
+    <button class="btn on" id="bBg">  <span>BACKGROUND</span><span class="key">B</span></button>
+    <button class="btn" id="bCabin"> <span>CABIN LIGHT</span><span class="key">L</span></button>
+    <button class="btn" id="bReset">  <span>RECENTRE VIEW</span><span class="key">R</span></button>
+    <button class="btn" id="bPhosphor"><span id="bPhosphorLabel">PHOSPHOR: WHITE</span><span class="key">P</span></button>
+    <div class="hint">
+      ORBIT: drag to spin, scroll to zoom.<br />
+      EYE: camera locked at (0,0,0), fov 70,
+      letterboxed to 16:9 so the framing you
+      see is the framing AC-FRAME measures.<br />
+      [G] hides the canopy shell to judge the
+      ribs and screens alone.<br />
+      [L] CABIN LIGHT is OFF by default — it is
+      a lab-only fill, not the shipped look.<br />
+      [P] cycles the PHOSPHOR colour. White
+      (#EDE8DE on black) is Well Dipper's spec
+      and the default; the others are options.
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PHOSPHOR PALETTE
+    //
+    // Max, this session: "I do want to adopt the white ui of phosphor (with options to
+    // toggle the color to something else of course)."
+    //
+    // WHITE IS THE DEFAULT AND IT IS NOT PURE WHITE. #EDE8DE is Well Dipper's Phosphor ink
+    // — a warm off-white on black (scan-phosphor-style.md). The lab was previously hardcoded
+    // to terminal green, which is also what both of Max's form references show, and the
+    // handoff flagged that as a live risk of green drifting into the project palette by
+    // accident. Making white the default and the others an explicit, labelled toggle is what
+    // stops that: choosing green is now a choice rather than an inheritance.
+    //
+    // These four values are the SINGLE source of the lab's colour. Increment 2's CRT panels
+    // should read them rather than growing a second set that drifts from this one.
+    // ─────────────────────────────────────────────────────────────────────────
+    const PHOSPHORS = [
+      { name: 'WHITE',  ink: '#EDE8DE', hi: '#FFFFFF', dim: '#7C776E', glow: '237, 232, 222' },
+      { name: 'AMBER',  ink: '#FFB454', hi: '#FFE0A8', dim: '#8A6432', glow: '255, 180, 84' },
+      { name: 'GREEN',  ink: '#7CFF9E', hi: '#D8FFE4', dim: '#3F7A50', glow: '124, 255, 158' },
+      { name: 'ICE',    ink: '#9FD8FF', hi: '#E2F3FF', dim: '#4E6C86', glow: '159, 216, 255' },
+    ];
+    let phosphorIndex = 0;
+
+    function applyPhosphor(index) {
+      phosphorIndex = ((index % PHOSPHORS.length) + PHOSPHORS.length) % PHOSPHORS.length;
+      const p = PHOSPHORS[phosphorIndex];
+      const r = document.documentElement.style;
+      r.setProperty('--ink', p.ink);
+      r.setProperty('--ink-hi', p.hi);
+      r.setProperty('--ink-dim', p.dim);
+      r.setProperty('--ink-glow', p.glow);
+      const label = document.getElementById('bPhosphorLabel');
+      if (label) label.textContent = 'PHOSPHOR: ' + p.name;
+      return p;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Constants
+    // ─────────────────────────────────────────────────────────────────────────
+    // public/ is the Vite static root, so this relative URL resolves under
+    // whatever base the dev server is on (vite.config.js sets base '/well-dipper/').
+    // ?glb=<name> loads a sibling asset instead of the default. Added so a --no-fittings
+    // build can be looked at WITHOUT regenerating cockpit.glb, which lane F binds to for its
+    // Screen_* UV contract (d528f6c). Max asked to see the tub with nothing on it; forking the
+    // asset it consumes to arrange that would have broken the other lane to demo this one.
+    const GLB_NAME     = new URLSearchParams(location.search).get('glb') || 'cockpit';
+    const GLB_URL      = `assets/cockpit/${GLB_NAME.replace(/[^A-Za-z0-9._-]/g, '')}.glb`;
+    const GAME_FOV     = 70;          // src/ui/Settings.js:40 — the FOV the framing is judged at
+    const GAME_ASPECT  = 16 / 9;      // AC-FRAME is defined at 16:9
+    const ORBIT_FOV    = 50;          // inspection FOV — NOT the game FOV, and never used in EYE mode
+
+    // There is deliberately NO occlusion pass band here. The old [0.25, 0.30] was
+    // derived from the frame+nose design Max replaced at UAT; carrying it into the
+    // re-spec would push the geometry to be padded until it hit a stale number. The
+    // amended AC-FRAME is measure-and-report — the HUD prints the figure and says the
+    // band is pending Max's acceptance, and asserts nothing.
+
+    // Node-name rules. These mirror the names the headless AC-FORM checks key off, so
+    // if the generator renames anything, the lab goes visibly wrong rather than quietly
+    // measuring the wrong set.
+    //   RE_SCREEN_FACE matches the DISPLAY FACE quads only. It cannot match
+    //   `ScreenBody_*` — the underscore straight after "Screen" is required — which is
+    //   what keeps [S] off the bezels.
+    const RE_SCREEN_FACE = /^Screen_/i;
+    const RE_GLASS       = /^Canopy_Glass/i;   // tolerant of a Blender `.001` suffix
+    const RE_NOSE        = /^Hull_Nose/i;      // must NOT exist — deleted at Max's instruction
+
+    // Canopy_Glass placeholder look. It is NOT glass yet (increment 3), so it must not
+    // pretend to be: faint, no depth write, so it tints the view without ever hiding
+    // the geometry Max is trying to judge.
+    const GLASS_OPACITY = 0.10;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Renderer / scene
+    // ─────────────────────────────────────────────────────────────────────────
+    const canvas   = document.getElementById('canvas');
+    // No alpha on the canvas context: the visible pass always clears to opaque black.
+    // The occlusion pass does NOT need it — it renders into a WebGLRenderTarget whose
+    // own RGBAFormat attachment carries the alpha channel it reads back, which is
+    // independent of the default framebuffer's context attributes.
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000000, 1);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
+
+    const scene = new THREE.Scene();   // background stays null; the clear colour is the black
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Cameras — two distinct objects so OrbitControls can never touch the eye cam
+    // ─────────────────────────────────────────────────────────────────────────
+    const orbitCam = new THREE.PerspectiveCamera(ORBIT_FOV, window.innerWidth / window.innerHeight, 0.01, 8000);
+    orbitCam.position.set(2.6, 1.8, 4.2);
+
+    const eyeCam = new THREE.PerspectiveCamera(GAME_FOV, GAME_ASPECT, 0.01, 8000);
+    eyeCam.position.set(0, 0, 0);          // the pilot's eye. Never moved. Ever.
+    eyeCam.rotation.order = 'YXZ';
+
+    // Offscreen measurement camera — never in the scene graph, never displayed.
+    const occCam = new THREE.PerspectiveCamera(GAME_FOV, GAME_ASPECT, 0.01, 8000);
+
+    const controls = new OrbitControls(orbitCam, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 0, -0.6);
+
+    let mode = 'orbit';                    // 'orbit' | 'eye'
+    let eyeYaw = 0, eyePitch = 0;          // EYE look-around, applied as YXZ rotation only
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Lighting — key + fill + low ambient, angled from ahead/above/port so it rakes the
+    // OUTWARD-facing surfaces (the canopy ribs' outer edges, the tops of the screen
+    // bodies, the arms) while the surfaces that point back at the eye sit in shadow.
+    // That shadow is physically correct — the only light source is outside the ship —
+    // which is exactly why the cabin light below exists as a lab aid. Standard
+    // materials only; no shader work in this increment.
+    // ─────────────────────────────────────────────────────────────────────────
+    const ambient = new THREE.AmbientLight(0xaebccc, 0.22);
+    scene.add(ambient);
+
+    const keyLight = new THREE.DirectionalLight(0xfff2e0, 2.4);
+    keyLight.position.set(-30, 50, -60);   // ahead, above, port side
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x6f8ab0, 0.30);
+    fillLight.position.set(24, -8, 34);    // dim bounce from behind/below the pilot
+    scene.add(fillLight);
+
+    // CABIN LIGHT — a LAB AID, not part of the shipped look, and OFF BY DEFAULT (Max,
+    // this session). With key+fill alone the inward-facing surfaces are almost black —
+    // correct, because the only light source is outside the ship — so [L] exists to
+    // rake the rib inner faces and the screen bezels when the form needs inspecting.
+    // Default-off means what Max sees on load is the honest unlit read, and the aid is
+    // something he opts into. In increment 2 the four CRT panels become the real
+    // in-cabin light source and this goes away entirely.
+    const cabinLight = new THREE.PointLight(0xc8d4e0, 2.6, 6.0, 2.0);
+    cabinLight.position.set(0, 0.30, 0.40);
+    cabinLight.visible = false;
+    scene.add(cabinLight);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Placeholder background — stars + faint horizon grid + one distant body.
+    // Grouped so measureOcclusion() can hide it and count ONLY the cockpit.
+    // ─────────────────────────────────────────────────────────────────────────
+    const bgGroup = new THREE.Group();
+    bgGroup.name = '__background';
+    scene.add(bgGroup);
+
+    (function buildStars() {
+      const N = 4000, R = 900;
+      const pos = new Float32Array(N * 3);
+      const col = new Float32Array(N * 3);
+      // Deterministic LCG so the backdrop is the same every load (screenshots diff cleanly).
+      let s = 0x2f6e2b1;
+      const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+      for (let i = 0; i < N; i++) {
+        const u = rnd() * 2 - 1, th = rnd() * Math.PI * 2, r = Math.sqrt(Math.max(0, 1 - u * u));
+        pos[i * 3 + 0] = Math.cos(th) * r * R;
+        pos[i * 3 + 1] = u * R;
+        pos[i * 3 + 2] = Math.sin(th) * r * R;
+        const b = 0.30 + rnd() * rnd() * 0.70;
+        col[i * 3 + 0] = b * (0.90 + rnd() * 0.10);
+        col[i * 3 + 1] = b * (0.94 + rnd() * 0.06);
+        col[i * 3 + 2] = b;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      const stars = new THREE.Points(g, new THREE.PointsMaterial({
+        size: 2, sizeAttenuation: false, vertexColors: true, depthWrite: false,
+      }));
+      stars.name = '__stars';
+      bgGroup.add(stars);
+    })();
+
+    (function buildHorizon() {
+      const grid = new THREE.GridHelper(2400, 80, 0x2b5a86, 0x16283c);
+      grid.position.y = -30;                       // well below the cockpit, reads as a distant floor
+      grid.material.transparent = true;
+      grid.material.opacity = 0.40;
+      grid.material.depthWrite = false;
+      grid.name = '__horizonGrid';
+      bgGroup.add(grid);
+    })();
+
+    (function buildDistantBody() {
+      // One lit sphere so the aperture frames SOMETHING with shape, not just points.
+      const body = new THREE.Mesh(
+        new THREE.SphereGeometry(26, 48, 32),
+        new THREE.MeshStandardMaterial({ color: 0x51708f, roughness: 1.0, metalness: 0.0 })
+      );
+      body.position.set(38, -4, -155);
+      body.name = '__distantBody';
+      bgGroup.add(body);
+    })();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Load the cockpit GLB — as authored. No scale, no reposition, no re-centre.
+    // ─────────────────────────────────────────────────────────────────────────
+    let model = null;
+    let objectNames = [];
+    let bbox = null;
+    let loadError = null;
+    let staleNose = [];      // Hull_Nose nodes — must be empty; a non-empty list is a stale GLB
+    const screenMats = [];   // materials on the DISPLAY FACE nodes only — for the HILITE toggle
+    const glassNodes = [];   // Canopy_Glass — [G] toggles it, measureOcclusion() excludes it
+    const glassMats = new Set();
+    const allMats = new Set();
+    const baseEmissive = new Map();
+
+    const matsOf = (o) => (Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []));
+
+    const ready = new Promise((resolve) => {
+      new GLTFLoader().load(
+        GLB_URL,
+        (gltf) => {
+          model = gltf.scene;
+          scene.add(model);                       // ← no .scale, no .position, no centring
+          model.updateMatrixWorld(true);
+
+          // Pass 1 — classify every node. Display faces and canopy-shell meshes are
+          // pulled out as their own sets because each gets a LAB-ONLY material override
+          // ([S]'s tint, the glass placeholder look) that must not touch anything else.
+          const allMeshes = [], faceMeshes = [];
+          model.traverse((o) => {
+            const name = o.name || '';
+            if (o !== model && name) objectNames.push(name);
+            if (RE_GLASS.test(name)) glassNodes.push(o);
+            if (RE_NOSE.test(name)) staleNose.push(name);
+            if (!o.isMesh) return;
+            allMeshes.push(o);
+            if (RE_SCREEN_FACE.test(name)) faceMeshes.push(o);
+          });
+          const glassMeshSet = new Set();
+          for (const n of glassNodes) n.traverse((o) => { if (o.isMesh) glassMeshSet.add(o); });
+          const faceMeshSet = new Set(faceMeshes);
+          const glassMeshes = allMeshes.filter((o) => glassMeshSet.has(o));
+          const otherMeshes = allMeshes.filter((o) => !glassMeshSet.has(o) && !faceMeshSet.has(o));
+
+          // Pass 2 — isolate the materials the lab overrides. Both overrides are MATERIAL
+          // properties, so if a display face or the canopy shell ever shares its material
+          // with anything else, the override bleeds: [S] would light up the bezels it is
+          // meant to distinguish the screen FROM, and the 10%-opacity placeholder look
+          // would silently make a solid part see-through while it still counted as an
+          // occluder. Node naming already separates them — but that makes a correctness
+          // requirement depend on a naming habit in a file being rewritten in parallel.
+          // Enforce it structurally instead: give the target set its own copy of any
+          // material that is also used outside the set. Nothing is cloned when the
+          // materials are already distinct, which is the expected case.
+          const isolateMaterials = (meshes, outsiders, tag) => {
+            const shared = new Set();
+            for (const o of outsiders) for (const m of matsOf(o)) shared.add(m);
+            const cache = new Map();
+            const pick = (m) => {
+              if (!m || !shared.has(m)) return m;
+              let c = cache.get(m);
+              if (!c) { c = m.clone(); c.name = `${m.name || 'Mat'}__${tag}`; cache.set(m, c); }
+              return c;
+            };
+            for (const o of meshes) {
+              o.material = Array.isArray(o.material) ? o.material.map(pick) : pick(o.material);
+            }
+          };
+          isolateMaterials(faceMeshes, [...glassMeshes, ...otherMeshes], 'labFaceOnly');
+          isolateMaterials(glassMeshes, [...faceMeshes, ...otherMeshes], 'labGlassOnly');
+
+          // Pass 3 — register the FINAL material set (post-clone), so the wireframe /
+          // flat-shading toggles and the measurement's wireframe neutralisation see
+          // every material actually being rendered.
+          for (const o of allMeshes) {
+            for (const m of matsOf(o)) {
+              allMats.add(m);
+              if (m.emissive && !baseEmissive.has(m)) baseEmissive.set(m, m.emissive.clone());
+            }
+          }
+          for (const o of faceMeshes) {
+            for (const m of matsOf(o)) if (!screenMats.includes(m)) screenMats.push(m);
+          }
+          for (const o of glassMeshes) for (const m of matsOf(o)) glassMats.add(m);
+
+          // Canopy_Glass is a PLACEHOLDER, not glass (increment 3 makes it real), so it
+          // must not pretend otherwise: render it faint, and with depthWrite off so it
+          // can never hide the ribs, screens or arms Max is trying to judge behind it.
+          for (const m of glassMats) {
+            m.transparent = true;
+            m.opacity = GLASS_OPACITY;
+            m.depthWrite = false;
+            m.side = THREE.DoubleSide;
+            m.needsUpdate = true;
+          }
+
+          objectNames.sort();
+
+          bbox = new THREE.Box3().setFromObject(model);
+          frameOrbitCamera();
+          applyGlass();          // sync the [G] button + node visibility to the loaded set
+          resolve({ loaded: true, error: null });
+        },
+        undefined,
+        (err) => {
+          // Handle it here so GLTFLoader does not console.error — a missing GLB is a
+          // legible HUD message, not a stack trace. AC-LAB wants a clean console.
+          loadError = (err && (err.message || String(err))) || 'unknown load error';
+          resolve({ loaded: false, error: loadError });
+        }
+      );
+    });
+
+    function frameOrbitCamera() {
+      const centre = bbox.getCenter(new THREE.Vector3());
+      const size   = bbox.getSize(new THREE.Vector3());
+      const dist   = Math.max(size.x, size.y, size.z) * 1.9 || 6;
+      controls.target.copy(centre);
+      // Behind / above / starboard three-quarter: shows the arms reaching in from
+      // outboard, the screen boxes they carry, and the canopy shell bulging forward
+      // past the ribs.
+      orbitCam.position.copy(centre).add(
+        new THREE.Vector3(0.62, 0.44, 0.95).normalize().multiplyScalar(dist)
+      );
+      controls.update();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // AC-FRAME instrument — offscreen, pure, does not disturb the visible view
+    // ─────────────────────────────────────────────────────────────────────────
+    let occRT = null;
+    let occBuf = null;
+    let lastOcclusion = null;
+    let occNote = null;        // why there is no number, when there is no number
+
+    /**
+     * Render the cockpit ALONE into an offscreen RGBA target and count covered pixels.
+     *
+     * Returns the covered fraction in [0,1], or NULL if the GLB has not resolved yet —
+     * never a bogus 0, which a verifier who forgot to `await ready` would otherwise
+     * read as a confident "0.00%".
+     *
+     * WHAT IS COUNTED: the ribs, the screen boxes and the arms. Canopy_Glass is HIDDEN
+     * for the duration and does not count. It spans the whole opening, so counting it
+     * would report a near-totally-occluded cockpit — a true pixel count and a
+     * completely false answer to the question AC-FRAME actually asks, which is how much
+     * of the view is BLOCKED. It is see-through by design, and increment 3 makes it
+     * literally transparent. The HUD states the exclusion next to the number so nobody
+     * can read the figure as "including the canopy".
+     *
+     * The measurement is an INSTRUMENT, so it is deliberately hermetic:
+     *   - it force-neutralises operator toggles that change alpha coverage (wireframe
+     *     draws the model as lines, collapsing coverage to a few percent of the truth;
+     *     [G] would otherwise make the answer depend on a button Max last pressed);
+     *   - every piece of global renderer/scene state it touches is restored in a
+     *     `finally`, so a throw mid-measurement cannot leave the lab visually broken
+     *     (black background, wrong render target, scissor stuck on, canopy vanished)
+     *     for the session.
+     */
+    function measureOcclusion({ width = 1920, height = 1080, fov = GAME_FOV } = {}) {
+      if (!model) {
+        lastOcclusion = null;
+        occNote = loadError ? 'GLB failed to load — nothing to measure'
+                            : 'GLB not loaded yet — await window._cockpitLab.ready';
+        return null;
+      }
+
+      width = Math.max(1, Math.floor(width));
+      height = Math.max(1, Math.floor(height));
+
+      if (!occRT || occRT.width !== width || occRT.height !== height) {
+        const stale = occRT;
+        // Assign only once both allocations succeed, so a throw here cannot leave
+        // occRT pointing at a disposed target or occBuf at the wrong length.
+        const rt = new THREE.WebGLRenderTarget(width, height, {
+          format: THREE.RGBAFormat,
+          type: THREE.UnsignedByteType,
+          minFilter: THREE.NearestFilter,
+          magFilter: THREE.NearestFilter,
+          depthBuffer: true,
+          stencilBuffer: false,
+        });
+        occBuf = new Uint8Array(width * height * 4);
+        occRT = rt;
+        if (stale) stale.dispose();
+      }
+
+      // Camera at the eye-point, looking straight down -Z (identity rotation).
+      occCam.fov = fov;
+      occCam.aspect = width / height;
+      occCam.position.set(0, 0, 0);
+      occCam.rotation.set(0, 0, 0);
+      occCam.updateProjectionMatrix();
+      occCam.updateMatrixWorld(true);
+
+      // ── Save every piece of state this function mutates, BEFORE mutating any of it.
+      const prevBgVisible = bgGroup.visible;
+      const prevSceneBg   = scene.background;
+      const prevTarget    = renderer.getRenderTarget();
+      const prevColor     = renderer.getClearColor(new THREE.Color());
+      const prevAlpha     = renderer.getClearAlpha();
+      const prevScissor   = renderer.getScissorTest();
+      // Coverage-changing operator toggles, captured per material/node (not from
+      // `state`, so the restore is exact even if something was set directly).
+      const prevWire = new Map();
+      for (const m of allMats) prevWire.set(m, m.wireframe);
+      const prevGlassVis = glassNodes.map((n) => n.visible);
+
+      try {
+        // Wireframe would draw the model as 1px lines — the instrument would then
+        // report a confident wrong number. Neutralise it for the duration.
+        for (const m of allMats) m.wireframe = false;
+        // Canopy_Glass is see-through by design — excluded, whatever [G] is set to.
+        for (const n of glassNodes) n.visible = false;
+
+        // Cockpit only, cleared to fully transparent → alpha > 0 == covered by geometry.
+        bgGroup.visible = false;
+        scene.background = null;
+        renderer.setScissorTest(false);
+        renderer.setClearColor(0x000000, 0);
+        renderer.setRenderTarget(occRT);
+        renderer.clear(true, true, true);
+        renderer.render(scene, occCam);
+        renderer.readRenderTargetPixels(occRT, 0, 0, width, height, occBuf);
+      } finally {
+        // Restore everything the visible pass depends on — on the throw path too.
+        renderer.setRenderTarget(prevTarget);
+        renderer.setClearColor(prevColor, prevAlpha);
+        renderer.setScissorTest(prevScissor);
+        scene.background = prevSceneBg;
+        bgGroup.visible = prevBgVisible;
+        for (const [m, w] of prevWire) m.wireframe = w;
+        glassNodes.forEach((n, i) => { n.visible = prevGlassVis[i]; });
+      }
+
+      let covered = 0;
+      for (let i = 3; i < occBuf.length; i += 4) if (occBuf[i] > 0) covered++;
+      lastOcclusion = covered / (width * height);
+      occNote = null;
+      return lastOcclusion;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Modes + toggles
+    // ─────────────────────────────────────────────────────────────────────────
+    const el = {
+      hud: document.getElementById('hud'),
+      reticle: document.getElementById('reticle'),
+      bMode: document.getElementById('bMode'),
+      bModeLabel: document.getElementById('bModeLabel'),
+      bModeNow: document.getElementById('bModeNow'),
+      bMeasure: document.getElementById('bMeasure'),
+      bScreens: document.getElementById('bScreens'),
+      bFlat: document.getElementById('bFlat'),
+      bWire: document.getElementById('bWire'),
+      bGlass: document.getElementById('bGlass'),
+      bBg: document.getElementById('bBg'),
+      bCabin: document.getElementById('bCabin'),
+      bReset: document.getElementById('bReset'),
+      bPhosphor: document.getElementById('bPhosphor'),
+    };
+
+    function setMode(next) {
+      mode = (next === 'eye') ? 'eye' : 'orbit';
+      controls.enabled = (mode === 'orbit');
+      // The status line states WHERE YOU ARE; the button states WHERE IT TAKES YOU.
+      // Never both on the same element — "MODE: ORBIT" on a button is ambiguous.
+      el.bModeNow.textContent   = mode.toUpperCase();
+      el.bModeLabel.textContent = (mode === 'orbit') ? 'GO TO EYE VIEW' : 'GO TO ORBIT VIEW';
+      el.bMode.classList.toggle('on', mode === 'eye');
+      el.reticle.classList.toggle('on', mode === 'eye');
+      return mode;
+    }
+    function toggleMode() { return setMode(mode === 'orbit' ? 'eye' : 'orbit'); }
+
+    // cabin: false — the lab-only fill light is OPT-IN now (Max, this session).
+    const state = { screens: false, flat: false, wire: false, glass: true, bg: true, cabin: false };
+
+    // Tints the DISPLAY FACES only. `screenMats` is built from the Screen_* nodes and
+    // isolated from the ScreenBody_* materials at load, so the bezel and the backing
+    // stay untinted and Max can see where the screen ends and its frame begins.
+    function applyScreens() {
+      for (const m of screenMats) {
+        if (!m.emissive) continue;
+        if (state.screens) m.emissive.setHex(0x1f6f3a);
+        else m.emissive.copy(baseEmissive.get(m) || new THREE.Color(0x000000));
+        m.needsUpdate = true;
+      }
+      el.bScreens.classList.toggle('on', state.screens);
+    }
+    function applyFlat() {
+      for (const m of allMats) { m.flatShading = state.flat; m.needsUpdate = true; }
+      el.bFlat.classList.toggle('on', state.flat);
+    }
+    function applyWire() {
+      for (const m of allMats) m.wireframe = state.wire;
+      el.bWire.classList.toggle('on', state.wire);
+    }
+    function applyBg() {
+      bgGroup.visible = state.bg;
+      el.bBg.classList.toggle('on', state.bg);
+    };
+
+    // [G] — show the canopy shell's protruding form, or hide it to judge the ribs and
+    // screens alone. Visibility only; it never touches the occlusion number, which
+    // excludes Canopy_Glass either way.
+    function applyGlass() {
+      for (const n of glassNodes) n.visible = state.glass;
+      el.bGlass.classList.toggle('on', state.glass);
+    }
+
+    // Lab aid, not the shipped look, off by default — see the cabinLight comment above.
+    const applyCabin = () => {
+      cabinLight.visible = state.cabin;
+      el.bCabin.classList.toggle('on', state.cabin);
+    }
+    function recentre() {
+      if (mode === 'eye') { eyeYaw = 0; eyePitch = 0; }
+      else if (bbox) frameOrbitCamera();
+    }
+    function doMeasure() { measureOcclusion(); }
+
+    el.bMode.onclick    = toggleMode;
+    el.bMeasure.onclick = doMeasure;
+    el.bScreens.onclick = () => { state.screens = !state.screens; applyScreens(); };
+    el.bFlat.onclick    = () => { state.flat    = !state.flat;    applyFlat(); };
+    el.bWire.onclick    = () => { state.wire    = !state.wire;    applyWire(); };
+    el.bGlass.onclick   = () => { state.glass   = !state.glass;   applyGlass(); };
+    el.bBg.onclick      = () => { state.bg      = !state.bg;      applyBg(); };
+    el.bCabin.onclick   = () => { state.cabin   = !state.cabin;   applyCabin(); };
+    el.bReset.onclick   = recentre;
+    // Cycles the phosphor colour. Not a toggle button: it has four states, so it never gets
+    // the .on class — its label states which one is live.
+    el.bPhosphor.onclick = () => { applyPhosphor(phosphorIndex + 1); };
+    applyPhosphor(0);
+
+    // Sync the DOM to the initial state so the status line and the button lit-states can
+    // never disagree with the actual scene, even if the markup defaults drift. The cabin
+    // light matters most here: it now defaults OFF, and a button still wearing `.on`
+    // would be a lie about what Max is looking at.
+    setMode(mode);
+    applyCabin();
+    applyGlass();
+
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+      switch (e.key.toLowerCase()) {
+        case 'c': toggleMode(); break;
+        case 'm': doMeasure(); break;
+        case 's': el.bScreens.onclick(); break;
+        case 'f': el.bFlat.onclick(); break;
+        case 'w': el.bWire.onclick(); break;
+        case 'p': el.bPhosphor.onclick(); break;
+        case 'g': el.bGlass.onclick(); break;
+        case 'b': el.bBg.onclick(); break;
+        case 'l': el.bCabin.onclick(); break;
+        case 'r': recentre(); break;
+      }
+    });
+
+    // EYE look-around — rotation only. The camera position is never written here.
+    let dragging = false, lastX = 0, lastY = 0;
+    const LOOK_SPEED = 0.0026;
+    const PITCH_LIMIT = THREE.MathUtils.degToRad(85);
+    canvas.addEventListener('pointerdown', (e) => {
+      if (mode !== 'eye') return;
+      dragging = true; lastX = e.clientX; lastY = e.clientY;
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!dragging || mode !== 'eye') return;
+      eyeYaw   -= (e.clientX - lastX) * LOOK_SPEED;
+      eyePitch -= (e.clientY - lastY) * LOOK_SPEED;
+      eyePitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, eyePitch));
+      lastX = e.clientX; lastY = e.clientY;
+    });
+    const endDrag = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    };
+    canvas.addEventListener('pointerup', endDrag);
+    canvas.addEventListener('pointercancel', endDrag);
+
+    window.addEventListener('resize', () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      orbitCam.aspect = window.innerWidth / window.innerHeight;
+      orbitCam.updateProjectionMatrix();
+      // eyeCam stays locked at 16:9 — it is letterboxed, not stretched.
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HUD
+    // ─────────────────────────────────────────────────────────────────────────
+    // `+ 0` folds -0 to 0: without it, `-0 >= 0` is true in JS, so a negative zero got the
+    // sign-column space AND kept its minus, printing " -0.000" and knocking the column out.
+    const f3 = (n) => { const v = n + 0; return (v >= 0 ? ' ' : '') + v.toFixed(3); };
+    const vec3 = (v) => `[${f3(v.x)}, ${f3(v.y)}, ${f3(v.z)}]`;
+
+    // The node list is ~11 names now (ribs, four faces, four bodies, four arms, canopy).
+    // On one line it runs off the screen, so wrap it into a hanging-indent block.
+    function wrapNames(names, width, indent) {
+      const out = [];
+      let line = '';
+      for (const n of names) {
+        const piece = line ? `${line}, ${n}` : n;
+        if (piece.length > width && line) { out.push(line + ','); line = n; }
+        else line = piece;
+      }
+      if (line) out.push(line);
+      return out.map((s, i) => (i === 0 ? s : indent + s));
+    }
+
+    function updateHud() {
+      const L = [];
+      L.push(`<span class="k">COCKPIT LAB</span> <span class="dim">— increment 1 (re-spec), geometry only</span>`);
+
+      if (loadError) {
+        L.push(`<span class="err">GLB LOAD FAILED</span> <span class="dim">${GLB_URL}</span>`);
+        L.push(`<span class="err">${loadError}</span>`);
+        L.push(`<span class="dim">Run scripts/cockpit-gen.py in Blender to author the asset.</span>`);
+      } else if (!model) {
+        L.push(`<span class="dim">loading ${GLB_URL} …</span>`);
+      } else {
+        const size = bbox.getSize(new THREE.Vector3());
+        const rows = wrapNames(objectNames, 58, '        ');
+        L.push(`<span class="k">nodes  </span> <span class="v">${rows[0]}</span>`);
+        for (const r of rows.slice(1)) L.push(`<span class="v">${r}</span>`);
+        L.push(`<span class="k">bbox m </span> min ${vec3(bbox.min)}`);
+        L.push(`<span class="k">       </span> max ${vec3(bbox.max)}`);
+        L.push(`<span class="k">size m </span> ${vec3(size)}`);
+        // The canopy shell's state is called out on its own line because it is the one
+        // node that is both toggleable AND excluded from the number below.
+        L.push(glassNodes.length
+          ? `<span class="k">canopy </span> Canopy_Glass ×${glassNodes.length} — ` +
+            `<span class="v">${state.glass ? 'SHOWN' : 'HIDDEN'}</span> ` +
+            `<span class="dim">[G] · placeholder surface at ${(GLASS_OPACITY * 100).toFixed(0)}% opacity, not real glass yet (inc 3)</span>`
+          : `<span class="k">canopy </span> <span class="fail">no Canopy_Glass node in this GLB</span> ` +
+            `<span class="dim">— [G] has nothing to toggle</span>`);
+        // A stale asset is the likeliest way to be fooled here, so name it explicitly
+        // rather than leaving Max to spot a nose he asked to have deleted.
+        if (staleNose.length) {
+          L.push(`<span class="err">STALE ASSET</span> <span class="fail">${staleNose.join(', ')} present</span> ` +
+                 `<span class="dim">— the nose was removed at Max's instruction; re-run scripts/cockpit-gen.py (AC-FORM failure)</span>`);
+        }
+      }
+
+      const cam = (mode === 'eye') ? eyeCam : orbitCam;
+      L.push(`<span class="k">mode   </span> <span class="v">${mode.toUpperCase()}</span>` +
+             (mode === 'eye' ? ` <span class="dim">— eye at origin, 16:9 letterbox</span>` : ''));
+      L.push(`<span class="k">camera </span> pos ${vec3(cam.position)}  fov <span class="v">${cam.fov.toFixed(0)}</span>  aspect ${cam.aspect.toFixed(3)}`);
+
+      if (lastOcclusion === null) {
+        // Never render a null as a confident "0.00%" — say WHY there is no number.
+        L.push(occNote
+          ? `<span class="k">occlus </span> <span class="fail">n/a</span> <span class="dim">— ${occNote}</span>`
+          : `<span class="k">occlus </span> <span class="dim">— press M to measure (1920x1080, fov 70)</span>`);
+      } else {
+        // NO PASS/FAIL. The amended AC-FRAME is measure-and-report: the old [0.25,0.30]
+        // band described the frame+nose form Max replaced, so printing a verdict against
+        // it would be asserting against a spec that no longer exists.
+        L.push(`<span class="k">occlus </span> <span class="v">${(lastOcclusion * 100).toFixed(2)}%</span>` +
+               ` <span class="dim">of the 70° / 16:9 view — ribs + screen boxes + arms</span>`);
+        L.push(`<span class="k">       </span> <span class="dim">Canopy_Glass EXCLUDED (see-through by design)` +
+               `${glassNodes.length ? '' : ' — none in this GLB to exclude'}</span>`);
+        L.push(`<span class="k">       </span> <span class="dim">AC-FRAME is measure-and-report; band pending Max's acceptance</span>`);
+      }
+      el.hud.innerHTML = L.join('\n');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Render loop
+    // ─────────────────────────────────────────────────────────────────────────
+    function renderFrame() {
+      const W = window.innerWidth, H = window.innerHeight;
+      if (mode === 'orbit') {
+        controls.update();
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, W, H);
+        renderer.render(scene, orbitCam);
+      } else {
+        // Pin the eye at the origin every frame — belt and braces, so no code path
+        // can ever drift it. Rotation is the only thing look-around writes.
+        eyeCam.position.set(0, 0, 0);
+        eyeCam.rotation.set(eyePitch, eyeYaw, 0, 'YXZ');
+        eyeCam.fov = GAME_FOV;
+        eyeCam.aspect = GAME_ASPECT;
+        eyeCam.updateProjectionMatrix();
+
+        // Letterbox to 16:9 so what Max judges == what measureOcclusion() counts.
+        let w = W, h = Math.round(W / GAME_ASPECT);
+        if (h > H) { h = H; w = Math.round(H * GAME_ASPECT); }
+        const x = Math.round((W - w) / 2), y = Math.round((H - h) / 2);
+
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, W, H);
+        renderer.setScissor(0, 0, W, H);
+        renderer.clear(true, true, true);            // black bars
+
+        renderer.setViewport(x, y, w, h);
+        renderer.setScissor(x, y, w, h);
+        renderer.setScissorTest(true);
+        renderer.render(scene, eyeCam);
+        renderer.setScissorTest(false);
+      }
+    }
+
+    let measuredOnce = false;
+    let hudAt = 0;
+    function tick(t) {
+      requestAnimationFrame(tick);
+      renderFrame();
+      // First measurement after the model is in and one frame has drawn (shaders compiled).
+      if (!measuredOnce && model) { measuredOnce = true; measureOcclusion(); }
+      // HUD at ~10 Hz — a full innerHTML rewrite every frame is needless reflow.
+      if (t === undefined || t - hudAt > 100) { hudAt = t || 0; updateHud(); }
+    }
+    tick();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Verification surface (AC-FRAME / AC-LAB, asserted without screenshots)
+    // ─────────────────────────────────────────────────────────────────────────
+    function getInfo() {
+      const cam = (mode === 'eye') ? eyeCam : orbitCam;
+      return {
+        objects: objectNames.slice(),
+        boundingBox: bbox ? {
+          min:  [bbox.min.x, bbox.min.y, bbox.min.z],
+          max:  [bbox.max.x, bbox.max.y, bbox.max.z],
+          size: [bbox.max.x - bbox.min.x, bbox.max.y - bbox.min.y, bbox.max.z - bbox.min.z],
+        } : null,
+        mode,
+        cameraFov: cam.fov,
+        cameraPosition: [cam.position.x, cam.position.y, cam.position.z],
+        glbUrl: GLB_URL,
+        loaded: !!model,
+        loadError,
+        lastOcclusion,          // number in [0,1], or null if never successfully measured
+        occlusionNote: occNote, // why lastOcclusion is null, when it is
+        // What the number does and does not count — reported alongside it so a headless
+        // verifier records the exclusion instead of inferring it.
+        occlusionExcludes: glassNodes.map((n) => n.name),
+        occlusionBand: null,    // deliberately none: AC-FRAME is measure-and-report
+        screenFaceNodes: objectNames.filter((n) => RE_SCREEN_FACE.test(n)),
+        glassNodes: glassNodes.map((n) => n.name),
+        staleNoseNodes: staleNose.slice(),   // must be [] — Hull_Nose was deleted
+        glassVisible: state.glass,
+        cabinLightOn: state.cabin,
+      };
+    }
+
+    // ── window._cockpitLab — the verification surface.
+    //   ready                     Promise, resolves {loaded, error} on success OR failure.
+    //                             NEVER rejects. Await it before measuring.
+    //   measureOcclusion(opts?)   → covered fraction in [0,1], or null if the GLB has
+    //                             not resolved. opts: {width=1920, height=1080, fov=70}.
+    //                             Canopy_Glass is always excluded; wireframe and [G] are
+    //                             neutralised for the duration and restored.
+    //   getInfo()                 → {objects, boundingBox, mode, cameraFov,
+    //                                cameraPosition, glbUrl, loaded, loadError,
+    //                                lastOcclusion, occlusionNote, occlusionExcludes,
+    //                                occlusionBand (always null — measure-and-report),
+    //                                screenFaceNodes, glassNodes, staleNoseNodes,
+    //                                glassVisible, cabinLightOn}
+    //   setMode('orbit'|'eye')    → the mode actually set.
+    //   setGlass(bool)            → canopy-shell visibility actually set ([G]).
+    //   setCabinLight(bool)       → cabin-light state actually set ([L], default OFF).
+    //   loaded / error            getters.
+    //   THREE, scene, renderer, controls, model, cameras.{orbit,eye}  escape hatches.
+    window._cockpitLab = {
+      measureOcclusion,
+      getInfo,
+      setMode,
+      setGlass(on) { state.glass = !!on; applyGlass(); return state.glass; },
+      setCabinLight(on) { state.cabin = !!on; applyCabin(); return state.cabin; },
+      // Drive the EYE look-around from a script, in degrees. The render loop owns eyeYaw /
+      // eyePitch and rewrites the camera every frame, so setting camera.rotation directly
+      // from the console silently does nothing — this is the supported way in.
+      //
+      // It exists because judging an ENCLOSURE requires turning the head: the whole
+      // correction this increment answers is that the previous build was a window, and you
+      // cannot see that from one forward screenshot. The camera never leaves the origin.
+      setLook(yawDeg, pitchDeg) {
+        eyeYaw = THREE.MathUtils.degToRad(yawDeg);
+        eyePitch = Math.max(-PITCH_LIMIT,
+                            Math.min(PITCH_LIMIT, THREE.MathUtils.degToRad(pitchDeg)));
+        return { yawDeg: THREE.MathUtils.radToDeg(eyeYaw),
+                 pitchDeg: THREE.MathUtils.radToDeg(eyePitch),
+                 pitchClampedAtDeg: THREE.MathUtils.radToDeg(PITCH_LIMIT) };
+      },
+      ready,
+      get loaded() { return !!model; },
+      get error() { return loadError; },
+      // escape hatches for chrome-devtools poking
+      THREE, scene, renderer, controls,
+      get model() { return model; },
+      cameras: { orbit: orbitCam, eye: eyeCam },
+    };
+  </script>
+</body>
+</html>

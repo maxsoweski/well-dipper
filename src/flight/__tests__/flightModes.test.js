@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { FlightMode, advanceFlightMode, flightModeInfo, isManualInput, nextDriveAction, autopilotSourceInfo, freeLookPointerRoute, headReleaseAction } from '../flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, isManualInput, nextDriveAction, autopilotSourceInfo, freeLookPointerRoute, headReleaseAction, needsHandsOnRecenter } from '../flightModes.js';
 
 describe('advanceFlightMode — the 4-state ring', () => {
   it('enters at Manual from not-in-flight', () => {
@@ -113,5 +113,52 @@ describe('headReleaseAction — hold vs recenter when look-input is released', (
   });
   it('RECENTERS on release in hands-on (peek release returns to nose-forward)', () => {
     expect(headReleaseAction({ freeLookLatched: false })).toBe('recenter');
+  });
+});
+
+describe('needsHandsOnRecenter — the hands-on head lock', () => {
+  // Max, 2026-07-30: *"when we have the 'stick' our view should be locked to the
+  // center of the cockpit"*, and on the peek: *"so long as middle mouse release =
+  // snap back to central view angle."*
+  //
+  // ⚠ THE POINT OF THESE CASES IS THE PATHS THAT NEVER TOUCH A MOUSEUP HANDLER.
+  // `headReleaseAction` above already returns 'recenter' for a hands-on peek
+  // release, and if that were the only way to strand the head off-centre this
+  // predicate would be redundant. It is not: exiting free-look mid-drag, a mode
+  // flip during a peek, and flythrough clearing its own look state all leave a
+  // non-zero yaw with no release event coming. The last case below is the one
+  // that matters — off-centre, nothing held, nothing easing, no event pending.
+  const lock = (o) => needsHandsOnRecenter(o);
+
+  it('leaves free-look alone — leaving centre there IS the feature', () => {
+    // Aiming the pointer at a cockpit panel requires the head off-centre. A lock
+    // that fired here would fight the player for the whole of every menu.
+    expect(lock({ handsOn: false, held: false, recentering: false, centered: false })).toBe(false);
+  });
+
+  it('does not fight an active peek', () => {
+    expect(lock({ handsOn: true, held: true, recentering: false, centered: false })).toBe(false);
+  });
+
+  it('does not re-request a recenter already in flight', () => {
+    // Re-firing beginRecenter() every frame would restart the ease every frame,
+    // which does not read as "faster" — it reads as the head never arriving.
+    expect(lock({ handsOn: true, held: false, recentering: true, centered: false })).toBe(false);
+  });
+
+  it('is quiet once home, so the lock costs nothing at rest', () => {
+    expect(lock({ handsOn: true, held: false, recentering: false, centered: true })).toBe(false);
+  });
+
+  it('⭐ CATCHES THE STRANDED HEAD — off-centre in hands-on with no release coming', () => {
+    expect(lock({ handsOn: true, held: false, recentering: false, centered: false })).toBe(true);
+  });
+
+  it('defaults to silence on a malformed call rather than recentering forever', () => {
+    // A missing `handsOn` must not read as "locked". The failure of the opposite
+    // default is a head that recenters during free-look on every frame in which a
+    // caller forgot a field — i.e. the pointer becoming unusable, far from here.
+    expect(lock({})).toBe(false);
+    expect(lock()).toBe(false);
   });
 });

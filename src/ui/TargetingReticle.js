@@ -115,6 +115,16 @@ export class TargetingReticle {
     this.ctx = this.canvas.getContext('2d');
     this._dpr = window.devicePixelRatio || 1;
 
+    // ── The cabin cut (reticles-on-the-glass-2026-08-01) ──
+    // INJECTED, not imported. The reticle is a pure view over targets and must
+    // stay ignorant of the cockpit: `setMaskSource` hands it a function that
+    // returns "an image whose opaque pixels are not glass", and it erases with
+    // it. That keeps `ui/` free of a `cockpit/` dependency, and it is what lets
+    // this file behave identically in the lab, in ORRERY and with no GLB at all
+    // — the source simply returns null.
+    this._maskSource = null;
+    this._maskWarned = false;
+
     this._resize();
     window.addEventListener('resize', () => this._resize());
 
@@ -139,7 +149,22 @@ export class TargetingReticle {
       canvasW: 0,
       canvasH: 0,
       dpr: this._dpr,
+      // 0 until a cabin mask has actually been composited this frame. The
+      // probe's own answer to "was the cut applied, or is there simply nothing
+      // in front of the reticle?" — two states a screenshot cannot tell apart.
+      maskAppliedAt: 0,
     };
+  }
+
+  /**
+   * Install the source of the cabin silhouette.
+   *
+   * @param {(() => (HTMLCanvasElement|null))|null} fn returns an image whose
+   *   OPAQUE pixels are the thing the pilot cannot see through, or null when
+   *   there is nothing in front of the glass this frame.
+   */
+  setMaskSource(fn) {
+    this._maskSource = typeof fn === 'function' ? fn : null;
   }
 
   _resize() {
@@ -265,6 +290,7 @@ export class TargetingReticle {
     this._lastFrame.canvasW = this._cssW;
     this._lastFrame.canvasH = this._cssH;
     this._lastFrame.dpr = this._dpr;
+    this._lastFrame.maskAppliedAt = 0;
 
     if (!this.enabled) {
       this._clear();
@@ -328,6 +354,65 @@ export class TargetingReticle {
       } else {
         this._drawTarget(selectedTarget, true);
       }
+    }
+
+    // ⭐ LAST, AND OVER EVERYTHING. The cut is one uniform erase across the
+    // whole overlay rather than a per-element rule, because nothing else in
+    // `src/` draws on this canvas — so ghosts, brackets, NAMES and the
+    // off-screen chevron are all cut at the structure's real edge, which is
+    // Max's answer ("see previous answer") to what should happen when a rib
+    // covers a bracket but not its label.
+    this._applyCabinMask();
+  }
+
+  /**
+   * Erase whatever the cabin is standing in front of.
+   *
+   * `destination-out` keeps destination pixels where the SOURCE is transparent
+   * and clears them where it is opaque — so a mask that is opaque exactly on
+   * cabin structure cuts the reticles at that structure's silhouette, and a
+   * fully transparent mask is a no-op. That is the whole mechanism.
+   *
+   * ⚠ THE COMPOSITE OP IS RESTORED IN A `finally`. This canvas is drawn on
+   * every frame forever; leaving `destination-out` in force would mean the next
+   * frame's brackets erase instead of paint, and the overlay would simply never
+   * show anything again.
+   */
+  _applyCabinMask() {
+    if (!this._maskSource) return;
+    let mask = null;
+    try {
+      mask = this._maskSource();
+    } catch (err) {
+      // Once, not every frame — a mask that throws would otherwise bury the
+      // console at 235 Hz. Uncut reticles are the pre-mask behaviour and are
+      // survivable; a throw here would take the whole reticle layer down.
+      if (!this._maskWarned) {
+        this._maskWarned = true;
+        console.warn('[RETICLE] cabin mask source failed; reticles will not be cut:', err);
+      }
+      return;
+    }
+    if (!mask || !mask.width || !mask.height) return;
+
+    const ctx = this.ctx;
+    // The mask's backing store matches this canvas's, so this is a 1:1 blit and
+    // no resampling happens — but smoothing off is asserted rather than assumed,
+    // because a softened edge is a visual change nobody would trace back here.
+    const prevSmoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalCompositeOperation = 'destination-out';
+    // `destination-out` scales the erase by globalAlpha, so a stray value would
+    // turn a cut into a dim ghost of a reticle showing through the fuselage.
+    const prevAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = 1;
+    try {
+      ctx.drawImage(mask, 0, 0, this.canvas.width, this.canvas.height);
+      this._lastFrame.maskAppliedAt = performance.now();
+    } finally {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = prevAlpha;
+      ctx.imageSmoothingEnabled = prevSmoothing;
     }
   }
 
@@ -547,6 +632,7 @@ export class TargetingReticle {
       dpr: this._lastFrame.dpr,
       lastClearAt: this._lastFrame.lastClearAt,
       drawCallsThisFrame: this._lastFrame.drawCallsThisFrame,
+      maskAppliedAt: this._lastFrame.maskAppliedAt,
       entries: this._lastFrame.entries.slice(),
     };
   }

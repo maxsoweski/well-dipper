@@ -12,13 +12,27 @@ export const HEAD_TUNING = {
   MAX_PITCH: Math.PI / 3,   // ±60°
   // §free-look-interaction-redesign-2026-06-27, Part 2 step 4: the head no longer
   // recenters merely because the look is released — it HOLDS where you dragged it.
-  // Recenter is now EXPLICIT (beginRecenter()), fired only on free-look EXIT (F off).
-  // EXIT_RECENTER_TAU is that return's time-constant — snappy-but-graceful (~150-250ms
-  // feel; a single tunable Max/working-Claude can dial live afterward). It's an
-  // exponential ease, so ~63% of the return is done in 1τ and ~95% in 3τ (~0.5 s at
-  // τ=0.18) — perceptually settled in well under a second; the tiny SNAP_EPS tail
-  // (last ~0.06°) is imperceptible. Lower τ for a snappier return, raise for slower.
-  EXIT_RECENTER_TAU: 0.18,  // s — eased recenter on free-look EXIT (fast but graceful)
+  // Recenter is now EXPLICIT (beginRecenter()), fired on free-look EXIT (F off) and,
+  // since 2026-07-30, by the hands-on head lock (`needsHandsOnRecenter`).
+  // EXIT_RECENTER_TAU is that return's time-constant. It's an exponential ease, so
+  // ~63% of the return is done in 1τ and ~95% in 3τ — the tiny SNAP_EPS tail (last
+  // ~0.06°) is imperceptible. Lower τ for a snappier return, raise for slower.
+  //
+  // ⭐ 0.18 → 0.10 ON MAX'S ASK, 2026-07-30: *"I want the snap into position to be
+  // fast but not jarring."* 3τ moves from ~0.54 s to ~0.30 s. The old value was
+  // chosen when the return was a rare event on F-exit; with the hands-on lock the
+  // peek snap-back is now a routine, per-gesture motion, and 0.5 s reads as drift
+  // when there is a cockpit frame to judge it against.
+  //
+  // ⚠ IF HE SAYS "STILL JARRING", THE ANSWER IS THE CURVE, NOT A SMALLER NUMBER.
+  // An exponential leaves the held angle at its MAXIMUM speed — velocity jumps from
+  // 0 to full the instant you release the peek — then crawls the last few degrees.
+  // That discontinuity is what "jarring" describes, and shrinking τ makes it worse
+  // while making the tail shorter. The fix in that case is a critically-damped
+  // spring (accelerate, then decelerate; continuous velocity from rest), which
+  // needs a velocity term on the mount and a rewrite of the 3τ settle test's
+  // arithmetic. Deliberately NOT done pre-emptively: he has to fly it first.
+  EXIT_RECENTER_TAU: 0.10,  // s — eased recenter (see the note above before retuning)
   SNAP_EPS: 1e-3,           // rad (~0.06°) — snap-to-zero so the ease terminates cleanly
 };
 

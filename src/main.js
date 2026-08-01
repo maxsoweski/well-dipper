@@ -57,7 +57,7 @@ import { ShipControls } from './flight/ShipControls.js';
 // on/off toggle (no 4-state ring) and the flight TYPE moved to Settings. The
 // module (enum + flightModeInfo + isManualInput) stays in use; the ring helper
 // is kept importable for the deferred control-harness arc.
-import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed, bodyCycleAction, burnWorkflowAvailable, burnButtonRegimeVisible, navAutopilotToggleAction, autoWarpTimerFires, systemEntryStyle, tourRearmAllowed, bodyClickAction, navDispatchDuringWarp, bootSkipDecision } from './flight/flightModes.js';
+import { FlightMode, advanceFlightMode, flightModeInfo, nextDriveAction, autopilotSourceInfo, playerBurnMode, manualCancelsLeg, modeSwapAction, bootModeAction, commitBurnSwapsToHelm, pointerHudState, aimPoint, freeLookPointerRoute, headReleaseAction, handRouting, zKeyAction, fKeyAction, idleFiresTour, forcedProximityDropAllowed, bodyCycleAction, burnWorkflowAvailable, burnButtonRegimeVisible, navAutopilotToggleAction, autoWarpTimerFires, systemEntryStyle, tourRearmAllowed, bodyClickAction, navDispatchDuringWarp, bootSkipDecision, needsHandsOnRecenter } from './flight/flightModes.js';
 import { starMassKgFromSceneRadius } from './flight/proximityHorizon.js';
 import { starParkRadius, starKeepOutRadius, segmentCrossesSphere, goAroundWaypoint, planLeg, PARK_MIN_FACTOR, firstBlockingObstacle, planLegObstacle, obstacleKeepOutRadius } from './flight/tourStandoff.js';
 import { createFreeLook } from './flight/freeLook.js';
@@ -96,7 +96,13 @@ import {
 import { CameraInterpolator } from './core/CameraInterpolator.js';
 import { createAccumulator } from 'motion-test-kit/core/loop/accumulator';
 import { bindToRAF } from 'motion-test-kit/adapters/three/three-loop-binding';
-import { _advanceSimClock } from './core/SimClock.js';
+import { _advanceSimClock, simClockMs } from './core/SimClock.js';
+import { CockpitSnapshotProvider, resolveFocusedBody } from './cockpit/CockpitSnapshot.js';
+import { CockpitRig, EYE_FOV, EYE_NEAR, EYE_FAR, COCKPIT_TONE_EXPOSURE } from './cockpit/CockpitRig.js';
+import { cockpitEyeQuat } from './cockpit/cockpitEyePose.js';
+import { collectReticleOccluders, reticleDirInCockpit } from './cockpit/reticleOcclusion.js';
+import { CabinMask, assignMaskLayer } from './cockpit/cabinMask.js';
+import { starDirInCockpit, starLightColor } from './cockpit/starLight.js';
 import { simRandom, simRandomSeed } from './core/SimRandom.js';
 import {
   initRecording, initReplay, recordingTick, replayTickPre,
@@ -168,6 +174,14 @@ window._shipSpawner = shipSpawner;  // exposed for integration tests (Unit 3)
 // ── Retro Renderer ──
 const canvas = document.getElementById('canvas');
 const retroRenderer = new RetroRenderer(canvas, scene, camera);
+// ⚠ PRE-EXISTING, found 2026-07-30 while driving AC-FLIGHT-AND-ORRERY-SURVIVE's
+// save/reload clause; it predates the cockpit work (present at pre-cockpit-inc7).
+// `pixelScale` was the one visual setting that SAVED but never RESTORED: the
+// constructor hard-codes 3 (RetroRenderer.js:31), `applySettingChange` writes it
+// on a live drag, and the reset button re-applies it — but nothing read it at
+// boot. Move the slider, reload, and the picture silently came back at 3 with
+// the stored value still 5. Its neighbour on the next line always did this.
+retroRenderer.pixelScale = settings.get('pixelScale');
 retroRenderer.setColorPalette(settings.get('colorPalette'));
 
 // ── Texture Baker (runtime procedural → texture baking) ──
@@ -279,14 +293,17 @@ realStarCatalog.load().then(() => {
   StarfieldGenerator.realStarCatalog = realStarCatalog;
   KnownSystems.associate(realStarCatalog, galacticMap);   // derive known-system catalog aliases + inject map for authored-entry ctx (design D7)
   debugPanel.setRealStarCatalog(realStarCatalog);
-  if (_navComputer) _navComputer.setRealStarCatalog(realStarCatalog);
+  // EVERY instance, not "the" one — see `_navComputers()`. The cockpit's is
+  // usually already built by the time this resolves and the DOM overlay's
+  // usually is not; naming either one would silently starve the other.
+  for (const nav of _navComputers()) nav.setRealStarCatalog(realStarCatalog);
   console.log(`Real star catalog loaded: ${realStarCatalog.count} stars`);
 });
 
 // Load real feature catalogs (globular clusters, etc.)
 realFeatureCatalog.load().then(() => {
   debugPanel.setRealFeatureCatalog(realFeatureCatalog);
-  if (_navComputer) _navComputer.setRealFeatureCatalog(realFeatureCatalog); // Inc-4 AC2: class-(c) structures search
+  for (const nav of _navComputers()) nav.setRealFeatureCatalog(realFeatureCatalog); // Inc-4 AC2: class-(c) structures search
   // Make real features available to the hash grid for Plummer density
   HashGridStarfield.realFeatureCatalog = realFeatureCatalog;
   console.log(`Real feature catalog loaded: ${realFeatureCatalog.globularClusters.length} globular clusters`);
@@ -334,7 +351,15 @@ let orbitsVisible = settings.get('showOrbits');
 // toggles them (Settings / O key / HUD button, all via toggleOrbits), after which
 // their choice sticks. Session-scoped.
 let _orbitsUserOverride = false;
-let gravityWellVisible = settings.get('showGravityWells');
+// ⭐ RETIRED 2026-07-30 — see `_hudSlotScene`. Pinned false rather than read
+// from settings because the toggle, the V key and the mobile button are all
+// gone: a persisted `true` would otherwise leave the per-frame well updates
+// (search `gravityWellVisible`) running for a surface nothing draws.
+// ⚠ DEBT, named not hidden: `GravityWellMap` is still CONSTRUCTED on every
+// system spawn. Left in place deliberately — the diegetic replacement Max wants
+// may or may not reuse it, and deleting the build path is a bigger change than
+// the retirement he asked for.
+let gravityWellVisible = false;
 // Default minimap off on mobile (too small to be useful, overlaps controls)
 const _isMobile = 'ontouchstart' in window;
 // Tag the body so mobile-only CSS can key off it. JS guards still apply too.
@@ -400,14 +425,91 @@ function _applyHudVisibility() {
   // Minimap lives inside the RetroRenderer HUD pass, not the DOM — blank it
   // while the HUD is hidden and restore it from the saved minimapVisible
   // state when the HUD comes back.
-  if (!_hudVisible) {
-    retroRenderer.setHud(null, null);
-  } else if (system && !gravityWellVisible && minimapVisible && systemMap) {
-    retroRenderer.setHud(systemMap.scene, systemMap.camera);
-  } else if (system && gravityWellVisible && gravityWell) {
-    retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
-  }
+  _applyHudSlot();
 }
+
+/**
+ * ⭐ THE ONE PLACE THAT DECIDES WHAT IS IN THE HUD SLOT. Read it, don't
+ * reproduce it.
+ *
+ * AC-OVERLAYS-RETIRE-IN-HELM. The 320² circle is a SLOT that hosts two
+ * different scenes, and they retire differently:
+ *
+ *   MINIMAP (`systemMap`) — retires IN HELM ONLY. It is OPERABLE, not a
+ *     readout: clicks inside it hit bodies and call `autoNav.jumpToStar()` /
+ *     `jumpToPlanet()`, and it drags to rotate. So it cannot simply be deleted
+ *     — but in HELM the cockpit's NAV panel is its replacement, and ORRERY,
+ *     which has no cockpit to host anything, keeps it. Matches the ruling
+ *     already recorded in cockpit-screen-content-2026-07-28.
+ *
+ *   GRAVITY WELL — ⭐ RETIRED IN BOTH MODES, 2026-07-30. Max, after flying it:
+ *     *"We need to retire the gravity wells minimap; doesn't make sense
+ *     non-diagetically anymore. We can return to it later and implement
+ *     diagetically somehow."*
+ *
+ *     ⚠ THIS REVERSES THE RULING THAT STOOD HERE THIS MORNING, and the old text
+ *     is worth keeping in view: it said the well SURVIVES IN BOTH because it has
+ *     no cockpit replacement, so gating it off would delete it outright with no
+ *     replacement. That reasoning was sound and its PREMISE has changed — Max
+ *     has now accepted exactly that trade, in exchange for the option of a
+ *     diegetic one later. Stale, not wrong.
+ *
+ *     ⭐ WHY BOTH MODES AND NOT HELM ONLY, which is the one judgement call here.
+ *     The reason he gave is diegetic, and only HELM has a cockpit — so "HELM
+ *     only" is a readable interpretation. It is refused because it contradicts a
+ *     ruling he already made: the discriminator for what ORRERY keeps is
+ *     OPERABLE vs READOUT (`AC-ORRERY-KEEPS-WHAT-IT-OPERATES`). The minimap
+ *     stays in ORRERY because clicks inside it JUMP to bodies and it drags to
+ *     rotate — retire it there and ORRERY loses an ability. The gravity well is
+ *     a pure readout: no click target, no drag, nothing it lets you do. Under
+ *     his own discriminator it goes in both, exactly as SupercruiseHud and the
+ *     debug rows did. Reversing this is one line here plus the affordances.
+ *
+ * ⚠ WHY ONE FUNCTION AND NOT A GATE AT EACH SITE. Five separate places used to
+ * push a scene into this slot — the H-key toggle, the settings applier, the C
+ * key, `toggleGravityWell`, and `spawnSystem`. That last one runs on EVERY
+ * ARRIVAL, so a regime-only gate written at the other four would put the
+ * minimap straight back on top of the cockpit after the next warp, which is
+ * exactly the failure the contract's own verify step calls out. A single
+ * decision point cannot drift that way; the call sites now only say "re-decide".
+ */
+function _hudSlotScene() {
+  if (!_hudVisible || !system) return null;
+  // ⭐ `!_cockpitReplaces('NAV')`, NOT `!_scManual` (2026-07-31, Max's UAT). The
+  // minimap goes because the NAV panel took it over; if there is no NAV panel on
+  // the glass — GLB load failure, or a re-export that renamed `Screen_UL` — then
+  // nothing took it over and retiring it just deletes a CONTROL (it jumps to
+  // bodies, it drags to rotate) with no replacement. See `_cockpitReplaces`.
+  if (minimapVisible && systemMap && !_cockpitReplaces('NAV')) return 'minimap';
+  return null;
+}
+
+function _applyHudSlot() {
+  const which = _hudSlotScene();
+  if (which === 'minimap') retroRenderer.setHud(systemMap.scene, systemMap.camera);
+  else retroRenderer.setHud(null, null);
+}
+
+/**
+ * Hard-blank the slot, overriding the decision.
+ *
+ * Two callers, and both are SUPPRESSION rather than a decision: the warp fold
+ * (`_hideCurrentSystem`) and the object gallery. `system` is still set through
+ * both, so routing them through `_applyHudSlot` would put the minimap straight
+ * back up over a system that is no longer on screen. Named so the guard in
+ * `mainHudSlot.test.js` can tell the two intents apart — a bare
+ * `setHud(null, null)` anywhere else is a second decision point and goes red.
+ */
+function _blankHudSlot() { retroRenderer.setHud(null, null); }
+
+/**
+ * Is the minimap actually ON SCREEN, and therefore clickable/draggable?
+ *
+ * The click and drag handlers must ask the SAME question the renderer asked,
+ * or HELM keeps a live 320² dead zone that swallows clicks meant for the world
+ * over a minimap that is not being drawn.
+ */
+function _minimapLive() { return _hudSlotScene() === 'minimap'; }
 // ── Cursor + flight-HUD steering reticle, BY SUB-MODE (§free-look-interaction
 // -redesign-2026-06-27, Part 1) ──
 // `_showReticle` gates the SupercruiseHud's center cross + joystick deflection
@@ -462,6 +564,25 @@ const _visibleGhostTargets = [];
 const _occDir = new THREE.Vector3();
 function _isReticleOccluded(target) {
   if (!target?.mesh) return false;
+  // ⭐⭐ THE CABIN IS NOT ASKED HERE ANY MORE, AND THAT IS THE POINT OF
+  // reticles-on-the-glass-2026-08-01. `5cd1118` put `_cockpitBlocksReticle`
+  // first in this function: one ray through the target's CENTRE, and a hit hid
+  // the WHOLE reticle. A ~7 px `Arch_Bow` rib therefore blanked the entire
+  // bracket-plus-label for ~100 ms and brought it back whole — which is exactly
+  // how something drawn on the player's EYE behaves, arriving and leaving
+  // entire in a shape unrelated to what is in front of it.
+  //
+  // The cabin now cuts the overlay's PIXELS instead (`src/cockpit/cabinMask.js`
+  // → `TargetingReticle._applyCabinMask`), at the rib's own silhouette. That
+  // subsumes this gate rather than dropping it: a reticle wholly behind a
+  // monitor body is erased in full by the mask, so the outcome `5cd1118` bought
+  // survives while the blink does not.
+  //
+  // ⚠ `_cockpitBlocksReticle` itself SURVIVES, as the instrument — see the note
+  // on it below. What is retired is its power to suppress DRAWING.
+  //
+  // Everything from here down is unchanged: bodies occluding bodies, which the
+  // mask knows nothing about and must keep answering.
   _occDir.subVectors(target.mesh.position, camera.position);
   const targetDist = _occDir.length();
   if (targetDist < 1e-6) return false;
@@ -487,6 +608,64 @@ function _isReticleOccluded(target) {
     const dz = occ.mesh.position.z - pz;
     const perpSq = dx * dx + dy * dy + dz * dz;
     if (perpSq < occ.radius * occ.radius) return true;
+  }
+  return false;
+}
+
+// ── Reticle occlusion by the COCKPIT (Max, UAT 2026-08-01) ─────────────────
+//
+// *"the reticles on the hud that go around worlds/stars in-game are still not
+// being occluded by the monitors/monitor arms, fuselage, or ribs as they
+// should be."*
+//
+// The sphere test above cannot answer this and never could: a cockpit is not a
+// union of spheres, and it lives in a different scene, in a different frame,
+// drawn by a different camera. `src/cockpit/reticleOcclusion.js` has the
+// coordinate argument; this is only the wiring.
+//
+// ⚠ THE OCCLUDER LIST IS BUILT ONCE, at load, and that is a claim about the
+// model rather than an optimisation: the cabin is rigid — nothing in it is
+// added, removed or re-parented at runtime. `PanelMover` MOVES a panel to the
+// eye, and a moved panel is still the same mesh, so the cast follows it for
+// free and a screen swung in front of the pilot correctly blocks what is
+// behind it.
+const _cockpitRaycaster = new THREE.Raycaster();
+const _cockpitOccluders = [];
+const _cockpitHits = [];
+const _cockpitDir = new THREE.Vector3();
+
+/**
+ * Is a piece of the cabin between the pilot's eye and this body?
+ *
+ * False whenever there is no cockpit being drawn, which covers ORRERY, a GLB
+ * that failed to load and every frame before the rig resolves. That is the same
+ * question `_cockpitShouldRender` answers for the cockpit pass itself, asked
+ * here so the reticles cannot be occluded by a cabin that is not on screen —
+ * the exact class of defect `_cockpitReplaces` was written for this morning.
+ *
+ * ⭐ AN INSTRUMENT NOW, NOT A GATE (reticles-on-the-glass-2026-08-01). It no
+ * longer feeds `_isReticleOccluded`; the silhouette mask cuts pixels instead.
+ * It is kept and kept WIRED — `window._cockpitOcclusion.wouldBlink()` — because
+ * it is the only thing that can say "the retired centre-ray test would have
+ * hidden this reticle" on a frame where the reticle is nonetheless drawn and
+ * merely cut. Without it, "the blink is gone" and "there was nothing in the way"
+ * are indistinguishable from the console, and that ambiguity has already
+ * produced three false readings in this lane.
+ */
+function _cockpitBlocksReticle(target) {
+  if (!_cockpitOccluders.length || !_cockpitShouldRender()) return false;
+  const dir = reticleDirInCockpit(_cockpitDir, target.mesh.position, camera, _cockpitCamera);
+  if (!dir) return false;
+
+  _cockpitRaycaster.set(_cockpitCamera.position, dir);
+  // Iterated rather than one `intersectObjects` call, for two reasons that are
+  // both about this running per reticle per frame: that helper SORTS its
+  // results by distance, and we only ever ask whether the list is empty; and it
+  // cannot stop early, while the first hit is the whole answer.
+  for (let i = 0; i < _cockpitOccluders.length; i++) {
+    _cockpitHits.length = 0;
+    _cockpitRaycaster.intersectObject(_cockpitOccluders[i], false, _cockpitHits);
+    if (_cockpitHits.length) return true;
   }
   return false;
 }
@@ -560,6 +739,50 @@ function setScManual(on) {
   // THE universal regime-flip point, so hooking here covers every HELM<->ORRERY path
   // (same hoisted-forward-reference safety as above).
   if (typeof _syncOrbitsToMode === 'function') _syncOrbitsToMode();
+  // AC-OVERLAYS-RETIRE-IN-HELM: the minimap retires in HELM and returns in
+  // ORRERY, so the REGIME is an input to the slot decision and a flip has to
+  // re-decide. Found live 2026-07-30 — without this the minimap went away on
+  // entering HELM and never came BACK on leaving it, because nothing else
+  // re-decides until the next warp or toggle. Same universal-flip-point
+  // argument as the two hooks above.
+  if (typeof _applyHudSlot === 'function') _applyHudSlot();
+  // AC-ORRERY-KEEPS-WHAT-IT-OPERATES + AC-OVERLAYS-RETIRE-IN-HELM. The two DOM
+  // surfaces the cockpit replaces are retired from the same universal flip
+  // point, for the same reason the three hooks above are: eleven `show*` call
+  // sites gated eleven times is a gate that gets forgotten once. Each class
+  // owns its own suppression; this only tells them which station we are at.
+  if (typeof _syncRetiredOverlaysToMode === 'function') _syncRetiredOverlaysToMode();
+}
+
+/**
+ * Push the regime to the DOM surfaces the cockpit replaces.
+ *
+ * A hoisted function declaration rather than inline statements, so
+ * `setScManual`'s existing forward-reference safety keeps working: `bodyInfo`
+ * and `flightModeToast` are `const`s declared further down, and reaching them
+ * from inside a function body defers the read to call time.
+ */
+function _syncRetiredOverlaysToMode() {
+  // ⭐ EACH ONE ASKS ABOUT ITS OWN REPLACEMENT, not about the regime (2026-07-31,
+  // Max's UAT). `_scManual` here meant "HELM, therefore the cockpit has this
+  // covered" — a claim that is simply false when the GLB failed to load. See
+  // `_cockpitReplaces` for the whole argument and the role mapping.
+  //
+  // The names are the mapping: BodyInfo's own header says "the cockpit's INFO
+  // panel is this readout's replacement"; FlightModeToast's says the DRIVE
+  // panel's persistent `MODE:` line is. Reading these three lines now tells you
+  // WHY each surface goes, which `_scManual` three times never did.
+  bodyInfo.setSuppressed(_cockpitReplaces('INFO'));
+  flightModeToast.setSuppressed(_cockpitReplaces('DRIVE'));
+  // ⚠ NARROW, unlike the two above: #debug-hud loses ONLY the three dossier
+  // rows the INFO panel took over (COMP/ATMO/TIDAL) and keeps every developer
+  // row. And it is gated, not deleted as the build order's step 11 asked —
+  // there is no INFO panel in ORRERY, nor in HELM on a GLB load failure, so a
+  // deletion would strip the readings where nothing replaces them. ⭐ That
+  // sentence was already written here on 2026-07-31 and the gate below still
+  // said `_scManual`: the reasoning was right and the code did not implement
+  // it. The load-failure half is now actually true.
+  debugPanel.setSurveySuppressed(_cockpitReplaces('INFO'));
 }
 let _flightMode = FlightMode.MANUAL;          // in-flight sub-state (meaningful while _scManual)
 const _alignState = { active: false, mesh: null, t: 0 }; // Mode-B one-time align (Task 5)
@@ -2445,6 +2668,676 @@ const warpTarget = {
 };
 window._warpTarget = warpTarget;  // DEBUG: expose warp target for Playwright driving
 
+// ── Cockpit screens: the ONE read-only feed (cockpit-screen-content-2026-07-28,
+//    AC-SNAPSHOT) ────────────────────────────────────────────────────────────
+// Every screen feed (`system`, `focusIndex`, `_selectedTarget`,
+// `playerGalacticPos`, `scModel.speed/throttle`, `warpTarget`, the live nav) is
+// a module-level `let` here with no export and no store. Rather than let four
+// panels each reach in, the reader below gathers them once per frame and
+// buildCockpitSnapshot copies them to plain data. NO PANEL MAY REACH PAST THIS.
+//
+// The reader is a FUNCTION, not a bag of references: `system`, `_selectedTarget`
+// and `playerGalacticPos` are reassigned wholesale (`system` at every
+// spawnSystem), so a captured reference would go stale at the first warp.
+//
+// `frame` carries the values that exist only as renderFrame locals — the
+// `_scDrop` / `_scTargetPos` / `_aimOnTarget` consts already computed for
+// scHud.update. Passed in rather than recomputed so the panels and the 2D HUD
+// cannot disagree within one frame.
+const _cockpitSnapshotProvider = new CockpitSnapshotProvider((frame) => ({
+  simClockMs: simClockMs(),
+  renderDt: frame.renderDt ?? 0,
+
+  helm: _scManual,
+  // Mirrors the gate scHud.update and scControls.host.flightMode already use.
+  flightMode: _scManual ? _flightMode : null,
+  tour: autoNav.isActive,
+  warping: warpEffect.isActive,
+  pilotPhase: scPilot.phase,
+
+  scModel,
+  sublightCap: SC_TUNING.SUBLIGHT_CAP,
+  commandedSpeed: scModel.driveOn
+    ? scModel.throttle * scModel.speedCap()
+    : scModel.throttle * SC_TUNING.SUBLIGHT_CAP,
+
+  selectedTarget: _selectedTarget,
+  targetDistance: frame.targetDistance ?? null,
+  aimOnTarget: frame.aimOnTarget ?? false,
+  drop: frame.drop ?? null,
+  massLockHint: _massLockHintFrames > 0,
+
+  // Short-circuited while warping: `system` is never nulled (one assignment in
+  // this file, the declaration), and _hideCurrentSystem() runs at FOLD→ENTER,
+  // potentially many frames before spawnSystem() reassigns it — so mid-warp
+  // this would walk BodyRenderers whose GPU resources are about to be disposed.
+  // buildCockpitSnapshot blanks SURVEY on the same condition; this just avoids
+  // the walk.
+  focusedBody: warpEffect.isActive
+    ? null
+    : resolveFocusedBody(system, { focusIndex, focusMoonIndex, focusStarIndex }),
+
+  // The LIVE instance's level, not the overlay's. In HELM the overlay is often
+  // null (N has never been pressed) while the glass is drilled into PRISM; a
+  // holding card reading the overlay would say GALAXY under a PRISM map.
+  navLevel: liveNavComputer()?.level ?? null,
+  galacticPos: playerGalacticPos,
+  systemName: _currentSystemName || null,
+
+  warpTarget,
+  warpState: warpEffect.state,
+  warpProgress: warpEffect.progress,
+}));
+// DEBUG (cockpit-screen-content-2026-07-28 AC-SNAPSHOT): the only console reach
+// to the screen feeds. A probe function returning the frame's plain snapshot —
+// deliberately NOT a live handle like window._warpTarget above, in a lane whose
+// whole AC is "no live handles" (and a handle would go stale every frame anyway).
+window._cockpitSnapshot = () => _cockpitSnapshotProvider.get();
+
+// ── THE COCKPIT ITSELF (increment 7, cockpit-into-helm-2026-07-30) ──────────
+//
+// Six increments built a cockpit that only existed in a lab. This is where it
+// enters the game. `CockpitRig` is the SAME module the lab constructs — one
+// assembly, two hosts — so anything that changes the cockpit changes it here
+// and there together, which is what AC-ONE-RIG-TWO-HOSTS is for.
+//
+// ⭐ ITS OWN CAMERA, NOT THE WORLD CAMERA, and the reason is scale. The world
+// camera works in scene units where 1 m = 6.7e-9, and a zoomed panel lands
+// ~0.17 m from the eye; sharing one camera would either clip the cockpit or
+// z-fight it. This one is built from the RIG's optics (EYE_FOV/NEAR/FAR) so the
+// framing Max judged in the lab is the framing he gets here — three's own
+// default is 50 degrees, and PanelMover re-solves the zoom fill from the live
+// fov, so an unspecified fov lands the zoomed panel at a size he has never seen.
+//
+// It is posed FROM the world camera every frame — the cockpit sits at the
+// origin of its own scene and only its ORIENTATION follows the ship, which is
+// what makes the precision question vanish. `scModel` is never touched:
+// HeadMount.test.js asserts the trajectory is bit-identical with and without
+// look input, and nothing here writes it.
+//
+// ⭐ THE FOV COMES FROM SETTINGS, NOT FROM `EYE_FOV` (2026-08-01). `EYE_FOV` is
+// 70 *because that is the game's own default*, and the lab — which has no
+// Settings to read — is the host it exists for. But the GAME has a slider, and
+// this camera was built from the constant and never told when it moved: the
+// world re-projected and the cabin did not, so the two passes composited into
+// one image that no longer lined up. The resize handler below already carries
+// this exact lesson for `aspect`; this is the same oversight one field over.
+// `?? EYE_FOV` keeps the rig's documented default as the fallback rather than
+// three's 50, which is the failure the paragraph above is about.
+const _cockpitCamera = new THREE.PerspectiveCamera(settings.get('fov') ?? EYE_FOV, window.innerWidth / window.innerHeight, EYE_NEAR, EYE_FAR);
+_cockpitCamera.rotation.order = 'YXZ';
+let _cockpitRig = null;
+let _cockpitReady = false;
+
+/**
+ * Position pinned at the rig's eye point, orientation from the PILOT'S HEAD —
+ * in the cockpit's own frame, never the world's.
+ *
+ * ⭐ It used to copy `camera.quaternion`, which is `shipOrientation × headLook`.
+ * The cabin is static at identity in `_cockpitRig.scene`, so feeding it the
+ * ship's heading rotated the whole cockpit around the pilot: on a 119° turn the
+ * canopy ended up out of the side window with the head dead-centre, and
+ * screen-forward — where the ship actually goes — pointed at a bulkhead. That is
+ * both halves of "the view should be locked to the centre of the cockpit, and we
+ * should always fly forward from the cockpit's POV". See `cockpitEyePose.js`.
+ */
+/** Preallocated — this is written every frame the cockpit renders. */
+const _cockpitStarDir = new THREE.Vector3();
+
+function _poseCockpitCamera() {
+  if (!_cockpitRig) return;
+  _cockpitCamera.position.copy(_cockpitRig.eyePos);
+  cockpitEyeQuat(_cockpitCamera.quaternion, _cockpitRig.eyeQuat, scHead.yaw, scHead.pitch);
+  _cockpitCamera.updateMatrixWorld(true);
+}
+
+// ── The cabin cut (reticles-on-the-glass-2026-08-01) ───────────────────────
+//
+// The reticles are drawn on a 2D canvas that has no depth buffer, so structure
+// in front of them can only be expressed as an ERASE. `CabinMask` renders the
+// same occluder set the raycast oracle uses, flat white on transparent black,
+// on its own offscreen GL canvas; `TargetingReticle` composites it with
+// `destination-out`. See `src/cockpit/cabinMask.js` for why it is a second
+// renderer and not `RetroRenderer`'s `cockpitTarget`.
+const _cabinMask = new CabinMask();
+
+// ⚠⚠ THE POSE IS PINNED HERE, AND THE ORDER IS THE WHOLE OF IT.
+//
+// `_cockpitCamera`'s head pose is written by `_poseCockpitCamera`, whose ONLY
+// caller in the frame loop is `_cockpitRig.update()` (via `pinCamera`) — and
+// that runs ~100 lines AFTER `targetingReticle.update()`. Rendering the mask
+// from the camera as found would build this frame's cut from LAST frame's head
+// pose, so during free-look the cut would trail the cabin by exactly one frame:
+// a bright fringe of reticle along the leading edge of every rib, moving with
+// the head. That is the same one-frame-stale class of bug `PanelMover` already
+// paid for (a zoom solved against a stale camera landed 350 px off centre), and
+// it would read as "the mask is inaccurate" rather than as "the mask is late".
+//
+// Pinning is idempotent — it copies `rig.eyePos`/`eyeQuat` and `scHead`, all of
+// which are written in `simStep`, not in `renderFrame` — so calling it here and
+// again inside `_cockpitRig.update()` gives the same pose both times. That is
+// what makes this safe rather than a second source of truth.
+//
+// ⚠ ONE RESIDUAL, KNOWN AND ACCEPTED: `mover.update()` also runs inside
+// `_cockpitRig.update()`, so a panel MID-ZOOM is at last frame's point on its
+// tween when the mask is drawn. The cabin itself is rigid and the head pose —
+// the thing that moves fast and continuously — is exact; a tweening panel is
+// off by one frame of a sub-second travel, and only while the pilot is looking
+// at that panel rather than sweeping reticles. Fixing it would mean moving
+// `_cockpitRig.update()` ahead of the snapshot it is deliberately fed
+// ("the panels see the same state the frame is about to draw"), which trades a
+// pixel for an invariant.
+//
+// Returning null (no HELM cockpit, failed GLB, empty occluder set) is the
+// degrade path: `TargetingReticle` then draws whole, uncut reticles and never
+// touches the composite op.
+targetingReticle.setMaskSource(() => {
+  if (!_cockpitShouldRender() || !_cockpitOccluders.length) return _cabinMask.render(null, null);
+  _poseCockpitCamera();
+  return _cabinMask.render(_cockpitRig.scene, _cockpitCamera);
+});
+
+/**
+ * The system's star, as the cockpit's key light. Null when there is no star.
+ *
+ * ⭐ WHY THE SHIP AND NOT THE CAMERA. `starDirInCockpit` takes `scModel` —
+ * the HULL's position and orientation — and never touches `camera`. The
+ * neighbouring `_poseCockpitCamera` is the exact opposite: the ship's heading
+ * MUST NOT reach the cockpit camera (`b5e0d30`: a 119° turn swung the whole
+ * cabin around the pilot) and it MUST reach the light, because the star really
+ * does move across the cabin when the hull turns. That contrast is the whole
+ * reason the algebra lives in its own module with its own tests.
+ *
+ * ⚠ `system.star.mesh.position` IS THE STAR, INCLUDING FOR A BINARY. The shadow
+ * uniforms nearby special-case binaries into `_star1Pos`/`_star2Pos` and set
+ * BOTH to the origin for a single star; that is a shader convention, not a
+ * position, and reading it here would light every single-star cabin from
+ * whatever direction the scene origin happens to lie in after a rebase. The
+ * secondary of a binary is deliberately ignored for now — one key light, the
+ * brighter star. Named as a knob rather than left as an accident.
+ *
+ * ⚠ The intensity is CONSTANT — no inverse-square falloff. Physically wrong and
+ * deliberately so: a cabin that goes black at the system's edge is a worse first
+ * impression than one that does not change brightness, and how much it *should*
+ * fall off is Max's eye, not a formula. The knob to turn is here.
+ */
+function _cockpitStarLight() {
+  if (!system || !system.star || !system.star.mesh || !_cockpitRig) return null;
+  const dir = starDirInCockpit(
+    _cockpitStarDir,
+    system.star.mesh.position,
+    scModel.position,
+    scModel.orientation,
+    _cockpitRig.eyeQuat,
+  );
+  if (!dir) return null;
+  return { dir, color: starLightColor(system.star.data) };
+}
+
+/** HELM only. The regime is read fresh, never cached — see AC-HELM-ONLY. */
+function _cockpitShouldRender() {
+  return _scManual && _cockpitReady && !!_cockpitRig && !_cockpitRig.loadError;
+}
+
+/**
+ * ⭐ IS THE COCKPIT ACTUALLY REPLACING `role`'s SURFACE, RIGHT NOW?
+ *
+ * THE ONE QUESTION EVERY RETIREMENT MUST ASK, and until 2026-07-31 none of them
+ * did. AC-OVERLAYS-RETIRE-IN-HELM's five gates all read `_scManual` — "are we in
+ * HELM" — which is a DIFFERENT question, and the two answers come apart in
+ * exactly the case that matters. Found by Max in UAT:
+ *
+ *     the GLB fails to load → `_cockpitShouldRender()` is false, so there is no
+ *     cockpit → but `_scManual` is still true, so the minimap, the body dossier,
+ *     the three survey rows, the mode toast and the whole speed cluster retire
+ *     anyway. THE PLAYER IS LEFT FLYING WITH NO INSTRUMENTS AT ALL.
+ *
+ * A retirement is a TRADE — this surface goes because that one took it over — so
+ * the gate has to be a statement about the replacement, not about the station.
+ * `liveNavComputer()` already knew this and gated on `_cockpitShouldRender()`
+ * rather than `_scManual`; this is that same correction, applied to the other
+ * five and made per-role.
+ *
+ * ⭐ PER-ROLE, AND THAT IS NOT OVER-PRECISION. The four screens are discovered
+ * from the GLB BY MESH NAME (`DEFAULT_PANEL_ROLES`, PanelLayout.js), so a
+ * re-export that renames `Screen_UL` drops the NAV panel and leaves the other
+ * three. A whole-cockpit gate would call that "the cockpit is here" and retire
+ * the minimap into a screen that no longer exists — the same defect arriving by
+ * a quieter door. Asking per role makes the gate say what it means, and every
+ * way it can be wrong now fails in the direction where the OLD overlay comes
+ * back, which is the only survivable direction.
+ *
+ * The mapping is the one the retired classes already document in their own
+ * `setSuppressed` headers, so it is not invented here:
+ *   NAV   ← the 320² minimap
+ *   INFO  ← BodyInfo, and #debug-hud's three dossier rows
+ *   DRIVE ← SupercruiseHud's speed/throttle cluster + MODE line, FlightModeToast
+ *
+ * ⚠ THE GATES ARE EVENT-DRIVEN AND THIS PREDICATE IS NOT. `_cockpitReady` and
+ * `loadError` are written by a PROMISE, so a gate that only re-decides on the
+ * regime flip can be stale in both directions. That is why `CockpitRig.load`'s
+ * `.then` re-runs the appliers; see the note there.
+ */
+function _cockpitReplaces(role) {
+  return _cockpitShouldRender() && !!_cockpitRig.host?.panel(role);
+}
+
+CockpitRig.load({
+  glbUrl: 'assets/cockpit/cockpit.glb',
+  renderer: retroRenderer.renderer,
+  camera: _cockpitCamera,
+  pinCamera: () => _poseCockpitCamera(),
+  // The cockpit target is full-screen, so the picker's rect is the whole canvas.
+  getViewport: () => ({ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }),
+  bufferHeightPx: 512,
+  // followCamera stays FALSE: head decoupling is its own increment and must not
+  // arrive by default.
+  zoom: { followCamera: false },
+  // The rig suppresses the HOVER channel while the host is turning its head —
+  // a hover computed mid-look answers a question about where the cursor USED to
+  // be over the map. `scHead.held` is the game's whole look state: it is set by
+  // the free-look LMB grab and by the middle-mouse peek, and it is the same flag
+  // the joystick branch freezes on.
+  isLookDragging: () => scHead.held,
+  makeNav: (surface) => {
+    // ⚠ THE SECOND NavComputer — the one that draws on the glass. The DOM
+    // overlay's is built at `_initNavComputer`. See the two-instance note at the
+    // `// ── Nav Computer ──` block: neither is "the" nav computer.
+    const nav = new NavComputer(surface, galacticMap, retroRenderer.renderer);
+    _cockpitNavComputer = nav;
+    // Whatever has loaded by now. The loaders push to this instance for
+    // whatever has not — the two halves of the fan-out.
+    _applyCatalogsTo(nav);
+    // The SAME four callbacks the overlay's instance gets. Increment 6 shipped a
+    // NAV panel whose autopilot button reported `true` on every press and whose
+    // COMMIT invoked a callback nothing installed — not a defect in the panel,
+    // just an instance the game had never wired.
+    _installNavCallbacks(nav);
+    return nav;
+  },
+}).then((rig) => {
+  _cockpitRig = rig;
+  _cockpitReady = true;
+  if (rig.loadError) console.warn('[COCKPIT] model failed to load:', rig.loadError);
+  else if (rig.hostError) console.warn('[COCKPIT] panels failed to bind:', rig.hostError);
+  else console.log(`[COCKPIT] rig ready — ${rig.host ? rig.host.panels.length : 0} panels, eye ${rig.eyeFound ? 'found' : 'MISSING'}`);
+  // The reticle occluders, once. The rig's OWN glass census does the excluding
+  // — reusing it rather than re-deriving "which bits are see-through" is what
+  // keeps the canopy treatment and the occlusion set from ever disagreeing.
+  // (They must not: the canopy covers 97% of the sphere, so a disagreement in
+  // that direction hides every reticle in the game.)
+  _cockpitOccluders.length = 0;
+  _cockpitOccluders.push(...collectReticleOccluders(rig.model, rig));
+  console.log(`[COCKPIT] ${_cockpitOccluders.length} reticle occluders (glass excluded)`);
+  // ⭐ THE SAME LIST, TAGGED — not a second census. The mask camera renders one
+  // layer and `assignMaskLayer` is handed the array above, so the pixels that
+  // erase reticles and the rays that report what blocked them cannot disagree
+  // about what counts as glass. A mask with its own rule would be one edit away
+  // from including the canopy, which covers 97.4% of the sphere and would erase
+  // every reticle in the game.
+  console.log(`[CABIN-MASK] ${assignMaskLayer(_cockpitOccluders)} meshes on mask layer ${_cabinMask.layer}`);
+  // ⭐ RE-DECIDE, BECAUSE THIS LINE IS THE OTHER INPUT TO EVERY RETIREMENT.
+  //
+  // `_cockpitReplaces` reads `_cockpitReady`, `loadError` and the panel table —
+  // all three of which are written HERE, asynchronously, and none of which the
+  // regime flip knows about. The retirement gates re-decide on `setScManual`,
+  // so without this the answer is stale in BOTH directions:
+  //
+  //   load SUCCEEDS while the player is already in HELM → the overlays never
+  //     retire, and the pilot flies with the minimap on top of the cockpit;
+  //   load FAILS while the player is already in HELM → the overlays never come
+  //     BACK, which is the very bug this predicate was written for, surviving
+  //     the fix by arriving one tick late.
+  //
+  // In practice the load resolves during the splash and the player reaches HELM
+  // ~35 s later, so neither is reachable TODAY. That is a timing accident, not a
+  // guarantee: a slow disk, a cold cache or a bigger GLB moves it. The per-frame
+  // `showReadouts` gate self-heals for free and needs nothing here; these two
+  // appliers are the event-driven ones, and they are exactly the pair
+  // `setScManual` already calls for the same reason.
+  _applyHudSlot();
+  _syncRetiredOverlaysToMode();
+});
+
+// ── The pointer, and who gets it first (increment 7, step 6) ───────────────
+//
+// The rig ships `CockpitRig.pointer`, a router whose whole design is the ORDER
+// of three jobs — nav computer, then zoom, then the host's own look-around. The
+// game's job here is only to ASK it first and to honour the answer.
+//
+// ⭐ THE GATE IS CURSOR-VISIBLE HELM, and the cursor half is not a detail. In
+// HELM hands-on the OS cursor is HIDDEN because the mouse IS the flight stick:
+// its distance from screen centre is the turn-rate command, so a press is a
+// steering input and there is no pointer on screen to aim at a panel with.
+// Routing there would poke a panel on every steer. Cursor-visible means free-
+// look latched (F) or ORRERY — and ORRERY has no cockpit — so in practice this
+// reads: the pilot let go of the stick, so the pointer is theirs to aim.
+//
+// ⚠ `_navComputerOpen` is in the gate as belt-and-braces. The DOM overlay is a
+// full-screen element above the canvas, so the canvas should never see the
+// press at all; if that ever stops being true, a click would otherwise drive
+// BOTH nav computers from one gesture.
+function _cockpitPointerActive() {
+  return _cockpitShouldRender()
+    && !!_cockpitRig.host
+    && _pointerCursor !== 'none'
+    && !_navComputerOpen
+    && !splashActive
+    && !titleScreenActive;
+}
+
+/**
+ * What the router did with the CURRENT press, or null between gestures.
+ *
+ * ⚠ THIS IS THE GESTURE LATCH, and it is what keeps a release from doing the
+ * game's work after the router did its own. Without it, pressing a panel and
+ * releasing runs `trySelect(e.clientX, e.clientY)` at the bottom of the canvas
+ * mouseup — so working the nav menu would also re-target whatever body happens
+ * to be behind the monitor.
+ */
+let _cockpitPressUsed = null;
+
+/**
+ * End the gesture the router owns. Idempotent via the latch, because it is
+ * called from BOTH mouseup listeners on purpose: the canvas one does not fire
+ * when the release lands off-canvas or after the window loses the pointer, and a
+ * stranded `panelDrag` would forward every later move into the nav computer with
+ * no button down. Canvas fires first (target phase) and clears the latch; the
+ * window handler then sees null and does nothing.
+ */
+function _releaseCockpitPress(clientX, clientY) {
+  if (!_cockpitPressUsed) return;
+  _cockpitPressUsed = null;
+  if (_cockpitRig) _cockpitRig.pointer.up(clientX, clientY);
+}
+
+/** Probe surface, mirroring the lab's. Read-only. */
+/**
+ * The PILOT'S HEAD, read from the mount itself. Added 2026-07-30 for the
+ * hands-on head lock.
+ *
+ * ⭐⭐ WHY THIS IS NOT "JUST LOOK AT THE COCKPIT". The cockpit camera is posed
+ * FROM `scHead.yaw/pitch` (`_poseCockpitCamera` → `cockpitEyeQuat`), so a probe
+ * that inspected the cockpit to learn the head's angle would be asking the
+ * camera about itself and could only ever return agreement. It would read
+ * perfect while the lock was completely broken. This lane has been bitten by an
+ * instrument that was its own control six times; `scHead` is the source.
+ *
+ * `handsOn` mirrors the frame loop's own gate exactly (`_scManual &&
+ * !freeLook.latched`) rather than re-deriving it, so a probe that says "locked"
+ * cannot disagree with the code that does the locking.
+ */
+window._head = () => ({
+  yaw: +(scHead.yaw * 180 / Math.PI).toFixed(3),      // degrees, 0 = nose-forward
+  pitch: +(scHead.pitch * 180 / Math.PI).toFixed(3),
+  centered: scHead.centered,
+  held: scHead.held,             // true while the middle-mouse peek is down
+  recentering: scHead.recentering, // true while easing home
+  handsOn: _scManual && !freeLook.latched,
+  tau: scHead.tuning.EXIT_RECENTER_TAU,
+});
+
+/**
+ * Dial the recenter speed live, so Max can find "fast but not jarring" by
+ * flying it instead of by me guessing. `window._headTau(0.06)` etc.; returns the
+ * value in force. Read the EXIT_RECENTER_TAU note in HeadMount before assuming a
+ * smaller number is the answer — if the complaint is the JOLT rather than the
+ * duration, the curve is wrong and no τ fixes it.
+ */
+window._headTau = (s) => {
+  if (Number.isFinite(s) && s > 0) scHead.tuning.EXIT_RECENTER_TAU = s;
+  return scHead.tuning.EXIT_RECENTER_TAU;
+};
+
+window._cockpit = () => (_cockpitRig ? {
+  ready: _cockpitReady,
+  loadError: _cockpitRig.loadError,
+  hostError: _cockpitRig.hostError,
+  navError: _cockpitRig.navError,
+  panels: _cockpitRig.host ? _cockpitRig.host.panels.map((p) => p.role) : [],
+  eyeFound: _cockpitRig.eyeFound,
+  screens: _cockpitRig.screenNodeNames,
+  rendering: _cockpitShouldRender(),
+  regime: _scManual ? 'helm' : 'orrery',
+  moverState: _cockpitRig.mover ? _cockpitRig.mover.state : null,
+  zoomedRole: _cockpitRig.mover ? _cockpitRig.mover.zoomedRole : null,
+  // The pointer census, counted at the ROUTER — see its comment. `hover` rising
+  // with `pressedMove` at zero is what a quick click looks like when it works.
+  pointer: { ..._cockpitRig.pointer.census, routing: _cockpitPointerActive(), pressUsed: _cockpitPressUsed },
+} : { ready: false });
+
+/**
+ * ⭐ HOW MUCH OF THE VIEW THE CABIN ACTUALLY BLOCKS — `window._cockpitOcclusion()`.
+ *
+ * Added 2026-08-01 while live-verifying reticle occlusion, and it exists because
+ * the failure mode is INVISIBLE FROM A SCREENSHOT. If the canopy ever leaks into
+ * the occluder set the answer goes to ~100% and every reticle in the game
+ * disappears — and a cockpit with no reticles in it looks exactly like a cockpit
+ * with nothing to point at. The other direction (an empty list) looks exactly
+ * like the bug Max reported. Neither reads as wrong; both read as "fine".
+ *
+ * So the number is the instrument, and there is an INDEPENDENT figure to check
+ * it against: `public/assets/cockpit/cockpit-metrics.json` reports
+ * `predictedOcclusionFraction` — computed at build time by `cockpit-gen.py`, by
+ * analytic scanline rasterisation of the projected silhouettes, with no
+ * knowledge of this code at all. Two different methods, one number. That is a
+ * far stronger check than any assertion this file could make about itself.
+ *
+ * ⚠ The two are not required to match exactly and should not be tuned to: the
+ * generator rasterises at ITS OWN aspect, and this samples an NDC grid at the
+ * live window's. Same ballpark is the signal; 0.0 or 1.0 is the alarm.
+ *
+ * @param {number} [n] grid resolution per axis
+ */
+const _occProbeDir = new THREE.Vector3();
+
+/**
+ * Does the cabin block THIS point of the screen, and which piece of it?
+ *
+ * `window._cockpitOcclusion.at(ndcX, ndcY)` — the primitive the sweep below is
+ * built from, and the one that answers the question a screenshot cannot: a
+ * reticle that is not drawn looks the same whether the cabin hid it, a planet
+ * hid it, or it was never there. This names the mesh, so the three are
+ * distinguishable at the exact pixel the reticle would have been.
+ *
+ * NDC, not pixels, because that is the frame the projection speaks: (0,0) is
+ * screen centre, (-1,-1) bottom-left, (+1,+1) top-right.
+ */
+function _cockpitOcclusionAt(ndcX, ndcY) {
+  if (!_cockpitOccluders.length) return { blocked: false, by: null, note: 'no cockpit loaded' };
+  _occProbeDir.set(ndcX, ndcY, 0.5)
+    .unproject(_cockpitCamera).sub(_cockpitCamera.position).normalize();
+  _cockpitRaycaster.set(_cockpitCamera.position, _occProbeDir);
+  let best = null;
+  for (let i = 0; i < _cockpitOccluders.length; i++) {
+    _cockpitHits.length = 0;
+    _cockpitRaycaster.intersectObject(_cockpitOccluders[i], false, _cockpitHits);
+    // Nearest wins, so the answer names what the pilot would actually SEE there
+    // rather than whichever mesh happened to be first in traversal order.
+    for (const h of _cockpitHits) {
+      if (!best || h.distance < best.distance) best = { distance: h.distance, name: _cockpitOccluders[i].name };
+    }
+  }
+  return { blocked: !!best, by: best ? best.name : null, distance: best ? +best.distance.toFixed(3) : null };
+}
+
+window._cockpitOcclusion = (n = 61) => {
+  if (!_cockpitOccluders.length) return { occluders: 0, note: 'no cockpit loaded' };
+  let blocked = 0;
+  let total = 0;
+  for (let iy = 0; iy < n; iy++) {
+    for (let ix = 0; ix < n; ix++) {
+      total++;
+      if (_cockpitOcclusionAt((ix / (n - 1)) * 2 - 1, (iy / (n - 1)) * 2 - 1).blocked) blocked++;
+    }
+  }
+  return {
+    occluders: _cockpitOccluders.length,
+    excluded: _cockpitRig?.glassNodes?.map((g) => g.name) ?? [],
+    blockedFraction: +(blocked / total).toFixed(4),
+    samples: total,
+    fovWorld: camera.fov,
+    fovCockpit: _cockpitCamera.fov,
+  };
+};
+window._cockpitOcclusion.at = _cockpitOcclusionAt;
+
+/**
+ * Would the RETIRED centre-ray gate have blinked this reticle out?
+ *
+ * The oracle for AC-THE-CENTRE-RAY-BLINK-IS-GONE, and it exists because the
+ * interesting frame is the one where the answer is `true` AND the reticle is
+ * still in `_reticle._lastFrame.entries` — old test says hide, new behaviour
+ * says draw-and-cut. Without it, "the blink is gone" is indistinguishable from
+ * "nothing was ever in the way", which is the shape of every false reading this
+ * lane has had.
+ */
+window._cockpitOcclusion.wouldBlink = () => ({
+  hover: _hoverTarget ? _cockpitBlocksReticle(_hoverTarget) : null,
+  selected: _selectedTarget ? _cockpitBlocksReticle(_selectedTarget) : null,
+});
+
+/**
+ * The cabin cut's kill switch — `window._cabinMask(false)` to fly with whole,
+ * uncut reticles, `window._cabinMask()` to read the current state.
+ *
+ * Required by AC-NO-READBACK-NO-FRAME-COST (the A/B is measured on ONE page in
+ * ONE session, so the toggle has to be live) and by AC-DEGRADES-WHEN-THERE-IS-
+ * NO-CABIN. Off, the mask source returns null and `_applyCabinMask` never
+ * touches the composite op at all.
+ */
+window._cabinMask = (on) => {
+  if (on === undefined) return _cabinMask.stats();
+  _cabinMask.enabled = !!on;
+  return _cabinMask.stats();
+};
+
+/**
+ * The mask's opaque fraction — the ONE number that distinguishes a working mask
+ * from the two failures that both look fine on screen.
+ *
+ * An EMPTY occluder set reads as "a game that does no occlusion"; a LEAKED
+ * canopy reads as "a cockpit with nothing to point at". Neither is visible as
+ * wrong, so this is checked against two measurements that know nothing about
+ * the mask code: `cockpit-metrics.json` → `predictedOcclusionFraction`
+ * (0.587202, build-time scanline rasterisation in `cockpit-gen.py`) and
+ * `window._cockpitOcclusion()` (runtime ray/triangle grid, ~0.579 at 16:9).
+ *
+ * ⚠ THIS IS THE ONLY `readPixels` IN THE FEATURE and it is console-only. Putting
+ * it on the frame path would make the mask a GPU sync point, which is the exact
+ * cost the whole design exists to avoid.
+ */
+window._cabinMaskCoverage = () => _cabinMask.coverage();
+
+/**
+ * Dial the panel repaint period live — `window._panelHz(33)` for 30 Hz — so Max
+ * settles "laggy" by flying it, the same way `_headTau` settles the recenter.
+ * Returns the period in force and the rate it works out to.
+ *
+ * ⭐ WHY A KNOB AND NOT AN OPTIMISATION, MEASURED 2026-07-31 IN THIS BUILD.
+ * Profiled at rest in HELM against ORRERY as the control, 6 s each: mean frame
+ * 4.26 ms vs 4.17, p50 4.1 vs 4.2 — the full-res cockpit pass costs ~nothing
+ * here. The whole difference is a BURST: p95 10.5 ms against ORRERY's 4.6, on
+ * the 5% of frames carrying a repaint, because `PanelHost` paints all four
+ * panels on ONE frame by design. Exactly ONE frame in 1403 missed 16.7 ms.
+ *
+ * So there is no framerate problem to fix, and the two named suspects both
+ * measured small: NAV's `getImageData` readback is 0.24 ms (a canvas created
+ * WITH `willReadFrequently` measures 0.20 — the "cheap fix" is worth 0.04 ms),
+ * and the dither everyone costs is dead code with no production call site.
+ * NAV's 3.18 ms/repaint is its DRAWING.
+ *
+ * What is left is the tier itself: the glass updates 12.5 times a second beside
+ * a world updating ~235. That ratio is what reads as lag, and its fix is the
+ * OPPOSITE of optimising — spend more, not less. Hence a knob for his eye.
+ * MEASURED ON THIS MACHINE, hands-on in HELM, 5 s per tier. p50 is 4.2 ms at
+ * EVERY tier — the base frame never moves; all of this is the burst.
+ *
+ *     80 ms (12 Hz, today)   mean 4.39   p95  9.1   max 13.0   0/1134 over 16.7
+ *     33 ms (30 Hz)          mean 4.78   p95 11.7   max 13.6   0/1041 over 16.7
+ *     16 ms (51 Hz actual)   mean 6.44   p95 15.6   max 18.3  10/771  over 16.7
+ *
+ * ⭐ 30 Hz is 2.5x the update rate for +0.39 ms of mean frame time and still
+ * never misses a 60 Hz budget. 60 Hz is where it starts to bite: it cannot even
+ * reach the rate it is asked for — 51 of a requested 62.5 — which is repaint
+ * backpressure, and 1.3% of frames go long.
+ * ⚠ Amortisation beat the naive sum: adding one 6.3 ms burst to a 4.26 ms frame
+ * predicts ~95 fps at 60 Hz and the real figure is 155. Do not re-derive that
+ * estimate; it was wrong in the safe direction.
+ * ⚠ These are ONE machine's numbers. Anything Max likes should be checked on
+ * the slowest one that matters before it becomes the default in
+ * `DEFAULT_AMBIENT_REPAINT_MS` (PanelHost.js), which is where it would land.
+ *
+ * @param {number} [ms] new period; omit to read
+ */
+window._panelHz = (ms) => {
+  const host = _cockpitRig?.host ?? null;
+  if (!host) return { error: 'no cockpit host' };
+  if (Number.isFinite(ms) && ms > 0) host.ambientRepaintMs = ms;
+  return { ambientRepaintMs: host.ambientRepaintMs, hz: +(1000 / host.ambientRepaintMs).toFixed(1) };
+};
+
+/**
+ * Head + cockpit-camera pose. Read-only, and DELIBERATELY NOT read off the
+ * cockpit: the cockpit is posed FROM the camera, so anything that asks the
+ * cockpit about the camera is asking the camera about itself (lane rule 1).
+ * Every number here comes from the four primaries — scHead, scModel, camera,
+ * _cockpitCamera — and the derived angles say which axis they are about.
+ *
+ * `cockpitCamOffAxisDeg` is THE number for "does the cockpit sit square in the
+ * frame": the cockpit model is static at identity in its own scene, so the only
+ * thing that can rotate it on screen is this camera's own quaternion. Square
+ * means 0. Head-centred and non-zero means the cockpit is being viewed from a
+ * direction the pilot never chose.
+ */
+window._headPose = () => {
+  const q = _cockpitCamera.quaternion;
+  const s = scModel.orientation;
+  const deg = (x) => 2 * Math.acos(Math.min(1, Math.abs(x))) * 180 / Math.PI;
+  return {
+    yaw: scHead.yaw, pitch: scHead.pitch,
+    held: scHead.held, recentering: scHead.recentering,
+    handsOn: _scManual && !freeLook.latched,
+    freeLookLatched: freeLook.latched,
+    shipQuat: s.toArray(),
+    camQuat: camera.quaternion.toArray(),
+    cockpitCamQuat: q.toArray(),
+    cockpitCamOffAxisDeg: deg(q.w),
+    shipOffAxisDeg: deg(s.w),
+    headOffAxisDeg: Math.hypot(scHead.yaw, scHead.pitch) * 180 / Math.PI,
+  };
+};
+
+/**
+ * ⭐ WHAT THE KEY LIGHT IS ACTUALLY DOING — read off the LIGHT, never off the
+ * inputs that were meant to have aimed it.
+ *
+ * `_cockpitStarLight()` returns what main.js DECIDED. This returns what the
+ * renderer will use. The two disagree the moment `setStarLight` is not reached,
+ * the role tag stops matching, or a host passes `lights:` of its own — and every
+ * one of those looks, from the computed side, exactly like success. Seventh time
+ * this lane has needed the distinction; naming it for what it MEASURES rather
+ * than for the feature is the other half of the rule.
+ *
+ * `dirFromPilot` is the unit direction the light arrives from, in cabin space:
+ * (0,0,-1) is straight out through the canopy, (-1,0,0) is off the port beam.
+ * `offNoseDeg` is that as one number, which is the thing to watch while turning.
+ */
+window._cockpitKeyLight = () => {
+  const key = _cockpitRig && _cockpitRig.keyLight;
+  if (!key) return { keyLight: null, why: _cockpitRig ? 'no light tagged role:key' : 'no rig' };
+  const d = key.position.clone().normalize();
+  return {
+    dirFromPilot: d.toArray(),
+    offNoseDeg: d.angleTo(new THREE.Vector3(0, 0, -1)) * 180 / Math.PI,
+    color: key.color.getHexString(),
+    intensity: key.intensity,
+    targetAt: key.target.position.toArray(),
+    starPresent: !!(system && system.star && system.star.mesh),
+    shipOffAxisDeg: 2 * Math.acos(Math.min(1, Math.abs(scModel.orientation.w))) * 180 / Math.PI,
+  };
+};
+
 // When the tour visits every body, use the nav computer for a cinematic warp sequence.
 // The nav computer opens, drills down through galaxy levels, picks a star, and warps.
 autoNav.onTourComplete = () => {
@@ -2466,7 +3359,10 @@ autoNav.onTourComplete = () => {
   // Initialize the nav sequence if needed
   if (!_autopilotNavSequence) {
     _autopilotNavSequence = new AutopilotNavSequence({
-      navComputer: _navComputer,
+      // The LIVE instance — in HELM that is the glass, and the sequence
+      // performs on it. It is refreshed below on every tour completion because
+      // the regime can have flipped since the sequence was constructed.
+      navComputer: liveNavComputer(),
       galacticMap: galacticMap,
       openNavComputer: openNavComputer,
       closeNavComputer: closeNavComputer,
@@ -2494,12 +3390,14 @@ autoNav.onTourComplete = () => {
     });
   }
 
-  // Ensure nav computer is initialized
-  if (!_navComputer) _initNavComputer();
+  // Ensure THE LIVE ONE is initialized. In HELM the cockpit's instance already
+  // exists, and building the DOM overlay's here would be a second nav computer
+  // constructed for a surface nobody is going to see.
+  if (!liveNavComputer()) _initNavComputer();
 
   // Update player position for destination picking
   _autopilotNavSequence._playerPos = playerGalacticPos || { x: 8, y: 0, z: 0 };
-  _autopilotNavSequence._nav = _navComputer;
+  _autopilotNavSequence._nav = liveNavComputer();
 
   // Start the cinematic sequence
   _autopilotNavSequence.start();
@@ -2894,12 +3792,289 @@ function toggleKeybinds() {
 }
 
 // ── Nav Computer ──
+//
+// ⭐ THERE ARE TWO OF THEM, AND THERE IS NO WAY AROUND IT (increment 7 step 5).
+// A NavComputer renders into ONE canvas at ONE size: the DOM overlay's
+// `#nav-computer-canvas`, and the cockpit's 512-px panel buffer. One instance
+// cannot serve both, and sharing one would make every resize tear the other's
+// view down mid-drill.
+//
+// So the bare name `_navComputer` is GONE. [NAMING-RULE] Every call site read "the nav
+// computer" and mean "the only one"; with two, that same line is a coin flip
+// between the surface Max is looking at and one he is not. Both are named
+// explicitly, `liveNavComputer()` answers "the one being operated right now",
+// and `src/cockpit/__tests__/navComputerNaming.test.js` fails the build if the bare name
+// comes back — including in a comment, because a comment that says
+// `_navComputer` is a comment that tells the next reader there is one. [NAMING-RULE]
+// The two occurrences in THIS block carry that tag and are the only ones the
+// scan permits.
 let _navComputerOpen = false;
 let _manualBurnOrbiting = false; // true when camera is in post-burn slow orbit (flythrough active, autoNav off)
 let _autopilotEnabled = false;   // persists through warps (independent of autoNav.isActive)
-let _navComputer = null;
+/** The `#nav-computer-overlay` instance. Built lazily by `_initNavComputer`. */
+let _domNavComputer = null;
+/** The on-the-glass instance. Built by CockpitRig's `makeNav`, once, on GLB load. */
+let _cockpitNavComputer = null;
 let _navAnimFrame = null;
 let _autopilotNavSequence = null; // cinematic nav drill-down for autopilot warps
+
+/**
+ * Every constructed instance. Anything that must reach BOTH fans out over this
+ * rather than naming one — the catalogues are the worked example: they arrive
+ * asynchronously, long after `makeNav` has run and usually long before the DOM
+ * overlay is ever opened, so a loader that named one instance would leave the
+ * other permanently catalogue-less with nothing to say so.
+ */
+function _navComputers() {
+  const out = [];
+  if (_domNavComputer) out.push(_domNavComputer);
+  if (_cockpitNavComputer) out.push(_cockpitNavComputer);
+  return out;
+}
+
+/**
+ * The instance the pilot is actually operating right now.
+ *
+ * ⚠ GATED ON `_cockpitShouldRender()`, NOT ON `_scManual`. If the GLB failed to
+ * load there is no cockpit on screen, so in HELM the DOM overlay is still the
+ * only nav computer the pilot can reach — routing to an invisible instance would
+ * make N do nothing and read as a dead keybind rather than as a failed model.
+ */
+function liveNavComputer() {
+  return (_cockpitNavComputer && _cockpitShouldRender()) ? _cockpitNavComputer : _domNavComputer;
+}
+
+/**
+ * Hand a freshly built instance whatever catalogues have loaded SO FAR.
+ *
+ * The other half of the fan-out: the two `.load().then()` handlers push to
+ * everything that exists, this pulls for something that has just come into
+ * existence. Both halves are needed because either order actually happens — the
+ * cockpit's instance is built when the GLB resolves and the DOM overlay's when N
+ * is first pressed, and neither is ordered against a network fetch.
+ *
+ * Without this, `_realStarCatalog` stays null on the cockpit instance and the
+ * far-companion chip and the component sub-view are structurally unreachable on
+ * the glass — the exact hole AC-REAL-CATALOGUE-REACHES-THE-GLASS names.
+ */
+function _applyCatalogsTo(nav) {
+  if (!nav) return;
+  if (realStarCatalog.loaded) nav.setRealStarCatalog(realStarCatalog);
+  if (realFeatureCatalog.loaded) nav.setRealFeatureCatalog(realFeatureCatalog);
+}
+
+/**
+ * Whether the cockpit's NAV panel is the thing currently at the pilot's eye.
+ * "Open", on the glass, means zoomed — there is no overlay to show.
+ */
+function _cockpitNavZoomed() {
+  return !!(_cockpitRig && _cockpitRig.mover && _cockpitRig.mover.zoomedRole === 'NAV');
+}
+
+/** Whether the cockpit nav computer currently holds the WASD/RF keyboard. */
+let _cockpitNavKeysHeld = false;
+
+/**
+ * ⭐ WHO OWNS WASD / R / F RIGHT NOW — ONE DECISION POINT, RE-DECIDED EVERY FRAME.
+ *
+ * Max, in UAT 2026-08-01: *"I still can't use the up/down controls to rise and
+ * lower below the galactic plane on the prism menu."* The cockpit's nav computer
+ * had never been given a keyboard — `NavComputer.attachKeys` is called from
+ * `activate()`, and on the glass there is nothing to activate. See that method
+ * for why calling `activate()` wholesale would blank the panel instead.
+ *
+ * ⚠ WHY AN APPLIER AND NOT A LINE IN `_openCockpitNav`. The panel un-zooms from
+ * more places than it zooms: `closeNavComputer`, the Esc cascade, the regime
+ * flip's dismiss at ~3544, and the mover's own animation completing. A pair of
+ * attach/detach calls has to be right at EVERY one of those, and this file's own
+ * history is that the one that gets forgotten is the un-set — exactly the
+ * minimap-never-came-back bug `_applyHudSlot` exists because of. A capture-phase
+ * keydown handler left attached is worse than a stale minimap: it swallows W, A,
+ * S, D, R and F before the flight controls ever see them, so the ship stops
+ * answering the throttle and the only symptom is that flying is broken.
+ *
+ * So the question is asked from the frame loop and the answer is idempotent.
+ *
+ * ⭐ THE FLIGHT CONFLICT IS REAL AND IT RESOLVES ITSELF, mostly. W/S is throttle,
+ * A/D and the mouse are the stick, R is the drive toggle — but `handRouting`
+ * already routes every one of those to NOTHING when the pilot is hands-OFF, and
+ * cursor-visible-HELM (free-look latched) is the only way to aim at a panel and
+ * pull it to the eye. So in the normal path those keys are already inert and the
+ * map is simply picking up what flight has put down.
+ *
+ * ⚠ THE ONE EXCEPTION, FLAGGED RATHER THAN DECIDED: the N key zooms the panel
+ * without checking free-look, so a hands-ON pilot can have the map at their eye
+ * and will lose the throttle to it until they dismiss. That reads as correct to
+ * me — you put the map down before you fly — and F, which would otherwise take
+ * the stick back, means "lower the view" while the map is up, so N or Esc is the
+ * way out. It is a feel call and it is Max's; the alternative is to latch
+ * free-look on zoom, which is one line in `_openCockpitNav`.
+ */
+function _syncCockpitNavKeys() {
+  const want = !!(_cockpitNavComputer && _cockpitShouldRender() && _cockpitNavZoomed());
+  if (want === _cockpitNavKeysHeld) return;
+  _cockpitNavKeysHeld = want;
+  // `?.` on the detach and not the attach, and the asymmetry is the point: the
+  // attach cannot run without an instance (it is in `want`), while the detach is
+  // reached precisely BECAUSE something went away. A teardown that throws here
+  // would leave the listeners attached with the flag already cleared — flight
+  // silently keyless, and nothing left that would ever try again.
+  if (want) _cockpitNavComputer.attachKeys();
+  else _cockpitNavComputer?.detachKeys();
+}
+
+/**
+ * Read the pending action off an instance, null it, dispatch it.
+ *
+ * ⚠ THIS EXISTS BECAUSE MIRRORING THE OVERLAY'S COMMIT WIRING IS SILENTLY DEAD.
+ * The overlay's callback is `_pendingAction = action; closeNavComputer()`, and
+ * `closeNavComputer` returns at its first line when the overlay is not open — so
+ * on the glass, where there is no overlay, the action would be stored and never
+ * read. COMMIT would light up, sound, retract the panel, and do nothing. Found
+ * by the design review, not by a test; the read is explicit here so it cannot
+ * hide behind a close that did not happen.
+ */
+function _dispatchPendingNavAction(nav) {
+  if (!nav) return;
+  const action = nav._pendingAction || null;
+  nav._pendingAction = null;
+  dispatchNavAction(action);
+}
+
+/**
+ * The star entry the nav computer opens to.
+ *
+ * Built from `currentGalaxyStar` rather than searched for: it bypasses the async
+ * `_localStars` lookup, which is what guarantees the nav opens to the system the
+ * pilot is IN and not to whatever the sector load happens to have finished.
+ */
+function _buildCurrentStarEntry() {
+  if (!currentGalaxyStar) return null;
+  const gs = currentGalaxyStar;
+  return {
+    wx: gs.worldX, wy: gs.worldY, wz: gs.worldZ,
+    name: _currentSystemName || '',
+    spectral: gs.type || system?._systemData?.star?.type || 'G',
+    seed: gs.seed, dist: 0, distPc: '0',
+  };
+}
+
+/** The warp target, or the absence of one, as the nav computer wants it. */
+function _syncNavExternalTarget(nav) {
+  if (!nav) return;
+  if (warpTarget.direction && galacticMap) nav.setExternalTarget(_resolveWarpTargetGalacticPos(), warpTarget.name || null);
+  else nav.setExternalTarget(null);
+}
+
+/**
+ * ⭐ ARRIVAL. Everything that is true because the ship is somewhere ELSE now.
+ *
+ * ⚠ THE SPLIT FROM `_applyNavFocus` IS THE POINT, and it is not stylistic.
+ * `setPlayerPosition` is DESTRUCTIVE, not a sync (`NavComputer.js:912-930`): it
+ * empties `_localStars`, calls `_resetPrismLoad()` and nulls `_selectedNavStar`.
+ * The overlay could afford that because it ran once per open, on an instance
+ * nobody was looking at a moment earlier. The cockpit's instance is ALWAYS live,
+ * so wiring this to the four focus sites — Tab, 1-9, a body click, a tour leg —
+ * would wipe the pilot's PRISM selection out from under them mid-drill, and
+ * inside `AutopilotNavSequence`'s 20x300 ms retry it would dead-end the
+ * screensaver with no error at all.
+ *
+ * `openToCurrentSystem` lives here too, and it has to. It is what sets
+ * `_systemStar`, `_systemData`, `_currentSystemData`, `_systemMode` and
+ * `_levelIndex` — and it was called from EXACTLY ONE place, `openNavComputer`,
+ * which the cockpit's instance never goes through. Without it `_systemData`
+ * stays null, "a planet opens planet detail" cannot pass, and after every warp
+ * the glass describes the PREVIOUS system.
+ */
+function _applyNavArrival(nav) {
+  if (!nav) return;
+  nav.setPlayerPosition(playerGalacticPos || { x: 8, y: 0, z: 0 });
+  nav._currentSystemName = _currentSystemName || 'Unknown';
+  nav.openToCurrentSystem(_buildCurrentStarEntry(), system?._systemData || null);
+  _syncNavExternalTarget(nav);
+}
+
+/** FOCUS. The only thing a Tab, a 1-9, a body click or a tour leg may touch. */
+function _applyNavFocus(nav) {
+  if (!nav) return;
+  nav.setCurrentBody(focusIndex, focusMoonIndex);
+}
+
+/**
+ * The four callbacks, installed the SAME way on both instances.
+ *
+ * Increment 6 shipped a cockpit NAV whose autopilot button reported `true` on
+ * every press and whose COMMIT invoked a callback nothing installed. Neither was
+ * a bug in the panel: the game simply never wired the second instance. One
+ * installer means a fifth callback cannot arrive on one instance only.
+ */
+function _installNavCallbacks(nav) {
+  // COMMIT. The overlay closes and dispatches on the way out; the glass has
+  // nothing to close, so it retracts the panel and dispatches explicitly. Same
+  // sound either way — `navClose` is what pressing WARP has always sounded like.
+  nav.setCommitCallback((action) => {
+    nav._pendingAction = action;
+    if (nav === _domNavComputer && _navComputerOpen) { closeNavComputer(); return; }
+    soundEngine.play('navClose');
+    if (_cockpitRig && _cockpitRig.mover) _cockpitRig.mover.dismiss();
+    _dispatchPendingNavAction(nav);
+  });
+
+  nav.setDrillSoundCallback((levelIdx) => soundEngine.play(`navDrill${levelIdx}`));
+  nav.setSoundCallback((name) => soundEngine.play(name));
+
+  // AUTOPILOT. `_armAutopilotWithCockpit` rather than `startFlythrough` — see
+  // its header. The mirror is written back so the on-glass label follows the
+  // press immediately rather than waiting for the next frame's sync.
+  nav.setOnAutopilotToggle((enable) => {
+    // MERGE 2026-08-01 (lane B × cockpit). This function is cockpit's refactor of
+    // the nav callbacks; lane B held these inline and had gated THIS callback.
+    // The gate does not exist on the cockpit branch (navAutopilotToggleAction is
+    // absent there entirely), so taking cockpit's version wholesale would have
+    // silently deleted a shipped behavior Max UAT-passed on 2026-08-01.
+    //
+    // orrery-coherence-2026-07-15 W5 (seam map §6): the AUTOPILOT button arms a
+    // tour only in HELM. In ORRERY it is INERT both directions — "I do not
+    // want/need autopilot for orrery" (Max, 2026-07-02). Nothing flies in
+    // ORRERY; things only view. HAZARD F3: on the inert path we must NOT call
+    // setAutopilotState(true), or the button paints ON with nothing flying.
+    const act = navAutopilotToggleAction({ regime: _scManual ? 'helm' : 'orrery', enable }).action;
+    if (act === 'inert') {
+      console.log('[NAV] AUTOPILOT inert in ORRERY — nothing flies in ORRERY (navAutopilotToggleAction)');
+      return;
+    }
+    if (act === 'start') _armAutopilotWithCockpit();
+    else if (nav === _cockpitNavComputer) _disarmAutopilotKeepingCockpit();
+    else stopFlythrough();
+    nav.setAutopilotState(enable);
+  });
+}
+
+/**
+ * DEBUG probe: which instances exist, which is live, and what each one HAS.
+ *
+ * Named per instance on purpose. A probe that reported "the nav computer has the
+ * catalogue" would pass on the DOM overlay's while the glass had nothing.
+ */
+window._navComputers = () => {
+  const live = liveNavComputer();
+  const describe = (nav) => (nav ? {
+    starCatalog: !!nav._realStarCatalog?.loaded,
+    featureCatalog: !!nav._realFeatureCatalog?.loaded,
+    level: nav.level ?? null,
+    systemData: !!nav._systemData,
+  } : null);
+  return {
+    dom: describe(_domNavComputer),
+    cockpit: describe(_cockpitNavComputer),
+    live: live === _cockpitNavComputer && live ? 'cockpit' : (live ? 'dom' : 'none'),
+    overlayOpen: _navComputerOpen,
+    regime: _scManual ? 'helm' : 'orrery',
+  };
+};
+/** Live handles, for driving a check that must reach past the plain report. */
+window._domNav = () => _domNavComputer;
+window._cockpitNav = () => _cockpitNavComputer;
 
 // ── System ambient music (periodic, with gaps) ──
 let _systemMusicTimer = null;
@@ -2930,96 +4105,79 @@ function _cancelSystemMusic() {
 
 function _initNavComputer() {
   const navCanvas = document.getElementById('nav-computer-canvas');
-  _navComputer = new NavComputer(navCanvas, galacticMap, retroRenderer.renderer);
-  if (realStarCatalog.loaded) _navComputer.setRealStarCatalog(realStarCatalog);
-  if (realFeatureCatalog.loaded) _navComputer.setRealFeatureCatalog(realFeatureCatalog); // Inc-4 AC2: class-(c) structures search
+  _domNavComputer = new NavComputer(navCanvas, galacticMap, retroRenderer.renderer);
+  _applyCatalogsTo(_domNavComputer); // Inc-4 AC2: class-(c) structures search
+  _installNavCallbacks(_domNavComputer);
+}
 
-  // COMMIT button → request close (action retrieved via nav.close())
-  _navComputer.setCommitCallback((action) => {
-    // Store the action, then close — dispatchNavAction reads it
-    _navComputer._pendingAction = action;
-    closeNavComputer();
-  });
-
-  // Audio bridges
-  _navComputer.setDrillSoundCallback((levelIdx) => soundEngine.play(`navDrill${levelIdx}`));
-  _navComputer.setSoundCallback((name) => soundEngine.play(name));
-
-  // Autopilot toggle from nav computer.
-  // orrery-coherence-2026-07-15 W5 (navAutopilotToggleAction, seam map §6): the
-  // AUTOPILOT button arms a tour only in HELM. In ORRERY the toggle is INERT both
-  // directions — "I do not want/need autopilot for orrery" (Max, 2026-07-02).
-  // HAZARD F3: on the inert path we must NOT call setAutopilotState(true), or the
-  // button paints ON with nothing flying. Nothing flies in ORRERY; things only view.
-  _navComputer.setOnAutopilotToggle((enable) => {
-    const act = navAutopilotToggleAction({ regime: _scManual ? 'helm' : 'orrery', enable }).action;
-    if (act === 'inert') {
-      console.log('[NAV] AUTOPILOT inert in ORRERY — nothing flies in ORRERY (navAutopilotToggleAction)');
-      return;
-    }
-    if (act === 'start') startFlythrough();
-    else stopFlythrough();
-    _navComputer.setAutopilotState(enable);
-  });
+/**
+ * ⭐ IN HELM THE NAV COMPUTER IS ON THE GLASS, so "open" means bring that panel
+ * to the eye. There is no overlay to show and nothing to build — the cockpit's
+ * instance has been live and drawing in its corner since the GLB loaded.
+ *
+ * This is the single door every caller already goes through: the N key, the
+ * mobile dock's `nav` action, and — the one that matters — `AutopilotNavSequence`,
+ * 671 lines of screensaver act two that performs the nav computer with weighted
+ * styles, a faked cursor and real drills. It calls `openNavComputer` /
+ * `closeNavComputer` and knows nothing else, so redirecting HERE is what puts
+ * the whole performance on the glass instead of on a DOM overlay covering it.
+ */
+function _openCockpitNav() {
+  if (!_cockpitRig || !_cockpitRig.mover) return;
+  if (_cockpitNavZoomed()) return;
+  soundEngine.play('navOpen');
+  // ⚠ NOT `_applyNavArrival` — see its header. Opening is not arriving, and
+  // `setPlayerPosition` would wipe a PRISM selection the pilot is mid-drill on.
+  // Only the two cheap, non-destructive syncs belong on an open.
+  _cockpitNavComputer?.setAutopilotState(autoNav.isActive || _autopilotEnabled);
+  _syncNavExternalTarget(_cockpitNavComputer);
+  _cockpitRig.mover.zoom('NAV', _cockpitRig.cameraNow());
 }
 
 function openNavComputer() {
+  if (_cockpitNavComputer && _cockpitShouldRender()) { _openCockpitNav(); return; }
+
   const el = document.getElementById('nav-computer-overlay');
   if (!el || _navComputerOpen) return;
   _navComputerOpen = true;
   soundEngine.play('navOpen');
   el.style.display = 'flex';
 
-  if (!_navComputer) _initNavComputer();
+  if (!_domNavComputer) _initNavComputer();
 
-  // Sync state
-  _navComputer.setPlayerPosition(playerGalacticPos || { x: 8, y: 0, z: 0 }, null);
-  _navComputer._currentSystemName = _currentSystemName || 'Unknown';
-  _navComputer.setCurrentBody(focusIndex, focusMoonIndex);
+  // The overlay opens fresh every time, on an instance nobody was looking at a
+  // moment ago, so the destructive applier is exactly right here — this IS its
+  // original home. The glass gets it at system arrival instead.
+  _applyNavArrival(_domNavComputer);
+  _applyNavFocus(_domNavComputer);
+  _domNavComputer.setAutopilotState(autoNav.isActive || _autopilotEnabled);
 
-  // Build star entry from currentGalaxyStar — bypasses async _localStars search.
-  // This guarantees the nav opens to the correct system immediately.
-  let currentStar = null;
-  const sysData = system?._systemData || null;
-  if (currentGalaxyStar) {
-    const gs = currentGalaxyStar;
-    currentStar = {
-      wx: gs.worldX, wy: gs.worldY, wz: gs.worldZ,
-      name: _currentSystemName || '',
-      spectral: gs.type || sysData?.star?.type || 'G',
-      seed: gs.seed, dist: 0, distPc: '0',
-    };
-  }
-  _navComputer.setAutopilotState(autoNav.isActive || _autopilotEnabled);
-  _navComputer.openToCurrentSystem(currentStar, sysData);
-
-  // Pass existing warp target for display
-  if (warpTarget.direction && galacticMap) {
-    const targetWorldPos = _resolveWarpTargetGalacticPos();
-    _navComputer.setExternalTarget(targetWorldPos, warpTarget.name || null);
-  } else {
-    _navComputer.setExternalTarget(null);
-  }
-
-  _navComputer.activate();
+  _domNavComputer.activate();
   _navRenderLoop();
 }
 
 function closeNavComputer() {
-  const el = document.getElementById('nav-computer-overlay');
-  if (!el || !_navComputerOpen) return;
-  _navComputerOpen = false;
-  soundEngine.play('navClose');
+  // The overlay wins when it is up: it is what the pilot is looking at, and in
+  // HELM it should not be up at all (the ORRERY->HELM applier closes it).
+  if (_navComputerOpen) {
+    const el = document.getElementById('nav-computer-overlay');
+    if (!el) return;
+    _navComputerOpen = false;
+    soundEngine.play('navClose');
+    if (_domNavComputer) _domNavComputer.deactivate();
+    el.style.display = 'none';
+    if (_navAnimFrame) { cancelAnimationFrame(_navAnimFrame); _navAnimFrame = null; }
+    _dispatchPendingNavAction(_domNavComputer);
+    return;
+  }
 
-  // Read and dispatch any pending action
-  const action = _navComputer?._pendingAction || null;
-  _navComputer._pendingAction = null;
-
-  if (_navComputer) _navComputer.deactivate();
-  el.style.display = 'none';
-  if (_navAnimFrame) { cancelAnimationFrame(_navAnimFrame); _navAnimFrame = null; }
-
-  dispatchNavAction(action);
+  // On the glass, closing is retracting. The dispatch is EXPLICIT — the overlay
+  // got it as a side effect of a close that, here, does not exist.
+  if (_cockpitNavZoomed()) {
+    soundEngine.play('navClose');
+    _cockpitRig.mover.dismiss();
+    _dispatchPendingNavAction(_cockpitNavComputer);
+  }
 }
 
 function dispatchNavAction(action) {
@@ -3115,9 +4273,9 @@ function dispatchNavAction(action) {
   }
 }
 
-// Legacy toggle for keybind compatibility
+// Legacy toggle for keybind compatibility. "Open" is either surface now.
 function toggleNavComputer() {
-  if (_navComputerOpen) closeNavComputer();
+  if (_navComputerOpen || _cockpitNavZoomed()) closeNavComputer();
   else openNavComputer();
 }
 
@@ -3200,7 +4358,7 @@ function _setWarpTargetFromNavStar(navStar) {
 
 function _navRenderLoop() {
   if (!_navComputerOpen) return;
-  _navComputer.render();
+  _domNavComputer.render();
   _navAnimFrame = requestAnimationFrame(_navRenderLoop);
 }
 
@@ -3323,6 +4481,25 @@ function applySettingChange(key, value) {
     case 'fov':
       camera.fov = value;
       camera.updateProjectionMatrix();
+      // ⭐ THE CABIN TOO, AND IT WAS MISSING (2026-08-01). This is the same
+      // oversight the resize handler already carries a comment about, one field
+      // over: the cockpit camera is not the world camera and nothing else
+      // updates it, so moving this slider left the cabin drawn at `EYE_FOV`
+      // while the world behind it changed. The two passes composite into one
+      // image, so they stop lining up — a rib no longer covers what it looks
+      // like it covers, and `PanelMover` re-solves its zoom fill from the LIVE
+      // fov, so a zoomed panel lands at a size nobody chose.
+      //
+      // ⚠ NOT COSMETIC ANY MORE. Reticle occlusion casts against the cabin in
+      // the cockpit camera's frame and relies on the two passes agreeing about
+      // where a direction lands; with the FOVs apart it would be right at the
+      // default 70 and quietly wrong at every other setting. See
+      // `src/cockpit/reticleOcclusion.js`.
+      //
+      // `EYE_FOV` stays the exported DEFAULT both hosts build with — the lab
+      // has no Settings to read. This is the live override.
+      _cockpitCamera.fov = value;
+      _cockpitCamera.updateProjectionMatrix();
       break;
     case 'zoomSensitivity':
       cameraController.scrollSensitivity = value;
@@ -3332,14 +4509,11 @@ function applySettingChange(key, value) {
       break;
     case 'showMinimap':
       minimapVisible = value;
-      if (minimapVisible && systemMap && !gravityWellVisible) {
-        retroRenderer.setHud(systemMap.scene, systemMap.camera);
-      } else if (!minimapVisible && !gravityWellVisible) {
-        retroRenderer.setHud(null, null);
-      }
+      _applyHudSlot();
       break;
     case 'showGravityWells':
-      if (gravityWellVisible !== value) toggleGravityWell();
+      // Gravity wells retired 2026-07-30 — the setting no longer has a control
+      // or an effect. Left readable so an old save's value is not an error.
       break;
     case 'fullscreen':
       if (value && !document.fullscreenElement) {
@@ -4453,7 +5627,7 @@ function _hideCurrentSystem() {
     scene.remove(ship.mesh);
   }
   // Hide HUD (don't dispose yet — that happens in spawnSystem during HYPER)
-  retroRenderer.setHud(null, null);
+  _blankHudSlot();
   clickTargets = new Map();
 }
 
@@ -4685,9 +5859,24 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     // Physics data for the BodyRenderer (composition, atmosphere, tidal, surface history)
     const planetPhysics = {
       composition: entry.planetData.composition || null,
-      atmosphere: entry.planetData.atmosphereRetained !== undefined
-        ? { retained: entry.planetData.atmosphereRetained }
-        : null,
+      // `atmosphereRetained` NEVER EXISTED on planet data. PlanetGenerator's return
+      // literal has no such key — the only occurrence in that file is a PARAMETER
+      // NAME passed into habitabilityScore(). So this read was `undefined !== undefined`
+      // on every planet ever generated: planetPhysics.atmosphere has been null
+      // game-wide, BodyRenderer.hasAtmosphere() permanently false, and the debug HUD's
+      // atmosphere row has never once drawn. Found 2026-07-28 building the cockpit INFO
+      // panel, whose ATMO row would have been blank on every world in the galaxy.
+      //
+      // The real record is planetData.atmosphere.physics — the computeAtmosphere()
+      // result {retained, type, composition, pressure, jeansH2/N2/CO2} that
+      // PlanetGenerator parks inside the visual atmosphere object. Note it only exists
+      // when the atmosphere is RETAINED; an airless world carries no physics record at
+      // all, so this reads null and a readout shows blank rather than claiming "none"
+      // it cannot actually distinguish from "unknown".
+      //
+      // Safe to change: nothing calls hasAtmosphere(), and atmosphere RENDERING reads
+      // planetData.atmosphere directly (TexturedBodyShader / Moon.js), never this field.
+      atmosphere: entry.planetData.atmosphere?.physics ?? null,
       tidalState: entry.planetData.tidalState || null,
       surfaceHistory: entry.planetData.surfaceHistory || null,
     };
@@ -4917,16 +6106,12 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   // Only create the system map if there are planets (empty systems have nothing to map)
   if (systemData.planets.length > 0) {
     systemMap = new SystemMap(systemData, system);
-    if (gravityWellVisible) {
-      retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
-    } else if (minimapVisible) {
-      retroRenderer.setHud(systemMap.scene, systemMap.camera);
-    } else {
-      retroRenderer.setHud(null, null);
-    }
-  } else {
-    retroRenderer.setHud(null, null);
   }
+  // ⚠ THE ARRIVAL RE-DECIDE. This runs on every warp, and it used to reinstate
+  // the minimap unconditionally — which is how a regime gate written anywhere
+  // else would have been silently undone by the next jump. `_applyHudSlot`
+  // handles `systemMap === null` (planetless system) via its own guard.
+  _applyHudSlot();
 
   // ── Build click target map ──
   clickTargets = new Map();
@@ -5002,6 +6187,23 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     console.log(`  P${i + 1}: ${p.planetData.type} — ${p.planetData.radiusEarth.toFixed(2)} R⊕, orbit ${p.orbitRadiusAU.toFixed(2)} AU${moonDesc}`);
   }
 
+  // ⭐ SYSTEM ARRIVAL — the one place the destructive applier belongs, and the
+  // only reason the cockpit's nav computer ever describes the system the pilot
+  // is actually in. `openToCurrentSystem` used to be reachable from exactly one
+  // place, `openNavComputer`, which the glass never goes through; without this
+  // call `_systemData` stays null there forever and every warp leaves the NAV
+  // panel describing the PREVIOUS system with nothing to say so.
+  //
+  // ⚠ ABOVE `if (forWarp) return;`, NOT at the end of this function. That early
+  // return is why the first attempt did nothing: a WARP arrival — the only kind
+  // that changes system — skips everything below it, so a tail placement fired
+  // on debug spawns and never once on the path that matters. `system` is
+  // assigned above, `_currentSystemName` two lines up, and `playerGalacticPos`
+  // and `currentGalaxyStar` during the fold, so everything arrival reads is
+  // ready here. Both instances — arriving somewhere else is true for whichever
+  // surface is looking. See `_applyNavArrival`.
+  for (const nav of _navComputers()) _applyNavArrival(nav);
+
   // ── During warp, skip camera setup — warpRevealSystem handles that ──
   if (forWarp) return;
 
@@ -5056,7 +6258,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
 
     // Restart autopilot with new system if it was active before
     if (wasAutopilot) {
-      startFlythrough();
+      _armAutopilotWithCockpit(); // AC-AUTOPILOT-ALWAYS-HAS-A-COCKPIT, path 4 of 4
     }
   } else {
     // Debug camera mode: orbit the star, no autopilot, camera set by caller
@@ -5068,6 +6270,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     cameraController.smoothedDistance = viewDist;
     cameraController.autoRotateActive = false;
   }
+
 }
 
 /**
@@ -5502,7 +6705,7 @@ function enterGallery() {
   _setSystemVisible(false);
 
   // Hide HUD (system map / gravity well)
-  retroRenderer.setHud(null, null);
+  _blankHudSlot();
 
   document.getElementById('gallery-overlay').style.display = 'block';
   gallerySpawn();
@@ -5524,14 +6727,9 @@ function exitGallery() {
   // Restore everything in the current system
   _setSystemVisible(true);
 
-  // Restore HUD
-  if (systemMap) {
-    if (gravityWellVisible && gravityWell) {
-      retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
-    } else if (minimapVisible) {
-      retroRenderer.setHud(systemMap.scene, systemMap.camera);
-    }
-  }
+  // Restore HUD — a DECISION (the regime may have changed while the gallery
+  // was up), so it re-decides rather than reinstating what was there before.
+  _applyHudSlot();
 
   cameraController.bypassed = false;
 }
@@ -6300,6 +7498,64 @@ function startFlythrough() {
  * non-star-system branch flies an orrery-style orbit cam that would yank the
  * pilot out of the ship) — mirrors the Z handler's own guard.
  */
+/**
+ * ⭐ ARM AUTOPILOT AND MAKE SURE THERE IS A COCKPIT TO WATCH IT FROM.
+ * AC-AUTOPILOT-ALWAYS-HAS-A-COCKPIT, Max's decision of 2026-07-30.
+ *
+ * Four paths reach `startFlythrough()` and can do it with `_scManual === false`:
+ * the NavComputer autopilot button, the mobile dock's `autonav-toggle`, the
+ * speed-dial's `autonav`, and the post-respawn `wasAutopilot` re-arm. Left bare,
+ * pressing autopilot on the cockpit's OWN nav panel would fly the tour in
+ * ORRERY — which ejects the pilot from the ship they are sitting in, and takes
+ * the panel they just pressed off screen with them. Asked whether to route some
+ * or all, Max said all four.
+ *
+ * ⚠ THIS GENUINELY CHANGES THE REGIME, and two things follow that Max has been
+ * told about: `_updateModeSwapButton` relabels the HUD button, and
+ * `_syncOrbitsToMode` turns the ORRERY orbit lines off. Both are correct — the
+ * station really did change — and neither is this increment inventing behaviour.
+ *
+ * ⚠ AND IT CLOSES THE DOM OVERLAY. Nothing else does when the regime flips, so
+ * pressing autopilot on the ORRERY overlay would leave `#nav-computer-overlay`
+ * full-screen ON TOP of a cockpit that is now rendering underneath it, with its
+ * `_navRenderLoop` still driving the OTHER instance. Found by the design review.
+ */
+function _armAutopilotWithCockpit() {
+  if (!_scManual) {
+    if (_navComputerOpen) closeNavComputer();
+    _seedScPoseFromCameraIfIdle();
+    setScManual(true);
+    cameraController.setCameraMode(CameraMode.FLIGHT);
+    cameraController.bypassed = true;
+  }
+  _beginHandsOffTour();
+}
+
+/**
+ * ⭐ THE OTHER HALF: turn autopilot OFF and STAY in the cockpit.
+ *
+ * `stopFlythrough()` ends with `setScManual(false)` — it drops the whole regime
+ * to ORRERY. That is right for the ORRERY overlay's button (already there) and
+ * for the Z key, and it is exactly wrong for a button ON THE COCKPIT'S OWN NAV
+ * PANEL: the second press would eject the pilot from the ship they are sitting
+ * in and take the panel they just pressed off screen with it.
+ * AC-AUTOPILOT-BUTTON-TOGGLES asks for "the second stops it and the label
+ * returns" — the label can only return if there is still a cockpit to draw it.
+ *
+ * So the cockpit's OFF means what OFF means in a cockpit: the tour stops and the
+ * pilot has the stick. `_enterFlightInternal` is the game's own canonical
+ * hands-on HELM entry — the same door M-swap and R-engage use.
+ *
+ * ⚠ It clears the free-look latch, so the cursor goes and the zoomed panel stops
+ * taking clicks until F is pressed again. That follows from the pre-existing
+ * hand-routing rule (hands on the stick, no pointer), not from anything here.
+ */
+function _disarmAutopilotKeepingCockpit() {
+  const wasHelm = _scManual;
+  stopFlythrough();
+  if (wasHelm && !_scManual) _enterFlightInternal();
+}
+
 function _beginHandsOffTour() {
   if (!system) return;
   if (system.type && system.type !== 'star-system') {
@@ -6936,11 +8192,19 @@ function findClosestBody() {
   return closest;
 }
 
-/** Sync the nav computer's body tracking with current focus (if nav is open). */
+/**
+ * Sync body tracking with the current focus.
+ *
+ * ⚠ FOCUS ONLY — `_applyNavFocus` is `setCurrentBody` and nothing else, and this
+ * is the site that made the split necessary. Tab, 1-9 and a body click all land
+ * here; wiring the destructive arrival applier to them would empty `_localStars`
+ * and null `_selectedNavStar` every time the pilot changed focus, wiping a PRISM
+ * selection mid-drill. The cockpit's instance is unguarded by `_navComputerOpen`
+ * because it is ALWAYS live — it draws in its corner whether or not it is zoomed.
+ */
 function _syncNavBody() {
-  if (_navComputerOpen && _navComputer) {
-    _navComputer.setCurrentBody(focusIndex, focusMoonIndex);
-  }
+  if (_navComputerOpen) _applyNavFocus(_domNavComputer);
+  if (_cockpitNavComputer) _applyNavFocus(_cockpitNavComputer);
 }
 
 /**
@@ -7646,18 +8910,11 @@ function toggleFullscreen() {
   }
 }
 
-function toggleGravityWell() {
-  gravityWellVisible = !gravityWellVisible;
-  soundEngine.play(gravityWellVisible ? 'toggleOn' : 'toggleOff');
-  // Swap HUD between gravity well contour map and system map
-  if (gravityWellVisible && gravityWell) {
-    retroRenderer.setHud(gravityWell.scene, gravityWell.camera);
-  } else if (systemMap && minimapVisible) {
-    retroRenderer.setHud(systemMap.scene, systemMap.camera);
-  } else {
-    retroRenderer.setHud(null, null);
-  }
-}
+// `toggleGravityWell` DELETED 2026-07-30 with the surface it toggled. Its four
+// callers — the V key in both arms of the keydown handler, the mobile dock's
+// `gravity` action, and the settings applier — went with it. Recorded here
+// rather than left as an unexplained absence, because the flag it wrote is
+// still in the file and reads like something ought to set it.
 
 // ── Animation Loop ──
 const timer = new THREE.Timer();
@@ -9109,6 +10366,23 @@ function simStep(deltaTime) {
       // for the bridge is the one-shot recenter on F-EXIT: consumeRecenter() →
       // scHead.beginRecenter() → update() eases yaw/pitch → 0 (EXIT_RECENTER_TAU).
       syncHeadToFreeLook(freeLook, scHead);
+      // ⭐ THE HANDS-ON HEAD LOCK (Max, 2026-07-30): with the stick in your hand
+      // the view is pinned to the cockpit's centre, and the middle-mouse peek is
+      // the only way off it. Asserted here as a per-frame invariant rather than
+      // trusted to the mouseup handler, because every path that can strand the
+      // head off-centre — F-exit mid-drag, a mode flip during a peek, flythrough
+      // clearing its own look state — bypasses that handler entirely. See
+      // `needsHandsOnRecenter` for why a silent failure here is invisible: the
+      // cockpit is posed FROM the head, so it just renders at the wrong angle.
+      // ⚠ MUST run BEFORE update() so the request is honoured this frame.
+      if (needsHandsOnRecenter({
+        handsOn: _scManual && !freeLook.latched,
+        held: scHead.held,
+        recentering: scHead.recentering,
+        centered: scHead.centered,
+      })) {
+        scHead.beginRecenter();
+      }
       scHead.update(deltaTime);
       scHead.applyTo(camera, scModel.position, scModel.orientation);
 
@@ -9894,9 +11168,65 @@ function renderFrame(alpha) {
     // hands-on flight; hidden in free-look (the cross/dot don't belong while the
     // player is looking around) — §free-look-interaction-redesign Part 1.
     showReticle: _showReticle,
+    // AC-OVERLAYS-RETIRE-IN-HELM. The speed/throttle cluster and the MODE line
+    // are on the DRIVE panel's glass in HELM — drawing them here too is the
+    // duplication DIEGETIC-ONLY exists to remove. The reticle, the mass-lock
+    // hint and the at-the-body drop cue are NOT readouts and stay; see the
+    // block above `showReadouts` in SupercruiseHud.js for where that line is.
+    //
+    // ⭐ `_cockpitReplaces('DRIVE')`, not `_scManual` (2026-07-31, Max's UAT):
+    // "on the DRIVE panel's glass" is a PREMISE, and on a GLB load failure it is
+    // false. This one is asked every frame, so unlike the two event-driven gates
+    // it needs no re-decide hook — it simply starts telling the truth again the
+    // frame the premise changes.
+    showReadouts: !_cockpitReplaces('DRIVE'),
   });
   _updateCommitBurnButton();
   _updateModeSwapButton();
+
+  // ── Cockpit screens: take this frame's snapshot (AC-SNAPSHOT) ──
+  // Here, and only here. `renderFrame` is bindToRAF's `render` callback, so it
+  // runs EXACTLY once per RAF; `simStep` runs 0..6 times per RAF and would give
+  // a panel a stuttering feed. This point is also after the per-frame aim
+  // hit-test that writes `_hoverTarget`, and after the camera/mesh alpha
+  // interpolation — so the panels see the same state the frame is about to draw.
+  // It is deliberately NOT gated on cockpit visibility, `_hudVisible` or
+  // `system`: a null system (splash, title, deep sky, mid-warp teardown) is a
+  // normal state that must produce a well-formed snapshot, not a skipped frame.
+  _cockpitSnapshotProvider.update({
+    renderDt,
+    drop: _scDrop,
+    targetDistance: _scTargetPos ? scModel.position.distanceTo(_scTargetPos) : null,
+    aimOnTarget: _aimOnTarget,
+  });
+
+  // ── The cockpit: same snapshot, same frame (AC-PANELS-READ-THE-REAL-FLIGHT) ──
+  // Fed the provider's own frame rather than a second read, so the four screens
+  // and anything else reading the snapshot cannot disagree about the instant.
+  // Who owns WASD / R / F this frame. Asked here, beside the cockpit's own
+  // gate, because both answers come from the same two facts and neither may be
+  // decided anywhere a later un-zoom would not re-decide. See the applier.
+  _syncCockpitNavKeys();
+
+  if (_cockpitShouldRender()) {
+    // The on-glass AUTOPILOT label is a MIRROR (`_autopilotActive`), written
+    // only by `setAutopilotState` — and the overlay's one press-callback was
+    // the only writer, which is why increment 6's button reported `true` every
+    // press. The glass is always visible, so its mirror must track the real
+    // state every frame, not only when something remembers to push it. The
+    // setter is one assignment; this is free.
+    if (_cockpitNavComputer) _cockpitNavComputer.setAutopilotState(autoNav.isActive || _autopilotEnabled);
+    _cockpitRig.update({
+      snapshot: _cockpitSnapshotProvider.get(),
+      nowMs: performance.now(),
+      dtMs: renderDt * 1000,
+      starLight: _cockpitStarLight(),
+    });
+    retroRenderer.setCockpit(_cockpitRig.scene, _cockpitCamera);
+  } else {
+    // NO PASS AT ALL in ORRERY — not a transparent one. See AC-HELM-ONLY.
+    retroRenderer.setCockpit(null, null);
+  }
 
   // ── HUD (yaw + system map + gravity well) ──
   // During flythrough, compute yaw from camera position relative to origin.
@@ -9964,7 +11294,15 @@ const _animateController = bindToRAF({
 _replayReady.then(() => _animateController.start());
 
 // ── Handle Window Resize ──
-window.addEventListener('resize', () => retroRenderer.resize());
+window.addEventListener('resize', () => {
+  retroRenderer.resize();
+  // The cockpit camera is not RetroRenderer's, so `resize()` does not touch it.
+  // Left unfixed, the canopy stretches on every window change while the world
+  // behind it does not — and the panels' subtended size, the one thing this
+  // whole program is judged on, drifts with the window shape.
+  _cockpitCamera.aspect = window.innerWidth / window.innerHeight;
+  _cockpitCamera.updateProjectionMatrix();
+});
 
 // ── Flight engage/exit, MECHANICALLY EXTRACTED from the F-handler ──────────
 // (supercruise-control-harness-2026-06-26 Task 3 Option-A.) The ENGAGE body
@@ -10147,7 +11485,7 @@ function _updateModeSwapButton() {
   if (!btn) return;
   const swappable = _hudVisible && !splashActive && !titleScreenActive
     && !!system && !(system.type && system.type !== 'star-system')
-    && (!_isMobile || _scManual);
+    && (_isMobile && _scManual);
   btn.style.display = swappable ? 'block' : 'none';
   if (swappable) btn.textContent = _scManual ? 'HELM' : 'ORRERY';
 }
@@ -10261,9 +11599,36 @@ window.addEventListener('keydown', (e) => {
       toggleSoundTest();
       return;
     }
+    // A zoomed cockpit panel is dismissed FIRST, and by the same ESC. Max's
+    // 2026-07-29 ruling was that ESC means DISMISS EVERYWHERE, and while a
+    // monitor fills the view it is the only thing on screen worth dismissing —
+    // so it outranks a deselect and outranks the DOM overlay, which cannot be
+    // open at the same time anyway (the gate below would have blocked the zoom).
+    if (_cockpitRig && _cockpitRig.mover && _cockpitRig.mover.zoomedRole) {
+      // NAV goes out through `closeNavComputer` so the retraction carries its
+      // sound AND dispatches any pending COMMIT — a bare `dismiss()` would drop
+      // a warp the pilot had already committed to. Anything else just retracts.
+      if (_cockpitNavZoomed()) closeNavComputer();
+      else _cockpitRig.pointer.dismiss();
+      return;
+    }
     if (_navComputerOpen) {
-      if (_navComputer && _navComputer.handleEscape()) return; // back one level
-      toggleNavComputer(); // close if already at galaxy level
+      // ESC DISMISSES. It used to walk back one nav level per press and only
+      // close at GALAXY; Max ruled on 2026-07-29 that it should "just dismiss it"
+      // and that levels are navigated by clicking the tab strip. Asked whether
+      // that meant the cockpit panel alone or here too, he chose EVERYWHERE, so
+      // ESC now means one thing wherever the nav computer is drawn.
+      //
+      // This deliberately supersedes part of AC-NAV-OVERLAY-UNCHANGED in
+      // docs/WORKSTREAMS/cockpit-screen-content-2026-07-28 — for the escape path
+      // only. A requirement Max changed, not a regression.
+      //
+      // `handleEscape()` is NOT deleted: right-click-to-go-back still calls it
+      // (NavComputer._handleClick, `e.button === 2`), which Max did not ask to
+      // change. Every level and both SYSTEM sub-views keep a click route out —
+      // enumerated and driven against the real class in
+      // src/ui/__tests__/NavComputer.escape.test.js, AC-NO-STUCK-STATE.
+      toggleNavComputer();
       return;
     }
     if (_settingsOpen) {
@@ -10522,11 +11887,7 @@ window.addEventListener('keydown', (e) => {
   // C key: toggle minimap (was R; R is now the drive toggle — remapped 2026-06-28).
   if (e.code === 'KeyC') {
     minimapVisible = !minimapVisible;
-    if (minimapVisible && systemMap && !gravityWellVisible) {
-      retroRenderer.setHud(systemMap.scene, systemMap.camera);
-    } else if (!minimapVisible && !gravityWellVisible) {
-      retroRenderer.setHud(null, null);
-    }
+    _applyHudSlot();
     return;
   }
 
@@ -10704,7 +12065,6 @@ window.addEventListener('keydown', (e) => {
     }
     // O, V still work normally during autopilot
     if (e.code === 'KeyO') toggleOrbits();
-    if (e.code === 'KeyV') toggleGravityWell();
     return;
   }
 
@@ -10751,8 +12111,6 @@ window.addEventListener('keydown', (e) => {
     }
   } else if (e.code === 'KeyO') {
     toggleOrbits();
-  } else if (e.code === 'KeyV') {
-    toggleGravityWell();
   } else if (e.key >= '1' && e.key <= '9') {
     const idx = parseInt(e.key) - 1;
     if (system && idx < system.planets.length) {
@@ -10785,7 +12143,10 @@ function trySelect(clientX, clientY) {
 
   // 0. Check minimap click first (circular HUD region)
   // Any click inside the HUD circle is consumed — dead zone for star selection.
-  if (systemMap && minimapVisible && !gravityWellVisible) {
+  // `_minimapLive()`, not the old three-flag test: the dead zone must vanish
+  // wherever the minimap is not DRAWN, or HELM keeps a 320² hole that eats
+  // clicks meant for the world in front of the canopy.
+  if (_minimapLive()) {
     const uv = retroRenderer.getHudUV(clientX, clientY);
     if (uv) {
       // Inside the minimap circle — try to hit a body, but either way don't
@@ -11133,6 +12494,29 @@ canvas.addEventListener('mousemove', (e) => {
     _deepSkyLingerTimer = -1; // cancel auto-warp while user is active
   }
 
+  // ── THE HOVER CHANNEL, and it is why a quick click works (step 6) ──
+  //
+  // ⭐ THIS IS THE ONE THAT BIT MAX AT INCREMENT 6 UAT. NavComputer resolves
+  // every body the pilot clicks — a planet, a moon, a star at PRISM, a sector,
+  // a grid tile — from HOVER state, and that state is recomputed inside its
+  // RENDER from `_mouseX`/`_mouseY`, which only `_handleMouseMove` writes. A DOM
+  // canvas gets `mousemove` continuously with no button down; a 3D panel gets
+  // NOTHING unless a router forwards it. Forward only the PRESSED moves and a
+  // quick click resolves against stale hover and reads as empty space — while
+  // press-and-hold appears to work, because the hold manufactures the move.
+  //
+  // ⚠ SO THIS CALL IS UNCONDITIONAL ON BUTTON STATE. The router decides what a
+  // move is for (drag → the adapter, otherwise → hover, and never during a look
+  // drag). It runs BEFORE the freelook and joystick branches below because both
+  // of those `return`, and a hover starved by an early return is exactly the
+  // defect. A consumed move is a panel drag: the map's own drag-to-rotate must
+  // beat look-around while the pilot is working the menu.
+  if (_cockpitPointerActive() && _cockpitRig.pointer.move(e.clientX, e.clientY)) {
+    _mouseX = e.clientX;
+    _mouseY = e.clientY;
+    return;
+  }
+
   // ── Supercruise freelook (hold-to-look, Elite headlook) ──
   // The head LOOKS only while `held` is set, and `held` now follows the mouse
   // BUTTON, not the F-latch (§free-look-interaction-redesign-2026-06-27, Part 2):
@@ -11284,7 +12668,25 @@ canvas.addEventListener('mousedown', (e) => {
   _mouseDown.y = e.clientY;
 
   // Check if clicking on the minimap — start a drag-to-rotate
-  if (e.button === 0 && systemMap && minimapVisible && !gravityWellVisible) {
+  // ── THE COCKPIT GETS FIRST REFUSAL (increment 7, step 6) ──
+  // Before the minimap, before the look-grab, before the autopilot-click latch.
+  // The order is the design: everything below assumes the press is aimed at the
+  // WORLD, and a press aimed at a monitor 0.17 m from the eye is not.
+  //
+  // ⚠ 'none-consumed' is SWALLOWED, not passed through. It means the pilot
+  // pressed a nav panel filling their view and the adapter was not ready — so
+  // the honest answer is nothing at all, rather than swinging the head behind a
+  // panel they cannot see past.
+  if (e.button === 0 && _cockpitPointerActive()) {
+    const used = _cockpitRig.pointer.down(e.clientX, e.clientY);
+    if (used !== 'none') {
+      _cockpitPressUsed = used;
+      if (!autoNav.isActive) { idleTimer = 0; _deepSkyLingerTimer = -1; }
+      return;
+    }
+  }
+
+  if (e.button === 0 && _minimapLive()) {
     const uv = retroRenderer.getHudUV(e.clientX, e.clientY);
     if (uv) {
       _minimapDragging = true;
@@ -11349,6 +12751,37 @@ canvas.addEventListener('mousedown', (e) => {
   }
 });
 
+// ── THE COCKPIT GETS FIRST REFUSAL ON THE WHEEL (2026-07-30) ──
+//
+// Max: *"Scroll wheel doesn't work in the nav menus in game."* The cockpit's
+// NavComputer draws onto an offscreen texture and can never receive a real
+// wheel event, so the router has to forward one — see `CockpitPointerRouter.wheel`.
+//
+// ⚠ WHY THIS IS CAPTURE-PHASE ON `window` AND NOT ANOTHER CANVAS LISTENER.
+// FOUR other handlers bind `wheel` to this same canvas — `CameraController`,
+// `ShipCamera`, `ShipCameraSystem` and the idle-timer one directly below — and
+// same-element same-phase listeners fire in REGISTRATION order, which is a
+// function of construction order across four modules and is not a thing this
+// file can pin. Capture on `window` runs before all of them by the spec, no
+// matter who was built first. That is the same "the cockpit is asked first"
+// rule the mousedown path already follows (`_cockpitRig.pointer.down`), reached
+// by the only mechanism available for an event four other owners want.
+//
+// `stopPropagation` is what actually buys it: without it the wheel would zoom
+// the camera at the same time as the map. `passive: false` is required for
+// `preventDefault` to suppress the browser's own scroll.
+//
+// The idle reset mirrors the mousedown branch — working a menu is activity —
+// and deliberately does NOT call `stopFlythrough()`: scrolling a nav map is not
+// a reason to drop the autopilot, where dragging the world camera is.
+window.addEventListener('wheel', (e) => {
+  if (!_cockpitPointerActive()) return;
+  if (!_cockpitRig.pointer.wheel(e.clientX, e.clientY, e.deltaY)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (!autoNav.isActive) { idleTimer = 0; _deepSkyLingerTimer = -1; }
+}, { capture: true, passive: false });
+
 // Scroll wheel resets idle timer.
 // In TOY_BOX, wheel kills autopilot (old behavior). In FLIGHT, wheel
 // just changes chase distance (handled inside ShipCameraSystem) and
@@ -11363,6 +12796,11 @@ canvas.addEventListener('wheel', () => {
 }, { passive: true });
 
 window.addEventListener('mouseup', (e) => {
+  // The off-canvas safety net — see `_releaseCockpitPress`. The canvas listener
+  // below fires first for an on-canvas release and clears the latch, so this is
+  // a no-op then; it only does work when the release landed somewhere the canvas
+  // never heard about, which would otherwise strand `panelDrag`.
+  if (e.button === 0) _releaseCockpitPress(e.clientX, e.clientY);
   if (e.button === 0 && _minimapDragging) {
     _minimapDragging = false;
     _minimapDidDrag = false;
@@ -11387,6 +12825,14 @@ window.addEventListener('mouseup', (e) => {
 
 canvas.addEventListener('mouseup', (e) => {
   if (e.button !== 0) return;
+
+  // The router owned this gesture — release it and stop. Falling through would
+  // run `trySelect` at the bottom of this handler, so working the nav menu would
+  // also re-target whatever body sits behind the monitor.
+  if (_cockpitPressUsed) {
+    _releaseCockpitPress(e.clientX, e.clientY);
+    return;
+  }
 
   // Free-look LMB release (§free-look-interaction-redesign-2026-06-27, Part 2,
   // step 1+4): end the look. The view HOLDS where you dragged it (headReleaseAction
@@ -11576,18 +13022,37 @@ if (mobileControls) {
         beginWarpTurn();
       }
     } else if (action === 'nav') {
-      if (_navComputerOpen) closeNavComputer();
-      else openNavComputer();
-    } else if (action === 'autonav-toggle' || action === 'autonav') {
-      // orrery-coherence-2026-07-15 W5b (navAutopilotToggleAction, seam map §6 —
-      // the MOBILE AUTOPILOT twins of the NavComputer callback: dock
-      // 'autonav-toggle' + speed-dial 'autonav', identical behavior, gated as
-      // one). The AUTOPILOT button arms a tour only in HELM; startFlythrough
-      // arms the tour and FLIES, forbidden in ORRERY ("I do not want/need
-      // autopilot for orrery", Max 2026-07-02). In ORRERY the toggle is INERT
-      // both directions. HAZARD F3 mirror: on the inert path do NOT paint the
-      // button active with nothing flying. HELM byte-unchanged: enable maps to
-      // start/stop with the exact same side-effects as before.
+      // ⭐ `toggleNavComputer()`, NOT a bare `_navComputerOpen` test. That flag
+      // tracks the DOM OVERLAY, and in HELM the nav computer is on the glass —
+      // so it stays false forever and this branch could only ever OPEN. On
+      // desktop N covers it; on mobile there is no N, so the pilot got a zoomed
+      // NAV panel with no way to retract it. `toggleNavComputer` knows about
+      // both surfaces (`_navComputerOpen || _cockpitNavZoomed()`).
+      // Pinned by mainNavWiring.test.js, which asserts the old form is ABSENT.
+      toggleNavComputer();
+    } else if (action === 'autonav-toggle') {
+      // MERGE 2026-08-01 (lane B × cockpit): cockpit's arming/stopping, lane B's
+      // ORRERY gate. orrery-coherence-2026-07-15 W5b (navAutopilotToggleAction,
+      // seam map §6): the AUTOPILOT button arms a tour only in HELM — in ORRERY
+      // it is INERT both directions ("I do not want/need autopilot for orrery",
+      // Max 2026-07-02). Cockpit's branch predates that ruling and would have
+      // dropped it; the gate is restored here. HAZARD F3: on the inert path do
+      // NOT paint the button active with nothing flying.
+      //
+      // ⛔ `stopFlythrough()` below — DELIBERATELY NOT
+      // `_disarmAutopilotKeepingCockpit()`, and this asymmetry is load-bearing.
+      // Arming routes through `_armAutopilotWithCockpit` (Max, 2026-07-30, all
+      // four paths), so ON seats you in the cockpit while OFF drops the regime
+      // to ORRERY. That reads like a bug and was reported as one — it is not.
+      // MOBILE HAS NO HANDS-ON STATE TO FALL BACK TO: `setCameraMode` hard-locks
+      // mobile to TOY_BOX, `_toggleMode` refuses ORRERY→HELM on mobile, and the
+      // boot path records "mobile-HELM = tour by default, AC9". The dock carries
+      // no throttle and there is no F key, so keeping the cockpit would strand
+      // the pilot at throttle 0 in a ship they cannot fly. On mobile, HELM *is*
+      // the tour; ending the tour is ending HELM.
+      // ⚠ The adversary is a future good-faith session that notices the
+      // asymmetry, "fixes" it, and ships that dead state. mainNavWiring.test.js
+      // guards it.
       const act = navAutopilotToggleAction({ regime: _scManual ? 'helm' : 'orrery', enable: !autoNav.isActive }).action;
       if (act === 'inert') {
         console.log('[NAV] mobile AUTOPILOT inert in ORRERY — nothing flies in ORRERY (navAutopilotToggleAction)');
@@ -11596,7 +13061,7 @@ if (mobileControls) {
         btn.classList.remove('active');
       } else if (act === 'start' && system) {
         idleTimer = 0;
-        startFlythrough();
+        _armAutopilotWithCockpit(); // AC-AUTOPILOT-ALWAYS-HAS-A-COCKPIT, path 2 of 4
         btn.classList.add('active');
       }
     } else if (action === 'prev') {
@@ -11652,9 +13117,22 @@ if (mobileControls) {
     } else if (action === 'orbits') {
       toggleOrbits();
       btn.classList.toggle('active', orbitsVisible);
-    } else if (action === 'gravity') {
-      toggleGravityWell();
-      btn.classList.toggle('active', gravityWellVisible);
+    } else if (action === 'autonav') {
+      // Speed-dial twin of the dock's 'autonav-toggle' above — lane B gated the
+      // two "as one", so the ORRERY inert gate applies here identically. Master's
+      // `gravity` action is deliberately NOT carried forward: Max retired the
+      // gravity well in both modes (9be9f16), including this button.
+      const act = navAutopilotToggleAction({ regime: _scManual ? 'helm' : 'orrery', enable: !autoNav.isActive }).action;
+      if (act === 'inert') {
+        console.log('[NAV] mobile AUTOPILOT (speed dial) inert in ORRERY (navAutopilotToggleAction)');
+      } else if (act === 'stop') {
+        stopFlythrough();
+        btn.classList.remove('active');
+      } else if (act === 'start' && system) {
+        idleTimer = 0;
+        _armAutopilotWithCockpit(); // AC-AUTOPILOT-ALWAYS-HAS-A-COCKPIT, path 3 of 4
+        btn.classList.add('active');
+      }
     } else if (action === 'gyro') {
       if (cameraController.gyroEnabled) {
         cameraController.disableGyro();
@@ -11666,11 +13144,7 @@ if (mobileControls) {
       }
     } else if (action === 'minimap') {
       minimapVisible = !minimapVisible;
-      if (minimapVisible && systemMap && !gravityWellVisible) {
-        retroRenderer.setHud(systemMap.scene, systemMap.camera);
-      } else if (!minimapVisible && !gravityWellVisible) {
-        retroRenderer.setHud(null, null);
-      }
+      _applyHudSlot();
       btn.classList.toggle('active', minimapVisible);
     } else if (action === 'fullscreen') {
       toggleFullscreen();

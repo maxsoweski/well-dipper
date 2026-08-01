@@ -1,0 +1,1053 @@
+/**
+ * CockpitRig — the cockpit's visual assembly, as ONE thing both hosts construct.
+ *
+ * Increment 7, workstream `cockpit-into-helm-2026-07-30`, AC-ONE-RIG-TWO-HOSTS.
+ *
+ * ── WHY THIS FILE EXISTS ────────────────────────────────────────────────────
+ *
+ * Until 2026-07-30 every line of this lived inline in `cockpit-screens-lab.html`,
+ * and `src/main.js` contained none of it — only `CockpitSnapshotProvider`, the
+ * data feed. So the game could not show a cockpit at all, and the obvious way to
+ * fix that (write the assembly again in main.js) would have produced two copies
+ * of the same rig. This program's own worst case is two instruments that
+ * disagree: it has been bitten five times, and "the lab passes where the
+ * generator fails" is a named failure mode in its memory. One module, two
+ * callers, is the whole point.
+ *
+ * ── THE BOUNDARY, AND WHY IT IS DRAWN HERE ──────────────────────────────────
+ *
+ * SHARED (in here): the scene, the three lights (the KEY of which the host may
+ * aim at the system's star — see `setStarLight`), the GLB load and its Screen_*
+ * census, the glass placeholder override, the Eye_Point resolution, the panel
+ * host and its four painters, the mover, the picker, the nav adapter, the
+ * pointer router, and the per-frame update order.
+ *
+ * INJECTED (the host's): the renderer, the camera, the viewport, the buffer
+ * height, the zoom knobs, and `makeNav`. Every one of these is something the two
+ * hosts genuinely differ on, and every one of them would be a lie if this module
+ * picked a value.
+ *
+ * NOT HERE, deliberately: orbit cameras, background starfields, cabin lights,
+ * phosphor cycling, buffer-height cycling, seed tables, sliders, HUD readouts and
+ * the ~30-method probe surface. Those are lab affordances. A module that carried
+ * them would put a fake starfield in front of the real one the first time the
+ * game constructed it.
+ *
+ * ⚠ THIS MODULE NEVER TOUCHES RENDERER STATE. No `setSize`, `setPixelRatio`,
+ * `setClearColor`, `setViewport`, `setScissor`, `toneMapping` or
+ * `toneMappingExposure`. The renderer is a PASS-THROUGH: it is handed to
+ * `makeNav` so `NavComputer` can render the GPU galaxy image, and that is all.
+ * The lab owns a renderer of its own; the game's is RetroRenderer's, shared with
+ * the world pass and the palette remap, so a stray write in here would retint the
+ * entire game.
+ *
+ * ⚠ AND IT NEVER ADVANCES `SimClock`. The lab calls `_advanceSimClock` from its
+ * own tick and `src/main.js` already advances it once per sim tick; a rig that
+ * also advanced it would run every nav drill at 2x in the game, with no error.
+ *
+ * ── THE TONE-MAPPING TRAP, which is why the two constants below are exported ──
+ *
+ * three r0.183 hard-forces `toneMapping = NoToneMapping` for any render that is
+ * NOT going to the canvas: in `three.module.js`,
+ *
+ *     let toneMapping = NoToneMapping;
+ *     if (material.toneMapped) {
+ *       if (currentRenderTarget === null || currentRenderTarget.isXRRenderTarget === true) {
+ *         toneMapping = renderer.toneMapping;
+ *       }
+ *     }
+ *
+ * The lab renders the cockpit STRAIGHT TO THE CANVAS, so its ACES curve applies.
+ * The game renders it INTO A TARGET, where three drops tone mapping entirely. One
+ * rig, two materially different-looking cockpits, and nothing anywhere to say so
+ * — precisely the drift this file exists to prevent, arriving by a path no
+ * boundary review would catch. So the tone regime is part of the RIG's contract:
+ * both constants are exported, the lab applies them to its own renderer, and the
+ * game applies the equivalent curve to the cockpit sample in its composite.
+ * `src/main.js` already records this three behaviour near its own target setup.
+ */
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+import { PanelHost } from './PanelHost.js';
+import { SCREEN_NODE_RE, DEFAULT_PANEL_ROLES } from './PanelLayout.js';
+import { PanelMover, DEFAULT_FILL, DEFAULT_DURATION_MS } from './PanelMover.js';
+import { PanelPicker } from './PanelPicker.js';
+import { PanelPointerAdapter } from './PanelPointer.js';
+import { NavSource } from './NavSource.js';
+import { panelPainter } from './panelPainter.js';
+import { paintDrive } from './panels/DrivePanel.js';
+import { paintTarget } from './panels/TargetPanel.js';
+import { paintInfo } from './panels/InfoPanel.js';
+import { makeNavPainter } from './panels/NavPanel.js';
+import { paintNavHoldingCard } from './panels/NavHoldingCard.js';
+
+/** The model node that says where the pilot's head is. Found, never assumed. */
+export const EYE_NODE_NAME = 'Eye_Point';
+
+/** Where the cockpit model lives, relative to the app root. */
+export const COCKPIT_GLB_URL = 'assets/cockpit/cockpit.glb';
+
+/** The name test for the canopy glass placeholder. */
+export const GLASS_NODE_RE = /glass|canopy/i;
+
+/**
+ * The eye camera's optics, exported so BOTH hosts build the same camera.
+ *
+ * ⚠ 70 IS NOT A ROUND NUMBER PICKED HERE — it is the game's own FOV
+ * (`src/ui/Settings.js`), and it is the FOV every framing judgement Max has made
+ * about this cockpit was made at. three's PerspectiveCamera defaults to 50, so a
+ * host that forgot to pass one would show a cockpit subtending far more of the
+ * view than he approved — and `PanelMover` re-solves the zoom fill from the
+ * camera's LIVE fov on every solve, so a zoomed panel would land at a size he has
+ * never seen, with nothing to say so.
+ *
+ * NEAR is 0.005 because a zoomed panel lands ~0.17 m from the eye.
+ */
+export const EYE_FOV = 70;
+export const EYE_NEAR = 0.005;
+export const EYE_FAR = 8000;
+
+/**
+ * The cockpit's tone regime — see the header. Exported so the two hosts cannot
+ * drift; neither value is applied by this module.
+ */
+export const COCKPIT_TONE_MAPPING = THREE.ACESFilmicToneMapping;
+export const COCKPIT_TONE_EXPOSURE = 1.25;
+
+/**
+ * The canopy glass treatment.
+ *
+ * ⭐ REWRITTEN 2026-07-30 — it was a 10%-alpha PLACEHOLDER and is now GLARE.
+ * Max's ask at program open was "a glass-like material that interacts with
+ * game-world light while preserving the retro style", and until the key light
+ * followed the system's star there was no game-world light for it to interact
+ * WITH. There is now, so the placeholder's premise is spent.
+ *
+ * ⭐ ADDITIVE, AND THAT IS THE WHOLE IDEA. The old treatment blended 10% of a
+ * lit surface OVER the world, which is a faint white fog across the one thing
+ * the canopy exists to let you see. Additive blending cannot fog anything: it
+ * ADDS light where the glass is lit and adds exactly nothing where it is not.
+ * So the view through the canopy gets *clearer* than before, and a facet
+ * catching the star flares.
+ *
+ * ⭐⭐ IT IS A DIFFUSE WASH, NOT A SPECULAR GLINT — and the first attempt got
+ * this exactly backwards, which is worth writing down because the wrong version
+ * is the intuitive one.
+ *
+ * That attempt used `metalness: 1` with a dim `color`, reasoning that a metal
+ * has no diffuse term so additive blending would add the SPECULAR lobe alone:
+ * pure glare. It rendered almost nothing, and the measurement said why. A
+ * specular highlight needs the reflection of the light to reach the eye — and
+ * the pilot is INSIDE the canopy while the star is OUTSIDE it. There is no
+ * geometry in which an external star reflects off the inner surface into the
+ * seat. That is a transmission problem wearing a reflection's clothes, and
+ * three's standard material does not do transmission.
+ *
+ * What a canopy ACTUALLY does from the seat is let the light through so it falls
+ * on the inside. Measured on the real mesh: all 20 `Canopy_Glass` triangles have
+ * their normals pointing INWARD, at the pilot. So a diffuse term with
+ * `metalness: 0` lights each pane by how squarely the star faces its inner
+ * surface — which means a star off the STARBOARD beam lights the PORT panes,
+ * exactly as sunlight through a window falls on the far wall. Heading-dependent,
+ * legible, and right for the reason rather than by luck.
+ *
+ * `Canopy_Glass` is a FACETED shell (see `scripts/cockpit-gen.py`), so the wash
+ * arrives pane by pane as the star sweeps rather than sliding across one smooth
+ * sheet — cut panes, which is the cassette-futurism reading rather than a
+ * compromise. The pane you look straight through stays clear, because its inner
+ * normal faces you and not the star.
+ *
+ * `glare.metalness` is kept as a knob rather than hard-zeroed: turning it up
+ * trades the wash for the 4%-F0 glint, and that is a taste call for the lab.
+ *
+ * ⚠ `depthWrite: false` STILL DOES THE ORIGINAL JOB and must not be dropped: a
+ * canopy that writes depth can occlude the four screens, which is a first-light
+ * failure that looks plausible and raises no error.
+ *
+ * ⚠ `opacity` NO LONGER MEANS "faint". Under additive blending three multiplies
+ * the source by its alpha before adding, so opacity is now a master brightness
+ * on the glare — and 1 is correct, because the DIMMING is `glare.color`'s job.
+ * Two multiplying knobs for one visible quantity is how a lab session ends up
+ * unable to say which one it just moved.
+ *
+ * Set `additive: false` to get the old alpha-blended placeholder back in one
+ * flag; refraction (increment 3) remains unbuilt and is a different thing again.
+ */
+export const DEFAULT_GLASS = Object.freeze({
+  opacity: 1,
+  depthWrite: false,
+  doubleSide: true,
+  additive: true,
+  // ⭐⭐ 0x0f, NOT 0x4a. A REAL CEILING — BUT ⚠ IT IS NOT THE OPACITY FIX, AND
+  // AN EARLIER VERSION OF THIS COMMENT CLAIMED IT WAS.
+  //
+  // That claim is corrected here because it is the more expensive error of the
+  // two. Max reported *"all the window segments except the central one are
+  // opaque"*, this value was driven 0x4a → 0x0f in response, and he reported the
+  // identical symptom in the identical words afterwards. The panes were opaque
+  // because the material was writing ALPHA into a target composited by coverage
+  // — see `_applyGlass`, which is where that is actually fixed. No value of this
+  // constant could have solved it; darkening the glass only darkened the wall.
+  //
+  // What survives is a SEPARATE and still-valid constraint: with alpha fixed the
+  // canopy genuinely adds its light on top of the sky, so an albedo bright enough
+  // to out-add the starfield washes it out even though you can now see through
+  // it. That is the measurement below, and it still binds. Two different failures
+  // wearing one word — read the numbers as a brightness ceiling only.
+  //
+  // Measured in the lab, canopy hidden vs shown at a fixed star angle: the glass
+  // lifted the region it covers by a MEDIAN of 27/255, while the starfield
+  // behind it peaks at 4.7/255. An additive layer six times brighter than the
+  // brightest thing behind it is not glass, it is a wall. And the panes that
+  // went opaque were exactly the ones angled toward the star — the central pane
+  // survived because its inner normal faces the pilot, so `N·L` is negative and
+  // it never lit at all. His description names the mechanism precisely.
+  //
+  // ⚠ THE SKY IS THE CONSTRAINT, AND IT IS DARKER THAN INTUITION ALLOWS FOR.
+  // Anything added to a near-black frame reads as opacity almost immediately;
+  // there is no headroom. At 0x0f the same measurement gives a median lift of
+  // 2/255 — below the stars rather than above them — while the strongly lit
+  // panes still reach 21-60 and remain clearly visible. Most of the canopy stays
+  // clear and a few panes glow, which is the behaviour that was wanted.
+  //
+  // Treat this as a CEILING discovered by measurement, not a taste default.
+  // Raising it is not a matter of preference; past roughly 0x18 the sky starts
+  // disappearing again. The lab's GLASS GLOW slider is the place to re-check,
+  // and the check is "can I still see stars through a lit pane", not "does it
+  // look nice on its own".
+  //
+  // Neutral grey is separate and still deliberate: the tint is the STAR's job —
+  // an M dwarf washes the cabin amber, an O star blue-white — and a tinted
+  // albedo multiplies against that leaving neither legible.
+  glare: Object.freeze({ color: 0x0f0f0f, roughness: 0.22, metalness: 0 }),
+});
+
+/**
+ * Key + fill, angled from ahead/above/port so they rake the outward-facing
+ * surfaces. The inward-facing ones sit dark, which is physically correct — the
+ * only light source is outside the ship — and is precisely why the CRTs being
+ * their own light source is the thing to look at.
+ *
+ * ⚠ THESE ARE THE DIVERGENCE PROBE AC-ONE-RIG-TWO-HOSTS NAMES. Changing an
+ * intensity here must move BOTH hosts; if it moves only one, the boundary is
+ * wrong and the AC has failed.
+ */
+export const DEFAULT_COCKPIT_LIGHTS = Object.freeze([
+  Object.freeze({ role: 'ambient', type: 'ambient', color: 0xaebccc, intensity: 0.16 }),
+  Object.freeze({ role: 'key', type: 'directional', color: 0xfff2e0, intensity: 2.2, position: Object.freeze([-30, 50, -60]) }),
+  Object.freeze({ role: 'fill', type: 'directional', color: 0x6f8ab0, intensity: 0.26, position: Object.freeze([24, -8, 34]) }),
+]);
+
+/**
+ * How far out the key light is parked once the star drives it.
+ *
+ * A DirectionalLight has no falloff — only `position - target` matters — so this
+ * is arbitrary and exists solely to keep the direction numerically comfortable
+ * against a cabin about 2.5 m across.
+ */
+export const KEY_LIGHT_DISTANCE = 100;
+
+/**
+ * The four default painters, in `PanelHost.setPainter` form.
+ *
+ * NAV gets the HOLDING CARD, not the real nav computer: a nav source cannot be
+ * built at module load — it needs a canvas, a GalacticMap, a renderer and the NAV
+ * panel's buffer size, and that size does not exist until `PanelHost.fromRoot`
+ * has bound the panels off the loaded model. The real painter replaces it in
+ * `_mountNav`, registered AFTER these four rather than instead of one, so a nav
+ * source that could not be built leaves NO SOURCE on the glass and a reason
+ * beside it — instead of a black rectangle nobody can account for.
+ */
+export const DEFAULT_PANEL_PAINTERS = Object.freeze({
+  NAV: panelPainter(paintNavHoldingCard),
+  DRIVE: panelPainter(paintDrive),
+  TARGET: panelPainter(paintTarget),
+  INFO: panelPainter(paintInfo),
+});
+
+/** Which roles a press is allowed to zoom. One entry, widened by editing it. */
+export const DEFAULT_ZOOMABLE_ROLES = Object.freeze(['NAV']);
+
+function required(value, name) {
+  if (value === undefined || value === null) {
+    throw new Error(`CockpitRig: \`${name}\` is required — the rig cannot pick one for you, ` +
+      `because the lab and the game genuinely differ on it.`);
+  }
+  return value;
+}
+
+/**
+ * The cockpit, assembled.
+ *
+ * Construct with `CockpitRig.load(...)`, which NEVER REJECTS: a missing or broken
+ * GLB is a legible `rig.loadError` the host can print, not a stack trace and not
+ * an unhandled rejection that takes the page down. Same rule for the host and the
+ * nav source — `hostError` and `navError` are strings, and the other panels stay
+ * worth looking at.
+ */
+export class CockpitRig {
+  /**
+   * @param {object} opts
+   * @param {string} [opts.glbUrl] where the model is
+   * @param {object} opts.renderer PASS-THROUGH ONLY, handed to `makeNav`
+   * @param {object} opts.camera the eye camera. Read, never written.
+   * @param {() => void} opts.pinCamera makes `camera` current for THIS frame
+   * @param {() => {x:number,y:number,width:number,height:number}} opts.getViewport
+   *        the RENDERED rect in CSS pixels, read fresh per pick
+   * @param {number} opts.bufferHeightPx the one knob PanelHost takes
+   * @param {(surface:object) => object} opts.makeNav builds the NavComputer
+   * @param {object} [opts.zoom] `{fill, durationMs, followCamera}`
+   * @param {string[]} [opts.zoomableRoles]
+   * @param {object} [opts.painters]
+   * @param {object|null} [opts.glass] the placeholder override, or null to skip
+   * @param {Array} [opts.lights]
+   * @param {() => boolean} [opts.isLookDragging] host is mid-look-drag → no hover
+   * @param {(navSource:object) => void} [opts.onNavMounted] fired once, first build
+   */
+  constructor(opts = {}) {
+    this.opts = opts;
+    this.renderer = opts.renderer ?? null;
+    this.camera = required(opts.camera, 'camera');
+    this._pinCamera = required(opts.pinCamera, 'pinCamera');
+    this._getViewport = required(opts.getViewport, 'getViewport');
+    this._makeNav = opts.makeNav ?? null;
+    this._painters = opts.painters ?? DEFAULT_PANEL_PAINTERS;
+    this._glass = opts.glass === undefined ? DEFAULT_GLASS : opts.glass;
+    this._lights = opts.lights ?? DEFAULT_COCKPIT_LIGHTS;
+    this._isLookDragging = opts.isLookDragging ?? (() => false);
+    this._onNavMounted = opts.onNavMounted ?? null;
+
+    this.bufferHeightPx = opts.bufferHeightPx ?? null;
+    this.zoom = {
+      fill: opts.zoom?.fill ?? DEFAULT_FILL,
+      durationMs: opts.zoom?.durationMs ?? DEFAULT_DURATION_MS,
+      followCamera: opts.zoom?.followCamera ?? false,
+    };
+    this.zoomableRoles = opts.zoomableRoles ?? DEFAULT_ZOOMABLE_ROLES;
+
+    // The scene is INJECTABLE: the lab already has one at module-evaluation time
+    // (its backdrop and cabin light go in before the GLB resolves) and the game
+    // manages its own cockpit scene for the render pass. The rig owns the
+    // ASSEMBLY, not the container.
+    this.scene = opts.scene ?? new THREE.Scene();
+    this.model = null;
+    this.host = null;
+    this.mover = null;
+    this.picker = null;
+    this.navSource = null;
+    this.navAdapter = null;
+
+    this.loadError = null;
+    this.hostError = null;
+    this.navError = null;
+
+    this.screenNodeNames = [];
+    this.glassNodes = [];
+    this.glassMats = new Set();
+    this.eyePos = new THREE.Vector3(0, 0, 0);
+    this.eyeQuat = new THREE.Quaternion();
+    this.eyeFound = false;
+
+    this._lightObjects = [];
+    this._addLights();
+
+    this.pointer = new CockpitPointerRouter(this);
+  }
+
+  _addLights() {
+    for (const spec of this._lights) {
+      let light = null;
+      if (spec.type === 'ambient') {
+        light = new THREE.AmbientLight(spec.color, spec.intensity);
+      } else if (spec.type === 'directional') {
+        light = new THREE.DirectionalLight(spec.color, spec.intensity);
+        if (spec.position) light.position.set(...spec.position);
+      }
+      if (!light) continue;
+      this.scene.add(light);
+      this._lightObjects.push(light);
+      // ⭐ FOUND BY ROLE, NOT BY INDEX. `setStarLight` needs the key, and an
+      // index would silently drive the ambient the first time somebody reorders
+      // this list or a host passes `lights:` of its own — a cabin lit flat from
+      // everywhere, which raises nothing and looks like the feature not working.
+      if (spec.role === 'key') this.keyLight = light;
+    }
+  }
+
+  /**
+   * Point the key light at the system's star, and tint it to the star's colour.
+   *
+   * ⭐ THIS IS THE ONLY THING IN THE COCKPIT PASS THAT KNOWS THE WORLD EXISTS,
+   * and it is deliberately a direction and a colour rather than a scene
+   * reference. The cockpit scene is origin-anchored precisely so it never has to
+   * reason about a world where 1 m = 6.7e-9 units; handing it a unit vector
+   * keeps that true.
+   *
+   * `dir` is FROM the pilot TOWARD the star, in cockpit space — see
+   * `starLight.js`, which owns the frame algebra and the reason the ship's
+   * heading belongs in it.
+   *
+   * ⚠ A NULL `dir` LEAVES THE AUTHORED DEFAULT ALONE rather than blanking the
+   * light. There is no star direction during the deep-sky preview, between
+   * systems, or in the lab before a host supplies one, and a cabin that goes
+   * black in those states reads as a bug. The fallback being the SAME key light
+   * the rig has always shipped is what makes "the star is not driving it yet"
+   * and "the star is driving it" look like the same feature at two settings.
+   *
+   * @param {{dir?: THREE.Vector3|null, color?: {r:number,g:number,b:number}|null,
+   *          intensity?: number|null}} p
+   */
+  setStarLight({ dir = null, color = null, intensity = null } = {}) {
+    const key = this.keyLight;
+    if (!key) return;
+    if (dir) {
+      key.position.copy(dir).multiplyScalar(KEY_LIGHT_DISTANCE);
+      // three reads the target's matrixWorld, and a target that was never added
+      // to a scene is never updated by the renderer. Flushing it here is what
+      // keeps the light aimed at the cabin origin rather than wherever an
+      // un-flushed matrix happens to say.
+      key.target.position.set(0, 0, 0);
+      key.target.updateMatrixWorld();
+    }
+    if (color) key.color.setRGB(color.r, color.g, color.b);
+    if (Number.isFinite(intensity)) key.intensity = intensity;
+  }
+
+  /**
+   * Load the model and assemble everything over it.
+   *
+   * The post-load ORDER is the same one the lab ran and every step of it earns
+   * its place: `scene.add(model)` and `updateMatrixWorld(true)` come before
+   * `PanelHost.fromRoot`, because the host measures WORLD-SPACE vertices and a
+   * model whose matrices have not been flushed measures as if it were at the
+   * origin.
+   *
+   * @returns {Promise<CockpitRig>} always resolves; check `rig.loadError`
+   */
+  static load(opts = {}) {
+    const rig = new CockpitRig(opts);
+    return rig.loadModel();
+  }
+
+  /**
+   * Load the model into an already-constructed rig.
+   *
+   * Split from `load()` so a host can hold `rig.scene` BEFORE the model arrives —
+   * the lab adds its backdrop and cabin light to that scene at module-evaluation
+   * time, long before the GLB resolves.
+   */
+  loadModel() {
+    const rig = this;
+    const url = rig.opts.glbUrl ?? COCKPIT_GLB_URL;
+    return new Promise((resolve) => {
+      new GLTFLoader().load(
+        url,
+        (gltf) => {
+          rig.model = gltf.scene;
+          rig.scene.add(rig.model);
+          rig.model.updateMatrixWorld(true);
+          rig._censusAndGlass();
+          rig._mountEye();
+          rig.remount();
+          resolve(rig);
+        },
+        undefined,
+        (err) => {
+          // Handled here so GLTFLoader does not console.error — a missing GLB is
+          // a legible message for the host to print, not a stack trace.
+          rig.loadError = (err && (err.message || String(err))) || 'unknown load error';
+          resolve(rig);
+        },
+      );
+    });
+  }
+
+  /**
+   * The Screen_* census, taken BY NAME and independently of PanelHost.
+   *
+   * Independence is the point: if the host binds zero panels, this is what
+   * distinguishes "the model has no screens" (correct, and the tub's normal
+   * state) from "the model has screens and the host failed to bind them" (a bug).
+   * Conflating those two is exactly how a broken load gets read as a clean one.
+   */
+  _censusAndGlass() {
+    this.screenNodeNames = [];
+    this.glassNodes = [];
+    this.glassMats = new Set();
+    this.model.traverse((o) => {
+      const name = o?.name || '';
+      if (SCREEN_NODE_RE.test(name)) this.screenNodeNames.push(name);
+      if (GLASS_NODE_RE.test(name)) this.glassNodes.push(o);
+    });
+    this.screenNodeNames.sort();
+
+    if (!this._glass) return;
+    for (const n of this.glassNodes) {
+      n.traverse((o) => {
+        if (!o.isMesh) return;
+        for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+          if (m) this.glassMats.add(m);
+        }
+      });
+    }
+    this._applyGlass();
+  }
+
+  /**
+   * Push the current glass treatment onto every material the census found.
+   *
+   * Split out of `_censusAndGlass` so `setGlass` can re-run it against a live
+   * model — the lab tunes this by eye, and rebuilding the rig to move a slider
+   * would lose the panel state and the nav computer with it.
+   */
+  _applyGlass() {
+    const g = this._glass;
+    if (!g) return;
+    for (const m of this.glassMats) {
+      m.transparent = true;
+      m.opacity = g.opacity;
+      m.depthWrite = g.depthWrite;
+      if (g.doubleSide) m.side = THREE.DoubleSide;
+      if (g.additive) {
+        // ⭐⭐ CUSTOM BLENDING, NOT `THREE.AdditiveBlending`, AND THE ENTIRE
+        // DIFFERENCE IS THE ALPHA CHANNEL. This is the fix for the bug that
+        // survived two sessions and one confident wrong fix; read this before
+        // simplifying it back to the named constant.
+        //
+        // Max, twice, in the same words: *"the windows, except for the central
+        // segment, are all still opaque."* The first fix read that as BRIGHTNESS
+        // and drove the albedo from 0x4a to 0x0f. The measurement said it worked
+        // — the glass added a median 2/255 over a sky peaking at 4.7 — and he
+        // still saw a wall. Both observations were true, because the panes were
+        // never bright. They were OPAQUE, which is a different channel.
+        //
+        // The cockpit renders to its own `cockpitTarget` and is composited over
+        // the world BY ALPHA. `THREE.AdditiveBlending` sets `(SRC_ALPHA, ONE)`
+        // for RGB — which is what we want — but three applies that same pair to
+        // ALPHA unless told otherwise, so every pane accumulated
+        // `a' = a·a + a_dst` toward 1 and stamped itself fully-covered into the
+        // composite. A pane that adds no light still replaces the sky behind it
+        // with its own near-black colour. Lowering the albedo makes that wall
+        // darker; it cannot make it thinner.
+        //
+        // So: keep `(SRC_ALPHA, ONE)` on RGB — identical to AdditiveBlending,
+        // the glare is unchanged — and set alpha to `(ZERO, ONE)`, i.e. leave
+        // the destination's coverage exactly as the world pass wrote it. The
+        // canopy then adds light without ever claiming a pixel.
+        //
+        // ⚠ Verified live in the game, not in the lab: raycast a grid through
+        // `_cockpitScene` and `Canopy_Glass` was the occluder for every sample
+        // outside one central pinhole. That picker is the check to re-run if
+        // this regresses — a brightness measurement will NOT catch it, and did
+        // not, six times.
+        m.blending = THREE.CustomBlending;
+        m.blendEquation = THREE.AddEquation;
+        m.blendSrc = THREE.SrcAlphaFactor;
+        m.blendDst = THREE.OneFactor;
+        m.blendEquationAlpha = THREE.AddEquation;
+        m.blendSrcAlpha = THREE.ZeroFactor;
+        m.blendDstAlpha = THREE.OneFactor;
+      } else {
+        m.blending = THREE.NormalBlending;
+      }
+      // ⚠ GUARDED ON THE MATERIAL ACTUALLY HAVING THESE. GLTFLoader gives a
+      // MeshStandardMaterial for a glTF PBR material, which does — but a future
+      // re-author that hands the canopy a Basic or a custom ShaderMaterial would
+      // otherwise get silently ignored properties, and the glass would look
+      // untreated with nothing anywhere to say why.
+      if (g.glare && m.isMeshStandardMaterial) {
+        m.metalness = Number.isFinite(g.glare.metalness) ? g.glare.metalness : 0;
+        m.roughness = g.glare.roughness;
+        m.color.set(g.glare.color);
+      }
+      m.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Re-tune the canopy on a live rig. Merges, so a caller may pass one field.
+   *
+   * `glare` merges one level deeper, because moving roughness without restating
+   * the colour is the single most common thing a lab session wants to do.
+   */
+  setGlass(next = {}) {
+    const prev = this._glass || {};
+    this._glass = {
+      ...prev,
+      ...next,
+      glare: (next.glare || prev.glare) ? { ...(prev.glare || {}), ...(next.glare || {}) } : null,
+    };
+    this._applyGlass();
+    return this._glass;
+  }
+
+  /**
+   * Put the eye on the model's own Eye_Point node.
+   *
+   * FOUND, NOT ASSUMED. Eye_Point sits at the origin in today's cockpit GLBs, so
+   * hard-coding (0,0,0) would look correct right up until the cabin is re-fitted
+   * and the seat moves — at which point every judgement about how the panels
+   * subtend would be about the wrong viewpoint, with nothing to say so. Its world
+   * QUATERNION is taken too, so a future model that faces the seat somewhere
+   * other than -Z still works.
+   *
+   * A missing node falls back to the origin AND SAYS SO through `eyeFound`.
+   * Silent fallback is the failure being avoided: the picture would look
+   * plausible.
+   */
+  _mountEye() {
+    const node = this.model.getObjectByName(EYE_NODE_NAME);
+    this.eyeFound = !!node;
+    if (node) {
+      node.getWorldPosition(this.eyePos);
+      node.getWorldQuaternion(this.eyeQuat);
+    } else {
+      this.eyePos.set(0, 0, 0);
+      this.eyeQuat.identity();
+    }
+  }
+
+  /**
+   * Build (or rebuild) the panel host, the painters and the motion rig.
+   *
+   * ⭐ THE RIG COMES DOWN FIRST, BEFORE the host re-measures, and this is not
+   * redundant with `_buildZoomRig`'s own teardown. While a panel is rigged its
+   * mesh hangs off `PanelPivot_<role>` rather than off the model, and if it is
+   * ZOOMED the mesh is physically at the pilot's eye. `PanelHost.fromRoot`
+   * measures world-space vertices, so re-binding while that is true would freeze
+   * `panel.metrics.centre` AT THE EYE — permanently, for the rest of the session,
+   * with nothing to say why. Tearing down first puts every mesh back at its own
+   * identity pose, which is the state the measurement is supposed to be of.
+   *
+   * PUBLIC because the lab's `perturbScreens` / `restoreScreens` need it: they
+   * are how AC-MOTION-FOLLOWS-THE-MODEL was verified, and no GLB provides an
+   * alternate cockpit, so without a remount entry point increment 6's evidence
+   * becomes unreproducible.
+   */
+  remount() {
+    if (this.mover) { this.mover.dispose(); this.mover = null; this.picker = null; }
+    if (this.host) { this.host.dispose(); this.host = null; }
+    this.hostError = null;
+    if (!this.model) return;
+    try {
+      this.host = PanelHost.fromRoot(this.model, { bufferHeightPx: this.bufferHeightPx });
+      for (const role of Object.keys(DEFAULT_PANEL_ROLES)) {
+        if (this._painters[role]) this.host.setPainter(role, this._painters[role]);
+      }
+      this._buildZoomRig();
+      this._mountNav();
+    } catch (err) {
+      this.hostError = (err && err.message) || String(err);
+    }
+  }
+
+  /**
+   * The mover and the picker, over whatever panels are bound now.
+   *
+   * Both see ALL panels, not just the zoomable one: a click has to be able to
+   * land on the zoomed NAV screen and also to be recognised as NOT landing on it,
+   * and a picker that could only ever return NAV would report a click on DRIVE as
+   * a click on nothing. Rigging is free of side effects — the pivot sits at the
+   * measured centre and the mesh carries the compensating offset, so the
+   * composition is identity and nothing moves.
+   */
+  _buildZoomRig() {
+    if (this.mover) { this.mover.dispose(); this.mover = null; }
+    this.picker = null;
+    if (!this.host || this.host.panels.length === 0) return;
+    const panels = this.host.panels;
+    this.mover = new PanelMover({
+      panels,
+      root: this.model,
+      fill: this.zoom.fill,
+      durationMs: this.zoom.durationMs,
+      followCamera: this.zoom.followCamera,
+    });
+    this.picker = new PanelPicker({ panels });
+  }
+
+  /**
+   * Build the nav computer ONCE, and put the real NAV painter on the glass.
+   *
+   * ⭐ ONCE, not per remount. A buffer-resolution change tears the host down and
+   * rebuilds every panel; the NAV SOURCE deliberately does not follow, because
+   * constructing a `NavComputer` regenerates the sector table and reloads a
+   * prism's worth of stars — which would stall on every press and reset the view
+   * being looked at. `NavSource.resize` is the whole of what a resolution change
+   * needs, and the painter calls it from the panel's own current size on every
+   * paint. The PAINTER is re-registered unconditionally, because the host it was
+   * registered on has just been thrown away.
+   *
+   * ⚠ `makeNav` IS INJECTED AND THIS MODULE MUST NEVER CONSTRUCT A NavComputer
+   * ITSELF. It is the injection point for four of increment 7's ACs: the game's
+   * factory installs the autopilot-toggle, commit, sound and drill-sound
+   * callbacks and hands over the real star and feature catalogues, none of which
+   * the lab can do. A rig that hard-coded the construction would leave those
+   * clauses hostless in a new way.
+   */
+  _mountNav() {
+    if (!this.host || !this.host.panel('NAV')) return;
+    if (!this._makeNav) return;
+
+    if (!this.navSource && !this.navError) {
+      try {
+        const { canvas: navCanvas } = this.host.panel('NAV');
+        this.navSource = NavSource.mount({
+          width: navCanvas.width,
+          height: navCanvas.height,
+          makeNav: this._makeNav,
+        });
+        if (this._onNavMounted) this._onNavMounted(this.navSource);
+      } catch (err) {
+        this.navSource = null;
+        this.navError = (err && err.message) || String(err);
+      }
+    }
+
+    // `isZoomed` is read on EVERY paint. Zooming has to clear the chrome-less
+    // intent: the level tabs, the autopilot toggle and BURN/WARP are all
+    // withdrawn while bare, which is right in the corner and wrong at the eye.
+    if (this.navSource) {
+      this.host.setPainter('NAV', panelPainter(makeNavPainter(this.navSource, {
+        isZoomed: () => this.navIsZoomed(),
+      })));
+    }
+  }
+
+  /**
+   * Whether NAV is zoomed AT ALL — what the PAINTER asks before it draws.
+   *
+   * Distinct from `navZoomLanded` on purpose, and the distinction is load-bearing
+   * in both directions. Which chrome the panel draws is a question about the
+   * whole travel: the tabs and the autopilot toggle appear as it comes and stay
+   * until it is home.
+   */
+  navIsZoomed() {
+    return !!this.mover && this.mover.zoomedRole === 'NAV';
+  }
+
+  /**
+   * Whether NAV is at the eye AND finished travelling — what ROUTING asks.
+   *
+   * `zoomedRole` is non-null throughout BOTH travels, so routing on
+   * `navIsZoomed` forwards presses into a nav computer that is still mid-air: a
+   * press 21% through a 1200 ms zoom slid 427 px under a stationary cursor before
+   * the release, and NavComputer's own 25 px-squared drag rejection then threw
+   * the click away. During `toRest` it is worse than lost — a click on the
+   * retracting monitor could not re-zoom it and was poked into a panel the pilot
+   * can no longer read.
+   */
+  navZoomLanded() {
+    return !!this.mover && this.mover.state === 'zoomed' && this.mover.zoomedRole === 'NAV';
+  }
+
+  /**
+   * Make the camera current, then hand it over.
+   *
+   * ⭐ THE INVARIANT IS STATED AT THIS BOUNDARY, NOT INSIDE `PanelMover`. The
+   * mover is handed a camera it does not own and must not own: what makes a
+   * camera current is the host's business (look state and fov here, `scHead` and
+   * the shake composer in the game). A mover that re-pinned its argument would
+   * have to reach back into whichever host called it. So: whoever hands the mover
+   * a camera hands it a CURRENT one, and `src/cockpit/PanelMover.js` stays
+   * byte-identical — which AC-MOTION-FOLLOWS-THE-MODEL requires anyway.
+   *
+   * Measured cost of getting this wrong: a zoom solved against a camera one frame
+   * stale landed 350 px off centre and 65% larger than the fill knob asked for.
+   */
+  cameraNow() {
+    this._pinCamera();
+    return this.camera;
+  }
+
+  /**
+   * What the pointer is over, or null.
+   *
+   * ⚠ NOT pinned first, deliberately. A pick converts a pointer position against
+   * the camera the pixels under that pointer were DRAWN with, which is last
+   * frame's — re-pinning here would answer a question about a frame nobody has
+   * seen. The mover's need is the opposite: it solves a pose for the frame about
+   * to be drawn.
+   */
+  pickAt(clientX, clientY) {
+    if (!this.picker) return null;
+    return this.picker.pick(clientX, clientY, {
+      camera: this.camera,
+      viewport: this._getViewport(),
+    });
+  }
+
+  /**
+   * The pointer adapter over the live nav computer, built on demand.
+   *
+   * ⚠ THE CACHE KEY IS THE TARGET **AND** THE BUFFER SIZE. The size is a SNAPSHOT
+   * taken at construction — the adapter stores whatever `options.size` it was
+   * handed and maps every uv through it — so an adapter cached on identity alone
+   * survives a resolution change that its numbers do not. Measured: at buffer 384
+   * a centre click landed on nav pixel (230.5, 192), exactly right; rebuilding
+   * the host at 512 kept the SAME NavComputer, so identity still held, the cache
+   * hit, and the same click kept landing on (230.5, 192) instead of (307, 256).
+   * The error is the buffer ratio on both axes, zero at the top-left and growing
+   * toward the bottom-right — it reads as "the cursor drifts", not as a stale
+   * cache, and `clickGlass`'s uvError was 2.8e-16 on every one of those presses
+   * because the PICK is exact and the ADAPTER mis-maps it afterwards.
+   */
+  ensureNavAdapter() {
+    const nav = this.navSource && this.navSource.nav;
+    const panel = this.host && this.host.panel('NAV');
+    if (!nav || !panel || !panel.canvas) {
+      if (this.navAdapter) { this.navAdapter.detach(); this.navAdapter = null; }
+      return null;
+    }
+    const want = { width: panel.canvas.width, height: panel.canvas.height };
+    if (this.navAdapter && this.navAdapter.target === nav) {
+      let got = null;
+      // `bufferSize()` throws when it has nothing to measure in. An adapter that
+      // cannot say what size it is mapping through is one to rebuild, not one to
+      // keep and hope about.
+      try { got = this.navAdapter.bufferSize(); } catch { got = null; }
+      if (got && got.width === want.width && got.height === want.height) return this.navAdapter;
+    }
+    if (this.navAdapter) { this.navAdapter.detach(); this.navAdapter = null; }
+    this.navAdapter = new PanelPointerAdapter(nav, { size: want });
+    return this.navAdapter;
+  }
+
+  /**
+   * One frame.
+   *
+   * ⭐ THE ORDER IS THE FIX, not a style. The camera is pinned BEFORE the mover
+   * solves: pinning after meant a head-locked zoom re-solved the panel's pose
+   * against LAST frame's orientation and the panel trailed the head by exactly
+   * one frame of yaw — a constant 40.5 px offset at 800 px/s of look, 143 px at
+   * 2800, identical on every frame of a 12-frame sweep and back to 0.000 one
+   * frame after the head stopped.
+   *
+   * ⚠ REAL MILLISECONDS for both, and neither gated on whether the host's own
+   * clock is paused. A tween phased on sim time freezes when the flight scrub
+   * pauses, and a screen stuck half-way to the eye reads as a hang rather than as
+   * a pause. The blink phase in `host.update` makes the same argument.
+   *
+   * @param {object} p
+   * @param {object} p.snapshot the one read-only frame all four panels read
+   * @param {number} p.nowMs real time, for repaint and blink phase
+   * @param {number} p.dtMs real elapsed ms, for the travel
+   * @param {object} [p.starLight] optional `{dir, color, intensity}` for
+   *        `setStarLight` — the system's star, in cockpit space. Omitted by a
+   *        host that has no star to report; the key light then keeps whatever it
+   *        was last given, which at boot is the authored default.
+   */
+  update({ snapshot, nowMs, dtMs, starLight }) {
+    // Before the pin, because it changes nothing the pin reads and putting it
+    // after would leave one frame of the old direction on a regime entry.
+    if (starLight) this.setStarLight(starLight);
+    this._pinCamera();
+    if (this.mover) this.mover.update(Number.isFinite(dtMs) ? dtMs : 16);
+    if (this.host) this.host.update(snapshot, nowMs);
+  }
+
+  /** Change the buffer resolution. Rebuilds the host; keeps the nav computer. */
+  setBufferHeightPx(px) {
+    this.bufferHeightPx = px;
+    this.remount();
+  }
+
+  /** Re-apply the zoom knobs to the live mover without rebuilding the rig. */
+  setZoom(next = {}) {
+    if (Number.isFinite(next.fill)) this.zoom.fill = next.fill;
+    if (Number.isFinite(next.durationMs)) this.zoom.durationMs = next.durationMs;
+    if (typeof next.followCamera === 'boolean') this.zoom.followCamera = next.followCamera;
+    if (!this.mover) return;
+    if (Number.isFinite(next.fill)) this.mover.fill = this.zoom.fill;
+    if (Number.isFinite(next.durationMs)) this.mover.durationMs = this.zoom.durationMs;
+    if (typeof next.followCamera === 'boolean') this.mover.followCamera = this.zoom.followCamera;
+  }
+
+  dispose() {
+    if (this.navAdapter) { this.navAdapter.detach(); this.navAdapter = null; }
+    if (this.mover) { this.mover.dispose(); this.mover = null; }
+    this.picker = null;
+    if (this.host) { this.host.dispose(); this.host = null; }
+    if (this.model) { this.scene.remove(this.model); }
+    for (const l of this._lightObjects) this.scene.remove(l);
+    this._lightObjects = [];
+  }
+}
+
+/**
+ * The pointer router — one pointer, three jobs, and the ORDER between them is the
+ * whole design.
+ *
+ *   1. If NAV has LANDED at the eye and the pointer is on it, the nav computer
+ *      gets the event. That is the point of zooming — the pilot is working the
+ *      menu — and the map's own drag-to-rotate must beat look-around while they
+ *      are doing it.
+ *   2. Otherwise, a press on a ZOOMABLE panel zooms it.
+ *   3. Otherwise, the host looks around. The router says so and does not do it.
+ *
+ * ⭐ THE PRESS TRUTH TABLE — all four mover states x what the ray hit.
+ *
+ *   state    hit NAV (the zoomable one)     other panel   nothing
+ *   ───────  ────────────────────────────   ───────────   ───────
+ *   rest     zoom it                        host         host
+ *   toZoom   NOTHING — it is already        host         host
+ *            coming; a press on a panel
+ *            in flight must not restart
+ *            it, dismiss it, or poke a
+ *            nav computer not yet readable
+ *   zoomed   forward to the nav adapter;    host         host
+ *            with no adapter do NOTHING
+ *            rather than swing the head
+ *            behind a panel filling the
+ *            view
+ *   toRest   RE-ZOOM it — the pilot changed
+ *            their mind mid-retraction, and
+ *            zoom/dismiss both tween from
+ *            the CURRENT pose, so it turns
+ *            round smoothly
+ *
+ * ⭐ AND THE HOVER CHANNEL, which is the newest and least obvious part. Every body
+ * the player clicks in the map — a planet, a moon, a star at PRISM, a galaxy
+ * sector, a grid tile — is resolved by `NavComputer._handleClick` from HOVER
+ * state, and that state is recomputed inside the RENDER from `_mouseX`/`_mouseY`,
+ * which only `_handleMouseMove` writes. A DOM canvas receives `mousemove`
+ * continuously WITH NO BUTTON DOWN; a panel receives nothing unless a router
+ * forwards it. Forward only the pressed moves and a quick click resolves against
+ * a stale hover and reads as empty space — while press-and-hold appears to fix
+ * it, because the hold is what manufactures the missing move. Max found exactly
+ * that at increment 6 UAT. `hover()` is that channel and it must not be dropped.
+ */
+class CockpitPointerRouter {
+  constructor(rig) {
+    this.rig = rig;
+    this.panelDrag = false;
+    /**
+     * What this router has actually been handed. Counted HERE, at the receiver,
+     * not at whichever host does the forwarding — a host that believes it
+     * forwards unpressed moves and does not would report its own belief.
+     *
+     * `hover` vs `pressedMove` is the whole point: increment 6's UAT defect was
+     * `hover === 0` with `pressedMove` rising, which is press-and-hold working
+     * and a quick click doing nothing. AC-A-QUICK-CLICK-IS-ENOUGH reads these.
+     */
+    this.census = { down: 0, hover: 0, pressedMove: 0, up: 0, wheel: 0, navDown: 0, zoomDown: 0, lastRole: null };
+  }
+
+  /**
+   * @returns {'nav'|'zoom'|'none'} what the press was used for. 'none' means the
+   *          host should treat it as its own (look-around, or nothing).
+   */
+  down(clientX, clientY) {
+    const rig = this.rig;
+    const got = rig.pickAt(clientX, clientY);
+    this.census.down++;
+    this.census.lastRole = got ? got.role : null;
+
+    if (got && got.role === 'NAV' && rig.navZoomLanded()) {
+      const adapter = rig.ensureNavAdapter();
+      if (!adapter) return 'none-consumed';
+      this.panelDrag = true;
+      this.census.navDown++;
+      adapter.pointerDown(got.hit);
+      return 'nav';
+    }
+
+    if (got && rig.zoomableRoles.includes(got.role) && rig.mover) {
+      const settledOrArriving = rig.mover.zoomedRole === got.role
+        && (rig.mover.state === 'zoomed' || rig.mover.state === 'toZoom');
+      if (!settledOrArriving) rig.mover.zoom(got.role, rig.cameraNow());
+      this.census.zoomDown++;
+      return 'zoom';
+    }
+
+    return 'none';
+  }
+
+  /** @returns {boolean} whether the router consumed the move. */
+  move(clientX, clientY) {
+    const rig = this.rig;
+    if (this.panelDrag) {
+      const adapter = rig.ensureNavAdapter();
+      this.census.pressedMove++;
+      // A miss while pressed is the 3D form of the cursor leaving the canvas, and
+      // the adapter has always treated that as a release.
+      if (adapter) adapter.pointerMove(rig.pickAt(clientX, clientY)?.hit ?? null);
+      return true;
+    }
+
+    // HOVER — see the class header. Gated on landed-and-not-look-dragging for the
+    // same reasons the press is: at rest NAV is chrome-less and not something the
+    // pilot is working, and during a look-drag the head is turning so hover is
+    // meaningless. The ROLE TEST MATTERS: a hit on a different panel must arrive
+    // as a MISS, or that panel's uv gets mapped into NAV's pixel space.
+    if (!this._isLookDragging() && rig.navZoomLanded()) {
+      const adapter = rig.ensureNavAdapter();
+      if (adapter) {
+        const over = rig.pickAt(clientX, clientY);
+        this.census.hover++;
+        adapter.pointerHover(over && over.role === 'NAV' ? over.hit : null);
+      }
+    }
+    return false;
+  }
+
+  _isLookDragging() {
+    try { return !!this.rig._isLookDragging(); } catch { return false; }
+  }
+
+  /**
+   * WHEEL — the fourth channel, added 2026-07-30. Max: *"Scroll wheel doesn't
+   * work in the nav menus in game."*
+   *
+   * There was no wheel channel at all. A DOM canvas gets `wheel` from the
+   * browser; an offscreen panel texture gets whatever a router hands it, and
+   * this router handed it press, drag and hover. Third instance in this lane of
+   * the same shape — the wire is absent, so the class looks like it is ignoring
+   * the pilot.
+   *
+   * ⚠ GATED EXACTLY AS HOVER IS, and that is deliberate rather than incidental.
+   * At rest NAV is chrome-less and not a menu the pilot is working; during a
+   * host look-drag the head is turning and the pointer is not theirs to aim. A
+   * wheel channel that disagreed with the hover gate would zoom a map that is
+   * not on the glass in front of them.
+   *
+   * ⚠ A WHEEL OVER ANOTHER PANEL IS NOT FORWARDED AS A MISS. `move` forwards
+   * misses on purpose, because the class has hover state that has to be cleared
+   * by its own proximity tests. A wheel has no such state: it is either ours or
+   * it is the host's, and telling the nav computer about a scroll aimed at the
+   * DRIVE screen would zoom a map the pilot was not pointing at.
+   *
+   * @returns {boolean} whether the router consumed it. The host must honour a
+   *          `true` by suppressing its own camera zoom, or the map and the
+   *          chase distance move together on one gesture.
+   */
+  wheel(clientX, clientY, deltaY) {
+    const rig = this.rig;
+    if (this._isLookDragging() || !rig.navZoomLanded()) return false;
+    const over = rig.pickAt(clientX, clientY);
+    if (!over || over.role !== 'NAV') return false;
+    const adapter = rig.ensureNavAdapter();
+    if (!adapter) return false;
+    this.census.wheel++;
+    return adapter.pointerWheel(over.hit, deltaY);
+  }
+
+  /** @returns {boolean} whether the router consumed the release. */
+  up(clientX, clientY) {
+    const rig = this.rig;
+    if (!this.panelDrag) return false;
+    this.panelDrag = false;
+    this.census.up++;
+    const adapter = rig.ensureNavAdapter();
+    // This is the call that finally forwards `_handleClick` — the level tabs, the
+    // SYSTEM sub-views, the autopilot toggle and BURN/WARP all hang off it.
+    if (adapter) adapter.pointerUp(rig.pickAt(clientX, clientY)?.hit ?? null);
+    return true;
+  }
+
+  /** Dismiss whatever is zoomed. ESC means DISMISS EVERYWHERE. */
+  dismiss() {
+    if (this.rig.mover) this.rig.mover.dismiss();
+  }
+}
