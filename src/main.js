@@ -93,6 +93,7 @@ import { CockpitSnapshotProvider, resolveFocusedBody } from './cockpit/CockpitSn
 import { CockpitRig, EYE_FOV, EYE_NEAR, EYE_FAR, COCKPIT_TONE_EXPOSURE } from './cockpit/CockpitRig.js';
 import { cockpitEyeQuat } from './cockpit/cockpitEyePose.js';
 import { collectReticleOccluders, reticleDirInCockpit } from './cockpit/reticleOcclusion.js';
+import { CabinMask, assignMaskLayer } from './cockpit/cabinMask.js';
 import { starDirInCockpit, starLightColor } from './cockpit/starLight.js';
 import { simRandom, simRandomSeed } from './core/SimRandom.js';
 import {
@@ -543,13 +544,25 @@ const _visibleGhostTargets = [];
 const _occDir = new THREE.Vector3();
 function _isReticleOccluded(target) {
   if (!target?.mesh) return false;
-  // ⭐ THE CABIN GETS ASKED FIRST — it is metres away and the bodies are
-  // astronomical, so anything it blocks is blocked outright and the sphere loop
-  // below has nothing to add. Cheap-test-first would put the spheres here, but
-  // "cheap" is the wrong axis: this returns true far more often in HELM (the
-  // cockpit covers ~59% of the view) and the sphere loop is the one that
-  // usually finds nothing.
-  if (_cockpitBlocksReticle(target)) return true;
+  // ⭐⭐ THE CABIN IS NOT ASKED HERE ANY MORE, AND THAT IS THE POINT OF
+  // reticles-on-the-glass-2026-08-01. `5cd1118` put `_cockpitBlocksReticle`
+  // first in this function: one ray through the target's CENTRE, and a hit hid
+  // the WHOLE reticle. A ~7 px `Arch_Bow` rib therefore blanked the entire
+  // bracket-plus-label for ~100 ms and brought it back whole — which is exactly
+  // how something drawn on the player's EYE behaves, arriving and leaving
+  // entire in a shape unrelated to what is in front of it.
+  //
+  // The cabin now cuts the overlay's PIXELS instead (`src/cockpit/cabinMask.js`
+  // → `TargetingReticle._applyCabinMask`), at the rib's own silhouette. That
+  // subsumes this gate rather than dropping it: a reticle wholly behind a
+  // monitor body is erased in full by the mask, so the outcome `5cd1118` bought
+  // survives while the blink does not.
+  //
+  // ⚠ `_cockpitBlocksReticle` itself SURVIVES, as the instrument — see the note
+  // on it below. What is retired is its power to suppress DRAWING.
+  //
+  // Everything from here down is unchanged: bodies occluding bodies, which the
+  // mask knows nothing about and must keep answering.
   _occDir.subVectors(target.mesh.position, camera.position);
   const targetDist = _occDir.length();
   if (targetDist < 1e-6) return false;
@@ -609,6 +622,15 @@ const _cockpitDir = new THREE.Vector3();
  * question `_cockpitShouldRender` answers for the cockpit pass itself, asked
  * here so the reticles cannot be occluded by a cabin that is not on screen —
  * the exact class of defect `_cockpitReplaces` was written for this morning.
+ *
+ * ⭐ AN INSTRUMENT NOW, NOT A GATE (reticles-on-the-glass-2026-08-01). It no
+ * longer feeds `_isReticleOccluded`; the silhouette mask cuts pixels instead.
+ * It is kept and kept WIRED — `window._cockpitOcclusion.wouldBlink()` — because
+ * it is the only thing that can say "the retired centre-ray test would have
+ * hidden this reticle" on a frame where the reticle is nonetheless drawn and
+ * merely cut. Without it, "the blink is gone" and "there was nothing in the way"
+ * are indistinguishable from the console, and that ambiguity has already
+ * produced three false readings in this lane.
  */
 function _cockpitBlocksReticle(target) {
   if (!_cockpitOccluders.length || !_cockpitShouldRender()) return false;
@@ -2749,6 +2771,52 @@ function _poseCockpitCamera() {
   _cockpitCamera.updateMatrixWorld(true);
 }
 
+// ── The cabin cut (reticles-on-the-glass-2026-08-01) ───────────────────────
+//
+// The reticles are drawn on a 2D canvas that has no depth buffer, so structure
+// in front of them can only be expressed as an ERASE. `CabinMask` renders the
+// same occluder set the raycast oracle uses, flat white on transparent black,
+// on its own offscreen GL canvas; `TargetingReticle` composites it with
+// `destination-out`. See `src/cockpit/cabinMask.js` for why it is a second
+// renderer and not `RetroRenderer`'s `cockpitTarget`.
+const _cabinMask = new CabinMask();
+
+// ⚠⚠ THE POSE IS PINNED HERE, AND THE ORDER IS THE WHOLE OF IT.
+//
+// `_cockpitCamera`'s head pose is written by `_poseCockpitCamera`, whose ONLY
+// caller in the frame loop is `_cockpitRig.update()` (via `pinCamera`) — and
+// that runs ~100 lines AFTER `targetingReticle.update()`. Rendering the mask
+// from the camera as found would build this frame's cut from LAST frame's head
+// pose, so during free-look the cut would trail the cabin by exactly one frame:
+// a bright fringe of reticle along the leading edge of every rib, moving with
+// the head. That is the same one-frame-stale class of bug `PanelMover` already
+// paid for (a zoom solved against a stale camera landed 350 px off centre), and
+// it would read as "the mask is inaccurate" rather than as "the mask is late".
+//
+// Pinning is idempotent — it copies `rig.eyePos`/`eyeQuat` and `scHead`, all of
+// which are written in `simStep`, not in `renderFrame` — so calling it here and
+// again inside `_cockpitRig.update()` gives the same pose both times. That is
+// what makes this safe rather than a second source of truth.
+//
+// ⚠ ONE RESIDUAL, KNOWN AND ACCEPTED: `mover.update()` also runs inside
+// `_cockpitRig.update()`, so a panel MID-ZOOM is at last frame's point on its
+// tween when the mask is drawn. The cabin itself is rigid and the head pose —
+// the thing that moves fast and continuously — is exact; a tweening panel is
+// off by one frame of a sub-second travel, and only while the pilot is looking
+// at that panel rather than sweeping reticles. Fixing it would mean moving
+// `_cockpitRig.update()` ahead of the snapshot it is deliberately fed
+// ("the panels see the same state the frame is about to draw"), which trades a
+// pixel for an invariant.
+//
+// Returning null (no HELM cockpit, failed GLB, empty occluder set) is the
+// degrade path: `TargetingReticle` then draws whole, uncut reticles and never
+// touches the composite op.
+targetingReticle.setMaskSource(() => {
+  if (!_cockpitShouldRender() || !_cockpitOccluders.length) return _cabinMask.render(null, null);
+  _poseCockpitCamera();
+  return _cabinMask.render(_cockpitRig.scene, _cockpitCamera);
+});
+
 /**
  * The system's star, as the cockpit's key light. Null when there is no star.
  *
@@ -2881,6 +2949,13 @@ CockpitRig.load({
   _cockpitOccluders.length = 0;
   _cockpitOccluders.push(...collectReticleOccluders(rig.model, rig));
   console.log(`[COCKPIT] ${_cockpitOccluders.length} reticle occluders (glass excluded)`);
+  // ⭐ THE SAME LIST, TAGGED — not a second census. The mask camera renders one
+  // layer and `assignMaskLayer` is handed the array above, so the pixels that
+  // erase reticles and the rays that report what blocked them cannot disagree
+  // about what counts as glass. A mask with its own rule would be one edit away
+  // from including the canopy, which covers 97.4% of the sphere and would erase
+  // every reticle in the game.
+  console.log(`[CABIN-MASK] ${assignMaskLayer(_cockpitOccluders)} meshes on mask layer ${_cabinMask.layer}`);
   // ⭐ RE-DECIDE, BECAUSE THIS LINE IS THE OTHER INPUT TO EVERY RETIREMENT.
   //
   // `_cockpitReplaces` reads `_cockpitReady`, `loadError` and the panel table —
@@ -3086,6 +3161,53 @@ window._cockpitOcclusion = (n = 61) => {
   };
 };
 window._cockpitOcclusion.at = _cockpitOcclusionAt;
+
+/**
+ * Would the RETIRED centre-ray gate have blinked this reticle out?
+ *
+ * The oracle for AC-THE-CENTRE-RAY-BLINK-IS-GONE, and it exists because the
+ * interesting frame is the one where the answer is `true` AND the reticle is
+ * still in `_reticle._lastFrame.entries` — old test says hide, new behaviour
+ * says draw-and-cut. Without it, "the blink is gone" is indistinguishable from
+ * "nothing was ever in the way", which is the shape of every false reading this
+ * lane has had.
+ */
+window._cockpitOcclusion.wouldBlink = () => ({
+  hover: _hoverTarget ? _cockpitBlocksReticle(_hoverTarget) : null,
+  selected: _selectedTarget ? _cockpitBlocksReticle(_selectedTarget) : null,
+});
+
+/**
+ * The cabin cut's kill switch — `window._cabinMask(false)` to fly with whole,
+ * uncut reticles, `window._cabinMask()` to read the current state.
+ *
+ * Required by AC-NO-READBACK-NO-FRAME-COST (the A/B is measured on ONE page in
+ * ONE session, so the toggle has to be live) and by AC-DEGRADES-WHEN-THERE-IS-
+ * NO-CABIN. Off, the mask source returns null and `_applyCabinMask` never
+ * touches the composite op at all.
+ */
+window._cabinMask = (on) => {
+  if (on === undefined) return _cabinMask.stats();
+  _cabinMask.enabled = !!on;
+  return _cabinMask.stats();
+};
+
+/**
+ * The mask's opaque fraction — the ONE number that distinguishes a working mask
+ * from the two failures that both look fine on screen.
+ *
+ * An EMPTY occluder set reads as "a game that does no occlusion"; a LEAKED
+ * canopy reads as "a cockpit with nothing to point at". Neither is visible as
+ * wrong, so this is checked against two measurements that know nothing about
+ * the mask code: `cockpit-metrics.json` → `predictedOcclusionFraction`
+ * (0.587202, build-time scanline rasterisation in `cockpit-gen.py`) and
+ * `window._cockpitOcclusion()` (runtime ray/triangle grid, ~0.579 at 16:9).
+ *
+ * ⚠ THIS IS THE ONLY `readPixels` IN THE FEATURE and it is console-only. Putting
+ * it on the frame path would make the mask a GPU sync point, which is the exact
+ * cost the whole design exists to avoid.
+ */
+window._cabinMaskCoverage = () => _cabinMask.coverage();
 
 /**
  * Dial the panel repaint period live — `window._panelHz(33)` for 30 Hz — so Max

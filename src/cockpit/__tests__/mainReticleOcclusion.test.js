@@ -37,18 +37,49 @@ describe('the cabin occludes reticles', () => {
     expect(SRC).toMatch(/function _cockpitBlocksReticle\(target\)/);
   });
 
-  it('the ONE reticle-occlusion question asks the cabin too', () => {
-    // Three call sites read `_isReticleOccluded` — the ghost filter, the hover
-    // gate and the selected gate. Hooking the cabin into the predicate rather
-    // than at each of them is the same one-decision-point rule `_applyHudSlot`
-    // exists for, and the failure it prevents is the familiar one: the site that
-    // gets forgotten is the one nobody looks at.
-    expect(fnBody('_isReticleOccluded'), 'the cabin is not consulted at all')
-      .toMatch(/if \(_cockpitBlocksReticle\(target\)\) return true;/);
+  it('⭐⭐ THE CENTRE-RAY GATE NO LONGER SUPPRESSES DRAWING (the blink is retired)', () => {
+    // REVERSED 2026-08-01, reticles-on-the-glass. `5cd1118` put
+    // `_cockpitBlocksReticle` at the top of `_isReticleOccluded`: one ray
+    // through the target's CENTRE, and a hit hid the WHOLE reticle. A ~7 px
+    // `Arch_Bow` rib blanked the entire bracket-plus-label for ~100 ms and
+    // brought it back whole — behaving exactly like something drawn on the
+    // player's eye, which is the tell Max objected to.
+    //
+    // The silhouette mask cuts the overlay's PIXELS at the rib's own edge
+    // instead, and subsumes this gate: a reticle wholly behind a monitor body
+    // is erased in full. Re-adding the call here would restore the blink on top
+    // of a working mask, and the symptom (an occasional whole-reticle flicker
+    // in a game that otherwise cuts correctly) is the kind nobody traces back.
+    expect(fnBody('_isReticleOccluded'), 'the centre-ray blink came back')
+      .not.toMatch(/_cockpitBlocksReticle\(/);
+  });
+
+  it('CONTROL: the non-cockpit occlusion it shares a function with is untouched', () => {
+    // The retirement is surgical — body-occludes-body is a different question
+    // the mask cannot answer, and deleting it along with the cabin branch would
+    // put reticles back on top of planets. Pinned because "remove the cockpit
+    // branch" and "remove the branch" are one careless keystroke apart.
+    const body = fnBody('_isReticleOccluded');
+    expect(body, 'the ray/sphere loop over _occluders went with it')
+      .toMatch(/for \(let i = 0; i < _occluders\.length; i\+\+\)/);
+    expect(body).toMatch(/if \(perpSq < occ\.radius \* occ\.radius\) return true;/);
 
     const readers = [...SRC.matchAll(/_isReticleOccluded\(/g)].length;
     expect(readers, 'expected the definition plus the ghost, hover and selected gates')
       .toBeGreaterThanOrEqual(4);
+  });
+
+  it('…and the retired test survives WIRED, as the instrument', () => {
+    // `_cockpitBlocksReticle` is kept because it is the only thing that can say
+    // "the old gate would have hidden this reticle" on a frame where the
+    // reticle is drawn and merely cut — which is how AC-THE-CENTRE-RAY-BLINK-
+    // IS-GONE is actually measured. Unreferenced, it would be dead code the
+    // next cleanup deletes, taking the oracle with it.
+    expect(SRC, 'the retired gate is now dead code')
+      .toMatch(/window\._cockpitOcclusion\.wouldBlink = \(\) =>/);
+    const wired = [...SRC.matchAll(/_cockpitBlocksReticle\(/g)].length;
+    expect(wired, 'expected the definition plus at least one instrument call site')
+      .toBeGreaterThanOrEqual(2);
   });
 
   it('⭐ IT GATES ON THE COCKPIT BEING DRAWN, not merely on the list existing', () => {
@@ -91,6 +122,73 @@ describe('the cabin occludes reticles', () => {
     expect(body).toMatch(/intersectObject\(_cockpitOccluders\[i\], false, _cockpitHits\)/);
     expect(body, 'no early return on the first hit').toMatch(/if \(_cockpitHits\.length\) return true;/);
     expect(body, 'allocating a direction per call').not.toMatch(/new THREE\.Vector3\(\)/);
+  });
+});
+
+describe('the cabin CUTS reticles — the mask wiring', () => {
+  it('CONTROL: the mask is imported and installed on the reticle', () => {
+    expect(SRC).toMatch(/import \{ CabinMask, assignMaskLayer \} from '\.\/cockpit\/cabinMask\.js'/);
+    expect(SRC).toMatch(/const _cabinMask = new CabinMask\(\)/);
+    expect(SRC, 'the reticle has no mask source, so nothing is ever cut')
+      .toMatch(/targetingReticle\.setMaskSource\(/);
+  });
+
+  it('⭐ THE MASK IS TAGGED FROM `_cockpitOccluders`, not from a second census', () => {
+    // The mask ERASES with its occluder set, so a set of its own that drifted
+    // toward including `Canopy_Glass` — 97.4% of the sphere — would wipe every
+    // reticle in the game. Passing the array the raycast oracle already casts
+    // against makes the two physically incapable of disagreeing.
+    const then = SRC.indexOf('_cockpitReady = true;');
+    expect(then, 'the load handler moved — this scan is stale').toBeGreaterThan(-1);
+    const handler = SRC.slice(then, then + 1800);
+    expect(handler, 'the mask layer is never assigned — the mask renders nothing')
+      .toMatch(/assignMaskLayer\(_cockpitOccluders\)/);
+    expect(handler, 'the mask re-derived its own occluder set')
+      .not.toMatch(/assignMaskLayer\(collectReticleOccluders\(/);
+  });
+
+  it('⭐⭐ THE COCKPIT CAMERA IS PINNED BEFORE THE MASK RENDERS', () => {
+    // THE FRAME-ORDER FIX. `_poseCockpitCamera` is called from
+    // `_cockpitRig.update()` (via `pinCamera`), which runs ~100 lines AFTER
+    // `targetingReticle.update()` in `renderFrame`. Rendering the mask from the
+    // camera as found builds THIS frame's cut from LAST frame's head pose, so
+    // during free-look the cut trails the cabin by one frame — a moving fringe
+    // of reticle along the leading edge of every rib. It reads as "the mask is
+    // inaccurate", not as "the mask is late", which is why it is pinned in
+    // source rather than left to the comment.
+    const i = SRC.indexOf('targetingReticle.setMaskSource(');
+    expect(i).toBeGreaterThan(-1);
+    const cb = SRC.slice(i, SRC.indexOf('});', i));
+    const pin = cb.indexOf('_poseCockpitCamera()');
+    const draw = cb.indexOf('_cabinMask.render(_cockpitRig.scene');
+    expect(pin, 'the mask renders from an unpinned camera').toBeGreaterThan(-1);
+    expect(draw, 'the mask never renders the cabin').toBeGreaterThan(-1);
+    expect(pin, 'the pose is written AFTER the mask is drawn — one frame stale')
+      .toBeLessThan(draw);
+  });
+
+  it('degrades to null when there is no cabin, rather than to a stale silhouette', () => {
+    // AC-DEGRADES-WHEN-THERE-IS-NO-CABIN. A failed GLB, ORRERY, or any frame
+    // before the rig resolves must produce whole uncut reticles — and must also
+    // FORGET the previous scene, or the coverage accessor would keep reporting
+    // a cabin that is no longer being drawn. That is the same "a control
+    // against an absent subject is not a control" failure this lane has hit
+    // three times.
+    const i = SRC.indexOf('targetingReticle.setMaskSource(');
+    const cb = SRC.slice(i, SRC.indexOf('});', i));
+    expect(cb, 'no gate on the cockpit actually being drawn').toMatch(/_cockpitShouldRender\(\)/);
+    expect(cb, 'no early-out on an empty occluder list — a failed GLB').toMatch(/!_cockpitOccluders\.length/);
+    expect(cb, 'the stand-down path does not clear the mask').toMatch(/_cabinMask\.render\(null, null\)/);
+  });
+
+  it('the kill switch and the coverage accessor are both reachable', () => {
+    // Neither is a convenience. An EMPTY occluder set renders as "a game that
+    // does no occlusion" and a LEAKED canopy renders as "a cockpit with nothing
+    // to point at" — so the coverage number is the only thing that tells a
+    // working mask from either failure, and the A/B for frame cost has to be
+    // togglable on one page in one session.
+    expect(SRC).toMatch(/window\._cabinMask = \(on\) =>/);
+    expect(SRC).toMatch(/window\._cabinMaskCoverage = \(\) => _cabinMask\.coverage\(\)/);
   });
 });
 

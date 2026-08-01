@@ -228,6 +228,53 @@ describe('collectReticleOccluders — everything opaque, and only the glass out'
     expect(got).not.toContain('Canopy_Glass');
   });
 
+  it('⭐ GLASS BY MATERIAL BUT NOT BY NAME is still excluded', () => {
+    // The mask ERASES with this list, so the two discriminators have to be a
+    // UNION and not a choice. `Windshield_Pane` matches neither `glass` nor
+    // `canopy`, so the name census never sees it — the material census is the
+    // only thing standing between it and a see-through pane that cuts every
+    // reticle behind it. (The mask makes this louder than the raycast did: a
+    // leaked pane no longer hides a reticle only when its centre is behind it,
+    // it erases the reticle's pixels over the pane's whole area.)
+    const paneMat = { name: 'Mat_Glass' };
+    const model = node('Cockpit', {
+      children: [
+        node('Windshield_Pane', { isMesh: true, material: paneMat }),
+        node('Rib_Shoulder_L', { isMesh: true, material: { name: 'Mat_Frame' } }),
+      ],
+    });
+    // glassNodes is EMPTY on purpose: the name rule cannot reach this mesh.
+    const got = collectReticleOccluders(model, { glassNodes: [], glassMats: new Set([paneMat]) })
+      .map((m) => m.name);
+    expect(got, 'a see-through pane the NAME rule cannot see').not.toContain('Windshield_Pane');
+    expect(got).toEqual(['Rib_Shoulder_L']);
+  });
+
+  it('⭐ GLASS BY NAME BUT NOT BY MATERIAL is still excluded', () => {
+    // The mirror, and the one that bites when the glass TREATMENT is partial:
+    // `CockpitRig._applyGlass` only adds materials it actually treated, so a
+    // pane the treatment skipped — or any pane in a build with the treatment
+    // switched off — has a material that is not in `glassMats` at all. The name
+    // census is what keeps it out, and `glassMats` here is deliberately
+    // NON-EMPTY so this cannot pass by accident on the "no treatment" path the
+    // test above it already covers.
+    const treatedMat = { name: 'Mat_Glass' };
+    const untreated = node('Canopy_SidePane', { isMesh: true, material: { name: 'Mat_SidePane' } });
+    const model = node('Cockpit', {
+      children: [
+        node('Canopy_Glass', { isMesh: true, material: treatedMat }),
+        untreated,
+        node('Hull_Tub', { isMesh: true, material: { name: 'Mat_Hull' } }),
+      ],
+    });
+    const got = collectReticleOccluders(model, {
+      glassNodes: [model.children[0], untreated],
+      glassMats: new Set([treatedMat]),
+    }).map((m) => m.name);
+    expect(got, 'an untreated pane the MATERIAL rule cannot see').not.toContain('Canopy_SidePane');
+    expect(got).toEqual(['Hull_Tub']);
+  });
+
   it('excludes a whole glass SUBTREE, not just the node named', () => {
     // A glass node is a GROUP in the general case and the panes are its
     // children, so testing the node itself would exclude the parent and keep
