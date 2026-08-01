@@ -540,7 +540,14 @@ void main() {
   // lab's rule that this channel never darkens. uTermStrength = 0 skips it entirely and is the
   // byte-identical off switch.
   if (uTermStrength > 0.0) {
-    float tt = diffuse / max(uTermWidth, 1e-3);
+    // SIGNED mu, geometric normal, primary star, unshadowed. Clamped diffuse is 0 across the
+    // ENTIRE night hemisphere, which made this a half-gaussian anchored at PEAK over the whole
+    // night side instead of a band at the day/night line. vNormal rather than shadingNormal keeps
+    // the lab's rule that relief never bends twilight; no shadow term, so an eclipse umbra cannot
+    // bloom it on the lit side; no starBrightness weighting, so a dim companion cannot widen the
+    // band. This is the lab's mu = dot(N, uLightDir) in planet-lod-shaders.glsl.js.
+    float muTerm = dot(vNormal, lightDir);
+    float tt = muTerm / max(uTermWidth, 1e-3);
     finalColor += uTermColor * uTermStrength * exp(-tt * tt);
   }
 
@@ -917,7 +924,14 @@ void main() {
   // lab's rule that this channel never darkens. uTermStrength = 0 skips it entirely and is the
   // byte-identical off switch.
   if (uTermStrength > 0.0) {
-    float tt = diffuse / max(uTermWidth, 1e-3);
+    // SIGNED mu, geometric normal, primary star, unshadowed. Clamped diffuse is 0 across the
+    // ENTIRE night hemisphere, which made this a half-gaussian anchored at PEAK over the whole
+    // night side instead of a band at the day/night line. vNormal rather than shadingNormal keeps
+    // the lab's rule that relief never bends twilight; no shadow term, so an eclipse umbra cannot
+    // bloom it on the lit side; no starBrightness weighting, so a dim companion cannot widen the
+    // band. This is the lab's mu = dot(N, uLightDir) in planet-lod-shaders.glsl.js.
+    float muTerm = dot(vNormal, lightDir);
+    float tt = muTerm / max(uTermWidth, 1e-3);
     finalColor += uTermColor * uTermStrength * exp(-tt * tt);
   }
 
@@ -1245,7 +1259,14 @@ void main() {
   // lab's rule that this channel never darkens. uTermStrength = 0 skips it entirely and is the
   // byte-identical off switch.
   if (uTermStrength > 0.0) {
-    float tt = diffuse / max(uTermWidth, 1e-3);
+    // SIGNED mu, geometric normal, primary star, unshadowed. Clamped diffuse is 0 across the
+    // ENTIRE night hemisphere, which made this a half-gaussian anchored at PEAK over the whole
+    // night side instead of a band at the day/night line. vNormal rather than shadingNormal keeps
+    // the lab's rule that relief never bends twilight; no shadow term, so an eclipse umbra cannot
+    // bloom it on the lit side; no starBrightness weighting, so a dim companion cannot widen the
+    // band. This is the lab's mu = dot(N, uLightDir) in planet-lod-shaders.glsl.js.
+    float muTerm = dot(vNormal, lightDir);
+    float tt = muTerm / max(uTermWidth, 1e-3);
     finalColor += uTermColor * uTermStrength * exp(-tt * tt);
   }
 
@@ -1378,10 +1399,24 @@ const CRATER_VORO_CELLS = 27;
 // than inlined so the negative control is one edit, and so a bisect has something to grep for.
 const LIMB_MIX = 1.0;
 
-// Terminator gaussian half-width, in units of dot(N, L). PROVISIONAL: the lab's own width comes
-// from applyDrivers (state.termWidth), which is not extracted yet — see the plan of record, Step 1.
-// 0.18 puts the visible tint inside roughly +/- 10 degrees of the day/night line.
-const TERM_WIDTH = 0.18;
+// Terminator gaussian half-width, in units of dot(N, L) — the LAB'S OWN LAW, ported verbatim from
+// planet-lod-lab.html (state.termWidth). It reads only atmosphere.pressure, so it never needed
+// anything out of the un-extracted applyDrivers; the earlier provisional 0.18 constant is retired.
+// Hairline 0.06 at <= ~0.1 bar, 0.12 at 1 bar, ~0.14 at 1.5 bar, saturating at the 0.30
+// Venus-class ceiling. The 1e-3 floor keeps log10 finite on airless bodies, whose width is inert
+// behind strength 0 anyway.
+function termWidthFor(pressureBar) {
+  const p = Math.max(pressureBar ?? 0, 1e-3);
+  return Math.min(0.30, Math.max(0.06, 0.12 + 0.09 * Math.log10(p)));
+}
+
+// The terminator MAGNITUDE, also the lab's own value. Tuned in the lab 2026-06-15: it was 0.5, and
+// that additive peak "swamped the surface into a heavy orange BELT on every atmospheric world
+// (Max-reported, all planet types)". This port originally shipped columnFraction as the magnitude,
+// and columnFraction saturates to exactly 1.0 above 0.3 bar — 6.7x the lab's value, which
+// reproduced the very artifact the lab had already fixed. columnFraction is retained as the
+// airless GATE, which is the part atmosphereOptics.js actually owns.
+const TERM_STRENGTH = 0.15;
 
 const GAS_TYPES = new Set(['gas-giant', 'hot-jupiter', 'eyeball', 'sub-neptune']);
 const ROCKY_TYPES = new Set(['rocky', 'ice', 'lava', 'ocean', 'terrestrial', 'venus', 'carbon']);
@@ -1582,13 +1617,14 @@ export class Planet {
         uLimbColor: { value: new THREE.Vector3(...optics.limbColor) },
         // Terminator. The HUE is the shared module's — that is what atmosphereOptics.js owns and
         // says it owns ("derives the limb and terminator hue from condition scalars").
-        // ⚠ The STRENGTH and WIDTH are not the lab's law yet. The lab drives them from
-        // state.termStrength / state.termWidth, which live in applyDrivers and are not extracted.
-        // columnFraction is used as the strength here because it is the module's own physical
-        // measure of how much column there is to transmit through — 0 for airless, ~1 for a full
-        // atmosphere — which makes the gate correct even though the scale is provisional.
-        uTermStrength: { value: optics.columnFraction ?? 0 },
-        uTermWidth: { value: TERM_WIDTH },
+        // STRENGTH and WIDTH are now the lab's own laws (termWidthFor / TERM_STRENGTH above). Both
+        // were portable all along: they read only atmosphere.pressure and atmosphere.retained, so
+        // neither needed anything out of the un-extracted applyDrivers. columnFraction stays as the
+        // airless GATE — 0 for airless, ~1 for a full atmosphere — which is what the module owns.
+        // It is no longer doing double duty as the magnitude, which is what made the band 6.7x too
+        // strong and, because it saturates above 0.3 bar, identical on every generated body.
+        uTermStrength: { value: (optics.columnFraction ?? 0) * TERM_STRENGTH },
+        uTermWidth: { value: termWidthFor(condition.atmosphere?.pressure) },
         uTermColor: { value: new THREE.Vector3(...optics.termColor) },
         // Biosphere. BIO_PIGMENT is the module's own pigment constant, not a colour picked here.
         uBioCover: { value: bioCover },
