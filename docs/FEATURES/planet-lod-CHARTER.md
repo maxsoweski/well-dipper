@@ -34,10 +34,32 @@ There are **two unrelated planet renderers** (full detail + the deferred-port de
 - **Lab** (`planet-lod-lab.html` + `planet-lod-lab-core.js`) — a **feature-composition**
   renderer (provinces + the F1–F51 campaign). This is the next-gen renderer in development.
 
-They share **zero shader code**. Wiring the lab into the game is an **explicitly deferred,
-no-parity, separate effort** (Max-approved campaign spec, 2026-06-09) with **no plan/scope
-yet**. So: **do NOT chase "game bugs" from lab behavior, and do NOT start game-wiring** — the
-job right now is making the lab itself good.
+They share **zero shader code**. They do, however, already share the **physics**: the lab imports
+20+ modules from `src/worldengine/` (`sphereField`, `tectonic`, `plates`, `magmatism`,
+`surfaceMaterial`, `albedoTransfer`, `bombardment`, `province`, `climate-e5`, `storm-e`, …). The
+world engine lives in the game's tree in ONE copy and the lab is a consumer of it.
+
+> ### ⛔⛔ REVERSED 2026-07-31 / 2026-08-01 (Max) — GAME-WIRING IS NOW THE ACTIVE JOB
+>
+> This section used to end "**do NOT start game-wiring** — the job right now is making the lab
+> itself good," and the program list below used to call the game-port deferred and out of scope.
+> **Both are now wrong and are corrected in place.** Max's directive, verbatim:
+>
+> - *"the goal here is to have the lab's rendering pipeline in the game — the procgen and the
+>   rendering itself. go forward in whatever way will make that happen asap."* (2026-07-31)
+> - *"we change the rendering capabilities of the main game however we need to such that the
+>   features of the world engine can render in the main game."* (2026-08-01)
+> - *"we will likely do additional development in the world engine lab, and so we need to easily be
+>   able to move the latest developments from that lab into the main game in the future."* (2026-08-01)
+>
+> **⭐ THE PLAN OF RECORD IS [`lab-pipeline-into-game-PLAN.md`](lab-pipeline-into-game-PLAN.md).**
+> Read it before doing any of this work. It is the durable, multi-session tracker; per-session
+> handoff briefings are disposable and have twice been wrong about what had already shipped.
+>
+> What still holds from the old framing: **do NOT chase "game bugs" from lab behaviour** while the
+> two renderers differ. What no longer holds: "no parity goal" (parity IS the goal now), "which
+> features ship" (all of them), and "not until the lab is mature" (the lab will keep evolving —
+> that is precisely why the seam has to be shared modules rather than a one-time port).
 
 ## The model already exists — do NOT re-invent it
 A complete physics-first model was authored up front and is the source of truth:
@@ -77,11 +99,20 @@ Full rule + provenance: `feedback_physics-first-worldengine-scoping.md` (Claude 
    ([`feature-interaction-audit-2026-06-20.md`](feature-interaction-audit-2026-06-20.md)) →
    build plan in [`planet-lod-phase5-integration-plan.md`](planet-lod-phase5-integration-plan.md)
    (52 gaps → WS1–WS5 + cross-cutting; serves the NORTH STAR directly).
-4. **Game-port** — the deferred, separate, no-parity effort. NOT in scope until the lab is mature.
+4. **Game-port — ◀ NOW ACTIVE, RUNNING IN PARALLEL (reversed 2026-07-31, see the box above).**
+   No longer deferred and no longer gated on lab maturity. Plan of record:
+   [`lab-pipeline-into-game-PLAN.md`](lab-pipeline-into-game-PLAN.md).
 
 ## Current position
-Phase 2 (per-feature quality). See `../NOW.md` for the live micro-state and the latest
-handoff, and `planet-lod-campaign-tracker.md` for which feature is next (▶️ row).
+**Two arcs run at once.** Phase 2 (per-feature quality) continues in the lab —
+`planet-lod-campaign-tracker.md` for which feature is next (▶️ row). The game-port arc runs
+alongside it; its status is in [`lab-pipeline-into-game-PLAN.md`](lab-pipeline-into-game-PLAN.md),
+never here (this file changes rarely, by design). `../NOW.md` for live micro-state.
+
+⭐ **The two arcs are not in tension, and that is a design goal, not luck.** The port's whole shape
+is "extract the lab's pipeline into modules the lab imports back," so continued lab development
+lands in the game for free. If you ever find yourself choosing between improving the lab and
+porting to the game, the seam has been built wrong — stop and fix the seam.
 
 ## How to work here (pointers, not a re-teach)
 - **Test via chrome-devtools GPU `:9223`, NOT Playwright** → [[well-dipper-testing-reference]]
