@@ -96,12 +96,12 @@ uniform float uTermStrength;
 uniform float uTermWidth;
 uniform vec3 uTermColor;
 // ── Biosphere ground cover ──
-// uBioCover = biosphereOf(condition): liquid water x atmosphere x volatiles x time x not-frozen.
+// uBioGroundCover = biosphereOf(condition): liquid water x atmosphere x volatiles x time x not-frozen.
 // ⚠ Vegetation is DARKER than the rock it grows on (canopy albedo ~0.15-0.25), so a living world's
-// disc gets DARKER, not greener — the opposite of what "add a green tint" would do. uBioCover = 0
+// disc gets DARKER, not greener — the opposite of what "add a green tint" would do. uBioGroundCover = 0
 // leaves the land byte-identical.
-uniform float uBioCover;
-uniform vec3 uBioColor;
+uniform float uBioGroundCover;
+uniform vec3 uBioGroundColor;
 // Shadow casters
 uniform vec3 starPos1;
 uniform vec3 starPos2;
@@ -680,7 +680,7 @@ void main() {
     float landElev = smoothstep(seaLevel, seaLevel + 0.35, height);
     // Coastal lowlands. WAS commented "green vegetation" and set to accentColor — a per-planet
     // random colour standing in for a biosphere, on every terrestrial world whether or not one
-    // could live there. The actual cover is now derived below from uBioCover; this stays as the
+    // could live there. The actual cover is now derived below from uBioGroundCover; this stays as the
     // low-elevation base tone.
     vec3 lowland = accentColor;
     // Mid-elevation: sediment — the weathered surface ground up and moved downhill. Derived, so it
@@ -706,9 +706,9 @@ void main() {
     // vegElev is a treeline: cover thins with altitude. The lab also modulates by slope (a steep
     // face sheds soil faster than it forms) and by basin enrichment (water collects in the sinks);
     // this branch has neither a slope nor a province term, so both are DEFERRED rather than faked.
-    if (uBioCover > 0.0) {
+    if (uBioGroundCover > 0.0) {
       float vegElev = 1.0 - smoothstep(0.55, 0.9, landElev);
-      land = mix(land, uBioColor, clamp(uBioCover * vegElev, 0.0, 1.0));
+      land = mix(land, uBioGroundColor, clamp(uBioGroundCover * vegElev, 0.0, 1.0));
     }
 
     // Add local variation so terrain isn't pure bands
@@ -1627,8 +1627,19 @@ export class Planet {
         uTermWidth: { value: termWidthFor(condition.atmosphere?.pressure) },
         uTermColor: { value: new THREE.Vector3(...optics.termColor) },
         // Biosphere. BIO_PIGMENT is the module's own pigment constant, not a colour picked here.
-        uBioCover: { value: bioCover },
-        uBioColor: { value: new THREE.Vector3(...BIO_PIGMENT) },
+        uBioGroundCover: { value: bioCover },
+        // The DISPLAY-TRANSFERRED pigment, not raw BIO_PIGMENT. PlanetGenerator carries it through
+        // applyAlbedoTransfer's opts.extra so it rides the same scale as the ground endmembers it
+        // is mixed into; pushing the raw physical albedo here made the canopy ~4x darker than the
+        // rock it replaces. The fallback is the raw constant only for bodies generated before this
+        // field existed, which is a wrong-but-not-crashing path rather than a supported one.
+        //
+        // NAME: uBioGroundCover / uBioGroundColor, matching planet-lod-uniforms.js:144-145. The
+        // lab's uBioColor is F46 BIOLUMINESCENT EMISSIVE (0.30, 0.95, 0.55) — opposite physics on a
+        // near-identical name. The first port called this pair uBioCover/uBioColor, which would
+        // have had Step 3's by-name driver write a dark daylight canopy albedo into a night-side
+        // emissive channel and produce a plausible-looking wrong render.
+        uBioGroundColor: { value: new THREE.Vector3(...(d.landPalette?.pigment || BIO_PIGMENT)) },
         // ── World-engine relief (port slice 3) ──
         // uReliefMix is both the A/B dial and the safety valve: at 0.0 this body renders
         // byte-identically to slice 2.

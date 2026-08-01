@@ -1,5 +1,5 @@
 import { conditionFromPlanet } from '../worldengine/port/conditionFromPlanet.js';
-import { surfacePaletteOf, icenessOf, meltTemperatureOf, crustTemperatureOf, ICE_ALBEDO } from '../worldengine/base/surfaceMaterial.js';
+import { surfacePaletteOf, icenessOf, meltTemperatureOf, crustTemperatureOf, ICE_ALBEDO, BIO_PIGMENT } from '../worldengine/base/surfaceMaterial.js';
 import { applyAlbedoTransfer } from '../worldengine/display/albedoTransfer.js';
 import { emissiveBlackbody } from '../worldengine/base/emission-e.js';
 import { earthRadiiToScene, RADIUS_RANGES_EARTH } from '../core/ScaleConstants.js';
@@ -727,7 +727,15 @@ export class PlanetGenerator {
       radiusEarth, massEarth, composition, T_eq, age: ageGyr,
       atmosphere, tidalState, surfaceHistory, eccentricity,
     });
-    const landPalette = applyAlbedoTransfer(surfacePaletteOf(condition));
+    // The biosphere pigment rides through opts.extra so it is scaled by the SAME transfer as the
+    // ground endmembers. albedoTransfer.js states the rule outright: "a pigment scaled by its own
+    // luminance would drift out of relation with the ground it sits on", and calls carrying it via
+    // opts.extra "the only correct way to add one". The first port skipped this and pushed raw
+    // BIO_PIGMENT straight to the shader, so the canopy rendered at ~43% of intended albedo and
+    // about 4x DARKER than the rock it replaces, instead of the intended ~1.75x.
+    const landPalette = applyAlbedoTransfer(surfacePaletteOf(condition), {
+      extra: { pigment: BIO_PIGMENT },
+    });
 
     // ── World-engine surface material (V2-10 port slice 2) ────────────────────────────────────────
     // Two more condition-derived surface properties, replacing the last two hand-picked colour tables

@@ -138,7 +138,7 @@ describe('biosphere cover reaches the game from the shared module', () => {
   });
 
   it('is zero for a body with no world-engine fields, so hand-authored fixtures are inert', () => {
-    // uBioCover = 0 skips the shader block, leaving Sol's bodies byte-identical.
+    // uBioGroundCover = 0 skips the shader block, leaving Sol's bodies byte-identical.
     expect(biosphereOf(conditionFromPlanet({}))).toBe(0);
   });
 });

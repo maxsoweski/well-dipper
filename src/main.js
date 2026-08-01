@@ -6705,12 +6705,22 @@ function simStep(deltaTime) {
         if (moon.isPlanetMoon) {
           // Planet-class moons use Planet.js shader — shadow uniforms on surface material
           const pmMat = moon.planet.surface.material;
-          // Parent planet as shadow caster (reuse the planet-planet shadow slots)
-          pmMat.uniforms.shadowPlanetCount.value = 1;
-          pmMat.uniforms.shadowPlanetPos.value[0].copy(entry.planet.mesh.position);
-          pmMat.uniforms.shadowPlanetRadius.value[0] = entry.planet.data.radius;
-          pmMat.uniforms.starPos1.value.copy(_star1Pos);
-          pmMat.uniforms.starPos2.value.copy(_star2Pos);
+          // ⛔ GUARDED, and the guard is load-bearing. These five writes assume the game's own
+          // planet shader is on this mesh. The planet branch above already guards its equivalents;
+          // this branch did not. Any material swapped onto a planet-class moon (there are ~44 over
+          // 400 seeds, and Step 3 swaps materials in production during warp) lacks these uniforms,
+          // so the write threw a TypeError from inside the frame function — and the three-loop
+          // binding has no try/catch, so the throw escaped before raf() was rescheduled and the
+          // RENDER LOOP STOPPED PERMANENTLY, while the caller had already reported success.
+          const pmu = pmMat?.uniforms;
+          if (pmu?.shadowPlanetCount) {
+            // Parent planet as shadow caster (reuse the planet-planet shadow slots)
+            pmu.shadowPlanetCount.value = 1;
+            pmu.shadowPlanetPos.value[0].copy(entry.planet.mesh.position);
+            pmu.shadowPlanetRadius.value[0] = entry.planet.data.radius;
+          }
+          if (pmu?.starPos1) pmu.starPos1.value.copy(_star1Pos);
+          if (pmu?.starPos2) pmu.starPos2.value.copy(_star2Pos);
         } else {
           const mMat = moon.mesh.material;
           mMat.uniforms.shadowPlanetPos.value.copy(entry.planet.mesh.position);
