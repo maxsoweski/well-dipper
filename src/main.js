@@ -92,6 +92,7 @@ import { _advanceSimClock, simClockMs } from './core/SimClock.js';
 import { CockpitSnapshotProvider, resolveFocusedBody } from './cockpit/CockpitSnapshot.js';
 import { CockpitRig, EYE_FOV, EYE_NEAR, EYE_FAR, COCKPIT_TONE_EXPOSURE } from './cockpit/CockpitRig.js';
 import { cockpitEyeQuat } from './cockpit/cockpitEyePose.js';
+import { collectReticleOccluders, reticleDirInCockpit } from './cockpit/reticleOcclusion.js';
 import { starDirInCockpit, starLightColor } from './cockpit/starLight.js';
 import { simRandom, simRandomSeed } from './core/SimRandom.js';
 import {
@@ -542,6 +543,13 @@ const _visibleGhostTargets = [];
 const _occDir = new THREE.Vector3();
 function _isReticleOccluded(target) {
   if (!target?.mesh) return false;
+  // ⭐ THE CABIN GETS ASKED FIRST — it is metres away and the bodies are
+  // astronomical, so anything it blocks is blocked outright and the sphere loop
+  // below has nothing to add. Cheap-test-first would put the spheres here, but
+  // "cheap" is the wrong axis: this returns true far more often in HELM (the
+  // cockpit covers ~59% of the view) and the sphere loop is the one that
+  // usually finds nothing.
+  if (_cockpitBlocksReticle(target)) return true;
   _occDir.subVectors(target.mesh.position, camera.position);
   const targetDist = _occDir.length();
   if (targetDist < 1e-6) return false;
@@ -567,6 +575,55 @@ function _isReticleOccluded(target) {
     const dz = occ.mesh.position.z - pz;
     const perpSq = dx * dx + dy * dy + dz * dz;
     if (perpSq < occ.radius * occ.radius) return true;
+  }
+  return false;
+}
+
+// ── Reticle occlusion by the COCKPIT (Max, UAT 2026-08-01) ─────────────────
+//
+// *"the reticles on the hud that go around worlds/stars in-game are still not
+// being occluded by the monitors/monitor arms, fuselage, or ribs as they
+// should be."*
+//
+// The sphere test above cannot answer this and never could: a cockpit is not a
+// union of spheres, and it lives in a different scene, in a different frame,
+// drawn by a different camera. `src/cockpit/reticleOcclusion.js` has the
+// coordinate argument; this is only the wiring.
+//
+// ⚠ THE OCCLUDER LIST IS BUILT ONCE, at load, and that is a claim about the
+// model rather than an optimisation: the cabin is rigid — nothing in it is
+// added, removed or re-parented at runtime. `PanelMover` MOVES a panel to the
+// eye, and a moved panel is still the same mesh, so the cast follows it for
+// free and a screen swung in front of the pilot correctly blocks what is
+// behind it.
+const _cockpitRaycaster = new THREE.Raycaster();
+const _cockpitOccluders = [];
+const _cockpitHits = [];
+const _cockpitDir = new THREE.Vector3();
+
+/**
+ * Is a piece of the cabin between the pilot's eye and this body?
+ *
+ * False whenever there is no cockpit being drawn, which covers ORRERY, a GLB
+ * that failed to load and every frame before the rig resolves. That is the same
+ * question `_cockpitShouldRender` answers for the cockpit pass itself, asked
+ * here so the reticles cannot be occluded by a cabin that is not on screen —
+ * the exact class of defect `_cockpitReplaces` was written for this morning.
+ */
+function _cockpitBlocksReticle(target) {
+  if (!_cockpitOccluders.length || !_cockpitShouldRender()) return false;
+  const dir = reticleDirInCockpit(_cockpitDir, target.mesh.position, camera, _cockpitCamera);
+  if (!dir) return false;
+
+  _cockpitRaycaster.set(_cockpitCamera.position, dir);
+  // Iterated rather than one `intersectObjects` call, for two reasons that are
+  // both about this running per reticle per frame: that helper SORTS its
+  // results by distance, and we only ever ask whether the list is empty; and it
+  // cannot stop early, while the first hit is the whole answer.
+  for (let i = 0; i < _cockpitOccluders.length; i++) {
+    _cockpitHits.length = 0;
+    _cockpitRaycaster.intersectObject(_cockpitOccluders[i], false, _cockpitHits);
+    if (_cockpitHits.length) return true;
   }
   return false;
 }
@@ -2655,7 +2712,17 @@ window._cockpitSnapshot = () => _cockpitSnapshotProvider.get();
 // what makes the precision question vanish. `scModel` is never touched:
 // HeadMount.test.js asserts the trajectory is bit-identical with and without
 // look input, and nothing here writes it.
-const _cockpitCamera = new THREE.PerspectiveCamera(EYE_FOV, window.innerWidth / window.innerHeight, EYE_NEAR, EYE_FAR);
+//
+// ⭐ THE FOV COMES FROM SETTINGS, NOT FROM `EYE_FOV` (2026-08-01). `EYE_FOV` is
+// 70 *because that is the game's own default*, and the lab — which has no
+// Settings to read — is the host it exists for. But the GAME has a slider, and
+// this camera was built from the constant and never told when it moved: the
+// world re-projected and the cabin did not, so the two passes composited into
+// one image that no longer lined up. The resize handler below already carries
+// this exact lesson for `aspect`; this is the same oversight one field over.
+// `?? EYE_FOV` keeps the rig's documented default as the fallback rather than
+// three's 50, which is the failure the paragraph above is about.
+const _cockpitCamera = new THREE.PerspectiveCamera(settings.get('fov') ?? EYE_FOV, window.innerWidth / window.innerHeight, EYE_NEAR, EYE_FAR);
 _cockpitCamera.rotation.order = 'YXZ';
 let _cockpitRig = null;
 let _cockpitReady = false;
@@ -2806,6 +2873,14 @@ CockpitRig.load({
   if (rig.loadError) console.warn('[COCKPIT] model failed to load:', rig.loadError);
   else if (rig.hostError) console.warn('[COCKPIT] panels failed to bind:', rig.hostError);
   else console.log(`[COCKPIT] rig ready — ${rig.host ? rig.host.panels.length : 0} panels, eye ${rig.eyeFound ? 'found' : 'MISSING'}`);
+  // The reticle occluders, once. The rig's OWN glass census does the excluding
+  // — reusing it rather than re-deriving "which bits are see-through" is what
+  // keeps the canopy treatment and the occlusion set from ever disagreeing.
+  // (They must not: the canopy covers 97% of the sphere, so a disagreement in
+  // that direction hides every reticle in the game.)
+  _cockpitOccluders.length = 0;
+  _cockpitOccluders.push(...collectReticleOccluders(rig.model, rig));
+  console.log(`[COCKPIT] ${_cockpitOccluders.length} reticle occluders (glass excluded)`);
   // ⭐ RE-DECIDE, BECAUSE THIS LINE IS THE OTHER INPUT TO EVERY RETIREMENT.
   //
   // `_cockpitReplaces` reads `_cockpitReady`, `loadError` and the panel table —
@@ -3986,6 +4061,25 @@ function applySettingChange(key, value) {
     case 'fov':
       camera.fov = value;
       camera.updateProjectionMatrix();
+      // ⭐ THE CABIN TOO, AND IT WAS MISSING (2026-08-01). This is the same
+      // oversight the resize handler already carries a comment about, one field
+      // over: the cockpit camera is not the world camera and nothing else
+      // updates it, so moving this slider left the cabin drawn at `EYE_FOV`
+      // while the world behind it changed. The two passes composite into one
+      // image, so they stop lining up — a rib no longer covers what it looks
+      // like it covers, and `PanelMover` re-solves its zoom fill from the LIVE
+      // fov, so a zoomed panel lands at a size nobody chose.
+      //
+      // ⚠ NOT COSMETIC ANY MORE. Reticle occlusion casts against the cabin in
+      // the cockpit camera's frame and relies on the two passes agreeing about
+      // where a direction lands; with the FOVs apart it would be right at the
+      // default 70 and quietly wrong at every other setting. See
+      // `src/cockpit/reticleOcclusion.js`.
+      //
+      // `EYE_FOV` stays the exported DEFAULT both hosts build with — the lab
+      // has no Settings to read. This is the live override.
+      _cockpitCamera.fov = value;
+      _cockpitCamera.updateProjectionMatrix();
       break;
     case 'zoomSensitivity':
       cameraController.scrollSensitivity = value;
