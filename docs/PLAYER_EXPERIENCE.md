@@ -101,6 +101,32 @@ vanished while the planet was still a dot.
 Shipped on `feature/supercruise-freelook`, UAT-passed 2026-08-01, merged to
 **local master only — not deployed**.
 
+**Update 2026-08-01 — the HELM cockpit shipped, and it is the largest divergence
+from the passive-screensaver spec so far:** in HELM you are now *inside the
+ship*. A GLB cabin surrounds the view, and four glass panels carry live state —
+NAV (the system/galaxy map), DRIVE (speed, throttle, mode), SURVEY (the body
+you are looking at) and TARGET (name, distance, ETA). Max's gate for it was
+whether it *"feels like flying from inside"*, and it passed on that wording.
+
+The consequence worth writing down is subtractive: **the screen-space readouts
+retire in HELM** rather than being drawn twice. The speed/throttle cluster, the
+MODE line and the mass-lock warning are on the glass now, so the flat overlay
+stops drawing them. That retirement is per-role and premise-based, not a blanket
+"are we in HELM" — if the cabin fails to load, every retired overlay comes
+straight back, because the premise "it is on the glass" is then false. This was
+verified by moving the cabin asset aside on purpose rather than by argument.
+
+Targeting reticles are cut by the cabin's real silhouette, so a reticle behind a
+rib or a monitor arm is clipped at the actual edge rather than blinking out
+whole. Panels repaint at 30 Hz — Max's pick from a live knob; the earlier 12.5 Hz
+read as stale beside a ~235 Hz world, and the cost difference is under half a
+millisecond.
+
+Not yet done, and parked deliberately: the cabin casts no shadows (neither onto
+itself nor from system objects), and the reticles are cut by the glass without
+yet *looking* projected onto it — no canopy tint, glass-depth parallax or
+phosphor. Both are in `PARKING_LOT.md` (P6, P4).
+
 ---
 
 ## ENRICHED tier (Layer 2)
