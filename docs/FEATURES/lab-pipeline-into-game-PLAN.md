@@ -85,17 +85,32 @@ LIVE-MEASURED"*. Do not re-derive them.
 Built but **not yet exercised by anything**: `swapMaterialWhenReady()` in
 `src/rendering/ShaderWarmup.js`. Step 3 is its first consumer.
 
-### Step 1 — extract `applyDrivers` into a shared module — `TODO`
+### Step 1 — extract the condition→uniforms CORE of `applyDrivers` — `IN PROGRESS`
 
-**The one that makes every future lab change free.** 802 lines that turn a condition vector into the
-349 uniform values. `makeUniforms()` supplies only defaults, and the spike proved those defaults
-render **black** (mesh rasterises 76.2%, shader computes black) — so this is not decoration, it *is*
-the procgen half of the ask.
+**The one that makes every future lab change free.** 802 lines that turn a body's condition into the
+uniform values. `makeUniforms()` supplies only defaults, and the spike proved those defaults render
+**black** (mesh rasterises 76.2%, shader computes black) — so this is not decoration, it *is* the
+procgen half of the ask.
 
-- Interface to find: `(condition, knobs, seed) → uniform values`, pure, no lab `state`, no GUI.
-- The lab imports it back and keeps working exactly as before.
-- **Done when:** the lab's resolved uniform set is byte-identical across the preset population,
-  by the `albedoTransfer` method (max delta exactly 0), and a test pins it.
+⛔ **It is NOT a pure function and will not become one by being moved.** Measured 2026-08-01:
+**153 distinct `state.*` reads, 57 `u.*` uniform writes**, plus calls into GUI plumbing
+(`listen()`, `syncDisplays()`, `riverRerouteDebounced()`, `applyStormState()`). So the step is not
+"move 802 lines"; it is **split** them:
+
+- **(A) the pure core** — `condition → uniforms`, moves to `src/worldengine/`, lab imports it back,
+  game is the second consumer. This is the deliverable.
+- **(B) lab-only residue** — GUI knobs, debounce, display sync. Stays in the HTML.
+
+The classification that decides the split: of the 153 `state` fields, which are **condition-derived**
+(the game already has these through `src/worldengine/port/conditionFromPlanet.js`) versus **hand
+knobs** (the game needs a documented default instead). ⚠ A knob misclassified as condition puts a
+human-only slider on the game's critical path — so "unknown" must be reported as unknown, not
+guessed.
+
+- **Done when:** the lab's resolved uniform set is byte-identical across the preset population, by
+  the `albedoTransfer` method (max delta exactly 0), and a test pins it.
+- **MVP bias:** if the full split is large, ship the smallest independently-verifiable slice that
+  gets a real game planet rendering through lab-derived uniforms, and record what it defers.
 
 ### Step 2 — extract the shaders into `.glsl.js` modules — `TODO`
 
@@ -144,8 +159,14 @@ against 0.8% of planets. This is the population the crater work was actually bui
 
 ## Standing directives for this lane
 
-1. **No multi-agent workflows / no `Workflow` tool here.** Direct implementation only. Overrides
-   ultracode.
+1. **Workflows ARE allowed — reversed by Max, 2026-08-01:** *"proceed via workflows but be token
+   efficient where feasible and drive to shipping mvps."* This directive previously read "no
+   multi-agent workflows on this lane, direct implementation only"; that was a working preference
+   from the measurement-heavy Stage 0 work, not a standing rule, and it is retired.
+   **Shape that works here:** fan out *reconnaissance* over the 625 KB lab HTML (ranged reads only —
+   agents must never read it whole), synthesize a design, then implement the surgical edits in the
+   main thread. The lab file has template-literal hazards that make delegated editing risky.
+   ⚠ Pin an explicit `model` on every agent call (`feedback_subagent-model.md`).
 2. **No workstream artifacts** (`intent.md` / `contract.json`) by agreement — this file is the
    contract. `verify-workstream` presupposes one and does not apply.
 3. **Commit at seams without asking; confirm before `git push`.** Commit messages on this lane are
