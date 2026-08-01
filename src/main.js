@@ -1754,6 +1754,36 @@ window._lab = {
     return { ok: false, reason: 'KnownSystems.findAt(Sol) returned null' };
   },
 
+  /**
+   * Spawn a PROCEDURAL star system by seed, skipping splash + title.
+   *
+   * ⭐ Sol is hand-authored and textured and is the WRONG place to judge any generated-body work
+   * (Max, 2026-07-31). Its bodies carry no world-engine fields, so anything derived from condition
+   * silently degrades to defaults there — and its major planets render through BodyRenderer's
+   * textured path, bypassing the procedural shader entirely. Measuring the port in Sol therefore
+   * produces confident, wrong numbers. This is the entry point that gets a GENERATED population on
+   * screen instead; `enterSol()` remains correct for plumbing and compile-cost work.
+   *
+   * Same generation path the debug panel's spawnWithSeed uses.
+   * @param {string} seed
+   */
+  spawnProceduralSystem(seed = 'lab-procedural-1') {
+    if (splashActive || titleScreenActive) {
+      const splash = document.getElementById('splash-screen');
+      if (splash) splash.style.display = 'none';
+      const titleEl = document.getElementById('title-screen');
+      if (titleEl) titleEl.style.display = 'none';
+      splashActive = false;
+      titleScreenActive = false;
+      if (skyRenderer._glowLayer?.mesh) skyRenderer._glowLayer.mesh.visible = true;
+    }
+    if (galleryMode) exitGallery();
+    const sysData = StarSystemGenerator.generate(seed);
+    sysData._destType = 'star-system';
+    spawnSystem({ forWarp: false, systemData: sysData });
+    return { ok: true, seed, planetCount: sysData.planets?.length ?? 0 };
+  },
+
   /** Whether the in-system gameplay loop is active (post-splash, post-title). */
   isInSystem() {
     return !splashActive && !titleScreenActive && !!system;

@@ -9,6 +9,7 @@ import {
   CRATER_RELIEF_UNIFORMS_GLSL,
 } from '../worldengine/shaders/craterRelief.glsl.js';
 import { conditionFromPlanet } from '../worldengine/port/conditionFromPlanet.js';
+import { atmosphereOpticsOf } from '../worldengine/base/atmosphereOptics.js';
 import { craterUniformsFrom, CRATERS_OFF } from '../worldengine/port/craterUniforms.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,6 +75,17 @@ uniform float cloudDensity;
 uniform float cloudScale;
 uniform float atmosphereStrength;
 uniform vec3 atmosphereColor;
+// ── World-engine air optics (port: the limb / rim glow) ──
+// The rim used to be a hard-coded pow(fresnel, 3.0) tinted by the game's whole-body atmosphereColor
+// — the same narrow blue-line profile on Venus, Titan and Earth alike. These come from
+// atmosphereOpticsOf(), the SAME module the lab imports, so the rim now reads the body's physics:
+// Rayleigh blue for a clear column, tholin orange for a cold organic haze, sulfur cream for a hot
+// thick shroud, and a fat detached halo (exponent -> 1.8) instead of a narrow line when the column
+// is optically thick.
+// uLimbMix is the A/B dial AND the safety valve: at 0.0 this body renders byte-identically to before.
+uniform float uLimbMix;
+uniform float uLimbExponent;
+uniform vec3 uLimbColor;
 // Shadow casters
 uniform vec3 starPos1;
 uniform vec3 starPos2;
@@ -495,7 +507,7 @@ void main() {
   if (atmosphereStrength > 0.0) {
     vec3 viewDir = normalize(vViewDir);
     float fresnel = 1.0 - max(dot(vNormal, viewDir), 0.0);
-    fresnel = pow(fresnel, 3.0);
+    fresnel = pow(fresnel, mix(3.0, uLimbExponent, uLimbMix));
     float sunFacing = smoothstep(-0.1, 0.3, diffuse);
 
     // Sub-Neptune: atmosphere glow wraps further around
@@ -503,7 +515,7 @@ void main() {
       sunFacing = smoothstep(-0.3, 0.2, diffuse);
     }
 
-    finalColor += atmosphereColor * fresnel * atmosphereStrength * sunFacing * 0.5;
+    finalColor += mix(atmosphereColor, uLimbColor, uLimbMix) * fresnel * atmosphereStrength * sunFacing * 0.5;
   }
 
   // ── Aurora (night-side glow near magnetic poles) ──
@@ -847,7 +859,7 @@ void main() {
   if (atmosphereStrength > 0.0) {
     vec3 viewDir = normalize(vViewDir);
     float fresnel = 1.0 - max(dot(vNormal, viewDir), 0.0);
-    fresnel = pow(fresnel, 3.0);
+    fresnel = pow(fresnel, mix(3.0, uLimbExponent, uLimbMix));
     float sunFacing = smoothstep(-0.1, 0.3, diffuse);
 
     // Venus: atmosphere glow wraps further around
@@ -855,7 +867,7 @@ void main() {
       sunFacing = smoothstep(-0.3, 0.2, diffuse);
     }
 
-    finalColor += atmosphereColor * fresnel * atmosphereStrength * sunFacing * 0.5;
+    finalColor += mix(atmosphereColor, uLimbColor, uLimbMix) * fresnel * atmosphereStrength * sunFacing * 0.5;
   }
 
   // ── Aurora (night-side glow near magnetic poles) ──
@@ -1170,10 +1182,10 @@ void main() {
   if (atmosphereStrength > 0.0) {
     vec3 viewDir = normalize(vViewDir);
     float fresnel = 1.0 - max(dot(vNormal, viewDir), 0.0);
-    fresnel = pow(fresnel, 3.0);
+    fresnel = pow(fresnel, mix(3.0, uLimbExponent, uLimbMix));
     float sunFacing = smoothstep(-0.1, 0.3, diffuse);
 
-    finalColor += atmosphereColor * fresnel * atmosphereStrength * sunFacing * 0.5;
+    finalColor += mix(atmosphereColor, uLimbColor, uLimbMix) * fresnel * atmosphereStrength * sunFacing * 0.5;
   }
 
   // ── Aurora (night-side glow near magnetic poles) ──
@@ -1298,6 +1310,12 @@ const CRATER_RELIEF_GAIN = 1.0;
 // Desktop 3x3x3 voronoi. 9 (centre slab only) is the lossy mobile path; the game has no quality tier
 // wired here yet, so it takes the seam-free one.
 const CRATER_VORO_CELLS = 27;
+
+// ── Air-optics A/B dial ─────────────────────────────────────────────────────────────────────────
+// 1.0 = the world engine's condition-derived limb. 0.0 = the pre-port hard-coded rim
+// (pow(fresnel, 3.0) tinted by atmosphereColor), byte-identical. Kept as a named constant rather
+// than inlined so the negative control is one edit, and so a bisect has something to grep for.
+const LIMB_MIX = 1.0;
 
 const GAS_TYPES = new Set(['gas-giant', 'hot-jupiter', 'eyeball', 'sub-neptune']);
 const ROCKY_TYPES = new Set(['rocky', 'ice', 'lava', 'ocean', 'terrestrial', 'venus', 'carbon']);
@@ -1441,9 +1459,27 @@ export class Planet {
     // schedule's own P_SURF_MAX gate would eventually say so, but only after the defaults it never
     // gets given (Jupiter derives density 1.0 from a missing mass and a missing pressure). Skipping
     // the derivation outright keeps a meaningless number out of a uniform.
+    // Derived ONCE and shared by both consumers below. It used to be computed inline inside the
+    // crater ternary, i.e. only for rocky bodies; the air optics need it for every body that has an
+    // atmosphere at all, gas giants very much included. conditionFromPlanet is pure, so hoisting it
+    // is inert for the crater path.
+    const condition = conditionFromPlanet(d);
+
     const craters = ROCKY_TYPES.has(d.type)
-      ? craterUniformsFrom(conditionFromPlanet(d))
+      ? craterUniformsFrom(condition)
       : CRATERS_OFF;
+
+    // ── Air optics (port slice: the limb) ────────────────────────────────────────────────────────
+    // atmosphereOpticsOf is not a new module and not a transcription — it is the SAME file the lab
+    // imports (planet-lod-lab.html:177). The game simply never called it. That is the whole shape of
+    // this port: the game becomes a second consumer of what the lab already uses, so a future change
+    // to the optics law lands in both without anyone porting anything.
+    // ⚠ It returns a CONTINUOUS limbExponent (3.5 - 1.7*thickHaze). The lab currently overrides this
+    // with its own binary  _thickHaze ? 1.8 : 3.5  at planet-lod-lab.html:3749 and ignores the
+    // module's value — a live drift between the lab and the module it imports. The game takes the
+    // module's value, deliberately: the module is the shared law. Reconciling the lab is its own
+    // change and must be byte-gated, so it is NOT done here.
+    const optics = atmosphereOpticsOf(condition);
 
     // Pick the shader variant based on planet category
     const variant = planetShaderSource(shaderVariantFor(d.type));
@@ -1466,6 +1502,11 @@ export class Planet {
         uLavaCrust: { value: new THREE.Vector3(...(d.lavaCrustColor || d.accentColor || [1.0, 0.18, 0.05])) },
         noiseScale: { value: d.noiseScale },
         noiseDetail: { value: d.noiseDetail },
+        // ── World-engine air optics ──
+        // uLimbMix is the dial and the safety valve; at 0.0 the rim is byte-identical to pre-port.
+        uLimbMix: { value: LIMB_MIX },
+        uLimbExponent: { value: optics.limbExponent },
+        uLimbColor: { value: new THREE.Vector3(...optics.limbColor) },
         // ── World-engine relief (port slice 3) ──
         // uReliefMix is both the A/B dial and the safety valve: at 0.0 this body renders
         // byte-identically to slice 2.
