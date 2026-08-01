@@ -84,6 +84,7 @@ export class ExoticOverlay {
     const habitable = [];
     for (let i = 0; i < planets.length; i++) {
       const p = planets[i];
+      if (p.known) continue; // D3: injected real planets are never retyped/regenerated
       const type = p.planetData.type;
       if ((type === 'terrestrial' || type === 'ocean' || type === 'eyeball')
           && p.orbitRadiusAU >= hzInner && p.orbitRadiusAU < hzOuter) {
@@ -154,6 +155,7 @@ export class ExoticOverlay {
     const candidates = [];
     for (let i = 0; i < planets.length; i++) {
       const p = planets[i];
+      if (p.known) continue; // D3: injected real planets are never retyped/regenerated
       const type = p.planetData.type;
       const hasAtmo = p.planetData.atmosphere !== null;
       const isRocky = ['rocky', 'sub-neptune', 'terrestrial', 'ocean', 'venus', 'ice', 'eyeball'].includes(type);
@@ -176,8 +178,15 @@ export class ExoticOverlay {
     const isBloom = rng.chance(0.10);
 
     if (isBloom) {
-      // Bloom: colonize 2-4 bodies — any with atmosphere or rocky
-      const bloomCount = rng.int(2, Math.min(4, candidates.length));
+      // Bloom: colonize 2-4 bodies — any with atmosphere or rocky.
+      // With exactly 1 candidate, rng.int(2, 1) is an inverted range and
+      // returns 2. The draw must still happen (RNG cadence is load-bearing
+      // for procgen revisit-stability), so clamp the count rather than
+      // skip the roll — for ≥2 candidates the clamp is a no-op.
+      const bloomCount = Math.min(
+        rng.int(2, Math.min(4, candidates.length)),
+        candidates.length
+      );
       for (let b = 0; b < bloomCount; b++) {
         this._swapPlanetType(planets[candidates[b].idx], 'fungal', rng);
       }
@@ -194,21 +203,26 @@ export class ExoticOverlay {
    * Replaces a planet in inner/scorching zone (energy harvesting near star).
    */
   static _applyHex(rng, planets, hzInner) {
-    // Find inner/scorching zone planets
+    // Find inner/scorching zone planets (D3: injected real planets are never
+    // candidates — they must not be retyped/regenerated).
     const candidates = [];
     for (let i = 0; i < planets.length; i++) {
+      if (planets[i].known) continue;
       if (planets[i].orbitRadiusAU < hzInner) {
         candidates.push(i);
       }
     }
 
     if (candidates.length === 0) {
-      // Fallback: pick any planet
+      // Fallback: pick any planet (preserve the procgen RNG draw exactly).
       candidates.push(rng.int(0, planets.length - 1));
     }
 
     const idx = rng.pick(candidates);
-    this._swapPlanetType(planets[idx], 'hex', rng);
+    // D3 guard: if the fallback landed on a known planet (merged systems only),
+    // skip the swap rather than regenerate its real data. Procgen planets carry
+    // no `known` flag, so this never fires there (AC8).
+    if (!planets[idx].known) this._swapPlanetType(planets[idx], 'hex', rng);
     return true;
   }
 
@@ -217,10 +231,12 @@ export class ExoticOverlay {
    * Prefers outer system (resource harvesting beyond frost line).
    */
   static _applyMachine(rng, planets, frostLine) {
-    // Prefer outer system planets
+    // Prefer outer system planets (D3: injected real planets are never
+    // candidates — they must not be retyped/regenerated).
     const outer = [];
     const inner = [];
     for (let i = 0; i < planets.length; i++) {
+      if (planets[i].known) continue;
       if (planets[i].orbitRadiusAU > frostLine) {
         outer.push(i);
       } else {
@@ -229,6 +245,9 @@ export class ExoticOverlay {
     }
 
     const candidates = outer.length > 0 ? outer : inner;
+    // Merged system with ONLY known planets → no procgen candidate to retype;
+    // bail out. Procgen systems always keep ≥1 non-known planet here (AC8).
+    if (candidates.length === 0) return false;
     const idx = rng.pick(candidates);
     this._swapPlanetType(planets[idx], 'machine', rng);
     return true;
@@ -247,6 +266,7 @@ export class ExoticOverlay {
   static _applyGeological(rng, planets, hzInner, frostLine) {
     for (let i = 0; i < planets.length; i++) {
       const p = planets[i];
+      if (p.known) continue; // D3: injected real planets are never retyped/regenerated
       const r = p.orbitRadiusAU;
       const type = p.planetData.type;
 

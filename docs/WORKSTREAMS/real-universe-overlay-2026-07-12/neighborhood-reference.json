@@ -1,0 +1,215 @@
+{
+  "_generatedBy": "scripts/gen-neighborhood-reference.mjs",
+  "derivation": {
+    "radiusPc": 5,
+    "sources": [
+      "public/assets/data/hyg-stars.json (HYG catalog, naked-eye stars, mag<7.0 cut)",
+      "public/assets/data/real-star-supplement.json (dim named hosts at true positions)"
+    ],
+    "method": "For each origin, every named star (non-empty name, excluding the origin) whose Euclidean distance in the shared galactocentric-kpc frame is within 5.0 pc. refDistPc = that distance in pc, rounded to 3 decimals. Sorted by ascending raw distance.",
+    "toleranceRationale": "The ±2% live-assertion tolerance is against THESE shipped-catalog distances, not external astronomy: some K/M-dwarf Hipparcos (HYG) distances differ from modern Gaia by >2%, so an externally-sourced value can fail ±2% with no pipeline bug. Names and presence carry the astronomy truth; distances pin the pipeline (design fact 5)."
+  },
+  "origins": {
+    "Sol": [
+      {
+        "name": "Proxima Centauri",
+        "refDistPc": 1.301,
+        "spect": "M",
+        "source": "supplement"
+      },
+      {
+        "name": "Rigil Kentaurus",
+        "refDistPc": 1.324,
+        "spect": "G",
+        "source": "hyg"
+      },
+      {
+        "name": "Barnard's Star",
+        "refDistPc": 1.827,
+        "spect": "M",
+        "source": "supplement"
+      },
+      {
+        "name": "Sirius",
+        "refDistPc": 2.637,
+        "spect": "A",
+        "source": "hyg"
+      },
+      {
+        "name": "Ran",
+        "refDistPc": 3.216,
+        "spect": "K",
+        "source": "hyg"
+      },
+      {
+        "name": "Ross 128",
+        "refDistPc": 3.374,
+        "spect": "M",
+        "source": "supplement"
+      },
+      {
+        "name": "HD 201091",
+        "refDistPc": 3.486,
+        "spect": "K",
+        "source": "hyg"
+      },
+      {
+        "name": "Procyon",
+        "refDistPc": 3.514,
+        "spect": "F",
+        "source": "hyg"
+      },
+      {
+        "name": "Eps Ind",
+        "refDistPc": 3.622,
+        "spect": "K",
+        "source": "hyg"
+      },
+      {
+        "name": "Tau Cet",
+        "refDistPc": 3.65,
+        "spect": "G",
+        "source": "hyg"
+      },
+      {
+        "name": "YZ Cet",
+        "refDistPc": 3.712,
+        "spect": "M",
+        "source": "supplement"
+      },
+      {
+        "name": "Teegarden's Star",
+        "refDistPc": 3.831,
+        "spect": "M",
+        "source": "supplement"
+      },
+      {
+        "name": "Lacaille 8760",
+        "refDistPc": 3.946,
+        "spect": "M",
+        "source": "hyg"
+      },
+      {
+        "name": "Wolf 1061",
+        "refDistPc": 4.306,
+        "spect": "M",
+        "source": "supplement"
+      },
+      {
+        "name": "GJ 1002",
+        "refDistPc": 4.849,
+        "spect": "M",
+        "source": "supplement"
+      },
+      {
+        "name": "HD 88230",
+        "refDistPc": 4.873,
+        "spect": "K",
+        "source": "hyg"
+      },
+      {
+        "name": "Keid",
+        "refDistPc": 4.984,
+        "spect": "K",
+        "source": "hyg"
+      }
+    ],
+    "Sirius": [
+      {
+        "name": "Procyon",
+        "refDistPc": 1.614,
+        "spect": "F",
+        "source": "hyg"
+      },
+      {
+        "name": "Ran",
+        "refDistPc": 2.405,
+        "spect": "K",
+        "source": "hyg"
+      },
+      {
+        "name": "Sol",
+        "refDistPc": 2.637,
+        "spect": "G",
+        "source": "hyg"
+      },
+      {
+        "name": "Proxima Centauri",
+        "refDistPc": 2.867,
+        "spect": "M",
+        "source": "supplement"
+      },
+      {
+        "name": "Rigil Kentaurus",
+        "refDistPc": 2.918,
+        "spect": "G",
+        "source": "hyg"
+      },
+      {
+        "name": "Keid",
+        "refDistPc": 3.314,
+        "spect": "K",
+        "source": "hyg"
+      },
+      {
+        "name": "Teegarden's Star",
+        "refDistPc": 3.675,
+        "spect": "M",
+        "source": "supplement"
+      },
+      {
+        "name": "GJ 273",
+        "refDistPc": 3.682,
+        "spect": "M",
+        "source": "supplement"
+      },
+      {
+        "name": "Ross 128",
+        "refDistPc": 3.767,
+        "spect": "M",
+        "source": "supplement"
+      },
+      {
+        "name": "Tau Cet",
+        "refDistPc": 3.775,
+        "spect": "G",
+        "source": "hyg"
+      },
+      {
+        "name": "YZ Cet",
+        "refDistPc": 4.117,
+        "spect": "M",
+        "source": "supplement"
+      },
+      {
+        "name": "Barnard's Star",
+        "refDistPc": 4.419,
+        "spect": "M",
+        "source": "supplement"
+      },
+      {
+        "name": "Eps Ind",
+        "refDistPc": 4.688,
+        "spect": "K",
+        "source": "hyg"
+      },
+      {
+        "name": "82 G. Eri",
+        "refDistPc": 4.824,
+        "spect": "G",
+        "source": "hyg"
+      }
+    ]
+  },
+  "absentFamous": {
+    "note": "Famous nearby stars in neither shipped catalog (below the HYG mag<7.0 cut and not among the 14 supplement hosts). Documented gap — never asserted by AC1 (design fact 6).",
+    "names": [
+      "Lacaille 9352",
+      "Lalande 21185",
+      "Luyten 726-8 / UV Ceti",
+      "Ross 154",
+      "Ross 248",
+      "Wolf 359"
+    ]
+  }
+}

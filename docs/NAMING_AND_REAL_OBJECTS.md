@@ -554,6 +554,59 @@ determines whether the overlay is one system or four extensions.
 
 ---
 
+## 6. System-identity grammar — design law (ratified 2026-07-17)
+
+**Status: RATIFIED.** Max's directive, verbatim (2026-07-17, scoping
+`system-identity-grammar-2026-07-17`):
+
+> "I want binaries/trinaries to appear as multiple dots in the prism view. I
+> want the system view for those systems to be the SAME system (which they
+> are, realistically). I don't want to click on one of the binaries/trinaries
+> and end up in a different system in the nav computer, or via warp."
+
+**Why this is law and not a feature note.** Three consecutive UAT findings
+(`real-universe-overlay-2026-07-12/ac9-uat-findings.md` findings #1–#3) were
+instances of one recurring class: each fix made a single *layer* honest —
+naming, then seed/data identity, then per-marker glyphs — while no acceptance
+criterion ever spoke for **cross-view agreement**. Max named the class: "I feel
+like we keep running into the same issue." This section closes the class; every
+future workstream that touches multi-star presentation cites it as an AC
+template.
+
+**The normative clauses.** Any view of any component of a known multi-star
+system must:
+
+1. **Name the system** — titles and headers read the system's name
+   (`_knownSystemNames.system`), never a component's name posing as a system.
+   The component you browsed in through is *annotated* ("via Proxima
+   Centauri — far companion"), not promoted to title.
+2. **Show its full structure** — close members AND far companions
+   (`systemData.farCompanions`, incl. their planets) are visible; no member is
+   silently omitted from any view that claims to show the system.
+3. **Mark which component you're viewing** — when the entry point is a
+   specific member (a far companion's own prism marker, a component alias in
+   search), the view says so explicitly.
+4. **Cue co-membership wherever members render as separate markers** — a
+   far companion's catalog-true marker keeps its own position (ruling 1;
+   never merged, never moved), so the *presentation* must carry the "one
+   system" statement instead: membership label suffix ("Proxima Centauri ·
+   Alpha Centauri") plus a tether cue on hover/selection.
+
+**The invariant behind all four:** one star system = one identity everywhere.
+The same seed, the same structure, the same name, and the same warp
+destination, on every path a player can reach it — search, prism click, sky
+click, teleport — and on every screen that describes it. The data half of this
+invariant is built and verified (`real-star-identity-unification-2026-07-15`:
+canonical seed, preview ≡ arrival, pin-by-default); this section binds the
+presentation half (`system-identity-grammar-2026-07-17`).
+
+**Boundary.** The grammar binds *known* multi-star systems (KnownSystems
+registry + curated companion table). Procgen systems have no
+`_knownSystemNames` and render under generated names exactly as before —
+the grammar adds no obligations there.
+
+---
+
 ## Appendix — file map
 
 | Concern | File | Key lines |

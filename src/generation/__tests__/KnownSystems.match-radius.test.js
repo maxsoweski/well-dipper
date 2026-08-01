@@ -14,6 +14,14 @@ const SOL_POS = { x: GalacticMap.SOLAR_R, y: GalacticMap.SOLAR_Z, z: 0.0 };
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CATALOG_PATH = join(HERE, '../../../public/assets/data/hyg-stars.json');
 const CATALOG_STARS = JSON.parse(readFileSync(CATALOG_PATH, 'utf8'));
+// Increment-3 supplement-load inputs (design D5): the dim-host supplement +
+// exoplanet contents that RealStarCatalog.load() merges via one Promise.all.
+// Read off disk here (no fetch in node) — ingestCatalogData is the shared merge
+// path load() wraps, so this exercises the real concat + overlay index build.
+const SUPPLEMENT = JSON.parse(readFileSync(
+  join(HERE, '../../../public/assets/data/real-star-supplement.json'), 'utf8'));
+const CONTENTS = JSON.parse(readFileSync(
+  join(HERE, '../../../public/assets/data/real-system-contents.json'), 'utf8'));
 
 // Real HYG catalog positions (public/assets/data/hyg-stars.json).
 // Sirius is 2.64 pc from Sol — inside the old 5 pc match radius, which made
@@ -35,8 +43,16 @@ describe('KnownSystems.findAt — match radius vs real-star neighbors', () => {
     expect(KnownSystems.findAt(SIRIUS_POS)).toBeNull();
   });
 
-  it('does NOT match Sol at Rigil Kentaurus (1.32 pc — nearest real star)', () => {
-    expect(KnownSystems.findAt(RIGIL_POS)).toBeNull();
+  it('matches Alpha Centauri at Rigil Kentaurus (a1d2d4c successor flag 1 flips)', () => {
+    // Increment 2 (real-universe-overlay-2026-07-12, AC5) registers Alpha
+    // Centauri AT Rigil's HYG position. This test previously asserted findAt
+    // returned null there ("does NOT match Sol at Rigil Kentaurus"); the
+    // successor flag flips now that the authored A+B binary claims the position.
+    // Rigil keeps its identity — it is now Alpha Centauri's, not Sol's, and not
+    // a procgen impostor.
+    const ks = KnownSystems.findAt(RIGIL_POS);
+    expect(ks).not.toBeNull();
+    expect(ks.name).toBe('Alpha Centauri');
   });
 
   it('no real catalog star falls inside a known system radius UNLESS it is a derived alias', () => {
@@ -110,6 +126,22 @@ describe('RealStarCatalog.findByPosition — identity lookup for teleport arriva
     const cat = new RealStarCatalog();
     expect(cat.findByPosition(SIRIUS_POS)).toBeNull();
   });
+
+  it('merges the dim-host supplement into the catalog and finds a supplement host by position (Increment 3, design D5)', () => {
+    // load() concats hyg ∪ supplement; ingestCatalogData is that same merge path
+    // (browser fetches, tests feed fs). Supplement dim hosts become
+    // findByPosition/findVisible targets — TRAPPIST-1 is below the naked-eye HYG
+    // cut and reachable ONLY via the supplement.
+    expect(CATALOG_STARS.length).toBe(15592); // 15599 pre-FIX-4, minus 7 deduped secondary rows
+    expect(SUPPLEMENT.stars.length).toBe(14);
+    const cat = new RealStarCatalog();
+    cat.ingestCatalogData(CATALOG_STARS, SUPPLEMENT, CONTENTS);
+    expect(cat.count).toBe(CATALOG_STARS.length + SUPPLEMENT.stars.length); // 15592 + 14
+    const t1 = SUPPLEMENT.stars.find((s) => s.name === 'TRAPPIST-1');
+    expect(cat.findByPosition({ x: t1.x, y: t1.y, z: t1.z })?.name).toBe('TRAPPIST-1');
+    // The overlay index rode the same merge and is ready for the arrival join.
+    expect(cat.overlay.ready).toBe(true);
+  });
 });
 
 describe('cross-file invariant — RealStarCatalog tolerance vs KnownSystems radius', () => {
@@ -135,8 +167,26 @@ describe('alias-index + positional-belt join', () => {
   // into these assertions.
   it('resolves Sol via its eager self-name alias, seeded at module load', () => {
     expect(KnownSystems.findByAlias('Sol', SOL_POS)?.name).toBe('Sol');
-    // Rigil is 1.32 pc from Sol — never claimed by the Sol-only registry.
-    expect(KnownSystems.findByAlias('Rigil Kentaurus', RIGIL_POS)).toBeNull();
+    // Rigil is 1.32 pc from Sol — never claimed by Sol. Since Increment 2 (AC5)
+    // registered Alpha Centauri at Rigil's position, Rigil is now that entry's
+    // alias (once associate() runs), not Sol's. Order-robust but exact: the
+    // only legal outcomes are null (associate not yet run in this file) or
+    // the Alpha Centauri entry — anything else is a mis-claim.
+    const rigilOwner = KnownSystems.findByAlias('Rigil Kentaurus', RIGIL_POS);
+    expect([null, 'Alpha Centauri']).toContain(rigilOwner?.name ?? null);
+  });
+
+  it('Proxima is a sky catalog star once the supplement loads, yet its NAME routes to Alpha Centauri, not its own arrival (Increment 3, design D5/D6)', () => {
+    const prox = SUPPLEMENT.stars.find((s) => s.name === 'Proxima Centauri');
+    const proxPos = { x: prox.x, y: prox.y, z: prox.z };
+    const cat = new RealStarCatalog();
+    cat.ingestCatalogData(CATALOG_STARS, SUPPLEMENT, CONTENTS);
+    // In the sky as its own dim catalog star (below the HYG naked-eye cut):
+    expect(cat.findByPosition(proxPos)?.name).toBe('Proxima Centauri');
+    // But targeting the NAME resolves to the authored Alpha Centauri via the
+    // eager far-companion alias (design D6) — Proxima never spawns as a separate
+    // system; its planets ride Alpha Centauri's far companion, not a bulk merge.
+    expect(KnownSystems.findByAlias('Proxima Centauri', proxPos)?.name).toBe('Alpha Centauri');
   });
 
   it('the positional belt rejects a far same-named arrival', () => {

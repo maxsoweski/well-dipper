@@ -4,6 +4,7 @@ import { StarFlare } from './objects/StarFlare.js';
 import { RealStarCatalog } from './generation/RealStarCatalog.js';
 import { RealFeatureCatalog } from './generation/RealFeatureCatalog.js';
 import { HashGridStarfield } from './generation/HashGridStarfield.js';
+import { realStarSeed } from './generation/realStarSeed.js';
 import { createStarRenderer } from './rendering/objects/StarRenderer.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
@@ -27,6 +28,7 @@ import {
 } from './camera/orreryEntryGeometry.js';
 import { RetroRenderer } from './rendering/RetroRenderer.js';
 import { StarSystemGenerator } from './generation/StarSystemGenerator.js';
+import { resolveArrivalSystemAsync } from './generation/arrivalResolution.js';
 import { PlanetGenerator } from './generation/PlanetGenerator.js';
 import { MoonGenerator } from './generation/MoonGenerator.js';
 import { DestinationPicker } from './generation/DestinationPicker.js';
@@ -275,7 +277,7 @@ const realFeatureCatalog = new RealFeatureCatalog();
 // Load real star catalog
 realStarCatalog.load().then(() => {
   StarfieldGenerator.realStarCatalog = realStarCatalog;
-  KnownSystems.associate(realStarCatalog);   // derive known-system catalog aliases
+  KnownSystems.associate(realStarCatalog, galacticMap);   // derive known-system catalog aliases + inject map for authored-entry ctx (design D7)
   debugPanel.setRealStarCatalog(realStarCatalog);
   if (_navComputer) _navComputer.setRealStarCatalog(realStarCatalog);
   console.log(`Real star catalog loaded: ${realStarCatalog.count} stars`);
@@ -284,6 +286,7 @@ realStarCatalog.load().then(() => {
 // Load real feature catalogs (globular clusters, etc.)
 realFeatureCatalog.load().then(() => {
   debugPanel.setRealFeatureCatalog(realFeatureCatalog);
+  if (_navComputer) _navComputer.setRealFeatureCatalog(realFeatureCatalog); // Inc-4 AC2: class-(c) structures search
   // Make real features available to the hash grid for Plummer density
   HashGridStarfield.realFeatureCatalog = realFeatureCatalog;
   console.log(`Real feature catalog loaded: ${realFeatureCatalog.globularClusters.length} globular clusters`);
@@ -2929,6 +2932,7 @@ function _initNavComputer() {
   const navCanvas = document.getElementById('nav-computer-canvas');
   _navComputer = new NavComputer(navCanvas, galacticMap, retroRenderer.renderer);
   if (realStarCatalog.loaded) _navComputer.setRealStarCatalog(realStarCatalog);
+  if (realFeatureCatalog.loaded) _navComputer.setRealFeatureCatalog(realFeatureCatalog); // Inc-4 AC2: class-(c) structures search
 
   // COMMIT button → request close (action retrieved via nav.close())
   _navComputer.setCommitCallback((action) => {
@@ -3721,7 +3725,6 @@ async function _generateWarpDestinationData() {
     // First, check if the clicked starfield point maps to a specific
     // GalacticMap star. If so, warp directly to THAT star — don't do
     // a second direction-based search that might find a different star.
-    let galaxyContext = null;
     let resolvedStar = null;
 
     // Priority 1: Nav computer selected a specific star — use its exact position + seed
@@ -3750,47 +3753,44 @@ async function _generateWarpDestinationData() {
     if (resolvedStar) {
       playerGalacticPos = { x: resolvedStar.worldX, y: resolvedStar.worldY, z: resolvedStar.worldZ };
       currentGalaxyStar = resolvedStar;
-      galaxyContext = galacticMap.deriveGalaxyContext(playerGalacticPos);
-      // Hash grid already determined this star's type — pass it through
-      // so StarSystemGenerator uses it instead of re-rolling from weights
-      if (resolvedStar.type) {
-        galaxyContext.starTypeOverride = resolvedStar.type;
-      }
-      // Use the resolved star's seed for deterministic system generation
+      // Use the resolved star's seed for deterministic system generation.
+      // Context derivation + starTypeOverride now live in the shared arrival
+      // resolution module (FIX-2), fed resolvedStar.type below.
       seed = String(resolvedStar.seed);
       console.log(`[WARP] Resolved to: (${playerGalacticPos.x.toFixed(4)}, ${playerGalacticPos.y.toFixed(4)}, ${playerGalacticPos.z.toFixed(4)}) seed=${resolvedStar.seed}`);
     }
 
-    // Check for known system override. Identity-aware: a nav-picked star
-    // bypasses the positional check (picking a DIFFERENT star near Sol must
-    // not Sol-override it), but a nav entry carrying a known system's own
-    // name ("Sol" via the real-star overlay) IS that system — the nav's
-    // matched hash-grid star can sit up to 2 pc from the registered
-    // position, outside findAt's radius, so the name is joined via a
-    // catalog-derived alias index (KnownSystems.associate — a registry entry
-    // claims every catalog star within MATCH_RADIUS of its position, so a
-    // multi-star system like Alpha Centauri gets both component names as
-    // aliases automatically). A 3 pc positional belt on playerGalacticPos
-    // then rejects a same-named star reached far from the registered
-    // position (duplicate catalog names).
+    // ── Shared arrival resolution (FIX-2) ──
+    // ONE resolution core (arrivalResolution.js) owns context derivation +
+    // starTypeOverride + KnownSystems findByAlias/findAt routing + real-universe
+    // overlay merge + generate + merged display names, so the nav SYSTEM preview
+    // (NavComputer._renderSystem) generates EXACTLY what arrival delivers. The
+    // KnownSystems routing is identity-aware: a nav pick joins by the star's own
+    // name via the catalog-derived alias index (a multi-star system like Alpha
+    // Centauri gets each component name as an alias), gated by a 3 pc belt; a sky
+    // click uses the positional findAt. Engine globals a known-system arrival
+    // realigns (playerGalacticPos, currentGalaxyStar) and the arrival transport
+    // fields (_destType/_warpTargetName, set below) stay HERE — not the module's.
     const hasNavStar = !!warpTarget.navStarData;
-    const knownWarp = hasNavStar
-      ? KnownSystems.findByAlias(warpTarget.name, playerGalacticPos)
-      : KnownSystems.findAt(playerGalacticPos);
+    const _arr = await resolveArrivalSystemAsync({
+      galacticMap,
+      overlay: realStarCatalog?.overlay || null,
+      pos: playerGalacticPos,
+      starType: resolvedStar?.type || null,
+      seed,
+      displayName: warpTarget.name,
+      hasNavStar,
+    });
+    pendingSystemData = _arr.systemData;
+    const knownWarp = _arr.knownWarp;
     console.log(`[WARP] knownSystem check: hasNavStar=${hasNavStar}, knownWarp=${knownWarp?.name || 'none'}`);
     if (knownWarp) {
-      // Arriving at a known system means arriving at ITS registered
-      // position — align the player pos so sky prep, revisit naming, and
-      // the KnownSystems radius all agree (matters when the nav matched a
-      // nearby grid star rather than the exact registry coordinates).
+      // Arriving at a known system means arriving at ITS registered position —
+      // align the player pos so sky prep, revisit naming, and the KnownSystems
+      // radius all agree (matters when the nav matched a nearby grid star rather
+      // than the exact registry coordinates), and realign the "where am I"
+      // globals, same as _debugEnterKnownSystem's realignment (~2464-2472).
       playerGalacticPos = { ...knownWarp.position };
-      pendingSystemData = knownWarp.generate();
-      pendingSystemData._knownSystemNames = knownWarp.names;
-      pendingSystemData._warpTargetName = knownWarp.name;
-      // The "where am I" globals must agree after a known-system arrival —
-      // realign currentGalaxyStar (left pointing at the nav-matched grid
-      // star from the resolvedStar branch above) to the registry position,
-      // same as _debugEnterKnownSystem's realignment (~2464-2472).
       currentGalaxyStar = {
         worldX: knownWarp.position.x,
         worldY: knownWarp.position.y,
@@ -3801,8 +3801,6 @@ async function _generateWarpDestinationData() {
         isReal: true,
       };
       console.log(`[WARP] Known system override: ${knownWarp.name}`);
-    } else {
-      pendingSystemData = await StarSystemGenerator.generateAsync(seed, galaxyContext);
     }
   } else {
     // Any other destType that wasn't caught above — should not happen in production.
@@ -5234,7 +5232,7 @@ debugPanel.setSpawnCallbacks({
       // Step 3: system generation — deferred again
       setTimeout(() => {
         const nearest = HashGridStarfield.findStarsInRadius(galacticMap, playerGalacticPos, 0.01, 1);
-        const starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'debug-teleport';
+        let starSeed = nearest.length > 0 ? String(nearest[0].seed) : 'debug-teleport';
         const knownSys = KnownSystems.findAt(playerGalacticPos);
         let sysData;
         if (knownSys) {
@@ -5247,12 +5245,42 @@ debugPanel.setSpawnCallbacks({
           // warp arrivals get via _warpTargetName from the clicked sky
           // entry (~9508) and galaxyContext.starTypeOverride (~3405).
           const realStar = realStarCatalog.findByPosition(playerGalacticPos);
+          // FIX-1 (AC1): a teleport that resolves to a real catalog star seeds
+          // by the canonical F1 of the CATALOG position — not the nearest
+          // hash-grid star — so debug arrivals share the search/sky/prism
+          // identity. Procgen teleports (realStar null) keep the grid seed.
+          if (realStar) {
+            starSeed = String(realStarSeed(realStar.x, realStar.y, realStar.z));
+          }
           if (realStar?.spect) {
-            ctx.starTypeOverride = realStar.spect;
+            // D6: starTypeOverride stays CATALOG-sourced, routed through
+            // normalizeSpectralClass so the HYG letter zoo ('W','C','S','D',…)
+            // resolves defensively; a null (unrepresentable) result leaves the
+            // roll to galaxy weights. Only fires for a real star, so procgen
+            // teleports (realStar null) are untouched (AC8).
+            const _t = StarSystemGenerator.normalizeSpectralClass(realStar.spect);
+            if (_t) ctx.starTypeOverride = _t;
+          }
+          // ── Real-universe overlay merge (AC3/AC4, design D1/D6/D7) ──
+          // Join by the real star's NAME; applyToContext omits keys it can't
+          // supply and console.warns if the catalog is not yet loaded (D5).
+          const _overlay = realStarCatalog.overlay || null;
+          const _merge = (realStar?.name && _overlay?.ready)
+            ? _overlay.resolve(realStar.name, playerGalacticPos) : null;
+          if (realStar?.name && _overlay) {
+            _overlay.applyToContext(ctx, realStar.name, playerGalacticPos);
           }
           sysData = StarSystemGenerator.generate(starSeed, ctx);
           if (realStar?.name) {
             sysData._warpTargetName = realStar.name;
+          }
+          // D7 real display names + D6 host spectFull on a merged system.
+          if (_merge && (_merge.companionSpec || _merge.knownPlanets)) {
+            sysData._knownSystemNames =
+              _overlay.deriveMergedNames(realStar.name, sysData, _merge.tableEntry ?? null);
+            if (_merge.host?.spectFull && !sysData.star.spectFull) {
+              sysData.star.spectFull = _merge.host.spectFull;
+            }
           }
         }
         sysData._destType = 'star-system';

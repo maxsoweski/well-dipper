@@ -9,12 +9,73 @@
  * We map: Harris X → our x (toward galactic center)
  *         Harris Y → our z
  *         Harris Z → our y (height above plane)
+ *
+ * Part I supplies identifications + positions. Part III supplies the King-model
+ * structural parameters (concentration c, core radius r_c, half-light radius r_h
+ * in arcmin) that give each cluster a REAL physical radius instead of a uniform
+ * placeholder (AC6 / design D5, real-universe-overlay-2026-07-12). We join Part
+ * III to Part I by ID and emit a per-cluster tidal radius r_t = r_c·10^c,
+ * converted at the cluster's own Sun distance (the "visible ball" the renderer
+ * draws; r_h under-represents it).
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 
 const raw = readFileSync('data/catalogs/harris_globular_clusters.dat', 'utf-8');
 const lines = raw.split('\n');
+
+// Small-angle arcmin → radian (1' = π/10800 rad). r_pc = θ_arcmin · this · d_pc,
+// so radiusKpc = θ_arcmin · this · rSun_kpc (design D5, fact 10).
+const ARCMIN_TO_RAD = 2.90888e-4;
+
+// ── Part III: King-model structural parameters, parsed by fixed column ─────────
+// The velocity columns (v_r … sig_v) are frequently blank, so token splitting is
+// unreliable; c/r_c/r_h sit in fixed character columns (verified against the .dat):
+//   c   line[49:54]   |  core-collapse flag line[54:58] ('c'/'c:')
+//   r_c line[58:64]   |  r_h line[64:70]
+// Blank fields parse to NaN and are treated as absent.
+const structByFmId = new Map(); // Part-III ID (formatted, e.g. 'NGC 104') → params
+{
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s+ID\s+v_r\b/.test(lines[i])) { start = i + 1; break; } // the Part III header
+  }
+  for (let i = start; i >= 0 && i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    const id = line.slice(0, 12).trim();
+    if (!id) continue;
+    const c = parseFloat(line.slice(49, 54));
+    const coreCollapsed = /c/.test(line.slice(54, 58));
+    const rC = parseFloat(line.slice(58, 64));
+    const rH = parseFloat(line.slice(64, 70));
+    structByFmId.set(id, {
+      c: Number.isFinite(c) ? c : null,
+      rC: Number.isFinite(rC) ? rC : null,
+      rH: Number.isFinite(rH) ? rH : null,
+      coreCollapsed,
+    });
+  }
+}
+
+/**
+ * Physical cluster radius (kpc) from Part III structural params, at distance
+ * rSun (kpc). Preference order (design D5 / fact 10):
+ *   'tidal'  — c AND r_c present → tidal radius r_t = r_c·10^c
+ *   'rhalf'  — only r_h present  → fallback r_t ≈ 4·r_h
+ *   'placeholder' — neither      → keep the historical 30 pc default
+ */
+function deriveRadius(struct, rSun) {
+  if (struct && struct.c != null && struct.rC != null) {
+    const rTidalArcmin = struct.rC * Math.pow(10, struct.c);
+    return { radiusKpc: rTidalArcmin * ARCMIN_TO_RAD * rSun, method: 'tidal' };
+  }
+  if (struct && struct.rH != null) {
+    const rTidalArcmin = 4 * struct.rH;
+    return { radiusKpc: rTidalArcmin * ARCMIN_TO_RAD * rSun, method: 'rhalf' };
+  }
+  return { radiusKpc: 0.03, method: 'placeholder' };
+}
 
 const clusters = [];
 
@@ -63,6 +124,11 @@ for (let i = 0; i < lines.length; i++) {
 
   const name = altName || id;
 
+  // Join Part III structural parameters by ID → real physical radius.
+  const struct = structByFmId.get(id);
+  const { radiusKpc, method } = deriveRadius(struct, rSun);
+  const rH = struct?.rH ?? null;
+
   clusters.push({
     id,
     name,
@@ -73,6 +139,12 @@ for (let i = 0; i < lines.length; i++) {
     rGc: rGc,
     l: l,
     b: b,
+    // AC6/D5 structural parameters (join from Harris Part III).
+    radiusKpc: parseFloat(radiusKpc.toFixed(5)),
+    rHalfPc: rH != null ? parseFloat((rH * ARCMIN_TO_RAD * rSun * 1000).toFixed(3)) : null,
+    concentration: struct?.c ?? null,
+    coreCollapsed: struct?.coreCollapsed ?? false,
+    radiusMethod: method,
   });
 }
 
@@ -80,6 +152,11 @@ console.log(`Parsed ${clusters.length} globular clusters`);
 console.log('First 5:', clusters.slice(0, 5).map(c => `${c.name} at (${c.x}, ${c.y}, ${c.z})`));
 console.log('Furthest:', clusters.reduce((a, b) => a.rSun > b.rSun ? a : b).name,
   'at', clusters.reduce((a, b) => a.rSun > b.rSun ? a : b).rSun, 'kpc');
+
+const methodCounts = clusters.reduce((a, c) => { a[c.radiusMethod] = (a[c.radiusMethod] || 0) + 1; return a; }, {});
+console.log('Radius derivation methods:', methodCounts);
+const radiiPc = clusters.map(c => c.radiusKpc * 1000);
+console.log(`Radius range: ${Math.min(...radiiPc).toFixed(1)}–${Math.max(...radiiPc).toFixed(1)} pc (was uniform 30 pc)`);
 
 mkdirSync('public/assets/data', { recursive: true });
 const output = JSON.stringify(clusters, null, 2);

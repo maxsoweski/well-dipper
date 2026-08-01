@@ -1,0 +1,38 @@
+{
+  "workstream": "system-identity-grammar-2026-07-17",
+  "commit": "5583651",
+  "date": "2026-07-19",
+  "driver": "working-Claude (main thread, chrome-devtools on :5176)",
+  "scope": "Closes the two live:true integration ACs the verify-workstream full run (wf_35113e26-c4e, verdict.json) left INSUFFICIENT: AC2-prism-co-membership, AC5-one-destination. Complements, does not replace, verdict.json.",
+  "protocol": {
+    "tour": "window._autoNav stopped BEFORE any drive at boot chooser, re-checked after every warp (isActive false throughout); per feedback_wd-nav-drives-autopilot-off",
+    "inputs": "trusted CDP keys (N/Escape/Space) for game-level keys; canvas MouseEvents through the real listener chain (_handleMouseMove/_handleClick hit-testing) for prism hover/select/drill/commit — synthetic window-level keydowns verified NOT to reach the game (one attempted re-park dispatch was swallowed with the nav closed; harmless, re-done via trusted key)",
+    "seeds": "every warp confirmed via [WARP]/[NAV DISPATCH] console log before trusting the arrival",
+    "settled": "no dispatch ever issued mid-warp"
+  },
+  "AC2-prism-co-membership": {
+    "result": "PASS",
+    "evidence": [
+      "Membership suffix LIVE in the deferred label pass: _labelRects contains 'Proxima Centauri · Alpha Centauri' at both wide (1.5 pc) and tight (0.4 pc) prism zooms; screenshots evidence-prism-suffix-labels-5583651.png (clean) and evidence-prism-tether-hover-5583651.png (Rigil hover tooltip 'G class' + 2-dot glyph + Proxima's own dot)",
+      "Tether on HOVER: hovered Proxima via real mousemove -> _hoveredLocalStar.star.name === 'Proxima Centauri'; one instrumented frame of _drawMembershipCues (ctx proxy) recorded stroke segments EXACTLY dot-to-dot: Proxima (844.2, 6.5) -> Rigil (895.8, -9.1), endpoints matching independently re-computed marker projections to the decimal",
+      "Tether on SELECTION alone: clicked Proxima (real click chain), parked mouse away (hover null) -> instrumented frame still strokes Proxima (853.9, 314.4) -> Rigil (886.2, 295.2). Both AC-named gates (hover OR selection) verified independently",
+      "Label declutter intact: pairwise AABB check over all 16 placed labels at tight zoom = ZERO overlaps; at wide zoom Rigil's label took a leader-line slot (leader:true) with the suffix label stacked beneath — the predecessor AC9 pass handling the longer suffix string correctly",
+      "Known cosmetic (verifier-documented, non-blocking): hover+selection on different members double-draws the same tether segment"
+    ]
+  },
+  "AC5-one-destination": {
+    "result": "PASS",
+    "evidence": [
+      "Preview via Proxima's marker (real hover+click drill; console '[NAV] Entering system view for: Proxima Centauri seed: 1816942132'): fillText capture of one _renderSystem frame drew title 'Alpha Centauri', annotation 'via Proxima Centauri — far companion', 'G+K binary · 0 planets · 0.0 Gyr', far chip 'Proxima Centauri / far companion · 13,000 AU / planets: b, d'; _systemData._knownSystemNames = {system: Alpha Centauri, star: Rigil Kentaurus, star2: Toliman}; screenshot evidence-system-via-proxima-5583651.png",
+      "Preview via Rigil's marker (same real path): title 'Alpha Centauri', annotation 'via Rigil Kentaurus', SAME seed 1816942132, same far chip; screenshot evidence-system-via-rigil-5583651.png",
+      "Warp via Rigil-selected view [ WARP ] commit: log '[WARP] seed=1816942132' -> 'Known system override: Alpha Centauri' -> 'System \"Alpha Centauri\" — G+K binary, 0 planets', star2 sep 23,500 (authored 23.5 AU); arrival _systemData: G+K, farCompanions [Proxima (M), planets b,d]",
+      "Return to Sol (search-warp, log-confirmed), then warp via Proxima's marker: '[NAV DISPATCH] star=Proxima Centauri seed=1816942132' -> IDENTICAL arrival (Alpha Centauri, G+K, 0 planets, Proxima far companion w/ b,d)",
+      "Console: ZERO errors, ZERO warnings across the whole drive session"
+    ]
+  },
+  "incidents": [
+    "SYSTEM level-tab click while _systemData is null auto-selects the NEAREST star (code-confirmed in _handleClick idx===4 branch) — it retargeted a drive mid-sequence to Sol. Player-facing reading: the tab is 'show a system view' (nearest/current fallback), the marker-click drill is the browse path. Not a defect of this WS; noted for lane D's nav-rendering work.",
+    "Synthetic (untrusted) keyboard events do not reach the game's key handlers — all game-level keys must be real CDP presses. One re-park search dispatch was silently swallowed as a result (state verified unchanged, redone properly)."
+  ],
+  "windowState": "game tab on :5176 left open for Max's UAT — parked at Sol, demo tour OFF, nav closed"
+}

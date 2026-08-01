@@ -67,3 +67,49 @@ describe('ExoticOverlay._swapPlanetType — moon rescale (WU7-1)', () => {
     expect(entry.planetData.moonCount).toBe(0);
   });
 });
+
+/**
+ * Increment-3 binding input (b): _applyFungal crashed when a bloom roll
+ * (10%) fired on a system with exactly ONE fungal candidate —
+ * rng.int(2, Math.min(4, 1)) returns 2 (inverted range), so the colonize
+ * loop indexed candidates[1] = undefined. D-class primaries (planetRange
+ * [0,2]) make 1-candidate systems likelier, and the bulk overlay merge
+ * makes D primaries reachable.
+ */
+describe('ExoticOverlay._applyFungal — 1-candidate bloom (Inc-3 input b)', () => {
+  // Deterministically find a seed whose FIRST draw fires chance(0.10),
+  // so the bloom branch is taken without mocking the rng.
+  function bloomSeed() {
+    for (let i = 0; i < 500; i++) {
+      const s = `fungal-bloom-${i}`;
+      if (new SeededRandom(s).float() < 0.10) return s;
+    }
+    throw new Error('no bloom-firing seed found in 500 tries');
+  }
+
+  function makeCandidate(seed) {
+    const rng = new SeededRandom(seed);
+    const planetData = PlanetGenerator.generate(rng, 1.0, null, null, 'terrestrial');
+    return { planetData, orbitRadiusAU: 1.0, moons: [] };
+  }
+
+  const systemDataStub = { star: { type: 'M' } };
+
+  it('does not crash with exactly one candidate; colonizes it and returns true', () => {
+    const entry = makeCandidate('fungal-1cand-planet');
+    const rng = new SeededRandom(bloomSeed());
+    const result = ExoticOverlay._applyFungal(rng, [entry], systemDataStub, 0.5, 2.0);
+    expect(result).toBe(true);
+    expect(entry.planetData.type).toBe('fungal');
+  });
+
+  it('bloom with two candidates still colonizes exactly two (unchanged semantics)', () => {
+    const a = makeCandidate('fungal-2cand-a');
+    const b = makeCandidate('fungal-2cand-b');
+    const rng = new SeededRandom(bloomSeed());
+    const result = ExoticOverlay._applyFungal(rng, [a, b], systemDataStub, 0.5, 2.0);
+    expect(result).toBe(true);
+    expect(a.planetData.type).toBe('fungal');
+    expect(b.planetData.type).toBe('fungal');
+  });
+});

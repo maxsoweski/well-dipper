@@ -1,0 +1,73 @@
+{
+ "workstream": "multistar-components-2026-07-19",
+ "commit": "6bc5177",
+ "perLayer": {
+  "unit": "PASS",
+  "integration": "INSUFFICIENT",
+  "uat": "deferred-to-max"
+ },
+ "perAC": [
+  {
+   "id": "AC1-components-substrate",
+   "result": "PASS",
+   "evidence": "Substrate already committed (S1-S3). STELLAR_COMPANIONS has exactly 3 farCompanions-bearing rows (Alpha Centauri→Proxima, Guniibuu→HD 156026, Zet-1 Ret→Zet-2 Ret) matching the D4 default-breadth claim. New validateComponentPayload + census test walk the whole table 1:1. Isolated run: 4 files/30 tests pass. Full suite: 119 files/1616 tests pass (15 vendor/motion-test-kit node:test-vs-vitest collection mismatches are pre-existing/unrelated, matches prior 1,616/0 baseline).",
+   "adversarialVotes": "3/3 sufficient"
+  },
+  {
+   "id": "AC2-child-seed-determinism",
+   "result": "PASS",
+   "evidence": "componentSeed() routes through a fresh SeededRandom(canonicalSeed).child('component-{idx}') stream, never realStarSeed (zero references, grep + test-asserted; realStarSeed.js has zero diff on this branch). Path-independence proven: authoring vs nav-pick vs repeat deep-equal; sync (resolveArrivalSystem) ≡ async (resolveArrivalSystemAsync) for a second far row. Isolated: 3 files/27 tests pass. Full suite: 1615-1616/1616 (2 apparent failures were parallel-load timeout flakes, pass 18/18 in isolation) + 15 pre-existing vendor node:test-mismatch files, unrelated.",
+   "adversarialVotes": "3/3 sufficient"
+  },
+  {
+   "id": "AC3-procgen-byte-safety",
+   "result": "PASS",
+   "evidence": "systemData.componentSystems is assigned only inside the same farCompanions-gate as farCompanions itself (never emitted as null on procgen paths); componentSeed builds a fresh independent RNG root so the procgen path draws zero extra RNG calls. Poison-probe test spies componentSeed/buildComponentContext: NOT called across a 9-system procgen battery, DOES fire on an authored far system (proves probe isn't vacuous). ProcgenSnapshot: 24/24 byte-identical. Full suite 1616/1616 (vendor node:test noise pre-existing, called out in contract.json AC9).",
+   "adversarialVotes": "3/3 sufficient"
+  },
+  {
+   "id": "AC4-oracle-lockstep",
+   "result": "PASS",
+   "evidence": "mult() ignores the componentSystems key; componentSystems.length === farCompanions.length holds for Guniibuu/Zet-1 Ret/Alpha Cen; full census oracle.count === mult(systemData) with componentSystems present, matches expected counts for all 4 named systems + a procgen binary control. Glyph dot counts pin pre-existing (pre-workstream, commit 5583651) behavior exactly as specified: procgen binary=2, Guniibuu=3, Alpha Cen A+B=2 & Proxima=1 (own marker), Zet-1 Ret=2. 4 files/42 tests pass; full suite 1616/1616.",
+   "adversarialVotes": "3/3 sufficient"
+  },
+  {
+   "id": "AC5-drill-in-render",
+   "result": "PASS",
+   "evidence": "Drill-in mirrors the planet-detail pattern (_systemMode + _selectedComponentIdx, ESC pop). Both entry points tested: far-chip click hit-test, and PRISM far-member preselect consumed exactly-once via _pendingComponentSelect (stale-preselect regression guarded on zoom-cancel/fresh entry). Reuses system-scale sqrt-AU projection (not moon-scale); orbit data read by object identity from componentSystems[idx].systemData with real archive values (not synthesized). All 4 system-identity grammar clauses (title/systemData/annotation/breadcrumb) asserted via fillText; no commit affordance; own labelRects; safe degrade on stale/out-of-range index. Test files pass 29/29 + 7/7; full suite 1616/1616.",
+   "adversarialVotes": "3/3 sufficient"
+  },
+  {
+   "id": "AC6-drill-in-live",
+   "result": "INSUFFICIENT",
+   "evidence": "Layer integration/live=true — requires an actual browser drive, which this pass did not perform (static/headless only). Commit 6bc5177 itself is docs+screenshots only (8 PNGs + s6-live-drive-log-e8100d8.md); the drill-in code landed earlier (150cb11/9cf8560/627d072) and shows zero diff here. A PRIOR live chrome-devtools session (logged at build e8100d8, already committed) self-reports PASS for both entry paths — chip-click and PRISM-preselect — with _systemMode='component', 15 labelRects/0 overlaps, clean ESC round-trip, console 97 msgs/0 err/0 warn, backed by 8 screenshots on disk. Per protocol this self-report cannot be converted into today's PASS by a static-only pass; needs an independent live re-drive.",
+   "adversarialVotes": "0/3 sufficient"
+  },
+  {
+   "id": "AC7-arrival-unchanged",
+   "result": "INSUFFICIENT",
+   "evidence": "Layer integration/live=true, same static-only limitation as AC6. Structural code read (NavComputer.js PRISM-marker click path) is consistent with the claim — drill-in preselect is additive view-state beside the existing warp dispatch, comment reads \"Warp untouched\" — but that's not proof of runtime behavior. Same prior live-drive log (build e8100d8) self-reports PASS: both markers (Rigil Kentaurus, Proxima Centauri) preview+warp to identical seed 1816942132, [WARP] log confirms 'Known system override: Alpha Centauri' both times, identical G2V+K1V @23.5 AU arrivals, console clean. Needs an independent live re-drive to close.",
+   "adversarialVotes": "0/3 sufficient"
+  },
+  {
+   "id": "AC8-rep-cap-amendment",
+   "result": "PASS",
+   "evidence": "Docs-only amendment to representation-cap.md, already landed at 9904569 (2 hunks, 14 insertions/1 deletion), HEAD reflects it. Both required prose strokes verified verbatim: (a) 'SUPERSEDED in part by multistar-components-2026-07-19' paragraph explaining far companions now also get a componentSystems payload, not a scene slot; (b) §1 header now reads 'per rendered scene', body still caps at star+star2. No third stroke; §3 (higher-order collapse) textually untouched; NAMING_AND_REAL_OBJECTS.md cross-ref correctly omitted since that doc wasn't touched by this workstream. doc-rot scan: 0 flags on this file (225 pre-existing project-wide flags, unrelated). Full suite 1616/0. Process note: a mid-verification errant `git checkout` was caught and cleanly recovered (git status clean, md5sum-verified) — no lasting corruption.",
+   "adversarialVotes": "3/3 sufficient"
+  },
+  {
+   "id": "AC9-regression-guardrail",
+   "result": "PASS",
+   "evidence": "Suite count 1616/0 on repeat runs (2 apparent full-suite failures were parallel-load timeout flakes, pass 18/18 isolated) — at/above the 1,557/0 floor, matches the 1,616/0 figure already logged at e8100d8. 15 vendor/motion-test-kit failures are pre-existing node:test/vitest runner mismatch in an untouched submodule (zero diff confirmed). Lane boundaries clean: zero diff on src/main.js, src/generation/realStarSeed.js, scripts/; no SC_TUNING code references; diff confined to src/ui/, src/generation/, tests, docs/. New pure helpers (componentIdentity.js, componentSystems.js) grep-verified to construct no NavComputer instance — purity intact.",
+   "adversarialVotes": "3/3 sufficient"
+  },
+  {
+   "id": "AC10-uat",
+   "result": "deferred-to-max",
+   "evidence": "UAT is Max-only by definition (docs/PROTOCOLS/test-harnesses.md + this AC's own contract.json verifyVia); no agent can PASS it. All objective (unit) ACs are green and the underlying feature appears complete; only the live-integration confirmation (AC6/AC7) is still open ahead of it. contract.json names three riding gates that must be re-confirmed in the same UAT sitting: real-universe-overlay AC9, real-star-identity-unification AC11, system-identity-grammar AC8 (all themselves deferred-to-max). NOW.md's lane-C block is stale (still says 'BLOCKED on Max for S6 live drives' though S6 evidence now exists at 6bc5177) and no verdict.json exists yet — bookkeeping Max should be aware of, not a gating issue for this AC itself.",
+   "adversarialVotes": "n/a — UAT is Max-only"
+  }
+ ],
+ "overall": "INSUFFICIENT — unit layer is fully green (8/8 unit ACs PASS, full suite 1,616/1,616, no regressions, lane boundaries and helper purity intact), but integration is not closeable yet: AC6 and AC7 are both live-drive ACs that this pass could only verify statically. A prior live chrome-devtools session (logged at build e8100d8, already committed as evidence) self-reports PASS on both, but per protocol that self-report cannot substitute for an independent re-drive in this verification pass. UAT (AC10) is correctly deferred to Max and cannot be closed until integration is confirmed green.",
+ "summaryForMax": "Where things stand at commit 6bc5177: all 8 unit-layer ACs (substrate table, seed determinism, procgen byte-safety, oracle/glyph lockstep, drill-in render logic, rep-cap doc amendment, regression guardrail) are independently verified PASS — full suite is 1,616/1,616 green, no regressions, no lane violations. That part of the feature is solid.\n\nTwo things stand between here and your UAT:\n\n1. AC6 (drill-in live) and AC7 (arrival-unchanged live) are integration/live ACs that this verification pass could only check statically — it cannot drive a browser. There IS already a live chrome-devtools session on record (docs/WORKSTREAMS/multistar-components-2026-07-19/s6-live-drive-log-e8100d8.md, 8 screenshots, committed in 6bc5177) that reports both passing — chip-click and PRISM-marker drill-in both work, ESC round-trips cleanly, both Alpha Centauri marker paths preview and warp to the identical seed/arrival, console stayed clean throughout. But per the verification protocol a prior self-report can't be rubber-stamped into today's PASS by a static-only pass — working-Claude (main thread, not this subagent) needs to re-drive those two checks live at :5176 before integration can close. Given the code diff is empty since that log was written, this should be a quick confirmation rather than new exploration.\n\n2. Once AC6/AC7 close, AC10 is yours alone: pull up the app, drill into a far-companion system (Alpha Centauri → Proxima via chip click, and separately via clicking Proxima's own marker in the PRISM view), check that it reads right — the title names the parent system, the annotation says \"via Proxima Centauri — far companion\", the breadcrumb says \"part of Alpha Centauri\", ESC takes you back to the parent system view, and there's no way to accidentally \"commit\"/warp to the component from that view. contract.json also asks you to re-confirm three riding gates from earlier workstreams in the same sitting: real-universe-overlay AC9, real-star-identity-unification AC11, and system-identity-grammar AC8 — all still deferred-to-max themselves.\n\nOne bookkeeping note: NOW.md's lane-C entry still reads \"BLOCKED on Max for S6 live drives\" even though the S6 evidence log now exists at 6bc5177 — worth a refresh once AC6/AC7 close for real."
+}
