@@ -194,7 +194,14 @@ export const DEFAULT_PANEL_BUFFER_HEIGHT_PX = 512;
  * a changing number never looks stuck to a pilot glancing across, slow enough
  * that four texture uploads a frame become four every fifth frame.
  */
-export const DEFAULT_AMBIENT_REPAINT_MS = 80;
+// 33 ms = 30 Hz. MAX'S RULING 2026-08-01: "lets make the panel refresh rate 30",
+// chosen from the 80/33/16 ms tiers he had live under `window._panelHz(ms)`.
+//
+// The old 80 (12.5 Hz) was never a cost problem — p50 render is 4.2 ms at EVERY
+// tier, NAV's getImageData is 0.24 ms, and `willReadFrequently` would buy 0.04.
+// The "lag" was that the glass ticked at 12.5 Hz beside a ~235 Hz world, so the
+// panels read as stale rather than slow. 30 Hz costs +0.39 ms and misses nothing.
+export const DEFAULT_AMBIENT_REPAINT_MS = 33;
 
 /**
  * Turn a measured face plus a target height into an integer drawing buffer.

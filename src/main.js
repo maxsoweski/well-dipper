@@ -11154,7 +11154,18 @@ function renderFrame(alpha) {
       : scModel.throttle * SC_TUNING.SUBLIGHT_CAP,
     driveOn: scModel.driveOn,
     sublightCap: SC_TUNING.SUBLIGHT_CAP,
-    massLockHint: _massLockHintFrames > 0,
+    // ⭐ MAX'S RULING 2026-08-01: "we only need to see it once". The mass-lock
+    // warning was rendering TWICE — here on the screen-space overlay AND on the
+    // DRIVE panel's glass (FlightReadout's buildAlertCue reads the same
+    // massLockHint out of the cockpit snapshot). The overlay is the one that
+    // goes, on the same `_cockpitReplaces('DRIVE')` premise as showReadouts
+    // below, so it comes STRAIGHT BACK on a GLB load failure or in ORRERY —
+    // where there is no glass to carry it and an unmissable alert must survive.
+    //
+    // This overturns the note below, which argued the hint should stay here
+    // because it is an alert rather than a readout. That reasoning predates Max
+    // seeing it doubled; the duplication is what he ruled on.
+    massLockHint: _massLockHintFrames > 0 && !_cockpitReplaces('DRIVE'),
     throttle: scModel.throttle,
     deflection: _scDeflection,
     targetPos: _scTargetPos,

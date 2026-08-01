@@ -242,3 +242,40 @@ renderer under UAT.
 
 **Scope:** single-system (orbit rendering) but with a real perf-architecture
 decision; warrants `dev-collab-scope` before code.
+
+---
+
+## P6 — Cockpit shadows: nothing casts, inside or in
+
+**Originating workstream:** cockpit-into-helm-2026-07-30 / the HELM cockpit program
+(Max, 2026-08-01, raised while ruling on the post-UAT items).
+
+**Max's words:** *"the lighting in the cockpit works from the pov from the sun but shadows
+aren't casting properly — the cockpit isn't casting shadows internally and i don't think
+other system objects are casting shadows onto the cockpit."*
+
+**Two distinct halves, and they may have different causes:**
+1. **Internal self-shadowing.** The cabin does not shadow itself — a monitor arm, a rib or the
+   console should darken what is behind it relative to the star. The geometry is there (the
+   cabin mask work counts 782 faces / 45 meshes), so this is a shadow-map/material question,
+   not a missing-geometry one.
+2. **External casters.** System bodies (planets, moons, the star's occluders) do not cast onto
+   the cabin interior. Whether they *should* is partly a design call — a planet shadowing the
+   cockpit interior is a strong effect and may not be wanted at every scale.
+
+**Known-relevant context, not yet investigated:**
+- Direction is already right: Max confirms the lighting reads correctly from the sun's POV, so
+  the light's placement/orientation is not the bug — only the shadow pass.
+- `_cockpitKeyLight` is exposed on `window` (see the cockpit globals) — the likely entry point.
+- The cockpit renders through a SEPARATE pass from the world (the cabin-mask work relies on
+  exactly that: two passes sharing only the screen). ⚠ **A shadow crossing from world objects
+  onto cabin geometry therefore crosses a pass boundary** — that is probably the whole
+  difficulty of half (2), and it should be scoped before anyone starts.
+- Scene-level DirectionalLight + AmbientLight exist per FEATURES.md's ship-scale notes.
+
+**What a follow-up would do:** establish which lights have `castShadow`/`receiveShadow` set and
+whether a shadow map is being rendered for the cockpit pass at all; fix (1) first since it is
+self-contained within one pass; treat (2) as its own scoped decision.
+
+**Scope:** rendering/lighting, cockpit pass. Multi-system if (2) is taken on (world pass ↔
+cockpit pass). Not started; nothing built.

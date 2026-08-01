@@ -705,8 +705,22 @@ describe('PanelHost — the repaint tier', () => {
   const FRAME_MS = 16;
   const FRAMES = 20;   // 320 ms of flying at ~60 Hz
 
-  /** Ambient paints expected over the run above: t = 0, 80, 160, 240. */
-  const AMBIENT_PAINTS = 4;
+  /**
+   * Ambient paints expected over the run above, DERIVED from the live constant
+   * rather than hardcoded. Max retuned the tier 80 -> 33 ms (12.5 -> 30 Hz) on
+   * 2026-08-01 and three tests in this file broke on baked-in magic numbers; a
+   * rate is a tuning knob, so the pins now follow it. At 33 ms over 20x16 ms
+   * frames this is 7 (t = 0, 48, 96, 144, 192, 240, 288); at the old 80 it was
+   * 4 (t = 0, 80, 160, 240) — the same simulation reproduces both.
+   */
+  const AMBIENT_PAINTS = (() => {
+    let paints = 0, last = -Infinity;
+    for (let f = 0; f < FRAMES; f++) {
+      const t = f * FRAME_MS;
+      if (f === 0 || t - last >= DEFAULT_AMBIENT_REPAINT_MS) { paints++; last = t; }
+    }
+    return paints;
+  })();
 
   it('paints at the ambient rate when nothing is urgent', () => {
     const { root } = syntheticCockpit();
@@ -721,7 +735,9 @@ describe('PanelHost — the repaint tier', () => {
     // four screens must show ONE instant, not four staggered ones.
     expect(perFrame.filter((n) => n === 4).length).toBe(AMBIENT_PAINTS);
     expect(perFrame.filter((n) => n === 0).length).toBe(FRAMES - AMBIENT_PAINTS);
-    expect(DEFAULT_AMBIENT_REPAINT_MS).toBe(80);
+    // Max's ruling 2026-08-01: 30 Hz. Kept as an explicit pin so a silent retune
+    // is a failing test rather than a quiet behavior change.
+    expect(DEFAULT_AMBIENT_REPAINT_MS).toBe(33);
     host.dispose();
   });
 
@@ -818,7 +834,16 @@ describe('PanelHost — which clock the panels run on', () => {
     host.update(frame);                          // clock 100 — inside the ambient period
     host.update(frame);                          // clock 150 — due
 
-    expect(painters.NAV.calls.map((c) => c.nowMs)).toEqual([50, 150]);
+    // Derived, not hardcoded: which of the 50/100/150 stamps are "due" depends
+    // entirely on the ambient period. At 33 ms every frame is due ([50,100,150]);
+    // at the old 80 ms the middle one fell inside the period ([50,150]).
+    const stamps = [50, 100, 150];
+    let last = -Infinity;
+    const expected = stamps.filter((t, i) => {
+      if (i === 0 || t - last >= DEFAULT_AMBIENT_REPAINT_MS) { last = t; return true; }
+      return false;
+    });
+    expect(painters.NAV.calls.map((c) => c.nowMs)).toEqual(expected);
     host.dispose();
   });
 

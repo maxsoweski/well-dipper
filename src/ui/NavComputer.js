@@ -2383,11 +2383,22 @@ export class NavComputer {
     }
 
     // ── Orbit circles (wireframe) ──
+    // ⭐ ALPHA IS MODE-DEPENDENT (2026-08-01, Max: "there are no orbits on the
+    // system nav computer now"). Nothing was ever deleted — the circles were
+    // drawing the whole time. MEASURED on the cockpit glass: 1583 stroke pixels
+    // present, sampled at (14,22,31)/(15,24,34)/(17,27,40) — exactly what
+    // rgba(100,180,255,0.15) composites to over black, i.e. invisible.
+    //
+    // 0.15 was tuned for the DOM overlay: a bright, full-screen surface the
+    // player looks AT. Chrome-less, the same canvas becomes a texture on a dim
+    // in-world panel across the cabin, and a 15%-alpha hairline does not survive
+    // that trip. The dashes stay; only the ink gets darker-background compensation.
     const ORBIT_SEGS = 48;
+    const orbitAlpha = this._bare ? { on: 0.9, off: 0.45 } : { on: 0.5, off: 0.15 };
     for (let i = 0; i < planets.length; i++) {
       const r = auToScreen(planets[i].orbitRadiusAU);
       const isSelected = i === this._selectedPlanetIdx;
-      ctx.strokeStyle = isSelected ? 'rgba(100, 180, 255, 0.5)' : 'rgba(100, 180, 255, 0.15)';
+      ctx.strokeStyle = `rgba(100, 180, 255, ${isSelected ? orbitAlpha.on : orbitAlpha.off})`;
       ctx.lineWidth = isSelected ? 1.5 : 1;
       ctx.setLineDash([3, 4]);
       ctx.beginPath();
