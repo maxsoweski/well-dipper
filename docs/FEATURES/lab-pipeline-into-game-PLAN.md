@@ -217,7 +217,43 @@ Same pattern, `heightNoise.glsl.js` precedent. After this, **a lab shader edit i
 - ⚠ The game's mesh must then grow the four attributes the lab's vertex shader reads
   (`aBand`/`aShear`/`aMush`/`aStorm`) — the spike zero-filled them. Constraint 1 says the mesh grows.
 
-### Step 3 — one land type end-to-end in a procedural system — `TODO`
+### Step 3 — one land type end-to-end in a procedural system — `IN PROGRESS`
+
+#### ⭐⭐ THE LAB'S SHADER RENDERS A GAME PLANET — `fc06017`
+
+`src/rendering/LabPlanetMaterial.js` + `_lab.tryLabShader(i)`. The lab's shader module (Step 2) and
+the lab's 349 uniform defaults, on a live game planet, beside two game-shader planets in the same
+generated system. Screenshot: `~/briefings/lab-shader-in-game-2026-08-01.png`.
+
+⭐⭐ **THE UNDRIVEN FLOOR IS NOT BLACK — the spike's central claim was wrong.** `d8faaef` reported
+that `makeUniforms()` defaults render black ("76.21% rasterised, shader computing black"), and that
+is what made the uniform driver a hard prerequisite for anything visible. It was conflated with the
+trap recorded two lines below it in the same register: **`makeUniforms` takes the LIGHT VECTOR**, and
+calling it bare gives `uLightDir = [null,null,null]` → NaN → black. With a real light:
+
+    lit pixels   15.073% → 15.271%
+    mean luma    15.192  → 18.535     (+22%)
+
+Flat orange with the lab's posterize/Bayer dither at the terminator. **So Step 1 is no longer
+all-or-nothing** — it can go a few uniforms at a time with a visible result after each, instead of
+one 802-line split up front.
+
+⭐ **Stage 0 earned its keep here, and this is its first real consumer.** The compile measured
+**31 753.8 ms** — inside the 29–47 s band the spike predicted — for **zero frozen frames**. The game
+held 240 fps throughout because `swapMaterialWhenReady` links off the main thread and swaps on
+resolve.
+
+Mechanics worth not re-deriving:
+- The four attributes (`aBand`/`aShear`/`aMush`/`aStorm`) are **zero-filled** by
+  `ensureLabAttributes` — they are the band/jet/storm **bake** outputs (Step 4), and zero is correct
+  until that bake exists. Idempotent, never overwrites, so the bakes can take ownership later.
+- The surface mesh is found by **walking the scene for the game's own uniform set**, not by an
+  object path. It is an *unnamed* child of a `body.planet.*` group and neither `BodyRenderer` nor
+  `Planet` exposes it under a stable path — an earlier version guessed `_delegate.surface` and just
+  reported "no surface mesh".
+- Light comes from the body's own `lightDir` uniform, not the lab's `WORLD_LIGHT` constant.
+
+#### Original brief (kept)
 
 Wire `conditionFromPlanet` → the extracted driver → the extracted shader, on **Caph**, with the
 bakes gated OFF via their documented byte-identical gates (`uTectonicGrainStrength = 0`,
