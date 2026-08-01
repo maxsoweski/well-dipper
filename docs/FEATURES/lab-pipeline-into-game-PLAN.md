@@ -180,7 +180,34 @@ Also fixed by this slice: the game's terrestrial branch had `vec3 lowland = acce
 comment *"green vegetation"* — a per-planet **random colour** standing in for a biosphere on every
 terrestrial world, habitable or not.
 
-### Step 2 — extract the shaders into `.glsl.js` modules — `TODO`
+### Step 2 — extract the shaders into `.glsl.js` modules — ✅ `DONE 6f9d3f4`
+
+`planet-lod-shaders.glsl.js` now holds both, as `LAB_VERTEX_SHADER` / `LAB_FRAGMENT_SHADER`; the lab
+imports them back. **A lab shader edit is now a game shader edit** — no port step.
+
+    vertex                            1 655 bytes,  sha256 b65a9a2f… == b65a9a2f…
+    fragment (HEIGHT_GLSL resolved) 363 566 bytes,  sha256 3fca848b… == 3fca848b…
+
+⭐ **The live control was the load-bearing part, not the hashes.** A byte-identical string does not
+prove the page still runs, so the pre-extraction HTML was served alongside and both measured:
+BEFORE and AFTER both give **0.375% lit pixels, mean luma 1.86, 367 uniforms, glError 0**. That
+0.375% is low enough to look exactly like a black frame — the failure this lane has twice mistaken
+for a clean result — and the control is the only thing that says it is the lab's normal boot state.
+
+⚠ **SIX fences search the lab's source text and all six broke.** `vis-scale-fence` (counts the eight
+`/* glsl */` blocks), `instrument-tap-fence` (pulls literals out by declaration name),
+`worldengine-atmo-deck-spiral-rhines` (counts `attribute float aStorm`), `worldengine-base-band-flow`
+(a `zonalBandCol` call string), `worldengine-base-storm-e` (**the sixth — the recon missed it, the
+suite found it**). Fix pattern, reusable for any future GLSL move: **each fence reads
+`planet-lod-lab.html` AND the module as ONE corpus**, since together they are the lab's source. One
+line per fence, every assertion preserved, no fence weakened or deleted.
+
+⛔ **The game does not import this module yet, and cannot usefully.** The lab's shader with
+`makeUniforms()` defaults renders **black** (spike: 76.2% rasterised, shader computing black), so
+the shader needs Step 1's uniform driver before it shows anything. Shader without uniforms shows
+nothing; uniforms without shader do nothing. **Step 3 is where they meet — that is the real MVP.**
+
+#### Original brief (kept)
 
 Same pattern, `heightNoise.glsl.js` precedent. After this, **a lab shader edit is a game shader edit**
 — there is no port action at all.
