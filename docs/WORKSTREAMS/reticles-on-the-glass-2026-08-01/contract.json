@@ -3,8 +3,8 @@
   "intentRef": "intent.md",
   "project": "well-dipper-cockpit-screens",
   "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md",
-  "status": "verified",
-  "statusNote": "VERIFIED_PENDING_MAX d3dc4cb — unit + integration all PASS. 1 unit AC certified by the verify-workstream workflow (3/3 adversarial); 7 live integration ACs measured in the running game at :5181. The UAT gate AC-READS-AS-ON-THE-GLASS is deferred-to-max by construction and is the only thing between this and Shipped. NOT SHIPPED, NOT PUSHED.",
+  "status": "shipped",
+  "statusNote": "Shipped d3dc4cb — Max flew it and passed the UAT gate 2026-08-01 (\"Passes\"). All 9 ACs closed: 8 objective PASS (1 unit certified by the verify-workstream workflow 3/3 adversarial, 7 live integration measured in the running game at :5181), and AC-READS-AS-ON-THE-GLASS passed by Max directly rather than against a recording. DEVIATION FROM THE SHIPPED-GATE, stated rather than glossed: the protocol names a video recording as the acceptance artifact for visible/animated features. No recording was made. Max flew the running game himself and judged it in motion, which is what the recording exists to enable -- recording it for him to re-watch afterwards would have been ceremony. ⛔ SHIPPED here means Max accepted the increment on feature/cockpit-screens. It is NOT in master and NOT deployed -- which is why docs/FEATURES.md deliberately still reads shipped-code, not shipped-confirmed. That bumps when the branch merges.",
   "acceptanceCriteria": [
     {
       "id": "AC-CUT-NOT-BLINKED",
@@ -184,6 +184,22 @@
     {
       "item": "This system has 0 planets.",
       "detail": "Every live measurement was taken against a star. Moons and planets exercise smaller brackets, ghost reticles and different label lengths. Worth flying a populated system during UAT."
+    }
+  ],
+  "docUpdatesOnShip": {
+    "featuresMd": "docs/FEATURES.md ## Reticles -> the \"Targeting reticle — in-system bodies\" row, amended in place per the file's own precedent (that row already folds the 30aa1cf ghosting fix rather than spawning a new row). Cites d3dc4cb and Max's 2026-08-01 UAT, links this workstream dir in the previously-empty Deep dive cell, and states not-merged/not-deployed explicitly.",
+    "playerExperienceMd": "Unchanged, deliberately. Read in full: it carries no spec at the on-glass-vs-on-eye granularity this workstream operates at, so there is nothing to diverge from.",
+    "systemsReadme": "Unchanged. docs/SYSTEMS/ contains only app-shell, whose Wiring section names TargetingReticle but never claimed a call order between the reticle update and cockpit-camera pinning -- so the frame-order fix does not make it stale.",
+    "systemsChangelog": "No changelog.md exists anywhere under docs/SYSTEMS/. The rejected approaches (per-part raycasting; the WebGL depth-test pass, deferred as most-correct-and-largest; the CPU depth readback, rejected as a per-frame sync stall) are recorded in this contract's designDecisions instead, which is the only home the current doc structure offers them."
+  },
+  "openStructuralGaps": [
+    {
+      "item": "doc-rot scoped mode cannot run against ANY current workstream, not just this one.",
+      "detail": "The project CLAUDE.md Rule 3 prescribes `npm run doc-rot --workstream <slug>`. That fails twice over: npm swallows --workstream as its own invalid config flag and silently runs project-wide instead, and correcting it to `-- --workstream <slug>` then fails because scoped mode expects a flat docs/WORKSTREAMS/<slug>.md with frontmatter, a format this project left when it migrated to the two-artifact intent.md/contract.json directory. Not this workstream's to fix, but the prescribed check is currently unrunnable."
+    },
+    {
+      "item": "src/cockpit/ is owned by no system README (18+ files).",
+      "detail": "Project-wide doc-rot went 284 -> 286 flags across this workstream. The delta is exactly two: cabinMask.js and cabinMask.test.js, both unclaimed-src, both flagged only because nothing owns src/cockpit/. The other 284 are byte-identical pre-existing noise. None of the auto-FAIL tiers (stale deep dives, SYSTEMS.md graph staleness, orphan Systems-touched) fired for this workstream. Creating docs/SYSTEMS/cockpit/ is a structural decision above this workstream and was deliberately not taken unilaterally."
     }
   ]
 }
