@@ -4,7 +4,24 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> **🧭 Orientation chain (active focus):** Well Dipper → SCREENSAVER heart → LOD-lab renderer
+> ## ⭐⭐ 2026-08-01 — ACTIVE ARC: THE LAB'S PIPELINE GOES INTO THE GAME
+>
+> **Plan of record: [`FEATURES/lab-pipeline-into-game-PLAN.md`](FEATURES/lab-pipeline-into-game-PLAN.md).**
+> Six steps, status updated in place. **Step 0 (async shader compile + swap-on-ready) is DONE** —
+> worst frame on system entry went **5 424 ms → 58.7 ms**, live-measured. **Next is Step 1: extract
+> `applyDrivers` out of `planet-lod-lab.html` into a shared module.**
+>
+> Max's two standing constraints: the game's rendering **bends** to whatever the world engine needs;
+> and because the lab will keep developing, moving lab work into the game must stay **easy** — so
+> every step is an *extraction* the lab imports back, never a copy. Gate is resolved output
+> byte-identical.
+>
+> ⛔ **The orientation chain immediately below is the JUNE arc (rivers / Phase 2 per-feature
+> quality) and is NOT the active focus.** It is kept because that work is real and unfinished, and
+> the lab arc still runs in parallel — but read the PLAN first. Precedence: briefings lose to the
+> PLAN, the PLAN loses to `git log`.
+
+> **🧭 Orientation chain (lab arc — still live, but NOT the active focus as of 2026-08-01):** Well Dipper → SCREENSAVER heart → LOD-lab renderer
 > (lab≠game, by design) → Phase 2 per-feature quality pass → **Theme A (wrong generation
 > primitive) → #3 rivers ✅ SHIPPED (2026-06-19); F11 retired + dendritic made first-class
 > (`076f586`) → **FLUVIAL FEATURE CO-DEPENDENCE — ✅ SHIPPED (Max UAT-passed 2026-06-19, "these seem
