@@ -93,6 +93,8 @@ Commit history is supporting evidence only, not authority.
 | Moon generation + rendering (LOD2 partial — rocky/captured only; ice/volcanic/terrestrial moons get no LOD2) | F&F-MVP | shipped-code | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
 | Rings — multi-band per physics (instantiate existing `RingRenderer` dead code; FEATURE_AUDIT §2.4 confirmed) | F&F-MVP | proposed | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
 | Asteroid belts (multi-zone composition, Kirkwood gaps) | F&F-MVP | shipped-code | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
+| Rivers — dendritic drainage networks on terrain | F&F-MVP | **shipped-confirmed** (2026-06-19) — all 8 ACs green, Max UAT-passed on the clean Earth-like lab (*"looks good to me"*), no tuning requested. Deep route-vs-render fidelity deferred by design to the rivers successors | — | [WORKSTREAMS/rivers-dendritic-drainage-2026-06-17](WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/) |
+| Rivers — fluvial coupling + view-dependent LOD (successors) | F&F-MVP | in-flight | — | [WORKSTREAMS/rivers-viewdependent-lod-2026-06-18](WORKSTREAMS/rivers-viewdependent-lod-2026-06-18/) |
 
 ## Sky / galactic rendering
 
