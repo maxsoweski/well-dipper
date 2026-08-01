@@ -1,0 +1,147 @@
+{
+  "workstream": "reticles-on-the-glass-2026-08-01",
+  "intentRef": "intent.md",
+  "project": "well-dipper-cockpit-screens",
+  "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md",
+  "status": "building",
+  "statusNote": "Scoped 2026-08-01 from Max's two statements of the ask. Successor to cockpit-into-helm-2026-07-30, which is MAX-PASSED-GATE. Geometry half only — canopy tint / glass-depth parallax / phosphor look are explicitly NOT this work.",
+
+  "acceptanceCriteria": [
+    {
+      "id": "AC-CUT-NOT-BLINKED",
+      "statement": "When a cabin rib crosses a target's reticle, the reticle is CUT at the rib's own edge — part of the bracket still visible on clear glass, part erased — instead of the whole reticle vanishing. This is the criterion the workstream exists for: a ~7px Arch_Bow rib currently blanks the entire bracket-plus-label for ~100ms and that is the tell Max is objecting to.",
+      "verifyVia": {
+        "input": "Boot to HELM hands-on, take the stick with `f`, then sweep a reticle across a rib by turning the SHIP: `_sc.model.setTurnInput(0.35, 0)` in a loop (turning the HEAD does not sweep — head rotation reaches both cameras and they move together).",
+        "observable": "At the frames where a rib crosses the bracket, reading #targeting-overlay's OWN 2D context (never a drawImage copy into a scratch canvas — that returns stale frames) shows a partial bracket: nonzero lit pixels AND nonzero erased pixels inside the bracket's bounding box, with the erased region's boundary tracking the rib's silhouette. `_reticle._lastFrame.entries[0].state` shows the reticle was still DRAWN on those frames."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-CANOPY-DOES-NOT-OCCLUDE",
+      "statement": "The canopy glass does not cut reticles. Max: occluded by 'everything in the cockpit other than the canopy'. The mask's occluder set excludes glass by the SAME union rule the existing raycast census uses (rig.glassNodes subtrees UNION rig.glassMats materials), not a re-derived one — the glass covers 97.4% of the sphere, so a mask that includes it erases essentially every reticle and the feature is dead.",
+      "verifyVia": {
+        "input": "Unit test the mask's occluder/visibility census on plain objects, the way src/cockpit/reticleOcclusion.js is already tested (that module imports no three on purpose). Include a fixture where a mesh is glass by MATERIAL but not by NAME, and one that is glass by NAME but not by material — both must be excluded.",
+        "observable": "Census returns zero glass meshes in both fixtures; a mesh that is neither is retained. Headless, no browser."
+      },
+      "layer": "unit",
+      "live": false
+    },
+    {
+      "id": "AC-MASK-AGREES-WITH-THE-ORACLE",
+      "statement": "The live mask's screen coverage agrees with two independent measurements that know nothing about the mask code: cockpit-gen.py's build-time analytic scanline rasterisation (public/assets/cockpit/cockpit-metrics.json -> predictedOcclusionFraction: 0.587202) and the runtime ray/triangle grid (window._cockpitOcclusion(), measured 0.5789 at 16:9). If the mask's coverage does not land near these, the mask is wrong — and it is wrong in a way no screenshot reveals, because an empty occluder set looks like a game that does no occlusion and a leaked canopy looks like a cockpit with nothing to point at.",
+      "verifyVia": {
+        "input": "At 16:9 with the default 70 FOV and the head centred, sample the mask buffer's coverage fraction via a new debug accessor, and in the same page call window._cockpitOcclusion(61).",
+        "observable": "Mask coverage is within 0.02 absolute of BOTH 0.587202 and the live _cockpitOcclusion() value in that same session. Divergence beyond that fails the AC rather than being explained away."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-THE-CENTRE-RAY-BLINK-IS-GONE",
+      "statement": "The whole-reticle suppression that 5cd1118 introduced (the cockpit branch of _isReticleOccluded / _cockpitBlocksReticle) no longer gates DRAWING. With a mask, a reticle wholly behind structure is erased by the mask anyway, so the centre-ray gate is now redundant AND is the direct cause of the blink. reticleOcclusion.js and window._cockpitOcclusion survive untouched as the oracle for AC-MASK-AGREES-WITH-THE-ORACLE. Non-cockpit branches of _isReticleOccluded (body-occludes-body etc.) are NOT touched.",
+      "verifyVia": {
+        "input": "Sweep as in AC-CUT-NOT-BLINKED across a full turn, sampling `_reticle._lastFrame.entries` every frame for the tracked body.",
+        "observable": "No frame in the sweep has the entry present, then absent, then present again attributable to cabin structure. Concretely: the count of drawn->undrawn->drawn transitions for a continuously-visible body over the sweep is 0, where before the change it was >=1 per rib crossed (three were measured in one sweep)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-FULLY-BEHIND-A-MONITOR-STILL-HIDDEN",
+      "statement": "The win from 5cd1118 survives: a reticle whose entire bracket and label sit behind a monitor body is completely invisible, not partially visible and not restored by the removal of the centre-ray gate. This is the regression guard on retiring that gate.",
+      "verifyVia": {
+        "input": "Steer until window._cockpitOcclusion.at(x, y) names a monitor/console mesh at the reticle's screen position and the bracket's whole bounding box is inside that mesh's silhouette.",
+        "observable": "Zero lit pixels in the bracket's bounding box, read from #targeting-overlay's own 2D context."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-THE-LABEL-IS-CUT-LIKE-EVERYTHING-ELSE",
+      "statement": "The target's floating name label is cut by structure at the structure's edge, exactly like the bracket — no special-casing, no hide-the-orphan-label rule. Max, asked directly what should happen when a rib covers the bracket but not the name: 'see previous answer', i.e. the label is part of the reticles and gets the same treatment. This also covers ghost reticles, ship reticles and the off-screen ship chevron: nothing else draws on #targeting-overlay (verified), so one uniform erase is the whole behaviour.",
+      "verifyVia": {
+        "input": "Steer until a rib crosses a target's name label text specifically, with the bracket clear of structure.",
+        "observable": "The label's glyphs are partially erased along the rib's edge while the bracket remains fully drawn. Both states coexist in a single frame read from #targeting-overlay's own 2D context."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-NO-READBACK-NO-FRAME-COST",
+      "statement": "The mask reaches the Canvas2D overlay without a per-frame CPU stall — no readPixels, no readRenderTargetPixels, no getImageData on the mask path — and does not measurably cost the frame. The 2D overlay and the WebGL composite are separate DOM canvases with no data path between them today; whatever bridges them must not become a sync point. Frame budget matters here: the glass already runs beside a ~235Hz world.",
+      "verifyVia": {
+        "input": "Static: scan the mask code path for readPixels / readRenderTargetPixels / getImageData / toDataURL. Live: sample frame time over a steady flight segment with the mask on, and with it disabled via its kill switch.",
+        "observable": "Zero readback calls on the per-frame mask path. p50 frame time with the mask on is within 0.5ms of p50 with it off, measured on the same page in the same session."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-DEGRADES-WHEN-THERE-IS-NO-CABIN",
+      "statement": "With no cockpit — GLB failed to load, cockpit disabled, or a mode with no cabin — reticles draw normally and uncut rather than vanishing or throwing. The gate is verified by INDUCING the failure, not by asserting the happy path: this lane has now had three false readings from controls run against an absent subject (a 24-sample 'no reticles drawn' measurement of an empty title screen; a minimap gate that read false because the setting was off AND the system had 0 planets; shell probes that cannot see the host's sockets). A control against an absent subject is not a control.",
+      "verifyVia": {
+        "input": "Move public/assets/cockpit/cockpit.glb aside on purpose, reload, boot to HELM, select a target — then restore the file byte-identically (verify by hash).",
+        "observable": "Reticles render whole and uncut, no console error from the mask path, and the mask coverage accessor reports 0. Then with the file restored, the same page shows cut reticles again."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-READS-AS-ON-THE-GLASS",
+      "statement": "Max flies it and the reticles read as a HUD on the glass on the cockpit, rather than as something drawn directly on his eye. The holistic gate — whether the whole thing coheres as the experience he asked for. No agent drives or PASSes this; it is deferred-to-max by construction.",
+      "verifyVia": {
+        "input": "Max flies HELM hands-on, sweeps targets across ribs, arches and monitor edges, and looks at the reticles.",
+        "observable": "Max's judgment. Deferred-to-max."
+      },
+      "layer": "uat"
+    }
+  ],
+
+  "architecturalConnections": {
+    "inputs": [
+      "CockpitRig: rig.model (GLB scene root, ~782 faces, loaded once, rigid at runtime), rig.scene (its OWN THREE.Scene — the cabin never enters the world scene), rig.glassNodes (/glass|canopy/i name matches) and rig.glassMats (materials under those nodes). CockpitRig.js:333, 444-449, 474-495.",
+      "_cockpitCamera (main.js:2725) — a PerspectiveCamera separate from the world `camera`. Its pose is what determines the cabin's screen-space silhouette: the ship's heading deliberately never reaches it, so the silhouette moves with FREE-LOOK, not with ship turning. FOV syncs via applySettingChange('fov') (main.js:4137-4158, both cameras — the bug fixed today); aspect syncs via the resize listener (main.js:10536-10544, which explicitly does NOT go through retroRenderer.resize()).",
+      "TargetingReticle's frame slot: update(state) at TargetingReticle.js:259-332, called once per RAF from renderFrame at main.js:10376 — strictly BEFORE retroRenderer.render() at main.js:10493. The mask must be composited after the last draw inside update() and before that frame ends.",
+      "src/cockpit/reticleOcclusion.js — collectReticleOccluders (the glass-excluding census) is the exact rule the mask must reuse for glass exclusion rather than re-deriving it.",
+      "public/assets/cockpit/cockpit-metrics.json -> predictedOcclusionFraction (0.587202), computed at build time by cockpit-gen.py with no knowledge of runtime code. The independent oracle."
+    ],
+    "outputs": [
+      "#targeting-overlay pixels (canvas created at TargetingReticle.js:103-113, position:fixed, zIndex 50, id 'targeting-overlay'). Nothing else in src/ draws to it — only _drawGhost, _drawTarget, _drawShipReticle and _drawShipOffscreenArrow, all inside TargetingReticle — so a destination-out erase can only ever damage TargetingReticle's own output. It is fully cleared each frame via clearRect at update()'s top.",
+      "A debug accessor for the mask's coverage fraction, so AC-MASK-AGREES-WITH-THE-ORACLE is measurable and so an empty occluder set is distinguishable from a working mask (neither reads as wrong in a screenshot).",
+      "A kill switch for the mask, required by AC-NO-READBACK-NO-FRAME-COST's A/B and by AC-DEGRADES-WHEN-THERE-IS-NO-CABIN."
+    ],
+    "mustStayWorking": [
+      "The RetroRenderer composite chain is NOT touched: bgTarget -> sceneTarget -> hudTarget -> cockpitTarget -> composite to the default framebuffer (RetroRenderer.js:877-970). cockpitTarget's alpha IS the cabin silhouette, but it lives on the WebGL side of a boundary the 2D overlay cannot cross without a readback — do not reach for it, and do not perturb the pass to get at it.",
+      "window._cockpitOcclusion() and .at(ndcX, ndcY) keep working and keep returning ~0.579 at 16:9 — they are this workstream's oracle, so breaking them destroys the ability to verify it.",
+      "Target selection, hover and commit: erasing PIXELS must not change hit-testing, _lastFrame's entry set, or any target state. A reticle cut to invisibility is still a live, selectable target.",
+      "The cockpit's DRIVE and NAV panels, their own 2D canvases, and the _panelHz throttle — all separate canvases, none of which the mask may touch.",
+      "The FOV setting reaching BOTH cameras (main.js:4137-4158). The mask makes any camera desync visible as a misaligned cut; the desync bug was fixed today and must not regress.",
+      "The 2474-passing suite (plus 4 skipped and the 15 known vendor/motion-test-kit collection errors, which are pre-existing and unrelated).",
+      "The off-screen ship chevron (_drawShipOffscreenArrow) still draws. NOTE AS A RISK: it lives at the screen edge, which is where cabin structure is densest, so uniform cutting may hide it far more often than the other reticles. This is the correct behaviour under Max's answer and is deliberately NOT special-cased — but it is the element most likely to read wrong, and is the first thing to look at if UAT comes back negative."
+    ]
+  },
+
+  "designDecisions": [
+    {
+      "decision": "A silhouette mask, not per-part raycasting and not moving the reticles into the WebGL pass.",
+      "why": "Per-part raycasting (testing the four bracket corners and the label separately) clips at BRACKET granularity, not at the rib's edge — it buys less than it looks, and it still cannot cut a glyph. Moving TargetingReticle into the WebGL pass with a real depth test is the most correct answer and the largest change; it is a Canvas2D overlay drawing text today. A CPU depth readback (readPixels) is a per-frame sync stall and is rejected outright. The mask cuts EVERY reticle at the real edges with no per-reticle raycasting at all."
+    },
+    {
+      "decision": "Glass is excluded from the mask, and glass-as-tint is out of scope.",
+      "why": "Max: 'occluded by everything in the cockpit other than the canopy.' The defensible counter-reading — that glass which tints what is behind it is itself part of the on-the-glass look — is exactly the canopy-tint work Max split off and did not take. Including glass in an ERASE mask would blank 97.4% of the view."
+    },
+    {
+      "decision": "One uniform erase over the whole #targeting-overlay canvas; no per-element rules.",
+      "why": "The scope question 'cut only the reticles, or everything on that layer?' turned out to have one answer, not two: nothing but TargetingReticle draws on that canvas. Max's 'see previous answer' on the orphan-label question resolves the rest — the label is part of the reticles, so it is cut like the bracket. Pure decal behaviour, and the simplest code."
+    },
+    {
+      "decision": "Bridge the GPU silhouette to the 2D overlay via a small offscreen WebGL canvas + globalCompositeOperation='destination-out' drawImage — GPU-to-GPU inside the browser compositor, no readback.",
+      "why": "CanvasRenderingContext2D.drawImage accepts a WebGL-backed HTMLCanvasElement, so the pixels never round-trip through JS. The app's existing cockpitTarget cannot serve: it is a THREE.WebGLRenderTarget on the single app renderer, and extracting it to a 2D context requires readRenderTargetPixels — the stall we are avoiding. UNVERIFIED AT SCOPE TIME: the cost of a second GL context, and whether the mask can be rendered at reduced resolution without the cut edge reading as mushy at a ~7px rib. Both are settled by measurement in the first implementation increment, against AC-MASK-AGREES-WITH-THE-ORACLE and AC-NO-READBACK-NO-FRAME-COST — not by argument."
+    },
+    {
+      "decision": "Hard edge by default; softness is a knob, not a scope question.",
+      "why": "'Cut by the real geometry at the real edges' is the brief, and a hard edge is the literal reading. Whether a slightly soft edge reads better at a rib's width is a feel judgment Max can only make by looking at it, so it ships as a tunable and gets settled at UAT rather than argued at scope."
+    }
+  ]
+}
