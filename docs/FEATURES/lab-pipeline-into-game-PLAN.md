@@ -11,6 +11,23 @@
 > full measurement tables: [`surface-variation-beyond-mvp.md`](surface-variation-beyond-mvp.md).
 > The graft-vs-replace analysis this supersedes: [`lab-vs-game-renderer-divergence.md`](lab-vs-game-renderer-divergence.md) §4.1.
 
+> ⭐⭐ **VERIFIED AND CORRECTED 2026-08-05** by a 12-agent pass (6 recon + 6 adversarial audits)
+> that re-read every claim against source. **Four corrections change what you should DO**, and each
+> is marked in place below:
+> 1. **§LAYER 1's "BLAST RADIUS, checked" was WRONG** — an rng draw *is* conditional on
+>    `atmosphere.retained` via `&&` short-circuit. Layer 1 needs a stream-safety commit first or
+>    every moon of every de-atmosphered planet changes identity.
+> 2. **§LAYER 3 hazard A's port instruction WOULD CAUSE A REGRESSION** — withdrawn. The game's
+>    crater law already, deliberately, refuses the lab's `complexD` pin.
+> 3. **§LAYER 2 item 1's *preferred* fix would break every non-lab planet** — the geometry change is
+>    forbidden; use the uniform divide (and it is ~4 lines, not a re-tune).
+> 4. **§LAYER 4 is PRICED** — `route()` runs headless in node; the risk is a ~1 s per-body cold
+>    start, not carve cost, and the radius sweep this file prescribed was the wrong probe.
+>
+> It also established the fact that resequences everything: **`LabPlanetMaterial` is a debug probe
+> with one hand-invoked call site, not a render path** (see §LAYER 3). No lab work reaches a player
+> pixel until that changes.
+>
 > **RESTRUCTURED 2026-08-01.** The six-step model this file used to carry has been replaced by a
 > six-LAYER model, after a multi-agent code review found 16 defects in the previous 15 commits and a
 > recon found that the plan's own line numbers were 1293 lines stale. The reason for the change is in
@@ -139,14 +156,41 @@ consumers that do not can carry on. That turns the failure mode from silent into
 **Work:**
 - `conditionFromPlanet` returns provenance alongside the vector (proposed: a `_fabricated: Set<string>`
   or a parallel `provenance` object — shape is an implementation call, not a design one).
-- ⭐ **Export the fp.** `deriveUniforms(drivers)` reads six fields the condition vector does NOT
-  carry: `massEarth` (lab-core:610), `surfaceHistory.*` (:598, :702, :703), `habitability` (:744),
-  `seed` (:756), `starMassEarth`/`orbitRadiusEarth` (:621, :622). `conditionFromPlanet` builds an
-  fp-shaped object at :119-137 carrying most of them **and then does not return it** (:138 returns
-  `deriveConditionVector(fp, …)`). So `deriveUniforms(conditionFromPlanet(p))` silently yields
-  erosion 0, bombardment 0.5, massEarth 1.0, habitability 0 and a fake 1 M☉ / 1 AU orbit.
-  Export `fpFromPlanet(planetData)` and have `conditionFromPlanet` call it. **Two lines, and it is a
-  prerequisite for any crater / relief / glint work.**
+- ⭐ **Export the fp — RE-SCOPED 2026-08-05. It is not two lines, it is not six fields, and it is
+  not a prerequisite today.** `deriveUniforms(drivers)` reads **SEVEN** fields the condition vector
+  does not carry: `massEarth`, `surfaceHistory.*`, `habitability` (:744 **and :1046**), `seed`,
+  `starMassEarth`/`orbitRadiusEarth`, **and `axialTilt` (:907)** — the seventh was missing from this
+  list, so anyone implementing "export the fp + the four table fields" still leaves
+  `frostLatitudeBias` dead. The fp literal at `conditionFromPlanet.js:119-137` carries **two** of the
+  seven (`massEarth :121`, `surfaceHistory :135`) — not "most of them"; the other five appear
+  nowhere in the file. Corrected work order, because the data does not exist yet:
+  1. `habitability` — **the cheapest real win in this file.** One line; `PlanetGenerator.js:789`
+     already computes `habitability: habScore`. Revives `uBioCoverage` **and** `uMachCoverage`,
+     `uCityMaturity`, `uEcuCoverage` (`planet-lod-lab.html:5266/5276/5283`), none of which this
+     file lists.
+  2. `starMassEarth` / `orbitRadiusEarth` — **not on `planetData` at all.** `starMassSolar` and
+     `orbitRadiusAU` are function-locals (`PlanetGenerator.js:326`, `:372`) that are never returned.
+     PlanetGenerator must widen first.
+  3. `seed` — **there is no numeric seed.** `StarSystemGenerator.js:371-372` stamps `_systemSeed`
+     (a **string|number** — `'sol'` for Sol) *after* `generate()` returns, and the `ExoticOverlay.js:291`
+     path regenerates without re-stamping. Needs an fnv1a hash (helper exists in
+     `src/util/scene-naming.js`) plus two call-site fixes.
+  4. ⚠⚠ `axialTilt` — **a silent unit bug is waiting.** The lab law is `clamp01(axialTilt / 90)`
+     — **degrees** — while the game stores **radians** (`SolarSystemData.js:180 axialTilt: 0.41, // 23.4°`).
+     A naive passthrough gives Earth `frostLatitudeBias` **0.0046 instead of 0.26**, and the
+     procedural range (±0.5–1.5 rad) reads as 0.006–0.017 instead of 0.32–0.95. This is the third
+     unit disagreement on this seam (density kg/m³ vs g/cc, T_eq radiative vs surface are the other
+     two) and the only one not yet flagged in source.
+  ⚠ **Realistic total ~15 lines across FOUR sites**, not two lines across one. The fourth is
+  `PlanetGenerator.js:726-729` — a hand-built 9-field `conditionFromPlanet({...})` literal that
+  already drops `habitability` and `axialTilt` **even though both are live locals in the same
+  function.** Any fp widening must widen that call site too or the game's own palette/iceness/lava
+  chain keeps the old defaults.
+  ⛔ **"Prerequisite for any crater / relief / glint work" is FALSE today.** `grep -rn deriveUniforms
+  src/` → **zero production hits** (only tests, the lab, and three comments). `src/objects/Planet.js`
+  reaches craters/optics/biosphere through the condition vector at `:1567` without ever touching
+  `deriveUniforms`. Layer 0 item 2 joins the critical path only once something under `src/` calls
+  `deriveUniforms` — i.e. after layer 3.
 - Fill the moon contract: `massEarth` (derivable from radius × density), `age`, `surfaceHistory`.
 - ⚠ **Second-order hazard, pointing the other way:** the all-zeros `surfaceHistory` default passes
   every leg of the crystal-facet gate. If anyone loosens the airless gate before this is fixed,
@@ -197,10 +241,29 @@ Three stacked defects in `PhysicsEngine.computeAtmosphere`:
    atmosphere; Mars lands at 0.15 bar against a real 0.006 — **25× too thick**. Mars is thin because
    of outgassing budget and non-thermal loss after its dynamo died, neither of which is modelled.
 
-⭐ **BLAST RADIUS, checked:** `computeAtmosphere` is pure and **no rng draw is conditional on its
-result**, so fixing it cannot shift the generator's shared stream. The standing "one extra draw
-rewrites the generated universe" rule does not bite. Orbits, masses and radii stay byte-identical;
-only atmospheres and what derives from them move.
+⛔⛔ **BLAST RADIUS — THIS SECTION ASSERTED THE OPPOSITE AND IT WAS WRONG. Corrected 2026-08-05 by
+a 12-agent verification pass.** `computeAtmosphere` is pure, but **an rng draw IS conditional on its
+result**, through JavaScript's `&&` short-circuit. `src/generation/PlanetGenerator.js:526`:
+
+    const hasClouds = atmoPhysics.retained && rng.chance(cloudChance[type] || 0);
+
+When `retained` is false, `rng.chance(...)` **never evaluates and no number is consumed**. Two
+further draws sit inside the dependent block (`:533` `density: rng.range(0.3, 0.7)`, `:534`
+`scale: rng.range(2.0, 4.0)`). Today `retained` is true for 100% of bodies so the draw always fires
+— **which is exactly why this was never caught.** Make any body airless and its `planetRng`
+desynchronises from that point on. `SeededRandom.child()` also consumes a draw, so
+`StarSystemGenerator.js:386`'s `planetRng.child(\`moon-${m}\`)` reseeds: **every moon of every
+de-atmosphered planet becomes a different body, and every saved seed changes meaning.**
+
+⭐ **THEREFORE LAYER 1 NEEDS A STREAM-SAFETY COMMIT FIRST.** Hoist the `:526` draw out of the
+short-circuit (`const cloudRoll = rng.chance(cloudChance[type] || 0); const hasClouds =
+atmoPhysics.retained && cloudRoll;`) and hoist `:533-534` the same way, pinned by a seed-stability
+fence, **before** the threshold change lands. The standing "one extra draw rewrites the generated
+universe" rule **does** bite here.
+
+⚠ **And it is one constant away from firing on its own.** No body is airless today because of
+*orbital placement* (`StarSystemGenerator.js:264`'s innermost-orbit constant), not because of the
+retention law. Moving that constant trips the same desync with no atmosphere work at all.
 
 ### What layer 1 unblocks — the degenerate register
 
@@ -231,7 +294,8 @@ wiring bug and is not. Do not chase them as rendering defects.
 Found by the 2026-08-01 review. **Every measurement taken through `tryLabShader` before these land
 is in the same epistemic class as a Sol measurement — confidently wrong.**
 
-All four fixes belong in the **SHARED module**, not patched game-side: in the lab the divides reduce
+All **five** fixes below (the header used to say "four" and then list five) belong in the **SHARED
+module**, not patched game-side: in the lab the divides reduce
 to 1.0 and the logdepth chunks compile to nothing without the define, so the lab stays unchanged and
 constraint 2 is preserved. **Patching them game-side would create exactly the snapshot copy the
 program exists to avoid.**
@@ -240,36 +304,73 @@ program exists to avoid.**
    and `planet-lod-shaders.glsl.js:41` is `vPos = position;` with no normalisation, feeding
    absolute-scale domains (`voronoi3d(vPos * uVoroScale)`, `fbmd(vPos, …)`, ~30 `*Combiner(vPos, …)`
    calls). The game builds `IcosahedronGeometry(radiusEarth × 0.0426)`. An Earth-sized body spans
-   ±0.0426 where the lab spans ±1.0 — **the whole disc samples 1/23rd of one voronoi cell.** 23× on
-   a big planet, 78× on a small one, a 53× spread *within one system* from identical uniforms.
+   ±0.0426 where the lab spans ±1.0 — **the whole disc samples 1/23rd of one voronoi cell.**
+   ⚠ **Quantification corrected 2026-08-05** (and `*Combiner(vPos` is **23** call sites, not ~30):
+   the collapse runs **78.2× at 0.3 R⊕ (smallest rocky) down to 1.47× at 16 R⊕ (hot Jupiter)**, i.e.
+   23.5× at Earth size. The old line said "23× on a big planet", which is backwards — **big planets
+   barely collapse at all.** The 53× is the **max/min ratio** across the generated range, not a
+   big-vs-Earth ratio.
    ⭐ **This is a fully sufficient alternative explanation for the "flat orange"** that `fc06017`
-   read as the undriven floor.
-   **Fix:** normalise the game's object space (`IcosahedronGeometry(1, 5)` + `scale.setScalar(radius)`),
-   or interim `vPos = position / uBodyRadius` with `uBodyRadius = 1.0` in the lab.
-   ⛔ **A per-body `uDispDomainScale` is NOT sufficient** — `planet-lod-height.glsl.js:970/:2393/:2427`
-   explicitly exclude it from `fbmdRidged`/`fbmdHetero`/`fbmdDamped`, and it never touches
-   `uVoroScale`/`uCraterScale`/`uMountainScale`/`uEdificeScale`.
+   read as the undriven floor — **but it is now one of THREE sufficient causes**, alongside the
+   undriven palette and `uOctaves` (see item 3). **Fix them one at a time or the attribution stays
+   unresolved.**
+   ⛔ **FIX ORDERING CORRECTED 2026-08-05 — the option this file used to recommend FIRST is the
+   dangerous one.** `IcosahedronGeometry(1, 5)` + `scale.setScalar(radius)` **must not be used.**
+   `tryLabShader` (`src/main.js:1800-1844`) swaps only the MATERIAL on the game's existing mesh, so
+   the geometry stays shared with the game's own planet shader — which reads absolute object-space
+   position against a radius uniform (`Planet.js:436`
+   `float polarDark = smoothstep(0.6, 1.0, abs(vPosition.y) / planetRadius);`, plus `:721`, `:856`,
+   `:1611` `noiseScale`, `:1682` `planetRadius`). Unit-radius geometry silently changes **every
+   non-lab planet in the game.**
+   ✅ **THE FIX IS THE UNIFORM DIVIDE:** `vPos = position / uBodyRadius`, with `uBodyRadius = 1.0`
+   in the lab (identity, so the lab is untouched) and the mesh radius written game-side.
+   ⭐ **And it is ~4 lines, for a reason this file never stated:** the lab vertex shader does **not**
+   displace geometry — `planet-lod-shaders.glsl.js:45` is
+   `gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);` on the RAW position, so
+   all relief is fragment-side normal perturbation. Normalising `vPos` **cannot** change the
+   silhouette and **cannot** require re-tuning any relief amplitude.
+   ⛔ **A per-body `uDispDomainScale` is not even a candidate** — stronger than this file used to
+   say. It is **RETIRED dead code with no writer anywhere**, pinned at 1.0 forever
+   (`planet-lod-lab.html:4901-4904` "Slice C RETIRED … deliberately NO WRITE"; initializer
+   `planet-lod-uniforms.js:17`) and held there by a fence
+   (`tests/vis-scale-fence.test.js:232`). Repurposing it fights a test as well as the three
+   exclusions at `planet-lod-height.glsl.js:970/:2393/:2427`.
 2. **Light in the wrong space, and frozen.** `main.js` feeds the game's **world-space** `lightDir`
    into a uniform documented as *"object-space substellar direction"*. The surface spins and the
    parent carries axial tilt, so the terminator counter-rotates with the crust — one sweep per
-   planet day. The lab does the transform the game omits (`planet-lod-lab.html:4897`:
-   `invQuat.copy(planet.quaternion).invert()`). Separately `LabPlanetMaterial.js:68` copies the
+   planet day. The lab does the transform the game omits (`planet-lod-lab.html:4896`:
+   `invQuat.copy(planet.quaternion).invert()`; `:4897` is the `applyQuaternion` that consumes it).
+   Separately `LabPlanetMaterial.js:68` copies the
    vector by value, breaking the by-reference link the game material relies on, so it is also stale.
+   ✅ The shader needs **no** change here — `uLightDir` already *means* object-space; only the writer
+   is wrong. And the lab keeps its own writer, so the lab is untouched.
 3. **No per-frame seam at all.** `uTime` is never advanced (the game's only planet clock writer
    guards on a differently-named uniform), so cloud drift, superrotation, magma churn and aurora
    curtains evaluate at t=0 forever. `uOctaves`/`uLodRamp` likewise. **Fix as ONE seam** —
    `updateLabPlanetMaterial(material, {mesh, lightDirWorld, renderDt, octaves, lodRamp})` — not four
    patches. ⚠ This whole per-frame half of `applyDrivers` appears in **none** of the old six steps.
+   ⭐⭐ **`uOctaves` IS NOT MERELY "UNANIMATED" — added 2026-08-05.** It defaults to **4.0**
+   (`planet-lod-uniforms.js:18`) against a documented max of 9 (`fieldSampler.js:85`: *"it is
+   mix(4, 9, lodRamp)"*). **Every in-game lab-shader planet renders at the LOWEST detail rung,
+   permanently, at any distance.** That is a third fully independent sufficient explanation for the
+   flat-orange read, and it is nearly free to fix.
 4. **No log-depth chunks.** `RetroRenderer` runs `logarithmicDepthBuffer: true` with `near = 1e-9`;
    `grep -c logdepthbuf planet-lod-shaders.glsl.js` → **0**. Every fragment writes `z ≈ 1.0`, so the
    disc draws (LessEqualDepth passes) while sorting against rings, moons and the ship by traversal
    order. **In-repo precedent: `tests/warp-portal-logdepth.test.js` exists because this project
    already shipped this exact bug once.**
-5. **The view vector is scene-origin.** `planet-lod-shaders.glsl.js:446` assumes the planet sits at
+5. **The view vector is scene-origin.** `planet-lod-shaders.glsl.js:447` (`:446` is the comment
+   stating the assumption) assumes the planet sits at
    the origin with identity quaternion. In the game `|vPos| ≤ 0.68` while `cameraPosition` runs to
    the 100-unit rebase threshold, so `V` collapses to a constant direction. The rim glow slides
    across the disc as you orbit. The game's own shader does this correctly (`Planet.js` `vWorldPos`
    + `vViewDir`), so it is a real divergence, not a shared convention.
+   ⚠ **THE "THE LAB STAYS UNCHANGED" GUARANTEE DOES NOT COVER THIS ONE (2026-08-05).** It holds for
+   items 1–3. Item 5 is different: **the lab carries the same origin-assumption latently**, masked
+   only because `spinSpeed` defaults to 0 (`planet-lod-lab.html:906`) and its planet is never
+   translated. Turn the lab's spin slider on (`:4830`, `:1551`) and the lab's own rim glow is already
+   wrong. Fixing item 5 properly either changes the lab's spin-enabled look or requires deliberately
+   preserving the bug behind a flag — **decide which before writing it, and byte-gate accordingly.**
 
 ---
 
@@ -280,12 +381,48 @@ extraction). Corrected and verified 2026-08-01:
 
     planet-lod-lab.html            6411 lines   (NOT 7554)
     applyDrivers()                 1933-2734
-    ensureNetworkRouted()          2745-2880
+    ensureNetworkRouted()          2745-2904    (corrected 2026-08-05 — NOT 2745-2880; the 24
+                                                 omitted lines 2882-2903 are where its six direct
+                                                 uniform writes live)
+    per-frame uniform writer       4899-5492    ← half of every uniform's value. See hazard F.
 
-⭐⭐ **THE BIG VISUAL UNIFORMS ARE NOT IN `applyDrivers`.** They are in `ensureNetworkRouted`, and
-that code is already written in the exact idiom the game needs — every derive reads
-`_bodyDrivers.condition`, which is the same object shape `conditionFromPlanet` returns. **Zero
-adapter, zero bake.**
+⛔ **PATH DRIFT — every grep this file hands a fresh session against these will silently return
+nothing** (this is how the 2026-08-05 recon started): `planet-lod-lab.html`,
+`planet-lod-shaders.glsl.js`, `planet-lod-height.glsl.js`, `planet-lod-rivers.js`,
+`planet-lod-lab-core.js` and `planet-lod-uniforms.js` are all at the **REPO ROOT**, not under
+`src/worldengine/shaders/` (which holds only `craterRelief.glsl.js` and `heightNoise.glsl.js`).
+`LabPlanetMaterial.js` is at `src/rendering/`. ⚠ Also: `.claude/worktrees/` holds **8 stale copies**
+of `planet-lod-lab.html`, so a repo-wide grep returns 9 hits — **edit the wrong one and you get a
+silent no-op.**
+
+⭐⭐ **THE BIG VISUAL UNIFORMS ARE NOT IN `applyDrivers`** — but the sentence that used to follow
+was wrong and contradicted this file's own hazard F. **Corrected 2026-08-05.**
+`ensureNetworkRouted` (`2745-2904`, not `2745-2880`) writes **`state.*`, not uniforms** — its only
+six direct uniform writes are texture pointers (`uRiverCarveMap :2885`, `uTectonicGrainCube :2890`,
+`uReliefBakeCube :2894`, `uProvinceCube :2895`, `uCraterBakeCube :2897`, `uRiverCarveGateHi :2898`).
+**The uniforms are written by the per-frame writer inside `frame()` (`4899-5492`)**, which applies
+`state.<feature>Enabled`, `state.featureRelevant.<key>`, `state.craterRelevance` and the `sVis`
+visual-scale factor on the way. That is hazard F, and it is the truth. **Any extraction must carry
+BOTH halves — derivation without gating renders the wrong thing, gating without derivation renders
+nothing.** The good news survives: the derivations read `_bodyDrivers.condition`, the same object
+shape `conditionFromPlanet` returns, so there is still zero adapter.
+
+⛔⛔ **AND THE DESTINATION IS NOT A RENDER PATH YET — THE SINGLE MOST IMPORTANT FACT IN THIS FILE.**
+`src/rendering/LabPlanetMaterial.js` is instantiated at **exactly one site**: `src/main.js:1824`,
+inside `async tryLabShader`, a hand-invoked debug material swap that walks the scene looking for
+`o?.material?.uniforms?.noiseScale`. **Nothing in the normal render path builds it.** Production
+bodies render `Planet.js`'s own `GAS_BODY`/`ROCKY_BODY` (`src/objects/Planet.js:1460-1461`).
+Consequences, all of which resequence this program:
+- **Every "the game is flat orange / bone dry / renders black" reading in this file's history was
+  taken through that probe**, i.e. through an object the player never sees — the same error class
+  §LAYER 0 catalogues.
+- **No lab improvement — GLSL or driver — reaches a single player pixel today.** The shared shader
+  TEXT edge is real (`LabPlanetMaterial.js:2` → `planet-lod-shaders.glsl.js`) but its only consumer
+  is the probe. "Lab GLSL work is doubly valuable because the module is shared" is **false** until a
+  production material swap exists.
+- ⭐ **So the real deliverable of this program is not a uniform count. It is: make the lab material a
+  production render path.** That single milestone is what converts all future lab work into game
+  work for free, which is standing constraint 2's actual mechanism.
 
 ### Slice 1 worklist — the next 10 uniforms, ranked by visual payoff per unit of work
 
@@ -327,12 +464,21 @@ Let `cond = conditionFromPlanet(p)`. Full catalogue: 77 uniform writes, recon 20
 
 ### Ordering hazards — a naive extraction that reorders these produces plausible-but-wrong output
 
-- **A. ⭐ The crater uniforms are written TWICE.** `applyDrivers:2024-2027` sets them from
-  `deriveUniforms` (the *retired* preset-age law); `ensureNetworkRouted:2828-2856` **overwrites**
-  them from `craterSchedule(cond)`. The route-time values ship. They disagree **by design**: the
-  route block forces `craterComplexD = 2×0.55/0.6 = 1.8333` specifically so `morphology ≡ 0` for the
-  analytic sub-floor band. Port the `applyDrivers` line and every synthetic crater grows a spurious
-  central peak.
+- **A. ⭐ The crater uniforms are written TWICE — IN THE LAB.** `applyDrivers:2024-2027` sets them
+  from `deriveUniforms` (the *retired* preset-age law); `ensureNetworkRouted:2828-2856`
+  **overwrites** them from `craterSchedule(cond)`. The route-time values ship in the lab. They
+  disagree **by design**: the route block forces `craterComplexD = 2×0.55/0.6 = 1.8333` specifically
+  so `morphology ≡ 0` for the analytic sub-floor band.
+  ⛔⛔ **THIS SECTION USED TO SAY "port the route-time block at :2803-2856, not the applyDrivers
+  lines." THAT INSTRUCTION WOULD CAUSE A REGRESSION AND IS WITHDRAWN (2026-08-05).** The game
+  already has a crater law and it deliberately refuses the lab's pin —
+  `src/worldengine/port/craterUniforms.js:152` `const complexD = transitionDiameterKm(g) / Dchar;`,
+  under a header that states why: *"⛔ NOT the lab's value: the lab pins this high to force
+  morphology == 0, because every crater it draws is a sub-floor simple bowl. The game's craters are
+  ~0.1 R across — complex craters — and their central peaks and wall terraces are most of what makes
+  a big crater read as a crater rather than a dent."* Porting the lab's 1.8333 **flattens every
+  complex crater in the game to a bowl.** Hazard A is a lab-internal ordering fact only; the game's
+  crater uniforms are already correct and must be left alone.
 - **B. `uEmissive` — four writes over 705 lines** (:2001 base, then zeroed at :2432 `_hotJup`,
   :2687 `_magmaClass`, :2706 `_carbonClass`).
 - **C. `uSpecStrength` — three writes, order-critical.** Zeroing must precede the scale; lifting
@@ -366,13 +512,53 @@ were ported from the lab and fenced at max delta 0 in `fd2fdd4`.
 
 ---
 
-## LAYER 4 — the bakes — `TODO` ⚠ **THE ONE UNPRICED RISK — MEASURE THIS FIRST**
+## LAYER 4 — the bakes — `TODO` ✅ **PRICED 2026-08-05 — IT IS NO LONGER THE UNPRICED RISK**
 
-⭐ **THE BAKE WALL RUNS THROUGH THE MIDDLE OF ONE FUNCTION**, which is why it is easy to miss:
+⭐ **THE PROBE THIS FILE BUDGETED AT "A DAY" TOOK UNDER AN HOUR, HEADLESS, IN NODE.** `route()` is a
+plain ES module function (`planet-lod-rivers.js:1449`, inside `createRiverOverlay` at `:1382`). It
+touches no DOM and no canvas; its only GPU coupling is `renderer.render` / `readRenderTargetPixels`,
+both stubbable. ⛔ **`tests/ws4-grain-bake-host.test.js:19` states as fact that "route() cannot run
+headless." That is false and is probably where the "a day" budget came from — fix it in place.**
 
-    ensureNetworkRouted()  :2758-2857   FREE   pure CPU condition scalars (iceness, biosphere,
-                                               surfacePalette, the whole craterSchedule block)
-                           :2858+       WALL   riverOverlay.route() — router graph + RGB carve cube
+**MEASURED (node, CPU-only stub, `uReliefBakeStrength` pinned 1.0):**
+
+    steady-state route()      105-190 ms   (R=1 spans 103-173 ms over 6 runs — noisy; do not quote decimals)
+    FIRST route()             1.0-1.3 s    ← the real finding
+    of which buildIrregularSphere(40000, 4)   0.6-0.8 s
+    largest single phase      routeAndOrder ~30 ms      ribbon+valley ~44 ms combined (37%)
+    bakeGrainCube (CPU)       ~6 ms  (~5%)  — already inside route()
+
+⭐⭐ **THE ARCHITECTURAL RISK IS NOT THE CARVE COST — IT IS COLD START, AND IT IS PER INSTANCE.**
+The 0.6–0.8 s mesh build is a spherical Delaunay (three's `ConvexHull`) + 4 Lloyd relaxation
+iterations on a **fixed global 40,000-node sphere** (`DEFAULT_PARAMS.TARGET_N: 40000`), paid once per
+`createRiverOverlay` **instance**. The lab has one planet, pays it once, and never notices. **A game
+with many bodies pays ~1 s on each body's first visit unless the 40k mesh is built once and shared
+across overlays.** That is the layer-4 architecture decision, and this file never raised it.
+
+⚠ **`route()` cost is FLAT in radius** (111–138 ms over a 30× radius span) because the mesh is
+global; `radiusEarth` feeds only the ribbon/valley WIDTH law. **The radius sweep this file
+prescribed was the wrong probe.** The real radius dependence is a **BRANCH**:
+`planet-lod-rivers.js:1528` gates the router's height source on `uReliefBakeStrength > 0`, and the
+lab rewrites that uniform every frame as `grainCarveUI.reliefBakeStrength * bakeReliefCrossover(sVis)`
+(`planet-lod-lab.html:4941`) with `sVis = radiusEarth^0.5` — **exactly 0 for radiusEarth ≤ 0.25 or
+≥ 4.0.** On that branch `route()` calls `sampler.read()`: a 200×200 RGBA-float RTT running the full
+9-octave height shader, then a 640 KB `readRenderTargetPixels` — **the one synchronous GPU stall in
+the whole function.** The game has no `bakeReliefCrossover`, so **the port must decide which branch
+it takes before porting the router.**
+
+⛔ **TWO HONEST LIMITS ON THESE NUMBERS.** (1) Only the `bakedOn = true` path was priced — the
+stub lacks `renderer.clear()` (needed at `:588`), so the strength-0 fallback above is **still
+unpriced**. (2) These are isolated node-CPU figures with GPU cost zero by construction; treat them
+as a **floor**, not as a transferable frame cost. Browser shader compilation for the five
+`WebGLCubeRenderTarget`s built in `ensureMesh()` is not in them.
+
+**THE BAKE WALL RUNS THROUGH THE MIDDLE OF ONE FUNCTION**, which is why it is easy to miss
+(endpoints corrected 2026-08-05):
+
+    ensureNetworkRouted()  :2745-2859   FREE   pure CPU condition scalars (iceness, biosphere,
+                                               surfacePalette, the whole craterSchedule block).
+                                               MEASURED at 0.042 ms per call — it really is free.
+                           :2860        WALL   riverOverlay.route() — router graph + RGB carve cube
 
 Four bakes, in payoff order: (1) river router + carve cube → rivers, coastlines, deltas,
 strandlines; (2) the WS4 tectonic-grain cube → `sampleGrainStrike`, the only non-constant source for
@@ -385,10 +571,13 @@ attributes `aBand`/`aShear`/`aMush`/`aStorm` (gas giants only, correctly zero-fi
 rifts along identical great circles. **Adding `seed` to the fp de-constants seven uniforms with no
 bake at all**, and should precede any grain-cube work.
 
-**Approach A pulls this forward:** price ONE bake (`performance.now()` around `riverOverlay.route()`
-for a few radii) before layers 0–2 work begins. If a carve costs 500 ms on a game-sized body,
-streaming has to be *designed in*, not retrofitted. It is a day, and it is the only unknown that can
-invalidate the architecture.
+✅ **Approach A's probe is DONE (2026-08-05) — see the measurements above. Streaming does NOT have to
+be designed in for the carve cost; the ~1 s per-body cold start is the thing that does.** Bakes 2
+(grain, ~6 ms) and 3 (province) are **already called from inside `route()`** (`:1553`, `:1558`), so
+they are not separable work items — they ride along for ~11% of the router's cost. **Bake 4 (the
+four gas-giant vertex attributes, ~14 ms over 66,049 synthetic positions) is the only one of the
+four that needs neither the 40k mesh nor a router graph nor a cube** — a flat closed-form per-vertex
+loop that can be ported independently, first, at any time.
 
 ---
 
@@ -531,11 +720,63 @@ Sol *is* valid for **system-independent** work (shader compile cost — the GPU 
 body TYPE). Say which class the measurement is in whenever Sol is used at all.
 ⛔ Sol is **permanent**. Do not propose unifying them.
 
+## The LAB track — this file's blind spot (added 2026-08-05)
+
+**This file is a lab→game document end to end. It has never covered the other half of the program:
+building out the lab's own missing/underbaked features.** That backlog lives in
+[`lod-lab-quality-backlog.md`](lod-lab-quality-backlog.md) (Max's own 14 entries),
+[`surface-variation-beyond-mvp.md`](surface-variation-beyond-mvp.md) and
+[`planet-lod-campaign-tracker.md`](planet-lod-campaign-tracker.md). Verified 2026-08-05:
+
+- ⭐⭐ **THE HIGHEST-LEVERAGE SINGLE LAB ACTION, AND IT IS IN NO PLAN: the tectonic grain is
+  latitude-only.** `planet-lod-tectonic.js:106-107` — `const lat = carrier.latDegOf(i) + rotateDeg;`
+  → `stressAtLat(lat, drivers)`, and `:50` says it outright: *"the grain is otherwise latitude-only
+  / longitudinally uniform."* **A latitude-only strike is a mechanical explanation for Max's
+  backlog #7 "canyons look like one long trench" AND for blobby mountains** — and it is *also* the
+  port's only stated blocker for mountains+canyons. **Six** features ride the grain field, so one
+  investigation either fixes or kills two of Max's complaints and unblocks the port. The port lane
+  found this independently (`surface-variation-beyond-mvp.md:615/:625`) and nobody connected the two.
+  ⚠ Note the default disagrees across sides: lab runs grain **ON** (`planet-lod-lab.html:1442`
+  `grainStrength: 1.0`), production defaults **0**.
+- ⛔ **NOTHING on the lab backlog is superseded** by the 2026-07-31 "replace, not graft" turn. The
+  STOP-DOING note kills the PORT lane's transcription rungs (plateaus, provinces, mountains/canyons
+  *ported game-side*), not lab work.
+- ⛔ **But "lab GLSL work is doubly valuable because the shader module is shared" is FALSE today**
+  — see §LAYER 3 on `LabPlanetMaterial` being a debug probe. **Everything on the lab backlog is
+  lab-only until a production material swap exists.** That is the argument for doing layer 2 first
+  even if you care mainly about the lab.
+- **Backlog #12 (exotic surfaces) is blocked by a data gap nobody connected to it.**
+  `PROFILES.md:42-47` lists six body types as *"BLOCKED — no preset, no archetype"* (hex, shattered,
+  fungal, machine, city-lights, ecumenopolis) — exactly the ones Max complained about. You cannot
+  judge whether an ecumenopolis reads right *as a world* while it is only viewable as a toggle on
+  someone else's world. Authoring those presets must precede the #12 fix loop.
+- ⚠ **`PROFILES.md:28-47` already holds a real render probe for four backlog items** — read it
+  before triaging: F20 coastlines measures 0.050 on Ocean (so #4 is not a blackout), F19
+  mass-wasting is INERT at 0.00006 **on Mars**, a non-airless body (so #4 is wider than Max's
+  airless framing), F36 sunglint is unproducible in the probe geometry, F11/F12 inert with healthy
+  drivers.
+- ⚠ **Stale lab docs that will mislead you:** the tracker still schedules **F38 airglow and F39
+  cloud-optics as unbuilt Phase-4c work — both shipped ~2026-06-15**, and F39 was then turned
+  default-OFF by a Max taste-call (*"too hi-fidelity for the lo-fi aesthetic"* — decide delete vs
+  restyle, don't leave dead code). Tracker line 24 marks Phase 6 pending; commit `e2cdac6` ran it.
+  `labs-inventory.md:17` says the lab is 7593 lines; it is **6411**. `planet-lod-lab.html:1238/1240`
+  calls `cryoActivity` a stub; it is derived live at `planet-lod-lab-core.js:881`.
+- The lab itself has not been edited since `6f9d3f4` (2026-07-30); every commit since is port work.
+
 ## How to pick this up in a fresh session
 
-1. Read this file.
+1. Read this file — **starting with the 2026-08-05 correction box at the top.**
 2. `git log --oneline -15` on `feature/world-engine-production-L1` — **the log outranks this file.**
-3. Find the lowest-numbered layer that is not `DONE`. Layers 0/1 and 2 can run in parallel.
-4. Before building on layer 4, run the bake probe — it is the only unpriced risk.
+3. **Do LAYER 2 first.** Revised 2026-08-05, against this file's own old advice to take the lowest
+   unstarted layer. Reasons, in order: (a) layer 2 blocks *all measurement* — `planet-lod-shaders.glsl.js`
+   has exactly **one** commit in its history (`6f9d3f4`), so every reading ever taken through
+   `tryLabShader`, including `fc06017` and `d1f770a`, was taken against all five defects still live;
+   (b) it is the only layer whose fixes are confirmed, small and lab-neutral; (c) it is the path to
+   a production material swap, which is what makes lab work reach players at all.
+4. **Layers 0/1 run in parallel with it** — but layer 1 is **gated behind the stream-safety commit**
+   (see §LAYER 1 blast radius), and layer 0's cheapest real item is `habitability`, not the fp export.
+5. ~~Before building on layer 4, run the bake probe~~ — **done 2026-08-05.** Carry its one
+   architectural consequence instead: build the 40k router mesh **once and share it** across
+   overlays, or pay ~1 s per body on first visit.
 
 Do **not** read `~/briefings/*.md` for status. They are per-session and they go stale.

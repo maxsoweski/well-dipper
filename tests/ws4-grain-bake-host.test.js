@@ -16,7 +16,15 @@
 // uniform push are the :9223 deferred checks.
 //
 // WHY a helper, not a full route() test: createRiverOverlay.ensureMesh() builds a real
-// createHeightSampler + createCarveCubeMap (both need WebGL RTT), so route() cannot run headless.
+// createHeightSampler + createCarveCubeMap, which want a WebGL RTT.
+// ⚠ CORRECTED 2026-08-05: this comment used to end "...so route() cannot run headless." THAT IS
+// FALSE, and the sentence cost a session: it is why the layer-4 bake probe was budgeted at a day.
+// route() touches no DOM and no canvas — its only GPU coupling is renderer.render /
+// readRenderTargetPixels, and a no-op renderer stub runs the whole bakedOn=true path in node
+// (measured: first route ~1.0-1.3 s, mesh-dominated; steady state ~105-190 ms). What genuinely
+// does NOT run headless is the uReliefBakeStrength == 0 fallback, because createHeightSampler.read()
+// calls renderer.clear() (planet-lod-rivers.js:588) and then reads pixels back.
+// Numbers + the per-instance cold-start finding: docs/FEATURES/lab-pipeline-into-game-PLAN.md LAYER 4.
 // Extracting bakeGrainCube gives the bake logic a clean, GPU-free seam to lock in CI; the integration
 // (it is CALLED once per route, and its texture is pushed to uTectonicGrainCube) is the live AC.
 //
