@@ -34,6 +34,34 @@
 > §"Why layers, not steps". The old step numbering is preserved in §"Step-model history" so old
 > commit messages remain readable.
 
+> ⛔ **DEFERRED BEHIND THIS PROGRAM'S MVP — do not re-propose (Max's ruling, 2026-08-06).** After
+> master merged into lane A (`a865753`), two master-side golden fixtures went red because lane A's
+> generator legitimately produces different bodies (see `NOW.md` 2026-08-06). The obvious fix —
+> capture a fresh lane-A-owned procgen snapshot — is **explicitly deferred**, verbatim: *"I would
+> want to wait to take those images until I feel like we are in a good enough point where we have
+> effectively merged the procgen rendering from World Engine into the Well Dipper game. And we're
+> still not quite there."*
+>
+> The reasoning, which is the durable part: a snapshot taken mid-migration **pins a half-migrated
+> state**. Every legitimate remaining step would then trip its own alarm, so the guard would spend
+> its whole life reporting intended changes — churn with no protection. The snapshot is worth taking
+> exactly once, when the World Engine → game merge is MVP, and not before.
+>
+> **Named gap Max called (2026-08-06), verified against source the same day: MOONS ARE NOT IN THE
+> PIPELINE AT ALL** — not "mostly not", not at either end:
+> - `src/worldengine/**` has **no moon path whatsoever** (no moon-keyed condition / driver / relief
+>   writer anywhere in the tree).
+> - `MoonGenerator.js` emits essentially none of the condition fields `PlanetGenerator.js` does:
+>   `conditions` 0 vs 1, `habitability` 0 vs 3, `magneticField` 0 vs 8, `tidalState` 0 vs 8,
+>   `surfaceHistory` 0 vs 3, `metallicity` 1 vs 11.
+> - The lab-material hook excludes them **structurally**: `tryLabShader` filters
+>   `owner.startsWith('body.planet.')` (`src/main.js:2422`), so a moon can never receive the lab
+>   material even by hand.
+>
+> So moons need BOTH halves built — a driver/condition derivation path in the world engine, and
+> admission to the lab render route. Treat that as a gating item for "MVP", alongside whatever else
+> a scoping pass turns up. **Only once MVP is declared does the snapshot become worth taking.**
+
 ## The standing constraints (Max, verbatim — these decide every design question below)
 
 1. **"We change the rendering capabilities of the main game however we need to such that the

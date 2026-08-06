@@ -29,8 +29,17 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > `composition.density`, where lane A replaced master's linear blend with `1/specificVolume`.
 > Fixtures deliberately **not** re-captured: they exist to prove master's workstreams were
 > additive, and `_captureAuthoredParent.mjs` carries a self-guard against exactly that re-capture.
-> **▶ OPEN FOR MAX: whether to re-baseline them on lane A or leave them red until merge-back.**
 > 17 failed FILES = 15 `vendor/motion-test-kit` "no test suite" + those 2.
+>
+> ⛔ **RULED 2026-08-06 — leave them red; do NOT capture a lane-A procgen snapshot yet.** Max
+> deferred it behind a dependency: the snapshot gets taken only once the **World Engine → game
+> procgen/rendering merge is MVP**. A snapshot taken now pins a half-migrated state and would alarm
+> on every legitimate remaining step. Named gating gap, verified against source: **moons are not in
+> the pipeline at all** — no moon path in `src/worldengine/**`, `MoonGenerator` emits ~none of the
+> condition fields (`conditions` 0 vs 1, `tidalState` 0 vs 8, `magneticField` 0 vs 8), and
+> `tryLabShader` structurally excludes them (`body.planet.` filter, `src/main.js:2422`). Full record
+> + reasoning: [`FEATURES/lab-pipeline-into-game-PLAN.md`](FEATURES/lab-pipeline-into-game-PLAN.md)
+> header. ⛔ Do not re-propose the snapshot before MVP is declared.
 
 > ## ⭐⭐ 2026-08-01 — ACTIVE ARC: THE LAB'S PIPELINE GOES INTO THE GAME
 >
