@@ -34,6 +34,22 @@
 > §"Why layers, not steps". The old step numbering is preserved in §"Step-model history" so old
 > commit messages remain readable.
 
+> ## ⭐ MVP — DEFINED (Max, verbatim, 2026-08-06)
+>
+> *"MVP actually means that all of the planned features in World Engine are implemented in the
+> World Engine Lab and have been wired up in the main well-dipper game."*
+>
+> Two conditions, both required: **implemented in the Lab** AND **wired into the game**. A feature
+> that renders in the lab but has no game path is NOT done. This is the gate every "are we there
+> yet?" question resolves against, and the dependency the procgen snapshot below sits behind.
+>
+> **Standing constraint on HOW the remaining wiring is done (Max, 2026-08-06):** *"as we wire these
+> features up, [make sure] it'll make future migrations of updated rendering systems from World
+> Engine into well-dipper easier than they were when we just did it recently."* This reinforces
+> constraint 2 below and raises it from a preference to an acceptance criterion: a wiring increment
+> that lands the feature but leaves the next migration just as expensive has **not** met the bar.
+> See §"Why migrations are expensive today" for the measured diagnosis.
+
 > ⛔ **DEFERRED BEHIND THIS PROGRAM'S MVP — do not re-propose (Max's ruling, 2026-08-06).** After
 > master merged into lane A (`a865753`), two master-side golden fixtures went red because lane A's
 > generator legitimately produces different bodies (see `NOW.md` 2026-08-06). The obvious fix —
@@ -107,6 +123,66 @@ wrong measurements:
 Every one was read as a *rendering* question. Two were world-generation problems and one was an
 environment problem. **The program is not blocked on rendering capability. It is blocked on
 observability.**
+
+## Why migrations are expensive today — MEASURED 2026-08-06
+
+Max's 2026-08-06 constraint (see MVP block at top) makes "the next migration must be cheaper" an
+acceptance criterion. This is the diagnosis it rests on. Every claim was checked against source.
+
+**The root cause is not the code volume. It is that the lab and the game reach the world engine by
+TWO SEPARATE ROUTES, so each migration is a hand-reconciliation of the two.** The plan's own gate —
+"resolved output byte-identical" — exists *because* there are two routes. Collapse them to one and
+the gate stops being necessary work.
+
+Three findings:
+
+1. **`src/worldengine/port/` is a declared seam that only ONE side uses.** Its own header calls it
+   "the GAME-SIDE adapter into the world engine." Importers: `src/objects/Planet.js`,
+   `src/generation/PlanetGenerator.js`. The lab imports from it **zero** times — it goes through the
+   root-level `body-condition-vector.js` / `planet-drivers.js` cluster instead. Same engine, two
+   front doors.
+
+2. **`applyDrivers` — the function that turns conditions into uniforms — is trapped inside
+   `planet-lod-lab.html` (6 420 lines), and the game has NO counterpart.** The game is visibly
+   working around its absence one feature at a time: see `src/objects/Planet.js:1405` and `:1623`,
+   both of which say in so many words that the feature landed only because it "neither needed
+   anything out of the un-extracted applyDrivers." That workaround tax is paid again by every
+   feature wired from here on. Extracting it is already LAYER 3 / old-Step-1; it is the single
+   highest-leverage unblock in this file.
+
+3. **The shared/not-shared boundary is undeclared, so every migration re-derives it.** 34 loose
+   `.js` files sit at the repo root beside the HTML, mixing genuinely-shared pipeline
+   (`planet-lod-shaders.glsl.js`, `planet-lod-uniforms.js`, `planet-lod-lab-core.js`,
+   `body-condition-vector.js`) with lab-only UI/debug (`lab-render-audit.js`, `lab-render-status.js`,
+   `lab-isolation.js`, `driver-presets.js`) and unrelated cockpit-lab files. Nothing marks which is
+   which. `src/rendering/LabPlanetMaterial.js` then reaches **out of `src/` and up to the repo root**
+   (`../../planet-lod-shaders.glsl.js`, `../../planet-lod-uniforms.js`, `../../planet-lod-lab-core.js`).
+
+⭐ **And the seam is PLANET-KEYED, which is exactly why moons and gas giants are not wired.**
+`conditionFromPlanet(planetData)` is named and shaped for planets. `MoonGenerator` emits nearly none
+of the condition fields `PlanetGenerator` does (`conditions` 0 vs 1, `habitability` 0 vs 3,
+`magneticField` 0 vs 8, `tidalState` 0 vs 8, `surfaceHistory` 0 vs 3), `src/worldengine/**` has no
+moon path at all, and `tryLabShader` structurally excludes moons via its `body.planet.` filter
+(`src/main.js:2422`). The widening that makes migrations cheap and the widening that unblocks
+LAYER 5 body-class coverage are **the same change**.
+
+### What "cheaper next time" concretely means
+
+**One pipeline, two front-ends** — not two pipelines reconciled by hand:
+
+1. **Widen `port/` from planet-keyed to body-keyed** (`conditionFromPlanet` → `conditionFromBody`,
+   accepting planets / moons / giants). This is not extra work ahead of the body-class wiring — it
+   *is* that work, done once instead of three times.
+2. **Extract `applyDrivers` into the shared pipeline and have the LAB IMPORT IT BACK.** That is
+   already this file's stated rule ("every step is an *extraction* the lab imports back, never a
+   copy"); it simply has not been applied to the biggest piece.
+3. **Make the boundary physical and enforce it with a test.** Shared modules live under
+   `src/worldengine/**`; lab-only files stay at root; **nothing under `src/` may import from the
+   repo root**. That last rule is a greppable invariant (`../../` escapes out of `src/`), so it can
+   be a standing test instead of a convention that rots.
+
+**Ordering matters:** do 1 and 2 BEFORE wiring moons/gas giants. Wire them first and you wire them
+into the two-route world, then pay to migrate them a second time.
 
 ## The six layers
 
