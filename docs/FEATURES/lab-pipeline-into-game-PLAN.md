@@ -289,7 +289,43 @@ wiring bug and is not. Do not chase them as rendering defects.
 
 ---
 
-## LAYER 2 — renderer conformance — `4 of 5 SHIPPED, LIVE CHECK OWED` ⛔ BLOCKED ALL MEASUREMENT
+## LAYER 2 — renderer conformance — ✅ `DONE, VERIFIED LIVE 2026-08-06`
+
+> **All five items shipped and measured in the running game**, on a generated system (seed 12345),
+> not asserted from a test. `ef6e416` radius divide, `734b424` log depth, `ee34ce7` per-frame seam
+> (light space + clock + octaves), `98f1d75` view vector. Plus `d18cbcf`, a defect the live check
+> found — see below.
+>
+> **Measured, body at 6 radii:** shader compiles (29.8 s cold / 46.6 ms warm, zero shader errors);
+> `bodyRadius 0.048749` == `geometryRadius`, not 1.0; object light `[-0.7259, -0.1613, 0.6686]`,
+> which is the world light `[-0.7436, 0, 0.6686]` through the inverse of the body's `rotZ -0.21869`
+> tilt; `uTime` +1.004 s per second; `uOctaves` 4 → 9 and `uLodRamp` 0 → 1 on approach;
+> `uCameraPosObj` tracking 2789 → 13.3 body radii. 240 fps, console clean.
+>
+> ⭐ **TWO METHOD NOTES WORTH MORE THAN THE FIXES.**
+> 1. **`octaves: 4` at spawn is indistinguishable from a dead seam** — at 14,015 body radii it is
+>    also the *correct* answer. Proven live by writing a sentinel (7.77) into the uniform and
+>    watching the seam overwrite it within a second. Reach for a sentinel whenever the correct value
+>    and the broken value coincide.
+> 2. ⛔ **THIS FILE'S STANDING NOTE THAT "THE LOD RAMP CANNOT BE EXERCISED BY FLYING" IS TRUE ONLY
+>    OF SOL**, where bodies sit 10⁵–10⁷ radii out. In a generated system, `selectBody` +
+>    `commitBurnNow` puts you inside 6 radii in about four seconds and the ramp runs. Do not skip
+>    the live check on the strength of that note again.
+>
+> **Probe:** `window._lab.labShaderReport()` returns all of the above as numbers, leading with an
+> rAF frame-rate check — a backgrounded window throttles to ~1 Hz while `document.hidden` still
+> reports false, and every per-frame verdict then reads as "not wired" for the wrong reason.
+>
+> ⛔ **AND THE LIVE CHECK FOUND A DEFECT NO TEST COULD HAVE** (`d18cbcf`). The shader declares six
+> bake samplers; **five are absent from `makeUniforms` entirely** — the lab creates them at route
+> time alongside the bakes that fill them, and the game never runs that route. Five samplers of two
+> types therefore shared GL's default unit 0:
+> `GL_INVALID_OPERATION: Two textures of different types use the same sampler location` ×256, then
+> **"no more errors will be reported for this context."** That second line is the damage: a silenced
+> console is indistinguishable from a clean one, so the compile errors this layer depends on seeing
+> would have been invisible. Fixed by binding a typed 1×1 black texel to every declared sampler,
+> creating the slot when absent. ⚠ The first attempt only filled *null* slots and changed nothing —
+> filling a null and creating a missing key are different operations, and only the browser caught it.
 
 > **2026-08-05/06.** Items 1, 2, 3 and 4 are shipped with fences: `ef6e416` (radius divide),
 > `734b424` (log depth), `ee34ce7` (per-frame seam — light space, clock, octaves). Item 5 (view
