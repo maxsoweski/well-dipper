@@ -23,6 +23,20 @@ import { HEIGHT_GLSL } from './planet-lod-height.glsl.js';
  * fences counts them.
  */
 export const LAB_VERTEX_SHADER = /* glsl */ `
+      // ── Logarithmic depth (LAYER 2 item 4, 2026-08-05) ──
+      // The GAME's renderer runs \`logarithmicDepthBuffer: true\` with near = 1e-9
+      // (src/rendering/RetroRenderer.js:49). Without these chunks every fragment of this shader
+      // writes z ~= 1.0, so the disc still DRAWS (LessEqualDepth passes) but sorts against rings,
+      // moons and the ship by traversal order rather than by depth. In-repo precedent that this is
+      // a real and recurring bug: tests/warp-portal-logdepth.test.js exists because the project
+      // already shipped it once, and the shader this material replaces —
+      // src/objects/Planet.js SURFACE_VERTEX:1432 — carries exactly these two chunks.
+      // ⛔ THE LAB IS UNAFFECTED. planet-lod-lab.html:194 builds its renderer without the flag, so
+      //    USE_LOGDEPTHBUF is undefined and both chunks compile to nothing.
+      // ⚠ \`<common>\` is required, not decorative: logdepthbuf_vertex calls isPerspectiveMatrix(),
+      //    which three defines there. Planet.js includes it for the same reason.
+      #include <common>
+      #include <logdepthbuf_pars_vertex>
       varying vec3 vPos;            // object-space position (noise domain — precision-safe)
       varying vec3 vObjN;           // object-space geometric normal
       // ── Canonical shared varying (integration-index §1) — vSubstellarAngle ──
@@ -61,11 +75,18 @@ export const LAB_VERTEX_SHADER = /* glsl */ `
         vBand = aBand; vShear = aShear; vMush = aMush; vStorm = aStorm;
         vSubstellarAngle = acos(clamp(dot(normalize(position), normalize(uLightDir)), -1.0, 1.0));
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        #include <logdepthbuf_vertex>
       }
 `;
 
 export const LAB_FRAGMENT_SHADER = /* glsl */ `
       ${HEIGHT_GLSL}
+      // ── Logarithmic depth, fragment side (LAYER 2 item 4) — see the note in LAB_VERTEX_SHADER.
+      // ⚠ NO \`<common>\` here, deliberately: logdepthbuf_pars_fragment needs nothing from it, and
+      //    HEIGHT_GLSL above is 363 KB of the lab's own function library — pulling three's helpers
+      //    in alongside it invites a redefinition error for zero benefit. src/objects/Planet.js
+      //    FRAG_HEADER:24 makes the same choice.
+      #include <logdepthbuf_pars_fragment>
       // ── #3a E5 band/jet writer fields (fragment side). Declared here — HEIGHT_GLSL owns the
       // vPos/vObjN varying set, and zonalBandCol takes these as PARAMS so the shared GLSL (also used
       // by the river router, which never calls zonalBandCol) is unaffected.
@@ -132,6 +153,10 @@ export const LAB_FRAGMENT_SHADER = /* glsl */ `
         return dC;
       }
       void main(){
+        // FIRST statement in main, before the uDebugMode early-return path below — a fragment that
+        // returns early must still write its depth, or the debug views sort by traversal order
+        // while the normal path sorts correctly, which looks like a debug-view bug and is not.
+        #include <logdepthbuf_fragment>
         vec3 N = normalize(vObjN);
         float carveDepth = 0.0;
 
