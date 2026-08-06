@@ -1843,6 +1843,8 @@ window._lab = {
       uniformCount: built.uniformCount,
       lightDir: built.lightDir,
       bodyRadius: built.bodyRadius,
+      samplersFilled: built.samplersFilled,
+      samplersCreated: built.samplersCreated,
       meshName: mesh.name || mesh.parent?.name || '?',
       surfacesFound: surfaces.length,
     };

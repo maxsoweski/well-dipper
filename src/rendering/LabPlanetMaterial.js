@@ -58,6 +58,84 @@ export function ensureLabAttributes(geometry) {
   return { added, vertexCount: count };
 }
 
+// ── Placeholder textures for the LAYER 4 bakes that do not exist yet ────────────────────────────
+//
+// ⛔ FOUND BY THE 2026-08-06 LIVE CHECK, and it is not cosmetic. The lab's shader declares SIX
+// sampler uniforms — uTectonicGrainCube, uReliefBakeCube, uCraterBakeCube, uProvinceCube,
+// uRiverCarveMap (samplerCube) and uRiverCarvePatchMap (sampler2D) — every one of which is an
+// output of a layer-4 bake that has not been built. makeUniforms leaves all six null, and a null
+// sampler resolves to texture unit 0, so a sampler2D and five samplerCubes end up sharing one unit:
+//
+//     GL_INVALID_OPERATION: glDrawArrays: Two textures of different types use the same sampler
+//     location.                                                              [x256, then:]
+//     WebGL: too many errors, no more errors will be reported to the context.
+//
+// THE SECOND LINE IS THE REAL DAMAGE. Once WebGL stops reporting, every later error on that
+// context is invisible — including the compile and link errors this whole layer depends on being
+// able to see. A console that has gone quiet is indistinguishable from a console that is clean.
+//
+// Same principle as ensureLabAttributes below: bind something VALID and typed, so "no bake yet" is
+// a decision with a known value rather than an accident with an undefined one. A 1x1 black texel
+// reads as zero through every consumer, which is exactly what an absent bake should contribute.
+let _placeholders = null;
+function labSamplerPlaceholders() {
+  if (_placeholders) return _placeholders;
+  const texel = () => {
+    const t = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+    t.needsUpdate = true;
+    return t;
+  };
+  const cube = new THREE.CubeTexture([texel(), texel(), texel(), texel(), texel(), texel()]);
+  cube.needsUpdate = true;
+  _placeholders = { samplerCube: cube, sampler2D: texel(), sampler3D: null };
+  return _placeholders;
+}
+
+/** Every sampler the shader declares, as {name: glslType}. Parsed, never hand-listed — the lab
+ *  keeps moving and a hand-list is a snapshot, which is the failure mode this module exists to avoid. */
+export function declaredSamplers(shaderSource) {
+  const out = {};
+  for (const m of String(shaderSource).matchAll(/uniform\s+(sampler2D|samplerCube|sampler3D)\s+(\w+)/g)) {
+    out[m[2]] = m[1];
+  }
+  return out;
+}
+
+/**
+ * Bind a typed placeholder to every sampler uniform the shader declares but nothing has filled.
+ * Idempotent, and it never overwrites a real texture — when the layer-4 bakes land they own these.
+ *
+ * @returns {{filled: string[], alreadyBound: string[]}}
+ */
+export function ensureLabSamplers(uniforms, shaderSource) {
+  const ph = labSamplerPlaceholders();
+  const filled = [];
+  const created = [];
+  const alreadyBound = [];
+  for (const [name, type] of Object.entries(declaredSamplers(shaderSource))) {
+    if (!ph[type]) continue;
+    const slot = uniforms[name];
+    if (!slot) {
+      // ⭐ THE ACTUAL DEFECT, measured live 2026-08-06. FIVE of the shader's six samplers are not
+      // in makeUniforms' 350-key map at all — only uTectonicGrainCube is. The lab CREATES the
+      // other five at route time (ensureNetworkRouted writes uRiverCarveMap, uReliefBakeCube,
+      // uProvinceCube and uCraterBakeCube directly), so in the lab they spring into existence
+      // alongside the bakes that fill them. The game never runs that route, so they never exist,
+      // and three cannot allocate a texture unit for a uniform it has no value for — leaving five
+      // samplers of two different types all reading GL's default unit 0.
+      // So filling nulls is not enough: the slot has to be CREATED.
+      uniforms[name] = { value: ph[type] };
+      created.push(name);
+    } else if (slot.value == null) {
+      slot.value = ph[type];
+      filled.push(name);
+    } else {
+      alreadyBound.push(name);
+    }
+  }
+  return { filled, created, alreadyBound };
+}
+
 /**
  * The object-space radius of a mesh's geometry — the divisor the lab's vertex shader needs to put
  * its noise domain back on a unit sphere (LAYER 2 item 1).
@@ -103,13 +181,24 @@ export function buildLabPlanetMaterial(opts = {}) {
   const bodyRadius = Number.isFinite(opts.bodyRadius) && opts.bodyRadius > 0 ? opts.bodyRadius : 1.0;
   uniforms.uBodyRadius.value = bodyRadius;
 
+  // The layer-4 bakes do not exist yet; give their samplers a valid typed placeholder so the
+  // context does not drown in GL_INVALID_OPERATION and stop reporting errors entirely.
+  const samplers = ensureLabSamplers(uniforms, LAB_VERTEX_SHADER + LAB_FRAGMENT_SHADER);
+
   const material = new THREE.ShaderMaterial({
     uniforms,
     vertexShader: LAB_VERTEX_SHADER,
     fragmentShader: LAB_FRAGMENT_SHADER,
   });
 
-  return { material, uniformCount: Object.keys(uniforms).length, lightDir: light.toArray(), bodyRadius };
+  return {
+    material,
+    uniformCount: Object.keys(uniforms).length,
+    lightDir: light.toArray(),
+    bodyRadius,
+    samplersFilled: samplers.filled,
+    samplersCreated: samplers.created,
+  };
 }
 
 // ── The per-frame seam (LAYER 2 items 2 + 3) ────────────────────────────────────────────────────
