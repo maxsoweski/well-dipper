@@ -289,7 +289,33 @@ wiring bug and is not. Do not chase them as rendering defects.
 
 ---
 
-## LAYER 2 — renderer conformance — `TODO` ⛔ BLOCKS ALL MEASUREMENT
+## LAYER 2 — renderer conformance — `4 of 5 SHIPPED, LIVE CHECK OWED` ⛔ BLOCKED ALL MEASUREMENT
+
+> **2026-08-05/06.** Items 1, 2, 3 and 4 are shipped with fences: `ef6e416` (radius divide),
+> `734b424` (log depth), `ee34ce7` (per-frame seam — light space, clock, octaves). Item 5 (view
+> vector) is the only one left, and it carries the one decision named at the end of its entry.
+>
+> ⚠⚠ **ALL FOUR ARE HEADLESS-VERIFIED ONLY.** Vitest cannot compile GLSL. What is proven: the
+> chunks and expressions are present, correctly placed and byte-identical to the lab's law; three's
+> include resolution produces no symbol collision (checked by resolving `<common>` +
+> `logdepthbuf_*` against the lab text in node — no duplicate declarations, no clash with three's
+> ShaderMaterial prefix, `isPerspectiveMatrix` present for the vertex chunk, `<common>` correctly
+> kept OUT of the fragment where HEIGHT_GLSL lives). What is **not** proven: that the shader still
+> compiles on a GPU, and what it looks like. Per this file's own trap list, **a black frame is
+> indistinguishable from a clean negative control** — so the live check must assert a lit-pixel
+> floor before believing any reading.
+>
+> **The live check, in order:**
+> 1. `npm run dev` in a WSL terminal, open the printed localhost URL.
+> 2. `window._lab.spawnProceduralSystem(seed)` — ⛔ **NOT Sol** (see the section at the bottom).
+> 3. `await window._lab.tryLabShader(0)` → must return `ok: true`, and the new `bodyRadius` field
+>    must be the body's scene radius (~0.013–0.68), **not** 1.0. A 1.0 there means the divisor never
+>    reached the material and item 1 is inert.
+> 4. Read back `material.uniforms.uOctaves.value` while approaching — it must leave 4.0 and climb
+>    toward 9.0 inside 20 body radii. Constant 4.0 means the `setReliefDetail` seam is not firing.
+> 5. Read `uTime.value` across two frames — it must increase.
+> 6. Sort check (item 4's actual payoff): put a ring or moon in front of the disc and confirm it
+>    occludes correctly rather than by traversal order.
 
 Found by the 2026-08-01 review. **Every measurement taken through `tryLabShader` before these land
 is in the same epistemic class as a Sol measurement — confidently wrong.**
