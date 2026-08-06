@@ -169,7 +169,19 @@ const TAP_NAMES = { 1: 'TAP_COMPOSITE', 2: 'TAP_SOLID', 3: 'TAP_LIQUID' };
 // shader. Kept as data so the fence test can reason about them, and so a change here is a change
 // someone had to make on purpose.
 const TAP_VERTEX_SUBSTITUTIONS = [
-  ['vPos = position;', 'vPos = normalize(aDir);'],
+  // ── RE-READ 2026-08-05, which is what this table exists to force ──
+  // The lab vertex shader gained the LAYER 2 object-space radius divide
+  // (`vPos = position / uBodyRadius`), so this target moved and derivation threw. The correct
+  // substitution is UNCHANGED on the right-hand side, and that is the whole point:
+  //   • on a real mesh, `position / uBodyRadius` IS the unit-sphere direction for a surface point;
+  //   • in the tap, `aDir` is already a unit direction, so `normalize(aDir)` is that same value.
+  // The divide must NOT be carried into the tap — `aDir` is a direction, not a mesh position, and
+  // dividing it by the bound body's radius would re-key the whole sampled domain to that body.
+  // ⭐ Worth recording: before the divide landed, this instrument and the GAME disagreed. The tap
+  // always sampled the lab's unit domain while an in-game lab-shader body sampled its scene-radius
+  // domain (±0.0426 for Earth-sized). Any headless-vs-live comparison taken across that gap was
+  // measuring two different noise fields. They agree now.
+  ['vPos = position / uBodyRadius;', 'vPos = normalize(aDir);'],
   ['vObjN = normalize(position);', 'vObjN = normalize(aDir);'],
   // THE ONE THE ROUND-3 REVIEW CAUGHT. vSubstellarAngle is read by sublimationCombiner and
   // glacialCombiner, both of which write h and grad, both under uFrostLocked == 1, all upstream of

@@ -15,6 +15,13 @@ export function makeUniforms(WORLD_LIGHT) {
       // never writes it — CPU writeHeightSphere, not this uniform) is byte-identical. The lab
       // frame loop is the ONLY writer (= sVis); sVis=1 (radius 1 R⊕) → uDispDomainScale=1.
       uDispDomainScale: { value: 1.0 },
+      // Object-space radius of the mesh this material is bound to, in the mesh's OWN units — the
+      // divisor that puts the noise domain back on the lab's unit sphere (LAYER 2 item 1).
+      // 1.0 is the LAB's value and the identity: the lab renders a unit sphere, so the lab never
+      // writes this and its output is unchanged. The GAME writes the body's scene radius
+      // (radiusEarth × 0.0426, i.e. 0.0128..0.68), without which the whole disc samples a fraction
+      // of one noise cell. See planet-lod-shaders.glsl.js LAB_VERTEX_SHADER for the full note.
+      uBodyRadius: { value: 1.0 },
       uOctaves:    { value: 4.0 },
       uLodRamp:    { value: 0.0 },
       uLevels:     { value: 6.0 },

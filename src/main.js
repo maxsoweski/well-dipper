@@ -98,7 +98,7 @@ import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/Materi
 import { PretextLab } from './ui/PretextLab.js';
 import * as LabMode from './debug/LabMode.js';
 import { warmPlanetPrograms, swapMaterialWhenReady } from './rendering/ShaderWarmup.js';
-import { buildLabPlanetMaterial, ensureLabAttributes } from './rendering/LabPlanetMaterial.js';
+import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf } from './rendering/LabPlanetMaterial.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -1821,7 +1821,11 @@ window._lab = {
     const attrs = ensureLabAttributes(mesh.geometry);
     // The body's own sun direction, not the lab's constant — the game's light is where it is.
     const lightDir = mesh.material.uniforms.lightDir?.value || undefined;
-    const built = buildLabPlanetMaterial({ lightDir });
+    // LAYER 2 item 1. The lab's noise domains assume a UNIT sphere; this mesh is at the body's
+    // scene radius (~0.013..0.68), so without the divisor the whole disc samples a fraction of one
+    // noise cell and renders as a flat wash. Measured off the geometry, not assumed.
+    const bodyRadius = bodyRadiusOf(mesh.geometry);
+    const built = buildLabPlanetMaterial({ lightDir, bodyRadius });
 
     const t0 = performance.now();
     const swapped = await swapMaterialWhenReady({
@@ -1838,6 +1842,7 @@ window._lab = {
       vertexCount: attrs.vertexCount,
       uniformCount: built.uniformCount,
       lightDir: built.lightDir,
+      bodyRadius: built.bodyRadius,
       meshName: mesh.name || mesh.parent?.name || '?',
       surfacesFound: surfaces.length,
     };

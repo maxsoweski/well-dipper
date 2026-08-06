@@ -204,7 +204,12 @@ describe('AC-SAMPLER L1/B — deriveTapVertex leaves NO use of `position` behind
   it('the lab vertex shader is the one this derivation was written against', () => {
     // Pin the premise. If the lab vertex main changes shape, the derivation must be re-read, not
     // silently re-run: this is the one place duplication is physically unavoidable.
-    expect(labVert).toMatch(/vPos = position;/);
+    // ⚠ MOVED 2026-08-05 (LAYER 2 item 1): vPos is now divided by uBodyRadius, so the lab shader
+    // renders correctly on a game mesh of any radius. The tap's right-hand side did NOT move —
+    // `normalize(aDir)` is the same unit-sphere value the divide produces — see the re-read note on
+    // TAP_VERTEX_SUBSTITUTIONS in src/worldengine/instrument/fieldSampler.js.
+    expect(labVert).toMatch(/vPos = position \/ uBodyRadius;/);
+    expect(labVert).toMatch(/uniform float uBodyRadius;/);
     expect(labVert).toMatch(/vObjN = normalize\(position\);/);
     expect(labVert).toMatch(/vSubstellarAngle = acos\(clamp\(dot\(normalize\(position\), normalize\(uLightDir\)\), -1\.0, 1\.0\)\);/);
     expect(labVert).toMatch(/gl_Position = projectionMatrix \* modelViewMatrix \* vec4\(position, 1\.0\);/);
@@ -254,8 +259,8 @@ describe('AC-SAMPLER L1/B — deriveTapVertex leaves NO use of `position` behind
     // before the fix: a TypeError from a not-yet-existing export is an error too. Each pattern below
     // now names the specific failure AND its count, so a missing-target throw cannot stand in for a
     // duplicated-target throw or for a link error.
-    expect(() => FIELD.deriveTapVertex(labVert.replace('vPos = position;', 'vPos = vec3(0.0);')))
-      .toThrow(/expected EXACTLY ONE occurrence of "vPos = position;"[\s\S]*found 0/);
+    expect(() => FIELD.deriveTapVertex(labVert.replace('vPos = position / uBodyRadius;', 'vPos = vec3(0.0);')))
+      .toThrow(/expected EXACTLY ONE occurrence of "vPos = position \/ uBodyRadius;"[\s\S]*found 0/);
     expect(() => FIELD.deriveTapVertex(labVert.replace('vObjN = normalize(position);', 'vObjN = normalize(position); vObjN = normalize(position);')))
       .toThrow(/expected EXACTLY ONE occurrence of "vObjN = normalize\(position\);"[\s\S]*found 2/);
     expect(() => FIELD.deriveTapVertex(''))

@@ -32,13 +32,31 @@ export const LAB_VERTEX_SHADER = /* glsl */ `
       // SAME value instead of each recomputing acos(dot(...)). Object-space light.
       varying float vSubstellarAngle;
       uniform vec3 uLightDir;       // object-space substellar direction (same uniform the frag reads)
+      // ── Object-space radius normalisation (LAYER 2 item 1, 2026-08-05) ──
+      // The lab's body is a UNIT SPHERE (planet-lod-lab.html:202 \`const R = 1.0\`), and every noise
+      // domain downstream is written against that ±1.0 extent: voronoi3d(vPos * uVoroScale),
+      // fbmd(vPos, …), and 23 *Combiner(vPos, …) calls. The GAME builds IcosahedronGeometry at the
+      // body's SCENE radius (radiusEarth × 0.0426), so an Earth-sized body spans ±0.0426 — the whole
+      // disc samples 1/23rd of ONE voronoi cell. The collapse runs 78.2× at 0.3 R⊕ down to 1.47× at
+      // 16 R⊕, i.e. it is also 53× INCONSISTENT within a single system, from identical uniforms.
+      // Dividing here restores the lab's domain for a mesh of any radius.
+      //
+      // ⛔ DEFAULT 1.0, SO THE LAB IS UNTOUCHED — identity, byte-for-byte. That is the whole reason
+      //    this is a uniform divide and not a geometry change: the alternative once written into the
+      //    plan (IcosahedronGeometry(1,5) + scale.setScalar) would ALSO change every non-lab planet,
+      //    because tryLabShader swaps only the MATERIAL and the game's own shader reads absolute
+      //    object-space position against its own radius uniform (src/objects/Planet.js:436, :1682).
+      // ⛔ gl_Position BELOW MUST KEEP THE RAW \`position\`. vPos is the noise DOMAIN; the silhouette
+      //    is real geometry. Safe by construction today — this vertex shader does not displace — and
+      //    tests/lab-shader-body-radius.test.js pins it so that stays true.
+      uniform float uBodyRadius;
       // ── #3a E5 gas-giant band/jet writer fields, baked per render vertex (climate-e5.js) ──
       attribute float aBand;   varying float vBand;    // bandNorm — the writer's driver-organized band value
       attribute float aShear;  varying float vShear;   // |du/dφ| normalized — gates the jet filament turbulence
       attribute float aMush;   varying float vMush;    // NH₃ mushball compositional banding (depth layer)
       attribute float aStorm;  varying float vStorm;   // #3b storm/convection MASK — the ONE new baked attribute (consumed by V-α filamentation; passthrough-only in Slice P)
       void main() {
-        vPos = position;
+        vPos = position / uBodyRadius;
         vObjN = normalize(position);
         vBand = aBand; vShear = aShear; vMush = aMush; vStorm = aStorm;
         vSubstellarAngle = acos(clamp(dot(normalize(position), normalize(uLightDir)), -1.0, 1.0));
