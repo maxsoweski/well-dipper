@@ -4,6 +4,34 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> ## ⭐ 2026-08-06 — MASTER MERGED INTO LANE A (`a865753` + `a52b2ce`)
+>
+> Lane A now carries trunk's **navigation / ORRERY / cockpit**, so generated systems are
+> explorable with the shipped nav stack. Direction was master → lane A only; lane A is NOT ready
+> for trunk. Merge base `25fe51c`; 6 files overlapped, 2 needed hand resolution (`src/main.js`,
+> this file).
+>
+> ⭐ **`_lab.spawnProceduralSystem(seed)` now lands you in ORRERY.** It runs master's ceremony-free
+> entry tail (consume `_pendingBootReveal`/`_pendingBootMode`, frame, arrival zoom, orbit sync).
+> Without that tail the spawn was half-entered and `_effectiveRegime()` lied — a merge-interaction
+> bug **neither branch's tests can catch**. `commitBurn()` from ORRERY auto-swaps to HELM, so the
+> Layer 2 recipe (`selectBody` → `commitBurnNow`) still flies the LOD-ramp approach.
+>
+> ⛔ **NEW KNOWN-FAILURE BASELINE: 24 failed / 17 failed FILES / 22685 passed.** That is GREEN —
+> check here before blaming yourself. The old 4-failure baseline is gone (master FIXED
+> `KnownObjects` ×3 + `GalacticFeatures` ×1). The 24 are two master-only golden suites,
+> `ProcgenSnapshot.test.js` (×23) and `componentSystems.byteSafety.test.js` (×1), whose fixtures
+> were captured ON master; lane A's world-engine work deliberately changed procgen output, so they
+> cannot match here. Proven not-merge-damage two ways: the identical 23-seed set fails against
+> **pre-merge** lane A (`373e4f5`) in a clean worktree, and every differing field
+> (`age`, `metallicity`, `magneticField`, `eccentricity`, `tidalHeating`, `lavaCrustColor`,
+> `iceness`, `landPalette`) is emitted by lane A's `PlanetGenerator` and by none of master's — plus
+> `composition.density`, where lane A replaced master's linear blend with `1/specificVolume`.
+> Fixtures deliberately **not** re-captured: they exist to prove master's workstreams were
+> additive, and `_captureAuthoredParent.mjs` carries a self-guard against exactly that re-capture.
+> **▶ OPEN FOR MAX: whether to re-baseline them on lane A or leave them red until merge-back.**
+> 17 failed FILES = 15 `vendor/motion-test-kit` "no test suite" + those 2.
+
 > ## ⭐⭐ 2026-08-01 — ACTIVE ARC: THE LAB'S PIPELINE GOES INTO THE GAME
 >
 > **Plan of record: [`FEATURES/lab-pipeline-into-game-PLAN.md`](FEATURES/lab-pipeline-into-game-PLAN.md).**
