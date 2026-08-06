@@ -12,6 +12,7 @@ import { conditionFromPlanet } from '../worldengine/port/conditionFromPlanet.js'
 import { atmosphereOpticsOf } from '../worldengine/base/atmosphereOptics.js';
 import { biosphereOf, BIO_PIGMENT } from '../worldengine/base/surfaceMaterial.js';
 import { craterUniformsFrom, CRATERS_OFF } from '../worldengine/port/craterUniforms.js';
+import { updateLabPlanetMaterial } from '../rendering/LabPlanetMaterial.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fragment shader split into HEADER + per-category BODY + FOOTER.
@@ -1916,6 +1917,19 @@ export class Planet {
       // 10000s ≈ 2.8 h — noise patterns tile seamlessly at this scale.
       if (mat.uniforms.time.value > 10000) mat.uniforms.time.value -= 10000;
     }
+    // ── LAYER 2 items 2 + 3 — the lab material's per-frame half ──
+    // ⛔ THIS IS WHY THE GUARD ABOVE WAS NOT ENOUGH. The game's clock uniform is `time`; the lab's
+    // is `uTime`. When tryLabShader swaps the lab material onto this surface, `mat.uniforms.time`
+    // is undefined, the branch silently does nothing, and every time-driven effect in a 363 KB
+    // shader evaluates at t = 0 forever. A no-op guard on a differently-named uniform is
+    // indistinguishable from a shader that simply has no animation.
+    // The seam also puts the light into OBJECT space, which is what uLightDir has always claimed
+    // to be — see updateLabPlanetMaterial for the full note. No-ops on the game's own material.
+    updateLabPlanetMaterial(mat, {
+      mesh: this.surface,
+      lightDirWorld: this._lightDir,
+      renderDt,
+    });
   }
 
   /**

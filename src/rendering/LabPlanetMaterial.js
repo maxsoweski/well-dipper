@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { LAB_VERTEX_SHADER, LAB_FRAGMENT_SHADER } from '../../planet-lod-shaders.glsl.js';
 import { makeUniforms } from '../../planet-lod-uniforms.js';
+// The LOD ramp is the LAB'S law, imported rather than re-derived — lodRampOf is
+// smoothstep(20, 6, distanceInRadii) and autoOctaves is mix(4, 9, ramp). Same import
+// src/rendering/objects/BodyRenderer.js:11 already makes for the game's own shader, so the two
+// renderers cannot drift apart on detail.
+import { lodRampOf, autoOctaves } from '../../planet-lod-lab-core.js';
 
 /**
  * LabPlanetMaterial — the lab's ACTUAL planet material, built for a game body.
@@ -105,4 +110,109 @@ export function buildLabPlanetMaterial(opts = {}) {
   });
 
   return { material, uniformCount: Object.keys(uniforms).length, lightDir: light.toArray(), bodyRadius };
+}
+
+// ── The per-frame seam (LAYER 2 items 2 + 3) ────────────────────────────────────────────────────
+
+/** Scratch, module-scope: this runs once per lab-shader body per frame and must not allocate. */
+const _invQuat = new THREE.Quaternion();
+const _lightObj = new THREE.Vector3();
+
+/**
+ * Is this a material built by buildLabPlanetMaterial? Signature-based, not instanceof, because the
+ * question that matters is "does it carry the lab's uniform set", which is a fact about the thing
+ * rather than about its constructor. (The scene walk in main.js identifies the GAME's material the
+ * same way, for the same reason.)
+ */
+export function isLabPlanetMaterial(material) {
+  const u = material?.uniforms;
+  return !!(u && u.uBodyRadius && u.uLightDir && u.uOctaves && u.uTime);
+}
+
+/**
+ * Advance the per-frame half of the lab's driver for one body. THE SEAM, singular.
+ *
+ * ⛔ WHY ONE FUNCTION AND NOT FOUR PATCHES. Every uniform below was independently missing, and each
+ * one alone reads as a different bug: a frozen terminator, un-drifting clouds, permanently coarse
+ * relief. Fixed piecemeal they get four call sites, four chances for the next body type to be
+ * wired into three of them. The lab does all of this in one place (planet-lod-lab.html frame());
+ * so does this.
+ *
+ * What was wrong, verified 2026-08-05:
+ *
+ *  1. LIGHT IN THE WRONG SPACE. main.js fed the game's WORLD-space lightDir straight into
+ *     `uLightDir`, whose own declaration says "object-space substellar direction". The surface
+ *     spins (Planet.js:1896) and the parent carries axial tilt (:1544), so the terminator
+ *     counter-rotated with the crust — one full sweep per planet day. The lab does the transform
+ *     the game omitted (planet-lod-lab.html:4896-4897); this is that transform.
+ *  2. THE CLOCK NEVER ADVANCED. The game's only planet clock writer guards on `mat.uniforms.time`
+ *     (Planet.js:1913) and the lab's clock is `uTime`, so the guard silently failed on a lab
+ *     material and cloud drift, superrotation, magma churn and aurora curtains all evaluated at
+ *     t = 0 forever.
+ *  3. uOctaves WAS PINNED AT ITS 4.0 DEFAULT against a documented max of 9, so every in-game
+ *     lab-shader body rendered at the LOWEST detail rung at any distance. Not merely "unanimated" —
+ *     this was one of three independent sufficient causes of the flat-orange read.
+ *
+ * ⭐ AND IT RETIRES A FOURTH DEFECT BY CONSTRUCTION. buildLabPlanetMaterial copies the incoming
+ * light BY VALUE, which was recorded as a bug ("breaks the by-reference link the game material
+ * relies on, so it is also stale"). With this seam the copy is REQUIRED: what belongs in uLightDir
+ * is the OBJECT-space vector, and aliasing the game's world-space one would either be overwritten
+ * every frame or corrupt the game's own lighting. Do not "fix" it back to a reference.
+ *
+ * Every field is optional — each call site passes what it actually has, and the two existing
+ * per-frame paths (Planet.updateRender for the clock and light, LODManager -> BodyRenderer for the
+ * distance) stay the paths they already are instead of a third being invented.
+ *
+ * @param {THREE.ShaderMaterial} material
+ * @param {object} [opts]
+ * @param {THREE.Object3D} [opts.mesh]            the mesh the material is bound to (for its world quaternion)
+ * @param {THREE.Vector3}  [opts.lightDirWorld]   world-space direction to the star
+ * @param {number}         [opts.renderDt]        seconds since the last render tick
+ * @param {number}         [opts.distanceRadii]   camera distance to the body, in body radii
+ * @returns {null|{time: number, octaves: number, lodRamp: number, lightObj: number[]|null}}
+ *          diagnostics, or null if this is not a lab material — so a live probe can read the
+ *          resolved values as NUMBERS rather than judging them off a screenshot.
+ */
+export function updateLabPlanetMaterial(material, opts = {}) {
+  if (!isLabPlanetMaterial(material)) return null;
+  const u = material.uniforms;
+
+  // ── 2. the clock ──
+  if (Number.isFinite(opts.renderDt)) {
+    u.uTime.value += opts.renderDt;
+    // Same 10000 s (~2.8 h) wrap the game already applies to its own planet clock
+    // (Planet.js:1915-1917), for the same reason: float32 loses meaningful precision on a clock
+    // that only grows. ⚠ INHERITED ASSUMPTION, worth naming — the game's comment justifies the
+    // wrap with "noise patterns tile seamlessly at this scale", which is a claim about the GAME's
+    // shader. The lab shader has consumers that scale uTime (uLavaGlowRate multiplies it by 1.5),
+    // so a wrap is only invisible if every such consumer is periodic with a period dividing 10000.
+    // Matching the game is the right default — one convention, not two — but if anyone ever
+    // reports a once-every-three-hours hitch on a lava world, this line is the first suspect.
+    if (u.uTime.value > 10000) u.uTime.value -= 10000;
+  }
+
+  // ── 1. the light, world -> object space ──
+  let lightObj = null;
+  if (opts.lightDirWorld && opts.mesh) {
+    // getWorldQuaternion updates the world matrix itself, so this is correct even if the body has
+    // not been touched by the scene graph walk this frame.
+    opts.mesh.getWorldQuaternion(_invQuat).invert();
+    _lightObj.copy(opts.lightDirWorld).applyQuaternion(_invQuat).normalize();
+    u.uLightDir.value.copy(_lightObj);
+    lightObj = _lightObj.toArray();
+  }
+
+  // ── 3. the detail ramp ──
+  if (Number.isFinite(opts.distanceRadii)) {
+    const ramp = lodRampOf(opts.distanceRadii);
+    u.uLodRamp.value = ramp;
+    u.uOctaves.value = autoOctaves(ramp);
+  }
+
+  return {
+    time: u.uTime.value,
+    octaves: u.uOctaves.value,
+    lodRamp: u.uLodRamp.value,
+    lightObj,
+  };
 }
