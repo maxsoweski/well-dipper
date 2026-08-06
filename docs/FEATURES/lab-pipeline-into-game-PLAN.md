@@ -124,6 +124,17 @@ Every one was read as a *rendering* question. Two were world-generation problems
 environment problem. **The program is not blocked on rendering capability. It is blocked on
 observability.**
 
+> ⭐⭐ **SUPERSEDED IN PART, 2026-08-06 — read
+> [`one-pipeline-two-frontends-PLAN.md`](one-pipeline-two-frontends-PLAN.md) for the buildable
+> sequencing.** A 13-agent scoping workflow (5 source-verified recon passes → 3 competing designs →
+> judge → 3 adversarial lenses → synthesis) **corrected the diagnosis below in one load-bearing
+> way**: the lab and the game are NOT two separate routes to the world engine. Both import
+> `deriveConditionVector` from the same `body-condition-vector.js`
+> (`port/conditionFromPlanet.js:24`, `planet-lod-lab.html:174`). There is ONE condition engine.
+> What is duplicated is the two **ends** — the fp constructor upstream and the driver stage
+> downstream. That changes the ordering, so the §"What cheaper next time means" prescription below
+> is superseded by the new file's Steps 0-12. The measurements in this section stand.
+
 ## Why migrations are expensive today — MEASURED 2026-08-06
 
 Max's 2026-08-06 constraint (see MVP block at top) makes "the next migration must be cheaper" an
