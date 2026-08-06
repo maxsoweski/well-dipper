@@ -1,0 +1,908 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flight Controls Lab — SupercruiseModel + HeadMount test bed</title>
+  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: #000;
+      color: #0f0;
+      font-family: 'DotGothic16', monospace;
+      overflow: hidden;
+    }
+    canvas { display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+
+    /* center reticle, mirrors the in-game HUD cross so we can eyeball drift */
+    #reticle {
+      position: fixed; top: 50%; left: 50%;
+      width: 22px; height: 22px;
+      margin: -11px 0 0 -11px;
+      pointer-events: none; z-index: 15;
+    }
+    #reticle::before, #reticle::after {
+      content: ''; position: absolute; background: rgba(0,255,0,0.55);
+    }
+    #reticle::before { left: 50%; top: 0; width: 1px; height: 100%; margin-left: -0.5px; }
+    #reticle::after  { top: 50%; left: 0; height: 1px; width: 100%; margin-top: -0.5px; }
+
+    #hud {
+      position: fixed; top: 12px; left: 12px;
+      font-size: 13px; line-height: 1.6;
+      text-shadow: 0 0 8px #000, 0 0 16px #000;
+      pointer-events: none; z-index: 10;
+      white-space: pre;
+    }
+    #fps {
+      position: fixed; top: 12px; right: 12px;
+      font-size: 14px; color: #0f0;
+      text-shadow: 0 0 8px #000;
+      z-index: 10;
+    }
+
+    #panel {
+      position: fixed; bottom: 12px; left: 12px;
+      background: rgba(0, 0, 0, 0.72);
+      border: 1px solid rgba(0, 255, 0, 0.35);
+      padding: 10px 12px;
+      font-size: 12px; line-height: 1.9;
+      z-index: 10;
+      max-width: 380px;
+      border-radius: 3px;
+    }
+    #panel .group { margin-bottom: 8px; }
+    #panel .group-title {
+      color: #0a0; font-size: 10px; letter-spacing: 0.05em;
+      margin-bottom: 3px;
+    }
+    #panel label { display: block; cursor: pointer; white-space: nowrap; }
+    #panel input[type=range] { width: 170px; vertical-align: middle; }
+    #panel .btn {
+      background: rgba(0, 255, 0, 0.08);
+      border: 1px solid rgba(0, 255, 0, 0.5);
+      color: #0f0;
+      font-family: inherit; font-size: 11px;
+      padding: 4px 8px; cursor: pointer;
+      margin: 2px 3px 2px 0;
+    }
+    #panel .btn:hover { background: rgba(0, 255, 0, 0.2); }
+    #panel .hint { font-size: 10px; color: #0a0; margin-top: 4px; }
+    #status {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px; z-index: 20;
+    }
+    #stickPlot {
+      position: fixed; bottom: 12px; right: 12px;
+      width: 220px; height: 120px;
+      background: rgba(0, 0, 0, 0.72);
+      border: 1px solid rgba(0, 255, 0, 0.35);
+      border-radius: 3px;
+      cursor: default; z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="reticle"></div>
+  <div id="hud"></div>
+  <div id="fps">FPS: --</div>
+  <div id="status">LOADING…</div>
+
+  <!-- stick-curve plot: deflection (0..1) → achieved turn rate, redrawn on EXPO change -->
+  <canvas id="stickPlot" width="220" height="120"></canvas>
+
+  <div id="panel" style="display:none;">
+    <div class="group">
+      <div class="group-title">FLIGHT MODEL TUNING (model.tuning — live)</div>
+      <label>ETA_K: <input type="range" id="ETA_K" min="2" max="10" step="0.1" value="6.0"> <span id="ETA_KVal">6.0</span></label>
+      <label>ACCEL_TAU: <input type="range" id="ACCEL_TAU" min="0.2" max="2.0" step="0.05" value="1.4"> <span id="ACCEL_TAUVal">1.40</span></label>
+      <label>CAP_MIN_FRAC: <input type="range" id="CAP_MIN_FRAC" min="0.0" max="1.0" step="0.05" value="0.5"> <span id="CAP_MIN_FRACVal">0.50</span></label>
+      <label>THROTTLE_RATE: <input type="range" id="THROTTLE_RATE" min="0.1" max="2.0" step="0.05" value="0.6"> <span id="THROTTLE_RATEVal">0.60</span></label>
+    </div>
+    <div class="group">
+      <div class="group-title">STICK CURVE (stickTuning — live)</div>
+      <label>EXPO: <input type="range" id="EXPO" min="0" max="0.6" step="0.01" value="0.30"> <span id="EXPOVal">0.30</span></label>
+    </div>
+    <div class="group">
+      <div class="group-title">FLIGHT TOGGLE (F = engage/exit)</div>
+      <button class="btn" id="btnCycleMode">Engage / Exit (F)</button>
+      <div id="modeReadout">engaged:off &nbsp; mode:— &nbsp; phase:IDLE &nbsp; assist:off</div>
+    </div>
+    <div class="group">
+      <button class="btn" id="btnFly">Fly from rest (6s)</button>
+      <button class="btn" id="btnReset">Reset</button>
+    </div>
+    <div class="hint">W/S = throttle (S past 0 = reverse) &nbsp; drag = virtual joystick (turn)<br>F = engage / exit flight &nbsp; _lab.flyTo() in console for an autopilot leg<br>_lab.flyFromRest({seconds}) for the cruise-translation verdict</div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { SupercruiseModel } from './src/flight/SupercruiseModel.js';
+    import { HeadMount } from './src/flight/HeadMount.js';
+    import { earthRadiiToScene } from './src/core/ScaleConstants.js';
+    import { SupercruiseHud } from './src/ui/SupercruiseHud.js';
+    import { shapeStick, shapeMagnitude, STICK_TUNING } from './src/flight/stickCurve.js';
+    import { SupercruisePilot } from './src/flight/SupercruisePilot.js';
+    import { ShipControls, PILOT_FRAME_FIELDS } from './src/flight/ShipControls.js';
+    import { steerToward } from './src/flight/aimAssist.js';
+    // ── Toggle/exit/settings build (spec 2026-06-25) — real helper + real camera
+    // controller + real Settings store, exercised below by the F-toggle probes. ──
+    import { flightExitAnchor } from './src/flight/flightExitAnchor.js';
+    import { ShipCameraSystem, CameraMode } from './src/camera/ShipCameraSystem.js';
+    import { Settings } from './src/ui/Settings.js';
+
+    const canvas = document.getElementById('canvas');
+    const hudEl = document.getElementById('hud');
+    const fpsEl = document.getElementById('fps');
+    const statusEl = document.getElementById('status');
+    const panelEl = document.getElementById('panel');
+
+    // ── Renderer / scene / camera ──
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000000);
+
+    const scene = new THREE.Scene();
+    // near plane tiny because a real Earth (0.0426u) is small and we start close-ish.
+    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 1e-5, 100);
+
+    window.addEventListener('resize', () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+    });
+
+    // ── Real shipping HUD instance (previewed over the lab) + stick shaping state ──
+    const scHud = new SupercruiseHud(camera);
+    const stickTuning = { ...STICK_TUNING };       // live copy — EXPO slider mutates this
+    let _labDeflection = { x: 0, y: 0 };           // current shaped drag (HUD reticle)
+
+    // ── Real-scale reference planet (Earth = 1 Earth-radius) at origin ──
+    const PLANET_RADIUS = earthRadiiToScene(1); // ≈ 0.0426 scene units
+    const ENTRY_DIST = PLANET_RADIUS * 6;       // natural manual-entry distance (main.js:4250)
+
+    const planetGeo = new THREE.SphereGeometry(PLANET_RADIUS, 48, 32);
+    // lit + textured-ish so growth is visually obvious (procedural lat/long grid)
+    const tex = (() => {
+      const c = document.createElement('canvas');
+      c.width = 512; c.height = 256;
+      const g = c.getContext('2d');
+      g.fillStyle = '#1d4e6e'; g.fillRect(0, 0, 512, 256);
+      g.fillStyle = '#2f7a3a';
+      for (let i = 0; i < 60; i++) {
+        const x = Math.random() * 512, y = Math.random() * 256, r = 8 + Math.random() * 40;
+        g.beginPath(); g.ellipse(x, y, r, r * 0.6, 0, 0, Math.PI * 2); g.fill();
+      }
+      g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 1;
+      for (let lat = 0; lat <= 256; lat += 16) { g.beginPath(); g.moveTo(0, lat); g.lineTo(512, lat); g.stroke(); }
+      for (let lon = 0; lon <= 512; lon += 16) { g.beginPath(); g.moveTo(lon, 0); g.lineTo(lon, 256); g.stroke(); }
+      const t = new THREE.CanvasTexture(c);
+      return t;
+    })();
+    const planetMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0.0 });
+    const planet = new THREE.Mesh(planetGeo, planetMat);
+    scene.add(planet);
+
+    scene.add(new THREE.AmbientLight(0x335577, 0.6));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+    sun.position.set(1, 0.5, 0.7);
+    scene.add(sun);
+
+    // ── Starfield for parallax reference ──
+    const STAR_COUNT = 4000;
+    const starPos = new Float32Array(STAR_COUNT * 3);
+    for (let i = 0; i < STAR_COUNT; i++) {
+      // distribute on a large shell so they read as "infinitely far" but still parallax slightly
+      const u = Math.random(), v = Math.random();
+      const theta = 2 * Math.PI * u, phi = Math.acos(2 * v - 1);
+      const r = 20 + Math.random() * 30;
+      starPos[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+      starPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      starPos[i * 3 + 2] = r * Math.cos(phi);
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.06, sizeAttenuation: true }));
+    scene.add(stars);
+
+    // ── Real flight model + head mount (imported, NOT copied) ──
+    const model = new SupercruiseModel();
+    const headMount = new HeadMount();
+
+    // ── Real ShipControls surface (the SAME class the game uses) driving the real
+    //    model + pilot + head. The lab is the harness: it walks the verb surface,
+    //    not an ad-hoc reimplementation of the wiring (kills the divergent-path
+    //    false-pass that the retired 4-state ring was). ──
+    const scPilot = new SupercruisePilot(model);
+
+    // ≥2 selectable bodies so selectTarget exercises real selection (not a single
+    // hard-wired body) AND the no-target no-op. The reference planet is one; add a
+    // second body offset on +X so a re-select is observable. flyTo/engage act on
+    // whichever is currently selected.
+    const bodyB = (() => {
+      const geo = new THREE.SphereGeometry(PLANET_RADIUS * 0.6, 32, 24);
+      const mat = new THREE.MeshStandardMaterial({ color: 0x886622, roughness: 0.9 });
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(ENTRY_DIST * 1.4, 0, 0);
+      scene.add(m);
+      return m;
+    })();
+    const selectableBodies = [
+      { mesh: planet, radius: PLANET_RADIUS },
+      { mesh: bodyB,  radius: PLANET_RADIUS * 0.6 },
+    ];
+    let _selected = null; // null = no target (the no-op case)
+    let scModelEngaged = false; // lab "in flight" gate (mirrors main.js _scManual)
+
+    // Host delegates: the lab's REAL camera controller + REAL Settings, so engage/
+    // disengage/selectTarget walk the production host path (no main.js import). The
+    // real ShipCameraSystem is built lazily via _ensureExitController() (defined
+    // below) — called AT delegate-invoke time, never at module init, so it never
+    // trips the temporal-dead-zone on the `_exitController`/_exitCam `let`s. The
+    // real Settings store is `labSettings`, also declared below; read at call time.
+    const controls = new ShipControls({
+      model, pilot: scPilot, head: headMount,
+      stickTuning,   // SINGLE SOURCE: controls.tuning === the live EXPO-slider object
+      host: {
+        selectTarget(t) { _selected = t; },
+        deselectTarget() { _selected = null; },
+        resolveSelectedBody() { return _selected; },
+        readFlightType() { return labSettings.get('flightControlType'); },
+        enterFlight() {
+          const ctrl = _ensureExitController();
+          ctrl.setCameraMode(CameraMode.FLIGHT);
+          ctrl.bypassed = true;
+          scModelEngaged = true;
+        },
+        exitFlight() {
+          // no-snap forward-ray exit (real flightExitAnchor + adoptCurrentPose)
+          const ctrl = _ensureExitController();
+          ctrl.setCameraMode(CameraMode.TOY_BOX);
+          const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);
+          const rawD = camera.position.distanceTo((_selected?.mesh ?? planet).position);
+          const d = Math.max(ctrl.minDistance, Math.min(ctrl.maxDistance, rawD));
+          ctrl.adoptCurrentPose(flightExitAnchor(camera.position, fwd, d));
+          scModelEngaged = false;
+        },
+        setDeflection(d) { _labDeflection = { x: d.x, y: d.y }; },
+      },
+    });
+
+    // Single gravity body = the reference planet at origin (rebased frame = world here).
+    function refreshBodies() {
+      model.setBodies([{ position: planet.position, radius: PLANET_RADIUS }]);
+    }
+
+    // Reset to rest at radius×6, nose pointed at the planet.
+    // Ship sits at +Z; nose is (0,0,-1) → points toward origin. Throttle 0, speed 0.
+    function resetModel() {
+      model.position.set(0, 0, ENTRY_DIST);
+      model.orientation.identity();   // nose = -Z → straight at the planet at origin
+      model.speed = 0;
+      model.throttle = 0;
+      model.setTurnInput(0, 0);
+      controls.stop('idle');  // halt any pilot leg + zero throttle on reset
+      headMount.yaw = 0; headMount.pitch = 0; headMount.endLook();
+      refreshBodies();
+      headMount.applyTo(camera, model.position, model.orientation);
+    }
+    resetModel();
+
+    // ── Projected screen-space radius of the planet (the PERCEPTUAL signal) ──
+    // Project planet center + a limb point to NDC, measure pixel radius.
+    const _c = new THREE.Vector3();
+    const _l = new THREE.Vector3();
+    const _right = new THREE.Vector3();
+    function projectedScreenRadiusPx() {
+      camera.updateMatrixWorld();
+      // camera right vector in world space (for a limb point perpendicular to view)
+      _right.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+      _c.copy(planet.position);
+      _l.copy(planet.position).addScaledVector(_right, PLANET_RADIUS);
+      const cNdc = _c.clone().project(camera);
+      const lNdc = _l.clone().project(camera);
+      const halfW = window.innerWidth / 2, halfH = window.innerHeight / 2;
+      const cx = cNdc.x * halfW, cy = cNdc.y * halfH;
+      const lx = lNdc.x * halfW, ly = lNdc.y * halfH;
+      return Math.hypot(lx - cx, ly - cy);
+    }
+
+    // ── Input: W/S throttle + mouse-drag virtual joystick (mirror main.js manual) ──
+    const keys = { w: false, s: false };
+    window.addEventListener('keydown', (e) => {
+      const k = e.key.toLowerCase();
+      if (k === 'w') keys.w = true;
+      if (k === 's') keys.s = true;
+      if (k === 'f') { scModelEngaged ? controls.disengage() : controls.engage(); }
+    });
+    window.addEventListener('keyup', (e) => {
+      const k = e.key.toLowerCase();
+      if (k === 'w') keys.w = false;
+      if (k === 's') keys.s = false;
+    });
+
+    // Mouse drag = virtual joystick. Offset from drag-start → setTurnInput(x, y).
+    let dragging = false, dragX = 0, dragY = 0;
+    const JOY_RANGE = 200; // px to reach full deflection
+    canvas.addEventListener('mousedown', (e) => { dragging = true; dragX = e.clientX; dragY = e.clientY; });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const nx = THREE.MathUtils.clamp((e.clientX - dragX) / JOY_RANGE, -1, 1);
+      const ny = THREE.MathUtils.clamp(-(e.clientY - dragY) / JOY_RANGE, -1, 1);
+      controls.steer(nx, ny); // shaped (casing fixed) + setTurnInput(-x,-y) + setDeflection
+    });
+    window.addEventListener('mouseup', () => {
+      dragging = false;
+      controls.steer(0, 0);
+    });
+
+    // ── Tuning sliders bound live to model.tuning ──
+    const TUNING_IDS = ['ETA_K', 'ACCEL_TAU', 'CAP_MIN_FRAC', 'THROTTLE_RATE'];
+    function bindTuning(id) {
+      const el = document.getElementById(id);
+      const out = document.getElementById(id + 'Val');
+      const apply = () => {
+        const v = parseFloat(el.value);
+        model.tuning[id] = v;
+        out.textContent = id === 'ETA_K' ? v.toFixed(1) : v.toFixed(2);
+      };
+      el.oninput = apply;
+      apply();
+    }
+    TUNING_IDS.forEach(bindTuning);
+
+    // ── Stick-curve plot: deflection 0..1 → achieved turn rate, redrawn on EXPO change ──
+    const stickPlot = document.getElementById('stickPlot');
+    const stickCtx = stickPlot.getContext('2d');
+    function drawStickPlot() {
+      const W = stickPlot.width, H = stickPlot.height;
+      const pad = { l: 8, r: 8, t: 18, b: 8 };
+      const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+      stickCtx.clearRect(0, 0, W, H);
+      // label
+      stickCtx.fillStyle = '#0a0';
+      stickCtx.font = '10px monospace';
+      stickCtx.fillText('deflection → turn rate', pad.l, 12);
+      // axes
+      stickCtx.strokeStyle = 'rgba(0,255,0,0.25)';
+      stickCtx.lineWidth = 1;
+      stickCtx.strokeRect(pad.l, pad.t, pw, ph);
+      // curve: y = shapeMagnitude(x) * turnRateCap(); normalize by turnRateCap so the
+      // shape fills the plot regardless of the (speed-dependent) cap magnitude.
+      const cap = model.turnRateCap() || 1;
+      stickCtx.strokeStyle = '#0f0';
+      stickCtx.lineWidth = 1.5;
+      stickCtx.beginPath();
+      const N = 64;
+      for (let i = 0; i <= N; i++) {
+        const x = i / N;                                  // deflection 0..1
+        const y = shapeMagnitude(x, stickTuning) * cap;   // achieved turn rate
+        const px = pad.l + x * pw;
+        const py = pad.t + ph - (cap > 0 ? (y / cap) : 0) * ph;
+        if (i === 0) stickCtx.moveTo(px, py); else stickCtx.lineTo(px, py);
+      }
+      stickCtx.stroke();
+    }
+    drawStickPlot();
+
+    // EXPO slider → stickTuning.EXPO, redraw the plot.
+    (() => {
+      const el = document.getElementById('EXPO');
+      const out = document.getElementById('EXPOVal');
+      const apply = () => {
+        const v = parseFloat(el.value);
+        stickTuning.EXPO = v;
+        out.textContent = v.toFixed(2);
+        drawStickPlot();
+      };
+      el.oninput = apply;
+      apply();
+    })();
+
+    // ── Fixed-timestep sim loop ──
+    const FIXED_DT = 1 / 60;
+    let acc = 0, last = performance.now();
+    let scripted = null; // when a flyFromRest run is active, hold its driver
+
+    function step(dt) {
+      // Throttle from held W/S routed through the surface (negative = reverse).
+      if (!scripted) {
+        const dir = (keys.w ? 1 : 0) - (keys.s ? 1 : 0);
+        if (dir !== 0) controls.setThrottle(model.throttle + dir * model.tuning.THROTTLE_RATE * dt);
+      }
+      refreshBodies();        // current rebased body positions every tick (model contract)
+      controls.step(dt);      // pilot.update (if active) BEFORE model.update — encapsulated order
+      headMount.update(dt);   // recenter easing when not held
+      headMount.applyTo(camera, model.position, model.orientation);
+    }
+
+    function tickPhysics(now) {
+      acc += (now - last) / 1000;
+      last = now;
+      // clamp to avoid spiral-of-death after a tab stall
+      if (acc > 0.25) acc = 0.25;
+      while (acc >= FIXED_DT) {
+        step(FIXED_DT);
+        if (scripted) scripted.onStep(FIXED_DT);
+        acc -= FIXED_DT;
+      }
+    }
+
+    // ── HUD + FPS ──
+    function updateHud() {
+      const d = model.position.length();
+      hudEl.textContent =
+        `Flight Controls Lab — real SupercruiseModel\n` +
+        `planet R = ${PLANET_RADIUS.toFixed(5)} u  (Earth, real scale)\n` +
+        `entry dist = ${ENTRY_DIST.toFixed(5)} u (R×6)\n` +
+        `dist to centre = ${d.toFixed(5)} u\n` +
+        `throttle = ${model.throttle.toFixed(2)}   speed = ${model.speed.toExponential(2)} u/s\n` +
+        `cap = ${model.speedCap().toExponential(2)} u/s\n` +
+        `screen R = ${projectedScreenRadiusPx().toFixed(1)} px`;
+    }
+
+    // Flight-mode readout: current mode + whether Mode-B align / Mode-C assist
+    // are live, so Modes B/C are observable in isolation.
+    const modeReadoutEl = document.getElementById('modeReadout');
+    function updateModeLabel() {
+      if (!modeReadoutEl) return;
+      modeReadoutEl.textContent =
+        `engaged:${scModelEngaged ? 'ON' : 'off'}` +
+        `   mode:${controls.getState().mode ?? '—'}` +
+        `   phase:${controls.getState().phase}` +
+        `   assist:${scPilot.isActive ? 'ON' : 'off'}`;
+    }
+
+    let frameCount = 0, fpsTimer = performance.now();
+    function updateFps() {
+      frameCount++;
+      const now = performance.now();
+      if (now - fpsTimer >= 500) {
+        fpsEl.textContent = `FPS: ${(frameCount * 1000 / (now - fpsTimer)).toFixed(1)}`;
+        frameCount = 0; fpsTimer = now;
+      }
+    }
+
+    // Build + push the REAL shipping HUD state (previews speed readout, log bar,
+    // drop tick, ETA over the lab). Drop physics single-sourced from PLANET_RADIUS.
+    function updateScHud() {
+      const captureSphere = PLANET_RADIUS * 10;
+      const dropMaxSpeed = captureSphere / 2.5;
+      const d = model.position.distanceTo(planet.position);
+      const dropState = d > captureSphere
+        ? 'none'
+        : (model.speed <= dropMaxSpeed ? 'in-window' : 'too-fast');
+      scHud.update({
+        visible: true,
+        speed: model.speed,
+        commandedSpeed: model.throttle * model.speedCap(),
+        throttle: model.throttle,
+        deflection: _labDeflection,
+        targetPos: planet.position,
+        targetDistance: d,
+        captureSphere,
+        dropMaxSpeed,
+        dropState,
+        flightMode: controls.getState().mode ?? 'manual',
+      });
+    }
+
+    function loop(now) {
+      tickPhysics(now);
+      renderer.render(scene, camera);
+      updateScHud();   // real HUD render (after camera applied via headMount.applyTo in step)
+      updateHud();
+      updateModeLabel(); // reflect align/assist auto-clearing without a keypress
+      updateFps();
+      requestAnimationFrame(loop);
+    }
+
+    // ── window._lab API ──
+    // flyFromRest: reset to rest at R×6, full throttle (W), run the sim for `seconds`,
+    // sampling speed / camera world-pos / projected planet screen-radius over time.
+    // visiblyTranslated = projected screen radius grew >= 25% within the window.
+    function flyFromRest({ seconds = 6 } = {}) {
+      return new Promise((resolve) => {
+        resetModel();
+        model.setThrottle(1);            // full W
+        const baselineScreenR = projectedScreenRadiusPx();
+        const startPos = camera.position.clone();
+        const samples = [];
+        let elapsed = 0, peakSpeed = 0, maxScreenR = baselineScreenR;
+        // record an initial t=0 sample
+        const sample = () => {
+          const screenR = projectedScreenRadiusPx();
+          if (screenR > maxScreenR) maxScreenR = screenR;
+          if (model.speed > peakSpeed) peakSpeed = model.speed;
+          samples.push({
+            t: +elapsed.toFixed(3),
+            speed: model.speed,
+            dist: model.position.length(),
+            camPos: [camera.position.x, camera.position.y, camera.position.z],
+            screenRadiusPx: +screenR.toFixed(2),
+          });
+        };
+        sample();
+        let sampleAcc = 0;
+        const SAMPLE_EVERY = 0.25; // s between recorded samples
+        scripted = {
+          onStep(dt) {
+            elapsed += dt;
+            sampleAcc += dt;
+            if (model.speed > peakSpeed) peakSpeed = model.speed;
+            const sr = projectedScreenRadiusPx();
+            if (sr > maxScreenR) maxScreenR = sr;
+            if (sampleAcc >= SAMPLE_EVERY) { sampleAcc -= SAMPLE_EVERY; sample(); }
+            if (elapsed >= seconds) {
+              sample();
+              scripted = null;
+              model.setThrottle(0);
+              const growthPct = baselineScreenR > 0
+                ? ((maxScreenR - baselineScreenR) / baselineScreenR) * 100
+                : (maxScreenR > 0 ? Infinity : 0);
+              const distanceTravelled = startPos.distanceTo(camera.position);
+              resolve({
+                visiblyTranslated: growthPct >= 25,
+                screenRadiusGrowthPct: +growthPct.toFixed(2),
+                peakSpeed,
+                distanceTravelled,
+                baselineScreenRadiusPx: +baselineScreenR.toFixed(2),
+                maxScreenRadiusPx: +maxScreenR.toFixed(2),
+                samples,
+              });
+            }
+          },
+        };
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  F-TOGGLE BUILD PROBES (spec 2026-06-25 — toggle / no-snap exit / settings)
+    //
+    //  These exercise the SWITCHING + EXIT + SETTINGS changes against the real
+    //  modules, NOT the in-flight behaviors (Manual/Align/Assist stay as-is).
+    //  Two probes:
+    //    1. checkNoSnapExit()      — drives F-on (model engage) then the real
+    //       DISENGAGE sequence on a REAL ShipCameraSystem and asserts the CAMERA
+    //       pose (position + look direction) is preserved across the forward-ray
+    //       exit. This is the no-snap proof on the CAMERA, not the frozen model
+    //       (session-4's miss). Uses real flightExitAnchor + real adoptCurrentPose.
+    //    2. checkSettingsTypeEngage() — with Settings type = Assist, asserts the
+    //       model is IDLE while flight is OFF (no engage / no autopilot takeover),
+    //       and that the assist leg begins the pilot toward the selected body.
+    //       Routed through the ShipControls surface (engage + flyTo) — main.js's
+    //       `_type = settings.get('flightControlType')` → engage/flyTo equivalent.
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Real Settings store (reads the new `flightControlType` key + its default).
+    const labSettings = new Settings();
+
+    // A real ShipCameraSystem instance for the no-snap exit probe. Built lazily so
+    // the lab boots without it; constructed on its OWN offscreen canvas so its DOM
+    // listeners never fight the lab's main canvas input. We drive the camera through
+    // flight by hand (bypassed) exactly as main.js does, then run the production
+    // disengage and assert on the resulting camera transform.
+    let _exitCam = null;        // THREE.PerspectiveCamera owned by the probe
+    let _exitController = null; // ShipCameraSystem driving _exitCam
+    function _ensureExitController() {
+      if (_exitController) return _exitController;
+      _exitCam = new THREE.PerspectiveCamera(65, 1, 1e-5, 100);
+      const offscreen = document.createElement('canvas');
+      _exitController = new ShipCameraSystem(_exitCam, offscreen, { isMobile: false });
+      return _exitController;
+    }
+
+    const _exitFwd = new THREE.Vector3();
+    const _capPos = new THREE.Vector3();
+    const _capLook = new THREE.Vector3();
+    const _nowLook = new THREE.Vector3();
+
+    // Drive F-on (ENGAGE) then F-off (DISENGAGE) on the real camera controller and
+    // measure the camera-pose delta the forward-ray exit produces. Returns the raw
+    // deltas + a pass/fail verdict (Δposition ≈ 0, Δlook-direction ≈ 0).
+    //
+    // `posEps` is in scene units; the camera sits ~ENTRY_DIST (≈0.26u) out, so the
+    // tolerance is generous-but-tight relative to that scale. `lookEps` is the max
+    // allowed angle (rad) between before/after forward vectors.
+    function checkNoSnapExit({ posEps = 1e-4, lookEps = 1e-4 } = {}) {
+      const ctrl = _ensureExitController();
+      resetModel();
+
+      // ── ENGAGE (F-on): seed the camera from the model pose, FLIGHT + bypassed,
+      //    exactly like main.js's engage branch. headMount maps model→camera. ──
+      ctrl.setCameraMode(CameraMode.FLIGHT);
+      ctrl.bypassed = true;
+
+      // Put the ship somewhere non-trivial with a non-axis-aligned look so the
+      // pose-preservation test isn't accidentally satisfied by symmetry: pitch the
+      // nose off the planet and roll the head a touch. Then map model→camera.
+      model.position.set(ENTRY_DIST * 0.7, ENTRY_DIST * 0.4, ENTRY_DIST);
+      model.orientation.setFromEuler(new THREE.Euler(0.21, -0.6, 0.13, 'YXZ'));
+      headMount.yaw = 0.18; headMount.pitch = -0.12; // small freelook offset (bank/look)
+      headMount.applyTo(_exitCam, model.position, model.orientation);
+      _exitCam.updateMatrixWorld(true);
+
+      // ── Capture the camera pose BEFORE disengage (position + forward/look). ──
+      _capPos.copy(_exitCam.position);
+      _exitCam.getWorldDirection(_capLook); // world -Z, normalized
+
+      // ── DISENGAGE (F-off): the EXACT production sequence (main.js KeyF else-branch):
+      //    setCameraMode(TOY_BOX) → forward-ray flightExitAnchor → adoptCurrentPose
+      //    → resync. Anchor distance = dist to selected body (the planet here),
+      //    clamped to the controller's own [minDistance, maxDistance]. ──
+      ctrl.setCameraMode(CameraMode.TOY_BOX);
+      _exitCam.getWorldDirection(_exitFwd);
+      const _rawD = _exitCam.position.distanceTo(planet.position);
+      const _d = Math.max(ctrl.minDistance, Math.min(ctrl.maxDistance, _rawD));
+      const anchor = flightExitAnchor(_exitCam.position, _exitFwd, _d);
+      ctrl.adoptCurrentPose(anchor);
+      // One orbit update tick (dt=0 = the resync-frozen first frame: no auto-drift,
+      // no smoothing lerp). update() routes TOY_BOX → _applyOrbit, reconstructing
+      // the camera from the smoothed yaw/pitch/dist adoptCurrentPose just set.
+      ctrl.update(0);
+      _exitCam.updateMatrixWorld(true);
+
+      // ── Measure deltas on the CAMERA (not the frozen model). ──
+      const dPos = _exitCam.position.distanceTo(_capPos);
+      _exitCam.getWorldDirection(_nowLook);
+      // angle between before/after forward vectors (look-direction snap)
+      const dot = THREE.MathUtils.clamp(_capLook.dot(_nowLook), -1, 1);
+      const dLookRad = Math.acos(dot);
+
+      // Restore lab state so the probe leaves no residue.
+      resetModel();
+
+      const pass = dPos <= posEps && dLookRad <= lookEps;
+      return {
+        pass,
+        dPosition: dPos,
+        dLookRad,
+        dLookDeg: +(dLookRad * 180 / Math.PI).toFixed(6),
+        anchorDistance: _d,
+        rawDistance: _rawD,
+        before: { pos: _capPos.toArray(), look: _capLook.toArray() },
+        after: { pos: _exitCam.position.toArray(), look: _nowLook.toArray() },
+        posEps, lookEps,
+      };
+    }
+
+    // With Settings type = Assist: model is IDLE while OFF (no engage), and the
+    // assist leg (begun via the surface's flyTo) drives the pilot toward the
+    // selected body. Mirrors main.js engage path, now routed through ShipControls
+    // (engage() enters flight; flyTo() begins the assist leg under the new design).
+    // Uses the lab's real model + real ShipControls (controls) + real Settings.
+    function checkSettingsTypeEngage() {
+      const prevType = labSettings.get('flightControlType');
+      labSettings.set('flightControlType', 'assist');
+      resetModel();
+
+      // ── Flight OFF: nothing engaged. Step the model several frames and confirm
+      //    it does NOT move (no drift, no autopilot takeover). scPilot idle. ──
+      const offStartPos = model.position.clone();
+      const offStartSpeed = model.speed;
+      const assistIdleWhileOff = !scPilot.isActive;
+      for (let i = 0; i < 30; i++) {
+        // Step the model exactly as the OFF (non-flight) lab would: no pilot, no
+        // throttle, no stick. The model must remain frozen.
+        refreshBodies();
+        model.update(FIXED_DT);
+      }
+      const offDrift = model.position.distanceTo(offStartPos);
+      const modelStillWhileOff = offDrift < 1e-9 && Math.abs(model.speed - offStartSpeed) < 1e-12;
+
+      // ── F-on (ENGAGE) reading the Settings type → assist leg takes the stick.
+      //    Routed through the surface: engage() enters flight, then flyTo() begins
+      //    the assist leg toward the selected body (selfStep:false so the probe's
+      //    own manual step loop below drives it, not flyTo's internal 60Hz loop). ──
+      resetModel();
+      const _type = labSettings.get('flightControlType');     // 'assist'
+      const targetBody = selectableBodies[0];                  // the reference planet
+      controls.selectTarget(targetBody);
+      controls.engage(_type);                                  // enters flight (type 'assist')
+      controls.flyTo({ toBody: targetBody.mesh, bodyRadius: targetBody.radius, linger: 8, selfStep: false });
+      const engagedAssist = (_type === 'assist') && scPilot.isActive;
+      // beginLeg stores { mesh, radius, linger }; the leg target should be the
+      // currently-selected body (the reference planet in the lab).
+      const targetsSelected = controls.target?.mesh === targetBody.mesh;
+
+      // Step a few frames so the pilot actually starts driving the model.
+      const engStartPos = model.position.clone();
+      for (let i = 0; i < 30; i++) {
+        refreshBodies();
+        controls.step(FIXED_DT); // pilot.update (if active) BEFORE model.update
+      }
+      const movedAfterEngage = model.position.distanceTo(engStartPos) > 0;
+
+      // Restore.
+      controls.stop('idle');
+      controls.deselect();
+      labSettings.set('flightControlType', prevType);
+      resetModel();
+
+      const pass = assistIdleWhileOff && modelStillWhileOff
+        && engagedAssist && !!targetsSelected && movedAfterEngage;
+      return {
+        pass,
+        settingDefault: new Settings().get('flightControlType'), // fresh store → 'manual'
+        assistIdleWhileOff,
+        modelStillWhileOff,
+        offDrift,
+        engagedAssist,
+        targetsSelected: !!targetsSelected,
+        movedAfterEngage,
+      };
+    }
+
+    // ── Reverse throttle is a real verb (CONTRACT §1: setThrottle(-0.5) ⇒
+    //    model.throttle === -0.5, "reverse is real"). Drive a NEGATIVE throttle
+    //    through the SAME surface the game uses and assert the model latched it,
+    //    then step a few frames and confirm the ship actually reverses (moves
+    //    backward along its nose) rather than clamping to 0. Without this, a
+    //    regression that broke reverse clamping would pass the harness. ──
+    function checkReverseThrottle() {
+      resetModel();
+      // Model starts at +Z, nose = -Z (toward origin). A negative throttle should
+      // drive the ship BACKWARD along its nose, i.e. toward +Z (away from origin).
+      const startZ = model.position.z;
+      controls.setThrottle(-0.5);
+      const latched = model.throttle === -0.5;          // CONTRACT §1
+      // Step the model so commanded reverse speed develops and translates it.
+      for (let i = 0; i < 120; i++) { refreshBodies(); model.update(FIXED_DT); }
+      const reverseSpeed = model.speed;                  // negative = reversing
+      const movedBackward = (model.position.z - startZ) > 1e-6; // +Z = backward here
+      const didNotClampToZero = Math.abs(model.throttle) > 1e-9;
+      controls.stop('idle');
+      resetModel();
+      const pass = latched && reverseSpeed < 0 && movedBackward && didNotClampToZero;
+      return { pass, latched, throttle: -0.5, reverseSpeed, movedBackward, didNotClampToZero };
+    }
+
+    // ── Selection across ≥2 bodies INCLUDING the no-target no-op. selectTarget is
+    //    wired through the real host pipeline; this asserts it (a) latches body0,
+    //    (b) SWITCHES to a genuinely-different body1 (proving selection isn't
+    //    hard-wired to one body), and (c) selectTarget(null) / deselect() clear the
+    //    selection cleanly (no throw, _selected === null). ──
+    function checkSelection() {
+      resetModel();
+      const body0 = selectableBodies[0];
+      const body1 = selectableBodies[1];
+      const differentBodies = body0.mesh !== body1.mesh;
+
+      controls.selectTarget(body0);
+      const selectedBody0 = _selected === body0;
+
+      controls.selectTarget(body1);                      // re-select a DIFFERENT body
+      const switchedToBody1 = _selected === body1;
+
+      // No-target no-op: selecting null clears; a second clear (deselect with
+      // nothing meaningful selected) must be a clean no-op (no throw).
+      let nullNoThrow = true;
+      try {
+        controls.selectTarget(null);
+        controls.deselect();
+      } catch { nullNoThrow = false; }
+      const clearedToNull = _selected === null;
+
+      controls.deselect();                               // residue-free
+      resetModel();
+      const pass = differentBodies && selectedBody0 && switchedToBody1
+        && clearedToNull && nullNoThrow;
+      return { pass, differentBodies, selectedBody0, switchedToBody1, clearedToNull, nullNoThrow };
+    }
+
+    // ── Drive the engage()/disengage() VERBS themselves (not the inline no-snap
+    //    math). engage() runs host.enterFlight (camera→FLIGHT, scModelEngaged=true);
+    //    disengage() runs host.exitFlight (the no-snap Toy-Box exit) AND pilot.stop().
+    //    Asserts the 2-state toggle's observable effects so a break in the
+    //    verb→delegate wiring (or in disengage's pilot.stop side) is caught — which
+    //    checkNoSnapExit, re-implementing the math inline on _exitController, cannot.
+    function checkEngageDisengageVerbs() {
+      resetModel();
+      const engagedBefore = scModelEngaged;              // false at rest
+
+      controls.engage();                                 // F-on → host.enterFlight
+      const engagedAfterEngage = scModelEngaged === true;
+
+      // Kick the pilot active so disengage()'s pilot.stop() side is observable.
+      controls.flyTo({ toBody: planet, bodyRadius: PLANET_RADIUS, linger: 8, selfStep: false });
+      const pilotActiveBeforeDisengage = scPilot.isActive;
+
+      let disengageNoThrow = true;
+      try { controls.disengage(); } catch { disengageNoThrow = false; } // F-off → host.exitFlight + pilot.stop
+      const engagedAfterDisengage = scModelEngaged;      // back to false
+      const pilotStoppedByDisengage = !scPilot.isActive; // pilot.stop() ran
+
+      controls.stop('idle');
+      resetModel();
+      const pass = engagedBefore === false && engagedAfterEngage
+        && pilotActiveBeforeDisengage && disengageNoThrow
+        && engagedAfterDisengage === false && pilotStoppedByDisengage;
+      return {
+        pass, engagedBefore, engagedAfterEngage,
+        pilotActiveBeforeDisengage, disengageNoThrow,
+        engagedAfterDisengage, pilotStoppedByDisengage,
+      };
+    }
+
+    function setTuning(k, v) {
+      if (!(k in model.tuning)) throw new Error(`Unknown tuning key: ${k}`);
+      model.tuning[k] = v;
+      const el = document.getElementById(k);
+      const out = document.getElementById(k + 'Val');
+      if (el) { el.value = v; }
+      if (out) { out.textContent = k === 'ETA_K' ? v.toFixed(1) : v.toFixed(2); }
+    }
+
+    window._lab = {
+      flyFromRest,
+      reset: resetModel,
+      setTuning,
+      model,
+      headMount,
+      camera,
+      planet,
+      PLANET_RADIUS,
+      ENTRY_DIST,
+      projectedScreenRadiusPx,
+      stickTuning,
+      scHud,
+      // ── ShipControls surface (the SAME object the game drives) ──
+      controls,
+      scPilot,
+      selectableBodies,
+      // Verb passthroughs for console / chrome-devtools driving:
+      engage: (type) => controls.engage(type),
+      disengage: () => controls.disengage(),
+      setThrottle: (t) => controls.setThrottle(t),
+      steer: (x, y) => controls.steer(x, y),
+      stop: (mode) => controls.stop(mode),
+      getState: () => controls.getState(),
+      selectTarget: (i) => controls.selectTarget(i == null ? null : selectableBodies[i] ?? null),
+      deselect: () => controls.deselect(),
+      get engaged() { return scModelEngaged; },
+      get selected() { return _selected; },
+      // flyTo a selectable body by index; records `arrived` on motionComplete so a
+      // headless / chrome-devtools driver can assert "arrived at body".
+      arrived: false,
+      flyTo(i = 0, linger = 0.5) {
+        const b = selectableBodies[i];
+        this.arrived = false;
+        const a = controls.flyTo({ toBody: b.mesh, bodyRadius: b.radius, linger });
+        a.then(() => { this.arrived = true; });
+        return a;
+      },
+      // ── F-toggle build probes (spec 2026-06-25) ──
+      // No-snap exit verified on the CAMERA (real ShipCameraSystem + real
+      // flightExitAnchor + real adoptCurrentPose); Settings-type → engage path.
+      settings: labSettings,
+      checkNoSnapExit,
+      checkSettingsTypeEngage,
+      // Reverse throttle (CONTRACT §1), selection across ≥2 bodies + null no-op,
+      // and the engage()/disengage() verbs themselves driven through the surface.
+      checkReverseThrottle,
+      checkSelection,
+      checkEngageDisengageVerbs,
+    };
+
+    // ── Panel buttons ──
+    document.getElementById('btnReset').onclick = () => resetModel();
+    document.getElementById('btnCycleMode').onclick = () =>
+      scModelEngaged ? controls.disengage() : controls.engage();
+    document.getElementById('btnFly').onclick = async (e) => {
+      e.target.textContent = 'Flying…';
+      const r = await flyFromRest({ seconds: 6 });
+      e.target.textContent = `Fly from rest (6s) — ${r.visiblyTranslated ? 'VISIBLE ✓' : 'NOT VISIBLE ✗'} (${r.screenRadiusGrowthPct}%)`;
+      console.log('[flight-controls-lab] flyFromRest →', r);
+    };
+
+    statusEl.style.display = 'none';
+    panelEl.style.display = 'block';
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

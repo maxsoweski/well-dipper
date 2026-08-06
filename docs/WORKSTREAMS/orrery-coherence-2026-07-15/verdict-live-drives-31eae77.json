@@ -1,0 +1,39 @@
+{
+  "workstream": "orrery-coherence-2026-07-15",
+  "commit": "31eae77",
+  "date": "2026-07-17",
+  "driver": "working-Claude (chrome-devtools, real canvas events, :5173, debug Chrome :9223 working tab)",
+  "context": "Closes the AC5 cells named by verify-light wf_ce03c185-1dd: the round-2 fix's live evidence had only covered a planet glide, while Max's findings were about moons and stars. All cells below driven with real mousedown/mouseup/click/wheel/keydown events through trySelect/selectTarget, autoNav stopped first per feedback_wd-nav-drives-autopilot-off. System: Sol via window._lab.enterSol (compact, clickable).",
+  "cells": {
+    "star-glide": {
+      "result": "PASS",
+      "evidence": "Sol (r=4.65): select floor 4.8825 = 1.05R exact; click-2 glide arrived 69.750 = 15R exact, star centered, camera outside the 3R glow (13.95) — the round-2 F3 'buried in glow at 6R' cell, closed."
+    },
+    "moon-glide-tiny": {
+      "result": "PASS",
+      "evidence": "Phoebe (r=0.0007 — 28x smaller than the old 0.02 glide floor): select floor 0.0008 = 1.05R exact; glide arrived 0.0020 vs 2.6R = 0.0019 expected (live-tracking tolerance); wheel-zoom then reached 0.0015 — 6.7x CLOSER than the old absolute 0.01 wall (old code parked this moon at ~28R). F2 closed on the extreme cell. Note: 40 wheel ticks reached 2.1R, did not exercise the exact 1.05R clamp wall (clamp mechanics unit-proven, T3a)."
+    },
+    "repeat-glides": {
+      "result": "PASS",
+      "evidence": "Uranus 0.683 = 4R exact; Saturn 1.610 = 4R exact (twice across the session); Neptune driven twice; all arrivals centered (hit-test at screen center returns the target). Dogleg-gone in real play as far as arrival/centering can show; path SHAPE is unit-proven (40.67%/21.69% measured dogleg on old code -> 0.00%). Live absolute-coordinate straightness is unmeasurable here: world-origin rebases fired mid-glide in 3 separate drives (pre-existing infra; 'never compare positions across a rebase')."
+    },
+    "mid-glide-interrupt": {
+      "result": "PASS",
+      "evidence": "Wheel at ~40% through a Neptune glide: _gliding true->false immediately; per-frame RELATIVE distance trace (rebase-immune) around the interrupt shows max single-frame step 547.7 = the glide's own typical per-frame step (no discontinuity, no snap); camera coasts to rest over ~3 frames with a mild pull-back as smoothing settles into the back-solved orbit pose. UAT taste note: that brief coast/pull-back on interrupt is the one visual the tests don't cover — flag to Max."
+    },
+    "esc-cascade-reset": {
+      "result": "PASS",
+      "evidence": "Esc#1 deselects (pre-existing cascade), Esc#2 overview: focus floor reset to 0.01 and glide cleared — verified twice more this session on top of the Saturn round."
+    },
+    "console": {
+      "result": "PASS",
+      "evidence": "Zero errors, zero warnings across the entire drive session (entry, glides, interrupts, wheel storms)."
+    }
+  },
+  "ac6-disposition": "NOT driven. Stays with Max's hands per the explicit round-1 ruling recorded in contract statusNote + re-UAT script B7 (boot-warp TURN window + N + pick + commit) — an explicit scripted UAT step, not a silent fold. The debug-hook synthetic retry remains available if Max prefers agent closure.",
+  "residuals": [
+    "Exact 1.05R wheel-clamp wall not touched live (reached 2.1R on Phoebe; clamp unit-proven T3a).",
+    "Mid-glide-interrupt coast/pull-back = UAT visual taste item.",
+    "Wide evenly-spaced systems frame at full outer orbit (dot-in-a-starfield) — pre-existing gap-break heuristic limitation, surfaced to Max as taste queue item."
+  ]
+}

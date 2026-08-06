@@ -1,0 +1,116 @@
+{
+  "workstream": "naming-census-uniqueness-2026-07-07",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "shipped",
+  "phase": "Increment 0 = AC1+AC2 (defect quick wins, DONE 3d87ed6, live render check batched); Increment 1 = AC3+AC4 (census + explainer, DONE 4928ccd); Increment 2 = AC5 (Max gate — CLOSED 2026-07-07, ratified-with-amendments, see ac5-decision.md); Increment 3a = AC9 (HYG catalog regen) + sky-click real-name fix; Increment 3b = AC6+AC7 (position-derived naming, hard guarantee per ac5-decision.md); then AC8 + batched live checks. SHIPPED: Max UAT passed 2026-07-11 at a1d2d4c ('Sol works'); reached master + Pages via lane B's 847ab19 pre-deploy merge; status flipped at the 2026-07-13 coordinator relay (owed since 07-11)",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-horsehead-renders",
+      "statement": "IC434 (Horsehead) and M78 no longer share a galacticPos in KnownObjectProfiles; both survive the known-object injection dedup; the Horsehead actually renders in the galaxy.",
+      "verifyVia": {
+        "input": "Headless: run the known-object injection over the profile catalog. Live: navigate to IC434's corrected position.",
+        "observable": "Injection output contains BOTH IC434 and M78 at distinct positions (the SHADOWED=['IC434'] special-case is deleted from tests/known-object-feature-seed.test.js, which still passes); live, a nebula renders at IC434's position."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC2-stale-tests",
+      "statement": "The 4 pre-existing failures in src/generation/__tests__ (KnownObjects x3, GalacticFeatures x1) pass, tightened to the 37-profile catalog — not loosened.",
+      "verifyVia": {
+        "input": "npx vitest run src/generation/__tests__",
+        "observable": "0 failures; assertions reference the actual catalog (no length-5 relics; the 'ring' and 'pleiades' searches disambiguated to their intended profiles)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC3-collision-census",
+      "statement": "A committed, re-runnable headless census generates system names at volumes far beyond player reach across all four region buckets (core/arm/rim/halo) and reports duplicate rates per naming path (catalog / Greek / fantasy-word), including collisions against the ~15.6k real HYG designations, plus emits name samples at volume for Max's review.",
+      "verifyVia": {
+        "input": "Run the census tool twice (exact command documented in the tool header).",
+        "observable": "A report with per-path, per-region duplicate rates + at least 200 name samples per region; the two runs are byte-identical (seeded, deterministic)."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC4-explainer-doc",
+      "statement": "An explainer doc gives Max the in-depth picture: how each naming path works (catalog/fantasy split percentages, syllable tables, sectorCode hash, region flavor, forked seed streams), how all FOUR real-object tagging mechanisms work (KnownSystems, RealStarCatalog, KnownObjectProfiles, RealFeatureCatalog), what real name/characteristic data flows into the game on each targeting path (including the sky-click vs NavComputer naming split), with census numbers cited and claims pointing at code.",
+      "verifyVia": {
+        "input": "Read the doc; spot-check its code citations against the source.",
+        "observable": "Doc exists under docs/, covers every enumerated section, citations resolve to real code; the docs/SYSTEMS.md 'no doc yet' rows (data-catalogs, generation-style, generation-system) now point to it."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC5-scheme-ratified",
+      "statement": "Max, from the census report, samples, and explainer, is happy with the proc gen naming system — he ratifies the scheme (style split, formats, regional flavor) or specifies amendments, in his words.",
+      "verifyVia": {
+        "input": "Max reviews the AC3 report + AC4 doc.",
+        "observable": "A ratify-or-amend decision recorded in this workstream directory; amendments (if any) folded into this contract via the scope skill before AC6/AC7 build."
+      },
+      "layer": "uat"
+    },
+    {
+      "id": "AC6-no-duplicate-names",
+      "statement": "Players never encounter the same system name twice — guaranteed by construction per the ratified scheme (ac5-decision.md): every procgen name derives injectively from canonical position; name classes = common positional/catalog designations (tiny real-survey ranges dropped/bounded), common multi-part fantasy carrying position-derived parts, RARE bare fantasy words injectively allocated from a finite partitioned supply, and a blocklist so procgen never emits one of the ~355 real proper names; the no-position fallback branch is eliminated.",
+      "verifyVia": {
+        "input": "Re-run the AC3 census against the post-fix generator, plus a dedicated injectivity unit test over the allocation mapping.",
+        "observable": "0 duplicates among distinct systems at >=100k census volume; 0 procgen names matching real catalog designations or proper names; injectivity test proves the guarantee is structural (position->name mapping collision-free over the sampled sector space), not statistical; refreshed per-region sample blocks emitted for Max's UAT."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC7-revisit-stable-name",
+      "statement": "Re-visiting a system gives back the same name on EVERY targeting path: names derive from stable identity (position/seed), never transient starfield indices; sky-click and NavComputer targeting of the same star agree on its name (for real stars, the catalog name).",
+      "verifyVia": {
+        "input": "Live: click-target the same star before and after starfield regeneration and warp in twice; separately target the same real star via sky-click vs NavComputer.",
+        "observable": "Identical system name across both visits and across both targeting paths; real stars show their catalog name on the sky-click path too."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC9-hyg-real-names",
+      "statement": "The shipped real-star catalog carries usable names: public/assets/data/hyg-stars.json regenerated via the already-fixed scripts/process-hyg-catalog.mjs, eliminating the '\"' artifact on 15,243 of 15,599 entries; every entry has a proper name or a catalog designation (HD/HIP), so real stars can show real names on every targeting path.",
+      "verifyVia": {
+        "input": "Run the regeneration script; then a headless scan of the regenerated JSON (extend or reuse the census tool's HYG loader).",
+        "observable": "0 entries whose name is the '\"' artifact; >=15k entries with a non-empty usable name; the census HYG cross-check now runs against the full usable-name set and its report reflects the new baseline."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC8-sol-guardrail",
+      "statement": "Sol still resolves as Sol with its known-system contents and real planet names (always-test-Sol: Sol IS the known-system code path).",
+      "verifyVia": {
+        "input": "Boot into / warp to Sol in the running game.",
+        "observable": "System name 'Sol'; real planet names (Mercury through Neptune) present; no procgen name leakage anywhere in the system."
+      },
+      "layer": "integration",
+      "live": true
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "world seed -> new SeededRandom(seed).child('names') — naming's own forked stream, isolated from content generation (main.js ~4192; NameGenerator.generateSystemNames ~:565)",
+      "sectorCode ~1kpc spatial hash mixed into catalog/Greek paths only (NameGenerator CATALOG_FORMATS ~:78-95; sector suffix % 9000 aliases); the ~70% fantasy-word path currently has NO collision mitigation",
+      "galactic position -> region buckets core/arm/rim/halo (_classifyRegion ~:275)",
+      "RealStarCatalog (HYG ~15.6k) names via NavComputer dispatch (main.js ~2833) and the _warpTargetName override chain (main.js ~3358/~3433 -> ~4193)",
+      "KnownSystems.findAt -> _knownSystemNames full override (Sol; main.js ~2460, ~3419)",
+      "sky-click targeting path (main.js ~9481-9549) — currently transient-index-seeded naming, to be re-derived from stable identity"
+    ],
+    "outputs": [
+      "system/star/planet/moon display names everywhere names surface: BodyInfo warp labels, NavComputer list labels, tour stops, body registry (main.js ~3760-3797, ~5674-5692)",
+      "census report + name samples (committed tool + output) — the evidence for Max's AC5 review AND the data-flow recon for the successor real-universe-overlay workstream",
+      "explainer doc filling the docs/SYSTEMS.md gaps (data-catalogs / generation-style / generation-system rows)"
+    ],
+    "mustStayWorking": [
+      "System CONTENTS determinism: StarSystemGenerator.generate(seed) untouched — naming stays on its own forked RNG stream; a given seed's planets/orbits/stars byte-identical before vs after this workstream",
+      "Sol + KnownSystems real-name override precedence (always-test-Sol)",
+      "NavComputer real-star naming (navStar.name, main.js ~2833) — catalog names keep winning over procgen",
+      "Known-object injection dedup (GalacticMap ~:1515-1566) still dedups true duplicates while no longer eating IC434",
+      "Lane boundaries: no edits to lane-D-owned GalacticMap regions (density/clouds/features) or NavComputer rendering internals; no edits to lane-B-owned flight/boot/tour sections of main.js; tag-consumer render-site edits minimal and flagged in the seam handoff",
+      "Full existing test suite green beyond the 4 tests being fixed"
+    ]
+  }
+}

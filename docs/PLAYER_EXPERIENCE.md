@@ -64,6 +64,69 @@ Key gaps:
 - Galaxy rendering: angular artifacts, artificial-looking bar, uniform
   glow color
 
+**Update 2026-06-28 — supercruise flight shipped (diverges from passive-screensaver spec):**
+the F&F build now includes **hands-on HELM flight** (manual throttle + mouse
+virtual-joystick + hold-to-look free-look) over the same supercruise model the
+autopilot tour flies, deployed to master @ `09db316`. Two UAT behaviors corrected
+this session (@ `f455f39`): in HELM hands-on the cursor is hidden and the mouse is
+the flight stick, so **left-click selects the body under the center reticle** (your
+nose), making planets/moons selectable rather than only background stars; and
+forced-drop/mass-lock near a star is **direction-aware** — you can engage and fly
+off when pointed away, while a head-on approach still drops you (capture). Sublight
+maneuvering with a hard collision barrier (never fly through a body) shipped in the
+same arc.
+
+**Update 2026-08-01 — the ORRERY station shipped (a second, deliberately
+non-screensaver way to be in the build):** where HELM diverged from the passive
+spec by giving the player the stick, ORRERY diverges the other way — it is
+god's-eye *viewing* in which **nothing ever flies you**. Entry is an instant
+framed cut with no warp cinematic; the title-end and nebula-linger auto-warp
+timers never fire, so ORRERY idles indefinitely; BURN never renders and no path
+silently swaps you to HELM. Bodies are browsed by click-1 to select, click-2 to
+glide the *view* (a two-phase centre-then-fly: rotate until the target is
+centred, then translate straight in — never a side-slide). Warping between
+systems arrives by zooming **in** from a far spawn rather than teleporting in and
+zooming out, and D-hold at the chooser skips the whole boot ceremony straight
+into Sol in either station.
+
+Two consequences worth recording because they read as UX, not internals: orbit
+lines are drawn by a screen-space conic field rather than per-ring geometry, so
+they now survive being viewed edge-on (the old renderer painted nothing within
+~6° of the orbit plane); and the camera-proximity fade is **retired** on Max's
+2026-08-01 ruling — orbit lines no longer disappear as you approach a planet.
+That fade was mitigation for a renderer that no longer exists, and its cutoff
+scaled with the *orbit's* radius rather than the body being approached, so lines
+vanished while the planet was still a dot.
+
+Shipped on `feature/supercruise-freelook`, UAT-passed 2026-08-01, merged to
+**local master only — not deployed**.
+
+**Update 2026-08-01 — the HELM cockpit shipped, and it is the largest divergence
+from the passive-screensaver spec so far:** in HELM you are now *inside the
+ship*. A GLB cabin surrounds the view, and four glass panels carry live state —
+NAV (the system/galaxy map), DRIVE (speed, throttle, mode), SURVEY (the body
+you are looking at) and TARGET (name, distance, ETA). Max's gate for it was
+whether it *"feels like flying from inside"*, and it passed on that wording.
+
+The consequence worth writing down is subtractive: **the screen-space readouts
+retire in HELM** rather than being drawn twice. The speed/throttle cluster, the
+MODE line and the mass-lock warning are on the glass now, so the flat overlay
+stops drawing them. That retirement is per-role and premise-based, not a blanket
+"are we in HELM" — if the cabin fails to load, every retired overlay comes
+straight back, because the premise "it is on the glass" is then false. This was
+verified by moving the cabin asset aside on purpose rather than by argument.
+
+Targeting reticles are cut by the cabin's real silhouette, so a reticle behind a
+rib or a monitor arm is clipped at the actual edge rather than blinking out
+whole. Panels repaint at 30 Hz — Max's pick from a live knob; the earlier 12.5 Hz
+read as stale beside a ~235 Hz world, and the cost difference is under half a
+millisecond.
+
+Not yet done, and parked deliberately: the cabin casts no shadows (neither onto
+itself nor from system objects), and the reticles are cut by the glass without
+yet *looking* projected onto it — no canopy tint, glass-depth parallax or
+phosphor. Both are in `PARKING_LOT.md` (P6, P4).
+
 ---
 
 ## ENRICHED tier (Layer 2)

@@ -286,6 +286,59 @@ html, body {
   letter-spacing: 0.1em;
 }
 
+/* ── Cold-open chooser: ORRERY / HELM on the black splash (boot-flow corrected
+   2026-06-27). The picker lives on #splash-screen (the FIRST screen), centered on
+   black with nothing else. A gentle fade-in since no intro precedes it. ── */
+.splash-mode-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  opacity: 0;
+  animation: title-prompt-in 1s ease-out 0.4s forwards;
+}
+
+.splash-mode-btn {
+  pointer-events: auto;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  font-family: 'DotGothic16', monospace;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  padding: 14px 28px;
+  min-width: 280px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.splash-mode-btn:hover,
+.splash-mode-btn:focus-visible {
+  background: rgba(100, 180, 255, 0.18);
+  border-color: rgba(100, 180, 255, 0.6);
+  outline: none;
+}
+
+.splash-mode-btn:active {
+  background: rgba(100, 180, 255, 0.32);
+}
+
+.splash-mode-name {
+  font-size: clamp(18px, 2.6vw, 24px);
+  letter-spacing: 0.22em;
+  margin-right: -0.22em;
+}
+
+.splash-mode-desc {
+  font-size: clamp(10px, 1.4vw, 12px);
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 4px;
+}
+
 /* ── Overlay Close Button (used in settings + keybinds panels) ── */
 .overlay-close {
   position: absolute;
@@ -647,6 +700,36 @@ html, body {
   animation: cursor-blink 0.6s step-end infinite;
 }
 
+/* ── Flight-mode toast (F-cycle entry tooltip) ── */
+#flight-mode-toast {
+  position: fixed;
+  top: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 95;
+  font-family: 'DotGothic16', monospace;
+  text-align: center;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  text-shadow: 0 0 8px #000, 0 0 16px #000, 0 0 24px #000;
+}
+#flight-mode-toast.fading { opacity: 0; }
+.flight-mode-toast-label {
+  color: #64ff82;
+  font-size: 26px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+.flight-mode-toast-hint {
+  color: rgba(100, 255, 130, 0.7);
+  font-size: 15px;
+  font-weight: bold;
+  margin-top: 4px;
+  letter-spacing: 0.1em;
+}
+body.hud-hidden #flight-mode-toast { display: none !important; }
+
 /* ── Commit Burn Button (in-system target selection) ── */
 #commit-burn-btn {
   position: fixed;
@@ -677,6 +760,44 @@ html, body {
 
 #commit-burn-btn:active {
   transform: translateX(-50%) translateY(1px);
+}
+
+/* ── ORRERY <-> HELM mode-swap button (M key equivalent) ──
+   Small corner button so the two peer stations are swappable without knowing
+   the key. Top-right so it never overlaps the centered BURN button. Label
+   tracks the CURRENT station (set by _updateModeSwapButton in main.js). */
+#mode-swap-btn {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 100;
+  font-family: 'DotGothic16', monospace;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.15em;
+  color: rgba(140, 255, 160, 1.0);
+  background: rgba(0, 20, 5, 0.65);
+  border: 1.5px solid rgba(100, 255, 130, 0.85);
+  padding: 7px 16px;
+  cursor: pointer;
+  text-transform: uppercase;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 0 14px rgba(60, 200, 90, 0.2);
+  transition: background 0.15s, box-shadow 0.15s, transform 0.08s;
+  outline: none;
+}
+
+#mode-swap-btn:hover {
+  background: rgba(20, 60, 25, 0.85);
+  box-shadow: 0 0 22px rgba(100, 255, 140, 0.45);
+}
+
+#mode-swap-btn:active {
+  transform: translateY(1px);
+}
+
+body.hud-hidden #mode-swap-btn {
+  display: none !important;
 }
 
 /* ── HUD master toggle (H key) ──

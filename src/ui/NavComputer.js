@@ -1,6 +1,17 @@
 import { generateSystemName } from '../generation/NameGenerator.js';
+import { resolveKnownObjects } from '../generation/knownObjectSearch.js';
 import { StarSystemGenerator } from '../generation/StarSystemGenerator.js';
 import { HashGridStarfield } from '../generation/HashGridStarfield.js';
+import { realStarSeed } from '../generation/realStarSeed.js';
+import { POSITION_MATCH_TOL } from '../generation/RealStarCatalog.js';
+import { resolveArrivalSystem } from '../generation/arrivalResolution.js';
+import { multiplicityForSeed } from '../generation/multiplicityOracle.js';
+import { placeLabels } from './labelPlacement.js';
+import { deriveSystemTitle, deriveSystemAnnotation, deriveStarHoverName } from './systemIdentity.js';
+import { findComponentIndexByName, deriveComponentView } from './componentIdentity.js';
+import { buildFarCompanionChips, formatSeparationAU } from './farCompanionChips.js';
+import { resolveMembership, membershipLabel } from './prismMembership.js';
+import { KnownSystems } from '../generation/KnownSystems.js';
 import { GalacticSectors } from '../generation/GalacticSectors.js';
 import { GalaxyLuminosityRenderer } from '../rendering/GalaxyLuminosityRenderer.js';
 import { NavGalaxyRenderer } from '../rendering/NavGalaxyRenderer.js';
@@ -20,6 +31,18 @@ import { simClockMs } from '../core/SimClock.js';
  * Panning supported at all 2D levels. Player position always visible.
  */
 
+/**
+ * The frame the PRISM pan speed is normalised to, and the largest step one
+ * frame of it may take. See the pan block in `render()`.
+ *
+ * 60 Hz is not arbitrary: it is the rate the overlay's own rAF loop ran at when
+ * the per-call step was tuned, so normalising here leaves the overlay's feel
+ * bit-identical and changes only callers that draw at some other rate — which,
+ * as of the cockpit's NAV panel, is the interesting one.
+ */
+const FRAME_MS = 1000 / 60;
+const MAX_PAN_STEP_MS = 100;
+
 const LEVELS = ['galaxy', 'sector', 'region', 'prism', 'system'];
 const LEVEL_NAMES = ['GALAXY', 'SECTOR', 'REGION', 'PRISM', 'SYSTEM'];
 const GRID_N = 8; // tiles per axis (sector uses 8, region uses 16)
@@ -32,6 +55,29 @@ const DENSITY_TO_STARS_PER_PC3 = 0.14 / 0.065;
 
 function gridNForLevel(levelIndex) {
   return levelIndex === 2 ? 16 : 8; // region = 16x16, sector = 8x8
+}
+
+/**
+ * Should the NAV panel draw chrome-less at this view level?
+ *
+ * Max's ruling, 2026-07-29: chrome-lessness is a property of the SYSTEM view and
+ * nowhere else. `AutopilotNavSequence` drives `_levelIndex` 0 → 1 → 2 → 3 during
+ * its star-pick drill, and stripped of their labels SECTOR and REGION are a bare
+ * grid — you would be watching the ship pick a star whose name you cannot read.
+ * So levels 0-3 keep their chrome and need no new code at all.
+ *
+ * Lives here, exported and pure, so the policy is testable without a canvas and
+ * so there is exactly ONE place that knows which level goes bare. It is applied
+ * INSIDE this class by the `_bare` getter, at draw time — a caller that ran it
+ * before `render()` would be testing a level `render()` has not finished moving
+ * (see `_bare`). Callers set `chromeless` and nothing else.
+ *
+ * @param {string} level - a value from the `level` getter ('galaxy' | 'sector' |
+ *   'region' | 'prism' | 'system' | 'unknown').
+ * @returns {boolean}
+ */
+export function navChromelessForLevel(level) {
+  return level === 'system';
 }
 
 export class NavComputer {
@@ -90,9 +136,56 @@ export class NavComputer {
     this._hoveredBody = null;       // planet/star under cursor { type, index }
     this._systemRotX = 0.5;         // 3D view rotation (elevation)
     this._systemRotY = 0.0;         // 3D view rotation (azimuth)
-    this._systemMode = 'system';    // 'system' or 'planet'
+    this._systemMode = 'system';    // 'system' | 'planet' | 'component'
     this._selectedPlanetIdx = -1;   // which planet is selected for detail view
+    this._selectedComponentIdx = -1; // which componentSystems entry is drilled (AC5)
+    this._pendingComponentSelect = null; // far-member marker name awaiting _systemData (entry b)
+    this._componentView = null;      // deriveComponentView cache for the drilled frame
     this._systemZoom = 1.0;         // zoom multiplier for system view
+
+    // ── Chrome-less draw flag (cockpit NAV panel, cockpit-screen-content-2026-07-28) ──
+    // PUBLIC and additive. `false` is not just a default, it is a contract: every
+    // guard below is written so that with this flag unset the emitted pixels are
+    // byte-identical to what the full-screen overlay has always drawn. That is the
+    // only reason it is safe to put a second draw mode into live game code — the
+    // overlay is still built on this class and is not being forked.
+    //
+    // When true the SYSTEM view drops every word and every clickable control and
+    // keeps the graphics: star, orbit ellipses, habitable-zone ring, belt annuli,
+    // planet discs, moons, the green ship diamond and the dashed trajectory line.
+    // The rule is graphics stay, words go.
+    //
+    // This flag is an INTENT — "this host wants a bare screen wherever bare makes
+    // sense" — not a verdict. The LEVEL POLICY that turns it into a verdict is
+    // THIS CLASS'S JOB, applied at draw time by the `_bare` getter, and no guard
+    // below reads this field directly. That is not a style choice: `render()`
+    // moves `this._levelIndex` to 4 mid-frame when the prism→system zoom lands,
+    // so any level test a caller makes before calling `render()` is already stale
+    // when the painter runs, and the first SYSTEM frame of that zoom draws fully
+    // chromed with a live invisible autopilot button on it. Hosts set this true
+    // and stop thinking about levels.
+    this.chromeless = false;
+
+    // ⭐ IS THIS CANVAS BEING SHOWN ON A DIM SURFACE? Independent of `chromeless`
+    // (2026-08-01). These were conflated once and it cost a bug: the orbit
+    // circles were tuned at 0.15 alpha for the BRIGHT full-screen DOM overlay,
+    // and when the same canvas became a texture on an in-world cockpit panel
+    // across a dark cabin, they measured (14,22,31) on the glass — drawn, and
+    // invisible. Max: "there are no orbits on the system nav computer now".
+    //
+    // The fix keyed off `_bare` at first, which was WRONG: it happened to
+    // correlate only because the cockpit was the sole chrome-less caller. Max
+    // then ruled the panel always-chromed, which would have silently restored
+    // the invisible orbits. Brightness is its own axis — a host on a dim surface
+    // says so, whatever chrome it wants.
+    this.dimSurface = false;
+
+    // Fraction of the panel the orrery fills once the 50 px chrome reserve is
+    // reclaimed. Consulted ONLY on the bare path — the default path keeps its
+    // hard-coded 0.85 so byte-equality cannot be broken by retuning this. Read it
+    // through `_systemFill`, never directly: it is public, the lab writes it every
+    // frame, and a non-finite write NaNs the whole projection.
+    this.systemFillFactor = 0.95;
 
     // ── COMMIT BURN / WARP ──
     this._selectedBody = null;       // { type: 'star'|'planet'|'moon', index }
@@ -137,6 +230,13 @@ export class NavComputer {
     // ── Real star catalog (set via setRealStarCatalog) ──
     this._realStarCatalog = null;
 
+    // ── Player-facing search (Increment 4 / AC2) ──
+    this._realFeatureCatalog = null;   // set via setRealFeatureCatalog (class-c structures/globulars)
+    this._searchFocused = false;       // true while the search <input> holds focus (keydown guard)
+    this._searchResults = [];          // current SearchResult[] rendered as rows
+    this._searchHighlight = -1;        // keyboard-highlighted row index (-1 = none)
+    this._searchDom = null;            // { root, input, list } — created lazily in _ensureSearchDom()
+
     // ── RNG ──
     this._makeRng = (seed) => {
       const fn = alea(seed);
@@ -163,9 +263,16 @@ export class NavComputer {
 
     // WASD panning for local view
     this._heldKeys = new Set();
+    /** sim-clock ms at the last pan step, or null when no gesture is running. */
+    this._lastPanMs = null;
     this._localDebug = false;
     this._localYOffset = 0; // Y offset for viewing above/below the plane
     this._onKeyDown = (e) => {
+      // AC2 (design D6, fact 1): never eat WASDRF/Backquote while typing in the
+      // search field. This capture-phase handler runs BEFORE the input's own
+      // listeners, so without this guard the six pan/zoom letters would be
+      // preventDefaulted out of the text field.
+      if (this._searchFocused) return;
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyF'].includes(e.code)) {
         this._heldKeys.add(e.code);
         e.preventDefault();
@@ -180,16 +287,118 @@ export class NavComputer {
     this._onKeyUp = (e) => {
       this._heldKeys.delete(e.code);
     };
+
+    // Read-only debug / live-drive handle (design D3). Guarded so headless
+    // tests (no `window`) don't throw; harmless in play — the AC1 live drive
+    // reads `window._navComputer._localStars`.
+    if (typeof window !== 'undefined') window._navComputer = this;
   }
 
   // ════════════════════════════════════════════════════
   // PUBLIC
   // ════════════════════════════════════════════════════
 
-  activate() {
+  /**
+   * The current view level as a word: 'galaxy' | 'sector' | 'region' | 'prism' |
+   * 'system', or 'unknown' if `_levelIndex` is out of range.
+   *
+   * Added for the cockpit NAV panel (lane F, cockpit-screen-content-2026-07-28),
+   * whose read-only snapshot needs the level as a string. `LEVELS` is a private
+   * module const with no importers; letting the class name its own level is the
+   * only option that does not put a second copy of that array somewhere it can
+   * silently drift out of lockstep. Read-only — it sets nothing.
+   */
+  get level() {
+    return LEVELS[this._levelIndex] ?? 'unknown';
+  }
+
+  /**
+   * Is THIS frame drawing bare? — the `chromeless` intent resolved against the
+   * level that is live at the moment the painter asks, not at the moment the
+   * host set the flag.
+   *
+   * The distinction is the whole reason this getter exists. `render()` writes
+   * `this._levelIndex = 4` MID-FRAME, in the `_systemZoomAnim` completion block,
+   * so a host that read `level`, ran `navChromelessForLevel` and stored a boolean
+   * before calling `render()` has fixed the answer from the PRE-transition level.
+   * The first SYSTEM frame of a prism→system zoom then paints fully chromed: 12
+   * text calls and a published `_autopilotButtonRect` — a live invisible button
+   * on a panel whose contract is that it has no controls. Resolving here makes
+   * that race unrepresentable.
+   *
+   * It also enforces Max's ruling with no cooperation required: at levels 0-3
+   * this is false whatever the host asked for, so the autopilot star-pick drill
+   * keeps the labels that are the only reason it is watchable.
+   *
+   * Total, and false whenever `chromeless` is falsy — which is what preserves
+   * byte-equality on the default path. The ternary rather than `&&` so the answer
+   * is a real boolean even if a host assigns `undefined`; `&&` would hand that
+   * `undefined` straight back to every guard, and a guard that reads `undefined`
+   * is one refactor away from being read as "not yet known".
+   */
+  get _bare() {
+    return this.chromeless ? navChromelessForLevel(this.level) : false;
+  }
+
+  /**
+   * The bare fill factor, defended against the field it reads.
+   *
+   * `systemFillFactor` is public and the lab rewrites it from outside on every
+   * frame. One `undefined` write makes `viewSize` NaN, and with it every arc()
+   * coordinate — the panel goes BLANK, which passes a "no words on the glass"
+   * check for entirely the wrong reason. Non-finite falls back to the documented
+   * 0.95 default instead of propagating into the projection.
+   */
+  get _systemFill() {
+    return Number.isFinite(this.systemFillFactor) ? this.systemFillFactor : 0.95;
+  }
+
+  /**
+   * ⭐ THE KEYBOARD, ON ITS OWN — WASD pan, R/F height, backquote debug.
+   *
+   * Split out of `activate()` on 2026-08-01, from Max in UAT: *"I still can't
+   * use the up/down controls to rise and lower below the galactic plane on the
+   * prism menu."* He was looking at the COCKPIT's instance, and it had never had
+   * a keyboard: on the glass "open" means zooming the panel to the eye, so
+   * `_openCockpitNav` never went near `activate()`, and R/F — along with WASD
+   * panning and the debug toggle — simply did not exist there.
+   *
+   * ⚠ AND `activate()` IS NOT THE FIX, which is why this is its own method. It
+   * also calls `_resizeCanvas()`, which reads `getBoundingClientRect()` — on the
+   * panel's OFFSCREEN canvas that returns all zeros, so the buffer would be
+   * resized to 0×0 and the NAV screen would go black. And `_showSearch()` reveals
+   * a DOM input that belongs to the overlay, over a canvas the pilot is looking
+   * at from inside a cockpit. Both are the overlay's business, not the glass's.
+   *
+   * Re-attaching is harmless: `addEventListener` with the same function
+   * reference and the same capture flag is a no-op, which is what lets the
+   * caller drive this from an idempotent applier rather than tracking pairs.
+   */
+  attachKeys() {
     document.addEventListener('keydown', this._onKeyDown, true);
     document.addEventListener('keyup', this._onKeyUp, true);
+  }
+
+  /**
+   * Drop the keyboard, and FORGET WHAT WAS HELD.
+   *
+   * The clear is not tidiness. `_heldKeys` is drained by `keyup`, so a key still
+   * down when the listeners go away is never removed — and `render()` pans on
+   * the SET, not on the events. The map would then drift forever, in a view
+   * nobody is looking at, until the next time those listeners happen to be back
+   * and that key happens to be pressed and released.
+   */
+  detachKeys() {
+    document.removeEventListener('keydown', this._onKeyDown, true);
+    document.removeEventListener('keyup', this._onKeyUp, true);
+    this._heldKeys.clear();
+    this._lastPanMs = null;
+  }
+
+  activate() {
+    this.attachKeys();
     this._resizeCanvas();
+    this._showSearch();
   }
 
   /** Open directly to the system view for the current system. */
@@ -207,6 +416,7 @@ export class NavComputer {
     if (systemData) this._currentSystemData = systemData;
     this._hoveredBody = null;
     this._systemMode = 'system';
+    this._pendingComponentSelect = null; // fresh entry — no inherited pre-select (S5-verify)
     this._systemZoom = 1.0;
     this._clearCommitSelection();
     this._levelIndex = 4;
@@ -221,10 +431,10 @@ export class NavComputer {
   }
 
   deactivate() {
-    document.removeEventListener('keydown', this._onKeyDown, true);
-    document.removeEventListener('keyup', this._onKeyUp, true);
-    this._heldKeys.clear();
+    this.detachKeys();
+    this._hideSearch();
     this._systemZoomAnim = null; // cancel in-flight prism→system zoom so it can't fire after close
+    this._pendingComponentSelect = null; // never carry a pre-select across close/reopen (S5-verify)
     this._resetPrismLoad();
   }
 
@@ -236,6 +446,247 @@ export class NavComputer {
    */
   setRealStarCatalog(catalog) {
     this._realStarCatalog = catalog;
+  }
+
+  /** Loaded RealFeatureCatalog — supplies class-(c) globular structures to search. */
+  setRealFeatureCatalog(catalog) {
+    this._realFeatureCatalog = catalog;
+  }
+
+  // ════════════════════════════════════════════════════
+  // PLAYER-FACING SEARCH (Increment 4 / AC2)
+  // ════════════════════════════════════════════════════
+
+  /**
+   * Lazily build the DOM search overlay — a real `<input>` + a results list —
+   * as siblings of the nav canvas inside `.nav-computer-panel`, absolutely
+   * positioned over the top-left of the canvas. DOM (not a canvas widget) so the
+   * browser owns caret/backspace/IME/clipboard and real focus/blur drive the
+   * `_searchFocused` keyboard guard for free (design D2/D6, fact 2). Mirrors the
+   * imperative-DOM search pattern in DebugPanel (src/ui/DebugPanel.js) —
+   * including the `stopPropagation` on keydown that DebugPanel's input uses
+   * (:714-717) to keep game keybinds from firing while typing.
+   */
+  _ensureSearchDom() {
+    if (this._searchDom) return;
+    const panel = this._canvas.parentElement; // .nav-computer-panel
+    if (!panel) return;
+
+    // One-time style block (class-based so we get :focus / :hover / highlight).
+    if (!document.getElementById('nav-search-style')) {
+      const style = document.createElement('style');
+      style.id = 'nav-search-style';
+      style.textContent = `
+        .nav-search-overlay { position:absolute; top:12px; left:12px; width:320px; max-width:calc(100% - 24px); z-index:8; font-family:'Courier New',monospace; pointer-events:auto; }
+        .nav-search-input { width:100%; box-sizing:border-box; padding:8px 10px; background:rgba(4,10,20,0.92); color:#cfe6ff; border:1px solid rgba(100,180,255,0.35); border-radius:2px; font:13px 'Courier New',monospace; letter-spacing:0.04em; outline:none; }
+        .nav-search-input::placeholder { color:rgba(140,180,220,0.5); }
+        .nav-search-input:focus { border-color:rgba(120,200,255,0.85); box-shadow:0 0 8px rgba(80,160,255,0.35); }
+        .nav-search-results { list-style:none; margin:4px 0 0; padding:0; max-height:52vh; overflow-y:auto; background:rgba(4,10,20,0.92); border:1px solid rgba(100,180,255,0.18); border-radius:2px; }
+        .nav-search-results:empty { display:none; }
+        .nav-search-row { display:flex; justify-content:space-between; gap:10px; padding:6px 10px; color:#bcd6f0; font:12px 'Courier New',monospace; cursor:pointer; border-bottom:1px solid rgba(100,180,255,0.08); }
+        .nav-search-row:last-child { border-bottom:none; }
+        .nav-search-row:hover, .nav-search-row.hl { background:rgba(60,130,220,0.28); color:#eaf4ff; }
+        .nav-search-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .nav-search-kind { color:rgba(140,180,220,0.7); text-transform:uppercase; font-size:10px; letter-spacing:0.08em; align-self:center; flex:0 0 auto; }
+        .nav-search-empty { padding:6px 10px; color:rgba(150,180,210,0.55); font:12px 'Courier New',monospace; }
+      `;
+      document.head.appendChild(style);
+    }
+
+    const root = document.createElement('div');
+    root.className = 'nav-search-overlay';
+    root.style.display = 'none';
+
+    const input = document.createElement('input');
+    input.className = 'nav-search-input';
+    input.type = 'text';
+    input.setAttribute('placeholder', 'Search stars · systems · structures…');
+    input.setAttribute('aria-label', 'Search known objects');
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+
+    const list = document.createElement('ul');
+    list.className = 'nav-search-results';
+
+    root.appendChild(input);
+    root.appendChild(list);
+    panel.appendChild(root);
+
+    // Focus/blur drive the capture-phase keydown guard (design D6).
+    input.addEventListener('focus', () => { this._searchFocused = true; });
+    input.addEventListener('blur', () => { this._searchFocused = false; });
+    input.addEventListener('input', () => { this._runSearch(input.value); });
+
+    // Stop EVERY keydown from reaching the global `window` keydown handler
+    // (main.js:9553) — it has NO target guard, so 'N'/'K'/'P'/'T'/'X'/arrows
+    // typed into this field would otherwise fire game toggles. Mirrors
+    // DebugPanel.js:714-717. Then handle the nav-list keys.
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.code === 'ArrowDown') { e.preventDefault(); this._moveSearchHighlight(1); return; }
+      if (e.code === 'ArrowUp')   { e.preventDefault(); this._moveSearchHighlight(-1); return; }
+      if (e.code === 'Enter')     { e.preventDefault(); this._activateSearchHighlight(); return; }
+      if (e.code === 'Escape') {
+        // Escape while search-focused = clear + blur the search ONLY; it does
+        // NOT drill the nav level (design D6). Once blurred/empty, the next
+        // Escape flows to the global handler and governs the panel as before.
+        e.preventDefault();
+        input.value = '';
+        this._runSearch('');
+        input.blur();
+      }
+    });
+
+    this._searchDom = { root, input, list };
+  }
+
+  /** Show + reset the search overlay (called from activate()). */
+  _showSearch() {
+    this._ensureSearchDom();
+    if (!this._searchDom) return;
+    this._searchDom.input.value = '';
+    this._searchResults = [];
+    this._searchHighlight = -1;
+    this._renderSearchResults();
+    this._searchDom.root.style.display = 'block';
+  }
+
+  /** Hide + reset the search overlay and clear the focus guard (from deactivate()). */
+  _hideSearch() {
+    this._searchFocused = false;
+    if (!this._searchDom) return;
+    this._searchDom.input.blur();
+    this._searchDom.input.value = '';
+    this._searchResults = [];
+    this._searchHighlight = -1;
+    this._renderSearchResults();
+    this._searchDom.root.style.display = 'none';
+  }
+
+  /** Resolve `query` against all known-object sources and render result rows. */
+  _runSearch(query) {
+    const q = (query || '').trim();
+    if (!q) {
+      this._searchResults = [];
+      this._searchHighlight = -1;
+      this._renderSearchResults();
+      return;
+    }
+    // knownSystems defaults to the KnownSystems singleton inside the resolver;
+    // playerPos anchors the class-(b) named-systems box.
+    this._searchResults = resolveKnownObjects(q, {
+      realStarCatalog: this._realStarCatalog,
+      realFeatureCatalog: this._realFeatureCatalog,
+      playerPos: { x: this._playerX, y: this._playerY, z: this._playerZ },
+    });
+    this._searchHighlight = this._searchResults.length ? 0 : -1;
+    this._renderSearchResults();
+  }
+
+  _renderSearchResults() {
+    if (!this._searchDom) return;
+    const list = this._searchDom.list;
+    list.textContent = '';
+    const hasQuery = this._searchDom.input.value.trim().length > 0;
+    if (!this._searchResults.length) {
+      if (hasQuery) {
+        const empty = document.createElement('li');
+        empty.className = 'nav-search-empty';
+        empty.textContent = 'No matches';
+        list.appendChild(empty);
+      }
+      return;
+    }
+    this._searchResults.forEach((r, i) => {
+      const row = document.createElement('li');
+      row.className = 'nav-search-row' + (i === this._searchHighlight ? ' hl' : '');
+      const name = document.createElement('span');
+      name.className = 'nav-search-name';
+      name.textContent = r.name;
+      const kind = document.createElement('span');
+      kind.className = 'nav-search-kind';
+      kind.textContent = this._searchKindLabel(r);
+      row.appendChild(name);
+      row.appendChild(kind);
+      // mousedown (not click) so selection fires BEFORE the input's blur, and
+      // preventDefault keeps focus stable through the select→warp→close path.
+      row.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        this._selectSearchResult(i);
+      });
+      list.appendChild(row);
+    });
+  }
+
+  /** Short right-aligned type/kind label for a result row. */
+  _searchKindLabel(r) {
+    if (r.kind === 'star') return r.type || 'STAR';
+    if (r.kind === 'structure') return r.type || 'STRUCTURE';
+    if (r.kind === 'named') return r.region || 'SYSTEM';
+    if (r.kind === 'registry') return 'SYSTEM';
+    return r.kind;
+  }
+
+  _moveSearchHighlight(delta) {
+    if (!this._searchResults.length) return;
+    const n = this._searchResults.length;
+    this._searchHighlight = (this._searchHighlight + delta + n) % n;
+    this._renderSearchResults();
+  }
+
+  _activateSearchHighlight() {
+    if (this._searchHighlight >= 0 && this._searchHighlight < this._searchResults.length) {
+      this._selectSearchResult(this._searchHighlight);
+    }
+  }
+
+  /**
+   * Select a search result → arm a genuine WARP to it and close the nav computer.
+   *
+   * Routes through the SAME supported close→warp contract the COMMIT button uses:
+   * fire `_onCommit({type:'warp', star})` → main.js stores it as `_pendingAction`,
+   * closes the nav, and `dispatchNavAction` calls `_setWarpTargetFromNavStar` +
+   * `beginWarpTurn` (main.js:2884-2895). This NEVER hand-sets `window._warpTarget`
+   * and NEVER uses the debug teleport (which bypasses `onPrepareSystem` and would
+   * skip the Inc-3 real-star merge — fact 7 / Gate 4).
+   *
+   * `action.star` uses NavComputer's native `{wx,wy,wz,seed,name,spectral}` shape
+   * (what dispatchNavAction's warp branch reads, main.js:2890-2893). `spectral` is
+   * carried ONLY for real-star hits (result.starType), so a merged real star
+   * (Sirius) passes a valid class to arrival's starTypeOverride; named/structure/
+   * registry hits pass `spectral:undefined` so procgen / the known-system override
+   * decides the type at arrival.
+   */
+  _selectSearchResult(index) {
+    const r = this._searchResults[index];
+    if (!r) return;
+
+    // Build the internal star object in NavComputer's native shape — mirror
+    // openToCurrentSystem's externally-supplied-hit head (:199-213) and the
+    // prism-click tail (:3119-3122). The catalog hit is NOT in `_localStars`, so
+    // we do NOT reuse `_hoveredLocalStar` (fact 8).
+    const star = {
+      wx: r.worldPos.x, wy: r.worldPos.y, wz: r.worldPos.z,
+      seed: r.seed, name: r.name, spectral: r.starType,
+      color: NavComputer._SPECTRAL_COLORS[r.starType] || '#ffefb0',
+    };
+    this._systemStar = star;
+    this._selectedNavStar = star;
+    this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '' };
+
+    if (this._onSound) this._onSound('warpTarget');
+
+    // Arm the warp via the supported callback contract (no main.js edit needed).
+    if (this._onCommit) {
+      this._onCommit({
+        type: 'warp',
+        target: 'star',
+        star: {
+          wx: star.wx, wy: star.wy, wz: star.wz,
+          seed: star.seed, name: star.name, spectral: star.spectral,
+        },
+      });
+    }
   }
 
   setExternalTarget(worldPos, name) {
@@ -288,6 +739,140 @@ export class NavComputer {
     return `${starName}-${pIdx + 1}${String.fromCharCode(97 + mIdx)}`;
   }
 
+  /**
+   * Draw the SYSTEM-view header (AC3): the title is the SYSTEM name for a known
+   * multi-star/single system (never the clicked component marker), with an
+   * optional "via <component>" annotation directly under it, then the
+   * star-type / planet-count / age line. For a procgen system (no
+   * `_knownSystemNames`) `deriveSystemTitle` returns the marker name and
+   * `deriveSystemAnnotation` returns null, so the two lines land at their
+   * historical y=24 / y=42 positions — byte-identical to pre-AC3.
+   */
+  _drawSystemHeader(ctx, sys, markerName, planetCount) {
+    const title = deriveSystemTitle(sys, markerName);
+    ctx.font = '14px "DotGothic16", monospace';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    ctx.fillText(title, 16, 24);
+
+    // Optional component annotation — routes the system identity, keeping the
+    // title itself un-overloaded. Only known systems ever draw it; when present
+    // the type line drops to make room (procgen never shifts).
+    const annotation = deriveSystemAnnotation(sys, markerName);
+    let typeLineY = 42;
+    if (annotation) {
+      ctx.font = '9px "DotGothic16", monospace';
+      ctx.fillStyle = 'rgba(180, 200, 230, 0.55)';
+      ctx.fillText(annotation, 16, 38);
+      typeLineY = 54;
+    }
+
+    ctx.font = '11px "DotGothic16", monospace';
+    ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
+    const starTypeLabel = sys.isBinary && sys.star2
+      ? `${sys.star?.type || '?'}+${sys.star2.type} binary`
+      : `${sys.star?.type || '?'}`;
+    ctx.fillText(`${starTypeLabel} · ${planetCount} planet${planetCount !== 1 ? 's' : ''} · ${(sys.ageGyr || 0).toFixed(1)} Gyr`, 16, typeLineY);
+  }
+
+  /**
+   * Draw the far-companion edge chips (AC4) for the SYSTEM view. Wide,
+   * gravitationally-bound members on `systemData.farCompanions` — Proxima
+   * Centauri (~13,000 AU) for Alpha Centauri, 36 Oph C for Guniibuu — are far
+   * beyond the orrery's sqrt-AU orbital scale and carry no direction vector, so
+   * they cannot be drawn as an in-scene orbit. Each renders as an informational
+   * chip anchored to a consistent top-right boundary slot (clear of the U1
+   * header at 16,24 and the top-right level-name at w-16,24): a spectral-colour
+   * dot, the member's name, its separation, and its planets. Draw-only — no
+   * arrival change, positions never move.
+   *
+   * When `farCompanions` is absent/empty this returns having drawn NOTHING and
+   * published an empty `_farChipRects`, so a procgen (or planetless single)
+   * system renders byte-identically and no existing layout shifts.
+   */
+  _drawFarCompanionChips(ctx, w, drawH) {
+    this._farChipRects = [];
+    this._hoveredFarChip = null;
+    // Chrome-less: the whole method is chrome — chip box, swatch, three text
+    // lines, AND the hover tooltip at the bottom (which is the one live hover
+    // path the cockpit panel already forwards, so guarding only the chip loop
+    // would leave a text box floating on a wordless panel). Bailing AFTER the two
+    // resets above is deliberate: it also unpublishes `_farChipRects`, so the
+    // panel cannot carry invisible hit regions for chips it never drew.
+    if (this._bare) return;
+    const fars = this._systemData?.farCompanions;
+    if (!Array.isArray(fars) || fars.length === 0) return;
+
+    const NAME_FONT = '10px "DotGothic16", monospace';
+    const META_FONT = '8px "DotGothic16", monospace';
+    const LINE_H = 12;
+    const PAD_X = 8;
+    const PAD_Y = 6;
+
+    // Measure with the widest (name) font so a chip never clips its own text.
+    ctx.font = NAME_FONT;
+    const chips = buildFarCompanionChips(fars, {
+      right: w - 12,
+      top: 40, // below the top-right level-name HUD line (drawn later at y=24)
+      measure: (s) => ctx.measureText(s).width,
+      colorForType: (t) => NavComputer._SPECTRAL_COLORS[t] || '#ff9664',
+      lineHeight: LINE_H, padX: PAD_X, padY: PAD_Y, gap: 6, dotGap: 12,
+    });
+
+    for (const chip of chips) {
+      // Panel
+      ctx.fillStyle = 'rgba(10, 12, 20, 0.82)';
+      ctx.strokeStyle = 'rgba(120, 150, 200, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(chip.x, chip.y, chip.w, chip.h, 4);
+      ctx.fill();
+      ctx.stroke();
+
+      // Line 1: spectral-colour dot + name
+      const nameBaseline = chip.y + PAD_Y + 9;
+      ctx.fillStyle = chip.color;
+      ctx.beginPath();
+      ctx.arc(chip.x + PAD_X + 3, nameBaseline - 3, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = NAME_FONT;
+      ctx.fillStyle = '#dfe8ff';
+      ctx.textAlign = 'left';
+      ctx.fillText(chip.name, chip.x + PAD_X + 12, nameBaseline);
+
+      // Line 2: separation
+      ctx.font = META_FONT;
+      ctx.fillStyle = 'rgba(150, 175, 215, 0.75)';
+      ctx.fillText(chip.sepLine, chip.x + PAD_X, chip.y + PAD_Y + LINE_H + 9);
+
+      // Line 3 (optional): planets
+      if (chip.planetLine) {
+        ctx.fillStyle = 'rgba(120, 180, 255, 0.7)';
+        ctx.fillText(chip.planetLine, chip.x + PAD_X, chip.y + PAD_Y + LINE_H * 2 + 9);
+      }
+
+      this._farChipRects.push({ x: chip.x, y: chip.y, w: chip.w, h: chip.h, chip, index: chip.index });
+
+      // Hover hit-test → tooltip (the existing tooltip path, same as bodies).
+      if (this._mouseX >= chip.x && this._mouseX <= chip.x + chip.w &&
+          this._mouseY >= chip.y && this._mouseY <= chip.y + chip.h) {
+        this._hoveredFarChip = chip;
+      }
+    }
+
+    if (this._hoveredFarChip) {
+      const c = this._hoveredFarChip;
+      const lines = [
+        `${c.fullClass || c.type || '?'} · far companion`,
+        `separation: ${formatSeparationAU(c.separationAU)} AU`,
+        c.planetLetters.length > 0
+          ? `${c.planetLetters.length} planet${c.planetLetters.length > 1 ? 's' : ''}: ${c.planetLetters.join(', ')}`
+          : 'no known planets',
+      ];
+      this._drawTooltip(ctx, c.x, c.y + c.h / 2, c.name, lines);
+    }
+  }
+
   /** Find the star nearest to the player's position in _localStars. */
   _findNearestStar() {
     if (!this._localStars || this._localStars.length === 0) return null;
@@ -308,7 +893,15 @@ export class NavComputer {
     const dx = this._systemStar.wx - this._playerX;
     const dy = this._systemStar.wy - this._playerY;
     const dz = this._systemStar.wz - this._playerZ;
-    return Math.sqrt(dx * dx + dy * dy + dz * dz) < 0.002;
+    // Identity radius, not neighborhood radius: POSITION_MATCH_TOL (0.1 pc) is
+    // the same-star tolerance everywhere else AND the F1 seed bin, so "current
+    // system" agrees with seed identity. The old 0.002 (2 pc) swallowed real
+    // neighbors — browsing Rigil Kentaurus (1.32 pc) from Sol showed Sol's
+    // spawned data as its "preview" and built a BURN instead of a warp. A
+    // same-system sibling inside 0.1 pc (Proxima browsed from Alpha Centauri)
+    // still reads current on purpose: its arrival routes to the same spawned
+    // system, so the spawned data IS its honest preview.
+    return Math.sqrt(dx * dx + dy * dy + dz * dz) < POSITION_MATCH_TOL;
   }
 
   /** Set callback for COMMIT BURN/WARP button. */
@@ -526,7 +1119,26 @@ export class NavComputer {
 
     // WASD panning in prism view
     if (this._levelIndex === 3 && this._heldKeys.size > 0) {
-      const panSpeed = this._localRadius * 0.01; // slow enough to see individual grid lines move
+      // ⭐ PER UNIT OF TIME, NOT PER CALL (2026-08-01). This used to move a fixed
+      // step every render, which was fine while the only caller was the overlay's
+      // own 60 Hz rAF loop. The cockpit's NAV panel repaints at the AMBIENT PANEL
+      // RATE — 12.5 Hz by default, and live-tunable via `window._panelHz` — so
+      // the same code panned about five times slower on the glass than in the
+      // overlay, off nothing but who was asking it to draw.
+      //
+      // The factor is normalised to a 60 Hz frame, so the overlay's feel is
+      // unchanged to the millisecond and only the glass moves. `simClockMs` is
+      // the clock the animations either side of this block already use; it
+      // advances by sim ticks, so it does not care about repaint rate either.
+      //
+      // dt is CLAMPED. A tab left in the background, a warp stall or a GC pause
+      // would otherwise arrive as one enormous step and teleport the view across
+      // the prism — a pan is a held-key gesture, and no single frame of it should
+      // ever move further than a few frames' worth.
+      const nowPanMs = simClockMs();
+      const dtMs = this._lastPanMs == null ? FRAME_MS : Math.min(nowPanMs - this._lastPanMs, MAX_PAN_STEP_MS);
+      this._lastPanMs = nowPanMs;
+      const panSpeed = this._localRadius * 0.01 * (dtMs / FRAME_MS); // slow enough to see individual grid lines move
       const cosY = Math.cos(this._localRotY);
       const sinY = Math.sin(this._localRotY);
 
@@ -563,6 +1175,12 @@ export class NavComputer {
         }
         // Don't re-query stars — we have the full block cached
       }
+    } else {
+      // Nothing held (or not at PRISM) — forget when the last step was, so the
+      // FIRST frame of the next gesture is one nominal frame rather than the
+      // whole idle gap clamped down to MAX_PAN_STEP_MS. Without this a press
+      // after any pause opens with a visible lurch.
+      this._lastPanMs = null;
     }
 
     // Update drill-down animation (interpolates view center + size)
@@ -591,10 +1209,19 @@ export class NavComputer {
   handleEscape() {
     if (this._anim) return true; // ignore during animation
     this._systemZoomAnim = null; // cancel in-flight prism→system zoom so it can't slam level 4 after ESC
+    this._pendingComponentSelect = null; // the pre-select dies with the zoom that set it (S5-verify)
     if (this._levelIndex > 0) {
       // System view: planet detail → system overview → prism
       if (this._levelIndex === 4) {
         this._clearCommitSelection();
+        // Component sub-view pops back to the SYSTEM view first (AC5) —
+        // mirrors the planet-detail pop below; second ESC leaves level 4.
+        if (this._systemMode === 'component') {
+          this._systemMode = 'system';
+          this._selectedComponentIdx = -1;
+          this._componentView = null;
+          return true;
+        }
         if (this._systemMode === 'planet') {
           this._systemMode = 'system';
           this._selectedPlanetIdx = -1;
@@ -1162,6 +1789,12 @@ export class NavComputer {
     }));
     projected.sort((a, b) => b.starP.depth - a.starP.depth);
 
+    // Name -> screen point for every projected marker (AC2): the co-membership
+    // tether draws between a marker and its co-member markers' points. Draw-only
+    // (positions never move); an off-view co-member simply has no entry → no line.
+    const projByName = new Map();
+    for (const p of projected) if (p.star.name) projByName.set(p.star.name, p.starP);
+
     this._hoveredLocalStar = null;
     const hitDist = 12;
 
@@ -1186,6 +1819,20 @@ export class NavComputer {
       currentSystemStar = this._findNearestStar();
     }
 
+    // Deferred label pass (AC9): collect real-star name labels during the loop,
+    // place + draw them AFTER so drawn labels never overlap. Frame-reused array.
+    if (!this._labelQueue) this._labelQueue = [];
+    this._labelQueue.length = 0;
+
+    // Names of all currently-loaded prism markers (AC8): the N-dot glyph consults
+    // this to tell a far companion that has its OWN marker (α Cen's Proxima, a
+    // supplement catalog row → drawn as a separate dot, excluded from the A+B
+    // primary) from one deduped into the primary marker (36 Oph C, ζ² Ret — no
+    // catalog row, so no marker → drawn on the primary). Built from _localStars
+    // (not the `visible` filter) so an off-view companion still resolves.
+    this._localStarNames = new Set();
+    for (const s of this._localStars) if (s.name) this._localStarNames.add(s.name);
+
     for (const { star, starP, planeP } of projected) {
       // Vertical reference line (subtle)
       ctx.setLineDash([2, 5]);
@@ -1203,33 +1850,49 @@ export class NavComputer {
       const baseRadius = star.isReal ? 4.5 : 3.5;
       const drawR = isSelected ? baseRadius + 1 : baseRadius;
 
-      if (star._isBinary) {
-        // Binary: draw two slightly offset dots instead of one
-        const offset = drawR * 0.7; // separation between the pair
-        // Primary dot
-        ctx.fillStyle = star.color;
-        ctx.beginPath(); ctx.arc(starP.x - offset, starP.y, drawR * 0.8, 0, Math.PI * 2); ctx.fill();
-        // Companion dot — use companion spectral color if available, else dimmer primary
-        const s2Color = star._star2Type
-          ? (NavComputer._SPECTRAL_COLORS[star._star2Type] || star.color)
-          : star.color;
-        ctx.fillStyle = s2Color;
-        ctx.beginPath(); ctx.arc(starP.x + offset, starP.y, drawR * 0.65, 0, Math.PI * 2); ctx.fill();
-      } else {
-        ctx.fillStyle = star.color;
-        ctx.beginPath(); ctx.arc(starP.x, starP.y, drawR, 0, Math.PI * 2); ctx.fill();
-      }
+      // N-dot glyph (AC8): dot count = arrival-truth multiplicity from the AC7
+      // oracle, cached per entry, resolved to a PER-MARKER count (a resolvably
+      // wide companion draws on its own marker, not the primary's). The
+      // Escape-stash double-dot is the base case — a visited binary always reads
+      // >=2 even if the oracle is momentarily unavailable.
+      const mult = this._glyphMult(star);
+      let dotCount = this._glyphDotCount(star, mult);
+      if (star._isBinary && dotCount < 2) dotCount = 2;
+      const companionColor = star._star2Type
+        ? (NavComputer._SPECTRAL_COLORS[star._star2Type] || star.color)
+        : null;
+      this._drawStarGlyph(ctx, starP.x, starP.y, drawR, dotCount, star.color, companionColor);
 
-      // Real named stars: always show name label in gold/amber
+      // Real named stars: amber glow ring stays at the marker (draw-only
+      // decoration; positions never move). The NAME text is DEFERRED to the
+      // post-loop label pass (AC9) so labels can be placed without overlap —
+      // collect it now, draw after the loop.
       if (star.isReal && star.name) {
-        ctx.font = '10px "DotGothic16", monospace';
-        ctx.fillStyle = '#ffc850'; // gold/amber
-        ctx.textAlign = 'left';
-        ctx.fillText(star.name, starP.x + baseRadius + 4, starP.y + 3);
-        // Subtle amber glow ring
         ctx.strokeStyle = 'rgba(255, 200, 80, 0.3)';
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.arc(starP.x, starP.y, baseRadius + 2, 0, Math.PI * 2); ctx.stroke();
+
+        // Membership suffix (AC2): when this marker is a FAR member of a known
+        // multi-star system (Proxima → Alpha Centauri), the label carries the
+        // system name — 'Proxima Centauri · Alpha Centauri' — so a wide member
+        // reads as part of its system even before hover. Draw-only; the suffixed
+        // string flows through the deferred label pass (measureText keys by
+        // string). Procgen/singles resolve to no suffix → byte-identical label.
+        const membership = resolveMembership(star, mult, {
+          localStarNames: this._localStarNames,
+          findByAlias: KnownSystems.findByAlias,
+        });
+        // Priority: selected > current-system > nearest (smaller dist ranks higher).
+        const tier = isSelected ? 2 : (star === currentSystemStar ? 1 : 0);
+        this._labelQueue.push({
+          name: membershipLabel(star.name, membership),
+          anchorX: starP.x + baseRadius + 2, // ring edge — leader lines target here
+          anchorY: starP.y,
+          homeX: starP.x + baseRadius + 4,   // text baseline home x (was the inline x)
+          homeY: starP.y + 3,                // text baseline home y (was the inline y)
+          tier,
+          dist: star.dist ?? Infinity,
+        });
       }
 
       // Selected star: green highlight ring
@@ -1264,6 +1927,14 @@ export class NavComputer {
         this._hoveredLocalStar = { star, sx: starP.x, sy: starP.y };
       }
     }
+
+    // Co-membership cue (AC2): draw the tether(s) for the hovered/selected marker
+    // BENEATH the labels so text stays legible. Draw-only — positions untouched.
+    this._drawMembershipCues(ctx, projByName);
+
+    // Deferred label pass (AC9): place + draw the collected labels on top of the
+    // markers, overlap-free. Draw-only — marker/dot positions untouched.
+    this._drawLabelPass(ctx);
 
     // Player marker — only if no star at the player's position (prism not
     // loaded yet, or player between systems). Otherwise the cyan "you are
@@ -1308,11 +1979,218 @@ export class NavComputer {
   }
 
   // ════════════════════════════════════════════════════
+  // PRISM STAR GLYPHS + LABELS (AC8 / AC9)
+  // ════════════════════════════════════════════════════
+
+  /**
+   * Arrival-truth multiplicity for a prism star, cached PER ENTRY (not per
+   * frame): the N-dot glyph's dot count (AC8). Consumes the AC7 oracle so the
+   * glyph can never contradict what warping delivers. Passes the star shaped as
+   * the oracle expects (worldX/Y/Z + type) with its canonical seed (FIX-1).
+   *
+   * Cache invalidates exactly once if the first answer was computed before the
+   * real-star overlay finished loading (a real table star would otherwise have
+   * fallen through to a procgen roll and cached the wrong count). `null` marks a
+   * failed lookup → the draw falls back to the Escape-stash base case.
+   */
+  _glyphMult(star) {
+    const ready = !!(this._realStarCatalog?.overlay?.ready);
+    if (star._navMult === undefined || (star._navMultReady === false && ready)) {
+      try {
+        star._navMult = multiplicityForSeed(
+          {
+            seed: star.seed, name: star.name, type: star.spectral,
+            worldX: star.wx, worldY: star.wy, worldZ: star.wz,
+          },
+          { overlay: this._realStarCatalog?.overlay || null, galacticMap: this._gm },
+        );
+      } catch (e) {
+        star._navMult = null;
+      }
+      star._navMultReady = ready;
+    }
+    return star._navMult;
+  }
+
+  /**
+   * Per-marker dot count (AC8). The oracle answers with a SYSTEM's arrival
+   * multiplicity; a system whose wide companion sits at a genuinely resolvable
+   * separation renders as MORE THAN ONE marker, so the dots split across those
+   * markers (and only sum to the system multiplicity across all of them):
+   *
+   *  - The marker whose own name is a far companion (α Cen's Proxima Centauri —
+   *    the oracle routed it to Alpha Centauri via the alias, so mult.farNames
+   *    contains this marker's name) is a single star at its own position → 1 dot.
+   *  - A primary/close marker EXCLUDES every far companion that renders as its
+   *    own marker (present in _localStars), leaving the deduped-in ones. So α Cen
+   *    A+B draws 2 (Proxima has its own marker), while 36 Oph draws 3 (its K5
+   *    tertiary was deduped into the marker at catalog regen — no separate row).
+   *
+   * This is exactly the oracle-doc rule ("far companion with its own marker →
+   * closeCount; deduped into the marker → count"), driven by the one honest
+   * signal for "has its own marker": presence in the prism's marker set. `null`
+   * mult falls back to the Escape-stash base case.
+   */
+  _glyphDotCount(star, mult) {
+    if (!mult) return star._isBinary ? 2 : 1;
+    const farNames = mult.farNames;
+    if (Array.isArray(farNames) && farNames.length > 0) {
+      // This marker IS the wide companion of a larger system — one star here.
+      if (star.name && farNames.includes(star.name)) return 1;
+      // Primary/close marker: subtract far companions drawn on their own marker.
+      let separate = 0;
+      const names = this._localStarNames;
+      if (names) for (const fn of farNames) if (names.has(fn)) separate++;
+      return Math.max(1, mult.count - separate);
+    }
+    return mult.count;
+  }
+
+  /**
+   * Draw the N-dot marker glyph — a SYMBOL centered at (cx,cy); the centroid
+   * never moves off the marker (interview ruling 1). N=1/2 reproduce the prior
+   * single-dot / Escape-stash double-dot look byte-for-byte (base case); N>=3
+   * (real close multiples, e.g. the 36 Oph triple) lay out on a compact ring.
+   */
+  _drawStarGlyph(ctx, cx, cy, drawR, dotCount, primaryColor, companionColor) {
+    const n = Math.max(1, Math.round(dotCount));
+    if (n === 1) {
+      ctx.fillStyle = primaryColor;
+      ctx.beginPath(); ctx.arc(cx, cy, drawR, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
+    if (n === 2) {
+      const offset = drawR * 0.7; // separation between the pair (unchanged)
+      ctx.fillStyle = primaryColor;
+      ctx.beginPath(); ctx.arc(cx - offset, cy, drawR * 0.8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = companionColor || primaryColor;
+      ctx.beginPath(); ctx.arc(cx + offset, cy, drawR * 0.65, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
+    const ringR = drawR * 0.85;
+    const dotR = drawR * 0.55;
+    for (let k = 0; k < n; k++) {
+      const a = -Math.PI / 2 + (k * 2 * Math.PI) / n; // first dot at top
+      const dx = Math.cos(a) * ringR, dy = Math.sin(a) * ringR;
+      ctx.fillStyle = (k === 1 && companionColor) ? companionColor : primaryColor;
+      ctx.beginPath(); ctx.arc(cx + dx, cy + dy, dotR, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  /** measureText width for a label string, cached per name (font is constant). */
+  _measureLabel(ctx, name) {
+    if (!this._labelWidthCache) this._labelWidthCache = new Map();
+    let w = this._labelWidthCache.get(name);
+    if (w === undefined) {
+      w = ctx.measureText(name).width;
+      this._labelWidthCache.set(name, w);
+    }
+    return w;
+  }
+
+  /**
+   * Deferred label pass (AC9, ac9-uat-findings.md finding #1): priority-sort the
+   * labels collected during the star loop, run the pure greedy AABB placement
+   * (vertical stack slots), then draw — leader line when displaced past half a
+   * line, ~35% alpha when no slot frees. Publishes the frame's placed rects on
+   * `this._labelRects` (window._navComputer) for the live zero-overlap assertion.
+   */
+  _drawLabelPass(ctx) {
+    this._labelRects = [];
+    const queue = this._labelQueue;
+    if (!queue || queue.length === 0) return;
+
+    const FONT = '10px "DotGothic16", monospace';
+    const FONT_SIZE = 10;
+    const LINE_H = 12;
+    ctx.font = FONT;
+
+    // Home AABBs (top-left) derived from each label's text baseline; width via
+    // cached measureText. Priority: tier dominates, nearer wins within a tier.
+    const labels = queue.map((q) => ({
+      x: q.homeX,
+      y: q.homeY - FONT_SIZE,            // baseline -> box top
+      w: this._measureLabel(ctx, q.name) + 2,
+      h: FONT_SIZE + 2,
+      priority: q.tier * 1e7 - q.dist,
+      _q: q,
+    }));
+
+    const placed = placeLabels(labels, { lineHeight: LINE_H, leaderThreshold: LINE_H / 2 });
+
+    ctx.textAlign = 'left';
+    for (const p of placed) {
+      const q = p._q;
+      const baselineY = p.y + FONT_SIZE;  // box top -> baseline
+      if (p.leader) {
+        ctx.strokeStyle = 'rgba(255, 200, 80, 0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(q.anchorX, q.anchorY);
+        ctx.lineTo(p.x, baselineY - FONT_SIZE / 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#ffc850'; // gold/amber
+      ctx.globalAlpha = p.faded ? 0.35 : 1;
+      ctx.fillText(q.name, p.x, baselineY);
+      ctx.globalAlpha = 1;
+      this._labelRects.push({
+        x: p.x, y: p.y, w: p.w, h: p.h, name: q.name, faded: p.faded, leader: p.leader,
+      });
+    }
+  }
+
+  /**
+   * Co-membership cue (AC2): for the hovered and/or selected prism marker, draw a
+   * tether to the OTHER markers of the same KNOWN multi-star system, so a system
+   * whose members render as separate markers (α Cen A+B marker + Proxima's own
+   * marker) visibly reads as ONE system. Gated to hover/selection only — a settled
+   * prism draws no tethers. Resolution is oracle/alias-backed (resolveMembership);
+   * drawing is line-only, positions never move (interview ruling 1).
+   */
+  _drawMembershipCues(ctx, projByName) {
+    if (!projByName) return;
+    const active = [];
+    if (this._selectedNavStar) active.push(this._selectedNavStar);
+    const hov = this._hoveredLocalStar && this._hoveredLocalStar.star;
+    if (hov && hov !== this._selectedNavStar) active.push(hov);
+    for (const star of active) this._drawMembershipCue(ctx, star, projByName);
+  }
+
+  /** Draw one marker's tether(s) to its co-member markers (AC2 helper). */
+  _drawMembershipCue(ctx, star, projByName) {
+    if (!star || !star.name) return;
+    const from = projByName.get(star.name);
+    if (!from) return;
+    const membership = resolveMembership(star, this._glyphMult(star), {
+      localStarNames: this._localStarNames,
+      findByAlias: KnownSystems.findByAlias,
+    });
+    if (membership.memberMarkerNames.length === 0) return;
+    ctx.strokeStyle = 'rgba(120, 200, 255, 0.4)';
+    ctx.lineWidth = 1;
+    if (ctx.setLineDash) ctx.setLineDash([4, 4]);
+    for (const name of membership.memberMarkerNames) {
+      const to = projByName.get(name);
+      if (!to) continue;
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+    }
+    if (ctx.setLineDash) ctx.setLineDash([]);
+  }
+
+  // ════════════════════════════════════════════════════
   // SYSTEM VIEW (Level 4)
   // ════════════════════════════════════════════════════
 
   _renderSystem(ctx, w, h) {
-    const drawH = h - 50;
+    // The 50 px reserve exists to hold the commit button and the footer hint.
+    // Chrome-less draws neither, so keeping the reserve would leave a dead strip
+    // and shrink the orrery for nothing — on a 614x512 panel the picture is only
+    // 77% of the height. Reclaiming it is the whole of what "expanded" means.
+    const drawH = this._bare ? h : h - 50;
 
     // Generate system data on first render
     if (!this._systemData && this._systemStar) {
@@ -1323,10 +2201,22 @@ export class NavComputer {
         console.log('[NAV] Using actual system data:', this._systemData.planets?.length, 'planets');
       } else {
         console.log('[NAV] Generating system for', star.name, '...');
-        const galaxyCtx = this._gm.deriveGalaxyContext({ x: star.wx, y: star.wy, z: star.wz });
-        galaxyCtx.starTypeOverride = star.spectral;
         try {
-          this._systemData = StarSystemGenerator.generate(String(star.seed), galaxyCtx);
+          // Shared arrival resolution (FIX-2): the BROWSED-system preview routes
+          // through the SAME core arrival uses — overlay applied, KnownSystems
+          // routed via findByAlias, merged names attached — so the SYSTEM view
+          // previews EXACTLY what warping delivers (kills the overlay-less
+          // divergence). A browsed nav star is nav-picked → hasNavStar:true. Seed
+          // is canonical (FIX-1) and passed as given, never re-derived.
+          this._systemData = resolveArrivalSystem({
+            galacticMap: this._gm,
+            overlay: this._realStarCatalog?.overlay || null,
+            pos: { x: star.wx, y: star.wy, z: star.wz },
+            starType: star.spectral,
+            seed: star.seed,
+            displayName: star.name,
+            hasNavStar: true,
+          }).systemData;
           console.log('[NAV] System generated:', this._systemData.planets?.length, 'planets');
         } catch (e) {
           console.warn('[NAV] System generation failed:', e);
@@ -1339,6 +2229,26 @@ export class NavComputer {
       return;
     }
 
+    // Deferred component pre-select (AC5 entry b): a PRISM far-member click
+    // stashes the marker name because componentSystems does not exist until
+    // _systemData resolves (it persists across the 400ms prism→system zoom).
+    // Consumed exactly once on the first level-4 render; a non-component
+    // marker (Rigil — a close member, or any procgen star) resolves to -1 and
+    // leaves the SYSTEM view untouched.
+    if (this._pendingComponentSelect) {
+      const idx = findComponentIndexByName(this._systemData, this._pendingComponentSelect);
+      if (idx >= 0) {
+        this._selectedComponentIdx = idx;
+        this._systemMode = 'component';
+      }
+      this._pendingComponentSelect = null;
+    }
+
+    if (this._systemMode === 'component') {
+      this._renderComponentDetail(ctx, w, h);
+      return;
+    }
+
     if (this._systemMode === 'planet') {
       this._renderPlanetDetail(ctx, w, h);
       return;
@@ -1348,11 +2258,22 @@ export class NavComputer {
     const planets = sys.planets || [];
     const zones = sys.zones || {};
     const starName = this._systemStar?.name || 'Unknown';
+    // System-identity name (AC3): the SYSTEM name for known systems, else the
+    // marker name. Procgen-fill planet display names key off THIS (so a fill
+    // planet in Alpha Centauri reads 'Alpha Centauri-N', not 'Proxima
+    // Centauri-N'); for procgen systems it equals starName → unchanged.
+    const systemName = deriveSystemTitle(sys, starName);
 
     // ── 3D projection setup ──
     const cosX = Math.cos(this._systemRotX), sinX = Math.sin(this._systemRotX);
     const cosY = Math.cos(this._systemRotY), sinY = Math.sin(this._systemRotY);
-    const viewSize = Math.min(w, drawH) * 0.85;
+    // 0.85 left the orrery ringed by margin that used to read as breathing room
+    // around the header and footer. With those gone the margin is just loss, so
+    // the bare path takes the fill factor from a knob Max sets by eye. The literal
+    // 0.85 stays on the default path — one number, one meaning, no retuning risk.
+    // `_systemFill`, not the raw field: a non-finite factor NaNs every projected
+    // coordinate and blanks the panel, which a "no words" check reads as a pass.
+    const viewSize = Math.min(w, drawH) * (this._bare ? this._systemFill : 0.85);
     const centerSX = w / 2, centerSY = drawH / 2;
 
     // Scale: sqrt(AU) compression so inner + outer planets both visible
@@ -1469,15 +2390,30 @@ export class NavComputer {
       ctx.font = '8px "DotGothic16", monospace';
       ctx.fillStyle = labelColor;
       ctx.textAlign = 'center';
-      ctx.fillText(belt.isKuiper ? 'KUIPER BELT' : 'ASTEROID BELT', labelP.x, labelP.y - 6);
+      // Chrome-less keeps the annulus and drops its name. Guarding the fillText
+      // rather than the whole label block is the pattern used at every site in
+      // this file: canvas state assignments emit no pixels, so leaving them
+      // outside the guard keeps the flag-off diff to zero re-indented lines.
+      if (!this._bare) ctx.fillText(belt.isKuiper ? 'KUIPER BELT' : 'ASTEROID BELT', labelP.x, labelP.y - 6);
     }
 
     // ── Orbit circles (wireframe) ──
+    // ⭐ ALPHA IS MODE-DEPENDENT (2026-08-01, Max: "there are no orbits on the
+    // system nav computer now"). Nothing was ever deleted — the circles were
+    // drawing the whole time. MEASURED on the cockpit glass: 1583 stroke pixels
+    // present, sampled at (14,22,31)/(15,24,34)/(17,27,40) — exactly what
+    // rgba(100,180,255,0.15) composites to over black, i.e. invisible.
+    //
+    // 0.15 was tuned for the DOM overlay: a bright, full-screen surface the
+    // player looks AT. Chrome-less, the same canvas becomes a texture on a dim
+    // in-world panel across the cabin, and a 15%-alpha hairline does not survive
+    // that trip. The dashes stay; only the ink gets darker-background compensation.
     const ORBIT_SEGS = 48;
+    const orbitAlpha = this.dimSurface ? { on: 0.9, off: 0.45 } : { on: 0.5, off: 0.15 };
     for (let i = 0; i < planets.length; i++) {
       const r = auToScreen(planets[i].orbitRadiusAU);
       const isSelected = i === this._selectedPlanetIdx;
-      ctx.strokeStyle = isSelected ? 'rgba(100, 180, 255, 0.5)' : 'rgba(100, 180, 255, 0.15)';
+      ctx.strokeStyle = `rgba(100, 180, 255, ${isSelected ? orbitAlpha.on : orbitAlpha.off})`;
       ctx.lineWidth = isSelected ? 1.5 : 1;
       ctx.setLineDash([3, 4]);
       ctx.beginPath();
@@ -1644,7 +2580,7 @@ export class NavComputer {
       ctx.font = '9px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.textAlign = 'center';
-      ctx.fillText(this._planetDisplayName(i, starName), sp.x, sp.y + baseR + 12);
+      if (!this._bare) ctx.fillText(this._planetDisplayName(i, systemName), sp.x, sp.y + baseR + 12);
 
       // Hover detection
       const mdx = this._mouseX - sp.x, mdy = this._mouseY - sp.y;
@@ -1673,7 +2609,7 @@ export class NavComputer {
       if (hb.type === 'planet') {
         const p = planets[hb.index];
         const pd = p.planetData;
-        title = this._planetDisplayName(hb.index, starName);
+        title = this._planetDisplayName(hb.index, systemName);
         lines = [
           `${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕`,
           `${p.orbitRadiusAU.toFixed(2)} AU`,
@@ -1687,16 +2623,16 @@ export class NavComputer {
         ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(hb.sx, hb.sy, 10, 0, Math.PI * 2); ctx.stroke();
       } else if (hb.index === 1 && sys.isBinary && sys.star2) {
-        // Companion star hover
-        title = starName + ' B';
+        // Companion star hover — real component name for known systems (AC3).
+        title = deriveStarHoverName(sys, starName, 1, sys.isBinary);
         lines = [
           `${sys.star2.type} class (companion)`,
           `${(sys.star2.radiusSolar || 0.5).toFixed(2)} R☉`,
           `Sep: ${(sys.binarySeparationAU || 0).toFixed(3)} AU`,
         ];
       } else {
-        // Primary star hover
-        title = starName + (sys.isBinary ? ' A' : '');
+        // Primary star hover — real component name for known systems (AC3).
+        title = deriveStarHoverName(sys, starName, 0, sys.isBinary);
         lines = [
           `${sys.star.type} class${sys.isBinary ? ' (primary)' : ''}`,
           `${(sys.star.radiusSolar || 1).toFixed(2)} R☉`,
@@ -1705,7 +2641,14 @@ export class NavComputer {
         ];
         if (sys.isBinary) lines.push('Binary system');
       }
-      this._drawLeaderCallout(ctx, hb.sx, hb.sy, title, lines, w, drawH);
+      // Guard the CALL, not the `if (this._hoveredBody)` block it sits in. The
+      // block also computes the hover highlight ring (a survivor) and, more
+      // importantly, `_hoveredBody` feeds the dashed trajectory line below — an
+      // over-wide guard here would silently stop the trajectory responding to
+      // hover, losing a survivor without touching a single word. The callout's
+      // anchor dot, leader line and tick go with the words: a leader line that
+      // points at nothing is worse than no leader line.
+      if (!this._bare) this._drawLeaderCallout(ctx, hb.sx, hb.sy, title, lines, w, drawH);
     }
 
     // ── Ship position indicator + trajectory line ──
@@ -1756,11 +2699,13 @@ export class NavComputer {
         ctx.fill();
         ctx.stroke();
 
-        // Small "SHIP" label
+        // Small "SHIP" label — the WORD goes, the diamond above stays. Player
+        // position is the one thing Max named as must-keep, and the glyph is
+        // what carries it; the label only names what the glyph already shows.
         ctx.font = '7px "DotGothic16", monospace';
         ctx.fillStyle = 'rgba(0, 255, 128, 0.6)';
         ctx.textAlign = 'center';
-        ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
+        if (!this._bare) ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
         ctx.textAlign = 'left';
 
         // ── Trajectory line from ship to hovered/selected body ──
@@ -1816,17 +2761,15 @@ export class NavComputer {
       }
     }
 
-    // ── Header ──
-    ctx.font = '14px "DotGothic16", monospace';
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'left';
-    ctx.fillText(starName, 16, 24);
-    ctx.font = '11px "DotGothic16", monospace';
-    ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
-    const starTypeLabel = sys.isBinary && sys.star2
-      ? `${sys.star?.type || '?'}+${sys.star2.type} binary`
-      : `${sys.star?.type || '?'}`;
-    ctx.fillText(`${starTypeLabel} · ${planets.length} planet${planets.length !== 1 ? 's' : ''} · ${(sys.ageGyr || 0).toFixed(1)} Gyr`, 16, 42);
+    // ── Header (AC3: system-identity title + component annotation) ──
+    // One call site, but up to THREE text lines inside (title, `via <component>`
+    // annotation, type/planet-count/age) — guarding the call covers all three.
+    if (!this._bare) this._drawSystemHeader(ctx, sys, starName, planets.length);
+
+    // ── Far-companion edge chips (AC4: wide members the orrery can't place) ──
+    // Called unconditionally on purpose: the method's own chrome-less guard runs
+    // after it clears `_farChipRects`, so the hit regions are unpublished too.
+    this._drawFarCompanionChips(ctx, w, drawH);
 
     // ── Selection ring on selected body ──
     if (this._selectedBody) {
@@ -1857,7 +2800,14 @@ export class NavComputer {
       this._commitAction = this._buildCommitAction();
       this._selectedNavStar = this._systemStar;
     }
-    if (this._selectedBody && this._commitAction) {
+    // NOTE the guard starts HERE and not at the `!isCurrent` block above: that
+    // block is STATE, not drawing — it force-selects the star and builds the
+    // commit action that `getSelectedStar()` / `getCommitAction()` hand to the
+    // warp path. Chrome-less must change what the nav computer DRAWS, never what
+    // it REPORTS. Falling through to the else branch is also deliberate: it nulls
+    // `_commitButtonRect`, so a chrome-less panel cannot carry an unlabelled live
+    // region that commits a WARP on click.
+    if (this._selectedBody && this._commitAction && !this._bare) {
       // Draw commit button — click commits the pending action
       const btnText = isCurrent ? '[ BURN ]' : '[ WARP ]';
       const btnColor = isCurrent ? '#00ff80' : 'rgba(100, 180, 255, 0.9)';
@@ -1877,24 +2827,174 @@ export class NavComputer {
       // Hint below button
       ctx.font = '10px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
-      ctx.fillText('DRAG TO ROTATE · ESC TO RETURN', w / 2, drawH - 8);
+      ctx.fillText('DRAG TO ROTATE · TABS TO CHANGE VIEW', w / 2, drawH - 8);
     } else {
       this._commitButtonRect = null;
       ctx.font = '10px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.textAlign = 'center';
       if (isCurrent) {
-        ctx.fillText('SELECT BODY TO NAVIGATE · DRAG TO ROTATE · ESC TO RETURN', w / 2, drawH - 8);
+        if (!this._bare) ctx.fillText('SELECT BODY TO NAVIGATE · DRAG TO ROTATE · TABS TO CHANGE VIEW', w / 2, drawH - 8);
       } else {
-        ctx.fillText('SELECT STAR TO WARP · CLICK PLANET FOR DETAIL · ESC TO RETURN', w / 2, drawH - 8);
+        if (!this._bare) ctx.fillText('SELECT STAR TO WARP · CLICK PLANET FOR DETAIL · TABS TO CHANGE VIEW', w / 2, drawH - 8);
       }
     }
     ctx.textAlign = 'left';
   }
 
+  // ── Component sub-view (AC5, multistar-components-2026-07-19) ──
+  // The drill MECHANISM mirrors the planet-detail drill (mode + index + render
+  // fn + ESC pop); the RENDER is a SYSTEM-scale orrery over the component's
+  // own full generated payload (componentSystems[idx].systemData — a component
+  // is a full system, so sqrt-AU projection, not the moon-scale one). VIEW
+  // ONLY: no commit affordance — warp semantics unchanged, travel is
+  // Increment B's. Publishes its OWN _labelRects so the AC6 live non-overlap
+  // handle measures THIS view, not stale prism rects (fable M2).
+  _renderComponentDetail(ctx, w, h) {
+    // Same reserve reclamation as `_renderSystem`. This sub-view rides INSIDE
+    // level 'system' (`_systemMode` is independent of `_levelIndex`, and the
+    // `level` getter says 'system' for all three modes), so it is on the bare
+    // path too — and its chrome is already suppressed below. Keeping the 50 px
+    // would leave the orrery shrunk above a dead strip that draws nothing.
+    const drawH = this._bare ? h : h - 50;
+    const view = deriveComponentView(
+      this._systemData, this._selectedComponentIdx, this._systemStar?.name);
+    this._componentView = view;
+    this._commitButtonRect = null;
+    this._labelRects = [];
+    if (!view.systemData) {
+      // Stale index / procgen payload — degrade to the SYSTEM view, no throw.
+      this._systemMode = 'system';
+      this._selectedComponentIdx = -1;
+      this._componentView = null;
+      return;
+    }
+    const sys = view.systemData;
+    const planets = sys.planets || [];
+
+    // ── Header: title (clause 1), annotation (clause 3), breadcrumb (clause 4) ──
+    // This sub-view is guarded even though the cockpit panel cannot reach it
+    // today (PanelPointer forwards mousedown/move/up but never click, and click
+    // is the only thing that sets `_systemMode`). It needs guarding anyway
+    // because `_systemMode` is INDEPENDENT of `_levelIndex`: the `level` getter
+    // returns 'system' in all three sub-modes, so `_bare` is true in here too.
+    // One wiring change — a shared instance, or increment 6 forwarding clicks —
+    // and an unguarded sub-view would draw a fully chromed screen.
+    ctx.textAlign = 'center';
+    ctx.font = '14px "DotGothic16", monospace';
+    ctx.fillStyle = 'rgba(160, 210, 255, 0.95)';
+    if (!this._bare) ctx.fillText(view.title, w / 2, 24);
+    if (view.annotation) {
+      ctx.font = '9px "DotGothic16", monospace';
+      ctx.fillStyle = 'rgba(120, 180, 255, 0.75)';
+      if (!this._bare) ctx.fillText(view.annotation, w / 2, 38);
+    }
+    ctx.font = '9px "DotGothic16", monospace';
+    ctx.fillStyle = 'rgba(150, 175, 215, 0.6)';
+    if (!this._bare) ctx.fillText(view.breadcrumb, w / 2, 50);
+
+    // ── SYSTEM-scale orrery over the payload (the _renderSystem projection) ──
+    const cosX = Math.cos(this._systemRotX), sinX = Math.sin(this._systemRotX);
+    const cosY = Math.cos(this._systemRotY), sinY = Math.sin(this._systemRotY);
+    // 0.8 was picked to sit beside `_renderSystem`'s 0.85, so it takes the slider
+    // as a RATIO against that 0.85 rather than the raw value — otherwise dragging
+    // the knob would grow the system view and shrink this one. Default path keeps
+    // the bare literal 0.8.
+    const viewSize = Math.min(w, drawH) * (this._bare ? 0.8 * (this._systemFill / 0.85) : 0.8);
+    const centerSX = w / 2, centerSY = drawH / 2 + 10;
+    const maxOrbitAU = planets.length > 0
+      ? Math.max(...planets.map(p => p.orbitRadiusAU))
+      : 1;
+    const maxR = Math.sqrt(maxOrbitAU) * 1.2 || 1;
+    const projScale = (viewSize / 2) / maxR;
+    const auToScreen = (au) => Math.sqrt(au);
+    const project = (wx, wy, wz) => {
+      let rx = wx, ry = wy, rz = wz;
+      const tx = rx * cosY - rz * sinY; rz = rx * sinY + rz * cosY; rx = tx;
+      const ty = ry * cosX - rz * sinX; rz = ry * sinX + rz * cosX; ry = ty;
+      return { x: centerSX + rx * projScale, y: centerSY - ry * projScale, depth: rz };
+    };
+
+    // Orbit rings (payload-sourced radii — never synthesized).
+    const ORBIT_SEGS = 48;
+    for (const p of planets) {
+      const r = auToScreen(p.orbitRadiusAU);
+      ctx.strokeStyle = 'rgba(100, 180, 255, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      for (let s = 0; s <= ORBIT_SEGS; s++) {
+        const a = (s / ORBIT_SEGS) * Math.PI * 2;
+        const sp = project(Math.cos(a) * r, 0, Math.sin(a) * r);
+        if (s === 0) ctx.moveTo(sp.x, sp.y); else ctx.lineTo(sp.x, sp.y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // The component star (single by construction — kind:'single' pin).
+    const starColor = sys.star?.color || [1, 0.9, 0.7];
+    const starR = Math.max(6, Math.min(16, (sys.star?.radiusSolar || 1) * 5));
+    const starP = project(0, 0, 0);
+    const grad = ctx.createRadialGradient(starP.x, starP.y, 0, starP.x, starP.y, starR * 3);
+    grad.addColorStop(0, `rgba(${Math.round(starColor[0] * 255)},${Math.round(starColor[1] * 255)},${Math.round(starColor[2] * 255)},0.3)`);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(starP.x, starP.y, starR * 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgb(${Math.round(starColor[0] * 255)},${Math.round(starColor[1] * 255)},${Math.round(starColor[2] * 255)})`;
+    ctx.beginPath(); ctx.arc(starP.x, starP.y, starR, 0, Math.PI * 2); ctx.fill();
+
+    // Planets at their payload orbits + labels (one _labelRects entry per label).
+    const planetColors = {
+      'rocky': '#a09080', 'terrestrial': '#4a8a4a', 'ocean': '#3060b0',
+      'ice': '#b0c8e0', 'lava': '#d04020', 'venus': '#c0a050',
+      'gas-giant': '#c09060', 'hot-jupiter': '#e06030', 'sub-neptune': '#5090c0',
+      'carbon': '#606060', 'volcanic': '#b03010', 'eyeball': '#80a0c0',
+    };
+    ctx.font = '9px "DotGothic16", monospace';
+    for (let i = 0; i < planets.length; i++) {
+      const p = planets[i];
+      const r = auToScreen(p.orbitRadiusAU);
+      const angle = p.orbitAngle || 0;
+      const sp = project(Math.cos(angle) * r, 0, Math.sin(angle) * r);
+      const pd = p.planetData || {};
+      const baseR = Math.max(3, Math.min(10, 3 + Math.log2(Math.max(0.5, pd.radiusEarth || 1)) * 2.5));
+      ctx.fillStyle = planetColors[pd.type] || '#808080';
+      ctx.beginPath(); ctx.arc(sp.x, sp.y, baseR, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(sp.x, sp.y, baseR, 0, Math.PI * 2); ctx.stroke();
+
+      const label = p.name || (p.letter && view.componentName
+        ? `${view.componentName} ${p.letter}` : `P${i + 1}`);
+      ctx.fillStyle = p.known ? 'rgba(120, 200, 255, 0.75)' : 'rgba(255,255,255,0.4)';
+      ctx.textAlign = 'center';
+      const labelY = sp.y + baseR + 12;
+      // The `_labelRects` push goes inside the guard, not just the draw: those
+      // rects are the AC6 non-overlap handle and describe label boxes. Publishing
+      // boxes for labels that were never drawn would report a layout that isn't
+      // on the glass.
+      if (!this._bare) {
+        ctx.fillText(label, sp.x, labelY);
+        const labelW = ctx.measureText(label).width;
+        this._labelRects.push({ x: sp.x - labelW / 2, y: labelY - 8, w: labelW, h: 10, name: label });
+      }
+    }
+
+    // ── Footer: view-only affordance ──
+    ctx.font = '8px "DotGothic16", monospace';
+    ctx.fillStyle = 'rgba(150, 175, 215, 0.55)';
+    ctx.textAlign = 'center';
+    if (!this._bare) ctx.fillText('VIEW ONLY · CLICK TO GO BACK', w / 2, drawH - 8);
+    ctx.textAlign = 'left';
+  }
+
   // ── Planet detail sub-view ──
   _renderPlanetDetail(ctx, w, h) {
-    const drawH = h - 50;
+    // Reclaimed for the same reason as `_renderComponentDetail`: `_systemMode`
+    // rides inside level 'system', so this sub-view is on the bare path and its
+    // 50 px reserve holds a BURN button and a hint that the bare path never draws.
+    const drawH = this._bare ? h : h - 50;
     const sys = this._systemData;
     const planets = sys.planets || [];
     const idx = this._selectedPlanetIdx;
@@ -1904,11 +3004,16 @@ export class NavComputer {
     const pd = p.planetData;
     const moons = p.moons || [];
     const starName = this._systemStar?.name || 'Unknown';
+    // Procgen-fill planet/moon names key off the system name (AC3); equals
+    // starName for procgen systems, so unchanged there.
+    const systemName = deriveSystemTitle(this._systemData, starName);
 
     // ── 3D projection (same as system view) ──
     const cosX = Math.cos(this._systemRotX), sinX = Math.sin(this._systemRotX);
     const cosY = Math.cos(this._systemRotY), sinY = Math.sin(this._systemRotY);
-    const viewSize = Math.min(w, drawH) * 0.7;
+    // Same ratio-against-0.85 treatment as `_renderComponentDetail`, so one knob
+    // moves all three pictures together. Default path keeps the bare literal 0.7.
+    const viewSize = Math.min(w, drawH) * (this._bare ? 0.7 * (this._systemFill / 0.85) : 0.7);
     const centerSX = w / 2, centerSY = drawH / 2;
 
     // Scale based on outermost moon orbit
@@ -1990,7 +3095,9 @@ export class NavComputer {
       ctx.font = '8px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.textAlign = 'center';
-      ctx.fillText(moon.type || 'moon', moonP.x, moonP.y + moonR + 10);
+      // Same reasoning as _renderComponentDetail's header: `_systemMode` rides
+      // inside level 'system', so `_bare` can be true in here.
+      if (!this._bare) ctx.fillText(moon.type || 'moon', moonP.x, moonP.y + moonR + 10);
 
       // Moon hover
       const mdx = this._mouseX - moonP.x, mdy = this._mouseY - moonP.y;
@@ -1998,15 +3105,17 @@ export class NavComputer {
         this._hoveredBody = { type: 'moon', index: m, sx: moonP.x, sy: moonP.y };
       }
     }
-    // Moon hover tooltip
-    if (this._hoveredBody && this._hoveredBody.type === 'moon') {
+    // Moon hover tooltip — guarding the whole block is safe here (unlike the
+    // system view's callout) because nothing downstream reads `lines`, and
+    // `_hoveredBody` is set in the loop above, outside this block.
+    if (this._hoveredBody && this._hoveredBody.type === 'moon' && !this._bare) {
       const moon = moons[this._hoveredBody.index];
       const lines = [
         moon.type || 'moon',
         `${(moon.radiusEarth || 0.1).toFixed(2)} R⊕`,
       ];
       if (moon.isPlanetMoon) lines.push('Planet-class moon');
-      this._drawTooltip(ctx, this._hoveredBody.sx, this._hoveredBody.sy, this._moonDisplayName(idx, this._hoveredBody.index, starName), lines);
+      this._drawTooltip(ctx, this._hoveredBody.sx, this._hoveredBody.sy, this._moonDisplayName(idx, this._hoveredBody.index, systemName), lines);
     }
 
     // ── Ship position indicator + trajectory line (planet detail) ──
@@ -2044,7 +3153,7 @@ export class NavComputer {
         ctx.font = '7px "DotGothic16", monospace';
         ctx.fillStyle = 'rgba(0, 255, 128, 0.6)';
         ctx.textAlign = 'center';
-        ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
+        if (!this._bare) ctx.fillText('SHIP', shipP.x, shipP.y + s * 0.8 + 10);
         ctx.textAlign = 'left';
 
         // Trajectory line to hovered/selected moon
@@ -2100,13 +3209,13 @@ export class NavComputer {
     ctx.font = '14px "DotGothic16", monospace';
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'left';
-    ctx.fillText(this._planetDisplayName(idx, starName), 16, 24);
+    if (!this._bare) ctx.fillText(this._planetDisplayName(idx, systemName), 16, 24);
     ctx.font = '11px "DotGothic16", monospace';
     ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
-    ctx.fillText(`${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕ · ${(p.orbitRadiusAU).toFixed(2)} AU · ${moons.length} moon${moons.length !== 1 ? 's' : ''}`, 16, 42);
+    if (!this._bare) ctx.fillText(`${pd.type} · ${pd.radiusEarth.toFixed(1)} R⊕ · ${(p.orbitRadiusAU).toFixed(2)} AU · ${moons.length} moon${moons.length !== 1 ? 's' : ''}`, 16, 42);
     if (pd.T_eq) {
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.fillText(`${Math.round(pd.T_eq)} K${pd.habitability > 0.3 ? ' · Habitable' : ''}`, 16, 58);
+      if (!this._bare) ctx.fillText(`${Math.round(pd.T_eq)} K${pd.habitability > 0.3 ? ' · Habitable' : ''}`, 16, 58);
     }
 
     // ── Selection ring on selected moon ──
@@ -2130,7 +3239,10 @@ export class NavComputer {
     // ── Hint ──
     ctx.font = '10px "DotGothic16", monospace';
     // ── BURN button + hint ──
-    if (isCurrent && this._selectedBody && this._commitAction) {
+    // Same shape as the SYSTEM view's commit block: chrome-less falls through to
+    // the else branch so `_commitButtonRect` is nulled rather than left pointing
+    // at a button nobody can see.
+    if (isCurrent && this._selectedBody && this._commitAction && !this._bare) {
       const btnText = '[ BURN ]';
       const btnW = 180, btnH = 28;
       const btnX = (w - btnW) / 2, btnY = drawH - 52;
@@ -2147,15 +3259,15 @@ export class NavComputer {
 
       ctx.font = '10px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
-      ctx.fillText('ESC TO GO BACK', w / 2, drawH - 8);
+      ctx.fillText('CLICK EMPTY SPACE TO GO BACK', w / 2, drawH - 8);
     } else {
       this._commitButtonRect = null;
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.textAlign = 'center';
       if (isCurrent) {
-        ctx.fillText('SELECT MOON TO NAVIGATE · ESC TO GO BACK', w / 2, drawH - 8);
+        if (!this._bare) ctx.fillText('SELECT MOON TO NAVIGATE · CLICK EMPTY SPACE TO GO BACK', w / 2, drawH - 8);
       } else {
-        ctx.fillText('VIEW ONLY · ESC TO GO BACK', w / 2, drawH - 8);
+        if (!this._bare) ctx.fillText('VIEW ONLY · CLICK TO GO BACK', w / 2, drawH - 8);
       }
     }
     ctx.textAlign = 'left';
@@ -2303,6 +3415,7 @@ export class NavComputer {
   static _SPECTRAL_COLORS = {
     O: '#94b4ff', B: '#b0c4ff', A: '#d0d8ff', F: '#fff5e0',
     G: '#ffefb0', K: '#ffc480', M: '#ff9664',
+    D: '#e8f0ff', // white dwarf (design D7) — pale blue-white
     Kg: '#ffa050', Gg: '#ffd880', Mg: '#ff6030',
   };
 
@@ -2374,7 +3487,11 @@ export class NavComputer {
       if (!this._loadedSeen.has(key)) {
         this._loadedSeen.add(key);
         let name = '';
-        try { name = generateSystemName(this._makeRng(s.seed), { x: s.worldX, y: s.worldY, z: s.worldZ }); } catch {}
+        try { name = generateSystemName(this._makeRng(s.seed), { x: s.worldX, y: s.worldY, z: s.worldZ }); } catch (e) {
+          // Naming throws only on a missing/invalid position (D5 invariant) —
+          // a caller bug worth surfacing, not silently blank-naming the star.
+          console.warn('[NavComputer] generateSystemName failed for star', s.seed, e);
+        }
         this._localStars.push({
           wx: s.worldX, wy: s.worldY, wz: s.worldZ,
           name, spectral: s.type,
@@ -2395,7 +3512,10 @@ export class NavComputer {
       );
       const MATCH_DIST = 0.002; // 2 pc in kpc
       for (const rs of realStars) {
-        if (!rs.name) continue; // skip unnamed catalog entries
+        // Skip unnamed catalog entries, including the pre-regen hyg-stars.json
+        // '"' artifact (AC9 regen eliminates it; guard here defensively since
+        // that regen lands in parallel with this fix, not before it).
+        if (!rs.name || rs.name === '"') continue;
         const realKey = `real-${rs.name}`;
         if (this._loadedSeen.has(realKey)) continue;
         this._loadedSeen.add(realKey);
@@ -2411,12 +3531,26 @@ export class NavComputer {
         }
 
         if (bestIdx >= 0) {
-          // Replace the hash-grid star's name with the real name
-          this._localStars[bestIdx].name = rs.name;
-          this._localStars[bestIdx].isReal = true;
+          // Replace the matched hash-grid star's identity with the real star.
+          // Interview ruling 1 + AC1 (design fact 3 / D2): the rendered position
+          // and distance must come from the CATALOG, never the hash grid — so
+          // ALSO overwrite wx/wy/wz with the real position and recompute
+          // dist/distPc from the player (same math as the unmatched branch
+          // below). FIX-1 (AC1): the seed must be the canonical F1 of the
+          // CATALOG position — overwrite the retained grid seed so this path
+          // agrees with search/sky/arrival identity.
+          const ls = this._localStars[bestIdx];
+          ls.name = rs.name;
+          ls.isReal = true;
+          ls.wx = rs.x; ls.wy = rs.y; ls.wz = rs.z;
+          ls.seed = realStarSeed(rs.x, rs.y, rs.z);
+          const dx = rs.x - this._playerX, dy = rs.y - this._playerY, dz = rs.z - this._playerZ;
+          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          ls.dist = dist;
+          ls.distPc = (dist * 1000).toFixed(0);
           if (rs.spect) {
-            this._localStars[bestIdx].spectral = rs.spect;
-            this._localStars[bestIdx].color = NavComputer._SPECTRAL_COLORS[rs.spect] || '#ff9664';
+            ls.spectral = rs.spect;
+            ls.color = NavComputer._SPECTRAL_COLORS[rs.spect] || '#ff9664';
           }
         } else {
           // No nearby match — add as a new star entry
@@ -2426,7 +3560,10 @@ export class NavComputer {
             wx: rs.x, wy: rs.y, wz: rs.z,
             name: rs.name, spectral: rs.spect || '?',
             color: NavComputer._SPECTRAL_COLORS[rs.spect] || '#ff9664',
-            seed: Math.round(rs.x * 10000) ^ Math.round(rs.z * 10000),
+            // FIX-1 (AC1): canonical F1 seed of the catalog position (was a
+            // degenerate round(x*1e4) ^ round(z*1e4) XOR that ignored y and
+            // collided catastrophically).
+            seed: realStarSeed(rs.x, rs.y, rs.z),
             dist, distPc: (dist * 1000).toFixed(0),
             isReal: true,
           });
@@ -2737,6 +3874,14 @@ export class NavComputer {
   // ════════════════════════════════════════════════════
 
   _renderLevelTabs(ctx, w, h) {
+    // Whole method is chrome — five boxes with five words in them. `render()`
+    // calls this after EVERY level's render, so the guard has to be `_bare` and
+    // not the raw flag: `_bare` is false at levels 0-3 however the host set
+    // `chromeless`, which is what keeps the tabs under the autopilot star-pick
+    // drill Max ruled must stay legible. The matching hit region in
+    // `_handleClick` is withdrawn on the same test — drawing nothing here while
+    // leaving that live is five invisible buttons.
+    if (this._bare) return;
     const tabH = 32;
     const tabY = h - tabH;
     const tabW = w / LEVELS.length;
@@ -2766,8 +3911,15 @@ export class NavComputer {
   _renderHUD(ctx, w, h) {
     ctx.font = '14px "DotGothic16", monospace';
 
-    // System name (top-left) — hide when system view draws its own header
-    if (this._currentSystemName && this._levelIndex !== 4) {
+    // _renderHUD is MIXED — the autopilot crosshair at the bottom is a wordless
+    // graphic and survives — so it is guarded block by block, not wholesale.
+    //
+    // System name (top-left) — hide when system view draws its own header.
+    // The `!== 4` test already suppresses this at SYSTEM and `_bare` is only ever
+    // true AT SYSTEM, so the added test cannot change a pixel. Kept anyway: it
+    // makes the block declare its own chrome-lessness, so moving the level policy
+    // (say, to bare the PRISM view) does not silently reprint this name.
+    if (this._currentSystemName && this._levelIndex !== 4 && !this._bare) {
       ctx.fillStyle = '#00ff80';
       ctx.fillText('CURRENT SYSTEM', 16, 24);
       ctx.font = '16px "DotGothic16", monospace';
@@ -2775,15 +3927,19 @@ export class NavComputer {
       ctx.fillText(this._currentSystemName, 16, 44);
     }
 
-    // Sector name
-    if (this._currentSector && this._levelIndex !== 4) {
+    // Sector name — already suppressed at SYSTEM; `_bare` test added for the same
+    // reason as above, and equally unable to change a pixel today.
+    if (this._currentSector && this._levelIndex !== 4 && !this._bare) {
       ctx.font = '11px "DotGothic16", monospace';
       ctx.fillStyle = 'rgba(100, 180, 255, 0.6)';
       ctx.fillText(this._currentSector.name, 16, 60);
     }
 
-    // Autopilot toggle button (bottom-left, above tabs)
-    {
+    // Autopilot toggle button (bottom-left, above tabs). This one is NOT already
+    // suppressed — it sits in a bare block with no level test, so it draws over
+    // the SYSTEM orrery today. Guarding it also stops `_autopilotButtonRect`
+    // being published, which would otherwise leave an invisible live toggle.
+    if (!this._bare) {
       const tabH = 32;
       const btnText = this._autopilotActive ? '▶ AUTOPILOT ON' : '▷ AUTOPILOT OFF';
       const btnColor = this._autopilotActive ? '#00ff80' : 'rgba(255,255,255,0.35)';
@@ -2799,15 +3955,21 @@ export class NavComputer {
       ctx.textAlign = 'left';
       ctx.fillText(btnText, btnX + 8, btnY + 16);
       this._autopilotButtonRect = { x: btnX, y: btnY, w: btnW, h: btnH };
+    } else {
+      // Drop any rect a previous chromed frame published, so a click cannot land
+      // on an autopilot toggle that is no longer on the glass.
+      this._autopilotButtonRect = null;
     }
 
     // Level info (top-right)
     ctx.font = '12px "DotGothic16", monospace';
     ctx.textAlign = 'right';
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillText(LEVEL_NAMES[this._levelIndex], w - 16, 24);
+    if (!this._bare) ctx.fillText(LEVEL_NAMES[this._levelIndex], w - 16, 24);
 
-    if (this._levelIndex === 3 && this._localStars.length > 0) {
+    // Prism stats block — already gated to level 3, where `_bare` is false by
+    // construction; test kept for symmetry with the two HUD blocks above.
+    if (this._levelIndex === 3 && this._localStars.length > 0 && !this._bare) {
       const est = this._estimatedBlockStars;
       const estLabel = est != null ? `~${est.toLocaleString()} SYSTEMS IN BLOCK` : '';
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
@@ -2971,14 +4133,23 @@ export class NavComputer {
       }
     }
 
-    // Check tab clicks
+    // Check tab clicks — withdrawn on the bare path, where `_renderLevelTabs`
+    // bailed and the reclaimed `drawH` paints the orrery straight through this
+    // strip. Left ungated it is five INVISIBLE LIVE BUTTONS across the bottom of
+    // the panel: a click meant for an outer planet changes the nav level instead.
+    // Every other interactive rect is already withdrawn here (`_commitButtonRect`
+    // and `_autopilotButtonRect` nulled, `_farChipRects` emptied, `_labelRects`
+    // not pushed); this one is geometry rather than a rect, which is how it got
+    // missed. Falling through instead of returning is deliberate — the click now
+    // reaches the body picker that owns those pixels.
     const tabH = 32;
     const tabY = this._canvas.height - tabH;
-    if (p.y >= tabY) {
+    if (!this._bare && p.y >= tabY) {
       const tabW = this._canvas.width / LEVELS.length;
       const idx = Math.floor(p.x / tabW);
       if (idx >= 0 && idx < LEVELS.length) {
         this._systemZoomAnim = null; // cancel in-flight zoom so a tab click isn't overridden by it landing on level 4
+        this._pendingComponentSelect = null; // the pre-select dies with the zoom (S5-verify)
         const target = this._viewStack[idx];
         // Animate between 2D levels if both are 2D and have stack entries
         if (idx <= 2 && this._levelIndex <= 2 && target) {
@@ -3069,6 +4240,32 @@ export class NavComputer {
         }
       }
 
+      // Component sub-view: click returns to system (info only — the drill-in
+      // is a VIEW; travel is Increment B's, mirroring the foreign planet-detail
+      // return above).
+      if (this._systemMode === 'component') {
+        this._systemMode = 'system';
+        this._selectedComponentIdx = -1;
+        this._componentView = null;
+        return;
+      }
+
+      // Far-companion chip → component drill-in (AC5 entry a). Guarded by the
+      // matching componentSystems payload: a system carrying farCompanions but
+      // no components (pre-substrate data) keeps today's hover-only chip.
+      if (this._farChipRects) {
+        for (const r of this._farChipRects) {
+          if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
+            if (this._systemData?.componentSystems?.[r.index]) {
+              if (this._onSound) this._onSound('select');
+              this._selectedComponentIdx = r.index;
+              this._systemMode = 'component';
+            }
+            return;
+          }
+        }
+      }
+
       // System mode
       if (this._hoveredBody && this._hoveredBody.type === 'star') {
         if (this._onSound) this._onSound('select');
@@ -3114,6 +4311,13 @@ export class NavComputer {
       // Update external target so trajectory line shows in 2D views
       this._externalTarget = { x: star.wx, y: star.wy, z: star.wz, name: star.name || '' };
       this._systemData = null; // will be generated in _renderSystem
+      // Component pre-select (AC5 entry b): if this marker is a far member of
+      // the system it resolves into (Proxima → Alpha Centauri), the SYSTEM
+      // view opens with that component drilled. Unconditional set is safe —
+      // findComponentIndexByName returns -1 for non-component markers at
+      // consumption time. Warp untouched: _systemStar/COMMIT still build the
+      // one destination.
+      this._pendingComponentSelect = star.name || null;
       this._hoveredBody = null;
       this._systemMode = 'system';
       this._systemZoom = 1.0; // reset zoom for new system

@@ -58,9 +58,22 @@ describe('HeadMount (AC2 ship/head split + AC4 hold-to-look)', () => {
     expect(h.pitch).toBe(-HEAD_TUNING.MAX_PITCH);
   });
 
-  it('recenters on release (eased), ends aligned', () => {
+  it('HOLDS the view on plain release — no auto-recenter merely because !held', () => {
+    // §free-look-interaction-redesign-2026-06-27, Part 2 step 4: releasing the
+    // LMB after a look-drag in free-look must HOLD the view where you dragged it.
+    // A bare endLook() must NOT ease toward center any more (that recenter is now
+    // explicit, gated on beginRecenter() — fired only on F-exit).
     const h = new HeadMount();
     h.beginLook(); h.addLook(0.8, 0.4); h.endLook();
+    for (let i = 0; i < 120; i++) h.update(DT);
+    expect(h.yaw).toBeCloseTo(0.8, 9);   // held position, never decayed
+    expect(h.pitch).toBeCloseTo(0.4, 9);
+  });
+
+  it('recenters on EXPLICIT beginRecenter() (eased, fast), ends aligned', () => {
+    const h = new HeadMount();
+    h.beginLook(); h.addLook(0.8, 0.4); h.endLook();
+    h.beginRecenter();                   // F-exit requests the recenter
     let prevMag = Math.hypot(h.yaw, h.pitch);
     for (let i = 0; i < 120; i++) {
       h.update(DT);
@@ -69,6 +82,34 @@ describe('HeadMount (AC2 ship/head split + AC4 hold-to-look)', () => {
       prevMag = mag;
     }
     expect(h.centered).toBe(true);
+  });
+
+  it('the exit recenter is FAST but graceful (eased, ~90% home within ~3τ)', () => {
+    const h = new HeadMount();
+    h.beginLook(); h.addLook(0.8, 0.4); h.endLook();
+    const start = Math.hypot(h.yaw, h.pitch);
+    h.beginRecenter();
+    h.update(DT); // one frame — must be EASED (not an instant snap to 0)
+    const afterOneFrame = Math.hypot(h.yaw, h.pitch);
+    expect(afterOneFrame).toBeGreaterThan(0);            // graceful: not instant
+    expect(afterOneFrame).toBeLessThan(start);           // and moving home
+    // snappy: ~90% of the return done within ~3 time-constants (a fraction of a
+    // second at EXIT_RECENTER_TAU) — fast feel, still an ease not a snap.
+    const settleFrames = Math.ceil((3 * HEAD_TUNING.EXIT_RECENTER_TAU) / DT);
+    for (let i = 1; i < settleFrames; i++) h.update(DT);
+    expect(Math.hypot(h.yaw, h.pitch)).toBeLessThan(start * 0.1);
+  });
+
+  it('beginLook() during a recenter cancels it (grab the view back mid-return)', () => {
+    const h = new HeadMount();
+    h.beginLook(); h.addLook(0.8, 0.4); h.endLook();
+    h.beginRecenter();
+    h.update(DT); // partway home
+    h.beginLook(); // grab it again
+    const y = h.yaw, p = h.pitch;
+    for (let i = 0; i < 30; i++) h.update(DT); // held → frozen, recenter cleared
+    expect(h.yaw).toBeCloseTo(y, 9);
+    expect(h.pitch).toBeCloseTo(p, 9);
   });
 
   it('ignores look input while not held; holds offset while held', () => {

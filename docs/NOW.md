@@ -21,6 +21,78 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > the lab arc still runs in parallel — but read the PLAN first. Precedence: briefings lose to the
 > PLAN, the PLAN loses to `git log`.
 
+>
+> **▶ LANE B (2026-07-22 — CONIC RING-RENDER BUILT + VERIFIED): `orbit-ring-conic-2026-07-21`
+> VERIFIED_PENDING_MAX `7761d54` (code `903d3d8`).** The dig-proven screen-space conic + Sampson
+> pass REPLACED OrbitRingSDF's per-ring quad+fwidth render (dead zone + far-orbit flicker = Max's
+> round-3 findings, root-caused in `orrery-entry-orbits-2026-07-20/evidence/dig-record.md`).
+> Full arc in one session chain: scope+greenlight (`034c80d`) → BUILD-PLAN 2-lens adversarial
+> (`3f2197e`; rebase-safe proxies, DataTexture committed, argmax overlap, flag-gated switchover)
+> → Slice A math (`57e899b`) → Slice B field + lab battery + grazing-regression dig+fix
+> (`8fe3826`/`3df940c`/`7ea589a`: argmax alpha-flap proven by variant isolation, co-depth
+> tie-break eps=.005, calibrated cutoff 1.0) → Slice C re-route + ledger #5/#6 (`47ca81f`) →
+> Slice D live battery (`1a0bf9a`, AC2–AC9 in-game, −38 draw calls) → strip + AC11 (`3c46205`,
+> legacy SDF render DELETED, pins re-homed) → verify-full wf_acea8162-51d (unit PASS; live
+> INSUFFICIENT = stale-commit artifact) → close-out drive at HEAD (`7761d54`, all 8 live ACs
+> re-PASS). Suite 1367/0; byte-guards EMPTY; ledger FOUR→SIX.
+> **⭐ NEXT = Max's AC10 UAT flight** (:5173 ORRERY: overview → dive → skim plane → stand on
+> ring → drift at range; pre-set expectations: gentle-angle band wider, overview center dot-not-
+> square; caveats: different-inventory warp sliver, no floor-GPU perf sample). Then: Rule-3 docs
+> → Shipped → the PAIRED ship (orrery-entry-orbits + orrery-coherence: one real merge vs master
+> `847ab19`+lane-C, one push/deploy). Queued behind: `autopilot-depart-2026-07-15` (greenlit,
+> unbuilt); B5–B7 UAT items; taste queue; lane-C boot-tour re-arm flag. Anti-drop queue pinned
+> in the conic contract statusNote.**
+>
+> Prior (2026-07-17, superseded): `orrery-coherence-2026-07-15`
+> VERIFIED_PENDING_MAX `802cceb`. Max's ruled center-then-fly redesign landed via TDD workflow
+> wf_8b343c64-ca1 (AIM rotates in place until centered [0.45 s/rad, cap 0.7s, skip <2°], then
+> APPROACH flies straight with the body pinned; trackTarget cedes the target while gliding —
+> retires advisory #3; 2 opus lenses PASS, 0 MUST-FIX, 5 advisories folded). Suites 433/433,
+> guards EMPTY, main.js untouched. Verify-light wf_689b62f9-01e unit-PASS + AC5 live-closed
+> same day (verdict-live-drives-802cceb.json): race-click Neptune AIM 8.59°→0.12° camera-frozen
+> then approach ≤0.06° to 4R exact; Tethys 2.6R + Sol aim-skip 15R exact; mid-AIM interrupt
+> clean; console clean (Phoebe floor cell not re-drivable — compensated, see evidence file).
+> **UAT round 2c PASSED (2026-07-20, Max: "looks good") — the side-slide is closed.**
+> ⭐ NEXT = FRESH SESSION: one dev-collab-scope interview folding Max's 3 new ORRERY items
+> (D-hold boot skip → Sol; warp arrival as far-spawn zoom-IN; orbit visibility threshold —
+> verbatim + anchors in `~/briefings/handoff-lane-B-orrery-triplet-2026-07-20.md`) + the
+> orrery-coherence close-out ruling (run B5–B7 or waive → Rule-3 docs → Shipped → real merge
+> [master carries lane C] → push).**
+> Round 2 (2026-07-17, earlier):
+> A1/A2 PASSED, then Max's 3 new findings (dogleg glide / moons unapproachable / planets-far
+> stars-close) root-caused by investigation workflow wf_c2ee4336-a9f to ONE method (click-2
+> glideFocus: 3 mismatched ease channels; absolute floors vs tiny moons; flat 6R vs 3R star
+> glow) → FIXED `31eae77` via TDD workflow wf_635f2767-237 (single-channel glide w/ live body
+> tracking + orreryStandoff table {star 15/planet 4/moon 2.6, 0.002 degenerate floor} + focus
+> min-distance 1.05R w/ overview+mode-swap resets; red tests measured dogleg 40.67%→0.00%).
+> 2-lens adversarial PASS ×2, 3 advisories folded; suites 428/428, guards EMPTY, live drive
+> green (Saturn glide 4R exact, floors exact, Esc cascade resets, console clean). Standoff
+> numbers + 1.1s glide duration = one-line tunes if UAT feel is off. NEW pre-existing taste
+> item: evenly-spaced wide systems frame at full outer orbit (dot-in-a-starfield; gap-break
+> factor Max-re-rulable). Round-1 record below stands.
+>
+> **(round 1, superseded)** Round-1 UAT found 4 findings, ONE root
+> cause (instant-cut skipped camera-mode housekeeping; persisted FLIGHT mode left the flight
+> integrator owning the camera — framing writes never moved it) + skipped A1 orbit-line sync.
+> Fixed + live-verified through the real boot circuit at `ffea67c` (entry: TOY_BOX assert,
+> 1.8x outer-orbit frame, pitch 0.7 tilt, maxDistance 3x, _syncOrbitsToMode). Residual taste:
+> drag-sign convention, mirrored backside label. Full record: contract statusNote +
+> `~/briefings/handoff-lane-B-uat-round-2-2026-07-16.md`. Serves the SCREENSAVER heart
+> (35%): ORRERY is now player-driven viewing by construction — nothing flies in ORRERY. Built in
+> 3 opus-workflow increments (AC1 reducers TDD `orreryCoherence.test.js` → entry/timers/BURN/
+> autopilot wiring → glide/nav-wins/re-arm), each 2-lens adversarially reviewed; verify-full
+> wf_3786dbdc-f25 (unit PASS 3/3-adv) + working-Claude live drives on :5173 closed
+> AC2/AC3/AC4/AC5/AC7 with FOUR live-caught fixes at `8b35ec4`. **Fresh-session adversarial
+> re-check 2026-07-15 (wf_32f3fac9-81a + independent trace): 1 HIGH fixed at `e23050b` —
+> boot-window HELM downgrade at the four systemEntryStyle entry sites (raw `_scManual` read
+> pre-reveal; now boot-aware `_effectiveRegime()`), 1 LOW comment-corrected (binary overview
+> pivots on primary, parked to wide-separation thread); verify-light wf_fb37f8ac-161 unit PASS,
+> AC2–AC7 unregressed. Record: `verdict-recheck-e23050b.json`.** AC6 unit+static green, live
+> folded into Max's UAT (turn-window timing; steps in contract statusNote incl. the NEW e23050b
+> HELM boot-window step). Suite 422/422, build green. **UAT script + taste items: contract
+> statusNote + seam handoff `~/briefings/handoff-lane-B-orrery-verified-2026-07-15.md`. Sibling
+> `autopilot-depart-2026-07-15` queued (build after A ships).**
+>
 > **🧭 Orientation chain (lab arc — still live, but NOT the active focus as of 2026-08-01):** Well Dipper → SCREENSAVER heart → LOD-lab renderer
 > (lab≠game, by design) → Phase 2 per-feature quality pass → **Theme A (wrong generation
 > primitive) → #3 rivers ✅ SHIPPED (2026-06-19); F11 retired + dendritic made first-class
@@ -558,6 +630,254 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > session, build via subagents per Max): present contract for greenlight → plan → build → `verify-workstream` →
 > VERIFIED_PENDING_MAX → Max UAT.** LAB-only. Push HOLD. Handoff:
 > `/tmp/handoff-world-engine-baked-relief-render-2026-06-25.md`.
+>
+> **▶ LANE C (2026-07-08): naming-census-uniqueness-2026-07-07 → VERIFIED_PENDING_MAX (code `3336dd7`,
+> branch `feature/system-details`).** Serves the exploration-immersion outcome ("players never encounter
+> the same system name twice"). Landed: Horsehead IC434/M78 position fix + 4 stale tests; deterministic
+> name census; HYG catalog regenerated (0 `"` artifacts, 15,559 usable real names — CSV-parser root-cause
+> fix); real names win on every targeting path; position-derived injective procgen naming (survey +
+> multipart, zero duplicates by construction, no-position fallback now throws); shipped named-systems
+> catalog (12k settled + 36k greek notables, 40% near features, 0.82MB gzip). Full verify 3/3-adversarial
+> green + live chrome-devtools checks (Horsehead renders rank#2 with M78 #7; Sol 19/19 scene suite;
+> revisit round-trip stable). **UAT round 1 (2026-07-08): "looks good in general, BUT" — Sirius search
+> spawned Sol. FIXED `631571b` (2026-07-09):** Sol's KnownSystems match radius 5 pc → 0.5 pc (was
+> swallowing 12 real stars: Sirius 2.64 pc, Rigil Kentaurus 1.32 pc, Procyon…) + teleport arrivals now
+> carry the real star's name via `RealStarCatalog.findByPosition()` (same precedence warp already had).
+> Re-verified: new match-radius suite incl. full-catalog sweep, 1113/1113 vitest, live Sirius→"Sirius",
+> Solar preset→real Sol, scene suite 19/19; light verify addendum
+> `verdict-light-sirius-fix-631571b.json` (AC1 re-checked green end-to-end). **UAT round 2 (2026-07-10):
+> Sirius OK, BUT nav computer named Sol "Talimon". FIXED `d8d6b63` (2026-07-11):** AC9 catalog regen had
+> dropped Sol (HYG row 0 has dist=0 → distance filter); regen script now emits Sol explicitly (catalog
+> back to 15,599, +1 entry only). Plus identity-aware nav-warp arrival: nav entry named "Sol" warps to
+> REAL Sol with position snapped to registry (was: blanket hasNavStar skip → procgen impostor).
+> Verified: 1114/1114 vitest, live PRISM shows Sol gold-labeled + you-are-here ring, nav-style warp from
+> 1 pc-off grid position spawns real Sol, negative-case nav warp unaffected, scene suite 19/19.
+> **Post-fix hardening (2026-07-11, Max-directed):** 8-angle subagent code review of the two fixes → 11
+> verified candidates, 6 survived → applied via workflows: `7f5fd1e` (teleport arrivals force real
+> spectral type — Sirius now A-class; currentGalaxyStar realigned on known-system arrivals; dead `"`
+> guard dropped; tolerance-ordering invariant exported + tested) and `a1d2d4c` (identity-join redesign:
+> KnownSystems.associate() derives aliases from catalog stars within MATCH_RADIUS — self-healing across
+> regens; findByAlias name gate + 3 pc belt replaces the display-name lambda; makes future Alpha
+> Centauri registration work — HYG names its components Rigil Kentaurus/Toliman). 1123/1123 vitest,
+> live belt accept/reject verified, scene suite 19/19. Successor flags recorded in `a1d2d4c` message.
+> **✅ UAT PASSED (Max, 2026-07-11)** — Sol works; workstream CLOSED at `a1d2d4c` (FEATURES.md row
+> added). **Now IN MASTER + DEPLOYED** — lane B's `847ab19` pre-deploy merge (2026-07-11) folded this
+> branch in; `feature/system-details` is a strict ancestor of master (build sessions: just ff onto
+> master first). Contract: `docs/WORKSTREAMS/naming-census-uniqueness-2026-07-07/`.
+> **▶ SUCCESSOR SCOPED (2026-07-12): `real-universe-overlay-2026-07-12`** — interview done (Max's 4
+> facets: nav-neighborhood fidelity, player search, observed characteristics, structures; rulings:
+> true positions never procgen-snapping, bulk exoplanet ingest + curated companion table, structures
+> = search+audit only, settled-catalog UI folds into search, seedtags stays parked). 10 ACs incl.
+> AC10 engine structural support (degenerate star class, known-planet injection, far-companion; Alpha
+> Cen = A+B binary + Proxima far companion, authoring proof). Contract survived a 3-lens adversarial
+> review (12 findings folded, 3 blockers: multiplicity had no data source/engine support) + round-2
+> re-verify (clean + 3 residuals folded). Resolves D6–D9. Contract:
+> `docs/WORKSTREAMS/real-universe-overlay-2026-07-12/` (schema-valid, status building).
+> **▶ GREENLIT (Max 2026-07-12) → Increment 1 (AC7 ingest) BUILT `77723c2` (2026-07-13).** AC8
+> baseline captured FIRST (`1fc7357`: 24 procgen-only systems, deep-equal + re-filter hook). Archive
+> verified live (pscomppars 6319 planets/4735 hosts; attribution license). Built via 5-agent workflow
+> (opus builders, sonnet integrate, **fable adversarial verifier** — Max's today-only unlock) + 8
+> post-build rulings (design doc §Post-build): known-binary allowlist (HD 20781/20782, TOI-2267 A/B),
+> companion-table-derived duplicate exemption (Proxima vs Rigil/Toliman per contract's Alpha Cen
+> architecture), Kepler-90-as-KOI-351, lum 4-sig-digits, ICU-stable sorts. Shipped: ingest script
+> (byte-identical, exit 0, drops 0/7/7/27/260 reported), real-system-contents.json (4457 hosts/6030
+> planets), real-star-supplement.json (14 dim hosts), stellarCompanions.js (5 web-cited entries),
+> blocklist 323→325 (0 named-catalog collisions), 18 contract tests. Suite 1249 passed (vendor noise
+> unchanged). ⚠ **BINDING Increment-3 input:** overlay merge joins by NAME first — 104/116 same-named
+> hosts sit >0.1 pc from their HYG record (Hipparcos-vs-Gaia distance disagreement, max 141 pc).
+> **▶ Increment 2 (AC10+AC5) BUILT `d106181` (2026-07-13).** Design-first (`65994e2`, 2 explorer passes),
+> built via resumed 4-agent workflow (opus builders/reviewer, sonnet integrate; builder-2's report died on
+> StructuredOutput — work was on disk, recovered via audit-stage resume). Landed: STAR_PROPERTIES.D
+> (spec-only, never rolled) + normalizeSpectralClass ('DA2'→'D'); ctx companionSpec/knownPlanets/
+> farCompanions (omitted-not-null — AC8 snapshot held byte-identical); KnownSystemAuthoring adapter routes
+> declarative entries THROUGH StarSystemGenerator; Alpha Centauri entry = companionsRef only (A+B from
+> stellarCompanions, Proxima planets via gen-known-system-contents.mjs generated module); Proxima alias
+> derived from companion table; both anticipated test flips (findAt(RIGIL_POS)→Alpha Cen; ingest clearance
+> exemption); ONE surgical main.js line (map injection at associate()). Cap rules: representation-cap.md
+> (`c713625`). Suite 1276 (was 1249). Verify full ×2 (2nd run after an API-crash rerun of the AC10 check):
+> **AC10 PASS 3/3 + AC7 PASS 3/3**; AC5 static-green + **LIVE-DRIVEN same day** (Max brought up :5176 +
+> debug Chrome): nav-warp at Rigil, Proxima-position-targeted warp, and debug-search teleport ALL spawn
+> the authored Alpha Centauri (G2V+K1V @23.5 AU, Proxima far companion w/ planets b,d, names aligned, no
+> impostor); Sol intermediate spawned as Sol; **AC8 live enterSol() 19/19 CLEARED** (owed since Inc 1);
+> console zero errors/warns. Addendum: `verdict-live-drives-d106181.json` (sky-click deferred w/ rationale
+> — same findAt branch as teleport, plumbing untouched). ⚠ Inc-3 BINDING inputs: name-first join
+> (unchanged); ExoticOverlay._applyFungal 1-candidate crash must be fixed BEFORE D-primaries become
+> reachable; injected known planets need migration/stability immunity (TRAPPIST-class).
+> **▶ Increment 3 (AC3+AC4 bulk overlay merge) BUILT `c68c1fb` + VERIFIED + LIVE-DRIVEN (2026-07-13).**
+> Pre-work `d417a39` (fungal 1-candidate fix, TDD, cadence-preserving) + design `240ec99` (2 explorer
+> passes — both died at StructuredOutput, findings recovered from transcripts → new rule
+> `feedback_workflow-structuredoutput-hazard.md`). Landed: RealSystemOverlay (name-first join, dup-name
+> position disambiguator, display-name→hostname bridge, unready-warn); supplement+contents ride
+> RealStarCatalog.load() Promise.all (15,613 stars — TRAPPIST-1/Proxima arrivable); known-planet
+> immunity (migration/resonance/cull/exotic + slot guarantee — the ~4,000-host spurious-binary threat:
+> 2,437 hosts have a planet <0.1 AU); TWO surgical main.js edits (warp+teleport else-branches,
+> coordinator-flagged); merged display names (real designations); cap §5. Adversarial review 1 MED
+> (fill-letter dup of known designation under migration reorder) fixed in-thread + pinned. Suite
+> 1278→1321; ProcgenSnapshot 24/24. Verify full at `c68c1fb`: **AC4 + AC7 + AC10 PASS 3/3**;
+> AC3/AC5/AC8 live-closed same day (verdict-live-drives-c68c1fb.json): Sol 19/19, Sirius **A+D binary
+> @19.8 AU**, TRAPPIST-1 **M + all 7 knowns, real designations on HUD**, Rigil→authored Alpha Cen,
+> console clean. Merged-star nav-warp deferred w/ rationale (close at Inc-4 search or AC9). Structure
+> stays table-only — **snum-as-single-pin parked as an AC9/UAT knob** (with Alpha-Cen fill policy).
+> **▶ Increment 4 (AC2 player search) BUILT `44c7075` + VERIFIED + LIVE-DRIVEN (2026-07-13).** Design
+> `f40bac2` (2 explorer passes). New pure resolver `knownObjectSearch.js` (ports DebugPanel three-source
+> search + ADDS named-systems catalog class-b + registry-name bridge so 'Alpha Centauri'/'Sol' resolve +
+> toNavStar seed-parity). NavComputer: DOM `<input>` overlay, `_searchFocused` capture-guard **+**
+> bubble `stopPropagation` (both phases needed — build caught my design miss), result list w/ keyboard
+> nav, Escape clears+blurs, 'D' swatch; select → **genuine warp** via the real `_onCommit`→
+> `dispatchNavAction`→`_setWarpTargetFromNavStar` contract (never teleport, never hand-set `_warpTarget`).
+> +2 flagged main.js input-wiring lines. Max-ratified NavComputer seam recorded in `increment-4-design.md`
+> for lane D. Suite 1321→1340 (0 new failures); ProcgenSnapshot byte-identical. Verify full at `44c7075`:
+> **AC4+AC7+AC10 PASS 3/3** (unregressed); AC2/AC3/AC5/AC8 live-closed same day
+> (verdict-live-drives-44c7075.json): reachable via N; keyboard guard **both phases** ('WASDRFN' all land,
+> nav stays open); all 4 resolve classes; **search→warp→Sirius = real A1V+DA2 binary @19.8 AU**
+> (CLOSES the owed Gate-4 merged-star nav-warp; routes through the Inc-3 arrival merge); search→warp→Sol =
+> authored Sol; Sol integration suite **19/19**; console clean. Boot-tour warp-collision edge case
+> documented (in-flight boot warp overrides a mid-boot selection — NOT an AC2 defect; lane-B tour/N-gating
+> territory). Parked knobs: **snum==1 single-pin ADOPTED** (Max; representation-cap §5, `cd8abd0`);
+> Alpha-Cen A/B fill = Max's rec-open call at Inc-5.
+> **▶ Increment 5 (AC1 + AC6 + snum-pin + fill ruling) BUILT `3e58fac` + VERIFIED + LIVE-DRIVEN (2026-07-14)
+> → workstream VERIFIED_PENDING_MAX.** Design `4775f5f` (2 explorer passes; OOM sequential-builder rule
+> suspended by Max → 3 parallel opus builders + gate + adversarial review, 1 fix round — the review CAUGHT the
+> AC6 builder dying on the boilerplate-spawn glitch and the fix round built it). Landed: AC1
+> `neighborhood-reference.json` (19 Sol / 15 Sirius neighbors, shipped-catalog distances, 6 absent-famous
+> documented) + **NavComputer position-snap FIX** (matched real stars rendered at hash-grid positions up to
+> 2 pc off — interview-ruling-1 violation; now catalog-true) + `window._navComputer` handle; AC6 Harris
+> Part-III per-cluster radii (152 distinct, 1.9–180.2 pc, replaces uniform 30 pc) + committed audit that
+> CAUGHT 3 real position errors (M13 1.53 kpc off!, M57, M45 z-sign — corrected); snum==1 single-pin
+> (resolve()-side, one-directional, table-wins; AC4 case (e) amendment validated; AC3 immunity vehicle →
+> 55 Cnc); Alpha-Cen **fill-ON ruled by Max** w/ zero-planet-rate condition → documentation only
+> (representation-cap §6: existing 8% empty roll + astronomy basis + named-not-built calibration seam).
+> Suite 1340→**1404** (0 new failures); ProcgenSnapshot 24/24; ZERO main.js edits. verify-workstream full
+> (wf_1eab0d7b-3eb, 39 agents): **AC4+AC6+AC7+AC10 PASS 3/3** (AC6 flipped from FAIL-as-scheduled);
+> AC1/AC2/AC3/AC5/AC8 live-closed same day, TWO circuits (`verdict-live-drives-3e58fac.json`): AC1 both
+> vantages **worst error 0.03% vs ±2%** (34 assertions), TRAPPIST-1 visible @12.43 pc AND arrives as M
+> SINGLE w/ exactly 7 knowns b–h (the pin live), authored Alpha Cen G2V+K1V@23.5 AU + Proxima(b,d), Sirius
+> A1V+DA2@19.8 AU (table-wins), Sol 19/19 ×3, console clean. **⚠ AC9 flag: Alpha Cen A/B drew ZERO fill
+> planets on the authored seed** (fill-on active; deterministic empty branch / circumbinary geometry) —
+> small authoring knob if Max wants the flagship populated.
+> **▶ NEXT: AC9 = Max's batched UAT over the whole workstream** (nav neighborhood from Sol, search things he
+> knows, arrivals vs astronomy, structures; the α-Cen zero-planet flag above is his call). The only open
+> gate. Branch UNPUSHED (merge Max-gated; deploy = Pages).
+> **▶ AC9 RUN 2026-07-15: FAIL — and the 36 Oph investigation found a procgen-level identity defect
+> (bigger than nav).** Max's verdict verbatim + corrected mechanism in
+> `docs/WORKSTREAMS/real-universe-overlay-2026-07-12/ac9-uat-findings.md` finding #2 (commits `bd5733a`,
+> `d725c27`): (1) real-star seed identity is pipeline-dependent — search/catalog quantize position to
+> 0.1 pc (the 36 Oph trio collapses to ONE seed; 6 groups/13 stars total), the prism merge retains
+> replaced hash-grid seeds, its unmatched branch uses a degenerate x^z XOR (**10,986/15,560 named stars
+> collide**, incl. Sol/Sirius) — same named star generates DIFFERENT systems by selection path; (2) nav
+> SYSTEM view for browsed systems is an overlay-less locally-generated preview (live: Guniibuu preview
+> 6 planets vs arrival K+K binary + 4); (3) un-tabled/un-hosted real stars roll FABRICATED companions
+> (snum pin reaches archive hosts only). **Max tabled close-out + successor scoping: investigate root
+> cause → plan solutions → implement in a FRESH session (via /handoff), carrying the standing items**
+> (α-Cen SHIP-AS-IS standing resolution; label-declutter mechanism designed 2026-07-15 = deferred label
+> pass, lane D builds; formal close-out sequence; the 3 new scope questions: seed-identity unification,
+> preview honesty, fabrication-reach ruling). New drive rule: **stop `window._autoNav` before any nav
+> drive** (`feedback_wd-nav-drives-autopilot-off` — boot demo tour auto-warps under agents; contaminated
+> + retracted 2 mid-investigation claims). Window parked at Sol, suite 19/19, tour OFF.
+> **▶ FIX WORKSTREAM SCOPED (2026-07-15): `real-star-identity-unification-2026-07-15`** — serves
+> exploration-immersion (a real star = ONE system, the same system, on every path). Interview rulings
+> (Max): fabrication reach = **pin-by-default** (un-tabled/un-hosted real stars never roll fabricated
+> companions; table + archive snum win both directions); lane-D render half (N-dot glyph + deferred
+> label pass) **FOLDED IN under a Max-ratified NavComputer seam** (Inc-4 precedent, recorded for lane
+> D); **NEW workstream** (overlay stays `verified` w/ AC9-FAIL recorded; AC9 re-runs after this ships
+> to :5176). 11 ACs per `docs/WORKSTREAMS/real-star-identity-unification-2026-07-15/` (schema-valid):
+> canonical F1 seed + merge-test rewrite, path-identity live, shared arrival-resolution module +
+> preview honesty, pin-by-default, census companion table (36 Oph/61 Cyg/ζ Ret) + dup-row dedup w/
+> the neighborhood-reference regen ripple, multiplicity oracle (shared RNG prefix, snapshot-guarded),
+> glyph + label AABB pass, regression guardrail (GRID formula untouched), Max UAT via the AC9 re-run.
+> Plan of record: `seed-identity-investigation.md` (882d121). **GREENLIT same day → BUILT + VERIFIED
+> same day: → VERIFIED_PENDING_MAX `f6b3eff` (2026-07-15).** 6 units via build workflow (each
+> adversarially verified; suite 1,404→**1,504**/0; ProcgenSnapshot 24/24; main.js net −18 lines, all
+> regions on the lane-B ledger) → verify-workstream full (unit ACs 3/3-adversarial) → working-Claude
+> live circuit on :5176 closed AC2/AC4/AC8/AC9/AC10 (`verdict-live-drives-f6b3eff.json` + committed
+> screenshot): Denebola search≡prism-click IDENTICAL; previews ≡ arrivals ×4 classes; Guniibuu = ONE
+> marker, 3 dots, honest K+K+K arrival; Rigil 2 dots + Proxima her own; zero label overlaps at max
+> zoom (Rigil↔Proxima stack + leader line); Sol 19/19; console clean. **Live drives caught + TDD-fixed
+> `f6b3eff`:** `_isCurrentSystem` 2 pc radius swallowed neighbors (Rigil-from-Sol previewed Sol + built
+> BURN) → now POSITION_MATCH_TOL (0.1 pc = F1 bin). **NEW lane-B flag:** warp dispatch ungated during
+> in-flight warp (mid-flight commit re-targets against a moving frame). Max notes: R2 Proxima-marker
+> arrival = whole α Cen system (taste call); formerly-divergent stars legitimately changed contents.
+> **▶ AC9 RE-RUN STARTED (2026-07-15): finding #3 recorded `d502ec8`** — far-companion systems read
+> as adjacent duplicate binaries (Max verbatim + live-verified mechanism in ac9-uat-findings.md:
+> SYSTEM view titles by clicked marker; `farCompanions` never rendered; no prism co-membership cue —
+> DATA layer verified coherent). Options (a) system-identity titling + render fars (seam-local),
+> (b) component-centric arrival (R2, bigger), (c) prism co-membership cue. **Max tabled → fresh
+> session REASSESSES the fork first, then recs** (his ruling before any build). Handoff:
+> `~/briefings/handoff-lane-C-far-companion-fork-2026-07-15.md`. AC9 verdict still open; overlay
+> close-out remains gated on AC9-PASS. Branch 25 ahead of origin (push Max-gated). *(RESOLVED
+> 2026-07-21: the AC9 re-run PASSED in the ship-cascade UAT sitting on build `6bc5177` → overlay
+> Shipped `3e58fac`, unification Shipped `f6b3eff` — see the SHIPPED block below.)*
+
+> **▶ FINDING #3 RESOLVED (2026-07-19): `system-identity-grammar-2026-07-17` → VERIFIED_PENDING_MAX
+> `5583651`.** Fork reassessed 2026-07-17 → rec (a)+(c)+grammar-rule; **Max overrode with his own
+> three-sentence directive** (intent.md verbatim: multiple dots in prism / SAME system in system view /
+> one destination via nav or warp) and delegated plan/implement/test — (b) recorded as deliberate
+> non-goal. Built same-directive: U1 system-identity naming `5cc6baf` (title by `_knownSystemNames.system`
+> + "via <component>" annotation + real component hover names), U2 far-companion edge chips `f60cad9`
+> (Proxima + b/d visible in SYSTEM view for the first time; covers every farCompanions system incl.
+> 36 Oph), U3 prism co-membership cue `2cc925d` (tether on hover/selection + "· Alpha Centauri" label
+> suffix through the declutter pass; new pure helpers systemIdentity/farCompanionChips/prismMembership),
+> AC6 design law `5583651` (NAMING_AND_REAL_OBJECTS.md §6 — Max's directive as normative grammar; closes
+> the naming→seeds→glyphs→cross-view recurrence CLASS). Each unit adversarial-PASS round 1; verify-full
+> wf_35113e26-c4e 5 unit ACs PASS 3/3; gates personally re-run (suite 1,557/0, Snapshot 24/24, zero
+> main.js); AC2/AC5 closed by live drives (verdict-live-drives-5583651.json + 4 screenshots: both-marker
+> previews title "Alpha Centauri" seed 1816942132, both warps land the authored G+K system log-confirmed,
+> instrumented dot-to-dot tether, zero label overlaps, console clean). **REMAINING: AC8 UAT = Max's AC9
+> re-run** (:5176 tab parked at Sol, tour off). Overlay close-out still gated on AC9-PASS. Branch ~32
+> ahead of origin (push Max-gated). *(RESOLVED 2026-07-21: AC8 PASSED in the ship-cascade UAT sitting
+> on build `6bc5177` → Shipped `5583651` — see the SHIPPED block below.)*
+
+> **✅ DONE (2026-07-19): MULTI-STAR RENDER FEASIBILITY INVESTIGATION — verdict: FEASIBLE; Max
+> greenlit implementation.** Report `docs/WORKSTREAMS/real-universe-overlay-2026-07-12/`
+> `multistar-render-feasibility.md` (draft `8d9f08f` → 3-verifier adversarial corrections `7cb8253`;
+> material catch: Proxima F1 seed-bin inversion → one-seed + child-stream design). Headline: float32
+> was never the blocker (WorldOrigin rebasing + log depth already live); rec = **Increment A** (lane C:
+> `componentSystems` substrate + nav component drill-in + rep-cap amendment, zero main.js) then
+> **Increment B** (JOINT lane B+C scoping: component travel via warp-swap recenter + DEPART legs).
+> Max ruled 2026-07-19: "Great; … handle implementation (and any planning/research needed before and
+> testing needed after)" → D1/D2 greenlit-in-principle, D4 default = all authored wide multiples,
+> D3 + Increment B deferred to joint scoping. All three open UAT gates (AC9 re-run / AC11 / AC8)
+> re-run on Increment A's build. **▶ NEXT: Increment A via self-paced loop session** —
+> ⭐ Handoff: `~/briefings/handoff-lane-C-multistar-components-implementation-2026-07-19.md`.
+> Cross-lane relay owed to coordinator: lane B board drift (orrery-coherence VERIFIED_PENDING_MAX
+> `802cceb`; DEPART greenlit + `building`).
+
+> **✅ SHIPPED lane C (2026-07-21): MULTISTAR COMPONENTS INCREMENT A — Shipped `6bc5177`;
+> Max UAT PASSED same day ("UAT passes as written"): AC10 + all three riding gates in one
+> sitting.** Workstream
+> `multistar-components-2026-07-19` (JOURNEY: real-universe navigability / PLAYER_EXPERIENCE:
+> nav-computer tier). Headless S1–S5+S7+S8 (`a52163b`…`9904569`, each slice TDD +
+> fable-adversarially verified, findings folded same-session; suite 1,557→**1,616/0**;
+> ProcgenSnapshot 24/24; main.js + realStarSeed.js zero-diff; scripts/ untouched). **S6 live
+> drives DONE 2026-07-21** (chrome-devtools on `:5176`, build `e8100d8`≡`6bc5177`): AC6 both
+> entries (far-chip drill + PRISM pre-select, real payload b+d at archive orbits, 15 label
+> pairs zero overlap, ESC round-trips) + AC7 both α Cen markers (preview seed 1816942132
+> captured pre-warp; identical authored G+K @23.5 AU arrivals log-confirmed; console 0 err/
+> 0 warn) — `s6-live-drive-log-e8100d8.md` + 8 screenshots (`6bc5177`). **Phase 4
+> verify-workstream** wf_2dc6721a-12c at `6bc5177`: 8/8 unit ACs PASS (3/3 adversarial votes
+> each); AC6/AC7 static-INSUFFICIENT by design → closed by `verdict-live-drives-6bc5177.json`;
+> AC10 deferred-to-max. Contract `status: verified` / `VERIFIED_PENDING_MAX 6bc5177`.
+> **✅ UAT PASSED (Max, 2026-07-21, verbatim "UAT passes as written")** — all four gates in
+> one sitting on build `6bc5177`: AC10 + overlay AC9 re-run + unification AC11 + grammar AC8
+> (recipe: `~/briefings/handoff-lane-C-multistar-components-verified-2026-07-21.md` §3). Max
+> also confirmed no-warp-to-components is correct by design (Increment B; view only; §6
+> one-destination invariant). No recording artifact — Max drove the app HIMSELF live, which
+> is direct Max evaluation (motion evidence, Max-evaluated), satisfying the Shipped-gate
+> principle. **SHIP CASCADE EXECUTED same day:** FOUR contracts → `shipped`, all schema-valid
+> (multistar-components @`6bc5177`; grammar @`5583651` — AC8 was its last gate; unification
+> @`f6b3eff` — AC11 ditto; overlay @`3e58fac` — the AC9 re-run its close-out was gated on).
+> Rule 3 docs: FEATURES.md overlay row de-staled + 3 new rows (unification, grammar, component
+> drill-in) + naming row → shipped-confirmed; doc-graph zero-diff; doc-rot 225 flags, no new.
+> **✅ PUSHED + MERGED + DEPLOYED (Max "push & merge; go", 2026-07-21):** `feature/system-details`
+> pushed to origin; master fast-forwarded `58d11f3`→`e565bee` (pure ff — origin/master was an
+> ancestor; no merge commit needed) and pushed; GitHub Pages deploy run 29848620206 SUCCESS at
+> `e565bee`. FEATURES.md rows → shipped-confirmed. **▶ NEXT: Increment B (component
+> travel) = JOINT lane B+C scoping interview — not before Max prompts; also waits on lane B's
+> orrery-coherence UAT (`802cceb`).** Watch-items for Increment B scoping:
+> one 998 ms fold stall on the Sol→α Cen leg (attribution open; leg 1 clean); HELM boot-tour
+> auto-warp (standing lane-B flag). Parked (out of surface, recorded in commit messages +
+> seam handoff): normalizeSpectralClass prototype-key lookup quirk; silent 'M' fallback for
+> non-table far classes; doc-rot scoped-mode port-check still owed.
 
 > **▶ LATEST (2026-06-20): river-LOD methodology SPEC done + Max-approved → BUILD next.** Pursuing
 > river scale via a GENERAL structured-feature-LOD methodology (instance #1 = rivers). Brainstormed
@@ -1328,40 +1648,65 @@ liquid-water bundle completing the wet/frozen/airless trio vs europa, lava).
   `dev-collab-scope` the L1 layer (wiring engines into the real renderers + type-demotion refactor,
   high blast radius). Lab left clean on `terrestrial`.
 
-### Prior active — supercruise (paused at a clean seam, pending UAT)
+### Supercruise / in-system flight — SHIPPED TO MASTER 2026-06-28 (incl. sublight + 2 UAT fixes)
 
-**`supercruise-freelook-2026-06-10`** — **AUTOPILOT HALF BUILT (Tasks 1–7 of 13),
-paused at a clean seam 2026-06-10.** Elite-style supercruise is now THE in-system
-mover for the **autopilot**: tour legs AND post-warp fly-in both fly the new
-`SupercruiseModel` (one model, two drivers). Manual piloting / freelook / HUD /
-old-mover retirement (Tasks 8–13) deferred to a fresh session.
+> **▶ SHIPPED TO MASTER + DEPLOYED (2026-06-28).** The whole supercruise/free-look/arrival-modes
+> arc (149 commits) merged & deployed to GitHub Pages — master `09db316`. Same arc added **sublight
+> propulsion** (drive-OFF throttle → forward/stop/reverse at SUBLIGHT_CAP), a **hard collision
+> barrier** (never fly through a body), and **mass-based forced-drop/mass-lock** near stars. Then
+> **two post-ship UAT fixes pushed `15d7189`** (code `f455f39` + Rule-3 docs): **(A)** in HELM
+> hands-on the cursor is hidden and the mouse IS the flight stick, so **left-click now selects the
+> body under the center reticle** — planets/moons selectable, not just background stars; **(B)**
+> forced-drop/mass-lock is **direction-aware** — engage + fly off when pointed AWAY from a star, a
+> head-on approach still drops you (capture). Both live-verified via chrome-devtools (reticle-on-
+> Mercury click → Mercury selected; sim-loop nose-toward force-drops / nose-away stays engaged);
+> **259 unit tests green, build clean.** Spec `docs/superpowers/specs/2026-06-28-uat-fixes-select-masslock-design.md`.
+> The "deploy deferred" status below is SUPERSEDED. Handoff resolved (both issues closed):
+> `/tmp/well-dipper-supercruise-uat-fixes-handoff-2026-06-28.md`.
+>
+> **▶ ALSO FIXED + PUSHED (2026-06-28) — procedural orbital realism `a04bf4a`.** Max UAT
+> (sublight): planets visibly drifted away when parked near them in procedural systems (Sol was
+> fine). Root cause: `StarSystemGenerator` anchored Kepler's law on the system's innermost-planet
+> AU (a VISUAL map-layout quantity), not the physical Mercury reference (0.387 AU) Sol uses →
+> procedural orbits ran 1.6×–100× too fast (worst on luminous/binary stars). Fix: `keplerOrbitSpeed()`
+> anchored on physical AU; migration + resonance-snap now recompute speed (a stale-speed migrant bug
+> the test also caught). At `celestialTimeMultiplier 1.0` (realistic, default) motion is imperceptible
+> by design — now true for procedural too. Test `StarSystemGenerator.orbit-realism.test.js` (8 seeds,
+> ±30% of real Kepler). Build clean; pre-existing KnownObjects/GalacticFeatures failures unrelated.
+> **Max UAT pending:** warp to a procedural system, park at sublight, confirm planets sit still.
+>
+> **▶ NEXT (deferred to a fresh session, Max 2026-06-28) — Orrery/God's-Eye navigation UX.** Click a
+> star system → travel there; click a planet → instantly move to it; orbit lines ON by default
+> (`showOrbits: false`→true, `Settings.js:21`). Feature w/ 3 small feel decisions → brainstorm first.
+> Handoff with anchors: `/tmp/well-dipper-orrery-navigation-handoff-2026-06-28.md`.
+
+**`supercruise-freelook-2026-06-10`** — **ALL 13 tasks + control harness BUILT,
+live-verified, and UAT-PASSED by Max** (live ride 2026-06-27: "it's good to ship").
+Elite-style supercruise is now THE in-system mover for BOTH drivers — autopilot
+(tour legs + post-warp fly-in + COMMIT BURN) and the player (manual W/S throttle +
+mouse virtual-joystick + hold-to-look freelook + screen-space HUD). **F is a 2-state
+ON/OFF flight toggle**; flight TYPE (Manual / Align-on-select / Assist) is a Settings
+enum. The control harness `src/flight/ShipControls.js` is the single-door surface both
+drivers go through; legacy `AutopilotMotion` + `NavigationSubsystem` + `FlythroughCamera`
+motion roles are RETIRED from the live path (files kept; NPC `ShipSpawner` spawn gated
+off via `SHIPS_ENABLED=false`).
 Contract (9 ACs) + intent + plan:
 `docs/WORKSTREAMS/supercruise-freelook-2026-06-10/` +
 `docs/superpowers/plans/2026-06-10-supercruise-freelook.md`.
-**Built + committed (all unit + live-verified on GPU :9223):**
-- `src/flight/SupercruiseModel.js` — nose-vector flight, throttle, gravity-well
-  speed cap (scale-free: `CAP_MIN_FRAC` 0.5 + `CAP_MIN_ABS` 1e-5 — production
-  radii span 4e-5…5, two scale bugs found+fixed live), capped turn rate. 40 unit tests.
-- `src/flight/HeadMount.js` — rotation-only head/ship split (hold-to-look, eased
-  recenter); ready for Task 8/10 input wiring + the future cockpit (computed math,
-  NOT Object3D parenting — WorldOrigin rebase constraint).
-- `src/flight/SupercruisePilot.js` — ALIGN/CRUISE/HOLD autopilot driver issuing the
-  SAME throttle/steer a player will; drop-window capture vs overshoot; HOLD settle ease.
-- `src/main.js` — sc mover branch in simStep (drives `ShipChoreographer` for the
-  AC6 shake beats); tour-leg + warp-fly-in cutover; `_seedScPoseFromCameraIfIdle()`
-  helper; warp-path pilot stops; `window._sc` live-tuning probe.
-- Commits: `53f4766 b09015d a258eeb 5b5dcfe f40f59c de78ab7 a710919 64a614a 51cd579 259f855 d5e4e2f 2fd8981 0dce7b3 ec0f932` (master, UNPUSHED).
-**NOT yet built (Tasks 8–13):** manual W/S throttle + mouse virtual joystick + F→manual
-takeover + manual drop (AC3); freelook input binding (AC4 live); minimal HUD
-speed/throttle/reticle/target (AC7); COMMIT BURN cutover `focus*`→pilot, `focusShip`
-quarantine (AC5c); retire AutopilotMotion + NavigationSubsystem from live path (AC8
-loop + Task 12); full verify-workstream + Max UAT (AC9).
-**Handoff:** `/tmp/well-dipper-supercruise-handoff-2026-06-10.md`.
-**Maps to journey:** rebuilds the travel-loop foundation the 35% SCREENSAVER-MVP
-autopilot rides; first GAME-tier (85%) capability lands with Tasks 8–10.
-**⚠ Live tree note:** the screensaver autopilot now flies supercruise — if Max runs
-the dev server before Tasks 8–13, the tour/warp loop works but manual F-mode still
-routes to the legacy FlightDynamics drive (not yet rewired).
+**Status:** UAT-passed on branch `feature/supercruise-freelook` @ `7bd261c` (pushed to
+origin). **Master merge + GitHub-Pages deploy DEFERRED** — the next arc (reach-the-planet
+drop-out + mode restructure) builds directly on these same systems, and master has an
+active World-Engine session (main.js/NOW.md merge-conflict surface). Merge when both arcs
+are ready to land. Headless at the ship commit (verified 2026-06-27): build clean, flight
++ camera + ui suites green (200/200). Last fix `7bd261c`: F-off no longer snaps back to the focused body (clears focus
+on exit). Full arc trail: `memory/well-dipper-supercruise-progress.md`.
+**Maps to journey:** completes the travel-loop foundation the 35% SCREENSAVER-MVP
+autopilot rides + lands the first player-flight (GAME-tier) capability.
+**Known quirk (not blocking, deferred):** Assist sometimes fails to converge within ~55s
+and auto-flips its target to a moon (e.g. Dione) — separate flight/selection issue.
+**▶ NEXT arc (scoping now):** reach-the-planet drop-out + forced-out-near-planet +
+enter/exit camera-shake FX + mode restructure (Toybox / Flight / Free-look, autopilot as
+a flight subset). Research workflow running; brainstorm + scope pending.
 
 ### Prior active — warp tunnel (pending-UAT items remain)
 

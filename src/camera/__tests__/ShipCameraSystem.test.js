@@ -129,6 +129,93 @@ describe('ShipCameraSystem', () => {
       expect(sys.target.x).toBe(0);
     });
 
+    // orrery-coherence-2026-07-15 AC5 → round 2b (TWO-PHASE glide, Max's ruling
+    // 2026-07-17): glideFocus is the VIEW-ONLY sibling of focusOn. History: round 1
+    // eased THREE channels (pivot @0.06 + yaw/pitch @0.08 + log-distance @0.08) →
+    // dogleg; round 2 (single-channel, 31eae77) drove camera P_start→P_final and
+    // target T_start→body on one curve → straight path but the look ROTATED while
+    // translating (a body clicked at screen edge slid edge→center while flying).
+    // Round 2b splits the move: PHASE 1 AIM rotates the VIEW with the camera POSITION
+    // held still until the body is centered, then PHASE 2 APPROACH translates straight
+    // along the settled camera→body ray with the body pinned centered. glideFocus must
+    // still ARM a glide (not snap like focusOn) and converge the camera to the standoff
+    // on the body. The 'closes …' spec below was rewritten from the round-2 immediate-
+    // translation contract in lockstep — see src/camera/__tests__/orreryGlide.test.js
+    // for the full aim/approach/ownership/interrupt guarantees.
+    describe('glideFocus() — two-phase glide of the vantage (aim in place, then approach; does not snap)', () => {
+      it('arms a glide — sets glide state, does NOT snap the pose or move the camera yet', () => {
+        // Settle a known orbit pose first (camera at ~(0,0,10) looking at origin).
+        sys.target.set(0, 0, 0);
+        sys.yaw = 0; sys.pitch = 0; sys.distance = 10;
+        sys.smoothedYaw = 0; sys.smoothedPitch = 0; sys.smoothedDistance = 10;
+        sys.update(1 / 60);
+        const camBefore = sys.camera.position.clone();
+
+        const pos = new THREE.Vector3(100, 0, 0);
+        sys.glideFocus(pos, 5);
+
+        // Glide armed — it owns the move, so NO pivot ease (_transitioning stays off).
+        expect(sys._gliding).toBe(true);
+        expect(sys._transitioning).toBe(false);
+        expect(sys._glideStandoff).toBe(5);
+        // Pivot GOAL is the body, but the live pivot has NOT jumped there.
+        expect(sys._targetGoal.x).toBe(100);
+        expect(sys.target.x).toBe(0);
+        // Not a snap: camera unmoved and smoothedDistance untouched by glideFocus
+        // (focusOn would snap both). The pre-glide settle's log-ease leaves a sub-ULP
+        // residue on smoothedDistance, so assert closeness rather than bit-equality.
+        expect(sys.camera.position.distanceTo(camBefore)).toBeLessThan(1e-9);
+        expect(sys.smoothedDistance).toBeCloseTo(10, 6);
+      });
+
+      it('holds the camera position during the aim phase, then closes to the standoff', () => {
+        // Off-axis body so the aim phase is non-trivial: camera at ~(0,0,10) looking
+        // at the origin, body at (100,0,0) is ~84deg off the forward axis.
+        sys.target.set(0, 0, 0);
+        sys.yaw = 0; sys.pitch = 0; sys.distance = 10;
+        sys.smoothedYaw = 0; sys.smoothedPitch = 0; sys.smoothedDistance = 10;
+        sys.update(1 / 60);
+
+        const body = new THREE.Vector3(100, 0, 0);
+        sys.glideFocus(body, 5);
+        const camBefore = sys.camera.position.clone();
+
+        // AIM: the FIRST update rotates the view only — the camera POSITION must not
+        // move. RED on HEAD (single-channel): the camera translates immediately, so
+        // it has already left camBefore after one frame.
+        sys.update(1 / 60);
+        expect(sys.camera.position.distanceTo(camBefore)).toBeLessThan(1e-7);
+
+        // Eventually the approach runs and parks the camera at the 5-unit standoff.
+        for (let i = 0; i < 800; i++) sys.update(1 / 60);
+        expect(sys.camera.position.distanceTo(body)).toBeCloseTo(5, 1);
+      });
+
+      it('converges to the framed vantage (camera at standoff, pivot on body) after many steps', () => {
+        sys.target.set(0, 0, 0);
+        sys.yaw = 0; sys.pitch = 0; sys.distance = 10;
+        sys.smoothedYaw = 0; sys.smoothedPitch = 0; sys.smoothedDistance = 10;
+        sys.update(1 / 60);
+
+        const body = new THREE.Vector3(100, 0, 0);
+        sys.glideFocus(body, 5);
+        for (let i = 0; i < 800; i++) sys.update(1 / 60);
+        // Camera parked at the standoff from the body, pivot centered on the body.
+        expect(sys.camera.position.distanceTo(body)).toBeCloseTo(5, 1);
+        expect(sys.target.x).toBeCloseTo(100, 1);
+        expect(sys._transitioning).toBe(false);
+      });
+
+      it('focusOn still SNAPS — glide is a separate method, snap semantics preserved', () => {
+        const pos = new THREE.Vector3(50, 0, 0);
+        sys.focusOn(pos, 7);
+        expect(sys.distance).toBe(7);
+        expect(sys.smoothedDistance).toBe(7); // snapped
+        expect(sys.target.x).toBe(50);        // pivot snapped
+        expect(sys._transitioning).toBe(false);
+      });
+    });
+
     it('restoreFromWorldState() reverse-computes orbit', () => {
       camera.position.set(0, 0, 20);
       camera.lookAt(0, 0, 0);

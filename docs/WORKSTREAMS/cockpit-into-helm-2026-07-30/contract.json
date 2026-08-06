@@ -1,0 +1,329 @@
+{
+  "workstream": "cockpit-into-helm-2026-07-30",
+  "intentRef": "intent.md",
+  "project": "well-dipper-cockpit-screens",
+  "programRef": "~/.claude/projects/-home-ax/memory/well-dipper-cockpit-program.md",
+  "status": "shipped",
+  "statusNote": "2026-08-01 SHIPPED. Every item that was Max's is answered (see the ruling block below); what remained was agent work and is now done. RULE-3 DOC PASS: FEATURES.md — the stale 'Cockpit ... | proposed' row is REPLACED by four rows (cockpit-into-helm, zoom-to-panel, reticles-on-the-glass, and a parked row pointing at P6 shadows + P4 projected-look), each carrying its UAT date and Max's verbatim. PLAYER_EXPERIENCE.md — a 2026-08-01 entry under the SCREENSAVER tier recording the cockpit as the largest divergence from the passive spec yet, and specifically the SUBTRACTIVE consequence (screen-space readouts retire in HELM, per-role and premise-based, returning on a GLB failure) since that is player-visible. SYSTEMS/<sys>/README + changelog: N/A — no cockpit SYSTEM dir exists (same disposition as the 2026-06-28 supercruise ship, 15d7189, and the 2026-08-01 ORRERY triplet). AC-LETTERBOX-Y-SETTLED-HERE stays NOT-STARTED and MOOT by its own recorded reasoning: the game never letterboxes the cockpit, so the AC has no game-side surface to settle against; 16 of 17 ACs PASS. 2026-08-01 MAX RULED ALL THREE OPEN ITEMS — nothing of his remains on this contract. (1) N-zoom-without-free-look-check: KEEP AS IS, verbatim 'N zoom sounds good' — the hands-ON pilot losing the throttle to the map until N/Esc is intended, put the map down before you fly. No code change. (2) Double mass-lock warning: 'we only need to see it once, kill whichever one is less important/further downstream' — the SCREEN-SPACE OVERLAY copy is gone, gated on `!_cockpitReplaces('DRIVE')` at the scHud.update site, so it returns automatically on a GLB load failure or in ORRERY where no glass carries it. This deliberately overturns the older in-file note that the hint should stay on the overlay because it is an alert not a readout — that predates Max seeing it doubled. The DRIVE panel's copy (FlightReadout buildAlertCue) is the survivor. (3) Panel refresh tier: 30 Hz — DEFAULT_AMBIENT_REPAINT_MS 80 -> 33 in PanelHost.js, verified live at window._panelHz() = {ambientRepaintMs:33, hz:30.3}. Three PanelHost tests pinned the old 80 with baked-in magic numbers; they now DERIVE from the constant so a future retune cannot break them. (4) Reticle occlusion: Max confirms 'these are properly occluding now; works well' — the moot centre-ray question is closed for good. ⭐ REMAINING BEFORE SHIPPED IS NOW AGENT WORK ONLY: Rule-3 doc pass, then flip to shipped. NEW ITEM PARKED, not blocking: cockpit shadows -> PARKING_LOT P6 (cabin does not self-shadow; system objects do not cast onto the cabin; lighting direction itself is correct). 2026-08-01 LEDGER HYGIENE + SCOPE CORRECTION: the `status` field held the prose 'MAX-PASSED-GATE — all 4 post-UAT fixes live-verified' and was schema-invalid; moved verbatim to legacyStatusNote. Status set to `verified`, NOT `shipped` — this contract's own note says 'WHAT REMAINS BEFORE SHIPPED IS MAX'S, not an agent's'. ⭐ ONE OF THOSE ITEMS IS NOW MOOT: postUatFixes[4].openForMax asked whether the CENTRE-RAY occlusion test reads badly (a reticle vanishing whole rather than clipping at a rib edge). That mechanism was RETIRED by reticles-on-the-glass-2026-08-01, which shipped d3dc4cb on Max's pass and replaced it with a silhouette cabin mask that cuts the overlay at real geometry edges (src/cockpit/cabinMask.js, 23 references in main.js). Do not re-ask him that question. STILL OPEN AND GENUINELY HIS: (a) postUatFixes[3] — N zooms NAV without checking free-look, so a hands-ON pilot loses the throttle to the map until N/Esc; feel call, alternative is latching free-look on zoom, one line in _openCockpitNav. (b) the mass-lock warning renders TWICE — massLockHint is fed to two snapshot consumers, main.js:2708 and :11157. (c) the _panelHz tier default — DEFAULT_AMBIENT_REPAINT_MS is 80 (12.5 Hz) in src/cockpit/PanelHost.js:197; whichever of 80/33/16 he picks becomes the default. ⭐ 2026-08-01 — MAX PASSED AC-IT-FEELS-LIKE-FLYING-FROM-INSIDE (\"Yep\"). The increment's own gate is closed and 16 of 17 ACs are PASS; the 17th (AC-LETTERBOX-Y-SETTLED-HERE) is MOOT — the game never letterboxes the cockpit, so its premise dissolved when increment 7 shipped. ⭐ 2026-08-01, LIVE VERIFICATION DONE on :5181: THREE of the four post-UAT fixes are now verified in the running game (throttle bar, nav keyboard + pan rate, reticle occlusion + the FOV bug), each against an independent measurement rather than a screenshot — see postUatFixes for the numbers. ⭐ The fourth (29d3be9, the GLB-failure gate) is NOW live-verified too: the asset was moved aside on purpose to induce the failure, the overlays were confirmed to survive in HELM with no cockpit, and the GLB was restored byte-identically. ⚠ WHAT REMAINS BEFORE SHIPPED IS MAX'S, not an agent's: the four raised items in postUatFixes openForMax plus the double mass-lock warning and the _panelHz tier. Prior state, for the record: VERIFIED_PENDING_MAX e3a87aa (2026-07-31), 15 of 17 PASS. ⭐ THE PANEL-RATE KNOB STILL AWAITS HIS EYE: the on-glass 'lag' is NOT a cost problem (p50 is 4.2 ms at every tier; NAV's getImageData is 0.24 ms and willReadFrequently would buy 0.04). It is that the glass runs at 12.5 Hz beside a ~235 Hz world. `window._panelHz(ms)` is the live knob; whichever of 80/33/16 he picks becomes DEFAULT_AMBIENT_REPAINT_MS in PanelHost.js, and it should be checked on a slower machine before it becomes the default — the measured table is one machine's numbers.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-ONE-RIG-TWO-HOSTS",
+      "statement": "The cockpit's visual assembly — GLB load, scene graph, lights, eye camera, panel host, mover, picker — is ONE module that both the lab and the game construct, not two copies. Today it is inline in cockpit-screens-lab.html and absent from src/; the lab must be converted to a caller of the shared rig, not left as a second implementation. This is the first AC because everything below depends on it, and because a second copy would drift: this workstream has been bitten five times by two instruments that disagreed, and 'the lab passes where the generator fails' is already a named failure mode in this program.",
+      "verifyVia": {
+        "input": "Import the rig module in a headless test and construct it against a stub renderer. Then grep the lab for the assembly calls the module now owns.",
+        "observable": "The module constructs and exposes the panel records, the mover and the picker. The lab contains no remaining GLTFLoader/scene/light/mover/picker construction of its own — it calls the module. A planted divergence (change a light's intensity or the eye camera's fov in the module) shows up in BOTH the lab and the game rather than one of them."
+      },
+      "layer": "unit",
+      "live": false,
+      "status": "PASS",
+      "statusNote": "step 1a/1b — CockpitRig extracted, the lab is a caller"
+    },
+    {
+      "id": "AC-COCKPIT-IS-THERE",
+      "statement": "Max flies the game in HELM and the cockpit is there — he is looking through the canopy at four screens mounted at the corners. It renders as its own pass composited over the world, per the program's architecture, so the 1 m = 6.7e-9 scene-unit precision question never arises.",
+      "verifyVia": {
+        "input": "Load the game, boot into HELM, fly.",
+        "observable": "The cockpit geometry is on screen in front of the world, the four Screen_* faces carry their panel textures, and the frame does not regress: zero new console errors, and the world still renders behind the canopy aperture rather than being occluded by a full-screen quad."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "PASS",
+      "statusNote": "step 2-4 first light; re-confirmed live at steps 5-7"
+    },
+    {
+      "id": "AC-HELM-ONLY",
+      "statement": "The cockpit is present in HELM and absent in ORRERY, gated at the regime rather than at a visibility flag that something else can flip. `regime = _scManual ? 'helm' : 'orrery'` (main.js:410) is the existing seam. This includes the hands-off screensaver tour, which is a HELM feature — `idleFiresTour({regime})` is literally `return regime === 'helm'` — so the cockpit must be on screen for the whole tour, not only under manual control.",
+      "verifyVia": {
+        "input": "Boot to HELM, confirm the cockpit; switch to ORRERY, confirm it is gone; let the HELM screensaver tour run hands-off.",
+        "observable": "The cockpit's render pass is skipped entirely in ORRERY (not merely transparent — no pass, no cost), present in HELM, and present throughout the hands-off tour."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "PASS",
+      "statusNote": "live: rendering true in HELM, false in ORRERY, routing follows"
+    },
+    {
+      "id": "AC-PANELS-READ-THE-REAL-FLIGHT",
+      "statement": "The four screens show real data about the flight Max is actually in, through the one read-only feed: DRIVE (speed/throttle/drive state/MODE), TARGET (selected target, distance, ETA, SAFE TO DROP), INFO (the selected body's physics), NAV (the nav computer). The feed is CockpitSnapshotProvider, which already runs in the game once per renderFrame and is already proved unwritable-through (AC-SNAPSHOT, 106 write attempts landed nothing). No panel may reach past it. ⚠ FOUND BY REVIEW — INFO CURRENTLY DESCRIBES THE WRONG BODY, and retiring BodyInfo is what makes it visible. BodyInfo describes the SELECTED body (selectTarget, main.js:6570-6611, never touches focusIndex) while the INFO panel's snapshot block is built from focusIndex (CockpitSnapshot.js:87-124). Both are on screen today, so the divergence is invisible; with BodyInfo suppressed in HELM, selecting a body would leave INFO describing something else and read as 'INFO is broken'. RESOLVED FROM MAX'S OWN CHARTER WORDS rather than by asking again — he specified INFO as 'info about whichever system object is SELECTED', so INFO follows SELECTION and the focusIndex wiring is the defect. ⭐ AND THE CASUALTY HUNT PAID: BodyInfo's RADIUS line and its Rings / Clouds / Atmosphere chips have no INFO row and no snapshot field at all. They are added BEFORE BodyInfo is suppressed — otherwise this increment silently loses them, which is precisely what the previous workstream's open AC-NOTHING-I-HAD-GOT-LOST gate is about.",
+      "verifyVia": {
+        "input": "Fly in HELM: change throttle, select a body, target something, engage the drive.",
+        "observable": "Each panel's readout changes to match, within one frame of the snapshot. A panel reading a live game object directly instead of the snapshot is a FAIL even if the number displayed is correct — checked by attempting a write through every panel's inbound data."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "PASS",
+      "statusNote": "live: DRIVE/TARGET/INFO track the flight; NAV now reads the real system"
+    },
+    {
+      "id": "AC-OVERLAYS-RETIRE-IN-HELM",
+      "statement": "In HELM the DOM/canvas flight readouts are GONE, not hidden behind the cockpit — the four screens replaced them, which is the DIEGETIC-ONLY ruling Max made at program open and reaffirmed on 2026-07-30 for this increment. Retiring: SupercruiseHud (already gated on `_scManual || scPilot.isActive`, so this is its natural end), the 320²-circle-masked HUD target, and the #debug-hud physics rows the INFO panel took over. The NavComputer overlay and BodyInfo are SUPPRESSED in HELM, where the cockpit hosts them — see AC-ORRERY-KEEPS-WHAT-IT-OPERATES. ⚠ CORRECTED 2026-07-30 AFTER ADVERSARIAL REVIEW — THE 320-SQUARE SLOT WAS MIS-CLASSIFIED HERE AS A READOUT AND IT IS NOT. Clicks inside the minimap circle hit bodies and call autoNav.jumpToStar() / jumpToPlanet() (main.js:10240-10281, :10253-10257) and it drags to rotate (:10681-10700) — it is OPERABLE by this contract's own discriminator, and a prior recorded ruling (cockpit-screen-content-2026-07-28/contract.json:255) already said 'GONE in HELM, KEPT in ORRERY, still toggled by C'. So it retires in HELM ONLY, where NAV's system view is its replacement; ORRERY keeps it. ⭐ AND THE SLOT HOSTS TWO SCENES: GravityWellMap (V key) has no NavComputer level, no cockpit panel and no snapshot field, so it cannot fold into NAV at all — gating the whole slot off in HELM would delete gravity wells outright with no replacement. Only the MINIMAP scene is suppressed in HELM; the V key stays live in both modes. Also added to the retire-in-HELM list, both found by review and absent from the first draft: #commit-burn-btn (index.html:234, main.js:6830-6864) — a DOM burn affordance that would sit on screen beside the cockpit's own COMMIT, the exact contradiction DIEGETIC-ONLY exists to remove — and #flight-mode-toast, which the prior workstream already ruled retired-in-HELM. ⛔ #mode-swap-btn MUST SURVIVE on mobile (main.js:9610-9614): it is mobile-HELM's only tour exit.",
+      "verifyVia": {
+        "input": "Fly in HELM and attempt to reach each retired surface, including by its keybinding (N for the nav overlay) and by the mobile dock.",
+        "observable": "None of the retired elements is in the DOM's rendered tree in HELM (display:none is acceptable only where the element is shared with ORRERY; a retired-outright element is gone). The N key and the mobile 'nav' action do not open a DOM overlay on top of the cockpit. No layout gap or stray backdrop is left where they were. Additionally: after a WARP, the minimap is still suppressed — spawnSystem calls retroRenderer.setHud(...) on every arrival (main.js:4756-4767), so a regime-only gate leaves it back on top of the cockpit. The V-key gravity well still works in HELM. #mode-swap-btn is still present and functional on mobile."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "PASS",
+      "statusNote": "Step 8 landed 2026-07-30 (e22dd02 + this commit). DONE and verified live: SupercruiseHud's flight READOUTS (bottom-left speed/throttle cluster, MODE line) gone in HELM and still on the DRIVE panel; the minimap suppressed in HELM incl. AFTER A WARP (the trap this AC names) and returning in ORRERY; the V-key gravity well still live in HELM; #flight-mode-toast suppressed in HELM; BodyInfo suppressed in HELM; the NavComputer overlay already routed to the glass; #commit-burn-btn ALREADY carried `|| _scManual` and needed no change; #mode-swap-btn's `(!_isMobile || _scManual)` survives. DELIBERATELY KEPT, not retired: the centre steering reticle + deflection dot (a CONTROL - no panel can draw a cross at screen centre, and nothing on the glass replaces it), the mass-lock TOO CLOSE alert, and the at-the-body ETA/drop cue (world-space: says WHICH, where the panel says how far - Max can reverse that one by moving one block under the flag). ⛔ OUTSTANDING: the #debug-hud physics rows. It turned out to be a hidden DEVELOPER overlay (FPS, galactic potential, star evolution), display:none by default and not a player surface, so stripping dev diagnostics for DIEGETIC-ONLY looks like the wrong trade - RAISED TO MAX, not skipped. ⚠ ALSO NOT DRIVEN: #mode-swap-btn on a REAL mobile device; verified by reading only. ⚠ CONTRACT CONTRADICTION, resolved in favour of the corrected text: this AC's own ⚠CORRECTED note says the 320-square retires in HELM ONLY and ORRERY keeps it (citing a prior recorded ruling), while AC-ORRERY-KEEPS-WHAT-IT-OPERATES still says the circle is 'gone in both modes' - pre-correction wording. Implemented per the correction. ⭐ 2026-07-31, FOUND BY AUDIT AND FIXED (5e45ded + 73a26d8): STEP 9 SHIPPED ONLY ITS FIRST HALF. The design review (evidence/DESIGN-REVIEW-2026-07-30.md:115-117) paired the BodyInfo suppression with \"and add the warp-destination row to TARGET — in the same step\", because BodyInfo.showWarpTarget() (src/ui/BodyInfo.js:82) was the only announcement of a warp destination. 140b7a4 suppressed BodyInfo; the TARGET half was never built and no AC tracked it. The gap was sharper than a missing row: trySelectWarpTarget (main.js:11113) opens `if (_selectedTarget) scControls.deselect();` — the single-selection invariant — so picking a destination NULLS the body TargetPanel's hero reads. Picking where to go emptied the glass AND named the destination nowhere on the sky-click path. ⚠ NARROWED BY AN ADVERSARIAL REVIEWER: the destination is still reachable if the pilot then OPENS NAV (main.js:3507 _syncNavExternalTarget → NavComputer.js:1860 'WARP TARGET'), so the accurate claim is 'not announced on selection', not 'unreachable'. FIX: TargetPanel now takes warp.targetName (carried since increment 6 at CockpitSnapshot.js:208 and read by no painter) into the hero slot when no body is selected, labelled WARP TARGET in NavComputer's own words, drawn AFTER the hero because the overflow path re-clears the buffer. 5 tests; 5/5 planted defects red their own test — the fifth guard exists because the ordering plant STAYED GREEN (drawn() reads the fillText log, and a later clear() removes nothing from a log). ⚠ NOT LIVE-VERIFIED: :5181 was not running this session. ⭐ 2026-07-31, THE OUTSTANDING #debug-hud ITEM IS CLOSED (d713623) — as a GATE, not the deletion step 11 asked for, and BOTH premises of the earlier 'raised to Max' were refuted by audit. It is NOT hidden: index.html's K-key legend lists ` = Debug HUD beside WASD. It is NOT redundant: _updateHUD reads entry.planet and never consults _focusMoonIndex for physics, while the cockpit switches body (CockpitSnapshot.js:110-118) and moons carry physics:null by construction (main.js:5222) — focus a moon and the glass blanks while the HUD shows the PARENT planet. And a deletion is wrong in SHAPE: there is no INFO panel in ORRERY, nor in HELM on a GLB load failure (_cockpitShouldRender, main.js:2701), so it would strip the readings where nothing replaces them. New DebugPanel.setSurveySuppressed(_scManual) rides the same flip point as BodyInfo and FlightModeToast; NARROW — COMP/ATMO/TIDAL only, SURF stays because InfoReadout.js:190-206 excludes surfaceHistory by name. 5/5 planted defects red their own test, including a gate that over-reaches onto SURF. ⛔ THIS AC REMAINS PARTIAL FOR ONE REASON ONLY: it is layer=integration/live and NOTHING IN IT HAS BEEN LIVE-VERIFIED SINCE 2026-07-30 — :5181 was not running this session, so neither the warp-destination row nor this gate has been seen on a real page. ⚠ SEPARATE FINDING, NOT FIXED, RAISED: every retirement gates on _scManual while the nav overlay deliberately gates on _cockpitShouldRender() (main.js:3280-3283, so a GLB failure still leaves a nav computer). Consequence: a GLB load failure in HELM leaves NO cockpit AND no speed, throttle, MODE, minimap, BodyInfo or toast — a total readout blackout. Also unfixed and disclosed: the mass-lock 'TOO CLOSE — SUBLIGHT ONLY' now renders TWICE (SupercruiseHud.js:272 and DrivePanel.js:224 via AlertCue.js:63, character-identical) and SupercruiseHud.js:95-96's comment claiming it has 'no panel equivalent' is false at HEAD; and the THROTTLE bar was retired with no replacement — DrivePanel.js:34-44 says the model deliberately does not draw throttle, it draws commanded SPEED, so reverse throttle is unreadable in supercruise. ⭐⭐ 2026-07-31 LIVE-VERIFIED IN THE GAME on :5181, hands-on in HELM — this AC is now PASS. (1) THE WARP DESTINATION, measured on the REAL panel buffer (Screen_LR, identified live as TARGET because it is the only panel that responds to warp.targetName): with a destination set and no body, ink 5785, label band [0,1281,259,0], hero band [268,2677,334,0]; with the destination taken away — the exact frame the panel showed BEFORE the fix — ink 966, label band ALL ZERO, hero band ALL ZERO, i.e. two bare labels naming nothing. Reversible in both directions. The overflow fallback was observed too: a 3-char name draws MORE ink than a 16-char one, because the long one drops to body size. (2) THE DEBUG-HUD GATE, both directions: in HELM the rows are FPS/GAL/WELL/SYS/STAR/FOCUS/SURF/CAM — COMP/ATMO/TIDAL gone and SURF STILL PRESENT, which is the half a blanket suppression would have taken; in ORRERY with a planet focused all three return. ⚠ The first ORRERY read was a FALSE NEGATIVE and is worth recording: FOCUS and SURF had gone too, because the regime flip cleared the focus, so the precondition for the rows was absent rather than the gate failing — the same 'a control against a stationary subject is not a control' trap this lane hit on the star lighting. ⚠ ALSO CORRECTED: an earlier copy-based pixel profiler (drawImage into a scratch canvas) returned STALE frames and produced a flat, unchanging reading on every panel including NAV. Reading getImageData from the panel canvas's OWN context is what works. A pixel probe that never changes is broken, not a panel that never repaints."
+    },
+    {
+      "id": "AC-ORRERY-KEEPS-WHAT-IT-OPERATES",
+      "statement": "ORRERY keeps the two surfaces Max OPERATES and loses the readouts. Max, 2026-07-30, asked directly because retiring everything globally would leave ORRERY unnavigable: the nav computer (N, and the mobile 'nav' action) and BodyInfo stay reachable in ORRERY; SupercruiseHud, the 320² target circle and the debug rows are gone in both modes. ⚠ This is NOT the 'split by mode' option he rejected at program open — that was the whole HUD coexisting with the cockpit. This is which mode hosts the two operable machines, and ORRERY has no cockpit to host them in.",
+      "verifyVia": {
+        "input": "In ORRERY: press N, select a body, look for the flight readouts. Then switch to HELM and repeat.",
+        "observable": "In ORRERY the nav computer opens and drives, and selecting a body shows its info; the flight readouts are absent. In HELM the same two are absent as DOM and present on the glass. Warping from ORRERY still works end to end."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "PASS",
+      "statusNote": "Verified live 2026-07-30 by flipping the regime with M and driving each surface. ORRERY: N opens the nav computer and drives it (observed earlier the same day when the screensaver sequence ran on the DOM overlay in ORRERY, which is the correct surface there), and Tab-selecting a body shows BodyInfo (display 'block'). HELM: the same Tab leaves BodyInfo at 'none', and flipping back to ORRERY brings it 'block' again - so the retirement AND the restoration both work, which is the half that is easy to miss. Flight readouts absent in both (scHud only ever drew in HELM, and its readouts are now gated off there). ⚠ See the contradiction noted on AC-OVERLAYS-RETIRE-IN-HELM about the 320-square: this AC's 'gone in both modes' wording predates that AC's own correction and was NOT followed."
+    },
+    {
+      "id": "AC-ZOOM-AND-WORK-THE-MENU-IN-GAME",
+      "statement": "Max zooms the upper-left monitor in the GAME and works the full menu — his increment 6 words, now against the real flight: the level tabs change level, a star at PRISM drills to SYSTEM, a planet opens planet detail. Zooming clears the chromeless intent so the panel draws its chrome, exactly as in the lab. ⚠ REVIEW FOUND A PRECONDITION THE FIRST DESIGN MISSED: `openToCurrentSystem` is called ONLY from openNavComputer (main.js:2898), and it is what sets _systemStar, _systemData, _currentSystemData, _systemMode and _levelIndex (NavComputer.js:338-353). Redirecting openNavComputer for the cockpit means it is never called on that instance — so _systemData is null, 'a planet opens planet detail' cannot pass (the SYSTEM renderer reads _systemData at NavComputer.js:2164), and after every warp the cockpit NAV would still describe the PREVIOUS system. It must be called on SYSTEM ARRIVAL.",
+      "verifyVia": {
+        "input": "In HELM, click the upper-left monitor to zoom it, then click each of the five level tabs, a star at PRISM, and a planet at SYSTEM.",
+        "observable": "The panel travels to the eye and lands; each click produces its documented state change read from the live instance; the panel restores on ESC. Zero console errors across the sequence."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "PASS",
+      "statusNote": "live: level tabs change level, a star at PRISM drills to SYSTEM, a planet opens planet detail, ESC restores, zero console errors"
+    },
+    {
+      "id": "AC-A-QUICK-CLICK-IS-ENOUGH",
+      "statement": "A quick click works in the game — no press-and-hold. The game writes its own pointer routing from scratch (nothing in src/ builds a PanelHost today), so it must forward UNPRESSED pointer moves via PanelPointerAdapter.pointerHover or it reproduces the exact defect Max found at increment 6 UAT: NavComputer resolves every body in the map from hover state recomputed at DRAW time from _mouseX/_mouseY, which only _handleMouseMove writes. ⚠ AND THE PROBE MUST NOT HIDE IT AGAIN: clickGlass fires down → move → up, putting the move inside the gesture, which is what press-and-hold does by hand — that is why increment 6's live pass passed over this. Verification here must use a gesture with NOTHING between press and release.",
+      "verifyVia": {
+        "input": "With a panel zoomed in the game: move the cursor onto a planet with no button down, then press and release with no movement in between.",
+        "observable": "The planet drills in. The pointer census shows the hover channel carrying the moves (hover count rising, pressed-move count zero) and lastRole is the zoomed panel. A control run with no preceding hover does nothing, proving the hover is what did the work."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "PASS",
+      "statusNote": "live: CONTROL with no preceding hover does nothing; one unpressed hover then press+release with nothing between drills the body. census hover 1+, pressedMove 0, lastRole NAV"
+    },
+    {
+      "id": "AC-AUTOPILOT-BUTTON-TOGGLES",
+      "statement": "The autopilot button on the glass toggles autopilot for real and the label reaches AUTOPILOT ON — moved here from increment 6 on Max's decision of 2026-07-30, because in the lab `_autopilotActive` is a mirror written only by `setAutopilotState`, which no lab code calls, so the callback received `true` on every press. The game already has the correct wiring for its DOM instance at main.js:2863-2867 (startFlythrough/stopFlythrough then setAutopilotState); the cockpit instance needs the same callback installed.",
+      "verifyVia": {
+        "input": "Zoom NAV in the game and press the autopilot button twice.",
+        "observable": "The first press starts the hands-off tour and the on-glass label reads AUTOPILOT ON; the second stops it and the label returns. The callback receives true then false, not true twice."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "PASS",
+      "statusNote": "live: press 1 tour true->false and label ON->OFF with the cockpit STILL on screen; press 2 false->true. true then false, not true twice"
+    },
+    {
+      "id": "AC-COMMIT-FIRES-THE-WARP",
+      "statement": "COMMIT fires its action — moved here from increment 6, where it invoked a callback nothing installs. Pressing [ WARP ] / [ BURN ] on the glass does what pressing it in the retired overlay did, including its sound. ⚠ REVIEW FOUND THE OBVIOUS WIRING SILENTLY DEAD. Mirroring main.js:2852-2856 literally gives the cockpit instance a commit callback of `_pendingAction = action; closeNavComputer()` — and in HELM closeNavComputer returns at its first line (`if (!el || !_navComputerOpen) return;`, :2914) because the DOM overlay is not open, so dispatchNavAction (:2926) never runs. Max would press COMMIT and get nothing at all: no warp, no error, and _pendingAction left set to fire on some later unrelated close. The cockpit instance dispatches through an explicit read-null-dispatch helper, NOT through closeNavComputer, and the navOpen/navClose sounds need their own home because the redirect bypasses :2874 and :2916.",
+      "verifyVia": {
+        "input": "In the game, zoom NAV, select a destination, press COMMIT.",
+        "observable": "The same warp/burn sequence the overlay produced begins, with the same sound cue. The action payload matches the shape _buildCommitAction() returns — not a fabricated one."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "PASS",
+      "statusNote": "live: [ WARP ] on the glass flips warpTarget to the selected star, retracts the panel, and turning goes true"
+    },
+    {
+      "id": "AC-REAL-CATALOGUE-REACHES-THE-GLASS",
+      "statement": "The cockpit NavComputer gets the real star catalogue and the real feature catalogue, so the far-companion chip and the component sub-view work — both were structurally unreachable in the lab because `_realStarCatalog` is null there and only src/main.js sets it (main.js:263, :2848). With the catalogue in place a prism marker can BE an authored far-companion host, which is the precondition those two clauses were waiting on.",
+      "verifyVia": {
+        "input": "Reach a system with an authored far companion (Proxima → Alpha Centauri is the worked example), zoom NAV, click the far-companion chip.",
+        "observable": "The chip is drawn, the click opens the component sub-view, and clicking again returns to the system view. Both catalogues report loaded on the cockpit instance."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "PASS",
+      "statusNote": "DRIVEN LIVE 2026-07-30. Warped to Alpha Centauri via the game's own nav path (dispatchNavAction type:'warp' off the real catalogue entry Rigil Kentaurus, not a hand-built warpTarget). On arrival systemData.farCompanions = [{Proxima Centauri, 13000 AU, M5.5Ve}] with 1 componentSystem. Zoomed NAV: the chip IS DRAWN on the glass ('Proxima Centauri / far companion 13,000 AU / planets: b, d'). Clicked it -> _systemMode system->component, _selectedComponentIdx -1->0, sub-view header 'via Proxima Centauri - far companion'. Clicked again -> back to system, -1. Pointer census both times down/up/navDown with pressedMove 0, i.e. quick clicks. Tour stopped first per the parked-panel coordinate trap."
+    },
+    {
+      "id": "AC-AUTOPILOT-ALWAYS-HAS-A-COCKPIT",
+      "statement": "All four paths that reach startFlythrough() with `_scManual === false` are routed through the hands-off tour so the cockpit is on screen — Max's decision of 2026-07-30. The four are enumerated: the NavComputer autopilot button, the two mobile dock/speed-dial autonav buttons, and the post-respawn `wasAutopilot` re-arm. Left alone, pressing autopilot on the cockpit's own NAV panel ejects Max from the cockpit into a cinematic camera, which reads as a bug rather than a flourish.",
+      "verifyVia": {
+        "input": "Trigger autopilot from each of the four paths in turn.",
+        "observable": "Each one runs with the cockpit on screen and the camera at the helm (`scHead.applyTo(camera, ...)`), not the cinematic FlythroughCamera. All four are exercised; none is assumed from the others."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "PASS",
+      "statusNote": "ALL FOUR PATHS DRIVEN LIVE 2026-07-30, none assumed from another. Path 1 (nav button) was already done. Path 2 mobile dock autonav-toggle: tour armed, cockpit rendering, camera at the helm. Path 3 speed-dial autonav: fired from ORRERY with _scManual === false - the condition the AC names - flipped to HELM with the cockpit up, 0.000 deg. Path 4 post-respawn wasAutopilot: sampled across a warp, tour went DOWN at t=2.5s and back UP at t=8s with regime helm and rendering true throughout, so the re-arm branch genuinely ran rather than autopilot never stopping. 'At the helm' is measured by composing shipQuat x headLook and comparing to the live camera - the cinematic FlythroughCamera writes its own spline and cannot satisfy it."
+    },
+    {
+      "id": "AC-SCREENSAVER-LOOP-STAYS-CLOSED",
+      "statement": "The screensaver still loops. AutopilotNavSequence (671 lines) is act TWO — autoNav.onTourComplete fires it and it performs the nav computer, with weighted styles, a faked blinking cursor and real drills, to pick the next star. It does that by calling openNavComputer/closeNavComputer, which in HELM must now drive the COCKPIT's NAV panel rather than opening a DOM overlay on top of the cockpit. If this breaks, the game's default idle state dead-ends after one tour. ⚠ TWO REVIEW FINDINGS. (1) setPlayerPosition IS DESTRUCTIVE, NOT A SYNC — NavComputer.js:912-930 empties _localStars, calls _resetPrismLoad(), nulls _selectedNavStar and rewrites the whole local frame. Wiring it to the four focus sites (focusShip/Planet/Star/Moon) means pressing Tab while drilled into PRISM wipes the star list and the selection; worse, if a focus change lands inside AutopilotNavSequence's 20x300ms _localStars retry (AutopilotNavSequence.js:375-388) the list is emptied under it, no pick happens, and _finish() runs with no _pendingAction — a silent dead-end of the screensaver loop. So the state appliers SPLIT IN TWO: an ARRIVAL applier (setPlayerPosition + openToCurrentSystem + _currentSystemName + setExternalTarget) fired once per system, and a FOCUS applier (setCurrentBody only) fired from the four focus sites. (2) The ORRERY autopilot button leaves the DOM overlay OPEN over the cockpit: setOnAutopilotToggle routes to the hands-off start, which flips the regime, but nothing closes #nav-computer-overlay — so the cockpit renders underneath a full-screen overlay whose _navRenderLoop is still driving the OTHER instance, and the sequence then performs on a panel nobody can see. The HELM-entry applier must close the DOM overlay on the ORRERY->HELM transition.",
+      "verifyVia": {
+        "input": "Boot into HELM and leave it alone through a full tour and into the nav sequence.",
+        "observable": "The sequence performs on the cockpit's NAV panel — visible on the glass, no DOM overlay appears — picks a star, and warps. Then the loop begins again. In ORRERY the tour never auto-arms, which stays true."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "PASS",
+      "statusNote": "FULL LOOP OBSERVED IN HELM 2026-07-30, sampled 2x/sec: t=0.5 tour running, panel at rest; t=3.8 NAV toZoom; t=5.3 NAV zoomed (the sequence performs here); t=12.5 toRest, tour ended; t=16.9 rest; t=25.0 WARP fires; t=37.0 TOUR RUNNING AGAIN - the loop closed. navOverlay was 'none' at every sample and regime helm / rendering true throughout, so the DOM overlay never appeared and the cockpit never left the screen. A second cycle was then observed starting and touring a new system. NOTE: an earlier attempt recorded the sequence running on the DOM overlay - that run was in ORRERY (the arming tap had toggled the boot tour off and dropped the regime), which is the correct surface there; it is not a counter-example."
+    },
+    {
+      "id": "AC-FLIGHT-AND-ORRERY-SURVIVE",
+      "statement": "Flight keys still fly the ship while a panel is zoomed, and the ship's trajectory is bit-identical with and without look input — HeadMount.test.js:10-25 asserts exactly that and `scModel` must stay untouched by anything this increment adds. Warp, save/load, the mobile controls and ORRERY all keep working.",
+      "verifyVia": {
+        "input": "With a panel zoomed in the game, use the flight keys. Then run a warp, a save and reload, and a spell in ORRERY.",
+        "observable": "The ship responds to the flight keys while zoomed and the zoomed panel keeps its pose. The existing suite stays green, HeadMount's bit-identical assertion included. Warp, save/load and ORRERY behave as before."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "PASS",
+      "statusNote": "Remaining clauses driven live 2026-07-30. Mobile controls: autonav-toggle, autonav, orbits, gravity, prev, next and nav all dispatched through the real touchend handlers with the cockpit rendering and the camera at the helm. Save/reload: there is no game-state save in this project - localStorage holds only well-dipper-settings and wd_cameraMode - so this clause is settings persistence; wd_cameraMode survived reload, and pixelScale now does too. TWO DEFECTS FOUND AND FIXED while driving it (50640f1): (1) the mobile dock's nav action tested _navComputerOpen, which tracks the DOM overlay and is false forever in HELM, so it could open the glass NAV panel and never retract it - desktop was covered by N via toggleNavComputer, mobile has no N; (2) PRE-EXISTING, pixelScale saved but was never restored at boot. Flight keys while zoomed and the bit-identical trajectory were already verified."
+    },
+    {
+      "id": "AC-LETTERBOX-Y-SETTLED-HERE",
+      "statement": "The 1-px letterbox y-convention divergence is settled against the GAME's letterbox, which is the surface it actually matters on. PanelPicker reads viewport y top-down; renderer.setViewport reads the same number bottom-up; they disagree at 25.4% of 14,408 measured window sizes. Max, 2026-07-30, left it recorded rather than fixed in the lab precisely so it would be decided here once, against the real camera, rather than decided twice.",
+      "verifyVia": {
+        "input": "In the game, resize the window across a range of shapes including ones that produce an odd letterbox bar, and click a known on-glass target near the panel's top and bottom edges.",
+        "observable": "The picker and the renderer agree at every shape tested — the game's own viewport probe reports the two conventions agreeing — and a click near either edge lands on the target rather than one pixel off it."
+      },
+      "layer": "integration",
+      "live": true,
+      "status": "NOT-STARTED",
+      "statusNote": "⭐ 2026-07-31 — THE PREMISE DISSOLVED WHEN INCREMENT 7 SHIPPED; this AC has no game-side surface to settle against. THE GAME NEVER LETTERBOXES THE COCKPIT: main.js:2709-2710 hands the picker {x:0, y:0, width: innerWidth, height: innerHeight} with the comment \"The cockpit target is full-screen\"; RetroRenderer.js:808-814/844 sizes cockpitTarget to the window with no aspect lock; the cockpit pass (RetroRenderer.js:956-964) never calls setViewport at all — CockpitRig.test.js:298 is a committed regression guard that forbids it; main.js:10174 tracks window aspect. So x=y=0 always in HELM and the two conventions cannot disagree. The divergence is REAL, MEASURED AND LIVE-OBSERVED, but only in the lab harness (cockpit-screens-lab.html:799-804 feeds one `y` to renderer.setViewport, whose y is bottom-up, while PanelPicker.js:95-100 reads it top-down; they part when the letterbox slack H-h is odd). Evidence exists after all: cockpit-zoom-to-panel-2026-07-29/evidence/live-pass-1-gaps.json:285 records yConventionsAgree false at 1922x1082 and true at 1102x1002. The 25.4%-of-14,408 FIGURE is not recoverable from source — a reviewer recomputed the rate from the committed eyeViewport() and got 28.9-39.8% depending on the sweep set, so the percentage was a property of a size list nobody kept. RECOMMENDED DISPOSITION: moot against this build; nothing is painted wrong and no click can land wrong. ⚠ LATENT FRAGILITY WORTH KEEPING: the cockpit picker is the ONLY hit-test in main.js that assumes canvas origin = window origin — its siblings correct for it (main.js:4575, :4710 subtract rect.left). If the canvas ever stops filling the window, the cockpit picker silently acquires exactly this defect."
+    },
+    {
+      "id": "AC-BASELINE-GREEN",
+      "statement": "The existing suite stays green: 2275 passed / 4 skipped plus the 15 known vendor/motion-test-kit collection errors, which are pre-existing noise and not this increment's to fix.",
+      "verifyVia": {
+        "input": "npx vitest run from the worktree root.",
+        "observable": "2275 or more passed, 4 skipped, and exactly the 15 known vendor collection errors. Any new failure is a FAIL regardless of whether it looks related."
+      },
+      "layer": "unit",
+      "live": false,
+      "status": "PASS",
+      "statusNote": "2357 passed / 4 skipped + the 15 known vendor collection errors"
+    },
+    {
+      "id": "AC-IT-FEELS-LIKE-FLYING-FROM-INSIDE",
+      "statement": "UAT, Max's gate alone: does flying the game from inside this cockpit cohere as the thing he asked for — the screens are the instruments he actually reads, the overlays are gone and he does not miss them, and nothing he had got lost. No agent drives or passes this.",
+      "verifyVia": {
+        "input": "Max flies the game in HELM, uses the four screens as his instruments, zooms NAV and navigates from it, and spends time in ORRERY.",
+        "observable": "Max's judgement. Always deferred-to-max; the verify workflow marks it deferred and never PASS."
+      },
+      "layer": "uat",
+      "status": "PASS",
+      "statusNote": "⭐ PASSED BY MAX, 2026-08-01, in UAT. Asked whether flying the game from inside the cockpit reads as flying from inside a ship, he answered \"Yep\". THIS IS THE INCREMENT GATE AND IT IS CLOSED — recorded here by working-Claude as a transcription of his verdict, not as an agent judgement; no agent drives or passes this AC and none did. ⚠ He passed the FEEL and separately reported four defects in the same breath; passing the gate is not a claim that nothing was wrong, and the four are tracked in postUatFixes below. Two of them are live-verified only by unit + source guards so far and await a dev server for integration verification."
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "cockpit.glb + cockpit-metrics.json (public/assets/cockpit/) — the geometry lane E generates from scripts/cockpit-gen.py. Panels bind to the SURFACE, never the pose.",
+      "CockpitSnapshotProvider (src/cockpit/CockpitSnapshot.js), already live in the game at main.js:2445 and updated once per renderFrame at :9366 — the ONE read-only feed for all four panels.",
+      "regime = _scManual ? 'helm' : 'orrery' (main.js:410) and setScManual (main.js:533) — the existing seam the cockpit is gated at.",
+      "realStarCatalog / realFeatureCatalog (main.js:263, :270, :2848-2849) — the precondition for the far-companion chip and the component sub-view.",
+      "scHead / HeadMount / freeLook — the camera at the helm; the one camera write during HELM is scHead.applyTo(camera, scModel.position, scModel.orientation).",
+      "RetroRenderer (src/rendering/RetroRenderer.js) — the cockpit composites between sceneTarget and the palette remap, as its own pass.",
+      "The lab's inline assembly in cockpit-screens-lab.html (GLTFLoader :637/:684, scene :469, lights :495/:498, mover :838, picker :849) — the code this increment extracts."
+    ],
+    "outputs": [
+      "A shared cockpit rig module both the lab and the game construct (AC-ONE-RIG-TWO-HOSTS).",
+      "A cockpit render pass in the game's frame, HELM-gated.",
+      "The cockpit NavComputer instance — a SECOND NavComputer alongside the DOM one main.js builds at :2847. Both exist; which one is live follows the regime.",
+      "Callbacks installed on the cockpit instance: _onAutopilotToggle, _onCommit, _onSound, _onDrillSound — mirroring main.js:2852-2867.",
+      "openNavComputer / closeNavComputer become regime-aware, so AutopilotNavSequence performs the cockpit panel in HELM.",
+      "A settled letterbox y convention for the game's viewport."
+    ],
+    "mustStayWorking": [
+      "HeadMount.test.js:10-25 — the ship's trajectory is bit-identical with and without look input. scModel must stay untouched.",
+      "The screensaver loop: autoNav tour → AutopilotNavSequence → star pick → warp → repeat. Breaking it dead-ends the game's default idle state.",
+      "ORRERY as a mode you can steer: nav computer and body info reachable, warp working end to end.",
+      "idleFiresTour({regime}) === (regime === 'helm') — ORRERY never auto-arms.",
+      "The warp sequence, save/load, and the mobile dock / speed-dial controls.",
+      "The full suite: 2275 passed / 4 skipped + the 15 known vendor collection errors.",
+      "NavComputer's own behaviour — this increment installs callbacks and a host; it does not change the class. The escape rework's threat model (src/ui/__tests__/NavComputer.escape.test.js header) stands: a new ESC evasion gets a line in the DECLINED list, not a wider pattern."
+    ]
+  },
+  "designDecisions": [
+    {
+      "id": "overlays-retire-in-this-increment",
+      "date": "2026-07-30",
+      "approvedBy": "Max",
+      "decision": "The DOM overlay retirement happens in increment 7, together with first light, rather than as a following increment.",
+      "why": "Max chose it when asked. DIEGETIC-ONLY is his founding ruling and he did not want a period of double HUD.",
+      "recommendationWas": "SPLIT — first light in increment 7 (cockpit renders, panels live, NAV interactive, overlays still present), retirement in increment 8. The stated risk: first light and demolition in one increment opens a second front across SupercruiseHud, BodyInfo, the NavComputer overlay and the 320² target circle while nothing has ever rendered in-game, it removes the overlay you would otherwise compare a wrong panel against, and it forces the ORRERY answer immediately. Max was told this and confirmed. Recorded so the trade-off is legible if the increment turns out large, not as a hedge."
+    },
+    {
+      "id": "orrery-keeps-what-it-operates",
+      "date": "2026-07-30",
+      "approvedBy": "Max",
+      "decision": "ORRERY keeps the nav computer and BodyInfo; SupercruiseHud, the 320² target circle and the debug physics rows retire in both modes.",
+      "why": "The program's own ruling required the contract to give ORRERY-with-zero-HUD an answer rather than break it silently. Investigated before asking: the N key that opens the nav computer is NOT mode-gated (main.js:9695), so retiring it globally would leave ORRERY unable to pick a destination by hand — functional, not cosmetic. SupercruiseHud is already gated on `_scManual || scPilot.isActive`, so retiring it costs ORRERY nothing. The discriminator Max chose is OPERABLE vs READOUT: the readouts are HELM concepts and belong on the glass; the two machines you operate need a home in a mode with no cockpit.",
+      "notThe": "This is NOT the 'split by mode' option rejected at program open. That option was the whole HUD coexisting with the cockpit. This is which mode hosts two operable surfaces, and it was put to Max as exactly that."
+    },
+    {
+      "id": "extract-before-wiring",
+      "date": "2026-07-30",
+      "decision": "The lab's inline cockpit assembly is extracted into a module both hosts construct, and the lab is converted to a caller. Taken without asking Max — it is an engineering call, not a product one.",
+      "why": "The alternative is two copies of the GLB load, lights, eye camera and panel rig. This program has been bitten five times by two instruments that disagreed, and 'the lab passes where the generator fails' is already its named worst case. A second copy would also mean every future cockpit change gets made twice or silently once.",
+      "cost": "This is the increment's hidden bulk and it was not in the handoff's four-item list. src/main.js contains only CockpitSnapshotProvider; PanelHost, PanelMover, PanelPicker, NavSource and NavPanel appear in it zero times."
+    },
+    {
+      "id": "head-decoupling-and-glass-deferred",
+      "date": "2026-07-30",
+      "approvedBy": "Max",
+      "decision": "Head decoupling is its own step immediately after this increment. Glass carries as-is, with no screen-space refraction.",
+      "why": "Decoupling is a feel knob wanting lab sliders and Max's eye; bundled, neither first light nor the decoupling can be judged cleanly, and a wrong time constant reads as 'the cockpit is broken'. Refraction was never built at all — increment 3's canopy is a plain mesh with a visibility toggle — and sampling the composited world is separate work that does not block flying. The cockpit still renders as its own pass, for the precision and resolution reasons, not only the refraction one."
+    },
+    {
+      "id": "tone-mapping-belongs-to-the-rig",
+      "date": "2026-07-30",
+      "decision": "The cockpit's tone regime is part of the rig's contract, not the host's: an explicit ACES curve at exposure 1.25 is applied to the cockpit sample inside RetroRenderer's composite, and the two numbers are exported from the rig so the lab reads them too.",
+      "why": "VERIFIED IN node_modules/three/build/three.module.js: three r0.183 hard-forces `toneMapping = NoToneMapping` unless `currentRenderTarget === null || isXRRenderTarget`. The lab renders the cockpit STRAIGHT TO CANVAS with ACESFilmicToneMapping + exposure 1.25 (cockpit-screens-lab.html:466-467); the game renders it INTO a target, so it would silently get no tone mapping at all. One rig, two materially different cockpits, with nothing to say so — exactly the drift AC-ONE-RIG-TWO-HOSTS exists to prevent, arriving through a path no boundary review would catch. main.js:3831-3833 already records this three behaviour.",
+      "whyNotOtherwise": "The alternative was deleting the lab's ACES so both hosts are NoToneMapping and re-tuning DEFAULT_COCKPIT_LIGHTS under Max's eye. Rejected because it throws away lighting he has already judged and costs him a tuning session; this way the look he approved is what ships. If it reads wrong at first light, re-tuning is still available."
+    },
+    {
+      "id": "eye-fov-is-exported-and-follows-the-slider",
+      "date": "2026-07-30",
+      "decision": "EYE_FOV (70), EYE_NEAR (0.005) and EYE_FAR are exported from the rig as the single source; both hosts construct their camera from them, and the game's FOV setting also writes the cockpit camera.",
+      "why": "The lab pins fov 70 with a comment citing Settings.js:40 as 'the FOV the framing is judged at' (cockpit-screens-lab.html:305, :474) while the game side specified nothing — three's default is 50, which would show a cockpit subtending ~40% more of the view than Max approved, AND PanelMover re-solves fill from the live fov every solve (PanelMover.js:294-310) so the zoomed panel would land at a size he never judged. Following the slider (index.html:190 gives him a live fov control) is required for coherence: if the world's fov changes and the cockpit's does not, the canopy stops framing the view it is supposed to frame."
+    },
+    {
+      "id": "the-320-slot-has-one-door",
+      "date": "2026-07-30",
+      "decision": "The HUD slot is gated INSIDE _applyHudVisibility() (main.js:377-391) with _scManual added to its decision, and all fourteen direct retroRenderer.setHud(...) callers are converted to call it. setScManual then calls _applyHudVisibility().",
+      "why": "Gating at setScManual alone does not work and review proved it with a sequence: boot HELM (suppressed) -> warp -> spawnSystem:4756-4767 unconditionally restores the HUD on arrival -> the minimap is back on top of the cockpit with no further regime flip to re-suppress it. Same for toggleGravityWell (:7132), exitGallery (:5366), the C key (:10002) and two mobile actions. AC-HELM-ONLY's own wording asks for a gate 'at the regime rather than at a visibility flag that something else can flip' — one door is the only way to honour that."
+    }
+  ],
+  "openForMax": [
+    "⛔ THE ONE OPEN QUESTION: a hard stop between build steps 7 and 8 for a first-light UAT pass, BEFORE any overlay is deleted. Review's strongest finding. The build order calls step 8 the POINT OF NO RETURN and schedules Max's UAT gate at step 11, after every deletion — so the overlays he would compare a wrong panel against are gone before he has ever looked at the cockpit. The design's own step-7 rationale says 'EVERYTHING TO HERE IS PURELY ADDITIVE: stop at this step and the game is strictly better than before, with every overlay still present to compare a wrong panel against' — and then declines to use that checkpoint. This is NOT the increment split Max declined; the increment still ships whole. It is one pause inside it, at the seam the design itself identified. AWAITING HIS ANSWER.",
+    "ORRERY's half of the 320-square minimap: this increment retires it in HELM only and leaves ORRERY exactly as it is, which matches the prior recorded ruling. If Max wants it gone in ORRERY too that is a separate decision, and it would also take the C key, the V key and gravity wells, two Settings rows, two mobile speed-dial actions and the 'now targeting' blink cue with it.",
+    "Routing the four autopilot paths into HELM has two side effects Max has not been shown: setScManual fires _updateModeSwapButton (relabels the HUD button) and _syncOrbitsToMode (turns the ORRERY orbit LINES off). Both follow from the regime genuinely changing, which is what he approved; flagged so neither is a surprise.",
+    "THE ARM — unchanged, out of scope, wants its own scoping conversation. He wants it to bend/extend with the monitor; that is generator geometry (one baked mesh, world-space vertices, no transform).",
+    "AC-NOTHING-I-HAD-GOT-LOST in cockpit-screen-content-2026-07-28 is still an open UAT gate. No agent can close it."
+  ],
+  "postUatFixes": [
+    {
+      "commit": "29d3be9",
+      "reported": "A GLB load failure in HELM leaves no cockpit AND no readouts. (Raised by working-Claude at the UAT briefing; Max: \"Let's fix that bug.\")",
+      "fix": "All five of AC-OVERLAYS-RETIRE-IN-HELM's gates asked `_scManual` — the STATION — when a retirement claims a TRADE. New `_cockpitReplaces(role)` asks whether the replacement is really on the glass, per role, so a missing NAV/INFO/DRIVE panel leaves its overlay in place. Plus the async half: the rig load settling now re-runs both event-driven appliers, or the fix would have been stale by one tick in both directions.",
+      "verification": "⭐ LIVE-VERIFIED 2026-08-01 on :5181, by TEMPORARILY MOVING cockpit.glb ASIDE — the load failure was induced rather than argued about, then the asset restored byte-identically (git reports no change to public/assets/cockpit/). In HELM with loadError set, rendering false, panels [] and 0 occluders: `showReadouts` is TRUE and both overlay clusters are drawn (bottom-left speed/throttle 2477 ink px, top-centre MODE line 701), and the minimap IS in the HUD slot. ⚠ The minimap half needed a second attempt to mean anything: on the first system the slot was empty for two innocent reasons — the showMinimap setting was off and the system had 0 planets, so `systemMap` is never built — and in that state a working gate and a broken one both read false. Turning the setting on and warping to a 6-planet system made it decisive: minimapInSlot true, in HELM, with no cockpit. Screenshot confirms MODE: MANUAL, the 8.20 Mm/s cluster and the minimap all on screen with no cabin at all — before the fix that screen kept the star and the reticle and nothing else. Reload after restoring: loadError null, 4 panels, 4 screens, eye found, 44 occluders. The INFO-role half (BodyInfo, the three debug dossier rows) is NOT separately live-verified; it is the same predicate with a different role string, and each role is pinned individually by mainHudSlot.test.js. 8/8 planted defects caught."
+    },
+    {
+      "commit": "7ade886",
+      "reported": "Max: \"Let's make sure the throttle bar is represented on one of the screens.\"",
+      "fix": "A bipolar THR bar on DRIVE, under the speed bar, no pin. The blocker was never the throttle but the snapshot's `?? 0`, which made a frame with no drive model report a lever at rest; it writes null now, and the kit already draws a non-finite fraction as an empty frame. commandedFrac did not already cover it — that is throttle × the LIVE speed cap, so the pin slides under gravity with the pilot's hand still.",
+      "verification": "⭐ LIVE-VERIFIED 2026-08-01 on :5181, read off the DRIVE panel's own canvas context (never a drawImage copy — that returns stale frames). Bar centre x=333.8. throttle +0.8 → ink 330..527 (fills RIGHT of centre, 198 px); throttle -0.8 → ink 136..333 (fills LEFT, 198 px, symmetric); throttle 0 → 4 px at 330..333, the centre zero mark alone with no fill. The layout was re-measured on the buffer by ink-row profile: hero 43-110, SUBLIGHT 124-142, speed bar 158-204, THR bar 222-248 (layout says 223-248), CAP 260-278, TURN 305-331, MODE 370-388 — every band clear of its neighbours by 12-39 px, no collisions. The null case (no drive model → empty frame, no zero mark) is unit-verified only; scModel always exists in the running game, so that path is defensive by design."
+    },
+    {
+      "commit": "3c99ad5",
+      "reported": "Max: \"I still can't use the up/down controls to rise and lower below the galactic plane on the prism menu.\"",
+      "fix": "TWO defects. (a) The cockpit's NavComputer had no keyboard at all — attachKeys lived inside activate(), which only the DOM overlay's open path calls. Split out; activate() cannot be used wholesale because its _resizeCanvas() reads getBoundingClientRect() on an OFFSCREEN canvas and would resize the panel buffer to 0×0. (b) The pan step was per render call, so on the panel's 12.5 Hz repaint it moved ~5× slower than in the overlay; now scaled by simClockMs elapsed, normalised to 60 Hz so the overlay's feel is unchanged.",
+      "verification": "⭐ LIVE-VERIFIED 2026-08-01 on :5181, NAV zoomed to the eye at PRISM. (a) A synthetic keydown now reaches the COCKPIT's instance — _heldKeys gains KeyR and drops it on keyup; before the fix it stayed empty forever. (b) R raised _localCenter.y, F lowered it, release stopped it dead. (c) ⭐ THE RATE, which is the half that would have been missed: the panel repainted 36 times in 3.00 s (12 Hz) and the view rose 2.64 pc where 60 Hz would give 2.70 — ratio 0.977. Per-render-call, those 36 repaints would have moved it ~0.54 pc, a fifth as far.",
+      "openForMax": "The N key zooms the NAV panel without checking free-look, so a hands-ON pilot can have the map at their eye and loses the throttle to it until they dismiss (N/Esc). Reads as right — put the map down before you fly — but it is a feel call. Alternative: latch free-look on zoom, one line in _openCockpitNav."
+    },
+    {
+      "commit": "5cd1118",
+      "reported": "Max: \"the reticles on the hud that go around worlds/stars in-game are still not being occluded by the monitors/monitor arms, fuselage, or ribs as they should be.\"",
+      "fix": "A ray/triangle cast against the cabin's own 782 faces, in the cockpit camera's frame. The existing test is ray/SPHERE against world bodies and could never answer this. The two passes share only the SCREEN, so the cast converts a DIRECTION (world dir → world camera local → cockpit camera world), not a position, and deliberately not via NDC. Canopy_Glass is the only exclusion — it covers 97.4% of the sphere — reusing the rig's own glass census so treatment and occlusion cannot disagree.",
+      "alsoFixed": "⭐ THE FOV SETTING NEVER REACHED THE COCKPIT CAMERA, and it is older than this work. applySettingChange('fov') wrote camera.fov only; the cabin stayed pinned at EYE_FOV, so the two passes composited into one image that did not line up at any setting but the default 70. Occlusion depends on them agreeing, so it would have been right at 70 and quietly wrong everywhere else. Boot fixed too.",
+      "verification": "⭐ LIVE-VERIFIED 2026-08-01 on :5181, end to end. (a) 44 occluders, excluded: [Canopy_Glass] — 45 meshes less the glass. (b) Blocked fraction measured live at 16:9 = 0.5789 against the generator's independent build-time analytic scanline figure of 0.587202 — two methods sharing nothing, 1.4% apart, residual explained by a 61×61 grid. (c) A row scan across screen centre reads, in order: Arm_UL_BoomA / ScreenBody_LL / clear / Arch_Bow / clear / Arch_Bow / clear / ScreenBody_LR / Arm_UR_BoomA — the monitors, arms and ribs Max named. (d) Steering the ship swept a reticle across the view: of 8 hidden runs, 7 correlate with named cabin geometry, including THREE separate Arch_Bow blinks of 1-2 samples against a rib the row scan measures at ~7 px wide. The 8th is the reticle reversing direction, not the cabin. FOV: the slider to 100 now moves BOTH cameras and back to 70 moves both; before the fix only the world moved.",
+      "openForMax": "It is a CENTRE-RAY test, matching what _isReticleOccluded already means for body spheres. A reticle whose body centre passes behind a thin rib vanishes entirely rather than clipping, and near a rib edge it can pop. If that reads badly the fix is a small angular margin, not a different mechanism."
+    }
+  ],
+  "legacyStatusNote": "MAX-PASSED-GATE — all 4 post-UAT fixes live-verified"
+}

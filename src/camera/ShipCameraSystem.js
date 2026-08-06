@@ -66,6 +66,45 @@ const CHASE_SCALE_MIN = 0.3;
 const CHASE_SCALE_MAX = 4.0;
 const CHASE_SCALE_STEP = 0.1;                // per wheel tick
 
+// ORRERY two-phase glide (orrery-coherence-2026-07-15 → round 2b, Max's ruling
+// 2026-07-17: "make orrery navigation always fly straight, by first centering on
+// the target destination before flying over towards it"). History trail:
+//   3-channel — pivot/yaw-pitch/log-distance eased at mismatched rates toward
+//     independent endpoints → the distance collapsed before the pivot carried
+//     over → a curved DOGLEG.
+//   single-channel (31eae77) — one t drove camera P_start→P_final and target
+//     T_start→body together → straight PATH, but the look ROTATED while the camera
+//     translated, so a body clicked at screen edge slid edge→center WHILE flying
+//     — read as a lateral slide-in. Straight path, wrong feel.
+//   two-phase (this) — PHASE 1 AIM rotates the view in place (camera POSITION
+//     frozen) until the body is centered, THEN PHASE 2 APPROACH translates the
+//     camera straight down the settled camera→body ray with the body pinned
+//     centered. Translation only ever happens while the body is already centered,
+//     so a side-slide is impossible for poses reachable from the ORRERY overview
+//     (body on-screen, in front, near the orbital plane — a hypothetical behind-
+//     the-camera or near-zenith aim sweep could still roll the view, but no
+//     ORRERY click can produce one).
+// All durations are taste-tunable at Max's UAT.
+const GLIDE_APPROACH_DURATION = 1.1;    // s for the straight approach ease t: 0→1 (smoothstep)
+// AIM duration scales with the INITIAL angular offset between the current look
+// direction and the camera→body ray, so an edge-of-screen click aims longer than a
+// near-center one. Capped, and skipped entirely when already essentially centered.
+const GLIDE_AIM_SECONDS_PER_RAD = 0.45; // ⇒ ~0.24s at 30°, hits the cap near ~89°
+const GLIDE_AIM_MAX_DURATION = 0.7;     // s cap on the aim ease
+const GLIDE_AIM_MIN_ANGLE = (2 * Math.PI) / 180; // <2° off-axis ⇒ skip aim, go straight to approach
+
+// Glide phase tags (internal; the tests detect the AIM→APPROACH boundary
+// implementation-agnostically as the first frame the camera position moves).
+const GLIDE_PHASE_AIM = 0;
+const GLIDE_PHASE_APPROACH = 1;
+
+// ORRERY arrival zoom-in (orrery-entry-orbits-2026-07-20, AC4) — the log gap
+// |ln(smoothedDistance) − ln(distance)| under which the far-spawn zoom counts as
+// SETTLED (fires the far-plane restore hook). ε in log-units: at 1e-3 the camera
+// sits within ~0.1% of the overview distance — visually landed. The global
+// smoothing keeps closing the remaining sliver after the hook fires.
+const ARRIVAL_SETTLE_LOG_EPS = 1e-3;
+
 const STORAGE_KEY = 'wd_cameraMode';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -245,6 +284,27 @@ export class ShipCameraSystem {
     this._transitioning = false;
     this._transitionSpeed = 0.06;
 
+    // ── ORRERY two-phase glide (orrery-coherence-2026-07-15 → round 2b) ──
+    // Dedicated glide state used ONLY by glideFocus (the click-2 view move).
+    // PHASE 1 AIM: camera POSITION frozen at `_glidePStart`, the look target eases
+    //   `_glideTStart`→body over `_glideAimDuration` (∝ initial off-axis angle)
+    //   until the body is centered. PHASE 2 APPROACH: camera translates
+    //   `_glidePStart`→(body+`_glideDir`·standoff) over GLIDE_APPROACH_DURATION,
+    //   the look pinned to the live body. `_glideBody` is the caller's LIVE Vector3
+    //   (NOT a clone) so a moving moon is met at its live spot; `_glideDir` is
+    //   re-derived from (P_start−body_live) at the phase boundary (the body may
+    //   have moved during the aim) and frozen for the straight approach.
+    this._gliding = false;
+    this._glidePhase = GLIDE_PHASE_AIM; // AIM until the body is centered, then APPROACH
+    this._glideAimT = 0;                // 0→1 aim ease progress
+    this._glideAimDuration = 0;         // s, set per-glide from the initial off-axis angle
+    this._glideApproachT = 0;           // 0→1 approach ease progress
+    this._glideBody = null;
+    this._glideStandoff = 0;
+    this._glideDir = new THREE.Vector3(0, 0, 1);
+    this._glidePStart = new THREE.Vector3();
+    this._glideTStart = new THREE.Vector3();
+
     this.yaw = 0;
     this.pitch = 0.15;
     this.distance = 8;
@@ -255,6 +315,18 @@ export class ShipCameraSystem {
     this.smoothedPitch = this.pitch;
     this.smoothedDistance = this.distance;
     this.smoothing = 0.08;
+
+    // ── ORRERY arrival zoom-in (orrery-entry-orbits-2026-07-20, AC4) ──
+    // beginArrivalZoom() re-seeds smoothedDistance to a FAR spawn; the existing
+    // log-lerp (update(), smoothing 0.08) then closes it to the pre-set overview
+    // `distance` — the camera zooms IN. `_arrivalActive` holds from arm until
+    // settle OR any interruption; `_arrivalSettled` flips ONCE at the natural
+    // log-gap close. `_arrivalOnSettle` (the far-plane restore hook) fires EXACTLY
+    // once per arrival — on settle, or on any cancel/supersede — never twice,
+    // never leaked. This does NOT touch the two-phase glide machinery (802cceb).
+    this._arrivalActive = false;
+    this._arrivalSettled = false;
+    this._arrivalOnSettle = null;
 
     // ── Zoom ──
     this.zoomSpeed = 0;
@@ -373,6 +445,7 @@ export class ShipCameraSystem {
 
     const prev = this.cameraMode;
     this.cameraMode = mode;
+    this._endArrival(false); // AC4: a real mode swap cancels a live arrival zoom
 
     if (mode === CameraMode.TOY_BOX) {
       // Leaving Flight → Toy Box. Derive yaw/pitch/distance from the
@@ -405,6 +478,12 @@ export class ShipCameraSystem {
       this._lookOffsetPitch = 0;
       // Drop out of free-look if active — director owns orientation in Flight
       if (this.isFreeLooking) this.exitFreeLook(false);
+      // ORRERY focus state must not leak across the mode seam: end any in-flight
+      // glide and restore the absolute zoom floor. Without this, an M-swap while
+      // glide-focused on a star carries its radius*1.05 minDistance (~4.9) into
+      // the supercruise-exit clamp and the next toy-box zoom floor.
+      this._gliding = false;
+      this.resetFocusMinDistance();
     }
 
     this._persistMode(mode);
@@ -538,18 +617,55 @@ export class ShipCameraSystem {
   //  PUBLIC API (CameraController-compatible)
   // ═══════════════════════════════════════════════════════════════════
 
+  // ── ORRERY arrival zoom-in (orrery-entry-orbits-2026-07-20, AC4) ──────
+  // Seed the far spawn and arm the arrival. The CALLER has already framed the
+  // overview (viewSystem set `distance`, pitch 0.7, maxDistance); this only
+  // re-seeds smoothedDistance to the spawn so the existing log-lerp zooms IN to
+  // that overview `distance`. CRUCIALLY it writes smoothedDistance, NEVER
+  // this.distance — the wheel branch clamps `distance` to maxDistance (~overview)
+  // and would snap a multi-million spawn; the log-lerp reads `distance` as its
+  // UNCLAMPED target. A superseding call fires the prior onSettle first (the
+  // far-plane restore can never leak), then re-arms fresh.
+  // opts.onSettle fires EXACTLY once — at the natural settle, or on any cancel.
+  beginArrivalZoom(spawnDistance, opts = {}) {
+    // Supersede: an in-flight arrival's restore MUST run exactly once before the
+    // new one arms (C5). No-op if nothing is active.
+    this._endArrival(false);
+    this.smoothedDistance = spawnDistance;
+    this._arrivalActive = true;
+    this._arrivalSettled = false;
+    this._arrivalOnSettle = (typeof opts.onSettle === 'function') ? opts.onSettle : null;
+  }
+
+  // End the live arrival exactly once. `natural` true ⇒ the log gap closed (flip
+  // _arrivalSettled); false ⇒ an interruption/supersede cancelled it. Either way
+  // the onSettle hook fires once and is cleared, so no far-restore ever leaks or
+  // double-fires. Guarded on _arrivalActive so repeat calls are no-ops.
+  _endArrival(natural) {
+    if (!this._arrivalActive) return;
+    this._arrivalActive = false;
+    if (natural) this._arrivalSettled = true;
+    const cb = this._arrivalOnSettle;
+    this._arrivalOnSettle = null;
+    if (cb) cb();
+  }
+
   setTarget(position) {
+    this._endArrival(false); // AC4: retargeting cancels a live arrival zoom
     this.target.copy(position);
     this._targetGoal.copy(position);
     this._transitioning = false;
     this._returningToOrbit = false;
+    this._gliding = false;
   }
 
   focusOn(position, viewDistance = 8) {
+    this._endArrival(false); // AC4: a focus-snap cancels a live arrival zoom
     this.target.copy(position);
     this._targetGoal.copy(position);
     this._transitioning = false;
     this._returningToOrbit = false;
+    this._gliding = false;
 
     const dx = this.camera.position.x - position.x;
     const dy = this.camera.position.y - position.y;
@@ -578,11 +694,198 @@ export class ShipCameraSystem {
     }
   }
 
-  viewSystem(systemRadius) {
-    this.target.set(0, 0, 0);
-    this._targetGoal.set(0, 0, 0);
+  // Glide-focus — the VIEW-ONLY sibling of focusOn (orrery-coherence-2026-07-15
+  // AC5, Max: "click 1 selects, click 2 quickly moves us over to that body"). A
+  // SEPARATE method (not an option on focusOn) so focusOn's SNAP semantics stay
+  // byte-identical for its debug callers. Where focusOn snaps the whole pose,
+  // glideFocus arms a dedicated TWO-PHASE glide (round 2b — see GLIDE_* consts +
+  // _updateGlide): PHASE 1 rotates the view in place until the body is centered,
+  // PHASE 2 flies the camera straight down the settled camera→body ray to the
+  // standoff. This retires the single-channel side-slide (its look rotated WHILE
+  // the camera translated, so an edge-clicked body slid edge→center while flying).
+  // It never touches _applyOrbit/adoptCurrentPose math (the drift guard), and is
+  // Toy-Box orbit only: the caller keeps bypassed=false and never calls flyTo, so
+  // the pilot is untouched — nothing flies, the VIEW moves. `position` is the
+  // caller's LIVE Vector3 (mesh.position, NOT a clone) so a moving moon is met at
+  // its live spot; drag/wheel/select hand the glide back to orbit mid-EITHER phase.
+  glideFocus(position, viewDistance = 8) {
+    this._endArrival(false);        // AC4: arming a glide cancels a live arrival zoom
+    this._transitioning = false;    // this glide owns the move — no pivot ease
+    this._returningToOrbit = false;
+
+    // Initial approach direction from the CURRENT camera→body ray. Re-derived at
+    // the AIM→APPROACH boundary in _beginApproachPhase (the body may move during
+    // the aim), but kept here for the degenerate fallback + the flight seed below.
+    const dir = _v1.copy(this.camera.position).sub(position);
+    const len = dir.length();
+    if (len > 1e-6) dir.divideScalar(len);
+    else dir.set(0, 0, 1);          // degenerate: camera on the body — arbitrary axis
+    this._glideDir.copy(dir);
+
+    // `position` is the caller's LIVE Vector3 (mesh.position) — stored by REFERENCE,
+    // NOT cloned, so the glide re-reads a moving body's live spot (meets, not chases).
+    this._glideBody = position;
+    this._glideStandoff = viewDistance;
+    this._glidePStart.copy(this.camera.position);
+    this._glideTStart.copy(this.target);
+
+    // AIM duration ∝ the INITIAL angular offset between the current look direction
+    // and the camera→body ray (edge-of-screen click aims longer than a near-centre
+    // one), capped, and skipped when already essentially centered (no aim stall on
+    // the trivial on-axis click — the glide goes straight to the approach).
+    this.camera.getWorldDirection(_v3);          // current forward
+    const toBody = _v4.copy(position).sub(this.camera.position);
+    const tbLen = toBody.length();
+    let aimAngle = 0;
+    if (tbLen > 1e-6) {
+      toBody.divideScalar(tbLen);
+      const d = Math.max(-1, Math.min(1, _v3.dot(toBody)));
+      aimAngle = Math.acos(d);                   // radians
+    }
+    if (aimAngle < GLIDE_AIM_MIN_ANGLE) {
+      this._glideAimDuration = 0;                // already centered — skip the aim
+      this._glidePhase = GLIDE_PHASE_APPROACH;
+    } else {
+      this._glideAimDuration = Math.min(
+        GLIDE_AIM_MAX_DURATION, GLIDE_AIM_SECONDS_PER_RAD * aimAngle,
+      );
+      this._glidePhase = GLIDE_PHASE_AIM;
+    }
+    this._glideAimT = 0;
+    this._glideApproachT = 0;
+    this._gliding = true;
+    this._targetGoal.copy(position); // keep the pivot goal on the body (tidy handoff)
+    this.zoomSpeed = 0;
+
+    // Keep the flight system loosely in sync for a later Flight-mode switch, like
+    // focusOn — seeded from the framed vantage along the ARM-TIME ray (the approach
+    // re-derives dir post-aim; sub-second body drift makes the difference negligible).
+    if (this._hasGravity && this.flight) {
+      _v2.copy(position).addScaledVector(this._glideDir, viewDistance);
+      this.flight.setPositionVelocity(_v2);
+    }
+  }
+
+  // Advance the two-phase glide one frame.
+  //   PHASE 1 AIM — the camera POSITION is never touched; the look target eases
+  //     T_start→body (smoothstep) and camera.lookAt() rotates the view IN PLACE
+  //     until the body is centered. When the aim ease completes, freeze the
+  //     approach direction from the body's LIVE position and switch to APPROACH.
+  //   PHASE 2 APPROACH — the camera translates P_start→(body+dir·standoff) on a
+  //     smoothstep with the look PINNED to the live body, so the body stays
+  //     centered the whole way (never slides in from the side). `dir` is frozen;
+  //     P_final is re-derived from the LIVE body each frame (moving moons are MET,
+  //     not chased). Both phases use smoothstep, so both endpoints have zero
+  //     velocity and the AIM→APPROACH boundary has no jerk. After the approach t
+  //     reaches 1 the camera stays pinned at body+dir·standoff each frame, tracking
+  //     a still-moving body until an input hands off to orbit (_endGlideToOrbit).
+  _updateGlide(deltaTime) {
+    const body = this._glideBody;
+
+    if (this._glidePhase === GLIDE_PHASE_AIM) {
+      if (this._glideAimDuration > 1e-6) {
+        this._glideAimT = Math.min(1, this._glideAimT + deltaTime / this._glideAimDuration);
+        const t = this._glideAimT;
+        const ease = t * t * (3 - 2 * t); // smoothstep — zero-velocity endpoints
+        this.target.lerpVectors(this._glideTStart, body, ease);
+        this.camera.lookAt(this.target);
+        if (this._glideAimT >= 1) this._beginApproachPhase();
+        return; // AIM never moves the camera position
+      }
+      // Zero-duration aim (already centered) — go straight to the approach.
+      this._beginApproachPhase();
+    }
+
+    // PHASE 2 APPROACH
+    this._glideApproachT = Math.min(1, this._glideApproachT + deltaTime / GLIDE_APPROACH_DURATION);
+    const t = this._glideApproachT;
+    const ease = t * t * (3 - 2 * t); // smoothstep — zero-velocity endpoints
+    const pFinal = _v1.copy(body).addScaledVector(this._glideDir, this._glideStandoff);
+    this.camera.position.lerpVectors(this._glidePStart, pFinal, ease);
+    this.target.copy(body);           // look pinned to the live body — stays centered
+    this.camera.lookAt(this.target);
+  }
+
+  // Freeze the approach direction from (P_start − body_live) at the AIM→APPROACH
+  // boundary (the body may have moved during the aim), normalize, keep the
+  // degenerate fallback (len < 1e-6 → (0,0,1)), reset the approach ease, and
+  // switch the phase. Uses scratch _v2 (independent of _updateGlide's _v1 pFinal).
+  _beginApproachPhase() {
+    const dir = _v2.copy(this._glidePStart).sub(this._glideBody);
+    const len = dir.length();
+    if (len > 1e-6) dir.divideScalar(len);
+    else dir.set(0, 0, 1);
+    this._glideDir.copy(dir);
+    this._glideApproachT = 0;
+    this._glidePhase = GLIDE_PHASE_APPROACH;
+  }
+
+  // Hand the current glide pose back to the normal Toy-Box orbit with NO snap:
+  // back-solve yaw/pitch/distance about the live target so the next _applyOrbit
+  // reproduces the EXACT current camera position (mirrors adoptCurrentPose's
+  // clamp + push-out-along-ray). Called by the input handlers (drag/wheel/pinch)
+  // and by update() when a fresh select/pivot supersedes the glide. Deliberately
+  // leaves _transitioning / _targetGoal untouched so a superseding select keeps
+  // its pivot request intact.
+  _endGlideToOrbit() {
+    if (!this._gliding) return;
+    this._gliding = false;
+    const offset = _v1.copy(this.camera.position).sub(this.target);
+    const rawDist = offset.length();
+    const dist = Math.max(this.minDistance, Math.min(this.maxDistance, rawDist));
+    if (rawDist > 1e-6) {
+      this.yaw = Math.atan2(offset.x, offset.z);
+      this.pitch = Math.asin(Math.max(-1, Math.min(1, offset.y / rawDist)));
+      if (dist !== rawDist) {
+        const dir = offset.divideScalar(rawDist);
+        this.target.copy(this.camera.position).addScaledVector(dir, -dist);
+      }
+    }
+    this.distance = dist;
+    this.smoothedYaw = this.yaw;
+    this.smoothedPitch = this.pitch;
+    this.smoothedDistance = dist;
+    this.zoomSpeed = 0;
+  }
+
+  // ── Radius-relative focus min-distance (orrery-coherence-2026-07-15, fix C) ──
+  // While a body is focused/glided in ORRERY, allow wheel-zoom down to just above
+  // the surface (radius·1.05). The constructor default 0.01 is an ABSOLUTE floor
+  // that bottoms out at 2.5R–20R for sub-0.01 moons, so tiny moons could never be
+  // approached. resetFocusMinDistance restores 0.01 for system-overview framing.
+  // NOTE: does NOT change the constructor default 0.01 — flightExitAnchor.test.js
+  // and the supercruise-exit adopt clamp both rely on that default.
+  setFocusMinDistance(radius) {
+    this.minDistance = radius * 1.05;
+  }
+
+  resetFocusMinDistance() {
+    this.minDistance = 0.01;
+  }
+
+  viewSystem(systemRadius, center = null) {
+    // orrery-coherence-2026-07-15 AC2 live-drive fix: systems spawned via the
+    // instant-cut path (spawnSystem forWarp:false) live at their true galactic
+    // world position, NOT at the origin the warp flow rebases to — anchoring
+    // the overview at (0,0,0) framed empty space ~100k units from the system.
+    // `center` (the star's world position) anchors the frame on the system;
+    // omitted → origin, byte-equivalent for every pre-existing caller.
+    this._endArrival(false); // AC4: re-framing (incl. Esc de-focus) cancels a live arrival
+    if (center) {
+      this.target.copy(center);
+      this._targetGoal.copy(center);
+    } else {
+      this.target.set(0, 0, 0);
+      this._targetGoal.set(0, 0, 0);
+    }
     this._transitioning = false;
     this._returningToOrbit = false;
+    this._gliding = false;
+    // Fix C reset: framing the whole system clears any focused-body radius-relative
+    // min-distance clamp back to the absolute 0.01 floor. viewSystem is the shared
+    // overview primitive for BOTH _frameSystemForOrrery (system entry) and
+    // focusPlanet(-1) (ORRERY Esc de-focus), so every overview path resets here.
+    this.resetFocusMinDistance();
     this.distance = systemRadius * 1.5;
     this.zoomSpeed = 0;
 
@@ -615,7 +918,13 @@ export class ShipCameraSystem {
         this.camera.position.z += dz;
         this._returnTrackPos.copy(position);
       }
-    } else if (!this._transitioning) {
+    } else if (!this._transitioning && !this._gliding) {
+      // A two-phase glide OWNS the look target (phase-1 eased aim, phase-2 pin on
+      // the live body). main.js simStep calls trackTarget(body) EVERY frame while a
+      // body is focused; stomping this.target here would defeat the eased aim into
+      // an instant snap. _targetGoal (updated above) still follows the body for a
+      // superseding select's pivot request; the interrupt handback back-solves
+      // about this.target (the eased look point), NOT _targetGoal.
       this.target.copy(position);
     }
   }
@@ -635,6 +944,8 @@ export class ShipCameraSystem {
   }
 
   enterFreeLook() {
+    this._endArrival(false); // AC4: entering free-look cancels a live arrival zoom
+    this._gliding = false;
     if (this._returningToOrbit) {
       this._returningToOrbit = false;
       this._returnTurning = false;
@@ -684,11 +995,74 @@ export class ShipCameraSystem {
     this.target.copy(targetPosition);
     this._targetGoal.copy(targetPosition);
     this._transitioning = false;
+    this._gliding = false;
 
     const offset = this.camera.position.clone().sub(targetPosition);
     const dist = offset.length();
     const yaw = Math.atan2(offset.x, offset.z);
     const pitch = Math.asin(Math.max(-1, Math.min(1, offset.y / (dist || 1))));
+
+    this.yaw = yaw;
+    this.pitch = pitch;
+    this.distance = dist;
+    this.smoothedYaw = yaw;
+    this.smoothedPitch = pitch;
+    this.smoothedDistance = dist;
+    this.zoomSpeed = 0;
+
+    if (this._hasGravity && this.flight) {
+      this.flight.setPositionVelocity(this.camera.position.clone());
+    }
+  }
+
+  /**
+   * Adopt the camera's CURRENT world pose as a Toy Box orbit — no teleport.
+   *
+   * Like restoreFromWorldState, this anchors the orbit on `anchorPosition`
+   * (e.g. the closest body) and back-solves yaw/pitch/distance from the live
+   * camera position, so the next _applyOrbit reconstructs the SAME position
+   * the camera is already at. Two differences that matter when handing off
+   * from a supercruise pose that may be very far out:
+   *
+   *   1. The back-solved distance is CLAMPED to [minDistance, maxDistance].
+   *      An un-clamped supercruise distance (tens of thousands of units) would
+   *      otherwise live outside the zoom range the orbit code expects.
+   *   2. When the distance IS clamped, the orbit target is pushed OUT along the
+   *      camera→anchor ray so `target + clampedDist * dir` still lands exactly
+   *      on the camera's current position. So position is preserved even when
+   *      the raw distance was out of range — the orbit just rotates around a
+   *      virtual anchor along the same sight line until the player zooms.
+   *
+   * Callers MUST resync the render interpolator (cameraInterp.resync) right
+   * after, so the fixed-timestep blend doesn't lerp across the mode flip.
+   *
+   * DRIFT GUARD: src/flight/__tests__/flightExitAnchor.test.js re-implements
+   * this math (and _applyOrbit, plus the minDistance/maxDistance clamp) inline
+   * to assert the no-snap exit invariant. If this method or those clamp bounds
+   * change, update that test in lockstep or it will silently test stale math.
+   */
+  adoptCurrentPose(anchorPosition) {
+    this.bypassed = false;
+    this._transitioning = false;
+    this._returningToOrbit = false;
+    this._gliding = false;
+
+    const offset = _v1.copy(this.camera.position).sub(anchorPosition);
+    const rawDist = offset.length();
+    const yaw = Math.atan2(offset.x, offset.z);
+    const pitch = Math.asin(Math.max(-1, Math.min(1, offset.y / (rawDist || 1))));
+    const dist = Math.max(this.minDistance, Math.min(this.maxDistance, rawDist));
+
+    // Anchor the orbit so the clamped distance reproduces the EXACT current
+    // camera position. With dir = unit(camera - anchor), the orbit places the
+    // camera at target + dist*dir; solving for target = camera - dist*dir.
+    if (rawDist > 1e-6) {
+      const dir = offset.divideScalar(rawDist); // offset now normalized (_v1)
+      this.target.copy(this.camera.position).addScaledVector(dir, -dist);
+    } else {
+      this.target.copy(anchorPosition);
+    }
+    this._targetGoal.copy(this.target);
 
     this.yaw = yaw;
     this.pitch = pitch;
@@ -826,6 +1200,25 @@ export class ShipCameraSystem {
       this._decayLookOffset(deltaTime);
     }
 
+    // ── ORRERY two-phase glide owns the Toy-Box camera while active ──
+    // A freshly-requested pivot ease (a select of a NEW body sets _transitioning
+    // directly, main.js) supersedes the glide: hand the current pose to orbit
+    // (works mid-AIM or mid-APPROACH) and fall through to the normal transition/
+    // smoothing path. Otherwise the glide drives camera+target for this frame and
+    // returns (skips zoom/drift/smoothing).
+    if (this._gliding) {
+      if (this._transitioning) {
+        this._endGlideToOrbit();
+      } else {
+        this._updateGlide(deltaTime);
+        this._diagnostics.record(
+          this.camera, this.flight, this.director,
+          flightMode, deltaTime, false, this._chaseScale
+        );
+        return;
+      }
+    }
+
     // Auto-drift (Toy Box only — Flight is composed by the director)
     if (!flightMode && this.autoRotateActive && !this.isDragging) {
       this.yaw += this.autoRotateSpeed * (Math.PI / 180) * deltaTime;
@@ -881,6 +1274,15 @@ export class ShipCameraSystem {
     const logSmoothed = Math.log(this.smoothedDistance);
     const logTarget = Math.log(this.distance);
     this.smoothedDistance = Math.exp(logSmoothed + (logTarget - logSmoothed) * factor);
+
+    // ── ORRERY arrival zoom-in settle probe (AC4) ──
+    // Once the log gap the arrival is closing shrinks under ε, the far-spawn zoom
+    // has visually landed on the overview: flip _arrivalSettled ONCE and fire the
+    // far-plane restore hook exactly once. The lerp keeps closing the sliver after.
+    if (this._arrivalActive) {
+      const arrivalGap = Math.abs(logTarget - Math.log(this.smoothedDistance));
+      if (arrivalGap < ARRIVAL_SETTLE_LOG_EPS) this._endArrival(true);
+    }
 
     if (flightMode) {
       // ── FLIGHT MODE: flight dynamics drive camera, director composes ──
@@ -983,6 +1385,10 @@ export class ShipCameraSystem {
       } else if (e.button === 0) {
         this.isDragging = true;
         this.autoRotateActive = false;
+        // Drag interrupts a glide: hand the current pose to orbit (no snap) so
+        // the drag rotates from where the glide had reached (interrupt parity —
+        // on HEAD a mid-glide drag likewise steered the ongoing move).
+        if (this._gliding) this._endGlideToOrbit();
         if (this._returningToOrbit) {
           this._returningToOrbit = false;
           this._returnTurning = false;
@@ -1051,7 +1457,13 @@ export class ShipCameraSystem {
         this._chaseScale = Math.max(CHASE_SCALE_MIN,
                            Math.min(CHASE_SCALE_MAX, this._chaseScale + step));
       } else {
-        // Toy Box: scroll changes orbit distance
+        // Toy Box: scroll changes orbit distance. Wheel interrupts a glide —
+        // hand off to orbit first so the zoom applies to the settled pose (and
+        // reaches the radius-relative min-distance set on the focused body).
+        // It also interrupts an arrival zoom (AC4): the player grabbed the wheel;
+        // cancel the arrival and fire the far-plane restore before applying zoom.
+        this._endArrival(false);
+        if (this._gliding) this._endGlideToOrbit();
         this.zoomSpeed += Math.sign(e.deltaY) * this.scrollSensitivity;
       }
     }, { passive: false });
@@ -1060,6 +1472,9 @@ export class ShipCameraSystem {
     this.canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       this._touchCount = e.touches.length;
+      // Touch drag / pinch interrupts a glide — hand off to orbit first (parity
+      // with the mouse drag/wheel paths).
+      if (this._gliding) this._endGlideToOrbit();
       if (e.touches.length === 1) {
         this.isDragging = true;
         this.autoRotateActive = false;

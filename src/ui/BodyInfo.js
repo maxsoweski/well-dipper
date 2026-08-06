@@ -104,8 +104,28 @@ export class BodyInfo {
     }
   }
 
+  /**
+   * ⭐ RETIRE THE WHOLE SURFACE — AC-ORRERY-KEEPS-WHAT-IT-OPERATES.
+   *
+   * In HELM the cockpit's INFO panel is this readout's replacement, so the DOM
+   * copy must go; in ORRERY, which has no cockpit to host anything, it stays.
+   * Gated HERE and not at the eleven `bodyInfo.show*` call sites in main.js,
+   * because a gate repeated eleven times is a gate that will be forgotten once.
+   * `_show` is the single funnel all four public show* methods pass through.
+   *
+   * Suppressing also HIDES whatever is currently up: the regime can flip while
+   * a body's stats are on screen mid-typewriter, and a half-typed readout left
+   * frozen over the canopy is worse than either state.
+   */
+  setSuppressed(on) {
+    const next = !!on;
+    if (this._suppressed === next) return;
+    this._suppressed = next;
+    if (next) this.hide();
+  }
+
   _show(typeName, stats) {
-    if (!this._el) return;
+    if (!this._el || this._suppressed) return;
 
     // Stop any running typewriter
     clearTimeout(this._timer);

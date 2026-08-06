@@ -12,7 +12,16 @@
  *   const visibleRealStars = catalog.findVisible(playerPos, threshold);
  */
 
-import { GalacticMap } from './GalacticMap.js';
+import { RealSystemOverlay } from './RealSystemOverlay.js';
+import { realStarSeed } from './realStarSeed.js';
+
+// Default identity-match tolerance for findByPosition: 0.1 pc (0.0001 kpc).
+// This MUST stay BELOW KnownSystems' MATCH_RADIUS (0.0005 kpc, see that
+// file) — otherwise a teleport landing in the annulus between the two
+// tolerances could spawn a procgen system wearing a known system's name
+// (the inverse of the Sirius-swallow bug KnownSystems.MATCH_RADIUS guards
+// against).
+export const POSITION_MATCH_TOL = 0.0001; // kpc
 
 // Spectral type → color (same as HashGridStarfield)
 const SPECTRAL_COLOR = {
@@ -26,33 +35,89 @@ const SPECTRAL_COLOR = {
   W: [0.5, 0.6, 1.0],  // Wolf-Rayet
   C: [1.0, 0.4, 0.1],  // Carbon star
   S: [1.0, 0.5, 0.3],  // S-type
+  D: [0.85, 0.9, 1.0], // Degenerate white dwarf (AC10) — blue-white; matches
+                       //   StarSystemGenerator.STAR_PROPERTIES.D / the
+                       //   WhiteDwarfStar core palette. Increment-3 future-proof.
 };
 
 export class RealStarCatalog {
   constructor() {
     this._stars = null;
     this._loaded = false;
+    // The bulk real-universe overlay merge index (AC3/AC4). Constructed EMPTY
+    // (not ready) here; populated by load() from the same Promise.all that loads
+    // the stars, so any arrival that resolved a catalog star finds it ready
+    // (design D5). main.js reads `catalog.overlay` at the two arrival call sites.
+    this.overlay = new RealSystemOverlay();
   }
 
   get loaded() { return this._loaded; }
   get count() { return this._stars?.length ?? 0; }
 
   /**
-   * Load the star catalog from the static JSON file.
-   * Call once at startup.
+   * Load the star catalog + the real-universe overlay data (design D5). ONE
+   * Promise.all fetches hyg-stars.json, real-star-supplement.json, and
+   * real-system-contents.json together. `_stars` becomes hyg ∪ supplement,
+   * concatenated BEFORE this resolves — so the load().then() wiring in main.js
+   * (StarfieldGenerator, KnownSystems.associate) sees the supplement stars as
+   * findVisible/findInVolume/findByPosition targets. The contents are handed to
+   * the overlay index. Call once at startup.
    */
   async load() {
     try {
-      const resp = await fetch('./assets/data/hyg-stars.json');
-      if (!resp.ok) {
-        console.warn('RealStarCatalog: failed to load hyg-stars.json:', resp.status);
+      const [hyg, supplement, contents] = await Promise.all([
+        this._fetchJson('./assets/data/hyg-stars.json'),
+        this._fetchJson('./assets/data/real-star-supplement.json'),
+        this._fetchJson('./assets/data/real-system-contents.json'),
+      ]);
+      if (!Array.isArray(hyg)) {
+        console.warn('RealStarCatalog: hyg-stars.json missing or malformed; catalog not loaded');
         return;
       }
-      this._stars = await resp.json();
-      this._loaded = true;
-      console.log(`RealStarCatalog: loaded ${this._stars.length} real stars`);
+      this.ingestCatalogData(hyg, supplement, contents);
+      const suppCount = supplement?.stars?.length ?? 0;
+      const hostCount = contents?.hosts?.length ?? 0;
+      console.log(
+        `RealStarCatalog: loaded ${this._stars.length} real stars ` +
+        `(${hyg.length} HYG + ${suppCount} supplement), ${hostCount} exoplanet hosts`,
+      );
     } catch (e) {
       console.warn('RealStarCatalog: load error:', e.message);
+    }
+  }
+
+  /**
+   * Merge already-parsed catalog data and build the overlay index. This is the
+   * ONE code path for the star concat + overlay index build (design D5); load()
+   * is the browser fetch wrapper around it, and tests feed it fs-read JSON.
+   *
+   * @param {Array} hyg — hyg-stars.json (array of star records)
+   * @param {object|null} supplement — real-star-supplement.json ({ stars })
+   * @param {object|null} contents — real-system-contents.json ({ hosts })
+   */
+  ingestCatalogData(hyg, supplement = null, contents = null) {
+    const supplementStars = supplement?.stars ?? [];
+    const contentsHosts = contents?.hosts ?? [];
+    // hyg ∪ supplement — supplement dim hosts become catalog stars (nav/sky/
+    // arrival visible). Concat before _loaded flips so associate() sees them.
+    this._stars = supplementStars.length ? hyg.concat(supplementStars) : hyg;
+    this._loaded = true;
+    this.overlay.setData({ contentsHosts, supplementStars, catalogStars: this._stars });
+  }
+
+  /** Fetch + parse a JSON asset, tolerating a missing/failed file (returns null)
+   *  so one absent overlay file never aborts the whole catalog load. */
+  async _fetchJson(url) {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        console.warn(`RealStarCatalog: failed to load ${url}:`, resp.status);
+        return null;
+      }
+      return await resp.json();
+    } catch (e) {
+      console.warn(`RealStarCatalog: fetch error ${url}:`, e.message);
+      return null;
     }
   }
 
@@ -81,6 +146,53 @@ export class RealStarCatalog {
       }
     }
     return results;
+  }
+
+  /**
+   * Find the real star AT a galactic position (identity lookup) — the nearest
+   * catalog star within `tolKpc`, or null. Used by teleport arrivals to carry
+   * the real star's name into the spawned system, mirroring how warp arrivals
+   * resolve identity from the clicked sky entry. Nearest-not-first matters:
+   * close binaries (61 Cygni A/B, ~0.0004 pc apart) both sit inside the
+   * default 0.1 pc tolerance.
+   *
+   * @param {{ x, y, z }} pos — galactic position in kpc
+   * @param {number} tolKpc — match tolerance in kpc (default POSITION_MATCH_TOL = 0.1 pc)
+   * @returns {{ x, y, z, name, spect, absMag, lum, ci } | null}
+   */
+  findByPosition(pos, tolKpc = POSITION_MATCH_TOL) {
+    if (!this._stars) return null;
+    let best = null;
+    let bestDist = tolKpc;
+    for (let i = 0; i < this._stars.length; i++) {
+      const s = this._stars[i];
+      const dx = s.x - pos.x;
+      const dy = s.y - pos.y;
+      const dz = s.z - pos.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dist < bestDist) {
+        best = s;
+        bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Find all real stars within radiusKpc (sphere) of pos. Used by
+   * KnownSystems.associate to derive a known system's catalog aliases.
+   * @param {{x,y,z}} pos  @param {number} radiusKpc
+   * @returns {Array<catalogStar>}
+   */
+  findAllWithin(pos, radiusKpc) {
+    if (!this._stars) return [];
+    const out = [], r2 = radiusKpc * radiusKpc;
+    for (let i = 0; i < this._stars.length; i++) {
+      const s = this._stars[i];
+      const dx = s.x - pos.x, dy = s.y - pos.y, dz = s.z - pos.z;
+      if (dx*dx + dy*dy + dz*dz < r2) out.push(s);
+    }
+    return out;
   }
 
   /**
@@ -132,11 +244,9 @@ export class RealStarCatalog {
       else if (appMag < 6) size = 4;
       else size = 3;
 
-      // Generate a deterministic seed from position
-      const seed = GalacticMap.hashCombine(
-        Math.round(s.x * 10000),
-        GalacticMap.hashCombine(Math.round(s.y * 10000), Math.round(s.z * 10000))
-      );
+      // Generate a deterministic seed from position (canonical F1 — the ONE
+      // shared real-star seed module; formerly inlined here, now imported).
+      const seed = realStarSeed(s.x, s.y, s.z);
 
       results.push({
         worldX: s.x,

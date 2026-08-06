@@ -2,7 +2,7 @@
   "workstream": "supercruise-freelook-2026-06-10",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "shipped",
   "phase": "Movement-system replacement. Clone Elite Dangerous supercruise as the starting point for ALL in-system motion (Max's scope pick: post-warp fly-in + tour legs + COMMIT BURN transit), rewire the autopilot to drive it, add Elite-style hold-to-look freelook. One flight model, two drivers (autopilot / player). Ship transform and head/camera mount separated from day one so the near-future cockpit attaches without motion rework. Arrival keeps today's shaking-fast-decel beat (accel the inverse) ported onto the new model. AutopilotMotion and FlythroughCamera's motion role retire. Integration seam: warpRevealSystem nav handoff (main.js ~5510, per docs/superpowers/specs/2026-06-10-warp-arrival-billboard-distance-design.md). Out of scope: cockpit visual, world-origin rebasing, time dilation, wide binaries, warp-tunnel changes.",
   "acceptanceCriteria": [
     {
@@ -125,5 +125,7 @@
       "Autopilot-interrupt convention: player input takes control immediately, position/velocity preserved (no snap)",
       "Existing test suites stay green except those that encode the retired movers' motion (rewrite alongside, per AC5); known pre-existing failures (KnownObjects ×3, GalacticFeatures ×1, vendor runner-mismatch) are not ours"
     ]
-  }
+  },
+  "legacyStatusNote": "UAT-PASSED 2026-06-27 (Max live ride: 'it's good to ship') — all 13 tasks + control harness built, live-verified, accepted on branch feature/supercruise-freelook @ 7bd261c (pushed to origin). Master merge + GitHub-Pages deploy DEFERRED (next arc builds on the same systems; active World-Engine session on master = main.js/NOW.md conflict surface). Headless at ship commit (verified 2026-06-27): build clean, flight+camera+ui suites green (200/200). AC1-AC8 satisfied across the arc; AC9 (holistic Elite feel) = Max UAT PASS.",
+  "statusNote": "2026-08-01 LEDGER HYGIENE: the `status` field held PROSE and was schema-invalid; moved verbatim to legacyStatusNote and status set to `shipped`. Not a state change — FEATURES.md already records this arc as shipped to master @ 09db316 (2026-06-28) and deployed, UAT-passed on Max's 2026-06-27 live ride ('it's good to ship'). "
 }

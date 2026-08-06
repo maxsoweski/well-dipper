@@ -1,0 +1,44 @@
+{
+  "workstream": "orrery-entry-orbits-2026-07-20",
+  "commit": "140859f",
+  "scope": "verify-light re-run after the staticky-orbit fix (UAT round 1 finding) + working-Claude live closure of the flagged gap",
+  "workflowRun": {
+    "runId": "wf_05ea47d9-e2c",
+    "mode": "light",
+    "agents": 4,
+    "overall": "INSUFFICIENT — live integration pending",
+    "perAC": [
+      {
+        "id": "AC1-dhold-boot-skip",
+        "result": "INSUFFICIENT",
+        "evidence": "Headless: bootSkipDecision unit tests 12/12 PASS (src/flight/__tests__/bootMode.test.js), full suite 1316/0 regression-clean (15 pre-existing vendor/motion-test-kit collection failures unrelated). Static read confirms _pickBootMode (main.js:2720-2738) structurally cannot reach startIntroSequence() when bootSkipDecision returns skip:true, and _bootSkipToSol (main.js:2749-2805) only hides splash/title and spawns Sol — matches the AC's structural claim. BUT contract.json declares this AC's verifyVia.live:true, and no fresh live-browser pass ran in this check. Diff reviewed (140859f→ff686b3, a concurrent Lane B commit that landed mid-check) touched only docs/statusNotes + AC5 staticky-orbit evidence files, not AC1 code.",
+        "adversarialVotes": "0/1 sufficient"
+      }
+    ],
+    "note": "HEAD moved to ff686b3 during the check via the same-session evidence-filing commit (docs only, no source); verdict scoped to 140859f."
+  },
+  "liveClosure": {
+    "by": "working-Claude, same session, debug Chrome :9223 tab on :5173, HEAD ff686b3 (AC1 code byte-identical to 140859f)",
+    "AC1-dhold-boot-skip": {
+      "result": "PASS",
+      "orreryVariant": {
+        "method": "fresh page load → synthetic KeyboardEvent keydown KeyD (window bubble — reaches _heldKeys per this session's earlier drives) → #splash-mode-orrery .click()",
+        "bootSkipLog": "[BOOT-SKIP] D-hold → straight into Sol, ORRERY god's-eye (no ceremony)",
+        "ceremonySampling": "splash/title state flags + #title-screen visibility + intro-logo element sampled every 200ms for 4s post-click: ceremony NEVER visible",
+        "solLive": "isInSystem() true; ORRERY badge rendered; regime scManual:false",
+        "screenshot": "scratchpad ac1-orrery-dskip.jpeg (session-local)"
+      },
+      "helmVariant": {
+        "method": "same, #splash-mode-helm",
+        "bootSkipLog": "[BOOT-SKIP] D-hold → straight into Sol, HELM tour (no ceremony)",
+        "ceremonySampling": "same 20×200ms sampling: ceremony NEVER visible",
+        "solLive": "isInSystem() true; HELM badge rendered; regime scManual:true + tour:true + pilotPhase HOLD (HELM boot arms the tour — normal post-boot semantics preserved per scope pin)",
+        "screenshot": "scratchpad ac1-helm-dskip.jpeg (session-local); tour stopped by driver post-evidence (re-arm hygiene)"
+      }
+    },
+    "otherLiveACs": "AC2/AC4/AC5 live cells were closed at 40f36f3 (verdict-live-drives-40f36f3.json, all GREEN incl. the factor-source fix addendum). The staticky fix (140859f) touches only OrbitRingSDF.js alpha path + the lab; its own live evidence is evidence/staticky-fix-record.md (prod close-Jupiter churn 322.7→202.8 toggles/frame, before/after screenshots, perRingLadder zero regressions)."
+  },
+  "perLayer": { "unit": "PASS", "integration": "PASS (workflow static + live closures above)", "uat": "deferred-to-max" },
+  "overall": "VERIFIED_PENDING_MAX — re-UAT is the open gate (staticky finding fix feel-check + the 6 standing uatFlags + B5–B7 if not yet run)",
+  "_provenance": "verify-workstream wf_05ea47d9-e2c (mode:light, 4 agents) at 140859f returned inline without writing a file; persisted + live-closed by working-Claude 2026-07-20."
+}

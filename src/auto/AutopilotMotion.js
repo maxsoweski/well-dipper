@@ -1,3 +1,17 @@
+// ═══════════════════════════════════════════════════════════════════
+// RETIRED 2026-06-26 (supercruise-control-harness, Tasks 12–13).
+// AutopilotMotion is no longer instantiated or referenced anywhere in
+// the live path — the supercruise mover (SupercruiseModel +
+// SupercruisePilot, driven through ShipControls / window._sc.controls)
+// owns ALL autopilot-tour, manual-flight, and warp-arrival motion.
+// Its main.js wiring (import, instantiation, the unreachable simStep
+// branch, telemetry fallbacks) was removed in this arc.
+//
+// FILE KEPT, NOT DELETED — dormant for ENRICHED reactivation. Do NOT
+// re-wire into main.js without a fresh scoping pass; the §A4/§A7 lhokon
+// machinery below predates the supercruise model and would conflict.
+// ═══════════════════════════════════════════════════════════════════
+
 /**
  * AutopilotMotion — V1 per-leg motion evaluator.
  *

@@ -1,0 +1,20 @@
+{
+  "workstream": "naming-census-uniqueness-2026-07-07",
+  "commit": "631571b",
+  "note": "LIGHT-MODE ADDENDUM after the Sirius UAT-defect fix (631571b). The full 9-AC verdict at the workstream's verification commit lives in verdict.json and remains authoritative for the workstream gate; this file records the post-fix regression pass. Light mode verifies the contract's first AC only.",
+  "perLayer": {
+    "unit": "N/A",
+    "integration": "PASS",
+    "uat": "N/A"
+  },
+  "perAC": [
+    {
+      "id": "AC1-horsehead-renders",
+      "result": "PASS",
+      "evidence": "Static (workflow wf_923fe6f4, sonnet agent, 3-way): (1) npx vitest run src/ → 43 files / 521 tests, 0 failures. (2) Targeted known-object-feature-seed + KnownObjects + GalacticFeatures suites → 27 tests, 0 failures; SHADOWED=['IC434'] special-case confirmed deleted from source. (3) Independent headless script: IC434 {x:8.343,y:-0.089,z:-0.171} vs M78 {x:8.345,y:-0.093,z:-0.165} distinct; GalacticMap.findNearbyFeatures() returns both via known-object injection with truthy seeds. Commit-pointer note: AC1's implementing commit is 3d87ed6 (ancestor of 631571b, verified via merge-base); 631571b is the Sirius fix itself. Live (working-Claude main-thread drive, 2026-07-09, per liveBranch=main routing): debug-search 'Horsehead' near-mode teleport → console 'Teleporting to Horsehead Nebula (IC434)... Debug teleport: (8.33, -0.09, -0.17)'; sky.feature-layer.main present in scene inventory; screenshot shows the reddish-brown emission nebula rendering at IC434's near-view position. Local system correctly procgen-named ('QRN J3CP1RVO-XFCP0AX') — the 631571b real-name lookup correctly finds no catalog star at a feature offset position.",
+      "adversarialVotes": "workflow skeptic 0/1 sufficient on static-only evidence (downgrade reason: live half not yet driven); live half driven by working-Claude afterward, closing the named gap"
+    }
+  ],
+  "overall": "Integration PASS — light regression after Sirius fix 631571b: AC1 static clean (521 headless tests green) and live confirmed (Horsehead renders at IC434). Sirius-fix-specific evidence recorded in the 631571b commit message: new KnownSystems.match-radius suite incl. full-catalog sweep (no real star inside any known-system radius), 1113/1113 vitest, live Sirius→'Sirius'-named system, Solar preset→real Sol, in-game integration suite 19/19 in Sol.",
+  "summaryForMax": "This is the post-fix regression record for the Sirius defect you found in UAT. The fix (commit 631571b): Sol's match radius shrank from 5 pc to 0.5 pc (it was swallowing 12 real stars — Sirius, Alpha Cen, Procyon...), and teleport arrivals now carry the real star's name the way warp arrivals already did. Verified: searching Sirius now spawns a system named 'Sirius' (contents still procgen — real contents are the successor real-universe-overlay workstream); the Solar (R=8) preset still lands in real Sol; the in-game suite stays 19/19; all 1113 headless tests green; and the Horsehead AC re-checked clean end-to-end. Your UAT gate on the workstream is still the open item: re-run your Sirius search to confirm, then the AC5 naming-scheme ratification from verdict.json."
+}

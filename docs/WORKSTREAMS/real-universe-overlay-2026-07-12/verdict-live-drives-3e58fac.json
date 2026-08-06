@@ -1,0 +1,63 @@
+{
+  "workstream": "real-universe-overlay-2026-07-12",
+  "commit": "3e58fac",
+  "type": "live-drives-addendum",
+  "context": "Working-Claude chrome-devtools drives on :5176 (Max's window, reused — no new pages), 2026-07-14, after the Increment 5 build. Page hard-reloaded to the new bundle (two Vite full-reloads raced the first boot attempts — the server re-optimizing after the 18-file build; environmental, not a defect). Boot: HELM → Space → boot-tour auto-warp waited out → all selections made from settled idle systems (warp idle + seed stable ≥3.5s, per the Inc-4 rule).",
+  "checks": [
+    {
+      "id": "AC8-sol-suite",
+      "result": "PASS",
+      "evidence": "Search→warp→Sol from the boot-tour landing system arrived at authored Sol (seed 'sol', G primary, 13 handcrafted bodies). window.__wd.runIntegrationSuite(): 19/19 before the AC1 drives AND 19/19 after the full Sol→Sirius→Sol round-trip."
+    },
+    {
+      "id": "AC1-sol-vantage",
+      "result": "PASS",
+      "evidence": "Nav opened with N in normal play; window._navComputer (new D3 self-registration) live; Escape drilled system→prism; 43,685 local stars loaded; background Y-expansion waited. All 19 neighborhood-reference.json Sol entries present by EXACT shipped name (incl. traps Ran / Tau Cet / Eps Ind / HD 201091 / HD 201092 / Keid); worst |distPc − refDistPc| error 0.03% vs the ±2% tolerance (full-precision _localStars.dist × 1000, not the integer distPc label). TRAPPIST-1 (supplement, mag 17, below naked-eye) present at 12.43 pc."
+    },
+    {
+      "id": "AC1-sirius-vantage",
+      "result": "PASS",
+      "evidence": "Search→warp→Sirius (genuine warp via the search overlay, mousedown → _selectSearchResult). All 15 Sirius reference entries present; worst error 0.02%; Sol appears as a neighbor of Sirius at 2.637 pc (its explicit regen catalog entry working as designed)."
+    },
+    {
+      "id": "D2-position-snap-fix",
+      "result": "PASS",
+      "evidence": "The ±2% results above are the live proof of the Increment 5 _queryYRange fix: pre-fix, a matched real star rendered at the hash-grid star's position/distance (Rigil Kentaurus at 1.3 pc could err >100%); post-fix the worst observed error across 34 assertions from two vantages is 0.03%. Interview ruling 1 (true positions, never procgen snapping) now holds on the nav display surface."
+    },
+    {
+      "id": "AC3-sirius-unregressed-and-table-wins",
+      "result": "PASS",
+      "evidence": "Sirius arrival at the canonical seed 1508848428: A1V primary + DA2 white-dwarf companion at 19.8 AU with 2 procgen-filled planets — identical to the Inc-4 observable. Live confirmation that the new snum==1 pin defers to the curated companion table (Sirius is table-covered; its binary survived)."
+    },
+    {
+      "id": "console",
+      "result": "PASS",
+      "evidence": "Zero console errors and zero warnings across the entire drive session (reload → boot → three warps → two prism assertions → two suite runs)."
+    },
+    {
+      "id": "AC3-trappist1-under-snum-pin",
+      "result": "PASS",
+      "evidence": "SECOND CIRCUIT (after the verify-workstream verdict flagged that the pin changed TRAPPIST-1's arrival behavior and it had never been live-driven post-pin): search→warp→TRAPPIST-1 arrives at an M primary with isBinary FALSE and star2 null (the archive-snum single-pin live — pre-pin this was seed-dependent), planetCount exactly 7, all 7 known with real designations TRAPPIST-1 b–h, zero procgen additions."
+    },
+    {
+      "id": "AC5-authored-alpha-centauri",
+      "result": "PASS",
+      "evidence": "search→warp→'Alpha Centauri' (registry display name) arrives at the authored system: seed 'alpha-centauri', G2V primary + K1V close companion at 23.5 AU, farCompanions = [Proxima Centauri (M5.5Ve) with planets Proxima Cen b, d — data-level]. Sky-click path keeps its written d106181 deferral (untouched by this diff). ⚠ FLAG FOR AC9: A/B carry ZERO fill planets on the authored seed — fill-on is active but this deterministic seed lands the documented empty branch (or the circumbinary ≥58.75 AU geometry); astronomy-plausible per representation-cap §6, but Max may prefer the flagship system to carry worlds (small authoring knob if so)."
+    },
+    {
+      "id": "AC2-search-exercised-at-sha",
+      "result": "PASS",
+      "evidence": "Not a dedicated AC2 pass (the diff doesn't touch AC2's mechanism), but the search→select→warp path was exercised five times at this sha (Sol ×2, Sirius, TRAPPIST-1, Alpha Centauri — real-star, registry, and dim-host resolve classes), all resolving and warping correctly from normal play via N."
+    },
+    {
+      "id": "AC8-final",
+      "result": "PASS",
+      "evidence": "Post-second-circuit: back at authored Sol, suite 19/19 (third run this session), nav panel closed, console still zero errors/warns."
+    }
+  ],
+  "notes": {
+    "windowState": "Left at authored Sol, nav panel closed (lane convention).",
+    "fact11LiveHazard": "The enlarged per-cluster globular radii (AC6/D5) affect the live starfield only near clusters — all remote halo objects, none visited in normal near-Sol play; headless ProcgenSnapshot was 24/24. Recorded for AC9/lane-D awareness rather than driven here.",
+    "assertionMethod": "Live reads via window._navComputer._localStars (D3 handle) filtered to isReal entries, compared against the committed neighborhood-reference.json inlined into the page script; TRAPPIST-1 required waiting for the nav's background Y-band expansion tick, as the design predicted."
+  }
+}

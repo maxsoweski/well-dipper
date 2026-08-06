@@ -1,0 +1,48 @@
+{
+  "workstream": "real-universe-overlay-2026-07-12",
+  "commit": "44c7075",
+  "type": "live-integration addendum to verify-workstream verdict (working-Claude drove chrome-devtools on :5176, 2026-07-13, page hard-reloaded to pick up 44c7075). Closes the AC2/AC3/AC5/AC8 INSUFFICIENT-for-missing-live findings and the owed merged-star nav-warp check (Gate 4).",
+  "context": "The Increment-4 build (44c7075) added the player-facing nav-computer search (AC2). verify-workstream marked AC2/AC3/AC5/AC8 INSUFFICIENT solely for missing live evidence at this commit; AC4/AC7/AC10 PASS 3/3 (unregressed); AC1/AC6 are Increment-5 work (FAIL-as-scheduled). Working-Claude reloaded :5176 (HELM mode), drove the AC2 surface end-to-end, and closed the owed nav-warp merged-star check the prior addendum (c68c1fb) deferred to 'Increment 4's search surface'. Boot log confirms the catalog load: 'RealStarCatalog: loaded 15613 real stars (15599 HYG + 14 supplement), 4457 exoplanet hosts'.",
+  "checks": [
+    {
+      "ac": "AC2-player-search (reachability — no debug panel)",
+      "drive": "Pressed N in normal HELM play; observed the DOM search overlay (.nav-search-input, placeholder 'Search stars · systems · structures…') appear inside .nav-computer-panel with the nav overlay display:flex.",
+      "observed": "Nav computer opens via N (main.js:9616, no debug dependency); the DOM <input> search overlay is present and focusable.",
+      "result": "PASS"
+    },
+    {
+      "ac": "AC2-player-search (keyboard-capture reconciliation — the sharp edge, both phases)",
+      "drive": "Focused the search input, typed 'WASDRFN' via real CDP keystrokes (all six pan/zoom letters + the nav-toggle key), then read input.value and the nav overlay display.",
+      "observed": "input.value === 'WASDRFN' (length 7): the capture-phase _searchFocused guard let all six W/A/S/D/R/F land as text (not preventDefaulted out). Nav stayed open (display:flex): the bubble-phase stopPropagation kept the typed 'N' from reaching the window handler that would toggle the nav closed. BOTH listener phases confirmed. Escape while focused cleared+blurred the input and did NOT drill the nav level (design D6).",
+      "result": "PASS"
+    },
+    {
+      "ac": "AC2-player-search (resolution — all four target classes)",
+      "drive": "Typed queries and read the rendered result rows: 'Sirius', 'TRAPPIST', 'M42', 'Alpha Centauri', 'Rigil', 'Proxima', 'Funka', 'Sol'.",
+      "observed": "(a) real stars: Sirius→Sirius (A), TRAPPIST→TRAPPIST-1 (M, proves the dim-host supplement), Rigil→Rigil Kentaurus (G), Proxima→Proxima Centauri (M). (c) structures: M42→Orion Nebula (emission-nebula). (d) registry bridge: 'Alpha Centauri'→Alpha Centauri (SYSTEM) and 'Sol' returns both the G star AND the registry SYSTEM — the exact debug-panel gap, now closed. (b) named systems: 'Funka'→Pi Funkarekres 8754 (region 'arm'); 'Sol' also surfaces Chi Fisolbe 9560 / Pi Solkarutharo 8957 etc. All four classes resolve in the real UI.",
+      "result": "PASS"
+    },
+    {
+      "ac": "AC2-player-search (select → travel) + AC3-real-characteristics (merged star via search) + GATE-4 merged-star nav-warp",
+      "drive": "From a settled idle system, opened nav, searched 'Sirius', selected the result (mousedown → _selectSearchResult → _onCommit warp → dispatchNavAction → _setWarpTargetFromNavStar + beginWarpTurn). Captured console + _systemData at arrival.",
+      "observed": "Console: '[NAV DISPATCH] type=warp, target=star, star=Sirius seed=1508848428' → '[WARP] Priority 1 (navStarData): Y=0.0246, seed=1508848428' → '[WARP] Resolved to: (7.9982, 0.0246, -0.0019) seed=1508848428' → '[WARP] knownSystem check: hasNavStar=true, knownWarp=none' (findByAlias('Sirius') null → falls to the Inc-3 real-universe overlay merge) → 'System \"Sirius\" (seed: system-2) — A+D binary, 2 planets, 342 asteroids'. _systemData at arrival: seed 1508848428, _warpTargetName 'Sirius', star A1V, star2 DA2 (white-dwarf D), binary sep 19.800 AU. Genuine WARP (not the debug teleport), never hand-set window._warpTarget. This routes through the SAME Inc-3 warp-arrival merge code — CLOSES the owed merged-star nav-warp check (Gate 4) and confirms AC3's merged-star observable via the search mechanism it was waiting on.",
+      "result": "PASS"
+    },
+    {
+      "ac": "AC2-player-search (select → travel to an authored registry system) + AC5-authoring-path (registry search)",
+      "drive": "From Sirius (idle), searched 'Sol', selected the Sol star result, warped, settled.",
+      "observed": "Console: '[NAV DISPATCH] ... star=Sol seed=...' → arrival _systemData seed 'sol', _warpTargetName 'Sol', star type G — the AUTHORED Sol system (special 'sol' seed), not a procgen impostor. Registry-name search resolution ('Sol'/'Alpha Centauri' as SYSTEM rows) confirmed live — the AC5 settled/registry search surface. (Alpha Centauri ARRIVAL was already PASSed in prior addenda via nav-warp + teleport.)",
+      "result": "PASS"
+    },
+    {
+      "ac": "AC8-sol-and-regression-guardrail (live sub-clause)",
+      "drive": "Warped to Sol via search, then window.__wd.runIntegrationSuite().",
+      "observed": "At Sol: scene integration suite 19/19 passed, 0 failures. (Sanity: the same suite at Sirius returns 14/19 — the 5 failures are ALL Sol-specific bodies/lights [earth, mars, luna, light.star.sol, asteroid belts] legitimately absent at Sirius, i.e. position-sensitive checks, NOT a regression.) ProcgenSnapshot byte-identical headless (search is UI-only). Console clean across all drives: zero errors, zero warns, zero '[SSG] Unknown star type' fallbacks.",
+      "result": "PASS"
+    }
+  ],
+  "edgeCaseNote": {
+    "boot-tour warp collision (NOT an AC2 defect)": "Selecting a warp target WHILE the game's boot-tour auto-warp ('Warp: booting into HELM tour, hands-off') is mid-commit lets the in-flight tour warp override the selection: the [NAV DISPATCH] fires with the correct Sirius seed 1508848428, but the already-committed tour warp (a different seed) completes instead. First observed as a spurious 'wrong destination', root-caused via console to the boot tour, and eliminated by selecting only from a fully-settled idle system (warp state idle + stable system seed ≥ 3s) — which arrives correctly every time. In normal steady-state play the N-open is gated on !warpEffect.isActive, so a player selects from a settled system and this does not arise. The collision belongs to the boot/tour sequence (lane B territory: tour ownership / N-gating during the hands-off boot warp), not to AC2's search or warp-arming. Flagged for lane B awareness; no lane-C change indicated."
+  },
+  "uatNote": "These are objective integration drives, NOT UAT. AC9 remains deferred-to-max per the contract. Increment 4 makes the full known-universe search-and-travel loop UAT-tourable from normal play: type a real star / registry system / deep-sky structure name, select, warp, arrive type-true. AC1 (neighborhood fidelity) and AC6 (structures audit) remain Increment-5 work before AC9's batched UAT."
+}

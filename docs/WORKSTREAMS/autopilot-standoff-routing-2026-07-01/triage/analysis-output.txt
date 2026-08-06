@@ -1,0 +1,113 @@
+=== META ===
+system=Sol planets=13 lingerMult=0.1
+star: R=4.65 keepOut=16.3 park=37.2
+samples=931 span=930.8s
+
+=== LEGS ===
+idx stop        t0    dur  d0->dEnd           minSpeed maxSpeed phases          arrived aborts wayp minStarDist
+ 22 moon6.6        1   14s   9565.3->9487.4      4.03     9.62 CRUISE            no   0      Y    20.7
+ 23 moon6.7       16   47s   9506.2->34.5        2.32   588.97 CRUISE            no   0      -    57.4
+ 24 moon6.8       64   52s     95.8->0           0.00     7.51 ALIGN>CRUISE      no   0      -    9527.4
+ 25 planet7      117   15s  10621.8->10621.8     0.00     0.00 ALIGN>CRUISE      no   0      -    9619.1
+ 26 moon7.0      133   11s  10620.9->10620.9     0.00     0.00 CRUISE            no   0      -    9619.1
+ 27 moon7.1      145   11s  10622.6->10622.4     0.00     0.05 CRUISE            no   0      -    9619.1
+ 28 moon7.2      157   11s  10622.1->10616.6     0.07     1.63 CRUISE            no   0      -    9619.3
+ 29 moon7.3      169   11s  10611.3->10531.6     1.93    19.25 CRUISE            no   0      -    9625.1
+ 30 moon7.4      181   40s  10515.7->11.2        2.10  1215.53 CRUISE            no   0      -    9706.0
+ 31 planet8      222   14s  13564.6->13558       0.15     1.56 ALIGN>CRUISE      no   0      -    19184.3
+ 32 moon8.0      237   11s  13557.1->13556.5     0.00     0.15 CRUISE            no   0      -    19189.7
+ 33 moon8.1      249   11s    13559->13559       0.00     0.00 CRUISE            no   0      -    19190.1
+ 34 planet9      261   11s  27304.5->27304.5     0.00     0.00 CRUISE            no   0      -    19190.1
+ 35 moon9.0      273   11s  27304.4->27304.4     0.00     0.00 CRUISE            no   0      -    19190.1
+ 36 planet10     285   11s  36891.6->36891.6     0.00     0.00 CRUISE            no   0      -    19190.1
+ 37 planet11     297   12s  45670.2->45670.2     0.00     0.00 ALIGN>CRUISE      no   0      -    19190.1
+ 38 planet12     310   11s  72529.7->72529.7     0.00     0.00 CRUISE            no   0      -    19190.2
+ 39 moon12.0     322   11s  72529.7->72529.7     0.00     0.00 CRUISE            no   0      -    19190.2
+  0 star0        334   12s  19190.2->19190.2     0.00     0.00 ALIGN>CRUISE      no   0      -    19190.2
+  1 planet0      347   11s  19468.9->19468.9     0.00     0.00 CRUISE            no   0      -    19190.2
+  2 planet1      359   12s  19521.3->19521.3     0.00     0.00 ALIGN>CRUISE      no   0      -    19190.2
+  3 planet2      372   11s  19336.1->19336.1     0.00     0.00 CRUISE            no   0      -    19190.1
+  4 moon2.0      384   11s  19338.4->19338.4     0.00     0.00 CRUISE            no   0      -    19190.1
+  5 planet3      396 10.800000000000011s  18919.8->18919.8     0.00     0.00 CRUISE            no   0      -    19190.1
+  6 moon3.0    407.8   11s 18919.86->18919.84    0.00     0.00 CRUISE            no   0      -    19190.1
+  7 moon3.1    419.8   11s 18919.65->18919.63    0.00     0.00 CRUISE            no   0      -    19190.1
+  8 planet4    431.8   11s 17884.75->17884.72    0.00     0.00 CRUISE            no   0      -    19190.1
+  9 planet5    443.8   11s 15480.09->15479.93    0.00     0.08 CRUISE            no   0      -    19189.9
+ 10 moon5.0    455.8   11s 15481.02->15480.39    0.02     0.10 CRUISE            no   0      -    19189.2
+ 11 moon5.1    467.8   11s 15477.18->15476.14    0.02     0.30 CRUISE            no   0      -    19188.2
+ 12 moon5.2    479.8   11s 15476.77->15472.26    0.21     1.13 CRUISE            no   0      -    19183.5
+ 13 moon5.3    491.8   11s 15478.91->15418.99    1.50    14.35 CRUISE            no   0      -    19123.6
+ 14 moon5.4    503.8 56.99999999999994s 15387.05->2.68        0.89  1183.25 CRUISE            no   0      -    5217.1
+ 15 planet6    561.8   19s  4928.09->4912.46     0.21     3.93 ALIGN>CRUISE      no   0      -    5216.1
+ 16 moon6.0    581.8   46s  4906.96->5.62        1.37   556.94 CRUISE            no   0      -    5234.2
+ 17 moon6.1    628.8   42s     6.78->0.01        0.00     1.09 CRUISE>HOLD       HOLD 0      -    9532.1
+ 18 moon6.2    671.8   46s     3.09->0.01        0.00     0.24 ALIGN>CRUISE>HOLD HOLD 0      -    9536.4
+ 19 moon6.3    718.8   45s      3.9->0.01        0.00     0.27 ALIGN>CRUISE>HOLD HOLD 0      -    9535.3
+ 20 moon6.4    764.8   46s     5.25->0.02        0.00     0.36 ALIGN>CRUISE>HOLD HOLD 0      -    9535.3
+ 21 moon6.5    811.8   33s     6.59->0.27        0.00     0.91 ALIGN>CRUISE>HOLD HOLD 0      -    9540.4
+ 22 moon6.6      846 2.8999999999999773s    10.19->10.17       0.02     0.04 ALIGN             no   0      -    9540.6
+  0 none       849.8   29s     null->4.04        0.02   172.64 ALIGN>IDLE>CRUISE>HOLD HOLD 0      -    4.0
+  1 planet0    879.8   40s    91.86->0.06        0.00     9.91 ALIGN>CRUISE>HOLD HOLD 0      Y    2.5
+  2 planet1    920.8   11s   366.71->366.64      0.01     0.03 ALIGN>CRUISE      no   0      -    88.5
+
+legs=44 arrivals(HOLD)=7 stall-aborted=0
+
+=== SPEED DISTRIBUTION (share of run time) ===
+<0.5     62.7%
+0.5-4    12.1%
+4-50     12.1%
+50-500   10.4%
+>500     2.6%
+
+=== CAP-DOMINATING BODY (529 upgraded samples) ===
+body#14 R=0.016          65s (12%)
+body#25 R=0.171          56s (11%)
+body#19 R=0.004          48s (9%)
+body#18 R=0.004          47s (9%)
+body#17 R=0.002          45s (9%)
+body#29 R=0.005          43s (8%)
+body#20 R=0.005          40s (8%)
+body#0 R=1.525           36s (7%)
+
+=== STALL-ABORTS (35) ===
+t=   16 moon6.7    starDist=57.4
+t=   64 moon6.8    starDist=9527.4
+t=  117 planet7    starDist=9619.1
+t=  133 moon7.0    starDist=9619.1
+t=  145 moon7.1    starDist=9619.1
+t=  157 moon7.2    starDist=9619.3
+t=  169 moon7.3    starDist=9625.1
+t=  181 moon7.4    starDist=9706
+t=  222 planet8    starDist=19184.3
+t=  237 moon8.0    starDist=19189.7
+t=  249 moon8.1    starDist=19190.1
+t=  261 planet9    starDist=19190.1
+t=  273 moon9.0    starDist=19190.1
+t=  285 planet10   starDist=19190.1
+t=  297 planet11   starDist=19190.1
+t=  310 planet12   starDist=19190.2
+t=  322 moon12.0   starDist=19190.2
+t=  334 star0      starDist=19190.2
+t=  347 planet0    starDist=19190.2
+t=  359 planet1    starDist=19190.2
+t=  372 planet2    starDist=19190.2
+t=  384 moon2.0    starDist=19190.1
+t=  396 planet3    starDist=19190.1
+t=407.8 moon3.0    starDist=19190.1 distReal=18919.86 nearBody#25(R=0.171,surf=0.01)
+t=419.8 moon3.1    starDist=19190.1 distReal=18919.65 nearBody#25(R=0.171,surf=0.01)
+t=431.8 planet4    starDist=19190.1 distReal=17884.75 nearBody#25(R=0.171,surf=0.01)
+t=443.8 planet5    starDist=19190.1 distReal=15480.09 nearBody#25(R=0.171,surf=0.01)
+t=455.8 moon5.0    starDist=19189.8 distReal=15481.02 nearBody#25(R=0.171,surf=0.11)
+t=467.8 moon5.1    starDist=19189.2 distReal=15477.18 nearBody#26(R=0.002,surf=0.06)
+t=479.8 moon5.2    starDist=19187.9 distReal=15476.77 nearBody#29(R=0.005,surf=0.86)
+t=491.8 moon5.3    starDist=19182.2 distReal=15478.91 nearBody#29(R=0.005,surf=5.26)
+t=503.8 moon5.4    starDist=19108 distReal=15387.05 nearBody#29(R=0.005,surf=81.1)
+t=561.8 planet6    starDist=5216.7 distReal=4928.09 nearBody#14(R=0.016,surf=1.91)
+t=581.8 moon6.0    starDist=5234.2 distReal=4906.96 nearBody#14(R=0.016,surf=22.14)
+t=628.8 moon6.1    starDist=9532.1 distReal=6.78 nearBody#19(R=0.004,surf=3.25)
+
+=== STAR LEG DETAIL (idx 0, t0=334) ===
+t=334 phase=ALIGN speed=0 cap=0.09 starDist=19190.2 inKO=false stallT=0 holdT=0
+t=339 phase=CRUISE speed=0 cap=0.09 starDist=19190.2 inKO=false stallT=4 holdT=0
+t=344 phase=CRUISE speed=0 cap=0.09 starDist=19190.2 inKO=false stallT=9 holdT=0
+t=346 phase=CRUISE speed=0 cap=0.09 starDist=19190.2 inKO=false stallT=11 holdT=0

@@ -168,7 +168,43 @@ const PITCH_FREQ_HZ = 20;
 const YAW_FREQ_HZ   = 22;
 const ROLL_FREQ_HZ  = 19;
 
-// Convenience conversions
+// ════════════════════════════════════════════════════════════════════════
+//  JOLT TUNABLES (Task 4, 2026-06-27 — manual enter/drop drive beats, AC7)
+//
+//  Distinct from the cruise tremor above. The cruise tremor is a subtle
+//  SUSTAINED turbulence (0.2°/0.2°/0.1° over 1.5s) that fires when the drive
+//  cuts across a density spike. The enter/drop JOLT is a single felt THUMP
+//  when the pilot manually engages or drops the supercruise drive — bigger
+//  and shorter, so it reads as a hardware event, not weather.
+//
+//  Rotation-only, exactly like the tremor: peaks are camera-local pitch/yaw/
+//  roll, `camera.position` is never written.
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Jolt total duration in seconds. Shorter than the 1.5s cruise tremor so it
+ * reads as a discrete beat. V1 seed = 0.7s. Bounded [0.5, 0.8].
+ */
+const JOLT_ENVELOPE_DURATION = 0.7;
+
+/**
+ * Peak pitch/yaw rotation amplitude for a jolt, in degrees. Deliberately
+ * larger than the 0.2° cruise tremor peak so the manual enter/drop beat is
+ * unmistakably bigger. V1 seed = 1.0° (mid of the spec's 0.8–1.2° range).
+ */
+const JOLT_PITCH_PEAK_DEG = 1.0;
+const JOLT_YAW_PEAK_DEG   = 1.0;
+
+/**
+ * Peak roll rotation amplitude for a jolt, in degrees. ~0.5° per spec —
+ * larger than the 0.1° cruise roll but still subordinate to pitch/yaw so the
+ * beat reads as a thump, not a barrel-roll. V1 seed = 0.5°.
+ */
+const JOLT_ROLL_PEAK_DEG = 0.5;
+
+/**
+ * Convenience conversions
+ */
 const DEG_TO_RAD = Math.PI / 180;
 const TWO_PI = Math.PI * 2;
 
@@ -209,6 +245,34 @@ function decelEnvelope(t, duration) {
   }
   // Exponential decay with time constant chosen so env(1.0) ≈ 0.03
   return Math.exp(-3.5 * (u - 0.1));
+}
+
+/**
+ * Enter-jolt envelope: accel SWELL — crescendo-then-fade, like the accel
+ * tremor but over the short jolt duration so the manual drive-engage reads as
+ * a quick build-and-release rather than a flat thump. Same shape family as
+ * accelEnvelope (re-used intent: ramp-in to peak at 0.6·dur, fade to 0).
+ * env(0) = 0, env(0.6·dur) ≈ 1, env(dur) = 0.
+ */
+function enterJoltEnvelope(t, duration) {
+  return accelEnvelope(t, duration);
+}
+
+/**
+ * Drop-jolt envelope: IMPACT-then-ring — near-instant peak then a decaying
+ * ring-down, like the decel tremor but sharper (faster ramp-in) so the manual
+ * drop-out lands as a hit. Same shape family as decelEnvelope.
+ * env(0) = 0, env(~0.06·dur) ≈ 1, env(dur) → small.
+ */
+function dropJoltEnvelope(t, duration) {
+  const u = t / duration;
+  if (u <= 0 || u >= 1) return 0;
+  if (u < 0.06) {
+    // Sharper impact than the cruise decel (0.1 → 0.06 ramp-in fraction).
+    return smoothstep(0, 0.06, u);
+  }
+  // Exponential ring-down; tuned so env(1.0) ≈ 0.04.
+  return Math.exp(-3.4 * (u - 0.06));
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -281,6 +345,15 @@ export class ShipChoreographer {
 
     // ── Debug-hook: when non-null, bypasses phase/short-hop/warp-exit gates. ──
     this._pendingDebugFire = null;  // { type: 'accel' | 'decel' }
+    // ── Jolt-hook (Task 4): manual enter-swell / drop-jolt one-shots.
+    //    Like the debug hook, these bypass all gates (a drop-out can happen
+    //    in any phase). When non-null, `update()` consumes it and starts a
+    //    JOLT event — a bigger/shorter beat than the cruise tremor, with its
+    //    own peaks (JOLT_*_PEAK_DEG) and envelope (enter/drop). ──
+    this._pendingJoltFire = null;   // { type: 'enter' | 'drop' }
+    // True while the current event is a manual jolt (selects the jolt peaks +
+    // envelope in the sampler instead of the cruise-tremor peaks).
+    this._eventIsJolt = false;
     // Current event's provenance — natural (signal-triggered) vs debug
     // (test scaffolding bypassing gates). AC #17 (signal-coincidence)
     // only evaluates natural events; debug events intentionally fire
@@ -375,20 +448,36 @@ export class ShipChoreographer {
     //  before its envelope completed). AC #13 + #16 invariant.
     // ════════════════════════════════════════════════════════════════════
     if (subPhase !== 'traveling') {
-      if (this._eventActive) {
+      // Silence any in-flight NATURAL tremor. Manual jolts (enter/drop) are
+      // exempt: a drop-out can happen in any phase and its beat must ring out
+      // fully, so we let an active jolt keep sampling through this gate.
+      if (this._eventActive && !this._eventIsJolt) {
         this._eventActive = false;
         this._eventType = null;
         this._eventIsDebug = false;
       }
-      // Debug-fires still honored (they bypass gates), but even so:
-      // we reset the output and only fire if a pending debug is present.
-      this._zeroShake();
-      if (this._pendingDebugFire !== null) {
+      // Debug-fires AND jolt-fires still honored (both bypass gates). If a
+      // jolt is already active we don't disturb it. Jolt takes precedence
+      // over an incidental debug tremor on the same frame.
+      if (this._pendingJoltFire !== null) {
+        this._zeroShake();
+        const { type } = this._pendingJoltFire;
+        this._pendingJoltFire = null;
+        // Manual beat wins outright — discard any competing pending cruise
+        // tremor so it can't stomp the jolt on a later frame (T7 double-fire).
+        this._pendingDebugFire = null;
+        this._startJoltEvent(type);
+      } else if (this._eventActive && this._eventIsJolt) {
+        // Active jolt continues — leave it for the sampler below.
+      } else if (this._pendingDebugFire !== null) {
+        this._zeroShake();
         const { type } = this._pendingDebugFire;
         this._pendingDebugFire = null;
         this._startTremorEvent(type, /* isDebug */ true);
+      } else {
+        this._zeroShake();
       }
-      // Fall through to sample envelope if a debug fire is now active
+      // Fall through to sample envelope if a debug/jolt fire is now active
       if (!this._eventActive) return;
     }
 
@@ -504,7 +593,18 @@ export class ShipChoreographer {
     //  belt-and-suspenders phase gate above ALREADY handled this case
     //  for outside-traveling. Here we handle the inside-traveling case.
     // ════════════════════════════════════════════════════════════════════
-    if (this._pendingDebugFire !== null && subPhase === 'traveling') {
+    if (this._pendingJoltFire !== null && subPhase === 'traveling') {
+      const { type } = this._pendingJoltFire;
+      this._pendingJoltFire = null;
+      // Jolt fires replace any active event (manual beat wins). The manual beat
+      // also DISCARDS any competing pending cruise tremor on the same frame —
+      // otherwise the debug fire would stomp the just-started jolt on the next
+      // frame, cutting the drop beat short AND firing a cruise tremor (the
+      // double-fire T7 guards against on autopilot legs). (supercruise-arrival-
+      // modes-design-2026-06-27, Feature 5 / Task 7.)
+      this._pendingDebugFire = null;
+      this._startJoltEvent(type);
+    } else if (this._pendingDebugFire !== null && subPhase === 'traveling') {
       const { type } = this._pendingDebugFire;
       this._pendingDebugFire = null;
       // Debug fires replace any active event
@@ -517,20 +617,41 @@ export class ShipChoreographer {
     if (this._eventActive) {
       const t = this._timeAccum - this._eventOnsetTime;
       if (t >= this._eventDuration) {
-        // Event completed — record end time for cooldown and go idle
-        if (this._eventType === 'accel') {
-          this._lastAccelEndTime = this._timeAccum;
-        } else {
-          this._lastDecelEndTime = this._timeAccum;
+        // Event completed — record end time for cooldown and go idle.
+        // Jolts (enter/drop) are manual one-shots that don't participate in
+        // the natural-tremor cooldown timers, so skip the record for them.
+        if (!this._eventIsJolt) {
+          if (this._eventType === 'accel') {
+            this._lastAccelEndTime = this._timeAccum;
+          } else {
+            this._lastDecelEndTime = this._timeAccum;
+          }
         }
         this._eventActive = false;
         this._eventType = null;
         this._eventIsDebug = false;
+        this._eventIsJolt = false;
         this._zeroShake();
       } else {
-        const envValue = (this._eventType === 'accel')
-          ? accelEnvelope(t, this._eventDuration)
-          : decelEnvelope(t, this._eventDuration);
+        // Pick envelope + peaks by event kind. Manual jolts (enter/drop) use
+        // the bigger/shorter jolt peaks; cruise tremors (accel/decel) use the
+        // subtle sustained peaks. Both share the carrier mechanism.
+        let envValue, pitchPeak, yawPeak, rollPeak;
+        if (this._eventIsJolt) {
+          envValue = (this._eventType === 'enter')
+            ? enterJoltEnvelope(t, this._eventDuration)
+            : dropJoltEnvelope(t, this._eventDuration);
+          pitchPeak = JOLT_PITCH_PEAK_DEG;
+          yawPeak   = JOLT_YAW_PEAK_DEG;
+          rollPeak  = JOLT_ROLL_PEAK_DEG;
+        } else {
+          envValue = (this._eventType === 'accel')
+            ? accelEnvelope(t, this._eventDuration)
+            : decelEnvelope(t, this._eventDuration);
+          pitchPeak = TREMOR_PITCH_PEAK_DEG;
+          yawPeak   = TREMOR_YAW_PEAK_DEG;
+          rollPeak  = TREMOR_ROLL_PEAK_DEG;
+        }
 
         // Per-axis sinusoidal carriers, phase-scattered at onset,
         // frequency-detuned across axes to prevent Lissajous lock.
@@ -538,9 +659,9 @@ export class ShipChoreographer {
         const yawCarrier   = Math.sin(TWO_PI * YAW_FREQ_HZ   * t + this._yawPhase);
         const rollCarrier  = Math.sin(TWO_PI * ROLL_FREQ_HZ  * t + this._rollPhase);
 
-        this._shakeEuler.pitch = envValue * TREMOR_PITCH_PEAK_DEG * DEG_TO_RAD * pitchCarrier;
-        this._shakeEuler.yaw   = envValue * TREMOR_YAW_PEAK_DEG   * DEG_TO_RAD * yawCarrier;
-        this._shakeEuler.roll  = envValue * TREMOR_ROLL_PEAK_DEG  * DEG_TO_RAD * rollCarrier;
+        this._shakeEuler.pitch = envValue * pitchPeak * DEG_TO_RAD * pitchCarrier;
+        this._shakeEuler.yaw   = envValue * yawPeak   * DEG_TO_RAD * yawCarrier;
+        this._shakeEuler.roll  = envValue * rollPeak  * DEG_TO_RAD * rollCarrier;
       }
     } else {
       this._zeroShake();
@@ -602,6 +723,49 @@ export class ShipChoreographer {
     this._rollPhase  = simRandom() * TWO_PI;
   }
 
+  /**
+   * Fire a manual JOLT event — the enter-swell / drop-jolt beat. Modeled on
+   * `_startTremorEvent` but uses the jolt peaks (JOLT_*_PEAK_DEG) and the
+   * fixed short jolt duration. Bypasses all gates (manual beats play in any
+   * phase) and does NOT consume the per-leg tremor budget or the cooldown
+   * timers — those govern the incidental cruise tremor only.
+   *
+   * @param {'enter'|'drop'} type
+   */
+  _startJoltEvent(type) {
+    this._eventActive = true;
+    this._eventType = type;          // 'enter' | 'drop'
+    this._eventIsDebug = false;
+    this._eventIsJolt = true;
+    this._eventOnsetTime = this._timeAccum;
+    this._eventDuration = JOLT_ENVELOPE_DURATION;
+
+    // Randomize per-axis carrier phases so back-to-back beats don't pattern-match.
+    this._pitchPhase = simRandom() * TWO_PI;
+    this._yawPhase   = simRandom() * TWO_PI;
+    this._rollPhase  = simRandom() * TWO_PI;
+  }
+
+  // ── Manual drive-beat hooks (bypass all gates; rotation-only) ──
+
+  /**
+   * Enter-swell: a bigger/shorter accel SWELL when the pilot manually engages
+   * the supercruise drive (E from Toybox, or re-engage from drive-idle).
+   * Rotation-only; never writes camera.position. Consumed by next update().
+   */
+  enterImpulse() {
+    this._pendingJoltFire = { type: 'enter' };
+  }
+
+  /**
+   * Drop-jolt: a sharp impact-then-ring JOLT when the pilot manually drops the
+   * supercruise drive (E while driving → coast). Rotation-only; never writes
+   * camera.position. Consumed by next update().
+   */
+  dropImpulse() {
+    this._pendingJoltFire = { type: 'drop' };
+  }
+
   // ── Debug hooks (bypass all gates) ──
 
   /** Fire an accel tremor event next update. */
@@ -625,6 +789,7 @@ export class ShipChoreographer {
     this._resetState();
     this._zeroShake();
     this._pendingDebugFire = null;
+    this._pendingJoltFire = null;
   }
 
   _resetState() {
@@ -639,6 +804,7 @@ export class ShipChoreographer {
     this._eventActive = false;
     this._eventType = null;
     this._eventIsDebug = false;
+    this._eventIsJolt = false;
     this._eventOnsetTime = 0;
     this._eventDuration = 0;
     this._lastAccelEndTime = -Infinity;

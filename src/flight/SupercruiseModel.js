@@ -5,13 +5,33 @@
 // Pure math: no scene graph, no DOM. Positions are SCENE-LOCAL (rebased frame);
 // main.js registers `position` for world-origin rebase subtraction.
 import * as THREE from 'three';
+import { forcedDropRadiusScene } from './proximityHorizon.js';
 
 export const SC_TUNING = {
-  ETA_K: 6.0,               // speed cap = surfaceDist / ETA_K (Elite's ~6s rule)
+  ETA_K: 3.0,               // speed cap = surfaceDist / ETA_K. Tuned 2026-06-24 (Bug B: 6 → 3) for perceptible
+                            //   manual flight near small bodies. MUST stay ≥ 2.25: drop-safe at every body scale iff
+                            //   cap at capture sphere (9R/ETA_K) ≤ dropMax (4R), i.e. ETA_K ≥ 9/4. Scale-free.
   CAP_MIN_FRAC: 0.5,        // per-body cap floor = radius × this (scale-free: capture stays possible at any body size)
   CAP_MIN_ABS: 1e-5,        // u/s absolute floor — pure numerical safety; MUST stay ≤ 5.3 × smallest capturable body radius (capture needs 0.75×floor ≤ 4R; smallest moon ≈ 4e-5)
   CAP_MAX: 20000.0,         // u/s deep-space ceiling
-  ACCEL_TAU: 1.4,           // s — exponential approach to target speed (heavy feel) (must stay ≤ ETA_K/4 or full-throttle approach decel turns underdamped and surges)
+  ACCEL_TAU: 0.6,           // s — exponential approach to target speed. Tuned 2026-06-24 (Bug B: 1.4 → 0.6) for a
+                            //   responsive throttle (perceptible within ~1.3s). MUST stay ≤ ETA_K/4 (=0.75 here) or
+                            //   full-throttle approach decel turns underdamped and surges.
+  SUBLIGHT_TAU: 0.4,        // s — exponential approach time-constant for the drive-OFF (sublight) regime.
+                            //   Handles BOTH the hard decel when you drop out AND throttle response at
+                            //   sublight. (Renamed from DROP_TAU 2026-06-28: drive-OFF no longer decays to
+                            //   zero — it approaches throttle × SUBLIGHT_CAP; with throttle 0 that IS rest.)
+  SUBLIGHT_CAP: 0.002,      // u/s — fixed sublight top speed (≈ 300 km/s = 300 / 149597.87). NO mass.
+                            //   Also v_ref for the forced-drop horizon. KEY TUNING KNOB — dial live.
+  FORCED_DROP_FLOOR_FACTOR: 1.1,  // × radius (center-distance): minimum forced-drop buffer. Dominates for
+                                  //   planets/moons (their mass horizon falls inside the surface).
+  COLLISION_FACTOR: 1.05,   // × radius (center-distance): uniform hard barrier — never fly through a body.
+  MIN_CRUISE: 2.0,          // u/s — minimum cruise speed while the drive is ON (you can't crawl/stop in supercruise).
+                            //   At ~149,598 km/s per u/s this is ~299,000 km/s ≈ 1 c: the slowest you cruise in
+                            //   supercruise is ~light speed, matching "supercruise is where you reach/exceed light
+                            //   speed" (sublight lives below it). You go BELOW this only when a gravity well forces
+                            //   you (capture — the floor yields to the cap, see update()) or you DROP OUT (E → rest).
+                            //   KEY TUNING KNOB — dial in live testing for feel.
   TURN_RATE_MAX: 0.7,       // rad/s at rest
   TURN_RATE_MIN_FRAC: 0.25, // turn authority remaining at full local speed
   THROTTLE_RATE: 0.6,       // throttle units/s for held W/S stepping
@@ -22,20 +42,32 @@ export class SupercruiseModel {
     this.tuning = { ...SC_TUNING, ...tuning };
     this.position = new THREE.Vector3();      // scene-local (rebased) frame
     this.orientation = new THREE.Quaternion();
-    this.speed = 0;                            // u/s along the nose, ≥ 0
-    this.throttle = 0;                         // 0..1
-    this.turnInput = { yaw: 0, pitch: 0 };     // -1..1 each
+    this.speed = 0;                            // u/s along the nose (signed: reverse < 0)
+    this.throttle = 0;                         // -1..1
+    this._driveOn = true;                      // supercruise drive engaged. OFF → settle to rest (zero velocity)
+    this.turnInput = { yaw: 0, pitch: 0, roll: 0 }; // -1..1 each (roll = Q/E, 2026-06-28)
     this._bodies = [];                         // [{ position: Vector3, radius: number }]
     this._nose = new THREE.Vector3();
     this._euler = new THREE.Euler();
     this._q = new THREE.Quaternion();
+    this._scratch = new THREE.Vector3();     // collision-barrier projection scratch
   }
 
   /** Bodies used for the gravity-well speed cap. Caller refreshes per tick
    *  with CURRENT rebased mesh positions (never cache across ticks). */
   setBodies(list) { this._bodies = list; }
 
-  setThrottle(t) { this.throttle = THREE.MathUtils.clamp(t, 0, 1); }
+  setThrottle(t) { this.throttle = THREE.MathUtils.clamp(t, -1, 1); }
+
+  /** Engage (true) / drop out (false) the supercruise drive.
+   *  OFF → the model stops propelling and SETTLES TO REST: speed decays fast to
+   *  zero by SUBLIGHT_TAU (~1.5s), not coasting on preserved momentum. The gravity-well
+   *  speedCap still clamps the max while it settles. ON → the existing
+   *  throttle/accel behavior resumes (with the MIN_CRUISE floor). */
+  setDrive(on) { this._driveOn = !!on; }
+
+  /** True while the supercruise drive is engaged; false while settling to rest (dropped out). */
+  get driveOn() { return this._driveOn; }
 
   setTurnInput(yaw, pitch) {
     this.turnInput.yaw = THREE.MathUtils.clamp(yaw, -1, 1);
@@ -61,10 +93,34 @@ export class SupercruiseModel {
     return cap;
   }
 
+  /** True when any body is within its forced-drop distance =
+   *  max(FORCED_DROP_FLOOR_FACTOR × radius, escape-velocity horizon). The horizon
+   *  (2GM/v_ref²) only exceeds the floor for stars; bodies without `massKg` use the
+   *  floor. main.js calls this to force a supercruise drop-out and to mass-lock
+   *  re-engage. v_ref = SUBLIGHT_CAP. Pure. */
+  proximityDropRequired() {
+    const floorFactor = this.tuning.FORCED_DROP_FLOOR_FACTOR;
+    const vRef = this.tuning.SUBLIGHT_CAP;
+    const nose = this.nose();              // unit forward (fills this._nose)
+    for (const b of this._bodies) {
+      const floor = floorFactor * b.radius;
+      const horizon = forcedDropRadiusScene(b.massKg, vRef);
+      if (this.position.distanceTo(b.position) < Math.max(floor, horizon)) {
+        // Direction-aware: only an INBOUND nose forces the drop / mass-lock.
+        // Pointed away or tangent → free to engage and fly off (no real gravity
+        // pull). The hard collision barrier in update() stays direction-blind —
+        // it's the physical floor; this is only the forced-drop + mass-lock gate.
+        this._scratch.copy(b.position).sub(this.position); // → toward the body
+        if (nose.dot(this._scratch) > 0) return true;
+      }
+    }
+    return false;
+  }
+
   /** Turn authority shrinks as speed approaches the local cap (Elite feel). */
   turnRateCap() {
     const t = this.tuning;
-    const frac = Math.min(1, this.speed / Math.max(1e-6, this.speedCap()));
+    const frac = Math.min(1, Math.abs(this.speed) / Math.max(1e-6, this.speedCap()));
     return t.TURN_RATE_MAX * (1 - (1 - t.TURN_RATE_MIN_FRAC) * frac);
   }
 
@@ -73,17 +129,63 @@ export class SupercruiseModel {
     const rate = this.turnRateCap();
     const yaw = this.turnInput.yaw * rate * dt;
     const pitch = this.turnInput.pitch * rate * dt;
-    if (yaw !== 0 || pitch !== 0) {
-      this._q.setFromEuler(this._euler.set(pitch, yaw, 0, 'YXZ'));
+    const roll = (this.turnInput.roll || 0) * rate * dt;  // Q/E roll axis (2026-06-28)
+    if (yaw !== 0 || pitch !== 0 || roll !== 0) {
+      this._q.setFromEuler(this._euler.set(pitch, yaw, roll, 'YXZ'));
       this.orientation.multiply(this._q).normalize();
     }
-    // Speed: exponential approach to throttle × cap. The cap falling as we
-    // near a body IS the Elite decel-on-approach.
-    const target = this.throttle * this.speedCap();
-    const k = 1 - Math.exp(-dt / this.tuning.ACCEL_TAU);
-    this.speed += (target - this.speed) * k;
-    if (this.speed < 1e-9) this.speed = 0;
+    // Speed update. Two regimes:
+    if (this._driveOn) {
+      // DRIVE ON: exponential approach to throttle × cap, floored at MIN_CRUISE —
+      // you can't crawl/stop in supercruise; throttle 0 still cruises. The cap
+      // falling as we near a body IS the Elite decel-on-approach. The floor YIELDS
+      // to the cap (floorEff = min(MIN_CRUISE, cap)) so a nearby gravity well can
+      // still force you below the cruise floor and capture stays possible.
+      // NOTE: target is clamped ≥ floorEff > 0, so this also removes reverse-while-
+      // in-supercruise — intended ("can't crawl/stop in SC").
+      const cap = this.speedCap();
+      const floorEff = Math.min(this.tuning.MIN_CRUISE, cap);
+      const target = THREE.MathUtils.clamp(this.throttle * cap, floorEff, cap);
+      const k = 1 - Math.exp(-dt / this.tuning.ACCEL_TAU);
+      this.speed += (target - this.speed) * k;
+    } else {
+      // DRIVE OFF (sublight): exp-approach to throttle × SUBLIGHT_CAP — the same
+      // shape as the ON path, minus the MIN_CRUISE floor (full stop allowed) and
+      // allowing a negative target (reverse). throttle ∈ [-1,1] → full reverse …
+      // stop(0) … full forward. The E-key dropout zeroes throttle (main.js), so
+      // dropping out SETTLES TO REST; then W/S maneuver at sublight.
+      const cap = this.tuning.SUBLIGHT_CAP;
+      const target = this.throttle * cap;
+      const k = 1 - Math.exp(-dt / this.tuning.SUBLIGHT_TAU);
+      this.speed += (target - this.speed) * k;
+    }
+    // Gravity-well clamp (both regimes): magnitude never exceeds the local cap,
+    // sign preserved (reverse momentum survives). Anti-clip: nose-into-a-body
+    // engage can't exceed ~0 because the cap collapses to the surface floor.
+    const cap = this.speedCap();
+    if (this.speed > cap) this.speed = cap;
+    else if (this.speed < -cap) this.speed = -cap;
+    if (Math.abs(this.speed) < 1e-9) this.speed = 0;
     // The ONLY translation source: forward along the nose.
     this.position.addScaledVector(this.nose(), this.speed * dt);
+    // Hard surface barrier (both regimes): never penetrate a body. If the step
+    // landed inside COLLISION_FACTOR×radius, project back onto that barrier sphere
+    // and stop. Bodies don't overlap, so at most one fires per tick. The clamp only
+    // triggers on inward crossings — turning away leaves the new position outside,
+    // so you can always fly off the surface.
+    const cf = this.tuning.COLLISION_FACTOR;
+    for (const b of this._bodies) {
+      const barrier = cf * b.radius;
+      const d = this.position.distanceTo(b.position);
+      if (d < barrier) {
+        if (d > 1e-9) {
+          this._scratch.copy(this.position).sub(b.position).multiplyScalar(1 / d); // outward unit dir
+        } else {
+          this.nose(this._scratch);            // degenerate (at center): shove out along the nose
+        }
+        this.position.copy(b.position).addScaledVector(this._scratch, barrier);
+        this.speed = 0;
+      }
+    }
   }
 }

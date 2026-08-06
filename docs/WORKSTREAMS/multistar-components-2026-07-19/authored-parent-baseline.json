@@ -1,0 +1,257 @@
+{
+  "star": {
+    "type": "G",
+    "color": [
+      1,
+      0.96,
+      0.92
+    ],
+    "radiusSolar": 1.0370936329010874,
+    "radiusScene": 4.822485392990056,
+    "radius": 4.666921348054893,
+    "temp": 5600,
+    "luminosity": 1,
+    "spectFull": "G2V"
+  },
+  "star2": {
+    "type": "K",
+    "color": [
+      1,
+      0.82,
+      0.63
+    ],
+    "radiusSolar": 0.7609119680942967,
+    "radiusScene": 3.5382406516384797,
+    "radius": 4.565471808565781,
+    "temp": 4450,
+    "luminosity": 0.3,
+    "spectFull": "K1V"
+  },
+  "isBinary": true,
+  "binarySeparationAU": 23.5,
+  "binarySeparationScene": 23500,
+  "binarySeparation": 13.514448878006078,
+  "binaryMassRatio": 0.6402838534600861,
+  "binaryOrbitSpeed": 1.7494346328860606e-9,
+  "binaryOrbitAngle": 0.8230932130447133,
+  "planets": [],
+  "asteroidBelts": [],
+  "trojanClusters": [],
+  "starInfo": {
+    "color1": [
+      1,
+      0.96,
+      0.92
+    ],
+    "brightness1": 1,
+    "color2": [
+      1,
+      0.82,
+      0.63
+    ],
+    "brightness2": 0.5123406619178057
+  },
+  "seed": "alpha-centauri",
+  "zones": {
+    "scorchingOuterAU": 0.38,
+    "hzInnerAU": 0.95,
+    "hzOuterAU": 1.37,
+    "frostLineAU": 4.85,
+    "scorchingOuterScene": 380,
+    "hzInnerScene": 950,
+    "hzOuterScene": 1370,
+    "frostLineScene": 4850,
+    "scorchingOuterMap": 0.21853151377201321,
+    "hzInnerMap": 0.546328784430033,
+    "hzOuterMap": 0.7878636154412055,
+    "frostLineMap": 2.789152215248063
+  },
+  "metallicity": -0.3606215784260457,
+  "ageGyr": 0.01,
+  "archetype": "spread-giant",
+  "galaxyContext": {
+    "component": "thin",
+    "componentWeights": {
+      "thin": 0.7677536658118839,
+      "thick": 0.14030821035211247,
+      "bulge": 0.005032483198873409,
+      "halo": 0.08690564063713019,
+      "totalDensity": 0.06250603125007931,
+      "thinAbs": 0.04798923462760056,
+      "thickAbs": 0.008770109380911844,
+      "bulgeAbs": 0.00031456055209428036,
+      "haloAbs": 0.005432126689472622,
+      "barAbs": 0
+    },
+    "spiralArmStrength": 0.9839779280649479,
+    "armInfo": {
+      "armName": "Perseus",
+      "isMajor": true,
+      "strength": 0.9839779280649479,
+      "densityBoost": 2.5
+    },
+    "metallicity": -0.2224655319876006,
+    "age": 0.18723988552892304,
+    "starWeights": [
+      {
+        "type": "O",
+        "weight": 0.14487184008682347
+      },
+      {
+        "type": "B",
+        "weight": 0.23179494413891755
+      },
+      {
+        "type": "A",
+        "weight": 0.18894472621528363
+      },
+      {
+        "type": "F",
+        "weight": 0.09392183558031902
+      },
+      {
+        "type": "G",
+        "weight": 0.11740229447539878
+      },
+      {
+        "type": "K",
+        "weight": 0.11740229447539878
+      },
+      {
+        "type": "M",
+        "weight": 0.1056620650278589
+      }
+    ],
+    "binaryModifier": 1,
+    "starDensity": 0.06250603125007931,
+    "gravitationalPotential": -0.2499350310884457,
+    "escapeVelocity": 0.7070148953005809,
+    "potentialDepth": 0.2499350310884457,
+    "R_kpc": 8.000948053354676,
+    "z_kpc": 0.024984,
+    "theta_rad": -0.00011548631435827064,
+    "position": {
+      "x": 8.000948,
+      "y": 0.024984,
+      "z": -0.000924
+    },
+    "featureContext": null,
+    "starTypeOverride": "G",
+    "companionSpec": {
+      "name": "Alpha Centauri",
+      "kind": "multiple",
+      "components": [
+        {
+          "name": "Rigil Kentaurus",
+          "class": "G2V"
+        },
+        {
+          "name": "Toliman",
+          "class": "K1V",
+          "separationAU": 23.5
+        }
+      ],
+      "farCompanions": [
+        {
+          "name": "Proxima Centauri",
+          "class": "M5.5Ve",
+          "separationAU": 13000
+        }
+      ]
+    },
+    "farCompanions": [
+      {
+        "name": "Proxima Centauri",
+        "class": "M5.5Ve",
+        "separationAU": 13000,
+        "planets": [
+          {
+            "letter": "b",
+            "name": "Proxima Cen b",
+            "periodDays": 11.18465,
+            "smaAU": 0.04848,
+            "massEarth": 1.055,
+            "radiusEarth": 1.02,
+            "eccen": 0
+          },
+          {
+            "letter": "d",
+            "name": "Proxima Cen d",
+            "periodDays": 5.12338,
+            "smaAU": 0.02881,
+            "massEarth": 0.26,
+            "radiusEarth": 0.692,
+            "eccen": 0
+          }
+        ]
+      }
+    ]
+  },
+  "galacticPosition": {
+    "x": 8.000948,
+    "y": 0.024984,
+    "z": -0.000924
+  },
+  "mapUnitsPerAU": 0.5750829309789821,
+  "formation": {
+    "diskMass": 0.03716037892637632,
+    "dissipationMyr": 5.3189868703484535,
+    "archetype": "spread-giant",
+    "snowLineMigration": 1,
+    "solidFraction": 0.027435660856394553
+  },
+  "migrationHistory": {
+    "occurred": false
+  },
+  "resonanceChain": null,
+  "stellarEvolution": {
+    "evolved": false,
+    "remnantType": null,
+    "stage": "main-sequence",
+    "msLifetime": 8.924190863830995
+  },
+  "binaryStability": {
+    "stabilityLimitAU": 57.16757396441513,
+    "cbHZ": {
+      "hzInnerAU": 1.083166653844181,
+      "hzOuterAU": 1.5620403323858192
+    }
+  },
+  "farCompanions": [
+    {
+      "name": "Proxima Centauri",
+      "class": "M5.5Ve",
+      "type": "M",
+      "separationAU": 13000,
+      "planets": [
+        {
+          "letter": "b",
+          "name": "Proxima Cen b",
+          "periodDays": 11.18465,
+          "smaAU": 0.04848,
+          "massEarth": 1.055,
+          "radiusEarth": 1.02,
+          "eccen": 0
+        },
+        {
+          "letter": "d",
+          "name": "Proxima Cen d",
+          "periodDays": 5.12338,
+          "smaAU": 0.02881,
+          "massEarth": 0.26,
+          "radiusEarth": 0.692,
+          "eccen": 0
+        }
+      ]
+    }
+  ],
+  "_destType": "star-system",
+  "_isKnownSystem": true,
+  "_knownSystemName": "Alpha Centauri",
+  "_knownSystemNames": {
+    "system": "Alpha Centauri",
+    "star": "Rigil Kentaurus",
+    "star2": "Toliman",
+    "planets": []
+  }
+}

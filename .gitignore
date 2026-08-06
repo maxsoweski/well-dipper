@@ -35,3 +35,4 @@ recordings/
 docs/FEATURES/cards/shots/*.png
 docs/FEATURES/screenshots/*.png
 .superpowers/
+__pycache__/

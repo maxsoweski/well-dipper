@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ORRERY ORBIT LAB — SDF vs LineLoop (AC5)</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
+    #canvas { display: block; width: 100vw; height: 100vh; }
+    #hud {
+      position: fixed; top: 10px; left: 12px;
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: #9fe6b0; white-space: pre; pointer-events: none;
+      text-shadow: 0 1px 2px #000;
+    }
+    #hud b { color: #cfeedd; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="hud"></div>
+
+  <script type="module">
+    // ─────────────────────────────────────────────────────────────────────────
+    // ORRERY ORBIT LAB — isolated harness for orrery-entry-orbits-2026-07-20 AC5.
+    //
+    // Compares the production orbit line (THREE.LineLoop via OrbitLine) against
+    // the candidate fix (OrbitRingSDF) inside the EXACT production downsample
+    // pipeline (RetroRenderer: pixelScale 3, NearestFilter, antialias:false,
+    // pixelRatio 1). The green-pixel counter reads the low-res sceneTarget and
+    // is the objective orbit-presence probe. Star glow at origin is a faithful
+    // billboard-clamp stand-in (~17px, mirrors StarFlare.js:350). No production
+    // file is modified; this page only imports them.
+    // ─────────────────────────────────────────────────────────────────────────
+    import * as THREE from 'three';
+    import { RetroRenderer } from './src/rendering/RetroRenderer.js';   // PROD pipeline — imported for fidelity
+    import { OrbitRingSDF }  from './src/objects/OrbitRingSDF.js';      // candidate fix
+    import { OrbitConicField } from './src/objects/OrbitConicField.js'; // productized Slice B field
+
+    // BASELINE (staticky-orbit fix, 2026-07-20): since the AC5 prod swap,
+    // src/objects/OrbitLine.js EXTENDS OrbitRingSDF — importing it no longer
+    // yields a LineLoop, so "baseline vs sdf" silently measured SDF vs SDF
+    // (caught 2026-07-20: identical drift numbers to the decimal). This is a
+    // byte-faithful replica of the pre-swap OrbitLine (git 7e8b0ef).
+    class LineLoopRing {
+      constructor(radius, color = 0x444444) {
+        const segments = Math.max(128, Math.ceil(Math.sqrt(radius) * 32));
+        const points = [];
+        for (let i = 0; i < segments; i++) {
+          const angle = (i / segments) * Math.PI * 2;
+          points.push(new THREE.Vector3(
+            Math.cos(angle) * radius, 0, Math.sin(angle) * radius));
+        }
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.8 });
+        this.mesh = new THREE.LineLoop(geometry, material);
+      }
+      addTo(scene) { scene.add(this.mesh); }
+      dispose() { this.mesh.geometry.dispose(); this.mesh.material.dispose(); }
+    }
+
+    // ── ANALYTIC-ESTIMATOR candidate (critical-dig session, 2026-07-21) ──────
+    // Identical to OrbitRingSDF in every respect EXCEPT the screen-px distance
+    // estimator: instead of fwidth(g) (per-2x2-quad finite differences — the
+    // hypothesized noise source at grazing angles), the fragment shader computes
+    // the EXACT first-order screen-space gradient of g from the plane→screen
+    // Jacobian:  ∇_s g = A⁻ᵀ r̂,  A[:,i] = Fpx·(mᵢ.xy·w + pv.xy·mᵢ.z)/w²
+    // (mᵢ = modelView columns for the plane's x/z axes, pv = view-space pos,
+    // w = -pv.z, Fpx = projection scale in RENDER pixels). Smooth everywhere;
+    // blows up smoothly (not noisily) at the horizon, where the same 0.4R
+    // clamp bounds it. Band/clamp/smear-cut/prox-fade structure is UNCHANGED —
+    // the estimator is the single experimental variable.
+    class AnalyticRingSDF extends OrbitRingSDF {
+      constructor(radius, color) {
+        super(radius, color);
+        const m = this.material;
+        m.uniforms.uFpx = { value: new THREE.Vector2(1, 1) };  // set per-frame by renderOnce
+        m.vertexShader = /* glsl */`
+          #include <common>
+          #include <logdepthbuf_pars_vertex>
+          uniform float uRadius;
+          uniform float uProxNearAbs;
+          uniform float uProxNearRel;
+          uniform float uProxFarMul;
+          varying vec3 vLocalPos;
+          varying float vProxFade;
+          varying vec3 vViewPos;
+          varying vec3 vMVc0;
+          varying vec3 vMVc2;
+          void main() {
+            vLocalPos = position;
+            vec3 dWorld = cameraPosition - vec3(modelMatrix[3]);
+            vec3 camObj = vec3(dot(modelMatrix[0].xyz, dWorld),
+                               dot(modelMatrix[1].xyz, dWorld),
+                               dot(modelMatrix[2].xyz, dWorld));
+            float radial = length(camObj.xz) - uRadius;
+            float circleDist = length(vec2(radial, camObj.y));
+            float proxNear = max(uProxNearAbs, uProxNearRel * uRadius);
+            vProxFade = smoothstep(proxNear, proxNear * uProxFarMul, circleDist);
+
+            vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+            vViewPos = mvPos.xyz;
+            vMVc0 = modelViewMatrix[0].xyz;
+            vMVc2 = modelViewMatrix[2].xyz;
+            gl_Position = projectionMatrix * mvPos;
+            #include <logdepthbuf_vertex>
+          }
+        `;
+        m.fragmentShader = /* glsl */`
+          #include <logdepthbuf_pars_fragment>
+          uniform float uRadius;
+          uniform vec3  uColor;
+          uniform float uOpacity;
+          uniform float uPixelWidth;
+          uniform float uVisFactor;
+          uniform float uFeatherPx;
+          uniform vec2  uFpx;
+          varying vec3 vLocalPos;
+          varying float vProxFade;
+          varying vec3 vViewPos;
+          varying vec3 vMVc0;
+          varying vec3 vMVc2;
+
+          void main() {
+            if (vProxFade < 0.004) discard;
+            #include <logdepthbuf_fragment>
+
+            float g = length(vLocalPos.xz) - uRadius;
+
+            // Analytic screen-space gradient of g (replaces fwidth — see class doc).
+            float w = -vViewPos.z;
+            if (w < 1e-6) discard;
+            vec2 rhat = vLocalPos.xz / max(length(vLocalPos.xz), 1e-9);
+            float w2 = w * w;
+            vec2 a0 = uFpx * vec2(vMVc0.x * w + vViewPos.x * vMVc0.z,
+                                  vMVc0.y * w + vViewPos.y * vMVc0.z) / w2;
+            vec2 a1 = uFpx * vec2(vMVc2.x * w + vViewPos.x * vMVc2.z,
+                                  vMVc2.y * w + vViewPos.y * vMVc2.z) / w2;
+            float det = a0.x * a1.y - a1.x * a0.y;
+            vec2 grad = vec2( a1.y * rhat.x - a0.y * rhat.y,
+                             -a1.x * rhat.x + a0.x * rhat.y);
+            float aaRaw = length(grad) / max(abs(det), 1e-12);
+
+            float aaMax = max(uRadius * 0.4, 1e-4);
+            float aa = clamp(aaRaw, 1e-6, aaMax);
+
+            float distPx = abs(g) / aa;
+            float alpha = 1.0 - smoothstep(uPixelWidth * 0.5,
+                                           uPixelWidth * 0.5 + uFeatherPx,
+                                           distPx);
+            if (abs(g) / max(aaRaw, 1e-6) > uPixelWidth * 0.5 + uFeatherPx) discard;
+            if (alpha < 0.01) discard;
+            gl_FragColor = vec4(uColor, alpha * uOpacity * uVisFactor * vProxFade);
+          }
+        `;
+        m.needsUpdate = true;
+      }
+    }
+
+    // ── SCREEN-SPACE CONIC probe (critical-dig session, 2026-07-21) ──────────
+    // The domain-correct candidate: each ring's circle projects to a conic in
+    // screen space; the CPU builds that conic per ring per frame (homography
+    // H = screen ∘ [P·V·M columns x,z,w], conic Cs = H⁻ᵀ·diag(1,1,-R²)·H⁻¹)
+    // and ONE fullscreen pass paints every pixel within the band of ANY ring's
+    // curve via Sampson distance |pᵀCs p| / |2(Cs p).xy| — measured directly in
+    // RENDER pixels. No derivatives (no quad noise), no world-domain footprint
+    // (no 0.4R clamp, no smear cut), and per-pixel evaluation (no raster
+    // starvation of grazing slivers). Front-branch guard via w_clip sign.
+    // PROBE ONLY: no depth write (real impl would reconstruct plane point +
+    // write log depth), single color per ring set, no prox fade.
+    const CONIC_MAX = 16;
+    function inv3(m) {
+      const [a,b,c] = m[0], [d,e,f] = m[1], [g,h,i] = m[2];
+      const A = e*i-f*h, B = -(d*i-f*g), C = d*h-e*g;
+      const det = a*A + b*B + c*C;
+      if (!isFinite(det) || Math.abs(det) < 1e-30) return null;
+      const s = 1/det;
+      return [
+        [A*s, -(b*i-c*h)*s, (b*f-c*e)*s],
+        [B*s, (a*i-c*g)*s, -(a*f-c*d)*s],
+        [C*s, -(a*h-b*g)*s, (a*e-b*d)*s],
+      ];
+    }
+    const conicMat = new THREE.Matrix4();
+    function ringConicScreen(mesh, radius, W, Hh) {
+      conicMat.multiplyMatrices(camera.matrixWorldInverse, mesh.matrixWorld);
+      conicMat.premultiply(camera.projectionMatrix);
+      const el = conicMat.elements;                 // column-major
+      const M = (r, c) => el[c*4 + r];
+      const rowX = [M(0,0), M(0,2), M(0,3)];
+      const rowY = [M(1,0), M(1,2), M(1,3)];
+      const rowW = [M(3,0), M(3,2), M(3,3)];
+      const Hm = [
+        [(rowX[0]+rowW[0])*W/2, (rowX[1]+rowW[1])*W/2, (rowX[2]+rowW[2])*W/2],
+        [(rowY[0]+rowW[0])*Hh/2, (rowY[1]+rowW[1])*Hh/2, (rowY[2]+rowW[2])*Hh/2],
+        rowW,
+      ];
+      const Hi = inv3(Hm);
+      if (!Hi) return null;
+      const Ck = [1, 1, -radius*radius];
+      const Cs = [[0,0,0],[0,0,0],[0,0,0]];
+      let mx = 0;
+      for (let i2 = 0; i2 < 3; i2++) for (let j = 0; j < 3; j++) {
+        let s = 0;
+        for (let k = 0; k < 3; k++) s += Ck[k]*Hi[k][i2]*Hi[k][j];
+        Cs[i2][j] = s;
+        mx = Math.max(mx, Math.abs(s));
+      }
+      if (!(mx > 0) || !isFinite(mx)) return null;
+      for (let i2 = 0; i2 < 3; i2++) for (let j = 0; j < 3; j++) Cs[i2][j] /= mx;
+      return { Cs, rowW, Hi };
+    }
+    const conicUniforms = {
+      uConic:  { value: Array.from({length: CONIC_MAX}, () => new THREE.Matrix3()) },
+      uRowW:   { value: Array.from({length: CONIC_MAX}, () => new THREE.Vector3()) },
+      uHinv:   { value: Array.from({length: CONIC_MAX}, () => new THREE.Matrix3()) },
+      uActive: { value: new Array(CONIC_MAX).fill(0) },
+      uCount:  { value: 0 },
+      uPixelWidth: { value: 1.0 },
+      uFeatherPx:  { value: 0.5 },
+    };
+    const conicMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(2, 2),
+      new THREE.ShaderMaterial({
+        uniforms: conicUniforms,
+        vertexShader: /* glsl */`
+          void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }
+        `,
+        fragmentShader: /* glsl */`
+          uniform mat3 uConic[${CONIC_MAX}];
+          uniform vec3 uRowW[${CONIC_MAX}];
+          uniform mat3 uHinv[${CONIC_MAX}];
+          uniform float uActive[${CONIC_MAX}];
+          uniform int uCount;
+          uniform float uPixelWidth;
+          uniform float uFeatherPx;
+          void main() {
+            vec3 p = vec3(gl_FragCoord.xy, 1.0);
+            float alpha = 0.0;
+            for (int i = 0; i < ${CONIC_MAX}; i++) {
+              if (i >= uCount) break;
+              if (uActive[i] < 0.5) continue;
+              vec3 cp = uConic[i] * p;
+              float v = dot(p, cp);
+              float gl = length(2.0 * cp.xy);
+              float distPx = abs(v) / max(gl, 1e-12);
+              // front-branch guard: reconstruct the plane point, require w_clip>0
+              vec3 q = uHinv[i] * p;
+              vec2 XZ = q.xy / q.z;
+              float wclip = dot(uRowW[i], vec3(XZ, 1.0));
+              if (wclip <= 0.0) continue;
+              float a = 1.0 - smoothstep(uPixelWidth * 0.5,
+                                         uPixelWidth * 0.5 + uFeatherPx, distPx);
+              alpha = max(alpha, a);
+            }
+            if (alpha < 0.01) discard;
+            gl_FragColor = vec4(0.0, 1.0, 0.0, alpha * 0.8);
+          }
+        `,
+        transparent: true,
+        depthWrite: false,
+        depthTest: false,
+      }));
+    conicMesh.frustumCulled = false;
+    conicMesh.visible = false;
+
+    function updateConics() {
+      camera.updateMatrixWorld();
+      camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+      const W = retro.sceneTarget.width, Hh = retro.sceneTarget.height;
+      const u = conicUniforms;
+      u.uCount.value = Math.min(N, CONIC_MAX);
+      for (let i = 0; i < Math.min(N, CONIC_MAX); i++) {
+        const mesh = sdfRings[i].mesh;   // transform source (same placement as all sets)
+        mesh.updateMatrixWorld();
+        const r = ringConicScreen(mesh, ringDefs[i].radius, W, Hh);
+        const on = (solo === null || solo === i) && r !== null;
+        u.uActive.value[i] = on ? 1 : 0;
+        if (r) {
+          u.uConic.value[i].set(
+            r.Cs[0][0], r.Cs[0][1], r.Cs[0][2],
+            r.Cs[1][0], r.Cs[1][1], r.Cs[1][2],
+            r.Cs[2][0], r.Cs[2][1], r.Cs[2][2]);
+          u.uHinv.value[i].set(
+            r.Hi[0][0], r.Hi[0][1], r.Hi[0][2],
+            r.Hi[1][0], r.Hi[1][1], r.Hi[1][2],
+            r.Hi[2][0], r.Hi[2][1], r.Hi[2][2]);
+          u.uRowW.value[i].set(r.rowW[0], r.rowW[1], r.rowW[2]);
+        }
+      }
+    }
+
+    // ── Scene / camera ──────────────────────────────────────────────────────
+    const canvas = document.getElementById('canvas');
+    const scene  = new THREE.Scene();
+    const FOV = 70;                                     // ORRERY global FOV (main.js)
+    const camera = new THREE.PerspectiveCamera(
+      FOV, window.innerWidth / window.innerHeight, 0.01, 1e6);
+
+    // RetroRenderer IS the production compositor. Its constructor owns the
+    // WebGLRenderer (antialias:false, pixelRatio 1, logarithmicDepthBuffer) and
+    // builds the render targets: bgTarget at FULL res, sceneTarget at
+    // ceil(w/3) x ceil(h/3) with NearestFilter — the aliasing surface under test.
+    const retro = new RetroRenderer(canvas, scene, camera);
+
+    // ── Star glow stand-in (the AC3 rule's denominator) ───────────────────────
+    // Camera-facing quad whose WORLD size is recomputed every frame so it
+    // projects to a constant ~17px (StarFlare targetPx for a G-class star:
+    // max(16, min(22, 16 + 6*(lf-0.55))), lf~0.7 → 17). Pale-yellow + additive,
+    // so it never registers as a "green" orbit pixel.
+    const STAR_TARGET_PX = 17;
+    const starMat = new THREE.ShaderMaterial({
+      uniforms: { uColor: { value: new THREE.Vector3(1.0, 0.95, 0.8) } },
+      vertexShader: /* glsl */`
+        varying vec2 vUv;
+        void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+      `,
+      fragmentShader: /* glsl */`
+        varying vec2 vUv; uniform vec3 uColor;
+        void main() {
+          float d = length(vUv - 0.5) * 2.0;          // 0 center .. 1 edge
+          float a = smoothstep(1.0, 0.15, d);         // soft round glow
+          if (a < 0.02) discard;
+          gl_FragColor = vec4(uColor, a);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    const star = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), starMat);
+    star.frustumCulled = false;
+    scene.add(star);
+
+    function updateStar() {
+      const dist = Math.max(camera.position.length(), 0.001);   // star at origin
+      const fovRad = camera.fov * Math.PI / 180;
+      const pixelsPerRadian = (window.innerHeight / 2) / Math.tan(fovRad / 2);
+      const worldSize = dist * STAR_TARGET_PX / pixelsPerRadian; // == StarFlare clamp
+      star.scale.set(worldSize, worldSize, 1);
+      star.quaternion.copy(camera.quaternion);
+    }
+
+    // ── Planet stand-in (staticky-orbit fix, 2026-07-20) ─────────────────────
+    // BUILT-IN material on purpose: MeshBasicMaterial compiles three's
+    // logdepthbuf chunks, so this ball writes LOG depth exactly like production
+    // Planet/Moon meshes (Planet.js / Moon.js include the chunks explicitly).
+    // Any depth-contest static between an orbit band and a prod planet mesh
+    // reproduces against this ball. Hidden unless driftMeasure({planet:true}).
+    const planetStandIn = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 24, 16),
+      new THREE.MeshBasicMaterial({ color: 0x3a6ea5 }));
+    planetStandIn.visible = false;
+    scene.add(planetStandIn);
+
+    // ── Rings: 13 total, EACH built BOTH ways ─────────────────────────────────
+    // 9 planet-scale (Sol-like AU-ish scene radii) + 4 moon-scale around a point
+    // sitting on the 5200 orbit. Colors mirror production (planets 0x00ff00,
+    // moons 0x00bb00) so the green-pixel counter treats both builds identically.
+    const PLANET_RADII = [387, 723, 1000, 1520, 5200, 9500, 19100, 30000, 67670];
+    const MOON_RADII   = [2, 8, 20, 40];
+    const MOON_CENTER  = new THREE.Vector3(5200, 0, 0);   // repositioned every frame
+
+    const ringDefs = [];   // { radius, color, isMoon }
+    for (const r of PLANET_RADII) ringDefs.push({ radius: r, color: 0x00ff00, isMoon: false });
+    for (const r of MOON_RADII)   ringDefs.push({ radius: r, color: 0x00bb00, isMoon: true  });
+    const N = ringDefs.length;   // 13
+
+    // ── NOTE (orbit-ring-conic Slice D — sdf/analytic columns INERT post-strip) ──
+    // Slice D stripped OrbitRingSDF's self-rendering shaders: it is now a transform
+    // proxy + param bag whose .mesh sits UNCONDITIONALLY on ORBIT_PROXY_LAYER (the
+    // OrbitConicField is the one, unconditional ring renderer). This lab camera is
+    // default-masked (layer 0 only), so it draws NONE of the sdfRings — the 'sdf'
+    // mode (and 'analytic', which extends the stripped base and also lands on the
+    // proxy layer) renders nothing from here on. This is EXPECTED, not a regression:
+    // the Slice B acceptance battery (measureLadder/perRingLadder/driftMeasure over
+    // baseline vs sdf) ran fully BEFORE the strip, so the ACs are unaffected. The
+    // 'conic' mode still works: it reads sdfRings[i].mesh.matrixWorld purely as the
+    // TRANSFORM SOURCE (placement is independent of the deleted render geometry).
+    const baselineRings = [];   // LineLoopRing instances (pre-swap replica — see above)
+    const sdfRings = [];        // OrbitRingSDF instances (transform source only post-strip)
+    const analyticRings = [];   // AnalyticRingSDF instances (INERT post-strip — see note above)
+    for (const def of ringDefs) {
+      const bl = new LineLoopRing(def.radius, def.color);
+      const sd = new OrbitRingSDF(def.radius, def.color);
+      const an = new AnalyticRingSDF(def.radius, def.color);
+      bl.addTo(scene);
+      sd.addTo(scene);
+      an.addTo(scene);
+      baselineRings.push(bl);
+      sdfRings.push(sd);
+      analyticRings.push(an);
+    }
+    scene.add(conicMesh);   // fullscreen conic probe (visible only in 'conic' mode)
+
+    // ── Mode / solo state ─────────────────────────────────────────────────────
+    let mode = 'sdf';      // 'baseline' | 'sdf' | 'analytic'
+    let solo = null;       // ring index or null (=all)
+
+    function normMode(m) {
+      return (m === 'baseline' || m === 'analytic' || m === 'conic') ? m : 'sdf';
+    }
+
+    // ── PRODUCTIZED conic field (orbit-ring-conic Slice B) ────────────────────
+    // The old inline probe (conicMesh, above) STAYS reachable behind the
+    // `conic-prod` toggle (default ON). When ON, the 'conic' mode drives the
+    // productized OrbitConicField (DataTexture + texelFetch + log-depth +
+    // angular fade + single-argmax overlap); when OFF, the probe renders — so a
+    // probe-vs-productized A/B is one toggle if any measured number drifts.
+    // Fed the SAME transform source as every set (sdfRings[i].mesh) + ringDefs.
+    // NOTE: this wiring is UNVERIFIED headless — proven only at the lab GL battery.
+    const conicField = new OrbitConicField({ pixelWidth: 1.0, featherPx: 0.5 });
+    conicField.mesh.visible = false;
+    scene.add(conicField.mesh);
+    let conicProd = true;
+
+    function buildConicDescriptors() {
+      const descs = [];
+      for (let i = 0; i < N; i++) {
+        const mesh = sdfRings[i].mesh;   // transform source (same placement as all sets)
+        mesh.updateMatrixWorld();
+        const on = (solo === null || solo === i);
+        descs.push({
+          matrixWorld: mesh.matrixWorld,
+          radius: ringDefs[i].radius,
+          color: ringDefs[i].color,
+          alpha: 0.8,           // matches the probe's alpha*0.8 output scale
+          active: on,
+        });
+      }
+      return descs;
+    }
+
+    function updateFieldConics() {
+      camera.updateMatrixWorld();
+      conicField.update(buildConicDescriptors(), camera, retro.sceneTarget);
+    }
+
+    function applyVisibility() {
+      for (let i = 0; i < N; i++) {
+        const on = (solo === null || solo === i);
+        baselineRings[i].mesh.visible = on && (mode === 'baseline');
+        sdfRings[i].mesh.visible      = on && (mode === 'sdf');
+        analyticRings[i].mesh.visible = on && (mode === 'analytic');
+      }
+      conicMesh.visible      = (mode === 'conic') && !conicProd;
+      conicField.mesh.visible = (mode === 'conic') && conicProd;
+    }
+
+    // ── Camera placement: pitch-0.7 orbit at distance d ───────────────────────
+    let distance = 121806;    // ~1.8x Sol effOuter (settled overview, investigation.md)
+    const PITCH = 0.7;        // radians above the orbit plane
+    function placeCamera(d) {
+      distance = d;
+      const horiz = d * Math.cos(PITCH);
+      const y     = d * Math.sin(PITCH);
+      camera.position.set(0, y, horiz);   // azimuth 0 (+Z)
+      camera.up.set(0, 1, 0);
+      camera.lookAt(0, 0, 0);
+      camera.updateMatrixWorld();
+    }
+
+    // ── Render one frame + read pixels ────────────────────────────────────────
+    // Moon rings get their mesh.position set EVERY frame (exercises per-frame
+    // reposition — the SDF computes distance in local space, so this is a rigid
+    // move of the whole ring).
+    function renderOnce() {
+      for (let i = 0; i < N; i++) {
+        if (ringDefs[i].isMoon) {
+          baselineRings[i].mesh.position.copy(MOON_CENTER);
+          sdfRings[i].mesh.position.copy(MOON_CENTER);
+          analyticRings[i].mesh.position.copy(MOON_CENTER);
+        }
+      }
+      // Analytic estimator: projection scale in RENDER pixels (the 1/3-res
+      // sceneTarget — the buffer fwidth measures in, so both estimators speak
+      // the same pixel unit). P00/P11 read fresh each frame (resize-safe).
+      const pe = camera.projectionMatrix.elements;
+      const fx = pe[0] * retro.sceneTarget.width  / 2;
+      const fy = pe[5] * retro.sceneTarget.height / 2;
+      for (const an of analyticRings) an.material.uniforms.uFpx.value.set(fx, fy);
+      if (mode === 'conic') { if (conicProd) updateFieldConics(); else updateConics(); }
+      updateStar();
+      applyVisibility();
+      retro.render();
+    }
+
+    const GREEN_THRESHOLD = 2;   // >THRESHOLD green px ⇒ ring is "visible"
+    function countGreenPixels() {
+      const w = retro.sceneTarget.width;
+      const h = retro.sceneTarget.height;
+      const buf = new Uint8Array(w * h * 4);
+      retro.renderer.readRenderTargetPixels(retro.sceneTarget, 0, 0, w, h, buf);
+      let n = 0;
+      for (let i = 0; i < buf.length; i += 4) {
+        const r = buf[i], g = buf[i + 1], b = buf[i + 2];
+        // investigation.md probe: green-dominant, bright-enough pixel.
+        if (g > 40 && g > 1.5 * r && g > 1.5 * b) n++;
+      }
+      return n;
+    }
+
+    // ── Public instrument API ─────────────────────────────────────────────────
+    window._orbitLab = {
+      setMode(m) { mode = normMode(m); applyVisibility(); return mode; },
+      // conic-prod A/B: ON = productized OrbitConicField, OFF = inline probe.
+      setConicProd(on) { conicProd = !!on; applyVisibility(); if (mode === 'conic') renderOnce(); return conicProd; },
+      get conicProd() { return conicProd; },
+      // Provisional angular-size cutoff (render px of projected radius) — b8b sets the shipping value.
+      setConicCutoff(px) { const r = conicField.setAngularCutoff(px); if (mode === 'conic') renderOnce(); return r; },
+      setDistance(d) { placeCamera(d); renderOnce(); return distance; },
+      ringCount() { return N; },
+      soloRing(i) { solo = (i === null || i === undefined) ? null : (i | 0); applyVisibility(); return solo; },
+      countGreenPixels() { renderOnce(); return countGreenPixels(); },
+
+      // Per-distance green-px for BOTH modes, rings all-on. Switches modes
+      // internally; restores prior mode/solo/distance on exit.
+      measureLadder(distances) {
+        const prevMode = mode, prevSolo = solo, prevDist = distance;
+        solo = null;
+        const out = [];
+        for (const d of distances) {
+          placeCamera(d);
+          mode = 'baseline'; renderOnce(); const baseline = countGreenPixels();
+          mode = 'sdf';      renderOnce(); const sdf      = countGreenPixels();
+          mode = 'analytic'; renderOnce(); const analytic = countGreenPixels();
+          out.push({ distance: d, baseline, sdf, analytic });
+        }
+        mode = prevMode; solo = prevSolo; placeCamera(prevDist); renderOnce();
+        return out;
+      },
+
+      // Per-ring per-mode visibility matrix: solo each ring, mark visible when
+      // green-px > GREEN_THRESHOLD at each distance. Restores prior state.
+      perRingLadder(distances) {
+        const prevMode = mode, prevSolo = solo, prevDist = distance;
+        const rings = [];
+        for (let i = 0; i < N; i++) {
+          const row = { index: i, radius: ringDefs[i].radius, isMoon: ringDefs[i].isMoon, baseline: [], sdf: [], analytic: [], conic: [] };
+          for (const which of ['baseline', 'sdf', 'analytic', 'conic']) {
+            mode = which; solo = i;
+            for (const d of distances) {
+              placeCamera(d); renderOnce();
+              row[which].push(countGreenPixels() > GREEN_THRESHOLD);
+            }
+          }
+          rings.push(row);
+        }
+        mode = prevMode; solo = prevSolo; placeCamera(prevDist); renderOnce();
+        return { distances, threshold: GREEN_THRESHOLD, rings };
+      },
+
+      // ── Fix-candidate config (staticky-orbit fix, 2026-07-20) ─────────────
+      // Pokes the OrbitRingSDF taste knobs on ALL sdf rings. Pass nulls to
+      // leave a knob unchanged. (The smear cut is threshold-free in the shader
+      // — no knob; pre-fix behavior is only reproducible by checkout.)
+      setSdfConfig({ pixelWidth = null, featherPx = null } = {}) {
+        for (const sd of [...sdfRings, ...analyticRings]) {
+          const u = sd.material.uniforms;
+          if (pixelWidth !== null) u.uPixelWidth.value = pixelWidth;
+          if (featherPx !== null) u.uFeatherPx.value = featherPx;
+        }
+        if (pixelWidth !== null) conicUniforms.uPixelWidth.value = pixelWidth;
+        if (featherPx !== null) conicUniforms.uFeatherPx.value = featherPx;
+        conicField.setBand({ pixelWidth, featherPx });   // keep the productized field's band in sync
+        const u0 = sdfRings[0].material.uniforms;
+        return { pixelWidth: u0.uPixelWidth.value, featherPx: u0.uFeatherPx.value };
+      },
+
+      // ── Prox-fade envelope on BOTH SDF ring sets (critical-dig, 2026-07-21) ──
+      // The estimator A/B must run with the fade NEUTRALIZED (else the shipped
+      // fade hides the very regime under test). setProxFade({off:true}) shrinks
+      // the envelope to epsilon; setProxFade() restores shipped defaults.
+      setProxFade({ off = false, nearAbs = 0.35, nearRel = 0.02, farMul = 3.0 } = {}) {
+        const cfg = off
+          ? { nearAbs: 1e-6, nearRel: 1e-9, farMul: 1.000001 }
+          : { nearAbs, nearRel, farMul };
+        for (const sd of [...sdfRings, ...analyticRings]) sd.setProximityFade(cfg);
+        return cfg;
+      },
+
+      // ── Temporal instrument (staticky-orbit fix, 2026-07-20) ──────────────
+      // Slow camera drift orbiting `center`; per-frame symmetric difference of
+      // the green-pixel SET in the low-res sceneTarget. Pixels toggling on/off
+      // between consecutive frames ARE the "static" from UAT round 1 — this
+      // counts them objectively. Run the 2×2: {baseline,sdf} × {planet off,on}
+      // to discriminate depth-contest static from pure band re-quantization.
+      driftMeasure({ mode: m = 'sdf', planet: showPlanet = false, planetRadius = 1.5,
+                     center = [5200, 0, 0], dist = 25, pitch = 0.35,
+                     degPerFrame = 0.12, frames = 90, startDeg = 0 } = {}) {
+        const prevMode = mode, prevSolo = solo, prevDist = distance;
+        mode = normMode(m);
+        solo = null;
+        planetStandIn.visible = showPlanet;
+        planetStandIn.position.set(center[0], center[1], center[2]);
+        planetStandIn.scale.setScalar(planetRadius);
+        const c = new THREE.Vector3(center[0], center[1], center[2]);
+        const w = retro.sceneTarget.width, h = retro.sceneTarget.height;
+        const buf = new Uint8Array(w * h * 4);
+        let prev = null, sumGreen = 0, sumTog = 0, maxTog = 0;
+        for (let f = 0; f < frames; f++) {
+          const az = (startDeg + f * degPerFrame) * Math.PI / 180;
+          const horiz = dist * Math.cos(pitch);
+          camera.position.set(c.x + Math.sin(az) * horiz,
+                              c.y + dist * Math.sin(pitch),
+                              c.z + Math.cos(az) * horiz);
+          camera.lookAt(c);
+          camera.updateMatrixWorld();
+          renderOnce();
+          retro.renderer.readRenderTargetPixels(retro.sceneTarget, 0, 0, w, h, buf);
+          const cur = new Set();
+          for (let i = 0; i < buf.length; i += 4) {
+            const r = buf[i], g = buf[i + 1], b = buf[i + 2];
+            if (g > 40 && g > 1.5 * r && g > 1.5 * b) cur.add(i >> 2);
+          }
+          if (prev) {
+            let tog = 0;
+            for (const p of cur) if (!prev.has(p)) tog++;
+            for (const p of prev) if (!cur.has(p)) tog++;
+            sumTog += tog; if (tog > maxTog) maxTog = tog;
+          }
+          sumGreen += cur.size;
+          prev = cur;
+        }
+        planetStandIn.visible = false;
+        mode = prevMode; solo = prevSolo; placeCamera(prevDist); renderOnce();
+        const avgGreen = sumGreen / frames, avgTog = sumTog / (frames - 1);
+        return { mode: m, planet: showPlanet, frames,
+                 avgGreen: +avgGreen.toFixed(1),
+                 avgToggles: +avgTog.toFixed(1), maxToggles: maxTog,
+                 togglePerGreen: +(avgTog / Math.max(avgGreen, 1e-9)).toFixed(3) };
+      },
+
+      // ── Fixed-pose camera for screenshot evidence (critical-dig, 2026-07-21) ──
+      // Places the camera at an explicit pose and leaves it there (the RAF loop
+      // only re-renders; it never re-poses). placeCamera()/setDistance() restore
+      // the standard orbit placement.
+      poseCamera(pos, look) {
+        camera.position.set(pos[0], pos[1], pos[2]);
+        camera.up.set(0, 1, 0);
+        camera.lookAt(look[0], look[1], look[2]);
+        camera.updateMatrixWorld();
+        renderOnce();
+        return { pos, look };
+      },
+
+      // introspection helpers
+      get mode() { return mode; },
+      get distance() { return distance; },
+      get sceneTargetSize() { return { w: retro.sceneTarget.width, h: retro.sceneTarget.height }; },
+    };
+
+    // ── Live loop + readout (cosmetics minimal — this is an instrument) ────────
+    const hud = document.getElementById('hud');
+    placeCamera(distance);
+    applyVisibility();
+    let frame = 0;
+    let lastPx = 0;
+    function loop() {
+      renderOnce();
+      if ((frame++ % 15) === 0) lastPx = countGreenPixels();
+      hud.textContent =
+        `ORRERY ORBIT LAB — SDF vs LineLoop (AC5)\n` +
+        `mode      : ${mode}${(mode === 'sdf' || mode === 'analytic') ? '  (inert post-strip — Slice D)' : ''}${solo !== null ? `  (solo ring ${solo})` : ''}\n` +
+        `distance  : ${distance.toFixed(0)}\n` +
+        `green px  : ${lastPx}   (sceneTarget ${retro.sceneTarget.width}x${retro.sceneTarget.height})\n` +
+        `rings     : ${N}  (9 planet + 4 moon)\n` +
+        `API       : window._orbitLab`;
+      requestAnimationFrame(loop);
+    }
+    loop();
+
+    window.addEventListener('resize', () => {
+      retro.resize();
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      placeCamera(distance);
+    });
+
+    console.log('[orrery-orbit-lab] ready — window._orbitLab', window._orbitLab);
+  </script>
+</body>
+</html>

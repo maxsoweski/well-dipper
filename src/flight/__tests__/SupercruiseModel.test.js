@@ -35,11 +35,42 @@ describe('SupercruiseModel — nose-vector flight + throttle', () => {
     expect(m.speed).toBeGreaterThan(SC_TUNING.CAP_MAX * 0.9);
   });
 
-  it('throttle 0 decays speed smoothly toward 0', () => {
-    const m = new SupercruiseModel();
+  it('throttle 0 (drive ON) decays speed DOWN to the MIN_CRUISE floor, not to 0', () => {
+    // Reversed 2026-06-27: the drive ON now floors at MIN_CRUISE — you can't crawl
+    // to a stop in supercruise. Throttle 0 in open space cruises at MIN_CRUISE.
+    const m = new SupercruiseModel(); // no bodies → cap ≫ MIN_CRUISE
     m.speed = 100; m.setThrottle(0);
+    for (let i = 0; i < 1800; i++) m.update(DT); // 30 s — past the ACCEL_TAU settle
+    expect(m.speed).toBeCloseTo(SC_TUNING.MIN_CRUISE, 5); // settled onto the floor
+    expect(m.speed).toBeGreaterThan(0);                   // never crawls to a stop
+  });
+});
+
+describe('SupercruiseModel — throttle clamps + no reverse in supercruise', () => {
+  it('setThrottle clamps into [-1, 1]', () => {
+    const m = new SupercruiseModel();
+    m.setThrottle(-0.5);
+    expect(m.throttle).toBe(-0.5);
+    m.setThrottle(-2);
+    expect(m.throttle).toBe(-1);
+    m.setThrottle(2);
+    expect(m.throttle).toBe(1);
+  });
+
+  it('throttle -1 (drive ON) does NOT reverse — speed is floored at MIN_CRUISE forward', () => {
+    // Reversed 2026-06-27: target is clamped ≥ floorEff (= min(MIN_CRUISE, cap)) > 0,
+    // so reverse-while-in-supercruise is removed by design ("can't crawl/stop in SC").
+    const m = new SupercruiseModel(); // open space → floorEff = MIN_CRUISE
+    m.orientation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.7);
+    m.setThrottle(-1);
+    const before = m.position.clone();
     for (let i = 0; i < 600; i++) m.update(DT);
-    expect(m.speed).toBeLessThan(1);
+    expect(m.speed).toBeGreaterThan(0);          // never goes negative in SC
+    expect(m.speed).toBeCloseTo(SC_TUNING.MIN_CRUISE, 6);
+    const delta = m.position.clone().sub(before);
+    expect(delta.lengthSq()).toBeGreaterThan(0);
+    const nose = m.nose(new THREE.Vector3());
+    expect(delta.clone().normalize().dot(nose)).toBeCloseTo(1, 6); // still moves FORWARD along nose
   });
 });
 

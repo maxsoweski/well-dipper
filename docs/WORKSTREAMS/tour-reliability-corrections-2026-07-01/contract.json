@@ -1,0 +1,101 @@
+{
+  "workstream": "tour-reliability-corrections-2026-07-01",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "shipped",
+  "verifiedState": "Shipped — Max UAT PASS 2026-07-11 (AC7 closed in the mode-ownership combined watch session; AC6 rescope to inc-2 was already accepted by Max 2026-07-02). Code sha f0bd7cc. Prior state: VERIFIED_PENDING_MAX f0bd7cc (AC6 rescope accepted by Max 2026-07-02: arrival-rate + keep-out clauses moved to inc-2 where their measured mechanisms live; Step-0 AC6 remaining gates all MET — aborts 2<=2, zero livelock, long legs arrive). AC7 UAT = Max's open gate. Prior state: Unit PASS (verify wf_d6faed00-358: AC1/AC3/AC4/AC5 3/3 adversarial each, 288/288, build clean, SC_TUNING byte-identical). Live: AC2 PASS (warp-arrival star HOLD 11.85 ~= park 11.48, zero keep-out entries, departure clean). AC6 PARTIAL (see verdict.json): aborts 2 <= 2 MET, zero livelock, long legs arrive (19,204u leg captured; baseline killed all such legs) — but arrival rate 2/4 (50% vs >=90%) due to the moon-cluster reachability mechanism (neighbor barrier-pins + 0.001-0.4 u/s crawl labyrinth) that is explicitly inc-2 territory per intent.md, plus a boundary-start keep-out dip of the same family. NOT self-relaxed: Max decides rescope-to-inc-2 (recommended) vs hold Step 0 open. AC7 UAT deferred to Max.",
+  "phase": "Step 0 of the reconciled flight roadmap (docs/FLIGHT_RELIABILITY_ROADMAP_2026-07-01.md): correct the four MEASURED defects in shipped WS-1 + inc-1 before building the proactive DEPART phase (inc-2). Mechanism decisions: (RC1) the WS-1 CRUISE stall criterion becomes CAP-RELATIVE — 'stuck' = sustained closing-speed far below what the current speedCap permits (or speed pinned ~0 while cap is not), replacing the absolute 2%-of-initial-leg-distance quota that killed every long leg in its terminal crawl; stays CRUISE-keyed, PILOT-layer only. (RC3) split the warp gate in _dispatchTourLeg (main.js:6985): keep waypoint-INSERTION disabled while warpEffect.isActive (protects the choreographed fly-in) but ALWAYS compute star geometry so a star stop gets its PARK standoff — the measured failure parked the arrival star leg at legacy 2.6R INSIDE the keep-out sphere (obs. 4.04 = 2.6*1.525R vs keepOut 5.34). (AC3-B) harden tourStandoff.goAroundWaypoint for P on/inside the keep-out sphere (measured to occur via the RC3 path; inc-1's AC3 'impossible' premise is void): escape-first geometry — waypoint direction moves radially out, monotonic escape, then tangent; dispatch re-check + SC_GOAROUND_CAP unchanged. (RC4) floor the pilot capture window: dropMaxSpeed = max(4R, absolute floor) in PILOT_TUNING so R~0.004 moons capture instead of flying through at distance 0; dropRadius law unchanged. GUARDRAILS: SC_TUNING never touched (the fix surface is SupercruisePilot.js + main.js dispatch + tourStandoff.js only); WS-1 remains CRUISE-keyed and must still abort true wedges + fast-moon non-convergence; no new pilot phase (that is inc-2); tour pacing is explicitly out of scope (Max re-judges after this lands).",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-stall-criterion-cap-relative",
+      "statement": "The stall detector judges stuck relative to what the gravity well permits. A leg genuinely progressing at crawl speeds near a body is NEVER aborted — including the measured terminal-approach case (multi-thousand-unit leg closing its final units inside the crawl band). A ship pinned at the collision barrier (speed ~0 while the cap allows more) still aborts within the stall window. Fast-moon non-convergence (distance not closing at all while the cap is high) still aborts.",
+      "verifyVia": {
+        "input": "Headless Vitest with real SupercruiseModel + SupercruisePilot (fresh instances): (a) terminal-crawl approach — leg whose remaining distance closes at ~cap speed inside the crawl band (reproduce moon5.4's kill geometry: huge initial dist, final units at 1-4 u/s); (b) barrier-pinned — speed forced ~0 with cap >= its floor; (c) fast-moon — dist-to-target flat/increasing while cap is high.",
+        "observable": "(a) frame.stallAborted NEVER fires; leg reaches HOLD. (b) stallAborted fires within CRUISE_STALL_WINDOW + margin. (c) stallAborted fires. Hand-built scenarios, not mirrors of the implementation formula. SC_TUNING file untouched."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2-warp-arrival-star-standoff",
+      "statement": "After the tour wraps and warps to a new system, the arrival star leg parks at the PARK standoff outside the keep-out sphere — never at the legacy 2.6R inside it (the measured stuck-at-the-sun case). Waypoint insertion stays disabled during the warp fly-in (the choreography is untouched); only the standoff now applies.",
+      "verifyVia": {
+        "input": "Live (chrome-devtools :9223, tab foreground): run the tour to wrap -> cinematic warp -> new-system arrival with the telemetry sampler installed; read _lab.starKeepOutInfo() fresh and the star-leg HOLD distance.",
+        "observable": "Star-leg HOLD centerDist >= park (> keepOut) in the NEW system; zero samples inside the keep-out sphere on the arrival leg and the following departure leg; warp fly-in visuals/choreography unchanged; 0 new console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC3-goaround-escape-from-inside-sphere",
+      "statement": "goAroundWaypoint is correct when the ship starts ON or INSIDE the keep-out sphere (measured to occur via the warp-arrival path). The produced waypoint yields a monotonic escape: W lies outside the sphere, the flown segment P->W never brings the ship closer to the star center than it started, and from W the onward leg clears or triggers the existing dispatch re-check. No regression for the normal outside-sphere regimes.",
+      "verifyVia": {
+        "input": "Headless Vitest on the pure function: (a) P deep inside the sphere (the measured regime, e.g. |P-C| = 0.75*keepOut) with T antipodal; (b) P exactly on the sphere; (c) P just outside near-boundary antipodal (inc-1's bounded best-effort case); (d) the normal far-side regime from PARK distance (must match inc-1 behavior). Verify with a standalone closed-form ray/sphere check and a hand-computed oracle for the radial-escape case.",
+        "observable": "For (a)/(b): W outside the sphere, |W-C| > |P-C|, P->W monotonically non-decreasing in center distance per the independent check. For (c)/(d): behavior matches inc-1 (bounded best-effort / clean tangent). No NaN anywhere."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC4-tiny-body-capture-floor",
+      "statement": "Tiny bodies capture instead of being flown through. The pilot's arrival-speed window gets an absolute floor so a R~0.004 moon (the measured fly-through at distance 0.00) reaches HOLD; large-body capture behavior is unchanged (the floor is far below their existing 4R window).",
+      "verifyVia": {
+        "input": "Headless Vitest with real Model + Pilot: (a) leg to a R=0.004 body reproducing the measured approach (reaches dropRadius at crawl speed); (b) leg to a large body (R=0.48) asserting the capture threshold is numerically identical to today.",
+        "observable": "(a) phase reaches HOLD (no fly-through, no stall-abort). (b) dropMaxSpeed unchanged for large R. Change confined to PILOT_TUNING; SC_TUNING untouched."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC5-suites-and-build-green",
+      "statement": "Everything that worked keeps working: the full flight+auto unit suites stay green (275/275 baseline plus this workstream's new tests), the build is clean, WS-1 stays CRUISE-keyed, and inc-1's normal-leg go-around/standoff behavior is unchanged.",
+      "verifyVia": {
+        "input": "./node_modules/.bin/vitest run src/flight src/auto; npm run build; git diff over SC_TUNING lines (SupercruiseModel.js:10-38).",
+        "observable": "All suites green (>= 275 + new); build exits 0; SC_TUNING diff empty; inc-1 unit tests (standoff, crossing, waypoint, planLeg) all still pass unmodified except where AC3-B legitimately extends goAroundWaypoint cases."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC6-monitored-tour-gate",
+      "statement": "RESCOPED (Max, 2026-07-02 — accepted working-Claude's recommendation): the arrival-rate (>=90% HOLD) and keep-out-entry clauses MOVE to Increment 2's contract, where their measured residual mechanisms live (moon-cluster neighbor barrier-pins + boundary-start departure dip — the DEPART/routing regime, out of Step-0 scope per intent.md). Step-0 AC6 gates on what the corrections own: stall-aborts <= 2 per 15-min window (baseline 35), zero livelock, and long/ordinary legs arriving instead of being killed in terminal approach. ORIGINAL (pre-rescope): nearly all attempted legs reach HOLD, aborts rare, ship never enters the star keep-out sphere. Baseline: 7/44 arrivals, 35 aborts, 62.7% of samples below 0.5 u/s.",
+      "verifyVia": {
+        "input": "Live (chrome-devtools :9223, tab foreground): fresh page -> _lab.enterSol() -> _lab.beginAutopilotTour() -> triage/tour-telemetry-sampler.js for ~15 min at boot-default settings -> analyze-tour.mjs against the dump.",
+        "observable": ">=90% of legs attempted within the window reach HOLD (excluding at most the final in-flight leg); tourStallAbortCount <= 2; zero samples with inKeepOut=true; report median leg duration + speed distribution alongside (for Max's separate pacing call, not gated here)."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7-tour-reaches-planets-holistic",
+      "statement": "Watching the unattended tour, it visibly works: the ship reaches planet after planet, visits them, and moves on; the sun never traps it — including across a warp into the next system. (Pacing/feel is noted separately, not gated here — Max's roadmap decision 3.)",
+      "verifyVia": {
+        "input": "Max watches the unattended tour through several legs, a star visit, and at least one warp-to-next-system loop (Z or window._lab.beginAutopilotTour() on :5173).",
+        "observable": "Holistic acceptance — legs arrive, nothing pins at the sun, the tour reads as functioning. Deferred to Max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "WS-1 CRUISE stall-detector (src/flight/SupercruisePilot.js:159-208, tuning :31-52: CRUISE_STALL_WINDOW 12s, CRUISE_STALL_PROGRESS_FRAC 0.02, _cruiseStallRef/_cruiseBestDist state) — the RC1 fix surface; stays CRUISE-keyed.",
+      "SupercruiseModel.speedCap() (src/flight/SupercruiseModel.js:85-94) — the achievable-speed reference the new criterion compares against; READ-only (SC_TUNING :10-38 locked).",
+      "Pilot capture window dropRadius=10R / dropMaxSpeed=4R (SupercruisePilot.js:118-119, capture :190-207) — the RC4 fix surface (PILOT_TUNING, not SC_TUNING).",
+      "_dispatchTourLeg (src/main.js:6981-7031), the warp gate `ko = warpEffect.isActive ? null : _starKeepOut()` at :6985 — the RC3 fix surface; planLeg/tourStandoff seam from inc-1.",
+      "tourStandoff.js (goAroundWaypoint :130-167, GO_AROUND_MARGINS, segmentCrossesSphere) — the AC3-B fix surface; per-frame clearance switch (_handleScPilotFrame main.js:7045-7056) + SC_GOAROUND_CAP stay as-is.",
+      "Telemetry instruments: triage sampler + analyzer (docs/WORKSTREAMS/autopilot-standoff-routing-2026-07-01/triage/), runFlightReliabilitySuite (window.__wd), _lab hooks (starKeepOutInfo, tourStallAbortCount).",
+      "Test patterns: src/flight/__tests__/ (fresh Model+Pilot, real classes); ./node_modules/.bin/vitest run <path>; npx vitest/npx vite hook-blocked; the word 'vite' in commit messages trips a hook."
+    ],
+    "outputs": [
+      "Cap-relative CRUISE stall criterion in SupercruisePilot (replaces the absolute initial-distance quota); new unit tests for terminal-crawl/barrier-pinned/fast-moon scenarios.",
+      "Split warp gate in _dispatchTourLeg: star geometry always computed for standoff; waypoint insertion still warp-gated.",
+      "Escape-first goAroundWaypoint branch for P on/inside the keep-out sphere + unit cases (a)-(d).",
+      "Absolute floor on dropMaxSpeed in PILOT_TUNING + tiny/large capture unit tests.",
+      "Re-run sampler dataset + analysis committed to this workstream's dir as the AC6 evidence."
+    ],
+    "mustStayWorking": [
+      "SC_TUNING (SupercruiseModel.js:10-38) byte-identical — two prior live regressions; every fix here is pilot/dispatch/geometry layer.",
+      "WS-1 still aborts true wedges, null-bodyRef stops skip, fast-moon non-convergence aborts — the detector is corrected, not weakened; linger:Infinity HOLD parks never touched (CRUISE-keyed).",
+      "Inc-1 normal-leg behavior: far-side go-around routes around (minCenterDist > keepOut), per-frame clearance switch, star PARK visit, clear legs untouched (2.6R hold) — inc-1's unit suite stays green.",
+      "Warp loop + choreographed arrival fly-in: no waypoint insertion during warpEffect.isActive; _scPendingRealTarget still cleared on warp teardown; onLegAdvanced cue fires once per real leg.",
+      "Player Assist legs through the same flyTo funnel: no standoff/waypoint change for non-star Assist targets; standalone Assist still drops out on stall-abort.",
+      "Full-repo test baseline: 4 pre-existing unrelated failures in src/generation (KnownObjects/GalacticFeatures) stay the ONLY failures."
+    ]
+  }
+}

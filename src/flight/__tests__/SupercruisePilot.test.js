@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { SupercruiseModel } from '../SupercruiseModel.js';
 import { SupercruisePilot, PilotPhase, PILOT_TUNING } from '../SupercruisePilot.js';
+import { steerToward } from '../aimAssist.js';
 
 const DT = 1 / 60;
 const mkBody = (x, y, z, r) => ({
@@ -243,5 +244,25 @@ describe('SupercruisePilot', () => {
     expect(frames.some(f => f.phase === PilotPhase.HOLD)).toBe(true);
     expect(model.position.distanceTo(body.mesh.position))
       .toBeLessThanOrEqual(body.radius * 10);
+  });
+});
+
+describe('SupercruisePilot — steerToward parity (extraction is behavior-identical)', () => {
+  it('ALIGN-phase turn input equals steerToward(orientation, position, body, STEER_GAIN)', () => {
+    const model = new SupercruiseModel();
+    model.position.set(0, 0, 0);
+    // Off-axis body so yaw AND pitch are non-trivial and clamped under gain 3.0.
+    const body = mkBody(0.4, 0.25, -2, 0.05);
+    const pilot = new SupercruisePilot(model);
+    pilot.beginLeg({ toBody: body.mesh, bodyRadius: body.radius });
+    // Snapshot the PRE-rotation orientation/position the pilot actually fed into
+    // steerToward this frame; pilot.update rotates model.orientation, so the
+    // expected value must use the frame's input pose, not the post-rotation one.
+    const orient0 = model.orientation.clone();
+    const pos0 = model.position.clone();
+    pilot.update(DT); // ALIGN frame sets model.turnInput via steerToward
+    const expected = steerToward(orient0, pos0, body.mesh.position, PILOT_TUNING.STEER_GAIN);
+    expect(model.turnInput.yaw).toBeCloseTo(expected.yaw, 12);
+    expect(model.turnInput.pitch).toBeCloseTo(expected.pitch, 12);
   });
 });

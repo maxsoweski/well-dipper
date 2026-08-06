@@ -1,0 +1,77 @@
+{
+  "workstream": "real-universe-overlay-2026-07-12",
+  "commit": "3e58fac",
+  "perLayer": {
+    "unit": "PASS",
+    "integration": "INSUFFICIENT",
+    "uat": "deferred-to-max"
+  },
+  "perAC": [
+    {
+      "id": "AC1-neighborhood-fidelity",
+      "result": "INSUFFICIENT",
+      "evidence": "Static review complete and clean: new neighborhood-reference.json (19 Sol / 15 Sirius named neighbors within 5pc) reproduces byte-identical from gen-neighborhood-reference.mjs; NavComputer.js's real-star merge now correctly overwrites wx/wy/wz/dist from catalog position (fixes a prior ~2pc/100%+ displayed-distance error at Rigil); 12/12 targeted + 1404/1404 full suite pass. TRAPPIST-1 correctly has no reference-table row (it's ~12.4pc, outside the 5pc radius by design) but must still be checked for presence via findInVolume, not via the distance table. No chrome-devtools drive performed \u2014 layer=integration+live=true requires one against 3e58fac.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC2-player-search",
+      "result": "INSUFFICIENT",
+      "evidence": "This diff does not touch AC2's actual mechanism (resolveKnownObjects, _selectSearchResult, WASDRFN focus guard) \u2014 confirmed by source inspection. Only NavComputer.js changed, and neither of its two hunks (debug handle + real-star position merge) sits on the search\u2192select\u2192travel path. AC2 was live-PASSed 5/5 at an earlier commit (44c7075, verdict-live-drives-44c7075.json), but that predates this diff, and the live=true convention doesn't let an old-commit pass carry forward automatically. No live drive exists against 3e58fac.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC3-real-characteristics",
+      "result": "INSUFFICIENT",
+      "evidence": "RealSystemOverlay.js's new snum==1 single-pin (guarded by !tableEntry, table always wins) genuinely changes TRAPPIST-1's arrival: previously seed-dependent binary/single, now forced single via 'archive-snum'. 39/39 targeted tests pass incl. both AC3 describe blocks and the Sirius table-wins boundary case. Sirius's arrival path is unmodified and was live-verified at 44c7075, but TRAPPIST-1's actual arrival (not just search-resolution) has never been live-driven in this workstream, and this diff just changed its behavior. No live drive performed against 3e58fac.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC4-procgen-fill",
+      "result": "PASS",
+      "evidence": "snum==1 non-table single-pin (RealSystemOverlay.js, 7 lines) added, gated by !tableEntry (table-wins) and host.snum===1. All 5 AC4 cases (a-e) plus a new one-directional boundary (55 Cnc, pin doesn't fire) and table-wins boundary (synthetic Sirius host, table wins over pin) exercised by deterministic, revisit-stable vitest tests in RealSystemOverlay.pipeline.test.js. 39/39 targeted + 1404/1404 full suite pass (verified by running tests directly, not trusting the commit message; a baseline-comparison artifact from partial checkout was caught and discarded). Layer=integration/live=false \u2014 headless coverage is sufficient per project convention.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC5-authoring-path",
+      "result": "INSUFFICIENT",
+      "evidence": "git diff 58d11f3..3e58fac touches zero AC5-owned files (KnownSystems.js, KnownSystemAuthoring.js, stellarCompanions.js all untouched) \u2014 this is a pure regression check. 76/76 targeted tests pass, 1404/1404 full suite pass, confirming the Alpha Centauri declarative-entry/companion-table mechanism is unbroken. However even historically this AC's sky-click warp path was left 'notDriven' (verdict-live-drives-d106181.json addendum), and per this workstream's own established precedent, a fresh live pass tied to the current commit sha is required to close any live=true AC \u2014 none exists for 3e58fac, and this pass should also finally close the sky-click gap.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC6-structures-audit",
+      "result": "PASS",
+      "evidence": "Full new deliverable: scripts/audit-structures.mjs + structures-reference.json (37 profiles + 152 globulars, sourced from SIMBAD/NED/SEDS + Harris 2010) + committed structures-audit.md report + structuresAudit.test.js (45/45 pass). 3 real position corrections landed (M13/M57/M45) and the previously-flagged uniform-30pc-globular-radius defect is fixed to 152 distinct Harris-derived radii. Independently re-derived (not just trusted): script rerun reproduces the committed report byte-for-byte; M13's correction hand-verified against the raw l/b/d math (old value 44% over tolerance, new value well inside); NGC5139 tidal radius hand-computed from the actual .dat catalog file matches the report's spot-check. This closes a gap the prior verdict.json recorded as FAIL. Layer=unit/live=false, fully headless-satisfiable.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC7-ingestion-pipeline",
+      "result": "PASS",
+      "evidence": "Regression check (diff didn't touch the ingestion script itself). Ran ingest-exoplanets.mjs twice as separate processes \u2014 byte-identical sha256 output both times, matching committed artifacts exactly; script's internal self-checks (duplicate/sort/coverage/collision) all pass. 6319 raw rows -> 4457 hosts/6030 planets, 14 supplement stars, 5 companion-table entries with correct single/multiple discriminator schema. 18/18 dedicated ingest tests + 69/69 naming/catalog suites + 1404/1404 full suite pass, matching the commit message's claimed test count exactly. New snum-pin logic correctly consumes AC7's snum field without duplicating multiplicity data. Layer=unit/live=false.",
+      "adversarialVotes": "3/3 sufficient"
+    },
+    {
+      "id": "AC8-sol-and-regression-guardrail",
+      "result": "INSUFFICIENT",
+      "evidence": "Headless portions all pass: full suite 1404/1404 (vendor/motion-test-kit's 15 'no test suite found' files are pre-existing node:test/vitest runner-mismatch noise, confirmed unrelated); ProcgenSnapshot.test.js 24/24 (re-filter set unchanged since neither real-star-supplement.json nor real-system-contents.json changed in this diff); RealSystemOverlay tests 32/32 confirm the new snum-pin can't touch purely-procedural systems; StarSystemGenerator.js/GalacticMap.js/main.js (seed-stream owners) untouched by this diff. But the live sub-clause (window.__wd.runIntegrationSuite() in Sol, 19/19 scene checks) was last PASSed at 44c7075 -- new code (NavComputer.js position-snap fix, RealSystemOverlay.js snum-pin) has landed since, and per this workstream's own pattern every prior increment re-drove AC8 live after any code landed. No verdict-live-drives-3e58fac.json exists.",
+      "adversarialVotes": "0/3 sufficient"
+    },
+    {
+      "id": "AC9-known-universe-uat",
+      "result": "deferred-to-max",
+      "evidence": "UAT-layer AC -- per dev-collab-os.md, no agent ever marks this PASS; contract.json's own verifyVia.observable states the workflow never marks this AC. This commit is a real, substantive delivery (not doc-only): the AC1 nav-distance fix, the AC6 structures-audit + 152 corrected globular radii, and a documentation ruling on Alpha-Cen planet-fill rates. Test-suite is healthy at 3e58fac (one single-test flake investigated and shown NOT to be a real regression -- isolated + full-suite reruns both green). Workstream housekeeping note: verdict.json on disk is stale (pinned to c68c1fb/Increment 3) and contract.json's phase field still narrates Increment 4 as current -- neither reflects that Increment 5 (this commit) has landed.",
+      "adversarialVotes": "n/a \u2014 UAT is Max-only"
+    },
+    {
+      "id": "AC10-engine-structural-support",
+      "result": "PASS",
+      "evidence": "Pure regression check -- zero diff to StarSystemGenerator.overlay.test.js or any AC10-owned surface in this commit range. 12/12 targeted tests (companion end-to-end, known-planet injection, far-companion shape, overlay-field omission, single-pin suppression) + 32/32 RealSystemOverlay tests + 24/24 ProcgenSnapshot pass. The new snum-pin only fires `if (host)` (real-overlay hosts only), so procgen-only systemData is structurally unaffected, consistent with AC10's omit-never-null requirement. Full suite 1404/1404 across 3 runs (one run showed 2 flaky failures in AC1/AC6-owned files, unrelated to AC10, did not reproduce). Already PASSed 3/3 adversarial at Increment 2 (d106181); this is a clean regression hold.",
+      "adversarialVotes": "3/3 sufficient"
+    }
+  ],
+  "overall": "INSUFFICIENT \u2014 unit layer PASS (AC4, AC6, AC7, AC10 all green, 3/3 adversarial each), but integration layer is not-PASS: 5 of 6 integration ACs (AC1, AC2, AC3, AC5, AC8) are still INSUFFICIENT pending a live chrome-devtools drive against commit 3e58fac itself \u2014 their prior live-drive evidence is all pinned to earlier commits (44c7075/d106181), and new code has landed in the exercised areas since (NavComputer.js's real-star position/distance overwrite, RealSystemOverlay.js's snum==1 single-pin). AC9 (UAT) is deferred to Max as required and cannot be closed until integration closes.",
+  "summaryForMax": "Bottom line: the code is solid at the unit layer (4/4 unit ACs pass, all reproduced independently \u2014 not just re-read from commit messages), but this verdict can't go green yet because 5 integration ACs need a live browser drive against this exact commit (3e58fac) that hasn't happened. That work is NOT yours \u2014 it's queued for working-Claude to drive via chrome-devtools next:\n\n- AC1 (neighborhood fidelity): check nearby real stars in the nav computer show correct catalog distances (not procgen-drifted ones), and that TRAPPIST-1 appears by presence even though it has no reference-table row (it's outside the 5pc table radius by design).\n- AC2 (search): quick re-confirmation search\u2192select\u2192travel still works, since NavComputer.js changed nearby (though the search code path itself wasn't touched).\n- AC3 (real characteristics): TRAPPIST-1's arrival specifically \u2014 it's now forced to spawn as a single star instead of the old seed-dependent binary/single, and that's never been live-driven.\n- AC5 (authoring path): Alpha Centauri via all three entry paths, including sky-click warp, which has NEVER been live-driven in this workstream (a known long-standing gap, not new).\n- AC8 (Sol regression guardrail): run `window.__wd.runIntegrationSuite()` in Sol, expect 19/19 clean.\n\nOnce those close, here's what YOUR UAT pass (AC9, \"known-universe-uat\") should look at \u2014 this is the one gate no agent can close for you: do a holistic tour of the real-universe overlay as delivered in this commit \u2014 nearby real stars showing correct distances in the nav computer, the corrected deep-sky object positions/globular-cluster sizes (M13/M57/M45 were nudged, all 152 globulars now have distinct real radii instead of a uniform placeholder), and general \"does this feel like a coherent, astronomically-grounded universe\" judgment. I'd suggest reading contract.json's AC9 entry directly for its exact phrasing before you judge it \u2014 I only have paraphrased fragments of it, not the literal text.\n\nOne housekeeping flag, not a blocker: the workstream's verdict.json and contract.json phase field are stale \u2014 verdict.json is still pinned to an earlier commit (c68c1fb) and the phase field narrates Increment 4 as current even though Increment 5 (this commit) has landed. Worth a note to whoever's driving this workstream forward so status docs don't drift further from reality.",
+  "liveClosure": {
+    "note": "The five integration ACs left INSUFFICIENT here (AC1, AC2, AC3, AC5, AC8) were closed the SAME DAY by working-Claude chrome-devtools drives against this commit on :5176 \u2014 see verdict-live-drives-3e58fac.json (committed 56c703d, extended after this verdict returned). AC1 both vantages worst-error 0.03% vs \u00b12%; AC2 search\u2192select\u2192warp exercised \u00d75 at this sha; AC3 TRAPPIST-1 arrival under the new snum pin (M single, 7/7 knowns) + Sirius A1V+DA2 @19.8 AU; AC5 authored Alpha Centauri arrival (G2V+K1V @23.5 AU, Proxima far companion w/ b,d; sky-click keeps its written d106181 deferral); AC8 Sol suite 19/19 \u00d73, console clean.",
+    "file": "verdict-live-drives-3e58fac.json"
+  }
+}

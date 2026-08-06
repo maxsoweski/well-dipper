@@ -23,11 +23,17 @@ const DEFAULTS = {
   showGravityWells: false,
 
   // Simulation
-  // Per workstream realistic-celestial-motion-2026-04-27:
-  // 1× = realistic (Earth-orbit 1 year, Earth-rotation 24 hours).
-  // Slider extends log-scale to 10000× (Earth-orbit ~53 min,
-  // Earth-rotation ~8.6 s) so the user can speed motion up.
-  // Scales orbital revolution AND axial rotation AND asteroid orbits.
+  // Per workstream realistic-celestial-motion-2026-04-27 + signed-slider
+  // reframe (supercruise-hud-movement-design-2026-06-24):
+  // 1× = realistic (Earth-orbit 1 year, Earth-rotation 24 hours) and is the
+  // shipped default in EVERY mode (flight / autopilot / idle) — at human
+  // flight timescales realistic motion is imperceptible, which is the goal.
+  // The menu slider is now SIGNED: DOM pos -40..0..+40 maps to
+  // sign(pos)·10^(|pos|/10), so pos 0 → exactly 1× (REALTIME), drag right →
+  // speed up to ~10000×, drag left → REVERSE (retrograde / rewind) to
+  // ~-10000×. Scales orbital revolution AND axial rotation AND asteroid
+  // orbits AND binary-star orbit uniformly via the single celestialDt lever
+  // (main.js:6459). A negative multiplier runs every accumulator backward.
   celestialTimeMultiplier: 1.0,
 
   // Camera
@@ -43,6 +49,18 @@ const DEFAULTS = {
   // Color palette (0=default, 1=mono, 2=amber, 3=green, 4=blue,
   //   5=gameboy, 6=cga, 7=sepia, 8=virtualboy, 9=inverted)
   colorPalette: 0,
+
+  // Flight control type — §supercruise-flight-toggle-settings-design-2026-06-25.
+  // F is a 2-state on/off flight toggle; THIS setting picks WHICH of the three
+  // flight behaviors engages on F-on. main.js reads it on each engage and maps
+  // it to FlightMode (src/flight/flightModes.js) — the stored strings are the
+  // FlightMode enum values verbatim so the mapping is identity:
+  //   'manual' → Manual (you fly), 'align' → Align-on-select (nose centers on
+  //   target), 'assist' → Assist (auto-flies to target; steer to take over).
+  // Default 'manual'. No migration: an absent key falls back to 'manual' via
+  // the DEFAULTS merge, which is the desired one-time default for existing
+  // users (a stored value of any other enum string is preserved as-is).
+  flightControlType: 'manual',
 };
 
 export class Settings {
@@ -114,6 +132,22 @@ export class Settings {
         // the user lands on the new realistic default.
         if (saved.orbitSpeedMultiplier !== undefined) {
           delete saved.orbitSpeedMultiplier;
+          this._save();
+        }
+        // §supercruise-hud-movement-design-2026-06-24 — signed-slider reframe.
+        // The celestial-time slider became signed (-40..+40) and the DESIGN
+        // intent is that the game opens to realistic (imperceptible) motion in
+        // every mode. Any previously-persisted value carried the old
+        // positive-only meaning and was almost certainly raised (visible
+        // spin/orbit is the symptom we're fixing). One-time migration: reset
+        // a stored celestialTimeMultiplier to the realistic default (1.0) so
+        // Max opens to NO visible planet motion. Gated on a version marker so
+        // a user who DELIBERATELY re-raises/reverses it afterward isn't
+        // re-clobbered on the next load.
+        if (saved.celestialTimeMultiplier !== undefined
+            && saved._celestialTimeSignedMigrated !== true) {
+          this._values.celestialTimeMultiplier = DEFAULTS.celestialTimeMultiplier; // 1.0
+          this._values._celestialTimeSignedMigrated = true;
           this._save();
         }
       }

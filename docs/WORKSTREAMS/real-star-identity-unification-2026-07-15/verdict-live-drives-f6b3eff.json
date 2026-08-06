@@ -1,0 +1,39 @@
+{
+  "workstream": "real-star-identity-unification-2026-07-15",
+  "commit": "f6b3eff",
+  "driver": "working-Claude live integration drives, chrome-devtools on :5176 (2026-07-15)",
+  "driveRules": "window._autoNav stopped + isActive===false confirmed before every nav drive (feedback_wd-nav-drives-autopilot-off); every arrival validated against the dispatched seed in the Warp fold log; settled-state protocol (no dispatch while a warp is in flight) adopted after the mid-circuit incident below",
+  "liveResults": {
+    "AC2-path-identity": {
+      "result": "PASS",
+      "evidence": "Denebola (un-tabled, un-hosted, un-registered): search-warp arrival {seed 3294647526, A, single, 0 planets} — no [BINARY] line (pin-by-default live); return to Sol; prism entry for Denebola in _localStars carries seed 3294647526 (the SAME F1 seed — pre-fix this was a retained hash-grid seed); prism-click commit (faithful click-tail + commit-button contract) arrival digest deep-equal to the search-path digest, IDENTICAL: true. Dispatched seed confirmed in the fold log on both paths. Bonus corroborations: Sol search-warp seed 163760118 -> knownWarp=Sol override -> authored Sol; prism volume has exactly ONE Rigil Kentaurus row and ZERO Toliman rows (dedup live)."
+    },
+    "AC4-preview-honesty": {
+      "result": "PASS (after in-drive fix f6b3eff)",
+      "evidence": "Four classes, browsed SYSTEM preview vs actual subsequent arrival, each an exact digest match: Eps Ind {K, single(pin-by-default), 3 fill planets}; Sirius {A+D binary, 2 planets} ([BINARY] sep=19800 = 19.8 AU, table win); Guniibuu {K+K close binary + 1 far companion, 0 planets} = the honest authored triple; Rigil Kentaurus preview {G+K binary + 1 far} -> arrival = authored Alpha Centauri (seed alpha-centauri, knownName set, Proxima far companion) — findByAlias routing identical on both paths.",
+      "defectFoundAndFixed": "First preview pass showed Rigil Kentaurus previewing SOL's 13-planet spawned data: _isCurrentSystem() used a 0.002 kpc (2 pc) proximity radius, swallowing real neighbors (also misclassified their commit as BURN instead of warp). Fixed TDD at f6b3eff: radius -> POSITION_MATCH_TOL (0.1 pc, the F1 identity bin); Proxima-browsed-from-Alpha-Cen (0.055 pc) pinned as intentionally current (its arrival routes to the same spawned system). Same bug class as the 5 pc KnownSystems swallow fixed at 631571b."
+    },
+    "AC8-ndot-glyph": {
+      "result": "PASS",
+      "evidence": "Dot counts read through the render's own path (_glyphMult + _glyphDotCount(star, mult)) on live prism entries: Sirius 2 (table), Procyon 2 (table), Guniibuu ONE marker 3 dots (far tertiary HD 156026 deduped into the marker), Rigil Kentaurus 2 (count 3 minus Proxima who renders her own marker), Proxima Centauri 1, TRAPPIST-1 1 (archive-snum), Eps Ind 1 (pin-by-default), procgen binary 2 / procgen single 1 (source procgen). Warp-confirmed against arrivals: Guniibuu glyph 3 = arrival K+K close + 1 far (3 stars); Rigil glyph 2 + Proxima 1 = authored A+B + Proxima far. Screenshot evidence-prism-labels-glyphs-f6b3eff.png shows the glyphs rendered on canvas.",
+      "watchpointR3": "CLEAR — after actually visiting Alpha Centauri, Proxima's marker still reads 1 dot (the Escape-stash base-case override did not force 2)."
+    },
+    "AC9-label-declutter": {
+      "result": "PASS",
+      "evidence": "Max prism zoom (localRadius clamp 0.002) on the worst shipped pair: Rigil Kentaurus label at (880,371) and Proxima Centauri stack-offset one line below at (873,385) WITH a leader line; zero overlapping AABBs among all 50 drawn labels (read from _labelRects, the render pass's own frame array). Stress view at wider radius: 171 labels -> 167 drawn, 4 faded, 37 leader lines, zero overlaps among drawn. Screenshot shows the Chi Dra / HD 38392 / Gam Lep three-label pile stacked cleanly. Zero-overlap invariant applied to non-faded labels per the AC text (overflow labels fade instead of overlapping).",
+      "markerPositions": "Labels are draw-only; marker positions come from the untouched projection path (headless glyphLabels tests pin the separation structurally; Inc-5 catalog-true snap unchanged in the diff)."
+    },
+    "AC10-regression-guardrail": {
+      "result": "PASS",
+      "evidence": "window._lab.enterSol() + window.__wd.runIntegrationSuite(): 19/19 at circuit start; after the full warp circuit 18/19 once (post-arrival timing transient, unreproducible) then 19/19 twice consecutively. Search keyboard guard BOTH phases: with the search input focused, real keydowns 'wasdrfn' landed in the input (value 'wasdrfn'), nav stayed open, prism center and level unchanged. Spot-check arrivals unchanged: Sirius A+DA2 @19.8 AU, TRAPPIST-1 M single (pin), authored Alpha Centauri G+K @23.5 AU + Proxima. Console across the ENTIRE circuit: zero errors, zero warnings. Full suite at f6b3eff: 1,504 passed / 0 failed (baseline 1,404; 15 vendor/motion-test-kit collection-noise files pre-existing). ProcgenSnapshot 24/24 (in the ui+snapshot run at f6b3eff). main.js lane-B ledger unchanged by f6b3eff (NavComputer-only)."
+    }
+  },
+  "incidents": [
+    "Driver error (retraction discipline): after the first Denebola leg, a second warp dispatch was issued while a Sol warp was still in flight; the in-flight machinery resolved the new target against a moving reference frame and delivered a random procgen system (seed 1034281417). The console record shows the FIRST dispatch landed correctly (knownWarp=Sol override, authored Sol) — no build defect. Settled-state protocol adopted for all subsequent drives.",
+    "LANE B FLAG (new): nav warp dispatch is UNGATED during an in-flight warp — a commit dispatched mid-flight re-targets against a moving frame instead of being refused/queued. Cousin of the boot-tour warp collision already on lane B's board."
+  ],
+  "notesForMax": [
+    "R2 (taste, matches AC text as written): warping to the Proxima MARKER routes to the whole Alpha Centauri system (its glyph honestly shows 1 dot; arrival delivers the authored A+B+Proxima system). Whether a far-companion marker should arrive 'at Proxima' specifically is an arrival-layer design question, not a render defect.",
+    "Formerly-divergent real stars now generate their canonical-seed contents — planet counts/names at such stars legitimately changed (no persistence exists; system names are position-keyed and stable)."
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "workstream": "autopilot-depart-2026-07-15",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "phase": "Inc-2 DEPART per docs/FLIGHT_RELIABILITY_ROADMAP_2026-07-01.md §2-3; sibling B of the post-847ab19 pair (Max chose two siblings at scope 2026-07-15). Mechanism decisions from the roadmap's research conclusions: (1) DEPART's first act is a radial climb away from the current body, gated by v/vmax, THEN orbit-to-horizon alignment toward the next target — hand off to TRANSIT only once the nose clears the horizon (Elite escape-vector doctrine promoted from mitigation to first act). (2) Commit-and-hold phase discipline: once DEPART/TRANSIT/ARRIVE is chosen, hold that phase's control law to completion — no blended loops, no reactive re-optimization (the documented anti-patterns). (3) Arrival = ETA-scheduled deceleration culminating at the capture window (MechJeb/ED blue-zone pattern), replacing the HOLD position-lerp (SupercruisePilot HOLD easing — the 'tractor beam'); pilot-layer throttle policy ONLY, zero SC_TUNING contact. Carried-in residuals this contract owns (Step-0 verdict + reachability verdict): moon-cluster crawl labyrinth, boundary-start keep-out dip, barrier-pin dwell bound, tightest-moon-0 far-side visit. GUARDRAILS: SC_TUNING byte-identical; WS-1 CRUISE stall detector semantics preserved (DEPART gets its OWN timeout so it cannot false-trip the CRUISE-keyed detector); inc-1 standoff/go-around and 7/5 reachability fixes stay green; regime/UI/station files untouched (sibling A's territory).",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1-depart-phase-machine",
+      "statement": "A pure pilot-layer DEPART phase realizes Max's vision: starting at/near a body, the ship first climbs radially away (v/vmax-gated), then orbits the current body until the nose points over its horizon toward the next target, then hands off to TRANSIT — with commit-and-hold discipline (no phase thrash, no blended control laws). Built TDD in pure pilot tests mirroring the SupercruisePilot.align test patterns.",
+      "verifyVia": {
+        "input": "Headless Vitest: DEPART cells across geometries — deep-well start, surface-adjacent start, far-side next-target, moon-cluster neighbor start; phase-transition traces.",
+        "observable": "Every cell: radial climb first, horizon-clear alignment before TRANSIT handoff, monotone phase sequence (no DEPART<->TRANSIT oscillation), next-target line-of-sight clear of the departed body's horizon at handoff."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2-depart-timeout-detector-isolation",
+      "statement": "DEPART has its own bounded timeout and cannot false-trip the WS-1 CRUISE stall detector (which stays keyed on CRUISE only). A DEPART that can't complete degrades gracefully (skip-and-continue for tours, drop-out for Assist) exactly like the CRUISE abort family.",
+      "verifyVia": {
+        "input": "Headless Vitest: forced-unfinishable DEPART geometries; stall-detector suite re-run with DEPART phases active in the window.",
+        "observable": "DEPART aborts on its own timeout; CRUISE detector never fires during DEPART; existing 30/30 stall-abort backstop suite green unchanged."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC3-eta-decel-replaces-tractor-beam",
+      "statement": "Arrival is ETA-scheduled physics deceleration culminating at the capture window — the HOLD position-lerp is gone from arrivals (tour AND Assist). The ship pose is continuous and physics-driven through capture; no position.lerp teleport-easing remains in the arrival path. (Max, twice on record: 'the tractor beam thing is still happening... i thought we fixed that.')",
+      "verifyVia": {
+        "input": "Headless Vitest: arrival traces over varied leg lengths/caps — decel onset scheduled from ETA, not open-loop cap crawl; grep-level witness that the HOLD arrival easing no longer position-lerps the ship.",
+        "observable": "Braking culminates inside the capture window (speed reaches hold-speed at capture distance within tolerance); position deltas continuous (no lerp snap); SC_TUNING byte-identical."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC4-arrival-rate-gate",
+      "statement": "The tour actually arrives: over the standing 15-minute telemetry-sampler window (same instrument as the Step-0 triage), >=90% of legs end in HOLD arrival, zero livelock, and no keep-out entry on boundary-start legs (the coast-dip residual closed).",
+      "verifyVia": {
+        "input": "Live drive on :5173 (chrome-devtools :9223): boot HELM screensaver tour; run the sampler+analyzer from the standoff-routing triage kit for a 15-min window in a dense system (Sol-class).",
+        "observable": "Analyzer report: arrival rate >=90%, 0 livelock carousels, 0 keep-out entries incl. boundary-start legs; DEPART phases visible in the leg traces."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC5-barrier-pin-dwell-bound",
+      "statement": "A wedged/pinned ship never dwells long: the barrier-pin fast-path (speed ~0 AND surface-distance ~0 -> short absolute timeout) bounds wedge dwell, replacing the measured 83s/139s cap-relative patience pins; recovery is DEPART, not abort-and-re-wedge.",
+      "verifyVia": {
+        "input": "Headless Vitest: forced barrier-pin states; live corroboration within the AC4 sampler window.",
+        "observable": "Pin-to-recovery time bounded by the fast-path constant (not the cap-relative window); post-recovery leg DEPARTs cleanly instead of re-wedging."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC6-tightest-moon0-reachability",
+      "statement": "The documented tightest-moon-0 residual is closed: a far-side moon-0 at ~1.7R map orbit (inside the 1.8R inflated keep-out) is visited, not skipped — the staged clamp-keep-out-to-target fix plus DEPART handling the cluster geometry.",
+      "verifyVia": {
+        "input": "Forced tight-moon-0 geometry (system-finder side-quest from the reachability verdict, or a constructed test system); headless leg trace + live spot-check where a qualifying system is found.",
+        "observable": "The moon-0 leg reaches HOLD (visited), never stall-skipped; neighbor-moon legs in the same cluster still arrive."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC7-regression-guard",
+      "statement": "Everything shipped stays shipped: SC_TUNING byte-identical; inc-1 standoff/go-around, 7/5 reachability fixes, WS-1 detector, and mode-ownership regime isolation all green; full flight+auto suite passes.",
+      "verifyVia": {
+        "input": "Headless: full flight+auto Vitest run from the repo dir; SC_TUNING byte-diff; standoff/reachability/detector suites; build.",
+        "observable": "Suite green at/above the 847ab19 baseline; SupercruiseModel.js not in diff; build exit 0."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC8-intelligent-tour-uat",
+      "statement": "Max watches a full tour and it reads as his vision working: departures look like orbiting over the horizon then setting off, arrivals look like a ship braking in (no tractor beam), and the whole system tour is a coherent, unhurried sightseeing flight.",
+      "verifyVia": {
+        "input": "Max boots HELM on :5173/well-dipper/ and watches a full hands-off tour (recording per MAX_RECORDING_PROTOCOL if he wants the artifact).",
+        "observable": "Max's holistic acceptance: get-away-from reads as orbit-over-horizon, approach reads as braking flight, tour coheres end to end."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "SupercruisePilot phase machine + HOLD easing seam (the lerp being replaced) — src/flight/SupercruisePilot.js",
+      "AutoNavigator tour dispatch + skip-and-continue plumbing — src/auto/AutoNavigator.js",
+      "tourStandoff pure module (starParkRadius/keepOut/goAroundWaypoint/planLeg) — inc-1, stays byte-identical",
+      "WS-1 CRUISE stall detector (rolling window, CRUISE-keyed) — the abort family DEPART's timeout joins",
+      "Telemetry sampler + analyzer kit (docs/WORKSTREAMS/autopilot-standoff-routing-2026-07-01/triage/) — the AC4 instrument",
+      "SC_TUNING speed model (read-only, never edited)"
+    ],
+    "outputs": [
+      "DEPART phase — the reachability core the tangent-graph transit routing (next roadmap step) and inc-3 showcase policy build on",
+      "ETA-scheduled arrival throttle policy — covers player Assist arrivals too",
+      "Closed Step-0 carry-ins: arrival-rate gate, boundary-start dip, barrier-pin dwell, tightest-moon-0"
+    ],
+    "mustStayWorking": [
+      "WS-1 stall detector semantics (CRUISE-keyed; linger-infinity HOLD parks never touched)",
+      "Inc-1 star standoff + go-around routing (planLeg family byte-identical; star parks outside keep-out)",
+      "Tour-body-reachability 7/5 fixes (moons reached; driveAlwaysOn; forced-drop suppression)",
+      "Mode-ownership regime isolation (hands-off-only autopilot; input inertness during tours) — sibling A may be evolving ORRERY concurrently; coordinate main.js merge order through the coordinator",
+      "The visited-body terminal crawl (cinematic, deliberate) and SC_TUNING byte-identity",
+      "Full flight+auto suite at/above the 847ab19 baseline + build green"
+    ]
+  },
+  "greenlight": "Max, 2026-07-15 (scoping session, recovered from the interrupted 7/11 VS Code seam): both siblings greenlit; build order = orrery-coherence first, autopilot-depart second; builds run in fresh sessions via opus-pinned workflows."
+}

@@ -51,22 +51,34 @@ Commit history is supporting evidence only, not authority.
 
 | Feature | Tier | Status | Blocked by | Deep dive |
 |---|---|---|---|---|
-| Autopilot tour (auto-warp + flythrough camera; 15 sub-workstreams) | F&F-MVP | in-flight (still buggy; phases CRUISE/APPROACH/STATION-A in code) | — | [FEATURES/autopilot.md](FEATURES/autopilot.md) |
+| Autopilot tour (auto-warp; flies the supercruise model via SupercruisePilot ALIGN/CRUISE/HOLD + ShipControls; legacy FlythroughCamera motion retired 2026-06) | F&F-MVP | in-flight | — | [FEATURES/autopilot.md](FEATURES/autopilot.md) |
+| Supercruise flight system (one model, two drivers: manual W/S throttle + mouse virtual-joystick + hold-to-look freelook + screen-space HUD; autopilot flies the same controls; F=ON/OFF toggle, Settings flight-type Manual/Align/Assist; `ShipControls` single-door surface) | F&F-MVP | **shipped to master** @ `09db316` (2026-06-28) — full supercruise/free-look/arrival-modes arc (149 commits) merged & deployed; UAT-passed (Max live ride 2026-06-27). Incl. **sublight propulsion + hard collision barrier + mass-based forced-drop/mass-lock** (Piece B-c). Post-ship UAT fixes @ `f455f39` (pending push): HELM hands-on click now selects the **reticle** body (planets/moons selectable, not just background stars); **direction-aware** forced-drop/mass-lock (engage when pointed away from a star). Legacy AutopilotMotion/NavigationSubsystem/FlythroughCamera motion retired (files kept) | — | [WORKSTREAMS/supercruise-freelook-2026-06-10](WORKSTREAMS/supercruise-freelook-2026-06-10/) |
+
+## ORRERY station
+
+| Feature | Tier | Status | Blocked by | Deep dive |
+|---|---|---|---|---|
+| ORRERY as god's-eye viewing (nothing ever flies you: Tab/number cycling, BURN and the nav AUTOPILOT button all resolve view-only or inert; instant framed system entry with no cinematic; title-end + nebula-linger auto-warp timers never fire; click-1 selects, click-2 glides the VIEW via a two-phase centre-then-fly) | F&F-MVP | **shipped-code** — UAT-passed (Max 2026-08-01) on `feature/supercruise-freelook`; merged to local master only, **not deployed** | — | [WORKSTREAMS/orrery-coherence-2026-07-15](WORKSTREAMS/orrery-coherence-2026-07-15/) |
+| ORRERY entry grammar (D-hold at the chooser skips logos+title straight into Sol in either station; every ORRERY entry arrives by zoom **IN** from a far spawn — billboard star → glide → overview with orbits — replacing teleport-then-zoom-out; screen-space orbit-visibility rule anchored on the outermost orbit clearing the star's rendered glow disc) | F&F-MVP | **shipped-code** — UAT-passed (Max 2026-08-01); local master only, **not deployed** | — | [WORKSTREAMS/orrery-entry-orbits-2026-07-20](WORKSTREAMS/orrery-entry-orbits-2026-07-20/) |
+| Orbit ring rendering — screen-space conic field (per-ring CPU conic + Sampson-distance band in one fullscreen pass; replaces the per-ring plane-domain SDF quads, **39 draw calls → 1**; fixes the ≤6° dead zone where grazing rings painted zero pixels, the far-orbit flicker, and the close-range staticky lines) | F&F-MVP | **shipped-code** — UAT-passed (Max 2026-08-01) after two fixes: the edge-on band is bounded by an explicit screen AABB (was running to 22,096 px), and the camera-proximity fade is **retired** per Max's ruling (orbit lines no longer vanish as you approach). Local master only, **not deployed** | — | [WORKSTREAMS/orbit-ring-conic-2026-07-21](WORKSTREAMS/orbit-ring-conic-2026-07-21/) |
 
 ## Ship-scale
 
 | Feature | Tier | Status | Blocked by | Deep dive |
 |---|---|---|---|---|
-| Cockpit (visual frame + reactive HUD readouts + status lights pulsing w/ engine state) | F&F-MVP | proposed | — | — |
-| Ship Scanner (Alt-toggle, cyan reticles, burn-to-ship 45°, ship-lock orbit) | ENRICHED | shipped-code (30aa1cf) | — | — |
-| Ship NPC spawning (NPC ships in systems; stochastic ~0-12 per system) | ENRICHED | shipped-code — **will be disabled for F&F ship; preserve code for ENRICHED reactivation** | — | — |
+| HELM cockpit — you fly from inside the ship (GLB cabin, four live glass panels: NAV / DRIVE / SURVEY / TARGET; screen-space readouts retire in HELM because the glass carries them; reticles cut by the real cabin silhouette) | F&F-MVP | **shipped-code** — UAT-passed (Max 2026-08-01, *"it feels like flying from inside"*); local master only, **not deployed at time of writing**. Panels repaint at 30 Hz (Max's tier pick). On a GLB load failure the retired overlays come straight back, per-role — verified by moving the asset aside on purpose | — | [WORKSTREAMS/cockpit-into-helm-2026-07-30](WORKSTREAMS/cockpit-into-helm-2026-07-30/) |
+| Cockpit — zoom a panel to the eye (N for NAV; the panel is always chromed, so labels + COMMIT are present at rest and zoomed alike) | F&F-MVP | **shipped-code** — UAT-passed (Max 2026-08-01, *"Zooming to a panel feels good"*) | — | [WORKSTREAMS/cockpit-zoom-to-panel-2026-07-29](WORKSTREAMS/cockpit-zoom-to-panel-2026-07-29/) |
+| Cockpit — reticles read as being ON the glass (cabin silhouette mask cuts the overlay at real geometry edges rather than blinking whole reticles out) | F&F-MVP | **shipped-code** — UAT-passed (Max 2026-08-01, *"Passes"*); measured coverage 0.5873 vs the generator's independent 0.587202 | — | [WORKSTREAMS/reticles-on-the-glass-2026-08-01](WORKSTREAMS/reticles-on-the-glass-2026-08-01/) |
+| Cockpit — remaining: shadows (cabin does not self-shadow; system objects do not cast onto it — lighting direction is already correct, so it is the shadow pass) and reticles *looking* projected (canopy tint, glass-depth parallax, phosphor) | F&F-MVP | parked — [PARKING_LOT](PARKING_LOT.md) P6 and P4 | — | [PARKING_LOT.md](PARKING_LOT.md) |
+| Ship Scanner (Alt-toggle, cyan reticles, burn-to-ship 45°, ship-lock orbit) | ENRICHED | shipped-code (30aa1cf) — **dormant in F&F** (depends on NPC spawning, disabled 2026-06-26); `NavigationSubsystem`/`FlythroughCamera` retired, files kept | — | — |
+| Ship NPC spawning (NPC ships in systems; stochastic ~0-12 per system) | ENRICHED | **DISABLED for F&F** (`SHIPS_ENABLED=false`, `main.js` spawn switch, supercruise-control-harness 2026-06-26) — code KEPT, dormant for ENRICHED reactivation | — | — |
 | Ship-to-ship gameplay (interaction beyond visual presence) | GAME | proposed | Player ship manual flight | — |
 
 ## Reticles
 
 | Feature | Tier | Status | Blocked by | Deep dive |
 |---|---|---|---|---|
-| Targeting reticle — in-system bodies (planets, moons; brackets + labels + off-screen arrows) | F&F-MVP | shipped-code (ghosting fix 30aa1cf 2026-05-09; "pretty good" per Max) | — | — |
+| Targeting reticle — in-system bodies (planets, moons; brackets + labels + off-screen arrows) | F&F-MVP | shipped-code (ghosting fix 30aa1cf 2026-05-09; "pretty good" per Max) — **cabin now cuts the reticle overlay at the cabin's real silhouette edge instead of blinking the whole reticle out** (silhouette mask `src/cockpit/cabinMask.js`, replacing the `5cd1118` centre-ray gate that blanked bracket+label together whole on a ~7px `Arch_Bow` rib); Max UAT-passed 2026-08-01 @ `d3dc4cb` (workstream `reticles-on-the-glass-2026-08-01`) — not yet merged to master / not deployed | — | [WORKSTREAMS/reticles-on-the-glass-2026-08-01](WORKSTREAMS/reticles-on-the-glass-2026-08-01/) |
 | Star reticles rework (sky-side selection behavior + info readout: system preview, distance, type) | F&F-MVP | proposed | — | — |
 | Ship reticle (cyan brackets for ships) | ENRICHED | shipped-code (effectively dormant in F&F — depends on Ship NPC spawning, which is disabled for F&F) | — | — |
 
@@ -85,12 +97,18 @@ Commit history is supporting evidence only, not authority.
 | Moon generation + rendering (LOD2 partial — rocky/captured only; ice/volcanic/terrestrial moons get no LOD2) | F&F-MVP | shipped-code | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
 | Rings — multi-band per physics (instantiate existing `RingRenderer` dead code; FEATURE_AUDIT §2.4 confirmed) | F&F-MVP | proposed | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
 | Asteroid belts (multi-zone composition, Kirkwood gaps) | F&F-MVP | shipped-code | — | [FEATURES/planet-rendering.md](FEATURES/planet-rendering.md) |
+| Rivers — dendritic drainage networks on terrain | F&F-MVP | **shipped-confirmed** (2026-06-19) — all 8 ACs green, Max UAT-passed on the clean Earth-like lab (*"looks good to me"*), no tuning requested. Deep route-vs-render fidelity deferred by design to the rivers successors | — | [WORKSTREAMS/rivers-dendritic-drainage-2026-06-17](WORKSTREAMS/rivers-dendritic-drainage-2026-06-17/) |
+| Rivers — fluvial coupling + view-dependent LOD (successors) | F&F-MVP | in-flight | — | [WORKSTREAMS/rivers-viewdependent-lod-2026-06-18](WORKSTREAMS/rivers-viewdependent-lod-2026-06-18/) |
 
 ## Sky / galactic rendering
 
 | Feature | Tier | Status | Blocked by | Deep dive |
 |---|---|---|---|---|
 | Background starfield (procedural; density varies per galactic position) | F&F-MVP | shipped-confirmed ("strongest thing in the app, minus nebulae" — Max) | — | — |
+| System naming + real-object identity (position-derived injective procgen names; shipped named-systems catalog 12k settled + 36k greek; HYG real names win on every arrival path incl. real spectral type; KnownSystems catalog-derived alias identity + 3 pc belt; Horsehead IC434/M78 dedup fix; Sol restored to catalog) | F&F-MVP | shipped-confirmed @ `a1d2d4c` (Max UAT 2026-07-11, 3 rounds; in master + deployed via lane B's `847ab19` pre-deploy merge 2026-07-11) | — | [WORKSTREAMS/naming-census-uniqueness-2026-07-07](WORKSTREAMS/naming-census-uniqueness-2026-07-07/), [NAMING_AND_REAL_OBJECTS.md](NAMING_AND_REAL_OBJECTS.md) |
+| Real-universe overlay (real known systems/stars/planets: names AND contents override procgen — bulk exoplanet-archive ingest 4,457 hosts / 6,030 planets + curated companion table; Sirius = real A1V+DA2 binary @19.8 AU; TRAPPIST-1 = M single w/ 7 known planets b–h; authored Alpha Centauri = G2V+K1V @23.5 AU + Proxima far companion (b, d); snum==1 single-pin; player nav search (N); neighborhood fidelity ±2% vs committed reference; Harris globular radii) | ENRICHED | shipped-confirmed (Max AC9 re-run 2026-07-21 on build `6bc5177`; code @ `3e58fac` + successor-workstream fixes; in master + deployed @ `e565bee` 2026-07-21) | — | [WORKSTREAMS/real-universe-overlay-2026-07-12](WORKSTREAMS/real-universe-overlay-2026-07-12/) |
+| Real-star identity unification (one canonical F1 seed per real star — search ≡ prism-click ≡ teleport arrive at the SAME system; shared arrival-resolution module makes nav preview ≡ arrival; pin-by-default: un-tabled real stars never roll fabricated companions; census companion table 36 Oph/61 Cyg/ζ Ret; N-dot multiplicity glyphs + label declutter) | ENRICHED | shipped-confirmed (Max AC11 2026-07-21 on build `6bc5177`; code @ `f6b3eff`; in master + deployed @ `e565bee` 2026-07-21) | — | [WORKSTREAMS/real-star-identity-unification-2026-07-15](WORKSTREAMS/real-star-identity-unification-2026-07-15/) |
+| System-identity grammar (a multi-star system reads as ONE system: prism multi-dot markers + co-membership tether + "· Alpha Centauri" label suffix; SYSTEM view titled by the system w/ "via <component>" annotation; far-companion edge chips render Proxima + b/d; normative grammar rule = NAMING_AND_REAL_OBJECTS.md §6) | ENRICHED | shipped-confirmed (Max AC8 2026-07-21 on build `6bc5177`; code @ `5583651`; in master + deployed @ `e565bee` 2026-07-21) | — | [WORKSTREAMS/system-identity-grammar-2026-07-17](WORKSTREAMS/system-identity-grammar-2026-07-17/) |
 | Galactic rendering polish (combined: glow + GMC angular artifacts; bar artificial; color gradient should warm toward center) | F&F-MVP | in-flight | — | [FEATURES/galactic-rendering.md](FEATURES/galactic-rendering.md) |
 
 ## Nebulae
@@ -111,6 +129,7 @@ Commit history is supporting evidence only, not authority.
 | Nav computer — Level 3 REGION (districts → density-adaptive blocks) | F&F-MVP | proposed (mid-zoom — same problem) | — | [FEATURES/nav-computer.md](FEATURES/nav-computer.md) |
 | Nav computer — Level 4 PRISM (blocks → density-adaptive neighborhoods; renamed from COLUMN 2026-05-25) | F&F-MVP | in-flight (PRISM view buggy: minimap, lag, transition) | — | [FEATURES/nav-computer.md](FEATURES/nav-computer.md) |
 | Nav computer — Level 5 SYSTEM (3D star map; PRISM is the actual default-open level per code) | F&F-MVP | shipped-code | — | [FEATURES/nav-computer.md](FEATURES/nav-computer.md) |
+| Nav computer — multi-star component drill-in (far-companion chip click OR the member's own PRISM marker opens a SYSTEM-scale component sub-view — Proxima w/ real generated b+d orbits, breadcrumb "part of Alpha Centauri"; VIEW ONLY — §6 one-destination invariant stands, no warp to components; `componentSystems` data substrate ready for Increment B component travel) | ENRICHED | shipped-confirmed (Max AC10 2026-07-21 @ `6bc5177`; in master + deployed @ `e565bee` 2026-07-21); Increment B (component travel) queued for joint lane B+C scoping | — | [WORKSTREAMS/multistar-components-2026-07-19](WORKSTREAMS/multistar-components-2026-07-19/) |
 
 ## Deep-sky
 
@@ -127,6 +146,8 @@ Commit history is supporting evidence only, not authority.
 | Title theme music (first 3-second riff needs rework — grating after a while) | F&F-MVP | in-flight | — | — |
 | Music — non-title tracks (`explore.mp3` present; `hyperspace.mp3`, `deepsky.mp3`, `warp-charge.mp3`, `arrival.mp3` wired-but-absent on disk; Christian's tracks status unknown) | F&F-MVP | proposed | Christian delivering tracks | — |
 | SFX — all (currently placeholders from title-theme clipping/pitch-shift; 21 files including 5 warp-related: charge/enter/exit/lockOn/target) | F&F-MVP | in-flight | — | — |
+| System music themes — 12 categories: 1 baseline "average/normal" system + 11 variations on it. Define the 12 system categories, then classify a system algorithmically during gameplay and play its matching theme at the right time. **Open:** the 12-category taxonomy is undefined; the in-gameplay classifier is undesigned. Future — not now. | ENRICHED | proposed | 12-category taxonomy undefined | — |
+| Nav-menu BGM filter — apply a filter effect (e.g. low-pass / muffle) to whatever BGM is playing while the navigation-system menu is open; restore on close. Future — not now. | ENRICHED | proposed | — | — |
 
 ## UI / HUD
 
@@ -212,7 +233,7 @@ Follow-up (non-blocking): ~12 dead `system._navigable` reader sites in `main.js`
 deleted in this cleanup; harmless reads of `undefined`).
 
 ### Ship NPC spawning — disable for F&F
-ShipSpawner currently spawns ships stochastically (~0-12 per system) per intake-correcting code sweep. Scene-level DirectionalLight + AmbientLight provide proper Lambertian shading (shipped 2026-05-10 commit `aa9ad23`; prior emissive-only workaround removed in same commit). Feature is NPC-ships-in-systems = ENRICHED tier. **Action item before F&F ship:** disable spawn (likely gate behind URL param or settings flag, or remove ShipSpawner instantiation from `main.js`); preserve code for ENRICHED reactivation later.
+ShipSpawner currently spawns ships stochastically (~0-12 per system) per intake-correcting code sweep. Scene-level DirectionalLight + AmbientLight provide proper Lambertian shading (shipped 2026-05-10 commit `aa9ad23`; prior emissive-only workaround removed in same commit). Feature is NPC-ships-in-systems = ENRICHED tier. **DONE 2026-06-26** (supercruise-control-harness): spawn disabled at the single switch — `const SHIPS_ENABLED = false` gates the `shipSpawner.spawnForSystem(…)` call in `main.js`. With spawn off, `focusShip` / the `_shipScannerMode` hit-test / the `flythrough.active` simStep branch are unreachable by construction (all gated on `shipSpawner.ships`), so `NavigationSubsystem` + `FlythroughCamera` are marked retired (files KEPT, nav wiring intact). ShipSpawner code + NPC ship features preserved for ENRICHED reactivation — flip `SHIPS_ENABLED` to restore. Player-ship sharing (`shipHullToScene('player')`, `ScaleConstants.js`) untouched.
 
 ### World-origin rebasing — pipeline crossing
 Per intake conversation 2026-05-19: this is suspected to be where gameplay-layer issues will accumulate. It's necessary infrastructure for any ship-scale work that requires float32 precision (which is most of Layer 3). It crosses:

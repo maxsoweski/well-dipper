@@ -12,28 +12,40 @@
   <body>
     <canvas id="canvas"></canvas>
 
-    <!-- Splash + intro sequence (before title screen) -->
+    <!-- Cold-open: the BLACK ORRERY/HELM chooser (boot-flow corrected 2026-06-27).
+         This is the begin-gate — the FIRST thing shown, replacing the old
+         "Do you wish to begin?" splash. Black background, ONLY the two choices.
+         Picking a station records it (_pendingBootMode) then runs the ORIGINAL
+         begin flow UNCHANGED (intro logos → WELL-DIPPER title → music → warp); the
+         chosen mode is consumed at the first star-system arrival (warpRevealSystem):
+         HELM → autopilot tour hands-off (the cockpit screensaver), ORRERY → god's-eye,
+         nothing armed (FLIPPED, docs/WORKSTREAMS/mode-ownership-2026-07-02). A click on
+         the black background ("press anything") defaults to ORRERY (legacy path, via
+         _handleSplashDismiss). Both stations are offered on mobile too — mobile-HELM
+         boots the tour by default, no keyboard needed (AC9). -->
     <div id="splash-screen">
-      <p class="splash-prompt" id="splash-text"></p>
-      <script>
-        // Per-character sliding illumination
-        const _st = 'Do you wish to begin?';
-        const _el = document.getElementById('splash-text');
-        for (let i = 0; i < _st.length; i++) {
-          const s = document.createElement('span');
-          s.className = 'sc';
-          s.style.setProperty('--i', i);
-          s.textContent = _st[i] === ' ' ? '\u00A0' : _st[i];
-          _el.appendChild(s);
-        }
-      </script>
+      <div class="splash-mode-picker">
+        <button id="splash-mode-orrery" class="splash-mode-btn" data-mode="orrery">
+          <span class="splash-mode-name">ORRERY</span>
+          <span class="splash-mode-desc">watch &amp; plan &mdash; god's-eye overview</span>
+        </button>
+        <button id="splash-mode-helm" class="splash-mode-btn" data-mode="helm">
+          <span class="splash-mode-name">HELM</span>
+          <span class="splash-mode-desc">take the ship &mdash; pilot &amp; free-look</span>
+        </button>
+      </div>
     </div>
+
+    <!-- Intro sequence (DESHÉ / score logos), shown after the chooser before the
+         title screen — part of the ORIGINAL begin flow, run by startIntroSequence. -->
     <div id="intro-overlay" style="display:none;">
       <div id="intro-logo1" class="intro-logo"><span class="deshe-title">DESHÉ</span><span class="deshe-sub">studios</span></div>
       <div id="intro-logo2" class="intro-logo intro-credit">original score by<br><span class="credit-name">Christian Sewesky</span></div>
     </div>
 
-    <!-- Title screen overlay -->
+    <!-- Title screen overlay (plain — the mode picker moved to the black chooser
+         above). Original begin flow: intro logos reveal this, the title theme plays,
+         and "press anything" / the auto-dismiss timer warps into the chosen mode. -->
     <div id="title-screen" style="display:none;">
       <div class="title-content">
         <h1 class="title-name">WELL-DIPPER</h1>
@@ -55,16 +67,17 @@
           <span class="kb-key">TAB</span><span class="kb-desc">Next planet</span>
           <span class="kb-key">SHIFT+TAB</span><span class="kb-desc">Previous planet</span>
           <span class="kb-key">1&ndash;9</span><span class="kb-desc">Jump to planet</span>
-          <span class="kb-key">Q</span><span class="kb-desc">Toggle autopilot</span>
-          <span class="kb-key">M</span><span class="kb-desc">Toggle minimap</span>
-          <span class="kb-key">V</span><span class="kb-desc">Toggle gravity wells</span>
+          <span class="kb-key">Z</span><span class="kb-desc">Toggle autopilot</span>
+          <span class="kb-key">M</span><span class="kb-desc">Swap ORRERY / HELM</span>
           <span class="kb-key">O</span><span class="kb-desc">Toggle orbit lines</span>
-          <span class="kb-key">R</span><span class="kb-desc">Toggle auto-rotate</span>
-          <span class="kb-key">F</span><span class="kb-desc">Toggle free-look</span>
+          <span class="kb-key">C</span><span class="kb-desc">Toggle minimap</span>
+          <span class="kb-key">R</span><span class="kb-desc">Take the Helm + drive on / drop out</span>
+          <span class="kb-key">Q/E</span><span class="kb-desc">Roll left / right (in flight)</span>
+          <span class="kb-key">F</span><span class="kb-desc">Toggle free-look (in flight)</span>
           <span class="kb-key">CLICK SKY</span><span class="kb-desc">Select warp target star</span>
           <span class="kb-key">MIDDLE CLICK</span><span class="kb-desc">Hold for free-look</span>
           <span class="kb-key">SCROLL</span><span class="kb-desc">Zoom in / out</span>
-          <span class="kb-key">ESC</span><span class="kb-desc">Unfocus / overview</span>
+          <span class="kb-key">ESC</span><span class="kb-desc">Close menu / deselect target</span>
           <span class="kb-key">G</span><span class="kb-desc">Object gallery</span>
           <span class="kb-key">P</span><span class="kb-desc">Settings</span>
           <span class="kb-key">T</span><span class="kb-desc">Sound test</span>
@@ -120,8 +133,6 @@
             <input type="checkbox" data-setting="showOrbits">
             <label>Minimap</label>
             <input type="checkbox" data-setting="showMinimap">
-            <label>Gravity Wells</label>
-            <input type="checkbox" data-setting="showGravityWells">
             <label>Fullscreen</label>
             <input type="checkbox" data-setting="fullscreen">
           </div>
@@ -164,7 +175,7 @@
           <h3>SIMULATION</h3>
           <div class="settings-grid">
             <label>Celestial Time</label>
-            <input type="range" data-setting="celestialTimeMultiplier" min="0" max="40" step="1">
+            <input type="range" data-setting="celestialTimeMultiplier" min="-40" max="40" step="1">
             <span class="setting-value"></span>
           </div>
         </div>
@@ -182,6 +193,22 @@
             <input type="range" data-setting="zoomSensitivity" min="0.5" max="3.0" step="0.25">
             <span class="setting-value"></span>
           </div>
+          <div class="settings-grid" style="margin-top: 8px;">
+            <label>Flight Control</label>
+            <select data-setting="flightControlType" class="setting-select">
+              <option value="manual">Manual</option>
+              <option value="align">Align-on-select</option>
+              <option value="assist">Assist</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>MODE</h3>
+          <div class="settings-grid" style="margin-top: 8px;">
+            <label>Station</label>
+            <button type="button" id="mode-swap-settings-btn" class="setting-select">Swap ORRERY / HELM (M)</button>
+          </div>
         </div>
 
         <button class="settings-reset">Reset Defaults</button>
@@ -195,8 +222,17 @@
       <div class="body-info-stats"></div>
     </div>
 
+    <div id="flight-mode-toast" style="display:none;">
+      <div class="flight-mode-toast-label"></div>
+      <div class="flight-mode-toast-hint"></div>
+    </div>
+
     <!-- In-system burn button (shown when a body is selected) -->
     <button id="commit-burn-btn" style="display:none;">BURN</button>
+
+    <!-- Desktop mode-swap button: ORRERY <-> HELM (discoverable without the M key).
+         Hidden until a star system is active; shown/labelled by _updateModeSwapButton. -->
+    <button id="mode-swap-btn" style="display:none;" title="Swap ORRERY / HELM (M)">ORRERY</button>
 
     <!-- Debug gallery overlay (hidden by default) -->
     <div id="gallery-overlay" style="display:none; position:fixed; top:0; left:0; right:0; padding:16px; z-index:1000; pointer-events:none; font-family:'DotGothic16',monospace; color:#0f0; text-shadow:0 0 6px #000, 0 0 12px #000, 0 0 20px #000;">
@@ -248,7 +284,6 @@
         <button class="speed-dial-btn" data-action="autonav" title="Autopilot">&#x25B7;</button>
         <button class="speed-dial-btn" data-action="gyro" title="Gyroscope">&#x2B55;</button>
         <button class="speed-dial-btn" data-action="minimap" title="Minimap">&#x25A3;</button>
-        <button class="speed-dial-btn" data-action="gravity" title="Gravity wells">&#x25C9;</button>
         <button class="speed-dial-btn" data-action="orbits" title="Orbits">&#x25CE;</button>
         <button class="speed-dial-btn" data-action="fullscreen" title="Fullscreen">&#x26F6;</button>
         <button class="speed-dial-btn" data-action="settings" title="Settings">&#x2630;</button>

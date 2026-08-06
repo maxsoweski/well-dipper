@@ -1,0 +1,70 @@
+{
+  "_meta": {
+    "purpose": "Committed reference for the AC6 structures audit (real-universe-overlay-2026-07-12, design D6). scripts/audit-structures.mjs checks the shipped deep-sky objects against these published values and emits structures-audit.md.",
+    "profileReference": "Each profile row carries the published galactic longitude l (deg), latitude b (deg), and heliocentric distance d (kpc) that the KnownObjectProfiles galacticPos was hand-derived from, plus a published physical radius radiusPc (pc). The audit recomputes the galactocentric position from (l,b,d) with the Sun at (8.0, 0.025, 0) kpc and compares it to the stored galacticPos — a genuine self-consistency check that catches a mis-derived position (precedent: the IC434/M78 fix).",
+    "coordinateConvention": "x_towardGC = d*cos(b)*cos(l); y_rotation = d*cos(b)*sin(l); z_NGP = d*sin(b). game.x = 8.0 - x_towardGC; game.y = 0.025 + z_NGP; game.z = y_rotation. (Matches scripts/process-harris-catalog.mjs and the profile comments.)",
+    "sizeNote": "radiusPc is a published physical radius (angular extent x distance, or a catalog half-mass/optical radius). Nebular and cluster 'size' is genuinely fuzzy and source-dependent, so the size tolerance is a factor of 2 — it guards against gross (>2x) errors, not fine disagreement.",
+    "sources": "Positions l/b/d: SIMBAD / NED object records and the standard Messier/NGC/IC catalogs (the same values recorded in each profile's comment). Physical sizes: published angular diameters x distance (SEDS Messier database, NED). Globular structural radii: Harris (2010) Milky Way globular cluster catalog, Part III (data/catalogs/harris_globular_clusters.dat).",
+    "tolerances": {
+      "profilePosKpc": 0.05,
+      "profilePosFracOfDistance": 0.15,
+      "profileSizeFactor": 2.0,
+      "globularPosKpc": 0.1,
+      "globularPosFracOfDistance": 0.02
+    }
+  },
+
+  "profiles": {
+    "M42":    { "l": 209.0, "b": -19.4, "d": 0.41,  "radiusPc": 4.0,  "source": "Orion Nebula, ~24 ly across" },
+    "M1":     { "l": 184.6, "b": -5.8,  "d": 2.0,   "radiusPc": 1.7,  "source": "Crab SNR, ~5.5 ly radius" },
+    "M13":    { "l": 59.0,  "b": 40.9,  "d": 7.1,   "radiusPc": 21.0, "source": "Great Hercules Cluster, ~84 ly radius" },
+    "M57":    { "l": 63.2,  "b": 13.5,  "d": 0.7,   "radiusPc": 0.43, "source": "Ring Nebula, ~1.4 ly across" },
+    "M45":    { "l": 166.6, "b": -23.5, "d": 0.136, "radiusPc": 5.0,  "source": "Pleiades open cluster core extent" },
+    "M8":     { "l": 6.0,   "b": -1.4,  "d": 1.25,  "radiusPc": 14.0, "source": "Lagoon Nebula, ~55x20 ly" },
+    "M17":    { "l": 15.1,  "b": -0.7,  "d": 1.6,   "radiusPc": 7.0,  "source": "Omega/Swan Nebula" },
+    "M20":    { "l": 7.0,   "b": -0.2,  "d": 1.68,  "radiusPc": 6.0,  "source": "Trifid Nebula" },
+    "M16":    { "l": 17.0,  "b": 0.8,   "d": 1.74,  "radiusPc": 10.0, "source": "Eagle Nebula H II region" },
+    "NGC2237":{ "l": 206.3, "b": -2.1,  "d": 1.6,   "radiusPc": 16.0, "source": "Rosette Nebula, ~130 ly across" },
+    "NGC7000":{ "l": 85.2,  "b": -0.5,  "d": 0.6,   "radiusPc": 15.0, "source": "North America Nebula" },
+    "IC1396": { "l": 99.3,  "b": 3.7,   "d": 0.87,  "radiusPc": 16.0, "source": "Elephant Trunk H II region" },
+    "NGC6888":{ "l": 75.5,  "b": 2.4,   "d": 1.26,  "radiusPc": 6.0,  "source": "Crescent Nebula wind bubble" },
+    "IC434":  { "l": 206.5, "b": -16.6, "d": 0.4,   "radiusPc": 3.0,  "source": "Horsehead/IC434 emission region" },
+    "M78":    { "l": 205.6, "b": -17.2, "d": 0.4,   "radiusPc": 2.0,  "source": "M78 reflection nebula" },
+    "M27":    { "l": 60.8,  "b": -3.7,  "d": 0.42,  "radiusPc": 0.9,  "source": "Dumbbell Nebula" },
+    "NGC7293":{ "l": 36.2,  "b": -57.2, "d": 0.22,  "radiusPc": 1.4,  "source": "Helix Nebula" },
+    "NGC6543":{ "l": 96.5,  "b": 29.9,  "d": 1.0,   "radiusPc": 0.15, "source": "Cat's Eye Nebula inner shell" },
+    "M97":    { "l": 148.5, "b": 57.1,  "d": 0.62,  "radiusPc": 0.5,  "source": "Owl Nebula" },
+    "NGC3132":{ "l": 272.1, "b": 10.4,  "d": 0.61,  "radiusPc": 0.3,  "source": "Southern Ring Nebula" },
+    "NGC6960":{ "l": 74.0,  "b": -8.6,  "d": 0.74,  "radiusPc": 18.0, "source": "Veil Nebula / Cygnus Loop arc" },
+    "CasA":   { "l": 111.7, "b": -2.1,  "d": 3.4,   "radiusPc": 2.5,  "source": "Cassiopeia A SNR shell" },
+    "M22":    { "l": 9.9,   "b": -7.6,  "d": 3.2,   "radiusPc": 16.0, "source": "Sagittarius Cluster (NGC 6656)" },
+    "M3":     { "l": 42.2,  "b": 78.7,  "d": 10.2,  "radiusPc": 22.0, "source": "M3 (NGC 5272) globular" },
+    "M5":     { "l": 3.9,   "b": 46.8,  "d": 7.5,   "radiusPc": 20.0, "source": "M5 (NGC 5904) globular" },
+    "M15":    { "l": 65.0,  "b": -27.3, "d": 10.4,  "radiusPc": 22.0, "source": "M15 (NGC 7078) globular" },
+    "M4":     { "l": 351.0, "b": 15.97, "d": 1.8,   "radiusPc": 10.0, "source": "M4 (NGC 6121) nearest globular" },
+    "M92":    { "l": 68.3,  "b": 34.9,  "d": 8.3,   "radiusPc": 17.0, "source": "M92 (NGC 6341) globular" },
+    "NGC104": { "l": 305.9, "b": -44.9, "d": 4.5,   "radiusPc": 24.0, "source": "47 Tucanae (NGC 104) globular" },
+    "NGC5139":{ "l": 309.1, "b": 14.97, "d": 5.43,  "radiusPc": 43.0, "source": "Omega Centauri (NGC 5139), largest MW globular" },
+    "M11":    { "l": 27.3,  "b": -2.8,  "d": 1.88,  "radiusPc": 5.0,  "source": "Wild Duck Cluster (NGC 6705)" },
+    "M44":    { "l": 205.9, "b": 32.5,  "d": 0.187, "radiusPc": 4.0,  "source": "Beehive Cluster (Praesepe)" },
+    "NGC869": { "l": 134.6, "b": -3.7,  "d": 2.3,   "radiusPc": 8.0,  "source": "Double Cluster h Persei" },
+    "M35":    { "l": 186.6, "b": 2.2,   "d": 0.85,  "radiusPc": 5.0,  "source": "M35 (NGC 2168) open cluster" },
+    "M7":     { "l": 355.8, "b": -4.5,  "d": 0.3,   "radiusPc": 4.0,  "source": "Ptolemy's Cluster (NGC 6475)" },
+    "IC2602": { "l": 289.6, "b": -4.9,  "d": 0.149, "radiusPc": 3.0,  "source": "Southern Pleiades" },
+    "NGC2264":{ "l": 202.9, "b": 2.2,   "d": 0.76,  "radiusPc": 4.0,  "source": "Christmas Tree Cluster" }
+  },
+
+  "globulars": {
+    "note": "Positions are self-consistency-checked: recompute game xyz from (l, b, rSun) and compare to the shipped globular-clusters.json xyz (which came from the Harris heliocentric X/Y/Z columns). Tolerance absorbs the catalog's 1-decimal X/Y/Z rounding.",
+    "radiusDerivation": "radiusKpc = r_c * 10^c (tidal radius, arcmin) * 2.90888e-4 (arcmin->rad) * rSun_kpc. Harris Part III columns c (King concentration) and r_c (core radius, arcmin).",
+    "spotRadiiPc": {
+      "NGC 5139": 73.2,
+      "NGC 104": 55.4,
+      "NGC 6121": 33.0
+    },
+    "spotRadiiTolerancePc": 1.5,
+    "orderingCheck": ["NGC 5139", "NGC 104", "Pal 1"],
+    "expectedCount": 152,
+    "physicalRangePc": { "min": 1.0, "max": 250.0 }
+  }
+}

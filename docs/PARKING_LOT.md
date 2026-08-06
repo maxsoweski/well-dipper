@@ -139,3 +139,143 @@ cull it out.
 intended near-field experience), then a sub-feature implementation.
 Cross-feature scope — touches galactic-feature rendering AND any
 other large galactic-scale phenomena that share the same gate.
+
+---
+
+## P4 — Reticles should LOOK projected onto the canopy, not just be cut by it
+
+**Origin:** `reticles-on-the-glass-2026-08-01` (SHIPPED `d3dc4cb`,
+Max UAT pass 2026-08-01). **This is the deliberate second half of that
+ask** — Max split the work himself and took the geometry half first.
+Explicitly named a non-goal of that workstream so it could not drift.
+
+**What shipped:** the geometry. `src/cockpit/cabinMask.js` renders the
+cabin's opaque meshes flat-white to an offscreen buffer each frame and
+`TargetingReticle.update()` erases the overlay through it with
+`globalCompositeOperation='destination-out'`. Every reticle is now CUT
+at the real geometry's real edge — mid-glyph on a name label, at a
+rib's own boundary. Canopy glass deliberately does not occlude.
+
+**What is still missing.** Being cut correctly makes a reticle *sit
+behind* the cabin. It does not make it look *painted on the canopy*.
+The remaining tell is that the marks are still clean vector green
+drawn at screen depth. Max's original words, which the geometry half
+only partly answers:
+
+> "what I want is for the moon/planet/star reticles to be occluded by
+> the cockpit so that they look like a HUD on the glass on the cockpit
+> rather than something drawn directly on the player's eye"
+
+**Candidate surfaces** (none scoped, none costed):
+- **Canopy tint** — the glass colours what is drawn on it, so the
+  reticles pick up the pane they sit on rather than being colour-pure.
+- **Glass-depth parallax** — the marks live on a physical surface a
+  short distance from the eye, so they should shift slightly against
+  the world as the head moves. Today they are locked to the world.
+- **Phosphor rather than clean vector** — bloom, scanline interaction,
+  slight persistence, so they read as *emitted by* the canopy layer
+  instead of composited over it.
+
+**Why it is not trivial.** All three want the reticles to participate
+in the render rather than sit in a Canvas2D overlay above it. The
+shipped workstream's `designDecisions` already records that moving
+`TargetingReticle` into the WebGL pass is "the most correct answer and
+the largest change" — deferred there, and this is the item that would
+finally call it due. Expect the honest scoping answer to be a renderer
+question, not an overlay one.
+
+**Scope:** multi-system, premises genuinely open (is this a shader
+pass? a second glass-layer render? a texture the canopy samples?) →
+`dev-collab-scope` before any code, per the same reasoning that
+governed the geometry half.
+## P5 — Orbit ring cap: support procedurally complex systems
+
+**Originating workstream:** `orbit-ring-conic-2026-07-21` (Max, 2026-08-01,
+off the back of the AC7 inventory-swap drive).
+
+**Want:** the proc engine free to spawn systems with many planets and moons
+without the orbit renderer silently dropping rings.
+
+**The limit.** `OrbitConicField` packs every ring into one RGBA32F DataTexture
+sized `CONIC_MAX = 64` wide x `CONIC_TEX_ROWS` tall. `update()` clamps to
+`Math.min(descriptors.length, CONIC_MAX)`, so a system with >64 orbiting bodies
+loses rings — by design least-visible sub-pixel moons first (R9), but still a
+hard ceiling on system complexity. Richest system observed to date: Sol at 39
+rings; procedurals ran 2-11.
+
+**⛔ NOT the problem — do not "fix" this.** Stale per-ring data from the previous
+system persists in `_source` after a warp (measured: 38 non-zero entries past
+`uCount`, indices 2-60). This costs NOTHING — the fragment shader's constant-
+bound loop breaks at `i >= uCount` (`OrbitConicField.js:177-178`) so those slots
+are never sampled, and the buffer is allocated once and reused for the whole
+session. Clearing on swap would ADD a per-warp memory write for zero observable
+benefit — a pessimization. Evidence:
+`WORKSTREAMS/orbit-ring-conic-2026-07-21/evidence/live-ac7-inventory-swap-2026-08-01.md`.
+
+**Why raising the cap is cheaper than it looks.** `uCount` is a uniform, so the
+shader's early break is uniform control flow — per-pixel cost tracks the LIVE
+ring count, not `CONIC_MAX`. Raising the constant costs texture memory only
+(64 -> 512 rings is roughly 16 KB -> 128 KB) and nothing at runtime for ordinary
+systems.
+
+**The actual engineering problem.** All rings draw in ONE fullscreen pass, so
+every pixel walks the entire ring list. At ~200 rings that is ~200 conic
+evaluations per pixel, nearly all for rings nowhere near that pixel. This is what
+would make a dense system chug — not the stale data.
+
+**The answer is already specced and unbuilt:** the **R4 bounding-box pre-cull**
+in this workstream's BUILD-PLAN, deliberately kept READY and not built ("not
+needed on evidence"). Complex systems are the evidence.
+
+**What a follow-up would do:**
+1. Raise `CONIC_MAX` and size the DataTexture to match; confirm the packing
+   offsets (`stride = CONIC_MAX * 4`) and `readConic` still address correctly.
+2. Build R4 so cost tracks VISIBLE rings rather than total rings.
+3. Decide whether the cap becomes dynamic (sized to the richest system seen) or
+   simply a much higher constant.
+4. Verify on a deliberately dense generated system — one must be constructed;
+   none encountered in normal play exceeded 39 rings.
+
+**Sequencing (Max, 2026-08-01):** deferred until the lane B UAT ships and the
+merge arc lands. Do NOT touch `OrbitConicField.js` before then — it is the
+renderer under UAT.
+
+**Scope:** single-system (orbit rendering) but with a real perf-architecture
+decision; warrants `dev-collab-scope` before code.
+
+---
+
+## P6 — Cockpit shadows: nothing casts, inside or in
+
+**Originating workstream:** cockpit-into-helm-2026-07-30 / the HELM cockpit program
+(Max, 2026-08-01, raised while ruling on the post-UAT items).
+
+**Max's words:** *"the lighting in the cockpit works from the pov from the sun but shadows
+aren't casting properly — the cockpit isn't casting shadows internally and i don't think
+other system objects are casting shadows onto the cockpit."*
+
+**Two distinct halves, and they may have different causes:**
+1. **Internal self-shadowing.** The cabin does not shadow itself — a monitor arm, a rib or the
+   console should darken what is behind it relative to the star. The geometry is there (the
+   cabin mask work counts 782 faces / 45 meshes), so this is a shadow-map/material question,
+   not a missing-geometry one.
+2. **External casters.** System bodies (planets, moons, the star's occluders) do not cast onto
+   the cabin interior. Whether they *should* is partly a design call — a planet shadowing the
+   cockpit interior is a strong effect and may not be wanted at every scale.
+
+**Known-relevant context, not yet investigated:**
+- Direction is already right: Max confirms the lighting reads correctly from the sun's POV, so
+  the light's placement/orientation is not the bug — only the shadow pass.
+- `_cockpitKeyLight` is exposed on `window` (see the cockpit globals) — the likely entry point.
+- The cockpit renders through a SEPARATE pass from the world (the cabin-mask work relies on
+  exactly that: two passes sharing only the screen). ⚠ **A shadow crossing from world objects
+  onto cabin geometry therefore crosses a pass boundary** — that is probably the whole
+  difficulty of half (2), and it should be scoped before anyone starts.
+- Scene-level DirectionalLight + AmbientLight exist per FEATURES.md's ship-scale notes.
+
+**What a follow-up would do:** establish which lights have `castShadow`/`receiveShadow` set and
+whether a shadow map is being rendered for the cockpit pass at all; fix (1) first since it is
+self-contained within one pass; treat (2) as its own scoped decision.
+
+**Scope:** rendering/lighting, cockpit pass. Multi-system if (2) is taken on (world pass ↔
+cockpit pass). Not started; nothing built.

@@ -1,0 +1,36 @@
+{
+  "workstream": "real-universe-overlay-2026-07-12",
+  "commit": "d106181",
+  "type": "live-integration addendum to verdict.json (working-Claude drove chrome-devtools on :5176, 2026-07-13)",
+  "context": "verdict.json's AC5/AC8 INSUFFICIENT results were solely 'live layer not driven' — the dev server was down during the build session. Max started :5176 + the 9223 debug Chrome; working-Claude drove the checks below in the live app. Console captured across ALL drives: zero errors, zero warns, zero '[SSG] Unknown star type' / 'Unknown companion class' fallbacks.",
+  "checks": [
+    {
+      "ac": "AC8-sol-and-regression-guardrail (live sub-clause, owed since Increment 1)",
+      "drive": "window._lab.enterSol() then window.__wd.runIntegrationSuite()",
+      "observed": "In-system Sol, scene integration suite 19/19 passed, 0 failures",
+      "result": "PASS"
+    },
+    {
+      "ac": "AC5-authoring-path (live: nav-warp arrival)",
+      "drive": "Armed _warpTarget exactly per _setWarpTargetFromNavStar (navStarData at Rigil Kentaurus's HYG position, name 'Rigil Kentaurus') from Sol; _beginWarpTurn(); awaited arrival",
+      "observed": "_systemData._knownSystemName='Alpha Centauri', _isKnownSystem=true, star G2V (Rigil Kentaurus) + star2 K1V (Toliman), isBinary=true, binarySeparationAU=23.5 (companion-table verbatim), farCompanions=[{Proxima Centauri, M5.5Ve, 13000 AU, planets [b,d]}], names index-aligned {system 'Alpha Centauri', star 'Rigil Kentaurus', star2 'Toliman'}. No procgen impostor. A+B planetless = deterministic binary-stability outcome, astronomy-consistent (the known planets are Proxima's).",
+      "result": "PASS"
+    },
+    {
+      "ac": "AC5-authoring-path (live: arrival targeted at Proxima's position)",
+      "drive": "From Alpha Centauri, armed nav-warp at Proxima Centauri's supplement coordinates (0.055 pc from the registry position), name 'Proxima Centauri'; _beginWarpTurn()",
+      "observed": "Arrival resolved via alias membership + belt (findByAlias) to the SAME authored Alpha Centauri (G2V + K1V, far companion with planets b,d) — no procgen impostor at Proxima's coordinates",
+      "result": "PASS"
+    },
+    {
+      "ac": "AC5-authoring-path (live: teleport arrival)",
+      "drive": "Debug panel GO TO OBJECT (the real teleportToPosition callback): teleport 'sol' (fresh intermediate — spawned as Sol, always-test-Sol held), then 'Rigil Kentaurus' (→ Rigil Kentaurus (G-class, mag -0.01))",
+      "observed": "findAt at the teleported position spawned the authored Alpha Centauri (G2V + K1V, far companion Proxima Centauri present)",
+      "result": "PASS"
+    }
+  ],
+  "notDriven": {
+    "sky-click warp": "Not directly drivable without a pixel-accurate canvas click on the star. Its arrival resolution branch (starIndex path, hasNavStar=false → findAt) is the same findAt the teleport drive exercised, and the sky-click plumbing itself has ZERO edits in this increment. Deferred to AC9 UAT / a later increment's live pass; recorded here so it is not mistaken for covered."
+  },
+  "uatNote": "These are objective integration drives, NOT UAT. AC9 remains deferred-to-max per the contract."
+}
