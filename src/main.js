@@ -98,7 +98,7 @@ import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/Materi
 import { PretextLab } from './ui/PretextLab.js';
 import * as LabMode from './debug/LabMode.js';
 import { warmPlanetPrograms, swapMaterialWhenReady } from './rendering/ShaderWarmup.js';
-import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf } from './rendering/LabPlanetMaterial.js';
+import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetMaterial } from './rendering/LabPlanetMaterial.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -1845,6 +1845,90 @@ window._lab = {
       bodyRadius: built.bodyRadius,
       meshName: mesh.name || mesh.parent?.name || '?',
       surfacesFound: surfaces.length,
+    };
+  },
+
+  /**
+   * LAYER 2 live probe — report the resolved conformance numbers for every lab-shader body.
+   *
+   * ⛔ WHY THIS EXISTS RATHER THAN A SCREENSHOT. Four of layer 2's five fixes are invisible in a
+   * still image: a domain divisor, an octave count, a clock, a depth convention. The plan's
+   * verification cadence is explicit — "live probe through window._lab on a GENERATED system,
+   * report NUMBERS, not screenshots" — and this lane has twice been fooled by a reading that was
+   * entirely true and entirely misleading. Each field below is a value that can only be right for
+   * one reason.
+   *
+   * ⚠ CHECK `fps` FIRST. A backgrounded or minimised window throttles rAF to ~1 Hz while
+   * `document.hidden` still reports false. Every per-frame number here (uTime, and uOctaves via
+   * LODManager) is then measured on a loop that is barely running, and reads as "not wired".
+   *
+   * @returns {Promise<object>} one entry per lab-shader body, plus a frame-rate honesty check
+   */
+  async labShaderReport() {
+    // ── rAF honesty check, before anything that depends on frames advancing ──
+    const t0 = performance.now();
+    let frames = 0;
+    await new Promise((resolve) => {
+      const tick = () => {
+        frames++;
+        if (performance.now() - t0 < 500) requestAnimationFrame(tick); else resolve();
+      };
+      requestAnimationFrame(tick);
+    });
+    const fps = Math.round(frames / ((performance.now() - t0) / 1000));
+
+    const bodies = [];
+    const walk = (o) => {
+      if (isLabPlanetMaterial(o?.material) && o.geometry) {
+        const u = o.material.uniforms;
+        if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+        const geoRadius = o.geometry.boundingSphere?.radius ?? null;
+        const bodyRadius = u.uBodyRadius.value;
+        bodies.push({
+          mesh: o.name || o.parent?.name || '?',
+          // Item 1. These two must AGREE and must not be 1.0 — 1.0 means the divisor never
+          // reached the material and the whole disc is still sampling a fraction of one cell.
+          bodyRadius: +bodyRadius.toFixed(6),
+          geometryRadius: geoRadius === null ? null : +geoRadius.toFixed(6),
+          radiusDivideLive: geoRadius !== null && Math.abs(bodyRadius - geoRadius) / geoRadius < 1e-3 && bodyRadius !== 1.0,
+          // Item 3. 4.0 at every distance means setReliefDetail's seam is not firing.
+          octaves: +u.uOctaves.value.toFixed(3),
+          lodRamp: +u.uLodRamp.value.toFixed(4),
+          // Item 2 (clock half). Sampled twice below.
+          uTime: +u.uTime.value.toFixed(4),
+          // Item 2 (light half). Object space, so it must NOT equal the body's world sun vector.
+          lightDirObj: u.uLightDir.value.toArray().map((n) => +n.toFixed(4)),
+          // Item 4. Only observable as a program property; the visual payoff is sort order.
+          logDepth: !!retroRenderer?.renderer?.capabilities?.logarithmicDepthBuffer,
+        });
+      }
+      (o?.children || []).forEach(walk);
+    };
+    walk(scene);
+
+    // Second clock sample a frame later — a stopped clock is the exact bug item 2 fixed, and a
+    // single reading cannot tell "stopped" from "started at a nonzero value".
+    await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+    const walk2 = (o) => {
+      if (isLabPlanetMaterial(o?.material)) {
+        const b = bodies.find((x) => (o.name || o.parent?.name || '?') === x.mesh);
+        if (b) {
+          b.uTimeNext = +o.material.uniforms.uTime.value.toFixed(4);
+          b.clockAdvancing = b.uTimeNext > b.uTime;
+        }
+      }
+      (o?.children || []).forEach(walk2);
+    };
+    walk2(scene);
+
+    return {
+      fps,
+      throttled: fps < 20,   // if true, every per-frame verdict below is meaningless
+      labShaderBodies: bodies.length,
+      bodies,
+      hint: bodies.length === 0
+        ? 'No lab-shader body in the scene. Run await window._lab.tryLabShader(0) first.'
+        : undefined,
     };
   },
 
