@@ -2356,7 +2356,44 @@ window._lab = {
     const sysData = StarSystemGenerator.generate(seed);
     sysData._destType = 'star-system';
     spawnSystem({ forWarp: false, systemData: sysData });
-    return { ok: true, seed, planetCount: sysData.planets?.length ?? 0 };
+
+    // ── ORRERY entry tail (added at the master→lane-A merge, 2026-08-06) ──
+    // spawnSystem builds the system and stops. Before the merge that was the
+    // whole job; master's boot flow added a mandatory tail that every ceremony-
+    // free entry must run, and skipping it leaves the game in a state that is
+    // wrong in two ways at once:
+    //
+    //   1. `_pendingBootReveal` stays true, so `_effectiveRegime()` (~3823)
+    //      reports the PICKED boot mode forever instead of the live one — master's
+    //      own comment at _bootSkipToSol calls the stale flag a read that "would
+    //      LIE". The next real reveal's consume is stale too.
+    //   2. Nothing frames the system or syncs the orbit lines, so the camera sits
+    //      wherever it was and ORRERY's lines stay at the showOrbits:false boot
+    //      default.
+    //
+    // This is the tail of `_enterSystemInstantOrrery` (~8139-8154) and the ORRERY
+    // branch of `_bootSkipToSol` (~3908-3921) — the two established "spawn without
+    // ceremony, land in ORRERY" precedents. Inlined rather than factored out: this
+    // hook is lane-A-only and a shared extraction would collide at merge-back.
+    // `_enterSystemInstantOrrery()` itself is NOT callable here — it resolves its
+    // own warp destination and would spawn a different system over this seed.
+    //
+    // ORRERY (not HELM) is deliberate: it is what Max asked the merge for, and it
+    // costs the lab nothing — commitBurn() from ORRERY auto-swaps into HELM as an
+    // ASSIST leg (commitBurnSwapsToHelm, ~8628), so `selectBody` + `commitBurnNow`
+    // still flies the Layer 2 LOD-ramp approach.
+    if (flythrough.active) flythrough.stop();
+    if (autoNav.isActive) autoNav.stop();
+    scPilot.stop();
+    _manualBurnOrbiting = false;
+    bodyInfo.hide();
+    _pendingBootReveal = false;
+    _pendingBootMode = 'orrery';
+    _frameSystemForOrrery();
+    _beginOrreryArrivalZoom();
+    _syncOrbitsToMode();
+
+    return { ok: true, seed, planetCount: sysData.planets?.length ?? 0, mode: 'orrery' };
   },
 
   /**
