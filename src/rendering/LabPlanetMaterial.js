@@ -206,6 +206,7 @@ export function buildLabPlanetMaterial(opts = {}) {
 /** Scratch, module-scope: this runs once per lab-shader body per frame and must not allocate. */
 const _invQuat = new THREE.Quaternion();
 const _lightObj = new THREE.Vector3();
+const _camObj = new THREE.Vector3();
 
 /**
  * Is this a material built by buildLabPlanetMaterial? Signature-based, not instanceof, because the
@@ -298,10 +299,22 @@ export function updateLabPlanetMaterial(material, opts = {}) {
     u.uOctaves.value = autoOctaves(ramp);
   }
 
+  // ── 5. the view vector's camera operand, in THIS body's object space ──
+  // The shader used to read three's world-space `cameraPosition` against an object-space vPos,
+  // which is only correct at the origin with identity quaternion and unit radius — the lab, and no
+  // game body. Divided by uBodyRadius so it lands in the same normalised domain vPos now uses.
+  if (opts.cameraWorldPos && opts.mesh && u.uCameraPosObj) {
+    _camObj.copy(opts.cameraWorldPos);
+    opts.mesh.worldToLocal(_camObj);
+    _camObj.divideScalar(u.uBodyRadius.value || 1.0);
+    u.uCameraPosObj.value.copy(_camObj);
+  }
+
   return {
     time: u.uTime.value,
     octaves: u.uOctaves.value,
     lodRamp: u.uLodRamp.value,
     lightObj,
+    cameraPosObj: u.uCameraPosObj ? u.uCameraPosObj.value.toArray() : null,
   };
 }

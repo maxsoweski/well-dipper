@@ -163,6 +163,69 @@ describe('LAYER 2 items 2+3 — the per-frame seam', () => {
     });
   });
 
+  describe('5. the view vector — object space, not world space', () => {
+    it('GLSL reads uCameraPosObj, never three\'s world-space cameraPosition', () => {
+      const frag = readFileSync(join(ROOT, 'planet-lod-shaders.glsl.js'), 'utf8');
+      expect(frag).toMatch(/uniform vec3 uCameraPosObj;/);
+      expect(frag).toMatch(/vec3 V = normalize\(uCameraPosObj - vPos\);/);
+      // The broken form must not survive as CODE. Comments mentioning it are fine and wanted.
+      const codeLines = frag.split('\n').filter((l) => !l.trim().startsWith('//'));
+      expect(codeLines.join('\n')).not.toMatch(/normalize\(cameraPosition - vPos\)/);
+    });
+
+    it('⛔ NO UNESCAPED BACKTICK anywhere in the shader module', () => {
+      // The trap: these are template literals, so a prose backtick in a GLSL comment TERMINATES
+      // the string and the module stops parsing. It is already documented for
+      // src/objects/Planet.js; this module had no guard and it cost a red run on 2026-08-06.
+      const src = readFileSync(join(ROOT, 'planet-lod-shaders.glsl.js'), 'utf8');
+      const bare = src.split('\n')
+        .map((line, i) => ({ line, n: i + 1 }))
+        .filter(({ line }) => /(^|[^\\])`/.test(line))
+        .map(({ n }) => n);
+      // Exactly four: the open/close delimiter of each of the two exported template literals.
+      expect(bare.length).toBe(4);
+    });
+
+    it('is the exact identity for the LAB — origin, identity quaternion, unit radius', () => {
+      const mat = buildLabPlanetMaterial().material;   // bodyRadius defaults to 1.0
+      const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1));
+      mesh.updateMatrixWorld(true);
+      const camWorld = new THREE.Vector3(0, 0, 3);
+      updateLabPlanetMaterial(mat, { mesh, cameraWorldPos: camWorld });
+      const got = mat.uniforms.uCameraPosObj.value;
+      const maxDelta = Math.max(
+        Math.abs(got.x - camWorld.x), Math.abs(got.y - camWorld.y), Math.abs(got.z - camWorld.z),
+      );
+      expect(maxDelta).toBe(0);
+    });
+
+    it('the lab writes it too, so the shader never falls back to cameraPosition', () => {
+      const lab = labSource();
+      expect(lab).toMatch(/uniforms\.uCameraPosObj\.value\.copy\(camera\.position\);/);
+      expect(lab).toMatch(/planet\.worldToLocal\(uniforms\.uCameraPosObj\.value\);/);
+    });
+
+    it('DIVERGES from the world position on a real game body — the actual bug', () => {
+      // Rotated, tilted and far from the origin at a game-sized radius: exactly the case where
+      // reading cameraPosition made V collapse toward a constant and the rim glow slid.
+      const group = new THREE.Object3D();
+      group.position.set(-416, -0.05, -542);
+      group.rotation.z = -0.21869;
+      const surface = new THREE.Mesh(new THREE.IcosahedronGeometry(0.0487, 2));
+      surface.rotation.y = 1.1;
+      group.add(surface);
+      group.updateMatrixWorld(true);
+
+      const mat = buildLabPlanetMaterial({ bodyRadius: 0.0487 }).material;
+      const camWorld = new THREE.Vector3(-0.52, 0, -0.23);
+      updateLabPlanetMaterial(mat, { mesh: surface, cameraWorldPos: camWorld });
+      const got = mat.uniforms.uCameraPosObj.value;
+      expect(got.distanceTo(camWorld)).toBeGreaterThan(100);
+      // And it must be expressed in BODY RADII, so it is commensurate with vPos (|vPos| <= 1).
+      expect(got.length()).toBeGreaterThan(1000);
+    });
+  });
+
   describe('4. it must no-op on everything that is not a lab material', () => {
     it('returns null and mutates nothing for the game\'s own material shape', () => {
       const gameish = { uniforms: { time: { value: 3 }, uReliefOctaves: { value: 4 }, lightDir: { value: new THREE.Vector3() } } };

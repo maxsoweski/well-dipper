@@ -22,6 +22,11 @@ export function makeUniforms(WORLD_LIGHT) {
       // (radiusEarth × 0.0426, i.e. 0.0128..0.68), without which the whole disc samples a fraction
       // of one noise cell. See planet-lod-shaders.glsl.js LAB_VERTEX_SHADER for the full note.
       uBodyRadius: { value: 1.0 },
+      // Camera position in the BODY's object space, divided by uBodyRadius so it shares vPos's
+      // normalised domain (LAYER 2 item 5). Both the lab's frame loop and the game's
+      // updateLabPlanetMaterial write it every frame via worldToLocal; this initializer only has to
+      // be harmless for the headless/river-router path, which never evaluates the view vector.
+      uCameraPosObj: { value: new THREE.Vector3(0, 0, 3) },
       uOctaves:    { value: 4.0 },
       uLodRamp:    { value: 0.0 },
       uLevels:     { value: 6.0 },

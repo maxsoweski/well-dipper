@@ -198,14 +198,17 @@ export class BodyRenderer {
    *
    * @param {number} distanceRadii — camera distance to the body, in body radii
    */
-  setReliefDetail(distanceRadii) {
+  setReliefDetail(distanceRadii, cameraWorldPos) {
     const surface = this._delegate.surface || this._delegate.mesh;
     // ── LAYER 2 item 3 — the lab material rides the SAME distance, through the same law ──
     // Ordered before the early-return below on purpose: the lab material has no `uReliefOctaves`
     // (its detail uniforms are uOctaves/uLodRamp), so the guard would have skipped it exactly the
     // way the game's clock guard skipped its uTime. Two differently-named uniforms, one silent
     // no-op each — that pairing is what left the lab shader pinned at 4 of 9 octaves in-game.
-    updateLabPlanetMaterial(surface?.material, { distanceRadii });
+    // cameraWorldPos rides along here rather than in Planet.updateRender because THIS is the
+    // per-frame path that already holds the camera (LODManager.update), and inventing a third
+    // traversal to carry one vector is how seams multiply.
+    updateLabPlanetMaterial(surface?.material, { distanceRadii, cameraWorldPos, mesh: surface });
 
     const u = surface?.material?.uniforms?.uReliefOctaves;
     if (!u) return;                                  // moons, textured swaps, gas variants

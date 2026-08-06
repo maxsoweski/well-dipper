@@ -4895,6 +4895,15 @@
       const _dispR = sVis;
       invQuat.copy(planet.quaternion).invert();
       lightObj.copy(WORLD_LIGHT).applyQuaternion(invQuat);
+      // LAYER 2 item 5 — the view vector's camera operand, in the planet's OWN object space.
+      // At this lab's defaults (planet at the origin, spinSpeed 0, R = 1) this is exactly
+      // camera.position, so the authored look is unchanged, byte for byte. It stops being an
+      // identity the moment the spin slider moves — which is the latent bug this fixes: before it,
+      // the lab's own rim glow slid across the disc under spin. The game writes the same value via
+      // updateLabPlanetMaterial; the shader must never read `cameraPosition` directly again.
+      uniforms.uCameraPosObj.value.copy(camera.position);
+      planet.worldToLocal(uniforms.uCameraPosObj.value);
+      uniforms.uCameraPosObj.value.divideScalar(uniforms.uBodyRadius.value || 1.0);
 
       uniforms.uOctaves.value = oct;
       uniforms.uLodRamp.value = lod;

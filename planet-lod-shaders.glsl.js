@@ -87,6 +87,11 @@ export const LAB_FRAGMENT_SHADER = /* glsl */ `
       //    in alongside it invites a redefinition error for zero benefit. src/objects/Planet.js
       //    FRAG_HEADER:24 makes the same choice.
       #include <logdepthbuf_pars_fragment>
+      // Camera in THIS body's object space / uBodyRadius — the view vector's other operand.
+      // See the note at the "vec3 V = normalize(...)" site for why cameraPosition cannot be used.
+      // (Double quotes, not backticks: a prose backtick inside this template literal TERMINATES
+      //  the string. Documented trap; it cost this session one red test run.)
+      uniform vec3 uCameraPosObj;
       // ── #3a E5 band/jet writer fields (fragment side). Declared here — HEIGHT_GLSL owns the
       // vPos/vObjN varying set, and zonalBandCol takes these as PARAMS so the shared GLSL (also used
       // by the river router, which never calls zonalBandCol) is unaffected.
@@ -487,7 +492,23 @@ export const LAB_FRAGMENT_SHADER = /* glsl */ `
         float ambient = 0.035;
         vec2 fc = gl_FragCoord.xy;
         // View vector — planet sits at origin, identity quaternion, so world==object space
-        vec3 V = normalize(cameraPosition - vPos);
+        // ── View vector (LAYER 2 item 5, 2026-08-06) ──
+        // WAS: normalize(cameraPosition - vPos), which mixes spaces. cameraPosition is three's
+        // WORLD-space camera; vPos is object space. That is only correct when the body sits at the
+        // origin with identity quaternion and unit radius — true of the lab, false of every game
+        // body. In the game |vPos| <= 1.0 while cameraPosition runs to the 100-unit rebase
+        // threshold, so V collapsed toward a constant direction and the rim glow slid across the
+        // disc as you orbited. The game's own shader has always done this correctly
+        // (src/objects/Planet.js vWorldPos + vViewDir), so it was a real divergence.
+        // ⛔ THE LAB HAD THE SAME BUG LATENT — masked only because spinSpeed defaults to 0
+        //    (planet-lod-lab.html:906) and its planet is never translated. Turn the spin slider on
+        //    before this fix and the lab's own rim glow was already wrong. At the lab's defaults
+        //    uCameraPosObj IS cameraPosition, so this is the exact identity and the authored look
+        //    is unchanged; with spin on it now behaves instead of sliding.
+        // uCameraPosObj is the camera in THIS body's object space, divided by uBodyRadius so it
+        // shares vPos's normalised domain. Both writers use worldToLocal — see
+        // updateLabPlanetMaterial and the lab's own per-frame block.
+        vec3 V = normalize(uCameraPosObj - vPos);
 
         // ── Stage 6: surface albedo / material (relief + cryo frost tint + liquid material) ──
         // F3 bright rays — fresh high-albedo ejecta streaks brighten the lit surface BEFORE
