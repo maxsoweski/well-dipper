@@ -34,7 +34,21 @@ Academia: atmospheric science models this as meridional overturning cells (Held-
 
 ## 5. Isolation recipe (:9223)
 
-Unbuilt — recommended recipe once built: register in planet-archetypes.js FEATURES as `weatherBands: { label: 'Weather bands (F26)', enableKey: 'weatherBandsEnabled', archetypes: ['tectonic-terrestrial'] }`. Then on the :9223 lab (per memory/chrome-devtools-9223-launch.md + well-dipper-testing-reference.md): (1) load planet-lod-lab.html, (2) apply preset 'Rocky (Earthlike)' — or 'Ocean (temperate)' for the band-over-sea read, (3) `window._lab.solo('weatherBands')`, (4) judge at `window._lab.state.distance = 12` (full-disk band layout: ITCZ + storm tracks + clear gaps; distance is in radii, clamped 1.1-30), then `window._lab.state.distance = 4` (band-edge breakup into fronts under the LOD ramp), and `window._lab.state.distance = 2` (individual storm-cell texture). Also flip to the eyeball/locked configuration (uFrostLatitudeBias-style D3 driver at max, or the eyeball preset if present) to verify the substellar-axis reorganization.
+⭐ **BUILT IN THE LAB — this card's "Unbuilt" was stale, corrected 2026-08-06.** The recipe below
+was written as a forecast and the build then followed it almost exactly. As shipped:
+`planet-archetypes.js:38` registers the FEATURE, `:226` carries the `PROVINCES` row,
+`planet-lod-lab.html:5135-5138` drives `uWeatherStrength/Cells/ItczShift/Locked`, and
+`planet-lod-shaders.glsl.js:840-862` is the GLSL (`weatherLatBias`, `PROV_WEATHER`, and the
+`uWeatherStrength > 0.0` byte-identity branch the card's §5 hook specified). Landed in tracker
+phase 4b (`✅ 2026-06-10`, F24–F33, 🟡 taste-call VERIFIED_PENDING_MAX).
+
+⛔ **NOT in the game.** Zero F26 code under `src/`. The only near-miss is `uWeatheredColor`
+(`Planet.js:30`), an unrelated *rock-palette* uniform — do not mistake it for weather bands; that
+collision is the likely origin of the stale `[current]` tag now corrected to `[lab]` in
+`planet-visual-features.md:262`. F26 is therefore an ordinary member of the 48-feature lab-only
+queue, NOT an unknown.
+
+Recipe as originally written — register in planet-archetypes.js FEATURES as `weatherBands: { label: 'Weather bands (F26)', enableKey: 'weatherBandsEnabled', archetypes: ['tectonic-terrestrial'] }`. Then on the :9223 lab (per memory/chrome-devtools-9223-launch.md + well-dipper-testing-reference.md): (1) load planet-lod-lab.html, (2) apply preset 'Rocky (Earthlike)' — or 'Ocean (temperate)' for the band-over-sea read, (3) `window._lab.solo('weatherBands')`, (4) judge at `window._lab.state.distance = 12` (full-disk band layout: ITCZ + storm tracks + clear gaps; distance is in radii, clamped 1.1-30), then `window._lab.state.distance = 4` (band-edge breakup into fronts under the LOD ramp), and `window._lab.state.distance = 2` (individual storm-cell texture). Also flip to the eyeball/locked configuration (uFrostLatitudeBias-style D3 driver at max, or the eyeball preset if present) to verify the substellar-axis reorganization.
 
 ## 6. What to judge (UAT checklist)
 

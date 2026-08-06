@@ -60,6 +60,7 @@ This is **Phase 1 of two**:
 | Tag | Meaning |
 |---|---|
 | `[current]` | Renders / is computed in the live build today. |
+| `[lab]` | **Built and rendering in the World Engine Lab, but NOT wired into the game.** Added 2026-08-06. |
 | `[partial]` | Half-wired — data exists but isn't consumed, or only one variant ships. |
 | `[aspirational]` | Not built. The bulk of L1 and most close-up L2 relief. |
 | `[subtle]` | Inventory-complete but low render-priority — a real-world feature that the 6-level Bayer/posterize envelope will likely crush or render only as a faint tint. Kept for completeness; flagged so HOW-research deprioritizes it or treats it as stylized. |
@@ -258,7 +259,7 @@ climate and terrain.*
 |---|---|---|---|---|---|---|
 | **F24** | Zonal belts & zones | P16 | high-contrast many-banded (bold stripes, like Jupiter) · soft few-banded (faint pale stripes) · bland blue + sparse CH₄ clouds (mostly featureless blue with thin methane clouds, like an ice giant) | Jupiter, Saturn, Neptune | gas, sub-neptune, hot-jupiter | `[current]` |
 | **F25** | Jets & shear turbulence | P16 | equatorial superrotation jet (a fast wind band racing around the equator) · counter-rotating jet shear (neighboring wind bands sliding past each other in opposite directions) · festoon/scallop turbulence (wavy scalloped swirls where the winds churn) | Jupiter belt edges (the boundaries between Jupiter's cloud stripes) | gas, hot-jupiter, venus | `[partial]` (turbulence in gas-giant) |
-| **F26** | Latitude weather bands (terrestrial) | P20 | Hadley/Ferrel zonation (stacked bands of wind that circle the planet) · ITCZ/monsoon convergence band (a rainy belt where winds meet near the equator) | Earth | terrestrial, ocean, eyeball | `[current]` |
+| **F26** | Latitude weather bands (terrestrial) | P20 | Hadley/Ferrel zonation (stacked bands of wind that circle the planet) · ITCZ/monsoon convergence band (a rainy belt where winds meet near the equator) | Earth | terrestrial, ocean, eyeball | `[lab]` |
 
 ### F-storms — vortices & discrete storms
 *Derives from: P17.*

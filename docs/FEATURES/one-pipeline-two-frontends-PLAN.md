@@ -585,7 +585,68 @@ A scope fence, so a fresh session does not wander.
 
 ---
 
-## Open items for Max
+## ⭐⭐ MAX'S RULINGS — ALL FIVE ANSWERED 2026-08-06. The plan is GREENLIT.
+
+The five open items below are **closed**. Answers are binding; two of them enlarge the job.
+
+**1. F52 (eclipse / moon shadows) — IN SCOPE. Recommendation OVERRULED.** Max, verbatim:
+*"yes, the lighting engine needs to work for all objects in game."* Read the scope correctly: this
+is **not** just "add F52 to the list." The ruling is about the **lighting engine as a whole** —
+lighting must work for **all objects in the game**, not planets only. F52 is the named instance,
+and it is the one feature where the LAB is behind the game, so it means **new lab work**: the lab
+renders one body and has no shadow-caster path. ⛔ Do not treat lighting coverage for moons, rings,
+ships or any other object class as out of scope on the grounds that "the plan only said F52."
+
+**2. "All the planned features" — BIGGER MVP.** Max: *"yes, bigger mvp."* MVP is **not** F1–F53
+only. It also includes the lab quality backlog (`lod-lab-quality-backlog.md`, Max's 14 entries) and
+the Phase-5 integration couplings (`planet-lod-phase5-integration-plan.md`, 52 gaps, none built).
+⚠ **§3's checklist is therefore INCOMPLETE as written** — it enumerates one spine of three. The
+second and third spines still need enumerating; that is now a prerequisite for calling MVP
+closable, though NOT a prerequisite for starting Step 0.
+
+**3. F26 — RESOLVED, and it was never UNKNOWN.** Max: *"idk, see if you can find the record."*
+Found. **F26 is BUILT IN THE LAB and ABSENT FROM THE GAME** — an ordinary member of the 48-feature
+lab-only queue. Two stale records pointed in opposite directions and cancelled out:
+- `planet-visual-features.md` tagged it `[current]`, which the legend defines as "renders in the
+  live build today." It does not. **Corrected to `[lab]`** (`:262`).
+- `cards/F26-latitude-weather-bands.md:37` said "Unbuilt", written before the build. **Corrected.**
+  It shipped in tracker phase 4b (`✅ 2026-06-10`): `planet-archetypes.js:38` + `:226`,
+  `planet-lod-lab.html:5135-5138`, GLSL at `planet-lod-shaders.glsl.js:840-862`.
+- Likely origin of the bad tag: `Planet.js:30` has `uWeatheredColor`, an unrelated **rock-palette**
+  uniform. A `uWeather*` grep hits it. It is not weather bands.
+
+⭐ **The systemic finding is worth more than the F26 answer.** The catalog's legend had **no tag
+for "built in the lab, absent from the game"** — only `[current] / [partial] / [aspirational] /
+[subtle]`. The doc structurally could not express the distinction Max's MVP is defined by, which is
+why one feature's status silently disagreed with itself. **A `[lab]` tag has been added to the
+legend.** ▶ The other ~47 lab-only features still carry whatever tag they were given under the old
+scheme; a full re-tag pass is queued, NOT done — §3's enumeration is the input for it.
+
+**4. `gates = ALL_ON` for the game — CONFIRMED.** Max: *"yes."* Recommendation stands. The ~40
+features gated by the lab's 49 checkboxes all render in the game. Max sees the consequence at Step
+6's screenshot as a decision he made, not a regression he discovered.
+
+**5. The ordering — GREENLIT.** Max: *"yes."* Steps 0–3 (instruments, condition widening, tidal
+fix, fail-open fence) land before anything visible. Gas giants ship at Step 6, moons at Step 10.
+
+### What the rulings change
+
+| | Before | After |
+|---|---|---|
+| MVP feature spine | F1–F53 (58 rows) | F1–F53 **+** 14 backlog entries **+** 52 Phase-5 couplings |
+| F52 | proposed out of scope | **in**, and generalised to "lighting works for all objects" |
+| F26 | UNKNOWN | `[lab]` — built in lab, absent from game |
+| §3 checklist | "the" checklist | **one spine of three**; the other two need enumerating |
+| Steps 0–12 | awaiting greenlight | **greenlit, unchanged** |
+
+⛔ **The step sequence is NOT affected by rulings 1 and 2.** F52/lighting and the two extra MVP
+spines are *additional* work that lands after this plan's machinery exists — they are not
+prerequisites for Step 0, and folding them in now would be the "wire it into the two-route world
+and migrate it twice" mistake this plan exists to prevent.
+
+---
+
+## Open items for Max — ALL ANSWERED, retained for the reasoning
 
 1. **Is F52 (eclipse/moon shadows) in MVP scope?** It is the only feature the lab lacks. Yes ⇒ new lab work; no ⇒ MVP is 52 features and F52 is a permanent game‑owned exception. **Recommendation: no** — the game already has it and the lab has one body to render.
 2. **Does "all the planned features" mean F1–F53 only?** This plan assumes yes. If the lab quality backlog (14 entries) and the Phase‑5 couplings (52 gaps) are in, MVP is materially larger and the §3 checklist needs a second spine.
