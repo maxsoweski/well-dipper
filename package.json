@@ -13,7 +13,7 @@
     "gen-feature-cards": "node scripts/gen-feature-cards.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:instruments": "rc=0; echo ''; echo '=== Instrument A - per-test-ID baseline ==='; npm run --silent test:baseline || rc=1; echo ''; echo '=== Instrument B - body-identity fence ==='; npm run --silent test:body-identity || rc=1; echo ''; echo '=== Instrument C - shipped-uniform delta ==='; npm run --silent port-uniform-delta:check || rc=1; echo ''; if [ $rc -ne 0 ]; then echo 'INSTRUMENTS: FAILED - at least one instrument moved. Read the section(s) above; do NOT re-record without naming what moved.'; else echo 'INSTRUMENTS: all three green (A per-test-ID, B body-identity, C shipped-uniform).'; fi; exit $rc",
+    "check:instruments": "rc=0; echo ''; echo '=== Instrument A - per-test-ID baseline ==='; npm run --silent test:baseline || rc=1; echo ''; echo '=== Instrument B - body-identity fence ==='; npm run --silent test:body-identity || rc=1; echo ''; echo '=== Instrument C - shipped-uniform delta ==='; npm run --silent port-uniform-delta:check || rc=1; echo ''; echo '=== Instrument C - citation fence ==='; npm run --silent port-uniform-delta:citations || rc=1; echo ''; if [ $rc -ne 0 ]; then echo 'INSTRUMENTS: FAILED - at least one instrument moved. Read the section(s) above; do NOT re-record without naming what moved.'; else echo 'INSTRUMENTS: all four green (A per-test-ID, B body-identity, C shipped-uniform + citations).'; fi; exit $rc",
     "test:baseline": "node scripts/test-baseline.mjs --check",
     "test:baseline:record": "node scripts/test-baseline.mjs --record",
     "test:body-identity": "vitest run tests/body-identity-fence.test.js --exclude '**/.claude/**'",
@@ -27,7 +27,8 @@
     "doc-rot": "bash scripts/doc-rot-check.sh",
     "doc-graph": "node scripts/doc-graph.js",
     "uat-status": "bash scripts/uat-status.sh",
-    "mood-bootstrap": "bash scripts/mood-index-bootstrap.sh"
+    "mood-bootstrap": "bash scripts/mood-index-bootstrap.sh",
+    "port-uniform-delta:citations": "node tools/port-uniform-delta.mjs --check-citations"
   },
   "devDependencies": {
     "madge": "^8.0.0",

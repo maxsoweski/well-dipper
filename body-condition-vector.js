@@ -162,13 +162,16 @@ export function deriveConditionVector(fp, derived, radiusEarth) {
   // today — that is what makes the step additive, and it is asserted (not assumed) by
   // tests/port-condition-contract.test.js.
   //
-  // ⚠ surfaceHistory WAS ALREADY BEING HANDED IN AND SILENTLY DROPPED. `conditionFromPlanet.js:135`
-  // has put it on the fp since the port was written, and every lab preset carries one
+  // ⚠ surfaceHistory WAS ALREADY BEING HANDED IN AND SILENTLY DROPPED. The `surfaceHistory:` key in
+  // conditionFromPlanet.js's `const fp = {` literal has put it there since the port was written,
+  // and every lab preset carries one
   // (driver-presets.js:27 onward) — but this return literal never emitted it, so
   // `condition.surfaceHistory` was `undefined` on BOTH front-ends. PLAN §2 states it exactly:
   // "surfaceHistory goes in and is not emitted — the loss is in the vector, not the adapter."
   // NO DEFAULT IS INVENTED HERE. The adapter already supplies the game-side default
-  // (conditionFromPlanet.js:135); a second default site is a second place to fabricate a number,
+  // (that same `surfaceHistory:` fp key — grep it, do not chase a line number: Step 1 alone added
+  // 239 lines to that file and Steps 2-12 each add more); a second default site is a second place
+  // to fabricate a number,
   // and `_provenance` could not tell the two apart. A preset without one gets null, which reads as
   // "no record" rather than as "a record of nothing happening".
   surfaceHistory:  fp.surfaceHistory ?? null,

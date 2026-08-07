@@ -12,8 +12,13 @@
 //   node tools/port-uniform-delta.mjs --record --force  # overwrite an existing capture (deliberate)
 //   node tools/port-uniform-delta.mjs --list            # print the shared-uniform resolution and stop
 //   node tools/port-uniform-delta.mjs --selftest        # negative control: prove the gate still bites
+//   node tools/port-uniform-delta.mjs --check-citations  # the CITATION FENCE: resolve every
+//                                                        # `file:NNN `symbol`` ref in the port's
+//                                                        # reasoning files and fail if the symbol
+//                                                        # is not on that line (findings 5 + 6)
 //
-// Exit codes:  0 ok · 1 shipped uniforms moved · 2 structural break (basis changed) · 3 selftest
+// Exit codes:  0 ok · 1 shipped uniforms moved · 2 structural break (basis changed, or a broken
+//              citation) · 3 selftest
 //              failed · 64 usage · 65 refused to overwrite a capture · 66 no capture · 69 a game
 //              module would not load · 70 population is not deterministic
 //
@@ -44,13 +49,15 @@
 // WHAT IS MEASURED
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 // The REAL production material, not a transcription of it: every body is passed through
-// `new Planet(sceneData)` (src/objects/Planet.js:1519) and the uniforms are read off
-// `planet.surface.material.uniforms`. Planet._createSurface (:1548-1717) is the only place in the
+// `new Planet(sceneData)` — Planet.js:1519 `constructor(planetData, starInfo = null) {` — and the
+// uniforms are read off `planet.surface.material.uniforms`.
+// Planet.js:1548 `_createSurface() {` (body :1548-1716) is the only place in the
 // game that turns a condition into shipped shader numbers; re-deriving it here would create a
 // second copy of exactly the law this plan is removing, and the copy would drift silently.
 //
 // The watched set starts from a RUNTIME name intersection against makeUniforms()'s keys
-// (planet-lod-uniforms.js:8) — 28 names — and is then widened by an EXPLICIT VALUE-SOURCE MAP
+// (planet-lod-uniforms.js:8 `export function makeUniforms(WORLD_LIGHT) {`) — 28 names — and is
+// then widened by an EXPLICIT VALUE-SOURCE MAP
 // (see "THE UNIFORM MAP" below). A pure name intersection was the instrument's own blind spot:
 // it watched uFreshColor and uSedColor and MISSED the weathered endmember, which the game spelled
 // uWeatheredColor and the lab spelled uBaseColor, and which is the single largest contributor to a
@@ -148,7 +155,7 @@ const THREE = await import('three');
 //                including the MOON-BEARING giants (a planet's moon count is part of its record,
 //                and it is gas giants and sub-neptunes that carry the large retinues).
 //  P — PLANET-CLASS MOONS: the ~3.5% of moons that reach Planet.js today (PLAN.md:396) do so via
-//                main.js:6197 `new Planet(scenePMData)`. They are RARE — MoonGenerator.js:99
+//                main.js:6197 `new Planet(scenePMData, pmStarInfo)`. They are RARE — MoonGenerator.js:99
 //                gates them on a gas-giant/sub-neptune parent with ≥3 moons, non-innermost slot,
 //                at rng.chance(0.10), which measured ~1 per 40 systems. Harvesting them out of
 //                the S stratum alone would give 2-3 bodies. So a wider seed sweep (1..pmScanSeeds)
@@ -299,14 +306,17 @@ function flatten(v) {
 // game's 71. That is a matching key made of SPELLING, and the same world-engine value carried
 // under two different spellings was invisible to it. Not hypothetically:
 //
-//   `surfacePaletteOf` (src/worldengine/base/surfaceMaterial.js:302-314) returns FOUR endmembers
+//   surfaceMaterial.js:304 `export function surfacePaletteOf(cond) {` (body :304-318) returns
+//   FOUR endmembers
 //   {fresh, weathered, craton, sediment}. The lab wrote three of them to
 //   uFreshColor / uBaseColor / uSedColor (planet-lod-lab.html:5431-5433, and the import comment
 //   at :176 said so). The GAME wrote the same three to
-//   uFreshColor / uWeatheredColor / uSedColor (src/objects/Planet.js:1600-1602).
+//   uFreshColor / uWeatheredColor / uSedColor (src/objects/Planet.js:1602 `uFreshColor`,
+//   :1603 `uWeatheredColor`, :1604 `uSedColor`).
 //   Same function, same call, same body — and because the middle one was spelled differently,
 //   uFresh and uSed were watched and the WEATHERED one was not. uWeatheredColor is the largest
-//   single contributor to a rocky body's surface colour (Planet.js:692 highland, :769/:785 base).
+//   single contributor to a rocky body's surface colour (Planet.js:692 `vec3 highland`,
+//   :769 `vec3 rock` and :785 `vec3 crust`).
 //   ⭐ PAST TENSE SINCE 2026-08-06: the drifted name was collapsed onto the game's spelling, so the
 //   lab writes uWeatheredColor too and this pair is now NAME-MATCHED. The history is kept because
 //   the map's job did not end with it — see UNIFIED NAMES below for what still guards the pair.
@@ -316,6 +326,57 @@ function flatten(v) {
 // through uniforms the name intersection never compared: uWeatheredColor, uLavaGlow, uLavaCrust.
 // Step 2's primary gate could have run green over its own declared subject.
 //
+// ── ⭐ HOW CITATIONS ARE WRITTEN IN THIS MAP, AND WHY SOME CARRY NO LINE NUMBER ──────────────
+// This map is the AUTHORITY on which uniform carries which value, so a citation that points one
+// line off does not degrade gracefully — it names the NEIGHBOURING uniform, and it reads as
+// freshly verified while doing it. (Adversarial review, 2026-08-06: ~15 refs here were off by
+// one or two; following `uIceColor → Planet.js:1608` landed on `uIcenessMix: { value: d.iceness }`
+// and would have "shown" that the map paired a colour with a scalar.)
+//
+// So, two forms, and the choice between them is deliberate:
+//
+//   `Planet.js:1609 \`uIceColor\``   — file, line, AND the symbol at that line. Used for files that
+//                                    are STABLE for this program. The symbol is what makes the
+//                                    next drift survivable: grep it, do not trust the integer.
+//                                    ⭐ This form is MACHINE-CHECKED — see `--check-citations`,
+//                                    which reads every `file:NNN \`symbol\`` in this file and
+//                                    asserts the symbol is actually on that line.
+//
+//   `PlanetGenerator.js \`baseColor: palette.base\``  — symbol ONLY, no line. Used for the two
+//                                    REGIONS this program rewrites on a schedule: the record
+//                                    literal + bake assignments at the bottom of
+//                                    `PlanetGenerator.generate` (everything from `const planetData
+//                                    = {` down), and ALL of
+//                                    src/worldengine/port/conditionFromPlanet.js. Steps 2-12 each
+//                                    add lines to both — Step 1 alone added 239 to the adapter and
+//                                    re-pointed nothing — so an integer written here is born with a
+//                                    half-life of one step. A ref that is WRONG is worse than a ref
+//                                    that is ABSENT (that is this finding's own argument), and the
+//                                    repo already rules this way: docs/NOW.md — "the workstream
+//                                    docs carry build-time line numbers — grep the symbol, don't
+//                                    trust them."
+//
+// ⛔ Do not "helpfully" add line numbers back to the symbol-only refs. The absence is the record.
+//
+// ⚠⚠ AND ONE TRAP THE CONVENTION CREATES, FOUND BY INSTRUMENT A ON 2026-08-07 — twice, the second
+//    time inside the note warning about the first.
+//
+//    A citation's symbol text becomes SCANNED CONTENT. Several fences in this program prove two
+//    files agree by matching a declaration against the other file's SOURCE TEXT — the durable
+//    technique this program relies on. `tests/port-condition-contract.test.js` does exactly that
+//    for the shared bake list, with a non-global regex, so it takes the FIRST textual match in
+//    this file. Citing the symbol by reproducing its declaration head verbatim put an earlier
+//    match in a comment; the assertion then parsed 60 lines of prose instead of five strings.
+//    The citation was CORRECT, the test was RIGHT to go red, and only Instrument A could see it.
+//
+//    ⇒ RULE: cite a symbol by NAME, never by reproducing an assignment. Write `const FOO` — not
+//      the form with the equals sign and the opening bracket. This fence tests CONTAINMENT, so
+//      the short form verifies identically and cannot be mistaken for a declaration.
+//    ⇒ COROLLARY: prose that must discuss such a declaration names it in words, as this note now
+//      does. Reproducing it "just as an example" is the same edit as making it.
+//    Elsewhere in PlanetGenerator.js (the aurora law, the type/palette draws) the line form is used
+//    and IS machine-checked, so drift there is caught rather than believed.
+//
 // ── THE RULE (what gets watched, and why) ───────────────────────────────────────────────────
 // A game uniform is WATCHED if its construction-time value is a function of THIS BODY — its
 // record, its condition, or a game-side constant that gates world-engine output. Four tiers,
@@ -323,7 +384,7 @@ function flatten(v) {
 //
 //   bake      Reads one of the five WORLDENGINE_BAKES fields on planetData. Those five are
 //             DELIBERATELY EXCLUDED from the body-identity fingerprint (see the block above and
-//             tests/body-identity-fence.test.js:169), so a delta row is the ONLY thing that can
+//             tests/body-identity-fence.test.js:173 `const WORLDENGINE_BAKES`), so a delta row
 //             see them move. Highest-value tier. Step 2's whole gate lives here.
 //   condition Computed inside Planet._createSurface from conditionFromPlanet(d) — never on the
 //             record at all. Same property: the delta row is the only detector.
@@ -369,8 +430,9 @@ function flatten(v) {
 const UNIFIED_NAMES = [
   {
     name: 'uWeatheredColor', wasLab: 'uBaseColor', unifiedOn: '2026-08-06', tier: 'bake',
-    why: 'surfacePaletteOf(cond).weathered through applyAlbedoTransfer. Game: Planet.js:1601 reads '
-       + 'planetData.landPalette.weathered, baked at PlanetGenerator.js:735-737. Lab: '
+    why: 'surfacePaletteOf(cond).weathered through applyAlbedoTransfer. Game: Planet.js:1603 '
+       + '`uWeatheredColor` reads planetData.landPalette.weathered, baked at PlanetGenerator.js '
+       + '`planetData.landPalette = applyAlbedoTransfer(surfacePaletteOf(condition)`. Lab: '
        + 'planet-lod-lab.html:5431 writes the same endmember from the same call at :2794. '
        + 'THE PROVEN CASE — this is the alias the name intersection missed, and the drift PLAN.md §2 '
        + 'names as the shape every other divergence started in. The game spelling won: it names the '
@@ -383,8 +445,9 @@ const UNIFIED_NAMES = [
 const ALIASES = [
   {
     game: 'uIceColor', lab: 'uIcenessAlbedo', tier: 'bake',
-    why: 'ICE_ALBEDO [0.86,0.90,0.95] (surfaceMaterial.js:228). Game: Planet.js:1608 reads '
-       + 'planetData.iceColor, set at PlanetGenerator.js:762. Lab: planet-lod-uniforms.js:278 '
+    why: 'ICE_ALBEDO [0.86,0.90,0.95] (surfaceMaterial.js:231 `export const ICE_ALBEDO`). Game: '
+       + 'Planet.js:1609 `uIceColor` reads planetData.iceColor, set at PlanetGenerator.js '
+       + '`iceColor: ICE_ALBEDO`. Lab: planet-lod-uniforms.js:278 `uIcenessAlbedo` '
        + 'carries the identical triple as "icy-surface tint the rock ramp mixes toward". Same '
        + 'constant, same role, two names. A constant TODAY — which is precisely why it needs a '
        + 'row: the moment anyone makes it condition-derived, nothing else would notice.',
@@ -392,39 +455,42 @@ const ALIASES = [
   {
     game: 'uReliefOctaves', lab: 'uOctaves', tier: 'gate',
     why: "fbmd's octave count, both 4.0. Game: Planet.js:591 `fbmd(pos, uReliefOctaves, 0.0)`. "
-       + 'Lab: planet-lod-height.glsl.js:23 declares uOctaves as "effective octave count" and '
-       + 'feeds it to the same fbmd family (:1480, :3209). Same argument to the same function.',
+       + 'Lab: planet-lod-height.glsl.js:23 `uniform float uOctaves` declares it as "effective '
+       + 'octave count" and feeds it to the same fbmd family (:1480 `fbmdRidged`, :3209 '
+       + '`fbmdDamped`). Same argument to the same function.',
   },
   {
     game: 'noiseScale', lab: 'uNoiseScale', tier: 'record',
     why: 'MANY-TO-ONE, and deliberately so. The game declares the base feature frequency TWICE '
-       + 'from one expression — `noiseScale` (Planet.js:1613, the legacy simplex stack) and '
-       + '`uNoiseScale` (:1653, fbmd), both `d.noiseScale`. Only the second was watched. Watching '
+       + 'from one expression — `noiseScale` (Planet.js:1612 `noiseScale`, the legacy simplex '
+       + 'stack) and `uNoiseScale` (:1655 `uNoiseScale`, fbmd), both `d.noiseScale`. Only the '
+       + 'second was watched. Watching '
        + 'both is the only way a divergence BETWEEN the two paths becomes visible; a tool that '
        + 'watches one of a matched pair reports a green that means nothing about the other.',
   },
   // ── F37 aurora. Four pairs, u-prefix aside identical spellings, and the plan (§2) records them
-  //    as TWO DIVERGENT LAWS today (PlanetGenerator.js:490-503 vs planet-lod-lab.html:2585-2611,
+  //    as TWO DIVERGENT LAWS today (PlanetGenerator.js:490 `const auroraColors` … :503
+  //    `const ringWidth` vs planet-lod-lab.html:2585-2611,
   //    under a lab comment claiming it mirrors the game). They are the same FEATURE and the same
   //    slot in the shader; they are not yet the same law. Watched game-side, `record` tier — see
   //    the fingerprint-shadow caveat above. Listed here rather than left off so that when Step 4+
   //    unifies the law, the rows already exist and the movement is measured, not discovered.
-  { game: 'auroraColor',     lab: 'uAuroraColor',     tier: 'record', why: 'F37 emission colour — planetData.aurora.color (PlanetGenerator.js:490-503) ↔ planet-lod-uniforms.js:58.' },
-  { game: 'auroraIntensity', lab: 'uAuroraIntensity', tier: 'record', why: 'F37 ring strength — planetData.aurora.intensity ↔ planet-lod-uniforms.js:57.' },
-  { game: 'auroraRingLat',   lab: 'uAuroraRingLat',   tier: 'record', why: 'F37 oval magnetic latitude — planetData.aurora.ringLatitude ↔ planet-lod-uniforms.js:59.' },
-  { game: 'auroraRingWidth', lab: 'uAuroraRingWidth', tier: 'record', why: 'F37 oval half-width — planetData.aurora.ringWidth ↔ planet-lod-uniforms.js:60. The lab floors it at 0.07; the game does not. This is the §2 drift row.' },
+  { game: 'auroraColor',     lab: 'uAuroraColor',     tier: 'record', why: 'F37 emission colour — planetData.aurora.color (PlanetGenerator.js:490 `const auroraColors`) ↔ planet-lod-uniforms.js:58 `uAuroraColor`.' },
+  { game: 'auroraIntensity', lab: 'uAuroraIntensity', tier: 'record', why: 'F37 ring strength — planetData.aurora.intensity ↔ planet-lod-uniforms.js:57 `uAuroraIntensity`.' },
+  { game: 'auroraRingLat',   lab: 'uAuroraRingLat',   tier: 'record', why: 'F37 oval magnetic latitude — planetData.aurora.ringLatitude ↔ planet-lod-uniforms.js:59 `uAuroraRingLat`.' },
+  { game: 'auroraRingWidth', lab: 'uAuroraRingWidth', tier: 'record', why: 'F37 oval half-width — planetData.aurora.ringWidth ↔ planet-lod-uniforms.js:60 `uAuroraRingWidth`. The lab floors it at 0.07 (PlanetGenerator.js:503 `const ringWidth` does not). This is the §2 drift row.' },
 ];
 
 /** Game uniforms with NO lab counterpart at all. Watched game-side-only (before vs after). */
 const GAME_ONLY_WATCHED = [
   // ── The two remaining Step 2 bakes. No lab counterpart EXISTS: the lab renders F32/F33/F41
   //    emission from an in-shader blackbody driven by uThermalTempK / uNightTempK / uMagmaTemp
-  //    (planet-lod-uniforms.js:78, :455-460), never as a CPU-side colour uniform. The game bakes
-  //    the colour on the CPU instead (emissiveBlackbody at PlanetGenerator.js:755-756). Same law,
-  //    different side of the CPU/GPU line — so there is no name to alias, and game-side-only is
-  //    the correct and complete answer.
-  { game: 'uLavaGlow',  tier: 'bake', why: 'planetData.lavaGlowColor = emissiveBlackbody(meltTemperatureOf(cond)), PlanetGenerator.js:755 → Planet.js:1609. Named in Step 2\'s gate (PLAN.md:212).' },
-  { game: 'uLavaCrust', tier: 'bake', why: 'planetData.lavaCrustColor = emissiveBlackbody(crustTemperatureOf(cond)), PlanetGenerator.js:756 → Planet.js:1610. Named in Step 2\'s gate (PLAN.md:212).' },
+  //    (planet-lod-uniforms.js:78 `uMagmaTemp`, :455-460), never as a CPU-side colour uniform. The
+  //    game bakes the colour on the CPU instead (`emissiveBlackbody` in PlanetGenerator.generate).
+  //    Same law, different side of the CPU/GPU line — so there is no name to alias, and
+  //    game-side-only is the correct and complete answer.
+  { game: 'uLavaGlow',  tier: 'bake', why: 'PlanetGenerator.js `planetData.lavaGlowColor = emissiveBlackbody(meltTemperatureOf(condition))` → Planet.js:1610 `uLavaGlow`. Named in Step 2\'s gate (PLAN.md:212).' },
+  { game: 'uLavaCrust', tier: 'bake', why: 'PlanetGenerator.js `planetData.lavaCrustColor = emissiveBlackbody(crustTemperatureOf(condition))` → Planet.js:1611 `uLavaCrust`. Named in Step 2\'s gate (PLAN.md:212).' },
 
   // ── Gates on world-engine output. Constants, watched as dials (see the `gate` tier above).
   { game: 'uLimbMix',          tier: 'gate', why: 'LIMB_MIX (Planet.js:1401). Planet.js:527 `pow(fresnel, mix(3.0, uLimbExponent, uLimbMix))` and :535 mix onto uLimbColor — at 0.0 the entire condition-derived limb is off while uLimbExponent/uLimbColor still read correct.' },
@@ -438,17 +504,17 @@ const GAME_ONLY_WATCHED = [
   //    §3) — the things the port is scheduled to REPLACE. `record` tier, fingerprint-shadowed.
   //    Watched because the replacement itself is a shipped-pixel move that ought to be measured
   //    when it happens rather than discovered afterwards.
-  { game: 'baseColor',          tier: 'record', why: 'planetData.baseColor = palette.base (PlanetGenerator.js:772). ⚠ NOT the lab\'s uBaseColor — see COLLISIONS below.' },
-  { game: 'accentColor',        tier: 'record', why: 'planetData.accentColor = palette.accent (PlanetGenerator.js:773). The legacy per-type accent; also the fallback for uLavaGlow/uLavaCrust.' },
-  { game: 'noiseDetail',        tier: 'record', why: 'planetData.noiseDetail = rng.range(0.3,0.8) (PlanetGenerator.js:780). Legacy simplex detail weight; no lab counterpart.' },
+  { game: 'baseColor',          tier: 'record', why: 'PlanetGenerator.js `baseColor: palette.base`. ⚠ NOT the lab\'s uBaseColor — see COLLISIONS below.' },
+  { game: 'accentColor',        tier: 'record', why: 'PlanetGenerator.js `accentColor: palette.accent`. The legacy per-type accent; also the fallback for uLavaGlow/uLavaCrust.' },
+  { game: 'noiseDetail',        tier: 'record', why: 'PlanetGenerator.js `noiseDetail: rng.range(0.3, 0.8)`. Legacy simplex detail weight; no lab counterpart.' },
   { game: 'planetRadius',       tier: 'record', why: 'planetData.radius (scene-scaled by toSceneData). ⚠ NOT the lab\'s uBodyRadius, which is 1.0 in the lab\'s own unit-sphere units — different quantity, do not alias.' },
   { game: 'planetType',         tier: 'record', why: 'Planet._typeIndex() over planetData.type — the type branch the world-engine port exists to retire.' },
   { game: 'hasClouds',          tier: 'record', why: 'planetData.clouds presence gate.' },
   { game: 'cloudColor',         tier: 'record', why: 'planetData.clouds.color. Lab F31 haze/cloud colour is uHazeColor, driven by a DIFFERENT law (preset atmosphere colour) — a semantic neighbour, not the same value. Not aliased.' },
   { game: 'cloudDensity',       tier: 'record', why: 'planetData.clouds.density. Lab uCloudCoverage is driven by deriveUniforms from condition — same concept, different source. Not aliased.' },
-  { game: 'cloudScale',         tier: 'record', why: 'planetData.clouds.scale × the toSceneData ratio (main.js:6110-6118).' },
+  { game: 'cloudScale',         tier: 'record', why: 'planetData.clouds.scale × the toSceneData ratio (main.js:6110 `const mapToSceneRatio`, through :6118).' },
   { game: 'atmosphereStrength', tier: 'record', why: 'planetData.atmosphere.strength — the legacy rim magnitude uLimbMix blends against.' },
-  { game: 'atmosphereColor',    tier: 'record', why: 'planetData.atmosphere.color — the PRE-PORT rim tint; Planet.js:535 mixes from it toward the condition-derived uLimbColor.' },
+  { game: 'atmosphereColor',    tier: 'record', why: 'planetData.atmosphere.color — the PRE-PORT rim tint; Planet.js:535 `finalColor += mix(atmosphereColor, uLimbColor, uLimbMix)` mixes from it toward the condition-derived uLimbColor.' },
   { game: 'hasAurora',          tier: 'record', why: 'planetData.aurora presence gate. Lab has no counterpart gate (it gates on uAuroraIntensity), so game-side-only rather than aliased.' },
 ];
 
@@ -460,30 +526,30 @@ const UNWATCHED = [
   // X1 — RUNTIME. The renderer overwrites these every frame AFTER construction, so the value this
   // harness reads is a placeholder that never reaches a pixel. Recording it would assert the
   // stability of a number the game does not ship, which is a green with no subject.
-  { game: 'lightDir',            reason: 'runtime', why: 'overwritten per frame — src/main.js:9767 `entry.planet._lightDir.copy(_sunDir)` (also :7364, :9796).' },
-  { game: 'lightDir2',           reason: 'runtime', why: 'overwritten per frame — src/main.js:9773 (binary companion); constructed as (0,0,0).' },
-  { game: 'time',                reason: 'runtime', why: 'animation clock — Planet.js:1914-1918 `mat.uniforms.time.value += renderDt`.' },
-  { game: 'lodLevel',            reason: 'runtime', why: 'LOD tier — src/rendering/objects/BodyRenderer.js:181.' },
-  { game: 'starPos1',            reason: 'runtime', why: 'star world position — src/main.js:9832.' },
-  { game: 'starPos2',            reason: 'runtime', why: 'second-star world position — src/main.js:11147 block.' },
-  { game: 'shadowMoonCount',     reason: 'runtime', why: 'eclipse casters — src/main.js:9837-9841, rewritten every frame.' },
-  { game: 'shadowMoonPos',       reason: 'runtime', why: 'eclipse casters — src/main.js:9841.' },
-  { game: 'shadowMoonRadius',    reason: 'runtime', why: 'eclipse casters — src/main.js:9837 block.' },
-  { game: 'shadowPlanetCount',   reason: 'runtime', why: 'eclipse casters — src/main.js:9899 block.' },
-  { game: 'shadowPlanetPos',     reason: 'runtime', why: 'eclipse casters — src/main.js:9899 block.' },
-  { game: 'shadowPlanetRadius',  reason: 'runtime', why: 'eclipse casters — src/main.js:9899 block.' },
+  { game: 'lightDir',            reason: 'runtime', why: 'overwritten per frame — src/main.js:9767 `entry.planet._lightDir.copy(_sunDir)` (also :7364 `planet._lightDir`, :9796 `moon.planet._lightDir`).' },
+  { game: 'lightDir2',           reason: 'runtime', why: 'overwritten per frame — src/main.js:9773 `entry.planet._lightDir2.copy(_sunDir2)` (binary companion); constructed as (0,0,0).' },
+  { game: 'time',                reason: 'runtime', why: 'animation clock — Planet.js:1914 `if (mat.uniforms.time)`, through :1918.' },
+  { game: 'lodLevel',            reason: 'runtime', why: 'LOD tier — src/rendering/objects/BodyRenderer.js:181 `surface.material.uniforms.lodLevel.value = tier`.' },
+  { game: 'starPos1',            reason: 'runtime', why: 'star world position — src/main.js:9832 `pu.starPos1`.' },
+  { game: 'starPos2',            reason: 'runtime', why: 'second-star world position — src/main.js:9833 `pu.starPos2.value.copy(_star2Pos)` (also :9885 planet-class moons, :9891 textured moons). ⚠ The old ref here was :11147, a comment inside _updateRenderVisuals stating these are NOT written there — a citation that read as evidence and pointed at its own negation.' },
+  { game: 'shadowMoonCount',     reason: 'runtime', why: 'eclipse casters — src/main.js:9837 `if (pu.shadowMoonCount)`, through :9841, rewritten every frame.' },
+  { game: 'shadowMoonPos',       reason: 'runtime', why: 'eclipse casters — src/main.js:9841 `pu.shadowMoonPos`.' },
+  { game: 'shadowMoonRadius',    reason: 'runtime', why: 'eclipse casters — src/main.js:9837 `if (pu.shadowMoonCount)` block.' },
+  { game: 'shadowPlanetCount',   reason: 'runtime', why: 'eclipse casters — src/main.js:9848 `if (pu.shadowPlanetCount)`, assigned at :9862 `pu.shadowPlanetCount.value = shadowPlanetIdx`.' },
+  { game: 'shadowPlanetPos',     reason: 'runtime', why: 'eclipse casters — src/main.js:9852 `pu.shadowPlanetPos.value[shadowPlanetIdx].copy(inner.planet.mesh.position)` (and :9858 for the outer caster).' },
+  { game: 'shadowPlanetRadius',  reason: 'runtime', why: 'eclipse casters — src/main.js:9853 `pu.shadowPlanetRadius.value[shadowPlanetIdx] = inner.planet.data.radius` (and :9859).' },
 
   // X2 — HARNESS-BLIND. These come from `starInfo`, the SECOND constructor argument
   // (Planet.js:1519 `constructor(planetData, starInfo = null)`), which this harness never passes —
   // it builds `new Planet(rec)` with one argument, on purpose, because the population is bodies
   // and not systems. So every body would record the `|| [1,1,1]` / `?? 1.0` fallback at
-  // Planet.js:1527-1530. A row asserting that a fallback stayed constant is a green about the
+  // Planet.js:1527 `this._starColor1` through :1530. A row asserting that a fallback stayed constant is a green about the
   // harness, not about the game. ⭐ If this harness ever starts passing starInfo, move these four
   // into GAME_ONLY_WATCHED — the fence below will not do it for you.
-  { game: 'starColor1',      reason: 'harness-blind', why: 'starInfo?.color1 || [1,1,1] — Planet.js:1527; harness passes no starInfo.' },
-  { game: 'starColor2',      reason: 'harness-blind', why: 'starInfo?.color2 || [0,0,0] — Planet.js:1528; harness passes no starInfo.' },
-  { game: 'starBrightness1', reason: 'harness-blind', why: 'starInfo?.brightness1 ?? 1.0 — Planet.js:1529; harness passes no starInfo.' },
-  { game: 'starBrightness2', reason: 'harness-blind', why: 'starInfo?.brightness2 ?? 0.0 — Planet.js:1530; harness passes no starInfo.' },
+  { game: 'starColor1',      reason: 'harness-blind', why: 'Planet.js:1527 `this._starColor1 = starInfo?.color1 || [1, 1, 1]`; harness passes no starInfo.' },
+  { game: 'starColor2',      reason: 'harness-blind', why: 'Planet.js:1528 `this._starColor2 = starInfo?.color2 || [0, 0, 0]`; harness passes no starInfo.' },
+  { game: 'starBrightness1', reason: 'harness-blind', why: 'Planet.js:1529 `this._starBrightness1 = starInfo?.brightness1 ?? 1.0`; harness passes no starInfo.' },
+  { game: 'starBrightness2', reason: 'harness-blind', why: 'Planet.js:1530 `this._starBrightness2 = starInfo?.brightness2 ?? 0.0`; harness passes no starInfo.' },
 ];
 
 /**
@@ -493,11 +559,11 @@ const UNWATCHED = [
  * plausibly. The uWeatheredColor case is the reason this file exists; these are its inverse.
  */
 const COLLISIONS = [
-  { game: 'baseColor', lab: 'uBaseColor (RETIRED 2026-08-06)', why: 'The u-prefix rule matched these, and it was WRONG. The lab\'s uBaseColor was the WEATHERED endmember (planet-lod-uniforms.js:138, "driven: surfacePaletteOf(cond).weathered"); the game\'s baseColor is the legacy per-type palette tone (PlanetGenerator.js:772), a DIFFERENT quantity that still exists. The lab uniform has since been renamed uWeatheredColor (see UNIFIED NAMES), which closes this trap by construction — kept because the trap reopens the moment anyone introduces a lab uniform called uBaseColor, and because it is the reason not to.' },
-  { game: 'planetRadius', lab: 'uBodyRadius', why: 'Different units and different jobs. uBodyRadius is the object-space radius of the mesh the material is bound to (planet-lod-uniforms.js:24, 1.0 in the lab\'s unit sphere); planetRadius is the body\'s scene radius.' },
-  { game: 'uLimbMix', lab: 'uLimbStrength', why: 'Both gate the limb, neither is the other. uLimbMix is the game\'s A/B port dial (a constant); uLimbStrength is the lab\'s driven F34 rim-glow magnitude (planet-lod-uniforms.js:40).' },
+  { game: 'baseColor', lab: 'uBaseColor (RETIRED 2026-08-06)', why: 'The u-prefix rule matched these, and it was WRONG. The lab\'s uBaseColor was the WEATHERED endmember (planet-lod-uniforms.js:138 `uWeatheredColor`, "driven: surfacePaletteOf(cond).weathered"); the game\'s baseColor is the legacy per-type palette tone (PlanetGenerator.js `baseColor: palette.base`), a DIFFERENT quantity that still exists. The lab uniform has since been renamed uWeatheredColor (see UNIFIED NAMES), which closes this trap by construction — kept because the trap reopens the moment anyone introduces a lab uniform called uBaseColor, and because it is the reason not to.' },
+  { game: 'planetRadius', lab: 'uBodyRadius', why: 'Different units and different jobs. uBodyRadius is the object-space radius of the mesh the material is bound to (planet-lod-uniforms.js:24 `uBodyRadius`, 1.0 in the lab\'s unit sphere); planetRadius is the body\'s scene radius.' },
+  { game: 'uLimbMix', lab: 'uLimbStrength', why: 'Both gate the limb, neither is the other. uLimbMix is the game\'s A/B port dial (a constant); uLimbStrength is the lab\'s driven F34 rim-glow magnitude (planet-lod-uniforms.js:40 `uLimbStrength`).' },
   { game: 'cloudDensity', lab: 'uCloudCoverage', why: 'Same concept, two unrelated laws: a legacy generator draw vs a condition-driven coverage. Aliasing them would put two different quantities in one row.' },
-  { game: '(none)', lab: 'uCratonColor', why: 'LAB-ONLY. surfacePaletteOf returns FOUR endmembers; the game consumes three and DROPS `craton` (planet-lod-lab.html:5434 writes it, Planet.js has no uniform). Not a spelling gap — a missing consumer, and therefore port work, not map work.' },
+  { game: '(none)', lab: 'uCratonColor', why: 'LAB-ONLY. surfacePaletteOf returns FOUR endmembers; the game consumes three and DROPS `craton` (planet-lod-lab.html:5434 `uniforms.uCratonColor` writes it, Planet.js has no uniform). Not a spelling gap — a missing consumer, and therefore port work, not map work.' },
 ];
 
 // Resolve the watched set. ⛔ makeUniforms() is consulted for KEYS and for a KIND tag only — no
@@ -592,28 +658,38 @@ function resolveSharedUniforms(probeMaterialUniforms) {
 /**
  * Value-source tier for the NAME-MATCHED uniforms (27 when this was written; 28 since the
  * 2026-08-06 name unification). Same four tiers as the map above; kept
- * separate only because these names need no alias entry. Verified line by line against
- * src/objects/Planet.js:1596-1670.
+ * separate only because these names need no alias entry.
+ *
+ * ⭐ RE-VERIFIED LINE BY LINE 2026-08-07 against the uniforms object at
+ * src/objects/Planet.js:1596 `const material = new THREE.ShaderMaterial({` … :1709, and every ref
+ * below now carries its SYMBOL so `--check-citations` can assert the pairing mechanically. The
+ * previous set was written approximately: five of them landed on the COMMENT above the uniform and
+ * three on the NEIGHBOURING uniform, which in a block like this one is not a stale ref, it is a
+ * WRONG ANSWER about which uniform carries which value. (`uIceColor → :1608` resolved to
+ * `uIcenessMix: { value: d.iceness }` — a colour paired with a scalar.)
+ *
  *   bake      — reads a WORLDENGINE_BAKES field on planetData (outside the identity fingerprint)
  *   condition — computed in _createSurface from conditionFromPlanet(d)
  *   gate      — a Planet.js module constant
  *   record    — reads a DRAWN planetData field (fingerprint-shadowed)
  */
 const TIER_BY_NAME = {
-  uWeatheredColor: 'bake',    // d.landPalette.weathered  — Planet.js:1601. Name-matched only since
-                              // 2026-08-06; it was the ALIASES row above until the lab's uBaseColor
-                              // was renamed to match. See UNIFIED NAMES.
-  uFreshColor: 'bake',        // d.landPalette.fresh      — Planet.js:1600
-  uSedColor: 'bake',          // d.landPalette.sediment   — Planet.js:1602
-  uBioGroundColor: 'bake',    // d.landPalette.pigment    — Planet.js:1645
-  uIcenessMix: 'bake',        // d.iceness                — Planet.js:1607
-  uLimbExponent: 'condition', // atmosphereOpticsOf(cond) — Planet.js:1617
-  uLimbColor: 'condition',    //                          — Planet.js:1618
-  uTermColor: 'condition',    //                          — Planet.js:1629
-  uTermStrength: 'condition', // optics.columnFraction × TERM_STRENGTH — Planet.js:1627
-  uTermWidth: 'condition',    // termWidthFor(cond.atmosphere.pressure) — Planet.js:1628
-  uBioGroundCover: 'condition', // biosphereOf(cond)      — Planet.js:1631
-  uCraterDensity: 'condition',  // craterUniformsFrom(cond) — Planet.js:1660-1671
+  uWeatheredColor: 'bake',    // d.landPalette.weathered  — Planet.js:1603 `uWeatheredColor`.
+                              // Name-matched only since 2026-08-06; it was the ALIASES row above
+                              // until the lab's uBaseColor was renamed to match. See UNIFIED NAMES.
+  uFreshColor: 'bake',        // d.landPalette.fresh      — Planet.js:1602 `uFreshColor`
+  uSedColor: 'bake',          // d.landPalette.sediment   — Planet.js:1604 `uSedColor`
+  uBioGroundColor: 'bake',    // d.landPalette.pigment    — Planet.js:1643 `uBioGroundColor`
+  uIcenessMix: 'bake',        // d.iceness                — Planet.js:1608 `uIcenessMix`
+  uLimbExponent: 'condition', // atmosphereOpticsOf(cond) — Planet.js:1617 `uLimbExponent`
+  uLimbColor: 'condition',    //                          — Planet.js:1618 `uLimbColor`
+  uTermColor: 'condition',    //                          — Planet.js:1629 `uTermColor`
+  uTermStrength: 'condition', // optics.columnFraction × TERM_STRENGTH — Planet.js:1627 `uTermStrength`
+  uTermWidth: 'condition',    // termWidthFor(cond.atmosphere.pressure) — Planet.js:1628 `uTermWidth`
+  uBioGroundCover: 'condition', // biosphereOf(cond)      — Planet.js:1631 `uBioGroundCover`
+  uCraterDensity: 'condition',  // craterUniformsFrom(cond) — Planet.js:1662 `uCraterDensity`, and
+                                // the block it heads runs to :1672 `uEjectaLump` (:1668
+                                // `uCraterOffset` is reliefOffsets, not craterUniformsFrom)
   uCraterComplexD: 'condition',
   uCraterRelaxation: 'condition',
   uTerraceCount: 'condition',
@@ -623,11 +699,12 @@ const TIER_BY_NAME = {
   uEjectaRampart: 'condition',
   uEjectaAmp: 'condition',
   uEjectaLump: 'condition',
-  uDispDomainScale: 'gate',   // RELIEF_DOMAIN_SCALE      — Planet.js:1381
-  uFwClamp: 'gate',           // literal 1                — Planet.js:1655
-  uVoroCells: 'gate',         // CRATER_VORO_CELLS        — Planet.js:1395
-  uNoiseScale: 'record',      // d.noiseScale             — Planet.js:1653
-  uMacroOffset: 'record',     // reliefOffsets(d).macro   — Planet.js:1293-1322, hashed from 8 drawn record fields
+  uDispDomainScale: 'gate',   // RELIEF_DOMAIN_SCALE      — Planet.js:1381 `const RELIEF_DOMAIN_SCALE`
+  uFwClamp: 'gate',           // literal 1                — Planet.js:1657 `uFwClamp`
+  uVoroCells: 'gate',         // CRATER_VORO_CELLS        — Planet.js:1395 `const CRATER_VORO_CELLS`
+  uNoiseScale: 'record',      // d.noiseScale             — Planet.js:1655 `uNoiseScale`
+  uMacroOffset: 'record',     // reliefOffsets(d).macro   — Planet.js:1293 `function reliefOffsets`,
+                              // hashed from 8 drawn record fields
   uDetailOffset: 'record',    // reliefOffsets(d).detail
   uCraterOffset: 'record',    // reliefOffsets(d).crater
 };
@@ -647,9 +724,12 @@ const TIER_BY_NAME = {
 //
 // ⛔ WITH ONE EXCEPTION, AND IT IS THE WHOLE POINT OF THIS INSTRUMENT (adversarial review P1,
 // 2026-08-06). Five fields on planetData are not drawn — they are OUTPUTS of the port itself,
-// computed from conditionFromPlanet() at PlanetGenerator.js:725 and returned at :758-764. They
-// then become shipped uniforms (uIcenessMix, uFreshColor/uSedColor/uWeatheredColor, uLavaGlow,
-// uLavaCrust — Planet.js:1602-1611).
+// computed in PlanetGenerator.generate from `const condition = conditionFromPlanet(planetData)` and
+// assigned onto the record below it (`planetData.landPalette = …`, `planetData.iceness = …`,
+// `planetData.lavaGlowColor = …`, `planetData.lavaCrustColor = …`; `iceColor: ICE_ALBEDO` is a
+// constant in the record literal). They then become shipped uniforms (uIcenessMix, uFreshColor /
+// uSedColor / uWeatheredColor, uLavaGlow, uLavaCrust — Planet.js:1602 `uFreshColor` … :1611
+// `uLavaCrust`).
 //
 // Hashing them puts this instrument's SUBJECT inside its own matching key. A port change moves
 // the bake, the bake moves the fingerprint, and the body is excluded as a POPULATION MISMATCH —
@@ -662,16 +742,18 @@ const TIER_BY_NAME = {
 // catch, wearing the instrument's own uniform — and it would have fired at Steps 2 and 4, the two
 // declared pixel-moving steps that name Instrument C as their primary gate.
 //
-// The negative control did not catch it because the control nudged Planet.js:1617, the uniform
-// ASSIGNMENT site, which is DOWNSTREAM of the bake and so moved no planetData field. Every real
+// The negative control did not catch it because the control nudged Planet.js:1617 `uLimbExponent`,
+// the uniform ASSIGNMENT site, which is DOWNSTREAM of the bake and so moved no planetData field.
+// Every real
 // port change in this plan moves the condition UPSTREAM of the bake. A convincing control can
 // still step around the one class of change that matters.
 //
 // So: exclude the five bakes, and share ONE list with Instrument B, which already excludes exactly
-// these (tests/body-identity-fence.test.js:169-171) for the same reason. Two instruments that
-// disagree about what "the same body" means resolve into an unactionable instruction.
+// these (tests/body-identity-fence.test.js:173 `const WORLDENGINE_BAKES`, through :175) for the
+// same reason. Two instruments that disagree about what "the same body" means resolve into an
+// unactionable instruction.
 
-// ⛔ KEEP IN SYNC with WORLDENGINE_BAKES in tests/body-identity-fence.test.js:169. Derived port
+// ⛔ KEEP IN SYNC with tests/body-identity-fence.test.js:173 `const WORLDENGINE_BAKES`. Derived port
 // OUTPUTS, never drawn — excluded from the identity fingerprint by both instruments.
 export const WORLDENGINE_BAKES = [
   'iceColor', 'iceness', 'landPalette', 'lavaCrustColor', 'lavaGlowColor',
@@ -801,13 +883,213 @@ const argOf = (f, dflt) => { const i = argv.indexOf(f); return i >= 0 && argv[i 
 
 const CAPTURE = path.resolve(ROOT, argOf('--capture', 'tests/baseline/port-uniform-capture.json'));
 const MODE = has('--record') ? 'record' : has('--check') ? 'check'
-  : has('--list') ? 'list' : has('--selftest') ? 'selftest' : null;
+  : has('--list') ? 'list' : has('--selftest') ? 'selftest'
+  : has('--check-citations') ? 'check-citations' : null;
 
 if (!MODE) {
-  console.error('usage: node tools/port-uniform-delta.mjs (--record | --check | --list | --selftest)');
+  console.error('usage: node tools/port-uniform-delta.mjs (--record | --check | --list | --selftest');
+  console.error('                                          | --check-citations)');
   console.error('       [--force] [--allow-deltas] [--capture <path>]');
   process.exit(64);
 }
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// --check-citations — THE CITATION FENCE
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// Adversarial review 2026-08-06, findings 5 and 6: ~15 refs in the uniform map above were off by
+// one or two, and every ref INTO conditionFromPlanet.js — here, in body-condition-vector.js and in
+// PLAN.md, which Steps 2-12 are executed from — had rotted within a day of Step 1 landing 239 lines
+// in that file. No gate could see either. They are not typos: in a uniform block an off-by-one ref
+// NAMES THE NEIGHBOURING UNIFORM, so `uIceColor → Planet.js:1608` resolved to
+// `uIcenessMix: { value: d.iceness }` and read as proof that the map paired a colour with a scalar.
+//
+// The fix that lasts is not "fix the 15 numbers" — Step 2 re-rots them next week. It is to make the
+// CITATION FORM self-verifying:
+//
+//     Planet.js:1609 `uIceColor`      ← line AND the symbol that must be ON that line
+//
+// This mode resolves every citation written in that form and fails if the symbol is not there. A
+// ref with NO backticked symbol cannot be checked; those are COUNTED AND PRINTED rather than
+// ignored, because an unchecked count that nobody prints is the same blind spot one level up.
+//
+// ⛔ SCOPE, AND WHY IT IS NOT EVERY FILE. The basename→path map below is exhaustive and this mode
+// FAILS on a basename it does not know, rather than skipping it — a fence with a silent skip is
+// the failure mode this whole instrument exists to catch. SOURCES is deliberately the files that
+// carry the port's own reasoning; adding one is a one-line change and should be done.
+const CITE_FILES = {
+  'Planet.js': 'src/objects/Planet.js',
+  'PlanetGenerator.js': 'src/generation/PlanetGenerator.js',
+  'MoonGenerator.js': 'src/generation/MoonGenerator.js',
+  'SolarSystemData.js': 'src/generation/SolarSystemData.js',
+  'SeededRandom.js': 'src/generation/SeededRandom.js',
+  'PhysicsEngine.js': 'src/generation/PhysicsEngine.js',
+  'NavComputer.js': 'src/ui/NavComputer.js',
+  'BodyRenderer.js': 'src/rendering/objects/BodyRenderer.js',
+  'ShaderWarmup.js': 'src/rendering/ShaderWarmup.js',
+  'main.js': 'src/main.js',
+  'surfaceMaterial.js': 'src/worldengine/base/surfaceMaterial.js',
+  'atmosphereOptics.js': 'src/worldengine/base/atmosphereOptics.js',
+  'e1Regime.js': 'src/worldengine/base/e1Regime.js',
+  'baseStep.js': 'src/worldengine/base/baseStep.js',
+  'bombardment.js': 'src/worldengine/base/bombardment.js',
+  'adaptL0.js': 'src/worldengine/base/adaptL0.js',
+  'giant-drivers.js': 'src/worldengine/base/giant-drivers.js',
+  'craterUniforms.js': 'src/worldengine/port/craterUniforms.js',
+  'conditionFromPlanet.js': 'src/worldengine/port/conditionFromPlanet.js',
+  'albedoTransfer.js': 'src/worldengine/display/albedoTransfer.js',
+  'body-condition-vector.js': 'body-condition-vector.js',
+  'planet-lod-uniforms.js': 'planet-lod-uniforms.js',
+  'planet-lod-height.glsl.js': 'planet-lod-height.glsl.js',
+  'planet-lod-lab-core.js': 'planet-lod-lab-core.js',
+  'planet-lod-lab.html': 'planet-lod-lab.html',
+  'driver-presets.js': 'driver-presets.js',
+  'body-identity-fence.test.js': 'tests/body-identity-fence.test.js',
+  'port-limb-optics.test.js': 'tests/port-limb-optics.test.js',
+  'port-uniform-delta.mjs': 'tools/port-uniform-delta.mjs',
+};
+
+// Files whose reasoning this fence guards. PLAN.md is here because it is EXECUTED FROM.
+const CITE_SOURCES = [
+  'tools/port-uniform-delta.mjs',
+  'body-condition-vector.js',
+  'docs/FEATURES/one-pipeline-two-frontends-PLAN.md',
+  'tests/body-identity-fence.test.js',
+];
+
+// `Foo.js:123 \`sym\`` — or a bare `:123 \`sym\`` continuing the last filename on the same line.
+const CITE_RE = /([A-Za-z0-9_.\-]+\.(?:js|mjs|html|md)):(\d+)|(?<![\w.\/:]):(\d+)/g;
+
+function scanCitations(relSrc, text) {
+  const out = [];
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!/:\d/.test(line)) continue;
+    let lastFile = null, m;
+    CITE_RE.lastIndex = 0;
+    while ((m = CITE_RE.exec(line))) {
+      let base, ln;
+      if (m[1]) { base = m[1]; ln = +m[2]; lastFile = base; } else { base = lastFile; ln = +m[3]; }
+      if (!base) continue;
+      if (!/\.(js|mjs|html|md)$/.test(base)) continue;
+      // The symbol, if any, is a backticked run IMMEDIATELY after the number.
+      //
+      // ⚠ BACKTICK PARITY, and it is the difference between a fence and a noise generator. In a
+      // markdown/comment line the citation itself is often already inside a code span — "following
+      // `uIceColor → Planet.js:1608` landed on `uIcenessMix`". There the next backtick CLOSES the
+      // span, and a naive "first backtick after the number" reads the following PROSE span as the
+      // symbol and reports a break that is not one. So: only treat the next backtick as a symbol
+      // opener when an EVEN number of backticks precede the citation on this line.
+      const before = line.slice(0, m.index);
+      const insideSpan = ((before.match(/`/g) || []).length % 2) === 1;
+      const after = line.slice(m.index + m[0].length);
+      const sym = insideSpan ? null : /^ ?`([^`\n]{1,110})`/.exec(after);
+      out.push({ src: relSrc, srcLine: i + 1, base, ln, sym: sym ? sym[1] : null });
+    }
+  }
+  return out;
+}
+
+// The comparison. Whitespace is normalised on both sides (a ref must survive re-indentation);
+// nothing else is. A symbol either IS on that line or it is not.
+const normWs = (s) => s.replace(/\s+/g, '');
+function citationHolds(cite, targetLines) {
+  const text = targetLines[cite.ln - 1];
+  if (text === undefined) return { ok: false, why: 'PAST EOF', text: '' };
+  return { ok: normWs(text).includes(normWs(cite.sym)), why: 'symbol not on this line', text: text.trim() };
+}
+
+function runCitationCheck() {
+  console.log('── INSTRUMENT C · citation fence ' + '─'.repeat(57));
+  console.log('  Checks every `file:NNN `symbol`` ref in the port\'s own reasoning files.');
+  console.log('  A ref with no backticked symbol CANNOT be checked and is counted as UNCHECKED.');
+  console.log('');
+
+  // ⭐ NEGATIVE CONTROL, run every time, before the real check. Two synthetic citations against
+  // this very file: one that must hold and one that must fail. If either comes out the other way
+  // the resolver is broken and a green below would mean nothing. This is the answer to "0 failures"
+  // being indistinguishable from "0 citations resolved".
+  const selfLines = fs.readFileSync(path.resolve(ROOT, 'tools/port-uniform-delta.mjs'), 'utf8').split('\n');
+  const anchorLn = selfLines.findIndex((l) => l.includes('const CITE_SOURCES = [')) + 1;
+  const good = citationHolds({ ln: anchorLn, sym: 'const CITE_SOURCES = [' }, selfLines);
+  const bad = citationHolds({ ln: anchorLn, sym: 'const CITE_FILES = {' }, selfLines);
+  if (!anchorLn || !good.ok || bad.ok) {
+    console.error('⛔ CITATION-FENCE SELF-CONTROL FAILED — the resolver does not distinguish a correct');
+    console.error(`   ref from a wrong one (anchor line ${anchorLn}, good=${good.ok}, bad-must-be-false=${bad.ok}).`);
+    console.error('   Every result below would be meaningless. Exit 3.');
+    process.exit(3);
+  }
+  console.log(`  self-control    : PASS (a true ref at :${anchorLn} holds, a false one at the same line does not)`);
+
+  const targetCache = new Map();
+  const readTarget = (base) => {
+    if (!targetCache.has(base)) {
+      const rel = CITE_FILES[base];
+      targetCache.set(base, rel && fs.existsSync(path.resolve(ROOT, rel))
+        ? fs.readFileSync(path.resolve(ROOT, rel), 'utf8').split('\n') : null);
+    }
+    return targetCache.get(base);
+  };
+
+  const broken = [], unknown = [], unchecked = [];
+  let checked = 0;
+  for (const rel of CITE_SOURCES) {
+    const abs = path.resolve(ROOT, rel);
+    if (!fs.existsSync(abs)) { console.error(`⛔ CITE_SOURCES lists a file that does not exist: ${rel}`); process.exit(2); }
+    for (const c of scanCitations(rel, fs.readFileSync(abs, 'utf8'))) {
+      if (!CITE_FILES[c.base]) { (c.sym ? unknown : unchecked).push(c); continue; }
+      if (!c.sym) { unchecked.push(c); continue; }
+      const tgt = readTarget(c.base);
+      if (!tgt) { unknown.push(c); continue; }
+      const r = citationHolds(c, tgt);
+      checked++;
+      if (!r.ok) broken.push({ ...c, actual: r.text });
+    }
+  }
+
+  console.log(`  refs CHECKED    : ${checked}   (line + symbol)`);
+  console.log(`  refs UNCHECKED  : ${unchecked.length}  (line, no symbol — cannot be verified mechanically)`);
+  console.log(`  refs UNRESOLVED : ${unknown.length}  (basename not in CITE_FILES)`);
+  console.log('');
+
+  if (unknown.length) {
+    console.log('⛔ UNRESOLVED — these use the CHECKED form `file:NNN `symbol`` but the basename is not');
+    console.log('   in CITE_FILES, so the fence cannot verify them. Add the path; do not delete the ref.');
+    for (const u of unknown) console.log(`     ${u.src}:${u.srcLine}  ${u.base}:${u.ln} \`${u.sym}\``);
+    console.log('');
+  }
+  if (broken.length) {
+    console.log('⛔ BROKEN CITATIONS — the symbol is NOT on the cited line:');
+    for (const b of broken) {
+      console.log(`     ${b.src}:${b.srcLine}  cites  ${b.base}:${b.ln} \`${b.sym}\``);
+      console.log(`         that line actually reads: ${b.actual.slice(0, 100)}`);
+    }
+    console.log('');
+    console.log('   ⭐ Do NOT just bump the integer. Open the file, confirm which line carries the');
+    console.log('      SYMBOL, and cite that — a ref repaired to a second wrong line is worse than the');
+    console.log('      stale one, because it now reads as freshly verified.');
+    console.log('');
+    console.log(`RESULT: ${broken.length} BROKEN CITATION(S). Exit 2.`);
+    process.exit(2);
+  }
+  if (unknown.length) { console.log('RESULT: unresolved basenames. Exit 2.'); process.exit(2); }
+
+  if (unchecked.length) {
+    console.log('  UNCHECKED refs (line number only — trust, not verification):');
+    const byFile = {};
+    for (const u of unchecked) (byFile[u.src] ||= []).push(`${u.base}:${u.ln}`);
+    for (const [f, list] of Object.entries(byFile)) {
+      console.log(`     ${f}: ${list.length}`);
+      console.log(`        ${[...new Set(list)].slice(0, 12).join('  ')}${list.length > 12 ? '  …' : ''}`);
+    }
+    console.log('   Converting one of these to `file:NNN `symbol`` moves it into the checked column.');
+    console.log('');
+  }
+  console.log(`RESULT: all ${checked} symbol-anchored citations resolve. Exit 0.`);
+  process.exit(0);
+}
+
+if (MODE === 'check-citations') runCitationCheck();
 
 function gitHead() {
   try {
@@ -1023,6 +1305,32 @@ function compareAndReport(cap, nowMeasured, RES) {
     // ⭐ The composition, never a bare count. "27 uniforms, UNCHANGED" was true for months while
     // three of the four quantities Step 2's gate names were outside the set entirely.
     console.log(`  watched-uniform set: UNCHANGED (${nowSet.length} = ${composition})`);
+  }
+
+  // ── COMPOSITION DRIFT. The capture writes a `counts` block and, until 2026-08-07, NOTHING EVER
+  //    READ IT. Adversarial review finding 8: the committed capture said "27 name-matched + 8
+  //    aliased" while the live tool printed "28 + 7" — the classification had moved under the
+  //    uWeatheredColor rename and the record still answered "how was this classified?" with the
+  //    answer from before. True at record time, false now, and no gate could see it, because the
+  //    comparison key is the NAME LIST and the name list was unchanged.
+  //
+  //    ⛔ THIS IS NOT A FAILURE, and making it one would be the wrong fix: it would force a
+  //    re-record — a 526-body re-baseline — to clear a metadata mismatch, which is exactly the
+  //    "re-record to make the instrument green" move this plan forbids. It is a NOTE that names
+  //    what moved and what it does and does not mean.
+  const capC = cap.counts;
+  if (capC) {
+    const keys = ['game', 'lab', 'shared', 'nameMatched', 'aliased', 'gameOnly', 'unwatched'];
+    const moved = keys.filter((k) => capC[k] !== undefined && capC[k] !== c[k]);
+    if (moved.length) {
+      console.log('  ⓘ COMPOSITION DRIFT since the capture (the SET is identical; only its');
+      console.log('    classification moved, so this is descriptive, not a comparison failure):');
+      for (const k of moved) console.log(`       ${k.padEnd(12)} recorded ${capC[k]}  →  now ${c[k]}`);
+      console.log('    A uniform moving between name-matched and aliased means the two frontends');
+      console.log('    agreed or diverged on a SPELLING; the watched set, and therefore every delta');
+      console.log('    below, is unaffected. Clear it on the next DELIBERATE --record, at a clean');
+      console.log('    commit — never by re-recording to silence this line.');
+    }
   }
 
   // 2) Shape / kind drift on a still-shared uniform (Vector3 → Color is a silent semantic swap).

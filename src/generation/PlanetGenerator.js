@@ -723,45 +723,47 @@ export class PlanetGenerator {
     //
     // applyAlbedoTransfer is REQUIRED, not optional polish: surfaceMaterial.js returns physically
     // honest albedos, which render ~2.5x too dark without the display curve.
-    const condition = conditionFromPlanet({
-      radiusEarth, massEarth, composition, T_eq, age: ageGyr,
-      atmosphere, tidalState, surfaceHistory, eccentricity,
-    });
-    // The biosphere pigment rides through opts.extra so it is scaled by the SAME transfer as the
-    // ground endmembers. albedoTransfer.js states the rule outright: "a pigment scaled by its own
-    // luminance would drift out of relation with the ground it sits on", and calls carrying it via
-    // opts.extra "the only correct way to add one". The first port skipped this and pushed raw
-    // BIO_PIGMENT straight to the shader, so the canopy rendered at ~43% of intended albedo and
-    // about 4x DARKER than the rock it replaces, instead of the intended ~1.75x.
-    const landPalette = applyAlbedoTransfer(surfacePaletteOf(condition), {
-      extra: { pigment: BIO_PIGMENT },
-    });
-
-    // ── World-engine surface material (V2-10 port slice 2) ────────────────────────────────────────
-    // Two more condition-derived surface properties, replacing the last two hand-picked colour tables
-    // in the rocky-shader family (the 13-entry `ice` list and the 15-entry `lava` list, which between
-    // them offered violet, cyan and green "lava").
     //
-    // `iceness` is how much of the ground is ICE rather than bedrock. It is deliberately surfaced for
-    // EVERY body, not just type 'ice': a cold, volatile-rich, low-density world reads icy because of
-    // what it IS, and the shader consumes it without a type test. (It reads ~0 on a hot body whatever
-    // its label, which is the same statement from the other side.)
+    // ═══ ONE CONSTRUCTOR. THE BAKE ROUTE AND THE RENDER ROUTE NOW PASS THE SAME OBJECT. ═══════════
+    // ⭐ The argument below IS the record this function returns — the same object the renderer later
+    // receives as `this.data` and hands to `conditionFromPlanet(d)` at Planet.js:1568. Every
+    // generated body therefore crosses this seam TWICE, and until 2026-08-07 the two crossings did
+    // not agree: this site passed a nine-key literal
+    //     { radiusEarth, massEarth, composition, T_eq, age, atmosphere, tidalState,
+    //       surfaceHistory, eccentricity }
+    // and the render site passed the whole record. MEASURED over 808 generated bodies (200 seeds,
+    // planets + planet-class moons): the two conditions disagreed on exactly three keys, on
+    // 808/808 bodies — `magneticField`, `habitability`, `axialTiltDeg` — i.e. precisely the three
+    // Step 1 added. All 808 disagreements were DEGENERATE: `undefined` here against a real
+    // measurement there (e.g. magneticField 0.0613 / habitability 0.55 / axialTiltDeg 24.88 on
+    // S:1:p0). `_provenance` said so outright — 'defaulted' on this route, 'measured' on the other,
+    // for a fully-measured body — which is exactly the signal it was built to give.
     //
-    // `lavaGlowColor` / `lavaCrustColor` are blackbody chromaticity at the melt's own liquidus and at
-    // its chilled skin — ONE curve shared with the lab's F32/F33/F41 render, pinned CPU-to-GLSL by a
-    // parity test, so the game cannot drift from it. Two samples, not one, because the measured
-    // between-world melt spread is only 1538-1669 K; see the note on MELT_CRUST_FRACTION.
-    const iceness = icenessOf(condition);
-    const lavaGlowColor = emissiveBlackbody(meltTemperatureOf(condition));
-    const lavaCrustColor = emissiveBlackbody(crustTemperatureOf(condition));
-
-    return {
+    // The hazard was not today's pixels; it was that the FIVE LAWS below are the SAME FUNCTIONS the
+    // render route calls. The moment Step 4/5/8 adds a `habitability` or `magneticField` term to
+    // `surfacePaletteOf`, the baked `landPalette` on the record and the live material's palette
+    // disagree for one body, from one function, with nothing announcing it — and Instrument C would
+    // report it as a bake-tier delta whose cause is a CALL SITE, not a law.
+    //
+    // ⛔ DO NOT REINTRODUCE A SUBSET LITERAL HERE. Passing a hand-picked field list means every new
+    // adapter input has to be remembered in two places, which is the drift this whole plan
+    // ("one pipeline, two front-ends") exists to end. tests/port-route-agreement.test.js is the gate.
+    //
+    // BYTE-INERT WHEN LANDED, MEASURED NOT ASSUMED: the four bake laws below were re-run over
+    // 808 bodies with each of the three new keys deleted — 0/808 moved. The comparison was proven
+    // able to see a move first (T_eq×3 moves landPalette on 748, iceness on 178, lavaGlow/lavaCrust
+    // on 224 each), so the zero is a fact about the laws and not about a blind comparator.
+    //
+    // The five world-engine bakes are declared here as placeholders and assigned below, so the
+    // record keeps ONE key order and the condition can be derived from the record that carries it.
+    // Nothing reads them in between; conditionFromPlanet reads none of the five.
+    const planetData = {
       type,
-      landPalette,
-      iceness,
+      landPalette: null,      // ← assigned below, from `condition`
+      iceness: 0,             // ← assigned below, from `condition`
       iceColor: ICE_ALBEDO,
-      lavaGlowColor,
-      lavaCrustColor,
+      lavaGlowColor: null,    // ← assigned below, from `condition`
+      lavaCrustColor: null,   // ← assigned below, from `condition`
       // Physical unit — radius in Earth radii
       radiusEarth,
       // Scene unit — for realistic 3D rendering
@@ -795,6 +797,38 @@ export class PlanetGenerator {
       eccentricity, // [0,1) — circularize(e0, age, orbitAU, starMass); DATA-ONLY, drawn from a dedicated sub-rng (no shared-stream draw)
       tidalHeating, // D12 — stellar tidal heating (Io-moon scale); REAL, computed from eccentricity+star+orbit; DATA-ONLY (not fed to computeSurfaceHistory)
     };
+
+    const condition = conditionFromPlanet(planetData);
+
+    // The biosphere pigment rides through opts.extra so it is scaled by the SAME transfer as the
+    // ground endmembers. albedoTransfer.js states the rule outright: "a pigment scaled by its own
+    // luminance would drift out of relation with the ground it sits on", and calls carrying it via
+    // opts.extra "the only correct way to add one". The first port skipped this and pushed raw
+    // BIO_PIGMENT straight to the shader, so the canopy rendered at ~43% of intended albedo and
+    // about 4x DARKER than the rock it replaces, instead of the intended ~1.75x.
+    planetData.landPalette = applyAlbedoTransfer(surfacePaletteOf(condition), {
+      extra: { pigment: BIO_PIGMENT },
+    });
+
+    // ── World-engine surface material (V2-10 port slice 2) ────────────────────────────────────────
+    // Two more condition-derived surface properties, replacing the last two hand-picked colour tables
+    // in the rocky-shader family (the 13-entry `ice` list and the 15-entry `lava` list, which between
+    // them offered violet, cyan and green "lava").
+    //
+    // `iceness` is how much of the ground is ICE rather than bedrock. It is deliberately surfaced for
+    // EVERY body, not just type 'ice': a cold, volatile-rich, low-density world reads icy because of
+    // what it IS, and the shader consumes it without a type test. (It reads ~0 on a hot body whatever
+    // its label, which is the same statement from the other side.)
+    //
+    // `lavaGlowColor` / `lavaCrustColor` are blackbody chromaticity at the melt's own liquidus and at
+    // its chilled skin — ONE curve shared with the lab's F32/F33/F41 render, pinned CPU-to-GLSL by a
+    // parity test, so the game cannot drift from it. Two samples, not one, because the measured
+    // between-world melt spread is only 1538-1669 K; see the note on MELT_CRUST_FRACTION.
+    planetData.iceness = icenessOf(condition);
+    planetData.lavaGlowColor = emissiveBlackbody(meltTemperatureOf(condition));
+    planetData.lavaCrustColor = emissiveBlackbody(crustTemperatureOf(condition));
+
+    return planetData;
   }
 
   /**

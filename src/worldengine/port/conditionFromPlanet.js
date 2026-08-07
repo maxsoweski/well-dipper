@@ -26,8 +26,9 @@
 //    no error, a finite plausible wrong number — which is why each one is named rather than fixed
 //    silently. Expect a fifth.
 //  - `_provenance` (non-enumerable, on the returned condition) records 'measured' vs 'defaulted' for
-//    each of the 13 inputs. Read it before believing any number this seam produces for a moon or a
-//    hand-authored body.
+//    each of the 14 inputs. Read it before believing any number this seam produces for a moon or a
+//    hand-authored body. The input list is DERIVED FROM THIS FILE'S SOURCE TEXT by the contract test,
+//    not restated there — see PROVENANCE_COVERAGE below for why that distinction is the whole fence.
 
 import { deriveConditionVector } from '../../../body-condition-vector.js';
 
@@ -114,6 +115,76 @@ const RAD_TO_DEG = 180 / Math.PI;
  */
 export function axialTiltDegreesOf(gameAxialTiltRadians) {
   return gameAxialTiltRadians == null ? undefined : gameAxialTiltRadians * RAD_TO_DEG;
+}
+
+// ── THE OBLIQUITY DOMAIN FOLD — the seam's SIXTH silent disagreement, and the only ────────────────
+// one where the UNIT was already right. Found in adversarial review of Step 1.
+//
+// ⚠ THE CONVERSION ABOVE IS CORRECT AND WAS STILL NOT ENOUGH. `axialTiltDegreesOf` hands the fp a
+// number that is in the right unit, finite, and physically possible — and the ONE law that reads it
+// cannot use it. `planet-lod-lab-core.js:907-908`:
+//       const axialTilt = d.axialTilt ?? 0;
+//       const frostLatitudeBias = clamp01(axialTilt / 90);
+// `clamp01` has a DOMAIN of [0,90] baked into it, and Step 1 widened what arrives to [−86,+178]
+// while keeping the key's name and its reader. MEASURED over the contract test's own 526-body
+// corpus: 267 bodies (50.8%) arrive NEGATIVE (range −85.543…+80.769) and every one of them clamps
+// to exactly 0 — one value for half the galaxy, from 526 distinct inputs. Sol is worse in the other
+// direction: 4 bodies exceed 90° (3.1 rad → 177.6°, 2.2 → 126.1°, 2.14 → 122.6°, 1.71 → 98.0°) and
+// all four clamp to exactly 1.000, the MAXIMUM equator-ward frost spread, when Venus at 177.6° is a
+// ~2.4°-effective world that should read 0.026. That is the most wrong a value in [0,1] can be.
+//
+// ⚠⚠ WHY THE SIGN CAN BE DROPPED, STATED SO IT IS A DECISION AND NOT AN OVERSIGHT. Two different
+// things get folded here and they have two different justifications:
+//   · THE SIGN is a convention, not physics. `PlanetGenerator.js:687` (and `:560`) roll
+//     `rng.range(-1.5, 1.5)` — a tilt ABOUT AN AXIS, consumed by `Planet.js:1545` as
+//     `mesh.rotation.z`. A pole leaning −25° and one leaning +25° have the same obliquity and the
+//     same seasons; only the scene-space direction differs. Nothing physical is lost.
+//   · PAST 90° IS RETROGRADE, and that IS physics — but the seasons run back DOWN again, so a
+//     177.6° world has the seasonal amplitude of a 2.4° world. The angle the climate laws want is
+//     the effective obliquity; the retrograde BIT is a separate fact.
+// ⛔ THE RETROGRADE BIT IS NOT FORWARDED, AND IS NOT LOST. It stays on the game's own record
+// (`planetData.axialTilt`, untouched, still signed and still full-range) and can be read by whoever
+// needs it. Adding a `retrograde` key to the condition vector would be a FIFTH key with no reader,
+// which is the exact hazard this review flagged elsewhere in this file — so it is a NAMED FOLLOW-ON,
+// to land with the first law that actually reads spin direction, not speculatively now.
+//
+// ⛔ WHY HERE AND NOT IN THE READER. `planet-drivers.js:52-65` names FIVE future laws that take
+// `axialTilt` as a driver (P10 glacial flow, P11 sublimation etch, P20 meridional circulation,
+// P22 seasonal volatile cycling, P23 aerosol lofting). If the fold lived in the reader, each of
+// those five would have to remember it independently, a miss would be finite-and-plausible, and the
+// LAB route would never catch it — every lab preset is already inside [0,90] (`driver-presets.js:109`
+// = 25, `storm-e.js:68 URANIAN_OBLIQUITY: 80`, `planet-lod-lab.html:516` = 0), so a missing fold is
+// invisible on the frontend where laws get developed. Folding at the producer is also what makes the
+// two frontends AGREE on the key's domain, which is this program's whole thesis.
+//
+// ⛔ AND `deriveUniforms` IS DELIBERATELY LEFT UNGUARDED. A defensive fold there would make the
+// consumer half of the gate vacuous — it would pass for any producer, including the broken one.
+//
+// ⚠ HAZARD THIS FOLD INTRODUCES, RECORDED BECAUSE IT IS NOT OBVIOUS: the old domain assertion
+// (`Math.abs(deg) <= 180`) caught a TWICE-applied rad→deg conversion, which produces ~4900. The fold
+// hides that — 1.5 rad converted twice is 4924.2°, which folds to 64.21°, an ordinary obliquity.
+// So `axialTiltDegreesOf` above is kept as a PURE conversion with no fold in it, and its endpoints
+// stay pinned separately (0.41 → 23.4, 1.71 → 97.98). Do not merge the two functions.
+
+/**
+ * The EFFECTIVE OBLIQUITY in degrees: the angle between spin axis and orbit normal, folded into the
+ * [0°, 90°] domain every climate law in this engine assumes. Symmetric about 0° (sign is a spin-axis
+ * convention) and about 90° (retrograde seasons mirror prograde ones). `undefined` in ⇒ `undefined`
+ * out, for the same reason as `axialTiltDegreesOf`.
+ *
+ * ⛔ NaN IS DELIBERATELY NOT CAUGHT HERE, and the temptation to catch it is why this says so. An
+ * `!Number.isFinite` guard returning `undefined` would turn a corrupt tilt into an ABSENT one, and
+ * absent is a value this seam treats as legitimate — it would be laundered into a downstream
+ * `?? default` and render as a plausible world. The block at :119-131 above argues that NaN is the
+ * one failure mode in this codebase that is NOT quiet (it reaches a uniform and the body renders
+ * black). That loudness is an asset. NaN in ⇒ NaN out, on purpose.
+ */
+export function effectiveObliquityDegreesOf(tiltDegrees) {
+  if (tiltDegrees == null) return undefined;
+  let t = Math.abs(tiltDegrees) % 360;
+  if (t > 180) t = 360 - t;
+  if (t > 90) t = 180 - t;
+  return t;
 }
 
 // ── THE HABITABILITY SHAPE NORMALISATION — the seam's FIFTH silent disagreement. ───────────────────
@@ -228,13 +299,72 @@ export function atmosphereFromPlanet(gameAtmosphere) {
 // that survived review; a provenance record is the only mechanism that would have named any of them
 // at the moment it happened, rather than two steps later against the wrong suspect.
 //
-// THE 13 INPUTS are exactly the fields this adapter reads off `planetData` to build the fp. The
-// count is asserted in tests/port-condition-contract.test.js so that adding a fourteenth input
-// without a provenance entry fails loudly instead of creating a blind spot.
-export const PROVENANCE_INPUTS = Object.freeze([
-  'radiusEarth', 'massEarth', 'composition', 'age', 'T_eq', 'eccentricity', 'tidalState',
-  'atmosphere', 'surfaceHistory', 'rotationHours', 'magneticField', 'habitability', 'axialTilt',
-]);
+// ⛔ WHAT THIS BLOCK USED TO SAY, AND WHY IT WAS RETIRED — the same failure it exists to prevent.
+// It read: "THE 13 INPUTS are exactly the fields this adapter reads off `planetData` … The count is
+// asserted in tests/port-condition-contract.test.js so that adding a fourteenth input without a
+// provenance entry fails loudly instead of creating a blind spot." BOTH HALVES WERE FALSE, and they
+// were false in this codebase's signature shape — entirely true-looking, entirely misleading:
+//   · ALREADY FALSE WHEN WRITTEN. The fp literal below reads a FOURTEENTH field, `comp.carbonToOxygen`,
+//     and forwards it. `Object.keys(_provenance).length` was 13.
+//   · THE FENCE WAS SELF-REFERENTIAL. The test asserted `PROVENANCE_INPUTS.length === 13` and
+//     `Object.keys(p) === PROVENANCE_INPUTS` — both sides derived from THIS constant, and nothing
+//     read the adapter. MEASURED: injecting Step 2's own next read (`starMassEarth: d.starMassEarth`,
+//     PLAN.md:205) into the fp literal left all 47 contract tests GREEN. A fence that cannot fail is
+//     a comment with a test-shaped costume on.
+//
+// ⚠ THE FOURTEENTH INPUT IS NOT HYPOTHETICAL AND NOT INERT — that is why it is called out rather
+// than quietly added. `carbonToOxygen` is read TODAY by two shipped consumers, and its ABSENCE is a
+// claim, not a silence, because both supply `?? 0` and 0 means "definitively not a carbon world":
+//   · surfaceMaterial.js:335 — inside `surfacePaletteOf`, one of the FIVE BAKES PlanetGenerator
+//     writes onto the body record. Measured on a C/O 1.2 body: dropping the field moves `fresh` from
+//     [0.088, 0.085, 0.084] (graphite dark) to [0.197, 0.185, 0.168] — 2.2× brighter, and every other
+//     palette slot with it.
+//   · e1Regime.js:68 `compositionClass` — which body-condition-vector.js:107 uses to pick WHICH
+//     mass-radius law `gravityRadiusRatio` applies. Measured: the class flips 'carbon' → 'rocky' and
+//     the lab route's `surfaceGravity` at 1.6× drawn radius moves +38.96%.
+// Population, measured over the contract test's corpus: 526/526 generated planets carry it, 12/411
+// moons do, 0/39 Sol bodies do, and 1/18 lab presets does. So on Sol and on 97% of moons the engine
+// is already reading a fabricated 0 for it, and the record that exists to name fabrications was silent.
+//
+// ── HOW THE FENCE WORKS NOW: THE INPUT LIST IS DERIVED FROM THIS FILE'S SOURCE TEXT. ──────────────
+// PROVENANCE_COVERAGE maps each provenance entry to the EXACT property reads it accounts for.
+// tests/port-condition-contract.test.js strips this file's comments and strings, extracts
+// `conditionFromPlanet`'s function body by brace-matching, collects every `d.<field>` / `comp.<field>`
+// in it, and asserts that set equals the union of the values below. The two sides of that comparison
+// are now the ADAPTER'S CODE and this DECLARATION — not one constant compared with itself.
+//
+// ⛔ SO: ADD A READ, ADD A ROW. If a later step reads a new field off `planetData` (Step 2 adds
+// `d.tidalHeating`, `d.starMassEarth`, `d.orbitRadiusEarth` — PLAN.md:205) and does not add it here
+// with a `provenanceOf` entry to match, the contract test goes RED naming the field. That is proven
+// by injection, not asserted: the test carries a CONTROL that runs the same extractor over a
+// synthetic adapter with an extra read and requires it to be found.
+//
+// ⚠ WHY `composition` IS A COMPOUND ROW AND `carbonToOxygen` IS ITS OWN. The three fields the
+// density/iron/volatile gate reads are a unit — a body with iron and volatiles but no density is the
+// fabrication case, and one 'defaulted' for the group is the honest answer. `carbonToOxygen` is NOT
+// part of that unit: it is absent on bodies whose other three are fully measured (every Sol body,
+// 399 of 411 moons), and folding it into the group's all-present rule would flip those to 'defaulted'
+// for a reason that has nothing to do with density. It gets its own row so it can be answered on its
+// own terms.
+export const PROVENANCE_COVERAGE = Object.freeze({
+  radiusEarth:    Object.freeze(['d.radiusEarth']),
+  massEarth:      Object.freeze(['d.massEarth']),
+  composition:    Object.freeze(['d.composition', 'comp.ironFraction', 'comp.density', 'comp.volatileFraction']),
+  carbonToOxygen: Object.freeze(['comp.carbonToOxygen']),
+  age:            Object.freeze(['d.age']),
+  T_eq:           Object.freeze(['d.T_eq']),
+  eccentricity:   Object.freeze(['d.eccentricity']),
+  tidalState:     Object.freeze(['d.tidalState']),
+  atmosphere:     Object.freeze(['d.atmosphere']),
+  surfaceHistory: Object.freeze(['d.surfaceHistory']),
+  rotationHours:  Object.freeze(['d.rotationHours']),
+  magneticField:  Object.freeze(['d.magneticField']),
+  habitability:   Object.freeze(['d.habitability']),
+  axialTilt:      Object.freeze(['d.axialTilt']),
+});
+
+/** The provenance entry names, derived from the coverage map so the two can never disagree. */
+export const PROVENANCE_INPUTS = Object.freeze(Object.keys(PROVENANCE_COVERAGE));
 
 /**
  * 'measured' — the game handed this seam a value for this input, on this body.
@@ -251,6 +381,12 @@ export const PROVENANCE_INPUTS = Object.freeze([
  *    and MoonGenerator.js:192 set it outright to mean "nothing retained", and the engine's airless
  *    presets agree. `undefined` means the body never said. And a visual-only `{color, strength}`
  *    wrapper — the moon bug above — is 'defaulted', because it looks like an answer and is not one.
+ *
+ *  · `carbonToOxygen` is 'defaulted' when the body carries none, and that is a LOUDER statement than
+ *    it looks. The adapter deliberately omits the key rather than inventing one (the conditional
+ *    spread in the fp literal), so the fabrication happens one step later, in the two consumers'
+ *    `?? 0` — and 0 is not "unknown", it is "definitively not a carbon world". Sol reads that way on
+ *    39/39 bodies. This row is the only place that fact is recorded.
  */
 function provenanceOf(d, comp) {
   const seen = (v) => (v != null ? 'measured' : 'defaulted');
@@ -259,6 +395,7 @@ function provenanceOf(d, comp) {
     massEarth:      seen(d.massEarth),
     composition:    (comp.ironFraction != null && comp.density != null && comp.volatileFraction != null)
       ? 'measured' : 'defaulted',
+    carbonToOxygen: seen(comp.carbonToOxygen),
     age:            seen(d.age),
     T_eq:           seen(d.T_eq),
     eccentricity:   seen(d.eccentricity),
@@ -341,7 +478,11 @@ export function conditionFromPlanet(planetData) {
     // cannot rot into folklore.
     magneticField: d.magneticField,          // D13 — the vector has declared this key since V2-0
     habitability:  habitabilityScalarOf(d.habitability), // ⚠ SCALAR out of {score,factors} — see the block above
-    axialTilt:     axialTiltDegreesOf(d.axialTilt),      // ⚠ DEGREES out of RADIANS in — see the block above
+    // ⚠ TWO transforms, not one, and they are separate on purpose: DEGREES out of RADIANS
+    // (the unit), then folded to the [0,90] EFFECTIVE OBLIQUITY the laws' `clamp01(x/90)`
+    // assumes (the domain). Merging them would hide a twice-applied conversion — see both
+    // blocks above.
+    axialTilt:     effectiveObliquityDegreesOf(axialTiltDegreesOf(d.axialTilt)),
   };
   const condition = deriveConditionVector(fp, null, fp.radiusEarth);
 

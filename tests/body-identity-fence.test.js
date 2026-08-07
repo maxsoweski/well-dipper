@@ -94,7 +94,8 @@ const BULK_SEEDS = Array.from({ length: 192 }, (_, i) => `wd-${i}`);
 
 const PINNED_SEEDS = [
   // Rare planet types. Each is its own branch in `cloudChance`/`ringChance`/
-  // `maxMoonsByType` (PlanetGenerator.js:516-531, :539-551, :585-594), so each
+  // `maxMoonsByType` (PlanetGenerator.js:516 `const cloudChance = {`, :539 `const ringChance = {`,
+  // :587 `const maxMoonsByType = {`), so each
   // is its own draw pattern.
   ['wd-356', 'type: shattered'],
   ['wd-395', 'type: fungal'],
@@ -137,7 +138,10 @@ const GALAXY_POSITIONS = Array.from({ length: 24 }, (_, i) => {
 
 /**
  * The five `planetData` fields that are NOT drawn — they are computed by the
- * world-engine port from `conditionFromPlanet(...)` at PlanetGenerator.js:725-756.
+ * world-engine port, in PlanetGenerator.generate — grep `const condition = conditionFromPlanet(planetData)`
+ * and the `planetData.<field> =` assignments under it. (No line number on purpose: that region is
+ * rewritten by every step of one-pipeline-two-frontends-PLAN.md, and it moved on 2026-08-07 when the
+ * bake route stopped passing a hand-picked nine-key subset. See §10 of that plan.)
  *
  * They are excluded ON PURPOSE, and the exclusion is the difference between an
  * instrument and a nuisance. Plan Step 2 forwards the real tidal heating and
@@ -313,8 +317,9 @@ function classesOfSystem(s, into) {
   if (moons.some((m) => m.type === 'captured' && m.orbitSpeed > 0)) into.add('captured-prograde');
   if (moons.some((m) => m.type === 'terrestrial')) into.add('terrestrial-moon');
   if (moons.some((m) => m.isPlanetMoon)) into.add('planet-class-moon');
-  // `atmosphere === null` ⟺ `atmoPhysics.retained === false` (PlanetGenerator.js:449),
-  // which is the ONLY way PlanetGenerator.js:526's `&&` short-circuits.
+  // `atmosphere === null` ⟺ `atmoPhysics.retained === false` (PlanetGenerator.js:449
+  // `if (atmoPhysics.retained) {`), which is the ONLY way PlanetGenerator.js:526
+  // `const hasClouds = atmoPhysics.retained && rng.chance(cloudChance[type] || 0);` short-circuits.
   if (pds.some((p) => !p.atmosphere)) into.add('atmosphere-null');
   if (pds.some((p) => p.clouds)) into.add('clouds');
   if (pds.some((p) => p.rings)) into.add('rings');
@@ -530,7 +535,8 @@ describe('Instrument B — body-identity hash (generation-order fence)', () => {
   // "A gate that has never failed is not a gate." (plan, Step 0 gate)
   //
   // The plan's manual version is: insert a throwaway `rng.range(0,1)` before
-  // PlanetGenerator.js:526 and confirm B goes red. That needs a production edit.
+  // PlanetGenerator.js:526 `const hasClouds = atmoPhysics.retained && rng.chance(cloudChance[type] || 0);`
+  // and confirm B goes red. That needs a production edit.
   // This does the same thing from inside the test — the wrapper burns one extra
   // value out of the Alea stream at a chosen draw index, which is bit-for-bit
   // what an added `rng.range(0,1)` would do — so the proof runs on every CI run
