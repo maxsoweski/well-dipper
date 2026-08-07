@@ -42,7 +42,7 @@ export function makeUniforms(WORLD_LIGHT) {
       uSpecBypass:     { value: 0 },
       uLimbBypass:     { value: 0 },
       // ── F34 limb glow (driver-true rim — card §6.5 step 2) ──
-      uLimbColor:      { value: new THREE.Color(0.45, 0.65, 1.0) },  // F34 rim tint (driven: per-preset map, fallback uBaseColor)
+      uLimbColor:      { value: new THREE.Color(0.45, 0.65, 1.0) },  // F34 rim tint (driven: per-preset map, fallback uWeatheredColor)
       uLimbExponent:   { value: 3.5 },   // F34 fresnel width (driven: thin clear ~3.5 / thick-haze ~1.8)
       // ── F35 terminator color gradient (driver-true twilight band — card §6.5 step 2) ──
       uTermColor:      { value: new THREE.Color(1.0, 0.45, 0.18) }, // F35 band tint (driven: per-preset map, fallback warm orange)
@@ -135,10 +135,10 @@ export function makeUniforms(WORLD_LIGHT) {
       uEcuWarpAmt:        { value: 0.30 },                                 // F49 domain-warp amount (organic block network)
       uTime:           { value: 0.0 },   // animation clock (driven from frame())
       uLightDir:     { value: new THREE.Vector3().copy(WORLD_LIGHT) },
-      uBaseColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },  // WEATHERED ground endmember (driven: surfacePaletteOf(cond).weathered; the factory value is the pre-derivation rocky tone)
+      uWeatheredColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },  // WEATHERED ground endmember (driven: surfacePaletteOf(cond).weathered; the factory value is the pre-derivation rocky tone). ⭐ NAME UNIFIED 2026-08-06 — was `uBaseColor` here while the game said `uWeatheredColor` (Planet.js:30) for the SAME value; the game spelling won because it names the endmember, not a ramp position. ⛔ Do not reintroduce `uBaseColor`: the game's legacy record field `baseColor` (PlanetGenerator.js:772) is a DIFFERENT quantity the u-prefix rule would wrongly pair with it. Full record + the fence that catches a re-divergence: UNIFIED NAMES in tools/port-uniform-delta.mjs.
       // Terrain-material palette — the other two ground endmembers the Stage-6 albedo selects between per pixel
       // using local slope + elevation. Body condition picks the PALETTE; local geology picks WHERE IN IT a pixel
-      // sits. uTerrainAlbedoMix = 0 collapses the whole thing back to the single uBaseColor (regression-safe).
+      // sits. uTerrainAlbedoMix = 0 collapses the whole thing back to the single uWeatheredColor (regression-safe).
       uFreshColor:   { value: new THREE.Color(0.46, 0.40, 0.34) },  // unaltered bedrock — what steep slopes expose
       uSedColor:     { value: new THREE.Color(0.46, 0.40, 0.34) },  // transported fines — accumulates on flat lows
       uTerrainAlbedoMix: { value: 1.0 },   // 0..1 master dial on the terrain-driven ground palette

@@ -605,7 +605,7 @@ Consequences, all of which resequence this program:
 
 Let `cond = conditionFromPlanet(p)`. Full catalogue: 77 uniform writes, recon 2026-08-01.
 
-1. ⭐ **`uBaseColor` + `uFreshColor` + `uSedColor` + `uCratonColor` + `uBioGroundColor`** — THE
+1. ⭐ **`uWeatheredColor` + `uFreshColor` + `uSedColor` + `uCratonColor` + `uBioGroundColor`** — THE
    flat-orange fix, **one module call for five uniforms, no shader change**. All four factory-default
    to the *identical* `THREE.Color(0.46, 0.40, 0.34)`, and `uTerrainAlbedoMix` already defaults 1.0,
    so the palette path is live and simply has four copies of one brown to blend.

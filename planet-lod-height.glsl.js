@@ -34,7 +34,7 @@ export const HEIGHT_GLSL = /* glsl */ `
       uniform int   uSpecBypass;
       uniform int   uLimbBypass;
       // ── F34 limb glow (card F34 — driver-true rim) ──
-      uniform vec3  uLimbColor;     // F34 rim tint (driven: per-preset atmosphere hue; pre-F34 the rim reused uBaseColor)
+      uniform vec3  uLimbColor;     // F34 rim tint (driven: per-preset atmosphere hue; pre-F34 the rim reused uWeatheredColor)
       uniform float uLimbExponent;  // F34 fresnel width (driven: ~3.5 thin clear blue line, ~1.8 thick-haze halo; always > 0)
       // ── F35 terminator color gradient (card F35 — the F34 rim's twilight half) ──
       uniform vec3  uTermColor;     // F35 band tint (driven: per-preset hue map — warm n2-o2, broad orange Venus, cooler cold-haze)
@@ -88,7 +88,7 @@ export const HEIGHT_GLSL = /* glsl */ `
       uniform float uEcuWarpAmt;         // F49 domain-warp amount (bends the block network organic)
       uniform float uTime;            // animation clock (clouds drift, aurora rays)
       uniform vec3  uLightDir;      // object-space light dir
-      uniform vec3  uBaseColor;
+      uniform vec3  uWeatheredColor;
       uniform vec3  uFreshColor;        // unaltered-bedrock ground endmember (steep slopes strip to it)
       uniform vec3  uSedColor;          // transported-fines ground endmember (flat lows accumulate it)
       uniform float uTerrainAlbedoMix;  // 0..1 dial; 0 ⇒ single-colour ground (pre-palette behaviour)

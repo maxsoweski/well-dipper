@@ -173,7 +173,7 @@
     import { presetDriverDefaults, buildNeutralBodyDrivers } from './body-drivers.js';   // V2-0 Slice A: neutral (no-slider-override) driver construction the lab overlays overrides on (presetDriverDefaults also used by resetDriverOverrides)
     import { deriveConditionVector } from './body-condition-vector.js';   // V2-0 Slice C: pure _fp→condition vector, attached NESTED as bodyDrivers.condition (shadow-mode; V2-1 E1 read surface; SAME derive the headless AC1 harness uses)
     import { computeE1 } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment).
-    import { icenessOf, surfacePaletteOf, biosphereOf, BIO_PIGMENT } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3: condition-derived icy-material fraction → drives uIcenessMix (Stage-6 albedo). Pure scalar, imports nothing. · surfacePaletteOf: condition-derived GROUND PALETTE {fresh, weathered, sediment} → drives uFreshColor/uBaseColor/uSedColor (was a single hard-coded rocky tone for all 18 presets, uniform across every world's whole surface).
+    import { icenessOf, surfacePaletteOf, biosphereOf, BIO_PIGMENT } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3: condition-derived icy-material fraction → drives uIcenessMix (Stage-6 albedo). Pure scalar, imports nothing. · surfacePaletteOf: condition-derived GROUND PALETTE {fresh, weathered, sediment} → drives uFreshColor/uWeatheredColor/uSedColor (was a single hard-coded rocky tone for all 18 presets, uniform across every world's whole surface).
     import { applyAlbedoTransfer } from './src/worldengine/display/albedoTransfer.js';   // the albedo DISPLAY transfer, shared with the game port (one copy, by design — see that file's header).
     import { atmosphereOpticsOf } from './src/worldengine/base/atmosphereOptics.js';   // V2-7: condition-derived limb/terminator hue -> retires LIMB_COLOR_BY_PRESET + TERM_COLOR_BY_PRESET (the last name-keyed lookups in the colour path). Pure scalar, imports nothing.
     import { craterSchedule, craterRelevanceOf, D_D_SIMPLE } from './src/worldengine/base/bombardment.js';   // inc3b S3-fix: schedule-derived single crater law (sub-floor texture band) + the condition-derived crater/ejecta relevance gate (replaces the preset-name featureRelevant.craters lookup). e1-blind, pure.
@@ -1048,7 +1048,7 @@
       emissionRegister: true, // #2 slice-2: master emission register gate (AND-ed with the day/night enables at the per-frame uThermalStrength writer)
       limbEnabled: false,    // F34 enable gate — off zeroes uLimbStrength AND hides the F31e haze shell at the per-frame writer
       limbExponent: 3.5,    // F34 fresnel width (driven: thin clear ~3.5 narrow blue line / thick-haze ~1.8 fat halo)
-      limbColor: [0.45, 0.65, 1.0],  // F34 rim tint (driven: per-preset map, fallback uBaseColor)
+      limbColor: [0.45, 0.65, 1.0],  // F34 rim tint (driven: per-preset map, fallback uWeatheredColor)
       limbHazeShell: 0.0,   // F31e detached-shell intensity (driven: > 0 ONLY on the thick-haze class — Titan/Venus/Sub-Neptune)
       terminatorEnabled: false, // F35 enable gate — off zeroes uTermStrength at the per-frame writer (razor colorless terminator)
       termStrength: 0.0,    // F35 band strength (driven: ~0.5 on every retained atmosphere / 0 airless)
@@ -1260,7 +1260,7 @@
       frostLocked: 0,
       iceness: 0,   // V2-6 S3: condition-derived icy-material fraction (icenessOf(cond)); frame() syncs → uIcenessMix
       biosphere: 0,   // condition-derived photosynthetic ground-cover fraction (biosphereOf(cond)); frame() syncs → uBioGroundCover
-            surfacePalette: null,   // condition-derived ground endmembers {fresh, weathered, sediment} (surfacePaletteOf(cond)); frame() syncs → uFreshColor/uBaseColor/uSedColor. null ⇒ the uniforms keep their factory default (pre-applyDrivers boot frames).
+            surfacePalette: null,   // condition-derived ground endmembers {fresh, weathered, sediment} (surfacePaletteOf(cond)); frame() syncs → uFreshColor/uWeatheredColor/uSedColor. null ⇒ the uniforms keep their factory default (pre-applyDrivers boot frames).
       tempEq: 280.0,
       frostLatChill: 0.35,
       frostLapseRate: 0.3,
@@ -1605,7 +1605,7 @@
     // Derived-vs-authored across all 18 presets: worst single channel 0.10 (limb) / 0.11
     // (terminator), four presets exact. tools/atmosphere-optics-calibrate.mjs prints the table.
     // This also retires the Review-N6 defect the old code carried: a preset with no row fell
-    // back to a possibly-STALE previous-preset uBaseColor read (limb) or a flat warm orange
+    // back to a possibly-STALE previous-preset uWeatheredColor read (limb) or a flat warm orange
     // (terminator), so a NEW body could not get an atmosphere hue without a code edit. There
     // is no fallback now — a drawn body gets a hue from its own physics.
     const driverUI = { preset: 'Rocky (Earthlike)', qualityTier: 1.0 };
@@ -2451,7 +2451,7 @@
       const _thickHaze = _cloudRegime === 2 || _cloudRegime === 3 || _opaqueHaze;  // _opaqueHaze (cold solid tholin world, e.g. Titan) defined at the F26 weather-bands gate above
       state.limbExponent = _thickHaze ? 1.8 : 3.5;
       if (_thickHaze) state.limbStrength = Math.min(1.0, state.limbStrength * 1.3);
-      // Rim hue from the per-preset map; fallback = the uBaseColor rocky tone (the
+      // Rim hue from the per-preset map; fallback = the uWeatheredColor rocky tone (the
       // pre-F34 tint — airless presets land here and stay inert behind strength 0).
       state.limbColor = _atmoOptics.limbColor.slice();
       // F31e detached haze shell: > 0 ONLY for the thick-haze class, and only when
@@ -2678,7 +2678,7 @@
         ? Math.acos(Math.max(0, Math.min(1, Math.pow(MG_LIQUIDUS / _mgTss, 4)))) : 0;
       // F41 stand-in retirement (card §6.5 step 7 — the Lava half; F32 took the
       // hot-jupiter half above): the magma class REPLACES the whole-globe
-      // uBaseColor x uEmissive wash (Lava derived 0.23, K2-141b 0.25 — a uniform
+      // uWeatheredColor x uEmissive wash (Lava derived 0.23, K2-141b 0.25 — a uniform
       // unshaped glow UNDER the masked sea + F8 cracks would double-count, and it
       // lit the whole nightside). Mirrors the F32 _hotJup zeroing exactly:
       // independent of magmaEnabled, so Lava's DEFAULT look changes by design
@@ -2763,10 +2763,10 @@
       // Ground palette, SAME derived-state idiom as state.iceness above. The condition vector picks the three
       // ground endmembers; the shader's Stage 6 picks between them per pixel on local slope + elevation. Replaces
       // the single hard-coded rocky tone that every world and every point on every world used to share.
-      // frame() syncs → uFreshColor / uBaseColor / uSedColor.
+      // frame() syncs → uFreshColor / uWeatheredColor / uSedColor.
       // ⚠ DECLARED DISPLAY TRANSFER — read this before touching the constant.
       // surfacePaletteOf emits TRUE PHYSICAL ALBEDOS (Earthlike land 0.165, Mars 0.251, Moon 0.084 — all matching
-      // observation). This renderer's lighting and its ~48 feature layers were tuned against a uBaseColor of
+      // observation). This renderer's lighting and its ~48 feature layers were tuned against a uWeatheredColor of
       // (0.46, 0.40, 0.34) = linear luminance 0.408, which is ~2.5x brighter than physical Earthlike land. Feeding
       // raw albedo therefore renders Earthlike worlds nearly black — verified live by A/B against this constant.
       // The renderer is not physically exposed, so albedo→display needs a gain. It is applied HERE, render-side,
@@ -5428,7 +5428,7 @@
       uniforms.uBioGroundCover.value = state.biosphere ?? 0.0;   // condition-derived photosynthetic ground cover
       if (state.surfacePalette) {   // condition-derived ground palette (was one constant rocky tone everywhere)
         const _sp = state.surfacePalette;
-        uniforms.uBaseColor.value.setRGB(_sp.weathered[0], _sp.weathered[1], _sp.weathered[2]);
+        uniforms.uWeatheredColor.value.setRGB(_sp.weathered[0], _sp.weathered[1], _sp.weathered[2]);
         uniforms.uFreshColor.value.setRGB(_sp.fresh[0],    _sp.fresh[1],    _sp.fresh[2]);
         uniforms.uSedColor.value.setRGB(_sp.sediment[0],   _sp.sediment[1], _sp.sediment[2]);
         uniforms.uCratonColor.value.setRGB(_sp.craton[0],  _sp.craton[1],   _sp.craton[2]);

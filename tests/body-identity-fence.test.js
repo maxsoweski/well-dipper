@@ -150,6 +150,18 @@ const GALAXY_POSITIONS = Array.from({ length: 24 }, (_, i) => {
  *
  * They are not unwatched: Instrument C (shipped-uniform delta) and Step 2's own
  * committed delta table cover them. `iceColor` is the constant `ICE_ALBEDO`.
+ * ⭐ THAT SENTENCE WAS ONLY HALF TRUE UNTIL 2026-08-06 (review P2). Instrument C
+ * built its watched set by NAME INTERSECTION with the lab's uniforms, so it saw
+ * `landPalette.fresh`/`.sediment` and MISSED `.weathered`, `lavaGlowColor` and
+ * `lavaCrustColor` — the game spells those uWeatheredColor / uLavaGlow / uLavaCrust,
+ * and the lab spelled the first DIFFERENTLY (`uBaseColor`) while not spelling the other
+ * two at all. Three of the four quantities Step 2's own gate names sat outside both
+ * instruments. C now matches by VALUE SOURCE; see THE UNIFORM MAP in
+ * tools/port-uniform-delta.mjs. If you add a bake here, add it there.
+ * ⭐ The drifted spelling was COLLAPSED on 2026-08-06 — the lab now says uWeatheredColor
+ * too, so that pair is name-matched rather than aliased. One value, one name, both
+ * frontends. The other two remain game-only by construction: the lab renders that
+ * emission from an in-shader blackbody, so there is no CPU-side colour uniform to name.
  *
  * The key-shape test below asserts all five are still PRESENT on every live
  * record, so this list can never quietly become a hole.

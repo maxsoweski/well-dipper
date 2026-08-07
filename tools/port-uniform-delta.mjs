@@ -49,11 +49,16 @@
 // game that turns a condition into shipped shader numbers; re-deriving it here would create a
 // second copy of exactly the law this plan is removing, and the copy would drift silently.
 //
-// The shared set is resolved at RUNTIME by intersecting those uniform names against
-// makeUniforms()'s (planet-lod-uniforms.js:8). It is not a hardcoded list — a hardcoded list is
-// how a newly-shared uniform gets silently excluded from its own gate. The plan predicted 27
-// (PLAN.md:61, :158); the tool prints what it actually found and --check fails loudly if the SET
-// changes between record and check.
+// The watched set starts from a RUNTIME name intersection against makeUniforms()'s keys
+// (planet-lod-uniforms.js:8) — 28 names — and is then widened by an EXPLICIT VALUE-SOURCE MAP
+// (see "THE UNIFORM MAP" below). A pure name intersection was the instrument's own blind spot:
+// it watched uFreshColor and uSedColor and MISSED the weathered endmember, which the game spelled
+// uWeatheredColor and the lab spelled uBaseColor, and which is the single largest contributor to a
+// rocky body's surface colour. The tool prints what it actually resolved, prints the COMPOSITION of
+// that set, and --check fails loudly if the SET changes between record and check.
+// ⭐ THE SPELLINGS WERE UNIFIED ON 2026-08-06 (the lab now says uWeatheredColor too), so that one
+// pair is name-matched today — which is why the map still exists rather than being deleted with it:
+// the map is what makes a RE-divergence loud instead of silent. See UNIFIED NAMES below.
 //
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 // WHAT THIS TOOL DELIBERATELY DOES NOT DO
@@ -287,31 +292,345 @@ function flatten(v) {
   }
 }
 
-// Resolve the shared set. ⛔ makeUniforms() is consulted for KEYS and for a KIND tag only — no
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// THE UNIFORM MAP — match by VALUE SOURCE, not by SPELLING  (adversarial review P2, 2026-08-06)
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// The first version of this tool built its watched set by NAME INTERSECTION alone: 27 of the
+// game's 71. That is a matching key made of SPELLING, and the same world-engine value carried
+// under two different spellings was invisible to it. Not hypothetically:
+//
+//   `surfacePaletteOf` (src/worldengine/base/surfaceMaterial.js:302-314) returns FOUR endmembers
+//   {fresh, weathered, craton, sediment}. The lab wrote three of them to
+//   uFreshColor / uBaseColor / uSedColor (planet-lod-lab.html:5431-5433, and the import comment
+//   at :176 said so). The GAME wrote the same three to
+//   uFreshColor / uWeatheredColor / uSedColor (src/objects/Planet.js:1600-1602).
+//   Same function, same call, same body — and because the middle one was spelled differently,
+//   uFresh and uSed were watched and the WEATHERED one was not. uWeatheredColor is the largest
+//   single contributor to a rocky body's surface colour (Planet.js:692 highland, :769/:785 base).
+//   ⭐ PAST TENSE SINCE 2026-08-06: the drifted name was collapsed onto the game's spelling, so the
+//   lab writes uWeatheredColor too and this pair is now NAME-MATCHED. The history is kept because
+//   the map's job did not end with it — see UNIFIED NAMES below for what still guards the pair.
+//
+// That mattered immediately. PLAN.md:212 (Step 2's gate) names four moving quantities —
+// `landPalette`, `iceness`, `lavaGlowColor`, `lavaCrustColor`. THREE of the four reach the screen
+// through uniforms the name intersection never compared: uWeatheredColor, uLavaGlow, uLavaCrust.
+// Step 2's primary gate could have run green over its own declared subject.
+//
+// ── THE RULE (what gets watched, and why) ───────────────────────────────────────────────────
+// A game uniform is WATCHED if its construction-time value is a function of THIS BODY — its
+// record, its condition, or a game-side constant that gates world-engine output. Four tiers,
+// printed next to every row, because they are not equally strong evidence:
+//
+//   bake      Reads one of the five WORLDENGINE_BAKES fields on planetData. Those five are
+//             DELIBERATELY EXCLUDED from the body-identity fingerprint (see the block above and
+//             tests/body-identity-fence.test.js:169), so a delta row is the ONLY thing that can
+//             see them move. Highest-value tier. Step 2's whole gate lives here.
+//   condition Computed inside Planet._createSurface from conditionFromPlanet(d) — never on the
+//             record at all. Same property: the delta row is the only detector.
+//   gate      A Planet.js module constant that multiplies or mixes world-engine output
+//             (uReliefMix at Planet.js:591, uLimbMix at :527/:535, uCraterReliefGain at :320,
+//             uReliefNormalGain at :323). Constant across the population by construction, so the
+//             sensitivity table will correctly call it ⛔ CONSTANT — and that is exactly the
+//             claim wanted: a zero delta here proves the safety dial held. Flip RELIEF_MIX to 0
+//             and every shipped relief pixel vanishes while all 20+ condition-derived uniforms
+//             still read perfectly correct.
+//   record    Reads a DRAWN planetData field. ⚠ FINGERPRINT-SHADOWED, and this is the honest
+//             caveat the tool must state about itself: a change to the RECORD moves the body's
+//             fingerprint, which EXCLUDES that body from the delta table, so the row prints
+//             0.000000e+0 while the structural channel prints POPULATION MISMATCH. That row is
+//             entirely true and entirely misleading if read alone. It is still worth watching,
+//             because it DOES catch the other half — a change to how Planet.js READS the record
+//             (a fallback, a unit, a swapped field) moves the uniform without moving the record.
+//             The verdict block reprints this caveat whenever the population is not identical.
+//
+// A game uniform is EXCLUDED only for one of two reasons, and each one is named per uniform in
+// UNWATCHED below. No uniform is dropped silently — see the completeness fence at the bottom of
+// resolveSharedUniforms(), which REFUSES TO RUN if any of the game's uniforms is unclassified.
+//
+// ── WHAT THE LAB NAME IS FOR, AND WHAT IT IS NOT ────────────────────────────────────────────
+// ⛔ Every comparison stays SAME-TREE game-vs-game. The `lab` field on an alias is documentation
+// plus a typo fence (the lab name must exist in makeUniforms()); no lab VALUE is ever differenced
+// against a game value. Plan §6 risk 5, PLAN.md:548. An alias with `lab: null` is watched
+// game-side-only, which is the same valid comparison with one less cross-reference.
+
+// ── UNIFIED NAMES — pairs that WERE aliases and are now one spelling ─────────────────────────
+// Documentation only, no behaviour, and deliberately NOT an ALIASES row: once the two frontends
+// agree on a spelling the uniform is name-matched, and the fence at resolveSharedUniforms() below
+// rejects an alias for a name-matched uniform as the contradiction it is (exit 2).
+//
+// ⭐ WHAT STILL GUARDS THE PAIR, now that the alias row is gone. If anyone ever renames the LAB
+// side back — or renames the game side — `uWeatheredColor` stops being name-matched while it is
+// still on the production material, it lands in NONE of the four buckets, and the COMPLETENESS
+// FENCE stops this tool dead with "UNCLASSIFIED game uniform(s): uWeatheredColor" and exit 2.
+// That is a strictly LOUDER failure than the alias row it replaced: an alias whose `lab` name went
+// missing was also fenced, but a re-divergence that renamed BOTH sides in step would have satisfied
+// the alias and gone unnoticed. Verified by negative control 2026-08-06 — renaming the lab uniform
+// back to uBaseColor and running --list exits 2 on exactly that message.
+const UNIFIED_NAMES = [
+  {
+    name: 'uWeatheredColor', wasLab: 'uBaseColor', unifiedOn: '2026-08-06', tier: 'bake',
+    why: 'surfacePaletteOf(cond).weathered through applyAlbedoTransfer. Game: Planet.js:1601 reads '
+       + 'planetData.landPalette.weathered, baked at PlanetGenerator.js:735-737. Lab: '
+       + 'planet-lod-lab.html:5431 writes the same endmember from the same call at :2794. '
+       + 'THE PROVEN CASE — this is the alias the name intersection missed, and the drift PLAN.md §2 '
+       + 'names as the shape every other divergence started in. The game spelling won: it names the '
+       + 'ENDMEMBER rather than a position in a ramp. Zero behaviour change — Instrument C reported '
+       + '0/526 on all 55 watched uniforms across the rename.',
+  },
+];
+
+/** game name ↔ lab name, SAME world-engine value under two spellings. */
+const ALIASES = [
+  {
+    game: 'uIceColor', lab: 'uIcenessAlbedo', tier: 'bake',
+    why: 'ICE_ALBEDO [0.86,0.90,0.95] (surfaceMaterial.js:228). Game: Planet.js:1608 reads '
+       + 'planetData.iceColor, set at PlanetGenerator.js:762. Lab: planet-lod-uniforms.js:278 '
+       + 'carries the identical triple as "icy-surface tint the rock ramp mixes toward". Same '
+       + 'constant, same role, two names. A constant TODAY — which is precisely why it needs a '
+       + 'row: the moment anyone makes it condition-derived, nothing else would notice.',
+  },
+  {
+    game: 'uReliefOctaves', lab: 'uOctaves', tier: 'gate',
+    why: "fbmd's octave count, both 4.0. Game: Planet.js:591 `fbmd(pos, uReliefOctaves, 0.0)`. "
+       + 'Lab: planet-lod-height.glsl.js:23 declares uOctaves as "effective octave count" and '
+       + 'feeds it to the same fbmd family (:1480, :3209). Same argument to the same function.',
+  },
+  {
+    game: 'noiseScale', lab: 'uNoiseScale', tier: 'record',
+    why: 'MANY-TO-ONE, and deliberately so. The game declares the base feature frequency TWICE '
+       + 'from one expression — `noiseScale` (Planet.js:1613, the legacy simplex stack) and '
+       + '`uNoiseScale` (:1653, fbmd), both `d.noiseScale`. Only the second was watched. Watching '
+       + 'both is the only way a divergence BETWEEN the two paths becomes visible; a tool that '
+       + 'watches one of a matched pair reports a green that means nothing about the other.',
+  },
+  // ── F37 aurora. Four pairs, u-prefix aside identical spellings, and the plan (§2) records them
+  //    as TWO DIVERGENT LAWS today (PlanetGenerator.js:490-503 vs planet-lod-lab.html:2585-2611,
+  //    under a lab comment claiming it mirrors the game). They are the same FEATURE and the same
+  //    slot in the shader; they are not yet the same law. Watched game-side, `record` tier — see
+  //    the fingerprint-shadow caveat above. Listed here rather than left off so that when Step 4+
+  //    unifies the law, the rows already exist and the movement is measured, not discovered.
+  { game: 'auroraColor',     lab: 'uAuroraColor',     tier: 'record', why: 'F37 emission colour — planetData.aurora.color (PlanetGenerator.js:490-503) ↔ planet-lod-uniforms.js:58.' },
+  { game: 'auroraIntensity', lab: 'uAuroraIntensity', tier: 'record', why: 'F37 ring strength — planetData.aurora.intensity ↔ planet-lod-uniforms.js:57.' },
+  { game: 'auroraRingLat',   lab: 'uAuroraRingLat',   tier: 'record', why: 'F37 oval magnetic latitude — planetData.aurora.ringLatitude ↔ planet-lod-uniforms.js:59.' },
+  { game: 'auroraRingWidth', lab: 'uAuroraRingWidth', tier: 'record', why: 'F37 oval half-width — planetData.aurora.ringWidth ↔ planet-lod-uniforms.js:60. The lab floors it at 0.07; the game does not. This is the §2 drift row.' },
+];
+
+/** Game uniforms with NO lab counterpart at all. Watched game-side-only (before vs after). */
+const GAME_ONLY_WATCHED = [
+  // ── The two remaining Step 2 bakes. No lab counterpart EXISTS: the lab renders F32/F33/F41
+  //    emission from an in-shader blackbody driven by uThermalTempK / uNightTempK / uMagmaTemp
+  //    (planet-lod-uniforms.js:78, :455-460), never as a CPU-side colour uniform. The game bakes
+  //    the colour on the CPU instead (emissiveBlackbody at PlanetGenerator.js:755-756). Same law,
+  //    different side of the CPU/GPU line — so there is no name to alias, and game-side-only is
+  //    the correct and complete answer.
+  { game: 'uLavaGlow',  tier: 'bake', why: 'planetData.lavaGlowColor = emissiveBlackbody(meltTemperatureOf(cond)), PlanetGenerator.js:755 → Planet.js:1609. Named in Step 2\'s gate (PLAN.md:212).' },
+  { game: 'uLavaCrust', tier: 'bake', why: 'planetData.lavaCrustColor = emissiveBlackbody(crustTemperatureOf(cond)), PlanetGenerator.js:756 → Planet.js:1610. Named in Step 2\'s gate (PLAN.md:212).' },
+
+  // ── Gates on world-engine output. Constants, watched as dials (see the `gate` tier above).
+  { game: 'uLimbMix',          tier: 'gate', why: 'LIMB_MIX (Planet.js:1401). Planet.js:527 `pow(fresnel, mix(3.0, uLimbExponent, uLimbMix))` and :535 mix onto uLimbColor — at 0.0 the entire condition-derived limb is off while uLimbExponent/uLimbColor still read correct.' },
+  { game: 'uReliefMix',        tier: 'gate', why: 'RELIEF_MIX (Planet.js:1328). Planet.js:591 gates fbmd entirely: `(uReliefMix > 0.001) ? fbmd(...) : vec4(0.0)`.' },
+  { game: 'uReliefGain',       tier: 'gate', why: 'RELIEF_GAIN 3.648 (Planet.js:1335), the measured fbmd→legacy spread match. The land/sea threshold sits on it; an unmatched gain drowns or beaches every continent.' },
+  { game: 'uReliefGainCont',   tier: 'gate', why: 'RELIEF_GAIN_CONT 3.744 (Planet.js:1336), the terrestrial-continent spread match.' },
+  { game: 'uReliefNormalGain', tier: 'gate', why: 'RELIEF_NORMAL_GAIN 39.24 (Planet.js:1375) — a deliberate 6× exaggeration, calibrated on deflection angle over 60 bodies. Planet.js:323.' },
+  { game: 'uCraterReliefGain', tier: 'gate', why: 'CRATER_RELIEF_GAIN 1.0 (Planet.js:1391), separate from uReliefNormalGain ON PURPOSE so craters do not inherit its 6×. Planet.js:320.' },
+
+  // ── Legacy pre-world-engine record fields. These are the "R" rows of the MVP table (PLAN.md
+  //    §3) — the things the port is scheduled to REPLACE. `record` tier, fingerprint-shadowed.
+  //    Watched because the replacement itself is a shipped-pixel move that ought to be measured
+  //    when it happens rather than discovered afterwards.
+  { game: 'baseColor',          tier: 'record', why: 'planetData.baseColor = palette.base (PlanetGenerator.js:772). ⚠ NOT the lab\'s uBaseColor — see COLLISIONS below.' },
+  { game: 'accentColor',        tier: 'record', why: 'planetData.accentColor = palette.accent (PlanetGenerator.js:773). The legacy per-type accent; also the fallback for uLavaGlow/uLavaCrust.' },
+  { game: 'noiseDetail',        tier: 'record', why: 'planetData.noiseDetail = rng.range(0.3,0.8) (PlanetGenerator.js:780). Legacy simplex detail weight; no lab counterpart.' },
+  { game: 'planetRadius',       tier: 'record', why: 'planetData.radius (scene-scaled by toSceneData). ⚠ NOT the lab\'s uBodyRadius, which is 1.0 in the lab\'s own unit-sphere units — different quantity, do not alias.' },
+  { game: 'planetType',         tier: 'record', why: 'Planet._typeIndex() over planetData.type — the type branch the world-engine port exists to retire.' },
+  { game: 'hasClouds',          tier: 'record', why: 'planetData.clouds presence gate.' },
+  { game: 'cloudColor',         tier: 'record', why: 'planetData.clouds.color. Lab F31 haze/cloud colour is uHazeColor, driven by a DIFFERENT law (preset atmosphere colour) — a semantic neighbour, not the same value. Not aliased.' },
+  { game: 'cloudDensity',       tier: 'record', why: 'planetData.clouds.density. Lab uCloudCoverage is driven by deriveUniforms from condition — same concept, different source. Not aliased.' },
+  { game: 'cloudScale',         tier: 'record', why: 'planetData.clouds.scale × the toSceneData ratio (main.js:6110-6118).' },
+  { game: 'atmosphereStrength', tier: 'record', why: 'planetData.atmosphere.strength — the legacy rim magnitude uLimbMix blends against.' },
+  { game: 'atmosphereColor',    tier: 'record', why: 'planetData.atmosphere.color — the PRE-PORT rim tint; Planet.js:535 mixes from it toward the condition-derived uLimbColor.' },
+  { game: 'hasAurora',          tier: 'record', why: 'planetData.aurora presence gate. Lab has no counterpart gate (it gates on uAuroraIntensity), so game-side-only rather than aliased.' },
+];
+
+/**
+ * Game uniforms deliberately NOT watched, each with the reason. Nothing is dropped silently:
+ * the completeness fence below refuses to run if a game uniform appears in none of the buckets.
+ */
+const UNWATCHED = [
+  // X1 — RUNTIME. The renderer overwrites these every frame AFTER construction, so the value this
+  // harness reads is a placeholder that never reaches a pixel. Recording it would assert the
+  // stability of a number the game does not ship, which is a green with no subject.
+  { game: 'lightDir',            reason: 'runtime', why: 'overwritten per frame — src/main.js:9767 `entry.planet._lightDir.copy(_sunDir)` (also :7364, :9796).' },
+  { game: 'lightDir2',           reason: 'runtime', why: 'overwritten per frame — src/main.js:9773 (binary companion); constructed as (0,0,0).' },
+  { game: 'time',                reason: 'runtime', why: 'animation clock — Planet.js:1914-1918 `mat.uniforms.time.value += renderDt`.' },
+  { game: 'lodLevel',            reason: 'runtime', why: 'LOD tier — src/rendering/objects/BodyRenderer.js:181.' },
+  { game: 'starPos1',            reason: 'runtime', why: 'star world position — src/main.js:9832.' },
+  { game: 'starPos2',            reason: 'runtime', why: 'second-star world position — src/main.js:11147 block.' },
+  { game: 'shadowMoonCount',     reason: 'runtime', why: 'eclipse casters — src/main.js:9837-9841, rewritten every frame.' },
+  { game: 'shadowMoonPos',       reason: 'runtime', why: 'eclipse casters — src/main.js:9841.' },
+  { game: 'shadowMoonRadius',    reason: 'runtime', why: 'eclipse casters — src/main.js:9837 block.' },
+  { game: 'shadowPlanetCount',   reason: 'runtime', why: 'eclipse casters — src/main.js:9899 block.' },
+  { game: 'shadowPlanetPos',     reason: 'runtime', why: 'eclipse casters — src/main.js:9899 block.' },
+  { game: 'shadowPlanetRadius',  reason: 'runtime', why: 'eclipse casters — src/main.js:9899 block.' },
+
+  // X2 — HARNESS-BLIND. These come from `starInfo`, the SECOND constructor argument
+  // (Planet.js:1519 `constructor(planetData, starInfo = null)`), which this harness never passes —
+  // it builds `new Planet(rec)` with one argument, on purpose, because the population is bodies
+  // and not systems. So every body would record the `|| [1,1,1]` / `?? 1.0` fallback at
+  // Planet.js:1527-1530. A row asserting that a fallback stayed constant is a green about the
+  // harness, not about the game. ⭐ If this harness ever starts passing starInfo, move these four
+  // into GAME_ONLY_WATCHED — the fence below will not do it for you.
+  { game: 'starColor1',      reason: 'harness-blind', why: 'starInfo?.color1 || [1,1,1] — Planet.js:1527; harness passes no starInfo.' },
+  { game: 'starColor2',      reason: 'harness-blind', why: 'starInfo?.color2 || [0,0,0] — Planet.js:1528; harness passes no starInfo.' },
+  { game: 'starBrightness1', reason: 'harness-blind', why: 'starInfo?.brightness1 ?? 1.0 — Planet.js:1529; harness passes no starInfo.' },
+  { game: 'starBrightness2', reason: 'harness-blind', why: 'starInfo?.brightness2 ?? 0.0 — Planet.js:1530; harness passes no starInfo.' },
+];
+
+/**
+ * NAME COLLISIONS — pairs that LOOK like aliases and are not. Documentation only, no behaviour.
+ * Recorded because the obvious mechanical way to widen this map (strip/add the `u` prefix and
+ * capitalise) produces every one of these, and each would be a wrong answer that renders
+ * plausibly. The uWeatheredColor case is the reason this file exists; these are its inverse.
+ */
+const COLLISIONS = [
+  { game: 'baseColor', lab: 'uBaseColor (RETIRED 2026-08-06)', why: 'The u-prefix rule matched these, and it was WRONG. The lab\'s uBaseColor was the WEATHERED endmember (planet-lod-uniforms.js:138, "driven: surfacePaletteOf(cond).weathered"); the game\'s baseColor is the legacy per-type palette tone (PlanetGenerator.js:772), a DIFFERENT quantity that still exists. The lab uniform has since been renamed uWeatheredColor (see UNIFIED NAMES), which closes this trap by construction — kept because the trap reopens the moment anyone introduces a lab uniform called uBaseColor, and because it is the reason not to.' },
+  { game: 'planetRadius', lab: 'uBodyRadius', why: 'Different units and different jobs. uBodyRadius is the object-space radius of the mesh the material is bound to (planet-lod-uniforms.js:24, 1.0 in the lab\'s unit sphere); planetRadius is the body\'s scene radius.' },
+  { game: 'uLimbMix', lab: 'uLimbStrength', why: 'Both gate the limb, neither is the other. uLimbMix is the game\'s A/B port dial (a constant); uLimbStrength is the lab\'s driven F34 rim-glow magnitude (planet-lod-uniforms.js:40).' },
+  { game: 'cloudDensity', lab: 'uCloudCoverage', why: 'Same concept, two unrelated laws: a legacy generator draw vs a condition-driven coverage. Aliasing them would put two different quantities in one row.' },
+  { game: '(none)', lab: 'uCratonColor', why: 'LAB-ONLY. surfacePaletteOf returns FOUR endmembers; the game consumes three and DROPS `craton` (planet-lod-lab.html:5434 writes it, Planet.js has no uniform). Not a spelling gap — a missing consumer, and therefore port work, not map work.' },
+];
+
+// Resolve the watched set. ⛔ makeUniforms() is consulted for KEYS and for a KIND tag only — no
 // lab VALUE is ever differenced against a game value (see the header, plan §6 risk 5).
 function resolveSharedUniforms(probeMaterialUniforms) {
   const labU = makeUniforms(new THREE.Vector3(0, 1, 0)); // WORLD_LIGHT: any vector; keys don't depend on it
   const labNames = Object.keys(labU);
   const gameNames = Object.keys(probeMaterialUniforms);
-  const shared = gameNames.filter((n) => labNames.includes(n)).sort();
+
+  const nameMatched = gameNames.filter((n) => labNames.includes(n)).sort();
+  const aliasGames = ALIASES.map((a) => a.game);
+  const onlyGames = GAME_ONLY_WATCHED.map((a) => a.game);
+
+  // ── FENCES on the map itself. A hand-written map that can rot silently is worse than no map:
+  //    it reads like coverage. Every one of these throws rather than degrading.
+  const problems = [];
+  const gameSet = new Set(gameNames), labSet = new Set(labNames);
+  for (const a of ALIASES) {
+    if (!gameSet.has(a.game)) problems.push(`ALIASES: game uniform "${a.game}" is not on the production material any more — stale entry.`);
+    if (a.lab && !labSet.has(a.lab)) problems.push(`ALIASES: lab uniform "${a.lab}" is not in makeUniforms() — typo or renamed; the alias would silently degrade to game-only.`);
+    if (nameMatched.includes(a.game)) problems.push(`ALIASES: "${a.game}" is ALSO name-matched; an alias for a name-matched uniform is a contradiction.`);
+  }
+  for (const g of GAME_ONLY_WATCHED) {
+    if (!gameSet.has(g.game)) problems.push(`GAME_ONLY_WATCHED: "${g.game}" is not on the production material any more — stale entry.`);
+    if (labSet.has(g.game)) problems.push(`GAME_ONLY_WATCHED: "${g.game}" DOES exist in makeUniforms(); it belongs in the name-matched set, not here.`);
+  }
+  for (const u of UNWATCHED) {
+    if (!gameSet.has(u.game)) problems.push(`UNWATCHED: "${u.game}" is not on the production material any more — stale entry.`);
+  }
+  // Completeness: every game uniform must be classified. This is the fence that makes the map
+  // safe to hand-write — a uniform added to Planet.js tomorrow stops this tool dead rather than
+  // quietly sitting outside its own gate, which is exactly how uWeatheredColor got missed.
+  const classified = new Set([...nameMatched, ...aliasGames, ...onlyGames, ...UNWATCHED.map((u) => u.game)]);
+  const unclassified = gameNames.filter((n) => !classified.has(n));
+  if (unclassified.length) {
+    problems.push(`UNCLASSIFIED game uniform(s): ${unclassified.join(', ')}.\n`
+      + '     Every uniform on the production material must appear in exactly one of: the runtime\n'
+      + '     name intersection, ALIASES, GAME_ONLY_WATCHED, or UNWATCHED. Decide which — and if it\n'
+      + '     is UNWATCHED, write the reason. Silence is how a shipped uniform escapes its gate.');
+  }
+  const dupes = [...aliasGames, ...onlyGames, ...UNWATCHED.map((u) => u.game)]
+    .filter((n, i, a) => a.indexOf(n) !== i);
+  if (dupes.length) problems.push(`classified more than once: ${[...new Set(dupes)].join(', ')}`);
+  if (problems.length) {
+    console.error('⛔ INSTRUMENT C: THE UNIFORM MAP IS OUT OF DATE.');
+    for (const p of problems) console.error(`   ${p}`);
+    console.error('   Fix tools/port-uniform-delta.mjs. No delta was measured. This is NOT "zero delta".');
+    process.exit(2);
+  }
+
+  const watched = [...nameMatched, ...aliasGames, ...onlyGames].sort();
+
+  // Tier + lab counterpart per watched uniform. Name-matched uniforms get their tier from
+  // TIER_BY_NAME below; everything else carries it on its map entry.
+  const aliasByGame = new Map(ALIASES.map((a) => [a.game, a]));
+  const onlyByGame = new Map(GAME_ONLY_WATCHED.map((a) => [a.game, a]));
   const shapes = {};
-  for (const n of shared) {
+  for (const n of watched) {
     const gk = kindOf(probeMaterialUniforms[n].value);
-    const lk = kindOf(labU[n].value);
     if (!gk) throw new Error(`resolveSharedUniforms: game uniform ${n} has an unrecognised value shape`);
+    const labName = aliasByGame.has(n) ? aliasByGame.get(n).lab : (labSet.has(n) ? n : null);
+    const origin = aliasByGame.has(n) ? 'aliased' : onlyByGame.has(n) ? 'game-only' : 'name-matched';
+    const tier = aliasByGame.get(n)?.tier || onlyByGame.get(n)?.tier || TIER_BY_NAME[n];
+    if (!tier) throw new Error(`resolveSharedUniforms: no tier for name-matched uniform ${n} — add it to TIER_BY_NAME.`);
     shapes[n] = {
       gameKind: gk,
-      labKind: lk,                                  // recorded, never differenced
+      labKind: labName ? kindOf(labU[labName].value) : null,   // recorded, never differenced
       arity: flatten(probeMaterialUniforms[n].value).length,
+      labName,
+      origin,
+      tier,
     };
   }
+
   return {
-    shared,
+    shared: watched,
     shapes,
-    counts: { game: gameNames.length, lab: labNames.length, shared: shared.length },
+    counts: {
+      game: gameNames.length,
+      lab: labNames.length,
+      shared: watched.length,
+      nameMatched: nameMatched.length,
+      aliased: aliasGames.length,
+      gameOnly: onlyGames.length,
+      unwatched: UNWATCHED.length,
+    },
     gameOnly: gameNames.filter((n) => !labNames.includes(n)).sort(),
+    unwatched: UNWATCHED,
   };
 }
+
+/**
+ * Value-source tier for the NAME-MATCHED uniforms (27 when this was written; 28 since the
+ * 2026-08-06 name unification). Same four tiers as the map above; kept
+ * separate only because these names need no alias entry. Verified line by line against
+ * src/objects/Planet.js:1596-1670.
+ *   bake      — reads a WORLDENGINE_BAKES field on planetData (outside the identity fingerprint)
+ *   condition — computed in _createSurface from conditionFromPlanet(d)
+ *   gate      — a Planet.js module constant
+ *   record    — reads a DRAWN planetData field (fingerprint-shadowed)
+ */
+const TIER_BY_NAME = {
+  uWeatheredColor: 'bake',    // d.landPalette.weathered  — Planet.js:1601. Name-matched only since
+                              // 2026-08-06; it was the ALIASES row above until the lab's uBaseColor
+                              // was renamed to match. See UNIFIED NAMES.
+  uFreshColor: 'bake',        // d.landPalette.fresh      — Planet.js:1600
+  uSedColor: 'bake',          // d.landPalette.sediment   — Planet.js:1602
+  uBioGroundColor: 'bake',    // d.landPalette.pigment    — Planet.js:1645
+  uIcenessMix: 'bake',        // d.iceness                — Planet.js:1607
+  uLimbExponent: 'condition', // atmosphereOpticsOf(cond) — Planet.js:1617
+  uLimbColor: 'condition',    //                          — Planet.js:1618
+  uTermColor: 'condition',    //                          — Planet.js:1629
+  uTermStrength: 'condition', // optics.columnFraction × TERM_STRENGTH — Planet.js:1627
+  uTermWidth: 'condition',    // termWidthFor(cond.atmosphere.pressure) — Planet.js:1628
+  uBioGroundCover: 'condition', // biosphereOf(cond)      — Planet.js:1631
+  uCraterDensity: 'condition',  // craterUniformsFrom(cond) — Planet.js:1660-1671
+  uCraterComplexD: 'condition',
+  uCraterRelaxation: 'condition',
+  uTerraceCount: 'condition',
+  uCraterScale: 'condition',
+  uCraterAmp: 'condition',
+  uEjectaStrength: 'condition',
+  uEjectaRampart: 'condition',
+  uEjectaAmp: 'condition',
+  uEjectaLump: 'condition',
+  uDispDomainScale: 'gate',   // RELIEF_DOMAIN_SCALE      — Planet.js:1381
+  uFwClamp: 'gate',           // literal 1                — Planet.js:1655
+  uVoroCells: 'gate',         // CRATER_VORO_CELLS        — Planet.js:1395
+  uNoiseScale: 'record',      // d.noiseScale             — Planet.js:1653
+  uMacroOffset: 'record',     // reliefOffsets(d).macro   — Planet.js:1293-1322, hashed from 8 drawn record fields
+  uDetailOffset: 'record',    // reliefOffsets(d).detail
+  uCraterOffset: 'record',    // reliefOffsets(d).crater
+};
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════
 // BODY FINGERPRINT
@@ -349,10 +668,10 @@ function resolveSharedUniforms(probeMaterialUniforms) {
 // still step around the one class of change that matters.
 //
 // So: exclude the five bakes, and share ONE list with Instrument B, which already excludes exactly
-// these (tests/body-identity-fence.test.js:157-176) for the same reason. Two instruments that
+// these (tests/body-identity-fence.test.js:169-171) for the same reason. Two instruments that
 // disagree about what "the same body" means resolve into an unactionable instruction.
 
-// ⛔ KEEP IN SYNC with WORLDENGINE_BAKES in tests/body-identity-fence.test.js:157. Derived port
+// ⛔ KEEP IN SYNC with WORLDENGINE_BAKES in tests/body-identity-fence.test.js:169. Derived port
 // OUTPUTS, never drawn — excluded from the identity fingerprint by both instruments.
 export const WORLDENGINE_BAKES = [
   'iceColor', 'iceness', 'landPalette', 'lavaCrustColor', 'lavaGlowColor',
@@ -501,17 +820,70 @@ function gitHead() {
 const fmt = (x) => (Number.isNaN(x) ? '—' : x === 0 ? '0.000000e+0' : x.toExponential(6)).padStart(14);
 
 function printResolution(res) {
-  console.log('── SHARED UNIFORM RESOLUTION ' + '─'.repeat(60));
-  console.log(`  src/objects/Planet.js production material : ${res.counts.game} uniforms`);
-  console.log(`  planet-lod-uniforms.js  makeUniforms()    : ${res.counts.lab} uniforms`);
-  console.log(`  SHARED (by name, resolved at runtime)     : ${res.counts.shared}`);
-  console.log(`  game-only (no lab counterpart)            : ${res.gameOnly.length}`);
+  const c = res.counts;
+  console.log('── WATCHED UNIFORM RESOLUTION ' + '─'.repeat(59));
+  console.log(`  src/objects/Planet.js production material : ${c.game} uniforms`);
+  console.log(`  planet-lod-uniforms.js  makeUniforms()    : ${c.lab} uniforms`);
+  console.log(`  WATCHED                                   : ${c.shared}`);
+  console.log(`      name-matched  (same spelling)         : ${c.nameMatched}`);
+  console.log(`      aliased       (same value, two names) : ${c.aliased}`);
+  console.log(`      game-only     (no lab counterpart)    : ${c.gameOnly}`);
+  console.log(`  deliberately UNWATCHED                    : ${c.unwatched}   (each with a named reason, below)`);
+  console.log('  ⭐ Matched by VALUE SOURCE, not spelling. When this map was written a pure name');
+  console.log('     intersection watched 27 and missed uWeatheredColor / uLavaGlow / uLavaCrust —');
+  console.log("     three of the four quantities Step 2's own gate names (PLAN.md:212). The first of");
+  console.log('     those was a DRIFTED SPELLING and has since been unified (2026-08-06), which is');
+  console.log('     why it now reads name-matched. See THE UNIFORM MAP in this file.');
   console.log('');
+  const byTier = {};
+  for (const n of res.shared) (byTier[res.shapes[n].tier] ||= []).push(n);
+  console.log(`  ${'UNIFORM'.padEnd(20)} ${'TIER'.padEnd(10)} ${'ORIGIN'.padEnd(12)} ${'GAME KIND'.padEnd(11)} ${'LAB NAME'.padEnd(18)} ARITY`);
+  console.log('  ' + '─'.repeat(80));
   for (const n of res.shared) {
     const s = res.shapes[n];
-    console.log(`    ${n.padEnd(20)} game:${String(s.gameKind).padEnd(10)} lab:${String(s.labKind).padEnd(10)} arity:${s.arity}`);
+    const lab = s.labName ? `${s.labName}${s.labName === n ? '' : ' ⭐'}` : '—';
+    console.log(`  ${n.padEnd(20)} ${s.tier.padEnd(10)} ${s.origin.padEnd(12)} ${String(s.gameKind).padEnd(11)} ${lab.padEnd(18)} ${s.arity}`);
   }
   console.log('');
+  console.log(`  tier census: ${Object.entries(byTier).sort().map(([t, a]) => `${t}=${a.length}`).join(' · ')}`);
+  console.log('    bake      the ONLY detector — these five planetData fields are excluded from the');
+  console.log('              body-identity fingerprint on purpose (WORLDENGINE_BAKES, shared with');
+  console.log('              Instrument B). Step 2\'s declared gate lives entirely in this tier.');
+  console.log('    condition computed in Planet._createSurface from conditionFromPlanet(d); never on');
+  console.log('              the record, so likewise only visible here.');
+  console.log('    gate      a Planet.js constant that multiplies world-engine output. Constant across');
+  console.log('              the population by construction — a zero delta proves the dial held.');
+  console.log('    record    ⚠ FINGERPRINT-SHADOWED. Reads a DRAWN planetData field, so a change to the');
+  console.log('              RECORD moves the body fingerprint, excludes the body, and leaves this row');
+  console.log('              reading 0.000000e+0 — entirely true and entirely misleading if read while');
+  console.log('              POPULATION MISMATCH is red. It still catches the other half: a change to');
+  console.log('              how Planet.js READS the record moves the uniform and not the record.');
+  console.log('');
+  console.log(`  ── DELIBERATELY UNWATCHED (${res.unwatched.length}) ` + '─'.repeat(50));
+  for (const u of res.unwatched) {
+    console.log(`    ${u.game.padEnd(20)} ${u.reason.padEnd(14)} ${u.why}`);
+  }
+  console.log('    runtime       the renderer overwrites it after construction; the value read here is a');
+  console.log('                  placeholder that never reaches a pixel.');
+  console.log('    harness-blind sourced from the `starInfo` 2nd constructor arg, which this harness never');
+  console.log('                  passes — every body would record the same fallback.');
+  console.log('');
+  if (UNIFIED_NAMES.length) {
+    console.log('  ── UNIFIED NAMES — were aliases, now ONE spelling (documentation only) ' + '─'.repeat(9));
+    for (const un of UNIFIED_NAMES) {
+      console.log(`    ${un.name}  ⟵ was lab \`${un.wasLab}\` until ${un.unifiedOn}\n        ${un.why}`);
+    }
+    console.log('    ⛔ These are NOT alias rows: a unified pair is name-matched, and an alias for a');
+    console.log('       name-matched uniform is a contradiction the fence rejects. A RE-divergence is');
+    console.log('       caught by the completeness fence instead — the game name stops being matched,');
+    console.log('       falls into no bucket, and this tool exits 2 rather than quietly narrowing.');
+    console.log('');
+  }
+  if (COLLISIONS.length) {
+    console.log('  ── NAME COLLISIONS — look like aliases, are NOT (documentation only) ' + '─'.repeat(11));
+    for (const c2 of COLLISIONS) console.log(`    ${c2.game} ✗ ${c2.lab}\n        ${c2.why}`);
+    console.log('');
+  }
 }
 
 // ── probe body: any generated body resolves the uniform SET (the key set is type-independent —
@@ -636,15 +1008,21 @@ function compareAndReport(cap, nowMeasured, RES) {
   const nowSet = RES.shared.slice().sort();
   const added = nowSet.filter((n) => !capSet.includes(n));
   const removed = capSet.filter((n) => !nowSet.includes(n));
+  const c = RES.counts;
+  const composition = `${c.nameMatched} name-matched + ${c.aliased} aliased + ${c.gameOnly} game-only`
+    + `, ${c.unwatched} deliberately unwatched of ${c.game}`;
   if (added.length || removed.length) {
     structural++;
-    console.log('⛔ SHARED-UNIFORM SET CHANGED since the capture:');
+    console.log('⛔ WATCHED-UNIFORM SET CHANGED since the capture:');
     if (added.length) console.log(`     added   (+${added.length}): ${added.join(', ')}`);
     if (removed.length) console.log(`     removed (-${removed.length}): ${removed.join(', ')}`);
+    console.log(`   now: ${nowSet.length} watched = ${composition}`);
     console.log('   Deltas below cover the INTERSECTION only. Re-record deliberately once understood.');
     console.log('');
   } else {
-    console.log(`  shared-uniform set: UNCHANGED (${nowSet.length} uniforms)`);
+    // ⭐ The composition, never a bare count. "27 uniforms, UNCHANGED" was true for months while
+    // three of the four quantities Step 2's gate names were outside the set entirely.
+    console.log(`  watched-uniform set: UNCHANGED (${nowSet.length} = ${composition})`);
   }
 
   // 2) Shape / kind drift on a still-shared uniform (Vector3 → Color is a silent semantic swap).
@@ -675,7 +1053,8 @@ function compareAndReport(cap, nowMeasured, RES) {
   for (const ar of nowMeasured.rows) if (!capIds.has(ar.id)) appeared.push(ar.id);
 
   console.log(`  bodies in capture : ${cap.rows.length}   now: ${nowMeasured.rows.length}`);
-  if (missing.length || appeared.length || fpMoved.length) {
+  const populationMoved = !!(missing.length || appeared.length || fpMoved.length);
+  if (populationMoved) {
     structural++;
     console.log('');
     console.log('⛔ POPULATION MISMATCH — the generated bodies themselves moved.');
@@ -710,16 +1089,29 @@ function compareAndReport(cap, nowMeasured, RES) {
     stats.push(statsFor(n, 0, beforeRows, afterById));
   }
 
-  const HDR = `  ${'UNIFORM'.padEnd(20)} ${'KIND'.padEnd(9)} ${'MOVED'.padStart(10)}   ${'MIN|Δ|'.padStart(14)} ${'MEDIAN|Δ|'.padStart(14)} ${'P95|Δ|'.padStart(14)} ${'MAX|Δ|'.padStart(14)}   WORST BODY`;
+  const HDR = `  ${'UNIFORM'.padEnd(20)} ${'TIER'.padEnd(9)} ${'KIND'.padEnd(9)} ${'MOVED'.padStart(10)}   ${'MIN|Δ|'.padStart(14)} ${'MEDIAN|Δ|'.padStart(14)} ${'P95|Δ|'.padStart(14)} ${'MAX|Δ|'.padStart(14)}   WORST BODY`;
   console.log('── PER-UNIFORM DELTA (|Δ| = max abs component delta per body; nearest-rank percentiles) ─');
   console.log(HDR);
   console.log('  ' + '─'.repeat(HDR.length - 2));
   const ordered = stats.slice().sort((a, b) => (b.max || 0) - (a.max || 0) || a.name.localeCompare(b.name));
   for (const s of ordered) {
     const flag = s.moved > 0 ? '*' : ' ';
-    console.log(`${flag} ${s.name.padEnd(20)} ${String(RES.shapes[s.name].gameKind).padEnd(9)} ${`${s.moved}/${s.compared}`.padStart(10)}   ${fmt(s.min)} ${fmt(s.median)} ${fmt(s.p95)} ${fmt(s.max)}   ${s.moved ? `${s.maxAbsBody} [c${s.maxAbsComp}]` : ''}`);
+    const sh = RES.shapes[s.name];
+    console.log(`${flag} ${s.name.padEnd(20)} ${sh.tier.padEnd(9)} ${String(sh.gameKind).padEnd(9)} ${`${s.moved}/${s.compared}`.padStart(10)}   ${fmt(s.min)} ${fmt(s.median)} ${fmt(s.p95)} ${fmt(s.max)}   ${s.moved ? `${s.maxAbsBody} [c${s.maxAbsComp}]` : ''}`);
   }
   console.log('');
+  // ⭐ The caveat printed WHERE it applies, not only in the header. A `record`-tier row cannot
+  // report movement that came from the record itself, because that body was excluded above.
+  if (populationMoved) {
+    const shadowed = ordered.filter((s) => RES.shapes[s.name].tier === 'record').map((s) => s.name);
+    console.log(`  ⚠ THE POPULATION MOVED, so the ${shadowed.length} rows at tier \`record\` are NOT evidence of stability:`);
+    console.log(`      ${shadowed.join(', ')}`);
+    console.log('    Their value source is a DRAWN planetData field, and every body whose record moved was');
+    console.log('    excluded from this table by design. A 0.000000e+0 on those rows is entirely true and');
+    console.log('    entirely misleading right now. The `bake`, `condition` and `gate` rows are unaffected —');
+    console.log('    their sources sit outside the identity fingerprint.');
+    console.log('');
+  }
 
   const movedUniforms = ordered.filter((s) => s.moved > 0);
   console.log('── VERDICT ' + '─'.repeat(78));

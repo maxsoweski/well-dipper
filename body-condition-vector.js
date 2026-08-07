@@ -155,5 +155,45 @@ export function deriveConditionVector(fp, derived, radiusEarth) {
   shellThickness:  bodyShellThickness(fp),               // baseStep helper (Slice B) — raw scalar, NO d³ transform (R4)
   magneticField:   fp.magneticField,                     // D13 data-only (undefined for lab presets)
   metallicity:     fp.metallicity,                       // metallicity data-only (undefined for lab presets)
+  // ── STEP 1 of one-pipeline-two-frontends-PLAN.md — the WIDENED condition contract. ────────────
+  // Five additive passthroughs. Same byte-safe discipline as T_eq / surfaceGravity / rotationHours
+  // above: nested under `condition`, invisible to the flat-key tune builders (driversToTune /
+  // magmaDriversToTune) and to computeE1, which read only named keys. No law reads any of them
+  // today — that is what makes the step additive, and it is asserted (not assumed) by
+  // tests/port-condition-contract.test.js.
+  //
+  // ⚠ surfaceHistory WAS ALREADY BEING HANDED IN AND SILENTLY DROPPED. `conditionFromPlanet.js:135`
+  // has put it on the fp since the port was written, and every lab preset carries one
+  // (driver-presets.js:27 onward) — but this return literal never emitted it, so
+  // `condition.surfaceHistory` was `undefined` on BOTH front-ends. PLAN §2 states it exactly:
+  // "surfaceHistory goes in and is not emitted — the loss is in the vector, not the adapter."
+  // NO DEFAULT IS INVENTED HERE. The adapter already supplies the game-side default
+  // (conditionFromPlanet.js:135); a second default site is a second place to fabricate a number,
+  // and `_provenance` could not tell the two apart. A preset without one gets null, which reads as
+  // "no record" rather than as "a record of nothing happening".
+  surfaceHistory:  fp.surfaceHistory ?? null,
+  // R_c — the CANONICAL radius, kept distinct from `radiusEarth` above, which is the DRAWN one.
+  // On the lab route they differ whenever the GUI radius slider is off the preset value; on the
+  // game route they are the same float by construction and Step 2's ruling says to keep it that way
+  // ("do not invent a second game radius" — the game has one radius per body). Emitting R_c is what
+  // lets a consumer ASK which of the two it wants instead of guessing, and Step 3's `giantRegimeOf`
+  // population filter reads it by name.
+  radiusEarthCanonical: _R_c,
+  // D15 — the authored/scored habitability. Data-only, exactly like magneticField and metallicity.
+  // ⚠ surfaceMaterial.js's biosphere law deliberately does NOT key on this (see its note at :125);
+  // that decision is unchanged and stays correct. Emitting the field makes it REACHABLE, not read.
+  habitability:    fp.habitability,
+  // D3 obliquity — ⚠ DEGREES, AND THE NAME SAYS SO ON PURPOSE. This is the seam's FOURTH unit
+  // disagreement (after density kg/m³-vs-g/cc and T_eq equilibrium-vs-surface, both handled in
+  // conditionFromPlanet.js):
+  //     lab   driver-presets.js:109  `axialTilt: 25`   for Mars's 25.2°  → DEGREES
+  //     game  SolarSystemData.js:180 `axialTilt: 0.41` for Earth's 23.4° → RADIANS
+  // and the ONE law that reads the fp key is planet-lod-lab-core.js:907-908,
+  // `clamp01((d.axialTilt ?? 0) / 90)` — degrees. So the fp key `axialTilt` means DEGREES on both
+  // routes (conditionFromPlanet converts at the seam), and this vector key carries the unit in its
+  // name so that a reader who knows the GAME's radian field cannot mistake one for the other.
+  // A single unqualified `axialTilt` on the vector is precisely how the other three unit bugs
+  // happened: one name, two units, no warning.
+  axialTiltDeg:    fp.axialTilt,
   };
 }

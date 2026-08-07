@@ -12,7 +12,7 @@
 
 ## What shipped
 
-Ground colour used to be one hard-coded constant — `uBaseColor = (0.46, 0.40, 0.34)`, assigned
+Ground colour used to be one hard-coded constant — `uWeatheredColor = (0.46, 0.40, 0.34)`, assigned
 nowhere, shared by all 18 presets and by every point on every planet. Four MVPs replaced it:
 
 | | what it does | key file |
@@ -1025,8 +1025,10 @@ than reconcile it. What shipped:
 - `Planet.js` gained `uFreshColor` / `uWeatheredColor` / `uSedColor`, with fallbacks to the old
   constants so a hand-authored fixture never renders black.
 - **Terrestrial (type 5):** `highland` and `peak` WERE hard-coded `vec3(0.42,0.38,0.34)` and
-  `vec3(0.6,0.58,0.55)` — shared by every planet in the game, the exact defect the lab retired for
-  `uBaseColor`. They are now `uWeatheredColor` and `uFreshColor`; `midland` is `uSedColor`.
+  `vec3(0.6,0.58,0.55)` — shared by every planet in the game, the exact defect the lab retired when
+  it made the weathered endmember condition-derived. They are now `uWeatheredColor` and
+  `uFreshColor`; `midland` is `uSedColor`. (The lab spelled that endmember `uBaseColor` until
+  2026-08-06; both frontends say `uWeatheredColor` now.)
 - **Rocky (type 0):** got its own branch — a dry world IS its bedrock, so the whole surface is the
   palette (sediment in the lows, weathered background, fresh rock where relief exposes it).
 - **Deliberately NOT ported:** ocean water, ice caps, clouds, gas bands, venus, carbon, lava. Those are
@@ -1049,7 +1051,7 @@ brown/tan band (#69–#84), because that is what bedrock IS.
 
 **What the port actually needs:** wire the derived palette into the **land path only** — the game's
 `ROCKY_BODY` land branch — and leave the ocean, ice, cloud and gas-band layers on their own colours,
-exactly as the lab does (the lab's ocean/ice/cloud layers are separate from `uBaseColor` too). The
+exactly as the lab does (the lab's ocean/ice/cloud layers are separate from `uWeatheredColor` too). The
 lab's architecture already has this right; the port has to preserve the layering, not flatten it.
 
 ### ⛔ Blocker B — the two sides disagree about what `T_eq` means (FIXED at the seam)

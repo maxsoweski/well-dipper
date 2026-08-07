@@ -18,6 +18,8 @@
 //   3. massEarthOf round-trip — g·d² reconstructs M_derived = M_c·(R/R_c)³ within float64 ulp across the sweep.
 //   4. condition-vector key-set unchanged — no new fields (FENCE 2: NAMED_BODY vectors keep their exact shape;
 //      iceness/crystallizationPotential/radPerKm are computed DOWNSTREAM of the vector, never stored in it).
+//      ⭐ RE-PINNED 2026-08-06: PLAN Step 1 adds four DECLARED passthrough keys. The V2-6 claim — that this
+//      slice added none, and that derived quantities stay downstream — is unchanged; see the note on the list.
 // Plus a small radPerKm unit (the §1B shared km→angular scalar this slice adds to baseStep.js).
 import { describe, it, expect } from 'vitest';
 
@@ -179,13 +181,32 @@ describe('V2-6 AC-GCOHERE — massEarthOf round-trip (g·d² === M_derived)', ()
 });
 
 describe('V2-6 FENCE 2 — condition-vector key-set unchanged', () => {
+  // ⚠ RE-PINNED 2026-08-06 by Step 1 of docs/FEATURES/one-pipeline-two-frontends-PLAN.md
+  // (lines 172-196), which WIDENS THE CONDITION CONTRACT ON PURPOSE. This fence is doing its
+  // job by going red: it is the only thing in the suite that notices a key arriving on the
+  // vector, and Step 1 adds four.
+  //
+  // WHAT THE FENCE STILL MEANS. V2-6's claim was "the gravity change added no fields" — that a
+  // NAMED_BODY vector keeps its exact shape, and that iceness / crystallizationPotential /
+  // radPerKm are computed DOWNSTREAM rather than stored. That claim is untouched: none of the
+  // four new keys is derived, all four are passthroughs of inputs the front-ends already had,
+  // and tests/port-condition-contract.test.js proves no shipped law reads any of them (it
+  // deletes each one and re-runs all eight derivations).
+  //
+  // ⛔ THIS LIST IS NOT A GOLDEN AND MUST NOT BE RE-RECORDED BY REFLEX. Each addition below
+  // carries the step that added it. A key that appears here without one is an accident.
   const EXPECTED_KEYS = [
     'density', 'composition', 'age', 'radiusEarth', 'eccentricity', 'T_eq', 'surfaceGravity',
     'atmosphere', 'tidalState', 'rotationHours', 'rawTidalIoRatio', 'shellThickness',
     'magneticField', 'metallicity',
+    // ── PLAN Step 1 · the widened contract (2026-08-06) ──────────────────────────────────────
+    'surfaceHistory',        // was handed in and silently dropped by the return literal (PLAN §2)
+    'radiusEarthCanonical',  // R_c, kept distinct from the DRAWN radiusEarth above
+    'habitability',          // D15 passthrough (game shape {score,factors} flattened at the seam)
+    'axialTiltDeg',          // D3 obliquity in DEGREES (game stores radians; converted at the seam)
   ].sort();
 
-  it('deriveConditionVector returns exactly the 14 legacy keys (no new fields), every preset × drawn/canonical R', () => {
+  it('deriveConditionVector returns exactly the 18 declared keys, every preset × drawn/canonical R', () => {
     for (const [name, fp] of PRESETS) {
       for (const R of [fp.radiusEarth, 3.3]) {
         const keys = Object.keys(deriveConditionVector(fp, null, R)).sort();

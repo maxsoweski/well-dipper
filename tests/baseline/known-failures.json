@@ -7,8 +7,8 @@
     "Lists are sorted; no durations or timestamps are recorded, so nothing here",
     "churns on test order or machine speed."
   ],
-  "recordedAt": "2026-08-06T23:34:48.312Z",
-  "recordedFromCommit": "92277c6",
+  "recordedAt": "2026-08-07T02:11:10.346Z",
+  "recordedFromCommit": "b2ac455",
   "vitest": "4.1.0",
   "scope": {
     "extraExclude": [
@@ -18,12 +18,12 @@
   },
   "summary": {
     "counts": {
-      "collectedFiles": 305,
+      "collectedFiles": 306,
       "failingFiles": 2,
       "nonCollectingFiles": 15,
-      "tests": 4682,
+      "tests": 4721,
       "failed": 24,
-      "passed": 4654,
+      "passed": 4693,
       "skipped": 4,
       "todo": 0
     },
@@ -260,6 +260,7 @@
       "tests/planet-scale-calibration.test.js": 3,
       "tests/planet-scale.test.js": 13,
       "tests/planet-vis-scale.test.js": 9,
+      "tests/port-condition-contract.test.js": 39,
       "tests/port-limb-optics.test.js": 10,
       "tests/port-terminator-law.test.js": 9,
       "tests/portal-traversal-margin.test.js": 3,

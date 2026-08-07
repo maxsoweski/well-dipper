@@ -125,8 +125,11 @@ export function crystallizationPotential(cond, schedule) {
 //    ⚠ NOT keyed on the preset's `habitability` field, deliberately. That field is an AUTHORED per-preset constant
 //    (Rocky 0.7, Ocean 0.9, ...), so keying on it would (a) smuggle an authored number into a physics-derived
 //    chain and (b) make vegetation seed-INVARIANT, undoing the per-seed condition draw. PhysicsEngine's
-//    habitabilityScore() derives the same idea from drivers, but it is not on the condition vector; these are the
-//    same underlying requirements restated from the scalars actually in hand.
+//    habitabilityScore() derives the same idea from drivers; these are the same underlying requirements restated
+//    from the scalars actually in hand.
+//    ⭐ CORRECTED 2026-08-06: this note used to add "but it is not on the condition vector", which stopped being
+//    true at Step 1 of one-pipeline-two-frontends-PLAN.md — `condition.habitability` now exists. The DECISION is
+//    unchanged and the reasons above are unaffected: the field is now REACHABLE and still deliberately NOT read.
 //
 //    Life as we can currently reason about it needs, all at once: liquid water, an atmosphere to keep it liquid,
 //    a volatile budget to supply it, and time to establish and spread. Any one of them missing ⇒ 0.
@@ -171,9 +174,9 @@ export function biosphereOf(cond) {
 }
 
 // ── surface-albedo priors (the BASE GROUND COLOUR law) ────────────────────────────────────────────────────────
-//    Before this, the render used ONE hard-coded `uBaseColor` rocky tone (0.46,0.40,0.34) for all 18 presets —
+//    Before this, the render used ONE hard-coded `uWeatheredColor` rocky tone (0.46,0.40,0.34) for all 18 presets —
 //    Mars, the Moon, Venus and a carbon world all stood on the same brown. Every other colour in the pipeline is
-//    a tint mixed ON TOP of it (`albedoCol = mix(uBaseColor, liquidCol, liquidMask)`), so the ground itself never
+//    a tint mixed ON TOP of it (`albedoCol = mix(uWeatheredColor, liquidCol, liquidMask)`), so the ground itself never
 //    varied with what the world is made of. This derives it from condition scalars instead.
 //
 //    ⚠ DRIVER-SEMANTICS TRAP this law is built around. `composition.ironFraction` is a BULK-BODY iron fraction

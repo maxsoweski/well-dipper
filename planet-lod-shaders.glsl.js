@@ -178,7 +178,7 @@ export const LAB_FRAGMENT_SHADER = /* glsl */ `
             dbg = hash33(vCell);                                     // flat per-cell color — SEAM TEST
           } else if (uDebugMode == 4){
             vec3 pn = perturbAnalytic(N, vGrad, 0.5);               // voronoi grad as lit relief
-            dbg = uBaseColor * (max(dot(pn, uLightDir), 0.0) + 0.05);
+            dbg = uWeatheredColor * (max(dot(pn, uLightDir), 0.0) + 0.05);
           } else if (uDebugMode == 5){
             // emissiveBlackbody ramp swatch — pole(500K)→pole(4000K) gradient.
             // Confirms the GLSL transcription matches the CPU mirror: bottom
@@ -516,11 +516,11 @@ export const LAB_FRAGMENT_SHADER = /* glsl */ `
         float rayBright = rayField(vPos) * diff;       // sunlit fresh material only
         // Cryo frost (F23/F22): high-albedo overlay mixed into the base BEFORE posterize so the
         // luminance lift survives quantization as a bright cap (cryo-doc §2.a; the colour TINT is
-        // the stylize/drop part). frostCover=0 ⇒ uBaseColor unchanged (regression-safe).
+        // the stylize/drop part). frostCover=0 ⇒ uWeatheredColor unchanged (regression-safe).
         // F22 PLD strata: dim the frost albedo in alternating annular layers (pldBands), keyed on the
         // pole-distance coordinate (frostBandCoord = coldFactor) which ramps smoothly across the whole
         // cap — the coverage itself saturates to the budget past the snowline, so it cannot carry rings.
-        // The mix gates the strata to the cap (frostCover=0 ⇒ mix→uBaseColor, bare ground untouched).
+        // The mix gates the strata to the cap (frostCover=0 ⇒ mix→uWeatheredColor, bare ground untouched).
         vec3 frostShade = uFrostAlbedo * pldBands(frostBandCoord);
         // F14 standing liquid — species-keyed fill mixed BEFORE frost so frost wins where
         // cold (sea ice; the eyeball ice-ring falls out of the latitude lapse for free).
@@ -534,7 +534,7 @@ export const LAB_FRAGMENT_SHADER = /* glsl */ `
         //            it, i.e. flat LOW ground; a flat CREST is stripped, not filled, so the elevation term gates it.
         // Slope is the deviation of the relief-perturbed normal from the geometric one — bounded [0,1], needs no
         // field-unit calibration, and valid on both normalMode paths since both write shadeN.
-        // uTerrainAlbedoMix = 0 ⇒ collapses to the single uBaseColor (pre-palette behaviour, regression-safe).
+        // uTerrainAlbedoMix = 0 ⇒ collapses to the single uWeatheredColor (pre-palette behaviour, regression-safe).
         const float TERRAIN_SLOPE_GAIN = 3.0;    // 1-dot(shadeN,N) is 0.134 at a 30° tilt, 0.293 at 45° — this
                                                  // gain puts the fresh-rock transition across normal hillslopes
                                                  // rather than only on near-vertical faces. CALIBRATED LIVE.
@@ -562,7 +562,7 @@ export const LAB_FRAGMENT_SHADER = /* glsl */ `
         // normalize to zero, and the planet renders BLACK until the first route. The rgb sum is the honest
         // coverage test: the dummy fails it, and any genuinely baked direction sums to ~1 by construction.
         // (Sum, not any single channel: craton is R=1,G=0,B=0, indistinguishable from the dummy per-channel.)
-        vec3 groundCol = uBaseColor;
+        vec3 groundCol = uWeatheredColor;
         vec4 provS = sampleProvince(vObjN);
         float provSum = provS.r + provS.g + provS.b;
         float provBasin = 0.0;   // hoisted: the biosphere term below reads it (basins hold the water)
@@ -784,7 +784,7 @@ export const LAB_FRAGMENT_SHADER = /* glsl */ `
         // block: litSurf untouched, exp(-0) = 1.0 on the deck — byte-identical pre-F40
         // output, the F40 regression contract.
         float dustTau = 0.0;
-        vec3 litSurf = min(veilTint * (albedoCol * (diff + ambient) + uBaseColor * rayBright), vec3(1.0));
+        vec3 litSurf = min(veilTint * (albedoCol * (diff + ambient) + uWeatheredColor * rayBright), vec3(1.0));
         if (uDustActivity > 0.0){
           float a2 = uDustActivity * uDustActivity;            // activity^2 via a*a (no pow)
           float dph0 = fract(uTime * 0.008);
@@ -931,7 +931,7 @@ export const LAB_FRAGMENT_SHADER = /* glsl */ `
         // by (diff + 0.15): lit limb brightest, night limb keeps a faint floor.
         // Driver-true since F34: width = uLimbExponent (thin clear atmosphere ~3.5 =
         // narrow Earth blue line; thick-haze class ~1.8 = fat Titan/Venus halo), tint
-        // = uLimbColor (per-preset atmosphere hue — no longer the surface uBaseColor).
+        // = uLimbColor (per-preset atmosphere hue — no longer the surface uWeatheredColor).
         // The fresnel base is clamped to [0,1] and the exponent stays positive, so
         // pow() never hits the spec-undefined region. Strength 0 (enable off, or any
         // airless preset) zeroes the whole additive term: byte-identical pre-F34
@@ -972,7 +972,7 @@ export const LAB_FRAGMENT_SHADER = /* glsl */ `
         // (Venus T_eq 737 derives emissive ~0.14 — a night-side glow would read as
         // ground leak through the shroud). Lava cracks / lightning below still punch
         // through: they are above-deck or designated posterize-survivor channels.
-        vec3 emissive = uBaseColor * uEmissive * (1.0 - blanketMask);
+        vec3 emissive = uWeatheredColor * uEmissive * (1.0 - blanketMask);
         emissive = (uEmissiveBypass == 1) ? emissive : posterize(emissive, uLevels, fc, 0.4, uDitherMode);
         // ★ F8 lava cracks — ALWAYS bypass the quantizer (the canonical Option-C survivor, §F8.c):
         // spatial Worley crack-mask glow that stays crisp over the posterized basalt.

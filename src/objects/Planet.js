@@ -688,7 +688,7 @@ void main() {
     // inherits this world's oxidation state (a rusty world gets pale rusty basins, not beige ones).
     vec3 midland = uSedColor;
     // Highland: the weathered bedrock background. WAS a hard-coded vec3(0.42,0.38,0.34) shared by
-    // every planet in the game — the same defect the lab retired for uBaseColor.
+    // every planet in the game — the same defect the lab retired for uWeatheredColor.
     vec3 highland = uWeatheredColor;
     // Peaks: fresh unweathered rock, exposed where erosion strips the weathering rind. WAS a
     // hard-coded vec3(0.6,0.58,0.55).

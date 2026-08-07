@@ -712,7 +712,7 @@ export class PlanetGenerator {
     // ── World-engine land palette (V2-10 port slice 1) ────────────────────────────────────────────
     // The GROUND's colour, derived from this body's own condition rather than picked at random from
     // PALETTES. `highland` and `peak` in the rocky shader were hard-coded constants shared by every
-    // planet in the game — the exact defect the lab retired for uBaseColor. These four endmembers
+    // planet in the game — the exact defect the lab retired for uWeatheredColor. These four endmembers
     // replace them.
     //
     // ⚠ THIS IS BEDROCK, NOT A WHOLE-BODY COLOUR. It is deliberately NOT used for oceans, ice caps,

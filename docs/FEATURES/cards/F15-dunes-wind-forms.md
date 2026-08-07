@@ -44,7 +44,7 @@ Unbuilt — recommended recipe once built: (1) add a FEATURES entry in planet-ar
 - [ ] Do dune belts behave like a deposit ON the surface — pooling in lowlands and flowing around mountains/crater rims (Titan Shangri-La behavior) — instead of stamping uniformly across all relief?
 - [ ] Does the behavior gate correctly: dunes vanish on airless presets (no D5 air), shrink under high liquid stability (wet world), and strengthen on dry windy worlds?
 - [ ] If wind streaks are included, do they read as faint one-directional albedo tails behind craters/obstacles, all agreeing with the dune grain direction, without breaking the posterize discipline?
-- [ ] Does soloing the feature leave the base sphere unchanged where sand coverage is zero (regression-safe, like frostCover=0 ⇒ uBaseColor unchanged)?
+- [ ] Does soloing the feature leave the base sphere unchanged where sand coverage is zero (regression-safe, like frostCover=0 ⇒ uWeatheredColor unchanged)?
 
 ## 6.5 Build plan (added 2026-06-10, Phase-4a heavy loop — linear ergs v1, closed-form)
 
