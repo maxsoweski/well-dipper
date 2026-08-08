@@ -5,10 +5,19 @@
     "`node scripts/test-baseline.mjs --record` and say in the commit message which",
     "IDs moved and why. A blanket re-record throws the instrument away.",
     "Lists are sorted; no durations or timestamps are recorded, so nothing here",
-    "churns on test order or machine speed."
+    "churns on test order or machine speed.",
+    "",
+    "recordedFromCommit is {sha, dirty} — the same shape Instrument C writes to",
+    "tests/baseline/port-uniform-capture.json. dirty:true means these numbers are the",
+    "WORKING TREE's, NOT what a clean checkout of that sha produces; do not read the",
+    "sha as a reproduction recipe when it is set. A bare STRING there is a record",
+    "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-07T04:22:28.502Z",
-  "recordedFromCommit": "0af246e",
+  "recordedAt": "2026-08-08T14:43:06.250Z",
+  "recordedFromCommit": {
+    "sha": "e0002de60ddb7abc2b7304472b87dbdb82916bc5",
+    "dirty": true
+  },
   "vitest": "4.1.0",
   "scope": {
     "extraExclude": [
@@ -21,9 +30,9 @@
       "collectedFiles": 307,
       "failingFiles": 2,
       "nonCollectingFiles": 15,
-      "tests": 4748,
+      "tests": 4752,
       "failed": 24,
-      "passed": 4720,
+      "passed": 4724,
       "skipped": 4,
       "todo": 0
     },
@@ -260,7 +269,7 @@
       "tests/planet-scale-calibration.test.js": 3,
       "tests/planet-scale.test.js": 13,
       "tests/planet-vis-scale.test.js": 9,
-      "tests/port-condition-contract.test.js": 56,
+      "tests/port-condition-contract.test.js": 60,
       "tests/port-limb-optics.test.js": 10,
       "tests/port-route-agreement.test.js": 10,
       "tests/port-terminator-law.test.js": 9,
