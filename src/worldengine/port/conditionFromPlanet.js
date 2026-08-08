@@ -83,12 +83,14 @@ export function densityToGramsPerCC(gameDensity) {
 // ⚠ THE TWO SIDES USE DIFFERENT UNITS FOR `axialTilt`, UNDER THE SAME KEY NAME, and — for the third
 // time in this file — the names do not warn you.
 //   game   planetData.axialTilt is RADIANS.  SolarSystemData.js:180 `axialTilt: 0.41,  // 23.4°`;
-//          :484 `1.71, // 97.8°`; PlanetGenerator.js:687 rolls it in ±1.5. Corroborated by two
-//          independent consumers: Planet.js:1545 feeds it straight to `mesh.rotation.z` (three.js
-//          radians) and TextureBaker.js:265 declares `uniform float axialTilt; // radians`.
+//          SolarSystemData.js:484 `axialTilt: 1.71,`; PlanetGenerator.js:687 `const axialTilt = rings ?`
+//          rolls it in ±1.5. Corroborated by two independent consumers:
+//          Planet.js:1545 `this.mesh.rotation.z = this.data.axialTilt;` (a three.js radians slot),
+//          and TextureBaker.js:265, which declares `uniform float axialTilt; // radians`.
 //   lab    the fp key is DEGREES.  driver-presets.js:109 `axialTilt: 25` with the comment "(real
-//          25.2 deg)", and the ONE law that reads the key — planet-lod-lab-core.js:906-908 — is
-//          `// axialTilt in degrees (default 0)` / `frostLatitudeBias = clamp01(axialTilt / 90)`.
+//          25.2 deg)", and the ONE law that reads the key — planet-lod-lab-core.js:907
+//          `const axialTilt = d.axialTilt ?? 0;` — is under the comment planet-lod-lab-core.js:906
+//          `axialTilt in degrees (default 0)` and feeds `frostLatitudeBias = clamp01(axialTilt / 90)`.
 //          The rest of the engine agrees: climate-e5.js:99 `Math.sin(obliquityDeg * DEG2RAD)`,
 //          storm-e.js:68 `URANIAN_OBLIQUITY: 80`, emission-e.js:164 `obliquityDeg`.
 // Passed straight through, Earth's 0.41 would enter `clamp01(axialTilt / 90)` as 0.0046 instead of
@@ -135,10 +137,10 @@ export function axialTiltDegreesOf(gameAxialTiltRadians) {
 //
 // ⚠⚠ WHY THE SIGN CAN BE DROPPED, STATED SO IT IS A DECISION AND NOT AN OVERSIGHT. Two different
 // things get folded here and they have two different justifications:
-//   · THE SIGN is a convention, not physics. `PlanetGenerator.js:687` (and `:560`) roll
-//     `rng.range(-1.5, 1.5)` — a tilt ABOUT AN AXIS, consumed by `Planet.js:1545` as
-//     `mesh.rotation.z`. A pole leaning −25° and one leaning +25° have the same obliquity and the
-//     same seasons; only the scene-space direction differs. Nothing physical is lost.
+//   · THE SIGN is a convention, not physics. PlanetGenerator.js:687 `const axialTilt = rings ?` and
+//     PlanetGenerator.js:560 `rng.range(-1.5, 1.5)` roll a tilt ABOUT AN AXIS, consumed by
+//     Planet.js:1545 `this.mesh.rotation.z`. A pole leaning −25° and one leaning +25° have the same
+//     obliquity and the same seasons; only the scene-space direction differs. Nothing physical is lost.
 //   · PAST 90° IS RETROGRADE, and that IS physics — but the seasons run back DOWN again, so a
 //     177.6° world has the seasonal amplitude of a 2.4° world. The angle the climate laws want is
 //     the effective obliquity; the retrograde BIT is a separate fact.
@@ -190,20 +192,23 @@ export function effectiveObliquityDegreesOf(tiltDegrees) {
 // ── THE HABITABILITY SHAPE NORMALISATION — the seam's FIFTH silent disagreement. ───────────────────
 // ⚠ THE TWO SIDES DISAGREE ABOUT WHETHER `habitability` IS A NUMBER. Found while building this step;
 // not previously recorded anywhere, because nothing had ever forwarded the field.
-//   lab   driver-presets.js:27  `habitability: 0.7`                 → a SCALAR
-//   game  PlanetGenerator.js:789 `habitability: habScore`, where
-//         PhysicsEngine.js:687 returns `{ score: Math.min(score, 1.0), factors }` → an OBJECT
-// The engine's one reader is `planet-lod-lab-core.js:744` — `clamp01(d.habitability ?? 0)` — and
+//   lab   driver-presets.js:27 `habitability: 0.7`                  → a SCALAR
+//   game  PlanetGenerator.js `habitability: habScore` — §10 symbol-only, because it sits in the
+//         record literal that every step of this plan grows — assigned from
+//         PhysicsEngine.js:688 `return { score: Math.min(score, 1.0), factors };` → an OBJECT
+// The engine's one reader is planet-lod-lab-core.js:744 `clamp01(d.habitability ?? 0)` — and
 // `clamp01` of an object is `Math.min(1, Math.max(0, {…}))` = **NaN**. NaN is the one failure mode in
 // this codebase that is NOT quiet: it propagates into a uniform and the whole body renders as a black
 // frame (docs/FEATURES/surface-variation-beyond-mvp.md:790 records exactly that, from an `undefined`
 // axialTilt reaching a world matrix). Forwarding the raw object would therefore have shipped a
 // landmine to the first step that reads the field, three steps from here.
 //
-// ⚠ THE FUNCTION'S OWN JSDOC IS WRONG about this: `PhysicsEngine.js:637` says
-// `@returns {number} score 0-1` while `:687` returns an object. That is not fixed here — it is a
-// game-side edit outside this seam — but one live consumer is already miscomputing because of it:
-// `NavComputer.js:2618` and `:3218` both test `pd.habitability > 0.3`, an object-vs-number
+// ⚠ THE FUNCTION'S OWN JSDOC IS WRONG about this: PhysicsEngine.js:637 `@returns {number} score 0-1`
+// says a number, while PhysicsEngine.js:688 `return { score: Math.min(score, 1.0), factors };`
+// returns an object. That is not fixed here — it is a game-side edit outside this seam — but one
+// live consumer is already miscomputing because of it:
+// NavComputer.js:2618 `if (pd.habitability > 0.3) lines.push(` and
+// NavComputer.js:3218 `pd.habitability > 0.3` are both an object-vs-number
 // comparison that is ALWAYS false, so the "Habitability" HUD line has never once appeared. Reported,
 // not fixed: it changes on-screen text and belongs to whoever owns the HUD.
 /** The scalar the engine means by `habitability`, out of either side's shape. Absent stays absent. */
@@ -244,7 +249,8 @@ export function habitabilityScalarOf(gameHabitability) {
 // The retired test was `if (!phys) return gameAtmosphere; // already engine-shaped` — an ABSENCE
 // test. It asks "is there no `.physics`?" and concludes "then this must already be engine-shaped",
 // which is a non-sequitur that one real caller falsifies:
-//     MoonGenerator.js:192-196 — `atmosphere: type === 'terrestrial' ? { color, strength } : null`
+//     MoonGenerator.js:193 `atmosphere: type === 'terrestrial' ? {` — a `{ color, strength }` literal
+//     closed by MoonGenerator.js:196 `} : null,`
 // a purely VISUAL rim-glow wrapper with no physics anywhere. It has no `.physics`, so the absence
 // test passed it straight through, and the resulting condition carried an atmosphere that is
 // TRUTHY (so every `if (cond.atmosphere)` gate says "this world has air") whose `.pressure` is
@@ -309,35 +315,85 @@ export function atmosphereFromPlanet(gameAtmosphere) {
 //   · THE FENCE WAS SELF-REFERENTIAL. The test asserted `PROVENANCE_INPUTS.length === 13` and
 //     `Object.keys(p) === PROVENANCE_INPUTS` — both sides derived from THIS constant, and nothing
 //     read the adapter. MEASURED: injecting Step 2's own next read (`starMassEarth: d.starMassEarth`,
-//     PLAN.md:205) into the fp literal left all 47 contract tests GREEN. A fence that cannot fail is
-//     a comment with a test-shaped costume on.
+//     PLAN.md:201 `starMassEarth`) into the fp literal left all 47 contract tests GREEN — the 47 is
+//     that era's count, not today's. A fence that cannot fail is a comment in a test-shaped costume.
 //
 // ⚠ THE FOURTEENTH INPUT IS NOT HYPOTHETICAL AND NOT INERT — that is why it is called out rather
 // than quietly added. `carbonToOxygen` is read TODAY by two shipped consumers, and its ABSENCE is a
 // claim, not a silence, because both supply `?? 0` and 0 means "definitively not a carbon world":
-//   · surfaceMaterial.js:335 — inside `surfacePaletteOf`, one of the FIVE BAKES PlanetGenerator
-//     writes onto the body record. Measured on a C/O 1.2 body: dropping the field moves `fresh` from
+//   · surfaceMaterial.js:335 `cond?.composition?.carbonToOxygen` — the read sits inside
+//     surfaceMaterial.js:323 `export function surfaceAlbedoOf(cond, opts) {`, NOT inside
+//     surfaceMaterial.js:304 `export function surfacePaletteOf(cond) {`, which calls it four times
+//     and whose palette is one of the FIVE BAKES PlanetGenerator writes onto the body record.
+//     (⚠ this containment was stated the other way round until 2026-08-07 — ledger row B8.)
+//     Measured on a C/O 1.2 body: dropping the field moves `fresh` from
 //     [0.088, 0.085, 0.084] (graphite dark) to [0.197, 0.185, 0.168] — 2.2× brighter, and every other
 //     palette slot with it.
-//   · e1Regime.js:68 `compositionClass` — which body-condition-vector.js:107 uses to pick WHICH
-//     mass-radius law `gravityRadiusRatio` applies. Measured: the class flips 'carbon' → 'rocky' and
+//   · e1Regime.js:66 `export function compositionClass(cv) {` — whose C/O branch is
+//     e1Regime.js:68 `cv.composition?.carbonToOxygen` — and body-condition-vector.js:107
+//     `const _class = compositionClass(` uses that class to pick WHICH mass-radius law
+//     `gravityRadiusRatio` applies. Measured: the class flips 'carbon' → 'rocky' and
 //     the lab route's `surfaceGravity` at 1.6× drawn radius moves +38.96%.
 // Population, measured over the contract test's corpus: 526/526 generated planets carry it, 12/411
 // moons do, 0/39 Sol bodies do, and 1/18 lab presets does. So on Sol and on 97% of moons the engine
 // is already reading a fabricated 0 for it, and the record that exists to name fabrications was silent.
 //
-// ── HOW THE FENCE WORKS NOW: THE INPUT LIST IS DERIVED FROM THIS FILE'S SOURCE TEXT. ──────────────
-// PROVENANCE_COVERAGE maps each provenance entry to the EXACT property reads it accounts for.
-// tests/port-condition-contract.test.js strips this file's comments and strings, extracts
-// `conditionFromPlanet`'s function body by brace-matching, collects every `d.<field>` / `comp.<field>`
-// in it, and asserts that set equals the union of the values below. The two sides of that comparison
-// are now the ADAPTER'S CODE and this DECLARATION — not one constant compared with itself.
+// ── HOW THE FENCE WORKS NOW: THE ADAPTER'S CODE IS PARSED AND ITS BINDINGS RESOLVED. ──────────────
+// PROVENANCE_COVERAGE maps each provenance entry to the EXACT property reads it accounts for, and
+// tests/port-condition-contract.test.js holds that declaration against this module's CODE. The two
+// sides of the comparison are the ADAPTER and this DECLARATION — never one constant against itself.
+//
+// ⭐ STATED AS A PROPERTY, NOT AS A PROCEDURE, ON PURPOSE. What this block said before described a
+// text scan that no longer exists — it named brace-matching and a comment stripper, and a reader
+// following it would have concluded that a read written outside `conditionFromPlanet`'s body is
+// invisible to the fence. That is the OPPOSITE of the truth, in the block carrying the instruction
+// this file's next editor is meant to obey. A description pinned to implementation detail is what
+// rotted; the mechanism has already been rewritten twice under it. So: the property, which is what
+// the next editor actually needs, and which survives the next rewrite of how it is enforced.
+//
+//     EVERY INPUT THIS ADAPTER READS — HOWEVER IT IS WRITTEN — MUST HAVE A DECLARED COVERAGE ROW,
+//     AND EVERY DECLARED ROW MUST STILL BE READ. THE CHECK RESOLVES BINDINGS RATHER THAN MATCHING
+//     TEXT, AND A NODE TYPE NOBODY HAS BUCKETED IS A FAILURE, NOT A PASS.  ⛔ A WRONG RULE FOR A
+//     BUCKETED TYPE IS STILL SILENT — two such holes are known and named in KNOWN LIMITS in
+//     `tests/port-condition-contract.test.js`. Read them before treating a silence as proof.
+//
+// Four consequences, each of them a thing an earlier version of the fence got wrong:
+//   · ⛔ THE UNIT IS THE MODULE, NOT `conditionFromPlanet`'s BODY. Every function in this file is
+//     covered. Moving a read into a helper, a nested closure, or module scope hides nothing, and a
+//     helper's parameter becomes an input the moment the helper is CALLED with one.
+//   · SPELLING IS NOT THE SUBJECT. `d.x`, `planetData.x`, `d?.x`, `d['x']`, `const {x} = d`,
+//     `const p = d; p.x`, `let p; p = d`, `{ ...d }`, a ternary arm, and a helper that RETURNS the
+//     input are all the same fact, because aliases of the input are resolved to a fixpoint rather
+//     than pattern-matched. Naming a new spelling does not open a hole; it is already the same fact.
+//   · IT RUNS IN BOTH DIRECTIONS. A read with no row names the field; a row whose read has been
+//     DELETED names the row. The map cannot drift ahead of the code any more than behind it.
+//   · `provenanceOf` IS PARTITIONED, NOT EXEMPT. Its reads do not COUNT as reads-needing-a-row —
+//     they ARE the record, and counting them would put the record back on both sides of the
+//     comparison, which is the self-referential defect above, restored. They are nonetheless
+//     required to resolve to a row that ALREADY EXISTS. That body may read; it may not read
+//     something undeclared.
 //
 // ⛔ SO: ADD A READ, ADD A ROW. If a later step reads a new field off `planetData` (Step 2 adds
-// `d.tidalHeating`, `d.starMassEarth`, `d.orbitRadiusEarth` — PLAN.md:205) and does not add it here
-// with a `provenanceOf` entry to match, the contract test goes RED naming the field. That is proven
-// by injection, not asserted: the test carries a CONTROL that runs the same extractor over a
-// synthetic adapter with an extra read and requires it to be found.
+// `d.tidalHeating`, `d.starMassEarth`, `d.orbitRadiusEarth` — PLAN.md:180 `impossible to add silently`)
+// and does not add it here with a `provenanceOf` entry to match, the contract test goes RED naming
+// the field. Proven by injection, not asserted: the test carries CONTROLS that splice each evasion
+// into the REAL source in memory and require the fence to catch it, plus one that DELETES a read and
+// requires the stale direction to fire — a gate whose control never moved is evidence of nothing.
+//
+// ⚠ THE ROWS BELOW ARE ALSO THE NAMESPACE THE READS ARE COUNTED IN, so the depth is truncated on
+// purpose: one level off `planetData`, two under `composition` (that is what `comp.` means). A read
+// of `d.atmosphere.physics.pressure` is therefore attributed to the declared input `d.atmosphere`
+// rather than reported as a fourth undeclared thing — which is what makes `atmosphereFromPlanet`'s
+// three levels of nesting analysable at all. Add the row at the depth the map speaks in.
+//
+// ⚠ WRITE A NEW READ AS AN ORDINARY MEMBER ACCESS ON `d` OR `comp`. Much of what the analysis cannot
+// follow — the input handed to a callee it cannot see, a computed field name that is not a literal,
+// the input stored into an array or iterated over — is reported by name and fails the build. That is
+// deliberate and it is the difference from the two fences before this one: they were FAIL-OPEN at the
+// node-TYPE level, so a construct nobody had modelled was silently fine, and five were found on disk
+// with the full suite green. ⛔ But a MIS-resolved construct is not an unresolved one: a wrong rule
+// for a bucketed type still passes silently, and two such holes are known (KNOWN LIMITS, in
+// `tests/port-condition-contract.test.js`). So cleverness here is USUALLY a red build — not always.
 //
 // ⚠ WHY `composition` IS A COMPOUND ROW AND `carbonToOxygen` IS ITS OWN. The three fields the
 // density/iron/volatile gate reads are a unit — a body with iron and volatiles but no density is the
@@ -377,8 +433,9 @@ export const PROVENANCE_INPUTS = Object.freeze(Object.keys(PROVENANCE_COVERAGE))
  *    fabrication case — a body with iron and volatiles but no density silently becomes
  *    5500 kg/m³ ⇒ 5.5 g/cc, i.e. Earth, and reads maximally rocky.
  *
- *  · `atmosphere` distinguishes `null` from absent. `null` is a MEASUREMENT: PlanetGenerator.js:448
- *    and MoonGenerator.js:192 set it outright to mean "nothing retained", and the engine's airless
+ *  · `atmosphere` distinguishes `null` from absent. `null` is a MEASUREMENT: both
+ *    PlanetGenerator.js:448 `let atmosphere = null;` and MoonGenerator.js:196 `} : null,`
+ *    set it outright to mean "nothing retained", and the engine's airless
  *    presets agree. `undefined` means the body never said. And a visual-only `{color, strength}`
  *    wrapper — the moon bug above — is 'defaulted', because it looks like an answer and is not one.
  *
@@ -491,14 +548,18 @@ export function conditionFromPlanet(planetData) {
   // structurally, not stylistically: `planetData` is the subject of Instrument B's body-identity
   // fingerprint and Instrument C's watched set, and a port OUTPUT that lands inside its own
   // instrument's matching key is exactly the P1 defect Step 0 had to fix (the five WORLDENGINE_BAKES
-  // are excluded from the hash for that reason — tests/body-identity-fence.test.js:169). Keeping
+  // are excluded from the hash for that reason — the exclusion itself is
+  // body-identity-fence.test.js:192 `WORLDENGINE_BAKES.includes(k)`, over the list at
+  // body-identity-fence.test.js:173 `const WORLDENGINE_BAKES`). Keeping
   // provenance off `planetData` means neither exclusion list needs to grow, and the fence stays a
-  // fence instead of acquiring another hole. PlanetGenerator.js:756-761 writes only its five named
-  // bakes, so nothing carries this onto a body record; the contract test asserts that rather than
-  // trusting it.
+  // fence instead of acquiring another hole. The record literal in `PlanetGenerator.generate` and
+  // the four assignments under it — PlanetGenerator.js `planetData.iceness = icenessOf(condition);`
+  // and its siblings, cited symbol-only per §10 because every step of this plan grows that region —
+  // write only the five named bakes, so nothing carries this onto a body record; the contract test
+  // asserts that rather than trusting it.
   //
   // NON-ENUMERABLE, and that is the second half of the same argument. `Object.keys`, `JSON.stringify`
-  // and `{...spread}` (worldengine/instrument/laws.js:315 does spread a condition) cannot see it, so
+  // and `{...spread}` (laws.js:315 `const c = baselineCondition({ ...condition,` spreads one) cannot see it, so
   // it CANNOT enter any hash, golden or key-shape assertion by accident. The protection is
   // structural — nobody has to remember to exclude it. The cost is that a spread DROPS it, which is
   // correct: a spread-derived condition is a different body's worth of inputs and has no provenance.

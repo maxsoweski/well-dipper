@@ -259,9 +259,58 @@ function vitestVersion() {
   }
 }
 
+/**
+ * PROVENANCE — `{ sha, dirty }`, deliberately the SAME SHAPE Instrument C writes
+ * (tools/port-uniform-delta.mjs `gitHead`, recorded as `recordedAtGit`) so the two
+ * instruments say where a record came from in one vocabulary rather than two.
+ *
+ * ⭐ THE DIRTY FLAG IS THE LOAD-BEARING HALF, not decoration. A bare sha ASSERTS that
+ * the numbers under it are the numbers a checkout of that commit produces. On this
+ * branch that assertion was false and shipped that way: known-failures.json says
+ * `"recordedFromCommit": "0af246e"` while the counts it holds are the WORKING TREE's.
+ * A clean checkout of 0af246e therefore runs --check RED against a record naming it as
+ * the source, and the obvious response to that red — re-record — throws the instrument
+ * away to fix a lie the instrument told about itself. (Round-3 finding F, ledger B9.)
+ *
+ * `git status --porcelain` counts UNTRACKED files as dirty. For this instrument that is
+ * the correct reading and not an over-strict one: an untracked `*.test.js` is COLLECTED
+ * by vitest and moves the file set, which is the exact thing Instrument A compares.
+ *
+ * ⛔ REPORTING ONLY. Nothing here feeds the drift comparison — see main(). Provenance
+ * that could fail --check would make the instrument alarm on `git commit`, which moves
+ * no test.
+ *
+ * Implementation note: C uses execFileSync and throws into a catch; this uses the
+ * spawnSync already imported here and reads `status`. Same returned shape, same printed
+ * marker; only the plumbing differs.
+ */
 function gitHead() {
-  const res = spawnSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, encoding: 'utf8' });
-  return res.status === 0 ? res.stdout.trim() : 'unknown';
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' });
+  if (head.status !== 0) return { sha: 'unknown', dirty: null };
+  const st = spawnSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' });
+  return {
+    sha: head.stdout.trim(),
+    dirty: st.status === 0 ? st.stdout.trim().length > 0 : null,
+  };
+}
+
+/**
+ * Read a `recordedFromCommit` that may PREDATE the marker. Records written before
+ * 2026-08-07 hold a bare short-sha string — which carries no dirtiness at all, and
+ * `dirty: null` is the only honest reading of it. Flagged `legacy` so --check can say
+ * so out loud instead of rendering "not dirty".
+ */
+function readProvenance(v) {
+  if (typeof v === 'string') return { sha: v, dirty: null, legacy: true };
+  if (v && typeof v === 'object') return { sha: v.sha ?? 'unknown', dirty: v.dirty ?? null, legacy: false };
+  return { sha: 'unknown', dirty: null, legacy: false };
+}
+
+/** `<sha> (dirty tree)` — the marker string is verbatim Instrument C's. */
+function provenanceLine(p) {
+  if (p.dirty === true) return `${p.sha} (dirty tree)`;
+  if (p.dirty === null) return `${p.sha} (dirtiness NOT recorded)`;
+  return p.sha;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -443,6 +492,12 @@ function main() {
         'IDs moved and why. A blanket re-record throws the instrument away.',
         'Lists are sorted; no durations or timestamps are recorded, so nothing here',
         'churns on test order or machine speed.',
+        '',
+        'recordedFromCommit is {sha, dirty} — the same shape Instrument C writes to',
+        'tests/baseline/port-uniform-capture.json. dirty:true means these numbers are the',
+        "WORKING TREE's, NOT what a clean checkout of that sha produces; do not read the",
+        'sha as a reproduction recipe when it is set. A bare STRING there is a record',
+        'written before 2026-08-07, whose dirtiness was never captured either way.',
       ],
       recordedAt: new Date().toISOString(),
       recordedFromCommit: gitHead(),
@@ -461,6 +516,7 @@ function main() {
     fs.writeFileSync(opts.baseline, `${JSON.stringify(doc, null, 2)}\n`);
     process.stdout.write(
       `\ntest-baseline: recorded ${relPath(opts.baseline)}\n` +
+      `  recorded @: ${provenanceLine(readProvenance(doc.recordedFromCommit))}\n` +
       `  ${countsLine(summary.counts)}\n`,
     );
     process.exit(0);
@@ -476,6 +532,21 @@ function main() {
   }
 
   const warnings = [];
+  const recordedAt = readProvenance(baseline.recordedFromCommit);
+  const nowAt = gitHead();
+  if (recordedAt.legacy) {
+    warnings.push(
+      `provenance PREDATES the dirty-tree marker: recordedFromCommit is the bare string ` +
+        `"${recordedAt.sha}", so whether the tree was clean when these numbers were taken was ` +
+        'never captured. Do NOT read them as what a clean checkout of that sha produces — on ' +
+        'this branch they are the working tree\'s. The next --record writes {sha, dirty}.',
+    );
+  } else if (recordedAt.dirty === true) {
+    warnings.push(
+      `the baseline was recorded from a DIRTY tree at ${recordedAt.sha} — the numbers are that ` +
+        'working tree\'s, not that commit\'s. A clean checkout of it will read as drift.',
+    );
+  }
   const baseScope = (baseline.scope?.extraExclude ?? []).join(',');
   if (baseScope !== EXTRA_EXCLUDE.join(',')) {
     warnings.push(
@@ -495,6 +566,8 @@ function main() {
   const scopeDrift = baseScope !== EXTRA_EXCLUDE.join(',');
 
   process.stdout.write(`\ntest-baseline --check${opts.onlyFailures ? ' --only-failures' : ''}\n`);
+  process.stdout.write(`  recorded @: ${provenanceLine(recordedAt)}\n`);
+  process.stdout.write(`  now @     : ${provenanceLine(nowAt)}\n`);
   process.stdout.write(`  baseline : ${countsLine(baseline.summary.counts)}\n`);
   process.stdout.write(`  current  : ${countsLine(summary.counts)}\n`);
   for (const w of warnings) process.stdout.write(`  ⚠ ${w}\n`);

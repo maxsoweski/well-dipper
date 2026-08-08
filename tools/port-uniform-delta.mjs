@@ -185,8 +185,8 @@ const DEFAULT_POP = {
 function toSceneData(rec) {
   const ratio = rec.radius / rec.radiusScene;
   if (!Number.isFinite(ratio) || ratio <= 0) {
-    throw new Error(`toSceneData: radius/radiusScene is not finite-positive (${rec.radius}/${rec.radiusScene}). ` +
-      `main.js:6110 assumes both exist on every body it renders.`);
+    throw new Error(`toSceneData: radius/radiusScene is not finite-positive (${rec.radius}/${rec.radiusScene}). `
+      + 'main.js:6110 `const mapToSceneRatio` assumes both exist on every body it renders.');
   }
   return {
     ...rec,
@@ -321,7 +321,7 @@ function flatten(v) {
 //   lab writes uWeatheredColor too and this pair is now NAME-MATCHED. The history is kept because
 //   the map's job did not end with it — see UNIFIED NAMES below for what still guards the pair.
 //
-// That mattered immediately. PLAN.md:212 (Step 2's gate) names four moving quantities —
+// That mattered immediately. PLAN.md:212 `committed delta table` (Step 2's gate) names four moving quantities —
 // `landPalette`, `iceness`, `lavaGlowColor`, `lavaCrustColor`. THREE of the four reach the screen
 // through uniforms the name intersection never compared: uWeatheredColor, uLavaGlow, uLavaCrust.
 // Step 2's primary gate could have run green over its own declared subject.
@@ -489,8 +489,8 @@ const GAME_ONLY_WATCHED = [
   //    game bakes the colour on the CPU instead (`emissiveBlackbody` in PlanetGenerator.generate).
   //    Same law, different side of the CPU/GPU line — so there is no name to alias, and
   //    game-side-only is the correct and complete answer.
-  { game: 'uLavaGlow',  tier: 'bake', why: 'PlanetGenerator.js `planetData.lavaGlowColor = emissiveBlackbody(meltTemperatureOf(condition))` → Planet.js:1610 `uLavaGlow`. Named in Step 2\'s gate (PLAN.md:212).' },
-  { game: 'uLavaCrust', tier: 'bake', why: 'PlanetGenerator.js `planetData.lavaCrustColor = emissiveBlackbody(crustTemperatureOf(condition))` → Planet.js:1611 `uLavaCrust`. Named in Step 2\'s gate (PLAN.md:212).' },
+  { game: 'uLavaGlow',  tier: 'bake', why: 'PlanetGenerator.js `planetData.lavaGlowColor = emissiveBlackbody(meltTemperatureOf(condition))` → Planet.js:1610 `uLavaGlow`. Named in Step 2\'s gate (PLAN.md:212 `committed delta table`).' },
+  { game: 'uLavaCrust', tier: 'bake', why: 'PlanetGenerator.js `planetData.lavaCrustColor = emissiveBlackbody(crustTemperatureOf(condition))` → Planet.js:1611 `uLavaCrust`. Named in Step 2\'s gate (PLAN.md:212 `committed delta table`).' },
 
   // ── Gates on world-engine output. Constants, watched as dials (see the `gate` tier above).
   { game: 'uLimbMix',          tier: 'gate', why: 'LIMB_MIX (Planet.js:1401). Planet.js:527 `pow(fresnel, mix(3.0, uLimbExponent, uLimbMix))` and :535 mix onto uLimbColor — at 0.0 the entire condition-derived limb is off while uLimbExponent/uLimbColor still read correct.' },
@@ -912,10 +912,10 @@ if (!MODE) {
 // ref with NO backticked symbol cannot be checked; those are COUNTED AND PRINTED rather than
 // ignored, because an unchecked count that nobody prints is the same blind spot one level up.
 //
-// ⛔ SCOPE, AND WHY IT IS NOT EVERY FILE. The basename→path map below is exhaustive and this mode
-// FAILS on a basename it does not know, rather than skipping it — a fence with a silent skip is
-// the failure mode this whole instrument exists to catch. SOURCES is deliberately the files that
-// carry the port's own reasoning; adding one is a one-line change and should be done.
+// ⛔ SCOPE. The map below is a curated OVERRIDE, not the whole story: a basename it does not hold
+// is resolved against the repo (see `resolveBase`), and this mode FAILS — symbol or no symbol —
+// on one that matches no file or more than one. Never a silent skip; that is the failure mode this
+// whole instrument exists to catch. SOURCES is the files carrying the port's own reasoning.
 const CITE_FILES = {
   'Planet.js': 'src/objects/Planet.js',
   'PlanetGenerator.js': 'src/generation/PlanetGenerator.js',
@@ -937,6 +937,22 @@ const CITE_FILES = {
   'craterUniforms.js': 'src/worldengine/port/craterUniforms.js',
   'conditionFromPlanet.js': 'src/worldengine/port/conditionFromPlanet.js',
   'albedoTransfer.js': 'src/worldengine/display/albedoTransfer.js',
+  // ── added with the CITE_SOURCES widening (B4). Every one of these was NAMED BY THIS MODE'S OWN
+  // UNRESOLVED / SPAN-OPEN output after the sources went in, not guessed from reading the files.
+  'climate-e5.js': 'src/worldengine/base/climate-e5.js',
+  'storm-e.js': 'src/worldengine/base/storm-e.js',
+  'emission-e.js': 'src/worldengine/base/emission-e.js',
+  'fieldSampler.js': 'src/worldengine/instrument/fieldSampler.js',
+  'laws.js': 'src/worldengine/instrument/laws.js',
+  'port-condition-contract.test.js': 'tests/port-condition-contract.test.js',
+  'port-route-agreement.test.js': 'tests/port-route-agreement.test.js',
+  // The plan and the carried ledger cite THEMSELVES and each other — §10's "quoted claim" form is
+  // written that way. Without these two entries every such ref was unverifiable, which is why the
+  // one live instance surfaced as SPAN-OPEN "basename not in CITE_FILES" rather than as a check.
+  'PLAN.md': 'docs/FEATURES/one-pipeline-two-frontends-PLAN.md',
+  'one-pipeline-two-frontends-PLAN.md': 'docs/FEATURES/one-pipeline-two-frontends-PLAN.md',
+  'CARRIED.md': 'docs/FEATURES/one-pipeline-two-frontends-CARRIED.md',
+  'one-pipeline-two-frontends-CARRIED.md': 'docs/FEATURES/one-pipeline-two-frontends-CARRIED.md',
   'body-condition-vector.js': 'body-condition-vector.js',
   'planet-lod-uniforms.js': 'planet-lod-uniforms.js',
   'planet-lod-height.glsl.js': 'planet-lod-height.glsl.js',
@@ -948,12 +964,45 @@ const CITE_FILES = {
   'port-uniform-delta.mjs': 'tools/port-uniform-delta.mjs',
 };
 
+// ⛔ BASENAMES THAT ARE DELIBERATELY NOT FILES. A document that explains the citation FORM has to
+// show the form, and an example written in the live form is indistinguishable from a live ref —
+// CARRIED.md's statement of the B3.1 defect is exactly that, and it made this mode exit 2 on a
+// basename that has no path to add. The answer is not a silent skip (the failure mode this whole
+// instrument exists to catch) and not deleting the example: it is an ENUMERATED, PRINTED list.
+// Every entry is counted and shown on every run, and `assertIllustrativeAreNotFiles` below exits 3
+// if one of these ever names a real file — the day `foo.js` exists, this list is hiding a ref.
+const CITE_ILLUSTRATIVE = new Set(['foo.js', 'Foo.js']);
+
 // Files whose reasoning this fence guards. PLAN.md is here because it is EXECUTED FROM.
+//
+// ⭐ THE NOTE ABOVE USED TO SAY ADDING A SOURCE IS "a one-line change." IT WAS NOT, AND THAT CLAIM
+// IS WHY THIS LIST STAYED WRONG (round 3, B4). The four original entries omitted the two DENSEST
+// carriers of the port's reasoning — `conditionFromPlanet.js` (50 refs) and the contract test (49)
+// — the two files that churn fastest and therefore rot fastest. Round 3 finding 1 was broken BY
+// THE ROUND THAT FIXED CITATIONS and was invisible for exactly this reason: it lived outside the
+// scanned set. §11.3.4 requires this list to cover every file a step edits, and it could not.
+//
+// It was not one line because SOURCES and FILES were COUPLED: the adapter cites `climate-e5.js`,
+// `storm-e.js` and `emission-e.js`, none of which were in CITE_FILES, and this mode exits 2 on an
+// unresolvable basename by design. So widening SOURCES without widening FILES turned a correct
+// citation into a red build — which happened live on 2026-08-07, when a ref written in the correct
+// `line + symbol` form failed the fence and the author fell back to the weaker symbol-only form.
+// A fence that punishes the correct form and passes the vacuous one (B3.1) selects against itself.
+// ⭐ ROUND 4 DECOUPLED THEM (B3.4): `resolveBase` resolves any basename naming exactly one file in
+// the repo, so widening SOURCES no longer forces a hand-edit here. Adding a source IS now cheap.
+//
+// ⛔ The CARRIED ledger is a source. It is where the port's open reasoning now lives, and §11.6
+// makes it a file steps are executed against. Left out, it becomes the next unscanned carrier —
+// this exact defect, one file over.
 const CITE_SOURCES = [
   'tools/port-uniform-delta.mjs',
   'body-condition-vector.js',
   'docs/FEATURES/one-pipeline-two-frontends-PLAN.md',
+  'docs/FEATURES/one-pipeline-two-frontends-CARRIED.md',
   'tests/body-identity-fence.test.js',
+  'src/worldengine/port/conditionFromPlanet.js',
+  'tests/port-condition-contract.test.js',
+  'tests/port-route-agreement.test.js',
 ];
 
 // `Foo.js:123 \`sym\`` — or a bare `:123 \`sym\`` continuing the last filename on the same line.
@@ -983,8 +1032,66 @@ function scanCitations(relSrc, text) {
       const before = line.slice(0, m.index);
       const insideSpan = ((before.match(/`/g) || []).length % 2) === 1;
       const after = line.slice(m.index + m[0].length);
-      const sym = insideSpan ? null : /^ ?`([^`\n]{1,110})`/.exec(after);
-      out.push({ src: relSrc, srcLine: i + 1, base, ln, sym: sym ? sym[1] : null });
+      // ⭐ THE PARITY VERDICT IS ONLY A FACT ON A BALANCED LINE (round 4, B3.5). Counting the
+      // backticks BEFORE the citation answers "am I inside a span?" only if every span on the line
+      // actually closes. One stray backtick earlier — an apostrophe typed as a backtick, a `` in
+      // prose, a fence marker — inverts the answer for every citation to its right, and the failure
+      // is silent in the worst direction: a genuinely BROKEN §10-form ref
+      // (`file:NNN` + a separate `symbol` span) is read as "inside a span", `after.indexOf` lands
+      // on the SYMBOL SPAN'S OPENING backtick, the tail between them is empty, `spanSym` comes out
+      // null, and the ref falls through to UNCHECKED — not even SPAN-OPEN. Same family as B3.2:
+      // the correct citation form disappears while the vacuous one passes.
+      //
+      // On an unbalanced line the verdict is discarded rather than trusted in either direction, and
+      // the STRICT §10 reading is used instead: the symbol span must be separated from the number
+      // by exactly one space (a span CLOSING on the citation has its backtick flush against it,
+      // with no space) and must not open or close on whitespace (prose caught between two spans
+      // does). That discriminator is what keeps this from turning trailing prose into a false
+      // BROKEN. Where it finds a symbol the ref is checked normally — a broken one stays a build
+      // failure, so a stray backtick is not a way to silence a red citation. Where it finds none
+      // the ref is listed under TICK-PARITY, which is printed and counted; the one thing it may
+      // never do is join the 300-deep UNCHECKED pile.
+      const oddTicks = ((line.match(/`/g) || []).length % 2) === 1;
+      if (oddTicks) {
+        const strict = /^ `([^`\n\s](?:[^`\n]{0,108}[^`\n\s])?)`/.exec(after);
+        out.push({ src: relSrc, srcLine: i + 1, base, ln, sym: strict ? strict[1] : null, spanSym: null, oddTicks: true, raw: line.trim() });
+        continue;
+      }
+      if (!insideSpan) {
+        const sym = /^ ?`([^`\n]{1,110})`/.exec(after);
+        out.push({ src: relSrc, srcLine: i + 1, base, ln, sym: sym ? sym[1] : null, spanSym: null });
+        continue;
+      }
+      // ⭐ THE SILENT-DROP PATH, and why it is fixed here rather than counted (round 3, B3.2).
+      // `insideSpan` above was a single verdict — "no symbol" — covering two shapes that are not
+      // the same thing:
+      //
+      //   (a) prose that mentions a ref inside a span — one span holding `uIceColor → Planet.js`
+      //       and a line number. The span ENDS at the number: no symbol, and UNCHECKED is honest.
+      //   (b) THE WHOLE CITATION IN ONE SPAN — one span holding `storm-e.js`, a line number, AND
+      //       `URANIAN_OBLIQUITY: 80`. A fully-formed `line + symbol` ref the parser cannot see.
+      //       (Both shapes are written here WITHOUT a literal `file:NNN`, because this file is its
+      //       own CITE_SOURCE: an illustration written in the live form becomes a live ref.)
+      //
+      // (b) used to fall into UNCHECKED — one more among 232, where nobody would ever find it. A
+      // fence with a silent-drop path cannot be the thing that closes a class: the vacuous form
+      // passed and the CORRECT form disappeared, so the fence was pushing citations away from the
+      // shape it exists to enforce. Two live instances were in the tree when this was written.
+      //
+      // So: take the rest of the span as a candidate symbol and RESOLVE it. Resolving moves the ref
+      // into CHECKED where it always belonged. Not resolving gets its own loud category — never
+      // UNCHECKED — because the tool cannot tell a broken (b) from an ordinary (a) with trailing
+      // prose, and saying so out loud is the honest report. Both are printed with the target line.
+      const close = after.indexOf('`');
+      // §10's THIRD documented form is the "quoted claim" — a line number followed by a quoted
+      // sentence, and it is written inside one span, so it lands here. Strip one matching pair of
+      // surrounding double quotes: without this the whole form was unverifiable, failing on the
+      // quote characters alone. A documented-correct citation form that the fence cannot resolve
+      // is the same defect as a silent drop, one level up.
+      const tail = (close < 0 ? '' : after.slice(0, close)).trim()
+        .replace(/^"([\s\S]*)"$/, '$1').replace(/^“([\s\S]*)”$/, '$1').trim();
+      const spanSym = /[A-Za-z_$]/.test(tail) ? tail.slice(0, 110) : null;
+      out.push({ src: relSrc, srcLine: i + 1, base, ln, sym: null, spanSym });
     }
   }
   return out;
@@ -992,17 +1099,143 @@ function scanCitations(relSrc, text) {
 
 // The comparison. Whitespace is normalised on both sides (a ref must survive re-indentation);
 // nothing else is. A symbol either IS on that line or it is not.
-const normWs = (s) => s.replace(/\s+/g, '');
+//
+// ⭐ TOKEN BOUNDARY — and why the first version of this line was a VACUOUS FENCE (round 3, B3.1).
+// It read `normWs(text).includes(normWs(sym))`. Substring containment with whitespace deleted is
+// true of almost every line in the repo for almost every short symbol: a ref whose symbol is `d`
+// holds on `const s = and(x)` because `d` sits inside `and`; a ref whose symbol is `C` holds on
+// `const CITE_SOURCES = [` four times over. True of any line is not a check, and this is the fence
+// §11.2 leans on to close class N — so its own vacuity was the largest hole in the class.
+//
+// The rule now: the symbol must occur as a TOKEN. If it begins with an identifier character, the
+// character before it must not be one; likewise at the end. (Same rule `\b` encodes, applied only
+// on the sides where it is meaningful, so a symbol like `.iceness` or `= [` is not penalised for
+// starting or ending on punctuation.)
+//
+// ⚠ The boundary is evaluated against the ORIGINAL line, never against the whitespace-stripped
+// form — that distinction is load-bearing. On a whitespace-stripped target `export default class`
+// and `export default classFoo` are indistinguishable and a boundary test there would reject the
+// true ref. So whitespace tolerance is preserved (a run of whitespace in the SYMBOL matches any
+// run of whitespace in the target, which is what re-indentation and wrapping do to a ref) while
+// the boundary reads real characters: `export default class` still holds on
+// `export default class Foo`, and `uIceColor` does NOT hold on `uIcenessMix`.
+//
+// ⭐ WHITESPACE IS FOLDED ONLY WHERE THE SYMBOL HAS WHITESPACE (round 4, B3.3). The previous
+// version deleted whitespace from the symbol and then inserted `\s*` between EVERY pair of
+// characters. That is not "tolerating re-indentation" — it is tolerating whitespace the symbol
+// never had, which makes a MISSPELLED symbol pass: `constd` matched `const d = planetData || {};`
+// because `\s*` was silently offered between the `t` and the `d`. A fence that accepts a typo is
+// the vacuous-fence class B3.1 named, one layer down, so it is closed the same way: the symbol is
+// split on its OWN whitespace runs, each chunk must match LITERALLY and contiguously, and only the
+// seams between chunks are elastic. `const  CITE_SOURCES` (two spaces) still holds on
+// `const CITE_SOURCES = [` (one space) — the wrap/re-indent tolerance the self-control probe
+// guards — while `constd` no longer holds on anything but a literal `constd`.
+const IDENT_CH = /[A-Za-z0-9_$]/;
+// A symbol has to carry at least one LETTER-class character to anchor anything. Same test the
+// one-span tail already used; see SYMBOL MUST NAME SOMETHING below for why it is now a gate.
+const SYM_ANCHORING = /[A-Za-z_$]/;
+const reEsc = (c) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function symMatcher(sym) {
+  const raw = (sym == null ? '' : String(sym)).trim();
+  const chunks = raw.split(/\s+/).filter(Boolean);
+  if (!chunks.length) return null;
+  const body = chunks.map((chunk) => [...chunk].map(reEsc).join('')).join('\\s*');
+  const left = IDENT_CH.test(raw[0]) ? '(?<![A-Za-z0-9_$])' : '';
+  const right = IDENT_CH.test(raw[raw.length - 1]) ? '(?![A-Za-z0-9_$])' : '';
+  return new RegExp(left + body + right);
+}
+
+// ⛔ SYMBOL MUST NAME SOMETHING. A backticked run with no letter-class character in it — `//`,
+// `= [`, `});` — is a citation form with the anchoring removed: it holds on every comment line,
+// every array literal, every block close in the repo. That is B3.1's vacuous fence wearing the
+// correct syntax, and it was slipping through as CHECKED. `citationHolds` refuses it here so no
+// caller can accidentally count one, and `runCitationCheck` files such refs in their own printed,
+// FATAL category rather than letting them inflate the CHECKED headline.
 function citationHolds(cite, targetLines) {
   const text = targetLines[cite.ln - 1];
   if (text === undefined) return { ok: false, why: 'PAST EOF', text: '' };
-  return { ok: normWs(text).includes(normWs(cite.sym)), why: 'symbol not on this line', text: text.trim() };
+  if (!SYM_ANCHORING.test(cite.sym == null ? '' : String(cite.sym))) {
+    return { ok: false, why: 'symbol has no letter-class character — it anchors nothing', text: text.trim() };
+  }
+  const re = symMatcher(cite.sym);
+  if (!re) return { ok: false, why: 'empty symbol', text: text.trim() };
+  return { ok: re.test(text), why: 'symbol not on this line as a token', text: text.trim() };
+}
+
+// ═══ RESOLVING A BASENAME (round 4, B3.4) ════════════════════════════════════════════════════
+// The charter twelve screens up says this mode "FAILS on a basename it does not know, rather than
+// skipping it — a fence with a silent skip is the failure mode this whole instrument exists to
+// catch." That was HALF TRUE, and the half that was false was the dangerous half: a ref WITH a
+// symbol to an unknown basename was fatal, and a ref WITHOUT one was quietly filed under UNCHECKED,
+// where it read as "known file, no symbol" — a different and repairable fact. 41 refs across 22
+// basenames were sitting in that pile, two of them in this tool's own comments.
+//
+// The obvious repair — hand-add 22 entries to CITE_FILES — was written, run, and REJECTED on the
+// evidence: it grew this file above `const CITE_SOURCES = [`, which moved that line from 997 to
+// 1028, which broke a live symbol-checked citation to it in CARRIED.md. That is not a reason to
+// leave the hole; it is the diagnosis. B4 already recorded that CITE_SOURCES and CITE_FILES are
+// COUPLED, so widening one forces the other. The lasting fix is to DECOUPLE them: a basename that
+// names exactly one file in the repo does not need a hand-written line to say so, and a map that
+// has to enumerate every file the port's prose mentions is a map that will be behind by Tuesday.
+//
+// So: CITE_FILES stays as the curated override and always wins; anything else is resolved against
+// an index of the repo. Exactly one match resolves. More than one is AMBIGUOUS and none is
+// NOT-FOUND, and both are fatal for symbol-carrying AND symbol-less refs alike — which is the
+// first time the charter sentence above has been true of the code under it.
+const CITE_SKIP_DIRS = new Set(['node_modules', '.git', '.claude', 'dist', 'build', 'coverage']);
+const CITE_EXT = /\.(js|mjs|html|md)$/;
+let _repoIndex = null;
+function repoIndex() {
+  if (_repoIndex) return _repoIndex;
+  const idx = new Map();
+  const walk = (absDir, relDir) => {
+    let ents;
+    try { ents = fs.readdirSync(absDir, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) {
+      const rel = relDir ? `${relDir}/${e.name}` : e.name;
+      if (e.isDirectory()) {
+        if (CITE_SKIP_DIRS.has(e.name)) continue;
+        walk(path.join(absDir, e.name), rel);
+      } else if (e.isFile() && CITE_EXT.test(e.name)) {
+        if (!idx.has(e.name)) idx.set(e.name, []);
+        idx.get(e.name).push(rel);
+      }
+    }
+  };
+  walk(ROOT, '');
+  _repoIndex = idx;
+  return idx;
+}
+
+// ⚠ `.claude` is skipped because it holds WORKTREES — full second copies of this repo. Without
+// that skip almost every basename is "ambiguous" against its own clone and the resolver reports
+// nothing but noise. Verified: with the skip, all 22 previously-unresolved basenames match exactly
+// one file; without it, `vite.config.js` alone matches four.
+function resolveBase(base) {
+  if (CITE_FILES[base]) return { rel: CITE_FILES[base], how: 'CITE_FILES override' };
+  const hits = repoIndex().get(base) || [];
+  if (hits.length === 1) return { rel: hits[0], how: 'unique basename in repo' };
+  if (hits.length > 1) return { rel: null, how: 'AMBIGUOUS', candidates: hits };
+  // ⛔ PREFIX ELISION, and it is a real citation shape, not a typo. PLAN.md writes a pair as
+  // `cockpit-screens-lab-flight.js:1-9` and `-panels.js:1-9`, dropping the shared prefix from the
+  // second. Dropping the ref because the name "looks wrong" is the silent skip again. So a base
+  // that STARTS on a non-word character is allowed to match by suffix — and only when exactly one
+  // file in the repo ends that way, so the elision cannot quietly land on the wrong file.
+  if (/^[^A-Za-z0-9_$]/.test(base)) {
+    const tail = [];
+    for (const [name, paths] of repoIndex()) if (name.endsWith(base) && paths.length === 1) tail.push(paths[0]);
+    if (tail.length === 1) return { rel: tail[0], how: 'elided prefix, unique suffix match' };
+    if (tail.length > 1) return { rel: null, how: 'AMBIGUOUS (elided prefix)', candidates: tail };
+  }
+  return { rel: null, how: 'NOT FOUND in repo' };
 }
 
 function runCitationCheck() {
   console.log('── INSTRUMENT C · citation fence ' + '─'.repeat(57));
   console.log('  Checks every `file:NNN `symbol`` ref in the port\'s own reasoning files.');
-  console.log('  A ref with no backticked symbol CANNOT be checked and is counted as UNCHECKED.');
+  console.log('  A ref with no backticked symbol cannot be checked BY SYMBOL; its file and line range');
+  console.log('  still are, and it is counted as UNCHECKED rather than skipped.');
   console.log('');
 
   // ⭐ NEGATIVE CONTROL, run every time, before the real check. Two synthetic citations against
@@ -1013,32 +1246,130 @@ function runCitationCheck() {
   const anchorLn = selfLines.findIndex((l) => l.includes('const CITE_SOURCES = [')) + 1;
   const good = citationHolds({ ln: anchorLn, sym: 'const CITE_SOURCES = [' }, selfLines);
   const bad = citationHolds({ ln: anchorLn, sym: 'const CITE_FILES = {' }, selfLines);
-  if (!anchorLn || !good.ok || bad.ok) {
+  // ⭐ THE THIRD PROBE IS THE ONE B3.1 ADDS, and it is the one the old fence failed. `C` occurs on
+  // the anchor line four times — inside `const`, and three times inside `CITE_SOURCES` — and never
+  // as a token. Under substring containment it HELD, which is what made a one-letter symbol a ref
+  // that passes on almost any line. It must now fail. If the anchor line is ever rewritten so that
+  // a bare `C` IS a token there, this exits 3 and says so — the loud direction, not a silent pass.
+  const substr = citationHolds({ ln: anchorLn, sym: 'C' }, selfLines);
+  // ⭐ AND ITS MIRROR — the probe round 4 had to add, because round 3's set could not see half of
+  // its own rule. The token boundary has TWO halves. `C` above is killed by the RIGHT half alone
+  // (it is followed by `o` in `const` and by `I`/`E` inside `CITE_SOURCES`), so deleting the LEFT
+  // half changed nothing any probe could observe: a mutant that removed the left lookbehind kept
+  // the whole self-control GREEN. A control that cannot move is not a control.
+  //
+  // `SOURCES` is the mirror case: on the anchor line it is a SUFFIX of `CITE_SOURCES`, so the
+  // character before it is `_` (an identifier character) and the character after it is a space.
+  // Only the LEFT lookbehind can reject it. It must NOT hold. If the anchor line is ever rewritten
+  // so `SOURCES` stands alone as a token there, this exits 3 and says so — the loud direction.
+  const suffix = citationHolds({ ln: anchorLn, sym: 'SOURCES' }, selfLines);
+  // And the companion: whitespace tolerance must survive the boundary rule. A multi-word symbol
+  // whose last character abuts a space in the target is a TRUE ref and must still hold.
+  const spaced = citationHolds({ ln: anchorLn, sym: 'const  CITE_SOURCES' }, selfLines);
+  // ⭐ AND THE MIRROR OF *THAT* — the probe that pins whitespace folding to the symbol's own
+  // whitespace (B3.3). `constCITE_SOURCES` has no whitespace, so no elastic seam may be invented
+  // for it; it must NOT hold on `const CITE_SOURCES = [`. Removing the fold entirely kills
+  // `spaced`; making the fold universal again (the old `\s*`-between-every-character rule) makes
+  // this one hold. The pair brackets the behaviour from both sides — neither probe alone does.
+  const glued = citationHolds({ ln: anchorLn, sym: 'constCITE_SOURCES' }, selfLines);
+  // ⭐ AND THE VACUOUS-SYMBOL PROBE. A symbol with no letter-class character anchors nothing —
+  // `= [` occurs on the anchor line and on thousands of others. `citationHolds` must refuse it
+  // rather than report a match, or the punctuation-only ref is a fence that always passes.
+  const punct = citationHolds({ ln: anchorLn, sym: '= [' }, selfLines);
+  if (!anchorLn || !good.ok || bad.ok || substr.ok || suffix.ok || !spaced.ok || glued.ok || punct.ok) {
     console.error('⛔ CITATION-FENCE SELF-CONTROL FAILED — the resolver does not distinguish a correct');
-    console.error(`   ref from a wrong one (anchor line ${anchorLn}, good=${good.ok}, bad-must-be-false=${bad.ok}).`);
+    console.error(`   ref from a wrong one (anchor line ${anchorLn}, good=${good.ok}, bad-must-be-false=${bad.ok},`);
+    console.error(`   non-token-substring-must-be-false=${substr.ok}, token-SUFFIX-must-be-false=${suffix.ok},`);
+    console.error(`   whitespace-tolerant=${spaced.ok}, invented-fold-must-be-false=${glued.ok},`);
+    console.error(`   punctuation-only-must-be-false=${punct.ok}).`);
     console.error('   Every result below would be meaningless. Exit 3.');
     process.exit(3);
   }
-  console.log(`  self-control    : PASS (a true ref at :${anchorLn} holds, a false one at the same line does not)`);
+  console.log(`  self-control    : PASS (a true ref at :${anchorLn} holds; a false one at the same line does not;`);
+  console.log('                    a non-token substring does NOT hold and neither does a token SUFFIX (the two');
+  console.log('                    halves of the boundary, probed separately); whitespace still folds where the');
+  console.log('                    symbol has whitespace and NOT where it does not; punctuation-only is refused)');
 
   const targetCache = new Map();
   const readTarget = (base) => {
     if (!targetCache.has(base)) {
-      const rel = CITE_FILES[base];
+      const rel = resolveBase(base).rel;
       targetCache.set(base, rel && fs.existsSync(path.resolve(ROOT, rel))
         ? fs.readFileSync(path.resolve(ROOT, rel), 'utf8').split('\n') : null);
     }
     return targetCache.get(base);
   };
 
-  const broken = [], unknown = [], unchecked = [];
-  let checked = 0;
+  // A CITE_FILES entry that points at a path which no longer exists resolves to `null` and every
+  // ref through it reports as "basename not in CITE_FILES" — a true failure with a false reason,
+  // which is the navigational-rot class this instrument exists to catch, inside the instrument.
+  // Say the real thing instead, and say it before any count is printed.
+  const deadEntries = Object.entries(CITE_FILES).filter(([, rel]) => !fs.existsSync(path.resolve(ROOT, rel)));
+  if (deadEntries.length) {
+    console.error('⛔ CITE_FILES maps basenames to paths that DO NOT EXIST. Refs through them would be');
+    console.error('   reported as unknown basenames, which is the wrong reason for the right failure.');
+    for (const [b, rel] of deadEntries) console.error(`     ${b} → ${rel}`);
+    process.exit(3);
+  }
+
+  // The illustrative list may only ever hold names that are NOT files. If one becomes real, the
+  // list is silently swallowing refs into it — the exact thing it was added to avoid.
+  for (const base of CITE_ILLUSTRATIVE) {
+    const collides = Object.prototype.hasOwnProperty.call(CITE_FILES, base);
+    if (collides) {
+      console.error(`⛔ CITE_ILLUSTRATIVE and CITE_FILES both claim "${base}". One of them is wrong and`);
+      console.error('   refs to it are being classified by list order rather than by fact. Exit 3.');
+      process.exit(3);
+    }
+  }
+
+  const broken = [], unknown = [], unchecked = [], spanOpen = [], illustrative = [];
+  const unknownNoSym = [], punctOnly = [], tickParity = [], pastEof = [];
+  let checked = 0, spanRecovered = 0;
   for (const rel of CITE_SOURCES) {
     const abs = path.resolve(ROOT, rel);
     if (!fs.existsSync(abs)) { console.error(`⛔ CITE_SOURCES lists a file that does not exist: ${rel}`); process.exit(2); }
     for (const c of scanCitations(rel, fs.readFileSync(abs, 'utf8'))) {
-      if (!CITE_FILES[c.base]) { (c.sym ? unknown : unchecked).push(c); continue; }
-      if (!c.sym) { unchecked.push(c); continue; }
+      if (CITE_ILLUSTRATIVE.has(c.base)) { illustrative.push(c); continue; }
+      // Whole-citation-in-one-code-span. Resolve it if it resolves; report it if it does not.
+      // The one thing it must never do is join the UNCHECKED pile — see scanCitations.
+      if (c.spanSym) {
+        const sres = resolveBase(c.base);
+        const tgt = sres.rel ? readTarget(c.base) : null;
+        if (!tgt) { spanOpen.push({ ...c, actual: '', why: `basename unresolvable — ${sres.how}` }); continue; }
+        const r = citationHolds({ ...c, sym: c.spanSym }, tgt);
+        if (r.ok) { checked++; spanRecovered++; continue; }
+        spanOpen.push({ ...c, actual: r.text, why: r.why });
+        continue;
+      }
+      // ⛔ AN UNKNOWN BASENAME IS UNRESOLVED WHETHER OR NOT IT CARRIES A SYMBOL (round 4, B3.4).
+      // This line used to read `(c.sym ? unknown : unchecked).push(c)`. The symbol-less half of
+      // that ternary was a SILENT SKIP wearing UNCHECKED's clothes, and it flatly contradicted
+      // this mode's own charter twelve screens up — "this mode FAILS on a basename it does not
+      // know, rather than skipping it — a fence with a silent skip is the failure mode this whole
+      // instrument exists to catch." Two live instances were sitting in the tool's OWN UNCHECKED
+      // dump when this was found: `vite.config.js:37` and `scene-naming.js:20`, both in the
+      // node-resolution note near the top of this file. UNCHECKED means "we know the file, we just
+      // have no symbol to anchor to"; it must never mean "we have no idea what file this is."
+      // Those are different facts and only one of them is repairable by writing a better citation.
+      const res = resolveBase(c.base);
+      if (!res.rel) { (c.sym ? unknown : unknownNoSym).push({ ...c, how: res.how, candidates: res.candidates }); continue; }
+      // ⭐ A SYMBOL-LESS REF IS NOT UNVERIFIABLE — IT IS ONLY UNVERIFIABLE BY SYMBOL. The file is
+      // known now, so the one fact the ref does assert can be checked: that the line EXISTS. A ref
+      // to line 903 of a 726-line document is broken however you read it, and it used to sit in
+      // the UNCHECKED pile as "trust, not verification" alongside refs that were merely unanchored.
+      if (!c.sym) {
+        // Unbalanced source line and no §10-form symbol recovered: the ref cannot be trusted in
+        // either direction, so it is named rather than buried. Never UNCHECKED — see scanCitations.
+        if (c.oddTicks) { tickParity.push({ ...c, why: 'odd backtick count on the source line; no `symbol` span follows the number', actual: c.raw }); continue; }
+        const tgt = readTarget(c.base);
+        if (tgt && tgt[c.ln - 1] === undefined) { pastEof.push({ ...c, rel: res.rel, lines: tgt.length }); continue; }
+        unchecked.push(c); continue;
+      }
+      // A backticked run with no letter-class character anchors nothing — see SYMBOL MUST NAME
+      // SOMETHING. It is not CHECKED and it is not BROKEN (the target line is irrelevant to it);
+      // it is a malformed ref, and it gets said out loud.
+      if (!SYM_ANCHORING.test(c.sym)) { punctOnly.push(c); continue; }
       const tgt = readTarget(c.base);
       if (!tgt) { unknown.push(c); continue; }
       const r = citationHolds(c, tgt);
@@ -1047,15 +1378,95 @@ function runCitationCheck() {
     }
   }
 
-  console.log(`  refs CHECKED    : ${checked}   (line + symbol)`);
+  console.log(`  refs CHECKED    : ${checked}   (line + symbol${spanRecovered ? `, ${spanRecovered} of them recovered from a one-span citation` : ''})`);
   console.log(`  refs UNCHECKED  : ${unchecked.length}  (line, no symbol — cannot be verified mechanically)`);
-  console.log(`  refs UNRESOLVED : ${unknown.length}  (basename not in CITE_FILES)`);
+  console.log(`  refs UNRESOLVED : ${unknown.length + unknownNoSym.length}  (basename resolves to no file, or to more than one — ${unknown.length} with a symbol,`);
+  console.log(`                       ${unknownNoSym.length} without. BOTH are unresolved: not knowing the file is not the`);
+  console.log('                       same fact as not having a symbol, and only the second belongs in UNCHECKED)');
+  console.log(`  refs PAST-EOF   : ${pastEof.length}  (symbol-less ref whose LINE does not exist in the resolved file —`);
+  console.log('                       the one thing an unanchored ref does assert, and it is checkable)');
+  console.log(`  refs MALFORMED  : ${punctOnly.length}  (backticked symbol with no letter-class character — anchors nothing)`);
+  console.log(`  refs TICK-PARITY: ${tickParity.length}  (odd backtick count on the source line, so the in-span/out-of-span`);
+  console.log('                       verdict is void — printed, NEVER folded into UNCHECKED)');
+  console.log(`  refs SPAN-OPEN  : ${spanOpen.length}  (whole citation in ONE code span, tail did not resolve — listed below,`);
+  console.log('                       NEVER folded into UNCHECKED; that fold is the defect B3.2 names)');
+  console.log(`  refs ILLUSTRATIVE: ${illustrative.length}  (basename in CITE_ILLUSTRATIVE — an example OF the citation form,`);
+  console.log('                       not a ref to a file; enumerated and printed, never skipped)');
+  for (const c of illustrative) {
+    console.log(`     ${c.src}:${c.srcLine}  ${c.base}:${c.ln}${c.sym ? ` \`${c.sym}\`` : ''}`);
+    const real = fs.existsSync(path.resolve(ROOT, c.base));
+    if (real) {
+      console.error(`⛔ "${c.base}" is listed as illustrative but a file by that name EXISTS at the repo root.`);
+      console.error('   This list is now hiding a real ref. Remove it from CITE_ILLUSTRATIVE. Exit 3.');
+      process.exit(3);
+    }
+  }
   console.log('');
 
   if (unknown.length) {
-    console.log('⛔ UNRESOLVED — these use the CHECKED form `file:NNN `symbol`` but the basename is not');
-    console.log('   in CITE_FILES, so the fence cannot verify them. Add the path; do not delete the ref.');
+    console.log('⛔ UNRESOLVED — these use the CHECKED form `file:NNN `symbol`` but the basename names no');
+    console.log('   file in the repo, or names more than one, so the fence cannot verify them. Fix the name');
+    console.log('   or add a CITE_FILES entry to disambiguate; do not delete the ref.');
     for (const u of unknown) console.log(`     ${u.src}:${u.srcLine}  ${u.base}:${u.ln} \`${u.sym}\``);
+    console.log('');
+  }
+  if (unknownNoSym.length) {
+    console.log('⛔ UNRESOLVED (no symbol) — a line-number ref whose basename names no file in the repo, or');
+    console.log('   names more than one. These used to be filed as UNCHECKED, which reads as "known file, no');
+    console.log('   symbol" — a different and repairable fact — and directly contradicted this mode\'s own');
+    console.log('   charter. Fix the name, add a CITE_FILES entry to disambiguate, or, if the name is an');
+    console.log('   example OF the citation form rather than a ref to a file, add it to CITE_ILLUSTRATIVE.');
+    const byBase = {};
+    for (const u of unknownNoSym) (byBase[u.base] ||= []).push(u);
+    for (const [b, list] of Object.entries(byBase)) {
+      console.log(`     ${b}  ×${list.length}  [${list[0].how}]   ${list.slice(0, 6).map((u) => `${u.src}:${u.srcLine}→:${u.ln}`).join('  ')}${list.length > 6 ? '  …' : ''}`);
+      if (list[0].candidates) console.log(`         candidates: ${list[0].candidates.slice(0, 6).join('  ')}`);
+    }
+    console.log('');
+  }
+  if (pastEof.length) {
+    console.log('⛔ PAST EOF — a symbol-less ref whose line number does not exist in the file it names. An');
+    console.log('   unanchored ref asserts exactly one thing; this is that one thing being false.');
+    for (const p of pastEof) console.log(`     ${p.src}:${p.srcLine}  cites  ${p.base}:${p.ln}  but ${p.rel} has ${p.lines} lines`);
+    console.log('');
+  }
+  if (punctOnly.length) {
+    console.log('⛔ MALFORMED SYMBOL — the backticked run carries no letter-class character, so it holds on');
+    console.log('   any line with the same punctuation. `//` holds on every comment; `= [` on every array');
+    console.log('   literal. This is the correct citation SYNTAX with the anchoring removed — B3.1\'s');
+    console.log('   vacuous fence in disguise — so it is refused rather than counted as CHECKED.');
+    for (const p of punctOnly) console.log(`     ${p.src}:${p.srcLine}  cites  ${p.base}:${p.ln} \`${p.sym}\``);
+    console.log('');
+  }
+  if (tickParity.length) {
+    console.log('⚠ TICK-PARITY — the SOURCE line holds an odd number of backticks, so at least one code span');
+    console.log('   on it is unterminated and the "is this citation inside a span?" verdict is not a fact.');
+    console.log('   A ref here cannot be trusted in EITHER direction, so it is never filed as UNCHECKED:');
+    console.log('   one unmatched backtick earlier on the line used to demote a genuinely broken §10-form');
+    console.log('   citation into the UNCHECKED pile, invisible among hundreds. Where the plain §10 reading');
+    console.log('   resolves it is taken and CHECKED; where it does not, the ref is listed here rather than');
+    console.log('   failed, because prose is not a build error. Balance the backticks on the source line.');
+    for (const t of tickParity) {
+      console.log(`     ${t.src}:${t.srcLine}  cites  ${t.base}:${t.ln}${t.sym ? ` \`${t.sym}\`` : ' (no symbol recovered)'}  [${t.why}]`);
+      if (t.actual) console.log(`         that line actually reads: ${t.actual.slice(0, 100)}`);
+    }
+    console.log('');
+  }
+  // ⭐ PRINTED BEFORE THE BROKEN BLOCK, ON PURPOSE. `broken` exits the process, so anything
+  // printed after it is invisible on exactly the runs where the file is being worked on. A
+  // category that only shows up when everything else is green is a silent drop with extra steps.
+  if (spanOpen.length) {
+    console.log('⚠ SPAN-OPEN — the whole citation sits inside ONE code span, so the `file:NNN `symbol``');
+    console.log('   parser cannot see a symbol, and the rest of the span does NOT hold on the cited line.');
+    console.log('   Each is EITHER a broken citation OR ordinary prose that happens to trail a ref inside a');
+    console.log('   span. This tool cannot tell those apart — which is exactly why it prints them instead of');
+    console.log('   dropping them into UNCHECKED, where one more among hundreds is invisible. Read each and');
+    console.log('   decide: re-write a real ref as `file:NNN` followed by a SEPARATE `symbol` span, or leave');
+    console.log('   prose as prose. Non-fatal by design: making prose a build failure would be a false gate.');
+    for (const s of spanOpen) {
+      console.log(`     ${s.src}:${s.srcLine}  cites  ${s.base}:${s.ln}  span tail: ${JSON.stringify(s.spanSym.slice(0, 80))}  [${s.why}]`);
+      if (s.actual) console.log(`         that line actually reads: ${s.actual.slice(0, 100)}`);
+    }
     console.log('');
   }
   if (broken.length) {
@@ -1072,7 +1483,9 @@ function runCitationCheck() {
     console.log(`RESULT: ${broken.length} BROKEN CITATION(S). Exit 2.`);
     process.exit(2);
   }
-  if (unknown.length) { console.log('RESULT: unresolved basenames. Exit 2.'); process.exit(2); }
+  if (unknown.length || unknownNoSym.length) { console.log(`RESULT: ${unknown.length + unknownNoSym.length} unresolved basename ref(s). Exit 2.`); process.exit(2); }
+  if (pastEof.length) { console.log(`RESULT: ${pastEof.length} ref(s) past end of file. Exit 2.`); process.exit(2); }
+  if (punctOnly.length) { console.log(`RESULT: ${punctOnly.length} malformed (anchor-less) symbol(s). Exit 2.`); process.exit(2); }
 
   if (unchecked.length) {
     console.log('  UNCHECKED refs (line number only — trust, not verification):');
@@ -1113,7 +1526,7 @@ function printResolution(res) {
   console.log(`  deliberately UNWATCHED                    : ${c.unwatched}   (each with a named reason, below)`);
   console.log('  ⭐ Matched by VALUE SOURCE, not spelling. When this map was written a pure name');
   console.log('     intersection watched 27 and missed uWeatheredColor / uLavaGlow / uLavaCrust —');
-  console.log("     three of the four quantities Step 2's own gate names (PLAN.md:212). The first of");
+  console.log('     three of the four quantities Step 2\'s own gate names (PLAN.md:212 `committed delta table`). The first of');
   console.log('     those was a DRIFTED SPELLING and has since been unified (2026-08-06), which is');
   console.log('     why it now reads name-matched. See THE UNIFORM MAP in this file.');
   console.log('');
