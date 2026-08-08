@@ -1107,7 +1107,12 @@ describe('AT THE RADIUS THE LAB ACTUALLY DRAWS — the boot-time delta, pinned',
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 // SITE 6 — the crater-boot enable set: the one site DELIBERATELY left canonical (AC-CRATERBOOT)
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
-describe('AC-CRATERBOOT — the :5206 canonical read is justified by measurement, re-measured here', () => {
+// ⚠ THE TITLE BELOW DELIBERATELY CARRIES NO LINE NUMBER. It read "the :5206 canonical read" until
+// 2026-08-08; line 5206 is a comment about dust-veil attenuation and the read is at
+// planet-lod-lab.html:4297 `craterRelevanceOf(deriveConditionVector(`. A line number inside a
+// describe title is worse than one in a comment: it is a TEST ID, so the citation fence cannot see
+// it, re-pointing it churns the baseline record, and it rots on every edit above it. Name the site.
+describe('AC-CRATERBOOT — the craterRelevanceOf canonical read is justified by measurement, re-measured here', () => {
   // This is the live guard that replaces a dated document. The G2 sweep found NO preset flips; the
   // result is NOT unconditional (it depends on K_GS, MESH_FLOOR_RAD, D_SFD_MIN_KM, G_REF, the 1e-6
   // gravity clamp and the reachable radius floor), and a planted K_GS 0.17 → 15 alone flips nine
