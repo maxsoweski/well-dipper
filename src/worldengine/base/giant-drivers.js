@@ -59,7 +59,7 @@
 //       channel is SINGLE-SOURCED: drawGiantConditions back-solves the drawn condition's surfaceGravity
 //       from M0·massFactor and the condition's radiusEarth, so deriveGiantDrivers' literal-form
 //       M = surfaceGravity·radiusEarth² reproduces M0·massFactor EXACTLY, regardless of whether
-//       radiusEarth is the DRAWN (state.planetRadiusEarth) or FP (fp.radiusEarth) value — the
+//       radiusEarth is the DRAWN (state.planetRadiusEarth) value or the FP radius — the
 //       drawn-vs-fp radius ambiguity is NEUTRALIZED (cancels), not merely chosen. (Rationale: bulk mass
 //       is a body property that must not track the render radius; the raw drawn-radius mass would be
 //       ±50-80% off M0 across the gas-giant archetype radius range and would clamp-saturate internalHeat.)

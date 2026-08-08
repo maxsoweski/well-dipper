@@ -5,9 +5,76 @@
 // METHOD — SOURCE EXECUTION, NOT RE-IMPLEMENTATION. The rewired consumers live INLINE in
 // planet-lod-lab.html (inside applyDrivers / rebakeE5Bands / applyStormState), so there is nothing to
 // import. This suite therefore CUTS each expression out of the live source at run time and executes it.
-// That matters: a re-implementation would pass forever while the lab drifted underneath it. Every
-// extraction throws loudly if its pattern stops matching, so "the source changed shape" surfaces as a
-// hard failure rather than as a silently-vacuous green.
+// That matters: a re-implementation would pass forever while the lab drifted underneath it.
+//
+// ══ THE EXTRACTION CONTRACT — RESTATED 2026-08-08 (PLAN §4 Step 3). THE OLD ONE WAS FALSE. ════════
+// It read: "Every extraction throws loudly if its pattern stops matching, so 'the source changed
+// shape' surfaces as a hard failure rather than as a silently-vacuous green." Two ways that was
+// wrong. Both were measured against a scratch mirror of the repo, not reasoned:
+//   1. NOT EVERY EXTRACTION THREW. `SRC_E5_RADIUS_LINES` was a bare Array.prototype.filter with no
+//      no-match branch, so it returned []. With both `radius: … / 11.2` lines deleted, the loop in
+//      "all four rewired sites match the captured pre-rewire values, exactly" ran ZERO iterations and
+//      that test PASSED. The file went red only by ACCIDENT — a TypeError "Cannot read properties of
+//      undefined (reading 'replace')" thrown at module scope by the `.replace()` two describes below,
+//      which names the wrong site and kills collection before one assertion runs.
+//   2. "THE PATTERN STOPS MATCHING" WAS NOT THE FAILURE MODE THAT MATTERED. The lab's habit when a
+//      law moves is to quote the retired statement verbatim in a `//` or `/* */` comment — 7
+//      instances, e.g. planet-lod-lab.html:6160 `//   _lab.setCarveEpoch(false); const off = _lab.sampleRoutedHeight(channelDirs);`.
+//      Every extraction here read RAW text and took the FIRST match, and with lazy quantifiers first
+//      means topmost, so a comment ABOVE the live site shadows it. Measured: move the bandCount law
+//      out to `state.bandCount = _pack.bandCount;` and quote the old statement on a bare `//` line
+//      above it — this file stayed **44/44 GREEN**, compiling and measuring DEAD COMMENT TEXT. Same
+//      shape, same result, for the cloud-regime block and for the two E5 driver lines. PLAN §4 Steps
+//      4 and 5 both declare they will move lab code out; the hole was pre-armed and waiting.
+//
+// THE CONTRACT NOW, stated so it can be checked rather than trusted:
+//   · THE SCAN SET IS A CORPUS, NOT ONE FILE — planet-lod-lab.html, planet-lod-shaders.glsl.js, and
+//     every .js under src/worldengine. An extraction therefore FOLLOWS its law when a step moves it
+//     out of the lab, instead of forcing the check to be deleted that day. ⚠ The corpus SIZE is
+//     deliberately not written down here and is asserted nowhere: it read 43 files and then 44 inside
+//     one session on 2026-08-08 while another agent was editing the tree, so a number in this prose
+//     would be born rotting. The corpus is defined by the walk; per-carrier liveness is proven by the
+//     control "THE CORPUS IS REALLY SCANNED BEYOND THE LAB", which names a hit outside the lab
+//     instead of counting files (helpers/source-scan.mjs states the same limit for `jsFilesUnder`).
+//   · COMMENTS ARE STRIPPED BEFORE ANY PATTERN IS APPLIED — tests/helpers/source-scan.mjs
+//     `stripCommentsPreservingOffsets`, whose output is byte-length-identical to its input, so every
+//     line number this file reports is the real one. ⭐ This is the change that closes the shadow
+//     class. Nothing else in this list does.
+//   · EVERY SITE MATCHES EXACTLY ONCE ACROSS THE CORPUS, and the failure names every location it did
+//     find, file:line. Zero ⇒ the law was moved, deleted or commented out. Two or more ⇒ the law is
+//     duplicated and the harness cannot know which copy is live — which is the state a half-finished
+//     move leaves behind, and the state first-match-wins used to paper over.
+//   · EVERY EXTRACTION IS NON-EMPTY, the two block sites included. ⚠ Worth having, and NOT the fix
+//     for the shadow class — do not read it as one. All three shadow mutants above matched a LONG
+//     non-empty string and the non-empty clause passed every one of them. Overstating this line
+//     would be this codebase's signature failure with the sign flipped.
+//   · THE `radius: … / 11.2` SITE IS A COUNTED LIST, not a single match: the lab's two inline driver
+//     lines (band bake + storm bake) plus the one single-source helper they will collapse onto. Its
+//     count is asserted at module scope as a named EXTRACTION FAILED, alongside the other
+//     extractions — see E5_SITES below for the partition and the measurement behind it.
+//   · EVERY COMPILED BODY RUNS UNDER `'use strict'` — see compileExpr for what that buys.
+//
+// ── ⚠ KNOWN LIMITS OF THIS CONTRACT ──────────────────────────────────────────────────────────────
+// Written HERE, in the gate's own source, where the next author meets them — PLAN §11.9: "a limit
+// that is not written into the gate itself has been forgotten, not accepted." Each is stated with the
+// construct it excuses, and each is a thing an author could do that this file would NOT catch.
+//   1. STRINGS AND TEMPLATE LITERALS ARE PRESERVED, NOT STRIPPED, and they must be — the surviving
+//      text is handed to `new Function` and has to still compile. So a law written INSIDE a string or
+//      a `/* glsl */` template is live text to this scanner. Consequence, in both directions: a
+//      retired law parked in a template shadows nothing (it would appear as a SECOND match and red
+//      loudly), but a law that MOVES into a shader template is "found" by a pattern that cannot
+//      execute it. ⛔ Promote this to a real problem the day a driver law lands inside a GLSL string
+//      — planet-lod-shaders.glsl.js is in the corpus precisely because that is the plausible venue.
+//   2. THE CORPUS STOPS AT src/worldengine PLUS THE TWO LAB FILES. A law moved to, say,
+//      planet-lod-lab-core.js or anywhere under src/ outside worldengine reads as ZERO matches. That
+//      is LOUD, not silent — the failure says "moved, deleted or commented out" and names the site —
+//      but the fix is to widen CORPUS, and nothing here will suggest that; the next author has to.
+//   3. THE PROSE PINS READ RAW SOURCE AND ARE SATISFIABLE BY THE COMMENT ALONE. That is correct for
+//      what they pin (see the note at each) and it is exactly the shadow shape everywhere else, so it
+//      is named rather than assumed harmless: deleting the craterboot site while keeping its comment
+//      is caught by the STRIPPED code pin beside them, not by the prose pins themselves.
+//   4. A LAW REWRITTEN IN PLACE INTO A SHAPE THE PATTERN DOES NOT MATCH reads as zero matches, not as
+//      a wrong measurement. Loud. Recorded because it is the one failure people expect to be silent.
 //
 // EVERY CHECK CARRIES A PLANTED DEFECT. For each site, the FROZEN form is reconstructed from the LIVE
 // source by one textual substitution (state.planetRadiusEarth → _fp.radiusEarth, or the condition-vector
@@ -36,9 +103,27 @@ import { drawGiantConditions, deriveGiantDrivers } from '../src/worldengine/base
 import { craterRelevanceOf, MESH_FLOOR_RAD, D_SFD_MIN_KM, C_ATMO_KM, P_ATMO_EXP,
          G_REF, K_GS, P_SURF_MAX } from '../src/worldengine/base/bombardment.js';
 import { KM_PER_EARTH_RADIUS } from '../src/worldengine/base/baseStep.js';
+import { stripCommentsPreservingOffsets, jsFilesUnder, lineOf } from './helpers/source-scan.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const LAB = readFileSync(join(ROOT, 'planet-lod-lab.html'), 'utf8');
+
+// ── the corpus ───────────────────────────────────────────────────────────────────────────────────
+// planet-lod-shaders.glsl.js is in the list for FORWARD CLOSURE, not because it carries anything
+// today. ⚠ MEASURED 2026-08-08, so nobody later reads its presence as evidence of something: it
+// contributes ZERO matches to every pattern in this file and defines `applyDrivers` ZERO times (the
+// one definition is planet-lod-lab.html:1933 `function applyDrivers(){`). It is here because Step 5's
+// driver packs are the kind
+// of thing that lands next to the shader source, and a corpus that has to be widened in the same
+// commit that moves the code is a corpus that will be widened one commit late.
+const CORPUS = ['planet-lod-lab.html', 'planet-lod-shaders.glsl.js', ...jsFilesUnder(ROOT, 'src/worldengine')];
+const RAW = new Map(CORPUS.map((rel) => [rel, readFileSync(join(ROOT, rel), 'utf8')]));
+// Comment-BLIND text, one entry per corpus file, in scan order. Offsets are preserved by the
+// stripper, so `lineOf` on this text yields the line number in the file on disk.
+const SRC = CORPUS.map((rel) => ({ rel, text: stripCommentsPreservingOffsets(RAW.get(rel)) }));
+// The lab's RAW text. Used ONLY by the prose pins at the bottom of this file, whose subject IS a
+// comment — see the note there. Nothing that gets compiled may read this.
+const LAB_RAW = RAW.get('planet-lod-lab.html');
+
 const PRESETS = Object.keys(DRIVER_PRESETS);
 const TIER = 1.0;
 
@@ -47,24 +132,67 @@ const N_SWEEP = 401;                                   // ~1.0% multiplicative s
 const SWEEP = Array.from({ length: N_SWEEP }, (_, i) => radiusFromT(i / (N_SWEEP - 1)));
 
 // ── extraction ───────────────────────────────────────────────────────────────────────────────────
-function extract(re, label) {
-  const m = LAB.match(re);
-  if (!m) throw new Error(`EXTRACTION FAILED (${label}): planet-lod-lab.html no longer matches ${re}. `
-                        + `This suite measures NOTHING until the pattern is repaired — do not delete the check.`);
-  return m[1].trim();
+// Every match of `re` anywhere in the COMMENT-STRIPPED corpus, in corpus order, each tagged with the
+// file and the true 1-based line it sits on.
+function scanText(re, entries) {
+  const g = new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`);
+  const hits = [];
+  for (const { rel, text } of entries) {
+    g.lastIndex = 0;
+    let m;
+    while ((m = g.exec(text))) {
+      hits.push({ rel, line: lineOf(text, m.index), body: (m[1] ?? m[0]) });
+      if (m[0] === '') g.lastIndex++;                 // a zero-width match would otherwise spin forever
+    }
+  }
+  return hits;
+}
+const scanCorpus = (re) => scanText(re, SRC);
+const where = (hits) => (hits.length ? hits.map((h) => `${h.rel}:${h.line}`).join(', ') : '(nowhere in the corpus)');
+// Where each site was found this run, keyed by label. Not asserted — a site is ALLOWED to move, that
+// is the point of the corpus — but it is reported in downstream failure messages so "the harness is
+// measuring the wrong copy" is answerable without re-deriving it.
+const SITE_HOME = new Map();
+
+function extract(re, label, entries = SRC) {
+  const hits = scanText(re, entries);
+  if (hits.length !== 1) {
+    throw new Error(`EXTRACTION FAILED (${label}): expected EXACTLY ONE live match of ${re} across the `
+      + `${entries.length}-file corpus; found ${hits.length} at ${where(hits)}.\n`
+      + `  ZERO means the law was moved out of the corpus, deleted, or commented out — comments are\n`
+      + `  stripped before matching, so a quoted copy is invisible here BY DESIGN.\n`
+      + `  TWO OR MORE means the law is duplicated and this harness cannot know which copy is live.\n`
+      + `  This suite measures NOTHING until the pattern is repaired — do not delete the check.`);
+  }
+  const body = hits[0].body.trim();
+  if (body === '') {
+    throw new Error(`EXTRACTION FAILED (${label}): matched at ${where(hits)} but captured an EMPTY string. `
+      + `An empty body compiles and returns undefined, which is a silent pass.`);
+  }
+  SITE_HOME.set(label, `${hits[0].rel}:${hits[0].line}`);
+  return body;
 }
 // Compile an expression into a function of a scope bag. The bag names are exactly the lab's local
 // identifiers at each site, so the extracted text runs unmodified.
+//
+// ⭐ WHY `'use strict'` (added 2026-08-08, PLAN §4 Step 3). `new Function` bodies are SLOPPY-mode
+// regardless of the strictness of the module that built them. In sloppy mode an extracted block that
+// assigns to an identifier declared OUTSIDE the extracted span does not throw — it creates a property
+// on globalThis and carries on. The harness then reports numbers from a scope that is not the site's
+// scope, while staying green: the desynchronisation is invisible in exactly the way this whole file
+// exists to prevent. Strict mode turns that into a loud ReferenceError. The control that proves the
+// change is not decorative is the `it` titled "sloppy mode would have swallowed…" below — it is a
+// planted defect, run on every CI run, not a claim.
 function compileExpr(src, label) {
   try {
     // eslint-disable-next-line no-new-func
-    return new Function('env', `const { state, _fp, _gas, _rotH, _gcond, _scond, u } = env; return (${src});`);
+    return new Function('env', `'use strict';\nconst { state, _fp, _gas, _rotH, _gcond, _scond, u } = env; return (${src});`);
   } catch (e) { throw new Error(`COMPILE FAILED (${label}): ${e.message}\n  src: ${src}`); }
 }
 function compileBlock(src, label) {
   try {
     // eslint-disable-next-line no-new-func
-    return new Function('env', `const { state, _fp, _gas, _rotH, _gcond, _scond, u } = env;\n${src}`);
+    return new Function('env', `'use strict';\nconst { state, _fp, _gas, _rotH, _gcond, _scond, u } = env;\n${src}`);
   } catch (e) { throw new Error(`COMPILE FAILED (${label}): ${e.message}\n  src: ${src}`); }
 }
 
@@ -83,24 +211,104 @@ function envFor(presetName, R) {
   return { ...base, _gas: fGas(base), _rotH: fRotH(base) };
 }
 const canonicalR = (p) => DRIVER_PRESETS[p].radiusEarth ?? 1;
-// The radius the LAB ITSELF produces — planet-lod-lab.html:3010, byte-for-byte the same call, including
-// the { labUnlock: true } flag. This is what the lab boots with; `canonicalR` is what it boots with only
-// for the 6 NAMED_BODY presets. Everything below that says "at the radius the lab draws" uses this.
+// The radius the LAB ITSELF produces — planet-lod-lab.html:1955
+// `state.planetRadiusEarth = drawPresetRadius(driverUI.preset, state.radiusSeed, { labUnlock: true })`,
+// byte-for-byte the same call, including the { labUnlock: true } flag. This is what the lab boots
+// with; `canonicalR` is what it boots with only for the 6 NAMED_BODY presets. Everything below that
+// says "at the radius the lab draws" uses this. (CITATION REPAIRED 2026-08-08, PLAN §10: this and its
+// twin below both cited `:3010`, which is a river-overlay debounce — an off-by-1055 that read as
+// freshly verified. Both are now `line + symbol`, so the integer is the convenience and the symbol is
+// the ref.)
 const drawnR = (p, seed) => drawPresetRadius(p, seed, { labUnlock: true });
 // The lab's shipped default draw seed, READ OUT OF THE SOURCE rather than typed here. Typing it was
 // this suite's own first defect: with a hard-coded 1, changing `radiusSeed:` in the lab silently
 // changed the boot appearance while every check below stayed green — the exact failure mode the whole
 // "AT THE RADIUS THE LAB ACTUALLY DRAWS" block exists to close. Proven by planted defect (radiusSeed
 // 1 → 2 passed 84/84 with the literal; it fails with this extraction).
-const BOOT_SEED = Number(extract(/radiusSeed:\s*(\d+)\s*,\s*\/\/\s*AC5 seeded-radius draw seed/, 'boot radiusSeed'));
+// ⚠ PATTERN NARROWED 2026-08-08, and the loss is named rather than absorbed. It used to require the
+// trailing `// AC5 seeded-radius draw seed` comment, which made it specific — and which a
+// comment-BLIND scan cannot see at all: on stripped source that pattern matches ZERO times. The
+// specificity is now carried by corpus-wide uniqueness instead (measured: exactly one match of
+// `radiusSeed:\s*(\d+)\s*,` in all 43 files), which is a weaker anchor against a second `radiusSeed:`
+// key appearing somewhere and a stronger one against the comment being reworded.
+const BOOT_SEED = Number(extract(/radiusSeed:\s*(\d+)\s*,/, 'boot radiusSeed'));
 
 // ── the rewired sites, extracted ONCE from the live source and shared by every describe below ─────
 // (Hoisted 2026-07-25, lens round: the drawn-radius suite and the byte-oracle suite must measure the
 //  SAME text the response suites do, so there is exactly one extraction per site in this file.)
-const SRC_E5_RADIUS_LINES = LAB.split('\n').filter((l) => /^\s*radius:\s*.*\/\s*11\.2\s*,/.test(l));
-const SRC_E5_RADIUS = SRC_E5_RADIUS_LINES.map((l) => l.match(/radius:\s*(.*?)\s*,\s*(?:\/\/.*)?$/)[1]);
+//
+// ── THE E5 `radius:` SITE IS A COUNTED LIST, and the count is 3, not 2 ───────────────────────────
+// This was `LAB.split('\n').filter(…)` — Array.prototype.filter, no no-match branch, silently []. See
+// the header for what that cost. It is now counted at MODULE SCOPE, as a named EXTRACTION FAILED,
+// alongside every other extraction, so a vanished driver line names the E5 site instead of surfacing
+// two describes later as a TypeError about `.replace`.
+//
+// MEASURED 2026-08-08, and it is why the number here is 3 where PLAN §4 Step 3 says 2: widening the
+// scan to src/worldengine turns up a THIRD Jupiter-normalised radius driver —
+// src/worldengine/base/giant-drivers.js:277 `radius: (planetRadiusEarth ?? 1) / 11.2,`, the body of
+// `giantDriverScalars`, the already-single-sourced helper whose docstring says it exists so
+// "rebakeE5Bands and applyStormState (the two lab call sites) can never diverge again". The lab does
+// not call it yet; the two inline copies below are what it will replace.
+// THE PARTITION, and why it is by TEXT and not by path: the helper is excluded by its own distinctive
+// expression, not by which file it lives in, so (a) relocating the helper does not silently widen the
+// exclusion, and (b) a NEW `/ 11.2` driver appearing anywhere lands in the executed set and is
+// measured rather than waved through. Both halves of the partition are asserted, so the exclusion
+// cannot quietly grow to cover a site it was never meant to.
+// ⚠ NAMED LIMIT: the helper is excluded because it CANNOT go through this harness's planted-defect
+// machinery — the frozen counterfactual is built by rewriting `_gcond.radiusEarth` → `_fp.radiusEarth`
+// (`frozenFns` below — a self-reference by SYMBOL, not by line, because this file is edited on every
+// step and an integer written into it is born rotting), and the helper takes its radius as a
+// PARAMETER, so there is no preset field to
+// freeze onto and the "frozen" copy would be textually identical to the live one. Executing it would
+// turn the planted-defect control at "the frozen form is flat across the whole slider" RED for a
+// reason that is about the harness, not the lab. The day the lab collapses onto the helper, this site
+// goes to zero and reds — correctly: the law will then live in one place and this block must be
+// re-pointed at it rather than deleted.
+const E5_RADIUS_RE = /^[ \t]*radius:\s*(.*?\/\s*11\.2)\s*,/m;
+const E5_HELPER_EXPR = '(planetRadiusEarth ?? 1) / 11.2';
+const E5_ALL = scanCorpus(E5_RADIUS_RE);
+const E5_HELPER = E5_ALL.filter((h) => h.body.includes(E5_HELPER_EXPR));
+const E5_SITES  = E5_ALL.filter((h) => !h.body.includes(E5_HELPER_EXPR));
+if (E5_HELPER.length !== 1) {
+  throw new Error(`EXTRACTION FAILED (E5 single-source helper): expected EXACTLY ONE corpus match whose `
+    + `expression is \`${E5_HELPER_EXPR}\` (giantDriverScalars); found ${E5_HELPER.length} at ${where(E5_HELPER)}. `
+    + `All ${E5_ALL.length} Jupiter-normalised radius drivers in the corpus: ${where(E5_ALL)}. `
+    + `Until this resolves, the executed-set partition below is unverified — do not delete the check.`);
+}
+if (E5_SITES.length !== 2) {
+  throw new Error(`EXTRACTION FAILED (E5 radius driver lines): expected EXACTLY TWO live `
+    + `\`radius: … / 11.2\` drivers (rebakeE5Bands band bake + applyStormState storm bake) across the `
+    + `${CORPUS.length}-file corpus; found ${E5_SITES.length} at ${where(E5_SITES)}.\n`
+    + `  Corpus total including the excluded single-source helper: ${E5_ALL.length} at ${where(E5_ALL)}.\n`
+    + `  Comments are stripped before matching, so a driver quoted in a comment is invisible here BY\n`
+    + `  DESIGN — zero means the drivers were moved, deleted or commented out, not that they are fine.`);
+}
+for (const h of E5_SITES) {
+  if (h.body.trim() === '') {
+    throw new Error(`EXTRACTION FAILED (E5 radius driver lines): empty expression at ${h.rel}:${h.line}.`);
+  }
+}
+const SRC_E5_RADIUS_LINES = E5_SITES.map((h) => `${h.rel}:${h.line}`);
+const SRC_E5_RADIUS = E5_SITES.map((h) => h.body.trim());
 const SRC_BANDCOUNT = extract(/state\.bandCount\s*=\s*(.+?);\s*$/m, 'state.bandCount');
-const SRC_CLOUDBLOCK = extract(/(let _cloudRegime = 0;[\s\S]*?;)\s*\n\s*state\.cloudRegime = _cloudRegime;/, 'cloud-regime block');
+// `[\s\S]+?`, not `[\s\S]*?` (tightened 2026-08-08). With the star, a source reading
+// `let _cloudRegime = 0;;` matches with an EMPTY-after-trim tail and yields a 22-character, perfectly
+// NON-EMPTY extraction that compiles and returns the constant 0 — a live-looking gate that has lost
+// every threshold in it. The `+` forbids the empty tail; the assertion below forbids the tail that is
+// present but carries no decision.
+const SRC_CLOUDBLOCK = extract(/(let _cloudRegime = 0;[\s\S]+?;)\s*\n\s*state\.cloudRegime = _cloudRegime;/, 'cloud-regime block');
+// The gate is the ASSIGNMENTS, not the declaration. Measured: the live block carries 4 `_cloudRegime =`
+// in total — the initialiser plus 3 branches (regimes 3, 2 and 4). Requiring ≥1 beyond the initialiser
+// is what makes "the block is non-empty" mean "the block still decides something".
+{
+  const assignments = (SRC_CLOUDBLOCK.match(/_cloudRegime\s*=/g) || []).length;
+  if (assignments < 2) {
+    throw new Error(`EXTRACTION FAILED (cloud-regime block): extracted ${SRC_CLOUDBLOCK.length} characters `
+      + `from ${SITE_HOME.get('cloud-regime block')} but found ${assignments} \`_cloudRegime =\` — the `
+      + `initialiser and NO branch. A block with no branch left compiles, returns 0, and is a silent pass.\n`
+      + `  src: ${SRC_CLOUDBLOCK}`);
+  }
+}
 const SRC_GIANTDYNAMO = extract(/const\s+_giantDynamo\s*=\s*(.+?);/, '_giantDynamo');
 // The whole aurora consequence chain, not just the gate: the gate feeds `_mag`, `_mag` feeds
 // state.auroraIntensity through a STRICT `>` guard, and the ring geometry rides `_mag` too. Extracted
@@ -176,6 +384,98 @@ const PRE_REWIRE_AT_CANONICAL = {
   'Carbon (high C/O)':             [3, 0, false, 0.09821428571428573],
   'Crystal (faceted)':             [3, 0, false, 0.07142857142857144],
 };
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// THE EXTRACTION HARNESS ITSELF — controls, before any of it is used as evidence (PLAN §11.3.3)
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// ADDED 2026-08-08 with Step 3. Every clause of the contract in this file's header is a claim about
+// what this harness would CATCH, and each of the three mutants that motivated Step 3 had already been
+// green through the old harness. So each clause gets a planted defect here, executed on every run,
+// against the SAME functions the real extractions go through — not a re-implementation of them.
+describe('extraction harness — controls (each clause of the contract, shown failing)', () => {
+  const synth = (rel, text) => [{ rel, text: stripCommentsPreservingOffsets(text) }];
+
+  it('COMMENT-BLINDNESS: the shadow that was 44/44 green is caught, and the live site is what compiles', () => {
+    // The exact mutant, in miniature: the retired law quoted on a bare `//` line ABOVE a live pack
+    // read. Lazy quantifiers mean first-match-wins is topmost-wins, so RAW text hands back the DEAD
+    // COMMENT and the harness measures a law the lab no longer runs.
+    const SHADOWED = [
+      '      // moved to the driver pack (Step 4); the retired law was:',
+      '      // state.bandCount = Math.min(16, Math.max(3, Math.round(12 * (state.planetRadiusEarth ?? 1) / _rotH)));',
+      '      state.bandCount = _pack.bandCount;',
+    ].join('\n');
+    const RE = /state\.bandCount\s*=\s*(.+?);\s*$/m;
+    // CONTROL THAT MOVED: raw text still resolves to the comment. This is the defect, reproduced.
+    expect(SHADOWED.match(RE)[1]).toContain('Math.round(12 *');
+    // …and the harness's own scan path, which strips first, resolves to the LIVE statement instead.
+    expect(extract(RE, 'shadow control', synth('shadow.html', SHADOWED))).toBe('_pack.bandCount');
+  });
+
+  it('EXACTLY ONCE: a duplicated law throws, and the failure names BOTH locations', () => {
+    // The state a half-finished move leaves behind — a copy in the lab and a copy in the module it is
+    // moving to. First-match-wins picked one silently; there is no basis on which it could pick right.
+    const DUPED = [{ rel: 'a.html', text: 'state.bandCount = 1;' }, { rel: 'b.js', text: '\nstate.bandCount = 2;' }];
+    let msg = '';
+    try { extract(/state\.bandCount\s*=\s*(.+?);\s*$/m, 'dupe control', DUPED); } catch (e) { msg = e.message; }
+    expect(msg).toContain('EXTRACTION FAILED (dupe control)');
+    expect(msg).toContain('found 2');
+    expect(msg).toContain('a.html:1');
+    expect(msg).toContain('b.js:2');
+  });
+
+  it('ZERO MATCHES: a law that left the corpus throws, naming the site rather than a stray TypeError', () => {
+    let msg = '';
+    try { extract(/state\.bandCount\s*=\s*(.+?);\s*$/m, 'gone control', synth('a.html', 'nothing here')); }
+    catch (e) { msg = e.message; }
+    expect(msg).toContain('EXTRACTION FAILED (gone control)');
+    expect(msg).toContain('(nowhere in the corpus)');
+  });
+
+  it('NON-EMPTY: an empty capture throws — ⚠ and this is NOT what closes the shadow class', () => {
+    // The clause is real: `[\s\S]*?` against `let _x = 0;;` captures nothing, compiles, and returns
+    // undefined, which is a silent pass. It is worth having.
+    let msg = '';
+    try { extract(/marker:(\s*);/, 'empty control', synth('a.html', 'marker: ;')); } catch (e) { msg = e.message; }
+    expect(msg).toContain('captured an EMPTY string');
+    // ⛔ AND THE HONEST HALF, measured rather than assumed: every one of the three shadow mutants
+    // matched a LONG non-empty string, so the non-empty clause passed all three. Here is that fact as
+    // a check rather than a sentence — the shadowed comment above is 101 characters and sails through.
+    const shadowBody = '// state.bandCount = Math.min(16, Math.max(3, Math.round(12 * (state.planetRadiusEarth ?? 1) / _rotH)));'
+      .replace('// ', '').replace(/;$/, '');
+    expect(shadowBody.length).toBeGreaterThan(80);
+    expect(shadowBody.trim()).not.toBe('');          // the non-empty clause: satisfied by the defect
+  });
+
+  it("'use strict': a block assigning outside its own span throws instead of writing globalThis", () => {
+    // WHY THIS MATTERS HERE. Extracted blocks are cut out of the MIDDLE of applyDrivers, so an
+    // identifier declared above the cut is in scope at the site and NOT in scope in the harness. In
+    // sloppy mode — which is what `new Function` gives you regardless of this module's strictness —
+    // that assignment silently creates a globalThis property. The harness then answers from a scope
+    // that is not the site's, and every number it reports is true about something else.
+    const BODY = '_notDeclaredAnywhere = 42; return _notDeclaredAnywhere;';
+    // CONTROL THAT MOVED: sloppy mode swallows it whole and returns a plausible number.
+    // eslint-disable-next-line no-new-func
+    const sloppy = new Function('env', BODY);
+    expect(sloppy({})).toBe(42);
+    expect(globalThis._notDeclaredAnywhere).toBe(42);        // …by leaking onto the global object
+    delete globalThis._notDeclaredAnywhere;
+    // …and the harness's own compileBlock, which is strict, refuses.
+    expect(() => compileBlock(BODY, 'strict control')({})).toThrow(ReferenceError);
+    expect(globalThis._notDeclaredAnywhere).toBeUndefined();
+  });
+
+  it('THE CORPUS IS REALLY SCANNED BEYOND THE LAB — proven by a live non-lab hit, not by a file count', () => {
+    // A file-count threshold would prove only that the walker ran (helpers/source-scan.mjs names that
+    // limit for `jsFilesUnder` explicitly). The per-carrier fact is better: the E5 partition's
+    // excluded member is found in src/worldengine, which the pre-Step-3 scan set could not see at all.
+    expect(CORPUS).toContain('planet-lod-lab.html');
+    expect(CORPUS).toContain('planet-lod-shaders.glsl.js');
+    expect(E5_HELPER[0].rel.startsWith('src/worldengine/')).toBe(true);
+    // Every site's home is recorded; none of them is asserted, because a site is ALLOWED to move —
+    // that is the whole reason the scan set is a corpus. What is asserted is that each was found once.
+    expect(SITE_HOME.size).toBeGreaterThanOrEqual(7);
+  });
+});
 
 describe('AC-BYTE — at canonical radius the rewired sites return the PRE-REWIRE values (literal oracle)', () => {
   it('the oracle table covers every preset (no silent shrinkage)', () => {
@@ -258,7 +558,16 @@ describe('E5 giant drivers — the `radius` driver now carries the DRAWN radius'
   const driverLines = SRC_E5_RADIUS_LINES;
   it('finds exactly the two Jupiter-normalised radius drivers (band bake + storm bake)', () => {
     // Both must exist and both must be rewired; if a third appears, it needs its own pin.
-    expect(driverLines.length).toBe(2);
+    // ⚠ THIS IS NO LONGER THE GATE, and saying so is the point. The count is now enforced at MODULE
+    // SCOPE (see E5_SITES) as a named EXTRACTION FAILED, because a count checked only here runs AFTER
+    // module-scope code that indexes SRC_E5_RADIUS[0] — which is how a missing driver used to surface
+    // as "Cannot read properties of undefined (reading 'replace')" and kill collection before any
+    // assertion ran. What survives here is the human-readable statement of the same fact, and the
+    // report of WHERE the two sites currently live, so a failure elsewhere is diagnosable.
+    expect(driverLines.length, `E5 radius drivers found at: ${driverLines.join(', ')}`).toBe(2);
+    // …and the excluded single-source helper is exactly one site, in the corpus, not assumed absent.
+    expect(E5_HELPER.map((h) => `${h.rel}:${h.line}`)).toHaveLength(1);
+    expect(E5_ALL).toHaveLength(3);
   });
   const exprs = SRC_E5_RADIUS;
   const fns = exprs.map((e, i) => compileExpr(e, `E5 radius driver #${i}`));
@@ -292,8 +601,12 @@ describe('E5 giant drivers — the `radius` driver now carries the DRAWN radius'
 describe('E5 downstream — the drawn radius is the ONLY radius channel into the band count', () => {
   it('the per-seed giant driver triple is EXACTLY radius-independent (so uPeak is too)', () => {
     // This is what makes N ∝ √R an identity rather than an approximation. drawGiantConditions
-    // back-solves gravity so M = surfaceGravity·R² = M0·massFactor — "radius cancels"
-    // (giant-drivers.js:235) — and deriveGiantDrivers reads only M, age, T_eq and the Z proxy.
+    // back-solves gravity so M = surfaceGravity·R² = M0·massFactor — src/worldengine/base/giant-drivers.js:231
+    // `(radius cancels)` — and deriveGiantDrivers reads only M, age, T_eq and the Z proxy.
+    // (CITATION REPAIRED 2026-08-08, PLAN §10. It said `:235`, which is a BLANK LINE — four past the
+    // claim. An off-by-four onto a blank line survives every check the citation fence runs today,
+    // because a ref with no backticked symbol is counted as UNCHECKED rather than resolved; it is now
+    // `line + symbol`, so the integer is the convenience and the symbol is the ref.)
     // CRITERION: bit-exact equality of all three drivers across the slider. If this ever fails, the
     // Rhines exponent below stops being exact and the check must become a fit with honest dof.
     const P = 'Gas giant (Jovian)';
@@ -614,8 +927,9 @@ describe('AC-REGIME — the giant dynamo gate classifies composition, so the sli
 // AT THE RADIUS THE LAB ACTUALLY DRAWS — ADDED 2026-07-25 (lens round). THE MISSING SURFACE.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 // Every check above evaluates either at canonical radius or over the slider's [0.3, 16] sweep. The lab
-// boots at NEITHER for most presets: planet-lod-lab.html:3010 sets
-//     state.planetRadiusEarth = drawPresetRadius(driverUI.preset, state.radiusSeed, { labUnlock: true })
+// boots at NEITHER for most presets: planet-lod-lab.html:1955
+// `state.planetRadiusEarth = drawPresetRadius(driverUI.preset, state.radiusSeed, { labUnlock: true })`
+// sets it
 // on the first applyDrivers() call (state._lastPreset is undefined at boot, so the branch is taken) with
 // the shipped default radiusSeed = 1. That is the OPERATIVE radius, and nothing tested it — which is
 // the single structural reason a suite could be green while the Ice Giant lost its aurora on boot.
@@ -625,7 +939,9 @@ describe('AT THE RADIUS THE LAB ACTUALLY DRAWS — the boot-time delta, pinned',
     // CRITERION: exact. Every pinned value in this describe is a function of this seed, so if the lab
     // changes its default draw seed the tables must be re-captured — this is the tripwire that says so.
     expect(BOOT_SEED).toBe(1);
-    expect(LAB).toMatch(/radiusSeed:\s*1\s*,/);
+    // A CODE pin, so it reads COMMENT-STRIPPED source and demands exactly one match: `radiusSeed: 1,`
+    // written in a comment is not a default the lab boots with.
+    expect(scanCorpus(/radiusSeed:\s*1\s*,/).map((h) => `${h.rel}:${h.line}`)).toHaveLength(1);
   });
 
   it('the lab does NOT boot at canonical radius for 12 of 18 presets', () => {
@@ -749,8 +1065,15 @@ describe('AT THE RADIUS THE LAB ACTUALLY DRAWS — the boot-time delta, pinned',
     expect(fGiantDynamo(envFor(B, drawnR(B, BOOT_SEED)))).toBe(false);
     // The lab must SAY so at the site: an unexplained canonical read above a rewired block is how the
     // next agent "helpfully" re-points it at the drawn radius and re-introduces the regression.
-    expect(LAB).toContain('NO LONGER A DISCRIMINATION THE RADIUS CAN');
-    expect(LAB).toContain('CLASSIFIER reads canonical; a PHYSICS INPUT reads drawn');
+    // ⚠ THESE TWO READ **RAW** SOURCE, DELIBERATELY, and it is not an oversight in a file whose whole
+    // point is that comments are stripped. Their subject IS the comment: both strings live in `//`
+    // prose (planet-lod-lab.html:2535 `// Radius cutoff 3.5 — HISTORICAL INTENT, AND IT IS NO LONGER A DISCRIMINATION THE RADIUS CAN`
+    // and :2574 `//   CLASSIFIER reads canonical; a PHYSICS INPUT reads drawn. The three genuine physics inputs`).
+    // Scanning stripped text for them would delete their subject and red on day one. The rule this
+    // file follows: a pin on the CODE reads stripped and must match exactly once; a pin on the
+    // REASONING reads raw, because prose is the thing being pinned.
+    expect(LAB_RAW).toContain('NO LONGER A DISCRIMINATION THE RADIUS CAN');
+    expect(LAB_RAW).toContain('CLASSIFIER reads canonical; a PHYSICS INPUT reads drawn');
   });
 
   it('E5 BOOT DELTA: the visible band count on the two big giants drops at boot', () => {
@@ -889,8 +1212,29 @@ describe('AC-CRATERBOOT — the :5206 canonical read is justified by measurement
 
   it('the site still reads the canonical preset radius (disposition pin)', () => {
     // If someone "helpfully" rewires it later, this fails and points them at the evidence.
-    expect(LAB).toMatch(/craterRelevanceOf\(deriveConditionVector\(_fp,\s*deriveUniforms\(_fp,\s*driverUI\.qualityTier\),\s*_fp\.radiusEarth\)\)/);
-    expect(LAB).toContain('RADIUS-CANONICAL-BY-PROOF');
-    expect(LAB).toContain('evidence/G2-craterboot-sweep.md');
+    //
+    // ⭐ THESE THREE ARE THIS DESCRIBE'S **ONLY** COUPLING TO THE LAB. Everything above runs on
+    // imported modules — craterRelevanceOf, deriveConditionVector, deriveUniforms, the bombardment
+    // constants — so the sweeps would be word-for-word as green with the lab site deleted as with it
+    // present. Whatever these pins fail to notice, nothing else here notices either.
+    //
+    // WHICH IS WHY THE FIRST ONE MOVED TO STRIPPED SOURCE, AND WHY IT COUNTS (2026-08-08). Measured
+    // on a scratch mirror: replace the live call at planet-lod-lab.html:4297
+    // `if (_fp && craterRelevanceOf(deriveConditionVector(_fp, deriveUniforms(_fp, driverUI.qualityTier), _fp.radiusEarth)) > 0) set.add('craters');`
+    // with a pack read while quoting the old call in a comment, and all three of these stayed GREEN —
+    // 44/44 — because `LAB` was raw text and the comment satisfied every one of them. The canonical
+    // read the whole AC-CRATERBOOT exemption rests on could be gone with the suite reporting it
+    // present. Now: comment-stripped, and EXACTLY ONE match, so a quoted copy is invisible and a
+    // duplicated call is loud.
+    const live = scanCorpus(/craterRelevanceOf\(deriveConditionVector\(_fp,\s*deriveUniforms\(_fp,\s*driverUI\.qualityTier\),\s*_fp\.radiusEarth\)\)/);
+    expect(live.map((h) => `${h.rel}:${h.line}`), 'the canonical craterboot read, in LIVE code').toHaveLength(1);
+    // The other two are PROSE pins and stay on RAW source for the same reason as the pair in
+    // AC-REGIME above: their subject is the comment. planet-lod-lab.html:4274
+    // `// RADIUS-CANONICAL-BY-PROOF — this is the ONE site the radius-live-feed R1 rewire deliberately did`
+    // and :4276 `// Evidence: docs/WORKSTREAMS/world-engine-radius-live-feed-2026-07-25/evidence/G2-craterboot-sweep.md`.
+    // They assert the exemption is still ARGUED at the site; the stripped pin above asserts it is
+    // still TRUE there. Neither substitutes for the other.
+    expect(LAB_RAW).toContain('RADIUS-CANONICAL-BY-PROOF');
+    expect(LAB_RAW).toContain('evidence/G2-craterboot-sweep.md');
   });
 });

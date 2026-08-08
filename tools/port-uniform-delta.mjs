@@ -971,7 +971,15 @@ const CITE_FILES = {
 // instrument exists to catch) and not deleting the example: it is an ENUMERATED, PRINTED list.
 // Every entry is counted and shown on every run, and `assertIllustrativeAreNotFiles` below exits 3
 // if one of these ever names a real file — the day `foo.js` exists, this list is hiding a ref.
-const CITE_ILLUSTRATIVE = new Set(['foo.js', 'Foo.js']);
+// ── ADDED WITH STEP 3'S TWO SOURCES. `a.html` and `b.js` are the SYNTHETIC two-file corpus the
+// extraction suite builds in memory to prove its duplicate detector names BOTH locations rather than
+// silently taking the first — tests/radius-live-feed.test.js `expect(msg).toContain('a.html:1')`.
+// They are assertion fixtures, never files, and they surfaced the moment those sources were added:
+// the scanner read them as refs and exited 2 on two basenames that name nothing. That is the fence
+// working, so the answer is to declare them, not to loosen the check. `assertIllustrativeAreNotFiles`
+// exits 3 the day either name becomes a real file, which is the guard that keeps this list from
+// quietly hiding a live ref.
+const CITE_ILLUSTRATIVE = new Set(['foo.js', 'Foo.js', 'a.html', 'b.js']);
 
 // Files whose reasoning this fence guards. PLAN.md is here because it is EXECUTED FROM.
 //
@@ -1013,6 +1021,22 @@ const CITE_SOURCES = [
   // citing :756 — both sit ABOVE the insertion and are therefore unmoved. There are no refs below.
   'tools/port-condition-delta.mjs',
   'docs/FEATURES/step2-tidal-delta-table.md',
+  // ── STEP 3's two files, added for the same §11.3.4 reason and with a measured correction to the
+  // note above. B4's stated coupling — "adding a CITE_SOURCE is NOT a one-line change, because the
+  // mode exits 2 on an unknown basename by design" — NO LONGER REPRODUCES: round 4's `resolveBase`
+  // decoupled CITE_SOURCES from CITE_FILES, and adding both of these needs ZERO new CITE_FILES
+  // entries. Verified by running --check-citations with them added: exit 0.
+  // ⛔ THAT GREEN IS THE TRAP, AND IT IS WHY THIS COMMENT EXISTS. Before Step 3 these two files
+  // carried FOUR refs and every one was symbol-less, so adding them would have moved CHECKED by 0
+  // and satisfied §11.3.4 while gating nothing. THREE OF THE FOUR WERE ALSO WRONG: two cited
+  // planet-lod-lab.html:3010 (a river-overlay debounce) for a statement at :1955, and one cited
+  // giant-drivers.js:235 — a BLANK LINE — for text at :231. An off-by-four onto a blank line
+  // survives every check this fence runs: UNRESOLVED 0, PAST-EOF 0, MALFORMED 0, and it reads as
+  // freshly verified. The refs were rewritten into `line + symbol` form in the same commit, so this
+  // addition lands them in the FATAL column instead of the UNCHECKED pile. Adding a source and
+  // GATING a source are different acts; only the second one closes the class (§11.2).
+  'tests/radius-live-feed.test.js',
+  'tests/radius-live-feed-fence.test.js',
 ];
 
 // `Foo.js:123 \`sym\`` — or a bare `:123 \`sym\`` continuing the last filename on the same line.
