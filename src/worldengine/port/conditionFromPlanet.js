@@ -26,7 +26,11 @@
 //    no error, a finite plausible wrong number — which is why each one is named rather than fixed
 //    silently. Expect a fifth.
 //  - `_provenance` (non-enumerable, on the returned condition) records 'measured' vs 'defaulted' for
-//    each of the 14 inputs. Read it before believing any number this seam produces for a moon or a
+//    each of the 17 inputs (14 at Step 1; Step 2 added the tidal triple). ⚠ THAT COUNT IS NOT PINNED
+//    ANYWHERE AS A NUMBER, deliberately — the pin that was is the self-referential fence described
+//    under PROVENANCE_COVERAGE. It is stated here as prose so a reader has a scale, and it is the
+//    coverage map against the adapter's own code that is actually enforced.
+//    Read it before believing any number this seam produces for a moon or a
 //    hand-authored body. The input list is DERIVED FROM THIS FILE'S SOURCE TEXT by the contract test,
 //    not restated there — see PROVENANCE_COVERAGE below for why that distinction is the whole fence.
 
@@ -294,6 +298,85 @@ export function atmosphereFromPlanet(gameAtmosphere) {
   };
 }
 
+// ── THE TIDAL TRIPLE — the seam's SEVENTH silent disagreement, and the one that was ────────────────
+// ALREADY SOLVED ONE DIRECTORY OVER. Step 2.
+//
+// ⚠ THE TWO SIDES SPELL THE SAME QUANTITY WITH DIFFERENT NAMES, and for the fifth time in this file
+// the names do not warn you.
+//   game   `planetData.tidalHeating` — the RAW Io-normalised ratio, computed for real from
+//          eccentricity + star mass + orbit (PlanetGenerator.js `tidalHeating,` in the record
+//          literal, from PhysicsEngine.js:342 `export function tidalHeatingPlanet(eccentricity, starMassSolar, planetRadiusEarth, orbitAU) {`;
+//          and MoonGenerator.js:161 `const tidalHeating = this._computeTidalHeating(`).
+//   engine baseStep.js:29 `const rawTidalIoRatio = (d.tidalHeat != null)   // D12 raw Io-ratio, PRE-calibrateTidal`
+//          reads the fp key `tidalHeat`.
+//
+// ⛔ THIS IS A WIRING BUG, NOT A DESIGN CHOICE, AND THE EVIDENCE IS THE ENGINE'S OWN OTHER ADAPTER.
+// adaptL0.js:34 `tidalHeat: (p.tidalHeating != null) ? p.tidalHeating : undefined,` — already tested,
+// already body-generic — makes exactly this mapping, and the base step names it in source:
+// baseStep.js:23 `// Prefer the upstream D12 value (d.tidalHeat, from adaptL0 <- planetData.tidalHeating).`
+// The base step was DESIGNED to receive `adaptL0`'s output. This adapter handed it a differently-named
+// field, so `d.tidalHeat` was `undefined` on every body in the game and the fallback ran instead.
+//
+// ⛔⛔ AND THE FALLBACK IS NOT A SENTINEL — IT IS A FORMULA, WHICH IS WHY NOTHING NOTICED. The absent
+// branch of baseStep.js:29 is baseStep.js:32 `? (ecc * ecc * starMassEarth * starMassEarth * Math.pow(radiusEarth, 5) / Math.pow(orbitRadiusEarth, 5)) / ioRef`,
+// evaluated with baseStep.js:26 `const starMassEarth = d.starMassEarth ?? 332946;` and
+// baseStep.js:27 `const orbitRadiusEarth = d.orbitRadiusEarth ?? 23455;` — i.e. EVERY GAME BODY WAS
+// SILENTLY RELOCATED TO 1 AU AROUND A 1 M☉ STAR and its tidal heating recomputed there. It still
+// varies with the body's own eccentricity and radius, so the output is DISTINCT PER BODY and no
+// distinctness check can see it. (Measured on the pre-fix tree: 165 bodies, 112 distinct values,
+// 0 … 211000. A "distinct == 1" fabricated-fallback signature was predicted and is WRONG. Only the
+// old-vs-new differential settles it.)
+//
+// ⚠ MEASURED over the contract test's 526-planet corpus, old value vs the real one:
+//     within 2× of truth on  42/469  (9.0%)      |ratio| median 61×,  p95 1.5e8×,  max 3.7e13×
+//     median rawTidalIoRatio  5.86e-3 → 7.44e-6  p95 6376 → 12.67,   max 452834 → 10031
+// So the old number was not noise around the truth; it was a different quantity with the same units.
+// It reaches the shipped route through surfaceMaterial.js:84 `const td  = cond?.rawTidalIoRatio ?? 0;`
+// (melt temperature) and surfaceMaterial.js:274 `const td  = cond?.rawTidalIoRatio ?? 0;` (crust
+// temperature), whose outputs are the `lavaGlowColor` / `lavaCrustColor` bakes, and through
+// bombardment.js:164 `const td = condition.rawTidalIoRatio ?? 0;` into the crater schedule's `tExp`.
+//
+// ⛔ WHY ALL THREE FIELDS AND NOT JUST THE FIRST. Forwarding only `tidalHeat` fixes every body that
+// HAS a measurement and leaves the fallback exactly as wrong as it was for every body that does not
+// — and "does not" is the case the fallback exists for. `starMassEarth` and `orbitRadiusEarth` are
+// read by NOTHING ELSE in the engine: baseStep.js:26-27 are their only consumers, and only on the
+// absent branch. Forwarding them is therefore inert on measured bodies by construction and is the
+// whole of the fix on unmeasured ones.
+//
+// ⚠⚠ POPULATION, MEASURED, AND IT IS NOT WHAT THE FIELD NAMES SUGGEST — 526 generated planets and
+// 411 generated moons:
+//     tidalHeating       526/526 planets, 411/411 moons   ← so the fallback is DEAD on generated bodies
+//     orbitRadiusEarth     0/526 planets, 411/411 moons
+//     starMassEarth        0/526 planets,   0/411 moons
+// The game does not store a star mass on a body at all; `PlanetGenerator.generate` holds
+// `starMassSolar` as a local and spends it on `tidalHeatingPlanet` rather than recording it. So
+// `_provenance.starMassEarth` reads 'defaulted' on every body the game generates today, and that is
+// the honest answer rather than a bug in this block — it is the record doing its job.
+//
+// ⛔ HAZARD, NAMED BECAUSE FORWARDING ONE OF A PAIR IS WORSE THAN FORWARDING NEITHER. On a MOON
+// record `orbitRadiusEarth` is the orbit about its PARENT PLANET (MoonGenerator.js:137
+// `const orbitRadiusEarth = planetData.radiusEarth * orbitMultiple;`), while `starMassEarth` falls
+// back to 1 M☉ — so on the absent branch the pair is INCOHERENT for a moon: a planetary orbit radius
+// divided into a stellar mass. It is inert TODAY, because 411/411 moons carry a real `tidalHeating`
+// and the branch never runs. It stops being inert at Step 8, where moons get a condition record of
+// their own; the reconciliation there is to supply the PARENT MASS under `starMassEarth`, which is
+// what the formula's variable actually means (the mass being orbited), not what its name says.
+//
+// ⛔ NO FABRICATED DEFAULTS ON ANY OF THE THREE, for the same reason as the Step 1 block below the
+// fp: `?? 0` on `tidalHeat` would be a measurement of "no tidal heating at all", which is a real
+// reading some bodies genuinely have, and it would ALSO suppress the fallback branch entirely — the
+// one place the other two fields are read. `undefined` is the only value that keeps the precedence
+// at baseStep.js:29 working and lets `_provenance` stay honest.
+//
+// ⛔ AND THIS IS NOT DELEGATED TO `adaptL0`, DESPITE IT ALREADY DOING THE MAPPING. `adaptL0` returns
+// a BASE-STEP BUNDLE — `ageNorm` where the fp wants `age`, and no `atmosphere`, `tidalState` or
+// `rotationHours` at all — while `deriveConditionVector` wants an fp; and its output is hashed by
+// `tests/fixtures/v2-0-basestep-golden.mjs`. Reconciling the two adapters is real work and is
+// explicitly out of this plan's scope (PLAN.md:578 `Reconciling `adaptL0` with `conditionFromPlanet``).
+// Step 5 adds `d.metallicity` to the fp; that read does not exist yet and this line naming it is
+// PROSE, not code — the contract test uses exactly this string as its live decoy that the fence
+// walks an AST rather than the file's text.
+
 // ── `_provenance` — WHICH OF THIS BODY'S INPUTS WERE MEASURED AND WHICH WERE INVENTED. ────────────
 //
 // WHY IT EXISTS. Nothing at this seam throws. Every defaulted input produces a finite, plausible,
@@ -410,6 +493,14 @@ export const PROVENANCE_COVERAGE = Object.freeze({
   age:            Object.freeze(['d.age']),
   T_eq:           Object.freeze(['d.T_eq']),
   eccentricity:   Object.freeze(['d.eccentricity']),
+  // ── STEP 2. THREE SEPARATE ROWS, NOT ONE COMPOUND ROW, and the reason is the same one that gives
+  // `carbonToOxygen` its own row: they are absent independently and they mean different things when
+  // they are. `tidalHeat` present ⇒ the other two are unread; `orbitRadiusEarth` present without
+  // `starMassEarth` is the moon case named above, and a compound rule would report that pair as one
+  // 'defaulted' and hide which half is missing — which is the only thing worth knowing about it.
+  tidalHeat:        Object.freeze(['d.tidalHeating']),
+  starMassEarth:    Object.freeze(['d.starMassEarth']),
+  orbitRadiusEarth: Object.freeze(['d.orbitRadiusEarth']),
   tidalState:     Object.freeze(['d.tidalState']),
   atmosphere:     Object.freeze(['d.atmosphere']),
   surfaceHistory: Object.freeze(['d.surfaceHistory']),
@@ -444,6 +535,15 @@ export const PROVENANCE_INPUTS = Object.freeze(Object.keys(PROVENANCE_COVERAGE))
  *    spread in the fp literal), so the fabrication happens one step later, in the two consumers'
  *    `?? 0` — and 0 is not "unknown", it is "definitively not a carbon world". Sol reads that way on
  *    39/39 bodies. This row is the only place that fact is recorded.
+ *
+ *  · THE TIDAL TRIPLE IS READ AS A PRECEDENCE, NOT AS THREE INDEPENDENT FACTS, and the record is
+ *    what tells you which arm ran. `tidalHeat: 'measured'` ⇒ baseStep.js:29 took the D12 branch and
+ *    the other two rows are IRRELEVANT on that body, whatever they say. `tidalHeat: 'defaulted'` ⇒
+ *    the Io-formula fallback ran, and the other two rows are then the only statement of how much of
+ *    it was real: both 'measured' is a genuine derivation, both 'defaulted' is the 1 M☉-at-1-AU
+ *    fabrication, and one of each is the incoherent moon pair named in the tidal block above.
+ *    ⚠ 'measured' here means the game supplied a NUMBER, not that the number is right — 526/526
+ *    generated planets read 'measured' for `tidalHeat` and 0/526 for `starMassEarth`.
  */
 function provenanceOf(d, comp) {
   const seen = (v) => (v != null ? 'measured' : 'defaulted');
@@ -456,6 +556,9 @@ function provenanceOf(d, comp) {
     age:            seen(d.age),
     T_eq:           seen(d.T_eq),
     eccentricity:   seen(d.eccentricity),
+    tidalHeat:        seen(d.tidalHeating),
+    starMassEarth:    seen(d.starMassEarth),
+    orbitRadiusEarth: seen(d.orbitRadiusEarth),
     tidalState:     seen(d.tidalState),
     atmosphere:     (d.atmosphere === null || hasEngineAtmosphereShape(d.atmosphere?.physics ?? d.atmosphere))
       ? 'measured' : 'defaulted',
@@ -489,6 +592,11 @@ export function conditionFromPlanet(planetData) {
     // NOT d.T_eq — see surfaceTemperatureOf above. The engine wants SURFACE temperature.
     T_eq:          surfaceTemperatureOf(d.T_eq ?? 288, atmosphere?.pressure),
     eccentricity:  d.eccentricity ?? 0,
+    // ── STEP 2 — THE TIDAL TRIPLE. The seam's SEVENTH silent disagreement, and the second one
+    // that is a KEY-NAME mismatch rather than a unit or a shape. See the block above the fp.
+    tidalHeat:        d.tidalHeating,      // D12, RAW Io-ratio — NOT calibrated here; baseStep does that
+    starMassEarth:    d.starMassEarth,     // fallback-only; see the block above for why both, not one
+    orbitRadiusEarth: d.orbitRadiusEarth,
     tidalState:    d.tidalState || { locked: false },
     atmosphere,
     // ⚠⚠ KNOWN, MEASURED, DELIBERATELY NOT FIXED HERE — the seam's SIXTH disagreement, and the one

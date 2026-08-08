@@ -42,7 +42,7 @@
  * disagree for one body from one function, and Instrument C reports it as a
  * bake-tier delta whose cause is a CALL SITE, not a law.
  *
- * ── WHY FOUR CHANNELS AND NOT ONE ───────────────────────────────────────────
+ * ── WHY THREE CHANNELS AND NOT ONE ──────────────────────────────────────────
  * ⭐ The obvious gate — "bake output == render recompute" (channel 2) — is
  * VACUOUS for the field-set question TODAY, and saying so is the point. The
  * three keys are inert: deleting each from a live condition moves 0/808 of the
@@ -174,7 +174,9 @@ const srcOf = (rel) => stripCommentsAndStrings(
 //   S = generated planets. Nothing mutates their record after the bake.
 //   P = planet-class moons. MoonGenerator.js:317-327 OVERRIDES radiusEarth and
 //       massEarth on a spread copy AFTER PlanetGenerator already baked from the
-//       un-overridden planet-scale values. See the declared exception below.
+//       un-overridden planet-scale values. Until Step 2 that made them diverge
+//       from the render route; they no longer do, and the P block below is where
+//       the closure is measured, controlled, and watched for its return.
 // `toSceneData` is deliberately NOT applied: it rewrites radius / noiseScale /
 // clouds.scale, and the adapter reads none of the three (it reads radiusEarth).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -280,8 +282,11 @@ describe('Route agreement · channel 1 — both call sites pass the whole record
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// CHANNEL 2 — OUTPUT AGREEMENT. Vacuous today by construction (see header);
-// bites the moment a bake law starts reading one of the widened keys.
+// CHANNEL 2 — OUTPUT AGREEMENT. For the FIELD-SET question it is vacuous today
+// by construction (see header) and bites the moment a bake law starts reading one
+// of the widened keys. For the TIMING question it is not vacuous and never was:
+// the P stratum below watches a real post-bake mutation, and carries its own
+// controls because its subject went to zero on 2026-08-08.
 // ═════════════════════════════════════════════════════════════════════════════
 describe('Route agreement · channel 2 — the baked five equal the render-route recompute', () => {
   it('CONTROL — the comparator can see a move, on each of the four derived bakes', () => {
@@ -313,50 +318,133 @@ describe('Route agreement · channel 2 — the baked five equal the render-route
     ).toEqual([]);
   });
 
-  it('P stratum — planet-class moons diverge ONLY in the declared set (a NAMED known defect)', () => {
-    // ⛔ THIS IS A REAL, CURRENTLY-SHIPPING DISAGREEMENT AND IT IS PINNED, NOT FIXED.
+  it('P stratum — planet-class moons agree too, and the comparator is PROVED able to say otherwise', () => {
+    // ⭐ THIS TEST HELD A DECLARED EXCEPTION UNTIL 2026-08-08 AND NO LONGER DOES. The history is
+    // kept because the SHAPE of the closure is the reason this file is worth having.
     //
-    // MoonGenerator.js:317-327 builds a planet-class moon by generating a FULL
-    // PLANET at 1 AU and then shrinking it:
+    // ── WHAT THE EXCEPTION WAS ───────────────────────────────────────────────────────────────
+    // MoonGenerator.js:317-327 builds a planet-class moon by generating a FULL PLANET at 1 AU and
+    // then shrinking it:
     //     const scaledPlanetData = { ...pData, radiusEarth, massEarth: pData.massEarth * massScale, … }
-    // PlanetGenerator already baked landPalette / iceness / lava colours from the
-    // UN-shrunk planet, so the record the renderer holds carries planet-scale
-    // bakes beside moon-scale physical inputs. This is a TIMING divergence, not a
-    // field-set one: passing the whole record cannot fix it, because the record
-    // is mutated after the bake ran.
+    // PlanetGenerator has ALREADY baked landPalette / iceness / lava colours from the UN-shrunk
+    // planet, so the record the renderer holds carries planet-scale bakes beside moon-scale
+    // physical inputs. That is a TIMING divergence, not a field-set one — passing the whole record
+    // cannot fix it, because the record is mutated after the bake ran. MEASURED at 600 seeds it
+    // read 28 of 29 planet-class moons disagreeing (lavaGlowColor 28, lavaCrustColor 28,
+    // landPalette 2, iceness 0) against 0/2485 on the S stratum, which is what proved it was the
+    // rescale and not the measurement. The pin carried its own instruction: if you fix it, come
+    // here, delete the exception, and say so in the plan.
     //
-    // MEASURED (600 seeds): 28 of 29 planet-class moons disagree — lavaGlowColor
-    // 28, lavaCrustColor 28, landPalette 2, iceness 0. The S stratum reads 0/2485,
-    // which is the control proving this is the rescale and not the measurement.
+    // ── WHAT CLOSED IT — Step 2, and NOT by touching MoonGenerator ────────────────────────────
+    // ⭐ The rescale is still there and still runs AFTER the bake. What moved is what the bake laws
+    // READ. The old rule made `rawTidalIoRatio` a function of `radiusEarth^5` — precisely the field
+    // the rescale overrides — so meltTemperatureOf / crustTemperatureOf saw one radius on the bake
+    // route and another on the render route. Step 2 maps `tidalHeat: d.tidalHeating`, a value the
+    // rescale does not touch, and both routes now read the same number: 0 of 29 disagree, on all
+    // four bakes, over this file's own 600-seed corpus. Recorded in §4 Step 2 of the plan.
     //
-    // ⛔ NOT FIXED HERE, deliberately, and for the reason the adapter gives for the
-    // surfaceHistory/erosion rename: correcting it MOVES SHIPPED PIXELS on ~1% of
-    // bodies (uLavaGlow / uLavaCrust / uWeatheredColor), and it would land inside a
-    // step whose whole claim is that nothing moves. It needs its own step, with a
-    // deliberately-not-byte-identity gate and a committed delta table.
-    //
-    // ⭐ IF YOU FIX IT, THIS TEST GOES RED ON THE "at least one" ASSERTION. That is
-    // the pin working: come here, delete the exception, and say so in the plan.
-    const DECLARED = new Set(['landPalette', 'lavaGlowColor', 'lavaCrustColor']);
-    expect(P.length, 'no planet-class moons in the corpus — this exception is unmeasured').toBeGreaterThan(10);
+    // ── ⛔ WHY THE ZERO IS NOT THE WHOLE TEST ─────────────────────────────────────────────────
+    // Flipping the old "at least one" assertion to `toBe(0)` would have left a gate whose subject
+    // had gone to zero, which is §11.1 class D — and its sibling ("diverges only in the declared
+    // set") had ALREADY gone vacuous by that route: with nothing diverging, `seen` was empty and it
+    // compared [] to []. A zero is indistinguishable from a broken comparator; that is exactly how
+    // Instrument C failed in round 1 of this program, printing 0.000000e+0 for the one uniform that
+    // had moved. So three controls run FIRST, on THESE 29 RECORDS: two that must SEE an injected
+    // divergence (or the zero below is unfalsifiable) and one that names the mechanism the closure
+    // rests on, so the day it stops holding this block says so rather than staying quietly green.
+    expect(P.length, 'no planet-class moons in the corpus — every claim below would be vacuous').toBeGreaterThan(10);
 
-    const seen = new Set();
-    let diverged = 0;
-    for (const { rec } of P) {
-      const fields = disagreeingFields(rec);
-      if (fields.length) diverged++;
-      for (const f of fields) seen.add(f);
+    // ⚠ CONTROLS 2 AND 3 ARE STATED RELATIVE TO EACH BODY'S OWN BASELINE ANSWER, not against an
+    // assumed empty one, and that is not fussiness. Written the naive way — "the injected set must
+    // equal exactly [f]" — a control silently becomes a SECOND detector of the very defect the gate
+    // below detects, and a real route divergence reds the CONTROL instead of the GATE. Measured, not
+    // reasoned: growing MoonGenerator's rescale by one post-bake `tidalHeating` override reds the
+    // naive control 2 on 112/116 injections and never reaches the gate, so the failure text talks
+    // about the comparator when the fault is in the route. A control must report on the INSTRUMENT.
+    const baselineOf = new Map(P.map(({ id, rec }) => [id, disagreeingFields(rec)]));
+
+    // ── CONTROL 1 · PER BODY. The exception's own defect shape, injected deliberately: mutate a
+    // field the bake laws demonstrably read AFTER the bake, and require the comparator to RETURN
+    // SOMETHING — on every single body, not on the corpus in aggregate. `tidalHeating` is the field
+    // Step 2 forwards, so this also pins the chain that closed the exception. Two values, because
+    // one body can sit where a single perturbation lands back on its own colour: 0 disagrees on
+    // 28/29 and 1e4 on 28/29, and they are NOT the same 28 — the union is 29/29.
+    // ⛔ ABSOLUTE, not relative, and deliberately so: this one asks "could this body's zero ever
+    // have been a one?", and on a body that is ALREADY diverging the answer is trivially yes and the
+    // gate below is what speaks. Relative here would fail on a red baseline whose answer set has
+    // saturated (27/29 under the mutant above) and bury the real finding under an instrument alarm.
+    const blind = [];
+    for (const { id, rec } of P) {
+      const lo = disagreeingFields({ ...rec, tidalHeating: 0 });
+      const hi = disagreeingFields({ ...rec, tidalHeating: 1e4 });
+      if (!lo.length && !hi.length) blind.push(id);
     }
     expect(
-      [...seen].filter((f) => !DECLARED.has(f)),
-      'a planet-class moon now diverges on a field outside the declared MoonGenerator-rescale set. '
-      + 'Either the rescale grew, or a second route asymmetry was introduced.',
+      blind.slice(0, 8),
+      `${blind.length}/${P.length} planet-class moons show NO disagreement even when the record is `
+      + 'mutated after the bake. On those bodies the gate below cannot fail, so its verdict is not '
+      + 'evidence of agreement — it is evidence of nothing.',
     ).toEqual([]);
+
+    // ── CONTROL 2 · PER FIELD. Seeing *a* move is not enough: the gate's value is that it NAMES the
+    // field, so the comparator has to be shown naming each of the four, with no smearing onto its
+    // neighbours. A sentinel is written over one baked value at a time; the answer must gain exactly
+    // that field and leave the rest of the body's answer untouched. The injection cannot feed back
+    // into the recompute side — `conditionFromPlanet` reads the physical inputs and none of the four
+    // bakes, which is what makes overwriting them a clean one-sided injection.
+    const FIELDS = ['landPalette', 'iceness', 'lavaGlowColor', 'lavaCrustColor'];
+    const missed = [];
+    for (const { id, rec } of P) {
+      const base = baselineOf.get(id);
+      for (const f of FIELDS) {
+        const named = disagreeingFields({ ...rec, [f]: '__synthetic route divergence__' });
+        const without = (arr) => arr.filter((k) => k !== f);
+        if (!named.includes(f) || J(without(named)) !== J(without(base))) {
+          missed.push(`${id}.${f} → named ${J(named)}, baseline ${J(base)}`);
+        }
+      }
+    }
     expect(
-      diverged,
-      'no planet-class moon diverges any more. If that was deliberate, delete this exception and '
-      + 'record the pixel delta; if it was not, the corpus stopped containing the case.',
-    ).toBeGreaterThan(0);
+      missed.slice(0, 8),
+      `${missed.length}/${P.length * FIELDS.length} injected divergences the comparator failed to `
+      + 'name. A comparator that cannot say WHICH field moved cannot be read as saying none did.',
+    ).toEqual([]);
+
+    // ── CONTROL 3 · THE MECHANISM, NAMED AND WATCHED. The exception did not close because the
+    // rescale stopped; it closed because the four bake laws stopped reading anything the rescale
+    // moves. This perturbs the rescale's own axis far harder than MoonGenerator does, in both
+    // directions — 29 bodies × 2 perturbations — and measures 0/58.
+    // ⚠ A RED HERE IS NOT A BUG IN THIS FILE. It means a bake law has begun reading a rescaled
+    // field, the timing divergence is live again on real bodies, and the declared exception has to
+    // be reinstated — with a fresh delta table, per the plan's rule for anything that moves shipped
+    // pixels. This is the assertion that says so before the gate below does.
+    const rescaleSensitive = [];
+    for (const { id, rec } of P) {
+      const base = J(baselineOf.get(id));
+      for (const [rf, mf] of [[0.3, 0.05], [3, 10]]) {
+        const f = disagreeingFields({
+          ...rec, radiusEarth: rec.radiusEarth * rf, massEarth: rec.massEarth * mf,
+        });
+        if (J(f) !== base) rescaleSensitive.push(`${id} radius×${rf} mass×${mf}: ${J(f)} vs ${base}`);
+      }
+    }
+    expect(
+      rescaleSensitive.slice(0, 8),
+      `${rescaleSensitive.length} of ${P.length * 2} rescale perturbations moved a bake. A bake law `
+      + 'now reads a field MoonGenerator overrides after the bake, so the timing divergence this '
+      + 'block used to declare is constructible again. See the history above before editing.',
+    ).toEqual([]);
+
+    // ── THE GATE. Same claim as the S stratum, on the stratum that had the real defect: one body,
+    // one function, one answer — across a rescale that happens between the two crossings of the seam.
+    const bad = P.filter(({ rec }) => disagreeingFields(rec).length > 0);
+    expect(
+      bad.map((b) => `${b.id}: ${disagreeingFields(b.rec).join(',')}`).slice(0, 8),
+      `${bad.length}/${P.length} planet-class moons carry a baked value that the render route would `
+      + 'recompute differently. Either the MoonGenerator rescale grew a reader (control 3 above says '
+      + 'which axis), or a second route asymmetry was introduced — Step 8 gives moons a second '
+      + 'generator path, which is the first place a value divergence becomes constructible again.',
+    ).toEqual([]);
   });
 });
 

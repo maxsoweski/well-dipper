@@ -1003,6 +1003,16 @@ const CITE_SOURCES = [
   'src/worldengine/port/conditionFromPlanet.js',
   'tests/port-condition-contract.test.js',
   'tests/port-route-agreement.test.js',
+  // ── STEP 2 added two files and §11.3.4 wants every file a step edited inside this list: the delta
+  // harness (974 lines — the densest new carrier of the port's reasoning since the adapter itself)
+  // and the artifact it publishes. This is exactly the B4 defect one file over, so it is closed in
+  // the same commit that creates the carriers rather than after the next round finds them.
+  // ⚠ CHECKED BEFORE INSERTING, because B4's lesson is that widening this list has broken builds:
+  // appending here shifts every line BELOW :1005 in this file, and the two live `line + symbol`
+  // refs into it — CARRIED.md's B4 row citing :997 `const CITE_SOURCES = [`, and the contract test
+  // citing :756 — both sit ABOVE the insertion and are therefore unmoved. There are no refs below.
+  'tools/port-condition-delta.mjs',
+  'docs/FEATURES/step2-tidal-delta-table.md',
 ];
 
 // `Foo.js:123 \`sym\`` — or a bare `:123 \`sym\`` continuing the last filename on the same line.

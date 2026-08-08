@@ -238,7 +238,42 @@ const STEP1_KEYS = ['surfaceHistory', 'radiusEarthCanonical', 'habitability', 'a
  * name. One name, not a category — `metallicity` is the other declared-but-unset
  * key and it must stay unset until Step 5 (see the metallicity fence below).
  */
-const EXPECTED_MOVERS = ['magneticField'];
+const EXPECTED_MOVERS = ['magneticField', 'rawTidalIoRatio'];
+
+/**
+ * ⭐ STEP 2 — THE DECLARED MOVERS, AND WHY THIS LIST IS NOT AN EXCUSE LIST.
+ *
+ * Step 2 is a DECLARED PIXEL-MOVING STEP (PLAN.md:203 "Gate — deliberately NOT
+ * byte-identity", PLAN §11.3.6 "a pixel-moving step … publishes a committed delta
+ * table that is non-zero on the named quantities"). So the honest form of channel 2
+ * is NOT "nothing moved" and it is NOT "these names are exempt" either — an exempt
+ * name is a name nothing checks, which is how a real regression rides in behind a
+ * declared one. It is: **everything not named here is bit-equal, and everything
+ * named here is asserted to have MOVED, by name, with its population and direction.**
+ * The two named-mover tests below are the second half; without them this list is a
+ * hole and channel 2 has been quietly narrowed.
+ *
+ * ⚠ MEASURED over the 526-planet corpus (`scratchpad` measurement re-run as the two
+ * assertions below, so the numbers are executable rather than remembered):
+ *   condition keys that move:   rawTidalIoRatio ONLY, on 469/526 (the other 57 are
+ *                               ecc == 0 bodies where both arms give exactly 0)
+ *   shipped law outputs:        meltTemperature 353, crustTemperature 353,
+ *                               lavaGlowColor 352, lavaCrustColor 353 — on 353/526
+ *                               bodies, and NOTHING ELSE. `palette`, `iceness`,
+ *                               `biosphere`, `craters`, `optics` and the giant
+ *                               triple are all bit-identical.
+ *
+ * ⚠ `lavaGlowColor` IS 352 WHERE `meltTemperature` IS 353, AND THAT IS NOT A ROUNDING
+ * ARTEFACT — `emissiveBlackbody` saturates, so on exactly one body the melt point
+ * moved and the colour it maps to did not. Recorded because a reader who assumed the
+ * two counts must match would go looking for a bug that is not there.
+ */
+const EXPECTED_LAW_MOVERS = ['meltTemperature', 'crustTemperature', 'lavaGlowColor', 'lavaCrustColor'];
+
+/** The shipped-law bundle minus Step 2's declared movers — the surface that must still be bit-equal. */
+const withoutLawMovers = (o) => Object.fromEntries(
+  Object.entries(o).filter(([k]) => !EXPECTED_LAW_MOVERS.includes(k)),
+);
 
 const GIANT_TYPES = new Set(['gas-giant', 'hot-jupiter', 'sub-neptune']);
 
@@ -489,15 +524,99 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     // The broadest statement of "no pixel moved" this file can make without a
     // renderer: the five bakes PlanetGenerator writes and the three derivations
     // Planet.js builds per material, over every body.
+    // ⛔ CONTROL FIRST — `withoutLawMovers` SUBTRACTS FROM THE COMPARED SURFACE, and a
+    // subtraction that emptied it would make this whole test pass over anything. So the
+    // surface that survives the filter is named, and its size pinned, before it is used.
+    const surface = Object.keys(withoutLawMovers(shippedLawOutputs(conditionFromPlanet(planets[0])))).sort();
+    expect(surface, 'Step 2\'s exclusion emptied or reshaped the surface this gate compares')
+      .toEqual(['biosphere', 'craters', 'giant', 'iceness', 'optics', 'palette']);
+
     const diffs = [];
     for (let i = 0; i < planets.length && diffs.length <= 24; i++) {
       bitDiff(
-        shippedLawOutputs(legacyConditionFromPlanet(planets[i])),
-        shippedLawOutputs(conditionFromPlanet(planets[i])),
+        withoutLawMovers(shippedLawOutputs(legacyConditionFromPlanet(planets[i]))),
+        withoutLawMovers(shippedLawOutputs(conditionFromPlanet(planets[i]))),
         `${planets[i].type}[${i}]`, diffs,
       );
     }
     expect(diffs, `${diffs.length} shipped law output(s) moved`).toEqual([]);
+  });
+
+  // ═══ STEP 2 · THE DECLARED MOVERS, ASSERTED TO HAVE MOVED ═════════════════════
+  // ⛔ PLAN §11.3.6: "a byte-identity gate whose control never moved is
+  // indistinguishable from a gate pointed at nothing". Step 2 subtracted two names
+  // from channel 2 and four from the shipped-law diff; these two tests are the price
+  // of that subtraction. If Step 2 were reverted — the fp literal stops forwarding
+  // `d.tidalHeating` — the two tests above go GREEN and both of these go RED, which
+  // is the only arrangement under which the narrowing is safe.
+
+  it('STEP 2 · rawTidalIoRatio is the ONE condition key this step moves, and it moves off a fabrication', () => {
+    // Same shape as the `magneticField` row above: named, not blanket-excused, with
+    // the DIRECTION asserted so a future edit that reverts it fails here.
+    let moved = 0, zeroBoth = 0;
+    const ratios = [];
+    for (const pd of planets) {
+      const was = legacyConditionFromPlanet(pd).rawTidalIoRatio;
+      const now = conditionFromPlanet(pd).rawTidalIoRatio;
+      expect(Number.isFinite(now), `rawTidalIoRatio on a ${pd.type}`).toBe(true);
+      // ⛔ THE NEW VALUE IS THE GAME'S OWN MEASUREMENT, FORWARDED — not re-derived.
+      // This is the assertion that distinguishes "the number changed" from "the number
+      // is now the right one", and it is the whole claim of the step.
+      expect(Object.is(now, pd.tidalHeating), `${pd.type} did not receive its own tidalHeating`).toBe(true);
+      if (!Object.is(was, now)) moved++;
+      if (was === 0 && now === 0) zeroBoth++;
+      if (was > 0 && now > 0) ratios.push(was > now ? was / now : now / was);
+    }
+    expect(moved, 'the declared mover did not move — Step 2 is not in the tree').toBe(469);
+    expect(moved + zeroBoth).toBe(planets.length);   // the residue is fully accounted for
+    // ⛔ AND THE MOVE IS NOT COSMETIC. The old value was the Io formula evaluated with
+    // `starMassEarth ?? 332946` and `orbitRadiusEarth ?? 23455` — every body relocated
+    // to 1 AU around a 1 M☉ star. Asserting the SIZE of the disagreement is what stops
+    // a future "equivalent" refactor from re-introducing it under a tolerance.
+    ratios.sort((a, b) => a - b);
+    const median = ratios[Math.floor(ratios.length / 2)];
+    expect(ratios.length).toBe(469);
+    expect(median, 'the old and new tidal numbers agree too well to have been different quantities')
+      .toBeGreaterThan(10);
+    expect(Math.max(...ratios), 'the worst body should be orders out, not marginal').toBeGreaterThan(1e6);
+    // The 1 M☉-at-1-AU fabrication produced a DISTINCT value per body — it is a formula
+    // over the body's own eccentricity and radius, not a constant. So a distinctness
+    // check could never have caught it, and this records that as a fact, not a footnote.
+    const oldVals = new Set(planets.map((pd) => legacyConditionFromPlanet(pd).rawTidalIoRatio));
+    expect(oldVals.size, 'the fabricated fallback was NOT a single repeated value').toBeGreaterThan(100);
+  });
+
+  it('STEP 2 · exactly four shipped law outputs move, and the other six do not', () => {
+    // The subtraction `withoutLawMovers` performs, stated as an assertion in the other
+    // direction: each named key MOVES on a named population, and the count of bodies
+    // touched is pinned. A future step that widens the blast radius fails here first.
+    const perKey = {};
+    let bodiesTouched = 0;
+    for (const pd of planets) {
+      const a = shippedLawOutputs(legacyConditionFromPlanet(pd));
+      const b = shippedLawOutputs(conditionFromPlanet(pd));
+      let any = false;
+      for (const k of Object.keys(a)) {
+        if (bitDiff(a[k], b[k], k, []).length === 0) continue;
+        perKey[k] = (perKey[k] || 0) + 1;
+        any = true;
+      }
+      if (any) bodiesTouched++;
+    }
+    expect(Object.keys(perKey).sort(), 'the set of moving shipped laws is not the declared four — '
+      + 'an EMPTY left side means the declared movers did not move (Step 2 is not in the tree, and '
+      + 'the byte-identity gate above is passing vacuously); a LONGER one means the blast radius grew')
+      .toEqual([...EXPECTED_LAW_MOVERS].sort());
+    expect(perKey).toEqual({
+      meltTemperature: 353, crustTemperature: 353, lavaCrustColor: 353, lavaGlowColor: 352,
+    });
+    expect(bodiesTouched, '353 of 526 bodies change what they render').toBe(353);
+    // ⚠ TWO OF THE FOUR ARE BAKES `PlanetGenerator` WRITES ONTO THE BODY RECORD
+    // (`lavaGlowColor`, `lavaCrustColor`), so this step reaches the shipped uniforms
+    // through the bake route as well as the material route. That is expected and
+    // declared; it is Instrument C's committed delta table that measures it.
+    expect(EXPECTED_LAW_MOVERS).toContain('lavaGlowColor');
+    expect(EXPECTED_LAW_MOVERS).toContain('lavaCrustColor');
   });
 });
 
@@ -2532,7 +2651,11 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
     // the walk has collapsed to a one-shot scan and H/I/A are invisible again.
     expect(a.passes, 'the alias analysis converged in one pass — it is not a fixpoint any more')
       .toBeGreaterThan(1);
-    expect(a.reads.size, 'the analyser found suspiciously few reads').toBeGreaterThanOrEqual(14);
+    // ⚠ THIS FLOOR IS RAISED BY EVERY STEP THAT ADDS A READ, ON PURPOSE. It is not the
+    // input count (17) — the coverage map declares 20 reads across those rows, because
+    // `composition` is one row over four reads. Left at Step 1's 14 it would keep passing
+    // while the analyser silently lost the three reads Step 2 added.
+    expect(a.reads.size, 'the analyser found suspiciously few reads').toBeGreaterThanOrEqual(20);
 
     // ⛔ THE PRICE OF FAIL-CLOSED, COUNTED RATHER THAN WAVED AT. A fence that reds on
     // the file it guards is worse than no fence, because it gets switched off. So the
@@ -2573,17 +2696,35 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
       'surfaceTemperatureOf',
     ]);
 
-    // ⭐ A LIVE DECOY, not a synthetic one. The adapter's own PROSE contains the
-    // literal strings `d.starMassEarth`, `d.tidalHeating` and `d.orbitRadiusEarth`
-    // (the block explaining what Step 2 will add). Under the old text scan those
-    // needed a hand-written comment stripper to stay out; under a parser they are
-    // not nodes at all. Asserted anyway, because the decoys are the cheapest possible
-    // check that the thing being walked is CODE.
+    // ⭐ A LIVE DECOY, not a synthetic one. The adapter's own PROSE contains a literal
+    // `d.<field>` string for a read that does not exist yet. Under the old text scan a
+    // hand-written comment stripper had to keep it out; under a parser it is not a node
+    // at all. Asserted anyway, because the decoy is the cheapest possible check that the
+    // thing being walked is CODE.
+    //
+    // ⛔ THE DECOY HAD TO MOVE AT STEP 2, AND THAT IS THE POINT OF IT, NOT A REPAIR.
+    // Until Step 2 the decoys were `d.starMassEarth`, `d.tidalHeating` and
+    // `d.orbitRadiusEarth` — Step 2's own three reads, named in prose. Step 2 turned all
+    // three into CODE, so as decoys they are spent: `a.reads.has('d.tidalHeating')` is
+    // now `true` and asserting `false` would be asserting the feature is absent. A decoy
+    // is only a decoy while the read does not exist, so it re-points at the next
+    // declared-but-unwritten read — `d.metallicity`, which Step 5 adds
+    // (PLAN.md:262 `### Step 5 — Driver pack #1: the gas deck`), and whose ABSENCE the
+    // metallicity fence above already asserts on live bodies. Two independent statements
+    // of the same fact: the fence says the code does not read it, the metallicity gate
+    // says no body carries it.
     const src = ADAPTER_SRC();
-    expect(src, 'the decoy must actually be present for this to test anything').toContain('d.starMassEarth');
-    expect(a.reads.has('d.starMassEarth'), 'a commented-out read was analysed as code').toBe(false);
-    expect(a.reads.has('d.tidalHeating')).toBe(false);
-    expect(a.reads.has('d.orbitRadiusEarth')).toBe(false);
+    expect(src, 'the decoy must actually be present for this to test anything').toContain('d.metallicity');
+    expect(a.reads.has('d.metallicity'), 'a commented-out read was analysed as code').toBe(false);
+    // ⛔ AND THE OTHER HALF, WHICH IS WHAT MAKES THE DECOY MEAN ANYTHING NOW. The three
+    // strings that used to be decoys are the same shape in prose and are ALSO written as
+    // code below it. If the walk were a text scan both facts would look identical; the
+    // parser separates them, so all three read TRUE here while `d.metallicity` reads
+    // FALSE, from one file that contains all four strings.
+    expect(src).toContain('d.tidalHeating');
+    expect(a.reads.has('d.tidalHeating'), 'Step 2\'s tidal read is missing from the adapter').toBe(true);
+    expect(a.reads.has('d.starMassEarth')).toBe(true);
+    expect(a.reads.has('d.orbitRadiusEarth')).toBe(true);
   });
 
   it('⛔ the adapter uses NONE of the bypass forms — with the injected controls that make that zero mean something', () => {
@@ -2614,18 +2755,32 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
     const ANCHOR = '  const condition = deriveConditionVector(fp, null, fp.radiusEarth);';
     expect(src, 'the injection anchor moved').toContain(ANCHOR);
 
+    // ⛔⛔ WHY EVERY INJECTION BELOW NOW SMUGGLES `metallicity` AND NOT `tidalHeating`.
+    // Until Step 2 these controls injected `d.tidalHeating` — Step 2's own declared first
+    // move, which is exactly what PLAN §11.3.1 asks a mutant to be drawn from. Step 2
+    // LANDED that read and gave it a coverage row, so `d.tidalHeating` is now DECLARED,
+    // and an injection of a declared field produces no finding by design. Left as it was,
+    // every row here would have gone green-because-vacuous — sixteen controls that cannot
+    // fail, which is the D-class defect this fence exists to prevent, arriving through the
+    // fence's own controls. So the payload re-points at the NEXT declared-but-unwritten
+    // read, `d.metallicity` (Step 5 — PLAN.md:262 `### Step 5 — Driver pack #1: the gas deck`),
+    // keeping §11.3.1's "at least one mutant drawn from the next step's declared first move"
+    // true rather than expired. ⚠ THIS ROTATION IS PERMANENT WORK, not a one-off: the field
+    // named here must be swapped again by whichever step forwards `metallicity`, and the
+    // decoy assertion above must move with it. They are two halves of one fact.
+
     // H — a declaration split from its assignment. The regex fence required
     //     `const|let|var NAME = d` and matched NOTHING here.
-    expect(inject(src.replace(ANCHOR, `  let p; p = d; const _t = p.tidalHeating;\n${ANCHOR}`)))
-      .toContain('undeclared read d.tidalHeating');
+    expect(inject(src.replace(ANCHOR, `  let p; p = d; const _t = p.metallicity;\n${ANCHOR}`)))
+      .toContain('undeclared read d.metallicity');
     // I — object spread. The initialiser is `{`, not `d`.
-    expect(inject(src.replace(ANCHOR, `  const all = { ...d }; const _t = all.tidalHeating;\n${ANCHOR}`)))
-      .toContain('undeclared read d.tidalHeating');
+    expect(inject(src.replace(ANCHOR, `  const all = { ...d }; const _t = all.metallicity;\n${ANCHOR}`)))
+      .toContain('undeclared read d.metallicity');
     // G — nested destructuring. `\{[^{}]*\}` cannot match a brace inside the pattern,
-    //     so the top-level `starMassEarth` in the same statement escaped with it.
-    expect(inject(src.replace(ANCHOR, `  const { atmosphere: { pressure }, starMassEarth } = d;\n${ANCHOR}`)))
-      .toContain('undeclared read d.starMassEarth');
-    // A — Step 2's declared first move, written the way this file already writes
+    //     so the top-level name in the same statement escaped with it.
+    expect(inject(src.replace(ANCHOR, `  const { atmosphere: { pressure }, metallicity } = d;\n${ANCHOR}`)))
+      .toContain('undeclared read d.metallicity');
+    // A — the next step's declared move, written the way this file already writes
     //     things: a module-scope helper, CALLED with `d`. The pre-round-1 fence
     //     (which scanned `conditionFromPlanet`'s body alone) answered `false` here.
     //     ⚠ THE CALL IS PART OF THE INJECTION, DELIBERATELY. Adding the helper and
@@ -2634,11 +2789,11 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
     //     file. Measured — the first cut of this control omitted the call and read 0,
     //     which would have been recorded as "the fence is blind" against a fence that
     //     was right. Taint enters a helper at its CALL SITE or not at all.
-    expect(inject(`function tidalHeatOf(d) { return d.tidalHeating ?? 0; }\n`
-      + src.replace(ANCHOR, `  const _t = tidalHeatOf(d);\n${ANCHOR}`)))
-      .toContain('undeclared read d.tidalHeating');
+    expect(inject(`function metallicityOf(d) { return d.metallicity ?? 0; }\n`
+      + src.replace(ANCHOR, `  const _t = metallicityOf(d);\n${ANCHOR}`)))
+      .toContain('undeclared read d.metallicity');
     // and the other half of that pair: the helper WITHOUT the call is correctly silent
-    expect(inject(`function tidalHeatOf(d) { return d.tidalHeating ?? 0; }\n${src}`),
+    expect(inject(`function metallicityOf(d) { return d.metallicity ?? 0; }\n${src}`),
       'an uncalled helper is not a read of the adapter\'s input').toEqual([]);
 
     // ═══ K–P INJECTED INTO THE REAL FILE — the six that beat round 2 ══════════════
@@ -2649,22 +2804,22 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
     // with all 56 tests green — so the real file is where the fix has to be shown
     // working. Injected in memory here; the on-disk runs are recorded in the round's
     // report, md5-guarded before and after.
-    expect(inject(src.replace(ANCHOR, `  let _sb; class _S { static { _sb = d.tidalHeating; } } void _sb; void _S;\n${ANCHOR}`)),
-      'K — a class static block is invisible again').toContain('undeclared read d.tidalHeating');
-    expect(inject(src.replace(ANCHOR, `  let _z = null; _z ||= d; const _t = _z.tidalHeating; void _t;\n${ANCHOR}`)),
-      'L — `||=` drops the binding again').toContain('undeclared read d.tidalHeating');
-    expect(inject(src.replace(ANCHOR, `  let _z; _z ??= d; const _t = _z.tidalHeating; void _t;\n${ANCHOR}`)),
-      'M — `??=` drops the binding again').toContain('undeclared read d.tidalHeating');
-    expect(inject(src.replace(ANCHOR, `  let _z = d; _z &&= d; const _t = _z.tidalHeating; void _t;\n${ANCHOR}`)),
-      'N — `&&=` drops the binding again').toContain('undeclared read d.tidalHeating');
+    expect(inject(src.replace(ANCHOR, `  let _sb; class _S { static { _sb = d.metallicity; } } void _sb; void _S;\n${ANCHOR}`)),
+      'K — a class static block is invisible again').toContain('undeclared read d.metallicity');
+    expect(inject(src.replace(ANCHOR, `  let _z = null; _z ||= d; const _t = _z.metallicity; void _t;\n${ANCHOR}`)),
+      'L — `||=` drops the binding again').toContain('undeclared read d.metallicity');
+    expect(inject(src.replace(ANCHOR, `  let _z; _z ??= d; const _t = _z.metallicity; void _t;\n${ANCHOR}`)),
+      'M — `??=` drops the binding again').toContain('undeclared read d.metallicity');
+    expect(inject(src.replace(ANCHOR, `  let _z = d; _z &&= d; const _t = _z.metallicity; void _t;\n${ANCHOR}`)),
+      'N — `&&=` drops the binding again').toContain('undeclared read d.metallicity');
     // O and P are named as `unmodelled:` rather than as a read — the round's whole
     // point. Matched on the prefix plus the construct, because the line number moves
     // with the anchor and pinning it would make this brittle for no gain.
-    const oHit = inject(src.replace(ANCHOR, `  const _b = { get inner(){ return d; } }; const _t = _b.inner.tidalHeating; void _t;\n${ANCHOR}`));
+    const oHit = inject(src.replace(ANCHOR, `  const _b = { get inner(){ return d; } }; const _t = _b.inner.metallicity; void _t;\n${ANCHOR}`));
     expect(oHit.some((h) => h.startsWith('unmodelled: accessor `get inner` on an object literal at line ')),
       `O — an accessor hands the input out of a property slot unnoticed: ${oHit}`).toBe(true);
     const pSrc = `function* _g(x){ yield x; }\n`
-      + src.replace(ANCHOR, `  const _t = _g(d).next().value.tidalHeating; void _t;\n${ANCHOR}`);
+      + src.replace(ANCHOR, `  const _t = _g(d).next().value.metallicity; void _t;\n${ANCHOR}`);
     const pFindings = inject(pSrc);
     expect(pFindings.some((h) => h.startsWith('unmodelled: `_g(…)` at line ')
       && h.includes('generator function')), `P — a generator laundered the input: ${pFindings}`).toBe(true);
@@ -2675,27 +2830,27 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
     // would have shipped undisclosed. Q and T in particular are the same defect as
     // the original five: a NODE THE WALK NEVER VISITED (`handler.param`) and a CHANNEL
     // WITH NO BINDING (the unwind), not a pattern nobody had thought to match.
-    const throwHit = inject(src.replace(ANCHOR, `  let _t; try { throw d; } catch (_e) { _t = _e.tidalHeating; } void _t;\n${ANCHOR}`));
+    const throwHit = inject(src.replace(ANCHOR, `  let _t; try { throw d; } catch (_e) { _t = _e.metallicity; } void _t;\n${ANCHOR}`));
     expect(throwHit.some((h) => h.startsWith('unmodelled: `throw` at line ')),
       `Q — throw/catch smuggles the input past the walk: ${throwHit}`).toBe(true);
-    expect(inject(`function _h(x, y = x){ return y.tidalHeating; }\n`
+    expect(inject(`function _h(x, y = x){ return y.metallicity; }\n`
       + src.replace(ANCHOR, `  const _t = _h(d); void _t;\n${ANCHOR}`)),
-      'R — a parameter DEFAULT that re-aliases another parameter').toContain('undeclared read d.tidalHeating');
+      'R — a parameter DEFAULT that re-aliases another parameter').toContain('undeclared read d.metallicity');
     const asyncHit = inject(src.replace(ANCHOR, `  const _p = (async () => d)(); void _p;\n${ANCHOR}`));
     expect(asyncHit.some((h) => h.startsWith('unmodelled: `an immediately-invoked function expression(…)` at line ')),
       `S — an async IIFE with no arguments carries the input out through its promise: ${asyncHit}`).toBe(true);
     expect(inject(src.replace(ANCHOR, '  let _t3; try { _t3 = 1; } catch ({ message: _m = d }) '
-      + `{ _t3 = _m.tidalHeating; } void _t3;\n${ANCHOR}`)),
+      + `{ _t3 = _m.metallicity; } void _t3;\n${ANCHOR}`)),
       'T — a DEFAULT inside a catch parameter; round 2 never walked `handler.param` at all')
-      .toContain('undeclared read d.tidalHeating');
+      .toContain('undeclared read d.metallicity');
 
     // ── J: THE PARTITION IS NOT A HOLE. A read inside `provenanceOf` still has to
     //    resolve to a declared row, so exfiltrating one from there is caught.
     const NEEDLE = 'function provenanceOf(d, comp) {';
     expect(src, 'the partition anchor moved — `provenanceOf` cannot be located').toContain(NEEDLE);
-    expect(inject(src.replace(NEEDLE, `${NEEDLE}\n  const leaked = d?.starMassEarth;`)),
+    expect(inject(src.replace(NEEDLE, `${NEEDLE}\n  const leaked = d?.metallicity;`)),
       'a read inside provenanceOf is excused again — that is bypass J, reopened')
-      .toContain('undeclared read d.starMassEarth');
+      .toContain('undeclared read d.metallicity');
 
     // ── AND THE PARTITION IS STILL LOAD-BEARING IN THE OTHER DIRECTION. If
     //    provenanceOf's reads counted, `stale` could never fire: the record reads
@@ -2785,6 +2940,70 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
 
 describe('Step 1 · _provenance', () => {
 
+  it('STEP 2 · the tidal triple has three rows, and each answers on its own terms', () => {
+    // ⛔ THE ROWS ARE THE FENCE'S OTHER HALF. The coverage map proves the adapter's
+    // three new reads are DECLARED; this proves the record actually ANSWERS for them,
+    // which is a different claim — a row can be declared and then written as a constant.
+    expect(PROVENANCE_INPUTS).toContain('tidalHeat');
+    expect(PROVENANCE_INPUTS).toContain('starMassEarth');
+    expect(PROVENANCE_INPUTS).toContain('orbitRadiusEarth');
+    expect(PROVENANCE_COVERAGE.tidalHeat).toEqual(['d.tidalHeating']);
+    expect(PROVENANCE_COVERAGE.starMassEarth).toEqual(['d.starMassEarth']);
+    expect(PROVENANCE_COVERAGE.orbitRadiusEarth).toEqual(['d.orbitRadiusEarth']);
+
+    // A body with real tidal heating, and the same body without — one field apart, so
+    // nothing else can be responsible for the answer changing.
+    const heated = {
+      radiusEarth: 1.0, massEarth: 1.0, T_eq: 288, age: 4.5, eccentricity: 0.1, atmosphere: null,
+      composition: { ironFraction: 0.3, density: 5500, volatileFraction: 0.15 },
+      tidalHeating: 3.7, starMassEarth: 332946, orbitRadiusEarth: 23455,
+    };
+    const cold = { ...heated, tidalHeating: undefined, starMassEarth: undefined, orbitRadiusEarth: undefined };
+    expect(conditionFromPlanet(heated)._provenance.tidalHeat).toBe('measured');
+    expect(conditionFromPlanet(heated)._provenance.starMassEarth).toBe('measured');
+    expect(conditionFromPlanet(heated)._provenance.orbitRadiusEarth).toBe('measured');
+    expect(conditionFromPlanet(cold)._provenance.tidalHeat).toBe('defaulted');
+    expect(conditionFromPlanet(cold)._provenance.starMassEarth).toBe('defaulted');
+    expect(conditionFromPlanet(cold)._provenance.orbitRadiusEarth).toBe('defaulted');
+
+    // ⛔ AND THE ROWS TRACK A REAL DIFFERENCE IN THE OUTPUT, not just the input's
+    // presence: 'measured' means the D12 branch ran and the forwarded number came out
+    // un-transformed; 'defaulted' means the Io formula ran instead.
+    expect(conditionFromPlanet(heated).rawTidalIoRatio).toBe(3.7);
+    expect(conditionFromPlanet(cold).rawTidalIoRatio).not.toBe(3.7);
+
+    // ⚠ AND THE ROWS ARE INDEPENDENT, which is why they are three rows and not one. The
+    // moon shape — an orbit radius with no star mass — is the case a compound row would
+    // report as a single 'defaulted' while hiding WHICH half is missing.
+    const moonish = { ...cold, orbitRadiusEarth: 60 };
+    const mp = conditionFromPlanet(moonish)._provenance;
+    expect([mp.tidalHeat, mp.starMassEarth, mp.orbitRadiusEarth])
+      .toEqual(['defaulted', 'defaulted', 'measured']);
+  });
+
+  it('STEP 2 · reports the triple honestly on the populations the game actually generates', () => {
+    // ⚠ MEASURED, AND IT IS NOT WHAT THE FIELD NAMES SUGGEST. `tidalHeating` is on every
+    // generated body, so the Io-formula fallback is DEAD on generated data — which is
+    // exactly why nobody noticed it running for the whole life of this seam. The star
+    // mass is on NONE: `PlanetGenerator.generate` keeps `starMassSolar` as a local and
+    // spends it on `tidalHeatingPlanet` rather than recording it.
+    const pAll = planets.map((pd) => conditionFromPlanet(pd)._provenance);
+    expect(pAll.filter((p) => p.tidalHeat === 'measured').length).toBe(planets.length);
+    expect(pAll.filter((p) => p.starMassEarth === 'measured').length).toBe(0);
+    expect(pAll.filter((p) => p.orbitRadiusEarth === 'measured').length).toBe(0);
+
+    // Moons carry an orbit radius and no star mass — the incoherent pair named in the
+    // adapter's tidal block. Inert today only because every moon also has a real
+    // `tidalHeating`, so the branch that would read the pair never runs. If that first
+    // assertion ever drops below 100%, the pair becomes live and Step 8 owes the fix.
+    expect(moons.length).toBeGreaterThan(0);
+    const mAll = moons.map((m) => conditionFromPlanet(m)._provenance);
+    expect(mAll.filter((p) => p.tidalHeat === 'measured').length,
+      'a moon lost its tidalHeating — the incoherent starMass/orbitRadius pair is now LIVE').toBe(moons.length);
+    expect(mAll.filter((p) => p.orbitRadiusEarth === 'measured').length).toBe(moons.length);
+    expect(mAll.filter((p) => p.starMassEarth === 'measured').length).toBe(0);
+  });
+
   it('PLAN.md:192 — measured on a generated planet, defaulted on a bare radius', () => {
     expect(conditionFromPlanet(planets[0])._provenance.massEarth).toBe('measured');
     expect(conditionFromPlanet({ radiusEarth: 0.273 })._provenance.massEarth).toBe('defaulted');
@@ -2792,7 +3011,10 @@ describe('Step 1 · _provenance', () => {
 
   it('names the fabrications on a Sol-shaped moon record, which is the point of it', () => {
     // `{radiusEarth: 0.273}` is the Moon, as SolarSystemData.js:196-198 stores it.
-    // Ten of the thirteen inputs are invented, every one of them silently, and the
+    // SIXTEEN of the seventeen inputs are invented (it was ten of thirteen when this
+    // was written; Step 1 added four rows and Step 2 the tidal triple, and every one of
+    // them lands on the 'defaulted' side for this record), every one of them silently,
+    // and the
     // condition that comes out is a finite, plausible, entirely fictional body.
     const p = conditionFromPlanet({ radiusEarth: 0.273 })._provenance;
     expect(p.radiusEarth).toBe('measured');
