@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-08T14:43:06.250Z",
+  "recordedAt": "2026-08-08T23:08:06.413Z",
   "recordedFromCommit": {
-    "sha": "e0002de60ddb7abc2b7304472b87dbdb82916bc5",
+    "sha": "ec7583eed39c4f6d387afae376c9ccd1b0855880",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -27,12 +27,12 @@
   },
   "summary": {
     "counts": {
-      "collectedFiles": 307,
+      "collectedFiles": 308,
       "failingFiles": 2,
       "nonCollectingFiles": 15,
-      "tests": 4752,
+      "tests": 4793,
       "failed": 24,
-      "passed": 4724,
+      "passed": 4765,
       "skipped": 4,
       "todo": 0
     },
@@ -274,8 +274,8 @@
       "tests/port-route-agreement.test.js": 10,
       "tests/port-terminator-law.test.js": 9,
       "tests/portal-traversal-margin.test.js": 3,
-      "tests/radius-live-feed-fence.test.js": 41,
-      "tests/radius-live-feed.test.js": 44,
+      "tests/radius-live-feed-fence.test.js": 52,
+      "tests/radius-live-feed.test.js": 50,
       "tests/radius-slider-map.test.js": 8,
       "tests/relief-height-cube.test.js": 16,
       "tests/relief-octave-lod-ramp.test.js": 7,
@@ -288,6 +288,7 @@
       "tests/settings-flight-control-type.test.js": 7,
       "tests/shader-warmup-source-parity.test.js": 7,
       "tests/sound-engine-mute.test.js": 4,
+      "tests/source-scan-helper.test.js": 24,
       "tests/star-billboard-switch.test.js": 6,
       "tests/swap-compile-gate.test.js": 6,
       "tests/v2-0-byte-identity.test.js": 88,
