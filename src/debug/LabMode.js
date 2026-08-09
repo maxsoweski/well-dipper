@@ -338,27 +338,35 @@ export async function setupScenario3MidCruise() {
 }
 
 export async function setupScenario4MidHyper() {
-  // Mid-HYPER warp tunnel: load Sol, trigger warp directly via warpEffect
-  // .start(direction), wait for hyper state. Per the brief's open question
-  // #1, we let the warp run rather than pause it (lab-mode is interactive
-  // motion, not paused frame). Max has the ~3-second hyper window.
+  // Mid-HYPER warp tunnel: drive the FULL user-warp-flow via
+  // _autoSelectWarpTarget() + _beginWarpTurn(). Calling _warpEffect.start()
+  // directly only kicks the state machine but BYPASSES the multi-stage flow
+  // that makes the tunnel mesh visible. Per
+  // ~/.claude/projects/-home-ax/memory/feedback_test-actual-user-flow.md
+  // (2026-05-06 lab-mode incident), test the user's actual path; do not
+  // shortcut through internal entry points.
   if (typeof window._lab?.enterSol !== 'function') {
     return captureEntrySnapshot('mid-hyper');
   }
   window._lab.enterSol();
   await _waitFor(() => window._lab.isInSystem());
-  // Construct a Vector3 by cloning an existing scene-graph position.
-  // Camera-forward direction is fine; warp travels along it.
-  const cam = window._cam;
-  const sceneAny = window._scene;
-  if (cam && window._warpEffect?.start && sceneAny?.children?.[0]?.position?.constructor) {
-    const V = sceneAny.children[0].position.constructor;
-    const dir = new V(0, 0, -1);
-    try { window._warpEffect.start(dir); } catch (e) {
-      console.warn('[LabMode] scenario 4: warpEffect.start threw —', e);
+  // Production warp entry: pick a target (auto), then begin the turn.
+  // _beginWarpTurn handles flythrough stop + camera-turn-align state machine,
+  // which calls warpEffect.start internally with the proper visual setup.
+  if (typeof window._autoSelectWarpTarget === 'function') {
+    window._autoSelectWarpTarget();
+  }
+  if (typeof window._beginWarpTurn === 'function') {
+    window._beginWarpTurn();
+  } else {
+    console.warn('[LabMode] scenario 4: window._beginWarpTurn unavailable; falling back to direct warpEffect.start (tunnel may not render)');
+    const sceneAny = window._scene;
+    if (sceneAny?.children?.[0]?.position?.constructor && window._warpEffect?.start) {
+      const V = sceneAny.children[0].position.constructor;
+      try { window._warpEffect.start(new V(0, 0, -1)); } catch {}
     }
   }
-  await _waitFor(() => window._warpEffect?.state === 'hyper', 8000);
+  await _waitFor(() => window._warpEffect?.state === 'hyper', 12000);
   return captureEntrySnapshot('mid-hyper');
 }
 
@@ -395,35 +403,35 @@ export async function setupScenario6StationHold() {
 }
 
 export async function setupScenario7ReticlePersist() {
-  // Reticle/runway-persist reproducer: warp to body, let it complete to
-  // idle, leave camera in post-warp state with reticle/runway overlay
-  // visible. The regression Max reported 2026-05-05 — overlay persists
-  // when it should hide. Snapshot captures overlay visibility state so
-  // working-Claude can diagnose.
+  // Reticle/runway-persist reproducer: drive the FULL user-warp-flow via
+  // _autoSelectWarpTarget + _beginWarpTurn (NOT direct warpEffect.start —
+  // see scenario 4 comment for why), let it complete to idle, leave camera
+  // in post-warp state with reticle/runway overlay visible. The regression
+  // Max reported 2026-05-05 — overlay persists when it should hide.
+  // Snapshot captures overlay visibility state for diagnosis.
   if (typeof window._lab?.enterSol !== 'function') {
     return captureEntrySnapshot('reticle-persist');
   }
   window._lab.enterSol();
   await _waitFor(() => window._lab.isInSystem());
-  // Trigger warp same way as scenario 4
-  const cam = window._cam;
-  const sceneAny = window._scene;
-  if (cam && window._warpEffect?.start && sceneAny?.children?.[0]?.position?.constructor) {
-    const V = sceneAny.children[0].position.constructor;
-    const dir = new V(0, 0, -1);
-    try { window._warpEffect.start(dir); } catch (e) {
-      console.warn('[LabMode] scenario 7: warpEffect.start threw —', e);
-    }
+  if (typeof window._autoSelectWarpTarget === 'function') {
+    window._autoSelectWarpTarget();
+  }
+  if (typeof window._beginWarpTurn === 'function') {
+    window._beginWarpTurn();
+  } else {
+    console.warn('[LabMode] scenario 7: _beginWarpTurn unavailable');
+    return captureEntrySnapshot('reticle-persist');
   }
   // Wait for warp to fully complete (state returns to idle AFTER going
-  // non-idle). Use a small state-machine guard so we don't capture before
-  // warp even started.
+  // non-idle). State-machine guard: only count "back to idle" if we saw
+  // non-idle first, otherwise we'd capture before the warp even started.
   let sawNonIdle = false;
   await _waitFor(() => {
     const st = window._warpEffect?.state;
     if (st && st !== 'idle') sawNonIdle = true;
     return sawNonIdle && st === 'idle';
-  }, 15000);
+  }, 25000);
   return captureEntrySnapshot('reticle-persist');
 }
 

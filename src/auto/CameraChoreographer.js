@@ -97,11 +97,110 @@ const PAN_AHEAD_DECAY = 2.0;
  */
 const TRANSITION_BLEND_DURATION = 0.4;
 
+/**
+ * Live-feedback loop (a) cycle 4 Attempt 1 — half-life of the
+ * target-position critically-damped spring that smooths the raw
+ * look-at target. Parameterized as "time for the filter to close half
+ * the remaining gap to the raw setpoint" — at critical damping, ~63%
+ * closure in one half-life and ~95% closure in ~3 half-lives. 0.35s
+ * gives ~1s total settling on a framing-state flip, inside the
+ * "Blue Danube" / 2001 station-dock musical-phrasing range (feature
+ * doc §"Camera axis — ESTABLISHING" + Director §5.5).
+ *
+ * Replaces the cycle-1/2/3 angular-rate clamp class — "angular-rate
+ * clamping on the camera's look direction does not appear as a
+ * primary mechanism anywhere reputable. Where rate limits show up,
+ * they're secondary safety nets on top of a damped target." (Dana,
+ * research/autopilot-camera-motion-prior-art-2026-04-24.md, cited by
+ * Director §5 closure at audit f63ec122...). One tuning knob in V1;
+ * damping ratio ζ = 1.0 hardcoded critical.
+ */
+const TARGET_HALF_LIFE_SEC = 0.35;
+
+/**
+ * Live-feedback loop (a) cycle 2 — minimum permissible distance from
+ * ship (= camera) position to the raw look-at target. Acts as a
+ * geometric precondition on three.js `camera.lookAt()`: when the
+ * target sits within a scene-unit-scale distance of the camera, the
+ * lookAt-quaternion computation amplifies millimeter target wobbles
+ * into large orientation swings. Pushing the target outward to this
+ * minimum distance along its current direction keeps the
+ * `normalize`-amplification effect contained.
+ *
+ * Director 2026-04-24 cycle 2: 2.0 scene units. Observed degenerate
+ * clusters in the 450°/s clamp recording sat at distances of 0.30
+ * (PANNING_AHEAD bias decay: pan-target-lerp landed on top of the
+ * camera during APPROACH) and 0.46 (LINGERING: the orbit-body we
+ * just left is still at orbit distance). 2.0 gives 4–6× margin and
+ * keeps per-frame wobble below 1% of vector magnitude. Falsification
+ * signal: LINGER framing on small moons visibly "looks past" the
+ * body rather than at it — then reduce to 1.0 and re-capture.
+ */
+const MIN_TARGET_DISTANCE = 2.0;
+
 // ══════════════════════════════════════════════════════════════════════
 
 // Reusable vectors
 const _tmpTarget = new THREE.Vector3();
 const _tmpNext = new THREE.Vector3();
+// Loop (a) distance-guard scratch.
+const _loopATmpC = new THREE.Vector3();
+
+/**
+ * Loop (a) cycle 4 Attempt 1 — `spring_damper_exact` implementation
+ * (Daniel Holden, "Spring-It-On: The Game Developer's Spring-Roll-
+ * Call": https://theorangeduck.com/page/spring-roll-call).
+ *
+ * Analytical closed-form update of a critically-damped (ζ = 1.0)
+ * second-order spring. Frame-rate independent by construction — the
+ * closed-form solution integrates the ODE exactly over `deltaTime`,
+ * unlike `lerp(x, goal, 0.1)`-style ad-hoc smoothing that loses
+ * accuracy at high or variable framerates (Dana landmine #5).
+ *
+ * Mutates `position` and `velocity` IN PLACE. Operates on a Vector3
+ * as three independent scalar spring updates (one per axis) —
+ * mathematically equivalent to a spring on the 3D point for linear
+ * vector spaces because critically-damped analytical updates commute
+ * with linear composition.
+ *
+ * Holden's form (from the reference, with `v_goal = 0` specialized):
+ *     y    = 2 · ln(2) / halfLife        (damping coefficient)
+ *     j0   = x − x_goal                   (displacement)
+ *     j1   = v + j0 · y                   (adjusted velocity)
+ *     eydt = exp(−y · dt)
+ *     x(t+dt) = eydt · (j0 + j1 · dt) + x_goal
+ *     v(t+dt) = eydt · (v − j1 · y · dt)
+ *
+ * @param {THREE.Vector3} position — spring's current position state; mutated
+ * @param {THREE.Vector3} velocity — spring's current velocity state; mutated
+ * @param {THREE.Vector3} goal — setpoint (position the spring pulls toward)
+ * @param {number} halfLife — decay half-life in seconds
+ * @param {number} deltaTime — frame timestep in seconds
+ */
+const _SPRING_LN2 = Math.log(2);
+const _springJ0 = new THREE.Vector3();
+const _springJ1 = new THREE.Vector3();
+function _springDamperExact(position, velocity, goal, halfLife, deltaTime) {
+  if (halfLife < 1e-6) {
+    position.copy(goal);
+    velocity.set(0, 0, 0);
+    return;
+  }
+  const y = (2 * _SPRING_LN2) / halfLife;
+  const eydt = Math.exp(-y * deltaTime);
+  // j0 = x − goal
+  _springJ0.subVectors(position, goal);
+  // j1 = v + j0 · y
+  _springJ1.copy(velocity).addScaledVector(_springJ0, y);
+  // position = eydt · (j0 + j1 · dt) + goal
+  position.copy(goal)
+    .addScaledVector(_springJ0, eydt)
+    .addScaledVector(_springJ1, eydt * deltaTime);
+  // velocity = eydt · (v − j1 · y · dt)
+  //          = eydt · v − eydt · j1 · y · dt
+  velocity.multiplyScalar(eydt)
+    .addScaledVector(_springJ1, -eydt * y * deltaTime);
+}
 
 // ══════════════════════════════════════════════════════════════════════
 //  EstablishingMode — the V1 authored camera mode.
@@ -154,6 +253,46 @@ class EstablishingMode {
     this._blendFromTarget = new THREE.Vector3();
     this._blendElapsed = TRANSITION_BLEND_DURATION;  // start "blend already completed"
     this._prevRawTargetFrame = new THREE.Vector3();  // scratch for raw-target capture
+
+    // Loop (a) — first-frame guard for the distance guard's
+    // degenerate-fallback chain (if both the raw and prior directions
+    // are too short to be a valid anchor, we need to know if the
+    // prior exists at all before using it). Also gates the spring
+    // filter's "snap on ESTABLISHING entry" path (see below).
+    this._hasValidPriorTarget = false;
+
+    // Loop (a) cycle 4 Attempt 1 — spring filter state.
+    //
+    // Director cycle-4 Attempt-1 post-guard re-audit (2026-04-24)
+    // switched the filter's state surface from a world-space target
+    // POINT to a ship-relative OFFSET. `_filteredOffset` = the
+    // smoothed `(rawTarget − shipPos)` vector; at consumption the
+    // world-space look-at target is reconstructed as
+    // `shipPos + _filteredOffset`.
+    //
+    // Rationale: a lagging world-space target can be OVERTAKEN by the
+    // moving ship, flipping the direction 180° in a single frame —
+    // the failure mode that surfaced in the post-guard capture (707
+    // rad/s spike). A ship-relative offset cannot be "overtaken" by
+    // the ship that carries the filter state; when the ship moves,
+    // the offset naturally moves with it. The overtake class is
+    // precluded by construction.
+    //
+    // Velocity state remains a time-derivative of the offset vector
+    // in world-axes (Director: "do NOT rotate velocity into ship-
+    // local frame on framing-state flips — that's the coupling §587
+    // feared, and it stays foreclosed").
+    //
+    // Both fields persist across framing-state flips (TRACKING ↔
+    // LINGERING ↔ PANNING_AHEAD) — no reset on flip. Director §5.4
+    // + §6a M5. `_hasInitializedFilter` gates the first-frame "snap
+    // to raw-guarded offset" initialization path.
+    this._filteredOffset = new THREE.Vector3();
+    this._filteredTargetVelocity = new THREE.Vector3();
+    this._hasInitializedFilter = false;
+    // Scratch: reconstructed world-space target = shipPos + _filteredOffset.
+    // Held as a field so the post-filter guard and the blend can share it.
+    this._filteredTarget = new THREE.Vector3();
   }
 
   get currentLookAtTarget() { return this._currentLookAtTarget; }
@@ -169,6 +308,11 @@ class EstablishingMode {
     this._lastStationBodyRef = null;
     this._panAheadBias = 0;
     this._blendElapsed = TRANSITION_BLEND_DURATION;
+    this._hasValidPriorTarget = false;
+    this._filteredOffset.set(0, 0, 0);
+    this._filteredTargetVelocity.set(0, 0, 0);
+    this._filteredTarget.set(0, 0, 0);
+    this._hasInitializedFilter = false;
   }
 
   /**
@@ -294,17 +438,136 @@ class EstablishingMode {
       }
     }
 
-    // ── Blend from pre-transition anchor toward raw target ──
-    // During active blend (_blendElapsed < TRANSITION_BLEND_DURATION),
-    // camLookAt = lerp(blendFromAnchor, rawTarget, smoothstep(t)). After
-    // the blend window, camLookAt = rawTarget unconditionally.
+    // ── Loop (a) cycle 2 — target-distance guard ──
+    // three.js `camera.lookAt(target)` is numerically unstable when
+    // |target − cameraPos| is small (millimeter perturbations on a
+    // short relative vector produce wild quaternion swings after
+    // normalization). Cycle-1's angular-rate clamp on the raw-target
+    // direction did not bound this because the instability lives
+    // DOWNSTREAM of the raw-target pipe, inside the lookAt call. The
+    // guard is the Principle-5-compliant fix: push the target outward
+    // to MIN_TARGET_DISTANCE before the clamp, so the lookAt input is
+    // always in the stable regime.
+    //
+    // Degenerate fallback chain (per Director 2026-04-24):
+    //   1. If |target − shipPos| >= MIN_TARGET_DISTANCE → no-op.
+    //   2. If |target − shipPos| in (ε, MIN_TARGET_DISTANCE) → push
+    //      outward to MIN_TARGET_DISTANCE along the current direction.
+    //   3. If |target − shipPos| < ε (direction numerically zero) →
+    //      fall back to the prior-frame _currentLookAtTarget direction.
+    //   4. If that too is degenerate → fall back to camera forward
+    //      ((0,0,-1).applyQuaternion(camera.quaternion)).
+    {
+      const shipPos = motionFrame.position;
+      _loopATmpC.subVectors(this._prevRawTargetFrame, shipPos);
+      const dist = _loopATmpC.length();
+      if (dist < MIN_TARGET_DISTANCE) {
+        if (dist > 1e-6) {
+          _loopATmpC.divideScalar(dist);
+        } else if (this._hasValidPriorTarget) {
+          _loopATmpC.subVectors(this._currentLookAtTarget, shipPos);
+          const priorDist = _loopATmpC.length();
+          if (priorDist > 1e-6) {
+            _loopATmpC.divideScalar(priorDist);
+          } else {
+            // Last-resort fallback: world −Z (camera-forward on
+            // the canonical identity orientation). Practically
+            // unreachable — priorDist would need to also be zero,
+            // which implies back-to-back frames both had the
+            // target on top of the camera.
+            _loopATmpC.set(0, 0, -1);
+          }
+        } else {
+          // First-frame-before-any-prior case.
+          _loopATmpC.set(0, 0, -1);
+        }
+        this._prevRawTargetFrame.copy(shipPos).addScaledVector(_loopATmpC, MIN_TARGET_DISTANCE);
+      }
+    }
+
+    // ── Loop (a) cycle 4 Attempt 1 (Q) — ship-relative offset spring ──
+    // Smooths the SHIP-RELATIVE offset `(rawTarget − shipPos)` rather
+    // than the world-space target point. At consumption, the world-
+    // space target is reconstructed as `shipPos + _filteredOffset`.
+    // This precludes the ship-overtake-target pathology by
+    // construction: a ship-relative offset cannot be overtaken by the
+    // ship that carries the filter state.
+    //
+    // On the FIRST frame after EstablishingMode becomes active, snap
+    // the filter state to the raw-guarded offset (no transient catch-
+    // up — AC #7 initialization rule / Director §6a M5). From the
+    // second frame onward, `springDamperExact` drives the state.
+    // Filter state PERSISTS across framing-state flips — no reset
+    // (Director §5.4 + §6a M5). Velocity stays as the offset's
+    // time-derivative in world-axes (Director: "do NOT rotate
+    // velocity into ship-local frame on framing-state flips").
+    {
+      const shipPos = motionFrame.position;
+      _loopATmpC.subVectors(this._prevRawTargetFrame, shipPos);  // raw offset
+      if (!this._hasInitializedFilter) {
+        this._filteredOffset.copy(_loopATmpC);
+        this._filteredTargetVelocity.set(0, 0, 0);
+        this._hasInitializedFilter = true;
+      } else if (deltaTime > 1e-6) {
+        _springDamperExact(
+          this._filteredOffset,
+          this._filteredTargetVelocity,
+          _loopATmpC,
+          TARGET_HALF_LIFE_SEC,
+          deltaTime,
+        );
+      }
+      // Reconstruct world-space target for downstream consumption.
+      this._filteredTarget.copy(shipPos).add(this._filteredOffset);
+    }
+
+    // ── Loop (a) cycle 4 Attempt 1 — POST-filter distance guard ──
+    // Numerical-tiny-step defense. With ship-relative offset
+    // filtering (Q), the ship-overtake class is precluded by
+    // construction, so this guard's residual role is catching the
+    // small-offset edge where `|_filteredOffset| < MIN_TARGET_DISTANCE`
+    // (e.g., approach-phase close-in where the raw offset itself
+    // approaches the body surface). Expected to fire rarely.
+    //
+    // NOT a rate clamp. Director §5.7's foreclosure stands; this is
+    // the cycle-2 geometric precondition `camera.lookAt` requires.
+    {
+      const shipPos = motionFrame.position;
+      _loopATmpC.subVectors(this._filteredTarget, shipPos);
+      const dist = _loopATmpC.length();
+      if (dist < MIN_TARGET_DISTANCE) {
+        if (dist > 1e-6) {
+          _loopATmpC.divideScalar(dist);
+        } else if (this._hasValidPriorTarget) {
+          _loopATmpC.subVectors(this._currentLookAtTarget, shipPos);
+          const priorDist = _loopATmpC.length();
+          if (priorDist > 1e-6) {
+            _loopATmpC.divideScalar(priorDist);
+          } else {
+            _loopATmpC.set(0, 0, -1);
+          }
+        } else {
+          _loopATmpC.set(0, 0, -1);
+        }
+        this._filteredTarget.copy(shipPos).addScaledVector(_loopATmpC, MIN_TARGET_DISTANCE);
+      }
+    }
+
+    // ── Blend from pre-transition anchor toward filtered target ──
+    // The transition blend is a separate smoothing stage that handles
+    // framing-state flips (LINGERING ↔ TRACKING ↔ PANNING_AHEAD) over
+    // TRANSITION_BLEND_DURATION. It composes ON TOP of the spring's
+    // output — the spring handles frame-to-frame smoothness, the
+    // blend handles inter-state hand-off shape. Both consume the
+    // post-filter signal (`_filteredTarget`), not the raw target.
     if (this._blendElapsed >= TRANSITION_BLEND_DURATION) {
-      this._currentLookAtTarget.copy(this._prevRawTargetFrame);
+      this._currentLookAtTarget.copy(this._filteredTarget);
     } else {
       const u = this._blendElapsed / TRANSITION_BLEND_DURATION;
       const smoothU = u * u * (3 - 2 * u);  // smoothstep for gentle ease
-      this._currentLookAtTarget.copy(this._blendFromTarget).lerp(this._prevRawTargetFrame, smoothU);
+      this._currentLookAtTarget.copy(this._blendFromTarget).lerp(this._filteredTarget, smoothU);
     }
+    this._hasValidPriorTarget = true;
 
     // Save for next frame's transition detection.
     this._prevShipPhase = shipPhase;
