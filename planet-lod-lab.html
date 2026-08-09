@@ -182,10 +182,10 @@
     import { createTributaryPatch } from './planet-lod-tributary-patch.js';  // Option B river-LOD STEP 2: camera-localised fine-tributary patch bake+blend
     import { createFieldSampler, createTapControl, describeSample, TAP_COMPOSITE, TAP_SOLID, TAP_LIQUID } from './src/worldengine/instrument/fieldSampler.js';   // nonvisual-analysis-channel: live float-RTT field readback (AC-SAMPLER: renders the PLANET'S OWN fragment shader through a uniform-gated tap) + the descriptor pack + the live control legs. READ-ONLY instrument; console _lab API only (no GUI binding ⇒ taxonomy-exempt, AC-0 check 3).
     import { responseCurve as _sweepResponseCurve, planSweep as _sweepPlan } from './src/worldengine/instrument/sweep.js';   // nonvisual-analysis-channel AC-CURVE: M-seed driver sweep → mean±SEM per point + fitted exponent. Pure orchestration; the lab supplies setPoint/measure.
-    import { bakeClimateE5Attributes, E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a: signed driver-organized gas-giant band/jet writer → per-vertex render attributes (AC10)
+    import { E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a regime tags. ⭐ `bakeClimateE5Attributes` is NO LONGER IMPORTED HERE — PLAN §4 Step 5c moved the band/jet bake into giantDeckPack, and an unused import is how a "deleted" copy stays one edit away from coming back
     import { resolveStormE, bakeStormEAttributes, chromophoreColor, STORM_DECK } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp; S2 STORM_DECK deck table (carriage deckZ derivation)
     import { drawGiantConditions, deriveGiantDrivers, giantDriverScalars, drawRotationHours } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation); + S1 giantDriverScalars (single-sourced radius/rotation wire) & drawRotationHours (per-archetype rotation draw, hot-Jupiter derived)
-    import { drawBandRoughness, bandProxyUniforms } from './src/worldengine/base/band-flow.js';   // atmo-expression slice J: per-seed global band-edge roughness draw on the append-only bandFlow:rough stream (disjoint from climateE5:/stormE:/giantD: ⇒ both goldens frozen). slice K: bandProxyUniforms — the 6 render-side band-proxy uniforms from bake.params (single-sourced; the lab does NOT re-derive DEFLECT_SCALE)
+    import { giantDeckPack, giantDeckLabState, giantDeckDirectDrivers } from './src/worldengine/drivers/giantDeck.js'; import { writePackUniforms } from './src/worldengine/port/writePackUniforms.js';   // ⭐ PLAN §4 Step 5c — DRIVER PACK #1. The F24/F25 law + the E5 bake + the band-proxy export + the per-seed roughness draw now live in ONE module the GAME imports too; this line REPLACES the band-flow.js import, whose two symbols (drawBandRoughness, bandProxyUniforms) are now called by the pack and by nothing in this file. ⚠ TWO import STATEMENTS ON ONE LINE, ON PURPOSE — the §10 line-stability rule on this file forbids spending a second line (symbol-checked refs from PLAN.md and both radius-live-feed suites land below), exactly as the computeE1 line above already does
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -1718,74 +1718,74 @@
     // it is NOT gateable over SWEEP_SEEDS — those 12 flip 0/60 here, so such a gate would be vacuous. ──
     function rebakeE5Bands(){
       const _fp = DRIVER_PRESETS[driverUI.preset] || {};
-      // derive-not-freeze Slice D: derive the per-seed D-slot triple from the condition vector. The
-      // condition is derived FRESH here ([RESOLVED-BY-REVISE:2] — NOT state._lastBodyDrivers.condition,
-      // which is debounce-stale / Rocky-preset-wrong on the first synchronous giant bake). Same single-
-      // source pure derive buildBodyDrivers uses (deriveConditionVector), with the ensureNetworkRouted uniforms fallback. deriveConditionVector has NO macroSeed dep; per-seed variety comes entirely from drawGiantConditions(regime, condition, macroSeed).
-      // ⭐ It is now ALSO the input to the composition GATE and the regime CLASSIFIER on the line just below `_gcond`, which is why the derive moved ABOVE the regime instead of below it.
+      // derive-not-freeze Slice D: the condition is derived FRESH here ([RESOLVED-BY-REVISE:2] — NOT
+      // state._lastBodyDrivers.condition, which is debounce-stale / Rocky-preset-wrong on the first synchronous giant bake). Same single-source pure derive buildBodyDrivers uses
+      // (deriveConditionVector), with the ensureNetworkRouted uniforms fallback. deriveConditionVector has NO macroSeed dep; per-seed variety comes entirely from the pack's
+      // drawGiantConditions(regime, condition, macroSeed).
       const _gu = state._derived || deriveUniforms(_fp, driverUI.qualityTier);
       const _gcond = deriveConditionVector(_fp, _gu, state.planetRadiusEarth);
-      if (compositionClass(_gcond) !== 'gas') return;  const regime = giantRegimeOf(_gcond);   // gate (this is the old table MISS), then classify PRE-draw
-      const _gd = deriveGiantDrivers(drawGiantConditions(regime, _gcond, state.macroSeed | 0));   // { shellDepthFrac, internalHeat, dissipation }
-      const drivers = {
-        ..._gd,                                                                            // per-seed triple OVERRIDES the frozen DRIVER_BUNDLES (resolveParams merges caller drivers on top)
-        // MERGE 2026-07-30 (lanes A+ATMO) — the two lanes fenced these SAME lines with CONTRADICTORY
-        // pins. Atmo requires the bundle to come from giantDriverScalars (one source for both sites, and
-        // it carries the DRAWN rotation that L1 still read frozen off _fp). L1 requires `radius` to name
-        // the condition vector (tests/radius-live-feed-fence.test.js AC-0 source pins). BOTH are kept,
-        // because both guards are worth having and the values are provably identical: giant-drivers.js:277
-        // computes radius as (planetRadiusEarth ?? 1)/11.2, and _gcond/_scond.radiusEarth is
-        // deriveConditionVector fed state.planetRadiusEarth (pinned by that same fence). The explicit key
-        // therefore overrides the spread with the same number — no behavioural ambiguity.
-        // ⚠ The redundancy is DELIBERATE, not sloppiness. It should collapse only when someone reconciles
-        // the two contracts on purpose; deleting either line silently drops a lane's regression guard.
-        ...giantDriverScalars(state.planetRadiusEarth, state.rotationHours ?? _fp.rotationHours, state.e5RotationScale),
-        // radius-live-feed R1 (2026-07-25): reads the CONDITION VECTOR (_gcond.radiusEarth = the DRAWN
-        // state.planetRadiusEarth, :2851), not the frozen preset constant. The slider writes
-        // state.planetRadiusEarth and applyDrivers() re-runs rebakeE5Bands() on a 220 ms debounce, so the
-        // Rhines band law (N = RHINES_K·√(a·Ω/U), climate-e5.js:121 — physics already correct) finally gets
-        // a live `a`. Bit-inert at canonical radius: R === R_c ⇒ the same number goes in. The condition
-        // vector is preferred over a raw state read because it is the single source that already carries
-        // BOTH the drawn radius and the coherent gravity g = g_c·f(R)/f(R_c) (body-condition-vector.js;
-        // f is the piecewise self-compression shape as of gravity-selfcompression-2026-07-28 — it was
-        // the plain ratio R/R_c when this comment was written, and this preset class is gated OUT of
-        // the new law anyway, so the value reaching this line is unchanged).
-        radius: (_gcond.radiusEarth ?? 1) / 11.2,                                         // Jupiter 11.2 → 1.0
+      // ⭐⭐ PLAN §4 Step 5c — THE DERIVATION THAT STOOD HERE IS GONE. The composition gate, the regime
+      // classify, drawGiantConditions, deriveGiantDrivers, the E5 driver bundle, bakeClimateE5Attributes, bandProxyUniforms and the per-seed roughness draw are now ONE law in ONE
+      // file that the GAME imports too: src/worldengine/drivers/giantDeck.js `export function giantDeckPack(`. What is left here is the lab's CALL SITE — its display policy, its
+      // live radius wire, and the two things pack #1 deliberately does not own (the storm mask, whose whole family PLAN §7 fences out, and the roughness touched-flag, which is
+      // lab-GUI policy rather than physics).
+      // ⛔ ORDER — the pack is handed `_gcond`, the UN-PERTURBED condition, and NEVER the output of
+      // drawGiantConditions: that function rewrites surfaceGravity, T_eq AND density, which are exactly the fields giantRegimeOf keys on, and classifying its output flips the
+      // regime label on 63/2000 draws (3.15%) across these five rows — at seed 0 the Jovian row would silently bake `saturnian` bands.
+      const _dctx = {
+        // ⛔ THE LAB'S DISPLAY POLICY, NOT THE GAME'S (PLAN 5a). The lab scales the MESH by the same
+        // pseudo-radius the frame loop computes (planet-lod-lab.html:4895 `const _dispR = sVis;`), so a fixed-km feature holds its on-screen size as the disc grows; the game
+        // builds geometry at the real radius and passes gameDisplayRadiusEarth(R). ⚠ NOT ONE DRIVER IN THIS PACK IS km-SHAPED TODAY, so this argument does no work yet and the
+        // two policies agree on every value — that is a fact about the SIZE OF THE SET, not evidence
+        // that the seam works. It is passed anyway so that the first km-keyed gas
+        // uniform is a one-line change instead of a silent 2× spatial-frequency error on every body except exactly 1.0 R⊕.
+        displayRadiusEarth: visScaleOf(state.planetRadiusEarth ?? 1),
+        // ⛔ macroSeed MUST BE A NON-ZERO INTEGER (PLAN 5d, asserted inside the pack): resolveParams
+        // does `macroSeed | 0` and `'da81e221' | 0 === 0`, so a hex seed collapses to 0 and every giant gets identical band phases while every algebraic gate still passes. The
+        // lab's seed space is clamped to ≥1 at its four entry points (slider min, world-seed draw, New planet, _lab.setSeed) rather than remapped HERE, because the storm bake
+        // below must see the SAME integer or the mask and the bands derive from two different worlds.
+        macroSeed: state.macroSeed | 0,
+        // The lab's live enable gates and animation rate are applied by frame(), not here — see the
+        // giantDeckLabState mirror in applyDrivers for why double-gating is the hazard that avoids.
+        animRate: 1, gates: { bands: true, jets: true }, relevance: {},
+        rotationHours: state.rotationHours ?? _fp.rotationHours,   // the DRAWN spin (atmo S1 drawPresetRotation); the condition vector carries only the preset's
+        rotationScale: state.e5RotationScale, obliquityDeg: state.e5Obliquity,
+        e5DriverOverrides: {
+          // MERGE 2026-07-30 (lanes A+ATMO) — both pins kept, and they are now the FRONT-END's E5
+          // override rather than an inline bundle. Atmo requires the bundle to come from giantDriverScalars (one source for both lab call sites, carrying the DRAWN rotation);
+          // L1 requires `radius` to name the CONDITION VECTOR (tests/radius-live-feed-fence.test.js AC-0 source pins). BOTH hold, because both guards are worth having and the
+          // values are provably identical: giant-drivers.js:277 computes radius as (planetRadiusEarth ?? 1)/11.2, and _gcond.radiusEarth is deriveConditionVector fed
+          // state.planetRadiusEarth (pinned by that same fence). ⚠ AND THE WHOLE OVERRIDE IS NUMERICALLY A NO-OP: the pack computes the same two scalars from the same
+          // condition, so this object exists to keep the LAB the visible owner of its own drawn-radius / drawn-rotation wire, which is what those two fences are about.
+          ...giantDriverScalars(state.planetRadiusEarth, state.rotationHours ?? _fp.rotationHours, state.e5RotationScale),
+          radius: (_gcond.radiusEarth ?? 1) / 11.2,                                         // Jupiter 11.2 → 1.0
+        },
+        mesh: { positions: geometry.attributes.position.array, count: geometry.attributes.position.count, radius: R },
       };
-      if (state.e5Obliquity > 0) drivers.obliquityDeg = state.e5Obliquity;                // else regime default
+      const _deck = giantDeckPack(_gcond, _dctx);
+      if (!_deck.meta.gas) return _deck;   // solid preset: the pack emitted the ungated F24/F25 values and stopped — this is the old `compositionClass(_gcond) !== 'gas'` gate, moved inside
+      geometry.attributes.aBand.array.set(_deck.attributes.aBand);   geometry.attributes.aBand.needsUpdate = true;
+      geometry.attributes.aShear.array.set(_deck.attributes.aShear); geometry.attributes.aShear.needsUpdate = true;
+      geometry.attributes.aMush.array.set(_deck.attributes.aMush);   geometry.attributes.aMush.needsUpdate = true;
+      // The 6 render-side band-PROXY uniforms go STRAIGHT to the material through the SHARED writer,
+      // because frame() does not touch them and so nothing overwrites them next frame. Their GUI-bound siblings (uBandContrast, uJetSpeed, …) deliberately do NOT come through
+      // here — applyDrivers mirrors those into `state` instead, and giantDeckDirectDrivers is exactly the complement of that mirror rather than a second hand-written list.
+      writePackUniforms(uniforms, giantDeckDirectDrivers(_deck), _dctx);
+      state.e5BandCount = _deck.meta.bandCount; state.e5EqSign = _deck.meta.eqSign; state.e5PeakU = _deck.meta.peakU;  // live-AC probes
+      // #3b Slice P: bake the storm/convection MASK — the one attribute pack #1 does NOT own, because
+      // PLAN §7 fences applyStormState's whole family out of it — from the SAME regime and E5 drivers the pack just derived, plus the composition gas-gate and T_eq personality
+      // inputs the storm writer reads. ⛔ READING THEM OFF `_deck.meta` IS THE COHERENCE RULE, not convenience: a second local derive here could bake the mask against different
+      // drivers than the bands ([RESOLVED-BY-REVISE-2:minor-1] — the exact skew reseedGiant()'s coherence rule kills).
+      const _sd = { ..._deck.meta.e5Drivers, composition: _fp.atmosphere?.composition, T_eq: _fp.T_eq };
       const pos = geometry.attributes.position;
-      const bake = bakeClimateE5Attributes(pos.array, pos.count, R, { regime, drivers, macroSeed: state.macroSeed | 0 });   // consumer (a) BANDS — reads _gd via drivers
-      geometry.attributes.aBand.array.set(bake.aBand);   geometry.attributes.aBand.needsUpdate = true;
-      geometry.attributes.aShear.array.set(bake.aShear); geometry.attributes.aShear.needsUpdate = true;
-      geometry.attributes.aMush.array.set(bake.aMush);   geometry.attributes.aMush.needsUpdate = true;
-      // atmo-expression slice K: export the 6 render-side band-PROXY uniforms from bake.params (the full
-      // resolved P). bandProxy reconstructs the baked band value analytically render-side so the storm swirl +
-      // ink advection DEFLECT the primary band (dBand) instead of pasting a decal — aBand + GOLDEN_BANDFIELD_HASH
-      // untouched (read-only reconstruction). Single-sourced via band-flow.js bandProxyUniforms (the lab does
-      // NOT re-derive DEFLECT_SCALE). Every reseed re-runs rebakeE5Bands ⇒ re-exports (derive-not-freeze wiring).
-      const _proxyU = bandProxyUniforms(bake.params);
-      uniforms.uBandM.value            = _proxyU.uBandM;
-      uniforms.uBandPhaseJet.value     = _proxyU.uBandPhaseJet;
-      uniforms.uBandSEq.value          = _proxyU.uBandSEq;
-      uniforms.uBandAMid.value         = _proxyU.uBandAMid;
-      uniforms.uBandS2.value           = _proxyU.uBandS2;
-      uniforms.uBandDeflectScale.value = _proxyU.uBandDeflectScale;
-      state.e5BandCount = bake.bandCount; state.e5EqSign = bake.eqSign; state.e5PeakU = bake.peakU;  // live-AC probes
-      // #3b Slice P: bake the storm/convection MASK (the one new attribute) from the SAME regime/drivers,
-      // plus the composition gas-gate + T_eq personality inputs the storm writer reads. _sd inherits the
-      // derived _gd via ...drivers ([RESOLVED-BY-REVISE-2:minor-1] — consumer (b) MASK: miss it and the
-      // mask bakes FROZEN while the vortices derive, the exact skew reseedGiant()'s coherence rule kills).
-      const _sd = { ...drivers, composition: _fp.atmosphere?.composition, T_eq: _fp.T_eq };
-      const bakeStorm = bakeStormEAttributes(pos.array, pos.count, R, { regime, drivers: _sd, macroSeed: state.macroSeed | 0, stormSeed: state.stormSeed | 0 });
+      const bakeStorm = bakeStormEAttributes(pos.array, pos.count, R, { regime: _deck.meta.regime, drivers: _sd, macroSeed: state.macroSeed | 0, stormSeed: state.stormSeed | 0 });
       geometry.attributes.aStorm.array.set(bakeStorm.aStorm); geometry.attributes.aStorm.needsUpdate = true;
-      // atmo-expression slice J: the per-seed GLOBAL band-edge roughness draw (uBandRough). Drawn on the
-      // NEW append-only bandFlow:rough:<regime>:<macroSeed> alea stream — disjoint from every climateE5:/
-      // stormE:/giantD: stream, so it does NOT shift any existing draw order ⇒ GOLDEN_BANDFIELD_HASH +
-      // GOLDEN_STORM_MASK_HASH stay frozen (BUILD-PLAN §4.3). Touched-flag override (golden-lens must-fix #3):
-      // re-draw per seed ONLY when the roughness slider has NOT been manually dragged; a dragged value
-      // persists across reseeds until resetDriverOverrides (preset change) clears _driverTouched. state is
-      // the single source — the per-frame block syncs it into uniforms.uBandRough (same as every band uniform).
-      if (!_driverTouched.has('bandRough')) state.bandRough = drawBandRoughness(regime, state.macroSeed | 0);
+      // atmo-expression slice J: the per-seed GLOBAL band-edge roughness. The DRAW moved into the pack
+      // (it is the uBandRough driver, still on the append-only bandFlow:rough:<regime>:<macroSeed> alea stream, so no draw order shifts and both goldens stay frozen); the
+      // touched-flag OVERRIDE stays HERE because it is lab-GUI policy, not physics — a dragged roughness persists across reseeds until resetDriverOverrides (preset change)
+      // clears _driverTouched. state is the single source; frame() syncs it into uBandRough exactly like every other band uniform.
+      if (!_driverTouched.has('bandRough')) state.bandRough = _deck.drivers.uBandRough;
+      return _deck;
     }
     // ── #3b Slice 1 WIRING extraction: the discrete-vortex placement below used to live INLINED
     // inside applyDrivers, so the reseed paths (New-planet / macro-seed slider / _lab.setSeed) —
@@ -2225,12 +2225,21 @@
       // ensureNetworkRouted() (near the state.iceness idiom): its physics (retention/erosion) already
       // lives in craterSchedule's tExp, so there is one law, not two. state._craterDensityBase /
       // state._craterAmpBase (stashed above) are now inert. ──
-      // ── F24 zonal belts — gas-giant banding (Bands step 4b; derivation lives HERE
-      // per the F11 precedent — core.js untouched). Master gate: an h2-he envelope IS
-      // the visible surface, so bandStrength is 1 on gas worlds and 0 on EVERY solid
-      // preset (the no-leakage pre-check, card §6.5.6) — no partial gas in v1.
+      // ── F24 zonal belts + F25 jets & shear — ⭐⭐ THE DERIVATION HAS MOVED (PLAN §4 Step 5c). ──────
+      // Nine assignments stood here: band strength / contrast / warp / tint, jet strength / speed /
+      // shearTurb / festoon, and the `_vigor` T_eq ramp that four of them rode. They are now ONE law in
+      // ONE file, which the GAME imports too — src/worldengine/drivers/giantDeck.js
+      // `export function giantDeckPack(` — and the two things left in this block are the two bindings
+      // that OTHER blocks below read, plus the jet stripe ladder that has no uniform to be a driver of.
+      // Master-gate rationale, kept because it is why the pack carries two gates: an h2-he envelope IS
+      // the visible surface, so band/jet strength is 1 on gas worlds and 0 on EVERY solid preset (the
+      // no-leakage pre-check, card §6.5.6) — no partial gas in v1. The pack derives that gate from
+      // compositionClass(condition), which is the SAME predicate rather than a similar one:
+      // compositionClass returns 'gas' iff atmosphere.composition === 'h2-he', and that terminal fires
+      // before every other arm, so the two selected sets are equal by construction and not by luck.
+      // ⭐ SO WHY DOES `_gas` SURVIVE THE MOVE? Because two blocks BELOW read it and neither is in pack
+      // #1's scope: the cloud-regime gate and the giant-dynamo / aurora gate. It is no longer the deck's.
       const _gas = (_fp.atmosphere?.composition === 'h2-he');
-      state.bandStrength = _gas ? 1.0 : 0.0;
       // Band count, Rhines-flavored (card §4): fast D8 spin on a big disc organizes
       // convection into more alternating jets — 12·R/rotationHours, clamped 3..16.
       // Jovian 11.2R/9.9h → 14; Saturnian 9.4R/10.7h → 11; Neptunian 3.9R/16.1h → 3.
@@ -2242,8 +2251,8 @@
       // atmo's AC-ONECOUNT governs the visible STRIPE count (uBandM); this ladder drives the F25 JETS.
       const _rotH = state.rotationHours ?? _fp.rotationHours ?? 24;
       // radius-live-feed R1 (2026-07-25): reads the DRAWN state.planetRadiusEarth, not the frozen
-      // preset constant. applyDrivers() has NO condition vector in scope (buildBodyDrivers/:2804 and
-      // rebakeE5Bands/:2851 each derive their own; state._lastBodyDrivers.condition is debounce-stale
+      // preset constant. applyDrivers() has NO condition vector in scope (buildBodyDrivers and
+      // rebakeE5Bands each derive their own; state._lastBodyDrivers.condition is debounce-stale
       // here), so this site reads the state field directly — deliberate, per the workstream's "where a
       // site has no condition vector in scope, use state.planetRadiusEarth and say so" rule.
       // WHY THIS IS NOT DEAD WIRE (evidence/G1-ubandcount-liveness.md): uBandCount is NOT retired. The
@@ -2252,6 +2261,12 @@
       // the F25 JET stripe ladder — planet-lod-height.glsl.js:1518 jetU, :1530 jetShearGate, :1570 the
       // festoon window — all reachable behind uJetStrength > 0 (gas preset AND the Jets checkbox), via
       // two independent roots (zonalBandCol :668 and the jets-solo path :680, which bypasses bandMask).
+      // ⛔ AND IT IS NOT A PACK DRIVER, WHICH IS A FACT ABOUT THE CONTRACT AND NOT AN OMISSION. A pack's
+      // `drivers` map is keyed by UNIFORM NAME, and this quantity has no uniform at all: AC-ONECOUNT
+      // retired `uBandCount` and asserts the token appears in no GLSL, no uniform table and no lab code.
+      // A value with no uniform cannot be expressed as a driver, so it stays lab state. It is also the
+      // live subject of tests/radius-live-feed.test.js's SITE 3, which regex-extracts THIS statement out
+      // of this file and compiles it — moving the text would red that suite for a harness reason.
       // Measured leverage: Jovian frozen 14 vs drawn-range 7..16 shifts jetU's warp rotation by 0.711 rad
       // — 0.91× the finest warp octave's period, i.e. a visible-scale change, NOT a rounding wobble.
       // COHERENCE — CORRECTED 2026-07-25 (lens round). The earlier note here claimed the two ladders
@@ -2266,39 +2281,24 @@
       // radius' geometry while the bands move. Holding the ratio fixed would require changing one of
       // the two LAWS — out of scope for R1 (the feed, not the physics) and named as an R2 candidate.
       state.bandCount = Math.min(16, Math.max(3, Math.round(12 * (state.planetRadiusEarth ?? 1) / _rotH)));
-      // Contrast AND festooning track convective vigor on one T_eq ramp 55→130 K
-      // (D1/interior heat): a warm interior churns vivid scalloped bands (Jupiter);
-      // a cold CH4-haze ice giant goes near-bland blue (Neptune). The 0.08 floor
-      // keeps a ghost of banding on even the coldest disc (card §1 intensity axis).
-      const _vigor = _ss(55, 130, _fp.T_eq ?? 288);
-      state.bandContrast = 0.08 + 0.92 * _vigor;
-      // Warp is in STRIPE units (GLSL: bandCoord += warp·0.5·r, r ≈ ±0.9): keep peak
-      // displacement well under one band width or bands smear into marble (live
-      // tune 2026-06-10 — the first cut, mix(1.0,2.4), displaced ±1.07 stripes and
-      // destroyed band identity at d5). mix(0.12,0.55): Jovian ≈ ±0.23-stripe festoons.
-      state.bandWarp = 0.12 + 0.43 * _vigor;
-      // Deck tint straight from the preset atmosphere color (tan / pale-gold / blue).
-      if (_gas) state.bandTint = _fp.atmosphere.color.slice();
-      // ── F25 jets & shear — the dynamics riding the F24 deck (card F25 §6.5 step 6;
-      // derivation HERE per the F11 precedent — core.js untouched). Same h2-he gate:
-      // jets are a gas-deck phenomenon, every solid preset derives 0 and the whole
-      // family no-ops (preserving F24's static output byte-for-byte when off).
-      state.jetStrength = _gas ? 1.0 : 0.0;
-      // Drift amplitude from D8 spin (fast rotation ⇒ stronger zonal organization ⇒
-      // faster apparent shear): 8/rotationHours rad per flow phase, clamped 0.2..1.2.
-      // With the GLSL 25 s flow-map cycle (uTime·0.04) a Jovian full drift period is
-      // tens of seconds — visibly flowing, never frantic. Jovian 0.81 / Saturnian
-      // 0.75 / Neptunian 0.50.
-      state.jetSpeed = Math.min(1.2, Math.max(0.2, 8 / _rotH));
-      // Shear turbulence + festoons ride the SAME T_eq convective-vigor ramp as F24's
-      // contrast/warp — one interior-heat knob drives the whole deck personality.
-      // Budgets in stripe units (F24's marble lesson, pre-checked 2026-06-10): turb
-      // peak = 0.30·gate(<=1)·tn(~0.9) ≈ 0.27 <= 0.3; festoon peak = 0.444·~0.9 ≈
-      // 0.40 <= 0.5 local. Jovian 0.297/0.444, Saturnian 0.187/0.247, Neptunian 0.05/0.
-      state.jetShearTurb = 0.05 + 0.25 * _vigor;
-      state.jetFestoon = 0.45 * _vigor;
-      // #3a: bake the E5 writer's driver-organized band/jet fields onto the render mesh (gas presets only).
-      rebakeE5Bands();
+      // #3a + Step 5c: rebakeE5Bands() now CALLS the pack (it is the site that has the condition vector
+      // in scope), writes aBand/aShear/aMush and the six band-proxy uniforms, and hands the pack result
+      // back so this site can do the one thing it must do here rather than in there.
+      const _deck = rebakeE5Bands();
+      // ⭐ THE MIRROR, AND WHY IT LIVES IN applyDrivers RATHER THAN IN rebakeE5Bands. These nine values
+      // are the GUI-BOUND half of the pack: ~200 lil-gui `.listen()` controllers read and write them on
+      // `state`, and frame() copies state → uniforms every frame with the LIVE enable gates and the LIVE
+      // _animRate folded in. So (a) the pack must NOT write these uniforms in the lab — the next frame
+      // would overwrite them from stale state, and the slider would be the only thing driving the
+      // feature; and (b) the mirror must NOT sit inside rebakeE5Bands, because reseedGiant() calls that
+      // function WITHOUT calling applyDrivers, and a mirror in there would silently reset a dragged
+      // contrast/warp/tint slider on every re-roll. Resolving with every gate ON and animRate 1 is the
+      // matching half of the same argument: state holds the PRE-gate value, and frame() applies the
+      // gate — mirroring an already-gated value would apply each gate twice.
+      // ⚠ Object.assign, not a fixed list: `uBandTint` is ABSENT from the pack's map on a solid preset
+      // (the lab never reset the tint there either, and zeroing it would be a new behaviour wearing the
+      // byte-identity gate's clothes), so a spread copies exactly what the pack decided to emit.
+      Object.assign(state, giantDeckLabState(_deck));
       // ── F26 latitude weather bands — terrestrial circulation (card F26 §6.5 step 6;
       // derivation HERE per the F11 precedent — core.js untouched). Master gate:
       // weather bands need a SOLID world holding an atmosphere (not-gas AND retained
@@ -3066,7 +3066,7 @@
     function newPlanet(){
       state.worldSeed  = (Math.random()*4294967296)>>>0;
       state.radiusSeed = Math.floor(alea('draw:radius:'+state.worldSeed)()*4294967296)>>>0;   // into the 0–4294967295 seed field
-      state.macroSeed  = Math.floor(alea('draw:macro:' +state.worldSeed)()*10000);            // into the existing 0–9999 range
+      state.macroSeed  = Math.max(1, Math.floor(alea('draw:macro:' +state.worldSeed)()*10000));   // into the existing 0–9999 range, floored at 1 — ONLY the seed-0 draw moves (PLAN 5d; giantDeckPack refuses 0)
       state.detailSeed = Math.floor(alea('draw:detail:'+state.worldSeed)()*10000);            // into the existing 0–9999 range
       state._radiusDirty = true;
       reseedGiant();
@@ -4674,9 +4674,9 @@
 
     // ▸ Seeds — macro shifts continents (octaves 0-2), detail shifts texture (3+)
     const fSeeds = guiLeft.addFolder('Seeds'); fSeeds.close();
-    fSeeds.add(state, 'macroSeed', 0, 10000, 1).name('macro seed').listen().onChange(reseedGiant);   // Slice 1: reseedGiant() = updateSeedUniforms()+rebakeE5Bands()+applyStormState() — re-places storms/pole on drag (was frozen)
+    fSeeds.add(state, 'macroSeed', 1, 10000, 1).name('macro seed').listen().onChange(reseedGiant);   // Slice 1: reseedGiant() = updateSeedUniforms()+rebakeE5Bands()+applyStormState() — re-places storms/pole on drag (was frozen). ⛔ MIN IS 1, NOT 0 (PLAN §4 Step 5d): giantDeckPack asserts a NON-ZERO integer macroSeed, because `'da81e221' | 0 === 0` is how a hex seed silently makes every gas giant identical, and a contract that is enforced everywhere except one slider position is not a contract. Clamping the SOURCE rather than remapping at the pack call keeps the band bake and the storm bake on the same integer
     fSeeds.add(state, 'detailSeed', 0, 10000, 1).name('detail seed').listen().onChange(updateSeedUniforms);
-    fSeeds.add({ newPlanet(){ state.macroSeed = (Math.random()*10000)|0; state.detailSeed = (Math.random()*10000)|0; reseedGiant(); } }, 'newPlanet').name('New planet (re-roll both)');   // Slice 1: reseedGiant() re-places storms/pole (was updateSeedUniforms()+rebakeE5Bands() only — vortices stayed frozen)
+    fSeeds.add({ newPlanet(){ state.macroSeed = Math.max(1, (Math.random()*10000)|0); state.detailSeed = (Math.random()*10000)|0; reseedGiant(); } }, 'newPlanet').name('New planet (re-roll both)');   // Slice 1: reseedGiant() re-places storms/pole (was updateSeedUniforms()+rebakeE5Bands() only — vortices stayed frozen)
 
     // ▸ Presets — lil-gui save/load round-trips the whole panel as JSON
     const fPresets = guiLeft.addFolder('Presets'); fPresets.close();
@@ -6175,7 +6175,7 @@
                     //   _lab.setSeed(1234); _lab.grainStrength(1); _lab.setCarveEpoch(true);  // world A
                     //   _lab.setSeed(5678);                                                   // world B
                     setSeed(macro, detail){
-                      state.macroSeed = (macro >>> 0);
+                      state.macroSeed = Math.max(1, macro >>> 0);   // ⛔ ≥1 — see the macro-seed slider: giantDeckPack refuses a zero seed (PLAN 5d), and only seed 0 is remapped
                       state.detailSeed = (detail !== undefined ? detail : macro) >>> 0;
                       // R1/Slice 1: route through reseedGiant() = updateSeedUniforms() + rebakeE5Bands() +
                       // applyStormState(). setSeed is the DETERMINISTIC reseed path the evidence uses, so it

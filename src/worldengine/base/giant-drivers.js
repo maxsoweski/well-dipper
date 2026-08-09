@@ -104,7 +104,7 @@ const WZ = Object.freeze({ DENS: 1.0, IRON: 1.0, VOL: 1.0 });
 // ── Pinned per-regime CANONICAL anchors (DERIVE-FORMS §3, from driver-presets.js) + ratified SDF bands.
 // M0 = massEarth; T0 = T_eq (the "surface temperature" preset field the forms read as insolation proxy);
 // density0/iron0/vol0 = composition fields → the Z0 enrichment anchor. IH0/SDF0/DIS0 are SOURCED from
-// DRIVER_BUNDLES (single source of truth) so the D3 anchor reproduces the bundle triple by construction. ── EXPORTED at PLAN §4 Step 4: the nearest-anchor classifier `giantRegimeOf` lives in e1Regime.js — a DIFFERENT module — so exporting is the alternative to a second copy of these five rows, which is the exact coupling the plan removes. ⚠ `density0` IS NOT A BULK DENSITY: it is the preset's authored composition density, feeding `enrichmentZ` below and nothing else, and it disagrees with the `5.513·M/R³` bulk the classifier keys on at every row (worst: hot-jupiter 1.0037 vs 1.30, 23% low). Rationale + the full measured table: the block above `giantRegimeOf` in e1Regime.js. ⚠ NO LINE IS ADDED ABOVE THIS ONE — see that same block's §10 LINE-STABILITY note.
+// DRIVER_BUNDLES (single source of truth) so the D3 anchor reproduces the bundle triple by construction. ── EXPORTED at PLAN §4 Step 4: the nearest-anchor classifier `giantRegimeOf` lives in e1Regime.js — a DIFFERENT module — so exporting is the alternative to a second copy of these five rows, which is the exact coupling the plan removes. ⚠ `density0` IS NOT A BULK DENSITY: it is the preset's authored composition density, feeding `enrichmentRatio` below and nothing else, and it disagrees with the `5.513·M/R³` bulk the classifier keys on at every row (worst: hot-jupiter 1.0037 vs 1.30, 23% low). Rationale + the full measured table: the block above `giantRegimeOf` in e1Regime.js. ⚠ NO LINE IS ADDED ABOVE THIS ONE — see that same block's §10 LINE-STABILITY note.
 export const GIANT_ANCHOR = Object.freeze({
   [E5_REGIME.GAS_GIANT]:   Object.freeze({ M0: 317.8, T0: 125,  density0: 1.33, iron0: 0.03, vol0: 0.04, sdfBand: [0.74, 0.86] }),
   [E5_REGIME.SATURNIAN]:   Object.freeze({ M0: 95.2,  T0: 95,   density0: 0.69, iron0: 0.03, vol0: 0.04, sdfBand: [0.85, 0.95] }),
@@ -119,24 +119,24 @@ export const SWEEP_SEEDS = Object.freeze([1, 7, 13, 23, 42, 101, 256, 777, 1234,
 
 const anchorOf = (regime) => GIANT_ANCHOR[regime] || GIANT_ANCHOR[E5_REGIME.GAS_GIANT];
 
-// The enrichment-Z proxy: metallicity primary (declared future primary), else density + composition
-// (iron + volatile) — reads ONLY condition-vector slots (AC-0 driver connectivity).
-function enrichmentZ(condition) {
+// ⭐ PLAN §4 Step 5e — THE ENRICHMENT RATIO, RECALIBRATED (this replaces `enrichmentZ` + `canonicalZ0`, which were a numerator and a denominator on two DIFFERENT SCALES). FORM 2 reads ONE quantity, `Z/Z0`. `condition.metallicity` is dex — log10, solar-relative — while the composition proxy is a weighted sum in g/cc, so a ratio ACROSS those scales is meaningless, and it is not loud. MEASURED over 120 seeded systems / 204 gas-class bodies, each classified per regime and drawn through drawGiantConditions: forwarding raw dex collapses `shellDepthFrac` from 56 distinct values (53 of them strictly inside their sdfBand) to THREE — 0.44 / 0.21 / 0.95, one per regime, every one of them the band CEILING, 0 interior. Every algebraic gate still passes; only a distinctness gate can see it. PLAN.md:182 records the same defect as 0.74 → 0.86 on all 144, which is what it looks like through a call that leaves `condition.regime` undefined so all five rows read as gas-giant.
+// THE FIX IS A SCALE-AWARE RATIO rather than two numbers divided: dex → the linear metal-abundance ratio 10^(Z − Z0_dex), which is what a dex IS. Re-measured on the same population through the branch below: 57 distinct, 84 strictly interior — i.e. it clears both halves of Step 5's shellDepthFrac gate (≥3 regimes, ≥1 body strictly interior) instead of failing both. ⚠ NAMED CONSEQUENCE, because this is a real change and not a free win: with metallicity operative the per-BODY seeded density draw no longer reaches shellDepthFrac AT ALL, so gas giants sharing a system share a shell depth (metallicity is a SYSTEM property, `zones.metallicity`). internalHeat and dissipation keep their per-body entropy; the eq-jet sign, which reads shellDepthFrac, becomes a per-system property too. That is a ruling worth having, not a detail.
+// ⛔ BYTE-INERT UNTIL THE ADAPTER FORWARDS IT: `condition.metallicity` is `undefined` on every lab preset and
+// on every game body today (conditionFromPlanet.js withholds it by name and Step 1's fence asserts the
+// withholding), so only the second branch can run, and it is the shipped expression with no operand reordered — the two sums are formed exactly as before and then divided, so this is bit-identical and not merely equal.
+export function enrichmentRatio(condition = {}, regime = E5_REGIME.GAS_GIANT) {
   const meta = condition.metallicity;
-  if (meta != null) return meta;                                   // declared future PRIMARY (undefined for lab presets)
+  if (meta != null) return Math.pow(10, meta - MET0_DEX);          // PRIMARY: dex → linear metal-abundance ratio
   const comp = condition.composition || {};
   const dens = condition.density ?? comp.density ?? 1;
   const iron = comp.ironFraction ?? 0;
   const vol = comp.volatileFraction ?? 0;
-  return WZ.DENS * dens + WZ.IRON * iron + WZ.VOL * vol;           // OPERATIVE density-dominated proxy
+  const a = anchorOf(regime);                                      // OPERATIVE density-dominated proxy, unchanged
+  return (WZ.DENS * dens + WZ.IRON * iron + WZ.VOL * vol) / (WZ.DENS * a.density0 + WZ.IRON * a.iron0 + WZ.VOL * a.vol0);
 }
-
-// Z0 (canonical enrichment) for a regime — evaluated at the pinned canonical density/composition, so
-// the canonical condition gives Z/Z0 = 1 ⇒ shellDepthFrac = SDF0 (anchor exact).
-function canonicalZ0(regime) {
-  const a = anchorOf(regime);
-  return WZ.DENS * a.density0 + WZ.IRON * a.iron0 + WZ.VOL * a.vol0;
-}
+// The canonical metallicity anchor, in the metallicity branch's OWN units. Solar — and 0 rather than a fitted constant on purpose: dex is DEFINED as log10(Z/Z_solar), so 0 is the only value that keeps the D3 anchor exact (ratio 1 ⇒ shellDepthFrac = SDF0).
+// ⛔ A FREE GAIN MULTIPLIER WAS MEASURED AND REFUSED. Gains 0.6 / 0.4 / 0.3 / 0.25 / 0.2 / 0.15 give 83 / 99 / 103 / 107 / 109 / 113 distinct shellDepthFrac values and 131 / 164 / 168 / 174 / 177 / 182 strictly interior, over the same 204-body population — so a fudge does buy spread. It buys it by making the term stop meaning "metal abundance", and δ=0.95 saturating against a RATIFIED clamp band is the design of FORM 2, not a defect to tune away. The table is recorded here so that a future retune starts from data instead of from taste.
+export const MET0_DEX = 0.0;
 
 /**
  * The CANONICAL condition vector for a regime — the identity anchor. deriveGiantDrivers(this) reproduces
@@ -178,8 +178,8 @@ export function deriveGiantDrivers(condition = {}) {
   // NOTE (slice-R minor-1): condition.T_eq is body-condition-vector.js's "SURFACE temperature (NOT
   // equilibrium temp)" — we read it AS the forms' insolation proxy T_eq; only the ratio T0/T_eq is used.
   const T_eq = condition.T_eq ?? a.T0;
-  const Z = enrichmentZ(condition);
-  const Z0 = canonicalZ0(regime);
+  // The enrichment ratio Z/Z0 as ONE quantity (PLAN §4 Step 5e). It used to be two locals divided at the FORM 2 line below, which is what let a dex numerator meet a g/cc denominator with nothing complaining.
+  const zOverZ0 = enrichmentRatio(condition, regime);   // NAMED for the anchor it carries, not just for the ratio
 
   // FORM 1 — internalHeat (energy-balance ratio; convective vigor numerator).  ↑mass ↓age ↓T_eq.
   const internalHeatRaw = IH0
@@ -189,7 +189,7 @@ export function deriveGiantDrivers(condition = {}) {
   const internalHeat = clamp(IH0 * 0.88, IH0 * 1.12, internalHeatRaw);
 
   // FORM 2 — shellDepthFrac (jet-bearing shell fraction; sets eq-jet SIGN).  ↓enrichment-Z.
-  const shellDepthFracRaw = SDF0 * (1 - delta * (Z / Z0 - 1));
+  const shellDepthFracRaw = SDF0 * (1 - delta * (zOverZ0 - 1));
   const shellDepthFrac = clamp(a.sdfBand[0], a.sdfBand[1], shellDepthFracRaw);
 
   // FORM 3 — dissipation (wind-paradox denominator; Ohmic braking).  ↑SDF (DERIVED) ↑T_eq.

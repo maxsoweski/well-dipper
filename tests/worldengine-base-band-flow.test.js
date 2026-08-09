@@ -270,6 +270,8 @@ const GLSL = readFileSync(fileURLToPath(new URL('../planet-lod-height.glsl.js', 
 // this fence reads both as one corpus so its assertions keep testing what the lab compiles.
 const LAB  = readFileSync(fileURLToPath(new URL('../planet-lod-lab.html', import.meta.url)), 'utf8')
   + '\n' + readFileSync(fileURLToPath(new URL('../planet-lod-shaders.glsl.js', import.meta.url)), 'utf8');
+// Driver pack #1 (PLAN §4 Step 5c) — the new home of the band-proxy export. See the re-pointed pin below.
+const PACK_SRC = readFileSync(fileURLToPath(new URL('../src/worldengine/drivers/giantDeck.js', import.meta.url)), 'utf8');
 // the two added slice-K helper bodies ONLY (diff-scoped): from bandProxy's def to the F24 comment that
 // precedes zonalBandCol. Comments stripped so the F1 no-uTime grep inspects CODE, not the doc prose that
 // legitimately names uTime/ph0/… (the climate-e5 idiom used for the mirror above).
@@ -290,7 +292,15 @@ describe('worldengine base — slice-K GLSL ↔ mirror constant parity (atmo-exp
     expect(GLSL).toContain('bandProxy(latRaw + dLat) - bandProxy(latRaw)');
     // signature ↔ call-site parity: a mismatch is a shader compile fail vitest cannot catch, so pin it here
     expect(LAB).toContain('zonalBandCol(bandN, bandNraw, bandPos, vBand, vShear, vMush, vStorm)');
-    expect(LAB).toContain('bandProxyUniforms(bake.params)');   // proxy export site (rebakeE5Bands) present
+    // ⭐ RE-POINTED 2026-08-09, PLAN §4 Step 5c — NOT relaxed, and not deleted. The proxy export site
+    // MOVED out of `rebakeE5Bands` and into driver pack #1, which is the entire point of that step:
+    // one law, one file, both front-ends. Deleting this line would have left the wire unpinned on the
+    // side that now carries it; keeping it pointed at the lab would have pinned an absence. So it
+    // follows its subject — the pack EXPORTS them, and the lab's write of them is asserted too, since
+    // an exported-but-never-written proxy is exactly the orphan an `atmosphereOptics.js`-shaped fence
+    // misses. The old text was: expect(LAB).toContain('bandProxyUniforms(bake.params)').
+    expect(PACK_SRC).toContain('bandProxyUniforms(bake.params)');            // proxy export site (giantDeckPack) present
+    expect(LAB).toContain('writePackUniforms(uniforms, giantDeckDirectDrivers(_deck)');   // …and the lab writes them
   });
 
   it('[parity] bandProxy GLSL carries the climate-e5 PHYS consts + the combined DEFLECT_SCALE uniform', () => {

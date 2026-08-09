@@ -1054,15 +1054,15 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
 // feature horizontal size, and relief height in REAL km — converting to the shader's unit-sphere
 // uniform space given the planet's real radius. The shader still runs on a unit sphere; only the
 // uniform VALUES change. These do NOT touch the analytic-gradient / voronoi3d / crater-shape math.
-export const R_EARTH_KM = 6371; // Earth's mean radius in km (radiusEarth is in Earth radii).
-
-// Footprint → shader frequency. frequency = cFeature * radius_km / featureSize_km.
-// Monotonic ↑ in radiusEarth (bigger planet ⇒ a fixed-km feature spans fewer cells ⇒ higher
-// frequency ⇒ smaller + more numerous on the disk) and ↓ in featureSizeKm. cFeature is the
-// per-feature calibration constant (the desired look at the reference radius).
-export function featureFrequencyFromKm(radiusEarth, featureSizeKm, cFeature) {
-  return cFeature * (radiusEarth * R_EARTH_KM) / featureSizeKm;
-}
+// ⭐ EXTRACTED 2026-08-09 (PLAN §4 "Step 5", 5b): `R_EARTH_KM` and `featureFrequencyFromKm` are now
+// DEFINED in src/worldengine/base/featureScale.js and imported BACK here, so the shared pack writer
+// (src/worldengine/port/writePackUniforms.js) and this lab core call the SAME function object, not
+// two copies that agree today — the heightNoise.glsl.js pattern. The re-export keeps every existing
+// importer working unchanged; tests/pack-contract.test.js pins single-definition by identity with
+// `toBe`, which a copy cannot satisfy even when its numbers are byte-identical. ⚠ The `import`
+// sits HERE, not at the top (imports hoist): the edit is LINE-COUNT-NEUTRAL so §10 refs still hold.
+import { R_EARTH_KM, featureFrequencyFromKm } from './src/worldengine/base/featureScale.js';
+export { R_EARTH_KM, featureFrequencyFromKm };
 
 // Relief height → unit-sphere amplitude. EXACT: a height of h km on a body of real radius
 // radius_km is a fraction h / radius_km of the (unit) radius. No clamping here — the gravity cap

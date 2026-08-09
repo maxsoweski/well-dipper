@@ -1907,11 +1907,20 @@ describe('Step 1 · metallicity is NOT forwarded — it lands in Step 5', () => 
   });
 
   it('MEASURES the trap, so the reason cannot rot into folklore', () => {
-    // PLAN.md:182. `giant-drivers.js:124-125` reads `condition.metallicity` as its
-    // declared PRIMARY enrichment term, but `canonicalZ0` (:136-138) is ALWAYS the
-    // density proxy — a weighted sum in g/cc — while generated metallicity is a
-    // DEX value that is roughly half negative. Forwarding it switches the
-    // numerator's branch across a unit mismatch the denominator does not follow.
+    // ⭐⭐ NAMED RE-BLESS 2026-08-09, PLAN §4 Step 5e — READ THIS BEFORE THE ASSERTIONS.
+    // This test was written to measure a trap: `enrichmentZ` preferred `condition.metallicity`
+    // (dex) while `canonicalZ0` was always the density proxy (g/cc), so forwarding metallicity
+    // divided across two scales and pegged `shellDepthFrac` at a clamp bound. Step 5e CLOSED that
+    // trap — `giant-drivers.js` now exposes `enrichmentRatio`, one scale-aware quantity, and the
+    // metallicity branch is `10^(Z − MET0_DEX)`, the linear metal-abundance ratio, so the anchor is
+    // exact at solar and the population no longer collapses.
+    // ⛔ THE TEST IS NOT RELAXED AND IT IS NOT DELETED. It still measures the trap — by REPRODUCING
+    // the pre-5e cross-scale form in-test — and it now also measures that the shipped law no longer
+    // has it. That ordering matters: an assertion that only said "the new form is fine" would have
+    // let the old reason rot into folklore, which is the exact thing this test's title exists for.
+    // ⚠ AND THE ONE THING THAT DID NOT MOVE: the forwarding itself. `metallicity` is STILL not
+    // forwarded by the adapter (the sibling test above asserts it on every generated body), so this
+    // is a measurement about the LAW, not about a live behaviour change.
     const gas = planets.filter((p) => GIANT_TYPES.has(p.type));
     expect(gas.length).toBeGreaterThanOrEqual(100);
 
@@ -1924,18 +1933,29 @@ describe('Step 1 · metallicity is NOT forwarded — it lands in Step 5', () => 
       const c = { ...conditionFromPlanet(p), metallicity: p.metallicity };
       return deriveGiantDrivers(c).shellDepthFrac;
     });
+    // The PRE-5e law, reproduced here rather than cited, so the trap stays measured after the fix.
+    // `regime` is left undefined exactly as the two calls above leave it, so all three lines speak
+    // about the same body: gas-giant anchors, SDF0 0.80, band [0.74, 0.86].
+    const SDF0 = 0.80, BAND = [0.74, 0.86], DELTA = 0.95, Z0_GCC = 1.33 + 0.03 + 0.04;
+    const preFix = gas.map((p) => Math.max(BAND[0], Math.min(BAND[1],
+      SDF0 * (1 - DELTA * (p.metallicity / Z0_GCC - 1)))));
 
     // Held back: one value across the whole population (the density proxy is
-    // near-constant for the game's gas bodies).
+    // near-constant for the game's gas bodies). UNCHANGED by 5e — the density branch is bit-identical.
     expect(new Set(held.map((v) => v.toFixed(6))).size).toBe(1);
-    // Forwarded: also one value — but a DIFFERENT one, pegged at the clamp
-    // ceiling. Degenerate either way, which is why a "did it change?" eyeball on
-    // one body would not have caught it.
-    expect(new Set(forwarded.map((v) => v.toFixed(6))).size).toBe(1);
-    expect(forwarded[0]).not.toBe(held[0]);
-    expect(forwarded[0]).toBeGreaterThan(held[0]);
-    // And the tell: it is pinned to a clamp bound, not to a physical answer.
-    expect(forwarded.every((v) => v === forwarded[0])).toBe(true);
+    expect(held[0]).toBe(0.74);
+    // THE TRAP, still measured: under the pre-5e cross-scale division the forwarded population is a
+    // single value, and the tell is that it is a clamp BOUND rather than a physical answer.
+    expect(new Set(preFix.map((v) => v.toFixed(6))).size).toBe(1);
+    expect(preFix[0]).toBe(BAND[1]);
+    expect(preFix[0]).toBeGreaterThan(held[0]);
+    // THE FIX, measured on the same bodies: the shipped law is no longer degenerate, and it is not
+    // pinned to a bound. Floors rather than exact counts, because the count is a property of THIS
+    // 120-seed corpus and a corpus change must not read as a law change.
+    expect(new Set(forwarded.map((v) => v.toFixed(6))).size).toBeGreaterThan(1);
+    expect(forwarded.some((v) => v > BAND[0] && v < BAND[1])).toBe(true);
+    // …and it still MOVES relative to held — forwarding metallicity is a real change, not a no-op.
+    expect(forwarded.some((v) => v !== held[0])).toBe(true);
   });
 });
 
