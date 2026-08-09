@@ -237,8 +237,46 @@ const STEP1_KEYS = ['surfaceHistory', 'radiusEarthCanonical', 'habitability', 'a
  * bit-equal, and the previously-undefined declared keys are enumerated here by
  * name. One name, not a category — `metallicity` is the other declared-but-unset
  * key and it must stay unset until Step 5 (see the metallicity fence below).
+ *
+ * ⭐ STEP 4 CHANGED THE SHAPE OF THIS LEDGER, NOT JUST ITS CONTENTS. It used to be
+ * a NAME LIST consumed by a `continue`, i.e. a set of keys the bit-equality loop
+ * SKIPPED. A skipped key is a key nothing checks: `rawTidalIoRatio` could have
+ * stopped moving, or moved on 3 bodies instead of 469, and the loop below would
+ * have been just as green. Step 4's no-surface guard adds a third mover (`T_eq`),
+ * and adding a third name to a skip-list is exactly the "things changed, fine"
+ * re-bless PLAN §11 and ledger C15 both name as the defect this program exists to
+ * remove. So the ledger is now a TABLE OF EXACT POPULATIONS and the loop asserts
+ * the whole table by value: an unexpected mover adds a key and reds it, a mover
+ * that disappears drops a key and reds it, and a mover whose population shifts by
+ * ONE body reds it too. Nothing is skipped any more.
+ *
+ * ⚠ EVERY NUMBER HERE WAS EXECUTED, NOT COPIED (PLAN §11.3.2). Measured over the
+ * 526-planet corpus this file builds, uncapped — note that the `bitDiff` cap of 24
+ * makes the raw failure output an UNDERCOUNT, which is how "25" reads out of a
+ * red run that is really 204 bodies wide.
+ *   magneticField    526/526  undefined → a finite number (Step 1; the whole population)
+ *   rawTidalIoRatio  469/526  the fabricated 1 M☉-at-1-AU Io ratio → the body's own (Step 2)
+ *   T_eq             204/526  the greenhouse-corrected surface temperature → the bare
+ *                             radiative-balance number, on the bodies the no-surface
+ *                             guard classifies as having no surface (Step 4). Strictly
+ *                             DOWNWARD on all 204, and equal to the game's raw `d.T_eq`
+ *                             on all 204 — both asserted below, because "it changed" and
+ *                             "it is now the right number" are different claims.
  */
-const EXPECTED_MOVERS = ['magneticField', 'rawTidalIoRatio'];
+const EXPECTED_CONDITION_MOVERS = Object.freeze({
+  magneticField:   526,
+  rawTidalIoRatio: 469,
+  T_eq:            204,
+});
+
+/**
+ * The corpus size, pinned. Every population above and below is a COUNT, and a count
+ * only means something against a denominator — `T_eq: 204` is a different claim on a
+ * 526-body corpus than on a 210-body one. If generation changes and the corpus
+ * resizes, every number in this file is stale and the reader must be told that
+ * rather than left to compare a fresh 204 against a remembered denominator.
+ */
+const CORPUS_BODIES = 526;
 
 /**
  * ⭐ STEP 2 — THE DECLARED MOVERS, AND WHY THIS LIST IS NOT AN EXCUSE LIST.
@@ -263,12 +301,50 @@ const EXPECTED_MOVERS = ['magneticField', 'rawTidalIoRatio'];
  *                               `biosphere`, `craters`, `optics` and the giant
  *                               triple are all bit-identical.
  *
- * ⚠ `lavaGlowColor` IS 352 WHERE `meltTemperature` IS 353, AND THAT IS NOT A ROUNDING
+ * ⚠ `lavaGlowColor` IS ONE BELOW `meltTemperature`, AND THAT IS NOT A ROUNDING
  * ARTEFACT — `emissiveBlackbody` saturates, so on exactly one body the melt point
  * moved and the colour it maps to did not. Recorded because a reader who assumed the
  * two counts must match would go looking for a bug that is not there.
+ *
+ * ⭐⭐ STEP 4 — THE RE-BLESS, AND THE PART OF IT THAT WAS NOT DECLARED ANYWHERE.
+ *
+ * Step 4's no-surface guard moves `T_eq` on 204 bodies, and `T_eq` is an input to
+ * most of the shipped laws. So the declared-mover set widens. The plan
+ * (`one-pipeline-two-frontends-PLAN.md`:247) names FOUR laws as the ones Step 4
+ * touches. ⛔ MEASURED, THAT LIST IS WRONG IN BOTH DIRECTIONS at the uniform level
+ * (`npm run port-uniform-delta:check`: `uTermStrength` and `uTermWidth` are named and
+ * move on 0/526; eight uniforms move that the plan does not name), and it is wrong
+ * here too. NINE of the ten shipped laws move, not four and not the eight a first
+ * reading of the uniform delta suggests:
+ *
+ *   ⚠ `palette` IS THE NINTH, AND NOTHING DECLARED IT. `surfacePaletteOf` moves on
+ *   148/526 bodies — the `uSedColor` / `uWeatheredColor` / `uFreshColor` /
+ *   `uBioGroundColor` family in the uniform delta. It is a real, undeclared
+ *   consequence of the guard, and pinning it by name here is the only place in the
+ *   tree that says so.
+ *
+ * ⚠ EVERY NUMBER BELOW WAS EXECUTED OVER THIS FILE'S OWN 526-BODY CORPUS, not copied
+ * from the plan or from a delta table (PLAN §11.3.2 — a pinned number taken from prose
+ * has been wrong twice). They are LAW-OUTPUT populations and they deliberately do NOT
+ * match the uniform-level populations in `port-uniform-delta`: `deriveUniforms` sits
+ * between the two and quantises, clamps and drops. `palette` moving on 148 bodies and
+ * `uSedColor` moving on 131 is not a contradiction; it is the two stages measured
+ * separately, which is the point of having both instruments.
  */
-const EXPECTED_LAW_MOVERS = ['meltTemperature', 'crustTemperature', 'lavaGlowColor', 'lavaCrustColor'];
+const EXPECTED_LAW_MOVER_BODIES = Object.freeze({
+  meltTemperature:  354,   // Step 2 + Step 4
+  crustTemperature: 354,   // Step 2 + Step 4
+  lavaCrustColor:   354,   // Step 2 + Step 4
+  lavaGlowColor:    353,   // one below its melt point — emissiveBlackbody saturates
+  optics:           193,   // Step 4 — the limb/terminator family
+  giant:            164,   // Step 4 — dissipation on 164, internalHeat on 11
+  palette:          148,   // ⭐ Step 4, UNDECLARED — see the block above
+  iceness:           86,   // Step 4
+  biosphere:         32,   // Step 4
+});
+
+/** The names alone, derived so the list and the populations can never disagree. */
+const EXPECTED_LAW_MOVERS = Object.keys(EXPECTED_LAW_MOVER_BODIES);
 
 /** The shipped-law bundle minus Step 2's declared movers — the surface that must still be bit-equal. */
 const withoutLawMovers = (o) => Object.fromEntries(
@@ -430,14 +506,28 @@ const SEEDS = Array.from({ length: 120 }, (_, i) => `pcc-${i}`);
 
 let planets = [];
 let moons = [];
+/**
+ * `seed#ordinal` for each entry of `planets`, same index. A COUNT is anonymous; the
+ * no-surface domain tests below have to be able to name the body they are talking about,
+ * both in a canary literal and in a failure message.
+ *
+ * ⛔ THE ORDINAL IS THE INDEX INTO `system.planets`, NOT `planetData._ordinal`, and the two
+ * are NOT the same thing. MEASURED over this corpus: `_ordinal` is ABSENT on 6/526 bodies
+ * and DISAGREES with the array position on another 6 (`pcc-107#0` carries `_ordinal 5`,
+ * `pcc-116#1` carries `0`, …). A future editor who "tidies" this to read `_ordinal` would
+ * silently re-point twelve rows of the canary table at different bodies while every
+ * assertion stayed green, which is the exact failure the canary table exists to prevent.
+ */
+let bodyIds = [];
 
 beforeAll(() => {
   for (const seed of SEEDS) {
     const s = StarSystemGenerator.generate(seed, null);
-    for (const e of s.planets || []) {
+    (s.planets || []).forEach((e, ordinal) => {
       planets.push(e.planetData);
+      bodyIds.push(`${seed}#${ordinal}`);
       for (const m of e.moons || []) moons.push(m);
-    }
+    });
   }
 });
 
@@ -472,17 +562,71 @@ describe('Step 1 · channel 1 — the key set', () => {
 });
 
 describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 adapter', () => {
-  it('every pre-existing condition key that carried a value is BIT-equal', () => {
-    const diffs = [];
-    for (let i = 0; i < planets.length && diffs.length <= 24; i++) {
+  it('every pre-existing condition key that carried a value is BIT-equal, and the three that move do so on exactly their declared populations', () => {
+    // ⛔ THIS TEST NO LONGER SKIPS ANYTHING. See EXPECTED_CONDITION_MOVERS for why the
+    // skip-list shape had to go: a `continue` on a declared mover is an unchecked key,
+    // and Step 4 adding a third name to a skip-list would have been a re-bless that
+    // converts a gate into a shrug. All fourteen pre-existing keys are compared on all
+    // 526 bodies; the eleven that must not move are pinned by their ABSENCE from the
+    // table, the three that do are pinned by their exact population.
+    //
+    // ⛔ AND THE LOOP NO LONGER STOPS AT 24 DIFFS. The old `diffs.length <= 24` bound
+    // (plus `bitDiff`'s own cap) meant the failure output was an undercount and no count
+    // in it could be pinned: the pre-edit red run reported "25" for what is really 204
+    // bodies. A capped list is fine for a gate that asserts EMPTY. It is useless for a
+    // gate that asserts a population, so the population pass runs the whole corpus and
+    // only the human-readable SAMPLES are capped.
+    const movedOn = {};
+    const samples = {};
+    let bodiesTouched = 0;
+    for (let i = 0; i < planets.length; i++) {
       const was = legacyConditionFromPlanet(planets[i]);
       const now = conditionFromPlanet(planets[i]);
+      let any = false;
       for (const k of PRE_STEP1_KEYS) {
-        if (EXPECTED_MOVERS.includes(k)) continue;
-        bitDiff(was[k], now[k], `${planets[i].type}[${i}].${k}`, diffs);
+        if (bitDiff(was[k], now[k], k, []).length === 0) continue;
+        movedOn[k] = (movedOn[k] || 0) + 1;
+        if (!samples[k]) samples[k] = `${planets[i].type}[${i}].${k}: ${JSON.stringify(was[k]) ?? String(was[k])} → ${JSON.stringify(now[k]) ?? String(now[k])}`;
+        any = true;
       }
+      if (any) bodiesTouched++;
     }
-    expect(diffs, `${diffs.length} pre-existing condition value(s) moved`).toEqual([]);
+
+    expect(planets.length, 'the corpus resized — every pinned population in this file is now stale')
+      .toBe(CORPUS_BODIES);
+    expect(movedOn, 'the set OR the population of moving pre-existing condition keys is not the '
+      + 'declared one. A NEW key means a step moved a number it did not declare; a MISSING key means '
+      + 'a declared step is not in the tree and the gates that subtract it are passing vacuously; a '
+      + 'SHIFTED count means the blast radius changed size.\nfirst example of each mover:\n'
+      + Object.values(samples).join('\n'))
+      .toEqual({ ...EXPECTED_CONDITION_MOVERS });
+    expect(bodiesTouched, 'magneticField fills on every body, so every body must show at least one move')
+      .toBe(CORPUS_BODIES);
+
+    // ── STEP 4's MOVER, IN BOTH DIRECTIONS ────────────────────────────────────────
+    // Population alone is "it changed". These two say "it changed TO THE RIGHT THING",
+    // which is the actual claim of the guard, and they are what stops a future
+    // "equivalent" refactor from moving T_eq somewhere else on the same 204 bodies.
+    let rawOnMovers = 0, strictlyDown = 0, greenhouseOnRest = 0;
+    for (const pd of planets) {
+      const was = legacyConditionFromPlanet(pd).T_eq;
+      const now = conditionFromPlanet(pd).T_eq;
+      if (Object.is(was, now)) {
+        // The 322 bodies the guard does NOT classify must still get the greenhouse
+        // conversion — otherwise "T_eq moved on 204" could be satisfied by a guard that
+        // fires everywhere and a corpus that happens to agree elsewhere.
+        if (Object.is(now, surfaceTemperatureOf(pd.T_eq ?? 288, atmosphereFromPlanet(pd.atmosphere)?.pressure))) greenhouseOnRest++;
+        continue;
+      }
+      if (Object.is(now, pd.T_eq ?? 288)) rawOnMovers++;    // the BARE radiative number, not a new formula
+      if (now < was) strictlyDown++;                        // removing a greenhouse can only cool
+    }
+    expect(rawOnMovers, 'a no-surface body must receive the game\'s own raw T_eq, not a third number')
+      .toBe(EXPECTED_CONDITION_MOVERS.T_eq);
+    expect(strictlyDown, 'dropping the greenhouse column can only lower T_eq — an upward move is a different bug')
+      .toBe(EXPECTED_CONDITION_MOVERS.T_eq);
+    expect(greenhouseOnRest, 'the bodies the guard does NOT classify must still get the greenhouse conversion')
+      .toBe(CORPUS_BODIES - EXPECTED_CONDITION_MOVERS.T_eq);
   });
 
   it('magneticField is the ONE pre-existing key that moves, and it moves from nothing to something', () => {
@@ -501,23 +645,77 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     expect(filled).toBe(planets.length);
   });
 
-  it('the giant-driver triple {internalHeat, shellDepthFrac, dissipation} is byte-identical', () => {
+  it('the giant-driver triple {internalHeat, shellDepthFrac, dissipation} moves on exactly two of its three fields, on exactly their declared populations', () => {
     // PLAN.md:191 — "THIS is the assertion that actually means additive."
     // deriveGiantDrivers is the derivation most exposed to a widened contract:
     // its enrichment term (giant-drivers.js:122-131) explicitly prefers a
     // condition slot that Step 1 could have filled, and Step 5 will.
-    const diffs = [];
-    for (let i = 0; i < planets.length && diffs.length <= 24; i++) {
-      bitDiff(
-        deriveGiantDrivers(legacyConditionFromPlanet(planets[i])),
-        deriveGiantDrivers(conditionFromPlanet(planets[i])),
-        `${planets[i].type}[${i}]`, diffs,
-      );
+    //
+    // ⭐ STEP 4 RE-BLESS. This was `toEqual([])` — byte-identity over the whole triple.
+    // Step 4's `T_eq` move feeds two of the triple's three forms directly
+    // (`internalHeat = IH0·(M/M0)^α·(age0/age)^β·(T0/T_eq)^γ` and
+    // `dissipation = DIS0·(SDF/SDF0)^ε·(T_eq/T0)^ζ`), so byte-identity cannot hold.
+    // ⛔ IT IS NOT WIDENED TO "the triple may move". It is widened to a per-field table,
+    // and the third field — `shellDepthFrac`, whose form reads only the enrichment-Z
+    // proxy and therefore has NO path to T_eq — is pinned to zero by name. That negative
+    // half is the whole value of the test: it is what still catches Step 5 quietly
+    // filling the enrichment slot.
+    const movedOn = {};
+    const samples = {};
+    const fieldsSeen = new Set();
+    let bodiesTouched = 0;
+    for (let i = 0; i < planets.length; i++) {
+      const was = deriveGiantDrivers(legacyConditionFromPlanet(planets[i]));
+      const now = deriveGiantDrivers(conditionFromPlanet(planets[i]));
+      let any = false;
+      for (const k of new Set([...Object.keys(was), ...Object.keys(now)])) {
+        fieldsSeen.add(k);
+        if (bitDiff(was[k], now[k], k, []).length === 0) continue;
+        movedOn[k] = (movedOn[k] || 0) + 1;
+        if (!samples[k]) samples[k] = `${planets[i].type}[${i}].${k}: ${was[k]} → ${now[k]}`;
+        any = true;
+      }
+      if (any) bodiesTouched++;
     }
-    expect(diffs, `giant triple moved on ${diffs.length} body/bodies`).toEqual([]);
+
+    // ⛔ SHAPE CONTROL FIRST. Every assertion below is keyed by field name, so a field
+    // that gets RENAMED or DROPPED would silently leave the compared surface instead of
+    // failing. Pin the surface before measuring it.
+    expect([...fieldsSeen].sort(), 'the giant triple is no longer a triple — the table below is comparing a different surface')
+      .toEqual(['dissipation', 'internalHeat', 'shellDepthFrac']);
+
+    expect(planets.length).toBe(CORPUS_BODIES);
+    expect(movedOn, 'the giant triple\'s moving fields or their populations are not the declared ones\n'
+      + Object.values(samples).join('\n'))
+      .toEqual({ dissipation: 164, internalHeat: 11 });
+    // ⚠⚠ shellDepthFrac's ZERO IS A SATURATION FACT, NOT A LIVE CONTROL, and writing that
+    // down is the difference between a fence and a decoration. MEASURED: across all 526
+    // bodies `shellDepthFrac` takes exactly ONE value, 0.74. Game bodies carry no
+    // `regime`, so every one of them is scored against the gas-giant anchors, and their
+    // density-proxy enrichment puts `Z/Z0` far enough above 1 that
+    // `SDF0·(1 − δ·(Z/Z0 − 1))` lands below the regime band on every body and clamps.
+    // ⛔ VERIFIED BY INJECTION, not assumed: ×1.5 on the adapter's `density` and ×1.01 on
+    // its `volatileFraction` — the only two channels feeding `enrichmentZ` on this route —
+    // each left this test GREEN. So `movedOn.shellDepthFrac === 0` on its own could not
+    // fail and would be a decoration. The assertion that CAN fail is the saturation
+    // itself, and the event that would break it is the one worth being told about: Step 5
+    // forwarding `metallicity` (present on 526/526 planetData records, forwarded on 0),
+    // which `enrichmentZ` prefers over the density proxy.
+    const sdfValues = new Set(planets.map((pd) => deriveGiantDrivers(conditionFromPlanet(pd)).shellDepthFrac));
+    expect([...sdfValues], 'shellDepthFrac is no longer saturated at the regime band — the enrichment '
+      + 'channel has come alive (Step 5 forwarding metallicity?) and its zero mover-count below is '
+      + 'no longer explained by the clamp').toEqual([0.74]);
+    expect(movedOn.shellDepthFrac ?? 0, 'shellDepthFrac has NO path to T_eq — if it moved, something '
+      + 'other than Step 4\'s guard reached the enrichment channel').toBe(0);
+    expect(bodiesTouched, 'bodies whose jet profile changes').toBe(164);
 
     const gas = planets.filter((p) => GIANT_TYPES.has(p.type));
     expect(gas.length, 'the corpus must actually contain gas bodies').toBeGreaterThanOrEqual(100);
+    // ⚠ 164 > the gas population: `deriveGiantDrivers` is TOTAL and returns a triple for
+    // every body, giant or not, so the count above is not bounded by the gas bodies and a
+    // reader must not read it as "164 gas giants".
+    expect(gas.length, 'the mover count is corpus-wide, not gas-only — recorded so it is not misread')
+      .toBeLessThan(164);
   });
 
   it('every shipped law returns bit-identical output for the whole corpus', () => {
@@ -527,9 +725,46 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     // ⛔ CONTROL FIRST — `withoutLawMovers` SUBTRACTS FROM THE COMPARED SURFACE, and a
     // subtraction that emptied it would make this whole test pass over anything. So the
     // surface that survives the filter is named, and its size pinned, before it is used.
+    //
+    // ⭐⭐ STEP 4 RE-BLESS, AND THE HONEST STATEMENT OF WHAT IT COST. Step 2 subtracted
+    // four of the ten shipped laws and left six. Step 4 subtracts five more and leaves
+    // ONE. This gate — channel 2's broadest "no pixel moved" statement — is now a
+    // statement about `craters` and nothing else. That is a real narrowing and it is
+    // written here rather than buried, because a reader who still believes this test
+    // covers "the shipped surface" would be wrong by nine tenths.
     const surface = Object.keys(withoutLawMovers(shippedLawOutputs(conditionFromPlanet(planets[0])))).sort();
-    expect(surface, 'Step 2\'s exclusion emptied or reshaped the surface this gate compares')
-      .toEqual(['biosphere', 'craters', 'giant', 'iceness', 'optics', 'palette']);
+    expect(surface, 'the exclusion list emptied or reshaped the surface this gate compares')
+      .toEqual(['craters']);
+
+    // ⛔ NON-DEGENERACY OF WHAT IS LEFT. One key is a thin surface, and it would be
+    // thinner still if that key were constant: `craterUniformsFrom` returns the frozen
+    // CRATERS_OFF object for any body whose schedule does not fire, and comparing a
+    // constant to itself 526 times is a gate pointed at nothing. Measured: craters are
+    // LIVE on 8 bodies and the object takes 9 distinct values across the corpus. Both
+    // are pinned, so if a later step turns craters off everywhere this test says so
+    // instead of going quietly green.
+    const craterRows = planets.map((pd) => craterUniformsFrom(conditionFromPlanet(pd)));
+    expect(craterRows.filter((c) => (c.density ?? 0) > 0).length,
+      'craters are live on too few bodies for this gate to mean anything').toBe(8);
+    expect(new Set(craterRows.map((c) => JSON.stringify(c))).size,
+      'the surviving surface is a constant — this gate is comparing nothing to itself').toBe(9);
+
+    // ⛔ NON-VACUITY OF WHAT WAS SUBTRACTED. The subtraction is only safe if every name
+    // taken out really does move; a name on the exclusion list that has stopped moving is
+    // a hole, and it would leave this test green while the step it belongs to had silently
+    // reverted. Asserted here, in the test that performs the subtraction, so the two
+    // cannot drift apart. (The EXACT populations are the STEP 2/4 mover test below.)
+    const subtractedThatMove = new Set();
+    for (const pd of planets) {
+      const was = shippedLawOutputs(legacyConditionFromPlanet(pd));
+      const now = shippedLawOutputs(conditionFromPlanet(pd));
+      for (const k of EXPECTED_LAW_MOVERS) {
+        if (bitDiff(was[k], now[k], k, []).length) subtractedThatMove.add(k);
+      }
+    }
+    expect([...subtractedThatMove].sort(), 'a law was subtracted from this gate\'s surface and then '
+      + 'did not move anywhere in the corpus — that name is a hole, not an exclusion')
+      .toEqual([...EXPECTED_LAW_MOVERS].sort());
 
     const diffs = [];
     for (let i = 0; i < planets.length && diffs.length <= 24; i++) {
@@ -586,37 +821,487 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     expect(oldVals.size, 'the fabricated fallback was NOT a single repeated value').toBeGreaterThan(100);
   });
 
-  it('STEP 2 · exactly four shipped law outputs move, and the other six do not', () => {
+  it('STEP 2 + STEP 4 · exactly nine shipped law outputs move, and the tenth does not', () => {
     // The subtraction `withoutLawMovers` performs, stated as an assertion in the other
     // direction: each named key MOVES on a named population, and the count of bodies
     // touched is pinned. A future step that widens the blast radius fails here first.
+    //
+    // ⭐⭐ STEP 4 RE-BLESS — THE ONE MOST AT RISK OF BECOMING A SHRUG. The pre-Step-4
+    // shape ("exactly four move, the other six do not") is a precise, strong, TWO-SIDED
+    // claim, and the cheap way through it is `toContain` or a `>=`. It is widened here
+    // and stays exact: exactly these NINE, on exactly these populations, and the tenth
+    // (`craters`) pinned to zero by name. Nothing in this test is satisfiable by "more
+    // things moved than we said".
+    //
+    // ⛔ NINE, NOT THE EIGHT THE PLAN'S UNIFORM-LEVEL DELTA IMPLIES. `palette` moves on
+    // 148/526 and is named in no plan, no delta table and no ledger entry. See
+    // EXPECTED_LAW_MOVER_BODIES.
     const perKey = {};
+    const samples = {};
     let bodiesTouched = 0;
+    const lawSurface = Object.keys(shippedLawOutputs(conditionFromPlanet(planets[0])));
     for (const pd of planets) {
       const a = shippedLawOutputs(legacyConditionFromPlanet(pd));
       const b = shippedLawOutputs(conditionFromPlanet(pd));
       let any = false;
-      for (const k of Object.keys(a)) {
-        if (bitDiff(a[k], b[k], k, []).length === 0) continue;
+      for (const k of lawSurface) {
+        const d = bitDiff(a[k], b[k], k, []);
+        if (d.length === 0) continue;
         perKey[k] = (perKey[k] || 0) + 1;
+        if (!samples[k]) samples[k] = `${pd.type}: ${d[0]}`;
         any = true;
       }
       if (any) bodiesTouched++;
     }
-    expect(Object.keys(perKey).sort(), 'the set of moving shipped laws is not the declared four — '
-      + 'an EMPTY left side means the declared movers did not move (Step 2 is not in the tree, and '
-      + 'the byte-identity gate above is passing vacuously); a LONGER one means the blast radius grew')
+
+    // ⛔ SHAPE CONTROL FIRST, same reason as the giant test: every claim below is keyed by
+    // law name, so the set of names has to be pinned before it is used as an index.
+    expect([...lawSurface].sort(), 'the shipped-law bundle changed shape — the populations below index a different surface')
+      .toEqual(['biosphere', 'craters', 'crustTemperature', 'giant', 'iceness',
+        'lavaCrustColor', 'lavaGlowColor', 'meltTemperature', 'optics', 'palette']);
+
+    expect(planets.length).toBe(CORPUS_BODIES);
+    expect(Object.keys(perKey).sort(), 'the set of moving shipped laws is not the declared nine — '
+      + 'an EMPTY left side means the declared movers did not move (a step is not in the tree, and '
+      + 'the byte-identity gate above is passing vacuously); a LONGER one means the blast radius grew; '
+      + 'a SHORTER one means a step silently reverted\n' + Object.values(samples).join('\n'))
       .toEqual([...EXPECTED_LAW_MOVERS].sort());
-    expect(perKey).toEqual({
-      meltTemperature: 353, crustTemperature: 353, lavaCrustColor: 353, lavaGlowColor: 352,
+    expect(perKey, 'a declared mover moved on a different number of bodies than it is pinned to')
+      .toEqual({ ...EXPECTED_LAW_MOVER_BODIES });
+    expect(bodiesTouched, 'bodies that change what they render').toBe(413);
+
+    // ── THE NEGATIVE HALF, KEPT ─────────────────────────────────────────────────────
+    // "and the other N do not" is the half a re-bless is tempted to drop, because it is
+    // the half that fails. It is asserted by NAME, not by counting: the non-movers are
+    // derived from the pinned surface minus the pinned mover list, so widening the mover
+    // list cannot silently empty this.
+    const nonMovers = lawSurface.filter((k) => !EXPECTED_LAW_MOVERS.includes(k)).sort();
+    expect(nonMovers, 'Step 4 consumed the last non-moving shipped law — if this is EMPTY the '
+      + 'negative half of this gate no longer exists and the test must be reshaped, not re-blessed')
+      .toEqual(['craters']);
+    for (const k of nonMovers) {
+      expect(perKey[k] ?? 0, `${k} is declared not to move and it moved`).toBe(0);
+    }
+
+    // ── SUB-FIELD BREAKDOWN OF THE TWO BROADEST NEW MOVERS ──────────────────────────
+    // `optics` and `palette` are OBJECTS, so "optics moved on 193 bodies" is compatible
+    // with wildly different blast radii inside it — one channel moving on 193, or all
+    // seven. The shipped uniforms are the sub-fields, not the bundle, so the sub-fields
+    // are where the claim has to be pinned. ⚠ `optics.columnFraction` does not move and
+    // is pinned to zero: it is the negative control INSIDE the widest new mover.
+    const subPop = (fn) => {
+      const out = {};
+      const seen = new Set();
+      for (const pd of planets) {
+        const a = fn(legacyConditionFromPlanet(pd));
+        const b = fn(conditionFromPlanet(pd));
+        for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+          seen.add(k);
+          if (bitDiff(a[k], b[k], k, []).length) out[k] = (out[k] || 0) + 1;
+        }
+      }
+      return { out, seen: [...seen].sort() };
+    };
+
+    const optics = subPop(atmosphereOpticsOf);
+    expect(optics.seen, 'the optics bundle changed shape').toEqual(['columnFraction', 'hazeFraction',
+      'limbColor', 'limbExponent', 'primordialFraction', 'termColor', 'thickHaze']);
+    expect(optics.out, 'the optics sub-field blast radius is not the declared one').toEqual({
+      limbColor: 193, termColor: 193, limbExponent: 183, thickHaze: 183, hazeFraction: 173, primordialFraction: 27,
     });
-    expect(bodiesTouched, '353 of 526 bodies change what they render').toBe(353);
-    // ⚠ TWO OF THE FOUR ARE BAKES `PlanetGenerator` WRITES ONTO THE BODY RECORD
-    // (`lavaGlowColor`, `lavaCrustColor`), so this step reaches the shipped uniforms
-    // through the bake route as well as the material route. That is expected and
+    expect(optics.out.columnFraction ?? 0, 'columnFraction is the negative control inside optics').toBe(0);
+
+    const palette = subPop(surfacePaletteOf);
+    expect(palette.seen, 'the palette bundle changed shape').toEqual(['craton', 'fresh', 'sediment', 'weathered']);
+    expect(palette.out, 'the UNDECLARED palette family — pinned by sub-field so it cannot widen quietly')
+      .toEqual({ craton: 141, weathered: 128, sediment: 128, fresh: 16 });
+
+    // ⚠ TWO OF THE FOUR STEP-2 MOVERS ARE BAKES `PlanetGenerator` WRITES ONTO THE BODY
+    // RECORD (`lavaGlowColor`, `lavaCrustColor`), so that step reaches the shipped
+    // uniforms through the bake route as well as the material route. That is expected and
     // declared; it is Instrument C's committed delta table that measures it.
     expect(EXPECTED_LAW_MOVERS).toContain('lavaGlowColor');
     expect(EXPECTED_LAW_MOVERS).toContain('lavaCrustColor');
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// STEP 4 · THE NO-SURFACE GUARD'S **DOMAIN** — WHICH BODIES, NOT HOW MANY
+//
+// ⛔ WHY THIS BLOCK EXISTS, AND WHAT IT IS REPAIRING. Step 4's re-bless pinned the
+// guard with four assertions and ALL FOUR ARE COUNTS OR CORPUS-WIDE PROPERTIES:
+//   · `movedOn.T_eq === 204`                       — a count
+//   · `rawOnMovers === 204`                        — "whoever moved got the raw number"
+//   · `strictlyDown === 204`                       — "whoever moved got a smaller number"
+//   · `greenhouseOnRest === 322`                   — "whoever did not move got the cooked one"
+// Not one of them names a BODY, and Step 4's entire claim is *which* bodies have no
+// surface. The last three look two-sided and are not: MEASURED, all 526 corpus bodies
+// carry pressure > 0 (min 0.1133 bar, `pcc-59#1`), so `surfaceTemperatureOf` is strictly
+// warming on every one of them and "moved to the raw number, strictly downward" is
+// satisfied by ANY 204-body subset of the corpus. The four assertions together pin a
+// CARDINALITY, and the guard's domain is a SET.
+//
+// ⚠ THIS IS A RE-BLESS-INDUCED WEAKENING, NOT A PRE-EXISTING HOLE. Before Step 4 the
+// membership was pinned trivially and absolutely — `T_eq` moved on the EMPTY set, and any
+// body entering the domain reddened `movedOn`. The re-bless traded an exact (if trivial)
+// membership pin for a count. That trade is what these two tests buy back.
+//
+// ⚠⚠ MEASURED COST OF THE HOLE, so nobody has to take the paragraph above on faith. A
+// two-body permutation of the domain — drop `pcc-2#2` (rocky, raw T_eq 184.60965 K, which
+// then wrongly receives a 147.90 K greenhouse correction) and adopt `pcc-0#2` (rocky, which
+// then wrongly loses its 8.34 K correction) — preserves EVERY pinned count in this file
+// exactly, leaves the whole 17-file suite green, and prints a BYTE-IDENTICAL verdict block
+// from `node tools/port-uniform-delta.mjs --check`. A search over the corpus finds **1387**
+// such count-preserving two-body permutations. The domain was, in effect, unpinned.
+//
+// ── THE TWO HALVES, AND WHY NEITHER ALONE CLOSES IT ─────────────────────────────────
+//  1. PREDICATE CORRESPONDENCE (two-sided, per body, by id). For all 526 bodies: the
+//     body's `T_eq` moved IF AND ONLY IF the no-surface predicate says it should.
+//     `noSurfaceOf` is deliberately NOT exported (see conditionFromPlanet.js:149-155 —
+//     exporting it would red this file's own module-export-list pin), so the predicate is
+//     RECOMPUTED here from the same shim the adapter builds.
+//     ⛔ AND THAT IS EXACTLY WHY IT IS NOT ENOUGH. Ledger C10: *a control derived from its
+//     subject by one substitution is a control against ARITHMETIC drift, never against
+//     EXTRACTION drift.* Recomputing the predicate echoes the implementation; if someone
+//     changes what "no surface" MEANS, the echo changes with it and this half stays green.
+//  2. A HAND-WRITTEN CANARY TABLE that shares no code with the tree — twelve bodies named
+//     by literal `seed#ordinal`, six asserted IN and six OUT, each carrying the MEASURED
+//     properties that made it a straddler. Those literals are the independent oracle. They
+//     are read from the raw `planetData` record and from `conditionFromPlanet`'s output
+//     only: no `atmosphereFromPlanet`, no `densityToGramsPerCC`, no `surfaceTemperatureOf`,
+//     no `compositionClass`. Nothing in half 2 can move because half 1's helpers moved.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * The no-surface predicate, RECOMPUTED. Mirrors conditionFromPlanet.js:671-684 line for
+ * line: the flattened atmosphere, the three/four-key composition with the kg/m³→g/cc
+ * conversion, and the three-key shim `{ atmosphere, composition, density }` handed to
+ * `compositionClass`.
+ *
+ * ⚠ THIS IS AN ECHO AND IS LABELLED ONE. It re-uses the adapter's own exported helpers, so
+ * it is a control against the guard being MIS-APPLIED (right rule, wrong bodies) and not
+ * against the rule itself being redefined. The canary table below is the half that survives
+ * a redefinition.
+ */
+function noSurfacePredicateOf(planetData) {
+  const d = planetData || {};
+  const comp = d.composition || {};
+  const atmosphere = atmosphereFromPlanet(d.atmosphere);
+  const composition = {
+    ironFraction:     comp.ironFraction ?? 0.32,
+    density:          densityToGramsPerCC(comp.density),
+    volatileFraction: comp.volatileFraction ?? 0.15,
+    ...(comp.carbonToOxygen != null ? { carbonToOxygen: comp.carbonToOxygen } : {}),
+  };
+  return compositionClass({ atmosphere, composition, density: composition.density ?? 5.5 }) === 'gas';
+}
+
+/** The game's own bare radiative number, read straight off the record. */
+const rawTeqOf = (pd) => pd?.T_eq ?? 288;
+/** What the greenhouse column would make of it — the value a body OUTSIDE the domain gets. */
+const cookedTeqOf = (pd) => surfaceTemperatureOf(rawTeqOf(pd), atmosphereFromPlanet(pd?.atmosphere)?.pressure);
+
+/**
+ * ⭐ THE INDEPENDENT ORACLE. Twelve bodies, by literal `seed#ordinal`, hand-picked to
+ * STRADDLE the classification boundary along every axis a reader might mistake for the
+ * discriminator.
+ *
+ * ⛔ HOW THESE WERE CHOSEN, because "how" is the whole claim to independence. Each row was
+ * picked by INSPECTING THE BODY'S MEASURED PROPERTIES — `planetData.type`,
+ * `atmosphere.physics.composition`, `atmosphere.physics.pressure`, `composition.density`,
+ * `T_eq` — and then WRITING DOWN the classification those properties demand. Not one row
+ * was selected by asking the predicate, or the adapter, what it currently answers. The
+ * physical rule being asserted is stated once, here, in English:
+ *
+ *     A body has no surface when its envelope is HYDROGEN-HELIUM. There is no ground for a
+ *     pressure column to stand on, so the quoted `pressure` is an envelope DEPTH (generated
+ *     giants quote 1000 bar) and the grey-greenhouse fit — solved on Earth's 1 bar and
+ *     Venus's 92 — does not apply. Everything else, however thick, however thin, however
+ *     hot, however light, HAS a surface and gets the correction.
+ *
+ * ⛔ AND THE `props` COLUMN IS A FENCE, NOT DECORATION. Every row asserts its measured
+ * properties BEFORE it asserts its classification. A future editor who swaps an id (or a
+ * generation change that re-shuffles ordinals) reds on the property row and is told the
+ * FIXTURE moved — instead of silently re-pointing the oracle at a body that happens to
+ * agree. `seed#ordinal` is a position in the corpus; the properties are the body.
+ *
+ * ⚠ MEASURED. `pressure` in bar, `density` in the GAME'S OWN kg/m³ (read from
+ * `planetData.composition.density` with no conversion, so this table cannot be moved by an
+ * edit to `densityToGramsPerCC`), `rawTeq` = `planetData.T_eq`, `gapK` = the greenhouse
+ * correction at stake on that body — the number an IN body must NOT receive and an OUT body
+ * MUST.
+ */
+const NO_SURFACE_CANARIES = Object.freeze([
+  // ── IN: the guard fires. `condition.T_eq` must be the body's own raw radiative number. ──
+  {
+    id: 'pcc-2#4', expect: 'IN', gapK: 449.91,
+    props: { type: 'gas-giant', composition: 'h2-he', pressure: 1000, density: 1939.9114475714557, rawTeq: 86.39812436249863 },
+    why: 'THE ARCHETYPE. An h2-he giant quoting 1000 bar — an envelope depth, not a surface load. '
+       + 'Handed to a fit anchored on 1 bar and 92 bar it manufactures a 449.91 K correction on an '
+       + '86 K body. If any single body must be inside the domain, it is this one.',
+  },
+  {
+    id: 'pcc-2#2', expect: 'IN', gapK: 147.90,
+    props: { type: 'rocky', composition: 'h2-he', pressure: 11.203818899840723, density: 4377.237472142501, rawTeq: 184.60965032275448 },
+    why: 'STRADDLER — TYPE SAYS ROCKY AND DENSITY SAYS ROCKY, AND BOTH ARE IRRELEVANT. '
+       + '`planetData.type === "rocky"` and 4377 kg/m³ is the densest ROCKY-typed body in the h2-he population (next is 2339) — ⚠ NOT the densest h2-he body overall: it is rank 21 of 204, and `pcc-1#6` four rows below records 4675.87. Corrected 2026-08-09 after the claim was measured and failed; the straddler point it was written to make survives intact — '
+       + 'yet the envelope is hydrogen, so there is no ground. Pinning this row is what stops the '
+       + 'guard being "fixed" to key on `type` or on density. (It is also the body the measured '
+       + 'count-preserving permutation above DROPS.)',
+  },
+  {
+    id: 'pcc-47#4', expect: 'IN', gapK: 61.91,
+    props: { type: 'ice', composition: 'h2-he', pressure: 10.313674220964193, density: 1721.325431958318, rawTeq: 81.06096494183693 },
+    why: 'THE THINNEST h2-he ENVELOPE IN THE CORPUS, 10.31 bar. Read against `pcc-0#1` below — a '
+       + '90 bar body that is OUT — this row is the proof that the discriminator is NOT a pressure '
+       + 'threshold: 10.31 bar is inside the domain and 90 bar is outside it.',
+  },
+  {
+    id: 'pcc-40#0', expect: 'IN', gapK: 325.79,
+    props: { type: 'lava', composition: 'h2-he', pressure: 13.392195016138459, density: 4070.3233052222827, rawTeq: 367.91404669984087 },
+    why: 'THE ONLY `lava`-TYPED BODY IN THE DOMAIN, at 367.9 K. ⚠ It is NOT the hottest — that is `pcc-81#0` at 438.65 K, this one is rank 8 of 204; corrected 2026-08-09 after measurement. The type uniqueness is the real reason to pin it: a guard rewritten around molten-surface heuristics reds here. Read against `pcc-59#1` below '
+       + '(607.7 K and OUT) it shows the boundary is not a temperature ordering either.',
+  },
+  {
+    id: 'pcc-1#6', expect: 'IN', gapK: 295.00,
+    props: { type: 'sub-neptune', composition: 'h2-he', pressure: 50, density: 4675.871371298277, rawTeq: 174.81721707804073 },
+    why: 'THE MIDDLE ENVELOPE PRESSURE, 50 bar — between the 10 bar of `pcc-47#4` and the 1000 bar '
+       + 'of `pcc-2#4` — and the largest IN population (sub-neptunes, 95 of the 204). A guard that '
+       + 'fired only at the extremes of the pressure range would still red here.',
+  },
+  {
+    id: 'pcc-48#4', expect: 'IN', gapK: 36.27,
+    props: { type: 'rocky', composition: 'h2-he', pressure: 10.444295905101825, density: 1416.2507688386422, rawTeq: 47.140519934226035 },
+    why: 'A NEAR-LOWEST-DENSITY BODY IN THE DOMAIN, 1416 kg/m³ (rank 2 of 204; `pcc-7#5` is lower at 1408.71 — ⚠ this row claimed rank 1 until measured 2026-08-09) — which on the density smoothstep alone '
+       + 'would read `icy`, not `gas`. Its partner is `pcc-98#3` below at 1461 kg/m³, 3.2% denser and '
+       + 'OUT. Two bodies that agree on density to within 3% and classify OPPOSITELY: density cannot '
+       + 'be the discriminator, and this pair is the assertion that says so.',
+  },
+
+  // ── OUT: the guard does not fire. `condition.T_eq` must carry the greenhouse column. ──
+  {
+    id: 'pcc-0#1', expect: 'OUT', gapK: 599.55, minGapK: 590,
+    props: { type: 'venus', composition: 'co2', pressure: 90, density: 4112.043391887816, rawTeq: 277.2143692464735 },
+    why: 'THE THICK-ATMOSPHERE ROCKY. 90 bar of CO₂ — 8.7× the pressure of the thinnest body INSIDE '
+       + 'the domain — and it keeps its 599.55 K correction, because a Venus is the body the fit was '
+       + 'solved on. This is the row that makes "no surface" mean no surface rather than "a lot of gas".',
+  },
+  {
+    id: 'pcc-59#1', expect: 'OUT', gapK: 8.11, minGapK: 8,
+    props: { type: 'crystal', composition: 'co2', pressure: 0.11329564924345857, density: 4301.306689932942, rawTeq: 607.6737564505985 },
+    why: 'THE NEAREST THING TO AIRLESS THIS CORPUS CONTAINS — 0.1133 bar, the minimum over all 526 '
+       + 'bodies — and also the HOTTEST body in the corpus at 607.7 K. A thin atmosphere is still an '
+       + 'atmosphere standing on ground, so the correction (8.11 K) is small but real and must arrive. '
+       + '⚠ SEE THE AIRLESS RESIDUAL ASSERTED BELOW: there is no P = 0 planet here, and on one the '
+       + 'guard would be observationally inert.',
+  },
+  {
+    id: 'pcc-0#2', expect: 'OUT', gapK: 8.34, minGapK: 8.3,
+    props: { type: 'rocky', composition: 'n2-o2', pressure: 0.3293951843808789, density: 4203.717273535055, rawTeq: 196.62865297240302 },
+    why: 'THE ORDINARY THIN-AIR ROCKY, 0.33 bar of N₂-O₂ — the corpus\'s most common shape (180 of '
+       + '526) and the body the measured count-preserving permutation ADOPTS. Its 8.34 K correction is '
+       + 'small, which is exactly why losing it hides so well.',
+  },
+  {
+    id: 'pcc-98#3', expect: 'OUT', gapK: 2.42, minGapK: 2.4,
+    props: { type: 'rocky', composition: 'n2-o2', pressure: 0.31045654822477825, density: 1461.0320908561391, rawTeq: 60.664516855913725 },
+    why: 'THE DENSITY COUNTEREXAMPLE, partner to `pcc-48#4`. 1461 kg/m³ against that body\'s 1416 — '
+       + 'and this one is OUT. It carries the SMALLEST correction of any canary (2.42 K), so it is '
+       + 'also the row that would notice a guard that swallowed the near-invisible cases.',
+  },
+  {
+    id: 'pcc-8#2', expect: 'OUT', gapK: 35.41, minGapK: 35,
+    props: { type: 'ice', composition: 'n2-o2', pressure: 1.701013784013877, density: 4487.663492676555, rawTeq: 168.50328916063657 },
+    why: 'THE TYPE COUNTEREXAMPLE, partner to `pcc-47#4`. Both are `type: "ice"`; that one is IN and '
+       + 'this one is OUT. `planetData.type` does not decide this and this pair is the proof.',
+  },
+  {
+    id: 'pcc-32#2', expect: 'OUT', gapK: 128.30, minGapK: 128,
+    props: { type: 'ocean', composition: 'n2-o2', pressure: 6.163584474813617, density: 4390.1150570821155, rawTeq: 230.66726502067405 },
+    why: 'A NEAR-APPROACH ON THE PRESSURE AXIS FROM BELOW — 6.16 bar, the second-highest-pressure (`pcc-33#1` is 6.202; ⚠ this row claimed highest until measured 2026-08-09) '
+       + 'non-h2-he body short of the Venuses, sitting just under the 10.31 bar of the thinnest IN '
+       + 'body. If the boundary ever became a pressure cut, it would have to fall in this 6.16 … 10.31 '
+       + 'bar gap, and this row plus `pcc-47#4` bracket it from both sides.',
+  },
+]);
+
+describe('Step 4 · the no-surface guard\'s DOMAIN — which bodies, not how many', () => {
+  it('HALF 1 · every body\'s T_eq moves IF AND ONLY IF the no-surface predicate classifies it — per body, named by id', () => {
+    // ⛔ NON-DEGENERACY FIRST, because the iff below is only a statement about the domain on
+    // bodies where the two branches DISAGREE. On a body with pressure 0 the greenhouse factor
+    // is exactly 1 (`surfaceTemperatureOf`: tau = 0.84·0^1.124 = 0), so IN and OUT produce the
+    // SAME number and the classification is unobservable at this seam. MEASURED: that happens
+    // on 0 of 526 bodies. If it ever stops being 0, this test has quietly become partial on
+    // those bodies and the reader is told so here rather than discovering it later.
+    const unobservable = [];
+    for (let i = 0; i < planets.length; i++) {
+      if (Object.is(rawTeqOf(planets[i]), cookedTeqOf(planets[i]))) unobservable.push(bodyIds[i]);
+    }
+    expect(planets.length, 'the corpus resized — every pinned population in this file is now stale')
+      .toBe(CORPUS_BODIES);
+    expect(unobservable, 'bodies whose greenhouse correction is exactly zero: on these the guard\'s '
+      + 'classification produces no observable difference, so the correspondence below says NOTHING '
+      + 'about them. Measured at 0; a non-empty list means this gate is now partial.')
+      .toEqual([]);
+
+    // ── THE CORRESPONDENCE, BOTH DIRECTIONS, ONE BODY AT A TIME ─────────────────────────
+    // `deniedCorrection`  — the predicate says NO SURFACE and the body was cooked anyway.
+    // `fabricatedSurface` — the predicate says it HAS a surface and its greenhouse was dropped.
+    // A count-preserving permutation of the domain necessarily produces one of each, so it
+    // cannot pass through this loop the way it passes through a population table.
+    const deniedCorrection = [];
+    const fabricatedSurface = [];
+    let classifiedNoSurface = 0;
+    for (let i = 0; i < planets.length; i++) {
+      const pd = planets[i];
+      const id = bodyIds[i];
+      const raw = rawTeqOf(pd);
+      const cooked = cookedTeqOf(pd);
+      const got = conditionFromPlanet(pd).T_eq;
+      if (noSurfacePredicateOf(pd)) {
+        classifiedNoSurface++;
+        if (!Object.is(got, raw)) {
+          deniedCorrection.push(`${id} (${pd.type}): classified NO-SURFACE but T_eq = ${got} — `
+            + `expected the raw ${raw}, i.e. it wrongly received a ${(cooked - raw).toFixed(2)} K greenhouse`);
+        }
+      } else if (!Object.is(got, cooked)) {
+        fabricatedSurface.push(`${id} (${pd.type}): classified HAS-SURFACE but T_eq = ${got} — `
+          + `expected the greenhouse-corrected ${cooked}, i.e. it wrongly lost a ${(cooked - raw).toFixed(2)} K correction`);
+      }
+    }
+
+    expect(deniedCorrection, 'a body the no-surface predicate classifies as having NO surface was '
+      + 'given a greenhouse correction anyway — the guard\'s domain and the guard\'s effect have come '
+      + `apart:\n${deniedCorrection.join('\n')}`).toEqual([]);
+    expect(fabricatedSurface, 'a body the no-surface predicate classifies as HAVING a surface lost its '
+      + 'greenhouse correction — the guard fired outside its own domain:\n'
+      + fabricatedSurface.join('\n')).toEqual([]);
+
+    // The population, tied to the same table the count-based gate uses, so the two can never
+    // disagree about how big the domain is while agreeing about who is in it.
+    expect(classifiedNoSurface, 'the predicate\'s own population is not the declared T_eq mover count')
+      .toBe(EXPECTED_CONDITION_MOVERS.T_eq);
+  });
+
+  it('HALF 2 · twelve named bodies are classified as their MEASURED properties demand — literals, no shared code with the tree', () => {
+    // ⛔ THIS TEST TOUCHES NO TREE HELPER. It reads `planetData` fields and
+    // `conditionFromPlanet(...).T_eq`, and compares them to numbers typed into the table
+    // above. `atmosphereFromPlanet`, `densityToGramsPerCC`, `surfaceTemperatureOf` and
+    // `compositionClass` are all absent on purpose: half 1 is an echo of the implementation
+    // (ledger C10) and an echo cannot catch a redefinition of the rule. This half can.
+    const seen = new Set();
+    for (const row of NO_SURFACE_CANARIES) {
+      const i = bodyIds.indexOf(row.id);
+      expect(i, `${row.id} is not in the corpus — generation moved and this canary has no body`)
+        .toBeGreaterThanOrEqual(0);
+      expect(seen.has(row.id), `${row.id} is listed twice`).toBe(false);
+      seen.add(row.id);
+      const pd = planets[i];
+
+      // ── FIXTURE IDENTITY. The properties are the body; the id is only its address. ──
+      const phys = pd.atmosphere?.physics;
+      expect(phys, `${row.id} lost its atmosphere.physics block`).toBeTruthy();
+      expect(pd.type, `${row.id} type`).toBe(row.props.type);
+      expect(phys.composition, `${row.id} envelope composition`).toBe(row.props.composition);
+      expect(phys.pressure, `${row.id} pressure (bar)`).toBeCloseTo(row.props.pressure, 9);
+      expect(pd.composition?.density, `${row.id} density (kg/m³, the game's own unit)`)
+        .toBeCloseTo(row.props.density, 9);
+      expect(pd.T_eq, `${row.id} raw T_eq`).toBeCloseTo(row.props.rawTeq, 9);
+
+      // ── THE CLASSIFICATION, THROUGH THE SHIPPED SEAM AND NOTHING ELSE. ──
+      const got = conditionFromPlanet(pd).T_eq;
+      if (row.expect === 'IN') {
+        expect(Object.is(got, pd.T_eq), `${row.id} (${row.props.type}, ${row.props.composition} at `
+          + `${row.props.pressure} bar) MUST be inside the no-surface domain and keep its own raw `
+          + `T_eq. It received ${got} instead of ${pd.T_eq} — a fabricated greenhouse of about `
+          + `${row.gapK} K on a body with no ground.\nWHY THIS BODY: ${row.why}`).toBe(true);
+      } else {
+        expect(got, `${row.id} (${row.props.type}, ${row.props.composition} at ${row.props.pressure} `
+          + `bar) MUST be OUTSIDE the no-surface domain and receive its greenhouse column of about `
+          + `${row.gapK} K. It got ${got} against a raw ${pd.T_eq}.\nWHY THIS BODY: ${row.why}`)
+          .toBeGreaterThan(pd.T_eq + row.minGapK);
+      }
+    }
+    expect(seen.size, 'the canary table shrank — a straddler was deleted rather than answered').toBe(12);
+    expect(NO_SURFACE_CANARIES.filter((r) => r.expect === 'IN').length).toBe(6);
+    expect(NO_SURFACE_CANARIES.filter((r) => r.expect === 'OUT').length).toBe(6);
+  });
+
+  it('HALF 2 · the canary pairs are genuine counterexamples — type, density and pressure each FAIL to separate IN from OUT', () => {
+    // The table's straddling claim, asserted rather than described. Each pair is two bodies
+    // that classify OPPOSITELY while agreeing on the axis named — so a red here says which
+    // wrong discriminator someone reached for.
+    const at = (id) => {
+      const i = bodyIds.indexOf(id);
+      expect(i, `${id} missing from the corpus`).toBeGreaterThanOrEqual(0);
+      const pd = planets[i];
+      return { pd, inDomain: Object.is(conditionFromPlanet(pd).T_eq, pd.T_eq) };
+    };
+
+    // TYPE is not the discriminator: two `rocky` bodies, and two `ice` bodies, split.
+    for (const [a, b, axis] of [['pcc-2#2', 'pcc-0#2', 'rocky'], ['pcc-47#4', 'pcc-8#2', 'ice']]) {
+      const A = at(a); const B = at(b);
+      expect(A.pd.type, `${a} type`).toBe(axis);
+      expect(B.pd.type, `${b} type`).toBe(axis);
+      expect(A.inDomain, `${a} must be IN`).toBe(true);
+      expect(B.inDomain, `${b} must be OUT`).toBe(false);
+    }
+
+    // DENSITY is not the discriminator: 1416 kg/m³ is IN, 1461 kg/m³ is OUT — 3.2% apart.
+    const light = at('pcc-48#4'); const lighter = at('pcc-98#3');
+    expect(Math.abs(light.pd.composition.density / lighter.pd.composition.density - 1),
+      'the density counterexample pair drifted apart — it no longer shows density failing to separate '
+      + 'the two classes').toBeLessThan(0.05);
+    expect(light.inDomain, 'pcc-48#4 (1416 kg/m³, h2-he) must be IN').toBe(true);
+    expect(lighter.inDomain, 'pcc-98#3 (1461 kg/m³, n2-o2) must be OUT').toBe(false);
+
+    // PRESSURE is not the discriminator, and the failure is in BOTH directions: the OUT body
+    // carries 8.7× the pressure of the IN body.
+    const thinGas = at('pcc-47#4'); const thickRock = at('pcc-0#1');
+    expect(thickRock.pd.atmosphere.physics.pressure)
+      .toBeGreaterThan(thinGas.pd.atmosphere.physics.pressure * 5);
+    expect(thinGas.inDomain, 'pcc-47#4 (10.31 bar, h2-he) must be IN').toBe(true);
+    expect(thickRock.inDomain, 'pcc-0#1 (90 bar, co2) must be OUT').toBe(false);
+
+    // TEMPERATURE is not the discriminator: the hottest OUT body (607.7 K) is hotter than
+    // every IN body, and this IN body at 47.1 K is colder than every OUT body (min OUT = 60.665 K).
+    // ⚠ 47.1 K is NOT the coldest IN body — that is pcc-89#4 at 38.17 K, this one is rank 6 of 204.
+    // The sentence said "the coldest" until it was measured 2026-08-09. The ASSERTION below never
+    // depended on the superlative, only on the ordering, which is why it held while the prose did not.
+    const hotOut = at('pcc-59#1'); const coldIn = at('pcc-48#4');
+    expect(hotOut.pd.T_eq).toBeGreaterThan(coldIn.pd.T_eq);
+    expect(hotOut.inDomain, 'pcc-59#1 (607.7 K, co2) must be OUT').toBe(false);
+    expect(coldIn.inDomain, 'pcc-48#4 (47.1 K, h2-he) must be IN').toBe(true);
+  });
+
+  it('CONTROL · the two classifier branches this corpus does NOT exercise, pinned so their arrival is announced', () => {
+    // ⛔ THE HONEST STATEMENT OF WHAT THE TABLE ABOVE CANNOT COVER. `compositionClass` has
+    // three ways out — the h2-he envelope (⇒ gas), a C/O ratio above 1 (⇒ carbon) and the
+    // density smoothstep (⇒ icy | rocky). The canaries exercise the first and the third.
+    // They cannot exercise the second, and they cannot exercise a genuinely airless body,
+    // because THIS CORPUS CONTAINS NEITHER. Measured, and asserted here so that the day one
+    // appears the suite says "add a canary row" instead of staying green over a case nobody
+    // ever looked at.
+    const airless = planets.filter((pd) => pd.atmosphere == null);
+    expect(airless.length, 'an AIRLESS planet has appeared in the corpus. The canary table has no row '
+      + 'for one, and it needs a hand-written answer: an airless body has pressure 0, the greenhouse '
+      + 'factor is exactly 1, and IN vs OUT therefore produce the SAME T_eq — so its classification is '
+      + 'NOT observable through this seam and must be pinned some other way.').toBe(0);
+
+    const carbonWorlds = planets.filter((pd) => (pd.composition?.carbonToOxygen ?? 0) > 1);
+    expect(carbonWorlds.length, 'a C/O > 1 body has appeared in the corpus. e1Regime.js:68 returns '
+      + '"carbon" for it BEFORE the density smoothstep and AFTER the h2-he test, so it is a third '
+      + 'branch of the classifier with no canary row. Add one, both with and without an h2-he '
+      + 'envelope — the ordering of those two tests is the behaviour at stake.').toBe(0);
+
+    // And the fact the whole two-sided read rests on: every body in this corpus has a real,
+    // strictly-warming greenhouse column, so "moved downward to the raw number" is satisfiable
+    // by ANY subset and cannot pin membership on its own. That is the hole these tests close;
+    // it is asserted rather than argued.
+    expect(planets.filter((pd) => (pd.atmosphere?.physics?.pressure ?? 0) > 0).length,
+      'not every body carries positive pressure any more — the argument for why the COUNT-based '
+      + 'assertions were insufficient has changed, and this block\'s framing needs re-reading')
+      .toBe(CORPUS_BODIES);
   });
 });
 
