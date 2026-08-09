@@ -1978,6 +1978,7 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
 - **Per-system SYSTEMS/<sys>/ROADMAPs** — authored fresh when each system gets its first deep dive (Rule 1 no empty folders).
 - **Sol-naming triage** — `body.star.sol` not tagged in partial inspection layer.
 - **PARKING_LOT.md** — P1/P2/P3 deferred items; migrate to per-system Open Questions when those systems get deep dives (tracked in JOURNEY structural debt).
+- ⭐ **Camera aim choreography (`CameraChoreographer`) — DEFERRED 2026-08-09 by Max, and now a REQUIREMENT for screensaver-mode MVP shipping.** Built, committed (`92614e5`), **dormant** — it does not execute at HEAD (`SHIPS_ENABLED = false`), has zero tests, and its intended successor path is dead. ⛔ **Resumption is Max-gated by name** — do not pick this up opportunistically. ⚠ The screensaver requirement is bigger than the module: today's tour is HeadMount-welded first-person with no independent aim axis, so satisfying it means the screensaver grows one. Full state, the three repairs a revival owes, and the retired-by-record conflict: `docs/FEATURES/autopilot.md` §Deferred — camera aim choreography.
 
 ## What's NOT in the queue right now
 
