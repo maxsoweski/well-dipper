@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-09T00:15:17.712Z",
+  "recordedAt": "2026-08-09T06:46:53.658Z",
   "recordedFromCommit": {
-    "sha": "3f63c4f2200edb2dbd51abce82e447ebf34cf04b",
+    "sha": "09c88549bb30ef2dcabcdc45748d61b89e51ea82",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -30,9 +30,9 @@
       "collectedFiles": 308,
       "failingFiles": 2,
       "nonCollectingFiles": 15,
-      "tests": 4838,
+      "tests": 4842,
       "failed": 24,
-      "passed": 4810,
+      "passed": 4814,
       "skipped": 4,
       "todo": 0
     },
@@ -288,7 +288,7 @@
       "tests/settings-flight-control-type.test.js": 7,
       "tests/shader-warmup-source-parity.test.js": 7,
       "tests/sound-engine-mute.test.js": 4,
-      "tests/source-scan-helper.test.js": 45,
+      "tests/source-scan-helper.test.js": 49,
       "tests/star-billboard-switch.test.js": 6,
       "tests/swap-compile-gate.test.js": 6,
       "tests/v2-0-byte-identity.test.js": 88,
