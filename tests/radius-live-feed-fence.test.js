@@ -95,7 +95,7 @@ const ADAPTER_REL = 'src/worldengine/port/conditionFromPlanet.js';
 //     "the drawn-vs-fp radius ambiguity" without tripping the pattern. Rewording is the remedy this
 //     header has always documented, and it is the one that was applied.
 //
-// The walker is the shared house idiom: source-scan.mjs:191 `export function jsFilesUnder(root, rel) {`,
+// The walker is the shared house idiom: source-scan.mjs:269 `export function jsFilesUnder(root, rel) {`,
 // promoted there from vis-scale-fence.test.js:36 `function jsFilesUnder(rel) {` — the fence that
 // already walks this exact tree for the same reason. (Both refs kept on one line each, per the
 // tick-parity note above.)
@@ -105,7 +105,7 @@ const LAB = SRC.get(LAB_REL);
 
 // Comment-BLIND view of the corpus — never for the DENY scan. Offset-preserving, so `lineOf` reports
 // the same line number on any view
-// (tests/helpers/source-scan.mjs:103 `export function stripCommentsPreservingOffsets(src, opts = {}) {`).
+// (tests/helpers/source-scan.mjs:194 `export function stripCommentsPreservingOffsets(src, opts = {}) {`).
 const STRIPPED = new Map(CORPUS_REL.map((rel) => [rel, stripCommentsPreservingOffsets(SRC.get(rel))]));
 
 // Comment-blind AND literal-blind: the view the liveness check and the AC-0 pins actually assert on.
@@ -477,11 +477,27 @@ describe('AC-NOFROZEN — no live quantity reads radius off a frozen preset', ()
         + 'carrier in that same commit, and say where it went.')
         .toBeGreaterThanOrEqual(1);
     }
-    // The corpus must hold at least as many DENY-carrying files as the list claims. This is what
-    // stops the list being trimmed to match a shrinking corpus instead of the corpus being fixed.
+    // ⛔ THIS ASSERTION WAS VACUOUS UNTIL 2026-08-09 AND ITS COMMENT SAID THE OPPOSITE. It read
+    // `expect(carrying.size).toBeGreaterThanOrEqual(REQUIRED_CARRIERS.length)` under a comment
+    // claiming it "stops the list being trimmed". It cannot fire on a trim, and the reason is
+    // arithmetic, not oversight: the loop three lines above already asserts every member of
+    // REQUIRED_CARRIERS carries ≥1 raw hit, so `carrying` is a SUPERSET of the list by construction
+    // and the count comparison holds automatically. Only a DUPLICATED entry could ever red it.
+    // MEASURED: `const REQUIRED_CARRIERS = [LAB_REL];` — the adapter trimmed straight out — left this
+    // file at **74 passed (74)**, fully green, with the guard silent. Meanwhile the sibling loop's own
+    // failure message tells the author to "move this carrier out of REQUIRED_CARRIERS", which is
+    // precisely the edit this guard existed to stop.
+    // ⭐ IT IS THE FOURTH INSTANCE IN ONE STEP OF ONE CLASS — an assertion whose control is derived
+    // from its own subject (ledger C10; `lineOf` comparing raw-vs-stripped; `jsFilesUnder` sorting its
+    // own output and comparing it to itself; this). That recurrence is why `npm run test:mutation`
+    // now exists: the class is closed by a machine, not by the next reviewer noticing.
+    // SET EQUALITY, not a count floor. A carrier may now leave this list ONLY when the corpus genuinely
+    // stops carrying it, and a site that legitimately moves forces its new home to be named here.
     const carrying = new Set(scanCorpus(new Map(), []).map((o) => o.file));
-    expect(carrying.size, 'fewer files carry a DENY hit than REQUIRED_CARRIERS names')
-      .toBeGreaterThanOrEqual(REQUIRED_CARRIERS.length);
+    expect([...carrying].sort(),
+      'the set of DENY-carrying files is not the set REQUIRED_CARRIERS names — if a site moved, name '
+      + 'its new home here in the same commit; do not trim the list to match a shrinking corpus')
+      .toEqual([...new Set(REQUIRED_CARRIERS)].sort());
   });
 
   it('the walker ran and found a tree (a THRESHOLD, and only that)', () => {
@@ -489,7 +505,7 @@ describe('AC-NOFROZEN — no live quantity reads radius off a frozen preset', ()
     // (42 .js under src/worldengine + the lab + the shader module), so `> 20` survives LOSING HALF THE
     // TREE. It proves the walker ran and returned something; it proves nothing about the corpus being
     // intact. The per-carrier assertion above is the check that has that property. The same warning is
-    // written into tests/helpers/source-scan.mjs:191 `export function jsFilesUnder(root, rel) {`,
+    // written into tests/helpers/source-scan.mjs:269 `export function jsFilesUnder(root, rel) {`,
     // which points back here by name.
     expect(CORPUS_REL.length).toBeGreaterThan(20);
     expect(CORPUS_REL).toContain(LAB_REL);
@@ -945,6 +961,18 @@ describe('AC-0 — the rewired sites are NAMED consumers of the live driver (sou
   // live `const _gas = (_fp.atmosphere?.composition === '…')` statement, not text inside a template)
   // is asserted on the blanked view, and the VALUE `'h2-he'` is asserted on the comment-stripped view
   // in the same test. Neither half alone is the property; both together are.
+  // ⛔ WHAT THESE PINS DO NOT SAY, WRITTEN WHERE THEY SAY IT (PLAN §11.9). "Matches on `PIN_VIEW`"
+  // means the text is outside every comment and every literal. It does NOT mean the text RUNS. Round
+  // 2 of §11.4 executed both remaining containers, with the live `const _rotH` line replaced by
+  // `let _rotH = 24;` so the law was genuinely dead: the statement parked in RAW HTML MARKUP (a
+  // `<pre hidden>` before `<body>` — neither comment nor literal, and the corpus's principal file is
+  // an .html file) and the statement wrapped in a NEVER-CALLED FUNCTION each left all three suites at
+  // **175 passed (175)**. The `_rotH` pin below, added so "both files must FAIL" would hold, was
+  // satisfied by markup. Named rather than closed because both are adversarial: measured 2026-08-09,
+  // `grep -nE '<(pre|textarea|template|noscript|xmp)\b' planet-lod-lab.html` returns nothing and the
+  // lab's HTML surface is six lines before one `<script type="module">`, whereas re-quoting a law in a
+  // comment or a template is a habit with 7 instances. Reachability needs the control-flow pass
+  // KNOWN LIMIT #1 refuses; markup could be closed by blanking outside `<script>` on `.html` members.
   const BLIND_BLOCK_PINS = [
     ['`const _gas` (composition gate, feeds cloud regime + giant dynamo)',
       /const\s+_gas\s*=\s*\(_fp\.atmosphere\?\.composition\s*===\s*'[^']*'\)/,

@@ -83,7 +83,7 @@
 //      an absent one, because it tells the next author the hazard is self-reporting.
 //      ⭐ CLOSED, not documented: matching now runs on the literal-BLIND pass and only the SPLICE
 //      reads the literal-preserving one, via the `blankLiteralText` option on
-//      tests/helpers/source-scan.mjs:103 `export function stripCommentsPreservingOffsets(src, opts = {}) {`.
+//      tests/helpers/source-scan.mjs:194 `export function stripCommentsPreservingOffsets(src, opts = {}) {`.
 //      Measured over all 44 corpus files: the pass this file used to match against leaves 985 lines
 //      carrying a live `//` (900 of them in planet-lod-shaders.glsl.js, the venue this limit named
 //      as plausible, and 21 in the lab's own shader templates); the pass it matches against now
@@ -92,10 +92,28 @@
 //      rather than mis-matched, so it reports as ZERO matches, not as "it is over there in a
 //      template". That is the fail-CLOSED direction and it is loud; the failure text names the
 //      possibility, but it cannot name the venue, so the next author still has to go and look.
-//      There is no remaining direction in which a law parked in a literal produces a green.
-//      Interpolations are
-//      blanked with the text around them —
-//      tests/helpers/source-scan.mjs:92 `interpolations are blanked along with the surrounding text`
+//      ⛔ THIS PARAGRAPH USED TO END "There is no remaining direction in which a law parked in a
+//      literal produces a green." ROUND 2 OF PLAN §11.4 EXECUTED A COUNTER-EXAMPLE, and the shape of
+//      it is the reason the sentence is now written with its limit attached. The scanner tracked a
+//      template's `${…}` re-entry with a SINGLE INTEGER brace depth, so a NESTED template inside an
+//      interpolation whose TEXT carried an unbalanced `}` decremented the OUTER template's count: the
+//      outer template was declared closed at the inner backtick, backtick parity inverted for the
+//      rest of the file, and a later real template's contents were scanned as LIVE CODE. Round 2
+//      measured all three suites at **171 passed (171)** with the band law moved out of applyDrivers
+//      and parked there — round 1's D1, arriving through a different lexing path.
+//      ⭐ CLOSED BY CODE, NOT BY QUALIFICATION, because a limit a correct algorithm can remove should
+//      not be carried as prose. The integer is gone; `${…}` is lexed by three mutually-recursive span
+//      scanners that skip nested templates and strings whole —
+//      tests/helpers/source-scan.mjs:135 `function interpolationEnd(src, i) {`. Measured 2026-08-09:
+//      over 20,000 valid-JS snippets carrying nested templates the old lexer let a top-level comment
+//      survive as template text in 6,147 of them and the new one in ZERO, and over all 44 corpus
+//      files the two are BYTE-IDENTICAL on both passes, so nothing in the tree moved.
+//      ⚠ WHAT IS LEFT, stated as a limit rather than as an absolute: an unbalanced `}` or backtick
+//      inside a COMMENT or a REGEX LITERAL that is itself inside an interpolation still miscounts,
+//      one container further in. Corpus reach measured the same day: 149 interpolation spans across
+//      the 44 files, of which 0 carry `//` or `/*`, 0 carry any `/` at all, and 0 carry a backtick.
+//      Interpolations are also blanked with the text around them —
+//      tests/helpers/source-scan.mjs:175 `interpolations are blanked along with the surrounding text`
 //      — which is deliberate and in the same direction: live code written inside a `${…}`
 //      interpolation is invisible to this scanner too, and loudly.
 //   2. THE CORPUS STOPS AT src/worldengine PLUS THE TWO LAB FILES. A law moved to, say,
@@ -108,6 +126,26 @@
 //      is caught by the STRIPPED code pin beside them, not by the prose pins themselves.
 //   4. A LAW REWRITTEN IN PLACE INTO A SHAPE THE PATTERN DOES NOT MATCH reads as zero matches, not as
 //      a wrong measurement. Loud. Recorded because it is the one failure people expect to be silent.
+//   5. ⛔ "OUTSIDE EVERY COMMENT AND LITERAL" IS NOT "LIVE", AND LIMIT 1 ENUMERATES COFFINS RATHER
+//      THAN DEFINING LIFE. Two containers are neither comment nor literal and are not executed
+//      either, so a law parked in one is the single surviving match and the harness compiles it.
+//      Both were EXECUTED 2026-08-09 against a proven scratch mirror, with the live
+//      `const _rotH = state.rotationHours ?? _fp.rotationHours ?? 24;` replaced by `let _rotH = 24;`
+//      so the law was genuinely dead:
+//        · RAW HTML MARKUP — the retired statement parked in a `<pre hidden>` before `<body>`. The
+//          corpus's principal file IS an .html file and the stripper emits markup verbatim, as it
+//          must. All three suites: **175 passed (175)**. Fully silent.
+//        · A NEVER-CALLED FUNCTION — the statement wrapped in `function _legacyRotH(state, _fp)`.
+//          **175 passed (175)**. Also silent. Reachability needs a control-flow pass, which is the
+//          same refusal the fence's own KNOWN LIMIT #1 records.
+//      ⚠ WHY IT IS NAMED AND NOT CLOSED: measured the same day, `grep -nE '<(pre|textarea|template|noscript|xmp)\b' planet-lod-lab.html`
+//      returns NOTHING, and the lab's entire HTML surface is six lines before one `<script type="module">`.
+//      An author would have to invent the container, where quoting a retired law in a comment or a
+//      template is a habit the lab documents 7 instances of. Adversarial, not idiomatic — PLAN §11.9's
+//      test — so it is written here, where it bites, instead of being carried as a fix that is not one.
+//      The cheap real closure, if it is ever wanted: for `.html` corpus members blank everything
+//      outside `<script …>…</script>` on the matching pass, offset-preserving, same fail-closed
+//      direction as `blankLiteralText`.
 //
 // EVERY CHECK CARRIES A PLANTED DEFECT. For each site, the FROZEN form is reconstructed from the LIVE
 // source by one textual substitution (state.planetRadiusEarth → _fp.radiusEarth, or the condition-vector
@@ -219,6 +257,12 @@ function extract(re, label, entries = SRC) {
       + `  string or template — comments AND literal interiors are blanked before matching, so a quoted\n`
       + `  copy is invisible here BY DESIGN. Check the literals too before concluding it is gone.\n`
       + `  TWO OR MORE means the law is duplicated and this harness cannot know which copy is live.\n`
+      + `  ⚠ AND ONE MATCH IS NOT PROOF OF LIFE. Surviving both blanking passes means the text is\n`
+      + `  outside every comment and literal. It does NOT mean the text runs: measured 2026-08-09,\n`
+      + `  parking a retired law in raw HTML markup (a <pre hidden> before <body>, which is neither\n`
+      + `  comment nor literal) or inside a never-called function each left all three suites at\n`
+      + `  175 passed (175) with the live law deleted. Reachability needs a control-flow pass this\n`
+      + `  harness does not have — see KNOWN LIMIT 5.\n`
       + `  This suite measures NOTHING until the pattern is repaired — do not delete the check.`);
   }
   const body = hits[0].body.trim();

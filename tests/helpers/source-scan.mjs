@@ -16,7 +16,7 @@
 // ── PROMOTED, NOT INVENTED ────────────────────────────────────────────────────────────────────────
 // Three comment-strippers already existed in tests/. This promotes the only sound one — the character
 // state machine at tests/port-route-agreement.test.js:83 `function stripCommentsAndStrings(src) {` —
-// and changes it in exactly two ways, each for a measured reason:
+// and changes it in exactly three ways, each for a measured reason:
 //   1. STRINGS ARE PRESERVED, not blanked. That function blanks strings too, which is right for its
 //      job (proving a file contains no `Math.random` call) and wrong for ours: we hand the surviving
 //      text to `new Function` and must get back something that still compiles.
@@ -24,6 +24,12 @@
 //      becomes a space, every newline stays a newline. So `String.prototype.matchAll` indices, and
 //      any existing `lineOf(src, index)` helper, resolve to the SAME line in stripped and raw source.
 //      That is what lets the fence keep reporting true line numbers while scanning stripped text.
+//   3. `${…}` IS LEXED BY RE-ENTRY, not by a brace counter. Added 2026-08-09, after round 2 of PLAN
+//      §11.4 measured what the counter cost: see the LITERAL SPAN SCANNERS block below. The promoted
+//      function does not track `${…}` AT ALL — it treats a backtick like a quote and ends the
+//      template at the next one — which is a related mis-lex, not the same one. It is left alone
+//      because nothing this program owns has measured its consumer, and quietly editing a fence that
+//      already passes is the move this file exists to stop.
 // The two regex-based strippers in the tree (tests/worldengine-v2-3-dispatch-oracle.test.js:242 and
 // tests/relief-router-repoint.test.js:48 `function stripComments(src) {`) are NOT usable here and the
 // reason is measured, not stylistic: planet-lod-lab.html has 104 lines carrying `//` INSIDE a string
@@ -67,19 +73,96 @@ function looksLikeRegex(src, i) {
   return false;
 }
 
+// ── LITERAL SPAN SCANNERS ────────────────────────────────────────────────────────────────────────
+// Each returns the index ONE PAST the literal that starts at `i`, or `src.length` if it never closes.
+// They are separate functions rather than inline arms for one measured reason: a `${…}` interpolation
+// is CODE, so the things that can appear inside it are the same things the main loop handles, and the
+// only way to lex a nested template correctly is to re-enter. Round 2 of PLAN §11.4 measured what the
+// previous single-integer `depth` cost: a nested template whose TEXT carries an unbalanced `}` — the
+// fixture at tests/source-scan-helper.test.js `a nested template in an interpolation is lexed whole`
+// — decremented the OUTER template's brace count, so the outer template was declared closed at the
+// NESTED one's closing backtick. Backtick parity inverted for the rest of the file, a later real
+// template's contents were scanned as live code, and a law parked there became the single match
+// again: three suites at 171 passed (171) on a mutant with the band law moved out and parked there.
+// Measured 2026-08-09 over 20,000 valid-JS snippets carrying nested templates: the old arm let a
+// top-level `// SENTINEL` comment survive as template text in 6,147; these three let it survive in 0.
+// Over all 44 corpus files the two lexers are BYTE-IDENTICAL on both passes.
+//
+// ⚠ EACH FUNCTION ADVANCES BY AT LEAST ONE CHARACTER PER CALL, which is what makes the mutual
+// recursion terminate: `templateEnd(src, j)` is only ever called at a backtick and returns
+// ≥ j+1, and `interpolationEnd(src, j + 2)` returns ≥ j+2. Recursion depth is the input's literal
+// NESTING depth, not its length.
+
+/** `src[i]` is `'` or `"`. Quoted strings end at their quote or at a newline — never at EOF alone. */
+function stringEnd(src, i) {
+  const q = src[i];
+  let j = i + 1;
+  while (j < src.length) {
+    if (src[j] === '\\') { j += 2; continue; }
+    if (src[j] === q || src[j] === '\n') { j++; break; }
+    j++;
+  }
+  return j;
+}
+
+/** `src[i]` is a backtick. Delegates every `${…}` to `interpolationEnd`, which may re-enter here. */
+function templateEnd(src, i) {
+  let j = i + 1;
+  while (j < src.length) {
+    if (src[j] === '\\') { j += 2; continue; }
+    if (src[j] === '`') { j++; break; }
+    if (src[j] === '$' && src[j + 1] === '{') { j = interpolationEnd(src, j + 2); continue; }
+    j++;
+  }
+  return j;
+}
+
+/**
+ * `i` is the index just past `${`. Returns the index just past the matching `}`.
+ *
+ * Braces are counted, and the two things that can HIDE a brace from the count — a nested template and
+ * a quoted string — are skipped whole by the scanners above.
+ *
+ * ⚠ NAMED LIMIT, MEASURED, so it is accepted rather than forgotten: a comment or a REGEX LITERAL
+ * inside an interpolation is NOT skipped, so an unbalanced `}` or backtick inside one still miscounts
+ * — the same parity inversion, one container in. Corpus reach measured 2026-08-09 over all 44 corpus
+ * files: 149 interpolation spans, of which 0 carry `//` or `/*`, 0 carry any `/` at all (so neither a
+ * regex nor a division), and 0 carry a backtick. It is left because closing it means re-deciding the
+ * regex-or-division ambiguity inside interpolations, and a bug in THAT is the same silent class this
+ * file exists to close. What it is NOT is the old hole: those two containers are adversarial, whereas
+ * a nested template in an interpolation is ordinary JavaScript.
+ */
+function interpolationEnd(src, i) {
+  // ⚠ NO ESCAPE ARM HERE, deliberately, and it is the one asymmetry with the two scanners above. A
+  // backslash is only meaningful INSIDE a literal, and both literal kinds are skipped whole below —
+  // so an escape arm here would be a branch no case could kill, which is the thing PLAN §11.3.2 is
+  // about. `\` in expression position is not valid JavaScript.
+  let depth = 1, j = i;
+  while (j < src.length) {
+    if (src[j] === '`') { j = templateEnd(src, j); continue; }
+    if (src[j] === "'" || src[j] === '"') { j = stringEnd(src, j); continue; }
+    if (src[j] === '{') { depth++; j++; continue; }
+    if (src[j] === '}') { depth--; j++; if (depth === 0) return j; continue; }
+    j++;
+  }
+  return j;
+}
+
 /**
  * Blank every comment in `src`, preserving byte offsets and every newline.
  *
  * Handles: `//` line comments, `/* *\/` block comments, `<!-- -->` HTML comments, single/double
- * quoted strings (with backslash escapes), template literals (with `${}` re-entry tracked by brace
- * depth so a nested backtick cannot close the template early), and regex literals.
+ * quoted strings (with backslash escapes), template literals (whose `${…}` interpolations are lexed
+ * by `interpolationEnd`, which counts braces and skips nested templates and strings whole), and
+ * regex literals.
  *
  * ⭐ `opts.blankLiteralText` — ADDED 2026‑08‑08 AFTER ROUND 1 PROVED THE SHADOW CLASS WAS STILL OPEN.
  * Stripping comments alone closes the shadow only for comments OUTSIDE a literal. Literals are
  * preserved (they must be — the surviving text is handed to `new Function` and has to compile), so a
  * retired law parked INSIDE a template survives stripping and becomes the single "live" match the
- * moment the real one is moved out. Not hypothetical: the lab carries **21 comment lines that survive
- * stripping today**, all inside its own `/* glsl *\/` templates, and text parked in a template needs
+ * moment the real one is moved out. Not hypothetical: measured 2026-08-09, the lab carries **21
+ * comment lines that survive stripping** (3,264 raw, 21 after the default pass, 0 after this one),
+ * all inside its own `/* glsl *\/` templates, and text parked in a template needs
  * no comment markers at all — it is simply string content. MEASURED: moving the cloud-regime block
  * out of `applyDrivers` and parking it verbatim in a template left the extraction suite at
  * **50 passed (50)**, measuring the dead copy.
@@ -92,16 +175,24 @@ function looksLikeRegex(src, i) {
  * ⚠ NAMED LIMIT: `${…}` interpolations are blanked along with the surrounding text rather than being
  * treated as the live code they are. Deliberate, and it is the fail-CLOSED direction: a law that ever
  * moves into an interpolation becomes unmatchable, which surfaces as EXTRACTION FAILED naming the
- * site — loud — never as a silent green. The alternative needs brace matching that itself skips
- * nested literals, and a bug in THAT would be the same silent-green class this option exists to
- * close. Simplicity is chosen because both of its failure directions are red.
+ * site — loud — never as a silent green. ⚠ Their EXTENT is now lexed exactly (`interpolationEnd`);
+ * what is deliberate is that their CONTENTS are blanked with the rest of the literal. Emitting them
+ * as live code would mean deciding, for every `${…}`, whether the text inside is an expression this
+ * file may hand onward — and the two directions of THAT judgement are not both loud.
+ *
+ * ⚠ `opts.blankLiteralText` IS READ AS A PLAIN TRUTHY, deliberately, and the direction is the point:
+ * a caller who passes `1` or a non-empty string gets the MATCHING pass. It used to be `=== true`, so
+ * a truthy non-`true` value silently fell back to the DEFAULT pass — matching on unblanked literals,
+ * which is precisely the shadow this option exists to close, arriving through a truthiness bug
+ * instead of a lexing one. Round 2 of PLAN §11.4 measured that strictness as an unkillable branch:
+ * relaxing it to `!!` left the suite at 45 passed (45). It is now pinned by a case.
  *
  * @param {string} src
  * @param {{blankLiteralText?: boolean}} [opts]
  * @returns {string} same length as `src`; blanked characters replaced by spaces, newlines kept.
  */
 export function stripCommentsPreservingOffsets(src, opts = {}) {
-  const blankLiteralText = opts.blankLiteralText === true;
+  const blankLiteralText = !!opts.blankLiteralText;
   const out = new Array(src.length);
   let i = 0;
   const blank = (n) => { for (let k = 0; k < n && i + k < src.length; k++) out[i + k] = src[i + k] === '\n' ? '\n' : ' '; };
@@ -134,24 +225,11 @@ export function stripCommentsPreservingOffsets(src, opts = {}) {
       blank(j - i); i = j; continue;
     }
     if (c === "'" || c === '"') {                        // quoted string — preserved verbatim
-      let j = i + 1;
-      while (j < src.length) {
-        if (src[j] === '\\') { j += 2; continue; }
-        if (src[j] === c || src[j] === '\n') { j++; break; }
-        j++;
-      }
+      const j = stringEnd(src, i);
       literal(j - i, c); i = j; continue;
     }
     if (c === '`') {                                     // template literal — preserved verbatim
-      let j = i + 1, depth = 0;
-      while (j < src.length) {
-        if (src[j] === '\\') { j += 2; continue; }
-        if (depth === 0 && src[j] === '`') { j++; break; }
-        if (src[j] === '$' && src[j + 1] === '{') { depth++; j += 2; continue; }
-        if (depth > 0 && src[j] === '{') depth++;
-        if (depth > 0 && src[j] === '}') depth--;
-        j++;
-      }
+      const j = templateEnd(src, i);
       literal(j - i, '`'); i = j; continue;
     }
     if (c === '/' && looksLikeRegex(src, i)) {           // regex literal — preserved verbatim
