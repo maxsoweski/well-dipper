@@ -36,12 +36,18 @@
 //     would be born rotting. The corpus is defined by the walk; per-carrier liveness is proven by the
 //     control "THE CORPUS IS REALLY SCANNED BEYOND THE LAB", which names a hit outside the lab
 //     instead of counting files (helpers/source-scan.mjs states the same limit for `jsFilesUnder`).
-//   · COMMENTS ARE STRIPPED BEFORE ANY PATTERN IS APPLIED — tests/helpers/source-scan.mjs
-//     `stripCommentsPreservingOffsets`, whose output is byte-length-identical to its input, so every
-//     line number this file reports is the real one. ⭐ This is the change that closes the shadow
-//     class. Nothing else in this list does.
+//   · MATCHING IS COMMENT-BLIND **AND LITERAL-BLIND**; THE COMPILED TEXT IS NEITHER. Every pattern
+//     runs against `stripCommentsPreservingOffsets(src, { blankLiteralText: true })` — comments
+//     blanked, and the INTERIOR of every quoted string, template literal and regex literal blanked
+//     with its delimiters kept. The captured body is then SLICED out of the default pass (literals
+//     preserved) at the same offsets, because the extracted text has to still compile. Both passes
+//     are byte-length- and newline-identical, so the splice is exact and every line number this
+//     file reports is the real one. ⭐ This is the change that closes the shadow class. Nothing
+//     else in this list does. ⚠ COMMENT-STRIPPING ALONE WAS NOT ENOUGH AND THE FILE CLAIMED IT WAS
+//     — see KNOWN LIMIT 1 for what that cost and how it was measured.
 //   · EVERY SITE MATCHES EXACTLY ONCE ACROSS THE CORPUS, and the failure names every location it did
-//     find, file:line. Zero ⇒ the law was moved, deleted or commented out. Two or more ⇒ the law is
+//     find, file:line. Zero ⇒ the law was moved, deleted, commented out, or parked inside a string
+//     or template literal — all four are now the same loud answer. Two or more ⇒ the law is
 //     duplicated and the harness cannot know which copy is live — which is the state a half-finished
 //     move leaves behind, and the state first-match-wins used to paper over.
 //   · EVERY EXTRACTION IS NON-EMPTY, the two block sites included. ⚠ Worth having, and NOT the fix
@@ -58,13 +64,40 @@
 // Written HERE, in the gate's own source, where the next author meets them — PLAN §11.9: "a limit
 // that is not written into the gate itself has been forgotten, not accepted." Each is stated with the
 // construct it excuses, and each is a thing an author could do that this file would NOT catch.
-//   1. STRINGS AND TEMPLATE LITERALS ARE PRESERVED, NOT STRIPPED, and they must be — the surviving
-//      text is handed to `new Function` and has to still compile. So a law written INSIDE a string or
-//      a `/* glsl */` template is live text to this scanner. Consequence, in both directions: a
-//      retired law parked in a template shadows nothing (it would appear as a SECOND match and red
-//      loudly), but a law that MOVES into a shader template is "found" by a pattern that cannot
-//      execute it. ⛔ Promote this to a real problem the day a driver law lands inside a GLSL string
-//      — planet-lod-shaders.glsl.js is in the corpus precisely because that is the plausible venue.
+//   1. ⛔ THIS LIMIT USED TO STATE ITS CONSEQUENCE BACKWARDS, AND THE REVERSAL IS KEPT ON THE RECORD
+//      BECAUSE IT IS WHAT MADE THE HOLE LOOK SAFE. It read: strings and templates are preserved, so
+//      "a retired law parked in a template shadows nothing (it would appear as a SECOND match and
+//      red loudly)". That is true of ONE case and false of the other, and the sentence never
+//      distinguished them:
+//        · DUPLICATION — the law is copied into a literal and the live site SURVIVES ⇒ 2 matches ⇒
+//          EXTRACTION FAILED. Loud. This is the case the old sentence described.
+//        · A MOVE — the law is copied into a literal and the live site is REMOVED, which is item 1
+//          of what PLAN §4 Steps 4 and 5 declare they will do ⇒ the parked copy is the ONE match ⇒
+//          the harness compiles and measures DEAD TEXT at full green. Silent.
+//      Measured on a scratch mirror 2026-08-08, before the fix below existed: cloud-regime block,
+//      giant-dynamo/aurora chain, BOTH E5 `radius: … / 11.2` drivers, the craterboot canonical read
+//      and the boot `radiusSeed:` pin — each moved out of applyDrivers and parked verbatim, five in
+//      a `/* glsl */ ` template and three in an ordinary quoted string. Eight mutants, eight runs of
+//      **50 passed (50)**, identical to baseline. Text parked in a literal needs no comment markers
+//      at all; it is simply string content. A limit stated with the wrong consequence is worse than
+//      an absent one, because it tells the next author the hazard is self-reporting.
+//      ⭐ CLOSED, not documented: matching now runs on the literal-BLIND pass and only the SPLICE
+//      reads the literal-preserving one, via the `blankLiteralText` option on
+//      tests/helpers/source-scan.mjs:103 `export function stripCommentsPreservingOffsets(src, opts = {}) {`.
+//      Measured over all 44 corpus files: the pass this file used to match against leaves 985 lines
+//      carrying a live `//` (900 of them in planet-lod-shaders.glsl.js, the venue this limit named
+//      as plausible, and 21 in the lab's own shader templates); the pass it matches against now
+//      leaves ZERO. All eight mutants are red, six of them as a named EXTRACTION FAILED.
+//      ⚠ WHAT IS STILL LIMITED, and only this: a law that MOVES INTO a literal is now unmatchable
+//      rather than mis-matched, so it reports as ZERO matches, not as "it is over there in a
+//      template". That is the fail-CLOSED direction and it is loud; the failure text names the
+//      possibility, but it cannot name the venue, so the next author still has to go and look.
+//      There is no remaining direction in which a law parked in a literal produces a green.
+//      Interpolations are
+//      blanked with the text around them —
+//      tests/helpers/source-scan.mjs:92 `interpolations are blanked along with the surrounding text`
+//      — which is deliberate and in the same direction: live code written inside a `${…}`
+//      interpolation is invisible to this scanner too, and loudly.
 //   2. THE CORPUS STOPS AT src/worldengine PLUS THE TWO LAB FILES. A law moved to, say,
 //      planet-lod-lab-core.js or anywhere under src/ outside worldengine reads as ZERO matches. That
 //      is LOUD, not silent — the failure says "moved, deleted or commented out" and names the site —
@@ -117,9 +150,24 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // commit that moves the code is a corpus that will be widened one commit late.
 const CORPUS = ['planet-lod-lab.html', 'planet-lod-shaders.glsl.js', ...jsFilesUnder(ROOT, 'src/worldengine')];
 const RAW = new Map(CORPUS.map((rel) => [rel, readFileSync(join(ROOT, rel), 'utf8')]));
-// Comment-BLIND text, one entry per corpus file, in scan order. Offsets are preserved by the
-// stripper, so `lineOf` on this text yields the line number in the file on disk.
-const SRC = CORPUS.map((rel) => ({ rel, text: stripCommentsPreservingOffsets(RAW.get(rel)) }));
+// ⭐ TWO PASSES PER FILE, and the split is the whole of the Step-3-round-2 repair. Both passes come
+// out of the same stripper, are byte-LENGTH-identical to the input, and put their newlines at the
+// same offsets — so an offset found in one indexes the other character for character, and `lineOf`
+// on either yields the line number in the file on disk.
+//   · `match` — comments blanked AND the INTERIOR of every quoted string, template literal and regex
+//     literal blanked (delimiters kept). EVERY pattern in this file runs against this text. Text
+//     parked in a literal is therefore not matchable at all.
+//   · `code`  — comments blanked, literals PRESERVED. Every captured body is SLICED out of this at
+//     the offsets `match` reported, so what reaches `new Function` still has its real string
+//     literals (the cloud-regime block's `'co2'` branch does not survive the other pass).
+// MEASURED 2026-08-08 over all 44 corpus files: the default pass leaves 985 lines carrying a live
+// `//` — 900 of them in planet-lod-shaders.glsl.js, 21 in the lab's own `/* glsl */ ` templates. The
+// `blankLiteralText` pass leaves ZERO. That gap was the hole; see KNOWN LIMIT 1 for what it cost.
+const SRC = CORPUS.map((rel) => ({
+  rel,
+  match: stripCommentsPreservingOffsets(RAW.get(rel), { blankLiteralText: true }),
+  code: stripCommentsPreservingOffsets(RAW.get(rel)),
+}));
 // The lab's RAW text. Used ONLY by the prose pins at the bottom of this file, whose subject IS a
 // comment — see the note there. Nothing that gets compiled may read this.
 const LAB_RAW = RAW.get('planet-lod-lab.html');
@@ -132,16 +180,24 @@ const N_SWEEP = 401;                                   // ~1.0% multiplicative s
 const SWEEP = Array.from({ length: N_SWEEP }, (_, i) => radiusFromT(i / (N_SWEEP - 1)));
 
 // ── extraction ───────────────────────────────────────────────────────────────────────────────────
-// Every match of `re` anywhere in the COMMENT-STRIPPED corpus, in corpus order, each tagged with the
-// file and the true 1-based line it sits on.
+// Every match of `re` anywhere in the COMMENT-BLIND, LITERAL-BLIND corpus, in corpus order, each
+// tagged with the file and the true 1-based line it sits on.
+//
+// ⭐ MATCH ON ONE PASS, SLICE FROM THE OTHER. The regex is forced to carry `d` (hasIndices) so the
+// capture group reports OFFSETS, not just text; the offsets are then applied to the same file's
+// literal-PRESERVING pass. Without `d` there is no way to splice, and taking `m[1]` directly would
+// hand `new Function` a body whose string literals had been blanked to whitespace — which compiles,
+// and is a silent pass of exactly the kind this file exists to refuse.
 function scanText(re, entries) {
-  const g = new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`);
+  const withG = re.flags.includes('g') ? re.flags : `${re.flags}g`;
+  const g = new RegExp(re.source, withG.includes('d') ? withG : `${withG}d`);
   const hits = [];
-  for (const { rel, text } of entries) {
+  for (const { rel, match, code } of entries) {
     g.lastIndex = 0;
     let m;
-    while ((m = g.exec(text))) {
-      hits.push({ rel, line: lineOf(text, m.index), body: (m[1] ?? m[0]) });
+    while ((m = g.exec(match))) {
+      const [from, to] = m.indices[1] ?? m.indices[0];
+      hits.push({ rel, line: lineOf(match, m.index), body: code.slice(from, to) });
       if (m[0] === '') g.lastIndex++;                 // a zero-width match would otherwise spin forever
     }
   }
@@ -159,8 +215,9 @@ function extract(re, label, entries = SRC) {
   if (hits.length !== 1) {
     throw new Error(`EXTRACTION FAILED (${label}): expected EXACTLY ONE live match of ${re} across the `
       + `${entries.length}-file corpus; found ${hits.length} at ${where(hits)}.\n`
-      + `  ZERO means the law was moved out of the corpus, deleted, or commented out — comments are\n`
-      + `  stripped before matching, so a quoted copy is invisible here BY DESIGN.\n`
+      + `  ZERO means the law was moved out of the corpus, deleted, commented out, or parked inside a\n`
+      + `  string or template — comments AND literal interiors are blanked before matching, so a quoted\n`
+      + `  copy is invisible here BY DESIGN. Check the literals too before concluding it is gone.\n`
       + `  TWO OR MORE means the law is duplicated and this harness cannot know which copy is live.\n`
       + `  This suite measures NOTHING until the pattern is repaired — do not delete the check.`);
   }
@@ -183,6 +240,11 @@ function extract(re, label, entries = SRC) {
 // exists to prevent. Strict mode turns that into a loud ReferenceError. The control that proves the
 // change is not decorative is the `it` titled "sloppy mode would have swallowed…" below — it is a
 // planted defect, run on every CI run, not a claim.
+// ⚠ AND WHAT IT DOES **NOT** BUY, so the control is not misread as evidence that a real site depends
+// on it: measured 2026-08-08 on a scratch mirror, deleting `'use strict';\n` from BOTH helpers here
+// moves exactly ONE outcome — its own control — and nothing else: `1 failed | 51 passed (52)`. No
+// currently-extracted body assigns to an identifier declared outside its own span. This clause is
+// FORWARD closure, for the blocks Steps 4 and 5 will cut out of the middle of applyDrivers.
 function compileExpr(src, label) {
   try {
     // eslint-disable-next-line no-new-func
@@ -229,8 +291,12 @@ const drawnR = (p, seed) => drawPresetRadius(p, seed, { labUnlock: true });
 // trailing `// AC5 seeded-radius draw seed` comment, which made it specific — and which a
 // comment-BLIND scan cannot see at all: on stripped source that pattern matches ZERO times. The
 // specificity is now carried by corpus-wide uniqueness instead (measured: exactly one match of
-// `radiusSeed:\s*(\d+)\s*,` in all 43 files), which is a weaker anchor against a second `radiusSeed:`
+// `radiusSeed:\s*(\d+)\s*,` corpus-wide), which is a weaker anchor against a second `radiusSeed:`
 // key appearing somewhere and a stronger one against the comment being reworded.
+// ⚠ THE FILE COUNT THAT USED TO SIT IN THAT PARENTHESIS ("in all 43 files") IS GONE, 2026-08-08
+// round 2. The corpus is 44 files, not 43 — and the header twelve screens up already says a count
+// written into this prose "would be born rotting", then this line wrote one anyway. The uniqueness
+// is the property; it is enforced by the executed `extract()` below, which needs no integer.
 const BOOT_SEED = Number(extract(/radiusSeed:\s*(\d+)\s*,/, 'boot radiusSeed'));
 
 // ── the rewired sites, extracted ONCE from the live source and shared by every describe below ─────
@@ -251,9 +317,16 @@ const BOOT_SEED = Number(extract(/radiusSeed:\s*(\d+)\s*,/, 'boot radiusSeed'));
 // not call it yet; the two inline copies below are what it will replace.
 // THE PARTITION, and why it is by TEXT and not by path: the helper is excluded by its own distinctive
 // expression, not by which file it lives in, so (a) relocating the helper does not silently widen the
-// exclusion, and (b) a NEW `/ 11.2` driver appearing anywhere lands in the executed set and is
-// measured rather than waved through. Both halves of the partition are asserted, so the exclusion
-// cannot quietly grow to cover a site it was never meant to.
+// exclusion, and (b) a NEW `/ 11.2` driver appearing ANYWHERE IN THE CORPUS lands in the executed
+// set and is measured rather than waved through. Both halves of the partition are asserted, so the
+// exclusion cannot quietly grow to cover a site it was never meant to.
+// ⚠ "ANYWHERE IN THE CORPUS" IS NARROWER THAN THE "anywhere" THIS SENTENCE USED TO SAY, and the
+// difference is the direction that is silent. A driver LEAVING the corpus is loud (zero matches —
+// KNOWN LIMIT 2). A driver ARRIVING outside it is NOT. Measured 2026-08-08 on a scratch mirror, one
+// variable changed between the two arms: a new `radius: (rEarth ?? 1) / 11.2` written into
+// src/generation left this file at **52 passed (52)**; the SAME file written into
+// src/worldengine/base failed with "expected EXACTLY TWO … found 3", naming it. The corpus boundary
+// is the guarantee's real edge, and widening CORPUS is the fix if a driver ever lands past it.
 // ⚠ NAMED LIMIT: the helper is excluded because it CANNOT go through this harness's planted-defect
 // machinery — the frozen counterfactual is built by rewriting `_gcond.radiusEarth` → `_fp.radiusEarth`
 // (`frozenFns` below — a self-reference by SYMBOL, not by line, because this file is edited on every
@@ -280,8 +353,9 @@ if (E5_SITES.length !== 2) {
     + `\`radius: … / 11.2\` drivers (rebakeE5Bands band bake + applyStormState storm bake) across the `
     + `${CORPUS.length}-file corpus; found ${E5_SITES.length} at ${where(E5_SITES)}.\n`
     + `  Corpus total including the excluded single-source helper: ${E5_ALL.length} at ${where(E5_ALL)}.\n`
-    + `  Comments are stripped before matching, so a driver quoted in a comment is invisible here BY\n`
-    + `  DESIGN — zero means the drivers were moved, deleted or commented out, not that they are fine.`);
+    + `  Comments AND literal interiors are blanked before matching, so a driver quoted in a comment,\n`
+    + `  a string or a shader template is invisible here BY DESIGN — zero means the drivers were moved,\n`
+    + `  deleted, commented out or parked in a literal, not that they are fine.`);
 }
 for (const h of E5_SITES) {
   if (h.body.trim() === '') {
@@ -393,7 +467,20 @@ const PRE_REWIRE_AT_CANONICAL = {
 // green through the old harness. So each clause gets a planted defect here, executed on every run,
 // against the SAME functions the real extractions go through — not a re-implementation of them.
 describe('extraction harness — controls (each clause of the contract, shown failing)', () => {
-  const synth = (rel, text) => [{ rel, text: stripCommentsPreservingOffsets(text) }];
+  // A one-file corpus built the same two-pass way the real one is, so these controls exercise the
+  // shipped scan path rather than a simplified stand-in of it.
+  const synth = (rel, text) => [{
+    rel,
+    match: stripCommentsPreservingOffsets(text, { blankLiteralText: true }),
+    code: stripCommentsPreservingOffsets(text),
+  }];
+  // The PRE-FIX corpus: comments blanked, literals preserved, matched and sliced from the same text.
+  // This is what this file did until 2026-08-08 round 2, and it is kept here only as the arm that
+  // MOVED in the two controls below — never as a scan path anything real goes through.
+  const commentsOnly = (rel, text) => {
+    const t = stripCommentsPreservingOffsets(text);
+    return [{ rel, match: t, code: t }];
+  };
 
   it('COMMENT-BLINDNESS: the shadow that was 44/44 green is caught, and the live site is what compiles', () => {
     // The exact mutant, in miniature: the retired law quoted on a bare `//` line ABOVE a live pack
@@ -411,10 +498,73 @@ describe('extraction harness — controls (each clause of the contract, shown fa
     expect(extract(RE, 'shadow control', synth('shadow.html', SHADOWED))).toBe('_pack.bandCount');
   });
 
+  it('LITERAL-BLINDNESS: a law MOVED OUT and parked in a template is caught, not measured', () => {
+    // ⭐ THE ROUND-2 BLOCKER, IN MINIATURE. Stripping comments closes the shadow only for comments
+    // OUTSIDE a literal. Text parked inside a template needs no comment markers at all — it is
+    // simply string content — so it survived the pre-fix pass intact and, once the live site MOVED,
+    // it was the ONLY match. Measured on a scratch mirror before this control existed: the whole
+    // cloud-regime block cut out of applyDrivers and pasted verbatim into the ring fragment
+    // shader's `/* glsl */ ` template left this suite at **50 passed (50)**, compiling and
+    // measuring the dead copy. Same result for the giant-dynamo/aurora chain, for BOTH E5
+    // `radius: … / 11.2` drivers (Step 5's declared move), for the craterboot pin and for the boot
+    // `radiusSeed:` pin — eight mutants, eight silent greens.
+    const MOVED_AND_PARKED = [
+      'const RING_FRAG = /* glsl */ `',
+      '  void main() {',
+      '    state.bandCount = Math.min(16, Math.max(3, Math.round(12 * (state.planetRadiusEarth ?? 1) / _rotH)));',
+      '  }',
+      '`;',
+      'state.cloudRegime = _pack.cloudRegime;',       // the bandCount law is GONE from live code
+    ].join('\n');
+    const RE = /state\.bandCount\s*=\s*(.+?);\s*$/m;
+    // CONTROL THAT MOVED — the only variable is which pass the regex runs against. Comment-stripping
+    // alone leaves the template verbatim, so the parked copy resolves and extraction "succeeds".
+    expect(extract(RE, 'pre-fix control', commentsOnly('p.html', MOVED_AND_PARKED)))
+      .toContain('Math.round(12 *');
+    // …and the shipped two-pass path cannot see into the literal at all, so it reports the truth:
+    // the law left, and this suite measures nothing until someone re-points it.
+    let msg = '';
+    try { extract(RE, 'template-park control', synth('p.html', MOVED_AND_PARKED)); } catch (e) { msg = e.message; }
+    expect(msg).toContain('EXTRACTION FAILED (template-park control)');
+    expect(msg).toContain('(nowhere in the corpus)');
+    // The same shape in an ORDINARY QUOTED STRING, because a template is not the only venue — the
+    // craterboot and `_gas` pins were reproduced green this way on the mirror, no backticks needed.
+    const IN_A_STRING = 'const NOTE = "const _gas = (_fp.atmosphere?.composition === \'h2-he\');";\n'
+      + 'const { isGas: _gas } = _pack;\n';
+    const GAS_RE = /const\s+_gas\s*=\s*(.+?);/;
+    expect(extract(GAS_RE, 'pre-fix string control', commentsOnly('p.html', IN_A_STRING)))
+      .toContain("composition === 'h2-he'");
+    let smsg = '';
+    try { extract(GAS_RE, 'string-park control', synth('p.html', IN_A_STRING)); } catch (e) { smsg = e.message; }
+    expect(smsg).toContain('EXTRACTION FAILED (string-park control)');
+  });
+
+  it('THE SPLICE RETURNS REAL LITERALS: matching is literal-blind, the compiled body is not', () => {
+    // The other half of the two-pass contract, and the reason it is a SPLICE rather than a swap.
+    // The cloud-regime block's first branch is `_fp.atmosphere?.composition === 'co2'`. Take the
+    // captured text from the matching pass and that literal arrives as three spaces between quotes:
+    // it compiles, it runs, and every CO2 preset silently stops reaching regime 3. So the offsets
+    // come from the blanked pass and the TEXT comes from the preserving one.
+    expect(SRC_CLOUDBLOCK).toContain("'co2'");
+    // CONTROL THAT MOVED: the same span, taken from the pass the regex actually ran against.
+    expect(stripCommentsPreservingOffsets(SRC_CLOUDBLOCK, { blankLiteralText: true })).not.toContain("'co2'");
+    // …and the spliced body is what the AC-BYTE oracle above measures: Venus is regime 3 only if the
+    // literal survived the splice. This is the executed end of the same fact.
+    expect(fCloudRegime(envFor('Venus (sulfuric shroud)', canonicalR('Venus (sulfuric shroud)')))).toBe(3);
+    // Both passes must stay offset-compatible or the splice silently slides. Asserted on the real
+    // lab, not on a synthetic string, because that is the text the splice is applied to.
+    const a = stripCommentsPreservingOffsets(LAB_RAW);
+    const b = stripCommentsPreservingOffsets(LAB_RAW, { blankLiteralText: true });
+    expect(b.length).toBe(a.length);
+    expect(b.length).toBe(LAB_RAW.length);
+    const nl = (s) => { const out = []; for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) out.push(i); return out; };
+    expect(nl(b)).toEqual(nl(a));
+  });
+
   it('EXACTLY ONCE: a duplicated law throws, and the failure names BOTH locations', () => {
     // The state a half-finished move leaves behind — a copy in the lab and a copy in the module it is
     // moving to. First-match-wins picked one silently; there is no basis on which it could pick right.
-    const DUPED = [{ rel: 'a.html', text: 'state.bandCount = 1;' }, { rel: 'b.js', text: '\nstate.bandCount = 2;' }];
+    const DUPED = [...synth('a.html', 'state.bandCount = 1;'), ...synth('b.js', '\nstate.bandCount = 2;')];
     let msg = '';
     try { extract(/state\.bandCount\s*=\s*(.+?);\s*$/m, 'dupe control', DUPED); } catch (e) { msg = e.message; }
     expect(msg).toContain('EXTRACTION FAILED (dupe control)');
@@ -939,8 +1089,10 @@ describe('AT THE RADIUS THE LAB ACTUALLY DRAWS — the boot-time delta, pinned',
     // CRITERION: exact. Every pinned value in this describe is a function of this seed, so if the lab
     // changes its default draw seed the tables must be re-captured — this is the tripwire that says so.
     expect(BOOT_SEED).toBe(1);
-    // A CODE pin, so it reads COMMENT-STRIPPED source and demands exactly one match: `radiusSeed: 1,`
-    // written in a comment is not a default the lab boots with.
+    // A CODE pin, so it reads the COMMENT-BLIND, LITERAL-BLIND pass and demands exactly one match:
+    // `radiusSeed: 1,` written in a comment — or quoted in a help-panel template — is not a default
+    // the lab boots with. (Both venues measured red 2026-08-08; the template venue was green before
+    // the two-pass repair.)
     expect(scanCorpus(/radiusSeed:\s*1\s*,/).map((h) => `${h.rel}:${h.line}`)).toHaveLength(1);
   });
 
@@ -1070,8 +1222,8 @@ describe('AT THE RADIUS THE LAB ACTUALLY DRAWS — the boot-time delta, pinned',
     // prose (planet-lod-lab.html:2535 `// Radius cutoff 3.5 — HISTORICAL INTENT, AND IT IS NO LONGER A DISCRIMINATION THE RADIUS CAN`
     // and :2574 `//   CLASSIFIER reads canonical; a PHYSICS INPUT reads drawn. The three genuine physics inputs`).
     // Scanning stripped text for them would delete their subject and red on day one. The rule this
-    // file follows: a pin on the CODE reads stripped and must match exactly once; a pin on the
-    // REASONING reads raw, because prose is the thing being pinned.
+    // file follows: a pin on the CODE reads the comment-blind, literal-blind pass and must match
+    // exactly once; a pin on the REASONING reads raw, because prose is the thing being pinned.
     expect(LAB_RAW).toContain('NO LONGER A DISCRIMINATION THE RADIUS CAN');
     expect(LAB_RAW).toContain('CLASSIFIER reads canonical; a PHYSICS INPUT reads drawn');
   });
@@ -1229,8 +1381,12 @@ describe('AC-CRATERBOOT — the craterRelevanceOf canonical read is justified by
     // with a pack read while quoting the old call in a comment, and all three of these stayed GREEN —
     // 44/44 — because `LAB` was raw text and the comment satisfied every one of them. The canonical
     // read the whole AC-CRATERBOOT exemption rests on could be gone with the suite reporting it
-    // present. Now: comment-stripped, and EXACTLY ONE match, so a quoted copy is invisible and a
-    // duplicated call is loud.
+    // present. Now: comment-BLIND and literal-BLIND, and EXACTLY ONE match, so a quoted copy is
+    // invisible and a duplicated call is loud.
+    // ⚠ AND THE COMMENT WAS NOT THE ONLY VENUE — this pin was still green on 2026-08-08 with the
+    // same call parked in a `/* glsl */ ` template AND with it parked in an ordinary quoted string,
+    // both after the live call was replaced by a pack read. Both are red now (`1 failed | 51 passed`
+    // each, this test being the one). Comment-stripping alone would not have caught either.
     const live = scanCorpus(/craterRelevanceOf\(deriveConditionVector\(_fp,\s*deriveUniforms\(_fp,\s*driverUI\.qualityTier\),\s*_fp\.radiusEarth\)\)/);
     expect(live.map((h) => `${h.rel}:${h.line}`), 'the canonical craterboot read, in LIVE code').toHaveLength(1);
     // The other two are PROSE pins and stay on RAW source for the same reason as the pair in

@@ -1,5 +1,9 @@
 // tests/radius-live-feed-fence.test.js — AC-NOFROZEN.
-// Workstream: world-engine-radius-live-feed-2026-07-25. Widened for PLAN §4 Step 3 on 2026-08-08.
+// Workstream: world-engine-radius-live-feed-2026-07-25. Widened for PLAN §4 Step 3 on 2026-08-08, and
+// repaired the same day by PLAN §11.4's adversarial round 1, which proved the widened fence still had
+// two silent greens: an exemption forgave a whole SOURCE LINE rather than its own span, and "live"
+// meant "not in a comment" while a template literal held dead text just as well. Both are closed
+// below, each with the plant that was measured GREEN before and RED after.
 //
 // THE DEFECT THIS FENCE EXISTS TO PREVENT. Six sites in planet-lod-lab.html derived a LIVE quantity
 // (Rhines band drivers, the F25 jet stripe ladder, the storm-vortex drivers, the cloud-regime gate,
@@ -8,10 +12,12 @@
 // the disc and moved nothing else. That is Max's "I can tell that's not happening across the board".
 // Five of the six now read the drawn radius. This fence keeps the frozen feed from silently returning.
 //
-// THE INVARIANT: no expression in the CORPUS may read `radiusEarth` off a frozen preset object (`_fp`
-// or a `DRIVER_PRESETS[...]` subscript), EXCEPT the explicit ALLOWLIST below — and an allowlist entry
-// is only legitimate if the site's canonical-radius behaviour was PROVEN by measurement rather than
-// assumed (contract AC-NOFROZEN observable).
+// THE INVARIANT: no expression in the CORPUS may read `radiusEarth` off a frozen preset object — in
+// any of the four spellings the tree actually writes: `_fp`, a bare `fp`, a bare `preset`, or a
+// `DRIVER_PRESETS[...]` subscript — EXCEPT the explicit ALLOWLIST below, which exempts a named BYTE
+// SPAN and nothing else on its line. An allowlist entry is only legitimate if the site's
+// canonical-radius behaviour was PROVEN by measurement rather than assumed (contract AC-NOFROZEN
+// observable), and if the artifact carrying that proof demonstrably mentions the site.
 //
 // COMMENT-INCLUSIVE BY DESIGN, following the house pattern of tests/vis-scale-fence.test.js. The DENY
 // scan does NOT strip comments: commented-out code is one uncomment away from being live, and a fence
@@ -31,6 +37,21 @@
 //     source pin satisfied by a comment is the same defect one level up — it would let the extracted
 //     block be deleted as long as somebody quoted it on the way out. That is precisely the hole
 //     tests/helpers/source-scan.mjs was built to close (see its header: six mutants, all green).
+//
+// ⭐ AND THE COMMENT-BLIND SIDE IS NOW LITERAL-BLIND TOO (2026-08-08, adversarial round 1). A comment
+// is not the only way to park dead text: a template literal and a quoted string hold it just as well,
+// and the default stripper PRESERVES literal interiors by design (it feeds `new Function`). MEASURED
+// on the tree as it stood before this fix, both directions silently green:
+//   · the adapter's allowlisted line moved out and its text parked in a backtick template ⇒ the
+//     liveness test `certifies LIVE code` reported `1 passed | 51 skipped (52)`. The exemption
+//     certified a template.
+//   · `state.auroraRingWidth = Math.max(0.07, 0.15 - _mag * 0.08);` (planet-lod-lab.html:2589)
+//     DELETED and re-quoted inside a single-quoted string ⇒ whole file `52 passed (52)`. The AC-0 pin
+//     that exists to catch that deletion was satisfied by the quote.
+// So the liveness check and every comment-stripped pin run against `LIT_STRIPPED` /
+// `LAB_CODE` — the `{ blankLiteralText: true }` pass, which keeps each literal's DELIMITERS and blanks
+// its INTERIOR. That pass is byte-length- and newline-identical to the default one, so line numbers
+// and offsets agree character for character across all three views.
 //
 // PASS/FAIL CRITERION FOR THE WHOLE FILE: exact set equality on the offender list (`toEqual([])`), not
 // a count or a threshold. A radius feed is either live or frozen; there is no tolerance band.
@@ -74,7 +95,7 @@ const ADAPTER_REL = 'src/worldengine/port/conditionFromPlanet.js';
 //     "the drawn-vs-fp radius ambiguity" without tripping the pattern. Rewording is the remedy this
 //     header has always documented, and it is the one that was applied.
 //
-// The walker is the shared house idiom: source-scan.mjs:158 `export function jsFilesUnder(root, rel) {`,
+// The walker is the shared house idiom: source-scan.mjs:191 `export function jsFilesUnder(root, rel) {`,
 // promoted there from vis-scale-fence.test.js:36 `function jsFilesUnder(rel) {` — the fence that
 // already walks this exact tree for the same reason. (Both refs kept on one line each, per the
 // tick-parity note above.)
@@ -82,11 +103,18 @@ const CORPUS_REL = [...jsFilesUnder(ROOT, 'src/worldengine'), LAB_REL, 'planet-l
 const SRC = new Map(CORPUS_REL.map((rel) => [rel, readFileSync(join(ROOT, rel), 'utf8')]));
 const LAB = SRC.get(LAB_REL);
 
-// Comment-BLIND view of the corpus, for the liveness check and the AC-0 pins only — never for the
-// DENY scan. Offset-preserving, so `lineOf` reports the same line number on either view
-// (tests/helpers/source-scan.mjs:80 `export function stripCommentsPreservingOffsets(src) {`).
+// Comment-BLIND view of the corpus — never for the DENY scan. Offset-preserving, so `lineOf` reports
+// the same line number on any view
+// (tests/helpers/source-scan.mjs:103 `export function stripCommentsPreservingOffsets(src, opts = {}) {`).
 const STRIPPED = new Map(CORPUS_REL.map((rel) => [rel, stripCommentsPreservingOffsets(SRC.get(rel))]));
+
+// Comment-blind AND literal-blind: the view the liveness check and the AC-0 pins actually assert on.
+// Quoted delimiters survive, their interiors do not, so text that only exists inside a string or a
+// `/* glsl */` template can satisfy nothing here. See the third bullet of the header block.
+const strippedCode = (src) => stripCommentsPreservingOffsets(src, { blankLiteralText: true });
+const LIT_STRIPPED = new Map(CORPUS_REL.map((rel) => [rel, strippedCode(SRC.get(rel))]));
 const LAB_LIVE = STRIPPED.get(LAB_REL);
+const LAB_CODE = LIT_STRIPPED.get(LAB_REL);
 
 // ── the deny pattern ─────────────────────────────────────────────────────────────────────────────
 // Matches a `radiusEarth` member read on a FROZEN preset source, in any of the spellings the lab
@@ -105,7 +133,27 @@ const LAB_LIVE = STRIPPED.get(LAB_REL);
 // vector for the whole body-driver bundle is derived, i.e. the SAME class of site as the two the
 // rewire just fixed, so a re-freeze written through that alias would have been invisible. `\bfp\b`
 // cannot match inside `_fp` (no word boundary after `_`), so the two alternatives do not overlap.
-const DENY_SRC = String.raw`(?:\b_fp\b|\bfp\b|DRIVER_PRESETS\s*\[[^\]]*\])\s*\??\.\s*radiusEarth`;
+//
+// FOURTH SPELLING ADDED 2026-08-08 (adversarial round 1). `preset` — and unlike the three above it is
+// not a hypothesis, it is LIVE CODE: driver-presets.js:325 `const canonical = preset.radiusEarth ?? 1.0;`
+// inside `drawPresetRadius`, the very function the giantDynamo entry below cites as its proof. The
+// binding form is idiomatic in both files that own preset access; one of three such bindings is
+// planet-lod-lab.html:879 `const preset = DRIVER_PRESETS[presetName] || {};` (kept on ONE line — see
+// the tick-parity note in the corpus block: a citation the scanner cannot read is not a citation).
+// MEASURED BEFORE ADDING: a `const _bandR = Math.round(12 * (preset.radiusEarth ?? 1) / 24);` planted
+// directly under lab:879 left the fence at `52 passed (52)` — a real frozen read, invisible.
+// COST MEASURED, not assumed: `\bpreset\b\s*\??\.\s*radiusEarth` has ZERO hits across the whole
+// 44-file corpus, so this alternation costs nothing today and closes the alias the codebase already
+// writes. `\bpreset\b` cannot match inside `presetName`, and `DRIVER_PRESETS[driverUI.preset]` has a
+// `]` where `.radiusEarth` would have to be, so neither trips it.
+//
+// ⚠ NO TRAILING `\b`, AND THAT IS A DECISION, NOT AN OVERSIGHT. `_fp.radiusEarthCanonical` therefore
+// MATCHES. Step 1 landed `radiusEarthCanonical` as a vector field, so this WILL bite one day — and it
+// should: a canonical read off a FROZEN PRESET is still a frozen read, and it needs the same measured
+// ruling as any other. The alternative (append `\b`) buys a quieter build by making the fence blind to
+// a spelling of exactly the thing it bans. Measured: `radiusEarthCanonical` has 0 occurrences across
+// the 44-file corpus today, so the choice costs nothing now and is pinned in MUST_MATCH below.
+const DENY_SRC = String.raw`(?:\b_fp\b|\bfp\b|\bpreset\b|DRIVER_PRESETS\s*\[[^\]]*\])\s*\??\.\s*radiusEarth`;
 // NON-global on purpose: `.test()` on a /g regex advances and RETAINS `lastIndex`, and
 // String.prototype.matchAll seeds its internal matcher FROM the source regex's lastIndex — so a
 // single module-level /g regex shared between `.test()` and `matchAll` silently starts later scans
@@ -139,10 +187,25 @@ const denyScanner = () => new RegExp(DENY_SRC, 'g');
 const REQUIRED_CARRIERS = [LAB_REL, ADAPTER_REL];
 
 // ── the allowlist ────────────────────────────────────────────────────────────────────────────────
-// One entry per deliberately-canonical site. `match` is a distinctive substring of the offending
-// SOURCE LINE (not a line number — line numbers rot). `file` is the corpus file that line must live
-// in. `why` must state the PROOF, and `evidence` must point at the artifact that carries it. An entry
-// with no measured proof is not admissible.
+// One entry per deliberately-canonical site. `file` is the corpus file the site must live in. `why`
+// must state the PROOF, `evidence` must point at the artifact that carries it, and `anchor` must be a
+// string that artifact actually contains — an entry with no measured proof is not admissible, and
+// neither is one whose proof is a file that never mentions it.
+//
+// ⭐ `match` IS THE EXEMPTED SPAN — one field, one meaning, CHANGED 2026-08-08. It used to be "a
+// distinctive substring of the offending SOURCE LINE" (a line-identifying anchor, deliberately not a
+// line number, because line numbers rot). It is now the exact BYTE RANGE the exemption covers: a DENY
+// hit is forgiven only if its match starts INSIDE `[k, k + match.length)`, k being where `match` sits
+// on the line. Nothing else on that line rides along.
+// ⛔ THE CONSEQUENCE THAT COST A FIELD REWRITE: `match` must therefore CONTAIN the frozen read it
+// exempts. The craterboot entry's was `craterRelevanceOf(deriveConditionVector(` — a PREFIX that stops
+// 60 characters short of the `_fp.radiusEarth` it certifies. Under a span test that entry exempts
+// nothing and the fence reds on clean source (measured: the crater-boot line reported as an offender
+// on an unmodified tree). Extending it to the whole call is what makes the span reading coherent.
+// The narrowing is real and it is intended: re-spelling the read INSIDE an exempted span — say
+// `_fp.radiusEarth` → `DRIVER_PRESETS[preset].radiusEarth` — voids the exemption and demands it be
+// re-stated, because the span no longer occurs. That is one line of allowlist maintenance in exchange
+// for an exemption that cannot drift under its own proof.
 //
 // ⭐ `file` IS REQUIRED AND THE MATCHER IS KEYED ON IT (file, substring), NOT ON THE SUBSTRING ALONE.
 // The pre-Step-3 matcher was `allowlist.some((a) => text.includes(a.match))` — FILE-BLIND. MEASURED
@@ -156,7 +219,9 @@ const ALLOWLIST = [
   {
     id: 'craterboot-worldDefaultEnableSet',
     file: LAB_REL,
-    match: 'craterRelevanceOf(deriveConditionVector(',
+    // The WHOLE call, not the `craterRelevanceOf(deriveConditionVector(` prefix it used to be — the
+    // span has to contain the `_fp.radiusEarth` it certifies. See the ⭐ note on `match` above.
+    match: 'craterRelevanceOf(deriveConditionVector(_fp, deriveUniforms(_fp, driverUI.qualityTier), _fp.radiusEarth))',
     // PROVEN, not assumed. craterRelevanceOf was swept over the FULL slider range for all 18 presets
     // (18 × 401 log-spaced radii, the slider's own radiusFromT travel): zero flips, and no continuous
     // margin closer than 18× to any decision boundary. Stronger than the preset table — the predicate's
@@ -175,6 +240,8 @@ const ALLOWLIST = [
        + 'for every preset; its own clamps bound any possible flip at 0.133 RE, 2.03x below the true '
        + 'reachable floor of 0.27 RE (the Moon/Mercury lab-unlock draw band, not the 0.3 slider floor).',
     evidence: 'docs/WORKSTREAMS/world-engine-radius-live-feed-2026-07-25/evidence/G2-craterboot-sweep.md',
+    // The sweep note quotes the call shape itself, so the site's own `match` is the anchor.
+    anchor: 'craterRelevanceOf(deriveConditionVector(',
   },
   {
     id: 'giantDynamo-compositionClassifier',
@@ -210,6 +277,11 @@ const ALLOWLIST = [
        + 'bit-identical at every seed — a size-keyed discriminator provably cannot separate them. '
        + 'Classifiers read canonical; physics inputs read drawn.',
     evidence: 'docs/WORKSTREAMS/world-engine-radius-live-feed-2026-07-25/BUILD-NOTES.md',
+    // BUILD-NOTES.md does not quote the gate's source line, so the anchor is the §10 heading that
+    // carries the ruling — its "§10 — DISPOSITION CORRECTION" heading. Cited without a line number on
+    // purpose: `BUILD-NOTES.md` is not a unique basename in this repo, so the line+symbol form lands
+    // in UNRESOLVED and verifies nothing. The anchor string below is the check that does not rot.
+    anchor: 'the giant-dynamo gate reads CANONICAL',
   },
   {
     id: 'adapter-oneGameRadius',
@@ -229,15 +301,24 @@ const ALLOWLIST = [
     // lines to it and an integer written there is born with a half-life of one step. The `match`
     // string above IS the ref.
     // ⛔ WHAT THIS ENTRY DOES NOT LICENSE, stated because an exemption is read by whoever wants one:
-    // it certifies THAT ONE LINE IN THAT ONE FILE. It is keyed on `file`, so it cannot travel with a
-    // moved call shape; and it is checked for LIVENESS below, so it cannot survive the line being
-    // demoted to a comment. If Step 4 or 5 feeds `giantRegimeOf` a condition derived at
-    // `_fp.radiusEarth`, that is a DIFFERENT site and needs its own ruling — see KNOWN LIMITS #3.
+    // it certifies THAT ONE SPAN — the byte range of the `match` string above — IN THAT ONE FILE.
+    // ⚠ THAT SENTENCE USED TO SAY "THAT ONE LINE", AND THE BROAD READING WAS THE TRUE ONE. The skip
+    // was keyed on the whole source line until 2026-08-08, so a second frozen read appended to this
+    // line rode along free: measured, ` const _giantR = fp.radiusEarth;` appended here left the fence
+    // at `52 passed (52)`. The scanner's column test is what makes the narrow reading true; the prose
+    // was corrected to follow the mechanism rather than the other way round.
+    // It is keyed on `file`, so it cannot travel with a moved call shape; and it is checked for
+    // LIVENESS below against comment- AND literal-blanked source, so it cannot survive the line being
+    // demoted to a comment or re-quoted inside a template. If Step 4 or 5 feeds `giantRegimeOf` a
+    // condition derived at `_fp.radiusEarth`, that is a DIFFERENT site and needs its own ruling — see
+    // KNOWN LIMITS #3, whose promise the span fix is what finally made true.
     why: 'the game has exactly one radius per body, so this third argument is byte-identical to the '
        + 'canonical radius and gravityRadiusRatio is exactly 1.0 — the self-compression law it would '
        + 'feed can never fire. PLAN Step 2 ruled this correct and ruled against inventing a second '
        + 'game radius; a "fix" here would fabricate the second radius that ruling forbids.',
     evidence: 'docs/FEATURES/one-pipeline-two-frontends-PLAN.md',
+    // The PLAN quotes this exact line in the Step-2 ruling, so the site's own `match` is the anchor.
+    anchor: 'const condition = deriveConditionVector(fp, null, fp.radiusEarth);',
   },
 ];
 
@@ -246,13 +327,23 @@ const ALLOWLIST = [
 // that is not written into the gate itself has been forgotten, not accepted." Each entry names the
 // construct it excuses and the measurement that sized it.
 //
-// #1 — THE PATTERN CAN ONLY SEE THREE SPELLINGS. `DENY_SRC` recognises `_fp`, a bare `fp`, and a
-//      `DRIVER_PRESETS[...]` subscript. A frozen read reached through ANY OTHER ALIAS is invisible:
-//      `const p = DRIVER_PRESETS[name]; p.radiusEarth`, a destructured `const { radiusEarth } = _fp`,
-//      a preset passed as a differently-named parameter. This is a spelling fence, not a dataflow
-//      analysis, and it must never be described as one. It is accepted rather than fixed because the
-//      alternative is the taint analysis PLAN's ledger row C7 already ruled out of proportion for a
-//      gate of this kind.
+// #1 — THE PATTERN CAN ONLY SEE FOUR SPELLINGS, AND HERE IS THE LINE BETWEEN CLOSED AND ACCEPTED.
+//      `DENY_SRC` recognises `_fp`, a bare `fp`, a bare `preset`, and a `DRIVER_PRESETS[...]`
+//      subscript. `preset` was CLOSED 2026-08-08 rather than filed here, because the round-1
+//      measurement showed the alias is live code in the tree (driver-presets.js:325) and the closing
+//      cost zero corpus hits — §11.9's point is that a limit is accepted only when closing it is
+//      genuinely out of proportion, and this one was one alternation.
+//      STILL INVISIBLE, AND ENUMERATED WITH THE ARM THAT MEASURED IT — a five-arm matrix, one
+//      `src/worldengine/base/step4Probe.js` per arm, `npx vitest run tests/radius-live-feed-fence.test.js`:
+//        A  `const p = DRIVER_PRESETS[n] || {}; p.radiusEarth`  74 passed (74)   INVISIBLE
+//        B  `const { radiusEarth } = _fpArg`                    74 passed (74)   INVISIBLE
+//        C  `presetOf(n).radiusEarth`                           74 passed (74)   INVISIBLE
+//        D  a parameter literally named `preset`      21 failed | 53 passed (74) CAUGHT (the new one)
+//        E  `_fp.radiusEarth`, the control            21 failed | 53 passed (74) CAUGHT
+//        clean tree                                            74 passed (74)
+//      A, B and C all rename the binding, so closing them needs a binding-aware pass — the taint
+//      analysis PLAN's ledger row C7 already ruled out of proportion for a gate of this kind. This is
+//      a spelling fence, not a dataflow analysis, and it must never be described as one.
 //
 // #2 — D-CLAUSE VERDICT FOR STEP 4, WITH ITS EVIDENCE — NOT BLOCKING, AND HERE IS WHY.
 //      PLAN §11.1's D clause (as amended by §11.9) asks whether the NEXT step's declared first move
@@ -280,28 +371,66 @@ const ALLOWLIST = [
 //      `giantRegimeOf(deriveConditionVector(_fp, null, _fp.radiusEarth))` in e1Regime.js reds this
 //      file with 9 failures — the same count as the anti-idiomatic plant in #2, and unlike #2 this one
 //      IS idiomatic, so it is a budgeted cost rather than a limit.
+//      ⚠ THAT PROMISE WAS FALSE UNTIL 2026-08-08 IN THE ONE PLACE STEP 4 IS MOST LIKELY TO WRITE IT.
+//      Written on planet-lod-lab.html:4297 — a line that ALREADY IS a
+//      `deriveConditionVector(_fp, deriveUniforms(_fp, tier), _fp.radiusEarth)` call, i.e. the nearest
+//      existing example of the shape Step 4 wants to copy — the line-keyed skip forgave it: measured,
+//      the DENY/allowlist test reported `1 passed | 51 skipped (52)` under that exact plant. Only one
+//      unrelated AC-0 pin went red, and by an accident of concatenation, not by the fence working. The
+//      scanner's column test is what makes this paragraph true; the standing plant below holds it true.
 //
 // #4 — ✅ CLOSED IN THE SAME COMMIT, and kept here because the limit it names is the general one.
 //      This file WAS outside `CITE_SOURCES`, so every ref in it was hand-verified once and nothing
 //      re-verified it. It and tests/radius-live-feed.test.js are now both in the list (§11.3.4 wants
-//      every file a step edited), which moved `refs CHECKED` 160 → 176.
+//      every file a step edited), which moved `refs CHECKED` 160 → 171. (The step's tip reads 177; the
+//      extra 6 came from the PLAN/CARRIED repairs in the two follow-up commits, not from the widening.
+//      The 176 first written here was measured on a later tree than the commit it was attributed to —
+//      the exact "measured elsewhere, recorded here" shape §11.3.4 exists to catch, found by round 1.)
 //      ⚠ THE REMAINING LIMIT, WHICH IS THE ONE WORTH KNOWING: being IN `CITE_SOURCES` is not the same
-//      as being GATED. A ref with no backticked symbol lands in UNCHECKED (333 of them today) and
-//      fails nothing, and a symbol span WRAPPED ACROSS TWO SOURCE LINES lands in TICK-PARITY, which
-//      also fails nothing — three refs in this file's own freshly-written prose did exactly that and
-//      had to be un-wrapped. Prose wraps; citations must not. Ledger row C12.
+//      as being GATED. A ref with no backticked symbol lands in UNCHECKED (hundreds of them — run the
+//      tool for the count; an integer here would be born rotting, and the one that was here rotted by
+//      7 within the same step) and fails nothing, and a symbol span WRAPPED ACROSS TWO SOURCE LINES
+//      lands in TICK-PARITY, which also fails nothing — three refs in this file's own freshly-written
+//      prose did exactly that and had to be un-wrapped. Prose wraps; citations must not. Ledger C12.
 
 // ── the scanner ──────────────────────────────────────────────────────────────────────────────────
 // Returns [{ file, line, text }] for every DENY hit NOT covered by the allowlist. Exported shape is
 // deliberately data (not a boolean) so the negative controls below can assert on exactly what it
 // caught, rather than on "it failed somehow". `file` is both reported AND used for allowlist keying.
+//
+// ⭐ THE SKIP IS KEYED ON THE MATCHED SPAN'S COLUMN, NOT ON THE LINE. FIXED 2026-08-08 after the
+// adversarial round proved the line-keyed form silently forgave a co-located read. The old predicate
+// was `allowlist.some((a) => a.file === file && text.includes(a.match))` — `text` is the whole SOURCE
+// LINE, so a SECOND frozen read appended to an allowlisted line was exempt for free. MEASURED, five
+// paired arms whose ONLY difference is line placement (payload byte-identical in each pair):
+//   · `state.bandCount = Math.round(12 * (_fp.radiusEarth ?? 1) / _rotH);` appended to
+//     planet-lod-lab.html:4297 (the crater-boot line) ⇒ 52 passed (52) — FORGIVEN.
+//     The same text on its OWN line one below ⇒ 1 failed | 51 passed (52).
+//   · the same statement appended as a TRAILING `//` COMMENT ⇒ 52 passed (52) — and a commented-out
+//     frozen read is precisely what the comment-INCLUSIVE DENY scan exists to report, so the line-keyed
+//     skip voided that protection on every allowlisted line.
+//   · ` const _giantR = fp.radiusEarth;` appended to src/worldengine/port/conditionFromPlanet.js:652
+//     and ` const _bad = ...(_fp.radiusEarth ?? 1)...` appended to planet-lod-lab.html:2585 ⇒ both
+//     52 passed (52). ALL THREE allowlisted lines in the corpus exhibited it.
+//   · `const _bad = _fp\n          .radiusEarth;` appended to :4297 — the match STARTS on the
+//     allowlisted line ⇒ 52 passed (52), defeating the line-broken-chain capability claimed above.
+// ⛔ AND IT WAS NOT AN ADVERSARIAL SHAPE. Parking a retired statement in a `//` comment beside its
+// replacement is this codebase's own documented habit (tests/helpers/source-scan.mjs header), so under
+// §11.9 the accidental path ran straight through it. The column test below closes the CLASS: an
+// exemption covers the byte range of its own `match` and nothing else on the line.
 function scanFrozenRadiusReads(src, allowlist = ALLOWLIST, file = LAB_REL) {
   const lines = src.split('\n');
   const offenders = [];
   for (const m of src.matchAll(denyScanner())) {   // fresh matcher ⇒ always starts at offset 0
     const line = lineOf(src, m.index);
     const text = lines[line - 1];
-    if (allowlist.some((a) => a.file === file && text.includes(a.match))) continue;
+    const col = m.index - (src.lastIndexOf('\n', m.index - 1) + 1);   // column of the MATCH, 0-based
+    const covered = allowlist.some((a) => {
+      if (a.file !== file) return false;
+      const k = text.indexOf(a.match);
+      return k >= 0 && col >= k && col < k + a.match.length;          // inside the exempted SPAN
+    });
+    if (covered) continue;
     offenders.push({ file, line, text: text.trim() });
   }
   return offenders;
@@ -331,13 +460,28 @@ describe('AC-NOFROZEN — no live quantity reads radius off a frozen preset', ()
     // change) — and, since the widening, the strictly worse one where it stops matching IN ONE FILE
     // while another file's hits keep the count above zero. See the REQUIRED_CARRIERS block for the
     // measured mutant that makes the corpus-wide form fail open.
+    //
+    // ⭐ THE FLOOR FIRST, BECAUSE THIS TEST CAN GO VACUOUS ITSELF. Measured 2026-08-08:
+    // `const REQUIRED_CARRIERS = [];` left the whole file at `52 passed (52)` — this loop runs zero
+    // assertions and reports green. And the instruction that empties it is this test's OWN failure
+    // message, while PLAN §4 Steps 4 and 5 both declare they move lab code out. So the message now
+    // demands a replacement carrier, and the floor makes an unreplaced one impossible to ship quietly.
+    expect(REQUIRED_CARRIERS.length,
+      'REQUIRED_CARRIERS is empty — this test would assert nothing and report green. A carrier that '
+      + 'legitimately moved must be REPLACED by its new home, not simply removed.').toBeGreaterThanOrEqual(1);
     for (const rel of REQUIRED_CARRIERS) {
       const raw = rawHitsIn(rel);
       expect(raw.length, `carrier '${rel}' holds no DENY hit — the scan has gone vacuous THERE, `
         + 'even if other files keep the corpus-wide count non-zero. If the site legitimately moved, '
-        + 'move this carrier out of REQUIRED_CARRIERS in the same commit and say where it went.')
+        + 'move this carrier out of REQUIRED_CARRIERS in the same commit, NAME ITS NEW HOME as a '
+        + 'carrier in that same commit, and say where it went.')
         .toBeGreaterThanOrEqual(1);
     }
+    // The corpus must hold at least as many DENY-carrying files as the list claims. This is what
+    // stops the list being trimmed to match a shrinking corpus instead of the corpus being fixed.
+    const carrying = new Set(scanCorpus(new Map(), []).map((o) => o.file));
+    expect(carrying.size, 'fewer files carry a DENY hit than REQUIRED_CARRIERS names')
+      .toBeGreaterThanOrEqual(REQUIRED_CARRIERS.length);
   });
 
   it('the walker ran and found a tree (a THRESHOLD, and only that)', () => {
@@ -345,7 +489,7 @@ describe('AC-NOFROZEN — no live quantity reads radius off a frozen preset', ()
     // (42 .js under src/worldengine + the lab + the shader module), so `> 20` survives LOSING HALF THE
     // TREE. It proves the walker ran and returned something; it proves nothing about the corpus being
     // intact. The per-carrier assertion above is the check that has that property. The same warning is
-    // written into tests/helpers/source-scan.mjs:158 `export function jsFilesUnder(root, rel) {`,
+    // written into tests/helpers/source-scan.mjs:191 `export function jsFilesUnder(root, rel) {`,
     // which points back here by name.
     expect(CORPUS_REL.length).toBeGreaterThan(20);
     expect(CORPUS_REL).toContain(LAB_REL);
@@ -378,11 +522,27 @@ describe('AC-NOFROZEN — no live quantity reads radius off a frozen preset', ()
     // a commented-out frozen read must still be REPORTED (one uncomment from live), and a commented-out
     // exemption must NOT be HONOURED (an exemption may only certify live code). Both directions are
     // deliberate; harmonising them breaks one.
+    // ⭐ AND IT ASSERTS ON THE LITERAL-BLANKED VIEW, NOT THE DEFAULT ONE. A comment is not the only
+    // container for dead text. MEASURED 2026-08-08: the adapter's live line replaced by
+    // `const condition = deriveConditionVector(fp, null, R_c);` plus the retired statement parked in a
+    // backtick template left THIS TEST at `1 passed | 51 skipped (52)` — the exemption certified a
+    // template literal. `{ blankLiteralText: true }` keeps the delimiters and blanks the interior, so
+    // a `match` that survives it is outside every string, template and regex.
+    // ⛔ WHAT "LIVE" MEANS HERE, STATED SO IT IS NOT OVERREAD: outside a comment AND outside a literal.
+    // NOT "reachable" — a match inside `if (false) { … }` or a never-called function still counts.
+    // Reachability needs a control-flow pass, which is the same C7 refusal KNOWN LIMIT #1 records.
     for (const a of ALLOWLIST) {
-      expect(STRIPPED.get(a.file).includes(a.match),
-        `allowlist entry '${a.id}' no longer matches LIVE code in ${a.file} — it matches only inside a `
-        + 'comment. Either the site moved (delete the entry and re-prove it at its new home) or it was '
-        + 'commented out (delete the entry). An exemption may not certify a comment.').toBe(true);
+      // §11.3.3: the message must name the CAUSE it can actually distinguish. Round 1 caught this
+      // asserting "only inside a comment" for a line that had vanished from the file entirely.
+      const inRaw = SRC.get(a.file).includes(a.match);
+      const inComments = STRIPPED.get(a.file).includes(a.match);
+      const why = !inRaw ? 'it no longer occurs in that file at all'
+        : !inComments ? 'it matches only inside a comment'
+        : 'it matches only inside a string or template literal';
+      expect(LIT_STRIPPED.get(a.file).includes(a.match),
+        `allowlist entry '${a.id}' no longer matches LIVE code in ${a.file} — ${why}. Either the site `
+        + 'moved (delete the entry and re-prove it at its new home) or it was retired (delete the '
+        + 'entry). An exemption may not certify text that does not run.').toBe(true);
     }
   });
 
@@ -417,6 +577,13 @@ describe('AC-NOFROZEN — no live quantity reads radius off a frozen preset', ()
     // union: +38%). The shape check LOSES discrimination by exactly the amount the widening gains
     // coverage, so shipping the widening without the existence check would trade a rule that rejects
     // the truth for a rule that accepts almost anything.
+    // ⭐ A THIRD DEFECT, FOUND BY ROUND 1 AND CLOSED HERE: `existsSync` restored EXISTENCE, not
+    // RELEVANCE — and the widening admits 384 files. MEASURED 2026-08-08: rewriting all three
+    // `evidence:` values to docs/FEATURES/planet-lod-CHARTER.md (a real 9198-byte file whose
+    // `grep -ci "radiusEarth\|craterRelevance\|giantDynamo\|one game radius"` is 0) left the file at
+    // `52 passed (52)`. So the artifact must now PROVE IT IS ABOUT THE SITE by containing the entry's
+    // `anchor`. Per §11.2 that closes the class, not the instance: any future entry pointed at a
+    // plausible-but-unrelated document reds here rather than passing on its path shape.
     for (const a of ALLOWLIST) {
       expect(a.why, `allowlist entry '${a.id}' has no stated reason`).toBeTruthy();
       expect(a.why.length).toBeGreaterThan(40);              // a sentence, not a shrug
@@ -424,6 +591,13 @@ describe('AC-NOFROZEN — no live quantity reads radius off a frozen preset', ()
         .toMatch(/^docs\/(WORKSTREAMS|FEATURES)\/.+\.md$/);
       expect(existsSync(join(ROOT, a.evidence)),
         `allowlist entry '${a.id}' points at '${a.evidence}', which does not exist`).toBe(true);
+      expect(a.anchor, `allowlist entry '${a.id}' declares no evidence anchor`).toBeTruthy();
+      expect(a.anchor.length, `allowlist entry '${a.id}' anchor is too short to discriminate`)
+        .toBeGreaterThan(20);
+      expect(readFileSync(join(ROOT, a.evidence), 'utf8').includes(a.anchor),
+        `allowlist entry '${a.id}' points at '${a.evidence}', which never mentions '${a.anchor}' — `
+        + 'the artifact exists but is not evidence FOR THIS SITE. Cite the document that carries the '
+        + 'measurement, and anchor on a string it actually contains.').toBe(true);
     }
   });
 });
@@ -473,9 +647,15 @@ describe('AC-NOFROZEN — MANDATORY NEGATIVE CHECK: the fence catches a re-froze
       id: 'crater boot via a DRIVER_PRESETS subscript (the other frozen spelling)',
       live: 'deriveUniforms(_fp, driverUI.qualityTier), _fp.radiusEarth))',
       frozen: 'deriveUniforms(_fp, driverUI.qualityTier), DRIVER_PRESETS[preset].radiusEarth))',
-      // NB: this one is planted ON the allowlisted line, so it also proves the allowlist is keyed on
-      // the SITE (the craterRelevanceOf call shape), not on "any line mentioning a preset radius".
-      stillAllowlisted: true,
+      // ⚠ THIS CASE CHANGED VERDICT ON 2026-08-08, and the new verdict is the correct one. It used to
+      // be marked `stillAllowlisted` because the exemption keyed on the `craterRelevanceOf(` prefix,
+      // so re-spelling the read further along the same line kept its blessing. Now that `match` IS the
+      // exempted byte span, re-spelling the read means the span no longer occurs — so the site loses
+      // its exemption and is REPORTED. An exemption whose proof is a sweep of `_fp.radiusEarth` should
+      // not silently transfer to a `DRIVER_PRESETS[preset].radiusEarth` written in its place; the
+      // author re-states the entry, which is the whole point of an allowlist.
+      // It still proves what it was originally added to prove — that DENY covers the subscript
+      // spelling at all — via the un-allowlisted scan asserted for every case below.
     },
   ];
 
@@ -485,14 +665,11 @@ describe('AC-NOFROZEN — MANDATORY NEGATIVE CHECK: the fence catches a re-froze
       const broken = LAB.replace(d.live, d.frozen);
       expect(broken).not.toBe(LAB);                                   // the plant actually landed
       const offenders = scanFrozenRadiusReads(broken);
-      if (d.stillAllowlisted) {
-        // The crater-boot line stays exempt even in the other spelling — correct, and the reason the
-        // allowlist matches on the call shape. The point of this case is that the DENY pattern itself
-        // covers `DRIVER_PRESETS[...].radiusEarth`, proven by the un-allowlisted scan below.
-        expect(scanFrozenRadiusReads(broken, [])).not.toEqual([]);
-      } else {
-        expect(offenders.length, `fence did not catch the re-frozen ${d.id}`).toBeGreaterThanOrEqual(1);
-      }
+      expect(offenders.length, `fence did not catch the re-frozen ${d.id}`).toBeGreaterThanOrEqual(1);
+      // The DENY pattern itself must have done the catching, not some downstream pin: assert the plant
+      // is a raw hit with the allowlist removed entirely. (This is what the retired `stillAllowlisted`
+      // branch used to be the only assertion for; it now runs for every case.)
+      expect(scanFrozenRadiusReads(broken, [])).not.toEqual([]);
       // …and the UNMODIFIED corpus is still clean, i.e. restore ⇒ PASS.
       expect(scanCorpus()).toEqual([]);
     });
@@ -534,9 +711,14 @@ describe('AC-NOFROZEN — THE THIRD GATE CLAUSE: a violation planted in src/worl
     // lab. That is an accident of concatenation, not the fence working: it names no file, and it fires
     // only for a plant that happens to spell `deriveConditionVector`. The exemption machinery forgave
     // the read, which is what this test now stops.
+    // ⚠ THE PLANT IS THE ALLOWLISTED SPAN VERBATIM, 2026-08-08. It used to spell `tier` where the lab
+    // writes `driverUI.qualityTier`, so once `match` became the exempted BYTE SPAN the plant would have
+    // failed to match the entry for TWO reasons and the test would have passed without exercising the
+    // `file` key at all — the property it exists to hold. Building it from `ALLOWLIST[…].match` means
+    // the ONLY thing standing between this plant and an exemption is the file check.
+    const craterMatch = ALLOWLIST.find((x) => x.id === 'craterboot-worldDefaultEnableSet').match;
     const live = 'export function convectiveVigor(cv) {';
-    const frozen = 'export function convectiveVigor(cv) {\n'
-      + '  const _boot = craterRelevanceOf(deriveConditionVector(_fp, deriveUniforms(_fp, tier), _fp.radiusEarth));';
+    const frozen = 'export function convectiveVigor(cv) {\n  const _boot = ' + craterMatch + ';';
     const src = SRC.get(WE_PLANT_REL);
     expect(src.includes(live), `live form not found — source drifted: ${live}`).toBe(true);
     const mutated = src.replace(live, frozen);
@@ -554,18 +736,107 @@ describe('AC-NOFROZEN — THE THIRD GATE CLAUSE: a violation planted in src/worl
   it('an allowlisted site demoted to a COMMENT stops being covered (exemption liveness, planted)', () => {
     // ⭐ THE LIVENESS CONTROL. Comment out the adapter's allowlisted line — the shape of "the law moved
     // and somebody left the old statement quoted above it", which is this codebase's own habit
-    // (tests/helpers/source-scan.mjs header: 7 instances in the lab, 6 mutants, all green). Under the
-    // staleness test alone the entry still "matches a real line" and the exemption survives forever.
+    // (tests/helpers/source-scan.mjs header, e.g. planet-lod-lab.html:6160-6161). Under the staleness
+    // test alone the entry still "matches a real line" and the exemption survives forever.
+    // ⚠ IT ASSERTS THE PREDICATE, NOT A TALLY, AND THAT IS A REPAIR. Round 1 showed this control going
+    // red for the WRONG REASON on an unrelated mutant: with the live line already gone, `src.replace`
+    // landed its `// ` inside a string literal, where it is not a comment at all, and the assertion
+    // failed on a state it was not testing. Building the mutant from the LINE the match sits on, and
+    // asserting the same predicate the liveness test uses, removes the coincidence.
     const a = ALLOWLIST.find((x) => x.id === 'adapter-oneGameRadius');
     const src = SRC.get(a.file);
-    const commented = src.replace(a.match, `// ${a.match}`);
+    const line = src.split('\n').find((l) => l.includes(a.match));
+    expect(line, 'the adapter site is gone — this control has no subject').toBeTruthy();
+    const commented = src.replace(line, `// ${line}`);
     expect(commented).not.toBe(src);
     // Comment-inclusive staleness: still "covered". This is the state that used to be undetectable.
     expect(commented.split('\n').some((l) => l.includes(a.match))).toBe(true);
     // Comment-blind liveness: NOT covered. This is the assertion that catches it.
-    expect(stripCommentsPreservingOffsets(commented).includes(a.match)).toBe(false);
+    expect(strippedCode(commented).includes(a.match)).toBe(false);
     // And the real file is live, i.e. restore ⇒ PASS.
-    expect(STRIPPED.get(a.file).includes(a.match)).toBe(true);
+    expect(LIT_STRIPPED.get(a.file).includes(a.match)).toBe(true);
+  });
+
+  it('an allowlisted site RE-QUOTED INSIDE A LITERAL stops being covered (exemption liveness, planted)', () => {
+    // ⭐ THE SECOND COFFIN. A comment is not the only container for retired code; a template literal
+    // and a quoted string hold it just as well, and the DEFAULT stripper preserves literal interiors by
+    // design (its output is handed to `new Function` and must still compile).
+    // MEASURED BEFORE THE FIX, both arms: the adapter's live line replaced by a `R_c` third argument
+    // with the retired statement parked in a backtick template ⇒ the liveness test reported
+    // `1 passed | 51 skipped (52)`; the same with a single-quoted string ⇒ likewise. The exemption
+    // certified dead text in both. Asserted here on BOTH literal kinds, because they are lexed by
+    // different branches of the state machine and closing one does not close the other.
+    const a = ALLOWLIST.find((x) => x.id === 'adapter-oneGameRadius');
+    const src = SRC.get(a.file);
+    const line = src.split('\n').find((l) => l.includes(a.match));
+    for (const [kind, parked] of [
+      ['template literal', '  const _RETIRED = `' + a.match + '`;'],
+      ['quoted string', "  const _RETIRED = '" + a.match + "';"],
+    ]) {
+      const moved = src.replace(line, '  const condition = deriveConditionVector(fp, null, R_c);\n' + parked);
+      expect(moved, `${kind} mutant did not land`).not.toBe(src);
+      // The DEFAULT (literal-preserving) view still finds it — this is exactly the silent green.
+      expect(stripCommentsPreservingOffsets(moved).includes(a.match),
+        `${kind}: the comment-blind view cannot see the difference — that is why it is not the gate`).toBe(true);
+      // The literal-blanked view does not. This is the assertion that catches it.
+      expect(strippedCode(moved).includes(a.match),
+        `${kind}: an exemption may not certify text parked inside a literal`).toBe(false);
+    }
+    expect(LIT_STRIPPED.get(a.file).includes(a.match)).toBe(true);   // restore ⇒ PASS
+  });
+
+});
+
+describe('AC-NOFROZEN — THE FOURTH GATE CLAUSE: an exemption covers ONE SPAN, not a whole line', () => {
+  // ⭐ THE ROUND-1 BLOCKER, HELD OPEN AS A STANDING CONTROL. Every arm below was GREEN before the
+  // scanner's column test landed — the fence forgave a real frozen read because it happened to share a
+  // source line with an allowlisted one. See the scanner's own header for the five paired measurements.
+  // These run against the REAL current source, in memory, on every invocation.
+  const SITES = [
+    { rel: LAB_REL,     line: "if (_fp && craterRelevanceOf(deriveConditionVector(_fp, deriveUniforms(_fp, driverUI.qualityTier), _fp.radiusEarth)) > 0) set.add('craters');" },
+    { rel: LAB_REL,     line: 'const _giantDynamo = _gas && (_fp.radiusEarth ?? 1) >= 3.5;' },
+    { rel: ADAPTER_REL, line: 'const condition = deriveConditionVector(fp, null, fp.radiusEarth);' },
+  ];
+  // Each payload is a REAL frozen read that no allowlist entry covers. `stillReads` is asserted so a
+  // payload that stopped being a DENY hit cannot pass as "the fence caught nothing to catch".
+  const PAYLOADS = [
+    ['a second LIVE frozen read', ' state.bandCount = Math.round(12 * (_fp.radiusEarth ?? 1) / _rotH);'],
+    ['a COMMENTED-OUT frozen read', ' // was: state.bandCount = Math.round(12 * (_fp.radiusEarth ?? 1) / _rotH);'],
+    ['a LINE-BROKEN member chain starting on the allowlisted line', ' const _bad = _fp\n          .radiusEarth;'],
+    ['PLAN §4 Step 4\'s own declared first move', ' const _gr = giantRegimeOf(deriveConditionVector(_fp, deriveUniforms(_fp, driverUI.qualityTier), _fp.radiusEarth));'],
+  ];
+
+  for (const site of SITES) {
+    for (const [label, payload] of PAYLOADS) {
+      it(`${label}, appended to the allowlisted line in ${site.rel}, is REPORTED`, () => {
+        const src = SRC.get(site.rel);
+        const full = src.split('\n').find((l) => l.includes(site.line));
+        expect(full, `allowlisted line not found — source drifted: ${site.line}`).toBeTruthy();
+        const broken = src.replace(full, full + payload);
+        expect(broken).not.toBe(src);
+        // The payload must itself be a DENY hit, or this test proves nothing about the skip logic.
+        expect(rawHitsIn(site.rel, broken).length,
+          'the payload is not a DENY hit — this control has no subject')
+          .toBeGreaterThan(rawHitsIn(site.rel).length);
+        const offenders = scanFrozenRadiusReads(broken, ALLOWLIST, site.rel);
+        expect(offenders.length,
+          'a frozen read sharing a line with an allowlisted one was FORGIVEN — the skip has gone back '
+          + 'to keying on the source LINE instead of the matched SPAN').toBeGreaterThanOrEqual(1);
+        expect(offenders[0].file).toBe(site.rel);
+        expect(scanCorpus()).toEqual([]);            // restore ⇒ PASS
+      });
+    }
+  }
+
+  it('the allowlisted read ITSELF is still exempt — the span fix did not just ban the line', () => {
+    // §11.3.3's other half: a control that only ever goes one way proves nothing. If the column test
+    // were wrong in the opposite direction every allowlisted site would red, and the whole-corpus
+    // assertion would be doing the work. Assert the exemption still holds, per site.
+    for (const site of SITES) {
+      const src = SRC.get(site.rel);
+      expect(rawHitsIn(site.rel).length, `${site.rel} carries no DENY hit`).toBeGreaterThanOrEqual(1);
+      expect(scanFrozenRadiusReads(src, ALLOWLIST, site.rel), `${site.rel} is no longer exempt`).toEqual([]);
+    }
   });
 });
 
@@ -584,8 +855,18 @@ describe('AC-NOFROZEN — DENY-pattern precision (it must not ban the live sourc
     'fp?.radiusEarth',
     'deriveConditionVector(fp, u, fp.radiusEarth)',
     'bundle.fp.radiusEarth',                       // the alias reached through a property chain
+    'preset.radiusEarth',                          // the FOURTH alias — live at driver-presets.js:325
+    'const canonical = preset.radiusEarth ?? 1.0;',
+    '_fp.radiusEarthCanonical',                    // ⭐ the deliberate over-match: a canonical read off
+    'fp.radiusEarthCanonical',                     //   a FROZEN preset is still a frozen read. See the
+                                                   //   no-trailing-`\b` note on DENY_SRC. Fail-closed:
+                                                   //   this can red for a legitimate Step-4/5 move, and
+                                                   //   that move then argues its case like any other.
   ];
   const MUST_NOT_MATCH = [
+    'preset.massEarth',                            // the fourth alias on a DIFFERENT field
+    'presetName.radiusEarth',                      // `preset` inside a longer identifier — no boundary
+    'DRIVER_PRESETS[driverUI.preset]',             // the subscript with no member read after it
     'state.planetRadiusEarth',
     '(state.planetRadiusEarth ?? 1)',
     '_gcond.radiusEarth',
@@ -618,10 +899,24 @@ describe('AC-0 — the rewired sites are NAMED consumers of the live driver (sou
   // reads. These are the positive half of the fence — the negative half only proves the OLD feed is
   // gone, not that the NEW one is present.
   //
-  // ⚠ ALL PINS RUN AGAINST `LAB_LIVE`, THE COMMENT-STRIPPED LAB — never against raw source. A pin
-  // satisfied by a comment would let the block it pins be deleted as long as somebody quoted it on the
-  // way out, which is the exact mutant tests/helpers/source-scan.mjs was built for. The one deliberate
-  // exception is marked at its own site below and explains itself.
+  // ⚠ ALL PINS RUN AGAINST `LAB_CODE`, THE COMMENT- AND LITERAL-STRIPPED LAB — never against raw
+  // source. A pin satisfied by a comment would let the block it pins be deleted as long as somebody
+  // quoted it on the way out, which is the exact mutant tests/helpers/source-scan.mjs was built for.
+  // ⭐ AND `LAB_LIVE` WAS NOT ENOUGH, MEASURED 2026-08-08 (adversarial round 1): the default stripper
+  // preserves literal INTERIORS by design, so deleting the aurora tail outright — the whole statement
+  // `state.auroraRingWidth = Math.max(0.07, 0.15 - _mag * 0.08);` — and re-quoting it as a
+  // single-quoted string with a "moved to giantDeck.js" note beside it
+  // left the whole file at `52 passed (52)`. A single quote is as good a coffin as a comment. The pins
+  // therefore assert on the `{ blankLiteralText: true }` pass, which blanks literal interiors while
+  // keeping the delimiters and every byte offset. The one deliberate raw-source exception is marked at
+  // its own site below and explains itself.
+  //
+  // ⭐ EVERY POSITIVE PIN READS `PIN_VIEW`, AND THAT INDIRECTION IS A GATE, NOT A STYLE CHOICE. If the
+  // loops below named `LAB_CODE` directly, repointing them at the weaker `LAB_LIVE` would be a
+  // two-character edit that no test could see — the pins would still pass on clean source, and the
+  // literal-parking hole would silently reopen. Routing them through one binding lets the standing
+  // control at the end of this block assert what that binding IS.
+  const PIN_VIEW = LAB_CODE;
   const PINS = [
     // site, expected live expression, the driver it now names
     ['E5 Rhines band bake (rebakeE5Bands)', /radius:\s*\(_gcond\.radiusEarth\s*\?\?\s*1\)\s*\/\s*11\.2/],
@@ -630,7 +925,7 @@ describe('AC-0 — the rewired sites are NAMED consumers of the live driver (sou
     ['cloud regime gate', /_gas\s*&&\s*\(state\.planetRadiusEarth\s*\?\?\s*1\)\s*<\s*6/],
   ];
   for (const [name, re] of PINS) {
-    it(`${name} reads the drawn radius`, () => expect(LAB_LIVE).toMatch(re));
+    it(`${name} reads the drawn radius`, () => expect(PIN_VIEW).toMatch(re));
   }
 
   // ── THE FOUR BLIND BLOCKS ──────────────────────────────────────────────────────────────────────
@@ -643,8 +938,16 @@ describe('AC-0 — the rewired sites are NAMED consumers of the live driver (sou
   // does not change WHAT it looks for, and none of these four blocks contains a frozen read. Anyone
   // who assumed the widening covered the gate's first clause would have shipped it still half true.
   // These pins are what make it true for all 8.
+  //
+  // ⚠ THE `_gas` PIN IS THE ONE PIN WHOSE SUBJECT CONTAINS A STRING LITERAL, so it is the one pin that
+  // cannot be asserted whole on the literal-blanked view — `'h2-he'` comes back as `'     '`, five
+  // blanks between surviving quotes. Splitting it is not a weakening: the STRUCTURE (that this is a
+  // live `const _gas = (_fp.atmosphere?.composition === '…')` statement, not text inside a template)
+  // is asserted on the blanked view, and the VALUE `'h2-he'` is asserted on the comment-stripped view
+  // in the same test. Neither half alone is the property; both together are.
   const BLIND_BLOCK_PINS = [
     ['`const _gas` (composition gate, feeds cloud regime + giant dynamo)',
+      /const\s+_gas\s*=\s*\(_fp\.atmosphere\?\.composition\s*===\s*'[^']*'\)/,
       /const\s+_gas\s*=\s*\(_fp\.atmosphere\?\.composition\s*===\s*'h2-he'\)/],
     ['`const _rotH` (rotation hours, the bandCount divisor)',
       /const\s+_rotH\s*=\s*state\.rotationHours\s*\?\?\s*_fp\.rotationHours\s*\?\?\s*24/],
@@ -652,19 +955,64 @@ describe('AC-0 — the rewired sites are NAMED consumers of the live driver (sou
       /state\.auroraRingWidth\s*=\s*Math\.max\(/],
     ['the boot `radiusSeed:` draw seed', /radiusSeed:\s*1\s*,/],
   ];
-  for (const [name, re] of BLIND_BLOCK_PINS) {
-    it(`${name} is present in LIVE lab source`, () => expect(LAB_LIVE).toMatch(re));
+  for (const [name, re, valueRe] of BLIND_BLOCK_PINS) {
+    it(`${name} is present in LIVE lab source`, () => {
+      expect(PIN_VIEW).toMatch(re);                       // it is CODE — not a comment, not a literal
+      if (valueRe) expect(LAB_LIVE).toMatch(valueRe);     // …and the literal it carries is unchanged
+    });
   }
 
-  it('the extractor\'s `// AC5` anchor on the radiusSeed line is present in RAW source', () => {
+  it('a pinned block RE-QUOTED INSIDE A LITERAL stops satisfying its pin (pin liveness, planted)', () => {
+    // ⭐ THE CONTROL FOR THE VIEW ITSELF, and it is the mutant round 1 actually walked through:
+    // `state.auroraRingWidth = Math.max(0.07, 0.15 - _mag * 0.08);` (planet-lod-lab.html:2589) DELETED
+    // outright and re-quoted as `const _movedNote = '…';  // moved to giantDeck.js`. MEASURED before
+    // the fix: `52 passed (52)`. The pin whose entire job is to catch that deletion was satisfied by a
+    // pair of quote marks — the same hole the comment rule closed, wearing a different container.
+    // The regex is TAKEN FROM `BLIND_BLOCK_PINS` rather than re-typed, so a pin that is reworded
+    // cannot leave this control testing a string nothing pins any more.
+    const entry = BLIND_BLOCK_PINS.find(([n]) => n.includes('aurora tail'));
+    expect(entry, 'the aurora-tail pin is gone — this control has no subject').toBeTruthy();
+    const auroraRe = entry[1];
+    const tail = 'state.auroraRingWidth = Math.max(0.07, 0.15 - _mag * 0.08);';
+    expect(LAB.includes(tail), `live form not found — source drifted: ${tail}`).toBe(true);
+    const moved = LAB.replace(tail, `const _movedNote = '${tail}';  // moved to giantDeck.js`);
+    // The comment-only view cannot tell the difference — that is precisely why it is not the pin view.
+    expect(stripCommentsPreservingOffsets(moved)).toMatch(auroraRe);
+    expect(strippedCode(moved)).not.toMatch(auroraRe);
+    // ⛔ AND THE WIRING, which is the half a mutant cannot reach: the pins must actually READ that
+    // stricter view. `PIN_VIEW` is the single binding all the loops above go through, so repointing
+    // them at `LAB_LIVE` reds here instead of passing quietly.
+    expect(PIN_VIEW, 'the AC-0 pins are no longer reading the literal-blanked view')
+      .toBe(strippedCode(LAB));
+    expect(PIN_VIEW).toMatch(auroraRe);                   // restore ⇒ PASS
+  });
+
+  it('the `// AC5` comment on the radiusSeed line is present in RAW source (DOCUMENTATION, not an extractor dependency)', () => {
     // ⚠ THE ONE DELIBERATE RAW-SOURCE PIN IN THIS BLOCK, and it is pinning a COMMENT on purpose.
-    // tests/radius-live-feed.test.js extracts the boot seed with
-    // /radiusSeed:\s*(\d+)\s*,\s*\/\/\s*AC5 seeded-radius draw seed/ — the anchor it keys on IS the
-    // trailing comment, so a comment-stripped pin cannot see it (measured: 1 occurrence raw, 0
-    // stripped). Deleting just the comment would silently break that extraction.
-    // ⛔ This does NOT reopen the hole the liveness rule closes. The value-bearing half of the same
-    // line is pinned against LIVE source immediately above, so moving the whole line into a comment
-    // still reds the fence — this pin can only ever be the SECOND of two, never the only one.
+    // ⭐ ITS RATIONALE WAS REWRITTEN 2026-08-08 BECAUSE THE ORIGINAL WAS FALSIFIED BY THE COMMIT THAT
+    // WROTE IT. This pin used to justify itself with "the anchor it keys on IS the trailing comment"
+    // and "Deleting just the comment would silently break that extraction". Both were untrue the
+    // moment they were written: the SAME commit narrowed the extraction to
+    // tests/radius-live-feed.test.js `const BOOT_SEED = Number(extract(/radiusSeed:\s*(\d+)\s*,/, 'boot radiusSeed'));`
+    // — cited SYMBOL-ONLY, per PLAN §10, because that file is being edited alongside this one and a
+    // line number written here is born with a half-life of one commit (it rotted 234 → 300 inside this
+    // very session) —
+    // comment-BLIND, because the sibling suite moved to comment-stripped source and the old pattern
+    // matched ZERO times there. VERIFIED BY MUTANT: deleting ONLY the trailing comment from
+    // planet-lod-lab.html left tests/radius-live-feed.test.js at `50 passed (50)`. The extraction was
+    // not broken. A gate whose stated subject does not exist is §11.1's D clause — the subject sits
+    // outside the watched set — so the prose had to move to what the pin actually holds.
+    //
+    // WHAT IT ACTUALLY HOLDS, AND WHY IT IS STILL WORTH HOLDING: the extraction's specificity now
+    // rests on corpus-wide uniqueness (`radiusSeed:\s*(\d+)\s*,` matches exactly once across all 44
+    // corpus files), so nothing mechanical depends on the comment any more. That makes THIS PIN THE
+    // ONLY THING protecting it, and what it protects is documentary: `// AC5 seeded-radius draw seed`
+    // is the one place in the tree that says what the integer `1` on that line MEANS and that rerolling
+    // redraws the archetype-range radius. Delete it and the next reader sees a bare `radiusSeed: 1,`.
+    // ⛔ The claim that this "can only ever be the SECOND of two, never the only one" is also retired.
+    // It is the only pin on the comment. The VALUE half of the line is separately pinned against
+    // PIN_VIEW above (`radiusSeed:\s*1\s*,`), so moving the whole line into a comment still reds the
+    // fence — but that is a different subject, and it does not make this pin a second of two.
     expect(LAB).toMatch(/radiusSeed:\s*\d+\s*,\s*\/\/\s*AC5 seeded-radius draw seed/);
   });
 
@@ -672,8 +1020,12 @@ describe('AC-0 — the rewired sites are NAMED consumers of the live driver (sou
   // interior composition, and Neptunian/Sub-Neptune draw bit-identical radii at every seed, so a
   // drawn-radius discriminator cannot separate them (ALLOWLIST 'giantDynamo-compositionClassifier').
   // This asserts BOTH directions so the site cannot drift either way unnoticed.
+  // ⚠ THE POSITIVE AND THE NEGATIVE READ DIFFERENT VIEWS, AND THE ASYMMETRY IS THE POINT. A POSITIVE
+  // pin wants the STRICTEST view (PIN_VIEW — a match there cannot be a comment or a literal). A
+  // NEGATIVE pin wants the most PERMISSIVE one it can honestly use (LAB_LIVE — literals preserved), so
+  // that a drifted form hiding in a literal still trips it. Swapping them silently weakens both.
   it('giant dynamo gate reads the CANONICAL radius (composition classifier, not a physics input)', () => {
-    expect(LAB_LIVE).toMatch(/_giantDynamo\s*=\s*_gas\s*&&\s*\(_fp\.radiusEarth\s*\?\?\s*1\)\s*>=\s*3\.5/);
+    expect(PIN_VIEW).toMatch(/_giantDynamo\s*=\s*_gas\s*&&\s*\(_fp\.radiusEarth\s*\?\?\s*1\)\s*>=\s*3\.5/);
     expect(LAB_LIVE).not.toMatch(/_giantDynamo\s*=\s*_gas\s*&&\s*\(state\.planetRadiusEarth/);
   });
 
@@ -681,7 +1033,7 @@ describe('AC-0 — the rewired sites are NAMED consumers of the live driver (sou
     // The chain that makes _gcond/_scond legitimate live sources: both are built by the single-source
     // deriveConditionVector fed state.planetRadiusEarth. If that ever became _fp.radiusEarth the sites
     // above would look live while being frozen — so pin the derivation, not just the read.
-    const derives = [...LAB_LIVE.matchAll(/deriveConditionVector\(\s*_fp\s*,\s*_[a-z]+\s*,\s*([^)]+)\)/g)].map((m) => m[1].trim());
+    const derives = [...PIN_VIEW.matchAll(/deriveConditionVector\(\s*_fp\s*,\s*_[a-z]+\s*,\s*([^)]+)\)/g)].map((m) => m[1].trim());
     expect(derives.length).toBeGreaterThanOrEqual(2);
     for (const arg of derives) expect(arg).toBe('state.planetRadiusEarth');
   });
@@ -689,7 +1041,13 @@ describe('AC-0 — the rewired sites are NAMED consumers of the live driver (sou
   it('the crater-boot site is the ONLY deriveConditionVector call still fed a canonical radius', () => {
     // Belt and braces on the allowlist: exactly one canonical-fed derivation, and it is the one the
     // G2 sweep proved cannot change its answer.
-    const canonicalFed = [...LAB_LIVE.matchAll(/deriveConditionVector\([^)]*\)[^)]*\)/g)]
+    // ⚠ THIS IS NOT A SUBSTITUTE FOR THE FENCE, AND IT ONCE READ AS ONE. Round 1 measured a Step-4-shaped
+    // `giantRegimeOf(deriveConditionVector(_fp, deriveUniforms(_fp, tier), _fp.radiusEarth))` planted on
+    // the crater-boot line: the DENY/allowlist test passed and ONLY this pin went red. It names no file,
+    // it fires only for a plant that happens to spell `deriveConditionVector`, and its red was an
+    // accident of counting matches across a concatenated corpus. The scanner's column test is the gate;
+    // this stays as the belt.
+    const canonicalFed = [...PIN_VIEW.matchAll(/deriveConditionVector\([^)]*\)[^)]*\)/g)]
       .map((m) => m[0]).filter((s) => /_fp\.radiusEarth/.test(s));
     expect(canonicalFed.length).toBe(1);
     expect(canonicalFed[0]).toContain('driverUI.qualityTier');

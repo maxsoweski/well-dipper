@@ -74,14 +74,47 @@ function looksLikeRegex(src, i) {
  * quoted strings (with backslash escapes), template literals (with `${}` re-entry tracked by brace
  * depth so a nested backtick cannot close the template early), and regex literals.
  *
+ * ⭐ `opts.blankLiteralText` — ADDED 2026‑08‑08 AFTER ROUND 1 PROVED THE SHADOW CLASS WAS STILL OPEN.
+ * Stripping comments alone closes the shadow only for comments OUTSIDE a literal. Literals are
+ * preserved (they must be — the surviving text is handed to `new Function` and has to compile), so a
+ * retired law parked INSIDE a template survives stripping and becomes the single "live" match the
+ * moment the real one is moved out. Not hypothetical: the lab carries **21 comment lines that survive
+ * stripping today**, all inside its own `/* glsl *\/` templates, and text parked in a template needs
+ * no comment markers at all — it is simply string content. MEASURED: moving the cloud-regime block
+ * out of `applyDrivers` and parking it verbatim in a template left the extraction suite at
+ * **50 passed (50)**, measuring the dead copy.
+ *
+ * With `blankLiteralText: true` the DELIMITERS are kept and the INTERIOR is blanked, so the result is
+ * for MATCHING ONLY — never for compiling. Callers match on this pass, then slice the captured body
+ * out of the default pass at the same offsets; both passes are byte-length-identical, so the splice
+ * is exact.
+ *
+ * ⚠ NAMED LIMIT: `${…}` interpolations are blanked along with the surrounding text rather than being
+ * treated as the live code they are. Deliberate, and it is the fail-CLOSED direction: a law that ever
+ * moves into an interpolation becomes unmatchable, which surfaces as EXTRACTION FAILED naming the
+ * site — loud — never as a silent green. The alternative needs brace matching that itself skips
+ * nested literals, and a bug in THAT would be the same silent-green class this option exists to
+ * close. Simplicity is chosen because both of its failure directions are red.
+ *
  * @param {string} src
- * @returns {string} same length as `src`; comment characters replaced by spaces, newlines kept.
+ * @param {{blankLiteralText?: boolean}} [opts]
+ * @returns {string} same length as `src`; blanked characters replaced by spaces, newlines kept.
  */
-export function stripCommentsPreservingOffsets(src) {
+export function stripCommentsPreservingOffsets(src, opts = {}) {
+  const blankLiteralText = opts.blankLiteralText === true;
   const out = new Array(src.length);
   let i = 0;
   const blank = (n) => { for (let k = 0; k < n && i + k < src.length; k++) out[i + k] = src[i + k] === '\n' ? '\n' : ' '; };
   const keep = (n) => { for (let k = 0; k < n && i + k < src.length; k++) out[i + k] = src[i + k]; };
+  // Keep a literal's opening and (if present) closing delimiter, blank everything between. Newlines
+  // survive, so line numbers agree with the default pass character for character.
+  const literal = (n, delim) => {
+    if (!blankLiteralText) { keep(n); return; }
+    blank(n);
+    out[i] = src[i];
+    const last = i + n - 1;
+    if (n > 1 && src[last] === delim) out[last] = src[last];
+  };
 
   while (i < src.length) {
     const c = src[i], c2 = src[i + 1];
@@ -107,7 +140,7 @@ export function stripCommentsPreservingOffsets(src) {
         if (src[j] === c || src[j] === '\n') { j++; break; }
         j++;
       }
-      keep(j - i); i = j; continue;
+      literal(j - i, c); i = j; continue;
     }
     if (c === '`') {                                     // template literal — preserved verbatim
       let j = i + 1, depth = 0;
@@ -119,7 +152,7 @@ export function stripCommentsPreservingOffsets(src) {
         if (depth > 0 && src[j] === '}') depth--;
         j++;
       }
-      keep(j - i); i = j; continue;
+      literal(j - i, '`'); i = j; continue;
     }
     if (c === '/' && looksLikeRegex(src, i)) {           // regex literal — preserved verbatim
       let j = i + 1;
@@ -129,7 +162,7 @@ export function stripCommentsPreservingOffsets(src) {
         if (src[j] === '/' || src[j] === '\n') { j++; break; }
         j++;
       }
-      keep(j - i); i = j; continue;
+      literal(j - i, '/'); i = j; continue;
     }
 
     out[i] = c; i++;
