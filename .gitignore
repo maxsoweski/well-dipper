@@ -36,3 +36,11 @@ docs/FEATURES/cards/shots/*.png
 docs/FEATURES/screenshots/*.png
 .superpowers/
 __pycache__/
+
+# Stryker mutation-testing sandbox. It is a FULL COPY of the repo (measured 18M after
+# ignorePatterns, and it was 203M before), written per run and normally removed by cleanTempDir.
+# An interrupted run leaves it behind, where it does two kinds of damage: it shows up as untracked
+# noise, and it breaks the citation instrument outright — tools/port-uniform-delta.mjs resolves refs
+# by BASENAME, and a second copy of every file in the repo makes every basename ambiguous.
+.stryker-tmp/
+reports/mutation/
