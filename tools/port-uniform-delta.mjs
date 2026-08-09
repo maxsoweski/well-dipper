@@ -155,7 +155,7 @@ const THREE = await import('three');
 //                including the MOON-BEARING giants (a planet's moon count is part of its record,
 //                and it is gas giants and sub-neptunes that carry the large retinues).
 //  P — PLANET-CLASS MOONS: the ~3.5% of moons that reach Planet.js today (PLAN.md:396) do so via
-//                main.js:6197 `new Planet(scenePMData, pmStarInfo)`. They are RARE — MoonGenerator.js:99
+//                main.js:6847 `new Planet(scenePMData, pmStarInfo)`. They are RARE — MoonGenerator.js:99
 //                gates them on a gas-giant/sub-neptune parent with ≥3 moons, non-innermost slot,
 //                at rng.chance(0.10), which measured ~1 per 40 systems. Harvesting them out of
 //                the S stratum alone would give 2-3 bodies. So a wider seed sweep (1..pmScanSeeds)
@@ -186,7 +186,7 @@ function toSceneData(rec) {
   const ratio = rec.radius / rec.radiusScene;
   if (!Number.isFinite(ratio) || ratio <= 0) {
     throw new Error(`toSceneData: radius/radiusScene is not finite-positive (${rec.radius}/${rec.radiusScene}). `
-      + 'main.js:6110 `const mapToSceneRatio` assumes both exist on every body it renders.');
+      + 'main.js:6760 `const mapToSceneRatio` assumes both exist on every body it renders.');
   }
   return {
     ...rec,
@@ -512,7 +512,7 @@ const GAME_ONLY_WATCHED = [
   { game: 'hasClouds',          tier: 'record', why: 'planetData.clouds presence gate.' },
   { game: 'cloudColor',         tier: 'record', why: 'planetData.clouds.color. Lab F31 haze/cloud colour is uHazeColor, driven by a DIFFERENT law (preset atmosphere colour) — a semantic neighbour, not the same value. Not aliased.' },
   { game: 'cloudDensity',       tier: 'record', why: 'planetData.clouds.density. Lab uCloudCoverage is driven by deriveUniforms from condition — same concept, different source. Not aliased.' },
-  { game: 'cloudScale',         tier: 'record', why: 'planetData.clouds.scale × the toSceneData ratio (main.js:6110 `const mapToSceneRatio`, through :6118).' },
+  { game: 'cloudScale',         tier: 'record', why: 'planetData.clouds.scale × the toSceneData ratio (main.js:6760 `const mapToSceneRatio`, through :6118).' },
   { game: 'atmosphereStrength', tier: 'record', why: 'planetData.atmosphere.strength — the legacy rim magnitude uLimbMix blends against.' },
   { game: 'atmosphereColor',    tier: 'record', why: 'planetData.atmosphere.color — the PRE-PORT rim tint; Planet.js:535 `finalColor += mix(atmosphereColor, uLimbColor, uLimbMix)` mixes from it toward the condition-derived uLimbColor.' },
   { game: 'hasAurora',          tier: 'record', why: 'planetData.aurora presence gate. Lab has no counterpart gate (it gates on uAuroraIntensity), so game-side-only rather than aliased.' },
@@ -526,18 +526,18 @@ const UNWATCHED = [
   // X1 — RUNTIME. The renderer overwrites these every frame AFTER construction, so the value this
   // harness reads is a placeholder that never reaches a pixel. Recording it would assert the
   // stability of a number the game does not ship, which is a green with no subject.
-  { game: 'lightDir',            reason: 'runtime', why: 'overwritten per frame — src/main.js:9767 `entry.planet._lightDir.copy(_sunDir)` (also :7364 `planet._lightDir`, :9796 `moon.planet._lightDir`).' },
-  { game: 'lightDir2',           reason: 'runtime', why: 'overwritten per frame — src/main.js:9773 `entry.planet._lightDir2.copy(_sunDir2)` (binary companion); constructed as (0,0,0).' },
-  { game: 'time',                reason: 'runtime', why: 'animation clock — Planet.js:1914 `if (mat.uniforms.time)`, through :1918.' },
+  { game: 'lightDir',            reason: 'runtime', why: 'overwritten per frame — src/main.js:10417 `entry.planet._lightDir.copy(_sunDir)` (also :8014 `planet._lightDir`, :10446 `moon.planet._lightDir`).' },
+  { game: 'lightDir2',           reason: 'runtime', why: 'overwritten per frame — src/main.js:10423 `entry.planet._lightDir2.copy(_sunDir2)` (binary companion); constructed as (0,0,0).' },
+  { game: 'time',                reason: 'runtime', why: 'animation clock — Planet.js:1929 `if (mat.uniforms.time)`, through :1918.' },
   { game: 'lodLevel',            reason: 'runtime', why: 'LOD tier — src/rendering/objects/BodyRenderer.js:181 `surface.material.uniforms.lodLevel.value = tier`.' },
-  { game: 'starPos1',            reason: 'runtime', why: 'star world position — src/main.js:9832 `pu.starPos1`.' },
-  { game: 'starPos2',            reason: 'runtime', why: 'second-star world position — src/main.js:9833 `pu.starPos2.value.copy(_star2Pos)` (also :9885 planet-class moons, :9891 textured moons). ⚠ The old ref here was :11147, a comment inside _updateRenderVisuals stating these are NOT written there — a citation that read as evidence and pointed at its own negation.' },
-  { game: 'shadowMoonCount',     reason: 'runtime', why: 'eclipse casters — src/main.js:9837 `if (pu.shadowMoonCount)`, through :9841, rewritten every frame.' },
-  { game: 'shadowMoonPos',       reason: 'runtime', why: 'eclipse casters — src/main.js:9841 `pu.shadowMoonPos`.' },
-  { game: 'shadowMoonRadius',    reason: 'runtime', why: 'eclipse casters — src/main.js:9837 `if (pu.shadowMoonCount)` block.' },
-  { game: 'shadowPlanetCount',   reason: 'runtime', why: 'eclipse casters — src/main.js:9848 `if (pu.shadowPlanetCount)`, assigned at :9862 `pu.shadowPlanetCount.value = shadowPlanetIdx`.' },
-  { game: 'shadowPlanetPos',     reason: 'runtime', why: 'eclipse casters — src/main.js:9852 `pu.shadowPlanetPos.value[shadowPlanetIdx].copy(inner.planet.mesh.position)` (and :9858 for the outer caster).' },
-  { game: 'shadowPlanetRadius',  reason: 'runtime', why: 'eclipse casters — src/main.js:9853 `pu.shadowPlanetRadius.value[shadowPlanetIdx] = inner.planet.data.radius` (and :9859).' },
+  { game: 'starPos1',            reason: 'runtime', why: 'star world position — src/main.js:10482 `pu.starPos1`.' },
+  { game: 'starPos2',            reason: 'runtime', why: 'second-star world position — src/main.js:10483 `pu.starPos2.value.copy(_star2Pos)` (also :9885 planet-class moons, :9891 textured moons). ⚠ The old ref here was :11147, a comment inside _updateRenderVisuals stating these are NOT written there — a citation that read as evidence and pointed at its own negation.' },
+  { game: 'shadowMoonCount',     reason: 'runtime', why: 'eclipse casters — src/main.js:10487 `if (pu.shadowMoonCount)`, through :9841, rewritten every frame.' },
+  { game: 'shadowMoonPos',       reason: 'runtime', why: 'eclipse casters — src/main.js:10491 `pu.shadowMoonPos`.' },
+  { game: 'shadowMoonRadius',    reason: 'runtime', why: 'eclipse casters — src/main.js:10487 `if (pu.shadowMoonCount)` block.' },
+  { game: 'shadowPlanetCount',   reason: 'runtime', why: 'eclipse casters — src/main.js:10498 `if (pu.shadowPlanetCount)`, assigned at :10512 `pu.shadowPlanetCount.value = shadowPlanetIdx`.' },
+  { game: 'shadowPlanetPos',     reason: 'runtime', why: 'eclipse casters — src/main.js:10502 `pu.shadowPlanetPos.value[shadowPlanetIdx].copy(inner.planet.mesh.position)` (and :9858 for the outer caster).' },
+  { game: 'shadowPlanetRadius',  reason: 'runtime', why: 'eclipse casters — src/main.js:10503 `pu.shadowPlanetRadius.value[shadowPlanetIdx] = inner.planet.data.radius` (and :9859).' },
 
   // X2 — HARNESS-BLIND. These come from `starInfo`, the SECOND constructor argument
   // (Planet.js:1519 `constructor(planetData, starInfo = null)`), which this harness never passes —

@@ -172,7 +172,7 @@
     import alea from 'alea';   // V2-6 slice-5: worldSeed → deterministic per-namespace sub-seeds (draw:radius/macro/detail) for newPlanet()
     import { presetDriverDefaults, buildNeutralBodyDrivers } from './body-drivers.js';   // V2-0 Slice A: neutral (no-slider-override) driver construction the lab overlays overrides on (presetDriverDefaults also used by resetDriverOverrides)
     import { deriveConditionVector } from './body-condition-vector.js';   // V2-0 Slice C: pure _fp→condition vector, attached NESTED as bodyDrivers.condition (shadow-mode; V2-1 E1 read surface; SAME derive the headless AC1 harness uses)
-    import { computeE1 } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment).
+    import { computeE1 } from './src/worldengine/base/e1Regime.js'; import { giantRegimeOf, compositionClass } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment). ⚠ TWO import STATEMENTS FROM ONE MODULE ON ONE LINE, ON PURPOSE — do not "tidy" them into a single braced list. tests/worldengine-e1-shadow-audit.test.js pins this exact byte string `import { computeE1 } from './src/worldengine/base/e1Regime.js'` (V2-1 AC-0 check 1), so widening the first list reds that audit — MEASURED, it went red on exactly that edit and green again on this one — and the §10 line-stability rule on this file — eight symbol-checked refs from other files land BELOW this edit, e.g. planet-lod-lab.html:1811 `function applyStormState(){` — forbids spending a second line on it. Step 4 item 5's giantRegimeOf + compositionClass ride the second statement.
     import { icenessOf, surfacePaletteOf, biosphereOf, BIO_PIGMENT } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3: condition-derived icy-material fraction → drives uIcenessMix (Stage-6 albedo). Pure scalar, imports nothing. · surfacePaletteOf: condition-derived GROUND PALETTE {fresh, weathered, sediment} → drives uFreshColor/uWeatheredColor/uSedColor (was a single hard-coded rocky tone for all 18 presets, uniform across every world's whole surface).
     import { applyAlbedoTransfer } from './src/worldengine/display/albedoTransfer.js';   // the albedo DISPLAY transfer, shared with the game port (one copy, by design — see that file's header).
     import { atmosphereOpticsOf } from './src/worldengine/base/atmosphereOptics.js';   // V2-7: condition-derived limb/terminator hue -> retires LIMB_COLOR_BY_PRESET + TERM_COLOR_BY_PRESET (the last name-keyed lookups in the colour path). Pure scalar, imports nothing.
@@ -1702,30 +1702,30 @@
         condition:        _cond,
       };
     }
-    // ── #3a E5 render seam: map the lab gas/ice presets to the four E5 archetypes, then bake the
+    // ── #3a E5 render seam: DERIVE this body's E5 regime from its condition vector, then bake the
     // writer's per-vertex band/shear/mushball fields onto the render mesh. The writer's regime + drivers
     // (rotation → Rhines count, shell-depth → equatorial-jet sign, obliquity → Ward pole-emphasis) DECIDE
-    // the bands; the shader only expresses them. Solid presets have no map entry → attrs left flat, and
-    // the uBandStrength gate keeps zonalBandCol dead there regardless (exact no-op). ──
-    const E5_PRESET_REGIME = {
-      'Gas giant (Jovian)':         E5_REGIME.GAS_GIANT,
-      'Gas giant (Saturnian)':      E5_REGIME.SATURNIAN,
-      'Ice giant (Neptunian)':      E5_REGIME.NEPTUNIAN,
-      'Sub-Neptune (hazy)':         E5_REGIME.SUB_NEPTUNE,
-      'Hot Jupiter (locked giant)': E5_REGIME.HOT_JUPITER,
-    };
+    // the bands; the shader only expresses them. Solid presets fail the composition gate → attrs left
+    // flat, and the uBandStrength gate keeps zonalBandCol dead there regardless (exact no-op).
+    // ⭐ PLAN §4 Step 4 item 5 — THE PRESET-NAME TABLE THAT STOOD HERE IS GONE, and both of its readers (this one and applyStormState) are re-sourced in the same edit.
+    // It keyed the regime on a lab GUI string — the label-keying the adapter forbids (conditionFromPlanet.js `⚠ THIS ADAPTER READS`) — so importing it into src/ would have made the game read lab GUI data.
+    // Deriving the regime instead also GAINS the game saturnian + neptunian, which no game `type` expresses.
+    // MEASURED INERT ON TODAY'S LAB: giantRegimeOf returns the retired table's value for all five gas presets, at canonical radius AND at drawn 1 / 2.7 / 5 / 11.2 / 20 R⊕ — 30/30 — and
+    // compositionClass 'gas' selects exactly the same 5 of the 18 presets the table keyed (smallest 2.7 R⊕, so the size gate giantRegimeOf leaves to its caller needs no expression here).
+    // ⛔ ORDER — CLASSIFY THE UN-PERTURBED CONDITION. drawGiantConditions rewrites surfaceGravity, T_eq
+    // AND density before deriveGiantDrivers reads them, so classifying its OUTPUT flips 63/2000 draws
+    // (3.15%) on these five rows: seed 0 on the Jovian row would silently bake `saturnian` bands. ⛔ And
+    // it is NOT gateable over SWEEP_SEEDS — those 12 flip 0/60 here, so such a gate would be vacuous. ──
     function rebakeE5Bands(){
-      const regime = E5_PRESET_REGIME[driverUI.preset];
-      if (!regime) return;                                   // non-gas preset: attrs stay flat (unread)
       const _fp = DRIVER_PRESETS[driverUI.preset] || {};
       // derive-not-freeze Slice D: derive the per-seed D-slot triple from the condition vector. The
       // condition is derived FRESH here ([RESOLVED-BY-REVISE:2] — NOT state._lastBodyDrivers.condition,
       // which is debounce-stale / Rocky-preset-wrong on the first synchronous giant bake). Same single-
-      // source pure derive buildBodyDrivers uses (deriveConditionVector), with the ensureNetworkRouted
-      // uniforms fallback. deriveConditionVector has NO macroSeed dep; per-seed variety comes entirely
-      // from drawGiantConditions(regime, condition, macroSeed).
+      // source pure derive buildBodyDrivers uses (deriveConditionVector), with the ensureNetworkRouted uniforms fallback. deriveConditionVector has NO macroSeed dep; per-seed variety comes entirely from drawGiantConditions(regime, condition, macroSeed).
+      // ⭐ It is now ALSO the input to the composition GATE and the regime CLASSIFIER on the line just below `_gcond`, which is why the derive moved ABOVE the regime instead of below it.
       const _gu = state._derived || deriveUniforms(_fp, driverUI.qualityTier);
       const _gcond = deriveConditionVector(_fp, _gu, state.planetRadiusEarth);
+      if (compositionClass(_gcond) !== 'gas') return;  const regime = giantRegimeOf(_gcond);   // gate (this is the old table MISS), then classify PRE-draw
       const _gd = deriveGiantDrivers(drawGiantConditions(regime, _gcond, state.macroSeed | 0));   // { shellDepthFrac, internalHeat, dissipation }
       const drivers = {
         ..._gd,                                                                            // per-seed triple OVERRIDES the frozen DRIVER_BUNDLES (resolveParams merges caller drivers on top)
@@ -1844,15 +1844,15 @@
         const _cr = chromophoreColor(age, 0);                                               // white→red age ramp (the chromophore output)
         return [_bt[0] * 0.20 + _cr[0] * 0.80, _bt[1] * 0.20 + _cr[1] * 0.80, _bt[2] * 0.20 + _cr[2] * 0.80];  // grs / pearl / oval — age-reddened, lightly deck-tinted
       };
-      const _stormRegime = E5_PRESET_REGIME[driverUI.preset] || E5_REGIME.GAS_GIANT;
       // derive-not-freeze Slice D: the SAME per-seed D-slot triple the band + mask bakes use. Derived
       // FRESH ([RESOLVED-BY-REVISE:2]) from the same (regime, condition, macroSeed) → identical _gd to
       // rebakeE5Bands (drawGiantConditions is deterministic), so placement rides the SAME per-seed jets
-      // the bands + mask bake ([RESOLVED-BY-REVISE-2:minor-1] — consumer (c) VORTICES). The derived
-      // shellDepthFrac/internalHeat/dissipation OVERRIDE the frozen DRIVER_BUNDLES in resolveStormE's
-      // resolveParams → per-seed uPeak/m/sEq → per-seed storm latitudes (AC-LAT) on the shear argmax.
+      // the bands + mask bake ([RESOLVED-BY-REVISE-2:minor-1] — consumer (c) VORTICES). The derived shellDepthFrac/internalHeat/dissipation OVERRIDE the frozen DRIVER_BUNDLES in resolveStormE's resolveParams → per-seed uPeak/m/sEq → per-seed storm latitudes (AC-LAT) on the shear argmax.
+      // ⭐ PLAN §4 Step 4 item 5, THE SECOND READER of the retired preset-name table — re-sourced in the same edit as rebakeE5Bands, whose ⛔ ORDER note governs this site too: the regime is classified off the PRE-draw _scond, never off drawGiantConditions' output.
+      // ⛔ THE NON-GAS FALLBACK IS REPRODUCED EXACTLY RATHER THAN DROPPED, and that is a measurement, not caution: giantRegimeOf is TOTAL, so an ungated call answers for solid presets too — differently on 13/13 of them — which moves the polar bank this function writes (state.polarSides / state.polarR0) on 52/52 (preset, seed) pairs tried. polarStrength and the storm count stay 0 either way, so the render is off-gate regardless; the STATE written is not, and no test in this repo would have seen that.
       const _su = state._derived || deriveUniforms(_fp, driverUI.qualityTier);
       const _scond = deriveConditionVector(_fp, _su, state.planetRadiusEarth);
+      const _stormRegime = compositionClass(_scond) === 'gas' ? giantRegimeOf(_scond) : E5_REGIME.GAS_GIANT;
       const _sgd = deriveGiantDrivers(drawGiantConditions(_stormRegime, _scond, state.macroSeed | 0));
       const _stormDrivers = {
         ..._sgd,                                     // per-seed triple (consumer c — vortices)

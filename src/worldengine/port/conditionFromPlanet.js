@@ -35,6 +35,9 @@
 //    not restated there — see PROVENANCE_COVERAGE below for why that distinction is the whole fence.
 
 import { deriveConditionVector } from '../../../body-condition-vector.js';
+// The composition gate, imported rather than transcribed — see THE NO-SURFACE DOMAIN GUARD below for
+// why the guard must be THIS function and not a local `composition === 'h2-he'` test.
+import { compositionClass } from '../base/e1Regime.js';
 
 // ── THE GREENHOUSE CORRECTION — the seam's one non-trivial job. ────────────────────────────────────
 // ⚠ THE TWO SIDES DISAGREE ABOUT WHAT `T_eq` MEANS, and the names do not warn you.
@@ -62,6 +65,96 @@ export function surfaceTemperatureOf(T_eq, pressureBar) {
   const P = Math.max(pressureBar ?? 0, 0);
   const tau = TAU_REF * Math.pow(P, TAU_EXP);
   return T_eq * Math.pow(1 + 0.75 * tau, 0.25);
+}
+
+// ── THE NO-SURFACE DOMAIN GUARD — the fit above is right, and its DOMAIN was wrong. ───────────────
+// PLAN Step 4 item 4. This is the file's EIGHTH silent disagreement and the first one where neither
+// the unit, the shape nor the key name is at fault: the two sides disagree about what `pressure`
+// MEASURES, on a body with no surface for it to be measured at.
+//
+// ⚠ `pressure` IS NOT ONE QUANTITY. On a solid body it is the weight of the column standing on the
+// ground — 1 bar on Earth, 92 on Venus — and the grey-greenhouse fit above is a statement about
+// exactly that column. On a hydrogen-envelope body there is no ground; the number the game stores
+// is an ENVELOPE DEPTH, the pressure at whatever arbitrary depth the generator chose to quote, and
+// generated giants quote 1000 bar. Handed to a fit solved on 1 bar and 92 bar, 1000 bar is not a
+// large input, it is an input from a different measurement. The fit answers anyway, finitely and
+// plausibly, and the answer is the signature failure this file is a catalogue of.
+//
+// ⛔ THE FIX IS THE DOMAIN, NOT THE FIT. ⛔ DO NOT WIDEN THE FIT. Re-solving TAU_REF/TAU_EXP to make
+// 1000 bar come out "reasonable" would move Earth and Venus, which are the only two bodies the fit
+// is actually anchored on, to make a third body come out right for a reason that is not physical.
+// The greenhouse column simply does not exist on a body with no surface, so the correction to apply
+// is none, and `T_eq` reaches the engine as the game's own radiative-balance number.
+//
+// ⛔ AND IT KEYS ON `compositionClass`, NOT ON A LOCAL `composition === 'h2-he'` TEST, which is the
+// obvious way to write this and is wrong for two separate reasons. First, e1Regime.js:66
+// `export function compositionClass(cv) {` is the engine's ONE answer to "does this body have a
+// surface", and body-condition-vector.js:107
+// `const _class = compositionClass({ atmosphere: _atmosphere, composition: _composition, density: _density });`
+// already calls it on the very fp this adapter is assembling, to pick which mass-radius law applies.
+// Two independent tests of the same predicate is the "one value, two names" defect §2 records four
+// instances of; a body classified 'gas' for gravity and not-gas for its greenhouse would be that
+// defect with the engine on both sides of it. Second, the gate is condition-pure and the label test
+// is not: `compositionClass` is free to grow a second no-surface branch (a hot-envelope density
+// term, say), and everything that keys off THIS function follows it for free.
+//
+// ⚠ WHY THE SHIM IS BUILT BY HAND RATHER THAN DERIVED. The guard has to run BEFORE the fp exists —
+// its result is one of the fp's own fields — so it cannot be handed a condition vector. It is
+// therefore given the same three-key object body-condition-vector.js:107
+// `const _class = compositionClass(` builds, from the same
+// three values, with `density` taken from the SAME expression, body-condition-vector.js:100
+// `const _density     = fp.composition?.density ?? 5.5;`. That is what makes the guard's answer and
+// the vector's `_class` the same answer by construction rather than by coincidence; if they ever
+// diverge, the divergence is a real defect and not a rounding of it.
+//
+// ⚠⚠ AND `compositionClass` DOES NOT READ `T_eq`, WHICH IS THE ONLY REASON THIS IS ONE PASS. Its
+// three reads are `cv.atmosphere.composition`, `cv.composition?.carbonToOxygen` and `cv.density` —
+// none of them is the field the guard changes. So classifying first and setting `T_eq` second is
+// not an ordering choice that happens to work, it is acyclic. ⛔ If a future edit gives
+// `compositionClass` a temperature term, this becomes a fixpoint and the guard must be rewritten,
+// not reordered.
+//
+// ⚠ AND THAT INDEPENDENCE IS CHECKED, NOT ASSERTED — but NOT BY A TEST IN `tests/`, and saying so
+// is the point. It is the ACYCLICITY control in `tools/port-condition-delta.mjs`, which classifies
+// every body in its population at 100 K and at 1500 K and requires the two answers to agree; it is
+// run by `node tools/port-condition-delta.mjs --step4`. Measured 2026-08-09: 954/954 agree, and
+// splicing a `cv.T_eq > 1000` branch into `compositionClass` reds it on 575 of the 954 (exit 2),
+// so the control is one that can fail. ⛔ It is NOT in the vitest suite, so it does not run on
+// `npm test` and a temperature term COULD land without reding CI. That gap is real and is stated
+// rather than papered over; closing it means a test in `tests/port-condition-contract.test.js`,
+// which is outside the lane that wrote this block.
+//
+// ⚠⚠⚠ THIS IS A DECLARED PIXEL-MOVING CHANGE AND NO GATE IN THE OBVIOUS SET WOULD SEE IT.
+// `condition.T_eq` is atmosphereOptics.js:132 `const T    = cond?.T_eq ?? 288;` — the FIRST line of
+// `atmosphereOpticsOf`, and the input to every hue ramp and to atmosphereOptics.js:161
+// `limbExponent: 3.5 - 1.7 * thick,`. Its output is written live into the shipped material at
+// src/objects/Planet.js:1584 `const optics = atmosphereOpticsOf(condition);` → :1617
+// `uLimbExponent: { value: optics.limbExponent },` and its four siblings, and the limb is fully on
+// today: src/objects/Planet.js:1401 `const LIMB_MIX = 1.0;`. The delta is MEASURED and COMMITTED at
+// `docs/FEATURES/step4-limb-delta-table.md` rather than described here, with the population fully
+// specified, because §2's own history is that an under-specified population produced headline
+// numbers that did not reproduce.
+//
+// ⛔ WHAT THE DELTA TABLE IS NOT EVIDENCE OF (ledger C20). It is measured through the GAME material.
+// Step 6 swaps most of this population onto a material whose limb term is gated by a different
+// uniform name, so the table is the right gate for THIS step and is not a durable statement about
+// what a player sees afterwards.
+
+/**
+ * True when this body has no surface for a surface pressure to be measured at — i.e. when the
+ * engine's own composition gate calls it 'gas'. Takes the three-key shim
+ * body-condition-vector.js:107 `const _class = compositionClass(` builds, so the two
+ * classifications cannot drift apart.
+ *
+ * ⛔ NOT EXPORTED, AND THE OMISSION IS A DECISION. tests/port-condition-contract.test.js pins this
+ * module's export list precisely so that a new seam has to be declared rather than acquired; a
+ * predicate with one caller three lines below it is not a seam, and exporting it would spend that
+ * fence's one signal on nothing. The behaviour IS reachable from outside — through
+ * `conditionFromPlanet` itself, which is what every consumer actually calls, and end-to-end through
+ * the shipped material by `node tools/port-condition-delta.mjs --step4 --check`.
+ */
+function noSurfaceOf(cvShim) {
+  return compositionClass(cvShim) === 'gas';
 }
 
 // ── THE DENSITY UNIT CONVERSION — the seam's second silent-disagreement fix. ───────────────────────
@@ -576,21 +669,31 @@ export function conditionFromPlanet(planetData) {
   // Flattened FIRST — both the T_eq greenhouse conversion and the passthrough below read it, and
   // reading the raw wrapper for either is the bug atmosphereFromPlanet exists to close.
   const atmosphere = atmosphereFromPlanet(d.atmosphere);
+  // Hoisted OUT of the fp literal below — unchanged in content, and it has to exist before the fp
+  // does because the no-surface guard classifies on it. See THE NO-SURFACE DOMAIN GUARD above.
+  const composition = {
+    ironFraction:     comp.ironFraction ?? 0.32,
+    // NOT comp.density — see densityToGramsPerCC above. The game stores kg/m^3, the engine wants g/cc.
+    density:          densityToGramsPerCC(comp.density),
+    volatileFraction: comp.volatileFraction ?? 0.15,
+    ...(comp.carbonToOxygen != null ? { carbonToOxygen: comp.carbonToOxygen } : {}),
+  };
+  // The shim is the one body-condition-vector.js:107 `const _class = compositionClass(` builds, key
+  // for key and value for value, so
+  // this classification and the vector's `_class` are the same answer rather than two answers.
+  const noSurface = noSurfaceOf({ atmosphere, composition, density: composition.density ?? 5.5 });
   // fp-shaped view of the game body. Defaults mirror driver-presets.js so a partially-populated body
   // degrades to the same place a sparse preset would, instead of throwing.
   const fp = {
     radiusEarth: d.radiusEarth ?? 1.0,
     massEarth:   d.massEarth ?? 1.0,
-    composition: {
-      ironFraction:     comp.ironFraction ?? 0.32,
-      // NOT comp.density — see densityToGramsPerCC above. The game stores kg/m^3, the engine wants g/cc.
-      density:          densityToGramsPerCC(comp.density),
-      volatileFraction: comp.volatileFraction ?? 0.15,
-      ...(comp.carbonToOxygen != null ? { carbonToOxygen: comp.carbonToOxygen } : {}),
-    },
+    composition,
     age:           d.age ?? 4.5,
     // NOT d.T_eq — see surfaceTemperatureOf above. The engine wants SURFACE temperature.
-    T_eq:          surfaceTemperatureOf(d.T_eq ?? 288, atmosphere?.pressure),
+    // ⛔ EXCEPT on a body with no surface, where the greenhouse column does not exist and `pressure`
+    // is an envelope depth rather than a surface load. See THE NO-SURFACE DOMAIN GUARD above; the
+    // pixels this moves are measured in docs/FEATURES/step4-limb-delta-table.md.
+    T_eq:          noSurface ? (d.T_eq ?? 288) : surfaceTemperatureOf(d.T_eq ?? 288, atmosphere?.pressure),
     eccentricity:  d.eccentricity ?? 0,
     // ── STEP 2 — THE TIDAL TRIPLE. The seam's SEVENTH silent disagreement, and the second one
     // that is a KEY-NAME mismatch rather than a unit or a shape. See the block above the fp.

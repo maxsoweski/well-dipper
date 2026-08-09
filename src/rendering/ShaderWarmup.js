@@ -197,6 +197,87 @@ function _nextFrame() {
  * standing rule that it never returns to procedural. This swap is procedural→procedural
  * (cold→warm) and must not be routed through that path or it will fight it.
  *
+ * ── Instrument E item 2: the material registry ──────────────────────────────────────────────────
+ * ⛔ THE SWAP IS DESTRUCTIVE AND THE ONLY REVERT TODAY IS A PAGE RELOAD. `mesh.material = material`
+ * below is the single line where the game's own material for that body still exists and is about to
+ * stop existing; nothing anywhere keeps a reference to it. That is what makes an A/B pair
+ * impossible on a manually swapped body, and an A/B pair is the whole of Instrument E (PLAN §12
+ * E-1). One Map entry, written one line before the overwrite, buys the OFF twin.
+ *
+ * ⚠ WHAT THIS DOES **NOT** BUY, stated here so nobody reads a restore that cannot exist as a bug.
+ * The OFF twin exists ONLY for MANUALLY swapped bodies — the `tryLabShader` / preview path. It does
+ * NOT exist on the automatic path Step 6e introduces: with that flag ON the lab material is chosen
+ * at material-CREATION time and the legacy material for that body is never constructed, so there is
+ * no `prevMaterial` and nothing to restore. `restoreGameMaterial` returns `{ ok: false }` with a
+ * reason there, and it must, because the alternative is a hook that silently returns success having
+ * restored a material the body never had. On the automatic path the OFF twin is a flag flip plus a
+ * reload at a pose restored through `_lab.setCameraPose`, per §12.3 E-1.
+ *
+ * ⚠ Keyed by mesh OBJECT, deliberately not by index and not by name. Indices shift (PLAN §12 E-2:
+ * Step 10 widens the scene-walk prefix and every index moves), and a mesh can outlive the name its
+ * parent group carries. A Map — not a WeakMap — because Step 5's swap ledger has to ENUMERATE the
+ * swapped population; the entries are deleted on restore and on system teardown, and a stale entry
+ * pins one material, not a scene.
+ *
+ * ⚠ The retained `prevMaterial` is NOT disposed here for the reason note 1 at the top of this file
+ * gives at length: three refcounts GPU programs per material, and dropping the last reference hands
+ * the program back to be linked cold. Retention is the correct behaviour on both axes at once.
+ *
+ * @type {Map<THREE.Mesh, {prevMaterial: THREE.Material, nextMaterial: THREE.Material, at: number}>}
+ */
+export const MATERIAL_SWAPS = new Map();
+
+/**
+ * Record a material swap so the previous material can be put back. Idempotent per mesh in the sense
+ * that matters: a SECOND swap on an already-swapped mesh keeps the ORIGINAL `prevMaterial` rather
+ * than overwriting it with the first swap's replacement. Otherwise two previews in a row would make
+ * "restore" mean "go back to the previous preview", and the OFF twin would quietly become another
+ * ON frame — a pair that differs in nothing, reported as a pair that differs in one thing.
+ *
+ * @param {THREE.Mesh} mesh
+ * @param {THREE.Material} nextMaterial — the material about to be assigned.
+ * @returns {boolean} true if a NEW baseline was recorded; false if one was already held.
+ */
+export function recordMaterialSwap(mesh, nextMaterial) {
+  if (!mesh) return false;
+  const existing = MATERIAL_SWAPS.get(mesh);
+  if (existing) {
+    existing.nextMaterial = nextMaterial;
+    existing.at = Date.now();
+    return false;
+  }
+  MATERIAL_SWAPS.set(mesh, { prevMaterial: mesh.material, nextMaterial, at: Date.now() });
+  return true;
+}
+
+/**
+ * Put a recorded mesh back on the material it carried before the FIRST swap.
+ *
+ * ⚠ Returns a REASON, never a bare boolean, and the reason is the point: "this body was never
+ * swapped" and "this body was restored" are opposite findings, and a hook that collapses them into
+ * `false` lets an OFF frame that is actually an ON frame be captioned as an OFF frame.
+ *
+ * @param {THREE.Mesh} mesh
+ * @returns {{ok: boolean, reason?: string, restoredFrom?: string}}
+ */
+export function restoreMaterialSwap(mesh) {
+  if (!mesh) return { ok: false, reason: 'no mesh' };
+  const entry = MATERIAL_SWAPS.get(mesh);
+  if (!entry) {
+    return {
+      ok: false,
+      reason: 'no recorded swap for this mesh — it was never manually swapped. On the Step-6e '
+            + 'automatic path the legacy material was never constructed, so the OFF twin is a flag '
+            + 'flip plus a reload at a restored pose (PLAN §12.3 E-1), NOT a restore.',
+    };
+  }
+  const from = entry.nextMaterial?.type || '?';
+  mesh.material = entry.prevMaterial;
+  MATERIAL_SWAPS.delete(mesh);
+  return { ok: true, restoredFrom: from };
+}
+
+/**
  * @param {object} args
  * @param {THREE.WebGLRenderer} args.renderer
  * @param {THREE.Camera} args.camera
@@ -221,6 +302,9 @@ export async function swapMaterialWhenReady({ renderer, camera, target = null, m
 
     await pending;
     scene.remove(probe);
+    // Instrument E item 2 — record BEFORE the overwrite, because after it there is nothing left to
+    // record. See MATERIAL_SWAPS above for why this is the only line where the OFF twin exists.
+    recordMaterialSwap(mesh, material);
     mesh.material = material;
     return true;
   } catch (e) {

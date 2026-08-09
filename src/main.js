@@ -128,8 +128,15 @@ import { createTexturedBodyMaterial } from './rendering/shaders/TexturedBodyShad
 import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/MaterialBodyShader.js';
 import { PretextLab } from './ui/PretextLab.js';
 import * as LabMode from './debug/LabMode.js';
-import { warmPlanetPrograms, swapMaterialWhenReady } from './rendering/ShaderWarmup.js';
+import { warmPlanetPrograms, swapMaterialWhenReady, restoreMaterialSwap, MATERIAL_SWAPS } from './rendering/ShaderWarmup.js';
 import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetMaterial } from './rendering/LabPlanetMaterial.js';
+// Instrument E's reproduction line has to report BOTH quantities named `compositionClass`, because
+// PLAN §12.5 fact 6 measured them to be different populations (only 65 of 209 world-engine gas-class
+// bodies fall inside the game's own GAS_TYPES set) and an assertion written against the wrong one is
+// satisfied by a body the claim does not cover. `shaderVariantFor` IS the game's map — it is the
+// function `if (GAS_TYPES.has(type)) return 'gas';` lives in — and `compositionClass` is the E1 label.
+import { shaderVariantFor } from './objects/Planet.js';
+import { compositionClass as e1CompositionClassOf } from './worldengine/base/e1Regime.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -2415,18 +2422,29 @@ window._lab = {
     // guessed `_delegate.surface` and simply reported "no surface mesh". The game's procedural
     // planet material is identifiable by its own uniform set, which is a fact about the thing
     // rather than about the tree.
-    const surfaces = [];
-    const walk = (o) => {
-      if (o?.material?.uniforms?.noiseScale && o.geometry) {
-        const owner = o.name || o.parent?.name || '';
-        if (owner.startsWith('body.planet.')) surfaces.push(o);
-      }
-      (o?.children || []).forEach(walk);
-    };
-    walk(scene);
-    const mesh = surfaces[index];
+    //
+    // ── Instrument E item 5 (PLAN §12) ──────────────────────────────────────────────────────────
+    // ⛔ THE WALK THAT USED TO BE INLINE HERE IS NOW `_lab.bodySurfaces()`, and it is ONE walk on
+    // purpose. The inline version tested `o?.material?.uniforms?.noiseScale`, the GAME material's
+    // uniform name; the lab material declares `uNoiseScale`, so a body dropped out of this list the
+    // moment THIS FUNCTION swapped it. Calling `tryLabShader(0)` twice therefore addressed two
+    // different meshes, silently. A second copy of the walk living next to the stabilised one would
+    // reintroduce exactly that divergence one refactor later.
+    // ⚠ THIS CHANGES THE INDEX SPACE, deliberately: an already-swapped body now stays in the list,
+    // so indices no longer shuffle under a swap. That is the fix, and it is also the reason no other
+    // Instrument E hook accepts an index as its subject — see `resolveBody` (§12 E-2).
+    const found = window._lab.bodySurfaces();
+    const mesh = found._meshes[index]?.mesh;
     if (!mesh) {
-      return { ok: false, reason: `no planet surface at index ${index} (found ${surfaces.length})` };
+      return { ok: false, reason: `no planet surface at index ${index} (found ${found.count})` };
+    }
+    if (isLabPlanetMaterial(mesh.material)) {
+      return {
+        ok: false,
+        reason: `${found._meshes[index].name} already carries the lab material. Swapping again would `
+              + 'discard the game material the OFF twin needs; call _lab.restoreGameMaterial({name}) first.',
+        meshName: found._meshes[index].name,
+      };
     }
 
     const attrs = ensureLabAttributes(mesh.geometry);
@@ -2457,7 +2475,10 @@ window._lab = {
       samplersFilled: built.samplersFilled,
       samplersCreated: built.samplersCreated,
       meshName: mesh.name || mesh.parent?.name || '?',
-      surfacesFound: surfaces.length,
+      surfacesFound: found.count,
+      // The NAME is the identity (§12 E-2); the index that found it is a discovery convenience.
+      resolvedName: found._meshes[index].name,
+      restoreWith: `_lab.restoreGameMaterial({ name: '${found._meshes[index].name}' })`,
     };
   },
 
@@ -2860,7 +2881,636 @@ window._lab = {
     cc.isDragging = wasDragging;
     return { ok: true, samples: sampleProbe ? samples : undefined };
   },
+
+  // ════════════════════════════════════════════════════════════════════════════════════════════
+  // INSTRUMENT E — the paired shot. PLAN §12, Step 4 items 2-8.
+  //
+  // ⛔ E IS NOT A VERDICT. It produces a frame set and a caption; Max reads them. An agent may call
+  // black-vs-not-black, mesh-present and obvious-artifact and nothing else — an agent saying "the
+  // banding looks right" is a UAT closed by an agent, which §11.5 forbids.
+  //
+  // The failure this whole family exists to prevent is not "no picture". It is a picture of a body
+  // the step did not touch, taken through a frame that was moving on its own. Every hook below is
+  // named for the half of that sentence it closes: `resolveBody` (which body), `freezeFrame` (the
+  // frame was not moving), `cameraPose` (it is the same view twice), `shotState` (and here is how to
+  // take it again). `scripts/shot-diff.mjs` closes the fifth, which is "in which region".
+  //
+  // ⚠ Items 9-13 — `swapLedger`, `previewPack`, `forceGate` and the ledger's committed failing test
+  // — land at Step 5 and are DELIBERATELY ABSENT here rather than stubbed. §12.3 is explicit that
+  // nothing in this section may be written as if it exists when it does not; a stub that returns
+  // `{ok:true, rows:[]}` is a green ledger reporting zero losses, which is the exact shape this
+  // instrument was built to catch.
+  // ════════════════════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * ITEM 5 — the stabilised scene walk, with a parameterised owner prefix.
+   *
+   * Two defects in the walk `tryLabShader` uses, both of which make a body VANISH rather than error:
+   *
+   * ⛔ 1. `if (o?.material?.uniforms?.noiseScale && o.geometry) {` tests for the GAME material's
+   * uniform. The lab material declares `uNoiseScale`, not `noiseScale` — so the instant a body is
+   * swapped it drops out of the very list used to address it. `surfaces[0]` then means a different
+   * mesh before and after the swap, which is a silent renumbering in the middle of a pair.
+   *
+   * ⛔ 2. `if (owner.startsWith('body.planet.')) surfaces.push(o);` is hardcoded. Planet-class moons
+   * are `Planet` instances, so `assignBodyName(this.mesh, 'planet', planetData);` names them
+   * `body.planet.*` too and this filter already admits them (PLAN.md:441 records that it "never
+   * excluded *all* moons"). Step 10 widens the prefix to `body.` and every index moves again.
+   *
+   * ⭐ Hence: this returns NAMES, and an index into it is a discovery convenience only. Nothing in
+   * Instrument E takes an index as its subject — see `resolveBody` for why that is not a style
+   * preference but the difference between a pass and a false pass.
+   *
+   * @param {{ownerPrefix?: string}} [opts]
+   * @returns {{count: number, ownerPrefix: string, surfaces: Array<object>}}
+   */
+  bodySurfaces(opts = {}) {
+    const ownerPrefix = opts.ownerPrefix ?? 'body.planet.';
+    const surfaces = [];
+    const walk = (o) => {
+      // Either material signature counts. `isLabPlanetMaterial` is the same signature test the lab
+      // material's own module publishes, so "swapped" and "not swapped" both stay in one list.
+      const isGameMat = !!(o?.material?.uniforms?.noiseScale);
+      const isLabMat = isLabPlanetMaterial(o?.material);
+      if ((isGameMat || isLabMat) && o.geometry) {
+        const owner = o.name || o.parent?.name || '';
+        if (owner.startsWith(ownerPrefix)) {
+          surfaces.push({
+            name: owner,
+            mesh: o,
+            swapped: isLabMat,
+            hasBackLink: !!o.userData?.wd,
+          });
+        }
+      }
+      (o?.children || []).forEach(walk);
+    };
+    walk(scene);
+    return {
+      count: surfaces.length,
+      ownerPrefix,
+      surfaces: surfaces.map((s) => ({ name: s.name, swapped: s.swapped, hasBackLink: s.hasBackLink })),
+      _meshes: surfaces,
+    };
+  },
+
+  /**
+   * ITEM 3 — NAME-keyed body resolution. `{kind, p, m}` in, `{mesh, planetData, condition, name}` out.
+   *
+   * ⭐ WHY THE NAME AND NOT THE INDEX, restated because getting this wrong produces a FALSE PASS and
+   * not an error. Two index spaces are live at once. `selectBody(kind, idx, moonIdx) {` indexes
+   * `system.planets` in SIM order; the scene walk indexes a TRAVERSAL. In any system carrying a
+   * planet-class moon the camera frames body X while the preview drives body Y, and both hooks
+   * report success. It gets worse at Step 10: the walk's prefix widens to `body.`, plain moons pass
+   * the uniform test too (`noiseScale: { value: d.noiseScale },` in Moon.js), so `surfaces[i]` for a
+   * given planet SHIFTS. "Re-run Step 6's shot line verbatim" at Step 12 then lands on a different
+   * body, obtains the expected null on a body nothing touched, and passes.
+   *
+   * So resolution runs through the SIM tree — the space `selectBody` already uses — and the return
+   * value's identity is `name`. Steps 7 and 12 re-run against `{ name }`, never against an integer.
+   *
+   * @param {{kind?: 'planet'|'moon', p?: number, m?: number, name?: string}} subject
+   *   `name` wins when present: it is the replay path, and an index passed alongside it is ignored
+   *   rather than trusted, with the index it WOULD have resolved to reported for comparison.
+   * @returns {object} `{ok, name, mesh, planetData, condition, ...}` or `{ok:false, reason}`
+   */
+  resolveBody(subject = {}) {
+    if (!system) return { ok: false, reason: 'no system loaded — spawnProceduralSystem(seed) first' };
+
+    // Flatten the SIM tree once. Three shapes of body live here and they are NOT interchangeable:
+    //   planet            → BodyRenderer wrapping a Planet; the drawn mesh is `.surface`
+    //   planet-class moon → `moon.planet` is a real Planet; `moon.data` is a DIFFERENT object from
+    //                       `moon.planet.data` (main.js builds it with a spread), which is why the
+    //                       freeze writes orbit and spin through separate handles
+    //   plain moon        → BodyRenderer wrapping a Moon; Moon has no `.surface`, the mesh IS the
+    //                       surface, and it carries NO back-link because Planet._createSurface is
+    //                       the only place the back-link is written
+    const rows = [];
+    (system.planets || []).forEach((entry, pi) => {
+      const holder = entry.planet;
+      rows.push({
+        kind: 'planet', p: pi, m: null, holder,
+        group: holder?.mesh, mesh: holder?.surface || holder?.mesh, data: holder?.data,
+        display: system.names?.planets?.[pi]?.name || `Planet ${pi + 1}`,
+      });
+      (entry.moons || []).forEach((moon, mi) => {
+        const h = moon.isPlanetMoon ? moon.planet : moon;
+        rows.push({
+          kind: 'moon', p: pi, m: mi, holder: h, isPlanetMoon: !!moon.isPlanetMoon,
+          group: h?.mesh, mesh: h?.surface || h?.mesh, data: h?.data,
+          display: system.names?.planets?.[pi]?.moons?.[mi] || `Moon ${mi + 1}`,
+        });
+      });
+    });
+
+    let row = null;
+    let resolvedBy = null;
+    if (subject.name) {
+      row = rows.find((r) => r.group?.name === subject.name) || null;
+      resolvedBy = 'name';
+      if (!row) {
+        return {
+          ok: false, resolvedBy: 'name',
+          reason: `no body named ${subject.name} in this system`,
+          availableNames: rows.map((r) => r.group?.name).filter(Boolean),
+        };
+      }
+    } else {
+      const kind = subject.kind ?? 'planet';
+      const p = subject.p ?? 0;
+      const m = subject.m ?? null;
+      row = rows.find((r) => r.kind === kind && r.p === p && r.m === (kind === 'moon' ? m : null)) || null;
+      resolvedBy = 'index';
+      if (!row) return { ok: false, resolvedBy: 'index', reason: `no ${kind} at p=${p} m=${m}` };
+    }
+
+    const mesh = row.mesh;
+    const back = mesh?.userData?.wd || null;
+    const type = row.data?.type ?? null;
+    return {
+      ok: !!mesh,
+      resolvedBy,
+      // ⭐ THE IDENTITY. Everything downstream — the caption, the replay, shot-diff's sidecar —
+      // travels on this string. `display` is for humans and is NOT stable across regeneration.
+      name: row.group?.name ?? null,
+      display: row.display,
+      kind: row.kind, p: row.p, m: row.m, isPlanetMoon: !!row.isPlanetMoon,
+      mesh,
+      group: row.group,
+      // The back-link written by Planet._createSurface. Present on every planet and every
+      // planet-class moon; ABSENT on plain moons by construction — reported, never faked.
+      planetData: back?.planetData ?? row.data ?? null,
+      condition: back?.condition ?? null,
+      backLink: back ? 'present' : 'absent (plain moon — Moon.js has no _createSurface back-link)',
+      type,
+      // Both quantities named `compositionClass`, separately, per §12.5 fact 6.
+      e1CompositionClass: back?.condition ? _e1ClassSafe(back.condition) : null,
+      gameShaderVariant: type ? shaderVariantFor(type) : null,
+      // ⛔ REQUIRED, not incidental: `holder` is read at `r.holder?._lightDir` and at
+      // `r.holder?._delegate?._typeIndex?.()`. Omitting it made `shotState().body.planetType`
+      // structurally `null` on every shot, which §12.4 channel 3 makes the ADMISSIBILITY BAR for
+      // the loss triptych — a caption reading `planetType null` is read as "untyped body", not as
+      // "the instrument is unwired". Caught by verify, not by a test; see the control below it.
+      holder: row.holder,
+      swapped: isLabPlanetMaterial(mesh?.material),
+    };
+  },
+
+  /**
+   * ITEM 2 — put a manually swapped body back on its game material.
+   *
+   * The registry lives in ShaderWarmup because that is where the destructive line is; this is the
+   * addressed front door. See `MATERIAL_SWAPS` there for the full note on what the OFF twin does
+   * and does not cover — in one line: it exists for MANUALLY swapped bodies and not for the Step-6e
+   * automatic path, where the legacy material was never constructed and a "restore" would be a lie.
+   *
+   * @param {{body?: object}} args — `body` is a `resolveBody` subject: `{name}` or `{kind,p,m}`.
+   */
+  restoreGameMaterial(args = {}) {
+    const r = this.resolveBody(args.body || args);
+    if (!r.ok) return { ok: false, reason: r.reason, resolveFailed: true };
+    const out = restoreMaterialSwap(r.mesh);
+    return {
+      ...out,
+      name: r.name,
+      display: r.display,
+      // Read back rather than assumed: "I assigned it" and "it is on it" are different claims.
+      isLabPlanetMaterialNow: isLabPlanetMaterial(r.mesh?.material),
+      registrySize: MATERIAL_SWAPS.size,
+    };
+  },
+
+  /**
+   * ITEM 6 — ⛔ THE ABSOLUTE FREEZE. A pair is not a measurement until the frame is frozen, and
+   * `celestialTimeMultiplier` alone does NOT freeze it.
+   *
+   * ── Why absolute and not incremental ──────────────────────────────────────────────────────────
+   * Every animated quantity in this game ACCUMULATES (`+=`), and a repo-wide search finds no
+   * assignment form for any of them. A snapshot pin stops them going forward but CANNOT put two page
+   * loads at the same phase — and five of the contracts in this plan are two-load contracts, because
+   * `grep -c "import.meta.hot" src/main.js` is 0 and Vite full-reloads. The lab program links in
+   * 29.8 s cold, so load A at t=25 s against load B at t=6 s bakes 19 s of band drift and body
+   * rotation into the disc, and §12.6 reads that non-zero diff as "the flag was not selecting the
+   * pipeline everyone believed it was". So this writes DECLARED values, and then zeroes the RATES so
+   * nothing can walk away from them again.
+   *
+   * ── The clocks, and there are more of them than §12 names ─────────────────────────────────────
+   * §12.2 names four accumulators plus the grain. Reading the loop found TWO more and one hole:
+   *   1. `entry.orbitAngle += entry.orbitSpeed * celestialDt;`                    (§12, planet orbit)
+   *   2. `this.surface.rotation.y += this.data.rotationSpeed * (Math.PI / 180) * celestialDt;`  (§12, spin)
+   *   3. `mat.uniforms.time.value += renderDt;`                                   (§12, game shader clock)
+   *   4. `u.uTime.value += opts.renderDt;`                                        (§12, lab shader clock)
+   *   5. `retroRenderer.setTime(timer.getElapsed());`                             (§12, film grain — ABSOLUTE wall time)
+   *   6. ⚠ NOT IN §12: `this.ring.rotation.y += this.data.rotationSpeed * 0.3 * (Math.PI / 180) * celestialDt;` — a ringed
+   *      giant keeps turning its ring under a freeze that pins only the surface.
+   *   7. ⚠ NOT IN §12: `moon.orbitAngle += moon.data.orbitSpeed * celestialDt;` for planet-class
+   *      moons, and the same line inside `Moon.updateSim` for plain ones. Moons orbit and spin.
+   *   8. ⛔ NOT IN §12 AND A LIVE HOLE IN THE MULTIPLIER ITSELF: the planet-class-moon branch calls
+   *      `moon.planet.updateSim(deltaTime);` with NO second argument, and `updateSim(simDt, celestialDt = simDt) {`
+   *      defaults `celestialDt` to the raw sim dt. So a planet-class moon's SPIN ignores
+   *      `celestialTimeMultiplier` entirely — setting it to 0 does not stop it. A freeze built on
+   *      the multiplier alone would hold every body still except that one, and the pair would read
+   *      as a real difference on the one class of body §12.4 says the walk already mis-addresses.
+   * Zeroing the RATES (`rotationSpeed`, `orbitSpeed`) closes 1, 2, 6, 7 and 8 at once and does not
+   * care which dt reaches them. The multiplier is still set to 0 and still asserted, because it is
+   * what the caption claims and a reader will check it.
+   *
+   * ⛔ The shader clocks (3, 4) take WALL-CLOCK `renderDt` and are not on the multiplier at all, so
+   * zeroing the multiplier stops the body turning and leaves the bands drifting — Step 5's own
+   * selling point working against Step 7's and Step 12's. They are pinned by replacing the uniform's
+   * `value` with an accessor that ignores writes. That is deliberate over a per-frame rewrite: a rAF
+   * that re-writes the clock races the render loop's own rAF and holds only if it happens to run
+   * second, which is a freeze that works on some frames. An accessor cannot lose that race.
+   *
+   * ⛔ And the fourth clock runs OUTSIDE the bodies: the film-grain post pass.
+   * `uGrainStrength: { value: 0.045 },  // 0 = off, ~0.04-0.06 = subtle static` is non-zero by
+   * default on an unconditional renderer, fed absolute wall time, and it re-randomises EVERY PIXEL
+   * of the composited frame the screenshot captures at ±0.0225 ≈ ±5.7/255. Frozen bodies plus live
+   * grain makes a full-frame identity claim unsatisfiable and raises the floor inside both ROIs —
+   * and the only move left to the operator is to raise the declared tolerance above the grain, which
+   * is C15 arriving on schedule. `setGrainStrength(strength) {` is called with 0, and `setTime(time) {`
+   * is replaced so BOTH of its callers (the no-system early-out and the main render tail) write the
+   * declared constant instead of `timer.getElapsed()`.
+   *
+   * ⚠ Pinning some and not others is WORSE than pinning none: the game body would hold still while
+   * the lab body advected, and the pair would read as a real difference.
+   *
+   * ⚠ Materials created AFTER a freeze are not pinned — re-call `freezeFrame` after any swap. The
+   * return value's `clocksPinned` is what tells you whether you need to.
+   *
+   * @param {{clock?: number, spin?: number, orbit?: number}} [declared]
+   * @returns {object} the assertion block. Print it in the caption; a shot taken with
+   *   `uGrainStrength !== 0` is inadmissible on its face.
+   */
+  freezeFrame(declared = {}) {
+    const clock = declared.clock ?? 0;
+    const spin = declared.spin ?? 0;
+    const orbit = declared.orbit ?? 0;
+    if (this._freezeState) this.thawFrame();
+
+    const st = {
+      declared: { clock, spin, orbit },
+      prevMultiplier: settings.get('celestialTimeMultiplier'),
+      prevGrain: retroRenderer?._compositeMesh?.material?.uniforms?.uGrainStrength?.value ?? null,
+      prevSetTime: retroRenderer.setTime,
+      rates: [],   // {obj, key, prev}
+      clocks: [],  // {uniform, prev}
+    };
+
+    // ── 1. the multiplier (belt), then the rates (braces) ──
+    settings.set('celestialTimeMultiplier', 0);
+
+    const zeroRate = (obj, key) => {
+      if (!obj || typeof obj[key] !== 'number') return;
+      st.rates.push({ obj, key, prev: obj[key] });
+      obj[key] = 0;
+    };
+    const bodiesPinned = { planets: 0, moons: 0, rings: 0 };
+    for (const entry of (system?.planets || [])) {
+      entry.orbitAngle = orbit;
+      zeroRate(entry, 'orbitSpeed');
+      const pl = entry.planet;
+      if (pl) {
+        zeroRate(pl.data, 'rotationSpeed');
+        if (pl.surface) pl.surface.rotation.y = spin;
+        if (pl.ring) { pl.ring.rotation.y = spin; bodiesPinned.rings++; }
+        bodiesPinned.planets++;
+      }
+      for (const moon of (entry.moons || [])) {
+        zeroRate(moon.data, 'orbitSpeed');
+        if (typeof moon.orbitAngle === 'number') moon.orbitAngle = orbit;
+        // Plain moons keep their orbit angle on the DELEGATE, not the BodyRenderer wrapper.
+        if (moon._delegate && typeof moon._delegate.orbitAngle === 'number') moon._delegate.orbitAngle = orbit;
+        if (moon.isPlanetMoon && moon.planet) {
+          // Hole 8: this spin is off the multiplier entirely. The rate is the only handle on it.
+          zeroRate(moon.planet.data, 'rotationSpeed');
+          if (moon.planet.surface) moon.planet.surface.rotation.y = spin;
+        } else if (moon.mesh) {
+          moon.mesh.rotation.y = spin;
+        }
+        bodiesPinned.moons++;
+      }
+    }
+
+    // ── 2. both shader clocks, by accessor, on every material in the scene ──
+    const pin = (u) => {
+      if (!u || typeof u.value !== 'number') return;
+      const desc = Object.getOwnPropertyDescriptor(u, 'value');
+      if (!desc || desc.get) return;                 // already pinned — do not double-wrap
+      st.clocks.push({ uniform: u, prev: u.value });
+      Object.defineProperty(u, 'value', {
+        get: () => clock,
+        set: () => {},                                // ⛔ swallow, do not throw: the render loop
+        configurable: true,                           //   writes this every frame and must not die
+        enumerable: true,
+      });
+    };
+    scene.traverse((o) => {
+      const u = o?.material?.uniforms;
+      if (!u) return;
+      pin(u.time);    // the game's clock  (Planet / Moon / BodyRenderer textured)
+      pin(u.uTime);   // the lab's clock
+    });
+
+    // ── 3. the grain, and the post-pass clock behind it ──
+    retroRenderer.setGrainStrength(0);
+    retroRenderer.setTime = function pinnedSetTime() { st.prevSetTime.call(retroRenderer, clock); };
+    retroRenderer.setTime(clock);
+
+    this._freezeState = st;
+    const grainNow = retroRenderer?._compositeMesh?.material?.uniforms?.uGrainStrength?.value ?? null;
+    return {
+      frozen: true,
+      declared: { clock, spin, orbit },
+      // ⭐ READ BACK, not assumed. "I called setGrainStrength(0)" and "the uniform is 0" are
+      // different claims, and only the second one belongs in a caption.
+      celestialTimeMultiplier: settings.get('celestialTimeMultiplier'),
+      uGrainStrength: grainNow,
+      admissible: grainNow === 0 && settings.get('celestialTimeMultiplier') === 0,
+      clocksPinned: st.clocks.length,
+      ratesZeroed: st.rates.length,
+      bodiesPinned,
+      note: 'Re-run freezeFrame after any material swap — a material built after the freeze is not pinned.',
+    };
+  },
+
+  /** ITEM 6 (the other half) — undo `freezeFrame` exactly, by value. */
+  thawFrame() {
+    const st = this._freezeState;
+    if (!st) return { ok: false, reason: 'not frozen' };
+    for (const c of st.clocks) {
+      delete c.uniform.value;                      // drop the accessor…
+      c.uniform.value = c.prev;                    // …then restore the plain data property
+    }
+    for (const r of st.rates) r.obj[r.key] = r.prev;
+    retroRenderer.setTime = st.prevSetTime;
+    if (st.prevGrain !== null) retroRenderer.setGrainStrength(st.prevGrain);
+    settings.set('celestialTimeMultiplier', st.prevMultiplier);
+    this._freezeState = null;
+    return {
+      ok: true,
+      clocksRestored: st.clocks.length,
+      ratesRestored: st.rates.length,
+      celestialTimeMultiplier: settings.get('celestialTimeMultiplier'),
+      uGrainStrength: retroRenderer?._compositeMesh?.material?.uniforms?.uGrainStrength?.value ?? null,
+    };
+  },
+
+  /** Backing store for `freezeFrame`. Lives on the surface so the freeze adds no module-scope state. */
+  _freezeState: null,
+
+  /**
+   * ITEM 7 — capture a camera pose by value, and put it back by value.
+   *
+   * ⛔ `commitBurnNow() {` IS A FLIGHT, NOT A POSE. It runs an autopilot burn whose arrival depends
+   * on elapsed wall time and the body's orbital phase, so it can FRAME a body and can never RE-frame
+   * one. Two loads framed by `commitBurnNow` are two different views, and the diff between them is
+   * the flight, not the step.
+   *
+   * ⚠ Writing `camera.position` alone does not hold: `cameraController.update(deltaTime);` recomputes
+   * the camera from `yaw`/`pitch`/`distance` every frame and would overwrite it before the next
+   * draw. So the restore does both — it writes the controller's own state (which is what the
+   * controller will recompute FROM) and bypasses it, following the precedent already in this file at
+   * `camera.position.copy(prior.camPos);` / `camera.quaternion.copy(prior.camQuat);`.
+   *
+   * ⚠ `autoRotateActive` is turned OFF by the restore. `this.yaw += this.autoRotateSpeed * (Math.PI / 180) * deltaTime;`
+   * is a 0.67 °/s drift that runs whenever nothing is dragging — over the seconds between the two
+   * grabs of a pair, that alone moves the disc.
+   */
+  cameraPose() {
+    const cc = cameraController;
+    return {
+      position: camera.position.toArray(),
+      quaternion: camera.quaternion.toArray(),
+      fov: camera.fov, near: camera.near, far: camera.far,
+      controller: {
+        target: cc.target.toArray(),
+        yaw: cc.yaw, pitch: cc.pitch, distance: cc.distance,
+        smoothedYaw: cc.smoothedYaw, smoothedPitch: cc.smoothedPitch, smoothedDistance: cc.smoothedDistance,
+        autoRotateActive: cc.autoRotateActive,
+        bypassed: cc.bypassed,
+      },
+    };
+  },
+
+  /**
+   * @param {object} pose — a value previously returned by `cameraPose()`.
+   * @returns {object} the applied pose PLUS the deltas, so "the camera is where I asked" is a
+   *   measured number and not a hope. §12.2 part 3 requires the pose assertion to be PRINTED.
+   */
+  setCameraPose(pose) {
+    if (!pose?.position || !pose?.quaternion) return { ok: false, reason: 'pose must carry position + quaternion' };
+    const cc = cameraController;
+    const c = pose.controller;
+    if (c) {
+      cc.target.fromArray(c.target); cc._targetGoal.fromArray(c.target); cc._transitioning = false;
+      cc.yaw = c.yaw; cc.pitch = c.pitch; cc.distance = c.distance;
+      cc.smoothedYaw = c.smoothedYaw; cc.smoothedPitch = c.smoothedPitch; cc.smoothedDistance = c.smoothedDistance;
+      cc.autoRotateActive = false;   // see the note above — 0.67 °/s is not nothing over a pair
+      cc.bypassed = true;            // hold the written pose against the controller's recompute
+      cc.zoomSpeed = 0;
+    }
+    const want = new THREE.Vector3().fromArray(pose.position);
+    const wantQ = new THREE.Quaternion().fromArray(pose.quaternion);
+    camera.position.copy(want);
+    camera.quaternion.copy(wantQ);
+    if (pose.fov != null) camera.fov = pose.fov;
+    if (pose.near != null) camera.near = pose.near;
+    if (pose.far != null) camera.far = pose.far;
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld(true);
+    return {
+      ok: true,
+      posDelta: camera.position.distanceTo(want),
+      // 1 - |dot| : 0 is byte-identical orientation. Absolute, because q and -q are the same rotation.
+      quatDelta: 1 - Math.abs(camera.quaternion.dot(wantQ)),
+      autoRotateActive: cc.autoRotateActive,
+      bypassed: cc.bypassed,
+    };
+  },
+
+  /**
+   * ITEM 8 — ⭐ THE REPRODUCTION LINE, and the sidecar `scripts/shot-diff.mjs` refuses to run without.
+   *
+   * A caption nobody can re-run is a claim and not evidence; Step 3's dead gate survived precisely
+   * because nobody could re-run it. Every field here exists because a specific shot went wrong
+   * without it:
+   *
+   *  · `disc.{cx,cy,r}`  — ⛔ a shot at ORRERY spawn distance is a six-pixel disc that CANNOT FAIL.
+   *                        Without the disc geometry there is no disc ROI and no rim annulus, and a
+   *                        whole-frame percentage over a live HUD is inadmissible (§12.3 E-4).
+   *  · `e1CompositionClass` and `gameShaderVariant` reported SEPARATELY — §12.5 fact 6: the two
+   *                        quantities called `compositionClass` are different populations, and an
+   *                        assertion written against the wrong one is satisfied by a body the claim
+   *                        does not cover.
+   *  · `planetType`      — the master switch for all six of the gas branch's no-uniform effects
+   *                        (`_typeIndex() {`), which is what §12.4 channel 3 tests coverage against.
+   *  · `isBinary`, star type + colour, shadow counts — ⚠ so an agent can tell "this loss did not
+   *                        occur" from "this seed CANNOT show it". §6b's second-star loss needs a
+   *                        binary; its star-colour loss needs a non-white primary. A loss whose
+   *                        enabling condition is absent is captioned NOT WITNESSED BY THIS SHOT.
+   *  · `fps`             — ⚠ READ IT FIRST. A backgrounded window throttles rAF to ~1 Hz while
+   *                        `document.hidden` still reports false, and every per-frame verdict then
+   *                        reads as "not wired".
+   *  · `commit: null`    — ⛔ DELIBERATELY NOT READ FROM THE PAGE. §12.5 fact 6 requires the sha from
+   *                        `git rev-parse HEAD`. A page-derived sha is a claim about what the dev
+   *                        server served, which is exactly the thing in doubt when a null set fails.
+   *
+   * ⚠ `lit %` is NOT computed here. Every pixel read in Instrument E happens OUTSIDE the WebGL
+   * context — that is what retires the whole `preserveDrawingBuffer` / all-black class instead of
+   * re-litigating it — so lit fraction is measured by `shot-diff.mjs` from the PNG. What this
+   * reports is `phaseDot`, the geometric illumination of the face we are looking at, which is a
+   * different quantity and is named differently on purpose.
+   *
+   * @param {{body?: object, region?: 'full'|'disc'|'rim'}} [args]
+   * @returns {Promise<object>} write it beside the PNG as `<image>.json`.
+   */
+  async shotState(args = {}) {
+    // fps first, per §12.5 fact 5. Same 500 ms method `labShaderReport` uses, so the two numbers
+    // are comparable rather than merely both called "fps".
+    const t0 = performance.now();
+    let frames = 0;
+    await new Promise((resolve) => {
+      const tick = () => { frames++; if (performance.now() - t0 < 500) requestAnimationFrame(tick); else resolve(); };
+      requestAnimationFrame(tick);
+    });
+    const fps = Math.round(frames / ((performance.now() - t0) / 1000));
+
+    const r = this.resolveBody(args.body || {});
+    if (!r.ok) return { ok: false, reason: r.reason, fps, throttled: fps < 20 };
+
+    // ── disc geometry, in the pixels the screenshot will actually have ──
+    // The renderer runs `setPixelRatio(1)` against `setSize(window.innerWidth, ...)`, so the canvas
+    // backing store is CSS pixels 1:1. The capture may not be — hence `dpr` travels in the sidecar
+    // and `shot-diff.mjs` rescales the ROI by (png width / viewport width) rather than assuming.
+    const W = window.innerWidth, H = window.innerHeight;
+    const wp = new THREE.Vector3();
+    (r.group || r.mesh).getWorldPosition(wp);
+    const camDist = camera.position.distanceTo(wp);
+    const localR = r.mesh?.geometry ? bodyRadiusOf(r.mesh.geometry) : null;
+    const scl = new THREE.Vector3();
+    (r.group || r.mesh).getWorldScale(scl);
+    const worldR = localR === null ? null : localR * Math.max(scl.x, scl.y, scl.z);
+
+    const ndc = wp.clone().project(camera);
+    // ⛔ z outside [-1,1] means the body is behind the near plane or past the far plane. The
+    // projection still returns finite numbers there, and they are meaningless. Say so.
+    const onScreen = ndc.z > -1 && ndc.z < 1;
+    const cx = (ndc.x * 0.5 + 0.5) * W;
+    const cy = (0.5 - ndc.y * 0.5) * H;
+    let rPx = null;
+    if (worldR !== null) {
+      // Offset by one body radius along the camera's own RIGHT axis and re-project. Robust for
+      // off-centre bodies in a way the tan(fov/2) shortcut is not.
+      const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+      const edge = wp.clone().addScaledVector(right, worldR).project(camera);
+      rPx = Math.hypot((edge.x * 0.5 + 0.5) * W - cx, (0.5 - edge.y * 0.5) * H - cy);
+      // ⛔ THE PERPENDICULAR OFFSET IS NOT THE SILHOUETTE. A point one radius to the side projects
+      // INSIDE the visible disc; the limb is the TANGENT point, further out by camDist/√(camDist²−R²).
+      // Uncorrected, the rim-annulus ROI lands inside the disc and misses the limb entirely —
+      // excluding 11.1% of disc area at d=3R, 25.0% at d=2R, 44.4% at d=1.5R. That is fatal
+      // specifically here: §12.6 declares Step 4 item 4's signal in the rim annulus, so the one
+      // instrument built to prove the limb moved would have reported that it did not.
+      // ⚠ Lane D's own `discInterior` control could not catch it — that control only detects a mask
+      // too LARGE. A mask too small reads 0 and looks like a clean pass.
+      const camDist = camera.position.distanceTo(wp);
+      if (camDist > worldR) rPx *= camDist / Math.sqrt(camDist * camDist - worldR * worldR);
+      else rPx = null;  // camera inside the body: no silhouette. Leave null so shot-diff refuses.
+    }
+
+    const u = r.mesh?.material?.uniforms || {};
+    const lightDir = r.holder?._lightDir || null;
+    const toCam = camera.position.clone().sub(wp).normalize();
+    const phaseDot = lightDir ? +toCam.dot(lightDir.clone().normalize()).toFixed(4) : null;
+
+    const sysData = window._systemData || null;
+    const fz = this._freezeState;
+
+    return {
+      ok: true,
+      // ── provenance ──
+      commit: null,
+      commitNote: 'fill from `git rev-parse HEAD` — §12.5 fact 6 forbids taking the sha from the page',
+      capturedAt: new Date().toISOString(),
+      seed: sysData?.seed ?? null,
+      shaderCacheBust: window.__shaderCacheBust ?? null,
+      // ── the subject, by NAME ──
+      body: {
+        name: r.name, display: r.display, kind: r.kind, p: r.p, m: r.m,
+        isPlanetMoon: r.isPlanetMoon, type: r.type,
+        planetType: r.holder?._delegate?._typeIndex?.() ?? r.holder?._typeIndex?.() ?? null,
+        e1CompositionClass: r.e1CompositionClass,
+        gameShaderVariant: r.gameShaderVariant,
+        isLabPlanetMaterial: r.swapped,
+        backLink: r.backLink,
+      },
+      // ── what this seed CAN and CANNOT witness ──
+      witness: {
+        isBinary: !!sysData?.isBinary,
+        primaryStarType: sysData?.star?.type ?? null,
+        primaryStarColor: sysData?.star?.color ?? null,
+        secondStarColor: sysData?.star2?.color ?? null,
+        shadowMoonCount: u.shadowMoonCount?.value ?? null,
+        shadowPlanetCount: u.shadowPlanetCount?.value ?? null,
+        note: 'A loss whose enabling condition is absent here is captioned NOT WITNESSED BY THIS SHOT.',
+      },
+      // ── the frame ──
+      freeze: fz
+        ? {
+          declared: fz.declared,
+          celestialTimeMultiplier: settings.get('celestialTimeMultiplier'),
+          uGrainStrength: retroRenderer?._compositeMesh?.material?.uniforms?.uGrainStrength?.value ?? null,
+          clocksPinned: fz.clocks.length,
+        }
+        : { frozen: false, warn: '⛔ NOT FROZEN — this shot is inadmissible as half of a pair (§12.5 fact 3).' },
+      pose: this.cameraPose(),
+      fps, throttled: fps < 20,
+      // ── the ROI contract shot-diff.mjs consumes ──
+      roi: {
+        declaredRegion: args.region ?? null,
+        viewport: { w: W, h: H, dpr: window.devicePixelRatio || 1 },
+        disc: { cx: +cx.toFixed(2), cy: +cy.toFixed(2), r: rPx === null ? null : +rPx.toFixed(2), onScreen },
+        rim: { innerFrac: 0.85, outerFrac: 1.0 },
+      },
+      geometry: {
+        distanceScene: +camDist.toFixed(6),
+        bodyRadiusScene: worldR === null ? null : +worldR.toFixed(6),
+        distanceRadii: worldR ? +(camDist / worldR).toFixed(3) : null,
+        phaseDot,
+        phaseNote: 'geometric illumination of the visible face. Lit % is measured from the PNG by shot-diff.mjs.',
+      },
+      uniforms: _dumpUniforms(u),
+    };
+  },
 };
+
+/**
+ * `compositionClass` throws on a condition vector it cannot read rather than returning a wrong
+ * label, which is correct for the engine and wrong for a reproduction line — a caption that fails to
+ * render is a shot lost. Report the failure as the value.
+ */
+function _e1ClassSafe(condition) {
+  try { return e1CompositionClassOf(condition); } catch (e) { return `unavailable: ${e?.message || e}`; }
+}
+
+/**
+ * Flatten a material's uniforms to printable scalars for the reproduction line. Vectors become
+ * arrays, textures become their type name — never `[object Object]`, which is a uniform dump that
+ * records nothing while looking like it recorded something.
+ */
+function _dumpUniforms(u) {
+  const out = {};
+  for (const k of Object.keys(u || {})) {
+    const v = u[k]?.value;
+    if (typeof v === 'number' || typeof v === 'boolean' || v === null) out[k] = v;
+    else if (Array.isArray(v)) out[k] = v.length <= 8 ? v : `Array(${v.length})`;
+    else if (v?.isVector2 || v?.isVector3 || v?.isVector4 || v?.isColor) out[k] = v.toArray();
+    else if (v?.isTexture) out[k] = `Texture(${v.name || v.uuid.slice(0, 8)})`;
+    else if (ArrayBuffer.isView(v)) out[k] = `TypedArray(${v.length})`;
+    else if (v !== undefined) out[k] = v?.constructor?.name || typeof v;
+  }
+  return out;
+}
 window._skyRenderer = skyRenderer;  // DEBUG: inspect origin/destination layers during crossover
 // NOTE: warpTarget + commitSelection are exposed further down in the file,
 // AFTER their declarations (they're in the TDZ here and trying to read them

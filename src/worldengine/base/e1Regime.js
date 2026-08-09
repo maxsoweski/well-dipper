@@ -19,7 +19,7 @@
 //   • Φ, n   — phi-calib.mjs (delegable-#4 Φ size-aware proxy; gate-2 n = f(Φ, 1/L)).
 //   • m_hp   — rawTidalIoRatio − HEATPIPE_PEG (delegable #6, exported tunable).
 import alea from 'alea';
-import { clamp, clamp01, smoothstep } from './mathutil.js';
+import { clamp, clamp01, smoothstep } from './mathutil.js'; import { GIANT_ANCHOR } from './giant-drivers.js';   // ⚠ SECOND STATEMENT ON THIS LINE ON PURPOSE — see the §10 LINE-STABILITY note below giantRegimeOf
 
 // ── gate-1 L constants — VERBATIM from gate-1-L-lidstrength-form-DESIGN.md §Decision (RHOG_REF = 5.5·0.9
 //    written as the product to bit-match gate-1-L-calib.mjs). Do NOT retune here — UAT owns L_STRONG / weights.
@@ -67,6 +67,153 @@ export function compositionClass(cv) {
   if (cv.atmosphere && cv.atmosphere.composition === 'h2-he') return 'gas';   // h2-he envelope terminal (fires first)
   if ((cv.composition?.carbonToOxygen ?? 0) > 1) return 'carbon';            // R-exotic: C/O beats density→rocky
   return smoothstep(2.5, 3.9, cv.density ?? 5.5) < 0.5 ? 'icy' : 'rocky';    // rocky-crust density smoothstep
+}
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// giantRegimeOf — the CONDITION-DERIVED giant regime (PLAN §4 Step 4 items 1-3). Sibling of
+// compositionClass above, and deliberately written in the same idioms: one parameter named `cv`, every
+// read `cv.<field> ?? <default>`, no rng, no preset name, no string literal for any regime (the five
+// names come from GIANT_ANCHOR's own keys, so this file cannot drift from the table it classifies over).
+//
+// ⛔ WHY IT DOES NOT READ `condition.density`. The vector's `density` is the preset's AUTHORED
+// composition density, not the body's bulk. Re-measured here over 120 generated systems (491 planets,
+// 205 of them compositionClass 'gas'): `condition.density` disagrees with true bulk `5.513·M/R³` by
+// more than 1.5× on 127 of 205 (62.0%), worst case bulk 0.4290 g/cc reported as 4.4095 — a 10.3×
+// error, and the sign is not consistent, so it cannot be corrected by a factor. A classifier keyed on
+// the reported value misclassifies most of the population. ⛔ THE UNDERLYING GENERATOR DEFECT IS OPEN
+// AND IS NOT FIXED HERE; this function routes around it and nothing else does.
+//
+// ⛔ WHY THE ANCHOR ROUND-TRIP CAN ONLY BE A LABEL EQUALITY. GIANT_ANCHOR's `density0` values are NOT
+// the bulk this classifies on. Measured against each preset's own radiusEarth (driver-presets.js):
+//     gas-giant   5.513·317.8/11.2³ = 1.2471   vs  density0 1.33   (−6.2%)
+//     saturnian   5.513· 95.2/ 9.4³ = 0.6319   vs  density0 0.69   (−8.4%)
+//     neptunian   5.513· 17.1/ 3.9³ = 1.5892   vs  density0 1.64   (−3.1%)
+//     sub-neptune 5.513·  8.2/ 2.7³ = 2.2967   vs  density0 2.20   (+4.4%)
+//     hot-jupiter 5.513· 400 / 13 ³ = 1.0037   vs  density0 1.30   (−22.8%)
+// All five rows disagree, so a density EQUALITY round-trip is false on 5/5 before a line of this
+// function exists. What survives is regime-LABEL identity, and that is what the gate asserts.
+//
+// ── THE METRIC, and why it is not raw Euclidean. Nearest-anchor over (bulk, T_eq) needs the two axes
+// commensurable: bulk spans 0.69-2.20 across the table (a factor 3.2) while T0 spans 55-1400 (a factor
+// 25.5), so a RAW Euclidean nearest-anchor is a temperature classifier with a density column attached.
+// Measured: sweeping bulk 0.3 → 5.0 g/cc at a fixed T_eq of 300 K returns ONE distinct regime under raw
+// Euclidean — the density input is dead — while the anchor round-trip below still passes 5/5. That is
+// the shape of gate this program calls true-and-misleading, so the round-trip is NOT the whole gate:
+// tests/giant-regime-classifier.test.js also asserts both inputs are live, and that assertion is the
+// one that separates this metric from the raw one.
+// Both axes are therefore taken in LOG and normalized by the anchor table's OWN log-span. Log because
+// giant-drivers.js is anchored-multiplicative throughout — see the FORMS TABLE in its header: every
+// channel enters as a ratio (M/M0, AGE0/age, T0/T_eq, Z/Z0, SDF/SDF0), so equal RATIO is the natural
+// equal DISTANCE. Span-normalized because it introduces no tunable: the scale is derived from
+// GIANT_ANCHOR at module load, so editing a row re-derives the metric instead of stranding a constant.
+// Measured consequences of that choice, all reproducible from the test file:
+//   • preset round-trip 5/5, worst second-nearest margin 3.30× (hot-jupiter, the 22.8%-low row);
+//     best 15.35× (sub-neptune). No row is closer than 3× to being misclassified.
+//   • both inputs live: bulk 0.3 → 5.0 at T_eq 300 K yields 3 distinct regimes; T_eq 60 → 2000 at
+//     bulk 1.5 yields 4 distinct regimes.
+//   • over 133 generated bodies with radiusEarthCanonical ≥ 2 R⊕ the classifier returns 3 of the 5
+//     regimes (sub-neptune 102, saturnian 19, hot-jupiter 12). ⚠ NOT A BUG AND NOT A VALIDATION: the
+//     generated giants really are denser and hotter than the anchor hull (bulk quartiles 2.46/2.94/3.61
+//     against a table topping out at 2.20), and their T_eq still carries the greenhouse factor that
+//     Step 4 item 4's no-surface guard removes in a DIFFERENT file. This distribution WILL move when
+//     that guard lands, and moving is the expected result, not a regression.
+//
+// ── §10 LINE-STABILITY, and why the GIANT_ANCHOR import shares line 22 with the mathutil import.
+// Three files this lane may not edit cite this module by LINE — e1Regime.js:66 `export function compositionClass(cv) {`
+// and e1Regime.js:68 `cv.composition?.carbonToOxygen` — from
+// conditionFromPlanet.js, one-pipeline-two-frontends-PLAN.md and -CARRIED.md. A normal four-line
+// import block above them shifted both by 4 and `npm run check:instruments` reported them BROKEN,
+// which is the instrument working. Everything this step adds therefore lands BELOW line 74, and the
+// import rides an existing line. Same rule in giant-drivers.js, where PLAN.md and
+// tests/radius-live-feed.test.js cite giant-drivers.js:277 `radius: (planetRadiusEarth ?? 1) / 11.2,`:
+// that edit is 3 lines added / 3 removed, net zero. Verified: the citing refs are unmoved.
+// ⛔ IF THIS BLOCK IS EVER REFLOWED, re-run check:instruments — do not bump the cited integers blind.
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** Earth's mean bulk density in g/cc — the unit GIANT_ANCHOR's density0 column is written in. */
+export const EARTH_BULK_DENSITY_GCC = 5.513;
+
+// The log-space normalizer, derived ONCE from GIANT_ANCHOR itself (no transcribed constants).
+const GIANT_LOG_SCALE = (() => {
+  const rows = Object.values(GIANT_ANCHOR);
+  const ld = rows.map((a) => Math.log(a.density0));
+  const lt = rows.map((a) => Math.log(a.T0));
+  const d0 = Math.min(...ld), t0 = Math.min(...lt);
+  return Object.freeze({
+    d0, t0,
+    dSpan: (Math.max(...ld) - d0) || 1,   // `|| 1` guards a degenerate one-row table, never reached today
+    tSpan: (Math.max(...lt) - t0) || 1,
+  });
+})();
+
+/**
+ * Bulk density in g/cc — `5.513·M/R³` with M reconstructed the way this module already does it
+ * (massEarthOf = surfaceGravity·radiusEarth², the §4.2 NAMED DERIVATION; the vector carries no mass).
+ *
+ * ⚠ THE DRAWN RADIUS IS THE RIGHT ONE HERE, and that is a measurement rather than a preference. The
+ * vector scales gravity by gravityRadiusRatio, whose NON-ROCKY branch keeps the RETIRED
+ * constant-density exponent of 1 — status quo for gas/icy/carbon, explicitly not an endorsement, and
+ * NOT what a rocky body does (self-compression, R^1.70 above 1 R⊕). On that branch and that branch
+ * only, g = g_c·(R/R_c), so on every gas body M ∝ R³ and 5.513·M/R³ = 5.513·g_c/R_c is INVARIANT to
+ * the drawn radius — measured bit-identical at 5, 11.2 and 20 R⊕ in the test file. Reading R_c here
+ * while reading the drawn gravity would break that cancellation and make bulk track the render radius.
+ */
+export function giantBulkDensity(cv) {
+  const c = cv || {};
+  const R = c.radiusEarth ?? 1.0;
+  const M = massEarthOf(c);
+  return (EARTH_BULK_DENSITY_GCC * M) / (R * R * R);
+}
+
+/**
+ * giantRegimeOf — nearest GIANT_ANCHOR row to this body in normalized log (bulk density, T_eq) space.
+ *
+ * TOTAL: it always returns one of GIANT_ANCHOR's five keys, for any input, including a body that is not
+ * a giant at all. Deciding WHICH bodies to ask is the caller's job — compositionClass is the composition
+ * gate and a radius floor is the size gate. It is stated because the two must not be confused: 205
+ * generated bodies are compositionClass 'gas' and only 133 of them clear 2 R⊕, the rest being sub-Earth
+ * bodies that merely retained an h2-he envelope. An all-defaults `{}` lands on sub-neptune (bulk 5.513,
+ * T 288) — a real answer to a question that should not have been asked, which is the point.
+ *
+ * ⛔ DEGENERATE INPUT RETURNS THE FIRST ROW, EXPLICITLY. A zero/negative radius or gravity makes bulk
+ * NaN or negative and a bare argmin then returns `null` — measured, `{ radiusEarth: 0 }` did exactly
+ * that before this guard — which downstream reads as `GIANT_ANCHOR[null]` ⇒ undefined ⇒ a SILENT
+ * fallback. The guard picks the same fallback giant-drivers.js already uses at the one place a missing
+ * regime is tolerated, `const regime = condition.regime || E5_REGIME.GAS_GIANT`, rather than invent a
+ * second rule; it is loud only in the sense that it is written down here and asserted in the test file.
+ *
+ * ⛔ CALL IT ON THE UN-PERTURBED CONDITION. drawGiantConditions rewrites surfaceGravity, T_eq AND
+ * density — all three of the fields reached here — before deriveGiantDrivers reads them, so classifying
+ * its return value classifies a different body. Measured, regimes × seeds 0-399: 63/2000 draws (3.1%)
+ * come back with a different regime; seed 0 on the gas-giant row is one of them.
+ *
+ * @param {object} cv  a condition vector (deriveConditionVector output). Reads surfaceGravity,
+ *                     radiusEarth and T_eq only — never `cv.density`, never a preset name.
+ * @returns {string}   one of the five GIANT_ANCHOR keys (the E5_REGIME values).
+ */
+export function giantRegimeOf(cv) {
+  const c = cv || {};
+  const S = GIANT_LOG_SCALE;
+  const bulk = giantBulkDensity(c);
+  const T = c.T_eq ?? 288;
+  const keys = Object.keys(GIANT_ANCHOR);
+  // Degenerate-input guard (see the ⛔ block above): log() of a non-positive or non-finite value poisons
+  // every distance with NaN, and `NaN < Infinity` is false, so the argmin below would return null.
+  if (!(bulk > 0) || !Number.isFinite(bulk) || !(T > 0) || !Number.isFinite(T)) return keys[0];
+  const pd = (Math.log(bulk) - S.d0) / S.dSpan;
+  const pt = (Math.log(T) - S.t0) / S.tSpan;
+
+  // Fixed key order (GIANT_ANCHOR's own insertion order) + strict `<` ⇒ an exact tie keeps the FIRST
+  // row, deterministically. No rng, no wall-clock: same condition in, same regime out, forever.
+  let best = keys[0], bestD2 = Infinity;
+  for (const key of keys) {
+    const a = GIANT_ANCHOR[key];
+    const ad = (Math.log(a.density0) - S.d0) / S.dSpan;
+    const at = (Math.log(a.T0) - S.t0) / S.tSpan;
+    const d2 = (pd - ad) * (pd - ad) + (pt - at) * (pt - at);
+    if (d2 < bestD2) { bestD2 = d2; best = key; }
+  }
+  return best;
 }
 
 // ── L (lidStrength) — gate-1 pinned two-mechanism form, constants VERBATIM. Reads T_surf(=T_eq), V, ρ, g,

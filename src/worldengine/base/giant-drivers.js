@@ -104,8 +104,8 @@ const WZ = Object.freeze({ DENS: 1.0, IRON: 1.0, VOL: 1.0 });
 // ── Pinned per-regime CANONICAL anchors (DERIVE-FORMS §3, from driver-presets.js) + ratified SDF bands.
 // M0 = massEarth; T0 = T_eq (the "surface temperature" preset field the forms read as insolation proxy);
 // density0/iron0/vol0 = composition fields → the Z0 enrichment anchor. IH0/SDF0/DIS0 are SOURCED from
-// DRIVER_BUNDLES (single source of truth) so the D3 anchor reproduces the bundle triple by construction.
-const GIANT_ANCHOR = Object.freeze({
+// DRIVER_BUNDLES (single source of truth) so the D3 anchor reproduces the bundle triple by construction. ── EXPORTED at PLAN §4 Step 4: the nearest-anchor classifier `giantRegimeOf` lives in e1Regime.js — a DIFFERENT module — so exporting is the alternative to a second copy of these five rows, which is the exact coupling the plan removes. ⚠ `density0` IS NOT A BULK DENSITY: it is the preset's authored composition density, feeding `enrichmentZ` below and nothing else, and it disagrees with the `5.513·M/R³` bulk the classifier keys on at every row (worst: hot-jupiter 1.0037 vs 1.30, 23% low). Rationale + the full measured table: the block above `giantRegimeOf` in e1Regime.js. ⚠ NO LINE IS ADDED ABOVE THIS ONE — see that same block's §10 LINE-STABILITY note.
+export const GIANT_ANCHOR = Object.freeze({
   [E5_REGIME.GAS_GIANT]:   Object.freeze({ M0: 317.8, T0: 125,  density0: 1.33, iron0: 0.03, vol0: 0.04, sdfBand: [0.74, 0.86] }),
   [E5_REGIME.SATURNIAN]:   Object.freeze({ M0: 95.2,  T0: 95,   density0: 0.69, iron0: 0.03, vol0: 0.04, sdfBand: [0.85, 0.95] }),
   [E5_REGIME.NEPTUNIAN]:   Object.freeze({ M0: 17.1,  T0: 55,   density0: 1.64, iron0: 0.05, vol0: 0.04, sdfBand: [0.09, 0.21] }),
@@ -233,7 +233,7 @@ export function drawGiantConditions(regime = E5_REGIME.GAS_GIANT, baseCondition 
   const drawnMass = a.M0 * massFactor;
   const surfaceGravity = drawnMass / (R * R);
 
-  // Clean channels: perturb the real base (= canonical anchor at the canonical preset) multiplicatively.
+  // Clean channels: perturb the real base (= canonical anchor at the canonical preset) multiplicatively. ⚠ ORDER, for any caller that ALSO classifies (PLAN §4 Step 4 item 3): `surfaceGravity` above and `T_eq` / `density` below are exactly the fields `giantRegimeOf` (e1Regime.js) reads, so classifying THIS FUNCTION'S RETURN classifies a perturbed body, not the body itself. Measured over the five regimes × seeds 0-399, the label differs pre-draw vs post-draw on 63/2000 draws (3.1%), all on the gas-giant row, whose bulk 1.2471 sits between the gas-giant (1.33) and saturnian (0.69) anchors — at macroSeed 0 the drawn condition classifies saturnian where the un-perturbed base classifies gas-giant. ⛔ The 12 pinned SWEEP_SEEDS flip 0/12, so an ordering gate written over SWEEP_SEEDS is VACUOUS; tests/giant-regime-classifier.test.js pins seed 0 instead.
   const age = (b.age ?? AGE0) * ageFactor;
   const T_eq = (b.T_eq ?? a.T0) * teqFactor;
   const baseDensity = b.density ?? b.composition?.density ?? a.density0;

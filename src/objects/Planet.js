@@ -1712,7 +1712,22 @@ export class Planet {
       fragmentShader: variant.fragmentShader,
     });
 
-    return new THREE.Mesh(geometry, material);
+    const surface = new THREE.Mesh(geometry, material);
+    // ── Instrument E item 4 — the back-link (PLAN §12.3 E-3) ────────────────────────────────────
+    // ⛔ THE SCENE WALK YIELDS A BARE MESH AND `d` IS UNREACHABLE FROM IT. `conditionFromPlanet(d)`
+    // above is a local; this method returns a Mesh; the surface is an UNNAMED child of the
+    // `body.planet.*` group (named at `assignBodyName(this.mesh, 'planet', planetData);`), so
+    // neither the group nor BodyRenderer exposes a path back to the data that produced it. Every
+    // instrument that wants to say WHICH body it just measured — E's `resolveBody`, its
+    // reproduction line, Step 5's `previewPack`, which must evaluate `pack(condition, ctx)` for
+    // THIS body — has to re-derive the condition or guess. Two lines here fix it once, for all of
+    // them, rather than each of them re-deriving and drifting.
+    // ⚠ `planetData` and not a copy: the freeze hooks write `data.rotationSpeed`, and a snapshot
+    // here would make the back-link disagree with the live body the moment anything moved.
+    // ⚠ Spread-preserving, matching `assignName`'s own idiom, because LOD and lighting flags are
+    // written into `userData` elsewhere and a bare assignment would drop them.
+    surface.userData = { ...(surface.userData || {}), wd: { planetData: d, condition } };
+    return surface;
   }
 
   _createRing() {

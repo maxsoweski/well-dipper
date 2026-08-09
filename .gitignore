@@ -44,3 +44,31 @@ __pycache__/
 # by BASENAME, and a second copy of every file in the repo makes every basename ambiguous.
 .stryker-tmp/
 reports/mutation/
+
+# ── Instrument E's frame sets (PLAN §12 E-5, item 1) ────────────────────────────────────────────
+# E writes every PNG it captures into `screenshots/instrument-e/` and NOWHERE ELSE.
+#
+# ⛔ SCOPED TO THE SUBDIRECTORY ON PURPOSE, and the reason is not the one it looks like. A blanket
+# `screenshots/` rule would NOT untrack the 53 files already tracked there — .gitignore has no
+# effect on tracked paths — so nothing visibly breaks, which is exactly the hazard: it would
+# silently swallow every FUTURE sibling those 53 belong with (they are dated AC galleries, and the
+# `docs/FEATURES/*/shots/*.png` rules above are what that pattern looks like once it has bitten).
+# The subdirectory takes E's output out of the tree without putting a rule over anyone else's.
+#
+# ⛔ VERIFY WITH `--no-index`, AND THE REASON IS ITSELF A LEDGER ENTRY. `git check-ignore` consults
+# the INDEX, and a tracked file is never reported as ignored no matter what patterns exist. So the
+# obvious check — loop the 53 tracked paths through `git check-ignore` and confirm none is ignored —
+# PASSES IDENTICALLY under this scoped rule and under the blanket `screenshots/` rule it was written
+# to avoid. It is a fence already satisfied by the thing it is supposed to forbid. Measured, not
+# reasoned: with `screenshots/` appended, the plain form still reported 53 not-ignored / 0 ignored.
+#   ✓ git check-ignore -v --no-index screenshots/instrument-e/x.png              -> matches this line
+#   ✓ git check-ignore -v --no-index screenshots/ac1-packing-pass-2026-06-19.png -> no match (exit 1)
+#   ✓ all 53 tracked paths, --no-index: 0 ignored here; 53 ignored under a blanket `screenshots/`
+#     rule, which is what makes this check a live one rather than a decorative one.
+#
+# Untracked is the deliberate outcome, not a side effect. `screenshots/` already holds 1.7 GB, one
+# admissible triptych is over the ~10 MB ceiling where this repo has a recorded `git push` failure
+# inside the sandbox (TLS error, then a lying "Everything up-to-date"), and E is re-shot at nine
+# steps. ⭐ The REPRODUCTION LINE — `_lab.shotState()` — is what makes a shot re-runnable, not the
+# file. A shot whose evidence is the PNG rather than the line is inadmissible anyway (§12.1 E-f).
+screenshots/instrument-e/

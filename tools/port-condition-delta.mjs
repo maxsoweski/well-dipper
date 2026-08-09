@@ -103,7 +103,11 @@ const { PlanetGenerator }      = await loadOrExplain('src/generation/PlanetGener
 const { StarSystemGenerator }  = await loadOrExplain('src/generation/StarSystemGenerator.js');
 const { SeededRandom }         = await loadOrExplain('src/generation/SeededRandom.js');
 const { generateSolarSystem }  = await loadOrExplain('src/generation/SolarSystemData.js');
-const { conditionFromPlanet }  = await loadOrExplain('src/worldengine/port/conditionFromPlanet.js');
+const { conditionFromPlanet, surfaceTemperatureOf }
+                               = await loadOrExplain('src/worldengine/port/conditionFromPlanet.js');
+const { compositionClass }     = await loadOrExplain('src/worldengine/base/e1Regime.js');
+const AOPT                     = await loadOrExplain('src/worldengine/base/atmosphereOptics.js');
+const { atmosphereOpticsOf }   = AOPT;
 const { deriveConditionVector }= await loadOrExplain('body-condition-vector.js');
 const { bodyRawTidal }         = await loadOrExplain('src/worldengine/base/baseStep.js');
 const { craterUniformsFrom }   = await loadOrExplain('src/worldengine/port/craterUniforms.js');
@@ -604,6 +608,681 @@ function runSelftest() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
+// ██ STEP 4 ITEM 4 — THE NO-SURFACE DOMAIN GUARD'S COMMITTED DELTA TABLE ██
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// PLAN §4 Step 4 item 4 — docs/FEATURES/one-pipeline-two-frontends-PLAN.md:242
+// `compositionClass(cv) === 'gas'`.
+// Writes docs/FEATURES/step4-limb-delta-table.md. Shares this file's population builders, `deltaOf`
+// and `statsOf` with the Step 2 table on purpose: two delta tables that disagree about what "a body"
+// or "moved" means resolve into an unactionable instruction.
+//
+// ⛔ SAME REASON THE STEP 2 HARNESS COMPUTES BOTH LAWS ITSELF (see this file's header). The obvious
+// harness — "call conditionFromPlanet, then call it again with the guard reverted" — can only
+// measure the law the tree happens to carry, so it prints zeros a day early and cannot reproduce the
+// before-state a day late. Both laws are evaluated here from the SHIPPED `surfaceTemperatureOf` and
+// the SHIPPED `atmosphereOpticsOf`, so this table reads the same before and after the guard lands.
+//
+//   OLD  T_eq = surfaceTemperatureOf(rec.T_eq, atmosphere.pressure)   — the greenhouse fit applied
+//        to an envelope depth. On generated giants that depth is 1000 bar against a fit solved on
+//        1 bar (Earth) and 92 bar (Venus).
+//   NEW  T_eq = rec.T_eq                                              — on 'gas' bodies only. Every
+//        other body keeps OLD exactly, which is what makes the non-gas rows below a control.
+//
+// ⚠ WHAT IS AND IS NOT TRANSCRIBED. `limbColor`, `termColor` and `limbExponent` come out of
+// `atmosphereOpticsOf` — the shipped module, called, not copied. `uTermStrength` and `uTermWidth`
+// are the only two of the five whose final expression lives in src/objects/Planet.js and is not
+// exported, so those two ARE transcribed (TERM_STRENGTH / termWidthFor below) — and the
+// transcription is not trusted: MATERIAL CROSS-CHECK builds the real `new Planet(rec)` and requires
+// all five recomputed uniforms to equal the live material's, exactly, on every body.
+
+// ⛔ TRANSCRIBED FROM src/objects/Planet.js, WHICH DOES NOT EXPORT THEM. Verify against
+// src/objects/Planet.js:1420 `const TERM_STRENGTH = 0.15;` and src/objects/Planet.js:1409
+// `function termWidthFor(pressureBar) {` through :1411
+// `  return Math.min(0.30, Math.max(0.06, 0.12 + 0.09 * Math.log10(p)));`. A drift here is caught by
+// MATERIAL CROSS-CHECK, not by a reader's diligence.
+const TERM_STRENGTH = 0.15;
+function termWidthFor(pressureBar) {
+  const p = Math.max(pressureBar ?? 0, 1e-3);
+  return Math.min(0.30, Math.max(0.06, 0.12 + 0.09 * Math.log10(p)));
+}
+
+/** The five shipped uniform VALUES src/objects/Planet.js writes from a condition, as plain data. */
+function limbUniformsOf(cond) {
+  const o = atmosphereOpticsOf(cond);
+  return {
+    uLimbExponent: o.limbExponent,                            // Planet.js:1617 `uLimbExponent: { value: optics.limbExponent },`
+    uLimbColor:    o.limbColor.slice(),                       // Planet.js:1618 `uLimbColor: { value: new THREE.Vector3(...optics.limbColor) },`
+    uTermColor:    o.termColor.slice(),                       // Planet.js:1629 `uTermColor: { value: new THREE.Vector3(...optics.termColor) },`
+    uTermStrength: (o.columnFraction ?? 0) * TERM_STRENGTH,   // Planet.js:1627 `uTermStrength: { value: (optics.columnFraction ?? 0) * TERM_STRENGTH },`
+    uTermWidth:    termWidthFor(cond.atmosphere?.pressure),   // Planet.js:1628 `uTermWidth: { value: termWidthFor(condition.atmosphere?.pressure) },`
+  };
+}
+
+const LIMB_UNIFORM_ORDER = ['uLimbExponent', 'uLimbColor', 'uTermColor', 'uTermStrength', 'uTermWidth'];
+
+/** ⚠ Read the FLATTENED pressure, not `rec.atmosphere.pressure` — the game nests it one level down
+ *  and reading the wrapper is the third silent-disagreement bug conditionFromPlanet exists to close. */
+function step4RowFor(cond, rec) {
+  const rawTeq = rec.T_eq ?? 288;
+  const P = cond.atmosphere?.pressure;
+  const gas = compositionClass(cond) === 'gas';
+  const tEqDefaulted = (rec.T_eq == null);   // ⇒ 288 K, a fabrication, not a measurement of this body
+  const tOld = surfaceTemperatureOf(rawTeq, P);
+  const tNew = gas ? rawTeq : tOld;
+  // The condition is the REAL one; only T_eq is substituted, which is the whole of what the guard
+  // changes inside conditionFromPlanet. `_provenance` is non-enumerable and is dropped by the
+  // spread — deliberately; nothing downstream of here reads it.
+  const condOld = { ...cond, T_eq: tOld };
+  const condNew = { ...cond, T_eq: tNew };
+  return {
+    gas, rawTeq, tEqDefaulted, pressure: P ?? 0, tOld, tNew,
+    ghFactor: rawTeq !== 0 ? tOld / rawTeq : NaN,
+    old: limbUniformsOf(condOld),
+    neu: limbUniformsOf(condNew),
+    bakeOld: step4QuantitiesOf(condOld),
+    bakeNew: step4QuantitiesOf(condNew),
+  };
+}
+
+function sameUniforms(a, b) {
+  for (const k of LIMB_UNIFORM_ORDER) if (deltaOf(a[k], b[k]) !== 0) return false;
+  return true;
+}
+
+/**
+ * MATERIAL CROSS-CHECK — the control that makes every other number in this table admissible.
+ *
+ * Builds the REAL `new Planet(rec)` and reads the five uniforms off
+ * `planet.surface.material.uniforms`. Three things fall out of one measurement, and none of them is
+ * assertable without it:
+ *   1. THE TRANSCRIPTION IS RIGHT. TERM_STRENGTH / termWidthFor above are copies of un-exported
+ *      Planet.js constants; if either drifts, `matchesNeither` becomes non-zero and this run fails.
+ *   2. THE TWO LAWS ARE DISTINGUISHABLE ON REAL BODIES. `differ` counts the bodies where OLD and NEW
+ *      produce different uniforms at all. A table built where `differ` is 0 is a table of zeros
+ *      dressed as a measurement.
+ *   3. WHICH SIDE OF THE CHANGE THIS TREE IS ON, read off the shipped material rather than off the
+ *      source text. That is what makes `--step4 --check` a gate the guard's revert can red.
+ */
+function materialCrossCheck(Planet, rows) {
+  let built = 0, failed = 0, differ = 0, matchesOld = 0, matchesNew = 0, matchesNeither = 0;
+  const neitherIds = [];
+  for (const r of rows) {
+    let u;
+    try { u = new Planet(r.body.rec).surface.material.uniforms; built++; }
+    catch { failed++; continue; }
+    const live = {
+      uLimbExponent: u.uLimbExponent.value,
+      uLimbColor: [u.uLimbColor.value.x, u.uLimbColor.value.y, u.uLimbColor.value.z],
+      uTermColor: [u.uTermColor.value.x, u.uTermColor.value.y, u.uTermColor.value.z],
+      uTermStrength: u.uTermStrength.value,
+      uTermWidth: u.uTermWidth.value,
+    };
+    const d = !sameUniforms(r.m.old, r.m.neu);
+    if (d) differ++;
+    const mo = sameUniforms(live, r.m.old);
+    const mn = sameUniforms(live, r.m.neu);
+    if (mo) matchesOld++;
+    if (mn) matchesNew++;
+    if (!mo && !mn) { matchesNeither++; if (neitherIds.length < 5) neitherIds.push(r.body.id); }
+  }
+  // On a body where the two laws agree, matching "both" says nothing. The tree's law is read only
+  // off the bodies where they genuinely differ.
+  const discriminating = rows.filter(r => !sameUniforms(r.m.old, r.m.neu));
+  let dOld = 0, dNew = 0, dNeither = 0;
+  for (const r of discriminating) {
+    let u; try { u = new Planet(r.body.rec).surface.material.uniforms; } catch { continue; }
+    const live = {
+      uLimbExponent: u.uLimbExponent.value,
+      uLimbColor: [u.uLimbColor.value.x, u.uLimbColor.value.y, u.uLimbColor.value.z],
+      uTermColor: [u.uTermColor.value.x, u.uTermColor.value.y, u.uTermColor.value.z],
+      uTermStrength: u.uTermStrength.value,
+      uTermWidth: u.uTermWidth.value,
+    };
+    if (sameUniforms(live, r.m.neu)) dNew++;
+    else if (sameUniforms(live, r.m.old)) dOld++;
+    else dNeither++;
+  }
+  const treeLaw = (dNeither > 0) ? 'NEITHER'
+    : (dNew > 0 && dOld === 0) ? 'NEW'
+    : (dOld > 0 && dNew === 0) ? 'OLD'
+    : (dNew === 0 && dOld === 0) ? 'UNDETERMINED' : 'MIXED';
+  return { built, failed, differ, matchesOld, matchesNew, matchesNeither, neitherIds,
+           discriminating: discriminating.length, dOld, dNew, dNeither, treeLaw };
+}
+
+/**
+ * NON-GAS LIVENESS — the control that stops "0 / 616 non-gas bodies moved" from being vacuous.
+ * The guard is supposed to be inert outside the gas class, and the comparator returning 0 there
+ * looks identical to a comparator that is not wired. So the same comparator is handed a T_eq that
+ * moves by a declared amount on those same non-gas bodies; if it still reports 0, the zero above
+ * was evidence of nothing.
+ */
+const LIVE_T_LO = 100, LIVE_T_HI = 1500;   // spans every anchor in the optics law's two hue ramps
+
+function nonGasLiveness(rows, deltaK = 40) {
+  let n = 0, movedNear = 0, movedWide = 0, tIndependent = 0, tIndepAndStill = 0;
+  for (const r of rows) {
+    if (r.m.gas) continue;
+    n++;
+    const base = limbUniformsOf({ ...r.cond, T_eq: r.m.tOld });
+    if (!sameUniforms(base, limbUniformsOf({ ...r.cond, T_eq: r.m.tOld + deltaK }))) movedNear++;
+    const wide = !sameUniforms(limbUniformsOf({ ...r.cond, T_eq: LIVE_T_LO }),
+                               limbUniformsOf({ ...r.cond, T_eq: LIVE_T_HI }));
+    if (wide) movedWide++;
+    // ⚠ WHY A NON-GAS BODY CAN BE COMPLETELY TEMPERATURE-BLIND — DECOMPOSED BY MEASUREMENT, NOT BY
+    // A PREDICATE. `T` reaches these five uniforms through exactly two doors: `hazeFractionOf`, and
+    // `primordialFractionOf` (whose Jeans λ carries `T_exo = 3.5·T_eq` in its denominator, so `prim`
+    // is temperature-dependent on a SOLID body too — which is why the obvious "haze gate" predicate
+    // written here first was WRONG, predicting 425 blind bodies against 285 observed). So both doors
+    // are evaluated at both probe temperatures and the answer is counted, not modelled: a body with
+    // haze == 0 AND prim == 0 at both ends has no door open and cannot move, whatever the probe.
+    const at = (T) => { const c = { ...r.cond, T_eq: T };
+      return { h: AOPT.hazeFractionOf(c), p: AOPT.primordialFractionOf(c) }; };
+    const lo = at(LIVE_T_LO), hi = at(LIVE_T_HI);
+    const bothDoorsShut = (lo.h === 0 && hi.h === 0 && lo.p === 0 && hi.p === 0);
+    if (bothDoorsShut) { tIndependent++; if (!wide) tIndepAndStill++; }
+  }
+  return { n, movedNear, movedWide, deltaK, tIndependent, tIndepAndStill,
+           canMove: n - tIndependent, wideAmongCanMove: movedWide - (tIndependent - tIndepAndStill) };
+}
+
+/**
+ * ACYCLICITY — the guard classifies FIRST and sets `T_eq` SECOND, which is only well-defined
+ * because `compositionClass` does not read `T_eq`. That is a property of a function in a file this
+ * lane may not edit, so it is CHECKED rather than assumed: every body is classified at two
+ * temperatures 1400 K apart and the two answers must agree. If a future edit gives the composition
+ * gate a temperature term, the guard becomes a fixpoint and this control goes red naming it.
+ */
+function acyclicityCheck(rows) {
+  let n = 0, disagreed = 0;
+  const examples = [];
+  for (const r of rows) {
+    n++;
+    const a = compositionClass({ ...r.cond, T_eq: 100 });
+    const b = compositionClass({ ...r.cond, T_eq: 1500 });
+    if (a !== b) { disagreed++; if (examples.length < 5) examples.push(`${r.body.id}: ${a} vs ${b}`); }
+  }
+  return { n, disagreed, examples };
+}
+
+/** Per-uniform |Δ| stats over a row subset. Vectors report max abs channel delta (deltaOf's rule). */
+function limbStats(rows, pick) {
+  const out = new Map();
+  for (const k of LIMB_UNIFORM_ORDER) {
+    const vals = [];
+    for (const r of rows) { if (pick && !pick(r)) continue; vals.push(deltaOf(r.m.old[k], r.m.neu[k])); }
+    out.set(k, statsOf(vals));
+  }
+  return out;
+}
+
+// ⛔ QUANTITY_ORDER IS NOT WIDENED, DELIBERATELY — it is the Step 2 artifact's row list and adding
+// to it would silently rewrite a committed table belonging to another step. Step 4 needs two rows
+// Step 2 did not measure, because Instrument C reports two uniforms this table would otherwise be
+// silent about: `uBioGroundCover` (biosphereOf) and `uBioGroundColor` (the palette's transferred
+// pigment). They are added HERE, in a Step-4-local extension.
+const STEP4_EXTRA_ORDER = ['biosphere', 'landPalette.pigment'];
+const STEP4_QUANTITY_ORDER = [...QUANTITY_ORDER, ...STEP4_EXTRA_ORDER];
+
+function step4QuantitiesOf(cond) {
+  const q = quantitiesOf(cond);
+  q.biosphere = SM.biosphereOf(cond);                                     // Planet.js:1631 `uBioGroundCover: { value: bioCover },`
+  q['landPalette.pigment'] = applyAlbedoTransfer(SM.surfacePaletteOf(cond), { extra: { pigment: BIO } }).pigment;
+  return q;
+}
+
+/** The shipped uniform each measured quantity lands in, so this table and Instrument C can be joined. */
+const UNIFORM_OF_QUANTITY = {
+  'landPalette.fresh': 'uFreshColor', 'landPalette.weathered': 'uWeatheredColor',
+  'landPalette.sediment': 'uSedColor', 'landPalette.pigment': 'uBioGroundColor',
+  'landPalette.craton': '(not a shipped uniform)',
+  iceness: 'uIcenessMix', lavaGlowColor: 'uLavaGlow', lavaCrustColor: 'uLavaCrust',
+  biosphere: 'uBioGroundCover',
+};
+
+function bakeStats(rows, pick) {
+  const out = new Map();
+  for (const k of STEP4_QUANTITY_ORDER) {
+    const vals = [];
+    for (const r of rows) { if (pick && !pick(r)) continue; vals.push(deltaOf(r.m.bakeOld[k], r.m.bakeNew[k])); }
+    out.set(k, statsOf(vals));
+  }
+  return out;
+}
+
+function buildStep4Rows(bodies) {
+  const rows = [];
+  for (const body of bodies) {
+    let cond, m;
+    try { cond = conditionFromPlanet(body.rec); m = step4RowFor(cond, body.rec); }
+    catch (e) { rows.push({ body, error: String(e?.message || e) }); continue; }
+    rows.push({ body, cond, m });
+  }
+  return rows.filter(r => r.m);
+}
+
+function limbTable(stats, n) {
+  const lines = ['| uniform | moved / n | min |Δ| | median |Δ| | p95 |Δ| | max |Δ| |', '|---|---:|---:|---:|---:|---:|'];
+  for (const k of LIMB_UNIFORM_ORDER) {
+    const s = stats.get(k);
+    lines.push(`| \`${k}\` | ${s.moved} / ${n} | ${fmt(s.min)} | ${fmt(s.median)} | ${fmt(s.p95)} | ${fmt(s.max)} |`);
+  }
+  return lines.join('\n');
+}
+
+const STEP4_POP = { sysSeeds: 200, pmScanSeeds: 1000, gridSeed: 20260808, gridOrbitsAU: [0.35, 0.9, 2.0, 6.0, 18.0] };
+
+async function runStep4(args) {
+  const { Planet } = await loadOrExplain('src/objects/Planet.js');
+
+  const gen = buildGeneratedPopulation(STEP4_POP);
+  const sol = buildSolPopulation();
+  const rows = buildStep4Rows(gen);
+  const solRows = buildStep4Rows(sol);
+
+  const gasRows = rows.filter(r => r.m.gas);
+  const nonGasRows = rows.filter(r => !r.m.gas);
+  const solGas = solRows.filter(r => r.m.gas);
+
+  const gasStats = limbStats(gasRows);
+  const nonGasStats = limbStats(nonGasRows);
+  const solGasStats = limbStats(solGas);
+  const gasBakes = bakeStats(gasRows);
+
+  const gh = statsOf(gasRows.map(r => r.m.ghFactor));
+  const xc = materialCrossCheck(Planet, rows);
+  const live = nonGasLiveness(rows);
+  const acyc = acyclicityCheck(rows);
+
+  // Reproduction: the whole population is rebuilt from the same integer seeds and every one of the
+  // five uniforms is re-measured. Compared on the FULL per-body vector, not on a headline — a
+  // headline that matches while a body underneath it moved is this program's signature failure.
+  const rows2 = buildStep4Rows(buildGeneratedPopulation(STEP4_POP));
+  let reproN = 0, reproMismatch = 0;
+  if (rows2.length === rows.length) {
+    for (let i = 0; i < rows.length; i++) {
+      reproN++;
+      if (rows2[i].body.id !== rows[i].body.id) { reproMismatch++; continue; }
+      if (!sameUniforms(rows2[i].m.old, rows[i].m.old) || !sameUniforms(rows2[i].m.neu, rows[i].m.neu)) reproMismatch++;
+    }
+  } else { reproMismatch = -1; }
+  const repro = (reproMismatch === 0 && reproN === rows.length && rows.length > 0);
+
+  // ⛔ SOL BODIES CARRY NO NAME ON THE RECORD — `_canonicalName` is null on every planet except the
+  // dwarfs. So the two the plan names are identified by the pair the source authors them with,
+  // ORBIT + RADIUS, verified against the literal: SolarSystemData.js:473 `    // ── Uranus ───────────────────────────────────────────────────`
+  // gives SolarSystemData.js:476 `      radiusEarth: 4.01,` at SolarSystemData.js:477
+  // `      orbitAU: 19.19,`, and SolarSystemData.js:559 `    // ── Neptune ──────────────────────────────────────────────────`
+  // gives SolarSystemData.js:562 `      radiusEarth: 3.88,` at SolarSystemData.js:563
+  // `      orbitAU: 30.07,`. Matching on both, exactly, rather than on a position in an array that a
+  // future edit reorders silently.
+  const SOL_NAMED = [
+    { label: 'Uranus',  orbitAU: 19.19, radiusEarth: 4.01 },
+    { label: 'Neptune', orbitAU: 30.07, radiusEarth: 3.88 },
+  ];
+  const namedSol = (spec) => solRows.find(r =>
+    Math.abs((r.body.orbitRadiusEarth / AU_IN_EARTH_RADII) - spec.orbitAU) < 1e-6
+    && r.body.rec.radiusEarth === spec.radiusEarth);
+  const solDefaulted = solRows.filter(r => r.m.tEqDefaulted).length;
+  const genDefaulted = rows.filter(r => r.m.tEqDefaulted).length;
+
+  const head = gitHead();
+  const strataCount = (st) => gen.filter(b => b.stratum === st).length;
+  const gasIn = (st) => rows.filter(r => r.body.stratum === st && r.m.gas).length;
+
+  const o = [];
+  o.push('# Step 4 item 4 — the committed delta table: the no-surface domain guard');
+  o.push('');
+  o.push('> **Generated artifact — do not hand-edit.** Regenerate with `node tools/port-condition-delta.mjs --step4`.');
+  o.push('> Gate for item 4 of Step 4 in `docs/FEATURES/one-pipeline-two-frontends-PLAN.md`.');
+  o.push('> This is a **declared pixel-moving step** (§11.3.6): the named movers *must* move, and a table');
+  o.push('> of zeros here is a failure, not a pass.');
+  o.push('');
+  o.push(`**Tree at generation:** \`${head}\` · **generated:** ${new Date().toISOString().slice(0, 10)} · **law this tree implements, read off the live material:** \`${xc.treeLaw}\``);
+  o.push('');
+  o.push('## ⛔ What this table is NOT evidence of (ledger C20)');
+  o.push('');
+  o.push('Every number below is measured **through the game material** — the five uniforms');
+  o.push('`src/objects/Planet.js` writes today, with the limb term fully on — src/objects/Planet.js:1401');
+  o.push('`const LIMB_MIX = 1.0;`. **Step 6 swaps most of this population onto a material whose limb');
+  o.push('term is gated by a different uniform name.** This is the right gate for Step 4 and it is *not* a');
+  o.push('durable statement about what a player sees afterwards. Quote it as evidence about Step 4 only.');
+  o.push('');
+  o.push('It is also a statement about **uniform values, not pixels**. A moved uniform may be invisible.');
+  o.push('');
+  o.push('## What is being differenced');
+  o.push('');
+  o.push('| rule | `condition.T_eq` for a `compositionClass === \'gas\'` body | every other body |');
+  o.push('|---|---|---|');
+  o.push('| **OLD** | `surfaceTemperatureOf(rec.T_eq, atmosphere.pressure)` — the grey-greenhouse fit, solved on Earth (1 bar) and Venus (92 bar), evaluated at the generator\'s 1000 bar envelope depth | same |');
+  o.push('| **NEW** | `rec.T_eq` — the fit is not applied, because there is no surface for a surface pressure to be measured at | **identical to OLD, by construction** |');
+  o.push('');
+  o.push('Both are computed **by this tool** from the shipped `surfaceTemperatureOf` and the shipped');
+  o.push('`atmosphereOpticsOf`, never by reading what the tree happens to do, so the table reproduces');
+  o.push('before and after the guard lands. Only `T_eq` is substituted; the rest of the condition is the');
+  o.push('real `conditionFromPlanet(rec)` output.');
+  o.push('');
+  o.push('## Population — fully specified');
+  o.push('');
+  o.push('⚠ §2\'s own history is that an under-specified population produced headline numbers that did not');
+  o.push('reproduce. Every body below is a pure function of an integer seed and the recipe is stated in');
+  o.push('full, so a disagreeing measurement can be attributed rather than argued about.');
+  o.push('');
+  o.push('| stratum | recipe | bodies | of which `compositionClass === \'gas\'` |');
+  o.push('|---|---|---:|---:|');
+  o.push(`| \`S\` | every planet of \`StarSystemGenerator.generate(seed)\`, seed = 1..${STEP4_POP.sysSeeds} | ${strataCount('S')} | ${gasIn('S')} |`);
+  o.push(`| \`P\` | every **planet-class** moon (\`m.isPlanetMoon && m.planetData\`) found over seeds 1..${STEP4_POP.pmScanSeeds} | ${strataCount('P')} | ${gasIn('P')} |`);
+  o.push(`| \`G\` | forced-type grid: \`PlanetGenerator.generate(new SeededRandom(${STEP4_POP.gridSeed} + cell*7919), au, null, null, type)\` over all ${PlanetGenerator.TYPES.length} \`PlanetGenerator.TYPES\` × ${STEP4_POP.gridOrbitsAU.length} orbits (${STEP4_POP.gridOrbitsAU.join(', ')} AU) | ${strataCount('G')} | ${gasIn('G')} |`);
+  o.push(`| **total generated** | | **${rows.length}** | **${gasRows.length}** |`);
+  o.push(`| \`SOL\` | \`generateSolarSystem()\` planets + planet-class moons — **reported separately, never pooled** | ${solRows.length} | ${solGas.length} |`);
+  o.push('');
+  o.push('**Exclusions, stated rather than left to inference:**');
+  o.push('');
+  o.push(`- Bodies whose generation threw: excluded by \`buildGeneratedPopulation\`'s final \`filter(b => b.rec)\`. On this run the three strata yielded ${gen.length} records and ${rows.length} of them derived a condition without throwing (**${gen.length - rows.length} excluded**).`);
+  o.push('- **Non-planet-class moons are excluded**, and that is a scope statement, not a convenience:');
+  o.push('  `MoonGenerator` emits ~none of the condition fields the world engine reads, and');
+  o.push('  `tryLabShader` structurally excludes moons from this render path. They enter at Step 8.');
+  o.push('- **Nothing is excluded on the basis of its measured delta.** The gas / non-gas split below is');
+  o.push('  made by `compositionClass`, i.e. by the same predicate the guard itself keys on — which is');
+  o.push('  what makes the non-gas rows a control rather than a leftover.');
+  o.push(`- **Sol is a separate labelled population and is never pooled into the headline.** It is measured because a delta between two evaluations of a pure function of a data record is a fact about the function. ⛔ No Sol pixel was inspected; Sol renders from NASA textures through a different renderer and nothing here may be quoted as a rendering claim.`);
+  o.push('');
+  o.push(`**Reproduction:** the whole generated population was rebuilt from the same integer seeds and all five uniforms re-measured **per body** (not per headline): ${reproMismatch === 0 ? `**${reproN} / ${rows.length} bodies identical under both laws — PASS**` : `**MISMATCH on ${reproMismatch} bodies — FAIL**`}.`);
+  o.push('');
+  o.push('## The greenhouse factor this guard removes');
+  o.push('');
+  o.push(`Over the **${gasRows.length}** generated gas-class bodies, \`surfaceTemperatureOf(rec.T_eq, pressure) / rec.T_eq\`:`);
+  o.push('');
+  o.push('| | min | median | p95 | max |');
+  o.push('|---|---:|---:|---:|---:|');
+  o.push(`| greenhouse factor | ${fmt(gh.min)}× | **${fmt(gh.median)}×** | ${fmt(gh.p95)}× | **${fmt(gh.max)}×** |`);
+  o.push('');
+  o.push('## GENERATED, gas-class — the delta table');
+  o.push('');
+  o.push('|Δ| = |NEW − OLD| per body. Colour rows are the **max absolute channel delta**. No epsilon');
+  o.push('anywhere: `moved` counts bodies whose delta is not exactly 0.');
+  o.push('');
+  o.push(limbTable(gasStats, gasRows.length));
+  o.push('');
+  const le = gasStats.get('uLimbExponent');
+  o.push(`\`uLimbExponent\`'s entire law range is **1.8 – 3.5** (\`atmosphereOptics.js:161\` \`limbExponent: 3.5 - 1.7 * thick,\`), i.e. a span of 1.7 — so read its max |Δ| of ${fmt(le.max)} against that span, not against zero.`);
+  o.push('');
+  o.push('### The gas bodies that did NOT move — accounted for, not rounded off');
+  o.push('');
+  const gasStill = gasRows.filter(r => sameUniforms(r.m.old, r.m.neu));
+  const gasStillNoP = gasStill.filter(r => (r.m.pressure ?? 0) <= 0).length;
+  const gasStillP = gasStill.length - gasStillNoP;
+  const gasStillPrimZero = gasStill.filter(r => (r.m.pressure ?? 0) > 0
+    && AOPT.primordialFractionOf({ ...r.cond, T_eq: r.m.tOld }) === 0).length;
+  const expOnlyStill = gasRows.filter(r => deltaOf(r.m.old.uLimbExponent, r.m.neu.uLimbExponent) === 0
+                                        && deltaOf(r.m.old.uLimbColor, r.m.neu.uLimbColor) !== 0).length;
+  o.push(`**${gasStill.length} of ${gasRows.length}** gas bodies move none of the five uniforms. A row of "moved" counts with no`);
+  o.push('account of the residue is how a partial mechanism gets read as a total one, so:');
+  o.push('');
+  o.push(`- **${gasStillNoP}** carry \`atmosphere.pressure == 0\`. The greenhouse factor is exactly 1 there by`);
+  o.push('  construction (`P = 0 ⇒ tau = 0`), so OLD and NEW are the *same number* and the guard has nothing');
+  o.push('  to remove. These are not bodies the guard failed on; they are bodies it was already correct on.');
+  o.push(`- **${gasStillP}** carry a non-zero pressure and still do not move — and **${gasStillPrimZero} of those ${gasStillP}** have`);
+  o.push('  `primordialFractionOf(cond) == 0`.');
+  o.push('');
+  if (gasStillPrimZero > 0) {
+    o.push('⚠⚠ **THAT IS A SECOND DISAGREEMENT, NOT A ROUNDING — and it is worth more than the row it sits in.**');
+    o.push('`compositionClass` calls a body `\'gas\'` on ONE test: `atmosphere.composition === \'h2-he\'`, a');
+    o.push('label the generator wrote. `primordialFractionOf` asks a physical question instead — the Jeans');
+    o.push('escape parameter λ_H2 = m·v_esc²/(2kT_exo) against `LAMBDA_H2_LO`/`LAMBDA_H2_HI` — and answers');
+    o.push(`**"this body cannot hold hydrogen"** for ${gasStillPrimZero} of the ${gasRows.length} bodies the label calls a hydrogen envelope.`);
+    o.push('With `prim == 0` the deck ramp is mixed in at weight zero, `thickHaze` collapses, and the optics');
+    o.push('stop reading `T_eq` at all — which is why the guard is invisible on exactly these bodies.');
+    o.push('');
+    o.push('**Two engine functions disagree about which bodies have a hydrogen envelope.** That is this');
+    o.push('codebase\'s "one quantity, two answers" shape, and it is *out of scope for item 4*: the guard is');
+    o.push('correct to key on `compositionClass`, because that is the predicate the vector itself classifies');
+    o.push('on at body-condition-vector.js:107 `const _class = compositionClass(`, and a second opinion at');
+    o.push('this seam would be the defect, not the fix.');
+    o.push('It is recorded here so the next step that reads either function inherits a named');
+    o.push('finding rather than rediscovering it against the wrong commit.');
+    o.push('');
+  }
+  o.push(`Separately, **${expOnlyStill}** gas bodies move a \`uLimbColor\` channel while \`uLimbExponent\` stays put — the`);
+  o.push('exponent is a function of `thickHaze`, which saturates at 1.0 on a deep envelope, so both');
+  o.push('temperatures can land on the same clamped exponent while the hue ramp underneath still moves.');
+  o.push('That is why the two "moved" counts differ, and why quoting only the exponent count would');
+  o.push('understate the change.');
+  o.push('');
+  o.push('### ⚠ The affected set is NOT the game\'s `gas-giant` types — it crosses them');
+  o.push('');
+  o.push('A reviewer reading a failing byte-identity fence will see bodies labelled `rocky`, `crystal` and');
+  o.push('`ice` in the moved list and reasonably suspect a leak. It is not one, and the check is mechanical:');
+  o.push('**every** body the guard touches carries `atmosphere.composition === \'h2-he\'`, because that is the');
+  o.push('one test `compositionClass` applies. The game `type` label is not consulted anywhere on this path —');
+  o.push('which is the adapter\'s stated doctrine, not an accident of it.');
+  o.push('');
+  const gasByType = new Map(), allByType = new Map();
+  for (const r of rows) {
+    const t = r.body.type ?? '(none)';
+    allByType.set(t, (allByType.get(t) || 0) + 1);
+    if (r.m.gas) gasByType.set(t, (gasByType.get(t) || 0) + 1);
+  }
+  const notH2He = gasRows.filter(r => r.cond.atmosphere?.composition !== 'h2-he').length;
+  const h2heNotGas = nonGasRows.filter(r => r.cond.atmosphere?.composition === 'h2-he').length;
+  o.push(`- gas-class bodies whose \`atmosphere.composition\` is **not** \`'h2-he'\`: **${notH2He}**`);
+  o.push(`- \`'h2-he'\` bodies that are **not** gas-class: **${h2heNotGas}**`);
+  o.push(`- so the affected set and the \`'h2-he'\` set are ${notH2He === 0 && h2heNotGas === 0 ? '**the same set, exactly**' : '**NOT the same set — investigate before reading anything below**'}.`);
+  o.push('');
+  o.push('Game `type` labels inside the affected set, which is the part that looks wrong and is not:');
+  o.push('');
+  o.push('| game `type` | gas-class | total in population |');
+  o.push('|---|---:|---:|');
+  for (const [t, c] of [...gasByType.entries()].sort((a, b) => b[1] - a[1])) {
+    o.push(`| \`${t}\` | ${c} | ${allByType.get(t)} |`);
+  }
+  o.push('');
+  o.push('## GENERATED, non-gas — the control');
+  o.push('');
+  o.push('The guard is supposed to be **exactly inert** outside the gas class.');
+  o.push('');
+  o.push(limbTable(nonGasStats, nonGasRows.length));
+  o.push('');
+  o.push(`⛔ **A column of zeros here proves nothing on its own** — it is what a comparator that is not wired also prints. So the SAME comparator, on the SAME ${live.n} non-gas bodies, was handed a moved \`T_eq\`:`);
+  o.push('');
+  o.push('| probe | what it changes | non-gas bodies it moved |');
+  o.push('|---|---|---:|');
+  o.push(`| near | \`T_eq\` → \`T_eq + ${live.deltaK}\` K | **${live.movedNear} / ${live.n}** |`);
+  o.push(`| wide | \`T_eq\` = ${LIVE_T_LO} K vs ${LIVE_T_HI} K — spans every anchor in both hue ramps | **${live.movedWide} / ${live.n}** |`);
+  o.push('');
+  o.push(live.movedWide > 0
+    ? '**The comparator is wired.** The zeros in the table above are therefore a fact about the guard, not about the instrument.'
+    : '⛔ **ZERO under a full-range probe — the comparator is blind and the control table above is meaningless.**');
+  o.push('');
+  o.push('⚠ **And the fraction is not 100%, which is a fact about the optics law and is stated rather than');
+  o.push('quietly dropped.** `T` reaches these five uniforms through exactly two doors: `hazeFractionOf`,');
+  o.push('and `primordialFractionOf` — whose Jeans λ carries `T_exo = 3.5·T_eq` in its denominator, so it');
+  o.push('is temperature-dependent on a **solid** body too. Both doors are evaluated at both probe');
+  o.push('temperatures and counted:');
+  o.push('');
+  o.push('| non-gas subset | n | moved under the wide probe |');
+  o.push('|---|---:|---:|');
+  o.push(`| at least one door open at some probe temperature | ${live.canMove} | **${live.wideAmongCanMove}** |`);
+  o.push(`| both doors shut at both ends (\`haze == 0\` and \`prim == 0\`) | ${live.tIndependent} | ${live.tIndependent - live.tIndepAndStill} |`);
+  o.push('');
+  o.push(`Of the ${live.tIndependent} bodies with both doors shut, **${live.tIndepAndStill}** did indeed not move — ${live.tIndependent === 0 ? 'n/a' : ((100 * live.tIndepAndStill) / live.tIndependent).toFixed(1) + '%'} agreement between the`);
+  o.push('mechanism and the observation. That agreement is why the shortfall is attributed to the law');
+  o.push('rather than offered as an excuse for it.');
+  o.push('');
+  o.push('⚠ **The first version of this decomposition was WRONG and is recorded rather than replaced.** It');
+  o.push('predicted temperature-blindness from the haze gates alone (`volatileFraction > HAZE_VOL_LO` or');
+  o.push('`pressure > HAZE_P_THICK`) and called **425** of these bodies blind against **285** observed — it');
+  o.push('had missed that `primordialFractionOf` reads temperature. A predicate that over-predicts the');
+  o.push('blind set by 140 bodies is exactly how a real shortfall gets explained away, so the model was');
+  o.push('replaced by the measurement above rather than tuned.');
+  o.push('');
+  o.push('## ACYCLICITY — why classifying first and setting `T_eq` second is well-defined');
+  o.push('');
+  o.push('The guard runs `compositionClass` **before** it decides `T_eq`, because its answer is one of');
+  o.push('the fp\'s own fields. That ordering is sound only while the composition gate does not itself read');
+  o.push('temperature — and that is a property of a function in another file. So it is checked, not assumed:');
+  o.push('every body is classified at **100 K and at 1500 K** and the two answers must agree.');
+  o.push('');
+  o.push(`**${acyc.n - acyc.disagreed} / ${acyc.n}** bodies classified identically at both temperatures. ${acyc.disagreed === 0 ? 'The gate is temperature-independent, so the ordering is acyclic and the guard is a single pass.' : `⛔ **${acyc.disagreed} DISAGREED** — the composition gate now reads temperature, the guard is a fixpoint, and it must be rewritten rather than reordered. Examples: ${acyc.examples.join('; ')}.`}`);
+  o.push('');
+  o.push('## MATERIAL CROSS-CHECK — the control that makes the rest admissible');
+  o.push('');
+  o.push('Three of the five uniforms come out of the shipped `atmosphereOpticsOf`, but `uTermStrength`');
+  o.push('and `uTermWidth` are finished by expressions that live in `src/objects/Planet.js` and are not');
+  o.push('exported, so this tool transcribes them. A transcription is exactly the kind of thing that is');
+  o.push('true when written and misleading later. So it is not trusted: every body is built as a real');
+  o.push('`new Planet(rec)` and the five recomputed values are compared against');
+  o.push('`planet.surface.material.uniforms`, exactly, with no tolerance.');
+  o.push('');
+  o.push('| | count |');
+  o.push('|---|---:|');
+  o.push(`| bodies built as a real \`Planet\` | ${xc.built} |`);
+  o.push(`| construction failed | ${xc.failed} |`);
+  o.push(`| live material matched **neither** law (⇒ the transcription has drifted) | **${xc.matchesNeither}**${xc.neitherIds.length ? ' — e.g. ' + xc.neitherIds.join(', ') : ''} |`);
+  o.push(`| bodies where OLD and NEW **differ at all** (the discriminating set) | ${xc.discriminating} |`);
+  o.push(`| …of those, live material == **NEW** | ${xc.dNew} |`);
+  o.push(`| …of those, live material == **OLD** | ${xc.dOld} |`);
+  o.push(`| …of those, live material == neither | ${xc.dNeither} |`);
+  o.push('');
+  o.push(`**Verdict: this tree implements \`${xc.treeLaw}\`.** That is read off the shipped material, not off the`);
+  o.push('source text — which is what lets `node tools/port-condition-delta.mjs --step4 --check` go red the');
+  o.push('moment the guard is reverted, and is the executed control §11.3.3 asks for.');
+  o.push('');
+  o.push('## ⚠ UNDECLARED MOVERS — what else the guard moves, measured because Instrument C will show it');
+  o.push('');
+  o.push('Step 4\'s gate names five uniforms. `condition.T_eq` is not read only by `atmosphereOpticsOf`:');
+  o.push('it also reaches the `WORLDENGINE_BAKES` that `PlanetGenerator.generate` writes onto the record,');
+  o.push('and the biosphere pair, all of which become shipped uniforms of their own. Those are **watched by');
+  o.push('Instrument C**, so they appear in its diff whether or not this table names them. A delta table');
+  o.push('that publishes five movers while the instrument publishes thirteen is exactly the true-and-');
+  o.push('misleading shape this program keeps catching, so they are named here.');
+  o.push('');
+  o.push('Same gas-class population, same |Δ| rule. The middle column is the join key against Instrument');
+  o.push('C\'s output (`npm run port-uniform-delta:check`), so the two can be read against each other');
+  o.push('instead of being taken on trust:');
+  o.push('');
+  o.push('| quantity | shipped uniform it becomes | moved / n | median |Δ| | max |Δ| |');
+  o.push('|---|---|---:|---:|---:|');
+  for (const k of STEP4_QUANTITY_ORDER) {
+    const s = gasBakes.get(k);
+    if (s.moved === 0) continue;
+    o.push(`| \`${k}\` | ${UNIFORM_OF_QUANTITY[k] ? '`' + UNIFORM_OF_QUANTITY[k] + '`' : '—'} | ${s.moved} / ${gasRows.length} | ${fmt(s.median)} | ${fmt(s.max)} |`);
+  }
+  const bakeZeros = STEP4_QUANTITY_ORDER.filter(k => gasBakes.get(k).moved === 0);
+  o.push('');
+  o.push(`Quantities that read exactly 0 on all ${gasRows.length} gas bodies (${bakeZeros.length}): ${bakeZeros.map(k => '`' + k + '`').join(', ') || '—'}`);
+  o.push('');
+  const shippedExtra = STEP4_QUANTITY_ORDER.filter(k => gasBakes.get(k).moved > 0
+    && UNIFORM_OF_QUANTITY[k] && !UNIFORM_OF_QUANTITY[k].startsWith('('));
+  o.push(`**${shippedExtra.length} shipped uniforms beyond the declared five** therefore move under this guard:`);
+  o.push(shippedExtra.map(k => '`' + UNIFORM_OF_QUANTITY[k] + '`').join(', ') + '.');
+  o.push('`landPalette.craton` is measured and moves too, but it is not written to any uniform, so it is');
+  o.push('listed above and excluded from that count.');
+  o.push('');
+  o.push('⚠ **The counts here and Instrument C\'s will not match body-for-body, and should not be expected');
+  o.push('to.** Instrument C runs its own 526-body population; this table runs the one declared above. The');
+  o.push('claim they jointly support is *which* uniforms move and by roughly what magnitude — not a shared');
+  o.push('per-body count. Two things do corroborate exactly, across two independently written harnesses:');
+  o.push('`uLimbExponent`\'s maximum |Δ| of 1.7 (the law\'s entire 1.8–3.5 span), and `uTermStrength` /');
+  o.push('`uTermWidth` reading **zero on both**.');
+  o.push('');
+  o.push('## SOL — second population, clearly labelled');
+  o.push('');
+  o.push('⛔ **Pure-function arithmetic on data records, and nothing else.** No Sol pixel was inspected.');
+  o.push('Sol renders from NASA photographic textures through a different renderer and its bodies carry no');
+  o.push('world-engine condition fields, so it cannot validate procgen or rendering. It is measured here');
+  o.push('because the plan names two Sol bodies as members of the affected population, and because a delta');
+  o.push('between two evaluations of a pure function of a record is a fact about the function.');
+  o.push('');
+  o.push(`Sol bodies: **${solRows.length}**, of which **${solGas.length}** are \`compositionClass === 'gas'\`.`);
+  o.push('');
+  o.push('### ⛔⛔ READ THIS BEFORE READING THE SOL NUMBERS: Sol has no `T_eq` at all');
+  o.push('');
+  o.push(`\`rec.T_eq\` is **absent on ${solDefaulted} / ${solRows.length}** Sol bodies — against **${genDefaulted} / ${rows.length}** generated ones. \`SolarSystemData.js\``);
+  o.push('does not author an equilibrium temperature, so `d.T_eq ?? 288` fires and every Sol body enters this');
+  o.push('table at **288 K**, which `conditionFromPlanet`\'s own `_provenance.T_eq` correctly reports as');
+  o.push('`\'defaulted\'`. **The Sol rows below are therefore arithmetic about the number 288, not about');
+  o.push('Uranus.** They are published because the plan names Uranus and Neptune as members of the affected');
+  o.push('population and that claim deserves a checked answer — and the checked answer is that the guard');
+  o.push('does move their uniforms, on a temperature the game invented for them. ⛔ Do not quote a Sol');
+  o.push('magnitude as a physical result, and do not let the two identical rows below read as agreement');
+  o.push('between two independent bodies: they are identical *because* both bodies are the same 288 K.');
+  o.push('');
+  o.push(limbTable(solGasStats, solGas.length));
+  o.push('');
+  o.push('| named body | identified by | gas-class | `rec.T_eq` | OLD `T_eq` | NEW `T_eq` | Δ`uLimbExponent` | max Δ channel `uLimbColor` |');
+  o.push('|---|---|---|---:|---:|---:|---:|---:|');
+  for (const spec of SOL_NAMED) {
+    const r = namedSol(spec);
+    if (!r) { o.push(`| ${spec.label} | orbit ${spec.orbitAU} AU + R ${spec.radiusEarth} R⊕ | _no match — \`SolarSystemData.js\` has been edited_ | | | | | |`); continue; }
+    o.push(`| ${spec.label} | orbit ${spec.orbitAU} AU + R ${spec.radiusEarth} R⊕ | ${r.m.gas ? 'yes' : '**no**'} | ${r.m.tEqDefaulted ? '**absent ⇒ 288**' : fmt(r.m.rawTeq)} | ${fmt(r.m.tOld)} | ${fmt(r.m.tNew)} | ${fmt(deltaOf(r.m.old.uLimbExponent, r.m.neu.uLimbExponent))} | ${fmt(deltaOf(r.m.old.uLimbColor, r.m.neu.uLimbColor))} |`);
+  }
+  o.push('');
+  o.push('⚠ **Jupiter and Saturn are NOT in the affected population, and that is a finding rather than an');
+  o.push('omission.** Both are authored as `type: \'gas-giant\'` with **no atmosphere block at all**, so');
+  o.push('`compositionClass` never sees an `h2-he` composition and does not return `\'gas\'` for them. The');
+  o.push('guard is inert on the two largest bodies in Sol. Uranus and Neptune are affected only because');
+  o.push('they are authored as `sub-neptune` **with** a 1000-bar `h2-he` block. The plan names exactly');
+  o.push('those two, and this run agrees with it.');
+  o.push('');
+  o.push('---');
+  o.push('');
+  o.push('_Regenerate: `node tools/port-condition-delta.mjs --step4`. Gate: `--step4 --check`._');
+  o.push('');
+
+  const text = o.join('\n');
+  if (args.includes('--stdout')) console.log(text);
+  else if (!args.includes('--check')) {
+    const dest = path.join(ROOT, 'docs/FEATURES/step4-limb-delta-table.md');
+    fs.writeFileSync(dest, text);
+    console.log(`wrote ${path.relative(ROOT, dest)}`);
+  }
+
+  console.log('');
+  console.log(`STEP 4 · generated n=${rows.length} (gas ${gasRows.length}, non-gas ${nonGasRows.length})  sol n=${solRows.length} (gas ${solGas.length})`);
+  console.log(`greenhouse factor on gas: median ${fmt(gh.median)}x  max ${fmt(gh.max)}x`);
+  for (const k of LIMB_UNIFORM_ORDER) {
+    const s = gasStats.get(k);
+    console.log(`  ${k.padEnd(14)} moved ${String(s.moved).padStart(4)}/${gasRows.length}  median ${fmt(s.median)}  max ${fmt(s.max)}`);
+  }
+  console.log(`non-gas control: moved ${LIMB_UNIFORM_ORDER.map(k => nonGasStats.get(k).moved).join('/')} of ${nonGasRows.length}; liveness near ${live.movedNear}/${live.n}, wide ${live.movedWide}/${live.n} (${live.tIndependent} structurally T-blind)`);
+  console.log(`material cross-check: built ${xc.built}, failed ${xc.failed}, neither ${xc.matchesNeither}, discriminating ${xc.discriminating} (NEW ${xc.dNew} / OLD ${xc.dOld}) => tree implements ${xc.treeLaw}`);
+  console.log(`acyclicity: ${acyc.n - acyc.disagreed}/${acyc.n} classified identically at 100K and 1500K`);
+  console.log(`reproduction: ${repro ? 'PASS' : 'FAIL'} (${reproN} bodies re-measured, ${reproMismatch} mismatches)`);
+
+  // ── EXIT RULES ─────────────────────────────────────────────────────────────────────────────
+  let rc = 0;
+  const fail = (msg) => { console.error(msg); rc = Math.max(rc, 2); };
+  if (xc.matchesNeither > 0) fail(`CONTROL FAILED: ${xc.matchesNeither} bodies matched NEITHER law — the Planet.js transcription in this tool has drifted. Every delta above is suspect.`);
+  if (xc.discriminating === 0) fail('CONTROL FAILED: OLD and NEW produce identical uniforms on every body. The differential is not wired.');
+  if (live.movedWide === 0) fail('CONTROL FAILED: the non-gas liveness probe moved nothing even under a full-range T sweep — the non-gas zero column is vacuous.');
+  if (!repro) fail(`CONTROL FAILED: the table did not reproduce on a second build (${reproMismatch} mismatching bodies).`);
+  if (acyc.disagreed > 0) fail(`CONTROL FAILED: compositionClass returned different classes at 100 K vs 1500 K on ${acyc.disagreed} bodies — the composition gate now reads temperature, so conditionFromPlanet's classify-then-set-T_eq ordering is a fixpoint. The guard must be rewritten, not reordered.`);
+  // §11.3.6 — a declared pixel-moving step's named movers must move.
+  const declaredMovers = ['uLimbExponent', 'uLimbColor', 'uTermColor'];
+  for (const k of declaredMovers) {
+    if (gasStats.get(k).moved === 0) { console.error(`§11.3.6: declared mover ${k} did not move on any of ${gasRows.length} gas bodies.`); rc = Math.max(rc, 1); }
+  }
+  // uTermStrength / uTermWidth are NAMED BY THE GATE and measured at exactly zero. Their zero is a
+  // fact about the laws, not a blind comparator: both read ONLY atmosphere.pressure, which the guard
+  // does not touch. Said out loud rather than left as an unexplained blank row.
+  for (const k of ['uTermStrength', 'uTermWidth']) {
+    if (gasStats.get(k).moved === 0) {
+      console.error(`NOTE §11.3.6: ${k} is named by Step 4's gate and moved on 0/${gasRows.length}. Expected — it is a function of atmosphere.pressure alone (columnFractionOf / termWidthFor), and the guard changes only T_eq. Exit code unaffected.`);
+    }
+  }
+  if (args.includes('--check')) {
+    if (xc.treeLaw !== 'NEW') {
+      console.error(`GATE FAILED: the live material implements ${xc.treeLaw}, not NEW. The no-surface guard in src/worldengine/port/conditionFromPlanet.js is absent, reverted or not reaching the material.`);
+      rc = Math.max(rc, 1);
+    } else {
+      console.log('GATE: the live material implements NEW — the no-surface guard is landed and reaching the shipped uniforms.');
+    }
+  }
+  process.exit(rc);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
 // REPORT
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 function gitHead() {
@@ -624,8 +1303,14 @@ function tableFor(m) {
 
 function main() {
   const args = process.argv.slice(2);
-  const unknown = args.filter(a => !['--stdout', '--selftest'].includes(a));
-  if (unknown.length) { console.error(`usage: node tools/port-condition-delta.mjs [--stdout|--selftest]`); process.exit(64); }
+  const unknown = args.filter(a => !['--stdout', '--selftest', '--step4', '--check'].includes(a));
+  if (unknown.length) { console.error(`usage: node tools/port-condition-delta.mjs [--stdout|--selftest] | --step4 [--stdout|--check]`); process.exit(64); }
+  if (args.includes('--check') && !args.includes('--step4')) {
+    console.error('--check is only defined for --step4 (Step 2 has no tree-state gate; see this file\'s header).');
+    process.exit(64);
+  }
+
+  if (args.includes('--step4')) { runStep4(args); return; }   // async; exits itself
 
   if (args.includes('--selftest')) process.exit(runSelftest() ? 0 : 3);
 
