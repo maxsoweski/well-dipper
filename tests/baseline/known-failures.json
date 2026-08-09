@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-09T06:46:53.658Z",
+  "recordedAt": "2026-08-09T22:00:47.272Z",
   "recordedFromCommit": {
-    "sha": "09c88549bb30ef2dcabcdc45748d61b89e51ea82",
+    "sha": "ce5f7b46d0e85c377cd0f566749f9c37c536ac03",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -27,12 +27,12 @@
   },
   "summary": {
     "counts": {
-      "collectedFiles": 308,
+      "collectedFiles": 309,
       "failingFiles": 2,
       "nonCollectingFiles": 15,
-      "tests": 4842,
+      "tests": 4868,
       "failed": 24,
-      "passed": 4814,
+      "passed": 4840,
       "skipped": 4,
       "todo": 0
     },
@@ -230,6 +230,7 @@
       "tests/crater-uniform-law.test.js": 26,
       "tests/feature-associations.test.js": 17,
       "tests/gen-feature-cards.test.js": 3,
+      "tests/giant-regime-classifier.test.js": 22,
       "tests/gravity-provenance-fence.test.js": 6,
       "tests/gravity-selfcompression.test.js": 22,
       "tests/hashgrid-pacing.test.js": 3,
@@ -269,7 +270,7 @@
       "tests/planet-scale-calibration.test.js": 3,
       "tests/planet-scale.test.js": 13,
       "tests/planet-vis-scale.test.js": 9,
-      "tests/port-condition-contract.test.js": 60,
+      "tests/port-condition-contract.test.js": 64,
       "tests/port-limb-optics.test.js": 10,
       "tests/port-route-agreement.test.js": 10,
       "tests/port-terminator-law.test.js": 9,
