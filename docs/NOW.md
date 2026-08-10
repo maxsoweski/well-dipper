@@ -4,6 +4,44 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> ## ⭐ 2026-08-10 — AGENT CAMERA API SHIPPED (`606df5a`..`34046f4`). THE BEACH-BALL PROBLEM IS A NUMBER NOW.
+>
+> `_lab.frameBody(subject, {radii})` and `_lab.approachSweep(subject, {from,to,steps})` exist on
+> **both front-ends**. Max asked for this: *"a better system for you to drive in orrery, snap to
+> planets/moons/stars at various radii without having to use the human interface"*, and ruled the lab
+> page in so both can be framed by the same code.
+>
+> **The headline, measured on both front-ends (seed `lab-procedural-6`):**
+> ```
+> 20 -> 13.84 -> 9.57 -> 6.62 -> 4.58 -> 3.17 -> 2.19 -> 1.52 -> 1.05  body radii
+> oct  4.00     6.05    8.19    8.97    9.00    9.00    9.00    9.00    9.00
+> ```
+> Saturation onset in **(6.62, 4.58]**. **Five of nine rungs resolve nothing new** — the disc grows
+> ~4.4× from 4.58 radii to 1.05 while the octave budget does not move. That is Max's
+> approach-consistency criterion as a number for the first time. ⛔ Fixing it is **PLAN §LAYER 7,
+> after Step 7** — unchanged by this.
+>
+> ⭐ **CORRECTION TO A CARRIED CLAIM — read before touching planet-class moons.** The 2026-08-10
+> handoff says their `uOctaves` is "frozen at 4.0". MEASURED: there is **no `uOctaves` to freeze**.
+> A planet-class moon (`body.planet.f5791a`) is **not on the lab material at all** — 71 uniforms,
+> `isLabPlanetMaterial false`, carrying `uReliefOctaves`/`lodLevel` — against an ordinary planet's
+> 356 uniforms with `uOctaves` driven. The LODManager registration gap is **downstream of a material
+> gap**. ⛔ Code that tests for a 4.0 will read `undefined` and conclude the wrong thing.
+>
+> ⚠ **Two contract premises were WRONG and are amended in place, not quietly passed:** the game has
+> **no near clamp** on the `focusOn` path (asked 0.4, achieved 0.4, camera inside the body — the
+> `radius*1.05` floor belongs to ORRERY focus min-distance); and AC-3's planet-class-moon prediction,
+> above. ⛔ **AC-3's `agrees:false` branch is unit-tested only** — not witnessed live in any scanned
+> seed. Do not quote AC-3 as fully closed.
+>
+> ⛔ **`setCameraPose` is FIXED** (it never called `cameraInterp.resync`, so it reported `posDelta: 0`
+> with the pose reading back correctly while the camera left). Callers silently getting a stale pose
+> now get the pose they asked for. **Prefer `frameBody`**: `focusOn` writes controller STATE, which
+> every frame recomputes from, instead of defending a hand-written pose against the loop.
+>
+> Contract + evidence: `docs/WORKSTREAMS/agent-camera-api-2026-08-10/`. All four instruments green,
+> citations 320.
+
 > ## ⭐ 2026-08-06 — MASTER MERGED INTO LANE A (`a865753` + `a52b2ce`)
 >
 > Lane A now carries trunk's **navigation / ORRERY / cockpit**, so generated systems are

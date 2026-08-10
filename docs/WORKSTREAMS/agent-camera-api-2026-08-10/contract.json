@@ -2,7 +2,24 @@
   "workstream": "agent-camera-api-2026-08-10",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verified",
+  "verification": {
+    "at": "34046f4",
+    "date": "2026-08-10",
+    "driver": "working-Claude via chrome-devtools against localhost:5173, both front-ends, seed lab-procedural-6",
+    "serverProvenance": "confirmed serving THIS tree before any result was trusted — `_lab.frameBody` is present and did not exist minutes earlier",
+    "results": {
+      "AC-1": "PASS both front-ends, each with a positive control that MOVED. Game: framed pose drift 0.000000 units over 40 frames; camera-only write of the same magnitude erased, 6928.204 units, snapping back to within 0.001225 of the framed pose. Lab: 0.0000% vs a control erased at 66.67%.",
+      "AC-2": "PASS as amended. Lab clamp 1.05->1.10 reported; plain moon asked 3 achieved 2.9999; achieved matches shotState's independent route to 0.0000% at 12/4/1.5 radii. Game near-clamp absent — recorded as a finding.",
+      "AC-3": "PARTIAL. Agreement branch verified live (4dp at 9 rungs); no-uniform branch verified live with the reason named; `agrees:false` branch unit-tested only, NOT witnessed live.",
+      "AC-4": "PASS. 9-rung tables from both front-ends, identical asked values, achieved agreeing to 4dp, diverging only at the clamped last rung.",
+      "AC-5": "PASS. Star framed against its AUTHORED radius 4.720087; plain moon at 2.9999 of 0.012134; planet-class moon reachable by name; star LOD uniforms null rather than 0.",
+      "AC-6": "PASS with five hand-authored mutants, each run RED and restored GREEN."
+    },
+    "headline": "Saturation onset in (6.62, 4.58] body radii. Five of nine rungs resolve nothing new — the disc grows ~4.4x from 4.58 to 1.05 while the octave budget stays pinned at 9.",
+    "instruments": "all four green; citations 320",
+    "methodNote": "The first AC-1 control run reported 'did not move' because it sampled through shotState, which spends 500ms measuring fps BEFORE reading geometry — both samples landed post-erasure. The instrument, not the code. cameraPose() is synchronous and gave the real answer."
+  },
   "acceptanceCriteria": [
     {
       "id": "AC-1",
@@ -16,7 +33,7 @@
     },
     {
       "id": "AC-2",
-      "statement": "The call reports what it ACHIEVED, not what was asked. Both front-ends clamp the near end — the lab's `minCameraDistance(sVis)` only ever raises distance, and the game holds a radius*1.05 zoom floor — so at exactly the close radii Max cares about, asked and achieved diverge. The returned number is the achieved one, measured in the renderer's own frame.",
+      "statement": "The call reports what it ACHIEVED, not what was asked. The returned number is the achieved one, measured in the renderer's own frame. ⚠ AMENDED AFTER MEASUREMENT (2026-08-10): this AC originally asserted that BOTH front-ends clamp the near end. Only the lab does — `minCameraDistance(sVis)` raised an ask of 1.05 to 1.10. The game applied NO clamp on the focusOn path: asked 0.4, achieved 0.4, camera inside the body. The radius*1.05 floor belongs to ORRERY focus min-distance, not to focusOn. The AC is therefore verified on the lab's clamp plus two independent no-echo demonstrations, and the game's missing near clamp is recorded as a finding for Max rather than treated as a pass or a fix.",
       "verifyVia": {
         "input": "Ask for a radius BELOW the near-end clamp on each front-end (e.g. `{radii: 1.0}`), and for one comfortably above it (`{radii: 8}`).",
         "observable": "For the below-clamp ask, the returned `achieved.radii` differs from the asked value and equals an independent measurement taken from the live scene graph via `getWorldPosition`/`getWorldScale` (the rebase-immune method `_lab.shotState().geometry.distanceRadii` already uses) to within 1%. For the above-clamp ask, asked and achieved agree to within 1%. No call ever echoes the asked value back as though it were achieved."
@@ -29,7 +46,7 @@
       "statement": "The call reports the LOD state it produced, with the renderer's LIVE uniform values and the values predicted from the achieved distance reported SEPARATELY — so a disagreement between them is visible rather than averaged away. This is what turns a side-by-side into two pictures with numbers attached.",
       "verifyVia": {
         "input": "`_lab.frameBody({kind:'planet', p:3}, {radii:2})` on a generated system, then the same against a PLANET-CLASS MOON.",
-        "observable": "The return carries live `uOctaves`/`uLodRamp` read off the body's material AND `predicted.octaves`/`predicted.ramp` computed by `lodRampOf`/`autoOctaves` (imported from `planet-lod-lab-core.js`, the shared law) from the achieved radii — as separate fields. On the planet, they agree. On the planet-class moon they DISAGREE — live `uOctaves` reads its 4.0 default against a higher predicted value — surfacing the unregistered-moon defect at `src/main.js:7437` (`lodManager.register(moon)` sits in the `else` arm) instead of concealing it."
+        "observable": "The return carries live `uOctaves`/`uLodRamp` read off the body's material AND `predicted.octaves`/`predicted.ramp` computed by `lodRampOf`/`autoOctaves` (imported from `planet-lod-lab-core.js`, the shared law) from the achieved radii — as separate fields, so a mismatch is visible rather than averaged away. ⚠ AMENDED AFTER MEASUREMENT (2026-08-10): the planet-class-moon prediction in this AC was WRONG. Measured on `body.planet.f5791a`, such a moon carries NO `uOctaves` uniform to be frozen at 4.0 — it is not on the lab material at all (71 uniforms, isLabPlanetMaterial false, carries `uReliefOctaves`/`lodLevel` instead), so the LODManager registration gap is downstream of a material gap. VERIFIED: ordinary planet agrees to 4dp at all 9 rungs; no-uniform bodies report `agrees: null` with the reason named, and the sweep now refuses to present the law's octave column as a measurement of such a body. ⛔ RESIDUAL: the `agrees: false` branch (uniform present but not driven) is NOT witnessed live — no body in the scanned seeds is both lab-material and unregistered. It is unit-tested only, and AC-3 must not be quoted as fully closed."
       },
       "layer": "integration",
       "live": true
