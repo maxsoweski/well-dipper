@@ -41,6 +41,38 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > + reasoning: [`FEATURES/lab-pipeline-into-game-PLAN.md`](FEATURES/lab-pipeline-into-game-PLAN.md)
 > header. ⛔ Do not re-propose the snapshot before MVP is declared.
 
+> ## ⭐⭐ 2026-08-09 — STEP 6 SHIPPED. MAX'S RULING ON WHAT THE GATE ACTUALLY IS.
+>
+> **The first gas giant ever rendered through the world engine is on screen** (`lab-procedural-6`,
+> `p=5`, 10.6 R⊕). Bands driven from the body's own condition: `uBandStrength` 1.0, `uBandContrast`
+> 0.64, `uJetStrength` 1.0, and an `aBand` attribute carrying **2,160 real per-vertex values spanning
+> 0.31–0.76** — the body's physics, not a default.
+>
+> ⛔ **THE GATE IS THE PIPELINE, NOT THE PICTURE — Max, 2026-08-09.** Verbatim: *"it's still rough but
+> that's fine, what matters is we're making process wiring these systems up. Not everything was fully
+> baked in the world engine; this is why wiring up matters, so as we continue iterating in world
+> engine we will be able to (relatively) easily see those changes reflected in the game as well."*
+>
+> **Read that as an instruction, because it inverts the obvious reading of Step 6's UAT gate.** A
+> rough-looking giant is a SUCCESSFUL Step 6. The roughness lives in the world engine's own laws, and
+> the entire value of the wiring is that improving those laws now shows up in the game without a
+> porting job. ⛔ **Do NOT treat visual roughness as a blocker, do NOT start tuning the look to make
+> the step feel finished, and do NOT ask Max to sign off on appearance as though it were the gate.**
+> The thing under test is whether the seam carries change. It does.
+>
+> ⚠ **Two declared losses are live on screen and were predicted on paper hours earlier** — ledger C19
+> and C20, now observable rather than argued: `uPolarStrength` = 0 (no polar vortex; its producer,
+> `applyStormState`, is fenced out of pack #1) and `uLimbStrength` = 0 (no rim glow; the game writes
+> `uLimbMix` and the lab reads `uLimbStrength`, and nobody ever wired the two names together).
+> Under Max's own parity ruling an accepted loss is allowed and an UNDECLARED one is blocking; these
+> are declared. Porting both is the default (standing constraint 1: the game bends) and is ON-thesis
+> for the framing above — it is wiring, not polish.
+>
+> To see it: `localStorage.setItem('wd.labGasBodies','1')` then reload (the flag is OFF by default and
+> must survive a reload, because the OFF frame of every comparison IS a reload). Then
+> `await _lab.spawnProceduralSystem('lab-procedural-6')`. Seeds carrying gas giants, measured over 40:
+> `-6` (two, 7.6R + 10.6R), `-15` (13.5R), `-8` (11.3R), `-4` (6.0R). 25 of 40 carry a gas-CLASS body.
+
 > ## ⭐⭐ 2026-08-01 — ACTIVE ARC: THE LAB'S PIPELINE GOES INTO THE GAME
 >
 > **Plan of record: [`FEATURES/lab-pipeline-into-game-PLAN.md`](FEATURES/lab-pipeline-into-game-PLAN.md).**
