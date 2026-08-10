@@ -129,7 +129,7 @@ export function surfaceTemperatureOf(T_eq, pressureBar) {
 // `condition.T_eq` is atmosphereOptics.js:132 `const T    = cond?.T_eq ?? 288;` — the FIRST line of
 // `atmosphereOpticsOf`, and the input to every hue ramp and to atmosphereOptics.js:161
 // `limbExponent: 3.5 - 1.7 * thick,`. Its output is written live into the shipped material at
-// src/objects/Planet.js:1584 `const optics = atmosphereOpticsOf(condition);` → :1617
+// src/objects/Planet.js:1610 `const optics = atmosphereOpticsOf(condition);` → :1617
 // `uLimbExponent: { value: optics.limbExponent },` and its four siblings, and the limb is fully on
 // today: src/objects/Planet.js:1401 `const LIMB_MIX = 1.0;`. The delta is MEASURED and COMMITTED at
 // `docs/FEATURES/step4-limb-delta-table.md` rather than described here, with the population fully

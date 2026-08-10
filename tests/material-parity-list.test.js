@@ -189,7 +189,7 @@ function census(n) {
   return out;
 }
 
-/** src/objects/Planet.js:1890 `_typeIndex() {` — the same ordered list, which IS the GLSL branch id. */
+/** src/objects/Planet.js:1916 `_typeIndex() {` — the same ordered list, which IS the GLSL branch id. */
 const TYPE_INDEX = [
   'rocky', 'gas-giant', 'ice', 'lava', 'ocean', 'terrestrial',
   'hot-jupiter', 'eyeball', 'venus', 'carbon', 'sub-neptune',

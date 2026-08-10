@@ -24,8 +24,14 @@ export class Moon {
   _createMesh(lightDir, lightDir2, starInfo) {
     const d = this.data;
     // Terrestrial moons get higher resolution (clouds + atmosphere need smoother rim)
-    const subdivisions = d.type === 'terrestrial' ? 4 : 3;
-    const geometry = new THREE.IcosahedronGeometry(d.radius, subdivisions);
+    // ⭐ SPHERE, NOT ICOSPHERE — same change and same reasoning as `Planet.js:_createSurface`, read
+    // the block there. Moons were WORSE than planets, not better: icosphere detail 3 is 320 triangles
+    // and a ~25-gon limb, already 1.80 render px of limb error at the `radius * 2.8` survey stop —
+    // over the 1-pixel threshold at the distance the autopilot actually parks you. The old detail
+    // 4/3 split is preserved as a 96x48 / 64x32 split so the terrestrial rim stays the smoother one.
+    // ⛔ Same deliberate non-goal: fixed vertex count, no geometric LOD. Nothing displaces position.
+    const [widthSeg, heightSeg] = d.type === 'terrestrial' ? [96, 48] : [64, 32];
+    const geometry = new THREE.SphereGeometry(d.radius, widthSeg, heightSeg);
 
     // Type index: 0=captured, 1=rocky, 2=ice, 3=volcanic, 4=terrestrial
     const typeIndex = ['captured', 'rocky', 'ice', 'volcanic', 'terrestrial'].indexOf(d.type);

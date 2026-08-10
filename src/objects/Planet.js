@@ -1546,7 +1546,33 @@ export class Planet {
   }
 
   _createSurface() {
-    const geometry = new THREE.IcosahedronGeometry(this.data.radius, 5);
+    // ⭐ SPHERE, NOT ICOSPHERE — the limb is the whole reason. `IcosahedronGeometry(r, 5)` shipped
+    // here since March and is 720 triangles: a ~40-gon limb far away that COLLAPSES to 12.8 sides at
+    // the 1.05-radius zoom floor (`ShipCameraSystem.js:859`), because the visible cap shrinks as the
+    // camera closes while the disc grows. Measured threshold: the game crosses 1 render pixel of limb
+    // error at ≈2.6 body radii, so everything inside the autopilot survey stop (`radius * 2.8`) is
+    // visibly faceted. The lab has never had this — `planet-lod-lab.html:280` is
+    // `SphereGeometry(R, 256, 256)`, commented "256 for surface-skimming silhouette".
+    //
+    // ⛔ THE OBVIOUS FIX — raising the icosphere detail — IS THE WORST OPTION, and the reason is not
+    // obvious: `IcosahedronGeometry` is NON-INDEXED. Its 2160 attribute slots carry only 362 distinct
+    // positions (6x duplication), so every per-vertex bake runs 2160 times for 362 answers. Measured:
+    // an indexed `SphereGeometry(r, 64, 32)` is 2145 verts — FIFTEEN FEWER than what shipped — and
+    // still 3.3x the limb quality. `ico d10` needs 3.4x the vertices to match that. 96x48 is chosen
+    // for headroom: 4753 verts (2.2x), limb error 0.879 -> 0.118 render px at 2.8 radii, i.e.
+    // sub-pixel across the ENTIRE reachable range, at 7% of the lab's vertex cost.
+    //
+    // Safe because BOTH uv paths derive from position, not from the geometry attribute — the
+    // procedural shader builds triplanar uv at `:978` (`pos.yz`/`pos.xz`/`pos.xy`) and the
+    // NASA-textured path calls `equirectUV(dir)` at `TexturedBodyShader.js:246`. Nothing reads the
+    // sphere's own uv, so the seam and the poles are inert and Sol's 18 textures cannot shift.
+    //
+    // ⛔ DELIBERATE NON-GOAL: this is NOT geometric LOD. Vertex count is still FIXED at every
+    // distance — no tier swaps the mesh, here or anywhere in `src/rendering/`. It cannot be, because
+    // neither vertex shader displaces `position` (`:1445`, `:1773`), so vertices buy silhouette and
+    // nothing else. Frame cost is unmoved: relief is fragment-side, and tessellation does not change
+    // fragment count. The one real cost is spawn-time per-vertex bakes, ~0.62 -> ~1.05 ms per body.
+    const geometry = new THREE.SphereGeometry(this.data.radius, 96, 48);
     const d = this.data;
     const reliefSeed = reliefOffsets(d);
 

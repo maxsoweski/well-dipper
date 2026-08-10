@@ -311,7 +311,7 @@ function flatten(v) {
 //   {fresh, weathered, craton, sediment}. The lab wrote three of them to
 //   uFreshColor / uBaseColor / uSedColor (planet-lod-lab.html:5431-5433, and the import comment
 //   at :176 said so). The GAME wrote the same three to
-//   uFreshColor / uWeatheredColor / uSedColor (src/objects/Planet.js:1602 `uFreshColor`,
+//   uFreshColor / uWeatheredColor / uSedColor (src/objects/Planet.js:1628 `uFreshColor`,
 //   :1603 `uWeatheredColor`, :1604 `uSedColor`).
 //   Same function, same call, same body — and because the middle one was spelled differently,
 //   uFresh and uSed were watched and the WEATHERED one was not. uWeatheredColor is the largest
@@ -330,12 +330,12 @@ function flatten(v) {
 // This map is the AUTHORITY on which uniform carries which value, so a citation that points one
 // line off does not degrade gracefully — it names the NEIGHBOURING uniform, and it reads as
 // freshly verified while doing it. (Adversarial review, 2026-08-06: ~15 refs here were off by
-// one or two; following `uIceColor → Planet.js:1608` landed on `uIcenessMix: { value: d.iceness }`
+// one or two; following `uIceColor → Planet.js:1634` landed on `uIcenessMix: { value: d.iceness }`
 // and would have "shown" that the map paired a colour with a scalar.)
 //
 // So, two forms, and the choice between them is deliberate:
 //
-//   `Planet.js:1609 \`uIceColor\``   — file, line, AND the symbol at that line. Used for files that
+//   `Planet.js:1635 \`uIceColor\``   — file, line, AND the symbol at that line. Used for files that
 //                                    are STABLE for this program. The symbol is what makes the
 //                                    next drift survivable: grep it, do not trust the integer.
 //                                    ⭐ This form is MACHINE-CHECKED — see `--check-citations`,
@@ -430,7 +430,7 @@ function flatten(v) {
 const UNIFIED_NAMES = [
   {
     name: 'uWeatheredColor', wasLab: 'uBaseColor', unifiedOn: '2026-08-06', tier: 'bake',
-    why: 'surfacePaletteOf(cond).weathered through applyAlbedoTransfer. Game: Planet.js:1603 '
+    why: 'surfacePaletteOf(cond).weathered through applyAlbedoTransfer. Game: Planet.js:1629 '
        + '`uWeatheredColor` reads planetData.landPalette.weathered, baked at PlanetGenerator.js '
        + '`planetData.landPalette = applyAlbedoTransfer(surfacePaletteOf(condition)`. Lab: '
        + 'planet-lod-lab.html:5431 writes the same endmember from the same call at :2794. '
@@ -446,7 +446,7 @@ const ALIASES = [
   {
     game: 'uIceColor', lab: 'uIcenessAlbedo', tier: 'bake',
     why: 'ICE_ALBEDO [0.86,0.90,0.95] (surfaceMaterial.js:231 `export const ICE_ALBEDO`). Game: '
-       + 'Planet.js:1609 `uIceColor` reads planetData.iceColor, set at PlanetGenerator.js '
+       + 'Planet.js:1635 `uIceColor` reads planetData.iceColor, set at PlanetGenerator.js '
        + '`iceColor: ICE_ALBEDO`. Lab: planet-lod-uniforms.js:278 `uIcenessAlbedo` '
        + 'carries the identical triple as "icy-surface tint the rock ramp mixes toward". Same '
        + 'constant, same role, two names. A constant TODAY — which is precisely why it needs a '
@@ -462,7 +462,7 @@ const ALIASES = [
   {
     game: 'noiseScale', lab: 'uNoiseScale', tier: 'record',
     why: 'MANY-TO-ONE, and deliberately so. The game declares the base feature frequency TWICE '
-       + 'from one expression — `noiseScale` (Planet.js:1612 `noiseScale`, the legacy simplex '
+       + 'from one expression — `noiseScale` (Planet.js:1638 `noiseScale`, the legacy simplex '
        + 'stack) and `uNoiseScale` (:1655 `uNoiseScale`, fbmd), both `d.noiseScale`. Only the '
        + 'second was watched. Watching '
        + 'both is the only way a divergence BETWEEN the two paths becomes visible; a tool that '
@@ -489,8 +489,8 @@ const GAME_ONLY_WATCHED = [
   //    game bakes the colour on the CPU instead (`emissiveBlackbody` in PlanetGenerator.generate).
   //    Same law, different side of the CPU/GPU line — so there is no name to alias, and
   //    game-side-only is the correct and complete answer.
-  { game: 'uLavaGlow',  tier: 'bake', why: 'PlanetGenerator.js `planetData.lavaGlowColor = emissiveBlackbody(meltTemperatureOf(condition))` → Planet.js:1610 `uLavaGlow`. Named in Step 2\'s gate (PLAN.md:212 `committed delta table`).' },
-  { game: 'uLavaCrust', tier: 'bake', why: 'PlanetGenerator.js `planetData.lavaCrustColor = emissiveBlackbody(crustTemperatureOf(condition))` → Planet.js:1611 `uLavaCrust`. Named in Step 2\'s gate (PLAN.md:212 `committed delta table`).' },
+  { game: 'uLavaGlow',  tier: 'bake', why: 'PlanetGenerator.js `planetData.lavaGlowColor = emissiveBlackbody(meltTemperatureOf(condition))` → Planet.js:1636 `uLavaGlow`. Named in Step 2\'s gate (PLAN.md:212 `committed delta table`).' },
+  { game: 'uLavaCrust', tier: 'bake', why: 'PlanetGenerator.js `planetData.lavaCrustColor = emissiveBlackbody(crustTemperatureOf(condition))` → Planet.js:1637 `uLavaCrust`. Named in Step 2\'s gate (PLAN.md:212 `committed delta table`).' },
 
   // ── Gates on world-engine output. Constants, watched as dials (see the `gate` tier above).
   { game: 'uLimbMix',          tier: 'gate', why: 'LIMB_MIX (Planet.js:1401). Planet.js:527 `pow(fresnel, mix(3.0, uLimbExponent, uLimbMix))` and :535 mix onto uLimbColor — at 0.0 the entire condition-derived limb is off while uLimbExponent/uLimbColor still read correct.' },
@@ -528,7 +528,7 @@ const UNWATCHED = [
   // stability of a number the game does not ship, which is a green with no subject.
   { game: 'lightDir',            reason: 'runtime', why: 'overwritten per frame — src/main.js:10992 `entry.planet._lightDir.copy(_sunDir)` (also :8589 `planet._lightDir`, :11021 `moon.planet._lightDir`).' },
   { game: 'lightDir2',           reason: 'runtime', why: 'overwritten per frame — src/main.js:10998 `entry.planet._lightDir2.copy(_sunDir2)` (binary companion); constructed as (0,0,0).' },
-  { game: 'time',                reason: 'runtime', why: 'animation clock — Planet.js:1929 `if (mat.uniforms.time)`, through :1918.' },
+  { game: 'time',                reason: 'runtime', why: 'animation clock — Planet.js:1955 `if (mat.uniforms.time)`, through :1918.' },
   { game: 'lodLevel',            reason: 'runtime', why: 'LOD tier — src/rendering/objects/BodyRenderer.js:181 `surface.material.uniforms.lodLevel.value = tier`.' },
   { game: 'starPos1',            reason: 'runtime', why: 'star world position — src/main.js:11057 `pu.starPos1`.' },
   { game: 'starPos2',            reason: 'runtime', why: 'second-star world position — src/main.js:11058 `pu.starPos2.value.copy(_star2Pos)` (also :9885 planet-class moons, :9891 textured moons). ⚠ The old ref here was :11147, a comment inside _updateRenderVisuals stating these are NOT written there — a citation that read as evidence and pointed at its own negation.' },
@@ -661,7 +661,7 @@ function resolveSharedUniforms(probeMaterialUniforms) {
  * separate only because these names need no alias entry.
  *
  * ⭐ RE-VERIFIED LINE BY LINE 2026-08-07 against the uniforms object at
- * src/objects/Planet.js:1596 `const material = new THREE.ShaderMaterial({` … :1709, and every ref
+ * src/objects/Planet.js:1622 `const material = new THREE.ShaderMaterial({` … :1709, and every ref
  * below now carries its SYMBOL so `--check-citations` can assert the pairing mechanically. The
  * previous set was written approximately: five of them landed on the COMMENT above the uniform and
  * three on the NEIGHBOURING uniform, which in a block like this one is not a stale ref, it is a
@@ -674,20 +674,20 @@ function resolveSharedUniforms(probeMaterialUniforms) {
  *   record    — reads a DRAWN planetData field (fingerprint-shadowed)
  */
 const TIER_BY_NAME = {
-  uWeatheredColor: 'bake',    // d.landPalette.weathered  — Planet.js:1603 `uWeatheredColor`.
+  uWeatheredColor: 'bake',    // d.landPalette.weathered  — Planet.js:1629 `uWeatheredColor`.
                               // Name-matched only since 2026-08-06; it was the ALIASES row above
                               // until the lab's uBaseColor was renamed to match. See UNIFIED NAMES.
-  uFreshColor: 'bake',        // d.landPalette.fresh      — Planet.js:1602 `uFreshColor`
-  uSedColor: 'bake',          // d.landPalette.sediment   — Planet.js:1604 `uSedColor`
-  uBioGroundColor: 'bake',    // d.landPalette.pigment    — Planet.js:1643 `uBioGroundColor`
-  uIcenessMix: 'bake',        // d.iceness                — Planet.js:1608 `uIcenessMix`
-  uLimbExponent: 'condition', // atmosphereOpticsOf(cond) — Planet.js:1617 `uLimbExponent`
-  uLimbColor: 'condition',    //                          — Planet.js:1618 `uLimbColor`
-  uTermColor: 'condition',    //                          — Planet.js:1629 `uTermColor`
-  uTermStrength: 'condition', // optics.columnFraction × TERM_STRENGTH — Planet.js:1627 `uTermStrength`
-  uTermWidth: 'condition',    // termWidthFor(cond.atmosphere.pressure) — Planet.js:1628 `uTermWidth`
-  uBioGroundCover: 'condition', // biosphereOf(cond)      — Planet.js:1631 `uBioGroundCover`
-  uCraterDensity: 'condition',  // craterUniformsFrom(cond) — Planet.js:1662 `uCraterDensity`, and
+  uFreshColor: 'bake',        // d.landPalette.fresh      — Planet.js:1628 `uFreshColor`
+  uSedColor: 'bake',          // d.landPalette.sediment   — Planet.js:1630 `uSedColor`
+  uBioGroundColor: 'bake',    // d.landPalette.pigment    — Planet.js:1669 `uBioGroundColor`
+  uIcenessMix: 'bake',        // d.iceness                — Planet.js:1634 `uIcenessMix`
+  uLimbExponent: 'condition', // atmosphereOpticsOf(cond) — Planet.js:1643 `uLimbExponent`
+  uLimbColor: 'condition',    //                          — Planet.js:1644 `uLimbColor`
+  uTermColor: 'condition',    //                          — Planet.js:1655 `uTermColor`
+  uTermStrength: 'condition', // optics.columnFraction × TERM_STRENGTH — Planet.js:1653 `uTermStrength`
+  uTermWidth: 'condition',    // termWidthFor(cond.atmosphere.pressure) — Planet.js:1654 `uTermWidth`
+  uBioGroundCover: 'condition', // biosphereOf(cond)      — Planet.js:1657 `uBioGroundCover`
+  uCraterDensity: 'condition',  // craterUniformsFrom(cond) — Planet.js:1688 `uCraterDensity`, and
                                 // the block it heads runs to :1672 `uEjectaLump` (:1668
                                 // `uCraterOffset` is reliefOffsets, not craterUniformsFrom)
   uCraterComplexD: 'condition',
@@ -700,9 +700,9 @@ const TIER_BY_NAME = {
   uEjectaAmp: 'condition',
   uEjectaLump: 'condition',
   uDispDomainScale: 'gate',   // RELIEF_DOMAIN_SCALE      — Planet.js:1381 `const RELIEF_DOMAIN_SCALE`
-  uFwClamp: 'gate',           // literal 1                — Planet.js:1657 `uFwClamp`
+  uFwClamp: 'gate',           // literal 1                — Planet.js:1683 `uFwClamp`
   uVoroCells: 'gate',         // CRATER_VORO_CELLS        — Planet.js:1395 `const CRATER_VORO_CELLS`
-  uNoiseScale: 'record',      // d.noiseScale             — Planet.js:1655 `uNoiseScale`
+  uNoiseScale: 'record',      // d.noiseScale             — Planet.js:1681 `uNoiseScale`
   uMacroOffset: 'record',     // reliefOffsets(d).macro   — Planet.js:1293 `function reliefOffsets`,
                               // hashed from 8 drawn record fields
   uDetailOffset: 'record',    // reliefOffsets(d).detail
@@ -728,7 +728,7 @@ const TIER_BY_NAME = {
 // assigned onto the record below it (`planetData.landPalette = …`, `planetData.iceness = …`,
 // `planetData.lavaGlowColor = …`, `planetData.lavaCrustColor = …`; `iceColor: ICE_ALBEDO` is a
 // constant in the record literal). They then become shipped uniforms (uIcenessMix, uFreshColor /
-// uSedColor / uWeatheredColor, uLavaGlow, uLavaCrust — Planet.js:1602 `uFreshColor` … :1611
+// uSedColor / uWeatheredColor, uLavaGlow, uLavaCrust — Planet.js:1628 `uFreshColor` … :1611
 // `uLavaCrust`).
 //
 // Hashing them puts this instrument's SUBJECT inside its own matching key. A port change moves
@@ -742,7 +742,7 @@ const TIER_BY_NAME = {
 // catch, wearing the instrument's own uniform — and it would have fired at Steps 2 and 4, the two
 // declared pixel-moving steps that name Instrument C as their primary gate.
 //
-// The negative control did not catch it because the control nudged Planet.js:1617 `uLimbExponent`,
+// The negative control did not catch it because the control nudged Planet.js:1643 `uLimbExponent`,
 // the uniform ASSIGNMENT site, which is DOWNSTREAM of the bake and so moved no planetData field.
 // Every real
 // port change in this plan moves the condition UPSTREAM of the bake. A convincing control can
@@ -900,13 +900,13 @@ if (!MODE) {
 // one or two, and every ref INTO conditionFromPlanet.js — here, in body-condition-vector.js and in
 // PLAN.md, which Steps 2-12 are executed from — had rotted within a day of Step 1 landing 239 lines
 // in that file. No gate could see either. They are not typos: in a uniform block an off-by-one ref
-// NAMES THE NEIGHBOURING UNIFORM, so `uIceColor → Planet.js:1608` resolved to
+// NAMES THE NEIGHBOURING UNIFORM, so `uIceColor → Planet.js:1634` resolved to
 // `uIcenessMix: { value: d.iceness }` and read as proof that the map paired a colour with a scalar.
 //
 // The fix that lasts is not "fix the 15 numbers" — Step 2 re-rots them next week. It is to make the
 // CITATION FORM self-verifying:
 //
-//     Planet.js:1609 `uIceColor`      ← line AND the symbol that must be ON that line
+//     Planet.js:1635 `uIceColor`      ← line AND the symbol that must be ON that line
 //
 // This mode resolves every citation written in that form and fails if the symbol is not there. A
 // ref with NO backticked symbol cannot be checked; those are COUNTED AND PRINTED rather than
@@ -1080,7 +1080,7 @@ function scanCitations(relSrc, text) {
       //
       // ⚠ BACKTICK PARITY, and it is the difference between a fence and a noise generator. In a
       // markdown/comment line the citation itself is often already inside a code span — "following
-      // `uIceColor → Planet.js:1608` landed on `uIcenessMix`". There the next backtick CLOSES the
+      // `uIceColor → Planet.js:1634` landed on `uIcenessMix`". There the next backtick CLOSES the
       // span, and a naive "first backtick after the number" reads the following PROSE span as the
       // symbol and reports a break that is not one. So: only treat the next backtick as a symbol
       // opener when an EVEN number of backticks precede the citation on this line.

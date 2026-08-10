@@ -78,8 +78,8 @@ import {
 // — PlanetGenerator.js `iceColor: ICE_ALBEDO` and `planetData.iceness = icenessOf(condition);`
 // with its three siblings, cited symbol-only per PLAN §10 because that region grows every step.
 // Three more are built per-material inside `_createSurface`:
-// Planet.js:1571 `craterUniformsFrom(condition)`, Planet.js:1584 `const optics = atmosphereOpticsOf(condition);`
-// and Planet.js:1591 `const bioCover = biosphereOf(condition);`. If Step 1 moved a pixel,
+// Planet.js:1597 `craterUniformsFrom(condition)`, Planet.js:1610 `const optics = atmosphereOpticsOf(condition);`
+// and Planet.js:1617 `const bioCover = biosphereOf(condition);`. If Step 1 moved a pixel,
 // it moved one of these.
 import {
   surfacePaletteOf, icenessOf, biosphereOf, meltTemperatureOf, crustTemperatureOf,

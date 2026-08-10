@@ -10,7 +10,7 @@
  *          once per generated body, at generation time. Its condition drives the
  *          five values baked ONTO the record: landPalette, iceness, iceColor,
  *          lavaGlowColor, lavaCrustColor.
- *   RENDER src/objects/Planet.js:1568 — `conditionFromPlanet(d)` where `d =
+ *   RENDER src/objects/Planet.js:1594 — `conditionFromPlanet(d)` where `d =
  *          this.data`, once per material, at mesh-build time. Its condition
  *          drives craterUniformsFrom / atmosphereOpticsOf / biosphereOf.
  *

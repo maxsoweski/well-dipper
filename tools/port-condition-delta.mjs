@@ -650,11 +650,11 @@ function termWidthFor(pressureBar) {
 function limbUniformsOf(cond) {
   const o = atmosphereOpticsOf(cond);
   return {
-    uLimbExponent: o.limbExponent,                            // Planet.js:1617 `uLimbExponent: { value: optics.limbExponent },`
-    uLimbColor:    o.limbColor.slice(),                       // Planet.js:1618 `uLimbColor: { value: new THREE.Vector3(...optics.limbColor) },`
-    uTermColor:    o.termColor.slice(),                       // Planet.js:1629 `uTermColor: { value: new THREE.Vector3(...optics.termColor) },`
-    uTermStrength: (o.columnFraction ?? 0) * TERM_STRENGTH,   // Planet.js:1627 `uTermStrength: { value: (optics.columnFraction ?? 0) * TERM_STRENGTH },`
-    uTermWidth:    termWidthFor(cond.atmosphere?.pressure),   // Planet.js:1628 `uTermWidth: { value: termWidthFor(condition.atmosphere?.pressure) },`
+    uLimbExponent: o.limbExponent,                            // Planet.js:1643 `uLimbExponent: { value: optics.limbExponent },`
+    uLimbColor:    o.limbColor.slice(),                       // Planet.js:1644 `uLimbColor: { value: new THREE.Vector3(...optics.limbColor) },`
+    uTermColor:    o.termColor.slice(),                       // Planet.js:1655 `uTermColor: { value: new THREE.Vector3(...optics.termColor) },`
+    uTermStrength: (o.columnFraction ?? 0) * TERM_STRENGTH,   // Planet.js:1653 `uTermStrength: { value: (optics.columnFraction ?? 0) * TERM_STRENGTH },`
+    uTermWidth:    termWidthFor(cond.atmosphere?.pressure),   // Planet.js:1654 `uTermWidth: { value: termWidthFor(condition.atmosphere?.pressure) },`
   };
 }
 
@@ -826,7 +826,7 @@ const STEP4_QUANTITY_ORDER = [...QUANTITY_ORDER, ...STEP4_EXTRA_ORDER];
 
 function step4QuantitiesOf(cond) {
   const q = quantitiesOf(cond);
-  q.biosphere = SM.biosphereOf(cond);                                     // Planet.js:1631 `uBioGroundCover: { value: bioCover },`
+  q.biosphere = SM.biosphereOf(cond);                                     // Planet.js:1657 `uBioGroundCover: { value: bioCover },`
   q['landPalette.pigment'] = applyAlbedoTransfer(SM.surfacePaletteOf(cond), { extra: { pigment: BIO } }).pigment;
   return q;
 }
