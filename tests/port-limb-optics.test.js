@@ -142,3 +142,88 @@ describe('biosphere cover reaches the game from the shared module', () => {
     expect(biosphereOf(conditionFromPlanet({}))).toBe(0);
   });
 });
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// LEDGER C20 — THE SAME LIMB, ON THE MATERIAL THE GAME SWAPS TO.
+//
+// Everything above measures the optics reaching the game's LEGACY material. Step 6 moves every
+// world-engine gas body onto the LAB material, where the rim has a different master gate — and
+// nothing wrote it. That is C20: `grep -rn uLimbStrength src/` returned ZERO hits, measured
+// 2026-08-09, so on a swapped body F34 rendered nothing at all while every gate above stayed green.
+// This block is the other half of the same subject, in the file whose subject it is.
+//
+// ⛔ WHY THE IMPORTS ARE DOWN HERE AND NOT AT THE TOP. Two live `line + symbol` refs resolve INTO
+// this file at lines 47-49 (the `airless` fixture) — from
+// src/worldengine/port/conditionFromPlanet.js:369 `four-key literal` and from the port contract
+// test, both naming lines 47-49 of this file by number. An import block at the top shifts both and
+// `npm run check:instruments` reports them BROKEN, which is the instrument working; the answer is
+// not to bump the integers. `import` is hoisted, so a declaration here binds identically. The same
+// rule is already recorded at src/worldengine/base/e1Regime.js:122 `Three files this lane may not edit cite this module by LINE`.
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+import { compositionClass } from '../src/worldengine/base/e1Regime.js';
+import { buildLabPlanetMaterial } from '../src/rendering/LabPlanetMaterial.js';
+import { writePackUniforms } from '../src/worldengine/port/writePackUniforms.js';
+import { gatesFor } from '../src/worldengine/drivers/index.js';
+import {
+  limbDeckPack, LIMB_DECK_ENTRY, LIMB_STRENGTH_WITH_AIR, LIMB_STRENGTH_AIRLESS,
+} from '../src/worldengine/drivers/limbDeck.js';
+
+describe('C20 — the limb gate reaches the LAB material the game swaps to', () => {
+  const condFor = (key) => conditionFromPlanet(BODIES[key]);
+  const GATES = gatesFor(LIMB_DECK_ENTRY);
+  /** Run the pack onto a fresh lab material and hand back the uniforms map. */
+  function composed(key) {
+    const cond = condFor(key);
+    const ctx = { displayRadiusEarth: cond.radiusEarth ?? 1, gates: GATES };
+    const u = buildLabPlanetMaterial({ bodyRadius: 1 }).material.uniforms;
+    writePackUniforms(u, limbDeckPack(cond, ctx).drivers, ctx);
+    return u;
+  }
+
+  it('the two front-ends spell the master gate differently — which IS the defect', () => {
+    // The lab declares `uLimbStrength` and not `uLimbMix`; the game's legacy material declares
+    // `uLimbMix` and not `uLimbStrength`. Both directions, because a one-directional check passes
+    // on a superset — and this pair of absences is the whole of C20.
+    const lab = buildLabPlanetMaterial({ bodyRadius: 1 }).material.uniforms;
+    expect(lab.uLimbStrength).toBeTruthy();
+    expect(lab.uLimbMix).toBeUndefined();
+    expect(lab.uLimbStrength.value).toBe(0.0);   // ...and its default is OFF, which is the loss
+  });
+
+  it('the gas archetype now gets a NON-ZERO rim on the lab material', () => {
+    // `gasgiant` is the only fixture above whose condition reads compositionClass 'gas', so it is
+    // the only one this pack's predicate claims. Asserted rather than assumed.
+    expect(compositionClass(condFor('gasgiant'))).toBe('gas');
+    expect(LIMB_DECK_ENTRY.applies(condFor('gasgiant'))).toBe(true);
+    expect(composed('gasgiant').uLimbStrength.value).toBe(LIMB_STRENGTH_WITH_AIR);
+    expect(composed('gasgiant').uLimbStrength.value).toBeGreaterThan(0);
+  });
+
+  it('and the predicate refuses every solid archetype, so none of them is swapped at all', () => {
+    for (const key of ['earthlike', 'venuslike', 'titanlike', 'airless']) {
+      expect(LIMB_DECK_ENTRY.applies(condFor(key)), key).toBe(false);
+    }
+  });
+
+  it('the width and hue written to the lab material are the SAME law the legacy path reads', () => {
+    // The gate that says this is a wiring and not a second implementation: the pack forwards
+    // atmosphereOpticsOf's answer, so the swap opens the strength gate and moves nothing else in
+    // this family. A transcribed constant would break here the first time the law moved.
+    const o = opticsFor('gasgiant');
+    const u = composed('gasgiant');
+    expect(u.uLimbExponent.value).toBe(o.limbExponent);
+    expect([u.uLimbColor.value.r, u.uLimbColor.value.g, u.uLimbColor.value.b]).toEqual(o.limbColor);
+  });
+
+  it('an airless body still derives a finite rim at strength ZERO, never a NaN', () => {
+    // The airless branch of the lab's producer, reached by feeding the pack directly rather than
+    // through its predicate (no airless body is gas-class, so the predicate never routes one here
+    // today — Step 9 is when it will). A NaN uniform renders as an indistinguishable black frame,
+    // which is this lane's own hard-won lesson, so finiteness is asserted alongside the zero.
+    const cond = { ...condFor('gasgiant'), atmosphere: null };
+    const r = limbDeckPack(cond, { displayRadiusEarth: 1, gates: GATES });
+    expect(r.drivers.uLimbStrength.value).toBe(LIMB_STRENGTH_AIRLESS);
+    expect(Number.isFinite(r.drivers.uLimbExponent)).toBe(true);
+    for (const c of r.drivers.uLimbColor) expect(Number.isFinite(c)).toBe(true);
+  });
+});

@@ -549,3 +549,76 @@ export function bakeStormEAttributes(positions, count, radius, { regime = E5_REG
   }
   return { aStorm, vortices: rec.vortices, pole: rec.pole, strength: rec.strength, count: rec.count, params: rec.params };
 }
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// THE POLAR SLICE, REACHABLE WITHOUT THE STORM SLICE (PLAN §4 Step 5 / ledger C19)
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+//
+// ⭐ THIS APPENDS AT EOF AND SHIFTS NOTHING, ON PURPOSE. Two live `line + symbol` refs resolve into
+// this file — both onto storm-e.js:68 `URANIAN_OBLIQUITY: 80` from conditionFromPlanet.js — and
+// line-shift citation rot has cost this program 71 repairs across two steps. Everything below is
+// additive; `resolveStormE` above is byte-identical to HEAD and is NOT rewritten to call this.
+//
+// ⛔ IT IS NOT REWRITTEN, AND THE REASON IS THAT THE EQUALITY IS THE EVIDENCE. Refactoring
+// `resolveStormE` to delegate here would make the two agree BY CONSTRUCTION, which is exactly the
+// shape of measurement this program keeps catching: entirely true and entirely uninformative. Left
+// duplicated, "the wrapper reproduces the pole" is a claim a test can falsify, and
+// tests/driver-pack-polardeck.test.js falsifies it on demand by breaking one line and showing red.
+// The duplication is therefore load-bearing until someone retires it deliberately.
+//
+// ⭐ WHAT MAKES THE POLAR FAMILY SEPARABLE FROM THE STORM FAMILY — read this before assuming the
+// fence moved. The separation is not a boundary this lane drew; it is one the file already draws and
+// documents, at storm-e.js:33 `identity in SIX DISJOINT sub-namespaces — the FOUR placement streams`.
+// `stormE:polar` is a DISJOINT alea stream, drawn FIRST (storm-e.js:308 `const rngPolar = alea('stormE:polar:' + regime + ':' + id);`)
+// so the variable per-seed vortex count can never move the pole structure — the F5 recoupling the
+// legacy `_polRng ^ 0x9E3779B9` fork avoided. `resolvePole` reads FOUR things: the regime, the
+// `stormsOn` boolean, the vigor ramp and its own rng. It never touches `P = resolveParams(...)`,
+// never touches the ranked candidate list, never touches the mask. So this function reproduces
+// the polar block of `resolveStormE` EXACTLY — it does not reproduce a simplification of it — while
+// the placement machinery that begins at storm-e.js:317 `const { ranked } = resolveStormPlacement(P);` is not reachable from here at all.
+//
+// ⛔ CONSEQUENTLY THIS IS NOT A DOOR INTO THE STORM SLICE. It calls neither `resolveStormE` nor
+// `writeStormESphere` nor `bakeStormEAttributes`, so a caller cannot reach a vortex record, a
+// `uStorm*` value or the `aStorm` mask through it. tests/driver-pack-polardeck.test.js asserts that
+// as a SOURCE SCAN over the pack that consumes this, not as a promise in prose.
+//
+// ⚠ WHAT IS GENUINELY NEW AND IS NOT HIDDEN BY THE ABOVE: this module becomes reachable from the
+// GAME's module graph for the first time, and `stormE:polar` becomes a game-side draw. The golden
+// mask reads only `stormE:place` (storm-e.js:460 `reads ONLY stormE:place vortices — never the pole draws — so`),
+// so drawing the pole alone cannot move `GOLDEN_STORM_MASK_HASH` — but "cannot" there is a claim
+// about draw streams, and the polar-deck test re-runs the existing storm suite's own identity
+// expectations rather than restating it.
+/**
+ * The F29 polar-vortex parameter bank, resolved WITHOUT running storm placement.
+ *
+ * Deliberately carries the SAME positional signature as `resolveStormE` so the byte-identity control
+ * is `resolvePolarVortex(a,b,c,d)` vs `resolveStormE(a,b,c,d).pole` with no adapter in between — an
+ * adapter is a place for the two to be made to agree.
+ *
+ * @param {string} regime      an `E5_REGIME` value. ⛔ Classify the UN-DRAWN condition: `giantRegimeOf`
+ *   on `drawGiantConditions`' OUTPUT flips the label on 3.15% of draws, and the lab measured that
+ *   getting this wrong moves `polarSides`/`polarR0` on 52/52 (preset, seed) pairs while `polarStrength`
+ *   and the storm count stay 0 — invisible to every off-gate check.
+ * @param {object} drivers     reads `composition` (the gas gate), `T_eq` (the vigor ramp) and
+ *   `obliquityDeg` (the Uranian branch). Nothing else.
+ * @param {number} macroSeed   the per-body identity half of the placement pair.
+ * @param {number} stormSeed   the placement half. A front-end with no storm UI must DECLARE one.
+ * @returns {{strength:number, mode:number, sides:number, r0:number, ring:number, pole:number,
+ *   phase:number, ageScalar:number, phaseScalar:number}} — `strength` is the per-seed PRESENCE flag
+ *   (`POLAR_PRESENCE_PRIOR`), NOT a master gate: a gas giant can legitimately answer 0.
+ */
+export function resolvePolarVortex(regime = E5_REGIME.GAS_GIANT, drivers = {}, macroSeed = 0, stormSeed = 0) {
+  // ── the gas gate + hot-Jupiter regime suppression, verbatim from storm-e.js:291 `const gas = drivers?.composition === 'h2-he';` on ──
+  const gas = drivers?.composition === 'h2-he';
+  const hotJupiter = regime === E5_REGIME.HOT_JUPITER;
+  const stormsOn = gas && !hotJupiter;
+  // ── the V-β.5 Uranian read, verbatim from storm-e.js:303 `const uranian = regime === E5_REGIME.NEPTUNIAN && (drivers?.obliquityDeg ?? 0) >= STORM_PHYS.URANIAN_OBLIQUITY;` ──
+  const uranian = regime === E5_REGIME.NEPTUNIAN && (drivers?.obliquityDeg ?? 0) >= STORM_PHYS.URANIAN_OBLIQUITY;
+  // ── the identity mix, the disjoint stream, the vigor ramp and the pole — storm-e.js:304 `const id = stormIdentity(macroSeed, stormSeed);` on ──
+  const id = stormIdentity(macroSeed, stormSeed);
+  const rngPolar = alea('stormE:polar:' + regime + ':' + id);
+  const vigor = vigorOf(regime, drivers);
+  const pole = resolvePole(regime, stormsOn, vigor, rngPolar);
+  if (uranian) pole.mode = 0;
+  return pole;
+}
