@@ -262,11 +262,18 @@ const STEP1_KEYS = ['surfaceHistory', 'radiusEarthCanonical', 'habitability', 'a
  *                             DOWNWARD on all 204, and equal to the game's raw `d.T_eq`
  *                             on all 204 — both asserted below, because "it changed" and
  *                             "it is now the right number" are different claims.
+ *   metallicity      526/526  undefined → the game's own dex, forwarded verbatim (Step 5e).
+ *                             The SECOND declared-but-unset key to fill, and the last one:
+ *                             with it, no key in this ledger is `undefined` on a generated
+ *                             planet any more. Direction asserted below the same way
+ *                             `magneticField`'s is — `Object.is` against `pd.metallicity`,
+ *                             so a re-derivation that happens to be close fails.
  */
 const EXPECTED_CONDITION_MOVERS = Object.freeze({
   magneticField:   526,
   rawTidalIoRatio: 469,
   T_eq:            204,
+  metallicity:     526,
 });
 
 /**
@@ -337,7 +344,12 @@ const EXPECTED_LAW_MOVER_BODIES = Object.freeze({
   lavaCrustColor:   354,   // Step 2 + Step 4
   lavaGlowColor:    353,   // one below its melt point — emissiveBlackbody saturates
   optics:           193,   // Step 4 — the limb/terminator family
-  giant:            164,   // Step 4 — dissipation on 164, internalHeat on 11
+  // ⭐ STEP 5e MOVED THIS ROW, 164 → 404, AND IT IS THE ONLY ROW THAT MOVED. Forwarding
+  // `metallicity` turns `shellDepthFrac` from a saturated constant into a live channel
+  // (343 bodies), and `dissipation` follows it through FORM 3 (164 → 202). Every other
+  // row below is byte-unchanged, which is the check that nothing but the giant deck reads
+  // the new key — the same claim channel 3 makes structurally, made here by population.
+  giant:            404,   // Step 4 + Step 5e — shellDepthFrac 343, dissipation 202, internalHeat 11
   palette:          148,   // ⭐ Step 4, UNDECLARED — see the block above
   iceness:           86,   // Step 4
   biosphere:         32,   // Step 4
@@ -687,35 +699,210 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     expect(planets.length).toBe(CORPUS_BODIES);
     expect(movedOn, 'the giant triple\'s moving fields or their populations are not the declared ones\n'
       + Object.values(samples).join('\n'))
-      .toEqual({ dissipation: 164, internalHeat: 11 });
-    // ⚠⚠ shellDepthFrac's ZERO IS A SATURATION FACT, NOT A LIVE CONTROL, and writing that
-    // down is the difference between a fence and a decoration. MEASURED: across all 526
-    // bodies `shellDepthFrac` takes exactly ONE value, 0.74. Game bodies carry no
-    // `regime`, so every one of them is scored against the gas-giant anchors, and their
-    // density-proxy enrichment puts `Z/Z0` far enough above 1 that
-    // `SDF0·(1 − δ·(Z/Z0 − 1))` lands below the regime band on every body and clamps.
-    // ⛔ VERIFIED BY INJECTION, not assumed: ×1.5 on the adapter's `density` and ×1.01 on
-    // its `volatileFraction` — the only two channels feeding `enrichmentZ` on this route —
-    // each left this test GREEN. So `movedOn.shellDepthFrac === 0` on its own could not
-    // fail and would be a decoration. The assertion that CAN fail is the saturation
-    // itself, and the event that would break it is the one worth being told about: Step 5
-    // forwarding `metallicity` (present on 526/526 planetData records, forwarded on 0),
-    // which `enrichmentZ` prefers over the density proxy.
-    const sdfValues = new Set(planets.map((pd) => deriveGiantDrivers(conditionFromPlanet(pd)).shellDepthFrac));
-    expect([...sdfValues], 'shellDepthFrac is no longer saturated at the regime band — the enrichment '
-      + 'channel has come alive (Step 5 forwarding metallicity?) and its zero mover-count below is '
-      + 'no longer explained by the clamp').toEqual([0.74]);
-    expect(movedOn.shellDepthFrac ?? 0, 'shellDepthFrac has NO path to T_eq — if it moved, something '
-      + 'other than Step 4\'s guard reached the enrichment channel').toBe(0);
-    expect(bodiesTouched, 'bodies whose jet profile changes').toBe(164);
+      .toEqual({ shellDepthFrac: 343, dissipation: 202, internalHeat: 11 });
+    expect(bodiesTouched, 'bodies whose jet profile changes').toBe(404);
+
+    // ⭐⭐ STEP 5e RE-BLESS — AND THE PIN THAT REDDED IS THE REASON THIS WORKED.
+    //
+    // What stood here asserted `[...sdfValues].toEqual([0.74])` and `movedOn.shellDepthFrac === 0`,
+    // under a comment naming the exact event that would break it: "Step 5 forwarding `metallicity`
+    // (present on 526/526 planetData records, forwarded on 0)". Step 5e forwards it. The pin went
+    // RED, naming its own successor. ⛔ IT IS NOT WIDENED. A `toEqual([0.74])` replaced by
+    // `.length > 1` would be the shrug PLAN §11 and ledger C15 exist to refuse; a distinct-COUNT
+    // would be worse, because Step 4's own scar is that a count-preserving permutation passed every
+    // instrument byte-identically. So the saturation pin is replaced by a MEMBERSHIP statement:
+    // every body's `shellDepthFrac` is asserted against a closed form computed from THAT BODY'S OWN
+    // `metallicity`, with literal constants and no code shared with the tree.
+    //
+    // ⚠ WHY A CLOSED FORM IS AVAILABLE AT ALL, and it is the whole finding of this step. On this
+    // route `condition.regime` is undefined, so every body scores against the gas-giant anchors, and
+    // the metallicity arm of `enrichmentRatio` returns BEFORE any density is read. `shellDepthFrac`
+    // is therefore a pure function of one number the body carries — not of its mass, radius, age,
+    // temperature, composition or seed. Measured: 115 distinct `metallicity` values across the
+    // corpus map onto 21 distinct `shellDepthFrac` values, and NOT ONE metallicity value maps to two
+    // shell depths. That many-to-one is the clamp, and it is measured below rather than described.
+    const clampSdf = (v) => Math.min(0.86, Math.max(0.74, v));
+    const closedForm = (dex) => clampSdf(0.80 * (1 - 0.95 * (10 ** (dex - 0.0) - 1)));
+    let exact = 0;
+    for (const pd of planets) {
+      if (Object.is(deriveGiantDrivers(conditionFromPlanet(pd)).shellDepthFrac, closedForm(pd.metallicity))) exact++;
+    }
+    expect(exact, 'shellDepthFrac is no longer SDF0·(1 − δ·(10^Z − 1)) clamped to the gas-giant band — '
+      + 'either the adapter stopped forwarding metallicity, or the law stopped reading it, or a '
+      + 'THIRD input reached FORM 2').toBe(CORPUS_BODIES);
+
+    // ⛔⛔ THE CONTROL THAT SEPARATES THIS FROM A COUNT GATE — Step 4's scar, executed rather
+    // than remembered. Step 4 shipped a gate that pinned COUNTS, and a count-preserving PERMUTATION
+    // passed every instrument byte-identically. So the permutation is run here: the same 526
+    // metallicity values, dealt to different bodies. Every count below survives it unchanged — the
+    // distinct-value count, the interior count, both bound counts — and the membership assertion
+    // above is the only thing in this test that notices.
+    // ⚠ THE PERMUTATION IS A HALF-CORPUS CYCLIC SHIFT, NOT `i+1`, AND THE CHOICE WAS MEASURED.
+    // `i+1` leaves 442/526 bodies matching by luck, because adjacent entries are usually planets of
+    // the SAME system and therefore carry the same metallicity — a control that barely moves. The
+    // half-shift crosses systems on every row and leaves 174. Both are count-preserving; only the
+    // second is a control worth having, and picking it by running both is the difference.
+    const permuted = planets.map((_, i) => planets[(i + 263) % planets.length].metallicity);
+    const permSdf = permuted.map((dex) => closedForm(dex));
+    const liveSdf = planets.map((pd) => deriveGiantDrivers(conditionFromPlanet(pd)).shellDepthFrac);
+    expect(new Set(permSdf).size, 'the permutation changed the VALUE SET — it is not count-preserving '
+      + 'and proves nothing about membership').toBe(new Set(liveSdf).size);
+    expect(permSdf.filter((v) => v > 0.74 && v < 0.86).length)
+      .toBe(liveSdf.filter((v) => v > 0.74 && v < 0.86).length);
+    expect(permSdf.filter((v) => v === 0.74).length).toBe(liveSdf.filter((v) => v === 0.74).length);
+    expect(permSdf.filter((v) => v === 0.86).length).toBe(liveSdf.filter((v) => v === 0.86).length);
+    // …and the membership check DOES see it. ⚠ MEASURED, AND THE NUMBER IS THE POINT: even the
+    // strong permutation leaves 174 of 526 bodies matching by luck, because the clamp collapses 451
+    // of them onto two values. So this control fires on 352 bodies, not on 526, and a reader must
+    // not take "the membership gate catches a permutation" as "the membership gate is tight". It is
+    // as tight as the clamp allows, which is a third of the corpus loose.
+    const permExact = planets.filter((pd, i) => Object.is(
+      deriveGiantDrivers(conditionFromPlanet(pd)).shellDepthFrac, closedForm(permuted[i]))).length;
+    expect(permExact, 'the per-body membership assertion above cannot tell a permuted corpus from '
+      + 'the real one — it is a count gate wearing a membership costume').toBeLessThan(CORPUS_BODIES);
+    expect(permExact, 'recorded rather than left as an inequality, so the gate\'s LIMIT is on record '
+      + 'with the construct that produced it').toBe(174);
+
+    // ── THE DISTRIBUTION, PINNED BY VALUE, NOT BY SPREAD ────────────────────────────────
+    // ⚠ THE HEADLINE IS NOT THE 21. It is that 451 of 526 bodies still sit ON a clamp bound:
+    // δ = 0.95 against a band 0.12 wide about SDF0 = 0.80 means the interior window is
+    // log10(1 ± 0.06/(0.95·0.80)) = −0.0357 … +0.0330 dex — 0.069 dex wide, against a corpus
+    // spanning −0.5031 … +0.3645. So forwarding did not make this channel expressive on THIS route;
+    // it made it a near-binary switch on the sign of the metallicity. That is the number Max asked
+    // to see before ruling on whether it is "too uniform", and burying it under "21 distinct values"
+    // would be the true-and-misleading form this file exists to refuse. (⛔ The per-REGIME route the
+    // game actually renders through is a different and better measurement — see the Step 5e block in
+    // conditionFromPlanet.js. This route is the gate's route, not the player's.)
+    const sdfValues = planets.map((pd) => deriveGiantDrivers(conditionFromPlanet(pd)).shellDepthFrac);
+    expect(new Set(sdfValues).size, 'the shellDepthFrac population changed shape').toBe(21);
+    expect(sdfValues.filter((v) => v === 0.74).length, 'pinned at the band FLOOR (metal-rich)').toBe(183);
+    expect(sdfValues.filter((v) => v === 0.86).length, 'pinned at the band CEILING (metal-poor)').toBe(268);
+    expect(sdfValues.filter((v) => v > 0.74 && v < 0.86).length, 'strictly INTERIOR to the band').toBe(75);
+    // ⚠ AND THE ANCHOR IS EXACT, WHICH IS THE ONE VALUE WORTH NAMING. `MET0_DEX` is 0 by definition,
+    // so a body at exactly 0 dex gets ratio 1 and lands on SDF0 to the bit. Six bodies do — and none
+    // of them is a real solar measurement: all six are exotics (5 `crystal`, 1 `shattered`) whose
+    // `metallicity` is PlanetGenerator.js:376's `|| 0` arm firing on an absent `zones`. A fabricated
+    // input landing exactly on the D3 anchor is invisible to a clamp gate (it is interior), to a
+    // distinctness gate (other bodies take it too) and to the anchor round-trip (it IS the anchor),
+    // so it is pinned by count here rather than left to be discovered later as a coincidence.
+    expect(sdfValues.filter((v) => v === 0.80).length, 'bodies sitting exactly on the D3 anchor').toBe(6);
+    expect(planets.filter((pd) => pd.metallicity === 0).length).toBe(6);
+    expect(planets.filter((pd) => pd.metallicity === 0).every((pd) => pd._systemSeed === undefined),
+      'a body with a REAL solar metallicity appeared — the six anchor-sitters are no longer all '
+      + 'the zones-less exotics and the fabrication argument above no longer holds').toBe(true);
+    // ⛔ AND `_provenance` CALLS ALL SIX OF THEM 'measured', WHICH IS THE RECORD BEING WRONG.
+    // Asserted rather than lamented in prose: the row exists to name fabrications, and this is the
+    // one shape it structurally cannot name, because the fabrication arrives as a NUMBER. If a later
+    // step teaches the generator to emit `undefined` instead of `|| 0`, this assertion reds and the
+    // reader is told the hole closed rather than having to notice.
+    for (const pd of planets.filter((p) => p.metallicity === 0)) {
+      expect(conditionFromPlanet(pd)._provenance.metallicity,
+        'the fabricated 0 is no longer reported as a measurement').toBe('measured');
+    }
+
+    // ⛔⛔ THE LIMIT OF EVERYTHING ABOVE, RECORDED WITH THE CONSTRUCT THAT PRODUCED IT.
+    // Every shellDepthFrac number in this test is taken on the route `deriveGiantDrivers(
+    // conditionFromPlanet(pd))` — condition straight from the adapter, `regime` UNDEFINED, no
+    // `drawGiantConditions`. That is the right route for a CONTRACT gate (it isolates the adapter)
+    // and it is NOT the route a rendered body takes: `giantDeckPack` classifies with `giantRegimeOf`
+    // first, so a sub-neptune is scored against sdfBand [0.28, 0.44], not [0.74, 0.86]. The
+    // per-regime population is measured — 204 gas-class bodies, 84 strictly interior, 110/110
+    // same-system same-regime pairs sharing — and it is recorded in the Step 5e block in
+    // `conditionFromPlanet.js`, NOT gated here. ⚠ SO A GREEN RUN OF THIS FILE IS NOT EVIDENCE ABOUT
+    // THE PER-REGIME DISTRIBUTION. It is evidence that the adapter forwards and that FORM 2 reads it.
+    expect(conditionFromPlanet(planets[0]).regime,
+      'the adapter started emitting a regime — every band literal in this test is now wrong for some '
+      + 'body and the closed form above is measuring the wrong anchors').toBeUndefined();
+
+    // ── (d) THE NEGATIVE HALF: THE OTHER TWO FORMS KEEP THEIR OWN INPUTS ────────────────
+    // ⛔ ISOLATED FROM STEP 4. The table above is legacy-vs-live and so mixes Step 4's `T_eq` move
+    // into `internalHeat` and `dissipation`. To say anything about METALLICITY alone, the control is
+    // live-vs-live with the one key withheld — same body, same T_eq, same everything else.
+    let ihMoved = 0, disMoved = 0, sdfMoved = 0, disOutsideSdf = 0;
+    for (const pd of planets) {
+      const c = conditionFromPlanet(pd);
+      const held = deriveGiantDrivers({ ...c, metallicity: undefined });
+      const now = deriveGiantDrivers(c);
+      const sm = !Object.is(held.shellDepthFrac, now.shellDepthFrac);
+      const dm = !Object.is(held.dissipation, now.dissipation);
+      if (!Object.is(held.internalHeat, now.internalHeat)) ihMoved++;
+      if (dm) disMoved++;
+      if (sm) sdfMoved++;
+      if (dm && !sm) disOutsideSdf++;
+    }
+    expect(ihMoved, 'FORM 1 reads no enrichment term — internalHeat must be bit-identical with and '
+      + 'without metallicity, on every body').toBe(0);
+    expect(sdfMoved, 'metallicity ALONE, with T_eq held fixed, moves shellDepthFrac here').toBe(343);
+    expect(disMoved, 'dissipation follows shellDepthFrac through FORM 3, on a SUBSET').toBe(134);
+    expect(disOutsideSdf, 'dissipation moved on a body whose shellDepthFrac did not — FORM 3 has '
+      + 'acquired a second path to the enrichment channel').toBe(0);
+    // ⛔ AND THE CONTROL THAT MAKES THE 0 ABOVE MEAN SOMETHING. `ihMoved === 0` is only evidence if
+    // this harness CAN see internalHeat move. It can — ×10 on the mass channel moves it on 60 bodies.
+    //
+    // ⚠⚠ AND THE CONTROL MEASURED SOMETHING THE STEP DID NOT SET OUT TO FIND, WHICH IS WHY THE
+    // NUMBER IS 60 AND NOT 526. `internalHeat` IS ITSELF CLAMP-SATURATED on this route: it takes 8
+    // distinct values across 526 bodies and 514 of them sit exactly on the FLOOR, IH0·0.88 =
+    // 1.67·0.88 = 1.4696 (climate-e5.js:62 `  [E5_REGIME.GAS_GIANT]:   Object.freeze({ rotationRate: 1.00, radius: 1.00,  energyInput: 1.0000, internalHeat: 1.67, dissipation: 1.00, shellDepthFrac: 0.80, obliquityDeg: 3.1,  hazeMute: 0.0 }),`
+    // is where the 1.67 comes from). ⛔ SO "internalHeat KEEPS ITS PER-BODY SPREAD" IS TRUE AND
+    // NEARLY EMPTY, and saying only the true half would be this file's signature defect. What the
+    // zero above actually establishes is that metallicity did not REACH FORM 1 — not that FORM 1 is
+    // expressive. It is not, on this route, and that is a separate open question from Max's ruling.
+    // (The first draft of this control used ×1.5 and read 12, which would have been "green" while
+    // measuring almost nothing. It was caught by running it.)
+    let ihControl = 0;
+    for (const pd of planets) {
+      const c = conditionFromPlanet(pd);
+      const bumped = { ...c, surfaceGravity: c.surfaceGravity * 10 };
+      if (!Object.is(deriveGiantDrivers(c).internalHeat, deriveGiantDrivers(bumped).internalHeat)) ihControl++;
+    }
+    expect(ihControl, 'the internalHeat comparison above cannot detect a change at all — its zero is '
+      + 'a decoration').toBe(60);
+    const ihValues = planets.map((pd) => deriveGiantDrivers(conditionFromPlanet(pd)).internalHeat);
+    expect(new Set(ihValues).size, 'internalHeat\'s own spread, pinned so the sentence above cannot '
+      + 'be read as "internalHeat is varied"').toBe(8);
+    expect(ihValues.filter((v) => v === 1.67 * 0.88).length, 'bodies pinned at the internalHeat FLOOR')
+      .toBe(514);
+
+    // ── (c) THE PER-SYSTEM CONSEQUENCE, WHICH IS THE RULING MAX MADE, MEASURED ──────────
+    // `metallicity` is drawn ONCE per system (StarSystemGenerator.js:362) and copied onto every
+    // planet (PlanetGenerator.js:376), so `shellDepthFrac` — and with it the equatorial-jet SIGN —
+    // stops being a per-BODY property. ⚠ THE HONEST FORM OF THIS IS NOT "it now collapses": before
+    // this step it was saturated at 0.74 and ALL 111 multi-planet systems shared a value trivially.
+    // After, 105 do — and the 6 that do NOT are exactly the systems carrying one of the zones-less
+    // exotics above. So the sharing did not arrive with this step; what arrived is sharing that
+    // MEANS something, plus six systems that now disagree for a reason that is a generator bug.
+    const bySystem = new Map();
+    planets.forEach((pd, i) => {
+      const sys = bodyIds[i].split('#')[0];
+      if (!bySystem.has(sys)) bySystem.set(sys, []);
+      bySystem.get(sys).push(pd);
+    });
+    const multi = [...bySystem.values()].filter((xs) => xs.length >= 2);
+    const sdfOf = (pd) => deriveGiantDrivers(conditionFromPlanet(pd)).shellDepthFrac;
+    const oldSdfOf = (pd) => deriveGiantDrivers(legacyConditionFromPlanet(pd)).shellDepthFrac;
+    expect(multi.length, 'systems carrying more than one planet').toBe(111);
+    expect(multi.filter((xs) => new Set(xs.map(oldSdfOf)).size === 1).length,
+      'BEFORE: every multi-planet system shared a shell depth, by saturation').toBe(111);
+    expect(multi.filter((xs) => new Set(xs.map(sdfOf)).size === 1).length,
+      'AFTER: shared by metallicity instead, on every system whose planets agree about it').toBe(105);
+    // …and the six dissenters are the fabrication, named rather than left as a residue.
+    const dissent = multi.filter((xs) => new Set(xs.map(sdfOf)).size > 1);
+    expect(dissent.length).toBe(6);
+    expect(dissent.every((xs) => xs.some((pd) => pd.metallicity === 0)),
+      'a system disagrees about shellDepthFrac for a reason that is NOT the zones-less-exotic 0')
+      .toBe(true);
 
     const gas = planets.filter((p) => GIANT_TYPES.has(p.type));
     expect(gas.length, 'the corpus must actually contain gas bodies').toBeGreaterThanOrEqual(100);
-    // ⚠ 164 > the gas population: `deriveGiantDrivers` is TOTAL and returns a triple for
+    // ⚠ 404 ≫ the gas population: `deriveGiantDrivers` is TOTAL and returns a triple for
     // every body, giant or not, so the count above is not bounded by the gas bodies and a
-    // reader must not read it as "164 gas giants".
+    // reader must not read it as "404 gas giants". Of the 343 shellDepthFrac movers, only
+    // 82 are giant-typed; the other 261 are solids whose triple nothing renders.
     expect(gas.length, 'the mover count is corpus-wide, not gas-only — recorded so it is not misread')
-      .toBeLessThan(164);
+      .toBeLessThan(404);
+    expect(planets.filter((pd) => GIANT_TYPES.has(pd.type)
+      && !Object.is(oldSdfOf(pd), sdfOf(pd))).length,
+      'the giant-typed share of the shellDepthFrac movers').toBe(82);
   });
 
   it('every shipped law returns bit-identical output for the whole corpus', () => {
@@ -868,7 +1055,9 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
       .toEqual([...EXPECTED_LAW_MOVERS].sort());
     expect(perKey, 'a declared mover moved on a different number of bodies than it is pinned to')
       .toEqual({ ...EXPECTED_LAW_MOVER_BODIES });
-    expect(bodiesTouched, 'bodies that change what they render').toBe(413);
+    // ⭐ STEP 5e: 413 → 495. `giant` is the only row of EXPECTED_LAW_MOVER_BODIES this step touched,
+    // so the 82 extra bodies are shellDepthFrac movers that were not already moving something else.
+    expect(bodiesTouched, 'bodies that change what they render').toBe(495);
 
     // ── THE NEGATIVE HALF, KEPT ─────────────────────────────────────────────────────
     // "and the other N do not" is the half a re-bless is tempted to drop, because it is
@@ -1898,11 +2087,71 @@ describe('Step 1 · the atmosphere sniff became a positive shape validation', ()
   });
 });
 
-describe('Step 1 · metallicity is NOT forwarded — it lands in Step 5', () => {
-  it('stays undefined on every generated body', () => {
+// ⭐⭐ THE FENCE THAT USED TO LIVE HERE IS RETIRED BY NAME, IN THE COMMIT THAT SPENDS IT.
+//
+// Its title was `Step 1 · metallicity is NOT forwarded — it lands in Step 5` and its first test was
+// `stays undefined on every generated body`. It was a deliberate Step-1 guard against a defect in
+// the LAW (a dex numerator over a g/cc denominator), Step 5e fixed the law, and Max ruled on
+// 2026-08-09 to forward. ⛔ RETIRED IS NOT DELETED AND IS NOT RELAXED. The `undefined` assertion is
+// replaced by its exact opposite — `metallicity` IS forwarded, verbatim, on every generated body,
+// and it REACHES `enrichmentRatio`'s primary branch — so the same describe still fails if the
+// forwarding is reverted, dropped, re-derived, or forwarded into a slot nothing reads. A guard
+// removed leaves a hole; a guard inverted leaves a gate.
+describe('Step 5e · metallicity IS forwarded — the Step 1 fence, spent and inverted', () => {
+  it('is forwarded verbatim on every generated body, and NOT re-derived', () => {
     for (const pd of planets) {
       expect(typeof pd.metallicity, 'the game does carry one').toBe('number');
-      expect(conditionFromPlanet(pd).metallicity, `${pd.type} — forwarded too early`).toBeUndefined();
+      const v = conditionFromPlanet(pd).metallicity;
+      expect(Number.isFinite(v), `metallicity on a ${pd.type}`).toBe(true);
+      // `Object.is`, not a tolerance: the claim is "the game's own number", and a re-derivation
+      // that lands close would satisfy anything weaker. Same shape as the magneticField row.
+      expect(Object.is(v, pd.metallicity), `${pd.type} — not the game's own value`).toBe(true);
+    }
+  });
+
+  it('REACHES the enrichment branch — forwarding into a slot nothing reads would be no feature', () => {
+    // ⛔ "The key is present" is not the claim. The claim is that `enrichmentRatio` takes its
+    // PRIMARY arm because of it. Asserted against the branch's own closed form
+    // (`10^(Z − MET0_DEX)`, MET0_DEX = 0) rather than against the function, so a change inside
+    // `giant-drivers.js` that silently re-routed the branch would red here.
+    let onPrimary = 0;
+    for (const pd of planets) {
+      const c = conditionFromPlanet(pd);
+      const ratio = 10 ** pd.metallicity;
+      const expected = Math.min(0.86, Math.max(0.74, 0.80 * (1 - 0.95 * (ratio - 1))));
+      if (Object.is(deriveGiantDrivers(c).shellDepthFrac, expected)) onPrimary++;
+    }
+    expect(onPrimary, 'the forwarded metallicity is not what FORM 2 is reading — the density proxy '
+      + 'is still winning, or a third term entered').toBe(planets.length);
+
+    // AND THE CONTROL: withhold the key on the same live condition and the primary branch stops
+    // being taken, everywhere. A gate whose control never moved is evidence of nothing.
+    const withheld = new Set(planets.map((pd) => deriveGiantDrivers(
+      { ...conditionFromPlanet(pd), metallicity: undefined }).shellDepthFrac));
+    expect([...withheld], 'withholding metallicity no longer falls back to the saturated density '
+      + 'proxy — the control that makes the assertion above meaningful has stopped moving')
+      .toEqual([0.74]);
+  });
+
+  it('is inert on every population that carries none — moons, Sol, and the lab', () => {
+    // ⛔ THE OTHER HALF OF "FORWARDED". `?? 0` would have been the obvious default and would have
+    // been catastrophic: 0 dex is ratio 1, the exact D3 anchor, so every body with no metallicity
+    // would have been silently declared solar AND switched onto the primary branch. The adapter
+    // forwards `undefined` instead, which is what keeps these three populations on the density
+    // proxy and makes this step byte-inert for them.
+    expect(moons.length).toBeGreaterThan(0);
+    expect(moons.filter((m) => m.metallicity != null).length, 'a moon acquired a metallicity — Step 8 '
+      + 'owes this population a decision it has not made').toBe(0);
+    for (const m of moons) expect(conditionFromPlanet(m).metallicity).toBeUndefined();
+
+    const solBodies = (generateSolarSystem().planets || []).map((e) => e.planetData || e);
+    expect(solBodies.length).toBeGreaterThan(0);
+    expect(solBodies.filter((b) => b.metallicity != null).length,
+      'Sol acquired a metallicity — the Sol route is no longer inert under this step').toBe(0);
+
+    for (const [name, fp] of Object.entries(DRIVER_PRESETS)) {
+      expect(deriveConditionVector(fp, null, fp.radiusEarth).metallicity,
+        `lab preset ${name} — the lab route must stay on the density proxy`).toBeUndefined();
     }
   });
 
@@ -1918,9 +2167,14 @@ describe('Step 1 · metallicity is NOT forwarded — it lands in Step 5', () => 
     // the pre-5e cross-scale form in-test — and it now also measures that the shipped law no longer
     // has it. That ordering matters: an assertion that only said "the new form is fine" would have
     // let the old reason rot into folklore, which is the exact thing this test's title exists for.
-    // ⚠ AND THE ONE THING THAT DID NOT MOVE: the forwarding itself. `metallicity` is STILL not
-    // forwarded by the adapter (the sibling test above asserts it on every generated body), so this
-    // is a measurement about the LAW, not about a live behaviour change.
+    // ⭐ SECOND RE-BLESS, SAME DAY, AND THE SENTENCE THIS REPLACES IS WHY THE FILE SAYS SO. It read
+    // "AND THE ONE THING THAT DID NOT MOVE: the forwarding itself. `metallicity` is STILL not
+    // forwarded by the adapter … so this is a measurement about the LAW, not about a live behaviour
+    // change." Step 5e's FORWARDING half makes that false. It is corrected rather than deleted,
+    // because a stale sentence in a test about not letting reasons rot is the failure it names.
+    // ⚠ THE TWO ARMS THEREFORE SWAPPED SIDES. `held` is now the WITHHELD condition (built by
+    // deleting the key the adapter supplies) and `forwarded` is the plain live one. The assertions
+    // below are otherwise unchanged, and both arms still measure the same three populations.
     const gas = planets.filter((p) => GIANT_TYPES.has(p.type));
     expect(gas.length).toBeGreaterThanOrEqual(100);
 
@@ -1928,11 +2182,9 @@ describe('Step 1 · metallicity is NOT forwarded — it lands in Step 5', () => 
     expect(Math.min(...dex)).toBeLessThan(0);
     expect(dex.filter((m) => m < 0).length / dex.length).toBeGreaterThan(0.2);  // ~half, measured
 
-    const held = gas.map((p) => deriveGiantDrivers(conditionFromPlanet(p)).shellDepthFrac);
-    const forwarded = gas.map((p) => {
-      const c = { ...conditionFromPlanet(p), metallicity: p.metallicity };
-      return deriveGiantDrivers(c).shellDepthFrac;
-    });
+    const held = gas.map((p) => deriveGiantDrivers(
+      { ...conditionFromPlanet(p), metallicity: undefined }).shellDepthFrac);
+    const forwarded = gas.map((p) => deriveGiantDrivers(conditionFromPlanet(p)).shellDepthFrac);
     // The PRE-5e law, reproduced here rather than cited, so the trap stays measured after the fix.
     // `regime` is left undefined exactly as the two calls above leave it, so all three lines speak
     // about the same body: gas-giant anchors, SDF0 0.80, band [0.74, 0.86].
@@ -1956,6 +2208,15 @@ describe('Step 1 · metallicity is NOT forwarded — it lands in Step 5', () => 
     expect(forwarded.some((v) => v > BAND[0] && v < BAND[1])).toBe(true);
     // …and it still MOVES relative to held — forwarding metallicity is a real change, not a no-op.
     expect(forwarded.some((v) => v !== held[0])).toBe(true);
+    // ⚠ AND THE PART THAT IS NOT A WIN, ON THE SAME 130 GAS-TYPED BODIES, MEASURED: 14 distinct
+    // values, 20 strictly interior, 48 at the floor and 62 at the ceiling. The floors above are
+    // corpus-robust; these four are the actual shape and they say the channel is closer to a
+    // sign-of-Z switch than to a spread. Recorded here because "no longer degenerate" is true and,
+    // on its own, misleading — which is the failure mode this whole file is built around.
+    expect(new Set(forwarded).size).toBe(14);
+    expect(forwarded.filter((v) => v > BAND[0] && v < BAND[1]).length).toBe(20);
+    expect(forwarded.filter((v) => v === BAND[0]).length).toBe(48);
+    expect(forwarded.filter((v) => v === BAND[1]).length).toBe(62);
   });
 });
 
@@ -3413,23 +3674,33 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
     // three into CODE, so as decoys they are spent: `a.reads.has('d.tidalHeating')` is
     // now `true` and asserting `false` would be asserting the feature is absent. A decoy
     // is only a decoy while the read does not exist, so it re-points at the next
-    // declared-but-unwritten read — `d.metallicity`, which Step 5 adds
-    // (PLAN.md:262 `### Step 5 — Driver pack #1: the gas deck`), and whose ABSENCE the
-    // metallicity fence above already asserts on live bodies. Two independent statements
-    // of the same fact: the fence says the code does not read it, the metallicity gate
-    // says no body carries it.
+    // declared-but-unwritten read.
+    //
+    // ⭐ AND IT MOVED AGAIN AT STEP 5e, EXACTLY AS THE STEP-2 NOTE SAID IT WOULD HAVE TO.
+    // The decoy was `d.metallicity` from Step 2 until this commit, which forwards it —
+    // spending it the same way Step 2 spent the tidal triple. It now points at
+    // `d._systemSeed`, and that is not a placeholder: the pack contract landed by Step 5's
+    // sibling requires a NON-ZERO INTEGER macroSeed, the only seed a body carries is the
+    // STRING `_systemSeed`, and `'pcc-0' | 0 === 0`. Measured over this corpus: present on
+    // 520/526, `typeof 'string'` on all 520, so the coercion is 0 on every one — the same
+    // silent-collapse shape the seam already catalogues eight of.
+    // ⚠ THE ROTATION IS PERMANENT WORK. Whichever step forwards `_systemSeed` must move
+    // this assertion AND the injection payloads below, together.
     const src = ADAPTER_SRC();
-    expect(src, 'the decoy must actually be present for this to test anything').toContain('d.metallicity');
-    expect(a.reads.has('d.metallicity'), 'a commented-out read was analysed as code').toBe(false);
-    // ⛔ AND THE OTHER HALF, WHICH IS WHAT MAKES THE DECOY MEAN ANYTHING NOW. The three
+    expect(src, 'the decoy must actually be present for this to test anything').toContain('d._systemSeed');
+    expect(a.reads.has('d._systemSeed'), 'a commented-out read was analysed as code').toBe(false);
+    // ⛔ AND THE OTHER HALF, WHICH IS WHAT MAKES THE DECOY MEAN ANYTHING NOW. The four
     // strings that used to be decoys are the same shape in prose and are ALSO written as
     // code below it. If the walk were a text scan both facts would look identical; the
-    // parser separates them, so all three read TRUE here while `d.metallicity` reads
-    // FALSE, from one file that contains all four strings.
+    // parser separates them, so all four read TRUE here while `d._systemSeed` reads
+    // FALSE, from one file that contains all five strings.
     expect(src).toContain('d.tidalHeating');
     expect(a.reads.has('d.tidalHeating'), 'Step 2\'s tidal read is missing from the adapter').toBe(true);
     expect(a.reads.has('d.starMassEarth')).toBe(true);
     expect(a.reads.has('d.orbitRadiusEarth')).toBe(true);
+    expect(src).toContain('d.metallicity');
+    expect(a.reads.has('d.metallicity'), 'Step 5e\'s metallicity read is missing from the adapter')
+      .toBe(true);
   });
 
   it('⛔ the adapter uses NONE of the bypass forms — with the injected controls that make that zero mean something', () => {
@@ -3460,31 +3731,43 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
     const ANCHOR = '  const condition = deriveConditionVector(fp, null, fp.radiusEarth);';
     expect(src, 'the injection anchor moved').toContain(ANCHOR);
 
-    // ⛔⛔ WHY EVERY INJECTION BELOW NOW SMUGGLES `metallicity` AND NOT `tidalHeating`.
-    // Until Step 2 these controls injected `d.tidalHeating` — Step 2's own declared first
-    // move, which is exactly what PLAN §11.3.1 asks a mutant to be drawn from. Step 2
-    // LANDED that read and gave it a coverage row, so `d.tidalHeating` is now DECLARED,
+    // ⛔⛔ WHY EVERY INJECTION BELOW NOW SMUGGLES `_systemSeed`, AND WHY THE PAYLOAD HAS
+    // CHANGED TWICE. Until Step 2 these controls injected `d.tidalHeating` — Step 2's own
+    // declared first move, which is exactly what PLAN §11.3.1 asks a mutant to be drawn from.
+    // Step 2 LANDED that read and gave it a coverage row, so `d.tidalHeating` became DECLARED,
     // and an injection of a declared field produces no finding by design. Left as it was,
     // every row here would have gone green-because-vacuous — sixteen controls that cannot
     // fail, which is the D-class defect this fence exists to prevent, arriving through the
-    // fence's own controls. So the payload re-points at the NEXT declared-but-unwritten
-    // read, `d.metallicity` (Step 5 — PLAN.md:262 `### Step 5 — Driver pack #1: the gas deck`),
-    // keeping §11.3.1's "at least one mutant drawn from the next step's declared first move"
-    // true rather than expired. ⚠ THIS ROTATION IS PERMANENT WORK, not a one-off: the field
-    // named here must be swapped again by whichever step forwards `metallicity`, and the
+    // fence's own controls. So the payload re-pointed at `d.metallicity`.
+    // ⭐ STEP 5e FORWARDS `metallicity`, so that payload is now spent in exactly the same way,
+    // and every row below would have gone vacuous a SECOND time. It re-points at the next
+    // declared-but-unwritten read, `d._systemSeed` — the seed the giant-deck pack contract
+    // needs and cannot get (`giantDeck.js` asserts a non-zero INTEGER macroSeed; the body
+    // carries the STRING `'pcc-0'`, which `| 0` collapses to 0 on 520/526 bodies).
+    // ⚠ THIS ROTATION IS PERMANENT WORK, not a one-off — it has now been done twice: the
+    // field named here must be swapped again by whichever step forwards `_systemSeed`, and the
     // decoy assertion above must move with it. They are two halves of one fact.
+    // ⛔ VERIFIED NON-VACUOUS AT THIS ROTATION, not assumed — and the verification found that the
+    // rotation matters for ELEVEN of the sixteen rows, not all of them. The eleven that assert
+    // `toContain('undeclared read d.<field>')` name the field in the matcher, so a DECLARED field
+    // produces nothing and they go silently green. The other five (O, P, Q, S and the
+    // uncalled-helper negative) assert on a CONSTRUCT — `unmodelled: accessor …`,
+    // `unmodelled: \`throw\` …` and so on — and are field-independent, so they survive any rotation.
+    // EXECUTED: with the payload left at `metallicity` against the Step-5e adapter, the suite reds at
+    // row H — `expected [] to include 'undeclared read d.metallicity'` — which is the first of the
+    // eleven. They were re-pointed, not re-blessed.
 
     // H — a declaration split from its assignment. The regex fence required
     //     `const|let|var NAME = d` and matched NOTHING here.
-    expect(inject(src.replace(ANCHOR, `  let p; p = d; const _t = p.metallicity;\n${ANCHOR}`)))
-      .toContain('undeclared read d.metallicity');
+    expect(inject(src.replace(ANCHOR, `  let p; p = d; const _t = p._systemSeed;\n${ANCHOR}`)))
+      .toContain('undeclared read d._systemSeed');
     // I — object spread. The initialiser is `{`, not `d`.
-    expect(inject(src.replace(ANCHOR, `  const all = { ...d }; const _t = all.metallicity;\n${ANCHOR}`)))
-      .toContain('undeclared read d.metallicity');
+    expect(inject(src.replace(ANCHOR, `  const all = { ...d }; const _t = all._systemSeed;\n${ANCHOR}`)))
+      .toContain('undeclared read d._systemSeed');
     // G — nested destructuring. `\{[^{}]*\}` cannot match a brace inside the pattern,
     //     so the top-level name in the same statement escaped with it.
-    expect(inject(src.replace(ANCHOR, `  const { atmosphere: { pressure }, metallicity } = d;\n${ANCHOR}`)))
-      .toContain('undeclared read d.metallicity');
+    expect(inject(src.replace(ANCHOR, `  const { atmosphere: { pressure }, _systemSeed } = d;\n${ANCHOR}`)))
+      .toContain('undeclared read d._systemSeed');
     // A — the next step's declared move, written the way this file already writes
     //     things: a module-scope helper, CALLED with `d`. The pre-round-1 fence
     //     (which scanned `conditionFromPlanet`'s body alone) answered `false` here.
@@ -3494,11 +3777,11 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
     //     file. Measured — the first cut of this control omitted the call and read 0,
     //     which would have been recorded as "the fence is blind" against a fence that
     //     was right. Taint enters a helper at its CALL SITE or not at all.
-    expect(inject(`function metallicityOf(d) { return d.metallicity ?? 0; }\n`
-      + src.replace(ANCHOR, `  const _t = metallicityOf(d);\n${ANCHOR}`)))
-      .toContain('undeclared read d.metallicity');
+    expect(inject(`function systemSeedOf(d) { return d._systemSeed ?? 0; }\n`
+      + src.replace(ANCHOR, `  const _t = systemSeedOf(d);\n${ANCHOR}`)))
+      .toContain('undeclared read d._systemSeed');
     // and the other half of that pair: the helper WITHOUT the call is correctly silent
-    expect(inject(`function metallicityOf(d) { return d.metallicity ?? 0; }\n${src}`),
+    expect(inject(`function systemSeedOf(d) { return d._systemSeed ?? 0; }\n${src}`),
       'an uncalled helper is not a read of the adapter\'s input').toEqual([]);
 
     // ═══ K–P INJECTED INTO THE REAL FILE — the six that beat round 2 ══════════════
@@ -3509,22 +3792,22 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
     // with all 56 tests green — so the real file is where the fix has to be shown
     // working. Injected in memory here; the on-disk runs are recorded in the round's
     // report, md5-guarded before and after.
-    expect(inject(src.replace(ANCHOR, `  let _sb; class _S { static { _sb = d.metallicity; } } void _sb; void _S;\n${ANCHOR}`)),
-      'K — a class static block is invisible again').toContain('undeclared read d.metallicity');
-    expect(inject(src.replace(ANCHOR, `  let _z = null; _z ||= d; const _t = _z.metallicity; void _t;\n${ANCHOR}`)),
-      'L — `||=` drops the binding again').toContain('undeclared read d.metallicity');
-    expect(inject(src.replace(ANCHOR, `  let _z; _z ??= d; const _t = _z.metallicity; void _t;\n${ANCHOR}`)),
-      'M — `??=` drops the binding again').toContain('undeclared read d.metallicity');
-    expect(inject(src.replace(ANCHOR, `  let _z = d; _z &&= d; const _t = _z.metallicity; void _t;\n${ANCHOR}`)),
-      'N — `&&=` drops the binding again').toContain('undeclared read d.metallicity');
+    expect(inject(src.replace(ANCHOR, `  let _sb; class _S { static { _sb = d._systemSeed; } } void _sb; void _S;\n${ANCHOR}`)),
+      'K — a class static block is invisible again').toContain('undeclared read d._systemSeed');
+    expect(inject(src.replace(ANCHOR, `  let _z = null; _z ||= d; const _t = _z._systemSeed; void _t;\n${ANCHOR}`)),
+      'L — `||=` drops the binding again').toContain('undeclared read d._systemSeed');
+    expect(inject(src.replace(ANCHOR, `  let _z; _z ??= d; const _t = _z._systemSeed; void _t;\n${ANCHOR}`)),
+      'M — `??=` drops the binding again').toContain('undeclared read d._systemSeed');
+    expect(inject(src.replace(ANCHOR, `  let _z = d; _z &&= d; const _t = _z._systemSeed; void _t;\n${ANCHOR}`)),
+      'N — `&&=` drops the binding again').toContain('undeclared read d._systemSeed');
     // O and P are named as `unmodelled:` rather than as a read — the round's whole
     // point. Matched on the prefix plus the construct, because the line number moves
     // with the anchor and pinning it would make this brittle for no gain.
-    const oHit = inject(src.replace(ANCHOR, `  const _b = { get inner(){ return d; } }; const _t = _b.inner.metallicity; void _t;\n${ANCHOR}`));
+    const oHit = inject(src.replace(ANCHOR, `  const _b = { get inner(){ return d; } }; const _t = _b.inner._systemSeed; void _t;\n${ANCHOR}`));
     expect(oHit.some((h) => h.startsWith('unmodelled: accessor `get inner` on an object literal at line ')),
       `O — an accessor hands the input out of a property slot unnoticed: ${oHit}`).toBe(true);
     const pSrc = `function* _g(x){ yield x; }\n`
-      + src.replace(ANCHOR, `  const _t = _g(d).next().value.metallicity; void _t;\n${ANCHOR}`);
+      + src.replace(ANCHOR, `  const _t = _g(d).next().value._systemSeed; void _t;\n${ANCHOR}`);
     const pFindings = inject(pSrc);
     expect(pFindings.some((h) => h.startsWith('unmodelled: `_g(…)` at line ')
       && h.includes('generator function')), `P — a generator laundered the input: ${pFindings}`).toBe(true);
@@ -3535,27 +3818,27 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
     // would have shipped undisclosed. Q and T in particular are the same defect as
     // the original five: a NODE THE WALK NEVER VISITED (`handler.param`) and a CHANNEL
     // WITH NO BINDING (the unwind), not a pattern nobody had thought to match.
-    const throwHit = inject(src.replace(ANCHOR, `  let _t; try { throw d; } catch (_e) { _t = _e.metallicity; } void _t;\n${ANCHOR}`));
+    const throwHit = inject(src.replace(ANCHOR, `  let _t; try { throw d; } catch (_e) { _t = _e._systemSeed; } void _t;\n${ANCHOR}`));
     expect(throwHit.some((h) => h.startsWith('unmodelled: `throw` at line ')),
       `Q — throw/catch smuggles the input past the walk: ${throwHit}`).toBe(true);
-    expect(inject(`function _h(x, y = x){ return y.metallicity; }\n`
+    expect(inject(`function _h(x, y = x){ return y._systemSeed; }\n`
       + src.replace(ANCHOR, `  const _t = _h(d); void _t;\n${ANCHOR}`)),
-      'R — a parameter DEFAULT that re-aliases another parameter').toContain('undeclared read d.metallicity');
+      'R — a parameter DEFAULT that re-aliases another parameter').toContain('undeclared read d._systemSeed');
     const asyncHit = inject(src.replace(ANCHOR, `  const _p = (async () => d)(); void _p;\n${ANCHOR}`));
     expect(asyncHit.some((h) => h.startsWith('unmodelled: `an immediately-invoked function expression(…)` at line ')),
       `S — an async IIFE with no arguments carries the input out through its promise: ${asyncHit}`).toBe(true);
     expect(inject(src.replace(ANCHOR, '  let _t3; try { _t3 = 1; } catch ({ message: _m = d }) '
-      + `{ _t3 = _m.metallicity; } void _t3;\n${ANCHOR}`)),
+      + `{ _t3 = _m._systemSeed; } void _t3;\n${ANCHOR}`)),
       'T — a DEFAULT inside a catch parameter; round 2 never walked `handler.param` at all')
-      .toContain('undeclared read d.metallicity');
+      .toContain('undeclared read d._systemSeed');
 
     // ── J: THE PARTITION IS NOT A HOLE. A read inside `provenanceOf` still has to
     //    resolve to a declared row, so exfiltrating one from there is caught.
     const NEEDLE = 'function provenanceOf(d, comp) {';
     expect(src, 'the partition anchor moved — `provenanceOf` cannot be located').toContain(NEEDLE);
-    expect(inject(src.replace(NEEDLE, `${NEEDLE}\n  const leaked = d?.metallicity;`)),
+    expect(inject(src.replace(NEEDLE, `${NEEDLE}\n  const leaked = d?._systemSeed;`)),
       'a read inside provenanceOf is excused again — that is bypass J, reopened')
-      .toContain('undeclared read d.metallicity');
+      .toContain('undeclared read d._systemSeed');
 
     // ── AND THE PARTITION IS STILL LOAD-BEARING IN THE OTHER DIRECTION. If
     //    provenanceOf's reads counted, `stale` could never fire: the record reads

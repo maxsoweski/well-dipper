@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { PLANET_SHADER_VARIANTS, planetShaderSource } from '../objects/Planet.js';
+import { planetShaderSource } from '../objects/Planet.js';
+import { buildLabProbeMaterial, labShaderSource, ensureLabAttributes } from './LabPlanetMaterial.js';
 
 /**
  * ShaderWarmup — build the planet-surface GPU programs BEFORE a planet needs to be drawn.
@@ -58,29 +59,89 @@ const _keepAlive = [];
 
 let _warmPromise = null;
 
-const VARIANT_ORDER = ['gas', 'rocky', 'exotic'];
-
 /**
- * Build a probe material carrying one variant's exact shader source.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * PLAN §4 STEP 6c — THE LAB PROGRAM IS A WARM-UP VARIANT.
  *
- * No uniforms: the program cache key is built from the shader source and the renderer/scene
- * parameters, never from uniform values, and `compile()` never uploads a uniform. A probe with the
- * real planet's ~90-uniform block would link the identical program.
+ * ⛔ WHAT LINE `if (!PLANET_SHADER_VARIANTS[key]) continue;` DID. The loop below used to resolve
+ * every requested variant against `PLANET_SHADER_VARIANTS`, the GAME's three-entry table, and skip
+ * anything absent from it — silently, with `continue`. The lab's 363,566-byte fragment shader is not
+ * in that table and cannot be (it is built in this repo's other renderer), so it was never a
+ * candidate for pre-warming at all. Measured by the plan of record at **29.8 s cold / 46.6 ms warm**.
+ * On a warp arrival that cost is paid where the player is looking: `compileAsync` overruns HYPER's
+ * safety ceiling, main.js force-restores the gated roots, and the link is paid SYNCHRONOUSLY on the
+ * first draw.
  *
- * The source comes from `planetShaderSource`, the same accessor `_createSurface` uses, so the
- * measurement cache-bust (`window.__shaderCacheBust`) applies identically to the probe and to the
- * real bodies. Busting only one of the two would warm a program nothing draws.
+ * ⛔ AND THE `continue` WAS ITS OWN SMALLER DEFECT. A typo'd or retired variant name vanished with
+ * no record — `warmShaders({variants:['labb']})` returned `{ok:true, variants:{}}`, a clean report
+ * of nothing. Skips are now recorded with a reason, so "warmed zero programs" and "warmed every
+ * program asked for" stop producing the same output.
  *
- * @param {string} variantKey — 'gas' | 'rocky' | 'exotic'
- * @returns {THREE.ShaderMaterial}
+ * ⭐ ONE REGISTRY, AND MEMBERSHIP IS THE THING THE NEXT AUTHOR EDITS. Step 4's scar is that a gate
+ * pinning COUNTS does not pin MEMBERSHIP; the answer here is that there is exactly one place a
+ * program can be registered for warming, and both consumers (`buildProbeMaterial`, the warm loop)
+ * read it. Adding Step 9's rocky pack material — or Step 10's moon material, if it ever carries its
+ * own program — is one entry.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * @type {Object<string, {kind: string, build: () => THREE.ShaderMaterial, bytes: () => number}>}
  */
-export function buildProbeMaterial(variantKey) {
+export const WARMUP_VARIANTS = {
+  gas:    { kind: 'game', build: () => _gameProbe('gas'),    bytes: () => planetShaderSource('gas').fragmentShader.length },
+  rocky:  { kind: 'game', build: () => _gameProbe('rocky'),  bytes: () => planetShaderSource('rocky').fragmentShader.length },
+  exotic: { kind: 'game', build: () => _gameProbe('exotic'), bytes: () => planetShaderSource('exotic').fragmentShader.length },
+  // ⭐ The lab probe is `buildLabPlanetMaterial().material` itself — see `buildLabProbeMaterial`.
+  // There is no second expression of the lab shader anywhere in the repo, so the parity this
+  // module's own test has to assert for the three game variants holds here by construction.
+  lab:    { kind: 'lab',  build: () => buildLabProbeMaterial(), bytes: () => _labProbeBytes() },
+};
+
+// ⚠ `lab` LAST. `KHR_parallel_shader_compile` overlaps the links, but the driver still takes them in
+// the order they are handed over, and the lab program is roughly 7x the wall-clock of all three game
+// programs combined. Kicking it off first would put the three programs EVERY arrival needs behind a
+// 30 s job on a title screen the player may dismiss in two.
+const VARIANT_ORDER = ['gas', 'rocky', 'exotic', 'lab'];
+
+function _gameProbe(variantKey) {
   const variant = planetShaderSource(variantKey);
   return new THREE.ShaderMaterial({
     uniforms: {},
     vertexShader: variant.vertexShader,
     fragmentShader: variant.fragmentShader,
   });
+}
+
+// Reported in the warm-up record so a reader can tell WHICH program the wall-clock belongs to
+// (363,566 bytes vs the game's ~100 KB). Read through the source accessor, not by building a
+// material: a byte count that allocates six placeholder textures is a measurement with a side effect.
+function _labProbeBytes() {
+  return labShaderSource().fragmentShader.length;
+}
+
+/**
+ * Build a probe material carrying one variant's exact shader source.
+ *
+ * No uniforms for the three GAME variants: the program cache key is built from the shader source and
+ * the renderer/scene parameters, never from uniform values, and `compile()` never uploads a uniform.
+ * A probe with the real planet's ~90-uniform block would link the identical program. (The lab probe
+ * carries its full uniform block for the opposite reason — it IS the real material.)
+ *
+ * The source comes from `planetShaderSource` / `labShaderSource`, the same accessors the real bodies
+ * use, so the measurement cache-bust (`window.__shaderCacheBust`) applies identically to the probe
+ * and to the real bodies. Busting only one of the two would warm a program nothing draws.
+ *
+ * @param {string} variantKey — a key of `WARMUP_VARIANTS`
+ * @returns {THREE.ShaderMaterial}
+ */
+export function buildProbeMaterial(variantKey) {
+  const entry = WARMUP_VARIANTS[variantKey];
+  if (!entry) {
+    throw new Error(
+      `[SHADER-WARMUP] unknown variant '${variantKey}'. Known: ${Object.keys(WARMUP_VARIANTS).join(', ')}. `
+      + 'Returning undefined here is how a warm-up reported success having compiled nothing.',
+    );
+  }
+  return entry.build();
 }
 
 /**
@@ -129,7 +190,19 @@ async function _warmPlanetPrograms(renderer, camera, opts = {}) {
   // kickoffs costs three frames and buys back nothing, because the driver is already working.
   const inflight = [];
   for (const key of variants) {
-    if (!PLANET_SHADER_VARIANTS[key]) continue;
+    // ⛔ WAS `if (!PLANET_SHADER_VARIANTS[key]) continue;` — the line PLAN §4 Step 6c names. It
+    // resolved against the GAME's three-entry table, so the lab program could never be a candidate,
+    // and an unknown key produced a clean report of nothing. Both halves are recorded now.
+    if (!WARMUP_VARIANTS[key]) {
+      report.ok = false;
+      report.variants[key] = {
+        ok: false, skipped: true,
+        error: `unknown warm-up variant '${key}' — not a key of WARMUP_VARIANTS `
+             + `(${Object.keys(WARMUP_VARIANTS).join(', ')})`,
+      };
+      console.warn('[SHADER-WARMUP] unknown variant %s — nothing warmed for it', key);
+      continue;
+    }
     // Yield first, so the caller's own frame is never the one that pays the synchronous half.
     await _nextFrame();
     const vt0 = performance.now();
@@ -137,6 +210,13 @@ async function _warmPlanetPrograms(renderer, camera, opts = {}) {
       const scene = new THREE.Scene();
       const material = buildProbeMaterial(key);
       const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), material);
+      // The lab vertex shader reads aBand/aShear/aMush/aStorm. ⚠ NOT a cache-key concern — three's
+      // program key is built from shader source and renderer/material parameters, and attributes are
+      // not in it, so the program would link identically without this. It is here because a missing
+      // attribute is not a link error and `compileAsync` may still exercise the draw setup; giving
+      // the probe the same vertex layout as the real body removes a difference rather than fixing a
+      // known bug. If this line is ever deleted, nothing about the warm-up's PURPOSE is lost.
+      if (WARMUP_VARIANTS[key].kind === 'lab') ensureLabAttributes(mesh.geometry);
       scene.add(mesh);
       _keepAlive.push(material, mesh);
 
@@ -162,7 +242,11 @@ async function _warmPlanetPrograms(renderer, camera, opts = {}) {
       // Elapsed from this variant's own kickoff. These now OVERLAP, so they no longer sum to
       // totalMs — that is the point. Read totalMs for wall clock, the per-variant figures for
       // which shader is the expensive one.
-      report.variants[key] = { ms: +(performance.now() - vt0).toFixed(1), ok: true };
+      report.variants[key] = {
+        ms: +(performance.now() - vt0).toFixed(1), ok: true,
+        kind: WARMUP_VARIANTS[key].kind,
+        fragmentBytes: WARMUP_VARIANTS[key].bytes(),
+      };
     } catch (e) {
       report.ok = false;
       report.variants[key] = { ms: +(performance.now() - vt0).toFixed(1), ok: false, error: String(e) };
@@ -171,6 +255,14 @@ async function _warmPlanetPrograms(renderer, camera, opts = {}) {
   }
 
   report.totalMs = +(performance.now() - t0).toFixed(1);
+  // ⭐ MEMBERSHIP, not just counts (Step 4's scar: a count-preserving permutation passed every
+  // instrument byte-identically). `requested` is what the caller asked for and `warmed` is what a
+  // program actually exists for — a reader comparing them sees a silent skip, which is what the old
+  // `continue` made unreadable.
+  report.requested = [...variants];
+  report.warmed = Object.keys(report.variants).filter((k) => report.variants[k].ok);
+  report.skipped = Object.keys(report.variants).filter((k) => report.variants[k].skipped);
+  report.cacheBust = (typeof window !== 'undefined' && window.__shaderCacheBust) || null;
   if (typeof window !== 'undefined') window.__shaderWarmup = report;
   return report;
 }

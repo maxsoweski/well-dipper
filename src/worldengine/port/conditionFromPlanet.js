@@ -26,7 +26,8 @@
 //    no error, a finite plausible wrong number — which is why each one is named rather than fixed
 //    silently. Expect a fifth.
 //  - `_provenance` (non-enumerable, on the returned condition) records 'measured' vs 'defaulted' for
-//    each of the 17 inputs (14 at Step 1; Step 2 added the tidal triple). ⚠ THAT COUNT IS NOT PINNED
+//    each of the 18 inputs (14 at Step 1; Step 2 added the tidal triple; Step 5e added
+//    `metallicity`). ⚠ THAT COUNT IS NOT PINNED
 //    ANYWHERE AS A NUMBER, deliberately — the pin that was is the self-referential fence described
 //    under PROVENANCE_COVERAGE. It is stated here as prose so a reader has a scale, and it is the
 //    coverage map against the adapter's own code that is actually enforced.
@@ -466,9 +467,21 @@ export function atmosphereFromPlanet(gameAtmosphere) {
 // `rotationHours` at all — while `deriveConditionVector` wants an fp; and its output is hashed by
 // `tests/fixtures/v2-0-basestep-golden.mjs`. Reconciling the two adapters is real work and is
 // explicitly out of this plan's scope (PLAN.md:578 `Reconciling `adaptL0` with `conditionFromPlanet``).
-// Step 5 adds `d.metallicity` to the fp; that read does not exist yet and this line naming it is
+// A later step adds `d._systemSeed` to the fp; that read does not exist yet and this line naming it is
 // PROSE, not code — the contract test uses exactly this string as its live decoy that the fence
 // walks an AST rather than the file's text.
+// ⚠ THE DECOY ROTATED AT STEP 5e AND THE ROTATION IS THE MECHANISM, NOT A REPAIR. It was
+// `d.metallicity` until this commit, which forwards it; a decoy is only a decoy while the read does
+// not exist. `_systemSeed` is the next declared-but-unwritten one and it is not a hypothetical: the
+// pack contract this step's sibling landed requires a NON-ZERO INTEGER macroSeed
+// (src/worldengine/drivers/giantDeck.js:161 `const macroSeed = assertMacroSeed(ctx.macroSeed);`,
+// whose hazard note is giantDeck.js:157
+// `// every gas giant in the galaxy gets identical band phases, and not one gate on driver ALGEBRA`
+// — the paragraph above it spells out that a hex string coerces to seed 0 through the pack's own
+// bit-or) and the only seed a body carries is a STRING — MEASURED over this file's 526-planet corpus,
+// `_systemSeed` is present on 520 and is `typeof 'string'` on all 520 (`'pcc-0'`, `'pcc-1'`, …), so
+// `d._systemSeed | 0` is 0 on every one of them. Forwarding it is a real future read with a real
+// unit disagreement waiting at the end of it — the ninth, if it lands the obvious way.
 
 // ── `_provenance` — WHICH OF THIS BODY'S INPUTS WERE MEASURED AND WHICH WERE INVENTED. ────────────
 //
@@ -601,6 +614,12 @@ export const PROVENANCE_COVERAGE = Object.freeze({
   magneticField:  Object.freeze(['d.magneticField']),
   habitability:   Object.freeze(['d.habitability']),
   axialTilt:      Object.freeze(['d.axialTilt']),
+  // ── STEP 5e. Its own row, for the same reason `carbonToOxygen` has one: it is absent
+  // independently of everything above it, and its absence MEANS something specific. Measured over
+  // the contract test's corpus: 526/526 generated planets carry it, 0/411 moons do, 0/13 Sol bodies
+  // do and 0/18 lab presets do — so this row is the only place that says the metallicity branch of
+  // `enrichmentRatio` is live on generated planets and DEAD everywhere else in the tree.
+  metallicity:    Object.freeze(['d.metallicity']),
 });
 
 /** The provenance entry names, derived from the coverage map so the two can never disagree. */
@@ -637,6 +656,27 @@ export const PROVENANCE_INPUTS = Object.freeze(Object.keys(PROVENANCE_COVERAGE))
  *    fabrication, and one of each is the incoherent moon pair named in the tidal block above.
  *    ⚠ 'measured' here means the game supplied a NUMBER, not that the number is right — 526/526
  *    generated planets read 'measured' for `tidalHeat` and 0/526 for `starMassEarth`.
+ *
+ *  · ⛔ `metallicity` IS THE ROW THIS RECORD IS WEAKEST AT, AND STEP 5e IS WHERE THAT STOPS BEING
+ *    HYPOTHETICAL. `seen()` asks "is it there?", and PlanetGenerator.js:376
+ *    `const metallicity = zones ? (zones.metallicity || 0) : 0;` answers with a NUMBER on a body
+ *    that has no zones at all — so a fabrication arrives spelled exactly like a measurement and
+ *    this record says 'measured'. MEASURED over the 526-planet corpus: 6 bodies carry exactly 0,
+ *    every one of them an exotic (5 `crystal`, 1 `shattered`), every one of them carrying NEITHER
+ *    `_systemSeed` NOR `_ordinal`, and every one of them sitting in a system whose other planets
+ *    carry a non-zero value — which is what proves the 0 is the `|| 0` arm and not a solar-abundance
+ *    coincidence. ⚠⚠ AND 0 DEX IS THE WORST POSSIBLE VALUE TO FABRICATE HERE, because
+ *    `giant-drivers.js:139 `export const MET0_DEX = 0.0;`` makes it the exact D3 anchor:
+ *    `10^(0 − 0) = 1` ⇒ `shellDepthFrac === SDF0` to the bit. One of the six is gas-class
+ *    (`pcc-0#4`), so on that body the invented number does not merely pass — it lands on the
+ *    canonical answer — and a fabrication that lands on the canonical answer is invisible to every
+ *    class of check this program owns: it is inside the band (so no clamp gate sees it), it is a
+ *    value other bodies also take (so no distinctness gate sees it), and it equals the D3 anchor
+ *    (so the anchor round-trip agrees with it). Only the provenance row could name it, and this
+ *    bullet is the record that it cannot.
+ *    ⛔ NOT "FIXED" BY MAKING THIS ROW SMARTER. A rule that called 0 'defaulted' would call a
+ *    genuinely solar system's real 0 a fabrication, and the game emits no way to tell the two
+ *    apart; the honest fix is upstream, in the `|| 0`, and it is not this file's.
  */
 function provenanceOf(d, comp) {
   const seen = (v) => (v != null ? 'measured' : 'defaulted');
@@ -660,6 +700,7 @@ function provenanceOf(d, comp) {
     magneticField:  seen(d.magneticField),
     habitability:   seen(d.habitability),
     axialTilt:      seen(d.axialTilt),
+    metallicity:    seen(d.metallicity),
   });
 }
 
@@ -733,18 +774,89 @@ export function conditionFromPlanet(planetData) {
     // measurement of zero — which for `magneticField` ("no dynamo") and `axialTilt` ("no seasons")
     // are both physically meaningful readings that some body genuinely has.
     //
-    // ⛔ `metallicity` IS NOT HERE, AND ITS ABSENCE IS LOAD-BEARING. It lands in Step 5, not Step 1.
-    // `giant-drivers.js:124-125` reads `condition.metallicity` as its declared PRIMARY enrichment
-    // term and falls through to the density proxy only while it is undefined — but `canonicalZ0`
-    // (`:136-138`) is ALWAYS that density proxy, a weighted sum in g/cc, while the generated
-    // `metallicity` is a DEX value (−0.473…+0.460, 39.6% of it negative). Forwarding it switches the
-    // numerator's branch across a unit mismatch the denominator does not follow: measured over 144
-    // generated gas bodies, `shellDepthFrac` goes from 0.740000 on all 144 to 0.860000 on all 144 —
-    // pegged at its clamp ceiling. Step 1's own uniform gate would pass GREEN (no giant uniform
-    // ships yet) and the failure would surface two steps later against the wrong commit.
-    // tests/port-condition-contract.test.js pins the absence AND measures the trap, so this comment
-    // cannot rot into folklore.
+    // ── STEP 5e — `metallicity` IS FORWARDED. Max's ruling, 2026-08-09. ──────────────────────────
+    //
+    // ⛔ WHAT STOOD HERE, AND WHY RETIRING IT IS NOT SOFTENING IT. The block was headed
+    // "`metallicity` IS NOT HERE, AND ITS ABSENCE IS LOAD-BEARING", and it was correct: the
+    // enrichment term preferred `condition.metallicity` as its NUMERATOR while its DENOMINATOR was
+    // always the density proxy — a dex over a weighted sum in g/cc — so forwarding divided across
+    // two scales and pegged `shellDepthFrac` at a clamp bound. That is a guard against a defect in
+    // the LAW, and Step 5e fixed the law: the two locals are now ONE quantity,
+    // giant-drivers.js:127 `export function enrichmentRatio(condition = {}, regime = E5_REGIME.GAS_GIANT) {`,
+    // whose metallicity arm is giant-drivers.js:129 `  if (meta != null) return Math.pow(10, meta - MET0_DEX);          // PRIMARY: dex → linear metal-abundance ratio`
+    // — the dex turned into the linear abundance ratio a dex DENOTES, against an anchor that is 0 by
+    // definition rather than by fit (giant-drivers.js:139 `export const MET0_DEX = 0.0;`). A spent
+    // guard is retired by NAME in the commit that spends it, and its fence is replaced with the
+    // opposite assertion rather than deleted — tests/port-condition-contract.test.js now pins that
+    // this key IS forwarded and that it REACHES the enrichment branch, under the same describe the
+    // absence used to be pinned under.
+    //
+    // ⚠⚠ THE CONSEQUENCE MAX IS OWED, MEASURED, BECAUSE IT IS A REAL COST AND NOT A FREE WIN.
+    // `metallicity` is a SYSTEM property — StarSystemGenerator.js:363 `? galaxyContext.metallicity + rng.gaussian(0, 0.05)  // position-derived + small scatter`
+    // draws it ONCE per system and PlanetGenerator.js:376
+    // `const metallicity = zones ? (zones.metallicity || 0) : 0;` copies that one number onto every
+    // planet. So `shellDepthFrac` stops being a per-BODY quantity and becomes a per-SYSTEM-AND-REGIME
+    // one, and with it the equatorial-jet SIGN (climate-e5.js:71
+    // `  D_THR: 0.40,        // LAW2 shell-depth threshold: above ⇒ prograde eq jet, below ⇒ retrograde`),
+    // which reads it. MEASURED over the 120 seeded systems this file's contract test builds
+    // (204 gas-class bodies by `compositionClass`, each classified with `giantRegimeOf` and drawn
+    // through `drawGiantConditions` — the production order at giantDeck.js:216
+    // `const regime = giantRegimeOf(condition);`):
+    //     same-system same-regime gas pairs sharing a shellDepthFrac   66/110 → 110/110 (ALL of them)
+    //     multi-gas systems whose bodies all differ in shellDepthFrac  22/54  → 6/54
+    //     distinct shellDepthFrac values                               57     → 57   (NOT a collapse)
+    //     bodies strictly INSIDE their regime's sdfBand                54/204 → 84/204
+    //     bodies pinned at a band bound                                150 lo/0 hi → 60 lo/60 hi
+    //     internalHeat distinct                                        47 → 47  (bit-identical: FORM 1 reads no Z)
+    //     dissipation  distinct                                        58 → 54  (moves only through SDF, as FORM 3 says)
+    //     same-system pairs sharing an eq-jet SIGN, ANY regime         167/219 → 141/219  ← FELL
+    // ⚠⚠ THE LAST ROW IS THE ONE THAT CONTRADICTS THE OBVIOUS READING, so it is in the table rather
+    // than in a footnote. "The jet sign becomes a per-system property" is true WITHIN a regime and
+    // FALSE across one: a system's sub-neptune and its jovian are scored against different bands, and
+    // before this commit the density proxy pushed every regime to its own band FLOOR, which happened
+    // to put more of them on the same side of D_THR. Sign agreement therefore went DOWN. Whether that
+    // reads as more variety or as incoherence is Max's call, not a number's.
+    //
+    // ⚠ THE "BEFORE" COLUMN IS macroSeed-DEPENDENT AND THE "AFTER" COLUMN IS NOT, which is itself the
+    // finding. Re-run at three different macroSeed schemes (per-system index, a constant, per-body
+    // index) the BEFORE column moves — 57/65/59 distinct, 54/62/56 interior, 66/56/58 of 110 pairs
+    // sharing — while every AFTER number above is IDENTICAL on all three, because the metallicity arm
+    // returns before `drawGiantConditions`' density draw is ever read. So the seed has been removed
+    // from this channel, not merely diluted.
+    //
+    // The 66/110 is the part a reader will not guess: before this commit the density proxy already
+    // clamped 150 of 204 bodies to a band FLOOR, so gas giants were sharing a shell depth most of
+    // the time anyway — by saturation rather than by physics. This step trades a shared value that
+    // meant nothing for a shared value that means "these two giants formed out of the same metals",
+    // which is the thing Max asked to see and then judge.
+    //
+    // ⛔ AND NOTHING ON SCREEN MOVES TODAY, WHICH IS A SCOPE STATEMENT AND NOT A SAFETY CLAIM.
+    // `deriveGiantDrivers` has NO game-side caller: `giantDeckPack` is imported by
+    // `planet-lod-lab.html` and by nothing under `src/objects/`, and every lab preset carries
+    // `metallicity: undefined` (0/18), so the lab route is byte-inert too. Instrument C accordingly
+    // reports ZERO delta on all 55 shipped uniforms — ⚠ that zero means "this channel is not wired
+    // to a uniform yet", NOT "this change is small". It becomes visible the step the pack is wired
+    // into the game, and that is when "too uniform" can actually be looked at.
+    //
+    // ⛔ AND THE UNIFORMITY MAX NAMED IS NOT DENIED — IT IS WHERE THE NEXT KNOB GOES. His ruling was
+    // "forward it and then if it's too uniform, consider other variables per star system and per
+    // planet". The per-BODY entropy that used to reach FORM 2 was `drawGiantConditions`' `densFactor`
+    // (giant-drivers.js:229 `  const densFactor = 1 + (rng() - 0.5) * 2 * GIANT_DRAW.S_DENS;`), and it
+    // no longer reaches it at all: the metallicity arm returns before the density is read. So the
+    // per-planet variety, if he wants it back, is a per-planet term IN THE LAW, not a re-widening of
+    // the clamp band and not a gain multiplier on the dex (giant-drivers.js:138 records six gains
+    // measured and refused, with their distinct/interior counts).
     magneticField: d.magneticField,          // D13 — the vector has declared this key since V2-0
+    // ⚠ THE VECTOR HAS DECLARED THIS KEY SINCE V2-0 TOO and never received one from the game:
+    // body-condition-vector.js:157 `  metallicity:     fp.metallicity,                       // metallicity data-only (undefined for lab presets)`.
+    // The engine's OTHER adapter has forwarded it the whole time — adaptL0.js:39
+    // `    metallicity: p.metallicity,` — so this line is the two adapters agreeing, not a new idea.
+    // NO FABRICATED DEFAULT, for the reason the block above this one gives: 0 dex is SOLAR, a real
+    // reading, and `?? 0` here would be indistinguishable from it while also silently selecting the
+    // primary branch of `enrichmentRatio` on every body that has no metallicity at all — every moon
+    // (0/411), every Sol body (0/13) and every lab preset (0/18). `undefined` is what keeps those
+    // three populations on the density proxy, which is what makes this step byte-inert for them.
+    metallicity:   d.metallicity,
     habitability:  habitabilityScalarOf(d.habitability), // ⚠ SCALAR out of {score,factors} — see the block above
     // ⚠ TWO transforms, not one, and they are separate on purpose: DEGREES out of RADIANS
     // (the unit), then folded to the [0,90] EFFECTIVE OBLIQUITY the laws' `clamp01(x/90)`

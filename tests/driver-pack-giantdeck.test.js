@@ -710,16 +710,30 @@ describe('5e · metallicity and the enrichment ratio are on ONE scale', () => {
     expect(newVals.size).toBeGreaterThan(oldVals.size);
   });
 
-  it('and it is BYTE-INERT today, because nothing forwards metallicity yet', () => {
-    // ⚠ THIS IS THE ASSERTION THAT MAKES 5e SAFE TO LAND WITHOUT THE ADAPTER HALF. If this ever goes
-    // red, the adapter started forwarding and the shellDepthFrac re-bless in
-    // tests/port-condition-contract.test.js is DUE — see this lane's handoff, which names it.
+  it('and the tripwire it shipped with has FIRED — metallicity is forwarded, the re-bless is done', () => {
+    // ⭐ THIS TEST HAS BEEN INVERTED, NOT DELETED. It shipped in Step 5 asserting the OPPOSITE
+    // ('BYTE-INERT today, because nothing forwards metallicity yet') with the instruction: "if this
+    // ever goes red, the adapter started forwarding and the shellDepthFrac re-bless in
+    // tests/port-condition-contract.test.js is DUE". Max ruled on 2026-08-09 to forward it; the
+    // adapter half landed; this went red exactly as planted; and the re-bless it points at is done.
+    // A tripwire that fires and is then DELETED teaches nothing — inverting it keeps the same seam
+    // gated in the opposite direction, so a silent REVERSION of the forwarding also reds here.
+    let generated = 0;
     for (let i = 0; i < 40; i++) {
       const s = StarSystemGenerator.generate(`inert-${i}`, null);
       for (const e of s.planets || []) {
-        expect(conditionFromPlanet(e.planetData).metallicity).toBeUndefined();
+        // Forwarded VERBATIM — Object.is, not truthiness: 0 and negative dex are legal values
+        // (39.6% of the corpus is negative) and a truthiness check would pass on a dropped key.
+        expect(conditionFromPlanet(e.planetData).metallicity).toBe(e.planetData.metallicity);
+        generated++;
       }
     }
+    expect(generated, 'the sweep must actually reach bodies — a zero-body loop asserts nothing').toBeGreaterThan(100);
+
+    // ⛔ THE LAB PRESETS ARE THE OTHER HALF, AND THEY STAY UNDEFINED. DRIVER_PRESETS carry no
+    // metallicity, so the enrichment law falls back to the composition proxy there. That is why
+    // `undefined` and not `?? 0` is the correct absence: 0 dex is SOLAR, a real and common value,
+    // so defaulting would silently declare every lab preset sun-like.
     for (const name of Object.keys(DRIVER_PRESETS)) {
       const fp = DRIVER_PRESETS[name];
       expect(deriveConditionVector(fp, deriveUniforms(fp, 1.0), fp.radiusEarth).metallicity).toBeUndefined();

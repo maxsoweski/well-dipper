@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { assignBodyName } from '../util/scene-naming.js';
-import {
-  HEIGHT_NOISE_GLSL,
-  HEIGHT_NOISE_UNIFORMS_GLSL,
-} from '../worldengine/shaders/heightNoise.glsl.js';
+import { HEIGHT_NOISE_GLSL, HEIGHT_NOISE_UNIFORMS_GLSL } from '../worldengine/shaders/heightNoise.glsl.js';
+import { applyDriverPacks, selectPacks } from '../worldengine/drivers/index.js';  // §4 Step 6a
+import { gameDisplayRadiusEarth } from '../worldengine/port/writePackUniforms.js';
+import { fnv1aString } from 'motion-test-kit/core/hash/fnv1a.js';          // the 5d macroSeed shape, numeric form
 import {
   CRATER_RELIEF_GLSL,
   CRATER_RELIEF_UNIFORMS_GLSL,
@@ -12,7 +12,7 @@ import { conditionFromPlanet } from '../worldengine/port/conditionFromPlanet.js'
 import { atmosphereOpticsOf } from '../worldengine/base/atmosphereOptics.js';
 import { biosphereOf, BIO_PIGMENT } from '../worldengine/base/surfaceMaterial.js';
 import { craterUniformsFrom, CRATERS_OFF } from '../worldengine/port/craterUniforms.js';
-import { updateLabPlanetMaterial } from '../rendering/LabPlanetMaterial.js';
+import { updateLabPlanetMaterial, buildLabPlanetMaterial, ensureLabAttributes } from '../rendering/LabPlanetMaterial.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fragment shader split into HEADER + per-category BODY + FOOTER.
@@ -1589,9 +1589,9 @@ export class Planet {
     // condition vector. Only terrestrial worlds get it: the branch that consumes it is the
     // ocean/land one, and biosphereOf returns ~0 for anything dry or airless anyway.
     const bioCover = biosphereOf(condition);
-
-    // Pick the shader variant based on planet category
-    const variant = planetShaderSource(shaderVariantFor(d.type));
+    const labSurface = this._createLabSurface(geometry, d, condition);   // PLAN §4 Step 6a/6d/6e
+    if (labSurface) return labSurface;      // world-engine pack bodies leave HERE, flag ON (6e)
+    const variant = planetShaderSource(shaderVariantFor(d.type));  // legacy: 3 programs, by type
 
     const material = new THREE.ShaderMaterial({
       uniforms: {
@@ -1973,4 +1973,260 @@ export class Planet {
       this.ring.material.dispose();
     }
   }
+
+  /**
+   * ⭐ THE LAB-PIPELINE BRANCH — PLAN §4 Step 6a (compose the packs), 6d (exclude Sol in CODE) and
+   * 6e (behind an off-by-default flag until Max's UAT). Returns a finished surface Mesh, or `null`
+   * to mean "this body keeps the legacy material", which is what `_createSurface` falls through to.
+   *
+   * ⛔ WHY THE MATERIAL IS CHOSEN HERE AND NOT SWAPPED LATER. This selects at material-CREATION
+   * time, so for a swapped body the legacy `THREE.ShaderMaterial` below is never constructed at
+   * all. That is the reason PLAN 6e says the flag IS Instrument E's OFF twin and
+   * `_lab.restoreGameMaterial()` is NOT: there is no registry entry to restore, because there is no
+   * legacy material. The OFF frame is the FLAG off plus a reload.
+   *
+   * ⛔ AND IT IS WHY `labGasBodiesFlag()` IS EXPORTED WITH ITS SOURCE. §12.5 fact 6 requires the
+   * flag's live value in every E caption: a visual gate reported as passing in the default
+   * configuration is a shot of the code that was not written, and the default here is OFF.
+   */
+  _createLabSurface(geometry, d, condition) {
+    const decision = labPipelineAdmits(d, condition);
+    if (!decision.admitted) return null;
+
+    // The lab's own material, from the lab's own shader + uniform factory. `bodyRadius` is
+    // `d.radius` because src/objects/Planet.js:1549 builds the geometry at exactly that radius —
+    // omit it and the noise domain is 23-78x too small, one of the three sufficient causes of the
+    // "flat orange" this port already chased once.
+    const built = buildLabPlanetMaterial({ lightDir: this._lightDir, bodyRadius: d.radius });
+    const material = built.material;
+
+    const pos = geometry.getAttribute('position');
+    const packs = applyDriverPacks(material, condition, labPackCtx(d, condition, {
+      positions: pos.array, count: pos.count, radius: d.radius,
+    }));
+
+    // ⚠ ORDER IS LOAD-BEARING. The bake's arrays go on FIRST and the zero-fill runs SECOND:
+    // `ensureLabAttributes` never overwrites an attribute that already exists (that is its own
+    // documented contract), so this way the pack owns aBand/aShear/aMush and the zero-fill supplies
+    // only aStorm — whose producer PLAN §5 fences out of pack #1 by name. Reversed, the pack's
+    // arrays would still land, but "which of these four is a real bake" would stop being readable
+    // from the code, and aStorm's zero would stop being a decision.
+    for (const name of Object.keys(packs.attributes)) {
+      geometry.setAttribute(name, new THREE.BufferAttribute(packs.attributes[name], 1));
+    }
+    const zeroFilled = ensureLabAttributes(geometry);
+
+    const surface = new THREE.Mesh(geometry, material);
+    // The §12.3 E-3 back-link, in the SAME shape the legacy path writes at the end of
+    // `_createSurface` — a scene walk yields a bare mesh and `d` is unreachable from it, so an
+    // instrument that could name a legacy body but not a swapped one would go blind on exactly the
+    // bodies this step ships. `lab` carries what an E caption has to print: the flag AND its source
+    // (fact 6), which packs ran, and which attributes are real vs zero-filled.
+    surface.userData = {
+      ...(surface.userData || {}),
+      wd: {
+        planetData: d,
+        condition,
+        lab: {
+          isLabPipeline: true,
+          flag: decision.flag,
+          provenance: decision.provenance,
+          packsApplied: packs.applied,
+          packsSkipped: packs.skipped,
+          uniformsWritten: packs.uniformsWritten,
+          gates: packs.gates,
+          bakedAttributes: Object.keys(packs.attributes),
+          zeroFilledAttributes: zeroFilled.added,
+          bodyRadius: built.bodyRadius,
+          meta: packs.meta,
+        },
+      },
+    };
+    return surface;
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// PLAN §4 STEP 6d + 6e — WHO IS ADMITTED TO THE PACK PATH, AND THE FLAG THAT HOLDS IT SHUT
+//
+// ⛔ EVERYTHING IN THIS FILE'S EDIT FOR STEP 6 LANDS BELOW THE LAST CITED LINE, AND THE THREE NEW
+// IMPORTS RIDE AN EXISTING LINE. 50 distinct symbol-anchored `Planet.js:NNN` refs resolve into this
+// file from the plan, the carried ledger, the adapter and four test suites; the deepest is :1943 and
+// every one of them was verified byte-identical to HEAD after this edit. A four-line import block
+// at the top shifts every one of them and `npm run check:instruments` reports them BROKEN. That is
+// the instrument working, and the answer is not to bump the integers. The same rule is already
+// recorded at e1Regime.js:122 `Three files this lane may not edit cite this module by LINE`.
+//
+// ⭐ THE ADMISSION TEST IS ONE FUNCTION, AND THAT IS THE POINT OF 6a. Two routes reach
+// `_createSurface`: BodyRenderer's planets, and planet-class moons, which are built directly at
+// src/main.js:7422 `const planetMoon = new Planet(scenePMData, pmStarInfo);` and never touch
+// BodyRenderer. If the branch condition were written inline it would be written once and apply to
+// both by luck; the moment Step 10 adds `BodyRenderer.createMoon`'s branch there would be two
+// copies of a Sol test, and the plan's own §12.4/E-2 note records that this file's planet-class
+// moons are the shape that gets missed.
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** The system seed `generateSolarSystem` stamps on every Sol body. src/generation/SolarSystemData.js:111 `export function generateSolarSystem() {`. */
+export const SOL_SYSTEM_SEED = 'sol';
+
+/**
+ * World-engine provenance for one `planetData`. PLAN 6d says the branch must not be
+ * `d.type === 'gas-giant'` and must key on provenance — "absence of `profileId`".
+ *
+ * ⚠⚠ ABSENCE OF `profileId` IS NOT, BY ITSELF, A SOL TEST, AND SAYING SO HERE IS THE POINT.
+ * Measured against `generateSolarSystem()` on 2026-08-09: Sol carries 39 bodies and only 16 have a
+ * `profileId`. FOUR SOL PLANETS HAVE NONE — the 0.074 R⊕ rocky body and three ice bodies at 0.130 /
+ * 0.112 / 0.182 R⊕ — and neither do 19 of Sol's moons. Today none of those four is admitted anyway
+ * (their `compositionClass` is 'rocky'/'icy', so no pack claims them), which is exactly the kind of
+ * accidental safety that stops being true at Step 9, when a rocky pack claims all of them at once.
+ * So the test here is a CONJUNCTION and the second clause is the one that closes it:
+ *
+ *   1. no `profileId`      — PLAN 6d's clause. Excludes Sol's 16 profiled bodies, INCLUDING Uranus
+ *                            and Neptune, which are the two Sol planets whose condition really does
+ *                            read `compositionClass === 'gas'`. (Jupiter and Saturn do NOT: their
+ *                            `atmosphere` is null in SolarSystemData, so the condition-derived
+ *                            predicate calls them 'rocky' while their `type` says 'gas-giant'.
+ *                            That inversion is why 6d forbids the type branch.)
+ *   2. `_systemSeed` present and not `'sol'` — excludes the other 23. It reaches planet-class moons
+ *                            too, because src/main.js:7415 `_systemSeed: systemData.seed,` stamps
+ *                            the parent system's seed onto `scenePMData` before `new Planet`.
+ *
+ * ⛔ WHAT THIS STILL DOES NOT COVER, stated rather than discovered later: a PLAIN moon carries
+ * neither stamp — `MoonGenerator` emits no `_systemSeed` and most Sol moons have no `profileId` —
+ * so on the day Step 10 routes plain moons through `BodyRenderer.createMoon`, THIS FUNCTION WOULD
+ * ADMIT SOL'S MOONS. It is not reachable from a plain moon today (nothing but `Planet` calls it),
+ * and tests/gas-body-lab-material.test.js pins that limit with the construct that produced it, so
+ * Step 10 inherits a named hole instead of a silent one.
+ *
+ * `_ordinal` is required for a third reason, and it is not about Sol: it is half of the 5d
+ * `macroSeed` string. A body missing either half hashes `'undefined:undefined'`, which is one
+ * constant seed for the whole population — the 5d hex-collapse defect wearing different clothes,
+ * and equally invisible to every gate on driver algebra.
+ */
+export function worldEngineProvenance(d) {
+  const profileId = (d && d.profileId) || null;
+  const systemSeed = d && d._systemSeed != null ? d._systemSeed : null;
+  const ordinal = d && d._ordinal != null ? d._ordinal : null;
+  const blockers = [];
+  if (profileId) blockers.push('profileId=' + String(profileId));
+  if (systemSeed === null) blockers.push('no _systemSeed');
+  else if (String(systemSeed) === SOL_SYSTEM_SEED) blockers.push('_systemSeed=' + SOL_SYSTEM_SEED);
+  if (ordinal === null) blockers.push('no _ordinal');
+  return { isWorldEngine: blockers.length === 0, profileId, systemSeed, ordinal, blockers };
+}
+
+// ── 6e. The flag ─────────────────────────────────────────────────────────────────────────────────
+// OFF by default. Deletion of the legacy `GAS_BODY` branch is Step 12, a named commit AFTER Max has
+// seen the consequence — not now, and not a permanent fallback either.
+//
+// Three sources, most explicit first, and every read reports WHICH one answered, because "the flag
+// was on" and "the flag defaulted off and the shot shows legacy" are the same picture otherwise.
+// `localStorage` is in the list because 6e's OFF frame is "the flag OFF plus a RELOAD at a restored
+// camera pose" — a value that does not survive the reload cannot be the twin of one that does.
+export const LAB_GAS_BODIES_KEY = 'wd.labGasBodies';
+export const LAB_GAS_BODIES_DEFAULT = false;
+let _labGasBodiesOverride = null;
+
+/** Force the flag (tests, and the E harness's ON/OFF pair). `null` restores environment reading. */
+export function setLabGasBodiesOverride(v) {
+  _labGasBodiesOverride = (v === null || v === undefined) ? null : !!v;
+}
+
+/** @returns {{enabled: boolean, source: string, default: boolean}} — the live value AND its origin. */
+export function labGasBodiesFlag() {
+  if (_labGasBodiesOverride !== null) {
+    return { enabled: _labGasBodiesOverride, source: 'override', default: LAB_GAS_BODIES_DEFAULT };
+  }
+  const w = typeof window !== 'undefined' ? window : null;
+  if (w && typeof w.__wdLabGasBodies === 'boolean') {
+    return { enabled: w.__wdLabGasBodies, source: 'window.__wdLabGasBodies', default: LAB_GAS_BODIES_DEFAULT };
+  }
+  try {
+    const raw = w && w.localStorage ? w.localStorage.getItem(LAB_GAS_BODIES_KEY) : null;
+    if (raw === '1' || raw === '0') {
+      return { enabled: raw === '1', source: 'localStorage:' + LAB_GAS_BODIES_KEY, default: LAB_GAS_BODIES_DEFAULT };
+    }
+  } catch (e) { /* private-mode storage throws on read; the default below is the answer */ }
+  return { enabled: LAB_GAS_BODIES_DEFAULT, source: 'default', default: LAB_GAS_BODIES_DEFAULT };
+}
+
+/** Convenience for call sites that only need the boolean. */
+export function labGasBodiesEnabled() { return labGasBodiesFlag().enabled; }
+
+/**
+ * The single admission test. THREE independent conditions, each of which can refuse alone:
+ *   · the 6e flag is ON,
+ *   · the body carries world-engine provenance (6d — never Sol),
+ *   · at least one pack's CONDITION-DERIVED predicate claims the body (6a).
+ * The third is what makes this grow by an array entry at Steps 9 and 10 instead of by a branch.
+ */
+export function labPipelineAdmits(d, condition) {
+  const flag = labGasBodiesFlag();
+  const provenance = worldEngineProvenance(d);
+  const packs = condition ? selectPacks(condition).map((e) => e.name) : [];
+  return {
+    admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,
+    flag, provenance, packs,
+  };
+}
+
+// ── The game's writer-side context, named here rather than inside the pack ───────────────────────
+// PLAN §5c: "Name the game's `animRate` and relevance source explicitly NOW, not at the byte-identity
+// gate." Both are properties of the FRONT-END, and the game's answers are degenerate today, which is
+// precisely why they are constants with names instead of literals at a call site.
+export const GAME_ANIM_RATE = 1.0;         // the lab's `_animRate` GUI knob has no counterpart here
+export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance
+export const GAME_ROTATION_SCALE = 1.0;    // the lab's rotation multiplier; the game draws 1:1
+/** FNV-1a's offset basis — the substitute for an impossible zero hash. See `labMacroSeed`. */
+const FNV_OFFSET_BASIS = 0x811c9dc5;
+
+/**
+ * The DRAWN spin, in hours, from the game's stored `rotationSpeed` (deg/sec).
+ *
+ * ⛔ THE PACK ASKS FOR THE DRAWN SPIN AND THE CONDITION VECTOR CANNOT ANSWER IT. `condition
+ * .rotationHours` is the preset/canonical value — measured 24 on every generated giant sampled —
+ * while the game draws a real per-body rate at src/generation/PlanetGenerator.js:698
+ * `rotationSpeed = rot(rng.range(0.033, 0.167) * (rng.chance(0.15) ? -1 : 1));`. Pass the canonical
+ * one and every giant in the galaxy takes the same Rhines band count and the same jet drift, which
+ * is a distinctness failure no algebraic gate catches because the algebra is correct.
+ *
+ * The inverse of src/core/CelestialTime.js:68 `export const ROTATION_REALISM_FACTOR = 1 / 24;`:
+ * legacy 0.1 deg/s x 1/24 = 4.1667e-3 deg/s is one 24-hour turn, so hours = 360 / (deg/s x 3600).
+ * Sign is dropped — a retrograde giant spins at the same RATE, and the pack's `8 / rotationHours`
+ * would otherwise clamp to its floor on every retrograde body.
+ *
+ * @returns {number|null} hours, or null for a tidally-locked body (`rotationSpeed === 0`), which is
+ *   NOT a spin of zero hours; null lets the pack's own `?? condition.rotationHours ?? 24` chain
+ *   answer, rather than this function inventing a period it has no input for.
+ */
+export function rotationHoursFromSpeed(rotationSpeedDegPerSec) {
+  const s = Math.abs(rotationSpeedDegPerSec ?? 0);
+  if (!Number.isFinite(s) || s <= 0) return null;
+  return 360 / (s * 3600);
+}
+
+/**
+ * The 5d `macroSeed`, in the NUMERIC `fnv1aString` shape and never the hex one — `'da81e221' | 0`
+ * is 0, `resolveParams` does `macroSeed | 0`, and a zero seed gives every gas giant in the galaxy
+ * identical band phases while every gate on driver ALGEBRA still passes.
+ * The string is systemSeed:ordinal, the same key the inspection layer already hashes for the body's
+ * NAME — scene-naming.js:73 `const fullHex = toHex(fnv1aString(` — so a body's bands and its id
+ * cannot come from two different seeds. ⚠ That call takes `toHex` and this one deliberately does
+ * NOT: the hex form is the 5d collapse.
+ */
+export function labMacroSeed(d) {
+  return fnv1aString(String(d && d._systemSeed) + ':' + String(d && d._ordinal)) || FNV_OFFSET_BASIS;
+}
+
+/** The full Step-5a pack context for one game body. `gates` is deliberately absent — the policy owns it. */
+export function labPackCtx(d, condition, mesh) {
+  return {
+    macroSeed: labMacroSeed(d),
+    displayRadiusEarth: gameDisplayRadiusEarth(condition.radiusEarth ?? d.radiusEarth ?? 1),
+    animRate: GAME_ANIM_RATE,
+    relevance: GAME_RELEVANCE,
+    rotationHours: rotationHoursFromSpeed(d.rotationSpeed),
+    rotationScale: GAME_ROTATION_SCALE,
+    mesh,
+  };
 }

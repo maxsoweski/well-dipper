@@ -159,6 +159,38 @@ export function bodyRadiusOf(geometry) {
 }
 
 /**
+ * The lab shader source, with the measurement cache-bust applied — the lab's `planetShaderSource`.
+ *
+ * ⛔ WHY THIS EXISTS, AND IT IS NOT SYMMETRY FOR ITS OWN SAKE. Step 6's gate reads "run once with
+ * `window.__shaderCacheBust` so the cold number is real". Chrome keeps a shader DISK cache that
+ * serves linked binaries across GL contexts and page loads, so an un-busted measurement of the lab
+ * program times the cache and reports the 29.8 s cold link as free. `Planet.planetShaderSource`
+ * already does this for the game's three variants; without the same accessor here, a Step-6 arrival
+ * measurement busts the three cheap programs and NOT the 363,566-byte one the whole gate is about.
+ *
+ * ⚠ Fragment only, matching the game's convention (`planetShaderSource` leaves the vertex source
+ * alone): the vertex program is shared and cheap, and busting it inflates the "before" number with
+ * a link the game pays once.
+ *
+ * ⚠ Identity-preserving when off — returns the module's own frozen pair, so the shipped path never
+ * allocates a second copy of a 363 KB string per body.
+ *
+ * @returns {{vertexShader: string, fragmentShader: string}}
+ */
+export const LAB_SHADER_VARIANT = Object.freeze({
+  vertexShader: LAB_VERTEX_SHADER,
+  fragmentShader: LAB_FRAGMENT_SHADER,
+});
+export function labShaderSource() {
+  const bust = (typeof window !== 'undefined' && window.__shaderCacheBust) || null;
+  if (!bust) return LAB_SHADER_VARIANT;
+  return {
+    vertexShader: LAB_VERTEX_SHADER,
+    fragmentShader: '// cachebust ' + bust + '\n' + LAB_FRAGMENT_SHADER,
+  };
+}
+
+/**
  * Build the lab's planet material with its 349 defaults.
  *
  * Defaults ONLY — no condition driving yet. The lab overwrites a large share of these at route
@@ -185,10 +217,15 @@ export function buildLabPlanetMaterial(opts = {}) {
   // context does not drown in GL_INVALID_OPERATION and stop reporting errors entirely.
   const samplers = ensureLabSamplers(uniforms, LAB_VERTEX_SHADER + LAB_FRAGMENT_SHADER);
 
+  // ⛔ Through `labShaderSource`, NOT through the two imported constants — otherwise a cache-busted
+  // measurement run would bust the warm-up probe (which goes through this same function) and not
+  // the body, or vice versa, and the Step-6 cold number would be a measurement of Chrome's disk
+  // cache wearing a compile's clothes. One accessor, one call site. See `buildLabProbeMaterial`.
+  const src = labShaderSource();
   const material = new THREE.ShaderMaterial({
     uniforms,
-    vertexShader: LAB_VERTEX_SHADER,
-    fragmentShader: LAB_FRAGMENT_SHADER,
+    vertexShader: src.vertexShader,
+    fragmentShader: src.fragmentShader,
   });
 
   return {
@@ -198,6 +235,235 @@ export function buildLabPlanetMaterial(opts = {}) {
     bodyRadius,
     samplersFilled: samplers.filled,
     samplersCreated: samplers.created,
+    cacheBusted: src !== LAB_SHADER_VARIANT,
+  };
+}
+
+/**
+ * The warm-up probe for the lab program (PLAN §4 Step 6c).
+ *
+ * ⭐ IT IS THE REAL MATERIAL, AND THAT IS THE WHOLE POINT. `tests/shader-warmup-source-parity.test.js`
+ * exists because the game's warm-up builds its probe from a SECOND expression of the same source, so
+ * "the probe compiles what the body draws" is a claim that needs a test to hold it. Here there is no
+ * second expression: the probe IS `buildLabPlanetMaterial().material`, so a future edit cannot retype
+ * the warm-up's copy of the lab shader — there is no copy to retype. §11.2's "close the class, not
+ * the instance" applied to a class this file was about to acquire.
+ *
+ * three's program cache key is built from the shader SOURCE plus renderer/material parameters, never
+ * from uniform VALUES, so the extra 351-uniform map and the six placeholder texels cost one material
+ * and link the identical program. (The game's probe passes `uniforms: {}` for the same reason, from
+ * the other direction.)
+ *
+ * ⚠ Not disposed by the caller — see ShaderWarmup's note 1: dropping the last material reference
+ * hands the linked program straight back to the driver.
+ *
+ * @returns {THREE.ShaderMaterial}
+ */
+export function buildLabProbeMaterial() {
+  return buildLabPlanetMaterial().material;
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+// THE SWAP LEDGER — PLAN §12.4 channel 1, cost-table row 9. PURE; no THREE object is required and
+// nothing here touches the scene.
+//
+// ⛔ WHAT THIS CHANNEL CAN AND CANNOT SEE, said once, here, so a caller cannot mistake its silence
+// for a clean bill. It diffs two UNIFORM MAPS. It is therefore blind to every feature drawn in
+// hardcoded GLSL with no uniform of its own — §12.4 channel 2 names six of them in the game's gas
+// branch (`stormMask`, `polarDark`, `hotspot`, `nightSide`, `ringNoise`, `haze`) — and those are
+// exactly the losses a uniform diff of any construction must miss. A ledger reporting `lost: []` is
+// a statement about uniforms and about nothing else.
+// ════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** The lab's GLSL corpus, as one string, resolved. `LAB_FRAGMENT_SHADER` already interpolates
+ *  `HEIGHT_GLSL` at module-eval time (verified: appending the height module changes no match), so
+ *  these two constants ARE `planet-lod-shaders.glsl.js` + `planet-lod-height.glsl.js` for the
+ *  purpose of §12.4's grep. */
+export const LAB_SHADER_CORPUS = LAB_VERTEX_SHADER + '\n' + LAB_FRAGMENT_SHADER;
+
+const _escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * ⭐ THE TWO REGEXES ARE THE FILTER. They are exported, named, and pinned by
+ * `tests/swap-ledger.test.js` because §12.4 states a measured split (58 gate-shaped of 87) WITHOUT
+ * stating the expression that produced it, and a split is meaningless without one.
+ *
+ *  · `guarded`      — the name appears inside an `if (…) ` condition as `name > 0`. Written loosely
+ *                     enough to accept `if (uX > 0.0 && uY > 0.0)`, because a compound condition is
+ *                     still a guard on `uX`; written tightly enough to reject `if (fooBar > 0.0)`
+ *                     via the word boundary.
+ *  · `multiplicand` — the name appears immediately either side of a `*`. This is the "bare
+ *                     multiplicand" shape: a uniform at 0 that multiplies a term switches the term
+ *                     off entirely.
+ *
+ * ⚠ NAMED LIMIT, and it is §12.4's own: this is a regex over GLSL text. A gate consumed through a
+ * helper function or a `#define` is invisible to it, a name that also occurs inside a comment counts,
+ * and `mix(a, b, uX)` — a real gate shape — is neither guarded nor a multiplicand and lands in
+ * `neither`. `neither` therefore means "this filter found no gate shape", never "this uniform is not
+ * a gate".
+ */
+export function gateGuardPattern(name) {
+  return new RegExp('if\\s*\\([^)]*\\b' + _escapeRe(name) + '\\s*>\\s*0');
+}
+export function bareMultiplicandPattern(name) {
+  const n = _escapeRe(name);
+  return new RegExp('(\\*\\s*' + n + '\\b)|(\\b' + n + '\\s*\\*)');
+}
+
+/**
+ * The gate shape of one uniform name against a GLSL corpus.
+ * @returns {{name: string, guarded: boolean, multiplicand: boolean, gateShaped: boolean}}
+ */
+export function gateShapeOf(name, shaderSource = LAB_SHADER_CORPUS) {
+  const src = String(shaderSource);
+  const guarded = gateGuardPattern(name).test(src);
+  const multiplicand = bareMultiplicandPattern(name).test(src);
+  return { name, guarded, multiplicand, gateShaped: guarded || multiplicand };
+}
+
+/**
+ * Is this uniform value "off"? A zero scalar, an all-zero vector/colour/array, or absent.
+ *
+ * ⚠ `false` counts as off and `true` does not: several lab uniforms are int-flags (`uFwClamp`,
+ * `uEmissiveBypass`). A texture is never off — a bound sampler is a value nothing can call neutral.
+ */
+export function isOffValue(v) {
+  if (v === null || v === undefined) return true;
+  if (typeof v === 'number') return v === 0;
+  if (typeof v === 'boolean') return v === false;
+  if (Array.isArray(v)) return v.every((c) => c === 0);
+  if (v && typeof v.toArray === 'function') return v.toArray().every((c) => c === 0);
+  return false;
+}
+
+/**
+ * §12.4's "87 zero-defaulted of 351" quantity, reproduced: names whose default is a scalar zero.
+ *
+ * ⛔ TWO DEFINITIONS OF "AT ZERO" LIVE IN THIS FILE AND THE DIFFERENCE IS RECORDED RATHER THAN
+ * TIDIED AWAY, because two names for one idea is the failure §2 of the PLAN records happening four
+ * times. This one is SCALAR-ONLY. `isOffValue` — used by `diffMaterialUniforms` — is wider, and over
+ * `makeUniforms` it selects **111**: the 87 here plus 24 all-zero domain-offset vectors
+ * (`uMacroOffset`, `uBandOffset`, …), for which zero genuinely IS the identity. Both counts are
+ * pinned by `tests/swap-ledger.test.js`. The bucket a LIVE ledger ranks is the diff's, so it can
+ * legitimately carry rows this function would not return; the 87 is the population §12.4 measured.
+ *
+ * ⚠ Measured at `39986d3`: **351 declared, 87 scalar-zero** — both reproduce PLAN §12.4's figures
+ * for `9b33264` exactly, and `git diff 9b33264 HEAD` over `planet-lod-uniforms.js`,
+ * `planet-lod-shaders.glsl.js` and `planet-lod-height.glsl.js` is empty, so the corpus is unmoved.
+ */
+export function zeroDefaultedUniformNames(uniforms) {
+  return Object.keys(uniforms || {}).filter((n) => {
+    const slot = uniforms[n];
+    if (!slot || !('value' in slot)) return false;
+    const v = slot.value;
+    return typeof v === 'number' && v === 0;
+  });
+}
+
+/**
+ * ⭐ THE MECHANICAL RANK. §12.4: "an unranked 87 hands the discriminating step back to a human
+ * reading a list, which is the method the ruling was issued against."
+ *
+ * ⛔ THE SPLIT BELOW DOES NOT REPRODUCE §12.4's, AND SAYING SO IS PART OF THE MEASUREMENT.
+ * §12.4 records "58 gate-shaped — 38 both, 10 guard-only, 10 multiplicand-only, 29 neither" and does
+ * NOT record the expression that produced them. This filter, over the same corpus (`git diff
+ * 9b33264 HEAD` on the three shader/uniform files is empty), measures **55 gate-shaped — 17 both,
+ * 7 guard-only, 31 multiplicand-only, 32 neither**, and it agrees with §12.4 on the multiplicand
+ * TOTAL exactly (17+31 = 48 = 38+10). So the divergence is entirely in the guard arm: §12.4's
+ * guarded total is 48, this one's is 24. Five guard expressions were tried and none reaches 48 —
+ * `if (u > 0.0)` strict (20), `if (… u > 0 …)` (24), `u >` anything (25), `u <>0` either way (25),
+ * and "appears anywhere inside any `if (…)`" which OVERSHOOTS to 63. The strict/loose pair also
+ * measures identically against the raw FILE text (comments included) as against the resolved
+ * strings, so the difference is not the corpus. **§12.4's 58 is therefore not reproducible from
+ * §12.4**, and the number pinned by `tests/swap-ledger.test.js` is this file's, produced by the
+ * exported regexes above. Do not re-quote the 58/38/10/10/29 as a property of this filter.
+ *
+ * @returns {{total, gateShaped, both, guardOnly, multiplicandOnly, neither, rows}}
+ */
+export function rankOffByDefault(names, shaderSource = LAB_SHADER_CORPUS) {
+  const rows = names.map((n) => gateShapeOf(n, shaderSource));
+  const both = rows.filter((r) => r.guarded && r.multiplicand).length;
+  const guardOnly = rows.filter((r) => r.guarded && !r.multiplicand).length;
+  const multiplicandOnly = rows.filter((r) => !r.guarded && r.multiplicand).length;
+  const neither = rows.filter((r) => !r.gateShaped).length;
+  return {
+    total: rows.length,
+    gateShaped: both + guardOnly + multiplicandOnly,
+    both, guardOnly, multiplicandOnly, neither,
+    // Gate-shaped first, `both` ahead of the singletons: the rank IS the reading order.
+    rows: rows.slice().sort((a, b) =>
+      (Number(b.guarded) + Number(b.multiplicand)) - (Number(a.guarded) + Number(a.multiplicand))
+      || a.name.localeCompare(b.name)),
+  };
+}
+
+/**
+ * FIVE buckets, not three, and the two extra ones are the reason to trust the other three.
+ *
+ * §12.4 names three — LOST, OFF-BY-DEFAULT, CARRIED. Written as exactly three they do not partition
+ * the name union: a uniform that was present AT ZERO before and is absent after falls in no bucket,
+ * and so does one that arrives NON-ZERO. Both are silent drops, which is the shape of every defect
+ * this instrument exists to catch. They get named buckets and the partition is asserted.
+ *
+ * @param {object} prevUniforms — the material carried BEFORE the swap (the game's).
+ * @param {object} nextUniforms — the material carried AFTER (the lab's).
+ */
+export function diffMaterialUniforms(prevUniforms, nextUniforms) {
+  const prev = prevUniforms || {};
+  const next = nextUniforms || {};
+  const val = (m, n) => (m[n] && 'value' in m[n] ? m[n].value : undefined);
+  const out = { lost: [], lostAtZero: [], offByDefault: [], addedNonZero: [], carried: [] };
+  for (const n of Object.keys(prev)) {
+    if (n in next) continue;
+    (isOffValue(val(prev, n)) ? out.lostAtZero : out.lost).push(n);
+  }
+  for (const n of Object.keys(next)) {
+    if (n in prev) { out.carried.push(n); continue; }
+    (isOffValue(val(next, n)) ? out.offByDefault : out.addedNonZero).push(n);
+  }
+  return out;
+}
+
+/**
+ * The full ledger: the five-bucket diff plus the mechanical rank over the OFF-BY-DEFAULT bucket.
+ *
+ * ⛔ `prevUniforms` may legitimately be absent — on Step 6e's automatic path the legacy material for
+ * a swapped body is NEVER CONSTRUCTED (ShaderWarmup's `MATERIAL_SWAPS` note). This returns
+ * `pairable: false` and an EMPTY loss set with a reason rather than an empty loss set that reads as
+ * "nothing was lost". Those are opposite findings.
+ */
+export function swapLedgerOf({ prevUniforms, nextUniforms, shaderSource = LAB_SHADER_CORPUS } = {}) {
+  if (!nextUniforms) {
+    return { ok: false, reason: 'no post-swap uniform map — nothing to diff.' };
+  }
+  if (!prevUniforms) {
+    const zero = zeroDefaultedUniformNames(nextUniforms);
+    return {
+      ok: true,
+      pairable: false,
+      reason: 'no pre-swap uniform map. On the Step-6e automatic path the legacy material is never '
+            + 'constructed, so LOST is UNMEASURABLE here — it is not empty. The off-by-default rank '
+            + 'below is still meaningful because it reads the lab material alone.',
+      counts: { prev: 0, next: Object.keys(nextUniforms).length },
+      buckets: { lost: null, lostAtZero: null, offByDefault: zero, addedNonZero: null, carried: null },
+      rank: rankOffByDefault(zero, shaderSource),
+    };
+  }
+  const buckets = diffMaterialUniforms(prevUniforms, nextUniforms);
+  return {
+    ok: true,
+    pairable: true,
+    counts: {
+      prev: Object.keys(prevUniforms).length,
+      next: Object.keys(nextUniforms).length,
+      lost: buckets.lost.length,
+      lostAtZero: buckets.lostAtZero.length,
+      offByDefault: buckets.offByDefault.length,
+      addedNonZero: buckets.addedNonZero.length,
+      carried: buckets.carried.length,
+    },
+    buckets,
+    rank: rankOffByDefault(buckets.offByDefault, shaderSource),
   };
 }
 

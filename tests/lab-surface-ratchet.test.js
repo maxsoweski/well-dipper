@@ -115,7 +115,7 @@
 //
 //   frame uniforms — the ±1 REPRODUCES AND IS A SCAN ARTIFACT. Scanning the raw text yields 328
 //   names; stripping comments first yields 327. The extra is `js`, from the substring
-//   "uniforms.js" inside planet-lod-lab.html:4911 `// uDispDomainScale here. It keeps its 1.0 initializer (planet-lod-uniforms.js:17) forever,`
+//   "uniforms.js" inside planet-lod-lab.html:4911 `// uDispDomainScale here. It keeps its 1.0 initializer` — the quoted comment goes on to name planet-lod-uniforms.js line 17 as the initializer site, spelled in prose here ON PURPOSE: a line-anchored ref NESTED inside another ref's span parses as its own citation with a garbage tail, which is how this line reached exit 2 the moment Step 6 added this file to CITE_SOURCES.
 //   — a phantom uniform named after a filename. `stripNonCode` removes it. There was never a
 //   real disagreement here, only a scanner reading a comment.
 //

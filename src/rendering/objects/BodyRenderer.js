@@ -9,7 +9,7 @@ import { LODColorExtractor } from '../LODColorExtractor.js';
 // pure module (45 exports, zero imports, no top-level side effects) so this tree-shakes to the two
 // functions. Copying the law instead would be the same mistake the hash3/noised/fbmd copy was.
 import { lodRampOf, autoOctaves } from '../../../planet-lod-lab-core.js';
-import { updateLabPlanetMaterial } from '../LabPlanetMaterial.js';
+import { updateLabPlanetMaterial, isLabPlanetMaterial } from '../LabPlanetMaterial.js';
 
 /**
  * BodyRenderer — unified planet/moon renderer with physics data awareness.
@@ -177,7 +177,7 @@ export class BodyRenderer {
    */
   _updateProceduralLODLevel(tier) {
     const surface = this._delegate.surface || this._delegate.mesh;
-    if (!surface?.material?.uniforms?.lodLevel) return;
+    if (!surface?.material?.uniforms?.lodLevel) return this._noteLabSkip('lodLevel', surface);
     surface.material.uniforms.lodLevel.value = tier;
   }
 
@@ -214,6 +214,47 @@ export class BodyRenderer {
     if (!u) return;                                  // moons, textured swaps, gas variants
     const next = autoOctaves(lodRampOf(distanceRadii));
     if (u.value !== next) u.value = next;
+  }
+
+  // ── PLAN §4 Step 6 — the two writers in THIS file that go silent on a swapped body ─────────────
+  //
+  // ⛔ THE SCAR THIS ANSWERS IS ALREADY IN THIS FILE, TWICE OVER. `setReliefDetail` above carries
+  // the note: two per-frame writers guarded on uniform NAMES the lab material does not declare
+  // (`time` vs `uTime`, `uReliefOctaves` vs `uOctaves`) each fell through in silence, and "a guard
+  // that no-ops on the material you are trying to drive looks exactly like a feature that does not
+  // exist". Step 6's flag makes that happen again to two MORE writers, both in this class and both
+  // named in PLAN 6b's lost-feature table:
+  //
+  //   `lodLevel`   — src/rendering/objects/BodyRenderer.js:181 `surface.material.uniforms.lodLevel.value = tier`,
+  //                  guarded on `u.lodLevel`. The table calls it near-harmless because no shader
+  //                  reads it; near-harmless is a claim, and a claim wants a witness.
+  //   `baseColor`  — `_setProceduralColors`, guarded on `u.baseColor`. This is the LOD1 colour match
+  //                  that keeps a body from popping when its textures arrive.
+  //
+  // Neither loss can currently fire together with a swap — both need a `profileId`, and
+  // `labPipelineAdmits` refuses any body that has one — so this is a WITNESS, not a fix, and it
+  // costs one `isLabPlanetMaterial` call on two paths that run at LOD transitions and at texture
+  // load, never per frame. It exists so 6b's ledger can be re-derived by RUNNING rather than by
+  // reading, which is the method 6b's own ⛔ demands, and so that the day one of these DOES fire the
+  // count is on the object instead of in a document.
+  _noteLabSkip(site, surface) {
+    if (!isLabPlanetMaterial(surface?.material)) return;
+    if (!this._labSkips) this._labSkips = {};
+    this._labSkips[site] = (this._labSkips[site] || 0) + 1;
+  }
+
+  /** Per-site counts of writes this class skipped because the surface carries the lab material. */
+  get labSkips() { return this._labSkips || {}; }
+
+  /**
+   * The lab-pipeline record `Planet._createLabSurface` left on the surface, or null for a legacy
+   * body. Instrument E captions read the flag AND ITS SOURCE from here (§12.5 fact 6) rather than
+   * re-deriving them, because a caption that re-derives the flag is asserting what it should be
+   * reporting — and the default configuration is the one where the flag is OFF.
+   */
+  get labPipeline() {
+    const surface = this._delegate.surface || this._delegate.mesh;
+    return surface?.userData?.wd?.lab || null;
   }
 
   // ── LOD1 ↔ LOD2 downscaling pipeline ──
@@ -273,6 +314,8 @@ export class BodyRenderer {
 
     if (params.baseColor && u.baseColor) {
       u.baseColor.value.set(...params.baseColor);
+    } else if (params.baseColor) {
+      this._noteLabSkip('baseColor', surface);   // PLAN 6b row "LOD1 procedural colour match"
     }
     if (params.accentColor && u.accentColor) {
       u.accentColor.value.set(...params.accentColor);

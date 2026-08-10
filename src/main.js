@@ -129,7 +129,7 @@ import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/Materi
 import { PretextLab } from './ui/PretextLab.js';
 import * as LabMode from './debug/LabMode.js';
 import { warmPlanetPrograms, swapMaterialWhenReady, restoreMaterialSwap, MATERIAL_SWAPS } from './rendering/ShaderWarmup.js';
-import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetMaterial } from './rendering/LabPlanetMaterial.js';
+import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetMaterial, swapLedgerOf } from './rendering/LabPlanetMaterial.js';
 // Instrument E's reproduction line has to report BOTH quantities named `compositionClass`, because
 // PLAN §12.5 fact 6 measured them to be different populations (only 65 of 209 world-engine gas-class
 // bodies fall inside the game's own GAS_TYPES set) and an assertion written against the wrong one is
@@ -3482,7 +3482,582 @@ window._lab = {
       uniforms: _dumpUniforms(u),
     };
   },
+
+  // ════════════════════════════════════════════════════════════════════════════════════════════
+  // INSTRUMENT D — the frame-loop crash harness. PLAN §4 Step 6 gate, §12.3 cost row 14.
+  //
+  // ⛔ `window.__wd.runIntegrationSuite()` IS NOT INSTRUMENT D and must never appear in a gate that
+  // cites D. It is the Sol-scoped scene inspector: its entry point throws unless Sol has been
+  // entered, its checks name `body.planet.earth`, it installs no error handler of any kind, and its
+  // only occurrence of 120 is a `setTimeout` sleep. Run on a procedural system it returns a long red
+  // list about missing Sol bodies — many failures for reasons unrelated to the step, which is this
+  // program's signature failure with a fresh coat of paint.
+  //
+  // ⛔ WHY A JS ERROR CHANNEL AND NOT A PIXEL CHECK. A JS `TypeError` is not a WebGL error: the
+  // context reports nothing, `gl.getError()` stays clean, and the last frame that DID render is
+  // still on the canvas — so a lit-pixel floor passes on the frame drawn immediately before a throw
+  // that killed the loop. The two facts that actually separate "alive" from "frozen with a picture
+  // on it" are (1) no uncaught exception and (2) the loop kept scheduling.
+  //
+  // ⭐⭐ AND THE LOOP GENUINELY DIES ON A THROW — this is not hypothetical. The kit's binding
+  // (`vendor/motion-test-kit/adapters/three/three-loop-binding.js`) reschedules at the BOTTOM of its
+  // frame callback: `const { alpha } = accumulator.tick(dt, simUpdate); render(alpha); rafHandle =
+  // raf(frame);`. Anything thrown by `simUpdate` or `render` skips that last line and the chain
+  // stops forever. ⛔ AND ITS `running` FLAG IS NEVER CLEARED, so `_animateController.isRunning()`
+  // returns **true** on a permanently dead loop. That is reported below as `loopRunningFlag` and is
+  // explicitly NOT a liveness signal — an agent that checked it would report a frozen game healthy.
+  // ════════════════════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Run the live loop for ≥120 frames and report whether it survived.
+   *
+   * @param {{frames?: number, timeoutMs?: number}} [opts]
+   *   `frames` is FLOORED AT 120 (PLAN's figure) and the raise is reported. A hook that honoured
+   *   `{frames: 3}` would be a gate anybody could write past by passing a smaller number.
+   * @returns {Promise<object>} `{verdict: 'PASS'|'FAIL'|'INCONCLUSIVE', failures, observation, ...}`
+   */
+  async frameSurvival(opts = {}) {
+    const framesAsked = Number.isFinite(opts.frames) ? Math.floor(opts.frames) : 120;
+    const framesRequired = Math.max(120, framesAsked);
+    const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : 30000;
+
+    // ── the two error channels ─────────────────────────────────────────────────────────────────
+    // BOTH are installed, and the reason is not belt-and-braces. `window.onerror` is what PLAN §4
+    // names and what a reader greps for, but it is a PROPERTY: any code running during the 120
+    // frames can reassign it and silently disable the probe. `addEventListener('error')` cannot be
+    // clobbered that way. Installing both double-reports one throw, so they dedupe on the Error
+    // OBJECT — the same instance reaches both channels — falling back to a location key for the
+    // primitives a `throw 'string'` produces.
+    const errors = [];
+    const rejections = [];
+    const seen = new Set();
+    const record = (bucket, thrown, detail) => {
+      // ⚠ THE KEY EXCLUDES `via` ON PURPOSE — it is what makes the two channels' view of ONE throw
+      // collapse into one row. Dedupe is by the Error OBJECT where there is one, so two genuinely
+      // separate throws of the same shape are still counted twice; only the double-report collapses.
+      const key = (thrown !== null && typeof thrown === 'object')
+        ? thrown
+        : `${detail.message}|${detail.source}:${detail.lineno}:${detail.colno}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      bucket.push({ ...detail, stack: (thrown && thrown.stack) ? String(thrown.stack).slice(0, 800) : null });
+    };
+
+    const prevOnError = window.onerror;
+    const onErrorProp = function (message, source, lineno, colno, error) {
+      record(errors, error, { via: 'window.onerror', message: String(message), source: source ?? null, lineno: lineno ?? null, colno: colno ?? null });
+      // ⛔ CHAIN, NEVER SWALLOW. Returning true here would suppress the page's own reporting for the
+      // duration of the probe — an instrument that hides the thing it is measuring from everyone else.
+      return prevOnError ? prevOnError.apply(this, arguments) : false;
+    };
+    const onErrorEvt = (ev) => {
+      // A failed <img>/<script> load also dispatches 'error' on window during capture. It is not an
+      // uncaught exception and must not fail this gate; the discriminator is that it carries no
+      // `.error` and is not an ErrorEvent.
+      if (!ev || (typeof ErrorEvent !== 'undefined' && !(ev instanceof ErrorEvent) && !ev.error)) return;
+      record(errors, ev.error, { via: 'addEventListener(error)', message: String(ev.message ?? ev.error), source: ev.filename ?? null, lineno: ev.lineno ?? null, colno: ev.colno ?? null });
+    };
+    const onRejection = (ev) => {
+      const r = ev?.reason;
+      record(rejections, r, { via: 'unhandledrejection', message: String(r && r.message ? r.message : r), source: null, lineno: null, colno: null });
+    };
+
+    window.onerror = onErrorProp;
+    window.addEventListener('error', onErrorEvt, true);
+    window.addEventListener('unhandledrejection', onRejection);
+
+    // ── the two liveness counters, read BEFORE the run ─────────────────────────────────────────
+    // 1. The rAF handle. Per spec the document's animation-frame identifier increments by exactly
+    //    one per `requestAnimationFrame` call, so the delta over the run counts EVERY registration
+    //    on the page. Subtract this probe's own and what is left is the render loop's. A probe that
+    //    only counted its own ticks would run a clean 120 frames on a corpse.
+    // 2. `renderer.info.render.frame`, incremented inside three's `render()` — the only counter here
+    //    that says a draw actually happened rather than that a callback fired.
+    let probeRaf = 0;
+    const raf = (cb) => { probeRaf++; return requestAnimationFrame(cb); };
+    const rendererFrameStart = retroRenderer?.renderer?.info?.render?.frame ?? null;
+    const documentHiddenAtStart = !!document.hidden;
+
+    let framesObserved = 0;
+    let timedOut = false;
+    const t0 = performance.now();
+    const handleStart = raf(() => {});
+    await new Promise((resolve) => {
+      const tick = () => {
+        framesObserved++;
+        if (framesObserved >= framesRequired) return resolve();
+        if (performance.now() - t0 > timeoutMs) { timedOut = true; return resolve(); }
+        raf(tick);
+      };
+      raf(tick);
+    });
+
+    // ⚠ THE SETTLE. `unhandledrejection` fires only once the microtask checkpoint has passed with no
+    // handler attached, so a promise rejected on the final frame is reported AFTER the loop above
+    // has already resolved. Reading the tally immediately would report zero rejections for a run
+    // that had one — a false PASS produced by reading too early.
+    await new Promise((r) => raf(() => r()));
+    await new Promise((r) => setTimeout(r, 60));
+
+    const handleEnd = raf(() => {});
+    const elapsedMs = performance.now() - t0;
+    const rendererFrameEnd = retroRenderer?.renderer?.info?.render?.frame ?? null;
+    const onerrorClobbered = window.onerror !== onErrorProp;
+
+    // Restore. `prevOnError` goes back even if it was undefined — leaving the probe's handler on the
+    // page would keep a closure over 120 frames of captured errors alive for the session.
+    window.onerror = prevOnError;
+    window.removeEventListener('error', onErrorEvt, true);
+    window.removeEventListener('unhandledrejection', onRejection);
+
+    const fps = elapsedMs > 0 ? Math.round(framesObserved / (elapsedMs / 1000)) : 0;
+    const observation = {
+      framesRequired, framesAsked, framesObserved, timedOut,
+      elapsedMs: +elapsedMs.toFixed(1), fps, throttled: fps < 20,
+      documentHidden: documentHiddenAtStart || !!document.hidden,
+      // handleEnd - handleStart is every rAF id issued in the window; probeRaf - 1 excludes
+      // handleStart itself, which was issued at the boundary.
+      rafIdsIssued: handleEnd - handleStart,
+      probeRafRegistrations: probeRaf - 1,
+      rendererFrameStart, rendererFrameEnd,
+      errorCount: errors.length,
+      rejectionCount: rejections.length,
+      onerrorClobbered,
+    };
+
+    return {
+      ...frameSurvivalVerdict(observation),
+      observation,
+      errors,
+      rejections,
+      // ⛔ REPORTED AND NOT USED. See the header: this flag is `true` on a loop that died 100 frames
+      // ago, because the binding never clears it. It is printed so a reader can SEE it disagreeing
+      // with the rAF counter rather than discovering the trap the hard way.
+      // ⚠ try/catch, not `typeof`: `_animateController` is a `const` declared far below this object,
+      // and `typeof` does NOT shield a temporal-dead-zone binding — it throws too.
+      loopRunningFlag: (() => { try { return _animateController.isRunning(); } catch { return null; } })(),
+      loopRunningFlagNote: 'NOT a liveness signal — bindToRAF never clears `running` on a throw. '
+                         + 'Read `observation.rafIdsIssued` against `probeRafRegistrations` instead.',
+      seed: window._systemData?.seed ?? null,
+    };
+  },
+
+  // ════════════════════════════════════════════════════════════════════════════════════════════
+  // INSTRUMENT E, ROWS 9-11 — the swap ledger, the pack preview, and the forced gate.
+  // Scheduled for Step 5 (§12.3 cost table) and NOT built there; Step 6's gate depends on all three.
+  // ════════════════════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * ROW 9 — the live two-material uniform diff, ranked (PLAN §12.4 channel 1).
+   *
+   * ⭐ THE POINT OF DOING IT LIVE. §6b diffs two FILES and was populated by READING, which is what
+   * left `uLimbMix` out (ledger C20). This diffs two LIVE MATERIALS on the SAME body and is
+   * populated by running — so a uniform nobody thought of still appears.
+   *
+   * ⛔ IT SEES UNIFORMS AND NOTHING ELSE. §12.4 channel 2 lists six features the game's gas branch
+   * draws in hardcoded GLSL with no uniform at all (`stormMask`, `polarDark`, `hotspot`,
+   * `nightSide`, `ringNoise`, `haze`). No uniform diff of any construction can see them; the frame
+   * set is their channel. `lost: []` here is a statement about uniforms.
+   *
+   * @param {{body?: object}} [args] — a `resolveBody` subject: `{name}` or `{kind,p,m}`.
+   */
+  swapLedger(args = {}) {
+    const r = this.resolveBody(args.body || args);
+    if (!r.ok) return { ok: false, reason: r.reason, resolveFailed: true };
+    // ⛔ REFUSE AN UNSWAPPED BODY OUTRIGHT. The unpairable path ranks the post-swap material's
+    // zero-defaulted uniforms against the LAB shader corpus; run on a body still carrying the GAME
+    // material it would grep GAME uniform names in LAB GLSL and print a rank that is entirely
+    // well-formed and about nothing. An empty-ish gate-shaped list would read as "no gates at risk".
+    if (!r.swapped) {
+      return {
+        ok: false, name: r.name, display: r.display, swapped: false,
+        reason: `${r.name} still carries the GAME material. A ledger needs the post-swap material as `
+              + 'its subject; ranking game uniform names against the lab shader would print a rank '
+              + 'about nothing. Run `await _lab.tryLabShader(i)` on this body first.',
+      };
+    }
+    const entry = MATERIAL_SWAPS.get(r.mesh);
+    const nextUniforms = r.mesh?.material?.uniforms || null;
+    const prevUniforms = entry?.prevMaterial?.uniforms || null;
+    const ledger = swapLedgerOf({ prevUniforms, nextUniforms });
+    return {
+      ...ledger,
+      name: r.name,
+      display: r.display,
+      swapped: r.swapped,
+      // ⛔ The honest reason a pair is missing, printed rather than inferred: an unswapped body and
+      // an automatic-path body produce the same `pairable:false` and are opposite findings.
+      pairSource: entry
+        ? 'MATERIAL_SWAPS — this body was manually swapped and the game material is retained'
+        : 'NONE — this body carries the lab material but no swap was recorded. On the Step-6e '
+          + 'automatic path the legacy material is never constructed, so LOST is unmeasurable here.',
+      channelLimit: 'Channel 1 only. Six gas-branch features have no uniform and are invisible here '
+                  + '(PLAN §12.4 channel 2); one body can witness at most one planetType branch of them.',
+    };
+  },
+
+  /**
+   * ROW 10 — drive a named body through a driver pack under the GAME display policy.
+   *
+   * ⛔ VALUES COME FROM THE PACK'S RETURN OBJECT ONLY. A console-typed uniform proves the shader
+   * responds to that uniform and proves NOTHING about the pack; this hook therefore takes no
+   * uniform overrides, and every number it writes came out of `pack(condition, ctx)`.
+   *
+   * ⛔ AND IT WRITES THE ATTRIBUTES ITSELF. `ensureLabAttributes` deliberately never overwrites an
+   * existing attribute (correct — the bakes own them once they land), so a preview that only wrote
+   * uniforms would drive band STRENGTH against an all-zero `aBand` field and render a blank disc
+   * with a perfect uniform dump beside it.
+   *
+   * @param {object} args
+   * @param {'planet'|'moon'} [args.kind] / @param {number} [args.p] / @param {number} [args.m] /
+   *   @param {string} [args.name] — the `resolveBody` subject. NAME wins; an index is a discovery
+   *   convenience (§12 E-2 — index keying produces a false PASS, not an error).
+   * @param {string|function} [args.pack='giantDeck'] — a registry key, or a pack function directly.
+   * @param {number} [args.macroSeed] — override the preview's derivation. See `macroSeedSource`.
+   * @param {object} [args.gates] — defaults to a RECORDING all-on proxy (Max's ruling 4).
+   */
+  async previewPack(args = {}) {
+    const r = this.resolveBody(args.name ? { name: args.name } : args);
+    if (!r.ok) return { ok: false, reason: r.reason, resolveFailed: true };
+    if (!r.mesh?.material?.uniforms) return { ok: false, reason: `${r.name} has no uniform-carrying material` };
+    if (!isLabPlanetMaterial(r.mesh.material)) {
+      return {
+        ok: false,
+        name: r.name,
+        reason: `${r.name} carries the GAME material, which declares none of the pack's uniform names. `
+              + `writePackUniforms would throw on the first driver. Run \`await _lab.tryLabShader()\` `
+              + 'on this body first (that is also what records the OFF twin).',
+      };
+    }
+    const condition = r.condition;
+    if (!condition) {
+      return {
+        ok: false, name: r.name,
+        reason: 'no condition on this body\'s back-link. Plain moons carry none (Moon.js has no '
+              + '_createSurface), and a pack fed a fabricated condition measures the fabrication.',
+        backLink: r.backLink,
+      };
+    }
+
+    // ── resolve the pack THROUGH STEP 6a's REGISTRY ─────────────────────────────────────────────
+    // Dynamic import so this hook adds no module-scope import to the app: under Vite it resolves to
+    // the SAME instance the rest of the app holds, which a page-evaluated `import()` would not. The
+    // specifiers are LITERAL — a computed one needs `/* @vite-ignore */`, which survives dev and
+    // breaks in a production build, and a debug hook that works only under `npm run dev` is missing
+    // exactly when someone reaches for it on a deployed build.
+    //
+    // ⭐⭐ THE ENTRY, NOT JUST THE FUNCTION, and this is a correction rather than a nicety. The first
+    // version of this hook built `ctx.gates` as a permissive Proxy answering `true` to any name.
+    // Step 6a's `drivers/index.js` rejects exactly that, and it is right: `writePackUniforms` makes
+    // an ABSENT gate key THROW on the stated grounds that "an absent gate is not an off gate and is
+    // not an on gate — it is an unanswered rendering decision", and a permissive proxy would render
+    // a newly-added, never-ruled-on gate ON while reporting success. Two lanes shipping opposite
+    // gate policies is the drift this whole plan exists against, so the preview takes the entry's
+    // OWN declared gate names through `gatesFor` and lets the throw stay alive.
+    const drivers = await import('./worldengine/drivers/index.js');
+    const { writePackUniforms, gameDisplayRadiusEarth } = await import('./worldengine/port/writePackUniforms.js');
+    // ⚠ `fnv1aString`, the repo's OWN hash (`src/util/scene-naming.js` names bodies with it) — NOT a
+    // locally retyped fnv1a, which would have been wrong: the kit's string form folds each UTF-16
+    // code unit as TWO bytes and the obvious one-XOR-per-char version gives different values.
+    // ⛔ Dynamic, like the imports above, and for a reason beyond tidiness: §10's line-keyed refs
+    // into this file are addressed by integer, and a module-scope import here shifts EVERY citation
+    // below line 133 by one — eight of them, all pointing into the `_lab` surface.
+    const { fnv1aString } = await import('motion-test-kit/core/hash/fnv1a.js');
+
+    let pack = args.pack;
+    let packName = typeof args.pack === 'string' ? args.pack : (typeof args.pack === 'function' ? 'custom' : 'giantDeck');
+    let entry = drivers.PACKS.find((e) => e.name === packName) || null;
+    if (typeof pack !== 'function') {
+      if (!entry) {
+        return { ok: false, reason: `unknown pack '${packName}'. PACKS: ${drivers.PACKS.map((e) => e.name).join(', ')}` };
+      }
+      pack = entry.pack;
+    }
+
+    // ⭐ ASKED AND ANSWERED SEPARATELY. A caller-supplied `gates` overrides, and says so; otherwise
+    // it is the ALL_ON policy over the entry's own declared names. A pack function passed directly
+    // has no entry and therefore no declared gates — that is reported, not papered over, because a
+    // custom pack whose drivers are gated will throw and the reason must be legible.
+    let gates = args.gates;
+    let gatesSource;
+    if (gates) gatesSource = 'caller-supplied';
+    else if (entry) { gates = drivers.gatesFor(entry, drivers.GATE_POLICY_ALL_ON); gatesSource = `gatesFor(PACKS['${entry.name}'], ALL_ON) — Max ruling 4`; }
+    else { gates = {}; gatesSource = '⚠ NONE — a bare pack function has no PACKS entry, so no gate names are declared. A gated driver will throw.'; }
+
+    // ⛔ `d.radiusEarth`, NOT `d.radius`. `conditionFromPlanet` reads `d.radiusEarth` and the game's
+    // `planetData.radius` is a SCENE radius on some paths — feeding a scene radius to a policy
+    // measured in Earth radii is finite, plausible, in-band and wrong by ~2 orders of magnitude,
+    // which is the exact class of defect `assertDisplayPolicy` refuses a default for.
+    const radiusEarth = r.planetData?.radiusEarth ?? condition.radiusEarth ?? 1;
+    // ⚠ THE PREVIEW'S macroSeed IS NOT THE GAME'S LAW — Step 6 defines that, and it does not exist
+    // yet (`grep macroSeed src/objects/Planet.js` is empty). Derived here from the body NAME so it
+    // is stable per body and per seed; numeric and non-zero because `resolveParams` does
+    // `macroSeed | 0` and a hex string collapses to 0, giving every giant identical band phases
+    // while every algebraic gate still passes (PLAN 5d).
+    let macroSeed = args.macroSeed;
+    let macroSeedSource = 'caller';
+    if (!Number.isInteger(macroSeed) || macroSeed === 0) {
+      macroSeed = (fnv1aString(String(r.name)) | 0) || 1;
+      macroSeedSource = 'PREVIEW DERIVATION fnv1a(bodyName)|0 — NOT the game law; Step 6 defines that';
+    }
+
+    const geom = r.mesh.geometry;
+    const pos = geom?.getAttribute('position');
+    const ctx = {
+      macroSeed,
+      displayRadiusEarth: gameDisplayRadiusEarth(radiusEarth),
+      animRate: Number.isFinite(args.animRate) ? args.animRate : 1,
+      gates,
+      relevance: args.relevance || {},
+      // `d.rotationHours` is the spelling `conditionFromPlanet` reads. Left undefined when the body
+      // has none, so the pack falls back through `condition.rotationHours` and then its own
+      // documented default rather than being handed a fabricated spin.
+      rotationHours: args.rotationHours ?? r.planetData?.rotationHours ?? undefined,
+      mesh: pos ? { positions: pos.array, count: pos.count, radius: bodyRadiusOf(geom) } : undefined,
+    };
+
+    // ⭐ DOES THE PACK'S OWN PREDICATE CLAIM THIS BODY? Reported, and NOT enforced — driving a pack
+    // at a body it does not claim is a legitimate probe (the gas deck on a rocky world is how you
+    // see that its master gates go to 0). What is not legitimate is a caption that says "the pack
+    // works" over a body the runtime path would never have handed it.
+    let applies = null;
+    try { applies = entry ? entry.applies(condition, ctx) === true : null; } catch { applies = 'predicate threw'; }
+
+    let result;
+    try {
+      result = pack(condition, ctx);
+    } catch (e) {
+      return { ok: false, name: r.name, packName, applies, reason: `pack threw: ${e?.message || e}`, ctxSummary: { macroSeed, displayRadiusEarth: ctx.displayRadiusEarth, gates, gatesSource } };
+    }
+
+    const before = _dumpUniforms(r.mesh.material.uniforms);
+    try {
+      writePackUniforms(r.mesh.material.uniforms, result.drivers, ctx);
+    } catch (e) {
+      return { ok: false, name: r.name, packName, reason: `writePackUniforms threw: ${e?.message || e}`, drivers: Object.keys(result.drivers || {}) };
+    }
+
+    // ── the attributes ──────────────────────────────────────────────────────────────────────────
+    const attributesWritten = [];
+    for (const [name, data] of Object.entries(result.attributes || {})) {
+      if (!data || !geom) continue;
+      geom.setAttribute(name, new THREE.BufferAttribute(data, 1));
+      geom.getAttribute(name).needsUpdate = true;
+      attributesWritten.push({ name, length: data.length });
+    }
+
+    const after = _dumpUniforms(r.mesh.material.uniforms);
+    const moved = Object.keys(after).filter((k) => JSON.stringify(after[k]) !== JSON.stringify(before[k]));
+
+    return {
+      ok: true,
+      name: r.name, display: r.display, packName,
+      // ⚠ `applies:false` means the runtime path would NOT have run this pack on this body.
+      applies,
+      // ⛔ THE DRIVERS AS THE PACK RETURNED THEM, before the writer's gate/animRate/km resolution —
+      // and the resolved uniform values beside them, so the writer's own contribution is visible
+      // rather than folded in.
+      packDrivers: _dumpPackDrivers(result.drivers),
+      packMeta: result.meta ?? null,
+      uniformsMoved: moved,
+      uniformsAfter: Object.fromEntries(moved.map((k) => [k, after[k]])),
+      attributesWritten,
+      ctxSummary: {
+        macroSeed, macroSeedSource,
+        displayRadiusEarth: ctx.displayRadiusEarth,
+        displayPolicy: 'gameDisplayRadiusEarth (identity) — the GAME policy, per §12.3 E-3',
+        animRate: ctx.animRate, rotationHours: ctx.rotationHours,
+        gates, gatesSource,
+        meshBaked: !!ctx.mesh,
+      },
+      // The preview writes once; the per-frame seam re-asserts uTime/uLightDir/uLodRamp/uOctaves and
+      // nothing else, so pack values persist. A GATE the caller wants held against a future writer
+      // is `forceGate`'s job, not this one's.
+      note: 'Values above came from pack(condition, ctx) only. Nothing was typed into a uniform.',
+    };
+  },
+
+  /**
+   * ROW 11 — force one uniform to a value and MAKE IT HOLD. The loss triptych's third frame.
+   *
+   * ⛔ A PLAIN ASSIGNMENT DOES NOT HOLD. `updateLabPlanetMaterial` re-asserts `uTime`, `uLightDir`,
+   * `uLodRamp`, `uOctaves` and `uCameraPosObj` every render tick, and a future pack write or a
+   * `previewPack` re-run overwrites anything. So the slot's `value` is replaced by an ACCESSOR whose
+   * setter discards writes — the same technique `freezeFrame` uses on the shader clocks, and chosen
+   * for the same reason: a per-frame re-write races the render loop's own rAF and holds only when it
+   * happens to run second, which is a hold that works on some frames.
+   *
+   * ⚠ Object-valued uniforms (Vector3/Color) are held by CLONE-ON-READ: a writer's `.copy(...)`
+   * then mutates a throwaway. `Object.freeze` was rejected — ESM is strict mode, so `.copy` on a
+   * frozen vector THROWS, and Instrument D would report the hold as a crash.
+   *
+   * @param {string} name — the uniform name.
+   * @param {number|number[]} value
+   * @param {{body?: object}} [args]
+   */
+  forceGate(name, value, args = {}) {
+    const r = this.resolveBody(args.body || {});
+    if (!r.ok) return { ok: false, reason: r.reason, resolveFailed: true };
+    const u = r.mesh?.material?.uniforms;
+    const slot = u?.[name];
+    if (!slot) {
+      return {
+        ok: false, name: r.name,
+        reason: `no uniform '${name}' on ${r.name}'s material. Forcing a name the material does not `
+              + 'carry would create a slot no shader reads and report success.',
+        available: u ? Object.keys(u).length : 0,
+      };
+    }
+
+    const holds = (this._forcedGates ||= new Map());
+    const meshKey = r.mesh;
+    let perMesh = holds.get(meshKey);
+    if (!perMesh) { perMesh = new Map(); holds.set(meshKey, perMesh); }
+    if (perMesh.has(name)) {
+      // ⚠ Re-forcing keeps the ORIGINAL descriptor, exactly as `recordMaterialSwap` keeps the
+      // original prevMaterial: otherwise "release" would mean "go back to the previous force".
+      perMesh.get(name).held = value;
+      _installGateHold(slot, perMesh.get(name));
+      return { ok: true, name: r.name, uniform: name, value, reForced: true, held: [...perMesh.keys()] };
+    }
+
+    const original = slot.value;
+    // ⚠ `original` is the ONLY thing retained. An earlier draft also stashed the slot's property
+    // DESCRIPTOR "in case", used it nowhere, and would have restored an accessor over an accessor
+    // on a re-force — a field that exists to look thorough is a field the next reader trusts.
+    const entry = { held: value, original };
+    _installGateHold(slot, entry);
+    perMesh.set(name, entry);
+    return {
+      ok: true, name: r.name, display: r.display, uniform: name,
+      forcedTo: value,
+      wasValue: (original && typeof original.toArray === 'function') ? original.toArray() : original,
+      readsBack: (slot.value && typeof slot.value.toArray === 'function') ? slot.value.toArray() : slot.value,
+      holdMechanism: 'accessor — writes are discarded, not merely overwritten later',
+      held: [...perMesh.keys()],
+      releaseWith: `_lab.releaseGate('${name}', { body: { name: '${r.name}' } })`,
+    };
+  },
+
+  /** Undo one `forceGate`, exactly, by value. */
+  releaseGate(name, args = {}) {
+    const r = this.resolveBody(args.body || {});
+    if (!r.ok) return { ok: false, reason: r.reason };
+    const perMesh = this._forcedGates?.get(r.mesh);
+    const entry = perMesh?.get(name);
+    if (!entry) return { ok: false, name: r.name, reason: `'${name}' is not force-held on ${r.name}` };
+    const slot = r.mesh.material.uniforms[name];
+    delete slot.value;
+    slot.value = entry.original;
+    perMesh.delete(name);
+    return { ok: true, name: r.name, uniform: name, restoredTo: entry.original, stillHeld: [...perMesh.keys()] };
+  },
+
+  /** Release every hold on every mesh. Call before a shot that is meant to show the default state. */
+  releaseAllGates() {
+    const out = [];
+    for (const [mesh, perMesh] of (this._forcedGates || new Map())) {
+      for (const [name, entry] of perMesh) {
+        const slot = mesh?.material?.uniforms?.[name];
+        if (slot) { delete slot.value; slot.value = entry.original; }
+        out.push({ mesh: mesh?.name || mesh?.parent?.name || '?', uniform: name });
+      }
+    }
+    this._forcedGates?.clear();
+    return { ok: true, released: out.length, entries: out };
+  },
 };
+
+// ── INSTRUMENT D's verdict, PURE and EXTRACTED BY TEST ───────────────────────────────────────────
+// ⭐ WHY IT IS FENCED BY SENTINEL COMMENTS. Everything else in `frameSurvival` needs a live browser,
+// which means the DECISION — the part that can be wrong in a way that reports a dead loop healthy —
+// would be the one part of Instrument D no headless test could reach. `tests/instrument-d-frame-
+// survival.test.js` slices the text between these two markers out of THIS FILE and evaluates it, so
+// the function under test is the shipped bytes rather than a copy that can drift from them. Moving
+// or renaming a marker fails that test loudly.
+// ⛔ It must stay a pure function of its argument: no closure over module scope, no `window`, no
+// `this`. The extraction evaluates it with nothing else in scope.
+// D-VERDICT-BEGIN
+function frameSurvivalVerdict(obs) {
+  const failures = [];
+  const otherRaf = obs.rafIdsIssued - obs.probeRafRegistrations;
+  const renderFramesAdvanced = (obs.rendererFrameEnd === null || obs.rendererFrameStart === null)
+    ? null : obs.rendererFrameEnd - obs.rendererFrameStart;
+
+  if (obs.errorCount > 0) failures.push(`${obs.errorCount} uncaught exception(s) during the run`);
+  if (obs.rejectionCount > 0) failures.push(`${obs.rejectionCount} unhandled promise rejection(s)`);
+  // A clobbered handler means the error channel was off for an unknown part of the run, so
+  // `errorCount === 0` is unsupported rather than reassuring.
+  if (obs.onerrorClobbered) failures.push('window.onerror was reassigned mid-run — a zero exception count is unsupported');
+  if (obs.framesRequired < 120) failures.push(`framesRequired ${obs.framesRequired} is below the 120-frame floor`);
+  if (obs.framesObserved < obs.framesRequired) failures.push(`only ${obs.framesObserved} of ${obs.framesRequired} frames ran`);
+  if (obs.timedOut) failures.push('the frame loop timed out before reaching the required frame count');
+  // ⛔ THE LIVENESS CLAUSE. The probe's own rAF chain keeps ticking on a dead render loop, so 120
+  // clean frames is not evidence of survival on its own. Handles are issued +1 per call per
+  // document: subtract the probe's and anything left is somebody else's loop.
+  if (obs.rafIdsIssued < obs.probeRafRegistrations) {
+    failures.push('rAF handle counter incoherent (fewer ids issued than this probe requested) — liveness unmeasurable');
+  } else if (otherRaf <= 0) {
+    failures.push('the rAF handle advanced ONLY for this probe — the render loop scheduled nothing');
+  }
+  if (renderFramesAdvanced === null) failures.push('renderer.info.render.frame unreadable — draw liveness unmeasurable');
+  else if (renderFramesAdvanced <= 0) failures.push('renderer.info.render.frame did not advance — no draw happened');
+
+  // ⚠ NOT A FAILURE, AND NOT A PASS EITHER. A backgrounded window throttles rAF to ~1 Hz while
+  // `document.hidden` can still read false, and every per-frame verdict then means nothing.
+  const inconclusive = obs.throttled === true || obs.documentHidden === true;
+
+  return {
+    verdict: failures.length > 0 ? 'FAIL' : (inconclusive ? 'INCONCLUSIVE' : 'PASS'),
+    pass: failures.length === 0 && !inconclusive,
+    failures,
+    inconclusive,
+    otherRafRegistrations: otherRaf,
+    renderFramesAdvanced,
+    renderCoverage: (renderFramesAdvanced === null || obs.framesObserved === 0)
+      ? null : +(renderFramesAdvanced / obs.framesObserved).toFixed(3),
+  };
+}
+// D-VERDICT-END
+
+/**
+ * Install the accessor that makes `forceGate` hold. Separate from the hook so `forceGate` and a
+ * re-force take the identical path — two spellings of "install a hold" is how one of them acquires
+ * a bug the other does not have.
+ */
+function _installGateHold(slot, entry) {
+  delete slot.value;
+  Object.defineProperty(slot, 'value', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      const v = entry.held;
+      // Clone-on-read for vector/colour holds: a per-frame writer's `.copy()` then mutates a
+      // throwaway instead of the held value. Scalars need no clone.
+      if (Array.isArray(v) && entry.original && typeof entry.original.clone === 'function') {
+        return entry.original.clone().fromArray(v);
+      }
+      if (v && typeof v.clone === 'function') return v.clone();
+      return v;
+    },
+    set() { /* ⛔ deliberate no-op — see forceGate's docblock */ },
+  });
+}
+
+/** Print a pack's return drivers WITHOUT resolving them — the marker objects `sizeKm`/`scalar`
+ *  build carry the gate/animRate/relevance context, and flattening them to numbers here would hide
+ *  exactly the writer-side contribution `previewPack` reports separately. */
+function _dumpPackDrivers(drivers) {
+  const out = {};
+  for (const [k, d] of Object.entries(drivers || {})) {
+    if (typeof d === 'number' || Array.isArray(d)) { out[k] = d; continue; }
+    out[k] = {
+      value: d?.value, featureSizeKm: d?.featureSizeKm, cFeature: d?.cFeature,
+      animRate: d?.animRate, relevance: d?.relevance, gate: d?.gate,
+    };
+  }
+  return out;
+}
 
 /**
  * `compositionClass` throws on a condition vector it cannot read rather than returning a wrong
