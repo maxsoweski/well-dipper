@@ -957,3 +957,65 @@ building out the lab's own missing/underbaked features.** That backlog lives in
    overlays, or pay ~1 s per body on first visit.
 
 Do **not** read `~/briefings/*.md` for status. They are per-session and they go stale.
+
+---
+
+# ⭐ LAYER 7 — APPROACH CONSISTENCY (Max's criterion, 2026-08-10). NOT CLOSED.
+
+**Appended, not inserted — no line above this section moved.** Added because this criterion has no
+home in §LAYER 1-6 and would otherwise live only in a session handoff, which this file's own header
+says has twice been wrong about what shipped.
+
+## The criterion, verbatim
+
+> *"in the lab, I can get really close to the planet and the LOD stays pretty consistent, keeping the
+> illusion of getting closer and closer to a planet, as opposed to getting closer and closer to a
+> beach ball painted to look like a planet. I'm realizing this is critical to the visuals working,
+> even though we are using a lo-fi aesthetic."*
+
+⛔ **The lo-fi aesthetic does not excuse this — Max ruled that out in the same sentence.** And he
+framed it as a thing to *track toward*, not a stop-work: *"I don't want to throw a wrench into the
+plan here, just something I want to keep in mind and track to."* Do not re-scope Layers 1-6 around
+it. Do check every rendering increment against it.
+
+## ⭐ TWO HALVES. DO NOT CONFLATE THEM. One is closed and one is not.
+
+### Half 1 — SHAPE. ✅ CLOSED 2026-08-10, commit `77fff7f`.
+`src/objects/Planet.js` shipped `IcosahedronGeometry(r, 5)` = **720 triangles**, a ~40-gon limb that
+**collapses to 12.8 sides at the 1.05-radius zoom floor** (`ShipCameraSystem.js:859`), because the
+visible cap shrinks as the camera closes while the disc grows. Measured threshold: **1 render pixel
+of limb error at ~2.6 body radii**, i.e. everything inside the `radius * 2.8` autopilot survey stop
+was visibly faceted. Now `SphereGeometry(r, 96, 48)`; `Moon.js` likewise (it was WORSE — detail 3,
+1.80 px error already at the survey stop).
+
+⛔ **Raising the icosphere detail was proposed and WITHDRAWN on measurement** — record it so nobody
+re-proposes it. `IcosahedronGeometry` is **non-indexed**: 2160 attribute slots for **362 distinct
+positions**. An indexed `SphereGeometry(r, 64, 32)` is **2145 verts — fifteen FEWER than shipped** —
+at 3.3x the limb quality; `ico d10` needs 3.4x the verts to match that.
+
+### Half 2 — APPROACH DETAIL. ⛔ NOT CLOSED. This is what Max is actually describing.
+`planet-lod-lab-core.js:19-27` is `lodRampOf = smoothstep(20.0, 6.0, distanceRadii)` and
+`autoOctaves = mix(4.0, 9.0, lodRamp)`. **THE RAMP SATURATES AT 6 BODY RADII.** From 6 radii down to
+the 1.05 floor the disc grows ~6x in angular size and the octave budget stays pinned at 9 — *nothing
+new resolves*. The surface magnifies without revealing anything smaller. **That is the beach ball.**
+
+⭐ **The ramp itself is NOT the gap — it is already ported and live.** `BodyRenderer.js:11` and
+`LabPlanetMaterial.js:8` both `import { lodRampOf, autoOctaves }` from the lab's own core ("the
+LAB'S law, imported rather than re-derived"), driven per frame from `LODManager.update()`. Anyone
+who "discovers" that the LOD system is unported has found the wrong thing.
+
+**What is genuinely absent is camera-localised detail INJECTION** — new information near the camera,
+not more octaves of the same field. The lab has two such mechanisms and neither is in the game:
+- the fine-tributary patch bake+blend (`planet-lod-lab.html:346`, "Option B river-LOD STEP 2") —
+  note it is **default OFF even in the lab**, so the lab's own advantage here is partly unexercised
+- the baked-relief -> in-shader-synth crossfade
+
+⛔ **AND THERE IS NO GEOMETRIC LOD IN EITHER FRONT-END TO PORT.** No geometry constructor exists
+anywhere in `src/rendering/` — `LODManager` swaps materials and ramps octaves, never meshes; the lab
+builds one fixed `SphereGeometry(R, 256, 256)` at load. **Closing half 2 means BUILDING something,
+not wiring something.** Scope it with `dev-collab-scope` when it becomes the active job.
+
+## Known adjacent defect, do not bundle
+Planet-class moons never register with `LODManager` (`src/main.js:7437` sits in the `else` arm), so
+they get **no octave ramp at all** — `uOctaves` frozen at 4.0, `uLodRamp` at 0.0. Sweep finding
+S6-M7, verified 2026-08-10. Real, separate, and worth its own fix; it has zero effect on half 1.
