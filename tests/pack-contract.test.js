@@ -358,6 +358,31 @@ describe('5d — macroSeed shape (the pack precondition the contract exposes)', 
       expect(() => assertMacroSeed(bad)).toThrow(PackContractError);
     }
   });
+
+  // ⭐ THE CASE THE GUARD USED TO MISS, and the reason this `it` exists as its own block: the old
+  // predicate was `macroSeed === 0`, which is NOT the failure the guard's own error string describes.
+  // Every consumer coerces with `| 0` (`giant-drivers.js` alea key, `climate-e5.js`, `band-flow.js`),
+  // so the property that matters is SURVIVING the coercion. 2^32 is a finite, non-zero, integral seed
+  // that collapses to 0 downstream — it passed the old gate and would have given every gas giant
+  // identical band phases with no algebraic gate moving, which is exactly what 5d exists to prevent.
+  //
+  // ⛔ THIS TEST MUST FAIL IF THE PREDICATE IS REVERTED TO `macroSeed === 0`. That is its whole job.
+  // Verified both directions on 2026-08-10: with `=== 0` these three PASS the guard (test red), with
+  // `(macroSeed | 0) === 0` all three throw (test green).
+  it('rejects a non-zero integer that COLLAPSES to zero under `| 0` — 2^32 and its multiples', () => {
+    for (const collapsing of [4294967296, 8589934592, -4294967296, 2 ** 40]) {
+      // the precondition that makes each case interesting: non-zero and integral, yet coerces to 0
+      expect(Number.isInteger(collapsing)).toBe(true);
+      expect(collapsing).not.toBe(0);
+      expect(collapsing | 0).toBe(0);
+      expect(() => assertMacroSeed(collapsing)).toThrow(PackContractError);
+    }
+    // CONTROL — a seed that SURVIVES `| 0` must still be accepted, so the fix cannot have simply
+    // tightened the gate into rejecting everything. 2^32+1 differs from 2^32 by one and passes.
+    expect(4294967295 | 0).toBe(-1);
+    expect(assertMacroSeed(4294967295)).toBe(4294967295);
+    expect(assertMacroSeed(4294967297)).toBe(4294967297);
+  });
 });
 
 describe('5a — pack return shape is { drivers, attributes }', () => {

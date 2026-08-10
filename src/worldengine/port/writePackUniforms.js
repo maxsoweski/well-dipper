@@ -122,12 +122,26 @@ export function assertDisplayPolicy(ctx) {
 // rather than folded into the writer. PLAN 5d: the numeric fnv1aString form, never the hex form —
 // `'da81e221' | 0 === 0`, and a zero seed gives every gas giant identical band phases while every
 // distinctness gate on driver ALGEBRA still passes, because the algebra carries no seeded term.
+// ⭐ THE TEST IS `(macroSeed | 0) === 0`, NOT `macroSeed === 0`, and the difference is the whole
+// point of the guard. It used to read `macroSeed === 0`, which does not check the failure its own
+// error string describes: every consumer coerces with `| 0` (`giant-drivers.js` alea key,
+// `climate-e5.js`, `band-flow.js`), so what matters is whether the seed survives that coercion, not
+// whether the seed is literally zero. MEASURED on the old predicate — all three PASSED the guard and
+// all three collapse to 0 downstream:
+//     assertMacroSeed(4294967296)   // 2^32   -> `| 0` === 0
+//     assertMacroSeed(8589934592)   // 2^33   -> `| 0` === 0
+//     assertMacroSeed(-4294967296)  // -2^32  -> `| 0` === 0
+// i.e. the exact defect 5d exists to make impossible walked straight through the gate that exists to
+// stop it, and would have given every gas giant identical band phases with no algebraic gate moving.
+// Found by code review 2026-08-10; a 16-agent sweep on the same file the same day missed it, because
+// it asked "can the lab REACH a zero seed" and never asked whether the guard was correct.
 export function assertMacroSeed(macroSeed) {
-  if (!Number.isInteger(macroSeed) || macroSeed === 0) {
+  if (!Number.isInteger(macroSeed) || (macroSeed | 0) === 0) {
     throw new PackContractError(
-      'pack ctx.macroSeed must be a non-zero integer (got ' + String(macroSeed) + '). A hex ' +
-      'fnv1aString collapses to 0 under `| 0`, which makes every seeded field constant across ' +
-      'the whole population without moving any algebraic gate.',
+      'pack ctx.macroSeed must be a non-zero integer that SURVIVES `| 0` (got ' + String(macroSeed) +
+      ', which coerces to ' + String(macroSeed | 0) + '). A hex fnv1aString collapses to 0 under ' +
+      '`| 0`, and so does any multiple of 2^32, which makes every seeded field constant across the ' +
+      'whole population without moving any algebraic gate.',
     );
   }
   return macroSeed;

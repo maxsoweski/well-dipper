@@ -69,8 +69,25 @@ const BASELINE_PATH = path.join(ROOT, 'tests', 'baseline', 'known-failures.json'
  * CLI `--exclude` APPENDS to vitest's defaults rather than replacing them —
  * verified 2026-08-06: `vitest list --filesOnly --exclude '**\/.claude/**'`
  * returns 304 files and zero node_modules paths.
+ *
+ * ⭐ `scratchpad/**` ADDED 2026-08-10, for the same reason as `.claude/**` and after
+ * the hazard fired TWICE IN ONE SESSION. `scratchpad/` is untracked agent working
+ * space. A `--record` run swept 30+ throwaway probe files into the permanent
+ * baseline (files 318 -> 367, tests 5190 -> 5430) and had to be reverted unshipped;
+ * hours later a second agent wave reintroduced it with a DIFFERENT extension.
+ *
+ * ⛔ RENAMING PROBES IS NOT THE FIX, and that was the first thing tried. Vitest's
+ * include glob is `**\/*.{test,spec}.?(c|m)[jt]s?(x)`, so `.spec.mjs` is collected
+ * exactly as readily as `.test.js` — an instruction telling agents to "use .spec.mjs
+ * instead" is worse than useless because it reads as a safeguard. The scratchpad is
+ * written by parallel agents whose file names nobody controls, which is precisely
+ * the `.claude/worktrees/` argument above: this instrument must not alarm on, or
+ * bless, work that never touched the codebase.
+ *
+ * ⚠ This changes the recorded SCOPE string, so the guard at `scope MISMATCH` below
+ * will red until the next deliberate `--record`. That is the mechanism working.
  */
-const EXTRA_EXCLUDE = ['**/.claude/**'];
+const EXTRA_EXCLUDE = ['**/.claude/**', '**/scratchpad/**'];
 
 const SEP = ' :: ';
 

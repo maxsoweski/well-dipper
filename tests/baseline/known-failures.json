@@ -13,15 +13,16 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-10T13:14:33.584Z",
+  "recordedAt": "2026-08-10T17:21:43.623Z",
   "recordedFromCommit": {
-    "sha": "78d26e57877794317f19dda42aac9b73816c79b3",
+    "sha": "92860452ad1f7d2402381ca764f07bb8952d740c",
     "dirty": true
   },
   "vitest": "4.1.0",
   "scope": {
     "extraExclude": [
-      "**/.claude/**"
+      "**/.claude/**",
+      "**/scratchpad/**"
     ],
     "note": "Vitest default excludes do NOT cover .claude/worktrees/, which holds 8 stale checkouts of this repo (1136 duplicate test files). Excluding them preserves all 17 failing files and all 24 failing tests. The pass counts below are therefore NOT the historical 22685 scalar — that number counted the copies."
   },
@@ -30,9 +31,9 @@
       "collectedFiles": 318,
       "failingFiles": 2,
       "nonCollectingFiles": 15,
-      "tests": 5190,
+      "tests": 5191,
       "failed": 24,
-      "passed": 5162,
+      "passed": 5163,
       "skipped": 4,
       "todo": 0
     },
@@ -257,7 +258,7 @@
       "tests/moon-mass-radius-consistency.test.js": 5,
       "tests/motion-test-kit-smoke.test.js": 6,
       "tests/orbit-ring-rebase.test.js": 10,
-      "tests/pack-contract.test.js": 30,
+      "tests/pack-contract.test.js": 31,
       "tests/planet-archetypes.test.js": 21,
       "tests/planet-lod-blackbody.test.js": 9,
       "tests/planet-lod-fine-ribbon.test.js": 7,

@@ -63,7 +63,7 @@ import {
 //
 // ⚠ THE GATE MAP IS BUILT FROM EACH PACK'S OWN DECLARED GATE NAMES, NOT FROM A PROXY THAT ANSWERS
 // `true` FOR EVERYTHING. A Proxy would be shorter and it would destroy the one property the writer
-// has: writePackUniforms.js:166 `if (gates == null || !(d.gate in gates)) {` makes an ABSENT gate key throw, on the stated
+// has: writePackUniforms.js:180 `if (gates == null || !(d.gate in gates)) {` makes an ABSENT gate key throw, on the stated
 // grounds that "an absent gate is not an off gate and is not an on gate — it is an unanswered
 // rendering decision". Under a permissive proxy, a pack that started emitting a driver gated on a
 // name nobody had ever ruled on would silently render it ON. Declaring the names per entry keeps
