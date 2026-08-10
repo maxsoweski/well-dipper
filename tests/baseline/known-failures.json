@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-10T03:08:51.702Z",
+  "recordedAt": "2026-08-10T13:14:33.584Z",
   "recordedFromCommit": {
-    "sha": "5a44820fda3e80e2bcb8fc4cead56edee1259988",
+    "sha": "78d26e57877794317f19dda42aac9b73816c79b3",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -27,12 +27,12 @@
   },
   "summary": {
     "counts": {
-      "collectedFiles": 316,
+      "collectedFiles": 318,
       "failingFiles": 2,
       "nonCollectingFiles": 15,
-      "tests": 5125,
+      "tests": 5190,
       "failed": 24,
-      "passed": 5097,
+      "passed": 5162,
       "skipped": 4,
       "todo": 0
     },
@@ -229,6 +229,8 @@
       "tests/cockpit-screens-lab.test.js": 44,
       "tests/crater-uniform-law.test.js": 26,
       "tests/driver-pack-giantdeck.test.js": 73,
+      "tests/driver-pack-limbdeck.test.js": 31,
+      "tests/driver-pack-polardeck.test.js": 29,
       "tests/feature-associations.test.js": 17,
       "tests/gas-body-lab-material.test.js": 53,
       "tests/gen-feature-cards.test.js": 3,
@@ -277,7 +279,7 @@
       "tests/planet-scale.test.js": 13,
       "tests/planet-vis-scale.test.js": 9,
       "tests/port-condition-contract.test.js": 66,
-      "tests/port-limb-optics.test.js": 10,
+      "tests/port-limb-optics.test.js": 15,
       "tests/port-route-agreement.test.js": 10,
       "tests/port-terminator-law.test.js": 9,
       "tests/portal-traversal-margin.test.js": 3,
