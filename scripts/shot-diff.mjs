@@ -249,7 +249,29 @@ if (discPx.r < MIN_DISC_RADIUS_PX) {
 
 // ── 5. MEASURE ──────────────────────────────────────────────────────────────────────────────────
 const regions = makeRegions(discPx);
-const threshold = Number(args.threshold);
+
+// ⛔ THE THRESHOLD GATE. A threshold that is not a number is the one inadmissible input that used to
+// return the most reassuring answer this script can print. `Number('high')` is NaN, `mx > NaN` is
+// false for every pixel, so `moved` stays 0 and EVERY region reports movedPct 0.0000 — against a
+// floor column that also reports 0.0000. The count metric is not degraded, it is GONE, and the
+// verdict branch reads 0 ≤ 0 as "AT OR BELOW FLOOR" for a pair that may differ in every pixel.
+// A negative threshold fails the other way — `mx > -1` is true everywhere, so both columns read
+// 100 — which is the same defect wearing the opposite number. Neither is a measurement, and the
+// NaN would have been stamped into the JSON `threshold` field as if it were one.
+// (An OMITTED --threshold is unaffected: parseArgs seeds DEFAULT_THRESHOLD. Only an explicitly
+// supplied bad value refuses. `--threshold 0` is legal: it counts any non-zero channel delta.)
+const rawThreshold = args.threshold;
+const threshold = (typeof rawThreshold === 'string' && rawThreshold.trim() === '') ? NaN : Number(rawThreshold);
+if (!Number.isFinite(threshold) || threshold < 0) {
+  refuse(
+    `--threshold is not a usable number: ${JSON.stringify(rawThreshold ?? null)}.`,
+    'It is the per-channel 0-255 delta counted as "moved", so it must be finite and >= 0.\n'
+    + 'A non-numeric value silently zeroes `movedPct` in every region — signal AND floor — and the\n'
+    + `verdict then reads "AT OR BELOW FLOOR" for two images that differ everywhere. Pass a number\n`
+    + `(default ${DEFAULT_THRESHOLD}), or omit --threshold entirely.`,
+  );
+}
+
 const declared = roi.declaredRegion || args.region || null;
 
 const results = {};

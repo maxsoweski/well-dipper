@@ -388,6 +388,59 @@ class EstablishingMode {
           // TRACKING's computation runs THIS FRAME (not next frame).
           // Capture the blend-from anchor as the linger's final raw target
           // so the fall-through's raw target is blended from there.
+          //
+          // ⚠ DECLARED LIMIT — ANCHOR MISMATCH WITH THE GENERIC TRANSITION BLEND,
+          // LEFT IN PLACE DELIBERATELY. Recorded 2026-08-10.
+          //
+          // WHAT DIFFERS. The generic framing-state-change blend above
+          // (`if (this._framingState !== prevFramingState)`) anchors on
+          // `_currentLookAtTarget` — the POST-spring, post-blend point the camera
+          // actually looked at last frame. This site anchors on
+          // `_prevRawTargetFrame` — the PRE-spring raw target. The spring lags the
+          // raw target by TARGET_HALF_LIFE_SEC, so these are two different points,
+          // and the LINGERING→TRACKING hand-off therefore starts its blend from
+          // somewhere the camera was never looking.
+          //
+          // MEASURED, not inferred: a one-frame look-at pop of 6.7°–19.2°, which is
+          // 10–25× the surrounding per-frame angular delta. Causation is pinned by a
+          // half-life sweep — the pop scales with TARGET_HALF_LIFE_SEC and vanishes
+          // when the spring is effectively disabled: 0.35 s → 35.4 units, 0.10 s →
+          // 11.5, 1e-6 s → 0.000.
+          //
+          // ⛔ UNREACHABLE TODAY, which is why it is documented rather than changed.
+          // LINGERING is entered ONLY on the STATION→CRUISE edge above, and
+          // ShipPhase.STATION is produced ONLY by ShipChoreographer.update's
+          // subPhase mapping (`else if (subPhase === 'orbiting')`), which is dead
+          // while its `_phase === ShipPhase.IDLE` early return holds. The one live
+          // entry into NavigationSubsystem — commitBurn → focusShip →
+          // `navSubsystem.beginMotion({…})` in main.js — runs `stopFlythrough()`
+          // first, and that calls `shipChoreographer.stop()`, which sets
+          // `_phase = IDLE`. Independently, that ship-lock leg is `holdOnly` with
+          // `orbitDuration: 99999`, so even a non-IDLE choreographer would never see
+          // 'orbiting' hand back to 'traveling'. No STATION ⇒ no STATION→CRUISE ⇒
+          // no LINGERING.
+          //
+          // NOT A DELIBERATE ASYMMETRY — AN INCIDENTAL IDENTITY THAT GOT SPLIT.
+          // Before 92614e5 the blend consumed the raw target directly
+          // (`this._currentLookAtTarget.copy(this._prevRawTargetFrame)` at that
+          // revision), so once a blend had completed the two expressions named the
+          // SAME point — and at THIS site the prior blend has ALWAYS completed,
+          // since LINGER_DURATION (1.8 s) ≫ TRANSITION_BLEND_DURATION (0.4 s).
+          // 92614e5 inserted the spring and introduced `_filteredTarget`, making
+          // `_currentLookAtTarget` post-filter and splitting an identity nobody had
+          // chosen. Treat the mismatch as a leftover, not as a design.
+          //
+          // THE REPAIR, NAMED: change this line to copy `this._currentLookAtTarget`
+          // — the same expression the generic blend uses — at which point this
+          // special case does exactly what the generic transition blend already does
+          // and can go away entirely.
+          //
+          // WHY IT IS NOT APPLIED NOW: the path is unreachable, so there is no live
+          // behaviour to regress the change against and no live symptom to fix; and
+          // 92614e5, the commit that created the split, is itself un-UAT'd work that
+          // was committed to clear a long-dirty tree. Apply the repair in the same
+          // change that first makes LINGERING reachable, and gate it on Max's eyes
+          // then — a look-at pop is a UAT-layer judgement, not a unit assertion.
           this._blendFromTarget.copy(this._prevRawTargetFrame);
           this._blendElapsed = 0;
           this._framingState = FramingState.TRACKING;
@@ -455,8 +508,35 @@ class EstablishingMode {
     //      outward to MIN_TARGET_DISTANCE along the current direction.
     //   3. If |target − shipPos| < ε (direction numerically zero) →
     //      fall back to the prior-frame _currentLookAtTarget direction.
-    //   4. If that too is degenerate → fall back to camera forward
-    //      ((0,0,-1).applyQuaternion(camera.quaternion)).
+    //   4. If that too is degenerate → fall back to WORLD −Z: the literal
+    //      vector (0, 0, -1), in world axes. NOT camera-forward.
+    //
+    // ⚠ STEP 4 READ "camera forward
+    // ((0,0,-1).applyQuaternion(camera.quaternion))" until 2026-08-10.
+    // That was a STALE PROMISE in the header, NOT a defect in the code
+    // below, and the header is what was corrected. This mode holds no
+    // camera reference and never has: `EstablishingMode`'s constructor
+    // takes no arguments, and its update signature is
+    // `(deltaTime, motionFrame, shipPhase, nav)`. That is the AC #8
+    // camera-axis-only invariant stated in the block comment above the
+    // class, and it is the same split the file header declares — the
+    // choreographer produces the TARGET and never calls `camera.lookAt`,
+    // which stays in FlythroughCamera. So `applyQuaternion(camera
+    // .quaternion)` is not a missing line here; it is architecturally
+    // unavailable, and threading a camera reference in to satisfy the old
+    // wording would break the invariant this module exists to hold.
+    //
+    // What world −Z actually buys: it is camera-forward on the canonical
+    // identity orientation, and it is only ever reached when two
+    // successive frames BOTH put the target on top of the ship. At that
+    // point every unit vector is equally defensible — step 4's job is to
+    // hand `camera.lookAt` SOME finite, non-degenerate target, not a
+    // correct one.
+    //
+    // FOUR SITES, NOT TWO. This chain's steps 3–4 are duplicated verbatim
+    // by the POST-filter distance guard further down, so `set(0, 0, -1)`
+    // appears twice here and twice there, all four with this meaning. Any
+    // future rewording has to move all four together.
     {
       const shipPos = motionFrame.position;
       _loopATmpC.subVectors(this._prevRawTargetFrame, shipPos);
@@ -470,15 +550,19 @@ class EstablishingMode {
           if (priorDist > 1e-6) {
             _loopATmpC.divideScalar(priorDist);
           } else {
-            // Last-resort fallback: world −Z (camera-forward on
-            // the canonical identity orientation). Practically
-            // unreachable — priorDist would need to also be zero,
-            // which implies back-to-back frames both had the
-            // target on top of the camera.
+            // Step 4 — last-resort fallback: WORLD −Z. Camera-forward
+            // on the canonical identity orientation only; this mode
+            // holds no camera reference, so the live orientation is
+            // not available here and is not consulted (see the chain
+            // header above). Practically unreachable — priorDist would
+            // need to also be zero, which implies back-to-back frames
+            // both had the target on top of the ship.
             _loopATmpC.set(0, 0, -1);
           }
         } else {
-          // First-frame-before-any-prior case.
+          // First-frame-before-any-prior case. Same world −Z as step 4,
+          // for the same reason: no prior anchor exists yet, and no
+          // camera orientation is reachable from this mode.
           _loopATmpC.set(0, 0, -1);
         }
         this._prevRawTargetFrame.copy(shipPos).addScaledVector(_loopATmpC, MIN_TARGET_DISTANCE);
@@ -544,6 +628,10 @@ class EstablishingMode {
           if (priorDist > 1e-6) {
             _loopATmpC.divideScalar(priorDist);
           } else {
+            // Sites 3 and 4 of the four named in the pre-filter guard's
+            // chain header: WORLD −Z, not camera-forward. Same reason —
+            // EstablishingMode holds no camera reference, so the live
+            // orientation cannot be applied here.
             _loopATmpC.set(0, 0, -1);
           }
         } else {

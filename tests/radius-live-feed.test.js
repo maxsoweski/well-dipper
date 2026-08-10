@@ -19,7 +19,7 @@
 //      which names the wrong site and kills collection before one assertion runs.
 //   2. "THE PATTERN STOPS MATCHING" WAS NOT THE FAILURE MODE THAT MATTERED. The lab's habit when a
 //      law moves is to quote the retired statement verbatim in a `//` or `/* */` comment — 7
-//      instances, e.g. planet-lod-lab.html:6160 `//   _lab.setCarveEpoch(false); const off = _lab.sampleRoutedHeight(channelDirs);`.
+//      instances, e.g. planet-lod-lab.html:6186 `//   _lab.setCarveEpoch(false); const off = _lab.sampleRoutedHeight(channelDirs);`.
 //      Every extraction here read RAW text and took the FIRST match, and with lazy quantifiers first
 //      means topmost, so a comment ABOVE the live site shadows it. Measured: move the bandCount law
 //      out to `state.bandCount = _pack.bandCount;` and quote the old statement on a bare `//` line
@@ -83,7 +83,7 @@
 //      an absent one, because it tells the next author the hazard is self-reporting.
 //      ⭐ CLOSED, not documented: matching now runs on the literal-BLIND pass and only the SPLICE
 //      reads the literal-preserving one, via the `blankLiteralText` option on
-//      tests/helpers/source-scan.mjs:194 `export function stripCommentsPreservingOffsets(src, opts = {}) {`.
+//      tests/helpers/source-scan.mjs:230 `export function stripCommentsPreservingOffsets(src, opts = {}) {`.
 //      Measured over all 44 corpus files: the pass this file used to match against leaves 985 lines
 //      carrying a live `//` (900 of them in planet-lod-shaders.glsl.js, the venue this limit named
 //      as plausible, and 21 in the lab's own shader templates); the pass it matches against now
@@ -104,7 +104,7 @@
 //      ⭐ CLOSED BY CODE, NOT BY QUALIFICATION, because a limit a correct algorithm can remove should
 //      not be carried as prose. The integer is gone; `${…}` is lexed by three mutually-recursive span
 //      scanners that skip nested templates and strings whole —
-//      tests/helpers/source-scan.mjs:135 `function interpolationEnd(src, i) {`. Measured 2026-08-09:
+//      tests/helpers/source-scan.mjs:171 `function interpolationEnd(src, i) {`. Measured 2026-08-09:
 //      over 20,000 valid-JS snippets carrying nested templates the old lexer let a top-level comment
 //      survive as template text in 6,147 of them and the new one in ZERO, and over all 44 corpus
 //      files the two are BYTE-IDENTICAL on both passes, so nothing in the tree moved.
@@ -113,7 +113,7 @@
 //      one container further in. Corpus reach measured the same day: 149 interpolation spans across
 //      the 44 files, of which 0 carry `//` or `/*`, 0 carry any `/` at all, and 0 carry a backtick.
 //      Interpolations are also blanked with the text around them —
-//      tests/helpers/source-scan.mjs:175 `interpolations are blanked along with the surrounding text`
+//      tests/helpers/source-scan.mjs:211 `interpolations are blanked along with the surrounding text`
 //      — which is deliberate and in the same direction: live code written inside a `${…}`
 //      interpolation is invisible to this scanner too, and loudly.
 //   2. THE CORPUS STOPS AT src/worldengine PLUS THE TWO LAB FILES. A law moved to, say,
@@ -1263,7 +1263,7 @@ describe('AT THE RADIUS THE LAB ACTUALLY DRAWS — the boot-time delta, pinned',
     // next agent "helpfully" re-points it at the drawn radius and re-introduces the regression.
     // ⚠ THESE TWO READ **RAW** SOURCE, DELIBERATELY, and it is not an oversight in a file whose whole
     // point is that comments are stripped. Their subject IS the comment: both strings live in `//`
-    // prose (planet-lod-lab.html:2535 `// Radius cutoff 3.5 — HISTORICAL INTENT, AND IT IS NO LONGER A DISCRIMINATION THE RADIUS CAN`
+    // prose (planet-lod-lab.html:2561 `// Radius cutoff 3.5 — HISTORICAL INTENT, AND IT IS NO LONGER A DISCRIMINATION THE RADIUS CAN`
     // and :2574 `//   CLASSIFIER reads canonical; a PHYSICS INPUT reads drawn. The three genuine physics inputs`).
     // Scanning stripped text for them would delete their subject and red on day one. The rule this
     // file follows: a pin on the CODE reads the comment-blind, literal-blind pass and must match
@@ -1305,7 +1305,7 @@ describe('AT THE RADIUS THE LAB ACTUALLY DRAWS — the boot-time delta, pinned',
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 // ⚠ THE TITLE BELOW DELIBERATELY CARRIES NO LINE NUMBER. It read "the :5206 canonical read" until
 // 2026-08-08; line 5206 is a comment about dust-veil attenuation and the read is at
-// planet-lod-lab.html:4297 `craterRelevanceOf(deriveConditionVector(`. A line number inside a
+// planet-lod-lab.html:4323 `craterRelevanceOf(deriveConditionVector(`. A line number inside a
 // describe title is worse than one in a comment: it is a TEST ID, so the citation fence cannot see
 // it, re-pointing it churns the baseline record, and it rots on every edit above it. Name the site.
 describe('AC-CRATERBOOT — the craterRelevanceOf canonical read is justified by measurement, re-measured here', () => {
@@ -1420,7 +1420,7 @@ describe('AC-CRATERBOOT — the craterRelevanceOf canonical read is justified by
     // present. Whatever these pins fail to notice, nothing else here notices either.
     //
     // WHICH IS WHY THE FIRST ONE MOVED TO STRIPPED SOURCE, AND WHY IT COUNTS (2026-08-08). Measured
-    // on a scratch mirror: replace the live call at planet-lod-lab.html:4297
+    // on a scratch mirror: replace the live call at planet-lod-lab.html:4323
     // `if (_fp && craterRelevanceOf(deriveConditionVector(_fp, deriveUniforms(_fp, driverUI.qualityTier), _fp.radiusEarth)) > 0) set.add('craters');`
     // with a pack read while quoting the old call in a comment, and all three of these stayed GREEN —
     // 44/44 — because `LAB` was raw text and the comment satisfied every one of them. The canonical

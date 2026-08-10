@@ -95,7 +95,7 @@ const ADAPTER_REL = 'src/worldengine/port/conditionFromPlanet.js';
 //     "the drawn-vs-fp radius ambiguity" without tripping the pattern. Rewording is the remedy this
 //     header has always documented, and it is the one that was applied.
 //
-// The walker is the shared house idiom: source-scan.mjs:269 `export function jsFilesUnder(root, rel) {`,
+// The walker is the shared house idiom: source-scan.mjs:305 `export function jsFilesUnder(root, rel) {`,
 // promoted there from vis-scale-fence.test.js:36 `function jsFilesUnder(rel) {` — the fence that
 // already walks this exact tree for the same reason. (Both refs kept on one line each, per the
 // tick-parity note above.)
@@ -105,7 +105,7 @@ const LAB = SRC.get(LAB_REL);
 
 // Comment-BLIND view of the corpus — never for the DENY scan. Offset-preserving, so `lineOf` reports
 // the same line number on any view
-// (tests/helpers/source-scan.mjs:194 `export function stripCommentsPreservingOffsets(src, opts = {}) {`).
+// (tests/helpers/source-scan.mjs:230 `export function stripCommentsPreservingOffsets(src, opts = {}) {`).
 const STRIPPED = new Map(CORPUS_REL.map((rel) => [rel, stripCommentsPreservingOffsets(SRC.get(rel))]));
 
 // Comment-blind AND literal-blind: the view the liveness check and the AC-0 pins actually assert on.
@@ -505,7 +505,7 @@ describe('AC-NOFROZEN — no live quantity reads radius off a frozen preset', ()
     // (42 .js under src/worldengine + the lab + the shader module), so `> 20` survives LOSING HALF THE
     // TREE. It proves the walker ran and returned something; it proves nothing about the corpus being
     // intact. The per-carrier assertion above is the check that has that property. The same warning is
-    // written into tests/helpers/source-scan.mjs:269 `export function jsFilesUnder(root, rel) {`,
+    // written into tests/helpers/source-scan.mjs:305 `export function jsFilesUnder(root, rel) {`,
     // which points back here by name.
     expect(CORPUS_REL.length).toBeGreaterThan(20);
     expect(CORPUS_REL).toContain(LAB_REL);

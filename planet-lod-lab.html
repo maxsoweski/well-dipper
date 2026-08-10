@@ -2298,7 +2298,33 @@
       // ⚠ Object.assign, not a fixed list: `uBandTint` is ABSENT from the pack's map on a solid preset
       // (the lab never reset the tint there either, and zeroing it would be a new behaviour wearing the
       // byte-identity gate's clothes), so a spread copies exactly what the pack decided to emit.
+      // ⛔ S5-M1/S5-M8 — THE MIRROR MUST NOT CLOBBER A GUARDED DRAG. `uBandRough` is a row of
+      // LAB_STATE_BINDING, so the spread below re-derives `state.bandRough` from the pack and
+      // overwrites the dragged value that rebakeE5Bands' touched-flag guard (:1787) had just
+      // deliberately preserved — SILENTLY, and not on the drag itself but on the NEXT applyDrivers,
+      // which ANY other slider triggers (the bandRough slider only sets the touched flag). MEASURED
+      // on lab-procedural-6's 10.63 R⊕ giant: a dragged 1.77 survives :1787 and comes back 1.2171
+      // after the assign. So the guard up there was true and useless without this one.
+      // ⭐ WHY THE FIX IS HERE AND NOT A ROW REMOVED FROM LAB_STATE_BINDING. That table is shared
+      // pack contract — the GAME writes every row of it through writePackUniforms, and it has no
+      // `state`, no sliders and no touched flag. The touched flag is LAB-GUI POLICY, NOT PHYSICS
+      // (:1785-1786 rules exactly this), so the policy exception belongs at the lab's call site.
+      // ⚠ ONLY `bandRough` IS GUARDED, AND THAT IS THE DELIBERATE SCOPE, not an oversight. The other
+      // eight mirrored fields have never been guarded here; guarding them too would be a new
+      // behaviour wearing the byte-identity gate's clothes — the same trap the uBandTint note above
+      // names. `bandRough` is the one field with a SECOND, EARLIER writer that already honours
+      // `_driverTouched`, which is what makes the unguarded mirror a contradiction rather than a
+      // policy. Whether the other eight should honour drags across a reseed is a real question and
+      // an OPEN one; it is not this step's, and it must be argued on its own evidence.
+      // ⛔ The `Object.assign(state, giantDeckLabState(_deck));` CALL SHAPE IS LOAD-BEARING TEXT, so
+      // this is a save/restore rather than a filtered copy: driver-pack-giantdeck.test.js:483 pins
+      // that literal, and lab-surface-ratchet.test.js's bulk arm resolves the nine mirrored field
+      // names by following THAT call through to the binding table. Hoisting the call into a local
+      // and deleting a key would read to the ratchet as a bulk write it cannot name.
+      const _roughDragged = _driverTouched.has('bandRough');
+      const _roughDrag = state.bandRough;
       Object.assign(state, giantDeckLabState(_deck));
+      if (_roughDragged) state.bandRough = _roughDrag;
       // ── F26 latitude weather bands — terrestrial circulation (card F26 §6.5 step 6;
       // derivation HERE per the F11 precedent — core.js untouched). Master gate:
       // weather bands need a SOLID world holding an atmosphere (not-gas AND retained

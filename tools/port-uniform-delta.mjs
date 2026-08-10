@@ -563,7 +563,7 @@ const COLLISIONS = [
   { game: 'planetRadius', lab: 'uBodyRadius', why: 'Different units and different jobs. uBodyRadius is the object-space radius of the mesh the material is bound to (planet-lod-uniforms.js:24 `uBodyRadius`, 1.0 in the lab\'s unit sphere); planetRadius is the body\'s scene radius.' },
   { game: 'uLimbMix', lab: 'uLimbStrength', why: 'Both gate the limb, neither is the other. uLimbMix is the game\'s A/B port dial (a constant); uLimbStrength is the lab\'s driven F34 rim-glow magnitude (planet-lod-uniforms.js:40 `uLimbStrength`).' },
   { game: 'cloudDensity', lab: 'uCloudCoverage', why: 'Same concept, two unrelated laws: a legacy generator draw vs a condition-driven coverage. Aliasing them would put two different quantities in one row.' },
-  { game: '(none)', lab: 'uCratonColor', why: 'LAB-ONLY. surfacePaletteOf returns FOUR endmembers; the game consumes three and DROPS `craton` (planet-lod-lab.html:5434 `uniforms.uCratonColor` writes it, Planet.js has no uniform). Not a spelling gap — a missing consumer, and therefore port work, not map work.' },
+  { game: '(none)', lab: 'uCratonColor', why: 'LAB-ONLY. surfacePaletteOf returns FOUR endmembers; the game consumes three and DROPS `craton` (planet-lod-lab.html:5460 `uniforms.uCratonColor` writes it, Planet.js has no uniform). Not a spelling gap — a missing consumer, and therefore port work, not map work.' },
 ];
 
 // Resolve the watched set. ⛔ makeUniforms() is consulted for KEYS and for a KIND tag only — no

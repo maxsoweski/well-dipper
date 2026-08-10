@@ -24,6 +24,7 @@
 //          ones assigned in bulk by `Object.assign(state, …)` — see THE BULK ARM below
 //   set 2  every `<bag>.uniforms.<name>` MENTIONED anywhere inside `function frame(){`
 //   set 3  every `<bag>.uniforms.<name>` MENTIONED anywhere inside `function applyDrivers(){`
+//   set 4  every FUNCTION NAME CALLED from inside either region, keyed `<region>::<name>`
 //
 // Two different verbs, on purpose. `applyDrivers` is a writer, so an assignment is the event
 // worth catching. `frame()` both reads and writes uniforms — `uniforms.uCraterBakeRestore.value =
@@ -31,8 +32,34 @@
 // and a new feature that only READS a uniform in `frame()` has still been authored down the
 // un-packed path, so mention is the event there.
 //
+// ⭐⭐ SET 4 IS THE HELPER HOP, AND WITHOUT IT ONE FUNCTION DEFEATS THIS WHOLE FILE. Measured
+// 2026-08-10, executed rather than argued. Put
+// `function applyBypassFeature(){ state.__bypassField = 1.0; }` on the line ABOVE
+// `function applyDrivers(){`, and call it as applyDrivers' first statement. The write is now
+// OUTSIDE both watched regions, so set 1 sees nothing; it touches no uniform, so sets 2 and 3 see
+// nothing. The suite stayed 25/25 GREEN. A brand-new, un-packed feature, wired into the driver path
+// on the first line of the function this file is named after, and invisible.
+// ⚠ The 25/25 is executed here and re-executed on every run as CONTROL M. The wider claim that the
+// rest of the repo missed it too came from the sweep that filed this and is NOT reproduced by this
+// file — do not repeat it as if it were measured here.
+//
+// Sets 1-3 watch what the two regions WRITE. Nothing watched what they REACH. Set 4 pins the callee
+// NAMES, which moves the gate onto the indirection itself: the helper may write whatever it likes,
+// but `applyDrivers` cannot start calling it without this file's pinned list moving. `applyStormState`
+// and `rebakeE5Bands` are already called from `applyDrivers` and so cost nothing to pin. CONTROL M is
+// the executed proof, and it asserts the invisibility to sets 1-3 in its own body so the claim above
+// stays a measurement rather than a memory.
+//
+// ⚠ SET 4 HAS A HIGHER LEGITIMATE-ADDITION RATE THAN THE OTHER THREE, AND THAT IS THE DESIGN. Lifting
+// a block of `applyDrivers` into a helper and calling it is a REFACTOR to its author and a bypass to
+// this gate, and the two are the same bytes — no lexical rule separates them, and neither does a
+// non-lexical one. So the extraction reds, with the route out named. That is the intended cost rather
+// than a false positive: the surface really did leave the watched region, and the pinned line is
+// where somebody says so out loud. CONTROL N is the matching proof that a callee LEAVING stays green,
+// so this is still a ratchet and not a freeze.
+//
 // ⭐⭐ THE BULK ARM, AND WHY THE OBVIOUS VERSION OF IT IS WORSE THAN NOTHING. Set 1 was a lexical
-// scan for `state.<field> =`, and Step 5 put planet-lod-lab.html:2301
+// scan for `state.<field> =`, and Step 5 put planet-lod-lab.html:2326
 // `Object.assign(state, giantDeckLabState(_deck));` inside the very function it watches. That one
 // line writes NINE fields, and the scan could see none of them. Worse, Step 5c deleted the eight
 // direct `state.band*/state.jet* =` lines the bulk write replaced, so the ratchet observed a
@@ -78,6 +105,12 @@
 //      ⚠ The residual is bounded but NOT zero. The storm family's uniforms are assembled in
 //      `frame()`, so a new storm uniform still trips set 2; the six E5 band uniforms are the
 //      genuinely uncovered class, and a seventh added beside them trips nothing.
+//      ⚠ SET 4 CHANGED THE EDGE OF THIS LIMIT WITHOUT CLOSING IT, and the distinction is the whole
+//      point of the number above. Both functions are CALLED from `applyDrivers`, so both names are
+//      pinned in set 4 as of 2026-08-10: the call cannot silently disappear, be renamed, or be joined
+//      by a THIRD driver function without this file reddening. Their BODIES are still unwatched, and
+//      27 state fields + 6 uniforms is exactly what that costs. Pinning the door is not watching the
+//      room.
 //   2. The scan is lexical. A uniform reached through a computed name — `uniforms['u' + k]` — is
 //      invisible to it. `grep -cE "uniforms\s*\["` over planet-lod-lab.html returns 0, so this is
 //      not an idiom of this file, and under §11.9 that makes it a recorded limit and not a
@@ -88,7 +121,11 @@
 //      ⛔ BUT THE `state` HALF IS *NOT* CLOSED, AND THIS BLOCK CLAIMED IT WAS UNTIL 2026-08-09.
 //      Three shapes write a NEW top-level `state` field inside `applyDrivers` and are invisible to
 //      every arm here — verified by execution, each one injected for real and the suite stayed
-//      25/25 GREEN with no throw:
+//      25/25 GREEN with no throw. RE-RUN 2026-08-10 against set 4, because a fourth set is exactly
+//      the kind of change that quietly makes a limit stale: all three still pass, now 31/31. Set 4
+//      does not touch them and could not — each one is an in-region WRITE with no call in it (`(c)`
+//      reaches `Object.entries(`, which is a method call and outside set 4 by KNOWN LIMIT 4). The
+//      shapes:
 //        (a) computed index — `state['newField'] = 1`, or a template/variable key;
 //        (b) destructuring — `({ x: state.newField } = src)` and the array form;
 //        (c) a pack-shaped loop mirror written DIRECTLY here rather than in a helper:
@@ -105,6 +142,22 @@
 //      (`could not locate …`). That is deliberate: the cost of a missing hop is a red build with a
 //      named cause, and the cost of guessing is a silent zero. Measured today: one hop is enough
 //      for the file's only bulk write. CONTROL L is the executed proof that the loudness is real.
+//   4. Set 4 counts BARE calls — `helper(…)` — and NOT method calls, `obj.helper(…)`. Measured
+//      2026-08-10: every dotted call inside the two regions is a builtin. In `applyDrivers`:
+//      Math.{acos,atan2,cos,imul,log10,max,min,pow,round,sin}, Object.assign, Array#{slice,includes}.
+//      In `frame()`: the same Math family plus THREE's vector/quaternion/colour methods
+//      (applyAxisAngle, applyQuaternion, copy, divideScalar, invert, lookAt, normalize, set, setRGB,
+//      setScalar, worldToLocal) and renderer.{render,setRenderTarget}. Not ONE bespoke driver helper
+//      is reached as a method today, so keying on the receiver would pin `_v3.copy` and `_q.invert` —
+//      names that move whenever a local is renamed — in order to catch a shape this file does not
+//      use. Under §11.9 that makes it a recorded limit rather than a blocker. It becomes a blocker
+//      the day a driver helper is invoked as `<something>.method(…)` from either region, and nothing
+//      here will announce that day.
+//      Also NOT counted: a function DECLARED inside a region but never called — the call is the
+//      event, and an uncalled declaration is dead code. Measured, that exclusion removes exactly two
+//      names, `applyDrivers` and `frame` matching their own header lines, and nothing else. `new
+//      Foo(…)` IS counted; measured zero occurrences in both regions today, so it costs nothing and
+//      catches a bespoke class arriving.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 // RULE VARIANTS — the ±1 in the PLAN, chased down rather than pinned
@@ -115,7 +168,7 @@
 //
 //   frame uniforms — the ±1 REPRODUCES AND IS A SCAN ARTIFACT. Scanning the raw text yields 328
 //   names; stripping comments first yields 327. The extra is `js`, from the substring
-//   "uniforms.js" inside planet-lod-lab.html:4911 `// uDispDomainScale here. It keeps its 1.0 initializer` — the quoted comment goes on to name planet-lod-uniforms.js line 17 as the initializer site, spelled in prose here ON PURPOSE: a line-anchored ref NESTED inside another ref's span parses as its own citation with a garbage tail, which is how this line reached exit 2 the moment Step 6 added this file to CITE_SOURCES.
+//   "uniforms.js" inside planet-lod-lab.html:4937 `// uDispDomainScale here. It keeps its 1.0 initializer` — the quoted comment goes on to name planet-lod-uniforms.js line 17 as the initializer site, spelled in prose here ON PURPOSE: a line-anchored ref NESTED inside another ref's span parses as its own citation with a garbage tail, which is how this line reached exit 2 the moment Step 6 added this file to CITE_SOURCES.
 //   — a phantom uniform named after a filename. `stripNonCode` removes it. There was never a
 //   real disagreement here, only a scanner reading a comment.
 //
@@ -267,11 +320,33 @@ const STATE_WRITE =
 // `ringCloud.material.uniforms.uTime` and the planet's bare `uniforms.uTime` stay distinct.
 const UNIFORM_TOUCH = /([A-Za-z0-9_$.[\]]*?)\buniforms\s*\.\s*([A-Za-z_$][A-Za-z0-9_$]*)/g;
 
+// A CALL to a bare function name. The leading `[^.\w$]` is what keeps method calls out — `Math.max(`
+// has a `.` before the name (KNOWN LIMIT 4) — and it also stops `foo(` matching inside `barfoo(`.
+// The `function `/`new ` prefix is CAPTURED rather than excluded so the two can be told apart: a
+// declaration is skipped, a construction is kept.
+export const CALLEE = /(?:^|[^.\w$])(function\s+|new\s+)?([A-Za-z_$][A-Za-z0-9_$]*)\s*\(/g;
+
+// Reserved words that are followed by `(` and are not calls. Without this the set fills up with
+// `if`, `for` and `catch` — harmless to the ratchet's logic, but every one of them is a name a
+// legitimate edit can add or remove, which is a gate that reds on control flow. `function` and `new`
+// are handled by CALLEE's own prefix group instead, because their FOLLOWING name is the interesting
+// part. `return (` / `typeof (` are here for the parenthesised-expression form.
+const NOT_A_CALLEE = new Set([
+  'if', 'for', 'while', 'switch', 'catch', 'return', 'typeof', 'new', 'delete', 'void', 'in', 'of',
+  'do', 'else', 'function', 'await', 'yield', 'case', 'throw', 'instanceof', 'with', 'super',
+  'import', 'export', 'const', 'let', 'var', 'class', 'try', 'finally', 'break', 'continue',
+  'this', 'null', 'true', 'false', 'undefined',
+]);
+
+// One CALLEE match -> the called name, or null when the match is not a call.
+export const calleeName = (m) =>
+  (m[1] && m[1][0] === 'f') || NOT_A_CALLEE.has(m[2]) ? null : m[2];
+
 // ─────────────────────────────────────────────────────────────────────────────
 // THE `Object.assign(state, X)` ARM — the blind spot Step 5 opened, closed
 // ─────────────────────────────────────────────────────────────────────────────
 // ⛔ WHY THE OBVIOUS FIX IS THE WRONG ONE. `STATE_WRITE` measures the SET of `state.<field>` names
-// assigned by lexical scan. planet-lod-lab.html:2301 `Object.assign(state, giantDeckLabState(_deck));`
+// assigned by lexical scan. planet-lod-lab.html:2326 `Object.assign(state, giantDeckLabState(_deck));`
 // writes NINE fields that the scan cannot see, and — because Step 5c simultaneously deleted the nine
 // direct `state.band*/state.jet* =` lines it replaced — the ratchet read that as a SHRINK and stayed
 // green while nine authoring sites moved out of its view and one BRAND NEW field, `bandRough`,
@@ -515,6 +590,7 @@ export function measureLabSurface(src, opts = {}) {
   const st = new Set();
   const un = new Set();
   const adUn = new Set();
+  const cal = new Set();
   const key = (m) => {
     const bag = m[1].replace(/\.$/, '');
     return (bag === '' ? '' : bag + '.') + 'uniforms::' + m[2];
@@ -522,9 +598,11 @@ export function measureLabSurface(src, opts = {}) {
   for (let i = applyDriversExtent[0] - 1; i < applyDriversExtent[1]; i++) {
     for (const m of L[i].matchAll(STATE_WRITE)) st.add(m[1]);
     for (const m of L[i].matchAll(UNIFORM_TOUCH)) adUn.add(key(m));
+    for (const m of L[i].matchAll(CALLEE)) { const c = calleeName(m); if (c) cal.add('applyDrivers::' + c); }
   }
   for (let i = frameExtent[0] - 1; i < frameExtent[1]; i++) {
     for (const m of L[i].matchAll(UNIFORM_TOUCH)) un.add(key(m));
+    for (const m of L[i].matchAll(CALLEE)) { const c = calleeName(m); if (c) cal.add('frame::' + c); }
   }
   // The bulk arm runs over the region TEXT, not line by line: an `Object.assign(` call may wrap,
   // and a line-at-a-time scan of a multi-line call is its own silent zero.
@@ -543,6 +621,10 @@ export function measureLabSurface(src, opts = {}) {
     stateFields: [...st].sort(),
     frameUniforms: [...un].sort(),
     applyDriversUniforms: [...adUn].sort(),
+    // Set 4 — the helper hop. Region-qualified for the same reason set 2's entries are bag-qualified:
+    // a helper that `frame()` starts calling is a new authoring site even when `applyDrivers` has
+    // called it for months, and a name-only set would merge the two and miss it.
+    callees: [...cal].sort(),
     // Reported separately so liveness can prove the arm CONTRIBUTED. If this silently drops to
     // empty, set 1 shrinks and a shrink-only ratchet calls that GREEN — which is the failure.
     bulkStateFields: [...bulk].sort(),
@@ -563,14 +645,71 @@ export function ratchetDiff(baseline, measured) {
   };
 }
 
-const growthMessage = (what, added) =>
+const growthMessage = (what, added, opts = {}) =>
   `${what} GREW by ${added.length}: ${added.join(', ')}\n\n` +
-  `A new ${what} means a feature was authored inside applyDrivers()/frame() — the path this ` +
-  `ratchet exists to close. Read ${AUTHORING_DOC} and author it as a driver pack instead. If the ` +
-  `addition is genuinely correct, add the entry to tests/fixtures/lab-surface-baseline.mjs IN ` +
-  `THE SAME COMMIT, with a one-line reason. Silence is not one of the options.`;
+  (opts.why ||
+    `A new ${what} means a feature was authored inside applyDrivers()/frame() — the path this ` +
+    `ratchet exists to close. `) +
+  `Read ${AUTHORING_DOC} and author it as a driver pack instead. If the addition is genuinely ` +
+  `correct, add the entry to ${opts.where || 'tests/fixtures/lab-surface-baseline.mjs'} IN THE SAME ` +
+  `COMMIT, with a one-line reason. Silence is not one of the options.`;
 
 const read = () => readFileSync(LAB_SRC, 'utf8');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SET 4's BASELINE — pinned HERE, and the other three are not
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚠ Sets 1-3 live in tests/fixtures/lab-surface-baseline.mjs. This one does not, and the honest
+// reason is mechanical rather than principled: set 4 landed while that fixture was owned by another
+// concurrent lane, and a pinned list is worthless if two lanes re-bless it at once. It belongs beside
+// the other three. MOVE IT THERE — with `CALLEES_MEASURED_AT` and both floors — in the next commit
+// that re-blesses the fixture for its own reasons, and delete this paragraph with it.
+//
+// The entry shape is `<region>::<name>`, where region is `applyDrivers` or `frame`.
+const CALLEES_MEASURED_AT = { commit: 'c9d7ffb', date: '2026-08-10', count: 28 };
+
+const APPLY_DRIVERS_AND_FRAME_CALLEES = [
+  'applyDrivers::_clamp01',
+  'applyDrivers::_ss',
+  'applyDrivers::applyArchetypeFilter',
+  'applyDrivers::applyStormState',        // ⭐ driver function #3 — see KNOWN LIMIT 1
+  'applyDrivers::atmosphereOpticsOf',
+  'applyDrivers::deriveConditionVector',
+  'applyDrivers::deriveUniforms',
+  'applyDrivers::drawPresetConditions',
+  'applyDrivers::drawPresetRadius',
+  'applyDrivers::drawPresetRotation',
+  'applyDrivers::giantDeckLabState',      // the pack hop the Object.assign arm resolves
+  'applyDrivers::rebakeE5Bands',          // ⭐ driver function #4 — see KNOWN LIMIT 1
+  'applyDrivers::relevantFeatureSet',
+  'applyDrivers::resetDriverOverrides',
+  'applyDrivers::riverRerouteDebounced',
+  'applyDrivers::syncDisplays',
+  'frame::_stormDeckZ',
+  'frame::animationRateFactor',
+  'frame::autoOctaves',
+  'frame::bakeReliefCrossover',
+  'frame::featureFrequencyFromKm',
+  'frame::holdApparentDistance',
+  'frame::lodHysteresis',
+  'frame::lodRampOf',
+  'frame::minCameraDistance',
+  'frame::reliefEnvelope',
+  'frame::requestAnimationFrame',
+  'frame::visScaleOf',
+];
+
+// Floors, per region, for the same reason the other three sets have them: the empty set is a subset
+// of every set, so a regex that stops matching reports GREEN forever. PER REGION rather than in
+// total, because a total of 28 is satisfied by one region going dark while the other grows.
+//
+// ⛔ NO NAMED SENTINELS HERE, and that is the bulk arm's lesson applied rather than a preference.
+// The obvious picks — `applyStormState`, `rebakeE5Bands` — are exactly the calls PLAN Step 5c is
+// expected to rewrite, and a sentinel the next step legitimately removes is a gate that gets relaxed
+// the first time it fires. See the BULK_STATE_SENTINELS note in the fixture for the measured version
+// of this mistake. The floors and the both-regions-represented check below name nothing.
+const MIN_CALLEES_APPLY_DRIVERS = 8;   // measured 16
+const MIN_CALLEES_FRAME = 6;           // measured 12
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('harness liveness — the ratchet is measuring something', () => {
@@ -629,11 +768,28 @@ describe('harness liveness — the ratchet is measuring something', () => {
     expect(onlyInApplyDrivers.length).toBeGreaterThan(0);
   });
 
+  it('set 4 is alive in BOTH regions, and the declaration filter has not eaten it', () => {
+    const ad = m.callees.filter((c) => c.startsWith('applyDrivers::'));
+    const fr = m.callees.filter((c) => c.startsWith('frame::'));
+    expect(ad.length).toBeGreaterThanOrEqual(MIN_CALLEES_APPLY_DRIVERS);
+    expect(fr.length).toBeGreaterThanOrEqual(MIN_CALLEES_FRAME);
+    // No third prefix: if the key ever drifts, the two filters stop summing to the whole and this
+    // catches it before the ratchet starts diffing entries against a differently-shaped baseline.
+    expect(ad.length + fr.length).toBe(m.callees.length);
+    // The declaration filter is the one piece of set 4 that can fail SILENTLY-ish: if it inverts, the
+    // set grows by two and the ratchet reds loudly; if it over-matches, calls start disappearing and
+    // the set SHRINKS, which a shrink-only ratchet calls GREEN. Both header names must be absent —
+    // each function's own `function X(){` line sits inside its own measured region.
+    expect(m.callees).not.toContain('applyDrivers::applyDrivers');
+    expect(m.callees).not.toContain('frame::frame');
+  });
+
   it('is deterministic — two passes over the same bytes agree exactly', () => {
     const a = measureLabSurface(read());
     const b = measureLabSurface(read());
     expect(a.stateFields).toEqual(b.stateFields);
     expect(a.frameUniforms).toEqual(b.frameUniforms);
+    expect(a.callees).toEqual(b.callees);
   });
 
   it('the qualified-bag arm is alive — uTime is counted twice, in two different bags', () => {
@@ -645,7 +801,7 @@ describe('harness liveness — the ratchet is measuring something', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('the ratchet — neither set may grow', () => {
+describe('the ratchet — no set may grow', () => {
   const m = measureLabSurface(read());
 
   it('applyDrivers writes no state field that is not in the baseline', () => {
@@ -672,6 +828,20 @@ describe('the ratchet — neither set may grow', () => {
     }
     expect(added, growthMessage('applyDrivers direct uniform', added)).toEqual([]);
   });
+
+  it('neither region calls a function that is not in the baseline', () => {
+    const { added, removed } = ratchetDiff(APPLY_DRIVERS_AND_FRAME_CALLEES, m.callees);
+    if (removed.length) {
+      console.log(`[ratchet] applyDrivers/frame shed ${removed.length} callee(s) since ${CALLEES_MEASURED_AT.commit}: ${removed.join(', ')}`);
+    }
+    expect(added, growthMessage('applyDrivers()/frame() callee', added, {
+      why:
+        'A new callee means a feature was reached FROM applyDrivers()/frame() — the same un-packed ' +
+        'authoring path as a direct write, one indirection further out, and invisible to the other ' +
+        'three sets because the helper body sits outside both watched regions. ',
+      where: 'APPLY_DRIVERS_AND_FRAME_CALLEES in tests/lab-surface-ratchet.test.js',
+    })).toEqual([]);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -693,6 +863,16 @@ describe('controls — the states in which this ratchet fails', () => {
   const injectIntoFrame = (line) => {
     const L = src.split('\n');
     L.splice(m.frameExtent[0], 0, line);
+    return L.join('\n');
+  };
+
+  // The helper-hop shape, spliced in two places at once: the definition on the line ABOVE the
+  // `function applyDrivers(){` header — outside every watched region — and the call as the first
+  // statement inside. This is the mutation that stayed 25/25 GREEN before set 4 existed.
+  const injectHelperHop = (defLine, callLine) => {
+    const L = src.split('\n');
+    L.splice(m.applyDriversExtent[0], 0, callLine);       // first statement inside the body
+    L.splice(m.applyDriversExtent[0] - 1, 0, defLine);    // …and the definition just above the header
     return L.join('\n');
   };
 
@@ -778,16 +958,106 @@ describe('controls — the states in which this ratchet fails', () => {
     expect(ratchetDiff(m.frameUniforms, mutated.frameUniforms).added).toEqual([]);
   });
 
+  // ── Set 4's own controls — the helper hop ──────────────────────────────────────────────────────
+
+  it('CONTROL M — a HELPER HOP out of applyDrivers REDS, and it reds on set 4 ALONE', () => {
+    // ⭐ THE DEFECT, REPRODUCED AND CLOSED IN ONE BODY. Before set 4 this exact mutation left the
+    // suite 25/25 GREEN: one new function, defined one line above the header, called on the first
+    // line of the body, writing a brand-new `state` field that no set could see.
+    const mutated = measureLabSurface(injectHelperHop(
+      '    function applyBypassFeature(){ state.__bypassField = 1.0; }',
+      '      applyBypassFeature();',
+    ));
+    // First the half that is still true: sets 1-3 see NOTHING. If any of these three ever starts
+    // catching it, this control's premise has changed and the reasoning above needs re-reading —
+    // it does not become a pass-by-accident.
+    expect(ratchetDiff(m.stateFields, mutated.stateFields).added).toEqual([]);
+    expect(ratchetDiff(m.frameUniforms, mutated.frameUniforms).added).toEqual([]);
+    expect(ratchetDiff(m.applyDriversUniforms, mutated.applyDriversUniforms).added).toEqual([]);
+    // …and the field really did land outside every watched region, which is what makes those three
+    // greens evidence rather than an artifact of a mutation that did nothing.
+    expect(mutated.stateFields).not.toContain('__bypassField');
+    // Then the half set 4 adds — against the CURRENT measurement and against the COMMITTED list,
+    // which is the shape a real commit would take.
+    expect(ratchetDiff(m.callees, mutated.callees).added).toEqual(['applyDrivers::applyBypassFeature']);
+    expect(ratchetDiff(APPLY_DRIVERS_AND_FRAME_CALLEES, mutated.callees).added)
+      .toEqual(['applyDrivers::applyBypassFeature']);
+  });
+
+  it("CONTROL M′ — the unmutated source is GREEN on set 4, so CONTROL M's red is the hop", () => {
+    // The restore half. Same harness, same committed list, unmutated bytes.
+    expect(ratchetDiff(APPLY_DRIVERS_AND_FRAME_CALLEES, measureLabSurface(src).callees).added).toEqual([]);
+  });
+
+  // ⭐ LOCATED, NOT NAMED — CONTROL C's and CONTROL G's argument, applied a third time. A control
+  // keyed on `syncDisplays()` turns red the day Step 5 stops calling it, failing for the wrong
+  // reason. This finds the first callee in `applyDrivers` that occurs EXACTLY ONCE in the region and
+  // whose one occurrence is a whole statement on its own line, so deleting that line is brace-safe.
+  // Asserted found, so a restructured body is a loud failure of the CONTROL rather than a no-op.
+  const soloStatementCall = (() => {
+    const CL = stripNonCode(src).split('\n');   // stripped: a call inside a comment is not a call
+    const seen = new Map();
+    for (let i = m.applyDriversExtent[0] - 1; i < m.applyDriversExtent[1]; i++) {
+      for (const mm of CL[i].matchAll(CALLEE)) {
+        const c = calleeName(mm);
+        if (!c) continue;
+        if (!seen.has(c)) seen.set(c, []);
+        seen.get(c).push(i);
+      }
+    }
+    for (const [name, idxs] of seen) {
+      if (idxs.length !== 1) continue;
+      if (!new RegExp(`^\\s*${name}\\s*\\([^;]*\\)\\s*;\\s*$`).test(CL[idxs[0]])) continue;
+      return { name, idx: idxs[0] };
+    }
+    return null;
+  })();
+
+  it('CONTROL N — a callee LEAVING stays GREEN: this is a ratchet, not a freeze', () => {
+    // Set 4 reds on a helper EXTRACTION, which is a shape a legitimate refactor also takes (see the
+    // header). That makes this control load-bearing rather than symmetrical decoration: if the set
+    // also red when a call went away, the first legitimate inlining would delete this file.
+    expect(soloStatementCall, 'no single-occurrence standalone `helper(…);` statement found in applyDrivers — relocate this control, do not delete it').not.toBeNull();
+    const L = src.split('\n');
+    const kept = L.filter((_, i) => i !== soloStatementCall.idx);
+    expect(kept.length).toBe(L.length - 1);   // the line really was found and dropped
+    const shrunk = measureLabSurface(kept.join('\n'));
+    const { added, removed } = ratchetDiff(m.callees, shrunk.callees);
+    expect(removed).toEqual([`applyDrivers::${soloStatementCall.name}`]);   // the shrink really happened
+    expect(added).toEqual([]);                                             // and it is GREEN
+  });
+
+  it('CONTROL O — a COUNT-PRESERVING callee RENAME REDS (the Step 4 scar, on set 4)', () => {
+    // CONTROL D's argument applied to the fourth set. Renaming the helper holds the count at 28 —
+    // any count-based gate is green — while the call now reaches somewhere new.
+    const L = src.split('\n');
+    const line = L[soloStatementCall.idx];
+    const renamed = line.replace(
+      new RegExp(`\\b${soloStatementCall.name}\\s*\\(`),
+      `__renamed_${soloStatementCall.name}(`,
+    );
+    expect(renamed).not.toBe(line);   // the permutation really was applied
+    L[soloStatementCall.idx] = renamed;
+    const perm = measureLabSurface(L.join('\n'));
+    expect(perm.callees.length).toBe(m.callees.length);   // ⛔ a count gate sees NOTHING
+    const { added, removed } = ratchetDiff(m.callees, perm.callees);
+    expect(added).toEqual([`applyDrivers::__renamed_${soloStatementCall.name}`]);   // ✓ membership sees it
+    expect(removed).toEqual([`applyDrivers::${soloStatementCall.name}`]);
+  });
+
   it('CONTROL E — a dead harness cannot pass: an empty measurement fails liveness', () => {
     // The failure this whole file is most exposed to. Growth-only assertions are all GREEN here.
-    const empty = { stateFields: [], frameUniforms: [], applyDriversUniforms: [] };
+    const empty = { stateFields: [], frameUniforms: [], applyDriversUniforms: [], callees: [] };
     expect(ratchetDiff(APPLY_DRIVERS_STATE_FIELDS, empty.stateFields).added).toEqual([]);
     expect(ratchetDiff(FRAME_UNIFORMS, empty.frameUniforms).added).toEqual([]);
     expect(ratchetDiff(APPLY_DRIVERS_UNIFORMS, empty.applyDriversUniforms).added).toEqual([]);
+    expect(ratchetDiff(APPLY_DRIVERS_AND_FRAME_CALLEES, empty.callees).added).toEqual([]);
     // …and the liveness floor is what refuses it.
     expect(empty.stateFields.length).toBeLessThan(MIN_STATE_FIELDS);
     expect(empty.frameUniforms.length).toBeLessThan(MIN_FRAME_UNIFORMS);
     expect(empty.applyDriversUniforms.length).toBeLessThan(MIN_APPLY_DRIVERS_UNIFORMS);
+    expect(empty.callees.filter((c) => c.startsWith('applyDrivers::')).length).toBeLessThan(MIN_CALLEES_APPLY_DRIVERS);
+    expect(empty.callees.filter((c) => c.startsWith('frame::')).length).toBeLessThan(MIN_CALLEES_FRAME);
     // A renamed function must throw rather than measure nothing.
     expect(() => measureLabSurface(src.replace('function applyDrivers(){', 'function applyDriversV2(){')))
       .toThrow(/could not locate/);

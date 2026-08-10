@@ -730,28 +730,74 @@ describe('the mount-site fence — what does this gate NOT see that this commit 
   // `includes()` counts it as a mount site, which is the DEAD-COMMENT-TEXT failure
   // tests/helpers/source-scan.mjs was promoted to end. Measured: without the strip this fence
   // names three files and one of them compiles nothing.
-  const liveCallers = (token) => SRC_FILES
-    .filter((f) => f !== 'src/rendering/LabPlanetMaterial.js')   // it DEFINES the builder
-    .filter((f) => stripCommentsPreservingOffsets(read(f)).includes(token));
+  // ⛔ SCAN EVERY NAME THAT REACHES THE BUILDER, NOT JUST THE BUILDER'S OWN. This fence was blind for
+  // exactly one commit, and the shape of the blindness is worth keeping written down because it is
+  // the generic failure of any token fence that excludes the defining file. `liveCallers` skips
+  // `src/rendering/LabPlanetMaterial.js` because it DEFINES `buildLabPlanetMaterial` — but that same
+  // excluded file also defines `buildLabProbeMaterial`, a one-line alias that returns
+  // `buildLabPlanetMaterial().material`. So `src/rendering/ShaderWarmup.js`, which mounts a GENUINE
+  // lab material at every boot through the alias, matched no token and the fence sat green.
+  // MEASURED: at the commit before this one, dropping a brand-new `src/` file whose whole body is
+  // `buildLabProbeMaterial()` left this suite 53/53 GREEN. With the union below it REDS on that file.
+  // A new alias is therefore a new entry HERE, not a silent hole — see the ALIAS CLOSURE gate.
+  const MOUNT_TOKENS = ['buildLabPlanetMaterial(', 'buildLabProbeMaterial('];
+
+  const liveCallers = (tokens = MOUNT_TOKENS) => SRC_FILES
+    .filter((f) => f !== 'src/rendering/LabPlanetMaterial.js')   // it DEFINES the builder AND its aliases
+    .filter((f) => {
+      const src = stripCommentsPreservingOffsets(read(f));
+      return tokens.some((t) => src.includes(t));
+    });
 
   // The SET, with each entry's role, pinned by PATH. A new entry is a red, and the red is the
-  // point — but the red is ALSO a coordination cost, so the two additions that are already known to
-  // be coming are named here rather than left to surprise someone:
-  //   · `src/rendering/ShaderWarmup.js` — PLAN 6c pre-warms the 363 KB lab program, and
-  //     ShaderWarmup.js:93 already carries `buildLabPlanetMaterial().material` IN A COMMENT
-  //     describing a `buildLabProbeMaterial` that does not exist yet. When it does, add the path.
+  // point — but the red is ALSO a coordination cost, so the addition that is already known to be
+  // coming is named here rather than left to surprise someone:
   //   · `src/rendering/objects/BodyRenderer.js` — PLAN Step 10's moon branch.
-  // Both are legitimate. Neither may arrive without someone editing this line.
+  // Legitimate. It may not arrive without someone editing this line.
   const EXPECTED_MOUNT_SITES = [
     'src/main.js',            // _lab.tryLabShader — the Instrument E harness. Swaps at RUNTIME on
                               // an already-built body, refuses a body that already carries the lab
                               // material, and is driven by hand. Not the pipeline.
     'src/objects/Planet.js',  // THE PIPELINE. Selects at material-CREATION time, behind the 6e flag
                               // and the 6d provenance test.
+    'src/rendering/ShaderWarmup.js',  // PLAN 6c's WARM-UP PROBE, reached via `buildLabProbeMaterial`.
+                              // Mounts no body: it builds the real material once at boot so the
+                              // driver links the 363 KB program off the title screen instead of on
+                              // first approach. It is a mount site all the same — it is the same
+                              // material by construction (`buildLabPlanetMaterial().material`, no
+                              // second expression of the shader), so anything that changes what the
+                              // builder returns changes what boots.
   ];
 
   it('the set of files that mount the lab material is exactly the expected one, by PATH', () => {
-    expect(liveCallers('buildLabPlanetMaterial(').sort()).toEqual(EXPECTED_MOUNT_SITES);
+    expect(liveCallers().sort()).toEqual(EXPECTED_MOUNT_SITES);
+  });
+
+  it('ALIAS CLOSURE — every export that reaches the builder is in MOUNT_TOKENS', () => {
+    // The gate above is only as wide as this token list, and the token list is hand-maintained. So
+    // pin the thing that would silently widen the gap: an export of LabPlanetMaterial.js whose body
+    // calls the builder is a name a caller can mount through. If a second alias lands, this REDS and
+    // the next author adds it to MOUNT_TOKENS instead of discovering the hole a commit later.
+    const def = stripCommentsPreservingOffsets(read('src/rendering/LabPlanetMaterial.js'));
+    const reaching = [];
+    const re = /export function (\w+)\s*\([^)]*\)\s*\{/g;
+    for (let m; (m = re.exec(def)); ) {
+      const body = def.slice(m.index, def.indexOf('\n}', m.index) + 2);
+      if (/buildLabPlanetMaterial\(/.test(body) || m[1] === 'buildLabPlanetMaterial') reaching.push(m[1]);
+    }
+    expect(reaching.length).toBeGreaterThan(1);           // non-vacuous: the alias really is there
+    expect(reaching).toContain('buildLabProbeMaterial');
+    for (const name of reaching) expect(MOUNT_TOKENS).toContain(`${name}(`);
+  });
+
+  it('CONTROL — the union REDS on an alias-only caller that the single-token scan misses', () => {
+    // SYNTHETIC corpus, per the note on the comment-strip control below: the property under test is
+    // the SCANNER's, so pinning it to a real file would tripwire another lane's edits.
+    const aliasOnly = 'import { buildLabProbeMaterial } from "./LabPlanetMaterial.js";\n'
+      + 'export const warm = () => buildLabProbeMaterial();\n';
+    const scan = (tokens) => tokens.some((t) => stripCommentsPreservingOffsets(aliasOnly).includes(t));
+    expect(scan(['buildLabPlanetMaterial('])).toBe(false);   // ← the blindness, reproduced
+    expect(scan(MOUNT_TOKENS)).toBe(true);                   // ← and closed
   });
 
   it('CONTROL — the comment strip changes the answer, on a corpus this file owns', () => {
@@ -775,8 +821,8 @@ describe('the mount-site fence — what does this gate NOT see that this commit 
     // tree at any given moment and not something this lane may pin.
     const raw = SRC_FILES
       .filter((f) => f !== 'src/rendering/LabPlanetMaterial.js')
-      .filter((f) => read(f).includes('buildLabPlanetMaterial('));
-    for (const f of liveCallers('buildLabPlanetMaterial(')) expect(raw).toContain(f);
+      .filter((f) => MOUNT_TOKENS.some((t) => read(f).includes(t)));
+    for (const f of liveCallers()) expect(raw).toContain(f);
   });
 
   it('the PIPELINE mount runs the admission test in the same function', () => {

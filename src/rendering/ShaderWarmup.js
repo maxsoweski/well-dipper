@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { planetShaderSource } from '../objects/Planet.js';
+import { planetShaderSource, labGasBodiesFlag } from '../objects/Planet.js';
 import { buildLabProbeMaterial, labShaderSource, ensureLabAttributes } from './LabPlanetMaterial.js';
 
 /**
@@ -7,7 +7,8 @@ import { buildLabProbeMaterial, labShaderSource, ensureLabAttributes } from './L
  *
  * ── Why this exists ──────────────────────────────────────────────────────────────────────────────
  * The first time the game draws a planet it pays the cold link cost of that planet's program on the
- * main thread, inside the draw call. Measured cold, cache-busted, on an RTX 5080 / ANGLE / D3D11:
+ * main thread, inside the draw call. Measured cold, cache-busted, on an RTX 5080 / ANGLE / D3D11 —
+ * the three GAME programs:
  *
  *     GAS      576 ms
  *     EXOTIC 1 677 ms
@@ -15,9 +16,19 @@ import { buildLabProbeMaterial, labShaderSource, ensureLabAttributes } from './L
  *     ───────────────
  *     total  4 076 ms
  *
- * Every planet in the game renders one of exactly these three programs — 18 planet TYPES collapse
- * to 3 because the type only chooses which fragment BODY is concatenated onto the shared header, and
- * three caches programs by shader SOURCE. So warming three programs warms the whole game, once.
+ * Every planet the LEGACY path renders runs one of exactly those three programs — 18 planet TYPES
+ * collapse to 3 because the type only chooses which fragment BODY is concatenated onto the shared
+ * header, and three caches programs by shader SOURCE. So warming three programs warms the whole
+ * legacy planet population, once.
+ *
+ * ⭐ THERE IS A FOURTH VARIANT AND IT IS NOT ONE OF THOSE THREE. `lab` (PLAN §4 Step 6c) is the lab
+ * planet material's own program — MEASURED 366,262 fragment bytes / 356 uniforms, and 29.8 s cold —
+ * and it is drawn only when the Step-6e flag `wd.labGasBodies` is ON, which it is not by default
+ * (`LAB_GAS_BODIES_DEFAULT === false`). `WARMUP_VARIANTS` and `VARIANT_ORDER` therefore carry FOUR
+ * entries, while the DEFAULT warm set is the flag-gated subset `resolveWarmVariants` returns — read
+ * it for why a ~30 s driver link must not be started for a program the boot has already decided
+ * nothing in the session will draw. ⚠ Unqualified counts in this file mean the GAME trio; anything
+ * covering all four says so.
  *
  * The warp arrival path already gates on `compileAsync` (main.js, "AC9") — it buries the cost inside
  * the tunnel. But the cost is still paid, and it still extends the cruise via HYPER's load-adaptive
@@ -36,8 +47,11 @@ import { buildLabProbeMaterial, labShaderSource, ensureLabAttributes } from './L
  * 1. ⛔ THE WARM MATERIALS MUST STAY ALIVE. three refcounts programs per material and destroys the
  *    program when the last material referencing it is disposed. Dispose the warm-up material and
  *    you hand the program straight back — the real planet then links it again, cold. They are kept
- *    in `_keepAlive` for the lifetime of the page. Three tiny materials; the cost is a rounding
- *    error against 4 s.
+ *    in `_keepAlive` for the lifetime of the page. Three tiny game materials; the cost is a rounding
+ *    error against 4 s. ⚠ When the 6e flag admits `lab`, a FOURTH material is retained and it is not
+ *    tiny — 356 uniforms and six placeholder textures. Retained anyway, because re-linking it costs
+ *    a measured 29.8 s; that is the trade, and it is the reason the default set is gated at all
+ *    rather than the retention being made conditional after the fact.
  *
  * 2. ⛔ THE RENDER TARGET MUST MATCH THE ONE THE REAL DRAW USES. The program cache key bakes in
  *    `toneMapping` and `outputColorSpace`, and BOTH are read from the currently-bound target
@@ -65,7 +79,8 @@ let _warmPromise = null;
  *
  * ⛔ WHAT LINE `if (!PLANET_SHADER_VARIANTS[key]) continue;` DID. The loop below used to resolve
  * every requested variant against `PLANET_SHADER_VARIANTS`, the GAME's three-entry table, and skip
- * anything absent from it — silently, with `continue`. The lab's 363,566-byte fragment shader is not
+ * anything absent from it — silently, with `continue`. The lab's fragment shader (363,566 bytes when
+ * the plan recorded it; 366,262 measured today via `labShaderSource().fragmentShader.length`) is not
  * in that table and cannot be (it is built in this repo's other renderer), so it was never a
  * candidate for pre-warming at all. Measured by the plan of record at **29.8 s cold / 46.6 ms warm**.
  * On a warp arrival that cost is paid where the player is looking: `compileAsync` overruns HYPER's
@@ -100,7 +115,69 @@ export const WARMUP_VARIANTS = {
 // the order they are handed over, and the lab program is roughly 7x the wall-clock of all three game
 // programs combined. Kicking it off first would put the three programs EVERY arrival needs behind a
 // 30 s job on a title screen the player may dismiss in two.
-const VARIANT_ORDER = ['gas', 'rocky', 'exotic', 'lab'];
+export const VARIANT_ORDER = ['gas', 'rocky', 'exotic', 'lab'];
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ * S6-M2 / S6-M9 — THE DEFAULT WARM SET IS FLAG-GATED, AND THE REPORT SAYS WHY.
+ *
+ * ⛔ WHAT WAS WRONG. `_warmPlanetPrograms` defaulted `variants` to the whole of `VARIANT_ORDER`, and
+ * main.js's title-screen call site passes no `variants` at all. So EVERY boot built and linked the
+ * lab material — MEASURED at 366,262 fragment bytes and 356 uniforms, `isLabPlanetMaterial()` true —
+ * while `LAB_GAS_BODIES_DEFAULT` is `false` and nothing in the session could ever draw it. That is
+ * note 1's keep-alive pinning six placeholder textures for the life of the page, plus a ~30 s driver
+ * link queued on the title screen that the player's first arrival can still end up waiting behind.
+ *
+ * ⛔ WHY READING THE FLAG HERE, AT WARM TIME, IS THE RIGHT READ AND NOT A RACE. Both explicit
+ * sources `labGasBodiesFlag` consults are settled before this runs: `localStorage['wd.labGasBodies']`
+ * is set before boot and survives the reload that IS the 6e OFF frame, and `window.__wdLabGasBodies`
+ * is set by the harness before the module graph runs. The warm-up runs later still, from the title
+ * screen. There is no window between this read and the first planet draw that a page reload — the
+ * only way the 6e flag is flipped — does not already close.
+ *
+ * ⭐ AN EXPLICIT REQUEST IS NEVER GATED. `warmShaders({variants:[...,'lab']})`, the measurement path,
+ * still warms lab with the flag OFF. Only the DEFAULT changes. Gating the explicit form would leave
+ * the measurement path unable to measure the one program it exists to measure.
+ *
+ * ⭐ GATED BY `kind`, NOT BY THE LITERAL `'lab'`. The registry is the one place membership is edited
+ * (see WARMUP_VARIANTS); Step 9's rocky pack material and Step 10's moon material arrive as entries,
+ * and an entry of kind `lab` is gated the day it is added rather than the day someone remembers.
+ *
+ * ⭐ AND THE DECISION IS RECORDED, NOT INFERRED. `report.variantSelection` carries which set ran, who
+ * chose it, what the flag read and WHICH SOURCE answered. "lab is absent because the flag is off" and
+ * "lab is absent because someone deleted the registry entry" are opposite findings that a missing key
+ * alone cannot tell apart — the same unreadability the old `continue` produced.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * @param {object} [opts] — the opts object `warmPlanetPrograms` takes; only `variants` is read.
+ * @returns {{variants: string[], source: 'caller'|'default',
+ *            labGasBodies: {enabled: boolean, source: string},
+ *            omitted: Array<{key: string, reason: string}>}}
+ */
+export function resolveWarmVariants(opts = {}) {
+  // `labGasBodiesEnabled()` is exactly `labGasBodiesFlag().enabled`. The flag form is used because it
+  // additionally reports WHICH of the three sources answered, and that is half of what the record is
+  // for: "off by default" and "explicitly turned off by the harness" read identically otherwise.
+  const flag = labGasBodiesFlag();
+  const labGasBodies = { enabled: flag.enabled, source: flag.source };
+
+  if (Array.isArray(opts.variants)) {
+    return { variants: [...opts.variants], source: 'caller', labGasBodies, omitted: [] };
+  }
+
+  const omitted = [];
+  const variants = VARIANT_ORDER.filter((key) => {
+    if (WARMUP_VARIANTS[key]?.kind !== 'lab') return true;
+    if (flag.enabled) return true;
+    omitted.push({
+      key,
+      reason: `lab gas bodies are OFF (${flag.source}), so no body in this session is drawn by the `
+            + `'${key}' program. Pass variants:['${key}'] to warm it anyway (measurement path).`,
+    });
+    return false;
+  });
+  return { variants, source: 'default', labGasBodies, omitted };
+}
 
 function _gameProbe(variantKey) {
   const variant = planetShaderSource(variantKey);
@@ -112,8 +189,9 @@ function _gameProbe(variantKey) {
 }
 
 // Reported in the warm-up record so a reader can tell WHICH program the wall-clock belongs to
-// (363,566 bytes vs the game's ~100 KB). Read through the source accessor, not by building a
-// material: a byte count that allocates six placeholder textures is a measurement with a side effect.
+// (366,262 bytes vs the game variants' 27,887 / 46,146 / 34,841 — all four measured). Read through
+// the source accessor, not by building a material: a byte count that allocates six placeholder
+// textures is a measurement with a side effect.
 function _labProbeBytes() {
   return labShaderSource().fragmentShader.length;
 }
@@ -145,25 +223,32 @@ export function buildProbeMaterial(variantKey) {
 }
 
 /**
- * Compile the three planet-surface programs off the main thread.
+ * Compile the planet-surface programs off the main thread — by default the FLAG-GATED subset of
+ * `VARIANT_ORDER` that `resolveWarmVariants` returns: the three GAME programs always, plus `lab`
+ * only when the Step-6e flag admits it.
  *
  * Idempotent: the first call owns the work, later calls get the same promise. Never rejects — a
  * failed warm-up must degrade to "the game links it later, as it always did", never to a broken
  * boot. Safe to call before any planet exists; that is the point.
  *
  * One variant per animation frame. compileAsync's synchronous half is small but not free (three
- * assembles and hands over ~100 KB of GLSL per variant), and three of them in one frame is a visible
+ * assembles and hands over that variant's whole GLSL string — measured 27,887 / 46,146 / 34,841
+ * bytes for gas / rocky / exotic, and 366,262 for lab), and doing several in one frame is a visible
  * stutter on the title screen — the exact thing this module exists to remove.
  *
  * @param {THREE.WebGLRenderer} renderer
  * @param {THREE.Camera} camera
  * @param {object} [opts]
  * @param {THREE.WebGLRenderTarget|null} [opts.target] — the target the real draw binds. See note 2.
- * @param {string[]} [opts.variants] — subset of ['gas','rocky','exotic'], for measurement.
+ * @param {string[]} [opts.variants] — an explicit subset of `Object.keys(WARMUP_VARIANTS)`
+ *   (`gas`, `rocky`, `exotic`, `lab`), for measurement. ⭐ An explicit list BYPASSES the 6e flag
+ *   gate, so this is how `lab` is warmed while the flag is OFF.
  * @param {boolean} [opts.force] — re-run even if a warm-up already ran. Measurement only; only
  *   meaningful alongside a changed `window.__shaderCacheBust`, since otherwise the second run
  *   finds the program already linked and reports a few ms of nothing.
- * @returns {Promise<{variants: object, totalMs: number, ok: boolean}>}
+ * @returns {Promise<{variants: object, totalMs: number, ok: boolean, requested: string[],
+ *   warmed: string[], skipped: string[], omitted: Array<{key: string, reason: string}>,
+ *   variantSelection: object}>}
  */
 export function warmPlanetPrograms(renderer, camera, opts = {}) {
   if (_warmPromise && !opts.force) return _warmPromise;
@@ -173,21 +258,26 @@ export function warmPlanetPrograms(renderer, camera, opts = {}) {
 }
 
 async function _warmPlanetPrograms(renderer, camera, opts = {}) {
-  const { target = null, variants = VARIANT_ORDER } = opts;
+  const { target = null } = opts;
+  // ⭐ S6-M2/S6-M9 — the DEFAULT set is flag-gated; an explicit `opts.variants` passes through
+  // untouched. See resolveWarmVariants for why the flag is read here and not at module load.
+  const selection = resolveWarmVariants(opts);
+  const variants = selection.variants;
   const report = { variants: {}, totalMs: 0, ok: true };
   const t0 = performance.now();
 
-  // ── Kick all three off, THEN await ─────────────────────────────────────────────────────────────
-  // Awaiting each variant before starting the next made the total the SUM of the three links
+  // ── Kick them ALL off, THEN await ──────────────────────────────────────────────────────────────
+  // Awaiting each variant before starting the next made the total the SUM of the game trio's links
   // (measured 4 263 ms) instead of roughly the longest one, because the driver only ever had one
   // link in flight. KHR_parallel_shader_compile exists precisely to overlap them. The title screen
   // is not infinite — a player who dismisses it quickly only gets the variants that finished — so
   // the difference between sum and max is a difference in how much of the win actually lands.
   //
   // Still one KICKOFF per animation frame: the synchronous half is small but not free (three
-  // assembles and hands over ~100 KB of GLSL per variant), and three of those in one frame is a
-  // visible title-screen stutter — the exact thing this module exists to remove. Yielding between
-  // kickoffs costs three frames and buys back nothing, because the driver is already working.
+  // assembles and hands over the variant's whole GLSL string — 27,887 / 46,146 / 34,841 bytes for
+  // the game variants, 366,262 for lab), and doing several of those in one frame is a visible
+  // title-screen stutter — the exact thing this module exists to remove. Yielding between kickoffs
+  // costs one frame each and buys back nothing, because the driver is already working.
   const inflight = [];
   for (const key of variants) {
     // ⛔ WAS `if (!PLANET_SHADER_VARIANTS[key]) continue;` — the line PLAN §4 Step 6c names. It
@@ -256,10 +346,17 @@ async function _warmPlanetPrograms(renderer, camera, opts = {}) {
 
   report.totalMs = +(performance.now() - t0).toFixed(1);
   // ⭐ MEMBERSHIP, not just counts (Step 4's scar: a count-preserving permutation passed every
-  // instrument byte-identically). `requested` is what the caller asked for and `warmed` is what a
-  // program actually exists for — a reader comparing them sees a silent skip, which is what the old
-  // `continue` made unreadable.
+  // instrument byte-identically). `requested` is the set that was actually attempted — the caller's
+  // list, or the flag-gated default — and `warmed` is what a program actually exists for; a reader
+  // comparing them sees a silent skip, which is what the old `continue` made unreadable. What the
+  // GATE removed before the loop ever saw it is `variantSelection.omitted`, immediately below.
   report.requested = [...variants];
+  // ⭐ S6-M2/S6-M9 — WHY the set is what it is, not merely what it is. A reader who finds no `lab`
+  // key in `report.variants` reads this and learns whether the 6e flag excluded it (and which source
+  // answered the flag), or whether the registry entry is gone — opposite findings that an absent key
+  // cannot distinguish. `omitted` is the gate's own record; `skipped` below is the unknown-key one.
+  report.variantSelection = selection;
+  report.omitted = selection.omitted;
   report.warmed = Object.keys(report.variants).filter((k) => report.variants[k].ok);
   report.skipped = Object.keys(report.variants).filter((k) => report.variants[k].skipped);
   report.cacheBust = (typeof window !== 'undefined' && window.__shaderCacheBust) || null;
@@ -308,8 +405,34 @@ function _nextFrame() {
  * ⚠ Keyed by mesh OBJECT, deliberately not by index and not by name. Indices shift (PLAN §12 E-2:
  * Step 10 widens the scene-walk prefix and every index moves), and a mesh can outlive the name its
  * parent group carries. A Map — not a WeakMap — because Step 5's swap ledger has to ENUMERATE the
- * swapped population; the entries are deleted on restore and on system teardown, and a stale entry
- * pins one material, not a scene.
+ * swapped population and `_lab.restoreGameMaterial` reports `MATERIAL_SWAPS.size`; a WeakMap offers
+ * neither.
+ *
+ * ⛔ WHAT THIS COMMENT USED TO CLAIM, AND WHAT IS TRUE. It said the entries "are deleted on restore
+ * and on system teardown, and a stale entry pins one material, not a scene". Only the first half was
+ * ever implemented — `restoreMaterialSwap`'s `MATERIAL_SWAPS.delete(mesh)` is the ONLY delete in the
+ * repo, which `grep -rn 'MATERIAL_SWAPS' src/` shows in one screen — and the consequence was
+ * understated on both axes. A strong Map keyed by the mesh pins the MESH, its GEOMETRY and BOTH
+ * materials. `spawnSystem`'s teardown does `scene.remove(entry.planet.mesh)` then `.dispose()`,
+ * which frees the GPU handles but cannot free the JS objects this Map still points at, so one such
+ * carcass accrues per system in which a body was swapped and not restored.
+ *
+ * ⭐ THE SWEEP, and why it lives here rather than in the teardown. `pruneMaterialSwaps()` drops every
+ * entry whose mesh WAS attached to a Scene when it was recorded and is no longer attached to one —
+ * exactly the shape `scene.remove(...)` leaves behind. `recordMaterialSwap` runs it before it
+ * records, which bounds the residue at the entries made since the last swap rather than letting it
+ * grow with the session. It is exported so the teardown can call it at the discontinuity, which
+ * would be strictly better (it frees then, not at the next swap) — but the ONLY write path is
+ * `swapMaterialWhenReady`, reached only from `_lab.tryLabShader`, a dev/preview entry point on
+ * `window._lab` that no player path touches. So what is bounded here is a developer's session, not
+ * a shipped leak, and that is why this is a sweep in the owning module rather than a new call edited
+ * into main.js's teardown.
+ *
+ * ⚠ `wasLive` is RECORDED at swap time, not assumed, so a mesh that was never in a scene at all — a
+ * unit test's bare mesh, a body built off-graph and attached later — is never swept. "Detached
+ * because the system was torn down" and "detached because it has not been attached yet" are opposite
+ * states, and sweeping the second would silently delete a baseline that is still wanted, which is the
+ * failure `restoreMaterialSwap`'s reasons exist to prevent.
  *
  * ⚠ The retained `prevMaterial` is NOT disposed here for the reason note 1 at the top of this file
  * gives at length: three refcounts GPU programs per material, and dropping the last reference hands
@@ -318,6 +441,38 @@ function _nextFrame() {
  * @type {Map<THREE.Mesh, {prevMaterial: THREE.Material, nextMaterial: THREE.Material, at: number}>}
  */
 export const MATERIAL_SWAPS = new Map();
+
+// Walks to the graph root rather than testing `mesh.parent`: a swapped body may sit under a group,
+// and `scene.remove(group)` leaves the mesh with a non-null parent that leads nowhere.
+function _graphRootOf(object) {
+  let node = object;
+  while (node.parent) node = node.parent;
+  return node;
+}
+
+/** True while `mesh` is still reachable from a live THREE.Scene root. */
+function _isAttachedToScene(mesh) {
+  return !!(mesh && _graphRootOf(mesh).isScene);
+}
+
+/**
+ * Drop every entry whose mesh was live when it was recorded and has since been detached from its
+ * Scene — the shape system teardown leaves behind. See the MATERIAL_SWAPS note above for why this
+ * exists, why it is keyed on `wasLive`, and what it deliberately does NOT sweep.
+ *
+ * @returns {{dropped: string[], remaining: number}} — `dropped` carries the released meshes' names
+ *   (`'?'` when unnamed) rather than only a count, so a caller can print WHAT was released.
+ */
+export function pruneMaterialSwaps() {
+  const dropped = [];
+  for (const [mesh, entry] of MATERIAL_SWAPS) {
+    if (!entry.wasLive) continue;
+    if (_isAttachedToScene(mesh)) continue;
+    dropped.push(mesh.name || '?');
+    MATERIAL_SWAPS.delete(mesh);
+  }
+  return { dropped, remaining: MATERIAL_SWAPS.size };
+}
 
 /**
  * Record a material swap so the previous material can be put back. Idempotent per mesh in the sense
@@ -332,13 +487,22 @@ export const MATERIAL_SWAPS = new Map();
  */
 export function recordMaterialSwap(mesh, nextMaterial) {
   if (!mesh) return false;
+  // Sweep the torn-down systems' carcasses before growing the population. Runs BEFORE the lookup on
+  // purpose: the sweep can never touch `mesh` itself here, because a mesh being swapped right now is
+  // attached, so the idempotence contract below is unaffected by it.
+  pruneMaterialSwaps();
   const existing = MATERIAL_SWAPS.get(mesh);
   if (existing) {
     existing.nextMaterial = nextMaterial;
     existing.at = Date.now();
     return false;
   }
-  MATERIAL_SWAPS.set(mesh, { prevMaterial: mesh.material, nextMaterial, at: Date.now() });
+  MATERIAL_SWAPS.set(mesh, {
+    prevMaterial: mesh.material,
+    nextMaterial,
+    at: Date.now(),
+    wasLive: _isAttachedToScene(mesh),
+  });
   return true;
 }
 

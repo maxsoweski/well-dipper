@@ -67,6 +67,42 @@ function looksLikeRegex(src, i) {
   for (let k = i + 1; k < src.length; k++) {
     if (src[k] === '\\') { k++; continue; }
     if (src[k] === '\n') return false;          // never closed on this line ⇒ it was division
+    // ⛔ DECLARED LIMIT — DO NOT "FIX" AND DO NOT HARMONISE WITH THE TWIN AT `stripComments…`'s
+    // regex BODY. Everything below was executed 2026-08-10 at c9d7ffb, not reasoned.
+    //
+    // BEHAVIOUR. The class skip stops at `]` OR at a newline, and `continue` then hands control to
+    // this FOR-loop's own `k++`, which steps PAST that newline. So an UNCLOSED `[` lets the forward
+    // guard keep hunting for a closing slash on the NEXT line — one line past the newline arm
+    // directly above. The crossing is BOUNDED, not unbounded: exactly ONE newline per unclosed `[`,
+    // because after the step-past the very next newline returns false unless another `[` opens
+    // first. Executed on this function verbatim: `x = /[ab⏎c/ d` ⇒ true (one line crossed);
+    // `x = /[ab⏎c⏎d/ e` ⇒ false (two lines ⇒ refused); `x = /[ab⏎c[d⏎e/ f` ⇒ true (two `[`, two
+    // lines). N unclosed brackets buy N newlines, and nothing buys more than its own bracket.
+    //
+    // REACH: ZERO on live code. Re-measured 2026-08-10 by probing every one of the 266,306 `/`
+    // positions in all 698 tracked `.js` / `.mjs` / `.cjs` / `.html` files. The arm crosses a
+    // newline at 2 sites in the entire tree, and BOTH are fixture STRINGS inside
+    // tests/source-scan-helper.test.js that exist to exercise it. No production file reaches it.
+    //
+    // PINNED BY TEST, verbatim: tests/source-scan-helper.test.js:323 `the regex BODY exits at a
+    // newline` states this crossing as its own PRECONDITION — "Reachable because the guard … walks
+    // PAST a newline when a character class is left open (its `continue` hands control to the
+    // for-loop's own `k++`), so the body can be entered on text the guard already crossed."
+    //
+    // ⛔ WHY THE OBVIOUS FIX IS WORSE THAN THE LIMIT. The obvious fix is to bail once the class ran
+    // into a newline — append `if (src[k] === '\n') return false;` after the inner while. Executed
+    // in an isolated tree: that fix ALONE leaves the suite at **49 passed (49)**, i.e. the gate does
+    // not catch it; and WITH it in place the `src[j] === '/' || src[j] === '\n'` mutant in the regex
+    // BODY below (delete its newline exit) ALSO reports **49 passed (49)**, where against the
+    // unfixed guard that same mutant is **1 failed | 48 passed**. So the "fix" is not a no-op and
+    // not an improvement — it silently RETIRES a live mutation gate, because the only fixture that
+    // reaches the body's newline exit reaches it THROUGH this crossing.
+    //
+    // ⚠ THE TWIN IS DIFFERENT ON PURPOSE. The regex-BODY scanner below carries a textually
+    // near-identical class skip, but it sits in a `while` loop whose `j++` is in the loop BODY, so
+    // its `continue` re-tests the SAME character and hands the newline to the body's own
+    // `|| src[j] === '\n'` exit. Same text, opposite outcome, purely from the enclosing loop form.
+    // Converting either loop to the other's shape changes both behaviours at once.
     if (src[k] === '[') { while (k < src.length && src[k] !== ']' && src[k] !== '\n') k++; continue; }
     if (src[k] === '/') return true;
   }

@@ -196,7 +196,28 @@ export function resolveDriver(name, d, ctx) {
     }
     // ⭐ THE POLICY SEAM. This one line is the whole reason the contract carries a display
     // policy: the same pack, the same body, two front-ends, two correct answers.
-    v = featureFrequencyFromKm(ctx.displayRadiusEarth, d.featureSizeKm, d.cFeature);
+    //
+    // ⚠ RESOLVE THROUGH `assertDisplayPolicy`, NEVER READ `ctx.displayRadiusEarth` RAW HERE.
+    // The eager check in writePackUniforms (see the header's "validated UNCONDITIONALLY")
+    // is a check on the value the writer READ AT ENTRY; it is not a check on the value this
+    // line consumes, and the two are not the same value. Both gaps were MEASURED 2026-08-10:
+    //   1. `resolveDriver` is EXPORTED and called directly — by giantDeck.js's lab mirror and by
+    //      four test files — so the eager check is not on that path at all. Reading raw here,
+    //      all five bad shapes passed silently and produced a finite, plausible, in-band number
+    //      or a quiet NaN: missing -> NaN, '4' -> 254.84 (the string coerces through `*`, so a
+    //      stringly-typed radius reads as CORRECT), 0 -> 0, -4 -> -254.84, null -> 0 (null
+    //      coerces to 0). Only `missing` was even non-finite, and a NaN uniform is not loud.
+    //   2. Even on the guarded route the eager check is defeatable: a ctx whose
+    //      `displayRadiusEarth` is a getter returning 4 on the first read and undefined after
+    //      SATISFIED assertDisplayPolicy and then wrote NaN into the uniform with no throw.
+    // Validating at the POINT OF USE closes both, because `assertDisplayPolicy` reads once and
+    // returns the value it validated — so what is checked is exactly what is consumed.
+    //
+    // This does NOT move the gate: the gate short-circuit above returns +0 before reaching here,
+    // so a gated-off km driver still resolves without a display policy, and a driver that is not
+    // km-shaped still never needs one. That is the header's declared asymmetry, kept.
+    const dispR = assertDisplayPolicy(ctx);
+    v = featureFrequencyFromKm(dispR, d.featureSizeKm, d.cFeature);
   } else {
     if (typeof d.value !== 'number' || !Number.isFinite(d.value)) {
       throw new PackContractError(`driver '${name}' has a non-finite scalar value.`);
