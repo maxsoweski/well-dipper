@@ -19,7 +19,7 @@
 //      which names the wrong site and kills collection before one assertion runs.
 //   2. "THE PATTERN STOPS MATCHING" WAS NOT THE FAILURE MODE THAT MATTERED. The lab's habit when a
 //      law moves is to quote the retired statement verbatim in a `//` or `/* */` comment — 7
-//      instances, e.g. planet-lod-lab.html:6186 `//   _lab.setCarveEpoch(false); const off = _lab.sampleRoutedHeight(channelDirs);`.
+//      instances, e.g. planet-lod-lab.html:6266 `//   _lab.setCarveEpoch(false); const off = _lab.sampleRoutedHeight(channelDirs);`.
 //      Every extraction here read RAW text and took the FIRST match, and with lazy quantifiers first
 //      means topmost, so a comment ABOVE the live site shadows it. Measured: move the bandCount law
 //      out to `state.bandCount = _pack.bandCount;` and quote the old statement on a bare `//` line

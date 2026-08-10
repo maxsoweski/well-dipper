@@ -1192,3 +1192,73 @@ export function provinceWeightFromField(fieldValue, affinity, dial = 1) {
   const f = affinity.polarity >= 0 ? fieldValue : 1 - fieldValue;
   return mix(1, affinity.floor + (1 - affinity.floor) * f, dial);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// APPROACH MEASUREMENT — the shared half of the agent-facing camera API.
+//
+// Both front-ends frame bodies through their OWN camera (the game drives ShipCameraSystem, the lab
+// writes state.distance/yaw/pitch), because their camera stacks are genuinely different. What they
+// must NOT do differently is decide where the rungs of an approach are, or what LOD state a given
+// distance implies — a paired A/B is only a comparison if both sides answer those two questions
+// with the same code. That is what lives here.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The rungs of an approach, from far to near, in body radii.
+ *
+ * ⭐ GEOMETRIC, NOT LINEAR, and the choice is load-bearing rather than aesthetic. Apparent size goes
+ * as 1/d, so a linear ladder from 20 to 1.2 spends most of its rungs in the range where the disc is
+ * barely changing and crosses the entire visually-violent last stretch in one step. Equal RATIOS
+ * give equal apparent-size increments, which is the quantity the eye is actually judging when the
+ * question is "does detail keep resolving as I close?".
+ *
+ * Endpoints are written exactly rather than accumulated, so `from` and `to` come back as the caller
+ * spelled them and a sweep's first and last rows can be quoted without a float-drift caveat.
+ *
+ * @param {number} from  starting distance in body radii (the far end)
+ * @param {number} to    ending distance in body radii (the near end); must be > 0 and < from
+ * @param {number} steps how many rungs, counting both endpoints; must be >= 2
+ * @returns {number[]} descending distances in body radii
+ */
+export function approachLadder(from, to, steps) {
+  if (!(from > 0) || !(to > 0)) throw new RangeError(`approachLadder: distances must be > 0 (got from=${from}, to=${to})`);
+  if (!(from > to)) throw new RangeError(`approachLadder: an approach must close — need from > to (got from=${from}, to=${to})`);
+  const n = Math.floor(steps);
+  if (!(n >= 2)) throw new RangeError(`approachLadder: need at least 2 rungs to span both endpoints (got ${steps})`);
+  const ratio = Math.log(to / from) / (n - 1);
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) out[i] = from * Math.exp(ratio * i);
+  out[0] = from;
+  out[n - 1] = to;
+  return out;
+}
+
+/**
+ * What the renderer's LOD law says SHOULD happen at a given distance — the prediction half of the
+ * live-vs-predicted pair the camera API reports.
+ *
+ * ⭐ WHY THE PAIR EXISTS AT ALL. Reporting one blended "octaves" number would make a body whose
+ * uniform never got updated indistinguishable from a body correctly sitting at 4 octaves because it
+ * is far away. Reported separately, a disagreement is a visible fact — which is how the camera API
+ * surfaces planet-class moons never registering with LODManager (their live uOctaves stays at its
+ * 4.0 default at every distance) instead of averaging it into something plausible.
+ *
+ * `saturated` is called out because it is the whole of Max's approach-consistency criterion: lodRampOf
+ * is smoothstep(20, 6, d), so from 6 body radii inward the octave budget is pinned at its ceiling
+ * while the disc keeps growing. Everything below that distance resolves no new detail BY THE LAW,
+ * not by accident — a fact the sweep should print rather than leave to be inferred from equal numbers.
+ *
+ * @param {number} distanceRadii camera distance in body radii
+ * @param {number} [qualityTier=1] the GPU quality trim autoOctaves applies
+ * @returns {{ramp: number, octaves: number, saturated: boolean}}
+ */
+export function lodPredictionAt(distanceRadii, qualityTier = 1.0) {
+  const ramp = lodRampOf(distanceRadii);
+  return {
+    ramp,
+    octaves: autoOctaves(ramp, qualityTier),
+    // >= rather than === : smoothstep returns exactly 1 at and below its near edge, but the guard is
+    // written as a bound so a future eased ramp that asymptotes cannot silently stop reporting it.
+    saturated: ramp >= 1.0,
+  };
+}

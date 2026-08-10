@@ -148,7 +148,7 @@
   <script type="module">
     import * as THREE from 'three';
     import GUI from 'lil-gui';
-    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, reliefEnvelope, animationRateFactor, CRATER_DEPTH, visScaleOf, VIS_SCALE_EXP, minCameraDistance, holdApparentDistance, radiusFromT, tFromRadius, bakeReliefCrossover } from './planet-lod-lab-core.js';
+    import { smoothstep, lodRampOf, autoOctaves, lodHysteresis, deriveUniforms, featureFrequencyFromKm, reliefAmplitudeFromKm, reliefGravityFactor, reliefEnvelope, animationRateFactor, CRATER_DEPTH, visScaleOf, VIS_SCALE_EXP, minCameraDistance, holdApparentDistance, radiusFromT, tFromRadius, bakeReliefCrossover, approachLadder, lodPredictionAt } from './planet-lod-lab-core.js';
     import { RADIUS_RANGES_EARTH } from './src/core/ScaleConstants.js';   // AC5/AC6: single-source archetype radius ranges (game + lab)
     import { FEATURES, ARCHETYPES, featuresOf } from './planet-archetypes.js';
     import { ASSOCIATIONS, DEFAULT_DRESSING } from './planet-feature-associations.js';   // Tier-2 manifest: isolationKit per feature; DEFAULT_DRESSING = ratified boot dressing (defaults rescope 2026-07-15)
@@ -5616,6 +5616,86 @@
                     get soloMode(){ return _soloMode; }, set soloMode(m){ filterUI.soloMode = (m === 'bare') ? 'bare' : 'context'; setSoloMode(m); },
                     enableAllFeatures(){ _preSoloEnables = null; _soloKey = null; setFeatureEnables(null); },
                     renderDeltaSweep(opts){ return renderDeltaSweep(opts); },
+
+                    // ── AGENT-FACING FRAMING — the lab half of the paired A/B camera API ──
+                    // ⛔ WRITES state.distance, NOT camera.position. frame() recomputes the camera from
+                    // state.distance/yaw/pitch every single frame, so a direct camera write is erased before
+                    // it is ever drawn — the lab's own version of the trap the game's interpolator sets.
+                    // ⚠ AND state.distance IS NOT THE ANSWER EITHER: frame() applies minCameraDistance(sVis),
+                    // which only ever RAISES it. So the achieved distance is read back AFTER a frame has run,
+                    // never assumed from the write. Radii here are LOGICAL (state.distance / sVis), the same
+                    // quantity the game reports and the same one lodRampOf keys on.
+                    async frameBody(subject = {}, opts = {}) {
+                      const radii = Number.isFinite(opts.radii) ? opts.radii : (Number.isFinite(subject.radii) ? subject.radii : 8);
+                      if (!(radii > 0)) return { ok: false, reason: `radii must be > 0 (got ${radii})` };
+                      state.distance = radii * sVis;
+                      if (Number.isFinite(opts.yaw))   state.yaw   = opts.yaw;
+                      if (Number.isFinite(opts.pitch)) state.pitch = opts.pitch;
+                      await new Promise(res => requestAnimationFrame(() => requestAnimationFrame(res)));
+                      const achievedRadii = state.distance / sVis;
+                      // qualityTier 1.0 deliberately, matching frame()'s own `autoOctaves(lod)` call, which
+                      // passes no tier. Predicting with a different tier from the one the renderer used would
+                      // manufacture a live-vs-predicted disagreement that means nothing.
+                      const predicted = lodPredictionAt(achievedRadii, 1.0);
+                      const liveOct = uniforms.uOctaves.value, liveRamp = uniforms.uLodRamp.value;
+                      const clampedFromAsk = Math.abs(achievedRadii - radii) / radii > 0.01;
+                      // ⚠ octAuto off means the octave count is HAND-SET and is supposed to ignore distance.
+                      // Reporting that as "LOD is not being driven" would be a false alarm of exactly the kind
+                      // this pair exists to avoid, so it is named as the manual override it is.
+                      const manualOctaves = !state.octAuto;
+                      return {
+                        ok: true,
+                        frontEnd: 'lab',
+                        body: { name: 'lab-planet', kind: 'planet' },   // the lab renders exactly one body
+                        asked: { radii, stateDistance: +(radii * sVis).toFixed(4) },
+                        achieved: { radii: +achievedRadii.toFixed(4), stateDistance: +state.distance.toFixed(4), sVis: +sVis.toFixed(4) },
+                        clampedFromAsk,
+                        clampNote: clampedFromAsk ? 'ACHIEVED != ASKED — minCameraDistance raised this framing. The achieved number is the real one.' : null,
+                        lod: {
+                          live: { octaves: liveOct, ramp: liveRamp },
+                          predicted,
+                          agrees: manualOctaves ? null : Math.abs(liveOct - predicted.octaves) <= 0.01,
+                          note: manualOctaves
+                            ? 'octAuto is OFF — octaves are hand-set and correctly ignore distance, so live vs predicted is not a wiring signal here.'
+                            : null,
+                        },
+                      };
+                    },
+
+                    // Same ladder generator the game uses, so rows from the two front-ends pair up rung for rung.
+                    async approachSweep(subject = {}, opts = {}) {
+                      const o = (opts && Object.keys(opts).length) ? opts : subject;
+                      const from = Number.isFinite(o.from) ? o.from : 20;
+                      const to = Number.isFinite(o.to) ? o.to : 1.2;
+                      const steps = Number.isFinite(o.steps) ? o.steps : 8;
+                      let ladder;
+                      try { ladder = approachLadder(from, to, steps); } catch (err) { return { ok: false, reason: err.message }; }
+                      const rows = [];
+                      for (const askedRadii of ladder) {
+                        const shot = await window._lab.frameBody({}, { radii: askedRadii });
+                        if (!shot.ok) return { ok: false, reason: shot.reason, completedRows: rows };
+                        rows.push({
+                          askedRadii: +askedRadii.toFixed(3),
+                          achievedRadii: shot.achieved.radii,
+                          clamped: shot.clampedFromAsk,
+                          liveOctaves: shot.lod.live.octaves,
+                          predictedOctaves: shot.lod.predicted.octaves,
+                          predictedRamp: +shot.lod.predicted.ramp.toFixed(4),
+                          saturated: shot.lod.predicted.saturated,
+                          lodAgrees: shot.lod.agrees,
+                        });
+                      }
+                      let saturatedFromRadii = null;
+                      for (let i = 0; i < rows.length; i++) {
+                        if (rows[i].saturated && rows.slice(i).every(r => r.saturated)) { saturatedFromRadii = rows[i].achievedRadii; break; }
+                      }
+                      return {
+                        ok: true, frontEnd: 'lab', rows, saturatedFromRadii,
+                        saturatedNote: saturatedFromRadii == null
+                          ? 'No rung on this ladder sits at the octave ceiling.'
+                          : `Octave budget is pinned at its ceiling from ${saturatedFromRadii} body radii inward — every rung closer than that grows the disc and resolves no new detail.`,
+                      };
+                    },
                     // AC-SAMPLER inertness capture. renderDeltaSweep already freezes the animation
                     // clock + auto-spin internally (so an A/B isolates a feature's pixel contribution
                     // and never animation); the before/after byte-comparison this AC rests on needs

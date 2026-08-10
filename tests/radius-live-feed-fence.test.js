@@ -752,7 +752,7 @@ describe('AC-NOFROZEN — THE THIRD GATE CLAUSE: a violation planted in src/worl
   it('an allowlisted site demoted to a COMMENT stops being covered (exemption liveness, planted)', () => {
     // ⭐ THE LIVENESS CONTROL. Comment out the adapter's allowlisted line — the shape of "the law moved
     // and somebody left the old statement quoted above it", which is this codebase's own habit
-    // (tests/helpers/source-scan.mjs header, e.g. planet-lod-lab.html:6160-6161). Under the staleness
+    // (tests/helpers/source-scan.mjs header, e.g. planet-lod-lab.html:6240-6161). Under the staleness
     // test alone the entry still "matches a real line" and the exemption survives forever.
     // ⚠ IT ASSERTS THE PREDICATE, NOT A TALLY, AND THAT IS A REPAIR. Round 1 showed this control going
     // red for the WRONG REASON on an unrelated mutant: with the live line already gone, `src.replace`

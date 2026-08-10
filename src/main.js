@@ -20,6 +20,8 @@ import { GravityWellMap } from './ui/GravityWellMap.js';
 // import { CameraController } from './camera/CameraController.js'; // OLD — kept for revert
 import { ShipCameraSystem, CameraMode } from './camera/ShipCameraSystem.js';
 import { orreryStandoff } from './camera/orreryStandoff.js';
+import { measureFraming, lodStateOf, frameSequence, bodyWorldMetrics } from './camera/agentFraming.js';
+import { approachLadder } from '../planet-lod-lab-core.js';
 import {
   effectiveOuterOrbit,
   starGlowRadiusPx,
@@ -2986,6 +2988,19 @@ window._lab = {
     //                       surface, and it carries NO back-link because Planet._createSurface is
     //                       the only place the back-link is written
     const rows = [];
+    // ⭐ Stars first, and they are a THIRD shape: the authored radius lives on `data.radius` rather
+    // than being derivable from the drawn geometry the way a planet surface's is. `authoredRadius`
+    // travels on the row so "distance in body radii" means the same thing for a star as for a planet
+    // instead of quietly changing units. Planets and moons leave it null and keep deriving.
+    [system.star, system.star2].forEach((st, si) => {
+      if (!st?.mesh) return;
+      rows.push({
+        kind: 'star', p: null, m: null, s: si, holder: st,
+        group: st.mesh, mesh: st.mesh, data: st.data,
+        authoredRadius: st.data?.radius ?? null,
+        display: (si === 0 ? system.names?.star : system.names?.star2) || `Star ${si + 1}`,
+      });
+    });
     (system.planets || []).forEach((entry, pi) => {
       const holder = entry.planet;
       rows.push({
@@ -3019,9 +3034,18 @@ window._lab = {
       const kind = subject.kind ?? 'planet';
       const p = subject.p ?? 0;
       const m = subject.m ?? null;
-      row = rows.find((r) => r.kind === kind && r.p === p && r.m === (kind === 'moon' ? m : null)) || null;
+      if (kind === 'star') {
+        // Stars index on their OWN axis. Reusing `p` here would make `{kind:'star', p:1}` and
+        // `{kind:'planet', p:1}` read as the same address in a caller's head, which is the index-space
+        // confusion this function was built to end rather than a new spelling of it.
+        const s = subject.s ?? 0;
+        row = rows.find((r) => r.kind === 'star' && r.s === s) || null;
+        if (!row) return { ok: false, resolvedBy: 'index', reason: `no star at s=${s} (this system has ${rows.filter((r) => r.kind === 'star').length})` };
+      } else {
+        row = rows.find((r) => r.kind === kind && r.p === p && r.m === (kind === 'moon' ? m : null)) || null;
+        if (!row) return { ok: false, resolvedBy: 'index', reason: `no ${kind} at p=${p} m=${m}` };
+      }
       resolvedBy = 'index';
-      if (!row) return { ok: false, resolvedBy: 'index', reason: `no ${kind} at p=${p} m=${m}` };
     }
 
     const mesh = row.mesh;
@@ -3035,6 +3059,11 @@ window._lab = {
       name: row.group?.name ?? null,
       display: row.display,
       kind: row.kind, p: row.p, m: row.m, isPlanetMoon: !!row.isPlanetMoon,
+      // Additive only — every field above and below is untouched, so shot-diff's sidecar contract and
+      // every existing planet/moon caller read exactly what they read before. `s` is null off the
+      // star axis; `authoredRadius` is null wherever the radius is derived from geometry instead.
+      s: row.s ?? null,
+      authoredRadius: row.authoredRadius ?? null,
       mesh,
       group: row.group,
       // The back-link written by Planet._createSurface. Present on every planet and every
@@ -3319,6 +3348,13 @@ window._lab = {
     if (pose.far != null) camera.far = pose.far;
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld(true);
+    // ⭐ THE FIX, and it changes this hook from broken to correct rather than tuning it. Writing the
+    // pose was never enough: CameraInterpolator blends the camera between snapshots it takes itself,
+    // so without announcing the teleport it dragged the camera back toward the old pose on the very
+    // next rendered frame — while THIS function returned posDelta 0 and `cameraPose()` read back
+    // exactly what was asked for. A hook that reports success and is wrong is worse than one that
+    // fails, and this one cost most of a session before it was found.
+    cameraInterp.resync(camera);
     return {
       ok: true,
       posDelta: camera.position.distanceTo(want),
@@ -3326,6 +3362,121 @@ window._lab = {
       quatDelta: 1 - Math.abs(camera.quaternion.dot(wantQ)),
       autoRotateActive: cc.autoRotateActive,
       bypassed: cc.bypassed,
+    };
+  },
+
+  /**
+   * Put the camera at a chosen multiple of a body's radius, and report what the renderer did there.
+   *
+   * ⭐ THE RETURNED DISTANCE IS THE ACHIEVED ONE, NEVER THE ASKED ONE. The game holds a zoom floor
+   * just above the surface, so close asks are clamped — and the close regime is exactly where the
+   * approach-consistency question lives. `clampedFromAsk` says outright when the two parted company.
+   *
+   * ⚠ Awaits two animation frames before measuring, and that is not padding. Placement is synchronous
+   * but the ACHIEVED pose is whatever survives the next sim step and render blend; measuring
+   * immediately measures the request rather than the result, which is the exact way the previous
+   * scripted-pose hook produced confident wrong numbers.
+   *
+   * @param {{kind?: 'planet'|'moon'|'star', p?: number, m?: number, s?: number, name?: string}} subject
+   * @param {{radii?: number}} [opts] distance in body radii; defaults to 8 (outside the LOD ramp's knee)
+   */
+  async frameBody(subject = {}, opts = {}) {
+    const r = this.resolveBody(subject);
+    if (!r.ok) return { ok: false, reason: r.reason, resolvedBy: r.resolvedBy, availableNames: r.availableNames };
+
+    const radii = Number.isFinite(opts.radii) ? opts.radii : 8;
+    if (!(radii > 0)) return { ok: false, reason: `radii must be > 0 (got ${opts.radii})` };
+
+    const { worldPos, worldRadius } = bodyWorldMetrics(r.group, r.mesh, r.authoredRadius);
+    if (!worldRadius) {
+      return { ok: false, reason: `cannot size ${r.name} — no usable radius, so a distance "in body radii" would be meaningless here` };
+    }
+
+    const viewDistance = radii * worldRadius;
+    const controller = frameSequence({ camera, cameraController, cameraInterp, worldPos, viewDistance });
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+
+    const achieved = measureFraming(camera, r.group, r.mesh, r.authoredRadius);
+    const lod = lodStateOf(r.mesh, achieved.distanceRadii);
+    const clampedFromAsk = achieved.distanceRadii != null && Math.abs(achieved.distanceRadii - radii) / radii > 0.01;
+
+    return {
+      ok: true,
+      body: { name: r.name, display: r.display, kind: r.kind, p: r.p, m: r.m, s: r.s, isPlanetMoon: r.isPlanetMoon },
+      asked: { radii, viewDistance: +viewDistance.toFixed(4) },
+      achieved: {
+        radii: achieved.distanceRadii == null ? null : +achieved.distanceRadii.toFixed(4),
+        units: +achieved.distanceScene.toFixed(4),
+        bodyRadiusScene: +worldRadius.toFixed(6),
+      },
+      clampedFromAsk,
+      clampNote: clampedFromAsk
+        ? 'ACHIEVED != ASKED — the renderer clamped this framing. The achieved number is the real one.'
+        : null,
+      lod,
+      controller,
+    };
+  },
+
+  /**
+   * Walk a body from far out to nearly touching it, and return the table.
+   *
+   * ⭐ This is the one call that answers Max's approach criterion — "does detail keep resolving as I
+   * close, or am I flying at a beach ball painted to look like a planet?". `saturatedFromRadii` is
+   * the headline: the furthest rung from which the octave budget is pinned at its ceiling all the way
+   * in. Every rung inside that distance grows the disc and resolves nothing new, BY THE LAW.
+   *
+   * ⚠ Rungs are geometrically spaced (see `approachLadder`), so they are equal steps in apparent size
+   * rather than equal steps in distance.
+   *
+   * @param {object} subject same shape `frameBody` takes
+   * @param {{from?: number, to?: number, steps?: number}} [opts]
+   */
+  async approachSweep(subject = {}, opts = {}) {
+    const from = Number.isFinite(opts.from) ? opts.from : 20;
+    const to = Number.isFinite(opts.to) ? opts.to : 1.2;
+    const steps = Number.isFinite(opts.steps) ? opts.steps : 8;
+
+    let ladder;
+    try { ladder = approachLadder(from, to, steps); } catch (err) { return { ok: false, reason: err.message }; }
+
+    const rows = [];
+    let body = null;
+    for (const askedRadii of ladder) {
+      const shot = await this.frameBody(subject, { radii: askedRadii });
+      if (!shot.ok) return { ok: false, reason: shot.reason, completedRows: rows };
+      body = shot.body;
+      rows.push({
+        askedRadii: +askedRadii.toFixed(3),
+        achievedRadii: shot.achieved.radii,
+        clamped: shot.clampedFromAsk,
+        liveOctaves: shot.lod.live.octaves,
+        predictedOctaves: shot.lod.predicted?.octaves ?? null,
+        predictedRamp: shot.lod.predicted == null ? null : +shot.lod.predicted.ramp.toFixed(4),
+        saturated: shot.lod.predicted?.saturated ?? null,
+        lodAgrees: shot.lod.agrees,
+      });
+    }
+
+    // Scan inward and keep the FIRST rung after which every remaining rung is saturated. A rung that
+    // saturates and then unsaturates further in would mean the ramp is not monotonic, so reporting
+    // the first saturated rung alone could name a distance that does not hold.
+    let saturatedFromRadii = null;
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i].saturated && rows.slice(i).every((row) => row.saturated)) { saturatedFromRadii = rows[i].achievedRadii; break; }
+    }
+
+    return {
+      ok: true,
+      body,
+      rows,
+      saturatedFromRadii,
+      saturatedNote: saturatedFromRadii == null
+        ? 'No rung on this ladder sits at the octave ceiling.'
+        : `Octave budget is pinned at its ceiling from ${saturatedFromRadii} body radii inward — every rung closer than that grows the disc and resolves no new detail.`,
+      lodDrivenNote: rows.some((row) => row.lodAgrees === false)
+        ? '⛔ At least one rung reports LIVE and PREDICTED octaves disagreeing — this body\'s LOD is not being driven at its own distance. Read `lodAgrees` per row.'
+        : null,
     };
   },
 
