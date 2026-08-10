@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-10T18:16:21.779Z",
+  "recordedAt": "2026-08-10T21:04:01.280Z",
   "recordedFromCommit": {
-    "sha": "c9d7ffb26d503c7948f33c273743bb2268e90d91",
+    "sha": "c0cb8f7fadca7a1b1e622b516bb69a8687a7aab6",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -28,12 +28,12 @@
   },
   "summary": {
     "counts": {
-      "collectedFiles": 318,
+      "collectedFiles": 319,
       "failingFiles": 2,
       "nonCollectingFiles": 15,
-      "tests": 5214,
+      "tests": 5233,
       "failed": 24,
-      "passed": 5186,
+      "passed": 5205,
       "skipped": 4,
       "todo": 0
     },
@@ -224,6 +224,7 @@
       "src/ui/__tests__/componentIdentity.test.js": 7,
       "src/ui/__tests__/labelPlacement.test.js": 12,
       "src/ui/__tests__/retiredOverlays.test.js": 10,
+      "tests/agent-camera-api.test.js": 19,
       "tests/body-identity-fence.test.js": 8,
       "tests/camera-interpolator.test.js": 6,
       "tests/cockpit-geometry.test.js": 58,
