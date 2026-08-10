@@ -3450,8 +3450,10 @@ window._lab = {
         askedRadii: +askedRadii.toFixed(3),
         achievedRadii: shot.achieved.radii,
         clamped: shot.clampedFromAsk,
-        liveOctaves: shot.lod.live.octaves,
-        predictedOctaves: shot.lod.predicted?.octaves ?? null,
+        // Rounded to 4dp: far finer than any meaningful ramp step, and the raw float
+        // (6.053609446486112 against a predicted 6.05) makes the table unreadable as a table.
+        liveOctaves: shot.lod.live.octaves == null ? null : +shot.lod.live.octaves.toFixed(4),
+        predictedOctaves: shot.lod.predicted == null ? null : +shot.lod.predicted.octaves.toFixed(4),
         predictedRamp: shot.lod.predicted == null ? null : +shot.lod.predicted.ramp.toFixed(4),
         saturated: shot.lod.predicted?.saturated ?? null,
         lodAgrees: shot.lod.agrees,
@@ -3461,22 +3463,50 @@ window._lab = {
     // Scan inward and keep the FIRST rung after which every remaining rung is saturated. A rung that
     // saturates and then unsaturates further in would mean the ramp is not monotonic, so reporting
     // the first saturated rung alone could name a distance that does not hold.
-    let saturatedFromRadii = null;
+    let firstSaturatedIdx = -1;
     for (let i = 0; i < rows.length; i++) {
-      if (rows[i].saturated && rows.slice(i).every((row) => row.saturated)) { saturatedFromRadii = rows[i].achievedRadii; break; }
+      if (rows[i].saturated && rows.slice(i).every((row) => row.saturated)) { firstSaturatedIdx = i; break; }
     }
+    const firstSaturatedRung = firstSaturatedIdx < 0 ? null : rows[firstSaturatedIdx].achievedRadii;
+    // ⛔ THE RUNG IS NOT THE ONSET, and reporting it as one misleads in the expensive direction.
+    // The ladder only samples; saturation begins somewhere between the last unsaturated rung and the
+    // first saturated one. Naming the rung alone reads as "detail keeps resolving until here", which
+    // is a claim the measurement does not support and which understates the problem.
+    const onsetUpperBound = firstSaturatedIdx > 0 ? rows[firstSaturatedIdx - 1].achievedRadii : null;
+
+    const noLodUniform = rows.length > 0 && rows.every((row) => row.liveOctaves == null);
+    const disagreeing = rows.some((row) => row.lodAgrees === false);
 
     return {
       ok: true,
       body,
       rows,
-      saturatedFromRadii,
-      saturatedNote: saturatedFromRadii == null
+      saturatedFromRadii: firstSaturatedRung,
+      saturationOnsetBetweenRadii: firstSaturatedRung == null ? null : [onsetUpperBound, firstSaturatedRung],
+      // ⛔ On a body with no LOD uniform this sentence would be a statement of fact about an octave
+      // budget the body does not have. Said plainly instead of left to the reader to reconcile
+      // against `lodDrivenNote` — a caption that has to be corrected by another caption is a caption
+      // that will be quoted alone.
+      saturatedNote: noLodUniform
+        ? `⚠ HYPOTHETICAL FOR THIS BODY — it carries no LOD uniform. IF it rendered through the LOD-driven material, the law would pin the octave budget by ${firstSaturatedRung} body radii. That is a statement about the law, not about this body.`
+        : firstSaturatedRung == null
         ? 'No rung on this ladder sits at the octave ceiling.'
-        : `Octave budget is pinned at its ceiling from ${saturatedFromRadii} body radii inward — every rung closer than that grows the disc and resolves no new detail.`,
-      lodDrivenNote: rows.some((row) => row.lodAgrees === false)
-        ? '⛔ At least one rung reports LIVE and PREDICTED octaves disagreeing — this body\'s LOD is not being driven at its own distance. Read `lodAgrees` per row.'
-        : null,
+        : `Octave budget is pinned at its ceiling by ${firstSaturatedRung} body radii and stays pinned all the way in`
+          + (onsetUpperBound == null
+            ? ' (it was already pinned at the far end of this ladder — widen `from` to find the onset).'
+            : ` — the onset is somewhere in (${onsetUpperBound}, ${firstSaturatedRung}]; this ladder cannot place it more precisely. Every rung closer than the onset grows the disc and resolves no new detail.`),
+      // ⛔ THE QUIETEST FAILURE IS THE WORST ONE, so it gets the loudest note. A body with NO LOD
+      // uniform sweeps through with every `lodAgrees` null and would otherwise draw no warning at
+      // all — while its whole predicted-octave column describes the LAW rather than this body. Read
+      // as a measurement, that column would say "detail stops resolving here" about a body that
+      // never had octave-driven detail in the first place.
+      lodDrivenNote: noLodUniform
+        ? '⛔ THIS BODY CARRIES NO uOctaves UNIFORM AT ALL — it does not render through the LOD-driven material. '
+          + 'The predicted-octave column below is the shared LAW\'s output for these distances, NOT a measurement of this body. '
+          + 'Do not read saturation here as a fact about what this body renders.'
+        : (disagreeing
+          ? '⛔ At least one rung reports LIVE and PREDICTED octaves disagreeing — this body\'s LOD is not being driven at its own distance. Read `lodAgrees` per row.'
+          : null),
     };
   },
 

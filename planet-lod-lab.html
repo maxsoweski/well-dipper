@@ -5678,22 +5678,32 @@
                           askedRadii: +askedRadii.toFixed(3),
                           achievedRadii: shot.achieved.radii,
                           clamped: shot.clampedFromAsk,
-                          liveOctaves: shot.lod.live.octaves,
-                          predictedOctaves: shot.lod.predicted.octaves,
+                          liveOctaves: shot.lod.live.octaves == null ? null : +shot.lod.live.octaves.toFixed(4),
+                          predictedOctaves: +shot.lod.predicted.octaves.toFixed(4),
                           predictedRamp: +shot.lod.predicted.ramp.toFixed(4),
                           saturated: shot.lod.predicted.saturated,
                           lodAgrees: shot.lod.agrees,
                         });
                       }
-                      let saturatedFromRadii = null;
+                      // ⛔ THE RUNG IS NOT THE ONSET. The ladder only samples; saturation begins somewhere
+                      // between the last unsaturated rung and the first saturated one. Naming the rung alone
+                      // reads as "detail keeps resolving until here" — a claim the measurement cannot support,
+                      // and one that understates the problem. Same reasoning as the game's approachSweep.
+                      let idx = -1;
                       for (let i = 0; i < rows.length; i++) {
-                        if (rows[i].saturated && rows.slice(i).every(r => r.saturated)) { saturatedFromRadii = rows[i].achievedRadii; break; }
+                        if (rows[i].saturated && rows.slice(i).every(r => r.saturated)) { idx = i; break; }
                       }
+                      const saturatedFromRadii = idx < 0 ? null : rows[idx].achievedRadii;
+                      const onsetUpperBound = idx > 0 ? rows[idx - 1].achievedRadii : null;
                       return {
                         ok: true, frontEnd: 'lab', rows, saturatedFromRadii,
+                        saturationOnsetBetweenRadii: saturatedFromRadii == null ? null : [onsetUpperBound, saturatedFromRadii],
                         saturatedNote: saturatedFromRadii == null
                           ? 'No rung on this ladder sits at the octave ceiling.'
-                          : `Octave budget is pinned at its ceiling from ${saturatedFromRadii} body radii inward — every rung closer than that grows the disc and resolves no new detail.`,
+                          : `Octave budget is pinned at its ceiling by ${saturatedFromRadii} body radii and stays pinned all the way in`
+                            + (onsetUpperBound == null
+                              ? ' (already pinned at the far end of this ladder — widen `from` to find the onset).'
+                              : ` — the onset is somewhere in (${onsetUpperBound}, ${saturatedFromRadii}]; this ladder cannot place it more precisely.`),
                       };
                     },
                     // AC-SAMPLER inertness capture. renderDeltaSweep already freezes the animation
