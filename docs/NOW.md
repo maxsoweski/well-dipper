@@ -4,7 +4,7 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> ## ⭐⭐ 2026-08-11 — THE PHANTOM RING IS FOUND AND FIXED (`03cb1dd` + `9c8a1e2`). CARRIED OPEN ITEM 1 IS CLOSED.
+> ## ⭐⭐ 2026-08-11 — THE PHANTOM RING IS FOUND AND FIXED (`03cb1dd` + `1e4c7c8`). CARRIED OPEN ITEM 1 IS CLOSED.
 >
 > ⛔ **SUPERSEDES the carried reading "the phantom is a REAL conic rendered wrongly, not a spurious
 > one".** Half right. There is no spurious conic — 17 conics for 17 real orbits was always correct,
