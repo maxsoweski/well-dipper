@@ -449,7 +449,7 @@ describe('6d — no Sol body reaches the pack path, and the reason is provenance
   });
 
   it('a PLANET-class moon, however, IS covered — main.js stamps the parent system seed', () => {
-    // src/main.js:7686 `_systemSeed: systemData.seed,` — so a Sol planet-class moon arrives at
+    // src/main.js:7650 `_systemSeed: systemData.seed,` — so a Sol planet-class moon arrives at
     // Planet.js carrying `'sol'`, and clause 2 refuses it. This is the route PLAN §12.4/E-2 records
     // as the one that gets missed.
     const pmLikeSol = { ...SOL.find((b) => b.kind === 'moon').d, _systemSeed: 'sol', _ordinal: 'pm-0' };

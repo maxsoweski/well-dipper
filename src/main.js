@@ -3395,52 +3395,19 @@ window._lab = {
 
     const viewDistance = radii * worldRadius;
 
-    // ⛔⛔ POINT THE PER-FRAME BODY TRACKER AT THE BODY BEING FRAMED, OR IT WILL QUIETLY UNDO THE
-    // FRAMING (review 2026-08-11, defect 2). `frameSequence` step 1 clears `bypassed` — it must, or
-    // the controller never moves — and clearing it RE-ARMS simStep's camera-tracking block, which
-    // re-anchors the camera onto whatever `focusIndex` holds on EVERY frame. With a different body
-    // focused, the two frames awaited below silently drag the camera onto the FOCUSED body, and the
-    // measurement is then taken there and returned `ok: true`. The failure has no symptom: the
-    // numbers are internally consistent, they just describe the wrong body.
-    // ⭐ RETARGETED RATHER THAN SUSPENDED, and that is the better half of the fix: with the tracker
-    // pointed at the framed body it HOLDS the framing across the two frames, so a body that moves in
-    // its orbit during them no longer parts `achieved` from `asked` and no longer gets misreported as
-    // a clamp. Restoring the old focus afterwards was the alternative and it is worse — it drags the
-    // camera off the body one frame after the call returns, which breaks parking Max at a result.
-    const focusFrom = { focusIndex, focusMoonIndex, focusStarIndex };
-    if (r.kind === 'star') {
-      focusIndex = -2; focusStarIndex = r.s ?? 0; focusMoonIndex = -1;
-    } else if (r.kind === 'moon' && system.planets[r.p]?.moons?.[r.m]?.mesh) {
-      // Guarded on `.mesh` because the tracker reads `moons[i].mesh.position` directly, and a
-      // planet-class moon is a different shape (`moon.planet` is a real Planet). Unrepresentable
-      // bodies fall through to the clear below rather than crashing the tracker.
-      focusIndex = r.p; focusMoonIndex = r.m; focusStarIndex = -1;
-    } else if (r.kind === 'planet' && !r.isPlanetMoon && system.planets[r.p]?.planet?.mesh) {
-      focusIndex = r.p; focusMoonIndex = -1; focusStarIndex = -1;
-    } else {
-      // Not representable as a focus target — disarm the tracker instead of letting it fight.
-      focusIndex = -1; focusMoonIndex = -1; focusStarIndex = -1;
-    }
-    const focusRetargeted = focusIndex !== focusFrom.focusIndex
-      || focusMoonIndex !== focusFrom.focusMoonIndex
-      || focusStarIndex !== focusFrom.focusStarIndex;
-
-    // ⛔⛔ FOCUS CARRIES A ZOOM-FLOOR OBLIGATION, AND WRITING THE INDICES WITHOUT IT IS THE BUG
-    // MAX HIT: "the game goes mostly white after I click and zoom in." Measured at the time —
-    // camera 0.0511 units from the star's centre against a radius of 4.720, i.e. INSIDE the star,
-    // which fills the screen with its glow.
-    // Every OTHER way a body becomes focused sets this: src/main.js:10030 `cameraController.setFocusMinDistance(target.radius);`
-    // on select, and again on the click-2 glide, both with the comment that the radius-relative
-    // floor is what stops wheel-zoom from passing through the surface — the absolute default is
-    // src/camera/ShipCameraSystem.js:311 `this.minDistance = 0.01;`, which for a 4.72-radius star is
-    // 0.2% of the way to its centre. When this method started writing the focus indices directly it
-    // created a body that LOOKS focused to every consumer while the floor stayed at the absolute
-    // default, so the next wheel-zoom went straight through the surface.
-    // ⚠ NOT the same thing as clamping the framing. `focusOn` deliberately writes `distance`
-    // unclamped (ShipCameraSystem.js:679-680), which is what lets an agent ask for 0.5 radii and get
-    // it; that stays true. This bounds only what the HUMAN's wheel can then reach, which is the
-    // channel that was unbounded.
-    cameraController.setFocusMinDistance(worldRadius);
+    // ⚠ THIS METHOD DELIBERATELY DOES NOT TOUCH focusIndex / focusMoonIndex / focusStarIndex.
+    // It did between 67e86ad and this commit, to stop simStep's per-frame tracker re-anchoring
+    // the camera onto a DIFFERENT focused body during the two frames awaited below — a real
+    // defect (review 2026-08-11 #2). But those indices are GLOBAL UI STATE carrying obligations
+    // this method cannot discharge: nothing clears them, ordinary selection does not overwrite
+    // them, and every legitimate writer also sets a radius-relative zoom floor. In Max's hands
+    // the result was the camera being pulled toward whatever this method last framed —
+    // "the camera keeps getting placed in the star whenever I zoom all the way in after
+    // clicking twice on a planet or moon". Gameplay outranks measurement convenience.
+    // ⛔ DO NOT RE-ADD THE RETARGET WITHOUT SOLVING OWNERSHIP FIRST. The measurement problem is
+    // REAL and still open: a framing taken while another body is focused can be silently
+    // re-anchored mid-measurement. The fix belongs in a SUSPEND/RESTORE bracketing the two
+    // awaited frames, or behind an explicit opt-in argument — never in a write nobody undoes.
 
     const controller = frameSequence({ camera, cameraController, cameraInterp, worldPos, viewDistance });
     await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
@@ -3487,10 +3454,7 @@ window._lab = {
         ? 'ACHIEVED != ASKED — the renderer clamped this framing. The achieved number is the real one.'
         : null,
       lod,
-      // `focusRetargeted` is reported in `controller`'s own idiom — what had to be changed, named
-      // rather than silently corrected, because a caller that was relying on the previous focus needs
-      // to know the framing took it.
-      controller: { ...controller, focusRetargeted, focusFrom },
+      controller,
     };
   },
 

@@ -10,7 +10,7 @@
 // Without it, admitting a class means editing the branch that mounts the material, and there are
 // THREE such sites: `Planet._createSurface` (planets), `BodyRenderer.createMoon` (plain moons), and
 // `Planet._createSurface` AGAIN by a different route for planet-class moons, which reach Planet.js
-// from src/main.js:7693 `const planetMoon = new Planet(scenePMData, pmStarInfo);` and not through
+// from src/main.js:7657 `const planetMoon = new Planet(scenePMData, pmStarInfo);` and not through
 // BodyRenderer at all. Three sites, one of them easy to miss, and the failure mode of missing it is
 // a feature that renders on some bodies and not others with NOTHING COMPLAINING — no throw, no red
 // test, just a class of body that quietly kept the old look. With this array, admitting a class is
