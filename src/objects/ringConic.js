@@ -143,8 +143,10 @@ function axisExtentInto(h0, h1, h2, w0, w1, w2, R) {
  *   Cs max-abs-normalized (max|entry|=1); Hinv is adj(H) (see adj3Into — the same
  *   thing up to a scale nothing downstream can see); bounds = [minX,minY,maxX,maxY]
  *   render-pixel AABB of the ring's projection, or ±CONIC_EXTENT_UNBOUNDED when the
- *   circle crosses the camera plane. null ONLY on a non-finite / rank-≤1 H — never
- *   for the grazing OR the exactly-edge-on degeneracy.
+ *   circle crosses the camera plane, or an EMPTY extent (min=+UNBOUNDED,
+ *   max=−UNBOUNDED ⇒ withinRingExtent false everywhere) when the whole circle is
+ *   BEHIND the camera and nothing should be painted. null ONLY on a non-finite /
+ *   rank-≤1 H — never for the grazing OR the exactly-edge-on degeneracy.
  */
 export function buildRingConic(pvm, radius, W, H, out) {
   if (pvm && pvm.clipCols) {
@@ -200,7 +202,39 @@ export function buildRingConic(pvm, radius, W, H, out) {
   // the curve is a real hyperbola: leave it unbounded (that IS what the sky looks
   // like from inside an orbit) and let the front-branch guard do its job.
   const b = res.bounds;
-  const wMin = _Hm[8] - radius * Math.hypot(_Hm[6], _Hm[7]);
+  const wSpan = radius * Math.hypot(_Hm[6], _Hm[7]);
+  const wMin = _Hm[8] - wSpan;
+  const wMax = _Hm[8] + wSpan;
+
+  // ⭐ orbit-ring-phantom-2026-08-11 — THE THIRD CASE. clip-w around the circle
+  // spans [wMin, wMax], and that admits THREE geometries, not two:
+  //   wMin > 0        whole circle IN FRONT   -> bounded closed curve (below)
+  //   wMin < 0 < wMax straddles the camera    -> genuinely a hyperbola (sentinel)
+  //   wMax <= 0       whole circle BEHIND     -> nothing to draw AT ALL
+  // Only the first two were handled: everything that failed `wMin > 0` fell
+  // through to the unbounded sentinel, so a ring entirely behind the camera got
+  // its extent reject DISABLED — and the extent reject is the only thing bounding
+  // the edge-on degeneracy's infinite zero set (see the header + the shader's
+  // EXTENT REJECT comment). The band then painted the ring PLANE's vanishing line
+  // clean across the screen, in directions containing no ring, wherever the
+  // reconstructed w_clip happened to come out positive — which, at a point at
+  // infinity, is numerically arbitrary. MEASURED live 2026-08-11: from the
+  // outermost planet looking AWAY from the star, 13 of 17 conics were behind the
+  // camera (one of them radius 0.18 at 7183 units) and every one carried the
+  // "genuinely unbounded" sentinel; the resulting line sat on the ecliptic's
+  // vanishing line at y=155 of 855, 2px from where Max was seeing it.
+  //
+  // An EMPTY extent (min > max) rather than null: `null` means a non-finite /
+  // rank-<=1 H and that contract is relied on upstream (update() -> active=0,
+  // which zeroes the conic rows). The extent reject runs BEFORE the front-branch
+  // guard in the shader, so an inverted AABB rejects every pixel with no GLSL
+  // change. `!(wMax > 0)` and not `wMax <= 0` so a NaN culls rather than leaks.
+  if (!(wMax > 0)) {
+    b[0] = CONIC_EXTENT_UNBOUNDED;  b[1] = CONIC_EXTENT_UNBOUNDED;
+    b[2] = -CONIC_EXTENT_UNBOUNDED; b[3] = -CONIC_EXTENT_UNBOUNDED;
+    return res;
+  }
+
   if (wMin > 0
       && axisExtentInto(_Hm[0], _Hm[1], _Hm[2], _Hm[6], _Hm[7], _Hm[8], radius)) {
     b[0] = _ext[0]; b[2] = _ext[1];

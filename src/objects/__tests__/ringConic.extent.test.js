@@ -206,3 +206,81 @@ describe('a11 the packed DataTexture carries the extent bound', () => {
     for (let k = 0; k < 4; k++) expect(back.bounds[k]).toBe(Math.fround(direct.bounds[k]));
   });
 });
+
+// a12 — THE THIRD CASE (orbit-ring-phantom-2026-08-11). `wMin > 0` splits the
+// world in two, but clip-w around the circle spans [wMin, wMax] and that admits
+// THREE geometries. A ring entirely BEHIND the camera (wMax <= 0) used to fall
+// through to the same "genuinely unbounded" sentinel a10 pins for the straddling
+// case — disabling the extent reject, which is the ONLY bound on the edge-on
+// degeneracy's infinite zero set. The band then painted the ring plane's
+// vanishing line across the whole screen in directions containing no ring.
+//
+// MEASURED LIVE 2026-08-11 (seed lab-procedural-6, ORRERY, camera on the outermost
+// planet's orbit looking AWAY from the star): 13 of 17 conics had wMax < 0 — one
+// of radius 0.18 at camDist 7183, which cannot cross any camera plane — and every
+// one carried the unbounded sentinel. The phantom line sat at y=155 of 855, on the
+// ecliptic's computed vanishing line.
+describe('a12 a circle entirely BEHIND the camera paints nothing', () => {
+  // Camera at +D looking AWAY from the ring: the whole circle is behind it.
+  function cameraLookingAway(camY, dist = D) {
+    const cam = new THREE.PerspectiveCamera(FOV, ASPECT, NEAR, FAR);
+    cam.position.set(0, camY, dist);
+    cam.up.set(0, 1, 0);
+    cam.lookAt(0, camY, dist + 100);   // 180 deg from the ring at the origin
+    cam.updateMatrixWorld(true);
+    cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
+    return cam;
+  }
+
+  // The elevations that matter are the GRAZING ones — that is where Cs degenerates
+  // and the unbounded sentinel actually costs you pixels.
+  for (const { camY, deg } of CAM_Y_LADDER) {
+    it(`${deg} deg above plane, looking away: extent is EMPTY, not unbounded`, () => {
+      const cam = cameraLookingAway(camY);
+      // Ground truth, from forward projection only: every point is behind.
+      const truth = bruteExtent(cam);
+      expect(truth.wMin).toBeLessThan(0);
+
+      const conic = buildRingConic(pvmFor(cam), R, W, H);
+      expect(conic).not.toBeNull();
+
+      // NOT the a10 sentinel — an empty extent, so min > max.
+      expect(conic.bounds[0]).toBe(CONIC_EXTENT_UNBOUNDED);
+      expect(conic.bounds[2]).toBe(-CONIC_EXTENT_UNBOUNDED);
+      expect(conic.bounds[0]).toBeGreaterThan(conic.bounds[2]);
+
+      // The extent test rejects EVERY pixel, including the far field the
+      // degenerate band would otherwise paint.
+      expect(withinRingExtent(conic.bounds, W / 2, H / 2, MARGIN)).toBe(false);
+      expect(withinRingExtent(conic.bounds, -1e6, 1e6, MARGIN)).toBe(false);
+    });
+  }
+
+  it('nothing is painted anywhere along the vanishing-line scan row', () => {
+    // camY tiny => maximally degenerate Cs, the regime that produced the phantom.
+    const cam = cameraLookingAway(1e-3);
+    const conic = buildRingConic(pvmFor(cam), R, W, H);
+    for (const py of [0, H / 4, H / 2, (3 * H) / 4, H]) {
+      expect(scanBand(conic, py).count).toBe(0);
+    }
+  });
+
+  it('a ring far behind and TINY is culled too (the radius-0.18-at-7183 case)', () => {
+    const cam = cameraLookingAway(0.02, 7183);
+    const conic = buildRingConic(pvmFor(cam), 0.18, W, H);
+    expect(conic).not.toBeNull();
+    expect(conic.bounds[0]).toBeGreaterThan(conic.bounds[2]); // empty
+    expect(scanBand(conic, H / 2).count).toBe(0);
+  });
+
+  it('does NOT cull the two legitimate cases a6-a11 pin', () => {
+    // in front + bounded: still a real AABB
+    const front = buildRingConic(pvmFor(cameraAt(4)), R, W, H);
+    expect(isBounded(front)).toBe(true);
+    expect(front.bounds[0]).toBeLessThan(front.bounds[2]);
+    // straddling the camera plane: still the a10 unbounded sentinel
+    const straddle = buildRingConic(pvmFor(cameraAt(0.5, 50)), R, W, H);
+    expect(straddle.bounds[0]).toBe(-CONIC_EXTENT_UNBOUNDED);
+    expect(withinRingExtent(straddle.bounds, -1e6, 1e6, 0)).toBe(true);
+  });
+});
