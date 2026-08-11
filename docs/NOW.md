@@ -2041,6 +2041,14 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
 
 ## Open structural decisions (from session)
 
+- ✅ **STEP 6 UAT PASSED — Max, 2026-08-11.** On `PVX J3DK6GAO+RBJGI5M g` (p=5,
+  `lab-procedural-6`) at 3.0 body radii: north polar cap (`uPolarPole +1`, 6 sides),
+  `uLimbStrength 0.7`, `uBandContrast 0.64`, octaves 9/9 saturated, live agreeing with
+  predicted. **Gas giants are shipped through the pipeline in the game.** Coverage
+  9 of 50 bodies (18%).
+  ⭐ **Step 12's gate is now half closed.** Step 12 (delete `GAS_BODY`, `Moon.js`'s
+  shader, and the 6e flag) depends on Max's UAT on Steps 6 **and 10** — 6 is done, 10 is
+  not built. Do NOT read this as licence to remove the flag.
 - ⭐ **RULED 2026-08-11 (Max): Step 10 is its own workstream, not a `PACKS` registration.**
   The plan's §4 reads Steps 9 and 10 as symmetric — "one entry each". Measured, they
   are not. `applyDriverPacks` has exactly ONE production caller

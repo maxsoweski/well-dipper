@@ -305,7 +305,7 @@ Packs emit **sizeKm‑shaped drivers**. A single shared writer applies `featureF
 
 ---
 
-### Step 6 — Runtime pack composition + gas bodies render through the lab material · **L** — **SHIPS GAS GIANTS** · deps: Step 5
+### Step 6 — Runtime pack composition + gas bodies render through the lab material · **L** — **SHIPS GAS GIANTS** · deps: Step 5 · ✅ **UAT PASSED — Max, 2026‑08‑11**, on `PVX J3DK6GAO+RBJGI5M g` at 3.0 radii (north cap, 6 sides, limb 0.7, octaves 9/9 saturated). Half of Step 12's gate is now closed; the other half is Step 10.
 
 **What.**
 
