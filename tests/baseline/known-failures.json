@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-11T16:54:15.628Z",
+  "recordedAt": "2026-08-11T17:13:52.939Z",
   "recordedFromCommit": {
-    "sha": "8c0958baa494f99e90ee81fb11270672da8eea93",
+    "sha": "59fbd8e1b7c0722bfe9583a69bc2af06906c2db4",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -31,9 +31,9 @@
       "collectedFiles": 319,
       "failingFiles": 2,
       "nonCollectingFiles": 15,
-      "tests": 5250,
+      "tests": 5253,
       "failed": 24,
-      "passed": 5222,
+      "passed": 5225,
       "skipped": 4,
       "todo": 0
     },
@@ -100,7 +100,7 @@
       "src/camera/__tests__/arrivalZoom.test.js": 12,
       "src/camera/__tests__/modeSwapNoSnap.test.js": 5,
       "src/camera/__tests__/orreryEntryGeometry.test.js": 29,
-      "src/camera/__tests__/orreryGlide.test.js": 11,
+      "src/camera/__tests__/orreryGlide.test.js": 14,
       "src/cockpit/__tests__/CockpitRig.test.js": 46,
       "src/cockpit/__tests__/CockpitSnapshot.test.js": 14,
       "src/cockpit/__tests__/FlightReadout.test.js": 31,
