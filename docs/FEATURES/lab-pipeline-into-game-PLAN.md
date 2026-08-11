@@ -1015,7 +1015,51 @@ anywhere in `src/rendering/` — `LODManager` swaps materials and ramps octaves,
 builds one fixed `SphereGeometry(R, 256, 256)` at load. **Closing half 2 means BUILDING something,
 not wiring something.** Scope it with `dev-collab-scope` when it becomes the active job.
 
+### ⭐ MEASURED 2026-08-10 — the octave budget is NOT the difference, and Max's own eyes agree
+
+The agent camera API (`_lab.approachSweep`, workstream `agent-camera-api-2026-08-10`) makes this
+answerable for the first time. Run on both front-ends, seed `lab-procedural-6`:
+
+```
+20 -> 13.84 -> 9.57 -> 6.62 -> 4.58 -> 3.17 -> 2.19 -> 1.52 -> 1.05  body radii
+oct  4.00     6.05    8.19    8.97    9.00    9.00    9.00    9.00    9.00
+```
+
+Saturation onset in **(6.62, 4.58]**; five of nine rungs resolve nothing new; the disc grows ~4.4x
+across them. ⭐ **The two front-ends report the SAME live octave value at every rung** — the ramp
+really is shared and really is driven on both.
+
+**Max, 2026-08-10, after looking at the live game at 2.2 body radii:** *"The beach ball effect is
+greatly mitigated by it being rounder than before. But we do still have a detail problem. In the lab
+I can get closer and still see more detail. So we may need to work in more LOD steps. But we just
+have to get the pipeline from the lab working in game first."*
+
+⛔ **PUT THOSE TWO FACTS TOGETHER, BECAUSE THEY NARROW THE WORK SHARPLY.** The lab shows more detail
+up close *while running the identical octave budget*. So the deficit is **NOT** the ramp, **NOT** the
+octave count, and **NOT** a porting gap in `lodRampOf`/`autoOctaves`. This is measurement confirming
+what this section already argued from reading: what is missing is camera-localised detail INJECTION,
+above. ⛔ Anyone who proposes "raise the octave ceiling" or "re-port the LOD ramp" as the fix for
+half 2 is answering a question the measurement has already closed. Max's "more LOD steps" is a
+description of the symptom, not a specification of the fix — and his ruling is that the pipeline
+comes first regardless.
+
 ## Known adjacent defect, do not bundle
-Planet-class moons never register with `LODManager` (`src/main.js:7437` sits in the `else` arm), so
-they get **no octave ramp at all** — `uOctaves` frozen at 4.0, `uLodRamp` at 0.0. Sweep finding
-S6-M7, verified 2026-08-10. Real, separate, and worth its own fix; it has zero effect on half 1.
+Planet-class moons never register with `LODManager` (`src/main.js` — the `lodManager.register(moon)`
+call sits in the `else` arm), so they get **no octave ramp at all**. Sweep finding S6-M7.
+
+⛔ **CORRECTED 2026-08-10 BY MEASUREMENT — this section previously said `uOctaves` is "frozen at 4.0,
+`uLodRamp` at 0.0". THERE IS NO `uOctaves` ON THESE BODIES TO FREEZE.** Measured live on
+`body.planet.f5791a` ("Al", `lab-procedural-6` p=5 m=2) against an ordinary planet in the same
+system:
+
+| body | uniforms | `isLabPlanetMaterial` | `uOctaves` |
+|---|---|---|---|
+| ordinary planet `body.planet.41e625` | 356 | **true** | present, driven |
+| planet-class moon `body.planet.f5791a` | 71 | **false** | **absent** (carries `uReliefOctaves`/`lodLevel`) |
+| plain moon `body.moon.843748` | 29 | false | absent |
+
+A planet-class moon is **not on the lab material at all**, so the LODManager registration gap is
+**downstream of a material gap** — registration alone would not give it an octave ramp, because the
+uniform the ramp writes does not exist on it. The frozen-at-4.0 signature is what would appear
+*after* a lab-material swap. ⛔ Code that tests for a 4.0 here reads `undefined` and concludes the
+wrong thing. Still real, still separate, still zero effect on half 1.
