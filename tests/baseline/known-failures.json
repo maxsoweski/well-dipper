@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-11T03:14:51.256Z",
+  "recordedAt": "2026-08-11T03:26:18.429Z",
   "recordedFromCommit": {
-    "sha": "91b5b2b57e91a0fb9b81a7664e0779dae8678bba",
+    "sha": "48a69edbd7237b9b3c257fca8f8de38e0c18005f",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -31,9 +31,9 @@
       "collectedFiles": 319,
       "failingFiles": 2,
       "nonCollectingFiles": 15,
-      "tests": 5238,
+      "tests": 5241,
       "failed": 24,
-      "passed": 5210,
+      "passed": 5213,
       "skipped": 4,
       "todo": 0
     },
@@ -232,9 +232,9 @@
       "tests/crater-uniform-law.test.js": 26,
       "tests/driver-pack-giantdeck.test.js": 73,
       "tests/driver-pack-limbdeck.test.js": 31,
-      "tests/driver-pack-polardeck.test.js": 34,
+      "tests/driver-pack-polardeck.test.js": 35,
       "tests/feature-associations.test.js": 17,
-      "tests/gas-body-lab-material.test.js": 55,
+      "tests/gas-body-lab-material.test.js": 57,
       "tests/gen-feature-cards.test.js": 3,
       "tests/giant-regime-classifier.test.js": 22,
       "tests/gravity-provenance-fence.test.js": 6,
