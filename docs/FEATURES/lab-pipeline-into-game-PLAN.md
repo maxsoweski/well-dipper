@@ -1026,8 +1026,40 @@ oct  4.00     6.05    8.19    8.97    9.00    9.00    9.00    9.00    9.00
 ```
 
 Saturation onset in **(6.62, 4.58]**; five of nine rungs resolve nothing new; the disc grows ~4.4x
-across them. ⭐ **The two front-ends report the SAME live octave value at every rung** — the ramp
-really is shared and really is driven on both.
+across them.
+
+> ### ⛔⛔ CORRECTION, SAME DAY — THIS SWEEP WAS TAKEN WITH THE 6e FLAG ON
+>
+> The line here originally read *"the two front-ends report the SAME live octave value at every rung
+> — the ramp really is shared and really is driven on both."* **That measurement compared the lab
+> shader against ITSELF.** `localStorage['wd.labGasBodies']` was `'1'`, left over from an earlier
+> session, so the game body was carrying the LAB material. Caught by the planet-surface research
+> workflow's M1 check, not by me.
+>
+> **MEASURED at the shipped default (flag cleared, page reloaded), on the SAME body
+> `body.planet.41e625` in `lab-procedural-6`:**
+>
+> | | flag ON (the original sweep) | flag OFF (**shipped default**) |
+> |---|---|---|
+> | `isLabPlanetMaterial` | true | **false** |
+> | uniform count | 356 | **71** |
+> | `uOctaves` | present, driven 4.00 → 9.00 | **absent** |
+> | sweep `liveOctaves` | 4.00 → 9.00 | **null at every rung** |
+>
+> ⭐ **THE DEFAULT GAME DOES STILL RAMP — under a DIFFERENT UNIFORM.** Measured across 20 → 1.2 body
+> radii: `uReliefOctaves` 4 → 8.72 → 9 → 9 and `lodLevel` 1 → 2. So both shaders run a 4→9 octave
+> ramp and **both saturate before you are close**. The octave-ceiling finding survives for both — it
+> is the identification of *which* uniform, and *which shader*, that was wrong.
+>
+> ⭐⭐ **AND THIS MAKES MAX'S ORDERING MEASURABLY CORRECT.** He said *"in the lab I can get closer and
+> still see more detail... but we just have to get the pipeline from the lab working in game first."*
+> The default game body runs a **71-uniform** shader; the lab runs **356**. The lab's advantage up
+> close is not a better LOD ramp — **it is a different, much richer shader**. That is a pipeline-port
+> gap, which is exactly the thing he ruled comes first.
+>
+> ⛔ **CHECK THE FLAG BEFORE QUOTING ANY GAME-VS-LAB COMPARISON.** `localStorage['wd.labGasBodies']`
+> and `window.__wdLabGasBodies` are both live and both silent. A flag-ON measurement of "the game"
+> is a measurement of the lab material wearing the game's scene graph.
 
 **Max, 2026-08-10, after looking at the live game at 2.2 body radii:** *"The beach ball effect is
 greatly mitigated by it being rounder than before. But we do still have a detail problem. In the lab

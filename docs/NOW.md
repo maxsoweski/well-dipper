@@ -21,6 +21,15 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > approach-consistency criterion as a number for the first time. ⛔ Fixing it is **PLAN §LAYER 7,
 > after Step 7** — unchanged by this.
 >
+> ⛔⛔ **CORRECTED SAME DAY — that sweep ran with the 6e flag ON.** `localStorage['wd.labGasBodies']`
+> was `'1'` from an earlier session, so the "game" body was carrying the **lab** material and the
+> comparison was the lab shader against itself. At the shipped default the same gas giant has **71
+> uniforms, no `uOctaves`**, and ramps **`uReliefOctaves` 4 → 9** instead. Both shaders saturate, so
+> the octave-ceiling finding stands — but the lab's advantage up close is **a 356-uniform shader
+> versus 71**, i.e. a PIPELINE-PORT gap, not an LOD gap. ⭐ That makes Max's "pipeline first" ruling
+> measurably correct. Full record + the M1 measurement: `FEATURES/lab-pipeline-into-game-PLAN.md`
+> §LAYER 7. ⛔ **Check the flag before quoting any game-vs-lab comparison** — it is silent and sticky.
+>
 > ⭐ **CORRECTION TO A CARRIED CLAIM — read before touching planet-class moons.** The 2026-08-10
 > handoff says their `uOctaves` is "frozen at 4.0". MEASURED: there is **no `uOctaves` to freeze**.
 > A planet-class moon (`body.planet.f5791a`) is **not on the lab material at all** — 71 uniforms,
