@@ -242,6 +242,32 @@ describe('AC-6 — the resync call cannot be silently deleted', () => {
     expect(body).toMatch(/cameraInterp\.resync\(camera\)/);
   });
 
+  it('⭐ frameBody reports the 6e flag, so a measurement cannot be quoted against the wrong shader', () => {
+    // THE DEFECT THIS GATES, which actually happened on 2026-08-10: a sweep of "the game" was taken
+    // with the 6e flag silently ON (localStorage, set by an earlier session), so the body carried the
+    // LAB material. It compared the lab shader against itself and produced a confident wrong claim.
+    // ⛔ Asserted on LIVE code, and on the READ rather than the mention: the fix is only real if the
+    // flag is actually queried inside frameBody, not described in a comment above it.
+    const body = functionBodyAt(readStripped('src/main.js'), 'async frameBody(subject');
+    expect(body, 'frameBody must READ the flag, not just mention it').toMatch(/labGasBodiesFlag\(\)/);
+    expect(body, 'and the reading must reach the caller').toMatch(/pipeline:/);
+    expect(body).toMatch(/isLabPlanetMaterial/);
+    // The source matters as much as the value — 'override' / 'window' / 'localStorage' / 'default'
+    // are four different explanations for why a body looks the way it does.
+    expect(body).toMatch(/flagSource/);
+    // and the sweep must carry it up, because the failure was a SWEEP, not a single framing.
+    // ⛔ ASSERTED ON THE RETURNED OBJECT, NOT ON THE FUNCTION BODY, and the difference is not
+    // pedantry — it is a MEASURED vacuity. The first version of this line was
+    // `expect(sweep).toMatch(/pipeline/)`, which matches the local `let pipeline` and the
+    // `pipeline = shot.pipeline` assignment. Deleting the field from the RETURN left that gate
+    // green: mutant run, 20/20 passed. A gate that matches a mention of the thing instead of the
+    // thing is this repo's signature dead fence, and this one was mine.
+    const sweep = functionBodyAt(readStripped('src/main.js'), 'async approachSweep(subject');
+    const sweepReturn = sweep.slice(sweep.lastIndexOf('return {'));
+    expect(sweepReturn, 'approachSweep must RETURN the pipeline block, not merely compute it')
+      .toMatch(/^\s*pipeline,\s*$/m);
+  });
+
   it('the game frameBody measures AFTER awaiting frames, not before', () => {
     const body = functionBodyAt(readStripped('src/main.js'), 'async frameBody(subject');
     const iAwait = body.indexOf('requestAnimationFrame');

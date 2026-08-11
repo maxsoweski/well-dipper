@@ -137,7 +137,7 @@ import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetM
 // bodies fall inside the game's own GAS_TYPES set) and an assertion written against the wrong one is
 // satisfied by a body the claim does not cover. `shaderVariantFor` IS the game's map — it is the
 // function `if (GAS_TYPES.has(type)) return 'gas';` lives in — and `compositionClass` is the E1 label.
-import { shaderVariantFor } from './objects/Planet.js';
+import { shaderVariantFor, labGasBodiesFlag } from './objects/Planet.js';
 import { compositionClass as e1CompositionClassOf } from './worldengine/base/e1Regime.js';
 
 // ── User Settings (localStorage-backed) ──
@@ -3400,9 +3400,33 @@ window._lab = {
     const lod = lodStateOf(r.mesh, achieved.distanceRadii);
     const clampedFromAsk = achieved.distanceRadii != null && Math.abs(achieved.distanceRadii - radii) / radii > 0.01;
 
+    // ⭐⭐ THE FLAG TRAVELS WITH THE MEASUREMENT, AND THIS FIELD IS THE WHOLE REASON.
+    // On 2026-08-10 a sweep of "the game" was taken with the 6e flag silently ON — set in
+    // localStorage by an earlier session — so the body under measurement was carrying the LAB
+    // material. It compared the lab shader against ITSELF and produced a confident, printable,
+    // wrong conclusion: "both front-ends report the same octave value, the ramp is shared".
+    // ⛔ THE FIX IS NOT TO PIN THE FLAG OFF. The flag is not a correctness property of the
+    // environment, it is a PARAMETER OF THE MEASUREMENT — pinning it merely relocates the failure
+    // (assume-on and assume-off are the same mistake), and it costs whoever is looking at the game
+    // the very bodies this program exists to put there. So every framing REPORTS it, mechanically,
+    // where it cannot be forgotten. `source` matters as much as `enabled`: 'override', 'window',
+    // 'localStorage' and 'default' are four different stories about why a body looks how it looks.
+    const flag = labGasBodiesFlag();
+
     return {
       ok: true,
       body: { name: r.name, display: r.display, kind: r.kind, p: r.p, m: r.m, s: r.s, isPlanetMoon: r.isPlanetMoon },
+      pipeline: {
+        labGasBodies: flag.enabled,
+        flagSource: flag.source,
+        flagDefault: flag.default,
+        isLabPlanetMaterial: r.swapped,
+        // ⚠ The pair is the point. `labGasBodies: true` with `isLabPlanetMaterial: false` is a body
+        // no pack admitted (rocky today — there is no rocky pack until Step 9), NOT a broken flag.
+        note: flag.enabled === flag.default
+          ? null
+          : `⚠ THE 6e FLAG IS NOT AT ITS SHIPPED DEFAULT (${flag.default}) — it reads ${flag.enabled} from ${flag.source}. This measurement does NOT describe the default game.`,
+      },
       asked: { radii, viewDistance: +viewDistance.toFixed(4) },
       achieved: {
         radii: achieved.distanceRadii == null ? null : +achieved.distanceRadii.toFixed(4),
@@ -3442,10 +3466,12 @@ window._lab = {
 
     const rows = [];
     let body = null;
+    let pipeline = null;
     for (const askedRadii of ladder) {
       const shot = await this.frameBody(subject, { radii: askedRadii });
       if (!shot.ok) return { ok: false, reason: shot.reason, completedRows: rows };
       body = shot.body;
+      pipeline = shot.pipeline;
       rows.push({
         askedRadii: +askedRadii.toFixed(3),
         achievedRadii: shot.achieved.radii,
@@ -3480,6 +3506,9 @@ window._lab = {
     return {
       ok: true,
       body,
+      // Carried up from the rungs so a sweep table can never be quoted without the shader it was
+      // taken against — the failure this field was added for was a SWEEP, not a single framing.
+      pipeline,
       rows,
       saturatedFromRadii: firstSaturatedRung,
       saturationOnsetBetweenRadii: firstSaturatedRung == null ? null : [onsetUpperBound, firstSaturatedRung],
