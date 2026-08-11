@@ -294,7 +294,7 @@ describe('1. the swapped population, re-measured on lab-procedural-0…199', () 
   });
 
   it('⭐ 114 of the 341 swapped bodies do not render the GAS program today', () => {
-    // The predicate is condition-derived (drivers/index.js:97) and the legacy program is chosen by
+    // The predicate is condition-derived (drivers/index.js:99) and the legacy program is chosen by
     // the `type` LABEL (Planet.js:1422). They disagree on a third of the population, and PLAN §6b's
     // loss table enumerates the gas branch only. Ledger rows R-01…R-04 are that gap.
     expect(Object.fromEntries(CENSUS.byVariant)).toEqual({ gas: 227, rocky: 114 });
@@ -357,15 +357,22 @@ describe('2. the collapse in per-body variation', () => {
       'uBandS2', 'uBandSEq', 'uBandTint', 'uBandWarp',
       'uBodyRadius',
       'uJetFestoon', 'uJetShearTurb', 'uJetSpeed',
-      'uLightDir', 'uThermalDir',
+      'uLightDir',
+      'uLimbColor', 'uLimbExponent',
+      'uPolarMode', 'uPolarPhase', 'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
+      'uPolarStrength', 'uPolarTint',
+      'uThermalDir',
     ]);
-    // 13 band/jet drivers of the 15 the pack writes vary; `uBandStrength` and `uJetStrength` are
-    // written to the SAME value on every body, which is why "15 written" is not "15 varying".
+    // ⭐ MEASURED POST-REGISTRATION: 23 of the 26 uniforms the three packs write vary per body. The
+    // three that do not are the MASTER GATES — `uBandStrength`, `uJetStrength` and `uLimbStrength`
+    // are each written to the same value on every admitted body, which is why "26 written" is not
+    // "26 varying". ⚠ `uPolarStrength` is NOT among them: it is the per-seed PRESENCE coin (1 on
+    // roughly 24 of 41 gas bodies, 0 on the rest), so it genuinely varies.
     expect(LEDGER.written.filter((n) => !LEDGER.labVarying.includes(n)))
-      .toEqual(['uBandStrength', 'uJetStrength']);
+      .toEqual(['uBandStrength', 'uJetStrength', 'uLimbStrength']);
   });
 
-  it('the pack writes 15 uniforms, and the ledger’s three `carried` rulings rest on them', () => {
+  it('the three packs write 26 uniforms, and the ledger’s three `carried` rulings rest on them', () => {
     // If the pack stops writing the band deck, G-01/G-04/G-07's "carried" ruling is false. Pinned as
     // a SET OF NAMES, not a length — Step 4 measured that a count-preserving permutation is
     // byte-identical to every instrument this program owns.
@@ -373,6 +380,11 @@ describe('2. the collapse in per-body variation', () => {
       'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM', 'uBandPhaseJet', 'uBandRough',
       'uBandS2', 'uBandSEq', 'uBandStrength', 'uBandTint', 'uBandWarp',
       'uJetFestoon', 'uJetShearTurb', 'uJetSpeed', 'uJetStrength',
+      // ── limbDeck (C20), live from the registration commit ──
+      'uLimbColor', 'uLimbExponent', 'uLimbStrength',
+      // ── polarDeck (C19), live from the registration commit ──
+      'uPolarMode', 'uPolarPhase', 'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
+      'uPolarStrength', 'uPolarTint',
     ]);
     // P-18's three `carried` names must actually VARY on the post-swap material, or "carried" is a
     // claim about a constant.
@@ -385,7 +397,11 @@ describe('2. the collapse in per-body variation', () => {
     // a value comparison over the identical pair of materials reports them as diverged. A ledger
     // that ruled the name would record 28 surviving features where at most 8 survive.
     expect(LEDGER.carried.size).toBe(28);
-    expect(LEDGER.divergedCarried.size).toBe(20);
+    // ⭐ 20 -> 19 AT REGISTRATION, and the one that left is the evidence the wire is live:
+    // `uLimbExponent` was CARRIED-but-diverged (the game computed a per-body value the lab material
+    // did not receive). limbDeck now writes it, so the two sides agree and it moves into `agreeing`
+    // below. A registration that changed nothing would have left this at 20.
+    expect(LEDGER.divergedCarried.size).toBe(19);
     const everyBody = [...LEDGER.divergedCarried.entries()]
       .filter(([k, v]) => v === LEDGER.carriedTotal.get(k)).map(([k]) => k);
     expect(everyBody.length).toBe(17);
@@ -393,7 +409,10 @@ describe('2. the collapse in per-body variation', () => {
     const agreeing = [...LEDGER.carried].filter((n) => !LEDGER.divergedCarried.has(n)).sort();
     expect(agreeing).toEqual([
       'uCraterDensity', 'uCraterRelaxation', 'uEjectaLump', 'uEjectaRampart', 'uEjectaStrength',
-      'uFwClamp', 'uTerraceCount', 'uVoroCells',
+      'uFwClamp',
+      // ⭐ NOT by absence — this one agrees because limbDeck WRITES it. See the note above.
+      'uLimbExponent',
+      'uTerraceCount', 'uVoroCells',
     ]);
     for (const n of agreeing) {
       // …and every one of them is carried on every body, so "agrees" is not "was rarely compared".
@@ -408,9 +427,10 @@ describe('2. the collapse in per-body variation', () => {
 describe('3. channel 1 — the uniform diff, run not read', () => {
   const measured = () => new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.divergedCarried.keys()]);
 
-  it('the subject set is 43 lost names plus the 20 value-defaulted carried ones', () => {
+  it('the subject set is 43 lost names plus the 19 value-defaulted carried ones', () => {
     expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero]).size).toBe(43);
-    expect(measured().size).toBe(63);
+    // 63 -> 62 at registration: `uLimbExponent` stopped diverging because limbDeck now writes it.
+    expect(measured().size).toBe(62);
     // 43 lost + 28 carried = the 71 the game material declares. Nothing fell between the buckets.
     expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.carried]).size).toBe(71);
   });
@@ -463,12 +483,19 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
     expect([...labNames].filter((n) => /shadow/i.test(n))).toEqual([]);
     expect(LAB_SHADER_CORPUS.includes('uLightDir2')).toBe(false);
     expect(LAB_SHADER_CORPUS.includes('uShadow')).toBe(false);
-    // P-04 / P-05: the alias shape — the counterpart EXISTS, which is why those rows are `blocking`
-    // rather than `accepted-loss`.
-    for (const n of ['uLimbStrength', 'uAuroraColor', 'uAuroraIntensity', 'uAuroraRingLat', 'uAuroraRingWidth']) {
+    // P-05: the alias shape — the counterpart EXISTS, which is why that row is `blocking` rather
+    // than `accepted-loss`.
+    for (const n of ['uAuroraColor', 'uAuroraIntensity', 'uAuroraRingLat', 'uAuroraRingWidth']) {
       expect(labNames.has(n), `lab should declare ${n}`).toBe(true);
       expect(LEDGER.written).not.toContain(n);      // …and nothing writes it
     }
+    // ⭐⭐ P-04 IS CLOSED BY REGISTRATION, AND THIS IS THE ASSERTION THAT SAYS SO. `uLimbStrength`
+    // used to belong to the loop above: declared by the lab, written by nothing. limbDeck now writes
+    // it, so the loss is resolved rather than merely described. ⛔ THE INVERTED ASSERTION IS THE
+    // POINT — if a future edit un-registers limbDeck, this line goes red, which is precisely the
+    // "delete the entry and the feature silently leaves" failure the registration fence exists for.
+    expect(labNames.has('uLimbStrength'), 'the lab must still declare uLimbStrength').toBe(true);
+    expect(LEDGER.written, 'P-04: limbDeck must write it, or the loss is back').toContain('uLimbStrength');
   });
 
   it('P-17 — `lodLevel` is read by no shader, and that is counted rather than asserted', () => {

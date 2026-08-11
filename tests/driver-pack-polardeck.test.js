@@ -8,10 +8,15 @@
 // guards is broken in-test, the gate is shown red, and the break is discarded.
 //
 // ⛔ WHAT THIS FILE DOES NOT CLAIM, each because claiming it would be false or unmeasured:
-//  1. IT DOES NOT CLAIM THE GAME RENDERS A POLAR VORTEX TODAY. `polarDeck` is NOT in `PACKS`, so
-//     `applyDriverPacks` never calls it and no game body's `uPolarStrength` moves. That hole is
-//     ASSERTED (gate 6) rather than described, so the commit that registers the pack turns this file
-//     red and makes its author read the note instead of discovering the coupling later.
+//  1. ⭐ REGISTERED AS OF THE limbDeck/polarDeck REGISTRATION COMMIT — this claim USED to read
+//     "`polarDeck` is NOT in `PACKS`". `POLAR_DECK_ENTRY` is now in the runtime array and gate 6
+//     asserts it by IDENTITY (the exported frozen entry, not a retyped copy), so `applyDriverPacks`
+//     does call the pack. ⛔ THAT STILL DOES NOT MEAN A PLAYER SEES A VORTEX: the composition point
+//     is reached only from `_createLabSurface`, behind the 6e flag whose shipped default is
+//     `LAB_GAS_BODIES_DEFAULT = false`. So the wire is live and the DEFAULT GAME IS UNCHANGED, and
+//     those are two different statements. Nothing in this file gates the flag.
+//     ⚠ AND EVEN FLAG-ON: `uPolarStrength` is the per-seed PRESENCE coin, 0 on roughly 40% of gas
+//     bodies BY DESIGN, so a capless giant is not a failed registration.
 //  2. It does not claim the display-policy seam is exercised. NOT ONE F29 driver is km-shaped
 //     (`uPolarR0` is angular), so policy agreement is a fact about the SIZE OF THE SET. The
 //     emptiness is asserted directly (gate 6) so the vacuity ends loudly.
@@ -52,7 +57,7 @@ import { fnv1aString } from 'motion-test-kit/core/hash/fnv1a.js';
 import {
   writePackUniforms, gameDisplayRadiusEarth, resolveDriver, isPackDriver, PackContractError,
 } from '../src/worldengine/port/writePackUniforms.js';
-import { PACKS, gatesFor } from '../src/worldengine/drivers/index.js';
+import { PACKS, gatesFor, applyDriverPacks } from '../src/worldengine/drivers/index.js';
 import {
   polarDeckPack, polarTintFromBandTint, POLAR_TINT_LAW,
   POLAR_DRIVEN, POLAR_LAB_KNOBS, GAME_STORM_SEED,
@@ -567,28 +572,42 @@ describe('GATE 5b · the registry entry is correct before anything composes it',
 // GATE 6 — THE SCOPE FENCES, AND THE HOLE THIS LANE DID NOT CLOSE
 // ─────────────────────────────────────────────────────────────────────────────
 describe('GATE 6 · fences and the open registration hole', () => {
-  it('⛔ polarDeck is NOT registered in PACKS — read this before making it green', () => {
-    // ⭐ THIS ASSERTION IS THE OPEN HOLE, WRITTEN SO IT ANNOUNCES ITSELF. The producer exists and is
-    // callable, but `applyDriverPacks` iterates PACKS and PACKS has one entry, so NOT ONE game body's
-    // `uPolarStrength` moves as of this commit. Registration is a THREE-FILE edit that this lane's
-    // file set does not include:
-    //   1. src/worldengine/drivers/index.js — a PACKS entry
-    //      { name: 'polarDeck', applies: (c) => compositionClass(c) === 'gas',
-    //        gates: Object.freeze(['polarVortex']), pack: polarDeckPack }
-    //   2. tests/gas-body-lab-material.test.js:108 `expect(PACKS.map((e) => e.name)).toEqual(['giantDeck']);` — the
-    //      membership fence, pinned as a SET OF NAMES, which must gain 'polarDeck'.
-    //   3. tools/port-uniform-delta.mjs `CITE_SOURCES` — polarDeck.js and this file, per §11.3.4.
-    // When entry 1 lands, THIS test goes red. That is the intended behaviour: the author deletes it
-    // and enables the registered-path assertions immediately below it.
-    //
-    // ⚠ SCOPED TO `polarDeck` ALONE, NOT `toEqual(['giantDeck'])`, and the difference matters while
-    // lanes run concurrently: a sibling lane is adding its own pack, and an equality here would go
-    // red on SOMEONE ELSE'S registration — a false red that teaches people to edit this line
-    // without reading it. The set-equality version of this fence already exists, once, at
-    // tests/gas-body-lab-material.test.js:108 `expect(PACKS.map((e) => e.name)).toEqual(['giantDeck']);`.
-    expect(PACKS.map((e) => e.name)).not.toContain('polarDeck');
-    // …and the pack is genuinely absent from composition, not merely absent from the name list
-    expect(PACKS.some((e) => e.pack === polarDeckPack)).toBe(false);
+  it('⭐ polarDeck IS registered in PACKS, and it is THE EXPORTED ENTRY, not a retyped copy', () => {
+    // ⛔ THIS ASSERTION REPLACED A FENCE THAT SAID THE OPPOSITE. Until the registration commit this
+    // read `not.toContain('polarDeck')` and existed to announce the open hole. It is inverted here
+    // rather than deleted, because a deleted fence leaves nothing behind that goes red if someone
+    // later removes the entry — and "the feature silently leaves" is the failure this whole
+    // registration sequence is built against.
+    const entry = PACKS.find((e) => e.name === 'polarDeck');
+    expect(entry, 'polarDeck must be registered').toBeTruthy();
+    // IDENTITY, not equality: the array must hold the frozen entry this module exports, so the
+    // predicate and the eight driver→pole mappings under test in GATE 5b are the ones that actually
+    // compose. A hand-retyped copy at the composition point would satisfy a shape check and drift.
+    expect(entry).toBe(POLAR_DECK_ENTRY);
+    expect(entry.pack).toBe(polarDeckPack);
+    // …and it is APPENDED, never prepended: four assertions in this repo index PACKS positionally,
+    // and the disjointness gate below is one of them.
+    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck']);
+  });
+
+  it('⭐ the registered path actually writes the uPolar family onto a real gas body', () => {
+    // The gate that would have caught "registered but composing nothing". `applyDriverPacks` is the
+    // shipped composition point; this runs it rather than calling the pack directly.
+    const body = POPULATION.find((b) => b.id === PRESENT_EXAMPLE_ID) || POPULATION[0];
+    const material = { uniforms: makeUniforms(LAB_WORLD_LIGHT) };
+    const res = applyDriverPacks(material, body.cond, {
+      displayRadiusEarth: gameDisplayRadiusEarth(body.cond.radiusEarth ?? 1),
+      macroSeed: 4242, animRate: 1, relevance: {},
+    });
+    expect(res.applied).toContain('polarDeck');
+    for (const n of POLAR_DRIVEN) {
+      // uPolarTint is conditional on the body carrying a band tint; the rest are unconditional.
+      if (n === 'uPolarTint' && !res.uniformsWritten.includes(n)) continue;
+      expect(res.uniformsWritten, `${n} must be written through the registered path`).toContain(n);
+    }
+    // ⛔ AND NO COLLISION — three packs on one body, each name written exactly once. The throw in
+    // applyDriverPacks is what makes this an assertion rather than a hope.
+    expect(new Set(res.uniformsWritten).size).toBe(res.uniformsWritten.length);
   });
 
   it('the gate name the registry entry will have to declare is `polarVortex`', () => {
@@ -604,7 +623,11 @@ describe('GATE 6 · fences and the open registration hole', () => {
   it('the two packs cannot collide: their uniform-name sets are disjoint', () => {
     const cond = gasCondition('Gas giant (Jovian)');
     const polar = new Set(Object.keys(polarDeckPack(cond, packCtx(cond, 4242)).drivers));
-    const giant = new Set(Object.keys(PACKS[0].pack(cond, {
+    // ⛔ NAME LOOKUP, NOT `PACKS[0]`. With three entries a positional index is one prepend away from
+    // comparing polarDeck against the WRONG pack, finding them disjoint, and passing green while
+    // asserting nothing about giantDeck.
+    const giantEntry = PACKS.find((e) => e.name === 'giantDeck');
+    const giant = new Set(Object.keys(giantEntry.pack(cond, {
       ...packCtx(cond, 4242), gates: { bands: true, jets: true },
     }).drivers));
     const overlap = [...polar].filter((n) => giant.has(n));

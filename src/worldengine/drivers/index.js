@@ -51,6 +51,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { compositionClass } from '../base/e1Regime.js';
 import { giantDeckPack } from './giantDeck.js';
+import { LIMB_DECK_ENTRY } from './limbDeck.js';
+import { POLAR_DECK_ENTRY } from './polarDeck.js';
 import {
   writePackUniforms, assertDisplayPolicy, assertPackResult, PackContractError,
 } from '../port/writePackUniforms.js';
@@ -98,6 +100,27 @@ export const PACKS = Object.freeze([
     gates: Object.freeze(['bands', 'jets']),
     pack: giantDeckPack,
   }),
+  // ⛔ APPENDED AFTER giantDeck, NEVER BEFORE IT, AND THIS IS NOT A STYLE PREFERENCE. Four
+  // assertions index this array POSITIONALLY, and the dangerous one is
+  // tests/driver-pack-polardeck.test.js's disjointness check, which reads `PACKS[0].pack(...)` with a
+  // hardcoded `{ bands: true, jets: true }` gate map. Insert anything at index 0 and that test
+  // compares polarDeck against the WRONG pack, finds them disjoint, and passes GREEN while asserting
+  // nothing about giantDeck. Those four are converted to name lookups in this same commit; the
+  // append order is the belt to that braces.
+  //
+  // ⛔ IMPORTED, NEVER RETYPED. Both entries are frozen and exported from their own modules, where
+  // their predicates and their driver→field mappings are gated. A hand-written copy here would be a
+  // second expression of the same law, free to drift from the one under test — and the natural wrong
+  // version is measured, not imagined: `!!condition.atmosphere` admits every rocky and icy
+  // world-engine body, which is Step 9's whole population arriving unruled at Step 6.
+  //
+  // ⚠ ALL THREE PREDICATES ARE `compositionClass(condition) === 'gas'`, character for character, so
+  // registration admits EXACTLY the bodies already admitted — measured as set MEMBERSHIP over a
+  // generated population in each pack's own suite, not inferred from reading three source lines.
+  // Registration therefore cannot move a body from the legacy material to the lab material; it can
+  // only change which uniforms an already-swapped body carries.
+  LIMB_DECK_ENTRY,
+  POLAR_DECK_ENTRY,
 ]);
 
 /** The entries whose predicate claims this condition, in array order. */

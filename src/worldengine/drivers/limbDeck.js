@@ -170,7 +170,7 @@ export function limbDeckPack(condition, ctx = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 /**
  * ⭐ EXPORTED AS A FROZEN ENTRY RATHER THAN ASSEMBLED AT THE REGISTRY, so composing it is one
- * import plus one array element at src/worldengine/drivers/index.js:94 `export const PACKS = Object.freeze([`
+ * import plus one array element at src/worldengine/drivers/index.js:96 `export const PACKS = Object.freeze([`
  * and the predicate cannot be retyped differently from the one this pack's own test gates.
  *
  * ⛔⛔ THE PREDICATE IS `compositionClass(condition) === 'gas'` AND IT MUST NOT BE `!!condition.atmosphere`,
@@ -179,7 +179,7 @@ export function limbDeckPack(condition, ctx = {}) {
  * into src/objects/Planet.js:2194 `admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
  * — so a broader predicate would ADMIT EVERY ROCKY AND ICY WORLD-ENGINE BODY to the lab material,
  * which is Step 9's population arriving unruled at Step 6. It is written to be character-identical
- * to src/worldengine/drivers/index.js:97 `applies: (condition) => compositionClass(condition) === 'gas',`
+ * to src/worldengine/drivers/index.js:99 `applies: (condition) => compositionClass(condition) === 'gas',`
  * and the pack's test asserts the two predicates admit the SAME SET over a generated population —
  * membership, not a count, because Step 4 measured that a count-preserving permutation is
  * byte-identical to every instrument this program owns.

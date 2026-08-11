@@ -42,6 +42,11 @@ import { generateSolarSystem } from '../src/generation/SolarSystemData.js';
 import { PackContractError, gameDisplayRadiusEarth } from '../src/worldengine/port/writePackUniforms.js';
 import { stripCommentsPreservingOffsets } from './helpers/source-scan.mjs';
 
+// ⛔ NAME LOOKUP, NEVER `PACKS[0]`. Registration appends limbDeck and polarDeck, and a positional
+// index silently becomes a DIFFERENT pack the moment anyone prepends an entry — the assertion then
+// passes while testing the wrong pack, which is the failure this whole suite exists to prevent.
+const GIANT = PACKS.find((e) => e.name === 'giantDeck');
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 
@@ -105,7 +110,7 @@ describe('6a — PACKS is an array with pinned MEMBERSHIP, not a pinned length',
   // program owns. A `expect(PACKS.length).toBe(1)` would therefore pass a commit that swapped the
   // gas deck for something else entirely.
   it('the membership is exactly the names Step 6 ships', () => {
-    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck']);
+    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck']);
   });
 
   it('every entry carries the four contract fields, and the array is frozen', () => {
@@ -120,9 +125,9 @@ describe('6a — PACKS is an array with pinned MEMBERSHIP, not a pinned length',
   });
 
   it('gatesFor is ALL_ON over the DECLARED names only, and refuses an unknown policy', () => {
-    expect(gatesFor(PACKS[0])).toEqual({ bands: true, jets: true });
-    expect(gatesFor(PACKS[0], GATE_POLICY_ALL_ON)).toEqual({ bands: true, jets: true });
-    expect(() => gatesFor(PACKS[0], 'everything')).toThrow(PackContractError);
+    expect(gatesFor(GIANT)).toEqual({ bands: true, jets: true });
+    expect(gatesFor(GIANT, GATE_POLICY_ALL_ON)).toEqual({ bands: true, jets: true });
+    expect(() => gatesFor(GIANT, 'everything')).toThrow(PackContractError);
   });
 
   it('a driver gated on an UNDECLARED name still throws — ALL_ON did not become a blanket yes', () => {
@@ -208,8 +213,8 @@ describe('6a — every pack predicate is DERIVED FROM THE CONDITION, never from 
   it('the predicate moves when the CONDITION field it reads moves', () => {
     // The positive half: not merely label-blind, but actually driven by the composition channel.
     const noEnvelope = { ...gasCond, atmosphere: { ...gasCond.atmosphere, composition: 'co2' } };
-    expect(PACKS[0].applies(gasCond)).toBe(true);
-    expect(PACKS[0].applies(noEnvelope)).toBe(false);
+    expect(GIANT.applies(gasCond)).toBe(true);
+    expect(GIANT.applies(noEnvelope)).toBe(false);
   });
 });
 
@@ -231,11 +236,11 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
 
   it('a gas body: the deck runs, the master gates are 1.0, the bake is real', () => {
     const { material, res, count } = runOn(gas());
-    expect(res.applied).toEqual(['giantDeck']);
+    expect(res.applied).toEqual(['giantDeck', 'limbDeck', 'polarDeck']);
     expect(res.skipped).toEqual([]);
     expect(material.uniforms.uBandStrength.value).toBe(1.0);
     expect(material.uniforms.uJetStrength.value).toBe(1.0);
-    expect(res.gates).toEqual({ bands: true, jets: true });
+    expect(res.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true });
     expect(Object.keys(res.attributes).sort()).toEqual(['aBand', 'aMush', 'aShear']);
     expect(res.attributes.aBand.length).toBe(count);
     // Non-zero variance — a constant aBand is what a dead bake looks like.
@@ -251,7 +256,7 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     const b = GEN_SOLID[0];
     const res = applyDriverPacks(built.material, b.cond, labPackCtx(b.d, b.cond, undefined));
     expect(res.applied).toEqual([]);
-    expect(res.skipped).toEqual(['giantDeck']);
+    expect(res.skipped).toEqual(['giantDeck', 'limbDeck', 'polarDeck']);
     const after = Object.fromEntries(
       Object.entries(built.material.uniforms).map(([k, v]) => [k, typeof v.value === 'number' ? v.value : null]),
     );
@@ -527,8 +532,8 @@ describe('6e — the flag is OFF by default and it selects a DIFFERENT material'
     const { lab } = planetAt(body().d, true);
     expect(lab.isLabPipeline).toBe(true);
     expect(lab.flag).toEqual({ enabled: true, source: 'override', default: false });
-    expect(lab.packsApplied).toEqual(['giantDeck']);
-    expect(lab.gates).toEqual({ bands: true, jets: true });
+    expect(lab.packsApplied).toEqual(['giantDeck', 'limbDeck', 'polarDeck']);
+    expect(lab.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true });
     expect(lab.provenance.isWorldEngine).toBe(true);
     expect(lab.uniformsWritten).toContain('uBandStrength');
   });

@@ -8,7 +8,10 @@
 // are marked `[CONTROL]`.
 //
 // ⛔ WHAT THIS LANE DOES NOT DO, AND THE READER MUST NOT INFER OTHERWISE.
-// It does NOT add the entry to src/worldengine/drivers/index.js:94 `export const PACKS = Object.freeze([`.
+// ⭐ THE ENTRY IS NOW REGISTERED. This line used to read "It does NOT add the entry to"
+// src/worldengine/drivers/index.js:96 `export const PACKS = Object.freeze([` — the registration commit
+// added it, importing `LIMB_DECK_ENTRY` rather than retyping the predicate. ⛔ The default game is
+// still unchanged: composition is reached only behind the 6e flag, whose shipped default is false.
 // That file is the shared composition point for two concurrent lanes and is reserved for the
 // integration commit; the edit is one import plus `LIMB_DECK_ENTRY` as a second array element.
 // Everything below therefore composes `LIMB_DECK_ENTRY` DIRECTLY, and the registry-shape gates are
@@ -531,7 +534,7 @@ describe('F — the entry is registry-ready and collision-free', () => {
   });
 
   it('names NO uniform giantDeck names — the collision throw will not fire at integration', () => {
-    // src/worldengine/drivers/index.js:162 `if (uniformsWritten.includes(name)) {`
+    // src/worldengine/drivers/index.js:185 `if (uniformsWritten.includes(name)) {`
     // makes two packs naming one uniform an ERROR rather than
     // a last-writer-wins, because array order would otherwise decide what renders. Both packs claim
     // the same bodies, so the disjointness is a precondition of the integration commit, checked here.
