@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-11T20:11:24.124Z",
+  "recordedAt": "2026-08-11T22:07:39.535Z",
   "recordedFromCommit": {
-    "sha": "b9ea438c6f5790c8e5b9103a6a36b17316c2d116",
+    "sha": "03cb1dd40458eeb1d3450a33cff8f0cc15fd230a",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -31,9 +31,9 @@
       "collectedFiles": 320,
       "failingFiles": 2,
       "nonCollectingFiles": 15,
-      "tests": 5258,
+      "tests": 5267,
       "failed": 24,
-      "passed": 5230,
+      "passed": 5239,
       "skipped": 4,
       "todo": 0
     },
@@ -200,7 +200,7 @@
       "src/objects/__tests__/OrbitConicField.test.js": 15,
       "src/objects/__tests__/OrbitLine.swap.test.js": 13,
       "src/objects/__tests__/OrbitRingSDF.proxfade.test.js": 15,
-      "src/objects/__tests__/ringConic.extent.test.js": 20,
+      "src/objects/__tests__/ringConic.extent.test.js": 29,
       "src/objects/__tests__/ringConic.test.js": 15,
       "src/physics/__tests__/GravityField.test.js": 17,
       "src/physics/__tests__/OrbitalMechanics.test.js": 25,
