@@ -2041,6 +2041,21 @@ accumulation (DEFERRED, separate thread). Off-axis root cause + Fix D writeup:
 
 ## Open structural decisions (from session)
 
+- ⭐ **RULED 2026-08-11 (Max): Step 10 is its own workstream, not a `PACKS` registration.**
+  The plan's §4 reads Steps 9 and 10 as symmetric — "one entry each". Measured, they
+  are not. `applyDriverPacks` has exactly ONE production caller
+  (`src/objects/Planet.js:2030`), so the array's "admitting a class does not touch the
+  mount sites" claim **holds for Step 9** (rocky planets reach `_createSurface` by the
+  same two routes gas planets do) and **breaks for Step 10** — and `Planet.js:2120-2125`
+  already says so in its own words: a plain moon carries neither provenance stamp, so
+  *"on the day Step 10 routes plain moons through `BodyRenderer.createMoon`, THIS
+  FUNCTION WOULD ADMIT SOL'S MOONS."* `Planet.js:2087-2092` adds that the single-call-site
+  property holds *"by luck"* today. Step 10 therefore needs, before it can be one array
+  entry: a provenance stamp on plain moons, `src/objects/Moon.js` ported (it is still a
+  third renderer), and `BodyRenderer.createMoon` admitted as the array's second consumer.
+  **Order is unchanged** (7 → 8 → 9 → 10 → 11 → 12); what changed is that 10 gets
+  `dev-collab-scope` (intent.md + contract.json) when it starts, and 9 does not.
+  Evidence: `docs/FEATURES/review-2026-08-11-camera-api-and-packs.md` §PASS B.2.
 - **Historical-workstream Scope `# unverified` back-fill** — Phase 11
   added Scope frontmatter to all 37 historical workstreams, but `paths:`
   were left `[] # unverified` (not back-filled from shipped commits), and
