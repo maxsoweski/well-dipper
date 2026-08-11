@@ -83,8 +83,8 @@ list by construction. §3 below rules them.
 | Moon transit + planet shadows | 177 of 223 gas bodies have moons (448 moons) | **228 of 341** swapped bodies, **456** moons |
 | Second-star lighting | 79 of 223 in 72 binary systems | **125 of 341**, in **64** binary systems of 200 |
 | Primary star **colour** | "**all** giants… implicit white light" | **341 of 341** — and stronger: **every** primary in the corpus is non-white, so there is no body for which the loss is invisible |
-| LOD1 procedural colour match | Sol's Jupiter/Saturn while textures load | **0 of 341, and structurally 0.** `_applyLOD1Overrides` returns at src/rendering/objects/BodyRenderer.js:279 `if (!profileId) return;` and `worldEngineProvenance` refuses any body that HAS a `profileId`. The two guards are complements: no swapped body can ever reach that path. |
-| `lodLevel` | "near-harmless — read by no shader" | **reproduces.** `lodLevel` occurs exactly twice in `src/objects/Planet.js`: the declaration src/objects/Planet.js:118 `uniform int lodLevel;` and the material entry src/objects/Planet.js:1734 `lodLevel: { value: 1 },`. No shader body reads it. The writer already announces its own no-op: src/rendering/objects/BodyRenderer.js:180 `if (!surface?.material?.uniforms?.lodLevel) return this._noteLabSkip('lodLevel', surface);` |
+| LOD1 procedural colour match | Sol's Jupiter/Saturn while textures load | **0 of 341, and structurally 0.** `_applyLOD1Overrides` returns at src/rendering/objects/BodyRenderer.js:298 `if (!profileId) return;` and `worldEngineProvenance` refuses any body that HAS a `profileId`. The two guards are complements: no swapped body can ever reach that path. |
+| `lodLevel` | "near-harmless — read by no shader" | **reproduces.** `lodLevel` occurs exactly twice in `src/objects/Planet.js`: the declaration src/objects/Planet.js:118 `uniform int lodLevel;` and the material entry src/objects/Planet.js:1734 `lodLevel: { value: 1 },`. No shader body reads it. The writer already announces its own no-op: src/rendering/objects/BodyRenderer.js:212 `if (!surface?.material?.uniforms?.lodLevel) return this._noteLabSkip('lodLevel', surface);` |
 
 ---
 

@@ -87,8 +87,13 @@ export function measureFraming(camera, group, mesh, radiusOverride = null) {
  * right now; `predicted` is what the shared LOD law says that distance implies. They agree on a body
  * whose LOD is being driven and disagree on one whose is not — which is the only signal that
  * distinguishes "correctly at 4 octaves because it is far away" from "frozen at the 4.0 default
- * because nothing ever updates it". Planet-class moons are in the second category today: they are
- * built down a branch that never registers them with LODManager, so their octave count never moves.
+ * because nothing ever updates it".
+ * ⚠ PLANET-CLASS MOONS USED TO BE THE EXAMPLE HERE AND ARE NOT ANY MORE. They were built down a
+ * branch that never registered them with LODManager; as of 2026-08-11 they are registered
+ * (src/rendering/objects/PlanetMoonBody.js). The instrument FOUND that — body `Al` read 4.00 at 8
+ * radii against a predicted 8.72 — which is what this pair is for. The population still in the
+ * second category is the PLAIN moons, and their signature is different: they carry no octave
+ * uniform at all, so they report `live.octaves: null` rather than a disagreement. Step 10.
  *
  * ⛔⛔ TWO UNIFORM NAMES CARRY ONE LAW, AND READING ONLY THE LAB'S IS THE DEFECT THIS FUNCTION
  * SHIPPED WITH (review 2026-08-11, defect 1). The lab material spells the octave count `uOctaves`;
@@ -127,8 +132,9 @@ export function lodStateOf(mesh, achievedRadii, qualityTier = 1.0) {
     agrees = Math.abs(liveOct - predicted.octaves) <= 0.01;
     if (!agrees) {
       note = `LIVE AND PREDICTED DISAGREE (live ${liveOct.toFixed(2)} ${octaveUniform} vs predicted ${predicted.octaves.toFixed(2)} octaves) `
-        + '— this body\'s LOD is not being driven at its own distance. Expected on planet-class moons, '
-        + 'which are built down a branch that never registers them with LODManager.';
+        + '— this body\'s LOD is not being driven at its own distance, i.e. it is not registered with '
+        + 'LODManager or its registration is not reaching the material. Planet-class moons were the '
+        + 'known case and were fixed 2026-08-11; a disagreement here now is UNEXPECTED and worth reading.';
     }
   }
   return {

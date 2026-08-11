@@ -21,6 +21,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
 import { LODManager } from '../src/rendering/LODManager.js';
 import { lodRampOf, autoOctaves } from '../planet-lod-lab-core.js';
+import { createPlanetMoonBody } from '../src/rendering/objects/PlanetMoonBody.js';
 
 // Minimal stand-in for a BodyRenderer: LODManager only touches mesh.matrixWorld, radius,
 // setLOD and setReliefDetail.
@@ -113,5 +114,68 @@ describe('relief octave LOD ramp — the law is the lab\'s, and it is pop-free',
     expect(Number.isInteger(mid)).toBe(false);
     expect(mid).toBeGreaterThan(4);
     expect(mid).toBeLessThan(9);
+  });
+});
+
+// ── review 2026-08-11 — the branch that used to skip registration ────────────────────────────────
+// A planet-class moon is built directly (`new Planet(...)`) and never touches BodyRenderer, and its
+// `lodManager.register` call sat inside the `else` arm of `if (moonData.isPlanetMoon)`. So its
+// octave count stayed pinned at the CONSTRUCTED 4.0 default at every distance. Measured live before
+// the fix: body `Al` in lab-procedural-6 read 4.00 at 8 body radii where the law predicts 8.72.
+//
+// ⭐ BOTH assertions below are the gate, and the SECOND is the one that says why the obvious
+// one-line fix was wrong: LODManager reads `body.radius` (LODManager.js:87) and calls
+// `body.setLOD()` unconditionally (:98), so registering the OLD inline wrapper shape throws a
+// TypeError inside the frame callback — the failure mode main.js already records as having stopped
+// the render loop permanently on a frozen frame.
+describe('planet-class moons register with LODManager and ramp at their own distance', () => {
+  const fakePlanet = (uniforms) => {
+    const mesh = new THREE.Object3D();
+    const surface = { material: { uniforms } };
+    mesh.position.set(0, 0, 0);
+    return { mesh, surface, dispose() {} };
+  };
+  const moonData = { radiusScene: 3.0, orbitRadiusScene: 12, startAngle: 0.5, name: 'test-pm' };
+
+  const runPM = (uniforms, distanceRadii) => {
+    const planetMoon = fakePlanet(uniforms);
+    const body = createPlanetMoonBody(planetMoon, moonData);
+    body.mesh.position.set(0, 0, distanceRadii * moonData.radiusScene);
+    body.mesh.updateMatrixWorld(true);
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(0, 0, 0);
+    const lod = new LODManager(camera);
+    lod.register(body);
+    lod.update();
+    return { body, planetMoon };
+  };
+
+  it('⭐ drives uReliefOctaves to the law\'s value at its own distance (was frozen at 4.0)', () => {
+    const u = { uReliefOctaves: { value: 4.0 } };
+    runPM(u, 8);
+    expect(u.uReliefOctaves.value).toBeCloseTo(autoOctaves(lodRampOf(8)), 9);
+    expect(u.uReliefOctaves.value).not.toBe(4.0);
+  });
+
+  it('⭐ does not throw inside LODManager.update — the reason the one-line hoist was wrong', () => {
+    expect(() => runPM({ uReliefOctaves: { value: 4.0 } }, 8)).not.toThrow();
+    // The two members LODManager requires, asserted by name so a "cleanup" that drops either one
+    // fails here rather than in a frame callback.
+    const body = createPlanetMoonBody(fakePlanet({}), moonData);
+    expect(typeof body.setLOD).toBe('function');
+    expect(body.radius).toBe(moonData.radiusScene);
+  });
+
+  it('keeps data.radius alongside body.radius — other consumers read the first', () => {
+    const body = createPlanetMoonBody(fakePlanet({}), moonData);
+    expect(body.data.radius).toBe(moonData.radiusScene);
+    expect(body.data.orbitRadius).toBe(moonData.orbitRadiusScene);
+    expect(body.isPlanetMoon).toBe(true);
+  });
+
+  it('still reports 4.0 when genuinely far away — the ramp is driven, not merely written', () => {
+    const u = { uReliefOctaves: { value: 9.0 } };
+    runPM(u, 400);
+    expect(u.uReliefOctaves.value).toBe(4.0);
   });
 });

@@ -12,6 +12,38 @@ import { lodRampOf, autoOctaves } from '../../../planet-lod-lab-core.js';
 import { updateLabPlanetMaterial, isLabPlanetMaterial } from '../LabPlanetMaterial.js';
 
 /**
+ * Drive one surface's detail uniforms for a camera distance, in body radii.
+ *
+ * ⭐ A FREE FUNCTION AND NOT A METHOD, because two body kinds need it and only one of them is a
+ * `BodyRenderer`. Planet-class moons are built directly at src/main.js:7676 `const planetMoon = new Planet(scenePMData, pmStarInfo);`
+ * and never touch this class — which is exactly why they sat frozen at the constructed 4.0 default
+ * at every distance (measured live 2026-08-11: body `Al` read 4.00 where the law predicts 8.72).
+ * Extracting the body rather than duplicating it is the whole point: a second copy of this law is
+ * the failure mode the one-pipeline program exists to stop, and the two-spellings note below is
+ * precisely the kind of hard-won detail a copy loses.
+ *
+ * @param {THREE.Mesh|undefined} surface the drawn surface (its material carries the uniforms)
+ * @param {number} distanceRadii camera distance to the body, in body radii
+ * @param {THREE.Vector3} cameraWorldPos
+ */
+export function applyReliefDetail(surface, distanceRadii, cameraWorldPos) {
+  // ── LAYER 2 item 3 — the lab material rides the SAME distance, through the same law ──
+  // Ordered before the early-return below on purpose: the lab material has no `uReliefOctaves`
+  // (its detail uniforms are uOctaves/uLodRamp), so the guard would have skipped it exactly the
+  // way the game's clock guard skipped its uTime. Two differently-named uniforms, one silent
+  // no-op each — that pairing is what left the lab shader pinned at 4 of 9 octaves in-game.
+  // cameraWorldPos rides along here rather than in Planet.updateRender because THIS is the
+  // per-frame path that already holds the camera (LODManager.update), and inventing a third
+  // traversal to carry one vector is how seams multiply.
+  updateLabPlanetMaterial(surface?.material, { distanceRadii, cameraWorldPos, mesh: surface });
+
+  const u = surface?.material?.uniforms?.uReliefOctaves;
+  if (!u) return;                                  // moons, textured swaps, gas variants
+  const next = autoOctaves(lodRampOf(distanceRadii));
+  if (u.value !== next) u.value = next;
+}
+
+/**
  * BodyRenderer — unified planet/moon renderer with physics data awareness.
  *
  * Currently delegates to the existing Planet.js and Moon.js renderers
@@ -181,6 +213,7 @@ export class BodyRenderer {
     surface.material.uniforms.lodLevel.value = tier;
   }
 
+
   /**
    * Ramp the fbmd relief octave count with distance — the game's half of the lab's LOD ramp.
    *
@@ -199,21 +232,7 @@ export class BodyRenderer {
    * @param {number} distanceRadii — camera distance to the body, in body radii
    */
   setReliefDetail(distanceRadii, cameraWorldPos) {
-    const surface = this._delegate.surface || this._delegate.mesh;
-    // ── LAYER 2 item 3 — the lab material rides the SAME distance, through the same law ──
-    // Ordered before the early-return below on purpose: the lab material has no `uReliefOctaves`
-    // (its detail uniforms are uOctaves/uLodRamp), so the guard would have skipped it exactly the
-    // way the game's clock guard skipped its uTime. Two differently-named uniforms, one silent
-    // no-op each — that pairing is what left the lab shader pinned at 4 of 9 octaves in-game.
-    // cameraWorldPos rides along here rather than in Planet.updateRender because THIS is the
-    // per-frame path that already holds the camera (LODManager.update), and inventing a third
-    // traversal to carry one vector is how seams multiply.
-    updateLabPlanetMaterial(surface?.material, { distanceRadii, cameraWorldPos, mesh: surface });
-
-    const u = surface?.material?.uniforms?.uReliefOctaves;
-    if (!u) return;                                  // moons, textured swaps, gas variants
-    const next = autoOctaves(lodRampOf(distanceRadii));
-    if (u.value !== next) u.value = next;
+    applyReliefDetail(this._delegate.surface || this._delegate.mesh, distanceRadii, cameraWorldPos);
   }
 
   // ── PLAN §4 Step 6 — the two writers in THIS file that go silent on a swapped body ─────────────
@@ -225,7 +244,7 @@ export class BodyRenderer {
   // exist". Step 6's flag makes that happen again to two MORE writers, both in this class and both
   // named in PLAN 6b's lost-feature table:
   //
-  //   `lodLevel`   — src/rendering/objects/BodyRenderer.js:181 `surface.material.uniforms.lodLevel.value = tier`,
+  //   `lodLevel`   — src/rendering/objects/BodyRenderer.js:213 `surface.material.uniforms.lodLevel.value = tier`,
   //                  guarded on `u.lodLevel`. The table calls it near-harmless because no shader
   //                  reads it; near-harmless is a claim, and a claim wants a witness.
   //   `baseColor`  — `_setProceduralColors`, guarded on `u.baseColor`. This is the LOD1 colour match

@@ -9,6 +9,7 @@ import { createStarRenderer } from './rendering/objects/StarRenderer.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
 import { BodyRenderer } from './rendering/objects/BodyRenderer.js';
+import { createPlanetMoonBody } from './rendering/objects/PlanetMoonBody.js';   // LOD-registrable planet-class moon
 import { LODManager } from './rendering/LODManager.js';
 import { DebugPanel } from './ui/DebugPanel.js';
 import { OrbitLine } from './objects/OrbitLine.js';
@@ -7673,22 +7674,20 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
         const pmStarInfo = { ...systemData.starInfo, brightness1: systemData.starInfo.brightness1 * 0.7 };
         if (pmStarInfo.brightness2) pmStarInfo.brightness2 *= 0.7;
         const planetMoon = new Planet(scenePMData, pmStarInfo);
-        moon = {
-          mesh: planetMoon.mesh,
-          data: { ...moonData, radius: moonData.radiusScene, orbitRadius: moonData.orbitRadiusScene },
-          isPlanetMoon: true,
-          planet: planetMoon,
-          orbitAngle: moonData.startAngle,
-          addTo(s) { s.add(planetMoon.mesh); },
-          dispose() { planetMoon.dispose(); },
-        };
+        moon = createPlanetMoonBody(planetMoon, moonData);
       } else {
         moon = BodyRenderer.createMoon(
           moonData, null, systemData.starInfo,
           { lightDir: planet._lightDir, lightDir2: planet._lightDir2 }
         );
-        lodManager.register(moon);
       }
+      // ⭐ HOISTED OUT OF THE `else` — 2026-08-11. It sat in the else arm since `4fe2dce`, so
+      // planet-class moons were never registered and their octave count stayed pinned at the
+      // constructed 4.0 default at every distance (measured live: body `Al` read 4.00 where the law
+      // predicts 8.72). ⛔ The hoist is only safe BECAUSE `createPlanetMoonBody` supplies `radius`
+      // and `setLOD` — LODManager reads the first and calls the second unconditionally, so hoisting
+      // this line alone would throw inside the frame callback. See PlanetMoonBody.js's header.
+      lodManager.register(moon);
       moon.addTo(scene);
       moons.push(moon);
 
