@@ -787,7 +787,44 @@ export class ShipCameraSystem {
         this._glideAimT = Math.min(1, this._glideAimT + deltaTime / this._glideAimDuration);
         const t = this._glideAimT;
         const ease = t * t * (3 - 2 * t); // smoothstep — zero-velocity endpoints
-        this.target.lerpVectors(this._glideTStart, body, ease);
+        // ⛔⛔ THE AIM SLERPS THE LOOK DIRECTION. IT MUST NOT LERP THE TARGET POINT.
+        // `target.lerpVectors(_glideTStart, body, ease)` walks the look target along the STRAIGHT
+        // LINE between the two bodies while the camera stands still — and in the orrery the camera
+        // habitually sits BETWEEN them (you are looking at planet A and you click planet B across
+        // the system). The segment then passes essentially through the frozen camera, and the look
+        // direction REVERSES. Measured against this file's own math at the live system's real
+        // orbits (453.3 and 1014.1 scene units): a single step swings the view 149.8°, and exactly
+        // 180.0° when the camera is dead in the orbital plane — which is where the orrery lives
+        // (measured camera pitch there: 0.0008 rad). Camera outside the segment: 0.0°. That is the
+        // "camera flipping around on the second click" Max reported 2026-08-11.
+        // ⭐ THE PHASE'S OWN COMMENT ALREADY SAYS THE INTENT IS ANGULAR — "the look target eases
+        // T_start→body ... until the body is CENTERED". Centering is a rotation, so the ease
+        // belongs on the DIRECTION. This restores the stated intent rather than changing the
+        // design: endpoints are identical, the smoothstep is untouched, and the path between them
+        // becomes the great circle it was always described as.
+        // ⚠ `setFromUnitVectors` carries three.js's own antipodal fallback, which is exactly the
+        // 180°-apart case this bug is worst at — do not hand-roll the axis.
+        const camPos = this.camera.position;
+        _v2.copy(this._glideTStart).sub(camPos);
+        _v3.copy(body).sub(camPos);
+        const dStart = _v2.length();
+        const dEnd = _v3.length();
+        if (dStart > 1e-6 && dEnd > 1e-6) {
+          _v2.divideScalar(dStart);
+          _v3.divideScalar(dEnd);
+          _q1.setFromUnitVectors(_v2, _v3);
+          _q2.identity().slerp(_q1, ease);
+          // Distance is interpolated separately: `this.target` is also the orbit pivot that
+          // `_endGlideToOrbit` back-solves from, so it has to stay a real point in space, not a
+          // unit ray. Only its ANGLE is now on a great circle.
+          this.target.copy(_v2).applyQuaternion(_q2)
+            .multiplyScalar(dStart + (dEnd - dStart) * ease).add(camPos);
+        } else {
+          // Camera sitting on one of the two points — no direction to slerp. Fall back to the old
+          // straight-line ease rather than inventing an axis; the degenerate case is a click on the
+          // body you are already inside, where any aim is arbitrary.
+          this.target.lerpVectors(this._glideTStart, body, ease);
+        }
         this.camera.lookAt(this.target);
         if (this._glideAimT >= 1) this._beginApproachPhase();
         return; // AIM never moves the camera position

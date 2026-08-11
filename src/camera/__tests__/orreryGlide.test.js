@@ -473,3 +473,78 @@ describe('ORRERY glide coherence (orrery-coherence-2026-07-15, round 2b two-phas
     }
   });
 });
+
+// ── Max, 2026-08-11: "when i click on an orbit to go to the planet, the camera is flipping
+// around" — ONE SECOND CLICK, i.e. the glide. ────────────────────────────────────────────────────
+//
+// ⛔ THE GEOMETRY IS THE TEST. The aim phase used to walk the look target along the STRAIGHT LINE
+// from the old target to the clicked body while the camera stood still. In the orrery the camera
+// habitually sits BETWEEN those two points — you are looking at planet A and you click planet B
+// across the system — so the segment passes essentially through the frozen camera and the look
+// direction REVERSES. Reproduced against this file's own subject at the live system's real orbit
+// radii: 149.8° of view swing in a single step, and exactly 180.0° with the camera dead in the
+// orbital plane, which is where the orrery actually sits (measured camera pitch there: 0.0008 rad).
+//
+// ⚠ THIS TEST IS NOT "the glide is smooth". It is specifically that the camera never sits on the
+// interpolation path, which a target-point lerp cannot guarantee and a direction slerp cannot
+// violate. A smoothness-only assertion would pass on a lerp that merely missed the camera by luck
+// at the sampled geometry — and the bug IS the near-miss.
+describe('glide aim — the look direction never reverses when the camera is between the two bodies', () => {
+  let camera, canvas, sys;
+  beforeEach(() => {
+    camera = new THREE.PerspectiveCamera(70, 1, 0.01, 200000);
+    canvas = mockCanvas();
+    sys = new ShipCameraSystem(camera, canvas);
+    sys.autoRotateActive = false;
+  });
+
+  // Live orbit radii from PVX J3DK6GAO+RBJGI5M, measured 2026-08-11.
+  const A = () => new THREE.Vector3(453.3, 0, 0);      // currently-focused planet
+  const B = () => new THREE.Vector3(-1014.1, 0, 0);    // planet clicked across the system
+
+  function maxViewSwingDeg({ camY }) {
+    const a = A(), b = B();
+    // Seat the camera BETWEEN A and B, looking at A — the ordinary far-side-click setup.
+    sys.target.copy(a);
+    sys._targetGoal.copy(a);
+    sys._transitioning = false;
+    camera.position.set(400, camY, 0);
+    camera.lookAt(sys.target);
+    camera.updateMatrixWorld(true);
+
+    sys.glideFocus(b, 5);
+    let prev = new THREE.Vector3();
+    camera.getWorldDirection(prev);
+    let maxSwing = 0;
+    const fwd = new THREE.Vector3();
+    for (let i = 0; i < 600; i++) {
+      sys.update(1 / 60);
+      camera.updateMatrixWorld(true);
+      camera.getWorldDirection(fwd);
+      const d = Math.min(1, Math.max(-1, fwd.dot(prev)));
+      maxSwing = Math.max(maxSwing, THREE.MathUtils.radToDeg(Math.acos(d)));
+      prev.copy(fwd);
+    }
+    return maxSwing;
+  }
+
+  it('⭐ camera slightly off the orbital plane — was 149.8° in one frame', () => {
+    // 20° is far above any legitimate per-frame rate for a sub-second smoothstep aim and far
+    // below the failure, so it discriminates without pinning the easing curve.
+    expect(maxViewSwingDeg({ camY: 0.5 })).toBeLessThan(20);
+  });
+
+  it('⭐ camera DEAD IN the orbital plane — was exactly 180.0°, the worst case', () => {
+    expect(maxViewSwingDeg({ camY: 0 })).toBeLessThan(20);
+  });
+
+  it('control: the far-side click still ends up looking AT the body', () => {
+    const b = B();
+    maxViewSwingDeg({ camY: 0.5 });
+    const fwd = new THREE.Vector3();
+    camera.getWorldDirection(fwd);
+    const toBody = b.clone().sub(camera.position).normalize();
+    // The whole point of the glide is that the body ends centered.
+    expect(THREE.MathUtils.radToDeg(Math.acos(Math.min(1, fwd.dot(toBody))))).toBeLessThan(1);
+  });
+});
