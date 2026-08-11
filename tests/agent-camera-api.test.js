@@ -165,7 +165,52 @@ describe('lodStateOf — live and predicted stay separable', () => {
     const s = lodStateOf(meshWith({}), 3);
     expect(s.agrees).toBeNull();
     expect(s.live.octaves).toBeNull();
-    expect(s.note).toMatch(/no uOctaves/);
+    expect(s.live.octaveUniform).toBeNull();
+    // ⚠ BOTH spellings must be named, or the message is the pre-2026-08-11 claim again.
+    expect(s.note).toMatch(/uOctaves/);
+    expect(s.note).toMatch(/uReliefOctaves/);
+  });
+
+  // ── review 2026-08-11 defect 1 — the game's own spelling ────────────────────────────────────────
+  // ⭐ EVERY ASSERTION BELOW FAILED BEFORE THE FIX, and the failure was the expensive kind: at the
+  // SHIPPED 6e default an ordinary game planet is LODManager-registered and driven correctly through
+  // `uReliefOctaves`, and reading only `uOctaves` reported it as not rendering through the LOD path
+  // at all — false for 41 of 50 bodies. Pinned as behaviour, not as a source scan, because the
+  // regression that would undo it is a one-word revert in a value read.
+  describe('⭐ the GAME material spells it uReliefOctaves and carries the same law', () => {
+    it('agrees on a driven game planet, and names which uniform answered', () => {
+      const at = 3;
+      // No uLodRamp: that uniform is the LAB material's only, so `ramp` is legitimately null here.
+      const gameDriven = meshWith({ uReliefOctaves: { value: autoOctaves(lodRampOf(at)) } });
+      const s = lodStateOf(gameDriven, at);
+      expect(s.live.octaves).toBe(9);
+      expect(s.live.octaveUniform).toBe('uReliefOctaves');
+      expect(s.live.ramp).toBeNull();
+      expect(s.agrees).toBe(true);
+      expect(s.note).toBeNull();
+    });
+
+    it('still DISAGREES on an undriven game body — the signal is not lost by widening', () => {
+      const s = lodStateOf(meshWith({ uReliefOctaves: { value: 4.0 } }), 2);
+      expect(s.agrees).toBe(false);
+      expect(s.note).toMatch(/DISAGREE/);
+      // The message names the uniform it read, so two spellings cannot be confused in a quoted note.
+      expect(s.note).toMatch(/uReliefOctaves/);
+    });
+
+    it('prefers the lab spelling when a material somehow carries both', () => {
+      // Not hypothetical caution: the 6e flag swaps materials per body, and a future third mount site
+      // getting both would otherwise report whichever the implementation happened to test first.
+      const both = meshWith({ uOctaves: { value: 9 }, uReliefOctaves: { value: 4 } });
+      const s = lodStateOf(both, 3);
+      expect(s.live.octaves).toBe(9);
+      expect(s.live.octaveUniform).toBe('uOctaves');
+    });
+
+    it('a legitimate 0 in either uniform is read as a value, not as absence', () => {
+      expect(lodStateOf(meshWith({ uReliefOctaves: { value: 0 } }), 3).live.octaveUniform).toBe('uReliefOctaves');
+      expect(lodStateOf(meshWith({ uOctaves: { value: 0 } }), 3).live.octaveUniform).toBe('uOctaves');
+    });
   });
 });
 

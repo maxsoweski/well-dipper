@@ -88,32 +88,51 @@ export function measureFraming(camera, group, mesh, radiusOverride = null) {
  * whose LOD is being driven and disagree on one whose is not — which is the only signal that
  * distinguishes "correctly at 4 octaves because it is far away" from "frozen at the 4.0 default
  * because nothing ever updates it". Planet-class moons are in the second category today: they are
- * built down a branch that never registers them with LODManager, so their uOctaves never moves.
+ * built down a branch that never registers them with LODManager, so their octave count never moves.
+ *
+ * ⛔⛔ TWO UNIFORM NAMES CARRY ONE LAW, AND READING ONLY THE LAB'S IS THE DEFECT THIS FUNCTION
+ * SHIPPED WITH (review 2026-08-11, defect 1). The lab material spells the octave count `uOctaves`;
+ * the GAME'S OWN material spells it `uReliefOctaves` (src/objects/Planet.js:1674 `uReliefOctaves: { value: RELIEF_OCTAVES },`)
+ * and is driven through the IDENTICAL law by
+ * src/rendering/objects/BodyRenderer.js:216 `const next = autoOctaves(lodRampOf(distanceRadii));`,
+ * with no quality tier — which is exactly what `lodPredictionAt` computes at the 1.0 default. So the
+ * prediction is directly comparable against either spelling.
+ * ⚠ AT THE SHIPPED 6e DEFAULT the second spelling is the COMMON case, not the exotic one: reading
+ * `uOctaves` alone reported every ordinary game planet — LODManager-registered and correctly driven —
+ * as "does not render through the LOD-driven path at all", which was false for 41 of 50 bodies. That
+ * is the same shape as the scar BodyRenderer.js:204 already carries: two differently-named uniforms,
+ * one silent no-op each. `live.octaveUniform` NAMES which spelling answered, so a future third
+ * spelling shows up as a null instead of as a confident wrong sentence.
+ * ⚠ `uLodRamp` is the LAB material's only, so `live.ramp` is legitimately null on the game path.
  *
  * @returns {{live: object, predicted: object, agrees: boolean|null, note: string|null}}
  */
 export function lodStateOf(mesh, achievedRadii, qualityTier = 1.0) {
   const u = mesh?.material?.uniforms || {};
-  const liveOct = u.uOctaves?.value ?? null;
+  const labOct = u.uOctaves?.value ?? null;
+  const gameOct = u.uReliefOctaves?.value ?? null;
+  const liveOct = labOct != null ? labOct : gameOct;
+  // Named rather than inferred from the value: 4.0 is a legal reading of BOTH uniforms.
+  const octaveUniform = labOct != null ? 'uOctaves' : (gameOct != null ? 'uReliefOctaves' : null);
   const liveRamp = u.uLodRamp?.value ?? null;
   const predicted = achievedRadii == null ? null : lodPredictionAt(achievedRadii, qualityTier);
 
   let agrees = null;
   let note = null;
   if (liveOct == null) {
-    note = 'this body carries no uOctaves uniform — it does not render through the LOD-driven path at all';
+    note = 'this body carries neither uOctaves nor uReliefOctaves — it does not render through the LOD-driven path at all';
   } else if (predicted) {
     // 0.01 octaves: far tighter than any real ramp step, loose enough that float round-trips through
     // a uniform do not read as a disagreement.
     agrees = Math.abs(liveOct - predicted.octaves) <= 0.01;
     if (!agrees) {
-      note = `LIVE AND PREDICTED DISAGREE (live ${liveOct.toFixed(2)} vs predicted ${predicted.octaves.toFixed(2)} octaves) `
+      note = `LIVE AND PREDICTED DISAGREE (live ${liveOct.toFixed(2)} ${octaveUniform} vs predicted ${predicted.octaves.toFixed(2)} octaves) `
         + '— this body\'s LOD is not being driven at its own distance. Expected on planet-class moons, '
         + 'which are built down a branch that never registers them with LODManager.';
     }
   }
   return {
-    live: { octaves: liveOct, ramp: liveRamp },
+    live: { octaves: liveOct, ramp: liveRamp, octaveUniform },
     predicted,
     agrees,
     note,

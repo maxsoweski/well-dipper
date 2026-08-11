@@ -3393,6 +3393,37 @@ window._lab = {
     }
 
     const viewDistance = radii * worldRadius;
+
+    // ⛔⛔ POINT THE PER-FRAME BODY TRACKER AT THE BODY BEING FRAMED, OR IT WILL QUIETLY UNDO THE
+    // FRAMING (review 2026-08-11, defect 2). `frameSequence` step 1 clears `bypassed` — it must, or
+    // the controller never moves — and clearing it RE-ARMS simStep's camera-tracking block, which
+    // re-anchors the camera onto whatever `focusIndex` holds on EVERY frame. With a different body
+    // focused, the two frames awaited below silently drag the camera onto the FOCUSED body, and the
+    // measurement is then taken there and returned `ok: true`. The failure has no symptom: the
+    // numbers are internally consistent, they just describe the wrong body.
+    // ⭐ RETARGETED RATHER THAN SUSPENDED, and that is the better half of the fix: with the tracker
+    // pointed at the framed body it HOLDS the framing across the two frames, so a body that moves in
+    // its orbit during them no longer parts `achieved` from `asked` and no longer gets misreported as
+    // a clamp. Restoring the old focus afterwards was the alternative and it is worse — it drags the
+    // camera off the body one frame after the call returns, which breaks parking Max at a result.
+    const focusFrom = { focusIndex, focusMoonIndex, focusStarIndex };
+    if (r.kind === 'star') {
+      focusIndex = -2; focusStarIndex = r.s ?? 0; focusMoonIndex = -1;
+    } else if (r.kind === 'moon' && system.planets[r.p]?.moons?.[r.m]?.mesh) {
+      // Guarded on `.mesh` because the tracker reads `moons[i].mesh.position` directly, and a
+      // planet-class moon is a different shape (`moon.planet` is a real Planet). Unrepresentable
+      // bodies fall through to the clear below rather than crashing the tracker.
+      focusIndex = r.p; focusMoonIndex = r.m; focusStarIndex = -1;
+    } else if (r.kind === 'planet' && !r.isPlanetMoon && system.planets[r.p]?.planet?.mesh) {
+      focusIndex = r.p; focusMoonIndex = -1; focusStarIndex = -1;
+    } else {
+      // Not representable as a focus target — disarm the tracker instead of letting it fight.
+      focusIndex = -1; focusMoonIndex = -1; focusStarIndex = -1;
+    }
+    const focusRetargeted = focusIndex !== focusFrom.focusIndex
+      || focusMoonIndex !== focusFrom.focusMoonIndex
+      || focusStarIndex !== focusFrom.focusStarIndex;
+
     const controller = frameSequence({ camera, cameraController, cameraInterp, worldPos, viewDistance });
     await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
 
@@ -3438,7 +3469,10 @@ window._lab = {
         ? 'ACHIEVED != ASKED — the renderer clamped this framing. The achieved number is the real one.'
         : null,
       lod,
-      controller,
+      // `focusRetargeted` is reported in `controller`'s own idiom — what had to be changed, named
+      // rather than silently corrected, because a caller that was relying on the previous focus needs
+      // to know the framing took it.
+      controller: { ...controller, focusRetargeted, focusFrom },
     };
   },
 
@@ -3479,6 +3513,8 @@ window._lab = {
         // Rounded to 4dp: far finer than any meaningful ramp step, and the raw float
         // (6.053609446486112 against a predicted 6.05) makes the table unreadable as a table.
         liveOctaves: shot.lod.live.octaves == null ? null : +shot.lod.live.octaves.toFixed(4),
+        // WHICH shader answered. Two spellings carry one law and they mean different materials.
+        octaveUniform: shot.lod.live.octaveUniform,
         predictedOctaves: shot.lod.predicted == null ? null : +shot.lod.predicted.octaves.toFixed(4),
         predictedRamp: shot.lod.predicted == null ? null : +shot.lod.predicted.ramp.toFixed(4),
         saturated: shot.lod.predicted?.saturated ?? null,
@@ -3516,8 +3552,13 @@ window._lab = {
       // budget the body does not have. Said plainly instead of left to the reader to reconcile
       // against `lodDrivenNote` — a caption that has to be corrected by another caption is a caption
       // that will be quoted alone.
-      saturatedNote: noLodUniform
+      saturatedNote: noLodUniform && firstSaturatedRung != null
         ? `⚠ HYPOTHETICAL FOR THIS BODY — it carries no LOD uniform. IF it rendered through the LOD-driven material, the law would pin the octave budget by ${firstSaturatedRung} body radii. That is a statement about the law, not about this body.`
+        : noLodUniform
+        // ⛔ ORDER. This branch used to sit BELOW the hypothetical, which interpolated a null rung and
+        // printed "the law would pin the octave budget by null body radii" on every far-range sweep of
+        // a body with no LOD uniform (review 2026-08-11). Both conditions are now stated, not implied.
+        ? '⚠ HYPOTHETICAL FOR THIS BODY — it carries no LOD uniform, AND no rung on this ladder reaches the ceiling under the law either. Nothing here describes what this body renders.'
         : firstSaturatedRung == null
         ? 'No rung on this ladder sits at the octave ceiling.'
         : `Octave budget is pinned at its ceiling by ${firstSaturatedRung} body radii and stays pinned all the way in`
@@ -3529,8 +3570,10 @@ window._lab = {
       // all — while its whole predicted-octave column describes the LAW rather than this body. Read
       // as a measurement, that column would say "detail stops resolving here" about a body that
       // never had octave-driven detail in the first place.
+      // ⚠ "NO LOD UNIFORM" MEANS NEITHER SPELLING. Reading only `uOctaves` made this caption fire on
+      // every ordinary game planet at the shipped 6e default — see agentFraming.js `lodStateOf`.
       lodDrivenNote: noLodUniform
-        ? '⛔ THIS BODY CARRIES NO uOctaves UNIFORM AT ALL — it does not render through the LOD-driven material. '
+        ? '⛔ THIS BODY CARRIES NEITHER uOctaves NOR uReliefOctaves — it does not render through the LOD-driven material. '
           + 'The predicted-octave column below is the shared LAW\'s output for these distances, NOT a measurement of this body. '
           + 'Do not read saturation here as a fact about what this body renders.'
         : (disagreeing
