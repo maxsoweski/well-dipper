@@ -4,6 +4,43 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> ## ⭐⭐ 2026-08-11 — THE PHANTOM RING IS FOUND AND FIXED (`03cb1dd` + `9c8a1e2`). CARRIED OPEN ITEM 1 IS CLOSED.
+>
+> ⛔ **SUPERSEDES the carried reading "the phantom is a REAL conic rendered wrongly, not a spurious
+> one".** Half right. There is no spurious conic — 17 conics for 17 real orbits was always correct,
+> which is why hunting for an extra one kept failing. It is a real **PLANE** painted where its
+> **ring** is not.
+>
+> **Root cause.** `buildRingConic` decided a projection was "genuinely unbounded" from `wMin > 0`
+> alone. clip-w around the circle spans `[wMin, wMax]`, which admits **three** geometries, not two:
+> whole circle in front (`wMin > 0`, bounded); straddling the camera plane (`wMin < 0 < wMax`,
+> genuinely a hyperbola); and **whole circle BEHIND the camera** (`wMax <= 0`, nothing to draw).
+> Only the first two were handled — everything else fell through to the `±CONIC_EXTENT_UNBOUNDED`
+> sentinel, which **disables the extent reject**. That reject is the only bound on the edge-on
+> degeneracy's infinite zero set; the shader says so itself: *"edge-on, Cs degenerates to a double
+> LINE whose zero set is infinite, so the band alone paints far beyond the ring."*
+>
+> **Measured live**, camera on the moon `Al` of the outermost planet, `dot(forward, toStar) = -0.912`:
+> **13 of 17 conics were entirely behind the camera and every one carried the sentinel** — one of
+> them radius **0.18 at camDist 7183**, which cannot cross any camera plane by five orders of
+> magnitude. The line sat at **y=155 of 855**; the ecliptic's vanishing line, computed independently
+> from the projection matrices, images at **y=155**. Culling exactly the `wMax<0` set removed the
+> phantom and nothing else.
+>
+> **Why it tracked the zoom** (Max: *"zoom out, it fades; zoom in, it gets more solid"*): ORRERY
+> pivots on a body that is itself in the ecliptic, so camera height above the orbital plane is
+> exactly `distance · sin(pitch)` — measured 12.952 against predicted 13.059.
+>
+> ⭐ **The fix needed NO GLSL EDIT** — an empty extent (`min > max`) in `ringConic.js`, since the
+> extent reject already runs before the front-branch guard. It therefore stays clear of the ring
+> **draw-through** item, which is still blocked behind building numeric coverage for
+> `CONIC_FRAGMENT_SHADER`. 9 new tests in the existing `a12` idiom (7 RED at `85f227f`), incl. an
+> explicit anti-over-fire gate that the two legitimate cases `a6`–`a11` pin are NOT culled.
+>
+> ⚠ **STILL OPEN:** the *thick* line through the planet is conic #5 — the orbit the camera is
+> actually riding, correctly flagged as straddling. Whether it is drawn correctly at that grazing
+> angle is the separate draw-through item; it draws through the planet.
+
 > ## ⭐ 2026-08-11 — THE ORRERY ZOOM-INTO-STAR BUG IS FIXED (`b9ea438` + `1a2b5a6`). CLOSED, NOT PATCHED.
 >
 > Max: *"The camera keeps getting placed in the star whenever I zoom all the way in after clicking
