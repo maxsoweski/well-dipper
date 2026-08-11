@@ -215,6 +215,39 @@ would become the array's second consumer.
 
 ---
 
+---
+
+## Live measurement, 2026-08-11 after the fixes — what actually resolves on approach
+
+Taken with the repaired `_lab.frameBody` at 8 body radii over every body in
+`lab-procedural-6` (`PVX J3DK6GAO+RBJGI5M`, 16 bodies). This is Max's approach criterion
+measured per body, which the API could not do before defect 1 was fixed.
+
+| class | n | octave uniform | live vs predicted |
+|---|---|---|---|
+| planets on the lab material | 4 | `uOctaves` | agree — 8.72 / 8.72 |
+| planets on the legacy material | 2 | `uReliefOctaves` | agree — 8.72 / 8.72 |
+| **plain moons** | **9** | **NONE** | **no octave uniform at all** |
+| **planet-class moon** (`Al`) | **1** | `uReliefOctaves` | **4.00 vs 8.72 — frozen** |
+
+⭐ **This splits Goal A into two unequal halves, and the split is not what the 18% coverage
+number suggests.**
+
+- **All 6 planets already resolve detail correctly on approach**, including the two still on
+  the legacy shader. Step 9 changes how rocky planets LOOK; it does not change whether they
+  resolve. The 20 rocky planets in the 5-system count are in this category.
+- **The 9 plain moons carry no octave uniform whatsoever** — `Moon.js`'s generic-simplex
+  shader, confirming it as an unported third renderer. These bodies do not resolve detail on
+  approach AT ALL, at any distance. **Step 10 is where Max's criterion actually lives.**
+- **`Al` is a planet-class moon and is the documented signature firing live**: it HAS the
+  uniform and is pinned at the 4.0 constructed default because its branch never registers it
+  with LODManager. Small, independent of the pipeline, fixable without Steps 9–12.
+
+⚠ **A correction to an earlier claim in this session.** `Paurosgara` was first reported at
+4.00 octaves and `agrees: false`; re-measured it reads 8.72 and agrees. The first sample was
+taken on the body's first frame, before LODManager had run — the instrument, not the code.
+It is NOT a defect and should not be carried as one.
+
 ## Recommendation
 
 Fix **1, 2, 3** before real Step 7 (the `src/` module move): all three make the camera API report
