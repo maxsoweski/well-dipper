@@ -191,7 +191,7 @@ describe('B — the enable gate is a declared name that the ALL_ON policy resolv
   });
 
   it('an ABSENT gate key still THROWS — ALL_ON did not become a blanket yes', () => {
-    // src/worldengine/port/writePackUniforms.js:166 `if (gates == null || !(d.gate in gates)) {`
+    // src/worldengine/port/writePackUniforms.js:180 `if (gates == null || !(d.gate in gates)) {`
     // treats an absent gate as an unanswered rendering decision. That throw is the entire reason
     // the strength is a named gate instead of a literal.
     const b = GAS[0];
@@ -257,8 +257,8 @@ describe('C — width and hue are FORWARDED from the shared law, not transcribed
   });
 
   it('⭐ CROSS-MATERIAL AGREEMENT: the swapped body carries the SAME width and hue the legacy one did', () => {
-    // ⭐ THE GATE THAT SAYS WHAT THIS PORT IS. src/objects/Planet.js:1584 `const optics = atmosphereOpticsOf(condition);`
-    // already feeds the legacy material's src/objects/Planet.js:1617 `uLimbExponent: { value: optics.limbExponent },`.
+    // ⭐ THE GATE THAT SAYS WHAT THIS PORT IS. src/objects/Planet.js:1610 `const optics = atmosphereOpticsOf(condition);`
+    // already feeds the legacy material's src/objects/Planet.js:1643 `uLimbExponent: { value: optics.limbExponent },`.
     // If the pack forwards the same law, then on a given body the swap opens the STRENGTH gate and
     // moves nothing else in this family — which is what makes the result readable as "the wire
     // arrived" instead of "the new renderer looks different". A transcription passes this today and
@@ -353,7 +353,7 @@ describe('D — the wire reaches a real lab material', () => {
 
     // (2) The LEGACY GAME material does not carry `uLimbStrength` AT ALL. That is C20's actual
     //     shape — two names for one value — and it is why the swap silently switched F34 off: the
-    //     game's own gate is the differently-spelled src/objects/Planet.js:1616 `uLimbMix: { value: LIMB_MIX },`.
+    //     game's own gate is the differently-spelled src/objects/Planet.js:1642 `uLimbMix: { value: LIMB_MIX },`.
     const legacy = planetAt(GAS[0].d, false).material;
     expect(isLabPlanetMaterial(legacy)).toBe(false);
     expect(legacy.uniforms.uLimbStrength).toBeUndefined();
@@ -384,7 +384,7 @@ describe('D — the wire reaches a real lab material', () => {
   it('the hue really lands in the THREE.Color — MEASURED, not assumed', () => {
     // ⚠ The lab's slot is planet-lod-uniforms.js:45 `uLimbColor:      { value: new THREE.Color(0.45, 0.65, 1.0) },`
     // — a THREE.Color, while the game's own is a Vector3. The writer resolves arrays duck-typed via
-    // src/worldengine/port/writePackUniforms.js:245 `if (target && typeof target.set === 'function') target.set(...v);`,
+    // src/worldengine/port/writePackUniforms.js:280 `if (target && typeof target.set === 'function') target.set(...v);`,
     // and `Color.set` dispatches to `setRGB` only on THREE arguments. Under colour management
     // `setRGB` can transform its inputs, so the round-trip is measured here rather than reasoned.
     const b = GAS[0];

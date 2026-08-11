@@ -44,7 +44,7 @@
 //    zero-filled. This module imports `resolvePolarVortex` and NOTHING else from storm-e.js: it
 //    never names `resolveStormE`, `writeStormESphere` or `bakeStormEAttributes`, emits no `uStorm*`
 //    driver, and returns an EMPTY `attributes` map, so the zero-fill at
-//    src/objects/Planet.js:2017 `const zeroFilled = ensureLabAttributes(geometry);` still supplies
+//    src/objects/Planet.js:2043 `const zeroFilled = ensureLabAttributes(geometry);` still supplies
 //    `aStorm`. The pack test asserts all four as a source scan + an output scan.
 //  · `uPolarAmp` AND `uPolarW` ARE NOT WRITTEN, AND THAT IS THE FAMILY BEING 8-DRIVEN OF 10, NOT AN
 //    OMISSION. planet-lod-uniforms.js:429 `uPolarAmp:        { value: 0.12 },  // F29 polygon meander amplitude — lab knob (0.26 x 1.12 = 0.29 stays inside the 0.38 gate)`
@@ -56,7 +56,7 @@
 //  · NO PER-FEATURE RELEVANCE KEY, and this one is FORCED, not chosen. The lab folds a relevance
 //    hard-gate in at planet-lod-lab.html:5174 `uniforms.uPolarStrength.value = state.polarVortexEnabled ? state.polarStrength * state.featureRelevant.polarVortex : 0.0;   // ✓ enable gate × per-feature relevance hard-gate (Thread B idiom) — zeros Mars leak (polar vortex authored for gas giants, not terrestrial)`,
 //    whose signal is preset membership in `ASSOCIATIONS.polarVortex.rendersOn`. The game's
-//    src/objects/Planet.js:2178 `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`
+//    src/objects/Planet.js:2204 `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`
 //    is empty, and a driver keying an absent relevance name THROWS. ⭐ MEASURED, over all 18 driver
 //    presets: `compositionClass(cond) === 'gas'` and `rendersOn.includes(preset)` agree 18/18 with
 //    zero disagreements — the lab's preset-NAME table and this pack's condition-derived predicate
@@ -85,7 +85,7 @@ import {
 
 // ── THE ONE GENUINELY NEW LAW IN THIS PACK, DECLARED RATHER THAN DEFAULTED ───────────────────────
 // `resolvePolarVortex` takes a (macroSeed, stormSeed) PAIR. The game supplies `macroSeed` per body
-// already (src/objects/Planet.js:2224 `macroSeed: labMacroSeed(d),`) but has no storm UI and so has
+// already (src/objects/Planet.js:2250 `macroSeed: labMacroSeed(d),`) but has no storm UI and so has
 // never had a `stormSeed`. The lab's is a lil-gui default, planet-lod-lab.html:998 `stormSeed: 1234,      // F27 storm-placement seed — SEED IDENTITY: not reset on preset change; the folder 🎲 rerolls it`
 // — and copying 1234 would import a GUI artifact into the game's world law, where nothing would
 // ever explain the number. 0 is chosen because `macroSeed` is ALREADY per-body, so the identity pair
@@ -96,7 +96,7 @@ import {
 // silent about whether anyone decided it. Named, exported and asserted, it is a law with an author.
 //
 // ⚠ AND IT IS DECLARED HERE RATHER THAN BESIDE ITS SIBLINGS, WHICH IS A COMPROMISE, NOT A DESIGN.
-// It belongs next to src/objects/Planet.js:2177 `export const GAME_ANIM_RATE = 1.0;` with the other
+// It belongs next to src/objects/Planet.js:2203 `export const GAME_ANIM_RATE = 1.0;` with the other
 // GAME_* front-end constants. It is here because this lane may not edit Planet.js.
 // Recorded so the next author moves it deliberately instead of finding it and wondering.
 export const GAME_STORM_SEED = 0;
@@ -225,7 +225,7 @@ export function polarDeckPack(condition, ctx = {}) {
 
   // ── The eight driven uniforms ────────────────────────────────────────────────────────────────
   // ⭐ ONLY `uPolarStrength` CARRIES THE GATE, and that reproduces the lab exactly rather than being
-  // a simplification: planet-lod-lab.html:5170 `      // F29 polar vortex — polarVortexEnabled gates strength→0 ONLY (the GLSL call`
+  // a simplification: planet-lod-lab.html:5196 `      // F29 polar vortex — polarVortexEnabled gates strength→0 ONLY (the GLSL call`
   // says the enable gate zeroes strength ALONE, because the GLSL call site keys on `uPolarStrength`
   // — planet-lod-height.glsl.js:2167 `        if (uPolarStrength > 0.0) col = polarVortexCol(N, col);` — so one gate kills the whole
   // combiner and restores byte-identical F28 output, while the other seven keep their derived values.

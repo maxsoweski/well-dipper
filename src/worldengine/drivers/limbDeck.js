@@ -6,7 +6,7 @@
 //
 // ⭐ WHAT C20 ACTUALLY IS, in one line. The limb's master gate has two different names on the two
 // sides. The lab gates the rim on `uLimbStrength`, planet-lod-uniforms.js:40 `uLimbStrength:   { value: 0.0 },`,
-// default 0.0; the game's own gate is the differently-named src/objects/Planet.js:1616 `uLimbMix: { value: LIMB_MIX },`,
+// default 0.0; the game's own gate is the differently-named src/objects/Planet.js:1642 `uLimbMix: { value: LIMB_MIX },`,
 // which the lab does not declare. So Step 6's material swap moves a gas body onto a material whose
 // rim term is multiplied by a zero nobody writes, and F34 renders NOTHING on every swapped body.
 // The Step-6 parity ledger's P-04 row rules it BLOCKING and calls it "One mapping line."
@@ -18,9 +18,9 @@
 //     — INSIDE `applyDrivers`, i.e. inside the pack-legal region and NOT inside the fenced storm
 //     writer. Its one input is planet-lod-lab-core.js:596 `const hasAtmo = !!d.atmosphere;`, which
 //     the game's condition vector answers directly. Nothing had to be extracted.
-//   · WIDTH and HUE — the lab does not own these either. planet-lod-lab.html:2438 `const _atmoOptics = atmosphereOpticsOf(`
-//     is the SAME module the game already calls at src/objects/Planet.js:1584 `const optics = atmosphereOpticsOf(condition);`
-//     and already writes to its own legacy material at src/objects/Planet.js:1617 `uLimbExponent: { value: optics.limbExponent },`.
+//   · WIDTH and HUE — the lab does not own these either. planet-lod-lab.html:2464 `const _atmoOptics = atmosphereOpticsOf(`
+//     is the SAME module the game already calls at src/objects/Planet.js:1610 `const optics = atmosphereOpticsOf(condition);`
+//     and already writes to its own legacy material at src/objects/Planet.js:1643 `uLimbExponent: { value: optics.limbExponent },`.
 //     So this pack does not compute a width or a hue: it forwards the shared law's answer, and on a
 //     given body it forwards the SAME numbers the legacy material would have carried. The swap
 //     therefore moves the STRENGTH gate and nothing else in this family — which is what makes the
@@ -34,23 +34,23 @@
 // ⛔⛔ WHAT IS DELIBERATELY NOT PORTED — declared here so it is not "discovered" at Step 9.
 // ---------------------------------------------------------------------------------------------
 //  1. THE LAB'S DISCRETE EXPONENT FORK AND ITS x1.3 STRENGTH BOOST.
-//     planet-lod-lab.html:2453 `if (_thickHaze) state.limbStrength = Math.min(1.0, state.limbStrength * 1.3);`
+//     planet-lod-lab.html:2479 `if (_thickHaze) state.limbStrength = Math.min(1.0, state.limbStrength * 1.3);`
 //     and the `_thickHaze ? 1.8 : 3.5` line above it ride `_cloudRegime`, which is derived inside
 //     the lab's own `applyDrivers` and has no game-side producer. The game keeps the CONTINUOUS law
 //     it already ships, src/worldengine/base/atmosphereOptics.js:161 `limbExponent: 3.5 - 1.7 * thick,`.
 //     ⚠ AND THAT IS ALREADY A LIVE DIVERGENCE THIS PACK DID NOT CREATE: the lab overrides the
-//     module it imports, at planet-lod-lab.html:2452 `state.limbExponent = _thickHaze ? 1.8 : 3.5;`,
+//     module it imports, at planet-lod-lab.html:2478 `state.limbExponent = _thickHaze ? 1.8 : 3.5;`,
 //     and the game already takes the module's value, which
-//     src/objects/Planet.js:1582 `module's value, deliberately: the module is the shared law` states. Over
-//     the GAS class the lab's fork reduces to exactly planet-lod-lab.html:2380 `else if (_gas && (state.planetRadiusEarth ?? 1) < 6 && (_fp.massEarth ?? 1) < 10) _cloudRegime = 2;`
+//     src/objects/Planet.js:1608 `module's value, deliberately: the module is the shared law` states. Over
+//     the GAS class the lab's fork reduces to exactly planet-lod-lab.html:2406 `else if (_gas && (state.planetRadiusEarth ?? 1) < 6 && (_fp.massEarth ?? 1) < 10) _cloudRegime = 2;`
 //     — radiusEarth < 6 && massEarth < 10 — so it is closable later in ONE place. Transcribing it
 //     HERE would create a second expression of a lab law with no shared module, which is the drift
 //     this whole plan exists against.
-//  2. THE F31e DETACHED HAZE SHELL. planet-lod-lab.html:5000 `hazeShell.visible = !!(state.limbEnabled && state.limbStrength > 0 && state.limbHazeShell > 0);`
+//  2. THE F31e DETACHED HAZE SHELL. planet-lod-lab.html:5026 `hazeShell.visible = !!(state.limbEnabled && state.limbStrength > 0 && state.limbHazeShell > 0);`
 //     is a separate THREE mesh, not a uniform. A pack whose contract is "a map keyed by uniform
 //     name" cannot express it, and a game-side shell would be a rewrite rather than a wire.
 //  3. NO `macroSeed` ASSERTION, and the omission is the honest one. `assertMacroSeed` is the PACK's
-//     precondition, not the writer's (src/worldengine/port/writePackUniforms.js:125 `export function assertMacroSeed(macroSeed) {`),
+//     precondition, not the writer's (src/worldengine/port/writePackUniforms.js:138 `export function assertMacroSeed(macroSeed) {`),
 //     and this pack draws no entropy at all — every driver is a pure function of the condition
 //     vector. Asserting a seed it never reads would be a check that cannot fail for a reason, which
 //     is the shape of gate §11.1 calls dead. The pack's own test asserts seed-INDEPENDENCE instead,
@@ -67,13 +67,13 @@ import { scalar, assertDisplayPolicy, assertPackResult, PackContractError } from
 
 // ── The declared gate name ───────────────────────────────────────────────────
 // ⭐ A NAME, NOT A HARDCODED 1.0, AND THE DIFFERENCE IS THE WHOLE POINT OF ruling 4. The lab's write
-// is planet-lod-lab.html:4995 `uniforms.uLimbStrength.value = state.limbEnabled ? state.limbStrength : 0.0;   // ✓ enable gate`
+// is planet-lod-lab.html:5021 `uniforms.uLimbStrength.value = state.limbEnabled ? state.limbStrength : 0.0;   // ✓ enable gate`
 // — an enable gate and nothing else. Unlike the F29 polar writer, which is
-// planet-lod-lab.html:5174 `state.polarVortexEnabled ? state.polarStrength * state.featureRelevant.polarVortex : 0.0;`,
+// planet-lod-lab.html:5200 `state.polarVortexEnabled ? state.polarStrength * state.featureRelevant.polarVortex : 0.0;`,
 // this line multiplies NO relevance term — so the limb needs an enable gate and needs NO relevance key,
-// and src/objects/Planet.js:2178 `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`
+// and src/objects/Planet.js:2204 `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`
 // stays untouched. Declaring the gate by NAME is what keeps the absent-gate throw alive at
-// src/worldengine/port/writePackUniforms.js:166 `if (gates == null || !(d.gate in gates)) {`: a
+// src/worldengine/port/writePackUniforms.js:180 `if (gates == null || !(d.gate in gates)) {`: a
 // literal 1.0 would render the rim under a decision nobody had made.
 export const LIMB_GATE = 'limb';
 
@@ -127,7 +127,7 @@ export function limbDeckPack(condition, ctx = {}) {
 
   const air = hasAtmosphere(condition);
   // ⭐ THE SHARED LAW, CALLED — NOT COPIED. The legacy path already calls it, at
-  // src/objects/Planet.js:1584 `const optics = atmosphereOpticsOf(condition);`,
+  // src/objects/Planet.js:1610 `const optics = atmosphereOpticsOf(condition);`,
   // so a future change to the optics lands on both front-ends
   // and on both game materials at once. The pack's test pins that by asserting the swapped body's
   // exponent and hue EQUAL the legacy material's on the same body, which a transcription would
@@ -147,7 +147,7 @@ export function limbDeckPack(condition, ctx = {}) {
     // reads them off-gate.
     uLimbExponent: optics.limbExponent,
     // `.slice()` because the returned array is handed to a settable vector by
-    // src/worldengine/port/writePackUniforms.js:245 `if (target && typeof target.set === 'function') target.set(...v);`
+    // src/worldengine/port/writePackUniforms.js:280 `if (target && typeof target.set === 'function') target.set(...v);`
     // — handing out a live array is how one body's rim hue follows another's.
     uLimbColor: optics.limbColor.slice(),
   };
@@ -175,8 +175,8 @@ export function limbDeckPack(condition, ctx = {}) {
  *
  * ⛔⛔ THE PREDICATE IS `compositionClass(condition) === 'gas'` AND IT MUST NOT BE `!!condition.atmosphere`,
  * even though the strength driver keys on exactly that. Admission runs through
- * src/objects/Planet.js:2166 `const packs = condition ? selectPacks(condition).map((e) => e.name) : [];`
- * into src/objects/Planet.js:2168 `admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
+ * src/objects/Planet.js:2192 `const packs = condition ? selectPacks(condition).map((e) => e.name) : [];`
+ * into src/objects/Planet.js:2194 `admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
  * — so a broader predicate would ADMIT EVERY ROCKY AND ICY WORLD-ENGINE BODY to the lab material,
  * which is Step 9's population arriving unruled at Step 6. It is written to be character-identical
  * to src/worldengine/drivers/index.js:97 `applies: (condition) => compositionClass(condition) === 'gas',`

@@ -1008,6 +1008,18 @@ const CITE_ILLUSTRATIVE = new Set(['foo.js', 'Foo.js', 'a.html', 'b.js']);
 // makes it a file steps are executed against. Left out, it becomes the next unscanned carrier —
 // this exact defect, one file over.
 const CITE_SOURCES = [
+  // ── STEP-7 REGISTRATION PRE-WORK (2026-08-10). ⛔ These five carried 32 BROKEN refs that no gate
+  // could see, because the files were outside this list — the same wrong-and-ungated class as Step 6's
+  // four. All 32 were repaired BY SYMBOL in the same commit that adds them here, so this widening
+  // lands them in the FATAL column instead of the UNCHECKED pile. Adding a source and GATING a source
+  // are different acts (§11.2); this commit does both.
+  // ⚠ Checked first: appending BELOW `const CITE_SOURCES = [` does not move it from :1010, and the one
+  // live ref to that line (step6-parity-ledger.md) is repaired to 1010 in this same commit.
+  'src/worldengine/drivers/limbDeck.js',
+  'src/worldengine/drivers/polarDeck.js',
+  'tests/driver-pack-limbdeck.test.js',
+  'tests/driver-pack-polardeck.test.js',
+  'docs/FEATURES/step6-parity-ledger.md',
   'tools/port-uniform-delta.mjs',
   'body-condition-vector.js',
   'docs/FEATURES/one-pipeline-two-frontends-PLAN.md',

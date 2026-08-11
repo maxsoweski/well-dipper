@@ -263,7 +263,7 @@ describe('GATE 2 · the storm slice is not reopened', () => {
   });
 
   it('aStorm is still a zero-fill member and is not baked by this pack', () => {
-    // The order rule at Planet.js:2017 `const zeroFilled = ensureLabAttributes(geometry);` supplies
+    // The order rule at Planet.js:2043 `const zeroFilled = ensureLabAttributes(geometry);` supplies
     // aStorm precisely because no pack bakes it. Assert the membership, not the rule.
     expect(LAB_ATTRIBUTES).toContain('aStorm');
     expect(Object.keys(deck.attributes)).not.toContain('aStorm');
