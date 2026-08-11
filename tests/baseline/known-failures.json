@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-11T16:04:42.467Z",
+  "recordedAt": "2026-08-11T16:54:15.628Z",
   "recordedFromCommit": {
-    "sha": "67e86ad9cdb2ba41f28c4f33e29358952ab8c35b",
+    "sha": "8c0958baa494f99e90ee81fb11270672da8eea93",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -31,9 +31,9 @@
       "collectedFiles": 319,
       "failingFiles": 2,
       "nonCollectingFiles": 15,
-      "tests": 5246,
+      "tests": 5250,
       "failed": 24,
-      "passed": 5218,
+      "passed": 5222,
       "skipped": 4,
       "todo": 0
     },
@@ -289,7 +289,7 @@
       "tests/radius-live-feed.test.js": 52,
       "tests/radius-slider-map.test.js": 8,
       "tests/relief-height-cube.test.js": 16,
-      "tests/relief-octave-lod-ramp.test.js": 7,
+      "tests/relief-octave-lod-ramp.test.js": 11,
       "tests/relief-router-baked-drainage.test.js": 7,
       "tests/relief-router-repoint.test.js": 6,
       "tests/relief-seam-pole-continuity.test.js": 7,
