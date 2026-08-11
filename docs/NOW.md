@@ -4,6 +4,67 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> ## ⭐ 2026-08-11 — THE ORRERY ZOOM-INTO-STAR BUG IS FIXED (`b9ea438` + `1a2b5a6`). CLOSED, NOT PATCHED.
+>
+> Max: *"The camera keeps getting placed in the star whenever I zoom all the way in after clicking
+> twice on a planet or moon."* Diagnosed with a 5-agent workflow (4 read-only recon lanes + an
+> adversarial refuter — **all four returned CONFIRMS**), then confirmed live before any edit.
+>
+> **Root cause: two writers own "the body the camera is dealing with", and only one is re-issued
+> every frame.** The zoom floor comes from the body you CLICKED (`selectTarget` :10011 / the click-2
+> glide :13987 → `minDistance = radius * 1.05`). The orbit pivot comes from the global
+> `focusIndex`/`focusMoonIndex`/`focusStarIndex` triple, re-applied 60×/s by the tracker
+> (`main.js:12367-12395`) — **a triple no click path writes or clears** (18 writer sites; not one
+> falls inside `selectTarget` or either click branch). So the wheel drove `distance` to a floor
+> scaled by body X about a pivot on body Y, and **no pivot-relative clamp exists anywhere** in the
+> camera to stop it entering Y.
+>
+> ⭐ **The glide MASKS it while it runs** — `_gliding` pins `this.target` on the clicked body — which
+> is why the gesture looks right until the wheel is touched. The first wheel tick ends the glide,
+> both guards drop, and the pivot teleports.
+>
+> **The fix is one invariant, not five patches:** `minDistance` and the identity of the body it came
+> from are written by one function (`_setFocusAnchor`) and only that function, and `trackTarget`
+> refuses a per-frame anchor that names a different body. `restoreFromWorldState` /
+> `adoptCurrentPose` reset the floor (load-bearing — without it the guard would refuse the tracker
+> forever). The click paths still do NOT write the focus triple: that is the bigger candidate fix and
+> it would change the cockpit snapshot, NavComputer, orbit-ring highlight, system map, debug panel
+> and `hasFocusedBody` all at once.
+>
+> **Verified.** New `src/camera/__tests__/focusAnchorCoherence.test.js` (5 gates, named in `1a2b5a6`)
+> — RED at `85f227f` with *"expected 500 to be less than 0.000001"*, green now. 49 files / 739 tests
+> across camera + cockpit-FocusedBody + flightExitAnchor. All four instruments green; `main.js` edit
+> line-count-neutral (2/2) so no citation moved. **Live, real mousedown/mouseup + wheel:**
+> cam→clicked planet **8127.3 → 0.4756** (its own 1.05R floor); cam→tracker's body 0.4755 (inside it)
+> **→ 8875.2**; cam→star 1429.2 **→ 6747.6**.
+>
+> ⛔ **REPRO PRECONDITION — a cold ORRERY entry CANNOT reproduce this.** `_frameSystemForOrrery`
+> clears the triple to -1 and `viewSystem` resets the floor. The tracker must be ARMED first
+> (`_lab.beginAutopilotTour()` → `_lab.stopAutopilot()` → `stopFlythrough` launders
+> `findClosestBody`'s answer, whose first probe is the star). A test that skips that step proves
+> nothing — this is how the previous session's revert came to look like a cure.
+>
+> ⭐ **Synthetic wheel events must be dispatched on `document.getElementById('canvas')`**, never
+> `window`/`document` — the listener is on the canvas, `{passive:false}`, and calls
+> `preventDefault()`, so `cancelable: true` is required. `deltaY < 0` zooms in. This was the previous
+> session's stated blocker and it is now solved; fix verification is exercisable end-to-end.
+>
+> ⚠ **Known non-goal, measured not assumed:** after a click the pivot is a one-shot copy, so the
+> camera does not FOLLOW the clicked body around its orbit. Already true whenever `focusIndex` is -1;
+> drift is ~0.005 units per 25 s against a moon radius of 0.04. Live following is a separate change
+> with its own UAT.
+>
+> ▶ **STEP 7 PRE-WORK LANDED — the C17 ruling now has a number.** Moving `body-condition-vector.js`
+> into `src/worldengine/base/` puts it inside the `radius-live-feed-fence` corpus
+> (`jsFilesUnder(ROOT, 'src/worldengine')`, `tests/radius-live-feed-fence.test.js:102`). Measured the
+> DENY pattern over all five files to be moved: **exactly ONE live hit**, `body-condition-vector.js:105`
+> `const _R_c = fp.radiusEarth ?? 1.0;` (the other match, :95, is a comment and the scan is
+> comment-blind). It is a **FALSE POSITIVE**: `_R_c` is deliberately the *canonical* preset radius —
+> the denominator of the D14 gravity mass-radius ratio — explicitly distinguished from `_R`, the
+> DRAWN radius passed as the 3rd argument. **The ruling is "allowlist it with that reason", not
+> "rewire it".** `planet-lod-lab-core.js`, `-uniforms.js`, `-shaders.glsl.js`, `-height.glsl.js`
+> carry **0** hits, so they enter the corpus for free.
+
 > ## ⭐ 2026-08-10 — AGENT CAMERA API SHIPPED (`606df5a`..`34046f4`). THE BEACH-BALL PROBLEM IS A NUMBER NOW.
 >
 > `_lab.frameBody(subject, {radii})` and `_lab.approachSweep(subject, {from,to,steps})` exist on
