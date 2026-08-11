@@ -56,6 +56,7 @@ import { PACKS, gatesFor } from '../src/worldengine/drivers/index.js';
 import {
   polarDeckPack, polarTintFromBandTint, POLAR_TINT_LAW,
   POLAR_DRIVEN, POLAR_LAB_KNOBS, GAME_STORM_SEED,
+  POLAR_DECK_ENTRY, POLAR_GATE,
 } from '../src/worldengine/drivers/polarDeck.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -448,6 +449,117 @@ describe('GATE 5 · the Mars leak stays shut', () => {
     const defaults = { sides: uniforms.uPolarSides.value, r0: uniforms.uPolarR0.value };
     expect(leaked.sides !== defaults.sides || Math.abs(leaked.r0 - defaults.r0) > 1e-9,
       'the leaked bank differs from the material defaults on at least one field').toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// GATE 5b — THE REGISTRY ENTRY, GATED BEFORE THE WRITER GOES LIVE
+//
+// ⭐ WHY THESE LAND BEFORE REGISTRATION AND NOT WITH IT. Until the entry is in PACKS, its predicate
+// and its eight driver→pole mappings are unfalsifiable: nothing calls them, so nothing can catch a
+// wrong one. Registering FIRST and gating afterwards means the first thing that ever exercises the
+// mapping is a live frame, where a wrong field reads as "the vortex looks a bit off" — which is not
+// a failure anyone can act on. So the entry is exported and gated here, inert, and registration
+// becomes a one-line change to an array whose contents are already under test.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('GATE 5b · the registry entry is correct before anything composes it', () => {
+  it('admits EXACTLY the set the shipped giantDeck predicate admits — membership, not a count', () => {
+    // Same reasoning as limbDeck's twin gate. Polar is a gas-class feature, so registration must
+    // admit exactly the bodies already admitted and no others. MEMBERSHIP, because Step 4 measured
+    // that a count-preserving permutation passed every instrument in this program byte-identically.
+    const giant = PACKS.find((e) => e.name === 'giantDeck');
+    expect(giant, 'the shipped gas pack must exist to compare against').toBeTruthy();
+
+    // POPULATION is pre-filtered to gas, so it cannot answer "and nothing else". Build the unfiltered
+    // set here — a predicate gate whose population contains no counter-examples proves nothing.
+    const all = [];
+    for (const seed of SYSTEM_SEEDS.slice(0, 40)) {
+      const s = StarSystemGenerator.generate(seed, null);
+      (s.planets || []).forEach((e, ordinal) => {
+        all.push({ id: `${seed}#${ordinal}`, cond: conditionFromPlanet(e.planetData) });
+      });
+    }
+    const mine = all.filter((b) => POLAR_DECK_ENTRY.applies(b.cond) === true).map((b) => b.id);
+    const theirs = all.filter((b) => giant.applies(b.cond) === true).map((b) => b.id);
+    expect(mine).toEqual(theirs);
+    const nonGas = all.length - mine.length;
+    expect(nonGas, 'the population must contain non-gas bodies or this gate is vacuous').toBeGreaterThan(20);
+    expect(mine.length, 'and a real gas population, not one body').toBeGreaterThan(20);
+  });
+
+  it('[CONTROL] the natural wrong predicate `!!condition.atmosphere` OVER-ADMITS, and by how much', () => {
+    // ⭐ THIS IS WHAT MAKES THE GATE ABOVE MEAN SOMETHING. `uPolarStrength` keys on the presence coin
+    // and the strength driver's own inputs are atmosphere-shaped, so writing the PREDICATE that way
+    // is the natural mistake — and it admits every rocky and icy world-engine body, i.e. Step 9's
+    // whole population arriving unruled at Step 6.
+    const all = [];
+    for (const seed of SYSTEM_SEEDS.slice(0, 40)) {
+      const s = StarSystemGenerator.generate(seed, null);
+      (s.planets || []).forEach((e) => all.push(conditionFromPlanet(e.planetData)));
+    }
+    const correct = all.filter((c) => POLAR_DECK_ENTRY.applies(c) === true).length;
+    const counterfactual = all.filter((c) => !!c.atmosphere).length;
+    expect(counterfactual).toBeGreaterThan(correct);
+  });
+
+  it('declares the gate its own driver carries, and resolves through the shipped gate policy', () => {
+    const cond = gasCondition('Gas giant (Jovian)');
+    const deck = polarDeckPack(cond, packCtx(cond, 4242));
+    // One spelling, two consumers: the driver's gate and the entry's declared list. A shared constant
+    // is what stops them drifting; this asserts they have not.
+    expect(deck.drivers.uPolarStrength.gate).toBe(POLAR_GATE);
+    expect(POLAR_DECK_ENTRY.gates).toContain(POLAR_GATE);
+    expect(gatesFor(POLAR_DECK_ENTRY)).toEqual({ [POLAR_GATE]: true });
+    expect(POLAR_DECK_ENTRY.pack).toBe(polarDeckPack);
+    expect(Object.isFrozen(POLAR_DECK_ENTRY)).toBe(true);
+  });
+
+  it('⭐ every driver equals the pole field it claims — the mapping is IDENTITY, per body', () => {
+    // ⛔ THE GATE THIS REPLACES COULD NOT SEE A SWAPPED FIELD. The distributional check on
+    // `uPolarSides` passes on `uPolarRing` too: over 200 seeds the two share modal value 6, the same
+    // key set [5,6,7], and the same ordering — so a commit that swapped them was green. MEASURED,
+    // not feared. Identity-per-body kills it on the first body where the two differ.
+    const MAP = {
+      uPolarMode: 'mode', uPolarSides: 'sides', uPolarR0: 'r0',
+      uPolarPole: 'pole', uPolarRing: 'ring', uPolarPhase: 'phase',
+    };
+    let checked = 0;
+    let sidesDifferFromRing = 0;
+    for (const b of POPULATION.slice(0, 120)) {
+      const deck = polarDeckPack(b.cond, packCtx(b.cond, 4242));
+      const pole = deck.meta.pole;
+      expect(pole, `${b.id} must carry meta.pole`).toBeTruthy();
+      // The gated driver is a scalar() wrapper; its value is the pole's strength.
+      expect(deck.drivers.uPolarStrength.value, `${b.id} uPolarStrength`).toBe(pole.strength);
+      for (const [uniform, field] of Object.entries(MAP)) {
+        expect(deck.drivers[uniform], `${b.id} ${uniform} must equal pole.${field}`).toBe(pole[field]);
+      }
+      if (pole.sides !== pole.ring) sidesDifferFromRing++;
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(50);
+    // ⛔ WITHOUT THIS THE GATE IS VACUOUS FOR THE ONE MUTATION IT EXISTS TO KILL: if every body had
+    // sides === ring, swapping the two would still pass every assertion above.
+    expect(sidesDifferFromRing, 'population must contain bodies where sides !== ring').toBeGreaterThan(10);
+  });
+
+  it('uPolarTint is DERIVED, not a pole field — and says so by matching its own law', () => {
+    // The eighth driven name is the one the identity map above cannot cover: it comes from the band
+    // tint through POLAR_TINT_LAW rather than from `pole`. Gated separately so its absence from the
+    // identity map reads as a fact rather than an oversight.
+    const cond = gasCondition('Gas giant (Jovian)');
+    const deck = polarDeckPack(cond, packCtx(cond, 4242));
+    if (deck.drivers.uPolarTint !== undefined) {
+      const bandTint = cond.atmosphere && cond.atmosphere.color;
+      expect(deck.drivers.uPolarTint).toEqual(polarTintFromBandTint(bandTint));
+      expect(Object.keys(deck.meta.pole)).not.toContain('tint');
+    }
+    // POLAR_DRIVEN is the declared family; the identity map plus tint plus strength must exhaust it.
+    expect(new Set(POLAR_DRIVEN)).toEqual(new Set([
+      'uPolarStrength', 'uPolarMode', 'uPolarSides', 'uPolarR0',
+      'uPolarPole', 'uPolarRing', 'uPolarPhase', 'uPolarTint',
+    ]));
   });
 });
 

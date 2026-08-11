@@ -132,6 +132,13 @@ export const POLAR_DRIVEN = Object.freeze([
 // the fence is checkable instead of prose.
 export const POLAR_LAB_KNOBS = Object.freeze(['uPolarAmp', 'uPolarW']);
 
+// ⭐ ONE SPELLING OF THE GATE NAME, because there are about to be two places that need it: the
+// driver that carries it and the registry entry that declares it. `gatesFor` builds ALL_ON from the
+// ENTRY's names and `writePackUniforms` throws when a driver's gate is absent from that map — so a
+// typo in either place is caught on the first admitted body. That is a good failure, but a shared
+// constant means the two cannot disagree in the first place. Mirrors limbDeck.js's `LIMB_GATE`.
+export const POLAR_GATE = 'polarVortex';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // THE PACK
 // ─────────────────────────────────────────────────────────────────────────────
@@ -231,7 +238,7 @@ export function polarDeckPack(condition, ctx = {}) {
   // combiner and restores byte-identical F28 output, while the other seven keep their derived values.
   // Gating all eight would give the same pixels and a different STATE, which is the class of change
   // the lab's own 52/52 note above says no gate in this repo can see.
-  drivers.uPolarStrength = scalar(pole.strength, { gate: 'polarVortex' });
+  drivers.uPolarStrength = scalar(pole.strength, { gate: POLAR_GATE });
   drivers.uPolarMode = pole.mode;
   drivers.uPolarSides = pole.sides;
   drivers.uPolarR0 = pole.r0;
@@ -256,3 +263,31 @@ export function polarDeckPack(condition, ctx = {}) {
 
   return assertPackResult({ drivers, attributes, meta }, 'polarDeckPack');
 }
+
+/**
+ * The runtime registry entry, exported so `src/worldengine/drivers/index.js` ADDS it rather than
+ * RETYPES it.
+ *
+ * ⛔ THE POINT OF EXPORTING THIS IS THAT THE PREDICATE CANNOT BE RETYPED AT THE COMPOSITION POINT.
+ * A hand-written copy at index.js is a second expression of the same law, free to drift from the one
+ * this file's own gates test — and the natural mistake is specific and measured: writing the
+ * predicate as `!!condition.atmosphere` (which is what the STRENGTH driver keys on internally)
+ * admits every rocky and icy world-engine body, i.e. Step 9's whole population arriving unruled.
+ * Registration is one import plus one array element, and the predicate travels with its tests.
+ *
+ * ⚠ Character-identical to giantDeck's and limbDeck's predicate on purpose: polar is a gas-class
+ * feature, so registration must admit EXACTLY the bodies already admitted and no others. The gate in
+ * this file's test suite asserts that as SET MEMBERSHIP, not as a count — a count-preserving
+ * permutation was measured to pass every instrument in this program byte-identically.
+ *
+ * ⚠ `uPolarStrength` is the per-seed PRESENCE term, NOT a master gate: it is 1 on roughly 24 of 41
+ * generated gas bodies and 0 on the rest, and the GLSL skips the whole effect at 0. So a registered,
+ * correctly-wired polarDeck renders NOTHING on more than a third of gas giants BY DESIGN. Do not
+ * read a capless body as a failed registration.
+ */
+export const POLAR_DECK_ENTRY = Object.freeze({
+  name: 'polarDeck',
+  applies: (condition) => compositionClass(condition) === 'gas',
+  gates: Object.freeze([POLAR_GATE]),
+  pack: polarDeckPack,
+});
