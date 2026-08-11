@@ -3425,6 +3425,23 @@ window._lab = {
       || focusMoonIndex !== focusFrom.focusMoonIndex
       || focusStarIndex !== focusFrom.focusStarIndex;
 
+    // ⛔⛔ FOCUS CARRIES A ZOOM-FLOOR OBLIGATION, AND WRITING THE INDICES WITHOUT IT IS THE BUG
+    // MAX HIT: "the game goes mostly white after I click and zoom in." Measured at the time —
+    // camera 0.0511 units from the star's centre against a radius of 4.720, i.e. INSIDE the star,
+    // which fills the screen with its glow.
+    // Every OTHER way a body becomes focused sets this: src/main.js:10030 `cameraController.setFocusMinDistance(target.radius);`
+    // on select, and again on the click-2 glide, both with the comment that the radius-relative
+    // floor is what stops wheel-zoom from passing through the surface — the absolute default is
+    // src/camera/ShipCameraSystem.js:311 `this.minDistance = 0.01;`, which for a 4.72-radius star is
+    // 0.2% of the way to its centre. When this method started writing the focus indices directly it
+    // created a body that LOOKS focused to every consumer while the floor stayed at the absolute
+    // default, so the next wheel-zoom went straight through the surface.
+    // ⚠ NOT the same thing as clamping the framing. `focusOn` deliberately writes `distance`
+    // unclamped (ShipCameraSystem.js:679-680), which is what lets an agent ask for 0.5 radii and get
+    // it; that stays true. This bounds only what the HUMAN's wheel can then reach, which is the
+    // channel that was unbounded.
+    cameraController.setFocusMinDistance(worldRadius);
+
     const controller = frameSequence({ camera, cameraController, cameraInterp, worldPos, viewDistance });
     await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
 
