@@ -248,6 +248,21 @@ number suggests.**
 taken on the body's first frame, before LODManager had run — the instrument, not the code.
 It is NOT a defect and should not be carried as one.
 
+### Post-fix verification (`8c0958b`), live, after a full page reload
+
+| body | class | before | after |
+|---|---|---|---|
+| `Al` (p5 m2) | planet-class moon | 4.00 vs 8.72 — **frozen** | **8.723 / 8.723 agree** |
+| `…e V` (p3 m4) | planet-class moon | 4.00 vs 8.72 — **frozen** | **8.723 / 8.723 agree** |
+| `En` (p3 m0) | plain moon | no octave uniform | no octave uniform (Step 10) |
+| `…g` (p5) | planet | 8.723 agree | 8.723 agree (control, unmoved) |
+
+⚠ **The same first-frame trap fired a third time and is worth naming as a standing hazard, not an
+anecdote.** `…e V` read 4.00 on its first probe after the reload and 8.723 on three stable samples
+afterwards. LODManager has not run for a body on the frame it is first framed at. **Any octave
+reading taken from a body's first framing is meaningless — sample twice.** This has now produced a
+wrong conclusion once (`Paurosgara`, retracted above) and a wrong near-conclusion once.
+
 ## Recommendation
 
 Fix **1, 2, 3** before real Step 7 (the `src/` module move): all three make the camera API report
