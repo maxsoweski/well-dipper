@@ -10008,7 +10008,7 @@ function selectTarget(target) {
     // (click-1 / Tab-cycle) should already let wheel-zoom approach it to
     // radius*1.05 — otherwise a prior focus's floor (e.g. a star's ~4.9)
     // sticks until the glide click. Overview framing (viewSystem) resets it.
-    cameraController.setFocusMinDistance(target.radius);
+    cameraController.setFocusMinDistance(target.radius, target.mesh.position);
   }
 
   // Flight-assist modes react to a (re)selection while flying.
@@ -13984,7 +13984,7 @@ function trySelect(clientX, clientY) {
       // Radius-relative min-distance (fix C): let wheel-zoom reach just above the
       // surface (radius*1.05) instead of the absolute 0.01 floor that made sub-0.01
       // moons unapproachable. Reset to 0.01 on overview framing (_frameSystemForOrrery).
-      cameraController.setFocusMinDistance(bodyHit.radius);
+      cameraController.setFocusMinDistance(bodyHit.radius, bodyHit.mesh.position);
       soundEngine.play('select');
       // Pass the LIVE mesh.position (NOT a clone) so the single-channel glide meets a
       // moving moon at its live spot each frame instead of chasing the click-time clone.

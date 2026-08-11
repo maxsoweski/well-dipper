@@ -309,6 +309,10 @@ export class ShipCameraSystem {
     this.pitch = 0.15;
     this.distance = 8;
     this.minDistance = 0.01;
+    // The live Vector3 (a body's mesh.position, held BY REFERENCE) whose radius
+    // set minDistance. `null` = no focused body, absolute floor. The floor and
+    // the IDENTITY of the body it came from are one fact — see _setFocusAnchor.
+    this._focusAnchor = null;
     this.maxDistance = 50000;
 
     this.smoothedYaw = this.yaw;
@@ -892,12 +896,30 @@ export class ShipCameraSystem {
   // approached. resetFocusMinDistance restores 0.01 for system-overview framing.
   // NOTE: does NOT change the constructor default 0.01 — flightExitAnchor.test.js
   // and the supercruise-exit adopt clamp both rely on that default.
-  setFocusMinDistance(radius) {
-    this.minDistance = radius * 1.05;
+  //
+  // ⭐ orrery-zoom-into-star-2026-08-11: the floor and the identity of the body it
+  // came from are a SINGLE FACT and may never be set apart. Before this, the floor
+  // was written from the CLICKED body (main.js selectTarget / the click-2 glide)
+  // while the orbit pivot was re-anchored every frame from the stale global
+  // focusIndex triple — so wheel-zoom drove `distance` to a moon-scaled floor about
+  // a STAR-scaled pivot and put the camera 1% of the way to the star's centre.
+  // `anchor` is the body's LIVE mesh.position; trackTarget compares by reference.
+  setFocusMinDistance(radius, anchor = null) {
+    this._setFocusAnchor(anchor, radius);
   }
 
   resetFocusMinDistance() {
-    this.minDistance = 0.01;
+    this._setFocusAnchor(null, 0);
+  }
+
+  // THE ONE PLACE minDistance IS WRITTEN outside the constructor. Grep-checkable:
+  // `minDistance =` must appear exactly twice in this file (ctor + here).
+  // The floor depends on the RADIUS alone and the anchor on the reference alone —
+  // deliberately independent, so the legacy one-argument form keeps its exact old
+  // floor and merely leaves the guard inert (anchor null ⇒ trackTarget unchanged).
+  _setFocusAnchor(positionRef, radius) {
+    this._focusAnchor = positionRef || null;
+    this.minDistance = radius > 0 ? radius * 1.05 : 0.01;
   }
 
   viewSystem(systemRadius, center = null) {
@@ -939,6 +961,18 @@ export class ShipCameraSystem {
   }
 
   trackTarget(position) {
+    // ⭐ orrery-zoom-into-star-2026-08-11 — THE INVARIANT. main.js re-issues this
+    // EVERY FRAME from the global focusIndex/focusMoonIndex/focusStarIndex triple,
+    // which no click path ever writes or clears. A per-frame anchor naming a
+    // DIFFERENT body than the one that owns the zoom floor is therefore a STALE
+    // focus index (autopilot stop, tour leg, minimap click, spawn hero shot) — and
+    // honouring it steals the pivot the click just set while leaving the clicked
+    // body's floor in force. The most recent explicit user action owns the pivot;
+    // drop the stale anchor rather than fight it. Compare is by REFERENCE, which is
+    // exact here: main.js's tracker and _makeTarget read the SAME mesh instances
+    // (main.js:12374-12384 vs 7050/7063/7079). ⚠ _lab.resolveBody returns a
+    // planet's `.surface` — a DIFFERENT mesh — so never build an anchor from it.
+    if (this._focusAnchor && position !== this._focusAnchor) return;
     this._targetGoal.copy(position);
 
     if (this._returningToOrbit) {
@@ -1033,6 +1067,12 @@ export class ShipCameraSystem {
     this._targetGoal.copy(targetPosition);
     this._transitioning = false;
     this._gliding = false;
+    // Load-bearing, not cosmetic: this is the "re-anchor on a NEW pivot" event
+    // (stopFlythrough → findClosestBody, whose first probe is the star). Without
+    // it a pre-tour click's moon floor stays in force against the new pivot, and
+    // the trackTarget guard would refuse the tracker and leave the mismatch
+    // standing. No caller passes a radius, so the absolute floor is correct here.
+    this.resetFocusMinDistance();
 
     const offset = this.camera.position.clone().sub(targetPosition);
     const dist = offset.length();
@@ -1100,6 +1140,11 @@ export class ShipCameraSystem {
       this.target.copy(anchorPosition);
     }
     this._targetGoal.copy(this.target);
+    // Same rationale as restoreFromWorldState: the forward-ray exit anchor is not
+    // a body, so no radius-relative floor may survive it. MUST come AFTER the
+    // clamp above — flightExitAnchor.test.js's no-snap invariant depends on that
+    // clamp reading the OLD minDistance so it cancels out.
+    this.resetFocusMinDistance();
 
     this.yaw = yaw;
     this.pitch = pitch;
