@@ -4,7 +4,7 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> ## ⭐⭐ 2026-08-12 — THE PHANTOM RING IS ROOT-CAUSED AND FIXED (`945f08d` + `1a3c1e3`). VERIFIED_PENDING_MAX.
+> ## ⭐⭐ 2026-08-12 — THE PHANTOM RING IS ROOT-CAUSED AND FIXED (`945f08d` + `1a3c1e3`). ✅ SHIPPED — MAX UAT PASS 2026-08-12 ("works").
 >
 > ⛔ **SUPERSEDES the 2026-08-11 entry below.** That fix (`03cb1dd`) is real and independent — 13
 > conics entirely behind the camera were carrying the "unbounded" sentinel — but the phantom
@@ -51,9 +51,9 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > keeps an edge-on ring from **vanishing** (`d7db3a3`), so `M3-drop-frontguard` had started
 > surviving once the arc gate took over the coverage half of that guard's job.
 >
-> ▶ **NEEDS MAX'S UAT.** Park: seed `lab-procedural-6`, glide to the outermost planet's moon `Al`,
-> look away from the star. The faint full-width line should be gone; the real orbit curves must not
-> have thinned or shortened.
+> ✅ **MAX UAT PASS 2026-08-12** — parked live at seed `lab-procedural-6`, moon `Al`, looking away
+> from the star. Verdict: *"works"*. The full-width line is gone and the real orbit curves are
+> unchanged. **Shipped.**
 >
 > ⚠ **STILL OPEN, deliberately not bundled:** the §1–§4 **depth** artefact (ring drawn through the
 > planet). The arc solve now makes it cheap — it already computes the exact θ of the nearest
@@ -97,7 +97,7 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > actually riding, correctly flagged as straddling. Whether it is drawn correctly at that grazing
 > angle is the separate draw-through item; it draws through the planet.
 
-> ## ⭐ 2026-08-11 — THE ORRERY ZOOM-INTO-STAR BUG IS FIXED (`b9ea438` + `1a2b5a6`). CLOSED, NOT PATCHED.
+> ## ⭐ 2026-08-11 — THE ORRERY ZOOM-INTO-STAR BUG IS FIXED (`b9ea438` + `1a2b5a6`). ✅ SHIPPED — MAX UAT PASS 2026-08-12 ("works"), ratified 24h after landing.
 >
 > Max: *"The camera keeps getting placed in the star whenever I zoom all the way in after clicking
 > twice on a planet or moon."* Diagnosed with a 5-agent workflow (4 read-only recon lanes + an
