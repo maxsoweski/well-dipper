@@ -234,3 +234,51 @@ exactly `distance · sin(pitch)` — measured 12.952 against predicted 13.059. Z
 camera toward the plane, `Cs` degenerates harder and the asymptotes tighten onto the vanishing line;
 zooming out lifts it away. This is therefore **not specific to this seed, this planet or this
 system** — it reproduces near any body, because being near a body in ORRERY *is* being in the plane.
+
+### §7.1 CORRECTION (same day) — it is NOT a design tradeoff, the pixels are not the ring
+
+An earlier reading of §7 framed this as a tension between two of Max's rulings — "I do not want the
+lines to disappear when you get close" (`d7db3a3`) versus "a ring you are inside cannot be bounded"
+(`d0b5170`'s carve-out). **That framing is wrong and should not be repeated.** There is no tradeoff,
+because the painted pixels are not the ring.
+
+Measured at Max's own instance (planet 5 selected, camDistToStar 6636,
+`dot(forward,toStar) = -0.961`, controller distance 116.44, pitch 0.227), mirroring the fragment
+shader's per-pixel accept over the real 557×285 target and attributing every painted row to a conic:
+
+| conic #5 row | on screen | reconstructed plane point ÷ ring radius |
+|---|---|---|
+| cssY 408 / 411 | the real ring | **0.9996 – 1.000** |
+| cssY 288 | **the phantom** | **116.1 – 190.2** |
+
+116×–190× the ring radius. Not a marginal misclassification — numerical debris. The legitimate ring
+survives any sane bound; only the debris goes. **The fade ruling is untouched by the fix.**
+
+**All three gates are blind at once, which is why this survived three fixes:**
+1. **Sampson band** — for a ring the camera is INSIDE, `Cs` is near-degenerate and its zero set
+   includes an asymptote far from the circle. The band cannot separate them.
+2. **Extent AABB** — deliberately disabled for straddling rings (`d0b5170`'s carve-out). Correct in
+   itself: such a projection really is unbounded.
+3. **Front-branch guard** — tests only the SIGN of `wclip`, never its magnitude. A reconstruction
+   190× too far out still has a positive `w`.
+
+**Two observations explained.** The segment has ENDS (measured cssX 240→1653) because the sign of
+`wclip` flips there, not because anything bounded it — which is also why it "materializes"
+progressively on approach. And approach degenerates it because ORRERY camera height above the
+orbital plane is `distance · sin(pitch)`, and the pivot body is itself in the plane.
+
+⛔ **DISPROVED by control: selection is NOT the trigger.** Max reported it appearing "only when we've
+selected a planet". `_lab.deselectBody()` at the live instance left the phantom unchanged (only the
+name label went). Selection is incidental — it is what precedes gliding close.
+
+⛔ **NOT a lane-A regression.** `git diff master 85f227f -- src/objects/ringConic.js
+src/objects/OrbitConicField.js` is EMPTY: the ring stack is byte-identical to master, so the shipped
+game has this too. Nor is it the behind-camera class fixed in `03cb1dd` — that is real and separate,
+and the phantom survives it.
+
+**Bound to add:** the magnitude test the front-branch guard lacks — `wclip <= wMax`, where
+`wMax = _Hm[8] + radius·hypot(_Hm[6],_Hm[7])` is already the exact companion of the `wMin` the extent
+decision computes. §4's rejected patch asserted `w >= wMin` and §4 records why that was toothless
+(`wMin = −48498` at its failing pixel, so it never fired). This is the same idea with the bound that
+binds. Gates in §7 still stand: it is a GLSL edit in a pass with no numeric coverage, and it must be
+scored at multiple azimuths on pixels the pass actually paints.
