@@ -29,6 +29,7 @@
     "uat-status": "bash scripts/uat-status.sh",
     "mood-bootstrap": "bash scripts/mood-index-bootstrap.sh",
     "port-uniform-delta:citations": "node tools/port-uniform-delta.mjs --check-citations",
+    "check:conic-gl": "node tools/conic-gl-gate.mjs",
     "test:mutation": "npm run --silent test:mutation:helper && npm run --silent test:mutation:assertions",
     "test:mutation:helper": "WD_MUTATION_SCOPE=helper stryker run",
     "test:mutation:assertions": "WD_MUTATION_SCOPE=assertions stryker run"
