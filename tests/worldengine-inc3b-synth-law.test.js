@@ -20,8 +20,8 @@ import { dirname, join } from 'node:path';
 import { craterSchedule, craterRelevanceOf, isImpactSurface, D_D_SIMPLE } from '../src/worldengine/base/bombardment.js';
 import { radPerKm } from '../src/worldengine/base/baseStep.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms, featureFrequencyFromKm, CRATER_DEPTH } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms, featureFrequencyFromKm, CRATER_DEPTH } from '../src/worldengine/base/labCore.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

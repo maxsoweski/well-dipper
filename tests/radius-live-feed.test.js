@@ -165,9 +165,9 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { DRIVER_PRESETS, drawPresetRadius, LAB_UNLOCKED_RANGES, NAMED_BODY } from '../driver-presets.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
 import { compositionClass } from '../src/worldengine/base/e1Regime.js';
-import { deriveUniforms, radiusFromT, RADIUS_SLIDER_MIN, RADIUS_SLIDER_MAX } from '../planet-lod-lab-core.js';
+import { deriveUniforms, radiusFromT, RADIUS_SLIDER_MIN, RADIUS_SLIDER_MAX } from '../src/worldengine/base/labCore.js';
 import { PHYS, E5_REGIME, rhinesWavenumber, amplitudeLaw, resolveParams,
          bakeClimateE5Attributes } from '../src/worldengine/base/climate-e5.js';
 import { drawGiantConditions, deriveGiantDrivers } from '../src/worldengine/base/giant-drivers.js';
@@ -179,14 +179,20 @@ import { stripCommentsPreservingOffsets, jsFilesUnder, lineOf } from './helpers/
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // ── the corpus ───────────────────────────────────────────────────────────────────────────────────
-// planet-lod-shaders.glsl.js is in the list for FORWARD CLOSURE, not because it carries anything
+// planet-lod-shaders.glsl.js was in the list for FORWARD CLOSURE, not because it carries anything
 // today. ⚠ MEASURED 2026-08-08, so nobody later reads its presence as evidence of something: it
 // contributes ZERO matches to every pattern in this file and defines `applyDrivers` ZERO times (the
-// one definition is planet-lod-lab.html:1933 `function applyDrivers(){`). It is here because Step 5's
+// one definition is planet-lod-lab.html:1933 `function applyDrivers(){`). It was here because Step 5's
 // driver packs are the kind
 // of thing that lands next to the shader source, and a corpus that has to be widened in the same
 // commit that moves the code is a corpus that will be widened one commit late.
-const CORPUS = ['planet-lod-lab.html', 'planet-lod-shaders.glsl.js', ...jsFilesUnder(ROOT, 'src/worldengine')];
+// ⭐ STEP 7 CLOSED IT THE OTHER WAY AND REMOVED THE ENTRY. The file IS the thing that landed next
+// to the driver packs: it is now src/worldengine/shaders/planetShaders.glsl.js, which the walker
+// already returns. Naming it again would put one file in CORPUS TWICE, and every scan below iterates
+// CORPUS — so a future hit in it would be counted twice and a `toHaveLength(1)` would read 2, which
+// looks like a scanner bug rather than a duplicated corpus entry. The forward-closure claim is now
+// held by the walker, and the coverage assertion below names the new path.
+const CORPUS = ['planet-lod-lab.html', ...jsFilesUnder(ROOT, 'src/worldengine')];
 const RAW = new Map(CORPUS.map((rel) => [rel, readFileSync(join(ROOT, rel), 'utf8')]));
 // ⭐ TWO PASSES PER FILE, and the split is the whole of the Step-3-round-2 repair. Both passes come
 // out of the same stripper, are byte-LENGTH-identical to the input, and put their newlines at the
@@ -663,7 +669,7 @@ describe('extraction harness — controls (each clause of the contract, shown fa
     // limit for `jsFilesUnder` explicitly). The per-carrier fact is better: the E5 partition's
     // excluded member is found in src/worldengine, which the pre-Step-3 scan set could not see at all.
     expect(CORPUS).toContain('planet-lod-lab.html');
-    expect(CORPUS).toContain('planet-lod-shaders.glsl.js');
+    expect(CORPUS).toContain('src/worldengine/shaders/planetShaders.glsl.js');
     expect(E5_HELPER[0].rel.startsWith('src/worldengine/')).toBe(true);
     // Every site's home is recorded; none of them is asserted, because a site is ALLOWED to move —
     // that is the whole reason the scan set is a corpus. What is asserted is that each was found once.

@@ -38,10 +38,10 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { DRIVER_PRESETS } from '../driver-presets.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 import { ASSOCIATIONS } from '../planet-feature-associations.js';
-import { makeUniforms } from '../planet-lod-uniforms.js';
+import { makeUniforms } from '../src/worldengine/shaders/uniforms.js';
 import { LAB_ATTRIBUTES, LAB_WORLD_LIGHT } from '../src/rendering/LabPlanetMaterial.js';
 import alea from 'alea';
 import { compositionClass, giantRegimeOf } from '../src/worldengine/base/e1Regime.js';
@@ -69,7 +69,7 @@ const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 
 const POLAR_SRC = read('src/worldengine/drivers/polarDeck.js');
 const STORM_SRC = read('src/worldengine/base/storm-e.js');
-const UNIFORMS_SRC = read('planet-lod-uniforms.js');
+const UNIFORMS_SRC = read('src/worldengine/shaders/uniforms.js');
 const LAB_SRC = read('planet-lod-lab.html');
 
 // The appended wrapper's body ALONE — scanning the whole of storm-e.js for `resolveStormE` would hit

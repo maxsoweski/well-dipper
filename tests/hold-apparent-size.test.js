@@ -15,7 +15,7 @@ import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { holdApparentDistance, visScaleOf, minCameraDistance } from '../planet-lod-lab-core.js';
+import { holdApparentDistance, visScaleOf, minCameraDistance } from '../src/worldengine/base/labCore.js';
 
 const LAB = fs.readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'planet-lod-lab.html'),
@@ -109,6 +109,6 @@ describe('lab wiring — the control exists and is off by default', () => {
   });
 
   it('imports the helper from lab-core rather than re-deriving the math inline', () => {
-    expect(LAB).toMatch(/holdApparentDistance[^\n]*from '\.\/planet-lod-lab-core\.js'/);
+    expect(LAB).toMatch(/holdApparentDistance[^\n]*from '\.\/src\/worldengine\/base\/labCore\.js'/);
   });
 });

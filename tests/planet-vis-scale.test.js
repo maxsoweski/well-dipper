@@ -12,7 +12,7 @@ import {
   VIS_SCALE_EXP,
   minCameraDistance,
   CAMERA_CLEARANCE,
-} from '../planet-lod-lab-core.js';
+} from '../src/worldengine/base/labCore.js';
 
 // The design range: 0.3 RE (Moon-class draws bottom out here) → 16 RE (Sub-Neptune ceiling).
 const R_MIN = 0.3, R_MAX = 16;

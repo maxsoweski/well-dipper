@@ -21,11 +21,11 @@ import { describe, it, expect } from 'vitest';
 import {
   deriveConditionVector, gravityRadiusShape, gravityRadiusRatio,
   GRAV_R_EXP_SUB, GRAV_R_EXP_SUPER,
-} from '../body-condition-vector.js';
+} from '../src/worldengine/base/conditionVector.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
 import { bodySurfaceGravity } from '../src/worldengine/base/baseStep.js';
 import { compositionClass } from '../src/worldengine/base/e1Regime.js';
-import { deriveUniforms, RADIUS_SLIDER_MIN, RADIUS_SLIDER_MAX } from '../planet-lod-lab-core.js';
+import { deriveUniforms, RADIUS_SLIDER_MIN, RADIUS_SLIDER_MAX } from '../src/worldengine/base/labCore.js';
 
 const PRESETS = Object.entries(DRIVER_PRESETS);
 const classOf = (fp) => compositionClass(deriveConditionVector(fp, null, fp.radiusEarth ?? 1.0));

@@ -23,7 +23,7 @@ const SEEDS = [1, 2, 7, 42];
 const freshCarrier = () => makeSphereField(SHARED_MESH);
 
 const EMISSION_SRC_PATH = fileURLToPath(new URL('../src/worldengine/base/emission-e.js', import.meta.url));
-const GLSL_SRC_PATH = fileURLToPath(new URL('../planet-lod-height.glsl.js', import.meta.url));
+const GLSL_SRC_PATH = fileURLToPath(new URL('../src/worldengine/shaders/height.glsl.js', import.meta.url));
 const EMISSION_SRC = readFileSync(EMISSION_SRC_PATH, 'utf8');
 // source with comments stripped — static guards must inspect CODE, not documentation prose
 const CODE = EMISSION_SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');

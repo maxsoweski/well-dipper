@@ -8,7 +8,7 @@
 // class the relief doc §5.4 flags — so we pin it against finite-difference here
 // BEFORE trusting the shader normal.
 import { describe, it, expect } from 'vitest';
-import { voronoi3d } from '../planet-lod-lab-core.js';
+import { voronoi3d } from '../src/worldengine/base/labCore.js';
 
 // deterministic-ish sample points spread across the noise domain
 const SAMPLES = [

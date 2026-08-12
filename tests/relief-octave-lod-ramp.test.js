@@ -20,7 +20,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as THREE from 'three';
 import { LODManager } from '../src/rendering/LODManager.js';
-import { lodRampOf, autoOctaves } from '../planet-lod-lab-core.js';
+import { lodRampOf, autoOctaves } from '../src/worldengine/base/labCore.js';
 import { createPlanetMoonBody } from '../src/rendering/objects/PlanetMoonBody.js';
 
 // Minimal stand-in for a BodyRenderer: LODManager only touches mesh.matrixWorld, radius,

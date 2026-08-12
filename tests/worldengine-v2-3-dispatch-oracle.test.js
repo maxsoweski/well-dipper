@@ -42,8 +42,8 @@ import { computeE1 } from '../src/worldengine/base/e1Regime.js';
 import { classifyLidPath, isUnbrokenLidPath } from '../src/worldengine/base/lidResponse.js';
 import { DRIVER_PRESETS, PRESET_ARCHETYPE } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 import { TARGET_N, LLOYD, QUALITY_TIER } from './fixtures/v2-0-carrier-golden.mjs';
 
 const SEEDS = [1, 2, 3, 7, 42, 100, 777];   // the AC-FLIP seed-invariance set

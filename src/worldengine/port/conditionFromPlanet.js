@@ -35,7 +35,7 @@
 //    hand-authored body. The input list is DERIVED FROM THIS FILE'S SOURCE TEXT by the contract test,
 //    not restated there — see PROVENANCE_COVERAGE below for why that distinction is the whole fence.
 
-import { deriveConditionVector } from '../../../body-condition-vector.js';
+import { deriveConditionVector } from '../base/conditionVector.js';
 // The composition gate, imported rather than transcribed — see THE NO-SURFACE DOMAIN GUARD below for
 // why the guard must be THIS function and not a local `composition === 'h2-he'` test.
 import { compositionClass } from '../base/e1Regime.js';

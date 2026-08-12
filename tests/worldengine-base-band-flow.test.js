@@ -264,12 +264,12 @@ describe('worldengine base — band-flow atmo-expression CPU mirrors (atmo-expre
 // (the river-router link — a lab-only decl would compile-fail HEIGHT_FRAG at runtime, golden-lens #1), wires
 // the dBand deflection + the 7-param signature, and — DIFF-SCOPED to the two added helper bodies — contains no
 // uTime / animated-warp path (F1 static place-once; a whole-file grep false-trips on the legacy F25 jets path).
-const GLSL = readFileSync(fileURLToPath(new URL('../planet-lod-height.glsl.js', import.meta.url)), 'utf8');
+const GLSL = readFileSync(fileURLToPath(new URL('../src/worldengine/shaders/height.glsl.js', import.meta.url)), 'utf8');
 // ⚠ The lab's two shaders were EXTRACTED to planet-lod-shaders.glsl.js (so the game imports the
 // SAME source the lab renders). The lab's source text is therefore the HTML *plus* that module —
 // this fence reads both as one corpus so its assertions keep testing what the lab compiles.
 const LAB  = readFileSync(fileURLToPath(new URL('../planet-lod-lab.html', import.meta.url)), 'utf8')
-  + '\n' + readFileSync(fileURLToPath(new URL('../planet-lod-shaders.glsl.js', import.meta.url)), 'utf8');
+  + '\n' + readFileSync(fileURLToPath(new URL('../src/worldengine/shaders/planetShaders.glsl.js', import.meta.url)), 'utf8');
 // Driver pack #1 (PLAN §4 Step 5c) — the new home of the band-proxy export. See the re-pointed pin below.
 const PACK_SRC = readFileSync(fileURLToPath(new URL('../src/worldengine/drivers/giantDeck.js', import.meta.url)), 'utf8');
 // the two added slice-K helper bodies ONLY (diff-scoped): from bandProxy's def to the F24 comment that

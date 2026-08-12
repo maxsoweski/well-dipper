@@ -28,8 +28,8 @@ import {
 // callers migrate to condition-bearing bundles. stagnantLidRegimeOf (writer-module export) SURVIVES — kept.
 import { DRIVER_PRESETS } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 
 // N=1500 (finer than the plate/magma siblings' 600): stagnant-lid ships MANY small clustered coronae +
 // tessera — a finer structure than a few big plate/plume features — so it needs more nodes to resolve.

@@ -75,7 +75,9 @@ const ADAPTER_REL = 'src/worldengine/port/conditionFromPlanet.js';
 // it is exactly TWO pre-existing hits and both are disposed of below:
 //   · 42 .js files under src/worldengine, ZERO non-.js files in that tree (so `jsFilesUnder`'s
 //     extension filter drops nothing here), plus planet-lod-lab.html and planet-lod-shaders.glsl.js
-//     ⇒ a 44-file corpus.
+//     ⇒ a 44-file corpus. ⭐ RE-MEASURED 2026-08-12 AFTER STEP 7: 53 .js under src/worldengine (the
+//     five moved modules plus the packs landed since) + the lab ⇒ a 54-file corpus, and the shader
+//     module is now INSIDE the walked tree rather than concatenated (see CORPUS_REL).
 //   · planet-lod-shaders.glsl.js: 0 DENY hits. So are src/worldengine/shaders/craterRelief.glsl.js
 //     and heightNoise.glsl.js, the only other `.glsl.js` files in the corpus. They are scanned anyway
 //     because a `.glsl.js` file is a JS module that can hold JS, and excluding it would be an
@@ -96,10 +98,17 @@ const ADAPTER_REL = 'src/worldengine/port/conditionFromPlanet.js';
 //     header has always documented, and it is the one that was applied.
 //
 // The walker is the shared house idiom: source-scan.mjs:305 `export function jsFilesUnder(root, rel) {`,
-// promoted there from vis-scale-fence.test.js:36 `function jsFilesUnder(rel) {` — the fence that
+// promoted there from vis-scale-fence.test.js:74 `function jsFilesUnder(rel) {` — the fence that
 // already walks this exact tree for the same reason. (Both refs kept on one line each, per the
 // tick-parity note above.)
-const CORPUS_REL = [...jsFilesUnder(ROOT, 'src/worldengine'), LAB_REL, 'planet-lod-shaders.glsl.js'];
+// ⭐ STEP 7 REMOVED THE THIRD ELEMENT, AND REMOVING IT IS WHAT KEEPS THE CORPUS HONEST. The lab
+// shader module moved to src/worldengine/shaders/planetShaders.glsl.js, which the walker ALREADY
+// returns — so naming it again would put one file in CORPUS_REL TWICE, and `scanCorpus` iterates
+// this array, so every future DENY hit in it would be reported (and counted) twice. Today that is
+// invisible, because the file measures 0 hits; the day it carries one, a `toHaveLength(1)` on the
+// other side of the fence reads 2 and the failure looks like a scanner bug. The coverage claim it
+// used to carry is unchanged and is asserted directly at :510 and by the walker's own membership.
+const CORPUS_REL = [...jsFilesUnder(ROOT, 'src/worldengine'), LAB_REL];
 const SRC = new Map(CORPUS_REL.map((rel) => [rel, readFileSync(join(ROOT, rel), 'utf8')]));
 const LAB = SRC.get(LAB_REL);
 
@@ -182,9 +191,15 @@ const denyScanner = () => new RegExp(DENY_SRC, 'g');
 //     was reworded to zero hits (see the corpus block above). Requiring ≥1 here would demand the
 //     defect be kept.
 //   · planet-lod-shaders.glsl.js — deliberately NOT a carrier. Measured 0 hits; requiring ≥1 reds a
-//     clean build.
+//     clean build. (Now src/worldengine/shaders/planetShaders.glsl.js — still 0, still not a carrier.)
 //   · the other 40 src/worldengine files — measured 0 hits each.
-const REQUIRED_CARRIERS = [LAB_REL, ADAPTER_REL];
+// ⭐ STEP 7 ADDED THE THIRD ENTRY. src/worldengine/base/conditionVector.js arrived in the corpus with
+// exactly one DENY hit, :105 `const _R_c = fp.radiusEarth ?? 1.0` — allowlisted below as the
+// canonical preset radius. An allowlisted site is still a CARRIER: the non-vacuity claim is that the
+// scan can SEE the site, and the exemption is applied after it is seen. It is listed for the same
+// reason the adapter is, and it is the strongest carrier in the corpus, because `_R_c` is the D14
+// gravity denominator and cannot be deleted without deleting the law.
+const REQUIRED_CARRIERS = [LAB_REL, ADAPTER_REL, 'src/worldengine/base/conditionVector.js'];
 
 // ── the allowlist ────────────────────────────────────────────────────────────────────────────────
 // One entry per deliberately-canonical site. `file` is the corpus file the site must live in. `why`
@@ -319,6 +334,38 @@ const ALLOWLIST = [
     evidence: 'docs/FEATURES/one-pipeline-two-frontends-PLAN.md',
     // The PLAN quotes this exact line in the Step-2 ruling, so the site's own `match` is the anchor.
     anchor: 'const condition = deriveConditionVector(fp, null, fp.radiusEarth);',
+  },
+  {
+    id: 'conditionVector-canonicalDenominator',
+    file: 'src/worldengine/base/conditionVector.js',
+    match: 'const _R_c   = fp.radiusEarth ?? 1.0;',
+    // ⭐ NOT A NEW RATIONALE EITHER, AND IT IS THE SAME ONE AS THE ADAPTER'S, SEEN FROM THE OTHER END.
+    // Step 7 moved this file from the repo root into src/worldengine/base/, which is the whole of why
+    // it is newly visible: ledger C17 recorded that the lab's support modules sat OUTSIDE the corpus
+    // by accident of where files happen to live, and named Step 7 as the step that either brings them
+    // in or says out loud why not. It brings them in.
+    //
+    // WHY THE HIT IS NOT A DEFECT, and the distinction is two lines apart in the source:
+    //   :105  `_R_c` = the CANONICAL preset radius — the DENOMINATOR of the D14 gravity mass-radius
+    //         ratio. It answers "what size is this body nominally," which no draw can change.
+    //   :106  `_R`   = `radiusEarth ?? _R_c` — the DRAWN radius, the third argument, the live feed.
+    // `gravityRadiusRatio` is R/R_c. Feeding the DRAWN radius into the denominator makes the ratio
+    // identically 1.0 and the self-compression law (`GRAV_R_EXP_SUB/SUPER`) can then never fire —
+    // i.e. "fixing" this hit DELETES the law it looks like it protects. That is the same shape as the
+    // adapter entry above (where the ratio is 1.0 legitimately, because the game has one radius per
+    // body); here the two radii are genuinely distinct and the frozen read is the correct one.
+    // ⚠ Verified before this entry was written: :105/:106 read exactly as quoted at c479e29, and
+    // tests/radius-live-feed-fence.test.js:294 already carries the same `_R_c`/`_R` distinction for
+    // the adapter — this entry is that note applied at the definition site.
+    // ⛔ WHAT IT DOES NOT LICENSE: the byte range of the `match` string, in THAT file, and nothing
+    // else on the line — the column test above, not the line. A second frozen read appended here is
+    // an offender.
+    why: 'the two radii on these two lines are DIFFERENT quantities: _R_c is the canonical preset '
+       + 'radius (the D14 gravity denominator, a fact about the body) and _R is the drawn radius (the '
+       + 'live feed). Rewiring _R_c to the drawn radius forces gravityRadiusRatio to exactly 1.0, '
+       + 'which permanently disables the self-compression law — the "fix" would delete the physics.',
+    evidence: 'docs/FEATURES/one-pipeline-two-frontends-CARRIED.md',
+    anchor: '_R_c is the canonical preset radius, not the drawn one',
   },
 ];
 

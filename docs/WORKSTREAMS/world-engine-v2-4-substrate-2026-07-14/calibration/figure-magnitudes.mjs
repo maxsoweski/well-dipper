@@ -14,9 +14,9 @@
 //
 // METERED-SAFE: pure `node`, no `claude -p`.  Run:  node docs/WORKSTREAMS/.../calibration/figure-magnitudes.mjs
 import { DRIVER_PRESETS } from '../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
+import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
 import { deriveFigureDescriptor } from '../../../../src/worldengine/base/bodyFigure.js';
-import { deriveUniforms } from '../../../../planet-lod-lab-core.js';
+import { deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 import { QUALITY_TIER } from '../../../../tests/fixtures/v2-0-carrier-golden.mjs';
 
 const out = [];

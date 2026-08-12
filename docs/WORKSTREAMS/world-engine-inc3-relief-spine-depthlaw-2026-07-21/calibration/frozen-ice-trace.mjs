@@ -22,8 +22,8 @@
 // (nonzero exit). Pure `node` (no dev server, no claude -p). Numbers reproduce.
 
 import { DRIVER_PRESETS, drawPresetRadius, PRESET_ARCHETYPE, NAMED_BODY } from '../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
-import { deriveUniforms } from '../../../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 import { craterSchedule, forEachCrater, iceRelaxation, isImpactSurface } from '../../../../src/worldengine/base/bombardment.js';
 import { icenessOf } from '../../../../src/worldengine/base/surfaceMaterial.js';
 import { writeFileSync } from 'node:fs';

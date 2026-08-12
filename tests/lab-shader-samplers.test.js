@@ -26,7 +26,7 @@ import {
   declaredSamplers,
   ensureLabSamplers,
 } from '../src/rendering/LabPlanetMaterial.js';
-import { LAB_VERTEX_SHADER, LAB_FRAGMENT_SHADER } from '../planet-lod-shaders.glsl.js';
+import { LAB_VERTEX_SHADER, LAB_FRAGMENT_SHADER } from '../src/worldengine/shaders/planetShaders.glsl.js';
 
 const SHADER = LAB_VERTEX_SHADER + LAB_FRAGMENT_SHADER;
 

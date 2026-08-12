@@ -23,7 +23,7 @@
 // Plus a small radPerKm unit (the §1B shared km→angular scalar this slice adds to baseStep.js).
 import { describe, it, expect } from 'vitest';
 
-import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
 import { bodySurfaceGravity, radPerKm, KM_PER_EARTH_RADIUS } from '../src/worldengine/base/baseStep.js';
 import { compositionClass } from '../src/worldengine/base/e1Regime.js';

@@ -23,8 +23,8 @@
 // silently reverts the divide, test 2 keeps passing on defaults and only the control catches it.
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { LAB_VERTEX_SHADER } from '../planet-lod-shaders.glsl.js';
-import { makeUniforms } from '../planet-lod-uniforms.js';
+import { LAB_VERTEX_SHADER } from '../src/worldengine/shaders/planetShaders.glsl.js';
+import { makeUniforms } from '../src/worldengine/shaders/uniforms.js';
 import { buildLabPlanetMaterial, bodyRadiusOf } from '../src/rendering/LabPlanetMaterial.js';
 import { earthRadiiToScene } from '../src/core/ScaleConstants.js';
 

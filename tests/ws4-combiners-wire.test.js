@@ -18,7 +18,7 @@
 //
 // HARD RULE: no Date.now / Math.random in derivation (shader-only wiring here; not exercised).
 import { describe, it, expect } from 'vitest';
-import { HEIGHT_GLSL } from '../planet-lod-height.glsl.js';
+import { HEIGHT_GLSL } from '../src/worldengine/shaders/height.glsl.js';
 
 // Pull JUST one function body by name so assertions can't bleed across combiners.
 function fnBody(src, decl) {

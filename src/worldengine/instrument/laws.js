@@ -31,8 +31,8 @@ import {
   craterSchedule, isImpactSurface,
   G_REF, K_GS, B_SFD, C_BASIN,
 } from '../base/bombardment.js';
-import { reliefEnvelope, Q_RELIEF, Q_RELIEF_DERIVED, RELIEF_FLOOR, RELIEF_CEIL } from '../../../planet-lod-lab-core.js';
-import { deriveConditionVector, GRAV_R_EXP_SUB, GRAV_R_EXP_SUPER } from '../../../body-condition-vector.js';
+import { reliefEnvelope, Q_RELIEF, Q_RELIEF_DERIVED, RELIEF_FLOOR, RELIEF_CEIL } from '../base/labCore.js';
+import { deriveConditionVector, GRAV_R_EXP_SUB, GRAV_R_EXP_SUPER } from '../base/conditionVector.js';
 import { plateCountTarget } from '../base/plates.js';
 import { fitPowerLaw, lawVerdict, DEFAULT_Z } from './stats.js';
 

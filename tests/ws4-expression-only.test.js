@@ -28,10 +28,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { HEIGHT_GLSL } from '../planet-lod-height.glsl.js';
+import { HEIGHT_GLSL } from '../src/worldengine/shaders/height.glsl.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const LAB_CORE = readFileSync(join(__dirname, '..', 'planet-lod-lab-core.js'), 'utf8');
+const LAB_CORE = readFileSync(join(__dirname, '..', 'src/worldengine/base/labCore.js'), 'utf8');
 const LAB_HTML = readFileSync(join(__dirname, '..', 'planet-lod-lab.html'), 'utf8');
 
 // Pull one function body by name (brace-matched) so an assertion can't bleed across combiners.

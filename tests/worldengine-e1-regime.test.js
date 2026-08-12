@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 import { computeE1, MOBILE_L, inSeededBand } from '../src/worldengine/base/e1Regime.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
 
 const SEEDS = [1, 2, 3, 7, 42];

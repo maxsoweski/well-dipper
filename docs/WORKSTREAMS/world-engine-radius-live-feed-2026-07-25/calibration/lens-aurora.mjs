@@ -1,6 +1,6 @@
 // Verify findings [2]/[6]: the Ice giant aurora at the lab's DRAWN radius.
 import { DRIVER_PRESETS, drawPresetRadius } from '../../../../driver-presets.js';
-import { deriveUniforms } from '../../../../planet-lod-lab-core.js';
+import { deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 
 const TIER = 1.0;
 const GAS = Object.keys(DRIVER_PRESETS).filter((p) => DRIVER_PRESETS[p].atmosphere?.composition === 'h2-he');

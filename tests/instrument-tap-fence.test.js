@@ -48,7 +48,7 @@ const read = (rel) => readFileSync(path.resolve(__dirname, '..', rel), 'utf8');
 // ⚠ The lab's two shaders were EXTRACTED to planet-lod-shaders.glsl.js (so the game imports the
 // SAME source the lab renders). The lab's source text is therefore the HTML *plus* that module —
 // this fence reads both as one corpus so its assertions keep testing what the lab compiles.
-const labSrc = read('planet-lod-lab.html') + '\n' + read('planet-lod-shaders.glsl.js');
+const labSrc = read('planet-lod-lab.html') + '\n' + read('src/worldengine/shaders/planetShaders.glsl.js');
 const samplerSrc = read('src/worldengine/instrument/fieldSampler.js');
 const riversSrc = read('planet-lod-rivers.js');
 
@@ -108,8 +108,8 @@ describe('AC-SAMPLER L1/A — the three taps live in the RENDERED chain, verbati
     // untouched, so the shared GLSL, the router program and the headless/golden uniform set are
     // unchanged by this AC.
     expect(countOf(labSrc, 'uniform int uFieldTap;')).toBe(1);
-    expect(read('planet-lod-height.glsl.js')).not.toMatch(/uFieldTap/);
-    expect(read('planet-lod-uniforms.js')).not.toMatch(/uFieldTap/);
+    expect(read('src/worldengine/shaders/height.glsl.js')).not.toMatch(/uFieldTap/);
+    expect(read('src/worldengine/shaders/uniforms.js')).not.toMatch(/uFieldTap/);
   });
 
   it('BOTH composite writes carry the baked cube\'s GRADIENT channels, not only its height (F1)', () => {

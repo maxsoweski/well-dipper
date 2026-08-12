@@ -54,8 +54,8 @@ import { dirname, join } from 'node:path';
 import alea from 'alea';
 
 import { DRIVER_PRESETS, NAMED_BODY, LAB_UNLOCKED_RANGES, drawPresetRadius } from '../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
-import { deriveUniforms } from '../../../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 import { craterSchedule, isImpactSurface, forEachCrater, transitionDiameterKm,
          drawBoundedPareto, MESH_FLOOR_RAD, C_BASIN, B_SFD } from '../../../../src/worldengine/base/bombardment.js';
 import { radPerKm } from '../../../../src/worldengine/base/baseStep.js';

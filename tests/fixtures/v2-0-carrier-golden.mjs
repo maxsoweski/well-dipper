@@ -32,8 +32,8 @@ import { makeSphereField } from '../../src/worldengine/base/sphereField.js';
 import { buildIrregularSphere, writeBodyRelief, DEFAULT_GRAIN_DRIVERS } from '../../planet-lod-rivers.js';
 import { DRIVER_PRESETS, PRESET_ARCHETYPE } from '../../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../../body-drivers.js';
-import { deriveConditionVector } from '../../body-condition-vector.js';   // Slice C: attached at GATE time only (see buildBundle seam)
-import { deriveUniforms } from '../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../src/worldengine/base/conditionVector.js';   // Slice C: attached at GATE time only (see buildBundle seam)
+import { deriveUniforms } from '../../src/worldengine/base/labCore.js';
 
 // The established headless carrier pattern (tests/planet-lod-rivers-swappable-uplift.test.js:15,18) —
 // a deterministic irregular sphere. buildIrregularSphere uses fibonacci seeding + Lloyd relaxation with

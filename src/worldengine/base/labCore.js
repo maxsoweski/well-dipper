@@ -1061,7 +1061,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
 // importer working unchanged; tests/pack-contract.test.js pins single-definition by identity with
 // `toBe`, which a copy cannot satisfy even when its numbers are byte-identical. ⚠ The `import`
 // sits HERE, not at the top (imports hoist): the edit is LINE-COUNT-NEUTRAL so §10 refs still hold.
-import { R_EARTH_KM, featureFrequencyFromKm } from './src/worldengine/base/featureScale.js';
+import { R_EARTH_KM, featureFrequencyFromKm } from './featureScale.js';
 export { R_EARTH_KM, featureFrequencyFromKm };
 
 // Relief height → unit-sphere amplitude. EXACT: a height of h km on a body of real radius

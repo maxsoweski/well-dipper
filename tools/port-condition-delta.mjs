@@ -108,7 +108,7 @@ const { conditionFromPlanet, surfaceTemperatureOf }
 const { compositionClass }     = await loadOrExplain('src/worldengine/base/e1Regime.js');
 const AOPT                     = await loadOrExplain('src/worldengine/base/atmosphereOptics.js');
 const { atmosphereOpticsOf }   = AOPT;
-const { deriveConditionVector }= await loadOrExplain('body-condition-vector.js');
+const { deriveConditionVector }= await loadOrExplain('src/worldengine/base/conditionVector.js');
 const { bodyRawTidal }         = await loadOrExplain('src/worldengine/base/baseStep.js');
 const { craterUniformsFrom }   = await loadOrExplain('src/worldengine/port/craterUniforms.js');
 const BOMB                     = await loadOrExplain('src/worldengine/base/bombardment.js');

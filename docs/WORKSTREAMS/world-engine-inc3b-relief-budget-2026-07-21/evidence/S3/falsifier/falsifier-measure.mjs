@@ -36,8 +36,8 @@ import { craterSchedule, isImpactSurface, forEachCrater, MESH_FLOOR_RAD }
   from '../../../../../../src/worldengine/base/bombardment.js';
 import { buildIrregularSphere } from '../../../../../../planet-lod-rivers.js';
 import { DRIVER_PRESETS } from '../../../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../../../body-condition-vector.js';
-import { deriveUniforms, reliefEnvelope, lodRampOf } from '../../../../../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../../../../../src/worldengine/base/conditionVector.js';
+import { deriveUniforms, reliefEnvelope, lodRampOf } from '../../../../../../src/worldengine/base/labCore.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEG = 180 / Math.PI;

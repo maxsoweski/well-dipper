@@ -20,7 +20,7 @@
 // temperate)}; Neptunian/Sub-Neptune are writer-EQUAL both ways (a taxonomy NOTE, not a divergence).
 import { describe, it, expect } from 'vitest';
 import { computeE1, modalRegime } from '../src/worldengine/base/e1Regime.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
 import { DRIVER_PRESETS, PRESET_ARCHETYPE } from '../driver-presets.js';
 
 // ── writerUnder(PRESET_ARCHETYPE): PRESET_ARCHETYPE-retirement (2026-07-13) — the classifyWriterPath /

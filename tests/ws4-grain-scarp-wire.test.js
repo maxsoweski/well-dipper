@@ -17,7 +17,7 @@
 //
 // HARD RULE: no Date.now / Math.random in derivation. (Not exercised here; the wiring is shader-only.)
 import { describe, it, expect } from 'vitest';
-import { HEIGHT_GLSL } from '../planet-lod-height.glsl.js';
+import { HEIGHT_GLSL } from '../src/worldengine/shaders/height.glsl.js';
 
 // Pull JUST the scarpCombiner body so assertions don't accidentally match another combiner.
 function scarpCombinerBody(src) {

@@ -28,8 +28,8 @@ import {
 import { buildIrregularSphere, writeBodyRelief, DEFAULT_GRAIN_DRIVERS } from '../planet-lod-rivers.js';
 import { DRIVER_PRESETS, PRESET_ARCHETYPE } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 import { QUALITY_TIER } from './fixtures/v2-0-carrier-golden.mjs';
 
 const N = 3000;

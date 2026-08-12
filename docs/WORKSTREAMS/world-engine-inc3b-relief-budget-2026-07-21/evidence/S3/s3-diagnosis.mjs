@@ -74,8 +74,8 @@ import {
 import { makeSphereField } from '../../../../../src/worldengine/base/sphereField.js';
 import { DRIVER_PRESETS, PRESET_ARCHETYPE } from '../../../../../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../../../../../body-drivers.js';
-import { deriveConditionVector } from '../../../../../body-condition-vector.js';
-import { deriveUniforms, reliefEnvelope, lodRampOf } from '../../../../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../../../../src/worldengine/base/conditionVector.js';
+import { deriveUniforms, reliefEnvelope, lodRampOf } from '../../../../../src/worldengine/base/labCore.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const S2 = join(HERE, '..', 'S2');

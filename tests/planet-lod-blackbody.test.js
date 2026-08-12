@@ -7,7 +7,7 @@
 // rises — not exact constants (the deriveUniforms precedent: pin logic, tune
 // constants in the lab). The GLSL mirror is a transcription of this same ramp.
 import { describe, it, expect } from 'vitest';
-import { emissiveBlackbody } from '../planet-lod-lab-core.js';
+import { emissiveBlackbody } from '../src/worldengine/base/labCore.js';
 
 // Across the union of both domains' ranges.
 const TEMPS = [600, 800, 1200, 1500, 2000, 2500, 3000, 4000];

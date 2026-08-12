@@ -35,7 +35,7 @@ import {
 import { GIANT_ANCHOR, drawGiantConditions } from '../src/worldengine/base/giant-drivers.js';
 import { E5_REGIME } from '../src/worldengine/base/climate-e5.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const E1_SRC = readFileSync(path.resolve(__dirname, '../src/worldengine/base/e1Regime.js'), 'utf8');

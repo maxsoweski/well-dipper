@@ -17,8 +17,8 @@ import { dirname, join } from 'node:path';
 
 import { craterRelevanceOf, isImpactSurface, craterSchedule } from '../src/worldengine/base/bombardment.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

@@ -34,8 +34,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { DRIVER_PRESETS } from '../driver-presets.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 import { compositionClass, giantRegimeOf } from '../src/worldengine/base/e1Regime.js';
 import {
   drawGiantConditions, deriveGiantDrivers, GIANT_ANCHOR, enrichmentRatio, MET0_DEX,
@@ -519,7 +519,7 @@ describe('SCOPE · the storm and polar families are OUT, and the pack proves it 
   });
 
   it('[CONTROL] the fence names families that EXIST — it is not banning imaginary uniforms', () => {
-    const UNIF = readFileSync(join(ROOT, 'planet-lod-uniforms.js'), 'utf8');
+    const UNIF = readFileSync(join(ROOT, 'src/worldengine/shaders/uniforms.js'), 'utf8');
     expect(UNIF).toMatch(/uPolarStrength/);
     expect(UNIF).toMatch(/uStormCount/);
   });

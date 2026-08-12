@@ -23,7 +23,7 @@ import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const labSrc = readFileSync(path.resolve(__dirname, '../planet-lod-lab.html'), 'utf8');
-const uniformsSrc = readFileSync(path.resolve(__dirname, '../planet-lod-uniforms.js'), 'utf8');
+const uniformsSrc = readFileSync(path.resolve(__dirname, '../src/worldengine/shaders/uniforms.js'), 'utf8');
 
 describe('WS4 LAB-GUI — Tectonic grain & carve folder + grained-feature tags', () => {
   it('creates a discoverable top-level "Tectonic grain & carve (WS4)" folder on the left rig panel', () => {

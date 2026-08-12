@@ -33,7 +33,7 @@ import { dirname, join } from 'node:path';
 import * as THREE from 'three';
 
 import { widthRadiusFactor, paramsForRadius, DEFAULT_PARAMS } from '../../../../planet-lod-rivers.js';
-import { RADIUS_SLIDER_MIN, RADIUS_SLIDER_MAX, radiusFromT } from '../../../../planet-lod-lab-core.js';
+import { RADIUS_SLIDER_MIN, RADIUS_SLIDER_MAX, radiusFromT } from '../../../../src/worldengine/base/labCore.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = join(__dirname, '..', '..', '..', '..');

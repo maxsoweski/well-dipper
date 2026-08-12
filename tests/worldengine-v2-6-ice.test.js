@@ -20,8 +20,8 @@ import {
 import { icenessOf } from '../src/worldengine/base/surfaceMaterial.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 
 const condOf = (name) => {
   const fp = DRIVER_PRESETS[name];

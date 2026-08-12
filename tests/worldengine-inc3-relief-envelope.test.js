@@ -11,8 +11,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   reliefEnvelope, reliefGravityFactor, Q_RELIEF, Q_RELIEF_DERIVED, RELIEF_FLOOR, RELIEF_CEIL,
-} from '../planet-lod-lab-core.js';
-import { GRAV_R_EXP_SUPER } from '../body-condition-vector.js';
+} from '../src/worldengine/base/labCore.js';
+import { GRAV_R_EXP_SUPER } from '../src/worldengine/base/conditionVector.js';
 
 // The old (retired) lab law, reconstructed from its documented closed form for the collapse proof:
 //   reliefNorm(RE, g) = (1/RE)·reliefGravityFactor(g)  (heightKm cancelled in here/ref).

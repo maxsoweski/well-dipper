@@ -21,8 +21,8 @@
 import alea from 'alea';
 import { buildIrregularSphere } from '../../../../planet-lod-rivers.js';
 import { computeE1, lidStrength, L_STRONG } from '../../../../src/worldengine/base/e1Regime.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
-import { deriveUniforms } from '../../../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 
 // ── pinned MULTIPLY constants ─────────────────────────────────────────────────────────────────────
 const N_CRATERS_REF = 1800;    // crater-powerlaw.mjs

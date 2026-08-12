@@ -15,8 +15,8 @@ import { shellRegimeOf } from '../src/worldengine/base/shellRelief.js';   // SUR
 // migrate to condition-bearing bundles routing to the SAME writers. deriveUniforms(fp,1.0)==QUALITY_TIER.
 import { DRIVER_PRESETS } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 
 const TARGET_N = 600, LLOYD = 2;
 const carrierOf = () => makeSphereField(buildIrregularSphere(TARGET_N, LLOYD));

@@ -71,8 +71,8 @@
 
 import { craterSchedule, isImpactSurface } from '../../../../src/worldengine/base/bombardment.js';
 import { DRIVER_PRESETS, PRESET_NAMES, NAMED_BODY, drawPresetRadius } from '../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
-import { deriveUniforms } from '../../../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

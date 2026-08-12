@@ -25,7 +25,7 @@ import {
   K_GS, B_SFD, CRATER_SAT_N,
 } from '../src/worldengine/base/bombardment.js';
 import { radPerKm } from '../src/worldengine/base/baseStep.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

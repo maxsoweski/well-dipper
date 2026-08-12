@@ -19,10 +19,10 @@ import {
   LAW_REGISTRY, auditLaw, auditLaws, defaultDeps, baselineCondition,
 } from '../src/worldengine/instrument/laws.js';
 import { craterSchedule, isImpactSurface, G_REF, K_GS } from '../src/worldengine/base/bombardment.js';
-import { reliefEnvelope } from '../planet-lod-lab-core.js';
+import { reliefEnvelope } from '../src/worldengine/base/labCore.js';
 import {
   deriveConditionVector, GRAV_R_EXP_SUB, GRAV_R_EXP_SUPER,
-} from '../body-condition-vector.js';
+} from '../src/worldengine/base/conditionVector.js';
 
 describe('the audit is wired to the shipping functions', () => {
   // Closes the only gap dependency-injection leaves versus editing the source: if the registry ever

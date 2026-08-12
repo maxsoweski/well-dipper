@@ -30,8 +30,8 @@ import { PNG } from 'pngjs';
 import alea from 'alea';
 import { craterSchedule, isImpactSurface, forEachCrater } from '../../../../../src/worldengine/base/bombardment.js';
 import { DRIVER_PRESETS } from '../../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../../body-condition-vector.js';
-import { deriveUniforms } from '../../../../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../../../../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../../../../../src/worldengine/base/labCore.js';
 import { buildIrregularSphere } from '../../../../../planet-lod-rivers.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));

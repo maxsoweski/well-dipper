@@ -13,7 +13,7 @@
 //   → Horton–Strahler order → Dunne–Leopold variable-width ribbons (Chaikin-smoothed, lifted).
 import * as THREE from 'three';
 import { ConvexHull } from 'three/addons/math/ConvexHull.js';
-import { HEIGHT_GLSL } from './planet-lod-height.glsl.js';
+import { HEIGHT_GLSL } from './src/worldengine/shaders/height.glsl.js';
 import { solveSeaLevel } from './planet-lod-sealevel.js';
 // WS4 T8 — grain bake host. The derivation (bakeTectonicGrain) + cube geometry (buildGrainCubeGeometry)
 // + the HalfFloat cube baker (createGrainCube) all live in planet-lod-tectonic.js (the net-new

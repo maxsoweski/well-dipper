@@ -19,7 +19,7 @@
 
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { makeUniforms } from '../planet-lod-uniforms.js';
+import { makeUniforms } from '../src/worldengine/shaders/uniforms.js';
 import {
   LAB_SHADER_CORPUS,
   gateGuardPattern,

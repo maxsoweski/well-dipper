@@ -22,7 +22,7 @@ import { GravityWellMap } from './ui/GravityWellMap.js';
 import { ShipCameraSystem, CameraMode } from './camera/ShipCameraSystem.js';
 import { orreryStandoff } from './camera/orreryStandoff.js';
 import { measureFraming, lodStateOf, frameSequence, bodyWorldMetrics } from './camera/agentFraming.js';
-import { approachLadder } from '../planet-lod-lab-core.js';
+import { approachLadder } from './worldengine/base/labCore.js';
 import {
   effectiveOuterOrbit,
   starGlowRadiusPx,

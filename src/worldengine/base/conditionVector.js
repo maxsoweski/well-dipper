@@ -12,8 +12,8 @@
 // gate bundle) is the mechanical proof. R1: a FLAT `age` would re-drive magmaThermal (magmatism.js reads
 // flat `d.age`); nesting keeps `condition.age` invisible to it. R4: shellThickness is surfaced AS-IS —
 // NO d³ mantle-depth transform is baked here; the semantic split (z/D/d triple-duty) is V2-1's job.
-import { bodyShellThickness, bodyRawTidal, bodySurfaceGravity } from './src/worldengine/base/baseStep.js'; // Slice B helpers + AC6 surfaceGravity
-import { compositionClass } from './src/worldengine/base/e1Regime.js'; // gravity-selfcompression: the rocky/icy/gas/carbon gate (imports only alea + mathutil — no cycle)
+import { bodyShellThickness, bodyRawTidal, bodySurfaceGravity } from './baseStep.js'; // Slice B helpers + AC6 surfaceGravity
+import { compositionClass } from './e1Regime.js'; // gravity-selfcompression: the rocky/icy/gas/carbon gate (imports only alea + mathutil — no cycle)
 
 // ── The mass-radius shape behind surface gravity (gravity-selfcompression-2026-07-28) ─────────────
 //

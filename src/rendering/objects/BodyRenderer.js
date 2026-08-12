@@ -8,7 +8,7 @@ import { LODColorExtractor } from '../LODColorExtractor.js';
 // smoothstep(20,6,distanceInRadii) and autoOctaves is mix(4,9,ramp). planet-lod-lab-core.js is a
 // pure module (45 exports, zero imports, no top-level side effects) so this tree-shakes to the two
 // functions. Copying the law instead would be the same mistake the hash3/noised/fbmd copy was.
-import { lodRampOf, autoOctaves } from '../../../planet-lod-lab-core.js';
+import { lodRampOf, autoOctaves } from '../../worldengine/base/labCore.js';
 import { updateLabPlanetMaterial, isLabPlanetMaterial } from '../LabPlanetMaterial.js';
 
 /**

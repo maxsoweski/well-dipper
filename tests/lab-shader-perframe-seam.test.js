@@ -27,7 +27,7 @@ import {
   updateLabPlanetMaterial,
   isLabPlanetMaterial,
 } from '../src/rendering/LabPlanetMaterial.js';
-import { lodRampOf, autoOctaves } from '../planet-lod-lab-core.js';
+import { lodRampOf, autoOctaves } from '../src/worldengine/base/labCore.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const labSource = () => readFileSync(join(ROOT, 'planet-lod-lab.html'), 'utf8');
@@ -165,7 +165,7 @@ describe('LAYER 2 items 2+3 — the per-frame seam', () => {
 
   describe('5. the view vector — object space, not world space', () => {
     it('GLSL reads uCameraPosObj, never three\'s world-space cameraPosition', () => {
-      const frag = readFileSync(join(ROOT, 'planet-lod-shaders.glsl.js'), 'utf8');
+      const frag = readFileSync(join(ROOT, 'src/worldengine/shaders/planetShaders.glsl.js'), 'utf8');
       expect(frag).toMatch(/uniform vec3 uCameraPosObj;/);
       expect(frag).toMatch(/vec3 V = normalize\(uCameraPosObj - vPos\);/);
       // The broken form must not survive as CODE. Comments mentioning it are fine and wanted.
@@ -177,7 +177,7 @@ describe('LAYER 2 items 2+3 — the per-frame seam', () => {
       // The trap: these are template literals, so a prose backtick in a GLSL comment TERMINATES
       // the string and the module stops parsing. It is already documented for
       // src/objects/Planet.js; this module had no guard and it cost a red run on 2026-08-06.
-      const src = readFileSync(join(ROOT, 'planet-lod-shaders.glsl.js'), 'utf8');
+      const src = readFileSync(join(ROOT, 'src/worldengine/shaders/planetShaders.glsl.js'), 'utf8');
       const bare = src.split('\n')
         .map((line, i) => ({ line, n: i + 1 }))
         .filter(({ line }) => /(^|[^\\])`/.test(line))

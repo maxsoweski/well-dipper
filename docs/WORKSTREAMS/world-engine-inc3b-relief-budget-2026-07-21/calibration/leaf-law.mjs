@@ -45,7 +45,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 // depth ../../../../ from calibration/ → repo root (mirrors relic-lambda.mjs / inc3b-amplitude-budget.mjs)
-import { Q_RELIEF, deriveUniforms } from '../../../../planet-lod-lab-core.js';
+import { Q_RELIEF, deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 import { convectiveVigor } from '../../../../src/worldengine/base/e1Regime.js';
 import { erosionOf, icenessOf, P_ER_REF, DRY_ER_FLOOR } from '../../../../src/worldengine/base/surfaceMaterial.js';
 import {
@@ -54,7 +54,7 @@ import {
 } from '../../../../src/worldengine/base/bombardment.js';
 import { radPerKm } from '../../../../src/worldengine/base/baseStep.js';
 import { DRIVER_PRESETS } from '../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
+import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

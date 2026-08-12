@@ -27,7 +27,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 import * as THREE from 'three';
 import { bodyRadiusOf } from '../rendering/LabPlanetMaterial.js';
-import { lodPredictionAt } from '../../planet-lod-lab-core.js';
+import { lodPredictionAt } from '../worldengine/base/labCore.js';
 
 const _wp = new THREE.Vector3();
 const _scl = new THREE.Vector3();

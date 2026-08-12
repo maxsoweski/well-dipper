@@ -27,7 +27,7 @@
 // Frozen variance definition (relief-budget-fit.json): raw mean-square, V = mean(x^2).
 
 // depth ../../../ from src/worldengine/base/ → repo root
-import { Q_RELIEF } from '../../../planet-lod-lab-core.js';   // the shipped render strength exponent (0.58), REUSED — no 2nd g-law
+import { Q_RELIEF } from './labCore.js';   // the shipped render strength exponent (0.58), REUSED — no 2nd g-law
 import { erosionOf, icenessOf, P_ER_REF, DRY_ER_FLOOR } from './surfaceMaterial.js';
 import { craterSchedule, isImpactSurface, transitionDiameterKm, P_COMPLEX, B_SFD } from './bombardment.js';
 import { radPerKm } from './baseStep.js';

@@ -167,7 +167,7 @@ describe('crater transcription fence — craterProfile / ejectaProfile match the
     }
     throw new Error(`unbalanced body: ${sig}`);
   };
-  const lab = readFileSync(join(root, 'planet-lod-height.glsl.js'), 'utf8');
+  const lab = readFileSync(join(root, 'src/worldengine/shaders/height.glsl.js'), 'utf8');
   const game = readFileSync(join(root, 'src/worldengine/shaders/craterRelief.glsl.js'), 'utf8');
 
   for (const sig of [

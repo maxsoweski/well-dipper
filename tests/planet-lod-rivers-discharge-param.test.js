@@ -11,8 +11,8 @@ import { solveSeaLevel } from '../planet-lod-sealevel.js';
 // it needs any populated carrier.height. 'terrestrial' → Rocky condition (plate), the same self-referential body.
 import { DRIVER_PRESETS } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 
 const TARGET_N = 700, LLOYD = 2;
 

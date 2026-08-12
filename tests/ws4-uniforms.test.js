@@ -8,7 +8,7 @@
 // grain-zero-identical trivially holds. This test only pins the uniform contract the later tasks build on.
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { makeUniforms } from '../planet-lod-uniforms.js';
+import { makeUniforms } from '../src/worldengine/shaders/uniforms.js';
 
 // makeUniforms(WORLD_LIGHT) does `new THREE.Vector3().copy(WORLD_LIGHT)` internally,
 // so we must hand it a real Vector3 (matches the lab's WORLD_LIGHT constant shape).

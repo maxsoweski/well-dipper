@@ -13,7 +13,7 @@
 // single-source helper is exercised. If anyone retunes the crater/river size_km
 // (or the C constant) below the pre-change footprint, this fails.
 import { describe, it, expect } from 'vitest';
-import { featureFrequencyFromKm, R_EARTH_KM } from '../planet-lod-lab-core.js';
+import { featureFrequencyFromKm, R_EARTH_KM } from '../src/worldengine/base/labCore.js';
 
 const REFERENCE_RADIUS_EARTH = 1; // RE = 1 (Earth) — the calibration reference radius.
 

@@ -17,10 +17,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { stripCommentsPreservingOffsets } from './helpers/source-scan.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repo = (rel) => path.resolve(__dirname, '..', rel);
 const read = (rel) => readFileSync(repo(rel), 'utf8');
+// Comment-blanked, offset-preserving — the house scanner. Used ONLY for the symbol-consumer arm below.
+const readCode = (rel) => stripCommentsPreservingOffsets(read(rel));
 
 const BASE_DIR = 'src/worldengine/base';
 const baseFiles = readdirSync(repo(BASE_DIR)).filter((f) => f.endsWith('.js'));
@@ -36,6 +39,27 @@ const baseFiles = readdirSync(repo(BASE_DIR)).filter((f) => f.endsWith('.js'));
 //                            AC-0 grep in worldengine-v2-3-dispatch-oracle.test.js (function-body slice).
 // The base/ WRITERS stay E1-blind: the pre-flip "E1 has zero influence inside the expression layer" target
 // still holds one layer down (writers consume args, never the tuple).
+// ⭐ STEP 7 ADDED A THIRD CATEGORY, AND IT IS NARROWER THAN THE EXCLUSION IT REPLACES. Moving
+// body-condition-vector.js into this directory (→ conditionVector.js) put a file in the writer set
+// that imports `compositionClass` from e1Regime.js — the rocky/icy/gas/carbon gate the D14 gravity
+// self-compression law needs — and the second clause below bans the MODULE, not the tuple. Dropping
+// it the way lidResponse.js is dropped would also stop checking it for `computeE1`, which is the
+// clause that actually carries this audit's meaning. So it is excluded from the IMPORT clause only
+// and still asserted computeE1-free. ⛔ A file belongs here only if it imports a NON-computeE1 symbol;
+// `assertSymbolConsumersAreReal` below reds if one of them stops importing e1Regime at all (dead
+// entry) or starts touching computeE1 (which is the thing the audit forbids, arriving by the side
+// door). lidResponse.js keeps its blanket exclusion — it is the V2-2a ROUTER, whose whole job is the
+// classification, and re-deriving that judgement is not Step 7's business.
+// ⛔ AND THE `computeE1` CLAUSE IS COMMENT-BLIND FOR THESE FILES ONLY, WHICH IS A NARROWING WITH A
+// MEASURED REASON. conditionVector.js names `computeE1` FOUR times (:142, :148, :153, :161) and every
+// one of them asserts the OPPOSITE of a violation — "invisible to the flat-key tune builders and to
+// computeE1, which read only named keys". Rewording them (this repo's usual remedy for a prose hit,
+// per radius-live-feed-fence's HIT 2) would delete the greppable name from the documentation that is
+// ABOUT that name, and it is evidently the file's idiom rather than a slip. So for these entries the
+// clause runs against comment-BLANKED source. Every other base/ file keeps the strict raw check, so a
+// commented-out `computeE1(` call elsewhere is still caught — and the planted control below proves a
+// LIVE call in an exempted file is still caught too.
+const E1_SYMBOL_CONSUMERS = ['conditionVector.js'];
 const WRITER_DISPATCH = [
   ...baseFiles.filter((f) => f !== 'e1Regime.js' && f !== 'lidResponse.js').map((f) => `${BASE_DIR}/${f}`),
 ];
@@ -45,11 +69,43 @@ const LAB = read('planet-lod-lab.html');
 describe('V2-1 AC1/AC7 (repurposed V2-3) — computeE1 is imported by NO base/ writer (writers stay E1-blind)', () => {
   for (const rel of WRITER_DISPATCH) {
     it(`${rel} does not reference computeE1 / import e1Regime`, () => {
+      const isSymbolConsumer = E1_SYMBOL_CONSUMERS.includes(rel.slice(BASE_DIR.length + 1));
       const src = read(rel);
-      expect(src.includes('computeE1'), `${rel} references computeE1`).toBe(false);
+      expect((isSymbolConsumer ? readCode(rel) : src).includes('computeE1'),
+        `${rel} references computeE1`).toBe(false);
+      if (isSymbolConsumer) return;                                              // import clause only
       expect(/from\s+['"][^'"]*e1Regime/.test(src), `${rel} imports e1Regime`).toBe(false);
     });
   }
+
+  it('every E1_SYMBOL_CONSUMERS entry is LIVE and is a symbol consumer, not a tuple consumer', () => {
+    // The exemption's own control, per §11.2: close the class, not the instance. A dead entry (the
+    // file stopped importing e1Regime, or moved away) is an exemption sitting over nothing, which is
+    // how a future violation gets forgiven for free. A `computeE1` mention in one of these is the
+    // exact thing the audit forbids arriving through the side door — so it is asserted here too,
+    // not only in the early-returning loop above.
+    expect(E1_SYMBOL_CONSUMERS.length, 'keep this list small enough to read').toBeLessThanOrEqual(3);
+    for (const f of E1_SYMBOL_CONSUMERS) {
+      expect(baseFiles, `E1_SYMBOL_CONSUMERS names '${f}', which is not in ${BASE_DIR}`).toContain(f);
+      const src = read(`${BASE_DIR}/${f}`);
+      expect(/from\s+['"][^'"]*e1Regime/.test(src),
+        `'${f}' no longer imports e1Regime — the exemption is STALE, delete it`).toBe(true);
+      expect(readCode(`${BASE_DIR}/${f}`).includes('computeE1'), `'${f}' references computeE1`).toBe(false);
+    }
+  });
+
+  it('PLANTED: a LIVE computeE1 call in an exempted file is still caught (the narrowing has a floor)', () => {
+    // A pass with no failing control is worthless. The exemption above blanks COMMENTS, not code —
+    // this asserts that distinction is real rather than assumed, by re-running the exact predicate
+    // over source with one live call spliced in. Nothing is written to disk.
+    const f = E1_SYMBOL_CONSUMERS[0];
+    const clean = readCode(`${BASE_DIR}/${f}`);
+    expect(clean.includes('computeE1'), 'precondition: the real file is clean under the predicate').toBe(false);
+    const planted = stripCommentsPreservingOffsets(
+      read(`${BASE_DIR}/${f}`).replace('export function deriveConditionVector', 'const _e1 = computeE1(); export function deriveConditionVector'),
+    );
+    expect(planted.includes('computeE1'), 'the comment-blind predicate MISSED a live call').toBe(true);
+  });
 
   it('planet-lod-rivers.js is a LEGITIMATE consumer: its ONE computeE1 call site feeds the nested condition vector + macroSeed', () => {
     const code = read('planet-lod-rivers.js').replace(/\/\/[^\n]*/g, '');

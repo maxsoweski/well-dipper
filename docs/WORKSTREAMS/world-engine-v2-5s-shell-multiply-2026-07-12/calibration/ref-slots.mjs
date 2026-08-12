@@ -5,8 +5,8 @@
 // Run FROM REPO ROOT:  node docs/WORKSTREAMS/world-engine-v2-5s-shell-multiply-2026-07-12/calibration/ref-slots.mjs
 import { DRIVER_PRESETS } from '/home/ax/projects/well-dipper/driver-presets.js';
 import { buildNeutralBodyDrivers } from '/home/ax/projects/well-dipper/body-drivers.js';
-import { deriveConditionVector } from '/home/ax/projects/well-dipper/body-condition-vector.js';
-import { deriveUniforms } from '/home/ax/projects/well-dipper/planet-lod-lab-core.js';
+import { deriveConditionVector } from '/home/ax/projects/well-dipper/src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '/home/ax/projects/well-dipper/src/worldengine/base/labCore.js';
 
 const PRESETS = {
   'icy-active': 'Europa (icy moon)',

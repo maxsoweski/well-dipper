@@ -37,8 +37,8 @@ import { makeSphereField } from '../src/worldengine/base/sphereField.js';
 import { buildIrregularSphere, DEFAULT_GRAIN_DRIVERS, writeBodyRelief } from '../planet-lod-rivers.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 
 // N=600, LLOYD=2 — the SAME mesh the shipped shell structure suite + every V2-5s calibration script use. ONE
 // mesh reused, fresh carrier per build (== the calibration idiom). SEEDS mirror the sibling MULTIPLY passes.

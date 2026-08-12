@@ -1183,7 +1183,7 @@ describe('controls — the states in which this ratchet fails', () => {
       for (const mm of L[i].matchAll(new RegExp(UNIFORM_TOUCH.source, 'g'))) rawNames.add(mm[2]);
     }
     const strippedNames = new Set(m.frameUniforms.map((k) => k.split('::')[1]));
-    expect(rawNames.has('js')).toBe(true);            // the phantom, from "planet-lod-uniforms.js"
+    expect(rawNames.has('js')).toBe(true);            // the phantom, from "src/worldengine/shaders/uniforms.js"
     expect(strippedNames.has('js')).toBe(false);      // gone once comments are stripped
     expect(rawNames.size - strippedNames.size).toBe(1);
   });

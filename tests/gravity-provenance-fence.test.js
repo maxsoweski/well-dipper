@@ -48,7 +48,7 @@ describe('AC-PROVENANCE — the retired constant-density law is never asserted a
   it('finds a non-trivial number of files to scan (the walk itself is not silently empty)', () => {
     // A fence that scans nothing passes forever. Assert the scan is real before trusting its result.
     expect(FILES.length).toBeGreaterThan(200);
-    expect(FILES.some((f) => f.endsWith('body-condition-vector.js'))).toBe(true);
+    expect(FILES.some((f) => f.endsWith('src/worldengine/base/conditionVector.js'))).toBe(true);
   });
 
   // A mention of the retired law is fine; asserting it as CURRENT is not. So the fence asks for a
@@ -115,13 +115,13 @@ describe('AC-PROVENANCE — the retired constant-density law is never asserted a
   });
 
   it('the shipped derivation names its sources, its validity band, and calibration-vs-derivation', () => {
-    const src = readFileSync(join(ROOT, 'body-condition-vector.js'), 'utf8');
+    const src = readFileSync(join(ROOT, 'src/worldengine/base/conditionVector.js'), 'utf8');
     for (const needle of [
       'Zeng', 'Valencia', '1512.08827', 'astro-ph/0511150',
       'CALIBRATION', 'DERIVATION', 'INFERENCE FLAG',
       '1–8 M⊕',                       // the high branch's stated validity band
     ]) {
-      expect(src.includes(needle), `body-condition-vector.js must name: ${needle}`).toBe(true);
+      expect(src.includes(needle), `conditionVector.js must name: ${needle}`).toBe(true);
     }
   });
 
@@ -129,7 +129,7 @@ describe('AC-PROVENANCE — the retired constant-density law is never asserted a
     // The exact false claim that failed AC-0 in verify round 3, pinned so it cannot come back. It
     // had been corrected in intent.md but not in the shipped source comment or the contract.
     const targets = [
-      'body-condition-vector.js',
+      'src/worldengine/base/conditionVector.js',
       'docs/WORKSTREAMS/world-engine-gravity-selfcompression-2026-07-28/intent.md',
       'docs/WORKSTREAMS/world-engine-gravity-selfcompression-2026-07-28/contract.json',
     ];

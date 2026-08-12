@@ -2,7 +2,7 @@
 // that later grafts into production PlanetGenerator. Shader/visual behaviour is
 // verified separately via chrome-devtools (:9223), not here.
 import { describe, it, expect } from 'vitest';
-import { lodRampOf, autoOctaves, lodHysteresis, qualityKnobs, deriveUniforms } from '../planet-lod-lab-core.js';
+import { lodRampOf, autoOctaves, lodHysteresis, qualityKnobs, deriveUniforms } from '../src/worldengine/base/labCore.js';
 
 describe('lodRampOf', () => {
   it('is 0 at/over the far edge (>=20 radii)', () => {

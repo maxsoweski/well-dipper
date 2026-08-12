@@ -9,7 +9,7 @@ import {
   reliefAmplitudeFromKm,
   reliefGravityFactor,
   animationRateFactor,
-} from '../planet-lod-lab-core.js';
+} from '../src/worldengine/base/labCore.js';
 
 // Bounds the implementation documents (kept in sync with the helpers' comments).
 const GRAV_FLOOR = 0.4, GRAV_CEIL = 2.5;

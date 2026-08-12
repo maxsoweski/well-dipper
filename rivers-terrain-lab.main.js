@@ -9,7 +9,7 @@
 // stats are a zero-drift regression check against the committed AC2/AC3 record.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { makeUniforms } from './planet-lod-uniforms.js';
+import { makeUniforms } from './src/worldengine/shaders/uniforms.js';
 import { createRiverOverlay } from './planet-lod-rivers.js';
 
 const WORLD_LIGHT = new THREE.Vector3(0.6, 0.35, 0.7).normalize();   // lab static light dir (planet-lod-lab.html:172)

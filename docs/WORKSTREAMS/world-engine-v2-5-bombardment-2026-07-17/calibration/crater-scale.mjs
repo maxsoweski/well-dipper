@@ -25,8 +25,8 @@ import { makeSphereField } from '../../../../src/worldengine/base/sphereField.js
 import { buildIrregularSphere, writeBodyRelief } from '../../../../planet-lod-rivers.js';
 import { DRIVER_PRESETS } from '../../../../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../../../../body-drivers.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
-import { deriveUniforms } from '../../../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 
 const QUALITY_TIER = 1.0;
 const LAB_N = 40000;             // the lab render mesh (BUILD-PLAN §4 resolution check)

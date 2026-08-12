@@ -27,12 +27,12 @@ const src = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 const GD_SRC = src('../src/worldengine/base/giant-drivers.js');
 const GD_CODE = strip(GD_SRC);
-const GLSL_CODE = strip(src('../planet-lod-height.glsl.js'));
-const UNIF_CODE = strip(src('../planet-lod-uniforms.js'));
+const GLSL_CODE = strip(src('../src/worldengine/shaders/height.glsl.js'));
+const UNIF_CODE = strip(src('../src/worldengine/shaders/uniforms.js'));
 // ⚠ The lab's two shaders were EXTRACTED to planet-lod-shaders.glsl.js (so the game imports the
 // SAME source the lab renders). The lab's source text is therefore the HTML *plus* that module —
 // this fence reads both as one corpus so its assertions keep testing what the lab compiles.
-const LAB_SRC_TEXT = src('../planet-lod-lab.html') + '\n' + src('../planet-lod-shaders.glsl.js');
+const LAB_SRC_TEXT = src('../planet-lod-lab.html') + '\n' + src('../src/worldengine/shaders/planetShaders.glsl.js');
 const LAB_CODE = strip(LAB_SRC_TEXT);
 const LAB_RAW = LAB_SRC_TEXT;
 const STORM_SRC = src('../src/worldengine/base/storm-e.js');
@@ -411,7 +411,7 @@ describe('S2 carriage — uStormAux slot-sync (F2) + train s.mode pass-through',
 // asymmetry / cold collar / belt-family interior / rim wisps) are the ORCHESTRATOR's; this block owns the
 // source-structure closers + the AC-STATIC / dAdvect-untouched fence.
 // ══════════════════════════════════════════════════════════════════════════════════════════════════
-const GLSL_RAW = src('../planet-lod-height.glsl.js');
+const GLSL_RAW = src('../src/worldengine/shaders/height.glsl.js');
 // diff-scoped S3 slice: the deck header + consts through the end of stormColTerms (F29 banner follows it).
 const S3_RAW  = GLSL_RAW.slice(GLSL_RAW.indexOf('// ── S3 DECK-Z COMPOSITOR'), GLSL_RAW.indexOf('// ── F29 polarVortexCol'));
 const S3_CODE = strip(S3_RAW);

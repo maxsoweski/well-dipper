@@ -10,7 +10,7 @@
 // be duplicated there behind a byte-identity drift-guard; the guard existed only because this
 // file was contested by a second lane. That lane merged (c854c09), so there is one copy again.
 // Edit them THERE.
-import { HASH3_NOISED_GLSL, FBMD_GLSL } from './src/worldengine/shaders/heightNoise.glsl.js';
+import { HASH3_NOISED_GLSL, FBMD_GLSL } from './heightNoise.glsl.js';
 
 export const HEIGHT_GLSL = /* glsl */ `
       precision highp float;

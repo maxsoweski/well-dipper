@@ -138,7 +138,7 @@ const { Planet } = await loadOrExplain('src/objects/Planet.js');
 const { PlanetGenerator } = await loadOrExplain('src/generation/PlanetGenerator.js');
 const { StarSystemGenerator } = await loadOrExplain('src/generation/StarSystemGenerator.js');
 const { SeededRandom } = await loadOrExplain('src/generation/SeededRandom.js');
-const { makeUniforms } = await loadOrExplain('planet-lod-uniforms.js');
+const { makeUniforms } = await loadOrExplain('src/worldengine/shaders/uniforms.js');
 const THREE = await import('three');
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════
@@ -958,10 +958,23 @@ const CITE_FILES = {
   'one-pipeline-two-frontends-PLAN.md': 'docs/FEATURES/one-pipeline-two-frontends-PLAN.md',
   'CARRIED.md': 'docs/FEATURES/one-pipeline-two-frontends-CARRIED.md',
   'one-pipeline-two-frontends-CARRIED.md': 'docs/FEATURES/one-pipeline-two-frontends-CARRIED.md',
-  'body-condition-vector.js': 'body-condition-vector.js',
-  'planet-lod-uniforms.js': 'planet-lod-uniforms.js',
-  'planet-lod-height.glsl.js': 'planet-lod-height.glsl.js',
-  'planet-lod-lab-core.js': 'planet-lod-lab-core.js',
+  // ⭐ STEP 7 MOVED ALL FOUR OF THESE UNDER `src/`, AND THE KEYS DELIBERATELY DID NOT MOVE WITH THEM.
+  // A key here is the spelling a CITATION uses, not the file's basename — and 152 refs across the
+  // PLAN, the CARRIED ledger, the workstream records and the fence sources were written in the
+  // pre-move spelling. Repointing four VALUES keeps every one of them resolving and checked; rewriting
+  // 152 refs would touch the evidence to spare the map. ⛔ Do not "tidy" these keys to match the new
+  // basenames: that silently converts every pre-move ref into an UNRESOLVED, which this mode exits 2
+  // on — and the refs are correct, because a line number is a fact about the CONTENT, which the move
+  // preserved byte-for-byte (Step 7 gate 1: import specifiers only).
+  // Refs written in the NEW spelling need no entry — round 4's `resolveBase` resolves any basename
+  // naming exactly one file, and all five new basenames are unique in this repo (checked).
+  'body-condition-vector.js': 'src/worldengine/base/conditionVector.js',
+  'planet-lod-uniforms.js': 'src/worldengine/shaders/uniforms.js',
+  'planet-lod-height.glsl.js': 'src/worldengine/shaders/height.glsl.js',
+  'planet-lod-lab-core.js': 'src/worldengine/base/labCore.js',
+  // Added by Step 7: never had an entry, and the move made its refs UNRESOLVABLE rather than
+  // merely unchecked (PLAN.md:614 cites it). Same key convention as the four above.
+  'planet-lod-shaders.glsl.js': 'src/worldengine/shaders/planetShaders.glsl.js',
   'planet-lod-lab.html': 'planet-lod-lab.html',
   'driver-presets.js': 'driver-presets.js',
   'body-identity-fence.test.js': 'tests/body-identity-fence.test.js',
@@ -1013,7 +1026,8 @@ const CITE_SOURCES = [
   // four. All 32 were repaired BY SYMBOL in the same commit that adds them here, so this widening
   // lands them in the FATAL column instead of the UNCHECKED pile. Adding a source and GATING a source
   // are different acts (§11.2); this commit does both.
-  // ⚠ Checked first: appending BELOW `const CITE_SOURCES = [` does not move it from :1010, and the one
+  // ⚠ Checked first: appending BELOW `const CITE_SOURCES = [` does not move it (:1023 since Step 7 grew
+  // the CITE_FILES block ABOVE it — third instance of ledger C14, now promoted to C24), and the one
   // live ref to that line (step6-parity-ledger.md) is repaired to 1010 in this same commit.
   'src/worldengine/drivers/limbDeck.js',
   'src/worldengine/drivers/polarDeck.js',
@@ -1021,7 +1035,7 @@ const CITE_SOURCES = [
   'tests/driver-pack-polardeck.test.js',
   'docs/FEATURES/step6-parity-ledger.md',
   'tools/port-uniform-delta.mjs',
-  'body-condition-vector.js',
+  'src/worldengine/base/conditionVector.js',
   'docs/FEATURES/one-pipeline-two-frontends-PLAN.md',
   'docs/FEATURES/one-pipeline-two-frontends-CARRIED.md',
   'tests/body-identity-fence.test.js',
@@ -1585,7 +1599,7 @@ function printResolution(res) {
   const c = res.counts;
   console.log('── WATCHED UNIFORM RESOLUTION ' + '─'.repeat(59));
   console.log(`  src/objects/Planet.js production material : ${c.game} uniforms`);
-  console.log(`  planet-lod-uniforms.js  makeUniforms()    : ${c.lab} uniforms`);
+  console.log(`  uniforms.js  makeUniforms()            : ${c.lab} uniforms`);
   console.log(`  WATCHED                                   : ${c.shared}`);
   console.log(`      name-matched  (same spelling)         : ${c.nameMatched}`);
   console.log(`      aliased       (same value, two names) : ${c.aliased}`);

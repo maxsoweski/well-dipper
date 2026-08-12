@@ -1,8 +1,8 @@
 // Verify the remaining lens claims against real source + real modules.
 import { readFileSync } from 'node:fs';
 import { DRIVER_PRESETS, drawPresetRadius } from '../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
-import { deriveUniforms, radiusFromT, RADIUS_SLIDER_MIN, RADIUS_SLIDER_MAX } from '../../../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
+import { deriveUniforms, radiusFromT, RADIUS_SLIDER_MIN, RADIUS_SLIDER_MAX } from '../../../../src/worldengine/base/labCore.js';
 import { E5_REGIME, resolveParams, bakeClimateE5Attributes } from '../../../../src/worldengine/base/climate-e5.js';
 import { drawGiantConditions, deriveGiantDrivers } from '../../../../src/worldengine/base/giant-drivers.js';
 import { craterRelevanceOf, MESH_FLOOR_RAD, D_SFD_MIN_KM, C_ATMO_KM, P_ATMO_EXP,

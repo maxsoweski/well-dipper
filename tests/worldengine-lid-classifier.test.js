@@ -18,7 +18,7 @@
 import { describe, it, expect } from 'vitest';
 import { classifyLidPath, isUnbrokenLidPath } from '../src/worldengine/base/lidResponse.js';
 import { computeE1, L_STRONG, SHOULDER_LO } from '../src/worldengine/base/e1Regime.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
 import { DRIVER_PRESETS, PRESET_ARCHETYPE } from '../driver-presets.js';
 // PRESET_ARCHETYPE-retirement (2026-07-13): the four label-keyed dispatch predicates are DELETED; the
 // "two despun destinations distinct" assert re-anchors to the SURVIVING shellRegimeOf resolver (the

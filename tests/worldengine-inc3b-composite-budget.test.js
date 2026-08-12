@@ -21,8 +21,8 @@ import {
 } from '../planet-lod-rivers.js';
 import { DRIVER_PRESETS, PRESET_ARCHETYPE } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 
 // the lab's route() bundle (condition-BEARING), canonical radius — mirrors the v2-5 composite suite.
 function reliefBundle(name, seed) {

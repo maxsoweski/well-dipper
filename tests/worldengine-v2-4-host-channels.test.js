@@ -22,8 +22,8 @@ import { writeAccommodation, initSedimentHost } from '../src/worldengine/base/ho
 import { buildIrregularSphere, writeBodyRelief, DEFAULT_GRAIN_DRIVERS } from '../planet-lod-rivers.js';
 import { DRIVER_PRESETS, PRESET_ARCHETYPE } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 import { TARGET_N, LLOYD, QUALITY_TIER, SEEDS } from './fixtures/v2-0-carrier-golden.mjs';
 
 // ONE deterministic mesh, reused (each run gets a FRESH carrier; routing never depends on carrier bytes).

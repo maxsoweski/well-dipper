@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { LAB_VERTEX_SHADER, LAB_FRAGMENT_SHADER } from '../../planet-lod-shaders.glsl.js';
-import { makeUniforms } from '../../planet-lod-uniforms.js';
+import { LAB_VERTEX_SHADER, LAB_FRAGMENT_SHADER } from '../worldengine/shaders/planetShaders.glsl.js';
+import { makeUniforms } from '../worldengine/shaders/uniforms.js';
 // The LOD ramp is the LAB'S law, imported rather than re-derived — lodRampOf is
 // smoothstep(20, 6, distanceInRadii) and autoOctaves is mix(4, 9, ramp). Same import
 // src/rendering/objects/BodyRenderer.js:11 already makes for the game's own shader, so the two
 // renderers cannot drift apart on detail.
-import { lodRampOf, autoOctaves } from '../../planet-lod-lab-core.js';
+import { lodRampOf, autoOctaves } from '../worldengine/base/labCore.js';
 
 /**
  * LabPlanetMaterial — the lab's ACTUAL planet material, built for a game body.
@@ -277,7 +277,7 @@ export function buildLabProbeMaterial() {
 
 /** The lab's GLSL corpus, as one string, resolved. `LAB_FRAGMENT_SHADER` already interpolates
  *  `HEIGHT_GLSL` at module-eval time (verified: appending the height module changes no match), so
- *  these two constants ARE `planet-lod-shaders.glsl.js` + `planet-lod-height.glsl.js` for the
+ *  these two constants ARE `src/worldengine/shaders/planetShaders.glsl.js` + `src/worldengine/shaders/height.glsl.js` for the
  *  purpose of §12.4's grep. */
 export const LAB_SHADER_CORPUS = LAB_VERTEX_SHADER + '\n' + LAB_FRAGMENT_SHADER;
 
@@ -348,8 +348,8 @@ export function isOffValue(v) {
  * legitimately carry rows this function would not return; the 87 is the population §12.4 measured.
  *
  * ⚠ Measured at `39986d3`: **351 declared, 87 scalar-zero** — both reproduce PLAN §12.4's figures
- * for `9b33264` exactly, and `git diff 9b33264 HEAD` over `planet-lod-uniforms.js`,
- * `planet-lod-shaders.glsl.js` and `planet-lod-height.glsl.js` is empty, so the corpus is unmoved.
+ * for `9b33264` exactly, and `git diff 9b33264 HEAD` over `src/worldengine/shaders/uniforms.js`,
+ * `src/worldengine/shaders/planetShaders.glsl.js` and `src/worldengine/shaders/height.glsl.js` is empty, so the corpus is unmoved.
  */
 export function zeroDefaultedUniformNames(uniforms) {
   return Object.keys(uniforms || {}).filter((n) => {

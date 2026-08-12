@@ -14,7 +14,7 @@ import {
   equirectDirections, patchDirections, angleBetween,
 } from '../src/worldengine/instrument/sampling.js';
 import { rowLatDeg, cellSpacingKm, totalAreaKm2 } from '../src/worldengine/instrument/descriptors.js';
-import { reliefAmplitudeFromKm } from '../planet-lod-lab-core.js';
+import { reliefAmplitudeFromKm } from '../src/worldengine/base/labCore.js';
 
 describe('unit conversion', () => {
   it('is the exact inverse of the lab core reliefAmplitudeFromKm', () => {

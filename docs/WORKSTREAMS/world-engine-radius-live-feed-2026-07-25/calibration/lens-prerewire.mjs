@@ -2,8 +2,8 @@
 // inertness oracle is literals from the real prior build — not a substitution on the live source.
 import { execSync } from 'node:child_process';
 import { DRIVER_PRESETS, drawPresetRadius } from '../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
-import { deriveUniforms } from '../../../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 
 const OLD = execSync('git show HEAD:planet-lod-lab.html', { cwd: new URL('../../../../', import.meta.url).pathname, maxBuffer: 64 * 1024 * 1024 }).toString();
 const NEW_SRC = (await import('node:fs')).readFileSync(new URL('../../../../planet-lod-lab.html', import.meta.url), 'utf8');

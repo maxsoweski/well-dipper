@@ -1806,8 +1806,8 @@ export const BASELINE = [
 // const SHA_FULL = execFileSync('git', ['-C', ROOT, 'rev-parse', SHA], { encoding: 'utf8' }).trim();
 //
 // const { DRIVER_PRESETS } = await import(join(ROOT, 'driver-presets.js'));
-// const { deriveConditionVector } = await import(join(ROOT, 'body-condition-vector.js'));
-// const { deriveUniforms } = await import(join(ROOT, 'planet-lod-lab-core.js'));
+// const { deriveConditionVector } = await import(join(ROOT, 'src/worldengine/base/conditionVector.js'));
+// const { deriveUniforms } = await import(join(ROOT, 'src/worldengine/base/labCore.js'));
 // const e1 = await import(join(ROOT, 'src/worldengine/base/e1Regime.js'));
 // const gd = await import(join(ROOT, 'src/worldengine/base/giant-drivers.js'));
 // const c5 = await import(join(ROOT, 'src/worldengine/base/climate-e5.js'));

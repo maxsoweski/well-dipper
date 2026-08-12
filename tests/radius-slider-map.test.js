@@ -12,7 +12,7 @@ import {
   tFromRadius,
   RADIUS_SLIDER_MIN,
   RADIUS_SLIDER_MAX,
-} from '../planet-lod-lab-core.js';
+} from '../src/worldengine/base/labCore.js';
 
 describe('radiusFromT / tFromRadius — endpoints', () => {
   it('t=0 maps to the slider min (0.3 RE)', () => {

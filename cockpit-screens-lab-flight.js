@@ -4,7 +4,7 @@
  * Lane F, workstream `cockpit-screen-content-2026-07-28`. Lab support only: this
  * module is imported by `cockpit-screens-lab.html` and by its test, and by
  * nothing under `src/`. It is at the repo root for the same reason
- * `planet-lod-lab-core.js` and `lab-isolation.js` are — a lab's own logic does
+ * `src/worldengine/base/labCore.js` and `lab-isolation.js` are — a lab's own logic does
  * not belong in the game's source tree, but it still deserves a test.
  *
  * ── WHY A SCRIPT EXISTS AT ALL ──────────────────────────────────────────────

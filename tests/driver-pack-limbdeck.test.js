@@ -594,7 +594,7 @@ describe('F — the entry is registry-ready and collision-free', () => {
   it('SHADER FACT 1: uLimbStrength is a bare multiplicand with exactly one read site in the GLSL', () => {
     // The pack's whole claim — "0 deletes the term exactly, 0.7 restores it" — is a claim about
     // GLSL this suite cannot execute. It is pinned as source instead of assumed.
-    const glsl = read('planet-lod-shaders.glsl.js');
+    const glsl = read('src/worldengine/shaders/planetShaders.glsl.js');
     const hits = glsl.split('\n').filter((l) => l.includes('uLimbStrength') && !l.trim().startsWith('//'));
     expect(hits.length).toBe(1);
     expect(hits[0]).toContain('* uLimbStrength * (diff + 0.15)');
@@ -608,13 +608,13 @@ describe('F — the entry is registry-ready and collision-free', () => {
     // this whole lane would be decoration. Measured from the source: PROV_LIMB's floor is 1.00, and
     // planet-lod-height.glsl.js:901 `return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);` with
     // fl = 1.0 is `mix(1.0, 1.0, x)` — identically 1.0 for every field sample and every knob value.
-    const h = read('planet-lod-height.glsl.js');
+    const h = read('src/worldengine/shaders/height.glsl.js');
     const row = h.split('\n').find((l) => l.includes('fid == PROV_LIMB'));
     expect(row, 'the PROV_LIMB row must exist').toBeTruthy();
     expect(row).toContain('fl = 1.00');
     expect(h).toContain('return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);');
     // ...and the limb term is added unconditionally — it sits behind no `if` of its own.
-    const s = read('planet-lod-shaders.glsl.js');
+    const s = read('src/worldengine/shaders/planetShaders.glsl.js');
     expect(s).toContain('vec3 limbC = uLimbColor * limb * provinceWeight(PROV_LIMB);');
   });
 });

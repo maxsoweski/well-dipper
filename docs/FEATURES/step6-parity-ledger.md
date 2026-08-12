@@ -245,7 +245,7 @@ edits to `docs/FEATURES/one-pipeline-two-frontends-PLAN.md`, which the orchestra
    it.** `tools/port-uniform-delta.mjs` is outside lane C's file set, so this is reported rather
    than done. The addition is `'docs/FEATURES/step6-parity-ledger.md'` and
    `'tests/material-parity-list.test.js'` appended to the array at
-   tools/port-uniform-delta.mjs:1010 `const CITE_SOURCES = [`. ⚠ **Adding a source and GATING a
+   tools/port-uniform-delta.mjs:1023 `const CITE_SOURCES = [`. ⚠ **Adding a source and GATING a
    source are different acts** (the comment already in that array says so). All 14 `line + symbol`
    citations in this lane's two files were verified against their target lines by hand before this
    was written — 14 hold, 0 broken — so the addition lands them in the checked column rather than

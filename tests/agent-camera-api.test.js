@@ -29,7 +29,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
-import { approachLadder, lodPredictionAt, lodRampOf, autoOctaves } from '../planet-lod-lab-core.js';
+import { approachLadder, lodPredictionAt, lodRampOf, autoOctaves } from '../src/worldengine/base/labCore.js';
 import { lodStateOf, frameSequence } from '../src/camera/agentFraming.js';
 import { stripCommentsPreservingOffsets } from './helpers/source-scan.mjs';
 

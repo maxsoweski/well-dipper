@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { DRIVER_PRESETS, PRESET_NAMES, PRESET_ARCHETYPE } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const readFixture = (name) => JSON.parse(readFileSync(path.resolve(__dirname, 'fixtures', name), 'utf8'));

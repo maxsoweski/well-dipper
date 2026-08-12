@@ -37,7 +37,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 // (a) RENDER envelope + its exponent/clamp — the ONE relief-strength multiplier the lab bakes on uPerturb.
-import { reliefEnvelope, Q_RELIEF, RELIEF_FLOOR, RELIEF_CEIL } from '../../../../planet-lod-lab-core.js';
+import { reliefEnvelope, Q_RELIEF, RELIEF_FLOOR, RELIEF_CEIL } from '../../../../src/worldengine/base/labCore.js';
 // (b) DEPTH-law: K_DT (D_t = K_DT/g), the transition-diameter fn, and craterAmplitude to run the size proof.
 import { K_DT, transitionDiameterKm, craterAmplitude } from '../../../../src/worldengine/base/bombardment.js';
 // (c) WRITER dormancy: the exact grain-driver object the despun() path passes to writeHeightSphere.

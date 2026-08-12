@@ -50,8 +50,8 @@
 //         [--samples=401] [--tier=1.0]
 
 import { DRIVER_PRESETS } from '../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
-import { deriveUniforms, radiusFromT, RADIUS_SLIDER_MIN, RADIUS_SLIDER_MAX } from '../../../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
+import { deriveUniforms, radiusFromT, RADIUS_SLIDER_MIN, RADIUS_SLIDER_MAX } from '../../../../src/worldengine/base/labCore.js';
 import { craterRelevanceOf, craterSchedule, isImpactSurface,
          C_BASIN, MESH_FLOOR_RAD, D_SFD_MIN_KM, C_ATMO_KM, P_ATMO_EXP,
          G_REF, K_GS, CRATER_T_MAX, P_SURF_MAX } from '../../../../src/worldengine/base/bombardment.js';

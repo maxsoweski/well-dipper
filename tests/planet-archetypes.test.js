@@ -15,7 +15,7 @@ const labSrc = readFileSync(path.resolve(__dirname, '../planet-lod-lab.html'), '
 // if-chain this test mirrors — into the shared single-source module. The lab now splices it
 // at runtime, so the if-chain rows are parsed from there, not the .html. (Panel toggles +
 // DRIVER_PRESETS still live in the .html, so labSrc stays the source for those.)
-const glslSrc = readFileSync(path.resolve(__dirname, '../planet-lod-height.glsl.js'), 'utf8');
+const glslSrc = readFileSync(path.resolve(__dirname, '../src/worldengine/shaders/height.glsl.js'), 'utf8');
 
 // The enable-keys the panel actually binds, e.g. `.add(state, 'cratersEnabled')`.
 const panelEnableKeys = new Set(
@@ -106,7 +106,7 @@ describe('featuresOf inversion round-trips', () => {
 // if-chain in planet-lod-lab.html mirrors it. These tests parse the GLSL rows and
 // cross-check field/polarity/floor so the two cannot silently drift.
 import { PROVINCES, PROVINCE_FIELDS } from '../planet-archetypes.js';
-import { provinceWeightFromField } from '../planet-lod-lab-core.js';
+import { provinceWeightFromField } from '../src/worldengine/base/labCore.js';
 
 // JS key → GLSL const name (ejecta shares PROV_CRATERS in the shader — no own row).
 const GLSL_NAME = {

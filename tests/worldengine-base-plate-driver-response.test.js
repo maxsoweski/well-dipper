@@ -22,8 +22,8 @@ import { writeBodyRelief, buildIrregularSphere, DEFAULT_GRAIN_DRIVERS } from '..
 // PRESET_ARCHETYPE-retirement (2026-07-13): the AC5 no-clobber `it`s migrate to condition-bearing bundles.
 import { DRIVER_PRESETS } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 
 const SHARED_MESH = buildIrregularSphere(800, 2);
 // Condition-bearing bundle for a representative preset (mirrors the dispatch-oracle bundle17). SHARED_MESH is

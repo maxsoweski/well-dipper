@@ -11,7 +11,7 @@
 // back to a stale read. They are inert behind the hasAtmo master gate (limbStrength/termStrength 0), so
 // their derived hue is what a future atmosphere-bearing draw of that body WOULD get, not what renders.
 import { DRIVER_PRESETS } from '../driver-presets.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
 import { drawPresetConditions } from '../driver-presets.js';
 import { atmosphereOpticsOf, jeansH2Of } from '../src/worldengine/base/atmosphereOptics.js';
 

@@ -51,12 +51,12 @@ import { dirname, join } from 'node:path';
 
 // Import depth ../../../../ from calibration/ → repo root (mirrors the predecessor
 // world-engine-inc3-…/calibration/population-sweep.mjs import pattern).
-import { Q_RELIEF, deriveUniforms } from '../../../../planet-lod-lab-core.js';
+import { Q_RELIEF, deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 import { convectiveVigor } from '../../../../src/worldengine/base/e1Regime.js';
 import { icenessOf } from '../../../../src/worldengine/base/surfaceMaterial.js';
 import { craterSchedule, isImpactSurface } from '../../../../src/worldengine/base/bombardment.js';
 import { DRIVER_PRESETS } from '../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
+import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

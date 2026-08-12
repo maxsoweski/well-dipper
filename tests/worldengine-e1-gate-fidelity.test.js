@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 import { computeE1, HEATPIPE_PEG } from '../src/worldengine/base/e1Regime.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
 
 // ── VERBATIM reference helpers (from gate-1-L-calib.mjs / phi-calib.mjs) ──────────────────────────────

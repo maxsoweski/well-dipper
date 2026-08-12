@@ -17,8 +17,8 @@
 //
 // METERED-SAFE: pure `node`, no `claude -p`.  Run:  node docs/WORKSTREAMS/.../calibration/crater-gate.mjs
 import { DRIVER_PRESETS } from '../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
-import { deriveUniforms } from '../../../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 
 // ── pinned gate thresholds ────────────────────────────────────────────────────────────────────────
 const CRATER_ATMO_MAX = 0.05;   // bar — airless-or-thin (below the liquid-retention gate)

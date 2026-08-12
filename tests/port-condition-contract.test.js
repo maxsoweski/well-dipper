@@ -49,7 +49,7 @@ import * as babelParser from '@babel/parser';
 
 import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js';
 import { generateSolarSystem } from '../src/generation/SolarSystemData.js';
-import { deriveConditionVector, gravityRadiusRatio } from '../body-condition-vector.js';
+import { deriveConditionVector, gravityRadiusRatio } from '../src/worldengine/base/conditionVector.js';
 // The four helpers the FROZEN pre-Step-1 vector below calls. They are imported
 // LIVE and that is the one thing the frozen copy cannot fence — see the residual
 // note on the frozen-adapter block, and PRE_STEP1_VECTOR_GOLDEN, which closes it.
@@ -60,7 +60,7 @@ import { DRIVER_PRESETS } from '../driver-presets.js';
 // Imported so the domain gate below can measure what the READER produces, not
 // only what the seam emits — the two are different claims and only the second
 // was ever gated.
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 import {
   conditionFromPlanet,
   atmosphereFromPlanet,
@@ -102,10 +102,10 @@ import { deriveGiantDrivers } from '../src/worldengine/base/giant-drivers.js';
 // The attribution argument is sound. The PREMISE it rests on — "the vector's
 // pre-existing lines were not edited" — was never checked by anything, and the
 // gate could not check it, because BOTH SIDES OF THE COMPARISON RAN THROUGH THE
-// SAME LIVE VECTOR. Any edit inside `body-condition-vector.js` moved `was` and
+// SAME LIVE VECTOR. Any edit inside `src/worldengine/base/conditionVector.js` moved `was` and
 // `now` together and cancelled exactly.
 //
-// ⚠ MEASURED, NOT ARGUED — two injections into `body-condition-vector.js`, each
+// ⚠ MEASURED, NOT ARGUED — two injections into `src/worldengine/base/conditionVector.js`, each
 // run against this file and then reverted:
 //   · `rotationHours: fp.rotationHours ?? 24` → `?? 12`. Channel 2 GREEN. (The
 //     whole file went red only by luck: an unrelated literal in the _provenance
@@ -1694,7 +1694,7 @@ describe('Step 1 · the axialTilt unit conversion', () => {
 
   it('the ENGINE really does read degrees — the other half of the evidence', () => {
     const labCore = readFileSync(
-      fileURLToPath(new URL('../planet-lod-lab-core.js', import.meta.url)), 'utf8',
+      fileURLToPath(new URL('../src/worldengine/base/labCore.js', import.meta.url)), 'utf8',
     );
     expect(labCore).toMatch(/axialTilt in degrees/);                       // :906
     expect(labCore).toMatch(/frostLatitudeBias\s*=\s*clamp01\(axialTilt \/ 90\)/); // :908

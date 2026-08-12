@@ -11,10 +11,10 @@
 //      bundle and its null-condition twin — i.e. the nested vector is invisible to them (R1).
 import { describe, it, expect } from 'vitest';
 
-import { deriveConditionVector } from '../body-condition-vector.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 import { calibrateTidal } from '../src/worldengine/base/adaptL0.js';
 import { bodyShellThickness, bodyRawTidal, bodySurfaceGravity } from '../src/worldengine/base/baseStep.js';
 import { D_EARTH, driversToTune } from '../src/worldengine/base/plates.js';

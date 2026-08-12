@@ -19,7 +19,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { LAB_VERTEX_SHADER, LAB_FRAGMENT_SHADER } from '../planet-lod-shaders.glsl.js';
+import { LAB_VERTEX_SHADER, LAB_FRAGMENT_SHADER } from '../src/worldengine/shaders/planetShaders.glsl.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');

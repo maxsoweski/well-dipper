@@ -35,8 +35,8 @@ import {
 import { KM_PER_EARTH_RADIUS, radPerKm } from '../src/worldengine/base/baseStep.js';
 import { DRIVER_PRESETS } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEEDS = [1, 2, 3, 7, 42];

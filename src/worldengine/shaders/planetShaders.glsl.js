@@ -1,4 +1,4 @@
-import { HEIGHT_GLSL } from './planet-lod-height.glsl.js';
+import { HEIGHT_GLSL } from './height.glsl.js';
 
 /**
  * The lab's planet shaders, lifted verbatim out of planet-lod-lab.html so the GAME can import the

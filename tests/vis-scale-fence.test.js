@@ -14,23 +14,61 @@
 // This suite codifies that fence and pins the four LOD-keying call sites in the lab source.
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { featureFrequencyFromKm, visScaleOf, bakeReliefCrossover, BAKE_CROSS_SPAN } from '../planet-lod-lab-core.js';
-import { makeUniforms } from '../planet-lod-uniforms.js';
-import { HEIGHT_GLSL } from '../planet-lod-height.glsl.js';
+import { featureFrequencyFromKm, visScaleOf, bakeReliefCrossover, BAKE_CROSS_SPAN } from '../src/worldengine/base/labCore.js';
+import { makeUniforms } from '../src/worldengine/shaders/uniforms.js';
+import { HEIGHT_GLSL } from '../src/worldengine/shaders/height.glsl.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-// ⚠ The lab's two shaders were EXTRACTED to planet-lod-shaders.glsl.js (so the game imports the
+// ⚠ The lab's two shaders were EXTRACTED to src/worldengine/shaders/planetShaders.glsl.js (so the game imports the
 // SAME source the lab renders). The lab's source text is therefore the HTML *plus* that module —
 // this fence reads both as one corpus so its assertions keep testing what the lab compiles.
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8')
-  + (rel === 'planet-lod-lab.html' ? '\n' + readFileSync(join(ROOT, 'planet-lod-shaders.glsl.js'), 'utf8') : '');
+  + (rel === 'planet-lod-lab.html' ? '\n' + readFileSync(join(ROOT, 'src/worldengine/shaders/planetShaders.glsl.js'), 'utf8') : '');
 
 // The three tokens that carry the display scale. \bsVis\b so it can't match e.g. a
 // substring; the pure-fn names are distinctive enough to match plainly.
 const DENY = /visScaleOf|\bsVis\b|VIS_SCALE_EXP/;
+
+// ── the one carve-out, and it is an EXCEPTION rather than a false positive ────────────────────────
+// ⭐ STEP 7 (2026-08-12) MOVED THE FILE THAT DEFINES THE DISPLAY SCALE INTO THE TREE THIS FENCE
+// DECLARES TOKEN-FREE. `planet-lod-lab-core.js` → `src/worldengine/base/labCore.js`, carrying
+// VIS_SCALE_EXP, visScaleOf, minCameraDistance and bakeReliefCrossover — 25 token hits, four exports.
+// This file's own :50 already recorded it as "DELIBERATELY excluded — it DEFINES the exports"; that
+// exclusion was free while the file sat at the repo root and costs something now, so it is written
+// down as a list with a liveness check instead of living in a comment.
+//
+// ⛔ STATED PLAINLY SO NOBODY LATER READS IT AS A MIS-SCAN: a display concern genuinely now sits
+// inside the physics tree. That is a real boundary exception, carried as ledger C23, and it is
+// deferred rather than accepted — PLAN §4 Step 7 rules labCore moves WHOLE because "splitting is a
+// judgement call that must not ride in a mechanical commit." The step that lifts the four
+// display-scale exports into their own module deletes this list.
+//
+// WHAT THE FENCE STILL PROVES, unchanged, and it is the property it was written for: no CONSUMER
+// under src/worldengine/** reads the token. Exactly one definer is exempt, by name, and `checkedTree`
+// below asserts the exemption is LIVE — the file must exist AND must still carry the tokens, so a
+// stale entry reds rather than silently widening the hole.
+const DEFINES_THE_DISPLAY_SCALE = ['src/worldengine/base/labCore.js'];
+
+// The worldengine tree MINUS the definer. Every DENY sweep over the tree goes through here, so the
+// carve-out cannot be applied in one sweep and forgotten in another.
+function checkedTree() {
+  const all = jsFilesUnder('src/worldengine');
+  for (const rel of DEFINES_THE_DISPLAY_SCALE) {
+    const i = all.indexOf(rel);
+    if (i === -1) throw new Error(
+      `vis-scale carve-out '${rel}' is not in the worldengine tree. The file moved or was deleted; `
+      + 'delete the entry in the same commit rather than leaving an exemption pointed at nothing.');
+    if (!DENY.test(read(rel))) throw new Error(
+      `vis-scale carve-out '${rel}' no longer carries any display-scale token, so the exemption is `
+      + 'STALE and is now silently forgiving a future one. Delete the entry — the split it stands in '
+      + 'for (ledger C23) has evidently happened.');
+    all.splice(i, 1);
+  }
+  return all;
+}
 
 // Recursively collect every .js under a dir (worldengine is deeper than base/).
 function jsFilesUnder(rel) {
@@ -47,10 +85,10 @@ function jsFilesUnder(rel) {
 }
 
 describe('AC-ZERO-CLOBBER — display-only fence (procgen surfaces are sVis-free)', () => {
-  // NB: planet-lod-lab-core.js is DELIBERATELY excluded — it DEFINES the exports, so
+  // NB: src/worldengine/base/labCore.js is DELIBERATELY excluded — it DEFINES the exports, so
   // it legitimately contains the tokens. The fence is that no PROCGEN surface consumes them.
   const procgenSurfaces = [
-    'planet-lod-height.glsl.js',
+    'src/worldengine/shaders/height.glsl.js',
     'planet-lod-river-amplifier.glsl.js',
     'tests/golden-trajectories/run-golden.mjs',
     'tests/golden-trajectories/canonical-scenario.js',
@@ -66,11 +104,23 @@ describe('AC-ZERO-CLOBBER — display-only fence (procgen surfaces are sVis-free
     });
   }
 
-  it('every src/worldengine/**/*.js is free of the display-scale token', () => {
-    const files = jsFilesUnder('src/worldengine');
+  it('every src/worldengine/**/*.js except the one DEFINER is free of the display-scale token', () => {
+    const files = checkedTree();
     expect(files.length).toBeGreaterThan(20);   // sanity: we actually walked the tree
     const offenders = files.filter((f) => DENY.test(read(f)));
     expect(offenders).toEqual([]);
+  });
+
+  it('the carve-out is exactly one file, and it is the one that DEFINES the display scale', () => {
+    // The exemption's own control. `checkedTree` throws if the entry is dead or stale; this asserts
+    // the hole is the size it claims to be, and that the fence would SEE a token there — i.e. that
+    // the carve-out is doing work rather than sitting over an already-clean file.
+    expect(DEFINES_THE_DISPLAY_SCALE).toEqual(['src/worldengine/base/labCore.js']);
+    expect(jsFilesUnder('src/worldengine').length - checkedTree().length).toBe(1);
+    const core = read('src/worldengine/base/labCore.js');
+    for (const sym of ['VIS_SCALE_EXP', 'visScaleOf', 'minCameraDistance', 'bakeReliefCrossover']) {
+      expect(core.includes(`export function ${sym}`) || core.includes(`export const ${sym}`), sym).toBe(true);
+    }
   });
 });
 
@@ -119,7 +169,7 @@ describe('AC-ZERO-CLOBBER — the lab GLSL regions are sVis-free (breach only al
     const realRSurfaces = [
       'tests/golden-trajectories/run-golden.mjs',
       'tests/golden-trajectories/canonical-scenario.js',
-      ...jsFilesUnder('src/worldengine'),
+      ...checkedTree(),
     ];
     for (const rel of realRSurfaces) {
       const src = read(rel);
@@ -238,7 +288,7 @@ describe('Slice C RETIRED — uDispDomainScale is pinned at 1.0 (AC-PLATESCALE i
   // and is spliced in. Reading the raw file was always a proxy for the compiled string; reading
   // HEIGHT_GLSL is the thing itself, and stays correct wherever the text is hoisted to next.
   const heightGlsl = HEIGHT_GLSL;
-  const heightGlslSrc = read('planet-lod-height.glsl.js');
+  const heightGlslSrc = read('src/worldengine/shaders/height.glsl.js');
 
   it('uDispDomainScale defaults to 1.0 — now the value it renders at on EVERY path', () => {
     // Was "identity ⇒ headless/golden byte-identical" when the frame loop wrote sVis over it. With
@@ -337,7 +387,7 @@ describe('Slice D — bake→synth crossover (P2 reaches the live bake=1 default
     // The whole point of the crossover vs a route-rebake: it re-weights an existing blend uniform
     // lab-side, so every worldengine height writer (and its byte-goldens) is untouched. Re-assert
     // the worldengine tree carries no display-scale token at the Slice-D surface.
-    const files = jsFilesUnder('src/worldengine');
+    const files = checkedTree();
     expect(files.filter((f) => DENY.test(read(f)))).toEqual([]);
   });
 });

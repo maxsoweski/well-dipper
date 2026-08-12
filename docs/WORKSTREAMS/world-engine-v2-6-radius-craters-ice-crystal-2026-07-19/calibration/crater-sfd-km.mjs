@@ -30,8 +30,8 @@
 
 import { KM_PER_EARTH_RADIUS, radPerKm } from '../../../../src/worldengine/base/baseStep.js';
 import { DRIVER_PRESETS } from '../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
-import { deriveUniforms } from '../../../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 
 // ── priors (the writer will bake these; the pre-check may move F_REF only) ──────────────────────────
 const C_BASIN       = 1.0;      // SPA/disruption diameter limit as a fraction of R_km

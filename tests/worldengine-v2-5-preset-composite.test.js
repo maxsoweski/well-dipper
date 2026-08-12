@@ -22,8 +22,8 @@ import {
 import { writeGrainSphere, writeHeightSphere } from '../src/worldengine/base/tectonic.js';
 import { DRIVER_PRESETS, PRESET_ARCHETYPE } from '../driver-presets.js';
 import { buildNeutralBodyDrivers } from '../body-drivers.js';
-import { deriveConditionVector } from '../body-condition-vector.js';
-import { deriveUniforms } from '../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 import { buildBundle, hashCarrier, TARGET_N, LLOYD, SEEDS } from './fixtures/v2-0-carrier-golden.mjs';
 
 const NEW_PRESET = 'Moon/Mercury (impact-airless)';

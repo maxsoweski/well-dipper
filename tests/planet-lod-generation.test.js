@@ -4,7 +4,7 @@
 // (which mirrors PlanetGenerator's real output fields). Pin the LOGIC; the lab
 // tunes constants. Each surfacing is consumed by a Stage-C domain (step 3+).
 import { describe, it, expect } from 'vitest';
-import { deriveUniforms, pldBands } from '../planet-lod-lab-core.js';
+import { deriveUniforms, pldBands } from '../src/worldengine/base/labCore.js';
 
 describe('surfaceGravity (§2 #1 — gates Relief crater morphology + Aeolian dune scale)', () => {
   // g = M/R² in Earth-relative units; massEarth + radiusEarth are both already in

@@ -1,7 +1,7 @@
 // E5 visible consequence at the lab's DEFAULT boot (radiusSeed 1, macroSeed 1), OLD vs NEW.
 import { DRIVER_PRESETS, drawPresetRadius } from '../../../../driver-presets.js';
-import { deriveConditionVector } from '../../../../body-condition-vector.js';
-import { deriveUniforms } from '../../../../planet-lod-lab-core.js';
+import { deriveConditionVector } from '../../../../src/worldengine/base/conditionVector.js';
+import { deriveUniforms } from '../../../../src/worldengine/base/labCore.js';
 import { E5_REGIME, resolveParams, bakeClimateE5Attributes } from '../../../../src/worldengine/base/climate-e5.js';
 import { drawGiantConditions, deriveGiantDrivers } from '../../../../src/worldengine/base/giant-drivers.js';
 

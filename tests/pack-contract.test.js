@@ -42,7 +42,7 @@ import {
   visScaleOf,
   featureFrequencyFromKm as labFeatureFrequencyFromKm,
   R_EARTH_KM as labR_EARTH_KM,
-} from '../planet-lod-lab-core.js';
+} from '../src/worldengine/base/labCore.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
@@ -173,19 +173,21 @@ describe('5a — displayRadiusEarth is REQUIRED, with no default to fall back on
 // ─────────────────────────────────────────────────────────────────────────────
 describe('5b — featureFrequencyFromKm is defined ONCE and the lab imports it back', () => {
   it('the lab core re-exports the SAME function object, not an equal copy', () => {
-    // ⭐ Identity, not value equality. A local copy in planet-lod-lab-core.js would produce
+    // ⭐ Identity, not value equality. A local copy in labCore.js would produce
     // byte-identical numbers on every input forever — a value comparison cannot see the fork.
     // `toBe` on the function object is the only assertion that pins the SINGLE DEFINITION.
     expect(labFeatureFrequencyFromKm).toBe(featureFrequencyFromKm);
     expect(labR_EARTH_KM).toBe(R_EARTH_KM);
   });
 
-  it('planet-lod-lab-core.js no longer DEFINES either symbol', () => {
-    const core = read('planet-lod-lab-core.js');
+  it('labCore.js no longer DEFINES either symbol', () => {
+    const core = read('src/worldengine/base/labCore.js');
     expect(core).not.toMatch(/function\s+featureFrequencyFromKm\s*\(/);
     expect(core).not.toMatch(/const\s+R_EARTH_KM\s*=/);
     expect(core).toMatch(
-      /import\s*\{[^}]*featureFrequencyFromKm[^}]*\}\s*from\s*'\.\/src\/worldengine\/base\/featureScale\.js'/,
+      // Step 7 put labCore.js NEXT TO featureScale.js, so the specifier is now a sibling './'.
+      // The property pinned is unchanged: the lab core IMPORTS the symbol and does not define it.
+      /import\s*\{[^}]*featureFrequencyFromKm[^}]*\}\s*from\s*'\.\/featureScale\.js'/,
     );
   });
 
