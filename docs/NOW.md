@@ -4,7 +4,7 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> ## ⭐⭐ 2026-08-12 — THE ORBIT-RING DEPTH ARTEFACT IS FIXED (`b9eeaec` + `22c8b8a`). VERIFIED_PENDING_MAX.
+> ## ⭐⭐ 2026-08-12 — THE ORBIT-RING DEPTH ARTEFACT IS FIXED (`b9eeaec` + `22c8b8a`). ✅ SHIPPED — MAX UAT PASS 2026-08-12 ("yep, fixed").
 >
 > The ring drawn THROUGH the planet (§1–§4, open since 2026-08-10). Fourth candidate refuted (§9),
 > fifth landed. **Rule:** of the ≤4 roots §8's front-arc gate already computes, keep those in front
@@ -25,9 +25,9 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > (the front-branch guard's last decisive regime, 557 px at camera height ≈1). M1 was repointed —
 > `clipw×0.37` became *vacuous*, not weak, once the depth left `wclip`.
 >
-> ▶ **NEEDS MAX'S UAT.** Park: any planet at 4–12 body radii, just off the orbit plane. The orbit
-> line should stop at the planet's limb instead of painting across its face — and no line anywhere
-> should have gone missing.
+> ✅ **MAX UAT PASS 2026-08-12** — parked live at planet p3, 6 body radii, just off the orbit plane.
+> Verdict: *"yep, fixed"*. The orbit line stops at the limb, and nothing went missing — which was the
+> direction that killed candidate 4. **Shipped.**
 >
 > ⛔ **STILL OPEN, and it caps this pass:** 45.9% of painted px have NO ring point within the band's
 > reach at all. The Sampson band over-paints; the depth rule can only fall back there. Next to scope.
