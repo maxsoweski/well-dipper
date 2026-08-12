@@ -157,3 +157,80 @@ it was unreachable from the console. Both belong in the agent-facing camera API 
 
 ⚠ Also: `freezeFrame({orbit:0})` snaps every planet to orbital phase 0, so they line up collinearly
 with the star. "The planet is where it was" is false after a freeze.
+
+---
+
+## 7. A SECOND, DISTINCT DEFECT IN THE SAME PASS — the phantom line is COVERAGE, not depth
+
+**2026-08-11.** Max, parked on the moon `Al` of the outermost planet, looking AWAY from the star:
+*"The faint green line straight across the upper-fifth of the screen is the phantom orbit ... when I
+zoom out, this line fades away. When I continue zooming in, the line gets more solid."*
+
+⛔ **Do not merge this with §1–§4.** Those are about the DEPTH written for painted pixels (the ring
+showing through a planet). This is about pixels being **painted at all** in directions containing no
+ring. Same fullscreen pass, different test, different fix.
+
+### What it is, measured
+
+Two lines are painted from the ORRERY vantage; they are not the same thing. Mirroring the fragment
+shader's per-pixel accept in JS over the real `sceneTarget` grid (**557×285**, `pixelScale 3` — ⚠ the
+conic math runs in RENDER-TARGET pixels, not CSS pixels; a probe in window coordinates is 3× off and
+y-flipped, which is how the first probe this session measured nothing):
+
+| gl row | CSS y | width | reconstructed plane point ÷ ring radius | `wclip` |
+|---|---|---|---|---|
+| 92  | 579 | 95%  | **1.000** — genuinely on the ring | 16.1 |
+| 194 | 273 | **100%** | **1.754 – 2.023** | **4950** |
+
+Row 194 is the phantom. Its pixels reconstruct to plane points **1.75–2× further out than the ring
+itself** — they are nowhere near it. They pass the Sampson band because the near-degenerate `Cs`'s
+zero set is a pair of near-parallel lines (the plane's asymptotes), and they pass the front-branch
+guard because `wclip` is a healthy positive 4950.
+
+**It sits on the ecliptic's vanishing line, twice confirmed independently of the renderer**: computed
+from the projection matrices alone, the vanishing line images at y=155 in one pose (observed ~157)
+and y=270 in another (observed ~273).
+
+### Which ring, and why the obvious answers are wrong
+
+⛔ **It is NOT a spurious conic.** 17 conics for 17 orbits was always correct — which is why two
+sessions of hunting an extra one found nothing.
+
+⛔ **It is NOT the behind-camera class fixed in `03cb1dd`.** That fix is real and independent (13 of
+17 conics were entirely behind the camera carrying the "genuinely unbounded" sentinel), but the line
+survives it. Dropping conic **#5 alone** — the outermost planet's orbit, the ring the camera is
+riding, which **legitimately** straddles the camera plane and so **legitimately** has its extent
+bound disabled — removes both lines. There is no AABB that helps: a straddling ring's projection
+really is unbounded.
+
+### The isolated cure, and why it is the non-vacuous version of §4's invariant
+
+Conic #5's true clip-w range is `[wMin, wMax] = [−12310, +17.01]`. Every legitimately visible pixel
+must therefore satisfy `0 < wclip ≤ wMax`. The real ring row measures **16.1**; the phantom measures
+**4950**, which is **290× outside the ring's own depth range**. One comparison against a bound
+already computed on the CPU (`wMax = _Hm[8] + radius·hypot(_Hm[6],_Hm[7])`, the exact companion of
+the `wMin` already used for the extent decision), packed into the existing texture, tested per pixel.
+
+⭐ §4's rejected patch asserted `written w ≥ wMin` and the doc records why that was toothless: at the
+failing pixel `wMin = −48498`, so the invariant was vacuous and could not see the error class at all.
+**`wclip ≤ wMax` is the same idea with the bound that actually binds.**
+
+### ⚠ Gates and risks before anyone writes it
+
+1. **It is a GLSL edit**, in the pass whose shipped shader has zero numeric coverage — the standing
+   blocker §4 already names, and the reason one fix here was refuted 3/3. Build the gate first, and
+   per §4: test the GLSL, not the JS twin, and score only pixels the pass actually paints.
+2. **Regression risk, unresolved:** legitimate FAR-FIELD ring pixels also approach the asymptote,
+   where the reconstruction is ill-conditioned. A bound that is too tight erases the distant part of
+   a ring the player should see. The measured margin is large (16.1 vs 4950) but the tolerance must
+   be chosen against the far field, not against this one pose.
+3. **Score it at multiple azimuths.** §4's patch passed its own harness because that harness ran at
+   a single azimuth. az 0° / 60° / 110° at low elevation is the minimum.
+
+### Why it tracked the zoom
+
+ORRERY pivots on a body that is itself in the ecliptic, so camera height above the orbital plane is
+exactly `distance · sin(pitch)` — measured 12.952 against predicted 13.059. Zooming in drops the
+camera toward the plane, `Cs` degenerates harder and the asymptotes tighten onto the vanishing line;
+zooming out lifts it away. This is therefore **not specific to this seed, this planet or this
+system** — it reproduces near any body, because being near a body in ORRERY *is* being in the plane.
