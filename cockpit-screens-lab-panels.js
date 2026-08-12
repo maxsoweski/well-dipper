@@ -4,9 +4,11 @@
  *
  * Lane F, workstream `cockpit-screen-content-2026-07-28`. Lab support only:
  * imported by `cockpit-screens-lab.html` and by its test, and by nothing under
- * `src/`. It sits at the repo root for the same reason `src/worldengine/base/labCore.js`
- * and `lab-isolation.js` do — a lab's own wiring is not the game's source, but it
- * still deserves a test.
+ * `src/`. That last clause is the rule — no importer under `src/` — and not the
+ * file's name. ⛔ This header used to cite `planet-lod-lab-core.js` as the
+ * exemplar; Step 7 moved it into `src/` (`src/worldengine/base/labCore.js`)
+ * because four game files import it, so it was never evidence for this boundary.
+ * `lab-isolation.js` still is. See `tests/src-boundary-fence.test.js`.
  *
  * ── THERE IS NO SECOND SET OF PAINTERS HERE, AND THAT IS THE POINT ──────────
  *

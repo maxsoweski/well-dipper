@@ -3,9 +3,13 @@
  *
  * Lane F, workstream `cockpit-screen-content-2026-07-28`. Lab support only: this
  * module is imported by `cockpit-screens-lab.html` and by its test, and by
- * nothing under `src/`. It is at the repo root for the same reason
- * `src/worldengine/base/labCore.js` and `lab-isolation.js` are — a lab's own logic does
- * not belong in the game's source tree, but it still deserves a test.
+ * nothing under `src/`. THAT — no importer under `src/` — is why it is at the
+ * repo root, and it is the whole of the rule. ⛔ The old wording named
+ * `planet-lod-lab-core.js` as the exemplar; PLAN §4 Step 7 moved that file INTO
+ * `src/` (as `src/worldengine/base/labCore.js`) precisely because four game files
+ * import it. A lab file with production importers is game source, whatever its
+ * name says. `lab-isolation.js` is the surviving exemplar. `tests/src-boundary-fence.test.js`
+ * is now the machine form of this paragraph.
  *
  * ── WHY A SCRIPT EXISTS AT ALL ──────────────────────────────────────────────
  *
