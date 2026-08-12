@@ -4,6 +4,34 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> ## ⭐⭐ 2026-08-12 — THE ORBIT-RING DEPTH ARTEFACT IS FIXED (`b9eeaec` + `22c8b8a`). VERIFIED_PENDING_MAX.
+>
+> The ring drawn THROUGH the planet (§1–§4, open since 2026-08-10). Fourth candidate refuted (§9),
+> fifth landed. **Rule:** of the ≤4 roots §8's front-arc gate already computes, keep those in front
+> and within the **band's own reach**, write the **minimum** clip w. Zero extra `texelFetch`, zero
+> extra `sqrt` — it reads what the gate already computed and threw away.
+>
+> ⛔ **Three constants, each a measurement:** *min* not screen-nearest (nearest = candidate 4, error
+> `(d+R)/(d−R)`, unbounded, and it **hides** line — `d7db3a3` territory); window = band reach
+> `pw·0.5 + f·0.941096864` not `uArcTolPx` (at 3.0 it writes **5962× too near** and recreates §2's
+> leak); w from `rowW` not `Hfwd` (normalized ⇒ **5.3e-7×**).
+>
+> **Live, seed `lab-procedural-6`, scored as the PAIR** (leak *and* over-occlusion — a leak count
+> alone says candidate 4 was perfect): **163/195/220/149/26 leaks and up to 20 over-occlusions →
+> 0 / 0 at all seven poses.**
+>
+> **Instrument E 22/22 across NINE fixtures**; P1/P6 still 1114 px / 2 rows / 0 debris, so §8's
+> coverage is untouched. +P8 (inclined ring, camera in-plane at d=1.002R, `wMax/wMin`=1001) and +P9
+> (the front-branch guard's last decisive regime, 557 px at camera height ≈1). M1 was repointed —
+> `clipw×0.37` became *vacuous*, not weak, once the depth left `wclip`.
+>
+> ▶ **NEEDS MAX'S UAT.** Park: any planet at 4–12 body radii, just off the orbit plane. The orbit
+> line should stop at the planet's limb instead of painting across its face — and no line anywhere
+> should have gone missing.
+>
+> ⛔ **STILL OPEN, and it caps this pass:** 45.9% of painted px have NO ring point within the band's
+> reach at all. The Sampson band over-paints; the depth rule can only fall back there. Next to scope.
+
 > ## ⭐⭐ 2026-08-12 — THE PHANTOM RING IS ROOT-CAUSED AND FIXED (`945f08d` + `1a3c1e3`). ✅ SHIPPED — MAX UAT PASS 2026-08-12 ("works").
 >
 > ⛔ **SUPERSEDES the 2026-08-11 entry below.** That fix (`03cb1dd`) is real and independent — 13

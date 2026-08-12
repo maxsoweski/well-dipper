@@ -590,3 +590,95 @@ against an actual body in a multi-ring scene** — every number above is a depth
 ⚠ And **reach is a convention, not a detail**: the SIGN of some comparisons moves between the band's
 reach and `uArcTolPx`. Reach exactly 1.0 is a knife edge at edge-on (every root sits at d=1.0000).
 Any measurement in this regime quoting a single reach should be treated as unscored.
+
+---
+
+## §10 — THE DEPTH ARTEFACT IS FIXED. Shipped `b9eeaec`, VERIFIED_PENDING_MAX.
+
+§9 killed candidate 4 and named the surviving repair. This is that repair, measured, gated and
+landed. **The rule:** among the ≤4 roots the §8 front-arc gate already computes, keep the in-front
+roots whose exact screen distance is within the **band's own reach**, and write the **minimum**
+clip w among them; fall back to the screen-argmin root when none is in band.
+
+Three constants in it are load-bearing and each is a measurement, not a taste:
+
+| | value | what happens if you get it wrong |
+|---|---|---|
+| **min**, not screen-nearest | — | candidate 4: error `(d+R)/(d−R)`, unbounded, **hides** line (§9) |
+| window = **band reach** | `pw·0.5 + f·0.941096864` = 0.970548 | at `uArcTolPx`=3.0: **5962× too near** on 557/1114 px — §2's leak recreated |
+| w from **rowW**, not `Hfwd` | — | `Hfwd` is normalized, so its w is `hScale × true` — writes **5.3e-7×** |
+
+⚠ `0.941096864` is the root of `3t² − 2t³ = 0.99`, the shader's own `band < 0.01` cutoff. It is
+**not** 0.5 — that is the smoothstep's midpoint and would give reach 0.75. A lane proposed 0.5 in
+prose while using the correct number numerically; coding the prose would have shipped the leak.
+Measured headroom: the nearest root that must be rejected sits at **0.999722 px** against the
+reach of **0.970548**, so there is 0.0292 px of margin. Do not round it.
+
+Cost: **zero extra `texelFetch`, zero extra `sqrt`.** Both sqrts already existed for the gate.
+
+### Measured live, seed `lab-procedural-6`
+
+Scored as the **pair** §9 insists on — `LEAK` (ring behind the body, drawn in front) and
+`OVER-OCCLUDE` (ring in front, drawn behind; a legitimate line vanishing):
+
+| pose | BEFORE leak / over | **NOW** |
+|---|---|---|
+| p5 6R 0.25° | 163 / 0 | **0 / 0** |
+| p5 6R 0.5° | 195 / 0 | **0 / 0** |
+| p5 4R 0.25° | 220 / 0 | **0 / 0** |
+| p5 12R 0.25° | 0 / 17 | **0 / 0** |
+| p5 6R 2.01° | 149 / 20 | **0 / 0** |
+| p5 2.5R 0.25° | 2 / 0 | **0 / 0** |
+| p3 6R 1.15° | 26 / 0 | **0 / 0** |
+
+⚠ **The oracle had to be rebuilt to get these, and the first version was wrong in the documented
+way.** A uniform-θ sweep lands 155 screen px apart on the near arc, skips the real ring, and
+reported a **spurious 9-px regression that does not exist**. §9's trap 1, walked into in the
+browser where the algebraic solver wasn't available. The live oracle is now an adaptive
+screen-chord polyline (~150k samples/ring, subdivided to 0.05 px), built once per ring.
+
+⚠ **An earlier figure in this file was overcounted.** "540 leaking px at 6R" (quoted while §9 was
+being written) did not apply the §8 arc gate and scored against the *nearest* rather than the
+front-most *covering* point. The correct pre-fix count at that pose is **163**.
+
+### Instrument E — 22/22 across NINE fixtures, and two survivors that had to be resolved first
+
+P1/P6 still read **1114 px / 2 rows / 0 debris**: §8's coverage is untouched, by construction —
+the change only re-sources the value written *after* every reject has passed.
+
+M17–M22 cover the depth rule (ignore-the-arc, window→`uArcTolPx`, max-not-min, w-from-`Hfwd`,
+drop-the-covering-test, fallback-everywhere = candidate 4). They needed the **depth checksum**
+added in `22c8b8a`: per-frame `wclip[min,max]` cannot separate the shipped rule from candidate 4
+at six of seven fixtures, because they disagree *per pixel* while sharing a frame min and max.
+
+⭐ **Two pre-existing mutants stopped being killed, and the reasons differ — this is the useful
+part.**
+- **M1 (`clipw-x0.37`) became VACUOUS, not weak.** With the depth off `wclip`, that value is a pure
+  **sign** test for the front-branch guard, and a positive scale cannot move a sign. Repointed to
+  `M1-clipw-sign-flip`. Its old job — depth sensitivity — is now carried by six dedicated mutants.
+  A mutant surviving because the code's *contract* changed is different from a coverage hole.
+- **M3 (`drop-frontguard`) needed a fixture, and finding it needed a measurement.** The obvious
+  reading was "the arc gate subsumed the guard, so delete it." Measured instead
+  (`scratchpad/guard-alive.mjs`, 20 poses): the guard is decisive on **557 px at camera height ≈1**
+  — essentially *in* a straddling ring's plane, where the near and far arcs merge to within a pixel
+  so the reconstruction says `w ≤ 0` while a genuine in-front point sits inside the gate's
+  tolerance — and on **0 px** at h=4, 12.95, 40 and at P1–P8. **The guard is not dead.** → **P9**.
+
+**+P8-thin-ellipse-approach**: camera exactly in an **inclined** ring's plane at `d = 1.002R`, so
+`wMax/wMin = 1001`. That is the regime §9's refutation lives in, and P1–P7 cannot reach it — P1/P6
+are camera-inside straddle, P3/P7 are edge-on but *uninclined*, so none is a thin ellipse under a
+diagonal projection. It separates candidate 4 by 30% of the depth checksum.
+
+### ⛔ STILL OPEN — and it now caps everything downstream
+
+**45.9% of painted pixels have NO in-front ring point within the band's reach at all** (50.0% at
+Max's repro pose, 66.7% edge-on, 67.0% at P7). The Sampson band paints ink that no ring point
+covers; the depth rule can only fall back there. That is an **over-paint defect upstream of any
+depth rule**, it bounds what this pass can achieve, and it is the next thing to scope. The residual
+multi-ring leaks (22–24 px) are all of this class — every one is a pixel whose nearest in-front
+circle point is 1.485–1.500 px away, i.e. outside the band that painted it.
+
+Also unmeasured here: no temporal sequence, so whether the b6 grazing flap can recur under the new
+w distribution is unknown (`CONIC_WCLIP_TIE_EPS` is kept, and M8 stays killable — it fires *more*
+at P4 under the repair, on 193/333 overlap px vs 124/333); occluders in the scoring are analytic
+spheres, not `SphereGeometry(96×48)`.
