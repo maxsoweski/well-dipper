@@ -92,8 +92,8 @@ export function gravityRadiusRatio(radiusEarth, canonicalRadiusEarth, compClass)
 //   fp           = the raw DRIVER_PRESETS entry (composition, age, radiusEarth, eccentricity, …).
 //   derived      = deriveUniforms(fp, tier) uniforms (has surfaceGravity, tidalHeat[RAW]); the lab passes
 //                  its live `u`, the harness passes the same fresh derive.
-//   radiusEarth  = the DRAWN render radius (state.planetRadiusEarth in the lab; fp.radiusEarth headless
-//                  fallback) — R5: canonical for NAMED_BODY, seeded for archetypes.
+//   radiusEarth  = the DRAWN render radius (state.planetRadiusEarth in the lab; the fp's own
+//                  radiusEarth key headless) — R5: canonical for NAMED_BODY, seeded for archetypes.
 export function deriveConditionVector(fp, derived, radiusEarth) {
   // The three fields the composition gate reads, hoisted so the gate classifies EXACTLY the values
   // the vector carries. Deriving them twice would let the gate drift from the body it is judging.
