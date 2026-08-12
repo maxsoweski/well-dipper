@@ -105,6 +105,21 @@ export const CONIC_EXTENT_UNBOUNDED = 1e30;
  * construction: the identical margins were measured at ring radius 0.18 and at
  * 67622. Do not rescale it per ring.
  */
+/**
+ * The band's own reach in render px: the largest Sampson distance at which the shader
+ * still paints. The fragment shader drops a pixel at `band < 0.01`, and its band is
+ * `1 - smoothstep(pw*0.5, pw*0.5 + feather, d)`, so the cutoff is where
+ * `3t² − 2t³ = 0.99`, i.e. t = 0.941096864 — NOT 0.5, which is the midpoint and would
+ * give 0.75. At shipping defaults (1.0 / 0.5) the reach is 0.970548 px.
+ *
+ * This is the window the DEPTH rule selects covering roots with (frontArcDepthW). It is
+ * deliberately NOT the gate's uArcTolPx: see that function for the 5962x measurement.
+ */
+export const BAND_ALPHA_CUTOFF_T = 0.941096864;
+export function bandReachPx(pixelWidth, featherPx) {
+  return pixelWidth * 0.5 + featherPx * BAND_ALPHA_CUTOFF_T;
+}
+
 export const ARC_TOLERANCE_MARGIN_PX = 2.0;
 
 /** The shader's uArcTolPx, in one place so CPU and GLSL cannot drift. */
@@ -353,19 +368,38 @@ export function sampsonDistancePx(Cs, px, py) {
 // that point is BEHIND the camera, which is the whole purpose. Unlike
 // frontBranchOK's sign test on a reconstructed point, w here is evaluated on a
 // point known to be ON the circle, so it stays meaningful when adj(H) does not.
-function arcPointDistPx(Hfwd, radius, px, py, c, s) {
+function arcRootEval(Hfwd, rowW, radius, px, py, c, s, out) {
   const X = radius * c, Z = radius * s;
-  const w = Hfwd[6] * X + Hfwd[7] * Z + Hfwd[8];
-  if (!(w > 0)) return Infinity;
-  const sx = (Hfwd[0] * X + Hfwd[1] * Z + Hfwd[2]) / w;
-  const sy = (Hfwd[3] * X + Hfwd[4] * Z + Hfwd[5]) / w;
-  return Math.hypot(sx - px, sy - py);
+  const wn = Hfwd[6] * X + Hfwd[7] * Z + Hfwd[8];
+  if (!(wn > 0)) { out.dist = Infinity; out.w = 0; return out; }
+  const sx = (Hfwd[0] * X + Hfwd[1] * Z + Hfwd[2]) / wn;
+  const sy = (Hfwd[3] * X + Hfwd[4] * Z + Hfwd[5]) / wn;
+  out.dist = Math.hypot(sx - px, sy - py);
+  // ⛔ THE DEPTH COMES FROM rowW, NOT FROM Hfwd. Hfwd is max-abs normalized, so the
+  // w it yields is hScale * the true clip w. Ordering is unaffected (hScale > 0) so
+  // SELECTION could use either, but the value WRITTEN must be the true one — the
+  // wrong choice writes 5.3e-7x the correct depth. rowW is unnormalized and the
+  // shader already has it in t6.xyz, so this costs nothing.
+  out.w = rowW ? rowW[0] * X + rowW[1] * Z + rowW[2] : 0;
+  return out;
+}
+const _rootA = { dist: Infinity, w: 0 };
+const _rootB = { dist: Infinity, w: 0 };
+
+// Fold one evaluated root into the running accumulator:
+//   acc.dist / acc.w  — the SCREEN-ARGMIN root (the §8 coverage gate's value, and the
+//                       depth fallback when nothing covers the pixel)
+//   acc.minW          — the smallest clip w among roots that actually COVER the pixel
+function foldRoot(r, reach, acc) {
+  if (r.dist < acc.dist) { acc.dist = r.dist; acc.w = r.w; }
+  if (r.dist <= reach && r.w < acc.minW) acc.minW = r.w;
+  return acc;
 }
 
 // Solve screen_axis(θ) = the pixel's coordinate on that axis. A cosθ + B sinθ +
 // C = 0 with cos² + sin² = 1 → the closed-form root pair below (verify: A·c +
 // B·s = −C and c² + s² = 1 both fall out identically). ONE sqrt, no trig.
-function arcAxisDistPx(Hfwd, radius, px, py, axis) {
+function arcAxisInto(Hfwd, rowW, radius, px, py, axis, reach, acc) {
   const h0 = axis === 0 ? Hfwd[0] : Hfwd[3];
   const h1 = axis === 0 ? Hfwd[1] : Hfwd[4];
   const h2 = axis === 0 ? Hfwd[2] : Hfwd[5];
@@ -374,14 +408,13 @@ function arcAxisDistPx(Hfwd, radius, px, py, axis) {
   const B = radius * (h1 - t * Hfwd[7]);
   const C = h2 - t * Hfwd[8];
   const M2 = A * A + B * B;
-  if (!(M2 > 0)) return Infinity;
+  if (!(M2 > 0)) return acc;
   const disc = M2 - C * C;
   if (disc >= 0) {
     const sq = Math.sqrt(disc), iv = 1 / M2;
-    return Math.min(
-      arcPointDistPx(Hfwd, radius, px, py, (-A * C + B * sq) * iv, (-B * C - A * sq) * iv),
-      arcPointDistPx(Hfwd, radius, px, py, (-A * C - B * sq) * iv, (-B * C + A * sq) * iv),
-    );
+    foldRoot(arcRootEval(Hfwd, rowW, radius, px, py, (-A * C + B * sq) * iv, (-B * C - A * sq) * iv, _rootA), reach, acc);
+    foldRoot(arcRootEval(Hfwd, rowW, radius, px, py, (-A * C - B * sq) * iv, (-B * C + A * sq) * iv, _rootB), reach, acc);
+    return acc;
   }
   // No root on this axis: this screen row/column misses the curve outright.
   // Clamp to the θ that comes CLOSEST (the curve's extremum on this axis)
@@ -390,7 +423,15 @@ function arcAxisDistPx(Hfwd, radius, px, py, axis) {
   // is scored by its real distance. The other axis is well-conditioned there and
   // the min takes it anyway; this only keeps the degenerate axis honest.
   const M = Math.sqrt(M2), sg = C >= 0 ? -1 : 1;
-  return arcPointDistPx(Hfwd, radius, px, py, sg * A / M, sg * B / M);
+  return foldRoot(arcRootEval(Hfwd, rowW, radius, px, py, sg * A / M, sg * B / M, _rootA), reach, acc);
+}
+
+const _acc = { dist: Infinity, w: 0, minW: Infinity };
+function arcSolve(Hfwd, rowW, radius, px, py, reach) {
+  _acc.dist = Infinity; _acc.w = 0; _acc.minW = Infinity;
+  arcAxisInto(Hfwd, rowW, radius, px, py, 0, reach, _acc);
+  arcAxisInto(Hfwd, rowW, radius, px, py, 1, reach, _acc);
+  return _acc;
 }
 
 /**
@@ -408,10 +449,37 @@ function arcAxisDistPx(Hfwd, radius, px, py, axis) {
  * @returns {number} px distance to the nearest in-front circle point (Infinity if none)
  */
 export function frontArcDistPx(Hfwd, radius, px, py) {
-  return Math.min(
-    arcAxisDistPx(Hfwd, radius, px, py, 0),
-    arcAxisDistPx(Hfwd, radius, px, py, 1),
-  );
+  return arcSolve(Hfwd, null, radius, px, py, 0).dist;
+}
+
+/**
+ * Depth for a painted ring pixel — byte-mirror of the fragment shader's depth write
+ * (orbit-ring-depth-2026-08-12, artefact doc §9/§10). Same roots, same sqrt, no extra
+ * texelFetch: it reads what frontArcDistPx already throws away.
+ *
+ * ⛔ WHY NOT THE SCREEN-NEAREST ROOT — that was candidate 4, and it is refuted (§9).
+ * Near edge-on the projected ellipse is THIN, so the ring's near point (w=wMin) and far
+ * point (w=wMax) both land within the band's reach of one pixel and BOTH genuinely cover
+ * it. Screen distance cannot rank them; occlusion needs the SMALLER w. The error is
+ * exactly wMax/wMin = (d+R)/(d−R) — unbounded as the camera approaches the ring, measured
+ * 1001× at d=1.002R — and it points at Max's no-vanish ruling (d7db3a3): it HIDES line the
+ * shipped shader draws.
+ *
+ * ⛔ AND THE WINDOW MUST BE THE BAND'S REACH, NOT THE GATE'S TOLERANCE. Roots between the
+ * two are points that do NOT cover the pixel; folding them into the minimum writes the near
+ * arc's depth where the near arc is not there — measured 5962× TOO NEAR on 557 of 1114 px
+ * at Max's own repro pose, i.e. §2's leak recreated by the fix. The margin is thin and
+ * measured: the nearest root that must be rejected sits at 0.999722 px against a reach of
+ * 0.970548, so there is 0.0292 px of headroom. Do not round this constant.
+ *
+ * @param {Float64Array|Float32Array|number[]} Hfwd forward homography, row-major length-9
+ * @param {Float64Array|Float32Array|number[]} rowW UNNORMALIZED clip-w row (the true depth)
+ * @param {number} reach bandReachPx(pixelWidth, featherPx)
+ * @returns {{dist:number, w:number}} gate distance, and the clip w to write
+ */
+export function frontArcDepthW(Hfwd, rowW, radius, px, py, reach) {
+  const a = arcSolve(Hfwd, rowW, radius, px, py, reach);
+  return { dist: a.dist, w: a.minW < Infinity ? a.minW : a.w };
 }
 
 /**

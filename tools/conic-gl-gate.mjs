@@ -84,6 +84,7 @@ function build(name, rings, camPos, lookAt) {
 }
 
 const tilt = (deg) => new THREE.Matrix4().makeRotationZ((deg * Math.PI) / 180);
+const incl = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(1.1, 0.4, -0.6, 'XYZ'));
 
 const CASES = [
   // P1 — THE §7.1 REPRODUCER. Camera INSIDE the ring, pitched off its plane, looking outward.
@@ -135,13 +136,38 @@ const CASES = [
   // The height is exactly 0, not nearly 0: at 0.9 the reconstruction is still finite enough to pass.
   build('P7-exact-edgeon-bounded (M3 fixture)',
     [{ radius: R, color: 0x00ff00 }], [R * 2.2, 0, 0], [0, 0, 0]),
+  // P8 — the DEPTH fixture, and the regime §9's refutation lives in. Camera EXACTLY in an
+  // INCLINED ring's plane at d ~ R, so wMax/wMin = (d+R)/(d-R) = 1001: the ring's near point
+  // and far point land within the band's reach of the SAME pixel and both genuinely cover it.
+  // That is the only place the screen-argmin rule (M22, the refuted candidate 4) is
+  // catastrophically wrong, and P1-P7 cannot reach it — P1/P6 are camera-INSIDE straddle,
+  // P3/P7 are edge-on but UNINCLINED, so none is a thin ellipse under a diagonal projection.
+  // Separation measured on the CPU mirror: M22 660.556 vs 508.900 (30%), M18 294.224.
+  build('P8-thin-ellipse-approach (depth fixture)',
+    [{ radius: R, color: 0x00ff00, matrixWorld: incl }],
+    new THREE.Vector3(R * 1.002, 0, 0).applyMatrix4(incl).toArray(), [0, 0, 0]),
+  // P9 — M1/M3's fixture: the front-branch guard's LAST remaining job. Once the depth stopped
+  // flowing through the reconstructed wclip (§10), that value's only effect is the guard's two
+  // `continue`s, and at every other pose here the front-arc gate already rejects everything the
+  // guard culls — so M3 survived. It does NOT at camera height ~1: essentially IN the straddling
+  // ring's plane, the near and far arcs merge to within a pixel, so 557 px reconstruct to w <= 0
+  // (guard culls) while a genuine in-front circle point sits within the gate's tolerance (gate
+  // would keep). Measured with scratchpad/guard-alive.mjs across 20 poses: 557 decisive px here,
+  // 0 at h=4, h=12.95, h=40 and at P1-P8.
+  build('P9-straddle-in-plane (M1/M3 fixture)',
+    [{ radius: R, color: 0x00ff00 }], [R - 116, 1.0, 0], [R + 400, 0, 0]),
 ];
 
 // ── mutation battery ────────────────────────────────────────────────────────────────────────────
 // The gate is CLOSED only when every mutant moves at least one measured quantity at some pose.
 const MUT = [
   ['M0-ORIGINAL', (s) => s],
-  ['M1-clipw-x0.37', (s) => s.replace('float wclip = dot(vec3(t6.x, t6.y, t6.z), vec3(XZ, 1.0));', 'float wclip = 0.37 * dot(vec3(t6.x, t6.y, t6.z), vec3(XZ, 1.0));')],
+  // ⚠ M1 WAS `clipw-x0.37`, and it was killed everywhere while the reconstructed wclip WAS the
+  // written depth. Since the depth moved to the arc solve (§10) that value is a pure SIGN test
+  // for the front-branch guard, so scaling it by a POSITIVE constant is a true no-op and the old
+  // mutant was vacuous, not merely weak. Its real job — depth sensitivity — is now carried by
+  // M17-M22. What is left to pin is the sign, so that is what it mutates.
+  ['M1-clipw-sign-flip', (s) => s.replace('float wclip = dot(vec3(t6.x, t6.y, t6.z), vec3(XZ, 1.0));', 'float wclip = -dot(vec3(t6.x, t6.y, t6.z), vec3(XZ, 1.0));')],
   ['M2-band-x4', (s) => s.replace('smoothstep(uPixelWidth * 0.5, uPixelWidth * 0.5 + uFeatherPx, distPx)', 'smoothstep(uPixelWidth * 2.0, uPixelWidth * 2.0 + uFeatherPx, distPx)')],
   ['M3-drop-frontguard', (s) => s.replace('if (!(wclip > 0.0)) {', 'if (false) {')],
   ['M4-drop-extent', (s) => s.replace(/if \(p\.x < t5\.y - extentMargin[\s\S]*?continue;/, '')],
@@ -156,11 +182,21 @@ const MUT = [
   // cover the fix is where §4 was, so the fix does not land without these. M14 is the one that
   // matters most in the OTHER direction: it makes the tolerance far too TIGHT, so if the fixture
   // set cannot see erosion of legitimate far-field ring, M14 survives and says so.
-  ['M12-drop-arcgate', (s) => s.replace(/\n *if \(frontArcDist\([\s\S]*?continue;/, '')],
-  ['M13-arcgate-x10', (s) => s.replace('p.xy) > uArcTolPx) continue;', 'p.xy) > uArcTolPx * 10.0) continue;')],
-  ['M14-arcgate-x0.05', (s) => s.replace('p.xy) > uArcTolPx) continue;', 'p.xy) > uArcTolPx * 0.05) continue;')],
-  ['M15-arc-frontcheck-off', (s) => s.replace('if (!(w > 0.0)) return 1.0e30;', 'if (false) return 1.0e30;')],
-  ['M16-arc-single-axis', (s) => s.replace(/return min\(arcAxisDist\(fh0, fh1, fhw, radius, pix, 0\),\s*\n\s*arcAxisDist\(fh0, fh1, fhw, radius, pix, 1\)\);/, 'return arcAxisDist(fh0, fh1, fhw, radius, pix, 0);')],
+  ['M12-drop-arcgate', (s) => s.replace('    if (arc.x > uArcTolPx) continue;\n', '')],
+  ['M13-arcgate-x10', (s) => s.replace('if (arc.x > uArcTolPx) continue;', 'if (arc.x > uArcTolPx * 10.0) continue;')],
+  ['M14-arcgate-x0.05', (s) => s.replace('if (arc.x > uArcTolPx) continue;', 'if (arc.x > uArcTolPx * 0.05) continue;')],
+  ['M15-arc-frontcheck-off', (s) => s.replace('if (!(w > 0.0)) return vec2(1.0e30, 0.0);', 'if (false) return vec2(1.0e30, 0.0);')],
+  ['M16-arc-single-axis', (s) => s.replace('  acc = arcAxis(fh0, fh1, fhw, rw, radius, pix, 1, reach, acc);\n', '')],
+  // M17-M22 cover the DEPTH rule (artefact doc §9/§10). ⚠ These are the mutants that
+  // needed the depth CHECKSUM: per-frame wclip[min,max] cannot separate M22 (= the refuted
+  // screen-argmin candidate) from the shipped rule at six of seven fixtures, because they
+  // disagree PER PIXEL while sharing a frame min and max.
+  ['M17-depth-ignores-arc', (s) => s.replace('    wclip = arc.z < 1.0e30 ? arc.z : arc.y;', '')],
+  ['M18-depth-window-uArcTolPx', (s) => s.replace('float bandReach = uPixelWidth * 0.5 + uFeatherPx * 0.941096864;', 'float bandReach = uArcTolPx;')],
+  ['M19-depth-max-not-min', (s) => s.replace('if (r.x <= reach && r.y < acc.z) acc.z = r.y;', 'if (r.x <= reach && r.y > acc.z) acc.z = r.y;')],
+  ['M20-depth-from-Hfwd', (s) => s.replace('return vec2(length(vec2(dot(fh0, q), dot(fh1, q)) / w - pix), dot(rw, q));', 'return vec2(length(vec2(dot(fh0, q), dot(fh1, q)) / w - pix), dot(fhw, q));')],
+  ['M21-drop-covering-test', (s) => s.replace('if (r.x <= reach && r.y < acc.z) acc.z = r.y;', 'if (r.y < acc.z) acc.z = r.y;')],
+  ['M22-fallback-everywhere', (s) => s.replace('wclip = arc.z < 1.0e30 ? arc.z : arc.y;', 'wclip = arc.y;')],
 ];
 
 const applied = MUT.map(([n, f]) => {

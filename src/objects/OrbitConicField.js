@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildRingConic, CONIC_EXTENT_UNBOUNDED, arcTolerancePx } from './ringConic.js';
+import { buildRingConic, CONIC_EXTENT_UNBOUNDED, arcTolerancePx, BAND_ALPHA_CUTOFF_T } from './ringConic.js';
 
 /**
  * OrbitConicField — one fullscreen pass that paints every orbit ring's
@@ -182,44 +182,62 @@ float angularFade(float radius, float camDist) {
 // plane's VANISHING LINE, and every adj(H)-derived quantity sits on a pole there.
 // The forward map does not.
 
-// One root: forward-project the circle point at (cos,sin)=cs. Returns a huge
-// value when that point is BEHIND the camera — w is evaluated on a point known
-// to lie ON the circle, so it stays meaningful when the reconstruction does not.
-float arcPointDist(vec3 fh0, vec3 fh1, vec3 fhw, float radius, vec2 pix, vec2 cs) {
+// One root: forward-project the circle point at (cos,sin)=cs. Returns
+// vec2(screen distance, TRUE clip w), or a huge distance when that point is BEHIND
+// the camera — w is evaluated on a point known to lie ON the circle, so it stays
+// meaningful when the reconstruction does not.
+//
+// ⛔ THE RETURNED w COMES FROM rw (= rowW, unnormalized), NOT from fhw. fhw is
+// hScale * rowW because Hfwd is max-abs normalized; using it writes 5.3e-7x the
+// correct depth. Ordering is unaffected by hScale > 0, so the SELECTION could use
+// either, but the value written must be the true one. rw is t6.xyz, already fetched.
+vec2 arcRoot(vec3 fh0, vec3 fh1, vec3 fhw, vec3 rw, float radius, vec2 pix, vec2 cs) {
   vec3 q = vec3(radius * cs.x, radius * cs.y, 1.0);
   float w = dot(fhw, q);
-  if (!(w > 0.0)) return 1.0e30;
-  return length(vec2(dot(fh0, q), dot(fh1, q)) / w - pix);
+  if (!(w > 0.0)) return vec2(1.0e30, 0.0);
+  return vec2(length(vec2(dot(fh0, q), dot(fh1, q)) / w - pix), dot(rw, q));
+}
+
+// Fold one root into acc = vec3(screen-argmin distance, that root's w, min COVERING w).
+vec3 arcFold(vec2 r, float reach, vec3 acc) {
+  if (r.x < acc.x) { acc.x = r.x; acc.y = r.y; }
+  if (r.x <= reach && r.y < acc.z) acc.z = r.y;
+  return acc;
 }
 
 // Solve screen_axis(theta) == the pixel's coordinate on that axis. Linear in
 // (cos,sin) -> A c + B s + C = 0 with c^2+s^2 = 1 -> closed-form root pair.
 // ONE sqrt, no trig, no inverse.
-float arcAxisDist(vec3 fh0, vec3 fh1, vec3 fhw, float radius, vec2 pix, int axis) {
+vec3 arcAxis(vec3 fh0, vec3 fh1, vec3 fhw, vec3 rw, float radius, vec2 pix, int axis, float reach, vec3 acc) {
   vec3 h = axis == 0 ? fh0 : fh1;
   float t = axis == 0 ? pix.x : pix.y;
   float A = radius * (h.x - t * fhw.x);
   float B = radius * (h.y - t * fhw.y);
   float C = h.z - t * fhw.z;
   float M2 = A * A + B * B;
-  if (!(M2 > 0.0)) return 1.0e30;
+  if (!(M2 > 0.0)) return acc;
   float disc = M2 - C * C;
   if (disc >= 0.0) {
     float sq = sqrt(disc), iv = 1.0 / M2;
-    return min(arcPointDist(fh0, fh1, fhw, radius, pix, vec2((-A * C + B * sq) * iv, (-B * C - A * sq) * iv)),
-               arcPointDist(fh0, fh1, fhw, radius, pix, vec2((-A * C - B * sq) * iv, (-B * C + A * sq) * iv)));
+    acc = arcFold(arcRoot(fh0, fh1, fhw, rw, radius, pix, vec2((-A * C + B * sq) * iv, (-B * C - A * sq) * iv)), reach, acc);
+    acc = arcFold(arcRoot(fh0, fh1, fhw, rw, radius, pix, vec2((-A * C - B * sq) * iv, (-B * C + A * sq) * iv)), reach, acc);
+    return acc;
   }
   // No root on this axis: clamp to the theta that comes closest (the curve's
   // extremum on this axis) rather than hard-rejecting, so the band's own feather
   // survives a vertical/horizontal tangency. The other axis is well-conditioned
   // there and the min takes it anyway.
   float M = sqrt(M2), sg = C >= 0.0 ? -1.0 : 1.0;
-  return arcPointDist(fh0, fh1, fhw, radius, pix, vec2(sg * A / M, sg * B / M));
+  return arcFold(arcRoot(fh0, fh1, fhw, rw, radius, pix, vec2(sg * A / M, sg * B / M)), reach, acc);
 }
 
-float frontArcDist(vec3 fh0, vec3 fh1, vec3 fhw, float radius, vec2 pix) {
-  return min(arcAxisDist(fh0, fh1, fhw, radius, pix, 0),
-             arcAxisDist(fh0, fh1, fhw, radius, pix, 1));
+// vec3(gate distance, argmin root's w, min covering w) — byte-mirror of ringConic.js
+// arcSolve. The gate reads .x exactly as before; the depth reads .z, falling back to .y.
+vec3 frontArcSolve(vec3 fh0, vec3 fh1, vec3 fhw, vec3 rw, float radius, vec2 pix, float reach) {
+  vec3 acc = vec3(1.0e30, 0.0, 1.0e30);
+  acc = arcAxis(fh0, fh1, fhw, rw, radius, pix, 0, reach, acc);
+  acc = arcAxis(fh0, fh1, fhw, rw, radius, pix, 1, reach, acc);
+  return acc;
 }
 
 void main() {
@@ -299,8 +317,26 @@ void main() {
     // Rows 8-9 carry it; its third row is hScale * rowW (t6.xyz, already fetched).
     vec4 t8 = texelFetch(uData, ivec2(i, 8), 0);  // Hfwd0..3
     vec4 t9 = texelFetch(uData, ivec2(i, 9), 0);  // Hfwd4, Hfwd5, hScale, -
-    if (frontArcDist(vec3(t8.x, t8.y, t8.z), vec3(t8.w, t9.x, t9.y),
-                     t9.z * vec3(t6.x, t6.y, t6.z), t2.y, p.xy) > uArcTolPx) continue;
+    float bandReach = uPixelWidth * 0.5 + uFeatherPx * ${BAND_ALPHA_CUTOFF_T.toFixed(9)};
+    vec3 arc = frontArcSolve(vec3(t8.x, t8.y, t8.z), vec3(t8.w, t9.x, t9.y),
+                             t9.z * vec3(t6.x, t6.y, t6.z), vec3(t6.x, t6.y, t6.z),
+                             t2.y, p.xy, bandReach);
+    if (arc.x > uArcTolPx) continue;
+
+    // DEPTH (orbit-ring-depth-2026-08-12, artefact doc §9/§10). The wclip above is the
+    // ray-intersect-PLANE depth, which at grazing IS NOT ON THE CIRCLE — §2's entire
+    // 1212-px leak, measured live at 540 px. The arc solve already found the circle
+    // points; take the FRONT-MOST one that actually COVERS this pixel.
+    //
+    // ⛔ min, not screen-nearest: near edge-on the projected ellipse is thin, so the
+    // ring's near and far points both land within the band's reach of one pixel and BOTH
+    // cover it. Screen distance cannot rank them (that was candidate 4 — error
+    // wMax/wMin = (d+R)/(d-R), unbounded, and it HID line the shader used to draw).
+    // ⛔ reach, not uArcTolPx: roots between the two do not cover the pixel, and folding
+    // them in writes 5962x too NEAR — §2's leak, recreated by the fix.
+    // The wclip above stays exactly as it was: it is still the COVERAGE test above, and
+    // its ring-centre fallback still keeps an edge-on ring from vanishing (d7db3a3).
+    wclip = arc.z < 1.0e30 ? arc.z : arc.y;
 
     // Angular-size fade + composed alpha.
     float ang = angularFade(t2.y, t2.z);
