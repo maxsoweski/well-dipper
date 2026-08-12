@@ -467,3 +467,126 @@ Also worth keeping: at the `Al` pose ring #5's `wMax` is **3**, i.e. essentially
 behind the camera — correct, because a circle lies entirely on the centre's side of its own tangent,
 so standing *on* a ring and looking radially outward puts all of it behind you. Ring #5 legitimately
 paints **zero** pixels there, and the 1114 it was painting were **all** phantom.
+
+---
+
+## §9 — THE DEPTH ARTEFACT: candidate 4 REFUTED, and the metric this file was scoring with is wrong
+
+**2026-08-12.** §8 fixed COVERAGE. This section is the DEPTH bug (§1–§4), still open. A fourth
+candidate was proposed, measured by two independent lanes, and killed. Written down with numbers so
+a fifth attempt does not rediscover it.
+
+### The live baseline, first — the defect measured in the shipped game, not a fixture
+
+`window.__depthProbe()` in the running game (seed `lab-procedural-6`, planet 5 at 6 body radii,
+0.25° off the orbit plane) compares, per pixel: what the shader writes, the true depth of the
+in-front circle point nearest that pixel, and the body's near-surface depth along that ray.
+
+**540 leaking pixels of 1913 painted on the disc**, contributed by all 17 rings. Worst sample:
+ring 15 writes `1.271` where the true ring point is at `16.403` and the body's near surface is at
+`2.394` — 12.9× nearer than truth, and on the wrong side of the body, so the line paints through the
+planet. §2's mechanism, confirmed independently of `adj(H)`: the shipped `w` matches the analytic
+ray∩plane depth `t = −camY/dirY` to a relative 1.8e-2 at 0.5° and 2.7e-4 at 10°.
+
+### Candidate 4 — "write the w of the in-front circle point NEAREST the pixel". REFUTED.
+
+The §8 front-arc gate already computes, per pixel, the in-front circle points at the pixel's exact
+column and row (≤4 roots, closed form). The candidate wrote the winning root's forward-evaluated
+clip w. It looked strong: the point is *on the circle* by construction, so §2's mismatch cannot
+occur, and the selector is "minimise SCREEN distance", which is the notion §4 says its rejected
+patch got wrong.
+
+⛔ **It is wrong because two DISTINCT points of the projected conic can both lie within the band's
+reach of one pixel.** Near edge-on the projected ellipse is thin: the ring's NEAR point (θ=0,
+`w=wMin`) and FAR point (θ=π, `w=wMax`) both lie on the camera→centre line, so they land on the same
+pixel and **both genuinely cover it**. Screen distance cannot rank them; occlusion needs the
+**smaller** w. The error is exactly
+
+```
+wMax / wMin = (d + R) / (d − R)      — UNBOUNDED as the camera approaches the ring
+```
+
+measured at its predicted value to four digits at every rung: **1001× at d=1.002R, 201× at 1.01R,
+41× at 1.05R, 7.667× at 1.3R, 2.667× at 2.2R, 1.400× at 6R.** Scale-free (identical at R=100 and
+R=6748.05), survives inclination, unchanged under float32.
+
+⚠ **This is not §4's failure re-run.** §4 died on transversality *in the ring's own plane*. This
+dies on two points of the *same projected curve* sharing a pixel. Different rock.
+
+⭐ **AND IT IS A REGRESSION ON SHIPPED BEHAVIOUR, in Max's `d7db3a3` no-vanish territory** — which is
+what actually decides it:
+- body on the ring's **far side** (a planet on its own orbit — §1's own configuration): the
+  candidate **hides 22 of 33 px** of line the current shader draws, at ring radii 0.18 / 3.2 / 100 /
+  6748.05 and elevations 0–0.3°. At R=0.18 it loses 30 of 43 — 70% of the line.
+- body at the ring's **centre** (every moon orbit; the star inside every planet orbit): it loses
+  **exactly half** the line across the disc. The shipped path loses the same half, so there it is
+  not a regression but a failure to fix.
+- multi-ring overlap ownership: at one grazing pose the candidate is **worse than shipped**
+  (717/829 correct owners vs 732/829).
+- at exactly edge-on the pick is decided by rounding — float32 flips the selected root on 153/422 px
+  and moves the written w by up to 9.97×.
+
+⛔ **A trap worth recording, because the main thread walked into it.** It was predicted that
+injectivity forbids this: `H` is a projective bijection, so the circle→conic map *is* injective and
+no two circle points project to the same point. True, and irrelevant. The conic is *simple* but can
+be arbitrarily *thin*, and "two points within the band's reach of one pixel" is the condition that
+matters, not "two points at one pixel". Injectivity was the wrong invariant.
+
+### ⭐ THE METRIC THIS FILE HAS BEEN USING IS HALF A METRIC
+
+Scored by **leak count**, candidate 4 is perfect: 0 leaks at every pose, and it provably cannot
+write nearer than the front-most covering point by more than a measured 2%. Every remaining error is
+an **OVER-OCCLUSION** — a legitimate line vanishing behind a body — which is the *other* half and the
+half Max's ruling is about.
+
+**So: stop scoring this artefact with a leak count.** The pair is the metric.
+`LEAK` = ring genuinely behind the body, written in front (§1/§2's defect).
+`OVER-OCCLUDE` = ring genuinely in front, written behind (`d7db3a3`'s defect).
+A selector that trades 540 leaks for 300 vanishings is not a fix.
+
+⭐ **The sharp, body-independent invariant to pin instead:** every pose reaches
+`max error = wMax/wMin` exactly. A test asserting `written_w ≤ 1.01 × front-most-covering_w` is
+scale-free and needs no occluder.
+
+### The surviving repair, and what is still unproven about it
+
+Among the ≤4 roots the gate already computes, keep the in-front roots whose **exact screen distance**
+is within the **band's own reach** (`pixelWidth·0.5 + featherPx ≈ 1.0`) and write the **minimum**
+clip w; fall back to screen-argmin when none is in band. Zero extra `texelFetch`, zero extra `sqrt`.
+
+⛔ **The window is load-bearing and `uArcTolPx = 3.0` is REFUTED for it.** At 3.0 the min-w rule
+writes **1.68e-4 × the correct depth — 5962× too NEAR — on 557 of 1114 px at Max's own repro pose**,
+i.e. it recreates §2's leak at the exact pose the fix exists for. Roots between the band's reach and
+the gate's tolerance are points that do *not* cover the pixel; importing them writes the near arc's
+depth where the near arc is not there.
+
+Measured (`scratchpad/geo-refute/p5.out`), worst `written / front-most-covering`:
+
+| pose | screen-nearest | min-w @ band | min-w @ tol 3.0 |
+|---|---|---|---|
+| §1 repro, OUT 6R el 0.25° | 1.005 | **1.005** | 1.000, but **557 px at 1.7e-4** |
+| A2 R=100 d=2.2R el 0.2° | 2.667 (141 px >2×) | **1.056 (0 px)** | 1.056, 141 px under |
+| edge-on d=1.002R | 1001.000 (552 px) | 1.000, **but 5 px at 0.002×** | same |
+| inclined R=3000 d=1.3R el 0.05° | 7.667 (286 px) | **7.629 (14 px still >2×)** | 1.042, 253 px under |
+| inside/straddle (§8's regime) | 1.000 | 1.000 | 1.000 |
+
+**Two residuals, both open:** (G1) on inclined rings min-w barely helps — hypothesis, unverified,
+is that the 4 roots are AXIS-CONSTRAINED and need not contain the near-arc point that covers the
+pixel; (G2) at d=1.002R it writes 500× too near on 5 px. And (G3) **no lane has scored any selector
+against an actual body in a multi-ring scene** — every number above is a depth ratio.
+
+### Oracle traps, all three hit by a lane before being caught
+
+1. **A uniform-θ sweep is not an oracle here.** At the artefact pose n=24000 lands **155 screen px**
+   apart on the near arc, skips the real ring and reports the far arc. Use algebraic root-finding or
+   subdivision adaptive on SCREEN CHORD.
+2. **The Weierstrass substitution `t = tan(θ/2)` silently loses roots** (pole at θ=π; roots at
+   |t|~1e7 at grazing) — 170/2228 px disagreed with brute force. Solve on `|z|=1`, where every root
+   has modulus 1 and the solve is uniformly conditioned.
+3. **Pure chord-adaptation returns two samples at edge-on poses** — both arc endpoints are at w→0,
+   i.e. screen infinity, and a closed arc's endpoints are the same 3D point — yielding a vacuous
+   ratio of 1.0000.
+
+⚠ And **reach is a convention, not a detail**: the SIGN of some comparisons moves between the band's
+reach and `uArcTolPx`. Reach exactly 1.0 is a knife edge at edge-on (every root sits at d=1.0000).
+Any measurement in this regime quoting a single reach should be treated as unscored.
