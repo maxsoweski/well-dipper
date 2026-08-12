@@ -282,3 +282,51 @@ decision computes. §4's rejected patch asserted `w >= wMin` and §4 records why
 (`wMin = −48498` at its failing pixel, so it never fired). This is the same idea with the bound that
 binds. Gates in §7 still stand: it is a GLSL edit in a pass with no numeric coverage, and it must be
 scored at multiple azimuths on pixels the pass actually paints.
+
+### §7.2 — THE EXACT-BAND FIX IS ALSO REFUTED, and Instrument E is what caught it
+
+**2026-08-12.** Two candidate fixes for §7.1 have now been measured and both are dead. Written down
+so a third attempt does not rediscover them.
+
+**Candidate 1 — `wclip <= wMax` (a magnitude test on the front-branch guard). REFUTED.**
+The design lane measured, on INCLINED rings in the straddle regime, that the two classes do not
+merely overlap — they **invert**: the worst *legitimate* pixel reaches **5.5e2 ×** the ring's own far
+clip-w while the worst *debris* pixel bottoms out at **3.1e-2 ×**. At one pose a tolerance of 1.0
+deleted **116 of 659 real pixels and caught zero debris**. No threshold exists in either direction.
+The reconstructed-radius variant fails identically: both discriminators are functions of `adj(H)·p`,
+which has a **pole exactly on the vanishing line**, where the phantom and the far arc coincide.
+⭐ Note this is the same rock §4's rejected patch broke on, approached from the other side. Earlier
+lanes measured a clean 200×–3000× gap and were wrong because they sampled *uninclined* rings; every
+real orbit is inclined.
+
+**Candidate 2 — an exact-distance band gate. REFUTED, by Instrument E, before it shipped.**
+The premise was that Sampson is a first-order estimate that under-reports as `Cs` degenerates, so
+solving the conic exactly along the gradient normal would separate the classes. It was implemented in
+the shader and the mirror, and Instrument E showed **M0 unchanged: 1671 px, 3 rows, 557 debris,
+identical to the unfixed shader** — the gate rejected nothing, and M12/M13 survived as no-ops.
+
+Measured directly at P1 afterwards:
+
+| row | Sampson max | **exact max** | reconstructed radius ÷ R |
+|---|---|---|---|
+| 124 (real ring) | 0.429 | 0.437 | 0.9997 – 0.9999 |
+| 125 (real ring) | 0.961 | 0.922 | 1.000 – 1.001 |
+| **147 (phantom)** | 0.683 | **0.663** | **4.618 – 6.780** |
+
+⛔ **The premise is false.** The phantom's exact distance (0.66 px) is *smaller* than the real ring's
+(0.92 px). Sampson is not under-reporting: when the camera lies in the ring's plane the conic
+degenerates to a **pair of lines**, and the phantom row lies genuinely **on one of them**. Its true
+distance to the conic's zero set really is ~0.
+
+⭐ **THE STRUCTURAL CONCLUSION, which both refutations share: no test evaluated at the pixel — of
+distance to the conic, of depth, or of reconstructed radius — can separate these classes.** The
+phantom pixels are on the curve and their reconstruction is at a pole. A fix must come from
+information the per-pixel conic does not carry: candidates not yet tried are (a) bounding the drawn
+arc by parameter (θ-range of the in-front portion) rather than by screen extent, (b) splitting a
+straddling ring into two bounded sub-arcs on the CPU so the AABB is meaningful again, or (c) treating
+"camera inside the ring, near its plane" as a distinct render regime.
+
+**What this cost and what it bought.** Two fixes written and reverted; the source is byte-identical
+to `85f227f` for both files. What was bought is Instrument E (`npm run check:conic-gl`, `f6634b7`),
+which caught the second fix as a no-op in one run. §3 said validating against a twin is how §4's
+patch got refuted 3/3; this is the first time a candidate fix here was killed *before* landing.
