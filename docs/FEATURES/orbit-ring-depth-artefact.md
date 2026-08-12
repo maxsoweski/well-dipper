@@ -428,3 +428,42 @@ runs. M0 paints 633 px at the ring-centre w; M3 collapses it to 422 px at w=0. *
   shader now computes anyway — which is precisely the closed-form line∩circle solve §4 called
   "CORRECT and independently verified", arrived at from the well-conditioned side. Deliberately not
   bundled here.
+
+### §8.1 — LIVE A/B in the shipped game, with a null control
+
+Fixtures are not the game. Seed `lab-procedural-6`, camera on the moon **`Al` (p5 m2)** — Max's own
+repro body — 17 real conics, frame frozen (`_lab.freezeFrame()`).
+
+⭐ **The null control first:** two screenshots with *nothing* changed between them differ by
+**exactly 0 px**. Without that, an animated starfield, orbital motion and the retro dither make a
+raw frame diff read ~14% changed and mean nothing — measured, on the first attempt.
+
+Then toggling `uArcTolPx` between 3.0 (shipped) and 1e30 (gate disabled = the pre-fix path):
+
+| | |
+|---|---|
+| pixels changed | **10026** |
+| green **removed** | **10025** |
+| green **added** | **0** |
+| bounding box | **y 285–290** (two render rows at pixelScale 3), **x 0–1670 — full width** |
+
+Max's sentence was *"the faint green line straight across the upper-fifth of the screen."* Nothing
+else in the frame moved: the real orbit curve through Al is untouched. 172 fps median (p95 6.4 ms),
+console clean. `scratchpad/phantom-ab-crop.png` is the before/after band.
+
+Oracle-audited over the live 17-ring scene at three framings (planet p5 at 8 and 40 radii, moon Al
+at 8): **0 real px dropped, 0 phantom kept.**
+
+⚠ **Two live-driving traps, both of which produced confident wrong readings this session.**
+1. **`resolveBody` ignores `index` and silently resolves `p=0`.** `{kind:'planet', index:5}` returns
+   *planet 0* and reports `ok`. Every framing taken that way measured the innermost planet, showed
+   no phantom, and looked like the gate doing nothing. Use `{kind:'planet', p:5}` /
+   `{kind:'moon', p:5, m:2}`.
+2. **`uArcTolPx` is rewritten from the band knobs every frame** (`update()` — deliberate: the CPU
+   owns it and it cannot drift from the band). A plain assignment to the uniform is reverted before
+   the next draw. To A/B it, redefine the property; then restore it.
+
+Also worth keeping: at the `Al` pose ring #5's `wMax` is **3**, i.e. essentially the whole circle is
+behind the camera — correct, because a circle lies entirely on the centre's side of its own tangent,
+so standing *on* a ring and looking radially outward puts all of it behind you. Ring #5 legitimately
+paints **zero** pixels there, and the 1114 it was painting were **all** phantom.

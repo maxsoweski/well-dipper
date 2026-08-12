@@ -4,6 +4,62 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> ## ⭐⭐ 2026-08-12 — THE PHANTOM RING IS ROOT-CAUSED AND FIXED (`945f08d` + `1a3c1e3`). VERIFIED_PENDING_MAX.
+>
+> ⛔ **SUPERSEDES the 2026-08-11 entry below.** That fix (`03cb1dd`) is real and independent — 13
+> conics entirely behind the camera were carrying the "unbounded" sentinel — but the phantom
+> **survived it**. Three fixes were then proposed and refuted (artefact doc §7.2). This is the
+> fourth, and the first that names the mechanism.
+>
+> **Root cause, one identity.** `Cs` is built from `adj(H)`. As the camera nears a ring's plane
+> `adj(H)` collapses to rank 1, `adj(H) ≈ u·vᵀ`, so
+> `Cs ≈ (u₀²+u₁²−R²u₂²)·v·vᵀ` — a **double line**, whose zero set `vᵀp = 0` is exactly the ring
+> plane's **vanishing line**. The band paints that line. The phantom pixels are not near-misses;
+> they are *on the conic the CPU handed the shader*, which is why §7.2 measured the phantom's true
+> distance to it (0.663 px) **smaller** than the real ring's (0.922 px).
+>
+> ⛔ **And that is why all three gates were blind at once.** The reconstruction is
+> `adj(H)·p = u(vᵀp)`, **zero on that same line** — a pole. Clip-w magnitude, reconstructed radius
+> and exact distance-to-conic are three readings of one degenerate operator taken at its pole. So
+> is `planeRatio`, the "debris" metric: it read **1.2 on phantom pixels** at low camera height and
+> **2.2 on genuine ring pixels** at the bounded edge-on control. It is a signal, not evidence.
+>
+> **The fix** is §7.2's untried direction (a), on the **forward** map — perfectly conditioned exactly
+> where the inverse collapses, the same property `axisExtentInto` already relies on. `screen_x(θ) =
+> px` is *linear in (cos θ, sin θ)*: closed-form root pair, **one sqrt, no trig, no inverse, no
+> `adj(H)`**. Each root is a real point *of the circle* whose clip w is evaluated forward. Both
+> screen axes, minimised. `Hfwd` rides texture rows 8–9 (2 texelFetch — its third row is exactly
+> `hScale·rowW`, already fetched).
+>
+> **Measured**, against a brute-force forward-arc oracle with no reconstruction in it, 30 poses
+> (radius 0.18 → 67622, four azimuths, two inclinations, heights 1 → 200, five all-legitimate
+> controls): **27625 real px max 1.525 px · 6197 phantom px min 6.439 px · 0 in between.**
+> `uArcTolPx = 3.0`, scale-free by construction.
+>
+> ⭐ **LIVE A/B, frozen frame, seed `lab-procedural-6`, camera on the moon `Al` (p5 m2) — Max's own
+> repro.** Two shots with nothing changed between them differ by **exactly 0 px**, so the frame is
+> genuinely static and the rest is the gate alone. Toggling it: **10026 px change, every one green
+> REMOVED, zero added**, confined to **y 285–290 (two render rows) spanning x 0–1670, the full
+> width**. That is Max's sentence — *"the faint green line straight across the upper-fifth of the
+> screen"* — and nothing else in the frame moves. 172 fps median, console clean.
+> Oracle-audited in the live 17-ring scene at three framings: **0 real px dropped, 0 phantom kept.**
+>
+> **Instrument E** (shipped GLSL, not the twin): P1/P6 `1671 px / 3 rows / 557 debris` →
+> `1114 / 2 / 0`; P2–P5 unchanged; **16/16 mutants killed**, incl. M14 (tolerance ×0.05 → real ring
+> erodes, so the fixtures can see over-tightening) and a new **P7** — camera exactly in the plane —
+> which closes a hole older than this fix: nothing exercised the `wclip = ring centre` fallback that
+> keeps an edge-on ring from **vanishing** (`d7db3a3`), so `M3-drop-frontguard` had started
+> surviving once the arc gate took over the coverage half of that guard's job.
+>
+> ▶ **NEEDS MAX'S UAT.** Park: seed `lab-procedural-6`, glide to the outermost planet's moon `Al`,
+> look away from the star. The faint full-width line should be gone; the real orbit curves must not
+> have thinned or shortened.
+>
+> ⚠ **STILL OPEN, deliberately not bundled:** the §1–§4 **depth** artefact (ring drawn through the
+> planet). The arc solve now makes it cheap — it already computes the exact θ of the nearest
+> in-front circle point, which is the closed-form line∩circle solve §4 called "CORRECT and
+> independently verified", reached from the well-conditioned side.
+
 > ## ⭐⭐ 2026-08-11 — THE PHANTOM RING IS FOUND AND FIXED (`03cb1dd` + `1e4c7c8`). CARRIED OPEN ITEM 1 IS CLOSED.
 >
 > ⛔ **SUPERSEDES the carried reading "the phantom is a REAL conic rendered wrongly, not a spurious
