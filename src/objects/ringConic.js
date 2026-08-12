@@ -29,9 +29,44 @@
 // the projection is GENUINELY unbounded (a hyperbola that really does sweep
 // off-screen) and the ±CONIC_EXTENT_UNBOUNDED sentinel disables the bound.
 //
+// FRONT-ARC GATE (orbit-ring-phantom-2026-08-12). The extent bound above closes
+// the BOUNDED degeneracy. It cannot close the STRADDLING one, and that is not a
+// gap in the bound — a ring the camera is inside really does project unbounded.
+// The defect there is subtler: Cs is built from adj(H), and as the camera nears
+// the ring's plane adj(H) collapses to rank 1, adj(H) ≈ u·vᵀ. Then
+//   Cs = adj(H)ᵀ·diag(1,1,−R²)·adj(H) ≈ (u₀² + u₁² − R²u₂²)·v·vᵀ
+// — a DOUBLE LINE, and its zero set vᵀp = 0 is precisely the ring plane's
+// VANISHING LINE. So the band paints the vanishing line: those pixels are not
+// near-misses, they are exactly on the conic the CPU handed the shader.
+//
+// ⛔ AND NO GUARD BUILT ON adj(H) CAN SEE IT. The reconstruction is
+// adj(H)·p = u·(vᵀp), which is ZERO on that same line — a pole. Distance to the
+// conic, reconstructed radius and clip-w magnitude are all functions of it, and
+// all three were measured dead (artefact doc §7.2: on inclined rings the legit
+// and debris classes INVERT under any w bound; the phantom's exact distance to
+// the conic, 0.663 px, is SMALLER than the real ring's 0.922 px).
+//
+// The information survives in the FORWARD map, which is perfectly conditioned
+// exactly where the inverse collapses — the same reason axisExtentInto solves
+// the extent forward. Along the circle,
+//   screen_x(θ) = (R(h0 cosθ + h1 sinθ) + h2) / (R(w0 cosθ + w1 sinθ) + w2)
+// so screen_x(θ) = px is LINEAR in (cosθ, sinθ): A cosθ + B sinθ + C = 0, which
+// with cos²+sin² = 1 has a closed-form pair of roots — one sqrt, no trig, no
+// inverse, no adj(H). Each root is a REAL point of the circle whose clip w is
+// evaluated FORWARD, so "is this point in front of the camera" is finally a
+// well-conditioned question. frontArcDistPx returns the screen distance to the
+// nearest IN-FRONT circle point; the shader rejects a pixel beyond a few px of
+// one. Measured over 30 poses (radius 0.18 → 67622, four azimuths, two ring
+// inclinations, camera heights 1 → 200, plus five all-legitimate controls):
+// every real pixel scores ≤ 1.525 px, every phantom pixel ≥ 6.439 px, nothing
+// in between. See docs/FEATURES/orbit-ring-depth-artefact.md §8.
+//
 // Matrix convention: Cs, Hinv are ROW-MAJOR flat length-9 (M[r*3+c]); rowW is
 // length-3. Cs is symmetric so its row/column order is moot for pᵀCs p; Hinv is
 // not, so frontBranchOK reads it row-major to match the shader's `uHinv * p`.
+// Hfwd is the FORWARD homography, row-major, max-abs normalized (hScale is the
+// factor applied, so Hfwd row 2 === hScale·rowW — the shader rebuilds that row
+// from the rowW it already fetched instead of spending a texel on it).
 
 // Module scratch — all intermediates are preallocated so the hot path (39-64
 // builds/frame) allocates nothing per call (R5, GC-churn avoidance). inv3's
@@ -50,6 +85,32 @@ const _ext = new Float64Array(2); // one axis' [min,max] screen extent
  * sweeps off-screen). Packed as the bounds so the extent test becomes a no-op.
  */
 export const CONIC_EXTENT_UNBOUNDED = 1e30;
+
+/**
+ * Slack added to the band's own reach to form the front-arc tolerance:
+ *   arcTolPx = pixelWidth·0.5 + featherPx + ARC_TOLERANCE_MARGIN_PX
+ * At shipping defaults (1.0 / 0.5) that is 3.0 px.
+ *
+ * SIZED FROM MEASUREMENT, not taste. frontArcDistPx minimizes along a SCREEN
+ * AXIS, not along the curve's normal, so it can only ever OVERSTATE the true
+ * distance — by at most √2 for a straight curve (min over both axes of
+ * d/|cos α| and d/|sin α|). A pixel the band legitimately paints is within
+ * 0.5 + 0.5 = 1.0 px of the curve, so its worst honest score is ~1.41, and the
+ * measured worst over 30 poses is 1.525. The nearest phantom pixel measured
+ * 6.439. 3.0 sits 2× above the worst real and 2.1× below the nearest phantom —
+ * near the geometric mean of the gap, which is where a threshold belongs when
+ * both ends must survive poses nobody has tried yet.
+ *
+ * ⚠ It is a SCREEN-PIXEL quantity on both sides, so it is scale-free by
+ * construction: the identical margins were measured at ring radius 0.18 and at
+ * 67622. Do not rescale it per ring.
+ */
+export const ARC_TOLERANCE_MARGIN_PX = 2.0;
+
+/** The shader's uArcTolPx, in one place so CPU and GLSL cannot drift. */
+export function arcTolerancePx(pixelWidth, featherPx) {
+  return pixelWidth * 0.5 + featherPx + ARC_TOLERANCE_MARGIN_PX;
+}
 
 // ADJUGATE, not inverse (row-major 3×3 -> `out`, max-abs normalized).
 //
@@ -188,12 +249,24 @@ export function buildRingConic(pvm, radius, W, H, out) {
 
   const res = out || { Cs: new Float64Array(9), Hinv: new Float64Array(9), rowW: new Float64Array(3) };
   if (!res.bounds) res.bounds = new Float64Array(4);
+  if (!res.Hfwd) res.Hfwd = new Float64Array(9);
   const inv = 1 / mx; // R1: normalize so max|Cs|=1 → every entry survives float32
   for (let k = 0; k < 9; k++) {
     res.Cs[k] = _Cs[k] * inv;
     res.Hinv[k] = _Hi[k];
   }
   res.rowW[0] = _rowW[0]; res.rowW[1] = _rowW[1]; res.rowW[2] = _rowW[2];
+
+  // FORWARD homography for the front-arc gate, max-abs normalized so the float32
+  // pack keeps its digits. Every use is scale-invariant — screen coords are the
+  // RATIO of its rows, and the gate only reads the SIGN of the clip w — so the
+  // normalization is free. hScale is kept because row 2 of Hfwd is exactly
+  // hScale·rowW, which is how the shader rebuilds it without a third texel.
+  let hmx = 0;
+  for (let k = 0; k < 9; k++) { const av = Math.abs(_Hm[k]); if (av > hmx) hmx = av; }
+  const hs = hmx > 0 && isFinite(hmx) ? 1 / hmx : 0;
+  for (let k = 0; k < 9; k++) res.Hfwd[k] = _Hm[k] * hs;
+  res.hScale = hs;
 
   // Extent bound. clip-w along the circle is w(θ) = radius·(H20 cosθ + H21 sinθ)
   // + H22, whose minimum is H22 − radius·hypot(H20,H21) in closed form. Positive
@@ -275,6 +348,72 @@ export function sampsonDistancePx(Cs, px, py) {
   return Math.abs(v) / Math.max(grad, 1e-12);
 }
 
+// One candidate root of the axis solve: forward-project the circle point at
+// (cosθ,sinθ) = cs and return its screen distance to the pixel — or Infinity if
+// that point is BEHIND the camera, which is the whole purpose. Unlike
+// frontBranchOK's sign test on a reconstructed point, w here is evaluated on a
+// point known to be ON the circle, so it stays meaningful when adj(H) does not.
+function arcPointDistPx(Hfwd, radius, px, py, c, s) {
+  const X = radius * c, Z = radius * s;
+  const w = Hfwd[6] * X + Hfwd[7] * Z + Hfwd[8];
+  if (!(w > 0)) return Infinity;
+  const sx = (Hfwd[0] * X + Hfwd[1] * Z + Hfwd[2]) / w;
+  const sy = (Hfwd[3] * X + Hfwd[4] * Z + Hfwd[5]) / w;
+  return Math.hypot(sx - px, sy - py);
+}
+
+// Solve screen_axis(θ) = the pixel's coordinate on that axis. A cosθ + B sinθ +
+// C = 0 with cos² + sin² = 1 → the closed-form root pair below (verify: A·c +
+// B·s = −C and c² + s² = 1 both fall out identically). ONE sqrt, no trig.
+function arcAxisDistPx(Hfwd, radius, px, py, axis) {
+  const h0 = axis === 0 ? Hfwd[0] : Hfwd[3];
+  const h1 = axis === 0 ? Hfwd[1] : Hfwd[4];
+  const h2 = axis === 0 ? Hfwd[2] : Hfwd[5];
+  const t = axis === 0 ? px : py;
+  const A = radius * (h0 - t * Hfwd[6]);
+  const B = radius * (h1 - t * Hfwd[7]);
+  const C = h2 - t * Hfwd[8];
+  const M2 = A * A + B * B;
+  if (!(M2 > 0)) return Infinity;
+  const disc = M2 - C * C;
+  if (disc >= 0) {
+    const sq = Math.sqrt(disc), iv = 1 / M2;
+    return Math.min(
+      arcPointDistPx(Hfwd, radius, px, py, (-A * C + B * sq) * iv, (-B * C - A * sq) * iv),
+      arcPointDistPx(Hfwd, radius, px, py, (-A * C - B * sq) * iv, (-B * C + A * sq) * iv),
+    );
+  }
+  // No root on this axis: this screen row/column misses the curve outright.
+  // Clamp to the θ that comes CLOSEST (the curve's extremum on this axis)
+  // instead of hard-rejecting, so a pixel one step outside a vertical or
+  // horizontal tangency — where the band legitimately still paints its feather —
+  // is scored by its real distance. The other axis is well-conditioned there and
+  // the min takes it anyway; this only keeps the degenerate axis honest.
+  const M = Math.sqrt(M2), sg = C >= 0 ? -1 : 1;
+  return arcPointDistPx(Hfwd, radius, px, py, sg * A / M, sg * B / M);
+}
+
+/**
+ * Front-arc distance in render pixels — byte-mirror of the fragment shader's
+ * front-arc gate, and the ONLY test here that does not read adj(H).
+ *
+ * Returns the screen distance from (px,py) to the nearest point of the part of
+ * the ring circle that is IN FRONT of the camera, minimized over both screen
+ * axes. Because each axis solve is a CONSTRAINED minimum it can only overstate
+ * the true distance (bounded by √2 for a locally straight curve) — it can never
+ * understate it, so it cannot silently keep a phantom pixel.
+ *
+ * @param {Float64Array|Float32Array|number[]} Hfwd forward homography, row-major length-9
+ * @param {number} radius ring radius in the ring's local frame
+ * @returns {number} px distance to the nearest in-front circle point (Infinity if none)
+ */
+export function frontArcDistPx(Hfwd, radius, px, py) {
+  return Math.min(
+    arcAxisDistPx(Hfwd, radius, px, py, 0),
+    arcAxisDistPx(Hfwd, radius, px, py, 1),
+  );
+}
+
 /**
  * Front-branch guard: reconstruct the plane point XZ = (Hinv·p).xy / (Hinv·p).z
  * and require its clip w > 0 (in front of the camera). Rejects the behind-camera
@@ -288,6 +427,12 @@ export function sampsonDistancePx(Cs, px, py) {
  * point-at-infinity and w collapses to 0. The shader then falls back to the ring
  * centre's clip w (= rowW[2] > wMin > 0), so the ring is depth-sorted instead of
  * vanishing — which is exactly what Max ruled against.
+ *
+ * ⚠ This is a SIGN test on a reconstruction, so it is blind in exactly the
+ * regime frontArcDistPx exists for: where adj(H) is rank-1 the reconstructed w
+ * is numerically arbitrary and a 190×-too-far point still reports positive.
+ * Kept because the wclip it produces is what the depth write needs; it is no
+ * longer the last word on coverage.
  * @returns {boolean}
  */
 export function frontBranchOK(Hinv, rowW, px, py, extentBounded = false) {

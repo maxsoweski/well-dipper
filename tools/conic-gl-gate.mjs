@@ -78,7 +78,7 @@ function build(name, rings, camPos, lookAt) {
       uCount: u.uCount.value, uPixelWidth: u.uPixelWidth.value, uFeatherPx: u.uFeatherPx.value,
       uAngScale: u.uAngScale.value, uAngCutoffPx: u.uAngCutoffPx.value,
       uLogDepthBufFC: u.uLogDepthBufFC.value,
-      uExactBandPx: u.uExactBandPx ? u.uExactBandPx.value : 0,
+      uArcTolPx: u.uArcTolPx ? u.uArcTolPx.value : 0,
     },
   };
 }
@@ -125,6 +125,16 @@ const CASES = [
     [{ radius: R, color: 0x00ff00, matrixWorld: tilt(25) }],
     new THREE.Vector3(R - 116, 12.95, 0).applyMatrix4(tilt(25)).toArray(),
     new THREE.Vector3(R + 400, 0, 0).applyMatrix4(tilt(25)).toArray()),
+  // P7 — M3's missing fixture, and the one that pins Max's no-vanish ruling (d7db3a3).
+  // Camera EXACTLY in the ring's plane and OUTSIDE it: wMin > 0 so the extent AABB is live, and
+  // adj(H) is EXACTLY rank-1 so every pixel reconstructs to the same point at infinity and the
+  // recovered wclip collapses. That is the ONLY regime in which the shader's degenerate fallback
+  // (wclip = the ring centre's clip w, so the ring is depth-sorted instead of VANISHING) actually
+  // runs. Without this pose, deleting the front-branch guard changes nothing measurable — which is
+  // how M3 came to survive once the front-arc gate took over the COVERAGE half of that guard's job.
+  // The height is exactly 0, not nearly 0: at 0.9 the reconstruction is still finite enough to pass.
+  build('P7-exact-edgeon-bounded (M3 fixture)',
+    [{ radius: R, color: 0x00ff00 }], [R * 2.2, 0, 0], [0, 0, 0]),
 ];
 
 // ── mutation battery ────────────────────────────────────────────────────────────────────────────
@@ -142,10 +152,15 @@ const MUT = [
   ['M9-Hinv-rowswap', (s) => s.replace('vec3 q = vec3(dot(hR0, p), dot(hR1, p), dot(hR2, p));', 'vec3 q = vec3(dot(hR1, p), dot(hR0, p), dot(hR2, p));')],
   ['M10-argmax-flip', (s) => s.replace('if (wclip < bestW * (1.0 - 0.005000)) {', 'if (wclip > bestW * (1.0 - 0.005000)) {')],
   ['M11-angfade-off', (s) => s.replace('float ang = angularFade(t2.y, t2.z);', 'float ang = 1.0;')],
-  // M12/M13 cover the EXACT BAND GATE itself. Until it lands they are no-ops and are reported as
-  // NOT-APPLICABLE rather than as passes — a gate that does not cover the fix is where §4 was.
-  ['M12-drop-exactband', (s) => s.replace(/if \(min\(rootA, rootB\) > uExactBandPx\) continue;/, '')],
-  ['M13-exactband-x10', (s) => s.replace('if (min(rootA, rootB) > uExactBandPx) continue;', 'if (min(rootA, rootB) > uExactBandPx * 10.0) continue;')],
+  // M12-M16 cover the FRONT-ARC GATE itself (orbit-ring-phantom-2026-08-12). A gate that does not
+  // cover the fix is where §4 was, so the fix does not land without these. M14 is the one that
+  // matters most in the OTHER direction: it makes the tolerance far too TIGHT, so if the fixture
+  // set cannot see erosion of legitimate far-field ring, M14 survives and says so.
+  ['M12-drop-arcgate', (s) => s.replace(/\n *if \(frontArcDist\([\s\S]*?continue;/, '')],
+  ['M13-arcgate-x10', (s) => s.replace('p.xy) > uArcTolPx) continue;', 'p.xy) > uArcTolPx * 10.0) continue;')],
+  ['M14-arcgate-x0.05', (s) => s.replace('p.xy) > uArcTolPx) continue;', 'p.xy) > uArcTolPx * 0.05) continue;')],
+  ['M15-arc-frontcheck-off', (s) => s.replace('if (!(w > 0.0)) return 1.0e30;', 'if (false) return 1.0e30;')],
+  ['M16-arc-single-axis', (s) => s.replace(/return min\(arcAxisDist\(fh0, fh1, fhw, radius, pix, 0\),\s*\n\s*arcAxisDist\(fh0, fh1, fhw, radius, pix, 1\)\);/, 'return arcAxisDist(fh0, fh1, fhw, radius, pix, 0);')],
 ];
 
 const applied = MUT.map(([n, f]) => {
@@ -196,7 +211,7 @@ function render(prog,C){
  gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,dtex);
  gl.uniform1i(gl.getUniformLocation(prog,'uData'),0);
  gl.uniform1i(gl.getUniformLocation(prog,'uCount'),C.uni.uCount);
- for(const k of ['uPixelWidth','uFeatherPx','uAngScale','uAngCutoffPx','uLogDepthBufFC','uExactBandPx'])
+ for(const k of ['uPixelWidth','uFeatherPx','uAngScale','uAngCutoffPx','uLogDepthBufFC','uArcTolPx'])
   {const L=gl.getUniformLocation(prog,k);if(L)gl.uniform1f(L,C.uni[k]);}
  let lp=gl.getAttribLocation(prog,'position');gl.enableVertexAttribArray(lp);
  gl.bindBuffer(gl.ARRAY_BUFFER,vb);gl.vertexAttribPointer(lp,3,gl.FLOAT,false,0,0);
@@ -243,13 +258,12 @@ document.getElementById('out').textContent='B64:'+btoa(unescape(encodeURICompone
 </script></body>`;
 
 // ── run ─────────────────────────────────────────────────────────────────────────────────────────
-const noops = applied.filter((m) => m.noop && !/^M1[23]-/.test(m.name));
+const noops = applied.filter((m) => m.noop);
 if (noops.length) {
   console.error('FATAL: mutation is a NO-OP (the shader text moved under it): ' + noops.map((m) => m.name).join(', '));
   console.error('A no-op mutant is a silent hole — fix the replace() target, do not ignore it.');
   process.exit(1);
 }
-const exactBandLanded = applied.some((m) => /^M12-/.test(m.name) && !m.noop);
 
 if (!fs.existsSync(CHROME)) {
   console.error(`FATAL: Chrome not found at ${CHROME}.`);
@@ -294,7 +308,7 @@ console.log('\n── INSTRUMENT E · shipped-shader numeric coverage ───�
 console.log(`  executes : CONIC_FRAGMENT_SHADER, imported from src/objects/OrbitConicField.js`);
 console.log(`  context  : WebGL2 via ${CHROME} (ANGLE/SwiftShader), RGBA32F + DEPTH_COMPONENT32F FBO`);
 console.log(`  target   : ${W}x${H} (the game's sceneTarget at pixelScale 3)`);
-console.log(`  exact-band gate present in shader: ${exactBandLanded ? 'YES' : 'NO (M12/M13 not applicable yet)'}`);
+console.log(`  front-arc gate present in shader  : YES (M12-M16 cover it)`);
 
 // A mutant is KILLED if it moves any measured quantity at ANY pose, vs M0 at that pose.
 const killedBy = new Map();
@@ -320,8 +334,7 @@ for (const c of res.results) {
   }
 }
 
-const expected = applied.map((m) => m.name).filter((n) => n !== 'M0-ORIGINAL')
-  .filter((n) => exactBandLanded || !/^M1[23]-/.test(n));
+const expected = applied.map((m) => m.name).filter((n) => n !== 'M0-ORIGINAL');
 const survivors = expected.filter((n) => !killedBy.has(n));
 
 console.log('\n── VERDICT ─────────────────────────────────────────────────────────────────────────────');

@@ -330,3 +330,101 @@ straddling ring into two bounded sub-arcs on the CPU so the AABB is meaningful a
 to `85f227f` for both files. What was bought is Instrument E (`npm run check:conic-gl`, `f6634b7`),
 which caught the second fix as a no-op in one run. §3 said validating against a twin is how §4's
 patch got refuted 3/3; this is the first time a candidate fix here was killed *before* landing.
+
+---
+
+## §8 — FIXED. The forward map separates what adj(H) cannot
+
+**2026-08-12.** §7.2 closed with a structural conclusion: *no test evaluated at the pixel — of
+distance to the conic, of depth, or of reconstructed radius — can separate these classes,* and
+named three untried directions. This is direction **(a)**, bounding by the circle's own parameter,
+in the one form that costs nothing: solved per pixel, in closed form, on the **forward** map.
+
+### The root cause, stated exactly
+
+`Cs = adj(H)ᵀ·diag(1,1,−R²)·adj(H)`. As the camera approaches the ring's plane `adj(H)` collapses
+to rank 1, `adj(H) ≈ u·vᵀ`, and therefore
+
+```
+Cs ≈ (u₀² + u₁² − R²u₂²) · v·vᵀ
+```
+
+— a **double line**, whose zero set `vᵀp = 0` is precisely the ring plane's **vanishing line**.
+
+That single identity explains every measurement in §7–§7.2 at once. The phantom pixels are not
+near-misses of the band; they are *exactly on the conic the CPU handed the shader*, which is why
+their true distance to it (0.663 px) came out **smaller** than the real ring's (0.922 px) and why
+the exact-band gate rejected nothing. And the reconstruction is `adj(H)·p = u·(vᵀp)`, which is
+**zero on that same line** — so clip-w magnitude, reconstructed radius and Sampson distance are
+three readings of one degenerate operator, taken at its pole. §7.2's conclusion was right, and this
+is the reason it was right.
+
+⛔ **The corollary matters more than the fix: `planeRatio` is a function of `adj(H)·p` too.** The
+first version of this session's probe used it to label the classes and got the labels *inverted* at
+low camera height (at h=4 it reads 1.2 on pixels that are 6+ px off the ring; at the bounded
+edge-on control it reads 2.2 on pixels that are genuinely ON it). Instrument E still reports it as
+`debris`/`worstPR`, which is fine as a *signal* — but it is not admissible as ground truth in this
+regime, and one round was spent on that.
+
+### The fix
+
+`ringConic.js` `frontArcDistPx`, mirrored in `CONIC_FRAGMENT_SHADER` as `frontArcDist`. Along the
+circle, `screen_x(θ) = (R(h0 cosθ + h1 sinθ) + h2) / (R(w0 cosθ + w1 sinθ) + w2)`, so setting it
+equal to the pixel's x is **linear in (cosθ, sinθ)**: `A cosθ + B sinθ + C = 0`, which with
+`cos² + sin² = 1` has a closed-form root pair — **one sqrt, no trig, no inverse, no adj(H)**. Each
+root is a real point *of the circle* whose clip w is evaluated forward, so "is this point in front
+of the camera" is finally a well-conditioned question. Solved on both screen axes and minimised, so
+a vertical or horizontal tangency stays covered. The forward map is exactly conditioned where the
+inverse collapses — the same property `axisExtentInto` already relies on to solve the extent.
+
+`buildRingConic` returns `Hfwd` (max-abs normalized) + `hScale`; the field packs **rows 8–9**. Only
+Hfwd's first two rows ride the texture: the third is exactly `hScale·rowW`, already fetched at row
+6, so the gate costs **2 texelFetch** and cannot desync from `rowW`. The gate runs last, after the
+band, extent and front-branch rejects, so it is paid only on pixels that survived everything else
+(~1% of the frame).
+
+### Measured
+
+Oracle = brute-force min screen distance to the **in-front arc**, forward projection only, no
+reconstruction anywhere in it. Over **30 poses** — ring radius 0.18 → 67622, four azimuths, two
+inclinations, camera heights 1 → 200, plus five all-legitimate controls:
+
+| | pixels | closed-form distance |
+|---|---|---|
+| genuinely on the visible ring | 27625 | **max 1.525 px** |
+| phantom | 6197 | **min 6.439 px** |
+| in between | **0** | — |
+
+`uArcTolPx = pixelWidth·0.5 + featherPx + 2.0` = **3.0** at shipping defaults: 2× above the worst
+real pixel, 2.1× below the nearest phantom, near the geometric mean of the gap. It is a screen-px
+quantity on both sides, so it is scale-free by construction — the identical margins were measured
+at radius 0.18 and at 67622. The closed form is an axis-*constrained* minimum, so it can only ever
+**overstate** the true distance (0 violations measured): it cannot silently keep a phantom.
+
+### Instrument E — the GLSL, not the twin
+
+At **P1** and **P6** the shipped shader goes `1671 px / 3 rows / 557 debris` → **`1114 px / 2 rows /
+0 debris`**. P2–P5 unchanged. Five new mutants cover the gate: M12 drops it, M13 loosens it ×10
+(phantom returns), **M14 tightens it ×0.05 (real ring erodes — the direction §7 gate-risk 2 warned
+about, now visible)**, M15 disables the in-front check inside it, M16 drops the second axis.
+
+⭐ **A seventh pose had to be added, and it closed a hole that predates this fix.** With the arc
+gate taking over the *coverage* half of the front-branch guard's job, `M3-drop-frontguard` began
+surviving — no fixture exercised the guard's other half, the `wclip = ring centre` fallback that
+exists so an edge-on ring is depth-sorted instead of **vanishing** (Max's `d7db3a3` ruling). P3 sits
+at height 0.9, where the reconstruction is still finite. **P7 puts the camera exactly in the plane**
+(height 0, outside the ring, so the extent bound stays live) — the only regime where that fallback
+runs. M0 paints 633 px at the ring-centre w; M3 collapses it to 422 px at w=0. **16/16 killed.**
+
+### What this does NOT change
+
+- **The fade ruling stands** (§7.1). Every one of the 633 painted px at the bounded edge-on control
+  survives the gate; the ring does not disappear on approach.
+- **The `d0b5170` carve-out stands.** A straddling ring's projection really is unbounded and its
+  AABB stays disabled. The gate does not re-bound it; it asks a different question.
+- **The §1–§4 DEPTH artefact is still open.** This pass fixes which pixels are painted, not the
+  `w` written for them. ⭐ But it is now cheap: the arc solve already produces the exact θ of the
+  nearest in-front circle point, so the true ring-point depth is a few flops from a value the
+  shader now computes anyway — which is precisely the closed-form line∩circle solve §4 called
+  "CORRECT and independently verified", arrived at from the well-conditioned side. Deliberately not
+  bundled here.

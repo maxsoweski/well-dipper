@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildRingConic, CONIC_EXTENT_UNBOUNDED } from './ringConic.js';
+import { buildRingConic, CONIC_EXTENT_UNBOUNDED, arcTolerancePx } from './ringConic.js';
 
 /**
  * OrbitConicField — one fullscreen pass that paints every orbit ring's
@@ -57,12 +57,20 @@ export const CONIC_MAX = 64;
 //   row 2: Cs[8], radius, camDist, active
 //   row 3: Hinv[0..3]              row 6: rowW[0..2], bMaxY
 //                                   row 7: color.rgb, alpha
+//   row 8: Hfwd[0..3]              row 9: Hfwd[4..5], hScale, (spare)
 // (Cs 3 texels + Hinv 3 texels + rowW 1 texel + color/alpha 1 texel = 8; the
 // radius/camDist/active scalars ride the 3 spare slots of the Cs group's last
 // texel, so the plan's 8-texel grouping is honored exactly.) The ring's screen
 // AABB (ringConic.js `bounds`) rides the 4 remaining spare slots of the Hinv/rowW
 // texels — no extra row, no extra texelFetch, since rows 5 and 6 are already read.
-export const CONIC_TEX_ROWS = 8;
+//
+// ⭐ ROWS 8-9 ARE THE FORWARD MAP (orbit-ring-phantom-2026-08-12), and they are
+// the ONE thing here that is not derived from adj(H). Only Hfwd's first two ROWS
+// ride the texture: its third row is exactly hScale·rowW by construction, and
+// rowW is already fetched at row 6 — so the front-arc gate costs 2 texelFetch,
+// not 3, and cannot desync from rowW. See ringConic.js's FRONT-ARC GATE note for
+// why the forward map is the only well-conditioned object in this regime.
+export const CONIC_TEX_ROWS = 10;
 
 // Angular-size fade band: a ring is fully visible (fade 1) once its projected
 // radius reaches uAngCutoffPx render px, and fades smoothly to 0 as it collapses
@@ -157,6 +165,7 @@ uniform float uFeatherPx;
 uniform float uAngScale;       // pixelsPerRadian = (viewportH/2)/tan(fov/2)
 uniform float uAngCutoffPx;    // projected-radius cutoff (render px)
 uniform float uLogDepthBufFC;  // 2/log2(far+1)
+uniform float uArcTolPx;       // front-arc gate tolerance (render px) — ringConic.arcTolerancePx
 
 out vec4 outColor;
 
@@ -165,6 +174,52 @@ out vec4 outColor;
 float angularFade(float radius, float camDist) {
   float projPx = (radius / max(camDist, 1e-9)) * uAngScale;
   return smoothstep(uAngCutoffPx * ${ANGULAR_FADE_LO_FRAC.toFixed(6)}, uAngCutoffPx, projPx);
+}
+
+// ── FRONT-ARC GATE ── byte-mirror of ringConic.js frontArcDistPx. The only test
+// in this shader that does not read adj(H), which is the entire point: where the
+// camera nears a ring's plane adj(H) collapses to rank 1, Cs degenerates to the
+// plane's VANISHING LINE, and every adj(H)-derived quantity sits on a pole there.
+// The forward map does not.
+
+// One root: forward-project the circle point at (cos,sin)=cs. Returns a huge
+// value when that point is BEHIND the camera — w is evaluated on a point known
+// to lie ON the circle, so it stays meaningful when the reconstruction does not.
+float arcPointDist(vec3 fh0, vec3 fh1, vec3 fhw, float radius, vec2 pix, vec2 cs) {
+  vec3 q = vec3(radius * cs.x, radius * cs.y, 1.0);
+  float w = dot(fhw, q);
+  if (!(w > 0.0)) return 1.0e30;
+  return length(vec2(dot(fh0, q), dot(fh1, q)) / w - pix);
+}
+
+// Solve screen_axis(theta) == the pixel's coordinate on that axis. Linear in
+// (cos,sin) -> A c + B s + C = 0 with c^2+s^2 = 1 -> closed-form root pair.
+// ONE sqrt, no trig, no inverse.
+float arcAxisDist(vec3 fh0, vec3 fh1, vec3 fhw, float radius, vec2 pix, int axis) {
+  vec3 h = axis == 0 ? fh0 : fh1;
+  float t = axis == 0 ? pix.x : pix.y;
+  float A = radius * (h.x - t * fhw.x);
+  float B = radius * (h.y - t * fhw.y);
+  float C = h.z - t * fhw.z;
+  float M2 = A * A + B * B;
+  if (!(M2 > 0.0)) return 1.0e30;
+  float disc = M2 - C * C;
+  if (disc >= 0.0) {
+    float sq = sqrt(disc), iv = 1.0 / M2;
+    return min(arcPointDist(fh0, fh1, fhw, radius, pix, vec2((-A * C + B * sq) * iv, (-B * C - A * sq) * iv)),
+               arcPointDist(fh0, fh1, fhw, radius, pix, vec2((-A * C - B * sq) * iv, (-B * C + A * sq) * iv)));
+  }
+  // No root on this axis: clamp to the theta that comes closest (the curve's
+  // extremum on this axis) rather than hard-rejecting, so the band's own feather
+  // survives a vertical/horizontal tangency. The other axis is well-conditioned
+  // there and the min takes it anyway.
+  float M = sqrt(M2), sg = C >= 0.0 ? -1.0 : 1.0;
+  return arcPointDist(fh0, fh1, fhw, radius, pix, vec2(sg * A / M, sg * B / M));
+}
+
+float frontArcDist(vec3 fh0, vec3 fh1, vec3 fhw, float radius, vec2 pix) {
+  return min(arcAxisDist(fh0, fh1, fhw, radius, pix, 0),
+             arcAxisDist(fh0, fh1, fhw, radius, pix, 1));
 }
 
 void main() {
@@ -227,6 +282,25 @@ void main() {
       wclip = t6.z;
       if (wclip <= 0.0) continue;
     }
+
+    // FRONT-ARC REJECT (orbit-ring-phantom-2026-08-12). The three gates above are
+    // ALL functions of adj(H), and for a ring the camera is inside and near the
+    // plane of, all three are blind at once: the band's Cs has degenerated to the
+    // plane's vanishing LINE (so the phantom really is on the curve — measured
+    // exact distance 0.663 px, NEARER than the real ring's 0.922), the extent AABB
+    // is correctly disabled because such a projection genuinely is unbounded, and
+    // the front-branch guard reads only the SIGN of a reconstruction that is
+    // sitting on a pole. Measured live: phantom pixels reconstruct to 116x-190x
+    // the ring radius while the real ring reconstructs to 0.9996-1.000.
+    //
+    // This asks the one question none of them can: is there a point ON THIS
+    // CIRCLE, IN FRONT of the camera, that actually projects here? Solved on the
+    // forward map, which is exactly conditioned where the inverse collapses.
+    // Rows 8-9 carry it; its third row is hScale * rowW (t6.xyz, already fetched).
+    vec4 t8 = texelFetch(uData, ivec2(i, 8), 0);  // Hfwd0..3
+    vec4 t9 = texelFetch(uData, ivec2(i, 9), 0);  // Hfwd4, Hfwd5, hScale, -
+    if (frontArcDist(vec3(t8.x, t8.y, t8.z), vec3(t8.w, t9.x, t9.y),
+                     t9.z * vec3(t6.x, t6.y, t6.z), t2.y, p.xy) > uArcTolPx) continue;
 
     // Angular-size fade + composed alpha.
     float ang = angularFade(t2.y, t2.z);
@@ -314,6 +388,7 @@ export class OrbitConicField {
         uAngScale:      { value: 1.0 },
         uAngCutoffPx:   { value: angularCutoffPx },
         uLogDepthBufFC: { value: 1.0 },
+        uArcTolPx:      { value: arcTolerancePx(pixelWidth, featherPx) },
       },
       vertexShader: CONIC_VERTEX_SHADER,
       fragmentShader: CONIC_FRAGMENT_SHADER,
@@ -332,7 +407,7 @@ export class OrbitConicField {
     // in the hot path (R5). Reused across frames.
     this._scratch = [];
     for (let i = 0; i < CONIC_MAX; i++) {
-      this._scratch.push({ Cs: new Float64Array(9), Hinv: new Float64Array(9), rowW: new Float64Array(3), bounds: new Float64Array(4) });
+      this._scratch.push({ Cs: new Float64Array(9), Hinv: new Float64Array(9), rowW: new Float64Array(3), bounds: new Float64Array(4), Hfwd: new Float64Array(9), hScale: 0 });
     }
     this._pvm = new THREE.Matrix4();
     this._viewInv = new THREE.Matrix4();
@@ -356,9 +431,15 @@ export class OrbitConicField {
   setBand({ pixelWidth = null, featherPx = null } = {}) {
     if (pixelWidth !== null) this.material.uniforms.uPixelWidth.value = pixelWidth;
     if (featherPx !== null) this.material.uniforms.uFeatherPx.value = featherPx;
+    // The front-arc tolerance is DERIVED from the band (it must cover everything
+    // the band can legitimately paint), so it moves with it or the two drift.
+    this.material.uniforms.uArcTolPx.value = arcTolerancePx(
+      this.material.uniforms.uPixelWidth.value, this.material.uniforms.uFeatherPx.value,
+    );
     return {
       pixelWidth: this.material.uniforms.uPixelWidth.value,
       featherPx: this.material.uniforms.uFeatherPx.value,
+      arcTolPx: this.material.uniforms.uArcTolPx.value,
     };
   }
 
@@ -506,6 +587,7 @@ export class OrbitConicField {
     u.uAngScale.value = (H / 2) / Math.tan(fovRad / 2);
     u.uAngCutoffPx.value = this.angularCutoffPx;
     u.uLogDepthBufFC.value = 2.0 / (Math.log(camera.far + 1.0) / Math.LN2); // 2/log2(far+1)
+    u.uArcTolPx.value = arcTolerancePx(u.uPixelWidth.value, u.uFeatherPx.value);
 
     this.texture.needsUpdate = true;
   }
@@ -518,6 +600,7 @@ export class OrbitConicField {
     const o0 = i * 4;
     const o1 = o0 + stride, o2 = o1 + stride, o3 = o2 + stride, o4 = o3 + stride;
     const o5 = o4 + stride, o6 = o5 + stride, o7 = o6 + stride;
+    const o8 = o7 + stride, o9 = o8 + stride;
     if (conic) {
       const Cs = conic.Cs, Hi = conic.Hinv, rW = conic.rowW, bd = conic.bounds;
       // row0: Cs0..3
@@ -534,6 +617,11 @@ export class OrbitConicField {
       src[o5] = Hi[8]; src[o5 + 1] = bd[0]; src[o5 + 2] = bd[1]; src[o5 + 3] = bd[2];
       // row6: rowW0..2, bounds maxY
       src[o6] = rW[0]; src[o6 + 1] = rW[1]; src[o6 + 2] = rW[2]; src[o6 + 3] = bd[3];
+      // row8: Hfwd0..3   row9: Hfwd4, Hfwd5, hScale, spare. Hfwd's THIRD row is
+      // deliberately absent — it is exactly hScale*rowW, which row 6 already carries.
+      const Hf = conic.Hfwd, hs = conic.hScale;
+      src[o8] = Hf[0]; src[o8 + 1] = Hf[1]; src[o8 + 2] = Hf[2]; src[o8 + 3] = Hf[3];
+      src[o9] = Hf[4]; src[o9 + 1] = Hf[5]; src[o9 + 2] = hs;    src[o9 + 3] = 0;
     } else {
       // Null conic: zero the conic rows so no stale data lingers; keep radius/
       // camDist for introspection but force active=0 (shader skips it anyway).
@@ -545,6 +633,8 @@ export class OrbitConicField {
       src[o5] = 0; src[o5 + 1] = 0; src[o5 + 2] = 0; src[o5 + 3] = 0;
       src[o6] = 0; src[o6 + 1] = 0; src[o6 + 2] = 0; src[o6 + 3] = 0;
       src[o2] = 0; src[o2 + 1] = radius; src[o2 + 2] = camDist; src[o2 + 3] = 0;
+      src[o8] = 0; src[o8 + 1] = 0; src[o8 + 2] = 0; src[o8 + 3] = 0;
+      src[o9] = 0; src[o9 + 1] = 0; src[o9 + 2] = 0; src[o9 + 3] = 0;
     }
     // row7: color.rgb, alpha
     src[o7] = color.r; src[o7 + 1] = color.g; src[o7 + 2] = color.b; src[o7 + 3] = alpha;
@@ -560,12 +650,20 @@ export class OrbitConicField {
     const src = this._source;
     const off = (r) => (r * CONIC_MAX + i) * 4;
     const o0 = off(0), o1 = off(1), o2 = off(2), o3 = off(3), o4 = off(4), o5 = off(5), o6 = off(6), o7 = off(7);
+    const o8 = off(8), o9 = off(9);
     const Cs = new Float32Array([src[o0], src[o0 + 1], src[o0 + 2], src[o0 + 3], src[o1], src[o1 + 1], src[o1 + 2], src[o1 + 3], src[o2]]);
     const Hinv = new Float32Array([src[o3], src[o3 + 1], src[o3 + 2], src[o3 + 3], src[o4], src[o4 + 1], src[o4 + 2], src[o4 + 3], src[o5]]);
     const rowW = new Float32Array([src[o6], src[o6 + 1], src[o6 + 2]]);
     const bounds = new Float32Array([src[o5 + 1], src[o5 + 2], src[o5 + 3], src[o6 + 3]]);
+    // Hfwd row 2 is rebuilt as hScale*rowW EXACTLY as the shader rebuilds it, so a
+    // mirror test that passes here is testing the pack the GPU actually reads.
+    const hScale = src[o9 + 2];
+    const Hfwd = new Float32Array([
+      src[o8], src[o8 + 1], src[o8 + 2], src[o8 + 3], src[o9], src[o9 + 1],
+      hScale * src[o6], hScale * src[o6 + 1], hScale * src[o6 + 2],
+    ]);
     return {
-      Cs, Hinv, rowW, bounds,
+      Cs, Hinv, rowW, bounds, Hfwd, hScale,
       radius: src[o2 + 1], camDist: src[o2 + 2], active: src[o2 + 3],
       color: { r: src[o7], g: src[o7 + 1], b: src[o7 + 2] }, alpha: src[o7 + 3],
     };
