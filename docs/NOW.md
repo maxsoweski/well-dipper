@@ -4,6 +4,30 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> ## ⭐⭐ 2026-08-12 — MAX'S THREE RULINGS, AND ONE OF THEM CORRECTS A PREMISE THAT BLOCKED WORK FOR DAYS.
+>
+> 1. ⭐ **THE OVER-PAINT FIX IS APPROVED — "thinner line is fine" — AND `d7db3a3` NEVER BLOCKED IT.**
+>    Max: *"That statement was about a patch fix you had put in previously that would actively fade
+>    out rings. That's not what we're talking about here."* ⛔ **He is right, and the record was
+>    wrong.** `d7db3a3` retired the **proximity FADE** — an alpha multiply whose kill radius scaled
+>    with the ORBIT radius (`near = max(0.35, 0.02*R)`), so on an r=67622 ring the line died 1352
+>    units out while the planet is ~1 unit across. That is a whole line VANISHING by distance. The
+>    over-paint fix changes line **WIDTH IN PIXELS** and makes it correct. Two different mechanisms;
+>    the scope doc, the handoff and this file all treated the first as precedent against the second
+>    and parked the work on it. **A ruling generalised past the thing it ruled on is how a fix stays
+>    blocked by nobody.** The scope doc's §5 Move 2 gate is void — it was asking a question already
+>    answered.
+> 2. **The river/tectonic destination is DELEGATED, not answered.** Max: *"I really don't know how to
+>    rule on this. Honestly, I'm not sure why it matters."* — with the criterion that replaces it:
+>    ***"What I care about is being able to use the systems that we created for world engine in the
+>    main well-dipper game. I want to make this as optimized and well-architected as possible."***
+>    Taken under that criterion: **`src/rendering/bake/`** (ledger C25), still its own step.
+> 3. **Step 8 is greenlit** — *"yes, I want to proceed that way"* — and by workflow.
+>
+> ⛔ **READ THE PRIORITY, NOT JUST THE RULINGS.** The over-paint fix is now unblocked and Max said of
+> it *"I'm not sure why it matters, one way or the other."* It is ring cosmetics. **It is not what he
+> wants next.** Do not open a session on it.
+
 > ## ⭐⭐ 2026-08-12 — STEP 7 SHIPPED: THE FIVE SHARED MODULES ARE UNDER `src/` (`c479e29`..`b5b91af`).
 >
 > The `src/` module move — deferred eight times against *"I want to get the world engine rendering

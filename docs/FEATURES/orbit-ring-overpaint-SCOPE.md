@@ -335,7 +335,23 @@ On a branch, in one commit:
 | `npm run test:baseline` | any conic test failing for a reason **other** than the seven fixture counts moving. Those seven re-bless by name (precedent `1a3c1e3`); anything else is a real break. |
 | **live, at Max's own repro pose** — seed `lab-procedural-6`, planet 5 at 6 body radii, 0.25° off the orbit plane, `window.__depthProbe()` | the residual multi-ring leak count not going to **0**. The prediction is that it does, because 598/598 of the dFront ≥ 1.485 class is removed on fixtures. If it does not, the correctness case for this project is gone and it reverts to a pure line-width question — which is a WONTFIX conversation, not a fix. |
 
-### Move 2 — the ruling, and it is not an agent's
+### Move 2 — ⭐ ANSWERED 2026-08-12, AND THE QUESTION WAS BUILT ON A MISREADING
+
+**Max: "Thinner line is fine."** And the reason this section existed is retracted by him in the same
+breath: *"That statement was about a patch fix you had put in previously that would actively fade out
+rings. That's not what we're talking about here."*
+
+⛔ **`d7db3a3` WAS NEVER PRECEDENT AGAINST THIS FIX.** Read the commit: it retires the **proximity
+FADE**, an alpha multiply whose kill radius scaled with the ORBIT radius (`near = max(0.35, 0.02*R)`)
+— on an r=67622 ring the line died 1352 units out and only fully returned past 4057, while the body
+being approached is ~1 unit across. That is a line VANISHING BY DISTANCE. This fix changes the line's
+WIDTH IN PIXELS and makes it correct. Treating the first as a rule about the second is a ruling
+generalised past its subject, and it is what parked this work.
+
+The numbers below stand as the description of what will be seen; they are no longer a gate.
+Move 1 needs no ruling to start.
+
+### Move 2 (superseded) — the ruling, as originally written
 
 Park Max in the live game at the pose above with the branch built, and let him toggle. **The number to put in front of him, not a screenshot of it:** the line goes **4 rows → 2 at his own repro pose (−40.8% ink)** and **3 rows → 1 at exactly edge-on (−66.7%)**, and is **unchanged (−0.3%) on a healthy ellipse**. The question is one sentence: *does the thinner line read as correct, or as the line getting thin when you get close?* If the answer is "hold the weight", `pixelWidth` must go 1.0 → ≈1.28 alongside — which thickens the face-on line where nothing is currently wrong — or the mechanism changes to R5.
 
