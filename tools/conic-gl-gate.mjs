@@ -230,10 +230,15 @@ function render(prog,C){
 // Hinv reconstructs. "debris" = reconstructed |XZ|/R > 2, i.e. provably not on the circle.
 function oracle(C,r){
  const FC=C.uni.uLogDepthBufFC;
- let painted=0,wlo=1/0,whi=-1/0,debris=0,worst=0,own0=0,own1=0;const rowset=new Set();
+ let painted=0,wlo=1/0,whi=-1/0,debris=0,worst=0,own0=0,own1=0,dsum=0;const rowset=new Set();
  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
   const o=(y*W+x)*4;if(!(r.px[o+3]>0))continue;
   painted++;rowset.add(y);
+  // DEPTH CHECKSUM. Per-frame wclip[min,max] cannot separate two depth rules that disagree
+  // PER PIXEL while sharing a frame min and max -- measured: it fails to separate the min-w
+  // rule from the screen-argmin rule at six of seven fixtures, so the very candidate §9 is
+  // about would be nearly invisible. Summing gl_FragDepth over the painted set sees it.
+  dsum+=r.dp[o];
   const w=Math.pow(2,r.dp[o]*2/FC)-1;if(w<wlo)wlo=w;if(w>whi)whi=w;
   const gi=r.px[o+1]>0.5?0:1; if(gi===0)own0++;else own1++;
   const P=C.per[Math.min(gi,C.per.length-1)],Hi=P.Hinv;
@@ -241,7 +246,7 @@ function oracle(C,r){
   const pr=Math.hypot(qx/qz,qy/qz)/P.R;if(pr>2)debris++;if(pr>worst)worst=pr;}
  // own0/own1 = which RING owns each pixel, by colour. Without this an ownership flip is invisible,
  // and ownership is exactly what the co-depth tie-break (M8) and the argmax rule (M10) decide.
- return {painted,rows:rowset.size,wMin:painted?wlo:null,wMax:painted?whi:null,debris,worstPlaneRatio:painted?worst:null,own0,own1};
+ return {painted,rows:rowset.size,wMin:painted?wlo:null,wMax:painted?whi:null,debris,worstPlaneRatio:painted?worst:null,own0,own1,depthSum:painted?dsum:null};
 }
 for(const C of CASES){
  const per=[];
@@ -303,6 +308,7 @@ if (!res.ok) {
 }
 
 // ── report + verdict ────────────────────────────────────────────────────────────────────────────
+const dfmt = (v) => (v == null ? '-' : v.toFixed(3));
 const fmt = (v) => (v == null ? '-' : (Math.abs(v) >= 1e4 || (v !== 0 && Math.abs(v) < 1e-2) ? v.toExponential(3) : v.toFixed(3)));
 console.log('\n── INSTRUMENT E · shipped-shader numeric coverage ──────────────────────────────────────');
 console.log(`  executes : CONIC_FRAGMENT_SHADER, imported from src/objects/OrbitConicField.js`);
@@ -319,17 +325,20 @@ for (const c of res.results) {
     console.log(`      ring R=${r.R.toFixed(0)}  wMin=${fmt(r.wMin)}  wMax=${fmt(r.wMax)}  extent=${r.empty ? 'EMPTY (behind camera, culled)' : r.sentinel ? 'UNBOUNDED sentinel' : 'bounded AABB'}`);
   }
   console.log('      ' + 'MUTANT'.padEnd(20) + 'painted'.padStart(8) + 'rows'.padStart(6)
-    + 'wclip[min'.padStart(13) + ', max]'.padStart(12) + 'debris'.padStart(8) + 'worstPR'.padStart(11) + 'own(a/b)'.padStart(12));
+    + 'wclip[min'.padStart(13) + ', max]'.padStart(12) + 'debris'.padStart(8) + 'worstPR'.padStart(11) + 'own(a/b)'.padStart(12)
+    + 'depthSum'.padStart(13));
   for (const r of c.mutants) {
     if (r.err) { console.log('      ' + r.mutant.padEnd(20) + '  SHADER ERROR: ' + r.err); continue; }
     const moved = r.mutant !== 'M0-ORIGINAL' && base && (
       r.painted !== base.painted || r.rows !== base.rows || r.debris !== base.debris
       || fmt(r.wMin) !== fmt(base.wMin) || fmt(r.wMax) !== fmt(base.wMax)
-      || r.own0 !== base.own0 || r.own1 !== base.own1);
+      || r.own0 !== base.own0 || r.own1 !== base.own1
+      || dfmt(r.depthSum) !== dfmt(base.depthSum));
     if (moved) killedBy.set(r.mutant, (killedBy.get(r.mutant) ?? []).concat(c.case.split(' ')[0]));
     console.log('      ' + r.mutant.padEnd(20) + String(r.painted).padStart(8) + String(r.rows).padStart(6)
       + fmt(r.wMin).padStart(13) + fmt(r.wMax).padStart(12) + String(r.debris).padStart(8)
       + fmt(r.worstPlaneRatio).padStart(11) + `${r.own0}/${r.own1}`.padStart(12)
+      + dfmt(r.depthSum).padStart(13)
       + (moved ? '  ← killed' : ''));
   }
 }
