@@ -347,7 +347,7 @@ Each pack declares its own **applicability predicate derived from the condition*
 
 ---
 
-### Step 7 — Move the shared modules under `src/` and switch on the boundary fence · **L** · deps: Step 6
+### Step 7 — Move the shared modules under `src/` and switch on the boundary fence · **L** · deps: Step 6 · ✅ **SHIPPED 2026‑08‑12, `c479e29`..`b5b91af`** (4 commits: pre‑move rulings → move → fence → Instrument‑A re‑record). All six gates below executed; the uniform‑bundle gate published **subject 0/18, control 18/18** per §11.3.3. ⭐ Two rulings the pre‑flight did NOT name — `vis-scale-fence` (labCore DEFINES the display scale; one liveness‑checked carve‑out, ledger **C23**) and `worldengine-e1-shadow-audit` (conditionVector imports `compositionClass`; `E1_SYMBOL_CONSUMERS`) — plus a correction to C17: it read **two** DENY hits, not one, because that scan is comment‑INCLUSIVE. Boundary allowlist landed as stated: **1 root‑module entry** (ledger **C25**) + 4 test‑helper.
 
 **What.** Move, rewriting import specifiers only:
 

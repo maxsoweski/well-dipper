@@ -4,6 +4,67 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> ## ⭐⭐ 2026-08-12 — STEP 7 SHIPPED: THE FIVE SHARED MODULES ARE UNDER `src/` (`c479e29`..`b5b91af`).
+>
+> The `src/` module move — deferred eight times against *"I want to get the world engine rendering
+> system into the main game ASAP."* Four commits: pre-move rulings → the move → the boundary fence →
+> the Instrument A re-record.
+>
+> | from (repo root) | to |
+> |---|---|
+> | `body-condition-vector.js` | `src/worldengine/base/conditionVector.js` |
+> | `planet-lod-lab-core.js` | `src/worldengine/base/labCore.js` (**whole**, 1194 lines) |
+> | `planet-lod-uniforms.js` | `src/worldengine/shaders/uniforms.js` |
+> | `planet-lod-shaders.glsl.js` | `src/worldengine/shaders/planetShaders.glsl.js` |
+> | `planet-lod-height.glsl.js` | `src/worldengine/shaders/height.glsl.js` |
+>
+> **The content did not move.** `git show HEAD:<old> | diff - <new>` on each of the five: import
+> specifiers only, every hunk `NcN`, and `uniforms.js` is an EMPTY diff. 210 quoted strings rewritten
+> across 118 files — 190 import specifiers (the pre-flighted count, reproduced) **plus 20 path
+> strings** that `readFileSync` a corpus. ⛔ Those 20 are the half a specifier-only pass misses and
+> they are all inside fences.
+>
+> ⭐⭐ **THE REAL WORK WAS NOT THE MOVE. Three fences WALK `src/worldengine/**`, so three files
+> changed meaning by arriving** — and the pre-flight had named only one of them:
+>
+> 1. **`radius-live-feed-fence`** — the C17 ruling, **and it was one hit short**. It said "exactly ONE
+>    live DENY hit" and there were **two**: :105 (live code) *and* :95, a prose comment. The recorded
+>    reason for discounting :95 — *"the scan is comment-blind"* — is **the opposite of true**; that
+>    scan is comment-INCLUSIVE by design, which is why `giant-drivers.js:62`, a prose comment, was a
+>    hit and was REWORDED. :95 was reworded pre-move; :105 is allowlisted as
+>    `conditionVector-canonicalDenominator` (`_R_c` is the **canonical** preset radius, the D14
+>    gravity denominator; rewiring it forces `gravityRadiusRatio` to 1.0 and **permanently disables
+>    the self-compression law** — the "fix" deletes the physics). The file also joins
+>    `REQUIRED_CARRIERS` so the scan cannot go vacuous there.
+> 2. **`vis-scale-fence`** — **a REAL exception, not a false positive.** `labCore.js` DEFINES the
+>    display scale (25 token hits, four exports) and now sits inside the tree that fence declares
+>    token-free. One named, liveness-checked carve-out; `checkedTree()` throws if the entry is dead
+>    OR stale; all three sweeps go through it. Carried **C23**, cleared by the labCore split — which
+>    Step 7 itself defers. Unchanged and still proven: **no CONSUMER under `src/worldengine/**` reads
+>    the token.**
+> 3. **`worldengine-e1-shadow-audit`** — `conditionVector.js` imports `compositionClass` from
+>    `e1Regime.js`, which the audit bans by MODULE. New `E1_SYMBOL_CONSUMERS` exempts the *import*
+>    clause only (narrower than the blanket exclusion `lidResponse.js` gets) and keeps asserting
+>    computeE1-freedom comment-blind, with a **planted control** proving a LIVE `computeE1()` call in
+>    an exempted file is still caught.
+>
+> **The boundary fence does NOT claim zero.** 5 escapes measured: **one** root-module
+> (`fieldSampler.js:149` → `planet-lod-rivers.js`, blocked on PLAN §7's undecided three.js question —
+> **Max's call**, carried **C25**) + four test-helper. The count of root entries is pinned at one, so
+> a second cannot arrive quietly. 11 tests, **six planted controls**.
+>
+> **Gates, all executed.** Byte-identity of the lab's resolved uniform bundle: **subject 0/18 hashes
+> differ** pre-move vs post-move, **control 18/18 differ** under `radiusEarth × 1.000001` — a zero
+> with no control that moved is not evidence. Lab imports 43/40-relative/**0 missing**. `npm run
+> build` ✅. Four instruments green; **Instrument E 22/22 across nine fixtures**, unmoved.
+>
+> ⚠ The handoff predicted Instrument A would move **+2**; the true figure is **+16 with 3 renames**.
+> Two of the sixteen were **generated, not authored** — the e1 audit keys its ID set on a DIRECTORY,
+> so a file arriving in `src/worldengine/base/` writes tests nobody typed. A move is not ID-inert.
+>
+> ▶ **Next: Step 8** (moons get a real condition record, derived and never drawn) — deps Steps 2 + 7,
+> both now shipped.
+
 > ## ⭐⭐ 2026-08-12 — THE ORBIT-RING DEPTH ARTEFACT IS FIXED (`b9eeaec` + `22c8b8a`). ✅ SHIPPED — MAX UAT PASS 2026-08-12 ("yep, fixed").
 >
 > The ring drawn THROUGH the planet (§1–§4, open since 2026-08-10). Fourth candidate refuted (§9),
@@ -179,8 +240,8 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > into `src/worldengine/base/` puts it inside the `radius-live-feed-fence` corpus
 > (`jsFilesUnder(ROOT, 'src/worldengine')`, `tests/radius-live-feed-fence.test.js:102`). Measured the
 > DENY pattern over all five files to be moved: **exactly ONE live hit**, `body-condition-vector.js:105`
-> `const _R_c = fp.radiusEarth ?? 1.0;` (the other match, :95, is a comment and the scan is
-> comment-blind). It is a **FALSE POSITIVE**: `_R_c` is deliberately the *canonical* preset radius —
+> `const _R_c = fp.radiusEarth ?? 1.0;` (⛔ **CORRECTED 2026-08-12 at the move: the other match,
+> :95, IS a hit — that scan is comment-INCLUSIVE, and :95 was reworded in `c479e29`**). It is a **FALSE POSITIVE**: `_R_c` is deliberately the *canonical* preset radius —
 > the denominator of the D14 gravity mass-radius ratio — explicitly distinguished from `_R`, the
 > DRAWN radius passed as the 3rd argument. **The ruling is "allowlist it with that reason", not
 > "rewire it".** `planet-lod-lab-core.js`, `-uniforms.js`, `-shaders.glsl.js`, `-height.glsl.js`
