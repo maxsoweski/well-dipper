@@ -23,10 +23,10 @@ import { generateBody, GRID, SOL_ZONES } from './world-engine-l0-grid.js';
 // regen script (__fixtures__/regen-l0-moon-baseline.mjs) can reuse generateMoonGrid()
 // WITHOUT the chicken-and-egg of importing a fixture that does not yet exist.
 //
-// Determinism: MoonGenerator.generate(rng, parent, idx, total, zone, zones) is
-// a pure function of its inputs. The parent is the frozen gas-giant grid body
-// (GRID[7]) — itself byte-frozen by the planet gate — so the whole moon grid
-// reproduces identically every run.
+// Determinism: MoonGenerator.generate(rng, parent, idx, total, zone, zones, parentOrbitAU)
+// is a pure function of its inputs. ⭐ The 7th param arrived in C3 (`0b329da`): the parent's
+// REAL orbit in AU, default null, threaded for 8a's T_eq and 8b's hardcoded-1-AU fix, and
+// read by NOTHING yet. Parent = GRID[7], byte-frozen by the planet gate, so this grid repeats.
 // ════════════════════════════════════════════════════════════════════════
 
 // Fixed parent: the gas-giant grid body. Gas giants can host the full moon
