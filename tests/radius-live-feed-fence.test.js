@@ -63,7 +63,7 @@ import { stripCommentsPreservingOffsets, jsFilesUnder, lineOf } from './helpers/
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const LAB_REL = 'planet-lod-lab.html';
-const ADAPTER_REL = 'src/worldengine/port/conditionFromPlanet.js';
+const ADAPTER_REL = 'src/worldengine/port/conditionFromBody.js';
 
 // ── the corpus ───────────────────────────────────────────────────────────────────────────────────
 // WIDENED 2026-08-08 for PLAN §4 Step 3, whose stated reason is that this fence "matches
@@ -311,7 +311,7 @@ const ALLOWLIST = [
     // has two radii because its GUI has a radius SLIDER separate from the preset; the game has ONE
     // radius per body. The law expresses "what if this body were a size other than its canonical one,"
     // which is not a question the game asks.
-    // ⚠ The site is cited SYMBOL-ONLY, with no line number, per PLAN §10: conditionFromPlanet.js is
+    // ⚠ The site is cited SYMBOL-ONLY, with no line number, per PLAN §10: conditionFromBody.js is
     // one of the two regions that convention names explicitly, because every step of this plan adds
     // lines to it and an integer written there is born with a half-life of one step. The `match`
     // string above IS the ref.

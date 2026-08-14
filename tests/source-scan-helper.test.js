@@ -653,7 +653,7 @@ describe('jsFilesUnder — the promoted house walker', () => {
     const files = jsFilesUnder(ROOT, 'src/worldengine');
     expect(files.length).toBeGreaterThan(20);
     expect(files).toEqual([...files].sort());
-    expect(files).toContain('src/worldengine/port/conditionFromPlanet.js');
+    expect(files).toContain('src/worldengine/port/conditionFromBody.js');
     expect(files).toContain('src/worldengine/base/giant-drivers.js');
     for (const f of files) expect(f.endsWith('.js'), f).toBe(true);
   });

@@ -4019,7 +4019,7 @@ window._lab = {
     else if (entry) { gates = drivers.gatesFor(entry, drivers.GATE_POLICY_ALL_ON); gatesSource = `gatesFor(PACKS['${entry.name}'], ALL_ON) — Max ruling 4`; }
     else { gates = {}; gatesSource = '⚠ NONE — a bare pack function has no PACKS entry, so no gate names are declared. A gated driver will throw.'; }
 
-    // ⛔ `d.radiusEarth`, NOT `d.radius`. `conditionFromPlanet` reads `d.radiusEarth` and the game's
+    // ⛔ `d.radiusEarth`, NOT `d.radius`. `conditionFromBody` reads `d.radiusEarth` and the game's
     // `planetData.radius` is a SCENE radius on some paths — feeding a scene radius to a policy
     // measured in Earth radii is finite, plausible, in-band and wrong by ~2 orders of magnitude,
     // which is the exact class of defect `assertDisplayPolicy` refuses a default for.
@@ -4044,7 +4044,7 @@ window._lab = {
       animRate: Number.isFinite(args.animRate) ? args.animRate : 1,
       gates,
       relevance: args.relevance || {},
-      // `d.rotationHours` is the spelling `conditionFromPlanet` reads. Left undefined when the body
+      // `d.rotationHours` is the spelling `conditionFromBody` reads. Left undefined when the body
       // has none, so the pack falls back through `condition.rotationHours` and then its own
       // documented default rather than being handed a fabricated spin.
       rotationHours: args.rotationHours ?? r.planetData?.rotationHours ?? undefined,

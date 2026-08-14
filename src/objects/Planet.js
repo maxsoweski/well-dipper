@@ -8,7 +8,7 @@ import {
   CRATER_RELIEF_GLSL,
   CRATER_RELIEF_UNIFORMS_GLSL,
 } from '../worldengine/shaders/craterRelief.glsl.js';
-import { conditionFromPlanet } from '../worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../worldengine/port/conditionFromBody.js';
 import { atmosphereOpticsOf } from '../worldengine/base/atmosphereOptics.js';
 import { biosphereOf, BIO_PIGMENT } from '../worldengine/base/surfaceMaterial.js';
 import { craterUniformsFrom, CRATERS_OFF } from '../worldengine/port/craterUniforms.js';
@@ -1589,9 +1589,9 @@ export class Planet {
     // the derivation outright keeps a meaningless number out of a uniform.
     // Derived ONCE and shared by both consumers below. It used to be computed inline inside the
     // crater ternary, i.e. only for rocky bodies; the air optics need it for every body that has an
-    // atmosphere at all, gas giants very much included. conditionFromPlanet is pure, so hoisting it
+    // atmosphere at all, gas giants very much included. conditionFromBody is pure, so hoisting it
     // is inert for the crater path.
-    const condition = conditionFromPlanet(d);
+    const condition = conditionFromBody(d);
 
     const craters = ROCKY_TYPES.has(d.type)
       ? craterUniformsFrom(condition)
@@ -1740,7 +1740,7 @@ export class Planet {
 
     const surface = new THREE.Mesh(geometry, material);
     // ── Instrument E item 4 — the back-link (PLAN §12.3 E-3) ────────────────────────────────────
-    // ⛔ THE SCENE WALK YIELDS A BARE MESH AND `d` IS UNREACHABLE FROM IT. `conditionFromPlanet(d)`
+    // ⛔ THE SCENE WALK YIELDS A BARE MESH AND `d` IS UNREACHABLE FROM IT. `conditionFromBody(d)`
     // above is a local; this method returns a Mesh; the surface is an UNNAMED child of the
     // `body.planet.*` group (named at `assignBodyName(this.mesh, 'planet', planetData);`), so
     // neither the group nor BodyRenderer exposes a path back to the data that produced it. Every

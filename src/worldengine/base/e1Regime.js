@@ -121,7 +121,7 @@ export function compositionClass(cv) {
 // ── §10 LINE-STABILITY, and why the GIANT_ANCHOR import shares line 22 with the mathutil import.
 // Three files this lane may not edit cite this module by LINE — e1Regime.js:66 `export function compositionClass(cv) {`
 // and e1Regime.js:68 `cv.composition?.carbonToOxygen` — from
-// conditionFromPlanet.js, one-pipeline-two-frontends-PLAN.md and -CARRIED.md. A normal four-line
+// conditionFromBody.js, one-pipeline-two-frontends-PLAN.md and -CARRIED.md. A normal four-line
 // import block above them shifted both by 4 and `npm run check:instruments` reported them BROKEN,
 // which is the instrument working. Everything this step adds therefore lands BELOW line 74, and the
 // import rides an existing line. Same rule in giant-drivers.js, where PLAN.md and

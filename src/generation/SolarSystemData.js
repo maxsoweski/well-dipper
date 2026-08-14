@@ -157,7 +157,7 @@ export function generateSolarSystem() {
       rings: null,
       clouds: null,
       // ⚠ `physics` is NOT decoration and NOT the visual wrapper. The world engine reads
-      // atmosphere.pressure through conditionFromPlanet; a body carrying only {color, strength}
+      // atmosphere.pressure through conditionFromBody; a body carrying only {color, strength}
       // reads as a VACUUM, which made Sol's Earth derive a heavier crater record than the Moon's.
       // See docs/FEATURES/surface-variation-beyond-mvp.md, "RUNG 4, CRATERS", finding 2.
       atmosphere: { color: [0.9, 0.8, 0.5], strength: 0.6,
@@ -181,7 +181,7 @@ export function generateSolarSystem() {
       rings: null,
       clouds: { color: [0.95, 0.95, 0.97], density: 0.85, scale: 3.0 },
       // ⚠ `physics` is NOT decoration and NOT the visual wrapper. The world engine reads
-      // atmosphere.pressure through conditionFromPlanet; a body carrying only {color, strength}
+      // atmosphere.pressure through conditionFromBody; a body carrying only {color, strength}
       // reads as a VACUUM, which made Sol's Earth derive a heavier crater record than the Moon's.
       // See docs/FEATURES/surface-variation-beyond-mvp.md, "RUNG 4, CRATERS", finding 2.
       atmosphere: { color: [0.4, 0.6, 1.0], strength: 0.4,
@@ -217,7 +217,7 @@ export function generateSolarSystem() {
       rings: null,
       clouds: null,
       // ⚠ `physics` is NOT decoration and NOT the visual wrapper. The world engine reads
-      // atmosphere.pressure through conditionFromPlanet; a body carrying only {color, strength}
+      // atmosphere.pressure through conditionFromBody; a body carrying only {color, strength}
       // reads as a VACUUM, which made Sol's Earth derive a heavier crater record than the Moon's.
       // See docs/FEATURES/surface-variation-beyond-mvp.md, "RUNG 4, CRATERS", finding 2.
       atmosphere: { color: [0.8, 0.5, 0.3], strength: 0.15,

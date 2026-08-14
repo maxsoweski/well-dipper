@@ -1,4 +1,4 @@
-import { conditionFromPlanet } from '../worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../worldengine/port/conditionFromBody.js';
 import { surfacePaletteOf, icenessOf, meltTemperatureOf, crustTemperatureOf, ICE_ALBEDO, BIO_PIGMENT } from '../worldengine/base/surfaceMaterial.js';
 import { applyAlbedoTransfer } from '../worldengine/display/albedoTransfer.js';
 import { emissiveBlackbody } from '../worldengine/base/emission-e.js';
@@ -726,7 +726,7 @@ export class PlanetGenerator {
     //
     // ═══ ONE CONSTRUCTOR. THE BAKE ROUTE AND THE RENDER ROUTE NOW PASS THE SAME OBJECT. ═══════════
     // ⭐ The argument below IS the record this function returns — the same object the renderer later
-    // receives as `this.data` and hands to `conditionFromPlanet(d)` at Planet.js:1568. Every
+    // receives as `this.data` and hands to `conditionFromBody(d)` at Planet.js:1594. Every
     // generated body therefore crosses this seam TWICE, and until 2026-08-07 the two crossings did
     // not agree: this site passed a nine-key literal
     //     { radiusEarth, massEarth, composition, T_eq, age, atmosphere, tidalState,
@@ -756,7 +756,7 @@ export class PlanetGenerator {
     //
     // The five world-engine bakes are declared here as placeholders and assigned below, so the
     // record keeps ONE key order and the condition can be derived from the record that carries it.
-    // Nothing reads them in between; conditionFromPlanet reads none of the five.
+    // Nothing reads them in between; conditionFromBody reads none of the five.
     const planetData = {
       type,
       landPalette: null,      // ← assigned below, from `condition`
@@ -798,7 +798,7 @@ export class PlanetGenerator {
       tidalHeating, // D12 — stellar tidal heating (Io-moon scale); REAL, computed from eccentricity+star+orbit; DATA-ONLY (not fed to computeSurfaceHistory)
     };
 
-    const condition = conditionFromPlanet(planetData);
+    const condition = conditionFromBody(planetData);
 
     // The biosphere pigment rides through opts.extra so it is scaled by the SAME transfer as the
     // ground endmembers. albedoTransfer.js states the rule outright: "a pigment scaled by its own

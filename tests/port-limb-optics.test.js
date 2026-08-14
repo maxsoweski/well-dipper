@@ -6,7 +6,7 @@
 // module planet-lod-lab.html imports (:177) rather than a transcription of it. That is the shape of
 // this whole port: the game becomes a second consumer of what the lab already uses.
 //
-// The failure this exists to catch is the quiet one. If conditionFromPlanet ever stops forwarding
+// The failure this exists to catch is the quiet one. If conditionFromBody ever stops forwarding
 // what the optics read — pressure, T_eq, volatileFraction, surfaceGravity, radiusEarth — the call
 // still succeeds, still returns a colour, and every planet quietly collapses back to ONE rim. The
 // screen looks fine. Nothing throws. So distinctness is asserted here rather than trusted.
@@ -15,7 +15,7 @@
 // live in the browser instead (see the commit).
 
 import { describe, it, expect } from 'vitest';
-import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import { atmosphereOpticsOf } from '../src/worldengine/base/atmosphereOptics.js';
 import { biosphereOf } from '../src/worldengine/base/surfaceMaterial.js';
 
@@ -50,7 +50,7 @@ const BODIES = {
   },
 };
 
-const opticsFor = (key) => atmosphereOpticsOf(conditionFromPlanet(BODIES[key]));
+const opticsFor = (key) => atmosphereOpticsOf(conditionFromBody(BODIES[key]));
 
 describe('limb optics reach the game from the shared module', () => {
   it('gives every archetype a DISTINCT rim colour', () => {
@@ -108,16 +108,16 @@ describe('limb optics reach the game from the shared module', () => {
   });
 
   it('degrades to finite values on a body with no world-engine fields at all', () => {
-    // Hand-authored fixtures (Sol's bodies) never pass through PlanetGenerator. conditionFromPlanet
+    // Hand-authored fixtures (Sol's bodies) never pass through PlanetGenerator. conditionFromBody
     // is built to degrade rather than throw; this pins that the optics survive the degraded input.
-    const o = atmosphereOpticsOf(conditionFromPlanet({}));
+    const o = atmosphereOpticsOf(conditionFromBody({}));
     expect(Number.isFinite(o.limbExponent)).toBe(true);
     for (const c of o.limbColor) expect(Number.isFinite(c)).toBe(true);
   });
 });
 
 describe('biosphere cover reaches the game from the shared module', () => {
-  const bioFor = (key) => biosphereOf(conditionFromPlanet(BODIES[key]));
+  const bioFor = (key) => biosphereOf(conditionFromBody(BODIES[key]));
 
   it('puts cover on the temperate wet world and nowhere else', () => {
     // The defect this replaces: the game's terrestrial branch hard-coded "green vegetation" as
@@ -139,7 +139,7 @@ describe('biosphere cover reaches the game from the shared module', () => {
 
   it('is zero for a body with no world-engine fields, so hand-authored fixtures are inert', () => {
     // uBioGroundCover = 0 skips the shader block, leaving Sol's bodies byte-identical.
-    expect(biosphereOf(conditionFromPlanet({}))).toBe(0);
+    expect(biosphereOf(conditionFromBody({}))).toBe(0);
   });
 });
 
@@ -169,7 +169,7 @@ import {
 } from '../src/worldengine/drivers/limbDeck.js';
 
 describe('C20 — the limb gate reaches the LAB material the game swaps to', () => {
-  const condFor = (key) => conditionFromPlanet(BODIES[key]);
+  const condFor = (key) => conditionFromBody(BODIES[key]);
   const GATES = gatesFor(LIMB_DECK_ENTRY);
   /** Run the pack onto a fresh lab material and hand back the uniforms map. */
   function composed(key) {

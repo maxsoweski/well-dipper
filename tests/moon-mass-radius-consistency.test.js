@@ -8,7 +8,7 @@
 // 213 g/cc, roughly 20x denser than osmium, reported as ~35 g of surface gravity.
 //
 // WHY IT MATTERS BEYOND ABSURDITY. These 14-in-1120 bodies are the ONLY moons that render through
-// src/objects/Planet.js and therefore the only ones that reach conditionFromPlanet today. Their
+// src/objects/Planet.js and therefore the only ones that reach conditionFromBody today. Their
 // surfaceGravity (M/R^2) drives reliefEnvelope and every other gravity-dependent law in the world
 // engine port. Plain moons go through Moon.js, which has zero worldengine imports.
 //
@@ -19,7 +19,7 @@ import { describe, it, expect } from 'vitest';
 import { PlanetGenerator } from '../src/generation/PlanetGenerator.js';
 import { MoonGenerator } from '../src/generation/MoonGenerator.js';
 import { SeededRandom } from '../src/generation/SeededRandom.js';
-import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 
 const TYPES = ['rocky', 'terrestrial', 'ocean', 'ice', 'lava', 'carbon', 'gas-giant'];
 const SEEDS = [12345, 777, 90210, 31337, 8675309, 5150, 4242, 99991];
@@ -44,7 +44,7 @@ function planetClassMoons() {
   return out;
 }
 
-// Earth's mean density, the unit conditionFromPlanet's surfaceGravity is implicitly relative to.
+// Earth's mean density, the unit conditionFromBody's surfaceGravity is implicitly relative to.
 const EARTH_DENSITY_GCC = 5.51;
 
 describe('planet-class moons: mass and radius describe the same body', () => {
@@ -71,7 +71,7 @@ describe('planet-class moons: mass and radius describe the same body', () => {
   });
 
   it('keeps surface gravity in a band a body that size could actually have', () => {
-    const gs = moons.map((m) => conditionFromPlanet(m.planetData).surfaceGravity);
+    const gs = moons.map((m) => conditionFromBody(m.planetData).surfaceGravity);
     // Pre-fix this reached 35 g. A large icy/rocky moon or captured sub-Neptune tops out a few g.
     expect(Math.max(...gs)).toBeLessThan(5);
     expect(Math.min(...gs)).toBeGreaterThanOrEqual(0);
@@ -91,7 +91,7 @@ describe('planet-class moons: mass and radius describe the same body', () => {
   it('DISTINCTNESS: gravity is not one constant across the population', () => {
     // Cadence rule for this program: a correctly-wired law that is degenerate across the population
     // is this lane's characteristic failure. Assert the spread, not just the bound.
-    const gs = moons.map((m) => +conditionFromPlanet(m.planetData).surfaceGravity.toFixed(4));
+    const gs = moons.map((m) => +conditionFromBody(m.planetData).surfaceGravity.toFixed(4));
     expect(new Set(gs).size).toBeGreaterThan(3);
   });
 });

@@ -27,7 +27,7 @@ import {
 } from '../src/worldengine/port/craterUniforms.js';
 import { craterSchedule, transitionDiameterKm } from '../src/worldengine/base/bombardment.js';
 import { radPerKm } from '../src/worldengine/base/baseStep.js';
-import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import { generateSolarSystem } from '../src/generation/SolarSystemData.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -47,7 +47,7 @@ function solBody(profileId) {
 describe('crater law — the closed form reproduces the schedule it is derived from', () => {
   it('coverageBand over the FULL band equals craterSchedule.coverage', () => {
     for (const RE of [0.074, 0.273, 0.383, 0.532, 1.0]) {
-      const cond = conditionFromPlanet(airless(RE));
+      const cond = conditionFromBody(airless(RE));
       const sch = craterSchedule(cond);
       expect(sch.fired).toBe(true);
       const L = sch.D_LO_KM * sch.sizeMul;
@@ -56,7 +56,7 @@ describe('crater law — the closed form reproduces the schedule it is derived f
   });
 
   it('a sub-band never claims more coverage than the full band', () => {
-    const cond = conditionFromPlanet(airless(0.273));
+    const cond = conditionFromBody(airless(0.273));
     const sch = craterSchedule(cond);
     const rpk = radPerKm(0.273);
     const L = sch.D_LO_KM * sch.sizeMul;
@@ -69,14 +69,14 @@ describe('crater law — the closed form reproduces the schedule it is derived f
 describe('crater law — uCraterAmp * uCraterScale is EXACTLY 1 (why craters need no population fit)', () => {
   it('holds across a 40x radius span, to float64 exactness', () => {
     for (const RE of [0.031, 0.074, 0.212, 0.273, 0.383, 0.532, 1.21]) {
-      const u = craterUniformsFrom(conditionFromPlanet(airless(RE)));
+      const u = craterUniformsFrom(conditionFromBody(airless(RE)));
       expect(u.density, `R=${RE} renders craters`).toBeGreaterThan(0);
       expect(u.amp * u.scale).toBeCloseTo(1, 12);
     }
   });
 
   it('the ejecta apron is scaled to the crater rim it leaves, not to a free constant', () => {
-    const u = craterUniformsFrom(conditionFromPlanet(airless(0.273)));
+    const u = craterUniformsFrom(conditionFromBody(airless(0.273)));
     expect(u.ejectaAmp).toBeCloseTo(EJECTA_RIM_FRACTION * u.amp, 15);
   });
 });
@@ -93,7 +93,7 @@ describe('crater law — the population, with no type label anywhere', () => {
   };
   for (const [id, [lo, hi]] of Object.entries(EXPECT)) {
     it(`${id} keeps a crater record (density in [${lo}, ${hi}])`, () => {
-      const u = craterUniformsFrom(conditionFromPlanet(solBody(id)));
+      const u = craterUniformsFrom(conditionFromBody(solBody(id)));
       expect(u.density).toBeGreaterThanOrEqual(lo);
       expect(u.density).toBeLessThanOrEqual(hi);
     });
@@ -105,12 +105,12 @@ describe('crater law — the population, with no type label anywhere', () => {
       atmosphere: { color: [0, 0, 0], strength: 0.5, physics: { retained: true, pressure: 1.0, composition: 'n2-o2' } },
       composition: { density: 5500, volatileFraction: 0.05, ironFraction: 0.32 },
     };
-    expect(craterUniformsFrom(conditionFromPlanet(earthlike)).density).toBeLessThan(0.01);
+    expect(craterUniformsFrom(conditionFromBody(earthlike)).density).toBeLessThan(0.01);
   });
 
   it('a molten world is not an impact surface at all', () => {
     const molten = { radiusEarth: 1.0, T_eq: 1400, atmosphere: null };
-    expect(craterUniformsFrom(conditionFromPlanet(molten))).toEqual(CRATERS_OFF);
+    expect(craterUniformsFrom(conditionFromBody(molten))).toEqual(CRATERS_OFF);
   });
 
   it('CRATERS_OFF has density 0 — the shader gate and the negative control are the same number', () => {
@@ -124,7 +124,7 @@ describe('crater law — the population, with no type label anywhere', () => {
   it('density divides by the MEASURED per-cell coverage, not the analytic disc area', () => {
     expect(RENDERED_CELL_COVERAGE).toBeLessThan(CELL_CRATER_AREA);
     expect(CELL_CRATER_AREA / RENDERED_CELL_COVERAGE).toBeCloseTo(2.66, 1);
-    const cond = conditionFromPlanet(solBody('sol-moon'));
+    const cond = conditionFromBody(solBody('sol-moon'));
     const sch = craterSchedule(cond);
     const RE = cond.radiusEarth;
     const lo = Math.max(sch.D_LO_KM * sch.sizeMul, CRATER_VIS_FLOOR_RAD * RE * 6371);
@@ -133,14 +133,14 @@ describe('crater law — the population, with no type label anywhere', () => {
   });
 
   it('same condition in, identical uniforms out', () => {
-    const c = conditionFromPlanet(solBody('sol-moon'));
+    const c = conditionFromBody(solBody('sol-moon'));
     expect(craterUniformsFrom(c)).toEqual(craterUniformsFrom(c));
   });
 });
 
 describe('crater law — the game must NOT inherit the lab morphology pin', () => {
   it('uCraterComplexD makes the game\'s craters COMPLEX (peaks + terraces), not simple bowls', () => {
-    const cond = conditionFromPlanet(solBody('sol-moon'));
+    const cond = conditionFromBody(solBody('sol-moon'));
     const u = craterUniformsFrom(cond);
     // The shader: morphology = smoothstep(uCraterComplexD*0.6, uCraterComplexD, diameter), and the
     // smallest hashed diameter is 2*0.18 cell units. morphology == 1 for all of them iff the upper
@@ -189,7 +189,7 @@ describe('crater transcription fence — craterProfile / ejectaProfile match the
 });
 
 // ── FENCE 3: a hand-authored atmosphere must carry physics, or the engine reads it as vacuum ──────
-// There is no honest default for an unknown pressure, so conditionFromPlanet cannot guess one. The
+// There is no honest default for an unknown pressure, so conditionFromBody cannot guess one. The
 // guarantee has to live here instead: any hand-authored body that says it HAS an atmosphere must say
 // what that atmosphere IS. Without this, the next Sol body added with a {color, strength} wrapper
 // silently reacquires a Moon-grade crater record.
@@ -210,8 +210,8 @@ describe('Sol data fence — a visual atmosphere without physics reads as a vacu
   });
 
   it('and the derived consequence holds: Sol\'s Earth keeps no crater record, its Moon does', () => {
-    const earth = craterUniformsFrom(conditionFromPlanet(solBody('sol-earth')));
-    const moon = craterUniformsFrom(conditionFromPlanet(solBody('sol-moon')));
+    const earth = craterUniformsFrom(conditionFromBody(solBody('sol-earth')));
+    const moon = craterUniformsFrom(conditionFromBody(solBody('sol-moon')));
     expect(earth.density).toBe(0);
     expect(moon.density).toBeGreaterThan(0.1);
   });

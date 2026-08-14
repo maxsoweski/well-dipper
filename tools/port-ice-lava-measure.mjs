@@ -18,7 +18,7 @@
 //
 // Run: node tools/port-ice-lava-measure.mjs
 import { PlanetGenerator } from '../src/generation/PlanetGenerator.js';
-import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import { surfacePaletteOf, icenessOf, T_MELT_LO, T_MELT_HI } from '../src/worldengine/base/surfaceMaterial.js';
 import { applyAlbedoTransfer } from '../src/worldengine/display/albedoTransfer.js';
 import { SeededRandom } from '../src/generation/SeededRandom.js';
@@ -35,7 +35,7 @@ function population(type) {
       const zones = { metallicity: met, frostLine: 4.85 };
       let p;
       try { p = PlanetGenerator.generate(rng, au, null, zones, type); } catch (e) { continue; }
-      const cond = conditionFromPlanet(p);
+      const cond = conditionFromBody(p);
       rows.push({ au, met, p, cond, pal: applyAlbedoTransfer(surfacePaletteOf(cond)) });
     }
   }

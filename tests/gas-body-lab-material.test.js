@@ -35,7 +35,7 @@ import {
 import { PACKS, applyDriverPacks, selectPacks, gatesFor, GATE_POLICY_ALL_ON } from '../src/worldengine/drivers/index.js';
 import { buildLabPlanetMaterial, isLabPlanetMaterial } from '../src/rendering/LabPlanetMaterial.js';
 import { BodyRenderer } from '../src/rendering/objects/BodyRenderer.js';
-import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import { compositionClass } from '../src/worldengine/base/e1Regime.js';
 import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js';
 import { generateSolarSystem } from '../src/generation/SolarSystemData.js';
@@ -74,7 +74,7 @@ function generatedPlanets(count) {
     const seed = `s6-${i}`;
     const sys = StarSystemGenerator.generate(seed, null);
     (sys.planets || []).forEach((e) => {
-      out.push({ id: `${seed}#${e.planetData._ordinal}`, d: e.planetData, cond: conditionFromPlanet(e.planetData) });
+      out.push({ id: `${seed}#${e.planetData._ordinal}`, d: e.planetData, cond: conditionFromBody(e.planetData) });
     });
   }
   return out;
@@ -358,7 +358,7 @@ describe('6d — no Sol body reaches the pack path, and the reason is provenance
 
   it('⛔ ZERO Sol bodies are admitted — with the flag FORCED ON, the state in which it can fail', () => {
     setLabGasBodiesOverride(true);
-    const admitted = SOL.filter((b) => labPipelineAdmits(b.d, conditionFromPlanet(b.d)).admitted);
+    const admitted = SOL.filter((b) => labPipelineAdmits(b.d, conditionFromBody(b.d)).admitted);
     expect(admitted.map((b) => b.id)).toEqual([]);
   });
 
@@ -367,7 +367,7 @@ describe('6d — no Sol body reaches the pack path, and the reason is provenance
     // "simplifies" the admission test back to a type check, this is the assertion that reds.
     setLabGasBodiesOverride(true);
     const relabelled = SOL.map((b) => ({ ...b, d: { ...b.d, type: 'gas-giant' } }));
-    const admitted = relabelled.filter((b) => labPipelineAdmits(b.d, conditionFromPlanet(b.d)).admitted);
+    const admitted = relabelled.filter((b) => labPipelineAdmits(b.d, conditionFromBody(b.d)).admitted);
     expect(admitted.map((b) => b.id)).toEqual([]);
   });
 
@@ -376,7 +376,7 @@ describe('6d — no Sol body reaches the pack path, and the reason is provenance
     // Sol's Uranus and Neptune really do read `compositionClass === 'gas'`. A pipeline gated only on
     // the pack predicate would render two Sol planets through the lab material while every
     // measurement rule in this program excludes Sol from observation.
-    const gasBySol = SOL.filter((b) => compositionClass(conditionFromPlanet(b.d)) === 'gas');
+    const gasBySol = SOL.filter((b) => compositionClass(conditionFromBody(b.d)) === 'gas');
     expect(gasBySol.length).toBeGreaterThan(0);
     expect(gasBySol.map((b) => b.d.profileId).sort()).toEqual(['sol-neptune', 'sol-uranus']);
   });
@@ -401,7 +401,7 @@ describe('6d — no Sol body reaches the pack path, and the reason is provenance
     // Neptune; the intersection is empty. Two branches, two different pairs of planets, and only one
     // of them is answering a question about the body.
     const byType = SOL.filter((b) => b.d.type === 'gas-giant').map((b) => b.d.profileId).sort();
-    const byCond = SOL.filter((b) => compositionClass(conditionFromPlanet(b.d)) === 'gas').map((b) => b.d.profileId).sort();
+    const byCond = SOL.filter((b) => compositionClass(conditionFromBody(b.d)) === 'gas').map((b) => b.d.profileId).sort();
     expect(byType).toEqual(['sol-jupiter', 'sol-saturn']);
     expect(byCond).toEqual(['sol-neptune', 'sol-uranus']);
     expect(byType.filter((x) => byCond.includes(x))).toEqual([]);

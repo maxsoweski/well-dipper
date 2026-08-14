@@ -52,7 +52,7 @@ import {
   resolveStormE, resolvePolarVortex,
 } from '../src/worldengine/base/storm-e.js';
 import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js';
-import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import { fnv1aString } from 'motion-test-kit/core/hash/fnv1a.js';
 import {
   writePackUniforms, gameDisplayRadiusEarth, resolveDriver, isPackDriver, PackContractError,
@@ -482,7 +482,7 @@ describe('GATE 5b · the registry entry is correct before anything composes it',
     for (const seed of SYSTEM_SEEDS.slice(0, 40)) {
       const s = StarSystemGenerator.generate(seed, null);
       (s.planets || []).forEach((e, ordinal) => {
-        all.push({ id: `${seed}#${ordinal}`, cond: conditionFromPlanet(e.planetData) });
+        all.push({ id: `${seed}#${ordinal}`, cond: conditionFromBody(e.planetData) });
       });
     }
     const mine = all.filter((b) => POLAR_DECK_ENTRY.applies(b.cond) === true).map((b) => b.id);
@@ -501,7 +501,7 @@ describe('GATE 5b · the registry entry is correct before anything composes it',
     const all = [];
     for (const seed of SYSTEM_SEEDS.slice(0, 40)) {
       const s = StarSystemGenerator.generate(seed, null);
-      (s.planets || []).forEach((e) => all.push(conditionFromPlanet(e.planetData)));
+      (s.planets || []).forEach((e) => all.push(conditionFromBody(e.planetData)));
     }
     const correct = all.filter((c) => POLAR_DECK_ENTRY.applies(c) === true).length;
     const counterfactual = all.filter((c) => !!c.atmosphere).length;
@@ -733,7 +733,7 @@ const POPULATION = (() => {
   for (const seed of SYSTEM_SEEDS) {
     const s = StarSystemGenerator.generate(seed, null);
     (s.planets || []).forEach((e, ordinal) => {
-      const cond = conditionFromPlanet(e.planetData);
+      const cond = conditionFromBody(e.planetData);
       if (compositionClass(cond) !== 'gas') return;
       out.push({ id: `${seed}#${ordinal}`, cond, regime: giantRegimeOf(cond) });
     });

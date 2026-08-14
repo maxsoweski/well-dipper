@@ -17,7 +17,7 @@
 import { readFileSync } from 'node:fs';
 import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js';
 import { GalacticMap } from '../src/generation/GalacticMap.js';
-import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import { craterUniformsFrom } from '../src/worldengine/port/craterUniforms.js';
 
 // Mirrors Planet.js's routing. Only ROCKY carries the palette / ice-lava / relief / crater work.
@@ -55,12 +55,12 @@ for (const { s, distPc } of near) {
     planetCount++;
     if (ROCKY_TYPES.has(p.type)) { types.add(p.type); rocky.push(p); }
     try {
-      const u = craterUniformsFrom(conditionFromPlanet(p));
+      const u = craterUniformsFrom(conditionFromBody(p));
       if (u.density > 0 && ROCKY_TYPES.has(p.type)) craterBodies.push(`${p.type}:${u.density.toFixed(2)}`);
     } catch { /* partial record */ }
     for (const m of (w.moons || [])) {
       moonCount++;
-      try { if (craterUniformsFrom(conditionFromPlanet(m)).density > 0) moonCraters++; } catch { /* */ }
+      try { if (craterUniformsFrom(conditionFromBody(m)).density > 0) moonCraters++; } catch { /* */ }
     }
   }
   rows.push({

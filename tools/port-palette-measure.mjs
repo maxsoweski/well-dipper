@@ -9,7 +9,7 @@
 //   2. T_eq is IDENTICAL down each orbit column regardless of type, and iron barely moves — the
 //      game's bodies are far less differentiated in condition space than the lab's presets (blocker C).
 import { PlanetGenerator } from '../src/generation/PlanetGenerator.js';
-import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import { surfacePaletteOf } from '../src/worldengine/base/surfaceMaterial.js';
 import { applyAlbedoTransfer } from '../src/worldengine/display/albedoTransfer.js';
 
@@ -21,7 +21,7 @@ console.log('type'.padEnd(13),'orbitAU'.padStart(7),'R⊕'.padStart(5),'T_eq'.pa
 for(const t of types){
   for(const au of [0.6, 3.0]){
     let p; try{ p = PlanetGenerator.generate(rng, au, null, null, t); }catch(e){ console.log(t.padEnd(13),'GEN ERR',e.message.slice(0,60)); continue; }
-    const cond = conditionFromPlanet(p);
+    const cond = conditionFromBody(p);
     const pal = applyAlbedoTransfer(surfacePaletteOf(cond));
     console.log(t.padEnd(13), au.toFixed(2).padStart(7), (p.radiusEarth??0).toFixed(2).padStart(5),
       (p.T_eq??0).toFixed(0).padStart(6), (p.composition?.ironFraction??0).toFixed(2).padStart(5),

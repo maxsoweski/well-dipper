@@ -24,7 +24,7 @@
 import { PlanetGenerator } from '../src/generation/PlanetGenerator.js';
 import { SeededRandom } from '../src/generation/SeededRandom.js';
 import { generateSolarSystem } from '../src/generation/SolarSystemData.js';
-import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import {
   craterSchedule, craterRelevanceOf, isImpactSurface,
   C_BASIN, MESH_FLOOR_RAD,
@@ -68,7 +68,7 @@ for (const t of TYPES) {
     for (let i = 0; i < N_PER; i++) {
       let p;
       try { p = PlanetGenerator.generate(rng, au, null, null, t); } catch { continue; }
-      const cond = conditionFromPlanet(p);
+      const cond = conditionFromBody(p);
       const sch = craterSchedule(cond);
       rows.push({ t, au, p, cond, sch, rel: craterRelevanceOf(cond), impact: isImpactSurface(cond) });
     }
@@ -126,7 +126,7 @@ const BANDS = (sch, RE) => {
 const sol = [];
 for (const w of generateSolarSystem().planets) {
   const push = (b, label) => {
-    const cond = conditionFromPlanet(b);
+    const cond = conditionFromBody(b);
     const sch = craterSchedule(cond);
     if (sch.fired) sol.push({ label, b, cond, sch, rel: craterRelevanceOf(cond) });
   };

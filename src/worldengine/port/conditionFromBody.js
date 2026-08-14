@@ -1,4 +1,4 @@
-// src/worldengine/port/conditionFromPlanet.js — the GAME-SIDE adapter into the world engine.
+// src/worldengine/port/conditionFromBody.js — the GAME-SIDE adapter into the world engine.
 //
 // The game's PlanetGenerator output and the lab's DRIVER_PRESETS entries are nearly the same shape
 // already (both carry radiusEarth / massEarth / composition / T_eq / age / tidalState / atmosphere /
@@ -151,7 +151,7 @@ export function surfaceTemperatureOf(T_eq, pressureBar) {
  * module's export list precisely so that a new seam has to be declared rather than acquired; a
  * predicate with one caller three lines below it is not a seam, and exporting it would spend that
  * fence's one signal on nothing. The behaviour IS reachable from outside — through
- * `conditionFromPlanet` itself, which is what every consumer actually calls, and end-to-end through
+ * `conditionFromBody` itself, which is what every consumer actually calls, and end-to-end through
  * the shipped material by `node tools/port-condition-delta.mjs --step4 --check`.
  */
 function noSurfaceOf(cvShim) {
@@ -534,7 +534,7 @@ export function atmosphereFromPlanet(gameAtmosphere) {
 //
 // ⭐ STATED AS A PROPERTY, NOT AS A PROCEDURE, ON PURPOSE. What this block said before described a
 // text scan that no longer exists — it named brace-matching and a comment stripper, and a reader
-// following it would have concluded that a read written outside `conditionFromPlanet`'s body is
+// following it would have concluded that a read written outside `conditionFromBody`'s body is
 // invisible to the fence. That is the OPPOSITE of the truth, in the block carrying the instruction
 // this file's next editor is meant to obey. A description pinned to implementation detail is what
 // rotted; the mechanism has already been rewritten twice under it. So: the property, which is what
@@ -547,7 +547,7 @@ export function atmosphereFromPlanet(gameAtmosphere) {
 //     `tests/port-condition-contract.test.js`. Read them before treating a silence as proof.
 //
 // Four consequences, each of them a thing an earlier version of the fence got wrong:
-//   · ⛔ THE UNIT IS THE MODULE, NOT `conditionFromPlanet`'s BODY. Every function in this file is
+//   · ⛔ THE UNIT IS THE MODULE, NOT `conditionFromBody`'s BODY. Every function in this file is
 //     covered. Moving a read into a helper, a nested closure, or module scope hides nothing, and a
 //     helper's parameter becomes an input the moment the helper is CALLED with one.
 //   · SPELLING IS NOT THE SUBJECT. `d.x`, `planetData.x`, `d?.x`, `d['x']`, `const {x} = d`,
@@ -704,7 +704,7 @@ function provenanceOf(d, comp) {
   });
 }
 
-export function conditionFromPlanet(planetData) {
+export function conditionFromBody(planetData) {
   const d = planetData || {};
   const comp = d.composition || {};
   // Flattened FIRST — both the T_eq greenhouse conversion and the passthrough below read it, and

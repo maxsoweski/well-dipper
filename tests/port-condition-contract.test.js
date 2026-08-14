@@ -62,7 +62,7 @@ import { DRIVER_PRESETS } from '../driver-presets.js';
 // was ever gated.
 import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 import {
-  conditionFromPlanet,
+  conditionFromBody,
   atmosphereFromPlanet,
   axialTiltDegreesOf,
   effectiveObliquityDegreesOf,
@@ -71,7 +71,7 @@ import {
   densityToGramsPerCC,
   PROVENANCE_INPUTS,
   PROVENANCE_COVERAGE,
-} from '../src/worldengine/port/conditionFromPlanet.js';
+} from '../src/worldengine/port/conditionFromBody.js';
 
 // The eight derivations that ALREADY SHIP on the game route. Five are baked onto
 // planetData in the record literal and the assignments under it in `PlanetGenerator.generate`
@@ -557,7 +557,7 @@ describe('Step 1 · the corpus is big enough to mean anything', () => {
 
 describe('Step 1 · channel 1 — the key set', () => {
   it('emits exactly the pre-Step-1 keys plus the four this step adds', () => {
-    const live = Object.keys(conditionFromPlanet(planets[0])).sort();
+    const live = Object.keys(conditionFromBody(planets[0])).sort();
     expect(live).toEqual([...PRE_STEP1_KEYS, ...STEP1_KEYS].sort());
   });
 
@@ -593,7 +593,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     let bodiesTouched = 0;
     for (let i = 0; i < planets.length; i++) {
       const was = legacyConditionFromPlanet(planets[i]);
-      const now = conditionFromPlanet(planets[i]);
+      const now = conditionFromBody(planets[i]);
       let any = false;
       for (const k of PRE_STEP1_KEYS) {
         if (bitDiff(was[k], now[k], k, []).length === 0) continue;
@@ -622,7 +622,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     let rawOnMovers = 0, strictlyDown = 0, greenhouseOnRest = 0;
     for (const pd of planets) {
       const was = legacyConditionFromPlanet(pd).T_eq;
-      const now = conditionFromPlanet(pd).T_eq;
+      const now = conditionFromBody(pd).T_eq;
       if (Object.is(was, now)) {
         // The 322 bodies the guard does NOT classify must still get the greenhouse
         // conversion — otherwise "T_eq moved on 204" could be satisfied by a guard that
@@ -649,7 +649,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     let filled = 0;
     for (const pd of planets) {
       expect(legacyConditionFromPlanet(pd).magneticField).toBeUndefined();
-      const v = conditionFromPlanet(pd).magneticField;
+      const v = conditionFromBody(pd).magneticField;
       expect(Number.isFinite(v), `magneticField on a ${pd.type}`).toBe(true);
       expect(Object.is(v, pd.magneticField)).toBe(true);   // forwarded, not re-derived
       filled++;
@@ -678,7 +678,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     let bodiesTouched = 0;
     for (let i = 0; i < planets.length; i++) {
       const was = deriveGiantDrivers(legacyConditionFromPlanet(planets[i]));
-      const now = deriveGiantDrivers(conditionFromPlanet(planets[i]));
+      const now = deriveGiantDrivers(conditionFromBody(planets[i]));
       let any = false;
       for (const k of new Set([...Object.keys(was), ...Object.keys(now)])) {
         fieldsSeen.add(k);
@@ -725,7 +725,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     const closedForm = (dex) => clampSdf(0.80 * (1 - 0.95 * (10 ** (dex - 0.0) - 1)));
     let exact = 0;
     for (const pd of planets) {
-      if (Object.is(deriveGiantDrivers(conditionFromPlanet(pd)).shellDepthFrac, closedForm(pd.metallicity))) exact++;
+      if (Object.is(deriveGiantDrivers(conditionFromBody(pd)).shellDepthFrac, closedForm(pd.metallicity))) exact++;
     }
     expect(exact, 'shellDepthFrac is no longer SDF0·(1 − δ·(10^Z − 1)) clamped to the gas-giant band — '
       + 'either the adapter stopped forwarding metallicity, or the law stopped reading it, or a '
@@ -744,7 +744,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     // second is a control worth having, and picking it by running both is the difference.
     const permuted = planets.map((_, i) => planets[(i + 263) % planets.length].metallicity);
     const permSdf = permuted.map((dex) => closedForm(dex));
-    const liveSdf = planets.map((pd) => deriveGiantDrivers(conditionFromPlanet(pd)).shellDepthFrac);
+    const liveSdf = planets.map((pd) => deriveGiantDrivers(conditionFromBody(pd)).shellDepthFrac);
     expect(new Set(permSdf).size, 'the permutation changed the VALUE SET — it is not count-preserving '
       + 'and proves nothing about membership').toBe(new Set(liveSdf).size);
     expect(permSdf.filter((v) => v > 0.74 && v < 0.86).length)
@@ -757,7 +757,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     // not take "the membership gate catches a permutation" as "the membership gate is tight". It is
     // as tight as the clamp allows, which is a third of the corpus loose.
     const permExact = planets.filter((pd, i) => Object.is(
-      deriveGiantDrivers(conditionFromPlanet(pd)).shellDepthFrac, closedForm(permuted[i]))).length;
+      deriveGiantDrivers(conditionFromBody(pd)).shellDepthFrac, closedForm(permuted[i]))).length;
     expect(permExact, 'the per-body membership assertion above cannot tell a permuted corpus from '
       + 'the real one — it is a count gate wearing a membership costume').toBeLessThan(CORPUS_BODIES);
     expect(permExact, 'recorded rather than left as an inequality, so the gate\'s LIMIT is on record '
@@ -772,8 +772,8 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     // to see before ruling on whether it is "too uniform", and burying it under "21 distinct values"
     // would be the true-and-misleading form this file exists to refuse. (⛔ The per-REGIME route the
     // game actually renders through is a different and better measurement — see the Step 5e block in
-    // conditionFromPlanet.js. This route is the gate's route, not the player's.)
-    const sdfValues = planets.map((pd) => deriveGiantDrivers(conditionFromPlanet(pd)).shellDepthFrac);
+    // conditionFromBody.js. This route is the gate's route, not the player's.)
+    const sdfValues = planets.map((pd) => deriveGiantDrivers(conditionFromBody(pd)).shellDepthFrac);
     expect(new Set(sdfValues).size, 'the shellDepthFrac population changed shape').toBe(21);
     expect(sdfValues.filter((v) => v === 0.74).length, 'pinned at the band FLOOR (metal-rich)').toBe(183);
     expect(sdfValues.filter((v) => v === 0.86).length, 'pinned at the band CEILING (metal-poor)').toBe(268);
@@ -796,21 +796,21 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     // step teaches the generator to emit `undefined` instead of `|| 0`, this assertion reds and the
     // reader is told the hole closed rather than having to notice.
     for (const pd of planets.filter((p) => p.metallicity === 0)) {
-      expect(conditionFromPlanet(pd)._provenance.metallicity,
+      expect(conditionFromBody(pd)._provenance.metallicity,
         'the fabricated 0 is no longer reported as a measurement').toBe('measured');
     }
 
     // ⛔⛔ THE LIMIT OF EVERYTHING ABOVE, RECORDED WITH THE CONSTRUCT THAT PRODUCED IT.
     // Every shellDepthFrac number in this test is taken on the route `deriveGiantDrivers(
-    // conditionFromPlanet(pd))` — condition straight from the adapter, `regime` UNDEFINED, no
+    // conditionFromBody(pd))` — condition straight from the adapter, `regime` UNDEFINED, no
     // `drawGiantConditions`. That is the right route for a CONTRACT gate (it isolates the adapter)
     // and it is NOT the route a rendered body takes: `giantDeckPack` classifies with `giantRegimeOf`
     // first, so a sub-neptune is scored against sdfBand [0.28, 0.44], not [0.74, 0.86]. The
     // per-regime population is measured — 204 gas-class bodies, 84 strictly interior, 110/110
     // same-system same-regime pairs sharing — and it is recorded in the Step 5e block in
-    // `conditionFromPlanet.js`, NOT gated here. ⚠ SO A GREEN RUN OF THIS FILE IS NOT EVIDENCE ABOUT
+    // `conditionFromBody.js`, NOT gated here. ⚠ SO A GREEN RUN OF THIS FILE IS NOT EVIDENCE ABOUT
     // THE PER-REGIME DISTRIBUTION. It is evidence that the adapter forwards and that FORM 2 reads it.
-    expect(conditionFromPlanet(planets[0]).regime,
+    expect(conditionFromBody(planets[0]).regime,
       'the adapter started emitting a regime — every band literal in this test is now wrong for some '
       + 'body and the closed form above is measuring the wrong anchors').toBeUndefined();
 
@@ -820,7 +820,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     // live-vs-live with the one key withheld — same body, same T_eq, same everything else.
     let ihMoved = 0, disMoved = 0, sdfMoved = 0, disOutsideSdf = 0;
     for (const pd of planets) {
-      const c = conditionFromPlanet(pd);
+      const c = conditionFromBody(pd);
       const held = deriveGiantDrivers({ ...c, metallicity: undefined });
       const now = deriveGiantDrivers(c);
       const sm = !Object.is(held.shellDepthFrac, now.shellDepthFrac);
@@ -851,13 +851,13 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     // measuring almost nothing. It was caught by running it.)
     let ihControl = 0;
     for (const pd of planets) {
-      const c = conditionFromPlanet(pd);
+      const c = conditionFromBody(pd);
       const bumped = { ...c, surfaceGravity: c.surfaceGravity * 10 };
       if (!Object.is(deriveGiantDrivers(c).internalHeat, deriveGiantDrivers(bumped).internalHeat)) ihControl++;
     }
     expect(ihControl, 'the internalHeat comparison above cannot detect a change at all — its zero is '
       + 'a decoration').toBe(60);
-    const ihValues = planets.map((pd) => deriveGiantDrivers(conditionFromPlanet(pd)).internalHeat);
+    const ihValues = planets.map((pd) => deriveGiantDrivers(conditionFromBody(pd)).internalHeat);
     expect(new Set(ihValues).size, 'internalHeat\'s own spread, pinned so the sentence above cannot '
       + 'be read as "internalHeat is varied"').toBe(8);
     expect(ihValues.filter((v) => v === 1.67 * 0.88).length, 'bodies pinned at the internalHeat FLOOR')
@@ -878,7 +878,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
       bySystem.get(sys).push(pd);
     });
     const multi = [...bySystem.values()].filter((xs) => xs.length >= 2);
-    const sdfOf = (pd) => deriveGiantDrivers(conditionFromPlanet(pd)).shellDepthFrac;
+    const sdfOf = (pd) => deriveGiantDrivers(conditionFromBody(pd)).shellDepthFrac;
     const oldSdfOf = (pd) => deriveGiantDrivers(legacyConditionFromPlanet(pd)).shellDepthFrac;
     expect(multi.length, 'systems carrying more than one planet').toBe(111);
     expect(multi.filter((xs) => new Set(xs.map(oldSdfOf)).size === 1).length,
@@ -919,7 +919,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     // statement about `craters` and nothing else. That is a real narrowing and it is
     // written here rather than buried, because a reader who still believes this test
     // covers "the shipped surface" would be wrong by nine tenths.
-    const surface = Object.keys(withoutLawMovers(shippedLawOutputs(conditionFromPlanet(planets[0])))).sort();
+    const surface = Object.keys(withoutLawMovers(shippedLawOutputs(conditionFromBody(planets[0])))).sort();
     expect(surface, 'the exclusion list emptied or reshaped the surface this gate compares')
       .toEqual(['craters']);
 
@@ -930,7 +930,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     // LIVE on 8 bodies and the object takes 9 distinct values across the corpus. Both
     // are pinned, so if a later step turns craters off everywhere this test says so
     // instead of going quietly green.
-    const craterRows = planets.map((pd) => craterUniformsFrom(conditionFromPlanet(pd)));
+    const craterRows = planets.map((pd) => craterUniformsFrom(conditionFromBody(pd)));
     expect(craterRows.filter((c) => (c.density ?? 0) > 0).length,
       'craters are live on too few bodies for this gate to mean anything').toBe(8);
     expect(new Set(craterRows.map((c) => JSON.stringify(c))).size,
@@ -944,7 +944,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     const subtractedThatMove = new Set();
     for (const pd of planets) {
       const was = shippedLawOutputs(legacyConditionFromPlanet(pd));
-      const now = shippedLawOutputs(conditionFromPlanet(pd));
+      const now = shippedLawOutputs(conditionFromBody(pd));
       for (const k of EXPECTED_LAW_MOVERS) {
         if (bitDiff(was[k], now[k], k, []).length) subtractedThatMove.add(k);
       }
@@ -957,7 +957,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     for (let i = 0; i < planets.length && diffs.length <= 24; i++) {
       bitDiff(
         withoutLawMovers(shippedLawOutputs(legacyConditionFromPlanet(planets[i]))),
-        withoutLawMovers(shippedLawOutputs(conditionFromPlanet(planets[i]))),
+        withoutLawMovers(shippedLawOutputs(conditionFromBody(planets[i]))),
         `${planets[i].type}[${i}]`, diffs,
       );
     }
@@ -979,7 +979,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     const ratios = [];
     for (const pd of planets) {
       const was = legacyConditionFromPlanet(pd).rawTidalIoRatio;
-      const now = conditionFromPlanet(pd).rawTidalIoRatio;
+      const now = conditionFromBody(pd).rawTidalIoRatio;
       expect(Number.isFinite(now), `rawTidalIoRatio on a ${pd.type}`).toBe(true);
       // ⛔ THE NEW VALUE IS THE GAME'S OWN MEASUREMENT, FORWARDED — not re-derived.
       // This is the assertion that distinguishes "the number changed" from "the number
@@ -1026,10 +1026,10 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     const perKey = {};
     const samples = {};
     let bodiesTouched = 0;
-    const lawSurface = Object.keys(shippedLawOutputs(conditionFromPlanet(planets[0])));
+    const lawSurface = Object.keys(shippedLawOutputs(conditionFromBody(planets[0])));
     for (const pd of planets) {
       const a = shippedLawOutputs(legacyConditionFromPlanet(pd));
-      const b = shippedLawOutputs(conditionFromPlanet(pd));
+      const b = shippedLawOutputs(conditionFromBody(pd));
       let any = false;
       for (const k of lawSurface) {
         const d = bitDiff(a[k], b[k], k, []);
@@ -1083,7 +1083,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
       const seen = new Set();
       for (const pd of planets) {
         const a = fn(legacyConditionFromPlanet(pd));
-        const b = fn(conditionFromPlanet(pd));
+        const b = fn(conditionFromBody(pd));
         for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
           seen.add(k);
           if (bitDiff(a[k], b[k], k, []).length) out[k] = (out[k] || 0) + 1;
@@ -1156,7 +1156,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
 //  2. A HAND-WRITTEN CANARY TABLE that shares no code with the tree — twelve bodies named
 //     by literal `seed#ordinal`, six asserted IN and six OUT, each carrying the MEASURED
 //     properties that made it a straddler. Those literals are the independent oracle. They
-//     are read from the raw `planetData` record and from `conditionFromPlanet`'s output
+//     are read from the raw `planetData` record and from `conditionFromBody`'s output
 //     only: no `atmosphereFromPlanet`, no `densityToGramsPerCC`, no `surfaceTemperatureOf`,
 //     no `compositionClass`. Nothing in half 2 can move because half 1's helpers moved.
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1346,7 +1346,7 @@ describe('Step 4 · the no-surface guard\'s DOMAIN — which bodies, not how man
       const id = bodyIds[i];
       const raw = rawTeqOf(pd);
       const cooked = cookedTeqOf(pd);
-      const got = conditionFromPlanet(pd).T_eq;
+      const got = conditionFromBody(pd).T_eq;
       if (noSurfacePredicateOf(pd)) {
         classifiedNoSurface++;
         if (!Object.is(got, raw)) {
@@ -1374,7 +1374,7 @@ describe('Step 4 · the no-surface guard\'s DOMAIN — which bodies, not how man
 
   it('HALF 2 · twelve named bodies are classified as their MEASURED properties demand — literals, no shared code with the tree', () => {
     // ⛔ THIS TEST TOUCHES NO TREE HELPER. It reads `planetData` fields and
-    // `conditionFromPlanet(...).T_eq`, and compares them to numbers typed into the table
+    // `conditionFromBody(...).T_eq`, and compares them to numbers typed into the table
     // above. `atmosphereFromPlanet`, `densityToGramsPerCC`, `surfaceTemperatureOf` and
     // `compositionClass` are all absent on purpose: half 1 is an echo of the implementation
     // (ledger C10) and an echo cannot catch a redefinition of the rule. This half can.
@@ -1398,7 +1398,7 @@ describe('Step 4 · the no-surface guard\'s DOMAIN — which bodies, not how man
       expect(pd.T_eq, `${row.id} raw T_eq`).toBeCloseTo(row.props.rawTeq, 9);
 
       // ── THE CLASSIFICATION, THROUGH THE SHIPPED SEAM AND NOTHING ELSE. ──
-      const got = conditionFromPlanet(pd).T_eq;
+      const got = conditionFromBody(pd).T_eq;
       if (row.expect === 'IN') {
         expect(Object.is(got, pd.T_eq), `${row.id} (${row.props.type}, ${row.props.composition} at `
           + `${row.props.pressure} bar) MUST be inside the no-surface domain and keep its own raw `
@@ -1424,7 +1424,7 @@ describe('Step 4 · the no-surface guard\'s DOMAIN — which bodies, not how man
       const i = bodyIds.indexOf(id);
       expect(i, `${id} missing from the corpus`).toBeGreaterThanOrEqual(0);
       const pd = planets[i];
-      return { pd, inDomain: Object.is(conditionFromPlanet(pd).T_eq, pd.T_eq) };
+      return { pd, inDomain: Object.is(conditionFromBody(pd).T_eq, pd.T_eq) };
     };
 
     // TYPE is not the discriminator: two `rocky` bodies, and two `ice` bodies, split.
@@ -1563,7 +1563,7 @@ describe('Step 1 · channel 3 — no law reads any of the new keys', () => {
     const sample = planets.filter((_, i) => i % 4 === 0).slice(0, 140);
     const diffs = [];
     for (const pd of sample) {
-      const cond = conditionFromPlanet(pd);
+      const cond = conditionFromBody(pd);
       const base = shippedLawOutputs(cond);
       for (const k of STEP1_KEYS) {
         const stripped = { ...cond };
@@ -1611,7 +1611,7 @@ describe('Step 1 · surfaceHistory is emitted at last', () => {
     for (const pd of planets) {
       expect(legacyFpFromPlanet(pd).surfaceHistory, 'the pre-Step-1 fp already had it')
         .toBe(pd.surfaceHistory);
-      expect(conditionFromPlanet(pd).surfaceHistory).toBe(pd.surfaceHistory);
+      expect(conditionFromBody(pd).surfaceHistory).toBe(pd.surfaceHistory);
     }
   });
 
@@ -1644,7 +1644,7 @@ describe('Step 1 · surfaceHistory is emitted at last', () => {
     let engineSpellingPresent = 0;
     let gameSpellingPresent = 0;
     for (const pd of planets) {
-      const sh = conditionFromPlanet(pd).surfaceHistory;
+      const sh = conditionFromBody(pd).surfaceHistory;
       if (sh.erosion !== undefined) engineSpellingPresent++;
       if (typeof sh.erosionLevel === 'number') gameSpellingPresent++;
     }
@@ -1660,7 +1660,7 @@ describe('Step 1 · radiusEarthCanonical is distinct from the drawn radius', () 
     // is CORRECT, not broken — the self-compression law expresses "what if this
     // body were a size other than its canonical one," which the game never asks.
     for (const pd of planets) {
-      const c = conditionFromPlanet(pd);
+      const c = conditionFromBody(pd);
       expect(Object.is(c.radiusEarthCanonical, c.radiusEarth), pd.type).toBe(true);
     }
   });
@@ -1722,7 +1722,7 @@ describe('Step 1 · the axialTilt unit conversion', () => {
     expect(axialTiltDegreesOf(undefined)).toBeUndefined();
     expect(axialTiltDegreesOf(null)).toBeUndefined();
     // Sol's moon records carry no axialTilt (surface-variation-beyond-mvp.md:790).
-    expect(conditionFromPlanet({ radiusEarth: 0.273 }).axialTiltDeg).toBeUndefined();
+    expect(conditionFromBody({ radiusEarth: 0.273 }).axialTiltDeg).toBeUndefined();
   });
 
   it('lands every generated body inside a physically possible obliquity', () => {
@@ -1734,7 +1734,7 @@ describe('Step 1 · the axialTilt unit conversion', () => {
     // is the UNIT check, which the fold cannot carry (see the double-conversion
     // hazard test in that block).
     for (const pd of planets) {
-      const deg = conditionFromPlanet(pd).axialTiltDeg;
+      const deg = conditionFromBody(pd).axialTiltDeg;
       expect(Number.isFinite(deg), pd.type).toBe(true);
       expect(Object.is(deg, pd.axialTilt)).toBe(false);   // a passthrough would fail here
     }
@@ -1827,7 +1827,7 @@ describe('Step 1 · the axialTiltDeg DOMAIN, and the consumer it feeds', () => {
     // ⛔ THE REPLACEMENT FOR THE VACUOUS `Math.abs(deg) <= 180`. Measured before
     // the fold landed: 267 of 526 bodies (50.8%) emitted a NEGATIVE value,
     // range −85.543…+80.769. Every one of them is dimensionally correct.
-    const degs = planets.map((pd) => conditionFromPlanet(pd).axialTiltDeg);
+    const degs = planets.map((pd) => conditionFromBody(pd).axialTiltDeg);
     const bad = degs.filter((d) => !(d >= 0 && d <= 90));
     expect(bad.length, `${bad.length}/${degs.length} outside [0,90]; e.g. ${bad.slice(0, 5)}`).toBe(0);
   });
@@ -1837,7 +1837,7 @@ describe('Step 1 · the axialTiltDeg DOMAIN, and the consumer it feeds', () => {
     // COMPOSITION (rad→deg, then fold) and not just the endpoints.
     for (const pd of planets) {
       if (typeof pd.axialTilt !== 'number') continue;
-      expect(conditionFromPlanet(pd).axialTiltDeg)
+      expect(conditionFromBody(pd).axialTiltDeg)
         .toBeCloseTo(expectedEffectiveObliquity(pd.axialTilt * 180 / Math.PI), 10);
     }
   });
@@ -1848,7 +1848,7 @@ describe('Step 1 · the axialTiltDeg DOMAIN, and the consumer it feeds', () => {
     // and 260 distinct bias values existed across 526 bodies, because every
     // negative tilt clamped to the same floor. After: 0 and 526.
     const bias = planets
-      .map((pd) => conditionFromPlanet(pd).axialTiltDeg)
+      .map((pd) => conditionFromBody(pd).axialTiltDeg)
       .filter(Number.isFinite)
       .map(frostLatitudeBiasFor);
     const zero = bias.filter((b) => b === 0).length;
@@ -1881,7 +1881,7 @@ describe('Step 1 · the axialTiltDeg DOMAIN, and the consumer it feeds', () => {
     expect(retro.length, 'Sol must still carry retrograde bodies for this gate to mean anything').toBe(4);
 
     for (const b of retro) {
-      const deg = conditionFromPlanet(b).axialTiltDeg;
+      const deg = conditionFromBody(b).axialTiltDeg;
       expect(deg).toBeGreaterThanOrEqual(0);
       expect(deg).toBeLessThanOrEqual(90);
       expect(frostLatitudeBiasFor(deg)).toBeLessThan(1);      // was exactly 1.000 on all four
@@ -1892,14 +1892,14 @@ describe('Step 1 · the axialTiltDeg DOMAIN, and the consumer it feeds', () => {
     // equator-ward frost spread — which is the most wrong a value in [0,1] can be.
     const venus = bodies.find((b) => b.axialTilt === 3.1);
     expect(venus, 'SolarSystemData.js still carries Venus at 3.1 rad').toBeTruthy();
-    expect(conditionFromPlanet(venus).axialTiltDeg).toBeCloseTo(2.38, 2);
-    expect(frostLatitudeBiasFor(conditionFromPlanet(venus).axialTiltDeg)).toBeCloseTo(0.026, 3);
+    expect(conditionFromBody(venus).axialTiltDeg).toBeCloseTo(2.38, 2);
+    expect(frostLatitudeBiasFor(conditionFromBody(venus).axialTiltDeg)).toBeCloseTo(0.026, 3);
   });
 
   it('folds on the physics identities, not on an implementation detail', () => {
     // A tilt and its mirror are the same obliquity; so are θ and 180−θ. These
     // are properties of the sky, so they hold whatever the adapter does inside.
-    const deg = (r) => conditionFromPlanet({ axialTilt: r }).axialTiltDeg;
+    const deg = (r) => conditionFromBody({ axialTilt: r }).axialTiltDeg;
     const D2R = Math.PI / 180;
     expect(deg(-25 * D2R)).toBeCloseTo(deg(25 * D2R), 12);   // sign is a convention
     expect(deg(98 * D2R)).toBeCloseTo(deg(82 * D2R), 12);    // retrograde 98° ≡ prograde 82°
@@ -1967,8 +1967,8 @@ describe('Step 1 · the axialTiltDeg DOMAIN, and the consumer it feeds', () => {
     // `undefined` is a legitimate value at this seam (absent tilt), so laundering a
     // corrupt one into it would hand a downstream `?? default` a plausible world.
     // NaN stays NaN, which is loud (it reaches a uniform and the body renders black).
-    expect(Number.isNaN(conditionFromPlanet({ axialTilt: NaN }).axialTiltDeg)).toBe(true);
-    expect(conditionFromPlanet({ axialTilt: undefined }).axialTiltDeg).toBeUndefined();
+    expect(Number.isNaN(conditionFromBody({ axialTilt: NaN }).axialTiltDeg)).toBe(true);
+    expect(conditionFromBody({ axialTilt: undefined }).axialTiltDeg).toBeUndefined();
   });
 });
 
@@ -1989,12 +1989,12 @@ describe('Step 1 · the habitability shape normalisation', () => {
     // body renders as a black frame.
     const clamp01 = (x) => Math.min(1, Math.max(0, x));
     expect(Number.isNaN(clamp01(planets[0].habitability))).toBe(true);
-    expect(clamp01(conditionFromPlanet(planets[0]).habitability)).not.toBeNaN();
+    expect(clamp01(conditionFromBody(planets[0]).habitability)).not.toBeNaN();
   });
 
   it('emits the scalar, from either side\'s shape', () => {
     for (const pd of planets) {
-      const h = conditionFromPlanet(pd).habitability;
+      const h = conditionFromBody(pd).habitability;
       expect(typeof h, pd.type).toBe('number');
       expect(Object.is(h, pd.habitability.score)).toBe(true);
       expect(h).toBeGreaterThanOrEqual(0);
@@ -2031,7 +2031,7 @@ describe('Step 1 · the atmosphere sniff became a positive shape validation', ()
     expect(Boolean(was.atmosphere)).toBe(true);          // "has air"
     expect(was.atmosphere.pressure).toBeUndefined();     // "vacuum"
 
-    const now = conditionFromPlanet(moonLike);
+    const now = conditionFromBody(moonLike);
     expect(now.atmosphere).toBeNull();                   // one answer, and it is airless
     expect(now._provenance.atmosphere).toBe('defaulted'); // and it is labelled as a non-measurement
   });
@@ -2045,7 +2045,7 @@ describe('Step 1 · the atmosphere sniff became a positive shape validation', ()
     for (const pd of planets) {
       const diffs = bitDiff(
         legacyConditionFromPlanet(pd).atmosphere,
-        conditionFromPlanet(pd).atmosphere, `${pd.type}.atmosphere`, [],
+        conditionFromBody(pd).atmosphere, `${pd.type}.atmosphere`, [],
       );
       expect(diffs).toEqual([]);
       if (pd.atmosphere) {
@@ -2073,7 +2073,7 @@ describe('Step 1 · the atmosphere sniff became a positive shape validation', ()
 
   it('forwards the wrapper\'s colour, which the physics block does not carry', () => {
     // PLAN.md:177 lists `atmosphere.color` as something to forward. It ALREADY was
-    // (conditionFromPlanet.js, the `color:` line) — this is a regression fence on a
+    // (conditionFromBody.js, the `color:` line) — this is a regression fence on a
     // claim that was true before the step, not a new addition.
     const withPhysics = {
       color: [0.8, 0.5, 0.3], strength: 0.15,
@@ -2082,7 +2082,7 @@ describe('Step 1 · the atmosphere sniff became a positive shape validation', ()
     expect(atmosphereFromPlanet(withPhysics).color).toBe(withPhysics.color);
     for (const pd of planets) {
       if (!pd.atmosphere) continue;
-      expect(conditionFromPlanet(pd).atmosphere.color).toBe(pd.atmosphere.color);
+      expect(conditionFromBody(pd).atmosphere.color).toBe(pd.atmosphere.color);
     }
   });
 });
@@ -2101,7 +2101,7 @@ describe('Step 5e · metallicity IS forwarded — the Step 1 fence, spent and in
   it('is forwarded verbatim on every generated body, and NOT re-derived', () => {
     for (const pd of planets) {
       expect(typeof pd.metallicity, 'the game does carry one').toBe('number');
-      const v = conditionFromPlanet(pd).metallicity;
+      const v = conditionFromBody(pd).metallicity;
       expect(Number.isFinite(v), `metallicity on a ${pd.type}`).toBe(true);
       // `Object.is`, not a tolerance: the claim is "the game's own number", and a re-derivation
       // that lands close would satisfy anything weaker. Same shape as the magneticField row.
@@ -2116,7 +2116,7 @@ describe('Step 5e · metallicity IS forwarded — the Step 1 fence, spent and in
     // `giant-drivers.js` that silently re-routed the branch would red here.
     let onPrimary = 0;
     for (const pd of planets) {
-      const c = conditionFromPlanet(pd);
+      const c = conditionFromBody(pd);
       const ratio = 10 ** pd.metallicity;
       const expected = Math.min(0.86, Math.max(0.74, 0.80 * (1 - 0.95 * (ratio - 1))));
       if (Object.is(deriveGiantDrivers(c).shellDepthFrac, expected)) onPrimary++;
@@ -2127,7 +2127,7 @@ describe('Step 5e · metallicity IS forwarded — the Step 1 fence, spent and in
     // AND THE CONTROL: withhold the key on the same live condition and the primary branch stops
     // being taken, everywhere. A gate whose control never moved is evidence of nothing.
     const withheld = new Set(planets.map((pd) => deriveGiantDrivers(
-      { ...conditionFromPlanet(pd), metallicity: undefined }).shellDepthFrac));
+      { ...conditionFromBody(pd), metallicity: undefined }).shellDepthFrac));
     expect([...withheld], 'withholding metallicity no longer falls back to the saturated density '
       + 'proxy — the control that makes the assertion above meaningful has stopped moving')
       .toEqual([0.74]);
@@ -2142,7 +2142,7 @@ describe('Step 5e · metallicity IS forwarded — the Step 1 fence, spent and in
     expect(moons.length).toBeGreaterThan(0);
     expect(moons.filter((m) => m.metallicity != null).length, 'a moon acquired a metallicity — Step 8 '
       + 'owes this population a decision it has not made').toBe(0);
-    for (const m of moons) expect(conditionFromPlanet(m).metallicity).toBeUndefined();
+    for (const m of moons) expect(conditionFromBody(m).metallicity).toBeUndefined();
 
     const solBodies = (generateSolarSystem().planets || []).map((e) => e.planetData || e);
     expect(solBodies.length).toBeGreaterThan(0);
@@ -2183,8 +2183,8 @@ describe('Step 5e · metallicity IS forwarded — the Step 1 fence, spent and in
     expect(dex.filter((m) => m < 0).length / dex.length).toBeGreaterThan(0.2);  // ~half, measured
 
     const held = gas.map((p) => deriveGiantDrivers(
-      { ...conditionFromPlanet(p), metallicity: undefined }).shellDepthFrac);
-    const forwarded = gas.map((p) => deriveGiantDrivers(conditionFromPlanet(p)).shellDepthFrac);
+      { ...conditionFromBody(p), metallicity: undefined }).shellDepthFrac);
+    const forwarded = gas.map((p) => deriveGiantDrivers(conditionFromBody(p)).shellDepthFrac);
     // The PRE-5e law, reproduced here rather than cited, so the trap stays measured after the fix.
     // `regime` is left undefined exactly as the two calls above leave it, so all three lines speak
     // about the same body: gas-giant anchors, SDF0 0.80, band [0.74, 0.86].
@@ -2546,7 +2546,7 @@ const NODE_TYPE_LEDGER = Object.freeze({
  * satisfied. Three adversarial rounds established this empirically; both limits
  * below are of exactly that shape, and were found only by attacking the fence.
  *
- *   #1 `arguments`. Inside `conditionFromPlanet`, `arguments[0]` IS `planetData`.
+ *   #1 `arguments`. Inside `conditionFromBody`, `arguments[0]` IS `planetData`.
  *      `Identifier` is MODELLED, so the sweep is satisfied; the rule has no case
  *      for the name, so `arguments[0].tidalHeating` records no read and produces
  *      no finding. The `usesArguments` guard covers a resolvable in-file callee's
@@ -2754,7 +2754,7 @@ const fnNamed = (name, scope) => {
  * every place a bare input escaped the walk, and the module's export surface.
  */
 function analyzeAdapterSource(src, opts = {}) {
-  const adapterName = opts.adapter || 'conditionFromPlanet';
+  const adapterName = opts.adapter || 'conditionFromBody';
   const excisedName = opts.excised || 'provenanceOf';
   // ⛔ THE MUTATION LEVER (PLAN §11.3.1). `forgetTypes` drops node types out of the
   // ledger AT RUN TIME, so the completeness sweep can be shown to FIRE on a real
@@ -3278,7 +3278,7 @@ const caughtBy = (f) => [
 ];
 
 const ADAPTER_SRC = () => readFileSync(
-  fileURLToPath(new URL('../src/worldengine/port/conditionFromPlanet.js', import.meta.url)), 'utf8',
+  fileURLToPath(new URL('../src/worldengine/port/conditionFromBody.js', import.meta.url)), 'utf8',
 );
 
 /** The adapter's own reads, extracted from disk. */
@@ -3292,7 +3292,7 @@ function adapterReads() {
  */
 const syntheticAdapter = ({ moduleScope = '', preamble = '', fpLine = '', provLine = '' }) => `
       ${moduleScope}
-      export function conditionFromPlanet(planetData) {
+      export function conditionFromBody(planetData) {
         const d = planetData || {};
         const comp = d.composition || {};
         ${preamble}
@@ -3324,7 +3324,7 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
     // and the test passes over any defect at all. So the analyser is run over a
     // SYNTHETIC adapter carrying an undeclared read and required to surface it.
     const synthetic = `
-      export function conditionFromPlanet(planetData) {
+      export function conditionFromBody(planetData) {
         const d = planetData || {};
         const comp = d.composition || {};
         // a comment mentioning d.neverRead must NOT count
@@ -3657,7 +3657,7 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
     // declared here on purpose.
     expect(a.exportNames).toEqual([
       'PROVENANCE_COVERAGE', 'PROVENANCE_INPUTS', 'TAU_EXP', 'TAU_REF',
-      'atmosphereFromPlanet', 'axialTiltDegreesOf', 'conditionFromPlanet',
+      'atmosphereFromPlanet', 'axialTiltDegreesOf', 'conditionFromBody',
       'densityToGramsPerCC', 'effectiveObliquityDegreesOf', 'habitabilityScalarOf',
       'surfaceTemperatureOf',
     ]);
@@ -3709,7 +3709,7 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
     // provenance record — the blind spot rebuilt one level over.
     const declared = new Set(Object.values(PROVENANCE_COVERAGE).flat());
     const live = fenceFindings(ADAPTER_SRC(), declared);
-    expect(live.findings, 'conditionFromPlanet.js reaches an input by a route this analysis cannot '
+    expect(live.findings, 'conditionFromBody.js reaches an input by a route this analysis cannot '
       + 'follow — write the read as an ordinary member access on `d` / `comp`').toEqual([]);
     expect(caughtBy(live), 'the real adapter, unmodified').toEqual([]);
 
@@ -3875,7 +3875,7 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
     // own this is the self-referential assertion that was retired; it is only
     // worth anything because the test above independently ties one of its sides
     // to the adapter's code.
-    const p = conditionFromPlanet(planets[0])._provenance;
+    const p = conditionFromBody(planets[0])._provenance;
     expect(Object.keys(p).sort()).toEqual([...PROVENANCE_INPUTS].sort());
     expect(PROVENANCE_INPUTS).toEqual(Object.keys(PROVENANCE_COVERAGE));
     for (const [k, v] of Object.entries(p)) {
@@ -3896,15 +3896,15 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
       composition: { ironFraction: 0.3, density: 6000, volatileFraction: 0.02, carbonToOxygen: 1.2 },
     };
     const bare = { ...carbonish, composition: { ironFraction: 0.3, density: 6000, volatileFraction: 0.02 } };
-    expect(conditionFromPlanet(carbonish)._provenance.carbonToOxygen).toBe('measured');
-    expect(conditionFromPlanet(bare)._provenance.carbonToOxygen).toBe('defaulted');
+    expect(conditionFromBody(carbonish)._provenance.carbonToOxygen).toBe('measured');
+    expect(conditionFromBody(bare)._provenance.carbonToOxygen).toBe('defaulted');
     // ...while the composition ROW stays 'measured' on both, which is the reason
     // this needed its own row instead of joining the density/iron/volatile group.
-    expect(conditionFromPlanet(bare)._provenance.composition).toBe('measured');
+    expect(conditionFromBody(bare)._provenance.composition).toBe('measured');
 
     // surfaceMaterial.js:335, inside surfacePaletteOf — one of the five bakes.
-    const lit = surfacePaletteOf(conditionFromPlanet(carbonish));
-    const unlit = surfacePaletteOf(conditionFromPlanet(bare));
+    const lit = surfacePaletteOf(conditionFromBody(carbonish));
+    const unlit = surfacePaletteOf(conditionFromBody(bare));
     expect(lit.fresh).not.toEqual(unlit.fresh);
     expect(unlit.fresh[0]).toBeGreaterThan(lit.fresh[0] * 1.5);   // measured 2.2x brighter
   });
@@ -3912,7 +3912,7 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
   it('and reports it defaulted on the populations that actually lack it', () => {
     // Measured: 526/526 generated planets carry C/O, 0/39 Sol bodies do. So on
     // Sol the engine has always read a fabricated 0 for it, unrecorded.
-    for (const pd of planets) expect(conditionFromPlanet(pd)._provenance.carbonToOxygen).toBe('measured');
+    for (const pd of planets) expect(conditionFromBody(pd)._provenance.carbonToOxygen).toBe('measured');
 
     const sol = generateSolarSystem();
     const bodies = [];
@@ -3921,7 +3921,7 @@ describe('Step 1 · _provenance describes THE ADAPTER, not itself', () => {
       for (const m of e.moons || []) bodies.push(m.planetData || m);
     }
     expect(bodies.length).toBeGreaterThanOrEqual(30);
-    const measured = bodies.filter((b) => conditionFromPlanet(b)._provenance.carbonToOxygen === 'measured');
+    const measured = bodies.filter((b) => conditionFromBody(b)._provenance.carbonToOxygen === 'measured');
     expect(measured.length, 'if Sol gains a C/O this becomes a real measurement — retire the claim above').toBe(0);
   });
 });
@@ -3947,24 +3947,24 @@ describe('Step 1 · _provenance', () => {
       tidalHeating: 3.7, starMassEarth: 332946, orbitRadiusEarth: 23455,
     };
     const cold = { ...heated, tidalHeating: undefined, starMassEarth: undefined, orbitRadiusEarth: undefined };
-    expect(conditionFromPlanet(heated)._provenance.tidalHeat).toBe('measured');
-    expect(conditionFromPlanet(heated)._provenance.starMassEarth).toBe('measured');
-    expect(conditionFromPlanet(heated)._provenance.orbitRadiusEarth).toBe('measured');
-    expect(conditionFromPlanet(cold)._provenance.tidalHeat).toBe('defaulted');
-    expect(conditionFromPlanet(cold)._provenance.starMassEarth).toBe('defaulted');
-    expect(conditionFromPlanet(cold)._provenance.orbitRadiusEarth).toBe('defaulted');
+    expect(conditionFromBody(heated)._provenance.tidalHeat).toBe('measured');
+    expect(conditionFromBody(heated)._provenance.starMassEarth).toBe('measured');
+    expect(conditionFromBody(heated)._provenance.orbitRadiusEarth).toBe('measured');
+    expect(conditionFromBody(cold)._provenance.tidalHeat).toBe('defaulted');
+    expect(conditionFromBody(cold)._provenance.starMassEarth).toBe('defaulted');
+    expect(conditionFromBody(cold)._provenance.orbitRadiusEarth).toBe('defaulted');
 
     // ⛔ AND THE ROWS TRACK A REAL DIFFERENCE IN THE OUTPUT, not just the input's
     // presence: 'measured' means the D12 branch ran and the forwarded number came out
     // un-transformed; 'defaulted' means the Io formula ran instead.
-    expect(conditionFromPlanet(heated).rawTidalIoRatio).toBe(3.7);
-    expect(conditionFromPlanet(cold).rawTidalIoRatio).not.toBe(3.7);
+    expect(conditionFromBody(heated).rawTidalIoRatio).toBe(3.7);
+    expect(conditionFromBody(cold).rawTidalIoRatio).not.toBe(3.7);
 
     // ⚠ AND THE ROWS ARE INDEPENDENT, which is why they are three rows and not one. The
     // moon shape — an orbit radius with no star mass — is the case a compound row would
     // report as a single 'defaulted' while hiding WHICH half is missing.
     const moonish = { ...cold, orbitRadiusEarth: 60 };
-    const mp = conditionFromPlanet(moonish)._provenance;
+    const mp = conditionFromBody(moonish)._provenance;
     expect([mp.tidalHeat, mp.starMassEarth, mp.orbitRadiusEarth])
       .toEqual(['defaulted', 'defaulted', 'measured']);
   });
@@ -3975,7 +3975,7 @@ describe('Step 1 · _provenance', () => {
     // exactly why nobody noticed it running for the whole life of this seam. The star
     // mass is on NONE: `PlanetGenerator.generate` keeps `starMassSolar` as a local and
     // spends it on `tidalHeatingPlanet` rather than recording it.
-    const pAll = planets.map((pd) => conditionFromPlanet(pd)._provenance);
+    const pAll = planets.map((pd) => conditionFromBody(pd)._provenance);
     expect(pAll.filter((p) => p.tidalHeat === 'measured').length).toBe(planets.length);
     expect(pAll.filter((p) => p.starMassEarth === 'measured').length).toBe(0);
     expect(pAll.filter((p) => p.orbitRadiusEarth === 'measured').length).toBe(0);
@@ -3985,7 +3985,7 @@ describe('Step 1 · _provenance', () => {
     // `tidalHeating`, so the branch that would read the pair never runs. If that first
     // assertion ever drops below 100%, the pair becomes live and Step 8 owes the fix.
     expect(moons.length).toBeGreaterThan(0);
-    const mAll = moons.map((m) => conditionFromPlanet(m)._provenance);
+    const mAll = moons.map((m) => conditionFromBody(m)._provenance);
     expect(mAll.filter((p) => p.tidalHeat === 'measured').length,
       'a moon lost its tidalHeating — the incoherent starMass/orbitRadius pair is now LIVE').toBe(moons.length);
     expect(mAll.filter((p) => p.orbitRadiusEarth === 'measured').length).toBe(moons.length);
@@ -3993,8 +3993,8 @@ describe('Step 1 · _provenance', () => {
   });
 
   it('PLAN.md:192 — measured on a generated planet, defaulted on a bare radius', () => {
-    expect(conditionFromPlanet(planets[0])._provenance.massEarth).toBe('measured');
-    expect(conditionFromPlanet({ radiusEarth: 0.273 })._provenance.massEarth).toBe('defaulted');
+    expect(conditionFromBody(planets[0])._provenance.massEarth).toBe('measured');
+    expect(conditionFromBody({ radiusEarth: 0.273 })._provenance.massEarth).toBe('defaulted');
   });
 
   it('names the fabrications on a Sol-shaped moon record, which is the point of it', () => {
@@ -4004,7 +4004,7 @@ describe('Step 1 · _provenance', () => {
     // them lands on the 'defaulted' side for this record), every one of them silently,
     // and the
     // condition that comes out is a finite, plausible, entirely fictional body.
-    const p = conditionFromPlanet({ radiusEarth: 0.273 })._provenance;
+    const p = conditionFromBody({ radiusEarth: 0.273 })._provenance;
     expect(p.radiusEarth).toBe('measured');
     const defaulted = Object.entries(p).filter(([, v]) => v === 'defaulted').map(([k]) => k);
     expect(defaulted.length).toBeGreaterThanOrEqual(10);
@@ -4019,22 +4019,22 @@ describe('Step 1 · _provenance', () => {
     // PlanetGenerator.js:448 `let atmosphere = null;` and MoonGenerator.js:196 `} : null,`
     // both set it outright to mean "nothing retained". That IS the game's answer, and calling
     // it 'defaulted' would cry wolf on every airless body in the galaxy.
-    expect(conditionFromPlanet({ atmosphere: null })._provenance.atmosphere).toBe('measured');
-    expect(conditionFromPlanet({})._provenance.atmosphere).toBe('defaulted');
-    expect(conditionFromPlanet({ atmosphere: { color: [1, 1, 1], strength: 0.3 } })
+    expect(conditionFromBody({ atmosphere: null })._provenance.atmosphere).toBe('measured');
+    expect(conditionFromBody({})._provenance.atmosphere).toBe('defaulted');
+    expect(conditionFromBody({ atmosphere: { color: [1, 1, 1], strength: 0.3 } })
       ._provenance.atmosphere).toBe('defaulted');
-    expect(conditionFromPlanet({ atmosphere: { retained: true, pressure: 1 } })
+    expect(conditionFromBody({ atmosphere: { retained: true, pressure: 1 } })
       ._provenance.atmosphere).toBe('measured');
   });
 
   it('calls a partly-populated composition defaulted, because that is the fabrication case', () => {
     const all = { ironFraction: 0.3, density: 5500, volatileFraction: 0.1 };
-    expect(conditionFromPlanet({ composition: all })._provenance.composition).toBe('measured');
+    expect(conditionFromBody({ composition: all })._provenance.composition).toBe('measured');
     const noDensity = { ironFraction: 0.3, volatileFraction: 0.1 };
     // Without density the body silently becomes 5500 kg/m³ ⇒ 5.5 g/cc, i.e. Earth,
     // and reads maximally rocky — which looks exactly like a real measurement.
-    expect(conditionFromPlanet({ composition: noDensity })._provenance.composition).toBe('defaulted');
-    expect(conditionFromPlanet({ composition: noDensity }).density).toBe(5.5);
+    expect(conditionFromBody({ composition: noDensity })._provenance.composition).toBe('defaulted');
+    expect(conditionFromBody({ composition: noDensity }).density).toBe(5.5);
   });
 
   it('reports rotationHours as defaulted on every generated planet, and says so out loud', () => {
@@ -4045,13 +4045,13 @@ describe('Step 1 · _provenance', () => {
     // `condition.rotationHours` is the vector's 24 h fallback on 100% of bodies.
     // PLAN.md:403 makes a live gate out of exactly this kind of count at Step 8.
     let defaulted = 0;
-    for (const pd of planets) if (conditionFromPlanet(pd)._provenance.rotationHours === 'defaulted') defaulted++;
+    for (const pd of planets) if (conditionFromBody(pd)._provenance.rotationHours === 'defaulted') defaulted++;
     expect(defaulted).toBe(planets.length);
-    expect(conditionFromPlanet(planets[0]).rotationHours).toBe(24);
+    expect(conditionFromBody(planets[0]).rotationHours).toBe(24);
   });
 
   it('is NON-ENUMERABLE, so it cannot enter a hash, a golden or a key-shape assertion', () => {
-    const c = conditionFromPlanet(planets[0]);
+    const c = conditionFromBody(planets[0]);
     expect(c._provenance).toBeTruthy();
     expect(Object.keys(c)).not.toContain('_provenance');
     expect(JSON.parse(JSON.stringify(c))._provenance).toBeUndefined();

@@ -555,7 +555,7 @@ export function bakeStormEAttributes(positions, count, radius, { regime = E5_REG
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 //
 // ⭐ THIS APPENDS AT EOF AND SHIFTS NOTHING, ON PURPOSE. Two live `line + symbol` refs resolve into
-// this file — both onto storm-e.js:68 `URANIAN_OBLIQUITY: 80` from conditionFromPlanet.js — and
+// this file — both onto storm-e.js:68 `URANIAN_OBLIQUITY: 80` from conditionFromBody.js — and
 // line-shift citation rot has cost this program 71 repairs across two steps. Everything below is
 // additive; `resolveStormE` above is byte-identical to HEAD and is NOT rewritten to call this.
 //

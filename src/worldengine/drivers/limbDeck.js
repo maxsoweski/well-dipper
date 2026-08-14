@@ -104,7 +104,7 @@ export function hasAtmosphere(condition) {
 // THE PACK
 // ─────────────────────────────────────────────────────────────────────────────
 /**
- * @param {object} condition  a body condition vector (deriveConditionVector / conditionFromPlanet).
+ * @param {object} condition  a body condition vector (deriveConditionVector / conditionFromBody).
  * @param {object} ctx
  *   @param {number} ctx.displayRadiusEarth  the front-end's display policy. Carried, not consumed —
  *                                           NOT ONE driver here is sizeKm-shaped, so the two

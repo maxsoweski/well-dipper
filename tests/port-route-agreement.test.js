@@ -6,11 +6,11 @@
  * ════════════════════════════════════════════════════════════════════════════
  *
  * ── THE TWO ROUTES ──────────────────────────────────────────────────────────
- *   BAKE   src/generation/PlanetGenerator.js — `conditionFromPlanet(planetData)`
+ *   BAKE   src/generation/PlanetGenerator.js — `conditionFromBody(planetData)`
  *          once per generated body, at generation time. Its condition drives the
  *          five values baked ONTO the record: landPalette, iceness, iceColor,
  *          lavaGlowColor, lavaCrustColor.
- *   RENDER src/objects/Planet.js:1594 — `conditionFromPlanet(d)` where `d =
+ *   RENDER src/objects/Planet.js:1594 — `conditionFromBody(d)` where `d =
  *          this.data`, once per material, at mesh-build time. Its condition
  *          drives craterUniformsFrom / atmosphereOpticsOf / biosphereOf.
  *
@@ -58,7 +58,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js';
-import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import {
   surfacePaletteOf, icenessOf, meltTemperatureOf, crustTemperatureOf, BIO_PIGMENT,
 } from '../src/worldengine/base/surfaceMaterial.js';
@@ -115,13 +115,13 @@ function functionBodyOf(code, sig) {
 }
 
 /**
- * Every argument text passed to `conditionFromPlanet(` in a chunk of
+ * Every argument text passed to `conditionFromBody(` in a chunk of
  * comment-free code, paren-matched so an object literal containing `(` or a
  * nested call does not truncate the capture.
  */
 function conditionCallArgsIn(body) {
   const args = [];
-  const needle = 'conditionFromPlanet(';
+  const needle = 'conditionFromBody(';
   let at = 0;
   for (;;) {
     at = body.indexOf(needle, at);
@@ -149,7 +149,7 @@ function routeShapeOf(code, sig) {
   // real miss while this file was being written. `_createSurface()` appears twice
   // in Planet.js: the CALL at :1533 (`this.surface = this._createSurface();`) and
   // the DEFINITION at :1548. A plain indexOf found the call, brace-matched the
-  // enclosing block, saw zero conditionFromPlanet calls in it and would have been
+  // enclosing block, saw zero conditionFromBody calls in it and would have been
   // read as "the render route stopped calling the adapter". Anchors are
   // line-anchored below; this asserts the anchor resolved to one place.
   const hits = code.split(sig).length - 1;
@@ -157,7 +157,7 @@ function routeShapeOf(code, sig) {
   const body = functionBodyOf(code, sig);
   if (body === null) return { ok: false, why: `could not locate ${sig}` };
   const args = conditionCallArgsIn(body);
-  if (args.length !== 1) return { ok: false, why: `expected exactly 1 conditionFromPlanet call, found ${args.length}`, args };
+  if (args.length !== 1) return { ok: false, why: `expected exactly 1 conditionFromBody call, found ${args.length}`, args };
   const arg = args[0];
   if (!IDENTIFIER.test(arg)) {
     return { ok: false, why: `the argument is not a bare identifier — a subset literal or expression was reintroduced: ${arg.slice(0, 120)}`, args };
@@ -210,7 +210,7 @@ const bakedOn = (rec) => ({
 });
 /** Which of the four disagree between the record and a fresh render-route recompute. */
 function disagreeingFields(rec) {
-  const now = bakesFrom(conditionFromPlanet(rec)), was = bakedOn(rec);
+  const now = bakesFrom(conditionFromBody(rec)), was = bakedOn(rec);
   return Object.keys(now).filter((k) => J(now[k]) !== J(was[k]));
 }
 
@@ -223,7 +223,7 @@ describe('Route agreement · channel 1 — both call sites pass the whole record
     // exact code shape that shipped before 2026-08-07, reduced to a fixture.
     const bad = `
       static generate(rng, orbitRadiusAU) {
-        const condition = conditionFromPlanet({
+        const condition = conditionFromBody({
           radiusEarth, massEarth, composition, T_eq, age: ageGyr,
           atmosphere, tidalState, surfaceHistory, eccentricity,
         });
@@ -240,7 +240,7 @@ describe('Route agreement · channel 1 — both call sites pass the whole record
     const bad = `
       static generate(rng, orbitRadiusAU) {
         const inputs = { radiusEarth, massEarth };
-        const condition = conditionFromPlanet(inputs);
+        const condition = conditionFromBody(inputs);
         const planetData = { type };
         return planetData;
       }`;
@@ -297,7 +297,7 @@ describe('Route agreement · channel 2 — the baked five equal the render-route
     // iceness 178, lavaGlow 224, lavaCrust 224.
     const reached = { landPalette: 0, iceness: 0, lavaGlowColor: 0, lavaCrustColor: 0 };
     for (const { rec } of S.slice(0, 300)) {
-      const c = conditionFromPlanet(rec);
+      const c = conditionFromBody(rec);
       for (const f of [3, 0.3]) {
         const now = bakesFrom(c), moved = bakesFrom({ ...c, T_eq: c.T_eq * f });
         for (const k of Object.keys(reached)) if (J(now[k]) !== J(moved[k])) reached[k]++;
@@ -390,7 +390,7 @@ describe('Route agreement · channel 2 — the baked five equal the render-route
     // field, so the comparator has to be shown naming each of the four, with no smearing onto its
     // neighbours. A sentinel is written over one baked value at a time; the answer must gain exactly
     // that field and leave the rest of the body's answer untouched. The injection cannot feed back
-    // into the recompute side — `conditionFromPlanet` reads the physical inputs and none of the four
+    // into the recompute side — `conditionFromBody` reads the physical inputs and none of the four
     // bakes, which is what makes overwriting them a clean one-sided injection.
     const FIELDS = ['landPalette', 'iceness', 'lavaGlowColor', 'lavaCrustColor'];
     const missed = [];
@@ -460,7 +460,7 @@ describe('Route agreement · channel 3 — the bake route MEASURES the widened k
   const WIDENED = ['magneticField', 'habitability', 'axialTilt'];
 
   it('CONTROL — _provenance still says "defaulted" when the key is genuinely absent', () => {
-    const bare = conditionFromPlanet({ radiusEarth: 1 })._provenance;
+    const bare = conditionFromBody({ radiusEarth: 1 })._provenance;
     for (const k of WIDENED) {
       expect(bare[k], `${k} reported '${bare[k]}' on a body that carries nothing`).toBe('defaulted');
     }
@@ -469,7 +469,7 @@ describe('Route agreement · channel 3 — the bake route MEASURES the widened k
   it('every generated planet measures all three — the 808/808 "defaulted" is gone', () => {
     const bad = [];
     for (const { id, rec } of S) {
-      const p = conditionFromPlanet(rec)._provenance;
+      const p = conditionFromBody(rec)._provenance;
       for (const k of WIDENED) if (p[k] !== 'measured') bad.push(`${id}.${k}=${p[k]}`);
     }
     expect(

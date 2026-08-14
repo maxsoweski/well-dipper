@@ -13,7 +13,7 @@
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // ⛔ WHY THIS TOOL COMPUTES BOTH LAWS ITSELF INSTEAD OF READING THE TREE
 // ══════════════════════════════════════════════════════════════════════════════════════════════
-// The obvious harness — "call conditionFromPlanet(rec), then call it again with the three fields
+// The obvious harness — "call conditionFromBody(rec), then call it again with the three fields
 // stripped" — measures the OLD rule correctly on any tree, and measures the NEW rule ONLY on a
 // tree where Step 2 has already landed. Run it a day early and it prints a table of zeros that
 // looks exactly like "the change does nothing". Run it a day late and it cannot reproduce the
@@ -48,7 +48,7 @@
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // THE CAUSAL FOOTPRINT, MEASURED NOT ASSUMED
 // ══════════════════════════════════════════════════════════════════════════════════════════════
-// The table is built by taking the REAL condition — `conditionFromPlanet(rec)`, so every unit fix,
+// The table is built by taking the REAL condition — `conditionFromBody(rec)`, so every unit fix,
 // greenhouse conversion and provenance rule in the port is the shipped one, not a copy — and
 // substituting `rawTidalIoRatio` with each of the two laws.
 //
@@ -103,8 +103,8 @@ const { PlanetGenerator }      = await loadOrExplain('src/generation/PlanetGener
 const { StarSystemGenerator }  = await loadOrExplain('src/generation/StarSystemGenerator.js');
 const { SeededRandom }         = await loadOrExplain('src/generation/SeededRandom.js');
 const { generateSolarSystem }  = await loadOrExplain('src/generation/SolarSystemData.js');
-const { conditionFromPlanet, surfaceTemperatureOf }
-                               = await loadOrExplain('src/worldengine/port/conditionFromPlanet.js');
+const { conditionFromBody, surfaceTemperatureOf }
+                               = await loadOrExplain('src/worldengine/port/conditionFromBody.js');
 const { compositionClass }     = await loadOrExplain('src/worldengine/base/e1Regime.js');
 const AOPT                     = await loadOrExplain('src/worldengine/base/atmosphereOptics.js');
 const { atmosphereOpticsOf }   = AOPT;
@@ -416,7 +416,7 @@ function footprintProbe(bodies) {
   let probed = 0;
   const keysSeen = new Set();
   for (const b of bodies) {
-    const cond = conditionFromPlanet(b.rec);
+    const cond = conditionFromBody(b.rec);
     const fpA = fpFromCondition(cond);
     const fpB = { ...fpA, tidalHeat: b.rec.tidalHeating, starMassEarth: b.starMassEarth, orbitRadiusEarth: b.orbitRadiusEarth };
     const cA = deriveConditionVector(fpA, null, fpA.radiusEarth);
@@ -455,7 +455,7 @@ function craterDiagnostic(bodies) {
   const bind = { age: 0, tidal: 0, erosion: 0 };            // argmin of tExp under the NEW rule
   let tidalBindsUnderEither = 0;
   for (const b of bodies) {
-    const cond = conditionFromPlanet(b.rec);
+    const cond = conditionFromBody(b.rec);
     const rOld = rawTidalOld(cond);
     const rNew = rawTidalNew(cond, b);
     const cOld = { ...cond, rawTidalIoRatio: rOld };
@@ -494,7 +494,7 @@ function measure(bodies, label) {
   const d12VsCorrectedRel = [];              // does the corrected fallback reproduce the D12 value?
 
   for (const b of bodies) {
-    const cond = conditionFromPlanet(b.rec);
+    const cond = conditionFromBody(b.rec);
     const rOld = rawTidalOld(cond);
     const rNew = rawTidalNew(cond, b);
     const rFallbackCorrected = rawTidalCorrectedFallback(cond, b);
@@ -593,7 +593,7 @@ function runSelftest() {
   //    fact about the comparator instead of about the laws — this codebase's signature failure.
   const rng = new SeededRandom(20260808);
   const probeRec = PlanetGenerator.generate(rng, 1.2, null, null, 'rocky');
-  const c0 = conditionFromPlanet(probeRec);
+  const c0 = conditionFromBody(probeRec);
   const qLo = quantitiesOf({ ...c0, rawTidalIoRatio: 0 });
   const qHi = quantitiesOf({ ...c0, rawTidalIoRatio: 500 });
   const sawMove = QUANTITY_ORDER.filter(k => deltaOf(qLo[k], qHi[k]) > 0);
@@ -617,7 +617,7 @@ function runSelftest() {
 // or "moved" means resolve into an unactionable instruction.
 //
 // ⛔ SAME REASON THE STEP 2 HARNESS COMPUTES BOTH LAWS ITSELF (see this file's header). The obvious
-// harness — "call conditionFromPlanet, then call it again with the guard reverted" — can only
+// harness — "call conditionFromBody, then call it again with the guard reverted" — can only
 // measure the law the tree happens to carry, so it prints zeros a day early and cannot reproduce the
 // before-state a day late. Both laws are evaluated here from the SHIPPED `surfaceTemperatureOf` and
 // the SHIPPED `atmosphereOpticsOf`, so this table reads the same before and after the guard lands.
@@ -661,7 +661,7 @@ function limbUniformsOf(cond) {
 const LIMB_UNIFORM_ORDER = ['uLimbExponent', 'uLimbColor', 'uTermColor', 'uTermStrength', 'uTermWidth'];
 
 /** ⚠ Read the FLATTENED pressure, not `rec.atmosphere.pressure` — the game nests it one level down
- *  and reading the wrapper is the third silent-disagreement bug conditionFromPlanet exists to close. */
+ *  and reading the wrapper is the third silent-disagreement bug conditionFromBody exists to close. */
 function step4RowFor(cond, rec) {
   const rawTeq = rec.T_eq ?? 288;
   const P = cond.atmosphere?.pressure;
@@ -670,7 +670,7 @@ function step4RowFor(cond, rec) {
   const tOld = surfaceTemperatureOf(rawTeq, P);
   const tNew = gas ? rawTeq : tOld;
   // The condition is the REAL one; only T_eq is substituted, which is the whole of what the guard
-  // changes inside conditionFromPlanet. `_provenance` is non-enumerable and is dropped by the
+  // changes inside conditionFromBody. `_provenance` is non-enumerable and is dropped by the
   // spread — deliberately; nothing downstream of here reads it.
   const condOld = { ...cond, T_eq: tOld };
   const condNew = { ...cond, T_eq: tNew };
@@ -854,7 +854,7 @@ function buildStep4Rows(bodies) {
   const rows = [];
   for (const body of bodies) {
     let cond, m;
-    try { cond = conditionFromPlanet(body.rec); m = step4RowFor(cond, body.rec); }
+    try { cond = conditionFromBody(body.rec); m = step4RowFor(cond, body.rec); }
     catch (e) { rows.push({ body, error: String(e?.message || e) }); continue; }
     rows.push({ body, cond, m });
   }
@@ -960,7 +960,7 @@ async function runStep4(args) {
   o.push('Both are computed **by this tool** from the shipped `surfaceTemperatureOf` and the shipped');
   o.push('`atmosphereOpticsOf`, never by reading what the tree happens to do, so the table reproduces');
   o.push('before and after the guard lands. Only `T_eq` is substituted; the rest of the condition is the');
-  o.push('real `conditionFromPlanet(rec)` output.');
+  o.push('real `conditionFromBody(rec)` output.');
   o.push('');
   o.push('## Population — fully specified');
   o.push('');
@@ -1200,7 +1200,7 @@ async function runStep4(args) {
   o.push('');
   o.push(`\`rec.T_eq\` is **absent on ${solDefaulted} / ${solRows.length}** Sol bodies — against **${genDefaulted} / ${rows.length}** generated ones. \`SolarSystemData.js\``);
   o.push('does not author an equilibrium temperature, so `d.T_eq ?? 288` fires and every Sol body enters this');
-  o.push('table at **288 K**, which `conditionFromPlanet`\'s own `_provenance.T_eq` correctly reports as');
+  o.push('table at **288 K**, which `conditionFromBody`\'s own `_provenance.T_eq` correctly reports as');
   o.push('`\'defaulted\'`. **The Sol rows below are therefore arithmetic about the number 288, not about');
   o.push('Uranus.** They are published because the plan names Uranus and Neptune as members of the affected');
   o.push('population and that claim deserves a checked answer — and the checked answer is that the guard');
@@ -1257,7 +1257,7 @@ async function runStep4(args) {
   if (xc.discriminating === 0) fail('CONTROL FAILED: OLD and NEW produce identical uniforms on every body. The differential is not wired.');
   if (live.movedWide === 0) fail('CONTROL FAILED: the non-gas liveness probe moved nothing even under a full-range T sweep — the non-gas zero column is vacuous.');
   if (!repro) fail(`CONTROL FAILED: the table did not reproduce on a second build (${reproMismatch} mismatching bodies).`);
-  if (acyc.disagreed > 0) fail(`CONTROL FAILED: compositionClass returned different classes at 100 K vs 1500 K on ${acyc.disagreed} bodies — the composition gate now reads temperature, so conditionFromPlanet's classify-then-set-T_eq ordering is a fixpoint. The guard must be rewritten, not reordered.`);
+  if (acyc.disagreed > 0) fail(`CONTROL FAILED: compositionClass returned different classes at 100 K vs 1500 K on ${acyc.disagreed} bodies — the composition gate now reads temperature, so conditionFromBody's classify-then-set-T_eq ordering is a fixpoint. The guard must be rewritten, not reordered.`);
   // §11.3.6 — a declared pixel-moving step's named movers must move.
   const declaredMovers = ['uLimbExponent', 'uLimbColor', 'uTermColor'];
   for (const k of declaredMovers) {
@@ -1273,7 +1273,7 @@ async function runStep4(args) {
   }
   if (args.includes('--check')) {
     if (xc.treeLaw !== 'NEW') {
-      console.error(`GATE FAILED: the live material implements ${xc.treeLaw}, not NEW. The no-surface guard in src/worldengine/port/conditionFromPlanet.js is absent, reverted or not reaching the material.`);
+      console.error(`GATE FAILED: the live material implements ${xc.treeLaw}, not NEW. The no-surface guard in src/worldengine/port/conditionFromBody.js is absent, reverted or not reaching the material.`);
       rc = Math.max(rc, 1);
     } else {
       console.log('GATE: the live material implements NEW — the no-surface guard is landed and reaching the shipped uniforms.');
@@ -1361,7 +1361,7 @@ function main() {
   out.push('| **OLD** | `{radiusEarth, eccentricity}` | falls back to its own `starMassEarth = 332946`, `orbitRadiusEarth = 23455` — **1 M☉ at 1 AU, for every body in the galaxy** |');
   out.push('| **NEW** | `+ {tidalHeat: d.tidalHeating, starMassEarth, orbitRadiusEarth}` | takes the D12 value when present; when genuinely absent, runs the same fallback against the body\'s **real** star and orbit |');
   out.push('');
-  out.push('The condition itself is the real one — `conditionFromPlanet(rec)` — with `rawTidalIoRatio`');
+  out.push('The condition itself is the real one — `conditionFromBody(rec)` — with `rawTidalIoRatio`');
   out.push('substituted. That substitution is licensed by the FOOTPRINT PROBE below, not assumed.');
   out.push('');
   out.push('## Population');

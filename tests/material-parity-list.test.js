@@ -41,7 +41,7 @@ import {
   Planet, PLANET_SHADER_VARIANTS, shaderVariantFor,
   setLabGasBodiesOverride, labPipelineAdmits,
 } from '../src/objects/Planet.js';
-import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js';
 import { swapLedgerOf, isLabPlanetMaterial, LAB_SHADER_CORPUS } from '../src/rendering/LabPlanetMaterial.js';
 import { stripCommentsPreservingOffsets } from './helpers/source-scan.mjs';
@@ -170,7 +170,7 @@ function census(n) {
       const white = c1[0] === 1 && c1[1] === 1 && c1[2] === 1;
       for (const e of (sys.planets || [])) {
         const d = e.planetData;
-        const adm = labPipelineAdmits(d, conditionFromPlanet(d));
+        const adm = labPipelineAdmits(d, conditionFromBody(d));
         if (!adm.packs.length) continue;
         out.claimed++;
         if (!adm.admitted) { out.provenanceBlocked++; continue; }
@@ -316,7 +316,7 @@ describe('1. the swapped population, re-measured on lab-procedural-0…199', () 
         const sys = StarSystemGenerator.generate(`lab-procedural-${i}`, null);
         for (const e of (sys.planets || [])) {
           const d = e.planetData;
-          const adm = labPipelineAdmits(d, conditionFromPlanet(d));
+          const adm = labPipelineAdmits(d, conditionFromBody(d));
           if (!adm.packs.length) continue;
           claimedIgnoringProvenance++;
           if (!adm.admitted) exotic.push({ type: d.type, blockers: adm.provenance.blockers });
@@ -334,7 +334,7 @@ describe('1. the swapped population, re-measured on lab-procedural-0…199', () 
   it('the flag is the other half of admission, and OFF means no swap at all', () => {
     const sys = StarSystemGenerator.generate('lab-procedural-4', null);
     const gas = sys.planets.find((p) => shaderVariantFor(p.planetData.type) === 'gas'
-      && labPipelineAdmits(p.planetData, conditionFromPlanet(p.planetData)).packs.length);
+      && labPipelineAdmits(p.planetData, conditionFromBody(p.planetData)).packs.length);
     expect(gas).toBeTruthy();
     expect(isLabPlanetMaterial(materialAt(gas.planetData, sys.starInfo, true).material)).toBe(true);
     expect(isLabPlanetMaterial(materialAt(gas.planetData, sys.starInfo, false).material)).toBe(false);
@@ -473,7 +473,7 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
     const labNames = new Set(Object.keys(
       materialAt(
         StarSystemGenerator.generate('lab-procedural-4', null).planets
-          .find((p) => labPipelineAdmits(p.planetData, conditionFromPlanet(p.planetData)).packs.length).planetData,
+          .find((p) => labPipelineAdmits(p.planetData, conditionFromBody(p.planetData)).packs.length).planetData,
         null, true,
       ).material.uniforms,
     ));
@@ -591,7 +591,7 @@ describe('4. channel 2 — the features with no uniform to diff', () => {
         const sys = StarSystemGenerator.generate(`lab-procedural-${i}`, null);
         for (const e of (sys.planets || [])) {
           const d = e.planetData;
-          if (!labPipelineAdmits(d, conditionFromPlanet(d)).packs.length) continue;
+          if (!labPipelineAdmits(d, conditionFromBody(d)).packs.length) continue;
           keys.add(`${shaderVariantFor(d.type)}:${TYPE_INDEX.indexOf(d.type)}`);   // provenance IGNORED
         }
       }

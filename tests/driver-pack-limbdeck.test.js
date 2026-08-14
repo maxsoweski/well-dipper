@@ -54,7 +54,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js';
-import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 import { compositionClass } from '../src/worldengine/base/e1Regime.js';
 import { atmosphereOpticsOf } from '../src/worldengine/base/atmosphereOptics.js';
 import {
@@ -98,7 +98,7 @@ function generatedPlanets(count) {
       out.push({
         id: `${seed}#${e.planetData._ordinal}`,
         d: e.planetData,
-        cond: conditionFromPlanet(e.planetData),
+        cond: conditionFromBody(e.planetData),
       });
     });
   }

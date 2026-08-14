@@ -163,7 +163,7 @@ export function deriveConditionVector(fp, derived, radiusEarth) {
   // tests/port-condition-contract.test.js.
   //
   // ⚠ surfaceHistory WAS ALREADY BEING HANDED IN AND SILENTLY DROPPED. The `surfaceHistory:` key in
-  // conditionFromPlanet.js's `const fp = {` literal has put it there since the port was written,
+  // conditionFromBody.js's `const fp = {` literal has put it there since the port was written,
   // and every lab preset carries one
   // (driver-presets.js:27 onward) — but this return literal never emitted it, so
   // `condition.surfaceHistory` was `undefined` on BOTH front-ends. PLAN §2 states it exactly:
@@ -188,12 +188,12 @@ export function deriveConditionVector(fp, derived, radiusEarth) {
   habitability:    fp.habitability,
   // D3 obliquity — ⚠ DEGREES, AND THE NAME SAYS SO ON PURPOSE. This is the seam's FOURTH unit
   // disagreement (after density kg/m³-vs-g/cc and T_eq equilibrium-vs-surface, both handled in
-  // conditionFromPlanet.js):
+  // conditionFromBody.js):
   //     lab   driver-presets.js:109  `axialTilt: 25`   for Mars's 25.2°  → DEGREES
   //     game  SolarSystemData.js:180 `axialTilt: 0.41` for Earth's 23.4° → RADIANS
   // and the ONE law that reads the fp key is planet-lod-lab-core.js:907-908,
   // `clamp01((d.axialTilt ?? 0) / 90)` — degrees. So the fp key `axialTilt` means DEGREES on both
-  // routes (conditionFromPlanet converts at the seam), and this vector key carries the unit in its
+  // routes (conditionFromBody converts at the seam), and this vector key carries the unit in its
   // name so that a reader who knows the GAME's radian field cannot mistake one for the other.
   // A single unqualified `axialTilt` on the vector is precisely how the other three unit bugs
   // happened: one name, two units, no warning.

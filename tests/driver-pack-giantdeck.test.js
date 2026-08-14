@@ -42,7 +42,7 @@ import {
 } from '../src/worldengine/base/giant-drivers.js';
 import { E5_REGIME, DRIVER_BUNDLES } from '../src/worldengine/base/climate-e5.js';
 import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js';
-import { conditionFromPlanet } from '../src/worldengine/port/conditionFromPlanet.js';
+import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
 // ⚠ IMPORTED FROM THE SAME MODULE `src/util/scene-naming.js` IMPORTS THEM FROM, not re-exported through
 // it: scene-naming does not re-export either symbol, and a test that quietly imported `undefined` would
 // have made every seed assertion below vacuously green.
@@ -262,7 +262,7 @@ describe('GATE 3 · distinctness over 200 generated systems', () => {
     (s.planets || []).forEach((e, ordinal) => bodies.push({ id: `${seed}#${ordinal}`, pd: e.planetData }));
   }
   const gas = bodies
-    .map((b) => ({ ...b, cond: conditionFromPlanet(b.pd) }))
+    .map((b) => ({ ...b, cond: conditionFromBody(b.pd) }))
     .filter((b) => compositionClass(b.cond) === 'gas');
   // Each body gets a per-body seed of the SHAPE the game will use (5d), never a constant.
   const deckFor = (b) => giantDeckPack(b.cond, {
@@ -664,7 +664,7 @@ describe('5e · metallicity and the enrichment ratio are on ONE scale', () => {
       const s = StarSystemGenerator.generate(`pcc-${i}`, null);
       (s.planets || []).forEach((e) => bodies.push(e.planetData));
     }
-    const gas = bodies.map((pd) => ({ pd, cond: conditionFromPlanet(pd) }))
+    const gas = bodies.map((pd) => ({ pd, cond: conditionFromBody(pd) }))
       .filter((b) => compositionClass(b.cond) === 'gas' && typeof b.pd.metallicity === 'number');
     expect(gas.length).toBeGreaterThanOrEqual(100);
 
@@ -724,7 +724,7 @@ describe('5e · metallicity and the enrichment ratio are on ONE scale', () => {
       for (const e of s.planets || []) {
         // Forwarded VERBATIM — Object.is, not truthiness: 0 and negative dex are legal values
         // (39.6% of the corpus is negative) and a truthiness check would pass on a dropped key.
-        expect(conditionFromPlanet(e.planetData).metallicity).toBe(e.planetData.metallicity);
+        expect(conditionFromBody(e.planetData).metallicity).toBe(e.planetData.metallicity);
         generated++;
       }
     }

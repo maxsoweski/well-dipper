@@ -306,7 +306,7 @@ export class MoonGenerator {
     // three lines below shrink it to moon scale by overriding radiusEarth. Overriding radius
     // without mass leaves a planet's mass inside a moon's volume: measured worst case 27.6 M⊕ at
     // 0.89 R⊕, i.e. denser than any real rocky body, reported as ~35 g by
-    // conditionFromPlanet's surfaceGravity (M/R²) — which then drives reliefEnvelope and every
+    // conditionFromBody's surfaceGravity (M/R²) — which then drives reliefEnvelope and every
     // other gravity-dependent law on the 14-in-1120 bodies that render through Planet.js.
     //
     // Cubing the radius ratio preserves pData's DENSITY exactly, which is the physically correct

@@ -143,7 +143,7 @@ export const POLAR_GATE = 'polarVortex';
 // THE PACK
 // ─────────────────────────────────────────────────────────────────────────────
 /**
- * @param {object} condition  a body condition vector (deriveConditionVector / conditionFromPlanet).
+ * @param {object} condition  a body condition vector (deriveConditionVector / conditionFromBody).
  * @param {object} ctx
  *   THE FIVE CONTRACT FIELDS (PLAN 5a):
  *   @param {number} ctx.macroSeed           integer, non-zero.

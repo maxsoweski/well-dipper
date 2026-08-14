@@ -138,7 +138,7 @@ const GALAXY_POSITIONS = Array.from({ length: 24 }, (_, i) => {
 
 /**
  * The five `planetData` fields that are NOT drawn — they are computed by the
- * world-engine port, in PlanetGenerator.generate — grep `const condition = conditionFromPlanet(planetData)`
+ * world-engine port, in PlanetGenerator.generate — grep `const condition = conditionFromBody(planetData)`
  * and the `planetData.<field> =` assignments under it. (No line number on purpose: that region is
  * rewritten by every step of one-pipeline-two-frontends-PLAN.md, and it moved on 2026-08-07 when the
  * bake route stopped passing a hand-picked nine-key subset. See §10 of that plan.)
@@ -303,7 +303,7 @@ const PLANET_CLASS_MOONS = [
  * leaves the draw profile, every body hash and the shape set all green while
  * `moon.massEarth` reads perfectly downstream. That construction is IDIOMATIC in
  * this codebase, not adversarial — it is exactly how the world-engine port
- * attaches `_provenance` (`src/worldengine/port/conditionFromPlanet.js`
+ * attaches `_provenance` (`src/worldengine/port/conditionFromBody.js`
  * `Object.defineProperty(condition, '_provenance', {`), argued there as a
  * feature: "it CANNOT enter any hash… The protection is structural."
  *

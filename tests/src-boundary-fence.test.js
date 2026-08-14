@@ -169,7 +169,7 @@ describe('AC-BOUNDARY — nothing under src/ imports outside src/ (Step 7)', () 
 describe('AC-BOUNDARY — MANDATORY NEGATIVE CHECKS: the fence catches a real escape', () => {
   // A gate that has never failed is not a gate (PLAN §11.3.1). Each of these takes the REAL current
   // source, plants one defect in memory, and asserts the scanner reports it.
-  const VICTIM = 'src/worldengine/port/conditionFromPlanet.js';
+  const VICTIM = 'src/worldengine/port/conditionFromBody.js';
   const src = () => readFileSync(join(ROOT, VICTIM), 'utf8');
 
   it('PLANTED: a relative import escaping to the repo root is caught', () => {

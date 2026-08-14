@@ -347,7 +347,7 @@ function flatten(v) {
 //                                    literal + bake assignments at the bottom of
 //                                    `PlanetGenerator.generate` (everything from `const planetData
 //                                    = {` down), and ALL of
-//                                    src/worldengine/port/conditionFromPlanet.js. Steps 2-12 each
+//                                    src/worldengine/port/conditionFromBody.js. Steps 2-12 each
 //                                    add lines to both — Step 1 alone added 239 to the adapter and
 //                                    re-pointed nothing — so an integer written here is born with a
 //                                    half-life of one step. A ref that is WRONG is worse than a ref
@@ -386,7 +386,7 @@ function flatten(v) {
 //             DELIBERATELY EXCLUDED from the body-identity fingerprint (see the block above and
 //             tests/body-identity-fence.test.js:173 `const WORLDENGINE_BAKES`), so a delta row
 //             see them move. Highest-value tier. Step 2's whole gate lives here.
-//   condition Computed inside Planet._createSurface from conditionFromPlanet(d) — never on the
+//   condition Computed inside Planet._createSurface from conditionFromBody(d) — never on the
 //             record at all. Same property: the delta row is the only detector.
 //   gate      A Planet.js module constant that multiplies or mixes world-engine output
 //             (uReliefMix at Planet.js:591, uLimbMix at :527/:535, uCraterReliefGain at :320,
@@ -669,7 +669,7 @@ function resolveSharedUniforms(probeMaterialUniforms) {
  * `uIcenessMix: { value: d.iceness }` — a colour paired with a scalar.)
  *
  *   bake      — reads a WORLDENGINE_BAKES field on planetData (outside the identity fingerprint)
- *   condition — computed in _createSurface from conditionFromPlanet(d)
+ *   condition — computed in _createSurface from conditionFromBody(d)
  *   gate      — a Planet.js module constant
  *   record    — reads a DRAWN planetData field (fingerprint-shadowed)
  */
@@ -724,7 +724,7 @@ const TIER_BY_NAME = {
 //
 // ⛔ WITH ONE EXCEPTION, AND IT IS THE WHOLE POINT OF THIS INSTRUMENT (adversarial review P1,
 // 2026-08-06). Five fields on planetData are not drawn — they are OUTPUTS of the port itself,
-// computed in PlanetGenerator.generate from `const condition = conditionFromPlanet(planetData)` and
+// computed in PlanetGenerator.generate from `const condition = conditionFromBody(planetData)` and
 // assigned onto the record below it (`planetData.landPalette = …`, `planetData.iceness = …`,
 // `planetData.lavaGlowColor = …`, `planetData.lavaCrustColor = …`; `iceColor: ICE_ALBEDO` is a
 // constant in the record literal). They then become shipped uniforms (uIcenessMix, uFreshColor /
@@ -940,7 +940,7 @@ const CITE_FILES = {
   'adaptL0.js': 'src/worldengine/base/adaptL0.js',
   'giant-drivers.js': 'src/worldengine/base/giant-drivers.js',
   'craterUniforms.js': 'src/worldengine/port/craterUniforms.js',
-  'conditionFromPlanet.js': 'src/worldengine/port/conditionFromPlanet.js',
+  'conditionFromPlanet.js': 'src/worldengine/port/conditionFromBody.js',  // ⛔ Step 8 C2 — key is a citation spelling; do not tidy
   'albedoTransfer.js': 'src/worldengine/display/albedoTransfer.js',
   // ── added with the CITE_SOURCES widening (B4). Every one of these was NAMED BY THIS MODE'S OWN
   // UNRESOLVED / SPAN-OPEN output after the sources went in, not guessed from reading the files.
@@ -1039,7 +1039,7 @@ const CITE_SOURCES = [
   'docs/FEATURES/one-pipeline-two-frontends-PLAN.md',
   'docs/FEATURES/one-pipeline-two-frontends-CARRIED.md',
   'tests/body-identity-fence.test.js',
-  'src/worldengine/port/conditionFromPlanet.js',
+  'src/worldengine/port/conditionFromBody.js',
   'tests/port-condition-contract.test.js',
   'tests/port-route-agreement.test.js',
   // ── STEP 6 (2026-08-09): eleven lane-touched files added. ⛔ NOT bookkeeping — verify found FOUR
@@ -1625,7 +1625,7 @@ function printResolution(res) {
   console.log('    bake      the ONLY detector — these five planetData fields are excluded from the');
   console.log('              body-identity fingerprint on purpose (WORLDENGINE_BAKES, shared with');
   console.log('              Instrument B). Step 2\'s declared gate lives entirely in this tier.');
-  console.log('    condition computed in Planet._createSurface from conditionFromPlanet(d); never on');
+  console.log('    condition computed in Planet._createSurface from conditionFromBody(d); never on');
   console.log('              the record, so likewise only visible here.');
   console.log('    gate      a Planet.js constant that multiplies world-engine output. Constant across');
   console.log('              the population by construction — a zero delta proves the dial held.');
