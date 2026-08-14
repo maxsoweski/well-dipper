@@ -26,7 +26,7 @@ import { generateBody, GRID, SOL_ZONES } from './world-engine-l0-grid.js';
 // Determinism: MoonGenerator.generate(rng, parent, idx, total, zone, zones, parentOrbitAU)
 // is a pure function of its inputs. ⭐ The 7th param arrived in C3 (`0b329da`): the parent's
 // REAL orbit in AU, default null, threaded for 8a's T_eq and 8b's hardcoded-1-AU fix, and
-// read by NOTHING yet. Parent = GRID[7], byte-frozen by the planet gate, so this grid repeats.
+// CONSUMED by nothing yet — `:100` forwards it, and `_generatePlanetMoon` never reads it. Parent = GRID[7], byte-frozen by the planet gate, so this grid repeats.
 // ════════════════════════════════════════════════════════════════════════
 
 // Fixed parent: the gas-giant grid body. Gas giants can host the full moon
