@@ -395,19 +395,83 @@ describe('scripted flight — the lab has a ship worth watching', () => {
     expect(frames.some((f) => f.snapshot.survey.atmosphere)).toBe(true);
   });
 
-  it('blanks T_eq, composition and tidal state on a moon, keeping name and type', () => {
-    // PlanetGenerator writes T_eq onto PLANET data only, and main.js hands
-    // `BodyRenderer.createMoon` a null physics record — so all four are absent
-    // for a moon and the rows must read blank rather than stale or zero.
+  it('shows a real T_eq on a moon while composition, atmosphere and tidal state stay blank', () => {
+    // ⭐ REWRITTEN 2026-08-14 (working-Claude, on Max's ruling). This test used to
+    // assert all four rows blank, and had been RED since C4 `2f3f8fd` — "feat(8a):
+    // moons carry a derived condition record" — which put T_eq, composition,
+    // massEarth, age, tidalState and surfaceHistory onto the plain moon record. It
+    // stayed red across two commits unnoticed because C4 and C5 gated on
+    // Instrument B and nobody ran this suite, on the reasoning that C4's tests were
+    // expected red anyway. Max's ruling: SHOW the temperature. Step 8 exists so
+    // moons carry a real derived condition, and blanking a value we now genuinely
+    // have would be hiding the first visible payoff.
+    //
+    // ⛔ EXACTLY ONE ROW MOVED, and the reason is a SOURCE asymmetry, not a
+    // capability one. `CockpitSnapshot.js` builds the survey from two feeds:
+    //
+    //     tEq         ← bodyData?.T_eq        the body record itself
+    //     composition ← physics?.composition  a separate physics record
+    //     atmosphere  ← physics?.atmosphere
+    //     tidalState  ← physics?.tidalState
+    //
+    // 8a populated the BODY record. It did NOT wire a physics record for moons:
+    // `main.js:7661` still hands `BodyRenderer.createMoon` a literal `null`, and
+    // `buildLabWorld` mirrors that with `physics: null`. So the other three keep
+    // reading blank even though the moon demonstrably HAS two of them now —
+    // measured 2026-08-14 on seed 'well-dipper-lane-F', `moon.data.composition`
+    // carries five keys and `moon.data.tidalState` reads
+    // `{ locked: true, lockType: 'synchronous' }`, while the survey reports null
+    // for both. Do NOT read this test as evidence that 8a wired the moon physics
+    // record. It did not; the value simply arrives on the one feed the survey
+    // reads directly. (`atmosphere` is null on the raw moon record too for these
+    // bodies, so of the three it proves the least.)
     const moonFrames = frames.filter((f) => f.snapshot.survey.kind === 'moon');
     expect(moonFrames.length).toBeGreaterThan(10);
     for (const { t, snapshot } of moonFrames) {
-      expect(snapshot.survey.tEq, `@ ${t}s`).toBeNull();
+      expect(typeof snapshot.survey.tEq, `@ ${t}s`).toBe('number');
+      expect(Number.isFinite(snapshot.survey.tEq), `@ ${t}s: T_eq not finite`).toBe(true);
+      // Bounds chosen from physics, NOT fitted to today's numbers: a body colder
+      // than the cosmic microwave background is unphysical, and a moon sitting at
+      // a stellar photosphere temperature would not still be a moon. The measured
+      // band across the five lab seeds on 2026-08-14 was 158.95 K … 399.50 K, so
+      // a regression that zeroes or NaNs the row is caught long before these edges.
+      expect(snapshot.survey.tEq, `@ ${t}s`).toBeGreaterThan(2.7);
+      expect(snapshot.survey.tEq, `@ ${t}s`).toBeLessThan(5000);
       expect(snapshot.survey.composition, `@ ${t}s`).toBeNull();
       expect(snapshot.survey.atmosphere, `@ ${t}s`).toBeNull();
       expect(snapshot.survey.tidalState, `@ ${t}s`).toBeNull();
       expect(snapshot.survey.name, `@ ${t}s`).toBeTruthy();
       expect(snapshot.survey.type, `@ ${t}s`).toBeTruthy();
+    }
+
+    // NON-VACUITY, because a number that is always the same number is not
+    // evidence. `frames` walks ONE world and `buildLabWorld` picks exactly one
+    // moon (`planets[aIndex].moons[0]`), so every frame above is the SAME body —
+    // a single repeated reading proves nothing by itself. Two checks close it.
+    //
+    // (1) Across the five seeds the moon T_eq takes five DISTINCT values, so the
+    //     row varies with the system rather than showing a constant no matter
+    //     what is focused.
+    const perWorld = worlds.map((w) => {
+      const legs = walk(w).filter((f) => f.snapshot.survey.kind === 'moon');
+      expect(legs.length, `${w.seed}: no moon leg`).toBeGreaterThan(10);
+      const values = new Set(legs.map((f) => f.snapshot.survey.tEq));
+      expect(values.size, `${w.seed}: one moon should hold one T_eq for the leg`).toBe(1);
+      return { seed: w.seed, tEq: [...values][0], parentTEq: w.planetA.data.T_eq };
+    });
+    expect(
+      new Set(perWorld.map((p) => p.tEq)).size,
+      'moon T_eq repeats across systems — the row is not reading the body',
+    ).toBe(worlds.length);
+
+    // (2) Each moon's T_eq equals its PARENT PLANET's, which is what C3 `0b329da`
+    //     bought: MoonGenerator computes `equilibriumTemperature(luminosityRel,
+    //     parentAU)`, and that only lands on the parent's own value if the
+    //     parent's REAL orbit AU was threaded through instead of a default. So
+    //     the number is pinned to an independently derived quantity rather than
+    //     only to a loose plausible band.
+    for (const { seed, tEq, parentTEq } of perWorld) {
+      expect(tEq, `${seed}: moon T_eq is not its parent planet's`).toBe(parentTEq);
     }
   });
 
