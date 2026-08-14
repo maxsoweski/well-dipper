@@ -250,6 +250,97 @@ function uninstallDrawCounter() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PLANET-CLASS SIDE-CHANNEL
+// docs/FEATURES/step8-build-plan-2026-08-12.md §3, commit C1
+//
+// BODY IDENTITY below compares 16-hex digests, and a digest carries no class.
+// So "the only records that moved are planet-class moons" — the containment
+// claim Step 8b's gate rests on — was a sentence a human asserted after reading
+// a diff. This makes it a partition the test computes and checks.
+//
+// ⛔ THE PLACEMENT IS THE ENTIRE DESIGN. This map is TOP-LEVEL: on `captureAll`'s
+// return, and on the re-blessed baseline. It must NEVER go inside the object
+// `captureSystem` hashes into `rollup` (`hash({ system, planets })`). Measured:
+// adding a `pc` key inside `planets[]` moves wd-0's rollup
+//   e67f7a5184d423ac → 95dbe61d46cc21be
+// which reds the NEGATIVE CONTROL's baseline-reproduction assertion at the foot
+// of this file and forces a 221-seed re-bless INSIDE the very commit whose gate
+// is "no re-bless" — i.e. the side-channel would destroy the control it exists
+// to sharpen. And the trap has no partial escape: wd-0 has ZERO planet-class
+// moons, so on that seed the forbidden key carries no information whatsoever
+// (`[]` or `[false,false,false,false]`) and moves the digest anyway. It is the
+// key's PRESENCE in the JSON that moves it, never its value.
+//
+// ⚠ THE KEYS ARE POSITIONAL — `seed/planetIndex/moonIndex` — because those are
+// the coordinates BODY IDENTITY indexes (`was.planets[i].moons[j]`). NOT the
+// record's own `_ordinal` (StarSystemGenerator.js `moonData._ordinal =`), which
+// looks like the same thing and is not: measured, 16 of these 794 moons carry an
+// `_ordinal` whose planet index no longer matches the final `planets[]` order
+// (wd-115 planet 0 moon 0 says "5.0"), because moons are stamped before the
+// planet array is reordered. Keying off it would attribute a moved hash to a
+// different body than the one that moved.
+//
+// Measured at bcb62d1 over this file's own 221 seeds: 24 planet-class moons in
+// 22 systems; wd-133 and wd-166 carry two each; exactly one galaxy-context seed
+// (gc-22) and exactly one pinned seed (wd-1403) contribute. Listed in generation
+// order, which is the order `captureAll` walks its job list.
+// ─────────────────────────────────────────────────────────────────────────────
+const PLANET_CLASS_MOONS = [
+  'wd-11/2/2', 'wd-15/6/1', 'wd-24/1/2', 'wd-27/3/1', 'wd-40/4/4', 'wd-61/1/2',
+  'wd-66/0/1', 'wd-70/5/5', 'wd-100/5/1', 'wd-101/4/2', 'wd-116/5/1', 'wd-126/4/3',
+  'wd-133/4/3', 'wd-133/4/4', 'wd-147/1/2', 'wd-161/5/1', 'wd-166/3/1', 'wd-166/3/5',
+  'wd-168/3/1', 'wd-174/0/1', 'wd-187/2/1', 'wd-189/0/1', 'wd-1403/2/2', 'gc-22/2/2',
+];
+
+/**
+ * Own property names `Object.keys` does NOT return — i.e. the non-enumerable ones.
+ *
+ * ⭐ THIS IS THE ONLY CHANNEL IN THIS FILE THAT CAN SEE A NON-ENUMERABLE APPEND.
+ * Every other channel here is built from `Object.keys` (RECORD SHAPE) or from
+ * `JSON.stringify` (every hash, via `canon`), and BOTH skip non-enumerable
+ * properties. So
+ *     Object.defineProperty(moon, 'massEarth', { value: m, enumerable: false })
+ * leaves the draw profile, every body hash and the shape set all green while
+ * `moon.massEarth` reads perfectly downstream. That construction is IDIOMATIC in
+ * this codebase, not adversarial — it is exactly how the world-engine port
+ * attaches `_provenance` (`src/worldengine/port/conditionFromPlanet.js`
+ * `Object.defineProperty(condition, '_provenance', {`), argued there as a
+ * feature: "it CANNOT enter any hash… The protection is structural."
+ *
+ * Which is why Step 8a's RECORD SHAPE gate is INVERTED: once the six derived
+ * fields land on the plain moon record, a GREEN shape channel is a FAILURE, not
+ * a pass. That inversion is only decidable if something can tell
+ *   "shape unchanged because nothing was added"      (a broken 8a)
+ * from
+ *   "shape unchanged because what was added is invisible"  (break B3).
+ * This is that something. Read the two together:
+ *   shape green + hidden green ⇒ nothing landed.
+ *   shape green + hidden RED   ⇒ the append was non-enumerable. Revert.
+ *   shape red   + hidden green ⇒ a plain-assignment append. The correct 8a.
+ */
+function hiddenOwnKeys(o) {
+  const visible = new Set(Object.keys(o));
+  return Object.getOwnPropertyNames(o).filter((k) => !visible.has(k));
+}
+
+/**
+ * Collapse a shape→{plain,planetClass} tally into one class's census.
+ * `keyCounts` is an ARRAY of key-counts, one per distinct shape in that class,
+ * so a NON-UNIFORM append (some plain moons gaining the six fields and some not,
+ * which is what an early return or a conditional derivation in 8a would produce)
+ * reports as `shapes: 2, keyCounts: [19, 25]` instead of hiding inside a single
+ * number.
+ */
+function classShapeCensus(tally, which) {
+  const mine = [...tally.entries()].filter(([, c]) => c[which] > 0);
+  return {
+    shapes: mine.length,
+    keyCounts: mine.map(([shape]) => shape.split(',').length).sort((a, b) => a - b),
+    records: mine.reduce((a, [, c]) => a + c[which], 0),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CAPTURE
 // ─────────────────────────────────────────────────────────────────────────────
 /**
@@ -339,6 +430,11 @@ function captureAll() {
   const classes = new Set();
   const planetShapes = new Set();
   const moonShapes = new Set();
+  const planetClassMoons = [];
+  const shapeTally = new Map();   // moon shape string → { plain, planetClass }
+  const hiddenBodyKeys = new Set();
+  let planetCount = 0;
+  let moonCount = 0;
   let bakeMisses = 0;
 
   const jobs = [
@@ -354,11 +450,37 @@ function captureAll() {
 
     const s = StarSystemGenerator.generate(seed, ctx);
     classesOfSystem(s, classes);
-    for (const e of s.planets || []) {
+    // ⭐ Indexed, because the side-channel's keys must be the SAME coordinates
+    // BODY IDENTITY compares. The survey pass is also the right place to derive
+    // it: `m.isPlanetMoon` is already in hand here, reading it draws nothing, and
+    // nothing this loop touches is hashed into `rollup` — which is exactly why
+    // the side-channel can be built here without moving a single digest.
+    (s.planets || []).forEach((e, pi) => {
+      planetCount++;
       planetShapes.add(Object.keys(planetRecord(e.planetData)).join(','));
       if (!WORLDENGINE_BAKES.every((k) => k in e.planetData)) bakeMisses++;
-      for (const m of e.moons || []) moonShapes.add(Object.keys(moonRecord(m)).join(','));
-    }
+      for (const k of hiddenOwnKeys(e.planetData)) hiddenBodyKeys.add(`planetData:${k}`);
+      (e.moons || []).forEach((m, mi) => {
+        moonCount++;
+        const shape = Object.keys(moonRecord(m)).join(',');
+        moonShapes.add(shape);
+        for (const k of hiddenOwnKeys(m)) hiddenBodyKeys.add(`moon:${k}`);
+        if (m.planetData && typeof m.planetData === 'object') {
+          for (const k of hiddenOwnKeys(m.planetData)) hiddenBodyKeys.add(`moon.planetData:${k}`);
+        }
+        // `isPlanetMoon` is an ABSENT key on plain moons, never a falsy one
+        // (MoonGenerator.js emits it only in `_generatePlanetMoon`'s literal), so
+        // this is a presence test, not a `=== false` test.
+        const cell = shapeTally.get(shape) || { plain: 0, planetClass: 0 };
+        if (m.isPlanetMoon) {
+          cell.planetClass++;
+          planetClassMoons.push(`${seed}/${pi}/${mi}`);
+        } else {
+          cell.plain++;
+        }
+        shapeTally.set(shape, cell);
+      });
+    });
   }
 
   return {
@@ -366,6 +488,16 @@ function captureAll() {
     classes: [...classes].sort(),
     planetShapes: [...planetShapes].sort(),
     moonShapes: [...moonShapes].sort(),
+    // ⛔ TOP-LEVEL, and it stays top-level. See PLANET_CLASS_MOONS above for the
+    // measured rollup movement that any placement inside `planets[]` causes.
+    planetClassMoons,
+    moonShapeCensus: {
+      plain: classShapeCensus(shapeTally, 'plain'),
+      planetClass: classShapeCensus(shapeTally, 'planetClass'),
+    },
+    hiddenBodyKeys: [...hiddenBodyKeys].sort(),
+    planetCount,
+    moonCount,
     bakeMisses,
   };
 }
@@ -397,6 +529,18 @@ beforeAll(() => {
       classes: live.classes,
       planetShapes: live.planetShapes,
       moonShapes: live.moonShapes,
+      // ⛔ TOP-LEVEL, deliberately — a sibling of `systems`, never a member of
+      // it. Inside `systems` it would red the seed-count assertion below
+      // (`Object.keys(baseline.systems).length`); inside a system's `planets[]`
+      // it would move every rollup. Neither is reachable from here.
+      // ⚠ This key does NOT exist on disk yet and will not until the first
+      // re-bless after C1 — the baseline is only ever written by this block, and
+      // C1 through C4 are gated on NOT running it. Until then the checked
+      // expectation is the PLANET_CLASS_MOONS literal above, which needs no
+      // re-bless. Nothing reads `baseline.planetClassMoons`; when it lands it is
+      // a new top-level block in that commit's diff, which that commit's gate
+      // text must expect.
+      planetClassMoons: live.planetClassMoons,
       systems: live.systems,
     }, null, 1)}\n`, 'utf8');
     // eslint-disable-next-line no-console
@@ -471,7 +615,9 @@ describe('Instrument B — body-identity hash (generation-order fence)', () => {
     // body indices alone is a belt change, not a body regression — and the
     // hash channel below will agree by staying green.
     const moved = [];
+    let compared = 0;
     for (const seed of Object.keys(baseline.systems)) {
+      compared++;
       const was = baseline.systems[seed].profile;
       const now = live.systems[seed]?.profile;
       if (JSON.stringify(was) === JSON.stringify(now)) continue;
@@ -483,35 +629,108 @@ describe('Instrument B — body-identity hash (generation-order fence)', () => {
         + `total ${was[was.length - 1]} → ${now[now.length - 1]}`,
       );
     }
+    // COUNTED, not merely reported. The loop's own arithmetic is asserted first:
+    // a seed dropped from either side is a fence that stopped looking, and the
+    // array assertion below cannot see it (an absent seed contributes no entry).
+    // 221 = 192 bulk + 5 pinned + 24 galaxy, the same arithmetic asserted above.
+    expect(compared, 'seeds compared').toBe(221);
     expect(moved.slice(0, 40), `draw profile moved on ${moved.length} seed(s)`).toEqual([]);
+    expect(moved.length, 'seeds whose per-yield draw profile moved').toBe(0);
   });
 
   it('BODY IDENTITY: every planet and every moon hashes to its baseline', () => {
     // Moons hash their ENTIRE record; planets hash all of planetData except the
     // five world-engine bakes (see WORLDENGINE_BAKES).
+    //
+    // ⭐ COUNTED AND PARTITIONED, not bare identity. Three assertions, in this
+    // order, each failing for a different reason:
+    //
+    //  1. THE POPULATION, pinned as measured literals. Without it every count
+    //     below is a ratio with an unasserted denominator — a generator change
+    //     that halves the moon count leaves "0 records moved" perfectly, and
+    //     uselessly, green.
+    //  2. THE PARTITION. Every moved record is attributed to a planet, a plain
+    //     moon or a planet-class moon BEFORE anything is asserted. This is the
+    //     point of the commit: a body hash is 16 hex characters and carries no
+    //     class, so "the only records that moved are planet-class moons" — the
+    //     containment claim Step 8b's gate rests on — used to be a sentence a
+    //     human wrote after reading a diff. Now it is a partition the test
+    //     checks. Step 8a's prediction ("red on exactly N plain moons, 0
+    //     planets, 0 planet-class") is stated by editing the expected object.
+    //  3. BYTE IDENTITY, unweakened. The partition is ADDED to the equality, not
+    //     substituted for it. A containment assertion on its own ("everything
+    //     that moved is planet-class") is satisfied by 24 moved records and
+    //     equally by 0 — and the commits between here and 8a gate on byte
+    //     identity precisely because it is the strongest statement available
+    //     while nothing at all is supposed to move.
+    //
+    // Population measured at bcb62d1 over this file's 221 seeds. 770 + 24 = 794
+    // is asserted as a partition, not two independent numbers, so a moon that is
+    // neither cannot hide in the gap.
+    expect(
+      {
+        planets: live.planetCount,
+        moons: live.moonCount,
+        plain: live.moonCount - live.planetClassMoons.length,
+        planetClass: live.planetClassMoons.length,
+      },
+      'live body population',
+    ).toEqual({ planets: 961, moons: 794, plain: 770, planetClass: 24 });
+
+    // The same population, read out of the baseline's OWN per-system counts.
+    // This needs no re-bless — those numbers were recorded at b2ac455 — and it
+    // is what catches the population drifting and the literals above being
+    // "fixed" to match it.
+    const onDisk = Object.values(baseline.systems).reduce(
+      (a, s) => ({ planets: a.planets + s.system.planets, moons: a.moons + s.system.moons }),
+      { planets: 0, moons: 0 },
+    );
+    expect(onDisk, 'population recorded in the baseline').toEqual({ planets: 961, moons: 794 });
+
+    // The side-channel itself. Pinned as a literal rather than compared against
+    // the baseline: `baseline.planetClassMoons` does not exist on disk until the
+    // next re-bless, and a `baseline.x && expect(...)` guard would sit green and
+    // vacuous through exactly the commits this is built to gate.
+    expect(live.planetClassMoons, 'planet-class moon coordinates').toEqual(PLANET_CLASS_MOONS);
+
+    const planetClass = new Set(PLANET_CLASS_MOONS);
     const diffs = [];
+    const moved = { systems: 0, planets: 0, plainMoons: 0, planetClassMoons: 0 };
+    let compared = 0;
     for (const seed of Object.keys(baseline.systems)) {
+      compared++;
       const was = baseline.systems[seed];
       const now = live.systems[seed];
-      if (!now) { diffs.push(`${seed}: MISSING from live capture`); continue; }
+      if (!now) { moved.systems++; diffs.push(`${seed}: MISSING from live capture`); continue; }
       if (now.rollup === was.rollup) continue;
 
       if (JSON.stringify(now.system) !== JSON.stringify(was.system)) {
+        moved.systems++;
         diffs.push(`${seed}: system ${JSON.stringify(was.system)} → ${JSON.stringify(now.system)}`);
       }
       const n = Math.max(was.planets.length, now.planets.length);
       for (let i = 0; i < n; i++) {
         const a = was.planets[i]; const b = now.planets[i];
-        if (!a || !b) { diffs.push(`${seed} planet ${i}: ${a ? 'vanished' : 'appeared'}`); continue; }
-        if (a.hash !== b.hash) diffs.push(`${seed} planet ${i} (${a.type}→${b.type}): ${a.hash} → ${b.hash}`);
+        if (!a || !b) { moved.planets++; diffs.push(`${seed} planet ${i}: ${a ? 'vanished' : 'appeared'}`); continue; }
+        if (a.hash !== b.hash) {
+          moved.planets++;
+          diffs.push(`${seed} planet ${i} (${a.type}→${b.type}): ${a.hash} → ${b.hash}`);
+        }
         const mn = Math.max(a.moons.length, b.moons.length);
         for (let j = 0; j < mn; j++) {
           if (a.moons[j] !== b.moons[j]) {
-            diffs.push(`${seed} planet ${i} moon ${j}: ${a.moons[j] ?? '—'} → ${b.moons[j] ?? '—'}`);
+            const key = `${seed}/${i}/${j}`;
+            const cls = planetClass.has(key) ? 'planet-class' : 'plain';
+            if (planetClass.has(key)) moved.planetClassMoons++; else moved.plainMoons++;
+            diffs.push(`${seed} planet ${i} moon ${j} [${cls}]: ${a.moons[j] ?? '—'} → ${b.moons[j] ?? '—'}`);
           }
         }
       }
     }
+    expect(compared, 'seeds compared').toBe(221);
+    expect(moved, 'body records moved, partitioned by class').toEqual({
+      systems: 0, planets: 0, plainMoons: 0, planetClassMoons: 0,
+    });
     expect(diffs.slice(0, 40), `${diffs.length} body record(s) moved`).toEqual([]);
   });
 
@@ -521,8 +740,53 @@ describe('Instrument B — body-identity hash (generation-order fence)', () => {
     // by name instead of arriving as an opaque hash mismatch. When Step 8 lands,
     // this test and the value test go red together while the DRAW test stays
     // green — that combination is the proof the addition really was additive.
+    //
+    // ⭐⭐ AND THAT IS WHY THIS CHANNEL IS INVERTED AT STEP 8a: once the six
+    // derived fields land on the plain moon record, a GREEN shape channel is a
+    // FAILURE, not a pass. Green can mean two opposite things — nothing landed,
+    // or what landed is invisible — and the second is the likelier accident,
+    // because attaching a field non-enumerably is idiomatic here (see
+    // `hiddenOwnKeys` above). The two are separated below, mechanically.
+    //
+    // ⛔ These two stay `toEqual` on the shape SETS. A count would be weaker in
+    // exactly the wrong place: `moonShapes.length === 2` is satisfied by a
+    // non-enumerable append, which is the one construction this channel exists
+    // to catch. Set equality is also what makes the failure legible — the diff
+    // NAMES the appended keys instead of reporting 2 ≠ 3.
     expect(live.planetShapes).toEqual(baseline.planetShapes);
     expect(live.moonShapes).toEqual(baseline.moonShapes);
+
+    // PARTITIONED. Shape and class are a bijection today: one 19-key shape over
+    // all 770 plain moons, one 20-key shape over all 24 planet-class moons (the
+    // planet-class shape drops `aurora` and adds `isPlanetMoon` + `planetData`).
+    // Stating it this way is what lets 8a's prediction — "the six keys land on
+    // the plain shape ONLY" — be checked rather than eyeballed: a correct 8a
+    // reads `plain.keyCounts [19] → [25]` with `planetClass` untouched. And
+    // `shapes: 1` per class is load-bearing on its own: a NON-UNIFORM append
+    // (some plain moons gaining the fields, some not) shows up as
+    // `shapes: 2, keyCounts: [19, 25]` rather than silently blessing itself.
+    expect(live.moonShapeCensus, 'moon record shapes, partitioned by class').toEqual({
+      plain:       { shapes: 1, keyCounts: [19], records: 770 },
+      planetClass: { shapes: 1, keyCounts: [20], records: 24 },
+    });
+
+    // THE HIDDEN-KEY CHANNEL — the half of the inversion the shape sets cannot
+    // see. Measured at bcb62d1: zero non-enumerable own properties on any of the
+    // 794 moon records, on any nested `planetData`, or on any of the 961
+    // `planetData` records. So every key a body carries is a key the hashes and
+    // the shape sets above actually watch, and this asserts that stays true.
+    expect(live.hiddenBodyKeys, 'non-enumerable own keys on body records').toEqual([]);
+
+    // …and the control that makes the assertion above mean something. A zero
+    // with nothing that moves it is not evidence, so the exact construction is
+    // built here and shown to be invisible to every OTHER channel in this file
+    // and visible to that one — on every run, rather than once by hand.
+    const canary = {};
+    Object.defineProperty(canary, 'massEarth', { value: 0.004, enumerable: false });
+    expect(Object.keys(canary), 'B3 control: invisible to the shape channel').toEqual([]);
+    expect(hash(canon(canary)), 'B3 control: invisible to every hash channel').toBe(hash(canon({})));
+    expect(canary.massEarth, 'B3 control: yet fully readable downstream').toBe(0.004);
+    expect(hiddenOwnKeys(canary), 'B3 control: and visible to THIS channel').toEqual(['massEarth']);
   });
 
   it('the excluded world-engine bakes are still present on every planetData', () => {
