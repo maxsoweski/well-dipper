@@ -592,7 +592,7 @@ export class StarSystemGenerator {
       for (let m = 0; m < planetData.moonCount; m++) {
         if (m > 0) yield;  // yield between moons — first moon rides the planet's chunk
         const moonRng = planetRng.child(`moon-${m}`);
-        const moonData = MoonGenerator.generate(moonRng, planetData, m, planetData.moonCount, parentZone, zones);
+        const moonData = MoonGenerator.generate(moonRng, planetData, m, planetData.moonCount, parentZone, zones, orbitRadiusAU);
         moonData._systemSeed = seed;
         moonData._ordinal = `${i}.${m}`;
         moons.push(moonData);
