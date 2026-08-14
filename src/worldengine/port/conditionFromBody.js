@@ -347,8 +347,8 @@ export function habitabilityScalarOf(gameHabitability) {
 // The retired test was `if (!phys) return gameAtmosphere; // already engine-shaped` — an ABSENCE
 // test. It asks "is there no `.physics`?" and concludes "then this must already be engine-shaped",
 // which is a non-sequitur that one real caller falsifies:
-//     MoonGenerator.js:193 `atmosphere: type === 'terrestrial' ? {` — a `{ color, strength }` literal
-//     closed by MoonGenerator.js:196 `} : null,`
+//     MoonGenerator.js:217 `atmosphere: type === 'terrestrial' ? {` — a `{ color, strength }` literal
+//     closed by MoonGenerator.js:220 `} : null,`
 // a purely VISUAL rim-glow wrapper with no physics anywhere. It has no `.physics`, so the absence
 // test passed it straight through, and the resulting condition carried an atmosphere that is
 // TRUTHY (so every `if (cond.atmosphere)` gate says "this world has air") whose `.pressure` is
@@ -400,7 +400,7 @@ export function atmosphereFromPlanet(gameAtmosphere) {
 //   game   `planetData.tidalHeating` — the RAW Io-normalised ratio, computed for real from
 //          eccentricity + star mass + orbit (PlanetGenerator.js `tidalHeating,` in the record
 //          literal, from PhysicsEngine.js:342 `export function tidalHeatingPlanet(eccentricity, starMassSolar, planetRadiusEarth, orbitAU) {`;
-//          and MoonGenerator.js:161 `const tidalHeating = this._computeTidalHeating(`).
+//          and MoonGenerator.js:185 `const tidalHeating = this._computeTidalHeating(`).
 //   engine baseStep.js:29 `const rawTidalIoRatio = (d.tidalHeat != null)   // D12 raw Io-ratio, PRE-calibrateTidal`
 //          reads the fp key `tidalHeat`.
 //
@@ -637,7 +637,7 @@ export const PROVENANCE_INPUTS = Object.freeze(Object.keys(PROVENANCE_COVERAGE))
  *    5500 kg/m³ ⇒ 5.5 g/cc, i.e. Earth, and reads maximally rocky.
  *
  *  · `atmosphere` distinguishes `null` from absent. `null` is a MEASUREMENT: both
- *    PlanetGenerator.js:448 `let atmosphere = null;` and MoonGenerator.js:196 `} : null,`
+ *    PlanetGenerator.js:448 `let atmosphere = null;` and MoonGenerator.js:220 `} : null,`
  *    set it outright to mean "nothing retained", and the engine's airless
  *    presets agree. `undefined` means the body never said. And a visual-only `{color, strength}`
  *    wrapper — the moon bug above — is 'defaulted', because it looks like an answer and is not one.

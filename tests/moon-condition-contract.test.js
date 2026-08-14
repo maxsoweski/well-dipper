@@ -72,7 +72,7 @@ import {
 import { EARTH_RADIUS_AU } from '../src/core/ScaleConstants.js';
 
 // ── Duplicated src constants, deliberately ───────────────────────────────────────────────────
-// `RHO_EARTH_KGM3` (MoonGenerator.js:496) and `EARTH_MASSES_PER_SUN` (:501) are module-private.
+// `RHO_EARTH_KGM3` (MoonGenerator.js:536 `const RHO_EARTH_KGM3 = 5514;`) and `EARTH_MASSES_PER_SUN` (:501) are module-private.
 // Copying them as literals is DESIRABLE here: if either ever changes in src, a gate should red and
 // the change should be a named act rather than a silent re-scaling of every moon in the universe.
 // Precedent: tests/moon-mass-radius-consistency.test.js:46 duplicates EARTH_DENSITY_GCC the same way.
@@ -228,7 +228,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // G3/G4 VALUE ARM — mass and radius describe the same body. CORRECTNESS. Green today.
   //
   // AT RETURN TIME, which is where MoonGenerator's own invariant is stated
-  // (MoonGenerator.js:242 `moon.massEarth = moonRadiusData.radiusEarth ** 3 * (composition.density / RHO_EARTH_KGM3);`).
+  // (MoonGenerator.js:266 `moon.massEarth = moonRadiusData.radiusEarth ** 3 * (composition.density `).
   // ⚠ The symbol above is the LITERAL line text, not a math paraphrase. An earlier draft wrote
   // `massEarth = radiusEarth³ × …` — correct as algebra, a broken citation as a fence anchor,
   // because the rule is literal token presence on the cited line. :242 was always the right line.
@@ -361,7 +361,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // over the line today". Not on this corpus: max is 2.6663 g on 23 bodies, 1.88× inside the
   // shipped bound, and nothing is over any line. Row 13 measured a different population.
   //
-  // MUTANT: `pcnomass` — drop the `massScale` cube at MoonGenerator.js:378 (`massEarth: pData.massEarth`,
+  // MUTANT: `pcnomass` — drop the `massScale` cube at MoonGenerator.js:418 `const massScale = pData.radiusEarth > 0 ? (radiusEarth / pData.radiusEar` (`massEarth: pData.massEarth`,
   // unscaled). That is the exact regression moon-mass-radius-consistency.test.js exists for; it
   // put 27.6 M⊕ in a 0.89 R⊕ body, ~213 g/cc, ~35 g. Both bounds here red.
   // ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -386,7 +386,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // orbit AU survives onto the finished system (`starInfo` carries colours and brightnesses, not
   // luminosity; `system.zones` is the scene/map zoneData, not the generator's `zones`). Asserting
   // it against the final system instead would be red on 56 bodies for a reason that is a declared
-  // design choice — MoonGenerator.js:227-229 deliberately uses the pre-migration AU so the value
+  // design choice — MoonGenerator.js:251 `const luminosityRel = zones?.luminosity ?? 1.0;` deliberately uses the pre-migration AU so the value
   // agrees with the `parentZone` derived from that same number, and StarSystemGenerator.js:655-657
   // rewrites the wrapper's AU for hot-jupiter migrants after every moon is already built.
   //
@@ -445,7 +445,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // MUTANT (inverted): ⚠ MEASURED 2026-08-14 — passing real zones takes this 3 violators → **1**,
   // NOT 0. Do not expect green. The survivor is `wd-79/2/0` (moon 259.364 vs parent 260.178), and
   // it is a SECOND, separate defect: the moon's T_eq uses the PRE-migration parentOrbitAU
-  // (527.736, MoonGenerator.js:227-229's deliberate choice) while `_swapPlanetType` regenerates
+  // (527.736, MoonGenerator.js:251 `const luminosityRel = zones?.luminosity ?? 1.0;`'s deliberate choice) while `_swapPlanetType` regenerates
   // the planet at the FINAL orbit (524.442). Residual is exactly sqrt(527.736/524.442) = 1.00314×.
   // ⛔ And the fix is NOT one line: `_swapPlanetType(planetEntry, newType, rng)`
   // (ExoticOverlay.js:306) has no zones parameter, and `systemData.zones` is zoneData — four AU
@@ -466,7 +466,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // G3 VALUE ARM — tidalState. CORRECTNESS. Green on 705/705.
   //
   // Re-derives `checkTidalLock(tidalLockTimescale(...))` from the moon's own record and its FINAL
-  // parent, including both unit conversions MoonGenerator.js:250-259 performs: the parent's mass
+  // parent, including both unit conversions MoonGenerator.js:274 `moon.massEarth,` performs: the parent's mass
   // out of Earth masses into SOLAR masses, and the moon's orbit out of Earth radii into AU. The
   // two constants are duplicated at the top of this file on purpose.
   //
@@ -500,7 +500,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // G3 VALUE ARM — composition internal consistency. CORRECTNESS. Green on 705/705.
   //
   // ⛔ WHY THIS IS AN ALGEBRAIC IDENTITY AND NOT A RE-DERIVATION. Re-running `deriveComposition`
-  // needs the `mooncomp:` float, and `namespacedFloat` (MoonGenerator.js:538) is module-private.
+  // needs the `mooncomp:` float, and `namespacedFloat` (MoonGenerator.js:578 `function namespacedFloat(key) {`) is module-private.
   // Copying it into a test would create a genuine second source of truth for a value the record
   // carries — the one duplication that is NOT acceptable here.
   //
@@ -626,81 +626,120 @@ describe('moon condition contract — the six derived fields carry real values',
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════════════════
-  // surfaceHistory — CURRENT BEHAVIOUR. **THE DEFECT IS NAMED AND ITS PRICE IS PINNED.**
+  // surfaceHistory — **THE nearGiant DEFECT WAS FIXED. THIS ARM NOW PINS THE FIXED CALL.**
   //
-  // C4's known value issue 1: MoonGenerator.js:262 calls
+  // HISTORY (the state this gate was written against, at ea8afca): MoonGenerator.js:262 called
   //     computeSurfaceHistory(ageGyr, /* nearBelt */ false, /* nearGiant */ false, hasAtmo, tidal)
   // hardcoding BOTH flags false for every moon — including moons of gas giants, which are by
-  // definition near a giant. This arm asserts that today's values are exactly that call, so the
-  // three outputs are pinned; the arm below prices the defect.
+  // definition near a giant. C6 declined to fix it and priced it instead (four reasons, of which
+  // #2 is the one that survived: it moves no pixel). Max ruled on 2026-08-14 that the fix goes in
+  // anyway, on the ground that Step 9's crater pack consumes bombardment and getting it wrong now
+  // bakes the error into that pack. Reasons #1 and #3 are superseded by that ruling.
   //
-  // WHY CURRENT BEHAVIOUR AND NOT CORRECTNESS — the recommendation, with what it rests on:
-  //  1. PlanetGenerator.js:610-611 passes the SAME two hardcoded falses, with the comment
-  //     "nearBelt/nearGiant refined by system generator later". MoonGenerator is consistent with
-  //     the shipped planet path, not divergent from it. Fixing only the moon side would make moons
-  //     and planets disagree about one shared model.
-  //  2. ⭐ MEASURED: passing `nearGiant` truthfully moves NOTHING a player can see. It multiplies
-  //     `bombardment` by 1.3 before the clamp (PhysicsEngine.js:809-816) and touches nothing else —
-  //     `erosionLevel` and `resurfacingRate` moved on 0 of 448 giant-parent moons. And
-  //     `bombardmentIntensity` is not on the crater path: Step 9's declared consumer
-  //     `craterSchedule` (src/worldengine/base/bombardment.js:155-166) reads radiusEarth,
-  //     surfaceGravity, age, rawTidalIoRatio, atmosphere.pressure and `erosionOf` — never
-  //     bombardmentIntensity. Its only non-test reader in src/ is the debug overlay at
-  //     src/ui/DebugPanel.js:243 and `deriveUniforms` (labCore.js:702), which no game-route file
-  //     imports (BodyRenderer.js:11 takes `lodRampOf`/`autoOctaves`; main.js:25 takes
-  //     `approachLadder`), and plain moons render through src/objects/Moon.js, which has ZERO
-  //     worldengine imports.
-  //  3. It would move 181 moon records and force a third Instrument B re-bless inside a commit
-  //     whose declared job is tests-only. §3 requires C6 to be written against a stable baseline.
-  //  4. `nearBelt` has no defensible threshold to fix it TO. Belts carry `centerRadiusAU` and
-  //     `widthAU`, and the moon count called "near" swings 21× (8 → 172 moons) across
-  //     1.0× / 1.5× / 3.0× width, on a constant nobody has calibrated. Inventing one would be worse
-  //     than the hardcode, because it would look measured.
+  // ⭐ REASON #2 STILL HOLDS AND IS WHY NO PIXEL GATE REDS ALONGSIDE THIS ONE. `nearGiant`
+  // multiplies `bombardment` by 1.3 before the clamp (PhysicsEngine.js:809-816) and touches
+  // nothing else — `erosionLevel` and `resurfacingRate` move on 0 of 448. And
+  // `bombardmentIntensity` is not on the crater path: Step 9's declared consumer `craterSchedule`
+  // (src/worldengine/base/bombardment.js:155-166) reads radiusEarth, surfaceGravity, age,
+  // rawTidalIoRatio, atmosphere.pressure and `erosionOf` — never bombardmentIntensity. Its only
+  // non-test reader in src/ is the debug overlay at src/ui/DebugPanel.js:243 and `deriveUniforms`
+  // (labCore.js:702), which no game-route file imports (BodyRenderer.js:11 takes
+  // `lodRampOf`/`autoOctaves`; main.js:25 takes `approachLadder`), and plain moons render through
+  // src/objects/Moon.js, which has ZERO worldengine imports.
   //
-  // ⇒ REPORTED, NOT FIXED HERE. The correct owner is the "system generator later" the planet path
-  // already names: one place, both populations, its own commit with a delta table.
+  // ⛔ `nearBelt` IS STILL HARDCODED false, AND THAT HALF IS UNFIXED BY DESIGN. The reason is
+  // stronger than C6's original "no defensible threshold": the information does not EXIST at this
+  // point in the stream. Belts are drawn at StarSystemGenerator.js:736, AFTER the moon loop at
+  // :595; `zones` (:457-467) carries no belt field and MoonGenerator references belts nowhere.
+  // Computing it here would require reordering generation, which moves the draw stream for every
+  // body downstream. Correct owner: the "refined by system generator later" pass that
+  // PlanetGenerator.js:610 already names — one place, both populations, its own commit.
+  //
+  // ⚠ AND A REAL INCONSISTENCY THIS COMMIT LEAVES STANDING, FLAGGED SO IT IS NOT LOST: PLANET-CLASS
+  // moons still carry `nearGiant = false` in their nested `planetData.surfaceHistory`, because they
+  // are built by PlanetGenerator (MoonGenerator.js:123 `if (isLargeParent && moonIndex > 0 && totalMoons >= 3 && rng.chance(0.10` → :338) and the planet path keeps its own
+  // hardcoded falses. They are moons of giants by construction (the branch at :98 gates on a
+  // gas-giant/sub-neptune parent), so after this commit they disagree with their plain siblings
+  // around the same parent. Same owner as nearBelt.
   //
   // MUTANT: `zerofill` — `moon.surfaceHistory = {}`. The three keys vanish and this reds on 705/705
   // while G3's presence arm stays green. MUTANT: `flatatmo` (see the atmosphere gate) flips
   // `hasAtmosphere` on a terrestrial moon and moves `erosionLevel` from the 0.03/Gyr branch to the
-  // 0.15/Gyr one — reds this arm on any corpus that contains one.
+  // 0.15/Gyr one — reds this arm on any corpus that contains one. MUTANT: THE REVERT — restoring
+  // the two hardcoded falses at MoonGenerator.js reds this arm on 181 of 705.
   // ═══════════════════════════════════════════════════════════════════════════════════════════
-  it('surfaceHistory is exactly computeSurfaceHistory(age, false, false, hasAtmosphere, tidalHeating)', () => {
+  it('surfaceHistory is exactly computeSurfaceHistory(age, false, parentIsGiant, hasAtmosphere, tidalHeating)', () => {
+    // ⚠ CLASSIFIED ON `r.snap.argParentType`, NOT `r.parent.type`. `argParentType` is
+    // `planetData.type` as captured at the moment MoonGenerator.generate was CALLED — the exact
+    // value the src predicate reads. `r.parent.type` is the POST-generate type, after the
+    // migration retype (StarSystemGenerator.js:662) and after ExoticOverlay. Measured divergence
+    // on this corpus: 11 of 705 (gas-giant→hot-jupiter ×8, lava→hex, rocky→crystal,
+    // ocean→city-lights). The two layers happen to agree on giant-ness today; asserted below so
+    // they cannot silently stop agreeing.
+    const GIANTS = new Set(['gas-giant', 'hot-jupiter', 'sub-neptune']);
     let mismatches = 0;
     for (const r of plain) {
-      const expected = computeSurfaceHistory(r.m.age, false, false, r.m.atmosphere != null, r.m.tidalHeating);
+      const expected = computeSurfaceHistory(
+        r.m.age, false, GIANTS.has(r.snap.argParentType), r.m.atmosphere != null, r.m.tidalHeating,
+      );
       const got = r.m.surfaceHistory;
       if (expected.bombardmentIntensity !== got.bombardmentIntensity
         || expected.erosionLevel !== got.erosionLevel
         || expected.resurfacingRate !== got.resurfacingRate) mismatches++;
     }
     expect({ moons: plain.length, mismatches }).toEqual({ moons: 705, mismatches: 0 });
-    // Non-vacuity: 169 distinct erosion levels behind it, and 515 of 705 bombardmentIntensity
-    // values clamped to exactly 0 by `max(0, bombardment − resurfacing × 0.5)` — which is itself
-    // worth pinning, because it is why the defect below moves fewer records than it looks like.
+    // The two classification layers agree on GIANT-NESS for every moon (not on type — 11 types
+    // differ). If ExoticOverlay ever retyped a small parent INTO a giant, or a giant out of it,
+    // this reds and names the layer split before any value gate goes mysteriously wrong.
+    expect(plain.filter((r) => GIANTS.has(r.snap.argParentType) !== GIANTS.has(r.parent.type)).length,
+      'moons where generation-time and post-generate giant-ness disagree').toBe(0);
+    // Non-vacuity: 169 distinct erosion levels behind it (UNCHANGED by the nearGiant fix —
+    // erosion is a pure function of (hasAtmosphere, ageGyr), PhysicsEngine.js:813-815), and
+    // 449 of 705 bombardmentIntensity values clamped to exactly 0 by
+    // `max(0, bombardment − resurfacing × 0.5)`.
+    // ⭐ 449 WAS 515 BEFORE THE nearGiant FIX. The drop is exactly 66 = the zero-crossers priced
+    // by the gate below. Arithmetically forced, not a second measurement: nearGiant only
+    // multiplies bombardment UP and the clamp is monotone in bombardment, so this population can
+    // only shrink and only by the crossers (verified: 0 of 705 records decreased).
     expect(new Set(plain.map((r) => r.m.surfaceHistory.erosionLevel)).size).toBe(169);
-    expect(plain.filter((r) => r.m.surfaceHistory.bombardmentIntensity === 0).length).toBe(515);
+    expect(plain.filter((r) => r.m.surfaceHistory.bombardmentIntensity === 0).length).toBe(449);
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════════════════
-  // THE PRICE OF THE HARDCODED `nearGiant` — pinned as literals so the src fix reds a NAMED NUMBER
-  // instead of sliding silently under the green gate above. This is what stops "assert current
-  // behaviour" from being the same thing as "lock the defect in".
+  // `nearGiant` IS NOW TRUTHFUL — this gate flipped from PRICING a defect to GUARDING the fix.
+  // It measures the SAME quantity it always did (what would change if nearGiant were passed
+  // truthfully) — but now that src already does, the honest answer is 0. A revert, or a narrowing
+  // of the type list, reds it immediately.
   //
-  // All measured at ea8afca on this corpus (197 seeds, 705 plain moons):
+  // ⚠ CORPUS LABEL, LOAD-BEARING: everything here is THIS FILE'S 197-seed corpus, 705 plain moons.
+  // The fence (tests/body-identity-fence.test.js) adds 24 `gc-*` seeds and reads 770 plain / 474
+  // giant-parented for the same quantities. ⛔ `giantParented: 448` IS NOT STALE and must NOT be
+  // "corrected" to 474 — different corpora, both right.
+  //
+  // WAS, at ea8afca, before the fix (this 197-seed corpus):
   //     448 of 705 (63.5%) have a giant parent — sub-neptune 261, gas-giant 179, hot-jupiter 8
-  //     181 of those 448 would move `bombardmentIntensity` if nearGiant were passed truthfully
-  //      66 of the 181 cross 0 → nonzero (a body Step 9 would read as "no impact history" starts
+  //     181 of those 448 moved `bombardmentIntensity` once nearGiant was passed truthfully
+  //      66 of the 181 crossed 0 → nonzero (a body Step 9 read as "no impact history" started
   //         having one); of the remaining 115, ratio p50 1.975×, max 55.69×
-  //       0 of 448 move `erosionLevel`; 0 of 448 move `resurfacingRate` — structural, not luck
+  //       0 of 448 moved `erosionLevel`; 0 of 448 moved `resurfacingRate` — structural, not luck
+  // ⚠ 181 and 66 are ALSO the fence's numbers on its larger corpus, and that is an ACCIDENT, not a
+  // corpus-independent fact: the 26 extra gc-* giant-parented moons contribute exactly 0 movers
+  // because all 26 sit in an age regime already clamped to 0. Do not reuse either number without
+  // naming its corpus.
   //
-  // MUTANT: the src fix itself — `nearGiant = ['gas-giant','sub-neptune','hot-jupiter'].includes(parent.type)`
-  // at MoonGenerator.js:262. `moved` goes 181 → 0 and this reds, naming the commit that must
-  // carry the delta table and the Instrument B re-bless.
+  // IS, after the fix: `moved` and `crossedZero` are 0 — `today` already IS the truthful value.
+  // `giantParented` is unchanged at 448: the fix changes no moon's parent, only a value.
+  //
+  // MUTANT: THE REVERT — restoring `false` for nearGiant at MoonGenerator.js. `moved` goes
+  // 0 → 181, `crossedZero` 0 → 66, and this reds.
+  // MUTANT: `narrowlist` — dropping 'sub-neptune' from GIANT_PARENT_TYPES in src. `moved` goes
+  // 0 → 113 (the sub-neptune-parented movers), which is why the type list is asserted and not
+  // merely commented.
   // ═══════════════════════════════════════════════════════════════════════════════════════════
-  it('the hardcoded nearGiant is priced: 448 moons in the affected class, 181 records, 0 pixels', () => {
+  it('nearGiant is truthful: 448 moons in the affected class, 0 records left to move, 0 pixels', () => {
     const GIANTS = new Set(['gas-giant', 'sub-neptune', 'hot-jupiter']);
-    const giantParented = plain.filter((r) => GIANTS.has(r.parent.type));
+    // Generation-time parent type — the layer src reads. See the gate above on argParentType.
+    const giantParented = plain.filter((r) => GIANTS.has(r.snap.argParentType));
     let moved = 0;
     let crossedZero = 0;
     let erosionMoved = 0;
@@ -718,7 +757,7 @@ describe('moon condition contract — the six derived fields carry real values',
     expect({
       giantParented: giantParented.length, moved, crossedZero, erosionMoved, resurfacingMoved,
     }).toEqual({
-      giantParented: 448, moved: 181, crossedZero: 66, erosionMoved: 0, resurfacingMoved: 0,
+      giantParented: 448, moved: 0, crossedZero: 0, erosionMoved: 0, resurfacingMoved: 0,
     });
   });
 
@@ -731,7 +770,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // corpus carry an atmosphere, because 0 are terrestrial-type (rocky 226, ice 235, captured 171,
   // volcanic 73, terrestrial 0). The fence pins `wd-1403` at body-identity-fence.test.js:104-108
   // saying it is "the only terrestrial-moon system found in 6000 seeds" and that without it the
-  // fence "never watches seven of the moon generator's draws" at MoonGenerator.js:186-201 —
+  // fence "never watches seven of the moon generator's draws" at MoonGenerator.js:210 `// Terrestrial moons have atmosphere + clouds (they support life!)` —
   // but `wd-1403`'s terrestrial moon is PLANET-CLASS, built by `_generatePlanetMoon`, which never
   // reaches those lines. The seed's coverage argument names the wrong code path. (Not C6's to fix;
   // recorded here because the next author will otherwise trust it.)
@@ -747,7 +786,7 @@ describe('moon condition contract — the six derived fields carry real values',
   //   3. POSITIVE CONTROL — the violating shape, handed in directly, DOES produce the pathology.
   //      Without this the whole gate is an assertion that nothing happened.
   //
-  // MUTANT: `flatatmo` — MoonGenerator.js:194-197 emits `{retained: true, color}` instead.
+  // MUTANT: `flatatmo` — MoonGenerator.js:218 `color: [0.4, 0.6, 1.0],` emits `{retained: true, color}` instead.
   // Arm 1 reds on the key set, arm 2 reds because `hasEngineAtmosphereShape` now passes it through
   // truthy with `pressure` undefined. Arm 3 is what proves arms 1-2 are watching a live wire.
   // ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -760,7 +799,7 @@ describe('moon condition contract — the six derived fields carry real values',
     expect(typeCounts).toEqual({ rocky: 226, ice: 235, captured: 171, volcanic: 73 });
 
     // ── the forced arm: drive MoonGenerator directly until the terrestrial branch fires ──
-    // gas-giant parent + parentZone 'hz' is the only route to `terrestrial` (MoonGenerator.js:459);
+    // gas-giant parent + parentZone 'hz' is the only route to `terrestrial` (MoonGenerator.js:499 `if (rng.chance(0.03)) return 'terrestrial';`);
     // totalMoons = 2 keeps the planet-class branch (:99, needs >= 3) out of the way, and
     // moonIndex = 1 keeps the volcanic branch (:437, moonIndex 0 only) out of the way.
     const zones = { luminosity: 1.0, metallicity: 0.0, ageGyr: 4.5, frostLine: 4.85 };

@@ -5,6 +5,30 @@ import { tidalHeating as tidalHeatingFn, equilibriumTemperature, tidalLockTimesc
 import { SeededRandom } from './SeededRandom.js';
 
 /**
+ * Parent types massive enough to count as "a giant" for a moon.
+ *
+ * THE CRITERION IS PARENT MASS, NOT SHADER FAMILY OR NAME. `nearGiant` exists in
+ * `computeSurfaceHistory` (PhysicsEngine.js:808 `if (nearGiant) bombardment *= 1.3;`) because a massive neighbour
+ * gravitationally focuses impactors and stirs planetesimals — both scale with mass.
+ * Measured against this repo's own mass model (RADIUS_RANGES_EARTH × estimateMassEarth),
+ * the 18 planet types split with a clean gap and nothing inside it:
+ *   every EXCLUDED type tops out at  7.92 M⊕  (largest: ocean / ecumenopolis, 1.8 R⊕)
+ *   every INCLUDED type starts at   12.82 M⊕  (smallest: sub-neptune, 2.5 R⊕)
+ * sub-neptune is in because Neptune-class IS a giant planet and is the Solar System's
+ * canonical planetesimal stirrer; hot-jupiter is in because it is the most massive type
+ * in the table (65–272 M⊕).
+ *
+ * ⛔ NOT `GAS_TYPES` (src/objects/Planet.js:1422). That set includes `eyeball` and is
+ * consumed at :1473 to pick a SHADER FAMILY — it is defined by what to draw, not by what
+ * the body weighs. An eyeball is a tidally-locked terrestrial (0.8–1.3 R⊕, ≤2.38 M⊕),
+ * ~100× too light to focus impactors.
+ *
+ * This is the same three-type set `_pickRadius` already tested for inline; it is hoisted
+ * here so the two sites cannot drift apart.
+ */
+const GIANT_PARENT_TYPES = new Set(['gas-giant', 'hot-jupiter', 'sub-neptune']);
+
+/**
  * MoonGenerator — produces data describing moons orbiting a planet.
  *
  * Moon orbit distances use realistic multiples of parent radius:
@@ -257,8 +281,24 @@ export class MoonGenerator {
     // passes — that 0 is a WS1 byte-identity constraint on PLANETS, and it does
     // not bind a field that has never existed on moons. With the literal 0 this
     // field could only ever emit two distinct resurfacingRate values.
+    // `nearGiant` is passed TRUTHFULLY: a moon of a gas giant / hot Jupiter /
+    // sub-neptune is not merely near a giant, its parent is the permanent dominant
+    // perturber at 6–60 parent radii. See GIANT_PARENT_TYPES above for why the test is
+    // parent MASS and not `GAS_TYPES`. Measured on the fence's 221-seed corpus: 474 of
+    // 770 plain moons are giant-parented and 181 records move `bombardmentIntensity`;
+    // `erosionLevel` and `resurfacingRate` move on 0, structurally — `nearGiant` reaches
+    // neither (PhysicsEngine.js:813-818).
+    //
+    // ⛔ `nearBelt` STAYS false, considered and rejected rather than overlooked. It is not
+    // that the threshold is uncalibrated — the information does not EXIST at this point in
+    // the stream. Belts are generated at StarSystemGenerator.js:736, after the moon loop at
+    // :595, so at moon-generation time no belt has been drawn yet; `zones` (:457-467)
+    // carries no belt field and this file references belts nowhere. Computing it here would
+    // require reordering generation, which moves the RNG draw stream for every body
+    // downstream. Correct owner: the "refined by system generator later" pass that
+    // PlanetGenerator.js:610 already names, which can see both populations at once.
     moon.surfaceHistory = computeSurfaceHistory(
-      ageGyr, false, false, moon.atmosphere != null, tidalHeating,
+      ageGyr, false, GIANT_PARENT_TYPES.has(planetData.type), moon.atmosphere != null, tidalHeating,
     );
 
     return moon;
@@ -270,7 +310,7 @@ export class MoonGenerator {
    */
   static _pickRadius(rng, type, planetData) {
     const pType = planetData.type;
-    const isGasGiant = pType === 'gas-giant' || pType === 'sub-neptune' || pType === 'hot-jupiter';
+    const isGasGiant = GIANT_PARENT_TYPES.has(pType);
 
     let fraction;
     if (type === 'terrestrial') {

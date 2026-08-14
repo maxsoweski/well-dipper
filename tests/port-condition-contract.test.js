@@ -2017,8 +2017,8 @@ describe('Step 1 · the atmosphere sniff became a positive shape validation', ()
   });
 
   it('names why that mattered: one object, two contradictory answers', () => {
-    // MoonGenerator.js:193 `atmosphere: type === 'terrestrial' ? {` emits exactly this
-    // for a terrestrial moon (closed by MoonGenerator.js:196 `} : null,`). Through
+    // MoonGenerator.js:217 `atmosphere: type === 'terrestrial' ? {` emits exactly this
+    // for a terrestrial moon (closed by MoonGenerator.js:220 `} : null,`). Through
     // the old seam the resulting condition said "has air" to every truthiness gate
     // and "vacuum" to every pressure gate, and nothing threw, because every
     // divisor downstream is floored.
@@ -4016,7 +4016,7 @@ describe('Step 1 · _provenance', () => {
   });
 
   it('distinguishes an explicit null atmosphere (a measurement) from an absent one', () => {
-    // PlanetGenerator.js:448 `let atmosphere = null;` and MoonGenerator.js:196 `} : null,`
+    // PlanetGenerator.js:448 `let atmosphere = null;` and MoonGenerator.js:220 `} : null,`
     // both set it outright to mean "nothing retained". That IS the game's answer, and calling
     // it 'defaulted' would cry wolf on every airless body in the galaxy.
     expect(conditionFromBody({ atmosphere: null })._provenance.atmosphere).toBe('measured');
