@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-12T17:14:48.267Z",
+  "recordedAt": "2026-08-14T20:35:59.269Z",
   "recordedFromCommit": {
-    "sha": "0dddabe8c73ad98f301dd522458a74cd55d9b186",
+    "sha": "1340c4dd793d8f67f7663fc0d02823f716bdf5b9",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -28,12 +28,12 @@
   },
   "summary": {
     "counts": {
-      "collectedFiles": 322,
-      "failingFiles": 2,
+      "collectedFiles": 324,
+      "failingFiles": 3,
       "nonCollectingFiles": 15,
-      "tests": 5293,
-      "failed": 24,
-      "passed": 5265,
+      "tests": 5312,
+      "failed": 26,
+      "passed": 5282,
       "skipped": 4,
       "todo": 0
     },
@@ -56,7 +56,8 @@
     ],
     "failingFiles": [
       "src/generation/__tests__/ProcgenSnapshot.test.js",
-      "src/generation/__tests__/componentSystems.byteSafety.test.js"
+      "src/generation/__tests__/componentSystems.byteSafety.test.js",
+      "tests/moon-condition-contract.test.js"
     ],
     "failingTests": [
       "src/generation/__tests__/ProcgenSnapshot.test.js :: AC8 — procgen-only snapshot (seed-stream isolation) regenerates identical contents: bulge seed=1462877588",
@@ -82,7 +83,9 @@
       "src/generation/__tests__/ProcgenSnapshot.test.js :: AC8 — procgen-only snapshot (seed-stream isolation) regenerates identical contents: outer-disk seed=1918858082",
       "src/generation/__tests__/ProcgenSnapshot.test.js :: AC8 — procgen-only snapshot (seed-stream isolation) regenerates identical contents: outer-disk seed=2757311045",
       "src/generation/__tests__/ProcgenSnapshot.test.js :: AC8 — procgen-only snapshot (seed-stream isolation) regenerates identical contents: outer-disk seed=592560942",
-      "src/generation/__tests__/componentSystems.byteSafety.test.js :: AC3 — procgen byte-safety non-far authored row byte-unchanged: Sirius deep-equals its pre-increment baseline"
+      "src/generation/__tests__/componentSystems.byteSafety.test.js :: AC3 — procgen byte-safety non-far authored row byte-unchanged: Sirius deep-equals its pre-increment baseline",
+      "tests/moon-condition-contract.test.js :: moon condition contract — the six derived fields carry real values POST-OVERLAY: mass and radius still describe the same body after StarSystemGenerator returns",
+      "tests/moon-condition-contract.test.js :: moon condition contract — the six derived fields carry real values a moon carries the same equilibrium temperature as the planet it orbits"
     ],
     "skippedTests": [
       "tests/cockpit-geometry.test.js :: AC-REPRO — geometric identity across two independent generator runs declares identical metrics from both runs",
@@ -258,7 +261,9 @@
       "tests/lab-shader-samplers.test.js": 7,
       "tests/lab-surface-ratchet.test.js": 31,
       "tests/material-parity-list.test.js": 27,
+      "tests/moon-condition-contract.test.js": 15,
       "tests/moon-mass-radius-consistency.test.js": 5,
+      "tests/moon-rng-stream-identity.test.js": 4,
       "tests/motion-test-kit-smoke.test.js": 6,
       "tests/orbit-ring-rebase.test.js": 10,
       "tests/pack-contract.test.js": 31,
