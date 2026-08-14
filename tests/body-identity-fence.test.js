@@ -766,7 +766,7 @@ describe('Instrument B — body-identity hash (generation-order fence)', () => {
     // (some plain moons gaining the fields, some not) shows up as
     // `shapes: 2, keyCounts: [19, 25]` rather than silently blessing itself.
     expect(live.moonShapeCensus, 'moon record shapes, partitioned by class').toEqual({
-      plain:       { shapes: 1, keyCounts: [19], records: 770 },
+      plain:       { shapes: 1, keyCounts: [25], records: 770 },  // 19 + the six 8a fields, C5 (8a)
       planetClass: { shapes: 1, keyCounts: [20], records: 24 },
     });
 
