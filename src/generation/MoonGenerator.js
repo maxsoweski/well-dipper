@@ -1,7 +1,7 @@
 import { earthRadiiToScene, EARTH_RADIUS_AU, AU_TO_SCENE } from '../core/ScaleConstants.js';
 import { PlanetGenerator } from './PlanetGenerator.js';
 import { realisticOrbitSpeed as orb } from '../core/CelestialTime.js';
-import { tidalHeating as tidalHeatingFn } from './PhysicsEngine.js';
+import { tidalHeating as tidalHeatingFn, equilibriumTemperature, tidalLockTimescale, checkTidalLock, deriveComposition, computeSurfaceHistory } from './PhysicsEngine.js';
 import { SeededRandom } from './SeededRandom.js';
 
 /**
@@ -162,7 +162,7 @@ export class MoonGenerator {
       planetData, moonRadiusData.radiusEarth, orbitRadiusEarth,
     );
 
-    return {
+    const moon = {
       type,
       // Physical units
       radiusEarth: moonRadiusData.radiusEarth,
@@ -202,6 +202,66 @@ export class MoonGenerator {
         ringWidth: rng.range(0.08, 0.15),
       } : null,
     };
+
+    // ══ Step 8a — the derived condition record ═══════════════════════════════
+    // APPENDED by plain assignment onto the already-built literal, never spliced
+    // into it: every `rng.` draw above keeps its position in the shared stream,
+    // so no downstream value re-rolls. Plain assignment (NOT defineProperty) is
+    // load-bearing — a non-enumerable append is invisible to every hash and to
+    // RECORD SHAPE, i.e. it would look like a pass while changing nothing that
+    // any gate can see.
+    //
+    // ZERO draws from the passed-in `rng`. The one float `deriveComposition`
+    // needs comes from a dedicated `mooncomp:` namespace keyed on the moon's
+    // stable identity, exactly like `moonecc:` at _computeTidalHeating below.
+    //
+    // ⚠ Null-input guards are not decoration. `generate` has four shipped call
+    // sites and only StarSystemGenerator.js:595 passes all seven arguments; the
+    // three test call sites pass 4 or 6, leaving `parentOrbitAU` (and, for the
+    // 4-arg one, `zones`) null. equilibriumTemperature(L, null) is Infinity and
+    // (L, undefined) is NaN — both of which JSON.stringify renders as `null`,
+    // so a poisoned T_eq would stay legible to every hash while being garbage.
+    // `??` not `||`: metallicity and ageGyr are legitimately 0.
+    // ⚠ The zones key is `frostLine`, NOT `frostLineAU` (StarSystemGenerator.js:458).
+    const ageGyr = zones?.ageGyr ?? planetData.age ?? 4.5;
+    const luminosityRel = zones?.luminosity ?? 1.0;
+    // PRE-migration, PRE-resonance-snap orbit, by deliberate choice: it is the
+    // same local `parentZone` is derived from, so the two agree by construction.
+    const parentAU = Math.max(parentOrbitAU ?? 1.0, 0.01);
+
+    const compSeed = `mooncomp:${planetData.massEarth}:${planetData.radiusEarth}:${orbitRadiusEarth}:${moonRadiusData.radiusEarth}:${type}`;
+    const compFloat = namespacedFloat(compSeed);
+    const composition = deriveComposition(
+      zones?.metallicity ?? 0, parentAU, zones?.frostLine ?? 4.85, compFloat,
+    );
+
+    moon.composition = composition;
+    // Mass from the moon's OWN bulk density, not the parent's. `composition`
+    // lands on this same record in this same commit; sourcing mass from the
+    // parent's bulk density would put two disagreeing densities on one body.
+    moon.massEarth = moonRadiusData.radiusEarth ** 3 * (composition.density / RHO_EARTH_KGM3);
+    moon.T_eq = equilibriumTemperature(luminosityRel, parentAU);
+    moon.age = ageGyr;
+    // Parent is the PLANET, so the units convert twice: the planet's mass into
+    // solar masses, and the moon's orbit out of Earth radii into AU.
+    moon.tidalState = checkTidalLock(
+      tidalLockTimescale(
+        (planetData.massEarth ?? 0) / EARTH_MASSES_PER_SUN,
+        moon.massEarth,
+        moonRadiusData.radiusEarth,
+        Math.max(orbitRadiusEarth * EARTH_RADIUS_AU, 1e-9),
+      ),
+      ageGyr,
+    );
+    // The real tidal heating goes in, not the literal 0 PlanetGenerator.js:610
+    // passes — that 0 is a WS1 byte-identity constraint on PLANETS, and it does
+    // not bind a field that has never existed on moons. With the literal 0 this
+    // field could only ever emit two distinct resurfacingRate values.
+    moon.surfaceHistory = computeSurfaceHistory(
+      ageGyr, false, false, moon.atmosphere != null, tidalHeating,
+    );
+
+    return moon;
   }
 
   /**
@@ -429,4 +489,59 @@ export class MoonGenerator {
       return 'ice';
     }
   }
+}
+
+// Earth's mean bulk density (kg/m³) — the unit `massEarth = R⊕³ × ρ/ρ⊕` is
+// expressed in. Same constant the mass-radius consistency fence assumes.
+const RHO_EARTH_KGM3 = 5514;
+// M☉ / M⊕. tidalLockTimescale() documents massParent in SOLAR masses, but a
+// moon's parent is a planet carried in EARTH masses, so it must be converted.
+// Sanity anchor: Sol's Moon (60.3 R⊕ orbit, 0.0123 M⊕, 0.2727 R⊕, 1 M⊕ parent)
+// → t_lock 9.66e-4 Gyr → locked/synchronous, which is correct.
+const EARTH_MASSES_PER_SUN = 332946;
+
+/**
+ * Deterministic float in [0,1) from a namespaced identity key.
+ *
+ * ⛔ WHY THIS IS NOT `new SeededRandom(key).float()`, which is the idiom used
+ * for `moonecc:` at _computeTidalHeating below.
+ *
+ * Instrument B's DRAW STREAM channel counts draws with an accessor installed on
+ * `SeededRandom.prototype` (tests/body-identity-fence.test.js:225-241), so it
+ * counts EVERY instance, not just the passed-in generation stream. `moonecc:`
+ * reads green there only because its draws were already baked into
+ * tests/baseline/body-identity.json at Step 0 (`b2ac455`). A NEW sub-rng is not,
+ * and it reds the channel — measured, not argued: this exact block with
+ * `new SeededRandom(compSeed).float()` moves the draw profile on 197 of 221
+ * fence seeds ("wd-0: first divergence at yield 2 (68 → 69); total 8903 →
+ * 8907"), +1 per plain moon, with zero drawn VALUES moved. The same block with
+ * this function moves 0 of 221.
+ *
+ * That matters beyond one commit's colour: DRAW STREAM is the only channel that
+ * detects a leak into the shared stream, and a genuine `rng.float()` leak
+ * appended here produces a signature byte-identical to the sub-rng's. Spending
+ * the channel's red on an expected, benign construction would leave the next
+ * commit unable to tell a leak from the noise.
+ *
+ * The namespace discipline documented at _computeTidalHeating is unchanged and
+ * is what this preserves: the key is a prefix plus the body's stable identity,
+ * carrying no per-system seed and no per-body counter, so the value is a pure
+ * function of the body and ZERO numbers come off the passed-in `rng`.
+ *
+ * Hash is xmur3's mixer (two Math.imul rounds + xorshift finalizer) for
+ * avalanche — `deriveComposition` uses this float as scatter across three
+ * correlated outputs, so a low-avalanche hash would band them.
+ *
+ * @param {string} key - namespaced identity key, e.g. `mooncomp:...`
+ * @returns {number} float in [0,1)
+ */
+function namespacedFloat(key) {
+  let h = 1779033703 ^ key.length;
+  for (let i = 0; i < key.length; i++) {
+    h = Math.imul(h ^ key.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
