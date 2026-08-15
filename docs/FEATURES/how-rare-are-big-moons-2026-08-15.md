@@ -34,6 +34,14 @@ different mechanisms around different parents.** They need separate targets and 
 
 ### Band A — Moon-class satellites, ~0.2–0.7 R⊕, SOLID parents
 Giant-impact channel. Well supported.
+
+> ⭐⭐ **MAX'S RULING, 2026-08-15: *"I want the Band A target to be basically what is ANTICIPATED
+> BASED ON THE SCIENTIFIC LITERATURE."*** So Band A is **not a taste choice and not a tuned dial** —
+> implement Elser et al. as measured: **~8.3% per terrestrial planet central, bracket 2.2%–25%.**
+> ⛔ The earlier suggestion to "pick the middle, ~1 in 8" is withdrawn; the central estimate and its
+> bracket come from the paper, not from us. A generated corpus is CORRECT when it reproduces that
+> distribution, and any deviation is a defect to explain rather than a preference to defend.
+
 - **Target: 1 in 4 to 1 in 15 systems** host at least one. Both ends are Elser, Moore, Stadel &
   Morishima (2011, *Icarus*; arXiv:1105.4616) — 25% and 2.2% per terrestrial planet — converted
   through ~3 terrestrial planets per system, `1 − (1−p)³`. That conversion is defensible because
@@ -69,10 +77,38 @@ if fully assembled — again the workflow's arithmetic; ⚠ the paper's 4.37 g/c
 circumplanetary tail reaching "a few Earth masses," but that is one model-dependent synthesis in
 tension with the Canup & Ward cap, and the HEK limit constrains the same channel.
 
-> ⭐ **The honest design ruling: if the game wants 2 R⊕ companions, they are BINARY PLANETS, not
-> satellites.** And the literature is *more* permissive there, not less — **Ochiai et al. (2014,
-> ApJ 790, 92) give ~10% of systems undergoing orbital crossing; Lazzoni et al. (2024, MNRAS 527,
-> 3837) give 14.3% per simulated system**, both gas-giant only.
+> **A design ruling was drafted here reading: "if the game wants 2 R⊕ companions, they are BINARY
+> PLANETS, not satellites."** ⛔ **That is a FALSE DICHOTOMY and it is corrected in §2.1.** The
+> binary-planet numbers stand on their own and are worth having — **Ochiai et al. (2014, ApJ 790,
+> 92) give ~10% of systems undergoing orbital crossing; Lazzoni et al. (2024, MNRAS 527, 3837) give
+> 14.3% per simulated system**, both gas-giant only — but they are a *second* channel, not a
+> substitute for the first.
+
+### 2.1 ⭐⭐ CORRECTION — Max, 2026-08-15: it is not either/or, and the barycentre says so
+
+> *"Does this have to be either or? I'm thinking especially of gas giants. It's NOT binary in that
+> case. Could there be large captured planets around gas giants? I think so."*
+
+**He is right.** Take a 2 R⊕ body at ~8 M⊕ around a Jupiter-class parent (317.8 M⊕, 11.2 R⊕):
+mass ratio **0.025** — about 2× Earth–Moon and a fifth of Pluto–Charon. Barycentre distance from
+the primary's centre is `a × 0.0246`, so at the orbits this generator actually draws (planet-class
+moons sit at 12–60 parent radii) it lies **inside the giant** below ~41 parent radii. ⚠ Stated
+precisely, since the wide end of that range does clear it: the barycentre-outside criterion is only
+met beyond ~41 R_p, and at a 0.025 mass ratio the object is a **satellite by every ordinary
+convention** regardless — our own Moon is 0.0123.
+
+**Binary-planet is the frame for COMPARABLE masses** (Pluto–Charon 0.12), which is a different
+object in a different parent regime. It does not compete with a large captured moon.
+
+⭐ **And the literature already has the mechanism for exactly what he described.** Hansen (2019)
+pull-down capture takes **a ~10 M⊕ body around a ~2 M_J planet** — a large captured body around a
+gas giant, which is Band B precisely. So Band B is not a consolation prize for having been denied
+binary planets; **it is the channel that makes the object he asked for.**
+
+**Consequence for the design:** three complementary channels, not a choice —
+disk-formed (regular satellites), **pull-down capture (large moons of giants, Band B)**, and
+giant-impact (Band A, solid parents) — with binary planets as a separate fourth thing keyed to
+comparable-mass pairs.
 
 ⭐ **This independently confirms the option raised and withdrawn in
 [`world-engine-reconciliations-2026-08-15.md`](world-engine-reconciliations-2026-08-15.md) §3.1** —
