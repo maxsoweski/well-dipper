@@ -243,9 +243,38 @@ Per §0 the function is degenerate: `starMassSolar` cancels, both `diskMass` cla
 
 ---
 
-## 6. OPEN QUESTIONS FOR THE OWNER
+## 6. OPEN QUESTIONS FOR THE OWNER — ⭐⭐ ALL FOUR ANSWERED 2026-08-15
 
-Four, and only these. Everything else in this plan is a technical call already ruled above.
+> **Q1 — visibility policy. ANSWERED: the recommendation stands.** Suppress orbit lines below a
+> size threshold; give the swarm a single billboard. **B5 is unblocked.**
+>
+> **Q2 — Band A rate. ANSWERED: the recommendation stands.** Elser's **central 8.3%** per
+> terrestrial planet, with the 2.2–25% bracket as a runtime clamp. Not the low-end bias.
+>
+> **Q3 — binary planets. ANSWERED, AND IT IS NOT A PLAIN "DEFER":**
+> *"I would like there to be binary planets in our system… Although I do eventually want these to
+> be renderable and to fly through them where appropriate. Anyhow, we can defer that side of it."*
+> ⭐ **Read precisely: he wants binary planets to EXIST. What defers is the RENDER side.** §5's
+> deferral was argued entirely on renderer grounds and is therefore still correct *as to rendering*
+> — but "deferred until the orbit stack supports a barycentre" is no longer the whole answer,
+> because the generation half was never the blocker. ⛔ **Do not let §5 be read as "binaries are
+> out of scope."** The open design question is now narrower and belongs to its own scoping pass:
+> can the pair be generated with correct barycentric physics while the renderer draws it
+> provisionally (primary-centred, flagged) until barycentre support lands — or does a provisional
+> render seed exactly the barycentre bug §5 warns about? **That question is not settled here.**
+>
+> **Q4 — irregular-swarm materialisation. ANSWERED: ~4 per giant "seems roughly right."**
+> With the same forward note: he eventually wants the swarm renderable and flyable. Recorded as a
+> direction of travel, not as scope now.
+
+⚠ **One number in this plan's own framing was already corrected by it and must not regress:**
+`m̄` is **measured at 3.69**, not the 20 used illustratively upstream — so today's 3.1% per-moon
+figure is roughly **11% per system**, not 62%. **B0 replaces the estimate with a measurement; no
+rate claim survives without it.**
+
+---
+
+### The original four, kept for the record
 
 **1. The visibility policy for small moons — this gates B5 and needs answering before it, not at UAT.** Physically-correct captured moons are 10–100 km, and `main.js:7683-7696` gives every moon an unconditional 2px `Billboard`, a `radiusScene`-sized `PlanetBillboard` and a full green `OrbitLine` with no size gate anywhere. So the first thing you see on a live gas giant after B5 is a set of green orbit rings around bodies you cannot see. The options are a minimum render size, orbit-line suppression below a threshold, targetability rules, or a swarm-billboard treatment — and which of those reads right is taste, not physics.
 
