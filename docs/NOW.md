@@ -4,7 +4,14 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> ## ✅ 2026-08-14 — STEP 8a's LAST DEFECT (break B7) IS CLOSED. ⭐ ONE THING WAITS ON MAX.
+> ## ✅ 2026-08-14 — BREAK B7 CLOSED **AND UAT-PASSED BY MAX**. ▶ NEXT = C7 (Step 8b).
+>
+> **Handoff for the next session: [`FEATURES/step8-handoff-c7-2026-08-14.md`](FEATURES/step8-handoff-c7-2026-08-14.md).**
+> Max UAT'd three planets on the live game and passed B7 — *"yep, that's right"* (wd-614),
+> *"i think so, yes"* (wd-79). He re-reported **QB-1** on wd-45 (*"a huge orange stripe"*) and
+> deferred it: *"We don't need to do that now."* That band is the **terminator gradient**, not the
+> atmosphere — and B7 only made this planet exhibit it, by ending its airlessness.
+> He chose to **continue with C7** despite exotic rendering being rough across the board.
 >
 > `tests/moon-condition-contract.test.js` **15/15** (was 13/2). C6's two red-by-design gates both
 > pass and **neither was weakened**. All four instruments green. HEAD `dc0779c`, tracked tree
