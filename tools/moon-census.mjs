@@ -397,6 +397,12 @@ function measure(systems) {
   // ── §7 Hill and Roche ─────────────────────────────────────────────────────
   let hillEval = 0, hillSkipped = 0;
   let overFullHill = 0, overProgradeLimit = 0, overRetrogradeLimit = 0;
+  // ⛔ THE THREE COUNTS ABOVE ARE NESTED, NOT DISJOINT. Every moon past 1.0 R_H
+  // is ALSO past its own Domingos limit (0.4895 < 0.9309 < 1.0), so summing
+  // them double-counts. `beyondDomingos` is the union — each moon judged
+  // against the limit for ITS OWN orbital sense — and it is the number B8's
+  // "zero moons outside the Domingos limits" assertion has to drive to zero.
+  let beyondDomingos = 0, unboundAlsoBeyondDomingos = 0;
   const hillFractions = [];
   let rocheEval = 0, rocheSkipped = 0, rocheViolations = 0;
   const rocheRatios = [];
@@ -420,7 +426,9 @@ function measure(systems) {
           hillEval++;
           const frac = a / hillEarthRadii;
           hillFractions.push(frac);
-          if (frac > 1.0) overFullHill++;
+          const beyond = isRetrograde(m) ? frac > 0.9309 : frac > 0.4895;
+          if (beyond) beyondDomingos++;
+          if (frac > 1.0) { overFullHill++; if (beyond) unboundAlsoBeyondDomingos++; }
           if (isRetrograde(m)) { if (frac > 0.9309) overRetrogradeLimit++; }
           else if (frac > 0.4895) overProgradeLimit++;
         } else hillSkipped++;
@@ -442,6 +450,8 @@ function measure(systems) {
     overFullHill,
     overProgradeLimit,   // Domingos 0.4895 R_H, prograde
     overRetrogradeLimit, // Domingos 0.9309 R_H, retrograde
+    beyondDomingos,              // the UNION — the B8 acceptance number
+    unboundAlsoBeyondDomingos,   // overlap; equals overFullHill when nested
     fractionDist: dist(hillFractions),
     migratedSystems, resonantSystems,
   };
@@ -669,9 +679,21 @@ function report(r, corpus) {
   say('|---|---:|');
   say(`| moons evaluated | ${h.evaluated} |`);
   say(`| moons skipped (missing input) | ${h.skipped} |`);
-  say(`| a > 1.0 R_H (unbound) | ${h.overFullHill} |`);
   say(`| prograde moons beyond 0.4895 R_H (Domingos) | ${h.overProgradeLimit} |`);
   say(`| retrograde moons beyond 0.9309 R_H (Domingos) | ${h.overRetrogradeLimit} |`);
+  say(`| **UNION — beyond its OWN sense's Domingos limit (the B8 number)** | **${h.beyondDomingos}** |`);
+  say(`| a > 1.0 R_H (unbound) — a SUBSET of the union above | ${h.overFullHill} |`);
+  say(`| of those unbound, already counted in the union | ${h.unboundAlsoBeyondDomingos} |`);
+  say();
+  say('⛔ **These rows are NESTED, not disjoint — do not add them.** Because');
+  say('`0.4895 < 0.9309 < 1.0`, every unbound moon is already past its own Domingos limit, so');
+  say(`the ${h.overFullHill} unbound moons sit INSIDE the ${h.beyondDomingos}, not beside them. Summing the prograde,`);
+  say(`retrograde and unbound rows gives ${h.overProgradeLimit + h.overRetrogradeLimit + h.overFullHill}, which is ${h.overProgradeLimit + h.overRetrogradeLimit + h.overFullHill - h.beyondDomingos} moons of double-count. B8 asserts "zero moons`);
+  say(`outside 0.4895 R_H prograde / 0.9309 R_H retrograde" — the count it must drive to zero is`);
+  say(`**${h.beyondDomingos}**, and the unbound subset is a severity note on it, not an addition to it.`);
+  say();
+  say('| further detail | value |');
+  say('|---|---:|');
   say(`| a/R_H  p05 / median / p95 / max | ${f(h.fractionDist.p05, 5)} / ${f(h.fractionDist.median, 5)} / ${f(h.fractionDist.p95, 5)} / ${f(h.fractionDist.max, 5)} |`);
   say(`| systems where migration occurred | ${h.migratedSystems} / ${p.seeds} |`);
   say(`| systems with a resonance chain | ${h.resonantSystems} / ${p.seeds} |`);
@@ -743,14 +765,29 @@ function report(r, corpus) {
   say(`| P(zero moons \\| gas giant) (AUDIT §2) | 13.9% (10 of 72) | ${pctStr(r.pZeroGasGiant)} | ${v(Math.abs(r.pZeroGasGiant - 0.139) < 0.0005, 'corpus match')} |`);
   say(`| sibling-order inversions (AUDIT §3.1) | 60 of 321 (18.7%) | ${so2.inversions} of ${so2.adjacentPairs} (${pctStr(so2.rate)}) | ${v(so2.inversions === 60 && so2.adjacentPairs === 321, 'corpus match')} |`);
   say(`| moons / 221 seeds (AUDIT §1) | 829 | ${p.moons} | ${v(p.moons === 829, 'corpus match')} |`);
+  // ⭐ The Hill rows are the one place where a corpus match does NOT rescue the
+  // audit. See the note below the table.
+  say(`| moons outside R_Hill outright (AUDIT §0) | 32 of 829 | ${r.hill.overFullHill} of ${p.moons} | ${v(r.hill.overFullHill === 32, 'corpus match')} |`);
+  say(`| + "47 more" beyond 0.4895 prograde ⇒ union (AUDIT §0) | 79 | ${r.hill.beyondDomingos} | ${v(r.hill.beyondDomingos === 79, 'corpus match')} |`);
   if (pin) {
     say(`| population (planets / plain / planet-class) (FENCE) | ${pin.planets} / ${pin.plain} / ${pin.planetClass} | ${p.planets} / ${p.plain} / ${p.planetClass} | ${v(p.planets === pin.planets && p.plain === pin.plain && p.planetClass === pin.planetClass, 'exact')} |`);
   }
   say();
   say('⭐ **The audit\'s corpus is not the fence\'s corpus.** Run `--corpus=bulk221` and all four');
-  say('audit figures reproduce exactly; run the default FENCE-221 and none of them do. Both');
-  say('documents say "221 seeds". Neither corpus is wrong; quoting one\'s number against the');
+  say('of its POPULATION figures reproduce exactly; run the default FENCE-221 and none of them do.');
+  say('Both documents say "221 seeds". Neither corpus is wrong; quoting one\'s number against the');
   say('other is.');
+  say();
+  say('⛔ **The Hill rows are the exception, and they are a different KIND of disagreement.** The');
+  say('audit\'s corpus is settled — BULK-221 reproduces its 948 planets, its 829 moons, its 10-of-72,');
+  say('its 60-of-321, its 26 planet-class moons, and its 508 moon-bearing planets (73+435). So its');
+  say('Hill figures cannot be excused as a corpus artefact: on the very corpus that reproduces');
+  say('everything else it reports, "32 of 829 outside R_Hill, plus 47 more" measures **16 and 48**');
+  say('here, a union of **51** against its 79. The audit states it recomputed "against final');
+  say('orbits" — the convention used here — but records no formula. Swept this session and NOT');
+  say('reproduced under: `M_p/(3M_*)` and `M_p/M_*`; thresholds 0.4895 → 1.0; per-moon and');
+  say('per-planet denominators; primary-only and combined binary star mass. **Treat the audit\'s');
+  say('32/47 as unsourced until someone reproduces it; the numbers above are the reproducible ones.**');
   say();
 
   return L.join('\n');

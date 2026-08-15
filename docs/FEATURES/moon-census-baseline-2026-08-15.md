@@ -1,7 +1,9 @@
 # Moon census — the pre-rework baseline
 
 **Step:** B0 of `docs/FEATURES/moon-formation-channel-model-PLAN-2026-08-15.md`
-**Tree:** `feature/world-engine-production-L1` @ `978f1a7`, node v24.13.1
+**Tree:** `feature/world-engine-production-L1` @ `571b04d`, node v24.13.1
+**Amended** after adversarial review of B0 — see the third and fifth findings (the Hill rows were
+reported as if disjoint; the audit's Hill figures were not checked against this census).
 **Tool:** `tools/moon-census.mjs` — read-only. Imports the shipped generator, installs no
 wrappers, writes no file, mutates no record. Regenerate with:
 
@@ -37,7 +39,8 @@ exactly that when it carries the audit's 13.9% into a design that will be verifi
 
 **Consequences for the plan, stated plainly:**
 
-- **`m̄ = 3.69` reproduces on NEITHER corpus and no source for it exists in the tree.** FENCE-221
+- **`m̄ = 3.69` reproduces on NEITHER corpus and is asserted, never derived.** The plan states it
+  three times (`:154`, `:216`, `:271`) and shows no computation for it anywhere in the tree. FENCE-221
   gives 3.5928 per system, 3.7453 per planet-bearing system, 4.0510 per moon-bearing system.
   BULK-221 gives 3.7511 / 3.9289 / 4.2081. The plan's own warning — that no rate claim survives
   without this measurement — applies to the plan's own figure. Use the measured row, and name the
@@ -65,12 +68,34 @@ If the intended denominator is instead *any solid planet*, the generator has 3.1
 owner, not something this step decides: `terrestrial` is a **type label** in this generator, not
 the class of rocky bodies.
 
-## ⚠ THE THIRD FINDING: 17 moons are outside their parent's Hill sphere
+## ⚠ THE THIRD FINDING: 49 moons sit outside their own Domingos limit, and 17 are unbound outright
 
-Under `R_H = a_p · (M_p / 3M_*)^(1/3)` at the parent's final orbit, **17 of 794 moons sit beyond
-1.0 R_H** — unbound — with a maximum of **17.5 R_H**. B8 asserts zero moons beyond the Domingos
-limits; today **45 prograde moons exceed 0.4895 R_H and 4 retrograde moons exceed 0.9309 R_H**,
-and 17 are past the full Hill sphere entirely.
+Under `R_H = a_p · (M_p / 3M_*)^(1/3)` at the parent's final orbit, **49 of 794 moons are beyond
+the stability limit for their own orbital sense** — 45 prograde past 0.4895 R_H, 4 retrograde past
+0.9309 R_H. **49 is the number B8 has to drive to zero.** Of those, **17 are beyond 1.0 R_H
+outright** — unbound — reaching a maximum of **17.5 R_H**.
+
+⛔ **Those three counts are nested, not disjoint.** Because `0.4895 < 0.9309 < 1.0`, all 17 unbound
+moons are already inside the 49 — verified, the overlap is 17 of 17. Adding the rows gives 66,
+which is 17 moons of double-count. The unbound figure is a *severity* note on the 49, not an
+addition to it.
+
+## ⚠ THE FIFTH FINDING: the audit's Hill numbers do not reproduce, and this is NOT the corpus problem
+
+`moon-formation-audit-2026-08-15.md` §0 reports "**32 of 829** moons sit outside R_Hill outright,
+plus **47 more** beyond the 0.4895 prograde limit," explicitly "recomputed against final orbits."
+On BULK-221 — the audit's own corpus — the measurement is **16 and 48, a union of 51 against its
+79**. The unbound count is off by exactly 2×.
+
+This one cannot be waved off as the corpus confusion above, because BULK-221 reproduces *everything
+else the audit reports*: 948 planets, 829 moons, 10-of-72 gas giants, 60-of-321 inversions, 26
+planet-class moons, and 508 moon-bearing planets (its 73+435 ring split). The corpus is settled; the
+Hill figure is the outlier.
+
+The audit records no formula. Swept this session and **not** reproduced under `M_p/(3M_*)` or
+`M_p/M_*`, thresholds 0.4895 → 1.0, per-moon or per-planet denominators, primary-only or combined
+binary star mass. **The audit's 32/47 should be treated as unsourced until someone reproduces it.**
+This matters because B8's acceptance bracket would otherwise be written against 79.
 
 Roche is clean: **0 violations of 794**, minimum a/R_roche = 2.439. So the plan's B8 Roche
 assertion is already satisfied and will stay satisfied only if the ordered-orbit ladder keeps its
@@ -249,9 +274,21 @@ that caveat is visible.
 |---|---:|
 | moons evaluated | 794 |
 | moons skipped (missing input) | 0 |
-| a > 1.0 R_H (unbound) | 17 |
 | prograde moons beyond 0.4895 R_H (Domingos) | 45 |
 | retrograde moons beyond 0.9309 R_H (Domingos) | 4 |
+| **UNION — beyond its OWN sense's Domingos limit (the B8 number)** | **49** |
+| a > 1.0 R_H (unbound) — a SUBSET of the union above | 17 |
+| of those unbound, already counted in the union | 17 |
+
+⛔ **These rows are NESTED, not disjoint — do not add them.** Because
+`0.4895 < 0.9309 < 1.0`, every unbound moon is already past its own Domingos limit, so
+the 17 unbound moons sit INSIDE the 49, not beside them. Summing the prograde,
+retrograde and unbound rows gives 66, which is 17 moons of double-count. B8 asserts "zero moons
+outside 0.4895 R_H prograde / 0.9309 R_H retrograde" — the count it must drive to zero is
+**49**, and the unbound subset is a severity note on it, not an addition to it.
+
+| further detail | value |
+|---|---:|
 | a/R_H  p05 / median / p95 / max | 0.00138 / 0.04846 / 0.60490 / 17.53066 |
 | systems where migration occurred | 6 / 221 |
 | systems with a resonance chain | 27 / 221 |
@@ -307,12 +344,25 @@ disagrees, the disagreement is the report.
 | P(zero moons \| gas giant) (AUDIT §2) | 13.9% (10 of 72) | 12.70% | **does not reproduce** |
 | sibling-order inversions (AUDIT §3.1) | 60 of 321 (18.7%) | 57 of 292 (19.52%) | **does not reproduce** |
 | moons / 221 seeds (AUDIT §1) | 829 | 794 | **does not reproduce** |
+| moons outside R_Hill outright (AUDIT §0) | 32 of 829 | 17 of 794 | **does not reproduce** |
+| + "47 more" beyond 0.4895 prograde ⇒ union (AUDIT §0) | 79 | 49 | **does not reproduce** |
 | population (planets / plain / planet-class) (FENCE) | 961 / 770 / 24 | 961 / 770 / 24 | reproduces (exact) |
 
 ⭐ **The audit's corpus is not the fence's corpus.** Run `--corpus=bulk221` and all four
-audit figures reproduce exactly; run the default FENCE-221 and none of them do. Both
-documents say "221 seeds". Neither corpus is wrong; quoting one's number against the
+of its POPULATION figures reproduce exactly; run the default FENCE-221 and none of them do.
+Both documents say "221 seeds". Neither corpus is wrong; quoting one's number against the
 other is.
+
+⛔ **The Hill rows are the exception, and they are a different KIND of disagreement.** The
+audit's corpus is settled — BULK-221 reproduces its 948 planets, its 829 moons, its 10-of-72,
+its 60-of-321, its 26 planet-class moons, and its 508 moon-bearing planets (73+435). So its
+Hill figures cannot be excused as a corpus artefact: on the very corpus that reproduces
+everything else it reports, "32 of 829 outside R_Hill, plus 47 more" measures **16 and 48**
+here, a union of **51** against its 79. The audit states it recomputed "against final
+orbits" — the convention used here — but records no formula. Swept this session and NOT
+reproduced under: `M_p/(3M_*)` and `M_p/M_*`; thresholds 0.4895 → 1.0; per-moon and
+per-planet denominators; primary-only and combined binary star mass. **Treat the audit's
+32/47 as unsourced until someone reproduces it; the numbers above are the reproducible ones.**
 
 
 ---
@@ -461,9 +511,21 @@ that caveat is visible.
 |---|---:|
 | moons evaluated | 829 |
 | moons skipped (missing input) | 0 |
-| a > 1.0 R_H (unbound) | 16 |
 | prograde moons beyond 0.4895 R_H (Domingos) | 48 |
 | retrograde moons beyond 0.9309 R_H (Domingos) | 3 |
+| **UNION — beyond its OWN sense's Domingos limit (the B8 number)** | **51** |
+| a > 1.0 R_H (unbound) — a SUBSET of the union above | 16 |
+| of those unbound, already counted in the union | 16 |
+
+⛔ **These rows are NESTED, not disjoint — do not add them.** Because
+`0.4895 < 0.9309 < 1.0`, every unbound moon is already past its own Domingos limit, so
+the 16 unbound moons sit INSIDE the 51, not beside them. Summing the prograde,
+retrograde and unbound rows gives 67, which is 16 moons of double-count. B8 asserts "zero moons
+outside 0.4895 R_H prograde / 0.9309 R_H retrograde" — the count it must drive to zero is
+**51**, and the unbound subset is a severity note on it, not an addition to it.
+
+| further detail | value |
+|---|---:|
 | a/R_H  p05 / median / p95 / max | 0.00161 / 0.04773 / 0.61720 / 17.53066 |
 | systems where migration occurred | 8 / 221 |
 | systems with a resonance chain | 25 / 221 |
@@ -519,9 +581,22 @@ disagrees, the disagreement is the report.
 | P(zero moons \| gas giant) (AUDIT §2) | 13.9% (10 of 72) | 13.89% | reproduces (corpus match) |
 | sibling-order inversions (AUDIT §3.1) | 60 of 321 (18.7%) | 60 of 321 (18.69%) | reproduces (corpus match) |
 | moons / 221 seeds (AUDIT §1) | 829 | 829 | reproduces (corpus match) |
+| moons outside R_Hill outright (AUDIT §0) | 32 of 829 | 16 of 829 | **does not reproduce** |
+| + "47 more" beyond 0.4895 prograde ⇒ union (AUDIT §0) | 79 | 51 | **does not reproduce** |
 
 ⭐ **The audit's corpus is not the fence's corpus.** Run `--corpus=bulk221` and all four
-audit figures reproduce exactly; run the default FENCE-221 and none of them do. Both
-documents say "221 seeds". Neither corpus is wrong; quoting one's number against the
+of its POPULATION figures reproduce exactly; run the default FENCE-221 and none of them do.
+Both documents say "221 seeds". Neither corpus is wrong; quoting one's number against the
 other is.
+
+⛔ **The Hill rows are the exception, and they are a different KIND of disagreement.** The
+audit's corpus is settled — BULK-221 reproduces its 948 planets, its 829 moons, its 10-of-72,
+its 60-of-321, its 26 planet-class moons, and its 508 moon-bearing planets (73+435). So its
+Hill figures cannot be excused as a corpus artefact: on the very corpus that reproduces
+everything else it reports, "32 of 829 outside R_Hill, plus 47 more" measures **16 and 48**
+here, a union of **51** against its 79. The audit states it recomputed "against final
+orbits" — the convention used here — but records no formula. Swept this session and NOT
+reproduced under: `M_p/(3M_*)` and `M_p/M_*`; thresholds 0.4895 → 1.0; per-moon and
+per-planet denominators; primary-only and combined binary star mass. **Treat the audit's
+32/47 as unsourced until someone reproduces it; the numbers above are the reproducible ones.**
 
