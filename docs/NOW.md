@@ -4,7 +4,14 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> ## ✅ 2026-08-15 — **C7 (Step 8b) IS SHIPPED.** ▶ NEXT = MAX'S EYES ON 24 MOONS.
+> ## ✅ 2026-08-15 — **C7 (Step 8b) SHIPPED, UAT-PASSED AND PUSHED.** ▶ NEXT = THE WORLD-ENGINE DEEP DIVE.
+>
+> **Handoff for the next session: [`FEATURES/step8-handoff-2026-08-15.md`](FEATURES/step8-handoff-2026-08-15.md).**
+> Max UAT'd `wd-27/3/1` in the live game and passed it, then redirected the question —
+> *"yes? you would know better than me though in terms of the sizes and what's realistic."*
+> ⭐ He was right to: physical plausibility is measurable and is Claude's job, not his eyes'.
+> The check that followed confirmed the temperature **and found the moon-size defect below**.
+> ▶ Next session: deep-dive the remainder of the world-engine plan + hunt the bug family.
 >
 > Planet-class moons no longer generate at a hardcoded 1 AU. `MoonGenerator.js:378` now reads
 > `Math.max(parentOrbitAU ?? 1.0, 0.01)` — the parent's **generation-time** orbit, the same
@@ -43,6 +50,22 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > an atmosphere) — never a guessed seed; a random one has no planet-class mover and produces a
 > green, pretty, meaningless pair. Second: `wd-174/0/1` (orbit 0.58×, locks into 3:2).
 > ⛔ **Ask for the one quantity that changed, not for a review of the body** (handoff §4.2).
+>
+> ### ⭐ NEW — the bug FAMILY C7 belongs to, filed 2026-08-15
+> [`FEATURES/world-engine-reconciliations-2026-08-15.md`](FEATURES/world-engine-reconciliations-2026-08-15.md)
+> — *"what other kinds of reconciliations like the one we just found will need to be
+> planned/implemented"* (Max). One family, two sub-shapes: **Sol-defaults** (a missing context
+> value silently substitutes the Sun/Earth — B7 RC2, B7 RC3 and C7 are all this, all now fixed)
+> and **authored-for-looks constants** never revisited once physics arrived — **zero fixes so far**.
+>
+> ⭐⭐ **First confirmed instance of the second shape: planet-class moons are binary planets.**
+> `MoonGenerator.js:381` draws a moon at 10–25% of its parent's radius while the comment on the
+> line above says *"Ganymede is 0.038× Jupiter"* — it names the real ceiling and then draws
+> 2.6–6.6× above it. Mass goes as radius³, so that is a ~250× mass overshoot. Measured on
+> `wd-27/3/1`: **7.1% of its parent's mass** (Ganymede/Jupiter is 0.0078%; Charon/Pluto, a real
+> binary, is 12%). ⛔ **Pre-existing — C7 re-drew this body's fraction but did not widen the range.**
+> ▶ Max wants a fix prioritised alongside the world-engine rendering work. Shape is in §3;
+> **the target value is a game-feel call and is his** — physically honest is ~4–6× smaller moons.
 >
 > ### Open, filed, not done
 > 1. Instrument A's baseline provenance: recorded from `952c5d0` with `dirty: true`, and the
