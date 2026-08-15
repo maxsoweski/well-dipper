@@ -102,9 +102,9 @@ const PINNED_SEEDS = [
   ['wd-614', 'type: city-lights'],
   ['wd-2232', 'type: ecumenopolis'],
   // `machine` AND the only terrestrial-moon system found in 6000 seeds.
-  // A terrestrial moon is the one moon branch that draws clouds (×2),
-  // atmosphere (×1) and aurora (×4) — MoonGenerator.js:213 `density: rng.range(0.3, 0.55)` through :226 `ringWidth: rng.range(0.08, 0.15)`. Without this
-  // seed the fence never watches seven of the moon generator's draws.
+  // ⛔ THIS COMMENT WAS WRONG TWICE, MEASURED 2026-08-15. The block is clouds (×2),
+  // atmosphere (×1), aurora (×3) — MoonGenerator.js:213 `density: rng.range(0.3, 0.55)` through :226 `ringWidth: rng.range(0.08, 0.15)`. SIX draws, not seven; the `color:` entries are literals.
+  // ⭐ And this seed does not reach them: its terrestrial moon is `isPlanetMoon`, returns at :124, carries no aurora. The branch is UNWATCHED, not pinned.
   ['wd-1403', 'type: machine + the only terrestrial moon in 6000 seeds'],
 ];
 

@@ -769,11 +769,11 @@ describe('moon condition contract — the six derived fields carry real values',
   // ⭐ MEASURED, AND IT CORRECTS THE FENCE'S OWN COVERAGE CLAIM: 0 of 705 plain moons on this
   // corpus carry an atmosphere, because 0 are terrestrial-type (rocky 226, ice 235, captured 171,
   // volcanic 73, terrestrial 0). The fence pins `wd-1403` at body-identity-fence.test.js:104-108
-  // saying it is "the only terrestrial-moon system found in 6000 seeds" and that without it the
-  // fence "never watches seven of the moon generator's draws" at MoonGenerator.js:210 `Terrestrial moons have atmosphere` —
+  // saying it is "the only terrestrial-moon system found in 6000 seeds" and claiming coverage of
+  // the terrestrial draws at MoonGenerator.js:210 `Terrestrial moons have atmosphere` —
   // but `wd-1403`'s terrestrial moon is PLANET-CLASS, built by `_generatePlanetMoon`, which never
-  // reaches those lines. The seed's coverage argument names the wrong code path. (Not C6's to fix;
-  // recorded here because the next author will otherwise trust it.)
+  // reaches those lines. ⭐ THIS WAS RIGHT AND IS NOW FIXED AT SOURCE (2026-08-15): the fence says
+  // so itself, and its COUNT was wrong too — six draws, aurora ×3, not seven/×4. Branch unwatched.
   //
   // ⛔ SO THE FORCED ARM IS MANDATORY, NOT BELT-AND-BRACES. Without it this gate is vacuous by
   // construction, and §5 says to delete the gate rather than ship decoration.

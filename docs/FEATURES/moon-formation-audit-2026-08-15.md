@@ -42,9 +42,26 @@ for planet type.** A fix verified that way would be false-verified.
 
 Two smaller repairs: `maxMoonsByType` is a **16**-entry table, not 18 (the 18-entry one is
 `ringChance`), and it is read as `maxMoonsByType[type] ?? 1`, so `ice` and `lava` parents are
-absent from it and silently take max 1. And the Hill-sphere violation count is understated
-roughly 4× — recomputed against final orbits, **32 of 829 moons sit outside R_Hill outright, plus
-47 more beyond the 0.4895 prograde limit** (~9.5% on non-surviving orbits).
+absent from it and silently take max 1.
+
+⛔ **C4 — A THIRD CORRECTION, AND THIS ONE IS TO §0 ITSELF (2026-08-15, by `tools/moon-census.mjs`).**
+This section originally read *"the Hill-sphere violation count is understated roughly 4× —
+recomputed against final orbits, 32 of 829 moons sit outside R_Hill outright, plus 47 more beyond
+the 0.4895 prograde limit."* **That correction was itself wrong, and the figure it "corrected"
+was right.** Measured by the census under the stated convention
+`R_H = a_p·(M_p/(3M_*))^(1/3)` with `a_p` the FINAL wrapper orbit: **16 outright and 48 beyond the
+prograde limit** — the register's original 16, not 32.
+
+⭐ **Why this one cannot be excused as a corpus artefact, which is the usual escape here.** Every
+*other* figure in this file reproduces exactly on BULK-221 — 948 planets, 829 moons, 10-of-72,
+60-of-321, 26 planet-class, 508 moon-bearing planets — so the corpus is settled. The Hill numbers
+fail on the very corpus that reproduces everything else beside them.
+
+⚠ **And the corpus itself was never named in this file, which is the standing trap.** These figures
+are **BULK-221**, not FENCE-221. On FENCE-221 the same quantities read: **794 moons** (not 829),
+**P(zero moons | gas giant) 12.70%** (not 13.9%), **57 of 292 sibling inversions** (not 60 of 321).
+Both sets are correct on their own corpus and neither transfers. ⛔ **Quote no figure from this
+file without its corpus label.**
 
 ---
 

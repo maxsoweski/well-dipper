@@ -36,7 +36,7 @@ The three designs all routed their primary conditioning through a metallicity-dr
 
 **Physical precondition, binary, no roll.** The parent accreted a hydrogen envelope, so it had a disk to make satellites in: `planetData.massEarth ≥ ~15 M⊕` **and** `composition.volatileFraction` above the envelope threshold. Read from mass and composition, **never the type string** — `ExoticOverlay.js:353` can retype a parent after its moons were drawn, and reconciliations §2.3 already established that type and composition disagree on moons.
 
-**Likelihood: none.** This channel does not roll. Removing the constant is a stronger answer to the owner's criterion than conditioning it, and it leaves nothing to audit. A gas giant formed beyond the frost line has regular satellites with certainty, which structurally repairs the measured `P(zero moons | gas giant) = 13.9%` — an artefact of `rng.int(0, 6)` admitting zero at `PlanetGenerator.js:596`, not a physical outcome.
+**Likelihood: none.** This channel does not roll. Removing the constant is a stronger answer to the owner's criterion than conditioning it, and it leaves nothing to audit. A gas giant formed beyond the frost line has regular satellites with certainty, which structurally repairs the measured `P(zero moons | gas giant)` — **12.70% on FENCE-221, 13.9% on BULK-221; ⛔ neither figure transfers, label the corpus** — an artefact of `rng.int(0, 6)` admitting zero at `PlanetGenerator.js:596`, not a physical outcome.
 
 **Mass rule.** System total `M_sat = 1e-4 × M_parent` (Canup & Ward 2006, gas-starved disk). Verified against all three solar giants: Galileans 2.07e-4, Saturn's majors 2.48e-4, Uranus's five 1.05e-4. This is a formation constraint, not a curve fit, which is why it survives application to invented parents.
 
@@ -151,7 +151,7 @@ The instrument battery charges a **fixed toll per population move**: re-derive `
 ⭐ **Ruling on the Budget-and-Cascade design's "each step independently valuable" priority: it does not survive.** Its step 2 promised ordered orbits plus Hill *and Roche* clamps, independent of the mass work, with the Roche clamp landing in the append block. Verified in §0: `orbitRadiusEarth` is consumed at `:161` and by `_computeTidalHeating` at `:185`, both before that block, so a late clamp ships `tidalHeating` derived from an orbit the record no longer carries — a fresh instance of the exact bug family this work exists to close. The Hill clamp alone survives at orbit time; the Roche clamp needs `ρ_moon`, hence composition, hence the window.
 
 ### B0 — Metrics tool. Cost: **zero**.
-New read-only `tools/moon-census.mjs`. Emits `m̄`, mean count per parent type, Band A rate per terrestrial planet **and** per system, Band B rate per giant and per system, mass-ratio distribution, `R_Hill` and Roche violations, sibling-order inversions, regular/irregular split, and **terrestrial-planet multiplicity**. Commit today's baseline as a dated doc. A tool is not a test, so Instrument A's per-file counts are untouched. *Verification:* the tool runs and the baseline is committed. This is first because every later claim is unfalsifiable without it — the Band A target was mis-scoped once already because `m̄` was assumed at 20 when it is measured at 3.69.
+New read-only `tools/moon-census.mjs`. Emits `m̄`, mean count per parent type, Band A rate per terrestrial planet **and** per system, Band B rate per giant and per system, mass-ratio distribution, `R_Hill` and Roche violations, sibling-order inversions, regular/irregular split, and **terrestrial-planet multiplicity**. Commit today's baseline as a dated doc. A tool is not a test, so Instrument A's per-file counts are untouched. *Verification:* the tool runs and the baseline is committed. This is first because every later claim is unfalsifiable without it — the Band A target was mis-scoped once already because `m̄` was assumed at 20. ⛔ **And 3.69 is wrong too — MEASURED by this tool: 3.5928 on FENCE-221, 3.7453 / 4.0510 on the others. 3.69 reproduces on no corpus.**
 
 ### B1 — Ring-divisor fix. Cost: **zero**.
 `PhysicsEngine.js:912` divides by the **moon's** `radiusEarth` under a comment claiming parent radii, and `:916` consumes it as `outerRadius`. Verified dead — `moons: []` at `PlanetGenerator.js:567` and in all three `PhysicsEngine.test.js` call sites — so the fix moves zero bodies and is provable by unit test alone. Do it before anything makes the branch live. *Verification:* new unit test; `check:instruments` green.
@@ -213,7 +213,7 @@ Per §0 the function is degenerate: `starMassSolar` cancels, both `diskMass` cla
 
 ## 4. INSTRUMENTS THAT DO NOT EXIST YET
 
-**Mean moons per system (`m̄`) and the per-parent-planet rate.** Without these no target in this plan is testable, and their absence has already caused one mis-scoping: the Band A conversion assumed `m̄ ≈ 20` when it is measured at 3.69, turning a 3.1% per-moon figure into a hypothesised 62% of systems when the real figure is 10.8%. B0 builds them first.
+**Mean moons per system (`m̄`) and the per-parent-planet rate.** Without these no target in this plan is testable, and their absence has already caused one mis-scoping: the Band A conversion assumed `m̄ ≈ 20`, turning a 3.1% per-moon figure into a hypothesised 62% of systems. ⛔ **The 3.69 written here is ALSO unmeasured — the census reads 3.5928 on FENCE-221 (3.7453 / 4.0510 on the others), so the real figure is ~11% per system.** B0 builds them first.
 
 **Terrestrial-planet multiplicity.** ⭐ The highest-risk unknown in the plan. Elser's 8.3% converts to 1-in-4..1-in-15 systems **only** through ~3 terrestrial planets per system. If this generator's multiplicity differs, the per-system rate lands outside the bracket even with the per-planet rate exactly right. B0 measures it **before** any change, so it is caught early. ⛔ If it is off, the defect lives in `PlanetGenerator._pickType` and must be **reported, not absorbed** by tuning the moon rate to compensate — absorbing it would recreate the exact bug family this work exists to close.
 
@@ -268,7 +268,7 @@ Per §0 the function is degenerate: `starMassSolar` cancels, both `diskMass` cla
 > direction of travel, not as scope now.
 
 ⚠ **One number in this plan's own framing was already corrected by it and must not regress:**
-`m̄` is **measured at 3.69**, not the 20 used illustratively upstream — so today's 3.1% per-moon
+`m̄` is **measured at 3.5928 on FENCE-221** (⛔ the 3.69 first written here reproduces on no corpus), not the 20 used illustratively upstream — so today's 3.1% per-moon
 figure is roughly **11% per system**, not 62%. **B0 replaces the estimate with a measurement; no
 rate claim survives without it.**
 
