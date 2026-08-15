@@ -363,19 +363,19 @@ export class MoonGenerator {
   }
 
   /**
-   * Generate a planet-class moon — uses PlanetGenerator for visuals
-   * but MoonGenerator for orbital parameters.
-   * Think Titan, Ganymede, or a captured mini-Neptune.
-   * Zone-aware: terrestrial/ocean only in HZ, ice dominant in outer.
+   * Generate a planet-class moon — uses PlanetGenerator for visuals but MoonGenerator for orbital
+   * parameters. Think Titan, Ganymede, or a captured mini-Neptune. Zone-aware: terrestrial/ocean
+   * only in HZ, ice dominant in outer.
+   * ⛔ The AU below is the parent's GENERATION-time orbit, never its post-migration one (B7 RC3).
    */
   static _generatePlanetMoon(rng, planetData, moonIndex, parentZone, zones = null, parentOrbitAU = null) {
     // Pick a planet type appropriate for this zone
     const allowed = this.PLANET_MOON_TYPES_BY_ZONE[parentZone] || ['rocky', 'ice'];
     const planetType = rng.pick(allowed);
 
-    // Generate full planet data — pass zones so planet-moons inherit
-    // the system's metallicity, age, luminosity for physics calculations
-    const pData = PlanetGenerator.generate(rng, 1.0, planetData.sunDirection, zones, planetType);
+    // Full planet data at the PARENT'S OWN ORBIT (8b/C7) — was hardcoded 1.0; `zones` still carries
+    // metallicity/age/luminosity. ⚠ AU gates tidal lock (PlanetGenerator.js:698) so draws shift ±2.
+    const pData = PlanetGenerator.generate(rng, Math.max(parentOrbitAU ?? 1.0, 0.01), planetData.sunDirection, zones, planetType);
 
     // Moon radius: 10-25% of parent (these are big moons — Ganymede is 0.038× Jupiter)
     const fraction = rng.range(0.10, 0.25);
