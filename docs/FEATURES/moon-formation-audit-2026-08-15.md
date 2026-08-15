@@ -130,7 +130,28 @@ line (`main.js:7677-7690`).
 
 ## 4. THE TWO CHANGES WORTH MAKING FIRST — and they are not the same change
 
-### 4.1 CHEAPEST VALUABLE: `moon.figure = { hydrostatic, R_pot }` — answers Max's shape question TODAY
+### 4.0 ⭐⭐ MAX'S RULING ON ORDER, 2026-08-15 — §4.1 does NOT go first
+
+> *"Shape probably has a lot to do with some of the variables that generate moons… should probably
+> be downstream of some of those."*
+
+**The recommendation in §4.1 — ship the shape flag first, standalone — is WITHDRAWN.** He is right
+on the substance and the reasoning is worth keeping, because §4.1's own argument is what makes it
+tempting: the flag *would* land on 27% of bodies today. But the potato-radius test reads **mass and
+density**, and both are about to be re-derived by §4.2. A flag computed now would be computed from
+inputs the very next change replaces, and would then need re-blessing twice.
+
+⭐ **Shape is a DERIVED property of the formation model, not a parallel feature.** It belongs
+downstream of channel, mass and composition — which is also the order that makes it *correct*
+rather than merely cheap: the same reorder that §4.2 performs (composition before size) is what
+puts ρ in hand before the shape test needs it.
+
+**Revised order:** §4.2 (the parameterization reorder) → channel model → **then** §4.1's
+`moon.figure`, computed from the new mass and density in the same pass. §4.1 stays in this file as
+a specification, not as a next step. ⛔ Its "cheapest fix in the register" framing should not be
+used to argue it back to the front.
+
+### 4.1 SPECIFICATION (NOT the next step — see §4.0): `moon.figure = { hydrostatic, R_pot }`
 
 Computed by **plain assignment** inside the existing condition block (`MoonGenerator.js:250-302`)
 from `radiusEarth` and `composition.density`, both already on the record two lines earlier at
