@@ -103,7 +103,7 @@ const PINNED_SEEDS = [
   ['wd-2232', 'type: ecumenopolis'],
   // `machine` AND the only terrestrial-moon system found in 6000 seeds.
   // A terrestrial moon is the one moon branch that draws clouds (×2),
-  // atmosphere (×1) and aurora (×4) — MoonGenerator.js:186-201. Without this
+  // atmosphere (×1) and aurora (×4) — MoonGenerator.js:213 `density: rng.range(0.3, 0.55)` through :226 `ringWidth: rng.range(0.08, 0.15)`. Without this
   // seed the fence never watches seven of the moon generator's draws.
   ['wd-1403', 'type: machine + the only terrestrial moon in 6000 seeds'],
 ];
@@ -125,8 +125,8 @@ const GALAXY_POSITIONS = Array.from({ length: 24 }, (_, i) => {
 // MOONS: the ENTIRE record, every key, no exceptions (plan requirement — four
 // named fields would miss seven of fifteen draws). Two things this catches that
 // a named-field set does not:
-//   · `retrograde` (MoonGenerator.js:155, the live conditional draw) NEVER
-//     appears as a field. It survives only as the SIGN of `orbitSpeed` (:179).
+//   · `retrograde` (MoonGenerator.js:179 `const retrograde = type === 'captured'`, the live conditional draw) NEVER
+//     appears as a field. It survives only as the SIGN of `orbitSpeed` (:203 `orbitSpeed: retrograde ? -orbitSpeed : orbitSpeed,`).
 //   · A plain moon promoted to planet-class carries a whole nested `planetData`
 //     and drops `aurora` — a different key set entirely (measured: 48 of 1475
 //     moons over 400 seeds).
@@ -403,7 +403,7 @@ function classesOfSystem(s, into) {
   if (moons.length >= 8) into.add('moon-heavy');
   into.add(s.isBinary ? 'binary' : 'single');
   if (pds.some((p) => GIANT_TYPES.includes(p.type))) into.add('giant-bearing');
-  // Both branches of the LIVE conditional draw, MoonGenerator.js:155.
+  // Both branches of the LIVE conditional draw, MoonGenerator.js:179 `rng.chance(0.4)`.
   if (moons.some((m) => m.type === 'captured' && m.orbitSpeed < 0)) into.add('retrograde-moon');
   if (moons.some((m) => m.type === 'captured' && m.orbitSpeed > 0)) into.add('captured-prograde');
   if (moons.some((m) => m.type === 'terrestrial')) into.add('terrestrial-moon');

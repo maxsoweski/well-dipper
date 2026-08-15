@@ -72,7 +72,7 @@ import {
 import { EARTH_RADIUS_AU } from '../src/core/ScaleConstants.js';
 
 // ── Duplicated src constants, deliberately ───────────────────────────────────────────────────
-// `RHO_EARTH_KGM3` (MoonGenerator.js:536 `const RHO_EARTH_KGM3 = 5514;`) and `EARTH_MASSES_PER_SUN` (:501) are module-private.
+// `RHO_EARTH_KGM3` (MoonGenerator.js:536 `RHO_EARTH_KGM3 = 5514`) and `EARTH_MASSES_PER_SUN` (:541 `EARTH_MASSES_PER_SUN = 332946`) are module-private.
 // Copying them as literals is DESIRABLE here: if either ever changes in src, a gate should red and
 // the change should be a named act rather than a silent re-scaling of every moon in the universe.
 // Precedent: tests/moon-mass-radius-consistency.test.js:46 duplicates EARTH_DENSITY_GCC the same way.
@@ -228,7 +228,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // G3/G4 VALUE ARM — mass and radius describe the same body. CORRECTNESS. Green today.
   //
   // AT RETURN TIME, which is where MoonGenerator's own invariant is stated
-  // (MoonGenerator.js:266 `moon.massEarth = moonRadiusData.radiusEarth ** 3 * (composition.density `).
+  // (MoonGenerator.js:266 `moon.massEarth = moonRadiusData.radiusEarth ** 3`).
   // ⚠ The symbol above is the LITERAL line text, not a math paraphrase. An earlier draft wrote
   // `massEarth = radiusEarth³ × …` — correct as algebra, a broken citation as a fence anchor,
   // because the rule is literal token presence on the cited line. :242 was always the right line.
@@ -361,7 +361,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // over the line today". Not on this corpus: max is 2.6663 g on 23 bodies, 1.88× inside the
   // shipped bound, and nothing is over any line. Row 13 measured a different population.
   //
-  // MUTANT: `pcnomass` — drop the `massScale` cube at MoonGenerator.js:418 `const massScale = pData.radiusEarth > 0 ? (radiusEarth / pData.radiusEar` (`massEarth: pData.massEarth`,
+  // MUTANT: `pcnomass` — drop the `massScale` cube at MoonGenerator.js:418 `const massScale` (`massEarth: pData.massEarth`,
   // unscaled). That is the exact regression moon-mass-radius-consistency.test.js exists for; it
   // put 27.6 M⊕ in a 0.89 R⊕ body, ~213 g/cc, ~35 g. Both bounds here red.
   // ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -386,7 +386,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // orbit AU survives onto the finished system (`starInfo` carries colours and brightnesses, not
   // luminosity; `system.zones` is the scene/map zoneData, not the generator's `zones`). Asserting
   // it against the final system instead would be red on 56 bodies for a reason that is a declared
-  // design choice — MoonGenerator.js:251 `const luminosityRel = zones?.luminosity ?? 1.0;` deliberately uses the pre-migration AU so the value
+  // design choice — MoonGenerator.js:251 `const luminosityRel` deliberately uses the pre-migration AU so the value
   // agrees with the `parentZone` derived from that same number, and StarSystemGenerator.js:655-657
   // rewrites the wrapper's AU for hot-jupiter migrants after every moon is already built.
   //
@@ -445,7 +445,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // MUTANT (inverted): ⚠ MEASURED 2026-08-14 — passing real zones takes this 3 violators → **1**,
   // NOT 0. Do not expect green. The survivor is `wd-79/2/0` (moon 259.364 vs parent 260.178), and
   // it is a SECOND, separate defect: the moon's T_eq uses the PRE-migration parentOrbitAU
-  // (527.736, MoonGenerator.js:251 `const luminosityRel = zones?.luminosity ?? 1.0;`'s deliberate choice) while `_swapPlanetType` regenerates
+  // (527.736, MoonGenerator.js:251 `const luminosityRel`'s deliberate choice) while `_swapPlanetType` regenerates
   // the planet at the FINAL orbit (524.442). Residual is exactly sqrt(527.736/524.442) = 1.00314×.
   // ⛔ And the fix is NOT one line: `_swapPlanetType(planetEntry, newType, rng)`
   // (ExoticOverlay.js:306) has no zones parameter, and `systemData.zones` is zoneData — four AU
@@ -628,7 +628,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // ═══════════════════════════════════════════════════════════════════════════════════════════
   // surfaceHistory — **THE nearGiant DEFECT WAS FIXED. THIS ARM NOW PINS THE FIXED CALL.**
   //
-  // HISTORY (the state this gate was written against, at ea8afca): MoonGenerator.js:262 called
+  // HISTORY (the state this gate was written against, at ea8afca): MoonGenerator.js:262 (an ea8afca line number; the live call is :300 `computeSurfaceHistory(`) called
   //     computeSurfaceHistory(ageGyr, /* nearBelt */ false, /* nearGiant */ false, hasAtmo, tidal)
   // hardcoding BOTH flags false for every moon — including moons of gas giants, which are by
   // definition near a giant. C6 declined to fix it and priced it instead (four reasons, of which
@@ -657,7 +657,7 @@ describe('moon condition contract — the six derived fields carry real values',
   //
   // ⚠ AND A REAL INCONSISTENCY THIS COMMIT LEAVES STANDING, FLAGGED SO IT IS NOT LOST: PLANET-CLASS
   // moons still carry `nearGiant = false` in their nested `planetData.surfaceHistory`, because they
-  // are built by PlanetGenerator (MoonGenerator.js:123 `if (isLargeParent && moonIndex > 0 && totalMoons >= 3 && rng.chance(0.10` → :338) and the planet path keeps its own
+  // are built by PlanetGenerator (MoonGenerator.js:123 `isLargeParent && moonIndex > 0` → :378 `PlanetGenerator.generate(`) and the planet path keeps its own
   // hardcoded falses. They are moons of giants by construction (the branch at :98 gates on a
   // gas-giant/sub-neptune parent), so after this commit they disagree with their plain siblings
   // around the same parent. Same owner as nearBelt.
@@ -770,7 +770,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // corpus carry an atmosphere, because 0 are terrestrial-type (rocky 226, ice 235, captured 171,
   // volcanic 73, terrestrial 0). The fence pins `wd-1403` at body-identity-fence.test.js:104-108
   // saying it is "the only terrestrial-moon system found in 6000 seeds" and that without it the
-  // fence "never watches seven of the moon generator's draws" at MoonGenerator.js:210 `// Terrestrial moons have atmosphere + clouds (they support life!)` —
+  // fence "never watches seven of the moon generator's draws" at MoonGenerator.js:210 `Terrestrial moons have atmosphere` —
   // but `wd-1403`'s terrestrial moon is PLANET-CLASS, built by `_generatePlanetMoon`, which never
   // reaches those lines. The seed's coverage argument names the wrong code path. (Not C6's to fix;
   // recorded here because the next author will otherwise trust it.)

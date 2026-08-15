@@ -1082,8 +1082,8 @@ const CITE_SOURCES = [
   // freshly verified. The refs were rewritten into `line + symbol` form in the same commit, so this
   // addition lands them in the FATAL column instead of the UNCHECKED pile. Adding a source and
   // GATING a source are different acts; only the second one closes the class (§11.2).
-  'tests/radius-live-feed.test.js',
-  'tests/radius-live-feed-fence.test.js',
+  'tests/radius-live-feed.test.js', 'tests/radius-live-feed-fence.test.js',
+  'tests/moon-condition-contract.test.js', 'src/generation/ExoticOverlay.js', // ── MOON B2, 2026-08-15
 ];
 
 // `Foo.js:123 \`sym\`` — or a bare `:123 \`sym\`` continuing the last filename on the same line.
