@@ -175,7 +175,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // G3 PRESENCE ARM — replaces `:396`'s "zero 'defaulted' on ≥500 moons".
   //
   // ⛔ SCOPED TO THE SEVEN ROWS THE SIX FIELDS DRIVE, NOT TO THE RECORD. `provenanceOf`
-  // (conditionFromBody.js:682) emits 18 rows and SEVEN of them are 'defaulted' on 100% of plain
+  // (conditionFromBody.js:683) emits 18 rows and SEVEN of them are 'defaulted' on 100% of plain
   // moons no matter what Step 8a does — moons have no eccentricity, no host-star mass, no
   // rotation period, no magnetic field, no habitability, no axial tilt and no metallicity on the
   // record. A whole-record "zero defaulted" assertion is permanently red. This is C4's §8 item 4,
@@ -831,7 +831,7 @@ describe('moon condition contract — the six derived fields carry real values',
     expect(cond._provenance.atmosphere).toBe('defaulted');
 
     // ── arm 3: POSITIVE CONTROL — the violating shape does produce the pathology ──
-    // `{retained, color}` satisfies hasEngineAtmosphereShape (conditionFromBody.js:371-372) and is
+    // `{retained, color}` satisfies hasEngineAtmosphereShape (conditionFromBody.js:372-373) and is
     // passed straight through at :380, giving one object that is TRUTHY to every
     // `if (cond.atmosphere)` gate and VACUUM to every `atmosphere.pressure ?? 0` gate. This is the
     // exact contradiction G6 exists to keep out, and it is reachable — one keyword away.

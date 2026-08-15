@@ -59,6 +59,7 @@ import { compositionClass } from '../base/e1Regime.js';
 //     Moon 0 bar 270 K -> 270.0 (0%)          Europa 0 bar 102 K -> 102.0 (0%)
 // Airless bodies are exact by construction (P = 0 => tau = 0 => factor 1), which is what keeps the
 // airless presets' behaviour identical on both sides of the seam.
+// ⚠ AND THE FIT IS PRESSURE-ONLY — COMPOSITION DOES NOT ENTER tau, WHICH IS WHAT "GREY" MEANS. Two bars of CO2 and two bars of N2-O2 receive an IDENTICAL lift, and physically they must not: CO2 absorbs far more per bar. Composition is used here only as a GATE (`compositionClass`, below), never as a strength. Named 2026-08-14 after `wd-614` planet 1 measured +64.42 K from 2.12 bar of N2-O2; a composition-weighted optical depth is filed as world-engine-INDEX.md §7 item 5.
 export const TAU_REF = 0.84;
 export const TAU_EXP = 1.124;
 
