@@ -120,9 +120,9 @@ function captureStream(seeds, plainPlusOne = false) {
 // Read a line as: <parent planet type>|<moon index>|<what generate returned> = [observed counts].
 //
 // Shape facts worth having in front of you, all measured:
-//   · moonIndex spans 0-5; counts-per-key min 1, max 6, mean 1.64.
+//   · moonIndex spans 0-5; counts-per-key min 1, max 5, mean 1.56 (was max 6 / 1.64 before 8b).
 //   · The PLAIN keys are tight — most carry a single count, none more than three.
-//   · All SIX widest keys are PLANET-CLASS, which is expected: `_generatePlanetMoon` generates a
+//   · The FIVE widest keys are PLANET-CLASS, which is expected: `_generatePlanetMoon` generates a
 //     whole planet (MoonGenerator.js:320), so it inherits every branch of PlanetGenerator's stream.
 //   · `sub-neptune|0|terrestrial=[18]` is the rarest line in the file — the ~3% terrestrial branch
 //     at MoonGenerator.js:459 plus its seven clouds/atmosphere/aurora draws at :186-201.
@@ -141,23 +141,23 @@ const PINNED_STREAM_SET = [
   'gas-giant|0|ice=[12]',
   'gas-giant|0|rocky=[12]',
   'gas-giant|0|volcanic=[12]',
-  'gas-giant|1|PLANET-CLASS=[18,19,21,23,25,27]',
+  'gas-giant|1|PLANET-CLASS=[19,21,23,27]',
   'gas-giant|1|captured=[11,12]',
   'gas-giant|1|ice=[11,12]',
   'gas-giant|1|rocky=[11,12]',
-  'gas-giant|2|PLANET-CLASS=[18,21,23,24,27]',
+  'gas-giant|2|PLANET-CLASS=[19,21,23,27]',
   'gas-giant|2|captured=[12]',
   'gas-giant|2|ice=[12]',
   'gas-giant|2|rocky=[12]',
-  'gas-giant|3|PLANET-CLASS=[21,23,27]',
+  'gas-giant|3|PLANET-CLASS=[21,23,27,29]',
   'gas-giant|3|captured=[12]',
   'gas-giant|3|ice=[12]',
   'gas-giant|3|rocky=[12]',
-  'gas-giant|4|PLANET-CLASS=[19,21,23]',
+  'gas-giant|4|PLANET-CLASS=[21,23]',
   'gas-giant|4|captured=[12]',
   'gas-giant|4|ice=[12]',
   'gas-giant|4|rocky=[12]',
-  'gas-giant|5|PLANET-CLASS=[18,21,27]',
+  'gas-giant|5|PLANET-CLASS=[21,27]',
   'gas-giant|5|captured=[12]',
   'gas-giant|5|ice=[12]',
   'gas-giant|5|rocky=[12]',
@@ -178,13 +178,13 @@ const PINNED_STREAM_SET = [
   'sub-neptune|0|rocky=[12,13]',
   'sub-neptune|0|terrestrial=[18]',
   'sub-neptune|0|volcanic=[12]',
-  'sub-neptune|1|PLANET-CLASS=[18,19,21,23,27]',
+  'sub-neptune|1|PLANET-CLASS=[19,21,23,25,27]',
   'sub-neptune|1|captured=[11,12,13]',
   'sub-neptune|1|ice=[11,12,13]',
   'sub-neptune|1|rocky=[11,12,13]',
   'sub-neptune|1|terrestrial=[17,18]',
   'sub-neptune|1|volcanic=[11,12]',
-  'sub-neptune|2|PLANET-CLASS=[18,19,21,23,27,29]',
+  'sub-neptune|2|PLANET-CLASS=[19,21,23,27,29]',
   'sub-neptune|2|captured=[12,13]',
   'sub-neptune|2|ice=[12,13]',
   'sub-neptune|2|rocky=[12,13]',
@@ -255,7 +255,7 @@ describe('moon rng stream identity — the shape of MoonGenerator\'s draws off t
     expect(STREAM_SEEDS).toBe(1500);
     expect(stream.lines).toEqual(PINNED_STREAM_SET);
     expect(stream.keys).toBe(64);
-    expect(stream.pairs).toBe(105);
+    expect(stream.pairs).toBe(100);
   });
 
   // ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -268,16 +268,24 @@ describe('moon rng stream identity — the shape of MoonGenerator\'s draws off t
   // MUTANT: `extradraw` (above) — the 57 plain lines all move, the 7 planet-class lines do not.
   // MUTANT: `pcextradraw` — insert `rng.float();` before MoonGenerator.js:346. Mirror image: the 7
   // planet-class lines all move, the 57 plain lines do not.
-  // ═══════════════════════════════════════════════════════════════════════════════════════════
+  // ⭐ MUTANT `postmigration` — substitute the wrapper's POST-migration orbitRadiusAU (mutated at
+  // StarSystemGenerator.js:655 / :682) at MoonGenerator.js:378 instead of the generation-time one.
+  // ⛔ `Math.min(...nums(planetClass))` BELOW IS THE ONLY ASSERTION IN THE TREE THAT SEPARATES THE
+  // TWO CONVENTIONS. Measured over this file's own 1500 seeds: shipped min 19 / pairs 100, mutant
+  // min 18 / pairs 102, and only 2 of the 7 PLANET-CLASS lines differ at all (gas-giant|3 gains an
+  // 18, gas-giant|5 gains a 19). Every other channel — Instrument B's seed list and {0,7,0,24}
+  // partition, every geometry column — is bit-identical between the two, so a wrong-AU
+  // implementation passes almost the whole re-bless. ⛔ Do not relax this to a range.
   it('the plain path and the planet-class path partition the set 57 / 7', () => {
     const planetClass = stream.lines.filter((l) => l.includes('|PLANET-CLASS='));
     const plain = stream.lines.filter((l) => !l.includes('|PLANET-CLASS='));
     expect({ plain: plain.length, planetClass: planetClass.length }).toEqual({ plain: 57, planetClass: 7 });
     // Every planet-class count is above every plain count — the planet-class path generates a
-    // whole planet, so it cannot be cheaper. Measured spans: plain 11-18, planet-class 18-29.
+    // whole planet, so it cannot be cheaper. Spans: plain 11-18, planet-class 19-29 — DISJOINT
+    // only since 8b; they touched at 18 before, so "above" was false at the boundary.
     const nums = (ls) => ls.flatMap((l) => l.slice(l.indexOf('[') + 1, -1).split(',').map(Number));
     expect(Math.max(...nums(plain))).toBe(18);
-    expect(Math.min(...nums(planetClass))).toBe(18);
+    expect(Math.min(...nums(planetClass))).toBe(19);
     expect(Math.max(...nums(planetClass))).toBe(29);
     expect(Math.min(...nums(plain))).toBe(11);
 
