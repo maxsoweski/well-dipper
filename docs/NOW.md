@@ -4,7 +4,61 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> ## ✅ 2026-08-14 — BREAK B7 CLOSED **AND UAT-PASSED BY MAX**. ▶ NEXT = C7 (Step 8b).
+> ## ✅ 2026-08-15 — **C7 (Step 8b) IS SHIPPED.** ▶ NEXT = MAX'S EYES ON 24 MOONS.
+>
+> Planet-class moons no longer generate at a hardcoded 1 AU. `MoonGenerator.js:378` now reads
+> `Math.max(parentOrbitAU ?? 1.0, 0.01)` — the parent's **generation-time** orbit, the same
+> convention `:254` already used for plain moons and the one B7's RC3 established.
+>
+> **Six commits, `9ebb24b` → this one.** The delta table was committed **one commit BEFORE**
+> the change, so the prediction's priority is in the git history, not just in a message.
+> **Every predicted number held and nothing was adjusted to fit.**
+>
+> | | |
+> |---|---|
+> | `9ebb24b` | the delta table, measured pre-change, with the geometry columns |
+> | `4cee76a` | src — the universe change, isolated |
+> | `ab173a3` | gate — draw-stream set re-derived; now the convention's only witness |
+> | `6fe87a5` | re-bless Instrument B |
+> | `a07b522` | re-record Instrument C |
+> | *(this commit)* | docs — four stale references repaired |
+>
+> **Instrument A needed NO re-record** — the gate fix and B's re-bless returned the four
+> newly-red tests to green, so the failing-ID set is exactly the baseline's 24. The build
+> plan's C8 assumed a 24 → 26 re-record; it was not needed.
+>
+> ### ⭐⭐ WHAT MAX HAS TO LOOK AT — 24 moons, and 7 of them are a different body
+> Planet-class moons are 3.0% of moons and all of them render through the **full `Planet`
+> renderer** (`src/main.js:7636`), not `Moon.js`. **All 24 change.**
+> - **17 of 24 — same rock, different climate.** Identical size, orbit, angle and tilt.
+>   Surface temperature moves **>50 K on 24/24 and >100 K on 21/24**, median **151 K (272 °F)**;
+>   17 get colder, 7 hotter. Six cross from a rocky surface to none at all (h₂-he envelope at
+>   10–15 bar). Eleven **lose an aurora**. Nine shift ground colour visibly (≥0.02/channel).
+> - **7 of 24 — visibly a different moon in a different orbit.** Radius **0.97×–1.97×**, orbit
+>   radius **0.58×–1.40×**, a different point in that orbit (median 2.2 rad), a different plane
+>   tilt (one sign flip), speed up to 34% off. **Five of the seven become tidally locked** —
+>   one face forever. That is gameplay-visible, not a palette shift.
+>
+> ⭐ **Park him on `wd-27` planet 3 moon 1** (radius 1.97×, orbit 0.63×, 5958 K → 175 K, gains
+> an atmosphere) — never a guessed seed; a random one has no planet-class mover and produces a
+> green, pretty, meaningless pair. Second: `wd-174/0/1` (orbit 0.58×, locks into 3:2).
+> ⛔ **Ask for the one quantity that changed, not for a review of the body** (handoff §4.2).
+>
+> ### Open, filed, not done
+> 1. Instrument A's baseline provenance: recorded from `952c5d0` with `dirty: true`, and the
+>    instrument warns about it itself. Unresolved, pre-existing, now named.
+> 2. `tools/port-uniform-delta.mjs` prints "the `bake`, `condition` and `gate` rows are
+>    unaffected" — false under C7: 13 of the 31 movers are non-record tier and read a hollow
+>    `0/461` because the 65 movers are excluded before those rows are computed.
+> 3. ⭐ The citation fence caps a symbol span at **110 chars** (`:1142`). Repairing a ref by
+>    quoting a line longer than that **silently demotes it to UNCHECKED while exit stays 0** —
+>    hit live in this session, caught only by watching the counters.
+> 4. Everything still open on 8a: the stale-rescale gate, `atmoPhysics.retained` unreached for
+>    planets, `ExoticOverlay.js` outside `CITE_SOURCES`, composition-weighted greenhouse τ.
+>
+> ---
+>
+> ## ✅ 2026-08-14 — BREAK B7 CLOSED **AND UAT-PASSED BY MAX**.
 >
 > **Handoff for the next session: [`FEATURES/step8-handoff-c7-2026-08-14.md`](FEATURES/step8-handoff-c7-2026-08-14.md).**
 > Max UAT'd three planets on the live game and passed B7 — *"yep, that's right"* (wd-614),
@@ -30,10 +84,10 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > **The physics being right is measured. Whether it LOOKS right is his call**, and no instrument
 > in the tree stands in for that. Seeds to park him on: `wd-45`, `wd-79`, `wd-614`.
 >
-> ▶ **Next: C7 = Step 8b** — `MoonGenerator.js:378` generates every planet-class moon at a
-> hardcoded 1 AU. ⛔ It is a UNIVERSE change (~22% of planet-class moons, bodies that render
-> today), so its delta table needs geometry columns. Full detail + traps:
-> [`FEATURES/step8-handoff-2026-08-14.md`](FEATURES/step8-handoff-2026-08-14.md).
+> ✅ **C7 shipped 2026-08-15 — see the block above.** `MoonGenerator.js:378` no longer holds a
+> hardcoded 1 AU. It was indeed a UNIVERSE change, and the measured figure is **7 of 24 = 29.2%**
+> of surviving planet-class moons (the "~22%" quoted here did not reproduce on any corpus).
+> Delta table: [`FEATURES/step8b-c7-delta-table-2026-08-14.md`](FEATURES/step8b-c7-delta-table-2026-08-14.md).
 
 > ## ⭐⭐ 2026-08-12 — MAX'S THREE RULINGS, AND ONE OF THEM CORRECTS A PREMISE THAT BLOCKED WORK FOR DAYS.
 >

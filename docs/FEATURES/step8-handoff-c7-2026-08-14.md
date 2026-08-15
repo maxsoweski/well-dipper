@@ -55,6 +55,13 @@ Parked on `wd-45/0` (hex), `wd-79/2` (crystal), `wd-614/1` (city-lights).
 
 ---
 
+> ## ✅ C7 IS SHIPPED — 2026-08-15. §2 below is HISTORY; its `1.0` quote is no longer the code.
+>
+> `4cee76a` made the change, `9ebb24b` carries the delta table it was predicted from, `ab173a3`
+> re-derived the draw-stream gate, `6fe87a5`/`a07b522` blessed Instruments B and C. Instrument A
+> needed NO re-record — the ID set returned to the baseline's 24. **Every predicted number held.**
+> ▶ What is still open is MAX'S EYES on the 24 moons, and the open items in NOW.md.
+
 ## 2. ▶ NEXT — C7 = Step 8b. START HERE.
 
 `MoonGenerator.js:378` generates every planet-class moon at `PlanetGenerator.generate(rng, 1.0, …)`

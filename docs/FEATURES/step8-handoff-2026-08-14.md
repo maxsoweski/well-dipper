@@ -134,6 +134,10 @@ took **3 edits across 2 files**.
 
 **Shape:** src fix → three-channel read → separate re-bless. Same as `a7e1982`/`235adef`.
 
+> ✅ **(b) IS SHIPPED — 2026-08-15, at `4cee76a`.** The `1.0` quoted below is no longer the code;
+> `:378` now reads `Math.max(parentOrbitAU ?? 1.0, 0.01)`. Delta table: `step8b-c7-delta-table-2026-08-14.md`.
+> ⭐ The "NEEDS MAX'S EYES" half is still open.
+
 ### (b) C7 = 8b — the universe change. ⭐ NEEDS MAX'S EYES.
 
 `MoonGenerator.js:378` generates every planet-class moon at `PlanetGenerator.generate(rng, 1.0, …)`

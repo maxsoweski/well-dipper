@@ -31,6 +31,12 @@ Same convention already shipped for plain moons at `MoonGenerator.js:252-254`. `
 
 Measured at HEAD `59b48ac` on `feature/world-engine-production-L1` by five measurement lanes and five independent adversarial verifiers, across seven substitution techniques (in-process static-property swap; `git worktree` source edit; `git archive` tree source edit; non-git file-copy tree source edit; Node `module.register` ESM load-hook transform; `module.registerHooks` transform; vitest `setupFiles` injection). Every number below was re-derived from the retained raw artifacts in this document's own pass.
 
+> ⚠ **LINE NUMBERS IN THIS DOCUMENT ARE AS OF `59b48ac`, before the change.** One has since
+> moved and it is the important one: the convention-discriminating assertion cited throughout
+> as `moon-rng-stream-identity.test.js:280` is at **`:288`** after the gate re-derivation at
+> `ab173a3`. Anchor to the symbol, not the number — `expect(Math.min(...nums(planetClass))).toBe(19);`
+> (the `18` quoted below was the pre-C7 value; the gate now pins `19`).
+
 ---
 
 ## Corpora
