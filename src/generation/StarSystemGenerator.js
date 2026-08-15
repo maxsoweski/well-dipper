@@ -13,7 +13,7 @@ import {
   deriveFormation, computeMigration, detectResonances, snapToResonances,
   stellarEvolution, mainSequenceLifetime, binaryStabilityLimit, circumbinaryHZ,
   shouldBeltExist, shouldOuterBeltExist, kirkwoodGaps,
-  beltCompositionZones, lagrangePoints,
+  beltCompositionZones, lagrangePoints, physicalStarMassSolar, solidInventoryOf,
 } from './PhysicsEngine.js';
 
 // Physical Kepler anchor: Mercury's orbit (0.387 AU, 88-day period). Orbital
@@ -449,11 +449,11 @@ export class StarSystemGenerator {
 
     // Zones object — the shared context passed to PlanetGenerator and MoonGenerator.
     // This is the primary data contract between system and body generation.
-    // All physics calculations in PlanetGenerator depend on these fields.
-    //
-    // Required by PlanetGenerator._pickType():  frostLine, hzInner, hzOuter, starType, metallicity, sizeBias
+    // Required by PlanetGenerator._pickType(): frostLine, hzInner, hzOuter, starType, metallicity, sizeBias
     // Required by PhysicsEngine (via PlanetGenerator): luminosity, ageGyr, starMassSolar
     // Passed through to MoonGenerator._generatePlanetMoon() for planet-class moons
+    // ⚠ solidInventory / contextSource / starMassSolarPhysical are UNREAD BY DESIGN (plan B3) and
+    // each shares a line with an older key so that :457 and :467 do not move (PhysicsEngine.js §13).
     const zones = {
       frostLine: frostLineAU,
       hzInner: hzInnerAU,
@@ -461,9 +461,9 @@ export class StarSystemGenerator {
       starType,
       metallicity,
       sizeBias: archetype.sizeBias,
-      luminosity,
-      ageGyr,
-      starMassSolar,
+      luminosity, solidInventory: solidInventoryOf(starMassSolar, formation.solidFraction),
+      ageGyr, contextSource: 'derived',
+      starMassSolar, starMassSolarPhysical: physicalStarMassSolar(starType, starMassSolar),
     };
 
     // ── Map-scale orbital spacing (exaggerated, for backward compat) ──

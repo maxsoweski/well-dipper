@@ -593,14 +593,14 @@ export function computeMigration(planets, diskMass, frostLineAU, rngFloat) {
  * @returns {object} formation history
  */
 export function deriveFormation(starMassSolar, metallicity, rngFloat1, rngFloat2) {
-  // Disk mass: fraction of star mass, scaled by metallicity
-  // Median ~1-5% of star mass for solids, boosted by metals
+  // Disk mass: solid fraction of star mass, scaled by metallicity (median ~1-5%, metal-boosted).
+  // ⚠ `solidFraction` is half of the B3 solid-supply seam — §13 `solidInventoryOf` says why that
   const solidFraction = 0.01 + 0.04 * Math.pow(10, metallicity);
   const diskMass = starMassSolar * solidFraction * (0.5 + rngFloat1);
-
-  // Disk dissipation timescale (Myr): log-normal, median ~3 Myr
-  // Short (<2 Myr) → giants didn't form → compact rocky
-  // Long (>5 Myr) → giants formed and migrated → spread giant
+  // seam is NOT a key on this return. ⛔ `diskMass` and `dissipationMyr` are REFUSED as
+  // body-generation inputs: `starMassSolar` cancels out of BOTH archetype clauses below (:608
+  // and :610 each compare a multiple of it against a multiple of it), so `archetype` is decided
+  // by `dissipationMyr` alone — a bare uniform. Short → no giants → compact rocky; long → spread.
   const dissipationMyr = 1.0 + rngFloat2 * 8.0;
 
   // Derive archetype from physical parameters
@@ -1149,4 +1149,120 @@ export function shouldOuterBeltExist(planets, diskMass) {
     albedo: 0.04,
     color: [0.12, 0.11, 0.10], // very dark icy
   };
+}
+
+
+// ═══════════════════════════════════════════════
+// §13 GENERATION-CONTEXT PROVENANCE
+// ═══════════════════════════════════════════════
+//
+// Appended at EOF deliberately. Every other section of this file is cited by line
+// number from docs/, tests/ and tools/ (118 refs at the time of writing, the
+// deepest at :912), so a new section anywhere ABOVE this point moves refs that
+// are not part of this step's budget. Nothing cites past :1152.
+
+/**
+ * The scatter-free solid supply of a protoplanetary disk, in solar masses.
+ *
+ * `deriveFormation` computes `starMassSolar × solidFraction × (0.5 + rngFloat1)` and calls it
+ * `diskMass`. This is the same product with the scatter factor removed — a deterministic function
+ * of the star's mass and its metallicity alone, which is what a channel law can be conditioned on
+ * without laundering a dice roll. It is the B3 seam: NOTHING READS IT YET, by design.
+ *
+ * ⛔ IT IS NOT A KEY ON `deriveFormation`'s RETURN, and the plan that scheduled this step said it
+ * could be. That was checked and is false: `src/generation/__tests__/componentSystems.byteSafety.test.js:98`
+ * deep-equals the WHOLE authored system record — `systemData.formation` included — against
+ * `docs/WORKSTREAMS/multistar-components-2026-07-19/authored-parent-baseline.json`, and it asserts
+ * in so many words that `componentSystems` is the ONLY delta against the pre-increment capture.
+ * Measured: adding the key turns that test red with a one-line diff, `+ "solidInventory": …`.
+ * Re-capturing the fixture is a re-bless, so the seam is derived at the CONSUMER instead
+ * (`StarSystemGenerator.js:464`, onto `zones`), which is where every channel law reads it anyway
+ * and which changes no stored record at all.
+ *
+ * @param {number} starMassSolar
+ * @param {number} solidFraction - `deriveFormation(...).solidFraction`
+ * @returns {number} solid mass available to build bodies, in solar masses
+ */
+export function solidInventoryOf(starMassSolar, solidFraction) {
+  return starMassSolar * solidFraction;
+}
+
+/**
+ * Mass of a white dwarf, in solar masses.
+ *
+ * ⚠ AN ANCHOR, NOT A DERIVATION, and it is stated that way on purpose. The
+ * observed field white-dwarf mass distribution peaks near 0.6 M☉ and is narrow;
+ * this constant is that peak, rounded. It is NOT read off `radiusSolar`, because
+ * for a degenerate star the mass–radius relation is INVERTED (more massive ⇒
+ * smaller) and `StarSystemGenerator`'s ±15% `starVariation` on `radiusSolar` is a
+ * main-sequence idiom with no degenerate meaning — feeding it through an inverted
+ * relation would make a bigger white dwarf lighter, which is worse than a constant.
+ *
+ * ⚠ The shipped `STAR_PROPERTIES.D` row is modelled on Sirius B, which is ~1.0 M☉
+ * — unusually heavy for a white dwarf. The row's radius therefore describes Sirius
+ * B while this mass describes the population. Named rather than hidden; a future
+ * step that wants per-star white-dwarf masses should take them from the catalog,
+ * not from this file.
+ */
+export const WHITE_DWARF_MASS_SOLAR = 0.6;
+
+/**
+ * The star's PHYSICAL mass, guarding the one spectral class where the shipped
+ * main-sequence estimate is not merely imprecise but qualitatively wrong.
+ *
+ * THE HAZARD. `StarSystemGenerator.js:386` derives `starMassSolar` as
+ * `radiusSolar ** 1.25`. `STAR_PROPERTIES.D` carries `radiusSolar: 0.01`, so a
+ * white dwarf comes out at 0.01 ** 1.25 ≈ 0.0032 M☉ — roughly 1/200 of its true
+ * mass, and small enough that anything keyed on stellar mass (tidal locking,
+ * circularisation, Hill radii, orbital periods) reads as effectively zero. It is
+ * silent: nothing throws, nothing warns, the number is simply wrong.
+ *
+ * ⛔ THIS IS A GUARD, NOT A SWITCH-OVER. `zones.starMassSolar` still carries the
+ * main-sequence estimate, byte-for-byte, and this value rides alongside it as
+ * `zones.starMassSolarPhysical`. The reason is that `starMassSolar` is consumed by
+ * `PlanetGenerator.js:391` INSIDE a seed string (`ecc:…:${starMassSolar}:…`) as well
+ * as by `:396`, `:406` and `:408`, so correcting the number in place would move
+ * every planet of every white-dwarf-primary system. Procgen can never roll 'D'
+ * (it is absent from `STAR_WEIGHTS`), so those systems are exactly the ones NO
+ * instrument corpus covers: the "fix" would read green on all four instruments
+ * while silently moving real-universe bodies. That move gets predicted and taken
+ * in the window, not smuggled in under a step whose whole claim is zero motion.
+ *
+ * @param {string} starType - a STAR_PROPERTIES key ('O'…'M', or 'D')
+ * @param {number} mainSequenceEstimateSolar - `radiusSolar ** 1.25`
+ * @returns {number} mass in solar masses
+ */
+export function physicalStarMassSolar(starType, mainSequenceEstimateSolar) {
+  if (starType === 'D') return WHITE_DWARF_MASS_SOLAR;
+  return mainSequenceEstimateSolar;
+}
+
+/**
+ * Whether a body was generated against a real system context or against defaults.
+ *
+ * WHY THIS EXISTS. `MoonGenerator.generate` takes `zones` and `parentOrbitAU` as
+ * optional 6th/7th arguments and falls back to Sol-ish constants when they are
+ * absent — `zones?.luminosity ?? 1.0`, `zones?.frostLine ?? 4.85`,
+ * `Math.max(parentOrbitAU ?? 1.0, 0.01)`. Three of its four call sites pass 4 or 6
+ * arguments (`tests/moon-mass-radius-consistency.test.js:37` passes four), so those
+ * bodies are generated at an implicit 1 AU around an implicit Sun and NOTHING ON
+ * THE RECORD SAYS SO. That is the failure shape `world-engine-reconciliations`
+ * §1 catalogues: a missing context value silently substituting Sol/Earth.
+ *
+ * THE MECHANISM. The PRODUCER stamps its own product: `StarSystemGenerator` writes
+ * `contextSource: 'derived'` onto the `zones` literal it builds. Absence therefore
+ * means "no real context reached this body", and no consumer has to re-derive the
+ * question from the shape of its own arguments.
+ *
+ * ⚠ NOT YET ON ANY BODY RECORD, and that is a constraint rather than an oversight.
+ * `tests/body-identity-fence.test.js:778` asserts the moon record has exactly one
+ * shape per class (`keyCounts: [25]` / `[20]`); appending a 26th key is a record
+ * change that must be predicted and re-blessed, which is B4/B5's budget, not B3's.
+ * What lands here is the seam and its single source of truth.
+ *
+ * @param {object|null} zones - the system context, or null/undefined
+ * @returns {'derived'|'default'}
+ */
+export function contextSourceOf(zones) {
+  return zones?.contextSource === 'derived' ? 'derived' : 'default';
 }
