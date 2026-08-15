@@ -3183,40 +3183,40 @@ window._lab = {
       prevMultiplier: settings.get('celestialTimeMultiplier'),
       prevGrain: retroRenderer?._compositeMesh?.material?.uniforms?.uGrainStrength?.value ?? null,
       prevSetTime: retroRenderer.setTime,
-      rates: [],   // {obj, key, prev}
+      rates: [],   // {obj, key, prev} — RATES **AND POSES**: restore is `obj[key] = prev` for both
       clocks: [],  // {uniform, prev}
     };
 
     // ── 1. the multiplier (belt), then the rates (braces) ──
     settings.set('celestialTimeMultiplier', 0);
 
-    const zeroRate = (obj, key) => {
-      if (!obj || typeof obj[key] !== 'number') return;
-      st.rates.push({ obj, key, prev: obj[key] });
-      obj[key] = 0;
+    const pinV = (obj, key, next = 0) => {          // ⛔ `next` ≠ 0 ⇒ a POSE write, which MOVES the body
+      if (!obj || typeof obj[key] !== 'number') return;   // guard replaces the old explicit typeof tests
+      st.rates.push({ obj, key, prev: obj[key] }); // ⭐ journalling POSES too is what makes thaw exact
+      obj[key] = next;                             // orbit defaults to 0 = every moon behind its parent
     };
     const bodiesPinned = { planets: 0, moons: 0, rings: 0 };
     for (const entry of (system?.planets || [])) {
-      entry.orbitAngle = orbit;
-      zeroRate(entry, 'orbitSpeed');
+      pinV(entry, 'orbitAngle', orbit);
+      pinV(entry, 'orbitSpeed');
       const pl = entry.planet;
       if (pl) {
-        zeroRate(pl.data, 'rotationSpeed');
-        if (pl.surface) pl.surface.rotation.y = spin;
-        if (pl.ring) { pl.ring.rotation.y = spin; bodiesPinned.rings++; }
+        pinV(pl.data, 'rotationSpeed');
+        if (pl.surface) pinV(pl.surface.rotation, 'y', spin);
+        if (pl.ring) { pinV(pl.ring.rotation, 'y', spin); bodiesPinned.rings++; }
         bodiesPinned.planets++;
       }
       for (const moon of (entry.moons || [])) {
-        zeroRate(moon.data, 'orbitSpeed');
-        if (typeof moon.orbitAngle === 'number') moon.orbitAngle = orbit;
+        pinV(moon.data, 'orbitSpeed');
+        pinV(moon, 'orbitAngle', orbit);   // `pinV`'s own typeof guard replaces the old explicit one
         // Plain moons keep their orbit angle on the DELEGATE, not the BodyRenderer wrapper.
-        if (moon._delegate && typeof moon._delegate.orbitAngle === 'number') moon._delegate.orbitAngle = orbit;
+        if (moon._delegate) pinV(moon._delegate, 'orbitAngle', orbit);
         if (moon.isPlanetMoon && moon.planet) {
           // Hole 8: this spin is off the multiplier entirely. The rate is the only handle on it.
-          zeroRate(moon.planet.data, 'rotationSpeed');
-          if (moon.planet.surface) moon.planet.surface.rotation.y = spin;
+          pinV(moon.planet.data, 'rotationSpeed');
+          if (moon.planet.surface) pinV(moon.planet.surface.rotation, 'y', spin);
         } else if (moon.mesh) {
-          moon.mesh.rotation.y = spin;
+          pinV(moon.mesh.rotation, 'y', spin);
         }
         bodiesPinned.moons++;
       }
