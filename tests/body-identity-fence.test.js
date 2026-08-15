@@ -585,7 +585,16 @@ describe('Instrument B — body-identity hash (generation-order fence)', () => {
     const map = new GalacticMap(GALAXY_MASTER_SEED);
     const cases = [
       ['wd-0', null],
-      ['wd-45', null],                                       // atmosphere-null
+      // ⛔ `wd-45` WAS PINNED HERE FOR `atmosphere-null` AND NO LONGER COVERS IT. Break B7's fix
+      // (2154de1) gave its hex planet the luminosity of the star it actually orbits, T_eq fell
+      // 1023.57 K -> 457.75 K, and the Jeans-escape branch stopped firing. MEASURED across
+      // wd-0…wd-1499 (6279 planets): `atmosphere: null` occurred on exactly ONE planet, this one,
+      // and only before the fix; after it, on ZERO. The class was never a generation path this
+      // fence was covering — it was a single artefact of the defect. The DETECTOR above stays, so
+      // the day a genuinely airless planet appears the class returns and this assertion reds.
+      // ⚠ The corollary is a real open question and is NOT this pin's to answer: the escape branch
+      // at PlanetGenerator.js:449 `if (atmoPhysics.retained) {` is now unreached for planets.
+      ['wd-45', null],                                       // kept: the hex swap + retained moon (B7's wd-45/0/0)
       ['wd-1403', null],                                     // terrestrial moon
       ['gc-7', map.deriveGalaxyContext(GALAXY_POSITIONS[7])], // galaxy context
     ];

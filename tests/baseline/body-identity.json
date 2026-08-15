@@ -352,7 +352,6 @@
   ]
  },
  "classes": [
-  "atmosphere-null",
   "aurora",
   "belts",
   "binary",
@@ -2995,7 +2994,7 @@
     4561,
     4561,
     4561,
-    4576
+    4577
    ],
    "system": {
     "star": "M",
@@ -3009,7 +3008,7 @@
    "planets": [
     {
      "type": "hex",
-     "hash": "5a4de9b70db7926a",
+     "hash": "00f71f4625b76e2c",
      "moons": [
       "a87947263b24d55d"
      ]
@@ -3031,7 +3030,7 @@
      ]
     }
    ],
-   "rollup": "ee809aed6621c614"
+   "rollup": "807019374e3db135"
   },
   "wd-46": {
    "profile": [
@@ -4816,7 +4815,7 @@
     },
     {
      "type": "crystal",
-     "hash": "a2cae808be3b44f6",
+     "hash": "1a170e0499f57d6b",
      "moons": [
       "5e665c93d323deab"
      ]
@@ -4836,7 +4835,7 @@
      ]
     }
    ],
-   "rollup": "c4b9788f5353119a"
+   "rollup": "aec4afc708c7a013"
   },
   "wd-80": {
    "profile": [
@@ -8210,7 +8209,7 @@
     },
     {
      "type": "crystal",
-     "hash": "487a7e62ccfc2821",
+     "hash": "cb719d73b3ecbc71",
      "moons": []
     },
     {
@@ -8233,7 +8232,7 @@
      ]
     }
    ],
-   "rollup": "4cca603a0f38bef1"
+   "rollup": "0fd3f1d438e49731"
   },
   "wd-140": {
    "profile": [
@@ -11028,7 +11027,7 @@
    "planets": [
     {
      "type": "shattered",
-     "hash": "2e63d72a137b1cad",
+     "hash": "5712c7d6363ef062",
      "moons": []
     },
     {
@@ -11044,7 +11043,7 @@
      ]
     }
    ],
-   "rollup": "d06f086499a73f55"
+   "rollup": "55b0cbe6c41b69ec"
   },
   "wd-395": {
    "profile": [
@@ -11088,11 +11087,11 @@
     },
     {
      "type": "fungal",
-     "hash": "66c4602cc1b1924e",
+     "hash": "b7f693edec07059c",
      "moons": []
     }
    ],
-   "rollup": "4cea94e4e096020c"
+   "rollup": "63ff6363b927057f"
   },
   "wd-614": {
    "profile": [
@@ -11133,7 +11132,7 @@
     },
     {
      "type": "city-lights",
-     "hash": "f6c61794e11575ce",
+     "hash": "758a722279cb0170",
      "moons": [
       "0ce5ddf23d3fcf1d"
      ]
@@ -11166,7 +11165,7 @@
      "moons": []
     }
    ],
-   "rollup": "2df8fe3234ed199b"
+   "rollup": "e2326089e575af57"
   },
   "wd-2232": {
    "profile": [
@@ -11204,7 +11203,7 @@
     },
     {
      "type": "ecumenopolis",
-     "hash": "256922a8c3febaaa",
+     "hash": "e29584afd8498c69",
      "moons": []
     },
     {
@@ -11218,7 +11217,7 @@
      "moons": []
     }
    ],
-   "rollup": "16db497e285b1a6e"
+   "rollup": "fe8c2fa5a3d0a6ab"
   },
   "wd-1403": {
    "profile": [
@@ -11254,7 +11253,7 @@
     },
     {
      "type": "machine",
-     "hash": "48ba4aa3c8db5050",
+     "hash": "5c65765614ef36a8",
      "moons": []
     },
     {
@@ -11280,7 +11279,7 @@
      ]
     }
    ],
-   "rollup": "0e36309654ee2bf5"
+   "rollup": "3731037485628777"
   },
   "gc-0": {
    "profile": [
@@ -12081,7 +12080,7 @@
     },
     {
      "type": "crystal",
-     "hash": "a94f23f52977d23c",
+     "hash": "af283e96712b8e05",
      "moons": []
     },
     {
@@ -12090,7 +12089,7 @@
      "moons": []
     }
    ],
-   "rollup": "284fb61e201c5efe"
+   "rollup": "1efabf50437db099"
   },
   "gc-14": {
    "profile": [
@@ -12585,7 +12584,7 @@
    "planets": [
     {
      "type": "fungal",
-     "hash": "60475d25abddb7ee",
+     "hash": "5cbdca0443f18f61",
      "moons": []
     },
     {
@@ -12603,7 +12602,7 @@
      ]
     }
    ],
-   "rollup": "eb1f7862a69ecba2"
+   "rollup": "31a329585cfa5934"
   },
   "gc-23": {
    "profile": [
