@@ -22,8 +22,23 @@ export class ExoticOverlay {
    * Modifies systemData.planets in-place.
    *
    * @param {object} systemData - output from StarSystemGenerator.generate()
+   * @param {object|null} genContext - the inputs the planets were GENERATED from, which
+   *   `systemData` alone cannot supply (break B7). Two fields, both needed by
+   *   `_swapPlanetType`:
+   *     · `zones` — the generation-time zones object (StarSystemGenerator.js:457), carrying
+   *       `luminosity`, `metallicity`, `ageGyr`, `starMassSolar`, `starType`. ⛔ NOT the same
+   *       object as `systemData.zones`, which is zoneData — four AU boundaries and their scene
+   *       and map conversions, with no stellar physics on it at all.
+   *     · `orbitAUByEntry` — Map(planet wrapper -> the AU it was generated at), captured BEFORE
+   *       migration and resonance-snapping rewrite `orbitRadiusAU` on the wrapper.
+   *   Passed as a context rather than stamped onto the records on purpose: generation
+   *   provenance is not a property of a body, and keeping it off the records keeps it
+   *   invisible to Instrument B's shape and hash channels.
+   *   Omitted (the three standalone unit-test call sites) → each falls back to what this file
+   *   did before B7. That fallback reproduces the defect by construction, so it is a
+   *   test-only affordance, never a shipped path.
    */
-  static apply(systemData) {
+  static apply(systemData, genContext = null) {
     const rng = new SeededRandom(systemData.seed + '-overlay');
     const { planets, star } = systemData;
     if (planets.length === 0) return;
@@ -40,20 +55,20 @@ export class ExoticOverlay {
     // Only on habitable planets (terrestrial/ocean/eyeball).
     // Civilization needs a habitable base + stable long-lived star.
     if (!hasExotic) {
-      hasExotic = this._applyCivilized(rng, planets, starType, hzInner, hzOuter);
+      hasExotic = this._applyCivilized(rng, planets, starType, hzInner, hzOuter, genContext);
     }
 
     // ── Layer 2: Exotic overlays ──
     // Fungal (biological), hex/machine (artificial)
     if (!hasExotic) {
-      hasExotic = this._applyExotic(rng, planets, systemData, hzInner, hzOuter, frostLine);
+      hasExotic = this._applyExotic(rng, planets, systemData, hzInner, hzOuter, frostLine, genContext);
     }
 
     // ── Layer 3: Geological anomalies ──
     // Crystal and shattered — these are independent of the exotic limit.
     // They're rare natural formations, not alien. A system can have both
     // a geological anomaly AND an exotic (but not two exotics).
-    this._applyGeological(rng, planets, hzInner, frostLine);
+    this._applyGeological(rng, planets, hzInner, frostLine, genContext);
   }
 
   // ════════════════════════════════════════════════════════════
@@ -67,7 +82,7 @@ export class ExoticOverlay {
    *
    * @returns {boolean} true if a civilized planet was placed
    */
-  static _applyCivilized(rng, planets, starType, hzInner, hzOuter) {
+  static _applyCivilized(rng, planets, starType, hzInner, hzOuter, genContext = null) {
     // Civilization chance by star type — stable, long-lived stars favor it.
     // O/B stars live too briefly for complex life to develop.
     const civChance = {
@@ -98,7 +113,7 @@ export class ExoticOverlay {
     for (const idx of habitable) {
       if (rng.chance(civChance)) {
         const civType = rng.float() < 0.7 ? 'city-lights' : 'ecumenopolis';
-        this._swapPlanetType(planets[idx], civType, rng);
+        this._swapPlanetType(planets[idx], civType, rng, genContext);
         return true;
       }
     }
@@ -116,7 +131,7 @@ export class ExoticOverlay {
    *
    * @returns {boolean} true if an exotic was placed
    */
-  static _applyExotic(rng, planets, systemData, hzInner, hzOuter, frostLine) {
+  static _applyExotic(rng, planets, systemData, hzInner, hzOuter, frostLine, genContext = null) {
     // Base exotic chance: 0.5% per system
     // M/K stars get a slight boost (NMS-inspired: red stars = more weird)
     const starType = systemData.star.type;
@@ -135,13 +150,13 @@ export class ExoticOverlay {
 
     if (exoticRoll < 0.40) {
       // Fungal (40% of exotic rolls)
-      return this._applyFungal(rng, planets, systemData, hzInner, hzOuter);
+      return this._applyFungal(rng, planets, systemData, hzInner, hzOuter, genContext);
     } else if (exoticRoll < 0.70) {
       // Hex (30% of exotic rolls)
-      return this._applyHex(rng, planets, hzInner);
+      return this._applyHex(rng, planets, hzInner, genContext);
     } else {
       // Machine (30% of exotic rolls)
-      return this._applyMachine(rng, planets, frostLine);
+      return this._applyMachine(rng, planets, frostLine, genContext);
     }
   }
 
@@ -150,7 +165,7 @@ export class ExoticOverlay {
    * Overlays on HZ rocky/sub-neptune planets.
    * 10% chance of "bloom" — hyper-virulent strain colonizes 2-4 bodies.
    */
-  static _applyFungal(rng, planets, systemData, hzInner, hzOuter) {
+  static _applyFungal(rng, planets, systemData, hzInner, hzOuter, genContext = null) {
     // Find suitable hosts: planets with atmospheres, or rocky bodies in HZ/transition
     const candidates = [];
     for (let i = 0; i < planets.length; i++) {
@@ -188,11 +203,11 @@ export class ExoticOverlay {
         candidates.length
       );
       for (let b = 0; b < bloomCount; b++) {
-        this._swapPlanetType(planets[candidates[b].idx], 'fungal', rng);
+        this._swapPlanetType(planets[candidates[b].idx], 'fungal', rng, genContext);
       }
     } else {
       // Normal: single planet, prefer HZ
-      this._swapPlanetType(planets[candidates[0].idx], 'fungal', rng);
+      this._swapPlanetType(planets[candidates[0].idx], 'fungal', rng, genContext);
     }
 
     return true;
@@ -202,7 +217,7 @@ export class ExoticOverlay {
    * Hex — alien megastructure. Tessellated hexagonal plates.
    * Replaces a planet in inner/scorching zone (energy harvesting near star).
    */
-  static _applyHex(rng, planets, hzInner) {
+  static _applyHex(rng, planets, hzInner, genContext = null) {
     // Find inner/scorching zone planets (D3: injected real planets are never
     // candidates — they must not be retyped/regenerated).
     const candidates = [];
@@ -222,7 +237,7 @@ export class ExoticOverlay {
     // D3 guard: if the fallback landed on a known planet (merged systems only),
     // skip the swap rather than regenerate its real data. Procgen planets carry
     // no `known` flag, so this never fires there (AC8).
-    if (!planets[idx].known) this._swapPlanetType(planets[idx], 'hex', rng);
+    if (!planets[idx].known) this._swapPlanetType(planets[idx], 'hex', rng, genContext);
     return true;
   }
 
@@ -230,7 +245,7 @@ export class ExoticOverlay {
    * Machine — artificial world. Von Neumann probe grown to planet size.
    * Prefers outer system (resource harvesting beyond frost line).
    */
-  static _applyMachine(rng, planets, frostLine) {
+  static _applyMachine(rng, planets, frostLine, genContext = null) {
     // Prefer outer system planets (D3: injected real planets are never
     // candidates — they must not be retyped/regenerated).
     const outer = [];
@@ -249,7 +264,7 @@ export class ExoticOverlay {
     // bail out. Procgen systems always keep ≥1 non-known planet here (AC8).
     if (candidates.length === 0) return false;
     const idx = rng.pick(candidates);
-    this._swapPlanetType(planets[idx], 'machine', rng);
+    this._swapPlanetType(planets[idx], 'machine', rng, genContext);
     return true;
   }
 
@@ -263,7 +278,7 @@ export class ExoticOverlay {
    * Independent of the exotic limit (a system can have both).
    * ~1% per planet in the right zone.
    */
-  static _applyGeological(rng, planets, hzInner, frostLine) {
+  static _applyGeological(rng, planets, hzInner, frostLine, genContext = null) {
     for (let i = 0; i < planets.length; i++) {
       const p = planets[i];
       if (p.known) continue; // D3: injected real planets are never retyped/regenerated
@@ -279,7 +294,7 @@ export class ExoticOverlay {
       // Only affects rocky/carbon/lava-sized bodies
       if (r < hzInner && ['rocky', 'carbon', 'lava'].includes(type)) {
         if (rng.chance(0.01)) {
-          this._swapPlanetType(p, 'shattered', rng);
+          this._swapPlanetType(p, 'shattered', rng, genContext);
           continue;
         }
       }
@@ -288,7 +303,7 @@ export class ExoticOverlay {
       // Only affects rocky/carbon/ice bodies
       if (r >= hzInner * 0.4 && ['rocky', 'carbon', 'ice'].includes(type)) {
         if (rng.chance(0.01)) {
-          this._swapPlanetType(p, 'crystal', rng);
+          this._swapPlanetType(p, 'crystal', rng, genContext);
         }
       }
     }
@@ -303,16 +318,43 @@ export class ExoticOverlay {
    * Keeps the same orbit, but gets new palette, radius, features
    * appropriate for the new type.
    */
-  static _swapPlanetType(planetEntry, newType, rng) {
+  static _swapPlanetType(planetEntry, newType, rng, genContext = null) {
     const swapRng = rng.child('swap-' + newType);
     const oldData = planetEntry.planetData;
+
+    // ⭐ A TYPE SWAP CHANGES THE TYPE. IT MUST NOT ALSO MOVE THE BODY TO A DIFFERENT
+    // STAR OR A DIFFERENT ORBIT (break B7). Both of the inputs below used to be wrong:
+    //
+    // `zones` was `null`, under the comment "no zones needed — forceType bypasses
+    // _pickType". That reason is TRUE and INCOMPLETE: `_pickType` is the only consumer
+    // of `hzInner`/`hzOuter`/`sizeBias`, but PlanetGenerator.js:368
+    // `const luminosityRel = zones?.luminosity || 1.0;` and the metallicity, ageGyr,
+    // starMassSolar and starType reads around it are NOT behind `forceType`. Passing
+    // null re-derived every swapped planet AS IF IT ORBITED THE SUN — a crystal planet
+    // 527 AU from a 300000 L☉ star came back at 11.12 K instead of 260.18 K.
+    //
+    // `orbitRadiusAU` is the wrapper's CURRENT orbit, which migration
+    // (StarSystemGenerator.js:655 `migrantInSurviving.orbitRadiusAU = migrationResult.finalOrbitAU;`)
+    // and resonance-snapping rewrite AFTER `planetData` was built. Every other body in
+    // the system carries physics derived from the orbit it was GENERATED at — planets
+    // because `planetData` is never recomputed, moons because MoonGenerator.js:254
+    // `const parentAU = Math.max(parentOrbitAU ?? 1.0, 0.01);` takes the pre-migration AU
+    // by deliberate choice. Regenerating at the final AU made the swapped planet the one
+    // body in the system on the other convention, which is the whole reason a moon could
+    // disagree with its own parent's equilibrium temperature.
+    //
+    // ⛔ This is CONSISTENCY with that convention, not an endorsement of it. Planets that
+    // migrate or snap still carry physics for an orbit they no longer occupy; that is a
+    // system-wide question and it is not this function's to answer.
+    const genZones = genContext?.zones ?? null;
+    const genOrbitAU = genContext?.orbitAUByEntry?.get(planetEntry) ?? planetEntry.orbitRadiusAU;
 
     // Regenerate planet data with the new type, keeping sun direction
     const newData = PlanetGenerator.generate(
       swapRng,
-      planetEntry.orbitRadiusAU,
+      genOrbitAU,
       oldData.sunDirection,
-      null,       // no zones needed — forceType bypasses _pickType
+      genZones,
       newType,    // force the exotic/civilized type
     );
 

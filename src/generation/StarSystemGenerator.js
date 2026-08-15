@@ -504,7 +504,7 @@ export class StarSystemGenerator {
     // ── Generate planets ──
     // Orbital spacing uses log-normal draws with peas-in-a-pod correlation.
     // Adjacent spacings are 60% correlated (Weiss et al. 2018).
-    const planets = [];
+    const planets = [];  const genOrbitAU = new Map();  // B7: per-wrapper generation orbit — see ExoticOverlay.apply
     let currentOrbitAU = adjustedInnerAU;
     let prevSpacing = 0;
     for (let i = 0; i < planetCount; i++) {
@@ -620,7 +620,7 @@ export class StarSystemGenerator {
         if (known.kp.name != null) wrapper.name = known.kp.name;
         if (known.kp.eccen != null) wrapper.eccen = known.kp.eccen;
       }
-      planets.push(wrapper);
+      planets.push(wrapper);  genOrbitAU.set(wrapper, orbitRadiusAU);  // B7: captured HERE because migration (:655) and snapToResonances (:682) rewrite orbitRadiusAU in place
     }
 
     yield;  // post-planet-loop yield — migration + resonance walk the full planets array
@@ -918,7 +918,7 @@ export class StarSystemGenerator {
     // Post-processing pass: rare alien anomalies, civilized worlds,
     // geological formations. Modifies planets array in-place.
     // See docs/GAME_BIBLE.md §6 and ExoticOverlay.js.
-    ExoticOverlay.apply(systemData);
+    ExoticOverlay.apply(systemData, { zones, orbitAUByEntry: genOrbitAU });  // B7 — `zones`, NOT systemData.zones (zoneData carries no luminosity); see apply()'s @param
 
     // ── systemContext post-pass (World-Engine WS1 AC5) ──
     // Each body's planetData is finalized by PlanetGenerator.generate() BEFORE
