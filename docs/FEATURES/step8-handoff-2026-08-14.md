@@ -1,3 +1,63 @@
+# Handoff — Well Dipper. ✅ B7 CLOSED. NEXT = C7 (8b), and Max's eyes on B7's 10 planets.
+
+> ## ✅ UPDATE, later on 2026-08-14 — §2(a) IS DONE. §2(b) IS NOT.
+>
+> **Break B7 is closed. `tests/moon-condition-contract.test.js` is 15/15** (was 13/2), both of
+> C6's red-by-design gates pass, and **neither was weakened by a character**. All four
+> instruments green. HEAD `dc0779c`, tracked tree clean, **NOT PUSHED — needs Max's OK.**
+>
+> | commit | |
+> |---|---|
+> | `10d4d1a` | src — a moon's mass follows its radius through a swap (3 moons) |
+> | `490db3e` | Instrument B re-bless |
+> | `2154de1` | src — a retyped planet keeps its own zones AND its own generation orbit (10 planets) |
+> | `ed8d069` | gate — 19 port-contract populations re-derived; 2 emptied pins flipped |
+> | `f61d092` | Instrument B re-bless + the `wd-45` pin comment |
+> | `952c5d0` | Instrument C re-record |
+> | `dc0779c` | Instrument A re-record |
+>
+> **There were THREE root causes, not the two §2(a) names.** RC1 = the un-rescaled `massEarth`.
+> RC2 = `zones: null`, so every swapped planet was derived as if it orbited the Sun. ⭐ **RC3 —
+> the one C6 could not name a fix for** — `_swapPlanetType` regenerated at the wrapper's
+> **post-migration** AU while every other body in the system uses its **generation-time** AU.
+> Re-derived by measurement: RC2 alone reproduces C6's "3 → 1" exactly; RC2+RC3 gives 0.
+>
+> ### ⭐⭐ THE ONE THING STILL OPEN ON B7 — MAX'S EYES
+> `2154de1` moves `landPalette` / `lavaGlowColor` / `lavaCrustColor` on **10 planets**, and
+> `wd-45/0`'s hex planet **gains an atmosphere** (T_eq fell 1023.57 K → 457.75 K, so Jeans escape
+> stopped firing). They were being shaded as if they orbited the Sun. That the physics is now
+> right is measured; **that it LOOKS right is his call and no instrument here substitutes for it.**
+> Park him in the live game on `wd-45`, `wd-79`, `wd-614` — see §5/§6 for how.
+>
+> ### Filed, measured, NOT done
+> 1. The rescale loop still leaves `tidalHeating`, `tidalState`, `surfaceHistory` on pre-rescale
+>    geometry and the OLD parent type. **Nothing gates it — it needs a gate before a fix.**
+>    ⚠ C6's note lists `T_eq` here too; that is wrong, `T_eq` has no moon-geometry input.
+> 2. `atmoPhysics.retained === false` is now **unreached for planets** across 6279 of them —
+>    i.e. the atmospheric-escape branch is dead in practice. Wants a physics review or a gate.
+> 3. `ExoticOverlay.js` is still outside `CITE_SOURCES` (adding it shifts 3 refs into
+>    `port-uniform-delta.mjs` — `:1090`, `:1565`, `:1628`).
+> 4. Migrated/snapped planets still carry physics for an orbit they no longer occupy. RC3 made
+>    the swap **consistent** with that convention; it did not fix it.
+>
+> ### ⛔ Two traps this session paid for — read before C7
+> - ⭐⭐ **A WRONG INSTRUMENTATION POINT IS §3.1's CONFIDENT ZERO IN A NEW COSTUME.** I predicted
+>   "draw count unchanged on 197/197 seeds" from a counter patching `SeededRandom.prototype.float`
+>   — but `range`/`chance`/`int`/`pick`/`gaussian` call `this.rng()` **directly** and never route
+>   through `float()`. The fence was right and I was wrong. Patch `float`, `range`, `chance` and
+>   `gaussian` (cost 1,1,1,**2**); `int`/`pick` delegate to `range` and would double-count.
+> - ⭐ **INSERTING LINES INTO `StarSystemGenerator.js` BREAKS 25 REFS ACROSS 12 FILES**, and the
+>   citation fence sees only ONE of them (the rest are symbol-less and rot in UNCHECKED). An
+>   8-line insert was written and thrown away; the shipped edit is **line-count-neutral** (3
+>   changed, 0 inserted) using PLAN §11.8's technique. Do the same in C7.
+> - The port-contract file had **already diagnosed B7 in prose** ("…whose `metallicity` is
+>   PlanetGenerator.js:376's `|| 0` arm firing on an absent `zones`") and pinned it as a count of
+>   6. **Grep the gates for a description of your bug before assuming nobody has seen it.**
+
+---
+
+# (original handoff below — §2(a) is now history; §2(b), §3, §4, §5, §6 all still apply)
+
 # Handoff — Well Dipper. NEXT = break B7, then C7 (8b).
 
 **Date:** 2026-08-14 · **Repo:** `~/projects/well-dipper`, branch `feature/world-engine-production-L1`

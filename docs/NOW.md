@@ -4,6 +4,30 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> ## ✅ 2026-08-14 — STEP 8a's LAST DEFECT (break B7) IS CLOSED. ⭐ ONE THING WAITS ON MAX.
+>
+> `tests/moon-condition-contract.test.js` **15/15** (was 13/2). C6's two red-by-design gates both
+> pass and **neither was weakened**. All four instruments green. HEAD `dc0779c`, tracked tree
+> clean, **NOT PUSHED — needs Max's OK.** Seven commits, `10d4d1a` → `dc0779c`.
+>
+> **THREE root causes in `ExoticOverlay._swapPlanetType`, not the two the plan named.** A type
+> swap was also silently moving the body to a different star (`zones: null` ⇒ derived as if it
+> orbited the Sun) and a different orbit (regenerated at the **post-migration** AU while every
+> other body uses its **generation-time** AU). ⭐ That second one is the defect C6 measured but
+> could not name a fix for — its "3 → 1, not 0" is reproduced exactly by fixing only the first.
+>
+> ### ⭐⭐ WHAT MAX HAS TO LOOK AT — this changed what renders
+> **10 planets** changed surface colour (`landPalette` / `lavaGlowColor` / `lavaCrustColor`), and
+> `wd-45/0`'s hex planet **gained an atmosphere** — its T_eq fell 1023.57 K → 457.75 K once it
+> was derived against the star it actually orbits, so atmospheric escape stopped stripping it.
+> **The physics being right is measured. Whether it LOOKS right is his call**, and no instrument
+> in the tree stands in for that. Seeds to park him on: `wd-45`, `wd-79`, `wd-614`.
+>
+> ▶ **Next: C7 = Step 8b** — `MoonGenerator.js:378` generates every planet-class moon at a
+> hardcoded 1 AU. ⛔ It is a UNIVERSE change (~22% of planet-class moons, bodies that render
+> today), so its delta table needs geometry columns. Full detail + traps:
+> [`FEATURES/step8-handoff-2026-08-14.md`](FEATURES/step8-handoff-2026-08-14.md).
+
 > ## ⭐⭐ 2026-08-12 — MAX'S THREE RULINGS, AND ONE OF THEM CORRECTS A PREMISE THAT BLOCKED WORK FOR DAYS.
 >
 > 1. ⭐ **THE OVER-PAINT FIX IS APPROVED — "thinner line is fine" — AND `d7db3a3` NEVER BLOCKED IT.**
