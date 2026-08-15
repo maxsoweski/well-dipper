@@ -157,7 +157,7 @@ subject to the same range.**
 
 ---
 
-## 3. THE FIX — invert the parameterization. NOT SCHEDULED; Max's call on when.
+## 3. THE FIX — invert the parameterization. ⭐ SCHEDULED: BEFORE Step 10 (Max, 2026-08-15).
 
 ⛔ **SUPERSEDES the "narrow the radius range" plan this section used to carry.** Narrowing the
 range treats the symptom: it leaves mass a derived, unconstrained quantity, does nothing for the
@@ -187,7 +187,35 @@ At a 1e-4 mass ratio on `wd-27/3/1`'s 92.6 M⊕ gas giant, an icy moon (ρ≈150
 Jupiter, **~0.43 R⊕** — bigger than Mercury. Both are substantial worlds.
 
 ⭐ **Honest cost, stated plainly: planet-class moons shrink ~5–7× in radius** (2.166 → ~0.32 R⊕ on
-the anchor body), from super-Earth to Ganymede-class. **That is the game-feel call and it is Max's.**
+the anchor body), from super-Earth to Ganymede-class.
+
+### 3.0 ⭐⭐ MAX'S RULING, 2026-08-15 — and it CHANGES the fix. Read before implementing.
+
+**Two decisions and one directive, in his own words:**
+
+1. **Ordering: BEFORE Step 10.** The predecessor recommendation ("after, so he looks once") is
+   **withdrawn** — it was written when the fix moved 24 bodies; it moves 794, which is exactly the
+   population Step 10 would otherwise re-render at sizes about to change.
+2. ⛔ **NO GANYMEDE CLAMP. The ~0.32 R⊕ ceiling above is REJECTED as a design target.**
+   > *"I really don't have a problem for us to have planetary moons that are twice the size of
+   > Earth so long as they're rare. What we need to make sure of is that our generation model
+   > represents the CONDITIONS that could cause such a moon and planet relationship, and has math
+   > to represent the LIKELIHOOD of that happening in the process at the appropriate point.
+   > I don't want this to be a pure dice roll if possible. I would like it to somehow be based
+   > on the SYSTEM ATTRIBUTES."*
+
+⭐ **What that means mechanically, because it is easy to mis-implement.** A 2 R⊕ moon is not
+forbidden — it is *conditioned*. The channel's PROBABILITY must be a function of attributes the
+generator already has (`zones.metallicity`, `zones.ageGyr`, parent mass, orbit vs `zones.frostLine`,
+belt population, dynamical temperature), **not a flat `rng.chance(k)`**. A flat rarity constant
+would be a fifth instance of this very bug family — an authored constant standing in for physics —
+and it must be rejected in review on those grounds. **The rarity has to fall out of the system,
+so that a player who learns the pattern can predict where to look.**
+
+⛔ **This grows the work past a one-line change into a moon-formation MODEL** spanning
+`MoonGenerator`, `PlanetGenerator` (moonCount, rings) and `StarSystemGenerator` (belts feed the
+capture reservoir). §3's numbered shape below is still right about *method*; it is no longer
+complete about *scope*. The audit driving that scope is `wd-moon-formation-audit`.
 
 ### 3.1 The option raised and withdrawn — keep the arithmetic so it is not re-raised
 
@@ -240,6 +268,13 @@ it into this fix.**
 | 4 | Still-open 8a items, all previously filed: the rescale loop leaves `tidalHeating`/`tidalState`/`surfaceHistory` on pre-rescale geometry and the OLD parent type; `atmoPhysics.retained === false` unreached for planets across 6279; migrated/snapped planets carry physics for an orbit they no longer occupy. | **FILED, MEASURED, UNGATED.** Item 3 wants a gate before it wants a fix. |
 | 5 | Composition-weighted greenhouse τ — `τ = 0.84·P^1.124` is pressure-only, so 2 bar of CO₂ and 2 bar of N₂-O₂ lift identically. Any fix must still reproduce the five anchors (Earth, Venus, Mars +0.1 %, Titan +3.7 %, Moon 0 %, Europa 0 %). | **FILED at `2ac8ea7`, NOT SCOPED.** |
 | 6 | `tools/port-uniform-delta.mjs` prints *"the `bake`, `condition` and `gate` rows are unaffected"* — false under C7: 13 of 31 movers are non-record tier and read a hollow `0/461`. | **CONFIRMED, tool defect, not a generator one.** |
+| 7 | ⭐ **MOON COUNT.** `PlanetGenerator.js:587` comments *"Moons by type — gas giants can have many (Jupiter has 95!)"* and `:596` then draws `rng.int(0, maxMoons)` with `maxMoonsByType['gas-giant'] = 6` — mean 3, and **0 is a legal roll for a gas giant**. `hot-jupiter` is hardcoded 0. | **CONFIRMED CONTRADICTION** by the comment-anchor method; population impact **UNMEASURED**. Sub-shape B. Real systems are *bimodal* (a few regular + a long captured tail), which a single `int(0,6)` cannot express. |
+| 8 | ⭐ **CAPTURED-MOON SIZE.** `MoonGenerator.js:40` describes the type as *"Tiny, dark, irregular (Phobos/Deimos)"*; `:318` sizes it at 0.02–0.04 **of the parent radius** = **1200–2400 km** on a 9.48 R⊕ giant. Phobos is 11 km — **100–220× out**. Worse, size-as-a-fraction-of-parent is meaningless for a body that formed elsewhere; a captured object's size belongs to the small-body population it came from. | **CONFIRMED CONTRADICTION**, impact **UNMEASURED**. Same *parameterization* defect as §2.1, not merely a wrong value. ⚠ Consequence: every captured moon is far above the hydrostatic threshold, so **nothing in the game can currently be irregular**. |
+| 9 | ⭐ **RINGS ⊥ MOONS.** `hasRings` (`PlanetGenerator.js:548`, per-type `ringChance`) and `moonCount` (`:596`, per-type `maxMoonsByType`) are independent draws and **neither reads the other**, despite sharing a formation process and being separated physically by the Roche limit. | **CONFIRMED INDEPENDENCE**, impact **UNMEASURED**. A coupling gap rather than a wrong constant — the first of that shape filed here. |
+
+⭐ **Rows 7–9 were all found by §4's method 1 — grepping the generators' comments for real-world
+anchors — in a single pass.** That is now four confirmed hits for one grep (§2.1 was the first).
+**The method is the cheapest audit tool in this repo; run it before any deeper instrumentation.**
 
 ### How to run the audit — the method, not a vibe
 1. **Grep the generators' own comments for real-world anchors** (`Ganymede`, `Titan`, `Io`,
