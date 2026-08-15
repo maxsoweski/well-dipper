@@ -567,7 +567,7 @@ describe('6e — the flag is OFF by default and it selects a DIFFERENT material'
   it('⛔ FOUND HERE, NOT FIXED HERE — ExoticOverlay strips the seed key off the bodies it swaps', () => {
     // MEASURED over 24 seeds / 119 generated planets: 2 planets carry NO `_systemSeed`, NO
     // `_ordinal` and no `_canonicalName`. Both are exotic types ('machine', 'crystal'), and the
-    // cause is src/generation/ExoticOverlay.js:342 `planetEntry.planetData = newData;` — the
+    // cause is src/generation/ExoticOverlay.js:359 `planetEntry.planetData = newData;` — the
     // overlay REPLACES the planetData with a fresh `PlanetGenerator.generate()` result, and
     // src/generation/StarSystemGenerator.js:567 `planetData._ordinal = i;` already ran, so the
     // stamps go with the old object.

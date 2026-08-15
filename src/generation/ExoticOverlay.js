@@ -333,7 +333,24 @@ export class ExoticOverlay {
         moon.orbitRadiusScene *= kEarth;
         moon.radius *= kMap;
         moon.orbitRadius *= kMap;
-        // noiseScale is texture detail, not geometry — leave it alone.
+        // ⭐ MASS FOLLOWS RADIUS, OR THE BODY STOPS BEING ONE BODY (break B7).
+        // MoonGenerator.js:266 `moon.massEarth = moonRadiusData.radiusEarth ** 3` builds mass
+        // as radius³ × ρ_moon/ρ⊕, and `composition.density` is NOT rescaled here (bulk density
+        // is a property of what the moon is made of, not of how big its parent is). So the cube
+        // is exactly what keeps that identity true. Leaving mass alone implied 35.96 g/cc on
+        // wd-45/0/0 and 27.57 on wd-79/2/0 — both denser than osmium, and both past the ceiling
+        // moon-mass-radius-consistency.test.js:70 `expect(worst.gcc).toBeLessThan(15)` already
+        // ships. ⚠ That ceiling reads `m.planetData`, so it covers the PLANET-CLASS moons only:
+        // it is the standard this repo already holds, not a gate these three plain moons were
+        // ever under. The gate that does bind them is
+        // moon-condition-contract.test.js:304 `POST-OVERLAY: mass and radius still describe`.
+        moon.massEarth *= kEarth ** 3;
+        // ⚠ STILL STALE AFTER THIS LINE, and deliberately left so — nothing gates it yet:
+        // `tidalHeating`, `tidalState` and `surfaceHistory` are all functions of the
+        // PRE-rescale geometry AND of the OLD parent (its mass, and its type via
+        // MoonGenerator's GIANT_PARENT_TYPES — which a swap can flip). `noiseScale` is
+        // `2.5/radius` on 98.77% of plain moons (build-plan break B1), so the comment that
+        // used to sit here calling it "texture detail, not geometry" was false.
       }
     }
     // Keep moonCount honest: it must match the moons that survive the swap.
