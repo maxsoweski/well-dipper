@@ -909,7 +909,7 @@ export function generateRingPhysics(params) {
   // Outer edge: limited by innermost moon, or a reasonable max
   let outerRadius;
   const innerMoonOrbit = moons.length > 0
-    ? Math.min(...moons.map(m => m.orbitRadiusEarth / (m.radiusEarth || 1))) // as multiple of planet radius
+    ? Math.min(...moons.map(m => m.orbitRadiusEarth / (params.planetRadiusEarth || 1))) // as multiple of planet radius
     : null;
 
   if (innerMoonOrbit && innerMoonOrbit > innerRadius + 0.5) {

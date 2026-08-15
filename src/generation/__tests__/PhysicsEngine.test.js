@@ -431,6 +431,45 @@ describe('Ring Physics', () => {
     });
     expect(young.density).toBeGreaterThan(old.density);
   });
+
+  // ── Regression (B1): the moon-shepherded outer edge is in PARENT radii ──
+  // PhysicsEngine.js:911-916 documents innerMoonOrbit "as multiple of planet radius"
+  // but divided the moon's orbit by the MOON's own radius. The two divisors agree
+  // only when the moon happens to be Earth-sized, which is why the defect survived:
+  // the sole non-empty `moons` call site (planet-lod-lab.html:522) passes
+  // radiusEarth: 1 alongside planetRadiusEarth: 1, so its quotient is unchanged.
+  it('clips the outer edge in parent radii, not in moon radii', () => {
+    const parentRE = 9.0;                     // Saturn-class parent
+    const ring = generateRingPhysics({
+      origin: 'roche',
+      planetRadiusEarth: parentRE,
+      planetDensity: 1300,
+      ageGyr: 4.5,
+      // A moon at 6 parent radii that is only 0.3 R_earth across. The old divisor
+      // read this orbit as 54 / 0.3 = 180 parent radii — far outside any disk, so
+      // the shepherd clip never fired and the ring fell through to the else branch.
+      moons: [{ orbitRadiusEarth: 6 * parentRE, radiusEarth: 0.3 }],
+      rngFloat1: 0.3, rngFloat2: 0.5, rngFloat3: 0.5,
+    });
+    // Clip lands just inside the moon: 6 × (0.85 + 0.5 × 0.1) = 5.4 parent radii.
+    expect(ring.outerRadius).toBeCloseTo(5.4, 6);
+  });
+
+  it('outer-edge clip is independent of the moon\'s own radius', () => {
+    const base = {
+      origin: 'roche', planetRadiusEarth: 9.0, planetDensity: 1300, ageGyr: 4.5,
+      rngFloat1: 0.3, rngFloat2: 0.5, rngFloat3: 0.5,
+    };
+    // Same orbit, two wildly different moon sizes. Under the old divisor these
+    // yielded 972 and 19.44 parent radii; the parent radius is what shepherds a ring.
+    const tinyMoon = generateRingPhysics({
+      ...base, moons: [{ orbitRadiusEarth: 54, radiusEarth: 0.05 }],
+    });
+    const largeMoon = generateRingPhysics({
+      ...base, moons: [{ orbitRadiusEarth: 54, radiusEarth: 2.5 }],
+    });
+    expect(tinyMoon.outerRadius).toBe(largeMoon.outerRadius);
+  });
 });
 
 // ═══════════════════════════════════════════════

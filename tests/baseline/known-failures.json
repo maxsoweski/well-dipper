@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-15T01:34:17.075Z",
+  "recordedAt": "2026-08-15T18:41:09.945Z",
   "recordedFromCommit": {
-    "sha": "952c5d00f2f65a1d0689ec2698792375da570971",
+    "sha": "821e3f1f79962fe598867694a908e4272b301cbc",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -31,9 +31,9 @@
       "collectedFiles": 324,
       "failingFiles": 2,
       "nonCollectingFiles": 15,
-      "tests": 5312,
+      "tests": 5314,
       "failed": 24,
-      "passed": 5284,
+      "passed": 5286,
       "skipped": 4,
       "todo": 0
     },
@@ -174,7 +174,7 @@
       "src/generation/__tests__/KnownSystemAuthoring.test.js": 15,
       "src/generation/__tests__/KnownSystems.match-radius.test.js": 20,
       "src/generation/__tests__/NameGenerator.injective.test.js": 17,
-      "src/generation/__tests__/PhysicsEngine.test.js": 54,
+      "src/generation/__tests__/PhysicsEngine.test.js": 56,
       "src/generation/__tests__/ProcgenSnapshot.test.js": 24,
       "src/generation/__tests__/RealSystemOverlay.pin-by-default.test.js": 17,
       "src/generation/__tests__/RealSystemOverlay.pipeline.test.js": 20,
