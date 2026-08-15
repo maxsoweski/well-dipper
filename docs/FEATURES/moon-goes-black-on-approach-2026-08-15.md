@@ -1,9 +1,80 @@
-# A planet-class moon renders BLACK past ~3.5 body radii — isolated, not yet root-caused
+# ~~A planet-class moon renders BLACK past ~3.5 body radii~~ — ⛔ **DOES NOT REPRODUCE**
 
 **Date:** 2026-08-15 · Branch `feature/world-engine-production-L1` · Subject `wd-27` planet 3 moon 1
 (`isPlanetMoon: true`, ice, `radiusEarth` 2.165953174089925, `gameShaderVariant: 'rocky'`).
 
-**Status: REPRODUCIBLE AND MEASURED. Cause NOT identified. Three hypotheses killed by measurement.**
+**Status: ⛔ THE DEFECT THIS FILE REPORTED IS WITHDRAWN. It was a confounded experiment.**
+Kept in full, because the reasoning that killed it is worth more than the finding was, and because
+a future session that re-observes a black body needs to find this refutation and not §1's table.
+
+---
+
+## 0. ⭐⭐ THE REFUTATION — read before anything below it
+
+§1's table mixed **one pre-freeze screenshot** (radii 3.2, mean 56.6) with **five post-freeze
+screenshots** (radii 3.9–12, all black), and read the difference as a function of camera distance.
+It is not. Two independent errors produced it:
+
+**(a) Session state, not distance.** Every black frame was taken in a session where the old
+`freezeFrame` had **permanently teleported every body to `orbitAngle = 0`** — the bug documented in
+§4 and since fixed (`e75cc12`). Re-measured after that fix, on a freshly reloaded page, by an
+A→B→A design in which distance returns to its starting value and elapsed sim time cannot:
+
+| order | radii | camera distance | mean L | frac > 40 |
+|---|---|---|---|---|
+| A (first) | 3.2 | 0.29526 | 41.8 | 0.635 |
+| B | 12.0 | 1.10724 | **42.8** | 0.635 |
+| C (last) | 3.2 | 0.29526 | 41.7 | 0.644 |
+
+⭐ **The body is not black at radii 12 any more, and A ≈ B ≈ C.** Distance is refuted as the
+independent variable — and so is the rival "black in every frame after the first," since C is the
+last frame taken and is lit.
+
+**(b) My region of interest was off-centre.** The lit-pixel centroid sits at x = 895 against a frame
+centre of 840 — a **55 px** offset — so a frame-centred window was sampling background sky as though
+it were body. Re-centred on the body: mean 41.7 → **52.2**, frac > 40 0.644 → **0.777** (0.825 on a
+tighter 0.4 window).
+
+**A third claim also dies here.** The workflow that refuted this file computed, by Monte Carlo, that
+even the "lit" frame was anomalous — that no single attenuation reproduces its (mean, frac) pair, and
+that `shadow1`/`shadow2` must therefore be firing. Measured directly, the shadow operands say
+otherwise: `shadowPlanetCount 1`, caster radius 0.40394, **`miss / R = 3.61`** — far outside the
+`smoothstep(0.85R, 1.15R, ·)` edge, so the term is fully **unshadowed**, and the guard
+`tca > distToStar` is **not** tripping. Its Monte Carlo also assumed unit star brightness; the real
+values are `starBrightness1 = 0.7` and `starBrightness2 = 0.434`. With registration fixed and those
+in hand, the residual is inside the model's uncertainty. ⛔ **There is no confirmed rendering
+defect here.**
+
+### What this cost, and the lesson that is worth keeping
+**A black body against black space cannot be measured by eye, and it is barely measurable by
+crop-and-average either.** Every wrong turn in this investigation — "the disc stays the same angular
+size", "the disc is ~450 px", "it goes black past 3.5 radii" — came from comparing dark regions
+without an anchored reference. ⭐ **The controls that actually worked were the ones that made
+something MOVE and then move back: hiding the mesh and differencing frames, and the A→B→A sweep.**
+Reach for those first next time. And ⛔ **never build a sweep whose rungs are ordered in both the
+independent variable and in time** — that is what made five months of session state look like physics.
+
+---
+
+## 0.1 WHAT SURVIVES THIS FILE
+
+- **§4's `freezeFrame` teleport is real, was proven by intervention, and is fixed** (`e75cc12`).
+  It is very probably what blacked the body in the first place — an eclipse the old `thawFrame`
+  could not undo.
+- **§5's three small defects stand** (dead-code fallback, asymmetric teardown, the unnamed proxy).
+- The `uReliefOctaves` lead in §3 is **dead by arithmetic**: the ramp is
+  `mix(4, 9, smoothstep(20, 6, d))` and cannot move at all until 6 body radii = 0.55362 scene units,
+  which is 1.54× beyond the last moment the claimed transition could have occurred. The lit rung and
+  three of the five black rungs all carried `uReliefOctaves = 9.000000`, bit-identical.
+- ⭐ **`cameraPosition` never reaches the lighting path.** It appears once in this material —
+  `Planet.js:1444` `vViewDir = cameraPosition - vWorldPos` — and `vViewDir`'s only consumer is the
+  fresnel rim (`Planet.js:908-920`), which is additive and gated on `atmosphereStrength > 0`. §3's
+  hypothesis was false at source.
+
+---
+
+**Original status line, kept for the record: "REPRODUCIBLE AND MEASURED. Cause NOT identified."
+It was neither reproducible nor correctly measured.**
 
 ---
 
