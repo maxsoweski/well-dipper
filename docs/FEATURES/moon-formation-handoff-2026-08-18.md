@@ -1,4 +1,4 @@
-# Handoff — the moon-formation lane. ▶ NEXT = amend B4 with the binary line item, THEN B5.
+# Handoff — the moon-formation lane. ▶ NEXT = **B5**. The B4 block is CLEARED (`1ed1176`).
 
 **Date:** 2026-08-18 · **Repo:** `~/projects/well-dipper`, branch `feature/world-engine-production-L1`
 **HEAD:** `2f078b1` · tracked tree **CLEAN** · **all four instruments GREEN at `1def6da`, exit 0**
@@ -21,25 +21,34 @@ Inherited, documented in B4 §3d. Treat its pointer as soft.
 
 ---
 
-## 1. ⛔ B5 IS BLOCKED. Read this before anything else.
+## 1. ✅ THE B5 BLOCK IS CLEARED. `1ed1176` — read B4 §8 before anything else.
 
-**B4 (`492d077`) predicts the moon window WITHOUT binary planets.** The binary scoping
-(`4f795f0`) then ruled that binaries fold **into** the B5 window. Running B5 against the
-un-amended B4 forfeits the attribution the prediction commit exists to buy.
+All three unblock conditions are done, in
+[`moon-formation-b4-prediction-2026-08-17.md`](moon-formation-b4-prediction-2026-08-17.md) **§8**,
+appended so nothing above line 374 moved (Rule 9 — the README cites that file at `:14`, `:39-49`,
+`:130`, `:229`). All four instruments green after it. **Read §8 in full before writing B5;** the
+three items below are only the headline.
 
-**To unblock — all three, in order:**
+1. ⛔ **The selector uses `namespacedFloat`, NOT `fnv1aString`** — the handoff offered both and they
+   are not equivalent. Over `wd-0`…`wd-2999`, FNV-1a's within-system gaps collapse to **eight**
+   distinct values across 9 578 adjacent-ordinal pairs (`P² mod 2³² = 0.148475·2³²`, derived and
+   measured), so two companions in one system become **impossible**. Both hashes pass a χ²
+   uniformity test — the failure is entirely in the joint structure. §8.1.
+2. **Yield, at the declared `p = 0.0335` per solid planet** (§8.2's derivation, exact histogram
+   inversion against Ochiai's 10% of systems): FENCE-221 **27** · MC-197 **22** · PCC-120 **17** ·
+   LAB-PROCEDURAL-200 **16**. Exact coordinate lists at §8.4; re-issue at any other `p` with
+   `node tools/binary-yield-probe.mjs --p=<new> --stamped`.
+3. **The partition is `{systems 27, planets 521, plainMoons 770, planetClassMoons 51}`** on
+   FENCE-221, and ⭐ **the `systems` arm is the attribution channel** — §3a wrote it off as always
+   0, but `body-identity-fence.test.js:376` puts the moon COUNT inside the per-seed `system` object.
+   Through B5 regime 1 that arm moves for binaries and for nothing else.
 
-1. Build the channel selector as a **deterministic zero-draw hash** over
-   `fnv1aString(\`binarypair:${_systemSeed}:${_ordinal}\`)`. ⭐ This is what makes the prediction
-   falsifiable: the exact `(seed, planet)` coordinate list becomes computable read-only *before*
-   a line of generator code exists. `namespacedFloat` is module-private (`MoonGenerator.js:46` is
-   the file's only export) — lift it, or use `fnv1aString` from `motion-test-kit`, already
-   imported at `scene-naming.js:20`.
-2. Compute that yield **per corpus** (120 `pcc-*` / 197 / 200 `lab-procedural-*` / 221 FENCE).
-   Every count in the scoping doc §5 is a *files-affected* ceiling, not a moved-literal count.
-3. Amend B4: `planetClassMoons` stops being 24; `moonShapeCensus.planetClass.records` → `24 + N`
-   with `shapes` still **1**. Add the binary contribution as a **separate line item**, so a wrong
-   binary rate and a wrong moon-mass sampler cannot produce the same red.
+⛔ **Three traps that will otherwise be found by going red** (§8.7): `ExoticOverlay` strips
+`_systemSeed`/`_ordinal` on the planets it swaps, so a coordinate list re-derived from generator
+output is short by exactly one row (`wd-1403/1`); the overlay can move a planet giant → solid but
+never the reverse; and ⛔⛔ **`ExoticOverlay.js:389` creates a `massEarth: NaN` on any planet-class
+moon of a swapped parent, taking the record 20 keys → 21** — the `{shapes: 2}` signature §3b names as
+"a conditional append shipped." Fix that in the same commit as the channel.
 
 **Threshold is RULED:** `q ≥ 0.122` (Pluto–Charon), distribution centred ~0.3–0.6.
 
@@ -74,11 +83,14 @@ un-amended B4 forfeits the attribution the prediction commit exists to buy.
    astrophysical rocky class (1-in-12 / 1-in-45 / 1-in-4 = the plan's 8.3% / 2.2% / 25%); this
    generator's `terrestrial` is a **game type string** meaning life-bearing, tuned to ~3% of
    systems (`PlanetGenerator.js:30,:947,:955`). Correct denominator is the measured **3.1357 solid
-   planets/system → 23.79%**, against the plan's 22.89%. **No `_pickType` defect. Nothing to file.**
-3. **B8's two acceptance assertions are barely co-satisfiable.** At 3.1357 solid/system the
-   per-planet clamp `[0.022, 0.25]` maps to per-system `[6.74%, 59.43%]`, but B8 also asserts
-   per-system ∈ `[6.7%, 25%]`. They hold together only for per-planet ≤ **8.766%**; Elser's
-   central 8.3% clears by **0.466 pp**. Decide deliberately; do not discover it by going red.
+   planets/system**. ⚠ **23.79% is the concave approximation; the exact figure is 23.06%** (B4 §8.2).
+   Still inside the plan's 6.67–25% bracket, so the conclusion stands: **no `_pickType` defect.**
+3. **B8's two acceptance assertions are barely co-satisfiable — and ⚠ the tension is at the FLOOR,
+   not the ceiling.** Recomputed exactly in B4 §8.2 (the `[6.74%, 59.43%]` and `8.766%` figures here
+   come from the mean-then-exponentiate form, which overstates): the co-satisfiable per-planet band
+   is **`[2.2071%, 9.1005%]`**. Elser's 8.3% clears the ceiling by **0.8005 pp**, not 0.466 — but the
+   clamp floor 2.2% maps to **6.6791%**, which is **below** B8's 6.7% per-system floor. Decide
+   deliberately; do not discover it by going red.
 
 ---
 
@@ -157,7 +169,19 @@ un-amended B4 forfeits the attribution the prediction commit exists to buy.
 2. **Circular + coplanar pairs.** Every capture mechanism in the literature produces eccentric,
    inclined pairs; this engine renders circular coplanar orbits by explicit product cap
    (`StarSystemGenerator.js:616`). Does a perfectly flat pair read as artificial in flight?
-3. **Standing forward-notes** (direction of travel, not scope): the irregular swarm eventually
+3. ⭐ **NEW 2026-08-18 — `p = 0.0335`, the binary rate, is an AUTHORED constant.** It puts a pair in
+   ~10% of systems (27 across FENCE-221's 221), derived by inverting Ochiai et al. 2014's ~10% of
+   systems-undergoing-crossing. ⚠ **That anchor is soft in two ways** and B4 §8.2 says so out loud:
+   Ochiai counts crossing *events* (the opportunity), not surviving pairs, and both it and Lazzoni
+   are **gas-giant-only** while this channel is solid-parent. B8 resets it by measurement.
+   *Rec: ship at 0.0335 and let B8 move it — the coordinate list is one command to re-issue.*
+4. ⭐ **NEW — most binary pairs will be binary DWARF planets, and that is a taste call, not a bug.**
+   9 of FENCE-221's 27 hosts are below 0.1 M⊕; the smallest, `wd-36/2`, is **0.0131 M⊕ / 0.319 R⊕**,
+   so at the ruled `q` its companion is a ~1 400 km body. Pluto is 0.0022 M⊕, so this is exactly the
+   Pluto–Charon case you anchored on — but it is what the channel will *mostly* produce.
+   **No mass floor is applied.** Adding one is a one-line eligibility change plus a probe re-run.
+   *Rec: no floor; judge it at UAT in the live game rather than on paper.*
+5. **Standing forward-notes** (direction of travel, not scope): the irregular swarm eventually
    renderable and flyable; binary planets eventually rendered with a true barycentre.
 
 ⭐ **ALREADY RULED — do not re-ask:** the mass-ratio threshold (`q ≥ 0.122`); binaries fold into the
