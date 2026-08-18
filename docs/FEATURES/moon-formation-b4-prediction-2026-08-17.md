@@ -331,11 +331,31 @@ literal must be edited to the §3a partition, not defended.
 4. **Instrument A's baseline was recorded from a dirty tree** at `3800dff`. Inherited.
 5. **Three constants are unpinned:** the potato-radius threshold (blocks B9) and C3's and C4's
    normalisation constants (set by measurement in B8, not by taste).
-6. **Binary planets** — scoping was in flight when this was committed and its result is **not**
-   folded in here. ⛔ **If binaries land in this window, §3a's partition changes and B4 must be
-   amended BEFORE B5 runs, not after.** The scoping doc lands as
-   `binary-planets-scoping-2026-08-17.md` in this directory; if it is absent, the question is
-   still open and B5 must not assume either answer.
+6. ⭐ **Binary planets — scoping has since RULED, and it recommends folding them into this
+   window.** See [`binary-planets-scoping-2026-08-17.md`](binary-planets-scoping-2026-08-17.md).
+   Summary of what it means for B4:
+
+   - **Route M** — the companion is delivered through `planets[i].moons[]` as a planet-class
+     record, built by the existing builder, with **zero renderer changes**. Its instrument toll
+     *is* B5's toll: the same literals get different numbers, no additional files.
+   - **§3a's partition therefore gains companions**, and `planetClassMoons` stops being 24.
+     `moonShapeCensus.planetClass.records` becomes `24 + N`, with `shapes` still **1** — the
+     companion must reuse the existing 20-key shape, not invent one.
+   - ⛔ **N is not yet knowable.** It depends on the mass-ratio threshold, which is Max's call
+     (scoping §8 Q1) and is not made. Measured today: the generator produces **zero** bodies above
+     `q = 0.25` and **one** at Pluto–Charon's `q = 0.122` across 192 seeds, so the channel must
+     *create* bodies — reclassification is dead.
+   - ⭐ **Attribution is preserved if and only if the channel selector is a deterministic
+     zero-draw hash.** Then the exact `(seed, planet)` coordinate list is computable read-only
+     *before* any generator code exists, and B4 states it as a **separate line item** — so a wrong
+     binary rate and a wrong moon-mass sampler cannot produce the same red.
+
+   ⛔ **B4 MUST BE AMENDED with that coordinate list and the revised partition BEFORE B5 runs.**
+   This document as committed predicts the moon window *without* binaries. Running B5 with
+   binaries against this version forfeits the attribution the prediction commit exists to buy.
+
+7. **`material-parity-list.test.js`'s `withMoons 228` / `moons 456` (`:290-291`) move under B5
+   alone**, and that file is **absent from the plan's B7 re-derivation list**. Add it.
 
 ---
 
