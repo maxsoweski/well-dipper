@@ -96,25 +96,55 @@ My own scouting called this "live, moving, barycentric two-body motion." That is
 | 6 | Offsetting the **primary** post-write desyncs lighting, moon meshes and moon rings | fatal — for the true-barycentre step only |
 | 7 | Two `planets[]` entries at one orbit collapse to a point | **fatal for the `planets[]` route** |
 
-### ⭐ §3a — CORRECTION: what the cockpit NAV screen actually does with moons
+### ⭐ §3a — what the cockpit NAV screen does with moons. TWICE CORRECTED — read the whole entry.
 
-The first draft of this document said moons are drawn "at a cosmetic pixel radius at a frozen
-angle." **Half of that was wrong.** Re-read at `src/ui/NavComputer.js:2545-2571`:
+**Draft 1** said moons are drawn "at a cosmetic pixel radius at a frozen angle."
+**Draft 2 "corrected" that to "radius uses real data."** ⛔ **Draft 2 was wrong. Draft 1 was right,
+and for a reason neither draft had.** The full arithmetic at `src/ui/NavComputer.js:2546-2551`:
 
-- **Radius uses REAL data.** `:2546` — `const moonOrbitWorld = Math.sqrt(moon.orbitRadiusEarth || (10 + m * 8));`
-  The moon's true `orbitRadiusEarth`, sqrt-compressed; the cosmetic `10 + m*8` is only a *fallback*
-  for a missing value. It is then rescaled by `(baseR + 6 + m*4) / (moonOrbitWorld * projScale)`
-  (`:2550`) so moons stay "visible but compact". ⇒ **relative ordering and spacing are real; the
-  absolute scale is deliberately compressed.** You cannot read a true separation off the screen.
-- **Angle uses REAL data but is STATIC.** `:2567` — `const moonAngle = moon.startAngle || (m * 2.4 + 0.7);`
-  The body's own generation-time `startAngle`, not its live `orbitAngle`. ⇒ **"frozen" is fair; a
-  moon never moves on the NAV display, while planet dots do.** This is a pre-existing property of
-  every moon, not something binaries introduce.
+```
+const moonOrbitWorld = Math.sqrt(moon.orbitRadiusEarth || (10 + m * 8));
+const moonOrbitScale = (baseR + 6 + m * 4) / (moonOrbitWorld * projScale);
+const moonOrbitR     = moonOrbitWorld * moonOrbitScale;
+```
 
-**Consequence for a binary companion:** it *will* appear on the cockpit NAV screen, at a position
-reflecting its real separation under compression, at a fixed angle, drawn with the visual weight of
-an ordinary moon dot. The pair is legible as "planet plus a close companion dot" — not as two
-co-equal bodies, and not in motion.
+`moonOrbitWorld` appears once in the numerator and once in the denominator. **It cancels exactly:**
+
+> `moonOrbitR = (baseR + 6 + m·4) / projScale`
+
+`baseR` (`:2519`) is a function of the *parent's* radius; `projScale` (`:2284`) of the viewport.
+Neither depends on the moon. ⛔ **The moon's real orbit radius has ZERO effect on where it is
+drawn. The distance is a function of its INDEX.** Two moons at 6 and 75 parent radii drew at the
+same place whenever they shared an index.
+
+⚠ **How draft 2 got it wrong, recorded because it is the reusable lesson:** the block opens with
+`Math.sqrt(moon.orbitRadiusEarth)` under a comment reading *"Use actual orbit data with sqrt
+compression."* Reading the top of the block confirms the **intent**. The cancellation is two lines
+below. **A comment stating what code intends is not evidence of what it computes** — and this lane
+had already recorded "propagating a correction that was itself wrong" as a failure mode before
+doing it again here.
+
+**And planets are frozen too.** Draft 2 said "a moon never moves on the NAV display, while planet
+dots do." Also wrong. `NavComputer._systemData` is the generator's output (`:135`
+*"StarSystemGenerator.generate() result"*). There are exactly **two** `orbitAngle` advances in
+`src/main.js` — `:11198` on `entry` from the **scene** array and `:11243` on the **scene** moon
+object — and the scene entry copies `orbitAngle` **by value** at `:7719`. **Nothing writes back to
+`systemData`.** So `p.orbitAngle` (`:2509`) and `moon.startAngle` (`:2567`) are both generation-time
+values, and **nothing on that screen moves.**
+
+**What has since been FIXED** (`src/ui/NavComputer.js`, `moonBandRadius` + `NavComputer.moonBandRadius.test.js`):
+the cancellation. Moon distance is now proportional to the real orbit within a visible band, in the
+same sqrt space `_renderPlanetDetail` (`:3066`) already used — the two views had disagreed about
+where the same moon was. The outermost moon lands exactly where index-based drawing put it, so the
+view's extent is unchanged. The ship-position marker (`:2674`, whose comment demanded it "match the
+moon orbit formula used in rendering") now calls the same helper, so the two cannot drift again.
+
+**What remains:** nothing on the NAV screen moves, for planets or moons, because `_systemData`
+carries no live angle. That is the nav-screen rework, not a quick fix.
+
+**Consequence for a binary companion:** it appears on the cockpit NAV glass at a distance that now
+honestly reflects its real separation under compression — but static, and with the visual weight of
+an ordinary moon dot.
 
 ### Refuted
 

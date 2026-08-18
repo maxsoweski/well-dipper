@@ -80,6 +80,42 @@ export function navChromelessForLevel(level) {
   return level === 'system';
 }
 
+/**
+ * Where a moon's orbit is DRAWN, in world units, for the system and component views.
+ *
+ * ⛔ THE BUG THIS REPLACES — the real orbit radius used to cancel out. The old form was
+ *
+ *     const moonOrbitWorld = Math.sqrt(moon.orbitRadiusEarth || (10 + m * 8));
+ *     const moonOrbitScale = (baseR + 6 + m * 4) / (moonOrbitWorld * projScale);
+ *     const moonOrbitR     = moonOrbitWorld * moonOrbitScale;
+ *
+ * `moonOrbitWorld` appears once in the numerator and once in the denominator, so it
+ * CANCELS EXACTLY and the result is (baseR + 6 + m * 4) / projScale — a function of the
+ * parent's radius and the moon's INDEX only. The comment above it read "use actual orbit
+ * data with sqrt compression", which described the intent, not the arithmetic. Two moons
+ * at 6 and 75 parent radii drew at the same distance whenever they shared an index, and
+ * `_renderPlanetDetail` (:3066, `Math.sqrt(moon.orbitRadiusEarth)` normalised against the
+ * outermost moon) disagreed with the system view about where the same moon was.
+ *
+ * This form keeps the legitimate intent — compress moon orbits into a band that stays
+ * visible beside the planet dot — while making POSITION WITHIN THE BAND proportional to
+ * the real orbit, in the same sqrt space `_renderPlanetDetail` already uses. The outermost
+ * moon lands exactly where index-based drawing put it, so the view's overall extent is
+ * unchanged; only the placement of inner moons within the band moves.
+ *
+ * ⚠ Two call sites, and they MUST agree: the system-view rendering and the ship-position
+ * marker in the component view, whose own comment says "must match the moon orbit formula
+ * used in rendering". They drifted apart once already; this function is why they cannot again.
+ */
+export function moonBandRadius(moons, index, baseR, projScale) {
+  const rOf = (mo, i) => Math.sqrt(mo.orbitRadiusEarth || (10 + i * 8));
+  let maxR = 0;
+  for (let i = 0; i < moons.length; i++) maxR = Math.max(maxR, rOf(moons[i], i));
+  const span = 4 * Math.max(1, moons.length - 1);
+  const frac = maxR > 0 ? rOf(moons[index], index) / maxR : 1;
+  return (baseR + 6 + span * frac) / projScale;
+}
+
 export class NavComputer {
   constructor(canvas, galacticMap, webglRenderer) {
     this._canvas = canvas;
@@ -2542,13 +2578,9 @@ export class NavComputer {
         const MOON_ORBIT_SEGS = 32;
         for (let m = 0; m < p.moons.length; m++) {
           const moon = p.moons[m];
-          // Use actual orbit data with sqrt compression, matching _renderPlanetDetail
-          const moonOrbitWorld = Math.sqrt(moon.orbitRadiusEarth || (10 + m * 8));
-          // Scale moon orbits down so they're visible but compact in system view
-          // Planet orbits use auToScreen (sqrt of AU); moon orbits are in Earth-radii,
-          // so we need a conversion factor to make them visible relative to the planet
-          const moonOrbitScale = (baseR + 6 + m * 4) / (moonOrbitWorld * projScale);
-          const moonOrbitR = moonOrbitWorld * moonOrbitScale;
+          // Real orbit radius, compressed into a visible band beside the planet dot.
+          // See moonBandRadius — the previous inline form cancelled the real radius out.
+          const moonOrbitR = moonBandRadius(p.moons, m, baseR, projScale);
 
           // 3D-projected orbit circle (tilts with rotation like planet orbits)
           ctx.strokeStyle = 'rgba(150, 150, 150, 0.12)';
@@ -2671,9 +2703,7 @@ export class NavComputer {
           // Must match the moon orbit formula used in rendering (lines 1465-1474)
           const moon = cp.moons[this._currentMoonIndex];
           const baseR = Math.max(4, Math.min(12, 3 + Math.log2(Math.max(0.5, cp.planetData.radiusEarth)) * 2.5));
-          const moonOrbitWorld = Math.sqrt(moon.orbitRadiusEarth || (10 + this._currentMoonIndex * 8));
-          const moonOrbitScale = (baseR + 6 + this._currentMoonIndex * 4) / (moonOrbitWorld * projScale);
-          const moonOrbitR = moonOrbitWorld * moonOrbitScale;
+          const moonOrbitR = moonBandRadius(cp.moons, this._currentMoonIndex, baseR, projScale);
           const moonAngle = moon.startAngle || (this._currentMoonIndex * 2.4 + 0.7);
           const moonWx = cpWx + Math.cos(moonAngle) * moonOrbitR;
           const moonWz = cpWz + Math.sin(moonAngle) * moonOrbitR;
