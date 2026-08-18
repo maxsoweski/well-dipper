@@ -253,7 +253,9 @@ Plan §4 says `tests/port-condition-contract.test.js` "stays green throughout…
    for the record.
 
    ~~**Which definition do you mean?**~~ By the formal one (barycentre outside the primary) the game **already has binary planets in 5.2% of systems** and you have not noticed them, because they are low-`q` distant moons. By the perceptual one (two comparably-sized bodies) it has **zero above `q = 0.25`**. My read is that you mean the second — but it determines the channel's entire target and it is a taste call, so it is yours.
-2. ⛔ **SUPERSEDED 2026-08-17 — the minimap framing was wrong** (Max: "there's no minimap anymore;
+2. ✅ **PARTLY RESOLVED 2026-08-18.** The moon-DISTANCE half was fixed (`7814088`, see §3a) — moon distance on the NAV screen is now proportional to the real orbit instead of the moon's index, and the system view now agrees with the planet-detail view. Max reviewed the binary lighting and geometry in the live game on 2026-08-18 and passed it ("seems good"). What remains open is MOTION: nothing on that screen moves, for planets or moons, which is the nav-screen rework rather than a patch. Original question kept below.
+
+   ~~**SUPERSEDED 2026-08-17 — the minimap framing was wrong**~~ (Max: "there's no minimap anymore;
    it's all the screen in-game in cockpit now"). Verified: `main.js:495`. **The correctly specified
    question is:**
 
@@ -271,4 +273,5 @@ Plan §4 says `tests/port-condition-contract.test.js` "stays green throughout…
 
    *Recommendation: exist first; take (i) if it is genuinely a few lines, and file (ii) separately.*
 3. **Naming.** A `moons[]` companion is "X b I". Peer designation (X b1 / X b2) in the first increment, or roman numeral until it earns its own identity?
-4. **The star pair is measurably broken** (§1). Separate defect. *Recommendation: file as its own workstream — fixing it moves generated values and wants its own window.*
+4. ✅ **RESOLVED 2026-08-18 — the star pair is FIXED, not filed.** Both halves landed as separate commits: the mass-ratio/barycentre disagreement in `df78785` and the 41–948× orbit-speed error in `d26971d`. It turned out to need no window at all: the fence's system record hashes only star types, an `isBinary` boolean and four counts, Instrument C names `starBrightness2` only as harness-blind, and both edits are draw-neutral — so no generated body moved and no instrument corpus was disturbed. All four instruments green at `1def6da`.
+   ⭐ **The design ruling that came out of it is recorded in `docs/SYSTEMS/generation/README.md` §7 item 2, not here**, because it outlives this document: correct physics makes a binary pair visually static at 1×, Max ruled on 2026-08-18 to keep it, and a future reader must not "fix" motionless suns. Live verification: the mass-weighted centroid of the two DRAWN stars lands exactly on the rebased system origin, and the heavier star now sits on the tighter orbit (129.23 vs 164.95 scene units on `wd-272`).
