@@ -68,7 +68,8 @@ My own scouting called this "live, moving, barycentric two-body motion." That is
 | SOI / dominant body | generalises-with-work | at `q=1` the boundary is `0.624·a`, not the midpoint; no mutual-Hill form exists |
 | Gravity acceleration | hardcoded-singleton | discontinuity at pair-SOI crossing is first-order for a co-equal pair |
 | Brackets / billboards | hardcoded-singleton | `MOON_GHOST_RANGE = 20 × a` vs the primary's 10 000 |
-| **SystemMap (minimap)** | hardcoded-singleton | `grep -c -i moon` → **0**. A `moons[]` companion is invisible |
+| ~~SystemMap (minimap)~~ | **near-irrelevant** | ⛔ **CORRECTED 2026-08-17.** `main.js:495` suppresses the minimap whenever the cockpit supplies a NAV panel (`!_cockpitReplaces('NAV')`), and `:490-494` describes it as the fallback for cockpit-glass load failure. It is not the shipped surface. Its zero moon support only bites in the degraded path |
+| **Cockpit NAV panel** `NavSource.js` → `NavComputer` | generalises-with-work | ⭐ **This is the real surface.** It hosts the live `NavComputer` on a CRT. It *does* draw moons, from real data — see §3a |
 | NavComputer orrery | hardcoded-singleton | moons drawn at a cosmetic radius, frozen angle |
 | Naming | hardcoded-singleton | a companion is named "X b I" |
 | **Persistence** | **n/a** | no referent |
@@ -91,9 +92,29 @@ My own scouting called this "live, moving, barycentric two-body motion." That is
 | 2 | Gravity fabricates the companion's mass (`R^2.5 × 0.5`), flight-model `q` off by 2–3× | serious |
 | 3 | At `q→1` the SOI boundary is `0.624·a`; the primary's Hill sphere never gains the companion's mass | serious |
 | 4 | Gravity discontinuity at pair-SOI crossing, integrated straight into ship velocity | serious |
-| 5 | The pair never reads as a pair on any map | serious — **but not render-caused**; reproduces identically under a fully barycentric renderer |
+| 5 | The pair reads weakly on the cockpit NAV screen — see §3a for what is actually true | serious — **but not render-caused**; reproduces identically under a fully barycentric renderer |
 | 6 | Offsetting the **primary** post-write desyncs lighting, moon meshes and moon rings | fatal — for the true-barycentre step only |
 | 7 | Two `planets[]` entries at one orbit collapse to a point | **fatal for the `planets[]` route** |
+
+### ⭐ §3a — CORRECTION: what the cockpit NAV screen actually does with moons
+
+The first draft of this document said moons are drawn "at a cosmetic pixel radius at a frozen
+angle." **Half of that was wrong.** Re-read at `src/ui/NavComputer.js:2545-2571`:
+
+- **Radius uses REAL data.** `:2546` — `const moonOrbitWorld = Math.sqrt(moon.orbitRadiusEarth || (10 + m * 8));`
+  The moon's true `orbitRadiusEarth`, sqrt-compressed; the cosmetic `10 + m*8` is only a *fallback*
+  for a missing value. It is then rescaled by `(baseR + 6 + m*4) / (moonOrbitWorld * projScale)`
+  (`:2550`) so moons stay "visible but compact". ⇒ **relative ordering and spacing are real; the
+  absolute scale is deliberately compressed.** You cannot read a true separation off the screen.
+- **Angle uses REAL data but is STATIC.** `:2567` — `const moonAngle = moon.startAngle || (m * 2.4 + 0.7);`
+  The body's own generation-time `startAngle`, not its live `orbitAngle`. ⇒ **"frozen" is fair; a
+  moon never moves on the NAV display, while planet dots do.** This is a pre-existing property of
+  every moon, not something binaries introduce.
+
+**Consequence for a binary companion:** it *will* appear on the cockpit NAV screen, at a position
+reflecting its real separation under compression, at a fixed angle, drawn with the visual weight of
+an ordinary moon dot. The pair is legible as "planet plus a close companion dot" — not as two
+co-equal bodies, and not in motion.
 
 ### Refuted
 
@@ -194,7 +215,30 @@ Plan §4 says `tests/port-condition-contract.test.js` "stays green throughout…
 
 ## §8 — Open questions for Max
 
-1. ⭐ **Which definition do you mean?** By the formal one (barycentre outside the primary) the game **already has binary planets in 5.2% of systems** and you have not noticed them, because they are low-`q` distant moons. By the perceptual one (two comparably-sized bodies) it has **zero above `q = 0.25`**. My read is that you mean the second — but it determines the channel's entire target and it is a taste call, so it is yours.
-2. **A pair will be invisible on the minimap and dishonest on the nav computer for the foreseeable future.** Exist anyway, discoverable by flying to them? *Recommendation: yes, exist first.*
+1. ✅ **RULED 2026-08-17 — Max confirmed the PERCEPTUAL reading, floor at `q ≥ 0.122`** (Pluto–Charon;
+   companion ≈ half the primary's radius), with the channel's distribution centred higher (~0.3–0.6),
+   since Ochiai/Lazzoni pairs come from gas-giant orbit crossing. The dynamical criterion is NOT the
+   target: the generator already satisfies it in 5.2% of systems and those bodies read as distant
+   moons. ⛔ **Reclassification is dead — the channel must create bodies.** Original question kept below
+   for the record.
+
+   ~~**Which definition do you mean?**~~ By the formal one (barycentre outside the primary) the game **already has binary planets in 5.2% of systems** and you have not noticed them, because they are low-`q` distant moons. By the perceptual one (two comparably-sized bodies) it has **zero above `q = 0.25`**. My read is that you mean the second — but it determines the channel's entire target and it is a taste call, so it is yours.
+2. ⛔ **SUPERSEDED 2026-08-17 — the minimap framing was wrong** (Max: "there's no minimap anymore;
+   it's all the screen in-game in cockpit now"). Verified: `main.js:495`. **The correctly specified
+   question is:**
+
+   > A binary companion *will* appear on the cockpit NAV screen — at a compressed distance, at a
+   > frozen angle, as an ordinary moon dot (§3a). So on the glass, a binary pair looks like "a planet
+   > with one more moon", and it does not move. **Is that acceptable for the first increment — with
+   > the pair only reading as a pair once you fly to it — or does the NAV screen need to show it as
+   > two co-equal bodies before binaries are worth shipping?**
+   >
+   > Two sub-parts, because they cost differently: (i) **weight** — drawing the companion with
+   > planet-class emphasis rather than a moon dot is cheap and local to the moon-drawing branch;
+   > (ii) **motion** — un-freezing the angle means feeding live `orbitAngle` instead of `startAngle`,
+   > which changes how *every* moon renders on that screen and is therefore its own change with its
+   > own UAT.
+
+   *Recommendation: exist first; take (i) if it is genuinely a few lines, and file (ii) separately.*
 3. **Naming.** A `moons[]` companion is "X b I". Peer designation (X b1 / X b2) in the first increment, or roman numeral until it earns its own identity?
 4. **The star pair is measurably broken** (§1). Separate defect. *Recommendation: file as its own workstream — fixing it moves generated values and wants its own window.*
