@@ -62,10 +62,17 @@ Drift prevention.
 → Rationale + linking pattern: [`PROTOCOLS/doc-updates-on-ship.md`](docs/PROTOCOLS/doc-updates-on-ship.md) §Rule-12
 
 ### Rule 14 — Structured fields where automation reads them
-`Module(s):` in SYSTEMS/<sys>/README.md, `Systems touched:` in
+`## Module(s)` in SYSTEMS/<sys>/README.md, `Systems touched:` in
 FEATURES/<feature>.md, `Scope:` frontmatter in WORKSTREAMS/<slug>.md
 follow specified formats. Free-form prose in these locations breaks
 `doc-graph.js` and `doc-rot-check.sh` parsing.
+⛔ **`Module(s)` is an H2 heading with NO colon**, and each bullet is
+`` - `path` `` (optional ` (scope: x)`) and **nothing else to EOL** —
+`doc-graph.js:64,68`. A colon, or trailing prose on a bullet, makes the
+line invisible with **no warning** (bare `continue` at `:65`). This text
+said "`Module(s):`" until 2026-08-17 and was wrong; the v5 spec is
+`docs/ARCHIVE/_design-doc-system-v5_LEGACY.md:301-333`, the live example
+is `docs/SYSTEMS/worldengine/README.md`.
 
 ### Rule 15 — World-engine increments carry the spine-conformance AC-0
 Every workstream touching `src/worldengine/**`, the lab dispatch, or the

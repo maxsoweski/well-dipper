@@ -31,8 +31,10 @@ specific docs. Tester checks these as part of PASS criterion.
   Shipped flip
 
 **`SYSTEMS/<sys>/README.md` (if wiring / interface / major behavior changed):**
-- If Module(s) line changed (file added/removed from system, scope
-  qualifier changed, meta flag changed): UPDATE
+- If the `## Module(s)` block changed (file added/removed from system,
+  scope qualifier changed, meta flag changed): UPDATE. ⛔ It is an H2
+  heading with NO colon and bullets carry a backticked path and nothing
+  else — `doc-graph.js:64,68` skips malformed lines silently.
 - If Interface block changed (Triggers / Inputs / Outputs / State):
   UPDATE
 - If Wiring block changed (Calls into / Called by / Reads / Writes):
