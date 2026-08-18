@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-15T18:41:09.945Z",
+  "recordedAt": "2026-08-18T03:42:35.744Z",
   "recordedFromCommit": {
-    "sha": "821e3f1f79962fe598867694a908e4272b301cbc",
+    "sha": "d26971d1485ba074f30ce3836bcd92b9ecb432cf",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -28,12 +28,12 @@
   },
   "summary": {
     "counts": {
-      "collectedFiles": 324,
+      "collectedFiles": 326,
       "failingFiles": 2,
       "nonCollectingFiles": 15,
-      "tests": 5314,
+      "tests": 5328,
       "failed": 24,
-      "passed": 5286,
+      "passed": 5300,
       "skipped": 4,
       "todo": 0
     },
@@ -180,6 +180,7 @@
       "src/generation/__tests__/RealSystemOverlay.pipeline.test.js": 20,
       "src/generation/__tests__/RealSystemOverlay.test.js": 19,
       "src/generation/__tests__/RealUniverseIngest.test.js": 18,
+      "src/generation/__tests__/StarSystemGenerator.binary-barycentre.test.js": 8,
       "src/generation/__tests__/StarSystemGenerator.immunity.test.js": 9,
       "src/generation/__tests__/StarSystemGenerator.orbit-realism.test.js": 1,
       "src/generation/__tests__/StarSystemGenerator.overlay.test.js": 12,
@@ -216,6 +217,7 @@
       "src/ui/__tests__/NavComputer.isCurrentSystem.test.js": 4,
       "src/ui/__tests__/NavComputer.level.test.js": 3,
       "src/ui/__tests__/NavComputer.merge.test.js": 3,
+      "src/ui/__tests__/NavComputer.moonBandRadius.test.js": 6,
       "src/ui/__tests__/NavComputer.prismMembership.test.js": 20,
       "src/ui/__tests__/NavComputer.prismPan.test.js": 8,
       "src/ui/__tests__/NavComputer.systemIdentity.test.js": 18,
