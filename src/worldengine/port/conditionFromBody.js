@@ -306,8 +306,8 @@ export function effectiveObliquityDegreesOf(tiltDegrees) {
 // says a number, while PhysicsEngine.js:688 `return { score: Math.min(score, 1.0), factors };`
 // returns an object. That is not fixed here — it is a game-side edit outside this seam — but one
 // live consumer is already miscomputing because of it:
-// NavComputer.js:2618 `if (pd.habitability > 0.3) lines.push(` and
-// NavComputer.js:3218 `pd.habitability > 0.3` are both an object-vs-number
+// NavComputer.js:2650 `if (pd.habitability > 0.3) lines.push(` and
+// NavComputer.js:3248 `pd.habitability > 0.3` are both an object-vs-number
 // comparison that is ALWAYS false, so the "Habitability" HUD line has never once appeared. Reported,
 // not fixed: it changes on-screen text and belongs to whoever owns the HUD.
 /** The scalar the engine means by `habitability`, out of either side's shape. Absent stays absent. */

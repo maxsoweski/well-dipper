@@ -344,12 +344,12 @@ export class StarSystemGenerator {
         binaryOrbitSpeed = keplerOrbitSpeed(binarySeparationAU);
         binaryOrbitAngle = rng.range(0, Math.PI * 2);
       } else {
-        // Binary separation in AU: close binaries are 0.1-0.5 AU apart
-        // (enough to not overlap visually, with some variety)
-        binarySeparationAU = rng.range(0.05, 0.3) + starSumAU * 3;
+        // q from the ACTUAL radii, not the qRoll above (that only picks the companion TYPE).
+        // physicalStarMassSolar is the IDENTITY for O-M — the R^1.25 law GravityField.js:83,99 uses — and guards 'D' (PhysicsEngine.js:1207-1229).
+        binaryMassRatio = physicalStarMassSolar(secondaryType, Math.pow(s2RadiusSolar, 1.25)) / physicalStarMassSolar(starType, Math.pow(star.radiusSolar, 1.25));
+        binarySeparationAU = rng.range(0.05, 0.3) + starSumAU * 3;  // close pair: 0.1-0.5 AU
         binarySeparationScene = auToScene(binarySeparationAU);
-        // Map separation: use old visual formula for backward compat
-        binarySeparation = rng.range(3, 8) + star.radius + star2.radius;
+        binarySeparation = rng.range(3, 8) + star.radius + star2.radius;  // map/HUD only (cf. :343)
         // Orbit speed: closer = faster (Kepler's 3rd law)
         binaryOrbitSpeed = 0.003 / Math.pow(binarySeparation / 5, 1.5);
         binaryOrbitAngle = rng.range(0, Math.PI * 2);
@@ -478,7 +478,7 @@ export class StarSystemGenerator {
     // Brightness uses compressed mass-luminosity relation: L ~ M^1.5
     // (real is M^3.5 but that makes secondary too dim for visual effect)
     const brightness2 = star2
-      ? Math.max(Math.pow(binaryMassRatio, 1.5), 0.05)
+      ? Math.min(Math.max(Math.pow(binaryMassRatio, 1.5), 0.05), 1.0)
       : 0.0;
 
     const starInfo = {
