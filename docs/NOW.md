@@ -4,6 +4,29 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> ## ✅ 2026-08-18 — **B4 COMMITTED · BINARY PLANETS SCOPED · BINARY-STAR DEFECTS FIXED + UAT-PASSED.** ▶ NEXT = amend B4 with the binary line item, then B5.
+>
+> **Handoff: [`FEATURES/moon-formation-handoff-2026-08-18.md`](FEATURES/moon-formation-handoff-2026-08-18.md).**
+> All four instruments green at `1def6da`; everything pushed. ⛔ **B5 IS BLOCKED** — see the handoff.
+>
+> ### What landed
+> | | |
+> |---|---|
+> | `492d077` | **B4 — the prediction commit.** Opens the moon window; B5's revert target. |
+> | `4f795f0` | **Binary planets: scoped and ruled.** "Provisional render" was the wrong frame. |
+> | `7814088` | nav screen — the moon's real orbit radius was cancelling out of its own formula |
+> | `a52a2e2` | **`docs/SYSTEMS/generation/README.md`** — the generation layer's first deep dive |
+> | `df78785` · `d26971d` | **binary-star mass ratio + orbit speed fixed**, as two revertable commits |
+> | `1def6da` · `ee62e69` | Instrument A re-record; the design ruling recorded durably |
+>
+> ### ⭐ Three findings that change what B5 does
+> - **B4's step-2 partition is MEASURED, not predicted:** `{systems 0, planets 502, plainMoons 770, planetClassMoons 24}`. **The 502 planets are predicted nowhere in the plan** — `systemContext.moons` (`StarSystemGenerator.js:947-952`) carries moon `tidalHeating` into the PARENT's hash, so the planet arm reds on the first sub-step and stays saturated, carrying no information for steps 3–9. 502 = every moon-bearing planet, derived two independent ways.
+> - **The census's "SECOND FINDING" is WITHDRAWN** — a category error, not a `_pickType` defect. Elser 2011's "terrestrial planet" is the astrophysical rocky class; this generator's `terrestrial` is a game type meaning life-bearing. Right denominator is the measured 3.1357 solid planets/system → **23.79% of systems**, against the plan's 22.89%. Nothing to file.
+> - **Binary planets fold INTO the B5 window** via `planets[i].moons[]` — zero renderer changes, and their toll *is* B5's toll. Threshold ruled: **`q ≥ 0.122`** (Pluto–Charon), distribution centred ~0.3–0.6.
+>
+> ### ⭐⭐ WHAT MAX LOOKED AT AND PASSED
+> Binary-star geometry and lighting in the live game, `wd-272` / `wd-197` / `wd-10`. The mass-weighted centroid of the two **drawn** stars lands exactly on the rebased system origin, and the heavier star now sits on the tighter orbit. **Ruling: binary pairs stay physically correct and therefore visually static at 1×** — recorded in `SYSTEMS/generation/README.md` §7 item 2 so nobody "fixes" it back.
+
 > ## ✅ 2026-08-15 — **C7 (Step 8b) SHIPPED, UAT-PASSED AND PUSHED.** ▶ NEXT = THE WORLD-ENGINE DEEP DIVE.
 >
 > **Handoff for the next session: [`FEATURES/step8-handoff-2026-08-15.md`](FEATURES/step8-handoff-2026-08-15.md).**
