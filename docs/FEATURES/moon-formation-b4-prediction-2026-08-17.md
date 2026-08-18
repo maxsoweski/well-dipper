@@ -626,6 +626,8 @@ superseded for the binary-bearing window: 521 is the correct figure and 502 is n
 
 #### ⛔ The partition classifies moons by the LITERAL, not by `isPlanetMoon`
 
+⚠ **The `:732` below is off by one — the classifier is `:733`. Corrected in §8.10.**
+
 `:705` `const planetClass = new Set(PLANET_CLASS_MOONS);` and `:732`
 `if (planetClass.has(key)) moved.planetClassMoons++; else moved.plainMoons++;`. A companion
 coordinate absent from `:288`'s literal is therefore counted as a **plain** moon. **The `:288`
@@ -653,13 +655,16 @@ companions, 5 land on an admitted parent and 1 of those was moonless. Probe repr
 shader pipeline*, and has nothing to do with `ExoticOverlay._swapPlanetType`. Two different senses of
 "swapped", one corpus, and conflating them is a live hazard in this lane.
 
-#### `moon-rng-stream-identity.test.js` — unchanged, and that is the point
+#### `moon-rng-stream-identity.test.js` — ⛔ **THREE of four literals unchanged. `ORPHANS` is not — see §8.10.**
 
 The companion is built from a pure hash and is **not** routed through `MoonGenerator.generate`, so
 the shared-stream counter (`:81-89`, which patches the own `rng` property of the single instance per
 `generate` call) never sees it. `PINNED_STREAM_SET` (`:133-198`), `POPULATION` (`:226`),
-`PARTITION`/`DISJOINTNESS` (`:282-290`) and `ORPHANS` (`:349-356`) all stay green. **The single
-largest non-re-blessable component of the toll is avoided**, as scoping §5 fact 1 predicted.
+and
+`PARTITION`/`DISJOINTNESS` (`:282-290`) stay green. **The single largest non-re-blessable component
+of the toll is avoided**, as scoping §5 fact 1 predicted. ⛔ **But `ORPHANS` (`:349-356`) does NOT —
+it counts survivors by walking the finished system, so it sees a body `calls` never counted, and
+`orphanPlanetClass` goes to −20. §8.10 item 1.**
 
 ---
 
@@ -719,8 +724,9 @@ inside `planetData` is left unscaled — so the pair's `q` is silently wrong as 
 This is a **pre-existing latent defect that the binary channel wakes up**: measured today, **0 of 24
 planet-class moons sit on an overlay-swapped parent**, which is the only reason
 `{shapes: 1, keyCounts: [20]}` is green. `wd-1403/1/0` is the first one ever to. And
-`{shapes: 2, keyCounts: [20, 21]}` is precisely the signature §3b names as *"what a conditional
-append produces"* — so the failure will be read as a channel-model bug when it is an overlay bug.
+`{shapes: 2, keyCounts: [20, 21]}` shares `shapes: 2` with the signature §3b names as *"what a
+conditional append produces"* (⚠ §3b's own literal is `[25, 27]`, on the **plain** class — see
+§8.10) — so the failure will be read as a channel-model bug when it is an overlay bug.
 
 **Fix it in the same commit as the channel**, alongside the `GravityField._estimateMoonMass` repair
 scoping §6 item 4 already requires: guard the rescale loop on key presence, or scale
@@ -757,3 +763,136 @@ without it.**
    ruled on, and Pluto is 0.0022 M⊕ — but it is what the channel will mostly produce, and it is a UAT
    question, not a physics one. **No mass floor is applied**; adding one is a one-line eligibility
    change and a re-run of §8.3/§8.4.
+
+---
+
+### 8.10 — ⛔ SIX THINGS §8.1–§8.9 MISSED. Found by the verification pass, each re-verified by hand.
+
+§8 as first committed (`1ed1176`) claimed a toll surface that is **incomplete in four files and wrong
+in one assertion**. Recorded here rather than patched into §8.5, so the correction has a date and
+whoever reads §8.5 first still meets it.
+
+#### 1. ⛔⛔ `ORPHANS` does **not** stay green. It goes NEGATIVE, and the invariant dies.
+
+§8.5 says all four `moon-rng-stream-identity.test.js` literals hold. `PINNED_STREAM_SET`,
+`POPULATION` and `PARTITION`/`DISJOINTNESS` do. **`ORPHANS` does not**, and the mechanism is not the
+one scoping §5 fact 1 reasoned about:
+
+- `calls` is counted by a wrapper on the method — `:326` `MoonGenerator.generate = function counting(...args)`.
+  A companion built without going through `MoonGenerator.generate` is **invisible** to it. That is
+  the whole point of the design, and it is what keeps the other three green.
+- `survivors` is counted by walking the **finished system** — `:339-341`
+  `for (const m of (entry.moons || [])) { survivors++; if (m.planetData) survivingPlanetClass++; … }`.
+  A companion **is** visible there.
+
+So at MC-197's `N = 22`: `survivors 728 → 750`, `survivingPlanetClass 23 → 45`, and `:353-356`
+computes `orphanPlanetClass = planetClassCalls − survivingPlanetClass = 25 − 45 = ` **−20**.
+
+⛔ **This is not a re-number.** "Orphan" means *a moon whose parent was discarded after generation*,
+and the arithmetic assumes `calls ⊇ survivors`. Route M inserts a survivor that was never a call, so
+the containment — not the constant — is what breaks. Hand-re-deriving the three literals to make it
+green would delete the invariant. **The honest repair is to count appended companions as their own
+term**, and it is a mechanism change, so B5 must either make it or say out loud that it did not.
+
+#### 2. ⛔ `StarSystemGenerator.binary-barycentre.test.js` reds on two pins, and it is in no toll list
+
+`:163-174` is a ten-row `PINS` table asserted whole at `:176`, each row carrying a live
+`reduce` over `p.moons.length`. Two of its ten seeds are §8.4 rows:
+
+| pin | today | after |
+|---|---|---|
+| `{ seed: 'wd-10', star: 'M', star2: 'M', planets: 5, moons: 5, belts: 1 }` | `moons: 5` | **6** — §8.4 row 1, `wd-10/3/0` |
+| `{ seed: 'wd-27', star: 'O', star2: 'O', planets: 4, moons: 5, belts: 2 }` | `moons: 5` | **6** — §8.4 row 4, `wd-27/1/0` |
+
+Ten hand-written literals, **no re-bless mechanism**, in a file that exists to guard *the binary-star
+barycentre fix* and has nothing to do with moons. Its own comment (`:157-162`) explains a red as
+"someone tidied the recompute up next to the qRoll," which is exactly the wrong diagnosis here.
+**Amend the two rows in the same commit, and say why in the message.**
+
+#### 3. ⛔ `tools/moon-census.mjs` carries a population pin and **exits 3** rather than warn
+
+`:116` `pinned: { seeds: 221, planets: 961, plain: 770, planetClass: 24 },` → `planetClass: 51`.
+Enforced at `:828-835`, which prints *"⛔ FENCE-221 DISAGREES WITH ITS PINNED POPULATION. This is a
+FINDING, not a nuisance. Do NOT adjust the expected numbers to match. Report it."* and
+`process.exit(3)`. Zero `process.env` in the file — no re-bless. It is the referee this lane built
+to stop corpus confusion, and after B5 it refuses to run until the pin is amended.
+
+#### 4. `moon-condition-contract.test.js` — §5 says "~35 literals"; these are the ones N moves
+
+Classification route: `:140` `if (m.planetData) planetClass.push(rec); else plain.push(rec);` — the
+companion carries `planetData`, so it lands in **`planetClass`**, at MC-197's `N = 22`:
+
+| line | today | after |
+|---|---|---|
+| `:162` `expect(planetClass.length).toBe(23);` | 23 | **45** |
+| `:163` `expect(plain.length + planetClass.length).toBe(728);` | 728 | **750** |
+| `:370` `expect(g.length).toBe(23);` | 23 | **45** |
+| `:161` `expect(plain.length).toBe(705);` | 705 | **unchanged** |
+| `:166` `expect(returned.length).toBe(733);` | 733 | **unchanged** — that count comes off the `MoonGenerator.generate` wrapper, which the companion never enters |
+
+#### 5. ⚠ `ProcgenSnapshot.test.js` — one companion, and one filter I did not evaluate
+
+`:81` `expect(JSON.parse(JSON.stringify(regenerated))).toEqual(sample.systemData);` — whole-system
+deep equality against a committed fixture. One companion falls inside the fixture's 24 samples
+(`star.seed 592560942`, planet index 2, `carbon`, `h = 0.003969`). ⚠ **Tier: ASSERTED, not measured** —
+the test first filters through `:63` `const active = snapshot.samples.filter(`, and whether that
+sample survives the real-coverage exclusion was not checked. A re-bless exists
+(`scripts/capture-procgen-snapshot.mjs`).
+
+#### 6. ⭐⭐ The ruled `q ≥ 0.122` is **unreachable** with the builder scoping §6.2 requires
+
+This is a design consequence, not a toll item, and it is the one that would have been discovered
+mid-B5. Scoping §6 asks for two things at once: item 2, *"built by the existing planet-class-moon
+builder so the 20-key shape is unchanged"*; item 3, *"mass derived to a target `q`."*
+
+The builder sizes the body as a fraction of its parent — `MoonGenerator.js:381`
+`const fraction = rng.range(0.10, 0.25);` — and derives mass from that radius at its **own**
+generated type's density: `:418`
+`const massScale = pData.radiusEarth > 0 ? (radiusEarth / pData.radiusEarth) ** 3 : 1;`. So
+
+> `q = (ρ_companion / ρ_parent) · f³`
+
+Confirmed on `wd-11`'s planet-class moon: `q / f³ = 1.2093`, and the measured density ratio
+`4.6962 / 3.8843 = 1.2090`. **The maximum `q` the shipped sampler can produce is
+`0.25³ = 0.015625` times that ratio — about 0.031 even at a generous 2× density ratio, four times
+below the ruled floor of 0.122.** Reaching `q ∈ [0.122, 0.6]` needs `f ≈ 0.40–0.84`. ⛔ **The two
+ranges do not overlap at any density ratio the generator produces.**
+
+Two things this is **not**, both checked so B5 does not budget for them:
+
+- **Not a Roche or collision problem.** `:387-391` puts a planet-class moon at
+  `orbitMultiple ∈ [12, 30] + moonIndex·[3, 8]` parent radii, so even at `f = 0.84` the separation
+  is `a / (R₁ + R₂) ≥ 6.5`.
+- **Not a density-gate problem.** The companion's density is its own generated type's and is
+  **invariant in `f`** (the `f³` cancels), so `moon-condition-contract.test.js:374-378`'s
+  `2.0 < g/cc < 7.0` band is untouched by widening the fraction. ⛔ It **would** be violated by the
+  other route — keeping `f` and forcing `massEarth` up to hit `q` — which is the obvious
+  implementation and the wrong one.
+
+**So the resolution is: widen the radius fraction on the companion path only, and leave the mass law
+alone.** That changes no key, so scoping §6.2's shape constraint survives intact — but §6.2's
+"existing builder, untouched" reading does not, and B5 must say which it did.
+
+#### Two corrections to §8 itself
+
+- §8.5 cites `:732` for the partition's moon classifier. `:732` is the `cls` label; the classifier is
+  `tests/body-identity-fence.test.js:733`
+  `if (planetClass.has(key)) moved.planetClassMoons++; else moved.plainMoons++;`. The substance —
+  `:288` and `:740` must land in one commit — is unaffected.
+- §8.7 trap 3 says `{shapes: 2, keyCounts: [20, 21]}` is *"precisely the signature §3b names."*
+  Overstated: §3b's literal is `{shapes: 2, keyCounts: [25, 27]}`, on the **plain** class. Only
+  `shapes: 2` is shared. The misdiagnosis risk is real; the wording was not.
+
+#### Added to §8.8 — what would falsify §8
+
+- `ORPHANS` reading `orphanPlanetClass: 2` after B5 — the companion **is** being routed through
+  `MoonGenerator.generate` after all, so the selector is not the zero-draw hash §8.1 specifies and
+  `PINNED_STREAM_SET` should be red too.
+- `world-engine-l0-plumbing.test.js:310`
+  `expect(body.systemContext.moons.length).toBe(entry.moons.length);` staying **green** proves
+  nothing about the append site: measured over its 3 seeds, **0 of 10 eligible parents are selected**
+  at `p = 0.0335`. §8.8's `moved.planets` falsifier is the real placement gate; this one is inert.
+- `componentSystems.byteSafety.test.js:104` `expect(sirius).toEqual(FIXTURE('sirius-baseline.json'));`
+  going red at `p = 0.0335` — it must not. Its fixture's eligible parent (`planets[1]`, `rocky`,
+  `_ordinal` **2** — another live instance of §8.4's index-vs-ordinal warning) hashes to
+  **0.120329**, so it is not selected. ⚠ It reds at any `p > 0.1204`.

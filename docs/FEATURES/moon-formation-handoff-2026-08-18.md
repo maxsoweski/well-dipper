@@ -43,6 +43,16 @@ three items below are only the headline.
    0, but `body-identity-fence.test.js:376` puts the moon COUNT inside the per-seed `system` object.
    Through B5 regime 1 that arm moves for binaries and for nothing else.
 
+⛔ **§8.10 is the correction pass — read it with §8.5.** A 13-agent verification found §8.5's toll
+incomplete in four files and wrong in one assertion: `ORPHANS` in `moon-rng-stream-identity.test.js`
+does **not** stay green, it goes to `orphanPlanetClass: −20` and the invariant dies; the *binary-star*
+barycentre test reds on two of its ten hand-written pins (`wd-10`, `wd-27`); `tools/moon-census.mjs:116`
+carries a population pin and **exits 3**; and ⭐⭐ **the ruled `q ≥ 0.122` is unreachable with the
+builder scoping §6.2 mandates** — `MoonGenerator.js:381` draws the radius fraction from `[0.10, 0.25]`
+and `q = (ρ_c/ρ_p)·f³`, capping `q` near **0.031**. Reaching 0.122 needs `f ≈ 0.40–0.84`; the ranges do
+not overlap. Widen the fraction on the companion path, do **not** force `massEarth` — that route
+violates `moon-condition-contract.test.js:374-378`'s density band, this one does not.
+
 ⛔ **Three traps that will otherwise be found by going red** (§8.7): `ExoticOverlay` strips
 `_systemSeed`/`_ordinal` on the planets it swaps, so a coordinate list re-derived from generator
 output is short by exactly one row (`wd-1403/1`); the overlay can move a planet giant → solid but
