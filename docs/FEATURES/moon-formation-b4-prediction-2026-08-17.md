@@ -160,7 +160,7 @@ a fixed population. **Step 7 changes the population itself** — the count law a
 
 | arm | predicted | basis |
 |---|---:|---|
-| `systems` | **0 / 221** | no system scalar is touched |
+| `systems` | **0 / 221** — ⛔ **SUPERSEDED by §8.5: 27 / 221 once binaries are in the window** | no system scalar is touched *by the moon steps*; but `body-identity-fence.test.js:376` puts the moon COUNT inside the per-seed `system` object, so a companion moves this arm and nothing else in regime 1 does — which makes it the binary line item's attribution channel |
 | `planets` | **502 / 961** | measured at step 2 (§2b); steps 3 and 6 move the same alias fields on the same 502 parents, so it saturates and carries no further information |
 | `plainMoons` | **770 / 770** | saturated at step 2 |
 | `planetClassMoons` | **24 / 24** | saturated at step 2 via `moonecc:`; step 4's merge then changes their *shape* as well |
@@ -350,7 +350,7 @@ literal must be edited to the §3a partition, not defended.
      *before* any generator code exists, and B4 states it as a **separate line item** — so a wrong
      binary rate and a wrong moon-mass sampler cannot produce the same red.
 
-   ⛔ **B4 MUST BE AMENDED with that coordinate list and the revised partition BEFORE B5 runs.**
+   ⛔ **B4 MUST BE AMENDED with that coordinate list and the revised partition BEFORE B5 runs.** ✅ **DONE 2026-08-18 — §8.** `N = 27` on FENCE-221 at `p = 0.0335`; coordinate list at §8.4.
    This document as committed predicts the moon window *without* binaries. Running B5 with
    binaries against this version forfeits the attribution the prediction commit exists to buy.
 
@@ -366,9 +366,394 @@ Stated so B5 cannot quietly pass:
 - Step 2 producing anything other than `{systems: 0, planets: 502, plainMoons: 770, planetClassMoons: 24}`.
 - DRAW STREAM going **red** on step 2 — that means a draw leaked into the shared stream and the
   re-key was not draw-neutral.
-- `planets` reading anything other than **502 at steps 2–6** — the alias analysis in §2b is then
+- `planets` reading anything other than **521 at steps 2–6** (⛔ **502 in the pre-§8 reading**) — the alias analysis in §2b is then
   wrong. (After step 7 it must **rise**; a figure still at 502 means the count law moved nothing.)
 - `plainMoons` still reading exactly 770 **after step 7** — the count law did not take effect.
 - RECORD SHAPE reporting `shapes: 2` at the end of the window — a conditional append shipped.
 - Instrument C exiting 1 rather than 2 — the population did not move, so B5 did not do its job.
 - Any Band A rate asserted in B8 without naming which denominator it used (§4a).
+
+---
+
+## §8 — ⭐⭐ THE BINARY LINE ITEM. Added 2026-08-18. This section is what unblocks B5.
+
+§6 item 6 said this document *"MUST BE AMENDED with that coordinate list and the revised partition
+BEFORE B5 runs."* This is that amendment. It is appended rather than woven in, because
+`docs/SYSTEMS/generation/README.md` cites this file at `:14`, `:39-49`, `:130` and `:229` — Rule 9,
+line-count neutrality. **Nothing above line 374 moved.**
+
+**Method.** A detached probe worktree at `65d3bb5` (`/home/ax/wd-b5-probe`, `node_modules` and
+`vendor/motion-test-kit` symlinked from the main tree), never `~/projects/well-dipper` — a dev
+server has been serving that tree on `:5173` for five days. Two line-count-neutral `src` stamps were
+needed and are **observation only**, never part of the design: `_preType` at
+`StarSystemGenerator.js:567` (the type an in-loop eligibility read sees, before
+`ExoticOverlay` retypes) and `_probeSeed`/`_probeOrdinal` at `ExoticOverlay.js:401` (because the
+overlay *strips* `_systemSeed`/`_ordinal` — see §8.7 trap 1).
+
+⭐ **The probe is committed, at `tools/binary-yield-probe.mjs`, and not archived to `scratchpad/`.**
+`binary-planets-scoping-2026-08-17.md` §4 says its own probe is *"archived at
+`scratchpad/probe-binary-criteria.mjs`"*; **that file does not exist** — the convention lost the
+evidence inside a day. This is a prediction commit, and a prediction nobody can re-derive is worth
+less than no prediction. The tool carries both stamps in its header as runnable `sed` one-liners, and
+⛔ **without `--stamped` it refuses to print a coordinate list and exits 3**, naming every planet
+whose key it could not resolve — because a list short by an unknown number of rows is worse than no
+list. `node tools/binary-yield-probe.mjs --stamped` reproduces §8.3 and §8.4 exactly.
+
+**Tier, per §0:** everything in §8.1 through §8.6 is **M — MEASURED**, except the declared fraction
+`p` itself, which is **T — TARGET** and named as authored. §8.7 is M. Every count carries its corpus.
+
+---
+
+### 8.1 — The selector, stated exactly
+
+```js
+// zero draws. No SeededRandom instance — see §3 Rule 2 of docs/SYSTEMS/generation/README.md.
+const BINARY_PAIR_RATE = 0.0335;
+const eligible = !GIANT_PARENT_TYPES.has(planetData.type);           // MoonGenerator.js:29
+const selected = eligible
+  && namespacedFloat(`binarypair:${planetData._systemSeed}:${planetData._ordinal}`) < BINARY_PAIR_RATE;
+```
+
+Evaluated **inside the planet loop, immediately after the moon loop closes** —
+`StarSystemGenerator.js:599` is the loop's closing brace, `:601` is `const wrapper = {`. Both stamps
+the key needs are already set, at `:566` `planetData._systemSeed = seed;` and `:567`
+`planetData._ordinal = i;`.
+
+⛔ **Correction to the scoping doc.** `binary-planets-scoping-2026-08-17.md` §5 fact 3 offers a
+second site, *"any post-loop emission after `:806`"*. Two things are wrong with it. The trojan `if`
+closes at `:806` but its `for` closes at `:807`, so an emission "after `:806`" is still **inside the
+trojan loop body**; and the site is in any case observationally identical to the in-loop one, because
+the only type write between them is `:662` `migrantInSurviving.planetData.type = 'hot-jupiter';`,
+whose subject is fenced to gas giants at `PhysicsEngine.js:541` — **giant → giant, never crossing the
+eligibility boundary.** The fork that matters is not A-vs-B; it is A/B vs anything after
+`ExoticOverlay.apply` (`:921`), which is fatal for three separate reasons (§8.7).
+
+#### ⛔ USE `namespacedFloat`, NOT `fnv1aString`. The handoff offered both. They are not equivalent.
+
+`MoonGenerator.js:578-587` is module-private; **lift it**, do not copy `moonecc:`'s mechanism
+(README §3 Rule 3). The alternative the handoff named — `fnv1aString` from
+`vendor/motion-test-kit/core/hash/fnv1a.js`, already imported at `scene-naming.js:20` — **fails on
+this key family, and a uniformity histogram will not tell you so.**
+
+Measured over `wd-0`…`wd-2999` (12 583 planets, 9 578 adjacent-ordinal pairs), at `p = 0.0335`:
+
+| | `fnv1aString(k)/2³²` | `namespacedFloat(k)` (xmur3) |
+|---|---:|---:|
+| companions selected | 306 | 296 |
+| χ²(49) marginal uniformity, 50 bins | 26.57 — **passes** | 35.12 — **passes** |
+| **distinct within-system gap values, 9 578 pairs** | **8** | **9 132** |
+| top two gaps | **0.14848 (n=3605), 0.85152 (n=3594)** | 3, 3 |
+| systems with 2 companions | **0** | 13 |
+
+For a single-digit `_ordinal` the FNV-1a tail reduces to `h = (h_prefix ⊕ c)·P²`, and
+`P² mod 2³² = 637 696 617 = 0.148475·2³²` — the measured 0.14848 gap, derived two ways. So every
+planet in a system sits on a **fixed lattice of eight rungs**, and the channel acquires a property
+nobody chose: *no system can ever contain two binary pairs*. The binomial expectation at this `p` is
+~10 such systems per 3 000; xmur3 gives 13, FNV gives 0. ⭐ **The marginal distribution is fine on
+both — the failure is entirely in the joint structure, which is exactly the banding
+`namespacedFloat`'s own docstring (`:571-573`) says the hash exists to prevent.**
+
+---
+
+### 8.2 — The declared fraction `p`, and its weakest joint
+
+`p = 0.0335` — a **fraction of solid planets**, evaluated once per planet, **not** a fraction of
+systems and not of all planets. The denominator is **693 of 961** on FENCE-221
+(`moon-census-baseline-2026-08-15.md:197`, `:233`: mean 3.1357 solid planets per system;
+reproduced by the probe to the digit).
+
+**Derivation.** Bisection of `P = (1/N)·Σ_s [1 − (1−p)^{k_s}]` against a per-system target of 10%,
+over the measured solid-planets-per-system histogram on FENCE-221
+(`0:10 · 1:27 · 2:38 · 3:57 · 4:47 · 5:26 · 6:12 · 7:3 · 8:1`, 211 of 221 systems carry ≥1 solid
+planet — a quantity **the tree does not measure anywhere**; `moon-census.mjs:345` publishes only
+`meanSolidPerSystem`, and `:346`'s histogram is built at `:339-340` from `terrestrialPerSystem`). Result:
+`p = 3.3497%` → **0.0335**. For Lazzoni's 14.3% the same bisection gives 4.8994%.
+
+⚠ **§4a and §4b use the concave approximation of that conversion, and it shifts §4b's finding to
+the other end of the band.** Both apply `P̃ = 1 − (1−p)^k̄` with `k̄ = 3.1357` — averaging `k` and
+*then* exponentiating. `x ↦ 1−(1−p)^x` is concave, so by Jensen `P ≤ P̃` always: the mean form
+**overstates** the per-system rate. Recomputed exactly over the histogram above:
+
+| per-planet `p` | §4a/§4b's `P̃` | exact `P` |
+|---:|---:|---:|
+| 2.2% — the clamp floor | 6.7379% | **6.6791%** |
+| 8.3% — Elser central | 23.7921% | **23.0643%** |
+| 8.766% — §4b's stated ceiling | 24.9999% | 24.1968% |
+| **9.1005% — the exact ceiling** | 25.8588% | **25.0000%** |
+
+§4a's headline is unaffected in kind — 23.06% is still inside the plan's 6.67–25% bracket, so **there
+is still no `_pickType` defect.** §4b moves in two directions at once, and ⛔ **neither is "the
+finding does not survive":**
+
+- **At the ceiling it gets easier.** The co-satisfiable per-planet band is `[2.2071%, 9.1005%]`, not
+  `[2.2%, 8.766%]`. Elser's 8.3% clears the ceiling by **0.8005 pp** rather than 0.466 pp. §4b's
+  *"barely co-satisfiable"* is **refined, not refuted**.
+- ⛔ **At the floor it gets harder, and §4b did not look there.** The clamp floor `p = 2.2%` maps to
+  **6.6791%** per system — **below** B8's 6.7% per-system floor, by 0.021 pp. On the mean form it
+  read 6.7379% and passed. **The tension §4b located at the ceiling actually sits at the floor**, and
+  it is a floor a legitimate calibration can land on.
+
+⛔ **B8 redoes the co-satisfiability arithmetic on the exact form, and states which end binds.**
+Recorded here rather than patched into §4b, because §4b is cited by line from
+`docs/SYSTEMS/generation/README.md:459`.
+
+**The weakest joint, named.** Ochiai et al. 2014's ~10% counts **systems undergoing orbit crossing**
+— the *opportunity* for pair formation, not the yield of surviving pairs — and both it and Lazzoni's
+14.3% are **gas-giant-only**, while this channel's denominator is the *complement* of gas giants.
+Converting one to the other is the same species of category error as the SECOND FINDING withdrawn in
+§4a, with a second error stacked on it (event → outcome) for which no change of denominator helps.
+**`p` is therefore an authored constant with a literature-shaped ceiling, not a derived one** — the
+same status the plan gives C3's and C4's normalisation constants, which §3 B8 sets by measurement.
+⛔ **Do not read "10% of systems" as a prediction of this document.** §8.3 predicts integers.
+
+---
+
+### 8.3 — Yield per corpus, at `p = 0.0335`. MEASURED.
+
+`N` = companions created · `S` = seeds carrying ≥1 · `Z` = of those companions, the ones whose parent
+had **zero** moons before the append (this is the number that moves the `planets` arm beyond §3a's
+502). Eligibility read on the **in-loop** type, per §8.1.
+
+| Corpus | systems | planets | eligible parents | **N** | **S** | **Z** | planet-class moons | total moons |
+|---|---:|---:|---:|---:|---:|---:|---|---|
+| **FENCE-221** | 221 | 961 | 693 | **27** | 27 | 19 | 24 → **51** | 794 → **821** |
+| **MC-197** | 197 | 838 | 593 | **22** | 22 | 16 | 23 → **45** | 728 → **750** |
+| **PCC-120** | 120 | 526 | 396 | **17** | 16 | 9 | 12 → **29** | 411 → **428** |
+| **LAB-PROCEDURAL-200** | 200 | 852 | 628 | **16** | 15 | 5 | 17 → **33** | 649 → **665** |
+| BULK-221 (cross-reference) | 221 | 948 | 671 | 23 | 23 | 17 | 26 → **49** | 829 → **852** |
+
+Every "today" column above was reproduced by the probe before anything was predicted from it: 961 /
+794 / 770 / 24 matches `body-identity-fence.test.js:687`; 705 + 23 matches MC-197's row in
+README §5; 526 matches `port-condition-contract.test.js:286`; 948 / 803 / 26 matches BULK-221.
+⭐ **PCC-120's 411 moons / 12 planet-class — which README §5 records as "Not found: a code-level
+assertion" — are now measured.** And the probe reproduces this document's own **502** moon-bearing
+planets on FENCE-221, independently of §2b's route, which is the fourth derivation of that number.
+
+⛔ `N_mc ≠ a subset of N_fence`. MC-197 drops the 24 `gc-*` seeds, so it is 838 planets against 961,
+not a sub-selection of the same records.
+
+---
+
+### 8.4 — The FENCE-221 coordinate list. This is the falsifiable artefact.
+
+Stated in the fence's own coordinate form, `seed/pi/mi` (`body-identity-fence.test.js:477`
+`planetClassMoons.push(\`${seed}/${pi}/${mi}\`);`). `mi` is the parent's pre-existing moon count,
+because the companion is appended last.
+
+⛔ **`pi` is the FINAL index in `planets[]`. The selector keys on `_ordinal`. They are not the same
+number** — migration re-sorts (`:666-667`) and the binary-stability cull re-packs (`:724-726`)
+without restamping, and they disagree on **18 of 961 planets across 6 systems** on FENCE-221 today.
+None of the 27 below happens to land on one, which is luck, not structure: a different `p`, or B5
+step 7's population change, will produce one. Both are given.
+
+| # | fence coord | `_ordinal` | parent type | parent R⊕ / M⊕ | h | existing moons |
+|---|---|---:|---|---|---|---:|
+| 1 | `wd-10/3/0` | 3 | ice | 1.0781 / 1.1889 | 0.001397 | 0 |
+| 2 | `wd-17/3/0` | 3 | carbon | 0.4313 / 0.0401 | 0.004996 | 0 |
+| 3 | `wd-20/5/1` | 5 | ice | 1.0203 / 0.9693 | 0.009569 | 1 |
+| 4 | `wd-27/1/0` | 1 | lava | 0.8274 / 0.4464 | 0.027577 | 0 |
+| 5 | `wd-29/0/0` | 0 | carbon | 0.4284 / 0.0391 | 0.001640 | 0 |
+| 6 | `wd-30/5/1` | 5 | ice | 0.7175 / 0.2636 | 0.027575 | 1 |
+| 7 | `wd-31/5/0` | 5 | carbon | 0.5020 / 0.0703 | 0.001012 | 0 |
+| 8 | `wd-34/0/0` | 0 | venus | 0.9793 / 0.8329 | 0.015589 | 0 |
+| 9 | `wd-35/2/0` | 2 | venus | 1.0920 / 1.2466 | 0.002207 | 0 |
+| 10 | `wd-36/2/0` | 2 | rocky | 0.3187 / 0.0131 | 0.029857 | 0 |
+| 11 | `wd-53/2/0` | 2 | venus | 1.1401 / 1.4622 | 0.028204 | 0 |
+| 12 | `wd-82/2/0` | 2 | ice | 0.6485 / 0.1812 | 0.004137 | 0 |
+| 13 | `wd-91/2/0` | 2 | ice | 1.1741 / 1.6301 | 0.028188 | 0 |
+| 14 | `wd-121/0/0` | 0 | venus | 1.0579 / 1.1083 | 0.018815 | 0 |
+| 15 | `wd-148/1/0` | 1 | venus | 0.9152 / 0.6483 | 0.032053 | 0 |
+| 16 | `wd-153/2/1` | 2 | rocky | 0.4245 / 0.0378 | 0.020532 | 1 |
+| 17 | `wd-161/4/1` | 4 | ice | 1.1002 / 1.2816 | 0.024812 | 1 |
+| 18 | `wd-166/0/1` | 0 | rocky | 0.5286 / 0.0851 | 0.015037 | 1 |
+| 19 | `wd-172/0/0` | 0 | rocky | 0.5009 / 0.0697 | 0.026861 | 0 |
+| 20 | `wd-174/1/0` | 1 | rocky | 0.4879 / 0.0632 | 0.010718 | 0 |
+| 21 | `wd-181/1/1` | 1 | lava | 0.4373 / 0.0422 | 0.033160 | 1 |
+| 22 | **`wd-1403/1/0`** | 1 | **venus → `machine`** | 0.9575 / 0.7665 | 0.012067 | 0 |
+| 23 | `gc-0/3/0` | 3 | ice | 0.5979 / 0.1342 | 0.025804 | 0 |
+| 24 | `gc-7/5/0` | 5 | ice | 0.9766 / 0.8246 | 0.021031 | 0 |
+| 25 | `gc-9/1/1` | 1 | rocky | 0.7612 / 0.3279 | 0.001529 | 1 |
+| 26 | `gc-19/4/1` | 4 | ice | 0.5441 / 0.0947 | 0.032376 | 1 |
+| 27 | `gc-22/1/0` | 1 | rocky | 0.7923 / 0.3802 | 0.031045 | 0 |
+
+Row 22 is bolded because it is the one that detonates (§8.7 traps 2 and 3).
+
+`PLANET_CLASS_MOONS` (`:288-293`) becomes these **51** strings, in `captureAll`'s walk order:
+
+```js
+'wd-10/3/0', 'wd-11/2/2', 'wd-15/6/1', 'wd-17/3/0', 'wd-20/5/1', 'wd-24/1/2', 'wd-27/1/0',
+'wd-27/3/1', 'wd-29/0/0', 'wd-30/5/1', 'wd-31/5/0', 'wd-34/0/0', 'wd-35/2/0', 'wd-36/2/0',
+'wd-40/4/4', 'wd-53/2/0', 'wd-61/1/2', 'wd-66/0/1', 'wd-70/5/5', 'wd-82/2/0', 'wd-91/2/0',
+'wd-100/5/1', 'wd-101/4/2', 'wd-116/5/1', 'wd-121/0/0', 'wd-126/4/3', 'wd-133/4/3',
+'wd-133/4/4', 'wd-147/1/2', 'wd-148/1/0', 'wd-153/2/1', 'wd-161/4/1', 'wd-161/5/1',
+'wd-166/0/1', 'wd-166/3/1', 'wd-166/3/5', 'wd-168/3/1', 'wd-172/0/0', 'wd-174/0/1',
+'wd-174/1/0', 'wd-181/1/1', 'wd-187/2/1', 'wd-189/0/1', 'wd-1403/1/0', 'wd-1403/2/2',
+'gc-0/3/0', 'gc-7/5/0', 'gc-9/1/1', 'gc-19/4/1', 'gc-22/1/0', 'gc-22/2/2',
+```
+
+---
+
+### 8.5 — The revised partition, and every literal that moves
+
+#### ⭐⭐ The `systems` arm is the attribution channel. §3a was wrong to write it off.
+
+§3a predicts `systems: 0 / 221` for the whole of regime 1 — *"no system scalar is touched."* True of
+the moon window. **False the moment a companion exists.** `body-identity-fence.test.js:376` puts
+`moons: entries.reduce((a, e) => a + (e.moons?.length || 0), 0)` inside the per-seed `system` object,
+and `:716` compares `JSON.stringify(now.system) !== JSON.stringify(was.system)` → `moved.systems++`.
+
+⭐ **So across B5 steps 2–6 and 9 — the entire fixed-population regime — `moved.systems` moves for
+exactly one reason, and that reason is binaries.** A wrong moon-mass sampler cannot touch it; a wrong
+composition re-key cannot touch it; a wrong binary rate moves it by exactly `S`. This is a cleaner
+separation than §6 item 6 asked for, and it is the line item's primary gate. It stops being clean at
+step 7, which changes moon counts and therefore the same field.
+
+#### The partition literal (`:740-742`), in the two readings B5 needs
+
+| reading | `systems` | `planets` | `plainMoons` | `planetClassMoons` |
+|---|---:|---:|---:|---:|
+| today's literal | 0 | 0 | 0 | 0 |
+| §3a, moon window only (no binaries) | 0 | 502 | 770 | 24 |
+| **Route M alone** (binaries, no other B5 step) | **27** | **27** | **0** | **27** |
+| **§3a + Route M, regime 1** | **27** | **521** | **770** | **51** |
+
+`planets: 521 = 502 + 19`. The 502 are §2b's moon-bearing parents, already moved by the `moonecc:`
+re-key. The **19** are moonless solid parents whose `systemContext.moons` goes `[] → [companion]`:
+`:947-952` builds that summary from `entry.moons`, `:972` writes it onto `planetData`, and
+`planetRecord` (`:190-194`) excludes only `WORLDENGINE_BAKES`, so it is hashed. ⛔ **The bound in §3a
+— "`planets` reading anything other than 502 at steps 2–6 means the alias analysis is wrong" — is
+superseded for the binary-bearing window: 521 is the correct figure and 502 is now the failure.**
+
+#### ⛔ The partition classifies moons by the LITERAL, not by `isPlanetMoon`
+
+`:705` `const planetClass = new Set(PLANET_CLASS_MOONS);` and `:732`
+`if (planetClass.has(key)) moved.planetClassMoons++; else moved.plainMoons++;`. A companion
+coordinate absent from `:288`'s literal is therefore counted as a **plain** moon. **The `:288`
+amendment and the `:740` amendment must land in the same commit**, or B4's prediction and the fence's
+report will disagree by exactly `N` in both arms while the code is correct.
+
+#### The rest of the fence's six non-reblessable literals
+
+| line | today | after Route M | why |
+|---|---|---|---|
+| `:687` | `{planets: 961, moons: 794, plain: 770, planetClass: 24}` | `{planets: 961, moons: 821, plain: 770, planetClass: 51}` | `plain` is derived at `:683` as `moonCount − planetClassMoons.length`; both terms rise by `N` and cancel |
+| `:697` | `onDisk {planets: 961, moons: 794}` | `{planets: 961, moons: 821}` — **but only after the re-bless.** It sums the on-disk JSON (`:693-696`), so it sits green while `:687` is red | |
+| `:779` | `planetClass: { shapes: 1, keyCounts: [20], records: 24 }` | `records: 51`; `shapes: 1` / `keyCounts: [20]` hold **only if §8.7 trap 3 is fixed** | |
+| `:778` | `plain: { shapes: 1, keyCounts: [25], records: 770 }` | unchanged | |
+| `:787` | `hiddenBodyKeys []` | unchanged | the append attaches no non-enumerable |
+| `:804` | `bakeMisses 0` | unchanged | `:461` tests `e.planetData` only, never `moon.planetData` |
+
+#### `material-parity-list.test.js` — MEASURED, and it is nearly free
+
+`:288-289` `withMoons 228` / `moons 456` are **not** the LAB-PROCEDURAL-200 corpus totals; they count
+only the 341 bodies the lab pipeline admits (`census()` at `:157-190`). Of that corpus's 16
+companions, 5 land on an admitted parent and 1 of those was moonless. Probe reproduced
+`claimed 343 / provenanceBlocked 2 / swapped 341 / withMoons 228 / moons 456` exactly, then:
+**`withMoons 228 → 229`, `moons 456 → 461`.** ⚠ That file's `swapped` means *admitted to the lab
+shader pipeline*, and has nothing to do with `ExoticOverlay._swapPlanetType`. Two different senses of
+"swapped", one corpus, and conflating them is a live hazard in this lane.
+
+#### `moon-rng-stream-identity.test.js` — unchanged, and that is the point
+
+The companion is built from a pure hash and is **not** routed through `MoonGenerator.generate`, so
+the shared-stream counter (`:81-89`, which patches the own `rng` property of the single instance per
+`generate` call) never sees it. `PINNED_STREAM_SET` (`:133-198`), `POPULATION` (`:226`),
+`PARTITION`/`DISJOINTNESS` (`:282-290`) and `ORPHANS` (`:349-356`) all stay green. **The single
+largest non-re-blessable component of the toll is avoided**, as scoping §5 fact 1 predicted.
+
+---
+
+### 8.6 — ⭐ Instrument C: the corpus goes 526 → 633. Nobody had this.
+
+`tools/port-uniform-delta.mjs:219-231` harvests the **P** stratum by sweeping integer seeds
+`1…1000` and taking **every** `m.isPlanetMoon && m.planetData` record. A binary companion is exactly
+that. Measured (probe reproduces IC-526's published 372 S + 64 P + 90 G = 526 first):
+
+| stratum | today | after Route M |
+|---|---:|---:|
+| S — integer seeds 1…90 | 372 planets, **178 moon-bearing** | 372 planets, **184 moon-bearing** (12 companions, 6 on moonless parents) |
+| **P — planet-class moons, seeds 1…1000** | **64** | **171** (+107) |
+| G — forced-type grid | 90 | 90 |
+| **CORPUS_BODIES** | **526** | **633** |
+
+⛔ **This rewrites §3c.** That section warns that 242 of 526 rows (178 moon-bearing S + all 64 P) will
+be *"re-baselined, not verified"* — `0.000000e+0` printed for bodies whose fingerprint moved. After
+binaries the figure is **354 of 633**, and the P stratum — the one stratum that exists specifically
+because planet-class moons are too rare to harvest from S — **nearly triples**. The structural
+POPULATION MISMATCH exit at `:1860` fires on the P count alone, before any moon-window effect.
+
+---
+
+### 8.7 — ⛔ Three traps. Each is measured, each will otherwise be discovered by going red.
+
+**Trap 1 — a post-hoc coordinate list is wrong, and wrong by a knowable amount.**
+`ExoticOverlay.js:401` `planetEntry.planetData = newData;` replaces `planetData` wholesale with a
+fresh `PlanetGenerator.generate()` result, which carries **no `_systemSeed` and no `_ordinal`** —
+the defect already pinned, cause and all, at `tests/gas-body-lab-material.test.js:567`. So the
+selector's key **does not exist in the generator's output** for swapped planets. Measured on
+FENCE-221: 10 swapped planets, all 10 eligible; recomputing the list from output instead of in-loop
+gives **26, not 27** — the missing body is `wd-1403/1`, whose key degrades to
+`binarypair:undefined:undefined`. ⭐ **Anyone verifying B5 against §8.4 by walking `generate()`'s
+output will file a false failure on exactly one row.** Verify in-loop, or fix the stripping first.
+
+**Trap 2 — `ExoticOverlay` can move a planet giant → solid, and only that direction.**
+Three paths have no giant filter: `_applyFungal` puts `sub-neptune` in its candidate list
+(`ExoticOverlay.js:176`) and its second arm `hasAtmo || isRocky` (`:182`) admits gas giants;
+`_applyHex` filters on orbit only (`:226`) with an any-planet fallback (`:233`); `_applyMachine`
+filters on orbit only and *prefers* beyond the frost line (`:255`), which is where giants live. None
+of the seven swap-in types is in `GIANT_PARENT_TYPES`, so solid → giant is structurally impossible.
+Measured over `wd-0`…`wd-2999`: 165 swaps, **8 cross giant → solid** (`sub-neptune → fungal` ×7,
+`gas-giant → machine` ×1), **0 cross solid → giant**. On all four stated corpora the crossing count
+is **0** — the populations are too small — so the in-loop and output readings agree there *by
+accident*. Reading eligibility off the output type is nonetheless wrong, and B5 must not.
+
+**Trap 3 — ⛔⛔ `wd-1403/1/0` turns `moonShapeCensus.planetClass` into `{shapes: 2}`, and the record
+carries a `NaN`.** `ExoticOverlay.js:371-389` rescales **every** moon of a swapped parent, with no
+`isPlanetMoon` guard, and its last line is `:389` `moon.massEarth *= kEarth ** 3;`. A planet-class
+moon record has **20 keys and no top-level `massEarth`** — mass lives on `planetData.massEarth`
+(README §5, "the mass trap"). Six of the seven rescale targets are present; `massEarth` is the one
+that is not. **Proven by intervention** on `wd-11`'s planet-class moon: `undefined * k³` → the
+property is *created* with value `NaN`, and the record goes **20 keys → 21**, while the real mass
+inside `planetData` is left unscaled — so the pair's `q` is silently wrong as well.
+
+This is a **pre-existing latent defect that the binary channel wakes up**: measured today, **0 of 24
+planet-class moons sit on an overlay-swapped parent**, which is the only reason
+`{shapes: 1, keyCounts: [20]}` is green. `wd-1403/1/0` is the first one ever to. And
+`{shapes: 2, keyCounts: [20, 21]}` is precisely the signature §3b names as *"what a conditional
+append produces"* — so the failure will be read as a channel-model bug when it is an overlay bug.
+
+**Fix it in the same commit as the channel**, alongside the `GravityField._estimateMoonMass` repair
+scoping §6 item 4 already requires: guard the rescale loop on key presence, or scale
+`moon.planetData.massEarth` for planet-class moons. Either is one line. ⛔ **Do not ship the channel
+without it.**
+
+---
+
+### 8.8 — What would falsify §8
+
+- Any row of §8.4 absent from B5's output, or any row present that §8.4 does not list. The list is
+  exact, not approximate; `N = 27` on FENCE-221 and there is no sampling error in a hash.
+- `moved.systems` reading **0** during regime 1 — the companion is not reaching `entry.moons` before
+  the fence's `system` object is built, i.e. the append site drifted past `:601`.
+- `moved.systems` reading anything other than **27** on FENCE-221 during regime 1 — the rate is
+  wrong, and nothing else in the window can produce that.
+- `moved.planets` reading **502** — the companions are not reaching `systemContext.moons`, so the
+  append landed after the post-pass at `:935`.
+- `moonShapeCensus.planetClass.keyCounts` reading `[20, 21]` — trap 3 shipped unfixed.
+- Instrument C's population mismatch reporting a P stratum of **64** — the companion is not carrying
+  `isPlanetMoon` or `planetData`, so it is not the record the scoping doc ruled for.
+- `PINNED_STREAM_SET` in `moon-rng-stream-identity.test.js` going red — a draw leaked; the selector
+  is not the pure hash §8.1 specifies.
+- Any figure in §8.3 quoted against a corpus other than the one on its row.
+
+### 8.9 — Two things §8 deliberately does not settle
+
+1. **`p` is authored** (§8.2). B8 sets it by measurement, like C3's and C4's constants. Changing it
+   is `node tools/binary-yield-probe.mjs --p=<new> --stamped`, which re-issues §8.3 and §8.4 in the
+   shape they are printed here; nothing else in this section depends on the value.
+2. **The parent population skews small.** 9 of the 27 FENCE-221 hosts are below 0.1 M⊕, the smallest
+   being `wd-36/2` at **0.0131 M⊕ / 0.3187 R⊕**. At the ruled `q ∈ [0.122, ~0.6]` its companion is a
+   ~1 400 km body: a binary *dwarf* planet. That is not a defect — Pluto–Charon is the anchor Max
+   ruled on, and Pluto is 0.0022 M⊕ — but it is what the channel will mostly produce, and it is a UAT
+   question, not a physics one. **No mass floor is applied**; adding one is a one-line eligibility
+   change and a re-run of §8.3/§8.4.
