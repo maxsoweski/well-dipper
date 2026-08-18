@@ -350,8 +350,8 @@ export class StarSystemGenerator {
         binarySeparationAU = rng.range(0.05, 0.3) + starSumAU * 3;  // close pair: 0.1-0.5 AU
         binarySeparationScene = auToScene(binarySeparationAU);
         binarySeparation = rng.range(3, 8) + star.radius + star2.radius;  // map/HUD only (cf. :343)
-        // Orbit speed: closer = faster (Kepler's 3rd law)
-        binaryOrbitSpeed = 0.003 / Math.pow(binarySeparation / 5, 1.5);
+        // Physical Kepler rate from real AU — same law as :344 and every planet (:554).
+        binaryOrbitSpeed = keplerOrbitSpeed(binarySeparationAU);
         binaryOrbitAngle = rng.range(0, Math.PI * 2);
       }
     }

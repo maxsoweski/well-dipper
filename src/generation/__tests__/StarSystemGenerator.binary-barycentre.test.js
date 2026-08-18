@@ -6,10 +6,6 @@ import { physicalStarMassSolar } from '../PhysicsEngine.js';
 import { GravityField } from '../../physics/GravityField.js';
 
 /**
- * ⚠ The `binary pair period` block is describe.skip HERE and un-skipped in the
- * NEXT commit, which lands the orbit-speed half. Split so the mass-ratio change
- * and the slow-down can be judged separately at UAT.
- *
  * Binary barycentre + pair period — the renderer's mass ratio must be the SAME
  * mass ratio gravity uses, and the pair must orbit on the same Kepler law as
  * every other body in the system.
@@ -123,7 +119,7 @@ describe('binary mass ratio — the renderer and gravity must agree', () => {
   });
 });
 
-describe.skip('binary pair period — the same Kepler law as the planets', () => {
+describe('binary pair period — the same Kepler law as the planets', () => {
   it('the pair orbits on the planets\' Kepler law, not the map-unit formula', () => {
     // ⚠ This band DELIBERATELY locks out the √(M₁+M₂) term. If the coordinated
     // mass-term change (moon-formation-channel-model-PLAN-2026-08-15.md:73) ever
