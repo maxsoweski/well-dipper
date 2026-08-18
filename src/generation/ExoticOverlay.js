@@ -386,7 +386,7 @@ export class ExoticOverlay {
         // it is the standard this repo already holds, not a gate these three plain moons were
         // ever under. The gate that does bind them is
         // moon-condition-contract.test.js:304 `POST-OVERLAY: mass and radius still describe`.
-        moon.massEarth *= kEarth ** 3;
+        if (Object.prototype.hasOwnProperty.call(moon, 'massEarth')) moon.massEarth *= kEarth ** 3; else if (moon.planetData?.massEarth != null) moon.planetData.massEarth *= kEarth ** 3;  // ⛔ A PLANET-CLASS moon has no top-level `massEarth` (it lives on planetData), so the bare `*=` CREATED the key as NaN and took the record 20 keys → 21 — the `shapes: 2` census break. Dormant until B5.0 put the first planet-class moon on a swappable parent. B4 §8.7 trap 3.
         // ⚠ STILL STALE AFTER THIS LINE, and deliberately left so — nothing gates it yet:
         // `tidalHeating`, `tidalState` and `surfaceHistory` are all functions of the
         // PRE-rescale geometry AND of the OLD parent (its mass, and its type via

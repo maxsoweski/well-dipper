@@ -896,3 +896,96 @@ alone.** That changes no key, so scoping §6.2's shape constraint survives intac
   going red at `p = 0.0335` — it must not. Its fixture's eligible parent (`planets[1]`, `rocky`,
   `_ordinal` **2** — another live instance of §8.4's index-vs-ordinal warning) hashes to
   **0.120329**, so it is not selected. ⚠ It reds at any `p > 0.1204`.
+
+---
+
+### 8.11 — ⭐⭐ B5.0 LANDED. Measured against §8, same day. Tier M.
+
+The binary channel shipped **alone**, before B5 steps 1–9, for one reason: §8.5's Route-M-alone
+partition is the only exact, separable prediction this window has, and it stops being checkable the
+moment step 2 saturates the arms. It is checked below and it holds.
+
+#### What matched, exactly
+
+| §8 said | live at B5.0 | |
+|---|---|---|
+| population `{planets 961, moons 821, plain 770, planetClass 51}` | identical | ✅ |
+| `PLANET_CLASS_MOONS` → 51 entries, §8.4's list, in `captureAll` walk order | 51 / 51, **zero missing, zero unexpected, order byte-identical** | ✅ |
+| `moonShapeCensus.planetClass` → `{shapes: 1, keyCounts: [20], records: 51}` | RECORD SHAPE's only diff is `records: 24 → 51`; shapes and key counts unmoved | ✅ |
+| `orbitRadiusScene` = full parent-relative separation (Convention A) | inherited from the reused builder, so it could not be otherwise | ✅ |
+| `q ≥ 0.122`, centred ~0.3–0.6 | min **0.1656** · median **0.4490** · max **0.7701**; zero below the floor | ✅ |
+| §8.6: Instrument C's corpus `526 → 633` | `bodies in capture : 526   now: 633`, and it exits **2** on `POPULATION MISMATCH` — the trigger §3c named, before `--allow-deltas` can be reached | ✅ |
+
+Measured `f = R_companion / R_parent` spans **0.523 – 0.950**, confirming §8.10 item 6's arithmetic
+from the other direction: the builder's shipped `[0.10, 0.25]` could not have produced any of it.
+⚠ The upper end is the **0.95 clamp**, not the sampler — a companion may not exceed 0.95 of its
+primary, so the realised `q` is compressed against `BINARY_Q_MAX` and the top of the band is not
+reachable at a low density ratio. Deliberate; stated so B8 does not read the ceiling as a target miss.
+
+#### ⛔ What §8 got wrong, by one seed — and the reason matters more than the number
+
+§8's `generateBinaryCompanion` docstring predicted *"DRAW STREAM reds on exactly the seeds carrying a
+companion, +2 instances each."* Measured: **28 seeds, not 27**, every one of them `+2` exactly
+(`(N → N+2)`, `total X → X+2`, no exceptions across all 28).
+
+The extra is `wd-170`, and it carries **no companion at all**. Its `_ordinal` 4 passes the hash gate,
+the companion is built — and migration then destroys 4 of its planets (`scatteredCount: 4`, leaving
+ordinals 0 and 3). **The build cost is paid before the cull.** So:
+
+> the DRAW STREAM red set is *companions **built***; the coordinate list is *companions **shipped***.
+> They differ by the planets migration and the binary-stability cull remove after their moons exist.
+
+⭐ This is the same accounting README §5 already records for moons (*"5207 calls vs 4861 records —
+migration-scatter and binary culling discard whole planets after their moons are built"*), arriving
+in a channel that was designed to be draw-free and is not quite. **A future reader must not
+"fix" the 28 back to 27.**
+
+The `+2` itself is not a defect and cannot be designed away while scoping §6.2's "reuse the existing
+builder" holds: `PlanetGenerator.js:392` `const eccRng = new SeededRandom(eccSeed);` and
+`MoonGenerator.js:358`'s `moonecc:` construction each build a fresh instance, and Instrument B's
+DRAW STREAM counts every `SeededRandom` in the process. Both are grandfathered for bodies that
+existed at Step 0; neither is for a body created today.
+
+#### ⛔ And a correction to §2c, measured
+
+§2c says NEGATIVE CONTROL fails under any population move, because `:845` asserts a fresh capture
+reproduces the stored baseline. **It is green at B5.0.** The control is scoped to a single seed —
+`:824` `const seed = 'wd-0';` — and `wd-0` carries no companion. So the channel that proves the fence
+can still *detect* a change survives any population move that misses `wd-0`. §2c's warning holds for
+the moon window (which moves every seed); it does not generalise.
+
+#### Instrument B at B5.0 — the full signature, named individually
+
+| test | result |
+|---|---|
+| the seed list on disk is the seed list in this file | ✓ |
+| still covers every generation class it was built to cover | ✓ |
+| is measuring the same code path production runs | ✓ |
+| **DRAW STREAM** | ✗ — 28 seeds, all `+2` |
+| **BODY IDENTITY** | ✗ |
+| **RECORD SHAPE** | ✗ — `planetClass.records 24 → 51` only |
+| the excluded world-engine bakes are still present | ✓ |
+| **NEGATIVE CONTROL** | **✓ GREEN** — see above |
+
+⚠ **A third distinct signature.** C7 failed DRAW STREAM + BODY IDENTITY; step 2 fails BODY IDENTITY +
+NEGATIVE CONTROL with DRAW STREAM green (§2c); B5.0 fails DRAW STREAM + BODY IDENTITY + RECORD SHAPE
+with NEGATIVE CONTROL green. Matching any one against another misreads all three.
+
+#### Shipped in the same commit, both required rather than optional
+
+- `GravityField._estimateMoonMass` now reads `moonData.planetData?.massEarth` first, and the stale
+  comment at `:148-149` is corrected. Scoping §6 item 4 called this required once a pair exists; a
+  planet-class moon's top-level `type` is a *planet* type, so `rocky`/`ocean`/`ice` all missed the
+  branch and the flight model was handed a mass the generator never chose.
+- `ExoticOverlay.js`'s moon rescale no longer assigns `moon.massEarth` when the key is absent —
+  §8.7 trap 3. It scales `planetData.massEarth` instead. Without this, `wd-1403/1/0` would have
+  taken the planet-class record to 21 keys with a `NaN`.
+
+#### Still open at B5.0 — deliberately left red
+
+The instruments stay red until B7, per the plan. Not yet amended, and each is a hand-derivation:
+`body-identity-fence.test.js:288`/`:687`/`:740`/`:779`; `moon-condition-contract.test.js:162`/`:163`/`:370`;
+`tools/moon-census.mjs:116` (which **exits 3**); `StarSystemGenerator.binary-barycentre.test.js:163-174`
+(rows `wd-10` and `wd-27`, `moons 5 → 6`); and `moon-rng-stream-identity.test.js`'s `ORPHANS`, whose
+`orphanPlanetClass` is now negative and needs a mechanism change rather than a new constant
+(§8.10 item 1).

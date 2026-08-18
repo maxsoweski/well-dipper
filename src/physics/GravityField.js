@@ -177,6 +177,7 @@ export class GravityField {
    * or a simpler radius^3 * density model for captured bodies.
    */
   _estimateMoonMass(moonData) {
+    if (moonData.planetData?.massEarth != null) return moonData.planetData.massEarth;  // ⛔ the comment above is STALE: all planet-class moons carry mass on planetData, and a planet-class moon's top-level `type` is a PLANET type, so rocky/ocean/ice all MISS the branch below and the flight model got a mass the generator never chose. Required, not optional, once a binary pair exists.
     const r = moonData.radiusEarth ?? 0.01;
     if (moonData.type === 'terrestrial') {
       // Terrestrial moons have higher density (planet-class)

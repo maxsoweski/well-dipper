@@ -368,7 +368,7 @@ export class MoonGenerator {
    * only in HZ, ice dominant in outer.
    * ⛔ The AU below is the parent's GENERATION-time orbit, never its post-migration one (B7 RC3).
    */
-  static _generatePlanetMoon(rng, planetData, moonIndex, parentZone, zones = null, parentOrbitAU = null) {
+  static _generatePlanetMoon(rng, planetData, moonIndex, parentZone, zones = null, parentOrbitAU = null, targetQ = null) {
     // Pick a planet type appropriate for this zone
     const allowed = this.PLANET_MOON_TYPES_BY_ZONE[parentZone] || ['rocky', 'ice'];
     const planetType = rng.pick(allowed);
@@ -378,7 +378,7 @@ export class MoonGenerator {
     const pData = PlanetGenerator.generate(rng, Math.max(parentOrbitAU ?? 1.0, 0.01), planetData.sunDirection, zones, planetType);
 
     // Moon radius: 10-25% of parent (these are big moons — Ganymede is 0.038× Jupiter)
-    const fraction = rng.range(0.10, 0.25);
+    const fraction = targetQ == null ? rng.range(0.10, 0.25) : Math.min(0.95, Math.cbrt(targetQ * densityRatio(planetData, pData)));  // targetQ: BINARY COMPANION path only — q = (rho_c/rho_p)*f^3, so f inverts it exactly (B4 §8.10 item 6)
     const radiusEarth = fraction * planetData.radiusEarth;
     const radiusScene = earthRadiiToScene(radiusEarth);
     const radius = fraction * planetData.radius;
@@ -529,6 +529,83 @@ export class MoonGenerator {
       return 'ice';
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BINARY COMPANION CHANNEL — B5.0
+  //
+  // A second, comparably-sized body delivered through `planets[i].moons[]` as a
+  // planet-class record. Ruled in docs/FEATURES/binary-planets-scoping-2026-08-17.md;
+  // PREDICTED, coordinate list and all, in
+  // docs/FEATURES/moon-formation-b4-prediction-2026-08-17.md §8 — which was
+  // committed BEFORE this code existed. Read §8 before changing anything here.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /** Fraction of SOLID planets that receive a companion. §8.2 derives it: bisection of
+   *  `(1/N)·Σ_s[1−(1−p)^k_s]` against Ochiai et al. 2014's ~10% of systems, over FENCE-221's
+   *  measured solid-planets-per-system histogram. ⚠ AUTHORED — B8 resets it by measurement. */
+  static BINARY_PAIR_RATE = 0.0335;
+
+  /** Mass-ratio band. Floor is Pluto–Charon, ruled by the owner 2026-08-17. The sampler below
+   *  is triangular, so the middle 50% lands at q ≈ 0.37–0.58 — the "centred ~0.3–0.6" that was
+   *  ruled with it. ⛔ The DYNAMICAL criterion (barycentre outside the primary) is NOT the
+   *  target: the generator already satisfies it in 5.2% of systems and those bodies read as
+   *  distant moons (scoping §4). */
+  static BINARY_Q_MIN = 0.122;
+  static BINARY_Q_MAX = 0.83;
+
+  /**
+   * ⭐ ZERO-DRAW predicate. Nothing here touches a `SeededRandom`, which is what makes the exact
+   * `(seed, planet)` coordinate list computable read-only — see Rule 2 in
+   * docs/SYSTEMS/generation/README.md §3, and §8.1 for why `fnv1aString` is NOT usable here
+   * (its within-system gaps collapse to eight distinct values, making two companions in one
+   * system impossible; both hashes pass a χ² uniformity test, so the failure is joint-only).
+   *
+   * ⛔ Reads `planetData.type` at the IN-LOOP call site. `ExoticOverlay` retypes afterwards and
+   * can move a planet giant → solid (never the reverse), and it strips `_systemSeed`/`_ordinal`
+   * outright (`ExoticOverlay.js:401`) — so this predicate CANNOT be re-evaluated against
+   * `generate()`'s output. §8.7 trap 1: doing so is short by exactly one row on FENCE-221.
+   */
+  static selectsBinaryCompanion(planetData) {
+    if (!planetData || GIANT_PARENT_TYPES.has(planetData.type)) return false;
+    if (planetData._systemSeed == null || planetData._ordinal == null) return false;
+    return namespacedFloat(`binarypair:${planetData._systemSeed}:${planetData._ordinal}`) < this.BINARY_PAIR_RATE;
+  }
+
+  /**
+   * Build the companion, or return null if this parent was not selected.
+   *
+   * ⭐⭐ EVERY drawn quantity comes from `hashRng`, a pure-hash stand-in for `SeededRandom`, and
+   * NOT from the generation stream. Two reasons, and the second is the load-bearing one:
+   *
+   *   1. `planetRng` is dead after the moon loop, but Instrument B's DRAW STREAM counts draws via
+   *      an accessor on `SeededRandom.prototype` — every instance in the process, not just the
+   *      shared stream. Drawing here would red it across the whole population.
+   *   2. ⭐ A companion built from the stream would be a function of the moon loop's draw
+   *      POSITION, so B5 steps 2, 3 and 6 would move every companion — and the §8.4 coordinate
+   *      list, which is B5's only exact prediction, would stop being checkable the moment the
+   *      second sub-step landed. Hash-built, the pair is a pure function of (seed, ordinal) and
+   *      survives the entire window unmoved.
+   *
+   * ⚠ It is NOT fully draw-neutral, and §8 did not predict this. `PlanetGenerator.generate`
+   * constructs `new SeededRandom(eccSeed)` at PlanetGenerator.js:392, and `_computeTidalHeating`
+   * constructs one at MoonGenerator.js:358. Both are counted by the prototype accessor. So DRAW
+   * STREAM reds on exactly the seeds carrying a companion, +2 instances each — a signature that
+   * is itself a prediction. Anything wider is a real leak.
+   */
+  static generateBinaryCompanion(planetData, moonIndex, parentZone, zones = null, parentOrbitAU = null) {
+    if (!this.selectsBinaryCompanion(planetData)) return null;
+    const key = `binarypair:${planetData._systemSeed}:${planetData._ordinal}`;
+    // Triangular on [Q_MIN, Q_MAX] — the mean of two independent hashes. Deliberately not
+    // uniform: uniform puts as much weight on a barely-a-pair 0.13 as on a co-equal 0.8.
+    const u = 0.5 * (namespacedFloat(`binaryq:a:${key}`) + namespacedFloat(`binaryq:b:${key}`));
+    const targetQ = this.BINARY_Q_MIN + (this.BINARY_Q_MAX - this.BINARY_Q_MIN) * u;
+    // Reuses the shipped planet-class builder verbatim, so the 20-key record shape is unchanged
+    // (scoping §6 item 2) and `orbitRadiusScene` carries the FULL parent-relative separation
+    // rather than the barycentric element (scoping §3, Convention A — Convention B is fatal and
+    // silent, drawing the pair half-size everywhere with no instrument noticing).
+    return this._generatePlanetMoon(hashRng(key), planetData, moonIndex, parentZone, zones, parentOrbitAU, targetQ);
+  }
+
 }
 
 // Earth's mean bulk density (kg/m³) — the unit `massEarth = R⊕³ × ρ/ρ⊕` is
@@ -584,4 +661,52 @@ function namespacedFloat(key) {
   h = Math.imul(h ^ (h >>> 16), 2246822507);
   h = Math.imul(h ^ (h >>> 13), 3266489909);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+
+/**
+ * Bulk-density ratio ρ_parent / ρ_body, in whatever units both sides share — the `5.514` and the
+ * Earth-radius cube cancel, so this is unitless and safe to feed a cube root.
+ * Guards a zero-radius or massless body by falling back to 1 (equal density).
+ */
+function densityRatio(parentData, bodyData) {
+  const rhoP = parentData.radiusEarth > 0 ? (parentData.massEarth ?? 0) / parentData.radiusEarth ** 3 : 0;
+  const rhoB = bodyData.radiusEarth > 0 ? (bodyData.massEarth ?? 0) / bodyData.radiusEarth ** 3 : 0;
+  return rhoP > 0 && rhoB > 0 ? rhoP / rhoB : 1;
+}
+
+/**
+ * A `SeededRandom`-shaped object backed entirely by `namespacedFloat`.
+ *
+ * ⛔ NOT a `SeededRandom`, and that is the entire point — Instrument B's DRAW STREAM channel
+ * installs an accessor on `SeededRandom.prototype` (tests/body-identity-fence.test.js:226-244),
+ * so it counts every instance in the process. A plain object is invisible to it, and to
+ * `moon-rng-stream-identity`'s per-call `rng` patch as well.
+ *
+ * The method surface and its semantics are transcribed from src/generation/SeededRandom.js:13-97
+ * so that a builder written against the real thing behaves identically — `int` is
+ * `floor(range(min, max + 1))`, `pick` is `int(0, len - 1)`, `gaussian` is Box–Muller on two
+ * values with no rejection loop. ⚠ If SeededRandom's semantics ever change, this must follow;
+ * there is no test that pins the two together.
+ *
+ * @param {string} key - namespace; the stream is a pure function of it
+ */
+function hashRng(key) {
+  let n = 0;
+  const next = () => namespacedFloat(`${key}#${n++}`);
+  const self = {
+    float: () => next(),
+    range: (min, max) => min + next() * (max - min),
+    int: (min, max) => Math.floor(min + next() * (max + 1 - min)),
+    pick: (array) => array[Math.floor(next() * array.length)],
+    chance: (probability) => next() < probability,
+    gaussian: (mean = 0, stddev = 1) => {
+      const u1 = next(); const u2 = next();
+      return mean + Math.sqrt(-2 * Math.log(u1 || 1e-10)) * Math.cos(2 * Math.PI * u2) * stddev;
+    },
+    logNormal: (mu = 0, sigma = 1) => Math.exp(self.gaussian(mu, sigma)),
+    gaussianClamped: (mean, stddev, min, max) => Math.max(min, Math.min(max, self.gaussian(mean, stddev))),
+    child: (suffix) => hashRng(`${key}/${suffix}`),
+  };
+  return self;
 }

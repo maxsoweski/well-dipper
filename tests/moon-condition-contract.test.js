@@ -72,7 +72,7 @@ import {
 import { EARTH_RADIUS_AU } from '../src/core/ScaleConstants.js';
 
 // ── Duplicated src constants, deliberately ───────────────────────────────────────────────────
-// `RHO_EARTH_KGM3` (MoonGenerator.js:536 `RHO_EARTH_KGM3 = 5514`) and `EARTH_MASSES_PER_SUN` (:541 `EARTH_MASSES_PER_SUN = 332946`) are module-private.
+// `RHO_EARTH_KGM3` (MoonGenerator.js:613 `RHO_EARTH_KGM3 = 5514`) and `EARTH_MASSES_PER_SUN` (:618 `EARTH_MASSES_PER_SUN = 332946`) are module-private.
 // Copying them as literals is DESIRABLE here: if either ever changes in src, a gate should red and
 // the change should be a named act rather than a silent re-scaling of every moon in the universe.
 // Precedent: tests/moon-mass-radius-consistency.test.js:46 duplicates EARTH_DENSITY_GCC the same way.
@@ -500,7 +500,7 @@ describe('moon condition contract — the six derived fields carry real values',
   // G3 VALUE ARM — composition internal consistency. CORRECTNESS. Green on 705/705.
   //
   // ⛔ WHY THIS IS AN ALGEBRAIC IDENTITY AND NOT A RE-DERIVATION. Re-running `deriveComposition`
-  // needs the `mooncomp:` float, and `namespacedFloat` (MoonGenerator.js:578 `function namespacedFloat(key) {`) is module-private.
+  // needs the `mooncomp:` float, and `namespacedFloat` (MoonGenerator.js:655 `function namespacedFloat(key) {`) is module-private.
   // Copying it into a test would create a genuine second source of truth for a value the record
   // carries — the one duplication that is NOT acceptable here.
   //

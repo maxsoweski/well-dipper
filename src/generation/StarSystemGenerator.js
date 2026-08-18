@@ -597,7 +597,7 @@ export class StarSystemGenerator {
         moonData._ordinal = `${i}.${m}`;
         moons.push(moonData);
       }
-
+      const companion = MoonGenerator.generateBinaryCompanion(planetData, moons.length, parentZone, zones, orbitRadiusAU); if (companion) { companion._systemSeed = seed; companion._ordinal = `${i}.${moons.length}`; moons.push(companion); }  // B5.0 binary companion — zero-draw selector over `binarypair:seed:ordinal`, predicted coordinate-list-and-all in docs/FEATURES/moon-formation-b4-prediction-2026-08-17.md §8
       const wrapper = {
         planetData,
         moons,
