@@ -52,9 +52,20 @@ world engine lives in the game's tree in ONE copy and the lab is a consumer of i
 > - *"we will likely do additional development in the world engine lab, and so we need to easily be
 >   able to move the latest developments from that lab into the main game in the future."* (2026-08-01)
 >
-> **⭐ THE PLAN OF RECORD IS [`lab-pipeline-into-game-PLAN.md`](lab-pipeline-into-game-PLAN.md).**
+> **⭐⭐ THE PLAN OF RECORD IS [`one-pipeline-two-frontends-PLAN.md`](one-pipeline-two-frontends-PLAN.md).**
 > Read it before doing any of this work. It is the durable, multi-session tracker; per-session
 > handoff briefings are disposable and have twice been wrong about what had already shipped.
+>
+> ⛔ **CORRECTED 2026-08-19. THIS LINE USED TO NAME [`lab-pipeline-into-game-PLAN.md`](lab-pipeline-into-game-PLAN.md),
+> WHICH HAS BEEN SUPERSEDED SINCE 2026-08-06** — that file's own successor says so at
+> `one-pipeline-two-frontends-PLAN.md:4` (*"Supersedes the sequencing in
+> `docs/FEATURES/lab-pipeline-into-game-PLAN.md`"*), but nothing propagated the change back here.
+> ⭐ **This was not a cosmetic staleness.** CLAUDE.md sends every planet-LOD session to this charter
+> FIRST, so the wrong pointer routed the reader into a plan whose six-layer status table is false on
+> three of six rows — layer 0 reads `TODO` when its deliverable shipped as the successor's Step 1
+> (`0af246e`, 2026-08-06). It cost a session on 2026-08-19, which opened the superseded plan and came
+> within one step of rebuilding a condition contract that already existed. The predecessor's
+> DIAGNOSIS and its MEASUREMENTS are still cited and still good; only its SEQUENCING is dead.
 >
 > What still holds from the old framing: **do NOT chase "game bugs" from lab behaviour** while the
 > two renderers differ. What no longer holds: "no parity goal" (parity IS the goal now), "which

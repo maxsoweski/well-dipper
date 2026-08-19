@@ -225,7 +225,17 @@ Layer 3 is where they meet and is only meaningful once both are done.
 
 ---
 
-## LAYER 0 — the condition contract — `TODO` ⭐ NEW, AND IT IS UNDERNEATH EVERYTHING
+## LAYER 0 — the condition contract — ✅ `SHIPPED 2026-08-06` ⭐ NEW, AND IT IS UNDERNEATH EVERYTHING
+
+> ⛔ **STATUS CORRECTED 2026-08-19. THIS ROW READ `TODO` FOR THIRTEEN DAYS AFTER IT SHIPPED, AND THE
+> STALENESS COST A SESSION.** Layer 0's deliverable landed as **Step 1 of
+> [`one-pipeline-two-frontends-PLAN.md`](one-pipeline-two-frontends-PLAN.md) — *"Widen the condition
+> contract, additively, with provenance"* — at `0af246e` on 2026-08-06. The provenance mechanism this
+> section asks for is live and documented at `src/worldengine/port/conditionFromBody.js`, fenced by
+> `tests/port-condition-contract.test.js`. On 2026-08-19 a session read this `TODO`, was told by
+> `planet-lod-CHARTER.md` that THIS file was the plan of record, and nearly rebuilt it.
+> ⭐ **The WORK BELOW IS STILL WORTH READING — the diagnosis, the 1120-moon measurement and the
+> fabrication failure mode are all still true and still cited.** It is the STATUS that was wrong.
 
 Discovered 2026-08-01. It did not exist as a concept before the moon measurement.
 
@@ -551,7 +561,12 @@ program exists to avoid.**
 
 ---
 
-## LAYER 3 — the driver — `IN PROGRESS`
+## LAYER 3 — the driver — ⚙️ `IN PROGRESS — and further along than this file knows`
+
+> ⛔ **STATUS CORRECTED 2026-08-19.** The driver stage is no longer trapped in the lab's HTML: the
+> shared pack pipeline ships at `src/worldengine/drivers/` (`index.js` + `giantDeck`, `limbDeck`,
+> `polarDeck`) with the contract at `src/worldengine/port/writePackUniforms.js`, all landed via the
+> successor plan's Steps 5-7. Read that file's step statuses, not this heading.
 
 ⭐ **THE PLAN'S OLD LINE NUMBERS WERE 1293 LINES STALE** (they predated Step 2's own −1299-line
 extraction). Corrected and verified 2026-08-01:
@@ -758,7 +773,11 @@ loop that can be ported independently, first, at any time.
 
 ---
 
-## LAYER 5 — body-class coverage — `TODO`
+## LAYER 5 — body-class coverage — ⚙️ `PARTIAL — gas giants SHIPPED and UAT-PASSED`
+
+> ⛔ **STATUS CORRECTED 2026-08-19.** Gas giants render through the pipeline and **Max UAT-passed
+> them on 2026-08-11** (successor plan Step 6). Moons are the remaining class and are the successor's
+> Step 10. "Gated behind layer 0" is no longer true — layer 0 shipped.
 
 `src/objects/Moon.js` is a **third renderer with none of the port** — no palette, no relief, no
 craters, still the March-2026 `snoise` shader.

@@ -1,3 +1,23 @@
+> ⛔⛔ **SUPERSEDED IN ITS CORE RECOMMENDATION, SAME DAY (2026-08-19). READ THIS BOX BEFORE §0.**
+>
+> This handoff's §1 layer table was copied from `lab-pipeline-into-game-PLAN.md`, whose statuses were
+> **stale by thirteen days** — layer 0 shipped as the successor plan's Step 1 at `0af246e` on
+> 2026-08-06, layer 3 has a live shared pack pipeline, and layer 5 shipped gas giants with Max's UAT
+> on 2026-08-11. All three are corrected in that file now. ⛔ **So this document's prescription —
+> *"the shortest path runs 0 → 1 → 3 → 4 → 5, and layer 0 is the front of it"* — points at work that
+> already exists.** The live sequencing is `one-pipeline-two-frontends-PLAN.md` Steps 9 → 10.
+>
+> ⭐ **Its LANE recommendation survived, on better evidence than it gave.** A verification workflow
+> confirmed the world-engine lane and killed this file's supporting argument at the same time: the
+> claim *"pivot now costs nothing"* was half false (the instrument cost was already paid at B5.0,
+> `34b502d`, which this document never names), and *"not one line of it is rendering"* is false —
+> two of B5's nine steps edit `src/main.js` rendering directly.
+>
+> ⛔ **And its §0 framing of two independent lanes was wrong in the other direction too:** the
+> moon-formation program was spun OUT of Step 8 of the world-engine plan, not parallel to it.
+>
+> Kept unedited below as the record of what was decided and why.
+
 # Handoff 2026-08-19 — ▶ **THE FIRST THING TO DO IS PUT THE LANE CHOICE TO MAX.**
 
 **HEAD:** see `git log -1` · **Branch:** `feature/world-engine-production-L1` · tracked tree **CLEAN**
