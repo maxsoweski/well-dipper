@@ -45,13 +45,39 @@ import { buildRingConic, CONIC_EXTENT_UNBOUNDED, arcTolerancePx, BAND_ALPHA_CUTO
  * on top and owns depth + overlap.
  */
 
-// Per-frame ceiling. Inventory worst case is 58 rings (8 planets x (1+6 moons)
-// + 2 binary-star rings) < 64. Rings past this are dropped (order largest-
-// angular-size-first upstream so any drop is the least-visible sub-pixel ring).
+// Per-frame ceiling. Rings past this are dropped (order largest-angular-size-first
+// upstream so any drop is the least-visible sub-pixel ring).
+//
+// ⚠ The old note here said "58 rings (8 planets x (1+6 moons) + 2 binary-star)". Both
+// halves were wrong and it is corrected rather than deleted so nobody re-derives it:
+// Sol's Saturn is `moonCount: 9` (SolarSystemData.js:349), not 6, and Sol carries 13
+// planet RECORDS, not 8. Sol is in fact the worst shipped system — 13 heliocentric +
+// 26 moon + 5 barycentric extras = 44 rings — still comfortably under 64. Procgen
+// systems cap at 8 planets (StarSystemGenerator.js:80-81, clamped at :499).
 export const CONIC_MAX = 64;
 
+// Per-frame OCCLUDER-DISC ceiling (orbit-line-local-system-occlusion-2026-08-18).
+// Sized the way CONIC_MAX is, and note what it bounds: the DISC LIST, not the
+// per-ring count. That makes per-ring truncation IMPOSSIBLE rather than merely
+// unlikely, since nk <= discCount <= KEEPOUT_MAX by construction.
+//
+//   procgen: the largest `planetRange` upper bound is 8 (StarSystemGenerator.js:80-81,
+//            spectral classes F and G) and the roll is clamped to it (:499).
+//   known:   :502 `Math.max(rolledPlanetCount, knownSorted.length)` is the one path
+//            that can exceed the roll. Its only shipped instance is Sol, which has 13
+//            planet records of which exactly 8 carry moons (5 of the 13 `moons:` lists
+//            are empty; enumerated by tools/barycentre-probe.mjs section 3 as earth,
+//            mars, jupiter, saturn, uranus, neptune, pluto, eris — and nothing else).
+//
+// Headroom is free at runtime: the GLSL loop breaks on the per-ring `nk` exactly as the
+// ring loop breaks on uCount (:252), so the bound costs compile-time unroll capacity and
+// 8 texture rows (8 KB) only. Should a future system ever exceed 8 moon-bearing planets,
+// discs are dropped SMALLEST-RADIUS-FIRST — the same least-visible-first drop discipline
+// CONIC_MAX uses above.
+export const KEEPOUT_MAX = 8;
+
 // DataTexture is CONIC_MAX wide x CONIC_TEX_ROWS tall, RGBA32F. Per ring (one
-// texel column) the 8 rows carry:
+// texel column) rows 0-9 carry:
 //   row 0: Cs[0..3]                 row 4: Hinv[4..7]
 //   row 1: Cs[4..7]                 row 5: Hinv[8], bMinX, bMinY, bMaxX
 //   row 2: Cs[8], radius, camDist, active
@@ -70,7 +96,29 @@ export const CONIC_MAX = 64;
 // rowW is already fetched at row 6 — so the front-arc gate costs 2 texelFetch,
 // not 3, and cannot desync from rowW. See ringConic.js's FRONT-ARC GATE note for
 // why the forward map is the only well-conditioned object in this regime.
-export const CONIC_TEX_ROWS = 10;
+//
+// ⭐ ROWS 10..17 ARE THE OCCLUDER DISCS (orbit-line-local-system-occlusion-2026-08-18).
+// Row 10+k, column i = ring i's k-th APPLICABLE keep-out disc, and `nk` — how many of
+// them apply to ring i — rides row 9 slot 3, which nothing read before (the shader's
+// only row-9 reads are t9.x/.y/.z at the front-arc call; readConic reads o9+2 and stops).
+//
+//   row 10+k: cx, cz, Reff2, (reserved)
+//
+// ⛔ cx/cz are the disc centre expressed in RING i's OWN PLANE FRAME, not world space.
+// That is the whole trick: `arcRoot` already builds the circle point as
+// `q = vec3(radius*cos, radius*sin, 1.0)`, and `q.xy` IS (X, Z) in that frame — the JS
+// mirror names them so at ringConic.js:371, and ringConic.js:211 records that the local-Y
+// column is dropped because the ring is a planar circle. So the per-pixel test is a 2-D
+// distance against a texel we transform CPU-side once per (ring, disc), with no matrix
+// inverse in the shader and no dependence on adj(H), whose rank-1 collapse at grazing is
+// the exact regime the front-arc gate exists to escape.
+//
+// Reff2 = R² − cy² folds the out-of-plane offset in, so the disc arrives pre-flattened to
+// the circle the BALL cuts in the ring's plane. ⛔ Subtract-then-square, never the
+// `cos(θ−φ) > K` closed form: at a real heliocentric radius of 67622 against a ~20-unit
+// ball, 1 − cos Δθ ≈ 4e-8, which is below float32 resolution near 1, and the gap would
+// vanish silently.
+export const CONIC_TEX_ROWS = 18;
 
 // Angular-size fade band: a ring is fully visible (fade 1) once its projected
 // radius reaches uAngCutoffPx render px, and fades smoothly to 0 as it collapses
@@ -182,6 +230,16 @@ float angularFade(float radius, float camDist) {
 // plane's VANISHING LINE, and every adj(H)-derived quantity sits on a pole there.
 // The forward map does not.
 
+// Which ring the loop is currently on, and how many occluder discs apply to it.
+// ⛔ Per-pixel-per-ring SCRATCH, not temporal state: main() writes both immediately
+// before the front-arc call and nothing reads them outside that call, so the shader
+// stays the pure function of the frame's ring set that the co-depth tie-break below
+// depends on. They are globals rather than parameters for one reason — threading them
+// through arcAxis would edit the very call line the mutation gate matches literally
+// (tools/conic-gl-gate.mjs:189, M16-arc-single-axis), FATALing the gate on a no-op.
+int gRing = 0;
+int gNK = 0;
+
 // One root: forward-project the circle point at (cos,sin)=cs. Returns
 // vec2(screen distance, TRUE clip w), or a huge distance when that point is BEHIND
 // the camera — w is evaluated on a point known to lie ON the circle, so it stays
@@ -195,6 +253,22 @@ vec2 arcRoot(vec3 fh0, vec3 fh1, vec3 fhw, vec3 rw, float radius, vec2 pix, vec2
   vec3 q = vec3(radius * cs.x, radius * cs.y, 1.0);
   float w = dot(fhw, q);
   if (!(w > 0.0)) return vec2(1.0e30, 0.0);
+  // OCCLUDER DISCS (orbit-line-local-system-occlusion-2026-08-18). q.xy is this circle
+  // point's (X, Z) IN THIS RING'S OWN PLANE, and rows 10+ carry each applicable disc
+  // pre-transformed into that same frame — so "is this point inside the solid?" is one
+  // subtract and one dot. Reusing the existing 1.0e30 sentinel means a masked point is
+  // simply A ROOT THAT DOES NOT EXIST: no new discard, no alpha channel, no uniform, and
+  // a fully-masked ring falls out at the untouched arc.x > uArcTolPx gate below.
+  //
+  // ⛔ This is a WORLD-space containment test, deliberately. A screen-space disc would be
+  // depth-blind and would erase a near ring that merely OVERLAPS a far local system,
+  // which is exactly what AC-NO-COLLATERAL-OCCLUSION forbids.
+  for (int k = 0; k < ${KEEPOUT_MAX}; k++) {
+    if (k >= gNK) break;
+    vec4 kd = texelFetch(uData, ivec2(gRing, 10 + k), 0);
+    vec2 e = q.xy - kd.xy;
+    if (dot(e, e) < kd.z) return vec2(1.0e30, 0.0);
+  }
   return vec2(length(vec2(dot(fh0, q), dot(fh1, q)) / w - pix), dot(rw, q));
 }
 
@@ -316,7 +390,11 @@ void main() {
     // forward map, which is exactly conditioned where the inverse collapses.
     // Rows 8-9 carry it; its third row is hScale * rowW (t6.xyz, already fetched).
     vec4 t8 = texelFetch(uData, ivec2(i, 8), 0);  // Hfwd0..3
-    vec4 t9 = texelFetch(uData, ivec2(i, 9), 0);  // Hfwd4, Hfwd5, hScale, -
+    vec4 t9 = texelFetch(uData, ivec2(i, 9), 0);  // Hfwd4, Hfwd5, hScale, nk
+    // Bind the occluder discs for THIS ring. t9 is already fetched, so this costs no
+    // texelFetch, and a fully-masked ring dies at the arc gate below — before the two
+    // arcAxis calls, which hold the loop's only sqrt.
+    gRing = i; gNK = int(t9.w);
     float bandReach = uPixelWidth * 0.5 + uFeatherPx * ${BAND_ALPHA_CUTOFF_T.toFixed(9)};
     vec3 arc = frontArcSolve(vec3(t8.x, t8.y, t8.z), vec3(t8.w, t9.x, t9.y),
                              t9.z * vec3(t6.x, t6.y, t6.z), vec3(t6.x, t6.y, t6.z),
@@ -458,6 +536,15 @@ export class OrbitConicField {
     this._descView = [];
     this._descCount = 0;
     this._adapterCam = new THREE.Vector3();
+
+    // Occluder-disc pools (orbit-line-local-system-occlusion-2026-08-18). Same zero-alloc
+    // discipline as _descPool/_descView: grow once, never shrink, hand update() a
+    // reference view. _discScratch stages one ring's applicable discs as flat
+    // (cx, cz, reff2) triples between _resolveDiscs and _packRing.
+    this._discPool = [];
+    this._discView = [];
+    this._discCount = 0;
+    this._discScratch = new Float64Array(KEEPOUT_MAX * 3);
   }
 
   /** Match OrbitLine/OrbitRingSDF.addTo — add the fullscreen mesh to a scene. */
@@ -520,16 +607,22 @@ export class OrbitConicField {
   updateFromSystem(system, camera, viewport) {
     this._adapterCam.setFromMatrixPosition(camera.matrixWorld);
     this._descCount = 0;
+    // Discs first: the ring append needs nothing from them, but building them here keeps
+    // the one traversal of system.planets that knows local-system membership in one place.
+    const discs = this._buildOccluderDiscs(system);
     if (system) {
+      // ⛔ localSystemId is LOCAL-SYSTEM MEMBERSHIP, not "which planet owns this ring".
+      // system.orbitLines[i] IS planet i's own heliocentric ring and is precisely what must
+      // be cut, so it carries -1 like the star rings. Only planets[i].moonOrbitLines carry i.
       const so = system.starOrbitLines;
-      if (so) for (let i = 0; i < so.length; i++) this._appendRing(so[i]);
+      if (so) for (let i = 0; i < so.length; i++) this._appendRing(so[i], -1);
       const po = system.orbitLines;
-      if (po) for (let i = 0; i < po.length; i++) this._appendRing(po[i]);
+      if (po) for (let i = 0; i < po.length; i++) this._appendRing(po[i], -1);
       const pl = system.planets;
       if (pl) {
         for (let i = 0; i < pl.length; i++) {
           const mo = pl[i] && pl[i].moonOrbitLines;
-          if (mo) for (let j = 0; j < mo.length; j++) this._appendRing(mo[j]);
+          if (mo) for (let j = 0; j < mo.length; j++) this._appendRing(mo[j], i);
         }
       }
     }
@@ -537,8 +630,82 @@ export class OrbitConicField {
     const view = this._descView;
     view.length = n; // reference view over the pooled objects — no object churn
     for (let i = 0; i < n; i++) view[i] = this._descPool[i];
-    this.update(view, camera, viewport);
+    this.update(view, camera, viewport, discs);
     return this;
+  }
+
+  /**
+   * The keep-out discs — one per moon-bearing planet, the solid a heliocentric ring is
+   * meant to pass behind (orbit-line-local-system-occlusion-2026-08-18).
+   *
+   * Reads ring GEOMETRY ONLY: `.radius`, `.mesh.visible`, `.mesh.position`. No masses, no
+   * barycentreOffset, no `_domRings`, no `entry.planet`. That is deliberate on three counts —
+   * it needs no `src/main.js` change at all, it keeps working against the bare
+   * `{ moonOrbitLines: [ring] }` fixtures the adapter tests use, and it makes the disc a
+   * statement about what is DRAWN rather than about what the physics believes.
+   *
+   * Centre is the outermost local ring's own position, which resolves the barycentric split
+   * for free: a dominated pair's rings are both written to the empty point (main.js:11345-11349)
+   * while an undominated planet's follow the planet mesh (:11351), and either way the outermost
+   * ring is sitting exactly where the local system is centred.
+   *
+   * Radius is `max(|ringPos − C| + ringRadius)`. When a planet's local rings share one centre —
+   * every case the contract enumerates, and verified live on wd-10 — the offset term is exactly
+   * 0 and this reduces to `max(ring.radius)`, the AC's literal observable. The bounding form only
+   * bites on a mixed planet (a dominated pair also carrying a non-dominant moon), where it grows
+   * the disc by that moon's excursion rather than clipping it.
+   *
+   * ⛔ Deliberately NOT grown by the moons' body radii. Bodies are already occluded by the depth
+   * buffer — this pass is `depthTest: true` at renderOrder 999, drawn after opaque geometry — so
+   * widening the disc for them would push the gap past the visible local system for nothing.
+   *
+   * @param {object} system  main.js system: { planets:[{moonOrbitLines}] }
+   * @returns {Array<{cx:number,cy:number,cz:number,radius:number,systemId:number}>|null}
+   */
+  _buildOccluderDiscs(system) {
+    const pl = system && system.planets;
+    this._discCount = 0;
+    if (!pl) return null;
+    for (let i = 0; i < pl.length && this._discCount < KEEPOUT_MAX; i++) {
+      const mo = pl[i] && pl[i].moonOrbitLines;
+      if (!mo || mo.length === 0) continue;
+
+      // Visible rings only — the same gate _appendRing applies, so a hidden local system
+      // occludes nothing, exactly as it draws nothing.
+      let out = null;
+      for (let j = 0; j < mo.length; j++) {
+        const r = mo[j];
+        if (!r || !r.mesh || !r.mesh.visible) continue;
+        if (out === null || r.radius > out.radius) out = r;
+      }
+      if (out === null) continue; // AC-APPLIES-GENERALLY: no moons (or none visible) ⇒ no disc
+
+      out.mesh.updateMatrixWorld(true);
+      const c = out.mesh.matrixWorld.elements;
+      const cx = c[12], cy = c[13], cz = c[14];
+
+      let radius = 0;
+      for (let j = 0; j < mo.length; j++) {
+        const r = mo[j];
+        if (!r || !r.mesh || !r.mesh.visible) continue;
+        const p = r.mesh.position;
+        const off = Math.hypot(p.x - cx, p.y - cy, p.z - cz);
+        const reach = off + r.radius;
+        if (reach > radius) radius = reach;
+      }
+
+      const n = this._discCount;
+      let d = this._discPool[n];
+      if (!d) { d = { cx: 0, cy: 0, cz: 0, radius: 0, systemId: -1 }; this._discPool[n] = d; }
+      d.cx = cx; d.cy = cy; d.cz = cz; d.radius = radius; d.systemId = i;
+      this._discCount = n + 1;
+    }
+    const n = this._discCount;
+    if (n === 0) return null;
+    const view = this._discView;
+    view.length = n;
+    for (let k = 0; k < n; k++) view[k] = this._discPool[k];
+    return view;
   }
 
   /**
@@ -546,11 +713,11 @@ export class OrbitConicField {
    * Zero-alloc after warm-up: reuses this._descPool[n], references ring.mesh.matrixWorld
    * and the live material color (no copies).
    */
-  _appendRing(ring) {
+  _appendRing(ring, systemId = -1) {
     if (!ring || !ring.mesh || !ring.mesh.visible) return;
     const n = this._descCount;
     let d = this._descPool[n];
-    if (!d) { d = { matrixWorld: null, radius: 0, color: null, alpha: 1, active: true }; this._descPool[n] = d; }
+    if (!d) { d = { matrixWorld: null, radius: 0, color: null, alpha: 1, active: true, localSystemId: -1 }; this._descPool[n] = d; }
 
     // Current transform off the render path (mirrors hitTestOrbits' per-mesh sync,
     // main.js:4119) — the moon-ring position is written at sim time and its
@@ -575,6 +742,9 @@ export class OrbitConicField {
     // angular-size fade still retires sub-pixel rings, so AC8 is unaffected.
     d.alpha = u.uOpacity.value * u.uVisFactor.value;
     d.active = true;
+    // Opaque integer, and it stays opaque: the field still knows NOTHING about OrbitLine
+    // (Slice B/C boundary above), exactly as `alpha` names no hover concept.
+    d.localSystemId = systemId;
     this._descCount = n + 1;
   }
 
@@ -584,7 +754,7 @@ export class OrbitConicField {
    * @param {THREE.PerspectiveCamera} camera  render-time camera (matrixWorld current — D-2)
    * @param {{width:number, height:number}} viewport  the sceneTarget dimensions
    */
-  update(descriptors, camera, viewport) {
+  update(descriptors, camera, viewport, discs = null) {
     const W = viewport.width, H = viewport.height;
     const count = Math.min(descriptors.length, CONIC_MAX);
     this.count = count;
@@ -609,7 +779,8 @@ export class OrbitConicField {
       const c = normalizeColor(d.color);
       const alpha = d.alpha == null ? 0.8 : d.alpha;
 
-      this._packRing(src, i, conic, d.radius, camDist, isActive ? 1 : 0, c, alpha);
+      const nk = discs === null ? 0 : this._resolveDiscs(d, discs);
+      this._packRing(src, i, conic, d.radius, camDist, isActive ? 1 : 0, c, alpha, nk);
       if (isActive) active++;
     }
 
@@ -628,8 +799,60 @@ export class OrbitConicField {
     this.texture.needsUpdate = true;
   }
 
-  /** Pack one ring column (rows 0-7). conic===null zeros the conic rows. */
-  _packRing(src, i, conic, radius, camDist, activeFlag, color, alpha) {
+  /**
+   * THE PREDICATE (orbit-line-local-system-occlusion-2026-08-18). Which occluder discs
+   * apply to ring `d`, transformed into that ring's own plane frame and staged in
+   * `this._discScratch` for _packRing. Returns how many.
+   *
+   * Two terms, and only two:
+   *
+   *   (a) THE SAME-LOCAL-SYSTEM EXEMPTION, and it is load-bearing ALONE. The pair's inner
+   *       ring r1 lies ENTIRELY inside the outer ring r2, so without this the disc erases
+   *       it in full and silently deletes what binary-barycentre-render-2026-08-18 shipped.
+   *   (b) 3-D CONTAINMENT — does this ring's circle actually enter the ball?
+   *
+   * ⛔ There is deliberately NO `ring.radius > disc.radius` term, though it reads like a
+   * sensible fail-safe. Because the disc radius bounds every local ring by construction,
+   * that term independently culls every same-system ring — which would make (a) dead code
+   * and turn AC-LOCAL-RINGS-SURVIVE's falsification test into a permanent no-op. A
+   * fail-safe that disarms the assertion protecting the thing it guards is worse than none.
+   * It is also unnecessary: measured live on wd-10, the nearest foreign ring misses by
+   * gap² = 2 427 689 against Reff² = 0.806, a margin of ~3e6. Geometry separates them.
+   */
+  _resolveDiscs(d, discs) {
+    const mw = d.matrixWorld.elements;
+    // Ring transforms are RIGID — rotation.x and position only; no `.scale` write exists in
+    // OrbitRingSDF.js or OrbitLine.js, and WorldOrigin.js writes position. So the basis
+    // columns are orthonormal and the world→local map is three dot products, not an inverse.
+    const tx = mw[12], ty = mw[13], tz = mw[14];
+    let nk = 0;
+    for (let k = 0; k < discs.length; k++) {
+      const g = discs[k];
+      if (d.localSystemId >= 0 && d.localSystemId === g.systemId) continue; // (a)
+
+      const vx = g.cx - tx, vy = g.cy - ty, vz = g.cz - tz;
+      const cx = vx * mw[0] + vy * mw[1] + vz * mw[2];
+      const cy = vx * mw[4] + vy * mw[5] + vz * mw[6];
+      const cz = vx * mw[8] + vy * mw[9] + vz * mw[10];
+
+      const reff2 = g.radius * g.radius - cy * cy;
+      if (!(reff2 > 0)) continue;                 // the ball misses the ring's plane entirely
+
+      const gap = Math.hypot(cx, cz) - d.radius;  // (b)
+      if (gap * gap >= reff2) continue;           // the circle never enters the disc
+
+      const o = nk * 3;
+      this._discScratch[o] = cx;
+      this._discScratch[o + 1] = cz;
+      this._discScratch[o + 2] = reff2;
+      nk++;
+      if (nk === KEEPOUT_MAX) break;
+    }
+    return nk;
+  }
+
+  /** Pack one ring column (rows 0-9, plus 10..10+nk-1). conic===null zeros the conic rows. */
+  _packRing(src, i, conic, radius, camDist, activeFlag, color, alpha, nk = 0) {
     // off(r) = (r*CONIC_MAX + i)*4 = i*4 + r*(CONIC_MAX*4). Inlined as running
     // additions of a constant row stride — no per-call closure allocation (R5).
     const stride = CONIC_MAX * 4;
@@ -657,7 +880,7 @@ export class OrbitConicField {
       // deliberately absent — it is exactly hScale*rowW, which row 6 already carries.
       const Hf = conic.Hfwd, hs = conic.hScale;
       src[o8] = Hf[0]; src[o8 + 1] = Hf[1]; src[o8 + 2] = Hf[2]; src[o8 + 3] = Hf[3];
-      src[o9] = Hf[4]; src[o9 + 1] = Hf[5]; src[o9 + 2] = hs;    src[o9 + 3] = 0;
+      src[o9] = Hf[4]; src[o9 + 1] = Hf[5]; src[o9 + 2] = hs;    src[o9 + 3] = nk;
     } else {
       // Null conic: zero the conic rows so no stale data lingers; keep radius/
       // camDist for introspection but force active=0 (shader skips it anyway).
@@ -670,10 +893,21 @@ export class OrbitConicField {
       src[o6] = 0; src[o6 + 1] = 0; src[o6 + 2] = 0; src[o6 + 3] = 0;
       src[o2] = 0; src[o2 + 1] = radius; src[o2 + 2] = camDist; src[o2 + 3] = 0;
       src[o8] = 0; src[o8 + 1] = 0; src[o8 + 2] = 0; src[o8 + 3] = 0;
-      src[o9] = 0; src[o9 + 1] = 0; src[o9 + 2] = 0; src[o9 + 3] = 0;
+      src[o9] = 0; src[o9 + 1] = 0; src[o9 + 2] = 0; src[o9 + 3] = nk;
     }
     // row7: color.rgb, alpha
     src[o7] = color.r; src[o7 + 1] = color.g; src[o7 + 2] = color.b; src[o7 + 3] = alpha;
+
+    // rows 10..10+nk-1: the applicable occluder discs, already in this ring's plane frame
+    // (_resolveDiscs). ⛔ Slots past nk are deliberately NOT cleared — the shader breaks on
+    // nk exactly as the ring loop breaks on uCount, so stale floats there are unreachable,
+    // the same reasoning docs/PARKING_LOT.md:206-213 gives for stale _source past uCount.
+    let oK = o9 + stride;
+    const ds = this._discScratch;
+    for (let k = 0; k < nk; k++, oK += stride) {
+      const o = k * 3;
+      src[oK] = ds[o]; src[oK + 1] = ds[o + 1]; src[oK + 2] = ds[o + 2]; src[oK + 3] = 0;
+    }
   }
 
   /**
@@ -702,7 +936,22 @@ export class OrbitConicField {
       Cs, Hinv, rowW, bounds, Hfwd, hScale,
       radius: src[o2 + 1], camDist: src[o2 + 2], active: src[o2 + 3],
       color: { r: src[o7], g: src[o7 + 1], b: src[o7 + 2] }, alpha: src[o7 + 3],
+      keepOutCount: src[o9 + 3],
     };
+  }
+
+  /**
+   * Unpack ring i's k-th packed occluder disc — the inverse of _packRing's rows 10+.
+   * cx/cz are in RING i's OWN PLANE FRAME and reff2 is R² − cy², so a circle point
+   * (X, Z) on that ring is inside iff (X−cx)² + (Z−cz)² < reff2. Introspection + tests.
+   * @param {number} i ring index
+   * @param {number} k disc index within that ring's applicable set, 0 <= k < keepOutCount
+   * @returns {{cx:number, cz:number, reff2:number}}
+   */
+  readOccluder(i, k) {
+    const src = this._source;
+    const o = ((10 + k) * CONIC_MAX + i) * 4;
+    return { cx: src[o], cz: src[o + 1], reff2: src[o + 2] };
   }
 
   /** Free GPU resources. */
