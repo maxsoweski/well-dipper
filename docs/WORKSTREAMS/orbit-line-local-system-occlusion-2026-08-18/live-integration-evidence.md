@@ -81,12 +81,34 @@ The inner ring lies entirely inside the outer one and is fully drawn.
   literals the disc-mask insert sits between. ⛔ Must be run with the agent sandbox disabled;
   Chrome cannot `socket()` inside it and the gate FATALs on launch, not on a real failure.
 
+## AC-RING-BUDGET-AND-PERF — the frame-time number, measured
+
+Protocol exactly as the AC specifies: same seed (`wd-10`), same body (planet 3), same framing
+(`frameBody radii 34`), same window (1680 × 1020), `freezeFrame` so the scene is static, 120
+warm-up frames discarded, then **N = 600** rAF deltas per arm. **The page was reloaded with cache
+ignored between arms**, and the parent arm's renderer was confirmed on the page rather than assumed
+— its packed texture reports **10 rows**, the build's **18**.
+
+| arm | rows | n | median | p95 | min |
+|---|---:|---:|---:|---:|---:|
+| **parent** `e0b6fa8` | 10 | 600 | **4.2 ms** | **4.5 ms** | 3.5 ms |
+| **build** `4cf67c5` | 18 | 600 | **4.2 ms** | **4.5 ms** | 3.6 ms |
+
+**Median delta 0.0 ms, p95 delta 0.0 ms.** ⛔ State that as *below this measurement's resolution*,
+not as zero: the deltas quantise at ~0.1 ms here and both arms sit on the same two values, so
+anything under ~0.1 ms is invisible to it. What the number does establish is that there is no
+regression of the size a per-pixel loop could plausibly have introduced.
+
+The mechanism agrees: at this pose 4 of 16 rings carry a disc and every one has `nk = 1`, so twelve
+of the sixteen rings pay one integer compare per `arcRoot` call and the other four pay one compare
+plus one `texelFetch` — and only on pixels that already passed the band, extent and front-branch
+gates.
+
+⚠ Not a claim about the worst case. A pose with more moon-bearing planets in frame, or a system
+approaching `KEEPOUT_MAX = 8` discs, is unmeasured.
+
 ## ⛔ NOT measured, and why
 
-1. **A frame-time number for AC-RING-BUDGET-AND-PERF.** Nothing in this repo can produce one
-   headlessly — `tools/conic-gl-gate.mjs` has no clock and `tools/barycentre-probe.mjs` has no
-   timing. It needs a live parent-vs-build comparison at a frozen pose with the page reloaded
-   between arms, N ≥ 300 frames. **The AC is not satisfied until that runs.**
-2. **A live click inside the occluded span.** The unit fence proves the disc path touches neither
+1. **A live click inside the occluded span.** The unit fence proves the disc path touches neither
    `mesh.visible` nor `orbitHitPositions`, and both are intact live, but the click itself is unrun.
-3. **AC-UAT.** Max's alone. `deferred-to-max`, never passed by an agent.
+2. **AC-UAT.** Max's alone. `deferred-to-max`, never passed by an agent.
