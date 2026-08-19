@@ -2,7 +2,7 @@
   "workstream": "binary-barycentre-render-2026-08-18",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "verified",
+  "status": "shipped",
   "summary": "Draw the primary at the true barycentre of itself and all its moons instead of pinning it to its orbital point, and draw the orbit rings in the barycentric frame where one moon dominates. Pure renderer change in src/main.js: q is read from records that already exist as of B5.0 (34b502d), so no generation output moves by a single bit. Max ruled the term applies to EVERY moon with no mass-ratio cutoff, which means it also corrects 16 existing moon/parent pairs whose barycentre already sits outside the primary and visibly moves 111 more. Fixes the UAT failure recorded in docs/FEATURES/binary-planets-scoping-2026-08-17.md §9.",
   "acceptanceCriteria": [
     {
@@ -78,7 +78,9 @@
         "input": "Max watches a recording of wd-10 planet 3 over a full companion orbit with orbits visible, and a second of wd-133 planet 4 (six moons, worst epicyclic case) and one ordinary moon system.",
         "observable": "Max says it reads as a pair, and that nothing else got worse. Never PASSed by an agent — deferred-to-max. Animated feature, so the Shipped gate takes a recording, not a screenshot."
       },
-      "layer": "uat"
+      "layer": "uat",
+      "result": "PASS",
+      "resultNote": "Max, 2026-08-19: \"Looks like it's working.\" Ruled on a clean reload."
     }
   ],
   "architecturalConnections": {
@@ -110,5 +112,13 @@
       "Spawn writes the un-offset position too (main.js:7606 planet, :7691 moon rings) and the opening hero shot takes a CLONE of it (main.js:7942), so a per-frame-only fix leaves the hero camera framed on the un-offset point permanently."
     ]
   },
-  "verifiedPendingMax": "b201bc0"
+  "verifiedPendingMax": "b201bc0",
+  "shippedCommit": "52031fd",
+  "uat": {
+    "ruledBy": "Max",
+    "ruledOn": "2026-08-19",
+    "verdict": "PASS",
+    "quote": "Looks like it's working",
+    "note": "Re-look on a CLEAN page reload, after the first UAT's item 1 ('one of the planets is not riding along its orbit line') was traced to HMR-duplicated module state. Retired objectively before he looked: both bodies measure on their rings at ratio 1.000000, out-of-plane -5e-8, r1 = 5.5332 R_p, r2 = 19.5492, cos-angle = -1, 16/16 ring proxies — reproduced in a fresh session at 51e3c7f."
+  }
 }

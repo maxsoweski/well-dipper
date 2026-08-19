@@ -1921,12 +1921,16 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
-> **▶▶ BARYCENTRE RENDER — code SHIPPED `52031fd`, integration GREEN, ⛔ Max's UAT re-look OPEN.**
+> **▶▶ BARYCENTRE RENDER — ✅ SHIPPED + UAT-PASSED 2026-08-19.** Max: *"Looks like it's working."*
+> ▶▶ **ACTIVE = ORBIT-LINE LOCAL-SYSTEM OCCLUSION** (queue item 2), planned at `971eb7a`, building.
+> ⛔ Historical below — kept because the HMR lesson in it is the most expensive one this lane learned.
 > ⭐ Full state + next action: `docs/FEATURES/moon-formation-handoff-2026-08-18-b5.md` **§11**.
 > ⛔ **RELOAD THE PAGE BEFORE ANY BROWSER MEASUREMENT** — HMR-duplicated module state faked a
 > constant 0.779424x moon-orbit error that cost three commits and a 13-agent workflow. §11 leads with it.
-> ▶ NEXT: Max re-looks at wd-10 planet 3 on a CLEAN load; then queue item 2 (orbit-line occlusion,
-> **now PLANNED at `971eb7a`**); then Sol, as a workflow.
+> ▶ NEXT: **queue item 2 (orbit-line occlusion), building**; then Sol, as a workflow.
+> ⭐ Max also ruled the two item-2 behaviours flagged for him — the gap persisting when the camera is
+> INSIDE a local system, and the far arc still drawing down a ring's tangent: *"Looks good also.
+> We can proceed."* Both stand as designed; no pop-on-boundary, no screen-space silhouette clause.
 >
 > ### 2026-08-19 — the re-look is SET UP, and the HMR diagnosis is CONFIRMED by measurement
 > Page reloaded clean, wd-10 planet 3 framed sunward, orbits on. Re-measured in a fresh session:
