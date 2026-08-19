@@ -2,7 +2,7 @@
   "workstream": "orbit-line-local-system-occlusion-2026-08-18",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "verified",
+  "status": "withdrawn",
   "summary": "Make a planet's local ring system occlude larger rings that pass through it, so a heliocentric orbit line stops at the edge of the local system and resumes past it instead of cutting across the pair's two concentric rings. Whole-disc erase, not a line hop — Max ruled it against a side-by-side preview 2026-08-18. Applies to every planet with moons, not just binaries. Requires OrbitConicField.js, whose parking-lot hold Max lifted the same day; the parking lot flags a real perf-architecture decision here, which is why this is scoped separately from the barycentre render. DESIGN PASS 2026-08-19 (13 agents, read-only): world-space ball keep-out tested against the circle point arcRoot already builds, packed into 8 new rows of the EXISTING DataTexture, predicate = same-local-system exemption + 3-D containment with NO radius comparison. Zero src/main.js edits. Plan + working-Claude's verification in implementation-plan.md.",
   "acceptanceCriteria": [
     {
@@ -15,7 +15,7 @@
       "layer": "integration",
       "live": true,
       "result": "PASS",
-      "resultNote": "Live wd-10: exactly ONE masked run on planet 3's heliocentric circle at 400k samples; arc length 1.75627 vs chord 2R = 1.795735 (the 2% is the sampling step). Headless bisection lands both endpoints on |P-C| = R to 12 dp against sqrt(reff2)."
+      "resultNote": "WITHDRAWN 2026-08-19 (Max rejected the premise at UAT). Result below was true of the reverted build. Live wd-10: exactly ONE masked run on planet 3's heliocentric circle at 400k samples; arc length 1.75627 vs chord 2R = 1.795735 (the 2% is the sampling step). Headless bisection lands both endpoints on |P-C| = R to 12 dp against sqrt(reff2)."
     },
     {
       "id": "AC-LOCAL-RINGS-SURVIVE",
@@ -27,7 +27,7 @@
       "layer": "integration",
       "live": true,
       "result": "PASS",
-      "resultNote": "Live: the pair's rings still 0.254132 / 0.897868 (5.5332 / 19.5492 primary radii), both with keepOutCount 0. Falsified by MUTATION, not by parent — deleting the exemption masks r1 at all 360 sampled angles."
+      "resultNote": "WITHDRAWN 2026-08-19 (Max rejected the premise at UAT). Result below was true of the reverted build. Live: the pair's rings still 0.254132 / 0.897868 (5.5332 / 19.5492 primary radii), both with keepOutCount 0. Falsified by MUTATION, not by parent — deleting the exemption masks r1 at all 360 sampled angles."
     },
     {
       "id": "AC-APPLIES-GENERALLY",
@@ -38,7 +38,7 @@
       },
       "layer": "unit",
       "result": "PASS",
-      "resultNote": "Live: 4 discs for 4 moon-bearing planets, none for planet 0. Ring 6 is planet 4 — UNDOMINATED, 3 moons — with reff2 = 90.453102 = 9.5107^2, its outermost local ring. No special case for the 27 pairs."
+      "resultNote": "WITHDRAWN 2026-08-19 (Max rejected the premise at UAT). Result below was true of the reverted build. Live: 4 discs for 4 moon-bearing planets, none for planet 0. Ring 6 is planet 4 — UNDOMINATED, 3 moons — with reff2 = 90.453102 = 9.5107^2, its outermost local ring. No special case for the 27 pairs."
     },
     {
       "id": "AC-HIT-TESTING-UNCHANGED",
@@ -50,7 +50,7 @@
       "layer": "integration",
       "live": true,
       "result": "PARTIAL",
-      "resultNote": "Unit fence green and live state intact: 16/16 ring proxies visible with intact baked hit perimeters, and the disc path provably touches neither. ⛔ The live CLICK inside the occluded span is UNRUN."
+      "resultNote": "WITHDRAWN 2026-08-19 (Max rejected the premise at UAT). Result below was true of the reverted build. Unit fence green and live state intact: 16/16 ring proxies visible with intact baked hit perimeters, and the disc path provably touches neither. ⛔ The live CLICK inside the occluded span is UNRUN."
     },
     {
       "id": "AC-RING-BUDGET-AND-PERF",
@@ -61,7 +61,7 @@
       },
       "layer": "unit",
       "result": "PASS",
-      "resultNote": "Descriptor count 16 before and after; CONIC_MAX 64; texture 64x18; KEEPOUT_MAX = 8 declared and justified in a comment; the shader loop bound is that literal. FRAME TIME MEASURED 2026-08-19 per the stated protocol — wd-10 planet 3, frameBody radii 34, 1680x1020, freezeFrame, 120 warm-up frames discarded, N = 600 rAF deltas per arm, page reloaded with cache ignored between arms, parent renderer confirmed on the page by its 10-row texture vs the build's 18. Parent e0b6fa8: median 4.2 ms, p95 4.5 ms. Build 4cf67c5: median 4.2 ms, p95 4.5 ms. Delta 0.0 ms on both — stated as BELOW THIS MEASUREMENT'S ~0.1 ms RESOLUTION, not as zero. Worst case (a pose near KEEPOUT_MAX discs) is unmeasured."
+      "resultNote": "WITHDRAWN 2026-08-19 (Max rejected the premise at UAT). Result below was true of the reverted build. Descriptor count 16 before and after; CONIC_MAX 64; texture 64x18; KEEPOUT_MAX = 8 declared and justified in a comment; the shader loop bound is that literal. FRAME TIME MEASURED 2026-08-19 per the stated protocol — wd-10 planet 3, frameBody radii 34, 1680x1020, freezeFrame, 120 warm-up frames discarded, N = 600 rAF deltas per arm, page reloaded with cache ignored between arms, parent renderer confirmed on the page by its 10-row texture vs the build's 18. Parent e0b6fa8: median 4.2 ms, p95 4.5 ms. Build 4cf67c5: median 4.2 ms, p95 4.5 ms. Delta 0.0 ms on both — stated as BELOW THIS MEASUREMENT'S ~0.1 ms RESOLUTION, not as zero. Worst case (a pose near KEEPOUT_MAX discs) is unmeasured."
     },
     {
       "id": "AC-NO-COLLATERAL-OCCLUSION",
@@ -73,7 +73,7 @@
       "layer": "integration",
       "live": true,
       "result": "PASS",
-      "resultNote": "Live: both binary-STAR rings at keepOutCount 0; every moon ring at 0; planet 0's heliocentric ring at 0. All 16 ring proxies still present and visible. Nearest false positive misses by gap^2 = 2,427,689 against Reff^2 = 0.806."
+      "resultNote": "WITHDRAWN 2026-08-19 (Max rejected the premise at UAT). Result below was true of the reverted build. Live: both binary-STAR rings at keepOutCount 0; every moon ring at 0; planet 0's heliocentric ring at 0. All 16 ring proxies still present and visible. Nearest false positive misses by gap^2 = 2,427,689 against Reff^2 = 0.806."
     },
     {
       "id": "AC-UAT",
@@ -83,8 +83,8 @@
         "observable": "Max says it reads as solid. Never PASSed by an agent — deferred-to-max."
       },
       "layer": "uat",
-      "result": "deferred-to-max",
-      "resultNote": "Max's gate alone. Never passed by an agent."
+      "result": "REJECTED",
+      "resultNote": "Max, 2026-08-19: \"we should just have the larger orbit intersect with the barycenter; I don't think having those smaller orbits occlude it actually works.\" The gate did its job — an agent could not have found this, because nothing was wrong."
     }
   ],
   "architecturalConnections": {
@@ -109,5 +109,22 @@
     ]
   },
   "planRef": "implementation-plan.md",
-  "evidenceRef": "live-integration-evidence.md"
+  "evidenceRef": "live-integration-evidence.md",
+  "withdrawn": {
+    "ruledBy": "Max",
+    "ruledOn": "2026-08-19",
+    "quote": "we should just have the larger orbit intersect with the barycenter; I don't think having those smaller orbits occlude it actually works",
+    "note": "⛔ UAT REJECTED THE PREMISE, not the build. Every AC passed and the mechanism was measured working live — one contiguous gap the full width of the disc, the pair's inner ring intact, no collateral occlusion, no measurable frame cost. Max looked at the result and ruled that a heliocentric line running THROUGH the barycentre reads better than one that stops at the local system's edge. The line already passes exactly through the barycentre (measured gap² = 0.00000 for planet 3's ring against the bary centre), so the revert restores precisely the behaviour he asked for.",
+    "revertedIn": "see the revert commit; src/objects/OrbitConicField.js and ringConic.js return to e0b6fa8",
+    "recordKept": [
+      "intent.md",
+      "implementation-plan.md",
+      "live-integration-evidence.md"
+    ],
+    "reusableIfRevisited": [
+      "The design pass found FOUR real defects in this contract's own ACs — an asteroid-belt clause naming an object that cannot exist, an observable that passed with or without the feature, a claimed parent-red the test could not deliver, and two probe numbers the probe does not print. Those corrections are in this file and stand on their own.",
+      "The keep-out mechanism is sound and cheap: a world-space ball tested against the circle point arcRoot already builds, packed into rows 10-17 of the existing DataTexture with nk in row 9 slot 3. If line-on-line occlusion is ever wanted for another reason, implementation-plan.md plus live-integration-evidence.md are enough to rebuild it without re-deriving anything.",
+      "⛔ The same-system exemption is load-bearing and the tempting `ring.radius > disc.radius` fail-safe must NOT be added: it subsumes the exemption and silently disarms the assertion that protects the pair's inner ring."
+    ]
+  }
 }

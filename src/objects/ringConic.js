@@ -368,25 +368,10 @@ export function sampsonDistancePx(Cs, px, py) {
 // that point is BEHIND the camera, which is the whole purpose. Unlike
 // frontBranchOK's sign test on a reconstructed point, w here is evaluated on a
 // point known to be ON the circle, so it stays meaningful when adj(H) does not.
-function arcRootEval(Hfwd, rowW, radius, px, py, c, s, out, discs = null, nDisc = 0) {
+function arcRootEval(Hfwd, rowW, radius, px, py, c, s, out) {
   const X = radius * c, Z = radius * s;
   const wn = Hfwd[6] * X + Hfwd[7] * Z + Hfwd[8];
   if (!(wn > 0)) { out.dist = Infinity; out.w = 0; return out; }
-  // OCCLUDER DISCS — the JS mirror of the fragment shader's rows-10+ loop
-  // (orbit-line-local-system-occlusion-2026-08-18). `discs` is a flat (cx, cz, reff2)
-  // triple list ALREADY in this ring's plane frame, exactly as the texture carries it,
-  // and X/Z above are the same (X, Z) the GLSL calls q.xy. A masked point is A ROOT THAT
-  // DOES NOT EXIST — the same Infinity/1.0e30 sentinel the behind-camera branch uses.
-  //
-  // ⚠ Params here, GLSL globals there. That asymmetry is deliberate, not drift: threading
-  // them through the JS arcAxisInto is free, but doing it in GLSL would edit the arcAxis
-  // call line that tools/conic-gl-gate.mjs:189 (M16) replaces literally, FATALing the gate
-  // on a no-op change. "Byte-mirror" in this file means numerical parity, not one signature.
-  for (let k = 0; k < nDisc; k++) {
-    const o = k * 3;
-    const ex = X - discs[o], ez = Z - discs[o + 1];
-    if (ex * ex + ez * ez < discs[o + 2]) { out.dist = Infinity; out.w = 0; return out; }
-  }
   const sx = (Hfwd[0] * X + Hfwd[1] * Z + Hfwd[2]) / wn;
   const sy = (Hfwd[3] * X + Hfwd[4] * Z + Hfwd[5]) / wn;
   out.dist = Math.hypot(sx - px, sy - py);
@@ -414,7 +399,7 @@ function foldRoot(r, reach, acc) {
 // Solve screen_axis(θ) = the pixel's coordinate on that axis. A cosθ + B sinθ +
 // C = 0 with cos² + sin² = 1 → the closed-form root pair below (verify: A·c +
 // B·s = −C and c² + s² = 1 both fall out identically). ONE sqrt, no trig.
-function arcAxisInto(Hfwd, rowW, radius, px, py, axis, reach, acc, discs = null, nDisc = 0) {
+function arcAxisInto(Hfwd, rowW, radius, px, py, axis, reach, acc) {
   const h0 = axis === 0 ? Hfwd[0] : Hfwd[3];
   const h1 = axis === 0 ? Hfwd[1] : Hfwd[4];
   const h2 = axis === 0 ? Hfwd[2] : Hfwd[5];
@@ -427,8 +412,8 @@ function arcAxisInto(Hfwd, rowW, radius, px, py, axis, reach, acc, discs = null,
   const disc = M2 - C * C;
   if (disc >= 0) {
     const sq = Math.sqrt(disc), iv = 1 / M2;
-    foldRoot(arcRootEval(Hfwd, rowW, radius, px, py, (-A * C + B * sq) * iv, (-B * C - A * sq) * iv, _rootA, discs, nDisc), reach, acc);
-    foldRoot(arcRootEval(Hfwd, rowW, radius, px, py, (-A * C - B * sq) * iv, (-B * C + A * sq) * iv, _rootB, discs, nDisc), reach, acc);
+    foldRoot(arcRootEval(Hfwd, rowW, radius, px, py, (-A * C + B * sq) * iv, (-B * C - A * sq) * iv, _rootA), reach, acc);
+    foldRoot(arcRootEval(Hfwd, rowW, radius, px, py, (-A * C - B * sq) * iv, (-B * C + A * sq) * iv, _rootB), reach, acc);
     return acc;
   }
   // No root on this axis: this screen row/column misses the curve outright.
@@ -438,14 +423,14 @@ function arcAxisInto(Hfwd, rowW, radius, px, py, axis, reach, acc, discs = null,
   // is scored by its real distance. The other axis is well-conditioned there and
   // the min takes it anyway; this only keeps the degenerate axis honest.
   const M = Math.sqrt(M2), sg = C >= 0 ? -1 : 1;
-  return foldRoot(arcRootEval(Hfwd, rowW, radius, px, py, sg * A / M, sg * B / M, _rootA, discs, nDisc), reach, acc);
+  return foldRoot(arcRootEval(Hfwd, rowW, radius, px, py, sg * A / M, sg * B / M, _rootA), reach, acc);
 }
 
 const _acc = { dist: Infinity, w: 0, minW: Infinity };
-function arcSolve(Hfwd, rowW, radius, px, py, reach, discs = null, nDisc = 0) {
+function arcSolve(Hfwd, rowW, radius, px, py, reach) {
   _acc.dist = Infinity; _acc.w = 0; _acc.minW = Infinity;
-  arcAxisInto(Hfwd, rowW, radius, px, py, 0, reach, _acc, discs, nDisc);
-  arcAxisInto(Hfwd, rowW, radius, px, py, 1, reach, _acc, discs, nDisc);
+  arcAxisInto(Hfwd, rowW, radius, px, py, 0, reach, _acc);
+  arcAxisInto(Hfwd, rowW, radius, px, py, 1, reach, _acc);
   return _acc;
 }
 
@@ -463,30 +448,8 @@ function arcSolve(Hfwd, rowW, radius, px, py, reach, discs = null, nDisc = 0) {
  * @param {number} radius ring radius in the ring's local frame
  * @returns {number} px distance to the nearest in-front circle point (Infinity if none)
  */
-export function frontArcDistPx(Hfwd, radius, px, py, discs = null, nDisc = 0) {
-  return arcSolve(Hfwd, null, radius, px, py, 0, discs, nDisc).dist;
-}
-
-/**
- * Is the circle point at angle θ masked by one of this ring's occluder discs?
- * (orbit-line-local-system-occlusion-2026-08-18.) The predicate alone, with no camera
- * and no projection — which is the whole reason AC-GAP's "exactly one contiguous gap"
- * is provable headlessly and at EVERY pose rather than at the one pose it is measured at.
- *
- * @param {number} radius ring radius in the ring's local frame
- * @param {number} theta  angle on the circle, radians
- * @param {Float64Array|number[]} discs flat (cx, cz, reff2) triples in the RING'S plane frame
- * @param {number} nDisc  how many triples apply
- * @returns {boolean} true if that point lies inside a disc and is therefore not drawn
- */
-export function arcPointMasked(radius, theta, discs, nDisc) {
-  const X = radius * Math.cos(theta), Z = radius * Math.sin(theta);
-  for (let k = 0; k < nDisc; k++) {
-    const o = k * 3;
-    const ex = X - discs[o], ez = Z - discs[o + 1];
-    if (ex * ex + ez * ez < discs[o + 2]) return true;
-  }
-  return false;
+export function frontArcDistPx(Hfwd, radius, px, py) {
+  return arcSolve(Hfwd, null, radius, px, py, 0).dist;
 }
 
 /**
@@ -514,8 +477,8 @@ export function arcPointMasked(radius, theta, discs, nDisc) {
  * @param {number} reach bandReachPx(pixelWidth, featherPx)
  * @returns {{dist:number, w:number}} gate distance, and the clip w to write
  */
-export function frontArcDepthW(Hfwd, rowW, radius, px, py, reach, discs = null, nDisc = 0) {
-  const a = arcSolve(Hfwd, rowW, radius, px, py, reach, discs, nDisc);
+export function frontArcDepthW(Hfwd, rowW, radius, px, py, reach) {
+  const a = arcSolve(Hfwd, rowW, radius, px, py, reach);
   return { dist: a.dist, w: a.minW < Infinity ? a.minW : a.w };
 }
 
