@@ -1,4 +1,6 @@
-# Handoff — the moon-formation lane. ▶ NEXT = **B5**. The B4 block is CLEARED (`1ed1176`).
+# Handoff — the moon-formation lane. ⛔ **SUPERSEDED by [`moon-formation-handoff-2026-08-18-b5.md`](moon-formation-handoff-2026-08-18-b5.md)** — B5.0 has since landed.
+
+> Kept because its §2 doc map, §5 techniques and §6 state are still current. ▶ NEXT is now **B5 steps 1–9**.
 
 **Date:** 2026-08-18 · **Repo:** `~/projects/well-dipper`, branch `feature/world-engine-production-L1`
 **HEAD:** `2f078b1` · tracked tree **CLEAN** · **all four instruments GREEN at `1def6da`, exit 0**
