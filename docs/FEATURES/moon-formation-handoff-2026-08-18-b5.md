@@ -443,6 +443,34 @@ view. It is a correctness/plausibility increment, not a visual one, and it shoul
 | 2 | **B5 steps 1–9** | **PROCEED, via workflows.** Now the active workstream. |
 | 3 | **Sol** | **AGREED** — ship as-is, fix Sol's mass data as its own increment. ⛔ Needs the window CLOSED (post-B7): `port-condition-contract.test.js` has **no re-bless mechanism**, so a data edit there is a hand-repair with no safety net. Filed in `PARKING_LOT.md` with the wobble table. |
 | 4 | **§4b — the `0.95` radius cap** | **AGREED** — fold into **B5 step 9**, the mass-ratio commit. |
+| 5 | **the cap's DISPOSITION** (raised 2026-08-19 by the B5 recon) | ⭐ **RULED: option C — REMOVE the cap; the primary is designated by MASS.** Max: *"1 agreed."* |
+
+#### ⛔ What ruling 5 changes, and what it costs — read before writing step 9
+
+The `0.95` cap (`MoonGenerator.js:381`) is the ONLY thing making the 2026-08-18 naming ruling
+(*"largest planet can get primary designation"*) true by construction. ⛔ **There is no test anywhere
+comparing a moon's radius or mass to its parent's** — the recon looked specifically; the cap's only
+protection is prose. Removing it therefore changes what "largest" means:
+
+| | with the cap | without |
+|---|---|---|
+| companions clipped below their drawn `q` | **7 / 97**, worst 46.3% short | **0** |
+| companions WIDER than their primary | 0 | **4 / 99**, worst 17% wider |
+| …but lighter than their primary | — | **all 4** (`q ≤ BINARY_Q_MAX = 0.83`, `:554`) |
+
+**So "primary" becomes a MASS word, not a size word.** That is the two-body convention, `q` is already
+defined that way at `:381`, and `Barycentre.js:95` already keys dominance off mass × orbit radius —
+so the rest of the system already agrees; only the prose did not.
+
+⛔ **It moves a render Max UAT-passed on 2026-08-19.** Companion mass ∝ `f³` (`:382`, `:418`) and
+`Barycentre.js:113` `r1 = a · massFraction` reads that mass. On `wd-234` removing the cap takes `f`
+from 0.95 to 1.1685 — **mass ×1.86, and that pair's two rings resize by nearly the same factor.**
+All 7 cap-binding pairs are ring-bearing. **This needs Max's eyes once step 9 lands.**
+
+⭐ **Record `qDelivered` and `qClipped` on the record regardless of disposition.** The defect §4b
+named was never the cap itself — it was that the delivered `q` came in under the sampler's draw
+**with nothing recording it**. A receipt fixes that permanently; removing the cap only fixes today's
+population.
 
 ### Queue after this — §10 otherwise unchanged
 
