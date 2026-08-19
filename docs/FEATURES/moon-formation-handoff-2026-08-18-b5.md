@@ -285,3 +285,78 @@ denominator any Band A rate is asserted against (§4a).
 - ⛔ **Do NOT invoke `library-context`.** The SessionStart hook nags about a three.js brief for an
   unrelated project (`gesar-app-skin`). This repo is on three.js **0.183.1**.
 
+
+---
+
+## 11. ▶ SESSION 2026-08-18/19 — queue item 1 SHIPPED-PENDING-UAT, item 2 SCOPED. Start here.
+
+**HEAD `87cdcd3`** · branch `feature/world-engine-production-L1` · tracked tree **CLEAN**
+⛔ Max's rulings this session are in §8 items 2 and 4 and below. §10's queue order held.
+
+### ⭐⭐ READ THIS BEFORE ANY BROWSER MEASUREMENT — it cost this session three commits and a workflow
+
+**A page that has been hot-reloaded through a build is not evidence about the shipped code.**
+Every `src` edit fires Vite HMR into the open game. After a dozen-plus reloads, stale duplicated
+module state gave planet-class moons a **constant 0.779424× drawn-orbit-radius error** that:
+
+- survived four consecutive `spawnProceduralSystem` calls (a respawn rebuilds the scene, **not**
+  HMR-duplicated module state),
+- survived `_lab.freezeFrame`,
+- appeared identically in `mesh.position`, `_interpPrev` and `_interpCurr`,
+- and **vanished completely on one page reload** — 1.000000 on every body across wd-10, wd-17 and
+  wd-133, planet-class and plain alike.
+
+**RELOAD FIRST, THEN MEASURE.** A 13-agent workflow honestly returned NOT FOUND because the defect
+was not in `src/`. Six mechanisms were each killed by measurement — that record is in
+`docs/WORKSTREAMS/binary-barycentre-render-2026-08-18/live-integration-evidence.md`, worth reading
+before re-deriving any of them.
+
+### Queue item 1 — BARYCENTRE RENDER. Code shipped, integration green, **Max's UAT still open.**
+
+`docs/WORKSTREAMS/binary-barycentre-render-2026-08-18/` — `intent.md`, `contract.json` (status
+`verified`, `verifiedPendingMax`), `live-integration-evidence.md`. Code at **`52031fd`**.
+
+- `src/physics/BodyMass.js` — the one mass rule; `GravityField._estimateMoonMass` delegates to it.
+  ⛔ `planetMassEarth`'s `?? estimateMassEarth(…)` arm is load-bearing: `SolarSystemData.js` has
+  **zero** `massEarth`, and without it every planet in Sol goes NaN.
+- `src/physics/Barycentre.js` — predicts, never mutates. Reads a plain moon's angle off `_delegate`.
+- `src/main.js` — four seams: per-frame planet write, spawn write, non-binary sun dir, ring loop.
+- 19 headless tests; all five source assertions proven red-at-parent / green-at-HEAD.
+
+**Verified live** (clean load): `r1 = 5.5332 R_p`, `r2 = 19.5492`, both rings on the empty point,
+`cos∠ = −1`, 16/16 ring proxies accounted for, single-star lighting arm `dot = 1` at wd-17.
+
+⛔ **Max's UAT item 1 — "one of the planets is not riding along its orbit line" — was almost
+certainly the HMR artifact above.** He was parked on the poisoned page. **He must re-look on a clean
+reload before any work is spent on it.** ▶ **That re-look is the immediate next action.**
+
+### Queue item 2 — ORBIT-LINE OCCLUSION. Scoped, greenlit, **NOT started.**
+
+`docs/WORKSTREAMS/orbit-line-local-system-occlusion-2026-08-18/` at **`f411974`**, 7 ACs, status
+`scoping`. From Max's UAT: the heliocentric line must not cut through a planet's local ring system.
+
+- **Whole-disc erase**, ruled against a side-by-side preview — one clean gap, not four nicks.
+- **Every moon-bearing planet**, not just the 27 pairs (his standing no-special-case preference).
+- ⛔⛔ **AC-LOCAL-RINGS-SURVIVE is the fatal trap.** The pair's inner ring lies *entirely inside* its
+  outer ring, so a naive "mask anything inside the outermost local radius" rule **erases the
+  primary's ring** and silently deletes what item 1 shipped. The same-system exemption is load-bearing.
+- ⛔ Needs `OrbitConicField.js` — the only ring pixel source (`OrbitRingSDF.js:49`). **Max lifted the
+  `docs/PARKING_LOT.md:239-241` hold on 2026-08-18.** That entry also flags a real perf-architecture
+  decision, carried as `AC-RING-BUDGET-AND-PERF`.
+
+### Still open for Max
+
+1. ⛔ **SOL — unanswered, and he asked for it as a workflow, after items 1 and 2.** Sol carries no
+   masses at all, so 19 of its 26 moons imply impossible bulk densities (to 15.8× Earth) and the
+   barycentre term makes **Earth wobble 1.271 of its own radii, Saturn 0.530, Pluto 7.447, Eris
+   4.644**. *Rec (unchanged): ship as-is and fix Sol's mass data as its own increment — the defect is
+   the data, and editing it mid-window risks reddening `port-condition-contract.test.js`, which has
+   no re-bless mechanism.*
+2. **Shipped flip on item 1** — gated on his UAT re-look, per the §11 note above.
+3. **§4b — the `0.95` radius cap clips the high-`q` tail** (7 of 97 companions, worst 46.3%
+   shortfall). *Rec: fold into B5 step 9, the mass-ratio commit.*
+
+### Queue after that — §10 is otherwise unchanged
+
+**B5 steps 1–9** (independent of both items above; ⛔ read §2 before step 4's merge) → **B6/B7/B8/B9**
+→ **sub-neptune (§4)** → **B10**.
