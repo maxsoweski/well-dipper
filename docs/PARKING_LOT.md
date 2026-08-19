@@ -279,3 +279,41 @@ self-contained within one pass; treat (2) as its own scoped decision.
 
 **Scope:** rendering/lighting, cockpit pass. Multi-system if (2) is taken on (world pass ↔
 cockpit pass). Not started; nothing built.
+
+---
+
+## Star↔planet barycentres — the star's own wobble (filed 2026-08-19, Max's ruling)
+
+**Status: FILED, not started. ⭐ Max wants it CONSIDERED BEFORE the rotor-fuel / gravity-well
+minigame** (`FEATURES.md` GAME tier), because *"realistic barycenters would be a cool enrichment to
+that system."* The link is real, not decorative: the minigame's whole premise is dipping into a
+gravity well for net-positive energy yield, so where the well's centre actually sits — and whether
+it moves — is a gameplay quantity, not a cosmetic one.
+
+**What is already modelled** (established by reading every line at `baa4935`):
+
+| pair | modelled? | where |
+|---|---|---|
+| planet ↔ its moons | ✅ **universally, no gate at all** | `main.js:11267` + `:7733` |
+| binary stars ↔ each other | ✅ closed-form split, not `barycentreOffset` | `main.js:7543`, `:11244` |
+| **star ↔ its planets** | ⛔ **not modelled anywhere** | — |
+
+⭐ The planet↔moons offset has **no `if` on it** — not dominance, not mass ratio, not a flag. Every
+planet, every frame. `DOMINANCE_THRESHOLD = 0.99` gates only whether the pair gets RINGS about the
+empty point, and `Barycentre.js:31-37` says why in its own words: *"NOT a physics cutoff … a
+statement about what a CIRCLE can describe."*
+
+**Why it is filed rather than built.** The physics is nearly free — `barycentreOffset` is already
+generic over "a body plus things orbiting it" and would take planets in place of moons unchanged.
+The cost is everything that READS the star position: lighting, `starKeepOutInfo`, warp targeting and
+the autopilot. Moving the star is a real blast radius for a visual payoff of ~1 stellar radius on a
+body drawn a few pixels across at system view. **It is a correctness/plausibility increment, not a
+visual one — and it becomes a GAMEPLAY one the moment the rotor-fuel minigame exists.** That is the
+moment to build it.
+
+⚠ For scale, general astronomy and NOT measured from this codebase: the Sun–Jupiter barycentre sits
+*outside the Sun's surface*, around 1.07 solar radii out.
+
+**⛔ Scope it before coding.** 2+ systems (physics ↔ lighting ↔ nav/autopilot ↔ keep-out), so it wants
+`dev-collab-scope`. A live decision to settle first: whether the system ORIGIN stays the star or
+becomes the star-plus-planets barycentre — the rings are already drawn about the latter.
