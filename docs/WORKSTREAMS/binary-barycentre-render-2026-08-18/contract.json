@@ -2,7 +2,7 @@
   "workstream": "binary-barycentre-render-2026-08-18",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "verified",
   "summary": "Draw the primary at the true barycentre of itself and all its moons instead of pinning it to its orbital point, and draw the orbit rings in the barycentric frame where one moon dominates. Pure renderer change in src/main.js: q is read from records that already exist as of B5.0 (34b502d), so no generation output moves by a single bit. Max ruled the term applies to EVERY moon with no mass-ratio cutoff, which means it also corrects 16 existing moon/parent pairs whose barycentre already sits outside the primary and visibly moves 111 more. Fixes the UAT failure recorded in docs/FEATURES/binary-planets-scoping-2026-08-17.md §9.",
   "acceptanceCriteria": [
     {
@@ -109,5 +109,6 @@
       "Adding a ring to moonOrbitLines makes it a DEAD CLICK TARGET unless the registration loop at main.js:7879 is bounded by entry.moons.length instead of entry.moonOrbitLines.length — otherwise it highlights on hover and swallows the click (main.js:7072-7073 -> :14011).",
       "Spawn writes the un-offset position too (main.js:7606 planet, :7691 moon rings) and the opening hero shot takes a CLONE of it (main.js:7942), so a per-frame-only fix leaves the hero camera framed on the un-offset point permanently."
     ]
-  }
+  },
+  "verifiedPendingMax": "b201bc0"
 }
