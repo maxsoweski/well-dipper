@@ -46,14 +46,63 @@ All 16 ring proxies on layer 10 enumerated and accounted for, by distance to eac
 two concentric circles about a point with **no body at it**, `MEAMEINATH` sitting on the inner
 one. The satellite read — one ring centred on the primary — is gone.
 
+## AC-PAIR-RINGS — the epicyclic branch, closed at wd-133 planet 4 — PASS
+
+Six moons, top share 0.626, so it must NOT get barycentric rings:
+
+| | |
+|---|---|
+| rings glued to the planet | **6 / 6**, at two samples 900 ms apart |
+| max offset from the planet | **0.000002 R_p** |
+| planet travelled between samples | 285.19 scene units |
+
+The rings translate as a rigid group with the wobbling primary. No barycentric ring was added.
+
+## AC-LIGHTING-AND-MOONS-FOLLOW — PASS
+
+⛔ **CORRECTION to the first draft of this file, which said "wd-10 is single-star".** It is not:
+`_systemData.isBinary === true`, two stars, and the 7 ring proxies at the star centre are 5
+heliocentric planet rings **plus 2 star-orbit rings** — itself the binary signature. Measured on the
+offset primary at wd-10 planet 3: `_lightDir` and `_lightDir2` are both unit vectors and distinct,
+and the moon's copies of both match the planet's to the last digit.
+
+**The arm this change actually edited is the SINGLE-star one, which never runs at wd-10.** Closed
+separately at **wd-17 planet 3** (`isBinary === false`, barycentre offset 8.05 R_p): the shipped
+`_lightDir` against the true planet→star direction measures **dot = 1 exactly**. The old closed form
+`(-px, 0, -pz)` pointed from the barycentre, not the planet.
+
+## ⚠ FILED, NOT FOLDED — a pre-existing separation discrepancy at wd-133 planet 4
+
+Two of its six moons — **both `isPlanetMoon: true`** — draw at a **stable 0.77942×** their record
+`orbitRadiusScene` (38.31 → 29.86 and 44.08 → 34.36). Identical ratio for both, unchanged across
+four samples, so it is a constant scale and not a render-interpolation artifact.
+
+⛔ **It cannot have been introduced here, on two independent grounds:** `git diff 30b030b..HEAD --
+src/main.js` touches no moon-placement line, and a common offset applied to a planet and its moon
+leaves their separation invariant by construction. The planet-class companion at wd-10 planet 3
+measures error **exactly 0**, so it is not "all planet-class moons" — the two systems differ in that
+wd-133 planet 4 MIXES plain and planet-class moons. Unresolved between a real placement defect and a
+`_lab.resolveBody` index/handle mismatch in the probe. **Not investigated further: out of scope, and
+provably not this change.**
+
 ## AC-FLIGHT-STILL-WORKS — PARTIAL
 
 Verified: both bodies resolve and select, every drawn coordinate is finite, the primary sits off
 the `y = 0` plane, and the console holds **zero errors or warnings** since navigation.
 ⛔ **NOT verified live:** an autopilot run to each member, and `dominantBodyAt` near the companion.
 
-## AC-LIGHTING-AND-MOONS-FOLLOW — PARTIAL
+## Full-suite count — the verify workflow's headline objection, overturned
 
-Verified: moons follow the moved primary exactly (AC-SEPARATION), and the primary renders lit.
-⛔ **NOT verified live: the binary-STAR arm.** wd-10 is single-star, so `_lightDir2` and the
-two-star terminator were never exercised. That arm needs a binary-star seed before this closes.
+`verdict.json` rated three unit ACs INSUFFICIENT because two agents reported counts it judged
+"a gap that cannot both describe one repo state." They can. They are two different commands, and
+both reproduce on one clean tree at `52031fd`:
+
+| command | files | tests | failed |
+|---|---:|---:|---:|
+| `npx vitest run tests/` | 192 | 3289 | **7** |
+| `npx vitest run` | 329 | 5348 | **32** |
+
+The delta is exactly the four files the path filter excludes — `ProcgenSnapshot` (23 failures),
+`componentSystems.byteSafety` (1), `StarSystemGenerator.binary-barycentre` (1), and a scratchpad
+collection error (0). **23 + 1 + 1 = 25, and 32 − 25 = 7.** The premise was false; the three ACs it
+sank stand on their evidence.
