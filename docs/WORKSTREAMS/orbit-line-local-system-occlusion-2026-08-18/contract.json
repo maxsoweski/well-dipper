@@ -2,15 +2,15 @@
   "workstream": "orbit-line-local-system-occlusion-2026-08-18",
   "intentRef": "intent.md",
   "project": "well-dipper",
-  "status": "scoping",
-  "summary": "Make a planet's local ring system occlude larger rings that pass through it, so a heliocentric orbit line stops at the edge of the local system and resumes past it instead of cutting across the pair's two concentric rings. Whole-disc erase, not a line hop — Max ruled it against a side-by-side preview 2026-08-18. Applies to every planet with moons, not just binaries. Requires OrbitConicField.js, whose parking-lot hold Max lifted the same day; the parking lot flags a real perf-architecture decision here, which is why this is scoped separately from the barycentre render.",
+  "status": "planned",
+  "summary": "Make a planet's local ring system occlude larger rings that pass through it, so a heliocentric orbit line stops at the edge of the local system and resumes past it instead of cutting across the pair's two concentric rings. Whole-disc erase, not a line hop — Max ruled it against a side-by-side preview 2026-08-18. Applies to every planet with moons, not just binaries. Requires OrbitConicField.js, whose parking-lot hold Max lifted the same day; the parking lot flags a real perf-architecture decision here, which is why this is scoped separately from the barycentre render. DESIGN PASS 2026-08-19 (13 agents, read-only): world-space ball keep-out tested against the circle point arcRoot already builds, packed into 8 new rows of the EXISTING DataTexture, predicate = same-local-system exemption + 3-D containment with NO radius comparison. Zero src/main.js edits. Plan + working-Claude's verification in implementation-plan.md.",
   "acceptanceCriteria": [
     {
       "id": "AC-GAP",
       "statement": "Max's words: the larger orbit line does not cut into the binary planets' orbits. Where a heliocentric ring passes inside a planet's local system, it is not drawn — ONE clean gap the full width of the outermost local ring, not four nicks at the crossing points.",
       "verifyVia": {
         "input": "Park on wd-10 planet 3 with orbits visible, framed so both the pair's rings and the heliocentric ring are in shot; then sample the rendered image along the heliocentric ring's screen-space path.",
-        "observable": "The heliocentric ring has exactly one contiguous unlit span crossing the local system, and its two endpoints sit at the outermost local ring's radius from the barycentre (to within a pixel or two of the ring's own line width). No lit heliocentric pixels anywhere inside that radius. Zero additional gaps."
+        "observable": "RULED 2026-08-19 (design pass §9.2): the endpoint criterion is a WORLD distance — the gap's two endpoints are the two points where the heliocentric ring's own circle crosses |P - C| = R, R being the local system's outermost ring radius. The screen measurement is CORROBORATION, and agrees only where the heliocentric ring and the local system are near-coplanar. Unit: over 360 theta samples of the heliocentric ring, the masked set is EXACTLY ONE contiguous run and both endpoints satisfy |P - C| = R to float tolerance. Live: the heliocentric ring has exactly one contiguous unlit span crossing the local system, no lit heliocentric pixels inside that radius, zero additional gaps."
       },
       "layer": "integration",
       "live": true
@@ -20,7 +20,7 @@
       "statement": "⛔ THE TRAP, and it is fatal if missed: a local system's own rings must NOT be occluded by its own disc. The pair's inner ring (r1) lies ENTIRELY inside the outer ring (r2), so a naive 'mask anything inside the outermost local radius' rule erases the primary's ring completely — deleting the very thing the barycentre workstream shipped. The rule must exempt rings belonging to the same local system.",
       "verifyVia": {
         "input": "wd-10 planet 3, orbits visible, before and after the change; count the distinct rings drawn about the barycentre and measure their radii from the rendered image and from the live ring proxies.",
-        "observable": "TWO rings still drawn about the empty point, at 5.53 and 19.55 primary radii — unchanged from the barycentre workstream's measurements. The inner ring is fully continuous, not partially or wholly erased. Reverting the same-system exemption must make THIS assertion go red specifically."
+        "observable": "TWO rings still drawn about the empty point, at 5.53 and 19.55 primary radii — unchanged from the barycentre workstream's measurements. The inner ring is fully continuous, not partially or wholly erased. Reverting the same-system exemption must make THIS assertion go red specifically. ⛔ CORRECTED 2026-08-19: this assertion CANNOT go red at the parent commit — no occlusion exists there, so it passes trivially. Its falsification is a MUTATION: delete the same-system exemption line and readConic(r1Ring).keepOutCount goes 0 -> 1 and the ring is erased in full. Do not claim a parent-red this test cannot deliver."
       },
       "layer": "integration",
       "live": true
@@ -49,16 +49,16 @@
       "statement": "No ring is added or removed, and the perf-architecture decision the parking lot flagged is made explicitly rather than by accident. CONIC_MAX stays 64 and the descriptor count is unchanged — the keep-out list is a SEPARATE, much shorter list (one entry per moon-bearing planet, worst case 8 in FENCE-221) and must not consume ring descriptor slots.",
       "verifyVia": {
         "input": "Count descriptors before and after on the worst measured system; then a like-for-like frame-time comparison on the same seed, same camera pose, same window size, parent commit vs build commit.",
-        "observable": "Descriptor count identical (worst system stays at 27 of 64 — measured by tools/barycentre-probe.mjs). Frame time regression is stated as a measured number with the sample size, not asserted to be zero. If the shader gains a per-pixel loop over keep-outs, its iteration bound is a declared constant, sized and justified in a comment the way CONIC_MAX is."
+        "observable": "Descriptor count identical before and after on the same system (16 on wd-10, measured live 2026-08-19). CONIC_MAX stays 64. ⛔ CORRECTED 2026-08-19: (a) 'worst system stays at 27 of 64 — measured by tools/barycentre-probe.mjs' — the probe does NOT print a per-system descriptor total; its 27 is the companion-pair count across FENCE-221. (b) 'worst case 8 in FENCE-221' — 8 is SOL's moon-bearing-planet count, not FENCE-221's. KEEPOUT_MAX = 8 is justified from the PLANET ceiling (StarSystemGenerator.js:80-81 planetRange upper bound 8, clamped at :499; the one path that can exceed it is :502 Math.max(rolledPlanetCount, knownSorted.length), whose only shipped instance is Sol at 8 moon-bearing planets), NOT from any ring count. Frame time is stated as a MEASURED number with sample size — same seed, frozen pose, same window, parent commit vs build commit, PAGE RELOADED BETWEEN ARMS, N >= 300 frames per arm, median + p95. If the shader gains a per-pixel loop, its bound is a declared constant sized and justified in a comment the way CONIC_MAX is."
       },
       "layer": "unit"
     },
     {
       "id": "AC-NO-COLLATERAL-OCCLUSION",
-      "statement": "Only rings LARGER than a local system are occluded by it, and only where they genuinely pass inside it. A moon ring belonging to a neighbouring planet, an asteroid-belt ring, or a binary-STAR orbit ring must not silently vanish because it grazes some other planet's disc.",
+      "statement": "Only rings that genuinely pass INSIDE a local system are occluded by it. A moon ring belonging to a neighbouring planet, or a binary-STAR orbit ring, must not silently vanish because it grazes some other planet's disc in SCREEN space. ⛔ CORRECTED 2026-08-19: the original clause also named an asteroid-belt ring, which cannot exist — updateFromSystem reads only starOrbitLines (:524), orbitLines (:526) and planets[i].moonOrbitLines (:531); system.asteroidBelts (main.js:7841) is not among them and no `new OrbitLine(` site is a belt.",
       "verifyVia": {
         "input": "On a binary-star system with several moon-bearing planets (wd-10 qualifies: isBinary true, 2 star-orbit rings, 5 planet rings, 4 moon-bearing planets), enumerate every ring proxy drawn before and after.",
-        "observable": "The same 16 rings are present after the change as before; only the DRAWN EXTENT of heliocentric rings changes. Both star-orbit rings remain fully drawn. No ring disappears entirely."
+        "observable": "⛔ CORRECTED 2026-08-19: the original observable — 'the same 16 rings are present after' — passes TRIVIALLY with or without the feature, because the descriptor list is untouched by any shader-side mask. It is a fence, not a test of the predicate. The real test is per-ring: readConic(i).keepOutCount === 0 for BOTH binary-star rings and for every neighbouring planet's moon ring, and === 1 for the moon-bearing planet's own heliocentric ring. MEASURED LIVE 2026-08-19 on wd-10 before any code: of 14 foreign rings exactly 1 is masked (planet 3's own heliocentric ring, gap^2 = 0); the nearest false positive misses by gap^2 = 2,427,689 against Reff^2 = 0.806, a margin of ~3e6. Fence, retained: all 16 ring proxies still present."
       },
       "layer": "integration",
       "live": true
@@ -79,7 +79,7 @@
       "OrbitConicField.updateFromSystem reads exactly three hardcoded property names — :524 system.starOrbitLines, :526 system.orbitLines, :531 planets[i].moonOrbitLines — and appends them in that order, so ring provenance (which planet a ring belongs to) is known at append time and is where the same-system exemption must be recorded.",
       "The per-ring RGBA32F DataTexture (CONIC_MAX wide x CONIC_TEX_ROWS tall, read with texelFetch) and the GLSL loop bound at OrbitConicField.js:251 — a keep-out list needs its own channel, not a stolen ring slot.",
       "entry.moonOrbitLines and the _baryCentred flag from binary-barycentre-render-2026-08-18 — the local system's centre is the bary ring centre where one exists, and the planet mesh otherwise.",
-      "docs/PARKING_LOT.md:236-243 — the deferral Max lifted, and the perf-architecture note that made this a scoped workstream rather than a patch."
+      "docs/PARKING_LOT.md:230-241 (follow-up list :230-237, sequencing note :239-241) — the deferral Max lifted, and the perf-architecture note that made this a scoped workstream rather than a patch."
     ],
     "outputs": [
       "Rendered ring pixels only. No ring object, radius, centre, transform, visibility flag or hit-test attribute changes.",
@@ -87,11 +87,12 @@
     ],
     "mustStayWorking": [
       "⛔ The pair's inner ring. It lies entirely inside the outer ring, so the same-system exemption is load-bearing, not a nicety — without it this workstream silently deletes what binary-barycentre-render-2026-08-18 shipped. AC-LOCAL-RINGS-SURVIVE exists solely to catch that.",
-      "The angular-size fade (OrbitConicField.js:75-104), which is the shipped mechanism for dropping sub-pixel rings. Occlusion must compose with it, not replace or double-count it.",
+      "The angular-size fade (OrbitConicField.js:75-79 + :107 + :121-129 (JS mirror) + :174-177 (GLSL) + :344 (the multiply)), which is the shipped mechanism for dropping sub-pixel rings. Occlusion must compose with it, not replace or double-count it.",
       "The camera-proximity fade stays RETIRED per Max's UAT ruling 2026-08-01 (OrbitConicField.js:503-504). Do not revive it as a way to implement this.",
-      "hitTestOrbits and hover: main.js prefers the baked perimeter attribute (OrbitLine.js:57-65, main.js:~7011), and the material.opacity shim that hover reads and restores.",
+      "hitTestOrbits and hover: main.js prefers the baked perimeter attribute (OrbitLine.js:57-65, main.js:7013), and the material.opacity shim that hover reads and restores.",
       "CONIC_MAX stays 64 and OrbitConicField's GLSL loop bound is not raised — :251 is a shader loop bound, so changing it recompiles, and :396/:406/:635 all size off it.",
       "The 27 barycentric ring pairs and the planet-following branch from the previous workstream both keep rendering exactly as measured in that workstream's live-integration-evidence.md."
     ]
-  }
+  },
+  "planRef": "implementation-plan.md"
 }
