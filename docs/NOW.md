@@ -1921,7 +1921,12 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
-> **▶▶ BARYCENTRE RENDER — scoped + greenlit 2026-08-18, building.**
+> **▶▶ BARYCENTRE RENDER — code SHIPPED `52031fd`, integration GREEN, ⛔ Max's UAT re-look OPEN.**
+> ⭐ Full state + next action: `docs/FEATURES/moon-formation-handoff-2026-08-18-b5.md` **§11**.
+> ⛔ **RELOAD THE PAGE BEFORE ANY BROWSER MEASUREMENT** — HMR-duplicated module state faked a
+> constant 0.779424x moon-orbit error that cost three commits and a 13-agent workflow. §11 leads with it.
+> ▶ NEXT: Max re-looks at wd-10 planet 3 on a CLEAN load; then queue item 2 (orbit-line occlusion,
+> scoped at `f411974`); then Sol, as a workflow.
 > `docs/WORKSTREAMS/binary-barycentre-render-2026-08-18/` (`intent.md` + `contract.json`, 8 ACs, scoped at `ea2681e`).
 > Queue item 1 of the moon-formation lane — see `docs/FEATURES/moon-formation-handoff-2026-08-18-b5.md` §10.
 > **Why:** B5.0's binary companion generated correctly and then **failed UAT on the first pair, first look** —
