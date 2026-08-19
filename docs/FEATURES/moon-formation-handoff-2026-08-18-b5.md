@@ -1,4 +1,4 @@
-# Handoff — the moon-formation lane. ▶ NEXT = **B5 steps 1–9**. B5.0 (binaries) is DONE and UAT-parked.
+# Handoff — the moon-formation lane. ▶ NEXT = **B5 steps 1–9**. ⛔ B5.0 shipped but **FAILED UAT** — see §9 below.
 
 **Date:** 2026-08-18 · **Repo:** `~/projects/well-dipper`, branch `feature/world-engine-production-L1`
 **HEAD:** `34b502d` · tracked tree **CLEAN**
@@ -165,10 +165,9 @@ it wants its own increment, and it overlaps B5 step 9's mass-ratio work.
 
 ## 8. OPEN FOR MAX
 
-1. **UAT: does `Meameinath` + `Meameinath I` read as a binary planet, or as a planet with a big
-   moon?** You are parked on it. `q = 0.283` there, so the companion is ~2/3 the primary's radius —
-   toward the *low* end of the ruled band. Fly to `wd-34/0`, `wd-91/2` or `gc-22/1` for others.
-   **This gate is yours alone.**
+1. ✅ **UAT ANSWERED 2026-08-18 — FAILED, cause named. See §9.** Max: *"planet with a big moon
+   because the orbit lines center one planet in orbit around the other rather than both around a
+   shared empty gravitational center."* The barycentre render is now REQUIRED, not a non-goal.
 2. **Naming — still unruled** (carried from the previous handoff §7 item 1). The companion ships as
    `Meameinath I`, the roman numeral you leaned toward. It reads as a moon designation. Peer
    designation (`Meameinath b1` / `b2`) is the alternative. *Rec: leave it until UAT says the pair
@@ -178,3 +177,28 @@ it wants its own increment, and it overlaps B5 step 9's mass-ratio work.
    `GIANT_PARENT_TYPES`-vs-`isRocky` disagreement separately.*
 4. **B5 steps 1–9 in a fresh session**, per your call. Start with step 1 (channel selector at
    `MoonGenerator.js:122-127`) — and ⛔ read §2 above before touching step 4's merge.
+
+---
+
+## 9. ⛔⛔ B5.0 FAILED UAT. The barycentre render is back on the critical path.
+
+The generation half is right and verified; **the render half is not**. Full finding, geometry, fix
+location and blast radius: [`binary-planets-scoping-2026-08-17.md`](binary-planets-scoping-2026-08-17.md) **§9**,
+which also annotates the three statements in that document the verdict refutes.
+
+**One-paragraph version.** On `wd-10` (`q = 0.283`, `a = 25.1` primary radii) the primary should
+circle the barycentre at `r1 = 5.53` primary radii and the companion at `r2 = 19.55`, with **two**
+rings around an empty point. It is drawn with the primary **fixed**, the companion at the full 25.1,
+and **one** ring centred on the primary — which is the satellite read. ⭐ The fix is small and §1 of
+the scoping doc mislocated why it looked fatal: an offset applied *inside* the planet write at
+`main.js:11197-11203` is picked up consistently by lighting, plain moons and the companion, and the
+companion needs no change at all. ⛔ The one thing that breaks with it is `:11265-11271`, which
+sources moon rings from the recomputed `px/pz` rather than the planet's mesh position — fix in the
+same change or every ring on the primary's other moons detaches.
+
+⚠ **Wider blast radius than the pair.** §4 measured 13 of 713 *existing* moon/parent pairs whose
+barycentre already sits outside the primary, worst `r1/R_p = 9.618`. All are drawn wrong today and
+the fix moves them too — so this is a visual change to non-binary bodies, and it needs its own UAT.
+
+**It does not block B5 steps 1–9** and they do not block it: B5 moves masses and radii, this moves
+where a body is drawn, and they meet only at `q`. ⛔ 2+ systems → `dev-collab-scope` before code.

@@ -8,14 +8,14 @@
 
 ## §0 — The answer
 
-**Yes — and "provisional render" turns out to be the wrong frame entirely.**
+**Yes — and "provisional render" turns out to be the wrong frame entirely.** ⛔⛔ **REFUTED AT UAT, 2026-08-18.** Max, on the first shipped pair (`wd-10`, `q = 0.283`): *"planet with a big moon **because the orbit lines center one planet in orbit around the other rather than both around a shared empty gravitational center**."* The magnitude analysis below is correct and the missing term is exactly as bounded as it says. What it got wrong is the step from *bounded* to *acceptable* — the reflex wobble is not a fidelity nicety, it is **the cue that separates a pair from a satellite**, and without it the render fails the one question the channel exists to answer. See **§9**.
 
-A binary pair can be generated with correct barycentric physics and drawn correctly **today, with zero renderer changes**, provided two conventions hold:
+A binary pair can be generated with correct barycentric physics and drawn correctly **today, with zero renderer changes** — ⛔ read "drawn correctly" as "drawn to the correct SEPARATION", which §9 shows is not the same as "reads as a pair" — provided two conventions hold:
 
 1. The companion is delivered through **`planets[i].moons[]`**, not appended to `planets[]`.
 2. Its `orbitRadiusScene` carries the **full parent-relative separation `a`** — which is what that field already means everywhere.
 
-Under those two conditions the drawn geometry is *exact*: separation, eclipses, transits, approach distance and the pair's own satellites all come out right. The only physics term absent is the primary's reflex wobble `r1 = a·q/(1+q)` — **an approximation the tree already ships on 13 of 713 existing moon/parent pairs, worst case 9.6 primary radii.** There is no second render path to build and no flag to plumb.
+Under those two conditions the drawn geometry is *exact*: separation, eclipses, transits, approach distance and the pair's own satellites all come out right. The only physics term absent is the primary's reflex wobble `r1 = a·q/(1+q)` — **an approximation the tree already ships on 13 of 713 existing moon/parent pairs, worst case 9.6 primary radii.** There is no second render path to build and no flag to plumb. ⛔ **That sentence is still true, and it is why §9's fix is small — but "the only physics term absent" was the wrong thing to take comfort from.**
 
 ---
 
@@ -275,3 +275,84 @@ Plan §4 says `tests/port-condition-contract.test.js` "stays green throughout…
 3. **Naming.** A `moons[]` companion is "X b I". Peer designation (X b1 / X b2) in the first increment, or roman numeral until it earns its own identity?
 4. ✅ **RESOLVED 2026-08-18 — the star pair is FIXED, not filed.** Both halves landed as separate commits: the mass-ratio/barycentre disagreement in `df78785` and the 41–948× orbit-speed error in `d26971d`. It turned out to need no window at all: the fence's system record hashes only star types, an `isBinary` boolean and four counts, Instrument C names `starBrightness2` only as harness-blind, and both edits are draw-neutral — so no generated body moved and no instrument corpus was disturbed. All four instruments green at `1def6da`.
    ⭐ **The design ruling that came out of it is recorded in `docs/SYSTEMS/generation/README.md` §7 item 2, not here**, because it outlives this document: correct physics makes a binary pair visually static at 1×, Max ruled on 2026-08-18 to keep it, and a future reader must not "fix" motionless suns. Live verification: the mass-weighted centroid of the two DRAWN stars lands exactly on the rebased system origin, and the heavier star now sits on the tighter orbit (129.23 vs 164.95 scene units on `wd-272`).
+
+---
+
+## §9 — ⛔⛔ UAT VERDICT, 2026-08-18: FAILED, and the cause is named
+
+**Subject:** `wd-10` planet 3 — `Meameinath` (ice, 6 869 km) + `Meameinath I` (4 951 km), the first
+shipped pair. Max, parked in the live game on a sunward camera with both bodies lit:
+
+> *"planet with a big moon **because the orbit lines center one planet in orbit around the other
+> rather than both around a shared empty gravitational center**."*
+
+### What this refutes, precisely
+
+Not §4's arithmetic — the missing term is exactly as bounded as §0 says. What fails is the **step
+from *bounded* to *acceptable***. Three statements in this document are now wrong:
+
+- §0: *"drawn correctly today, with zero renderer changes."* Correct **separation** ≠ reads as a pair.
+- §3: *"'provisional render' is unnecessary as a concept. What exists is a missing term of known,
+  bounded magnitude in an otherwise exact drawing."* The magnitude was right; the term is not
+  cosmetic, it is **the cue that distinguishes a pair from a satellite**.
+- §6: *"⛔ Deliberate non-goals, **so they are not discovered at UAT**: no primary wobble…"* It was
+  discovered at UAT, first pair, first look. Listing a non-goal does not make it survive contact.
+
+⭐ **This is what UAT is for and the deferral was the right shape of bet to lose** — the channel
+shipped, generated correctly, and cost one increment to find out. But the ruling was wrong and the
+plan's original instinct (*"deferred on the renderer… unblocks the moment the orbit stack supports a
+barycentre"*, `moon-formation-channel-model-PLAN-2026-08-15.md` §5) was right.
+
+### The geometry, measured on the parked pair
+
+`q = 0.2830`, `a = 25.1` primary radii.
+
+| | should be | is drawn |
+|---|---:|---:|
+| primary's orbit about the barycentre, `r1 = a·q/(1+q)` | **5.53 R_p** | **0** — fixed |
+| companion's, `r2 = a/(1+q)` | 19.55 R_p | 25.1 R_p |
+| orbit rings | two, both centred on the empty barycentre | **one**, centred on the primary |
+
+The primary should visibly circle a point five and a half of its own radii away. It does not move at
+all, and the single ring drawn is the satellite read Max reported.
+
+### ⭐ The fix is small, and §1 mislocated why it looked fatal
+
+§1 says offsetting the primary at `main.js:11201` *"desyncs lighting, moon meshes and moon rings
+independently."* **That is true of a POST-write offset only.** Applied *inside* the write at
+`:11197-11203`, before any consumer reads the position:
+
+- lighting (`:11205`+) reads the planet's rebased position → **follows, stays consistent**
+- plain moons (`:11258`, `updateSim(…, entry.planet.mesh.position, …)`) → **follows**
+- the companion (`:11247-11252`, `pp + (cos θ·r, …)` where `pp` is the parent's mesh position) →
+  ⭐ **needs no change at all.** Move the primary to `bary − r1·û` and place the companion at
+  `primary + a·û` and it lands at `bary + r2·û` exactly. The existing code already does the second half.
+
+⛔ **The one real breakage, and it must land in the same change.** `:11265-11271` positions moon
+orbit lines from the recomputed `px/pz`, **not** from `entry.planet.mesh.position`. Offset the
+primary and `px/pz` becomes the barycentre, so every ring belonging to the primary's *other* moons
+detaches and sits at the empty point. Required together:
+
+1. plain-moon rings → follow `entry.planet.mesh.position`
+2. the companion's ring → radius `r2`, centred on the barycentre
+3. one additional ring → radius `r1`, centred on the barycentre, for the primary
+
+⚠ Reuse `entry.moonOrbitLines` (built per-moon at `:7633-7695`) for (3). §2 records that a **new**
+ring array is silently never drawn (`CONIC_MAX = 64`).
+
+`q` needs nothing from generation — `companion.planetData.massEarth / parent.planetData.massEarth`
+is correct as of B5.0 (`34b502d`).
+
+### ⚠ This was never only a binary problem
+
+§4 measured **13 of 713** existing moon/parent pairs with the barycentre already outside the
+primary's surface, worst case `r1/R_p = 9.618` (`wd-133/4/3`). Every one of those is drawn with the
+primary nailed to the barycentre today. The fix corrects them too — and ⛔ **that means it moves
+bodies that are not binaries, so it is a visual change with a wider blast radius than the pair.**
+
+### Scope
+
+Renderer + orbit lines + a generation read = 2+ systems, so it takes `dev-collab-scope` and an
+`intent.md`/`contract.json` before code, per the Dev Collab OS. **Not started.** It is a separate
+increment from B5 steps 1–9 and does not block them: B5 moves masses and radii, this moves where a
+body is drawn, and they meet only at `q`.
