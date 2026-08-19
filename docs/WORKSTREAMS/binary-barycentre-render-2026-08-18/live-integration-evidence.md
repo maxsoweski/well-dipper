@@ -4,7 +4,7 @@ Driven by working-Claude via chrome-devtools against the running game. **Integra
 these are objective assertions with right answers. The holistic "does it read as a pair" judgment
 is Max's alone and is not recorded here.
 
-## AC-SEPARATION — ⛔ RETRACTED 2026-08-18. See the retraction note at the foot of this file.
+## AC-SEPARATION — PASS. (Retracted, then REINSTATED — see the foot of this file.)
 
 Drawn separation `|moon mesh − planet mesh|` against each record's `orbitRadiusScene`, all five
 planets of wd-10:
@@ -230,3 +230,57 @@ So the scene's `moon.data.orbitRadius` is 0.897895 while every static path says 
 mechanism in `src/` accounts for it. **The one decisive experiment left is instrumentation**: print
 `moon.data.orbitRadius` and `moon.data.orbitRadiusScene` at the write site (`src/main.js:11315`) for
 one frame. That is a `src` edit, which fires HMR into Max's live session — his call, not mine.
+
+---
+
+# ⭐ RESOLVED 2026-08-18 — the shortfall was an HMR ARTIFACT. The retraction above is WITHDRAWN.
+
+Instrumented the write site directly (`src/main.js`, temporary, removed in the same session) and
+then reloaded the page cleanly. Both halves of the contradiction are now explained.
+
+**At the write site, on a clean load:**
+
+```
+r                    1.1519994211465006     <- moon.data.orbitRadius, the record value
+sepJustAfterWrite    1.1519994211464362     <- |moon.mesh - planet.mesh|, immediately after
+moonMeshUuid    ffcdd91b…  === the uuid my probe reads back
+planetMeshUuid  1b35494e…  === the uuid my probe reads back
+```
+
+**Then measured across every body that had shown the shortfall, clean load:**
+
+| body | isPlanetMoon | drawn / record |
+|---|---|---:|
+| wd-133 / 4 / 0 | no | **1.000000** |
+| wd-133 / 4 / 3 | yes | **1.000000** |
+| wd-133 / 4 / 4 | yes | **1.000000** |
+| wd-133 / 4 / 5 | no | **1.000000** |
+| wd-17 / 3 / 0 | yes | **1.000000** |
+| wd-10 / 3 / 0 | yes | **1.000000** |
+
+Those are the exact three planet-class bodies that read `0.779424` earlier.
+
+### What actually happened
+
+The 0.779424 session had absorbed **a dozen-plus Vite hot-module reloads** while this workstream was
+being built — every `src` edit fires HMR into the open page. Stale duplicated module state produced a
+constant scale error. It is not in the shipped code:
+
+- ⛔ **It does not reproduce on a clean load**, on any seed, for any body class.
+- ⛔ **No gameplay action reproduces it**: `frameBody` at 34 radii, a close approach at 8 radii, and a
+  respawn all leave the ratio at exactly 1.000000.
+- The earlier "four consecutive fresh spawns all show 0.779424" is consistent with this —
+  `spawnProceduralSystem` rebuilds the scene but does **not** clear HMR-duplicated module state.
+
+### Consequences, stated plainly
+
+1. **AC-SEPARATION's live PASS is REINSTATED.** My retraction of it was backwards: `1.151999` was the
+   correct reading all along and `0.897895` was the artifact. The original measurement — taken shortly
+   after a reload, before the session accumulated reloads — was right.
+2. ⛔ **Max's UAT item 1 was almost certainly observed on that same HMR-poisoned page.** I warned him
+   HMR would fire into his session and it did, repeatedly. **He should re-look on a clean reload
+   before any further work is spent on it.**
+3. **The lesson is procedural, and it is the expensive one:** a browser probe against a page that has
+   been hot-reloaded through a build is not evidence about the shipped code. Reload first, then
+   measure. Three commits and a 13-agent workflow were spent chasing a defect that a page refresh
+   dissolves.
