@@ -1,4 +1,7 @@
-# Handoff — the moon-formation lane. ▶ NEXT = **B5 steps 1–9**. ⛔ B5.0 shipped but **FAILED UAT** — see §9 below.
+# Handoff — the moon-formation lane. ▶ NEXT = **§10's queue, in order, via workflows.**
+
+⛔ B5.0 shipped and **FAILED UAT** (§9). This is the lane's single live handoff — there is no
+companion doc. Read §10 first for the order and the workflow playbook, then §2, §3 and §9.
 
 **Date:** 2026-08-18 · **Repo:** `~/projects/well-dipper`, branch `feature/world-engine-production-L1`
 **HEAD:** `34b502d` · tracked tree **CLEAN**
@@ -202,3 +205,63 @@ the fix moves them too — so this is a visual change to non-binary bodies, and 
 
 **It does not block B5 steps 1–9** and they do not block it: B5 moves masses and radii, this moves
 where a body is drawn, and they meet only at `q`. ⛔ 2+ systems → `dev-collab-scope` before code.
+
+---
+
+## 10. ▶ THE QUEUE, IN ORDER — and how to run it
+
+⚠ **The order is assumed, not ruled.** Max said *"work all in order via workflows"* directly after
+I recommended the barycentre render before B5 steps 1–9, with the reason: it is the smaller piece,
+it is the difference between *binaries exist* and *binaries read as binaries*, and steps 1–9 red
+every instrument for a long stretch during which there is no clean look at a pair. **If he says
+otherwise, he outranks this line.**
+
+| # | item | entry condition | blocked by |
+|---|---|---|---|
+| **1** | **Barycentre render** — §9 | ⛔ `dev-collab-scope` FIRST (renderer + orbit lines + a generation read = 2+ systems) | nothing |
+| **2** | **B5 steps 1–9** — the moon window proper, PLAN §3 | ⛔ read §2 of this doc before step 4's merge | nothing; independent of (1) |
+| **3** | **B6** citation repair → **B7** re-derivation + re-bless → **B8** acceptance/calibration → **B9** shape | B7 is what finally clears every literal in §3 | (2) |
+| **4** | **sub-neptune** — §4 | — | *rec:* fold the label-survives-shrink half into B5 step 9; file the `GIANT_PARENT_TYPES`-vs-`isRocky` disagreement separately |
+| **5** | **B10** `deriveFormation` — PLAN §3 B10 | — | nothing depends on it, which is why it is last |
+
+**Two things B8 must not skip**, both raised late and easy to lose: redo §4b's co-satisfiability on
+the **exact** conversion (§8.2 — the tension is at the **floor**, not the ceiling), and state which
+denominator any Band A rate is asserted against (§4a).
+
+### The workflow playbook that worked this session
+
+- **Pin `model: 'opus'` on every agent.** Omission inherits Fable at ~2× Opus cost.
+- **Brief every agent with the ACTUAL HEAD and what already shipped.** ⛔ This session's synthesis
+  opened with *"THE PREMISE IS STALE"* because the finders were briefed at `65d3bb5` while the work
+  landed at `1ed1176`/`c52d397`. Four agents re-derived what the tree already held.
+- **Hard rules that produced the good output, verbatim:** read-only; no `src` edits (a dev server on
+  `:5173` fires HMR into Max's session); no chrome-devtools; no servers; scripts under `/tmp` only;
+  every claim carries a `file:line` **you opened**, with the line quoted; a comment stating what code
+  intends is not evidence of what it computes.
+- ⭐ **"An honest 'not found' beats a plausible invention."** Single highest-yield instruction.
+- **Shape:** `pipeline(finders, find → parallel([citation-accuracy lens, logical/corpus-soundness
+  lens]))` → synthesis. Corpus-soundness matters here specifically because *two different corpora are
+  both called "221"*.
+- ⛔⛔ **VERIFY THE VERIFIERS.** Of four finder reports, the refuters caught one genuinely fatal
+  misreading — **and three of their own refutations were themselves wrong.** Working-Claude must
+  re-open every load-bearing line before acting on either layer. §6 items 1 and 2 are what happens
+  when that step is skipped.
+- **Cost, so it can be budgeted:** 13 agents, ~43 min wall clock, ~2.5M subagent tokens for one
+  4-topic audit.
+
+### Suggested skills for the next session
+
+- **`dev-collab-scope`** — ⛔ REQUIRED before item 1 touches code. Produces `intent.md` +
+  `contract.json`; `verify-workstream` then runs against them.
+- **Workflow tool** — the lane's method, per the playbook above.
+- **`superpowers:verification-before-completion`** — §6 of this doc is four entries long, and two of
+  them shipped into a commit before being caught.
+- **`superpowers:test-driven-development`** — every test in this lane is proven by reverting the fix
+  and confirming the *specific* assertions go red.
+- **`superpowers:systematic-debugging`** — for anything that looks like a rendering defect. ⛔ And see
+  §5: a body reading black is almost always camera phase.
+- **`handoff`** at the next seam — ⛔ into `docs/FEATURES/`, never `/tmp`, and extend this file rather
+  than starting a second one.
+- ⛔ **Do NOT invoke `library-context`.** The SessionStart hook nags about a three.js brief for an
+  unrelated project (`gesar-app-skin`). This repo is on three.js **0.183.1**.
+
