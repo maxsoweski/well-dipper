@@ -106,3 +106,72 @@ The delta is exactly the four files the path filter excludes — `ProcgenSnapsho
 `componentSystems.byteSafety` (1), `StarSystemGenerator.binary-barycentre` (1), and a scratchpad
 collection error (0). **23 + 1 + 1 = 25, and 32 − 25 = 7.** The premise was false; the three ACs it
 sank stand on their evidence.
+
+---
+
+# Max's UAT, 2026-08-18 — two items
+
+> *"good but one of the planets is not riding along its orbit line; also, the two concentric orbit
+> lines intersect with the larger orbit line they ride around the star; I'd like the larger orbit
+> line to not cut into the binary planets' orbits."*
+
+## Item 1 — the body off its line. CONFIRMED, QUANTIFIED, and NOT caused by this change.
+
+It is the **companion**, not the primary. At wd-10 planet 3, one instant, all quantities together:
+
+| | |
+|---|---:|
+| record separation `a` | 1.151999 |
+| **drawn separation** | **0.897895** |
+| primary → barycentre | 0.254133 |
+| its ring's radius | **0.254133** — exact |
+| companion → barycentre | 0.643762 |
+| its ring's radius | **0.897895** — short by 0.254 |
+| `cos∠` between the two about the barycentre | **−1.000000** |
+
+So the *barycentric geometry is right* — the bodies are exactly antipodal and the primary rides its
+ring to six decimals. What is wrong is the companion's **distance from the primary**: it draws at
+`0.779423 × a`.
+
+### It is a pre-existing defect in planet-class moons, made conspicuous by the new rings
+
+- ⛔ **Not the Convention-B trap**, though it looks exactly like one at this seed: `1/(1+q) = 0.779399`
+  for wd-10's `q = 0.283`. But the *same constant* `0.779424` appears on both planet-class moons of
+  **wd-133 planet 4**, whose `1/(1+q)` are `0.871839` and `0.944685`. A mass-ratio effect cannot be
+  q-independent. The wd-10 agreement is a coincidence of that seed.
+- ⛔ **Not render interpolation.** The ratio is identical live and under `_lab.freezeFrame` (0.779423
+  both), so it is a static position, not a lerp chord between sim frames.
+- ⛔ **Cannot originate here.** `git diff 30b030b..HEAD -- src/main.js` touches no moon-placement
+  line, and wd-133 planet 4 is on the *planet-following* branch where no barycentric ring exists at
+  all — yet it shows the same constant.
+- **Plain moons are exact** (error 0 at every one measured, both systems). It is specific to
+  `isPlanetMoon` bodies.
+- Before this change the companion's ring was radius `a` centred on the planet, so the body sat 22%
+  inside it then too. The barycentric rings did not create the error; they made it legible.
+
+### Root cause NOT yet isolated — and what it will take
+
+`main.js`'s planet-class write is `pp + (cos·r, −sin(incl)·sin, cos(incl)·sin)·r` with
+`r = moon.data.orbitRadius`, whose magnitude is `r` exactly. So **`moon.data.orbitRadius` holds
+0.897895 at runtime while the record says 1.151999.** `createPlanetMoonBody`
+(`PlanetMoonBody.js:51`) sets it from `moonData.orbitRadiusScene`, so something between the generator
+record and that wrapper is scaling it by a constant. The wrapper is not reachable from `_lab`
+(`resolveBody().holder` is the inner `Planet`, whose `.data` is the moon's own body record and
+carries no `orbitRadius`), so closing this needs one instrumentation hook. **Not guessed at.**
+
+## Item 2 — the word is OCCLUSION, and the file it needs is PARKED
+
+What Max describes — a line that treats another as solid and does not cross it — is **occlusion**
+(masking); in draughting, the crossing convention is a *line hop* or *bridge*.
+
+⛔ **This is not depth occlusion.** Bodies hide rings behind them via the depth buffer for free, which
+is the behaviour he is comparing to. Line-vs-line hopping is a **shader feature** and
+`OrbitConicField` is the only thing that puts ring pixels on screen (`OrbitRingSDF.js:49` — "This
+class no longer renders anything").
+
+⛔ **`docs/PARKING_LOT.md:239-241`: "Do NOT touch `OrbitConicField.js` before then — it is the
+renderer under UAT."** Max's own sequencing ruling, 2026-08-01, deferred until lane B's UAT ships and
+the merge arc lands. ⚠ **That precondition now appears met** — lane B's ORRERY triplet shipped and
+the trunk merge landed 2026-08-01 — but this tree is lane A's branch, and lifting his own hold is
+his call, not mine. The same parking-lot entry already says this area "warrants `dev-collab-scope`
+before code."
