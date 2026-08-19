@@ -1922,7 +1922,11 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 ## Active workstream
 
 > **▶▶ BARYCENTRE RENDER — ✅ SHIPPED + UAT-PASSED 2026-08-19.** Max: *"Looks like it's working."*
-> ▶▶ **ACTIVE = ORBIT-LINE LOCAL-SYSTEM OCCLUSION** (queue item 2), planned at `971eb7a`, building.
+> ▶▶ **ORBIT-LINE LOCAL-SYSTEM OCCLUSION — code SHIPPED `4cf67c5`, integration GREEN, ⛔ Max's UAT OPEN.**
+> `docs/WORKSTREAMS/orbit-line-local-system-occlusion-2026-08-18/` — plan `971eb7a`, perf `090bd3e`,
+> `live-integration-evidence.md`. 6 of 7 ACs PASS; AC-HIT-TESTING-UNCHANGED is PARTIAL (fence green,
+> the live click inside the gap is unrun); AC-UAT is Max's alone.
+> ▶ NEXT: **Max looks** — the pair AND an ordinary multi-moon planet. Then B5 steps 1–9.
 > ⛔ Historical below — kept because the HMR lesson in it is the most expensive one this lane learned.
 > ⭐ Full state + next action: `docs/FEATURES/moon-formation-handoff-2026-08-18-b5.md` **§11**.
 > ⛔ **RELOAD THE PAGE BEFORE ANY BROWSER MEASUREMENT** — HMR-duplicated module state faked a
