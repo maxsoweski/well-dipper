@@ -435,8 +435,17 @@ warp targeting and the autopilot, so moving it has a real blast radius — while
 near zero, because the wobble is ~1 stellar radius on a body drawn a few pixels across at system
 view. It is a correctness/plausibility increment, not a visual one, and it should be scoped as such.
 
+### ⭐ MAX RULED ON EVERYTHING OUTSTANDING, 2026-08-19. Nothing is waiting on him.
+
+| # | item | ruling |
+|---|---|---|
+| 1 | **star↔planet barycentre** | **FILE IT** — *"but I do want to consider building it before implementing the gravity well refueling system that I've scoped out in the game bible; realistic barycenters would be a cool enrichment to that system."* ⭐ Not a vague someday: it is pinned to a named feature (`FEATURES.md` GAME tier, *"Rotor fuel + gravity-well minigame"*) and the link is real — if you harvest energy by dipping into a well, where the well's centre IS, and whether it moves, becomes a gameplay quantity. Filed in `FEATURES.md` + `PARKING_LOT.md`. ⛔ Wants `dev-collab-scope`; one decision to settle first is whether the system ORIGIN stays the star or becomes the star-plus-planets barycentre. |
+| 2 | **B5 steps 1–9** | **PROCEED, via workflows.** Now the active workstream. |
+| 3 | **Sol** | **AGREED** — ship as-is, fix Sol's mass data as its own increment. ⛔ Needs the window CLOSED (post-B7): `port-condition-contract.test.js` has **no re-bless mechanism**, so a data edit there is a hand-repair with no safety net. Filed in `PARKING_LOT.md` with the wobble table. |
+| 4 | **§4b — the `0.95` radius cap** | **AGREED** — fold into **B5 step 9**, the mass-ratio commit. |
+
 ### Queue after this — §10 otherwise unchanged
 
 **B5 steps 1–9** (⛔ read §2 before step 4's merge) → **B6/B7/B8/B9** → **sub-neptune (§4)** → **B10**.
-Still open for Max: **Sol** (rec: ship as-is, fix Sol's mass data as its own increment), **§4b's 0.95
-radius cap** (rec: fold into B5 step 9), and now **star↔planet barycentres** (rec: file, don't build).
+⚠ The **sub-neptune** finding (§4) stays a SEPARATE item after B5/B6–B9 — do not fold it into step 9;
+only §4b was folded.

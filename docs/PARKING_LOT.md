@@ -317,3 +317,36 @@ moment to build it.
 **⛔ Scope it before coding.** 2+ systems (physics ↔ lighting ↔ nav/autopilot ↔ keep-out), so it wants
 `dev-collab-scope`. A live decision to settle first: whether the system ORIGIN stays the star or
 becomes the star-plus-planets barycentre — the rings are already drawn about the latter.
+
+---
+
+## Sol's missing masses — ship as-is, fix the DATA as its own increment (ruled 2026-08-19)
+
+**Max ruled: agreed — ship as-is, fix Sol's mass data as its own increment.** *(Raised as an open
+question across three sessions; closed here.)*
+
+**The defect is the DATA, not the barycentre code.** `SolarSystemData.js` carries **zero**
+`massEarth` fields, so `BodyMass.planetMassEarth`'s `?? estimateMassEarth(…)` fallback arm is what
+keeps every Sol planet from going NaN — that arm is load-bearing and must not be "cleaned up".
+With masses estimated rather than authored, **19 of Sol's 26 moons imply impossible bulk densities,
+up to 15.8× Earth**, and the barycentre term consequently makes:
+
+| body | wobble, in its own radii |
+|---|---:|
+| Pluto | **7.447** |
+| Eris | **4.644** |
+| Earth | **1.271** |
+| Saturn | **0.530** |
+
+Earth wobbling 1.27 of its own radii is wrong by a factor of ~1.3 (the real Earth–Moon barycentre is
+*inside* the Earth, ~0.74 R⊕ from centre). Pluto's is genuinely outside its own body in reality, so
+that row is qualitatively right and quantitatively unchecked.
+
+**⛔ Why it is NOT fixed inside the moon window.** Editing Sol's records mid-window risks reddening
+`port-condition-contract.test.js`, **which has no re-bless mechanism** — so a data edit there is a
+hand-repair with no safety net, taken while every other instrument is already red by design and
+could not distinguish the new breakage from the expected one.
+
+**What the increment does:** author real `massEarth` on Sol's planets and moons from published
+values, then re-derive the wobble table and check it against the four rows above. Cheap, isolated,
+and it needs the window CLOSED (post-B7) so the instruments can actually witness it.
