@@ -88,6 +88,12 @@ const smoothstep = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t
 export const CRATERS_OFF = Object.freeze({
   density: 0, scale: 1, amp: 0, complexD: 1, relaxation: 0, terraceCount: TERRACE_COUNT,
   ejectaStrength: 0, ejectaRampart: 0, ejectaAmp: 0, ejectaLump: EJECTA_LUMP,
+  // ⛔ `Dchar: 0` MEANS "there is no characteristic diameter", NOT "the diameter is zero". A body
+  // reaching here has no resolvable crater band at all, so a consumer must NOT resolve a display
+  // frequency from it — `featureFrequencyFromKm` would divide by it. The paired `scale: 1` above is
+  // the value that ships today for this case and stays the answer; see the guard in
+  // src/worldengine/drivers/rockySurface.js, which forwards `scale` verbatim when `Dchar` is 0.
+  Dchar: 0,
 });
 
 // Areal coverage of the craters in [lo, hi] ⊆ [L, H]. BOUNDED Pareto, exponent B_SFD, normalised so
@@ -164,6 +170,16 @@ export function craterUniformsFrom(condition) {
   const vf = condition?.composition?.volatileFraction ?? 0.15;
   return {
     density,
+    // ⭐ `Dchar` IS EXPOSED, and `scale` IS KEPT — deliberately both, not one replacing the other.
+    // `scale` is an ALREADY-RESOLVED display frequency (R_km / Dchar). A driver pack that emitted it
+    // as a plain number would route around the display-policy seam entirely, and PLAN.md:419's whole
+    // reason for the rocky pack going second is that it is the first pack with a km-keyed frequency
+    // and therefore the first real test of that seam. So the pack takes `Dchar` — the physical
+    // diameter, in km, policy-free — and lets `featureFrequencyFromKm` resolve it. Under the GAME
+    // policy (`gameDisplayRadiusEarth(R) === R`) the two are byte-identical; under the LAB's they are
+    // not, and that difference is the thing the seam exists to make visible instead of silent.
+    // `scale` stays because Planet.js's legacy material still reads it.
+    Dchar,
     scale: R_km / Dchar,
     amp,
     complexD,
