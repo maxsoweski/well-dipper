@@ -140,6 +140,8 @@ import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetM
 // function `if (GAS_TYPES.has(type)) return 'gas';` lives in — and `compositionClass` is the E1 label.
 import { shaderVariantFor, labGasBodiesFlag } from './objects/Planet.js';
 import { compositionClass as e1CompositionClassOf } from './worldengine/base/e1Regime.js';
+import { planetMassEarth } from './physics/BodyMass.js';
+import { barycentreOffset, dominantMoon, ringRadii, DOMINANCE_THRESHOLD } from './physics/Barycentre.js';
 
 // ── User Settings (localStorage-backed) ──
 const settings = new Settings();
@@ -7603,6 +7605,9 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
     const planet = BodyRenderer.createPlanet(scenePlanetData, planetPhysics, systemData.starInfo);
     const px = Math.cos(entry.orbitAngle) * entry.orbitRadiusScene;
     const pz = Math.sin(entry.orbitAngle) * entry.orbitRadiusScene;
+    // px/pz are the ORBITAL POINT — which is where the planet-plus-moons system balances,
+    // not where the planet is. The offset is applied after the moons exist (see the
+    // barycentre fix-up below `planet.setRingGaps`), because it needs their directions.
     planet.mesh.position.set(px, 0, pz);
     planet.addTo(scene);
     lodManager.register(planet);
@@ -7626,6 +7631,25 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
       orbitRadius: m.orbitRadiusScene,
       noiseScale: m.noiseScale * (m.radius / m.radiusScene),
     }));
+
+    // ── Which rings are drawn about the empty point (binary-barycentre-render-2026-08-18) ──
+    // Decided BEFORE the rings exist, because a ring's radius is baked at construction. Static
+    // per system: masses and orbit radii never change. `dominantMoon` reads only `.data`, so
+    // the scene records stand in for the wrappers that do not exist yet.
+    //
+    // ⭐ The threshold is NOT a physics cutoff — Max ruled the offset itself unconditional. It
+    // is a statement about what a CIRCLE can describe: a barycentre-centred ring is the body's
+    // true path only in the two-body case. With several comparable moons the path is epicyclic
+    // and a circle would draw bodies visibly off their own orbit lines, a defect that does not
+    // exist today. See src/physics/Barycentre.js.
+    const _planetMass = planetMassEarth(entry.planetData);
+    const _dom = sceneMoons.length
+      ? dominantMoon(_planetMass, sceneMoons.map((d) => ({ data: d })))
+      : { index: -1, share: 0, massFraction: 0 };
+    const _domRings = _dom.index >= 0 && _dom.share >= DOMINANCE_THRESHOLD
+      ? { ...ringRadii(sceneMoons[_dom.index].orbitRadius, _dom.massFraction),
+          index: _dom.index, incl: sceneMoons[_dom.index].inclination || 0 }
+      : null;
 
     // Create moons + moon orbit lines (share planet's lightDir references + star info)
     const moons = [];
@@ -7686,13 +7710,45 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
       moonPb.addTo(scene);
       moon._planetBillboard = moonPb;
 
-      // Moon orbit line — centered on planet, tilted by inclination
-      const moonLine = new OrbitLine(moonData.orbitRadius, 0x00bb00);
+      // Moon orbit line — tilted by inclination. Centred on the planet, EXCEPT for the
+      // dominant member of a barycentric pair, whose ring is centred on the empty point at
+      // r2 = a - r1. ⛔ r2 is correct for the RING and fatal for the body separation: storing
+      // it as the separation is scoping §3's Convention-B trap, silent in every instrument.
+      const _isBary = _domRings != null && moonOrbitLines.length === _domRings.index;
+      const moonLine = new OrbitLine(_isBary ? _domRings.r2 : moonData.orbitRadius, 0x00bb00);
+      moonLine._baryCentred = _isBary;
       moonLine.mesh.position.set(px, 0, pz);
       moonLine.mesh.rotation.x = moonData.inclination;
       moonLine.addTo(scene);
       moonLine.mesh.visible = orbitsVisible;
       moonOrbitLines.push(moonLine);
+    }
+
+    // ── Barycentre fix-up (workstream binary-barycentre-render-2026-08-18) ──
+    // Every moon pulls the primary off its orbital point. Resolved here rather than at the
+    // planet write above because it needs the moons' directions, and re-resolved every frame
+    // in simStep. ⛔ Spawn matters on its own account: the opening hero shot takes a CLONE of
+    // this position and `setTarget` is never called again, so a per-frame-only fix would frame
+    // the hero on the empty barycentre permanently.
+    const _spawnOffset = barycentreOffset(_planetMass, moons, 0);
+    planet.mesh.position.set(px - _spawnOffset.x, -_spawnOffset.y, pz - _spawnOffset.z);
+
+    // The primary's own ring, which it never had. Only on a dominated planet, where a circle
+    // actually describes its path. ⛔ Radius is set at CONSTRUCTION, never per frame: OrbitLine
+    // bakes its hit-test perimeter from the constructor radius (OrbitLine.js:57-65) and
+    // hitTestOrbits prefers that baked attribute, so a per-frame radius would draw at one size
+    // and click at another. The mass fraction is constant, so construction is the right moment.
+    if (_domRings) {
+      const primaryRing = new OrbitLine(_domRings.r1, 0x00bb00);
+      primaryRing.mesh.rotation.x = _domRings.incl;
+      primaryRing.mesh.visible = orbitsVisible;
+      primaryRing._baryCentred = true;
+      primaryRing.addTo(scene);
+      moonOrbitLines.push(primaryRing);
+    }
+    for (const line of moonOrbitLines) {
+      if (line._baryCentred) line.mesh.position.set(px, 0, pz);
+      else line.mesh.position.copy(planet.mesh.position);
     }
 
     // Carve ring gaps where moons orbit inside the ring (shepherd moon effect)
@@ -7718,6 +7774,7 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
       orbitRadius: entry.orbitRadiusScene,
       orbitAngle: entry.orbitAngle,
       orbitSpeed: entry.orbitSpeed,
+      planetMassEarth: _planetMass,
     });
   }
 
@@ -7876,7 +7933,10 @@ function spawnSystem({ forWarp = false, systemData: preGenData = null, debugCame
   for (let i = 0; i < planets.length; i++) {
     _orbitLineTargets.set(orbitLines[i].mesh, { type: 'planet', planetIndex: i });
     const entry = planets[i];
-    for (let m = 0; m < entry.moonOrbitLines.length; m++) {
+    // ⛔ Bounded by moons.length, NOT moonOrbitLines.length: a dominated planet carries one
+    // EXTRA ring (the primary's) with no moon behind it. Registering it makes a dead click
+    // region that highlights on hover and then swallows the click (main.js:~7072 returns null).
+    for (let m = 0; m < entry.moons.length; m++) {
       _orbitLineTargets.set(entry.moonOrbitLines[m].mesh, { type: 'moon', planetIndex: i, moonIndex: m });
     }
   }
@@ -11196,12 +11256,21 @@ function simStep(deltaTime) {
     // ── Update each planet's orbit, position, and lighting ──
     for (const entry of system.planets) {
       entry.orbitAngle += entry.orbitSpeed * celestialDt;
+      // px/pz are the BARYCENTRE of the planet-plus-moons system, not the planet. The planet
+      // sits one offset short of it — which is the reflex that makes a pair read as a pair
+      // rather than as a planet with a big moon (workstream binary-barycentre-render-2026-08-18).
       const px = Math.cos(entry.orbitAngle) * entry.orbitRadius;
       const pz = Math.sin(entry.orbitAngle) * entry.orbitRadius;
+      // ⛔ PREDICTS each moon's direction this frame; mutates nothing. The moon loop below is
+      // the ONLY place an angle advances — pre-advancing here would double every plain moon's
+      // orbital rate, which is plausible on screen and invisible to every test.
+      const bary = barycentreOffset(entry.planetMassEarth, entry.moons, celestialDt);
+      // ⛔ Applied INSIDE the write, before any consumer reads the position. A post-write offset
+      // desyncs lighting, moon meshes and moon rings independently (scoping §3, scenario 6).
       entry.planet.mesh.position.set(
-        px - _worldOriginVec.x,
-        0 - _worldOriginVec.y,
-        pz - _worldOriginVec.z,
+        px - bary.x - _worldOriginVec.x,
+        0 - bary.y - _worldOriginVec.y,
+        pz - bary.z - _worldOriginVec.z,
       );
 
       // Primary sun direction: from planet toward star 1.
@@ -11217,10 +11286,12 @@ function simStep(deltaTime) {
         const s1 = system.star.mesh.position;
         _sunDir.set(s1.x - p.x, 0, s1.z - p.z).normalize();
       } else {
-        // Non-binary: the sole star sits at raw world origin, so its rebased
-        // position is -_worldOriginVec; (star_rebased - p) reduces exactly to
-        // (-px, -pz). Kept in this closed form (already rebase-invariant).
-        _sunDir.set(-px, 0, -pz).normalize();
+        // Non-binary: the sole star sits at raw world origin, so its rebased position is
+        // -_worldOriginVec and (star_rebased - p) reduces to (-p.x, -p.z) in rebased space.
+        // ⛔ It no longer reduces to (-px, -pz): px/pz are the BARYCENTRE, and the planet is an
+        // offset away from it. Reading the mesh keeps this rebase-invariant AND barycentre-
+        // correct, and matches what the binary arm above already does.
+        _sunDir.set(-(p.x + _worldOriginVec.x), 0, -(p.z + _worldOriginVec.z)).normalize();
       }
       entry.planet._lightDir.copy(_sunDir);
 
@@ -11259,15 +11330,26 @@ function simStep(deltaTime) {
         }
       }
 
-      // Moon orbit lines follow the parent planet (in the rebased frame —
-      // px/pz are absolute orbital coords, subtract `_worldOriginVec` to
-      // land in the renderer's frame).
+      // Moon orbit lines. Two kinds now, and the difference is the whole UAT fix:
+      //
+      //   `_baryCentred` — the two rings of a dominated pair. They stay on the EMPTY point, so
+      //   the primary and its companion are seen circling a shared centre. px/pz IS that point
+      //   by construction; y stays 0 because the barycentre rides the flat orbital plane.
+      //
+      //   everything else — rings that belong to a moon orbiting the planet at the full `a`,
+      //   so they must follow the WOBBLING planet, all three components. ⛔ This is the trap
+      //   scoping §9 named: leave these on px/pz and every ring belonging to the primary's
+      //   other moons detaches and parks at the empty point.
       for (const line of entry.moonOrbitLines) {
-        line.mesh.position.set(
-          px - _worldOriginVec.x,
-          0 - _worldOriginVec.y,
-          pz - _worldOriginVec.z,
-        );
+        if (line._baryCentred) {
+          line.mesh.position.set(
+            px - _worldOriginVec.x,
+            0 - _worldOriginVec.y,
+            pz - _worldOriginVec.z,
+          );
+        } else {
+          line.mesh.position.copy(entry.planet.mesh.position);
+        }
       }
     }
 

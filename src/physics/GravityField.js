@@ -18,6 +18,7 @@ import * as THREE from 'three';
 import { OrbitalMechanics } from './OrbitalMechanics.js';
 import { AU_TO_SCENE } from '../core/ScaleConstants.js';
 import { estimateMassEarth } from '../generation/PhysicsEngine.js';
+import { moonMassEarth } from './BodyMass.js';
 
 // Conversion factors for mass
 const M_EARTH_KG = 5.972e24;
@@ -177,15 +178,10 @@ export class GravityField {
    * or a simpler radius^3 * density model for captured bodies.
    */
   _estimateMoonMass(moonData) {
-    if (moonData.planetData?.massEarth != null) return moonData.planetData.massEarth;  // ⛔ the comment above is STALE: all planet-class moons carry mass on planetData, and a planet-class moon's top-level `type` is a PLANET type, so rocky/ocean/ice all MISS the branch below and the flight model got a mass the generator never chose. Required, not optional, once a binary pair exists.
-    const r = moonData.radiusEarth ?? 0.01;
-    if (moonData.type === 'terrestrial') {
-      // Terrestrial moons have higher density (planet-class)
-      return estimateMassEarth(r, 'rocky');
-    }
-    // Regular and captured moons: lower density ice/rock mix
-    // Rough: M ~ R^2.5 (less dense than rocky planets)
-    return Math.pow(r, 2.5) * 0.5;
+    // ⭐ Delegates to the ONE rule (src/physics/BodyMass.js) so the renderer's barycentre and
+    // this body's gravity cannot disagree about where a moon's mass is. Behaviour-identical —
+    // tests/barycentre-render.test.js pins the two against each other.
+    return moonMassEarth(moonData);
   }
 
   /**
