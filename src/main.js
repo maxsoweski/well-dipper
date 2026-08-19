@@ -11424,11 +11424,20 @@ function simStep(deltaTime) {
           if (pmu?.starPos1) pmu.starPos1.value.copy(_star1Pos);
           if (pmu?.starPos2) pmu.starPos2.value.copy(_star2Pos);
         } else {
-          const mMat = moon.mesh.material;
-          mMat.uniforms.shadowPlanetPos.value.copy(entry.planet.mesh.position);
-          mMat.uniforms.shadowPlanetRadius.value = entry.planet.data.radius;
-          mMat.uniforms.starPos1.value.copy(_star1Pos);
-          mMat.uniforms.starPos2.value.copy(_star2Pos);
+          // MOON-SHADOW-WRITE-BEGIN
+          // ⛔ GUARDED, for the reason the planet-class arm above records at length. These four
+          // writes assume Moon.js own shader is on this mesh (it declares all four at Moon.js:57-60);
+          // the lab material declares NONE of them, because it fills its uniforms from
+          // makeUniforms(light). PLAN.md Step 10 widens the tryLabShader filter that currently keeps
+          // plain moons off that material, and an unguarded write here throws inside the frame
+          // function — which stops the render loop permanently, on a frozen frame, after success has
+          // already been reported. Fence: tests/moon-shadow-write-guard.test.js.
+          const mu = moon.mesh.material?.uniforms;
+          if (mu?.shadowPlanetPos) mu.shadowPlanetPos.value.copy(entry.planet.mesh.position);
+          if (mu?.shadowPlanetRadius) mu.shadowPlanetRadius.value = entry.planet.data.radius;
+          if (mu?.starPos1) mu.starPos1.value.copy(_star1Pos);
+          if (mu?.starPos2) mu.starPos2.value.copy(_star2Pos);
+          // MOON-SHADOW-WRITE-END
         }
       }
     }

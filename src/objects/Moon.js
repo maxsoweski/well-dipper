@@ -618,7 +618,11 @@ export class Moon {
    */
   updateRender(renderDt) {
     if (this.data.clouds) {
-      this.mesh.material.uniforms.time.value += renderDt;
+      // ⛔ GUARDED — same hazard as the plain-moon shadow writes in src/main.js: the lab material
+      // declares no `time` uniform, and this throws inside the render tick. Measured: 7 of 683 moons
+      // carry clouds. Fence: tests/moon-shadow-write-guard.test.js.
+      const mu = this.mesh.material?.uniforms;
+      if (mu?.time) mu.time.value += renderDt;
     }
   }
 

@@ -467,7 +467,7 @@ export function atmosphereFromPlanet(gameAtmosphere) {
 // a BASE-STEP BUNDLE — `ageNorm` where the fp wants `age`, and no `atmosphere`, `tidalState` or
 // `rotationHours` at all — while `deriveConditionVector` wants an fp; and its output is hashed by
 // `tests/fixtures/v2-0-basestep-golden.mjs`. Reconciling the two adapters is real work and is
-// explicitly out of this plan's scope (PLAN.md:578 `Reconciling `adaptL0` with `conditionFromPlanet``).
+// explicitly out of this plan's scope (PLAN.md:580 `Reconciling `adaptL0` with `conditionFromPlanet``).
 // A later step adds `d._systemSeed` to the fp; that read does not exist yet and this line naming it is
 // PROSE, not code — the contract test uses exactly this string as its live decoy that the fence
 // walks an AST rather than the file's text.
