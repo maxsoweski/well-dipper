@@ -4,7 +4,7 @@ Driven by working-Claude via chrome-devtools against the running game. **Integra
 these are objective assertions with right answers. The holistic "does it read as a pair" judgment
 is Max's alone and is not recorded here.
 
-## AC-SEPARATION — PASS
+## AC-SEPARATION — ⛔ RETRACTED 2026-08-18. See the retraction note at the foot of this file.
 
 Drawn separation `|moon mesh − planet mesh|` against each record's `orbitRadiusScene`, all five
 planets of wd-10:
@@ -175,3 +175,58 @@ the merge arc lands. ⚠ **That precondition now appears met** — lane B's ORRE
 the trunk merge landed 2026-08-01 — but this tree is lane A's branch, and lifting his own hold is
 his call, not mine. The same parking-lot entry already says this area "warrants `dev-collab-scope`
 before code."
+
+---
+
+# ⛔⛔ RETRACTION — AC-SEPARATION's "PASS", 2026-08-18
+
+**This file recorded two contradictory measurements of the same quantity, on the same body, at the
+same commit, and I published both.** A root-cause workflow caught it, not me.
+
+| where | drawn separation, wd-10 planet 3 moon 0 |
+|---|---:|
+| the AC-SEPARATION section above | **1.151999** — "max error 0" |
+| the UAT section below it | **0.897895** |
+
+`git diff --stat 52031fd 03d9346 -- src/` is empty, so no code changed between them. One is wrong.
+
+**The 1.151999 reading is the one that is wrong.** Re-measured after the workflow, reading the exact
+nodes `src/main.js` writes (`resolveBody().holder.mesh` — `moon.planet.mesh` for a planet-class moon,
+`_delegate.mesh` for a planet):
+
+- **four consecutive fresh spawns** of wd-10: ratio `0.779423` every time, record `1.151999` every time
+- `mesh.position`, `mesh._interpPrev` and `mesh._interpCurr` **all three** give 0.897895, so it is the
+  sim write, not the render lerp at `main.js:12810`
+- identical under `_lab.freezeFrame`
+
+I cannot reproduce 1.151999 at all. **AC-SEPARATION is therefore NOT verified live for planet-class
+moons** — it holds for plain moons, which measure error 0 by the same probe, and it is proven
+headlessly for the shipped `Moon` class in `tests/barycentre-render.test.js`. The live claim is
+withdrawn.
+
+⚠ **The lane's own rule caught this and I had not applied it to myself: neither probe was committed.**
+`tools/binary-yield-probe.mjs`'s header exists because this lane already lost a probe to `scratchpad/`.
+A browser probe is harder to commit than a node one, which is a reason to build the hook, not a reason
+to skip it.
+
+**What does NOT change:** the barycentre geometry. `r1 = 0.254133` against a ring radius of `0.254133`,
+and `cos∠ = −1.000000` between the two bodies about the empty point, are independent of the separation
+scale and were measured in the same call. The primary rides its ring exactly.
+
+## Root cause after the workflow: still NOT FOUND, and the search is narrowed
+
+Excluded, each by measurement rather than argument:
+
+| candidate | how it died |
+|---|---|
+| Convention-B `1/(1+q)` | q-dependent (0.7794 / 0.8718 / 0.9447); observed constant is not |
+| render-interpolation chord | `_interpPrev` and `_interpCurr` both already carry it |
+| `ExoticOverlay._swapPlanetType`'s `moon.orbitRadiusScene *= kEarth` (`ExoticOverlay.js:375`) | wd-10 planet 3 still carries `_systemSeed` and `_ordinal`, which a swap strips |
+| repeated-spawn compounding of that `*=` | ratio identical on spawns 1, 2, 3 and 4 |
+| the static build path | headless run of the real `createPlanetMoonBody` gives `data.orbitRadius === orbitRadiusScene` for **86/86** planet-class moons over wd-0…wd-399 |
+| `resolveBody` surface-vs-group split | surface and holder world positions are identical to 0.000000, both scales 1 |
+
+So the scene's `moon.data.orbitRadius` is 0.897895 while every static path says 1.151999, and no
+mechanism in `src/` accounts for it. **The one decisive experiment left is instrumentation**: print
+`moon.data.orbitRadius` and `moon.data.orbitRadiusScene` at the write site (`src/main.js:11315`) for
+one frame. That is a `src` edit, which fires HMR into Max's live session — his call, not mine.
