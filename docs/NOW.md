@@ -1926,7 +1926,25 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 > ⛔ **RELOAD THE PAGE BEFORE ANY BROWSER MEASUREMENT** — HMR-duplicated module state faked a
 > constant 0.779424x moon-orbit error that cost three commits and a 13-agent workflow. §11 leads with it.
 > ▶ NEXT: Max re-looks at wd-10 planet 3 on a CLEAN load; then queue item 2 (orbit-line occlusion,
-> scoped at `f411974`); then Sol, as a workflow.
+> **now PLANNED at `971eb7a`**); then Sol, as a workflow.
+>
+> ### 2026-08-19 — the re-look is SET UP, and the HMR diagnosis is CONFIRMED by measurement
+> Page reloaded clean, wd-10 planet 3 framed sunward, orbits on. Re-measured in a fresh session:
+> `r1 = 5.5332` R_p, `r2 = 19.5492`, **both bodies on their rings at ratio 1.000000**, out-of-plane
+> −5e-8, `cos∠ = −1`, 16/16 ring proxies. ⭐ **Max's UAT item 1 — "one of the planets is not riding
+> along its orbit line" — DOES NOT REPRODUCE.** The §11 HMR-artifact diagnosis holds. His subjective
+> read is still the gate; the numbers only retire the objective half.
+>
+> ### 2026-08-19 — queue item 2 is PLANNED, not started (`971eb7a`)
+> `docs/WORKSTREAMS/orbit-line-local-system-occlusion-2026-08-18/implementation-plan.md` — 13-agent
+> read-only design pass, then working-Claude re-opened every load-bearing line. **World-space ball**
+> keep-out tested against the circle point `arcRoot` already builds, packed into 8 new rows of the
+> **existing** DataTexture; predicate = same-local-system exemption + 3-D containment, **no radius
+> comparison**. Zero `src/main.js` edits. Predicate measured against wd-10's real ring set before any
+> code: 1 of 14 foreign rings masked (the right one, `gap² = 0`), nearest false positive off by ~3e6.
+> The pass also found **four real defects in the contract**, all corrected — including an AC clause
+> naming an asteroid-belt ring that cannot exist, and an observable that passed with or without the
+> feature. ⛔ **Code waits on the UAT re-look**: an `src` edit fires HMR into the page Max is judging.
 > `docs/WORKSTREAMS/binary-barycentre-render-2026-08-18/` (`intent.md` + `contract.json`, 8 ACs, scoped at `ea2681e`).
 > Queue item 1 of the moon-formation lane — see `docs/FEATURES/moon-formation-handoff-2026-08-18-b5.md` §10.
 > **Why:** B5.0's binary companion generated correctly and then **failed UAT on the first pair, first look** —
