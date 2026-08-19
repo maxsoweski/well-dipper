@@ -1921,6 +1921,23 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 
 ## Active workstream
 
+> **▶▶ BARYCENTRE RENDER — scoped + greenlit 2026-08-18, building.**
+> `docs/WORKSTREAMS/binary-barycentre-render-2026-08-18/` (`intent.md` + `contract.json`, 8 ACs, scoped at `ea2681e`).
+> Queue item 1 of the moon-formation lane — see `docs/FEATURES/moon-formation-handoff-2026-08-18-b5.md` §10.
+> **Why:** B5.0's binary companion generated correctly and then **failed UAT on the first pair, first look** —
+> Max: *"planet with a big moon because the orbit lines center one planet in orbit around the other rather than
+> both around a shared empty gravitational center."* The primary is pinned to its orbital point; the reflex
+> wobble is the whole read.
+> **Max's rulings this session:** (1) the barycentre term applies to **every moon, no mass-ratio cutoff** —
+> so it also corrects 16 existing pairs whose barycentre is already outside the primary and visibly moves 111
+> more, across 90 of 221 systems; (2) **ring topology branch kept** — barycentric rings where one moon
+> dominates (all 27 companions at share ≥ 0.99), planet-following rings on the 16 epicyclic planets, so no body
+> is ever drawn off its own line; (3) **naming closed** — largest body holds the primary designation, measured
+> already true for 97/97 companions.
+> ⛔ The moon-formation window's instruments are **RED BY DESIGN**; `AC-ZERO-GENERATION-DRIFT` pins this change
+> to *bit-identical* generation output rather than to green. B7 is what re-blesses.
+> **Journey/tier:** serves the procedural-worlds milestone; PLAYER_EXPERIENCE tier — what you see out the canopy.
+
 > **▶▶ RADIUS LIVE FEED (R1) — ✅ SHIPPED 2026-07-28. Max re-UAT PASSED: _"okay, passes"_.**
 > Re-UAT ran on the new **"hold apparent size (radius read)"** toggle; the headline promise — drag radius, see the
 > banding answer — is delivered. **Two Max observations raised at the same moment, both FILED not folded:**

@@ -109,6 +109,24 @@ strength of a type string, which is exactly what the plan's own rule (*"read fro
 composition, never the type string"*, PLAN:37) exists to prevent. ⚠ **Not fixed. Scoped, not filed** —
 it wants its own increment, and it overlaps B5 step 9's mass-ratio work.
 
+### ⭐ §4b — NEW FINDING 2026-08-18. The 0.95 radius cap silently clips the high-`q` tail.
+
+Found while checking Max's naming ruling, so it is a by-product, not a hunt. `_generatePlanetMoon`
+(`MoonGenerator.js:381`) caps the radius fraction at `Math.min(0.95, …)`. When the cap binds, `f` is
+smaller than the one that inverts `targetQ`, and since `q = (ρ_c/ρ_p)·f³` the **delivered `q` comes in
+under the sampler's draw with nothing recording it.** Measured over `wd-0…wd-999`, 97 companions:
+
+| | count | worst |
+|---|---:|---|
+| cap binds (`f = 0.95`) | **7 / 97** | `wd-234/5` — `targetQ 0.7475` → **delivered 0.4016**, a **46.3%** shortfall |
+| uncapped, `q ≠ targetQ` | 1 / 90 | `wd-450/4` +13.74% — the `ExoticOverlay._swapPlanetType` parent swap, already documented in `tools/binary-yield-probe.mjs`'s header |
+
+⭐ **The inversion is otherwise exact: 89 of 90 uncapped companions deliver `targetQ` to floating point.**
+So the mechanism is sound and only the clamp leaks. Consequence: the triangular sampler on
+`[0.122, 0.83]` is **not** the shipped `q` distribution — its top end is compressed, and the
+population holds fewer near-co-equal pairs than §8.2's derivation assumes. ⛔ **This bears directly on
+B5 step 9 (the mass-ratio commit) and on anything that asserts a `q` distribution.** Not fixed.
+
 ---
 
 ## 5. STATE YOU NEED
@@ -171,10 +189,12 @@ it wants its own increment, and it overlaps B5 step 9's mass-ratio work.
 1. ✅ **UAT ANSWERED 2026-08-18 — FAILED, cause named. See §9.** Max: *"planet with a big moon
    because the orbit lines center one planet in orbit around the other rather than both around a
    shared empty gravitational center."* The barycentre render is now REQUIRED, not a non-goal.
-2. **Naming — still unruled** (carried from the previous handoff §7 item 1). The companion ships as
-   `Meameinath I`, the roman numeral you leaned toward. It reads as a moon designation. Peer
-   designation (`Meameinath b1` / `b2`) is the alternative. *Rec: leave it until UAT says the pair
-   reads as a pair; if it does, the name is the next thing that will feel wrong.*
+2. ✅ **NAMING RULED 2026-08-18 — closed.** Max: *"name seems fine to me; largest planet can get
+   primary designation."* So `Meameinath` + `Meameinath I` stands, and the rule is **the larger body
+   holds the primary designation**. ⭐ **Already satisfied by construction, and measured rather than
+   assumed:** `_generatePlanetMoon` sets `radiusEarth = fraction * planetData.radiusEarth` with
+   `fraction = Math.min(0.95, …)` (`MoonGenerator.js:381-382`), so over `wd-0…wd-999` / **97
+   companions, 0 exceed their parent** in either radius or mass. No work follows from this ruling.
 3. **The sub-neptune finding (§4) wants its own increment.** *Rec: fold the label-survives-shrink
    half into B5 step 9 (it is already the mass-ratio commit) and file the
    `GIANT_PARENT_TYPES`-vs-`isRocky` disagreement separately.*
