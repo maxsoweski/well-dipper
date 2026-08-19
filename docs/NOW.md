@@ -1922,11 +1922,17 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 ## Active workstream
 
 > **▶▶ BARYCENTRE RENDER — ✅ SHIPPED + UAT-PASSED 2026-08-19.** Max: *"Looks like it's working."*
-> ▶▶ **ORBIT-LINE LOCAL-SYSTEM OCCLUSION — code SHIPPED `4cf67c5`, integration GREEN, ⛔ Max's UAT OPEN.**
-> `docs/WORKSTREAMS/orbit-line-local-system-occlusion-2026-08-18/` — plan `971eb7a`, perf `090bd3e`,
-> `live-integration-evidence.md`. 6 of 7 ACs PASS; AC-HIT-TESTING-UNCHANGED is PARTIAL (fence green,
-> the live click inside the gap is unrun); AC-UAT is Max's alone.
-> ▶ NEXT: **Max looks** — the pair AND an ordinary multi-moon planet. Then B5 steps 1–9.
+> ⛔ **ORBIT-LINE LOCAL-SYSTEM OCCLUSION — REVERTED `baa4935`. Max rejected the PREMISE, not the build.**
+> *"we should just have the larger orbit intersect with the barycenter; I don't think having those
+> smaller orbits occlude it actually works."* Every AC passed and the mechanism measured working live;
+> the idea failed. The renderer is byte-identical to `e0b6fa8` again. Record kept and marked
+> `withdrawn`: `intent.md`, `implementation-plan.md`, `live-integration-evidence.md`, `contract.json`.
+> ⭐ Two things there outlive the feature — the FOUR real AC defects the design pass found, and the
+> warning that the tempting `ring.radius > disc.radius` fail-safe silently disarms the assertion
+> protecting the pair's inner ring.
+>
+> ▶▶ **ACTIVE = B5 steps 1–9** (⛔ read handoff §2 before step 4's merge), then B6/B7/B8/B9.
+> ▶ Also open: **star↔planet barycentres are NOT modelled** — see the handoff's §12.
 > ⛔ Historical below — kept because the HMR lesson in it is the most expensive one this lane learned.
 > ⭐ Full state + next action: `docs/FEATURES/moon-formation-handoff-2026-08-18-b5.md` **§11**.
 > ⛔ **RELOAD THE PAGE BEFORE ANY BROWSER MEASUREMENT** — HMR-duplicated module state faked a

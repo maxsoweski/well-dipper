@@ -360,3 +360,83 @@ reload before any work is spent on it.** ▶ **That re-look is the immediate nex
 
 **B5 steps 1–9** (independent of both items above; ⛔ read §2 before step 4's merge) → **B6/B7/B8/B9**
 → **sub-neptune (§4)** → **B10**.
+
+
+---
+
+## 12. ▶ SESSION 2026-08-19 — items 1 and 2 CLOSED. ▶ NEXT = **B5 steps 1–9.**
+
+**HEAD `baa4935`** · branch `feature/world-engine-production-L1` · tracked tree **CLEAN**
+
+### Queue item 1 — BARYCENTRE RENDER: ✅ **SHIPPED, UAT-PASSED** (`e0b6fa8`)
+
+Max, on a clean reload: *"Looks like it's working."* His original UAT item 1 — "one of the planets is
+not riding along its orbit line" — **does not reproduce**, confirming §11's HMR diagnosis. Measured
+in a fresh session before he looked: both bodies on their rings at **1.000000**, out-of-plane −5e-8,
+`r1 = 5.5332` R_p, `r2 = 19.5492`, `cos∠ = −1`, 16/16 ring proxies.
+
+### Queue item 2 — ORBIT-LINE OCCLUSION: ⛔ **BUILT, VERIFIED, THEN REVERTED** (`4cf67c5` → `baa4935`)
+
+Max: *"we should just have the larger orbit intersect with the barycenter; I don't think having those
+smaller orbits occlude it actually works."*
+
+⭐⭐ **THE BUILD WAS NOT WRONG — THE IDEA WAS.** Every AC passed. Live: exactly one contiguous gap the
+full width of the disc, the pair's inner ring intact, zero collateral occlusion, 22/22 mutants still
+killed, full-repo failure set byte-identical to parent, frame time 4.2 ms median in both arms. **No
+test and no agent could have returned this verdict**, which is exactly why AC-UAT is his alone. The
+renderer is byte-identical to `e0b6fa8` again.
+
+**Kept as a record** in `docs/WORKSTREAMS/orbit-line-local-system-occlusion-2026-08-18/`
+(`contract.json` status `withdrawn`). Two things outlive the feature:
+
+1. The design pass found **four real defects in the contract's own ACs** — a clause naming an
+   asteroid-belt ring that cannot exist, an observable that passed with or without the feature, a
+   claimed parent-red the test could not deliver, and two probe numbers `barycentre-probe.mjs` does
+   not print. Those corrections stand alone and are worth reading before writing the next contract.
+2. ⛔ If line-on-line occlusion is ever wanted again: the same-system exemption is load-bearing and
+   the tempting `ring.radius > disc.radius` fail-safe **must not** be added — it subsumes the
+   exemption and silently disarms the assertion protecting the pair's inner ring.
+
+### ⭐ NEW — Max asked: do we compute barycentres beyond the designated binaries?
+
+Answered from the code, every line opened at `baa4935`. **Three of the four cases are modelled; one
+is not, and it is the one real-world case with no code behind it at all.**
+
+| pair | modelled? | where |
+|---|---|---|
+| **planet ↔ its moons** | ✅ **UNIVERSALLY** | `main.js:11267` + `:7733` |
+| **binary stars ↔ each other** | ✅ but by a **different** mechanism | `main.js:7543`, `:11244` |
+| **star ↔ its planets** | ⛔ **NO. Not modelled anywhere.** | — |
+| moon ↔ sub-moons | n/a — no sub-moons exist | — |
+
+1. **Planet↔moons is not gated on anything.** `barycentreOffset(entry.planetMassEarth, entry.moons,
+   celestialDt)` sits inside `for (const entry of system.planets)` with **no `if`** — not on
+   dominance, not on mass ratio, not on a flag. Every planet, every frame. A moonless planet gets
+   `(0,0,0)` naturally because the loop body never runs. ⭐ **`DOMINANCE_THRESHOLD = 0.99` gates only
+   whether the pair gets RINGS drawn about the empty point** — and `Barycentre.js:31-37` says why in
+   its own words: *"NOT a physics cutoff — Max ruled the offset itself is unconditional. This is a
+   statement about what a CIRCLE can describe."* With several comparable moons the path is epicyclic
+   and a circle would draw the body visibly off its own line.
+2. **Binary stars orbit a shared empty point, via a closed-form two-body split, not
+   `barycentreOffset`**: `r1 = sep·q/(1+q)`, `r2 = sep/(1+q)` about the system origin, so the
+   barycentre IS the origin by construction. **Measured live on wd-10:** both star rings share one
+   centre, and the active star sits **116.188747** from it against a ring radius of **116.1887**.
+3. ⛔ **Nothing ever moves a star because of its planets.** The only system-star position writes are
+   the binary pair above; `main.js:8091`, `:8735`, `:8783` are deep-sky/gallery decoration. A
+   single-star system pins its star at the origin permanently.
+
+**So the one real-world barycentre WD does not have is the star's own wobble.** ⚠ For scale — this is
+general astronomy, NOT measured from this codebase: the Sun–Jupiter barycentre sits *outside the
+Sun's surface*, around 1.07 solar radii out. So it is not a negligible quantity physically.
+
+*Rec: FILE IT, do not build it now.* The machinery generalises (`barycentreOffset` is already generic
+over "a body plus things orbiting it"), but the star position is read by lighting, `starKeepOutInfo`,
+warp targeting and the autopilot, so moving it has a real blast radius — while the visual payoff is
+near zero, because the wobble is ~1 stellar radius on a body drawn a few pixels across at system
+view. It is a correctness/plausibility increment, not a visual one, and it should be scoped as such.
+
+### Queue after this — §10 otherwise unchanged
+
+**B5 steps 1–9** (⛔ read §2 before step 4's merge) → **B6/B7/B8/B9** → **sub-neptune (§4)** → **B10**.
+Still open for Max: **Sol** (rec: ship as-is, fix Sol's mass data as its own increment), **§4b's 0.95
+radius cap** (rec: fold into B5 step 9), and now **star↔planet barycentres** (rec: file, don't build).
