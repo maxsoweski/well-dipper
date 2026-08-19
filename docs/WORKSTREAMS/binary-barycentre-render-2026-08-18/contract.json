@@ -1,0 +1,107 @@
+{
+  "workstream": "binary-barycentre-render-2026-08-18",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "building",
+  "summary": "Draw the primary at the true barycentre of itself and all its moons instead of pinning it to its orbital point, and draw the orbit rings in the barycentric frame where one moon dominates. Pure renderer change in src/main.js: q is read from records that already exist as of B5.0 (34b502d), so no generation output moves by a single bit. Max ruled the term applies to EVERY moon with no mass-ratio cutoff, which means it also corrects 16 existing moon/parent pairs whose barycentre already sits outside the primary and visibly moves 111 more. Fixes the UAT failure recorded in docs/FEATURES/binary-planets-scoping-2026-08-17.md §9.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-WOBBLE",
+      "statement": "The primary is drawn at the barycentre of itself and ALL of its moons, not at its orbital point. Max's ruling: every moon contributes, with no mass-ratio cutoff and no flag on the record. On wd-10 planet 3 the primary must circle a point 5.53 of its own radii away instead of sitting still.",
+      "verifyVia": {
+        "input": "Advance the celestial sim headlessly over a full companion orbit for wd-10 planet 3 and for a sample spanning FENCE-221, reading the planet mesh position P, the orbital point B = (cos(orbitAngle)*orbitRadius, 0, sin(orbitAngle)*orbitRadius), and every moon mesh position.",
+        "observable": "P - B equals -(1/M_total) * sum_i m_i * (moon_i - P) to float tolerance at every sampled frame, where m_i is the moon's mass by the SAME rule GravityField._estimateMoonMass uses (planetData.massEarth when present) and M_total = M_planet + sum m_i. For wd-10 planet 3, |P - B| / radiusScene = 5.53 and is constant over the orbit. The y component is included, not dropped: a moon with non-zero inclination moves the primary off the y=0 plane."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-SEPARATION",
+      "statement": "The bodies stay exactly as far apart as they are generated. The pair must not be drawn half-size — this is scoping §3's Convention-B trap, which is fatal AND silent because no test in the battery measures a drawn separation.",
+      "verifyVia": {
+        "input": "Over the same headless run, measure the drawn distance |moon mesh - planet mesh| for every moon of every sampled planet.",
+        "observable": "It equals that moon's orbitRadiusScene exactly, unchanged from before the change, for every moon including the companion. Specifically NOT a/(1+q): on wd-10 planet 3 the drawn separation is 1.15200 scene units (25.1 primary radii), not 0.898."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-NO-BODY-OFF-ITS-LINE",
+      "statement": "No body is drawn off its own orbit line. This is the trap named in scoping §9: main.js:11265-11271 sources moon ring positions from the recomputed px/pz rather than the planet mesh, so offsetting the primary detaches every ring belonging to its other moons and parks them at the empty point. It must be fixed in the same change, and the fix must hold for BOTH ring branches.",
+      "verifyVia": {
+        "input": "Over the headless run, for every moon of every sampled planet compute the distance from the moon mesh to the centre of its own orbit ring, and compare against that ring's radius.",
+        "observable": "The two agree to float tolerance at every frame, for every moon, in both ring branches. Zero moons detached. Re-running with the ring fix reverted must make THESE assertions go red specifically (TDD proof), not some unrelated assertion."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-PAIR-RINGS",
+      "statement": "Max's words: two orbit lines around a shared empty gravitational center, not one line centred on the primary. Where one moon dominates the barycentric excursion (measured: all 27 companions are at share >= 0.99), the primary's ring and that moon's ring are both centred on the barycentre, at radii r1 = a*q/(1+q) and r2 = a/(1+q). Where several moons are comparable — 16 of the 44 visibly-wobbling planets, worst wd-133/4 at six moons and top share 0.626 — rings stay centred on the planet mesh and follow it, because a barycentric circle is not that body's path and drawing one would put bodies off their lines (see AC-NO-BODY-OFF-ITS-LINE).",
+      "verifyVia": {
+        "input": "Headless: enumerate the ring set for wd-10 planet 3 and for wd-133 planet 4. Live: park on wd-10 planet 3 with orbits visible and the camera sunward, and drive a full companion orbit.",
+        "observable": "wd-10 planet 3 carries exactly TWO rings, both centred on the same point, that point is empty (no mesh within r1 of it), radii are 5.53 and 19.55 primary radii, and both rings are STATIC while both bodies move along them. wd-133 planet 4 carries six planet-centred rings that translate with the wobbling primary and no barycentric ring. On screen at wd-10: two concentric circles about an empty point with a body on each."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-LIGHTING-AND-MOONS-FOLLOW",
+      "statement": "Everything downstream of the planet write follows the moved primary and stays consistent: lighting, plain moons, planet-class moons, and the companion itself. The companion needs no change at all — placing the primary at bary - r1*u and the companion at primary + a*u lands it at bary + r2*u exactly, which the existing code at main.js:11247-11252 already does.",
+      "verifyVia": {
+        "input": "Headless over the sampled run plus a live sunward look at wd-10 planet 3 in a binary-star system; compare _lightDir/_lightDir2 and every moon position against the planet's mesh position.",
+        "observable": "_lightDir is computed from the moved mesh position (not from px/pz), so the terminator stays correct in binary-star systems after a world-origin rebase — the WU5 property. Every moon's position is parent-mesh-relative. Nothing is computed from px/pz except the barycentre itself."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-ZERO-GENERATION-DRIFT",
+      "statement": "This is a pure renderer change and must move no generation output by a single bit. The lane's instruments are RED BY DESIGN mid-window (handoff §3 lists every deliberate literal; B7 re-blesses), so the gate is not 'green' — it is 'bit-identical to the same command at the parent commit'.",
+      "verifyVia": {
+        "input": "Run tools/moon-census.mjs, tools/binary-yield-probe.mjs and the full npm test suite at the build commit and at its parent, and diff the outputs.",
+        "observable": "Byte-identical census and probe output. The test suite's failing-file set and per-file assertion messages are identical to the parent's — no test moves from red to green, none from green to red, and no failure message changes a number. A newly-red generation test is a FAIL of this AC, not a re-bless candidate."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-FLIGHT-STILL-WORKS",
+      "statement": "Flying there still works. Gravity, SOI, collision, supercruise, targeting and autopilot all chase live meshes, so they should follow the moved primary for free — this AC exists to prove it rather than assume it, since the primary now leaves the y=0 plane for the first time.",
+      "verifyVia": {
+        "input": "Live: at wd-10 planet 3, approach the pair, target each body, and let the autopilot run to each; check dominantBodyAt at 0.1*a from the companion and near the primary.",
+        "observable": "Both bodies are targetable and reachable, the autopilot arrives at the body rather than at the empty barycentre, dominantBodyAt returns the companion near the companion, and no collision or SOI discontinuity fires at the empty point. No console errors."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max's gate, two subjects. (1) The pair: does wd-10 planet 3 read as a binary planet — both bodies orbiting a shared empty gravitational center — rather than as a planet with a big moon? (2) The blast radius: the same term now moves 111 planets Max has already flown to, 44 of them by more than a full planet radius. Does the game still look right, or did correcting the physics make ordinary moon systems look wrong?",
+      "verifyVia": {
+        "input": "Max watches a recording of wd-10 planet 3 over a full companion orbit with orbits visible, and a second of wd-133 planet 4 (six moons, worst epicyclic case) and one ordinary moon system.",
+        "observable": "Max says it reads as a pair, and that nothing else got worse. Never PASSed by an agent — deferred-to-max. Animated feature, so the Shipped gate takes a recording, not a screenshot."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "src/main.js:11197-11205 — the planet per-frame write; the single hardcoded-singleton seam (scoping §2). Today it writes the orbital point straight to the mesh with no offset term.",
+      "src/main.js:11237-11259 — the moon loop; planet-class moons are placed here relative to entry.planet.mesh.position, plain moons inside Moon.updateSim (src/objects/Moon.js:587-602), which advances its own orbitAngle. The offset needs this frame's moon directions BEFORE the planet write, so the loop order changes: compute next angles, offset, write planet, then place moons.",
+      "src/main.js:11265-11271 — moon orbit ring placement, currently from px/pz. The one thing scoping §9 says MUST land in the same change.",
+      "src/main.js:7633-7695 — per-moon OrbitLine construction at spawn; ⚠ reuse this array, a NEW ring array is silently never drawn (CONIC_MAX = 64, src/objects/OrbitConicField.js:51).",
+      "moon record fields as of B5.0: orbitRadiusScene (Convention A — the FULL parent-relative separation), planetData.massEarth for planet-class moons, radiusEarth for plain ones.",
+      "src/physics/GravityField.js:179-189 _estimateMoonMass — the mass rule the renderer must match so physics and render agree on q."
+    ],
+    "outputs": [
+      "Planet mesh world positions — consumed by lighting (main.js:11205+), moon placement, gravity (GravityField.tick, a blind mesh copy), collision, supercruise, targeting, brackets, autopilot, cinematic and the freezeFrame instrument.",
+      "Moon orbit ring transforms, and one new barycentric ring per dominated planet.",
+      "Nothing written back to systemData — the generator's output is untouched, which is what AC-ZERO-GENERATION-DRIFT pins."
+    ],
+    "mustStayWorking": [
+      "World-origin rebasing: every position written in the rebased frame. Mixing a rebased star with a raw planet skews the light direction by _worldOriginVec far from origin (WU5, memory/well-dipper-rebasing-plan.md). The barycentre must be computed and applied INSIDE the write, before any consumer reads it — a POST-write offset is scoping §3 scenario 6, rated fatal.",
+      "Planets are no longer pinned to y = 0. Moon inclination reaches 0.4982 rad, so the primary now moves vertically. Anything assuming a planet lies in the y=0 plane must be found and checked — orbit lines, brackets, minimap fallback, ring gaps, collision.",
+      "The 27 B5.0 companions and the 51 planet-class moons stay exactly where generation puts them; the drawn separation stays the full a (AC-SEPARATION).",
+      "Every existing moon stays on its own orbit line (AC-NO-BODY-OFF-ITS-LINE) — today zero moons are detached and that must remain true.",
+      "The moon-formation window's instrument reds stay exactly as handoff §3 documents them. B7 is what re-blesses; this workstream must not move a single one in either direction.",
+      "No dev server touched during the build: a server on :5173 serves Max's live session and any src edit fires HMR into it."
+    ]
+  }
+}
