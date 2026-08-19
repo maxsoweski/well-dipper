@@ -477,3 +477,29 @@ population.
 **B5 steps 1–9** (⛔ read §2 before step 4's merge) → **B6/B7/B8/B9** → **sub-neptune (§4)** → **B10**.
 ⚠ The **sub-neptune** finding (§4) stays a SEPARATE item after B5/B6–B9 — do not fold it into step 9;
 only §4b was folded.
+
+
+---
+
+## 13. ⛔ LANE PAUSED AT A CLEAN SEAM 2026-08-19 — read the lane-choice handoff FIRST
+
+▶ **[`handoff-2026-08-19-lane-choice.md`](handoff-2026-08-19-lane-choice.md)** is the live entry point.
+
+Max redirected: *"I want to drive to getting all the world engine rendering into the main welldipper
+game."* That is a **different lane** — `lab-pipeline-into-game-PLAN.md`, six layers — and not one line
+of B5 advances it. **The lane choice is his and it is unresolved.**
+
+⭐ **ZERO B5 steps have been cut**, so the pivot is free right now and expensive after step 1. The only
+thing that landed toward the window is **S0-a** (`905f77e`), a citation-fence regression repair that
+was owed regardless of lane.
+
+**The window is still open and the instruments are still red by design.** Nothing here is stale.
+
+▶ **Plan of record for the window is now
+[`moon-formation-b5-build-plan-2026-08-19.md`](moon-formation-b5-build-plan-2026-08-19.md)** — twelve
+commits, produced by a 14-agent recon and re-verified by working-Claude in its §10, which corrects two
+of the synthesis's own claims. It re-sequences PLAN §3 B5's nine steps; **§2, §3 and §12 of THIS file
+remain the lane's context and are still current.**
+
+Next commit if the lane resumes: **S0-b**, the 57/7 disjointness replacement — provable only before
+step 3.

@@ -1931,8 +1931,14 @@ Last updated: 2026-06-10 by working-Claude (flash session: **Max's entry flash F
 > warning that the tempting `ring.radius > disc.radius` fail-safe silently disarms the assertion
 > protecting the pair's inner ring.
 >
-> ▶▶ **ACTIVE = B5 steps 1–9** (⛔ read handoff §2 before step 4's merge), then B6/B7/B8/B9.
-> ▶ Also open: **star↔planet barycentres are NOT modelled** — see the handoff's §12.
+> ⛔⛔ **PAUSED AT A CLEAN SEAM 2026-08-19. ▶ THE LANE CHOICE IS MAX'S AND IT IS OPEN.**
+> ▶▶ **START HERE: `docs/FEATURES/handoff-2026-08-19-lane-choice.md`.**
+> Max: *"I want to drive to getting all the world engine rendering into the main welldipper game."*
+> That is `lab-pipeline-into-game-PLAN.md` (6 layers, layer 2 done, layer 0 underneath everything) —
+> a DIFFERENT lane from B5, which advances none of it. ⭐ **Zero B5 steps have been cut**, so the
+> pivot is free now and expensive after step 1. *Rec: pivot, starting at layer 0 — it also makes the
+> B5 window safer to open later.*
+> B5's plan of record if it resumes: `docs/FEATURES/moon-formation-b5-build-plan-2026-08-19.md`.
 > ⛔ Historical below — kept because the HMR lesson in it is the most expensive one this lane learned.
 > ⭐ Full state + next action: `docs/FEATURES/moon-formation-handoff-2026-08-18-b5.md` **§11**.
 > ⛔ **RELOAD THE PAGE BEFORE ANY BROWSER MEASUREMENT** — HMR-duplicated module state faked a
