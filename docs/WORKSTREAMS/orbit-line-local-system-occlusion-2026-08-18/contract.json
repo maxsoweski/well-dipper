@@ -1,0 +1,97 @@
+{
+  "workstream": "orbit-line-local-system-occlusion-2026-08-18",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "summary": "Make a planet's local ring system occlude larger rings that pass through it, so a heliocentric orbit line stops at the edge of the local system and resumes past it instead of cutting across the pair's two concentric rings. Whole-disc erase, not a line hop — Max ruled it against a side-by-side preview 2026-08-18. Applies to every planet with moons, not just binaries. Requires OrbitConicField.js, whose parking-lot hold Max lifted the same day; the parking lot flags a real perf-architecture decision here, which is why this is scoped separately from the barycentre render.",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-GAP",
+      "statement": "Max's words: the larger orbit line does not cut into the binary planets' orbits. Where a heliocentric ring passes inside a planet's local system, it is not drawn — ONE clean gap the full width of the outermost local ring, not four nicks at the crossing points.",
+      "verifyVia": {
+        "input": "Park on wd-10 planet 3 with orbits visible, framed so both the pair's rings and the heliocentric ring are in shot; then sample the rendered image along the heliocentric ring's screen-space path.",
+        "observable": "The heliocentric ring has exactly one contiguous unlit span crossing the local system, and its two endpoints sit at the outermost local ring's radius from the barycentre (to within a pixel or two of the ring's own line width). No lit heliocentric pixels anywhere inside that radius. Zero additional gaps."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-LOCAL-RINGS-SURVIVE",
+      "statement": "⛔ THE TRAP, and it is fatal if missed: a local system's own rings must NOT be occluded by its own disc. The pair's inner ring (r1) lies ENTIRELY inside the outer ring (r2), so a naive 'mask anything inside the outermost local radius' rule erases the primary's ring completely — deleting the very thing the barycentre workstream shipped. The rule must exempt rings belonging to the same local system.",
+      "verifyVia": {
+        "input": "wd-10 planet 3, orbits visible, before and after the change; count the distinct rings drawn about the barycentre and measure their radii from the rendered image and from the live ring proxies.",
+        "observable": "TWO rings still drawn about the empty point, at 5.53 and 19.55 primary radii — unchanged from the barycentre workstream's measurements. The inner ring is fully continuous, not partially or wholly erased. Reverting the same-system exemption must make THIS assertion go red specifically."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-APPLIES-GENERALLY",
+      "statement": "Every planet with moons gets the keep-out, not just the 27 that earned barycentric rings. Max's standing preference for the general answer over a special case, same as his no-mass-ratio-cutoff ruling on the wobble.",
+      "verifyVia": {
+        "input": "Enumerate the keep-out discs the renderer registers for a system with a mix of dominated and undominated planets — wd-10 (planets 1, 2, 3 dominated; planet 4 has three moons and is not).",
+        "observable": "A keep-out disc exists for EVERY planet carrying at least one moon, including planet 4, and none exists for planet 0, which has none. The disc radius equals that planet's outermost local ring radius in every case."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-HIT-TESTING-UNCHANGED",
+      "statement": "A masked pixel is still a clickable ring. Occlusion changes what is DRAWN, never what is selectable — otherwise the star-orbit line becomes unclickable across a span the user can see it ought to occupy.",
+      "verifyVia": {
+        "input": "Click the heliocentric orbit line at a point inside the occluded span, and at a point outside it, on wd-10 planet 3.",
+        "observable": "Both clicks select the same planet's orbit. hitTestOrbits reads the baked perimeter attribute (OrbitLine.js:57-65) and that attribute is untouched by this change."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-RING-BUDGET-AND-PERF",
+      "statement": "No ring is added or removed, and the perf-architecture decision the parking lot flagged is made explicitly rather than by accident. CONIC_MAX stays 64 and the descriptor count is unchanged — the keep-out list is a SEPARATE, much shorter list (one entry per moon-bearing planet, worst case 8 in FENCE-221) and must not consume ring descriptor slots.",
+      "verifyVia": {
+        "input": "Count descriptors before and after on the worst measured system; then a like-for-like frame-time comparison on the same seed, same camera pose, same window size, parent commit vs build commit.",
+        "observable": "Descriptor count identical (worst system stays at 27 of 64 — measured by tools/barycentre-probe.mjs). Frame time regression is stated as a measured number with the sample size, not asserted to be zero. If the shader gains a per-pixel loop over keep-outs, its iteration bound is a declared constant, sized and justified in a comment the way CONIC_MAX is."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC-NO-COLLATERAL-OCCLUSION",
+      "statement": "Only rings LARGER than a local system are occluded by it, and only where they genuinely pass inside it. A moon ring belonging to a neighbouring planet, an asteroid-belt ring, or a binary-STAR orbit ring must not silently vanish because it grazes some other planet's disc.",
+      "verifyVia": {
+        "input": "On a binary-star system with several moon-bearing planets (wd-10 qualifies: isBinary true, 2 star-orbit rings, 5 planet rings, 4 moon-bearing planets), enumerate every ring proxy drawn before and after.",
+        "observable": "The same 16 rings are present after the change as before; only the DRAWN EXTENT of heliocentric rings changes. Both star-orbit rings remain fully drawn. No ring disappears entirely."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC-UAT",
+      "statement": "Max's gate: does the star-orbit line now read as passing BEHIND a solid local system, rather than as a broken or missing line? And across an ordinary moon system — not just the pair — does the new gap look deliberate or does it look like a rendering fault?",
+      "verifyVia": {
+        "input": "Max looks at wd-10 planet 3 (the pair) and at an ordinary multi-moon planet with orbits visible, live or on a recording.",
+        "observable": "Max says it reads as solid. Never PASSed by an agent — deferred-to-max."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "src/objects/OrbitConicField.js — the ONLY source of ring pixels. src/objects/OrbitRingSDF.js:49 'This class no longer renders anything'; ring meshes carry empty geometry on layer 10 and exist as transform proxies plus a parameter bag.",
+      "OrbitConicField.updateFromSystem reads exactly three hardcoded property names — :524 system.starOrbitLines, :526 system.orbitLines, :531 planets[i].moonOrbitLines — and appends them in that order, so ring provenance (which planet a ring belongs to) is known at append time and is where the same-system exemption must be recorded.",
+      "The per-ring RGBA32F DataTexture (CONIC_MAX wide x CONIC_TEX_ROWS tall, read with texelFetch) and the GLSL loop bound at OrbitConicField.js:251 — a keep-out list needs its own channel, not a stolen ring slot.",
+      "entry.moonOrbitLines and the _baryCentred flag from binary-barycentre-render-2026-08-18 — the local system's centre is the bary ring centre where one exists, and the planet mesh otherwise.",
+      "docs/PARKING_LOT.md:236-243 — the deferral Max lifted, and the perf-architecture note that made this a scoped workstream rather than a patch."
+    ],
+    "outputs": [
+      "Rendered ring pixels only. No ring object, radius, centre, transform, visibility flag or hit-test attribute changes.",
+      "A keep-out list consumed by the conic field's fullscreen pass."
+    ],
+    "mustStayWorking": [
+      "⛔ The pair's inner ring. It lies entirely inside the outer ring, so the same-system exemption is load-bearing, not a nicety — without it this workstream silently deletes what binary-barycentre-render-2026-08-18 shipped. AC-LOCAL-RINGS-SURVIVE exists solely to catch that.",
+      "The angular-size fade (OrbitConicField.js:75-104), which is the shipped mechanism for dropping sub-pixel rings. Occlusion must compose with it, not replace or double-count it.",
+      "The camera-proximity fade stays RETIRED per Max's UAT ruling 2026-08-01 (OrbitConicField.js:503-504). Do not revive it as a way to implement this.",
+      "hitTestOrbits and hover: main.js prefers the baked perimeter attribute (OrbitLine.js:57-65, main.js:~7011), and the material.opacity shim that hover reads and restores.",
+      "CONIC_MAX stays 64 and OrbitConicField's GLSL loop bound is not raised — :251 is a shader loop bound, so changing it recompiles, and :396/:406/:635 all size off it.",
+      "The 27 barycentric ring pairs and the planet-following branch from the previous workstream both keep rendering exactly as measured in that workstream's live-integration-evidence.md."
+    ]
+  }
+}
