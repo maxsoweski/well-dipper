@@ -4,7 +4,7 @@
   "perLayer": {
     "unit": "PASS",
     "integration": "INSUFFICIENT",
-    "uat": "deferred-to-max"
+    "uat": "PASS (Max, 2026-08-20) — qualified: \"seems passable\""
   },
   "perAC": [
     {
@@ -33,8 +33,8 @@
     },
     {
       "id": "AC5",
-      "result": "deferred-to-max",
-      "evidence": "UAT-layer (holistic acceptance, MAX-ONLY). No agent passes a UAT AC. Wiring is consistent with the AC5 walk: GUI slider 'baked relief (0 = synth only)' bound to window._lab.reliefBakeStrength() (lab default 1.0); s=1 => pure baked field; one carrier.height feeds BOTH the displaced surface cube AND the router's height array (Phase-D re-point, the one-field invariant). Whether the surface reads as 'generated structure, not a grain on noise' is Max's call alone.",
+      "result": "PASS (Max, 2026-08-20)",
+      "evidence": "MAX WALKED IT HIMSELF, 2026-08-20. Verbatim: \"I just did the UAT and it seems passable.\" RECORDED AS HE SAID IT — a QUALIFIED pass, not upgraded to an unqualified one. Judged against the WS4-SCOPED bar (coherent tectonic system + drainage cut into that same relief), NOT 'where are Earth's continents', which intent.md:21-26 defers to E7/E8/E11 + Option C. This closes the AC5 that has sat deferred-to-max since 2026-06-25 and is the UAT the 2026-06-25 'do NOT ship WS4; do NOT start WS3' hold was waiting on. ⚠ IT DOES NOT MAKE THE WORKSTREAM GREEN: AC2, AC3 and AC4 remain INSUFFICIENT at the integration layer (live browser drive was deferred out of the workflow by design; live-integration-evidence.md records a working-Claude drive but the verdict was never re-scored against it). Closing those is separate work and is not implied by this pass.",
       "adversarialVotes": "n/a - UAT is Max-only"
     }
   ],
