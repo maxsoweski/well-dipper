@@ -1061,7 +1061,7 @@ across them.
 > | | flag ON (the original sweep) | flag OFF (**shipped default**) |
 > |---|---|---|
 > | `isLabPlanetMaterial` | true | **false** |
-> | uniform count | 356 | **71** |
+> | uniform count | 356 | **71** (**72 since B2P, 2026-08-20** — `uPosterizeLevels`) |
 > | `uOctaves` | present, driven 4.00 → 9.00 | **absent** |
 > | sweep `liveOctaves` | 4.00 → 9.00 | **null at every rung** |
 >
@@ -1074,7 +1074,7 @@ across them.
 > still see more detail... but we just have to get the pipeline from the lab working in game first."*
 > The default game body runs a **71-uniform** shader; the lab runs **356**. The lab's advantage up
 > close is not a better LOD ramp — **it is a different, much richer shader**. That is a pipeline-port
-> gap, which is exactly the thing he ruled comes first.
+> gap, which is exactly the thing he ruled comes first. ⛔ **THE FINGERPRINT MOVED — 71 → 72 AT B2P, 2026-08-20.** `uPosterizeLevels` joined the game material (src/rendering/posterizeLevels.js:45 `export const POSTERIZE_LEVELS = { value: 6.0 };`), so a body ON THE GAME MATERIAL now reports **72** uniforms and 71 identifies nothing. 71 was correct the day this line was measured; it is kept, annotated, rather than rewritten. Debug against `isLabPlanetMaterial` — a boolean cannot drift with the next uniform.
 >
 > ⛔ **CHECK THE FLAG BEFORE QUOTING ANY GAME-VS-LAB COMPARISON.** `localStorage['wd.labGasBodies']`
 > and `window.__wdLabGasBodies` are both live and both silent. A flag-ON measurement of "the game"
@@ -1106,7 +1106,7 @@ system:
 | body | uniforms | `isLabPlanetMaterial` | `uOctaves` |
 |---|---|---|---|
 | ordinary planet `body.planet.41e625` | 356 | **true** | present, driven |
-| planet-class moon `body.planet.f5791a` | 71 | **false** | **absent** (carries `uReliefOctaves`/`lodLevel`) |
+| planet-class moon `body.planet.f5791a` | 71 (**72 since B2P, 2026-08-20**) | **false** | **absent** (carries `uReliefOctaves`/`lodLevel`) |
 | plain moon `body.moon.843748` | 29 | false | absent |
 
 A planet-class moon is **not on the lab material at all**, so the LODManager registration gap is

@@ -461,13 +461,13 @@ For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 > comparison was the lab shader against itself. At the shipped default the same gas giant has **71
 > uniforms, no `uOctaves`**, and ramps **`uReliefOctaves` 4 → 9** instead. Both shaders saturate, so
 > the octave-ceiling finding stands — but the lab's advantage up close is **a 356-uniform shader
-> versus 71**, i.e. a PIPELINE-PORT gap, not an LOD gap. ⭐ That makes Max's "pipeline first" ruling
+> versus 71**, i.e. a PIPELINE-PORT gap, not an LOD gap. ⛔ **THE FINGERPRINT MOVED — 71 → 72 AT B2P, 2026-08-20.** `uPosterizeLevels` joined the game material (src/rendering/posterizeLevels.js:45 `export const POSTERIZE_LEVELS = { value: 6.0 };`), so a body ON THE GAME MATERIAL now reports **72** uniforms and 71 identifies nothing. 71 was correct the day this line was measured; it is kept, annotated, rather than rewritten. Debug against `isLabPlanetMaterial` — a boolean cannot drift with the next uniform. ⭐ That makes Max's "pipeline first" ruling
 > measurably correct. Full record + the M1 measurement: `FEATURES/lab-pipeline-into-game-PLAN.md`
 > §LAYER 7. ⛔ **Check the flag before quoting any game-vs-lab comparison** — it is silent and sticky.
 >
 > ⭐ **CORRECTION TO A CARRIED CLAIM — read before touching planet-class moons.** The 2026-08-10
 > handoff says their `uOctaves` is "frozen at 4.0". MEASURED: there is **no `uOctaves` to freeze**.
-> A planet-class moon (`body.planet.f5791a`) is **not on the lab material at all** — 71 uniforms,
+> A planet-class moon (`body.planet.f5791a`) is **not on the lab material at all** — 71 uniforms (**72 since B2P, 2026-08-20**; see the annotation above),
 > `isLabPlanetMaterial false`, carrying `uReliefOctaves`/`lodLevel` — against an ordinary planet's
 > 356 uniforms with `uOctaves` driven. The LODManager registration gap is **downstream of a material
 > gap**. ⛔ Code that tests for a 4.0 will read `undefined` and conclude the wrong thing.

@@ -24,7 +24,7 @@
 > octave value at every rung. That measurement was taken with the 6e flag ON (`localStorage
 > ['wd.labGasBodies'] === '1'`, left over from a previous session), so it compared the lab shader
 > against ITSELF. **At the shipped default the same gas giant carries 71 uniforms, no `uOctaves`, and
-> is not on the lab material at all.** See §5.2 / the M1 measurement.
+> is not on the lab material at all.** See §5.2 / the M1 measurement. ⛔ **THE FINGERPRINT MOVED — 71 → 72 AT B2P, 2026-08-20.** `uPosterizeLevels` joined the game material (src/rendering/posterizeLevels.js:45 `export const POSTERIZE_LEVELS = { value: 6.0 };`), so a body ON THE GAME MATERIAL now reports **72** uniforms and 71 identifies nothing. 71 was correct the day this line was measured; it is kept, annotated, rather than rewritten. Debug against `isLabPlanetMaterial` — a boolean cannot drift with the next uniform.
 
 # Research Dossier — Displaced, Camera-Adaptive Planet Surfaces in Well Dipper
 

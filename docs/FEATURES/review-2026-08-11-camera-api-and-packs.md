@@ -33,7 +33,7 @@ carries no uOctaves uniform — it does not render through the LOD-driven path a
 **false for that body class**, plus a `saturatedNote` asserting a distance it did not measure.
 
 This is the `11d1962` correction — *"at the shipped default the same gas giant has 71 uniforms and no
-`uOctaves`; it ramps `uReliefOctaves` 4→9 instead"* — not having been propagated into the new module.
+`uOctaves`; it ramps `uReliefOctaves` 4→9 instead"* — not having been propagated into the new module. ⛔ **THE FINGERPRINT MOVED — 71 → 72 AT B2P, 2026-08-20.** `uPosterizeLevels` joined the game material (src/rendering/posterizeLevels.js:45 `export const POSTERIZE_LEVELS = { value: 6.0 };`), so a body ON THE GAME MATERIAL now reports **72** uniforms and 71 identifies nothing. 71 was correct the day this line was measured; it is kept, annotated, rather than rewritten. Debug against `isLabPlanetMaterial` — a boolean cannot drift with the next uniform.
 Two independent verifiers confirmed it from different surfaces.
 
 **Why it ranks first:** the API exists to answer Max's approach criterion, and at the default it
