@@ -1050,3 +1050,83 @@ Recorded so nobody rebuilds that shape. Each was checked in source this run. ⭐
 *Written 2026-08-20 against `feature/world-engine-production-L1` @ `1777781`. Read-only: `src/` and `tests/`
 show zero changes, no commit, no server, no baseline re-record. Citation fence exit 0 / 531 CHECKED at HEAD.
 ⛔ No UAT was closed by this document; no agent ever closes one.*
+
+---
+
+## 9. ⭐ B2P — THE POSTERIZE CEILING, MADE RAISABLE · **S** · no UAT · ⭐ APPENDED 2026-08-20, AFTER THE PLAN WAS WRITTEN
+
+⛔ **APPENDED, NOT INSERTED, AND THAT IS LOAD-BEARING.** Six line-anchored refs point INTO this file
+from `docs/FEATURES/lab-features-not-yet-wired-2026-08-20.md` — `:302`, `:453`, `:586`, `:591`,
+`:601-607`, `:914` — so a block written into §2 where it belongs topically would silently move every one
+of them. §10's rule for `PLAN.md` applies to this file now that B0 item 11 put it in `CITE_SOURCES`:
+**expand a line, never insert one.** All six were re-resolved by hand before this section was written.
+
+> ⭐⭐ **WHAT MAX ASKED FOR, VERBATIM, 2026-08-20:** *"as we add detail to the game we'll want to be able
+> to add additional levels/make this less posterized. Can we work that in?"*
+
+**This is not a re-scope and not a re-rank. It is §6.3 item 1 coming back REAL, and being answered by
+lifting the ceiling instead of re-ordering the blocks under it.** That item named QB-15 *"the one item
+that could invalidate this plan's own priority order"* and made B0 item 12(b) take the measurement
+before the order was frozen. It came back real: on one identical 361×361 box, `uLevels` **6 → 34
+distinct colours** and `uLevels` **64 → 804** (23.6×), while removing the retro pixel grid instead moves
+34 → 50 (1.5×). ⭐ **The quantum, not the pixelation, is what compresses colour** — and relief is not
+capped the same way, which is why §3's ranking favours relief over colour. **B2P is what makes that
+ranking stop being forced**, so it runs before B2's UAT rather than after it.
+
+**GATE** · ⭐ **BYTE-IDENTICAL AT THE DEFAULT, and this is the whole gate:** the setting ships at **6.0**,
+so every instrument must read exactly as it does at HEAD — Instrument A's 32 red-by-design set unchanged
+(md5 `2be0e6a9de7be79b5d8c23e0958d2b1c`), Instrument C's per-uniform table unmoved on the matched
+population, citations exit 0 · a shader-compile check on **all four** call sites, because a uniform that
+is declared in one program and spent in another fails at link time and not at test time · Instrument E
+**paired shot at 6 against a raised value on the same body and the same pose**, which is the only
+evidence that the uniform is actually reaching the fragment rather than being written into a program
+that ignores it. ⛔ **A green test suite proves nothing here** — the default path is unchanged by
+construction, so the suite is green whether or not the uniform is wired at all. The paired shot is the
+gate; the suite is the negative control.
+
+**Delivers in the world:** the colour quantum stops being a constant nobody can move. ⛔ **It does NOT
+make anything look different by itself** — the default does not change, and changing it is Max's taste
+call, not an agent's.
+
+**Contents — four literals, and the fourth is not what the handoff said it was.**
+1. src/objects/Planet.js:560 `  finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);` ·
+   src/objects/Planet.js:944 `  finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);` ·
+   src/objects/Planet.js:1279 `  finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);` — the
+   three body programs (`GAS_BODY`, `ROCKY_BODY`, `EXOTIC_BODY`), each a separate fragment shader.
+2. ⚠ **REF CORRECTED HERE: the fourth site is the RING material, and it is a different quantity.**
+   src/objects/Planet.js:1881 `          color = posterize(color, 6.0, gl_FragCoord.xy, 0.4);` spends
+   `color`, not `finalColor`, inside a material built by its own factory — and it carries its own second
+   copy of the function at src/objects/Planet.js:1837 `        vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth) {`,
+   distinct from the body copy at src/objects/Planet.js:208 `vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth) {`.
+   **So this is two shader programs and two function copies, not one program with four call sites**, and
+   a single uniform added to one material object reaches neither the other three programs nor the ring.
+   ⭐ Whether rings follow the planet quantum or keep their own is a LOOK question; the conservative
+   branch is to wire the ring to the same setting so the disc and its ring never quantise differently,
+   and to say so rather than discover it in a screenshot.
+3. **The lab needs nothing.** It is already a uniform — src/worldengine/shaders/uniforms.js:32 `      uLevels:     { value: 6.0 },`
+   — spent through a posterize that already takes a mode argument,
+   src/worldengine/shaders/height.glsl.js:681 `      vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth, int mode){`.
+   ⛔ Do not touch the lab side. ⭐ **And note what this means for B7:** once the flag flips, 846 planets
+   and 632 moons render through the LAB program, whose `uLevels` is written by **no pack** — so B2P's
+   setting must reach the lab material's `uLevels` too, or the feature evaporates at the exact moment
+   the world engine becomes visible. That is one line in the per-frame seam, and leaving it out is how
+   a shipped feature becomes a shipped no-op.
+4. **The setting.** `src/ui/Settings.js`'s `DEFAULTS` block is the surface, beside `pixelScale` under
+   `// Visual`. Default **6**, which is the shipped value, so an absent key falls back through the
+   DEFAULTS merge to today's behaviour with no migration — the `flightControlType` precedent in that
+   same file, stated in its own words.
+
+**⛔ NON-GOALS, recorded so they are not quietly widened.**
+- **The default does not move.** 6.0 ships. What "less posterized" should look like is Max's eyes.
+- **The retro pixel grid is not touched.** Measured 1.5× against the quantum's 23.6× — it is a different
+  lever with a different look, and bundling them would make a wrong result unattributable.
+- **No pack writes `uLevels`.** It stays a global display setting, not a per-body derived quantity;
+  making it condition-derived is a different feature and would need a law nobody has authored.
+
+**Closes by ID:** spine-2 **QB-15**'s mechanism half — ⛔ **not its look half**, which is D-9-shaped and
+stays Max's. Spine-1 **F50**'s carrier.
+
+**Prereqs:** none. ⭐ **Runs before B2's UAT**, so that the quad Max looks at can be re-looked-at with the
+ceiling raised — which is the difference between B2's palette leg being visible work and being work that
+passes every algebraic gate and buys nothing (§6.3 item 1's own words). **Moves numbers?** **NO** at the
+default. **Needs Max?** **NO to build.** He raises it himself at B2's UAT and tells us where it should sit.
