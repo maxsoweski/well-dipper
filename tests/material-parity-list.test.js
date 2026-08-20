@@ -528,7 +528,7 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
   const measured = () => new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.divergedCarried.keys()]);
 
   it('the subject set is 44 lost names plus the 20 value-defaulted carried ones', () => {
-    expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero]).size).toBe(44);   // 43 -> 44 AT B2P: the game spelling uPosterizeLevels leaves the material at the swap; P-18 rules it carried, because the lab's uLevels holds the SAME object.
+    expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero]).size).toBe(44);   // 43 -> 44 AT B2P: the game spelling uPosterizeLevels leaves the material at the swap; P-18 rules it carried — NOT by object identity (the lab's scalar uLevels holds POSTERIZE_LEVELS, the game's vec2 holds POSTERIZE_QUANTUM) but by single-writer construction.
     // 62 -> 63 AT STEP 10a: `uLimbExponent` re-enters the diverged bucket on the 163 newly-admitted
     // solid bodies, which limbDeck's gas-only predicate never claims. See §2's note; P-11 claims it.
     expect(measured().size).toBe(64);   // 63 -> 64 AT B2P, same one name.

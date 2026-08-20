@@ -196,7 +196,7 @@ const retroRenderer = new RetroRenderer(canvas, scene, camera);
 // boot. Move the slider, reload, and the picture silently came back at 3 with
 // the stored value still 5. Its neighbour on the next line always did this.
 retroRenderer.pixelScale = settings.get('pixelScale');
-retroRenderer.setColorPalette(settings.get('colorPalette'));  setPosterizeLevels(settings.get('posterizeLevels')); settings.onChange('posterizeLevels', setPosterizeLevels); // B2P — read on BOOT (the pixelScale defect above is exactly the boot-read being missing) and subscribed for CHANGE, so settings.set() and settings.reset() both reach the four shader programs and the lab material through the one shared uniform object.
+retroRenderer.setColorPalette(settings.get('colorPalette'));  setPosterizeLevels(settings.get('posterizeLevels')); settings.onChange('posterizeLevels', setPosterizeLevels); // B2P — read on BOOT (the pixelScale defect above is exactly the boot-read being missing) and subscribed for CHANGE, so settings.set() and settings.reset() both reach the SIX game fragment programs (gas, rocky, exotic, ring, moon, belt — four `uniform vec2` declaration sites between them, FRAG_HEADER's one serving the three body programs) and the lab material through the TWO shared uniform objects: POSTERIZE_QUANTUM for the game's vec2 `uPosterizeLevels`, POSTERIZE_LEVELS for the lab's scalar `uLevels`, with setPosterizeLevels the single writer of both.
 
 // ── Texture Baker (runtime procedural → texture baking) ──
 let textureBaker = null; // lazy-init on first use (needs renderer)

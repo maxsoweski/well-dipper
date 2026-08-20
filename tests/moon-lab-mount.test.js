@@ -429,9 +429,9 @@ describe('per-class distinctness', () => {
 
 const LEDGER_MD = readFileSync(join(ROOT, 'docs/FEATURES/step6-parity-ledger.md'), 'utf8');
 const RULINGS = new Set(['carried', 'accepted-loss', 'blocking']);
-// The expensive pass builds TWO materials per moon. 60 systems, ~190 moons — and the union is a
+// The expensive pass builds TWO materials per moon. 60 systems, 193 moons (measured) — and the union is a
 // property of the two materials' NAME SETS, so it is already saturated well before 60: MEASURED,
-// the union over the first 60 seeds and over all 200 is the same 29 names.
+// the union over the first 60 seeds and over all 200 is the same 30 names. ⭐ 29 UNTIL B2P, 2026-08-20, which added `uPosterizeLevels` to the legacy moon material and updated every planet-channel count (71→72, 43→44, 63→64) while leaving the moon channel behind. RE-MEASURED by an independent pass over three corpus sizes: 30 at 20 seeds / 65 swapped moons, 30 at 60 / 193, 30 at 200 / 632, with `carried` empty at all three. ⚠ THE NUMBER IS A RECORD, NOT A GATE — the assertion at the non-vacuity check below is `toBeGreaterThan(20)`, deliberately loose against generator drift, so nothing reddens when this count moves and this comment is the only place it is written down.
 const LEDGER_SEEDS = SEEDS.slice(0, 60);
 
 /** Rows between `<!-- LEDGER-MOON -->` and `<!-- /LEDGER-MOON -->`, split on the pipe. */
@@ -488,7 +488,7 @@ describe('the moon parity ledger', () => {
     const { lost, bodies } = ledger();
     // NON-VACUITY FIRST. An empty measurement partitions against an empty table and passes; that is
     // the shape this whole gate exists against, so both halves are pinned before anything is
-    // compared. MEASURED at this commit: 632 swapped moons over 200 seeds, 29 lost names.
+    // compared. MEASURED at this commit: 632 swapped moons over 200 seeds, 30 lost names (29 until B2P, 2026-08-20 — re-measured independently, and the loose `> 20` bar below is why the stale 29 sat here for a whole block without reddening anything).
     expect(bodies, 'no moon swapped — the ledger pass measured nothing').toBeGreaterThan(150);
     expect(lost.size, 'the measured loss set is empty').toBeGreaterThan(20);
     expect(rows.length, 'the MOON channel has no rows').toBeGreaterThan(5);

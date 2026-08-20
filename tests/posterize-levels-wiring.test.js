@@ -2,7 +2,7 @@
 // B2P — THE POSTERIZE-LEVEL WIRING FENCE.
 //
 // WHY THIS FILE EXISTS. Block B2P turned the hard-coded colour quantum into a setting by handing
-// ONE shared uniform object to every material that spends it. Before this file, severing that
+// TWO shared uniform objects to the materials that spend it — POSTERIZE_QUANTUM, the vec2 (levels, 1/levels) the SIX game fragment programs take under `uPosterizeLevels`, and POSTERIZE_LEVELS, the scalar the lab program takes under `uniform float uLevels` because a float slot cannot hold a vec2 — with `setPosterizeLevels` the SINGLE WRITER of both, so they cannot drift. (It was ONE object until the round-3 arithmetic fix split it; this header said ONE until 2026-08-20.) Before this file, severing that
 // wiring — on the lab, on Moon, on AsteroidBelt, on the ring, on the body programs — left every
 // enumerated repo gate GREEN. The only real controls lived in scratchpad harnesses that evaporate
 // with the session. `material-parity-list.test.js` counts uniform NAMES and VALUES and cannot see
@@ -10,7 +10,7 @@
 // in this game are BUILT ONCE AND MUTATED, so a per-material COPY of the value would leave every
 // already-mounted body frozen at its build-time number — a shipped no-op wearing a feature's name.
 //
-// SO THIS FILE ASSERTS IDENTITY, NOT EQUALITY. `uniforms.uPosterizeLevels === POSTERIZE_LEVELS`,
+// SO THIS FILE ASSERTS IDENTITY, NOT EQUALITY — each slot against the object it is supposed to hold: `uniforms.uPosterizeLevels === POSTERIZE_QUANTUM` on the FOUR game material slots (body, ring, moon, belt) and `uniforms.uLevels === POSTERIZE_LEVELS` on the lab material,
 // per material path, plus the liveness that identity buys, plus a deep-clone negative control that
 // proves the identity assertion can actually fail.
 //
@@ -99,7 +99,7 @@ describe('B2P 2 — assigning through the setter moves what every ALREADY-BUILT 
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 // The uniform reaching the MATERIAL is worth nothing if the PROGRAM never spends it. Six fragment
-// programs across four files; the three body programs share one declaration in FRAG_HEADER.
+// programs across THREE files (Planet.js, Moon.js, AsteroidBelt.js); the three body programs share one declaration in FRAG_HEADER. ⚠ FOUR is a different quantity, twice over: the posterize() SOURCE-COPY count (Planet.js carries two — body and ring) and the `uniform vec2` DECLARATION-SITE count. SIX is the programs, and SIX is the call sites.
 const PROGRAMS = {
   gas:    () => PLANET_SHADER_VARIANTS.gas.fragmentShader,
   rocky:  () => PLANET_SHADER_VARIANTS.rocky.fragmentShader,
@@ -133,6 +133,17 @@ describe('B2P 3 — the shipped GLSL declares the uniform and spends it in poste
 // diverges 4 at 0.4 and 1 at 0.6, max byte delta 43; (2) the CARRIED reciprocal — a shader-derived
 // `1.0 / levels` with the same parentheses is 0 at 0.4 but 5 at 0.6, because the compiler re-folds
 // `edgeWidth * (1.0 / levels)` into a divide. Runtime 1.0/6.0 is itself bit-exact (0x3e2aaaab).
+/** Every posterize() BODY in a source file, brace-matched — the scope the arithmetic fence rules. */
+function posterizeBodies(text) {
+  const out = []; const re = /vec3 posterize\(vec3 color, vec2 levels, vec2 fragCoord, float edgeWidth\)/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const open = text.indexOf('{', m.index); let depth = 0, j = open;
+    for (; j < text.length; j++) { if (text[j] === '{') depth++; else if (text[j] === '}') { depth--; if (!depth) break; } }
+    out.push(text.slice(open + 1, j));
+  }
+  return out;
+}
 describe('B2P 4 — posterize() multiplies by the CARRIED reciprocal, parenthesised with edgeWidth', () => {
   for (const file of ['objects/Planet.js', 'objects/Moon.js', 'objects/AsteroidBelt.js']) {
     it(`${file}: every posterize copy takes vec2 levels and spends levels.y, parenthesised`, () => {
@@ -143,7 +154,21 @@ describe('B2P 4 — posterize() multiplies by the CARRIED reciprocal, parenthesi
       expect(dith.length, `${file}: the DITHER term lost its parentheses — five whole bands move`).toBe(decls.length);
       const ret = s.match(/return floor\(dithered \* levels\.x \+ 0\.5\) \* levels\.y;/g) || [];
       expect(ret.length, `${file}: the QUANTISER no longer multiplies by the carried reciprocal`).toBe(decls.length);
-      expect(/1\.0 \/ levels/.test(s.split('\n').map((l) => l.split('//')[0]).join('\n')), `${file}: a SHADER-derived reciprocal is back in the CODE — 5 divergences at edgeWidth 0.6`).toBe(false);
+      const stripped = s.split('\n').map((l) => l.split('//')[0]).join('\n');
+      // ⭐ WIDENED 2026-08-20, and the old fence overstated itself. It was /1\.0 \/ levels/ — one
+      // exact spelling with one exact space on each side — while its message claimed to catch 'a
+      // SHADER-derived reciprocal'. `1.0/levels`, `1.0 /levels` and `1.0 / uPosterizeLevels.x` all
+      // walked past it. This form takes any spacing and any carrier whose name ends in levels/Levels.
+      expect(/1\.0\s*\/\s*\w*[Ll]evels/.test(stripped),
+        `${file}: a SHADER-derived reciprocal is back in the CODE — 5 divergences at edgeWidth 0.6`).toBe(false);
+      // ⛔ AND THE FORM NO SPELLING ESCAPES, because a renamed local (`float inv = 1.0 / lv;`) defeats
+      // any name-based regex: posterize() DIVIDES NOWHERE AT ALL. MEASURED at this commit — all four
+      // source copies hold ZERO `/` once comments are stripped — so this is a fence, not an aspiration.
+      for (const body of posterizeBodies(s)) {
+        expect(body.split('\n').map((l) => l.split('//')[0]).join('\n').includes('/'),
+          `${file}: posterize() performs a DIVISION. levels.y is carried from the CPU precisely so the compiler `
+          + `cannot re-fold edgeWidth * (1.0 / levels) into a divide — 5 divergences at edgeWidth 0.6 when it can.`).toBe(false);
+      }
     });
   }
   it('the CPU carries the very float32 a compiler folds `1.0 / 6.0` to (the premise, in JS)', () => {
@@ -179,6 +204,13 @@ describe('B2P 5 — main.js actually joins the setting to the shader (boot read 
 // THE STORED NUMBER AND THE DRAWN NUMBER ARE ONE NUMBER. setPosterizeLevels clamps on its way to
 // the shader; if Settings did not clamp on its way to localStorage, a stored 500 would persist
 // forever against a picture drawn at 64.
+//
+// ⚠ AND "THE DRAWN NUMBER" IS TWO OBJECTS, NOT ONE — corrected 2026-08-20. Every assertion in this
+// section used to read POSTERIZE_LEVELS.value, which is the LAB's scalar `uLevels` and is drawn only
+// by the world-engine program behind a flag. The SIX SHIPPED GAME PROGRAMS draw POSTERIZE_QUANTUM,
+// and nothing here inspected it: the section was labelled "the DRAWN value" while never once reading
+// the value the game draws. Both are asserted below, on every case, and the vec2's carried .y with
+// them — so a clamp that reached the scalar and stopped short of the vec2 now reddens.
 function makeLocalStorage(seed = {}) {
   const store = { ...seed };
   return { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); },
@@ -192,7 +224,9 @@ describe('B2P 6 — the stored value and the drawn value cannot disagree', () =>
 
   it('the default ships at 6 — an absent key falls through to today’s picture, no migration', () => {
     expect(new Settings().get('posterizeLevels')).toBe(POSTERIZE_LEVELS_DEFAULT);
-    expect(POSTERIZE_LEVELS.value).toBe(POSTERIZE_LEVELS_DEFAULT);
+    expect(POSTERIZE_LEVELS.value, 'the LAB\u2019s drawn scalar').toBe(POSTERIZE_LEVELS_DEFAULT);
+    expect(POSTERIZE_QUANTUM.value.x, 'the value the SIX GAME programs draw').toBe(POSTERIZE_LEVELS_DEFAULT);
+    expect(POSTERIZE_QUANTUM.value.y, 'and its carried reciprocal').toBe(Math.fround(1 / POSTERIZE_LEVELS_DEFAULT));
   });
 
   for (const [asked, drawn] of [[500, 64], [-3, 2], [0, 2], [1, 2], [2, 2], [64, 64], [12, 12]]) {
@@ -202,13 +236,17 @@ describe('B2P 6 — the stored value and the drawn value cannot disagree', () =>
       s.set('posterizeLevels', asked);
       expect(s.get('posterizeLevels'), 'the STORED value').toBe(drawn);
       expect(JSON.parse(localStorage._raw[STORAGE_KEY]).posterizeLevels, 'the PERSISTED value').toBe(drawn);
-      expect(POSTERIZE_LEVELS.value, 'the DRAWN value').toBe(drawn);
+      expect(POSTERIZE_LEVELS.value, 'the LAB\u2019s DRAWN value (the scalar uLevels)').toBe(drawn);
+      expect(POSTERIZE_QUANTUM.value.x, 'the GAME\u2019s DRAWN value \u2014 the vec2 .x the six shipped fragment programs read').toBe(drawn);
+      expect(POSTERIZE_QUANTUM.value.y, 'the GAME\u2019s carried reciprocal \u2014 .y must be the float32 nearest 1/.x, or the top band shifts').toBe(Math.fround(1 / drawn));
     });
   }
 
   it('a poisoned localStorage cannot reach the shader — NaN and Infinity pass the typeof guard', () => {
     // `typeof NaN === 'number'` and `typeof Infinity === 'number'`, so Settings._load's type check
-    // admits both. Levels 0 or NaN makes the shader's 1.0/levels an Inf/NaN and the frame dies.
+    // admits both. Levels 0 or NaN makes setPosterizeLevels's CPU-side Math.fround(1 / levels) an
+    // Inf/NaN in POSTERIZE_QUANTUM.value.y, and the frame dies. ⛔ THE GAME'S DIVIDE IS ON THE CPU since
+    // round 3 — but the LAB shader still divides (height.glsl.js:683-684); B2P 4 fences only the three game files.
     for (const poison of [0, -1, 1e9, 1e309 /* Infinity after JSON round-trip */]) {
       vi.stubGlobal('localStorage', makeLocalStorage({
         [STORAGE_KEY]: JSON.stringify({ posterizeLevels: poison }) }));
@@ -216,6 +254,10 @@ describe('B2P 6 — the stored value and the drawn value cannot disagree', () =>
       expect(Number.isFinite(v), `stored ${poison} survived as ${v}`).toBe(true);
       expect(v).toBeGreaterThanOrEqual(POSTERIZE_LEVELS_MIN);
       expect(v).toBeLessThanOrEqual(POSTERIZE_LEVELS_MAX);
+      // …and the repaired value, pushed through the setter, leaves the GAME vec2 finite too.
+      setPosterizeLevels(v);
+      expect(Number.isFinite(POSTERIZE_QUANTUM.value.x) && Number.isFinite(POSTERIZE_QUANTUM.value.y),
+        `stored ${poison} reached the vec2 as (${POSTERIZE_QUANTUM.value.x}, ${POSTERIZE_QUANTUM.value.y})`).toBe(true);
     }
   });
 
@@ -224,6 +266,7 @@ describe('B2P 6 — the stored value and the drawn value cannot disagree', () =>
     s.onChange('posterizeLevels', setPosterizeLevels);
     s.set('posterizeLevels', 31);
     expect(POSTERIZE_LEVELS.value).toBe(31);
+    expect(POSTERIZE_QUANTUM.value.x, 'the GAME vec2 followed set(31) too').toBe(31);
     s.reset();
     expect(s.get('posterizeLevels')).toBe(POSTERIZE_LEVELS_DEFAULT);
     for (const [name, [mat, key]] of Object.entries(PATHS)) {
@@ -240,5 +283,59 @@ describe('B2P 6 — the stored value and the drawn value cannot disagree', () =>
     expect(Number.isFinite(1.0 / 0), 'the failing control: levels 0 is exactly the frame-killing Inf').toBe(false);
     expect(clampPosterizeLevels(0), 'which the clamp makes unreachable').toBe(POSTERIZE_LEVELS_MIN);
     expect(clampPosterizeLevels(NaN), 'a non-finite input falls back to the shipped default').toBe(POSTERIZE_LEVELS_DEFAULT);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// B2P 7 — "SO THEY CANNOT DRIFT" IS A CONSTRUCTION ARGUMENT, AND UNTIL THIS SECTION IT WAS FENCED
+// AT EXACTLY ONE LEVEL. posterizeLevels.js states that `setPosterizeLevels` is the only writer of
+// both objects, so a level and its carried reciprocal cannot disagree. That is true by reading —
+// but the only assertion on `.y` anywhere in this file was pinned at the shipped 6, and B2P 2, which
+// does exercise 23 and 41, reads only `.x` (through `readLevels`). The setter accepts 2 … 64, so a
+// `.y` that stopped tracking at any other level would have shipped with every gate green. The whole
+// admitted range is asserted here so the phrase "cannot drift" names a fenced property, not a hope.
+describe('B2P 7 — the carried reciprocal tracks the level at EVERY level the clamp admits', () => {
+  afterAll(() => { setPosterizeLevels(POSTERIZE_LEVELS_DEFAULT); });
+
+  it('every integer level in [MIN, MAX] carries its own exact float32 reciprocal', () => {
+    try {
+      for (let L = POSTERIZE_LEVELS_MIN; L <= POSTERIZE_LEVELS_MAX; L++) {
+        setPosterizeLevels(L);
+        expect(POSTERIZE_QUANTUM.value.x, `level ${L}: the vec2 .x the six game programs read`).toBe(L);
+        expect(POSTERIZE_QUANTUM.value.y,
+          `level ${L}: .y must be Math.fround(1/${L}) EXACTLY — it is the float32 the GPU receives, and a `
+          + `double-rounded or stale one shifts whole bands (B2P 4 measures 213 against 212 at levels 6)`).toBe(Math.fround(1 / L));
+        expect(POSTERIZE_LEVELS.value, `level ${L}: the lab's scalar followed the same single write`).toBe(L);
+      }
+    } finally { setPosterizeLevels(POSTERIZE_LEVELS_DEFAULT); }
+  });
+
+  it('an out-of-range or fractional ask carries the reciprocal of the CLAMPED level, not of the ask', () => {
+    try {
+      for (const asked of [1, 0, -7, 2.5, 12.75, 500, 1e9]) {
+        const want = clampPosterizeLevels(asked);
+        setPosterizeLevels(asked);
+        expect(POSTERIZE_QUANTUM.value.x, `set(${asked}) must clamp to ${want}`).toBe(want);
+        expect(POSTERIZE_QUANTUM.value.y,
+          `set(${asked}): .y must be the reciprocal of the CLAMPED ${want}, not of ${asked} — a pair that `
+          + `clamps .x and derives .y from the raw ask is exactly the drift this section fences`).toBe(Math.fround(1 / want));
+      }
+    } finally { setPosterizeLevels(POSTERIZE_LEVELS_DEFAULT); }
+  });
+
+  it('NEGATIVE CONTROL — a `.y` frozen at the default disagrees at 62 of the 63 admitted levels', () => {
+    // The assertions above are worth nothing unless a stale `.y` is DETECTABLE, so the defect is
+    // simulated here directly on the object: write the level, then stamp `.y` back to the shipped
+    // 1/6 and count the levels at which the pair now disagrees. It must be every level but 6.
+    try {
+      let caught = 0;
+      for (let L = POSTERIZE_LEVELS_MIN; L <= POSTERIZE_LEVELS_MAX; L++) {
+        setPosterizeLevels(L);
+        POSTERIZE_QUANTUM.value.y = Math.fround(1 / POSTERIZE_LEVELS_DEFAULT);
+        if (POSTERIZE_QUANTUM.value.y !== Math.fround(1 / POSTERIZE_QUANTUM.value.x)) caught++;
+      }
+      expect(caught, 'a frozen reciprocal must be visible at every admitted level except the default')
+        .toBe(POSTERIZE_LEVELS_MAX - POSTERIZE_LEVELS_MIN);
+    } finally { setPosterizeLevels(POSTERIZE_LEVELS_DEFAULT); }
   });
 });

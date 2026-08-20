@@ -114,7 +114,7 @@ export class Settings {
         const saved = JSON.parse(json);
         for (const key of Object.keys(DEFAULTS)) {
           if (key in saved && typeof saved[key] === typeof DEFAULTS[key]) {
-            this._values[key] = CLAMPS[key] ? CLAMPS[key](saved[key]) : saved[key];   // B2P — repair what came off disk: the typeof guard on the line above admits NaN and Infinity (both typeof 'number'), and levels 0 makes the shader's 1.0/levels an Inf that turns the whole frame NaN. Corrupt or hand-edited storage is fixed on the way in, not trusted.
+            this._values[key] = CLAMPS[key] ? CLAMPS[key](saved[key]) : saved[key];   // B2P — repair what came off disk: the typeof guard on the line above admits NaN and Infinity (both typeof 'number'), and levels 0 makes `setPosterizeLevels`'s CPU-side `Math.fround(1 / levels)` an Inf in `POSTERIZE_QUANTUM.value.y`, which turns the whole frame NaN — ⛔ the divide is on the CPU, NOT in any shipped GAME shader — but the LAB program still divides (height.glsl.js:683-684), so the clamp guards both. Corrupt or hand-edited storage is fixed on the way in, not trusted.
           }
         }
         // Migrate stale idleTimeout from old 20s default to new 300s default
