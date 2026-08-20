@@ -744,26 +744,26 @@ export function conditionFromBody(planetData) {
     orbitRadiusEarth: d.orbitRadiusEarth,
     tidalState:    d.tidalState || { locked: false },
     atmosphere,
-    // ⚠⚠ KNOWN, MEASURED, DELIBERATELY NOT FIXED HERE — the seam's SIXTH disagreement, and the one
+    // ⚠⚠ KNOWN, MEASURED, AND NOW SPENT — the seam's SIXTH disagreement, and the one
     // that is a KEY-NAME mismatch rather than a unit or a shape:
     //     game  PhysicsEngine.js:820-824 computeSurfaceHistory returns
     //           { bombardmentIntensity, erosionLevel, resurfacingRate }
-    //     lab   driver-presets.js:27 writes `surfaceHistory:{erosion:…}` and BOTH readers spell it
-    //           `erosion` — baseStep.js:38 `d.surfaceHistory?.erosion ?? 0` and
-    //           planet-lod-lab-core.js:598 `d.surfaceHistory?.erosion ?? 0`.
+    //     lab   driver-presets.js:27 writes `surfaceHistory:{erosion:…}` and until B1 BOTH readers
+    //           spelled it `erosion` ONLY — baseStep.js:38 `const surfaceHistory` and
+    //           labCore.js:598 `const erosion`, so a game body read a hard 0 at both.
     // MEASURED over 616 generated planets: `surfaceHistory.erosion` is undefined on 616/616, while
-    // `erosionLevel` runs 0.0150 … 1.0000 (median 0.6655). So the engine reads a hard 0 for a
+    // `erosionLevel` runs 0.0150 … 1.0000 (median 0.6655). So the engine READ a hard 0 for a
     // quantity that is really two-thirds of the way up its range, on every body in the game.
-    // ⛔ NOT renamed in Step 1, on purpose. This is the same shape of bug as the `tidalHeat` /
-    // `tidalHeating` name mismatch, and PLAN.md gives THAT one its own step (Step 2) with a
-    // deliberately-NOT-byte-identity gate and a committed delta table, precisely because fixing a
-    // dropped input MOVES NUMBERS. Step 1's whole claim is "additive, nothing moves". Renaming here
-    // would move `deriveBodyScalars`' `surfaceHistory` scalar (baseStep.js:38 → :80) for any body
-    // that reaches `makeBaseStep`, inside a step whose gate asserts nothing moved — and the gate
-    // would pass anyway, because the vector's three baseStep helpers (shellThickness, rawTidal,
-    // surfaceGravity) happen not to read it. A green gate over a real behaviour change is this
-    // codebase's signature failure and it is not being reproduced here. Pinned by
-    // tests/port-condition-contract.test.js as a NAMED known defect so it stays visible.
+    // ⭐ CLOSED 2026-08-20 BY B1 (ROOT-0) — AND CLOSED AT THE READER, NOT HERE. Nothing on the
+    // `surfaceHistory:` line below changed: the port still forwards the game's OWN key, and
+    // tests/port-condition-contract.test.js still pins that it does. What changed is that BOTH
+    // readers now accept either spelling, with the LAB spelling winning where a bundle carries
+    // both, so no lab preset moves. The deferral's stated price was paid in the currency it named:
+    // B1 is its own increment with a committed delta table (docs/FEATURES/root0-seam-delta-table.md)
+    // and a deliberately-NOT-byte-identity reading. ⛔ INSTRUMENT C DID NOT RUN CLEAN, AND THIS
+    // COMMENT CLAIMED IT DID: it exits 2, POPULATION MISMATCH — PRE-EXISTING, moon window 34b502d,
+    // confirmed 2026-08-20 by re-running with these edits stashed. Byte-identity is UNEVALUATABLE
+    // here, not passed. What carries it: a `surfaceHistory` scalar no baseStep helper reads.
     surfaceHistory: d.surfaceHistory || { erosion: 0, bombardmentIntensity: 0, resurfacingRate: 0 },
     ...(d.rotationHours != null ? { rotationHours: d.rotationHours } : {}),
     // ── STEP 1 — the three inputs the port declared and never forwarded, plus the unit fix. ──────

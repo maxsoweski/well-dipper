@@ -3,7 +3,7 @@
 // Pure: no three.js. Imports only alea + simplex-noise (deterministic; no Math.random/Date.now).
 import { makeSubstrate } from './substrate.js';
 import { clamp01, smoothstep } from './mathutil.js';
-import { calibrateTidal, LOVE_K2_RANGE } from './adaptL0.js';
+import { calibrateTidal, LOVE_K2_RANGE, AGE_NORM_DIVISOR } from './adaptL0.js';
 import alea from 'alea';
 import { createNoise2D } from 'simplex-noise';
 
@@ -35,9 +35,9 @@ export function deriveBodyScalars(bundle, discriminate = true) {
 
   const density = d.composition?.density ?? 5.5;
   const rockyCrust = smoothstep(2.5, 3.9, density);
-  const surfaceHistory = d.surfaceHistory?.erosion ?? 0;
-  // age: prefer the normalized ageNorm (from adaptL0); fall back to d.age (relief presets omit -> 0.5)
-  const ageNorm = d.ageNorm ?? (d.age ?? 0.5);
+  const surfaceHistory = d.surfaceHistory?.erosion ?? d.surfaceHistory?.erosionLevel ?? 0;   // ⭐ ROOT-0 fix 1 (B1, 2026-08-20): the SAME two-spellings defect as labCore.js:598, at the second reader. Lab presets write `erosion`, PhysicsEngine.js:822 writes `erosionLevel`; undefined on 616/616 generated planets before this line learned the game's spelling. Lab spelling still wins where both exist.
+  // age: prefer the normalized ageNorm (from adaptL0); else NORMALISE d.age by the law two other modules already express — adaptL0.js:36 `ageNorm: (p.age != null) ? clamp01(p.age / AGE_NORM_DIVISOR) : undefined,` and e1Regime.js:224 `const g = cv.surfaceGravity ?? 1.0, aN = clamp01((cv.age ?? 4.5) / 10);`; only a bundle with neither key falls to 0.5.
+  const ageNorm = d.ageNorm ?? (d.age != null ? clamp01(d.age / AGE_NORM_DIVISOR) : 0.5);   // ⭐ ROOT-0 fix 3 (B1, 2026-08-20): the fallback used to hand RAW GYR straight through, so every `(1 - ageNorm)` term below ran NEGATIVE for any body older than 1 Gyr — 88.3% of the corpus — pinning shellThickness at its clamp floor and despinAmp at its ceiling. This is a bug against a law written twice elsewhere, not a third fork of it. Delta: docs/FEATURES/root0-seam-delta-table.md.
 
   // radial strain: contraction (+1, scarps) vs expansion (-1, grabens)
   const expansionDrive = tidalHeat;   // calibrated tidal heating pushes expansion

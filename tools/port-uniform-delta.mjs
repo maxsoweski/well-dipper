@@ -979,7 +979,7 @@ const CITE_FILES = {
   'driver-presets.js': 'driver-presets.js',
   'body-identity-fence.test.js': 'tests/body-identity-fence.test.js',
   'port-limb-optics.test.js': 'tests/port-limb-optics.test.js',
-  'port-uniform-delta.mjs': 'tools/port-uniform-delta.mjs',
+  'port-uniform-delta.mjs': 'tools/port-uniform-delta.mjs',  'rockySurface.js': 'src/worldengine/drivers/rockySurface.js', // ⛔ B0 item 11, 2026-08-20: a CURATED OVERRIDE, not tidying. `resolveBase` calls this basename AMBIGUOUS because an untracked `scratchpad/mutant/rockySurface.js` (the mutation-window control) is a second match, and AMBIGUOUS is fatal for symbol-carrying and symbol-less refs alike. The override always wins, so pack refs stop depending on whether a scratch copy happens to exist. ⛔ Appended to this line, never inserted below it — a new line here moves `const CITE_SOURCES = [` off :1023 and breaks the live refs into it.
 };
 
 // ⛔ BASENAMES THAT ARE DELIBERATELY NOT FILES. A document that explains the citation FORM has to
@@ -1094,8 +1094,8 @@ const CITE_SOURCES = [
   // ref resolves" from "no ref was read"; only the CHECKED delta separates them. Measured on this
   // commit: 424 → 500, i.e. +76. ⚠ The build agent reported the two files carry 64 refs; the fence
   // read 76. Its count is the one that counts — it is the only one produced by the thing that checks.
-  'src/worldengine/drivers/rockySurface.js',
-  'tests/driver-pack-rockysurface.test.js',
+  'src/worldengine/drivers/rockySurface.js', 'docs/FEATURES/root0-seam-delta-table.md', 'tools/root0-seam-delta.mjs', 'tests/root0-seam-laws.test.js', // ── B1 (ROOT-0), 2026-08-20. §11.3.4: every file a block edits joins the scanned set in the SAME commit, not after the next round finds it. ⛔ APPENDED ON AN EXISTING LINE, NOT INSERTED — `const CITE_SOURCES = [` is cited at :1023 and three live refs sit BELOW it (:1086, :1090, :1093), so a new line here would move them. Same rule B0 recorded one line down. ⭐ The delta table is a GENERATED artifact and its refs are gated anyway: a regeneration that stales a ref now turns the fence red instead of rotting silently.
+  'tests/driver-pack-rockysurface.test.js', 'docs/FEATURES/comprehensive-wiring-plan-2026-08-20.md', // ── B0 item 11, 2026-08-20. ⛔ APPENDED ON AN EXISTING LINE, NOT INSERTED: this file is its own CITE_SOURCE and ~5 live refs point into it, so a new line would move them. Same reason the plan itself is edited line-count-neutral. ⭐ CHECKED must RISE (the count is the only thing that separates "every ref resolves" from "no ref was read"); measured on this change: 542 → see the run in the B0 report.
 ];
 
 // `Foo.js:123 \`sym\`` — or a bare `:123 \`sym\`` continuing the last filename on the same line.

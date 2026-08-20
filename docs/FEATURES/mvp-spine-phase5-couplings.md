@@ -113,7 +113,7 @@ a Phase-5 WS number.
 
 ## The 52 gaps
 
-`Sev` and `Tract` are the audit's own. `WS` is the plan's sequencing. `Lab` / `Game` per the legend
+`Sev` and `Tract` are the audit's own. `WS` is the plan's sequencing. `Lab` / `Game` per the legend ⭐ **`QB` is the CROSS-SPINE INDEX added 2026-08-20 (B0 item 6 of `comprehensive-wiring-plan-2026-08-20.md`); this file previously contained zero `QB-` strings.** ⭐⭐ **The column is almost entirely `—`, and that is the finding, not a gap in the work:** spine 3 is 52 EDGES over spine-1 NODES, spine 2 is 14 quality VERDICTS over the same nodes, and the two intersect in exactly **three rows** — `P5-G27` (canyons × scarps), `WS4-7` (orogenic drainage co-genesis) and part of `P5-G14` (lava × mountains), all three meeting **QB-7** at the one `grainStrength` 0-vs-1 render this document already calls its highest-leverage measurement (`:272-273`). ⛔ No pairing here is inferred from a title match; a coupling and a quality complaint that merely mention the same feature are not the same item.
 above.
 
 ### WS1 — Keystone: surface per-basin `filled` (5 gaps, +2 it unblocks in WS3)
@@ -127,13 +127,13 @@ levels (`priorityFlood()` → `filled`, `planet-lod-rivers.js:762-782`, closed o
 `planet-lod-lab.html:435`; the GLSL has since been extracted to its own module, so that line
 reference is stale but the code is unchanged in substance.
 
-| ID | Coupling | Sev | Tract | Lab | Game | Evidence / blocked on |
-|---|---|---|---|---|---|---|
-| P5-G01 | craters × rivers | 4 | wireable-now | UNBUILT | ABSENT | `planet-lod-rivers.js:762-782,942` computes `filled`; `planet-lod-shaders.glsl.js:375` discards it. Game has craters (WE-driven) but no rivers at all. |
-| P5-G02 | craters × lakes | 4 | wireable-now | UNBUILT | ABSENT | Same root. Game's only standing water is the type-branch ocean; no per-basin datum. |
-| P5-G03 | rivers × lakes | 3 | wireable-now | UNBUILT | ABSENT | Same root. Neither endpoint in the game. |
-| P5-G13 | lakes × deltas | 2 | wireable-now | UNBUILT | ABSENT | Same root — deltas need an elevated-lake datum. Neither endpoint in the game. |
-| P5-G20 | karst × lakes | 1 | wireable-now | UNBUILT | ABSENT | Same root. `karstCombiner` (`planet-lod-height.glsl.js:1209`) writes `canyonHeight`, never reads a fill level. |
+| ID | Coupling | Sev | Tract | Lab | Game | Evidence / blocked on | QB (spine 2) |
+|---|---|---|---|---|---|---|---|
+| P5-G01 | craters × rivers | 4 | wireable-now | UNBUILT | ABSENT | `planet-lod-rivers.js:762-782,942` computes `filled`; `planet-lod-shaders.glsl.js:375` discards it. Game has craters (WE-driven) but no rivers at all. | — |
+| P5-G02 | craters × lakes | 4 | wireable-now | UNBUILT | ABSENT | Same root. Game's only standing water is the type-branch ocean; no per-basin datum. | — |
+| P5-G03 | rivers × lakes | 3 | wireable-now | UNBUILT | ABSENT | Same root. Neither endpoint in the game. | — |
+| P5-G13 | lakes × deltas | 2 | wireable-now | UNBUILT | ABSENT | Same root — deltas need an elevated-lake datum. Neither endpoint in the game. | — |
+| P5-G20 | karst × lakes | 1 | wireable-now | UNBUILT | ABSENT | Same root. `karstCombiner` (`planet-lod-height.glsl.js:1209`) writes `canyonHeight`, never reads a fill level. | — |
 
 ### WS2 — Wire-now batch (18 gaps)
 
@@ -142,70 +142,70 @@ The optical rows share one structural piece of evidence: the fragment shader's f
 `surface + emissive + specC + limbC + termC + cloudC + auroraC + airglowC + cloudOpticsC + bioC +
 machC + cityC + ecuC` (`planet-lod-shaders.glsl.js:1383`). No optical channel modulates another.
 
-| ID | Coupling | Sev | Tract | Lab | Game | Evidence / blocked on |
-|---|---|---|---|---|---|---|
-| P5-G38 | clouds × sunglint | 2 | wireable-now | UNBUILT | ABSENT | Glint block `planet-lod-shaders.glsl.js:1260-1268` — `spec` is gated on `uSpecStrength`, `liquidMask`, `provinceWeight(PROV_GLINT)`, `uLodRamp`. No cloud term. Game has clouds but no sunglint uniform. |
-| P5-G39 | clouds × cityLights | 1 | wireable-now | UNBUILT | ABSENT | `cityC` block `:1029-1043` — masked by `cityLand`, `cityCoast`, `cityFbm`, `cityNight`. No cloud term. Game's city-lights is exclusive type 16. |
-| P5-G40 | clouds × terminator | 1 | wireable-now | UNBUILT | ABSENT | `termC` `:952-958` reads `uTermColor/uTermStrength` and `veilTint` (F16 dust) only. |
-| P5-G41 | clouds × limb | 1 | wireable-now | UNBUILT | ABSENT | `limb = pow(1-dot(N,V), uLimbExponent) * uLimbStrength * (diff+0.15)` `:939-940`. No cloud term. |
-| P5-G45 | lava × frost | 1 | wireable-now | UNBUILT | ABSENT | `frostCover` `:447` is modulated by exactly one thing: `frostCover *= 1.0 - liquidMask` `:452`. No lava term. |
-| P5-G46 | bioMats × frost | 1 | wireable-now | UNBUILT | ABSENT | Same line — no bio term either. |
-| P5-G11 | lakes × bioMats | 2 | wireable-now | UNBUILT | ABSENT | Comment-stripped probe: **zero** code lines pairing any `uBio*` with `liquidMask`/`uSeaLevel`. |
-| P5-G10 | lakes × dunes | 2 | wireable-now | UNBUILT | ABSENT | Zero code lines pairing `uDune*` with `liquidMask`/`uSeaLevel`. |
-| P5-G31 | hexTess × shatter | 1 | wireable-now | UNBUILT | ABSENT | Zero code lines pairing `uShat*` with `uHex*`. Game: **mutually exclusive types 11 vs 12** (`Planet.js:951-1140`) — structurally impossible, not merely unwired. |
-| P5-G36 | weatherBands × dustStorm | 1 | wireable-now | UNBUILT | ABSENT | Zero code lines pairing band terms with `uDustStorm*`. ⚠ The game *does* scale its own rocky dust storm by `cloudDensity` (`Planet.js:890`) — that is the game's own dust/cloud code, **not** this F24×F40 pair. Do not score it. |
-| P5-G37 | jets × greatSpot | 2 | wireable-now | UNBUILT | ABSENT | Zero code lines pairing `uJet*`/`jetSoloMask` with spot terms. |
-| P5-G52 | lightning × dustStorm | 1 | wireable-now | UNBUILT | ABSENT | Zero code lines pairing lightning with `uDustStorm*`. Game has neither. |
-| P5-G22 | magma × lava | 2 | wireable-now | PARTIAL | ABSENT | Audit's one-directional verdict unchanged; probe finds zero new code lines pairing `uMagma*`/`mgSeaMask` (`:480`) with `uLava*`. |
-| P5-G21 | magma × terminator | 1 | wireable-now | PARTIAL | ABSENT | Unchanged; `termC` `:952-958` carries no magma term. Plan flags this row **low value**. |
-| P5-G15 | dunes × craters | 2 | wireable-now | PARTIAL | ABSENT | Unchanged; zero code lines pairing `uDune*` with `uCrater*`. Plan flags **low priority — already emergent**. |
-| P5-G17 | airglow × limb | 2 | wireable-now | PARTIAL | ABSENT | Confirmed still masked-only: `airglowC = uAirglowColor * (limb * nightMask * uAirglowIntensity) * provinceWeight(PROV_AIRGLOW)` `:1348` reuses the `limb` **scalar** and nothing else. ⚠ Plan says *partly by design* — **needs Max's ruling on whether the deliberate layering stays** before this row can be scoped. |
-| P5-G48 | aurora × nightsideThermal | 1 | wireable-now | UNBUILT | ABSENT | Additive composite `:1383`. Plan flags **cosmetic**. |
-| P5-G49 | airglow × nightsideThermal | 1 | wireable-now | UNBUILT | ABSENT | Additive composite `:1383`. Plan flags **near-moot — disjoint `rendersOn`**. |
+| ID | Coupling | Sev | Tract | Lab | Game | Evidence / blocked on | QB (spine 2) |
+|---|---|---|---|---|---|---|---|
+| P5-G38 | clouds × sunglint | 2 | wireable-now | UNBUILT | ABSENT | Glint block `planet-lod-shaders.glsl.js:1260-1268` — `spec` is gated on `uSpecStrength`, `liquidMask`, `provinceWeight(PROV_GLINT)`, `uLodRamp`. No cloud term. Game has clouds but no sunglint uniform. | — |
+| P5-G39 | clouds × cityLights | 1 | wireable-now | UNBUILT | ABSENT | `cityC` block `:1029-1043` — masked by `cityLand`, `cityCoast`, `cityFbm`, `cityNight`. No cloud term. Game's city-lights is exclusive type 16. | — |
+| P5-G40 | clouds × terminator | 1 | wireable-now | UNBUILT | ABSENT | `termC` `:952-958` reads `uTermColor/uTermStrength` and `veilTint` (F16 dust) only. | — |
+| P5-G41 | clouds × limb | 1 | wireable-now | UNBUILT | ABSENT | `limb = pow(1-dot(N,V), uLimbExponent) * uLimbStrength * (diff+0.15)` `:939-940`. No cloud term. | — |
+| P5-G45 | lava × frost | 1 | wireable-now | UNBUILT | ABSENT | `frostCover` `:447` is modulated by exactly one thing: `frostCover *= 1.0 - liquidMask` `:452`. No lava term. | — |
+| P5-G46 | bioMats × frost | 1 | wireable-now | UNBUILT | ABSENT | Same line — no bio term either. | — |
+| P5-G11 | lakes × bioMats | 2 | wireable-now | UNBUILT | ABSENT | Comment-stripped probe: **zero** code lines pairing any `uBio*` with `liquidMask`/`uSeaLevel`. | — |
+| P5-G10 | lakes × dunes | 2 | wireable-now | UNBUILT | ABSENT | Zero code lines pairing `uDune*` with `liquidMask`/`uSeaLevel`. | — |
+| P5-G31 | hexTess × shatter | 1 | wireable-now | UNBUILT | ABSENT | Zero code lines pairing `uShat*` with `uHex*`. Game: **mutually exclusive types 11 vs 12** (`Planet.js:951-1140`) — structurally impossible, not merely unwired. | — |
+| P5-G36 | weatherBands × dustStorm | 1 | wireable-now | UNBUILT | ABSENT | Zero code lines pairing band terms with `uDustStorm*`. ⚠ The game *does* scale its own rocky dust storm by `cloudDensity` (`Planet.js:890`) — that is the game's own dust/cloud code, **not** this F24×F40 pair. Do not score it. | — |
+| P5-G37 | jets × greatSpot | 2 | wireable-now | UNBUILT | ABSENT | Zero code lines pairing `uJet*`/`jetSoloMask` with spot terms. | — |
+| P5-G52 | lightning × dustStorm | 1 | wireable-now | UNBUILT | ABSENT | Zero code lines pairing lightning with `uDustStorm*`. Game has neither. | — |
+| P5-G22 | magma × lava | 2 | wireable-now | PARTIAL | ABSENT | Audit's one-directional verdict unchanged; probe finds zero new code lines pairing `uMagma*`/`mgSeaMask` (`:480`) with `uLava*`. | — |
+| P5-G21 | magma × terminator | 1 | wireable-now | PARTIAL | ABSENT | Unchanged; `termC` `:952-958` carries no magma term. Plan flags this row **low value**. | — |
+| P5-G15 | dunes × craters | 2 | wireable-now | PARTIAL | ABSENT | Unchanged; zero code lines pairing `uDune*` with `uCrater*`. Plan flags **low priority — already emergent**. | — |
+| P5-G17 | airglow × limb | 2 | wireable-now | PARTIAL | ABSENT | Confirmed still masked-only: `airglowC = uAirglowColor * (limb * nightMask * uAirglowIntensity) * provinceWeight(PROV_AIRGLOW)` `:1348` reuses the `limb` **scalar** and nothing else. ⚠ Plan says *partly by design* — **needs Max's ruling on whether the deliberate layering stays** before this row can be scoped. | — |
+| P5-G48 | aurora × nightsideThermal | 1 | wireable-now | UNBUILT | ABSENT | Additive composite `:1383`. Plan flags **cosmetic**. | — |
+| P5-G49 | airglow × nightsideThermal | 1 | wireable-now | UNBUILT | ABSENT | Additive composite `:1383`. Plan flags **near-moot — disjoint `rendersOn`**. | — |
 
 ### WS3 — Resolve-pass / re-order (10 gaps, one shared with WS5)
 
-| ID | Coupling | Sev | Tract | Lab | Game | Evidence / blocked on |
-|---|---|---|---|---|---|---|
-| P5-G26 | glacial × lakes | 2 | resolve-pass | UNBUILT | ABSENT | **Blocked on WS1** (needs the fill datum) + negative-carve. |
-| P5-G34 | outflow × lakes | 1 | resolve-pass | UNBUILT | ABSENT | **Blocked on WS1** + head anchoring. `outflowCombiner` `:1108` writes `canyonHeight`; no fill read. |
-| P5-G14 | lava × mountains | 2 | resolve-pass | **PARTIAL ↑** | ABSENT | **Materially changed since the audit.** `lavaCombiner` `:2616-2617` and orogeny/`fbmdRidged` `:960-961` now *both* derive their axis from `sampleGrainStrike`. That is a shared **orientation**, not the "flows follow accumulated relief" resolve-pass the audit asked for — so still PARTIAL, but for a different reason than recorded. |
-| P5-G09 | machine × craters | 2 | resolve-pass | UNBUILT | ABSENT | Zero code lines pairing `uMach*` with `uCrater*`. Game: machine is exclusive type 15. |
-| P5-G08 | magma × edifices | 2 | resolve-pass | PARTIAL | ABSENT | Audit's masked-only verdict unchanged. |
-| P5-G24 | edifices × craters | 2 | resolve-pass | UNBUILT | ABSENT | `edificeCombiner` `:2578+`: the two "crater" hits inside it are **comments** (`:2571`, `:2576`). No code read. |
-| P5-G44 | plateaus × canyons | 1 | resolve-pass | UNBUILT | ABSENT | `plateauCombiner` `:2474` reads neither `canyonHeight` nor a canyon axis. |
-| P5-G32 | karst × rivers | 1 | resolve-pass | UNBUILT | ABSENT | Needs karst injected into the router **plus a re-route** — same prerequisite as P5-G12. |
-| P5-G18 | glacial × frost | 2 | wireable-now | PARTIAL | ABSENT | Confirmed masked-only, precisely: `glacialCombiner` `:3182-3189` **recomputes** the cold-cap field from the same `uFrostLocked` / `uFrostLatitudeBias` / `uFrostCondensationT` / `uFrostLapseRate` / `uPlanetTempEq` uniforms that `frostCoverage` `:3240-3247` uses. Shared **gate**, no shared volatile **budget**. |
-| P5-G19 | sublimation × frost | 2 | wireable-now | PARTIAL | ABSENT | Same pattern — the sublimation block mirrors `frostCoverage`'s field by construction (`planet-lod-height.glsl.js:3097`, `:3105`). Group with P5-G18 as one volatile-budget item. |
-| P5-G06 | glacial × mountains | 3 | view-LOD | PARTIAL | ABSENT | Audit's one-directional verdict; WS3 grad-bias half + **WS5↗** U-valley carving half. Both open. |
+| ID | Coupling | Sev | Tract | Lab | Game | Evidence / blocked on | QB (spine 2) |
+|---|---|---|---|---|---|---|---|
+| P5-G26 | glacial × lakes | 2 | resolve-pass | UNBUILT | ABSENT | **Blocked on WS1** (needs the fill datum) + negative-carve. | — |
+| P5-G34 | outflow × lakes | 1 | resolve-pass | UNBUILT | ABSENT | **Blocked on WS1** + head anchoring. `outflowCombiner` `:1108` writes `canyonHeight`; no fill read. | — |
+| P5-G14 | lava × mountains | 2 | resolve-pass | **PARTIAL ↑** | ABSENT | **Materially changed since the audit.** `lavaCombiner` `:2616-2617` and orogeny/`fbmdRidged` `:960-961` now *both* derive their axis from `sampleGrainStrike`. That is a shared **orientation**, not the "flows follow accumulated relief" resolve-pass the audit asked for — so still PARTIAL, but for a different reason than recorded. | **QB-7** (part) |
+| P5-G09 | machine × craters | 2 | resolve-pass | UNBUILT | ABSENT | Zero code lines pairing `uMach*` with `uCrater*`. Game: machine is exclusive type 15. | — |
+| P5-G08 | magma × edifices | 2 | resolve-pass | PARTIAL | ABSENT | Audit's masked-only verdict unchanged. | — |
+| P5-G24 | edifices × craters | 2 | resolve-pass | UNBUILT | ABSENT | `edificeCombiner` `:2578+`: the two "crater" hits inside it are **comments** (`:2571`, `:2576`). No code read. | — |
+| P5-G44 | plateaus × canyons | 1 | resolve-pass | UNBUILT | ABSENT | `plateauCombiner` `:2474` reads neither `canyonHeight` nor a canyon axis. | — |
+| P5-G32 | karst × rivers | 1 | resolve-pass | UNBUILT | ABSENT | Needs karst injected into the router **plus a re-route** — same prerequisite as P5-G12. | — |
+| P5-G18 | glacial × frost | 2 | wireable-now | PARTIAL | ABSENT | Confirmed masked-only, precisely: `glacialCombiner` `:3182-3189` **recomputes** the cold-cap field from the same `uFrostLocked` / `uFrostLatitudeBias` / `uFrostCondensationT` / `uFrostLapseRate` / `uPlanetTempEq` uniforms that `frostCoverage` `:3240-3247` uses. Shared **gate**, no shared volatile **budget**. | — |
+| P5-G19 | sublimation × frost | 2 | wireable-now | PARTIAL | ABSENT | Same pattern — the sublimation block mirrors `frostCoverage`'s field by construction (`planet-lod-height.glsl.js:3097`, `:3105`). Group with P5-G18 as one volatile-budget item. | — |
+| P5-G06 | glacial × mountains | 3 | view-LOD | PARTIAL | ABSENT | Audit's one-directional verdict; WS3 grad-bias half + **WS5↗** U-valley carving half. Both open. | — |
 
 ### WS4 — Architecture (17 gaps, each sub-item its own design pass)
 
-| ID | Coupling | Sev | Tract | Lab | Game | Evidence / blocked on |
-|---|---|---|---|---|---|---|
-| P5-G27 | canyons × scarps | 2 | needs-arch | **PARTIAL ↑ / UNKNOWN** | ABSENT | **The audit's named fix is built.** Its fix line: *"a shared tectonic lineament generator both combiners read"* (`audit:123`). `canyonCombiner` `:2326-2327` and `scarpCombiner` `:2369-2370` both mix toward `sampleGrainStrike(pos)` under `uTectonicGrainStrength`. ⚠ Lab-live 1.0 (`planet-lod-lab.html:1442`), **production default 0.0** (`planet-lod-uniforms.js:191`). What is shared is orientation, not geometry — **UNKNOWN whether canyon walls now read as scarp escarpments**; settled by one lab render at grain 0 vs 1 on a canyons+scarps preset. |
-| P5-G28 | plateaus × scarps | 2 | needs-arch | UNBUILT | ABSENT | Half the pair only: `scarpCombiner` reads the grain field, `plateauCombiner` `:2474` does **not** (the eight `sampleGrainStrike` call sites are `:960, :2326, :2369, :2524, :2534, :2616, :3058, :3071` — plateau is absent). Cheapest remaining partition win. |
-| P5-G29 | tessera × plateaus | 2 | needs-arch | UNBUILT | ABSENT | Same shape inverted: tessera reads grain `:2524`/`:2534`, plateau does not. |
-| P5-G30 | chaos × cryoRidge | 2 | needs-arch | UNBUILT | ABSENT | Same shape: cryoRidge reads grain `:3058`/`:3071`, `chaosCombiner` `:2743` does not. |
-| P5-G04 | dustStorm × dust | 3 | needs-arch | UNBUILT | ABSENT | **Blocked on the writable feedback buffer**, which does not exist — no ping-pong / redeposit machinery anywhere in the render path. |
-| P5-G42 | daysideThermal × clouds | 2 | needs-arch | UNBUILT | ABSENT | Same missing buffer (hotspot cloud-clearing). |
-| P5-G05 | edifices × lava | 3 | needs-arch | UNBUILT | ABSENT | **Blocked on lava-as-fluid routing.** `edificeCombiner`'s `uLava` hits are comments (`:2598`, `:2602`). |
-| P5-G25 | lava × rivers | 2 | needs-arch | UNBUILT | ABSENT | Same lava-as-fluid prerequisite. |
-| P5-G12 | rivers × massWasting | 2 | needs-arch | **PARTIAL ↑ / UNKNOWN** | ABSENT | **The router-re-route prerequisite moved.** `carveEpoch` + `perNodeIncision` + `applyIncision` (`planet-lod-lab.html:6241-6253`, "WS4 T12") is a real rivers→relief incision feedback. But it is applied to a **readback probe field**, not the rendered chain — the code says so at `:6247-6249` (*"the ROUTER_MAIN field the carve is computed over, NOT a rendered-chain sample (that is the deferred T12b)"*), and it is a one-shot incision, not a re-route. UNKNOWN how much of the WS4-1 design pass this retires; settled by reading the T12b deferral. |
-| P5-G07 | frost × craters | 2 | needs-arch | UNBUILT | ABSENT | **Blocked on the insolation/aspect term.** ⚠ `wardInsolation()` exists at `src/worldengine/base/climate-e5.js:104` — that is the annual-mean **latitude** insolation driving gas-giant banding, **not** a per-cell sun-axis·slope proxy. Do not match it to this row. |
-| P5-G43 | sublimation × craters | 1 | needs-arch | UNBUILT | ABSENT | Same missing aspect term. |
-| P5-G35 | dust × dunes | 1 | needs-arch | UNBUILT | ABSENT | **Blocked on a shared sediment-supply buffer.** `duneCombiner` `:1272`: its `dust` hits are all comments (`:1299-1324`). |
-| P5-G33 | chaos × lakes | 1 | needs-arch | UNBUILT | ABSENT | Blocked on a shallow-liquid class. |
-| P5-G23 | ecumenopolis × cityLights | 1 | needs-arch | PARTIAL | ABSENT | Continuum merge unbuilt; `ecuC` and `cityC` are separate additive channels `:1383`. Game: **mutually exclusive types 16 vs 17**. |
-| P5-G51 | carbon × lava | 1 | needs-arch | UNBUILT | ABSENT | Hot-carbon variant / preset. |
-| P5-G47 | aurora × bands | 1 | needs-arch | UNBUILT | ABSENT | Plan flags **low value — optional**. |
-| P5-G50 | clouds × greatSpot | 1 | needs-arch | UNBUILT | ABSENT | Plan flags **low sev — optional, gas-giant close-up**. |
+| ID | Coupling | Sev | Tract | Lab | Game | Evidence / blocked on | QB (spine 2) |
+|---|---|---|---|---|---|---|---|
+| P5-G27 | canyons × scarps | 2 | needs-arch | **PARTIAL ↑ / UNKNOWN** | ABSENT | **The audit's named fix is built.** Its fix line: *"a shared tectonic lineament generator both combiners read"* (`audit:123`). `canyonCombiner` `:2326-2327` and `scarpCombiner` `:2369-2370` both mix toward `sampleGrainStrike(pos)` under `uTectonicGrainStrength`. ⚠ Lab-live 1.0 (`planet-lod-lab.html:1442`), **production default 0.0** (`planet-lod-uniforms.js:191`). What is shared is orientation, not geometry — **UNKNOWN whether canyon walls now read as scarp escarpments**; settled by one lab render at grain 0 vs 1 on a canyons+scarps preset. | **QB-7** |
+| P5-G28 | plateaus × scarps | 2 | needs-arch | UNBUILT | ABSENT | Half the pair only: `scarpCombiner` reads the grain field, `plateauCombiner` `:2474` does **not** (the eight `sampleGrainStrike` call sites are `:960, :2326, :2369, :2524, :2534, :2616, :3058, :3071` — plateau is absent). Cheapest remaining partition win. | — |
+| P5-G29 | tessera × plateaus | 2 | needs-arch | UNBUILT | ABSENT | Same shape inverted: tessera reads grain `:2524`/`:2534`, plateau does not. | — |
+| P5-G30 | chaos × cryoRidge | 2 | needs-arch | UNBUILT | ABSENT | Same shape: cryoRidge reads grain `:3058`/`:3071`, `chaosCombiner` `:2743` does not. | — |
+| P5-G04 | dustStorm × dust | 3 | needs-arch | UNBUILT | ABSENT | **Blocked on the writable feedback buffer**, which does not exist — no ping-pong / redeposit machinery anywhere in the render path. | — |
+| P5-G42 | daysideThermal × clouds | 2 | needs-arch | UNBUILT | ABSENT | Same missing buffer (hotspot cloud-clearing). | — |
+| P5-G05 | edifices × lava | 3 | needs-arch | UNBUILT | ABSENT | **Blocked on lava-as-fluid routing.** `edificeCombiner`'s `uLava` hits are comments (`:2598`, `:2602`). | — |
+| P5-G25 | lava × rivers | 2 | needs-arch | UNBUILT | ABSENT | Same lava-as-fluid prerequisite. | — |
+| P5-G12 | rivers × massWasting | 2 | needs-arch | **PARTIAL ↑ / UNKNOWN** | ABSENT | **The router-re-route prerequisite moved.** `carveEpoch` + `perNodeIncision` + `applyIncision` (`planet-lod-lab.html:6241-6253`, "WS4 T12") is a real rivers→relief incision feedback. But it is applied to a **readback probe field**, not the rendered chain — the code says so at `:6247-6249` (*"the ROUTER_MAIN field the carve is computed over, NOT a rendered-chain sample (that is the deferred T12b)"*), and it is a one-shot incision, not a re-route. UNKNOWN how much of the WS4-1 design pass this retires; settled by reading the T12b deferral. | — |
+| P5-G07 | frost × craters | 2 | needs-arch | UNBUILT | ABSENT | **Blocked on the insolation/aspect term.** ⚠ `wardInsolation()` exists at `src/worldengine/base/climate-e5.js:104` — that is the annual-mean **latitude** insolation driving gas-giant banding, **not** a per-cell sun-axis·slope proxy. Do not match it to this row. | — |
+| P5-G43 | sublimation × craters | 1 | needs-arch | UNBUILT | ABSENT | Same missing aspect term. | — |
+| P5-G35 | dust × dunes | 1 | needs-arch | UNBUILT | ABSENT | **Blocked on a shared sediment-supply buffer.** `duneCombiner` `:1272`: its `dust` hits are all comments (`:1299-1324`). | — |
+| P5-G33 | chaos × lakes | 1 | needs-arch | UNBUILT | ABSENT | Blocked on a shallow-liquid class. | — |
+| P5-G23 | ecumenopolis × cityLights | 1 | needs-arch | PARTIAL | ABSENT | Continuum merge unbuilt; `ecuC` and `cityC` are separate additive channels `:1383`. Game: **mutually exclusive types 16 vs 17**. | — |
+| P5-G51 | carbon × lava | 1 | needs-arch | UNBUILT | ABSENT | Hot-carbon variant / preset. | — |
+| P5-G47 | aurora × bands | 1 | needs-arch | UNBUILT | ABSENT | Plan flags **low value — optional**. | — |
+| P5-G50 | clouds × greatSpot | 1 | needs-arch | UNBUILT | ABSENT | Plan flags **low sev — optional, gas-giant close-up**. | — |
 
 ### WS5↗ — View-dependent rich tier (2 gaps; owned by `rivers-viewdependent-lod-2026-06-18`)
 
-| ID | Coupling | Sev | Tract | Lab | Game | Evidence / blocked on |
-|---|---|---|---|---|---|---|
-| P5-G16 | dunes × mountains | 2 | view-LOD | PARTIAL | ABSENT | Orientation steering. **Cross-linked, not owned here** — status lives with `docs/WORKSTREAMS/rivers-viewdependent-lod-2026-06-18/`. |
+| ID | Coupling | Sev | Tract | Lab | Game | Evidence / blocked on | QB (spine 2) |
+|---|---|---|---|---|---|---|---|
+| P5-G16 | dunes × mountains | 2 | view-LOD | PARTIAL | ABSENT | Orientation steering. **Cross-linked, not owned here** — status lives with `docs/WORKSTREAMS/rivers-viewdependent-lod-2026-06-18/`. | — |
 | — | *(glacial × mountains = P5-G06, listed under WS3 — the one gap the plan splits across two WS)* | | | | | |
 
 ---
@@ -221,32 +221,32 @@ lab-protocol procedure driven by `window._lab` solo/enable flags on `:9223` (`:1
 equivalent harness exists on the game side, and the game cannot host these checks until the lab
 material actually renders a production body.
 
-| ID | Subject | Lab | Game | Disposition (plan `:184-198`) + evidence |
-|---|---|---|---|---|
-| I-1 | Rivers × canyons (F11×F04) | UNBUILT | ABSENT | Verify-only — presumed WIRED via the shared `canyonHeight` accumulator. Never verified. |
-| I-2 | Rivers × lakes/seas (F11×F14) | UNBUILT | ABSENT | Blocked on **P5-G03** (WS1 pour-point). |
-| I-3 | Deltas × coastlines × seas (F12×F20×F14) | UNBUILT | ABSENT | Mostly WIRED (shipped fluvial coupling) + **P5-G13** for the elevated-lake datum. |
-| I-4 | Frost/caps over relief (F22/F23×F01–F10) | UNBUILT | ABSENT | Verify-only (orographic lapse WIRED) + **P5-G45** + **P5-G07**. |
-| I-5 | Glacial × mountains (F17×F01) | UNBUILT | ABSENT | **P5-G06** (grad-bias) + WS5↗ (carving). |
-| I-6 | Sublimation × frost (F18×F22) | UNBUILT | ABSENT | **P5-G19** (volatile budget) + **P5-G43**. |
-| I-7 | Dunes × dust mantles (F15×F16) | UNBUILT | ABSENT | **P5-G35** + **P5-G10** / **P5-G15**. |
-| I-8 | Clouds over terrain × bands (F31a×F26) | UNBUILT | ABSENT | Verify-only + **X** (declare) + **P5-G42**. |
-| I-9 | Bands × storms (F24×F27/F28/F29) | UNBUILT | ABSENT | Mostly WIRED + **P5-G37**. |
-| I-10 | Atmosphere gate consistency (D6/P25 × all) | UNBUILT | ABSENT | Verify-only — airless gates the whole gradational+atmospheric stack off together. |
-| I-11 | Aurora × magnetic gate (F37×D13) | UNBUILT | ABSENT | Verify-only + **P5-G47** (optional). |
-| I-12 | Rings × eclipse shadows (F51×F52) | UNBUILT | ABSENT | Verify-only. ⚠ **F52 has no lab implementation at all** — the plan's own §7 calls it the one feature where the lab is behind, and Max ruled it **in scope** on 2026-08-06. This check cannot run in the lab until F52 exists there. |
-| I-13 | Thermal day/night × tidal lock × eyeball (F32/F33×D7×F31f) | UNBUILT | ABSENT | Verify-only + **P5-G42** (hotspot clearing). |
-| I-14 | Overlay compositing (F46–F49 × base) | UNBUILT | ABSENT | **P5-G23** + **P5-G39**. |
-| I-15 | LOD coherence (F53 × all combiners) | UNBUILT | ABSENT | WS5↗ + general verify. |
+| ID | Subject | Lab | Game | Disposition (plan `:184-198`) + evidence | QB (spine 2) |
+|---|---|---|---|---|---|
+| I-1 | Rivers × canyons (F11×F04) | UNBUILT | ABSENT | Verify-only — presumed WIRED via the shared `canyonHeight` accumulator. Never verified. | — |
+| I-2 | Rivers × lakes/seas (F11×F14) | UNBUILT | ABSENT | Blocked on **P5-G03** (WS1 pour-point). | — |
+| I-3 | Deltas × coastlines × seas (F12×F20×F14) | UNBUILT | ABSENT | Mostly WIRED (shipped fluvial coupling) + **P5-G13** for the elevated-lake datum. | — |
+| I-4 | Frost/caps over relief (F22/F23×F01–F10) | UNBUILT | ABSENT | Verify-only (orographic lapse WIRED) + **P5-G45** + **P5-G07**. | — |
+| I-5 | Glacial × mountains (F17×F01) | UNBUILT | ABSENT | **P5-G06** (grad-bias) + WS5↗ (carving). | — |
+| I-6 | Sublimation × frost (F18×F22) | UNBUILT | ABSENT | **P5-G19** (volatile budget) + **P5-G43**. | — |
+| I-7 | Dunes × dust mantles (F15×F16) | UNBUILT | ABSENT | **P5-G35** + **P5-G10** / **P5-G15**. | — |
+| I-8 | Clouds over terrain × bands (F31a×F26) | UNBUILT | ABSENT | Verify-only + **X** (declare) + **P5-G42**. | — |
+| I-9 | Bands × storms (F24×F27/F28/F29) | UNBUILT | ABSENT | Mostly WIRED + **P5-G37**. | — |
+| I-10 | Atmosphere gate consistency (D6/P25 × all) | UNBUILT | ABSENT | Verify-only — airless gates the whole gradational+atmospheric stack off together. | — |
+| I-11 | Aurora × magnetic gate (F37×D13) | UNBUILT | ABSENT | Verify-only + **P5-G47** (optional). | — |
+| I-12 | Rings × eclipse shadows (F51×F52) | UNBUILT | ABSENT | Verify-only. ⚠ **F52 has no lab implementation at all** — the plan's own §7 calls it the one feature where the lab is behind, and Max ruled it **in scope** on 2026-08-06. This check cannot run in the lab until F52 exists there. | — |
+| I-13 | Thermal day/night × tidal lock × eyeball (F32/F33×D7×F31f) | UNBUILT | ABSENT | Verify-only + **P5-G42** (hotspot clearing). | — |
+| I-14 | Overlay compositing (F46–F49 × base) | UNBUILT | ABSENT | **P5-G23** + **P5-G39**. | — |
+| I-15 | LOD coherence (F53 × all combiners) | UNBUILT | ABSENT | WS5↗ + general verify. | — |
 
 ---
 
 ## Non-gap spine items
 
-| ID | Item | Lab | Game | Evidence / blocked on |
-|---|---|---|---|---|
-| X | Re-derive `ASSOCIATIONS.dependsOn` from the shader | UNBUILT | ABSENT | `planet-feature-associations.js` still carries **49 `dependsOn` blocks, 37 of them empty**, hand-authored (the schema is documented at `:43-53`). No re-derivation script or commit exists. The plan says the manifest under-declares ~4 honored couplings; I did not re-verify that count — **UNKNOWN which four**, settled by diffing declared `dependsOn.features` against the shader's actual cross-reads. Independent of every WS; runnable any time. |
-| WS4-7 | Orogenic drainage-corridor co-genesis (mountains↔rivers) | **PARTIAL ↑ / UNKNOWN** | ABSENT | ⚠ **The plan's stated premise is now stale.** `planet-lod-phase5-integration-plan.md:43-46` says *"each relief writer has its own seed-hashed axis (no shared strike tensor), and inter-range lows are incidental ridged-multifractal noise minima."* Both clauses have moved: mountains read the shared strike field (`planet-lod-height.glsl.js:960-961`), and `writeGrainSphere(carrier, grainDrivers)` runs as an explicit **precondition** to `writeHeightSphere(...)` (`planet-lod-rivers.js:664-665`, comment: *"precondition: grain before height"*), so world-engine height is generated *from* the grain and the router routes on that height (`writeBodyRelief` `:1473`). **UNKNOWN whether the inter-range lows now read as oriented drainage corridors** — that is the whole point of the item and it is a render question. Settled by a lab render at `grainStrength` 0 vs 1 with rivers on, which is the same shot that settles **P5-G27**. |
+| ID | Item | Lab | Game | Evidence / blocked on | QB (spine 2) |
+|---|---|---|---|---|---|
+| X | Re-derive `ASSOCIATIONS.dependsOn` from the shader | UNBUILT | ABSENT | `planet-feature-associations.js` still carries **49 `dependsOn` blocks, 37 of them empty**, hand-authored (the schema is documented at `:43-53`). No re-derivation script or commit exists. The plan says the manifest under-declares ~4 honored couplings; I did not re-verify that count — **UNKNOWN which four**, settled by diffing declared `dependsOn.features` against the shader's actual cross-reads. Independent of every WS; runnable any time. | — |
+| WS4-7 | Orogenic drainage-corridor co-genesis (mountains↔rivers) | **PARTIAL ↑ / UNKNOWN** | ABSENT | ⚠ **The plan's stated premise is now stale.** `planet-lod-phase5-integration-plan.md:43-46` says *"each relief writer has its own seed-hashed axis (no shared strike tensor), and inter-range lows are incidental ridged-multifractal noise minima."* Both clauses have moved: mountains read the shared strike field (`planet-lod-height.glsl.js:960-961`), and `writeGrainSphere(carrier, grainDrivers)` runs as an explicit **precondition** to `writeHeightSphere(...)` (`planet-lod-rivers.js:664-665`, comment: *"precondition: grain before height"*), so world-engine height is generated *from* the grain and the router routes on that height (`writeBodyRelief` `:1473`). **UNKNOWN whether the inter-range lows now read as oriented drainage corridors** — that is the whole point of the item and it is a render question. Settled by a lab render at `grainStrength` 0 vs 1 with rivers on, which is the same shot that settles **P5-G27**. | **QB-7** |
 
 ---
 

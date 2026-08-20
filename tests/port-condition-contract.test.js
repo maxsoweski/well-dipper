@@ -384,12 +384,12 @@ const GIANT_TYPES = new Set(['gas-giant', 'hot-jupiter', 'sub-neptune']);
 // re-recorded rather than read — which is how a golden stops being evidence.
 //
 // ⚠ AND THEY CARRY `ageNorm`, WHICH LOOKS REDUNDANT NEXT TO `age`. It is not.
-// `baseStep.js:40` reads `d.ageNorm ?? (d.age ?? 0.5)` and treats the result as
-// a 0..1 quantity, so an fp carrying only `age: 4.5` drives
-// `shellThickness = clamp01(0.3 + … + 0.2*(1 − 4.5))` NEGATIVE and it clamps to
-// exactly 0. The first cut of this table did that on 5 of 7 fixtures — a golden
-// that would have recorded `shellThickness: 0` seven times and therefore could
-// not have caught the `* 2` injection that motivated it (0 * 2 === 0). That is
+// `baseStep.js:40` USED TO READ `d.ageNorm ?? (d.age ?? 0.5)` while treating the result as
+// a 0..1 quantity, so an fp carrying only `age: 4.5` drove
+// `shellThickness = clamp01(0.3 + … + 0.2*(1 − 4.5))` NEGATIVE and it clamped to
+// exactly 0 (B1 repaired the read 2026-08-20; carrying `ageNorm` is still the
+// right thing HERE, for the reason above it). The first cut of this table did
+// that on 5 of 7 fixtures — a golden that would have recorded `shellThickness: 0`
 // this codebase's signature failure, caught inside the fix for it. The
 // degeneracy CONTROL test below is what keeps it caught.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1623,24 +1623,24 @@ describe('Step 1 · surfaceHistory is emitted at last', () => {
     }
   });
 
-  it('KNOWN DEFECT, NAMED AND DEFERRED: the game spells it erosionLevel, the engine reads erosion', () => {
-    // ⛔ THIS TEST ASSERTS A BUG IS STILL PRESENT. It is not a mistake and it must
-    // not be "fixed" by editing this file.
-    //
+  it('SPENT GUARD, KEPT BY NAME: the game spells it erosionLevel and THE PORT STILL FORWARDS THAT', () => {
+    // ⛔ THIS TEST ASSERTS THE PORT'S SPELLING, NOT A BUG. It used to assert a bug
+    // was still present; B1 spent that deferral 2026-08-20 and the assertions below
+    // survive UNCHANGED, because B1 fixed the READERS and left the port alone.
     //   game  PhysicsEngine.js:820-824 → { bombardmentIntensity, erosionLevel, resurfacingRate }
     //   lab   driver-presets.js:27     → { erosion, bombardmentIntensity, resurfacingRate }
-    //   readers  baseStep.js:38 and planet-lod-lab-core.js:598 both spell it `erosion`
+    //   readers  baseStep.js:38 and labCore.js:598 now accept EITHER spelling (lab wins a tie)
     //
-    // So the engine reads a hard 0 for a quantity that really runs 0.015…1.000
-    // across the game's bodies. This is the SAME SHAPE of bug as the
-    // tidalHeat/tidalHeating name mismatch, and PLAN.md gives that one its own
-    // step (Step 2) with a deliberately-NOT-byte-identity gate and a committed
-    // delta table — because fixing a dropped input MOVES NUMBERS, and Step 1's
-    // entire claim is that nothing moved. Renaming it here would land a real
-    // behaviour change inside a step whose gate says there was none, and the gate
-    // would still pass, because the three baseStep helpers the vector calls
-    // happen not to read that scalar. That is this codebase's signature failure
-    // and it is not being reproduced. Pinned here so it stays visible.
+    // The engine USED TO read a hard 0 for a quantity that really runs 0.015…1.000
+    // across the game's bodies. It was the SAME SHAPE of bug as the
+    // tidalHeat/tidalHeating name mismatch, and it was paid for in the currency the
+    // deferral named: B1 is its own increment, with a committed delta table
+    // (docs/FEATURES/root0-seam-delta-table.md) and a deliberately-NOT-byte-identity
+    // reading, while Instrument C stayed byte-identical on all four packs. Renaming
+    // at the PORT would still be a different act with a different blast radius, so
+    // it still has not happened — and this test is what keeps that visible. The
+    // reader-side law is pinned separately, in tests/root0-seam-laws.test.js, so
+    // the two halves cannot drift into agreeing by accident.
     let engineSpellingPresent = 0;
     let gameSpellingPresent = 0;
     for (const pd of planets) {
@@ -1648,7 +1648,7 @@ describe('Step 1 · surfaceHistory is emitted at last', () => {
       if (sh.erosion !== undefined) engineSpellingPresent++;
       if (typeof sh.erosionLevel === 'number') gameSpellingPresent++;
     }
-    expect(engineSpellingPresent, 'if this is non-zero the rename happened — retire this test').toBe(0);
+    expect(engineSpellingPresent, 'if this is non-zero the PORT-side rename happened — re-rule this test').toBe(0);
     expect(gameSpellingPresent).toBe(planets.length);
   });
 });

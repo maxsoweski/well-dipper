@@ -595,7 +595,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   const iron = d.composition?.ironFraction ?? 0.3;
   const hasAtmo = !!d.atmosphere;
   const T = d.T_eq ?? 280;
-  const erosion = d.surfaceHistory?.erosion ?? 0;
+  const erosion = d.surfaceHistory?.erosion ?? d.surfaceHistory?.erosionLevel ?? 0;   // ⭐ ROOT-0 fix 1 (B1, 2026-08-20): TWO SPELLINGS OF ONE QUANTITY. The lab presets write `erosion`; the game writes `erosionLevel` (PhysicsEngine.js:822 `erosionLevel: erosion,`). This reader knew only the lab spelling, so every condition-shaped bundle drove a hard 0 into reliefAmplitude / chasmaStrength / scarpStrength / rayBrightness while the real value ran 0.0150…1.0000 (median 0.6655). The lab spelling still WINS where both exist, so no preset moves. Movement measured in docs/FEATURES/root0-seam-delta-table.md.
   const locked = !!d.tidalState?.locked;
 
   const hot = clamp01((T - 400) / 600);                          // 400K..1000K -> 0..1
@@ -608,7 +608,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   // F15). Defaults to 1 g when the bundle omits mass/radius (robust, finite).
   const radiusEarth = d.radiusEarth ?? 1.0;
   const massEarth = d.massEarth ?? 1.0;
-  const surfaceGravity = massEarth / (radiusEarth * radiusEarth);
+  const surfaceGravity = d.surfaceGravity ?? massEarth / (radiusEarth * radiusEarth);   // ⭐ ROOT-0 fix 4 (B1, 2026-08-20): PREFER the bundle's own g; recompute only when it has none. `conditionFromBody` deliberately omits `massEarth` (the engine reads mass only THROUGH g), so `d.massEarth ?? 1.0` on the line above handed every condition-shaped body Earth's mass and this line returned 1/R² — measured 8.3× off the correct value at the median and >10× off on 945 of 1517. conditionVector.js:134 already supplies the real g. ⚠ Booked as CORRECTNESS, not differentiation. Delta: docs/FEATURES/root0-seam-delta-table.md.
 
   // tidalHeat (#2): the planet-level analog of PhysicsEngine.tidalHeating() — a
   // planet self-heats on an eccentric close orbit around its STAR (Relief risk #2).
@@ -621,9 +621,9 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   const starMassEarth = d.starMassEarth ?? 332946;             // 1 M_sun in Earth masses
   const orbitRadiusEarth = d.orbitRadiusEarth ?? 23455;        // 1 AU in Earth radii
   const ioRef = (0.0041 * 0.0041) * (317.8 * 317.8) * Math.pow(0.286, 5) / Math.pow(66, 5);
-  const tidalHeat = orbitRadiusEarth > 0
+  const tidalHeat = d.tidalHeat ?? d.rawTidalIoRatio ?? (orbitRadiusEarth > 0   // ⭐ ROOT-0 fix 2 (B1, 2026-08-20): PREFER the forwarded raw Io-ratio, the precedence shape baseStep.js:29 has carried since WS2. A condition-shaped bundle names it `rawTidalIoRatio` (conditionVector.js:154) and carries no eccentricity / star mass / orbit at all, so the fallback below ran e²≈0 against the 1 M☉-at-1 AU defaults and returned ~0 on every game body — which is why lavaActivity and cryoActivity measured 1 distinct / 0 nonzero on all 632 plain moons. Same units both ways: RAW Io-ratio, PRE-calibrateTidal. Delta: docs/FEATURES/root0-seam-delta-table.md.
     ? (ecc * ecc * starMassEarth * starMassEarth * Math.pow(radiusEarth, 5) / Math.pow(orbitRadiusEarth, 5)) / ioRef
-    : 0;
+    : 0);
 
   // liquidStability + liquidSpecies (#3): the MASTER liquid gate (Fluvial owner;
   // read by Aeolian dryness, Cryo freeze-boundary, Optical glint-presence). Per the

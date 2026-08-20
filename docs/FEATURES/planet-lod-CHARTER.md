@@ -112,12 +112,12 @@ Full rule + provenance: `feedback_physics-first-worldengine-scoping.md` (Claude 
    (52 gaps → WS1–WS5 + cross-cutting; serves the NORTH STAR directly).
 4. **Game-port — ◀ NOW ACTIVE, RUNNING IN PARALLEL (reversed 2026-07-31, see the box above).**
    No longer deferred and no longer gated on lab maturity. Plan of record:
-   [`lab-pipeline-into-game-PLAN.md`](lab-pipeline-into-game-PLAN.md).
+   [`one-pipeline-two-frontends-PLAN.md`](one-pipeline-two-frontends-PLAN.md). ⛔ **CORRECTED 2026-08-20 (B0 item 2 of `comprehensive-wiring-plan-2026-08-20.md`).** This named the superseded `lab-pipeline-into-game-PLAN.md` — the 2026-08-19 fix repaired only the callout box above and left this copy armed; a session routed here in the interim sized the port from the wrong plan.
 
 ## Current position
 **Two arcs run at once.** Phase 2 (per-feature quality) continues in the lab —
 `planet-lod-campaign-tracker.md` for which feature is next (▶️ row). The game-port arc runs
-alongside it; its status is in [`lab-pipeline-into-game-PLAN.md`](lab-pipeline-into-game-PLAN.md),
+alongside it; its status is in [`one-pipeline-two-frontends-PLAN.md`](one-pipeline-two-frontends-PLAN.md) ⛔ (**corrected 2026-08-20, the second armed copy**),
 never here (this file changes rarely, by design). `../NOW.md` for live micro-state.
 
 ⭐ **The two arcs are not in tension, and that is a design goal, not luck.** The port's whole shape

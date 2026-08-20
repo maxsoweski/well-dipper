@@ -3,7 +3,7 @@
   "intentRef": "intent.md",
   "designRef": "design.md",
   "project": "well-dipper",
-  "status": "building",
+  "status": "shipped", "statusCorrection": "⛔ CORRECTED 2026-08-20 (B0 item 9 of docs/FEATURES/comprehensive-wiring-plan-2026-08-20.md): this key read \"building\" for two months on work that SHIPPED and passed Max's UAT 2026-06-17 — verified this run in git log at 576a833 \"docs: scale-normalization SHIPPED (Max UAT-passed); escalate lava #10 as next Theme-A re-think\". Ledger drift, not build state: no code moved for this correction. ⚠ AC4 is nonetheless FALSE IN THE GAME — src/objects/Planet.js:2203 GAME_ANIM_RATE is the constant 1.0 and the lab's _animRate has no game counterpart, so a shipped-in-the-lab verdict does not transfer to the player; scheduled as B5 strand 4, the anim-rate seam. ⭐ This note is deliberately on ONE line: the acceptance criterion at :41 is cited by line and an inserted line would move it.",
   "authoredBy": "working-Claude + Max in-thread scope (dev-collab-scope) + brainstorm (superpowers:brainstorming), 2026-06-15/16. Theme B of lod-lab-quality-backlog, reframed into a real-units scale system for the lab. Design in design.md.",
   "acceptanceCriteria": [
     {

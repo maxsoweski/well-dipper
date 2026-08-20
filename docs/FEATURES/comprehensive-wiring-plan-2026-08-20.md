@@ -35,7 +35,7 @@ fully-enumerated list.
 
 ⚠ **This is NOT the earlier draft's "B4 → B7, two blocks."** That claim rested on reading the parity
 ledger's `blocking` verdict as "declared, therefore allowed." The ledger defines the word against
-itself at `docs/FEATURES/step6-parity-ledger.md:94` `- **blocking** — the feature stops reaching the pixel **and the lab material already declares the`
+itself at docs/FEATURES/step6-parity-ledger.md:94 `- **blocking** — the feature stops reaching the pixel **and the lab material already declares the`
 — *"These must close before anyone is shown a parity claim."* Step 12 **is** a parity claim. Flipping
 the flag with eight `blocking` rows open ships 632 moons at a pinned terrain frequency, 130
 Venus-typed planets with their zonal banding deleted and unrecoverable, 20 live auroras dark, and 59
@@ -43,7 +43,7 @@ of 163 newly-admitted solid bodies without their limb exponent. **D-1 is that qu
 Max's.**
 
 ⛔ **This plan cannot be made decision-free, and pretending otherwise is the failure being avoided.**
-`one-pipeline-two-frontends-PLAN.md:713` `**Max decides:** the round‑2 escalation; anything visual; anything that changes what MVP means; and **retiring** a carried item rather than clearing it. **No agent ever closes UAT** — standing rule, unchanged by this section.`
+one-pipeline-two-frontends-PLAN.md:713 `**Max decides:** the round‑2 escalation; anything visual; anything that changes what MVP means; and **retiring** a carried item rather than clearing it. **No agent ever closes UAT** — standing rule, unchanged by this section.`
 So the goal is not zero stops — it is **the smallest number of blocks, each ending in at most one Max
 touch, with every decision inside a block pre-ruled.**
 
@@ -72,15 +72,15 @@ execution at completed work.
 
 **F-3. ⭐⭐ NOTHING UNDER `src/` CALLS `deriveUniforms`. This is the most load-bearing fact in the plan
 and the earlier draft got its consequence backwards.**
-`src/worldengine/base/labCore.js:593` `export function deriveUniforms(drivers, qualityTier = 1.0) {`
+src/worldengine/base/labCore.js:593 `export function deriveUniforms(drivers, qualityTier = 1.0) {`
 has **39 call sites: 36 in `tests/`, one in `planet-lod-lab.html`, and ZERO in `src/`.** Six `src/`
 files import `labCore` and none imports `deriveUniforms`:
-`src/worldengine/drivers/rockySurface.js:122` `import { reliefEnvelope } from '../base/labCore.js';` ·
-`src/rendering/objects/BodyRenderer.js:11` `import { lodRampOf, autoOctaves } from '../../worldengine/base/labCore.js';` ·
-`src/rendering/LabPlanetMaterial.js:8` `import { lodRampOf, autoOctaves } from '../worldengine/base/labCore.js';` ·
-`src/main.js:25` `import { approachLadder } from './worldengine/base/labCore.js';` ·
-`src/camera/agentFraming.js:30` `import { lodPredictionAt } from '../worldengine/base/labCore.js';` ·
-`src/worldengine/instrument/laws.js:34` `import { reliefEnvelope, Q_RELIEF, Q_RELIEF_DERIVED, RELIEF_FLOOR, RELIEF_CEIL } from '../base/labCore.js';`
+src/worldengine/drivers/rockySurface.js:122 `import { reliefEnvelope } from '../base/labCore.js';` ·
+src/rendering/objects/BodyRenderer.js:11 `import { lodRampOf, autoOctaves } from '../../worldengine/base/labCore.js';` ·
+src/rendering/LabPlanetMaterial.js:8 `import { lodRampOf, autoOctaves } from '../worldengine/base/labCore.js';` ·
+src/main.js:25 `import { approachLadder } from './worldengine/base/labCore.js';` ·
+src/camera/agentFraming.js:30 `import { lodPredictionAt } from '../worldengine/base/labCore.js';` ·
+src/worldengine/instrument/laws.js:34 `import { reliefEnvelope, Q_RELIEF, Q_RELIEF_DERIVED, RELIEF_FLOOR, RELIEF_CEIL } from '../base/labCore.js';`
 
 **Consequence, stated plainly: a fix inside `deriveUniforms` cannot change one pixel in the game.** It
 makes the LAB honest and it pre-writes the laws the packs will carry — that is its whole value, and it
@@ -103,19 +103,19 @@ moons** (`condition.eccentricity === 0`). Sol excluded by construction.
 | `deriveUniforms().cryoActivity` | **1 distinct / 0 nonzero** | 32 distinct / 40 nonzero |
 | counterfactual `clamp01(rawTidalIoRatio)` | **77 distinct / 81 nonzero** | 85 distinct / 93 nonzero |
 
-*Layer 1 — the law.* `src/worldengine/base/labCore.js:772` `const tidalProxy = clamp01(tidalHeat);`
-reads a `tidalHeat` that `src/worldengine/base/labCore.js:620` `const ecc = d.eccentricity ?? 0;`
+*Layer 1 — the law.* src/worldengine/base/labCore.js:772 `const tidalProxy = clamp01(tidalHeat);`
+reads a `tidalHeat` that src/worldengine/base/labCore.js:620 `const ecc = d.eccentricity ?? 0;`
 recomputes from a planet-around-star formula fed an eccentricity that is exactly zero on every plain
 moon. The already-forwarded `rawTidalIoRatio` is real and per-body, and
-`src/worldengine/base/baseStep.js:29` `const rawTidalIoRatio = (d.tidalHeat != null)   // D12 raw Io-ratio, PRE-calibrateTidal`
+src/worldengine/base/baseStep.js:29 `const rawTidalIoRatio = (d.tidalHeat != null)   // D12 raw Io-ratio, PRE-calibrateTidal`
 already has the correct precedence shape eight files away. Aurora dies the same way:
-`src/worldengine/base/labCore.js:1045` `auroraIntensity: magneticField * (hasAtmo ? 1 : 0),         // Optical reads the field; aurora needs an atmosphere to excite`
+src/worldengine/base/labCore.js:1045 `auroraIntensity: magneticField * (hasAtmo ? 1 : 0),         // Optical reads the field; aurora needs an atmosphere to excite`
 and `atmosphere` is null on 81/81.
 
 *Layer 2 — the carrier.* Even with layer 1 fixed, **no pack writes the uniforms.**
-`src/worldengine/shaders/uniforms.js:235` `uLavaActivity:   { value: 0.0 },   // emissive-crack glow intensity (driven, D12 tidal)` and
-`src/worldengine/shaders/uniforms.js:462` `uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)`
-sit at their factory defaults, and `src/worldengine/drivers/rockySurface.js:515` `export const ROCKY_SURFACE_UNIFORMS = Object.freeze([`
+src/worldengine/shaders/uniforms.js:235 `uLavaActivity:   { value: 0.0 },   // emissive-crack glow intensity (driven, D12 tidal)` and
+src/worldengine/shaders/uniforms.js:462 `uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)`
+sit at their factory defaults, and src/worldengine/drivers/rockySurface.js:515 `export const ROCKY_SURFACE_UNIFORMS = Object.freeze([`
 declares the pack's whole writer set — **21 names, none of them a lava, cryo, aurora, terminator, limb
 or noise-scale name.** `grep -rn 'uLavaActivity\|uCryoActivity' src/worldengine/drivers/` is empty.
 `docs/FEATURES/r-rows-decision-packet-2026-08-20.md:394` states the population figure: *"309 are
@@ -136,7 +136,7 @@ with the game's own derivation of it."* → **B0.**
 **F-6. The "124 stale `planet-lod-uniforms.js` refs" defect does not exist and the repair is prohibited
 in source.** `node tools/port-uniform-delta.mjs --check-citations` at HEAD → **exit 0, "all 531
 symbol-anchored citations resolve [inputs cf62869fba7a]"**.
-`tools/port-uniform-delta.mjs:972` `'planet-lod-uniforms.js': 'src/worldengine/shaders/uniforms.js',`
+tools/port-uniform-delta.mjs:972 `'planet-lod-uniforms.js': 'src/worldengine/shaders/uniforms.js',`
 is a deliberate alias under a comment reading *"⭐ STEP 7 MOVED ALL FOUR OF THESE UNDER `src/`, AND THE
 KEYS DELIBERATELY DID NOT MOVE WITH THEM… rewriting 152 refs would touch the evidence to spare the map.
 ⛔ Do not 'tidy' these keys."* ⛔ **Struck, with the reason recorded (§7.1 row 8)** so a fourth session
@@ -147,12 +147,12 @@ does not re-discover it.
 `src/rendering/bake/`.** Max declined the question as posed (**"I really don't know how to rule on
 this... I'm not sure why it matters"**) and replaced it with a criterion: **"as optimized and
 well-architected as possible"** … **Still its own step** — moving 108 KB and 24 exports is not a
-ride-along."* `one-pipeline-two-frontends-PLAN.md:575` still poses it as open; that half is stale.
+ride-along."* one-pipeline-two-frontends-PLAN.md:576 `- **The river/tectonic bakes.**` still poses it as open; that half is stale, and the ref is corrected here from `:575` (the storm slice) — B0 item 5 annotated the real bullet in place.
 ⛔ Putting it in Max's batch re-asks a refused question.
 
 **F-8. Step 12's Instrument-E caveat has expired, and its tolerance is derivable.** All three hooks
-exist: `src/main.js:3177` `freezeFrame(declared = {}) {` · `src/main.js:3312` `cameraPose() {` ·
-`src/main.js:3333` `setCameraPose(pose) {`. And `one-pipeline-two-frontends-PLAN.md:765` records that
+exist: src/main.js:3177 `freezeFrame(declared = {}) {` · src/main.js:3312 `cameraPose() {` ·
+src/main.js:3333 `setCameraPose(pose) {`. And `one-pipeline-two-frontends-PLAN.md:765` records that
 `freezeFrame` calls `setGrainStrength` with 0 and pins all four clocks, ending *"`uGrainStrength === 0`
 and the four declared values are printed in the caption; a shot taken with grain live is inadmissible
 on its face."* ⭐ **So B7's "tolerance declared before the shot" has a value: ZERO** (§2, B7's gate).
@@ -160,51 +160,51 @@ Leaving it undefined is how `C15` arrives on schedule — the ledger's own name 
 until the shot passes."
 
 **F-9. ONE FLAG EXPOSES BOTH SWAPS, and the moon route is not the one the earlier draft cited.**
-`src/objects/Planet.js:2153` `export const LAB_GAS_BODIES_DEFAULT = false;` is the first term of the
-admission test at `src/objects/Planet.js:2189` `export function labPipelineAdmits(d, condition) {`,
-which has exactly one call site — `src/objects/Planet.js:2019` `const decision = labPipelineAdmits(d, condition);`
+src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;` is the first term of the
+admission test at src/objects/Planet.js:2189 `export function labPipelineAdmits(d, condition) {`,
+which has exactly one call site — src/objects/Planet.js:2019 `const decision = labPipelineAdmits(d, condition);`
 inside `_createLabSurface`, reached for moons through
-`src/objects/Moon.js:58` `const labSurface = Planet._createLabSurface(geometry, d, conditionFromBody(d), lightDir);`.
+src/objects/Moon.js:58 `const labSurface = Planet._createLabSurface(geometry, d, conditionFromBody(d), lightDir);`.
 There is **no separate moon flag**, so this is one flip exposing both shipped swaps at once. ⚠ The
 earlier draft cited `src/rendering/objects/PlanetMoonBody.js:33` as a second flag read; that line is
 prose inside a comment block and the file reads no flag at all. ⛔ I did not touch the flag.
 
 ---
 
-## 1. ⭐⭐ THE DECISION BATCH — fourteen rulings, one sitting
+## 1. ⭐⭐ THE DECISION BATCH — ✅ ELEVEN RULED 2026-08-20 · ⛔ FOUR STILL OPEN
 
-**After this sitting, execution runs to B2's UAT without another question.** Read top to bottom; they
-are ordered by what each blocks. Every recommendation names the block it lands in, because a ruling
-that creates unowned work guarantees a follow-up conversation.
+⭐⭐ **RULED 2026-08-20 — Max, delegated to the plan's own recommendation** (*"go ahead with your
+recommendations"*): **D-1, D-2, D-3, D-4, D-5, D-8, D-10, D-11, D-12, D-13, and D-14's PROMOTE half.**
 
-⛔ **B0 runs BEFORE this sitting.** It is doc repair plus two read-only measurements, needs no ruling,
-moves no shipped number, and produces two things this batch is owed: the ledger re-measurement (F-5)
-and the two lab renders D-6 and §6.3 depend on. Presenting the batch without them means either freezing
-an order on an unmeasured assumption or coming back for a second sitting.
+⛔⛔ **FOUR ARE STILL OPEN, AND ONLY MAX CLOSES THEM** — they are the whole of what §1 still owes:
+· **D-6, the canyon look** — B0 took the shot 2026-08-20; it waits on his eyes, not on more work.
+· **D-9, `BIO_PIGMENT` darker or greener** — taste, never UAT'd anywhere, and no shot settles it.
+· **D-14's RETIREMENT half** — `one-pipeline-two-frontends-PLAN.md:715` reserves it to him by name.
+· **D-7** — ⚠ the recommendation CONFLICTS with a hold Max wrote himself. ⛔ NOT adopted; see the row.
 
-**The split criterion is Max's own, given twice.** CHARTER INTENT FRAME (2026-07-19): *"Physics-derivable
-questions are Claude's to answer, not interview forks for Max… Bring Max only taste/product calls
-physics cannot resolve, batched."* And `one-pipeline-two-frontends-PLAN.md:713` above. Applying those
-two rules is what moves eleven candidate questions into §1.3 instead of onto this list.
+⛔ **B0 ran 2026-08-20, before this sitting**, delivering what the batch was owed: the ledger
+re-measurement (F-5) and both renders D-6 and §6.3 depend on. No repo file was edited to take them.
+**The split criterion is Max's own, given twice** — CHARTER INTENT FRAME (2026-07-19): *"Bring Max only
+taste/product calls physics cannot resolve, batched."* And `one-pipeline-two-frontends-PLAN.md:713`.
 
-### 1.1 The fourteen
+### 1.1 The fourteen — ✅ eleven RULED 2026-08-20 · ⛔ four STILL OPEN
 
-| # | Decision | Blocks | Recommendation | Lands in |
+| # | Status · what was at issue | Blocks | ⭐ THE RULING AS MADE — 2026-08-20, Max, delegated to the plan's recommendation | Lands in |
 |---|---|---|---|---|
-| **D-1** | ⭐ Do the eight `blocking` ledger rows have to CLOSE before the flag flips, or do they ship as written-down losses? | **B7 — the only player-facing node, and everything behind it** | **They must close.** The ledger's §2 says so in its own definition; `accepted-loss` is the declared-and-allowed category, `blocking` is not. | gate of **B7** |
-| **D-2** | Does *"Pass, with the note that these are all identical"* close Step 12's Step-10 half? | **B7** | Rule it **OPEN**, and re-run it **as B3's UAT** with `wd.labGasBodies` on. B1 cannot make one moon look different (F-3, F-4). **No extra stop — it merges into a gate that already exists.** | gate of **B3** |
-| **D-3** | ⭐ Scheduling of the two R-rows you reserved to yourself 2026-08-09: **R-07** (Venus zonal banding, **130 bodies**, ruled `blocking`) and **R-05** (lava crust/melt, 52 bodies, `accepted-loss`). | R-07 blocks **B7**; R-05 blocks nothing | **R-07 → B3** as a named work item. **R-05 → B5**, with F8, same family and same open complaint. ⛔ Widening `giantDeck`'s predicate is a **measured no-op**: `src/worldengine/drivers/giantDeck.js:163` `const gas = compositionClass(condition) === 'gas';` feeds `src/worldengine/drivers/giantDeck.js:178` `uBandStrength: scalar(gas ? 1.0 : 0.0, { gate: 'bands' }),` — a *second* gate behind the pack predicate at `src/worldengine/drivers/index.js:100` `applies: (condition) => compositionClass(condition) === 'gas',`. | **B3** / **B5** |
-| **D-4** | Scope of the lighting block under ruling #1. | **B4, B7, F52, I-12, 8 optical couplings** | The four measured ledger rows **P-01 / P-02 / P-03 / S-01** across the nine verified consumer classes — **authored on the LAB material, not the legacy shader.** | **B4** |
-| **D-5** | ⭐ **QB-1, the terminator belt.** You deferred it 2026-08-14 on the live game — *"that effect needs a ton of work. It has for a long time"*, *"We don't need to do that now."* Ruling #1 (2026-08-06) folds it into the lighting engine. Your later word is the deferral. | **B3's P-11 closure** — a pack must write `uTermStrength`, and with WHICH law is the question | **Hold the deferral.** B3 forwards the game's already-tamed law verbatim and closes P-11 on parity; the belt stays as it is. Re-authoring what twilight looks like is a taste call you parked, and no agent may take it. | **B3** (forward) — re-author only if you lift it, then **B5** |
-| **D-6** | **QB-7 — are the post-grain canyons enough?** B0 takes the shot; this is your look at it. | **F4's block assignment** (694 distinct, never zero — the strongest relief candidate in queue (a)) | Look once. **If enough → F4 ships in B3; if not → F4 goes to B5** with the other method re-thinks. ⭐ One shot also settles **P5-G27**, **WS4-7** and part of **P5-G14**: lab-live `1.0` at `planet-lod-lab.html:1442` against the production default at `src/worldengine/shaders/uniforms.js:191` `uTectonicGrainStrength`. | **B3** or **B5** |
-| **D-7** | Does the `featureRelevant`/`rendersOn` migration come OUT of L1 WS3 into this plan, or does Tier 2 wait for your hold to lift? | **Tier 2 — 5 features, 200–814 distinct masters** | **Pull it out**, with a stop after the FIRST family (recommend **F38 airglow**: same allowlist, unrelated family, tests the mechanism without entangling the four relief laws). ⛔ Naming WS3 F2 as owner does **not** unblock it — `docs/NOW.md:1160` is your own standing *"do NOT ship WS4; do NOT start WS3."* | **B8**, promoted to **B5** if you pull it |
-| **D-8** | **QB-13** — does the shipped e5 deck close the gas-giant close-up complaint, and what happens to the three finished-but-unshipped atmo increments? | QB-13's MVP status; three `verified` workstreams sitting on a shelf | **Do NOT ship them standalone.** All three carry your own open complaints verbatim in their contracts (*"still seem pasted on top"*, *"like layers of paper"*). Land them as **B5's gas-atmosphere strand**, behind one spike and one UAT. | **B5** |
-| **D-9** | **QB-6 — darker or greener?** | QB-6, the only backlog item genuinely wired through a shared module | Rule the pigment with one look. `src/worldengine/base/surfaceMaterial.js:155` `export const BIO_PIGMENT   = [0.10, 0.16, 0.06];` **darkens** the disc — the physically defensible opposite of *"green stuff"* — and has never been UAT'd anywhere. ⛔ Two problems, not one: the pigment is taste; the coverage law (exactly 0 on 97.9% of 1156 non-gas, max 0.011535, `lab-procedural-0…199`) is its own unit. | **B5** |
-| **D-10** | **QB-12** — authorise the six lab presets; does the METHOD re-think enter MVP? | 8 (d) features + Step 12's deletion of the game's exotic branches | **Authorise the presets.** `mvp-spine-lab-quality-backlog.md:53` names them the hard prerequisite, citing `one-pipeline-two-frontends-PLAN.md:571`: *"replacing a working game feature with a lab feature nobody has ever seen render is how a failure becomes unattributable."* Keep the method re-think out of MVP unless you say otherwise. ⚠ You named FOUR (biolum, machine, city lights, ecumenopolis) — F44 hexTess and F45 shatter were **not** named; do not let anyone widen your complaint to six. | **B5** |
-| **D-11** | **P5-G17** airglow × limb — does the deliberate layering stay? | 1 coupling | Rule it `carried`; don't build it. The spine-3 doc says it cannot be scoped without your word. | **B8** |
-| **D-12** | Does spine 3 enter MVP as 52 items, or as a gated tail? | **what MVP-closable MEANS** | **Gated tail.** ⚠ Corrected against the earlier draft: **only ONE spine-3 item is genuinely free** — `X`, the `ASSOCIATIONS.dependsOn` re-derivation. P5-G18/G19 are **not** free (§2, B8). | **B8** |
-| **D-13** | Does the Rule-2 ledger gate land now, or never? | the ability to ever state a number for Rule 2 | **Now** — the count is meaningless retroactively; it only bites rows added after it exists. Split `accepted-loss` into `accepted-loss-lab-has-it` and `accepted-loss-lab-lacks-it`, assert the second's count ≤ 1, name F52 as the one permitted row. It is yours because it edits a document `tests/material-parity-list.test.js` asserts against. | **B0** |
-| **D-14** | Retire or promote the 10 undead CARRIED rows (C5, C6, C7, C8, C9, C10, C12, C14, C15, C18). | `one-pipeline-two-frontends-PLAN.md` §11.3's exit criterion | Do it in this sitting — ~10 one-line rulings. `PLAN.md:715` makes **retiring** a carried item yours specifically: *"a carried item that no step clears must be promoted to blocking or explicitly retired by Max."* | **B0** |
+| **D-1** | ✅ **RULED** — whether the eight `blocking` ledger rows have to CLOSE before the flag flips, or ship as written-down losses. | **B7 — the only player-facing node, and everything behind it** | ⭐ **THEY MUST CLOSE BEFORE THE FLAG FLIPS.** Ruled 2026-08-20 (Max, delegated to the plan's recommendation). The ledger's §2 says so in its own definition: `accepted-loss` is the declared-and-allowed category, `blocking` is not. **This is now B7's gate, not a proposal** — B7 cannot flip with a `blocking` row open. | gate of **B7** |
+| **D-2** | ✅ **RULED** — whether *"Pass, with the note that these are all identical"* closes Step 12's Step-10 half. | **B7** | ⭐ **IT DOES NOT. The Step-10 half is ruled OPEN, and is re-run AS B3's UAT** with `wd.labGasBodies` on. Ruled 2026-08-20 (Max, delegated to the plan's recommendation). B1 cannot make one moon look different (F-3, F-4). **No extra stop was created — it merges into a gate that already exists.** | gate of **B3** |
+| **D-3** | ✅ **RULED** — scheduling of the two R-rows Max reserved to himself 2026-08-09: **R-07** (Venus zonal banding, **130 bodies**, ruled `blocking`) and **R-05** (lava crust/melt, 52 bodies, `accepted-loss`). | R-07 blocks **B7**; R-05 blocks nothing | ⭐ **R-07 → B3 as a named work item. R-05 → B5, with F8** — same family, same open complaint. Ruled 2026-08-20 (Max, delegated to the plan's recommendation). ⛔ Widening `giantDeck`'s predicate is **struck as a measured no-op**: src/worldengine/drivers/giantDeck.js:163 `const gas = compositionClass(condition) === 'gas';` feeds src/worldengine/drivers/giantDeck.js:178 `uBandStrength: scalar(gas ? 1.0 : 0.0, { gate: 'bands' }),` — a *second* gate behind the pack predicate at src/worldengine/drivers/index.js:100 `applies: (condition) => compositionClass(condition) === 'gas',`. | **B3** / **B5** |
+| **D-4** | ✅ **RULED** — scope of the lighting block under ruling #1. | **B4, B7, F52, I-12, 8 optical couplings** | ⭐ **SCOPE IS THE FOUR MEASURED LEDGER ROWS P-01 / P-02 / P-03 / S-01, across the nine verified consumer classes, AUTHORED ON THE LAB MATERIAL — NOT THE LEGACY SHADER.** Ruled 2026-08-20 (Max, delegated to the plan's recommendation). Anything outside those four rows is outside B4. | **B4** |
+| **D-5** | ✅ **RULED** — **QB-1, the terminator belt.** Max deferred it 2026-08-14 on the live game (*"that effect needs a ton of work. It has for a long time"*, *"We don't need to do that now."*); ruling #1 (2026-08-06) had folded it into the lighting engine. His later word is the deferral. | **B3's P-11 closure** — a pack must write `uTermStrength`, and with WHICH law was the question | ⭐ **THE DEFERRAL HOLDS. B3 forwards the game's already-tamed law VERBATIM and closes P-11 on parity**; the belt stays exactly as it is. Ruled 2026-08-20 (Max, delegated to the plan's recommendation). ⛔ **No agent re-authors what twilight looks like** — that is the taste call he parked, and it re-opens only on his word. | **B3** (forward) — re-author only if he lifts it, then **B5** |
+| **D-6** | ⛔⛔ **OPEN — MAX'S LOOK, AND ONLY HIS.** **QB-7 — are the post-grain canyons enough?** ⭐ **B0 TOOK THE SHOT 2026-08-20; it is now waiting on his eyes, not on more work.** | **F4's block assignment** (694 distinct, never zero — the strongest relief candidate in queue (a)) | ⛔ **NO AGENT MAY ANSWER THIS.** The two frames to look at are `A-PAIR-fulldisc-LEFT-grain0-RIGHT-grain1.png` and `A-PAIR-rift-LEFT-grain0-RIGHT-grain1.png`, in the B0 shot set at `/tmp/claude-1000/-home-ax/d7bf083b-b464-42f5-94fe-04658f23d98e/scratchpad/b0-shots/` with `CAPTIONS.txt` beside them (pose captured BY VALUE and asserted byte-identical across each pair; freeze asserted; the lab carries no film-grain uniform at all). ⚠ **That directory is session-scoped scratchpad — copy it somewhere durable before it ages out.** **If enough → F4 ships in B3; if not → F4 goes to B5** with the other method re-thinks. ⭐ The same shot also settles **P5-G27**, **WS4-7** and part of **P5-G14**: lab-live `1.0` at `planet-lod-lab.html:1442` against the production default at src/worldengine/shaders/uniforms.js:191 `uTectonicGrainStrength`. ⭐ MECHANICAL GATE ONLY, and it is not a canyons-only A/B: grain 0→1 moves 49.37% of the disc ROI while the canyon feature's own footprint is 1.64%, because the grain uniform re-orients six relief features at once. | **B3** or **B5** |
+| **D-7** | ⛔⛔ **OPEN — ⚠ NOT ADOPTED, because the recommendation collides with a hold Max wrote himself.** Does the `featureRelevant`/`rendersOn` migration come OUT of L1 WS3 into this plan, or does Tier 2 wait for the hold to lift? | **Tier 2 — 5 features, 200–814 distinct masters** | ⚠ **THE CONFLICT, PLAINLY.** The plan recommends **pulling it out**; `docs/NOW.md:1160` is Max's own standing *"do NOT ship WS4; do NOT start WS3."* Adopting the recommendation would override a hold he wrote himself, so **no agent adopted it, and WS3 was NOT started.** ⛔ This row is recorded as a conflict, not as a pending yes. If he lifts the hold, the recommendation stands as written: pull it out with a stop after the FIRST family — **F38 airglow**, same allowlist, unrelated family, tests the mechanism without entangling the four relief laws. ⛔ Naming WS3 F2 as owner does **not** unblock it. | **B8**; promoted to **B5** only if he lifts the hold |
+| **D-8** | ✅ **RULED** — **QB-13**: does the shipped e5 deck close the gas-giant close-up complaint, and what happens to the three finished-but-unshipped atmo increments? | QB-13's MVP status; three `verified` workstreams sitting on a shelf | ⭐ **THEY DO NOT SHIP STANDALONE. All three land as B5's gas-atmosphere strand, behind one spike and one UAT.** Ruled 2026-08-20 (Max, delegated to the plan's recommendation). Each carries Max's own open complaints verbatim in its contract (*"still seem pasted on top"*, *"like layers of paper"*), so shipping them as they stand would ship a complaint he has already filed. | **B5** |
+| **D-9** | ⛔⛔ **OPEN — TASTE, AND MAX'S ALONE.** **QB-6 — darker or greener?** | QB-6, the only backlog item genuinely wired through a shared module | ⛔ **NO AGENT MAY ANSWER THIS**, and nothing shot so far settles it. src/worldengine/base/surfaceMaterial.js:155 `export const BIO_PIGMENT   = [0.10, 0.16, 0.06];` **darkens** the disc — the physically defensible opposite of *"green stuff"* — and **has never been UAT'd anywhere**. ⛔ Two problems, not one: the pigment is taste and stays here; the coverage law (exactly 0 on 97.9% of 1156 non-gas, max 0.011535, `lab-procedural-0…199`) is its own unit and is NOT gated on this. | **B5** |
+| **D-10** | ✅ **RULED** — **QB-12**: authorise the six lab presets; does the METHOD re-think enter MVP? | 8 (d) features + Step 12's deletion of the game's exotic branches | ⭐ **THE SIX LAB PRESETS ARE AUTHORISED. THE METHOD RE-THINK STAYS OUT OF MVP.** Ruled 2026-08-20 (Max, delegated to the plan's recommendation). `mvp-spine-lab-quality-backlog.md:53` names them the hard prerequisite, citing `one-pipeline-two-frontends-PLAN.md:571`: *"replacing a working game feature with a lab feature nobody has ever seen render is how a failure becomes unattributable."* ⚠ **Max named FOUR — biolum, machine, city lights, ecumenopolis. F44 hexTess and F45 shatter were NOT named. ⛔ Nobody widens his complaint to six.** | **B5** |
+| **D-11** | ✅ **RULED** — **P5-G17** airglow × limb: does the deliberate layering stay? | 1 coupling | ⭐ **RULED `carried`. ⛔ DO NOT BUILD IT.** Ruled 2026-08-20 (Max, delegated to the plan's recommendation). The spine-3 doc says it cannot be scoped without his word; his word is that it stays carried. | **B8** |
+| **D-12** | ✅ **RULED** — does spine 3 enter MVP as 52 items, or as a gated tail? | **what MVP-closable MEANS** | ⭐ **GATED TAIL.** Ruled 2026-08-20 (Max, delegated to the plan's recommendation). ⚠ Corrected against the earlier draft: **only ONE spine-3 item is genuinely free** — `X`, the `ASSOCIATIONS.dependsOn` re-derivation. P5-G18/G19 are **not** free (§2, B8). | **B8** |
+| **D-13** | ✅ **RULED** — does the Rule-2 ledger gate land now, or never? | the ability to ever state a number for Rule 2 | ⭐ **IT LANDS NOW.** Ruled 2026-08-20 (Max, delegated to the plan's recommendation). The count is meaningless retroactively; it only bites rows added after it exists. **Split `accepted-loss` into `accepted-loss-lab-has-it` and `accepted-loss-lab-lacks-it`, assert the second's count ≤ 1, and name F52 as the one permitted row.** It was his because it edits a document `tests/material-parity-list.test.js` asserts against. | **B0** |
+| **D-14** | ⭐ **SPLIT — PROMOTE half ✅ RULED, RETIREMENT half ⛔ STILL OPEN.** The 10 undead CARRIED rows (C5, C6, C7, C8, C9, C10, C12, C14, C15, C18). | `one-pipeline-two-frontends-PLAN.md` §11.3's exit criterion | ⭐ **PROMOTE half, ruled 2026-08-20 (Max, delegated to the plan's recommendation): a row may be PROMOTED to `blocking` wherever the evidence supports it.** ⛔⛔ **RETIREMENT half was NOT delegated and stays Max's alone** — `PLAN.md:715`: *"a carried item that no step clears must be promoted to blocking or explicitly retired by Max."* **No agent retires one.** Every row whose only correct disposition is retirement is PARKED with its evidence assembled, so each costs him one line. | **B0** (promote) · **Max** (retire) |
 
 ### 1.2 ⭐ DECIDED — made for you, listed so you can overrule, not so you must rule
 
@@ -213,16 +213,16 @@ two rules is what moves eleven candidate questions into §1.3 instead of onto th
 | **The bakers land under `src/rendering/bake/`** | Already answered — CARRIED **C25** (F-7). You declined the question as posed. | **B8**, its own step |
 | **WS1 F1 + F2 are not scheduled** — they shipped 2026-06-24 | F-2, three independent records | nowhere; struck |
 | **The `uNoiseScale` km-wavelength ruling is LIVE** | You ruled it *"AFTER moons ship"*; P-10's evidence bounds the deferral at *"stays at 4.0 through Steps 9-10"*; both shipped and passed. `lab-features-not-yet-wired-2026-08-20.md:354` already drew the conclusion in its own words. Only the calibration table comes to you, at B2's UAT. | **B2** |
-| **The `erosion` rename, the `ageNorm` law and the `surfaceGravity` read are BUGS, not authoring calls** | Each disagrees with a law already written elsewhere in the tree (`adaptL0.js:36` and `e1Regime.js:224` both express `clamp01(age/10)`; `src/worldengine/base/conditionVector.js:134` `surfaceGravity:  (derived?.surfaceGravity ?? bodySurfaceGravity(fp)) * gravityRadiusRatio(_R, _R_c, _class),` already supplies g). CHARTER INTENT FRAME assigns this class to Claude. | **B1** |
+| **The `erosion` rename, the `ageNorm` law and the `surfaceGravity` read are BUGS, not authoring calls** | Each disagrees with a law already written elsewhere in the tree (`adaptL0.js:36` and `e1Regime.js:224` both express `clamp01(age/10)`; src/worldengine/base/conditionVector.js:134 `surfaceGravity:  (derived?.surfaceGravity ?? bodySurfaceGravity(fp)) * gravityRadiusRatio(_R, _R_c, _class),` already supplies g). CHARTER INTENT FRAME assigns this class to Claude. | **B1** |
 | **F4's chasma axes are FORWARDED on `ctx`, never synthesised in a pack** | Ruled in source: `src/worldengine/drivers/rockySurface.js:48` names the offsets *"⭐ THE OFFSET FAMILY IS NOW FORWARDED — AND STILL NOT DERIVED"* and refuses to synthesise a third seed→vec3 law, and `:76` records that the pack's own test asserts seed-INDEPENDENCE. `reliefOffsets` is the precedent. ⚠ **This corrects the earlier draft**, which told an agent to "fix pack-side" against a pack whose source refuses it. | **B3**, with F4 |
 | **Route (iii) for every wiring extraction** — extract each law into a condition-shaped module both sides import | Only route with shipped precedent, three-way: `surfaceMaterial.js`, `bombardment.js` and `atmosphereOptics.js` are each imported by `planet-lod-lab.html`, by `src/objects/Planet.js` AND by a driver pack. `docs/FEATURES/pack-authoring-path.md` documents it; `tests/lab-surface-ratchet.test.js` enforces it shrink-only. | **B3** |
 | **P-10 and P-14 get SPLIT, not stretched** | `noiseDetail` *"has no lab counterpart at all and is NOT covered by that ruling"*, and `uDispDomainScale` has no producer — both fail §2's `blocking` test, so both belong with P-06/P-08/P-09 as `accepted-loss`. **The precedent is P-08**, re-ruled 2026-08-19 with *"the original ruling was mine to correct, not Max's to decide."* ⛔ No fourth verdict invented; the three stay three. | gates of **B2** / **B3** |
 | **P-13's evidence is stale and gets re-measured, not re-argued** | `db1cf51` forwarded all three offsets; `ROCKY_SURFACE_UNIFORMS` carries them (F-5). | **B0** |
 | **The 124-stale-refs repair is STRUCK** | F-6 — the defect does not exist and the fix is prohibited in source. | struck; §7.1 |
 | **The aurora law needs no ruling** | Ledger P-05: *"this is a WIRING row, not the law-choice it was filed as, and no ruling from Max is owed"* — the game's `uvFlux` term is not expressible across the condition seam at all. | **B3** |
-| **The ordering criterion is DIFFERENTIATION** | `docs/FEATURES/r-rows-decision-packet-2026-08-20.md:598` `**Criterion:** what a player sees, per unit of work, on the largest named population — and whether the` — settled, and it is §3's key. | §3 |
+| **The ordering criterion is DIFFERENTIATION** | docs/FEATURES/r-rows-decision-packet-2026-08-20.md:598 `**Criterion:** what a player sees, per unit of work, on the largest named population — and whether the` — settled, and it is §3's key. | §3 |
 | **B7's Instrument-E tolerance is ZERO** | F-8. `freezeFrame` pins all four clocks and forces grain to 0; with grain off and pose restored, full-frame identity means bit-identical. **Any shot needing a nonzero tolerance is inadmissible on its face.** | gate of **B7** |
-| **`featureRelevant`'s better-specified owner is L1 WS3 F2** | `world-engine-production-L1-plan.md:181` `- **F2 · Replace \`rendersOn\` allowlists with driver-threshold gates** (the biggest lab conflict) — \`featureRelevant\`` has a migration strategy and a done-criterion at `:194`; `one-pipeline-two-frontends-PLAN.md:578` fences it out with neither. Only the **hold interaction** is yours → D-7. | **B8** |
+| **`featureRelevant`'s better-specified owner is L1 WS3 F2** | world-engine-production-L1-plan.md:181 `- **F2 · Replace` (the row reads *"Replace rendersOn allowlists with driver-threshold gates — the biggest lab conflict"*, and names `featureRelevant`) has a migration strategy and a done-criterion at `:194`; `one-pipeline-two-frontends-PLAN.md:578` fences it out with neither. Only the **hold interaction** is yours → D-7. | **B8** |
 
 ### 1.3 ⛔ NOT IN THIS BATCH, and why
 
@@ -231,8 +231,8 @@ two rules is what moves eleven candidate questions into §1.3 instead of onto th
 | Do the bakers land under `src/rendering/bake/`? | **Already answered** — C25, and you declined the question as posed. |
 | Should WS1 eccentricity / tidal heating be scheduled? | **Already shipped 2026-06-24.** |
 | Confirm the `uNoiseScale` ruling is live | Its expiry condition is recorded as met in two places. Asking would be choice-theatre in the document arguing against it. |
-| The `ageNorm` law | `src/worldengine/base/baseStep.js:40` `const ageNorm = d.ageNorm ?? (d.age ?? 0.5);` is a bug against two existing expressions of the same law, not a third fork. |
-| The `erosion` rename | A dropped input. The isolation reasoning is already written in source at `src/worldengine/port/conditionFromBody.js:261` `// ⛔ AND \`deriveUniforms\` IS DELIBERATELY LEFT UNGUARDED. A defensive fold there would make the`. |
+| The `ageNorm` law | src/worldengine/base/baseStep.js:40 `const ageNorm` was a bug against two existing expressions of the same law, not a third fork. ⭐ **REPAIRED BY B1, 2026-08-20** — the pre-fix text on that line was `d.ageNorm ?? (d.age ?? 0.5)`; it now normalises through `clamp01(d.age / AGE_NORM_DIVISOR)`, the same law adaptL0 and e1Regime already expressed. Movement: `docs/FEATURES/root0-seam-delta-table.md` §Fix 3. |
+| The `erosion` rename | A dropped input. The isolation reasoning is already written in source at src/worldengine/port/conditionFromBody.js:261 `// ⛔ AND` — *"deriveUniforms IS DELIBERATELY LEFT UNGUARDED. A defensive fold there would make the…"*. |
 | Repair the 124 stale refs | **The defect does not exist and the repair is prohibited** (F-6). |
 | Who owns `featureRelevant`? | Doc-conflict, not taste. WS3 F2 wins on done-criteria. Only the WS3-hold interaction is yours → D-7. |
 | P-13's `blocking` ruling | Its evidence is stale; re-measure is a technical correction under §11.5. |
@@ -264,7 +264,7 @@ already exists — which has now happened twice on record — and it tells the b
 **Contents**
 1. **Mark `docs/FEATURES/wiring-execution-plan-2026-08-20.md` superseded by this file**, with §7.4's
    defect list as the reason. ⛔ Annotate; do not delete — its evidence is real even where its
-   conclusions were not.
+   conclusions were not. ⛔⛔ **MOOT, AND EXECUTED AS A RECORD INSTEAD — 2026-08-20.** That file is ABSENT from the tree and `git log --all -- docs/FEATURES/wiring-execution-plan-2026-08-20.md` returns nothing: it was never committed, and it was deleted before B0 ran. There is no file to annotate, so **§7.4 IS the annotation** and is now the only surviving record of that draft. ⛔ Do not recreate it. See §7.4.
 2. `docs/FEATURES/planet-lod-CHARTER.md:115` and `:120` still name the superseded
    `lab-pipeline-into-game-PLAN.md` as plan of record. The 2026-08-19 fix repaired only the callout box
    at `:59`. **Two armed copies remain**, in the file `CLAUDE.md` routes every planet-LOD session to
@@ -275,7 +275,7 @@ already exists — which has now happened twice on record — and it tells the b
    — **annotate as superseded by ruling #2 sixteen lines below it.** `PLAN.md:637` already tabulates the
    change. ⛔ **Annotate in place; do not repeal.** The reasoning it carries is the record of why the
    question was asked.
-5. `PLAN.md:575` (the bakers) — annotate as superseded by CARRIED **C25** (F-7).
+5. `PLAN.md:576` (the bakers) — annotate as superseded by CARRIED **C25** (F-7). ⚠ **REF CORRECTED 2026-08-20: this read `:575`, which is the STORM SLICE bullet.** The bakers are `:576`. Repaired by locating the symbol, never by adding an offset — the same rule §10 applies to code refs applies to refs into this plan's own sources. **DONE**: annotated in place at `one-pipeline-two-frontends-PLAN.md:576`.
 6. **The cross-spine index** — the deliverable ruling #2 actually needs, ~80% pre-computed. Add a QB
    column to the 48-row table in `lab-features-not-yet-wired-2026-08-20.md`; an F/ROOT column to
    `mvp-spine-lab-quality-backlog.md`; a QB column to `mvp-spine-phase5-couplings.md` (currently zero
@@ -292,15 +292,15 @@ already exists — which has now happened twice on record — and it tells the b
    standing hold. Four documents cite it as owner of live work.
 9. `planet-scale-normalization-2026-06-15/contract.json` still reads `"status":"building"` for work that
    shipped and passed UAT 2026-06-17. Ledger drift, not build state.
-10. ⛔ **STRIKE the stale-path repair item and record WHY** (F-6, §7.1).
-11. Add this file to `CITE_SOURCES` at `tools/port-uniform-delta.mjs:1023` `const CITE_SOURCES = [` so
+10. ⛔ **STRIKE the stale-path repair item and record WHY** (F-6, §7.1). ⭐ **EXECUTED 2026-08-20 — STRUCK, and the conclusion is recorded at §7.1 row 8, which is where a session doing citation work reads.** Re-measured this run rather than quoted: the fence exits 0 at **542 CHECKED** (`inputs 80196f286708`), i.e. the refs ARE being read. ⛔ A fourth lens has now been stopped here; a fifth should stop too.
+11. Add this file to `CITE_SOURCES` at tools/port-uniform-delta.mjs:1023 `const CITE_SOURCES = [` so
     its refs are gated rather than merely written.
 12. ⭐ **THE TWO MEASUREMENTS — taken FOR Max, no ruling needed to take them.**
     (a) **the `uTectonicGrainStrength` 0-vs-1 render** on a canyons + scarps + rivers preset — settles
     QB-7 (→ D-6), **P5-G27**, **WS4-7** and part of **P5-G14** in one shot, and the spine-3 doc calls it
     *"the highest-leverage measurement in this document"*;
     (b) **the QB-15 posterize comparison** — one high-`radiusEarth` body in-game at the game's own
-    pixelScale against the lab. `src/worldengine/shaders/uniforms.js:32` `uLevels:     { value: 6.0 },`
+    pixelScale against the lab. src/worldengine/shaders/uniforms.js:32 `uLevels:     { value: 6.0 },`
     is a global constant written by no pack, a 0.1667 quantum that caps every COLOUR feature and leaves
     relief untouched. ⭐ **Its result can re-rank B2 and B3** (§6.3 item 1) — take it before the order is
     frozen, not after.
@@ -319,7 +319,7 @@ re-measurement.
 
 **GATE** · **Instrument C** shipped-uniform delta **byte-identical on all four packs** — a gate that CAN
 be met, because of F-3: `deriveUniforms` is not on the game's path, and the only `labCore` export that
-reaches a pack is `reliefEnvelope` (`src/worldengine/base/labCore.js:1167` `export function reliefEnvelope(radiusEarth, surfaceGravity) {`,
+reaches a pack is `reliefEnvelope` (src/worldengine/base/labCore.js:1167 `export function reliefEnvelope(radiusEarth, surfaceGravity) {`,
 a pure function of two arguments) at `src/worldengine/drivers/rockySurface.js:122`. ⛔ If it goes red the
 change leaked out of the seam and must be split; never loosen the gate · **Instrument A** the 32
 red-by-design set unchanged, everything else green · **Instrument B** body-identity fence green ·
@@ -342,10 +342,10 @@ which is why they are ONE block with ONE delta table rather than four blocks wit
 
 | # | Seam fix | Evidence | Measured effect (`lab-procedural-0…24`: 110 planets + 81 plain moons) |
 |---|---|---|---|
-| 1 | **erosion** | `src/worldengine/base/labCore.js:598` `const erosion = d.surfaceHistory?.erosion ?? 0;` reads a key `PhysicsEngine.js:822` never emits; `erosionLevel` is the one present | undefined 191/191. On 81 plain moons: `rayBrightness` 1→23, `scarpStrength` 21→42, `mountainAmp` 11→30. On 110 planets: `orogenyStrength` 13→60, `chasmaDepth` 63→95, `plateauStrength` 63→95, `tesseraStrength` 45→62 |
-| 2 | **tidal precedence** | `labCore.js:772` reads a `tidalHeat` that `labCore.js:620` recomputes from a zero eccentricity; `baseStep.js:29` already has the correct shape | **`lavaActivity` 1 distinct / 0 nonzero → 77 / 81 on 81/81 plain moons.** Same for `cryoActivity` |
-| 3 | **ageNorm** | `baseStep.js:40` gets raw Gyr because `conditionVector.js:112` emits `age`, not `ageNorm`; `(1 - ageNorm)` runs negative above 1 Gyr, which is 88.3% of bodies | undefined 191/191. Saturates four interior scalars |
-| 4 | **surfaceGravity** | `src/worldengine/base/labCore.js:610` `const massEarth = d.massEarth ?? 1.0;` recomputes g instead of reading `condition.surfaceGravity` | ⚠ **Book as CORRECTNESS, not differentiation.** The 48-doc measures the "correct" substitution making the edifice clamp rail *worse* (834→904 of 1517, `lab-procedural-0…199`) |
+| 1 | **erosion** | src/worldengine/base/labCore.js:598 `const erosion` read a key `PhysicsEngine.js:822` never emits — pre-fix text `d.surfaceHistory?.erosion ?? 0`; `erosionLevel` is the one present. ⭐ **REPAIRED BY B1, 2026-08-20**: both spellings resolve, lab wins a tie. | undefined 191/191. On 81 plain moons: `rayBrightness` 1→23, `scarpStrength` 21→42, `mountainAmp` 11→30. On 110 planets: `orogenyStrength` 13→60, `chasmaDepth` 63→95, `plateauStrength` 63→95, `tesseraStrength` 45→62. ⭐ RE-MEASURED over the full 1517: `reliefAmplitude` 1517, `chasmaDepth` 1517, `plateauStrength` 1517, `scarpStrength` 1263, `mountainAmp` 1179, `orogenyStrength` 885, `rayBrightness` 632, `tesseraStrength` 606 |
+| 2 | **tidal precedence** | `labCore.js:772` read a `tidalHeat` that `labCore.js:620` recomputed from a zero eccentricity; `baseStep.js:29` already had the correct shape. ⭐ **REPAIRED BY B1, 2026-08-20** — `labCore.js:624` now prefers `d.tidalHeat ?? d.rawTidalIoRatio`, the second being the name a CONDITION uses. | **`lavaActivity` 1 distinct / 0 nonzero → 77 / 81 on 81/81 plain moons.** Same for `cryoActivity`. ⭐ RE-MEASURED over the full 1517: `tidalHeat` moved on 1414, `lavaActivity` 1006, `channelDensity` 1006, `volcanismStrength` 899, `cryoActivity` 596 |
+| 3 | **ageNorm** | `baseStep.js:40` got raw Gyr because `conditionVector.js:112` emits `age`, not `ageNorm`; `(1 - ageNorm)` ran negative above 1 Gyr, which is 88.3% of bodies. ⭐ **REPAIRED BY B1, 2026-08-20** — it now normalises through `clamp01(d.age / AGE_NORM_DIVISOR)`. | undefined 191/191. Saturates four interior scalars. ⭐ RE-MEASURED over the full 1517: `ageNorm` 1517, `shellThickness` 1517, `loveK2` 1517, `thermalState` 1503, `despinAmp` 1501, `radialStrainMag` 1501 — the four saturated interiors, named |
+| 4 | **surfaceGravity** | src/worldengine/base/labCore.js:610 `const massEarth = d.massEarth ?? 1.0;` fed a g recompute instead of reading `condition.surfaceGravity`. ⭐ **REPAIRED BY B1, 2026-08-20** at `labCore.js:611`, which now prefers `d.surfaceGravity`. | ⚠ **Book as CORRECTNESS, not differentiation.** The 48-doc measures the "correct" substitution making the edifice clamp rail *worse* (834→904 of 1517, `lab-procedural-0…199`). ⭐ **REPRODUCED EXACTLY** by B1's own probe — and the SHAPE is new: the FLOOR rail empties 586→0 while the CEIL absorbs 248→904, so it is one rail replacing two on 59.6%, not the same flatness moved around. Whoever wires the edifice consumer inherits a re-ranging job |
 
 ⛔ **THE SEED FIX IS NOT IN THIS BLOCK.** The earlier draft's fix #5 told an agent to route
 `ctx.macroSeed` pack-side while simultaneously gating the block on pack byte-identity — two requirements
@@ -364,10 +364,10 @@ not assumed to improve.
 F3/F4/F5/F6/F12's masters. ⭐ **All five are then wiring work with no bake and no world-gen, and they
 need a block: they go to B3's tier 1b.** ⛔ The earlier draft listed them as "unblocked" and gave four of
 them no block anywhere; F13 alone is the 48-doc's *"cheapest unblock in the set"* —
-`docs/FEATURES/lab-features-not-yet-wired-2026-08-20.md:91` `| **F13** | Outflow channels | **(p)** ⭐ | \`planet-lod-lab.html:2166\` \`state.outflowDensity\` → **1 distinct / 100.0% zero** today.`
+docs/FEATURES/lab-features-not-yet-wired-2026-08-20.md:91 `| **F13** | Outflow channels | **(p)** ⭐ |` — planet-lod-lab.html:2166 `state.outflowDensity` → **1 distinct / 100.0% zero** today.
 
 **Prereqs:** none that bind. ⭐ **B1 ∥ B2 ∥ B3 ∥ B4.** ⛔ **B1 → B2 is a FALSE EDGE and B1's own gate
-proves it:** `src/worldengine/port/craterUniforms.js:157` `const g = Math.max(1e-6, condition?.surfaceGravity ?? 0.5);`
+proves it:** src/worldengine/port/craterUniforms.js:157 `const g = Math.max(1e-6, condition?.surfaceGravity ?? 0.5);`
 reads the condition directly, and `src/worldengine/base/conditionVector.js:134` builds that field from
 `bodySurfaceGravity(fp)`. B1's fix #4 lives inside `deriveUniforms`, which no `src/` file calls. Queue
 B0's doc edits rather than applying them while B1 runs
@@ -397,14 +397,14 @@ as 254 → 371 distinct signatures over 1156 bodies, largest bucket 9.8% → 5.3
 
 **Contents** — cite, do not re-derive: `docs/FEATURES/r-rows-decision-packet-2026-08-20.md:564`
 `### Option C — Differentiation push: two crater floors, a hue-moving palette input, unpin \`uNoiseScale\``.
-1. **Two crater floors** — `src/worldengine/port/craterUniforms.js:71` `export const CRATER_VIS_FLOOR_RAD = 0.02;`,
+1. **Two crater floors** — src/worldengine/port/craterUniforms.js:71 `export const CRATER_VIS_FLOOR_RAD = 0.02;`,
    calibrated on Sol's 39 bodies whose gravity was fabricated as 1/R², and
-   `src/worldengine/port/craterUniforms.js:79` `export const CRATER_MIN_DENSITY = 1e-3;`, which refuses
+   src/worldengine/port/craterUniforms.js:79 `export const CRATER_MIN_DENSITY = 1e-3;`, which refuses
    151 of 632 plain moons.
 2. **A hue-moving palette input** — `uCratonColor === uWeatheredColor` on 73.6% of 1156 non-gas and on
    100% of plain moons (`lab-procedural-0…199`). r-rows §4 calls the palette *"the biggest single reason
    the discs look alike"*.
-3. **Unpin `uNoiseScale`** — `src/worldengine/shaders/uniforms.js:10` `uNoiseScale: { value: 4.0 },` is
+3. **Unpin `uNoiseScale`** — src/worldengine/shaders/uniforms.js:10 `uNoiseScale: { value: 4.0 },` is
    the factory default on **both** sides while the game draws 4.83–510.6 on its 632 moons with **0 of
    632** equal to 4.0. It is the one frequency in the engine with no physical size behind it, against
    sixteen feature families already km-keyed through `src/worldengine/base/featureScale.js:42`
@@ -471,12 +471,12 @@ outflow, **F16** dust mantles, **F20-strand**, **F21** karst. ⭐ **F4's chasma 
 
 *Tier 1c — the four `blocking` ledger closures that are pack work:*
 - **P-05** aurora — a pack claiming `uAuroraColor` `uAuroraIntensity` `uAuroraRingLat` `uAuroraRingWidth`
-  for non-gas conditions. `src/worldengine/shaders/uniforms.js:57` `uAuroraIntensity:{ value: 0.0 },   // F37 ring strength (driven: core field x atmosphere, hard-gated field > 0.05; Venus regime-3 override)`.
+  for non-gas conditions. src/worldengine/shaders/uniforms.js:57 `uAuroraIntensity:{ value: 0.0 },   // F37 ring strength (driven: core field x atmosphere, hard-gated field > 0.05; Venus regime-3 override)`.
 - **P-11** limb + terminator optics for non-gas — `uLimbColor` `uLimbExponent` `uTermColor`
   `uTermStrength` `uTermWidth`. ⛔ *"must not be closed by scoping the ledger pass to the gas half"*;
   59 of 163 solid bodies diverge on `uLimbExponent` alone. ⭐ **Under D-5's recommendation the terminator
-  law is FORWARDED verbatim** — `src/objects/Planet.js:1420` `const TERM_STRENGTH = 0.15;` and
-  `src/objects/Planet.js:1653` `uTermStrength: { value: (optics.columnFraction ?? 0) * TERM_STRENGTH },`
+  law is FORWARDED verbatim** — src/objects/Planet.js:1420 `const TERM_STRENGTH = 0.15;` and
+  src/objects/Planet.js:1653 `uTermStrength: { value: (optics.columnFraction ?? 0) * TERM_STRENGTH },`
   — never re-authored inside a wiring commit.
 - **P-14**'s crater half (`uCraterAmp` `uCraterComplexD` `uCraterScale` `uEjectaAmp`), with
   `uDispDomainScale` split off.
@@ -525,10 +525,10 @@ star-colour uniform and no shadow casters, while the game carries `lightDir2`, `
 
 ⭐⭐ **THE WORK LANDS IN THE LAB MATERIAL AND THE GAME'S PER-FRAME SEAM — NEVER IN THE LEGACY FRAGMENT
 COPIES.** This is a correction to the earlier draft with a hard reason. `src/objects/Planet.js:380`
-`const GAS_BODY = /* glsl */`` is deleted **by name** at Step 12; `src/objects/Planet.js:571`
-`const ROCKY_BODY = /* glsl */`` and `src/objects/Planet.js:955` `const EXOTIC_BODY = /* glsl */``
+`const GAS_BODY = /* glsl */` is deleted **by name** at Step 12; `src/objects/Planet.js:571`
+`const ROCKY_BODY = /* glsl */` and src/objects/Planet.js:955 `const EXOTIC_BODY = /* glsl */`
 are bypassed for 846 of 852 planets once the flag flips. Authoring lighting in
-`src/objects/Planet.js:543` `  if (uTermStrength > 0.0) {` and its two copies at `:927` and `:1262` buys
+src/objects/Planet.js:543 `  if (uTermStrength > 0.0) {` and its two copies at `:927` and `:1262` buys
 work with a one-block shelf life, and makes B4's UAT a look at the material B7 replaces.
 
 **F52 is a restoration, not a new feature** — the game has it, the lab renders one body and has no
@@ -581,7 +581,7 @@ the six exotic presets exist so the (d) queue can ever be scored.
    Max named** — CH₄ (`uVolatileSpecies == 3`) is a sun-aligned periodic blade train at
    `height.glsl.js:3116-3131`, and the `voronoi3d` path at `:3137` serves H₂O / CO₂ / N₂ only, so scoping
    *"replace the cell system"* from his words fixes the wrong three species and leaves CH₄ untouched;
-   **QB-11's guess is correct** (`src/worldengine/shaders/height.glsl.js:2778` `void facetCombiner(` is
+   **QB-11's guess is correct** (src/worldengine/shaders/height.glsl.js:2778 `void facetCombiner(` is
    voronoi3d, and the post-posterize spark is a second one), so "Theme A" is ~4 features, not 6;
    **QB-7 is not a cell problem at all** — `src/worldengine/shaders/height.glsl.js:2320`
    `void canyonCombiner(` is a great-circle plane cut, by construction a band wrapping the whole sphere,
@@ -599,7 +599,7 @@ the six exotic presets exist so the (d) queue can ever be scored.
    sit at status `verified` (built, not shipped, no UAT) with Max's complaints open in their contracts.
    They ship behind the spike, at B5's UAT, never standalone.
 4. ⭐ **THE ANIM-RATE SEAM — in no other document, and three backlog entries meet on one line.**
-   `src/objects/Planet.js:2203` `export const GAME_ANIM_RATE = 1.0;         // the lab's \`_animRate\` GUI knob has no counterpart here`
+   src/objects/Planet.js:2203 `export const GAME_ANIM_RATE = 1.0;` — whose own trailing comment reads *"the lab's _animRate GUI knob has no counterpart here"*
    against the lab's `_animRate`, applied to `uJetSpeed`, `uLightRate`, `uMagmaChurnSpeed` and
    `uLavaGlowRate`. `giantDeck.js:189` already emits `uJetSpeed` as `{ animRate: true }` **on a shipped
    pack**, so the game multiplies by 1.0 and jet drift does not slow on a large giant — which makes
@@ -630,7 +630,7 @@ the batch, plus the spike look and the UAT.**
 registration, failing **by name** with the offending path in the message. *"A pass with no failing
 control is worthless."*
 
-`one-pipeline-two-frontends-PLAN.md:470` `### Step 11 — The standing "cheaper next time" fence · **M** · deps: Steps 5, 9, 10`
+one-pipeline-two-frontends-PLAN.md:470 `### Step 11 — The standing "cheaper next time" fence · **M** · deps: Steps 5, 9, 10`
 — five registrations plus the Step-5 shrink-only ratchet as a sixth. **Its declared deps are Steps 5, 9
 and 10; all three carry ship records, so it is executable today with zero unmet prerequisites, and it is
 NOT on B7's dependency path.** ⭐ Say that explicitly so Max is not falsely constrained into ordering B6
@@ -708,10 +708,10 @@ province-partition architecture works in the game today. `uProvinceCube` drives 
 correctly guarded. The partition-generator work is not blocked on a bake.
 
 **The (c) world-gen four — and one of them is a B1-class fix that must be scheduled the same way.**
-`src/worldengine/base/labCore.js:645` `const volatileGate = smoothstep(0.05, 0.2, volatileFraction);             // D2 — bone-dry floor at 0.05`
+src/worldengine/base/labCore.js:645 `const volatileGate = smoothstep(0.05, 0.2, volatileFraction);             // D2 — bone-dry floor at 0.05`
 gates F14 lakes, F11 rivers, F36 sunglint, and **14 of the 52 couplings** (G01, G02, G03, G10, G11, G12,
 G13, G20, G25, G26, G32, G33, G34, G38). R-06 measured
-`src/worldengine/base/labCore.js:658` `const liquidStability = clamp01(retentionGate * volatileGate * tempWindow);`
+src/worldengine/base/labCore.js:658 `const liquidStability = clamp01(retentionGate * volatileGate * tempWindow);`
 clearing 0.01 on **0 of 6** ocean worlds because `volatileFraction` runs 0.0276–0.0579 against that floor.
 ⛔ **Its own step, its own delta table, a deliberately-NOT-byte-identity gate — the Step-2 precedent
 exactly.** A physics-authoring call that moves numbers must never sit inside a wiring commit. ⭐ Max
@@ -776,7 +776,7 @@ work, on the largest named population — and whether the change exceeds the ren
    This is why B1's law fixes still matter and still get a block, just not the first one.
 
 ⚠ **Two standing caveats on every distinct-count in this plan.** (1) Every figure here is CPU **law
-output**, not pixels. `src/worldengine/shaders/uniforms.js:32` `uLevels:     { value: 6.0 },` posterises
+output**, not pixels. src/worldengine/shaders/uniforms.js:32 `uLevels:     { value: 6.0 },` posterises
 colour to six levels globally — a 0.1667 quantum that caps every COLOUR feature while leaving relief
 untouched. Whether a distinct-count is *visible* is Max's eyes, and **QB-15 is exactly that question,
 unmeasured until B0 item 12(b).** (2) **Every number carries its corpus.** Where two documents disagree —
@@ -848,10 +848,10 @@ for since 2026-08-06: **players seeing the world engine at all** — B0 → B2 �
 
 | Item | Owner document + line | Status |
 |---|---|---|
-| Orbital eccentricity (WS1 F2) | `world-engine-production-L1-plan.md:90` `- **F2 · Compute orbital eccentricity** — \`circularize()\` (\`PhysicsEngine.js:321\`) is dead; orbits are circular by` | ✅ **SHIPPED 2026-06-24** (`27a77f5`) |
+| Orbital eccentricity (WS1 F2) | world-engine-production-L1-plan.md:90 `- **F2 · Compute orbital eccentricity** —` *"circularize() (PhysicsEngine.js:321) is dead; orbits are circular by…"* | ✅ **SHIPPED 2026-06-24** (`27a77f5`) |
 | Real tidal heating (WS1 F1) | same document, `:85`–`:89` | ✅ **SHIPPED 2026-06-24** (`367f9fd`) |
 | `featureRelevant` / `rendersOn` migration | `world-engine-production-L1-plan.md:181` (strategy + done-criterion at `:194`) vs `one-pipeline-two-frontends-PLAN.md:578` (fenced out) | ⛔ **TWO OWNERS, opposite dispositions.** WS3 F2 wins on done-criteria; it sits behind Max's own hold → **D-7** |
-| The exotic "overlay/enable" carve-out | `world-engine-production-L1-plan.md:205` `**Carve-out (R3):** some features (hexTess, shatter, overlays) are pure-enable lab knobs with **no driver class** —` | ✅ **ALREADY RULED** under a don't-ask heading. F44–F49 re-enumeration is not a new question |
+| The exotic "overlay/enable" carve-out | world-engine-production-L1-plan.md:205 `**Carve-out (R3):** some features (hexTess, shatter, overlays) are pure-enable lab knobs with **no driver class** —` | ✅ **ALREADY RULED** under a don't-ask heading. F44–F49 re-enumeration is not a new question |
 | The bakers' location | `one-pipeline-two-frontends-CARRIED.md:39` row **C25** | ✅ **ANSWERED 2026-08-12** — `src/rendering/bake/`, still its own step |
 | `uNoiseScale`'s km wavelength | ledger **P-10** evidence + `lab-features-not-yet-wired-2026-08-20.md:354` | ✅ **RULED**, expiry condition met at Step 10a → executes in **B2** |
 | R-05 / R-06 / R-07 get wired | Max, 2026-08-20 — *"it's just a question of when"* | ✅ **SCOPE RULED.** Only R-05's and R-07's **scheduling** is open, and the ledger reserves both to him → **D-3** |
@@ -865,11 +865,11 @@ for since 2026-08-06: **players seeing the world engine at all** — B0 → B2 �
 
 ## 6. HONESTY
 
-### 6.1 ⭐ Where this plan stops — every stop named, none hidden in a block
+### 6.1 ⭐ Where this plan stops — ⛔ STILL SEVEN after the 2026-08-20 rulings; the count did NOT drop
 
 | # | Stop | Block | Kind | Avoidable? |
 |---|---|---|---|---|
-| 1 | **The decision batch** — 14 rulings, one sitting | after **B0** | decisions | No. It is the whole design |
+| 1 | ⛔ **The residual sitting** — 11 of 14 ruled 2026-08-20; **D-6, D-7, D-9 and D-14's retirement half remain** | after **B0** (ran 2026-08-20) | decisions | No — D-6 routes F4, and only Max closes any of the four |
 | 2 | **B2's UAT** — the quad, after the frequency + palette calibration | **B2** | UAT | No |
 | 3 | **B3's UAT** — ⭐ also D-2's Step-10 moon re-run, with `wd.labGasBodies` on | **B3** | UAT | No |
 | 4 | **B4's UAT** — lighting, per object class, on the lab material | **B4** | UAT | No |
@@ -877,8 +877,10 @@ for since 2026-08-06: **players seeing the world engine at all** — B0 → B2 �
 | 6 | **B5's UAT** | **B5** | UAT | No |
 | 7 | **The post-flip look** | **B7** | informal | Formally yes — the gate is #3 plus D-1/D-2. He will look anyway |
 
-**Seven stops for B0 through B7. FIVE of them on the path to a player** (1, 2, 3, 4, 7); B5's two are off it.
-B0, B1 and B6 have none.
+⭐ **STILL SEVEN STOPS for B0 through B7 — the number did NOT drop.** Eleven rulings landed 2026-08-20 and
+stop #1 shrank from fourteen questions to four, but a shrunken stop is still a stop, and D-6 still routes F4.
+**FIVE are on the path to a player** (1, 2, 3, 4, 7); B5's two are off it. B0, B1 and B6 have none. ⛔ Booking
+the ruling batch as a drop in the stop count would be exactly the false progress this section exists against.
 
 ⛔ **It cannot go lower, and the reason is structural rather than a planning failure.** UAT is Max's gate
 alone and no agent closes it. Each of B2, B3, B4 and B5 changes what a player would see in a way he has not
@@ -887,14 +889,12 @@ attribution when the quad looks wrong — the exact failure this whole ordering 
 
 **Where the reduction comes from, and it is three moves and nothing else:**
 1. **Batching every ruling into §1** — a stepwise walk through the same work produces ~19 stops.
-2. **Refusing to schedule work that already has a ruling** — §1.3 removes eleven questions and §1.2
-   pre-decides thirteen more.
-3. **Merging D-2's moon re-UAT into B3's existing gate** rather than adding an eighth stop, and **running
-   B0 before the sitting** so the batch arrives with its measurements in hand instead of asking permission
-   to take them.
+2. **Refusing to schedule work that already has a ruling** — §1.3 removes eleven, §1.2 pre-decides thirteen.
+3. **Merging D-2's moon re-UAT into B3's existing gate** rather than an eighth stop, and **running B0 first**.
 
-**And the honest counter-move: adopting the Phase-5 plan's own execution model for B8 adds ≥20 more stops**
-(§2, B8). Retiring that model is worth more than any other single ordering decision in this document.
+⭐ **What the rulings DID buy, and it is NOT a smaller stop count:** stop #1 is now two one-line looks (D-6,
+D-9), ten one-line retirements (D-14's carried rows, each parked with its evidence) and one hold-conflict (D-7);
+B2–B7 need no further question. ⛔ **Counter-move unchanged: the Phase-5 execution model for B8 adds ≥20 more stops** (§2, B8) — retiring it is still worth more than any other single ordering decision in this document.
 
 ### 6.2 The honest size
 
@@ -912,7 +912,7 @@ attribution when the quad looks wrong — the exact failure this whole ordering 
 ### 6.3 ⭐ WHAT IS UNKNOWN OR UNMEASURED — named, never guessed
 
 1. ⭐⭐ **QB-15, the posterize ceiling — the one item that could invalidate this plan's own priority order.**
-   `uniforms.js:32` `uLevels` is a global constant, identical on both sides, written by no pack. Several of
+   uniforms.js:32 `uLevels` is a global constant, identical on both sides, written by no pack. Several of
    B2's and B3's picks are colour/emissive-only. If QB-15 is real they wire cleanly, pass every algebraic
    gate and buy nothing — *"these are all identical"* one layer down. **B0 item 12(b) takes the measurement
    before the order is frozen. If it comes back real, B2's palette leg and B3's colour features drop below
@@ -977,11 +977,11 @@ attribution when the quad looks wrong — the exact failure this whole ordering 
 | 1 | ⭐⭐ **`PLAN.md` §7:584 contradicts ruling #2 sixteen lines below it, in the same file.** The §7 bullet excludes the 14 backlog entries and the 52 couplings and ends *"Max should say so now"* — and ruling #2 IS Max saying so. `PLAN.md:637` already tabulates the change. **A fresh session sizing MVP from §7 gets the wrong answer.** | XS — one annotation | **B0** item 4. ⛔ Annotate, never repeal |
 | 2 | ⭐⭐ **`PLAN.md:602-605` still says spines 2 and 3 need enumerating**, and nothing in the plan of record cites either file. This is why a fresh brief concluded they did not exist and commissioned a run to build what was already on disk. | XS — two citations | **B0** item 3 |
 | 3 | ⭐⭐ **`planet-lod-CHARTER.md:115` and `:120` still name the superseded `lab-pipeline-into-game-PLAN.md`**, in the file `CLAUDE.md` routes every planet-LOD session to FIRST. The 2026-08-19 fix repaired only the callout box at `:59`, whose own text records what the error cost. **Still armed, twice.** | XS | **B0** item 2 |
-| 4 | **`PLAN.md:575` poses the bakers' location as an open decision.** Answered by CARRIED **C25** on 2026-08-12, where Max declined the question as posed. | XS | **B0** item 5 |
+| 4 | **`PLAN.md:575` poses the bakers' location as an open decision.** Answered by CARRIED **C25** on 2026-08-12, where Max declined the question as posed. | XS | **B0** item 5 ⚠ **The ref is one line high — `:575` is the storm slice; the bakers are `:576`.** Corrected and annotated 2026-08-20. |
 | 5 | **`world-engine-production-L1-plan.md`'s header reads "PLANNING… not built"** while WS1 and WS2 shipped and WS4 failed UAT. Four documents route work to it. | S | **B0** item 8 |
 | 6 | **`lab-features-not-yet-wired-2026-08-20.md` open item 3 recommends WS1 F2 → WS1 F1 first.** Both shipped 2026-06-24 (F-2); `docs/NOW.md:1172` already carries the correction. | XS | **B0**, one annotation |
 | 7 | **`planet-scale-normalization-2026-06-15/contract.json` reads `"status":"building"`** for work that shipped and passed UAT 2026-06-17. | XS | **B0** item 9 |
-| 8 | ⛔ **THE "124 STALE `planet-lod-uniforms.js` REFS ACROSS 56 FILES" DEFECT DOES NOT EXIST.** The fence exits 0 with 531 CHECKED; `tools/port-uniform-delta.mjs:972` is a deliberate alias, one of five, under a comment reading *"⛔ Do not 'tidy' these keys."* Rewriting them converts every pre-move ref into an UNRESOLVED, which the mode exits 2 on. **Three separate lenses have now proposed this repair.** | **STRIKE — 0** | **B0** item 10: record WHY, so a fourth session does not re-discover it |
+| 8 | ⛔ **THE "124 STALE `planet-lod-uniforms.js` REFS ACROSS 56 FILES" DEFECT DOES NOT EXIST.** The fence exits 0 with 531 CHECKED; `tools/port-uniform-delta.mjs:972` is a deliberate alias, one of five, under a comment reading *"⛔ Do not 'tidy' these keys."* Rewriting them converts every pre-move ref into an UNRESOLVED, which the mode exits 2 on. **Three separate lenses have now proposed this repair.** | **STRIKE — 0** | **B0** item 10: record WHY, so a fourth session does not re-discover it · ⭐⭐ **EXECUTED 2026-08-20. THE ITEM IS STRUCK AND THIS ROW IS THE RECORD.** Re-measured this run, not quoted: `npm run --silent port-uniform-delta:citations` exits **0** at **542 CHECKED** (`inputs 80196f286708`), up from the 531 this document was written against, which is the only evidence that separates *"every ref resolves"* from *"no ref was read"* — the distinction `tools/port-uniform-delta.mjs:1093` states in its own words. The aliases are deliberate and the repair is prohibited in source; rewriting them converts every pre-move ref into an UNRESOLVED and the mode exits 2. **Four lenses have now proposed this repair. A fifth should stop at this row.** |
 | 9 | The real residue is unrelated and smaller: refs written **without** a backticked symbol sit in the UNCHECKED bucket by §10's own rule — a citation-FORM issue, not a broken path. ⛔ **Do not bulk-rewrite line numbers blind; a ref repaired to a SECOND wrong line is worse than a stale one.** | S, opportunistic | not scheduled; convert on touch |
 
 ### 7.2 In the parity ledger
@@ -1007,7 +1007,7 @@ attribution when the quad looks wrong — the exact failure this whole ordering 
 
 ### 7.4 ⭐ In `wiring-execution-plan-2026-08-20.md` — the eleven this run verified and corrected
 
-Recorded so nobody rebuilds that shape. Each was checked in source this run.
+Recorded so nobody rebuilds that shape. Each was checked in source this run. ⭐⭐ **B0 ITEM 1 EXECUTED 2026-08-20 AS A RECORD RATHER THAN AN ANNOTATION, BECAUSE THERE IS NO LONGER A FILE TO ANNOTATE.** `docs/FEATURES/wiring-execution-plan-2026-08-20.md` is absent from the working tree and `git log --all` on that path returns **nothing** — it was drafted, its eleven claims were verified against source (this table), and it was deleted before B0 ran, never having been committed. So item 1's *"⛔ Annotate; do not delete"* cannot be obeyed as written, and obeying its INTENT means putting the evidence where it survives: **this table is now the only record of that draft, and it is the annotation.** ⛔ **Do not recreate the file** — recreating it re-arms eleven verified-wrong claims, four of which stall execution. ⚠ Note what this costs: the draft's own supporting evidence is gone with it, so anything here that reads as a bare assertion cannot be traced back to it and must be re-derived from source instead.
 
 | # | The claim | What is true | What it would have cost |
 |---|---|---|---|
@@ -1027,23 +1027,23 @@ Recorded so nobody rebuilds that shape. Each was checked in source this run.
 
 ## 8. OPEN ITEMS FOR MAX
 
-1. ⭐ **Run B0 first, then sit with §1 once — fourteen rulings.** **D-1 (do the eight `blocking` rows gate the
-   flag flip) decides whether players see any of this, and it is yours alone.** I did not touch
-   `src/objects/Planet.js:2153` `export const LAB_GAS_BODIES_DEFAULT = false;`, and you should know before you
-   rule: **it is ONE flag exposing BOTH swaps** — `labPipelineAdmits` has exactly one call site, reached for
-   moons through `src/objects/Moon.js:58`. There is no separate moon flag.
-2. ⭐ **D-3 is the one nobody has been carrying.** R-07 — Venus zonal banding on **130 bodies**, the largest of
-   the three newly-live rocky branches — is ruled `blocking`, its scheduling is reserved to you in the ledger,
-   and until this document it appeared in no plan's block list at all.
-3. ⭐ **D-5 exists because your own last word contradicts an earlier ruling of yours.** On 2026-08-06 you
-   folded the terminator into *"the lighting engine needs to work for all objects"*; on 2026-08-14, on the live
-   game, you said *"that effect needs a ton of work… We don't need to do that now."* **The recommendation is to
-   hold your deferral and forward the tamed law**, so nobody re-authors what twilight looks like on your
-   behalf. Say the word if you want it lifted.
-4. **The honest headline: seven stops for B0–B7, five of them on the path to a player** — not the six the
-   earlier draft claimed, and not zero. §6.1 names every one and why it cannot merge.
-5. **MVP under ruling #2 is not closable this quarter** (§4.3). **The world engine reaching a player is** —
-   B0 → B2 → B3 → B4 → B7, five blocks.
+1. ⛔⛔ **FOUR THINGS ARE OPEN AND ONLY YOU CLOSE THEM — the other eleven were ruled 2026-08-20**, delegated
+   by you to the plan's own recommendations. **(a) D-6, the canyon look** — B0 took the shot; it is waiting on
+   your eyes, not on more work (§1.1's D-6 row has the two frames and the full path). **(b) D-9**, darker or
+   greener, taste, never UAT'd anywhere. **(c) D-14's RETIREMENT half** — `PLAN.md:715` reserves retiring a
+   carried row to you by name; all ten are parked with their evidence, one line each. **(d) D-7, below.**
+2. ⚠⚠ **D-7 is a CONFLICT WITH YOUR OWN HOLD, not a recommendation waiting for a yes.** The plan recommends
+   pulling `featureRelevant` out of L1 WS3; `docs/NOW.md:1160` is your standing *"do NOT ship WS4; do NOT start
+   WS3."* ⛔ No agent adopted it and **WS3 was NOT started.** It moves only if you lift the hold yourself.
+3. ⭐ **RULED, and here is what the biggest one now means.** **D-1: the eight `blocking` rows MUST CLOSE before
+   the flag flips** — that is now B7's gate, not a proposal. The flag itself is untouched:
+   src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;` — and **it is ONE flag exposing
+   BOTH swaps**; `labPipelineAdmits` has exactly one call site, reached for moons through
+   `src/objects/Moon.js:58`. There is no separate moon flag. **D-3's R-07 is now a named B3 work item.**
+4. ⛔ **The honest headline did NOT improve: still seven stops for B0–B7, five on the path to a player.**
+   Eleven rulings shrank stop #1 from fourteen questions to four; a shrunken stop is still a stop. §6.1 names each.
+5. ⭐ **D-5 held your deferral** — the belt is forwarded verbatim, P-11 closes on parity, nobody re-authors
+   twilight. **MVP under ruling #2 is not closable this quarter** (§4.3); the player path is B0→B2→B3→B4→B7.
 
 ---
 
