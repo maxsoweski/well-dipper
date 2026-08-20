@@ -1084,6 +1084,18 @@ const CITE_SOURCES = [
   // GATING a source are different acts; only the second one closes the class (§11.2).
   'tests/radius-live-feed.test.js', 'tests/radius-live-feed-fence.test.js',
   'tests/moon-condition-contract.test.js', 'src/generation/ExoticOverlay.js', // ── MOON B2, 2026-08-15
+
+  // ── STEP 9a, 2026-08-19. The rocky-surface pack and its suite carry 64 symbol-anchored refs
+  // between them, and until this line they were scanned by NOTHING. ⛔ THE FAILURE MODE IS THE ONE
+  // THIS LIST EXISTS AGAINST, AND IT IS WORSE ON A NEW FILE THAN ON AN OLD ONE: the fence reported
+  // `424 CHECKED / 0 BROKEN, exit 0` on the very commit that introduced them, so a green fence would
+  // have certified 64 refs it had never opened. The count is the tell — CHECKED did not move.
+  // ⭐ THE COUNT MUST RISE WHEN A SOURCE IS ADDED. Verifying `BROKEN == 0` cannot distinguish "every
+  // ref resolves" from "no ref was read"; only the CHECKED delta separates them. Measured on this
+  // commit: 424 → 500, i.e. +76. ⚠ The build agent reported the two files carry 64 refs; the fence
+  // read 76. Its count is the one that counts — it is the only one produced by the thing that checks.
+  'src/worldengine/drivers/rockySurface.js',
+  'tests/driver-pack-rockysurface.test.js',
 ];
 
 // `Foo.js:123 \`sym\`` — or a bare `:123 \`sym\`` continuing the last filename on the same line.

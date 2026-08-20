@@ -134,7 +134,7 @@ commit**; **mutate the PASSING gates**; **refuse any number without its corpus**
 
 ⭐ **AND A NEW ONE: A REPAIRED CITATION MUST BE VERIFIED BY THE COUNTERS, NOT THE EXIT CODE.**
 Re-quoting the whole new line of `:378` made the fence print *"all 400 citations resolve, Exit 0"* —
-green and wrong. `tools/port-uniform-delta.mjs:1142` caps a symbol span at **110 characters**; the new
+green and wrong. `tools/port-uniform-delta.mjs:1154` caps a symbol span at **110 characters**; the new
 line is ~125, so the ref matched no symbol and was demoted into the 447-deep UNCHECKED pile where it
 would have rotted forever. **CHECKED had gone 401 → 400 and nothing said so.** Anchor to a short
 token, then confirm 401 / 447 / 0.

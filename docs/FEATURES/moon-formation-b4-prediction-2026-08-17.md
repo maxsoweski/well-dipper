@@ -201,7 +201,7 @@ construction: step 4 merges `_generatePlanetMoon` into the shared tail, and the 
 
 ### 3c. Instrument C — sharper than the plan states
 
-- **Exit 2, structural, one break, trigger = POPULATION MISMATCH** (`tools/port-uniform-delta.mjs:1860`,
+- **Exit 2, structural, one break, trigger = POPULATION MISMATCH** (`tools/port-uniform-delta.mjs:1872`,
   message at `:1862`). Not uniform-set drift (`:1791`), not shape drift (`:1840`), not
   build-failures (`:1875`).
 - ⛔ **`--allow-deltas` cannot rescue it.** The structural check runs first and exits at

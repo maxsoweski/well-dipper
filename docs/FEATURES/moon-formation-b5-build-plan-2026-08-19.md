@@ -311,7 +311,7 @@ Three construction requirements, each from a line I opened:
 
 **Six instruments have no re-record mechanism.** B7 is four commands **plus ~70 hand-derived numbers across six files, on five non-interchangeable corpora** (FENCE-221 / MC-197 / PCC-526 / STREAM-1500 / LAB-PROCEDURAL-200). Stamp every number with its corpus.
 
-**"Do not re-record mid-window"** appears in writing exactly once — handoff `:17`. Its four in-code justifications are `known-failures.json._readme`, `scripts/test-baseline.mjs:73-77`, `tools/port-uniform-delta.mjs:1685` (*A blanket re-record is how a regression becomes the new baseline*) and `body-identity-fence.test.js:56-57`. Promote it into the PLAN's B7 section with those citations.
+**"Do not re-record mid-window"** appears in writing exactly once — handoff `:17`. Its four in-code justifications are `known-failures.json._readme`, `scripts/test-baseline.mjs:73-77`, `tools/port-uniform-delta.mjs:1697` (*A blanket re-record is how a regression becomes the new baseline*) and `body-identity-fence.test.js:56-57`. Promote it into the PLAN's B7 section with those citations.
 
 ---
 
