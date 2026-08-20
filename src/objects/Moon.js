@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { assignBodyName } from '../util/scene-naming.js';
-import { MOON_ROTATION_DEFAULT_DEG_PER_SEC } from '../core/CelestialTime.js';
+import { MOON_ROTATION_DEFAULT_DEG_PER_SEC } from '../core/CelestialTime.js'; import { Planet } from './Planet.js'; import { conditionFromBody } from '../worldengine/port/conditionFromBody.js'; import { updateLabPlanetMaterial } from '../rendering/LabPlanetMaterial.js';  // ⛔ RIDES THIS LINE: Planet.js does not import Moon.js, so there is no cycle — but a new import LINE shifts every cited line below it.
 
 /**
  * Moon — a small sphere that orbits a parent planet.
@@ -16,6 +16,12 @@ export class Moon {
   constructor(moonData, lightDir, lightDir2 = null, starInfo = null) {
     this.data = moonData;
     this.orbitAngle = moonData.startAngle;
+    // ⭐ HELD FOR THE LAB MATERIAL'S PER-FRAME SEAM. A legacy moon never needed this: its shader
+    // reads the parent planet's Vector3 BY REFERENCE through a `lightDir` uniform, so the game
+    // updating that one vector updated the moon for free. A swapped moon declares no such uniform —
+    // `uLightDir` is OBJECT-space and must be recomputed from the world vector every render tick —
+    // so the reference has to live on the instance or `updateRender` has nothing to hand the seam.
+    this._lightDir = lightDir;
 
     this.mesh = this._createMesh(lightDir, lightDir2, starInfo);
     assignBodyName(this.mesh, 'moon', moonData);
@@ -32,6 +38,25 @@ export class Moon {
     // ⛔ Same deliberate non-goal: fixed vertex count, no geometric LOD. Nothing displaces position.
     const [widthSeg, heightSeg] = d.type === 'terrestrial' ? [96, 48] : [64, 32];
     const geometry = new THREE.SphereGeometry(d.radius, widthSeg, heightSeg);
+
+    // ⭐ PLAN STEP 10 — THE LAB PIPELINE, MOUNTED WHERE THE LEGACY MATERIAL DOES NOT YET EXIST.
+    // Same position and same reasoning as the planet-side branch: selecting at material-CREATION
+    // time means the `THREE.ShaderMaterial` below is never constructed for a swapped body, so
+    // there is nothing to dispose and no registry entry to restore. Swapping AFTER `new Moon()`
+    // would build ~25 uniforms and throw them away, and a second surface mesh would leave the
+    // legacy moon rendering underneath.
+    // ⛔ ONE EXPRESSION, NOT A COPY. `Planet._createLabSurface` is static and takes `lightDir` as a
+    // parameter for exactly this call. The alternative was a second transcription of
+    // admit -> build -> packs -> attributes -> back-link, and two transcriptions of one pipeline is
+    // the drift this whole port exists to remove. It returns a MESH, not a material, which is why
+    // it can replace `_createMesh`'s whole result: a Moon's mesh IS its surface.
+    // ⛔ NO SOL BRANCH, ON PURPOSE. The admission test inside refuses on the 6e flag, on provenance
+    // (Sol's moons are stamped `_systemSeed: 'sol'`) and on pack selection. Measured: 0 of Sol's 25
+    // plain moons admit with the flag forced ON. A branch here would be a second admission test.
+    // `assignBodyName` runs after this returns and PRESERVES `userData.wd` — it spreads existing
+    // userData — which is what `_lab.resolveBody` and Instrument E read to caption the body.
+    const labSurface = Planet._createLabSurface(geometry, d, conditionFromBody(d), lightDir);
+    if (labSurface) return labSurface;
 
     // Type index: 0=captured, 1=rocky, 2=ice, 3=volcanic, 4=terrestrial
     const typeIndex = ['captured', 'rocky', 'ice', 'volcanic', 'terrestrial'].indexOf(d.type);
@@ -619,11 +644,40 @@ export class Moon {
   updateRender(renderDt) {
     if (this.data.clouds) {
       // ⛔ GUARDED — same hazard as the plain-moon shadow writes in src/main.js: the lab material
-      // declares no `time` uniform, and this throws inside the render tick. Measured: 7 of 683 moons
-      // carry clouds. Fence: tests/moon-shadow-write-guard.test.js.
+      // declares no `time` uniform, and this throws inside the render tick. MEASURED: 0 of 632
+      // plain moons carries clouds (below). Fence: tests/moon-shadow-write-guard.test.js.
       const mu = this.mesh.material?.uniforms;
       if (mu?.time) mu.time.value += renderDt;
     }
+    // ⭐ THE LAB MATERIAL'S PER-FRAME HALF — DELIBERATELY OUTSIDE THE CLOUDS GUARD, and the reason
+    // is stronger than the count that used to stand here. MEASURED over lab-procedural-0…199, the
+    // corpus tests/moon-lab-mount.test.js names: 0 of the 632 PLAIN moons carries clouds.
+    // `MoonGenerator` gives clouds to `type === 'terrestrial'` only, and the corpus's plain-moon
+    // types are {captured 139, ice 219, volcanic 67, rocky 207} — no terrestrial at all. The 6
+    // cloud-carrying moons in that corpus are ALL planet-class, and the frame loop routes those to
+    // `Planet.updateRender`; `Moon.updateRender` never runs on one. So nesting this inside the
+    // guard above would have frozen 632 of 632 at t = 0 — the WHOLE population this method sees,
+    // not almost all of it, and a swapped ROCKY moon needs its clock just as much.
+    // ⛔ THE FIGURE THIS REPLACES — "7 of 683 moons carry clouds" — reproduces on no corpus in the
+    // tree, and it was arithmetic over a population that cannot execute this method: 683 only
+    // reaches 7 cloudy by counting planet-class moons, which are `Planet` instances. Over 2000
+    // seeds a cloudy PLAIN moon runs 8 in 6295 (0.13%), so this branch is dead on the named corpus
+    // and rare everywhere — cheap insurance, not hot-path coverage.
+    // Self-guards on `isLabPlanetMaterial`, so it is a null-returning no-op on a legacy material.
+    // ⛔ THIS IS THE HALF THE DISTANCE PATH DOES NOT COVER. LODManager -> BodyRenderer already
+    // drives uOctaves/uLodRamp/uCameraPosObj for every registered moon, but it passes neither
+    // `renderDt` nor `lightDirWorld`. Without the call below, `uTime` stays 0 forever while
+    // `updateSim` spins the mesh every tick — so `uLightDir`, which is OBJECT-space, would
+    // counter-rotate with the crust: one terminator sweep per moon day. Those are defects 1 and 2
+    // from updateLabPlanetMaterial's own header, re-opened on the body class that migrated last.
+    // ⛔ HERE AND NOT IN BodyRenderer.updateRender: that would double-advance `uTime` on planets
+    // (Planet.updateRender already drives them) and would miss the gallery moon, which constructs
+    // a `Moon` directly with no BodyRenderer around it.
+    updateLabPlanetMaterial(this.mesh.material, {
+      mesh: this.mesh,
+      lightDirWorld: this._lightDir,
+      renderDt,
+    });
   }
 
   /**

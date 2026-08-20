@@ -886,7 +886,14 @@ describe('the mount-site fence — what does this gate NOT see that this commit 
   // MEASURED: at the commit before this one, dropping a brand-new `src/` file whose whole body is
   // `buildLabProbeMaterial()` left this suite 53/53 GREEN. With the union below it REDS on that file.
   // A new alias is therefore a new entry HERE, not a silent hole — see the ALIAS CLOSURE gate.
-  const MOUNT_TOKENS = ['buildLabPlanetMaterial(', 'buildLabProbeMaterial('];
+  // ⭐ THIRD TOKEN ADDED AT STEP 10, AND IT CLOSES A HOLE THIS SUITE SAT GREEN ON. Step 10 mounts
+  // the lab material on plain moons by CALLING `Planet._createLabSurface` rather than the builder,
+  // so `src/objects/Moon.js` became a genuine mount site while carrying NEITHER of the two tokens
+  // above — MEASURED: with the moon mount landed and this list unwidened, the PATH assertion below
+  // stayed green and only the signature-slice test reded. That is the same shape of blindness the
+  // alias note above records, arriving through a call instead of an alias: the fence is only ever
+  // as wide as the ways a file can reach the material, and "call a function that mounts" is one.
+  const MOUNT_TOKENS = ['buildLabPlanetMaterial(', 'buildLabProbeMaterial(', '_createLabSurface('];
 
   const liveCallers = (tokens = MOUNT_TOKENS) => SRC_FILES
     .filter((f) => f !== 'src/rendering/LabPlanetMaterial.js')   // it DEFINES the builder AND its aliases
@@ -900,10 +907,19 @@ describe('the mount-site fence — what does this gate NOT see that this commit 
   // coming is named here rather than left to surprise someone:
   //   · `src/rendering/objects/BodyRenderer.js` — PLAN Step 10's moon branch.
   // Legitimate. It may not arrive without someone editing this line.
+  // ⭐ IT ARRIVED, AT A DIFFERENT PATH — `src/objects/Moon.js`, not BodyRenderer.js. BodyRenderer
+  // only wraps an already-built `Moon`, so mounting there would mean disposing a legacy material
+  // that had just been constructed, and would MISS the gallery, which builds a `Moon` directly.
+  // Moon.js is where the legacy material does not yet exist. The prediction was right about the
+  // step and wrong about the file, which is the reason this list is pinned by PATH and not by count.
   const EXPECTED_MOUNT_SITES = [
     'src/main.js',            // _lab.tryLabShader — the Instrument E harness. Swaps at RUNTIME on
                               // an already-built body, refuses a body that already carries the lab
                               // material, and is driven by hand. Not the pipeline.
+    'src/objects/Moon.js',    // PLAN Step 10's plain-moon branch. Mounts by CALLING the static
+                              // `Planet._createLabSurface` — one expression, so the admit -> build
+                              // -> packs -> attributes -> back-link sequence has exactly one
+                              // transcription and the two frontends cannot drift apart in it.
     'src/objects/Planet.js',  // THE PIPELINE. Selects at material-CREATION time, behind the 6e flag
                               // and the 6d provenance test.
     'src/rendering/ShaderWarmup.js',  // PLAN 6c's WARM-UP PROBE, reached via `buildLabProbeMaterial`.
@@ -975,7 +991,7 @@ describe('the mount-site fence — what does this gate NOT see that this commit 
     // Not merely "the file mentions it somewhere": the guard and the mount have to be in one
     // function, or a later edit can keep both tokens and separate them.
     const src = read('src/objects/Planet.js');
-    const start = src.indexOf('_createLabSurface(geometry, d, condition) {');
+    const start = src.indexOf('static _createLabSurface(geometry, d, condition, lightDir) {');
     expect(start).toBeGreaterThan(0);
     const body = src.slice(start, start + 2600);
     expect(body).toMatch(/labPipelineAdmits\(/);
@@ -985,7 +1001,7 @@ describe('the mount-site fence — what does this gate NOT see that this commit 
   });
 
   it('CONTROL — the same window check REDS on a mount with the gate removed', () => {
-    const withoutGate = '_createLabSurface(geometry, d, condition) {\n'
+    const withoutGate = 'static _createLabSurface(geometry, d, condition, lightDir) {\n'
       + '    const built = buildLabPlanetMaterial({ bodyRadius: d.radius });\n  }';
     expect(/labPipelineAdmits\(/.test(withoutGate)).toBe(false);
   });

@@ -304,3 +304,97 @@ a uniform value or a GLSL symbol; not one pixel was rendered, because this lane 
 server or drive a browser. Instrument E's DRIVE pair and the per-branch LOSS triptych are the
 missing half, and the ledger's job was to make sure that when those shots are taken, **the caption
 names losses the machine printed** rather than losses a document remembered.
+
+---
+
+## 9. Channel M — the MOON class (PLAN §4 Step 10)
+
+**Why a Step-10 channel lives in a Step-6b document.** Because the machinery is the same and a
+second document would be a second version of it. PLAN §4 Step 10's **What** paragraph ends *"Produce
+a moon parity list on the Step-6 pattern"*, its **Gate** bullet reads *"Moon parity-list test
+green"*, and risk 4's mitigation names Steps **6b and 10** by number. Appending here rather than
+forking also keeps §2's three rulings, and the "an accepted loss is allowed; an UNDECLARED loss is
+blocking" ruling that produced them, as one vocabulary rather than two.
+
+⛔ **Channel 1 has never contained a moon.** `tests/material-parity-list.test.js` walks
+`sys.planets` and builds `new Planet(...)`; a PLAIN moon is a `Moon`, so it is outside that
+population by construction, and P-01…P-18's evidence cells each state their own population
+explicitly (`341 of 341`, `125 of 341`, `228 of 341`) — none of which is a moon count. So the moon
+losses are not "already ruled one class over"; they were undeclared until this channel, and
+silently so: the four frame-loop writers that would otherwise have thrown were converted to guards
+at src/main.js:11436 `if (mu?.shadowPlanetPos) mu.shadowPlanetPos.value.copy(entry.planet.mesh.position);`
+and src/objects/Moon.js:650 `if (mu?.time) mu.time.value += renderDt;`, so every one of these losses
+is a silent no-op rather than a crash.
+
+**How it was produced.** Channel 1's derivation, one class over and by the same decision core: BOTH
+materials built on the SAME moon record — `setLabGasBodiesOverride(false)` then `(true)` through
+`new Moon(...)` with identical `lightDir`, `lightDir2` and `starInfo` — and the pair fed to
+`swapLedgerOf`. `tests/moon-lab-mount.test.js` carries the same row table this section does and
+**fails when the two disagree**, so this is machine-checked rather than transcribed. Corpus is the
+one at the top of this file; nothing here was measured on Sol, which is structurally refused.
+
+### 9.1 The moon populations, measured
+
+| | measured on `lab-procedural-0…199` |
+|---|---|
+| plain moons — the class Step 10 ships | **632** |
+| …that admit with the 6e flag forced ON | **632 of 632 (100%)** — the pack registered at index.js:167 `ROCKY_SURFACE_ENTRY,` applies on `compositionClass(condition) !== 'gas'`, the complement of `giantDeck`'s predicate at §1, and it claims every one; measured types `captured` 139 · `ice` 219 · `volcanic` 67 · `rocky` 207, and **no `gas` moon exists** |
+| swapped moons in a binary system | **197** of 632, in **64** binary systems of 200 |
+| swapped moons under a **non-white** primary | **632** of 632 — as at P-01, there is no body on which the star-colour loss is invisible |
+| swapped moons carrying clouds / atmosphere / aurora | **0 / 0 / 0.** One gate produces all three: src/generation/MoonGenerator.js:211 `clouds: type === 'terrestrial' ? {` and the two literals under it, and **the corpus contains no terrestrial plain moon** |
+| uniforms the legacy `Moon.js` material declares | **29** |
+| uniforms the lab material declares | **356** |
+| …of the 29 in `swapLedgerOf`'s CARRIED bucket | **0** |
+
+⭐ **CARRIED IS EMPTY, and that is the structural difference from Channel 1.** There, 28 names sat
+on both materials and §0's whole finding was that a name bucket reads as 28 surviving features and
+is 8 at most. Here the two materials share **no name at all** — every legacy moon uniform is
+lowercase and every lab uniform is `u`-prefixed — so `lost ∪ lostAtZero` is the complete 29 and
+there is no name-carried/value-diverged class to mis-read. The three features that DO survive
+(M-11) survive by a **rename plus a named mechanism**, and each is asserted live in
+`tests/moon-lab-mount.test.js` rather than inferred from a name.
+
+⚠ **`lostAtZero` is not "lost but it was off anyway"** — the same caveat §3 records, and on moons it
+has two clean controls. `starColor2`/`starBrightness2` split **197 lost / 435 lostAtZero**, and 197
+is exactly the binary population. `moonType` splits **493 lost / 139 lostAtZero**, and 139 is
+exactly the `captured` population, whose type index is 0. Both buckets are ruled below.
+
+### 9.2 The rows
+
+<!-- LEDGER-MOON -->
+| id | uniforms | ruling | evidence |
+|---|---|---|---|
+| M-01 | `starColor1` `starBrightness1` | accepted-loss | P-01's mechanism on the moon population. **No lab uniform name contains `star` or `Star`** — measured over all 356. The legacy moon shader spends both in one expression, src/objects/Moon.js:541 `vec3 starLight = starColor1 * diff1 * starBrightness1 * shadow1`, so a swapped moon is lit implicit white. **632 of 632** sit under a non-white primary, so as at P-01 there is no body on which the loss is invisible: a red dwarf's moon and a B-star's moon become indistinguishable. Closing it is a shader change, not a mapping line. |
+| M-02 | `lightDir2` `starColor2` `starBrightness2` | accepted-loss | P-02's mechanism on the moon population. `uLightDir2` occurs nowhere in `LAB_SHADER_CORPUS`; the lab has one light. **197 of 632** sit in a binary and lose the second star's diffuse term outright — src/objects/Moon.js:513 `float diff2 = max(dot(shadingNormal, lightDir2), 0.0);` and three further sites. `starColor2`/`starBrightness2` land in `lost` on exactly those 197 and in `lostAtZero` on the other 435; **the split IS the binary population**, which is the control that the bucket assignment is reading real values rather than defaults. |
+| M-03 | `shadowPlanetPos` `shadowPlanetRadius` `starPos1` `starPos2` | accepted-loss | P-03's mechanism on the moon population, and the one loss whose *writers* had to be neutered for Step 10 to ship at all. **No lab uniform name contains `hadow`.** The parent planet eclipsing its own moon is src/objects/Moon.js:536 `shadow1 = sphereShadow(vWorldPos, starPos1, shadowPlanetPos, shadowPlanetRadius);` and it stops on **632 of 632**. All four writers are guarded — src/main.js:11437 `if (mu?.shadowPlanetRadius) mu.shadowPlanetRadius.value = entry.planet.data.radius;`, src/main.js:11438 `if (mu?.starPos1) mu.starPos1.value.copy(_star1Pos);`, src/main.js:11439 `if (mu?.starPos2) mu.starPos2.value.copy(_star2Pos);` and the `shadowPlanetPos` sibling above them — so the loss throws nothing and reports nothing. ⚠ This is the row a transit UAT will find first: a swapped moon no longer darkens when its parent passes in front of the star. |
+| M-04 | `moonType` | accepted-loss | ⛔ **MOON-NATIVE — no planet row covers it and none can, because the quantity does not exist on the planet material.** P-16 rules `planetType` `carried` on the ground that the branches it selects are ruled loss-by-loss in Channel 2; **there is no Channel 2 for moons**, so the same ruling here would claim a coverage that does not exist. `moonType` is not only a branch selector: it drives the per-type surface pattern, the per-type `perturbStrength` and the per-type diffuse ramp across roughly forty lines of src/objects/Moon.js:133 `uniform int moonType;`. Neither `moonType` nor `uMoonType` occurs anywhere in the lab corpus — the lab draws from the CONDITION, not from a type label, which is the port's thesis — so §2's `blocking` test (the lab already declares the carrier) is not met and this is replacement rather than a mapping line. Population **632 of 632**, split 493 `lost` / 139 `lostAtZero` on the `captured` index-0 population. |
+| M-05 | `hasClouds` `cloudColor` `cloudDensity` `cloudScale` | accepted-loss | P-06's mechanism on the moon population: the lab has a cloud system (`uCloudCoverage` `uCloudRegime` `uCloudRelief` `uCloudOpticsIntensity`) and **no cloud-colour uniform**, and `rockySurface` writes none of the four. ⚠ **MEASURED POPULATION: 0 of 632.** Clouds are terrestrial-only and the corpus carries no terrestrial plain moon, so this loss has no witness here — it is DECLARED rather than discovered, which is the point of the row. Across 2000 seeds a cloudy plain moon runs 8 in 6295 (0.13%). |
+| M-06 | `hasAtmosphere` `atmosphereColor` `atmosphereStrength` | accepted-loss | P-07's mechanism on the moon population: the legacy rim glow, superseded in intent by the lab's limb optics. **No lab uniform name contains `Atmos`.** ⚠ **MEASURED POPULATION: 0 of 632**, same terrestrial-only gate as M-05. |
+| M-07 | `hasAurora` `auroraColor` `auroraIntensity` `auroraRingLat` `auroraRingWidth` | accepted-loss | P-05's subject family, one class over, and the ruling differs from P-05's **because the population does**. The lab DOES declare the carriers (`uAuroraColor` `uAuroraIntensity` `uAuroraRingLat` `uAuroraRingWidth`, all unwritten by `rockySurface`), which is why P-05 is `blocking` at 20 of 341 live planets. ⚠ **MEASURED POPULATION HERE: 0 of 632** — same terrestrial-only gate as M-05 — so §2's `blocking` first conjunct ("the feature stops reaching the pixel") is not satisfied on any moon, and ruling it `blocking` would invent an obligation over an empty set. ⛔ **If `MoonGenerator` ever gives a non-terrestrial moon an aurora, §2's test moves this row to `blocking` on the same day**; that is a consequence of the test, not a fourth verdict, and it is recorded here for the same reason P-10 records its scheduling in evidence. |
+| M-08 | `baseColor` `accentColor` | accepted-loss | P-08's mechanism on the moon population, and P-08's re-ruling applies verbatim: these are palette endmembers for layers the lab parameterises separately, and **no counterpart name exists** — src/worldengine/shaders/uniforms.js:138 `uWeatheredColor:    { value: new THREE.Color(0.46, 0.40, 0.34) },` carries the standing instruction not to reintroduce `uBaseColor`, because the game's record field is a different quantity. §2's `blocking` test therefore fails and this belongs with M-05. Population **632 of 632**. |
+| M-09 | `noiseScale` | blocking | P-10's row, on the moon population, and it is the one row here that meets §2's `blocking` test: **the lab material already declares the carrier.** `uNoiseScale` sits at its factory default `4.0` on every swapped moon while the game draws a real per-moon value — measured range **4.83 … 510.6** over the 632, with **0 of 632** equal to 4.0, and the scene record rescales it further. ⛔ **`blocking` is the ruling; the SCHEDULING is Max's and already given at P-10 — the base field gets a characteristic wavelength in km AFTER moons ship.** So this row is expected to be open at Step 10's gate and is not a Step-10 blocker; per P-10's own precedent the deferral lives in evidence, because §2 defines exactly three rulings and "deferred" is not one of them. ⚠ `noiseDetail` has no moon-side equivalent — the legacy moon material never declared one — so P-10's uncovered half does not recur here. |
+| M-10 | `lodLevel` | accepted-loss | P-17's row, on the moon population: read by no shader on either side, and the writer already announces its own no-op at src/rendering/objects/BodyRenderer.js:212 `if (!surface?.material?.uniforms?.lodLevel) return this._noteLabSkip('lodLevel', surface);`. This is the **one** loss in the whole channel that is WITNESSED at runtime rather than merely declared — `labSkips.lodLevel` counts it, and `tests/moon-lab-mount.test.js` asserts the counter moves on a swapped moon. ⚠ The other ten rows have no such counter: `_noteLabSkip` has exactly two call sites in the whole tree, `lodLevel` and `baseColor`. |
+| M-11 | `lightDir` `moonRadius` `time` | carried | P-18's three, moon-side, each by a rename plus a named mechanism and each asserted LIVE rather than by name — which matters more here than at P-18 because the CARRIED bucket is empty, so a name argument was never available. `lightDir`→`uLightDir` and `moonRadius`→`uBodyRadius` are written by `buildLabPlanetMaterial`; `time`→`uTime` by the per-frame seam `updateLabPlanetMaterial`, which **Step 10 had to add to `Moon.updateRender` for this row to be true at all** — before it the clock stayed at 0 forever on every swapped moon. ⛔ `uLightDir` is OBJECT-space where the legacy `lightDir` was world-space and bound by reference, so "carried" here means re-derived every render tick, not shared. All three are fenced in `tests/moon-lab-mount.test.js` (uTime advances, uLightDir changes under rotation, uBodyRadius equals the geometry's radius) with a committed mutant on the seam. |
+<!-- /LEDGER-MOON -->
+
+### 9.3 Named limits — what Channel M does not see
+
+⛔ Recorded with the construct that produced each one, on §5's pattern.
+
+1. **§5's limits 1-4 all recur unchanged.** The diff still runs at material-creation time, so a
+   per-frame divergence is invisible; a feature implemented inside a GLSL helper or inline with no
+   named local is still unclaimable.
+2. **THERE IS NO CHANNEL-2 EQUIVALENT FOR MOONS.** Channel 2 brace-matches `planetType == N`
+   branches out of the shipped planet shader and demands a row per symbol. The moon shader
+   branches on `moonType` in a different shape and no extractor was written for it, so a new
+   hardcoded effect in `Moon.js`'s GLSL is **not** caught the way a new one in `Planet.js`'s is.
+   M-04 rules the switch and the per-type look together, which is coarser than Channel 2's
+   per-symbol partition and is stated as coarser rather than presented as equivalent.
+3. **The pass builds from the RAW generator record, not the scene record.** `src/main.js` rescales
+   `radius`, `noiseScale` and `clouds` when it builds a moon's scene record, so the *values* here
+   are one transform away from the shipped body. That does not move any name into or out of a
+   bucket — which is what this channel rules — but no value quoted here should be read as the
+   number a frame contains.
+4. **Ten of the eleven rows are declared, not witnessed.** Only M-10 has a runtime counter. Nothing
+   in the tree reports at run time that a swapped moon stopped drawing its eclipse or its second
+   star; those losses are visible only in this document and in the test that re-derives it.

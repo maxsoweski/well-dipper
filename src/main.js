@@ -2417,7 +2417,7 @@ window._lab = {
    * Defaults only — no condition driving. The open question this answers is whether the undriven
    * floor is BLACK (in which case the uniform driver is a hard prerequisite) or merely flat.
    *
-   * @param {number} [index] planet index
+   * @param {number} [index] index into `_lab.bodySurfaces()` — ⚠ ITS SPACE MOVED AT STEP 10c.
    * @returns {Promise<object>} diagnostics
    */
   async tryLabShader(index = 0) {
@@ -2435,9 +2435,9 @@ window._lab = {
     // moment THIS FUNCTION swapped it. Calling `tryLabShader(0)` twice therefore addressed two
     // different meshes, silently. A second copy of the walk living next to the stabilised one would
     // reintroduce exactly that divergence one refactor later.
-    // ⚠ THIS CHANGES THE INDEX SPACE, deliberately: an already-swapped body now stays in the list,
-    // so indices no longer shuffle under a swap. That is the fix, and it is also the reason no other
-    // Instrument E hook accepts an index as its subject — see `resolveBody` (§12 E-2).
+    // ⚠ THIS CHANGES THE INDEX SPACE, deliberately: an already-swapped body stays in the list, so
+    // indices no longer shuffle under a swap. ⛔ STEP 10c MOVED IT AGAIN — the default prefix
+    // widened, plain moons joined, so a RECORDED integer means another body. By NAME (§12 E-2).
     const found = window._lab.bodySurfaces();
     const mesh = found._meshes[index]?.mesh;
     if (!mesh) {
@@ -2920,17 +2920,17 @@ window._lab = {
    * ⛔ 2. `if (owner.startsWith('body.planet.')) surfaces.push(o);` is hardcoded. Planet-class moons
    * are `Planet` instances, so `assignBodyName(this.mesh, 'planet', planetData);` names them
    * `body.planet.*` too and this filter already admits them (PLAN.md:441 records that it "never
-   * excluded *all* moons"). Step 10 widens the prefix to `body.` and every index moves again.
+   * excluded *all* moons"). ✅ WIDENED TO `body.` AT STEP 10c — plain moons joined, indices moved.
    *
    * ⭐ Hence: this returns NAMES, and an index into it is a discovery convenience only. Nothing in
    * Instrument E takes an index as its subject — see `resolveBody` for why that is not a style
    * preference but the difference between a pass and a false pass.
    *
-   * @param {{ownerPrefix?: string}} [opts]
+   * @param {{ownerPrefix?: string}} [opts] default `'body.'` since Step 10c (see ⛔ 2 above).
    * @returns {{count: number, ownerPrefix: string, surfaces: Array<object>}}
    */
   bodySurfaces(opts = {}) {
-    const ownerPrefix = opts.ownerPrefix ?? 'body.planet.';
+    const ownerPrefix = opts.ownerPrefix ?? 'body.';   // ⭐ STEP 10c — see ⛔ 2 in the docblock.
     const surfaces = [];
     const walk = (o) => {
       // Either material signature counts. `isLabPlanetMaterial` is the same signature test the lab
@@ -2966,10 +2966,10 @@ window._lab = {
    * not an error. Two index spaces are live at once. `selectBody(kind, idx, moonIdx) {` indexes
    * `system.planets` in SIM order; the scene walk indexes a TRAVERSAL. In any system carrying a
    * planet-class moon the camera frames body X while the preview drives body Y, and both hooks
-   * report success. It gets worse at Step 10: the walk's prefix widens to `body.`, plain moons pass
-   * the uniform test too (`noiseScale: { value: d.noiseScale },` in Moon.js), so `surfaces[i]` for a
-   * given planet SHIFTS. "Re-run Step 6's shot line verbatim" at Step 12 then lands on a different
-   * body, obtains the expected null on a body nothing touched, and passes.
+   * report success. ⭐ STEP 10c MADE IT WORSE EXACTLY AS PREDICTED: the walk's prefix widened to
+   * `body.`, plain moons pass the uniform test too (`noiseScale: { value: d.noiseScale },` in
+   * Moon.js), so `surfaces[i]` for a given planet SHIFTED. "Re-run Step 6's shot line verbatim" at
+   * Step 12 then lands on a different body, obtains the expected null on it, and passes.
    *
    * So resolution runs through the SIM tree — the space `selectBody` already uses — and the return
    * value's identity is `name`. Steps 7 and 12 re-run against `{ name }`, never against an integer.
@@ -2988,8 +2988,8 @@ window._lab = {
     //                       `moon.planet.data` (main.js builds it with a spread), which is why the
     //                       freeze writes orbit and spin through separate handles
     //   plain moon        → BodyRenderer wrapping a Moon; Moon has no `.surface`, the mesh IS the
-    //                       surface, and it carries NO back-link because Planet._createSurface is
-    //                       the only place the back-link is written
+    //                       surface. ⭐ SINCE STEP 10 A SWAPPED ONE CARRIES `userData.wd`, written by
+    //                       the shared `Planet._createLabSurface`; a LEGACY moon still carries none.
     const rows = [];
     // ⭐ Stars first, and they are a THIRD shape: the authored radius lives on `data.radius` rather
     // than being derivable from the drawn geometry the way a planet surface's is. `authoredRadius`

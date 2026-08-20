@@ -1382,17 +1382,17 @@ function runCitationCheck() {
   console.log('                    a non-token substring does NOT hold and neither does a token SUFFIX (the two');
   console.log('                    halves of the boundary, probed separately); whitespace still folds where the');
   console.log('                    symbol has whitespace and NOT where it does not; punctuation-only is refused)');
-
-  const targetCache = new Map();
+  // ⭐ EVERY BYTE THIS RUN READS IS HASHED INTO `inputDigest`, PRINTED BESIDE THE VERDICT — so a
+  // verdict names a TREE. Same digest + different verdict = regression. Different digests = a race.
+  const inputDigest = createHash('sha256'); const hashIn = (rel, t) => { inputDigest.update(`${rel}\0${t}\0`); return t; }; const targetCache = new Map();
   const readTarget = (base) => {
     if (!targetCache.has(base)) {
-      const rel = resolveBase(base).rel;
-      targetCache.set(base, rel && fs.existsSync(path.resolve(ROOT, rel))
-        ? fs.readFileSync(path.resolve(ROOT, rel), 'utf8').split('\n') : null);
+      const rel = resolveBase(base).rel; const abs = rel ? path.resolve(ROOT, rel) : null;
+      const txt = abs && fs.existsSync(abs) ? hashIn(rel, fs.readFileSync(abs, 'utf8')) : null;
+      targetCache.set(base, txt === null ? null : txt.split('\n'));
     }
     return targetCache.get(base);
   };
-
   // A CITE_FILES entry that points at a path which no longer exists resolves to `null` and every
   // ref through it reports as "basename not in CITE_FILES" — a true failure with a false reason,
   // which is the navigational-rot class this instrument exists to catch, inside the instrument.
@@ -1422,7 +1422,7 @@ function runCitationCheck() {
   for (const rel of CITE_SOURCES) {
     const abs = path.resolve(ROOT, rel);
     if (!fs.existsSync(abs)) { console.error(`⛔ CITE_SOURCES lists a file that does not exist: ${rel}`); process.exit(2); }
-    for (const c of scanCitations(rel, fs.readFileSync(abs, 'utf8'))) {
+    for (const c of scanCitations(rel, hashIn(rel, fs.readFileSync(abs, 'utf8')))) {
       if (CITE_ILLUSTRATIVE.has(c.base)) { illustrative.push(c); continue; }
       // Whole-citation-in-one-code-span. Resolve it if it resolves; report it if it does not.
       // The one thing it must never do is join the UNCHECKED pile — see scanCitations.
@@ -1573,12 +1573,12 @@ function runCitationCheck() {
     console.log('      SYMBOL, and cite that — a ref repaired to a second wrong line is worse than the');
     console.log('      stale one, because it now reads as freshly verified.');
     console.log('');
-    console.log(`RESULT: ${broken.length} BROKEN CITATION(S). Exit 2.`);
+    console.log(`RESULT: ${broken.length} BROKEN CITATION(S) [inputs ${inputDigest.digest('hex').slice(0, 12)}]. Exit 2.`);
     process.exit(2);
   }
-  if (unknown.length || unknownNoSym.length) { console.log(`RESULT: ${unknown.length + unknownNoSym.length} unresolved basename ref(s). Exit 2.`); process.exit(2); }
-  if (pastEof.length) { console.log(`RESULT: ${pastEof.length} ref(s) past end of file. Exit 2.`); process.exit(2); }
-  if (punctOnly.length) { console.log(`RESULT: ${punctOnly.length} malformed (anchor-less) symbol(s). Exit 2.`); process.exit(2); }
+  if (unknown.length || unknownNoSym.length) { console.log(`RESULT: ${unknown.length + unknownNoSym.length} unresolved basename ref(s) [inputs ${inputDigest.digest('hex').slice(0, 12)}]. Exit 2.`); process.exit(2); }
+  if (pastEof.length) { console.log(`RESULT: ${pastEof.length} ref(s) past end of file [inputs ${inputDigest.digest('hex').slice(0, 12)}]. Exit 2.`); process.exit(2); }
+  if (punctOnly.length) { console.log(`RESULT: ${punctOnly.length} malformed (anchor-less) symbol(s) [inputs ${inputDigest.digest('hex').slice(0, 12)}]. Exit 2.`); process.exit(2); }
 
   if (unchecked.length) {
     console.log('  UNCHECKED refs (line number only — trust, not verification):');
@@ -1591,7 +1591,7 @@ function runCitationCheck() {
     console.log('   Converting one of these to `file:NNN `symbol`` moves it into the checked column.');
     console.log('');
   }
-  console.log(`RESULT: all ${checked} symbol-anchored citations resolve. Exit 0.`);
+  console.log(`RESULT: all ${checked} symbol-anchored citations resolve [inputs ${inputDigest.digest('hex').slice(0, 12)}]. Exit 0.`);
   process.exit(0);
 }
 

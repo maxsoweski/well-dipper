@@ -1615,7 +1615,7 @@ export class Planet {
     // condition vector. Only terrestrial worlds get it: the branch that consumes it is the
     // ocean/land one, and biosphereOf returns ~0 for anything dry or airless anyway.
     const bioCover = biosphereOf(condition);
-    const labSurface = this._createLabSurface(geometry, d, condition);   // PLAN §4 Step 6a/6d/6e
+    const labSurface = Planet._createLabSurface(geometry, d, condition, this._lightDir);  // PLAN §4 Step 6a/6d/6e
     if (labSurface) return labSurface;      // world-engine pack bodies leave HERE, flag ON (6e)
     const variant = planetShaderSource(shaderVariantFor(d.type));  // legacy: 3 programs, by type
 
@@ -2001,9 +2001,9 @@ export class Planet {
   }
 
   /**
-   * ⭐ THE LAB-PIPELINE BRANCH — PLAN §4 Step 6a (compose the packs), 6d (exclude Sol in CODE) and
-   * 6e (behind an off-by-default flag until Max's UAT). Returns a finished surface Mesh, or `null`
-   * to mean "this body keeps the legacy material", which is what `_createSurface` falls through to.
+   * ⭐ THE LAB-PIPELINE BRANCH — PLAN §4 Step 6a (packs), 6d (exclude Sol in CODE), 6e (off-by-
+   * default flag). Returns a finished surface Mesh, or `null` = "this body keeps the legacy
+   * material", the fall-through. ⛔ STATIC: PLAN Step 10's src/objects/Moon.js calls it too.
    *
    * ⛔ WHY THE MATERIAL IS CHOSEN HERE AND NOT SWAPPED LATER. This selects at material-CREATION
    * time, so for a swapped body the legacy `THREE.ShaderMaterial` below is never constructed at
@@ -2015,7 +2015,7 @@ export class Planet {
    * flag's live value in every E caption: a visual gate reported as passing in the default
    * configuration is a shot of the code that was not written, and the default here is OFF.
    */
-  _createLabSurface(geometry, d, condition) {
+  static _createLabSurface(geometry, d, condition, lightDir) {
     const decision = labPipelineAdmits(d, condition);
     if (!decision.admitted) return null;
 
@@ -2023,7 +2023,7 @@ export class Planet {
     // `d.radius` because src/objects/Planet.js:1549 builds the geometry at exactly that radius —
     // omit it and the noise domain is 23-78x too small, one of the three sufficient causes of the
     // "flat orange" this port already chased once.
-    const built = buildLabPlanetMaterial({ lightDir: this._lightDir, bodyRadius: d.radius });
+    const built = buildLabPlanetMaterial({ lightDir, bodyRadius: d.radius });
     const material = built.material;
 
     const pos = geometry.getAttribute('position');
@@ -2087,9 +2087,9 @@ export class Planet {
 // `_createSurface`: BodyRenderer's planets, and planet-class moons, which are built directly at
 // src/main.js:7681 `const planetMoon = new Planet(scenePMData, pmStarInfo);` and never touch
 // BodyRenderer. If the branch condition were written inline it would be written once and apply to
-// both by luck; the moment Step 10 adds `BodyRenderer.createMoon`'s branch there would be two
-// copies of a Sol test, and the plan's own §12.4/E-2 note records that this file's planet-class
-// moons are the shape that gets missed.
+// both by luck; when Step 10 added the plain-moon branch — in `src/objects/Moon.js`, not in
+// `BodyRenderer.createMoon` as this note predicted — an inline condition would have become a
+// SECOND copy of the Sol test. §12.4/E-2 records planet-class moons as the shape that gets missed.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 
 /** The system seed `generateSolarSystem` stamps on every Sol body. src/generation/SolarSystemData.js:111 `export function generateSolarSystem() {`. */
@@ -2117,12 +2117,12 @@ export const SOL_SYSTEM_SEED = 'sol';
  *                            too, because src/main.js:7674 `_systemSeed: systemData.seed,` stamps
  *                            the parent system's seed onto `scenePMData` before `new Planet`.
  *
- * ⛔ WHAT THIS STILL DOES NOT COVER, stated rather than discovered later: a PLAIN moon carries
- * neither stamp — `MoonGenerator` emits no `_systemSeed` and most Sol moons have no `profileId` —
- * so on the day Step 10 routes plain moons through `BodyRenderer.createMoon`, THIS FUNCTION WOULD
- * ADMIT SOL'S MOONS. It is not reachable from a plain moon today (nothing but `Planet` calls it),
- * and tests/gas-body-lab-material.test.js pins that limit with the construct that produced it, so
- * Step 10 inherits a named hole instead of a silent one.
+ * ⛔ CORRECTED 2026-08-19 — THE NOTE THAT STOOD HERE WAS FALSE IN BOTH HALVES. It said a PLAIN moon
+ * carries neither stamp and that Step 10 would therefore ADMIT SOL'S MOONS. `MoonGenerator` indeed
+ * stamps nothing, but `StarSystemGenerator` stamps `_systemSeed`/`_ordinal` onto every plain moon
+ * in the very next statement, and `SolarSystemData` stamps `'sol'` on Sol's directly. Condition 2
+ * therefore already refuses Sol's plain moons — MEASURED: 0 of 25 admitted with the flag forced ON.
+ * Step 10 needs no Sol branch and no Sol test here. Do not act on the note that used to say it did.
  *
  * `_ordinal` is required for a third reason, and it is not about Sol: it is half of the 5d
  * `macroSeed` string. A body missing either half hashes `'undefined:undefined'`, which is one

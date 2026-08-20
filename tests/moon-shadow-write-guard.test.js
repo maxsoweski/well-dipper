@@ -7,11 +7,11 @@
 // try/catch — so the throw escaped before `raf()` was rescheduled and THE RENDER LOOP STOPPED
 // PERMANENTLY while the caller had already reported success. The plain-moon arm was left unguarded.
 //
-// That arm is inert today only because `tryLabShader`'s `body.planet.` filter (`src/main.js`) never
-// admits a plain moon. PLAN.md Step 10 widens exactly that filter — "guard two unguarded uniform
-// writes inside the frame loop — and land the guards FIRST in the working tree, before the filter
-// widening above admits a moon to `tryLabShader`". Preview-first-guard-second gives a frozen frame
-// AND an `ok: true`, which is the worst case arriving through that step's first line of code.
+// ⛔ THAT ARM IS NO LONGER INERT. It used to be reachable only through `tryLabShader`, whose walk
+// filtered plain moons out. PLAN Step 10 removed both halves of that safety: 10b mounts the lab
+// material on plain moons automatically behind the 6e flag, and 10c widened the walk's owner
+// prefix to `body.` so the hook admits them too. The guards below landed FIRST, on purpose —
+// preview-first-guard-second gives a frozen frame AND an `ok: true`, the worst case of the two.
 //
 // ── THE CONTROL DISCIPLINE ───────────────────────────────────────────────────────────────────────
 // A text assertion ("the source contains `?.`") proves nothing about behaviour and rots the first
@@ -26,7 +26,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { stripCommentsPreservingOffsets } from './helpers/source-scan.mjs';
+import { stripCommentsPreservingOffsets } from './helpers/source-scan.mjs'; import { updateLabPlanetMaterial } from '../src/rendering/LabPlanetMaterial.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MAIN = readFileSync(join(ROOT, 'src/main.js'), 'utf8');
@@ -68,9 +68,18 @@ function extractUpdateRender(source = MOON) {
 const compileShadowWrite = (src) =>
   // eslint-disable-next-line no-new-func
   new Function('moon', 'entry', '_star1Pos', '_star2Pos', src);
+// ⭐ `updateLabPlanetMaterial` IS INJECTED, AND IT IS THE REAL ONE. PLAN Step 10 added the lab
+// material's per-frame seam to the bottom of `Moon.updateRender`, so the shipped body now names a
+// module-scope import that `new Function` cannot see — MEASURED: without this parameter all four
+// tests below died with `ReferenceError: updateLabPlanetMaterial is not defined`, which is a
+// property of the SLICE, not of the guard under test. Injecting a stub would have hidden whatever
+// the real one does to these fixtures, so the real one is passed: it self-guards on
+// `isLabPlanetMaterial`, and neither `labMaterial()` (no `uLightDir`, no `uTime`) nor
+// `moonJsMaterial()` satisfies that, so it returns null and the assertions below still measure
+// exactly the cloud-clock guard they always did.
 const compileUpdateRender = (src) =>
   // eslint-disable-next-line no-new-func
-  new Function('renderDt', src);
+  new Function('renderDt', 'updateLabPlanetMaterial', src);
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -149,7 +158,7 @@ describe('src/main.js — the plain-moon shadow write', () => {
 
 describe('src/objects/Moon.js — the cloud clock write', () => {
   const src = extractUpdateRender();
-  const run = (material, data) => compileUpdateRender(src).call({ data, mesh: { material } }, 0.5);
+  const run = (material, data) => compileUpdateRender(src).call({ data, mesh: { material } }, 0.5, updateLabPlanetMaterial);
 
   it('⭐ survives the LAB material on a cloudy moon — `time` is not declared there', () => {
     expect(() => run(labMaterial(), { clouds: true })).not.toThrow();
@@ -192,7 +201,7 @@ describe('committed failing controls — delete the guard and the frame dies', (
     const mutant = src.replace(/\?\./g, '.').replace(/if \(mu\.\w+\) /g, '');
     expect(mutant, 'the mutant must differ from the shipped text').not.toBe(src);
     const run = () => compileUpdateRender(mutant).call(
-      { data: { clouds: true }, mesh: { material: labMaterial() } }, 0.5,
+      { data: { clouds: true }, mesh: { material: labMaterial() } }, 0.5, updateLabPlanetMaterial,
     );
     expect(run).toThrow(TypeError);
   });
