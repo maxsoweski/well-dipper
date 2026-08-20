@@ -4,6 +4,43 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
+> ## ▶ 2026-08-19 (evening) — **WORLD-ENGINE LANE: Steps 9a/9b/P-13/10a SHIPPED. ▶ NEXT = MOONS (Step 10b/c).**
+>
+> **Handoff: [`FEATURES/handoff-2026-08-19-moons-next.md`](FEATURES/handoff-2026-08-19-moons-next.md).**
+> HEAD `db1cf51`, tree clean, **3 commits unpushed**. ⛔ Read the handoff's §1 first — a build agent
+> checked every one of PLAN Step 10's own citations against the tree and **three are wrong**.
+>
+> | | |
+> |---|---|
+> | `f3157c5` | frame-loop guards — Step 10's stated prerequisite, with committed mutants |
+> | `2e089b4` | `craterUniforms` exposes `Dchar` → the rocky pack reaches the display-policy seam |
+> | `f65d2d3` | ledger: P-08 → accepted-loss, P-10 corrected, P-05 demoted to a wire |
+> | `b7adc76` | the three false docs in the next session's startup path |
+> | `532d246` | **Step 9a** — the `rockySurface` pack, unregistered |
+> | `db1cf51` | **Step 9b + P-13 + Step 10a** — swap, per-body noise offsets, registration |
+>
+> ### ⭐⭐ THE FINDING THAT MATTERS FOR STEP 12
+> `index.js` said *"Registration cannot move a body from the legacy material to the lab material."*
+> True of the three gas packs, **FALSE as of `db1cf51`** — `Planet.js:2192` feeds `packs.length > 0`
+> into the admission test, so a pack claiming bodies no other pack claimed **admits them**. Swapped
+> planets **341 → 846**, and **188 newcomers lose a legacy branch** (lava 52, ocean 6, venus 130 —
+> ledger rows R-05/R-06/R-07). ⭐ **Not a live regression**: `LAB_GAS_BODIES_DEFAULT = false` gates
+> the whole path, so nothing reaches a player until Step 12. It IS the trajectory Step 12 commits to.
+>
+> ### ⛔ MOONS DID NOT SHIP, deliberately
+> Step 10b/c halted with `proceed=false` rather than pile a second delta on an open one.
+> `BodyRenderer` has zero references to the lab material; `tests/moon-render-path.test.js` does not
+> exist. **Owed and not run:** Instrument D, the ≥95%-of-moons crater-density gate, and the per-class
+> distinctness quad. All are now unblocked.
+>
+> ### ⭐ OPEN FOR MAX
+> 1. **Moons** — greenlit, nothing waiting on him.
+> 2. **R-05/R-06/R-07 scheduling** — venus banding on 130 bodies; reserved to him since 2026-08-09.
+> 3. **Doc-rot triage, 3 items** — gate repairs (335 → ~92), the citation sweep (2,590 refs across
+>    199 docs, currently unscanned), two deep dives. Detail in the handoff §6.
+> 4. **P-10's km wavelength** — his ruling: after moons, calibrated against real bodies.
+> 5. **3 commits unpushed.** ⛔ sandbox DISABLED, verify with `git ls-remote`.
+
 > ## ✅ 2026-08-18 — **B4 COMMITTED · BINARY PLANETS SCOPED · BINARY-STAR DEFECTS FIXED + UAT-PASSED.** ▶ NEXT = amend B4 with the binary line item, then B5.
 >
 > **Handoff: [`FEATURES/moon-formation-handoff-2026-08-18.md`](FEATURES/moon-formation-handoff-2026-08-18.md).**
