@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { LAB_VERTEX_SHADER, LAB_FRAGMENT_SHADER } from '../worldengine/shaders/planetShaders.glsl.js';
-import { makeUniforms } from '../worldengine/shaders/uniforms.js';
+import { makeUniforms } from '../worldengine/shaders/uniforms.js'; import { POSTERIZE_LEVELS } from './posterizeLevels.js'; // ⛔ B2P RIDES THIS LINE: this file is line-cited, so a new import line moves every ref below it.
 // The LOD ramp is the LAB'S law, imported rather than re-derived — lodRampOf is
 // smoothstep(20, 6, distanceInRadii) and autoOctaves is mix(4, 9, ramp). Same import
 // src/rendering/objects/BodyRenderer.js:11 already makes for the game's own shader, so the two
@@ -208,7 +208,7 @@ export function labShaderSource() {
 export function buildLabPlanetMaterial(opts = {}) {
   const raw = opts.lightDir ?? LAB_WORLD_LIGHT;
   const light = (raw.isVector3 ? new THREE.Vector3().copy(raw) : new THREE.Vector3(...raw)).normalize();
-  const uniforms = makeUniforms(light);
+  const uniforms = makeUniforms(light); uniforms.uLevels = POSTERIZE_LEVELS; // ⭐ B2P — SUBSTITUTE the shared object for makeUniforms' private one. Nothing here edits the lab shader or the uniforms.js default (still 6.0); this only makes the value REACHABLE. Once the lab flag flips, 846 planets and 632 moons render through THIS program, whose uLevels no pack writes — leave this out and the setting evaporates exactly when the world engine becomes visible.
 
   const bodyRadius = Number.isFinite(opts.bodyRadius) && opts.bodyRadius > 0 ? opts.bodyRadius : 1.0;
   uniforms.uBodyRadius.value = bodyRadius;

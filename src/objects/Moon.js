@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { assignBodyName } from '../util/scene-naming.js';
-import { MOON_ROTATION_DEFAULT_DEG_PER_SEC } from '../core/CelestialTime.js'; import { Planet } from './Planet.js'; import { conditionFromBody } from '../worldengine/port/conditionFromBody.js'; import { updateLabPlanetMaterial } from '../rendering/LabPlanetMaterial.js';  // ⛔ RIDES THIS LINE: Planet.js does not import Moon.js, so there is no cycle — but a new import LINE shifts every cited line below it.
+import { MOON_ROTATION_DEFAULT_DEG_PER_SEC } from '../core/CelestialTime.js'; import { Planet } from './Planet.js'; import { conditionFromBody } from '../worldengine/port/conditionFromBody.js'; import { updateLabPlanetMaterial } from '../rendering/LabPlanetMaterial.js'; import { POSTERIZE_LEVELS } from '../rendering/posterizeLevels.js';  // ⛔ RIDES THIS LINE: Planet.js does not import Moon.js, so there is no cycle — but a new import LINE shifts every cited line below it.
 
 /**
  * Moon — a small sphere that orbits a parent planet.
@@ -68,7 +68,7 @@ export class Moon {
 
     const material = new THREE.ShaderMaterial({
       uniforms: {
-        baseColor: { value: new THREE.Vector3(...d.baseColor) },
+        baseColor: { value: new THREE.Vector3(...d.baseColor) }, uPosterizeLevels: POSTERIZE_LEVELS, // B2P — the shared object. This is the LEGACY plain-moon program and 632 moons render through it until the lab flag flips. ⛔ RIDES THIS LINE.
         accentColor: { value: new THREE.Vector3(...d.accentColor) },
         noiseScale: { value: d.noiseScale },
         lightDir: { value: lightDir },
@@ -121,7 +121,7 @@ export class Moon {
 
       fragmentShader: /* glsl */ `
         #include <logdepthbuf_pars_fragment>
-        uniform vec3 baseColor;
+        uniform vec3 baseColor;  uniform float uPosterizeLevels;   // B2P — this program's own declaration (its posterize copy is below). ⛔ RIDES THIS LINE.
         uniform vec3 accentColor;
         uniform float noiseScale;
         uniform vec3 lightDir;
@@ -589,7 +589,7 @@ export class Moon {
           // Posterize — wider edgeWidth (0.6) than planets (0.4) so dithering
           // creates more visible transition bands, revealing surface detail
           finalColor = min(finalColor, vec3(1.0));
-          finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.6);
+          finalColor = posterize(finalColor, uPosterizeLevels, gl_FragCoord.xy, 0.6);
 
           gl_FragColor = vec4(finalColor, 1.0);
         }

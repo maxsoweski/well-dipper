@@ -402,8 +402,8 @@ describe('1. the swapped population, re-measured on lab-procedural-0…199', () 
 // 2. THE HEADLINE — how much per-body character survives the swap.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 describe('2. the collapse in per-body variation', () => {
-  it('45 of the game material’s 71 uniforms vary across bodies; 48 of the lab’s 356 do', () => {
-    expect(LEDGER.gameSize).toBe(71);
+  it('45 of the game material’s 72 uniforms vary across bodies; 48 of the lab’s 356 do', () => {
+    expect(LEDGER.gameSize).toBe(72);   // 71 -> 72 AT B2P: uPosterizeLevels, the colour quantum. It is CONSTANT across bodies (a global display setting), so gameVarying stays 45 — the two numbers moving apart is the control that this is a declaration and not a new per-body draw.
     expect(LEDGER.labSize).toBe(356);
     // ⭐ RE-PINNED AT STEP 10a, 37 -> 45. This is a POPULATION move, not a code move: the pass now
     // walks 266 bodies instead of 103, and eight game uniforms that read one value across the gas-only
@@ -527,13 +527,13 @@ describe('2. the collapse in per-body variation', () => {
 describe('3. channel 1 — the uniform diff, run not read', () => {
   const measured = () => new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.divergedCarried.keys()]);
 
-  it('the subject set is 43 lost names plus the 20 value-defaulted carried ones', () => {
-    expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero]).size).toBe(43);
+  it('the subject set is 44 lost names plus the 20 value-defaulted carried ones', () => {
+    expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero]).size).toBe(44);   // 43 -> 44 AT B2P: the game spelling uPosterizeLevels leaves the material at the swap; P-18 rules it carried, because the lab's uLevels holds the SAME object.
     // 62 -> 63 AT STEP 10a: `uLimbExponent` re-enters the diverged bucket on the 163 newly-admitted
     // solid bodies, which limbDeck's gas-only predicate never claims. See §2's note; P-11 claims it.
-    expect(measured().size).toBe(63);
-    // 43 lost + 28 carried = the 71 the game material declares. Nothing fell between the buckets.
-    expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.carried]).size).toBe(71);
+    expect(measured().size).toBe(64);   // 63 -> 64 AT B2P, same one name.
+    // 44 lost + 28 carried = the 72 the game material declares. Nothing fell between the buckets.
+    expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.carried]).size).toBe(72);
   });
 
   it('every measured subject is claimed by exactly ONE ledger row', () => {

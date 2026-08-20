@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { assignBodyName } from '../util/scene-naming.js';
+import { assignBodyName } from '../util/scene-naming.js'; import { POSTERIZE_LEVELS } from '../rendering/posterizeLevels.js'; // ⛔ B2P RIDES THIS LINE: this file carries line-anchored citations, so a new import line moves them.
 
 /**
  * AsteroidBelt — renders a belt of asteroids using InstancedMesh.
@@ -68,7 +68,7 @@ export class AsteroidBelt {
     return new THREE.ShaderMaterial({
       uniforms: {
         // Star positions (updated each frame for binary, stay at origin for single)
-        starPos1: { value: new THREE.Vector3(0, 0, 0) },
+        starPos1: { value: new THREE.Vector3(0, 0, 0) }, uPosterizeLevels: POSTERIZE_LEVELS, // B2P — the shared object. ⛔ RIDES THIS LINE.
         starPos2: { value: new THREE.Vector3(0, 0, 0) },
         starColor1: { value: new THREE.Vector3(...(starInfo?.color1 || [1, 1, 1])) },
         starColor2: { value: new THREE.Vector3(...(starInfo?.color2 || [0, 0, 0])) },
@@ -102,7 +102,7 @@ export class AsteroidBelt {
 
       fragmentShader: /* glsl */ `
         #include <logdepthbuf_pars_fragment>
-        uniform vec3 starPos1;
+        uniform vec3 starPos1;  uniform float uPosterizeLevels;   // B2P — this program's own declaration. ⛔ RIDES THIS LINE.
         uniform vec3 starPos2;
         uniform vec3 starColor1;
         uniform vec3 starColor2;
@@ -150,7 +150,7 @@ export class AsteroidBelt {
 
           vec3 finalColor = vColor * starLight;
           finalColor = min(finalColor, vec3(1.0));
-          finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);
+          finalColor = posterize(finalColor, uPosterizeLevels, gl_FragCoord.xy, 0.4);
 
           gl_FragColor = vec4(finalColor, 1.0);
         }

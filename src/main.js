@@ -132,7 +132,7 @@ import { createMaterialBodyMaterial, PALETTES } from './rendering/shaders/Materi
 import { PretextLab } from './ui/PretextLab.js';
 import * as LabMode from './debug/LabMode.js';
 import { warmPlanetPrograms, swapMaterialWhenReady, restoreMaterialSwap, MATERIAL_SWAPS } from './rendering/ShaderWarmup.js';
-import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetMaterial, swapLedgerOf } from './rendering/LabPlanetMaterial.js';
+import { buildLabPlanetMaterial, ensureLabAttributes, bodyRadiusOf, isLabPlanetMaterial, swapLedgerOf } from './rendering/LabPlanetMaterial.js'; import { setPosterizeLevels } from './rendering/posterizeLevels.js'; // ⛔ B2P RIDES THIS LINE: main.js carries ~700 line-anchored citations.
 // Instrument E's reproduction line has to report BOTH quantities named `compositionClass`, because
 // PLAN §12.5 fact 6 measured them to be different populations (only 65 of 209 world-engine gas-class
 // bodies fall inside the game's own GAS_TYPES set) and an assertion written against the wrong one is
@@ -196,7 +196,7 @@ const retroRenderer = new RetroRenderer(canvas, scene, camera);
 // boot. Move the slider, reload, and the picture silently came back at 3 with
 // the stored value still 5. Its neighbour on the next line always did this.
 retroRenderer.pixelScale = settings.get('pixelScale');
-retroRenderer.setColorPalette(settings.get('colorPalette'));
+retroRenderer.setColorPalette(settings.get('colorPalette'));  setPosterizeLevels(settings.get('posterizeLevels')); settings.onChange('posterizeLevels', setPosterizeLevels); // B2P — read on BOOT (the pixelScale defect above is exactly the boot-read being missing) and subscribed for CHANGE, so settings.set() and settings.reset() both reach the four shader programs and the lab material through the one shared uniform object.
 
 // ── Texture Baker (runtime procedural → texture baking) ──
 let textureBaker = null; // lazy-init on first use (needs renderer)
@@ -6227,7 +6227,7 @@ function applySettingChange(key, value) {
       break;
     case 'colorPalette':
       retroRenderer.setColorPalette(value);
-      break;
+      break;  case 'posterizeLevels': setPosterizeLevels(value); break; // B2P — the colorPalette precedent, for the DOM path. Idempotent with the onChange subscription at :199 (the DOM handler calls settings.set first). ⛔ RIDES THIS LINE: a new case line shifts every cited line below it.
     case 'masterVolume':
     case 'musicVolume':
     case 'sfxVolume':

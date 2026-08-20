@@ -12,7 +12,7 @@ import { conditionFromBody } from '../worldengine/port/conditionFromBody.js';
 import { atmosphereOpticsOf } from '../worldengine/base/atmosphereOptics.js';
 import { biosphereOf, BIO_PIGMENT } from '../worldengine/base/surfaceMaterial.js';
 import { craterUniformsFrom, CRATERS_OFF } from '../worldengine/port/craterUniforms.js'; import { craterRelevanceOf } from '../worldengine/base/bombardment.js'; // ⛔ RIDES THIS LINE: a new import line shifts every cited line below (see :2085-2090)
-import { updateLabPlanetMaterial, buildLabPlanetMaterial, ensureLabAttributes } from '../rendering/LabPlanetMaterial.js';
+import { updateLabPlanetMaterial, buildLabPlanetMaterial, ensureLabAttributes } from '../rendering/LabPlanetMaterial.js'; import { POSTERIZE_LEVELS } from '../rendering/posterizeLevels.js'; // ⛔ B2P RIDES THIS LINE: a new import line shifts every cited line below it.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fragment shader split into HEADER + per-category BODY + FOOTER.
@@ -23,7 +23,7 @@ import { updateLabPlanetMaterial, buildLabPlanetMaterial, ensureLabAttributes } 
 // ── Shared header: uniforms, varyings, noise, helpers ──
 const FRAG_HEADER = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
-uniform vec3 baseColor;
+uniform vec3 baseColor;  uniform float uPosterizeLevels;  // B2P — the colour quantum. ⭐ ONE declaration here reaches ALL THREE body programs, because GAS_BODY / ROCKY_BODY / EXOTIC_BODY are BODIES spliced onto this shared header. ⛔ RIDES THIS LINE: a new line shifts every cited line below it.
 // ── World-engine land palette (V2-10 port slice 1). BEDROCK endmembers, condition-derived per body.
 // NOT whole-body colours: oceans, ice caps, clouds and gas bands keep baseColor/accentColor.
 uniform vec3 uFreshColor;      // unweathered rock — exposed on peaks and fresh scarps
@@ -557,7 +557,7 @@ void main() {
 
   // ── Posterize with edge dithering ──
   finalColor = min(finalColor, vec3(1.0));
-  finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);
+  finalColor = posterize(finalColor, uPosterizeLevels, gl_FragCoord.xy, 0.4);
 
   gl_FragColor = vec4(finalColor, 1.0);
 }
@@ -941,7 +941,7 @@ void main() {
 
   // ── Posterize with edge dithering ──
   finalColor = min(finalColor, vec3(1.0));
-  finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);
+  finalColor = posterize(finalColor, uPosterizeLevels, gl_FragCoord.xy, 0.4);
 
   gl_FragColor = vec4(finalColor, 1.0);
 }
@@ -1276,7 +1276,7 @@ void main() {
 
   // ── Posterize with edge dithering ──
   finalColor = min(finalColor, vec3(1.0));
-  finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);
+  finalColor = posterize(finalColor, uPosterizeLevels, gl_FragCoord.xy, 0.4);
 
   gl_FragColor = vec4(finalColor, 1.0);
 }
@@ -1621,7 +1621,7 @@ export class Planet {
 
     const material = new THREE.ShaderMaterial({
       uniforms: {
-        baseColor: { value: new THREE.Vector3(...d.baseColor) },
+        baseColor: { value: new THREE.Vector3(...d.baseColor) }, uPosterizeLevels: POSTERIZE_LEVELS, // B2P — THE SHARED OBJECT ITSELF, never a copy: materials are built once and mutated, so a copy would strand every already-mounted body at its build-time value. ⛔ RIDES THIS LINE.
         accentColor: { value: new THREE.Vector3(...d.accentColor) },
         // World-engine land palette. Falls back to the legacy hard-coded constants when a body
         // predates the derive (e.g. a hand-authored fixture), so nothing renders black.
@@ -1770,7 +1770,7 @@ export class Planet {
     const material = new THREE.ShaderMaterial({
       side: THREE.DoubleSide,
       uniforms: {
-        ringColor1: { value: new THREE.Vector3(...d.rings.color1) },
+        ringColor1: { value: new THREE.Vector3(...d.rings.color1) }, uPosterizeLevels: POSTERIZE_LEVELS, // B2P — the ring is its OWN program with its OWN posterize copy, so it needs its own entry; wired to the same object so a disc and its ring never quantise differently. ⛔ RIDES THIS LINE.
         ringColor2: { value: new THREE.Vector3(...d.rings.color2) },
         ringOpacity: { value: d.rings.opacity },
         innerRadius: { value: innerR },
@@ -1809,7 +1809,7 @@ export class Planet {
         uniform float innerRadius;
         uniform float outerRadius;
         uniform vec3 lightDir;
-        uniform float planetRadius;
+        uniform float planetRadius;  uniform float uPosterizeLevels;   // B2P — this program's own declaration; the body header above does not reach here. ⛔ RIDES THIS LINE.
         // Moon-cleared gaps
         const int MAX_MOON_GAPS = 6;
         uniform int moonGapCount;
@@ -1878,7 +1878,7 @@ export class Planet {
 
           if (bayerDither(gl_FragCoord.xy) > alpha) discard;
 
-          color = posterize(color, 6.0, gl_FragCoord.xy, 0.4);
+          color = posterize(color, uPosterizeLevels, gl_FragCoord.xy, 0.4);
 
           gl_FragColor = vec4(color, 1.0);
         }

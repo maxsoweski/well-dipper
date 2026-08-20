@@ -1089,12 +1089,12 @@ make anything look different by itself** — the default does not change, and ch
 call, not an agent's.
 
 **Contents — four literals, and the fourth is not what the handoff said it was.**
-1. src/objects/Planet.js:560 `  finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);` ·
-   src/objects/Planet.js:944 `  finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);` ·
-   src/objects/Planet.js:1279 `  finalColor = posterize(finalColor, 6.0, gl_FragCoord.xy, 0.4);` — the
+1. src/objects/Planet.js:560 `  finalColor = posterize(finalColor, uPosterizeLevels, gl_FragCoord.xy, 0.4);` ·
+   src/objects/Planet.js:944 `  finalColor = posterize(finalColor, uPosterizeLevels, gl_FragCoord.xy, 0.4);` ·
+   src/objects/Planet.js:1279 `  finalColor = posterize(finalColor, uPosterizeLevels, gl_FragCoord.xy, 0.4);` — the
    three body programs (`GAS_BODY`, `ROCKY_BODY`, `EXOTIC_BODY`), each a separate fragment shader.
 2. ⚠ **REF CORRECTED HERE: the fourth site is the RING material, and it is a different quantity.**
-   src/objects/Planet.js:1881 `          color = posterize(color, 6.0, gl_FragCoord.xy, 0.4);` spends
+   src/objects/Planet.js:1881 `          color = posterize(color, uPosterizeLevels, gl_FragCoord.xy, 0.4);` spends
    `color`, not `finalColor`, inside a material built by its own factory — and it carries its own second
    copy of the function at src/objects/Planet.js:1837 `        vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth) {`,
    distinct from the body copy at src/objects/Planet.js:208 `vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth) {`.
@@ -1129,4 +1129,4 @@ stays Max's. Spine-1 **F50**'s carrier.
 **Prereqs:** none. ⭐ **Runs before B2's UAT**, so that the quad Max looks at can be re-looked-at with the
 ceiling raised — which is the difference between B2's palette leg being visible work and being work that
 passes every algebraic gate and buys nothing (§6.3 item 1's own words). **Moves numbers?** **NO** at the
-default. **Needs Max?** **NO to build.** He raises it himself at B2's UAT and tells us where it should sit.
+default. **Needs Max?** **NO to build.** He raises it himself at B2's UAT and tells us where it should sit. ⭐ **BUILT 2026-08-20 — and the contents list above was INCOMPLETE, twice over.** (1) **SIX live call sites across FOUR programs, not four sites.** The two this section missed are the two that carry the population: `src/objects/Moon.js:592` — the LEGACY plain-moon program, its own posterize copy, and ⚠ **edgeWidth 0.6, not 0.4**, which 632 moons render through until the lab flag flips — and `src/objects/AsteroidBelt.js:153`, its own program and its own copy again. (2) **⭐ ONE declaration in `FRAG_HEADER` reaches all three body programs, not three declarations.** `GAS_BODY`/`ROCKY_BODY`/`EXOTIC_BODY` are BODIES spliced onto that shared header by `PLANET_SHADER_VARIANTS`, so the "each a separate fragment shader" line above is true about the PROGRAMS and false about the DECLARATION. Four declarations were needed, not six: the shared header, the ring, the moon, the belt. **What shipped:** `src/rendering/posterizeLevels.js` holds ONE shared `{ value: 6.0 }` object handed to every material — materials here are built once and mutated, so a build-time-only read would have stranded every mounted body and shipped a no-op; three reads `.value` per draw, so one assignment moves every live material with no registry. The lab path is wired too (`buildLabPlanetMaterial` substitutes the same object for `uLevels`), without touching the lab shader or the `uniforms.js` default, so B7 does not evaporate the feature. `posterizeLevels: 6` joined `DEFAULTS`, read on boot and subscribed for change. `src/rendering/objects/RingRenderer.js:269` was left alone: it has ZERO importers in `src/`, and the `MaterialBodyShader`/`TexturedBodyShader` pair already take a `posterizeLevels` uniform and are Sol's path, which is out of scope. **Not built:** no settings-menu control — the value moves through `settings.set('posterizeLevels', n)` today, and where the slider sits is a look question.

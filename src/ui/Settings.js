@@ -9,7 +9,7 @@ const STORAGE_KEY = 'well-dipper-settings';
 
 const DEFAULTS = {
   // Visual
-  pixelScale: 3,
+  pixelScale: 3, posterizeLevels: 6,   // B2P: the colour quantum every body/ring/moon/asteroid shader quantises to. 6 IS the shipped value, so an absent key falls through the DEFAULTS merge to today's picture with no migration — the flightControlType precedent below, in its own words. Raising it makes the game LESS posterized as detail lands.
   starDensity: 18000,
 
   // Screensaver
