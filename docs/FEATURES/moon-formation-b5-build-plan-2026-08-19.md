@@ -301,7 +301,7 @@ Three construction requirements, each from a line I opened:
 | `moon-condition-contract:542` (`>600`) | ✓ | ⛔ **the gate step 2's key must clear.** Measured: `parent:type` = 607/733 built (591/705 survivors — fails); `+moonIndex` = 733/733 | keep green | — |
 | `tools/moon-census.mjs:116` | ✗ exit 3 | yes — `plain` and `planetClass` both, at 7/8 | ⛔ no mechanism **by design** (`:830-831`: *Do NOT adjust the expected numbers to match. Report it.*) | **hand-derived** |
 | `binary-barycentre.test.js:163-174` | ✗ 2 of 10 rows (`wd-10`, `wd-27`, both `moons 5→6`) | yes, any count change | hand | **hand-derived** |
-| `material-parity-list.test.js:288-289` | ✗ **absent from handoff §3** — `withMoons 228→229`; `:289` `moons 456→461` **masked** | yes | hand, **2 literals** (the other 7 pins are unmoved) | **hand-derived** |
+| `material-parity-list.test.js:325-326` | ✗ **absent from handoff §3** — `withMoons 228→229`; `:289` `moons 456→461` **masked** | yes | hand, **2 literals** (the other 7 pins are unmoved) | **hand-derived** |
 | `ProcgenSnapshot.test.js` | ✗ 23/23, blessed | already maximally red — no further signal | `node scripts/capture-procgen-snapshot.mjs` | **re-recordable** |
 | `l0-moon-baseline.json` | ✓ | yes at step 3 | `node src/generation/__tests__/__fixtures__/regen-l0-moon-baseline.mjs` | **re-recordable** |
 | `port-condition-contract.test.js:286` `CORPUS_BODIES = 526` | ✓ **green** | ⛔ **must not move** | no mechanism — a break is a hand-repair with no net | **must stay green** |

@@ -53,6 +53,7 @@ import { compositionClass } from '../base/e1Regime.js';
 import { giantDeckPack } from './giantDeck.js';
 import { LIMB_DECK_ENTRY } from './limbDeck.js';
 import { POLAR_DECK_ENTRY } from './polarDeck.js';
+import { ROCKY_SURFACE_ENTRY } from './rockySurface.js';
 import {
   writePackUniforms, assertDisplayPolicy, assertPackResult, PackContractError,
 } from '../port/writePackUniforms.js';
@@ -119,8 +120,51 @@ export const PACKS = Object.freeze([
   // generated population in each pack's own suite, not inferred from reading three source lines.
   // Registration therefore cannot move a body from the legacy material to the lab material; it can
   // only change which uniforms an already-swapped body carries.
+  //
+  // ⛔⛔ THAT PARAGRAPH IS TRUE OF THE THREE GAS ENTRIES ABOVE AND **FALSE AS OF STEP 10a**. It held
+  // only because all three predicates were `compositionClass(condition) === 'gas'` character for
+  // character, so the union of claims never grew. `rockySurface` is the COMPLEMENT, `!== 'gas'`, and
+  // src/objects/Planet.js:2192 `const packs = condition ? selectPacks(condition).map((e) => e.name) : [];`
+  // feeds `packs.length > 0` into the admission test one line below it. A pack whose predicate claims
+  // bodies no other pack claimed therefore ADMITS THEM TO THE LAB MATERIAL. Measured over
+  // lab-procedural-0…199: swapped planets 341 -> 846, and 188 of the newcomers lose a legacy branch
+  // that nothing yet rewrites (lava 52, ocean 6, venus 130 — ledger rows R-05, R-06, R-07).
+  // ⭐ NOT A LIVE REGRESSION, AND THE REASON IS THE FLAG, NOT THE PACK: src/objects/Planet.js:2153
+  // `export const LAB_GAS_BODIES_DEFAULT = false;` is the first term of that same admission test, so
+  // none of this reaches a player until Step 12 deletes the fallbacks. It IS the trajectory Step 12
+  // commits to, and the ledger is where those losses are declared before Max is asked to accept them.
+  // ⚠ ANY FUTURE PACK WITH A NON-'gas' PREDICATE WIDENS THE SWAPPED POPULATION. Say so in the commit
+  // and re-record the census in the same edit, or the parity fence reds on a declared change and
+  // reads as a regression.
   LIMB_DECK_ENTRY,
   POLAR_DECK_ENTRY,
+  // ── STEP 10a. THE FOURTH ENTRY, AND THE FIRST WHOSE PREDICATE IS NOT `=== 'gas'`.
+  //
+  // ⛔ APPENDED, NEVER PREPENDED, for the positional reason spelled out above — and with one extra
+  // consequence the three gas entries did not have: this predicate is their exact COMPLEMENT, so
+  // every body in the corpus is now claimed by exactly one of the two disjoint halves. The
+  // collision throw below stays inert, and the pack suites assert that by NAME lookup rather than
+  // by trusting a reading of four `applies` lines.
+  //
+  // ⚠ THIS IS THE FIRST ENTRY THAT MOVES BODIES FROM THE LEGACY MATERIAL TO THE LAB ONE. The
+  // paragraph above says registration "cannot move a body"; that was true while all three
+  // predicates were `=== 'gas'`, and it stops being true on this line. MEASURED over
+  // lab-procedural-0…199: planets claimed by at least one pack go 343 -> 852 (i.e. all of them) and
+  // swapped go 341 -> 846, the six refusals being provenance, not the predicate. Per-branch, three
+  // legacy rocky branches become live for the first time — lava (52 bodies), ocean (6) and venus
+  // (130). tests/material-parity-list.test.js's census is re-pinned in this same commit for that
+  // declared reason; a census that moved silently is indistinguishable from a regression.
+  // ⛔ THE PARITY LEDGER IS NOT CLOSED BY THAT RE-PIN, and an earlier draft of this note mis-routed
+  // the work: of the eight §2/§3/§4 assertions the registration reddened, only TWO read the ledger
+  // doc at all. Rows R-05/R-06/R-07 close those; five were pins this suite re-records itself, and
+  // one was an instrument bug (`LEDGER.written` sampled the FIRST body, so it silently re-pointed at
+  // rockySurface). What stays Max's (2026-08-09) is the SCHEDULING, recorded in each row's evidence.
+  //
+  // ⭐ `!== 'gas'` AND NOT `=== 'rocky'`, and the difference is a gate two commits away rather than
+  // a style preference. Measured over the same corpus, plain moons are {rocky: 407, icy: 225} with
+  // zero gas — so `=== 'rocky'` claims 64.4% of them, under the ≥95% bar Step 10's moon branch has
+  // to clear, and the shortfall would surface as an unreachable gate with nothing pointing here.
+  ROCKY_SURFACE_ENTRY,
 ]);
 
 /** The entries whose predicate claims this condition, in array order. */

@@ -694,7 +694,7 @@ POPULATION MISMATCH exit at `:1860` fires on the P count alone, before any moon-
 **Trap 1 — a post-hoc coordinate list is wrong, and wrong by a knowable amount.**
 `ExoticOverlay.js:401` `planetEntry.planetData = newData;` replaces `planetData` wholesale with a
 fresh `PlanetGenerator.generate()` result, which carries **no `_systemSeed` and no `_ordinal`** —
-the defect already pinned, cause and all, at `tests/gas-body-lab-material.test.js:567`. So the
+the defect already pinned, cause and all, at `tests/gas-body-lab-material.test.js:708`. So the
 selector's key **does not exist in the generator's output** for swapped planets. Measured on
 FENCE-221: 10 swapped planets, all 10 eligible; recomputing the list from output instead of in-loop
 gives **26, not 27** — the missing body is `wd-1403/1`, whose key degrades to

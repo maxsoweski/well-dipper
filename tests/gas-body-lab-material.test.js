@@ -32,7 +32,7 @@ import {
   LAB_GAS_BODIES_DEFAULT, LAB_GAS_BODIES_KEY, SOL_SYSTEM_SEED,
   GAME_ANIM_RATE, GAME_RELEVANCE,
 } from '../src/objects/Planet.js';
-import { PACKS, applyDriverPacks, selectPacks, gatesFor, GATE_POLICY_ALL_ON } from '../src/worldengine/drivers/index.js';
+import { PACKS, applyDriverPacks, selectPacks, gatesFor, GATE_POLICY_ALL_ON } from '../src/worldengine/drivers/index.js'; import { ROCKY_SURFACE_UNIFORMS } from '../src/worldengine/drivers/rockySurface.js'; // ⛔ RIDES THIS PHYSICAL ROW: this file is cited BY LINE from four files outside CITE_SOURCES, so a new import line rots refs the fence cannot see.
 import { buildLabPlanetMaterial, isLabPlanetMaterial } from '../src/rendering/LabPlanetMaterial.js';
 import { BodyRenderer } from '../src/rendering/objects/BodyRenderer.js';
 import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
@@ -110,7 +110,7 @@ describe('6a — PACKS is an array with pinned MEMBERSHIP, not a pinned length',
   // program owns. A `expect(PACKS.length).toBe(1)` would therefore pass a commit that swapped the
   // gas deck for something else entirely.
   it('the membership is exactly the names Step 6 ships', () => {
-    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck']);
+    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface']);
   });
 
   it('every entry carries the four contract fields, and the array is frozen', () => {
@@ -237,10 +237,17 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
   it('a gas body: the deck runs, the master gates are 1.0, the bake is real', () => {
     const { material, res, count } = runOn(gas());
     expect(res.applied).toEqual(['giantDeck', 'limbDeck', 'polarDeck']);
-    expect(res.skipped).toEqual([]);
+    expect(res.skipped).toEqual(['rockySurface']);
     expect(material.uniforms.uBandStrength.value).toBe(1.0);
     expect(material.uniforms.uJetStrength.value).toBe(1.0);
+    // ⭐ MEASURED, NOT ASSUMED — `rockySurface` declares `craters` and `ejecta`, and NEITHER KEY IS
+    // HERE. `applyDriverPacks` merges an entry's gate map only after the applicability `continue`
+    // (src/worldengine/drivers/index.js:219 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`),
+    // so a skipped pack contributes nothing to `res.gates`. That matters beyond bookkeeping:
+    // `res.gates` is what an Instrument E caption prints as "what was decided on this body", and a
+    // gate name from a pack that never ran would read as a rendering decision nobody made.
     expect(res.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true });
+    expect(Object.keys(res.gates)).not.toContain('craters');
     expect(Object.keys(res.attributes).sort()).toEqual(['aBand', 'aMush', 'aShear']);
     expect(res.attributes.aBand.length).toBe(count);
     // Non-zero variance — a constant aBand is what a dead bake looks like.
@@ -248,19 +255,89 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     expect(new Set(Array.from(a)).size).toBeGreaterThan(8);
   });
 
-  it('a solid body: nothing applies and NOT ONE uniform moved', () => {
+  it('a solid body: EXACTLY the rocky pack applies, and nothing it did not declare moved', () => {
+    // ⛔ THIS TEST'S PREMISE INVERTED AT STEP 10a AND IT WAS REWRITTEN, NOT RENUMBERED. It read "a
+    // solid body: nothing applies and NOT ONE uniform moved", which was a true statement about a
+    // registry whose three predicates were all `compositionClass === 'gas'`. `rockySurface`'s is
+    // their complement, so a solid body is claimed the moment it registers and "nothing applies" is
+    // simply false. The control property that sentence was carrying is NOT "the array does nothing
+    // here" — it is **containment**: a pack may only move the uniforms it declares, so a body can
+    // never be quietly restyled by a deck that was never meant to reach it. That property survives
+    // the inversion in a stronger form, because now there is a pack running and it still may not
+    // touch anything outside its own list. Deleting it to make the numbers pass is the failure mode
+    // src/worldengine/drivers/rockySurface.js's own registry-fence comment names.
     const built = buildLabPlanetMaterial({ bodyRadius: 1 });
-    const before = Object.fromEntries(
-      Object.entries(built.material.uniforms).map(([k, v]) => [k, typeof v.value === 'number' ? v.value : null]),
+    // ⛔ STRUCTURAL ENCODE, NOT `typeof value === 'number' ? value : null`. The version this test
+    // carried before the rewrite mapped every non-number to `null`, and 8 of the 13 uniforms this
+    // pack actually moves on this body are a THREE.Vector3 or a THREE.Color — the offsets and the
+    // whole surface palette. Under the old snapshot the containment check would have been blind to
+    // exactly the family Step 9 added, which is a containment claim that cannot see the thing it is
+    // containing. Same blind spot the ledger records against `encodeValue`, closed here rather than
+    // inherited.
+    const enc = (v) => {
+      if (v == null) return 'null';
+      if (typeof v === 'object') {
+        if ('x' in v) return `v:${v.x},${v.y},${v.z ?? ''},${v.w ?? ''}`;
+        if ('r' in v && 'g' in v) return `c:${v.r},${v.g},${v.b}`;
+        if (ArrayBuffer.isView(v)) return `a:${Array.from(v).join(',')}`;
+        if (Array.isArray(v)) return `[${v.map(enc).join('|')}]`;
+        return 'obj';
+      }
+      return String(v);
+    };
+    const snapshot = () => Object.fromEntries(
+      Object.entries(built.material.uniforms).map(([k, v]) => [k, enc(v.value)]),
     );
+    const before = snapshot();
     const b = GEN_SOLID[0];
     const res = applyDriverPacks(built.material, b.cond, labPackCtx(b.d, b.cond, undefined));
-    expect(res.applied).toEqual([]);
+    expect(res.applied).toEqual(['rockySurface']);
     expect(res.skipped).toEqual(['giantDeck', 'limbDeck', 'polarDeck']);
-    const after = Object.fromEntries(
-      Object.entries(built.material.uniforms).map(([k, v]) => [k, typeof v.value === 'number' ? v.value : null]),
-    );
-    expect(after).toEqual(before);
+    // The gate map is the applied pack's names ONLY — the three skipped decks contribute none.
+    expect(res.gates).toEqual({ craters: true, ejecta: true });
+    // ⛔ NO ATTRIBUTE IS BAKED ON A SOLID BODY. `aBand`/`aMush`/`aShear` are the gas deck's, and the
+    // ctx here carries no geometry at all; a pack that baked one anyway would be reaching for
+    // vertex data it was not given.
+    expect(Object.keys(res.attributes)).toEqual([]);
+
+    // ── CONTAINMENT, the property the old sentence was protecting ──────────────────────────────
+    const after = snapshot();
+    const moved = Object.keys(after).filter((k) => after[k] !== before[k]).sort();
+    const wrote = new Set(res.uniformsWritten);
+    // ⛔ THE CONTRACT SET, NOT THE WRITE LOG, AND THE DIFFERENCE IS THE WHOLE GATE. An earlier form of
+    // this assertion compared `moved` against `new Set(res.uniformsWritten)` — but
+    // src/worldengine/drivers/index.js:246 `for (const name of Object.keys(result.drivers)) uniformsWritten.push(name);`
+    // pushes every name the writer just moved, so `moved \ uniformsWritten` is empty BY CONSTRUCTION
+    // for any driver map at all. EXECUTED: wrapping the pack to emit two extra drivers (`uOctaves: 11`,
+    // `uLavaCoverage: 0.9`) really restyles this body — and the write-log form stayed green, as did
+    // `moved.length > 8` and the seven named gas uniforms below. Against ROCKY_SURFACE_UNIFORMS both
+    // extras are caught. ⚠ With N packs the write log is the UNION of what all of them wrote, so the
+    // write-log form gets WEAKER as the registry grows; the contract form does not.
+    const DECLARED = new Set(ROCKY_SURFACE_UNIFORMS);
+    expect(moved.filter((n) => !DECLARED.has(n))).toEqual([]);
+    // …and the pack may not name a uniform outside its own published family in the first place, so a
+    // driver that is emitted CONDITIONALLY (only on an icy condition, say) reds on the WRITE rather
+    // than on whether this particular body happened to move it.
+    expect(res.uniformsWritten.filter((n) => !DECLARED.has(n))).toEqual([]);
+    // …and it is not vacuous — the pack really did write, so `moved` is a real sample and not the
+    // empty set passing by default. MEASURED on this body: 13 of the 21 declared names move; the
+    // other 8 land on a value the factory default already held, which is a fact about THIS body's
+    // condition rather than about the wire — hence a floor rather than a pin.
+    expect(moved.length).toBeGreaterThan(8);
+    // The eight the structural encode is here for: without it these read as `null === null`.
+    for (const n of ['uMacroOffset', 'uDetailOffset', 'uCraterOffset', 'uFreshColor']) {
+      expect(moved, `${n} is a Vector3/Color the snapshot must be able to see move`).toContain(n);
+    }
+
+    // ── AND THE GAS DECKS ARE UNTOUCHED, BY NAME ───────────────────────────────────────────────
+    // The four master gates and the two limb terms are what a mis-registered array would move
+    // first: they are the names whose non-zero value IS "this body renders as a gas giant".
+    for (const n of ['uBandStrength', 'uJetStrength', 'uLimbStrength', 'uPolarStrength',
+                     'uLimbExponent', 'uBandM', 'uJetSpeed']) {
+      expect(wrote.has(n), `${n} must not be in the rocky pack's write set`).toBe(false);
+      expect(DECLARED.has(n), `${n} must not be in ROCKY_SURFACE_UNIFORMS either`).toBe(false);
+      expect(after[n], `${n} moved on a solid body`).toEqual(before[n]);
+    }
   });
 
   it('refuses a material with no uniforms, and refuses a caller-supplied gates map', () => {
@@ -292,13 +369,30 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
 
 describe('6a — the module reaches no renderer, and its npm surface is pinned by NAME', () => {
   const IMPORT_RE = /(?:^|\n)\s*(?:import|export)[\s\S]*?from\s*['"]([^'"]+)['"]/g;
+  // ⛔ COMMENTS ARE STRIPPED BEFORE THE SCAN, AND THIS IS A MEASURED REPAIR, NOT TIDYING. Step 10a
+  // reddened this fence with `deps` reading
+  // ['alea', 'simplex-noise', 'the material already had the factory\n// value'] — a THIRD npm
+  // "dependency" invented out of English prose. `IMPORT_RE` is anchored on a line starting with
+  // `import`/`export` and then matches lazily to the first `from '…'`, so the comment block above
+  // `PERTURB_BASE` in src/worldengine/drivers/rockySurface.js — which contains the sentence
+  // …distinguish "the pack wrote the relief envelope" from "the material already had the factory
+  // value"… — closes a match that began at an `export` line 18 rows earlier.
+  // ⛔ NO LINE CITATION ON THAT FILE ON PURPOSE: `scratchpad/mutant/rockySurface.js` exists, the
+  // citation fence resolves by BASENAME and skips only node_modules/.git/.claude/dist/build/
+  // coverage, so `rockySurface.js:NNN` is AMBIGUOUS and exits 2. Symbol name, no number.
+  // ⚠ THE FALSE POSITIVE IS THE HARMLESS HALF. The lazy span runs from an `export` line to the first
+  // `from '…'` ANYWHERE below it, so a comment carrying that phrasing ABOVE a real import swallows
+  // the real one and the dependency it names is never reported — a silent green in the exact
+  // direction this fence exists to make loud. Stripping comments closes both halves at once, with
+  // the repo's own sound stripper (tests/helpers/source-scan.mjs, offsets preserved, STRINGS KEPT so
+  // a genuine `from 'three'` still reads).
   function closureOf(entryRel, reader = read) {
     const seen = new Set();
     const bare = [];
     const walk = (rel) => {
       if (seen.has(rel)) return;
       seen.add(rel);
-      const src = reader(rel);
+      const src = stripCommentsPreservingOffsets(reader(rel));
       IMPORT_RE.lastIndex = 0;
       let m;
       while ((m = IMPORT_RE.exec(src)) !== null) {
@@ -343,6 +437,19 @@ describe('6a — the module reaches no renderer, and its npm surface is pinned b
     };
     const c = closureOf('a.js', (rel) => fake[rel]);
     expect(c.bare).toEqual(['b.js -> three']);
+  });
+
+  it('CONTROL — prose cannot invent a dependency, and prose cannot HIDE one', () => {
+    // The two halves of the Step 10a defect, constructed rather than argued. Both fake modules
+    // carry the same English sentence rockySurface.js carries; only the second one also has a real
+    // npm import underneath it, which the un-stripped walker swallowed.
+    const invents = { 'a.js': 'export const K = 1;\n// …tell one from "the other" from "a third".\n' };
+    expect(closureOf('a.js', (rel) => invents[rel]).bare).toEqual([]);
+    const hides = {
+      'a.js': 'export const K = 1;\n// …tell one from "the other" from "a third".\n'
+            + "import * as THREE from 'three';\n",
+    };
+    expect(closureOf('a.js', (rel) => hides[rel]).bare).toEqual(['a.js -> three']);
   });
 });
 
@@ -545,23 +652,57 @@ describe('6e — the flag is OFF by default and it selects a DIFFERENT material'
     expect(compositionClass(surface.userData.wd.condition)).toBe('gas');
   });
 
-  it('a WORLD-ENGINE SOLID planet is untouched with the flag ON (Instrument C stays at zero)', () => {
-    // Step 6's own gate: "Instrument C on the still-legacy bodies: zero delta." The mechanism that
-    // makes that true is here — no pack claims a solid condition, so nothing is admitted.
+  it('⛔ INVERTED AT STEP 10a — a WORLD-ENGINE SOLID planet now SWAPS, and Sol is what stays at zero', () => {
+    // ⛔ THIS READ "a WORLD-ENGINE SOLID planet is untouched with the flag ON (Instrument C stays at
+    // zero)". Step 6's zero-delta gate rested on a mechanism — "no pack claims a solid condition" —
+    // and `rockySurface`'s predicate is exactly the sentence that stops being true. So the swapped
+    // population goes from the gas bodies to very nearly the whole corpus, which is Step 10's
+    // declared blast radius and not a discovery.
+    //
+    // ⭐ THE CONTROL DOES NOT DISAPPEAR WITH IT, because "Instrument C stays at zero" still has a
+    // real population: SOL. Sol bodies are refused by PROVENANCE, not by the predicate, and that
+    // half is untouched by registration. Asserting the new positive alone would have quietly
+    // retired the only zero-delta claim this suite still owns.
     const b = GEN_SOLID[0];
     const { material, lab } = planetAt(b.d, true);
-    expect(isLabPlanetMaterial(material)).toBe(false);
-    expect(lab).toBe(null);
-    expect(labPipelineAdmits(b.d, b.cond).packs).toEqual([]);
+    expect(isLabPlanetMaterial(material)).toBe(true);
+    expect(lab.packsApplied).toEqual(['rockySurface']);
+    expect(lab.gates).toEqual({ craters: true, ejecta: true });
+    expect(labPipelineAdmits(b.d, b.cond).packs).toEqual(['rockySurface']);
+    // …and with the flag OFF it is still the legacy material. Registration widened WHICH bodies the
+    // pipeline claims; it did not touch the flag that decides whether the pipeline runs at all.
+    expect(isLabPlanetMaterial(planetAt(b.d, false).material)).toBe(false);
+    // THE SURVIVING ZERO: a solid Sol planet, claimed by the predicate and refused by provenance.
+    const solSolid = SOL.filter((x) => x.kind === 'planet'
+      && compositionClass(conditionFromBody(x.d)) !== 'gas');
+    expect(solSolid.length).toBeGreaterThan(4);
+    for (const x of solSolid) {
+      const adm = labPipelineAdmits(x.d, conditionFromBody(x.d));
+      expect(adm.packs, `${x.id} must be CLAIMED, or this control proves nothing`).toEqual(['rockySurface']);
+      expect(adm.admitted, `${x.id} must be refused by provenance`).toBe(false);
+      expect(isLabPlanetMaterial(planetAt(x.d, true).material), x.id).toBe(false);
+    }
   });
 
-  it('every STAMPED generated gas planet swaps, and no solid one does', () => {
+  it('every STAMPED generated planet swaps — gas AND solid — and the class decides WHICH pack', () => {
+    // ⛔ THIS READ "…and no solid one does". `solidAdmitted.length === 0` was a statement about the
+    // registry, not about provenance, and Step 10a falsifies it by design. The half that was doing
+    // the real work — ADMITTED equals STAMPED, i.e. the only thing turning a claimed body away is
+    // Step 6d's provenance test — is kept and is now asserted on BOTH halves of the population.
     setLabGasBodiesOverride(true);
-    const stampedGas = GEN_GAS.filter((b) => worldEngineProvenance(b.d).isWorldEngine);
-    const gasAdmitted = GEN_GAS.filter((b) => labPipelineAdmits(b.d, b.cond).admitted);
-    const solidAdmitted = GEN_SOLID.filter((b) => labPipelineAdmits(b.d, b.cond).admitted);
-    expect(gasAdmitted.length).toBe(stampedGas.length);
-    expect(solidAdmitted.length).toBe(0);
+    const stamped = (set) => set.filter((b) => worldEngineProvenance(b.d).isWorldEngine);
+    const admitted = (set) => set.filter((b) => labPipelineAdmits(b.d, b.cond).admitted);
+    expect(admitted(GEN_GAS).length).toBe(stamped(GEN_GAS).length);
+    expect(admitted(GEN_SOLID).length).toBe(stamped(GEN_SOLID).length);
+    // Non-vacuous in the direction that matters: some gas bodies really are refused, so
+    // "admitted === stamped" is an equality between two different numbers, not 59 === 59 twice.
+    expect(admitted(GEN_GAS).length).toBeLessThan(GEN_GAS.length);
+    // …and every claimed body is claimed by ONE side of the disjoint predicate pair, never both.
+    for (const b of [...GEN_GAS, ...GEN_SOLID]) {
+      const packs = labPipelineAdmits(b.d, b.cond).packs;
+      expect(packs, b.id).toEqual(compositionClass(b.cond) === 'gas'
+        ? ['giantDeck', 'limbDeck', 'polarDeck'] : ['rockySurface']);
+    }
   });
 
   it('⛔ FOUND HERE, NOT FIXED HERE — ExoticOverlay strips the seed key off the bodies it swaps', () => {

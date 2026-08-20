@@ -11,6 +11,7 @@
 //     surfacePaletteOf -> applyAlbedoTransfer ─> the ground palette (5 uniforms)
 //     icenessOf / biosphereOf ─────────────────> the two surface scalars
 //     reliefEnvelope ─────────────────────────> the one global relief term
+//     (ctx.macroOffset / detailOffset / craterOffset) ─> the three domain offsets, FORWARDED
 //
 // ⭐ WHY THIS PACK EXISTS, in one line. Ledger P-12 and P-14 are the two rows where the game
 // ALREADY RUNS the producer and the lab material simply never receives the answer: the legacy
@@ -44,22 +45,39 @@
 //     among them — it is the lab's global domain multiplier and the game's is identity
 //     (src/objects/Planet.js:1682 `uDispDomainScale: { value: RELIEF_DOMAIN_SCALE },`). P-14 closes
 //     4 of 5 and stays partially open; naming it here would author a law with no source.
-//  3. THE OFFSET FAMILY — `uMacroOffset`, `uDetailOffset`, `uCraterOffset` (ledger P-13). There are
-//     already TWO divergent private seed→vec3 laws (the game's `reliefOffsets` in Planet.js, the
-//     lab's scalar sin-hash) and synthesising a third from `ctx.macroSeed` inside a pack would be a
-//     new disagreement that nothing can fail on. P-13's real shape is ~23 zero-defaulted offset
-//     vectors, not three (src/rendering/LabPlanetMaterial.js:345 `it selects **111**: the 87 here plus 24 all-zero domain-offset vectors`), so it is an
-//     offset-FAMILY decision at the ctx layer, not a driver this pack may quietly invent.
+//  3. ⭐ THE OFFSET FAMILY IS NOW FORWARDED — AND STILL NOT DERIVED. `uMacroOffset`,
+//     `uDetailOffset` and `uCraterOffset` (ledger P-13) are emitted below, but NOT ONE of the three
+//     is computed in this file: they arrive on `ctx` already answered, and the answer is the game's
+//     own `reliefOffsets` — the exact vectors the legacy material writes at
+//     src/objects/Planet.js:1684 `uMacroOffset: { value: reliefSeed.macro },`. The earlier refusal
+//     stands where it was aimed: there are TWO divergent private seed→vec3 laws (the game's, and the
+//     lab's scalar sin-hash), so SYNTHESISING a third from a seed inside a pack would be a new
+//     disagreement nothing can fail on. Forwarding a front-end's own law is the opposite act.
+//     ⚠ AND IT CLOSES 3 OF 23, WHICH IS THE HONEST NUMBER. Measured on the material factory:
+//     `grep -oE 'u[A-Za-z0-9]*Offset[A-Za-z0-9]*:' src/worldengine/shaders/uniforms.js | sort -u`
+//     yields 26 names, of which 3 are scalar knobs (`uRidgeOffset`, `uPlateauOffset`,
+//     `uCryoRidgeOffset`) and 23 are vec3 domain offsets defaulting to a bare `new THREE.Vector3()`
+//     (src/rendering/LabPlanetMaterial.js:345 `it selects **111**: the 87 here plus 24 all-zero domain-offset vectors`).
+//     The lab writes all 26; the GAME's legacy material writes exactly these three and no others
+//     (measured: `uMacroOffset|uDetailOffset|uCraterOffset` are the only offset names in
+//     src/objects/Planet.js), and no shipped pack writes any. So after this commit the 20 remaining
+//     feature-domain offsets — dune, dust, karst, glacial, fluvial, tessera, … — are still identical
+//     on every swapped body. That is a REAL residue and it is not a regression this pack introduces:
+//     it is the state the legacy material already ships. Closing it is an offset-FAMILY decision
+//     with 20 producers to find, not three more driver lines.
 //  4. `uNoiseScale` (ledger P-10). Measured: the lab never writes it either — it sits at the factory
 //     default (src/worldengine/shaders/uniforms.js:10 `uNoiseScale: { value: 4.0 },`). There is no
 //     lab law to carry, so closing P-10 means DECIDING what a per-body value should be. Not wiring.
 //  5. `uIcenessAlbedo`. `uIcenessMix` is the driven MIX; the albedo it mixes toward is a lab knob.
 //  6. NO `assertMacroSeed`, and the omission is the honest one — same reasoning as
 //     src/worldengine/drivers/limbDeck.js:52 `ASSERTION, and the omission is the honest one.`.
-//     This pack draws NO entropy: every driver is a pure function of the condition vector, so
-//     asserting a seed it never reads would be a check that cannot fail for a reason. The pack's own
-//     test asserts seed-INDEPENDENCE instead, so the day a seeded term joins the deck the omission
-//     ends loudly rather than silently.
+//     This pack draws NO entropy: every driver is a pure function of the condition vector AND of the
+//     three offset vectors the front-end hands it, so asserting a seed it never reads would be a
+//     check that cannot fail for a reason. The pack's own test asserts seed-INDEPENDENCE instead, so
+//     the day a seeded term joins the deck the omission ends loudly rather than silently.
+//     ⚠ THE OFFSETS DO NOT CHANGE THAT. They are the front-end's answer carried across a seam, the
+//     same shape `displayRadiusEarth` has; the pack never opens a stream to produce them, which is
+//     why they get a REQUIRED-field assertion (like the display policy) and not a seed assertion.
 //
 // ⛔ THREE-FREE, AND NO ENTROPY. The import closure is `base/` + `display/` + `port/`. Measured on
 // this file's own imports rather than assumed:
@@ -142,6 +160,52 @@ export const C_CRATER = 1.0;
 // the anti-transcription fence stay meaningful over this file.
 export const PERTURB_BASE = 0.55;
 
+// ── The three domain-offset ctx fields, and why they are ASSERTED rather than defaulted ──────────
+/**
+ * One offset vector off the front-end's ctx, refused unless it is a 3-element array of finite
+ * numbers.
+ *
+ * ⭐ WHY A THROW AND NOT A `?? ZERO` DEFAULT. The uniform's factory default IS the zero vector
+ * (src/worldengine/shaders/uniforms.js:158 `uMacroOffset:  { value: new THREE.Vector3() },`), and a
+ * zero domain offset is a perfectly legal noise domain — it renders a plausible planet. It just
+ * renders the SAME planet's relief as every other body on the material, which is a defect only two
+ * bodies side by side can show. A default here would therefore reproduce ledger row P-13 silently
+ * inside the very commit that closes it, so the seam refuses instead, exactly as
+ * src/worldengine/port/writePackUniforms.js:107 `export function assertDisplayPolicy(ctx) {` refuses a missing display policy.
+ *
+ * ⛔ THE ARRAY SHAPE IS CHECKED, NOT ASSUMED, AND `Array.isArray` IS THE POINT OF THE CHECK. A
+ * `THREE.Vector3` has `.x/.y/.z` and no `.length`, so a front-end handing one over would fail here
+ * loudly rather than reach src/worldengine/port/writePackUniforms.js:280 `if (target && typeof target.set === 'function') target.set(...v);`
+ * as a non-array and be written as a scalar `slot.value`. The pack tree may not name a renderer
+ * type, so the guard is written as a positive shape assertion rather than as a type test.
+ */
+function offsetOf(ctx, field) {
+  const v = ctx == null ? undefined : ctx[field];
+  if (!Array.isArray(v) || v.length !== 3) {
+    throw new PackContractError(
+      `rockySurfacePack: ctx.${field} is REQUIRED and must be a 3-element array. It is the ` +
+      'FRONT-END\'s per-body noise-domain offset, not a value this pack may derive: two divergent ' +
+      'private seed-to-vector laws already exist and a third would agree with neither. Defaulting ' +
+      'it to zero is legal, invisible on one body, and gives every body the same relief.',
+    );
+  }
+  for (let i = 0; i < v.length; i++) {
+    if (typeof v[i] !== 'number' || !Number.isFinite(v[i])) {
+      throw new PackContractError(`rockySurfacePack: ctx.${field} component ${i} is not a finite number.`);
+    }
+  }
+  return v;
+}
+
+/** The three, named once so the driver block below cannot spell one of them differently. */
+function offsetsOf(ctx) {
+  return {
+    macro: offsetOf(ctx, 'macroOffset'),
+    detail: offsetOf(ctx, 'detailOffset'),
+    crater: offsetOf(ctx, 'craterOffset'),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // THE PACK
 // ─────────────────────────────────────────────────────────────────────────────
@@ -154,6 +218,11 @@ export const PERTURB_BASE = 0.55;
  *                                           and both-correct answers here. See DECISION 1.
  *   @param {object} ctx.gates               must carry BOTH `craters` and `ejecta` — an ABSENT key
  *                                           throws; an absent gate is an unanswered decision.
+ *   @param {number[]} ctx.macroOffset       ⭐ REQUIRED, all three. The front-end's per-body
+ *   @param {number[]} ctx.detailOffset      noise-domain offsets as plain 3-arrays. FORWARDED
+ *   @param {number[]} ctx.craterOffset      VERBATIM — see DECISION 4 and non-port 3. An absent one
+ *                                           throws rather than defaulting to the zero vector, which
+ *                                           is legal, invisible, and the P-13 defect itself.
  *   ⛔ `ctx.macroSeed` is NOT read — this pack draws no entropy (non-port 6 in the header).
  *   ⛔ `ctx.animRate` is NOT read — nothing in this family animates; the crater and palette GLSL is
  *      static (src/worldengine/shaders/height.glsl.js:2201 `// uCraterDensity≤0 ⇒ early-out, so the Stage-A base render is untouched.`).
@@ -216,7 +285,28 @@ export function rockySurfacePack(condition, ctx = {}) {
   // rather than rendering, which is the right failure, but it is a failure the port must not create.
   const relief = reliefEnvelope(condition.radiusEarth, condition.surfaceGravity ?? 1.0);
 
+  // ── DECISION 4: THE THREE DOMAIN OFFSETS ARE FORWARDED, AND A MISSING ONE IS A THROW ────────────
+  // Non-port 3 in the header is the whole argument; this line is only its consequence. `offsetsOf`
+  // REQUIRES all three rather than defaulting them, for the same reason
+  // src/worldengine/port/writePackUniforms.js:107 `export function assertDisplayPolicy(ctx) {` requires the display policy: the
+  // default is (0,0,0), (0,0,0) is a legal noise domain, and a body that silently took it renders a
+  // perfectly plausible planet wearing the SAME relief as every other body on the material. That is
+  // the one failure in this family that no still frame and no algebraic gate can see — it needs two
+  // bodies side by side — so the seam refuses rather than substitutes.
+  const off = offsetsOf(ctx);
+
   const drivers = {
+    // ── The three domain offsets (3) ─────────────────────────────────────────────────────────────
+    // ⛔ UNGATED, AND FORWARDED BYTE-FOR-BYTE. There is no lab toggle over the noise domain, and a
+    // gate here would hand a gated-off body the shared domain — the exact state this closes.
+    // ⛔ `.slice()` FOR THE REASON THE PALETTE TAKES ONE, one seam further out: these arrays come
+    // from the CALLER's ctx, which a front-end is free to build once and reuse across bodies. The
+    // writer hands an array to a settable vector, and the pack's own suite asserts that two bodies
+    // never share the array object.
+    uMacroOffset: off.macro.slice(),
+    uDetailOffset: off.detail.slice(),
+    uCraterOffset: off.crater.slice(),
+
     // ── The impact family (10) ───────────────────────────────────────────────────────────────────
     // ⭐ ONLY THE TWO MASTER GATES CARRY A GATE, which reproduces the lab exactly rather than being
     // a simplification: the GLSL keys the whole crater pass on the density
@@ -377,7 +467,7 @@ export function rockySurfacePack(condition, ctx = {}) {
  * ⭐ EXPORTED AS A FROZEN ENTRY rather than assembled at the registry, so composing it is one import
  * plus one array element and the predicate cannot be retyped differently from the one this pack's
  * own test gates. Registration is STEP 10's commit, not Step 9's: appended AFTER
- * src/worldengine/drivers/index.js:123 `POLAR_DECK_ENTRY,`.
+ * src/worldengine/drivers/index.js:140 `POLAR_DECK_ENTRY,`.
  *
  * ⛔⛔ THE PREDICATE IS `compositionClass(condition) !== 'gas'` AND IT MUST NOT BE `=== 'rocky'`,
  * even though this pack is named for rock and every uniform in it is a rocky-surface uniform. It is
@@ -396,16 +486,16 @@ export function rockySurfacePack(condition, ctx = {}) {
  * the term that makes it look icy).
  *
  * ⚠ IT MUST RETURN THE BOOLEAN, not a truthy value. Both admission sites compare with `=== true` —
- * src/worldengine/drivers/index.js:131 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`
- * and src/worldengine/drivers/index.js:175 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`
+ * src/worldengine/drivers/index.js:175 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`
+ * and src/worldengine/drivers/index.js:219 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`
  * — so a truthy non-boolean registers, reports as `skipped`, renders nothing, and throws nothing.
  * `!==` already yields a boolean; this is a note against a future rewrite, not a cast.
  *
  * ⚠ DISJOINTNESS FROM THE THREE SHIPPED PACKS IS BY CONSTRUCTION AND IS STILL ASSERTED. All three
  * are `compositionClass(condition) === 'gas'` character-for-character
- * (src/worldengine/drivers/index.js:99 `applies: (condition) => compositionClass(condition) === 'gas',`),
+ * (src/worldengine/drivers/index.js:100 `applies: (condition) => compositionClass(condition) === 'gas',`),
  * so this predicate is their exact complement and the collision throw at
- * src/worldengine/drivers/index.js:186 `throw new PackContractError(` is inert here. Inert is not the
+ * src/worldengine/drivers/index.js:230 `throw new PackContractError(` is inert here. Inert is not the
  * same as impossible — the pack test asserts the emitted name sets are disjoint by NAME LOOKUP, so
  * the day a predicate widens the overlap is caught by a test rather than by array order.
  */
@@ -427,4 +517,5 @@ export const ROCKY_SURFACE_UNIFORMS = Object.freeze([
   'uTerraceCount', 'uEjectaStrength', 'uEjectaRampart', 'uEjectaAmp', 'uEjectaLump',
   'uWeatheredColor', 'uFreshColor', 'uSedColor', 'uCratonColor', 'uBioGroundColor',
   'uBioGroundCover', 'uIcenessMix', 'uPerturb',
+  'uMacroOffset', 'uDetailOffset', 'uCraterOffset',
 ]);

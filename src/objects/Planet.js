@@ -11,7 +11,7 @@ import {
 import { conditionFromBody } from '../worldengine/port/conditionFromBody.js';
 import { atmosphereOpticsOf } from '../worldengine/base/atmosphereOptics.js';
 import { biosphereOf, BIO_PIGMENT } from '../worldengine/base/surfaceMaterial.js';
-import { craterUniformsFrom, CRATERS_OFF } from '../worldengine/port/craterUniforms.js';
+import { craterUniformsFrom, CRATERS_OFF } from '../worldengine/port/craterUniforms.js'; import { craterRelevanceOf } from '../worldengine/base/bombardment.js'; // ⛔ RIDES THIS LINE: a new import line shifts every cited line below (see :2085-2090)
 import { updateLabPlanetMaterial, buildLabPlanetMaterial, ensureLabAttributes } from '../rendering/LabPlanetMaterial.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1583,17 +1583,17 @@ export class Planet {
     // ones do, because every rocky body the game generates retains an atmosphere — see the register).
     // Display-side derivation also means no draw from PlanetGenerator's shared rng stream, the same
     // discipline reliefOffsets follows. Pure arithmetic, once per material.
-    // Only the ROCKY variant carries the crater code, and a gas giant has no surface to crater — the
-    // schedule's own P_SURF_MAX gate would eventually say so, but only after the defaults it never
-    // gets given (Jupiter derives density 1.0 from a missing mass and a missing pressure). Skipping
-    // the derivation outright keeps a meaningless number out of a uniform.
+    // ⭐ STEP 9b — THE GATE IS THE CONDITION, NOT THE `type` LABEL. `ROCKY_TYPES` still picks the
+    // shader VARIANT at :1474 and only ROCKY_BODY calls the crater code, so the two now AND together.
+    // ⚠ The label gate used to SUPPRESS the derivation; this one does not. Sol's Jupiter (`gas-giant`
+    // label, `atmosphere: null` ⇒ 'rocky' condition) now derives density 1.0 into an inert uniform.
     // Derived ONCE and shared by both consumers below. It used to be computed inline inside the
     // crater ternary, i.e. only for rocky bodies; the air optics need it for every body that has an
     // atmosphere at all, gas giants very much included. conditionFromBody is pure, so hoisting it
     // is inert for the crater path.
     const condition = conditionFromBody(d);
 
-    const craters = ROCKY_TYPES.has(d.type)
+    const craters = craterRelevanceOf(condition) > 0
       ? craterUniformsFrom(condition)
       : CRATERS_OFF;
 
@@ -2254,5 +2254,51 @@ export function labPackCtx(d, condition, mesh) {
     rotationHours: rotationHoursFromSpeed(d.rotationSpeed),
     rotationScale: GAME_ROTATION_SCALE,
     mesh,
+    // ⭐ P-13 — THE THREE DOMAIN OFFSETS, CARRIED AT THE ctx LAYER AND NEVER SYNTHESISED IN A PACK.
+    // `uMacroOffset` / `uDetailOffset` / `uCraterOffset` default to (0,0,0) on the lab material
+    // (src/worldengine/shaders/uniforms.js:158 `uMacroOffset:  { value: new THREE.Vector3() },`), so
+    // EVERY body swapped onto it draws its surface field from the SAME noise domain — one relief,
+    // repainted. There is no shared seed→vec3 transform to reach for: `reliefOffsets` above and the
+    // lab's own scalar sin-hash are two DIFFERENT private laws, and a pack synthesising a third from
+    // `macroSeed` would agree with neither while every algebraic gate stayed green. So the FRONT-END
+    // answers, exactly as it does for the display policy — and the game's answer is the one it
+    // already renders at :1684, :1685 and :1694. Byte-identical to the legacy material BY
+    // CONSTRUCTION rather than by measurement.
+    // ⛔ APPENDED BELOW `mesh` ON PURPOSE. Live citations from
+    // src/worldengine/drivers/polarDeck.js:88 and from the rocky-surface pack's DECISION 1 note
+    // point INTO the lines above; inserting anywhere among them rots refs that are correct today,
+    // and a repair-by-offset is how a citation stops meaning anything.
+    ...labReliefOffsets(d),
+  };
+}
+
+/**
+ * `reliefOffsets(d)`'s three vectors in the ONLY shape a driver pack may consume — PLAIN 3-ARRAYS,
+ * never `THREE.Vector3`.
+ *
+ * ⛔ THE ARRAY SHAPE IS THE CONTRACT, NOT A CONVENIENCE. The pack tree is fenced out of the renderer
+ * (src/worldengine/drivers/index.js:40 `// ⛔ NO RENDERER IN THE CLOSURE — and that is a NARROWER claim than "three-free", deliberately.`),
+ * and handing a pack a `Vector3` through `ctx` would put a renderer object in its closure by the
+ * back door — invisible to the import-set gate, which reads specifiers and not values. A plain array
+ * is also what the writer already accepts
+ * (src/worldengine/port/writePackUniforms.js:280 `if (target && typeof target.set === 'function') target.set(...v);`).
+ *
+ * ⚠ MEASURED ON MOON RECORDS BEFORE THIS SHIPPED, because Step 10 swaps moons and `reliefOffsets`
+ * keys on eight `d` scalars a moon record was never guaranteed to carry. Over `lab-procedural-0…199`
+ * (852 planets, 665 moons): planets carry all eight; moons carry `noiseScale` and `radiusEarth` on
+ * 665/665 and `massEarth`/`T_eq` on 632/665, and carry `noiseDetail`, `axialTilt`, `metallicity` and
+ * `eccentricity` on NONE. The four absent ones fold in as 0 through the `Number.isFinite` guard, so
+ * there is no NaN and no shared constant: all 665 moons — including the 33 with neither mass nor
+ * temperature — come out with distinct macro/detail/crater triples, because `noiseScale` alone is
+ * drawn per moon. ⛔ THE DEGENERATE CASE IS REAL AND IS NOT THIS ONE: a record carrying NONE of the
+ * eight folds to acc = 0 and every such body shares one triple. That is a fact about a record with
+ * no physical fields at all, which is not a body either front-end can render.
+ */
+export function labReliefOffsets(d) {
+  const o = reliefOffsets(d);
+  return {
+    macroOffset: o.macro.toArray(),
+    detailOffset: o.detail.toArray(),
+    craterOffset: o.crater.toArray(),
   };
 }

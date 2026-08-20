@@ -7,7 +7,7 @@
  * amended rather than the claim bent. What IS reachable headlessly, and is what these use:
  *   1. the pure arithmetic, extracted to src/physics/Barycentre.js + src/physics/BodyMass.js
  *   2. the SHIPPED body classes, which construct with no GL context — precedent
- *      tests/gas-body-lab-material.test.js:678 does the Planet half already
+ *      tests/gas-body-lab-material.test.js:819 does the Planet half already
  *   3. a source scan over main.js, which pins the call site exists (existence, NOT behaviour —
  *      the pattern at src/cockpit/__tests__/mainNavWiring.test.js:45)
  */

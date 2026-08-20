@@ -203,7 +203,16 @@ function ledgerPass(n, { starInfo = 'real' } = {}) {
   const divergedCarried = new Map(), carriedTotal = new Map();
   const bucketOf = new Map();          // name -> Set('lost'|'lostAtZero')
   const labVaries = new Map(), gameVaries = new Map();
-  let bodies = 0, written = null;
+  // ⛔ `written` IS A UNION OVER THE PASS, NOT A SAMPLE OF THE FIRST BODY. It used to be
+  // `if (written === null) written = …`, which was silently correct only while every registered
+  // predicate was `=== 'gas'` and the first admitted body was therefore always a gas one. The
+  // Step-10a registration made the first admitted body in `lab-procedural-0` a SOLID planet and
+  // the whole instrument re-pointed at rockySurface's 21 names — measured, exactly TWO write-sets
+  // exist over this corpus (21 names on 163 bodies, 26 on 103; disjoint, union 47), so a sample
+  // answers one of two questions depending on generation order. P-04's inverted fence below reads
+  // this set; under a sample it was red with limbDeck's wire fully intact.
+  const writtenSet = new Set();
+  let bodies = 0;
   for (let i = 0; i < n; i++) {
     const sys = StarSystemGenerator.generate(`lab-procedural-${i}`, null);
     const si = starInfo === 'real' ? sys.starInfo : null;
@@ -216,7 +225,7 @@ function ledgerPass(n, { starInfo = 'real' } = {}) {
       // The cheap census's `admitted` and the real mount must agree, or every count above is fiction.
       expect(isLabPlanetMaterial(nextSurf.material)).toBe(true);
       bodies++;
-      if (written === null) written = lab.uniformsWritten.slice().sort();
+      for (const n of lab.uniformsWritten) writtenSet.add(n);
       const prev = prevSurf.material.uniforms;
       const next = nextSurf.material.uniforms;
       const led = swapLedgerOf({ prevUniforms: prev, nextUniforms: next });
@@ -245,7 +254,8 @@ function ledgerPass(n, { starInfo = 'real' } = {}) {
   }
   const varying = (m) => [...m.entries()].filter(([, s]) => s.size > 1).map(([k]) => k).sort();
   return {
-    bodies, lost, lostAtZero, carried, divergedCarried, carriedTotal, bucketOf, written,
+    bodies, lost, lostAtZero, carried, divergedCarried, carriedTotal, bucketOf,
+    written: [...writtenSet].sort(),
     labVarying: varying(labVaries), gameVarying: varying(gameVaries),
     labSize: labVaries.size, gameSize: gameVaries.size,
   };
@@ -280,31 +290,74 @@ afterEach(() => { setLabGasBodiesOverride(null); });
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 describe('1. the swapped population, re-measured on lab-procedural-0…199', () => {
   it('pins the counts the ledger rules against', () => {
+    // ⭐ RE-RECORDED AT STEP 10a, IN THE SAME COMMIT AS THE REGISTRATION THAT MOVED THEM. The fourth
+    // registry entry's predicate is `compositionClass(condition) !== 'gas'` — the exact complement
+    // of the three that were there — so every planet in the corpus is now claimed by one half or
+    // the other and `claimed` becomes the whole population. These numbers moved for a DECLARED
+    // reason; a census left stale would have reddened indistinguishably from a regression, which is
+    // precisely what this pin exists to make impossible.
     expect(CENSUS.systems).toBe(200);
     expect(CENSUS.binarySystems).toBe(64);
-    expect(CENSUS.claimed).toBe(343);
-    expect(CENSUS.provenanceBlocked).toBe(2);
-    expect(CENSUS.swapped).toBe(341);
+    expect(CENSUS.claimed).toBe(852);          // 343 -> 852 (every planet; both predicates together)
+    expect(CENSUS.provenanceBlocked).toBe(6);  //   2 ->   6 (the exotic bodies ExoticOverlay unstamps)
+    expect(CENSUS.swapped).toBe(846);          // 341 -> 846
+    // ⛔ THESE TWO ARE NOT RE-PINNED, AND THE REASON IS NARROWER THAN IT WAS FIRST WRITTEN. Both are
+    // moon-keyed and the moon population is LIVE under an unrelated formation program (mechanism at
+    // src/generation/StarSystemGenerator.js:600), so re-recording them here would absorb another
+    // lane's open defect into this lane's commit. They stay stale and this suite stays red on them.
+    // ⛔ WHAT THEY NO LONGER PRESERVE IS THE SIGNAL. `withMoons` is counted INSIDE the `out.swapped++`
+    // block, so it is a statistic over the swapped population — which this commit took 341 -> 846.
+    // Measured here, in one pass: restricting the same census to gas-condition bodies (HEAD's whole
+    // predicate) gives 341 swapped / 229 withMoons / 461 moons — HEAD's answer — while the shipped
+    // predicate gives 846 / 420 / 663, against the pin's pre-window 228 / 456. The failure message is
+    // therefore `expected 420 to be 228`, NOT the `expected 229 to be 228` an earlier draft of this
+    // note claimed; the moon program's own +1/+5 is swamped by a +191 this commit caused, and B7 will
+    // be re-pinning a number that encodes the registration rather than the formation change.
+    // ⛔ AND THIS IS NOT "the only marker anyone has for it" — that claim was false when written. Six
+    // moon-NATIVE reds carry the same window and are uncontaminated by this lane: three in
+    // tests/body-identity-fence.test.js, two in tests/moon-condition-contract.test.js (G4
+    // PLANET-CLASS, POPULATION) and one in tests/moon-rng-stream-identity.test.js (ORPHANS).
+    // ⭐ WHAT B7 SHOULD ACTUALLY DO: pin the CORPUS population, not the swapped one. Measured in the
+    // same pass, planets-with-moons / moons over `lab-procedural-0…199` is 422 / 665 — a figure that
+    // does not read `adm.admitted` at all, so it is invariant under this lane's predicate and moves
+    // only when the moon program moves. A `toBe(420)` written now has to be re-measured again the
+    // next time a predicate widens, which is the defect this note is recording.
     expect(CENSUS.withMoons).toBe(228);
     expect(CENSUS.moons).toBe(456);
-    expect(CENSUS.inBinary).toBe(125);
+    expect(CENSUS.inBinary).toBe(269);         // 125 -> 269
     // Not "most primaries are non-white" — every one of them. The star-colour loss (P-01) has no
     // body on which it is invisible, which is a stronger statement than the plan's "all giants".
-    expect(CENSUS.nonWhitePrimary).toBe(341);
+    expect(CENSUS.nonWhitePrimary).toBe(846);  // 341 -> 846, and still every swapped body
   });
 
-  it('⭐ 114 of the 341 swapped bodies do not render the GAS program today', () => {
-    // The predicate is condition-derived (drivers/index.js:99) and the legacy program is chosen by
-    // the `type` LABEL (Planet.js:1422). They disagree on a third of the population, and PLAN §6b's
-    // loss table enumerates the gas branch only. Ledger rows R-01…R-04 are that gap.
-    expect(Object.fromEntries(CENSUS.byVariant)).toEqual({ gas: 227, rocky: 114 });
+  it('⭐ 617 of the 846 swapped bodies do not render the GAS program today', () => {
+    // The predicate is condition-derived (drivers/index.js:100) and the legacy program is chosen by
+    // the `type` LABEL (Planet.js:1422). PLAN §6b's loss table enumerates the gas branch only, and
+    // ledger rows R-01…R-04 are that gap.
+    // ⭐ AT STEP 10a THE GAP BECOMES THE MAJORITY: 114 of 341 -> 617 of 846. THREE ROCKY BRANCHES
+    // ARE NEWLY LIVE — `rocky:3` (lava, 52 bodies), `rocky:4` (ocean, 6) and `rocky:8` (venus, 130)
+    // — and §4's `every LIVE branch has rows` demands a ledger row with a RULING for each. Rows R-05,
+    // R-06 and R-07 are those, and each ruling is DERIVED from §2's own test rather than chosen: the
+    // lab declaring the carrier makes venus `blocking`, a different parameterisation makes lava and
+    // ocean `accepted-loss` on the precedent of P-09 and R-03. ⚠ What is still Max's, reserved
+    // 2026-08-09, is the SCHEDULING; §2 defines exactly three rulings and "deferred" is not one, so
+    // that deferral lives in each row's evidence cell — the shape P-10 already set.
+    // ⚠ `gas:7` also moved, 3 -> 5, AND IT IS THIS COMMIT'S PREDICATE, NOT THE MOON WINDOW. Measured
+    // on both trees: the corpus carries 5 `eyeball` bodies either way, 3 of them gas-CONDITION and 2
+    // rocky-CONDITION, and the two rocky ones swap for the first time here because `eyeball` is in
+    // GAS_TYPES (src/objects/Planet.js:1422) so `shaderVariantFor` says gas while the condition does
+    // not. `byVariant.gas` 227 -> 229 is the same two bodies. ⛔ Do not file this with `withMoons`:
+    // a "restore the moon-window numbers" pass would move it back to 3 and red this suite for an
+    // invented reason, and a genuine future formation-driven type move here would be pre-excused.
+    expect(Object.fromEntries(CENSUS.byVariant)).toEqual({ gas: 229, rocky: 617 });
     expect(Object.fromEntries(CENSUS.byBranch)).toEqual({
-      'gas:1': 53, 'gas:6': 5, 'gas:7': 3, 'gas:10': 166,
-      'rocky:0': 21, 'rocky:2': 66, 'rocky:5': 1, 'rocky:9': 26,
+      'gas:1': 53, 'gas:6': 5, 'gas:7': 5, 'gas:10': 166,
+      'rocky:0': 181, 'rocky:2': 131, 'rocky:3': 52, 'rocky:4': 6,
+      'rocky:5': 13, 'rocky:8': 130, 'rocky:9': 104,
     });
   });
 
-  it('⭐ CONTROL THAT MOVED — the provenance test is what makes 343 into 341', () => {
+  it('⭐ CONTROL THAT MOVED — the provenance test is what makes 852 into 846', () => {
     // A count with no control is a count. Re-run the same census ignoring Step 6d's provenance
     // refusal and the answer changes: 343, and the two extra bodies are `crystal` — an EXOTIC-variant
     // body, whose 20 branch blocks nothing in this ledger rules (named limit 5).
@@ -323,12 +376,16 @@ describe('1. the swapped population, re-measured on lab-procedural-0…199', () 
         }
       }
     } finally { setLabGasBodiesOverride(null); }
-    expect(claimedIgnoringProvenance).toBe(343);          // ← the mutant's answer
-    expect(CENSUS.swapped).toBe(341);                     // ← the shipped answer
-    expect(exotic.map((x) => x.type)).toEqual(['crystal', 'crystal']);
+    expect(claimedIgnoringProvenance).toBe(852);          // ← the mutant's answer
+    expect(CENSUS.swapped).toBe(846);                     // ← the shipped answer
+    // ⭐ THE REFUSED SET GREW AND DIVERSIFIED AT STEP 10a — 2 -> 6, and no longer `crystal` alone.
+    // `ecumenopolis` and `shattered` are exotic-variant too, and they became visible here only
+    // because the widened predicate claims them; the blocker is the SAME ExoticOverlay stamp loss.
+    expect(exotic.map((x) => x.type))
+      .toEqual(['crystal', 'crystal', 'crystal', 'crystal', 'ecumenopolis', 'shattered']);
     for (const x of exotic) expect(x.blockers).toEqual(['no _systemSeed', 'no _ordinal']);
     // …and the refused ones really are the unruled variant.
-    expect(shaderVariantFor('crystal')).toBe('exotic');
+    for (const t of ['crystal', 'ecumenopolis', 'shattered']) expect(shaderVariantFor(t)).toBe('exotic');
   });
 
   it('the flag is the other half of admission, and OFF means no swap at all', () => {
@@ -345,46 +402,77 @@ describe('1. the swapped population, re-measured on lab-procedural-0…199', () 
 // 2. THE HEADLINE — how much per-body character survives the swap.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 describe('2. the collapse in per-body variation', () => {
-  it('37 of the game material’s 71 uniforms vary across bodies; 16 of the lab’s 356 do', () => {
+  it('45 of the game material’s 71 uniforms vary across bodies; 48 of the lab’s 356 do', () => {
     expect(LEDGER.gameSize).toBe(71);
     expect(LEDGER.labSize).toBe(356);
-    expect(LEDGER.gameVarying.length).toBe(37);
+    // ⭐ RE-PINNED AT STEP 10a, 37 -> 45. This is a POPULATION move, not a code move: the pass now
+    // walks 266 bodies instead of 103, and eight game uniforms that read one value across the gas-only
+    // set read several across the whole one. Nothing about the game material changed.
+    expect(LEDGER.gameVarying.length).toBe(45);
     // ⛔ MEMBERSHIP, NOT A COUNT. Step 4 measured that a count-preserving permutation passes every
-    // instrument this program owns byte-identically, so `toBe(16)` alone would accept a build in
+    // instrument this program owns byte-identically, so a bare count would accept a build in
     // which the bands stopped varying and something else started.
+    // ⭐ 16 -> 48 AT STEP 10a, AND THE 32 NEW NAMES ARE THE WHOLE POINT OF THE STEP: the 21-name
+    // rockySurface family (crater, ejecta, palette, offsets, `uPerturb`) now varies per body, and the
+    // three MASTER GATES `uBandStrength`/`uJetStrength`/`uLimbStrength` joined it too — not because a
+    // deck changed, but because they hold their gate value on the 103 gas bodies and the factory
+    // default on the 163 solid ones, so across the merged population they differ.
     expect(LEDGER.labVarying).toEqual([
       'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM', 'uBandPhaseJet', 'uBandRough',
-      'uBandS2', 'uBandSEq', 'uBandTint', 'uBandWarp',
+      'uBandS2', 'uBandSEq', 'uBandStrength', 'uBandTint', 'uBandWarp',
+      'uBioGroundColor', 'uBioGroundCover',
       'uBodyRadius',
-      'uJetFestoon', 'uJetShearTurb', 'uJetSpeed',
+      'uCraterAmp', 'uCraterComplexD', 'uCraterDensity', 'uCraterOffset', 'uCraterRelaxation',
+      'uCraterScale', 'uCratonColor',
+      'uDetailOffset',
+      'uEjectaAmp', 'uEjectaRampart', 'uEjectaStrength',
+      'uFreshColor',
+      'uIcenessMix',
+      'uJetFestoon', 'uJetShearTurb', 'uJetSpeed', 'uJetStrength',
       'uLightDir',
-      'uLimbColor', 'uLimbExponent',
+      'uLimbColor', 'uLimbExponent', 'uLimbStrength',
+      'uMacroOffset',
+      'uPerturb',
       'uPolarMode', 'uPolarPhase', 'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
       'uPolarStrength', 'uPolarTint',
+      'uSedColor',
       'uThermalDir',
+      'uWeatheredColor',
     ]);
-    // ⭐ MEASURED POST-REGISTRATION: 23 of the 26 uniforms the three packs write vary per body. The
-    // three that do not are the MASTER GATES — `uBandStrength`, `uJetStrength` and `uLimbStrength`
-    // are each written to the same value on every admitted body, which is why "26 written" is not
-    // "26 varying". ⚠ `uPolarStrength` is NOT among them: it is the per-seed PRESENCE coin (1 on
-    // roughly 24 of 41 gas bodies, 0 on the rest), so it genuinely varies.
+    // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 45 of the 47 uniforms the four packs
+    // write vary per body. The two that do not are `uEjectaLump` and `uTerraceCount` — rockySurface
+    // forwards both from `craterUniformsFrom`, and on this corpus every body that fires a crater
+    // schedule lands on the same lump and terrace count. ⚠ The three master gates are NO LONGER on
+    // this list; see the note above for why that is a population fact, not a wire fact.
     expect(LEDGER.written.filter((n) => !LEDGER.labVarying.includes(n)))
-      .toEqual(['uBandStrength', 'uJetStrength', 'uLimbStrength']);
+      .toEqual(['uEjectaLump', 'uTerraceCount']);
   });
 
-  it('the three packs write 26 uniforms, and the ledger’s three `carried` rulings rest on them', () => {
+  it('the four packs write 47 uniforms between them, and the ledger’s `carried` rulings rest on them', () => {
     // If the pack stops writing the band deck, G-01/G-04/G-07's "carried" ruling is false. Pinned as
     // a SET OF NAMES, not a length — Step 4 measured that a count-preserving permutation is
     // byte-identical to every instrument this program owns.
+    // ⭐ THIS IS A UNION OVER THE PASS AND WAS NOT ALWAYS ONE. See the note on `writtenSet` in
+    // `ledgerPass`: as a first-body sample this pin read 26 gas names by accident of generation
+    // order, and Step 10a's solid-first population re-pointed it at rockySurface's 21 without any
+    // deck changing. The two write-sets are disjoint, so the union is exactly 26 + 21.
     expect(LEDGER.written).toEqual([
       'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM', 'uBandPhaseJet', 'uBandRough',
       'uBandS2', 'uBandSEq', 'uBandStrength', 'uBandTint', 'uBandWarp',
+      // ── rockySurface (P-12 + P-14 + P-13), live from the Step 10a registration ──
+      'uBioGroundColor', 'uBioGroundCover',
+      'uCraterAmp', 'uCraterComplexD', 'uCraterDensity', 'uCraterOffset', 'uCraterRelaxation',
+      'uCraterScale', 'uCratonColor', 'uDetailOffset',
+      'uEjectaAmp', 'uEjectaLump', 'uEjectaRampart', 'uEjectaStrength',
+      'uFreshColor', 'uIcenessMix',
       'uJetFestoon', 'uJetShearTurb', 'uJetSpeed', 'uJetStrength',
       // ── limbDeck (C20), live from the registration commit ──
       'uLimbColor', 'uLimbExponent', 'uLimbStrength',
+      'uMacroOffset', 'uPerturb',
       // ── polarDeck (C19), live from the registration commit ──
       'uPolarMode', 'uPolarPhase', 'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
       'uPolarStrength', 'uPolarTint',
+      'uSedColor', 'uTerraceCount', 'uWeatheredColor',
     ]);
     // P-18's three `carried` names must actually VARY on the post-swap material, or "carried" is a
     // claim about a constant.
@@ -397,21 +485,33 @@ describe('2. the collapse in per-body variation', () => {
     // a value comparison over the identical pair of materials reports them as diverged. A ledger
     // that ruled the name would record 28 surviving features where at most 8 survive.
     expect(LEDGER.carried.size).toBe(28);
-    // ⭐ 20 -> 19 AT REGISTRATION, and the one that left is the evidence the wire is live:
-    // `uLimbExponent` was CARRIED-but-diverged (the game computed a per-body value the lab material
-    // did not receive). limbDeck now writes it, so the two sides agree and it moves into `agreeing`
-    // below. A registration that changed nothing would have left this at 20.
-    expect(LEDGER.divergedCarried.size).toBe(19);
+    // ⛔ 19 -> 20 AT STEP 10a, AND THE ONE THAT CAME BACK IS `uLimbExponent`. At the limbDeck/polarDeck
+    // registration it left this bucket (the deck wrote it, so the two sides agreed) and the note here
+    // read "20 -> 19 … a registration that changed nothing would have left this at 20". That reading
+    // was true of a GAS-ONLY population. limbDeck's predicate is `=== 'gas'`, so it never claims the
+    // 163 solid bodies Step 10a admits; measured, `uLimbExponent` diverges on 59 of them and on 0 of
+    // the 103 gas ones. This is a REAL per-body loss on the newly-admitted half, not an instrument
+    // artefact, and P-11 claims it again in the ledger for exactly that reason. ⛔ Do not "fix" it by
+    // scoping this pass to the gas half — that would suppress the loss rather than record it.
+    expect(LEDGER.divergedCarried.size).toBe(20);
     const everyBody = [...LEDGER.divergedCarried.entries()]
       .filter(([k, v]) => v === LEDGER.carriedTotal.get(k)).map(([k]) => k);
-    expect(everyBody.length).toBe(17);
+    // ⭐ 17 -> 10 AT STEP 10a. rockySurface writes the palette, the crater terms and the offsets, so
+    // seven names that used to diverge on EVERY body now diverge on only part of the population. The
+    // ten that remain are named rather than counted, because "10" alone cannot distinguish a wire
+    // that landed from a population that shrank.
+    expect(everyBody.sort()).toEqual([
+      // ⚠ These four are written by rockySurface and STILL diverge on every body — the P-11/P-12
+      // `encodeValue` container split (game `THREE.Vector3` vs lab `THREE.Color`), not a dead wire.
+      'uBioGroundColor', 'uFreshColor', 'uSedColor', 'uWeatheredColor',
+      // …and these six have no writer on either half.
+      'uDispDomainScale', 'uLimbColor', 'uNoiseScale', 'uTermColor', 'uTermStrength', 'uTermWidth',
+    ].sort());
     // The eight that agree, agree by ABSENCE — both sides are zero or the same constant.
     const agreeing = [...LEDGER.carried].filter((n) => !LEDGER.divergedCarried.has(n)).sort();
     expect(agreeing).toEqual([
       'uCraterDensity', 'uCraterRelaxation', 'uEjectaLump', 'uEjectaRampart', 'uEjectaStrength',
       'uFwClamp',
-      // ⭐ NOT by absence — this one agrees because limbDeck WRITES it. See the note above.
-      'uLimbExponent',
       'uTerraceCount', 'uVoroCells',
     ]);
     for (const n of agreeing) {
@@ -427,10 +527,11 @@ describe('2. the collapse in per-body variation', () => {
 describe('3. channel 1 — the uniform diff, run not read', () => {
   const measured = () => new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.divergedCarried.keys()]);
 
-  it('the subject set is 43 lost names plus the 19 value-defaulted carried ones', () => {
+  it('the subject set is 43 lost names plus the 20 value-defaulted carried ones', () => {
     expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero]).size).toBe(43);
-    // 63 -> 62 at registration: `uLimbExponent` stopped diverging because limbDeck now writes it.
-    expect(measured().size).toBe(62);
+    // 62 -> 63 AT STEP 10a: `uLimbExponent` re-enters the diverged bucket on the 163 newly-admitted
+    // solid bodies, which limbDeck's gas-only predicate never claims. See §2's note; P-11 claims it.
+    expect(measured().size).toBe(63);
     // 43 lost + 28 carried = the 71 the game material declares. Nothing fell between the buckets.
     expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.carried]).size).toBe(71);
   });
@@ -494,6 +595,11 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
     // it, so the loss is resolved rather than merely described. ⛔ THE INVERTED ASSERTION IS THE
     // POINT — if a future edit un-registers limbDeck, this line goes red, which is precisely the
     // "delete the entry and the feature silently leaves" failure the registration fence exists for.
+    // ⚠ THAT PROPERTY DEPENDS ON `LEDGER.written` BEING A UNION. While it was a first-body sample it
+    // went red at Step 10a with limbDeck's wire fully intact, and — worse — could not have gone green
+    // again for any state of limbDeck, because the sampled body was solid by construction. The four
+    // aurora `not.toContain` lines above have the mirror-image dependency: under a sample they passed
+    // vacuously, since no gas-deck name was in the set at all.
     expect(labNames.has('uLimbStrength'), 'the lab must still declare uLimbStrength').toBe(true);
     expect(LEDGER.written, 'P-04: limbDeck must write it, or the loss is back').toContain('uLimbStrength');
   });
@@ -529,7 +635,7 @@ describe('4. channel 2 — the features with no uniform to diff', () => {
     return { variant, pt: Number(pt) };
   });
 
-  it('the extraction reproduces all six lines PLAN §6b names by hand, and finds 93 more', () => {
+  it('the extraction reproduces all six lines PLAN §6b names by hand, and finds 108 more', () => {
     const g = EXTRACT.gas.branch;
     expect(g.get(1).has('stormMask')).toBe(true);      // Planet.js:434
     expect(g.get(1).has('polarDark')).toBe(true);      // Planet.js:437
@@ -539,7 +645,11 @@ describe('4. channel 2 — the features with no uniform to diff', () => {
     expect(g.get(10).has('haze')).toBe(true);          // Planet.js:413
     const live = liveBranches.reduce((n, b) => n + EXTRACT[b.variant].branch.get(b.pt).size, 0);
     const shared = new Set([...EXTRACT.gas.shared, ...EXTRACT.rocky.shared]).size;
-    expect(live + shared).toBe(99);
+    // ⭐ 99 -> 114 AT STEP 10a. Nothing was added to the shipped shader; three rocky branches became
+    // LIVE — `pt3` lava (4 symbols), `pt4` ocean (7) and `pt8` venus (4) — and `live` is derived from
+    // the population, so the extraction now reaches them. `shared` is unchanged at 26.
+    expect(shared).toBe(26);
+    expect(live + shared).toBe(114);
   });
 
   it('every LIVE branch has rows, and they claim its symbols exactly once', () => {
@@ -651,7 +761,10 @@ describe('5. the ledger document', () => {
     expect(LEDGER_MD).toContain('<!-- LEDGER-CH2 -->');
     expect(LEDGER_MD).toContain('<!-- /LEDGER-CH2 -->');
     expect(CH1_ROWS.length).toBe(18);
-    expect(CH2_ROWS.length).toBe(16);
+    // ⭐ 16 -> 19 AT STEP 10a: R-05 (rocky pt3 lava), R-06 (pt4 ocean) and R-07 (pt8 venus), the three
+    // branches the widened predicate made live. `every LIVE branch has rows` above is what demanded
+    // them; this pin is what stops a row being deleted again without anyone noticing.
+    expect(CH2_ROWS.length).toBe(19);
   });
 
   it('every ruling in the document is one of the three Max named', () => {

@@ -36,10 +36,12 @@
 //  3. It does not claim `uCraterComplexD` agrees with the lab. It must NOT: the lab pins it high
 //     to force morphology ≡ 0, and src/worldengine/port/craterUniforms.js:153 refuses that value in
 //     its own words. §C carries the disagreement as a [CONTROL] rather than hiding it.
-//  4. It does not claim the production swap (blueprint §2, src/objects/Planet.js:1596) has landed.
-//     It has not. §C measures what that costs the cross-material gate TODAY — the bodies where the
-//     legacy `type` gate and `craterRelevanceOf` disagree, and how many of them carry a non-zero
-//     density (measured: none, so the two materials still agree byte-for-byte).
+//  4. It does not claim the production swap is what makes FAMILY 9's byte-identity hold. ⭐ THE SWAP
+//     HAS LANDED — src/objects/Planet.js:1596 now reads `craterRelevanceOf(condition) > 0`, and the
+//     three notes in this file that said otherwise were stale as written. §C measures what the swap
+//     costs the cross-material gate: on solid PLANETS the two gates disagree on 26 bodies and NOT
+//     ONE carries a non-zero density; on solid MOONS 17 disagree and 14 DO. See FAMILY 9b for why
+//     that second number moves no rendered value, and for the shader fact that is the actual reason.
 //  5. It does not pin the moon census. tools/moon-census.mjs exits 3 today and Instruments A/B/C
 //     are red by design over a moon-formation window — every moon-keyed number below is therefore
 //     a FLOOR with the 2026-08-19 measurement named beside it, never an equality.
@@ -74,7 +76,7 @@ import {
   PackContractError, gameDisplayRadiusEarth,
 } from '../src/worldengine/port/writePackUniforms.js';
 import { PACKS, gatesFor, GATE_POLICY_ALL_ON } from '../src/worldengine/drivers/index.js';
-import { Planet, labPackCtx, setLabGasBodiesOverride } from '../src/objects/Planet.js';
+import { Planet, labPackCtx, setLabGasBodiesOverride, PLANET_SHADER_VARIANTS, shaderVariantFor } from '../src/objects/Planet.js';
 import {
   rockySurfacePack, ROCKY_SURFACE_ENTRY, ROCKY_SURFACE_UNIFORMS,
   CRATER_GATE, EJECTA_GATE, C_CRATER, PERTURB_BASE,
@@ -151,6 +153,16 @@ const SOLID_MOONS = MOONS.filter((b) => compositionClass(b.cond) !== 'gas');
 // comparison, not a law this suite may import from the module it audits. src/objects/Planet.js:1423.
 const LEGACY_ROCKY_TYPES = new Set(['rocky', 'ice', 'lava', 'ocean', 'terrestrial', 'venus', 'carbon']);
 
+// ⭐ A HAND-BUILT ctx MUST ANSWER THE THREE OFFSET FIELDS (Step 9c) — the pack refuses to default
+// them, because the default is the shared zero domain that P-13 exists to end. The fixture is
+// deliberately NON-ZERO so that a contract-shaped test using it cannot quietly assert the very
+// state the wire was built to remove. Real bodies get `labPackCtx`'s vectors via `ctxFor`.
+const CTX_OFFSETS = Object.freeze({
+  macroOffset: [11.5, -3.25, 7.75],
+  detailOffset: [-2.5, 9.0, -14.25],
+  craterOffset: [1.5, -0.75, 2.25],
+});
+
 const ALL_ON = gatesFor(ROCKY_SURFACE_ENTRY);              // { craters: true, ejecta: true }
 const ALL_OFF = { [CRATER_GATE]: false, [EJECTA_GATE]: false };
 /** The full game-side pack ctx for one body, with this entry's gates resolved by the shipped policy. */
@@ -187,7 +199,7 @@ function planetAt(d, enabled) {
 }
 
 // ⛔ COMPONENT-WISE, ALWAYS. The ledger's own `encodeValue`
-// (tests/material-parity-list.test.js:255-259) branches on `'x' in v` before `'r' in v`, so a
+// (tests/material-parity-list.test.js:265-269) branches on `'x' in v` before `'r' in v`, so a
 // THREE.Vector3 (the legacy slot) and a THREE.Color (the lab slot) holding IDENTICAL components
 // encode differently. Comparing by encoding reports a false divergence, and the last time that
 // happened someone hunted a `uLimbColor` colour bug that did not exist.
@@ -223,7 +235,7 @@ describe('A — the predicate admits exactly the non-gas class', () => {
     expect(myPlanets.filter((id) => theirGas.includes(id))).toEqual([]);
     expect(myPlanets.length + theirGas.length).toBe(PLANETS.length);
 
-    // It must return the BOOLEAN. src/worldengine/drivers/index.js:131 and :175 both compare with
+    // It must return the BOOLEAN. src/worldengine/drivers/index.js:159 and :203 both compare with
     // `=== true`, so a truthy non-boolean registers, reports as `skipped`, renders nothing, and
     // throws nothing.
     for (const b of [SOLID[0], GAS[0], SOLID_MOONS[0]]) {
@@ -253,8 +265,8 @@ describe('A — the predicate admits exactly the non-gas class', () => {
   });
 
   it('FAMILY 2b · [CONTROL] the counterfactual `type`-label predicate OVER-admits, quantified', () => {
-    // The other natural mistake, and the one the game's own legacy material still makes at
-    // src/objects/Planet.js:1596. MEASURED 2026-08-19: `ROCKY_TYPES.has(d.type)` admits 77 planets
+    // The other natural mistake, and the one the game's legacy material made at
+    // src/objects/Planet.js:1596 until the Step 9b swap replaced it. MEASURED 2026-08-19: `ROCKY_TYPES.has(d.type)` admits 77 planets
     // where the condition admits 66 — 11 bodies admitted by the label and refused by the condition,
     // 0 the other way. src/worldengine/drivers/index.js:20-31 records the same disagreement on Sol,
     // where the two sets are DISJOINT.
@@ -564,20 +576,28 @@ describe('C — every driver is a forward of a shared producer', () => {
       for (const n of ['uWeatheredColor', 'uFreshColor', 'uSedColor', 'uBioGroundColor']) {
         expect(comps(u[n].value), `${b.id} ${n}`).toEqual(drivers[n]);
       }
+      // ⭐ AND THE THREE DOMAIN OFFSETS, WHICH ARE THE SHARPEST FORM OF THIS FAMILY'S CLAIM (P-13,
+      // Step 9c). Every other name here agrees because both sides call the same PRODUCER; these
+      // three agree because the pack calls no producer at all — `labPackCtx` hands it the very
+      // vectors the legacy material writes at src/objects/Planet.js:1684. Byte-identical BY
+      // CONSTRUCTION, which is the only version of this that is provable rather than measured.
+      for (const n of ['uMacroOffset', 'uDetailOffset', 'uCraterOffset']) {
+        expect(u[n], `${b.id} legacy must carry ${n}`).toBeTruthy();
+        expect(comps(u[n].value), `${b.id} ${n}`).toEqual(drivers[n]);
+      }
       checked++;
     }
     expect(checked, 'an empty loop is a green gate about nothing').toBeGreaterThan(30);
   });
 
-  it('FAMILY 9b · the two crater GATES disagree on a real set and on ZERO rendered values — stated', () => {
-    // ⚠ THE PRODUCTION SWAP (blueprint §2, src/objects/Planet.js:1596) IS NOT IN THIS COMMIT. Until
-    // it lands the legacy material fires craters on `ROCKY_TYPES.has(d.type)` while this pack folds
-    // `craterRelevanceOf(condition)`, so FAMILY 9 above could in principle be comparing two
-    // different decisions. MEASURED 2026-08-19 over 200 systems (476 solid planets): the two gates
-    // disagree on 186 bodies and on NOT ONE of them does `craterUniformsFrom` return a non-zero
-    // density — `craterUniforms.js:79 CRATER_MIN_DENSITY` dominates both. So the swap moves the SET
-    // and moves no rendered number, and FAMILY 9's byte-identity is real rather than lucky.
-    // Re-measured here on the 24-system corpus so it is a measurement and not a quotation.
+  it('FAMILY 9b · the two crater gates disagree on a real set; ZERO rendered values move on FAMILY 9\u2019s population, and the moons that DO move are named', () => {
+    // ⭐ THE PRODUCTION SWAP HAS LANDED — src/objects/Planet.js:1596 is `craterRelevanceOf(condition) > 0`.
+    // FAMILY 9 above compares the pack against the legacy material on SOLID PLANETS, so the question
+    // this gate answers is whether the swap could have moved a value underneath that comparison.
+    // ⛔ AND THE ANSWER IS POPULATION-SCOPED, WHICH AN EARLIER DRAFT OF THIS GATE STATED AS GLOBAL.
+    // On FAMILY 9's own population — solid PLANETS — the answer is a clean zero. On solid MOONS it is
+    // not, and saying "the swap moves the SET and moves no rendered number" while looping only over
+    // planets was measuring the half where the answer is structurally 0.
     let disagree = 0; let disagreeWithDensity = 0;
     for (const b of SOLID) {
       const byLabel = LEGACY_ROCKY_TYPES.has(b.d.type);
@@ -586,9 +606,44 @@ describe('C — every driver is a forward of a shared producer', () => {
       disagree++;
       if (craterUniformsFrom(b.cond).density > 0) disagreeWithDensity++;
     }
-    expect(disagree, 'the two gates really do disagree — otherwise this gate is vacuous').toBeGreaterThan(0);
+    expect(disagree, 'the two gates really do disagree \u2014 otherwise this gate is vacuous').toBeGreaterThan(0);
     expect(disagreeWithDensity,
       'a body where the gates disagree AND the density is non-zero would break FAMILY 9').toBe(0);
+
+    // ⚠ THE MOON HALF, STATED AS A FLOOR (header rule 5 \u2014 the moon window is open). MEASURED
+    // 2026-08-19 on these 24 seeds: 58 solid moons, the gates disagree on 17, and 14 of those DO
+    // carry a non-zero density. Over `lab-procedural-0\u20261999`'s first 200 systems the swap turns a
+    // live crater derivation ON for 156 bodies and OFF for 0 \u2014 every one of them a moon.
+    const movedMoons = SOLID_MOONS.filter((b) => {
+      const byLabel = LEGACY_ROCKY_TYPES.has(b.d.type);
+      const byRelevance = craterRelevanceOf(b.cond) > 0;
+      return byLabel !== byRelevance && craterUniformsFrom(b.cond).density > 0;
+    });
+    expect(movedMoons.length, 'the moon half is NOT the planet half \u2014 floor, measured 14').toBeGreaterThan(9);
+    // ⭐ AND THIS IS WHY IT MOVES NO RENDERED NUMBER: not one of them renders a program that reads a
+    // crater uniform. `shaderVariantFor` puts every one on the EXOTIC branch (measured: `captured`
+    // and `volcanic`), and ROCKY_BODY is the only branch the crater relief is spliced into.
+    for (const b of movedMoons) {
+      expect(shaderVariantFor(b.d.type), `${b.id} must not render ROCKY_BODY`).not.toBe('rocky');
+    }
+    // ⛔ THE SHADER FACT, DERIVED RATHER THAN TRANSCRIBED, because the whole paragraph above rests on
+    // it and nothing else in this commit pins it. The three variants share a byte-identical header
+    // (measured 20253 chars) and differ only in the body spliced after it; a naive pin on
+    // `PLANET_SHADER_VARIANTS.exotic.fragmentShader` is USELESS here \u2014 the shared header declares
+    // `uCraterDensity` and reads it inside `perturbNormalAnalytic`, so that string contains the token
+    // on every variant. The claim is about the BODY.
+    const rockyFrag = PLANET_SHADER_VARIANTS.rocky.fragmentShader;
+    const exoticFrag = PLANET_SHADER_VARIANTS.exotic.fragmentShader;
+    const gasFrag = PLANET_SHADER_VARIANTS.gas.fragmentShader;
+    let cut = 0;
+    while (cut < rockyFrag.length && cut < exoticFrag.length && rockyFrag[cut] === exoticFrag[cut]) cut++;
+    expect(cut, 'the variants must actually share a header, or this slice means nothing').toBeGreaterThan(1000);
+    expect(gasFrag.slice(0, cut)).toBe(rockyFrag.slice(0, cut));   // …and all three share the SAME one
+    expect(rockyFrag.slice(cut)).toMatch(/uCraterDensity/);        // ROCKY_BODY reads it
+    expect(exoticFrag.slice(cut)).not.toMatch(/uCrater|uEjecta/);  // EXOTIC_BODY names no crater uniform
+    expect(gasFrag.slice(cut)).not.toMatch(/uCrater|uEjecta/);     // …nor does GAS_BODY
+    expect(exoticFrag.slice(cut)).not.toMatch(/perturbNormalAnalytic/);
+
     // ...and the legacy material carries NEITHER of the two names this pack adds outright.
     const legacy = planetAt(SOLID[0].d, false).material;
     expect(legacy.uniforms.uCratonColor).toBeUndefined();
@@ -657,9 +712,9 @@ describe('C — every driver is a forward of a shared producer', () => {
     expect(PACK_CODE_STRINGS).not.toMatch(/Number\(|parseFloat\(|parseInt\(/);
     // ⭐ AND THE FENCE IS CLOSED FROM THE OTHER SIDE: rather than a blacklist a new constant could
     // walk past, the code view is asserted to contain NO numeric literal outside the three this
-    // pack declares it owns. MEASURED 2026-08-19: exactly `1.0`, `0.55`, `0` and nothing else.
+    // pack declares it owns. MEASURED 2026-08-19: exactly `1.0`, `0.55`, `0`, `3` and nothing else.
     const literals = literalsIn(PACK_CODE_STRINGS);
-    expect(literals.sort()).toEqual(['0', '0.55', '1.0']);
+    expect(literals.sort()).toEqual(['0', '0.55', '1.0', '3']);
     //   · 1.0 twice: C_CRATER (planet-lod-lab.html:821) and the lab's surfaceGravity fallback
     //     (planet-lod-lab.html:4996 — NOT craterUniforms.js:157's 0.5, which would raise the relief
     //     envelope ~1.5x on any body missing the field and look exactly like a working wire).
@@ -669,6 +724,12 @@ describe('C — every driver is a forward of a shared producer', () => {
     //   · 0: the `Dchar === 0` divide-by-zero guard, not a null check. craterUniforms.js:96 says
     //     Dchar 0 means "no characteristic diameter", and writePackUniforms.js:191 refuses it.
     expect(CRATERS_OFF.Dchar).toBe(0);
+    //   · 3: the LENGTH of a domain-offset vector in `offsetOf`'s shape guard (Step 9c), and the
+    //     only member of this list that is not a law constant at all — it is a dimension. It earns
+    //     its place rather than being waved through: the guard is what stops a `THREE.Vector3` (no
+    //     `.length`) and a truncated array from reaching the writer, where the first would be
+    //     written as a scalar and the second would set a component to undefined.
+    expect(packFor(FIRED_MOONS[0]).drivers.uMacroOffset).toHaveLength(3);
   });
 
   it('FAMILY 11b · [CONTROL] the fence REDS on a source that does name one of the constants', () => {
@@ -679,7 +740,7 @@ describe('C — every driver is a forward of a shared producer', () => {
     expect(() => expect(mutant.includes('0.2')).toBe(false)).toThrow();
     const lits = literalsIn(stripCommentsPreservingOffsets(mutant));
     expect(lits).toContain('0.2');
-    expect(() => expect(lits.sort()).toEqual(['0', '0.55', '1.0'])).toThrow();
+    expect(() => expect(lits.sort()).toEqual(['0', '0.55', '1.0', '3'])).toThrow();
 
     // ⭐ AND THE TWO FORMS THAT USED TO WALK PAST BOTH ARMS, EXERCISED RATHER THAN ASSERTED. Each
     // is the SAME transcription as above in a shape the old fence could not see.
@@ -688,7 +749,7 @@ describe('C — every driver is a forward of a shared producer', () => {
     const dotMutant = 'const amp = .2 / .2 * rpk * Dchar;';
     const dotLits = literalsIn(stripCommentsPreservingOffsets(dotMutant));
     expect(dotLits).toContain('.2');
-    expect(() => expect(dotLits.sort()).toEqual(['0', '0.55', '1.0'])).toThrow();
+    expect(() => expect(dotLits.sort()).toEqual(['0', '0.55', '1.0', '3'])).toThrow();
     //  (ii) string-parsed: `blankLiteralText` blanks the interior, so the STRINGS-INTACT view is
     //       what sees it. Both arms are shown to red on it, and the blanked view to stay green —
     //       which is the whole reason FAMILY 11 no longer reads PACK_CODE.
@@ -788,7 +849,7 @@ describe('D — the wire reaches a real lab material', () => {
     expect(built.material.uniforms.uCraterDensity.value).toBe(0.0);
     expect(() => expect(built.material.uniforms.uCraterDensity.value)
       .toBe(resolveDriver('uCraterDensity', res.drivers.uCraterDensity, ctx))).toThrow();
-    // ...while the OTHER 17 still landed, so the control isolates the density rather than the write.
+    // ...while the OTHER 20 still landed, so the control isolates the density rather than the write.
     expect(built.material.uniforms.uEjectaStrength.value).toBeGreaterThan(0);
     expect(comps(built.material.uniforms.uWeatheredColor.value)).toEqual(res.drivers.uWeatheredColor);
 
@@ -797,7 +858,7 @@ describe('D — the wire reaches a real lab material', () => {
       { uCratonColour: [0.1, 0.2, 0.3] }, ctx)).toThrow(/no uniform named 'uCratonColour'/);
   });
 
-  it('FAMILY 14 · the per-frame writer does not clobber any of the 18', () => {
+  it('FAMILY 14 · the per-frame writer does not clobber any of the 21', () => {
     // ⭐ THE HAZARD giantDeck's LAB_STATE_BINDING EXISTS FOR, asked of THIS pack. The game's lab
     // material is written every frame by `updateLabPlanetMaterial`. If that seam touched any of
     // these names the pack's write would survive exactly one frame and the wire would be decoration.
@@ -816,6 +877,118 @@ describe('D — the wire reaches a real lab material', () => {
     expect(material.uniforms.uTime.value).not.toBe(t);
     expect(material.uniforms.uOctaves.value).not.toBe(o);
     expect(snap()).toEqual(before);
+  });
+
+  it('FAMILY 29 · ⭐ P-13 — THE THREE DOMAIN OFFSETS ARE PER-BODY, FORWARDED, AND UNSHARED', () => {
+    // ⭐ WHAT THIS FAMILY IS FOR, IN MAX'S WORDS: a planet must not read as "a beach ball painted to
+    // look like a planet". `uMacroOffset` / `uDetailOffset` / `uCraterOffset` are the noise-domain
+    // origins of the whole surface field, and they default to (0,0,0) — so before Step 9c every
+    // body swapped onto the lab material wore the SAME relief under a different paint job. That is
+    // the one defect in this pack's family that a single still frame CANNOT show, which is why the
+    // gate below is a population gate and a pairwise gate rather than a value assertion.
+
+    // (a) FORWARDED VERBATIM. Not "agrees with a producer" — there is no producer on this side. The
+    //     driver must be the ctx array's own contents, and the ctx must be the game's own law.
+    for (const b of SOLID_MOONS.slice(0, 12).concat(SOLID.slice(0, 12))) {
+      const ctx = ctxFor(b);
+      const { drivers } = rockySurfacePack(b.cond, ctx);
+      expect(drivers.uMacroOffset, b.id).toEqual(ctx.macroOffset);
+      expect(drivers.uDetailOffset, b.id).toEqual(ctx.detailOffset);
+      expect(drivers.uCraterOffset, b.id).toEqual(ctx.craterOffset);
+      // ...and the ctx really is `labPackCtx`'s, i.e. the game's `reliefOffsets`, not a test fixture.
+      expect(ctx.macroOffset, b.id).toEqual(labPackCtx(b.d, b.cond).macroOffset);
+    }
+
+    // (b) DISTINCT ACROSS THE POPULATION. A forward of a constant would satisfy (a) exactly.
+    const triple = (b) => {
+      const { drivers } = packFor(b);
+      return [...drivers.uMacroOffset, ...drivers.uDetailOffset, ...drivers.uCraterOffset]
+        .map((x) => x.toFixed(9)).join(',');
+    };
+    expect(new Set(SOLID_MOONS.map(triple)).size, 'moons must not share a noise domain')
+      .toBe(SOLID_MOONS.length);
+    expect(new Set(SOLID.map(triple)).size, 'planets must not share a noise domain')
+      .toBe(SOLID.length);
+    // ...and the ONE number that says the wire changed something: the default is a single shared
+    // triple, so a dead wire collapses the two counts above to 1.
+    const factoryTriple = ['uMacroOffset', 'uDetailOffset', 'uCraterOffset']
+      .flatMap((n) => comps(makeUniforms(LAB_WORLD_LIGHT)[n].value));
+    expect(factoryTriple.every((c) => c === 0), 'the default really is the shared zero domain').toBe(true);
+    expect(new Set([triple(SOLID_MOONS[0]), factoryTriple.map((x) => x.toFixed(9)).join(',')]).size).toBe(2);
+
+    // (c) ⛔ NO TWO BODIES SHARE AN ARRAY OBJECT, and no body shares one with its own ctx. A live
+    //     array is how one body's relief follows another's — the failure `.slice()` on the palette
+    //     already exists for, one seam further out, because a front-end is free to build a ctx once
+    //     and reuse it. Identity, not equality: `toEqual` cannot see this.
+    const b0 = SOLID_MOONS[0]; const b1 = SOLID_MOONS[1];
+    const c0 = ctxFor(b0); const c1 = ctxFor(b1);
+    const d0 = rockySurfacePack(b0.cond, c0).drivers;
+    const d1 = rockySurfacePack(b1.cond, c1).drivers;
+    const CTX_FIELD_OF = { uMacroOffset: 'macroOffset', uDetailOffset: 'detailOffset', uCraterOffset: 'craterOffset' };
+    for (const [n, f] of Object.entries(CTX_FIELD_OF)) {
+      expect(d0[n], n).not.toBe(d1[n]);
+      expect(d0[n], `${n} must be a copy, never the ctx's own array`).not.toBe(c0[f]);
+      expect(d0[n], `${n} must still hold the ctx's VALUES`).toEqual(c0[f]);
+    }
+    // ...proved by mutation rather than by reading `.slice()` in the source: writing through the
+    // driver must not reach the ctx, and a SHARED ctx must not let one body's pack move another's.
+    const before0 = c0.macroOffset.slice();
+    d0.uMacroOffset[0] = 12345;
+    expect(c0.macroOffset).toEqual(before0);
+    const shared = { ...c0 };
+    const s1 = rockySurfacePack(b0.cond, shared).drivers.uMacroOffset;
+    const s2 = rockySurfacePack(b1.cond, shared).drivers.uMacroOffset;
+    expect(s1).not.toBe(s2);
+    s1[0] = -999;
+    expect(s2[0]).not.toBe(-999);
+
+    // (d) [CONTROL] THE VARIATION COMES FROM THE OFFSETS AND FROM NOTHING ELSE. Two DIFFERENT bodies
+    //     handed the SAME offsets emit the same three vectors — so (b)'s distinctness is a fact
+    //     about the ctx the game builds, not an accident of the condition vector.
+    const forced = { ...ctxFor(b1), macroOffset: c0.macroOffset.slice(),
+      detailOffset: c0.detailOffset.slice(), craterOffset: c0.craterOffset.slice() };
+    const dF = rockySurfacePack(b1.cond, forced).drivers;
+    expect(dF.uMacroOffset).toEqual(c0.macroOffset);
+    expect(dF.uDetailOffset).toEqual(c0.detailOffset);
+    expect(dF.uCraterOffset).toEqual(c0.craterOffset);
+
+    // (e) THE WIRE REACHES A REAL MATERIAL, and two bodies' materials disagree there.
+    const m0 = composeOnto(b0).material; const m1 = composeOnto(b1).material;
+    for (const n of ['uMacroOffset', 'uDetailOffset', 'uCraterOffset']) {
+      expect(comps(m0.uniforms[n].value), n).toEqual(packFor(b0).drivers[n]);
+      expect(comps(m0.uniforms[n].value), `${n} must not be the shared default`).not.toEqual([0, 0, 0]);
+      expect(comps(m0.uniforms[n].value), `${n} must differ between two bodies`)
+        .not.toEqual(comps(m1.uniforms[n].value));
+    }
+
+    // (f) SHADER FACTS — the three are READ, so a per-body value changes output rather than sitting
+    //     in a slot. Pinned as source, the shape FAMILY 25 uses, because this suite runs no GLSL.
+    const h = read('src/worldengine/shaders/height.glsl.js');
+    expect(h).toContain('float h  = snoise(pos * uNoiseScale * 0.3 + uMacroOffset)  * 0.5;');
+    expect(h).toContain('h += snoise(pos * uNoiseScale * 2.0 + uDetailOffset) * 0.2;');
+    expect(read('src/worldengine/shaders/craterRelief.glsl.js'))
+      .toContain('voronoi3d(dir * uCraterScale + uCraterOffset, uVoroCells, cellId, voroGrad)');
+
+    // (g) ⚠ THE MOON MEASUREMENT, PINNED RATHER THAN ASSUMED — Step 10 swaps moons, and the game's
+    //     `reliefOffsets` keys on EIGHT `d` scalars that a moon record was never promised to carry.
+    //     Measured over `lab-procedural-0…199` (852 planets, 665 moons): a moon carries `noiseScale`
+    //     and `radiusEarth` always and `massEarth`/`T_eq` on 632 of 665, and carries `noiseDetail`,
+    //     `axialTilt`, `metallicity` and `eccentricity` on NONE. The absent four fold in as 0, so
+    //     there is no NaN and no shared constant — (b) above already showed every moon distinct,
+    //     and `noiseScale` alone is why. Re-measured here on this file's own corpus so it is a
+    //     measurement rather than a quotation.
+    const MISSING_ON_MOONS = ['noiseDetail', 'axialTilt', 'metallicity', 'eccentricity'];
+    for (const f of MISSING_ON_MOONS) {
+      expect(MOONS.every((b) => b.d[f] === undefined), `${f} — if moons GAIN this the fold changes`).toBe(true);
+    }
+    for (const f of ['noiseScale', 'radiusEarth']) {
+      expect(MOONS.every((b) => Number.isFinite(b.d[f])), `${f} is what keeps moon offsets distinct`).toBe(true);
+    }
+    for (const b of MOONS.slice(0, 20)) {
+      for (const v of [...ctxFor(b).macroOffset, ...ctxFor(b).craterOffset]) {
+        expect(Number.isFinite(v), `${b.id} — a missing field must fold to 0, never to NaN`).toBe(true);
+      }
+    }
   });
 });
 
@@ -838,6 +1011,22 @@ describe('E — the pack obeys the Step-5a contract and stays inside its scope',
     expect(() => rockySurfacePack(b.cond, { ...ctxFor(b), macroSeed: 0 })).not.toThrow();
     expect(() => rockySurfacePack(b.cond, { ...ctxFor(b), macroSeed: undefined })).not.toThrow();
     expect(() => rockySurfacePack(b.cond, { ...ctxFor(b), animRate: undefined })).not.toThrow();
+    // ⭐ AND IT DOES ASSERT THE THREE OFFSETS (Step 9c), which is the OPPOSITE ruling to the seed
+    // one line above and for a stated reason: the pack READS these, so the check can fail for a
+    // reason. Each is refused independently — a front-end that answered two of three has answered
+    // none of the question this uniform family asks.
+    for (const f of ['macroOffset', 'detailOffset', 'craterOffset']) {
+      expect(() => rockySurfacePack(b.cond, { ...ctxFor(b), [f]: undefined }), f)
+        .toThrow(new RegExp(`ctx\\.${f} is REQUIRED`));
+      expect(() => rockySurfacePack(b.cond, { ...ctxFor(b), [f]: [0, 0] }), `${f} short`)
+        .toThrow(PackContractError);
+      expect(() => rockySurfacePack(b.cond, { ...ctxFor(b), [f]: [0, 0, NaN] }), `${f} NaN`)
+        .toThrow(/is not a finite number/);
+      // ⛔ THE SHAPE A CARELESS FRONT-END ACTUALLY PRODUCES: a renderer vector, which has x/y/z and
+      // no length. It must be refused HERE rather than reach the writer and be stored as a scalar.
+      expect(() => rockySurfacePack(b.cond, { ...ctxFor(b), [f]: { x: 1, y: 2, z: 3 } }), `${f} vec`)
+        .toThrow(PackContractError);
+    }
   });
 
   it('FAMILY 16 · returns { drivers, attributes, meta } with attributes EMPTY, not undefined', () => {
@@ -845,7 +1034,7 @@ describe('E — the pack obeys the Step-5a contract and stays inside its scope',
     expect(r.attributes).toEqual({});
     expect(r.attributes).not.toBeUndefined();
     expect(Object.keys(r.drivers).sort()).toEqual([...ROCKY_SURFACE_UNIFORMS].sort());
-    expect(ROCKY_SURFACE_UNIFORMS.length).toBe(18);
+    expect(ROCKY_SURFACE_UNIFORMS.length).toBe(21);   // 18 + the three domain offsets (P-13)
     expect(Object.isFrozen(ROCKY_SURFACE_UNIFORMS)).toBe(true);
     // `meta` is the pack's own report and the only place a test can read WHY a body came out zero.
     expect(r.meta.compositionClass).toBe(compositionClass(FIRED_MOONS[0].cond));
@@ -961,7 +1150,7 @@ describe('E — the pack obeys the Step-5a contract and stays inside its scope',
     //     which is tests/pack-contract.test.js's property and not a pack suite's.
     //
     // ⭐ WHAT THE SHIPPED PACKS ASSERT IN THIS ROW IS THE OTHER HALF, and this pack had dropped it:
-    //     tests/driver-pack-limbdeck.test.js:473 and tests/driver-pack-polardeck.test.js:661 both
+    //     tests/driver-pack-limbdeck.test.js:473 and tests/driver-pack-polardeck.test.js:665 both
     //     state that EVERY driver is identical under the two display policies. This pack inverts
     //     that for `uCraterScale` — which is the whole point — so the honest form is the same
     //     assertion with exactly one stated exception. It is falsifiable by a PACK mutant, which is
@@ -1006,7 +1195,11 @@ describe('E — the pack obeys the Step-5a contract and stays inside its scope',
     // feature claims. A reader must be able to SEE that this pack never touched them.
     const names = Object.keys(packFor(FIRED_MOONS[0]).drivers);
     expect(new Set(names)).toEqual(new Set(ROCKY_SURFACE_UNIFORMS));
-    const FORBIDDEN_NAMES = ['uNoiseScale', 'uMacroOffset', 'uDetailOffset', 'uCraterOffset',
+    // ⭐ THE THREE OFFSET NAMES LEFT THIS LIST IN STEP 9c, AND THE MOVE IS THE POINT. They are
+    // still not DERIVED here — non-port 3 — but they are now EMITTED, forwarded verbatim off the
+    // front-end's ctx. FAMILY 29 is the gate that says so; leaving them here would have made this
+    // family assert the opposite of what the pack now does.
+    const FORBIDDEN_NAMES = ['uNoiseScale',
       'uDispDomainScale', 'uIcenessAlbedo', 'uIceColor', 'uBaseColor', 'accentColor'];
     for (const n of FORBIDDEN_NAMES) {
       expect(names, `${n} is outside this pack's declared family`).not.toContain(n);
@@ -1046,7 +1239,7 @@ describe('E — the pack obeys the Step-5a contract and stays inside its scope',
     // ...and the gravity fallback is the LAB's 1.0, not craterUniforms.js:157's 0.5. Taking the
     // crater law's would raise the envelope on any body missing the field.
     const noG = { ...SOLID[0].cond, surfaceGravity: undefined };
-    const r = rockySurfacePack(noG, { displayRadiusEarth: 1, gates: ALL_ON });
+    const r = rockySurfacePack(noG, { displayRadiusEarth: 1, gates: ALL_ON, ...CTX_OFFSETS });
     expect(r.drivers.uPerturb).toBe(PERTURB_BASE * reliefEnvelope(noG.radiusEarth, 1.0));
     expect(r.drivers.uPerturb).not.toBe(PERTURB_BASE * reliefEnvelope(noG.radiusEarth, 0.5));
     expect(Number.isFinite(r.drivers.uPerturb), 'the ?? is load-bearing: Math.max(undefined, 1e-3) is NaN').toBe(true);
@@ -1068,34 +1261,40 @@ describe('F — the entry is registry-ready and collision-free', () => {
     expect(Object.keys(ROCKY_SURFACE_ENTRY).sort()).toEqual(['applies', 'gates', 'name', 'pack']);
   });
 
-  it('FAMILY 21 + 26 · ⛔ NOT REGISTERED TODAY — the open-hole fence, and the identity gate for Step 10', () => {
-    // ⛔ THIS ASSERTION IS WRITTEN TO BE INVERTED, NOT DELETED, exactly as
-    // tests/driver-pack-polardeck.test.js:575-580 records having done. Registration is Step 10's
-    // commit because it breaks FIVE existing assertions, one of which INVERTS rather than shifts:
-    // tests/gas-body-lab-material.test.js:258 asserts "a solid body: nothing applies and NOT ONE
-    // uniform moved", and a solid body IS non-gas, so `rockySurface` applies the moment it lands.
+  it('FAMILY 21 + 26 · ⭐ REGISTERED AT STEP 10a — the inverted fence, and the identity gate', () => {
+    // ⛔ INVERTED, NOT DELETED — the shape tests/driver-pack-polardeck.test.js:575-580 records. Until
+    // Step 10a this read `not.toContain('rockySurface')` and existed to announce the open hole. A
+    // deleted fence leaves nothing behind that reds if someone later drops the entry, and "the
+    // feature silently leaves" is the failure the whole registration sequence is built against.
+    //
+    // ⚠ THE OLD COMMENT SAID "FIVE EXISTING ASSERTIONS". MEASURED AT REGISTRATION: EIGHT in the pack
+    // suites, plus eleven in tests/material-parity-list.test.js. The three the count missed are this
+    // fence itself, gas-body-lab-material.test.js's npm-surface walker (which read English prose in
+    // rockySurface.js as a third npm dependency), and 6e's two solid-planet mount assertions, whose
+    // premise — "no solid body swaps" — inverts for the same reason this one does.
     const names = PACKS.map((e) => e.name);
-    expect(names, 'Step 9 ships the pack UNREGISTERED — see Step 10 for the five assertions that move')
-      .not.toContain('rockySurface');
-    // NAME UNIQUENESS, written to pass in BOTH states so the merge does not red for the wrong reason.
-    expect(names.filter((n) => n === 'rockySurface').length).toBeLessThanOrEqual(1);
+    expect(names, 'Step 10a registers the pack — see the entry appended after POLAR_DECK_ENTRY')
+      .toContain('rockySurface');
+    // NAME UNIQUENESS, unchanged and still passing in both states.
+    expect(names.filter((n) => n === 'rockySurface').length).toBe(1);
     expect(new Set(names).size).toBe(names.length);
-    // AND THE IDENTITY GATE, live the instant the entry appears: the array must hold the FROZEN
-    // ENTRY THIS MODULE EXPORTS, never a hand-retyped copy at the composition point. A retyped
-    // predicate would satisfy a shape check and then drift from the one gated in §A.
+    // THE IDENTITY GATE: the array must hold the FROZEN ENTRY THIS MODULE EXPORTS, never a
+    // hand-retyped copy at the composition point. A retyped predicate would satisfy a shape check
+    // and then drift from the one gated in §A.
     const entry = PACKS.find((e) => e.name === 'rockySurface');
-    if (entry) {
-      expect(entry).toBe(ROCKY_SURFACE_ENTRY);
-      expect(entry.pack).toBe(rockySurfacePack);
-      expect(names.indexOf('rockySurface')).toBe(names.length - 1);   // APPENDED, never prepended
-    }
+    expect(entry).toBe(ROCKY_SURFACE_ENTRY);
+    expect(entry.pack).toBe(rockySurfacePack);
+    expect(names.indexOf('rockySurface')).toBe(names.length - 1);   // APPENDED, never prepended
+    // …and the predicate that composes is the complement one, not `=== 'rocky'`: the ≥95%-of-moons
+    // bar Step 10 has to clear is decided on this line and nowhere else.
+    expect(entry.gates).toEqual(['craters', 'ejecta']);
   });
 
   it('FAMILY 22 · names NO uniform any shipped pack names — by NAME LOOKUP, never by index', () => {
-    // src/worldengine/drivers/index.js:185 makes two packs naming one uniform an ERROR rather than
+    // src/worldengine/drivers/index.js:213 makes two packs naming one uniform an ERROR rather than
     // a last-writer-wins, because array order would otherwise decide what renders. The predicates
     // are disjoint TODAY, so the collision throw is inert — but inert is not the same as
-    // impossible, and index.js:103-109 records that Step 10 appends an entry, which is one prepend
+    // impossible, and index.js:104-110 records that Step 10 appends an entry, which is one prepend
     // away from a positional read comparing against the WRONG pack and passing green.
     const gas = GAS[0];
     const mine = new Set(ROCKY_SURFACE_UNIFORMS);
@@ -1212,7 +1411,7 @@ describe('F — the entry is registry-ready and collision-free', () => {
     // `uCraterAmp` is the raw crater law's value, unmultiplied.
     const s = read('src/worldengine/shaders/planetShaders.glsl.js');
     expect(s).toContain('float reliefAmp = uPerturb * mix(0.7, 1.0, uLodRamp);');
-    // Every one of the 18 is DECLARED in the shared uniform factory — the names are not invented here.
+    // Every one of the 21 is DECLARED in the shared uniform factory — the names are not invented here.
     const uSrc = read('src/worldengine/shaders/uniforms.js');
     for (const n of ROCKY_SURFACE_UNIFORMS) {
       expect(new RegExp(`\\b${n}\\s*:`).test(uSrc), `${n} must be declared in uniforms.js`).toBe(true);
@@ -1239,12 +1438,16 @@ describe('F — the entry is registry-ready and collision-free', () => {
     expect(densities.size, 'a dead wire would give one repeated value').toBeGreaterThan(8);
     for (const b of FIRED_MOONS) expect(valueOf(b, 'uCraterDensity'), b.id).toBeGreaterThan(0);
 
-    // ⛔ AND THE STEP-10 GATE IS **NOT** CLAIMED HERE.
-    // docs/FEATURES/one-pipeline-two-frontends-PLAN.md:460 wants ">=95% of plain moons resolve a
-    // non-zero uCraterDensity with >=20 distinct values". This corpus measures 86.2% and 15
-    // distinct on the pack's own moons; whether that clears 95% is a question about the moon
+    // ⛔ AND THE STEP-10 GATE IS **NOT** CLAIMED HERE — nor, any longer, is it the ≥95% bar.
+    // docs/FEATURES/one-pipeline-two-frontends-PLAN.md:460 used to want ">=95% of plain moons resolve
+    // a non-zero uCraterDensity with >=20 distinct values"; that clause was WITHDRAWN 2026-08-19 as
+    // unreachable and is now a distinctness gate. Measured over `lab-procedural-0…199`: 473 of 632
+    // plain moons = 74.8% non-zero with 236 distinct, and the entry predicate already admits 632 of
+    // 632 — so the 20-point shortfall is `craterUniforms.js:79 CRATER_MIN_DENSITY` refusing 151
+    // bodies, a CRATER-LAW question no predicate change touches. This corpus measures 86.2% and 15
+    // distinct on the pack's own 24 seeds; the difference between the two figures is the moon
     // POPULATION and the BodyRenderer branch, neither of which is in this commit. Saying so is part
-    // of the measurement. (That plan line's "today: 0 of ~571" is also a population figure the
+    // of the measurement. (That plan line's "today: 0 of ~571" was also a population figure the
     // blueprint could not reproduce — 632 over the ledger's corpus, 770 over FENCE-221 — which is
     // the second reason this file pins no moon count.)
     expect(moonFrac).toBeLessThan(1.0);

@@ -125,7 +125,7 @@ Also: `step6-parity-ledger.md:114` cites `src/main.js:11027`; the symbol is at `
 - `tests/driver-pack-polardeck.test.js:529` — the identity gate runs all 120 bodies at a hardcoded
   `macroSeed: 4242`, so `uPolarPole` takes exactly **one** value across the slice. The
   driver→pole-field mapping gets no per-body evidence.
-- The uniform-collision throw at `index.js:185-191` has **no executed control**: disabling it leaves
+- The uniform-collision throw at `index.js:213-219` has **no executed control**: disabling it leaves
   all seven `applyDriverPacks` suites green. (Carries IDX-165 — see Open items.)
 
 ### 10. LOW · remainder

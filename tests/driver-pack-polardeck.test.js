@@ -587,7 +587,11 @@ describe('GATE 6 · fences and the open registration hole', () => {
     expect(entry.pack).toBe(polarDeckPack);
     // …and it is APPENDED, never prepended: four assertions in this repo index PACKS positionally,
     // and the disjointness gate below is one of them.
-    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck']);
+    // ⚠ THE FOURTH NAME ARRIVED AT STEP 10a (`rockySurface`, the first entry whose predicate is not
+    // `compositionClass === 'gas'`). Pinned as the full ORDERED list rather than trimmed to a
+    // `toContain`, because this line's job is the append order, and a `toContain` would pass a
+    // prepend — which is the one thing the comment above says must red.
+    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface']);
   });
 
   it('⭐ the registered path actually writes the uPolar family onto a real gas body', () => {

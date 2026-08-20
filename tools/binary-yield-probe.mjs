@@ -22,7 +22,7 @@
  * (`src/generation/ExoticOverlay.js:401` `planetEntry.planetData = newData;`)
  * REPLACES `planetData` wholesale with a fresh `PlanetGenerator.generate()`
  * result, which carries no `_systemSeed` and no `_ordinal` — the defect pinned
- * at `tests/gas-body-lab-material.test.js:567`. So for an overlay-swapped
+ * at `tests/gas-body-lab-material.test.js:708`. So for an overlay-swapped
  * planet the selector's key is NOT RECOVERABLE from `generate()`'s output, and
  * neither is the type an in-loop read would have seen.
  *
