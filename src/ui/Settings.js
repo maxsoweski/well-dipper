@@ -5,7 +5,7 @@
  * to localStorage immediately and can trigger registered callbacks.
  */
 
-const STORAGE_KEY = 'well-dipper-settings';
+import { clampPosterizeLevels } from '../rendering/posterizeLevels.js'; const STORAGE_KEY = 'well-dipper-settings'; const CLAMPS = { posterizeLevels: clampPosterizeLevels };   // ⭐ B2P — WHERE A SETTING IS STORED IS WHERE IT IS CLAMPED. setPosterizeLevels() clamps to 2..64 on its way to the shader, so without this set('posterizeLevels', 500) PERSISTED 500 while the game drew 64: the stored setting and the drawn picture disagreed forever, and any UI reading the setting back would show a number no pixel ever used. The bound is NOT restated here — it is the very clamp the shader path spends, imported, so the two cannot drift. ⛔ RIDES THIS LINE: Settings.js is line-count fenced like the rest of B2P.
 
 const DEFAULTS = {
   // Visual
@@ -77,7 +77,7 @@ export class Settings {
 
   /** Set a setting value and persist. */
   set(key, value) {
-    if (!(key in DEFAULTS)) return;
+    if (!(key in DEFAULTS)) return; if (CLAMPS[key]) value = CLAMPS[key](value);   // B2P — clamp BEFORE the store, so the value kept in memory, the value persisted to localStorage and the value handed to every listener are one number and not three.
     this._values[key] = value;
     this._save();
     // Notify listeners
@@ -114,7 +114,7 @@ export class Settings {
         const saved = JSON.parse(json);
         for (const key of Object.keys(DEFAULTS)) {
           if (key in saved && typeof saved[key] === typeof DEFAULTS[key]) {
-            this._values[key] = saved[key];
+            this._values[key] = CLAMPS[key] ? CLAMPS[key](saved[key]) : saved[key];   // B2P — repair what came off disk: the typeof guard on the line above admits NaN and Infinity (both typeof 'number'), and levels 0 makes the shader's 1.0/levels an Inf that turns the whole frame NaN. Corrupt or hand-edited storage is fixed on the way in, not trusted.
           }
         }
         // Migrate stale idleTimeout from old 20s default to new 300s default

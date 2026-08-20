@@ -1096,8 +1096,8 @@ call, not an agent's.
 2. ⚠ **REF CORRECTED HERE: the fourth site is the RING material, and it is a different quantity.**
    src/objects/Planet.js:1881 `          color = posterize(color, uPosterizeLevels, gl_FragCoord.xy, 0.4);` spends
    `color`, not `finalColor`, inside a material built by its own factory — and it carries its own second
-   copy of the function at src/objects/Planet.js:1837 `        vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth) {`,
-   distinct from the body copy at src/objects/Planet.js:208 `vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth) {`.
+   copy of the function at src/objects/Planet.js:1837 `        vec3 posterize(vec3 color, vec2 levels, vec2 fragCoord, float edgeWidth) {`,
+   distinct from the body copy at src/objects/Planet.js:208 `vec3 posterize(vec3 color, vec2 levels, vec2 fragCoord, float edgeWidth) {`.
    **So this is two shader programs and two function copies, not one program with four call sites**, and
    a single uniform added to one material object reaches neither the other three programs nor the ring.
    ⭐ Whether rings follow the planet quantum or keep their own is a LOOK question; the conservative

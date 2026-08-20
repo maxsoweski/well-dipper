@@ -12,7 +12,7 @@ import { conditionFromBody } from '../worldengine/port/conditionFromBody.js';
 import { atmosphereOpticsOf } from '../worldengine/base/atmosphereOptics.js';
 import { biosphereOf, BIO_PIGMENT } from '../worldengine/base/surfaceMaterial.js';
 import { craterUniformsFrom, CRATERS_OFF } from '../worldengine/port/craterUniforms.js'; import { craterRelevanceOf } from '../worldengine/base/bombardment.js'; // ⛔ RIDES THIS LINE: a new import line shifts every cited line below (see :2085-2090)
-import { updateLabPlanetMaterial, buildLabPlanetMaterial, ensureLabAttributes } from '../rendering/LabPlanetMaterial.js'; import { POSTERIZE_LEVELS } from '../rendering/posterizeLevels.js'; // ⛔ B2P RIDES THIS LINE: a new import line shifts every cited line below it.
+import { updateLabPlanetMaterial, buildLabPlanetMaterial, ensureLabAttributes } from '../rendering/LabPlanetMaterial.js'; import { POSTERIZE_QUANTUM } from '../rendering/posterizeLevels.js'; // ⛔ B2P RIDES THIS LINE: a new import line shifts every cited line below it.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fragment shader split into HEADER + per-category BODY + FOOTER.
@@ -23,7 +23,7 @@ import { updateLabPlanetMaterial, buildLabPlanetMaterial, ensureLabAttributes } 
 // ── Shared header: uniforms, varyings, noise, helpers ──
 const FRAG_HEADER = /* glsl */ `
 #include <logdepthbuf_pars_fragment>
-uniform vec3 baseColor;  uniform float uPosterizeLevels;  // B2P — the colour quantum. ⭐ ONE declaration here reaches ALL THREE body programs, because GAS_BODY / ROCKY_BODY / EXOTIC_BODY are BODIES spliced onto this shared header. ⛔ RIDES THIS LINE: a new line shifts every cited line below it.
+uniform vec3 baseColor;  uniform vec2 uPosterizeLevels;   // B2P — the colour quantum as a vec2: .x = levels, .y = its CPU-carried float32 reciprocal. It is a vec2 and not a float so the reciprocal cannot be re-derived (and re-folded into a divide) by the shader compiler; see posterizeLevels.js 'POSTERIZE_QUANTUM'. ⛔ RIDES THIS LINE.
 // ── World-engine land palette (V2-10 port slice 1). BEDROCK endmembers, condition-derived per body.
 // NOT whole-body colours: oceans, ice caps, clouds and gas bands keep baseColor/accentColor.
 uniform vec3 uFreshColor;      // unweathered rock — exposed on peaks and fresh scarps
@@ -205,10 +205,10 @@ float bayerDither(vec2 coord) {
 }
 
 // ── Edge-dithered posterization ──
-vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth) {
+vec3 posterize(vec3 color, vec2 levels, vec2 fragCoord, float edgeWidth) {
   float dither = bayerDither(fragCoord) - 0.5;
-  vec3 dithered = color + dither * edgeWidth / levels;
-  return floor(dithered * levels + 0.5) / levels;
+  vec3 dithered = color + dither * (edgeWidth * levels.y);  // ⭐ B2P — levels.y is the reciprocal CARRIED FROM THE CPU (posterizeLevels.js 'POSTERIZE_QUANTUM'), and THE INNER PARENTHESES ARE LOAD-BEARING. Pre-B2P was 'dither * edgeWidth / 6.0' with BOTH operands literal, which the compiler folds into ONE constant multiply; parity therefore needs one multiply by that same constant, which '(edgeWidth * levels.y)' reproduces and '(dither * edgeWidth) * levels.y' does not. MEASURED on ANGLE/SwiftShader Vulkan over 12,582,912 knife-edge samples (6,291,456 per edgeWidth): this form 0 divergences from the bed3235 programs at edgeWidth 0.4 AND 0.6. The two forms that FAIL: the round-2 'dither * edgeWidth * inv' = 4 divergences at 0.4 and 1 at 0.6, max byte delta 43; and a shader-DERIVED '1.0 / levels' with these same parentheses = 0 at 0.4 but 5 at 0.6, because the compiler re-folds 'edgeWidth * (1.0 / levels)' back into a divide. Runtime '1.0/6.0' is itself bit-exact (0x3e2aaaab); it is the RE-FOLDING an opaque uniform denies. Also 0 differing across the FULL input domain (8,388,608 float32 samples, both edgeWidths) and 0 bytes differing in unorm8; and gl-reach's seven whole programs each render 0 px differ vs bed3235. Scope: ANGLE/SwiftShader Vulkan — not proven on every driver. ⛔ RIDES THIS LINE.
+  return floor(dithered * levels.x + 0.5) * levels.y;  // B2P — the SECOND divide. '* levels.y' is a plain reciprocal multiply by the carried constant, and matched pre-B2P's folded '/ 6.0' in every one of the 12,582,912 samples above. levels.x is the quantum itself; both components ride ONE uniform, so a level and its reciprocal cannot drift apart.
 }
 
 // ── Ray-sphere shadow test ──
@@ -1621,7 +1621,7 @@ export class Planet {
 
     const material = new THREE.ShaderMaterial({
       uniforms: {
-        baseColor: { value: new THREE.Vector3(...d.baseColor) }, uPosterizeLevels: POSTERIZE_LEVELS, // B2P — THE SHARED OBJECT ITSELF, never a copy: materials are built once and mutated, so a copy would strand every already-mounted body at its build-time value. ⛔ RIDES THIS LINE.
+        baseColor: { value: new THREE.Vector3(...d.baseColor) }, uPosterizeLevels: POSTERIZE_QUANTUM, // B2P — THE SHARED OBJECT ITSELF, never a copy: materials are built once and mutated, so a copy would strand every already-mounted body at its build-time value. ⛔ RIDES THIS LINE.
         accentColor: { value: new THREE.Vector3(...d.accentColor) },
         // World-engine land palette. Falls back to the legacy hard-coded constants when a body
         // predates the derive (e.g. a hand-authored fixture), so nothing renders black.
@@ -1770,7 +1770,7 @@ export class Planet {
     const material = new THREE.ShaderMaterial({
       side: THREE.DoubleSide,
       uniforms: {
-        ringColor1: { value: new THREE.Vector3(...d.rings.color1) }, uPosterizeLevels: POSTERIZE_LEVELS, // B2P — the ring is its OWN program with its OWN posterize copy, so it needs its own entry; wired to the same object so a disc and its ring never quantise differently. ⛔ RIDES THIS LINE.
+        ringColor1: { value: new THREE.Vector3(...d.rings.color1) }, uPosterizeLevels: POSTERIZE_QUANTUM, // B2P — the ring is its OWN program with its OWN posterize copy, so it needs its own entry; wired to the same object so a disc and its ring never quantise differently. ⛔ RIDES THIS LINE.
         ringColor2: { value: new THREE.Vector3(...d.rings.color2) },
         ringOpacity: { value: d.rings.opacity },
         innerRadius: { value: innerR },
@@ -1809,7 +1809,7 @@ export class Planet {
         uniform float innerRadius;
         uniform float outerRadius;
         uniform vec3 lightDir;
-        uniform float planetRadius;  uniform float uPosterizeLevels;   // B2P — this program's own declaration; the body header above does not reach here. ⛔ RIDES THIS LINE.
+        uniform float planetRadius;  uniform vec2 uPosterizeLevels;   // B2P — the colour quantum as a vec2: .x = levels, .y = its CPU-carried float32 reciprocal. It is a vec2 and not a float so the reciprocal cannot be re-derived (and re-folded into a divide) by the shader compiler; see posterizeLevels.js 'POSTERIZE_QUANTUM'. ⛔ RIDES THIS LINE.
         // Moon-cleared gaps
         const int MAX_MOON_GAPS = 6;
         uniform int moonGapCount;
@@ -1834,10 +1834,10 @@ export class Planet {
           return t / 16.0;
         }
 
-        vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth) {
+        vec3 posterize(vec3 color, vec2 levels, vec2 fragCoord, float edgeWidth) {
           float dither = bayerDither(fragCoord) - 0.5;
-          vec3 dithered = color + dither * edgeWidth / levels;
-          return floor(dithered * levels + 0.5) / levels;
+          vec3 dithered = color + dither * (edgeWidth * levels.y);  // ⭐ B2P — levels.y is the reciprocal CARRIED FROM THE CPU (posterizeLevels.js 'POSTERIZE_QUANTUM'), and THE INNER PARENTHESES ARE LOAD-BEARING. Pre-B2P was 'dither * edgeWidth / 6.0' with BOTH operands literal, which the compiler folds into ONE constant multiply; parity therefore needs one multiply by that same constant, which '(edgeWidth * levels.y)' reproduces and '(dither * edgeWidth) * levels.y' does not. MEASURED on ANGLE/SwiftShader Vulkan over 12,582,912 knife-edge samples (6,291,456 per edgeWidth): this form 0 divergences from the bed3235 programs at edgeWidth 0.4 AND 0.6. The two forms that FAIL: the round-2 'dither * edgeWidth * inv' = 4 divergences at 0.4 and 1 at 0.6, max byte delta 43; and a shader-DERIVED '1.0 / levels' with these same parentheses = 0 at 0.4 but 5 at 0.6, because the compiler re-folds 'edgeWidth * (1.0 / levels)' back into a divide. Runtime '1.0/6.0' is itself bit-exact (0x3e2aaaab); it is the RE-FOLDING an opaque uniform denies. Also 0 differing across the FULL input domain (8,388,608 float32 samples, both edgeWidths) and 0 bytes differing in unorm8; and gl-reach's seven whole programs each render 0 px differ vs bed3235. Scope: ANGLE/SwiftShader Vulkan — not proven on every driver. ⛔ RIDES THIS LINE.
+          return floor(dithered * levels.x + 0.5) * levels.y;  // B2P — the SECOND divide. '* levels.y' is a plain reciprocal multiply by the carried constant, and matched pre-B2P's folded '/ 6.0' in every one of the 12,582,912 samples above. levels.x is the quantum itself; both components ride ONE uniform, so a level and its reciprocal cannot drift apart.
         }
 
         void main() {

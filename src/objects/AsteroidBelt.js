@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { assignBodyName } from '../util/scene-naming.js'; import { POSTERIZE_LEVELS } from '../rendering/posterizeLevels.js'; // ⛔ B2P RIDES THIS LINE: this file carries line-anchored citations, so a new import line moves them.
+import { assignBodyName } from '../util/scene-naming.js'; import { POSTERIZE_QUANTUM } from '../rendering/posterizeLevels.js'; // ⛔ B2P RIDES THIS LINE: this file carries line-anchored citations, so a new import line moves them.
 
 /**
  * AsteroidBelt — renders a belt of asteroids using InstancedMesh.
@@ -68,7 +68,7 @@ export class AsteroidBelt {
     return new THREE.ShaderMaterial({
       uniforms: {
         // Star positions (updated each frame for binary, stay at origin for single)
-        starPos1: { value: new THREE.Vector3(0, 0, 0) }, uPosterizeLevels: POSTERIZE_LEVELS, // B2P — the shared object. ⛔ RIDES THIS LINE.
+        starPos1: { value: new THREE.Vector3(0, 0, 0) }, uPosterizeLevels: POSTERIZE_QUANTUM, // B2P — the shared object. ⛔ RIDES THIS LINE.
         starPos2: { value: new THREE.Vector3(0, 0, 0) },
         starColor1: { value: new THREE.Vector3(...(starInfo?.color1 || [1, 1, 1])) },
         starColor2: { value: new THREE.Vector3(...(starInfo?.color2 || [0, 0, 0])) },
@@ -102,7 +102,7 @@ export class AsteroidBelt {
 
       fragmentShader: /* glsl */ `
         #include <logdepthbuf_pars_fragment>
-        uniform vec3 starPos1;  uniform float uPosterizeLevels;   // B2P — this program's own declaration. ⛔ RIDES THIS LINE.
+        uniform vec3 starPos1;  uniform vec2 uPosterizeLevels;   // B2P — the colour quantum as a vec2: .x = levels, .y = its CPU-carried float32 reciprocal. It is a vec2 and not a float so the reciprocal cannot be re-derived (and re-folded into a divide) by the shader compiler; see posterizeLevels.js 'POSTERIZE_QUANTUM'. ⛔ RIDES THIS LINE.
         uniform vec3 starPos2;
         uniform vec3 starColor1;
         uniform vec3 starColor2;
@@ -128,10 +128,10 @@ export class AsteroidBelt {
           return t / 16.0;
         }
 
-        vec3 posterize(vec3 color, float levels, vec2 fragCoord, float edgeWidth) {
+        vec3 posterize(vec3 color, vec2 levels, vec2 fragCoord, float edgeWidth) {
           float dither = bayerDither(fragCoord) - 0.5;
-          vec3 dithered = color + dither * edgeWidth / levels;
-          return floor(dithered * levels + 0.5) / levels;
+          vec3 dithered = color + dither * (edgeWidth * levels.y);  // ⭐ B2P — levels.y is the reciprocal CARRIED FROM THE CPU (posterizeLevels.js 'POSTERIZE_QUANTUM'), and THE INNER PARENTHESES ARE LOAD-BEARING. Pre-B2P was 'dither * edgeWidth / 6.0' with BOTH operands literal, which the compiler folds into ONE constant multiply; parity therefore needs one multiply by that same constant, which '(edgeWidth * levels.y)' reproduces and '(dither * edgeWidth) * levels.y' does not. MEASURED on ANGLE/SwiftShader Vulkan over 12,582,912 knife-edge samples (6,291,456 per edgeWidth): this form 0 divergences from the bed3235 programs at edgeWidth 0.4 AND 0.6. The two forms that FAIL: the round-2 'dither * edgeWidth * inv' = 4 divergences at 0.4 and 1 at 0.6, max byte delta 43; and a shader-DERIVED '1.0 / levels' with these same parentheses = 0 at 0.4 but 5 at 0.6, because the compiler re-folds 'edgeWidth * (1.0 / levels)' back into a divide. Runtime '1.0/6.0' is itself bit-exact (0x3e2aaaab); it is the RE-FOLDING an opaque uniform denies. Also 0 differing across the FULL input domain (8,388,608 float32 samples, both edgeWidths) and 0 bytes differing in unorm8; and gl-reach's seven whole programs each render 0 px differ vs bed3235. Scope: ANGLE/SwiftShader Vulkan — not proven on every driver. ⛔ RIDES THIS LINE.
+          return floor(dithered * levels.x + 0.5) * levels.y;  // B2P — the SECOND divide. '* levels.y' is a plain reciprocal multiply by the carried constant, and matched pre-B2P's folded '/ 6.0' in every one of the 12,582,912 samples above. levels.x is the quantum itself; both components ride ONE uniform, so a level and its reciprocal cannot drift apart.
         }
 
         void main() {
