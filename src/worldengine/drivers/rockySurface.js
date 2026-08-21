@@ -82,7 +82,7 @@
 // ⛔ THREE-FREE, AND NO ENTROPY. The import closure is `base/` + `display/` + `port/`. Measured on
 // this file's own imports rather than assumed:
 //   · `base/labCore.js` imports exactly ONE module —
-//     src/worldengine/base/labCore.js:1064 `import { R_EARTH_KM, featureFrequencyFromKm } from './featureScale.js';`
+//     src/worldengine/base/labCore.js:1102 `import { R_EARTH_KM, featureFrequencyFromKm } from './featureScale.js';`
 //     — and `featureScale.js` imports nothing at all. So the 1264-line module adds ZERO npm deps and
 //     ZERO renderer surface to the closure. The alternative was weighed BEFORE writing — extract
 //     `reliefEnvelope` and its four constants into a leaf module rather than pull a 1264-line file
@@ -104,7 +104,7 @@
 //   The contract's whole shape is that the pack states a SIZE and the writer resolves the FREQUENCY.
 //
 // ⚠ CARRIED DEFECT, NOT FIXED HERE. `reliefEnvelope`'s first parameter is dead:
-// src/worldengine/base/labCore.js:1140 `// for call-site symmetry with the old reliefNorm signature but is UNUSED in the return (radius via`
+// src/worldengine/base/labCore.js:1178 `// for call-site symmetry with the old reliefNorm signature but is UNUSED in the return (radius via`
 // — the radius reaches the answer only through g. It is filed as a defect in the gravity/self-
 // compression workstream's evidence folder,
 // docs/WORKSTREAMS/world-engine-gravity-selfcompression-2026-07-28/evidence/FINDING-uperturb-radius-blind.md.
@@ -373,7 +373,7 @@ export function rockySurfacePack(condition, ctx = {}) {
  * ⭐ EXPORTED AS A FROZEN ENTRY rather than assembled at the registry, so composing it is one import
  * plus one array element and the predicate cannot be retyped differently from the one this pack's
  * own test gates. Registration is STEP 10's commit, not Step 9's: appended AFTER
- * src/worldengine/drivers/index.js:154 `POLAR_DECK_ENTRY,`.
+ * src/worldengine/drivers/index.js:155 `POLAR_DECK_ENTRY,`.
  *
  * ⛔⛔ THE PREDICATE IS `compositionClass(condition) !== 'gas'` AND IT MUST NOT BE `=== 'rocky'`,
  * even though this pack is named for rock and every uniform in it is a rocky-surface uniform. It is
@@ -392,8 +392,8 @@ export function rockySurfacePack(condition, ctx = {}) {
  * the term that makes it look icy).
  *
  * ⚠ IT MUST RETURN THE BOOLEAN, not a truthy value. Both admission sites compare with `=== true` —
- * src/worldengine/drivers/index.js:226 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`
- * and src/worldengine/drivers/index.js:270 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`
+ * src/worldengine/drivers/index.js:248 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`
+ * and src/worldengine/drivers/index.js:292 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`
  * — so a truthy non-boolean registers, reports as `skipped`, renders nothing, and throws nothing.
  * `!==` already yields a boolean; this is a note against a future rewrite, not a cast.
  *
@@ -401,12 +401,12 @@ export function rockySurfacePack(condition, ctx = {}) {
  * `limbDeck` and `polarDeck` are still `compositionClass(condition) === 'gas'` character-for-character
  * and `craterDeck` is `=== 'gas'` too, so this predicate is their exact complement. ⛔ `giantDeck` IS
  * THE EXCEPTION AND IT IS NAMED RATHER THAN GLOSSED: ledger R-07 widened its entry to
- * src/worldengine/drivers/index.js:114 `applies: (condition) => bandedEnvelopeOf(condition),` — gas OR
+ * src/worldengine/drivers/index.js:115 `applies: (condition) => bandedEnvelopeOf(condition),` — gas OR
  * an opaque CO2 shroud — and an opaque-CO2 body is `rocky`, so the deck CO-APPLIES with this pack on
  * that slice and the two are held apart by NAME rather than by predicate. That is asserted over the
  * population in FAMILY 22 alongside `solidOptics`, which has always had the same shape. For the three
  * that remain complementary, the collision throw at
- * src/worldengine/drivers/index.js:281 `throw new PackContractError(` is inert here. Inert is not the
+ * src/worldengine/drivers/index.js:278 `throw new PackContractError(` is inert here. Inert is not the
  * same as impossible — the pack test asserts the emitted name sets are disjoint by NAME LOOKUP, so
  * the day a predicate widens the overlap is caught by a test rather than by array order.
  */

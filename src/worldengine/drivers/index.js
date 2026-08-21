@@ -56,6 +56,7 @@ import { POLAR_DECK_ENTRY } from './polarDeck.js';
 import { ROCKY_SURFACE_ENTRY } from './rockySurface.js';
 import { SOLID_OPTICS_ENTRY } from './solidOptics.js';
 import { CRATER_DECK_ENTRY } from './craterDeck.js';
+import { SOLID_FEATURES_ENTRY } from './solidFeatures.js';
 import {
   writePackUniforms, assertDisplayPolicy, assertPackResult, PackContractError,
 } from '../port/writePackUniforms.js';
@@ -216,6 +217,27 @@ export const PACKS = Object.freeze([
   // two packs cannot answer differently for the same condition — asserted directly in
   // tests/driver-pack-craterdeck.test.js rather than inferred from the import graph.
   CRATER_DECK_ENTRY,
+  // ── BLOCK B3 leg 3. THE SEVENTH ENTRY. Six lab features that no pack wrote: F7 volcanic edifices,
+  // F9 chaos + F10 ridged icy (one shared master), F23 snowline/frost, F22 polar caps, F17 glacial.
+  //
+  // ⭐ ITS PREDICATE IS CHARACTER-IDENTICAL TO ROCKY_SURFACE_ENTRY'S AND SOLID_OPTICS_ENTRY'S,
+  // `!== 'gas'`, so this registration is population-neutral in the same way leg 1's was:
+  // `selectPacks` already returns a non-empty list for every body it claims, the `packs.length > 0`
+  // term of src/objects/Planet.js:2194 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
+  // cannot flip for any record, and NO CENSUS IS RE-PINNED. Asserted over lab-procedural-0…199 in
+  // tests/driver-pack-solidfeatures.test.js by comparing the swapped SET before and after
+  // registration, not by reading three `applies` lines by eye.
+  //
+  // ⛔ IT CO-APPLIES WITH THREE PACKS, so the collision throw below is live rather than inert:
+  // `rockySurface` and `solidOptics` on every body it claims, and `giantDeck` on the 130 venus-class
+  // bodies R-07 admitted at leg 2. All four emitted name sets are disjoint — asserted by NAME LOOKUP
+  // over a generated population in this pack's suite.
+  //
+  // ⚠ IT DECLARES FOUR GATE NAMES THAT DID NOT EXIST BEFORE — `edifices`, `chaos`, `frost`,
+  // `glacial` — and `gatesFor` answers ALL_ON for each. That is PLAN §9 ruling 4 applied to four
+  // more lab checkboxes, and it is a VISIBLE change on every swapped solid body rather than a
+  // no-op: six feature families stop reading their factory default. It is the point of the leg.
+  SOLID_FEATURES_ENTRY,
 ]);
 
 /** The entries whose predicate claims this condition, in array order. */

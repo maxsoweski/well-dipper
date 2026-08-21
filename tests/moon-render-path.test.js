@@ -349,7 +349,7 @@ describe('2. the back-link', () => {
     // labCore's `hasAtmo` 0), so what actually reaches the moon is the limb width/hue, the
     // terminator hue/width and four aurora values behind a zero intensity. Recorded because a
     // pack in the list is not the same as a feature on the pixel.
-    expect(moonWd.lab.packsApplied).toEqual(['rockySurface', 'solidOptics']);
+    expect(moonWd.lab.packsApplied).toEqual(['rockySurface', 'solidOptics', 'solidFeatures']);
     expect(moonWd.lab.packsSkipped.length).toBeGreaterThan(0);
     // `uniformsWritten` is the NAME LIST, not a count — a caption that printed a bare integer
     // could not tell 'the pack wrote 21 uniforms' from 'the pack wrote uCraterDensity 21 times'.
@@ -524,7 +524,7 @@ describe('6. per-class distinctness', () => {
     }
     // ⭐ `solidOptics` joins the plain-moon list at B3 leg 1 (same `!== 'gas'` predicate as
     // rockySurface). Its magnitudes are 0 on an airless moon; see the note in moon-lab-mount.
-    expect(packs.plainMoon).toBe('rockySurface+solidOptics');
+    expect(packs.plainMoon).toBe('rockySurface+solidOptics+solidFeatures');
     expect(packs.gasGiant).not.toBe(packs.rockyPlanet);
 
     // ⛔ THE COMPARISON IS SCOPED TO PACK-WRITTEN UNIFORMS, AND THAT SCOPING IS THE GATE. Four

@@ -585,6 +585,35 @@ function seededUnitVec3(seed) {
   return [r * Math.cos(phi), r * Math.sin(phi), z];
 }
 
+// ── F4's rift system, from a seed alone (B3 leg 3, 2026-08-21) ───────────────────────────────────
+// `chasmaCount` (1..3) and `chasmaAxes` (3 unit-vec3 rift-plane normals; the great circle ⊥ each
+// normal is a rift) were two inline expressions inside `deriveUniforms`. They are lifted here
+// UNCHANGED — same hash constants, same `seed + 1/2/3` offsets — for one reason:
+//
+// ⛔ THEY ARE THE ONLY F4 QUANTITIES A CONDITION VECTOR CANNOT ANSWER. `deriveUniforms` reads its
+// seed from `d.seed`, and MEASURED over lab-procedural-0…199, `condition.seed` is `undefined` on
+// 1484 of 1484 bodies — no condition vector carries the key at all. So the bundle's answer on every
+// game body is the seed-0 answer, i.e. ONE rift system for the whole galaxy. The seed is the
+// FRONT-END's to supply, exactly as the three domain offsets are
+// (src/objects/Planet.js:2271 `    ...labReliefOffsets(d), ...chasmaRiftsFor(labMacroSeed(d)),   // ⭐ B3-3: F4's rift pair RIDES THIS LINE — appended below `mesh`, never inserted, for the citation reason above; the pack tree cannot answer it because a condition carries no `seed`.`), which is why the game
+// forwards this pair on `ctx` from its own `labMacroSeed` rather than letting a pack derive it.
+//
+// ⭐ ONE EXPRESSION, TWO CALLERS. `deriveUniforms` calls it, so the lab is byte-inert: same seed in,
+// same pair out. A transcription at the game's forwarding site would have been a second expression
+// of a seeded law free to drift from the one under test — which is exactly what B3 leg 1 had to
+// delete three copies of.
+// ⛔ THE TWO BINDINGS KEEP THEIR ORIGINAL `const NAME = …` FORM RATHER THAN BEING INLINED INTO THE
+// RETURN LITERAL. tests/ws4-expression-only.test.js:141 `    expect(LAB_CORE).toMatch(/chasmaAxes\s*=\s*\[\s*seededUnitVec3/);` scrapes this file as TEXT for
+// exactly `chasmaAxes = [seededUnitVec3`, on the stated grounds that the seed-derived axis hashes
+// must SURVIVE as the grain-OFF endpoint. A `chasmaAxes:` property shorthand renders the same value
+// and reds that fence — measured, not guessed: it reddened on the first draft of this extraction.
+export function chasmaRiftsFor(seed) {
+  const cs = Math.sin(seed * 45.164 + 9.1) * 43758.5453;
+  const chasmaCount = 1 + Math.floor((cs - Math.floor(cs)) * 3);   // 1..3
+  const chasmaAxes = [seededUnitVec3(seed + 1), seededUnitVec3(seed + 2), seededUnitVec3(seed + 3)];
+  return { chasmaCount, chasmaAxes };
+}
+
 // deriveUniforms: physics driver-bundle -> flat semantic uniform values.
 // Generalizes the aurora/atmosphere precedent in PlanetGenerator.js:435-487
 // (fieldStrength = composition.ironFraction * (locked ? 0.2 : 1.0); NO planetType branch).
@@ -777,9 +806,7 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   // chasmaCount (1..3) + chasmaAxes (3 seeded unit-vec3 rift-plane normals — each great
   // circle ⊥ its normal is a rift). Seed-deterministic so a planet's rift system is
   // stable; production passes the real planet seed. The combiner uses chasmaCount rifts.
-  const cs = Math.sin(seed * 45.164 + 9.1) * 43758.5453;
-  const chasmaCount = 1 + Math.floor((cs - Math.floor(cs)) * 3);   // 1..3
-  const chasmaAxes = [seededUnitVec3(seed + 1), seededUnitVec3(seed + 2), seededUnitVec3(seed + 3)];
+  const { chasmaCount, chasmaAxes } = chasmaRiftsFor(seed);   // ⭐ B3 leg 3: ONE expression, two callers (see chasmaRiftsFor below)
 
   // ── F5 scarps / fault systems (Stage-C step 3, Relief — relief doc §F5.b) ───
   // Lobate contraction scarps form from GLOBAL COOLING/CONTRACTION as a planet ages
@@ -904,7 +931,18 @@ export function deriveUniforms(drivers, qualityTier = 1.0) {
   const frostMaxCoverage = clamp01(smoothstep(0.05, 0.4, volatileFraction));
   // frostLatitudeBias — D3 axial tilt spreads frost to LOW latitudes (Mars-like seasonal caps);
   // zero-tilt worlds hold sharp polar-symmetric caps. axialTilt in degrees (default 0).
-  const axialTilt = d.axialTilt ?? 0;
+  // ⭐ ROOT-0 fix 5 (B3 leg 3, 2026-08-21): TWO SPELLINGS OF ONE QUANTITY, the same shape as fix 1's
+  // erosion/erosionLevel. The lab presets write `axialTilt` in degrees (driver-presets.js:109
+  // `axialTilt: 25`); the condition vector renames it on the way through —
+  // src/worldengine/base/conditionVector.js:200 `  axialTiltDeg:    fp.axialTilt,                          // D3 obliquity in DEGREES (see the block above; the fp key is degrees on both sides)` — so this reader, which knew only the lab
+  // spelling, drove a hard 0 into `frostLatitudeBias` on every condition-shaped body. MEASURED over
+  // lab-procedural-0…199 BEFORE this line changed: `frostLatitudeBias` was 0 nonzero / 1 distinct on
+  // all 852 planets and all 632 plain moons, while `condition.axialTiltDeg` ran 0.0123°…85.6487° over
+  // 852 distinct values on the planets. AFTER: 852 nonzero / 852 distinct on planets.
+  // ⛔ THE LAB SPELLING STILL WINS WHERE BOTH EXIST, so no preset moves and the lab is byte-inert.
+  // ⛔ MOONS DO NOT MOVE AND THAT IS NOT THIS LINE'S FAULT: a plain-moon record carries no tilt key
+  // of either spelling (measured: 0 of 632 have one), so `frostLatitudeBias` stays 0 there.
+  const axialTilt = d.axialTilt ?? d.axialTiltDeg ?? 0;
   const frostLatitudeBias = clamp01(axialTilt / 90);
   // frostAlbedo — luminance is load-bearing (bright → survives posterize); the TINT is the
   // stylize/drop call (cryo-doc §6 Q1): H₂O white, CO₂ grey-white, CH₄ tholin-pink, N₂ blue-white.

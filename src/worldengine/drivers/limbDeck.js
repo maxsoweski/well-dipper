@@ -13,10 +13,10 @@
 // This module is that line, made into a pack so the composition point stays an array entry.
 //
 // ⛔ NOTHING HERE IS DESIGNED. Every input already exists on the game side and no producer moves:
-//   · STRENGTH — the lab's only producer is planet-lod-lab-core.js:1043 `limbStrength: hasAtmo ? 0.7 : 0.0,`
+//   · STRENGTH — the lab's only producer is planet-lod-lab-core.js:1081 `limbStrength: hasAtmo ? 0.7 : 0.0,`
 //     inside `deriveUniforms`, picked up at planet-lod-lab.html:2001 `state.emissive = u.emissive; state.specStrength = u.specStrength; state.limbStrength = u.limbStrength;`
 //     — INSIDE `applyDrivers`, i.e. inside the pack-legal region and NOT inside the fenced storm
-//     writer. Its one input is planet-lod-lab-core.js:596 `const hasAtmo = !!d.atmosphere;`, which
+//     writer. Its one input is planet-lod-lab-core.js:625 `const hasAtmo = !!d.atmosphere;`, which
 //     the game's condition vector answers directly. Nothing had to be extracted.
 //   · WIDTH and HUE — the lab does not own these either. planet-lod-lab.html:2464 `const _atmoOptics = atmosphereOpticsOf(`
 //     is the SAME module the game already calls at src/objects/Planet.js:1610 `const optics = atmosphereOpticsOf(condition);`
@@ -80,7 +80,7 @@ export const LIMB_GATE = 'limb';
 // ── The lab's strength constants, transcribed from its ONE producer ──────────
 // These two numbers are the only values this file owns, and they are owned because the lab's
 // producer is a literal ternary with no module behind it. Everything else is forwarded.
-// Both branches of planet-lod-lab-core.js:1043 `limbStrength: hasAtmo ? 0.7 : 0.0,`, split in two:
+// Both branches of planet-lod-lab-core.js:1081 `limbStrength: hasAtmo ? 0.7 : 0.0,`, split in two:
 export const LIMB_STRENGTH_WITH_AIR = 0.7;   // the `hasAtmo` branch — a retained atmosphere glows
 export const LIMB_STRENGTH_AIRLESS = 0.0;    // the else branch — no air, hard dark silhouette
 
@@ -170,7 +170,7 @@ export function limbDeckPack(condition, ctx = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 /**
  * ⭐ EXPORTED AS A FROZEN ENTRY RATHER THAN ASSEMBLED AT THE REGISTRY, so composing it is one
- * import plus one array element at src/worldengine/drivers/index.js:99 `export const PACKS = Object.freeze([`
+ * import plus one array element at src/worldengine/drivers/index.js:100 `export const PACKS = Object.freeze([`
  * and the predicate cannot be retyped differently from the one this pack's own test gates.
  *
  * ⛔⛔ THE PREDICATE IS `compositionClass(condition) === 'gas'` AND IT MUST NOT BE `!!condition.atmosphere`,
@@ -180,7 +180,7 @@ export function limbDeckPack(condition, ctx = {}) {
  * — so a broader predicate would ADMIT EVERY ROCKY AND ICY WORLD-ENGINE BODY to the lab material,
  * which is Step 9's population arriving unruled at Step 6. ⛔ IT USED TO BE CHARACTER-IDENTICAL TO
  * THE GAS DECK'S ENTRY AND IT IS NOT ANY MORE, 2026-08-21 (B3 leg 2, ledger R-07): that entry now
- * reads src/worldengine/drivers/index.js:114 `applies: (condition) => bandedEnvelopeOf(condition),`
+ * reads src/worldengine/drivers/index.js:115 `applies: (condition) => bandedEnvelopeOf(condition),`
  * — gas OR an opaque CO2 shroud — so the deck claims 130 rocky bodies this pack must NOT claim. This
  * predicate stays `compositionClass(condition) === 'gas'` and the pack's test now asserts it against
  * the COMPOSITION CLASS directly, with the deck asserted as a superset; comparing to the deck would

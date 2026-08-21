@@ -9,7 +9,7 @@
 //
 // ⛔ WHAT THIS LANE DOES NOT DO, AND THE READER MUST NOT INFER OTHERWISE.
 // ⭐ THE ENTRY IS NOW REGISTERED. This line used to read "It does NOT add the entry to"
-// src/worldengine/drivers/index.js:99 `export const PACKS = Object.freeze([` — the registration commit
+// src/worldengine/drivers/index.js:100 `export const PACKS = Object.freeze([` — the registration commit
 // added it, importing `LIMB_DECK_ENTRY` rather than retyping the predicate. ⛔ The default game is
 // still unchanged: composition is reached only behind the 6e flag, whose shipped default is false.
 // That file is the shared composition point for two concurrent lanes and is reserved for the
@@ -320,7 +320,7 @@ describe('C — width and hue are FORWARDED from the shared law, not transcribed
       expect(PACK_CODE.includes(n), `limbDeck.js code names ${n} — ${why}`).toBe(false);
     }
     // The two numbers it DOES own, and it owns them because the lab's producer is a literal ternary
-    // with no module behind it: planet-lod-lab-core.js:1043 `limbStrength: hasAtmo ? 0.7 : 0.0,`.
+    // with no module behind it: planet-lod-lab-core.js:1081 `limbStrength: hasAtmo ? 0.7 : 0.0,`.
     expect(PACK_CODE).toContain('0.7');
     expect(LIMB_STRENGTH_WITH_AIR).toBe(0.7);
     expect(LIMB_STRENGTH_AIRLESS).toBe(0.0);
@@ -545,7 +545,7 @@ describe('F — the entry is registry-ready and collision-free', () => {
   });
 
   it('names NO uniform giantDeck names — the collision throw will not fire at integration', () => {
-    // src/worldengine/drivers/index.js:280 `if (uniformsWritten.includes(name)) {`
+    // src/worldengine/drivers/index.js:302 `if (uniformsWritten.includes(name)) {`
     // makes two packs naming one uniform an ERROR rather than
     // a last-writer-wins, because array order would otherwise decide what renders. Both packs claim
     // the same bodies, so the disjointness is a precondition of the integration commit, checked here.

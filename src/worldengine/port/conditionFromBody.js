@@ -295,7 +295,7 @@ export function effectiveObliquityDegreesOf(tiltDegrees) {
 //   game  PlanetGenerator.js `habitability: habScore` — §10 symbol-only, because it sits in the
 //         record literal that every step of this plan grows — assigned from
 //         PhysicsEngine.js:688 `return { score: Math.min(score, 1.0), factors };` → an OBJECT
-// The engine's one reader is planet-lod-lab-core.js:744 `clamp01(d.habitability ?? 0)` — and
+// The engine's one reader is planet-lod-lab-core.js:773 `clamp01(d.habitability ?? 0)` — and
 // `clamp01` of an object is `Math.min(1, Math.max(0, {…}))` = **NaN**. NaN is the one failure mode in
 // this codebase that is NOT quiet: it propagates into a uniform and the whole body renders as a black
 // frame (docs/FEATURES/surface-variation-beyond-mvp.md:790 records exactly that, from an `undefined`
@@ -750,7 +750,7 @@ export function conditionFromBody(planetData) {
     //           { bombardmentIntensity, erosionLevel, resurfacingRate }
     //     lab   driver-presets.js:27 writes `surfaceHistory:{erosion:…}` and until B1 BOTH readers
     //           spelled it `erosion` ONLY — baseStep.js:38 `const surfaceHistory` and
-    //           labCore.js:598 `const erosion`, so a game body read a hard 0 at both.
+    //           labCore.js:627 `const erosion`, so a game body read a hard 0 at both.
     // MEASURED over 616 generated planets: `surfaceHistory.erosion` is undefined on 616/616, while
     // `erosionLevel` runs 0.0150 … 1.0000 (median 0.6655). So the engine READ a hard 0 for a
     // quantity that is really two-thirds of the way up its range, on every body in the game.

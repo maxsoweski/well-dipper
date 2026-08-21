@@ -72,7 +72,7 @@ execution at completed work.
 
 **F-3. ⭐⭐ NOTHING UNDER `src/` CALLS `deriveUniforms`. This is the most load-bearing fact in the plan
 and the earlier draft got its consequence backwards.**
-src/worldengine/base/labCore.js:593 `export function deriveUniforms(drivers, qualityTier = 1.0) {`
+src/worldengine/base/labCore.js:622 `export function deriveUniforms(drivers, qualityTier = 1.0) {`
 has **39 call sites: 36 in `tests/`, one in `planet-lod-lab.html`, and ZERO in `src/`.** Six `src/`
 files import `labCore` and none imports `deriveUniforms`:
 src/worldengine/drivers/rockySurface.js:122 `import { reliefEnvelope } from '../base/labCore.js';` ·
@@ -103,8 +103,8 @@ moons** (`condition.eccentricity === 0`). Sol excluded by construction.
 | `deriveUniforms().cryoActivity` | **1 distinct / 0 nonzero** | 32 distinct / 40 nonzero |
 | counterfactual `clamp01(rawTidalIoRatio)` | **77 distinct / 81 nonzero** | 85 distinct / 93 nonzero |
 
-*Layer 1 — the law.* src/worldengine/base/labCore.js:772 `const tidalProxy = clamp01(tidalHeat);`
-reads a `tidalHeat` that src/worldengine/base/labCore.js:620 `const ecc = d.eccentricity ?? 0;`
+*Layer 1 — the law.* src/worldengine/base/labCore.js:801 `const tidalProxy = clamp01(tidalHeat);`
+reads a `tidalHeat` that src/worldengine/base/labCore.js:649 `const ecc = d.eccentricity ?? 0;`
 recomputes from a planet-around-star formula fed an eccentricity that is exactly zero on every plain
 moon. The already-forwarded `rawTidalIoRatio` is real and per-body, and
 src/worldengine/base/baseStep.js:29 `const rawTidalIoRatio = (d.tidalHeat != null)   // D12 raw Io-ratio, PRE-calibrateTidal`
@@ -193,7 +193,7 @@ taste/product calls physics cannot resolve, batched."* And `one-pipeline-two-fro
 |---|---|---|---|---|
 | **D-1** | ✅ **RULED** — whether the eight `blocking` ledger rows have to CLOSE before the flag flips, or ship as written-down losses. | **B7 — the only player-facing node, and everything behind it** | ⭐ **THEY MUST CLOSE BEFORE THE FLAG FLIPS.** Ruled 2026-08-20 (Max, delegated to the plan's recommendation). The ledger's §2 says so in its own definition: `accepted-loss` is the declared-and-allowed category, `blocking` is not. **This is now B7's gate, not a proposal** — B7 cannot flip with a `blocking` row open. | gate of **B7** |
 | **D-2** | ✅ **RULED** — whether *"Pass, with the note that these are all identical"* closes Step 12's Step-10 half. | **B7** | ⭐ **IT DOES NOT. The Step-10 half is ruled OPEN, and is re-run AS B3's UAT** with `wd.labGasBodies` on. Ruled 2026-08-20 (Max, delegated to the plan's recommendation). B1 cannot make one moon look different (F-3, F-4). **No extra stop was created — it merges into a gate that already exists.** | gate of **B3** |
-| **D-3** | ✅ **RULED** — scheduling of the two R-rows Max reserved to himself 2026-08-09: **R-07** (Venus zonal banding, **130 bodies**, ruled `blocking`) and **R-05** (lava crust/melt, 52 bodies, `accepted-loss`). | R-07 blocks **B7**; R-05 blocks nothing | ⭐ **R-07 → B3 as a named work item. R-05 → B5, with F8** — same family, same open complaint. Ruled 2026-08-20 (Max, delegated to the plan's recommendation). ⛔ Widening `giantDeck`'s predicate is **struck as a measured no-op**: src/worldengine/drivers/giantDeck.js:201 `const gas = compositionClass(condition) === 'gas';` feeds src/worldengine/drivers/giantDeck.js:225 `uBandStrength: scalar(banded ? 1.0 : 0.0, { gate: 'bands' }),` (⛔ RE-POINTED 2026-08-21 — it read `scalar(gas ? ...)` when this line was written; B3 leg 2 changed it, which is this bullet's own work item done) — a *second* gate behind the pack predicate at src/worldengine/drivers/index.js:114 `applies: (condition) => bandedEnvelopeOf(condition),` (⛔ RE-POINTED 2026-08-21 — it read `compositionClass(condition) === 'gas'` when this line was written). | **B3** / **B5** |
+| **D-3** | ✅ **RULED** — scheduling of the two R-rows Max reserved to himself 2026-08-09: **R-07** (Venus zonal banding, **130 bodies**, ruled `blocking`) and **R-05** (lava crust/melt, 52 bodies, `accepted-loss`). | R-07 blocks **B7**; R-05 blocks nothing | ⭐ **R-07 → B3 as a named work item. R-05 → B5, with F8** — same family, same open complaint. Ruled 2026-08-20 (Max, delegated to the plan's recommendation). ⛔ Widening `giantDeck`'s predicate is **struck as a measured no-op**: src/worldengine/drivers/giantDeck.js:201 `const gas = compositionClass(condition) === 'gas';` feeds src/worldengine/drivers/giantDeck.js:225 `uBandStrength: scalar(banded ? 1.0 : 0.0, { gate: 'bands' }),` (⛔ RE-POINTED 2026-08-21 — it read `scalar(gas ? ...)` when this line was written; B3 leg 2 changed it, which is this bullet's own work item done) — a *second* gate behind the pack predicate at src/worldengine/drivers/index.js:115 `applies: (condition) => bandedEnvelopeOf(condition),` (⛔ RE-POINTED 2026-08-21 — it read `compositionClass(condition) === 'gas'` when this line was written). | **B3** / **B5** |
 | **D-4** | ✅ **RULED** — scope of the lighting block under ruling #1. | **B4, B7, F52, I-12, 8 optical couplings** | ⭐ **SCOPE IS THE FOUR MEASURED LEDGER ROWS P-01 / P-02 / P-03 / S-01, across the nine verified consumer classes, AUTHORED ON THE LAB MATERIAL — NOT THE LEGACY SHADER.** Ruled 2026-08-20 (Max, delegated to the plan's recommendation). Anything outside those four rows is outside B4. | **B4** |
 | **D-5** | ✅ **RULED** — **QB-1, the terminator belt.** Max deferred it 2026-08-14 on the live game (*"that effect needs a ton of work. It has for a long time"*, *"We don't need to do that now."*); ruling #1 (2026-08-06) had folded it into the lighting engine. His later word is the deferral. | **B3's P-11 closure** — a pack must write `uTermStrength`, and with WHICH law was the question | ⭐ **THE DEFERRAL HOLDS. B3 forwards the game's already-tamed law VERBATIM and closes P-11 on parity**; the belt stays exactly as it is. Ruled 2026-08-20 (Max, delegated to the plan's recommendation). ⛔ **No agent re-authors what twilight looks like** — that is the taste call he parked, and it re-opens only on his word. | **B3** (forward) — re-author only if he lifts it, then **B5** |
 | **D-6** | ⛔⛔ **OPEN — MAX'S LOOK, AND ONLY HIS.** **QB-7 — are the post-grain canyons enough?** ⭐ **B0 TOOK THE SHOT 2026-08-20; it is now waiting on his eyes, not on more work.** | **F4's block assignment** (694 distinct, never zero — the strongest relief candidate in queue (a)) | ⛔ **NO AGENT MAY ANSWER THIS.** The two frames to look at are `A-PAIR-fulldisc-LEFT-grain0-RIGHT-grain1.png` and `A-PAIR-rift-LEFT-grain0-RIGHT-grain1.png`, in the B0 shot set at `/tmp/claude-1000/-home-ax/d7bf083b-b464-42f5-94fe-04658f23d98e/scratchpad/b0-shots/` with `CAPTIONS.txt` beside them (pose captured BY VALUE and asserted byte-identical across each pair; freeze asserted; the lab carries no film-grain uniform at all). ⚠ **That directory is session-scoped scratchpad — copy it somewhere durable before it ages out.** **If enough → F4 ships in B3; if not → F4 goes to B5** with the other method re-thinks. ⭐ The same shot also settles **P5-G27**, **WS4-7** and part of **P5-G14**: lab-live `1.0` at `planet-lod-lab.html:1442` against the production default at src/worldengine/shaders/uniforms.js:191 `uTectonicGrainStrength`. ⭐ MECHANICAL GATE ONLY, and it is not a canyons-only A/B: grain 0→1 moves 49.37% of the disc ROI while the canyon feature's own footprint is 1.64%, because the grain uniform re-orients six relief features at once. | **B3** or **B5** |
@@ -319,7 +319,7 @@ re-measurement.
 
 **GATE** · **Instrument C** shipped-uniform delta **byte-identical on all four packs** — a gate that CAN
 be met, because of F-3: `deriveUniforms` is not on the game's path, and the only `labCore` export that
-reaches a pack is `reliefEnvelope` (src/worldengine/base/labCore.js:1167 `export function reliefEnvelope(radiusEarth, surfaceGravity) {`,
+reaches a pack is `reliefEnvelope` (src/worldengine/base/labCore.js:1205 `export function reliefEnvelope(radiusEarth, surfaceGravity) {`,
 a pure function of two arguments) at `src/worldengine/drivers/rockySurface.js:122`. ⛔ If it goes red the
 change leaked out of the seam and must be split; never loosen the gate · **Instrument A** the 32
 red-by-design set unchanged, everything else green · **Instrument B** body-identity fence green ·
@@ -342,10 +342,10 @@ which is why they are ONE block with ONE delta table rather than four blocks wit
 
 | # | Seam fix | Evidence | Measured effect (`lab-procedural-0…24`: 110 planets + 81 plain moons) |
 |---|---|---|---|
-| 1 | **erosion** | src/worldengine/base/labCore.js:598 `const erosion` read a key `PhysicsEngine.js:822` never emits — pre-fix text `d.surfaceHistory?.erosion ?? 0`; `erosionLevel` is the one present. ⭐ **REPAIRED BY B1, 2026-08-20**: both spellings resolve, lab wins a tie. | undefined 191/191. On 81 plain moons: `rayBrightness` 1→23, `scarpStrength` 21→42, `mountainAmp` 11→30. On 110 planets: `orogenyStrength` 13→60, `chasmaDepth` 63→95, `plateauStrength` 63→95, `tesseraStrength` 45→62. ⭐ RE-MEASURED over the full 1517: `reliefAmplitude` 1517, `chasmaDepth` 1517, `plateauStrength` 1517, `scarpStrength` 1263, `mountainAmp` 1179, `orogenyStrength` 885, `rayBrightness` 632, `tesseraStrength` 606 |
+| 1 | **erosion** | src/worldengine/base/labCore.js:627 `const erosion` read a key `PhysicsEngine.js:822` never emits — pre-fix text `d.surfaceHistory?.erosion ?? 0`; `erosionLevel` is the one present. ⭐ **REPAIRED BY B1, 2026-08-20**: both spellings resolve, lab wins a tie. | undefined 191/191. On 81 plain moons: `rayBrightness` 1→23, `scarpStrength` 21→42, `mountainAmp` 11→30. On 110 planets: `orogenyStrength` 13→60, `chasmaDepth` 63→95, `plateauStrength` 63→95, `tesseraStrength` 45→62. ⭐ RE-MEASURED over the full 1517: `reliefAmplitude` 1517, `chasmaDepth` 1517, `plateauStrength` 1517, `scarpStrength` 1263, `mountainAmp` 1179, `orogenyStrength` 885, `rayBrightness` 632, `tesseraStrength` 606 |
 | 2 | **tidal precedence** | `labCore.js:772` read a `tidalHeat` that `labCore.js:620` recomputed from a zero eccentricity; `baseStep.js:29` already had the correct shape. ⭐ **REPAIRED BY B1, 2026-08-20** — `labCore.js:624` now prefers `d.tidalHeat ?? d.rawTidalIoRatio`, the second being the name a CONDITION uses. | **`lavaActivity` 1 distinct / 0 nonzero → 77 / 81 on 81/81 plain moons.** Same for `cryoActivity`. ⭐ RE-MEASURED over the full 1517: `tidalHeat` moved on 1414, `lavaActivity` 1006, `channelDensity` 1006, `volcanismStrength` 899, `cryoActivity` 596 |
 | 3 | **ageNorm** | `baseStep.js:40` got raw Gyr because `conditionVector.js:112` emits `age`, not `ageNorm`; `(1 - ageNorm)` ran negative above 1 Gyr, which is 88.3% of bodies. ⭐ **REPAIRED BY B1, 2026-08-20** — it now normalises through `clamp01(d.age / AGE_NORM_DIVISOR)`. | undefined 191/191. Saturates four interior scalars. ⭐ RE-MEASURED over the full 1517: `ageNorm` 1517, `shellThickness` 1517, `loveK2` 1517, `thermalState` 1503, `despinAmp` 1501, `radialStrainMag` 1501 — the four saturated interiors, named |
-| 4 | **surfaceGravity** | src/worldengine/base/labCore.js:610 `const massEarth = d.massEarth ?? 1.0;` fed a g recompute instead of reading `condition.surfaceGravity`. ⭐ **REPAIRED BY B1, 2026-08-20** at `labCore.js:611`, which now prefers `d.surfaceGravity`. | ⚠ **Book as CORRECTNESS, not differentiation.** The 48-doc measures the "correct" substitution making the edifice clamp rail *worse* (834→904 of 1517, `lab-procedural-0…199`). ⭐ **REPRODUCED EXACTLY** by B1's own probe — and the SHAPE is new: the FLOOR rail empties 586→0 while the CEIL absorbs 248→904, so it is one rail replacing two on 59.6%, not the same flatness moved around. Whoever wires the edifice consumer inherits a re-ranging job |
+| 4 | **surfaceGravity** | src/worldengine/base/labCore.js:639 `const massEarth = d.massEarth ?? 1.0;` fed a g recompute instead of reading `condition.surfaceGravity`. ⭐ **REPAIRED BY B1, 2026-08-20** at `labCore.js:611`, which now prefers `d.surfaceGravity`. | ⚠ **Book as CORRECTNESS, not differentiation.** The 48-doc measures the "correct" substitution making the edifice clamp rail *worse* (834→904 of 1517, `lab-procedural-0…199`). ⭐ **REPRODUCED EXACTLY** by B1's own probe — and the SHAPE is new: the FLOOR rail empties 586→0 while the CEIL absorbs 248→904, so it is one rail replacing two on 59.6%, not the same flatness moved around. Whoever wires the edifice consumer inherits a re-ranging job |
 
 ⛔ **THE SEED FIX IS NOT IN THIS BLOCK.** The earlier draft's fix #5 told an agent to route
 `ctx.macroSeed` pack-side while simultaneously gating the block on pack byte-identity — two requirements
@@ -452,6 +452,36 @@ F7 edifices (634 distinct / 22.3% zero), **F37 aurorae** (603/53.5%), F23 snowli
 F22 polar caps (548/53.6%), F17 glacial (364/69.7%), F9 chaos + F10 ridged icy (227, shared master).
 **Held out to B5: F18 sublimation (QB-5), F8 lava (QB-10), and F4 canyons if D-6 says not-enough.**
 
+✅ **LANDED B3 LEG 3, 2026-08-21 — a seventh pack, `solidFeatures`, predicate `!== 'gas'`.** It forwards
+fourteen names off ONE `deriveUniforms(condition)` bundle: F7's three, F9/F10's shared `uCryoActivity`
+plus `uChaosRaftJitter`, F23's six, F22's `uPldStrength`, F17's two. ⭐ **F37 was already wired at leg 1**
+(`solidOptics`, ledger P-05), so leg 3 wired six of the seven and re-measured the seventh.
+⭐ **MEASURED over `lab-procedural-0…199` (852 planets + 632 plain moons), before/after on the material:
+all fourteen were 1 distinct on every body; after, ten of the fourteen differentiate the 632 plain moons
+— `uChaosRaftJitter` 626 distinct, `uGlacialFlowVigor` 626, `uVolcanismStrength` 438, `uPlanetTempEq` 417,
+`uPldStrength` 298, `uCryoActivity` 283, `uFrostMaxCoverage` 272, `uEdificeMaxHeight` 40,
+`uFrostCondensationT` 5, `uFrostAlbedo` 4.**
+⛔ **THREE OF THE FOURTEEN ARE FLAT ON THE MOON HALF and the caption must say so alongside F37's zero:**
+`uShieldStratoMix` (1 distinct — `condition.habitability` is undefined on 632/632 plain moons),
+`uFrostLocked` (1 — every plain moon reads tidally locked), `uFrostLatitudeBias` (1 — a plain-moon record
+carries no obliquity key at all). All three vary on the 852 planets.
+⛔ **SEVEN MORE NAMES WERE DELIBERATELY NOT WRITTEN**, each because `labCore` answers it with a bare
+literal byte-equal to the lab material's own factory default: `chaosCellScale`, `chaosMatrixRough`,
+`doubleRidgeFreq`, `cryoRidgeOffset`, `cryoRidgeWidth`, `groovedBandFreq`, `pldLevels`. Wiring them would
+move no pixel and would grow `tests/material-parity-list.test.js`'s non-varying residue, which exists to
+tell wiring a law from wiring a constant. ⚠ `uCryoRidgeAxis0`/`uCryoRidgeAxis1` are a DIFFERENT refusal
+and they DO cost a value: they are seed-derived and a condition vector carries no `seed` (measured
+`undefined` on 1484/1484), so forwarding the bundle's answer would put every body on one rift
+orientation. The fix is the `ctx` seed forward F4 got in this same leg; F10's axes are not in leg 3's scope.
+
+⭐ **ROOT-0 FIX 5, FOUND AND LANDED IN THE SAME LEG.** `frostLatitudeBias` was a hard 0 on every
+condition-shaped body — not for physics but for a rename: the lab preset key is `axialTilt` and the
+condition vector spells it `axialTiltDeg`, and `deriveUniforms` read only the first. MEASURED before:
+0 nonzero / 1 distinct on 852 planets and 632 moons, while `condition.axialTiltDeg` ran 0.0123°…85.6487°
+over 852 distinct values. After the dual read: 852 nonzero / 852 distinct on planets, still 0 on moons
+(their records carry no tilt key of either spelling). Fenced beside B1's four in
+`tests/root0-seam-laws.test.js`, same shape as fix 1's erosion/erosionLevel.
+
 ⛔ **F37 AURORAE CARRIES A KNOWN DEAD POPULATION, AND THE RULE FOR IT IS GIVEN HERE RATHER THAN ASKED FOR
 MID-BLOCK.** `condition.atmosphere` is null on 81/81 plain moons measured and 632/632 in the 48-doc's
 corpus, and `src/worldengine/base/labCore.js:1045` multiplies by `hasAtmo`. **Wire it anyway, and say so
@@ -468,6 +498,32 @@ F9/F10, F17, F22, F23 and B2's frequency work — not from aurorae.
 *Tier 1b — the five (p) PORT-DROP features*, live at the law level after B1: **F1** mountains, **F13**
 outflow, **F16** dust mantles, **F20-strand**, **F21** karst. ⭐ **F4's chasma axes are forwarded on
 `ctx` here**, per the DECIDED list.
+
+⛔⛔ **THIS PARAGRAPH IS WRONG ABOUT FOUR OF THE FIVE, AND B3's RECON MEASURED IT.** Only **F1**'s law is
+in `src/` at all. `outflowDensity`, `dustDepth`, `strandStrength` and `karstDensity` return NOTHING from
+`grep -rn` over `src/` — they are inline JS inside `planet-lod-lab.html`, outside the module tree and
+therefore unreachable from the game. Extracting four laws out of a 5000-line HTML file is a different
+unit from wiring a pack, and **Max split them into their own future block on 2026-08-21.** ⛔ Do not
+extract or wire them under B3.
+
+✅ **F4's chasma pair LANDED B3 LEG 3** — `chasmaCount` and `chasmaAxes` on `ctx`, from the game's own
+`labMacroSeed`, through a single exported `chasmaRiftsFor(seed)` in `labCore` that `deriveUniforms` also
+calls (one expression, two callers; byte-identical over 10001 seeds). ⛔ **Forwarded only — no pack
+consumes it yet**, which is the DECIDED list's own wording.
+
+⛔⛔ **F1 MOUNTAINS IS ITS OWN UNIT AND B3 LEG 3 DID NOT HALF-WIRE IT.** Its two masters (`mountainAmp`,
+`orogenyStrength`) are in `src/`, but the lab's write multiplies them by TWO terms that no condition
+vector can answer, and both are PRESET-NAME lookups of exactly the kind
+`src/worldengine/drivers/index.js`'s header forbids a pack to make:
+`state.featureRelevant.mountains`, recomputed at `planet-lod-lab.html:1987-1988` as
+`(ASSOCIATIONS[key]?.rendersOn || []).includes(driverUI.preset) ? 1.0 : 0.0`, and
+`state.isExoticCarbonOrGeometric`, computed from `relevantFeatureSet().archs`. The game's answer to
+relevance is `src/objects/Planet.js:2204` `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`.
+`craterRelevanceOf` exists because the lab ALREADY replaced the preset-name lookup for craters with a
+condition-derived law (the inc3b S3-fix); **no such law exists for mountains, and writing one is
+authoring, not wiring.** ⭐ Recommendation: F1 becomes its own scoped unit alongside the four HTML
+extractions, and the first question in it is whether `mountainRelevanceOf(condition)` is a law Max wants
+at all — the honest alternative is that mountains are relevant everywhere and both terms collapse to 1.
 
 *Tier 1c — the four `blocking` ledger closures that are pack work:*
 - **P-05** aurora — a pack claiming `uAuroraColor` `uAuroraIntensity` `uAuroraRingLat` `uAuroraRingWidth`
@@ -725,10 +781,10 @@ province-partition architecture works in the game today. `uProvinceCube` drives 
 correctly guarded. The partition-generator work is not blocked on a bake.
 
 **The (c) world-gen four — and one of them is a B1-class fix that must be scheduled the same way.**
-src/worldengine/base/labCore.js:645 `const volatileGate = smoothstep(0.05, 0.2, volatileFraction);             // D2 — bone-dry floor at 0.05`
+src/worldengine/base/labCore.js:674 `const volatileGate = smoothstep(0.05, 0.2, volatileFraction);             // D2 — bone-dry floor at 0.05`
 gates F14 lakes, F11 rivers, F36 sunglint, and **14 of the 52 couplings** (G01, G02, G03, G10, G11, G12,
 G13, G20, G25, G26, G32, G33, G34, G38). R-06 measured
-src/worldengine/base/labCore.js:658 `const liquidStability = clamp01(retentionGate * volatileGate * tempWindow);`
+src/worldengine/base/labCore.js:687 `const liquidStability = clamp01(retentionGate * volatileGate * tempWindow);`
 clearing 0.01 on **0 of 6** ocean worlds because `volatileFraction` runs 0.0276–0.0579 against that floor.
 ⛔ **Its own step, its own delta table, a deliberately-NOT-byte-identity gate — the Step-2 precedent
 exactly.** A physics-authoring call that moves numbers must never sit inside a wiring commit. ⭐ Max

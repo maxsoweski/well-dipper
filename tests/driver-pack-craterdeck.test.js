@@ -358,8 +358,14 @@ describe('F — the entry is registry-ready and collision-free', () => {
     expect(entry).toBe(CRATER_DECK_ENTRY);      // IDENTITY, so the predicate under test is the one that composes
     expect(entry.pack).toBe(craterDeckPack);
     expect(Object.isFrozen(CRATER_DECK_ENTRY)).toBe(true);
-    // APPENDED, never prepended: four assertions in this repo index PACKS positionally.
-    expect(PACKS[PACKS.length - 1]).toBe(CRATER_DECK_ENTRY);
+    // APPENDED, never prepended: four assertions in this repo index PACKS positionally, and the
+    // dangerous one reads `PACKS[0]`. ⭐ RE-AIMED AT B3 LEG 3, and re-aimed rather than deleted: it
+    // WAS `PACKS[PACKS.length - 1]`, which stops meaning "appended" the moment a LATER leg appends
+    // its own entry — `solidFeatures` did, and the assertion then reads as a craterDeck regression.
+    // What it was actually protecting is stated directly instead: index 0 is untouched, and this
+    // entry sits after every entry that predates it.
+    expect(PACKS[0].name).toBe('giantDeck');
+    expect(PACKS.indexOf(CRATER_DECK_ENTRY)).toBeGreaterThan(PACKS.findIndex((e) => e.name === 'solidOptics'));
   });
 
   it('⛔ it collides with NOTHING on any body it claims — by NAME LOOKUP, over the population', () => {

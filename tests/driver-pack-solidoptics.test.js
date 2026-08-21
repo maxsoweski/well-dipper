@@ -28,7 +28,7 @@ import {
   writePackUniforms, isPackDriver, PackContractError,
 } from '../src/worldengine/port/writePackUniforms.js';
 import { PACKS, gatesFor, selectPacks } from '../src/worldengine/drivers/index.js';
-import { ROCKY_SURFACE_ENTRY, ROCKY_SURFACE_UNIFORMS } from '../src/worldengine/drivers/rockySurface.js';
+import { ROCKY_SURFACE_ENTRY, ROCKY_SURFACE_UNIFORMS } from '../src/worldengine/drivers/rockySurface.js'; import { SOLID_FEATURES_UNIFORMS } from '../src/worldengine/drivers/solidFeatures.js';   // ⛔ RIDES THIS LINE: a new import line shifts every cited line below it.
 import { LIMB_UNIFORMS } from '../src/worldengine/drivers/limbDeck.js';
 import { Planet, labPackCtx, setLabGasBodiesOverride } from '../src/objects/Planet.js';
 import {
@@ -492,10 +492,12 @@ describe('F — the entry is registry-ready and its collision guard is LIVE', ()
     const b = SOLID[0];
     const built = buildLabPlanetMaterial({ bodyRadius: b.d.radius });
     const res = applyDriverPacks(built.material, b.cond, labPackCtx(b.d, b.cond, undefined));
-    expect(res.applied).toEqual(['rockySurface', 'solidOptics']);
-    expect(res.gates).toEqual({ craters: true, ejecta: true, terminator: true, aurora: true });
+    expect(res.applied).toEqual(['rockySurface', 'solidOptics', 'solidFeatures']);
+    expect(res.gates).toEqual({ craters: true, ejecta: true, terminator: true, aurora: true, edifices: true, chaos: true, frost: true, glacial: true });
     // The write log is the UNION of both contract sets and nothing outside them.
-    const declared = new Set([...ROCKY_SURFACE_UNIFORMS, ...SOLID_OPTICS_UNIFORMS]);
+    // ⭐ THREE PACKS SINCE B3 LEG 3: `solidFeatures` shares this predicate, so the union it is
+    // compared against has to include its contract set or the assertion reds on a declared write.
+    const declared = new Set([...ROCKY_SURFACE_UNIFORMS, ...SOLID_OPTICS_UNIFORMS, ...SOLID_FEATURES_UNIFORMS]);
     expect(res.uniformsWritten.filter((n) => !declared.has(n))).toEqual([]);
     for (const n of SOLID_OPTICS_UNIFORMS) expect(res.uniformsWritten, n).toContain(n);
   });

@@ -167,3 +167,56 @@ describe('B1 fix 4 · surfaceGravity — the bundle\'s own g beats a recompute f
     expect(CONDITIONS.every((c) => c.massEarth === undefined)).toBe(true);   // the reason the bug existed
   });
 });
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// ⭐⭐ A FIFTH FIX OF THE SAME SHAPE, FOUND AT B3 LEG 3 (2026-08-21) AND LANDED THERE.
+// This file's four fixes were B1's. This one is not B1's, and it is filed here rather than beside
+// the pack that needed it because it is the same defect class and this is where a reader looks for
+// it: ONE quantity, TWO spellings, and a reader that knows only one of them.
+//   lab   driver-presets.js:102 `  // zero. axialTilt 25 (real 25.2 deg) spreads seasonal frost low per D3.` — the fp key, in DEGREES
+//   game  src/worldengine/base/conditionVector.js:200 `  axialTiltDeg:    fp.axialTilt,                          // D3 obliquity in DEGREES (see the block above; the fp key is degrees on both sides)` — RENAMED on the way onto the condition vector
+// `deriveUniforms` read `d.axialTilt` only, so `frostLatitudeBias` — F22/F23's low-latitude frost
+// spread — was a hard 0 on every condition-shaped body. ⚠ THE PORT WAS ALREADY CORRECT: the unit
+// conversion and the [0,90] fold at src/worldengine/port/conditionFromBody.js:866 both shipped at
+// Step 1 and both work; only the KEY the reader asks for was wrong. The value was sitting one
+// rename away the whole time, which is exactly what made it invisible.
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+describe('B3 fix 5 · obliquity — the reader learns the CONDITION spelling without forgetting the LAB one', () => {
+  it('labCore: the condition spelling resolves, and to the same value as the lab spelling', () => {
+    expect(deriveUniforms({ axialTiltDeg: 45 }).frostLatitudeBias)
+      .toBe(deriveUniforms({ axialTilt: 45 }).frostLatitudeBias);
+    expect(deriveUniforms({ axialTiltDeg: 45 }).frostLatitudeBias).toBeCloseTo(0.5, 12);
+  });
+
+  it('labCore: the LAB spelling still wins when a bundle carries both — no preset moves', () => {
+    expect(deriveUniforms({ axialTilt: 0, axialTiltDeg: 90 }).frostLatitudeBias).toBe(0);
+    expect(deriveUniforms({ axialTilt: 90, axialTiltDeg: 0 }).frostLatitudeBias).toBe(1);
+  });
+
+  it('with NEITHER key present the 0 fallback is untouched', () => {
+    expect(deriveUniforms({}).frostLatitudeBias).toBe(0);
+  });
+
+  it('⭐ ON REAL BODIES: the quantity is no longer a hard 0 on the whole planet population', () => {
+    // The reason the bug existed: the condition carries the renamed key and NOT the lab one.
+    const planets = CONDITIONS.filter((c) => typeof c.axialTiltDeg === 'number');
+    expect(planets.length).toBeGreaterThan(50);
+    expect(CONDITIONS.every((c) => c.axialTilt === undefined)).toBe(true);
+    const vals = planets.map((c) => deriveUniforms(c).frostLatitudeBias);
+    expect(new Set(vals).size).toBeGreaterThan(1);
+    expect(vals.filter((v) => v > 0).length).toBe(planets.length);
+    // ...and every one stays inside the [0,1] domain `clamp01(x/90)` assumes, which is the property
+    // the port's fold is for — a raw radian or an unfolded 177.6° would leave it.
+    for (const v of vals) { expect(v).toBeGreaterThanOrEqual(0); expect(v).toBeLessThanOrEqual(1); }
+  });
+
+  it('⛔ AND IT DOES NOT REACH THE MOON HALF — a plain-moon record carries no tilt key at all', () => {
+    // Stated as an assertion rather than left to the leg report: this fix buys the planet half and
+    // nothing on the moon half, and the cause is the generator, not the reader.
+    const moonConds = BODIES.map((b, i) => [b, CONDITIONS[i]])
+      .filter(([b]) => b.id.endsWith(':m') && b.body.axialTilt === undefined)
+      .map(([, c]) => c);
+    expect(moonConds.length).toBeGreaterThan(20);
+    for (const c of moonConds) expect(deriveUniforms(c).frostLatitudeBias).toBe(0);
+  });
+});

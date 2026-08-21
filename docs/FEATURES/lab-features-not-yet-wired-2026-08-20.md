@@ -149,6 +149,29 @@ The three tiers are disjoint and cover all 21: **9 + 4 + 8 = 21.**
 | 8 | **F9 Chaos** | **227 / 78.8%** | ⛔ Drawable population is **85 of 1160 non-gas**, 0 moons. See the caveat below. |
 | 9 | **F10 Ridged icy** | shares F9's master | Same one master unblocks both — but on the same 85 bodies. |
 
+✅ **SEVEN OF THE NINE ARE NOW WIRED. 2026-08-21.** F37 at B3 leg 1 (`solidOptics`, ledger P-05); F7, F23,
+F22, F17, F9 and F10 at B3 leg 3 (`src/worldengine/drivers/solidFeatures.js`, predicate `!== 'gas'`,
+fourteen uniforms forwarded off one `deriveUniforms(condition)` bundle). **F18 and F8 remain held to B5**
+(QB-5 / QB-10) and were not touched.
+
+⛔⛔ **THE ⚠ PARAGRAPH BELOW IS TWO-THIRDS STALE AND IT IS STALE IN THE WIRING'S FAVOUR. RE-MEASURED
+2026-08-21 over `lab-procedural-0…199`, 632 plain moons:** F9/F10 `cryoActivity` is **306 nonzero / 283
+distinct** and F8 `lavaActivity` is **474 / 442** — both alive. B1's ROOT-0 fix 2 is what did it:
+`src/worldengine/base/labCore.js` now prefers the forwarded raw Io-ratio instead of recomputing tidal
+heat from an `eccentricity` no moon record carries. ⭐ **Only rank 2 survives: F37 `auroraIntensity` is
+still 0 nonzero / 1 distinct on 632 of 632 plain moons**, because `condition.atmosphere` is null on
+632/632 and the master multiplies by `hasAtmo`. **F37 contributes nothing on any moon**, and no pack can
+change that. ⛔ Do NOT repeat "three of these nine are identically zero on all 632 plain moons" in any
+UAT caption; it would tell Max the moon UAT is weaker than it is.
+
+⚠ **THREE MORE NAMES ARE FLAT ON THE MOON HALF, and they are NOT in the paragraph below because nobody
+had wired them when it was written.** MEASURED on the same corpus after leg 3: `uShieldStratoMix` 1
+distinct (F7 — `condition.habitability` is undefined on 632/632 plain moons), `uFrostLocked` 1 (F23 —
+every plain moon reads tidally locked), `uFrostLatitudeBias` 1 (F23 — a plain-moon record carries no
+obliquity key at all, under either spelling). All three vary on the 852 planets. The moon
+differentiation this block delivers comes from the other ten names, led by `uChaosRaftJitter` and
+`uGlacialFlowVigor` at 626 distinct each.
+
 ⚠ **Three of these nine are identically zero on all 632 plain moons — the exact population whose UAT Max passed with "these are all identical".** Measured, on 632/632 plain moons: F37 `auroraIntensity` 0 nonzero / 1 distinct, F8 `lavaActivity` 0 / 1, F9+F10 `cryoActivity` 0 / 1. Causes, all measured on the moon record: `atmosphere` absent on 632/632 (so `labCore.js:1045` `auroraIntensity:` multiplies by `hasAtmo` = 0); `eccentricity` absent on 632/632, and `labCore.js:611` recomputes tidal heat from eccentricity rather than reading the forwarded `tidalHeat`, so the tidal proxy is 0 and both `lavaActivity` and `cryoActivity` go with it. **Packing ranks 2, 6 and 8 first and re-running the moon UAT would produce 632 byte-identical moons on all three, while every driver Max would be pointed at measures healthy over the pooled corpus** — the unattributable failure §3 warns about. `eccentricity` is a fifth dropped field, and it is a generator-side absence rather than a rename — ⭐ **already scheduled as `world-engine-production-L1-plan.md:90` F2 · Compute orbital eccentricity**, blast LOW if data-only, and a hard prerequisite of WS1 F1 above. ⛔ Do not re-scope it; **do** note that WS1 F1+F2 is the cheapest known fix for three of the nine Tier-1 picks being dead on every moon.
 
 ⚠ **F9/F10's 227-distinct figure is manufactured on bodies that cannot draw it.** `cryoActivity` is nonzero on 322 bodies, but 237 of those are `compositionClass` gas — claimed by giantDeck/limbDeck/polarDeck, not rockySurface — and chaos terrain and grooved icy crust are surface relief that cannot render on an h2-he envelope. The population that could draw it is **85 of 1160 non-gas (7.3%)**, of which 47 are icy. It is still the best two-for-one in the tier; it is not a 322-body feature.
@@ -164,6 +187,17 @@ The three tiers are disjoint and cover all 21: **9 + 4 + 8 = 21.**
 | 12 | **F6 Plateaus / tessera** | **680 / 0.0%** and **346 / 59.9%** — two masters |
 | 13 | **F38 Airglow** | **525 / 41.7%** — same allowlist, unrelated family |
 | (+) | **F1 Mountains** | **200 → 472** — needs the erosion rename too, so it trails its siblings |
+
+⛔⛔ **F1 IS ITS OWN UNIT, RULED AT B3 LEG 3 AFTER MEASURING IT — NOT WIRED, AND DELIBERATELY NOT
+HALF-WIRED.** Both masters are in `src/`, but the lab's `uMountainAmp` write multiplies them by two terms
+that a condition vector cannot answer and that a pack is forbidden to derive, because BOTH are
+preset-name lookups: `state.featureRelevant.mountains` (recomputed from
+`ASSOCIATIONS[key].rendersOn.includes(driverUI.preset)`) and `state.isExoticCarbonOrGeometric` (from
+`relevantFeatureSet().archs`). The game's relevance answer is
+`src/objects/Planet.js:2204` `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`. The lab
+already replaced the equivalent preset lookup for CRATERS with a condition-derived `craterRelevanceOf`;
+**there is no counterpart for mountains, and writing one is authoring a law, not wiring one.** F1 goes
+with the four HTML extractions into their own block.
 
 **The obstacle is `state.featureRelevant.X`, a preset-name allowlist with no game analogue.** Measured: it gates **12 render uniforms** in the lab (`planet-lod-lab.html:5064` `uAirglowIntensity`, `:5073` `uCloudOpticsIntensity`, `:5200` `uPolarStrength`, `:5280` `uHexStrength`, `:5289` `uShatStrength`, `:5301` `uMachCoverage`, `:5354` `uCraterDensity`, `:5369` `uMountainAmp`, `:5376` `uChasmaDepth`, `:5381` `uScarpStrength`, `:5388` `uPlateauStrength`, `:5393` `uTesseraStrength`).
 

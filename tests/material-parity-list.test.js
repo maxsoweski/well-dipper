@@ -418,35 +418,47 @@ describe('2. the collapse in per-body variation', () => {
     // were ALREADY varying (the gas half held the factory default, the solid half the game's value),
     // and `uLimbExponent`/`uLimbColor`, already varying from limbDeck. So the four newcomers are
     // exactly the names that had NO writer at all on either side before this pack.
+    // ⭐⭐ B3 LEG 3 ADDS FOURTEEN, AND EVERY ONE OF THEM IS NEW TO THIS LIST — 56 -> 70. They are the
+    // whole `solidFeatures` contract set (F7 edifices, F9/F10's shared cryo master, F23 frost, F22
+    // polar caps, F17 glacial), and BEFORE this commit each read one value on every body in the
+    // corpus because nothing wrote any of them. ⛔ NOTHING LEFT THE LIST, which is the control that
+    // the leg widened the lab material and touched neither the game's nor another pack's writes.
+    // ⚠ THREE OF THE FOURTEEN ARE FLAT ON THE MOON HALF ALONE and are on this list only because the
+    // pass pools planets with moons — MEASURED over lab-procedural-0…199's 632 plain moons:
+    // `uShieldStratoMix` 1 distinct (`condition.habitability` is undefined on 632/632),
+    // `uFrostLocked` 1 distinct (every plain moon reads tidally locked), `uFrostLatitudeBias`
+    // 1 distinct (a plain-moon record carries no tilt key of either spelling). On the 852 planets
+    // they are 17, 2 and 852 distinct respectively. The moon-half figures are in this leg's report
+    // rather than folded into this pooled number, because the pooled number would hide them.
     expect(LEDGER.labVarying).toEqual([
       'uAuroraColor', 'uAuroraIntensity', 'uAuroraRingLat', 'uAuroraRingWidth',
-      'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM', 'uBandPhaseJet', 'uBandRough',
-      'uBandS2', 'uBandSEq', 'uBandStrength', 'uBandTint', 'uBandWarp',
-      'uBioGroundColor', 'uBioGroundCover',
-      'uBodyRadius',
-      'uCraterAmp', 'uCraterComplexD', 'uCraterDensity', 'uCraterOffset', 'uCraterRelaxation',
-      'uCraterScale', 'uCratonColor',
-      'uDetailOffset',
-      'uEjectaAmp', 'uEjectaRampart', 'uEjectaStrength',
-      'uFreshColor',
-      'uIcenessMix',
-      'uJetFestoon', 'uJetShearTurb', 'uJetSpeed', 'uJetStrength',
-      'uLightDir',
-      'uLimbColor', 'uLimbExponent', 'uLimbStrength',
-      'uMacroOffset',
-      'uNoiseScale',
-      'uPerturb',
-      'uPolarMode', 'uPolarPhase', 'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
-      'uPolarStrength', 'uPolarTint',
-      'uSedColor',
-      'uTermColor', 'uTermStrength', 'uTermWidth',
-      'uThermalDir',
-      'uWeatheredColor',
+      'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM',
+      'uBandPhaseJet', 'uBandRough', 'uBandS2', 'uBandSEq',
+      'uBandStrength', 'uBandTint', 'uBandWarp', 'uBioGroundColor',
+      'uBioGroundCover', 'uBodyRadius', 'uChaosRaftJitter', 'uCraterAmp',
+      'uCraterComplexD', 'uCraterDensity', 'uCraterOffset', 'uCraterRelaxation',
+      'uCraterScale', 'uCratonColor', 'uCryoActivity', 'uDetailOffset',
+      'uEdificeMaxHeight', 'uEjectaAmp', 'uEjectaRampart', 'uEjectaStrength',
+      'uFreshColor', 'uFrostAlbedo', 'uFrostCondensationT', 'uFrostLatitudeBias',
+      'uFrostLocked', 'uFrostMaxCoverage', 'uGlacialFlowVigor', 'uGlacialStrength',
+      'uIcenessMix', 'uJetFestoon', 'uJetShearTurb', 'uJetSpeed',
+      'uJetStrength', 'uLightDir', 'uLimbColor', 'uLimbExponent',
+      'uLimbStrength', 'uMacroOffset', 'uNoiseScale', 'uPerturb',
+      'uPlanetTempEq', 'uPldStrength', 'uPolarMode', 'uPolarPhase',
+      'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
+      'uPolarStrength', 'uPolarTint', 'uSedColor', 'uShieldStratoMix',
+      'uTermColor', 'uTermStrength', 'uTermWidth', 'uThermalDir',
+      'uVolcanismStrength', 'uWeatheredColor',
     ]);
-    // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 53 of the 55 uniforms the five packs
-    // write vary per body (46 of 48 before B3 leg 1 added `solidOptics`' seven new names, all seven
-    // of which vary, so the residue below is UNCHANGED — a new write that did not vary would have
-    // grown it, and that is exactly the difference between wiring a law and wiring a constant).
+    // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 67 of the 69 uniforms the six writing
+    // packs emit vary per body (53 of 55 before B3 leg 3 added `solidFeatures`' fourteen new names,
+    // all fourteen of which vary, so the residue below is UNCHANGED — a new write that did not vary
+    // would have grown it, and that is exactly the difference between wiring a law and wiring a
+    // constant. ⭐ THAT TEST IS WHY `solidFeatures` REFUSES SEVEN MORE NAMES it could have written:
+    // `chaosCellScale`, `chaosMatrixRough`, `doubleRidgeFreq`, `cryoRidgeOffset`, `cryoRidgeWidth`,
+    // `groovedBandFreq` and `pldLevels` are bare literals in labCore that are byte-equal to the lab
+    // material's own factory defaults, so each would have landed in this residue and moved no pixel.
+    // The refusals and their measurements are listed in that pack's header.)
     // The two that do not are `uEjectaLump` and `uTerraceCount` — rockySurface
     // forwards both from `craterUniformsFrom`, and on this corpus every body that fires a crater
     // schedule lands on the same lump and terrace count. ⚠ The three master gates are NO LONGER on
@@ -455,7 +467,7 @@ describe('2. the collapse in per-body variation', () => {
       .toEqual(['uEjectaLump', 'uTerraceCount']);
   });
 
-  it('the five packs write 55 uniforms between them, and the ledger’s `carried` rulings rest on them', () => {
+  it('the six writing packs emit 69 uniforms between them, and the ledger’s `carried` rulings rest on them', () => {
     // If the pack stops writing the band deck, G-01/G-04/G-07's "carried" ruling is false. Pinned as
     // a SET OF NAMES, not a length — Step 4 measured that a count-preserving permutation is
     // byte-identical to every instrument this program owns.
@@ -466,28 +478,30 @@ describe('2. the collapse in per-body variation', () => {
     // ⭐ 48 -> 55 AT B3 LEG 1. `solidOptics` declares nine names; two of them (`uLimbColor`,
     // `uLimbExponent`) limbDeck already wrote on the gas half, so the UNION grows by the seven that
     // nothing wrote anywhere: the aurora four and the terminator three.
+    // ⭐ 55 -> 69 AT B3 LEG 3. `solidFeatures` declares fourteen names and NOT ONE of them was
+    // written by any pack before this commit, so the union grows by exactly its contract set — the
+    // same shape leg 1 had, and the check that this pack collides with nothing: an overlap with an
+    // existing writer would have shown up here as a union that grew by less than fourteen, and in
+    // `applyDriverPacks` as a throw.
     expect(LEDGER.written).toEqual([
-      // ── solidOptics (P-05), live from the B3 leg 1 registration ──
       'uAuroraColor', 'uAuroraIntensity', 'uAuroraRingLat', 'uAuroraRingWidth',
-      'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM', 'uBandPhaseJet', 'uBandRough',
-      'uBandS2', 'uBandSEq', 'uBandStrength', 'uBandTint', 'uBandWarp',
-      // ── rockySurface (P-12 + P-14 + P-13), live from the Step 10a registration ──
-      'uBioGroundColor', 'uBioGroundCover',
-      'uCraterAmp', 'uCraterComplexD', 'uCraterDensity', 'uCraterOffset', 'uCraterRelaxation',
-      'uCraterScale', 'uCratonColor', 'uDetailOffset',
+      'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM',
+      'uBandPhaseJet', 'uBandRough', 'uBandS2', 'uBandSEq',
+      'uBandStrength', 'uBandTint', 'uBandWarp', 'uBioGroundColor',
+      'uBioGroundCover', 'uChaosRaftJitter', 'uCraterAmp', 'uCraterComplexD',
+      'uCraterDensity', 'uCraterOffset', 'uCraterRelaxation', 'uCraterScale',
+      'uCratonColor', 'uCryoActivity', 'uDetailOffset', 'uEdificeMaxHeight',
       'uEjectaAmp', 'uEjectaLump', 'uEjectaRampart', 'uEjectaStrength',
-      'uFreshColor', 'uIcenessMix',
-      'uJetFestoon', 'uJetShearTurb', 'uJetSpeed', 'uJetStrength',
-      // ── limbDeck (C20), live from the registration commit ──
-      'uLimbColor', 'uLimbExponent', 'uLimbStrength',
-      'uMacroOffset', 'uNoiseScale', 'uPerturb',
-      // ── polarDeck (C19), live from the registration commit ──
-      'uPolarMode', 'uPolarPhase', 'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
-      'uPolarStrength', 'uPolarTint',
-      'uSedColor',
-      // ── solidOptics (P-11's terminator triple), live from the B3 leg 1 registration ──
-      'uTermColor', 'uTermStrength', 'uTermWidth',
-      'uTerraceCount', 'uWeatheredColor',
+      'uFreshColor', 'uFrostAlbedo', 'uFrostCondensationT', 'uFrostLatitudeBias',
+      'uFrostLocked', 'uFrostMaxCoverage', 'uGlacialFlowVigor', 'uGlacialStrength',
+      'uIcenessMix', 'uJetFestoon', 'uJetShearTurb', 'uJetSpeed',
+      'uJetStrength', 'uLimbColor', 'uLimbExponent', 'uLimbStrength',
+      'uMacroOffset', 'uNoiseScale', 'uPerturb', 'uPlanetTempEq',
+      'uPldStrength', 'uPolarMode', 'uPolarPhase', 'uPolarPole',
+      'uPolarR0', 'uPolarRing', 'uPolarSides', 'uPolarStrength',
+      'uPolarTint', 'uSedColor', 'uShieldStratoMix', 'uTermColor',
+      'uTermStrength', 'uTermWidth', 'uTerraceCount', 'uVolcanismStrength',
+      'uWeatheredColor',
     ]);
     // P-18's three `carried` names must actually VARY on the post-swap material, or "carried" is a
     // claim about a constant.
