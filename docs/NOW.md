@@ -4,42 +4,42 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> ## ▶ 2026-08-19 (evening) — **WORLD-ENGINE LANE: Steps 9a/9b/P-13/10a SHIPPED. ▶ NEXT = MOONS (Step 10b/c).**
+> ## ▶ 2026-08-21 (evening) — **B3 + B4 MERGED AND GATE-GREEN. D-2 PASSED. ▶ NEXT = THE GAS-HALF BLOCK.**
 >
-> **Handoff: [`FEATURES/handoff-2026-08-19-moons-next.md`](FEATURES/handoff-2026-08-19-moons-next.md).**
-> HEAD `db1cf51`, tree clean, **3 commits unpushed**. ⛔ Read the handoff's §1 first — a build agent
-> checked every one of PLAN Step 10's own citations against the tree and **three are wrong**.
+> **Handoff: [`FEATURES/handoff-2026-08-21-gas-half-next.md`](FEATURES/handoff-2026-08-21-gas-half-next.md).**
+> HEAD `0604d13`, tree clean, **pushed** (remote 0/0).
 >
-> | | |
-> |---|---|
-> | `f3157c5` | frame-loop guards — Step 10's stated prerequisite, with committed mutants |
-> | `2e089b4` | `craterUniforms` exposes `Dchar` → the rocky pack reaches the display-policy seam |
-> | `f65d2d3` | ledger: P-08 → accepted-loss, P-10 corrected, P-05 demoted to a wire |
-> | `b7adc76` | the three false docs in the next session's startup path |
-> | `532d246` | **Step 9a** — the `rockySurface` pack, unregistered |
-> | `db1cf51` | **Step 9b + P-13 + Step 10a** — swap, per-body noise offsets, registration |
+> ⚠⚠ **Max's browser has `wd.labGasBodies = '1'` in localStorage — his game is NOT at its shipped
+> default.** Restore with `localStorage.setItem('wd.labGasBodies','0'); location.reload();`
 >
-> ### ⭐⭐ THE FINDING THAT MATTERS FOR STEP 12
-> `index.js` said *"Registration cannot move a body from the legacy material to the lab material."*
-> True of the three gas packs, **FALSE as of `db1cf51`** — `Planet.js:2192` feeds `packs.length > 0`
-> into the admission test, so a pack claiming bodies no other pack claimed **admits them**. Swapped
-> planets **341 → 846**, and **188 newcomers lose a legacy branch** (lava 52, ocean 6, venus 130 —
-> ledger rows R-05/R-06/R-07). ⭐ **Not a live regression**: `LAB_GAS_BODIES_DEFAULT = false` gates
-> the whole path, so nothing reaches a player until Step 12. It IS the trajectory Step 12 commits to.
+> ### EIGHT LEDGER ROWS CLOSED
+> **B3** P-05 aurora · P-11's non-gas half · P-14's crater half · R-07 venus banding (130 bodies)
+> **B4** P-01 star colour · P-02 second star · P-03 shadows/F52 · S-01 the rollup
 >
-> ### ⛔ MOONS DID NOT SHIP, deliberately
-> Step 10b/c halted with `proceed=false` rather than pile a second delta on an open one.
-> `BodyRenderer` has zero references to the lab material; `tests/moon-render-path.test.js` does not
-> exist. **Owed and not run:** Instrument D, the ≥95%-of-moons crater-density gate, and the per-class
-> distinctness quad. All are now unblocked.
+> ⭐ **`src/objects/Planet.js` auto-merged** across two concurrent lanes editing the same uniform
+> literal ~47 lines apart, because both held it at **2304 lines** with same-line edits. Keep it there.
+>
+> ### ⛔ THREE `blocking` ROWS REMAIN, AND THEY ARE ONE PROBLEM
+> **P-11 (gas half), P-12, P-13** — all the GAS HALF. `rockySurface`'s predicate is `!== 'gas'`, so
+> **343 of 852** bodies get no limb/terminator optics, no palette endmembers, no noise offsets.
+> `giantDeck` must write them. ⛔ **The plan predicted B0 would close P-12/P-13. It did not** — do not
+> trust its precondition table; count `| blocking |` in the ledger yourself.
+> ⭐ The gap reaches MOONS: *Daiben* is a planet-class moon routed down the gas path.
+>
+> ### GATES at `0604d13` — all measured, none inherited
+> Instrument A **31** failing, md5 `982b5bdf5812e9d5f72c59270bd5f781` · Instrument C **exit 0, zero
+> delta** (55 uniforms × 633 bodies) · Instrument D **28/28** · citations **785**, exit 0.
+> ⛔ **Both baselines were re-recorded today** (`b505869`, `3166084`) after Instrument C's capture was
+> found **100+ commits stale** — no gate in this lane was readable before that. Commit messages
+> enumerate everything blessed.
 >
 > ### ⭐ OPEN FOR MAX
-> 1. **Moons** — greenlit, nothing waiting on him.
-> 2. **R-05/R-06/R-07 scheduling** — venus banding on 130 bodies; reserved to him since 2026-08-09.
-> 3. **Doc-rot triage, 3 items** — gate repairs (335 → ~92), the citation sweep (2,590 refs across
->    199 docs, currently unscanned), two deep dives. Detail in the handoff §6.
-> 4. **P-10's km wavelength** — his ruling: after moons, calibrated against real bodies.
-> 5. **3 commits unpushed.** ⛔ sandbox DISABLED, verify with `git ls-remote`.
+> 1. **Gas-half block** — greenlit (option B), nothing waiting on him.
+> 2. **Pigment contract** awaits his greenlight — `WORKSTREAMS/world-engine-star-driven-pigment-2026-08-21/`.
+>    The four palette families are his to author, as a live A/B flipped while flying.
+> 3. **Token economy** stands until Tuesday 2026-08-25. Ultracode OFF.
+>
+> ⛔ **Symbol-less refs point INTO this file** (`NOW.md:256/1020/1160/1172/2145` from four docs). They are UNCHECKED by the citation fence by construction, so a line-count change here breaks them SILENTLY. This block is padded to preserve the file length for exactly that reason.
 
 > ## ✅ 2026-08-18 — **B4 COMMITTED · BINARY PLANETS SCOPED · BINARY-STAR DEFECTS FIXED + UAT-PASSED.** ▶ NEXT = amend B4 with the binary line item, then B5.
 >
