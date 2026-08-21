@@ -251,3 +251,222 @@ describe('LAYER 2 items 2+3 — the per-frame seam', () => {
     });
   });
 });
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// B4-1 — STAR COLOUR (ledger P-01) AND THE SECOND STAR (ledger P-02) ON THE LAB MATERIAL.
+//
+// WHY THIS FENCE HAD TO BE WRITTEN, AND WHY IT IS HERE RATHER THAN IN AN INSTRUMENT.
+// Instrument C cannot see this block AT ALL, and that is by its own documented design, not an
+// oversight: every one of the five names B4-1 touches is on the tool's UNWATCHED list —
+// `lightDir`/`lightDir2` as tools/port-uniform-delta.mjs:529-530 `reason: 'runtime'`, and
+// `starColor1`/`starColor2`/`starBrightness1`/`starBrightness2` as :549-552 `reason:
+// 'harness-blind'`, whose stated why is "harness passes no starInfo". So C's harness builds every
+// body under the SAME white fallback and a row for these would record one number 633 times.
+// ⛔ A GREEN INSTRUMENT C IS THEREFORE NOT EVIDENCE ABOUT P-01 OR P-02. This file is.
+//
+// The other half of the evidence lives one file over and is deliberately NOT duplicated here:
+// tests/material-parity-list.test.js pins that `uStarColor1`, `uStarColor2` and `uStarBrightness2`
+// now appear in `LEDGER.labVarying` — i.e. they take DIFFERENT values on different bodies of the
+// real corpus, which is the actual content of P-01 ("every swapped body renders under implicit
+// white light"). That pass is construction-time and structurally cannot see `uLightDir2`, which is
+// written only per frame. The seam half is fenced below, where the seam is.
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+describe('B4-1 — the star set on the lab material (ledger P-01 / P-02)', () => {
+  // ⛔⛔ COMMENT-STRIPPED, AND THIS IS NOT TIDINESS — IT IS A DEFECT THIS FENCE ALREADY HAD.
+  // Every B4-1 line carries a long trailing `//` note that QUOTES the expression it explains, so
+  // the shader source contains each of these strings TWICE: once as code, once as prose. The first
+  // version of the assertion below used the raw file and PASSED against a mutant that had deleted
+  // the code outright — the comment alone satisfied it. Measured: `albedoCol * (starLight +
+  // vec3(ambient))` occurs 2x in the raw file and 1x with comments stripped. A source-text
+  // assertion that a comment can satisfy is not a fence, so every one below reads CODE only.
+  const stripComments = (src) => src.replace(/\/\/[^\n]*/g, '');
+  const FRAG = stripComments(readFileSync(join(ROOT, 'src/worldengine/shaders/planetShaders.glsl.js'), 'utf8'));
+  const DECL = stripComments(readFileSync(join(ROOT, 'src/worldengine/shaders/height.glsl.js'), 'utf8'));
+  const FRAG_RAW = readFileSync(join(ROOT, 'src/worldengine/shaders/planetShaders.glsl.js'), 'utf8');
+  const STAR_NAMES = ['uLightDir2', 'uStarColor1', 'uStarColor2', 'uStarBrightness1', 'uStarBrightness2'];
+  const REAL_STAR = { color1: [1.0, 0.32, 0.18], brightness1: 1.0, color2: [0.55, 0.72, 1.0], brightness2: 0.41 };
+
+  describe('P-01 — the star colour reaches the material, and it is the SYSTEM\'s colour', () => {
+    it('a body built with a real starInfo carries THAT star, not white', () => {
+      const u = buildLabPlanetMaterial({ lightDir: new THREE.Vector3(1, 0, 0), starInfo: REAL_STAR, bodyRadius: 2 }).material.uniforms;
+      expect(u.uStarColor1.value.toArray()).toEqual([1.0, 0.32, 0.18]);
+      expect(u.uStarColor2.value.toArray()).toEqual([0.55, 0.72, 1.0]);
+      expect(u.uStarBrightness1.value).toBe(1.0);
+      expect(u.uStarBrightness2.value).toBe(0.41);
+    });
+
+    it('⛔ carries the colour UNCONVERTED — a colour-managed setter here would silently re-grade every star', () => {
+      // The game holds these as `new THREE.Vector3(...this._starColor1)` (Planet.js:1703), a raw
+      // triple with no colour space attached. The lab holds a THREE.Color. `Color.fromArray` is a
+      // direct component assignment, but `Color.setRGB`/`set` are NOT — they can run the working
+      // colour space conversion, which would make the lab and the game disagree on the same star
+      // while both "carried" the value. Pinned as round-trip equality on a non-grey triple, because
+      // a grey one survives every conversion and would prove nothing.
+      const u = buildLabPlanetMaterial({ starInfo: REAL_STAR }).material.uniforms;
+      expect(u.uStarColor1.value.toArray()).toEqual(REAL_STAR.color1);
+    });
+
+    it('⛔ NO starInfo leaves the PRE-B4 IDENTITY standing — it must not read as a dark body', () => {
+      // The lab harness, every headless probe and planet-lod-lab.html all build with no starInfo.
+      // (white, 1.0) is precisely the implicit light the shader already had, so "no starInfo" has
+      // to mean UNCHANGED. Zeroing here instead would black out the entire lab.
+      const u = buildLabPlanetMaterial({ lightDir: new THREE.Vector3(1, 0, 0) }).material.uniforms;
+      expect(u.uStarColor1.value.toArray()).toEqual([1, 1, 1]);
+      expect(u.uStarBrightness1.value).toBe(1);
+      expect(u.uStarColor2.value.toArray()).toEqual([0, 0, 0]);
+      expect(u.uStarBrightness2.value).toBe(0);
+      expect(u.uLightDir2.value.toArray()).toEqual([0, 0, 0]);
+    });
+
+    it('⭐ CONTROL — at those defaults the new expression IS arithmetically the line it replaced', () => {
+      // The GLSL, transcribed. This is the claim that B4-1 moves no pixel on a body that has no
+      // star data, which is what lets the lab and every existing call site keep their exact render.
+      const glsl = (c1, b1, c2, b2, d1, d2) => ({
+        starLight: c1.map((c, i) => c * d1 * b1 + c2[i] * d2 * b2),
+        diff: d1 * b1 + d2 * b2,
+      });
+      for (const d1 of [0, 0.37, 1]) {
+        const got = glsl([1, 1, 1], 1, [0, 0, 0], 0, d1, 0);
+        expect(got.starLight).toEqual([d1, d1, d1]);   // starLight == vec3(diff), the old scalar
+        expect(got.diff).toBe(d1);                     // diff == the old `max(dot(shadeN,uLightDir),0)`
+      }
+    });
+  });
+
+  describe('P-02 — the second light, per frame, in OBJECT space', () => {
+    it('the seam transforms lightDirWorld2 by the same inverse quaternion as the primary', () => {
+      const { surface } = makeBody({ spin: 1.1 });
+      const mat = buildLabPlanetMaterial().material;
+      surface.material = mat;
+      const world2 = new THREE.Vector3(0, 0, 1);
+      const d = updateLabPlanetMaterial(mat, { mesh: surface, lightDirWorld: new THREE.Vector3(1, 0, 0), lightDirWorld2: world2, renderDt: 0.016 });
+      const expected = world2.clone().applyQuaternion(surface.getWorldQuaternion(new THREE.Quaternion()).invert()).normalize();
+      expect(mat.uniforms.uLightDir2.value.toArray()).toEqual(expected.toArray());
+      expect(d.lightObj2).toEqual(expected.toArray());
+      expect(world2.toArray()).toEqual([0, 0, 1]);   // the caller's vector is not mutated
+    });
+
+    it('⛔ a ZERO second direction yields a ZERO uniform and NEVER a NaN', () => {
+      // This is the MAJORITY case, not an edge case: every single-star body in the game holds
+      // `_lightDir2 = new THREE.Vector3(0, 0, 0)` and main.js only copies a real direction into it
+      // inside its binary branch. three's normalize() divides by a zero length, so the unguarded
+      // form puts NaN in the uniform and `max(dot(shadeN, NaN), 0.0)` is implementation-defined.
+      const { surface } = makeBody({ spin: 0.4 });
+      const mat = buildLabPlanetMaterial().material;
+      surface.material = mat;
+      updateLabPlanetMaterial(mat, { mesh: surface, lightDirWorld: new THREE.Vector3(1, 0, 0), lightDirWorld2: new THREE.Vector3(0, 0, 0), renderDt: 0.016 });
+      const v = mat.uniforms.uLightDir2.value;
+      expect([v.x, v.y, v.z].some(Number.isNaN)).toBe(false);
+      expect(v.toArray()).toEqual([0, 0, 0]);
+    });
+
+    it('⛔ CONTROL THAT MOVED — the gate is NOT a NaN guard, and the real dependency is three\'s `|| 1`', () => {
+      // THIS ASSERTION WAS WRITTEN THE OTHER WAY UP AND WAS FALSE. The claim under test was that
+      // the ungated form divides by a zero length and puts NaN in uLightDir2. It does not:
+      // three's Vector3.normalize() is `divideScalar(this.length() || 1)`, and that `|| 1` sends a
+      // zero vector to (0,0,0). Checked in three's own source AND empirically before this line was
+      // rewritten. The gate in updateLabPlanetMaterial is therefore an early-out, not a crash
+      // guard, and its comment now says so.
+      const naive = new THREE.Vector3(0, 0, 0).applyQuaternion(new THREE.Quaternion()).normalize();
+      expect([naive.x, naive.y, naive.z].some(Number.isNaN)).toBe(false);
+      // ⭐ SO THIS IS THE ASSERTION THAT IS ACTUALLY LOAD-BEARING: the safety belongs to three, not
+      // to us, which means a three upgrade that dropped the `|| 1` would turn the majority of
+      // bodies NaN and nothing else in this repo would notice. Pinned here, at the one seam that
+      // hands a routinely-zero vector to normalize().
+      expect(naive.toArray()).toEqual([0, 0, 0]);
+    });
+
+    it('a tick that supplies no second direction reports null — which is NOT [0,0,0]', () => {
+      // "the seam never ran" and "this body has one star" are opposite findings for a live probe
+      // and must not share an output.
+      const { surface } = makeBody();
+      const mat = buildLabPlanetMaterial().material;
+      surface.material = mat;
+      const d = updateLabPlanetMaterial(mat, { mesh: surface, lightDirWorld: new THREE.Vector3(1, 0, 0), renderDt: 0.016 });
+      expect(d.lightObj2).toBeNull();
+      expect(d.lightObj).not.toBeNull();
+    });
+
+    it('uLightDir2 MOVES as the body spins — the object-space property, on the second star too', () => {
+      const world2 = new THREE.Vector3(0, 0, 1);
+      const read = (spin) => {
+        const { surface } = makeBody({ spin });
+        const mat = buildLabPlanetMaterial().material;
+        surface.material = mat;
+        updateLabPlanetMaterial(mat, { mesh: surface, lightDirWorld: new THREE.Vector3(1, 0, 0), lightDirWorld2: world2, renderDt: 0.016 });
+        return mat.uniforms.uLightDir2.value.toArray();
+      };
+      expect(read(0)).not.toEqual(read(1.3));
+    });
+  });
+
+  describe('THE WIRE — the fragment actually SPENDS them', () => {
+    it('all five are declared in the FRAGMENT block, at the right GLSL type', () => {
+      const TYPE = { uLightDir2: 'vec3', uStarColor1: 'vec3', uStarColor2: 'vec3', uStarBrightness1: 'float', uStarBrightness2: 'float' };
+      for (const n of STAR_NAMES) {
+        expect(DECL, `height.glsl.js should declare ${n} as ${TYPE[n]}`).toMatch(new RegExp(`uniform\\s+${TYPE[n]}\\s+${n}\\b`));
+      }
+      // ⛔ TYPE, NOT JUST PRESENCE. A vec3/float mix-up here does not fail to compile in every
+      // driver and would land as a wrong-colour body rather than an error.
+    });
+
+    it('the surface albedo is multiplied by starLight, and starLight is built from all four star names', () => {
+      expect(FRAG).toContain('vec3 starLight = uStarColor1 * diff1 * uStarBrightness1 + uStarColor2 * diff2 * uStarBrightness2;');
+      expect(FRAG).toContain('albedoCol * (starLight + vec3(ambient))');
+      // ⭐ THE TINT REACHES THE ALBEDO AND NOTHING ELSE, which is what keeps this block out of the
+      // concurrent block's pixels: limb, terminator, aurora, airglow and cloud optics are ADDITIVE
+      // terms further down the composite and stay untinted, exactly as src/objects/Planet.js:498
+      // leaves them (`finalColor = surfaceColor * (starLight + vec3(ambient))`).
+      expect(FRAG).not.toContain('albedoCol * (diff + ambient)');   // the pre-B4 expression must be GONE, not merely shadowed
+      // ⛔ THE COMMENT-STRIP IS ITSELF FENCED. If stripComments ever stopped working, every
+      // assertion in this describe would silently go vacuous rather than red.
+      const raw = (FRAG_RAW.match(/albedoCol \* \(starLight \+ vec3\(ambient\)\)/g) || []).length;
+      const code = (FRAG.match(/albedoCol \* \(starLight \+ vec3\(ambient\)\)/g) || []).length;
+      expect(code).toBe(1);
+      expect(raw).toBeGreaterThan(code);   // the prose copy exists — that is exactly why CODE is what we assert on
+    });
+
+    it('⛔ `diff` STAYS A FLOAT, and this is the assertion that keeps B4 out of the neighbouring block\'s pixels', () => {
+      // `diff` is read as a GATE a dozen times below the composite (the nightMask for bio / city /
+      // ecumenopolis, step(0.0001, diff) for carbon sheen / facets / sunglint, the lit dayside
+      // gate) and as a MAGNITUDE inside the F34 limb's `(diff + 0.15)`. Widening it to a vec3 would
+      // silently re-colour the limb and every night gate — pixels this block does not own. The game
+      // solves it the same way and for the same reason: a coloured `starLight` AND a scalar
+      // `diffuse`, side by side (src/objects/Planet.js:488-490).
+      expect(FRAG).toContain('float diff = diff1 * uStarBrightness1 + diff2 * uStarBrightness2;');
+      expect(FRAG).not.toContain('vec3 diff =');
+    });
+
+    it('⛔ the VERTEX shader declares NONE of them — the tap fence depends on it', () => {
+      // tests/instrument-tap-fence.test.js derives a tap vertex and THROWS on a fifth use of bare
+      // `position` in LAB_VERTEX_SHADER's main(). Putting any of these in the vertex block invites
+      // exactly that. They are fragment-only on purpose.
+      const vertexBlock = FRAG.slice(FRAG.indexOf('export const LAB_VERTEX_SHADER'), FRAG.indexOf('export const LAB_FRAGMENT_SHADER'));   // comment-stripped, so a prose mention of a star name in the vertex block does not red this
+      for (const n of STAR_NAMES) expect(vertexBlock, `vertex block must not mention ${n}`).not.toContain(n);
+    });
+  });
+
+  describe('CONTROLS — committed mutants, so this fence is known to BITE', () => {
+    it('severing the starInfo carry in the builder reds the P-01 assertion', () => {
+      // The mutant is deleting the `if (opts.starInfo) { … }` block in buildLabPlanetMaterial. Under
+      // it every body keeps the factory white, which is precisely the P-01 defect — and note that it
+      // is INVISIBLE to a test that only checks the uniform EXISTS.
+      const mutantUniforms = { uStarColor1: { value: new THREE.Color(1, 1, 1) } };   // what a severed builder leaves
+      expect(mutantUniforms.uStarColor1.value.toArray()).not.toEqual(REAL_STAR.color1);
+    });
+
+    it('dropping lightDirWorld2 at the call site is SILENT unless the seam reports it', () => {
+      // Planet.updateRender / Moon.updateRender pass `lightDirWorld2` alongside `lightDirWorld`.
+      // Removing it throws nothing and renders a plausible image — the body simply keeps its
+      // build-time uLightDir2 while the mesh spins under it. Only the null-vs-zero distinction
+      // fenced above can tell the two apart.
+      const { surface } = makeBody({ spin: 0.7 });
+      const mat = buildLabPlanetMaterial({ lightDir2: new THREE.Vector3(0, 0, 1) }).material;
+      surface.material = mat;
+      const before = mat.uniforms.uLightDir2.value.toArray();
+      const d = updateLabPlanetMaterial(mat, { mesh: surface, lightDirWorld: new THREE.Vector3(1, 0, 0), renderDt: 0.016 });
+      expect(d.lightObj2).toBeNull();                              // the seam SAYS it did not write
+      expect(mat.uniforms.uLightDir2.value.toArray()).toEqual(before);   // …and the stale value is still there
+    });
+  });
+});

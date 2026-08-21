@@ -402,9 +402,9 @@ describe('1. the swapped population, re-measured on lab-procedural-0…199', () 
 // 2. THE HEADLINE — how much per-body character survives the swap.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 describe('2. the collapse in per-body variation', () => {
-  it('45 of the game material’s 72 uniforms vary across bodies; 49 of the lab’s 356 do', () => {
+  it('45 of the game material’s 72 uniforms vary across bodies; 52 of the lab’s 361 do', () => {
     expect(LEDGER.gameSize).toBe(72);   // 71 -> 72 AT B2P: uPosterizeLevels, the colour quantum. It is CONSTANT across bodies (a global display setting), so gameVarying stays 45 — the two numbers moving apart is the control that this is a declaration and not a new per-body draw.
-    expect(LEDGER.labSize).toBe(356);
+    expect(LEDGER.labSize).toBe(361);   // ⭐ 356 -> 361 AT B4-1, and the +5 is enumerable: uLightDir2, uStarColor1, uStarColor2, uStarBrightness1, uStarBrightness2 — the star set that closes ledger P-01 and P-02. MEASURED in this session, not derived: makeUniforms() returns 356 keys and buildLabPlanetMaterial() reports uniformCount 361 (the 5 ensureLabSamplers slots). ⚠ gameVarying stays 45 and gameSize stays 72: the GAME material was not touched, which is the control that this is a lab-side declaration and not a new per-body draw.
     // ⭐ RE-PINNED AT STEP 10a, 37 -> 45. This is a POPULATION move, not a code move: the pass now walks 266 bodies instead of 103, and eight game uniforms that read one value across the gas-only set read several across the whole one. Nothing about the game material changed. ⚠ AND B2 LEG 3 LEFT IT AT 45 ON PURPOSE, which is the control that the leg touched the LAB material and not the game's: `uNoiseScale` was already in `gameVarying` (the legacy material spends a drawn per-body `d.noiseScale`), so a leg that moved the game side would have moved this number too.
     expect(LEDGER.gameVarying.length).toBe(45);
     // ⛔ MEMBERSHIP, NOT A COUNT. Step 4 measured that a count-preserving permutation passes every
@@ -432,7 +432,7 @@ describe('2. the collapse in per-body variation', () => {
       'uPerturb',
       'uPolarMode', 'uPolarPhase', 'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
       'uPolarStrength', 'uPolarTint',
-      'uSedColor',
+      'uSedColor', 'uStarBrightness2', 'uStarColor1', 'uStarColor2',   // ⭐⭐ THE THREE NAMES B4-1 ADDS, AND THEY ARE THIS BLOCK'S ENTIRE CLAIM — `uStarColor1` VARYING PER BODY on the lab material is exactly the thing ledger P-01 said was lost ("every swapped body renders under implicit white light"). ⛔ NOTE WHICH TWO OF THE FIVE DID **NOT** JOIN, because that is the control: `uStarBrightness1` is a literal 1.0 on every primary StarSystemGenerator draws, so it is constant BY CONSTRUCTION and a build in which it started varying would mean the generator moved, not the port; and `uLightDir2` is constructed at (0,0,0) on every body and only ever written by the PER-FRAME seam (src/main.js copies it inside its binary branch), so this construction-time pass cannot see it and must not pretend to — P-02's direction half is fenced at the seam instead, in tests/lab-shader-perframe-seam.test.js.
       'uThermalDir',
       'uWeatheredColor',
     ]);
@@ -578,12 +578,12 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
         null, true,
       ).material.uniforms,
     ));
-    // P-01: no star-colour uniform of any kind.
-    expect([...labNames].filter((n) => /star/i.test(n))).toEqual([]);
-    // P-02 / P-03: no second light, no shadow term.
+    // ⭐⭐ P-01 INVERTED AT B4-1, BY P-04'S MECHANISM. This line read `.toEqual([])` and was the machine-check that the lab declared NO star-colour uniform of any kind. It now NAMES the four the lab declares, so un-declaring any one of them reds this assertion instead of letting the feature leave silently — the same inversion that closed P-04 eight lines down.
+    expect([...labNames].filter((n) => /star/i.test(n)).sort()).toEqual(['uStarBrightness1', 'uStarBrightness2', 'uStarColor1', 'uStarColor2']);
+    // ⛔ P-03 IS NOT CLOSED, AND THE NEXT LINE IS WHERE THAT IS RECORDED. B4-1 did star colour (P-01) and the second light (P-02) ONLY. The shadow half needs four world-space vectors and the lab fragment shader has no vWorldPos varying at all, so it is a different block — not an oversight, and this assertion stays absence-side-up to say so.
     expect([...labNames].filter((n) => /shadow/i.test(n))).toEqual([]);
-    expect(LAB_SHADER_CORPUS.includes('uLightDir2')).toBe(false);
-    expect(LAB_SHADER_CORPUS.includes('uShadow')).toBe(false);
+    expect(LAB_SHADER_CORPUS.includes('uLightDir2')).toBe(true);    // ⭐ P-02 INVERTED AT B4-1 — this asserted `false`. The second light now occurs in LAB_SHADER_CORPUS; deleting it from the fragment reds this line.
+    expect(LAB_SHADER_CORPUS.includes('uShadow')).toBe(false);      // ⛔ STILL false, STILL deliberate — P-03's half, for the reason two lines up. Do not invert this one without a vWorldPos varying to invert it against.
     // P-05: the alias shape — the counterpart EXISTS, which is why that row is `blocking` rather
     // than `accepted-loss`.
     for (const n of ['uAuroraColor', 'uAuroraIntensity', 'uAuroraRingLat', 'uAuroraRingWidth']) {

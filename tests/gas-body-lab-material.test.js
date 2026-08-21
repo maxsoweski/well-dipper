@@ -991,7 +991,7 @@ describe('the mount-site fence — what does this gate NOT see that this commit 
     // Not merely "the file mentions it somewhere": the guard and the mount have to be in one
     // function, or a later edit can keep both tokens and separate them.
     const src = read('src/objects/Planet.js');
-    const start = src.indexOf('static _createLabSurface(geometry, d, condition, lightDir) {');
+    const start = src.indexOf('static _createLabSurface(geometry, d, condition, lightDir, lightDir2 = null, starInfo = null) {');   // ⭐ SIGNATURE RE-PINNED AT B4-1. The two new parameters are OPTIONAL and default to the pre-B4 behaviour, so this is a widening and not a break — but the pin is a literal string on purpose (a regex would have absorbed the change silently), so it moves by hand every time the signature does. The window below is unchanged: admission test still before the mount, in one function.
     expect(start).toBeGreaterThan(0);
     const body = src.slice(start, start + 2600);
     expect(body).toMatch(/labPipelineAdmits\(/);

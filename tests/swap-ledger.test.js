@@ -90,7 +90,7 @@ describe('the gate-shape filter', () => {
       || bareMultiplicandPattern(n).test(LAB_SHADER_CORPUS)).length;
     const shipped = rankOffByDefault(names, LAB_SHADER_CORPUS).gateShaped;
     expect(overshoot).toBeGreaterThan(shipped);
-    expect(overshoot).toBe(63);
+    expect(overshoot).toBe(64);   // ⭐ +1 AT B4-1 (uStarBrightness2). The whole +1 is that ONE new uniform: of the five the star set adds, it is the only scalar-zero default, and the fragment spends it as a bare multiplicand (`uStarColor2 * diff2 * uStarBrightness2`). MEASURED this session.
   });
 });
 
@@ -100,17 +100,17 @@ describe('the gate-shape filter', () => {
 describe('the measurement §12.4 states, reproduced', () => {
   const u = labUniforms();
 
-  it('reproduces 351 declared and 87 scalar-zero-defaulted EXACTLY', () => {
+  it('reproduces 356 declared and 88 scalar-zero-defaulted EXACTLY', () => {
     // PLAN §12.4 measured these at `9b33264`; `git diff 9b33264 HEAD` over planet-lod-uniforms.js,
     // planet-lod-shaders.glsl.js and planet-lod-height.glsl.js is empty, so they must still hold.
-    expect(Object.keys(u).length).toBe(351);
-    expect(zeroDefaultedUniformNames(u).length).toBe(87);
+    expect(Object.keys(u).length).toBe(356);   // ⭐ 351 -> 356 AT B4-1: uLightDir2, uStarColor1, uStarColor2, uStarBrightness1, uStarBrightness2 — the star set closing ledger P-01 / P-02. MEASURED by importing makeUniforms in this session, not derived from the old number.
+    expect(zeroDefaultedUniformNames(u).length).toBe(88);   // ⭐ +1 AT B4-1 (uStarBrightness2). The whole +1 is that ONE new uniform: of the five the star set adds, it is the only scalar-zero default, and the fragment spends it as a bare multiplicand (`uStarColor2 * diff2 * uStarBrightness2`). MEASURED this session.
   });
 
   it('names the wider off-value population separately rather than conflating the two', () => {
-    // 111 = the 87 scalars + 23 all-zero domain-offset vectors + the one null sampler slot.
+    // ⭐ 114 AT B4-1, and the breakdown was MEASURED not inferred: 88 scalar zeros + 24 all-zero vectors + 1 all-zero COLOUR + the one null sampler slot. Was 111 = 87 + 23 + 0 + 1. Three of B4-1's five land here (uStarBrightness2 scalar, uLightDir2 vector, uStarColor2 colour); uStarColor1 (1,1,1) and uStarBrightness1 (1.0) are NOT off-valued, which is the point — their defaults ARE the pre-B4 implicit white light. ⚠ uStarColor2 is the FIRST all-zero THREE.Color in this population; isOffValue reaches it through `toArray`, not through a vector branch.
     const off = Object.keys(u).filter((n) => isOffValue(u[n].value));
-    expect(off.length).toBe(111);
+    expect(off.length).toBe(114);
     // Every scalar-zero is also off-valued; the reverse is not true, and the gap is the point.
     for (const n of zeroDefaultedUniformNames(u)) expect(off).toContain(n);
   });
@@ -123,10 +123,10 @@ describe('the measurement §12.4 states, reproduced', () => {
     // (24 vs 48). Five guard readings were tried; none reaches 48. The number below is this file's,
     // and a caption must quote it rather than §12.4's.
     expect(rank).toMatchObject({
-      total: 87, gateShaped: 55, both: 17, guardOnly: 7, multiplicandOnly: 31, neither: 32,
+      total: 88, gateShaped: 56, both: 17, guardOnly: 7, multiplicandOnly: 32, neither: 32,   // ⭐ B4-1 moved exactly two of these six, by exactly one each: total 87->88 and multiplicandOnly 31->32, which carries gateShaped 55->56. `both`, `guardOnly` and `neither` are UNCHANGED. That shape is the control: uStarBrightness2 enters as a pure multiplicand and is read by no `if`, so a move in `guardOnly` here would mean something other than the star set moved.
     });
-    expect(rank.both + rank.guardOnly + rank.multiplicandOnly + rank.neither).toBe(87);
-    expect(rank.both + rank.multiplicandOnly).toBe(48);   // agrees with §12.4's 38 + 10
+    expect(rank.both + rank.guardOnly + rank.multiplicandOnly + rank.neither).toBe(88);
+    expect(rank.both + rank.multiplicandOnly).toBe(49);   // ⛔ WAS 48, AND THE COMMENT THAT SAID "agrees with §12.4's 38 + 10" IS WITHDRAWN RATHER THAN RE-FITTED. §12.4's 48 was measured on a 351-uniform material that no longer exists; B4-1 added a 49th multiplicand. The agreement was real and is now historical — it is not evidence about this tree.
   });
 
   it('puts §12.4\'s two named subjects inside the ranked set — the thing the rank is FOR', () => {
@@ -223,10 +223,10 @@ describe('swapLedgerOf', () => {
     expect(led.pairable).toBe(true);
     expect(led.buckets.lost).toContain('uLimbMix');
     expect(led.rank.total).toBe(led.buckets.offByDefault.length);
-    // The lab material carries 351 names and the fake prev carries one, so nothing is CARRIED and
-    // the off-by-default bucket is the wider `isOffValue` population, not the scalar-only 87.
-    expect(led.counts.next).toBe(351);
-    expect(led.buckets.offByDefault.length).toBe(111);
+    // The lab material carries 356 names and the fake prev carries one, so nothing is CARRIED and
+    // the off-by-default bucket is the wider `isOffValue` population, not the scalar-only 88.
+    expect(led.counts.next).toBe(356);   // ⭐ 351 -> 356 AT B4-1 — the star set. Same +5 as the makeUniforms pin above; this one reads it through swapLedgerOf instead of directly, which is why both exist.
+    expect(led.buckets.offByDefault.length).toBe(114);
   });
 
   it('⛔ refuses to report an EMPTY loss set when the pre-swap material never existed', () => {
@@ -238,8 +238,8 @@ describe('swapLedgerOf', () => {
     expect(led.buckets.lost).toBeNull();          // ← NOT `[]`
     expect(led.reason).toMatch(/it is not empty/);
     // The rank still works, because it reads the lab material alone.
-    expect(led.rank.total).toBe(87);
-    expect(led.rank.gateShaped).toBe(55);
+    expect(led.rank.total).toBe(88);
+    expect(led.rank.gateShaped).toBe(56);   // ⭐ +1 AT B4-1 (uStarBrightness2). The whole +1 is that ONE new uniform: of the five the star set adds, it is the only scalar-zero default, and the fragment spends it as a bare multiplicand (`uStarColor2 * diff2 * uStarBrightness2`). MEASURED this session.
   });
 
   it('⭐ CONTROL THAT MOVED — an empty-array unpairable ledger reads as a clean bill', () => {
