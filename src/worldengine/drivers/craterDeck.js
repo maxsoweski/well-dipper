@@ -27,7 +27,7 @@
 // ⛔ THE PREDICATES ARE EXACT COMPLEMENTS AND THAT IS THE WHOLE COLLISION ARGUMENT.
 // `rockySurface` is `!== 'gas'`, this entry is `=== 'gas'`, so every body in any corpus is claimed by
 // EXACTLY ONE writer of the family — never zero (which was P-14) and never two (which
-// src/worldengine/drivers/index.js:303 `          throw new PackContractError(` refuses at run time).
+// src/worldengine/drivers/index.js:330 `          throw new PackContractError(` refuses at run time).
 // Asserted over a generated population by NAME LOOKUP in this pack's suite, not by reading two
 // `applies` lines side by side.
 //
@@ -252,7 +252,7 @@ export function craterDeckPack(condition, ctx = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 /**
  * ⭐ EXPORTED AS A FROZEN ENTRY rather than assembled at the registry, mirroring
- * src/worldengine/drivers/rockySurface.js:415 `  applies: (condition) => compositionClass(condition) !== 'gas',`
+ * src/worldengine/drivers/rockySurface.js:349 `  applies: (condition) => compositionClass(condition) !== 'gas',`
  * — one import plus one array element, and the predicate cannot be retyped differently from the one
  * this pack's own test gates.
  *
@@ -263,7 +263,7 @@ export function craterDeckPack(condition, ctx = {}) {
  * entry inverted: that one WAS the first to widen the swapped population and said so.
  *
  * ⚠ IT MUST RETURN THE BOOLEAN. Both admission sites compare with `=== true`
- * (src/worldengine/drivers/index.js:248 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`),
+ * (src/worldengine/drivers/index.js:275 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`),
  * so a truthy non-boolean registers, reports as `skipped`, renders nothing and throws nothing.
  * `===` already yields a boolean; this is a note against a future rewrite, not a cast.
  */

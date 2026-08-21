@@ -130,7 +130,7 @@ export function solidOpticsPack(condition, ctx) {
  * pack's own test gates.
  *
  * ⛔⛔ THE PREDICATE IS THE COMPLEMENT OF GAS AND IT IS CHARACTER-IDENTICAL TO rockySurface's,
- * src/worldengine/drivers/rockySurface.js:415 `  applies: (condition) => compositionClass(condition) !== 'gas',`.
+ * src/worldengine/drivers/rockySurface.js:349 `  applies: (condition) => compositionClass(condition) !== 'gas',`.
  * That is what makes registration population-neutral: `selectPacks` already returns a non-empty
  * list for every body this claims, so `packs.length > 0` cannot flip for any record and no body
  * moves between materials. A DIFFERENT non-gas predicate — `!!condition.atmosphere`, say — would

@@ -95,6 +95,19 @@ const PACK_CODE = stripCommentsPreservingOffsets(read('src/worldengine/drivers/r
   blankLiteralText: true,
 });
 
+// ⭐ THE SECOND PACK-SOURCE VIEW, 2026-08-21 — AND IT EXISTS BECAUSE THE SUBJECT MOVED, NOT BECAUSE
+// THE ASSERTION WEAKENED. `surfacePaletteBlock` and `offsetDriverBlock` left this pack for
+// src/worldengine/drivers/giantSurface.js:155 `export function surfacePaletteBlock(condition) {`, so a second pack could emit
+// the identical families over the complement predicate (ledger P-12 / P-13's gas halves). The
+// source pins below follow the code rather than being deleted with it — a pin whose subject has
+// moved out of the scanned file passes VACUOUSLY, which is the exact failure this file's own
+// header records limbDeck learning in blood. ⛔ NAMED APART FROM `BLOCK_CODE` BELOW, which is
+// craterDeck's view: two shared blocks now live in two sibling packs and one identifier for both
+// would let a crater pin silently start scanning the palette file.
+const GIANT_SURFACE_CODE = stripCommentsPreservingOffsets(read('src/worldengine/drivers/giantSurface.js'), {
+  blankLiteralText: true,
+});
+
 // ⛔ AND A SECOND VIEW, COMMENTS STRIPPED BUT STRING INTERIORS INTACT, FOR THE ANTI-TRANSCRIPTION
 // FENCE ALONE — because `blankLiteralText` is what opens the fence's second hole. It blanks the
 // interior of every string literal, so `Number('0.1706')` reads as `Number('        ')` and a
@@ -493,7 +506,7 @@ describe('C — every driver is a forward of a shared producer', () => {
     // see it until that module changes.
     for (const [n, k] of [['uWeatheredColor', 'weathered'], ['uFreshColor', 'fresh'],
       ['uSedColor', 'sediment'], ['uCratonColor', 'craton'], ['uBioGroundColor', 'pigment']]) {
-      expect(PACK_CODE, `${n} must take a COPY — the writer hands the array to target.set(...)`)
+      expect(GIANT_SURFACE_CODE, `${n} must take a COPY — the writer hands the array to target.set(...)`)
         .toMatch(new RegExp(`${n}:\\s*sp\\.${k}\\.slice\\(\\)`));
     }
     // ...and the coupling the behavioural line below depends on is pinned rather than assumed, so
@@ -745,7 +758,13 @@ describe('C — every driver is a forward of a shared producer', () => {
     // walk past, the code view is asserted to contain NO numeric literal outside the three this
     // pack declares it owns. MEASURED 2026-08-19: exactly `1.0`, `0.55`, `0`, `3` and nothing else.
     const literals = literalsIn(PACK_CODE_STRINGS);
-    expect(literals.sort()).toEqual(['0', '0.55', '1.0', '3']);
+    // ⭐ `'3'` LEFT THIS SET ON 2026-08-21 AND IT IS A MOVE, NOT A LOOSENING. Its only source was
+    // `offsetOf`'s `v.length !== 3` shape guard, which went to `./giantSurface.js` with
+    // `offsetDriverBlock`; the guard is asserted there, in that pack's own suite, over the same
+    // refuse-don't-default property. ⛔ The remaining three are still this file's OWN numbers —
+    // `PERTURB_BASE` and the relief call's gravity fallback — so the fence still bites on a
+    // calibration constant typed here rather than forwarded.
+    expect(literals.sort()).toEqual(['0', '0.55', '1.0']);
     //   ⭐ THE SET IS UNCHANGED AT B3 LEG 2 AND ITS MEMBERS ARE NOT. `C_CRATER` and the `Dchar === 0`
     //     guard moved to src/worldengine/drivers/craterDeck.js with the drivers they belong to, and
     //     `1.0` and `0` both survive here for OTHER reasons (below) — so this assertion would have
@@ -828,7 +847,9 @@ describe('D — the wire reaches a real lab material', () => {
     expect(read('src/worldengine/shaders/uniforms.js')).toMatch(/uCratonColor:\s*\{\s*value:/);
     // ...and the pack's own end on the COMMENT-STRIPPED view, not on `read()`, which is what every
     // other source assertion in this file already does (the header at the top says so).
-    expect(PACK_CODE).toContain('uCratonColor: sp.craton.slice()');
+    // ⭐ ON `BLOCK_CODE` SINCE 2026-08-21: the line moved to the shared block both packs spread, so a
+    // pin left on THIS file's view would pass vacuously — see the GIANT_SURFACE_CODE note at the top.
+    expect(GIANT_SURFACE_CODE).toContain('uCratonColor: sp.craton.slice()');
 
     let checked = 0;
     for (const b of FIRED_MOONS.slice(0, 12)) {

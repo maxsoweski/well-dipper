@@ -115,7 +115,7 @@ describe('6a — PACKS is an array with pinned MEMBERSHIP, not a pinned length',
     // ⭐ B3 leg 2 APPENDS A SIXTH, `craterDeck` (ledger P-14's crater half), whose predicate is
     // `rockySurface`'s exact COMPLEMENT — so the ten impact uniforms now have exactly one writer on
     // every body instead of none on the gas half.
-    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics', 'craterDeck', 'solidFeatures']);
+    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics', 'craterDeck', 'solidFeatures', 'giantSurface']);
   });
 
   it('every entry carries the four contract fields, and the array is frozen', () => {
@@ -255,7 +255,7 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     const { material, res, count } = runOn(gas());
     // ⭐ `craterDeck` JOINS THE APPLIED LIST AT B3 LEG 2 — it is the gas half of ledger P-14, and a
     // gas body is exactly the population it exists for.
-    expect(res.applied).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck']);
+    expect(res.applied).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface']);
     // ⭐ `solidOptics` joins the SKIPPED list here and nowhere else on a gas body: its predicate is
     // the complement of gas, so a gas body must never see it. That is the whole of its scope claim.
     expect(res.skipped).toEqual(['rockySurface', 'solidOptics', 'solidFeatures']);
@@ -263,7 +263,7 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     expect(material.uniforms.uJetStrength.value).toBe(1.0);
     // ⭐ MEASURED, NOT ASSUMED — `rockySurface` declares `craters` and `ejecta`, and NEITHER KEY IS
     // HERE. `applyDriverPacks` merges an entry's gate map only after the applicability `continue`
-    // (src/worldengine/drivers/index.js:292 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`),
+    // (src/worldengine/drivers/index.js:319 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`),
     // so a skipped pack contributes nothing to `res.gates`. That matters beyond bookkeeping:
     // `res.gates` is what an Instrument E caption prints as "what was decided on this body", and a
     // gate name from a pack that never ran would read as a rendering decision nobody made.
@@ -272,8 +272,15 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     // decision that really was made. What must still be absent is a gate from a SKIPPED pack, and
     // `rockySurface` declares the same two names — so the check is re-aimed at a name only a skipped
     // pack owns.
-    expect(res.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true, craters: true, ejecta: true });
-    expect(Object.keys(res.gates)).not.toContain('terminator');
+    // ⭐⭐ `terminator` IS HERE NOW TOO, 2026-08-21, AND IT MOVED FOR THE SECOND TIME FOR THE FIRST
+    // REASON. It was chosen as the absence probe precisely because `solidOptics` was its ONLY owner
+    // and `solidOptics` is skipped on a gas body. `giantSurface` — ledger P-11's gas half — declares
+    // the same gate and RUNS here, so its presence is a rendering decision that really was made and
+    // the old assertion would now be pinning a lie. ⛔ THE PROBE IS RE-AIMED, NOT DELETED: `aurora`
+    // is the last gate name a skipped pack alone owns, and the line below is the whole of what this
+    // check was ever for. If a pack is ever added that declares `aurora` over the gas predicate, the
+    // right move is to re-aim again — not to drop the direction.
+    expect(res.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true, craters: true, ejecta: true, terminator: true });
     expect(Object.keys(res.gates)).not.toContain('aurora');
     expect(Object.keys(res.attributes).sort()).toEqual(['aBand', 'aMush', 'aShear']);
     expect(res.attributes.aBand.length).toBe(count);
@@ -328,7 +335,7 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     // ⭐ `craterDeck` JOINS THE SKIPPED LIST at B3 leg 2: its predicate is `=== 'gas'`, so on a solid
     // body the impact family keeps its single writer (`rockySurface`) and the collision throw stays
     // inert for that pair by construction.
-    expect(res.skipped).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck']);
+    expect(res.skipped).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface']);
     // The gate map is the applied packs' names ONLY — the three skipped decks contribute none.
     expect(res.gates).toEqual({ craters: true, ejecta: true, terminator: true, aurora: true, edifices: true, chaos: true, frost: true, glacial: true });
     // ⛔ NO ATTRIBUTE IS BAKED ON A SOLID BODY. `aBand`/`aMush`/`aShear` are the gas deck's, and the
@@ -342,7 +349,7 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     const wrote = new Set(res.uniformsWritten);
     // ⛔ THE CONTRACT SET, NOT THE WRITE LOG, AND THE DIFFERENCE IS THE WHOLE GATE. An earlier form of
     // this assertion compared `moved` against `new Set(res.uniformsWritten)` — but
-    // src/worldengine/drivers/index.js:319 `for (const name of Object.keys(result.drivers)) uniformsWritten.push(name);`
+    // src/worldengine/drivers/index.js:346 `for (const name of Object.keys(result.drivers)) uniformsWritten.push(name);`
     // pushes every name the writer just moved, so `moved \ uniformsWritten` is empty BY CONSTRUCTION
     // for any driver map at all. EXECUTED: wrapping the pack to emit two extra drivers (`uOctaves: 11`,
     // `uLavaCoverage: 0.9`) really restyles this body — and the write-log form stayed green, as did
@@ -696,8 +703,8 @@ describe('6e — the flag is OFF by default and it selects a DIFFERENT material'
     const { lab } = planetAt(body().d, true);
     expect(lab.isLabPipeline).toBe(true);
     expect(lab.flag).toEqual({ enabled: true, source: 'override', default: false });
-    expect(lab.packsApplied).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck']);
-    expect(lab.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true, craters: true, ejecta: true });
+    expect(lab.packsApplied).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface']);
+    expect(lab.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true, craters: true, ejecta: true, terminator: true });
     expect(lab.provenance.isWorldEngine).toBe(true);
     expect(lab.uniformsWritten).toContain('uBandStrength');
   });
@@ -778,7 +785,7 @@ describe('6e — the flag is OFF by default and it selects a DIFFERENT material'
     for (const b of [...GEN_GAS, ...GEN_SOLID]) {
       const packs = labPipelineAdmits(b.d, b.cond).packs;
       if (compositionClass(b.cond) === 'gas') {
-        expect(packs, b.id).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck']);
+        expect(packs, b.id).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface']);
       } else {
         const banded = PACKS.find((e) => e.name === 'giantDeck').applies(b.cond) === true;
         if (banded) bandedSolid++;

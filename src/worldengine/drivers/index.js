@@ -56,7 +56,7 @@ import { POLAR_DECK_ENTRY } from './polarDeck.js';
 import { ROCKY_SURFACE_ENTRY } from './rockySurface.js';
 import { SOLID_OPTICS_ENTRY } from './solidOptics.js';
 import { CRATER_DECK_ENTRY } from './craterDeck.js';
-import { SOLID_FEATURES_ENTRY } from './solidFeatures.js';
+import { SOLID_FEATURES_ENTRY } from './solidFeatures.js'; import { GIANT_SURFACE_ENTRY } from './giantSurface.js';   // ⛔ TWO import STATEMENTS ON ONE LINE, ON PURPOSE. Fifteen live symbol-anchored refs point INTO this file by line — src/worldengine/drivers/limbDeck.js:173 `import plus one array element at` is one of them — so a new line here reds fifteen citations as some other block's failure. The same discipline planet-lod-lab.html:188 keeps.
 import {
   writePackUniforms, assertDisplayPolicy, assertPackResult, PackContractError,
 } from '../port/writePackUniforms.js';
@@ -238,6 +238,33 @@ export const PACKS = Object.freeze([
   // more lab checkboxes, and it is a VISIBLE change on every swapped solid body rather than a
   // no-op: six feature families stop reading their factory default. It is the point of the leg.
   SOLID_FEATURES_ENTRY,
+  // ── PACK #8 · giantSurface — ledger P-11's GAS HALF, P-12 and P-13, 2026-08-21 ─────────────────
+  // ⭐⭐ IT IS THE COMPLEMENT OF `rockySurface` AND `solidOptics`, AND THAT IS THE WHOLE OF BOTH ITS
+  // POPULATION ARGUMENT AND ITS COLLISION ARGUMENT. Those two register on
+  // src/worldengine/drivers/rockySurface.js:349 `    applies: (condition) => compositionClass(condition) !== 'gas',`, so the thirteen names
+  // they carry were unwritten on every gas-class body and answered the LAB FACTORY DEFAULT while the
+  // GAME had a per-body value in hand — measured at 0604d13 on the gas giant Meameinath, where
+  // `uTermStrength` and `uBioGroundCover` both read 0.
+  //
+  // ⛔ IT MOVES NO BODY BETWEEN MATERIALS. Every gas-class body is already claimed by `giantDeck`,
+  // `limbDeck`, `polarDeck` and `craterDeck`, so the `packs.length > 0` term of
+  // src/objects/Planet.js:2194 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
+  // cannot flip for any record and no census is re-pinned.
+  //
+  // ⛔ IT CO-APPLIES WITH FOUR PACKS AND WITH NEITHER SOLID ONE. Because the predicate is the exact
+  // complement, no body ever runs this pack and `rockySurface`/`solidOptics` together — the thirteen
+  // names cannot meet their solid-side twins on one body. Against the four gas packs that DO
+  // co-apply the emitted sets are disjoint by name, asserted by NAME LOOKUP over a generated
+  // population in this pack's suite rather than by reading `applies` lines by eye.
+  //
+  // ⚠ IT DECLARES NO NEW GATE NAME — `terminator` is `solidOptics`'s, IMPORTED rather than retyped,
+  // so both halves of the population honour one checkbox. ⚠ AND IT IS A VISIBLE CHANGE ON EVERY
+  // SWAPPED GAS BODY RATHER THAN A NO-OP, but only through two of its three families: the terminator
+  // triple lights a twilight band that the legacy material already draws on those same bodies, and
+  // the three domain offsets stop 343 gas-class bodies sharing one relief domain. The palette seven
+  // change VALUES ONLY — the deck replaces the ground albedo at mask 1.0 — and giantSurface.js's
+  // header carries the measurement rather than leaving it to be rediscovered as a bug.
+  GIANT_SURFACE_ENTRY,
 ]);
 
 /** The entries whose predicate claims this condition, in array order. */

@@ -117,12 +117,12 @@
 import { compositionClass } from '../base/e1Regime.js';
 // ⭐ B3 LEG 2, 2026-08-21 — THE IMPACT FAMILY MOVED OUT AND IS IMPORTED BACK, and the reason is a row rather than tidiness: ledger P-14's crater half is that NO pack writes these ten names on a gas-class body, and the fix is a second pack over the complement predicate. Two packs emitting one family from two copies of ten lines is the third-transcription failure B3 leg 1 spent a commit deleting, so there is now exactly ONE expression of the block and both packs import it. The two producer imports this line replaces (`craterRelevanceOf`, `craterUniformsFrom`) moved WITH it.
 import { craterDriverBlock, CRATER_GATE, EJECTA_GATE, C_CRATER } from './craterDeck.js';
-import { surfacePaletteOf, icenessOf, biosphereOf, BIO_PIGMENT } from '../base/surfaceMaterial.js';
-import { applyAlbedoTransfer } from '../display/albedoTransfer.js';
+import { surfacePaletteBlock, offsetDriverBlock } from './giantSurface.js';   // ⭐ 2026-08-21 — THE PALETTE AND OFFSET BLOCKS MOVED OUT AND ARE IMPORTED BACK, and the reason is a row rather than tidiness: ledger P-12's and P-13's GAS halves are exactly "no pack writes these names on a gas-class body", and the fix is a pack over the complement predicate. Two packs emitting one family from two copies of ten lines is the third-transcription failure B3 leg 1 spent a commit deleting, so there is now exactly ONE expression of each block and both packs import it — the same move `craterDriverBlock` made one family over.
+// ⚠ THE FIVE PRODUCER IMPORTS THIS LINE REPLACES (`surfacePaletteOf`, `icenessOf`, `biosphereOf`, `BIO_PIGMENT`, `applyAlbedoTransfer`) MOVED WITH THE BLOCK and NOT ONE of them is called from this file any more. An unused import kept "for symmetry" is how a file grows a dependency it no longer has — the same note `scalar`'s departure carries three lines below.
 import { reliefEnvelope } from '../base/labCore.js';
 // ⚠ `scalar` LEFT THIS IMPORT AT B3 LEG 2 AND WAS NOT DROPPED FROM THE PROGRAM: the only two gated drivers this pack ever emitted are the crater/ejecta master gates, and they moved to `./craterDeck.js` with the block. An unused import kept "for symmetry" is how a file grows a dependency it no longer has.
 import { sizeKm, assertDisplayPolicy, assertPackResult, PackContractError } from '../port/writePackUniforms.js';
-// ⭐ B2 LEG 3 — the base field's km wavelength and its cFeature. ⛔ THE CALIBRATION CONSTANTS LIVE IN THAT MODULE AND ARE ONLY FORWARDED FROM HERE, and the reason is a shipped fence rather than taste: tests/driver-pack-rockysurface.test.js:748 `    expect(literals.sort()).toEqual(['0', '0.55', '1.0', '3']);` asserts this file's numeric literals are exactly those four (⭐ was cited as :717 until 2026-08-21; that line is the `literalsIn` call, not the assertion, and being symbol-less the ref sat in gate 2's UNCHECKED column where nothing could catch it), so a calibration constant TYPED here reds it. `C_CRATER` below is the same NAMED-FORWARD shape and escapes only because its value happens to be one of the four; a base-field constant of 1.16 does not, and routing around the fence rather than through a shared module is exactly the transcription it exists to catch.
+// ⭐ B2 LEG 3 — the base field's km wavelength and its cFeature. ⛔ THE CALIBRATION CONSTANTS LIVE IN THAT MODULE AND ARE ONLY FORWARDED FROM HERE, and the reason is a shipped fence rather than taste: tests/driver-pack-rockysurface.test.js:767 `    expect(literals.sort()).toEqual(['0', '0.55', '1.0']);` asserts this file's numeric literals are exactly those THREE — ⭐ FOUR UNTIL 2026-08-21, and the `'3'` did not get deleted, it MOVED: its only source was `offsetOf`'s array-length guard, which went to `./giantSurface.js` with `offsetDriverBlock` and is fenced there instead (⭐ was also cited as :717 until 2026-08-21; that line is the `literalsIn` call, not the assertion, and being symbol-less the ref sat in gate 2's UNCHECKED column where nothing could catch it) — so a calibration constant TYPED here reds it. `C_CRATER` below is the same NAMED-FORWARD shape and escapes only because its value happens to be one of the three; a base-field constant of 1.16 does not, and routing around the fence rather than through a shared module is exactly the transcription it exists to catch.
 import { macroWavelengthKm, C_MACRO } from '../base/macroWavelength.js';
 
 // ── The two declared gate names and the crater cFeature — RE-EXPORTED, NOT DECLARED ─────────────
@@ -150,51 +150,15 @@ export { CRATER_GATE, EJECTA_GATE, C_CRATER };
 // the anti-transcription fence stay meaningful over this file.
 export const PERTURB_BASE = 0.55;
 
-// ── The three domain-offset ctx fields, and why they are ASSERTED rather than defaulted ──────────
-/**
- * One offset vector off the front-end's ctx, refused unless it is a 3-element array of finite
- * numbers.
- *
- * ⭐ WHY A THROW AND NOT A `?? ZERO` DEFAULT. The uniform's factory default IS the zero vector
- * (src/worldengine/shaders/uniforms.js:158 `uMacroOffset:  { value: new THREE.Vector3() },`), and a
- * zero domain offset is a perfectly legal noise domain — it renders a plausible planet. It just
- * renders the SAME planet's relief as every other body on the material, which is a defect only two
- * bodies side by side can show. A default here would therefore reproduce ledger row P-13 silently
- * inside the very commit that closes it, so the seam refuses instead, exactly as
- * src/worldengine/port/writePackUniforms.js:107 `export function assertDisplayPolicy(ctx) {` refuses a missing display policy.
- *
- * ⛔ THE ARRAY SHAPE IS CHECKED, NOT ASSUMED, AND `Array.isArray` IS THE POINT OF THE CHECK. A
- * `THREE.Vector3` has `.x/.y/.z` and no `.length`, so a front-end handing one over would fail here
- * loudly rather than reach src/worldengine/port/writePackUniforms.js:280 `if (target && typeof target.set === 'function') target.set(...v);`
- * as a non-array and be written as a scalar `slot.value`. The pack tree may not name a renderer
- * type, so the guard is written as a positive shape assertion rather than as a type test.
- */
-function offsetOf(ctx, field) {
-  const v = ctx == null ? undefined : ctx[field];
-  if (!Array.isArray(v) || v.length !== 3) {
-    throw new PackContractError(
-      `rockySurfacePack: ctx.${field} is REQUIRED and must be a 3-element array. It is the ` +
-      'FRONT-END\'s per-body noise-domain offset, not a value this pack may derive: two divergent ' +
-      'private seed-to-vector laws already exist and a third would agree with neither. Defaulting ' +
-      'it to zero is legal, invisible on one body, and gives every body the same relief.',
-    );
-  }
-  for (let i = 0; i < v.length; i++) {
-    if (typeof v[i] !== 'number' || !Number.isFinite(v[i])) {
-      throw new PackContractError(`rockySurfacePack: ctx.${field} component ${i} is not a finite number.`);
-    }
-  }
-  return v;
-}
-
-/** The three, named once so the driver block below cannot spell one of them differently. */
-function offsetsOf(ctx) {
-  return {
-    macro: offsetOf(ctx, 'macroOffset'),
-    detail: offsetOf(ctx, 'detailOffset'),
-    crater: offsetOf(ctx, 'craterOffset'),
-  };
-}
+// ── The three domain-offset ctx fields ─────────────────────────────────────────────────────
+// ⭐ `offsetOf` AND `offsetsOf` MOVED TO `./giantSurface.js` AS `offsetDriverBlock`, WITH THEIR WHOLE
+// ARGUMENT, and the argument is the single decision the block exists to hold in one place: a
+// missing offset THROWS rather than defaulting to the zero vector, because the zero vector is a
+// legal noise domain that renders a plausible planet wearing the SAME relief as every other body
+// on the material — ledger P-13 itself, reproduced silently inside the commit that closes it.
+// ⛔ DO NOT RE-ADD A LOCAL COPY. A second pack now forwards the identical three names over the
+// complement predicate, and a `?? ZERO` in one of them is invisible on every still frame and on
+// every algebraic gate this program owns — it needs two bodies side by side to show.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // THE PACK
@@ -251,7 +215,7 @@ export function rockySurfacePack(condition, ctx = {}) {
   // by its own luminance drifts it out of relation with the rock, which
   // src/worldengine/display/albedoTransfer.js:42 `// through the SAME scale via opts.extra, which is the only correct way to add one: a pigment scaled by`
   // states as the only correct way to add one.
-  const sp = applyAlbedoTransfer(surfacePaletteOf(condition), { extra: { pigment: BIO_PIGMENT } });
+  const { drivers: paletteDrivers, sp } = surfacePaletteBlock(condition);   // ⛔ `sp` COMES BACK OUT because this pack's `meta` reports the palette, and a second `applyAlbedoTransfer(surfacePaletteOf(...))` for it would be a second derivation of the same body — pure and therefore harmless today, and exactly the shape that stops being harmless the day the producer takes an argument.
 
   // ── DECISION 3: THE RELIEF ENVELOPE'S GRAVITY FALLBACK IS THE LAB'S, NOT THE CRATER LAW'S ───────
   // ⚠ TWO SHARED MODULES IN THIS PACK FALL BACK DIFFERENTLY ON A CONDITION WITH NO `surfaceGravity`,
@@ -268,69 +232,39 @@ export function rockySurfacePack(condition, ctx = {}) {
   const relief = reliefEnvelope(condition.radiusEarth, condition.surfaceGravity ?? 1.0);
 
   // ── DECISION 4: THE THREE DOMAIN OFFSETS ARE FORWARDED, AND A MISSING ONE IS A THROW ────────────
-  // Non-port 3 in the header is the whole argument; this line is only its consequence. `offsetsOf`
-  // REQUIRES all three rather than defaulting them, for the same reason
-  // src/worldengine/port/writePackUniforms.js:107 `export function assertDisplayPolicy(ctx) {` requires the display policy: the
-  // default is (0,0,0), (0,0,0) is a legal noise domain, and a body that silently took it renders a
-  // perfectly plausible planet wearing the SAME relief as every other body on the material. That is
-  // the one failure in this family that no still frame and no algebraic gate can see — it needs two
-  // bodies side by side — so the seam refuses rather than substitutes.
-  const off = offsetsOf(ctx);
+  // ⭐ THE WHOLE ARGUMENT MOVED WITH THE CODE and is quoted at
+  // src/worldengine/drivers/giantSurface.js:231 `export function offsetDriverBlock(ctx, packName) {`'s
+  // two doc blocks: why a throw and not a `?? ZERO` default, and why `Array.isArray` is the point of
+  // the shape check. ⛔ It is NOT restated here — a rationale in two places is a rationale that can
+  // be repaired in one, which is how the two halves of a shared block start disagreeing.
+  const { drivers: offsetDrivers, off } = offsetDriverBlock(ctx, 'rockySurfacePack');   // ⛔ THE PACK NAME IS PASSED so a refusal names the front-end seam that failed rather than the shared block both packs call.
 
   const drivers = {
-    // ── The three domain offsets (3) ─────────────────────────────────────────────────────────────
-    // ⛔ UNGATED, AND FORWARDED BYTE-FOR-BYTE. There is no lab toggle over the noise domain, and a
-    // gate here would hand a gated-off body the shared domain — the exact state this closes.
-    // ⛔ `.slice()` FOR THE REASON THE PALETTE TAKES ONE, one seam further out: these arrays come
-    // from the CALLER's ctx, which a front-end is free to build once and reuse across bodies. The
-    // writer hands an array to a settable vector, and the pack's own suite asserts that two bodies
-    // never share the array object.
-    uMacroOffset: off.macro.slice(),
-    uDetailOffset: off.detail.slice(),
-    uCraterOffset: off.crater.slice(),
+    // ── The three domain offsets (3), from the shared block ──────────────────────────────────────
+    // ⛔ SPREAD IN PLACE, at the position the three lines occupied, so `uniformsWritten` order is
+    // unchanged and the diff is a move rather than a re-ordering.
+    ...offsetDrivers,
 
     // ── The impact family (10), from the shared block ────────────────────────────────────────────
     // ⛔ SPREAD IN PLACE, at the position the ten lines occupied, so `uniformsWritten` order is
     // unchanged and the diff is a move rather than a re-ordering.
     ...craterDrivers,
 
-    // ── The ground palette (5) ───────────────────────────────────────────────────────────────────
-    // UNGATED ON PURPOSE, mirroring src/worldengine/drivers/limbDeck.js:143 `// Width and hue: forwarded, ungated, and UNGATED ON PURPOSE. They reproduce the lab, which`:
-    // the lab writes the palette every frame regardless of any feature flag, and there is no palette
-    // toggle to gate on. A colour behind a gate would leave a gated-off body wearing black ground.
-    //
-    // ⛔ `.slice()` ON EVERY COLOUR, AND IT IS NOT DEFENSIVE PROGRAMMING — IT IS THE FIX FOR A KNOWN
-    // FAILURE MODE. The writer hands the array to a settable vector,
-    // src/worldengine/port/writePackUniforms.js:280 `if (target && typeof target.set === 'function') target.set(...v);`
-    // — and handing out a live array is how one body's tint follows another's
-    // (src/worldengine/drivers/giantDeck.js:292 `// condition's array is shared with the record it came from and the writer hands it to a settable`).
-    // ⚠ `applyAlbedoTransfer` happens to return fresh arrays TODAY (it maps every endmember). The
-    // copy is taken anyway, because "no caller aliases my output" is a property of a module in
-    // another directory, not of this one, and the failure it prevents is invisible on a still frame.
-    uWeatheredColor: sp.weathered.slice(),
-    uFreshColor: sp.fresh.slice(),
-    uSedColor: sp.sediment.slice(),
-    // ⭐ `uCratonColor` IS NOT ON LEDGER ROW P-12'S LIST, AND IT CLOSES HERE TOO — say so rather than
-    // let it look like scope creep. Its producer already exists
-    // (src/worldengine/base/surfaceMaterial.js:316 `const craton    = surfaceAlbedoOf(cond, { stable: true });`),
-    // its shader consumer already reads it, and it is written by NOBODY in src/ today — the ancient
-    // stable shield renders at the factory tone on every body in the game.
-    uCratonColor: sp.craton.slice(),
-    uBioGroundColor: sp.pigment.slice(),
-
-    // ── The two surface scalars ──────────────────────────────────────────────────────────────────
-    // Both are modules the game already imports and already writes to its LEGACY material
-    // (src/objects/Planet.js:1657 `uBioGroundCover: { value: bioCover },`), so the swap is what loses
-    // them. Re-derived from the condition here for the same reason the palette is.
-    uBioGroundCover: biosphereOf(condition),
-    uIcenessMix: icenessOf(condition),
+    // ── The ground palette + the two surface scalars (7), from the shared block ──────────────────
+    // ⭐ SEVEN, NOT THE FIVE THIS COMMENT USED TO SAY: the count now includes `uBioGroundCover` and
+    // `uIcenessMix`, which sat in their own stanza below and moved into the block with the colours
+    // because they are the same row (P-12) and the same producer family. ⛔ SPREAD IN PLACE, so
+    // `uniformsWritten` order is unchanged. The ungated-on-purpose rule, the `.slice()` rule and the
+    // `extra: { pigment: BIO_PIGMENT }` argument all moved with the code and are quoted at
+    // src/worldengine/drivers/giantSurface.js:155 `export function surfacePaletteBlock(condition) {`.
+    ...paletteDrivers,
 
     // ── The one global relief term ───────────────────────────────────────────────────────────────
     // ⭐ IT RIDES ONCE. The lab's own note at its write site is that the envelope applies at `uPerturb` and NOWHERE ELSE — applying it again at the crater amplitude squared it, which was a convicted defect. `uCraterAmp` above is therefore the raw crater law's value, unmultiplied, exactly as planet-lod-lab.html:5359 `uniforms.uCraterAmp.value        = state.craterAmp;` records. Do not "fix" the asymmetry between these two lines.
     uPerturb: PERTURB_BASE * relief,
 
     // ── B2 LEG 3: the base field's characteristic wavelength (ledger P-10 / M-09) ────────────────
-    // ⭐ THE SECOND km-SHAPED DRIVER IN THIS PACK, and the second name whose VALUE this file refuses to author: `macroWavelengthKm` states a physical size in km and the writer resolves it at the front-end's display radius, exactly as `uCraterScale` does above. The eight-body calibration table, its two-convention caveat, the Io-anchored process term and every constant behind them live in src/worldengine/base/macroWavelength.js — ⛔ do not re-state any of them here. ⚠ UNGATED ON PURPOSE, AND THE SCOPE IS PINNED ELSEWHERE: tests/driver-pack-rockysurface.test.js:403 `  it('FAMILY 6b · GATE SCOPE: the two gates move those two names and NOTHING else', () => {` holds the gated set at exactly `uCraterDensity` and `uEjectaStrength`. There is no lab toggle over the base field, and a gate here would short-circuit to +0 — src/worldengine/port/writePackUniforms.js:186 `    if (!gates[d.gate]) return 0;` — i.e. hand a gated-off body a frequency of zero, one noise cell across the whole disc, a state neither front-end has ever rendered.
+    // ⭐ THE SECOND km-SHAPED DRIVER IN THIS PACK, and the second name whose VALUE this file refuses to author: `macroWavelengthKm` states a physical size in km and the writer resolves it at the front-end's display radius, exactly as `uCraterScale` does above. The eight-body calibration table, its two-convention caveat, the Io-anchored process term and every constant behind them live in src/worldengine/base/macroWavelength.js — ⛔ do not re-state any of them here. ⚠ UNGATED ON PURPOSE, AND THE SCOPE IS PINNED ELSEWHERE: tests/driver-pack-rockysurface.test.js:416 `  it('FAMILY 6b · GATE SCOPE: the two gates move those two names and NOTHING else', () => {` holds the gated set at exactly `uCraterDensity` and `uEjectaStrength`. There is no lab toggle over the base field, and a gate here would short-circuit to +0 — src/worldengine/port/writePackUniforms.js:186 `    if (!gates[d.gate]) return 0;` — i.e. hand a gated-off body a frequency of zero, one noise cell across the whole disc, a state neither front-end has ever rendered.
     uNoiseScale: sizeKm(macroWavelengthKm(condition), C_MACRO),
   };
 
@@ -392,8 +326,8 @@ export function rockySurfacePack(condition, ctx = {}) {
  * the term that makes it look icy).
  *
  * ⚠ IT MUST RETURN THE BOOLEAN, not a truthy value. Both admission sites compare with `=== true` —
- * src/worldengine/drivers/index.js:248 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`
- * and src/worldengine/drivers/index.js:292 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`
+ * src/worldengine/drivers/index.js:275 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`
+ * and src/worldengine/drivers/index.js:319 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`
  * — so a truthy non-boolean registers, reports as `skipped`, renders nothing, and throws nothing.
  * `!==` already yields a boolean; this is a note against a future rewrite, not a cast.
  *
@@ -406,7 +340,7 @@ export function rockySurfacePack(condition, ctx = {}) {
  * that slice and the two are held apart by NAME rather than by predicate. That is asserted over the
  * population in FAMILY 22 alongside `solidOptics`, which has always had the same shape. For the three
  * that remain complementary, the collision throw at
- * src/worldengine/drivers/index.js:278 `throw new PackContractError(` is inert here. Inert is not the
+ * src/worldengine/drivers/index.js:305 `throw new PackContractError(` is inert here. Inert is not the
  * same as impossible — the pack test asserts the emitted name sets are disjoint by NAME LOOKUP, so
  * the day a predicate widens the overlap is caught by a test rather than by array order.
  */

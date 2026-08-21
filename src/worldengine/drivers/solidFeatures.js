@@ -239,7 +239,7 @@ export function solidFeaturesPack(condition, ctx) {
  * so the day either set grows into the other it reds instead of throwing at a player.
  *
  * ⚠ IT MUST RETURN THE BOOLEAN. Both admission sites compare with `=== true`
- * (src/worldengine/drivers/index.js:248 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`),
+ * (src/worldengine/drivers/index.js:275 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`),
  * so a truthy non-boolean registers, reports as `skipped`, renders nothing and throws nothing.
  */
 export const SOLID_FEATURES_ENTRY = Object.freeze({

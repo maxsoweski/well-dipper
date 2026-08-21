@@ -115,7 +115,7 @@ and `atmosphere` is null on 81/81.
 *Layer 2 — the carrier.* Even with layer 1 fixed, **no pack writes the uniforms.**
 src/worldengine/shaders/uniforms.js:235 `uLavaActivity:   { value: 0.0 },   // emissive-crack glow intensity (driven, D12 tidal)` and
 src/worldengine/shaders/uniforms.js:462 `uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)`
-sit at their factory defaults, and src/worldengine/drivers/rockySurface.js:426 `export const ROCKY_SURFACE_UNIFORMS = Object.freeze([`
+sit at their factory defaults, and src/worldengine/drivers/rockySurface.js:360 `export const ROCKY_SURFACE_UNIFORMS = Object.freeze([`
 declares the pack's whole writer set — **21 names, none of them a lava, cryo, aurora, terminator, limb
 or noise-scale name.** `grep -rn 'uLavaActivity\|uCryoActivity' src/worldengine/drivers/` is empty.
 `docs/FEATURES/r-rows-decision-packet-2026-08-20.md:394` states the population figure: *"309 are

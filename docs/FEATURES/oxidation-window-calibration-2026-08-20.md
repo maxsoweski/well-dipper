@@ -25,7 +25,7 @@ parameterised mirror of `surfaceAlbedoOf` must reproduce the shipped `surfacePal
 
 They are spent at one place, `surfaceAlbedoOf`'s oxidation stage, so **both front-ends move together and
 cannot disagree**: src/generation/PlanetGenerator.js:809 `planetData.landPalette = applyAlbedoTransfer(surfacePaletteOf(condition), {` bakes the
-record's palette, and src/worldengine/drivers/rockySurface.js:254 `const sp = applyAlbedoTransfer(surfacePaletteOf(condition), { extra: { pigment: BIO_PIGMENT } });`
+record's palette, and src/worldengine/drivers/giantSurface.js:156 `const sp = applyAlbedoTransfer(surfacePaletteOf(condition), { extra: { pigment: BIO_PIGMENT } });`
 derives the pack's from the same two functions in the same order. The uniforms they reach are consumed on the **whole disc with no
 gate**: src/worldengine/shaders/planetShaders.glsl.js:565 `vec3 groundCol = uWeatheredColor;` and
 src/worldengine/shaders/planetShaders.glsl.js:578 `groundCol = mix(groundCol, uSedColor,   terrLowFlat * uTerrainAlbedoMix);`.

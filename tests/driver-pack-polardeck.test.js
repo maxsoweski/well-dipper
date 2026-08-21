@@ -607,7 +607,7 @@ describe('GATE 6 · fences and the open registration hole', () => {
     // ⭐ B3 leg 2 APPENDS A SIXTH, `craterDeck` (ledger row P-14's crater half). Its predicate is
     // rockySurface's exact COMPLEMENT, `=== 'gas'`, so every gas body it claims was already claimed by
     // this deck and the swapped population does not move — see tests/driver-pack-craterdeck.test.js.
-    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics', 'craterDeck', 'solidFeatures']);
+    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics', 'craterDeck', 'solidFeatures', 'giantSurface']);
   });
 
   it('⭐ the registered path actually writes the uPolar family onto a real gas body', () => {
@@ -615,9 +615,18 @@ describe('GATE 6 · fences and the open registration hole', () => {
     // shipped composition point; this runs it rather than calling the pack directly.
     const body = POPULATION.find((b) => b.id === PRESENT_EXAMPLE_ID) || POPULATION[0];
     const material = { uniforms: makeUniforms(LAB_WORLD_LIGHT) };
+    // ⭐ THE THREE OFFSETS JOINED THIS CTX ON 2026-08-21 AND THE ADDITION IS THE FENCE WORKING, not
+    // boilerplate. `giantSurface` (ledger P-11's gas half, P-12, P-13) registered over the gas
+    // predicate and REFUSES a ctx with no per-body noise-domain offset — src/worldengine/drivers/giantSurface.js:199 `function offsetOf(ctx, field, packName) {`
+    // — because defaulting one to the zero vector is legal, renders a plausible planet, and gives
+    // every body the same relief. This test composes through the SHIPPED path, so it now has to
+    // supply what the shipped path supplies; the game's own `labPackCtx` has carried all three
+    // unconditionally since Step 9. ⛔ THE VALUES ARE DISTINCT AND NON-ZERO ON PURPOSE — a triple of
+    // zeroes would satisfy the shape check and re-hide P-13 inside this fixture.
     const res = applyDriverPacks(material, body.cond, {
       displayRadiusEarth: gameDisplayRadiusEarth(body.cond.radiusEarth ?? 1),
       macroSeed: 4242, animRate: 1, relevance: {},
+      macroOffset: [11.5, -3.25, 7.75], detailOffset: [-19.0, 4.5, 2.25], craterOffset: [6.125, 13.5, -8.375],
     });
     expect(res.applied).toContain('polarDeck');
     for (const n of POLAR_DRIVEN) {

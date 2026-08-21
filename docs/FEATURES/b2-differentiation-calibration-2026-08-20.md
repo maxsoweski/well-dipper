@@ -322,7 +322,7 @@ source, not assumed:
 - The legacy game program does not have the uniform: `grep -c uCratonColor src/objects/Planet.js
   src/objects/Moon.js` → **0 and 0**. It binds `uFreshColor`, `uWeatheredColor`, `uSedColor` and
   `uBioGroundColor` only.
-- On the lab material the pack does write it — src/worldengine/drivers/rockySurface.js:318 `    uCratonColor: sp.craton.slice(),` — and the shader does read it —
+- On the lab material the pack does write it — src/worldengine/drivers/giantSurface.js:165 `    uCratonColor: sp.craton.slice(),` — and the shader does read it —
   but at exactly one site, src/worldengine/shaders/planetShaders.glsl.js:573 `            vec3 provCol = pw.r * uCratonColor + pw.g * uFreshColor + pw.b * uSedColor;`,
   inside the gate at src/worldengine/shaders/planetShaders.glsl.js:569 `        if (provSum > 0.001) {`.
   `provSum` comes from `sampleProvince` → `uProvinceCube`, declared at

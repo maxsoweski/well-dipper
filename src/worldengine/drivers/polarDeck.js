@@ -33,7 +33,7 @@
 // changed is that a SIBLING now has the producer in scope. Extending pack #1 instead would force
 // that comment to be rewritten from a statement into a history note, and would
 // put two unrelated scope fences in one module. The uniform-collision throw at
-// src/worldengine/drivers/index.js:278 `throw new PackContractError(` guarantees the two packs
+// src/worldengine/drivers/index.js:305 `throw new PackContractError(` guarantees the two packs
 // cannot silently overlap; their emitted name sets are disjoint (`uBand*`/`uJet*` vs `uPolar*`) and
 // the pack test asserts that as a set difference rather than trusting the prefixes.
 //

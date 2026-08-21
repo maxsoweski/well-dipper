@@ -1030,7 +1030,7 @@ const CITE_SOURCES = [
   // the CITE_FILES block ABOVE it — third instance of ledger C14, now promoted to C24), and the one
   // live ref to that line (step6-parity-ledger.md) is repaired to 1010 in this same commit.
   'src/worldengine/drivers/limbDeck.js',  'src/worldengine/drivers/craterDeck.js', 'src/worldengine/drivers/solidOptics.js', 'src/worldengine/drivers/solidFeatures.js', 'src/worldengine/base/auroraOptics.js', 'src/worldengine/base/terminatorOptics.js',   // ⛔ B3's five, 2026-08-21 — APPENDED TO THIS LINE, NEVER BELOW IT, for the reason given at :982: a new line here moves every entry under it and this array is itself cited. These were TRACKED but UNREGISTERED, so 27 refs that a commit message described as having "moved into craterDeck.js" had in fact LEFT THE SCANNED SET: CHECKED fell 708 -> 700 across five commits that each printed exit 0. That is the failure this mode's own header names — BROKEN == 0 cannot tell "every ref resolves" from "no ref was read". Registering them raises CHECKED and turns their refs FATAL, which is the point.
-  'src/worldengine/drivers/polarDeck.js',
+  'src/worldengine/drivers/polarDeck.js', 'src/worldengine/drivers/giantSurface.js', // ⛔ APPENDED TO THIS LINE, NEVER INSERTED BELOW IT — this array is itself cited and a new line moves every entry under it. giantSurface.js joins the scanned set in the SAME commit that creates it, which is the §11.3.4 rule and the fix for the B3 defect where five tracked-but-unregistered modules let CHECKED fall 708 -> 700 across five commits that each printed exit 0.
   'tests/driver-pack-limbdeck.test.js',
   'tests/driver-pack-polardeck.test.js',
   'docs/FEATURES/step6-parity-ledger.md',
