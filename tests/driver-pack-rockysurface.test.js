@@ -1301,7 +1301,14 @@ describe('F — the entry is registry-ready and collision-free', () => {
     const entry = PACKS.find((e) => e.name === 'rockySurface');
     expect(entry).toBe(ROCKY_SURFACE_ENTRY);
     expect(entry.pack).toBe(rockySurfacePack);
-    expect(names.indexOf('rockySurface')).toBe(names.length - 1);   // APPENDED, never prepended
+    // ⭐ APPENDED, NEVER PREPENDED — re-expressed at B3 leg 1 as the property rather than as the
+    // position. This read `names.length - 1` while rockySurface was the last entry; `solidOptics`
+    // is now appended after it, and pinning "last" would have forced every future append to be
+    // wedged in front of this one to keep a test green — the exact pressure the ⛔ in
+    // src/worldengine/drivers/index.js warns about, since a prepend re-points positional reads at
+    // the WRONG pack. What has to hold is that it sits AFTER the three gas entries.
+    expect(names.indexOf('rockySurface')).toBeGreaterThan(names.indexOf('polarDeck'));
+    expect(names.indexOf('rockySurface')).toBeGreaterThan(0);
     // …and the predicate that composes is the complement one, not `=== 'rocky'`: the ≥95%-of-moons
     // bar Step 10 has to clear is decided on this line and nowhere else.
     expect(entry.gates).toEqual(['craters', 'ejecta']);
@@ -1336,6 +1343,30 @@ describe('F — the entry is registry-ready and collision-free', () => {
         expect(mineApplies && e.applies(b.cond) === true, `${b.id} / ${name}`).toBe(false);
       }
     }
+
+    // ⛔⛔ AND NOW ONE PACK THAT IS *NOT* DISJOINT BY PREDICATE — `solidOptics`, appended at B3 leg 1
+    // with a predicate character-identical to this one. For every other registered pack the
+    // collision throw is inert because the predicates never co-apply; for this one the predicates
+    // ALWAYS co-apply, so name-disjointness is the only thing holding the throw off. That makes it
+    // the assertion this family exists for rather than a footnote, and it is checked over the whole
+    // population rather than on one sampled body.
+    const so = PACKS.find((x) => x.name === 'solidOptics');
+    expect(so, 'solidOptics must be registered to compare against').toBeTruthy();
+    const soNames = new Set(Object.keys(
+      so.pack(SOLID[0].cond, { ...labPackCtx(SOLID[0].d, SOLID[0].cond), gates: gatesFor(so) }).drivers,
+    ));
+    expect(soNames.size).toBeGreaterThan(2);
+    expect([...mine].filter((n) => soNames.has(n)), 'solidOptics collides with rockySurface').toEqual([]);
+    let coApplied = 0;
+    for (const b of PLANETS) {
+      const mineApplies = ROCKY_SURFACE_ENTRY.applies(b.cond) === true;
+      expect(so.applies(b.cond) === true, `${b.id}: the two non-gas predicates must agree exactly`)
+        .toBe(mineApplies);
+      if (mineApplies) coApplied++;
+    }
+    // Non-vacuous: they really do co-apply on a real slice of the corpus, so "disjoint by name" is
+    // load-bearing rather than a claim about the empty set.
+    expect(coApplied).toBeGreaterThan(20);
   });
 
   it('FAMILY 23 · every uniform it names EXISTS on the lab material, and a typo THROWS', () => {

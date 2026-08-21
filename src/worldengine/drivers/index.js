@@ -54,6 +54,7 @@ import { giantDeckPack } from './giantDeck.js';
 import { LIMB_DECK_ENTRY } from './limbDeck.js';
 import { POLAR_DECK_ENTRY } from './polarDeck.js';
 import { ROCKY_SURFACE_ENTRY } from './rockySurface.js';
+import { SOLID_OPTICS_ENTRY } from './solidOptics.js';
 import {
   writePackUniforms, assertDisplayPolicy, assertPackResult, PackContractError,
 } from '../port/writePackUniforms.js';
@@ -165,6 +166,26 @@ export const PACKS = Object.freeze([
   // zero gas — so `=== 'rocky'` claims 64.4% of them, under the ≥95% bar Step 10's moon branch has
   // to clear, and the shortfall would surface as an unreachable gate with nothing pointing here.
   ROCKY_SURFACE_ENTRY,
+  // ── BLOCK B3 leg 1. THE FIFTH ENTRY. Ledger rows P-11 (limb + terminator) and P-05 (aurora).
+  //
+  // ⭐ ITS PREDICATE IS CHARACTER-IDENTICAL TO ROCKY_SURFACE_ENTRY'S, `!== 'gas'`, AND THAT IS THE
+  // WHOLE OF ITS POPULATION ARGUMENT. `selectPacks` already returns a non-empty list for every body
+  // this claims — rockySurface claims the same set — so the `packs.length > 0` term of
+  // src/objects/Planet.js:2194 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
+  // cannot flip for any record. ⛔ Unlike Step 10a's entry directly above, THIS ONE MOVES NO BODY
+  // between materials and re-pins no census. That is asserted over lab-procedural-0…199 in
+  // tests/driver-pack-solidoptics.test.js by comparing the swapped SET before and after
+  // registration, not by comparing two `applies` lines by eye.
+  //
+  // ⛔ IT CO-APPLIES WITH rockySurface ON EVERY BODY IT CLAIMS, so the collision throw below is the
+  // live guard rather than an inert one, and the two emitted name sets have to stay disjoint. They
+  // are: rockySurface writes the crater/ejecta/palette families, this writes the air-optics ones.
+  // Asserted by NAME LOOKUP in both suites.
+  //
+  // ⚠ WHAT IT DOES NOT CLOSE. `uLimbStrength` is not in P-11's subject list and is not written here,
+  // so the limb pair it forwards is inert on pixels behind that uniform's 0.0 default. Named in the
+  // pack header; it is a UAT decision about ~1000 solid bodies, not a wiring one.
+  SOLID_OPTICS_ENTRY,
 ]);
 
 /** The entries whose predicate claims this condition, in array order. */

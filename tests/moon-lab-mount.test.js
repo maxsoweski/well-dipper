@@ -91,7 +91,13 @@ describe('the mount', () => {
     // material but carried no back-link would be an uncaptionable body in every shot.
     const wd = br.mesh.userData.wd;
     expect(wd.lab.isLabPipeline).toBe(true);
-    expect(wd.lab.packsApplied).toEqual(['rockySurface']);
+    // ⭐ `solidOptics` JOINS ON A PLAIN MOON AT B3 LEG 1 — its predicate is `!== 'gas'`, the same
+    // one that put `rockySurface` here, so a moon is claimed by both or by neither. ⚠ Its two
+    // MAGNITUDES land on zero for a plain moon (no atmosphere ⇒ columnFraction 0 and
+    // labCore's `hasAtmo` 0), so what actually reaches the moon is the limb width/hue, the
+    // terminator hue/width and four aurora values behind a zero intensity. Recorded because a
+    // pack in the list is not the same as a feature on the pixel.
+    expect(wd.lab.packsApplied).toEqual(['rockySurface', 'solidOptics']);
     expect(wd.lab.flag.source).toBe('override');
     expect(wd.planetData).toBe(d);
     // ⛔ NOT `toBeTruthy()`, and the gap that phrasing left is a whole class of defect. A condition
@@ -346,7 +352,9 @@ describe('per-class distinctness', () => {
         .toBeGreaterThan(10);
     }
     expect(packsOf.gasGiant).not.toBe(packsOf.rockyPlanet);
-    expect(packsOf.plainMoon).toBe('rockySurface');
+    // ⭐ `solidOptics` joins the plain-moon list at B3 leg 1 (same `!== 'gas'` predicate as
+    // rockySurface). Its magnitudes are 0 on an airless moon; see the note in moon-lab-mount.
+    expect(packsOf.plainMoon).toBe('rockySurface+solidOptics');
     // ⛔ THE COMPARISON IS OVER PACK-WRITTEN UNIFORMS, NOT OVER THE WHOLE RESOLVED SET, and the
     // difference is the whole gate. `uBodyRadius` comes from `buildLabPlanetMaterial`, not from a
     // driver, and `uMacroOffset`/`uDetailOffset`/`uCraterOffset` are seed vectors `rockySurface`

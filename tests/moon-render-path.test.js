@@ -343,7 +343,13 @@ describe('2. the back-link', () => {
     expect(moonWd.lab.flag.enabled).toBe(true);
     expect(moonWd.lab.flag.source).toBe('override');       // the flag AND where it came from
     expect(moonWd.lab.flag.default).toBe(false);
-    expect(moonWd.lab.packsApplied).toEqual(['rockySurface']);
+    // ⭐ `solidOptics` JOINS ON A PLAIN MOON AT B3 LEG 1 — its predicate is `!== 'gas'`, the same
+    // one that put `rockySurface` here, so a moon is claimed by both or by neither. ⚠ Its two
+    // MAGNITUDES land on zero for a plain moon (no atmosphere ⇒ columnFraction 0 and
+    // labCore's `hasAtmo` 0), so what actually reaches the moon is the limb width/hue, the
+    // terminator hue/width and four aurora values behind a zero intensity. Recorded because a
+    // pack in the list is not the same as a feature on the pixel.
+    expect(moonWd.lab.packsApplied).toEqual(['rockySurface', 'solidOptics']);
     expect(moonWd.lab.packsSkipped.length).toBeGreaterThan(0);
     // `uniformsWritten` is the NAME LIST, not a count — a caption that printed a bare integer
     // could not tell 'the pack wrote 21 uniforms' from 'the pack wrote uCraterDensity 21 times'.
@@ -516,7 +522,9 @@ describe('6. per-class distinctness', () => {
       expect(written[n].length, `${n} wrote no uniforms — the bar below would be vacuous`)
         .toBeGreaterThan(10);
     }
-    expect(packs.plainMoon).toBe('rockySurface');
+    // ⭐ `solidOptics` joins the plain-moon list at B3 leg 1 (same `!== 'gas'` predicate as
+    // rockySurface). Its magnitudes are 0 on an airless moon; see the note in moon-lab-mount.
+    expect(packs.plainMoon).toBe('rockySurface+solidOptics');
     expect(packs.gasGiant).not.toBe(packs.rockyPlanet);
 
     // ⛔ THE COMPARISON IS SCOPED TO PACK-WRITTEN UNIFORMS, AND THAT SCOPING IS THE GATE. Four

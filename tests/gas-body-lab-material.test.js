@@ -32,7 +32,7 @@ import {
   LAB_GAS_BODIES_DEFAULT, LAB_GAS_BODIES_KEY, SOL_SYSTEM_SEED,
   GAME_ANIM_RATE, GAME_RELEVANCE,
 } from '../src/objects/Planet.js';
-import { PACKS, applyDriverPacks, selectPacks, gatesFor, GATE_POLICY_ALL_ON } from '../src/worldengine/drivers/index.js'; import { ROCKY_SURFACE_UNIFORMS } from '../src/worldengine/drivers/rockySurface.js'; // ⛔ RIDES THIS PHYSICAL ROW: this file is cited BY LINE from four files outside CITE_SOURCES, so a new import line rots refs the fence cannot see.
+import { PACKS, applyDriverPacks, selectPacks, gatesFor, GATE_POLICY_ALL_ON } from '../src/worldengine/drivers/index.js'; import { ROCKY_SURFACE_UNIFORMS } from '../src/worldengine/drivers/rockySurface.js'; import { SOLID_OPTICS_UNIFORMS } from '../src/worldengine/drivers/solidOptics.js'; // ⛔ RIDES THIS PHYSICAL ROW: this file is cited BY LINE from four files outside CITE_SOURCES, so a new import line rots refs the fence cannot see.
 import { buildLabPlanetMaterial, isLabPlanetMaterial } from '../src/rendering/LabPlanetMaterial.js';
 import { BodyRenderer } from '../src/rendering/objects/BodyRenderer.js';
 import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
@@ -110,7 +110,9 @@ describe('6a — PACKS is an array with pinned MEMBERSHIP, not a pinned length',
   // program owns. A `expect(PACKS.length).toBe(1)` would therefore pass a commit that swapped the
   // gas deck for something else entirely.
   it('the membership is exactly the names Step 6 ships', () => {
-    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface']);
+    // ⭐ B3 leg 1 APPENDS A FIFTH, `solidOptics`. Re-pinned here BY MEMBERSHIP for the declared
+    // reason this block exists: a length pin would have passed a swap of one pack for another.
+    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics']);
   });
 
   it('every entry carries the four contract fields, and the array is frozen', () => {
@@ -237,12 +239,14 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
   it('a gas body: the deck runs, the master gates are 1.0, the bake is real', () => {
     const { material, res, count } = runOn(gas());
     expect(res.applied).toEqual(['giantDeck', 'limbDeck', 'polarDeck']);
-    expect(res.skipped).toEqual(['rockySurface']);
+    // ⭐ `solidOptics` joins the SKIPPED list here and nowhere else on a gas body: its predicate is
+    // the complement of gas, so a gas body must never see it. That is the whole of its scope claim.
+    expect(res.skipped).toEqual(['rockySurface', 'solidOptics']);
     expect(material.uniforms.uBandStrength.value).toBe(1.0);
     expect(material.uniforms.uJetStrength.value).toBe(1.0);
     // ⭐ MEASURED, NOT ASSUMED — `rockySurface` declares `craters` and `ejecta`, and NEITHER KEY IS
     // HERE. `applyDriverPacks` merges an entry's gate map only after the applicability `continue`
-    // (src/worldengine/drivers/index.js:219 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`),
+    // (src/worldengine/drivers/index.js:240 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`),
     // so a skipped pack contributes nothing to `res.gates`. That matters beyond bookkeeping:
     // `res.gates` is what an Instrument E caption prints as "what was decided on this body", and a
     // gate name from a pack that never ran would read as a rendering decision nobody made.
@@ -291,10 +295,16 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     const before = snapshot();
     const b = GEN_SOLID[0];
     const res = applyDriverPacks(built.material, b.cond, labPackCtx(b.d, b.cond, undefined));
-    expect(res.applied).toEqual(['rockySurface']);
+    // ⭐ TWO PACKS APPLY ON A SOLID BODY SINCE B3 LEG 1, AND THAT IS THE INTERESTING CASE. This
+    // used to read "EXACTLY the rocky pack applies", which was true only while rockySurface was the
+    // sole non-gas entry. `solidOptics` carries the identical predicate, so every body rockySurface
+    // claims it also claims — and the collision guard in applyDriverPacks is therefore LIVE here
+    // rather than inert. That it does not throw is the assertion; the two emitted name sets are
+    // disjoint, which both pack suites check by name lookup.
+    expect(res.applied).toEqual(['rockySurface', 'solidOptics']);
     expect(res.skipped).toEqual(['giantDeck', 'limbDeck', 'polarDeck']);
-    // The gate map is the applied pack's names ONLY — the three skipped decks contribute none.
-    expect(res.gates).toEqual({ craters: true, ejecta: true });
+    // The gate map is the applied packs' names ONLY — the three skipped decks contribute none.
+    expect(res.gates).toEqual({ craters: true, ejecta: true, terminator: true, aurora: true });
     // ⛔ NO ATTRIBUTE IS BAKED ON A SOLID BODY. `aBand`/`aMush`/`aShear` are the gas deck's, and the
     // ctx here carries no geometry at all; a pack that baked one anyway would be reaching for
     // vertex data it was not given.
@@ -306,14 +316,19 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     const wrote = new Set(res.uniformsWritten);
     // ⛔ THE CONTRACT SET, NOT THE WRITE LOG, AND THE DIFFERENCE IS THE WHOLE GATE. An earlier form of
     // this assertion compared `moved` against `new Set(res.uniformsWritten)` — but
-    // src/worldengine/drivers/index.js:246 `for (const name of Object.keys(result.drivers)) uniformsWritten.push(name);`
+    // src/worldengine/drivers/index.js:267 `for (const name of Object.keys(result.drivers)) uniformsWritten.push(name);`
     // pushes every name the writer just moved, so `moved \ uniformsWritten` is empty BY CONSTRUCTION
     // for any driver map at all. EXECUTED: wrapping the pack to emit two extra drivers (`uOctaves: 11`,
     // `uLavaCoverage: 0.9`) really restyles this body — and the write-log form stayed green, as did
     // `moved.length > 8` and the seven named gas uniforms below. Against ROCKY_SURFACE_UNIFORMS both
     // extras are caught. ⚠ With N packs the write log is the UNION of what all of them wrote, so the
     // write-log form gets WEAKER as the registry grows; the contract form does not.
-    const DECLARED = new Set(ROCKY_SURFACE_UNIFORMS);
+    // ⭐ THE UNION OF BOTH APPLIED PACKS' CONTRACT SETS SINCE B3 LEG 1 — and it is still the CONTRACT
+    // form, not the write log. The paragraph above says the write-log form gets weaker as the
+    // registry grows and the contract form does not; that is only true if the contract set tracks
+    // the packs that actually applied, which is what this union does. Two packs run on this body,
+    // so a uniform outside EITHER published family is still caught.
+    const DECLARED = new Set([...ROCKY_SURFACE_UNIFORMS, ...SOLID_OPTICS_UNIFORMS]);
     expect(moved.filter((n) => !DECLARED.has(n))).toEqual([]);
     // …and the pack may not name a uniform outside its own published family in the first place, so a
     // driver that is emitted CONDITIONALLY (only on an icy condition, say) reds on the WRITE rather
@@ -330,14 +345,28 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     }
 
     // ── AND THE GAS DECKS ARE UNTOUCHED, BY NAME ───────────────────────────────────────────────
-    // The four master gates and the two limb terms are what a mis-registered array would move
+    // The four master gates and the gas band/jet terms are what a mis-registered array would move
     // first: they are the names whose non-zero value IS "this body renders as a gas giant".
+    //
+    // ⭐ `uLimbExponent` LEFT THIS LIST AT B3 LEG 1 AND `uLimbStrength` DID NOT, and the split is the
+    // point rather than an exemption. `solidOptics` forwards the limb WIDTH and HUE to a solid body
+    // — that is ledger row P-11 — but it does not claim the rim's MASTER GATE, which stays at its
+    // 0.0 factory default. So a solid body carrying a limb exponent is now correct, and a solid body
+    // carrying a non-zero `uLimbStrength` is still the mis-registration this loop is watching for.
+    // The positive half of that claim is asserted immediately below, so the removal cannot pass by
+    // simply deleting a name.
     for (const n of ['uBandStrength', 'uJetStrength', 'uLimbStrength', 'uPolarStrength',
-                     'uLimbExponent', 'uBandM', 'uJetSpeed']) {
-      expect(wrote.has(n), `${n} must not be in the rocky pack's write set`).toBe(false);
-      expect(DECLARED.has(n), `${n} must not be in ROCKY_SURFACE_UNIFORMS either`).toBe(false);
+                     'uBandM', 'uJetSpeed']) {
+      expect(wrote.has(n), `${n} must not be in the applied packs' write set`).toBe(false);
+      expect(DECLARED.has(n), `${n} is in neither applied pack's declared family`).toBe(false);
       expect(after[n], `${n} moved on a solid body`).toEqual(before[n]);
     }
+    // ⭐ THE POSITIVE HALF, so removing `uLimbExponent` from the loop above cannot be how this
+    // passes. B3 leg 1's claim is precisely: the WIDTH and HUE reach a solid body, the master GATE
+    // does not — and the gate's factory default is what leaves the rim unlit.
+    expect(wrote.has('uLimbExponent'), 'solidOptics forwards the limb width to a solid body').toBe(true);
+    expect(wrote.has('uLimbColor'), 'solidOptics forwards the limb hue to a solid body').toBe(true);
+    expect(built.material.uniforms.uLimbStrength.value, 'the rim master gate stays at its 0.0 default').toBe(0);
   });
 
   it('refuses a material with no uniforms, and refuses a caller-supplied gates map', () => {
@@ -666,9 +695,9 @@ describe('6e — the flag is OFF by default and it selects a DIFFERENT material'
     const b = GEN_SOLID[0];
     const { material, lab } = planetAt(b.d, true);
     expect(isLabPlanetMaterial(material)).toBe(true);
-    expect(lab.packsApplied).toEqual(['rockySurface']);
-    expect(lab.gates).toEqual({ craters: true, ejecta: true });
-    expect(labPipelineAdmits(b.d, b.cond).packs).toEqual(['rockySurface']);
+    expect(lab.packsApplied).toEqual(['rockySurface', 'solidOptics']);
+    expect(lab.gates).toEqual({ craters: true, ejecta: true, terminator: true, aurora: true });
+    expect(labPipelineAdmits(b.d, b.cond).packs).toEqual(['rockySurface', 'solidOptics']);
     // …and with the flag OFF it is still the legacy material. Registration widened WHICH bodies the
     // pipeline claims; it did not touch the flag that decides whether the pipeline runs at all.
     expect(isLabPlanetMaterial(planetAt(b.d, false).material)).toBe(false);
@@ -678,7 +707,7 @@ describe('6e — the flag is OFF by default and it selects a DIFFERENT material'
     expect(solSolid.length).toBeGreaterThan(4);
     for (const x of solSolid) {
       const adm = labPipelineAdmits(x.d, conditionFromBody(x.d));
-      expect(adm.packs, `${x.id} must be CLAIMED, or this control proves nothing`).toEqual(['rockySurface']);
+      expect(adm.packs, `${x.id} must be CLAIMED, or this control proves nothing`).toEqual(['rockySurface', 'solidOptics']);
       expect(adm.admitted, `${x.id} must be refused by provenance`).toBe(false);
       expect(isLabPlanetMaterial(planetAt(x.d, true).material), x.id).toBe(false);
     }
@@ -697,11 +726,14 @@ describe('6e — the flag is OFF by default and it selects a DIFFERENT material'
     // Non-vacuous in the direction that matters: some gas bodies really are refused, so
     // "admitted === stamped" is an equality between two different numbers, not 59 === 59 twice.
     expect(admitted(GEN_GAS).length).toBeLessThan(GEN_GAS.length);
-    // …and every claimed body is claimed by ONE side of the disjoint predicate pair, never both.
+    // …and every claimed body is claimed by ONE SIDE of the disjoint predicate pair, never both.
+    // ⭐ "One side" is still exact; what changed at B3 leg 1 is that the non-gas side now holds TWO
+    // entries rather than one. The property this assertion exists for — no body is claimed by a gas
+    // pack AND a non-gas pack — is unaffected, and the two lists below are still disjoint.
     for (const b of [...GEN_GAS, ...GEN_SOLID]) {
       const packs = labPipelineAdmits(b.d, b.cond).packs;
       expect(packs, b.id).toEqual(compositionClass(b.cond) === 'gas'
-        ? ['giantDeck', 'limbDeck', 'polarDeck'] : ['rockySurface']);
+        ? ['giantDeck', 'limbDeck', 'polarDeck'] : ['rockySurface', 'solidOptics']);
     }
   });
 

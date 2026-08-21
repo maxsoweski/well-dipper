@@ -591,7 +591,10 @@ describe('GATE 6 · fences and the open registration hole', () => {
     // `compositionClass === 'gas'`). Pinned as the full ORDERED list rather than trimmed to a
     // `toContain`, because this line's job is the append order, and a `toContain` would pass a
     // prepend — which is the one thing the comment above says must red.
-    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface']);
+    // ⭐ B3 leg 1 APPENDS A FIFTH, `solidOptics` (ledger rows P-11 + P-05). Its predicate is
+    // rockySurface's, character for character, so it claims no body rockySurface did not already
+    // claim and the swapped population does not move — see tests/driver-pack-solidoptics.test.js.
+    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics']);
   });
 
   it('⭐ the registered path actually writes the uPolar family onto a real gas body', () => {

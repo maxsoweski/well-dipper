@@ -467,7 +467,7 @@ export function rockySurfacePack(condition, ctx = {}) {
  * ⭐ EXPORTED AS A FROZEN ENTRY rather than assembled at the registry, so composing it is one import
  * plus one array element and the predicate cannot be retyped differently from the one this pack's
  * own test gates. Registration is STEP 10's commit, not Step 9's: appended AFTER
- * src/worldengine/drivers/index.js:140 `POLAR_DECK_ENTRY,`.
+ * src/worldengine/drivers/index.js:141 `POLAR_DECK_ENTRY,`.
  *
  * ⛔⛔ THE PREDICATE IS `compositionClass(condition) !== 'gas'` AND IT MUST NOT BE `=== 'rocky'`,
  * even though this pack is named for rock and every uniform in it is a rocky-surface uniform. It is
@@ -486,16 +486,16 @@ export function rockySurfacePack(condition, ctx = {}) {
  * the term that makes it look icy).
  *
  * ⚠ IT MUST RETURN THE BOOLEAN, not a truthy value. Both admission sites compare with `=== true` —
- * src/worldengine/drivers/index.js:175 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`
- * and src/worldengine/drivers/index.js:219 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`
+ * src/worldengine/drivers/index.js:196 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`
+ * and src/worldengine/drivers/index.js:240 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`
  * — so a truthy non-boolean registers, reports as `skipped`, renders nothing, and throws nothing.
  * `!==` already yields a boolean; this is a note against a future rewrite, not a cast.
  *
  * ⚠ DISJOINTNESS FROM THE THREE SHIPPED PACKS IS BY CONSTRUCTION AND IS STILL ASSERTED. All three
  * are `compositionClass(condition) === 'gas'` character-for-character
- * (src/worldengine/drivers/index.js:100 `applies: (condition) => compositionClass(condition) === 'gas',`),
+ * (src/worldengine/drivers/index.js:101 `applies: (condition) => compositionClass(condition) === 'gas',`),
  * so this predicate is their exact complement and the collision throw at
- * src/worldengine/drivers/index.js:230 `throw new PackContractError(` is inert here. Inert is not the
+ * src/worldengine/drivers/index.js:251 `throw new PackContractError(` is inert here. Inert is not the
  * same as impossible — the pack test asserts the emitted name sets are disjoint by NAME LOOKUP, so
  * the day a predicate widens the overlap is caught by a test rather than by array order.
  */

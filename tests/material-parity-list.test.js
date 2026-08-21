@@ -413,7 +413,13 @@ describe('2. the collapse in per-body variation', () => {
     // ⭐⭐ 48 -> 49 AT B2 LEG 3, 2026-08-20, AND THE ONE NEW NAME IS THAT LEG'S ENTIRE CLAIM. `uNoiseScale` was the last frequency in the engine with no physical size behind it — the factory 4.0 on BOTH sides, written by NEITHER. rockySurface now emits it km-shaped, and it lands here rather than in the `written`-minus-`labVarying` residue below because it VARIES per body: the base wavelength law is a constant (radius cancels under the game display policy), so all of the variation is the Io-anchored tidal process term at src/worldengine/base/macroWavelength.js:126 `export function macroShortening(rawIoRatio) {`. ⚠ MEASURED on `lab-procedural-0…199`'s 1160 non-gas bodies, WITH THE PRECISION CONVENTION ON EVERY FIGURE because a raw float64 count splits one physical value across ULP-adjacent doubles: 985 distinct at raw float64, 844 at 9 significant figures, 780 at float32 — the precision a uniform reaches the shader at — across 83 distinct 5 % bins, where the LAB factory default was exactly 1 of each. ⛔ THAT `1` IS THE LAB'S 4.0, NOT WHAT RENDERS: the mounted legacy material writes the generator's own draw and MEASURED that is 1160 distinct over the same 1160 bodies at all three precisions, so the swap TRADES DISTINCTNESS FOR MEANING rather than adding it, and at src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;` it reaches 0 pixels today. ⛔ IF THE PROCESS TERM WERE EVER REMOVED this name would leave this list and the residue assertion below would red — which is the control that says the differentiation is real and not a re-labelled constant.
     // ⭐ 16 -> 48 AT STEP 10a, AND THE 32 NEW NAMES ARE THE WHOLE POINT OF THE STEP: the 21-name rockySurface family (crater, ejecta, palette, offsets, `uPerturb`) now varies per body, and the
     // three MASTER GATES `uBandStrength`/`uJetStrength`/`uLimbStrength` joined it too — not because a deck changed, but because they hold their gate value on the 103 gas bodies and the factory default on the 163 solid ones, so across the merged population they differ.
+    // ⭐ B3 LEG 1 ADDS FOUR AND ONLY FOUR: the aurora family. Nothing else on this list moved, and
+    // that is the check — `solidOptics` also writes `uTermStrength`/`uTermWidth`/`uTermColor`, which
+    // were ALREADY varying (the gas half held the factory default, the solid half the game's value),
+    // and `uLimbExponent`/`uLimbColor`, already varying from limbDeck. So the four newcomers are
+    // exactly the names that had NO writer at all on either side before this pack.
     expect(LEDGER.labVarying).toEqual([
+      'uAuroraColor', 'uAuroraIntensity', 'uAuroraRingLat', 'uAuroraRingWidth',
       'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM', 'uBandPhaseJet', 'uBandRough',
       'uBandS2', 'uBandSEq', 'uBandStrength', 'uBandTint', 'uBandWarp',
       'uBioGroundColor', 'uBioGroundCover',
@@ -433,13 +439,14 @@ describe('2. the collapse in per-body variation', () => {
       'uPolarMode', 'uPolarPhase', 'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
       'uPolarStrength', 'uPolarTint',
       'uSedColor',
+      'uTermColor', 'uTermStrength', 'uTermWidth',
       'uThermalDir',
       'uWeatheredColor',
     ]);
-    // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 46 of the 48 uniforms the four packs
-    // write vary per body (45 of 47 before B2 leg 3 added `uNoiseScale`, which varies, so the
-    // residue below is UNCHANGED — a new write that did not vary would have grown it, and that is
-    // exactly the difference between wiring a law and wiring a constant).
+    // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 53 of the 55 uniforms the five packs
+    // write vary per body (46 of 48 before B3 leg 1 added `solidOptics`' seven new names, all seven
+    // of which vary, so the residue below is UNCHANGED — a new write that did not vary would have
+    // grown it, and that is exactly the difference between wiring a law and wiring a constant).
     // The two that do not are `uEjectaLump` and `uTerraceCount` — rockySurface
     // forwards both from `craterUniformsFrom`, and on this corpus every body that fires a crater
     // schedule lands on the same lump and terrace count. ⚠ The three master gates are NO LONGER on
@@ -448,7 +455,7 @@ describe('2. the collapse in per-body variation', () => {
       .toEqual(['uEjectaLump', 'uTerraceCount']);
   });
 
-  it('the four packs write 48 uniforms between them, and the ledger’s `carried` rulings rest on them', () => {
+  it('the five packs write 55 uniforms between them, and the ledger’s `carried` rulings rest on them', () => {
     // If the pack stops writing the band deck, G-01/G-04/G-07's "carried" ruling is false. Pinned as
     // a SET OF NAMES, not a length — Step 4 measured that a count-preserving permutation is
     // byte-identical to every instrument this program owns.
@@ -456,7 +463,12 @@ describe('2. the collapse in per-body variation', () => {
     // `ledgerPass`: as a first-body sample this pin read 26 gas names by accident of generation
     // order, and Step 10a's solid-first population re-pointed it at rockySurface's 21 without any
     // deck changing. The two write-sets are disjoint, so the union is exactly 26 + 22 (21 until B2 leg 3 added `uNoiseScale` to the rockySurface half; the disjointness is what makes the union a sum, and it holds because giantDeck's predicate is `=== 'gas'` and rockySurface's is its exact complement).
+    // ⭐ 48 -> 55 AT B3 LEG 1. `solidOptics` declares nine names; two of them (`uLimbColor`,
+    // `uLimbExponent`) limbDeck already wrote on the gas half, so the UNION grows by the seven that
+    // nothing wrote anywhere: the aurora four and the terminator three.
     expect(LEDGER.written).toEqual([
+      // ── solidOptics (P-05), live from the B3 leg 1 registration ──
+      'uAuroraColor', 'uAuroraIntensity', 'uAuroraRingLat', 'uAuroraRingWidth',
       'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM', 'uBandPhaseJet', 'uBandRough',
       'uBandS2', 'uBandSEq', 'uBandStrength', 'uBandTint', 'uBandWarp',
       // ── rockySurface (P-12 + P-14 + P-13), live from the Step 10a registration ──
@@ -472,7 +484,10 @@ describe('2. the collapse in per-body variation', () => {
       // ── polarDeck (C19), live from the registration commit ──
       'uPolarMode', 'uPolarPhase', 'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
       'uPolarStrength', 'uPolarTint',
-      'uSedColor', 'uTerraceCount', 'uWeatheredColor',
+      'uSedColor',
+      // ── solidOptics (P-11's terminator triple), live from the B3 leg 1 registration ──
+      'uTermColor', 'uTermStrength', 'uTermWidth',
+      'uTerraceCount', 'uWeatheredColor',
     ]);
     // P-18's three `carried` names must actually VARY on the post-swap material, or "carried" is a
     // claim about a constant.
@@ -493,10 +508,19 @@ describe('2. the collapse in per-body variation', () => {
     // the 103 gas ones. This is a REAL per-body loss on the newly-admitted half, not an instrument
     // artefact, and P-11 claims it again in the ledger for exactly that reason. ⛔ Do not "fix" it by
     // scoping this pass to the gas half — that would suppress the loss rather than record it.
-    expect(LEDGER.divergedCarried.size).toBe(24);   // ⭐⭐ 20 -> 24 AT B2 LEG 1, 2026-08-20, AND THE FOUR NEWCOMERS ARE THE ONES P-14 PREDICTED: `uCraterDensity` (64 of 266 bodies), `uEjectaStrength` (64), `uCraterRelaxation` (56), `uEjectaRampart` (42). They used to sit in the "agree by absence" list below — both sides zero — and P-14 wrote down in advance what would happen: "a loud default behind a shut gate … it becomes a pixel the moment anything opens that gate." Leg 1 opened it: re-deriving CRATER_VIS_FLOOR_RAD 0.02 -> 9.6e-4 and replacing the fixed density floor with the per-body CRATER_MIN_VISIBLE gave 289 of 526 bodies a live crater record where 8 had one. ⚠ AND THE DIRECTION IS THE BAD ONE, MEASURED NOT ASSUMED: on every diverging body the GAME writes the live value and the LAB writes 0 (`rocky: uCraterDensity 0.0008051676964833844 -> 0`; `sub-neptune: uEjectaStrength 1 -> 0`). The cause is a GATE difference the leg neither created nor closes — rockySurface multiplies the crater terms by `craterRelevanceOf(condition)` and its pack predicate excludes gas-class bodies, while the legacy material's crater path is keyed on the TYPE LABEL — so the four names JOIN the blocking P-14 row rather than being re-blessed into agreement.
+    // ⭐⭐ 24 -> 23 AT B3 LEG 1, AND THE ONE THAT LEFT IS THE ONE P-11'S ROW NAMES BY NUMBER.
+    // `uLimbExponent` is gone from the diverged bucket entirely — not moved to a smaller count,
+    // REMOVED: `solidOptics` forwards the game's own `optics.limbExponent` to the 163 solid bodies
+    // limbDeck's gas-only predicate never claimed, so the row's "59 of those 163" is 0 and the name
+    // drops out of `measured()` below. ⚠ `uLimbColor` and `uTermColor` did NOT leave with it and
+    // that is not a half-done wire: both are written now and both still diverge on all 266 bodies
+    // through the `encodeValue` CONTAINER split this file already records for the palette four
+    // (game `THREE.Vector3` vs lab `THREE.Color`). Same measurement, different cause — see the
+    // everyBody list below, where they sit alongside `uFreshColor` and its siblings.
+    expect(LEDGER.divergedCarried.size).toBe(23);   // ⭐⭐ 20 -> 24 AT B2 LEG 1, 2026-08-20, AND THE FOUR NEWCOMERS ARE THE ONES P-14 PREDICTED: `uCraterDensity` (64 of 266 bodies), `uEjectaStrength` (64), `uCraterRelaxation` (56), `uEjectaRampart` (42). They used to sit in the "agree by absence" list below — both sides zero — and P-14 wrote down in advance what would happen: "a loud default behind a shut gate … it becomes a pixel the moment anything opens that gate." Leg 1 opened it: re-deriving CRATER_VIS_FLOOR_RAD 0.02 -> 9.6e-4 and replacing the fixed density floor with the per-body CRATER_MIN_VISIBLE gave 289 of 526 bodies a live crater record where 8 had one. ⚠ AND THE DIRECTION IS THE BAD ONE, MEASURED NOT ASSUMED: on every diverging body the GAME writes the live value and the LAB writes 0 (`rocky: uCraterDensity 0.0008051676964833844 -> 0`; `sub-neptune: uEjectaStrength 1 -> 0`). The cause is a GATE difference the leg neither created nor closes — rockySurface multiplies the crater terms by `craterRelevanceOf(condition)` and its pack predicate excludes gas-class bodies, while the legacy material's crater path is keyed on the TYPE LABEL — so the four names JOIN the blocking P-14 row rather than being re-blessed into agreement.
     const everyBody = [...LEDGER.divergedCarried.entries()]
       .filter(([k, v]) => v === LEDGER.carriedTotal.get(k)).map(([k]) => k);
-    // ⭐ 17 -> 10 AT STEP 10a. rockySurface writes the palette, the crater terms and the offsets, so
+    // ⭐ 17 -> 10 AT STEP 10a, then 10 -> 8 AT B3 LEG 1 (see the two named just below). rockySurface writes the palette, the crater terms and the offsets, so
     // seven names that used to diverge on EVERY body now diverge on only part of the population. The
     // ten that remain are named rather than counted, because "10" alone cannot distinguish a wire
     // that landed from a population that shrank.
@@ -504,14 +528,32 @@ describe('2. the collapse in per-body variation', () => {
       // ⚠ These four are written by rockySurface and STILL diverge on every body — the P-11/P-12
       // `encodeValue` container split (game `THREE.Vector3` vs lab `THREE.Color`), not a dead wire.
       'uBioGroundColor', 'uFreshColor', 'uSedColor', 'uWeatheredColor',
-      // …and these six diverge for their own recorded reasons. ⛔ FIVE HAVE NO WRITER ON EITHER HALF; `uNoiseScale` NO LONGER DOES, AND ITS CAUSE INVERTED AT B2 LEG 3, 2026-08-20 — BOTH halves now write it and they answer different questions (the game draws `d.noiseScale`, the lab derives a size in km), which is why the assertion below is unchanged while its reason is not. The inverted control is at :604.
-      'uDispDomainScale', 'uLimbColor', 'uNoiseScale', 'uTermColor', 'uTermStrength', 'uTermWidth',
+      // …and these four diverge for their own recorded reasons.
+      // ⭐⭐ SIX -> FOUR AT B3 LEG 1, AND THE TWO THAT LEFT ARE THE HALF-CLOSURE THIS BLOCK EXISTS TO
+      // MAKE VISIBLE. `uTermStrength` and `uTermWidth` no longer diverge on EVERY body — they now
+      // diverge on 103 of 266, which is the GAS half exactly, because `solidOptics`' predicate is
+      // the complement of gas and limbDeck writes no terminator at all. They move to the partial
+      // bucket rather than out of it, so P-11 cannot be reported closed: its non-gas half is, its
+      // gas half is not. ⛔ `uTermColor` STAYS HERE, and it is NOT the gas half that keeps it — the
+      // pack writes it on all 163 solid bodies too. It stays for the same `encodeValue` container
+      // reason as `uLimbColor` two lines up: the game hands a `THREE.Vector3`, the lab a
+      // `THREE.Color`, and this instrument compares the encoded container. A colour that is written
+      // and still "diverges" here is an instrument fact, not a wire fact.
+      // ⛔ `uDispDomainScale` HAS NO WRITER ON EITHER HALF; `uNoiseScale` NO LONGER DOES, AND ITS CAUSE INVERTED AT B2 LEG 3, 2026-08-20 — BOTH halves now write it and they answer different questions (the game draws `d.noiseScale`, the lab derives a size in km), which is why its presence here is unchanged while its reason is not.
+      'uDispDomainScale', 'uLimbColor', 'uNoiseScale', 'uTermColor',
     ].sort());
     // The four that agree, agree by a shared CONSTANT (it was eight, and four agreed by ABSENCE until B2 leg 1 — see above).
     const agreeing = [...LEDGER.carried].filter((n) => !LEDGER.divergedCarried.has(n)).sort();
     // ⭐ EIGHT -> FOUR AT B2 LEG 1. The four that left are named on the assertion above; the four that remain are the ones genuinely CONSTANT on both sides (`uEjectaLump` 0.6, `uTerraceCount` 4.0, `uVoroCells` 27, `uFwClamp`) rather than merely both-zero — which is why opening the crater gate could not move them, and is the control that says the four that DID move, moved for a reason.
+    // ⭐⭐ FOUR -> FIVE AT B3 LEG 1, AND THE NEWCOMER IS A DIFFERENT KIND OF AGREEMENT FROM THE OTHER
+    // FOUR. Those four agree because they are genuinely CONSTANT on both sides. `uLimbExponent`
+    // agrees because it is WRITTEN on both sides and the two writers now read the same law — it
+    // varies across the population and matches body by body. That is the stronger sense of
+    // "carried" and it is the first name in this bucket to have it, so it is called out rather than
+    // appended silently: a future reader must not conclude from the list that the exponent is a
+    // constant. The non-vacuity loop below holds for it too, which is what makes it real.
     expect(agreeing).toEqual([
-      'uEjectaLump', 'uFwClamp',
+      'uEjectaLump', 'uFwClamp', 'uLimbExponent',
       'uTerraceCount', 'uVoroCells',
     ]);
     for (const n of agreeing) {
@@ -531,7 +573,10 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
     expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero]).size).toBe(44);   // 43 -> 44 AT B2P: the game spelling uPosterizeLevels leaves the material at the swap; P-18 rules it carried — NOT by object identity (the lab's scalar uLevels holds POSTERIZE_LEVELS, the game's vec2 holds POSTERIZE_QUANTUM) but by single-writer construction.
     // 62 -> 63 AT STEP 10a: `uLimbExponent` re-enters the diverged bucket on the 163 newly-admitted
     // solid bodies, which limbDeck's gas-only predicate never claims. See §2's note; P-11 claims it.
-    expect(measured().size).toBe(68);   // 63 -> 64 AT B2P, same one name; 64 -> 68 AT B2 LEG 1 — the four crater names §2 names, which join P-14's subject cell rather than acquiring a row.
+    // ⭐ 68 -> 67 AT B3 LEG 1, and it is a SHRINK, which no previous leg produced. Every earlier
+    // move on this line added a subject; this one removes `uLimbExponent`, because `solidOptics`
+    // makes the lab material agree with the game on all 266 bodies rather than on 207 of them.
+    expect(measured().size).toBe(67);   // 63 -> 64 AT B2P, same one name; 64 -> 68 AT B2 LEG 1 — the four crater names §2 names, which join P-14's subject cell rather than acquiring a row.
     // 44 lost + 28 carried = the 72 the game material declares. Nothing fell between the buckets.
     expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.carried]).size).toBe(72);
   });
@@ -584,11 +629,24 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
     expect([...labNames].filter((n) => /shadow/i.test(n))).toEqual([]);
     expect(LAB_SHADER_CORPUS.includes('uLightDir2')).toBe(false);
     expect(LAB_SHADER_CORPUS.includes('uShadow')).toBe(false);
-    // P-05: the alias shape — the counterpart EXISTS, which is why that row is `blocking` rather
-    // than `accepted-loss`.
+    // ⭐⭐ P-05 IS CLOSED BY THE B3 LEG 1 REGISTRATION, AND THIS IS THE ASSERTION THAT SAYS SO —
+    // INVERTED, exactly the way P-04's below was. These four used to be the alias shape's exhibit:
+    // declared by the lab, written by NOTHING, so the whole feature sat behind the
+    // `uAuroraIntensity > 0.0` guard in the shader on every swapped body. `solidOptics` writes all
+    // four for non-gas conditions. ⛔ THE INVERSION IS THE POINT — un-register the pack and these
+    // lines go red, which is the "delete the entry and the feature silently leaves" failure the
+    // registration fence exists for. A `not.toContain` here would now pass only while the wire was
+    // broken.
     for (const n of ['uAuroraColor', 'uAuroraIntensity', 'uAuroraRingLat', 'uAuroraRingWidth']) {
       expect(labNames.has(n), `lab should declare ${n}`).toBe(true);
-      expect(LEDGER.written).not.toContain(n);      // …and nothing writes it
+      expect(LEDGER.written, `P-05: solidOptics must write ${n}, or the loss is back`).toContain(n);
+    }
+    // …and the same inversion for P-11's terminator triple, which had the identical shape: three
+    // names the lab declares and nothing wrote. ⚠ Writing them does not make the row agree — the
+    // gas half still diverges, and §2's everyBody/partial split is where that is recorded.
+    for (const n of ['uTermColor', 'uTermStrength', 'uTermWidth']) {
+      expect(labNames.has(n), `lab should declare ${n}`).toBe(true);
+      expect(LEDGER.written, `P-11: solidOptics must write ${n}, or the loss is back`).toContain(n);
     }
     // ⭐⭐ P-04 IS CLOSED BY REGISTRATION, AND THIS IS THE ASSERTION THAT SAYS SO. `uLimbStrength`
     // used to belong to the loop above: declared by the lab, written by nothing. limbDeck now writes
@@ -600,7 +658,7 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
     // aurora `not.toContain` lines above have the mirror-image dependency: under a sample they passed vacuously, since no gas-deck name was in the set at all.
     expect(labNames.has('uLimbStrength'), 'the lab must still declare uLimbStrength').toBe(true);
     expect(LEDGER.written, 'P-04: limbDeck must write it, or the loss is back').toContain('uLimbStrength');
-    // ⭐⭐ M-09 IS CLOSED THE SAME WAY, AT B2 LEG 3, AND THIS IS ITS HALF OF THE FENCE. `uNoiseScale` used to be the aurora shape too — declared by the lab, written by nothing, the factory 4.0 on both sides. `rockySurface` now writes it on every body its `!== 'gas'` predicate claims, which is 632 of 632 plain moons (tests/moon-lab-mount.test.js:406 `expect(admitted).toBe(plain);`), so the moon-side base-frequency loss is resolved rather than described. ⛔ INVERTED FOR THE SAME REASON: un-register the pack and this line goes red instead of the feature leaving silently.
+    // ⭐⭐ M-09 IS CLOSED THE SAME WAY, AT B2 LEG 3, AND THIS IS ITS HALF OF THE FENCE. `uNoiseScale` used to be the aurora shape too — declared by the lab, written by nothing, the factory 4.0 on both sides. `rockySurface` now writes it on every body its `!== 'gas'` predicate claims, which is 632 of 632 plain moons (tests/moon-lab-mount.test.js:414 `expect(admitted).toBe(plain);`), so the moon-side base-frequency loss is resolved rather than described. ⛔ INVERTED FOR THE SAME REASON: un-register the pack and this line goes red instead of the feature leaving silently.
     expect(LEDGER.written, 'M-09/P-10: rockySurface must write it, or the base-frequency loss is back').toContain('uNoiseScale');
   });
 
