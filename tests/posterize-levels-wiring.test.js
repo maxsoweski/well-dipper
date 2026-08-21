@@ -91,7 +91,7 @@ describe('B2P 2 — assigning through the setter moves what every ALREADY-BUILT 
     expect(cloned.uPosterizeLevels === POSTERIZE_QUANTUM).toBe(false);
     try {
       setPosterizeLevels(41);
-      expect(readLevels(cloned.uPosterizeLevels), 'the clone should be frozen at its clone-time value').toBe(6);
+      expect(readLevels(cloned.uPosterizeLevels), 'the clone should be frozen at its clone-time value').toBe(POSTERIZE_LEVELS_DEFAULT);   // ⭐ BOUND TO THE CONSTANT, NOT THE LITERAL, 2026-08-21: this control tests that a DEEP CLONE STOPS FOLLOWING the shared object, which is true at any level. It was written as `toBe(6)` and reddened the moment Max ruled the default to 31 — a control that breaks when an unrelated taste call moves is testing the wrong thing.
       expect(readLevels(planet.surface.material.uniforms.uPosterizeLevels), 'the live material should have moved').toBe(41);
     } finally { setPosterizeLevels(POSTERIZE_LEVELS_DEFAULT); }
   });
@@ -173,7 +173,7 @@ describe('B2P 4 — posterize() multiplies by the CARRIED reciprocal, parenthesi
   }
   it('the CPU carries the very float32 a compiler folds `1.0 / 6.0` to (the premise, in JS)', () => {
     const f = Math.fround;
-    expect(POSTERIZE_QUANTUM.value.y, 'the shipped object carries the float32 nearest 1/6').toBe(f(1 / 6));
+    expect(POSTERIZE_QUANTUM.value.y, 'the shipped object carries the float32 nearest 1/DEFAULT').toBe(f(1 / POSTERIZE_LEVELS_DEFAULT));   // ⭐ GENERALISED 2026-08-21 (default 6 -> 31, Max's ruling). The premise this section proves is that the CPU carries the exact float32 a compiler would fold `1.0 / N` to — it is a property of the CARRY, not of the number 6, so pinning it to the shipped default is what the section actually claims. The original 1/6 case survives as the round-1 regression below.
     expect(Math.round(f(5 * f(1 / 6)) * 255), 'reciprocal multiply gives the literal code 213').toBe(213);
     expect(Math.round(f(5 / 6) * 255), 'a double-rounded divide gives 212 — one code darker').toBe(212);
   });

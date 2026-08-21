@@ -31,7 +31,7 @@
  */
 
 import * as THREE from 'three';  /** The shipped value. 6.0 is what every call site had hard-coded before B2P. */
-export const POSTERIZE_LEVELS_DEFAULT = 6;
+export const POSTERIZE_LEVELS_DEFAULT = 31;
 
 /** Below 2 the quantiser stops being a quantiser; above 64 the dither costs more than it buys. */
 export const POSTERIZE_LEVELS_MIN = 2;
@@ -42,7 +42,7 @@ export const POSTERIZE_LEVELS_MAX = 64;
  * which cannot carry the vec2 below — so the lab keeps this one. Hand the object itself, never a
  * copy. setPosterizeLevels writes this AND POSTERIZE_QUANTUM: one value in two shapes, one writer.
  */
-export const POSTERIZE_LEVELS = { value: 6.0 };
+export const POSTERIZE_LEVELS = { value: 31.0 };
 
 /**
  * THE GAME PROGRAMS' QUANTUM, as a vec2: .x = levels, .y = its exact float32 reciprocal. The
@@ -52,7 +52,7 @@ export const POSTERIZE_LEVELS = { value: 6.0 };
  * rounds differently at edgeWidth 0.6. An opaque uniform denies it that reassociation.
  * setPosterizeLevels is the ONLY writer of this and of POSTERIZE_LEVELS, so they cannot drift. ⚠ THAT IS A CONSTRUCTION ARGUMENT, AND IT IS NOW ALSO FENCED: tests/posterize-levels-wiring.test.js B2P 7 asserts .y === Math.fround(1/.x) at every integer level the clamp admits, not only at the shipped 6, so a .y that stopped tracking at some non-default level reddens instead of shipping.
  */
-export const POSTERIZE_QUANTUM = { value: new THREE.Vector2(6.0, Math.fround(1 / 6)) };
+export const POSTERIZE_QUANTUM = { value: new THREE.Vector2(31.0, Math.fround(1 / 31)) };
 
 /**
  * The one clamp. Spent on BOTH sides of the boundary — by setPosterizeLevels on its way to the
