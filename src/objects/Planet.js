@@ -1615,7 +1615,7 @@ export class Planet {
     // condition vector. Only terrestrial worlds get it: the branch that consumes it is the
     // ocean/land one, and biosphereOf returns ~0 for anything dry or airless anyway.
     const bioCover = biosphereOf(condition);
-    const labSurface = Planet._createLabSurface(geometry, d, condition, this._lightDir);  // PLAN §4 Step 6a/6d/6e
+    const labSurface = Planet._createLabSurface(geometry, d, condition, this._lightDir, this._lightDir2, { color1: this._starColor1, color2: this._starColor2, brightness1: this._starBrightness1, brightness2: this._starBrightness2 });  // PLAN §4 Step 6a/6d/6e   // ⭐ B4-1 — THE DROP THAT WAS P-01 AND P-02, CLOSED HERE. The constructor resolves all four star fields and `_lightDir2` a few dozen lines above, hands them to the legacy material, and used to hand the lab material only `_lightDir`. The record passed is the constructor's ALREADY-RESOLVED values, not the raw starInfo, so a body built with starInfo = null passes (white, black, 1.0, 0.0) — the same identity the builder would have defaulted to. ⛔ RIDES THIS LINE — the handoff gate is "every citation-bearing file N added / N deleted" and this file carries symbol-anchored citations down to :2251.
     if (labSurface) return labSurface;      // world-engine pack bodies leave HERE, flag ON (6e)
     const variant = planetShaderSource(shaderVariantFor(d.type));  // legacy: 3 programs, by type
 
@@ -1968,7 +1968,7 @@ export class Planet {
     // to be — see updateLabPlanetMaterial for the full note. No-ops on the game's own material.
     updateLabPlanetMaterial(mat, {
       mesh: this.surface,
-      lightDirWorld: this._lightDir,
+      lightDirWorld: this._lightDir, lightDirWorld2: this._lightDir2,   // ⭐ B4-1 — the second star, per render tick. It has to be re-transformed every frame for exactly the reason the primary does: uLightDir2 is OBJECT space, the body spins, and a direction written once at build would counter-rotate with the crust into one false terminator sweep per body-day. src/main.js re-copies `_lightDir2` in place every sim tick inside its binary branch, so this reads the live vector by reference. ⛔ RIDES THIS LINE — the handoff gate is "every citation-bearing file N added / N deleted" and this file carries symbol-anchored citations down to :2251.
       renderDt,
     });
   }
@@ -2015,7 +2015,7 @@ export class Planet {
    * flag's live value in every E caption: a visual gate reported as passing in the default
    * configuration is a shot of the code that was not written, and the default here is OFF.
    */
-  static _createLabSurface(geometry, d, condition, lightDir) {
+  static _createLabSurface(geometry, d, condition, lightDir, lightDir2 = null, starInfo = null) {   // ⭐ B4-1 — two new OPTIONAL parameters, defaulted to the pre-B4 behaviour so an old three-arg call still builds the identical material. They exist because the constructor two frames up ALREADY HOLDS BOTH and was dropping them at the call site: the lab material then rendered 846 bodies and 632 moons under an implicit white light with no second star (parity-ledger P-01 / P-02). ⛔ RIDES THIS LINE — the handoff gate is "every citation-bearing file N added / N deleted" and this file carries symbol-anchored citations down to :2251.
     const decision = labPipelineAdmits(d, condition);
     if (!decision.admitted) return null;
 
@@ -2023,7 +2023,7 @@ export class Planet {
     // `d.radius` because src/objects/Planet.js:1549 builds the geometry at exactly that radius —
     // omit it and the noise domain is 23-78x too small, one of the three sufficient causes of the
     // "flat orange" this port already chased once.
-    const built = buildLabPlanetMaterial({ lightDir, bodyRadius: d.radius });
+    const built = buildLabPlanetMaterial({ lightDir, lightDir2, starInfo, bodyRadius: d.radius });   // B4-1 — lightDir2 + starInfo forwarded. Both are identity when null (factory white x 1.0, zero second direction), so the lab's own route through here is unchanged. ⛔ RIDES THIS LINE — the handoff gate is "every citation-bearing file N added / N deleted" and this file carries symbol-anchored citations down to :2251.
     const material = built.material;
 
     const pos = geometry.getAttribute('position');
@@ -2063,7 +2063,7 @@ export class Planet {
           gates: packs.gates,
           bakedAttributes: Object.keys(packs.attributes),
           zeroFilledAttributes: zeroFilled.added,
-          bodyRadius: built.bodyRadius,
+          bodyRadius: built.bodyRadius, starColor1: built.starColor1, starColor2: built.starColor2, starBrightness1: built.starBrightness1, starBrightness2: built.starBrightness2, lightDir2: built.lightDir2,   // ⭐ B4-1 — the star set lands in the E-3 back-link for the same reason the flag and its source do (§12.5 fact 6): a shot that shows a red star and a white-lit planet is the P-01 defect in one frame, and the caption has to be able to PRINT the star colour the body was built with rather than have a reader judge it off the pixels. ⛔ RIDES THIS LINE — the handoff gate is "every citation-bearing file N added / N deleted" and this file carries symbol-anchored citations down to :2251.
           meta: packs.meta,
         },
       },

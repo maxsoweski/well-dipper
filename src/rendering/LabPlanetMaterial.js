@@ -202,7 +202,7 @@ export function labShaderSource() {
  * an undriven shader. It is one of THREE independent sufficient causes of the "flat orange" this
  * lane chased; the other two are uOctaves pinned at 4 of 9, and the undriven palette.
  *
- * @param {{lightDir?: THREE.Vector3|number[], bodyRadius?: number}} [opts]
+ * @param {{lightDir?: THREE.Vector3|number[], lightDir2?: THREE.Vector3|number[], starInfo?: object|null, bodyRadius?: number}} [opts]   ⭐ B4-1 added `lightDir2` and `starInfo`; BOTH ARE IDENTITY WHEN ABSENT (no starInfo leaves the factory white/1.0 pair, no lightDir2 leaves the zero vector), so every existing call site keeps its exact material and only a caller holding real star data — the Planet and Moon constructors — changes anything.
  * @returns {{material: THREE.ShaderMaterial, uniformCount: number, lightDir: number[], bodyRadius: number}}
  */
 export function buildLabPlanetMaterial(opts = {}) {
@@ -210,8 +210,8 @@ export function buildLabPlanetMaterial(opts = {}) {
   const light = (raw.isVector3 ? new THREE.Vector3().copy(raw) : new THREE.Vector3(...raw)).normalize();
   const uniforms = makeUniforms(light); uniforms.uLevels = POSTERIZE_LEVELS; // ⭐ B2P — SUBSTITUTE the shared object for makeUniforms' private one. Nothing here edits the lab shader or the uniforms.js default (still 6.0); this only makes the value REACHABLE. Once the lab flag flips, 846 planets and 632 moons render through THIS program, whose uLevels no pack writes — leave this out and the setting evaporates exactly when the world engine becomes visible.
 
-  const bodyRadius = Number.isFinite(opts.bodyRadius) && opts.bodyRadius > 0 ? opts.bodyRadius : 1.0;
-  uniforms.uBodyRadius.value = bodyRadius;
+  const bodyRadius = Number.isFinite(opts.bodyRadius) && opts.bodyRadius > 0 ? opts.bodyRadius : 1.0;  if (opts.starInfo) { uniforms.uStarColor1.value.fromArray(opts.starInfo.color1 || [1, 1, 1]); uniforms.uStarColor2.value.fromArray(opts.starInfo.color2 || [0, 0, 0]); uniforms.uStarBrightness1.value = opts.starInfo.brightness1 ?? 1.0; uniforms.uStarBrightness2.value = opts.starInfo.brightness2 ?? 0.0; }   // ⭐ B4-1 (ledger P-01) — STAR COLOUR, AT CONSTRUCTION, BECAUSE THE ENGINE HAS NOWHERE ELSE TO TAKE IT FROM. Star colour and brightness are written exactly once in the whole game: into a material's uniform bag when the body is built. There is no per-frame writer to widen. ⛔ THE FALLBACKS ARE COPIED FROM THE GAME CHARACTER FOR CHARACTER (`color1 || [1,1,1]`, `color2 || [0,0,0]`, `brightness1 ?? 1.0`, `brightness2 ?? 0.0` — the Planet constructor and the Moon uniform bag), because a PARTIAL starInfo must land on the same value in both programs or the two disagree. ⛔ A NULL starInfo LEAVES THE FACTORY DEFAULTS STANDING RATHER THAN ZEROING THEM: the lab and every headless probe build with none, and (white, 1.0) is precisely the implicit light the shader already had, so "no starInfo" means UNCHANGED, not dark. tests/material-parity-list.test.js already records the mirror trap on the ledger side — a pass with starInfo null reported starColor2 lost on every body, and only the system's real starInfo gave the honest split. ⛔ RIDES THIS LINE (handoff gate: every citation-bearing file N added / N deleted; this file carries symbol-anchored citations down to :572).
+  uniforms.uBodyRadius.value = bodyRadius;  if (opts.lightDir2) uniforms.uLightDir2.value.copy(opts.lightDir2.isVector3 ? opts.lightDir2 : new THREE.Vector3(...opts.lightDir2));   // ⭐ B4-1 (ledger P-02) — the second star's direction, seeded at build so a body that never reaches the per-frame seam still lights correctly. ⛔ NOT NORMALIZED HERE, AND THAT IS DELIBERATE: the zero vector is the meaningful "single star" VALUE (every non-binary body carries `_lightDir2 = new THREE.Vector3(0,0,0)`), and three's normalize() divides by a zero length — the result is NaN, it reaches the shader, and `max(dot(shadeN, NaN), 0.0)` is implementation-defined. The seam normalizes only when the incoming vector has length. ⛔ RIDES THIS LINE (handoff gate: every citation-bearing file N added / N deleted; this file carries symbol-anchored citations down to :572).
 
   // The layer-4 bakes do not exist yet; give their samplers a valid typed placeholder so the
   // context does not drown in GL_INVALID_OPERATION and stop reporting errors entirely.
@@ -231,7 +231,7 @@ export function buildLabPlanetMaterial(opts = {}) {
   return {
     material,
     uniformCount: Object.keys(uniforms).length,
-    lightDir: light.toArray(),
+    lightDir: light.toArray(), lightDir2: uniforms.uLightDir2.value.toArray(), starColor1: uniforms.uStarColor1.value.toArray(), starColor2: uniforms.uStarColor2.value.toArray(), starBrightness1: uniforms.uStarBrightness1.value, starBrightness2: uniforms.uStarBrightness2.value,   // B4-1 — reported as NUMBERS so a probe can read what a body was BUILT with instead of inferring a star colour off a screenshot (§12.5's rule that a visual gate needs its condition printed). ⛔ RIDES THIS LINE (handoff gate: every citation-bearing file N added / N deleted; this file carries symbol-anchored citations down to :572).
     bodyRadius,
     samplersFilled: samplers.filled,
     samplersCreated: samplers.created,
@@ -471,7 +471,7 @@ export function swapLedgerOf({ prevUniforms, nextUniforms, shaderSource = LAB_SH
 
 /** Scratch, module-scope: this runs once per lab-shader body per frame and must not allocate. */
 const _invQuat = new THREE.Quaternion();
-const _lightObj = new THREE.Vector3();
+const _lightObj = new THREE.Vector3(); const _light2Obj = new THREE.Vector3();   // B4-1 — the second star's object-space direction. Module-scope like its neighbours so the seam allocates nothing per body per frame.
 const _camObj = new THREE.Vector3();
 
 /**
@@ -523,7 +523,7 @@ export function isLabPlanetMaterial(material) {
  * @param {object} [opts]
  * @param {THREE.Object3D} [opts.mesh]            the mesh the material is bound to (for its world quaternion)
  * @param {THREE.Vector3}  [opts.lightDirWorld]   world-space direction to the star
- * @param {number}         [opts.renderDt]        seconds since the last render tick
+ * @param {number}         [opts.renderDt]        seconds since the last render tick — and B4-1's `opts.lightDirWorld2`, the world-space direction to the SECOND star. A zero-length vector there is the legitimate "one star" value and is passed through AS ZERO, never normalized; it is only read when `lightDirWorld` is supplied too.
  * @param {number}         [opts.distanceRadii]   camera distance to the body, in body radii
  * @returns {null|{time: number, octaves: number, lodRamp: number, lightObj: number[]|null}}
  *          diagnostics, or null if this is not a lab material — so a live probe can read the
@@ -548,14 +548,14 @@ export function updateLabPlanetMaterial(material, opts = {}) {
   }
 
   // ── 1. the light, world -> object space ──
-  let lightObj = null;
+  let lightObj = null; let lightObj2 = null;   // B4-1 — lightObj2 stays null when this tick did not write it, which is a DIFFERENT fact from [0,0,0] ("this tick wrote the single-star identity"); a probe that conflated them could not tell a seam that never ran from a body with one star.
   if (opts.lightDirWorld && opts.mesh) {
     // getWorldQuaternion updates the world matrix itself, so this is correct even if the body has
     // not been touched by the scene graph walk this frame.
     opts.mesh.getWorldQuaternion(_invQuat).invert();
     _lightObj.copy(opts.lightDirWorld).applyQuaternion(_invQuat).normalize();
     u.uLightDir.value.copy(_lightObj);
-    lightObj = _lightObj.toArray();
+    lightObj = _lightObj.toArray();  if (opts.lightDirWorld2 && u.uLightDir2) { if (opts.lightDirWorld2.lengthSq() > 0) { _light2Obj.copy(opts.lightDirWorld2).applyQuaternion(_invQuat).normalize(); } else { _light2Obj.set(0, 0, 0); } u.uLightDir2.value.copy(_light2Obj); lightObj2 = _light2Obj.toArray(); }   // ⭐ B4-1 (ledger P-02) — THE SECOND LIGHT, WORLD -> OBJECT, on the same inverted quaternion the primary just computed. ⛔ INSIDE THE PRIMARY'S GUARD ON PURPOSE: `_invQuat` is only valid because the line above inverted it, and both live call sites (Planet.updateRender, Moon.updateRender) pass the pair together. ⛔ THE lengthSq GATE IS NOT DEFENSIVE PADDING. Every single-star body in the game holds `_lightDir2 = new THREE.Vector3(0,0,0)` and main.js only copies a real direction into it inside its binary branch, so the zero vector arrives here on the MAJORITY of bodies; normalize() would divide by zero, NaN would reach uLightDir2, and the body would render at an implementation-defined value that reads as a shader bug. Below the gate the uniform is SET to zero rather than left at whatever the previous frame put there.
   }
 
   // ── 3. the detail ramp ──
@@ -580,7 +580,7 @@ export function updateLabPlanetMaterial(material, opts = {}) {
     time: u.uTime.value,
     octaves: u.uOctaves.value,
     lodRamp: u.uLodRamp.value,
-    lightObj,
+    lightObj, lightObj2, starColor1: u.uStarColor1 ? u.uStarColor1.value.toArray() : null, starColor2: u.uStarColor2 ? u.uStarColor2.value.toArray() : null, starBrightness1: u.uStarBrightness1 ? u.uStarBrightness1.value : null, starBrightness2: u.uStarBrightness2 ? u.uStarBrightness2.value : null,   // B4-1 — the star set is read back through `?` guards so this diagnostic keeps working against a lab material built before B4 (an older cached bundle, or a hand-built bag in a test).
     cameraPosObj: u.uCameraPosObj ? u.uCameraPosObj.value.toArray() : null,
   };
 }

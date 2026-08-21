@@ -87,7 +87,7 @@ export const HEIGHT_GLSL = /* glsl */ `
       uniform float uEcuSeamWidth;       // F49 Voronoi-border canyon half-width (F2−F1 threshold)
       uniform float uEcuWarpAmt;         // F49 domain-warp amount (bends the block network organic)
       uniform float uTime;            // animation clock (clouds drift, aurora rays)
-      uniform vec3  uLightDir;      // object-space light dir
+      uniform vec3  uLightDir;  uniform vec3  uLightDir2;  uniform vec3  uStarColor1;  uniform vec3  uStarColor2;  uniform float uStarBrightness1;  uniform float uStarBrightness2;      // object-space light dir, then B4-1's star set (ledger P-01 / P-02). ⛔ RIDES THIS LINE by the handoff gate "every citation-bearing file N added / N deleted" (handoff-2026-08-21-B3-B4-parallel.md:89) - a NEW line here shifts symbol-anchored citations and reds them as some other block's failure. FRAGMENT BLOCK ONLY - the vertex shader reads none of them, which also leaves LAB_VERTEX_SHADER's four reads of position at four; a fifth makes deriveTapVertex THROW (tests/instrument-tap-fence.test.js).
       uniform vec3  uWeatheredColor;
       uniform vec3  uFreshColor;        // unaltered-bedrock ground endmember (steep slopes strip to it)
       uniform vec3  uSedColor;          // transported-fines ground endmember (flat lows accumulate it)

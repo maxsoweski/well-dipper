@@ -488,7 +488,7 @@ export const LAB_FRAGMENT_SHADER = /* glsl */ `
 
         // ── Envelope composite-split (spec §2.C) — each term is the A/B/C surface.
         // A bypassed term skips the quantizer => smooth glow over the posterized base.
-        float diff = max(dot(shadeN, uLightDir), 0.0);
+        float diff1 = max(dot(shadeN, uLightDir), 0.0);  float diff2 = max(dot(shadeN, uLightDir2), 0.0);  vec3 starLight = uStarColor1 * diff1 * uStarBrightness1 + uStarColor2 * diff2 * uStarBrightness2;  float diff = diff1 * uStarBrightness1 + diff2 * uStarBrightness2;   // ⭐⭐ B4-1 (ledger P-01 / P-02) — the GAME'S OWN LAW, forwarded from src/objects/Planet.js diff1/diff2/starLight/diffuse. ⛔ RIDES THIS LINE by the handoff gate "every citation-bearing file N added / N deleted" (handoff-2026-08-21-B3-B4-parallel.md:89) - a NEW line here shifts symbol-anchored citations and reds them as some other block's failure. ⭐⭐ diff STAYS A FLOAT ON PURPOSE. It is read as a GATE a dozen times below (the nightMask for bio/city/ecumenopolis, step(0.0001, diff) for carbon sheen / facets / sunglint, the lit dayside gate) and as a MAGNITUDE in rayField, machine metal and the F34 limb's (diff + 0.15). Widening it to vec3 would silently re-colour the limb and every night gate - a different block's pixels. The game solves this the same way and for the same reason: a coloured starLight AND a scalar diffuse, side by side. ⛔ NO SHADOW FACTORS HERE. P-03 wants sphereShadow(vWorldPos, ...) and the lab material has no world-space varying at all; that is a separate block. Every shadow term is therefore 1.0 and DROPS OUT of the expression rather than being faked at a placeholder value. ⭐ AT THE FACTORY DEFAULTS THIS IS ARITHMETICALLY THE LINE IT REPLACES: uStarBrightness1 is 1.0 (every primary StarSystemGenerator draws is a literal 1.0), uLightDir2 is the zero vector so diff2 is 0, and diff reduces to diff1. On a BINARY the scalar gains the second star's term - which is the game's law, not a lab liberty.
         float ambient = 0.035;
         vec2 fc = gl_FragCoord.xy;
         // View vector — planet sits at origin, identity quaternion, so world==object space
@@ -784,7 +784,7 @@ export const LAB_FRAGMENT_SHADER = /* glsl */ `
         // block: litSurf untouched, exp(-0) = 1.0 on the deck — byte-identical pre-F40
         // output, the F40 regression contract.
         float dustTau = 0.0;
-        vec3 litSurf = min(veilTint * (albedoCol * (diff + ambient) + uWeatheredColor * rayBright), vec3(1.0));
+        vec3 litSurf = min(veilTint * (albedoCol * (starLight + vec3(ambient)) + uWeatheredColor * rayBright), vec3(1.0));   // ⭐ B4-1 — albedoCol * (starLight + vec3(ambient)) is src/objects/Planet.js's finalColor = surfaceColor * (starLight + vec3(ambient)) verbatim. The star tint multiplies the SURFACE ALBEDO ONLY; limb, terminator, aurora, airglow and cloud-optics are ADDITIVE terms further down and stay untinted, exactly as the game leaves them - which is what keeps this change out of the neighbouring block's pixels by construction. starLight == vec3(diff) at the factory defaults, so this is the line it replaces. ⛔ RIDES THIS LINE by the handoff gate "every citation-bearing file N added / N deleted" (handoff-2026-08-21-B3-B4-parallel.md:89) - a NEW line here shifts symbol-anchored citations and reds them as some other block's failure.
         if (uDustActivity > 0.0){
           float a2 = uDustActivity * uDustActivity;            // activity^2 via a*a (no pow)
           float dph0 = fract(uTime * 0.008);

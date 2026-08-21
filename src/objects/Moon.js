@@ -21,7 +21,7 @@ export class Moon {
     // updating that one vector updated the moon for free. A swapped moon declares no such uniform —
     // `uLightDir` is OBJECT-space and must be recomputed from the world vector every render tick —
     // so the reference has to live on the instance or `updateRender` has nothing to hand the seam.
-    this._lightDir = lightDir;
+    this._lightDir = lightDir; this._lightDir2 = lightDir2 || new THREE.Vector3(0, 0, 0);   // ⭐ B4-1 — HELD FOR THE SAME REASON `_lightDir` IS, one paragraph up. A legacy moon reads the parent's Vector3 BY REFERENCE through a `lightDir2` uniform and updates for free; a swapped moon's uLightDir2 is OBJECT space and must be recomputed every render tick, so the reference has to live on the instance or updateRender has nothing to hand the seam. ⛔ The `|| new Vector3(0,0,0)` matches the legacy bag's own fallback below: BodyRenderer passes the parent's real vector, but src/main.js's gallery moon passes a literal null.
 
     this.mesh = this._createMesh(lightDir, lightDir2, starInfo);
     assignBodyName(this.mesh, 'moon', moonData);
@@ -55,7 +55,7 @@ export class Moon {
     // plain moons admit with the flag forced ON. A branch here would be a second admission test.
     // `assignBodyName` runs after this returns and PRESERVES `userData.wd` — it spreads existing
     // userData — which is what `_lab.resolveBody` and Instrument E read to caption the body.
-    const labSurface = Planet._createLabSurface(geometry, d, conditionFromBody(d), lightDir);
+    const labSurface = Planet._createLabSurface(geometry, d, conditionFromBody(d), lightDir, lightDir2, starInfo);   // ⭐ B4-1 — the two arguments this call was dropping (parity-ledger M-01 / M-03: 632 plain moons, every one of them under a non-white primary, 197 of them in a binary). `starInfo` goes through RAW here, not pre-resolved as on the planet side, because a Moon keeps no resolved copy — the builder applies the game's own fallbacks, which are transcribed from the legacy uniform bag twenty lines below.
     if (labSurface) return labSurface;
 
     // Type index: 0=captured, 1=rocky, 2=ice, 3=volcanic, 4=terrestrial
@@ -675,7 +675,7 @@ export class Moon {
     // a `Moon` directly with no BodyRenderer around it.
     updateLabPlanetMaterial(this.mesh.material, {
       mesh: this.mesh,
-      lightDirWorld: this._lightDir,
+      lightDirWorld: this._lightDir, lightDirWorld2: this._lightDir2,   // ⭐ B4-1 — the second star, per render tick, for the same object-space reason as the primary directly above. A moon in a binary that never got this line would hold its build-time uLightDir2 while the mesh spins under it.
       renderDt,
     });
   }
