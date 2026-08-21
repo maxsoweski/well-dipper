@@ -1,0 +1,105 @@
+{
+  "workstream": "world-engine-star-driven-pigment-2026-08-21",
+  "intentRef": "intent.md",
+  "project": "well-dipper",
+  "status": "scoping",
+  "acceptanceCriteria": [
+    {
+      "id": "AC1",
+      "statement": "The host star's temperature is recorded on the body record and reaches the condition vector as a real measured value, not a default.",
+      "verifyVia": {
+        "input": "Generate lab-procedural-0..199 headlessly and read the condition vector and _provenance for every planet.",
+        "observable": "A star-temperature field is present on 100% of generated planets and its _provenance reads 'measured' on 100% of them. Today the comparable figure is 0/167. Report the measured count, never the field's name-resolution count."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC2",
+      "statement": "Adding the star field to the body record moves Instrument B's RECORD SHAPE assertion, and that move is declared and deliberately re-blessed rather than absorbed.",
+      "verifyVia": {
+        "input": "Run tests/body-identity-fence.test.js before and after the generator change.",
+        "observable": "RECORD SHAPE reds and names the added field. BODY IDENTITY and DRAW STREAM stay green, proving the field is additive and did not move the RNG stream. The re-bless is a separate commit naming the field. A green run here would mean the field was never actually added."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC3",
+      "statement": "Ground cover colour is chosen by which kind of star the world orbits — the spectrum picks a palette family, and the families are authored rather than derived.",
+      "verifyVia": {
+        "input": "Sample the resolved land palette across generated worlds grouped by primary spectral class (M / K / G / A).",
+        "observable": "The pigment resolved for each class comes from that class's authored family, and the four families are distinguishable from one another. A world's family is a function of its primary only."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC4",
+      "statement": "An M-dwarf world does not read green — it comes out dark, oxblood or violet, something that looks like it grew under a red sun.",
+      "verifyVia": {
+        "input": "Fly to a generated M-dwarf system with a vegetated world and view it from orbit.",
+        "observable": "The vegetated ground is visibly not-green and sits inside the authored M-dwarf family."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC5",
+      "statement": "A Sun-like star still gives green continents — Max's D-9 ruling survives the change.",
+      "verifyVia": {
+        "input": "Fly to a generated G-star system with an Earth-like vegetated world and view it from orbit.",
+        "observable": "Vegetated land reads green. This is the ordinary case and it must not be sacrificed to make the strange cases strange."
+      },
+      "layer": "integration",
+      "live": true
+    },
+    {
+      "id": "AC6",
+      "statement": "The pigment rides through albedoTransfer's opts.extra and is scaled by the same transfer as the ground endmembers.",
+      "verifyVia": {
+        "input": "Unit-test the transfer with a pigment supplied for each authored family.",
+        "observable": "Pigment albedo sits in the intended relation to the rock it replaces. The known failure to fence against: the first port pushed raw BIO_PIGMENT to the shader and the canopy rendered at ~43% of intended albedo, ~4x darker than its rock, instead of the intended ~1.75x."
+      },
+      "layer": "unit"
+    },
+    {
+      "id": "AC7",
+      "statement": "Sol is untouched by the whole change.",
+      "verifyVia": {
+        "input": "Load Sol and compare its bodies against a pre-change capture.",
+        "observable": "Sol renders identically. Sol runs 18 NASA textures through a different renderer with no world-engine condition fields and is excluded in code; any movement here means the change leaked past that carve-out."
+      },
+      "layer": "integration"
+    },
+    {
+      "id": "AC8",
+      "statement": "The four palette families are Max's authored colours, judged in the running build while moving between systems — not from a swatch sheet.",
+      "verifyVia": {
+        "input": "Max flies between an M-dwarf, K-dwarf, G-star and A-star system in the real build, with the pigment change behind a bare-key A/B he can flip while moving.",
+        "observable": "Max's judgment that the four families cohere as somewhere he wants to fly to, and that the alien worlds read alien rather than merely miscoloured. Holistic acceptance — no agent drives or passes this."
+      },
+      "layer": "uat"
+    }
+  ],
+  "architecturalConnections": {
+    "inputs": [
+      "StarSystemGenerator — holds the primary's spectral class and temperature at system level; the only place the star's spectrum exists today",
+      "PlanetGenerator.generate — currently holds starMassSolar as a LOCAL and spends it on tidalHeatingPlanet without recording it; this is the gap AC1 closes",
+      "src/worldengine/port/conditionFromBody.js — the port seam the value must cross to become condition-shaped",
+      "src/worldengine/base/emission-e.js blackbodyEmission(tempK) — existing Planckian-locus chromaticity law anchored to real blackbody sRGB; reusable for deriving the family boundaries even though the family colours are authored",
+      "src/worldengine/base/surfaceMaterial.js BIO_PIGMENT + surfacePaletteOf(condition) — the constant being replaced by a per-world law"
+    ],
+    "outputs": [
+      "landPalette on the body record, via applyAlbedoTransfer — the orbital ground colour Max actually sees",
+      "src/generation/PlanetGenerator.js:809 the applyAlbedoTransfer call carrying pigment through opts.extra",
+      "the lab material's palette path, which B3 is concurrently wiring — the collision surface named in intent.md"
+    ],
+    "mustStayWorking": [
+      "Instrument A — the 32 red-by-design failing set, md5 2be0e6a9de7be79b5d8c23e0958d2b1c, verified at 9e81350. Diff membership both ways; never report the count as the gate",
+      "Instrument B body-identity fence — RECORD SHAPE will move by design (AC2); BODY IDENTITY and DRAW STREAM must NOT, or the generator change has moved the RNG stream",
+      "Instrument C shipped-uniform delta and the 708-citation fence (exit 0)",
+      "the albedoTransfer opts.extra rule — a pigment scaled by its own luminance drifts out of relation with the ground it sits on",
+      "the Sol carve-out — NASA textures, different renderer, excluded in code",
+      "B3's ownership of the palette/uTerm*/uLimb*/crater/aurora uniform family — do not build into it while B3 is in flight",
+      "the D-9 green ruling for Sun-like stars (AC5)"
+    ]
+  }
+}
