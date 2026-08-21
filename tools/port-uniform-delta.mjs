@@ -1029,7 +1029,7 @@ const CITE_SOURCES = [
   // ⚠ Checked first: appending BELOW `const CITE_SOURCES = [` does not move it (:1023 since Step 7 grew
   // the CITE_FILES block ABOVE it — third instance of ledger C14, now promoted to C24), and the one
   // live ref to that line (step6-parity-ledger.md) is repaired to 1010 in this same commit.
-  'src/worldengine/drivers/limbDeck.js',
+  'src/worldengine/drivers/limbDeck.js',  'src/worldengine/drivers/craterDeck.js', 'src/worldengine/drivers/solidOptics.js', 'src/worldengine/drivers/solidFeatures.js', 'src/worldengine/base/auroraOptics.js', 'src/worldengine/base/terminatorOptics.js',   // ⛔ B3's five, 2026-08-21 — APPENDED TO THIS LINE, NEVER BELOW IT, for the reason given at :982: a new line here moves every entry under it and this array is itself cited. These were TRACKED but UNREGISTERED, so 27 refs that a commit message described as having "moved into craterDeck.js" had in fact LEFT THE SCANNED SET: CHECKED fell 708 -> 700 across five commits that each printed exit 0. That is the failure this mode's own header names — BROKEN == 0 cannot tell "every ref resolves" from "no ref was read". Registering them raises CHECKED and turns their refs FATAL, which is the point.
   'src/worldengine/drivers/polarDeck.js',
   'tests/driver-pack-limbdeck.test.js',
   'tests/driver-pack-polardeck.test.js',

@@ -11,7 +11,7 @@
 //     auroraOpticsOf ─────┴─> the auroral oval (P-05, 4 uniforms)
 //
 // ⭐ WHY A FIFTH PACK RATHER THAN A WIDENED limbDeck. limbDeck's predicate is
-// src/worldengine/drivers/limbDeck.js:189 `  applies: (condition) => compositionClass(condition) === 'gas',`
+// src/worldengine/drivers/limbDeck.js:193 `  applies: (condition) => compositionClass(condition) === 'gas',`
 // and its own header records that the narrow predicate is load-bearing: admission to the lab
 // material runs through src/objects/Planet.js:2192
 // `    const packs = condition ? selectPacks(condition).map((e) => e.name) : [];` into the
@@ -130,7 +130,7 @@ export function solidOpticsPack(condition, ctx) {
  * pack's own test gates.
  *
  * ⛔⛔ THE PREDICATE IS THE COMPLEMENT OF GAS AND IT IS CHARACTER-IDENTICAL TO rockySurface's,
- * src/worldengine/drivers/rockySurface.js:506 `  applies: (condition) => compositionClass(condition) !== 'gas',`.
+ * src/worldengine/drivers/rockySurface.js:415 `  applies: (condition) => compositionClass(condition) !== 'gas',`.
  * That is what makes registration population-neutral: `selectPacks` already returns a non-empty
  * list for every body this claims, so `packs.length > 0` cannot flip for any record and no body
  * moves between materials. A DIFFERENT non-gas predicate — `!!condition.atmosphere`, say — would

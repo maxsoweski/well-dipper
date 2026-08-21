@@ -34,7 +34,7 @@
 // 0.0017 ms/body, and it runs once per material build rather than once per frame.
 //
 // ⛔ `qualityTier` IS LEFT AT ITS DEFAULT AND THAT IS A CHECKED CLAIM, NOT AN OMISSION. The
-// parameter reaches exactly one place — src/worldengine/base/labCore.js:1048 `    ...qualityKnobs(qualityTier),`
+// parameter reaches exactly one place — src/worldengine/base/labCore.js:1086 `    ...qualityKnobs(qualityTier),`
 // — whose three outputs are `craterCells`, `atmosphereModel` and `maxOctaves`. None of the fourteen
 // fields below is one of them and none is computed from them, so a tier the game has no opinion
 // about cannot reach a value this pack emits.
@@ -47,7 +47,7 @@
 //      the lab material's own factory default, so a forward would move no pixel on any body and
 //      would grow this pack's claimed name set for nothing. MEASURED over lab-procedural-0…199
 //      (852 planets + 632 plain moons), each is 1 distinct value on 1484/1484 bodies:
-//        `chaosCellScale` 5.0   vs src/worldengine/shaders/uniforms.js:249 `      uChaosCellScale:   { value: 5.0 },   // raft size (voronoi3d frequency, driven)`
+//        `chaosCellScale` 5.0   vs src/worldengine/shaders/uniforms.js:246 `      uChaosCellScale:   { value: 5.0 },   // raft size (voronoi3d frequency, driven)`
 //        `chaosMatrixRough` 0.5, `doubleRidgeFreq` 3.0, `cryoRidgeOffset` 0.45,
 //        `cryoRidgeWidth` 0.18, `groovedBandFreq` 14.0, `pldLevels` 6 — all equal to their
 //        declared defaults at src/worldengine/shaders/uniforms.js:251-263 and :282.
@@ -74,7 +74,7 @@
 //   4. ⛔ `uCryoRidgeAxis0` / `uCryoRidgeAxis1` — F10's TWO SEEDED ORIENTATIONS, AND THE ONLY
 //      OMISSION THAT COSTS A REAL VALUE. src/worldengine/base/labCore.js:985 derives them as
 //      `[seededUnitVec3(seed + 13), seededUnitVec3(seed + 14)]` from
-//      src/worldengine/base/labCore.js:756 `  const seed = d.seed ?? 0;` — and A CONDITION VECTOR CARRIES NO `seed`.
+//      src/worldengine/base/labCore.js:785 `  const seed = d.seed ?? 0;` — and A CONDITION VECTOR CARRIES NO `seed`.
 //      MEASURED: `condition.seed` is `undefined` on 1484/1484 bodies of this corpus, so forwarding
 //      the bundle's answer would put every body in the galaxy on the seed-0 pair — 1484 identical
 //      rift orientations, wired, green, and indistinguishable from the "these are all identical"
@@ -239,7 +239,7 @@ export function solidFeaturesPack(condition, ctx) {
  * so the day either set grows into the other it reds instead of throwing at a player.
  *
  * ⚠ IT MUST RETURN THE BOOLEAN. Both admission sites compare with `=== true`
- * (src/worldengine/drivers/index.js:196 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`),
+ * (src/worldengine/drivers/index.js:248 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`),
  * so a truthy non-boolean registers, reports as `skipped`, renders nothing and throws nothing.
  */
 export const SOLID_FEATURES_ENTRY = Object.freeze({
