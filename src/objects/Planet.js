@@ -9,7 +9,7 @@ import {
   CRATER_RELIEF_UNIFORMS_GLSL,
 } from '../worldengine/shaders/craterRelief.glsl.js';
 import { conditionFromBody } from '../worldengine/port/conditionFromBody.js';
-import { atmosphereOpticsOf } from '../worldengine/base/atmosphereOptics.js';
+import { atmosphereOpticsOf } from '../worldengine/base/atmosphereOptics.js'; import { terminatorOpticsOf } from '../worldengine/base/terminatorOptics.js';  // ⛔ B3-1 RIDES THIS LINE: a new import line would shift every one of the 194 line-anchored citations that point below it.
 import { biosphereOf, BIO_PIGMENT } from '../worldengine/base/surfaceMaterial.js';
 import { craterUniformsFrom, CRATERS_OFF } from '../worldengine/port/craterUniforms.js'; import { craterRelevanceOf } from '../worldengine/base/bombardment.js'; // ⛔ RIDES THIS LINE: a new import line shifts every cited line below (see :2085-2090)
 import { updateLabPlanetMaterial, buildLabPlanetMaterial, ensureLabAttributes } from '../rendering/LabPlanetMaterial.js'; import { POSTERIZE_QUANTUM } from '../rendering/posterizeLevels.js'; // ⛔ B2P RIDES THIS LINE: a new import line shifts every cited line below it.
@@ -1400,24 +1400,24 @@ const CRATER_VORO_CELLS = 27;
 // than inlined so the negative control is one edit, and so a bisect has something to grep for.
 const LIMB_MIX = 1.0;
 
-// Terminator gaussian half-width, in units of dot(N, L) — the LAB'S OWN LAW, ported verbatim from
-// planet-lod-lab.html (state.termWidth). It reads only atmosphere.pressure, so it never needed
-// anything out of the un-extracted applyDrivers; the earlier provisional 0.18 constant is retired.
-// Hairline 0.06 at <= ~0.1 bar, 0.12 at 1 bar, ~0.14 at 1.5 bar, saturating at the 0.30
-// Venus-class ceiling. The 1e-3 floor keeps log10 finite on airless bodies, whose width is inert
-// behind strength 0 anyway.
-function termWidthFor(pressureBar) {
-  const p = Math.max(pressureBar ?? 0, 1e-3);
-  return Math.min(0.30, Math.max(0.06, 0.12 + 0.09 * Math.log10(p)));
-}
-
-// The terminator MAGNITUDE, also the lab's own value. Tuned in the lab 2026-06-15: it was 0.5, and
-// that additive peak "swamped the surface into a heavy orange BELT on every atmospheric world
-// (Max-reported, all planet types)". This port originally shipped columnFraction as the magnitude,
-// and columnFraction saturates to exactly 1.0 above 0.3 bar — 6.7x the lab's value, which
-// reproduced the very artifact the lab had already fixed. columnFraction is retained as the
-// airless GATE, which is the part atmosphereOptics.js actually owns.
-const TERM_STRENGTH = 0.15;
+// ── Terminator: THE LAW MOVED, 2026-08-21 (block B3, leg 1) ────────────────────────────────────
+// `TERM_STRENGTH` and `termWidthFor` used to be DEFINED here, module-private and unexported, and
+// that is exactly why ledger row P-11 could not close: nothing under src/worldengine/ could import
+// them, so no driver pack could forward the band to a swapped body and the three `uTerm*` names
+// were written by this material and by nothing else. Both now live in
+// src/worldengine/base/terminatorOptics.js and are imported BACK on the import line at the top of
+// this file, so the game and the world engine call ONE function object — the shape
+// atmosphereOptics.js already had.
+//
+// ⛔ THIS BLOCK IS A POINTER STONE AND ITS LINE COUNT IS LOAD-BEARING. It occupies exactly the 18
+// lines the two definitions occupied, because line-anchored citations across this repo point BELOW
+// here in Planet.js (measured: 194 refs of the form `Planet.js:NNNN` with NNNN >= 1400) and the B4
+// lane is editing the same `uniforms:` literal further down. Deleting the block outright would have
+// moved every one of them and rotted both lanes' citations in a single commit. Do not compress it.
+//
+// ⭐ The values did not move. `terminatorOpticsOf(condition)` returns the same
+// `(columnFraction ?? 0) * TERM_STRENGTH` and the same log-pressure ramp, character for
+// character. The call site is :1610 and the three uniform lines are :1653-1655.
 
 const GAS_TYPES = new Set(['gas-giant', 'hot-jupiter', 'eyeball', 'sub-neptune']);
 const ROCKY_TYPES = new Set(['rocky', 'ice', 'lava', 'ocean', 'terrestrial', 'venus', 'carbon']);
@@ -1607,7 +1607,7 @@ export class Planet {
     // module's value — a live drift between the lab and the module it imports. The game takes the
     // module's value, deliberately: the module is the shared law. Reconciling the lab is its own
     // change and must be byte-gated, so it is NOT done here.
-    const optics = atmosphereOpticsOf(condition);
+    const optics = atmosphereOpticsOf(condition); const term = terminatorOpticsOf(condition);   // ⛔ B3-1 RIDES THIS LINE (see :1403). `term` is the SHARED module the packs read, not a second law.
 
     // ── Biosphere cover (port: biosphereOf) ────────────────────────────────────────────────────
     // Another module the game already imported and never called. Pure, and every input it reads —
@@ -1644,14 +1644,14 @@ export class Planet {
         uLimbColor: { value: new THREE.Vector3(...optics.limbColor) },
         // Terminator. The HUE is the shared module's — that is what atmosphereOptics.js owns and
         // says it owns ("derives the limb and terminator hue from condition scalars").
-        // STRENGTH and WIDTH are now the lab's own laws (termWidthFor / TERM_STRENGTH above). Both
-        // were portable all along: they read only atmosphere.pressure and atmosphere.retained, so
-        // neither needed anything out of the un-extracted applyDrivers. columnFraction stays as the
-        // airless GATE — 0 for airless, ~1 for a full atmosphere — which is what the module owns.
-        // It is no longer doing double duty as the magnitude, which is what made the band 6.7x too
-        // strong and, because it saturates above 0.3 bar, identical on every generated body.
-        uTermStrength: { value: (optics.columnFraction ?? 0) * TERM_STRENGTH },
-        uTermWidth: { value: termWidthFor(condition.atmosphere?.pressure) },
+        // STRENGTH and WIDTH are the lab's own laws, and since B3-1 they live in the SHARED module
+        // src/worldengine/base/terminatorOptics.js rather than in this file. They were portable all
+        // along: they read only atmosphere.pressure and atmosphere.retained, so neither needed
+        // anything out of the un-extracted applyDrivers. columnFraction stays as the airless GATE —
+        // 0 for airless, ~1 for a full atmosphere — which is what atmosphereOptics.js owns, and it is
+        // no longer doing double duty as the magnitude, which is what made the band 6.7x too strong.
+        uTermStrength: { value: term.termStrength },
+        uTermWidth: { value: term.termWidth },
         uTermColor: { value: new THREE.Vector3(...optics.termColor) },
         // Biosphere. BIO_PIGMENT is the module's own pigment constant, not a colour picked here.
         uBioGroundCover: { value: bioCover },
