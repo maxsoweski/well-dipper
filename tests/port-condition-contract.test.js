@@ -350,7 +350,7 @@ const EXPECTED_LAW_MOVER_BODIES = Object.freeze({
   // row below is byte-unchanged, which is the check that nothing but the giant deck reads
   // the new key — the same claim channel 3 makes structurally, made here by population.
   giant:            401,   // Step 4 + Step 5e — shellDepthFrac 340, dissipation 201, internalHeat 11
-  palette:          149,   // ⭐ Step 4, UNDECLARED — see the block above (148 -> 149 at 2154de1)
+  palette:          164,   // ⭐ Step 4, UNDECLARED — see the block above (148 -> 149 at 2154de1; 149 -> 164 at B2 LEG 2, 2026-08-20, the oxidation window OX_VOL_LO/HI 0.03/0.12 -> 0.02/0.10 — the 15 are bodies the widened oxidiser gate now moves off the frozen adapter's palette)
   iceness:           85,   // Step 4 (86 -> 85 at 2154de1)
   biosphere:         32,   // Step 4
 });
@@ -1020,7 +1020,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     // things moved than we said".
     //
     // ⛔ NINE, NOT THE EIGHT THE PLAN'S UNIFORM-LEVEL DELTA IMPLIES. `palette` moves on
-    // 148/526 and is named in no plan, no delta table and no ledger entry. See
+    // 164/526 (148 pre-2154de1, 149 pre-B2-leg-2) and was named in no plan, delta table or ledger entry. See
     // EXPECTED_LAW_MOVER_BODIES.
     const perKey = {};
     const samples = {};
@@ -1103,7 +1103,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     const palette = subPop(surfacePaletteOf);
     expect(palette.seen, 'the palette bundle changed shape').toEqual(['craton', 'fresh', 'sediment', 'weathered']);
     expect(palette.out, 'the UNDECLARED palette family — pinned by sub-field so it cannot widen quietly')
-      .toEqual({ craton: 141, weathered: 129, sediment: 129, fresh: 16 });  // weathered/sediment 128 -> 129 at 2154de1
+      .toEqual({ craton: 150, weathered: 144, sediment: 144, fresh: 16 });  // weathered/sediment 128 -> 129 at 2154de1, 129 -> 144 and craton 141 -> 150 at B2 LEG 2 (2026-08-20, OX_VOL_LO/HI 0.03/0.12 -> 0.02/0.10). ⭐ `fresh` IS THE CONTROL AND IT IS UNMOVED AT 16: surfaceAlbedoOf skips the whole oxidation stage under `altered: false`, so a leg that moved the oxidiser window and nothing else MUST leave this one row alone. If it ever moves with the other three, the change was not the window.
 
     // ⚠ TWO OF THE FOUR STEP-2 MOVERS ARE BAKES `PlanetGenerator` WRITES ONTO THE BODY
     // RECORD (`lavaGlowColor`, `lavaCrustColor`), so that step reaches the shipped

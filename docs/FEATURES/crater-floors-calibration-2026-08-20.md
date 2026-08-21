@@ -1,6 +1,9 @@
 # THE TWO CRATER FLOORS — DERIVATION AND COMMITTED CALIBRATION TABLE
 
-**B2 leg 1**, built 2026-08-20 on `feature/world-engine-production-L1` at `e17ca25`. This is the
+**B2 leg 1**, built 2026-08-20 on `feature/world-engine-production-L1` at `e17ca25`. ⭐ **B2 ships ONE calibration deliverable across all three legs and it is
+`docs/FEATURES/b2-differentiation-calibration-2026-08-20.md`** — this file stays the full crater
+derivation, that one carries leg 3's wavelength table, leg 2's oxidation anchors, the block's delta
+table and the moon numbers no instrument prints. ⛔ Committed at `5afef82`, not `e17ca25`. This is the
 calibration table `docs/FEATURES/comprehensive-wiring-plan-2026-08-20.md:413` names as *"part of the
 deliverable"*, for the crater half of Option C
 (`docs/FEATURES/r-rows-decision-packet-2026-08-20.md:564`).

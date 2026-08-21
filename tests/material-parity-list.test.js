@@ -402,21 +402,17 @@ describe('1. the swapped population, re-measured on lab-procedural-0…199', () 
 // 2. THE HEADLINE — how much per-body character survives the swap.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 describe('2. the collapse in per-body variation', () => {
-  it('45 of the game material’s 72 uniforms vary across bodies; 48 of the lab’s 356 do', () => {
+  it('45 of the game material’s 72 uniforms vary across bodies; 49 of the lab’s 356 do', () => {
     expect(LEDGER.gameSize).toBe(72);   // 71 -> 72 AT B2P: uPosterizeLevels, the colour quantum. It is CONSTANT across bodies (a global display setting), so gameVarying stays 45 — the two numbers moving apart is the control that this is a declaration and not a new per-body draw.
     expect(LEDGER.labSize).toBe(356);
-    // ⭐ RE-PINNED AT STEP 10a, 37 -> 45. This is a POPULATION move, not a code move: the pass now
-    // walks 266 bodies instead of 103, and eight game uniforms that read one value across the gas-only
-    // set read several across the whole one. Nothing about the game material changed.
+    // ⭐ RE-PINNED AT STEP 10a, 37 -> 45. This is a POPULATION move, not a code move: the pass now walks 266 bodies instead of 103, and eight game uniforms that read one value across the gas-only set read several across the whole one. Nothing about the game material changed. ⚠ AND B2 LEG 3 LEFT IT AT 45 ON PURPOSE, which is the control that the leg touched the LAB material and not the game's: `uNoiseScale` was already in `gameVarying` (the legacy material spends a drawn per-body `d.noiseScale`), so a leg that moved the game side would have moved this number too.
     expect(LEDGER.gameVarying.length).toBe(45);
     // ⛔ MEMBERSHIP, NOT A COUNT. Step 4 measured that a count-preserving permutation passes every
     // instrument this program owns byte-identically, so a bare count would accept a build in
     // which the bands stopped varying and something else started.
-    // ⭐ 16 -> 48 AT STEP 10a, AND THE 32 NEW NAMES ARE THE WHOLE POINT OF THE STEP: the 21-name
-    // rockySurface family (crater, ejecta, palette, offsets, `uPerturb`) now varies per body, and the
-    // three MASTER GATES `uBandStrength`/`uJetStrength`/`uLimbStrength` joined it too — not because a
-    // deck changed, but because they hold their gate value on the 103 gas bodies and the factory
-    // default on the 163 solid ones, so across the merged population they differ.
+    // ⭐⭐ 48 -> 49 AT B2 LEG 3, 2026-08-20, AND THE ONE NEW NAME IS THAT LEG'S ENTIRE CLAIM. `uNoiseScale` was the last frequency in the engine with no physical size behind it — the factory 4.0 on BOTH sides, written by NEITHER. rockySurface now emits it km-shaped, and it lands here rather than in the `written`-minus-`labVarying` residue below because it VARIES per body: the base wavelength law is a constant (radius cancels under the game display policy), so all of the variation is the Io-anchored tidal process term at src/worldengine/base/macroWavelength.js:126 `export function macroShortening(rawIoRatio) {`. ⚠ MEASURED on `lab-procedural-0…199`'s 1160 non-gas bodies: 985 distinct values and 83 distinct 5% bins, where before there was exactly 1 of each. ⛔ IF THE PROCESS TERM WERE EVER REMOVED this name would leave this list and the residue assertion below would red — which is the control that says the differentiation is real and not a re-labelled constant.
+    // ⭐ 16 -> 48 AT STEP 10a, AND THE 32 NEW NAMES ARE THE WHOLE POINT OF THE STEP: the 21-name rockySurface family (crater, ejecta, palette, offsets, `uPerturb`) now varies per body, and the
+    // three MASTER GATES `uBandStrength`/`uJetStrength`/`uLimbStrength` joined it too — not because a deck changed, but because they hold their gate value on the 103 gas bodies and the factory default on the 163 solid ones, so across the merged population they differ.
     expect(LEDGER.labVarying).toEqual([
       'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM', 'uBandPhaseJet', 'uBandRough',
       'uBandS2', 'uBandSEq', 'uBandStrength', 'uBandTint', 'uBandWarp',
@@ -432,6 +428,7 @@ describe('2. the collapse in per-body variation', () => {
       'uLightDir',
       'uLimbColor', 'uLimbExponent', 'uLimbStrength',
       'uMacroOffset',
+      'uNoiseScale',
       'uPerturb',
       'uPolarMode', 'uPolarPhase', 'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
       'uPolarStrength', 'uPolarTint',
@@ -439,8 +436,11 @@ describe('2. the collapse in per-body variation', () => {
       'uThermalDir',
       'uWeatheredColor',
     ]);
-    // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 45 of the 47 uniforms the four packs
-    // write vary per body. The two that do not are `uEjectaLump` and `uTerraceCount` — rockySurface
+    // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 46 of the 48 uniforms the four packs
+    // write vary per body (45 of 47 before B2 leg 3 added `uNoiseScale`, which varies, so the
+    // residue below is UNCHANGED — a new write that did not vary would have grown it, and that is
+    // exactly the difference between wiring a law and wiring a constant).
+    // The two that do not are `uEjectaLump` and `uTerraceCount` — rockySurface
     // forwards both from `craterUniformsFrom`, and on this corpus every body that fires a crater
     // schedule lands on the same lump and terrace count. ⚠ The three master gates are NO LONGER on
     // this list; see the note above for why that is a population fact, not a wire fact.
@@ -448,14 +448,14 @@ describe('2. the collapse in per-body variation', () => {
       .toEqual(['uEjectaLump', 'uTerraceCount']);
   });
 
-  it('the four packs write 47 uniforms between them, and the ledger’s `carried` rulings rest on them', () => {
+  it('the four packs write 48 uniforms between them, and the ledger’s `carried` rulings rest on them', () => {
     // If the pack stops writing the band deck, G-01/G-04/G-07's "carried" ruling is false. Pinned as
     // a SET OF NAMES, not a length — Step 4 measured that a count-preserving permutation is
     // byte-identical to every instrument this program owns.
     // ⭐ THIS IS A UNION OVER THE PASS AND WAS NOT ALWAYS ONE. See the note on `writtenSet` in
     // `ledgerPass`: as a first-body sample this pin read 26 gas names by accident of generation
     // order, and Step 10a's solid-first population re-pointed it at rockySurface's 21 without any
-    // deck changing. The two write-sets are disjoint, so the union is exactly 26 + 21.
+    // deck changing. The two write-sets are disjoint, so the union is exactly 26 + 22 (21 until B2 leg 3 added `uNoiseScale` to the rockySurface half; the disjointness is what makes the union a sum, and it holds because giantDeck's predicate is `=== 'gas'` and rockySurface's is its exact complement).
     expect(LEDGER.written).toEqual([
       'uBandAMid', 'uBandContrast', 'uBandDeflectScale', 'uBandM', 'uBandPhaseJet', 'uBandRough',
       'uBandS2', 'uBandSEq', 'uBandStrength', 'uBandTint', 'uBandWarp',
@@ -468,7 +468,7 @@ describe('2. the collapse in per-body variation', () => {
       'uJetFestoon', 'uJetShearTurb', 'uJetSpeed', 'uJetStrength',
       // ── limbDeck (C20), live from the registration commit ──
       'uLimbColor', 'uLimbExponent', 'uLimbStrength',
-      'uMacroOffset', 'uPerturb',
+      'uMacroOffset', 'uNoiseScale', 'uPerturb',
       // ── polarDeck (C19), live from the registration commit ──
       'uPolarMode', 'uPolarPhase', 'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
       'uPolarStrength', 'uPolarTint',
@@ -593,15 +593,15 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
     // ⭐⭐ P-04 IS CLOSED BY REGISTRATION, AND THIS IS THE ASSERTION THAT SAYS SO. `uLimbStrength`
     // used to belong to the loop above: declared by the lab, written by nothing. limbDeck now writes
     // it, so the loss is resolved rather than merely described. ⛔ THE INVERTED ASSERTION IS THE
-    // POINT — if a future edit un-registers limbDeck, this line goes red, which is precisely the
-    // "delete the entry and the feature silently leaves" failure the registration fence exists for.
+    // POINT — if a future edit un-registers limbDeck, this line goes red, which is precisely the "delete the entry and the feature silently leaves" failure the registration fence exists for.
     // ⚠ THAT PROPERTY DEPENDS ON `LEDGER.written` BEING A UNION. While it was a first-body sample it
     // went red at Step 10a with limbDeck's wire fully intact, and — worse — could not have gone green
     // again for any state of limbDeck, because the sampled body was solid by construction. The four
-    // aurora `not.toContain` lines above have the mirror-image dependency: under a sample they passed
-    // vacuously, since no gas-deck name was in the set at all.
+    // aurora `not.toContain` lines above have the mirror-image dependency: under a sample they passed vacuously, since no gas-deck name was in the set at all.
     expect(labNames.has('uLimbStrength'), 'the lab must still declare uLimbStrength').toBe(true);
     expect(LEDGER.written, 'P-04: limbDeck must write it, or the loss is back').toContain('uLimbStrength');
+    // ⭐⭐ M-09 IS CLOSED THE SAME WAY, AT B2 LEG 3, AND THIS IS ITS HALF OF THE FENCE. `uNoiseScale` used to be the aurora shape too — declared by the lab, written by nothing, the factory 4.0 on both sides. `rockySurface` now writes it on every body its `!== 'gas'` predicate claims, which is 632 of 632 plain moons (tests/moon-lab-mount.test.js:406 `expect(admitted).toBe(plain);`), so the moon-side base-frequency loss is resolved rather than described. ⛔ INVERTED FOR THE SAME REASON: un-register the pack and this line goes red instead of the feature leaving silently.
+    expect(LEDGER.written, 'M-09/P-10: rockySurface must write it, or the base-frequency loss is back').toContain('uNoiseScale');
   });
 
   it('P-17 — `lodLevel` is read by no shader, and that is counted rather than asserted', () => {

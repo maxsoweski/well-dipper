@@ -191,8 +191,8 @@ export function biosphereOf(cond) {
 //    oxidised dust mantle accumulate and stay. So the oxidation term rides (1 − erosion).
 export const IRON_FELSIC   = 0.08;  // bulk iron fraction at/below which the exposed crust reads fully felsic (light)
 export const IRON_MAFIC    = 0.40;  // at/above which it reads fully mafic (dark basalt/mare)
-export const OX_VOL_LO     = 0.03;  // volatile fraction below which there was never enough water to oxidise the crust
-export const OX_VOL_HI     = 0.12;  // at/above which the oxidiser budget is saturated
+export const OX_VOL_LO     = 0.02;  // = Luna's and Mercury's own volatile budget — the reference UNOXIDISED bodies read exactly 0
+export const OX_VOL_HI     = 0.10;  // = Mars's own budget — the reference OXIDISED body must SATURATE the gate, not sit at 0.874 of it
 export const OX_FE_LO      = 0.02;  // even an iron-poor rocky crust has ample Fe to rust — this saturates fast
 export const OX_FE_HI      = 0.10;
 export const AGE_OX_REF    = 4.5;   // Ga — exposure time at which oxidation/space-weathering maturity saturates
@@ -201,7 +201,7 @@ export const AGE_OX_REF    = 4.5;   // Ga — exposure time at which oxidation/s
 // twice as bright as the surrounding land. Real deep-weathering profiles do not get there: laterite is
 // iron-ENRICHED, but the parent rock's quartz and kaolinite persist through the profile, so residual silicate
 // always shows. The cap keeps the endmember a weathered ROCK rather than a pigment.
-export const OX_MAX        = 0.60;
+export const OX_MAX        = 0.60;  // ⛔ re-examined 2026-08-20 and HELD; the measurement that held it is at the oxidation stage below
 export const OX_T_LO       = 150;   // K — PALAEO liquid-water gate, low edge. Deliberately colder + wider than
 export const OX_T_HI       = 250;   // K — erosionOf's present-climate band: rust records a wet PAST (Mars, 210 K
                                     // today) that Europa (~102 K) and Titan (~94 K) never had.
@@ -344,6 +344,35 @@ export function surfaceAlbedoOf(cond, opts) {
   const mafic = smoothstep(IRON_FELSIC, IRON_MAFIC, iron);
   let col = mix3(FELSIC_ROCK, MAFIC_ROCK, mafic);
 
+  // ⭐ THE OXIDISER WINDOW'S TWO EDGES WERE RE-DERIVED FROM REFERENCE BODIES ON 2026-08-20 (B2 leg 2). The full
+  //    table, the corpus delta and the two alternatives that were REFUSED are in
+  //    docs/FEATURES/oxidation-window-calibration-2026-08-20.md. The scale the gate reads is this engine's OWN
+  //    real-body volatileFraction (driver-presets.js): Mercury/Luna 0.02, Venus 0.02, Mars 0.10, Earth 0.15.
+  //    Set against each body's OBSERVED surface oxidation, the window falls out rather than being chosen:
+  //      · Luna and Mercury carry no Fe³⁺ at all (lunar fO₂ ≈ IW−1 with native Fe⁰ in the agglutinates; Mercury
+  //        more reduced still, sulfide-bearing, surface FeO < 2 wt%). The reference unoxidised bodies must read
+  //        EXACTLY zero, so OX_VOL_LO sits ON them at 0.02 rather than in the gap above them.
+  //      · Mars is the most thoroughly ferric-oxidised regolith measured anywhere (dust Fe³⁺/ΣFe ≈ 0.7–0.9), so
+  //        the archetype must SATURATE the gate: OX_VOL_HI sits ON Mars at 0.10.
+  //      · Earth is oxidised and wet and sits ABOVE Mars's budget, so it saturates too — what keeps Earth's disc
+  //        un-rusty is the (1 − erosion) brake in this same product, not the oxidiser gate. That is the design.
+  //      · Venus is dry (0.02) and reads zero here, which matches a dark basalt disc — but note that Venus's real
+  //        oxidation is CO₂/SO₂-driven, not water-driven, and this law has no oxidiser channel but water. Declared,
+  //        not fixed: giving it one is a new law, not a constant.
+  //    ⛔ THE PRE-LEG PAIR IS KEPT AS THE THING CORRECTED, NOT DELETED: OX_VOL_LO 0.03 / OX_VOL_HI 0.12. Neither
+  //      edge sat on a body; 0.12 held Mars — the archetype — at 0.874 of its own gate.
+  //    ⛔ AND A CORPUS-FITTED PAIR WAS REFUSED. 0.015 / 0.080 fits `lab-procedural-0…199`'s volatileFraction
+  //      histogram and measures better (87 bodies past one posterize quantum against 0), but 0.015 hands Luna and
+  //      Mercury a NONZERO oxidiser gate. Fitting the law to our own generator is how a world-generation defect
+  //      becomes a palette law; the real-body pair ships and the fitted one is recorded here as refused.
+  //    ⛔ OX_MAX RE-EXAMINED AND HELD AT 0.60. MEASURED, not assumed: it is a CEILING on exactly two presets
+  //      (Rocky Earthlike and Eyeball, both on the `stable` craton branch, where the clamp01 below reaches 1) and
+  //      on 0 of the corpus's 1160 non-gas bodies — on the corpus it is a flat 0.6× GAIN that moves every body at
+  //      once. The real-body rule that would raise it REFUSES: reproducing Martian bright-region red/blue (≈3.3)
+  //      through the rest of this chain needs a mix of 0.771 on a product of 0.648, i.e. OX_MAX 1.19 — not a legal
+  //      mix fraction. So the chain under-reds Mars (R/B 2.12 against ≈3.3) and the term holding it back is
+  //      palaeoWater (OX_T_HI 250 puts Mars's 210 K at 0.648), NOT this cap. OX_T is a different window and was
+  //      out of this leg's scope; the arithmetic for moving it is in §5 of the doc above.
   // 2. oxidation — rust needs FIVE things, and dropping any one of them mis-colours a real world:
   //      (a) iron in the crust (saturates fast — every rocky crust has ample Fe),
   //      (b) an oxidiser reservoir (volatile budget),

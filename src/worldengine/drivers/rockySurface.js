@@ -65,9 +65,9 @@
 //     on every swapped body. That is a REAL residue and it is not a regression this pack introduces:
 //     it is the state the legacy material already ships. Closing it is an offset-FAMILY decision
 //     with 20 producers to find, not three more driver lines.
-//  4. `uNoiseScale` (ledger P-10). Measured: the lab never writes it either — it sits at the factory
-//     default (src/worldengine/shaders/uniforms.js:10 `uNoiseScale: { value: 4.0 },`). There is no
-//     lab law to carry, so closing P-10 means DECIDING what a per-body value should be. Not wiring.
+//  4. `uNoiseScale` (ledger P-10 planets / M-09 moons) — ⭐ NO LONGER A NON-PORT. CLOSED AT B2 LEG 3, 2026-08-20, and ⛔ the pre-leg text is kept as the thing CORRECTED rather than deleted, because a reader who finds only the new claim cannot tell what changed: it read "Measured: the lab never writes it either — it sits at the factory default (src/worldengine/shaders/uniforms.js:10 `      uNoiseScale: { value: 4.0 },`). There is no lab law to carry, so closing P-10 means DECIDING what a per-body value should be. Not wiring."
+//     ⭐ THAT WAS RIGHT ABOUT THE STATE AND WRONG ABOUT THE REMEDY. Max ruled the shape — give the base field a characteristic wavelength in km, in the engine's established shape, and calibrate that wavelength against real bodies rather than choosing it mid-wiring — so the value is now DERIVED (an eight-body calibration plus an Io-anchored tidal process term) rather than decided. src/worldengine/base/macroWavelength.js carries the whole derivation; this pack forwards it and authors nothing, which is the same posture every other line here takes.
+//     ⚠ AND IT IS A RE-CALIBRATION FIRST, A DIFFERENTIATOR SECOND. The base law is a CONSTANT 2.8736 against today's 4.0 — the reference bodies put the macro wavelength at about one body radius from Luna to Venus, so the radius cancels — and every per-body difference comes from the process term. MEASURED on `lab-procedural-0…199`'s 1160 non-gas bodies: 985 distinct values where there was 1, and 83 distinct 5% bins where there was 1.
 //  5. `uIcenessAlbedo`. `uIcenessMix` is the driven MIX; the albedo it mixes toward is a lab knob.
 //  6. NO `assertMacroSeed`, and the omission is the honest one — same reasoning as
 //     src/worldengine/drivers/limbDeck.js:52 `ASSERTION, and the omission is the honest one.`.
@@ -120,9 +120,9 @@ import { craterUniformsFrom } from '../port/craterUniforms.js';
 import { surfacePaletteOf, icenessOf, biosphereOf, BIO_PIGMENT } from '../base/surfaceMaterial.js';
 import { applyAlbedoTransfer } from '../display/albedoTransfer.js';
 import { reliefEnvelope } from '../base/labCore.js';
-import {
-  sizeKm, scalar, assertDisplayPolicy, assertPackResult, PackContractError,
-} from '../port/writePackUniforms.js';
+import { sizeKm, scalar, assertDisplayPolicy, assertPackResult, PackContractError } from '../port/writePackUniforms.js';
+// ⭐ B2 LEG 3 — the base field's km wavelength and its cFeature. ⛔ THE CALIBRATION CONSTANTS LIVE IN THAT MODULE AND ARE ONLY FORWARDED FROM HERE, and the reason is a shipped fence rather than taste: tests/driver-pack-rockysurface.test.js:717 asserts this file's numeric literals are exactly `0`, `0.55`, `1.0` and `3`, so a calibration constant TYPED here reds it. `C_CRATER` below is the same NAMED-FORWARD shape and escapes only because its value happens to be one of the four; a base-field constant of 1.16 does not, and routing around the fence rather than through a shared module is exactly the transcription it exists to catch.
+import { macroWavelengthKm, C_MACRO } from '../base/macroWavelength.js';
 
 // ── The two declared gate names ──────────────────────────────────────────────────────────────────
 // ⭐ NAMES, NOT HARDCODED 1.0s, and TWO of them rather than one, because the lab has two independent
@@ -420,12 +420,12 @@ export function rockySurfacePack(condition, ctx = {}) {
     uIcenessMix: icenessOf(condition),
 
     // ── The one global relief term ───────────────────────────────────────────────────────────────
-    // ⭐ IT RIDES ONCE. The lab's own note at its write site is that the envelope applies at
-    // `uPerturb` and NOWHERE ELSE — applying it again at the crater amplitude squared it, which was
-    // a convicted defect. `uCraterAmp` above is therefore the raw crater law's value, unmultiplied,
-    // exactly as planet-lod-lab.html:5359 `uniforms.uCraterAmp.value        = state.craterAmp;`
-    // records. Do not "fix" the asymmetry between these two lines.
+    // ⭐ IT RIDES ONCE. The lab's own note at its write site is that the envelope applies at `uPerturb` and NOWHERE ELSE — applying it again at the crater amplitude squared it, which was a convicted defect. `uCraterAmp` above is therefore the raw crater law's value, unmultiplied, exactly as planet-lod-lab.html:5359 `uniforms.uCraterAmp.value        = state.craterAmp;` records. Do not "fix" the asymmetry between these two lines.
     uPerturb: PERTURB_BASE * relief,
+
+    // ── B2 LEG 3: the base field's characteristic wavelength (ledger P-10 / M-09) ────────────────
+    // ⭐ THE SECOND km-SHAPED DRIVER IN THIS PACK, and the second name whose VALUE this file refuses to author: `macroWavelengthKm` states a physical size in km and the writer resolves it at the front-end's display radius, exactly as `uCraterScale` does above. The eight-body calibration table, its two-convention caveat, the Io-anchored process term and every constant behind them live in src/worldengine/base/macroWavelength.js — ⛔ do not re-state any of them here. ⚠ UNGATED ON PURPOSE, AND THE SCOPE IS PINNED ELSEWHERE: tests/driver-pack-rockysurface.test.js:379 `  it('FAMILY 6b · GATE SCOPE: the two gates move those two names and NOTHING else', () => {` holds the gated set at exactly `uCraterDensity` and `uEjectaStrength`. There is no lab toggle over the base field, and a gate here would short-circuit to +0 — src/worldengine/port/writePackUniforms.js:186 `    if (!gates[d.gate]) return 0;` — i.e. hand a gated-off body a frequency of zero, one noise cell across the whole disc, a state neither front-end has ever rendered.
+    uNoiseScale: sizeKm(macroWavelengthKm(condition), C_MACRO),
   };
 
   // ⚠ POPULATED, NOT DECORATIVE. src/worldengine/port/writePackUniforms.js:296 `export function assertPackResult(result, packName = 'pack') {`
@@ -518,4 +518,12 @@ export const ROCKY_SURFACE_UNIFORMS = Object.freeze([
   'uWeatheredColor', 'uFreshColor', 'uSedColor', 'uCratonColor', 'uBioGroundColor',
   'uBioGroundCover', 'uIcenessMix', 'uPerturb',
   'uMacroOffset', 'uDetailOffset', 'uCraterOffset',
+  // ⭐ 21 -> 22 AT B2 LEG 3, 2026-08-20. `uNoiseScale` is the base field's frequency (ledger P-10
+  // planets / M-09 moons), and it is the first name this pack writes that the LEGACY material also
+  // writes from a DRAWN record field rather than from a law — src/objects/Planet.js:1681 `        uNoiseScale: { value: d.noiseScale },`
+  // spends `PlanetGenerator.js`'s `rng.range(2.0, 5.0)` on planets and MoonGenerator.js:209 `      noiseScale: Math.max(rng.range(3.0, 6.0), 2.5 / moonRadiusData.radius),`
+  // on moons. ⛔ SO THIS NAME CANNOT REACH BYTE-IDENTITY WITH THE GAME AND IS NOT MEANT TO: the two
+  // sides answer different questions, one drawn and one derived, and the ledger row is what records
+  // that. MEASURED over `lab-procedural-0…199`: 0 of 1160 non-gas bodies agree.
+  'uNoiseScale',
 ]);

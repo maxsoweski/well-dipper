@@ -1035,7 +1035,7 @@ describe('E — the pack obeys the Step-5a contract and stays inside its scope',
     expect(r.attributes).toEqual({});
     expect(r.attributes).not.toBeUndefined();
     expect(Object.keys(r.drivers).sort()).toEqual([...ROCKY_SURFACE_UNIFORMS].sort());
-    expect(ROCKY_SURFACE_UNIFORMS.length).toBe(21);   // 18 + the three domain offsets (P-13)
+    expect(ROCKY_SURFACE_UNIFORMS.length).toBe(22);   // 18 + the three domain offsets (P-13) + `uNoiseScale` (B2 leg 3, ledger P-10/M-09). ⛔ A COUNT IS NOT THE GATE HERE and never was — the line above pins the SET by membership, and this one only catches a driver added to the object and forgotten in the frozen list.
     expect(Object.isFrozen(ROCKY_SURFACE_UNIFORMS)).toBe(true);
     // `meta` is the pack's own report and the only place a test can read WHY a body came out zero.
     expect(r.meta.compositionClass).toBe(compositionClass(FIRED_MOONS[0].cond));
@@ -1153,18 +1153,26 @@ describe('E — the pack obeys the Step-5a contract and stays inside its scope',
     // ⭐ WHAT THE SHIPPED PACKS ASSERT IN THIS ROW IS THE OTHER HALF, and this pack had dropped it:
     //     tests/driver-pack-limbdeck.test.js:473 and tests/driver-pack-polardeck.test.js:665 both
     //     state that EVERY driver is identical under the two display policies. This pack inverts
-    //     that for `uCraterScale` — which is the whole point — so the honest form is the same
-    //     assertion with exactly one stated exception. It is falsifiable by a PACK mutant, which is
-    //     what the line it replaces was not: making a second driver km-shaped by accident (the
+    //     that for its km-shaped names — which is the whole point — so the honest form is the same
+    //     assertion with exactly the stated exceptions. It is falsifiable by a PACK mutant, which is
+    //     what the line it replaces was not: making a THIRD driver km-shaped by accident (the
     //     natural mistake, `uCraterAmp` being the reciprocal) reds it immediately.
+    // ⭐⭐ ONE -> TWO AT B2 LEG 3, 2026-08-20, AND THE SECOND NAME IS THE WHOLE OF THAT LEG.
+    //     `uNoiseScale` is now emitted as `sizeKm(macroWavelengthKm(condition), C_MACRO)`, so it
+    //     crosses the SAME policy seam `uCraterScale` does. ⛔ The list is ORDERED, not a set: the
+    //     filter walks `ROCKY_SURFACE_UNIFORMS`, so the order here is that array's order and a name
+    //     appended in the wrong place reds this rather than passing silently.
+    //     ⚠ AND THIS IS THE GATE THAT SAYS THE NEW DRIVER REALLY IS km-SHAPED. A `scalar(...)` or a
+    //     plain number would be policy-invariant and would DROP OUT of `moved` — the exact silent
+    //     regression this row exists for, one name over.
     for (const x of km.slice(0, 12)) {
       const gameCtx = ctxFor(x);
       const otherPolicy = { ...gameCtx, displayRadiusEarth: gameCtx.displayRadiusEarth * 2 };
       const { drivers } = packFor(x);
       const moved = ROCKY_SURFACE_UNIFORMS.filter((n) => JSON.stringify(resolveDriver(n, drivers[n], gameCtx))
         !== JSON.stringify(resolveDriver(n, drivers[n], otherPolicy)));
-      expect(moved, `${x.id}: exactly ONE driver may move with the display policy`)
-        .toEqual(['uCraterScale']);
+      expect(moved, `${x.id}: exactly TWO drivers may move with the display policy`)
+        .toEqual(['uCraterScale', 'uNoiseScale']);
     }
 
     // (d) The un-fired branch forwards `scale` VERBATIM and is therefore policy-invariant — a
@@ -1200,7 +1208,15 @@ describe('E — the pack obeys the Step-5a contract and stays inside its scope',
     // still not DERIVED here — non-port 3 — but they are now EMITTED, forwarded verbatim off the
     // front-end's ctx. FAMILY 29 is the gate that says so; leaving them here would have made this
     // family assert the opposite of what the pack now does.
-    const FORBIDDEN_NAMES = ['uNoiseScale',
+    // ⭐ `uNoiseScale` LEFT THIS LIST AT B2 LEG 3, 2026-08-20, and it is the same move the three
+    // offset names made at Step 9c one comment up: it is EMITTED now (ledger P-10 / M-09), so
+    // leaving it here would have made this family assert the opposite of what the pack does. The
+    // arm that matters is not this list at all — FAMILY 17 gates that it is km-SHAPED, and
+    // FAMILY 11's literal allowlist gates that its constants were forwarded rather than typed here.
+    // ⛔ `uDispDomainScale` STAYS, and the two must not be confused: it is the OTHER half of P-14's
+    // split, ruled `accepted-loss` at P-15, and it has no producer on either side. Same neighbourhood
+    // in the GLSL, different question.
+    const FORBIDDEN_NAMES = [
       'uDispDomainScale', 'uIcenessAlbedo', 'uIceColor', 'uBaseColor', 'accentColor'];
     for (const n of FORBIDDEN_NAMES) {
       expect(names, `${n} is outside this pack's declared family`).not.toContain(n);
