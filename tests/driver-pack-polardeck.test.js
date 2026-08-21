@@ -617,7 +617,7 @@ describe('GATE 6 · fences and the open registration hole', () => {
     const material = { uniforms: makeUniforms(LAB_WORLD_LIGHT) };
     // ⭐ THE THREE OFFSETS JOINED THIS CTX ON 2026-08-21 AND THE ADDITION IS THE FENCE WORKING, not
     // boilerplate. `giantSurface` (ledger P-11's gas half, P-12, P-13) registered over the gas
-    // predicate and REFUSES a ctx with no per-body noise-domain offset — src/worldengine/drivers/giantSurface.js:199 `function offsetOf(ctx, field, packName) {`
+    // predicate and REFUSES a ctx with no per-body noise-domain offset — src/worldengine/drivers/giantSurface.js:196 `function offsetOf(ctx, field, packName) {`
     // — because defaulting one to the zero vector is legal, renders a plausible planet, and gives
     // every body the same relief. This test composes through the SHIPPED path, so it now has to
     // supply what the shipped path supplies; the game's own `labPackCtx` has carried all three

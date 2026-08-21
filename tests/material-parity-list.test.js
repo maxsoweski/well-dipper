@@ -271,7 +271,14 @@ function encodeValue(v) {
   if (v == null) return 'null';
   if (typeof v === 'object') {
     if ('x' in v) return `v:${v.x},${v.y},${v.z ?? ''},${v.w ?? ''}`;
-    if ('r' in v && 'g' in v) return `c:${v.r},${v.g},${v.b}`;
+    // ⭐⭐ WAS `c:${...}` UNTIL 2026-08-21, AND THE PREFIX IS THE WHOLE OF WHAT CHANGED. A THREE.Color
+    // and a THREE.Vector3 carrying the SAME three floats used to encode to two different strings, so
+    // `sameValue` reported them as diverging on every body, forever, whatever any pack wrote. Both
+    // containers upload to the same GLSL `vec3` slot — the container is a JS wrapper the GPU never
+    // sees — so the old encoding was measuring the WRITER'S CHOICE OF CLASS and reporting it as a
+    // per-body value loss. ⛔ THE FOURTH COMPONENT IS STILL DISTINGUISHED: a Color emits an empty
+    // `w` field exactly as a `z`-only Vector3 does, so a Vector4 can never collide with either.
+    if ('r' in v && 'g' in v) return `v:${v.r},${v.g},${v.b},`;
     if (ArrayBuffer.isView(v)) return `a:${Array.from(v).join(',')}`;
     if (Array.isArray(v)) return `[${v.map(encodeValue).join('|')}]`;
     if (v.isTexture) return 'tex';
@@ -463,7 +470,16 @@ describe('2. the collapse in per-body variation', () => {
       'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
       'uPolarStrength', 'uPolarTint', 'uSedColor', 'uShieldStratoMix',
       'uStarBrightness2', 'uStarColor1', 'uStarColor2', 'uTermColor',
-      'uTermStrength', 'uTermWidth', 'uThermalDir', 'uVolcanismStrength',
+      // ⭐⭐ `uTermStrength` LEFT THIS LIST ON 2026-08-21 AND THE DIRECTION IS THE WHOLE POINT — a name
+      // leaving `labVarying` normally means a wire died, and here it means one landed. The lab used
+      // to write TWO values across the corpus: 0.15 on the 163 solid bodies `solidOptics` claimed,
+      // and the factory 0 on the 103 gas bodies NO pack claimed. That is what made it "vary".
+      // `giantSurface` gives the gas half the same producer, `columnFraction` saturates above 0.3 bar
+      // and every body in this corpus is above it, so the lab now writes the CONSTANT 0.15 — which is
+      // exactly what the game writes, and `gameVarying` has never contained this name either.
+      // ⚠ SO THE AGREEMENT ON IT IS THE WEAK KIND (Instrument C's caveat: green is weak evidence on a
+      // constant), and ledger P-11 says so rather than counting it as per-body character.
+      'uTermWidth', 'uThermalDir', 'uVolcanismStrength',
       'uWeatheredColor',
       // ⭐⭐ THE THREE NAMES B4-1 ADDS, AND THEY ARE THIS BLOCK'S ENTIRE CLAIM — `uStarColor1` VARYING PER BODY on the lab material is exactly the thing ledger P-01 said was lost ("every swapped body renders under implicit white light"). ⛔ NOTE WHICH TWO OF THE FIVE DID **NOT** JOIN, because that is the control: `uStarBrightness1` is a literal 1.0 on every primary StarSystemGenerator draws, so it is constant BY CONSTRUCTION and a build in which it started varying would mean the generator moved, not the port; and `uLightDir2` is constructed at (0,0,0) on every body and only ever written by the PER-FRAME seam (src/main.js copies it inside its binary branch), so this construction-time pass cannot see it and must not pretend to — P-02's direction half is fenced at the seam instead, in tests/lab-shader-perframe-seam.test.js.
     ]);
@@ -481,7 +497,14 @@ describe('2. the collapse in per-body variation', () => {
     // schedule lands on the same lump and terrace count. ⚠ The three master gates are NO LONGER on
     // this list; see the note above for why that is a population fact, not a wire fact.
     expect(LEDGER.written.filter((n) => !LEDGER.labVarying.includes(n)))
-      .toEqual(['uEjectaLump', 'uTerraceCount']);
+      // ⭐ `uTermStrength` JOINED THESE TWO ON 2026-08-21, AND IT ARRIVED BY THE OPPOSITE ROUTE.
+      // `uEjectaLump` and `uTerraceCount` are written-and-constant because their LAW is constant.
+      // `uTermStrength` is written-and-constant because `columnFraction` saturates above 0.3 bar and
+      // every body in this corpus is above it — so once `giantSurface` gave the gas half a writer,
+      // the lab's two values (0.15 solid / factory 0 gas) collapsed to the game's single 0.15.
+      // ⛔ A NAME ENTERING THIS LIST IS NORMALLY A WIRE DYING. Here it is a wire landing, and the
+      // way to tell them apart is the GAME side: `gameVarying` has never held this name either.
+      .toEqual(['uEjectaLump', 'uTermStrength', 'uTerraceCount']);
   });
 
   it('the six writing packs emit 69 uniforms between them, and the ledger’s `carried` rulings rest on them', () => {
@@ -556,7 +579,7 @@ describe('2. the collapse in per-body variation', () => {
     // sense: written on both sides from one producer, varying across the population, matching body
     // by body. MEASURED over lab-procedural-0…199 before the fence was moved: all ten crater names
     // went from diverging on up to 343 of 343 gas planets to 0 of 343.
-    expect(LEDGER.divergedCarried.size).toBe(15);   // ⭐⭐ 20 -> 24 AT B2 LEG 1, 2026-08-20, AND THE FOUR NEWCOMERS ARE THE ONES P-14 PREDICTED: `uCraterDensity` (64 of 266 bodies), `uEjectaStrength` (64), `uCraterRelaxation` (56), `uEjectaRampart` (42). They used to sit in the "agree by absence" list below — both sides zero — and P-14 wrote down in advance what would happen: "a loud default behind a shut gate … it becomes a pixel the moment anything opens that gate." Leg 1 opened it: re-deriving CRATER_VIS_FLOOR_RAD 0.02 -> 9.6e-4 and replacing the fixed density floor with the per-body CRATER_MIN_VISIBLE gave 289 of 526 bodies a live crater record where 8 had one. ⚠ AND THE DIRECTION IS THE BAD ONE, MEASURED NOT ASSUMED: on every diverging body the GAME writes the live value and the LAB writes 0 (`rocky: uCraterDensity 0.0008051676964833844 -> 0`; `sub-neptune: uEjectaStrength 1 -> 0`). The cause is a GATE difference the leg neither created nor closes — rockySurface multiplies the crater terms by `craterRelevanceOf(condition)` and its pack predicate excludes gas-class bodies, while the legacy material's crater path is keyed on the TYPE LABEL — so the four names JOIN the blocking P-14 row rather than being re-blessed into agreement.
+    expect(LEDGER.divergedCarried.size).toBe(2);   // ⭐⭐⭐ 15 -> 2 AT THE GAS-HALF BLOCK, 2026-08-21, AND IT IS THE LARGEST SHRINK THIS LINE HAS TAKEN — larger than B3 leg 2's. THIRTEEN LEFT, from two causes that must not be conflated: SEVEN by a WIRE (`giantSurface` gives the gas half the terminator triple, the palette and the offsets — `uTermStrength` `uTermWidth` `uMacroOffset` `uDetailOffset` `uCraterOffset` `uBioGroundCover` `uIcenessMix`), and SIX by the INSTRUMENT (`encodeValue` stopped comparing the JS container, so `uBioGroundColor` `uFreshColor` `uLimbColor` `uSedColor` `uTermColor` `uWeatheredColor` — each measured at maxComponentDelta 0 on 266/266, i.e. bit-for-bit equal at float64 and diverging only as Vector3-vs-Color). ⛔ EXACTLY SIX NAMES FLIP ON THE INSTRUMENT CHANGE AND ALL SIX ARE NAMED HERE; that enumeration is what makes it a comparison fix rather than a loosening, and it was probed rather than reasoned. The TWO that remain are the two with no writer on either half.   // ⭐⭐ 20 -> 24 AT B2 LEG 1, 2026-08-20, AND THE FOUR NEWCOMERS ARE THE ONES P-14 PREDICTED: `uCraterDensity` (64 of 266 bodies), `uEjectaStrength` (64), `uCraterRelaxation` (56), `uEjectaRampart` (42). They used to sit in the "agree by absence" list below — both sides zero — and P-14 wrote down in advance what would happen: "a loud default behind a shut gate … it becomes a pixel the moment anything opens that gate." Leg 1 opened it: re-deriving CRATER_VIS_FLOOR_RAD 0.02 -> 9.6e-4 and replacing the fixed density floor with the per-body CRATER_MIN_VISIBLE gave 289 of 526 bodies a live crater record where 8 had one. ⚠ AND THE DIRECTION IS THE BAD ONE, MEASURED NOT ASSUMED: on every diverging body the GAME writes the live value and the LAB writes 0 (`rocky: uCraterDensity 0.0008051676964833844 -> 0`; `sub-neptune: uEjectaStrength 1 -> 0`). The cause is a GATE difference the leg neither created nor closes — rockySurface multiplies the crater terms by `craterRelevanceOf(condition)` and its pack predicate excludes gas-class bodies, while the legacy material's crater path is keyed on the TYPE LABEL — so the four names JOIN the blocking P-14 row rather than being re-blessed into agreement.
     const everyBody = [...LEDGER.divergedCarried.entries()]
       .filter(([k, v]) => v === LEDGER.carriedTotal.get(k)).map(([k]) => k);
     // ⭐ 17 -> 10 AT STEP 10a, then 10 -> 8 AT B3 LEG 1 (see the two named just below). rockySurface writes the palette, the crater terms and the offsets, so
@@ -564,9 +587,12 @@ describe('2. the collapse in per-body variation', () => {
     // ten that remain are named rather than counted, because "10" alone cannot distinguish a wire
     // that landed from a population that shrank.
     expect(everyBody.sort()).toEqual([
-      // ⚠ These four are written by rockySurface and STILL diverge on every body — the P-11/P-12
-      // `encodeValue` container split (game `THREE.Vector3` vs lab `THREE.Color`), not a dead wire.
-      'uBioGroundColor', 'uFreshColor', 'uSedColor', 'uWeatheredColor',
+      // ⭐⭐ THE FOUR PALETTE COLOURS AND THE TWO OPTICS COLOURS ALL LEFT THIS LIST ON 2026-08-21.
+      // They were never a dead wire — rockySurface and solidOptics wrote them on every body they
+      // claimed, and giantSurface now writes them on the rest — they were the `encodeValue` CONTAINER
+      // split this block used to record as a standing residue. The comparison stopped measuring the
+      // writer's choice of JS class, and all six went to 0/266 at maxComponentDelta 0. ⛔ WHAT IS LEFT
+      // BELOW IS THE HONEST REMAINDER: two names with no per-body writer anywhere.
       // …and these four diverge for their own recorded reasons.
       // ⭐⭐ SIX -> FOUR AT B3 LEG 1, AND THE TWO THAT LEFT ARE THE HALF-CLOSURE THIS BLOCK EXISTS TO
       // MAKE VISIBLE. `uTermStrength` and `uTermWidth` no longer diverge on EVERY body — they now
@@ -579,7 +605,7 @@ describe('2. the collapse in per-body variation', () => {
       // `THREE.Color`, and this instrument compares the encoded container. A colour that is written
       // and still "diverges" here is an instrument fact, not a wire fact.
       // ⛔ `uDispDomainScale` HAS NO WRITER ON EITHER HALF; `uNoiseScale` NO LONGER DOES, AND ITS CAUSE INVERTED AT B2 LEG 3, 2026-08-20 — BOTH halves now write it and they answer different questions (the game draws `d.noiseScale`, the lab derives a size in km), which is why its presence here is unchanged while its reason is not.
-      'uDispDomainScale', 'uLimbColor', 'uNoiseScale', 'uTermColor',
+      'uDispDomainScale', 'uNoiseScale',
     ].sort());
     // The four that agree, agree by a shared CONSTANT (it was eight, and four agreed by ABSENCE until B2 leg 1 — see above).
     const agreeing = [...LEDGER.carried].filter((n) => !LEDGER.divergedCarried.has(n)).sort();
@@ -598,10 +624,22 @@ describe('2. the collapse in per-body variation', () => {
     // (`uEjectaLump`, `uTerraceCount`) and they did NOT move — they were already agreeing by being
     // constant, and they still are. A reader must not conclude the whole family is now derived.
     expect(agreeing).toEqual([
-      'uCraterAmp', 'uCraterComplexD', 'uCraterDensity', 'uCraterRelaxation', 'uCraterScale',
-      'uEjectaAmp', 'uEjectaLump', 'uEjectaRampart', 'uEjectaStrength',
-      'uFwClamp', 'uLimbExponent',
-      'uTerraceCount', 'uVoroCells',
+      // ⭐⭐⭐ 13 -> 26 AT THE GAS-HALF BLOCK, 2026-08-21, AND THE THIRTEEN NEWCOMERS SPLIT BY CAUSE
+      // RATHER THAN ARRIVING AS ONE LUMP. SEVEN came by a WIRE — `giantSurface` gave the gas half
+      // the terminator magnitudes, the two surface scalars and the three domain offsets. SIX came
+      // by the INSTRUMENT — `encodeValue` stopped comparing the JS container, and the colours were
+      // already byte-identical at float64 on 266/266. ⛔ THE SECOND SIX ARE THE WEAKER KIND OF
+      // MEMBERSHIP AND MUST NOT BE READ AS NEW WIRING: nothing about what reaches the GPU changed
+      // for them, only what this instrument was willing to call equal. ⚠ AND `uTermStrength` IS
+      // WEAKER STILL — it agrees on a CONSTANT (see §2's written-but-not-varying list), which is
+      // the case Instrument C's own header warns green is weak evidence for.
+      'uBioGroundColor', 'uBioGroundCover', 'uCraterAmp', 'uCraterComplexD',
+      'uCraterDensity', 'uCraterOffset', 'uCraterRelaxation', 'uCraterScale',
+      'uDetailOffset', 'uEjectaAmp', 'uEjectaLump', 'uEjectaRampart',
+      'uEjectaStrength', 'uFreshColor', 'uFwClamp', 'uIcenessMix',
+      'uLimbColor', 'uLimbExponent', 'uMacroOffset', 'uSedColor',
+      'uTermColor', 'uTermStrength', 'uTermWidth', 'uTerraceCount',
+      'uVoroCells', 'uWeatheredColor'
     ]);
     for (const n of agreeing) {
       // …and every one of them is carried on every body, so "agrees" is not "was rarely compared".
@@ -627,7 +665,7 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
     // eight crater subjects leave the measured set entirely: `craterDeck` writes the impact family
     // on the gas half, which is the half that diverged, so the lab material now agrees with the game
     // on all 266 bodies for every one of them.
-    expect(measured().size).toBe(59);   // 63 -> 64 AT B2P, same one name; 64 -> 68 AT B2 LEG 1 — the four crater names §2 names, which join P-14's subject cell rather than acquiring a row.
+    expect(measured().size).toBe(46);   // ⭐⭐⭐ 59 -> 46 AT THE GAS-HALF BLOCK, 2026-08-21 — the THIRD shrink and the largest. Thirteen subjects leave: P-13's three offsets and P-12's two scalars and P-11's two terminator magnitudes by a WIRE (`giantSurface`, the complement-predicate pack), and six colours by the INSTRUMENT (`encodeValue`'s container split, six names enumerated on §2's divergedCarried line, every one at maxComponentDelta 0 over 266/266). ⛔ ALL THREE ROWS ARE NOW `carried` AND CHANNEL 1 HAS NO `blocking` ROW LEFT; the residue this document still carries is named in P-13 (20 unwritten feature-domain offsets) and in the two names on §2's everyBody list, neither of which is a subject.   // 63 -> 64 AT B2P, same one name; 64 -> 68 AT B2 LEG 1 — the four crater names §2 names, which join P-14's subject cell rather than acquiring a row.
     // 44 lost + 28 carried = the 72 the game material declares. Nothing fell between the buckets.
     expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.carried]).size).toBe(72);
   });
@@ -657,10 +695,18 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
       expect(carriedRows.has(n), `${n} is claimed by a row that is not ruled carried, yet it no longer diverges`).toBe(true);
       expect(agreeing.has(n), `${n} is claimed, does not diverge, and is not in the agreeing bucket either — it fell between the instrument's buckets`).toBe(true);
     }
-    // …and the residue is exactly P-14's eight, named so it cannot grow silently.
+    // ⭐⭐⭐ P-14's EIGHT -> TWENTY-ONE AT THE GAS-HALF BLOCK, 2026-08-21. This list is every name a
+    // ledger row still CLAIMS and this instrument no longer sees diverging, and it grew by P-11's
+    // four, P-12's six and P-13's three. ⛔ IT IS THE RECORD OF WHICH ROWS SUCCEEDED, so it is named
+    // rather than counted, and it may never be SHORTENED to keep an assertion green — emptying a
+    // row's subject cell at the moment the row closes is the one move this document exists against.
     expect(closed.sort()).toEqual([
-      'uCraterAmp', 'uCraterComplexD', 'uCraterDensity', 'uCraterRelaxation',
-      'uCraterScale', 'uEjectaAmp', 'uEjectaRampart', 'uEjectaStrength',
+      'uBioGroundColor', 'uBioGroundCover', 'uCraterAmp', 'uCraterComplexD',
+      'uCraterDensity', 'uCraterOffset', 'uCraterRelaxation', 'uCraterScale',
+      'uDetailOffset', 'uEjectaAmp', 'uEjectaRampart', 'uEjectaStrength',
+      'uFreshColor', 'uIcenessMix', 'uLimbColor', 'uMacroOffset',
+      'uSedColor', 'uTermColor', 'uTermStrength', 'uTermWidth',
+      'uWeatheredColor',
     ].sort());
   });
 
@@ -924,9 +970,16 @@ describe('5. the ledger document', () => {
   it('every ruling in the document is one of the three Max named', () => {
     const rulings = new Set([...CH1_ROWS, ...CH2_ROWS].map((r) => r.ruling));
     for (const r of rulings) expect(RULINGS.has(r), `illegal ruling "${r}"`).toBe(true);
-    // All three are actually used — a ledger with no losses is a ledger that was not run, and one
-    // with no `carried` rows would mean the swap carries nothing, which §2 measures as false.
-    expect(rulings).toEqual(new Set(['carried', 'accepted-loss', 'blocking']));
+    // Two of the three are actually used — a ledger with no losses is a ledger that was not run, and
+    // one with no `carried` rows would mean the swap carries nothing, which §2 measures as false.
+    // ⭐⭐⭐ `blocking` LEFT THIS SET ON 2026-08-21, AND THAT IS THE TERMINAL STATE THIS DOCUMENT WAS
+    // WRITTEN TO REACH rather than a sign the ledger stopped being run. The last three blocking rows
+    // were P-11's gas half, P-12 and P-13 — one defect, not three — closed by `giantSurface` plus the
+    // `encodeValue` container fix, with §2's two lines naming every one of the thirteen subjects that
+    // moved and by WHICH of the two causes. ⛔ THE ASSERTION IS NOT RELAXED TO A SUBSET CHECK: it is
+    // pinned to the exact pair, so the day a row is ruled `blocking` again this reds and someone has
+    // to say which row and why. A ⊆-check would let the set drift in either direction in silence.
+    expect(rulings).toEqual(new Set(['carried', 'accepted-loss']));
   });
 
   it('⭐ CONTROL THAT MOVED — the parser reads the DOC, not a copy inside this file', () => {

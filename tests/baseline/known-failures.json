@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-21T19:07:00.389Z",
+  "recordedAt": "2026-08-21T22:09:56.867Z",
   "recordedFromCommit": {
-    "sha": "be1342706770092c9fd0ce4447143e9eb41c1f0c",
+    "sha": "14d45595ad0fdced68e3a128f1ac351779b8ce7d",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -28,12 +28,12 @@
   },
   "summary": {
     "counts": {
-      "collectedFiles": 338,
+      "collectedFiles": 339,
       "failingFiles": 6,
       "nonCollectingFiles": 15,
-      "tests": 5633,
+      "tests": 5658,
       "failed": 31,
-      "passed": 5598,
+      "passed": 5623,
       "skipped": 4,
       "todo": 0
     },
@@ -248,13 +248,14 @@
       "tests/crater-uniform-law.test.js": 25,
       "tests/driver-pack-craterdeck.test.js": 26,
       "tests/driver-pack-giantdeck.test.js": 79,
+      "tests/driver-pack-giantsurface.test.js": 24,
       "tests/driver-pack-limbdeck.test.js": 31,
       "tests/driver-pack-polardeck.test.js": 35,
       "tests/driver-pack-rockysurface.test.js": 37,
       "tests/driver-pack-solidfeatures.test.js": 33,
       "tests/driver-pack-solidoptics.test.js": 26,
       "tests/feature-associations.test.js": 17,
-      "tests/gas-body-lab-material.test.js": 62,
+      "tests/gas-body-lab-material.test.js": 63,
       "tests/gen-feature-cards.test.js": 3,
       "tests/giant-regime-classifier.test.js": 22,
       "tests/gravity-provenance-fence.test.js": 6,
