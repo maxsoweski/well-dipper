@@ -164,7 +164,7 @@ src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;` is the
 admission test at src/objects/Planet.js:2189 `export function labPipelineAdmits(d, condition) {`,
 which has exactly one call site — src/objects/Planet.js:2019 `const decision = labPipelineAdmits(d, condition);`
 inside `_createLabSurface`, reached for moons through
-src/objects/Moon.js:58 `const labSurface = Planet._createLabSurface(geometry, d, conditionFromBody(d), lightDir);`.
+src/objects/Moon.js:58 `Planet._createLabSurface(geometry, d, conditionFromBody(d), lightDir, lightDir2, starInfo)`.
 There is **no separate moon flag**, so this is one flip exposing both shipped swaps at once. ⚠ The
 earlier draft cited `src/rendering/objects/PlanetMoonBody.js:33` as a second flag read; that line is
 prose inside a comment block and the file reads no flag at all. ⛔ I did not touch the flag.

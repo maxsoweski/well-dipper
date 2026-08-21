@@ -158,6 +158,7 @@ function census(n) {
   const out = {
     systems: 0, binarySystems: 0, claimed: 0, swapped: 0, provenanceBlocked: 0,
     withMoons: 0, moons: 0, inBinary: 0, nonWhitePrimary: 0,
+    corpusWithMoons: 0, corpusMoons: 0,   // ⭐ CORPUS-LEVEL, counted OUTSIDE the admission branch on purpose — see the note above the assertions.
     byVariant: new Map(), byBranch: new Map(),   // 'gas:1' -> count
   };
   setLabGasBodiesOverride(true);
@@ -170,6 +171,10 @@ function census(n) {
       const white = c1[0] === 1 && c1[1] === 1 && c1[2] === 1;
       for (const e of (sys.planets || [])) {
         const d = e.planetData;
+        // ⭐ Counted BEFORE any admission or predicate test, so these two are invariant under
+        // every pack-predicate change and move only when the moon program itself moves.
+        const corpusMoons = (e.moons || []).length;
+        if (corpusMoons) { out.corpusWithMoons++; out.corpusMoons += corpusMoons; }
         const adm = labPipelineAdmits(d, conditionFromBody(d));
         if (!adm.packs.length) continue;
         out.claimed++;
@@ -322,8 +327,18 @@ describe('1. the swapped population, re-measured on lab-procedural-0…199', () 
     // does not read `adm.admitted` at all, so it is invariant under this lane's predicate and moves
     // only when the moon program moves. A `toBe(420)` written now has to be re-measured again the
     // next time a predicate widens, which is the defect this note is recording.
-    expect(CENSUS.withMoons).toBe(228);
-    expect(CENSUS.moons).toBe(456);
+    // ⭐⭐ FIXED 2026-08-21, AND THE FIX IS THE ONE THE NOTE ABOVE ASKED FOR RATHER THAN A NEW NUMBER.
+    // These two asserted 228 / 456 and had been failing ever since the moon-formation window moved
+    // the population — a red that stayed invisible because it sat inside the blessed 32. Both lanes
+    // published 420 / 663 in prose while leaving the assertion carrying the withdrawn figure.
+    // ⛔ Re-pinning them at 420 / 663 was NOT the fix: they are counted inside `out.swapped++`, so
+    // they move on any predicate widening — which is what happened here and would happen again.
+    // The invariant pair is asserted instead; the swapped pair is kept, at its measured value, as
+    // the thing that is ALLOWED to move.
+    expect(CENSUS.corpusWithMoons).toBe(422);
+    expect(CENSUS.corpusMoons).toBe(665);
+    expect(CENSUS.withMoons).toBe(420);        // 228 -> 420, predicate-dependent BY CONSTRUCTION
+    expect(CENSUS.moons).toBe(663);            // 456 -> 663, ditto
     expect(CENSUS.inBinary).toBe(269);         // 125 -> 269
     // Not "most primaries are non-white" — every one of them. The star-colour loss (P-01) has no
     // body on which it is invisible, which is a stronger statement than the plan's "all giants".
@@ -402,9 +417,9 @@ describe('1. the swapped population, re-measured on lab-procedural-0…199', () 
 // 2. THE HEADLINE — how much per-body character survives the swap.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 describe('2. the collapse in per-body variation', () => {
-  it('45 of the game material’s 72 uniforms vary across bodies; 49 of the lab’s 356 do', () => {
+  it('45 of the game material’s 72 uniforms vary across bodies; 52 of the lab’s 369 do', () => {
     expect(LEDGER.gameSize).toBe(72);   // 71 -> 72 AT B2P: uPosterizeLevels, the colour quantum. It is CONSTANT across bodies (a global display setting), so gameVarying stays 45 — the two numbers moving apart is the control that this is a declaration and not a new per-body draw.
-    expect(LEDGER.labSize).toBe(356);
+    expect(LEDGER.labSize).toBe(369);   // ⭐⭐ 361 -> 369 AT B4-2, and the +8 is enumerable: uStarPos1, uStarPos2, uShadowMoonCount, uShadowMoonPos, uShadowMoonRadius, uShadowPlanetCount, uShadowPlanetPos, uShadowPlanetRadius — the caster set that closes ledger P-03. MEASURED in this session, not derived: makeUniforms() returns 364 keys and buildLabPlanetMaterial() reports uniformCount 369 (the 5 ensureLabSamplers slots). ⚠ gameVarying and gameSize are UNCHANGED again, the same control B4-1 used: the GAME material was not touched, so this is a lab-side declaration and not a new per-body draw.   // ⭐ 356 -> 361 AT B4-1, and the +5 is enumerable: uLightDir2, uStarColor1, uStarColor2, uStarBrightness1, uStarBrightness2 — the star set that closes ledger P-01 and P-02. MEASURED in this session, not derived: makeUniforms() returns 356 keys and buildLabPlanetMaterial() reports uniformCount 361 (the 5 ensureLabSamplers slots). ⚠ gameVarying stays 45 and gameSize stays 72: the GAME material was not touched, which is the control that this is a lab-side declaration and not a new per-body draw.
     // ⭐ RE-PINNED AT STEP 10a, 37 -> 45. This is a POPULATION move, not a code move: the pass now walks 266 bodies instead of 103, and eight game uniforms that read one value across the gas-only set read several across the whole one. Nothing about the game material changed. ⚠ AND B2 LEG 3 LEFT IT AT 45 ON PURPOSE, which is the control that the leg touched the LAB material and not the game's: `uNoiseScale` was already in `gameVarying` (the legacy material spends a drawn per-body `d.noiseScale`), so a leg that moved the game side would have moved this number too.
     expect(LEDGER.gameVarying.length).toBe(45);
     // ⛔ MEMBERSHIP, NOT A COUNT. Step 4 measured that a count-preserving permutation passes every
@@ -447,8 +462,10 @@ describe('2. the collapse in per-body variation', () => {
       'uPlanetTempEq', 'uPldStrength', 'uPolarMode', 'uPolarPhase',
       'uPolarPole', 'uPolarR0', 'uPolarRing', 'uPolarSides',
       'uPolarStrength', 'uPolarTint', 'uSedColor', 'uShieldStratoMix',
-      'uTermColor', 'uTermStrength', 'uTermWidth', 'uThermalDir',
-      'uVolcanismStrength', 'uWeatheredColor',
+      'uStarBrightness2', 'uStarColor1', 'uStarColor2', 'uTermColor',
+      'uTermStrength', 'uTermWidth', 'uThermalDir', 'uVolcanismStrength',
+      'uWeatheredColor',
+      // ⭐⭐ THE THREE NAMES B4-1 ADDS, AND THEY ARE THIS BLOCK'S ENTIRE CLAIM — `uStarColor1` VARYING PER BODY on the lab material is exactly the thing ledger P-01 said was lost ("every swapped body renders under implicit white light"). ⛔ NOTE WHICH TWO OF THE FIVE DID **NOT** JOIN, because that is the control: `uStarBrightness1` is a literal 1.0 on every primary StarSystemGenerator draws, so it is constant BY CONSTRUCTION and a build in which it started varying would mean the generator moved, not the port; and `uLightDir2` is constructed at (0,0,0) on every body and only ever written by the PER-FRAME seam (src/main.js copies it inside its binary branch), so this construction-time pass cannot see it and must not pretend to — P-02's direction half is fenced at the seam instead, in tests/lab-shader-perframe-seam.test.js.
     ]);
     // ⭐ MEASURED POST-REGISTRATION, over the UNION write-set: 67 of the 69 uniforms the six writing
     // packs emit vary per body (53 of 55 before B3 leg 3 added `solidFeatures`' fourteen new names,
@@ -686,12 +703,12 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
         null, true,
       ).material.uniforms,
     ));
-    // P-01: no star-colour uniform of any kind.
-    expect([...labNames].filter((n) => /star/i.test(n))).toEqual([]);
-    // P-02 / P-03: no second light, no shadow term.
-    expect([...labNames].filter((n) => /shadow/i.test(n))).toEqual([]);
-    expect(LAB_SHADER_CORPUS.includes('uLightDir2')).toBe(false);
-    expect(LAB_SHADER_CORPUS.includes('uShadow')).toBe(false);
+    // ⭐⭐ P-01 INVERTED AT B4-1, BY P-04'S MECHANISM. This line read `.toEqual([])` and was the machine-check that the lab declared NO star-colour uniform of any kind. It now NAMES the four the lab declares, so un-declaring any one of them reds this assertion instead of letting the feature leave silently — the same inversion that closed P-04 eight lines down.
+    expect([...labNames].filter((n) => /star/i.test(n)).sort()).toEqual(['uStarBrightness1', 'uStarBrightness2', 'uStarColor1', 'uStarColor2', 'uStarPos1', 'uStarPos2']);   // ⭐⭐ FOUR -> SIX AT B4-2, and the two arrivals belong to a DIFFERENT ledger row than the four. uStarColor1/2 and uStarBrightness1/2 are P-01/P-02, carried at CONSTRUCTION. uStarPos1/2 are P-03: the star WORLD positions the shadow ray is cast toward, re-derived into this body's object space every render tick by the seam. They share a prefix and nothing else, and this list is the one place a reader sees them together — so the distinction is written here rather than left to be inferred from the spelling.
+    // ⭐⭐ P-03 INVERTED AT B4-2, ON P-01'S PATTERN. This line read `.toEqual([])` and was the machine-check that the lab declared NO shadow uniform of any kind; B4-1's comment here said the shadow half "needs four world-space vectors and the lab fragment shader has no vWorldPos varying", which was true and was NOT the end of the matter — the casters were moved into the fragment's object space instead of the fragment being moved into theirs. The line now NAMES the six the lab declares, so un-declaring any one of them reddens it instead of letting the feature leave silently.
+    expect([...labNames].filter((n) => /shadow/i.test(n)).sort()).toEqual(['uShadowMoonCount', 'uShadowMoonPos', 'uShadowMoonRadius', 'uShadowPlanetCount', 'uShadowPlanetPos', 'uShadowPlanetRadius']);  expect([...labNames].filter((n) => /^uStarPos/.test(n)).sort()).toEqual(['uStarPos1', 'uStarPos2']);  // ⚠ SIX, NOT EIGHT — and the two that are missing from this list are missing because of the FILTER, not because of the port. P-03's subject list also carries starPos1 and starPos2, whose lab counterparts are uStarPos1/uStarPos2; those match /star/i and are asserted on the line below rather than here. Stated because a reader counting this list against the ledger row will otherwise find six where the row says eight and have to re-derive which is wrong.
+    expect(LAB_SHADER_CORPUS.includes('uLightDir2')).toBe(true);    // ⭐ P-02 INVERTED AT B4-1 — this asserted `false`. The second light now occurs in LAB_SHADER_CORPUS; deleting it from the fragment reds this line.
+    expect(LAB_SHADER_CORPUS.includes('uShadow')).toBe(true);       // ⭐ P-03 INVERTED AT B4-2 — this asserted `false`. The caster names now occur in LAB_SHADER_CORPUS. ⚠ A NAME OCCURRING IS THE WEAK HALF OF THIS ROW and this line is not the evidence for it: a declaration nothing reads would satisfy it. tests/lab-shader-shadows.test.js carries the arithmetic — that the lab's sphereShadow is the game's token-for-token, that totalShadow differs from the game's only by the six re-spelled names, that the factors reach the lit expression, and that severing any of those reddens something.   // ⛔ WAS false, deliberately
     // ⭐⭐ P-05 IS CLOSED BY THE B3 LEG 1 REGISTRATION, AND THIS IS THE ASSERTION THAT SAYS SO —
     // INVERTED, exactly the way P-04's below was. These four used to be the alias shape's exhibit:
     // declared by the lab, written by NOTHING, so the whole feature sat behind the
