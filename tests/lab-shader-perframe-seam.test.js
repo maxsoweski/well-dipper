@@ -411,7 +411,7 @@ describe('B4-1 — the star set on the lab material (ledger P-01 / P-02)', () =>
     });
 
     it('the surface albedo is multiplied by starLight, and starLight is built from all four star names', () => {
-      expect(FRAG).toContain('vec3 starLight = uStarColor1 * diff1 * uStarBrightness1 + uStarColor2 * diff2 * uStarBrightness2;');
+      expect(FRAG).toContain('vec3 starLight = uStarColor1 * diff1 * uStarBrightness1 * shadow1 + uStarColor2 * diff2 * uStarBrightness2 * shadow2;');   // ⭐⭐ TWO `* shadowN` FACTORS ADDED AT B4-2 (ledger P-03). B4-1 wrote this string without them and its comment on the shader line said there would never be any; the casters were moved into the fragment's object space instead. ⛔ THIS ASSERTION IS UPDATED RATHER THAN RELAXED — the temptation on an exact-string fence that a later block invalidates is to soften it to a regex or a substring, which would leave it passing on an expression that had lost the star names too. The P-01/P-02 content of the line — all four star names, in this order, multiplying the albedo — is unchanged and still pinned here.
       expect(FRAG).toContain('albedoCol * (starLight + vec3(ambient))');
       // ⭐ THE TINT REACHES THE ALBEDO AND NOTHING ELSE, which is what keeps this block out of the
       // concurrent block's pixels: limb, terminator, aurora, airglow and cloud optics are ADDITIVE
@@ -433,7 +433,7 @@ describe('B4-1 — the star set on the lab material (ledger P-01 / P-02)', () =>
       // silently re-colour the limb and every night gate — pixels this block does not own. The game
       // solves it the same way and for the same reason: a coloured `starLight` AND a scalar
       // `diffuse`, side by side (src/objects/Planet.js:488-490).
-      expect(FRAG).toContain('float diff = diff1 * uStarBrightness1 + diff2 * uStarBrightness2;');
+      expect(FRAG).toContain('float diff = diff1 * uStarBrightness1 * shadow1 + diff2 * uStarBrightness2 * shadow2;');   // ⭐⭐ SAME TWO FACTORS, SAME REASON, AND THE `float` IS STILL THE POINT OF THIS LINE. B4-2 rewrote this statement and the one thing it did NOT do is widen it: `diff` is read as a GATE a dozen times below and as a MAGNITUDE inside the F34 limb's (diff + 0.15), which is the neighbouring block's pixels. A vec3 here would re-colour them silently.
       expect(FRAG).not.toContain('vec3 diff =');
     });
 
