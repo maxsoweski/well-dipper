@@ -331,7 +331,7 @@ export function isOffValue(v) {
   if (v === null || v === undefined) return true;
   if (typeof v === 'number') return v === 0;
   if (typeof v === 'boolean') return v === false;
-  if (Array.isArray(v)) return v.every((c) => c === 0);
+  if (Array.isArray(v)) return v.every(isOffValue);   // ⭐ B4-2 — RECURSES, and the change is a correctness fix with a measured blast radius rather than a tidy-up. The old body was v.every((c) => c === 0), which is right for a flat float array and WRONG for an array of Vector3: uShadowMoonPos defaults to six zero vectors — as off as a value gets — and every element compared === 0 as false, so the whole uniform reported NOT off. Recursing is backward-compatible on every numeric array (isOffValue(0) is true). ⛔⛔ AND MY FIRST STATEMENT OF ITS BLAST RADIUS WAS WRONG AND IS CORRECTED HERE RATHER THAN QUIETLY RE-FITTED: this comment originally said "there was no other array-of-objects uniform in the bag before them". THERE WAS ONE. MEASURED by running both predicates over makeUniforms in this session, exactly one PRE-EXISTING name changes class — uStormColor, eight all-zero colours, which the old body called NOT off and the new one correctly calls off. ⚠ CONSEQUENCE THE COUNT TABLE MUST CARRY: the off-value population moves 114 -> 123, which is +8 new names AND +1 correction to a name that was already all-zero and already mis-classified. Any previously published off-value figure for this bag counted uStormColor on the wrong side.
   if (v && typeof v.toArray === 'function') return v.toArray().every((c) => c === 0);
   return false;
 }
@@ -472,7 +472,7 @@ export function swapLedgerOf({ prevUniforms, nextUniforms, shaderSource = LAB_SH
 /** Scratch, module-scope: this runs once per lab-shader body per frame and must not allocate. */
 const _invQuat = new THREE.Quaternion();
 const _lightObj = new THREE.Vector3(); const _light2Obj = new THREE.Vector3();   // B4-1 — the second star's object-space direction. Module-scope like its neighbours so the seam allocates nothing per body per frame.
-const _camObj = new THREE.Vector3();
+const _camObj = new THREE.Vector3();   const _castObj = new THREE.Vector3(); const _sclObj = new THREE.Vector3();   // B4-2 — caster scratch + the mesh world-scale probe. Module scope for the same reason as its neighbours: the shadow branch runs on every body every frame and must allocate nothing.
 
 /**
  * Is this a material built by buildLabPlanetMaterial? Signature-based, not instanceof, because the
@@ -524,7 +524,7 @@ export function isLabPlanetMaterial(material) {
  * @param {THREE.Object3D} [opts.mesh]            the mesh the material is bound to (for its world quaternion)
  * @param {THREE.Vector3}  [opts.lightDirWorld]   world-space direction to the star
  * @param {number}         [opts.renderDt]        seconds since the last render tick — and B4-1's `opts.lightDirWorld2`, the world-space direction to the SECOND star. A zero-length vector there is the legitimate "one star" value and is passed through AS ZERO, never normalized; it is only read when `lightDirWorld` is supplied too.
- * @param {number}         [opts.distanceRadii]   camera distance to the body, in body radii
+ * @param {number}         [opts.distanceRadii]   camera distance to the body, in body radii — and B4-2's opts.shadowCast, the body's WORLD-space caster record ({starPos1, starPos2, moonCount, moonPos[], moonRadius[], planetCount, planetPos[], planetRadius[]}), written on the sim tick by src/main.js and transformed into this body's object space here. Absent ⇒ the counts are zeroed, which is the no-shadow identity, NOT last frame's casters left standing.
  * @returns {null|{time: number, octaves: number, lodRamp: number, lightObj: number[]|null}}
  *          diagnostics, or null if this is not a lab material — so a live probe can read the
  *          resolved values as NUMBERS rather than judging them off a screenshot.
@@ -548,7 +548,7 @@ export function updateLabPlanetMaterial(material, opts = {}) {
   }
 
   // ── 1. the light, world -> object space ──
-  let lightObj = null; let lightObj2 = null;   // B4-1 — lightObj2 stays null when this tick did not write it, which is a DIFFERENT fact from [0,0,0] ("this tick wrote the single-star identity"); a probe that conflated them could not tell a seam that never ran from a body with one star.
+  let lightObj = null; let lightObj2 = null; let shadowCast = null;   // B4-1 — lightObj2 stays null when this tick did not write it, which is a DIFFERENT fact from [0,0,0] ("this tick wrote the single-star identity"); a probe that conflated them could not tell a seam that never ran from a body with one star.
   if (opts.lightDirWorld && opts.mesh) {
     // getWorldQuaternion updates the world matrix itself, so this is correct even if the body has
     // not been touched by the scene graph walk this frame.
@@ -574,13 +574,13 @@ export function updateLabPlanetMaterial(material, opts = {}) {
     opts.mesh.worldToLocal(_camObj);
     _camObj.divideScalar(u.uBodyRadius.value || 1.0);
     u.uCameraPosObj.value.copy(_camObj);
-  }
+  }    if (opts.shadowCast && opts.mesh && u.uShadowMoonCount) { const sc = opts.shadowCast; const bodyR = u.uBodyRadius.value || 1.0; const wScale = opts.mesh.getWorldScale(_sclObj).x || 1.0; const k = 1 / (wScale * bodyR); _castObj.copy(sc.starPos1); opts.mesh.worldToLocal(_castObj); u.uStarPos1.value.copy(_castObj.divideScalar(bodyR)); _castObj.copy(sc.starPos2); opts.mesh.worldToLocal(_castObj); u.uStarPos2.value.copy(_castObj.divideScalar(bodyR)); const mc = Math.min(sc.moonCount, 6); u.uShadowMoonCount.value = mc; for (let m = 0; m < mc; m++) { _castObj.copy(sc.moonPos[m]); opts.mesh.worldToLocal(_castObj); u.uShadowMoonPos.value[m].copy(_castObj.divideScalar(bodyR)); u.uShadowMoonRadius.value[m] = sc.moonRadius[m] * k; } const pc = Math.min(sc.planetCount, 2); u.uShadowPlanetCount.value = pc; for (let q = 0; q < pc; q++) { _castObj.copy(sc.planetPos[q]); opts.mesh.worldToLocal(_castObj); u.uShadowPlanetPos.value[q].copy(_castObj.divideScalar(bodyR)); u.uShadowPlanetRadius.value[q] = sc.planetRadius[q] * k; } shadowCast = { moonCount: mc, planetCount: pc, starPos1: u.uStarPos1.value.toArray(), radiusScale: k }; } else if (u.uShadowMoonCount) { u.uShadowMoonCount.value = 0; u.uShadowPlanetCount.value = 0; }   // ── 6. the shadow casters, world -> THIS body's object space (B4-2, ledger P-03) ── ⭐⭐ F52's TRANSPORT, AND IT IS THE HALF THAT IS GENUINELY NEW WORK RATHER THAN A RESTORATION. The game hands its shader four WORLD-space vectors per caster test. This fragment has no world-space position and provably cannot be given one (uniforms.js:137 records the tap-fence throw that blocks a vWorldPos varying), so the casters are brought into the fragment's frame instead — the SAME transform the camera operand above already uses, worldToLocal then / uBodyRadius, which is why this rides that block's brace rather than inventing a second convention. ⭐ THE RADIUS NEEDS THE SCALE AND THE POSITIONS DO NOT: worldToLocal already divides the mesh's own world scale out of a POSITION, but a caster RADIUS is a bare length with no transform applied to it, so it is multiplied by k = 1/(worldScale * bodyRadius) by hand. Get that wrong in either direction and every shadow is the right shape at the wrong size — which reads as "shadows look a bit off", not as a bug, and would survive a screenshot review. ⚠ ONE COMPONENT OF getWorldScale IS READ, so a NON-UNIFORMLY scaled body mesh would break the similarity invariance the whole substitution rests on. No body in this engine is non-uniformly scaled today; this is the line that would have to change if one ever is. ⚠ "|| 1.0" ON THE SCALE IS A DIVIDE-BY-ZERO GUARD, not a default — a degenerate zero-scaled mesh would otherwise put Infinity in every caster radius. ⛔ THE ELSE ARM IS NOT DEAD CODE AND MUST NOT BE DELETED: a body whose caster list goes away (its moons unload, the system changes) would otherwise keep casting last frame's shadows forever, because these uniforms persist on the material. Zeroing the two COUNTS is sufficient and is cheaper than clearing the arrays — totalShadow reads nothing else. ⛔ RIDES THIS LINE (handoff gate: every citation-bearing file N added / N deleted; this file carries symbol-anchored citations down to :572).
 
   return {
     time: u.uTime.value,
     octaves: u.uOctaves.value,
     lodRamp: u.uLodRamp.value,
-    lightObj, lightObj2, starColor1: u.uStarColor1 ? u.uStarColor1.value.toArray() : null, starColor2: u.uStarColor2 ? u.uStarColor2.value.toArray() : null, starBrightness1: u.uStarBrightness1 ? u.uStarBrightness1.value : null, starBrightness2: u.uStarBrightness2 ? u.uStarBrightness2.value : null,   // B4-1 — the star set is read back through `?` guards so this diagnostic keeps working against a lab material built before B4 (an older cached bundle, or a hand-built bag in a test).
+    lightObj, lightObj2, shadowCast, starColor1: u.uStarColor1 ? u.uStarColor1.value.toArray() : null, starColor2: u.uStarColor2 ? u.uStarColor2.value.toArray() : null, starBrightness1: u.uStarBrightness1 ? u.uStarBrightness1.value : null, starBrightness2: u.uStarBrightness2 ? u.uStarBrightness2.value : null,   // B4-1 — the star set is read back through `?` guards so this diagnostic keeps working against a lab material built before B4 (an older cached bundle, or a hand-built bag in a test).   // B4-2 — shadowCast reports the RESOLVED caster counts and the radius scale as NUMBERS, so a live probe can tell "this body has no casters this frame" apart from "the seam never ran" (null) without judging a screenshot. It is null on every material that lacks uShadowMoonCount, which is every pre-B4-2 build.
     cameraPosObj: u.uCameraPosObj ? u.uCameraPosObj.value.toArray() : null,
   };
 }

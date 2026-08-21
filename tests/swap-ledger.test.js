@@ -90,7 +90,7 @@ describe('the gate-shape filter', () => {
       || bareMultiplicandPattern(n).test(LAB_SHADER_CORPUS)).length;
     const shipped = rankOffByDefault(names, LAB_SHADER_CORPUS).gateShaped;
     expect(overshoot).toBeGreaterThan(shipped);
-    expect(overshoot).toBe(64);   // ⭐ +1 AT B4-1 (uStarBrightness2). The whole +1 is that ONE new uniform: of the five the star set adds, it is the only scalar-zero default, and the fragment spends it as a bare multiplicand (`uStarColor2 * diff2 * uStarBrightness2`). MEASURED this session.
+    expect(overshoot).toBe(66);   // ⭐⭐ 64 -> 66 AT B4-2, AND THIS CONTROL IS THE ONE THAT CORROBORATES THE `neither` ROW ABOVE RATHER THAN CONTRADICTING IT. The narrow shipped filter put uShadowMoonCount and uShadowPlanetCount in `neither` — read by no guard it recognises. This LOOSE reading — the name appearing anywhere inside an if(…) — picks up exactly those same two, from `if (i >= uShadowMoonCount) break;` and its planet twin. So the two filters disagree about these two names in the direction the loose one is known to overshoot, which is the behaviour this control exists to demonstrate. MEASURED, not predicted: the first run of this line came back 66 against an expected 64 and the two names were then read out of the corpus by hand.   // ⭐ +1 AT B4-1 (uStarBrightness2). The whole +1 is that ONE new uniform: of the five the star set adds, it is the only scalar-zero default, and the fragment spends it as a bare multiplicand (`uStarColor2 * diff2 * uStarBrightness2`). MEASURED this session.
   });
 });
 
@@ -100,17 +100,17 @@ describe('the gate-shape filter', () => {
 describe('the measurement §12.4 states, reproduced', () => {
   const u = labUniforms();
 
-  it('reproduces 356 declared and 88 scalar-zero-defaulted EXACTLY', () => {
+  it('reproduces 364 declared and 90 scalar-zero-defaulted EXACTLY', () => {
     // PLAN §12.4 measured these at `9b33264`; `git diff 9b33264 HEAD` over planet-lod-uniforms.js,
     // planet-lod-shaders.glsl.js and planet-lod-height.glsl.js is empty, so they must still hold.
-    expect(Object.keys(u).length).toBe(356);   // ⭐ 351 -> 356 AT B4-1: uLightDir2, uStarColor1, uStarColor2, uStarBrightness1, uStarBrightness2 — the star set closing ledger P-01 / P-02. MEASURED by importing makeUniforms in this session, not derived from the old number.
-    expect(zeroDefaultedUniformNames(u).length).toBe(88);   // ⭐ +1 AT B4-1 (uStarBrightness2). The whole +1 is that ONE new uniform: of the five the star set adds, it is the only scalar-zero default, and the fragment spends it as a bare multiplicand (`uStarColor2 * diff2 * uStarBrightness2`). MEASURED this session.
+    expect(Object.keys(u).length).toBe(364);   // ⭐⭐ 356 -> 364 AT B4-2: uStarPos1, uStarPos2, uShadowMoonCount, uShadowMoonPos, uShadowMoonRadius, uShadowPlanetCount, uShadowPlanetPos, uShadowPlanetRadius — the caster set closing ledger P-03. MEASURED by importing makeUniforms in this session.   // ⭐ 351 -> 356 AT B4-1: uLightDir2, uStarColor1, uStarColor2, uStarBrightness1, uStarBrightness2 — the star set closing ledger P-01 / P-02. MEASURED by importing makeUniforms in this session, not derived from the old number.
+    expect(zeroDefaultedUniformNames(u).length).toBe(90);   // ⭐⭐ 88 -> 90 AT B4-2, and the +2 is enumerable and is the WHOLE scalar-zero contribution of the eight: uShadowMoonCount and uShadowPlanetCount. The other six are two zero VECTORS (uStarPos1/2) and four ARRAYS, none of which is a scalar. MEASURED this session.   // ⭐ +1 AT B4-1 (uStarBrightness2). The whole +1 is that ONE new uniform: of the five the star set adds, it is the only scalar-zero default, and the fragment spends it as a bare multiplicand (`uStarColor2 * diff2 * uStarBrightness2`). MEASURED this session.
   });
 
   it('names the wider off-value population separately rather than conflating the two', () => {
     // ⭐ 114 AT B4-1, and the breakdown was MEASURED not inferred: 88 scalar zeros + 24 all-zero vectors + 1 all-zero COLOUR + the one null sampler slot. Was 111 = 87 + 23 + 0 + 1. Three of B4-1's five land here (uStarBrightness2 scalar, uLightDir2 vector, uStarColor2 colour); uStarColor1 (1,1,1) and uStarBrightness1 (1.0) are NOT off-valued, which is the point — their defaults ARE the pre-B4 implicit white light. ⚠ uStarColor2 is the FIRST all-zero THREE.Color in this population; isOffValue reaches it through `toArray`, not through a vector branch.
     const off = Object.keys(u).filter((n) => isOffValue(u[n].value));
-    expect(off.length).toBe(114);
+    expect(off.length).toBe(123);   // ⭐⭐ 114 -> 123 AT B4-2, and the +9 DOES NOT EQUAL the 8 uniforms added — that gap is the finding, not a rounding. MEASURED breakdown at HEAD: 90 scalar zeros + 26 all-zero vectors + 1 all-zero COLOUR + 1 null sampler slot + 5 all-zero ARRAYS = 123. Eight of the nine are the new caster names, every one of which is off at its default. ⛔ THE NINTH IS uStormColor, WHICH IS NOT NEW AND DID NOT CHANGE VALUE. isOffValue's array branch was `v.every((c) => c === 0)`, which is correct for a flat float array and wrong for an array of Vector3/Color: uStormColor is eight all-zero colours and reported NOT off. B4-2 made that branch recurse, which is why it now reports off. Every off-value figure published for this bag before B4-2 — 111 and 114 — counted uStormColor on the wrong side of this line.
     // Every scalar-zero is also off-valued; the reverse is not true, and the gap is the point.
     for (const n of zeroDefaultedUniformNames(u)) expect(off).toContain(n);
   });
@@ -123,10 +123,10 @@ describe('the measurement §12.4 states, reproduced', () => {
     // (24 vs 48). Five guard readings were tried; none reaches 48. The number below is this file's,
     // and a caption must quote it rather than §12.4's.
     expect(rank).toMatchObject({
-      total: 88, gateShaped: 56, both: 17, guardOnly: 7, multiplicandOnly: 32, neither: 32,   // ⭐ B4-1 moved exactly two of these six, by exactly one each: total 87->88 and multiplicandOnly 31->32, which carries gateShaped 55->56. `both`, `guardOnly` and `neither` are UNCHANGED. That shape is the control: uStarBrightness2 enters as a pure multiplicand and is read by no `if`, so a move in `guardOnly` here would mean something other than the star set moved.
+      total: 90, gateShaped: 56, both: 17, guardOnly: 7, multiplicandOnly: 32, neither: 34,   // ⭐⭐ B4-2 moved exactly two of these six, by exactly one each, and BOTH LANDED IN `neither`: total 88->90 and neither 32->34. gateShaped, both, guardOnly and multiplicandOnly are ALL UNCHANGED, which is this row's control — the caster set adds no new multiplicand and no new `if`-read that this filter recognises. ⚠ AND THAT LAST CLAUSE IS A STATEMENT ABOUT THE FILTER, NOT ABOUT THE SHADER. The two counts ARE read as guards in the GLSL — `if (i >= uShadowMoonCount) break;` — but rankOffByDefault's guard pattern does not match the break-out-of-loop shape, so it classifies them `neither`. Recorded here rather than silently absorbed, because a future reader comparing this table against the shader would otherwise find a contradiction and have to re-derive which side was wrong.   // ⭐ B4-1 moved exactly two of these six, by exactly one each: total 87->88 and multiplicandOnly 31->32, which carries gateShaped 55->56. `both`, `guardOnly` and `neither` are UNCHANGED. That shape is the control: uStarBrightness2 enters as a pure multiplicand and is read by no `if`, so a move in `guardOnly` here would mean something other than the star set moved.
     });
-    expect(rank.both + rank.guardOnly + rank.multiplicandOnly + rank.neither).toBe(88);
-    expect(rank.both + rank.multiplicandOnly).toBe(49);   // ⛔ WAS 48, AND THE COMMENT THAT SAID "agrees with §12.4's 38 + 10" IS WITHDRAWN RATHER THAN RE-FITTED. §12.4's 48 was measured on a 351-uniform material that no longer exists; B4-1 added a 49th multiplicand. The agreement was real and is now historical — it is not evidence about this tree.
+    expect(rank.both + rank.guardOnly + rank.multiplicandOnly + rank.neither).toBe(90);
+    expect(rank.both + rank.multiplicandOnly).toBe(49);   // ⭐ UNCHANGED ACROSS B4-2 — the caster set contributes no multiplicand.   // ⛔ WAS 48, AND THE COMMENT THAT SAID "agrees with §12.4's 38 + 10" IS WITHDRAWN RATHER THAN RE-FITTED. §12.4's 48 was measured on a 351-uniform material that no longer exists; B4-1 added a 49th multiplicand. The agreement was real and is now historical — it is not evidence about this tree.
   });
 
   it('puts §12.4\'s two named subjects inside the ranked set — the thing the rank is FOR', () => {
@@ -223,10 +223,10 @@ describe('swapLedgerOf', () => {
     expect(led.pairable).toBe(true);
     expect(led.buckets.lost).toContain('uLimbMix');
     expect(led.rank.total).toBe(led.buckets.offByDefault.length);
-    // The lab material carries 356 names and the fake prev carries one, so nothing is CARRIED and
+    // The lab material carries 364 names and the fake prev carries one, so nothing is CARRIED and
     // the off-by-default bucket is the wider `isOffValue` population, not the scalar-only 88.
-    expect(led.counts.next).toBe(356);   // ⭐ 351 -> 356 AT B4-1 — the star set. Same +5 as the makeUniforms pin above; this one reads it through swapLedgerOf instead of directly, which is why both exist.
-    expect(led.buckets.offByDefault.length).toBe(114);
+    expect(led.counts.next).toBe(364);   // ⭐⭐ 356 -> 364 AT B4-2: uStarPos1, uStarPos2, uShadowMoonCount, uShadowMoonPos, uShadowMoonRadius, uShadowPlanetCount, uShadowPlanetPos, uShadowPlanetRadius — the caster set closing ledger P-03. MEASURED by importing makeUniforms in this session.   // ⭐ 351 -> 356 AT B4-1 — the star set. Same +5 as the makeUniforms pin above; this one reads it through swapLedgerOf instead of directly, which is why both exist.
+    expect(led.buckets.offByDefault.length).toBe(123);
   });
 
   it('⛔ refuses to report an EMPTY loss set when the pre-swap material never existed', () => {
@@ -238,7 +238,7 @@ describe('swapLedgerOf', () => {
     expect(led.buckets.lost).toBeNull();          // ← NOT `[]`
     expect(led.reason).toMatch(/it is not empty/);
     // The rank still works, because it reads the lab material alone.
-    expect(led.rank.total).toBe(88);
+    expect(led.rank.total).toBe(90);
     expect(led.rank.gateShaped).toBe(56);   // ⭐ +1 AT B4-1 (uStarBrightness2). The whole +1 is that ONE new uniform: of the five the star set adds, it is the only scalar-zero default, and the fragment spends it as a bare multiplicand (`uStarColor2 * diff2 * uStarBrightness2`). MEASURED this session.
   });
 
