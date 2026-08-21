@@ -30,6 +30,45 @@ generation. No file under `src/generation/SolarSystemData.js` was read or writte
 32 tests are red by design over it. Every moon count in this document is therefore a **floor at the
 sha in its row**, not a stable figure.
 
+## ⛔ THE PRECISION CONVENTION, AND IT IS ON EVERY DISTINCT-VALUE COUNT
+
+Two of this document's tables originally counted distinct uniform values at **raw float64**, which
+splits one physical value across ULP-adjacent doubles — `32.27486121839514` and `32.274861218395145`
+counted as two. That made a table disagree with leg 1's committed record and made a correct committed
+figure look unreproducible. It is fixed here in one direction only: **the committed figures were
+right and this document was wrong.**
+
+| convention | what it is | used for |
+|---|---|---|
+| **9 significant figures** | the DEFAULT for every distinct-value count below | every `distinct` row unless the row says otherwise |
+| `float32` | the precision a uniform actually reaches the shader at | named wherever it differs from the 9-sig reading |
+| raw float64 | the bit pattern in JS | printed only alongside, and never on its own |
+
+⛔ **A count with no convention on it is not a measurement.** On `uCraterScale` the three readings
+agree exactly (9 sig = float32 = 21 → 322); on `uNoiseScale` they do not (985 raw → 844 at 9 sig →
+780 at float32), which is why the convention is stated per figure rather than once and forgotten.
+
+## ⛔⛔ WHAT ANY OF THIS CHANGES IN A FRAME MAX CAN OPEN TODAY: NOTHING
+
+**Stated before the first number, because every table below is a POST-FLIP reading.** The lab
+material is admitted only behind a flag that is OFF —
+src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;` and
+src/objects/Planet.js:2194 `    admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`,
+so `Planet._createLabSurface` returns null on every body in a default frame.
+
+**MEASURED over `lab-procedural-0…199`: `rockySurface` SELECTS 1160 of 1160 non-gas bodies and
+`0 of 1160` are ADMITTED at the default flag** — the flag alone refuses all 1160.
+
+| leg | what it writes | reaches a pixel at the DEFAULT flag |
+|---|---|---|
+| **1** `uCraterScale` + 7 | the pack AND the game's own `craterUniformsFrom` | **yes** — leg 1 is a game-side law, which is why Instrument C sees it on 514 bodies |
+| **3** `uNoiseScale` | the pack only | **no** — 0 of 1160 |
+| **2** the palette | the pack, AND the baked `landPalette` the legacy `Planet` program reads | **528 of 1160** — 509 planets + 19 planet-class. **0 of 632 plain moons**, see §3.2 |
+
+⛔ **This is B2 working as the plan specifies, not a defect.** B2, B3 and B4 are all pre-flip wiring
+blocks; **B7 is the plan's only player-facing node.** It is stated here so that no table below can be
+read as a claim about what renders today.
+
 ## ⛔ THE SHA ON EVERY NUMBER
 
 | leg | what it moved | sha |
@@ -54,13 +93,31 @@ derived from a stated rule calibrated against real bodies.
 
 | leg | the quantity | before | after | corpus |
 |---|---|---|---|---|
-| 1 | `uCraterScale` | **25 distinct values** over 1160 non-gas bodies; 485 cratered, 269 of them on ONE shared scale | **324 distinct**; 772 cratered, 323 of them on one shared scale | `lab-procedural-0…199`, sha `5afef82` |
-| 3 | `uNoiseScale` | **1 distinct value** (the factory `4.0`) on all 1160 non-gas | **985 distinct across 83 5 % bins**; 0 still answer 4.0 | same, uncommitted |
+| 1 | `uCraterScale` | **22 distinct values** over 1160 non-gas bodies (21 over cratered ones); 485 cratered, **465 of them = 95.9 % on ONE shared scale** | **323 distinct** (322 over cratered ones); 772 cratered, **451 = 58.4 %** still on one shared scale | `lab-procedural-0…199`, sha `5afef82`, **9 sig figs** |
+| 3 | `uNoiseScale` | **1 distinct value** — the LAB factory `4.0`. ⛔ The MOUNTED legacy material already writes **1160 distinct** on the same bodies | **844 distinct** (985 raw float64, 780 float32) across **83** 5 % bins; 0 still answer 4.0 | same, uncommitted, **9 sig figs** |
 | 2 | the ground palette | 1159 distinct `weathered` colours over 1160 | **1159** — ⚠ the palette was never short of values; see §3.0 | same, uncommitted |
 
+⛔⛔ **LEG 3 IS A RE-CALIBRATION, NOT A DIFFERENTIATOR, AND ITS ROW ABOVE IS MEASURED AGAINST THE LAB
+FACTORY DEFAULT RATHER THAN AGAINST WHAT RENDERS.** The "1 distinct value" it replaces is
+src/worldengine/shaders/uniforms.js:10 `      uNoiseScale: { value: 4.0 },`, the lab's default. What
+the mounted material spends today is src/objects/Planet.js:1681 `        uNoiseScale: { value: d.noiseScale },`
+and src/objects/Moon.js:73 `        noiseScale: { value: d.noiseScale },` — the generator's own
+`rng.range`-shaped draw, MEASURED at **1160 distinct values over the 1160 non-gas bodies at raw
+float64, at 9 significant figures and at float32 alike** (509 planets 1.5055…4.9970 · 632 plain moons
+4.8319…510.6324 · 19 planet-class 2.1662…4.6128). **Post-flip the swap is 1160 distinct → 844: FEWER
+distinct values.** It is the intended trade only because Max ruled the base field must carry a
+PHYSICAL wavelength rather than a random draw — the number now MEANS a size in km. ⛔ Do not read
+§2 as a differentiation win.
+
 ⭐ **Leg 2 is the one whose headline is a refusal, and it is stated here rather than buried.** The
-palette leg moves 663 of 1160 bodies and **0 of them past one `uLevels` 6 posterize quantum**. What
-makes discs read alike at the shipped posterize level is the quantum, not the palette law.
+palette leg moves 663 of 1160 bodies and **ZERO of them past one `uLevels` 6 posterize quantum**
+(0.1667 — the largest move on `uWeathered` is 0.0995, **0.60 of a quantum**). What makes discs read
+alike at the shipped posterize level is the quantum, not the palette law. ⭐ **And B2P — shipped
+today — made that quantum raisable**, so the leg becomes visible the moment Max raises it: MEASURED,
+at `uLevels` 6 the leg moves body-pair separation by **0.97 points** (12.73 % → 13.70 %) while raising
+the level 6 → 12 moves it by **37.82 points** with the pre-leg law still in place. **The posterize
+setting is worth about 39× this leg's constants on that measure**, and no constant in
+`surfaceMaterial.js` can close that ratio.
 
 ---
 
@@ -139,25 +196,47 @@ src/worldengine/base/macroWavelength.js:136 `export const MACRO_FREQ_CEIL = C_MA
 
 ⚠ **THE HONEST HEADLINE, STATED BEFORE THE COUNTS.** The reference bodies put the macro wavelength at
 about one body radius from Luna to Venus, so **the radius cancels under the game's display policy and
-the calibrated base law is a CONSTANT** 2.873563 against today's 4.0 — a 1.39× *longer* wavelength on
-every untidal body. **All** of the per-body variation comes from the Io-anchored process term.
+the calibrated base law is a CONSTANT** 2.873563 against the lab's 4.0 — a 1.39× *longer* wavelength
+on every untidal body. **All** of the per-body variation comes from the Io-anchored process term.
+
+⛔⛔ **AND THE SECOND HALF OF THAT HEADLINE, WHICH IS THE ONE THAT DECIDES HOW §2.3 READS: THIS IS A
+RE-CALIBRATION, NOT A DIFFERENTIATOR.** Two measured facts, both stated at the top of this document:
+
+1. **It is invisible today.** 0 of 1160 bodies are ADMITTED to the lab material at
+   src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;`, so every count in §2.3
+   is a POST-FLIP reading.
+2. **Post-flip it REPLACES a 1160-distinct legacy draw with an 844-distinct derived one** (9 sig
+   figs; 985 raw float64, 780 float32). Fewer values, on purpose: the trade Max ruled for is
+   *meaning* — a size in km — not *count*.
 
 ### 2.3 THE CORPUS DELTA — measured through the shipped pack
 
 ⛔ Re-measured for this document over `lab-procedural-0…199`, resolved through the writer
 (`resolveDriver`), not read raw off the pack.
 
-| population | distinct values | distinct 5 % bins | min | max | still at 4.0 |
-|---|---:|---:|---:|---:|---:|
-| **1160 non-gas** | **985** | **83** | 2.873563 | 245.175 | **0** |
-| **632 plain moons** | **632** | **79** | 2.873563 | 245.175 | **0** |
-| 509 planets | 340 | 33 | 2.873563 | 56.4358 | 0 |
-| 19 planet-class moons | 16 | 3 | 2.873563 | 69.8999 | 0 |
-| *before the leg, all 1160* | *1* | *1* | *4.0* | *4.0* | *1160* |
+**Distinct-value counts are at 9 significant figures**, per the convention block at the top; the raw
+float64 and float32 readings are given beside them because on this uniform the three disagree.
+
+| population | **distinct @ 9 sig** | raw f64 | float32 | 5 % bins | min | max | still at 4.0 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **1160 non-gas** | **844** | 985 | 780 | **83** | 2.873563 | 245.175 | **0** |
+| **632 plain moons** | **557** | 632 | 521 | **79** | 2.873563 | 245.175 | **0** |
+| 509 planets | 285 | 340 | 266 | 33 | 2.873563 | 56.4358 | 0 |
+| 19 planet-class moons | 14 | 16 | 14 | 3 | 2.873563 | 69.8999 | 0 |
+| *the LAB default this replaces, all 1160* | *1* | *1* | *1* | *1* | *4.0* | *4.0* | *1160* |
+| ⛔ *the MOUNTED legacy draw, same 1160* | ***1160*** | *1160* | *1160* | ***117*** | *1.505478* | *510.6324* | *0* |
+
+⛔ **READ THE LAST TWO ROWS TOGETHER OR THE TABLE LIES.** The `1` is the LAB factory default; the
+`1160` is what the game actually writes today and what this replaces after the flip. **1160 → 844 is
+a REDUCTION in distinct values, and 117 → 83 a reduction in 5 % bins** — accepted deliberately in
+exchange for the value meaning a physical size in km rather than being a draw off a type table. ⚠ The ULP spread is why the convention matters here: 179 of the 1160 sit exactly on the cold
+floor at one physical wavelength and present as **four** distinct raw doubles.
 
 ⚠ **THE VARIATION IS NOT EVENLY SPREAD, AND THE PLANET HALF GETS FAR LESS OF IT.** 509 planets return
-340 distinct values across 33 bins against the moons' 632 across 79. The moons are where this leg
-lands, because the tidal process term is where the variation comes from.
+285 distinct values across 33 bins against the moons' 557 across 79. The moons are where this leg
+lands, because the tidal process term is where the variation comes from — and MEASURED, 179 of the
+1160 (173 of them planets, 1 moon, 5 planet-class) sit below the `log10(1 + t)` float64 underflow at
+t = 1.1102e-16 and take the base constant unchanged.
 
 ### 2.4 THE RENDER-PIXEL CONSEQUENCE, in leg 1's own framing
 
@@ -186,8 +265,15 @@ process term's anchor is Io, a solid body. Same spelling, two quantities: the sh
 already rules at P-15.
 
 **MEASURED: 0 of 357 gas bodies in the corpus are claimed by any rocky pack**, so all 357 keep the
-factory 4.0. Ruled in the ledger at `docs/FEATURES/step6-parity-ledger.md:135` (P-15, the gas half,
-`accepted-loss`) and `docs/FEATURES/step6-parity-ledger.md:130` (P-10, the solid half, `carried`).
+factory 4.0 on the lab material. Ruled at `docs/FEATURES/step6-parity-ledger.md:130` (P-10, the solid
+half, `carried`), whose cell carries the gas half in prose on P-15's precedent.
+
+⚠ **AND THE GAS HALF IS NOT A SUBJECT ON P-15'S OWN LIST, WHICH THIS DOCUMENT SAYS RATHER THAN LETS
+THE CROSS-REFERENCE IMPLY.** `tests/material-parity-list.test.js:540` pins every measured subject to
+exactly ONE row, so `uNoiseScale` cannot appear in P-15's subject list while it is P-10's. The gas
+half therefore exists as **reasoned evidence in two cells and in no machine-checked ruling column** —
+a real gap, named here, and the honest form of it is: the ruling that *is* machine-checked is P-10's
+`carried`, and P-10's own cell states that its `carried` covers the solid half only.
 
 ---
 
@@ -201,12 +287,52 @@ regenerate every table with `node tools/oxidation-window-delta.mjs`, which print
 Re-measured for this document over the 1160 non-gas bodies, with an independent mirror whose CONTROL
 run reproduces the shipped `surfacePaletteOf` **BIT-IDENTICALLY over 1160 bodies × 4 endmembers**:
 
-- **`weathered`: 663 of 1160 bodies move. 50 clear the posterize dither window (0.0667), 22 clear
-  half a quantum, `0` clear one full `uLevels` 6 quantum (0.1667). Max |Δ| = 0.0995.**
-- **`craton`: 698 move, 99 past dither, 54 past half a quantum, `0` past one. Max |Δ| = 0.1586.**
+⭐ **THE ONE SENTENCE:** the oxidation window moves **663 of 1160 bodies and ZERO of them past one
+`uLevels` 6 posterize quantum.**
+
+- **`weathered` — the endmember the whole disc is painted with: 663 of 1160 bodies move. 50 clear the
+  posterize dither window (0.0667), 22 clear half a quantum, `0` clear one full quantum (0.1667). Max
+  |Δ| = 0.0995, which is `0.60` of a quantum.**
+- `sediment`: 664 move, 0 past dither, `0` past one. Max |Δ| = 0.0454.
+- `fresh`: 663 move, 0 past dither, `0` past one. Max |Δ| = 0.0208.
 
 ⛔ **At the shipped posterize level this leg is sub-quantum on the entire corpus.** It is a
 correctness fix with a real-body rule, and it is not a visibility win at `uLevels` 6.
+
+⭐⭐ **AND THAT IS A STATEMENT ABOUT THE QUANTUM, NOT ABOUT THE LAW — WHICH IS WHY B2P MAKES THE LEG
+VISIBLE.** B2P (shipped today) turned `uLevels` into a live setting. MEASURED on body-pair separation
+over all 672,220 pairs of the 1160:
+
+| | quantum | pairs separated by > 1 quantum |
+|---|---:|---|
+| `uLevels` **6**, today's default | 0.1667 | 12.73 % → **13.70 %** — this leg buys **0.97 points** |
+| `uLevels` **12**, B2P's setting | 0.0833 | 50.55 % → **54.53 %** — the level alone buys **37.82 points** with the PRE-leg law still in place |
+
+**The posterize setting is worth ≈ 39× this leg's constants on that measure** (37.82 / 0.97), and no
+constant in `surfaceMaterial.js` can close that ratio — the quantum is the thing the palette is being
+compared against. ⭐ **So: raise `uLevels` to 12 and this leg becomes something to look at. Leave it
+at 6 and it is not.** That is the single most useful thing to do at B2's UAT.
+
+⚠ **`uCratonColor` IS DELIBERATELY NOT IN THIS HEADLINE, THOUGH ITS NUMBERS ARE THE LARGEST IN THE
+LEG** (698 move, 99 past dither, 54 past half a quantum, max |Δ| = 0.1586 — 0.95 of a quantum, the
+biggest figure in this document's §3). **It is demoted because it paints zero pixels on either
+mounted material, and ranking the leg by it would rank the dead endmember first.** Verified in
+source, not assumed:
+
+- The legacy game program does not have the uniform: `grep -c uCratonColor src/objects/Planet.js
+  src/objects/Moon.js` → **0 and 0**. It binds `uFreshColor`, `uWeatheredColor`, `uSedColor` and
+  `uBioGroundColor` only.
+- On the lab material the pack does write it — src/worldengine/drivers/rockySurface.js:412 `    uCratonColor: sp.craton.slice(),` — and the shader does read it —
+  but at exactly one site, src/worldengine/shaders/planetShaders.glsl.js:573 `            vec3 provCol = pw.r * uCratonColor + pw.g * uFreshColor + pw.b * uSedColor;`,
+  inside the gate at src/worldengine/shaders/planetShaders.glsl.js:569 `        if (provSum > 0.001) {`.
+  `provSum` comes from `sampleProvince` → `uProvinceCube`, declared at
+  src/worldengine/shaders/height.glsl.js:177 `      uniform samplerCube uProvinceCube;` and written by
+  **nothing in `src/`** — the only value it ever receives is the 1×1 all-zero placeholder built at
+  src/rendering/LabPlanetMaterial.js:84 `    const t = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);`.
+  So `provSum` is 0, the branch never runs, and the read is unreachable in any shipped frame.
+
+⭐ Its numbers are kept in §3.2 because `craton === weathered` on most bodies makes it a useful
+*proxy* for how far the law moved — but a proxy is not a pixel, and it is not the headline.
 
 ### 3.1 THE DERIVATION — both edges sit ON a body
 
@@ -263,11 +389,25 @@ bright-region R/B ≈ 3.3) asks for **1.19**, not a legal mix fraction.
 | `craton` | 509 planets | 369 | 70 | 40 | **0** | 0.1586 |
 | `craton` | 19 planet-class | 16 | 3 | 2 | **0** | 0.1206 |
 
-⭐ **The moon rows are new here — no instrument in the repo prints them.** They say the palette leg
-lands on the moons at exactly half the rate it lands on planets (313 of 632 = 49.5 % against 336 of
-509 = 66.0 %), and that `craton` and `weathered` are IDENTICAL on the moon half — the moons' craton
-branch and weathered branch return the same colour, which is the `craton === weathered` collapse the
-leg-2 document reports at 853 → 759 bodies, concentrated here.
+⛔⛔ **EVERY ROW ABOVE IS THE LAW'S OUTPUT, NOT ITS REACH, AND THE MOON ROWS REACH NOTHING AT ALL.**
+A table that prints rows for a population no consumer reads would be claiming coverage it does not
+have, so the reach is stated here as its own measurement:
+
+| population | carries a baked `landPalette` | what binds it | leg 2's reach at the DEFAULT flag |
+|---|---:|---|---|
+| 509 non-gas planets | **509 / 509** | src/objects/Planet.js:1629 `uWeatheredColor: { value: new THREE.Vector3(...(d.landPalette?.weathered` | **336 move — REAL TODAY** |
+| 19 non-gas planet-class | **19 / 19** | the same legacy `Planet` program — src/main.js:7681 `        const planetMoon = new Planet(scenePMData, pmStarInfo);` where `scenePMData` is a spread of `moonData.planetData`, so the baked palette carries through | **14 move — REAL TODAY** |
+| **632 plain moons** | **0 / 632** | ⛔ **nothing.** `MoonGenerator` never calls `surfacePaletteOf`, and `grep -c 'uWeatheredColor\|uSedColor\|uFreshColor\|uBioGroundColor\|landPalette' src/objects/Moon.js` → **0**. A plain moon's colour is src/generation/MoonGenerator.js:134 `    const palette = rng.pick(this.PALETTES[type]);` | **0 move — the 313 above is a POST-FLIP figure only** |
+
+**So leg 2's pixel reach today is 350 of 1160 bodies** (336 planets + 14 planet-class), not 663. The
+other 313 are the value the pack *would* write on the lab material, which no body mounts at
+src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;`.
+
+⭐ **The moon rows are still worth printing — no instrument in the repo prints them — and with that
+label on them they say two things.** The palette law lands on the moons at almost exactly half the
+rate it lands on planets (313 of 632 = 49.5 % against 336 of 509 = 66.0 %), and `craton` and
+`weathered` are IDENTICAL on the moon half, which is the `craton === weathered` collapse the leg-2
+document reports at 853 → 759 bodies, concentrated there.
 
 ---
 
@@ -292,49 +432,61 @@ fixed density floor that could not state that quantity, because the cell count m
 ⛔ Not quoted from the commit message: the pre-leg module was recovered with `git show 5afef82^` and
 both versions were run side by side over `lab-procedural-0…199`.
 
+⛔ **AT 9 SIGNIFICANT FIGURES, per the convention block at the top.** An earlier draft of this
+section counted at raw float64 and therefore disagreed with leg 1's committed record; the committed
+record was right. Both readings are printed so the disagreement cannot recur silently.
+
 | | PRE | POST | denominator |
 |---|---:|---:|---|
 | bodies with craters ON | 485 | **772** | 1160 non-gas |
 | — of which **plain moons** | 473 | **547** | 632 |
 | — of which planets | 12 | **214** | 509 |
 | — of which planet-class moons | 0 | **11** | 19 |
-| distinct `uCraterScale` (all bodies) | 25 | **324** | 1160 non-gas |
-| distinct `uCraterScale` (cratered only) | 24 | **323** | 485 → 772 cratered |
-| distinct `uCraterScale` | 25 | **324** | 632 plain moons |
-| distinct `uCraterScale` | 4 | 3 | 509 planets |
-| **largest single-value group** | **269** at scale 7.0710678 | **323** at scale 32.274861 | cratered bodies |
+| **distinct `uCraterScale`, cratered only** | **21** | **322** | 485 → 772 cratered |
+| **distinct `uCraterScale`, all bodies** | **22** | **323** | 1160 non-gas |
+| distinct `uCraterScale` | 22 | **323** | 632 plain moons |
+| distinct `uCraterScale` | 2 | 2 | 509 planets |
+| **largest single-value group** | **465 of 485 = 95.9 %** at scale 7.07106781 | **451 of 772 = 58.4 %** at scale 32.2748612 | cratered bodies |
 | cratered bodies rendering UNDER 1 crater | 119 | **0** | all cratered |
 | — of which plain moons | 108 | **0** | 632 |
 
-⛔ **TWO FIGURES IN THE COMMITTED RECORD DO NOT REPRODUCE HERE, AND THEY ARE RECORDED RATHER THAN
-OVERWRITTEN.**
+*The same quantities at raw float64, for the record only: distinct cratered 24 → 323, all 25 → 324,
+plain moons 25 → 324, planets 4 → 3; largest group 269 (55.5 %) → 323 (41.8 %). Every one of those
+splits a physical value across ULP-adjacent doubles — POST's largest group covers exactly two,
+`32.27486121839514` and `32.274861218395145`; PRE's covers four.* **At 9 sig figs, at 12 sig figs and
+at float32 the readings are identical**, which is what makes 9 sig figs the right convention here.
 
-1. **A denominator correction.** `5afef82`'s message — and
-`docs/FEATURES/comprehensive-wiring-plan-2026-08-20.md:403` repeating it — state *"cratered 485 →
-761"* under the heading `1160 non-gas`. **761 is the planets +
-plain moons sum (214 + 547); the non-gas total is 772**, because 11 of the 19 planet-class moons also
-gained craters and were not counted. PRE is unaffected (0 planet-class were cratered), so the LEG is
-larger than its own commit message says, not smaller.
+⛔ **THE COMMITTED FIGURE REPRODUCES EXACTLY, AND AN EARLIER DRAFT OF THIS SECTION SAID IT DID NOT.**
+`5afef82`'s message and `docs/FEATURES/crater-floors-calibration-2026-08-20.md:123` state *"distinct
+`uCraterScale` 21 → 322"* over cratered bodies. **That is the 9-significant-figure reading through
+the shipped driver path** (`cu.Dchar > 0 ? sizeKm(Dchar, C_CRATER) : cu.scale`, resolved at each
+body's own `displayRadiusEarth` by `resolveDriver`) and it reconciles to the digit. The earlier
+draft's "24 → 323" was the raw-float64 count of the same quantity, and its sentence *"Neither reading
+gives 21 → 322"* was wrong. **It is corrected in this direction and not the other: the committed
+record is right and this document was wrong.**
 
-2. **A figure I could not reproduce, named rather than overwritten.** The same two records state
-*"distinct `uCraterScale` 21 → 322"*. Measured here **through the shipped driver path** — the
-`cu.Dchar > 0 ? sizeKm(Dchar, C_CRATER) : cu.scale` branch, resolved at each body's own
-`displayRadiusEarth` by `resolveDriver`, which is what actually reaches a uniform — the pair is
-**24 → 323 over cratered bodies** and **25 → 324 over all 1160 non-gas** (the extra value is the
-`scale: 1` that `CRATERS_OFF` hands the uncratered ones). Neither reading gives 21 → 322. ⚠ **The
-direction and the size of the move are not in dispute** — a ~13× rise in distinct values either way —
-and this is recorded as a method disagreement, not as a claim that the committed figure is wrong.
+⛔ **ONE FIGURE IN THE COMMITTED RECORD REMAINS CORRECTED, AND IT IS A DENOMINATOR, NOT A VALUE.**
+`5afef82`'s message and `docs/FEATURES/comprehensive-wiring-plan-2026-08-20.md:403` state *"cratered
+485 → 761"* under the heading `1160 non-gas`. **761 is the planets + plain-moons sum (214 + 547); the
+non-gas total is 772**, because 11 of the 19 planet-class moons also gained craters and were not
+counted. PRE is unaffected (0 planet-class were cratered), so **the leg is larger than its own commit
+message says, not smaller.** The committed doc's own branch split reconciles on the same 11:
+*"floor binds 465 of 485 → 440 of 761"*, and 440 + 11 = **451**, the POST largest group above.
 
-⚠ **AND THE MOVE IS OFF A FLOOR ONTO A CEILING, WHICH NEITHER RECORD SAYS.** Measured here: PRE, the
-largest single-value group is **269 cratered bodies sharing scale 7.0710678**; POST it is **323
-sharing scale 32.274861**, which is also the corpus maximum. Leg 1 genuinely un-pinned 485 → 772
-bodies and 24 → 323 values, **and 42 % of the cratered population still answers with one number.**
-That is the next crater question, and it is not this block's.
+⚠ **AND THE MOVE IS OFF A FLOOR ONTO A CEILING, WHICH NEITHER RECORD SAYS — AND IT IS 58.4 %, NOT
+42 %.** PRE, the largest single-value group is **465 of 485 cratered bodies (95.9 %) sharing scale
+7.07106781**; POST it is **451 of 772 (58.4 %) sharing 32.2748612**, which is also the corpus
+maximum. Leg 1 genuinely un-pinned 485 → 772 bodies and 21 → 322 values, **and 58.4 % of the cratered
+population still answers with one number** — measured, that group is **all 214 cratered planets, all
+11 cratered planet-class moons, and 226 of the 547 cratered plain moons.** The un-pinning is real and
+it is concentrated entirely in the moon half.
 
-⭐ **AND THE ENTIRE `uCraterScale` DIFFERENTIATION IS ON THE MOONS.** 25 → 324 distinct over the 1160
-non-gas is the *same* 25 → 324 measured over the 632 plain moons alone; the 509 planets go 4 → 3.
-Leg 1's distinctness gain is a moon result with a planet-count side effect, and Instrument C — which
-samples no plain moon at all (§5) — cannot see any of it.
+⭐ **AND THE ENTIRE `uCraterScale` DIFFERENTIATION IS ON THE MOONS — MORE SO AT THIS PRECISION THAN
+THE RAW COUNT SUGGESTED.** 22 → 323 distinct over the 1160 non-gas is the *same* 22 → 323 measured
+over the 632 plain moons alone. **The 509 planets go 2 → 2**: 214 of them gained craters and every
+one landed on the ceiling, so at the precision that reaches the shader the planet half gains no
+distinctness at all — it gains craters. Instrument C, which samples no plain moon (§5), cannot see
+any of the moon result.
 
 ---
 
@@ -397,21 +549,40 @@ Verified in source, not assumed: the `P:` stratum is built under
 every plain moon is skipped.** The delta table above therefore says nothing at all about the
 population where legs 1 and 3 do most of their work. The direct probe supplies it:
 
-| leg | quantity | 632 plain moons, PRE → POST | instrument |
-|---|---|---|---|
-| **1** | bodies with craters ON | **473 → 547** | direct probe, `5afef82^` vs `5afef82` |
-| **1** | distinct `uCraterScale` | **25 → 324** | direct probe |
-| **1** | moons rendering under 1 crater | **108 → 0** | direct probe |
-| **3** | distinct `uNoiseScale` | **1 → 632** (79 distinct 5 % bins) | direct probe, shipped pack |
-| **3** | moons still at the factory 4.0 | **632 → 0** | direct probe |
-| **2** | `weathered` bodies moved | **0 → 313** (0 past one quantum) | direct probe, validated mirror |
+| leg | quantity | 632 plain moons, PRE → POST | reaches a pixel today | instrument |
+|---|---|---|---|---|
+| **1** | bodies with craters ON | **473 → 547** | **yes** | direct probe, `5afef82^` vs `5afef82` |
+| **1** | distinct `uCraterScale` (9 sig figs) | **22 → 323** | **yes** | direct probe |
+| **1** | moons rendering under 1 crater | **108 → 0** | **yes** | direct probe |
+| **3** | distinct `uNoiseScale` (9 sig figs) | **1 → 557** (632 raw f64, 521 float32; 79 5 % bins) | **no — 0 of 632 admitted** | direct probe, shipped pack |
+| **3** | moons still at the LAB factory 4.0 | **632 → 0** | **no** | direct probe |
+| **2** | `weathered` bodies moved | **0 → 313** (0 past one quantum) | **no — no moon material binds a palette** | direct probe, validated mirror |
 
-⚠ **THE LEGACY MOON RANGE, FOR SCALE, AND IT IS NOT A CLEAN SUBSET.** Measured over the same 632:
+⛔ **THREE OF THOSE SIX ROWS ARE POST-FLIP READINGS**, per the flag section at the top of this
+document. Leg 1's three are real today because leg 1 changed a GAME-side law
+(`craterUniformsFrom`), which is exactly why Instrument C can see leg 1 on 514 bodies and cannot see
+leg 3 at all.
+
+⛔ **THE LEGACY MOON RANGE, AND THE NEW RANGE IS NOT A SUBSET OF IT.** Measured over the same 632:
 the game's own record `noiseScale` runs **4.8319 … 510.6324 across 632 distinct values, 0 of them
-4.0.** The new lab range is **2.8736 … 245.175**. So the new MAXIMUM sits well inside what ships
-today (245 against 511) — but the new MINIMUM sits *below* the legacy minimum, i.e. the calibrated
-untidal body carries a **longer** macro wavelength than any moon the game ships. Saying "a strict
-subset" would be wrong on the low edge and it is not said.
+4.0.** The new lab range is **2.8736 … 245.175**. The new MAXIMUM sits well inside what ships today
+(245 against 511) — but **483 of 632 plain moons (76.4 %) fall BELOW the legacy minimum**, i.e. three
+quarters of the moon population would carry a *longer* macro wavelength than any moon the game has
+ever shipped. ⚠ An earlier draft of this paragraph narrowed that to "the calibrated untidal body",
+singular; the population is 483. And the relationship inverts on the other two kinds, which is why it
+must be stated per population and never pooled:
+
+| population | NEW | LEGACY | below legacy min | above legacy max |
+|---|---|---|---:|---:|
+| 632 plain moons | 2.8736 … 245.175 | 4.8319 … 510.632 | **483 / 632** | 0 / 632 |
+| 509 planets | 2.8736 … 56.4358 | 1.5055 … 4.9970 | 0 / 509 | **33 / 509**, up to 11.3× |
+| 19 planet-class | 2.8736 … 69.8999 | 2.1662 … 4.6128 | 0 / 19 | **1 / 19** |
+| *all 1160 pooled* | *2.8736 … 245.175* | *1.5055 … 510.632* | *0* | *0* |
+
+**The pooled row is the one that made "subset" look true**, and it is true only because the moons'
+ceiling covers the planets' and the planets' floor covers the moons'. No population is a subset of
+its own legacy range. ⛔ Two shipped source comments asserted the subset claim and both were
+corrected in this pass.
 
 ---
 
@@ -423,6 +594,8 @@ subset" would be wrong on the low edge and it is not said.
 - **Leg 2 did not move `OX_MAX`** (§3.1) and **did not ship the palaeo-temperature window**
   (`OX_T_LO/HI` 150/250 → 110/210), which is derived and measured in the leg-2 document and is the
   larger lever: 18 bodies past a full quantum against this leg's 0.
+- **No leg flipped the lab flag**, so none of legs 2's moon half or leg 3's whole is visible in a
+  default frame. That is the plan's sequencing, not an omission — see the flag section up top.
 - **Leg 1 did not re-derive from Sol.** `PLAN.md:409`'s Sol-mass follow-on stays open and untouched;
   the floor was derived from measured render pixels instead, which touches Sol not at all.
 - **No baseline was re-recorded by any leg**, and the Instrument-B break that makes
@@ -431,13 +604,17 @@ subset" would be wrong on the low edge and it is not said.
 ## 7. THE ONE THING FOR MAX'S EYES
 
 ⚠ Above `uNoiseScale ≈ 45`, **26 % of the base stack's amplitude falls below two render px** (§2.4).
-The measured case for shipping it uncapped is that the whole new range sits inside what the legacy
-material already spends on these moons, and that a cap re-collapses the 67 hottest moons onto one
-value. **Whether it reads as fine relief or as noise is Max's eyes, not any instrument's.** The
-bodies to look at are the tidally hot moons; the corpus maximum is `lab-procedural-15`, planet 2,
-moon 0, at `uNoiseScale` 245.
+⛔ **The case for shipping it uncapped is now ONE measured fact, not two** — an earlier draft also
+offered "the whole new range sits inside what the legacy material already spends", which §5.3 shows
+is false on 483 of 632 moons. **The surviving reason: a cap at the Io anchor would re-collapse the 67
+hottest plain moons onto one shared value**, the exact floor-bound pathology leg 1 was spent
+removing. **Whether it reads as fine relief or as noise is Max's eyes, not any instrument's** — and
+it cannot be looked at until the lab flag is flipped. The bodies are the tidally hot moons; the
+corpus maximum is `lab-procedural-15`, planet 2, moon 0, at `uNoiseScale` 245.
 
-⚠ And for the palette: at the shipped `uLevels` 6, **87 % of body pairs share a posterized ground
-tone** and this leg moves that by about one point. **Raising `uLevels` to 12 moves it by 38 points
-with the pre-leg law still in place.** The most useful thing to do at B2's UAT is look at the same
-quad at 6 and then at 12.
+⭐⭐ And for the palette, **the one that is real today on 350 bodies**: at the shipped `uLevels` 6,
+**87.27 % of body pairs share a posterized ground tone**, and this leg moves that by **0.97 points**
+(12.73 % → 13.70 %). **Raising `uLevels` 6 → 12 moves it by 37.82 points with the pre-leg law still
+in place — about 39× the leg's own constants.** B2P shipped that setting live for exactly this
+reason. **The most useful thing to do at B2's UAT is look at the same quad at 6 and then at 12 in one
+sitting**, on a planet or a planet-class moon (a plain moon binds no palette uniform, §3.2).

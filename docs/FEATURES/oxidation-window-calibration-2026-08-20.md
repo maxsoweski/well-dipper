@@ -126,8 +126,30 @@ full level.
 |---|---:|---:|---:|---:|---:|---:|---:|
 | `weathered` | 663 / 1160 | 50 | 22 | **0** | 0.0005 | 0.0472 | 0.0995 |
 | `sediment` | 664 | 0 | 0 | **0** | 0.0003 | 0.0245 | 0.0454 |
-| `craton` | 698 | 99 | 54 | **0** | 0.0012 | 0.0593 | 0.1586 |
+| `craton` ⚠ paints 0 px | 698 | 99 | 54 | **0** | 0.0012 | 0.0593 | 0.1586 |
 | `fresh` | 663 | 0 | 0 | **0** | 0.0001 | 0.0101 | 0.0208 |
+
+⛔ **`craton` CARRIES THE LARGEST NUMBERS IN THIS TABLE AND THE FEWEST PIXELS**, per §0 — it is kept as
+a proxy for how far the law moved and must not be read as the leg's headline. **`weathered` is the row
+that paints the disc**, and its honest headline is: **663 of 1160 bodies move and ZERO of them past one
+`uLevels` 6 quantum** — the largest move, 0.0995, is 0.60 of a quantum. ⭐ **B2P made the quantum
+raisable, which is what turns this leg visible**: MEASURED, at `uLevels` 6 the leg buys 0.97 points of
+body-pair separation and raising the level 6 → 12 buys 37.82 points with the PRE-leg law still in place
+(§6) — **about 39×**.
+
+### ⚠ AND THE ROWS ABOVE ARE THE LAW'S OUTPUT, NOT ITS REACH — 0 of the 632 plain moons
+
+MEASURED per kind. The `1160` denominator above is the population the LAW covers; the population a
+palette uniform actually reaches today is smaller, and the difference is the whole moon half:
+
+| population | carries a baked `landPalette` | reached today |
+|---|---:|---|
+| 509 non-gas planets | **509 / 509** | ✅ src/objects/Planet.js:1629 `uWeatheredColor: { value: new THREE.Vector3(...(d.landPalette?.weathered` binds it — **336 move** |
+| 19 non-gas planet-class moons | **19 / 19** | ✅ the same legacy `Planet` program — src/main.js:7681 `const planetMoon = new Planet(scenePMData, pmStarInfo);` — **14 move** |
+| **632 plain moons** | **0 / 632** | ⛔ **nothing binds a palette on a plain moon.** `grep -c 'uWeatheredColor\|uSedColor\|uFreshColor\|uBioGroundColor\|landPalette' src/objects/Moon.js` → **0**; a plain moon's colour is src/generation/MoonGenerator.js:134 `const palette = rng.pick(this.PALETTES[type]);`. The 313 that "move" is a POST-FLIP figure |
+
+**Leg 2's pixel reach today is 350 of 1160 bodies**, not 663 — and the lab material that would carry
+the other 313 is admitted on no body at src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;`.
 
 Other corpus movements: oxide mix values **534 → 699 distinct**; bodies with oxidation exactly zero
 **627 → 462**; `craton === weathered` **853 → 759**.

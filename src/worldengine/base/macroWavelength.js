@@ -6,14 +6,14 @@
 // ⭐ WHAT THIS CLOSES. `uNoiseScale` was the ONE frequency in the engine with no physical size
 // behind it: src/worldengine/shaders/uniforms.js:10 `      uNoiseScale: { value: 4.0 },` is the factory default on
 // BOTH front-ends and NEITHER wrote it, against a km→frequency law that
-// src/worldengine/port/writePackUniforms.js:13 `// 18 lab uniforms resolve as \`featureFrequencyFromKm(_dispR, state.<x>SizeKm, C_X)\` where the`
+// src/worldengine/port/writePackUniforms.js:13 `// 18 lab uniforms resolve as` (the symbol is quoted WITHOUT its backticked interior on purpose — the fence's parser truncates a citation at an escaped backtick, and this ref shipped BROKEN and unscanned until the module joined CITE_SOURCES on 2026-08-21)
 // records 18 lab uniforms already resolving through. Max's ruling was to give the base field a
 // characteristic wavelength in km, in the engine's established shape, with the wavelength
 // CALIBRATED AGAINST REAL BODIES rather than chosen mid-wiring. This module is that wavelength.
 //
 // ⛔ IT EMITS KILOMETRES AND NEVER A FREQUENCY. The km→frequency step belongs to the pack writer,
 // because the two front-ends legitimately differ on the display radius they resolve it at — the
-// argument is written out at src/worldengine/port/writePackUniforms.js:11 `// ⭐ WHY \`displayRadiusEarth\` IS A REQUIRED PARAMETER AND NOT AN OPTIONAL ONE WITH A DEFAULT`.
+// argument is written out at src/worldengine/port/writePackUniforms.js:11 `IS A REQUIRED PARAMETER AND NOT AN OPTIONAL ONE WITH A DEFAULT` — same escaped-backtick repair as :9.
 //
 // ⛔ three-free and renderer-free, like every other `base/` module. Closure: this file →
 // featureScale.js (imports nothing) + adaptL0.js → mathutil.js (imports nothing), i.e. ZERO bare
@@ -109,11 +109,11 @@ const U_IO = calibrateTidal(1);
 
 // The shortening factor: 1 at zero tidal drive, exactly `K_MACRO_R_IO / K_MACRO_R` at Io-grade, and
 // BOUNDED BELOW BY CONSTRUCTION — `calibrateTidal` never reaches 1, so `u` never exceeds 1 / U_IO
-// (5.3777; the corpus reaches 5.3459) and the factor never falls below 0.011447.
+// (5.3777; the 1160 NON-GAS bodies this module reaches top out at u = 5.2507 — the 5.3459 an earlier draft of this line called "the corpus" is the maximum over all 1517 INCLUDING the 357 gas bodies §4 rules out, i.e. a different denominator from every other figure in this file) and the factor never falls below 0.011447.
 //
 // ⭐ THE HYPERBOLIC FORM IS CHOSEN FOR THAT BOUND, and the two obvious alternatives were rejected on
 // measurement rather than taste. The linear form `1 - (1 - K_MACRO_R_IO/K_MACRO_R)·u` goes NEGATIVE
-// above u = 1.0623, and the corpus reaches 5.3459. The exponential form `exp(-2.8367·u)` reaches
+// above u = 1.0623, and this module's corpus — the 1160 non-gas bodies — reaches u = 5.2507 (5.3459 over all 1517 with the gas half included; the rejection holds either way, both being far above 1.0623). The exponential form `exp(-2.8367·u)` reaches
 // 2.371e-7 at the top of the dial, i.e. a frequency of 1.212e+7 — a uniform that is not merely wrong
 // but unrenderable. This form is monotone, exact at both anchors, and has a ceiling this file states.
 //
@@ -122,7 +122,7 @@ const U_IO = calibrateTidal(1);
 // in the corpus onto ONE shared value, which is the exact floor-bound pathology B2 leg 1 was spent
 // removing (its own delta: 465 of 485 bodies sharing one `uCraterScale`). Above Io this law IS
 // extrapolation. It is bounded, it is monotone, and it is declared here rather than hidden.
-// ⚠ THERE IS A HARD FLOOR AT THE COLD END AND IT IS ARITHMETIC, NOT DESIGN: `log10(1 + t)` underflows to exactly 0 in float64 below t = 1.1102e-16, so every body colder than that lands on the base wavelength BIT-FOR-BIT rather than merely near it. MEASURED on `lab-procedural-0…199`: 179 of the 1160 non-gas bodies, but only 1 of the 632 plain moons. It is recorded because a reader who assumes strict monotonicity everywhere would write a test this map cannot pass, and because it is the reason the planet half of the population differentiates less than the moon half.
+// ⚠ THERE IS A HARD FLOOR AT THE COLD END AND IT IS ARITHMETIC, NOT DESIGN: `log10(1 + t)` underflows to exactly 0 in float64 below t = 1.1102e-16, so every body colder than that lands on the base WAVELENGTH bit-for-bit rather than merely near it. MEASURED on `lab-procedural-0…199`: 179 of the 1160 non-gas bodies (173 planets, 5 planet-class, 1 moon), and the moon count is the load-bearing half of that — only 1 of the 632. ⚠ BIT-FOR-BIT IS TRUE OF λ AND FALSE OF THE FREQUENCY THE WRITER DERIVES FROM IT: the radius cancels algebraically but not in float64, so MEASURED those 179 bodies present as FOUR distinct written `uNoiseScale` doubles (2.8735632183908044 … 2.8735632183908058), which is why every distinct-value count in §5 names its precision. It is recorded because a reader who assumes strict monotonicity everywhere would write a test this map cannot pass, and because it is the reason the planet half of the population differentiates less than the moon half.
 export function macroShortening(rawIoRatio) {
   const u = calibrateTidal(Math.max(0, rawIoRatio || 0)) / U_IO;
   return 1 / (1 + (K_MACRO_R / K_MACRO_R_IO - 1) * u);
@@ -131,8 +131,8 @@ export function macroShortening(rawIoRatio) {
 // The ceiling the shortening factor implies, as the frequency a front-end whose display radius IS the
 // physical radius resolves. Exported as a DERIVED value so a test can gate the bound rather than
 // trust this comment. MEASURED 251.031, against a corpus maximum of 245.175 over the 1160 non-gas
-// bodies this pack claims — and against the 510.632 the game's LEGACY material already spends on its
-// own moons today, which is what makes the whole new range a SUBSET of what ships.
+// bodies this pack claims. ⛔ AN EARLIER DRAFT OF THIS LINE CALLED THE NEW RANGE A SUBSET OF WHAT THE
+// LEGACY MATERIAL SPENDS. IT IS NOT ONE — the measured comparison is in §5 and it is not a subset.
 export const MACRO_FREQ_CEIL = C_MACRO / (K_MACRO_R * macroShortening(Infinity));
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -181,6 +181,49 @@ export function macroWavelengthKm(condition) {
 // pixels. B2 leg 1 measured the framing this rests on — the scene renders at 1/3 resolution and a
 // disc is 359.4 RENDER pixels in radius at the closest measured approach — so octave 0 still spans
 // 4.9 render pixels at the corpus maximum of 245.175 and stays above leg 1's "reads as a feature"
-// bar of 4, while the two fine octaves do not. ⛔ NO CEILING IS IMPOSED FOR IT: the game's LEGACY
-// material already spends 4.83…510.632 on these same 632 moons, so the new range is a SUBSET of
-// what ships today, and a ceiling would re-collapse the hot tail onto one shared value.
+// bar of 4, while the two fine octaves do not. ⛔ NO CEILING IS IMPOSED FOR IT, and the reason is
+// §5's measured comparison plus one fact: a ceiling would re-collapse the hot tail onto one shared
+// value — MEASURED, clamping u at 1 puts the 67 hottest plain moons back on a single number.
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 5. ⛔ WHAT THIS IS AGAINST WHAT SHIPS — THE TWO SENTENCES A READER MUST NOT GET WRONG
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// ⭐⭐ (1) NOTHING HERE IS VISIBLE IN A DEFAULT FRAME TODAY, AND THAT IS THE PLAN'S OWN DESIGN.
+// src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;` and the admission test at
+// src/objects/Planet.js:2194 `    admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
+// mean `Planet._createLabSurface` returns null on every body in a default frame. MEASURED over
+// `lab-procedural-0…199`: `rockySurface` SELECTS 1160 of 1160 non-gas bodies and 0 of 1160 are
+// ADMITTED at the default flag — the flag alone refuses all 1160. So this module writes nothing a
+// player sees until the flip. B2, B3 and B4 are all like this by construction; B7 is the plan's only
+// player-facing node. This is not a defect and it is not a caveat to bury.
+//
+// ⭐⭐ (2) POST-FLIP THIS REPLACES A 1160-DISTINCT LEGACY DRAW WITH A LESS DISTINCT DERIVED ONE,
+// AND THAT IS THE INTENDED TRADE RATHER THAN A DIFFERENTIATION WIN. What the mounted legacy material
+// spends today is NOT one shared value: src/objects/Planet.js:1681 `        uNoiseScale:      { value: d.noiseScale },`
+// and src/objects/Moon.js:73 `      noiseScale:      { value: d.noiseScale },` write the generator's own
+// `rng.range(2.0, 5.0)`-shaped draw, and MEASURED it is 1160 DISTINCT values over the 1160 non-gas
+// bodies at every precision tested (509 planets 1.5055…4.9970 · 632 plain moons 4.8319…510.6324 · 19
+// planet-class 2.1662…4.6128). The "one shared 4.0" this module replaces is
+// src/worldengine/shaders/uniforms.js:10 `      uNoiseScale: { value: 4.0 },` — the LAB factory
+// default, which is a real loss on the lab side and is what ledger rows P-10/M-09 rule on, but it is
+// not what renders today. ⛔ THE HONEST LEDGER OF THE SWAP, one precision convention stated on every
+// figure, over the 1160 non-gas: LEGACY 1160 distinct at raw float64, at 9 significant figures and at
+// float32 alike → DERIVED 985 at raw float64, 844 at 9 sig figs, 780 at float32 (the precision a
+// uniform reaches the shader at). FEWER distinct values, deliberately, because Max ruled the value
+// must be a PHYSICAL wavelength rather than a random draw. What the swap buys is that the number now
+// MEANS something — 0 of 1160 lab values agree with the legacy draw, by construction, because one is
+// derived from a size in km and the other is drawn.
+//
+// ⛔ AND IT IS NOT A SUBSET OF WHAT SHIPS. An earlier draft of this file asserted twice that the new
+// range sits inside what the legacy material already spends. MEASURED per population, which is the
+// only way the comparison means anything — pooling all three kinds hides it:
+//   632 plain moons   NEW [2.8736, 245.175]  LEGACY [4.8319, 510.632]  → 483 of 632 (76.4 %) fall
+//                     BELOW the legacy minimum: three quarters of the moons now carry a LONGER macro
+//                     wavelength than any moon the game has ever shipped. 0 of 632 exceed the top.
+//   509 planets       NEW [2.8736, 56.4358]  LEGACY [1.5055, 4.9970]   → 33 of 509 sit ABOVE the
+//                     legacy maximum, up to 11.3× it. 0 fall below.
+//   19 planet-class   NEW [2.8736, 69.8999]  LEGACY [2.1662, 4.6128]   → 1 of 19 above, 0 below.
+// The pooled reading (0 of 1160 outside [1.5055, 510.632]) is the one that made "subset" look true;
+// it is true only because the moons' ceiling covers the planets' and the planets' floor covers the
+// moons'. No population is a subset of its own legacy range. ⛔⛔ AND THE `LEGACY` COLUMN ABOVE IS THE RECORD FIELD `d.noiseScale`, NOT THE VALUE THE MOUNTED UNIFORM HOLDS — main.js interposes a measured 5.90–17.52x factor before it reaches a shader. So these three rows establish THAT the ranges differ and do NOT establish BY HOW MUCH, and the per-population percentages must not be quoted as if they did. ⚠ THREE CONSECUTIVE PASSES HAVE NOW MEASURED THIS COMPARISON OFF THE WRONG FIELD, each one "correcting" the last. Re-measure off the mounted uniform before drawing any conclusion from it; do not transcribe these figures.

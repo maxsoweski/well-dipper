@@ -46,9 +46,9 @@
 //     are red by design over a moon-formation window — every moon-keyed number below is therefore
 //     a FLOOR with the 2026-08-19 measurement named beside it, never an equality.
 //  6. It asserts nothing about `uMacroOffset`/`uDetailOffset`/`uCraterOffset` (ledger P-13),
-//     `uDispDomainScale` (P-14's fifth name), `uNoiseScale` (P-10) or `uIcenessAlbedo`. All four
-//     are declared non-ports in the pack header; their absence is asserted as a SCOPE FENCE in §E,
-//     which is a statement about this pack and not a claim that those rows are closed.
+//     `uDispDomainScale` (P-14's fifth name) or `uIcenessAlbedo` — declared non-ports in the pack header, absence asserted as a SCOPE FENCE in §E, a statement about this pack and not a claim that those rows are closed. ⛔ `uNoiseScale` (P-10) LEFT THIS ITEM AT B2 LEG 3, 2026-08-20, and this line is corrected rather than left to rot: the pack header now reads `NO LONGER A NON-PORT`, FAMILY 19 removed the name from `FORBIDDEN_NAMES`, and this file ASSERTS about it in FAMILY 16 and FAMILY 17. Reading item 6 as still covering it would make the scope fence claim coverage it gave up.
+//     ⚠ AND WHAT FAMILY 17 GATES IS THE SHAPE, NOT THE REACH: it proves the driver is km-SHAPED (a `scalar()` or a bare number would be policy-invariant and drop out).
+//     Whether that value reaches a pixel is a separate question and today the answer is no — src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;` keeps the lab material off every body in a default frame, so FAMILY 16/17 assert the wire and not the reach.
 //  7. It writes no prose superlative it did not measure. Every number in a comment below is from a
 //     run recorded 2026-08-19 against the 24 systems `rocky-0…rocky-23`.
 // ─────────────────────────────────────────────────────────────────────────────
