@@ -1,4 +1,33 @@
-# Handoff 2026-08-21 (evening) — ▶ **NEXT = THE GAS-HALF BLOCK, then two instrument fixes**
+# Handoff 2026-08-21 (evening) — ✅ **CLOSED OUT. Everything below §0 and §4 is DONE.**
+
+> ✅ **§0 THE GAS-HALF BLOCK — DONE** (`14d4559`, `3e42a81`). Pack #8 `giantSurface` over the
+> complement predicate closes P-11's gas half, P-12 and P-13. ⛔ It is NOT inside `giantDeckPack`
+> as this doc directed, and there were two measured reasons: the lab calls that pack DIRECTLY with
+> a ctx carrying no offset triple, and the deck's predicate is gas-OR-shroud so it would collide
+> with the two solid packs on 130 venus bodies.
+> ⭐⭐ **CHANNEL 1 NOW HAS ZERO `blocking` ROWS.** Seven subjects closed by a wire; six more by
+> Max's option-B ruling on the `encodeValue` container split (probed first: 6 names, 266/266,
+> maxComponentDelta 0). Measured subject set 59 → 46.
+>
+> ✅ **§4 BOTH INSTRUMENT FIXES — DONE.** `resolveBody` refuses a subject it cannot parse instead
+> of answering planet 0 (`src/util/lab-subject.js`, extracted so a test can call it); `frameBody`
+> refuses an unlit subject and every framing now reports sub-solar angle and lit fraction
+> (`subjectLighting` in `src/camera/agentFraming.js`). Both are mutation-verified.
+>
+> ⚠ **MAX'S BROWSER FLAG IS CLEARED** — done via chrome-devtools and confirmed `'0'` after a hard
+> reload. ⛔ Do NOT write "tell Max to run `localStorage.setItem(...)`" into a handoff again: he
+> does not use the browser console, and it is Claude's job to drive it. See
+> `memory/feedback_max-does-not-run-console-commands.md`.
+>
+> ▶ **NEXT = B7.** Its gate was D-1 + D-2 (passed) + the eight rows, and no blocking row remains.
+> The two §4 fixes landed first deliberately: B7's Instrument E replays against recorded body
+> NAMES, which is the exact path `resolveBody` used to get wrong.
+
+---
+
+## ORIGINAL BRIEF (kept as written — the reasoning is the record, not the status)
+
+# ▶ NEXT = THE GAS-HALF BLOCK, then two instrument fixes
 
 **HEAD:** `0604d13` · **Branch:** `feature/world-engine-production-L1` · **PUSHED** (remote 0/0)
 **Repo:** `~/projects/well-dipper` — tree tracked-clean

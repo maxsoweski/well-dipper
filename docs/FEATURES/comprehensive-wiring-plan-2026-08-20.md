@@ -151,8 +151,8 @@ ride-along."* one-pipeline-two-frontends-PLAN.md:576 `- **The river/tectonic bak
 ⛔ Putting it in Max's batch re-asks a refused question.
 
 **F-8. Step 12's Instrument-E caveat has expired, and its tolerance is derivable.** All three hooks
-exist: src/main.js:3177 `freezeFrame(declared = {}) {` · src/main.js:3312 `cameraPose() {` ·
-src/main.js:3333 `setCameraPose(pose) {`. And `one-pipeline-two-frontends-PLAN.md:765` records that
+exist: src/main.js:3190 `freezeFrame(declared = {}) {` · src/main.js:3325 `cameraPose() {` ·
+src/main.js:3346 `setCameraPose(pose) {`. And `one-pipeline-two-frontends-PLAN.md:765` records that
 `freezeFrame` calls `setGrainStrength` with 0 and pins all four clocks, ending *"`uGrainStrength === 0`
 and the four declared values are printed in the caption; a shot taken with grain live is inadmissible
 on its face."* ⭐ **So B7's "tolerance declared before the shot" has a value: ZERO** (§2, B7's gate).

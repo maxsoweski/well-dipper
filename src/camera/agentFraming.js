@@ -99,7 +99,7 @@ export function measureFraming(camera, group, mesh, radiusOverride = null) {
  * SHIPPED WITH (review 2026-08-11, defect 1). The lab material spells the octave count `uOctaves`;
  * the GAME'S OWN material spells it `uReliefOctaves` (src/objects/Planet.js:1674 `uReliefOctaves: { value: RELIEF_OCTAVES },`)
  * and is driven through the IDENTICAL law by
- * src/rendering/objects/BodyRenderer.js:216 `const next = autoOctaves(lodRampOf(distanceRadii));`,
+ * src/rendering/objects/BodyRenderer.js:42 `const next = autoOctaves(lodRampOf(distanceRadii));`,
  * with no quality tier — which is exactly what `lodPredictionAt` computes at the 1.0 default. So the
  * prediction is directly comparable against either spelling.
  * ⚠ AT THE SHIPPED 6e DEFAULT the second spelling is the COMMON case, not the exotic one: reading
@@ -168,6 +168,84 @@ export function lodStateOf(mesh, achievedRadii, qualityTier = 1.0) {
  *   reported rather than silently corrected, because either being set means something else had left
  *   the camera in a state where scripted framing does not work.
  */
+// ── THE FREEZE-POSE FALSE NEGATIVE, AND WHY A FRAMING MUST REPORT LIGHTING ───────────────────────
+// ⛔⛔ ITEM 2 OF THE TWO INSTRUMENT FIXES MAX APPROVED, 2026-08-21. IT FIRED TWICE IN ONE DAY.
+// `freezeFrame()` pins orbit phase to 0 and teleports the body, so the frozen pose is NOT the pose
+// the body was in — it can put the subject's night side to camera. Framing a gas giant while frozen
+// rendered a FULLY BLACK DISC that read exactly like a broken shader; `thawFrame()` plus a re-frame
+// showed a correctly lit, banded planet. Nothing was wrong with the shader either time.
+//
+// ⛔ THE EXISTING RULE — "freeze FIRST, then frameBody" — IS NOT SUFFICIENT AND THAT IS THE FINDING.
+// It guarantees the frame is not MOVING. It says nothing about whether the subject is LIT, and an
+// unlit subject is indistinguishable from a dead one in a still frame. This is the same class as
+// every other instrument bug in this lane: the instrument answered a different question confidently.
+//
+// ⭐ THE GEOMETRY, STATED SO NOBODY RE-DERIVES IT WITH THE SIGN FLIPPED. `_lightDir` is the
+// SUBSTELLAR direction — it points from the body TOWARD its star, which is the convention the shader
+// reads (src/worldengine/shaders/planetShaders.glsl.js:48 `      uniform vec3 uLightDir;       // object-space substellar direction (same uniform the frag reads)`).
+// With `toCam` the unit vector from body to camera, `phaseDot = toCam · lightDir` is +1 when the
+// camera sits between star and body (full disc) and -1 when the body sits between star and camera
+// (new phase, black disc). The illuminated fraction of the visible disc is the standard
+// `k = (1 + cos alpha) / 2`, so `k = (1 + phaseDot) / 2`.
+//
+// ⚠ THE TWO THRESHOLDS ARE READABILITY BOUNDS AND ARE DECLARED AS SUCH RATHER THAN DRESSED UP AS
+// PHYSICS. There is no physical edge here — illumination is continuous — so a precise-looking number
+// would be a false instrument. `UNLIT` is where there is effectively no lit disc left to read
+// (k < 0.02, alpha > 163 degrees); `MOSTLY_NIGHT` is where a dark render is EXPECTED rather than
+// suspicious (k < 0.15, alpha > 137 degrees) and is a warning, never a refusal.
+export const LIGHTING = Object.freeze({ UNLIT: 0.02, MOSTLY_NIGHT: 0.15 });
+
+/**
+ * How much of the subject's visible disc is lit, from three positions.
+ *
+ * ⭐ PURE, AND TAKES PLAIN {x,y,z} — no renderer type, no camera object — so the sign convention and
+ * the thresholds are exercised directly by tests/lab-subject-contract.test.js rather than pinned by
+ * scanning `main.js`, which cannot be imported by a test.
+ *
+ * @param {{x,y,z}} camPos     camera world position
+ * @param {{x,y,z}} bodyPos    subject world position
+ * @param {{x,y,z}|null} lightDir  the subject's SUBSTELLAR direction (body -> star). Null when the
+ *                                 subject carries no holder, in which case every field is null and
+ *                                 nothing is refused — an unknown is reported, never guessed.
+ * @returns {{phaseDot: number|null, subSolarAngleDeg: number|null, litFraction: number|null,
+ *            unlit: boolean, mostlyNight: boolean, note: string|null}}
+ */
+export function subjectLighting(camPos, bodyPos, lightDir) {
+  const UNKNOWN = {
+    phaseDot: null, subSolarAngleDeg: null, litFraction: null, unlit: false, mostlyNight: false,
+    note: 'lighting UNKNOWN — the subject carries no holder, so no substellar direction is reachable. '
+      + 'A dark render here cannot be attributed either way.',
+  };
+  if (!camPos || !bodyPos || !lightDir) return UNKNOWN;
+  const dx = camPos.x - bodyPos.x, dy = camPos.y - bodyPos.y, dz = camPos.z - bodyPos.z;
+  const dLen = Math.hypot(dx, dy, dz);
+  const lLen = Math.hypot(lightDir.x, lightDir.y, lightDir.z);
+  // ⛔ A ZERO-LENGTH VECTOR IS NOT A DIRECTION. Camera exactly at the body, or an unset light,
+  // normalises to NaN and NaN compares false against every threshold — so it would sail past the
+  // refusal as "lit". Reported as unknown instead.
+  if (!(dLen > 0) || !(lLen > 0)) return UNKNOWN;
+  const phaseDot = (dx * lightDir.x + dy * lightDir.y + dz * lightDir.z) / (dLen * lLen);
+  const clamped = Math.max(-1, Math.min(1, phaseDot));
+  const litFraction = (1 + clamped) / 2;
+  const unlit = litFraction < LIGHTING.UNLIT;
+  const mostlyNight = litFraction < LIGHTING.MOSTLY_NIGHT;
+  return {
+    phaseDot: +clamped.toFixed(6),
+    subSolarAngleDeg: +((Math.acos(clamped) * 180) / Math.PI).toFixed(3),
+    litFraction: +litFraction.toFixed(6),
+    unlit,
+    mostlyNight,
+    note: unlit
+      ? '⛔ SUBJECT IS UNLIT — the camera is on its night side, so this frame is a BLACK DISC and says '
+        + 'NOTHING about the shader. If the scene is frozen, the frozen pose is the likely cause: '
+        + 'freezeFrame() pins orbit phase to 0 and teleports the body. thawFrame() and re-frame, or '
+        + 'pass { allowUnlit: true } if a night-side shot is what you actually want.'
+      : (mostlyNight
+        ? '⚠ MOSTLY NIGHT SIDE — a dark render here is EXPECTED and is not evidence of a defect.'
+        : null),
+  };
+}
+
 export function frameSequence({ camera, cameraController, cameraInterp, worldPos, viewDistance }) {
   const bypassClearedFrom = !!cameraController.bypassed;
   const autoRotateClearedFrom = !!cameraController.autoRotateActive;

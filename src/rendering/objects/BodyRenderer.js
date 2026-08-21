@@ -15,7 +15,7 @@ import { updateLabPlanetMaterial, isLabPlanetMaterial } from '../LabPlanetMateri
  * Drive one surface's detail uniforms for a camera distance, in body radii.
  *
  * ⭐ A FREE FUNCTION AND NOT A METHOD, because two body kinds need it and only one of them is a
- * `BodyRenderer`. Planet-class moons are built directly at src/main.js:7681 `const planetMoon = new Planet(scenePMData, pmStarInfo);`
+ * `BodyRenderer`. Planet-class moons are built directly at src/main.js:7731 `const planetMoon = new Planet(scenePMData, pmStarInfo);`
  * and never touch this class — which is exactly why they sat frozen at the constructed 4.0 default
  * at every distance (measured live 2026-08-11: body `Al` read 4.00 where the law predicts 8.72).
  * Extracting the body rather than duplicating it is the whole point: a second copy of this law is

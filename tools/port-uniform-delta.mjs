@@ -155,7 +155,7 @@ const THREE = await import('three');
 //                including the MOON-BEARING giants (a planet's moon count is part of its record,
 //                and it is gas giants and sub-neptunes that carry the large retinues).
 //  P — PLANET-CLASS MOONS: the ~3.5% of moons that reach Planet.js today (PLAN.md:396) do so via
-//                main.js:7681 `new Planet(scenePMData, pmStarInfo)`. They are RARE — MoonGenerator.js:99
+//                main.js:7731 `new Planet(scenePMData, pmStarInfo)`. They are RARE — MoonGenerator.js:99
 //                gates them on a gas-giant/sub-neptune parent with ≥3 moons, non-innermost slot,
 //                at rng.chance(0.10), which measured ~1 per 40 systems. Harvesting them out of
 //                the S stratum alone would give 2-3 bodies. So a wider seed sweep (1..pmScanSeeds)
@@ -186,7 +186,7 @@ function toSceneData(rec) {
   const ratio = rec.radius / rec.radiusScene;
   if (!Number.isFinite(ratio) || ratio <= 0) {
     throw new Error(`toSceneData: radius/radiusScene is not finite-positive (${rec.radius}/${rec.radiusScene}). `
-      + 'main.js:7572 `const mapToSceneRatio` assumes both exist on every body it renders.');
+      + 'main.js:7622 `const mapToSceneRatio` assumes both exist on every body it renders.');
   }
   return {
     ...rec,
@@ -512,7 +512,7 @@ const GAME_ONLY_WATCHED = [
   { game: 'hasClouds',          tier: 'record', why: 'planetData.clouds presence gate.' },
   { game: 'cloudColor',         tier: 'record', why: 'planetData.clouds.color. Lab F31 haze/cloud colour is uHazeColor, driven by a DIFFERENT law (preset atmosphere colour) — a semantic neighbour, not the same value. Not aliased.' },
   { game: 'cloudDensity',       tier: 'record', why: 'planetData.clouds.density. Lab uCloudCoverage is driven by deriveUniforms from condition — same concept, different source. Not aliased.' },
-  { game: 'cloudScale',         tier: 'record', why: 'planetData.clouds.scale × the toSceneData ratio (main.js:7572 `const mapToSceneRatio`, through :6328).' },
+  { game: 'cloudScale',         tier: 'record', why: 'planetData.clouds.scale × the toSceneData ratio (main.js:7622 `const mapToSceneRatio`, through :6328).' },
   { game: 'atmosphereStrength', tier: 'record', why: 'planetData.atmosphere.strength — the legacy rim magnitude uLimbMix blends against.' },
   { game: 'atmosphereColor',    tier: 'record', why: 'planetData.atmosphere.color — the PRE-PORT rim tint; Planet.js:535 `finalColor += mix(atmosphereColor, uLimbColor, uLimbMix)` mixes from it toward the condition-derived uLimbColor.' },
   { game: 'hasAurora',          tier: 'record', why: 'planetData.aurora presence gate. Lab has no counterpart gate (it gates on uAuroraIntensity), so game-side-only rather than aliased.' },
@@ -526,18 +526,18 @@ const UNWATCHED = [
   // X1 — RUNTIME. The renderer overwrites these every frame AFTER construction, so the value this
   // harness reads is a placeholder that never reaches a pixel. Recording it would assert the
   // stability of a number the game does not ship, which is a green with no subject.
-  { game: 'lightDir',            reason: 'runtime', why: 'overwritten per frame — src/main.js:11296 `entry.planet._lightDir.copy(_sunDir)` (also :8882 `planet._lightDir`, :11325 `moon.planet._lightDir`).' },
-  { game: 'lightDir2',           reason: 'runtime', why: 'overwritten per frame — src/main.js:11302 `entry.planet._lightDir2.copy(_sunDir2)` (binary companion); constructed as (0,0,0).' },
+  { game: 'lightDir',            reason: 'runtime', why: 'overwritten per frame — src/main.js:11346 `entry.planet._lightDir.copy(_sunDir)` (also :8932 `planet._lightDir`, :11375 `moon.planet._lightDir`).' },
+  { game: 'lightDir2',           reason: 'runtime', why: 'overwritten per frame — src/main.js:11352 `entry.planet._lightDir2.copy(_sunDir2)` (binary companion); constructed as (0,0,0).' },
   { game: 'time',                reason: 'runtime', why: 'animation clock — Planet.js:1955 `if (mat.uniforms.time)`, through :1918.' },
   { game: 'lodLevel',            reason: 'runtime', why: 'LOD tier — src/rendering/objects/BodyRenderer.js:213 `surface.material.uniforms.lodLevel.value = tier`.' },
-  { game: 'starPos1',            reason: 'runtime', why: 'star world position — src/main.js:11372 `pu.starPos1`.' },
-  { game: 'starPos2',            reason: 'runtime', why: 'second-star world position — src/main.js:11373 `pu.starPos2.value.copy(_star2Pos)` (also :10095 planet-class moons, :10101 textured moons). ⚠ The old ref here was :11357, a comment inside _updateRenderVisuals stating these are NOT written there — a citation that read as evidence and pointed at its own negation.' },
-  { game: 'shadowMoonCount',     reason: 'runtime', why: 'eclipse casters — src/main.js:11377 `if (pu.shadowMoonCount)`, through :10051, rewritten every frame.' },
-  { game: 'shadowMoonPos',       reason: 'runtime', why: 'eclipse casters — src/main.js:11381 `pu.shadowMoonPos`.' },
-  { game: 'shadowMoonRadius',    reason: 'runtime', why: 'eclipse casters — src/main.js:11377 `if (pu.shadowMoonCount)` block.' },
-  { game: 'shadowPlanetCount',   reason: 'runtime', why: 'eclipse casters — src/main.js:11388 `if (pu.shadowPlanetCount)`, assigned at :11402 `pu.shadowPlanetCount.value = shadowPlanetIdx`.' },
-  { game: 'shadowPlanetPos',     reason: 'runtime', why: 'eclipse casters — src/main.js:11392 `pu.shadowPlanetPos.value[shadowPlanetIdx].copy(inner.planet.mesh.position)` (and :10068 for the outer caster).' },
-  { game: 'shadowPlanetRadius',  reason: 'runtime', why: 'eclipse casters — src/main.js:11393 `pu.shadowPlanetRadius.value[shadowPlanetIdx] = inner.planet.data.radius` (and :10069).' },
+  { game: 'starPos1',            reason: 'runtime', why: 'star world position — src/main.js:11422 `pu.starPos1`.' },
+  { game: 'starPos2',            reason: 'runtime', why: 'second-star world position — src/main.js:11423 `pu.starPos2.value.copy(_star2Pos)` (also :10095 planet-class moons, :10101 textured moons). ⚠ The old ref here was :11357, a comment inside _updateRenderVisuals stating these are NOT written there — a citation that read as evidence and pointed at its own negation.' },
+  { game: 'shadowMoonCount',     reason: 'runtime', why: 'eclipse casters — src/main.js:11427 `if (pu.shadowMoonCount)`, through :10051, rewritten every frame.' },
+  { game: 'shadowMoonPos',       reason: 'runtime', why: 'eclipse casters — src/main.js:11431 `pu.shadowMoonPos`.' },
+  { game: 'shadowMoonRadius',    reason: 'runtime', why: 'eclipse casters — src/main.js:11427 `if (pu.shadowMoonCount)` block.' },
+  { game: 'shadowPlanetCount',   reason: 'runtime', why: 'eclipse casters — src/main.js:11438 `if (pu.shadowPlanetCount)`, assigned at :11452 `pu.shadowPlanetCount.value = shadowPlanetIdx`.' },
+  { game: 'shadowPlanetPos',     reason: 'runtime', why: 'eclipse casters — src/main.js:11442 `pu.shadowPlanetPos.value[shadowPlanetIdx].copy(inner.planet.mesh.position)` (and :10068 for the outer caster).' },
+  { game: 'shadowPlanetRadius',  reason: 'runtime', why: 'eclipse casters — src/main.js:11443 `pu.shadowPlanetRadius.value[shadowPlanetIdx] = inner.planet.data.radius` (and :10069).' },
 
   // X2 — HARNESS-BLIND. These come from `starInfo`, the SECOND constructor argument
   // (Planet.js:1519 `constructor(planetData, starInfo = null)`), which this harness never passes —
@@ -1030,7 +1030,7 @@ const CITE_SOURCES = [
   // the CITE_FILES block ABOVE it — third instance of ledger C14, now promoted to C24), and the one
   // live ref to that line (step6-parity-ledger.md) is repaired to 1010 in this same commit.
   'src/worldengine/drivers/limbDeck.js',  'src/worldengine/drivers/craterDeck.js', 'src/worldengine/drivers/solidOptics.js', 'src/worldengine/drivers/solidFeatures.js', 'src/worldengine/base/auroraOptics.js', 'src/worldengine/base/terminatorOptics.js',   // ⛔ B3's five, 2026-08-21 — APPENDED TO THIS LINE, NEVER BELOW IT, for the reason given at :982: a new line here moves every entry under it and this array is itself cited. These were TRACKED but UNREGISTERED, so 27 refs that a commit message described as having "moved into craterDeck.js" had in fact LEFT THE SCANNED SET: CHECKED fell 708 -> 700 across five commits that each printed exit 0. That is the failure this mode's own header names — BROKEN == 0 cannot tell "every ref resolves" from "no ref was read". Registering them raises CHECKED and turns their refs FATAL, which is the point.
-  'src/worldengine/drivers/polarDeck.js', 'src/worldengine/drivers/giantSurface.js', // ⛔ APPENDED TO THIS LINE, NEVER INSERTED BELOW IT — this array is itself cited and a new line moves every entry under it. giantSurface.js joins the scanned set in the SAME commit that creates it, which is the §11.3.4 rule and the fix for the B3 defect where five tracked-but-unregistered modules let CHECKED fall 708 -> 700 across five commits that each printed exit 0.
+  'src/worldengine/drivers/polarDeck.js', 'src/worldengine/drivers/giantSurface.js', 'src/util/lab-subject.js', 'src/camera/agentFraming.js', 'tests/lab-subject-contract.test.js', // ⛔ APPENDED TO THIS LINE, NEVER INSERTED BELOW IT — this array is itself cited and a new line moves every entry under it. giantSurface.js joins the scanned set in the SAME commit that creates it, which is the §11.3.4 rule and the fix for the B3 defect where five tracked-but-unregistered modules let CHECKED fall 708 -> 700 across five commits that each printed exit 0.
   'tests/driver-pack-limbdeck.test.js',
   'tests/driver-pack-polardeck.test.js', 'tests/driver-pack-giantsurface.test.js', // ⛔ APPENDED TO THIS LINE, never inserted below it. Pack #8's suite joins the scanned set in the SAME commit that creates it — §11.3.4 — so its refs land in the FATAL column rather than the UNCHECKED pile, which is where B3's five tracked-but-unregistered modules hid 27 refs while every gate printed exit 0.
   'docs/FEATURES/step6-parity-ledger.md',

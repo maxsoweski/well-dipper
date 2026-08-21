@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-21T22:09:56.867Z",
+  "recordedAt": "2026-08-21T22:23:04.150Z",
   "recordedFromCommit": {
-    "sha": "14d45595ad0fdced68e3a128f1ac351779b8ce7d",
+    "sha": "3e42a8129a47c9c8caf4baa0c68415b49bff25cf",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -28,12 +28,12 @@
   },
   "summary": {
     "counts": {
-      "collectedFiles": 339,
+      "collectedFiles": 340,
       "failingFiles": 6,
       "nonCollectingFiles": 15,
-      "tests": 5658,
+      "tests": 5675,
       "failed": 31,
-      "passed": 5623,
+      "passed": 5640,
       "skipped": 4,
       "todo": 0
     },
@@ -276,6 +276,7 @@
       "tests/lab-shader-perframe-seam.test.js": 32,
       "tests/lab-shader-samplers.test.js": 7,
       "tests/lab-shader-shadows.test.js": 27,
+      "tests/lab-subject-contract.test.js": 17,
       "tests/lab-surface-ratchet.test.js": 31,
       "tests/macro-wavelength-law.test.js": 5,
       "tests/material-parity-list.test.js": 27,

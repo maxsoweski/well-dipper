@@ -4,7 +4,7 @@ import { StarFlare } from './objects/StarFlare.js';
 import { RealStarCatalog } from './generation/RealStarCatalog.js';
 import { RealFeatureCatalog } from './generation/RealFeatureCatalog.js';
 import { HashGridStarfield } from './generation/HashGridStarfield.js';
-import { realStarSeed } from './generation/realStarSeed.js';
+import { realStarSeed } from './generation/realStarSeed.js'; import { assertLabSubject, labSubjectIsAddressed } from './util/lab-subject.js';   // ⛔ APPENDED TO THIS LINE, never inserted below it: this file carries symbol-anchored citations down past :12000 and a new import line shifts every one of them, reding them as some other block's failure. The same discipline planet-lod-lab.html:188 keeps.
 import { createStarRenderer } from './rendering/objects/StarRenderer.js';
 import { Planet } from './objects/Planet.js';
 import { Moon } from './objects/Moon.js';
@@ -21,7 +21,7 @@ import { GravityWellMap } from './ui/GravityWellMap.js';
 // import { CameraController } from './camera/CameraController.js'; // OLD — kept for revert
 import { ShipCameraSystem, CameraMode } from './camera/ShipCameraSystem.js';
 import { orreryStandoff } from './camera/orreryStandoff.js';
-import { measureFraming, lodStateOf, frameSequence, bodyWorldMetrics } from './camera/agentFraming.js';
+import { measureFraming, lodStateOf, frameSequence, bodyWorldMetrics, subjectLighting } from './camera/agentFraming.js';   // ⛔ `subjectLighting` APPENDED TO THIS LINE, never a new import line — this file's citations are line-anchored.
 import { approachLadder } from './worldengine/base/labCore.js';
 import {
   effectiveOuterOrbit,
@@ -2980,6 +2980,15 @@ window._lab = {
    * @returns {object} `{ok, name, mesh, planetData, condition, ...}` or `{ok:false, reason}`
    */
   resolveBody(subject = {}) {
+    // ⛔⛔ ITEM 1 OF THE TWO INSTRUMENT FIXES MAX APPROVED, 2026-08-21 — THIS FUNCTION USED TO
+    // ANSWER PLANET 0 FOR A SUBJECT IT DID NOT UNDERSTAND, WHICH IS A FALSE PASS RATHER THAN AN
+    // ERROR. ⭐ THE WHOLE ARGUMENT MOVED WITH THE GUARD and is quoted at
+    // src/util/lab-subject.js:62 `export function assertLabSubject(subject) {` — what the defect
+    // was, why a THROW rather than this object's usual `{ok:false}`, and why an empty `{}` is
+    // deliberately still legal. ⛔ It is NOT restated here: a rationale in two places is one that
+    // can be repaired in one. It lives THERE because `src/main.js` cannot be imported by a test,
+    // so a guard written inline here could only ever be pinned by scanning source text.
+    assertLabSubject(subject);
     if (!system) return { ok: false, reason: 'no system loaded — spawnProceduralSystem(seed) first' };
 
     // Flatten the SIM tree once. Three shapes of body live here and they are NOT interchangeable:
@@ -3048,7 +3057,11 @@ window._lab = {
         row = rows.find((r) => r.kind === kind && r.p === p && r.m === (kind === 'moon' ? m : null)) || null;
         if (!row) return { ok: false, resolvedBy: 'index', reason: `no ${kind} at p=${p} m=${m}` };
       }
-      resolvedBy = 'index';
+      // ⭐ `'default'`, NOT `'index'`, WHEN NOTHING WAS ADDRESSED AT ALL — see the ⚠ at the top. An
+      // index subject is a discovery convenience the caller chose; an empty one is a default the
+      // caller did not choose, and a caption that spells them the same way cannot tell Max which
+      // body a shot was AIMED at versus which one it merely LANDED on.
+      resolvedBy = labSubjectIsAddressed(subject) ? 'index' : 'default';
     }
 
     const mesh = row.mesh;
@@ -3431,9 +3444,39 @@ window._lab = {
     // 'localStorage' and 'default' are four different stories about why a body looks how it looks.
     const flag = labGasBodiesFlag();
 
+    // ⛔⛔ ITEM 2 OF THE TWO INSTRUMENT FIXES, 2026-08-21 — THE FREEZE-POSE FALSE NEGATIVE, WHICH
+    // FIRED TWICE IN ONE DAY. The whole argument, the sign convention and the two thresholds live
+    // with the maths at src/camera/agentFraming.js:213 `export function subjectLighting(camPos, bodyPos, lightDir) {` and are not restated here.
+    // In one line: "freeze FIRST, then frameBody" guarantees the frame is not MOVING and says
+    // nothing about whether the subject is LIT, and a black disc reads exactly like a broken shader.
+    // ⚠ MEASURED AFTER THE FRAMING, NOT BEFORE — the camera has to be where the shot will be taken
+    // from, which is only true once `frameSequence` and its two awaited frames have run.
+    const lighting = subjectLighting(camera.position, worldPos, r.holder?._lightDir || null);
+    if (lighting.unlit && opts.allowUnlit !== true) {
+      // ⛔ A REFUSAL RATHER THAN A WARNING, AND IT IS OVERRIDABLE. The failure this closes is an
+      // agent photographing a night side and reporting a broken shader, so the default must stop.
+      // But a night-side shot is a legitimate thing to want (terminator work, city lights, aurora),
+      // and an instrument nobody can override gets worked around instead of used.
+      return {
+        ok: false,
+        reason: lighting.note,
+        unlit: true,
+        lighting,
+        body: { name: r.name, display: r.display, kind: r.kind, p: r.p, m: r.m },
+        frozen: !!this._freezeState,
+        remedy: this._freezeState
+          ? 'the scene IS frozen — thawFrame(), re-frame, then re-freeze, or pass { allowUnlit: true }'
+          : 'pass { allowUnlit: true } if a night-side framing is what you want',
+      };
+    }
+
     return {
       ok: true,
       body: { name: r.name, display: r.display, kind: r.kind, p: r.p, m: r.m, s: r.s, isPlanetMoon: r.isPlanetMoon },
+      // ⭐ REPORTED ON EVERY FRAMING, not only on the refusal — the `mostlyNight` band is exactly the
+      // case where a dark render is expected, and a caption that omits it invites the same wrong
+      // conclusion one notch less severely.
+      lighting,
       pipeline: {
         labGasBodies: flag.enabled,
         flagSource: flag.source,
@@ -3659,6 +3702,10 @@ window._lab = {
     const lightDir = r.holder?._lightDir || null;
     const toCam = camera.position.clone().sub(wp).normalize();
     const phaseDot = lightDir ? +toCam.dot(lightDir.clone().normalize()).toFixed(4) : null;
+    // ⭐⭐ THE RAW DOT WAS ALREADY HERE AND NOTHING READ IT, WHICH IS WHY THE BLACK DISC WAS READ AS A
+    // BROKEN SHADER TWICE ON 2026-08-21. A bare `phaseDot: -0.98` in a large caption is not a
+    // finding; `unlit: true` with a note naming the frozen pose is. Same number, named.
+    const lighting = subjectLighting(camera.position, wp, lightDir);
 
     const sysData = window._systemData || null;
     const fz = this._freezeState;
@@ -3715,6 +3762,9 @@ window._lab = {
         distanceRadii: worldR ? +(camDist / worldR).toFixed(3) : null,
         phaseDot,
         phaseNote: 'geometric illumination of the visible face. Lit % is measured from the PNG by shot-diff.mjs.',
+        // ⭐ THE SAME NUMBER, NAMED — and `unlit` is the field a caption can act on. `phaseDot` stays
+        // for every existing reader of this shape; nothing is renamed or removed.
+        lighting,
       },
       uniforms: _dumpUniforms(u),
     };
