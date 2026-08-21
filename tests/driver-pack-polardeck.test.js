@@ -485,8 +485,18 @@ describe('GATE 5b · the registry entry is correct before anything composes it',
         all.push({ id: `${seed}#${ordinal}`, cond: conditionFromBody(e.planetData) });
       });
     }
+    // ⛔⛔ RE-AIMED AT B3 LEG 2 — IT NOW COMPARES AGAINST THE GAS CLASS DIRECTLY, WHICH IS WHAT THIS
+    // GATE ALWAYS MEANT. `giantDeck` was the stand-in for "the gas class" because its predicate WAS
+    // `compositionClass(condition) === 'gas'` character for character; ledger R-07 widened it to
+    // src/worldengine/drivers/giantDeck.js:89 `export function bandedEnvelopeOf(condition) {` (gas OR an
+    // opaque CO2 shroud), so the deck now claims rocky bodies this pack must NOT claim. Comparing to
+    // the moved predicate would have silently re-scoped this pack's gate to whatever the deck does
+    // next; comparing to `compositionClass` states the property this pack actually has, and the
+    // containment line keeps the original "registration admits nothing new" claim alive.
     const mine = all.filter((b) => POLAR_DECK_ENTRY.applies(b.cond) === true).map((b) => b.id);
-    const theirs = all.filter((b) => giant.applies(b.cond) === true).map((b) => b.id);
+    const theirs = all.filter((b) => compositionClass(b.cond) === 'gas').map((b) => b.id);
+    const deck = all.filter((b) => giant.applies(b.cond) === true).map((b) => b.id);
+    expect(mine.every((id) => deck.includes(id)), 'the deck must still claim every body this pack does').toBe(true);
     expect(mine).toEqual(theirs);
     const nonGas = all.length - mine.length;
     expect(nonGas, 'the population must contain non-gas bodies or this gate is vacuous').toBeGreaterThan(20);
@@ -594,7 +604,10 @@ describe('GATE 6 · fences and the open registration hole', () => {
     // ⭐ B3 leg 1 APPENDS A FIFTH, `solidOptics` (ledger rows P-11 + P-05). Its predicate is
     // rockySurface's, character for character, so it claims no body rockySurface did not already
     // claim and the swapped population does not move — see tests/driver-pack-solidoptics.test.js.
-    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics']);
+    // ⭐ B3 leg 2 APPENDS A SIXTH, `craterDeck` (ledger row P-14's crater half). Its predicate is
+    // rockySurface's exact COMPLEMENT, `=== 'gas'`, so every gas body it claims was already claimed by
+    // this deck and the swapped population does not move — see tests/driver-pack-craterdeck.test.js.
+    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics', 'craterDeck']);
   });
 
   it('⭐ the registered path actually writes the uPolar family onto a real gas body', () => {

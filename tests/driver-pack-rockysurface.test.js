@@ -106,6 +106,16 @@ const PACK_CODE = stripCommentsPreservingOffsets(read('src/worldengine/drivers/r
 // by the COMMENT stripping, which both views do.
 const PACK_CODE_STRINGS = stripCommentsPreservingOffsets(read('src/worldengine/drivers/rockySurface.js'));
 
+// ⭐ B3 LEG 2 — A THIRD VIEW, OVER THE FILE THE IMPACT DRIVERS MOVED TO. Ten of this pack's uniforms
+// are now emitted by src/worldengine/drivers/craterDeck.js:96 `export function craterDriverBlock(condition) {`,
+// imported and spread in place, so a SOURCE pin over `PACK_CODE` alone would silently stop reading
+// its subject. ⛔ The pins were re-pointed at the block rather than deleted: FAMILY 7c's whole
+// argument is that the relevance fold is behaviourally unreachable and a source pin is the only gate
+// that can see it, and a gate that stops looking at the code it guards is worse than no gate.
+const BLOCK_CODE = stripCommentsPreservingOffsets(read('src/worldengine/drivers/craterDeck.js'), {
+  blankLiteralText: true,
+});
+
 // ⛔ THE LEADING-DOT ARM IS NOT OPTIONAL, AND ITS ABSENCE WAS THE FENCE'S FIRST HOLE. A negative
 // lookbehind that includes `.` makes `.1706` produce NO match at any offset — offset 1 fails the
 // dot, offsets 2+ fail the digit — so a transcription one character shorter than the forbidden form
@@ -227,13 +237,27 @@ describe('A — the predicate admits exactly the non-gas class', () => {
     // ...and it is the EXACT COMPLEMENT of the three shipped predicates, which is what makes
     // "registering this entry cannot move a body off the pack that already claims it" a measured
     // statement rather than a reading of four source lines.
-    const giant = PACKS.find((e) => e.name === 'giantDeck');
-    expect(giant, 'the shipped gas pack must exist to compare against').toBeTruthy();
-    const theirGas = PLANETS.filter((b) => giant.applies(b.cond) === true).map((b) => b.id);
+    // ⛔⛔ RE-AIMED AT B3 LEG 2, AND AIMED AT A DIFFERENT PACK RATHER THAN LOOSENED. This paragraph
+    // used `giantDeck` as its stand-in for "the gas class", which was exact while the deck's
+    // predicate WAS `compositionClass === 'gas'`. R-07 widened it to gas OR an opaque-CO2 shroud
+    // (src/worldengine/drivers/giantDeck.js:89 `export function bandedEnvelopeOf(condition) {`), and an
+    // opaque-CO2 body is `rocky` — so the deck and this pack now co-apply and the complement claim is
+    // FALSE of that pair. It is still true of `craterDeck`, whose predicate is this one's exact
+    // complement by construction and which is the pack the claim is actually about: it writes the ten
+    // impact uniforms on the population this pack does not claim.
+    const other = PACKS.find((e) => e.name === 'craterDeck');
+    expect(other, 'the complement pack must exist to compare against').toBeTruthy();
+    const theirGas = PLANETS.filter((b) => other.applies(b.cond) === true).map((b) => b.id);
     const myPlanets = PLANETS.filter((b) => ROCKY_SURFACE_ENTRY.applies(b.cond) === true).map((b) => b.id);
     expect(theirGas.length).toBe(GAS.length);
     expect(myPlanets.filter((id) => theirGas.includes(id))).toEqual([]);
     expect(myPlanets.length + theirGas.length).toBe(PLANETS.length);
+    // ...and the deck is now a PROPER superset of the gas class, which is R-07's whole population
+    // change and is asserted here so it cannot shrink back unnoticed.
+    const giant = PACKS.find((e) => e.name === 'giantDeck');
+    const deckClaims = PLANETS.filter((b) => giant.applies(b.cond) === true).map((b) => b.id);
+    expect(theirGas.every((id) => deckClaims.includes(id))).toBe(true);
+    expect(deckClaims.length).toBeGreaterThan(theirGas.length);
 
     // It must return the BOOLEAN. src/worldengine/drivers/index.js:159 and :203 both compare with
     // `=== true`, so a truthy non-boolean registers, reports as `skipped`, renders nothing, and
@@ -505,9 +529,15 @@ describe('C — every driver is a forward of a shared producer', () => {
     // ⚠ PINNED ON THE DRIVER LINES THEMSELVES, not on the substring. `meta` carries the same two
     // products, so a bare `toContain('cu.density * rel')` stays green with the fold deleted from
     // the drivers and surviving in the report — measured, on the mutant, before this was tightened.
-    expect(PACK_CODE).toMatch(/uCraterDensity:\s*scalar\(\s*cu\.density\s*\*\s*rel\s*,/);
-    expect(PACK_CODE).toMatch(/uEjectaStrength:\s*scalar\(\s*cu\.ejectaStrength\s*\*\s*rel\s*,/);
-    expect(PACK_CODE).toContain('const rel = craterRelevanceOf(condition);');
+    // ⭐ RE-POINTED AT `craterDeck.js` AT B3 LEG 2 — the three lines moved there with the block; the
+    // property they pin is unchanged and is now pinned for BOTH packs at once.
+    expect(BLOCK_CODE).toMatch(/uCraterDensity:\s*scalar\(\s*cu\.density\s*\*\s*rel\s*,/);
+    expect(BLOCK_CODE).toMatch(/uEjectaStrength:\s*scalar\(\s*cu\.ejectaStrength\s*\*\s*rel\s*,/);
+    expect(BLOCK_CODE).toContain('const rel = craterRelevanceOf(condition);');
+    // ...and this pack really does import it rather than carry a copy, which is what makes the pin
+    // above a pin on THIS pack's behaviour.
+    expect(PACK_CODE).toContain('craterDriverBlock');
+    expect(PACK_CODE).not.toContain('craterUniformsFrom(');
     // …and `meta` must agree with what the drivers resolve to, so the report and the wire cannot
     // drift apart and leave the pin above reading a line nobody renders from.
     for (const b of FIRED_MOONS.slice(0, 8)) {
@@ -716,13 +746,21 @@ describe('C — every driver is a forward of a shared producer', () => {
     // pack declares it owns. MEASURED 2026-08-19: exactly `1.0`, `0.55`, `0`, `3` and nothing else.
     const literals = literalsIn(PACK_CODE_STRINGS);
     expect(literals.sort()).toEqual(['0', '0.55', '1.0', '3']);
-    //   · 1.0 twice: C_CRATER (planet-lod-lab.html:821) and the lab's surfaceGravity fallback
-    //     (planet-lod-lab.html:4996 — NOT craterUniforms.js:157's 0.5, which would raise the relief
-    //     envelope ~1.5x on any body missing the field and look exactly like a working wire).
+    //   ⭐ THE SET IS UNCHANGED AT B3 LEG 2 AND ITS MEMBERS ARE NOT. `C_CRATER` and the `Dchar === 0`
+    //     guard moved to src/worldengine/drivers/craterDeck.js with the drivers they belong to, and
+    //     `1.0` and `0` both survive here for OTHER reasons (below) — so this assertion would have
+    //     stayed green through the move while its explanation rotted. RE-MEASURED after the move.
+    //   · 1.0: the lab's surfaceGravity fallback (planet-lod-lab.html:4996 — NOT
+    //     craterUniforms.js:157's 0.5, which would raise the relief envelope ~1.5x on any body
+    //     missing the field and look exactly like a working wire). ⛔ It used to be TWO occurrences,
+    //     the second being C_CRATER; that one is now pinned by `craterDeck.js`'s own literal fence
+    //     and the `expect(C_CRATER).toBe(1.0)` below still reads it through this file's re-export.
     expect(C_CRATER).toBe(1.0);
     //   · 0.55: PERTURB_BASE, pinned to the factory default rather than transcribed — see FAMILY 28.
     expect(PERTURB_BASE).toBe(makeUniforms(LAB_WORLD_LIGHT).uPerturb.value);
-    //   · 0: the `Dchar === 0` divide-by-zero guard, not a null check. craterUniforms.js:96 says
+    //   · 0: TWO occurrences, RE-ENUMERATED after the move rather than assumed — `for (let i = 0;`
+    //     in the offset-shape refusal, and `cratersFired: cu.Dchar > 0` in `meta`. The DRIVER-side
+    //     `Dchar === 0` divide-by-zero guard left with the block. craterUniforms.js:96 says
     //     Dchar 0 means "no characteristic diameter", and writePackUniforms.js:191 refuses it.
     expect(CRATERS_OFF.Dchar).toBe(0);
     //   · 3: the LENGTH of a domain-offset vector in `offsetOf`'s shape guard (Step 9c), and the
@@ -1336,13 +1374,26 @@ describe('F — the entry is registry-ready and collision-free', () => {
     expect(compared).toBe(3);
     // ...and the predicates really are complementary on the whole population, so the collision
     // throw stays inert by construction rather than by luck.
+    // ⭐⭐ `giantDeck` LEFT THIS LOOP AT B3 LEG 2 AND THE REASON IS LEDGER R-07, NOT A LOOSENED GATE.
+    // The deck's predicate was `compositionClass === 'gas'`, the exact complement of this pack's, so
+    // it belonged with the two decks below. R-07 widened it to
+    // src/worldengine/drivers/giantDeck.js:89 `export function bandedEnvelopeOf(condition) {` — gas OR
+    // an opaque CO2 shroud — and an opaque-CO2 body is `rocky`, so the two now CO-APPLY on exactly
+    // that slice. ⛔ The disjointness that holds the collision throw off is therefore by NAME for this
+    // pair, which the `overlap` assertion above already checks and which is re-checked over the whole
+    // population below; asserting predicate-disjointness here would have been asserting something
+    // false. The co-application is counted so this cannot go vacuous.
+    let deckCoApplied = 0;
+    const gd = PACKS.find((x) => x.name === 'giantDeck');
     for (const b of PLANETS) {
       const mineApplies = ROCKY_SURFACE_ENTRY.applies(b.cond) === true;
-      for (const name of ['giantDeck', 'limbDeck', 'polarDeck']) {
+      for (const name of ['limbDeck', 'polarDeck']) {
         const e = PACKS.find((x) => x.name === name);
         expect(mineApplies && e.applies(b.cond) === true, `${b.id} / ${name}`).toBe(false);
       }
+      if (mineApplies && gd.applies(b.cond) === true) deckCoApplied++;
     }
+    expect(deckCoApplied, 'R-07: the deck must really co-apply with the rocky pack, or the name-disjointness check below is vacuous').toBeGreaterThan(0);
 
     // ⛔⛔ AND NOW ONE PACK THAT IS *NOT* DISJOINT BY PREDICATE — `solidOptics`, appended at B3 leg 1
     // with a predicate character-identical to this one. For every other registered pack the

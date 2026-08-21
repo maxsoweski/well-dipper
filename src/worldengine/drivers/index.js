@@ -50,11 +50,12 @@
 // caller — which already owns three — does that one line.
 // ─────────────────────────────────────────────────────────────────────────────
 import { compositionClass } from '../base/e1Regime.js';
-import { giantDeckPack } from './giantDeck.js';
+import { giantDeckPack, bandedEnvelopeOf } from './giantDeck.js';
 import { LIMB_DECK_ENTRY } from './limbDeck.js';
 import { POLAR_DECK_ENTRY } from './polarDeck.js';
 import { ROCKY_SURFACE_ENTRY } from './rockySurface.js';
 import { SOLID_OPTICS_ENTRY } from './solidOptics.js';
+import { CRATER_DECK_ENTRY } from './craterDeck.js';
 import {
   writePackUniforms, assertDisplayPolicy, assertPackResult, PackContractError,
 } from '../port/writePackUniforms.js';
@@ -98,7 +99,19 @@ export function gatesFor(entry, policy = GATE_POLICY_ALL_ON) {
 export const PACKS = Object.freeze([
   Object.freeze({
     name: 'giantDeck',
-    applies: (condition) => compositionClass(condition) === 'gas',
+    // ⭐ R-07's FIRST GATE, B3 leg 2. It was `compositionClass(condition) === 'gas'`; it is now the
+    // deck's own condition-derived banding predicate, IMPORTED rather than retyped —
+    // src/worldengine/drivers/giantDeck.js:89 `export function bandedEnvelopeOf(condition) {` — so this
+    // line and `uBandStrength` cannot disagree. ⛔ WIDENING THIS LINE ALONE IS A MEASURED NO-OP; the
+    // second gate is inside the pack and the reason is written at both ends.
+    // ⚠ IT WIDENS THE CLAIM BUT MOVES NO BODY BETWEEN MATERIALS: the 130 bodies it adds are already
+    // claimed by `rockySurface` and `solidOptics`, so the `packs.length > 0` term of the admission
+    // test cannot flip for any record and no census is re-pinned. Measured, not read off these lines.
+    // ⚠ AND IT MAKES THE COLLISION THROW BELOW LIVE ON THOSE 130 rather than inert: this deck now
+    // co-applies with two non-gas packs. Their emitted name sets are disjoint — the deck writes the
+    // `uBand*`/`uJet*` families, `rockySurface` the impact/palette ones and `solidOptics` the air
+    // optics — asserted by NAME LOOKUP over a generated population in the deck's own suite.
+    applies: (condition) => bandedEnvelopeOf(condition),
     gates: Object.freeze(['bands', 'jets']),
     pack: giantDeckPack,
   }),
@@ -186,6 +199,23 @@ export const PACKS = Object.freeze([
   // so the limb pair it forwards is inert on pixels behind that uniform's 0.0 default. Named in the
   // pack header; it is a UAT decision about ~1000 solid bodies, not a wiring one.
   SOLID_OPTICS_ENTRY,
+  // ── BLOCK B3 leg 2. THE SIXTH ENTRY. Ledger row P-14's crater half.
+  //
+  // ⭐ ITS PREDICATE IS THE EXACT COMPLEMENT OF ROCKY_SURFACE_ENTRY'S, `=== 'gas'`, AND THAT IS THE
+  // WHOLE OF BOTH ITS POPULATION ARGUMENT AND ITS COLLISION ARGUMENT. Population: every gas-class
+  // body is ALREADY claimed by giantDeck, so the `packs.length > 0` term of
+  // src/objects/Planet.js:2194 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
+  // cannot flip for any record and NO CENSUS MOVES — the opposite of Step 10a's entry above, which
+  // was the first to widen the swapped population and said so. Collision: `rockySurface` writes the
+  // impact family on `!== 'gas'` and this writes it on `=== 'gas'`, so across any corpus EXACTLY ONE
+  // pack writes each of the ten names on each body — never zero, which is what P-14 was, and never
+  // two, which the throw below refuses.
+  //
+  // ⛔ IT SHARES ITS DRIVER BLOCK WITH `rockySurface` BY IMPORT, NOT BY COPY. Both call
+  // src/worldengine/drivers/craterDeck.js:96 `export function craterDriverBlock(condition) {`, so the
+  // two packs cannot answer differently for the same condition — asserted directly in
+  // tests/driver-pack-craterdeck.test.js rather than inferred from the import graph.
+  CRATER_DECK_ENTRY,
 ]);
 
 /** The entries whose predicate claims this condition, in array order. */

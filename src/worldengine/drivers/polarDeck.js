@@ -33,7 +33,7 @@
 // changed is that a SIBLING now has the producer in scope. Extending pack #1 instead would force
 // that comment to be rewritten from a statement into a history note, and would
 // put two unrelated scope fences in one module. The uniform-collision throw at
-// src/worldengine/drivers/index.js:251 `throw new PackContractError(` guarantees the two packs
+// src/worldengine/drivers/index.js:281 `throw new PackContractError(` guarantees the two packs
 // cannot silently overlap; their emitted name sets are disjoint (`uBand*`/`uJet*` vs `uPolar*`) and
 // the pack test asserts that as a set difference rather than trusting the prefixes.
 //
@@ -107,7 +107,7 @@ export const GAME_STORM_SEED = 0;
 // pack #1 sources from `condition.atmosphere.color`, so feeding this the SAME condition field makes
 // the two front-ends' cap tints identical by construction rather than by coincidence.
 //
-// ⚠ WRITTEN AS NAMED COEFFICIENTS, for the reason recorded at giantDeck.js:63 `and that is a byte-identity decision, not a`:
+// ⚠ WRITTEN AS NAMED COEFFICIENTS, for the reason recorded at giantDeck.js:101 `and that is a byte-identity decision, not a`:
 // a tuned triple buried inside a return statement is a triple that gets "cleaned up" by someone who
 // thought they were simplifying an expression.
 export const POLAR_TINT_LAW = Object.freeze({ R: 0.45, G: 0.62, B_MUL: 0.85, B_ADD: 0.25 });
@@ -199,7 +199,7 @@ export function polarDeckPack(condition, ctx = {}) {
     return assertPackResult({ drivers, attributes, meta }, 'polarDeckPack');
   }
 
-  // ⛔ ORDER — CLASSIFY THE UN-DRAWN CONDITION. The same call pack #1 makes at giantDeck.js:216 `const regime = giantRegimeOf(condition);`,
+  // ⛔ ORDER — CLASSIFY THE UN-DRAWN CONDITION. The same call pack #1 makes at giantDeck.js:269 `const regime = giantRegimeOf(condition);`,
   // and the lab records the specific damage of getting it wrong at exactly THIS derivation:
   // planet-lod-lab.html:1852 `which moves the polar bank this function writes (state.polarSides / state.polarR0) on 52/52 (preset, seed) pairs tried`
   // — the polar bank moves on 52/52 pairs while `polarStrength` and the storm count stay 0, i.e. the
@@ -207,7 +207,7 @@ export function polarDeckPack(condition, ctx = {}) {
   const regime = giantRegimeOf(condition);
 
   // ⛔ THE VIGOR RAMP IS THE WRITER'S, NOT PACK #1's, AND THEY ARE NOT THE SAME FUNCTION. Both ramp
-  // T_eq over 55..130 K — giantDeck.js:69 `export const VIGOR = Object.freeze({ LO: 55, HI: 130, T_FALLBACK: 288 });`
+  // T_eq over 55..130 K — giantDeck.js:107 `export const VIGOR = Object.freeze({ LO: 55, HI: 130, T_FALLBACK: 288 });`
   // and storm-e.js:63 `VIGOR_LO: 55, VIGOR_HI: 130,             // T_eq → personality ramp (ports the legacy _ss(55,130,T_eq))`
   // — but their FALLBACKS differ: pack #1 falls back to 288 K, the writer falls back to a per-regime
   // `DEFAULT_T_EQ` (124 Jovian, 47 Neptunian, …). On a body with no `T_eq` those give different
@@ -222,7 +222,7 @@ export function polarDeckPack(condition, ctx = {}) {
       // this string is 'h2-he'. Passed anyway: the writer's gate is the writer's to enforce.
       composition: condition.atmosphere && condition.atmosphere.composition,
       T_eq: condition.T_eq,
-      // Pack #1's idiom, giantDeck.js:232 `if ((ctx.obliquityDeg ?? 0) > 0) e5Drivers.obliquityDeg = ctx.obliquityDeg;   // else regime default`
+      // Pack #1's idiom, giantDeck.js:285 `if ((ctx.obliquityDeg ?? 0) > 0) e5Drivers.obliquityDeg = ctx.obliquityDeg;   // else regime default`
       // — a zero/absent obliquity means "use the regime default", so only a positive one is forwarded.
       ...((ctx.obliquityDeg ?? 0) > 0 ? { obliquityDeg: ctx.obliquityDeg } : {}),
     },
@@ -247,7 +247,7 @@ export function polarDeckPack(condition, ctx = {}) {
   drivers.uPolarPhase = pole.phase;
 
   // The cap tint, from the SAME condition field pack #1 reads for `uBandTint`. `Array.isArray` guard
-  // + omission on failure is pack #1's idiom, giantDeck.js:242 `if (Array.isArray(tint)) drivers.uBandTint = tint.slice();`
+  // + omission on failure is pack #1's idiom, giantDeck.js:295 `if (Array.isArray(tint)) drivers.uBandTint = tint.slice();`
   // — a body with no atmosphere colour keeps the
   // last cap tint behind whatever strength it drew, which is what the lab does, rather than being
   // reset to a colour nobody derived.

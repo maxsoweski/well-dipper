@@ -112,7 +112,10 @@ describe('6a — PACKS is an array with pinned MEMBERSHIP, not a pinned length',
   it('the membership is exactly the names Step 6 ships', () => {
     // ⭐ B3 leg 1 APPENDS A FIFTH, `solidOptics`. Re-pinned here BY MEMBERSHIP for the declared
     // reason this block exists: a length pin would have passed a swap of one pack for another.
-    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics']);
+    // ⭐ B3 leg 2 APPENDS A SIXTH, `craterDeck` (ledger P-14's crater half), whose predicate is
+    // `rockySurface`'s exact COMPLEMENT — so the ten impact uniforms now have exactly one writer on
+    // every body instead of none on the gas half.
+    expect(PACKS.map((e) => e.name)).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics', 'craterDeck']);
   });
 
   it('every entry carries the four contract fields, and the array is frozen', () => {
@@ -214,9 +217,21 @@ describe('6a — every pack predicate is DERIVED FROM THE CONDITION, never from 
 
   it('the predicate moves when the CONDITION field it reads moves', () => {
     // The positive half: not merely label-blind, but actually driven by the composition channel.
-    const noEnvelope = { ...gasCond, atmosphere: { ...gasCond.atmosphere, composition: 'co2' } };
+    // ⭐⭐ RE-WRITTEN AT B3 LEG 2, AND THE OLD MUTANT NOW LEGITIMATELY PASSES. Ledger R-07 widened this
+    // predicate to src/worldengine/drivers/giantDeck.js:89 `export function bandedEnvelopeOf(condition) {`
+    // — gas OR an opaque CO2 shroud — so swapping an h2-he envelope for `co2` at the SAME (high)
+    // pressure moves the body from one disjunct to the other and it still bands. That is the closure
+    // working, not the gate failing, so the mutant is sharpened rather than deleted: the fall to
+    // `false` needs the pressure to go with the composition, and BOTH disjuncts are exercised.
     expect(GIANT.applies(gasCond)).toBe(true);
-    expect(GIANT.applies(noEnvelope)).toBe(false);
+    const thinCO2 = { ...gasCond, atmosphere: { ...gasCond.atmosphere, composition: 'co2', pressure: 1 } };
+    expect(GIANT.applies(thinCO2), 'a thin CO2 atmosphere is neither disjunct').toBe(false);
+    const thickCO2 = { ...gasCond, atmosphere: { ...gasCond.atmosphere, composition: 'co2', pressure: 92 } };
+    expect(GIANT.applies(thickCO2), 'R-07: an opaque CO2 shroud bands').toBe(true);
+    // …and the shroud disjunct really is PRESSURE-keyed, not composition-keyed alone: 10 bar is the
+    // lab's own regime-3 threshold and the predicate is strict above it.
+    expect(GIANT.applies({ ...thinCO2, atmosphere: { ...thinCO2.atmosphere, pressure: 10 } })).toBe(false);
+    expect(GIANT.applies({ ...thinCO2, atmosphere: { ...thinCO2.atmosphere, pressure: 10.0001 } })).toBe(true);
   });
 });
 
@@ -238,7 +253,9 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
 
   it('a gas body: the deck runs, the master gates are 1.0, the bake is real', () => {
     const { material, res, count } = runOn(gas());
-    expect(res.applied).toEqual(['giantDeck', 'limbDeck', 'polarDeck']);
+    // ⭐ `craterDeck` JOINS THE APPLIED LIST AT B3 LEG 2 — it is the gas half of ledger P-14, and a
+    // gas body is exactly the population it exists for.
+    expect(res.applied).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck']);
     // ⭐ `solidOptics` joins the SKIPPED list here and nowhere else on a gas body: its predicate is
     // the complement of gas, so a gas body must never see it. That is the whole of its scope claim.
     expect(res.skipped).toEqual(['rockySurface', 'solidOptics']);
@@ -246,12 +263,18 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     expect(material.uniforms.uJetStrength.value).toBe(1.0);
     // ⭐ MEASURED, NOT ASSUMED — `rockySurface` declares `craters` and `ejecta`, and NEITHER KEY IS
     // HERE. `applyDriverPacks` merges an entry's gate map only after the applicability `continue`
-    // (src/worldengine/drivers/index.js:240 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`),
+    // (src/worldengine/drivers/index.js:270 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`),
     // so a skipped pack contributes nothing to `res.gates`. That matters beyond bookkeeping:
     // `res.gates` is what an Instrument E caption prints as "what was decided on this body", and a
     // gate name from a pack that never ran would read as a rendering decision nobody made.
-    expect(res.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true });
-    expect(Object.keys(res.gates)).not.toContain('craters');
+    // ⭐ `craters`/`ejecta` ARE HERE NOW, and the sentence above is why that is the right answer
+    // rather than a loosening: `craterDeck` RAN on this body, so its gate names are a rendering
+    // decision that really was made. What must still be absent is a gate from a SKIPPED pack, and
+    // `rockySurface` declares the same two names — so the check is re-aimed at a name only a skipped
+    // pack owns.
+    expect(res.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true, craters: true, ejecta: true });
+    expect(Object.keys(res.gates)).not.toContain('terminator');
+    expect(Object.keys(res.gates)).not.toContain('aurora');
     expect(Object.keys(res.attributes).sort()).toEqual(['aBand', 'aMush', 'aShear']);
     expect(res.attributes.aBand.length).toBe(count);
     // Non-zero variance — a constant aBand is what a dead bake looks like.
@@ -302,7 +325,10 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     // rather than inert. That it does not throw is the assertion; the two emitted name sets are
     // disjoint, which both pack suites check by name lookup.
     expect(res.applied).toEqual(['rockySurface', 'solidOptics']);
-    expect(res.skipped).toEqual(['giantDeck', 'limbDeck', 'polarDeck']);
+    // ⭐ `craterDeck` JOINS THE SKIPPED LIST at B3 leg 2: its predicate is `=== 'gas'`, so on a solid
+    // body the impact family keeps its single writer (`rockySurface`) and the collision throw stays
+    // inert for that pair by construction.
+    expect(res.skipped).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck']);
     // The gate map is the applied packs' names ONLY — the three skipped decks contribute none.
     expect(res.gates).toEqual({ craters: true, ejecta: true, terminator: true, aurora: true });
     // ⛔ NO ATTRIBUTE IS BAKED ON A SOLID BODY. `aBand`/`aMush`/`aShear` are the gas deck's, and the
@@ -316,7 +342,7 @@ describe('6a — applyDriverPacks composes the array onto a real lab material', 
     const wrote = new Set(res.uniformsWritten);
     // ⛔ THE CONTRACT SET, NOT THE WRITE LOG, AND THE DIFFERENCE IS THE WHOLE GATE. An earlier form of
     // this assertion compared `moved` against `new Set(res.uniformsWritten)` — but
-    // src/worldengine/drivers/index.js:267 `for (const name of Object.keys(result.drivers)) uniformsWritten.push(name);`
+    // src/worldengine/drivers/index.js:297 `for (const name of Object.keys(result.drivers)) uniformsWritten.push(name);`
     // pushes every name the writer just moved, so `moved \ uniformsWritten` is empty BY CONSTRUCTION
     // for any driver map at all. EXECUTED: wrapping the pack to emit two extra drivers (`uOctaves: 11`,
     // `uLavaCoverage: 0.9`) really restyles this body — and the write-log form stayed green, as did
@@ -668,8 +694,8 @@ describe('6e — the flag is OFF by default and it selects a DIFFERENT material'
     const { lab } = planetAt(body().d, true);
     expect(lab.isLabPipeline).toBe(true);
     expect(lab.flag).toEqual({ enabled: true, source: 'override', default: false });
-    expect(lab.packsApplied).toEqual(['giantDeck', 'limbDeck', 'polarDeck']);
-    expect(lab.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true });
+    expect(lab.packsApplied).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck']);
+    expect(lab.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true, craters: true, ejecta: true });
     expect(lab.provenance.isWorldEngine).toBe(true);
     expect(lab.uniformsWritten).toContain('uBandStrength');
   });
@@ -705,12 +731,23 @@ describe('6e — the flag is OFF by default and it selects a DIFFERENT material'
     const solSolid = SOL.filter((x) => x.kind === 'planet'
       && compositionClass(conditionFromBody(x.d)) !== 'gas');
     expect(solSolid.length).toBeGreaterThan(4);
+    // ⭐⭐ AND THE REAL VENUS IS IN THIS SET, WHICH IS R-07's SHARPEST CONFIRMATION IN THIS SUITE.
+    // Since B3 leg 2 the band deck's predicate is condition-derived (gas OR an opaque CO2 shroud), so
+    // `sol-venus` — 92 bar of CO2 — is claimed by `giantDeck` as well, without anyone naming Venus
+    // anywhere. The expected pack list is therefore computed from the predicate rather than typed,
+    // and the venus arm is asserted non-vacuous below so this cannot quietly become a one-branch check.
+    let shrouded = 0;
     for (const x of solSolid) {
-      const adm = labPipelineAdmits(x.d, conditionFromBody(x.d));
-      expect(adm.packs, `${x.id} must be CLAIMED, or this control proves nothing`).toEqual(['rockySurface', 'solidOptics']);
+      const xc = conditionFromBody(x.d);
+      const banded = PACKS.find((e) => e.name === 'giantDeck').applies(xc) === true;
+      if (banded) shrouded++;
+      const adm = labPipelineAdmits(x.d, xc);
+      expect(adm.packs, `${x.id} must be CLAIMED, or this control proves nothing`)
+        .toEqual(banded ? ['giantDeck', 'rockySurface', 'solidOptics'] : ['rockySurface', 'solidOptics']);
       expect(adm.admitted, `${x.id} must be refused by provenance`).toBe(false);
       expect(isLabPlanetMaterial(planetAt(x.d, true).material), x.id).toBe(false);
     }
+    expect(shrouded, 'R-07: Sol must contain at least one opaque-CO2 body, or the banded arm is vacuous').toBeGreaterThan(0);
   });
 
   it('every STAMPED generated planet swaps — gas AND solid — and the class decides WHICH pack', () => {
@@ -730,11 +767,26 @@ describe('6e — the flag is OFF by default and it selects a DIFFERENT material'
     // ⭐ "One side" is still exact; what changed at B3 leg 1 is that the non-gas side now holds TWO
     // entries rather than one. The property this assertion exists for — no body is claimed by a gas
     // pack AND a non-gas pack — is unaffected, and the two lists below are still disjoint.
+    // ⭐ B3 LEG 2 MOVES BOTH ARMS AND THE DISJOINTNESS CLAIM SURVIVES IN A NARROWER FORM. The gas arm
+    // gains `craterDeck` (P-14's crater half). The non-gas arm gains `giantDeck` on the opaque-CO2
+    // slice only (R-07) — which is the FIRST time a gas-named pack reaches a non-gas body, so the
+    // sentence "no body is claimed by a gas pack AND a non-gas pack" is no longer true of `giantDeck`
+    // and IS still true of `limbDeck`/`polarDeck`/`craterDeck`. Stated rather than quietly dropped.
+    let bandedSolid = 0;
     for (const b of [...GEN_GAS, ...GEN_SOLID]) {
       const packs = labPipelineAdmits(b.d, b.cond).packs;
-      expect(packs, b.id).toEqual(compositionClass(b.cond) === 'gas'
-        ? ['giantDeck', 'limbDeck', 'polarDeck'] : ['rockySurface', 'solidOptics']);
+      if (compositionClass(b.cond) === 'gas') {
+        expect(packs, b.id).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck']);
+      } else {
+        const banded = PACKS.find((e) => e.name === 'giantDeck').applies(b.cond) === true;
+        if (banded) bandedSolid++;
+        expect(packs, b.id).toEqual(banded
+          ? ['giantDeck', 'rockySurface', 'solidOptics'] : ['rockySurface', 'solidOptics']);
+        // the three GAS-ONLY packs never reach a non-gas body, which is the half that is still exact
+        for (const n of ['limbDeck', 'polarDeck', 'craterDeck']) expect(packs, `${b.id}/${n}`).not.toContain(n);
+      }
     }
+    expect(bandedSolid, 'R-07: the generated corpus must contain opaque-CO2 bodies, or the new arm is vacuous').toBeGreaterThan(0);
   });
 
   it('⛔ FOUND HERE, NOT FIXED HERE — ExoticOverlay strips the seed key off the bodies it swaps', () => {

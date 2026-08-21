@@ -99,7 +99,16 @@ export function auroraColorFor(atmosphereComposition) {
 }
 
 /**
- * THE VENUS OVERRIDE, planet-lod-lab.html:2637 `      if (_cloudRegime === 3) state.auroraIntensity = 0.0;`
+ * THE OPAQUE CO2 SHROUD — the lab's cloud regime 3, and P-05's Venus override.
+ *
+ * ⭐ RENAMED FROM `auroraOpaqueShroudOf` AT B3 LEG 2 (2026-08-21) BECAUSE IT ACQUIRED A SECOND
+ * CONSUMER. Ledger R-07 needs the same two-term test to answer "is a thick CO2 blanket this body's
+ * VISIBLE SURFACE" for the zonal band deck — src/worldengine/drivers/giantDeck.js reads it there. A
+ * predicate named for its first consumer is how the second consumer ends up retyping it, and a
+ * retyped `> 10` is a silent population change in two rows at once. The quantity is the LAB's cloud
+ * regime and nothing about it is auroral; only the OVERRIDE it feeds is.
+ *
+ * planet-lod-lab.html:2637 `      if (_cloudRegime === 3) state.auroraIntensity = 0.0;`
  * where regime 3 is planet-lod-lab.html:2385
  * `      if (_fp.atmosphere?.composition === 'co2' && (_fp.atmosphere?.pressure ?? 0) > 10) _cloudRegime = 3;`
  *
@@ -118,7 +127,7 @@ export function auroraColorFor(atmosphereComposition) {
  * regimes. That is a property of the chain's ORDER; if regime 3 ever stops being first, this stops
  * being liftable.
  */
-export function auroraOpaqueShroudOf(condition) {
+export function opaqueCO2ShroudOf(condition) {
   return condition?.atmosphere?.composition === 'co2' && (condition?.atmosphere?.pressure ?? 0) > 10;
 }
 
@@ -146,7 +155,7 @@ export function auroraOpticsOf(condition) {
   const field = u.magneticField;
   // Live only above the hard field gate AND out from under an opaque CO2 shroud. Both are the
   // lab's; neither is a fade, so the whole feature is skipped by the shader's `> 0.0` guard.
-  const live = field > AURORA_FIELD_MIN && !auroraOpaqueShroudOf(condition);
+  const live = field > AURORA_FIELD_MIN && !opaqueCO2ShroudOf(condition);
   return {
     auroraIntensity: live ? u.auroraIntensity : 0.0,
     auroraColor: auroraColorFor(condition?.atmosphere?.composition),

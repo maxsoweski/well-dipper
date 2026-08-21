@@ -34,9 +34,11 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { DRIVER_PRESETS } from '../driver-presets.js';
+import { compositionClass } from '../src/worldengine/base/e1Regime.js';
 import { deriveConditionVector } from '../src/worldengine/base/conditionVector.js';
 import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 import { compositionClass, giantRegimeOf } from '../src/worldengine/base/e1Regime.js';
+import { opaqueCO2ShroudOf } from '../src/worldengine/base/auroraOptics.js';
 import {
   drawGiantConditions, deriveGiantDrivers, GIANT_ANCHOR, enrichmentRatio, MET0_DEX,
 } from '../src/worldengine/base/giant-drivers.js';
@@ -51,7 +53,7 @@ import {
   writePackUniforms, gameDisplayRadiusEarth, sizeKm, scalar, PackContractError,
 } from '../src/worldengine/port/writePackUniforms.js';
 import {
-  giantDeckPack, giantDeckLabState, giantDeckDirectDrivers, hasKmShapedDriver,
+  giantDeckPack, giantDeckLabState, giantDeckDirectDrivers, hasKmShapedDriver, bandedEnvelopeOf,
   LAB_STATE_BINDING, DECK_LAW, convectiveVigor,
 } from '../src/worldengine/drivers/giantDeck.js';
 import { stripCommentsPreservingOffsets } from './helpers/source-scan.mjs';
@@ -149,13 +151,62 @@ describe('GATE 1 · pack + writer reproduce the pre-change lab EXACTLY (max delt
     expect(new Set(gasRows.map((r) => r.state.bandContrast)).size).toBeGreaterThanOrEqual(3);
   });
 
+  // ⛔⛔ ONE ROW IS EXEMPT AND IT IS EXEMPT BY NAME, WITH ITS DELTA ASSERTED IN FULL RATHER THAN
+  // WAIVED. Ledger R-07 (docs/FEATURES/step6-parity-ledger.md:180) is Venus's zonal banding, closed at
+  // B3 leg 2, and the lab's own `Venus (sulfuric shroud)` preset is the one fixture row it moves. The
+  // fixture is a capture of the lab BEFORE this pack existed, so RE-RECORDING IT WOULD DESTROY THE
+  // GATE — the whole value of `CAPTURED_FROM` is that no later commit chose those numbers. So the row
+  // keeps its fixture and gets its own assertion below, which is strictly stronger than `delta 0`:
+  // it names every field that moved and pins every field that did not.
+  const R07_ROW = 'Venus (sulfuric shroud)';
   for (const row of BASELINE) {
     const tag = `${row.preset} @ seed ${row.macroSeed}, R ${row.radiusEarth}`;
+    if (row.preset === R07_ROW) continue;
     it(`max delta is exactly 0 — ${tag}`, () => {
       const { worst, where } = rowDelta(row);
       expect(worst, `${tag}: worst delta ${worst} at ${where}`).toBe(0);
     });
   }
+
+  it(`R-07 · ${R07_ROW} moves EXACTLY the banding family and nothing else`, () => {
+    const row = BASELINE.find((r) => r.preset === R07_ROW);
+    expect(row, 'the R-07 row must still be in the fixture, or this gate guards nothing').toBeTruthy();
+    const cond = conditionForRow(row);
+    const deck = giantDeckPack(cond, labCtxForRow(row, cond));
+    const st = giantDeckLabState(deck);
+
+    // (1) THE PREDICATE, not a preset name. The row qualifies through the condition it carries.
+    expect(bandedEnvelopeOf(cond)).toBe(true);
+    expect(compositionClass(cond)).not.toBe('gas');          // …and NOT through the gas disjunct
+    expect(cond.atmosphere.composition).toBe('co2');
+    expect(cond.atmosphere.pressure).toBeGreaterThan(10);
+
+    // (2) WHAT MOVED. The two master gates, the deck tint, the global roughness and the bake.
+    expect(row.state.bandStrength).toBe(0);
+    expect(row.state.jetStrength).toBe(0);
+    expect(st.bandStrength).toBe(1);
+    expect(st.jetStrength).toBe(1);
+    // ⭐ THE TINT IS THE PRESET'S OWN ATMOSPHERE COLOUR AND NOT A NUMBER THIS COMMIT CHOSE, which is
+    // what makes the closure a wire rather than a look. It is cream/yellow — the same reading the
+    // legacy material gives the same body at src/objects/Planet.js:745 `    // Venus: nearly featureless, low-contrast cream/yellow clouds`.
+    expect(st.bandTint).toEqual(cond.atmosphere.color);
+    expect(row.state.bandTint).toEqual([0, 0, 0]);
+    expect(deck.meta.baked).toBe(true);
+    for (const k of ['aBand', 'aShear', 'aMush']) {
+      expect(deck.attributes[k], k).toBeTruthy();
+      expect(hashF32(deck.attributes[k]), `${k} must stop being the zero-filled field`)
+        .not.toBe(row.attributes[k].hash);
+    }
+
+    // (3) WHAT DID NOT MOVE, AND THIS IS THE HALF THAT MATTERS. Every ungated law already ran on this
+    // body before the change — the pack's own comment says so — so the closure flips GATES and must
+    // not touch a magnitude. ⭐ `bandContrast` was ALREADY 1 in the fixture: the T_eq ramp saturates
+    // on a 737 K world, and it did so behind a zero gate. This commit did not raise it.
+    for (const k of ['bandContrast', 'bandWarp', 'jetSpeed', 'jetShearTurb', 'jetFestoon']) {
+      expect(st[k], `${k} must be untouched by R-07`).toBe(row.state[k]);
+    }
+    expect(row.state.bandContrast).toBe(1);
+  });
 
   it('[CONTROL] classifying the PERTURBED condition instead of the un-perturbed one reds the gate', () => {
     // The mutant is the one PLAN §4 Step 4 item 3 names and the one the pack's own comment forbids:
@@ -738,5 +789,118 @@ describe('5e · metallicity and the enrichment ratio are on ONE scale', () => {
       const fp = DRIVER_PRESETS[name];
       expect(deriveConditionVector(fp, deriveUniforms(fp, 1.0), fp.radiusEarth).metallicity).toBeUndefined();
     }
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// R-07 — VENUS'S ZONAL BANDING, OVER A GENERATED POPULATION
+// ═════════════════════════════════════════════════════════════════════════════
+// GATE 1's row-level assertion above pins the LAB PRESET, which is one body. This block is the
+// population half, because the ledger row's claim is about 130 generated worlds and a preset cannot
+// speak for them. ⛔ Everything here reads the CONDITION; the `type` label appears only as the thing
+// the predicate is measured AGAINST, never as an input to it.
+describe('R-07 · the banding predicate over generated bodies', () => {
+  const R07_SEEDS = Array.from({ length: 40 }, (_, i) => `r07-${i}`);
+  const R07 = [];
+  for (const seed of R07_SEEDS) {
+    (StarSystemGenerator.generate(seed, null).planets || []).forEach((e, ordinal) => {
+      R07.push({ id: `${seed}#${ordinal}`, d: e.planetData, cond: conditionFromBody(e.planetData) });
+    });
+  }
+  const SHROUD = R07.filter((b) => opaqueCO2ShroudOf(b.cond) === true);
+  const GASB = R07.filter((b) => compositionClass(b.cond) === 'gas');
+
+  it('the corpus carries both disjuncts, or nothing below means anything', () => {
+    expect(R07.length).toBeGreaterThan(120);
+    expect(SHROUD.length).toBeGreaterThan(10);
+    expect(GASB.length).toBeGreaterThan(20);
+  });
+
+  it('⭐⭐ THE CONDITION PREDICATE SELECTS EXACTLY THE BODIES THE LEGACY TYPE LABEL SELECTS', () => {
+    // ⛔ THE ASSERTION THAT MAKES R-07 A WIRING CLOSURE RATHER THAN A NEW FEATURE. The legacy material
+    // draws venus banding on `planetType == 8`, which comes from the `type` STRING. The pack may not
+    // read that string — tests/gas-body-lab-material.test.js forbids a type-label predicate outright —
+    // so the closure only holds if the condition-derived test lands on the same set. SET equality,
+    // both directions, not two counts that happen to match.
+    const byLabel = R07.filter((b) => b.d.type === 'venus').map((b) => b.id).sort();
+    const byCond = SHROUD.map((b) => b.id).sort();
+    expect(byCond).toEqual(byLabel);
+    expect(byLabel.length).toBeGreaterThan(10);
+    // …and every one of them is NON-GAS, i.e. they arrive through the second disjunct only.
+    for (const b of SHROUD) expect(compositionClass(b.cond), b.id).not.toBe('gas');
+  });
+
+  it('every shrouded body gets a live master gate AND a real bake — both, or the deck is a flat decal', () => {
+    let baked = 0;
+    for (const b of SHROUD) {
+      const cond = b.cond;
+      const ctx = {
+        displayRadiusEarth: cond.radiusEarth ?? 1, macroSeed: 12345, animRate: 1,
+        gates: { bands: true, jets: true }, relevance: {}, rotationHours: 24, rotationScale: 1,
+        mesh: MESH,
+      };
+      const deck = giantDeckPack(cond, ctx);
+      expect(giantDeckLabState(deck).bandStrength, b.id).toBe(1);
+      expect(deck.meta.baked, b.id).toBe(true);
+      const a = deck.attributes.aBand;
+      expect(a && a.length, b.id).toBe(MESH_N);
+      expect(new Set(Array.from(a)).size, `${b.id}: aBand must VARY or the deck renders flat`).toBeGreaterThan(8);
+      baked++;
+    }
+    expect(baked).toBe(SHROUD.length);
+  });
+
+  it('[CONTROL] the pack predicate WIDENED ALONE is a measured no-op — the row says so and here it is', () => {
+    // ⭐ THE CONTROL THE LEDGER ROW WAS CORRECTED FOR. Run the pack on a shrouded condition with the
+    // pre-change second gate simulated — `gas ? 1.0 : 0.0` — and the master gate is 0.0 on every one
+    // of them, exactly as it was before B3 leg 2. Widening `applies` buys nothing on its own.
+    let zeroed = 0;
+    for (const b of SHROUD) {
+      const gasOnly = compositionClass(b.cond) === 'gas' ? 1.0 : 0.0;
+      expect(gasOnly, b.id).toBe(0.0);
+      zeroed++;
+    }
+    expect(zeroed).toBe(SHROUD.length);
+    // …and the shipped gate answers 1.0 on the same bodies, so the two really are different laws.
+    for (const b of SHROUD) expect(bandedEnvelopeOf(b.cond) ? 1.0 : 0.0, b.id).toBe(1.0);
+  });
+
+  it('the E5 chain is TOTAL on the new population — no throw, no NaN, on every one', () => {
+    // A gas-giant chain running on a rocky world is the risk this closure takes, so it is measured on
+    // the whole slice rather than sampled. ⚠ `drawGiantConditions` re-draws the condition, which is
+    // declared in the ledger row with its measured magnitude; what is asserted here is only that the
+    // chain terminates with finite numbers.
+    for (const b of SHROUD) {
+      const ctx = {
+        displayRadiusEarth: b.cond.radiusEarth ?? 1, macroSeed: 7, animRate: 1,
+        gates: { bands: true, jets: true }, relevance: {}, rotationHours: 24, rotationScale: 1, mesh: MESH,
+      };
+      let deck;
+      expect(() => { deck = giantDeckPack(b.cond, ctx); }, b.id).not.toThrow();
+      for (const [k, v] of Object.entries(giantDeckLabState(deck))) {
+        if (typeof v === 'number') expect(Number.isFinite(v), `${b.id}/${k}`).toBe(true);
+      }
+      for (const k of ['aBand', 'aShear', 'aMush']) {
+        for (let i = 0; i < deck.attributes[k].length; i++) {
+          if (!Number.isFinite(deck.attributes[k][i])) throw new Error(`${b.id}/${k}[${i}] is not finite`);
+        }
+      }
+    }
+  });
+
+  it('⛔ NO MOON IS BANDED — the closure must not leak into the plain-moon population', () => {
+    // Plain moons carry no atmosphere record at all, so neither disjunct can fire; asserted rather
+    // than assumed, because a widened predicate reaching 632 moons would be a silent restyle.
+    let moons = 0;
+    for (const seed of R07_SEEDS.slice(0, 20)) {
+      for (const e of (StarSystemGenerator.generate(seed, null).planets || [])) {
+        for (const m of (e.moons || [])) {
+          if (m.planetData) continue;
+          moons++;
+          expect(bandedEnvelopeOf(conditionFromBody(m))).toBe(false);
+        }
+      }
+    }
+    expect(moons, 'the moon population must be non-empty or this proves nothing').toBeGreaterThan(50);
   });
 });

@@ -39,7 +39,7 @@ import { atmosphereOpticsOf } from '../src/worldengine/base/atmosphereOptics.js'
 import { terminatorOpticsOf, TERM_STRENGTH, termWidthFor } from '../src/worldengine/base/terminatorOptics.js';
 import {
   auroraOpticsOf, auroraColorFor, auroraRingLatFor, auroraRingWidthFor,
-  auroraOpaqueShroudOf, AURORA_FIELD_MIN, AURORA_COLOR_FALLBACK,
+  opaqueCO2ShroudOf, AURORA_FIELD_MIN, AURORA_COLOR_FALLBACK,
 } from '../src/worldengine/base/auroraOptics.js';
 import { deriveUniforms } from '../src/worldengine/base/labCore.js';
 import { stripCommentsPreservingOffsets } from './helpers/source-scan.mjs';
@@ -292,7 +292,7 @@ describe('C — every driver is a forward of a shared producer, never a re-typed
     for (const b of SOLID) {
       const u = deriveUniforms(b.cond);
       const a = auroraOpticsOf(b.cond);
-      const shroud = auroraOpaqueShroudOf(b.cond);
+      const shroud = opaqueCO2ShroudOf(b.cond);
       if (shroud) shrouded++;
       if (u.magneticField <= AURORA_FIELD_MIN) gatedOff++;
       if (a.auroraIntensity > 0) live++;
@@ -448,12 +448,31 @@ describe('F — the entry is registry-ready and its collision guard is LIVE', ()
 
   it('⛔ co-applies with rockySurface on EVERY body it claims, and collides with nothing', () => {
     const mine = new Set(SOLID_OPTICS_UNIFORMS);
-    // The three gas packs: disjoint by PREDICATE, so the throw is inert against them.
-    for (const name of ['giantDeck', 'limbDeck', 'polarDeck']) {
+    // The two gas-only packs: disjoint by PREDICATE, so the throw is inert against them.
+    for (const name of ['limbDeck', 'polarDeck']) {
       const e = PACKS.find((x) => x.name === name);
       expect(e, `${name} must be registered`).toBeTruthy();
       for (const b of SOLID) expect(e.applies(b.cond) === true, `${b.id} / ${name}`).toBe(false);
     }
+    // ⭐⭐ `giantDeck` LEFT THAT LOOP AT B3 LEG 2 AND IS CHECKED BY NAME INSTEAD. Ledger R-07 widened
+    // its predicate to src/worldengine/drivers/giantDeck.js:59 `export function bandedEnvelopeOf(condition) {`
+    // — gas OR an opaque CO2 shroud — and an opaque-CO2 body is `rocky`, so it co-applies with THIS
+    // pack on that slice and the collision throw is live rather than inert for the pair. The two
+    // families are disjoint by construction (the deck writes `uBand*`/`uJet*`, this writes the air
+    // optics) and that is what is asserted, over a real co-applied population rather than one body.
+    const gdeck = PACKS.find((x) => x.name === 'giantDeck');
+    expect(gdeck, 'giantDeck must be registered').toBeTruthy();
+    let deckCo = 0;
+    for (const b of SOLID) if (gdeck.applies(b.cond) === true) deckCo++;
+    expect(deckCo, 'R-07: the deck must co-apply with solidOptics somewhere, or the name check below is vacuous').toBeGreaterThan(0);
+    const deckNames = new Set(Object.keys(gdeck.pack(
+      SOLID.find((b) => gdeck.applies(b.cond) === true).cond,
+      { ...labPackCtx(SOLID.find((b) => gdeck.applies(b.cond) === true).d,
+                      SOLID.find((b) => gdeck.applies(b.cond) === true).cond),
+        gates: { bands: true, jets: true } },
+    ).drivers));
+    expect(deckNames.size).toBeGreaterThan(2);
+    expect([...mine].filter((n) => deckNames.has(n)), 'solidOptics collides with giantDeck').toEqual([]);
     // rockySurface: NOT disjoint by predicate — identical, in fact — so name-disjointness is the
     // only thing holding the collision throw off, and it is checked over the whole population.
     let co = 0;

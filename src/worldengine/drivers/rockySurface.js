@@ -6,8 +6,8 @@
 //
 // It composes five modules that were already pure, three-free and SHARED, and derives nothing:
 //
-//     craterRelevanceOf ─┐
-//     craterUniformsFrom ┼─> the impact family (10 uniforms)
+//     craterDriverBlock ──────────────────────> the impact family (10 uniforms) ⭐ IMPORTED, not
+//                                               derived here since B3 leg 2 — see ./craterDeck.js
 //     surfacePaletteOf -> applyAlbedoTransfer ─> the ground palette (5 uniforms)
 //     icenessOf / biosphereOf ─────────────────> the two surface scalars
 //     reliefEnvelope ─────────────────────────> the one global relief term
@@ -115,38 +115,28 @@
 // law lives; silently dropping the argument here would erase the only visible trace of the defect.
 // ─────────────────────────────────────────────────────────────────────────────
 import { compositionClass } from '../base/e1Regime.js';
-import { craterRelevanceOf } from '../base/bombardment.js';
-import { craterUniformsFrom } from '../port/craterUniforms.js';
+// ⭐ B3 LEG 2, 2026-08-21 — THE IMPACT FAMILY MOVED OUT AND IS IMPORTED BACK, and the reason is a row rather than tidiness: ledger P-14's crater half is that NO pack writes these ten names on a gas-class body, and the fix is a second pack over the complement predicate. Two packs emitting one family from two copies of ten lines is the third-transcription failure B3 leg 1 spent a commit deleting, so there is now exactly ONE expression of the block and both packs import it. The two producer imports this line replaces (`craterRelevanceOf`, `craterUniformsFrom`) moved WITH it.
+import { craterDriverBlock, CRATER_GATE, EJECTA_GATE, C_CRATER } from './craterDeck.js';
 import { surfacePaletteOf, icenessOf, biosphereOf, BIO_PIGMENT } from '../base/surfaceMaterial.js';
 import { applyAlbedoTransfer } from '../display/albedoTransfer.js';
 import { reliefEnvelope } from '../base/labCore.js';
-import { sizeKm, scalar, assertDisplayPolicy, assertPackResult, PackContractError } from '../port/writePackUniforms.js';
-// ⭐ B2 LEG 3 — the base field's km wavelength and its cFeature. ⛔ THE CALIBRATION CONSTANTS LIVE IN THAT MODULE AND ARE ONLY FORWARDED FROM HERE, and the reason is a shipped fence rather than taste: tests/driver-pack-rockysurface.test.js:718 `    expect(literals.sort()).toEqual(['0', '0.55', '1.0', '3']);` asserts this file's numeric literals are exactly those four (⭐ was cited as :717 until 2026-08-21; that line is the `literalsIn` call, not the assertion, and being symbol-less the ref sat in gate 2's UNCHECKED column where nothing could catch it), so a calibration constant TYPED here reds it. `C_CRATER` below is the same NAMED-FORWARD shape and escapes only because its value happens to be one of the four; a base-field constant of 1.16 does not, and routing around the fence rather than through a shared module is exactly the transcription it exists to catch.
+// ⚠ `scalar` LEFT THIS IMPORT AT B3 LEG 2 AND WAS NOT DROPPED FROM THE PROGRAM: the only two gated drivers this pack ever emitted are the crater/ejecta master gates, and they moved to `./craterDeck.js` with the block. An unused import kept "for symmetry" is how a file grows a dependency it no longer has.
+import { sizeKm, assertDisplayPolicy, assertPackResult, PackContractError } from '../port/writePackUniforms.js';
+// ⭐ B2 LEG 3 — the base field's km wavelength and its cFeature. ⛔ THE CALIBRATION CONSTANTS LIVE IN THAT MODULE AND ARE ONLY FORWARDED FROM HERE, and the reason is a shipped fence rather than taste: tests/driver-pack-rockysurface.test.js:748 `    expect(literals.sort()).toEqual(['0', '0.55', '1.0', '3']);` asserts this file's numeric literals are exactly those four (⭐ was cited as :717 until 2026-08-21; that line is the `literalsIn` call, not the assertion, and being symbol-less the ref sat in gate 2's UNCHECKED column where nothing could catch it), so a calibration constant TYPED here reds it. `C_CRATER` below is the same NAMED-FORWARD shape and escapes only because its value happens to be one of the four; a base-field constant of 1.16 does not, and routing around the fence rather than through a shared module is exactly the transcription it exists to catch.
 import { macroWavelengthKm, C_MACRO } from '../base/macroWavelength.js';
 
-// ── The two declared gate names ──────────────────────────────────────────────────────────────────
-// ⭐ NAMES, NOT HARDCODED 1.0s, and TWO of them rather than one, because the lab has two independent
-// toggles over this family and they do not switch together:
-//   planet-lod-lab.html:5354 `= state.cratersEnabled ? state.craterDensity * state.craterRelevance : 0.0;`
-//   planet-lod-lab.html:5361 `= state.ejectaEnabled ? state.ejectaStrength * state.craterRelevance : 0.0;`
-// Ejecta off with craters on is a real lab state; collapsing the two into one gate would delete a
-// rendering decision rather than express it. One spelling each, shared by the driver and the ENTRY,
-// mirroring src/worldengine/drivers/limbDeck.js:78 `export const LIMB_GATE = 'limb';` and
-// src/worldengine/drivers/polarDeck.js:140 `export const POLAR_GATE = 'polarVortex';` — a typo in
-// either place is caught on the first admitted body by
-// src/worldengine/port/writePackUniforms.js:180 `if (gates == null || !(d.gate in gates)) {`, but a
-// shared constant means the ENTRY and the driver cannot disagree in the first place.
-export const CRATER_GATE = 'craters';
-export const EJECTA_GATE = 'ejecta';
-
-// ── The two numbers this file owns, and they are both PINS rather than tunables ───────────────────
-// ⚠ C_CRATER is the per-feature calibration constant of the km→frequency law, ported from the lab's
-// own declaration, planet-lod-lab.html:821 `const C_CRATER = 1.0;`, whose comment two lines above
-// states the identity it encodes: C = 1 means `uCraterScale = radius_km / craterSizeKm`. It is
-// written out rather than inlined into the `sizeKm(...)` call for the reason recorded at
-// src/worldengine/drivers/giantDeck.js:63 `and that is a byte-identity decision, not a` — a
-// calibration constant buried in a call argument is a constant that gets "simplified" away.
-export const C_CRATER = 1.0;
+// ── The two declared gate names and the crater cFeature — RE-EXPORTED, NOT DECLARED ─────────────
+// ⭐ ALL THREE MOVED TO `./craterDeck.js` AT B3 LEG 2 (2026-08-21), WITH THE DRIVERS THEY BELONG TO,
+// and they are re-exported from here rather than dropped because both pack ENTRIES declare the same
+// two gate names and every existing importer of this file reads them from this path. A constant in
+// one file whose only consumer is another is how a "shared" law becomes two laws; the reasoning that
+// used to sit here — the lab's two independent `cratersEnabled` / `ejectaEnabled` toggles, and why
+// `C_CRATER` is written out instead of inlined into the `sizeKm(...)` argument — moved with them and
+// is quoted in full at src/worldengine/drivers/craterDeck.js:56 `// ── The two declared gate names ──────────────────────────────────────────────────────────────────`.
+// ⛔ THE NUMERIC-LITERAL FENCE OVER THIS FILE MOVES WITH `C_CRATER` AND THE SUITE RE-PINS IT IN THE
+// SAME COMMIT: this file no longer NAMES 1.0 for the crater law, and `craterDeck.js` carries its own
+// literal fence for the same anti-transcription reason.
+export { CRATER_GATE, EJECTA_GATE, C_CRATER };
 
 // ⚠ PERTURB_BASE IS A TRANSCRIPTION RISK AND IS DECLARED SO THE SUITE CAN PIN IT. The lab's global
 // relief write is `state.perturb * reliefEnvelope(...)`, and `state.perturb` is a GUI default,
@@ -239,24 +229,16 @@ export function rockySurfacePack(condition, ctx = {}) {
   // a missing display policy fails silently and plausibly.
   assertDisplayPolicy(ctx);
 
-  // ── DECISION 2: THE RELEVANCE FOLD IS CPU-SIDE, AND IT IS FORCED ────────────────────────────────
-  // The lab multiplies a per-feature relevance term into the two gated writes (the two lines quoted
-  // above the gate constants). The obvious port is `scalar(v, { gate, relevance: 'craters' })` — and
-  // it THROWS on every body, because the game's relevance map is empty:
-  // src/objects/Planet.js:2204 `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`
-  // and src/worldengine/port/writePackUniforms.js:240 `  if (d.relevance !== null && d.relevance !== undefined) {` refuses a name with no finite value.
-  // ⛔ The fix is NOT to add a `craters` key to GAME_RELEVANCE. `craterRelevanceOf` is a pure
-  // condition function — src/worldengine/base/bombardment.js:220 `export function craterRelevanceOf(condition) {`
-  // — so folding it here reproduces the lab's product exactly while keeping the relevance CHANNEL
-  // empty and every pack that keys nothing on it unchanged. It is also what the lab itself does one
-  // step earlier: planet-lod-lab.html:2834 `state.craterRelevance = craterRelevanceOf(_bodyDrivers.condition);`
-  // derives the same 0/1 from the same condition vector; the frame writer is only the multiply.
-  const rel = craterRelevanceOf(condition);
-
-  // The whole per-body crater derivation, in one call. TOTAL — it returns the frozen CRATERS_OFF for
-  // any body whose schedule does not fire or whose resolvable band is empty, so this line never
-  // throws and never needs a class guard of its own.
-  const cu = craterUniformsFrom(condition);
+  // ── THE IMPACT FAMILY (10) — ONE CALL, AND THE BLOCK LIVES IN `./craterDeck.js` ────────────────
+  // ⭐ THE TEN DRIVERS AND THEIR TWO PRODUCER CALLS MOVED OUT AT B3 LEG 2 SO A SECOND PACK COULD EMIT
+  // THE IDENTICAL MAP over the complement predicate — ledger P-14's crater half is exactly "no pack
+  // writes this family on a gas-class body". The whole rationale that used to sit here (DECISION 1 on
+  // `uCraterScale` being km-shaped, DECISION 2 on the CPU-side relevance fold, and why only the two
+  // master gates carry a gate) moved verbatim with the code and is quoted at
+  // src/worldengine/drivers/craterDeck.js:96 `export function craterDriverBlock(condition) {`.
+  // ⛔ `cu` AND `rel` COME BACK OUT because this pack's `meta` reports both, and a second call to
+  // `craterUniformsFrom` for them would be a second derivation of the same body.
+  const { drivers: craterDrivers, cu, rel } = craterDriverBlock(condition);
 
   // The ground palette, re-derived from the CONDITION. ⚠ IT CANNOT BE READ OFF THE BODY RECORD.
   // The generator bakes an equivalent palette onto `d.landPalette`, but a pack receives `condition`
@@ -307,86 +289,10 @@ export function rockySurfacePack(condition, ctx = {}) {
     uDetailOffset: off.detail.slice(),
     uCraterOffset: off.crater.slice(),
 
-    // ── The impact family (10) ───────────────────────────────────────────────────────────────────
-    // ⭐ ONLY THE TWO MASTER GATES CARRY A GATE, which reproduces the lab exactly rather than being
-    // a simplification: the GLSL keys the whole crater pass on the density
-    // (src/worldengine/shaders/height.glsl.js:2203 `if (uCraterDensity <= 0.0) return;`) and the
-    // whole apron on the strength
-    // (src/worldengine/shaders/craterRelief.glsl.js:157 `if (uEjectaStrength <= 0.0) return;`), so
-    // one zero deletes each pass byte-identically. Gating the morphology terms too would give the
-    // same pixels and a different STATE — and would leave a gated-off body carrying the previous
-    // body's terrace count behind a zero, invisible until something read them off-gate.
-    uCraterDensity: scalar(cu.density * rel, { gate: CRATER_GATE }),
-
-    // ── DECISION 1: `uCraterScale` IS km-SHAPED, AND THAT IS THE POINT OF THIS PACK ───────────────
-    // `craterUniformsFrom` returns BOTH the physical diameter and an already-resolved frequency:
-    // src/worldengine/port/craterUniforms.js:142 `const Dchar = Math.sqrt(lo * H);` and
-    // src/worldengine/port/craterUniforms.js:183 `scale: R_km / Dchar,`. Emitting `scale` as a plain
-    // number would work, render correctly in the game today, and route around the policy seam
-    // entirely — `sizeKm` would still have ZERO production callers and the contract's central claim
-    // would remain untested. So the pack takes `Dchar` (policy-FREE) and lets the writer resolve it.
-    // Under the game policy the two are byte-identical: src/worldengine/port/writePackUniforms.js:50 `export function gameDisplayRadiusEarth(radiusEarth) {`
-    // is the identity, so src/worldengine/base/featureScale.js:42 `export function featureFrequencyFromKm(radiusEarth, featureSizeKm, cFeature) {`
-    // computes 1.0 * (R * 6371) / Dchar, and multiplying by an exact 1.0 is exact in IEEE.
-    // ⚠ ONE MEASURED EDGE, STATED RATHER THAN DISCOVERED: `craterUniformsFrom` floors its radius at
-    // 1e-6 while `labPackCtx` passes the raw one (src/objects/Planet.js:2251 `displayRadiusEarth: gameDisplayRadiusEarth(condition.radiusEarth ?? d.radiusEarth ?? 1),`),
-    // so the two arms agree on every radius at or above that floor and only there. Below it the
-    // display policy is refused outright, so there is no silent band.
-    // ⚠ AND THE BYTE-IDENTITY ARM AGAINST THE LAB IS STRUCTURALLY IMPOSSIBLE ON THIS ONE NAME. The
-    // lab's write is planet-lod-lab.html:5358 `featureFrequencyFromKm(state.planetRadiusEarth, state.craterSizeKm, C_CRATER)`
-    // — the REAL radius and then a further display multiply, i.e. R^1.5, while every other km-keyed
-    // lab uniform resolves at the display pseudo-radius alone. The pack must NOT carry that trailing
-    // multiply (it is the front-end's, and this file may not name it), so the gate over this driver
-    // is a stated POLICY-DIFFERENCE assertion, not an identity.
-    // ⛔ THE `Dchar === 0` BRANCH IS NOT A NULL CHECK — IT IS A DIVIDE-BY-ZERO GUARD, and the reason
-    // is written into the constant it reads: src/worldengine/port/craterUniforms.js:96 `Dchar: 0,`
-    // means "there is no characteristic diameter", not "the diameter is zero", and
-    // src/worldengine/port/writePackUniforms.js:191 `if (typeof d.featureSizeKm !== 'number' || !Number.isFinite(d.featureSizeKm) || d.featureSizeKm <= 0) {`
-    // would refuse it. So an un-cratered body forwards the paired `scale` VERBATIM —
-    // src/worldengine/port/craterUniforms.js:89 `density: 0, scale: 1, amp: 0, complexD: 1, relaxation: 0, terraceCount: TERRACE_COUNT,`
-    // — which is the value that ships today for this case and is inert behind a density of 0 anyway.
-    uCraterScale: cu.Dchar > 0 ? sizeKm(cu.Dchar, C_CRATER) : cu.scale,
-
-    // ── DECISION 1, SECOND HALF: `uCraterAmp` IS THE RECIPROCAL OF `uCraterScale`, AND ONLY ONE OF
-    // THE PAIR CROSSES THE SEAM ─────────────────────────────────────────────────────────────────
-    // ⚠⚠ THE TWO NAMES ABOVE AND BELOW ARE AN EXACT RECIPROCAL PAIR, DECLARED SO BY THE SHADER THAT
-    // READS THEM, and the line above quietly put one of them behind a display policy. Say it here
-    // rather than let a second front-end discover it:
-    // src/worldengine/shaders/craterRelief.glsl.js:29 `//    frequency: uCraterAmp * uCraterScale == 1 exactly, so the crater slope is body-independent`
-    // src/worldengine/port/craterUniforms.js:150 `  // amp * scale == 1 EXACTLY, which is why the crater slope is body-independent.`
-    // and the GAME LEANS ON IT rather than merely documenting it — both analytic-normal call sites
-    // skip a divide they would otherwise owe, for this reason and no other:
-    // src/objects/Planet.js:312 `// the crater gradient is ALREADY a slope, because uCraterAmp * uCraterScale == 1 exactly (see`
-    // src/objects/Planet.js:1385 `// because the crater slope is body-independent: uCraterAmp * uCraterScale == 1 EXACTLY (the`
-    //
-    // ⛔ SO THE PAIR DECOUPLES BY EXACTLY THE DISPLAY-POLICY RATIO. `uCraterScale` is km-shaped and
-    // the writer resolves it at `ctx.displayRadiusEarth`; `uCraterAmp` is the raw crater law's
-    // amplitude, computed by `craterUniformsFrom` from the REAL radius, and it crosses no seam at
-    // all. Under the game policy the identity survives — that policy IS the identity, so nothing
-    // ships wrong today and the pack's own test gates the emitted product. Under ANY OTHER display
-    // policy the emitted product is `dispR / R` rather than 1. MEASURED 2026-08-19 over this pack's
-    // own 24-seed corpus, resolving at a pseudo-radius of the square root of R: the product reaches
-    // 10.77 on the smallest moon in the set — a 10.77x slope error in the one uniform pair the
-    // analytic-normal path is allowed to trust, in a term no gate downstream re-derives.
-    //
-    // ⛔ AND THE FIX IS NOT AVAILABLE IN THIS FILE, which is why the hazard is written down instead
-    // of closed. Emitting the reciprocal of the RESOLVED frequency would move shipped game values
-    // (measured: it differs from `cu.amp` in the last ulp on 16 of the 53 fired bodies, a different
-    // rounding order), and this module may not resolve a frequency at all — the contract's shape is
-    // that the pack states a SIZE and the writer resolves it. Closing it properly needs an
-    // INVERSE-km driver shape beside src/worldengine/port/writePackUniforms.js:83 `export function sizeKm(featureSizeKm, cFeature, opts) {`,
-    // which is a port-layer change and not this commit's. UNTIL THEN: A SECOND FRONT-END PASSING A
-    // NON-IDENTITY `displayRadiusEarth` MUST RESOLVE `uCraterAmp` ITSELF.
-    uCraterAmp: cu.amp,
-    // ⛔ THE GAME'S VALUE. See non-port 1 in the header for the refusal, quoted from its own source.
-    uCraterComplexD: cu.complexD,
-    uCraterRelaxation: cu.relaxation,
-    uTerraceCount: cu.terraceCount,
-
-    uEjectaStrength: scalar(cu.ejectaStrength * rel, { gate: EJECTA_GATE }),
-    uEjectaRampart: cu.ejectaRampart,
-    uEjectaAmp: cu.ejectaAmp,
-    uEjectaLump: cu.ejectaLump,
+    // ── The impact family (10), from the shared block ────────────────────────────────────────────
+    // ⛔ SPREAD IN PLACE, at the position the ten lines occupied, so `uniformsWritten` order is
+    // unchanged and the diff is a move rather than a re-ordering.
+    ...craterDrivers,
 
     // ── The ground palette (5) ───────────────────────────────────────────────────────────────────
     // UNGATED ON PURPOSE, mirroring src/worldengine/drivers/limbDeck.js:143 `// Width and hue: forwarded, ungated, and UNGATED ON PURPOSE. They reproduce the lab, which`:
@@ -397,7 +303,7 @@ export function rockySurfacePack(condition, ctx = {}) {
     // FAILURE MODE. The writer hands the array to a settable vector,
     // src/worldengine/port/writePackUniforms.js:280 `if (target && typeof target.set === 'function') target.set(...v);`
     // — and handing out a live array is how one body's tint follows another's
-    // (src/worldengine/drivers/giantDeck.js:239 `// condition's array is shared with the record it came from and the writer hands it to a settable`).
+    // (src/worldengine/drivers/giantDeck.js:292 `// condition's array is shared with the record it came from and the writer hands it to a settable`).
     // ⚠ `applyAlbedoTransfer` happens to return fresh arrays TODAY (it maps every endmember). The
     // copy is taken anyway, because "no caller aliases my output" is a property of a module in
     // another directory, not of this one, and the failure it prevents is invisible on a still frame.
@@ -424,7 +330,7 @@ export function rockySurfacePack(condition, ctx = {}) {
     uPerturb: PERTURB_BASE * relief,
 
     // ── B2 LEG 3: the base field's characteristic wavelength (ledger P-10 / M-09) ────────────────
-    // ⭐ THE SECOND km-SHAPED DRIVER IN THIS PACK, and the second name whose VALUE this file refuses to author: `macroWavelengthKm` states a physical size in km and the writer resolves it at the front-end's display radius, exactly as `uCraterScale` does above. The eight-body calibration table, its two-convention caveat, the Io-anchored process term and every constant behind them live in src/worldengine/base/macroWavelength.js — ⛔ do not re-state any of them here. ⚠ UNGATED ON PURPOSE, AND THE SCOPE IS PINNED ELSEWHERE: tests/driver-pack-rockysurface.test.js:379 `  it('FAMILY 6b · GATE SCOPE: the two gates move those two names and NOTHING else', () => {` holds the gated set at exactly `uCraterDensity` and `uEjectaStrength`. There is no lab toggle over the base field, and a gate here would short-circuit to +0 — src/worldengine/port/writePackUniforms.js:186 `    if (!gates[d.gate]) return 0;` — i.e. hand a gated-off body a frequency of zero, one noise cell across the whole disc, a state neither front-end has ever rendered.
+    // ⭐ THE SECOND km-SHAPED DRIVER IN THIS PACK, and the second name whose VALUE this file refuses to author: `macroWavelengthKm` states a physical size in km and the writer resolves it at the front-end's display radius, exactly as `uCraterScale` does above. The eight-body calibration table, its two-convention caveat, the Io-anchored process term and every constant behind them live in src/worldengine/base/macroWavelength.js — ⛔ do not re-state any of them here. ⚠ UNGATED ON PURPOSE, AND THE SCOPE IS PINNED ELSEWHERE: tests/driver-pack-rockysurface.test.js:403 `  it('FAMILY 6b · GATE SCOPE: the two gates move those two names and NOTHING else', () => {` holds the gated set at exactly `uCraterDensity` and `uEjectaStrength`. There is no lab toggle over the base field, and a gate here would short-circuit to +0 — src/worldengine/port/writePackUniforms.js:186 `    if (!gates[d.gate]) return 0;` — i.e. hand a gated-off body a frequency of zero, one noise cell across the whole disc, a state neither front-end has ever rendered.
     uNoiseScale: sizeKm(macroWavelengthKm(condition), C_MACRO),
   };
 
@@ -467,7 +373,7 @@ export function rockySurfacePack(condition, ctx = {}) {
  * ⭐ EXPORTED AS A FROZEN ENTRY rather than assembled at the registry, so composing it is one import
  * plus one array element and the predicate cannot be retyped differently from the one this pack's
  * own test gates. Registration is STEP 10's commit, not Step 9's: appended AFTER
- * src/worldengine/drivers/index.js:141 `POLAR_DECK_ENTRY,`.
+ * src/worldengine/drivers/index.js:154 `POLAR_DECK_ENTRY,`.
  *
  * ⛔⛔ THE PREDICATE IS `compositionClass(condition) !== 'gas'` AND IT MUST NOT BE `=== 'rocky'`,
  * even though this pack is named for rock and every uniform in it is a rocky-surface uniform. It is
@@ -486,16 +392,21 @@ export function rockySurfacePack(condition, ctx = {}) {
  * the term that makes it look icy).
  *
  * ⚠ IT MUST RETURN THE BOOLEAN, not a truthy value. Both admission sites compare with `=== true` —
- * src/worldengine/drivers/index.js:196 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`
- * and src/worldengine/drivers/index.js:240 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`
+ * src/worldengine/drivers/index.js:226 `return PACKS.filter((e) => e.applies(condition, ctx) === true);`
+ * and src/worldengine/drivers/index.js:270 `if (entry.applies(condition, ctx) !== true) { skipped.push(entry.name); continue; }`
  * — so a truthy non-boolean registers, reports as `skipped`, renders nothing, and throws nothing.
  * `!==` already yields a boolean; this is a note against a future rewrite, not a cast.
  *
- * ⚠ DISJOINTNESS FROM THE THREE SHIPPED PACKS IS BY CONSTRUCTION AND IS STILL ASSERTED. All three
- * are `compositionClass(condition) === 'gas'` character-for-character
- * (src/worldengine/drivers/index.js:101 `applies: (condition) => compositionClass(condition) === 'gas',`),
- * so this predicate is their exact complement and the collision throw at
- * src/worldengine/drivers/index.js:251 `throw new PackContractError(` is inert here. Inert is not the
+ * ⚠ DISJOINTNESS FROM THE SHIPPED PACKS IS ASSERTED, AND SINCE B3 LEG 2 IT IS NO LONGER UNIVERSAL.
+ * `limbDeck` and `polarDeck` are still `compositionClass(condition) === 'gas'` character-for-character
+ * and `craterDeck` is `=== 'gas'` too, so this predicate is their exact complement. ⛔ `giantDeck` IS
+ * THE EXCEPTION AND IT IS NAMED RATHER THAN GLOSSED: ledger R-07 widened its entry to
+ * src/worldengine/drivers/index.js:114 `applies: (condition) => bandedEnvelopeOf(condition),` — gas OR
+ * an opaque CO2 shroud — and an opaque-CO2 body is `rocky`, so the deck CO-APPLIES with this pack on
+ * that slice and the two are held apart by NAME rather than by predicate. That is asserted over the
+ * population in FAMILY 22 alongside `solidOptics`, which has always had the same shape. For the three
+ * that remain complementary, the collision throw at
+ * src/worldengine/drivers/index.js:281 `throw new PackContractError(` is inert here. Inert is not the
  * same as impossible — the pack test asserts the emitted name sets are disjoint by NAME LOOKUP, so
  * the day a predicate widens the overlap is caught by a test rather than by array order.
  */

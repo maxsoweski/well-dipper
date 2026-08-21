@@ -47,6 +47,7 @@
 // already owned by giant-drivers.js / climate-e5.js / band-flow.js.
 // ─────────────────────────────────────────────────────────────────────────────
 import { compositionClass, giantRegimeOf } from '../base/e1Regime.js';
+import { opaqueCO2ShroudOf } from '../base/auroraOptics.js';
 import { drawGiantConditions, deriveGiantDrivers, giantDriverScalars } from '../base/giant-drivers.js';
 import { bakeClimateE5Attributes } from '../base/climate-e5.js';
 import { bandProxyUniforms, drawBandRoughness } from '../base/band-flow.js';
@@ -54,6 +55,43 @@ import {
   scalar, resolveDriver, isPackDriver,
   assertMacroSeed, assertDisplayPolicy, assertPackResult, PackContractError,
 } from '../port/writePackUniforms.js';
+
+// ── WHICH BODIES HAVE A ZONALLY-BANDED VISIBLE SURFACE ───────────────────────
+// ⭐⭐ THE ONE PREDICATE BEHIND BOTH OF R-07's GATES, AND IT EXISTS BECAUSE FIXING ONE OF THEM IS A
+// MEASURED NO-OP. Ledger R-07 (docs/FEATURES/step6-parity-ledger.md:180) is Venus's zonal banding —
+// the legacy material draws it at src/objects/Planet.js:642 `    float bands = sin(lat * 2.0) * 0.15 + sin(lat * 4.0) * 0.08;`
+// and a swapped body loses it, because TWO independent gates each asked `compositionClass === 'gas'`:
+// the pack predicate in src/worldengine/drivers/index.js and `uBandStrength` below. Widening the
+// predicate alone leaves the second gate writing 0.0 — MEASURED on 130 of 130 venus-typed bodies,
+// reproduced twice in this lane. So both now read THIS function and there is one place to be wrong.
+//
+// ⛔ IT IS A CONDITION PREDICATE AND NOT A TYPE LOOKUP, which
+// tests/gas-body-lab-material.test.js requires of every pack predicate in the registry. The second
+// disjunct is the LAB's own cloud regime 3 — src/worldengine/base/auroraOptics.js:121
+// `export function opaqueCO2ShroudOf(condition) {` — not a `type === 'venus'` read.
+//
+// ⭐ AND THE TWO ROUTES SELECT THE SAME BODIES, MEASURED RATHER THAN ASSERTED. Over
+// `lab-procedural-0…199` (852 generated planets, this session): `d.type === 'venus'` is true on 130
+// and `opaqueCO2ShroudOf(condition)` is true on 130, and the two sets are IDENTICAL — 130 in both,
+// 0 in either alone — with all 130 of composition class `rocky`. That set equality is what makes
+// this a wiring change: the condition-derived predicate reproduces the legacy branch's whole
+// population without naming its label.
+//
+// ⚠ WHAT THE SECOND DISJUNCT COSTS, DECLARED HERE RATHER THAN DISCOVERED IN A FRAME. A body admitted
+// this way runs the SAME E5 chain a gas giant does, and its first step re-draws the condition:
+// `giantRegimeOf` answers `sub-neptune` on all 130 (the same regime 73 of 104 gas bodies get) and
+// `drawGiantConditions` then overrides `surfaceGravity` — MEASURED, the drawn/actual ratio runs
+// 5.22 … 20.06 on those 130. That looks alarming until it is measured against the population the
+// deck already claims, where the SAME ratio runs 0.31 … 359.83 (median 0.60) over 104 gas bodies:
+// the redraw is what this deck does to every body it claims, on real generated worlds, today. Venus
+// sits inside that spread rather than outside it. ⛔ It is still a REAL property of the closure and
+// it is Max's eyes that rule on the look, not this comment.
+export function bandedEnvelopeOf(condition) {
+  // An h2-he envelope IS the visible surface; so is a supercritical CO2 blanket, which is why the
+  // legacy material zeroes Venus's surface relief outright at
+  // src/objects/Planet.js:800 `  if (planetType == 8) perturbStrength = 0.0;   // venus: hidden by thick clouds`.
+  return compositionClass(condition) === 'gas' || opaqueCO2ShroudOf(condition) === true;
+}
 
 // ── The convective-vigor ramp ────────────────────────────────────────────────
 // One T_eq ramp, 55 K -> 130 K, drives band contrast, band warp, jet shear-turbulence and jet
@@ -161,6 +199,9 @@ export function giantDeckPack(condition, ctx = {}) {
   const macroSeed = assertMacroSeed(ctx.macroSeed);
 
   const gas = compositionClass(condition) === 'gas';
+  // ⭐ R-07's SECOND GATE. `gas` survives because `meta.gas` reports the composition class and
+  // nothing else may quietly become a banding answer; `banded` is what every gate below reads.
+  const banded = bandedEnvelopeOf(condition);
   const T_eq = condition.T_eq;
   const vigor = convectiveVigor(T_eq);
   // The DRAWN spin, with the same fallback chain the front-ends already use.
@@ -175,8 +216,14 @@ export function giantDeckPack(condition, ctx = {}) {
   const drivers = {
     // The two master gates. An h2-he envelope IS the visible surface, so the deck is fully on for a
     // gas world and fully off for every solid one — no partial gas.
-    uBandStrength: scalar(gas ? 1.0 : 0.0, { gate: 'bands' }),
-    uJetStrength:  scalar(gas ? 1.0 : 0.0, { gate: 'jets' }),
+    // ⭐ `banded`, NOT `gas`, SINCE B3 LEG 2 — this line IS the second of R-07's two gates.
+    // ⛔ BOTH MASTER GATES MOVE TOGETHER AND THAT IS INSIDE R-07 RATHER THAN BEYOND IT. The row's
+    // subject symbols are `bands` `lat` `swirl` `val`, and `swirl` is the legacy venus branch's own
+    // src/objects/Planet.js:643 `    float swirl = snoise(pos * noiseScale * 0.8) * 0.12;` — the deck's
+    // answer to it is the jet/shear machinery, so flipping bands alone would close three of the row's
+    // four symbols and invent an asymmetry nobody chose.
+    uBandStrength: scalar(banded ? 1.0 : 0.0, { gate: 'bands' }),
+    uJetStrength:  scalar(banded ? 1.0 : 0.0, { gate: 'jets' }),
     uBandContrast: DECK_LAW.CONTRAST.BASE + DECK_LAW.CONTRAST.SPAN * vigor,
     uBandWarp:     DECK_LAW.WARP.BASE + DECK_LAW.WARP.SPAN * vigor,
     uJetShearTurb: DECK_LAW.SHEAR.BASE + DECK_LAW.SHEAR.SPAN * vigor,
@@ -197,7 +244,13 @@ export function giantDeckPack(condition, ctx = {}) {
     bandCount: null, eqSign: null, peakU: null, baked: false,
   };
 
-  if (!gas) {
+  // ⛔⛔ `!banded`, AND THE EARLY RETURN IS THE THIRD PLACE R-07 HAD TO REACH — MEASURED, NOT
+  // REASONED. Widening only the two gates above and leaving this at `!gas` is WORSE than the row it
+  // closes: `uBandStrength` would be 1.0 while the E5 bake never ran, so `aBand` stays zero-filled and
+  // src/worldengine/shaders/planetShaders.glsl.js:634 `        float bandMask = uBandStrength * provinceWeight(PROV_BANDS);`
+  // hands `mix(albedoCol, zonalBandCol(..., vBand, ...), 1.0)` a flat field — the rocky albedo is
+  // REPLACED by a degenerate deck. A regression wearing the closure's clothes.
+  if (!banded) {
     // ⚠ NOTHING ELSE IS EMITTED ON A SOLID BODY, and the omissions are the behaviour, not a shortcut.
     // `uBandTint` is omitted because the lab never resets it either — a solid preset keeps whatever
     // deck colour was last drawn, behind a 0 gate, and zeroing it here would be a new behaviour

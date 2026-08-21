@@ -475,7 +475,7 @@ export function atmosphereFromPlanet(gameAtmosphere) {
 // `d.metallicity` until this commit, which forwards it; a decoy is only a decoy while the read does
 // not exist. `_systemSeed` is the next declared-but-unwritten one and it is not a hypothetical: the
 // pack contract this step's sibling landed requires a NON-ZERO INTEGER macroSeed
-// (src/worldengine/drivers/giantDeck.js:161 `const macroSeed = assertMacroSeed(ctx.macroSeed);`,
+// (src/worldengine/drivers/giantDeck.js:199 `const macroSeed = assertMacroSeed(ctx.macroSeed);`,
 // whose hazard note is giantDeck.js:157
 // `// every gas giant in the galaxy gets identical band phases, and not one gate on driver ALGEBRA`
 // — the paragraph above it spells out that a hex string coerces to seed 0 through the pack's own

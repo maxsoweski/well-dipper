@@ -9,7 +9,7 @@
 //
 // ⛔ WHAT THIS LANE DOES NOT DO, AND THE READER MUST NOT INFER OTHERWISE.
 // ⭐ THE ENTRY IS NOW REGISTERED. This line used to read "It does NOT add the entry to"
-// src/worldengine/drivers/index.js:98 `export const PACKS = Object.freeze([` — the registration commit
+// src/worldengine/drivers/index.js:99 `export const PACKS = Object.freeze([` — the registration commit
 // added it, importing `LIMB_DECK_ENTRY` rather than retyping the predicate. ⛔ The default game is
 // still unchanged: composition is reached only behind the 6e flag, whose shipped default is false.
 // That file is the shared composition point for two concurrent lanes and is reserved for the
@@ -146,10 +146,21 @@ describe('A — the predicate admits the gas class and nothing else', () => {
     // is what makes "adding limbDeck to PACKS does not change which bodies are admitted" a measured
     // statement rather than a reading of two source lines. Membership, because Step 4 measured that
     // a count-preserving permutation passed every instrument in this program byte-identically.
+    // ⛔⛔ RE-AIMED AT B3 LEG 2 — IT NOW COMPARES AGAINST THE GAS CLASS DIRECTLY, WHICH IS WHAT THIS
+    // GATE ALWAYS MEANT. `giantDeck` was the stand-in for "the gas class" because its predicate WAS
+    // `compositionClass(condition) === 'gas'` character for character; ledger R-07 widened it to
+    // src/worldengine/drivers/giantDeck.js:89 `export function bandedEnvelopeOf(condition) {` (gas OR an
+    // opaque CO2 shroud) so the deck now claims 130 rocky bodies this pack must NOT claim. Comparing
+    // to the moved predicate would have silently re-scoped this pack's own gate to whatever the deck
+    // does next; comparing to `compositionClass` states the property this pack actually has.
     const giant = PACKS.find((e) => e.name === 'giantDeck');
     expect(giant, 'the shipped gas pack must exist to compare against').toBeTruthy();
     const mine = GENERATED.filter((b) => LIMB_DECK_ENTRY.applies(b.cond) === true).map((b) => b.id);
-    const theirs = GENERATED.filter((b) => giant.applies(b.cond) === true).map((b) => b.id);
+    const theirs = GENERATED.filter((b) => compositionClass(b.cond) === 'gas').map((b) => b.id);
+    // ...and the deck is still a SUPERSET of it, so this pack can never claim a body the deck does
+    // not — the property the old comparison was protecting, stated as containment rather than equality.
+    const deck = GENERATED.filter((b) => giant.applies(b.cond) === true).map((b) => b.id);
+    expect(mine.every((id) => deck.includes(id))).toBe(true);
     expect(mine).toEqual(theirs);
     expect(mine.length).toBe(GAS.length);        // and the set really is the gas class
     expect(GAS.length).toBeGreaterThan(20);      // measured 41 of 97 — a real population, not 1
@@ -534,7 +545,7 @@ describe('F — the entry is registry-ready and collision-free', () => {
   });
 
   it('names NO uniform giantDeck names — the collision throw will not fire at integration', () => {
-    // src/worldengine/drivers/index.js:250 `if (uniformsWritten.includes(name)) {`
+    // src/worldengine/drivers/index.js:280 `if (uniformsWritten.includes(name)) {`
     // makes two packs naming one uniform an ERROR rather than
     // a last-writer-wins, because array order would otherwise decide what renders. Both packs claim
     // the same bodies, so the disjointness is a precondition of the integration commit, checked here.

@@ -115,7 +115,7 @@ and `atmosphere` is null on 81/81.
 *Layer 2 — the carrier.* Even with layer 1 fixed, **no pack writes the uniforms.**
 src/worldengine/shaders/uniforms.js:235 `uLavaActivity:   { value: 0.0 },   // emissive-crack glow intensity (driven, D12 tidal)` and
 src/worldengine/shaders/uniforms.js:462 `uCryoActivity:    { value: 0.0 },   // 0..1 icy-resurfacing activity — owner Cryo; read by Relief (F9/F10 chaos/ridged)`
-sit at their factory defaults, and src/worldengine/drivers/rockySurface.js:515 `export const ROCKY_SURFACE_UNIFORMS = Object.freeze([`
+sit at their factory defaults, and src/worldengine/drivers/rockySurface.js:426 `export const ROCKY_SURFACE_UNIFORMS = Object.freeze([`
 declares the pack's whole writer set — **21 names, none of them a lava, cryo, aurora, terminator, limb
 or noise-scale name.** `grep -rn 'uLavaActivity\|uCryoActivity' src/worldengine/drivers/` is empty.
 `docs/FEATURES/r-rows-decision-packet-2026-08-20.md:394` states the population figure: *"309 are
@@ -193,7 +193,7 @@ taste/product calls physics cannot resolve, batched."* And `one-pipeline-two-fro
 |---|---|---|---|---|
 | **D-1** | ✅ **RULED** — whether the eight `blocking` ledger rows have to CLOSE before the flag flips, or ship as written-down losses. | **B7 — the only player-facing node, and everything behind it** | ⭐ **THEY MUST CLOSE BEFORE THE FLAG FLIPS.** Ruled 2026-08-20 (Max, delegated to the plan's recommendation). The ledger's §2 says so in its own definition: `accepted-loss` is the declared-and-allowed category, `blocking` is not. **This is now B7's gate, not a proposal** — B7 cannot flip with a `blocking` row open. | gate of **B7** |
 | **D-2** | ✅ **RULED** — whether *"Pass, with the note that these are all identical"* closes Step 12's Step-10 half. | **B7** | ⭐ **IT DOES NOT. The Step-10 half is ruled OPEN, and is re-run AS B3's UAT** with `wd.labGasBodies` on. Ruled 2026-08-20 (Max, delegated to the plan's recommendation). B1 cannot make one moon look different (F-3, F-4). **No extra stop was created — it merges into a gate that already exists.** | gate of **B3** |
-| **D-3** | ✅ **RULED** — scheduling of the two R-rows Max reserved to himself 2026-08-09: **R-07** (Venus zonal banding, **130 bodies**, ruled `blocking`) and **R-05** (lava crust/melt, 52 bodies, `accepted-loss`). | R-07 blocks **B7**; R-05 blocks nothing | ⭐ **R-07 → B3 as a named work item. R-05 → B5, with F8** — same family, same open complaint. Ruled 2026-08-20 (Max, delegated to the plan's recommendation). ⛔ Widening `giantDeck`'s predicate is **struck as a measured no-op**: src/worldengine/drivers/giantDeck.js:163 `const gas = compositionClass(condition) === 'gas';` feeds src/worldengine/drivers/giantDeck.js:178 `uBandStrength: scalar(gas ? 1.0 : 0.0, { gate: 'bands' }),` — a *second* gate behind the pack predicate at src/worldengine/drivers/index.js:101 `applies: (condition) => compositionClass(condition) === 'gas',`. | **B3** / **B5** |
+| **D-3** | ✅ **RULED** — scheduling of the two R-rows Max reserved to himself 2026-08-09: **R-07** (Venus zonal banding, **130 bodies**, ruled `blocking`) and **R-05** (lava crust/melt, 52 bodies, `accepted-loss`). | R-07 blocks **B7**; R-05 blocks nothing | ⭐ **R-07 → B3 as a named work item. R-05 → B5, with F8** — same family, same open complaint. Ruled 2026-08-20 (Max, delegated to the plan's recommendation). ⛔ Widening `giantDeck`'s predicate is **struck as a measured no-op**: src/worldengine/drivers/giantDeck.js:201 `const gas = compositionClass(condition) === 'gas';` feeds src/worldengine/drivers/giantDeck.js:225 `uBandStrength: scalar(banded ? 1.0 : 0.0, { gate: 'bands' }),` (⛔ RE-POINTED 2026-08-21 — it read `scalar(gas ? ...)` when this line was written; B3 leg 2 changed it, which is this bullet's own work item done) — a *second* gate behind the pack predicate at src/worldengine/drivers/index.js:114 `applies: (condition) => bandedEnvelopeOf(condition),` (⛔ RE-POINTED 2026-08-21 — it read `compositionClass(condition) === 'gas'` when this line was written). | **B3** / **B5** |
 | **D-4** | ✅ **RULED** — scope of the lighting block under ruling #1. | **B4, B7, F52, I-12, 8 optical couplings** | ⭐ **SCOPE IS THE FOUR MEASURED LEDGER ROWS P-01 / P-02 / P-03 / S-01, across the nine verified consumer classes, AUTHORED ON THE LAB MATERIAL — NOT THE LEGACY SHADER.** Ruled 2026-08-20 (Max, delegated to the plan's recommendation). Anything outside those four rows is outside B4. | **B4** |
 | **D-5** | ✅ **RULED** — **QB-1, the terminator belt.** Max deferred it 2026-08-14 on the live game (*"that effect needs a ton of work. It has for a long time"*, *"We don't need to do that now."*); ruling #1 (2026-08-06) had folded it into the lighting engine. His later word is the deferral. | **B3's P-11 closure** — a pack must write `uTermStrength`, and with WHICH law was the question | ⭐ **THE DEFERRAL HOLDS. B3 forwards the game's already-tamed law VERBATIM and closes P-11 on parity**; the belt stays exactly as it is. Ruled 2026-08-20 (Max, delegated to the plan's recommendation). ⛔ **No agent re-authors what twilight looks like** — that is the taste call he parked, and it re-opens only on his word. | **B3** (forward) — re-author only if he lifts it, then **B5** |
 | **D-6** | ⛔⛔ **OPEN — MAX'S LOOK, AND ONLY HIS.** **QB-7 — are the post-grain canyons enough?** ⭐ **B0 TOOK THE SHOT 2026-08-20; it is now waiting on his eyes, not on more work.** | **F4's block assignment** (694 distinct, never zero — the strongest relief candidate in queue (a)) | ⛔ **NO AGENT MAY ANSWER THIS.** The two frames to look at are `A-PAIR-fulldisc-LEFT-grain0-RIGHT-grain1.png` and `A-PAIR-rift-LEFT-grain0-RIGHT-grain1.png`, in the B0 shot set at `/tmp/claude-1000/-home-ax/d7bf083b-b464-42f5-94fe-04658f23d98e/scratchpad/b0-shots/` with `CAPTIONS.txt` beside them (pose captured BY VALUE and asserted byte-identical across each pair; freeze asserted; the lab carries no film-grain uniform at all). ⚠ **That directory is session-scoped scratchpad — copy it somewhere durable before it ages out.** **If enough → F4 ships in B3; if not → F4 goes to B5** with the other method re-thinks. ⭐ The same shot also settles **P5-G27**, **WS4-7** and part of **P5-G14**: lab-live `1.0` at `planet-lod-lab.html:1442` against the production default at src/worldengine/shaders/uniforms.js:191 `uTectonicGrainStrength`. ⭐ MECHANICAL GATE ONLY, and it is not a canyons-only A/B: grain 0→1 moves 49.37% of the disc ROI while the canyon feature's own footprint is 1.64%, because the grain uniform re-orients six relief features at once. | **B3** or **B5** |
@@ -480,10 +480,26 @@ outflow, **F16** dust mantles, **F20-strand**, **F21** karst. ⭐ **F4's chasma 
   `export const TERM_STRENGTH = 0.15;`, and the game reads it at src/objects/Planet.js:1653
   `uTermStrength: { value: term.termStrength },` — never re-authored inside a wiring commit.
 - **P-14**'s crater half (`uCraterAmp` `uCraterComplexD` `uCraterScale` `uEjectaAmp`), with
-  `uDispDomainScale` split off.
+  `uDispDomainScale` split off. ✅ **LANDED B3 LEG 2, 2026-08-21 — and it closed the WHOLE row, not the
+  four names.** The ten impact drivers moved OUT of `rockySurface.js` into a shared block both packs
+  import, and a sixth entry `craterDeck` (predicate `=== 'gas'`, `rockySurface`'s exact complement)
+  emits it on the half that had no writer. MEASURED over `lab-procedural-0…199`, 343 gas planets, all
+  ten names: diverging on up to 343 → **0**. On the ledger's own 266-body pass `divergedCarried`
+  23 → **15** and `measured()` **67 → 59**. ⛔ `uDispDomainScale` was ALREADY split off at P-15 before
+  this leg — verified, not re-done. ⚠ The row's own cell describes the gas half as "the game holds
+  craters OFF"; that stopped being true at B2 leg 1 and **204 of 343 gas bodies have a FIRING crater
+  schedule**, so the closure forwards a live record rather than switching a family off.
 - **R-07** Venus zonal banding, **130 bodies** — per D-3, a condition-derived banding predicate **plus**
   the second gate at `src/worldengine/drivers/giantDeck.js:178`. ⛔ Widening the pack predicate alone is a
-  measured no-op.
+  measured no-op. ✅ **LANDED B3 LEG 2, 2026-08-21, AND THERE WAS A THIRD SITE THIS BULLET DOES NOT NAME.**
+  One predicate — `bandedEnvelopeOf` (gas OR an opaque CO2 shroud) — read at the registry entry and at
+  `uBandStrength`/`uJetStrength`, **plus the pack's `if (!gas) return` early exit**: leaving that would
+  have set the master gate to 1.0 with the E5 bake never run, so `zonalBandCol` REPLACES the rocky
+  albedo with a flat field. A regression wearing the closure's clothes; measured, not reasoned.
+  MEASURED: the condition predicate and the legacy `type === 'venus'` label select the **identical 130
+  bodies** (0 in either alone), and all 130 now carry a live gate and a real `aBand`. ⚠ Declared cost:
+  those bodies run the gas-giant E5 chain, which re-draws `surfaceGravity` by 5.22 … 20.06× — inside
+  the 0.31 … 359.83 spread the deck already applies to the gas bodies it claims today.
 
 **⭐ THE ROUTE — route (iii), and it is Claude's call.** Extract each law into a condition-shaped module
 both sides import. Precedent is three-way and shipped (§1.2). ⭐ **Consequence that decouples two

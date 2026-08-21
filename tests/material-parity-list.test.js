@@ -517,7 +517,15 @@ describe('2. the collapse in per-body variation', () => {
     // through the `encodeValue` CONTAINER split this file already records for the palette four
     // (game `THREE.Vector3` vs lab `THREE.Color`). Same measurement, different cause — see the
     // everyBody list below, where they sit alongside `uFreshColor` and its siblings.
-    expect(LEDGER.divergedCarried.size).toBe(23);   // ⭐⭐ 20 -> 24 AT B2 LEG 1, 2026-08-20, AND THE FOUR NEWCOMERS ARE THE ONES P-14 PREDICTED: `uCraterDensity` (64 of 266 bodies), `uEjectaStrength` (64), `uCraterRelaxation` (56), `uEjectaRampart` (42). They used to sit in the "agree by absence" list below — both sides zero — and P-14 wrote down in advance what would happen: "a loud default behind a shut gate … it becomes a pixel the moment anything opens that gate." Leg 1 opened it: re-deriving CRATER_VIS_FLOOR_RAD 0.02 -> 9.6e-4 and replacing the fixed density floor with the per-body CRATER_MIN_VISIBLE gave 289 of 526 bodies a live crater record where 8 had one. ⚠ AND THE DIRECTION IS THE BAD ONE, MEASURED NOT ASSUMED: on every diverging body the GAME writes the live value and the LAB writes 0 (`rocky: uCraterDensity 0.0008051676964833844 -> 0`; `sub-neptune: uEjectaStrength 1 -> 0`). The cause is a GATE difference the leg neither created nor closes — rockySurface multiplies the crater terms by `craterRelevanceOf(condition)` and its pack predicate excludes gas-class bodies, while the legacy material's crater path is keyed on the TYPE LABEL — so the four names JOIN the blocking P-14 row rather than being re-blessed into agreement.
+    // ⭐⭐⭐ 23 -> 15 AT B3 LEG 2, AND IT IS THE LARGEST SHRINK THIS LINE HAS EVER TAKEN. The EIGHT
+    // that left are P-14's whole subject cell — `uCraterAmp` `uCraterComplexD` `uCraterScale`
+    // `uEjectaAmp` `uCraterDensity` `uCraterRelaxation` `uEjectaRampart` `uEjectaStrength` — and they
+    // left because `craterDeck` gave the impact family a writer on the GAS half, which is the half
+    // that was diverging. They land in the `agreeing` list below, in `uLimbExponent`'s stronger
+    // sense: written on both sides from one producer, varying across the population, matching body
+    // by body. MEASURED over lab-procedural-0…199 before the fence was moved: all ten crater names
+    // went from diverging on up to 343 of 343 gas planets to 0 of 343.
+    expect(LEDGER.divergedCarried.size).toBe(15);   // ⭐⭐ 20 -> 24 AT B2 LEG 1, 2026-08-20, AND THE FOUR NEWCOMERS ARE THE ONES P-14 PREDICTED: `uCraterDensity` (64 of 266 bodies), `uEjectaStrength` (64), `uCraterRelaxation` (56), `uEjectaRampart` (42). They used to sit in the "agree by absence" list below — both sides zero — and P-14 wrote down in advance what would happen: "a loud default behind a shut gate … it becomes a pixel the moment anything opens that gate." Leg 1 opened it: re-deriving CRATER_VIS_FLOOR_RAD 0.02 -> 9.6e-4 and replacing the fixed density floor with the per-body CRATER_MIN_VISIBLE gave 289 of 526 bodies a live crater record where 8 had one. ⚠ AND THE DIRECTION IS THE BAD ONE, MEASURED NOT ASSUMED: on every diverging body the GAME writes the live value and the LAB writes 0 (`rocky: uCraterDensity 0.0008051676964833844 -> 0`; `sub-neptune: uEjectaStrength 1 -> 0`). The cause is a GATE difference the leg neither created nor closes — rockySurface multiplies the crater terms by `craterRelevanceOf(condition)` and its pack predicate excludes gas-class bodies, while the legacy material's crater path is keyed on the TYPE LABEL — so the four names JOIN the blocking P-14 row rather than being re-blessed into agreement.
     const everyBody = [...LEDGER.divergedCarried.entries()]
       .filter(([k, v]) => v === LEDGER.carriedTotal.get(k)).map(([k]) => k);
     // ⭐ 17 -> 10 AT STEP 10a, then 10 -> 8 AT B3 LEG 1 (see the two named just below). rockySurface writes the palette, the crater terms and the offsets, so
@@ -552,8 +560,16 @@ describe('2. the collapse in per-body variation', () => {
     // "carried" and it is the first name in this bucket to have it, so it is called out rather than
     // appended silently: a future reader must not conclude from the list that the exponent is a
     // constant. The non-vacuity loop below holds for it too, which is what makes it real.
+    // ⭐⭐⭐ FIVE -> THIRTEEN AT B3 LEG 2. The eight newcomers are P-14's crater half, closing on the
+    // GAS population, and they arrive in `uLimbExponent`'s sense rather than the constants' sense:
+    // both sides now call `craterUniformsFrom` through one shared driver block, so they VARY across
+    // the corpus and match body by body. ⚠ Two of the previous four constants are crater names
+    // (`uEjectaLump`, `uTerraceCount`) and they did NOT move — they were already agreeing by being
+    // constant, and they still are. A reader must not conclude the whole family is now derived.
     expect(agreeing).toEqual([
-      'uEjectaLump', 'uFwClamp', 'uLimbExponent',
+      'uCraterAmp', 'uCraterComplexD', 'uCraterDensity', 'uCraterRelaxation', 'uCraterScale',
+      'uEjectaAmp', 'uEjectaLump', 'uEjectaRampart', 'uEjectaStrength',
+      'uFwClamp', 'uLimbExponent',
       'uTerraceCount', 'uVoroCells',
     ]);
     for (const n of agreeing) {
@@ -576,7 +592,11 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
     // ⭐ 68 -> 67 AT B3 LEG 1, and it is a SHRINK, which no previous leg produced. Every earlier
     // move on this line added a subject; this one removes `uLimbExponent`, because `solidOptics`
     // makes the lab material agree with the game on all 266 bodies rather than on 207 of them.
-    expect(measured().size).toBe(67);   // 63 -> 64 AT B2P, same one name; 64 -> 68 AT B2 LEG 1 — the four crater names §2 names, which join P-14's subject cell rather than acquiring a row.
+    // ⭐⭐⭐ 67 -> 59 AT B3 LEG 2 — the SECOND shrink, and eight times the size of the first. P-14's
+    // eight crater subjects leave the measured set entirely: `craterDeck` writes the impact family
+    // on the gas half, which is the half that diverged, so the lab material now agrees with the game
+    // on all 266 bodies for every one of them.
+    expect(measured().size).toBe(59);   // 63 -> 64 AT B2P, same one name; 64 -> 68 AT B2 LEG 1 — the four crater names §2 names, which join P-14's subject cell rather than acquiring a row.
     // 44 lost + 28 carried = the 72 the game material declares. Nothing fell between the buckets.
     expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.carried]).size).toBe(72);
   });
@@ -585,7 +605,32 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
     const claimed = CH1_ROWS.flatMap((r) => r.subjects);
     const dupes = claimed.filter((x, i) => claimed.indexOf(x) !== i);
     expect(dupes).toEqual([]);
-    expect([...claimed].sort()).toEqual([...measured()].sort());
+    // ⛔⛔ THE LOAD-BEARING DIRECTION, AND IT IS UNCHANGED IN STRENGTH: nothing this instrument
+    // measures may go unruled. A name that starts diverging with no row is what this assertion has
+    // always existed to catch, and it still catches it exactly.
+    for (const n of measured()) {
+      expect(claimed, `${n} is measured and no ledger row claims it`).toContain(n);
+    }
+    // ⭐⭐ THE OTHER DIRECTION WAS AN EQUALITY UNTIL B3 LEG 2, AND IT IS SPLIT RATHER THAN DROPPED.
+    // It held only while every ruled subject still diverged. P-14 is the first row whose subjects ALL
+    // stop diverging — `craterDeck` closes the crater half on the gas population — and under the old
+    // equality the only way to stay green was to EMPTY the row's subject cell, i.e. to delete the
+    // record of which uniforms the row ruled at the moment it succeeded. ⛔ That is the shape this
+    // document exists against, so the reverse direction is now a CLASSIFIED residue instead: every
+    // claimed-but-no-longer-measured name must be a `carried` row's subject AND must be in the
+    // agreeing bucket. A row that quietly claims a name this instrument never sees still reds.
+    const carriedRows = new Set(CH1_ROWS.filter((r) => r.ruling === 'carried').flatMap((r) => r.subjects));
+    const agreeing = new Set([...LEDGER.carried].filter((n) => !LEDGER.divergedCarried.has(n)));
+    const closed = claimed.filter((n) => !measured().has(n));
+    for (const n of closed) {
+      expect(carriedRows.has(n), `${n} is claimed by a row that is not ruled carried, yet it no longer diverges`).toBe(true);
+      expect(agreeing.has(n), `${n} is claimed, does not diverge, and is not in the agreeing bucket either — it fell between the instrument's buckets`).toBe(true);
+    }
+    // …and the residue is exactly P-14's eight, named so it cannot grow silently.
+    expect(closed.sort()).toEqual([
+      'uCraterAmp', 'uCraterComplexD', 'uCraterDensity', 'uCraterRelaxation',
+      'uCraterScale', 'uEjectaAmp', 'uEjectaRampart', 'uEjectaStrength',
+    ].sort());
   });
 
   it('every row carries a legal ruling and at least one subject', () => {
@@ -600,7 +645,11 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
     const mutated = CH1_ROWS.map((r) => (r.id === 'P-04' ? { ...r, subjects: [] } : r));
     const claimed = mutated.flatMap((r) => r.subjects);
     expect(claimed.length).toBe(CH1_ROWS.flatMap((r) => r.subjects).length - 1);
-    expect([...claimed].sort()).not.toEqual([...measured()].sort());   // ← the mutant reds
+    // ⭐ RE-AIMED AT THE SURVIVING DIRECTION AT B3 LEG 2. `uLimbMix` is `lost` — the lab declares no
+    // counterpart — so it is measured, and a row dropping it leaves it unruled. That is the direction
+    // the split above kept, and this control proves the split did not hollow it out.
+    expect(measured().has('uLimbMix'), 'the mutant must drop a MEASURED subject or it proves nothing').toBe(true);
+    expect(claimed).not.toContain('uLimbMix');   // ← the mutant reds
   });
 
   it('⭐ CONTROL THAT MOVED — `lostAtZero` is a per-body VALUE split, not a constant', () => {
@@ -660,6 +709,22 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
     expect(LEDGER.written, 'P-04: limbDeck must write it, or the loss is back').toContain('uLimbStrength');
     // ⭐⭐ M-09 IS CLOSED THE SAME WAY, AT B2 LEG 3, AND THIS IS ITS HALF OF THE FENCE. `uNoiseScale` used to be the aurora shape too — declared by the lab, written by nothing, the factory 4.0 on both sides. `rockySurface` now writes it on every body its `!== 'gas'` predicate claims, which is 632 of 632 plain moons (tests/moon-lab-mount.test.js:414 `expect(admitted).toBe(plain);`), so the moon-side base-frequency loss is resolved rather than described. ⛔ INVERTED FOR THE SAME REASON: un-register the pack and this line goes red instead of the feature leaving silently.
     expect(LEDGER.written, 'M-09/P-10: rockySurface must write it, or the base-frequency loss is back').toContain('uNoiseScale');
+    // ⭐⭐ P-14 IS CLOSED BY THE B3 LEG 2 REGISTRATION AND THIS IS THE INVERSION THAT HOLDS IT CLOSED.
+    // The row's ten impact names were written on the non-gas half only; `craterDeck`'s `=== 'gas'`
+    // predicate is `rockySurface`'s exact complement, so the family now has exactly one writer on
+    // every body. ⛔ INVERTED for the reason the four lines above are: un-register the entry and
+    // these go red, instead of the crater record silently leaving every gas world's material.
+    // ⚠ `LEDGER.written` IS A UNION over the pass, so it sees the gas half even though the pass's
+    // first body is not one — the same dependency P-04's note records in blood.
+    for (const n of ['uCraterAmp', 'uCraterComplexD', 'uCraterScale', 'uEjectaAmp',
+                     'uCraterDensity', 'uCraterRelaxation', 'uEjectaRampart', 'uEjectaStrength']) {
+      expect(labNames.has(n), `lab should declare ${n}`).toBe(true);
+      expect(LEDGER.written, `P-14: a pack must write ${n} on BOTH halves, or the loss is back`).toContain(n);
+    }
+    // …and R-07's carrier, on the same inverted pattern: the band deck must reach the opaque-CO2
+    // population or Venus's zonal banding goes back to the 0.0 default it sat at since Step 10a.
+    expect(labNames.has('uBandStrength'), 'the lab must still declare uBandStrength').toBe(true);
+    expect(LEDGER.written, 'R-07: giantDeck must write it, or the venus banding loss is back').toContain('uBandStrength');
   });
 
   it('P-17 — `lodLevel` is read by no shader, and that is counted rather than asserted', () => {
