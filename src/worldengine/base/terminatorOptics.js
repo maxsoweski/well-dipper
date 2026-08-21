@@ -16,10 +16,12 @@
 //
 // ⛔ NOTHING HERE IS NEW AND NOTHING HERE IS TUNED. Every line below is the shipped text moved, not
 // rewritten. The two constants and the one ramp are character-identical to what
-// src/objects/Planet.js carried at HEAD `9e81350`, and the third expression of them —
+// src/objects/Planet.js carried at HEAD `9e81350`. The third expression of them —
 // tools/port-condition-delta.mjs's transcription, which existed ONLY because they were unexported —
-// is deleted in the same commit and replaced by an import of this file. Three expressions of one
-// law become one.
+// is deleted and replaced by a call to this module, so three expressions of one law become one.
+// ⚠ That deletion did NOT land in the same commit as this file, contrary to what this comment said
+// when it was written mid-stage: the stage was interrupted and the tool was still transcribing.
+// It lands in the repair commit that also fixes the five citations the extraction broke.
 //
 // ⛔⛔ WHY THE MAGNITUDE MAY NOT BE RE-DERIVED HERE, EVER. The comment that rode `TERM_STRENGTH` in
 // Planet.js is reproduced verbatim below because it records a defect this codebase has already paid
@@ -72,9 +74,17 @@ export const TERM_STRENGTH = 0.15;
  * ⚠ THE LAB'S OWN STRENGTH EXPRESSION IS THE BINARY planet-lod-lab.html:2497
  * `      state.termStrength = _fp.atmosphere?.retained ? 0.15 : 0.0;` — NOT this continuous one.
  * The game's form is kept because it is the one this row is instructed to forward, and because it
- * agrees with the lab's on all but the thinnest columns. MEASURED over the 1141 non-gas bodies of
- * `lab-procedural-0…199`: the two expressions return the same number on 1139 of 1141, the two
- * exceptions being bodies whose `columnFraction` has not yet saturated to 1.0.
+ * agrees with the lab's everywhere except on the thinnest columns.
+ *
+ * ⛔ THE FIGURE THAT USED TO SIT HERE IS WITHDRAWN. An earlier draft of this file claimed
+ * "1139 of 1141" non-gas bodies over `lab-procedural-0…199`. Re-measured 2026-08-21 the count of
+ * non-gas bodies came out differently (the moon half depends on which moon records the enumeration
+ * admits), so the denominator was not reproducible and publishing a second candidate for it would
+ * be guessing twice. WHAT IS REPRODUCIBLE, and was measured twice in one session under two
+ * different enumerations of the same corpus: the two expressions disagree on exactly TWO bodies,
+ * both of them thin-column worlds whose `columnFraction` has not yet saturated to 1.0
+ * (termStrength ≈ 0.1304 and ≈ 0.1303 against the lab's flat 0.15, at ~0.105 bar). The DISAGREEING
+ * SET is the load-bearing quantity; the population it sits in is not, and is not restated.
  *
  * @param {object} condition  a body condition vector (deriveConditionVector / conditionFromBody).
  * @returns {{termStrength: number, termWidth: number, termColor: number[]}}

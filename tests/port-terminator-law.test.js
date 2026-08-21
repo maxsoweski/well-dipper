@@ -29,10 +29,20 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+// ⭐ B3-1: THE LAW IS NOW IMPORTABLE, SO THIS FILE IMPORTS IT. Until 2026-08-21 `TERM_STRENGTH` and
+// `termWidthFor` were module-private inside src/objects/Planet.js, so the only way to check them was
+// to scrape the file as text and `new Function` the body out of it. They now live in
+// src/worldengine/base/terminatorOptics.js, whose only import is the sibling optics module — no
+// bare specifier, so vitest resolves it. The text-scrape assertions BELOW are kept and re-pointed
+// rather than deleted: they are what stops the law being quietly re-authored back into the game
+// material, which is the failure this whole extraction exists against.
+import { TERM_STRENGTH, termWidthFor, terminatorOpticsOf } from '../src/worldengine/base/terminatorOptics.js';
+import { atmosphereOpticsOf } from '../src/worldengine/base/atmosphereOptics.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PLANET = readFileSync(join(ROOT, 'src/objects/Planet.js'), 'utf8');
 const LAB = readFileSync(join(ROOT, 'planet-lod-lab.html'), 'utf8');
+const TERMMOD = readFileSync(join(ROOT, 'src/worldengine/base/terminatorOptics.js'), 'utf8');
 
 describe('terminator: the shader computes a band, not a night-side flood', () => {
   it('uses SIGNED mu from the geometric normal at every one of the three surface branches', () => {
@@ -81,18 +91,20 @@ describe('terminator: the shader computes a band, not a night-side flood', () =>
 
 describe('terminator: strength and width are the LAB’s laws, not game-authored constants', () => {
   it('magnitude matches the value the lab retuned to, and is not columnFraction', () => {
-    const game = PLANET.match(/const TERM_STRENGTH = ([0-9.]+);/);
-    expect(game, 'TERM_STRENGTH must exist in src/objects/Planet.js').toBeTruthy();
+    // ⭐ READ OFF THE MODULE, NOT SCRAPED OUT OF THE GAME FILE. The constant is the imported binding.
+    const mod = TERMMOD.match(/export const TERM_STRENGTH = ([0-9.]+);/);
+    expect(mod, 'TERM_STRENGTH must be EXPORTED from src/worldengine/base/terminatorOptics.js').toBeTruthy();
+    expect(Number(mod[1])).toBe(TERM_STRENGTH);
 
     const lab = LAB.match(/state\.termStrength = [^;]*\?\s*([0-9.]+)\s*:/);
     expect(lab, 'the lab must still carry state.termStrength').toBeTruthy();
 
-    expect(Number(game[1])).toBe(Number(lab[1]));
+    expect(TERM_STRENGTH).toBe(Number(lab[1]));
 
     // columnFraction saturates to exactly 1.0 above 0.3 bar and EVERY generated planet is above
     // that, so using it as the magnitude is both 6.7x too strong and identical on every body.
     // It is legitimate only as the airless gate, i.e. multiplied BY the magnitude.
-    expect(PLANET).toMatch(/uTermStrength:\s*\{\s*value:\s*\(optics\.columnFraction \?\? 0\) \* TERM_STRENGTH\s*\}/);
+    expect(TERMMOD).toMatch(/termStrength:\s*\(optics\.columnFraction \?\? 0\) \* TERM_STRENGTH,/);
   });
 
   it('width is the lab’s log-pressure ramp, agreeing to max delta exactly 0 over a sweep', () => {
@@ -101,31 +113,27 @@ describe('terminator: strength and width are the LAB’s laws, not game-authored
     const labExpr = LAB.match(/state\.termWidth = ([^;]+);/);
     expect(labExpr, 'the lab must still carry state.termWidth').toBeTruthy();
 
-    const gameBody = PLANET.match(/function termWidthFor\(pressureBar\) \{([\s\S]*?)\n\}/);
-    expect(gameBody, 'termWidthFor must exist in src/objects/Planet.js').toBeTruthy();
-
-    // The lab names its already-floored pressure _tp; the game floors inside the function.
+    // The lab names its already-floored pressure _tp; the shared module floors inside the function.
     const labFn = new Function('_tp', `return ${labExpr[1]};`);
-    const gameFn = new Function('pressureBar', gameBody[1]);
 
     let maxDelta = 0;
     // Airless through Venus-class and beyond, log-spaced.
     for (const p of [0, 1e-6, 1e-3, 0.006, 0.01, 0.1, 0.31, 1.0, 1.5, 10, 92, 1000]) {
       const floored = Math.max(p, 1e-3);
-      maxDelta = Math.max(maxDelta, Math.abs(labFn(floored) - gameFn(p)));
+      maxDelta = Math.max(maxDelta, Math.abs(labFn(floored) - termWidthFor(p)));
     }
     expect(maxDelta).toBe(0);
   });
 
   it('the provisional 0.18 constant is retired', () => {
     expect(PLANET).not.toMatch(/const TERM_WIDTH = /);
+    expect(TERMMOD).not.toMatch(/const TERM_WIDTH = /);
   });
 
   it('width actually VARIES with pressure, so it is not silently degenerate', () => {
     // The lesson from columnFraction: a law can be wired correctly and still be a constant across
     // the whole population. Pin the spread so that failure is loud.
-    const gameBody = PLANET.match(/function termWidthFor\(pressureBar\) \{([\s\S]*?)\n\}/);
-    const w = new Function('pressureBar', gameBody[1]);
+    const w = termWidthFor;
     const vals = [0.006, 0.31, 1.0, 1.5, 92].map(w);
     expect(new Set(vals).size).toBeGreaterThanOrEqual(4);
     expect(w(0.006)).toBeLessThan(w(1.0));   // Mars-thin reads as a hairline
@@ -136,5 +144,93 @@ describe('terminator: strength and width are the LAB’s laws, not game-authored
     expect(w(92)).toBeLessThan(0.30);
     expect(w(1000)).toBe(0.30);              // gas-giant column clamps at the ceiling
     expect(w(0)).toBe(0.06);                 // airless clamps to the floor, inert behind strength 0
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// B3-1 · ROUTE (iii) — THE LAW HAS EXACTLY ONE EXPRESSION AND BOTH FRONT-ENDS READ IT
+// ─────────────────────────────────────────────────────────────────────────────
+// WHY THIS BLOCK EXISTS AND WHAT IT IS FOR. The two assertions above prove the law is CORRECT.
+// They said nothing about WHERE it lives, and that was the whole of ledger row P-11: the law was
+// right and it was module-private inside src/objects/Planet.js, so nothing under src/worldengine/
+// could reach it, so no driver pack could forward the band to a swapped body. The row's stated
+// closure is "extract the law into a condition-shaped module both sides import". This block is the
+// fence on THAT, and it is written so that re-authoring the law back into either front-end reds it.
+//
+// ⛔ THE CONTROL FOR THIS BLOCK IS RECORDED IN THE STAGE REPORT, NOT IMPLIED. Each of these
+// assertions was reverted individually and re-run to confirm the SPECIFIC assertion reds, because
+// two dead controls shipped in this lane already.
+describe('B3-1 · the terminator law has ONE expression, and both front-ends import it', () => {
+  it('src/objects/Planet.js imports terminatorOpticsOf and no longer DEFINES the law', () => {
+    expect(PLANET, 'the game must import the shared module')
+      .toMatch(/import \{ terminatorOpticsOf \} from '\.\.\/worldengine\/base\/terminatorOptics\.js'/);
+    // The two definitions must be GONE from the game file. A re-authored copy here is the exact
+    // drift the extraction exists against, and it would satisfy every assertion above.
+    expect(PLANET, 'TERM_STRENGTH must NOT be re-defined in the game material')
+      .not.toMatch(/^const TERM_STRENGTH = /m);
+    expect(PLANET, 'termWidthFor must NOT be re-defined in the game material')
+      .not.toMatch(/^function termWidthFor\(/m);
+  });
+
+  it('the game material writes uTermStrength/uTermWidth from the module return, not from a local', () => {
+    expect(PLANET).toMatch(/const term = terminatorOpticsOf\(condition\);/);
+    expect(PLANET).toMatch(/uTermStrength: \{ value: term\.termStrength \},/);
+    expect(PLANET).toMatch(/uTermWidth: \{ value: term\.termWidth \},/);
+  });
+
+  it('tools/port-condition-delta.mjs no longer carries a THIRD copy of the law', () => {
+    // It transcribed both, on the recorded grounds that they were unexported. They are exported now,
+    // so the transcription is a copy with no excuse; the instrument must call the module instead.
+    const TOOL = readFileSync(join(ROOT, 'tools/port-condition-delta.mjs'), 'utf8');
+    expect(TOOL, 'the tool must not re-declare TERM_STRENGTH').not.toMatch(/^const TERM_STRENGTH = /m);
+    expect(TOOL, 'the tool must not re-declare termWidthFor').not.toMatch(/^function termWidthFor\(/m);
+    expect(TOOL, 'the tool must load the shared module')
+      .toMatch(/terminatorOpticsOf.*terminatorOptics\.js/s);
+  });
+
+  it('terminatorOpticsOf reproduces the game expression EXACTLY, evaluated not read', () => {
+    // The textual assertions above can all pass while the composite returns something else. This
+    // one runs both sides over a pressure sweep crossing every branch of the optics law.
+    const conds = [];
+    for (const pressure of [0, 1e-4, 0.003, 0.05, 0.3, 1.0, 1.6, 12, 92, 1000]) {
+      for (const composition of ['n2-o2', 'co2', 'co2-n2', 'h2-he', 'methane']) {
+        for (const T_eq of [90, 150, 260, 420, 900]) {
+          conds.push({ T_eq, atmosphere: { pressure, composition, retained: pressure > 0 },
+                       composition: { volatileFraction: 0.2, ironFraction: 0.3 }, radiusEarth: 1 });
+        }
+      }
+    }
+    conds.push({ atmosphere: null, composition: {}, radiusEarth: 1, T_eq: 250 });   // airless
+    let maxS = 0, maxW = 0;
+    for (const c of conds) {
+      const o = atmosphereOpticsOf(c);
+      const t = terminatorOpticsOf(c);
+      maxS = Math.max(maxS, Math.abs(t.termStrength - (o.columnFraction ?? 0) * TERM_STRENGTH));
+      maxW = Math.max(maxW, Math.abs(t.termWidth - termWidthFor(c.atmosphere?.pressure)));
+      // The HUE is atmosphereOptics.js's and is forwarded, not re-derived.
+      expect(t.termColor).toEqual(o.termColor);
+    }
+    expect(conds.length).toBeGreaterThan(200);
+    expect(maxS).toBe(0);
+    expect(maxW).toBe(0);
+  });
+
+  it('the airless gate is intact: no atmosphere ⇒ strength exactly 0, width at the floor', () => {
+    // ⚠ WHAT THIS DOES AND DOES NOT FENCE, STATED because the first draft of it was a DEAD CONTROL.
+    // Deleting the `?? 0` from `(optics.columnFraction ?? 0)` does NOT red this test, and that is
+    // not a gap in the test — it is a measured fact about the module: `atmosphereOpticsOf` returns
+    // `columnFraction: 0` (a number, never undefined) for `{atmosphere:null}`, for `{}` and for
+    // `undefined` alike, so the coalesce is unreachable belt-and-braces rather than a live gate.
+    // Verified by running all three through `atmosphereOpticsOf` in this session. What this test
+    // DOES fence is the optional chaining on the pressure read — `condition?.atmosphere?.pressure`
+    // — which is live: removing either `?` makes the last two assertions throw.
+    const airless = terminatorOpticsOf({ atmosphere: null, composition: {}, T_eq: 200, radiusEarth: 1 });
+    expect(airless.termStrength).toBe(0);
+    expect(airless.termWidth).toBe(0.06);
+    expect(Number.isFinite(airless.termWidth)).toBe(true);
+    // …and a condition that is entirely absent must not throw or produce NaN either.
+    const empty = terminatorOpticsOf(undefined);
+    expect(Number.isFinite(empty.termStrength)).toBe(true);
+    expect(Number.isFinite(empty.termWidth)).toBe(true);
   });
 });

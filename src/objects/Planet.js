@@ -9,7 +9,7 @@ import {
   CRATER_RELIEF_UNIFORMS_GLSL,
 } from '../worldengine/shaders/craterRelief.glsl.js';
 import { conditionFromBody } from '../worldengine/port/conditionFromBody.js';
-import { atmosphereOpticsOf } from '../worldengine/base/atmosphereOptics.js'; import { terminatorOpticsOf } from '../worldengine/base/terminatorOptics.js';  // ⛔ B3-1 RIDES THIS LINE: a new import line would shift every one of the 194 line-anchored citations that point below it.
+import { atmosphereOpticsOf } from '../worldengine/base/atmosphereOptics.js'; import { terminatorOpticsOf } from '../worldengine/base/terminatorOptics.js';  // ⛔ B3-1 RIDES THIS LINE: a new import line would shift every line-anchored citation that points below it, in this lane and in the concurrent one.
 import { biosphereOf, BIO_PIGMENT } from '../worldengine/base/surfaceMaterial.js';
 import { craterUniformsFrom, CRATERS_OFF } from '../worldengine/port/craterUniforms.js'; import { craterRelevanceOf } from '../worldengine/base/bombardment.js'; // ⛔ RIDES THIS LINE: a new import line shifts every cited line below (see :2085-2090)
 import { updateLabPlanetMaterial, buildLabPlanetMaterial, ensureLabAttributes } from '../rendering/LabPlanetMaterial.js'; import { POSTERIZE_QUANTUM } from '../rendering/posterizeLevels.js'; // ⛔ B2P RIDES THIS LINE: a new import line shifts every cited line below it.
@@ -1405,15 +1405,15 @@ const LIMB_MIX = 1.0;
 // that is exactly why ledger row P-11 could not close: nothing under src/worldengine/ could import
 // them, so no driver pack could forward the band to a swapped body and the three `uTerm*` names
 // were written by this material and by nothing else. Both now live in
-// src/worldengine/base/terminatorOptics.js and are imported BACK on the import line at the top of
-// this file, so the game and the world engine call ONE function object — the shape
-// atmosphereOptics.js already had.
+// src/worldengine/base/terminatorOptics.js, imported BACK on the import line at the top of this
+// file, so game and world engine call ONE function object — atmosphereOptics.js's shape.
 //
-// ⛔ THIS BLOCK IS A POINTER STONE AND ITS LINE COUNT IS LOAD-BEARING. It occupies exactly the 18
-// lines the two definitions occupied, because line-anchored citations across this repo point BELOW
-// here in Planet.js (measured: 194 refs of the form `Planet.js:NNNN` with NNNN >= 1400) and the B4
-// lane is editing the same `uniforms:` literal further down. Deleting the block outright would have
-// moved every one of them and rotted both lanes' citations in a single commit. Do not compress it.
+// ⛔ THIS BLOCK IS A POINTER STONE AND ITS LINE COUNT IS LOAD-BEARING. It occupies the same number
+// of lines the two definitions occupied, because line-anchored citations across this repo point
+// BELOW here in Planet.js, and a second lane is editing the same `uniforms:` literal further down.
+// Deleting the block outright would have moved every one of those refs and rotted both lanes'
+// citations in a single commit. Do not compress it. (An earlier draft put a COUNT on those refs;
+// re-measuring gave a different answer, so it is WITHDRAWN, not re-guessed. `wc -l` is the check.)
 //
 // ⭐ The values did not move. `terminatorOpticsOf(condition)` returns the same
 // `(columnFraction ?? 0) * TERM_STRENGTH` and the same log-pressure ramp, character for

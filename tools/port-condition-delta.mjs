@@ -108,6 +108,7 @@ const { conditionFromBody, surfaceTemperatureOf }
 const { compositionClass }     = await loadOrExplain('src/worldengine/base/e1Regime.js');
 const AOPT                     = await loadOrExplain('src/worldengine/base/atmosphereOptics.js');
 const { atmosphereOpticsOf }   = AOPT;
+const { terminatorOpticsOf }   = await loadOrExplain('src/worldengine/base/terminatorOptics.js');
 const { deriveConditionVector }= await loadOrExplain('src/worldengine/base/conditionVector.js');
 const { bodyRawTidal }         = await loadOrExplain('src/worldengine/base/baseStep.js');
 const { craterUniformsFrom }   = await loadOrExplain('src/worldengine/port/craterUniforms.js');
@@ -628,33 +629,34 @@ function runSelftest() {
 //   NEW  T_eq = rec.T_eq                                              — on 'gas' bodies only. Every
 //        other body keeps OLD exactly, which is what makes the non-gas rows below a control.
 //
-// ⚠ WHAT IS AND IS NOT TRANSCRIBED. `limbColor`, `termColor` and `limbExponent` come out of
-// `atmosphereOpticsOf` — the shipped module, called, not copied. `uTermStrength` and `uTermWidth`
-// are the only two of the five whose final expression lives in src/objects/Planet.js and is not
-// exported, so those two ARE transcribed (TERM_STRENGTH / termWidthFor below) — and the
-// transcription is not trusted: MATERIAL CROSS-CHECK builds the real `new Planet(rec)` and requires
-// all five recomputed uniforms to equal the live material's, exactly, on every body.
-
-// ⛔ TRANSCRIBED FROM src/objects/Planet.js, WHICH DOES NOT EXPORT THEM. Verify against
-// src/objects/Planet.js:1420 `const TERM_STRENGTH = 0.15;` and src/objects/Planet.js:1409
-// `function termWidthFor(pressureBar) {` through :1411
-// `  return Math.min(0.30, Math.max(0.06, 0.12 + 0.09 * Math.log10(p)));`. A drift here is caught by
-// MATERIAL CROSS-CHECK, not by a reader's diligence.
-const TERM_STRENGTH = 0.15;
-function termWidthFor(pressureBar) {
-  const p = Math.max(pressureBar ?? 0, 1e-3);
-  return Math.min(0.30, Math.max(0.06, 0.12 + 0.09 * Math.log10(p)));
-}
+// ⭐ NOTHING IS TRANSCRIBED ANY MORE, AND THAT IS THE B3-1 CHANGE. All five values come out of
+// shipped modules, called rather than copied: `limbColor`, `termColor` and `limbExponent` from
+// `atmosphereOpticsOf`, and `uTermStrength` / `uTermWidth` from `terminatorOpticsOf`.
+//
+// Until 2026-08-21 those last two were the only ones whose final expression lived inside
+// src/objects/Planet.js unexported, so this file carried its own copy of `TERM_STRENGTH` and
+// `termWidthFor` — a THIRD expression of one law, kept honest only by MATERIAL CROSS-CHECK. The
+// extraction to src/worldengine/base/terminatorOptics.js removed the reason for the copy, so the
+// copy is gone.
+//
+// ⚠ WHAT THAT COSTS, STATED RATHER THAN GLOSSED. MATERIAL CROSS-CHECK used to be able to catch
+// a drifted transcription; with one expression there is no transcription left to drift, so for
+// those two uniforms the cross-check no longer proves a VALUE claim. What it still proves is the
+// WIRING claim, and that is the one that can now fail: if src/objects/Planet.js ever stops calling
+// `terminatorOpticsOf` and re-authors the band inline, the live material stops matching this
+// table's recomputation and `matchesNeither` goes non-zero. That is the failure mode the
+// extraction actually has.
 
 /** The five shipped uniform VALUES src/objects/Planet.js writes from a condition, as plain data. */
 function limbUniformsOf(cond) {
   const o = atmosphereOpticsOf(cond);
+  const t = terminatorOpticsOf(cond);
   return {
     uLimbExponent: o.limbExponent,                            // Planet.js:1643 `uLimbExponent: { value: optics.limbExponent },`
     uLimbColor:    o.limbColor.slice(),                       // Planet.js:1644 `uLimbColor: { value: new THREE.Vector3(...optics.limbColor) },`
     uTermColor:    o.termColor.slice(),                       // Planet.js:1655 `uTermColor: { value: new THREE.Vector3(...optics.termColor) },`
-    uTermStrength: (o.columnFraction ?? 0) * TERM_STRENGTH,   // Planet.js:1653 `uTermStrength: { value: (optics.columnFraction ?? 0) * TERM_STRENGTH },`
-    uTermWidth:    termWidthFor(cond.atmosphere?.pressure),   // Planet.js:1654 `uTermWidth: { value: termWidthFor(condition.atmosphere?.pressure) },`
+    uTermStrength: t.termStrength,                            // src/objects/Planet.js:1653 `uTermStrength: { value: term.termStrength },`
+    uTermWidth:    t.termWidth,                               // src/objects/Planet.js:1654 `uTermWidth: { value: term.termWidth },`
   };
 }
 
@@ -695,8 +697,9 @@ function sameUniforms(a, b) {
  * Builds the REAL `new Planet(rec)` and reads the five uniforms off
  * `planet.surface.material.uniforms`. Three things fall out of one measurement, and none of them is
  * assertable without it:
- *   1. THE TRANSCRIPTION IS RIGHT. TERM_STRENGTH / termWidthFor above are copies of un-exported
- *      Planet.js constants; if either drifts, `matchesNeither` becomes non-zero and this run fails.
+ *   1. THE MATERIAL STILL CALLS THE SHARED MODULE. Since B3-1 there is no transcription here to
+ *      check; what this arm now catches is src/objects/Planet.js re-authoring the band inline
+ *      instead of calling `terminatorOpticsOf`, which makes `matchesNeither` non-zero and fails.
  *   2. THE TWO LAWS ARE DISTINGUISHABLE ON REAL BODIES. `differ` counts the bodies where OLD and NEW
  *      produce different uniforms at all. A table built where `differ` is 0 is a table of zeros
  *      dressed as a measurement.
@@ -1127,12 +1130,15 @@ async function runStep4(args) {
   o.push('');
   o.push('## MATERIAL CROSS-CHECK — the control that makes the rest admissible');
   o.push('');
-  o.push('Three of the five uniforms come out of the shipped `atmosphereOpticsOf`, but `uTermStrength`');
-  o.push('and `uTermWidth` are finished by expressions that live in `src/objects/Planet.js` and are not');
-  o.push('exported, so this tool transcribes them. A transcription is exactly the kind of thing that is');
-  o.push('true when written and misleading later. So it is not trusted: every body is built as a real');
-  o.push('`new Planet(rec)` and the five recomputed values are compared against');
-  o.push('`planet.surface.material.uniforms`, exactly, with no tolerance.');
+  o.push('All five uniforms come out of shipped modules, called rather than copied — three from');
+  o.push('`atmosphereOpticsOf` and, since B3-1, `uTermStrength` and `uTermWidth` from');
+  o.push('`terminatorOpticsOf`. This tool used to transcribe those last two, because their final');
+  o.push('expression lived unexported inside `src/objects/Planet.js`; the extraction removed the');
+  o.push('reason for the copy. With one expression there is nothing left to drift, so for those two');
+  o.push('this check no longer proves a VALUE claim — it proves the WIRING claim, which is the one');
+  o.push('that can still fail. Every body is built as a real `new Planet(rec)` and the five');
+  o.push('recomputed values are compared against `planet.surface.material.uniforms`, exactly, with no');
+  o.push('tolerance, so a material that stopped calling the module reads as `matchesNeither`.');
   o.push('');
   o.push('| | count |');
   o.push('|---|---:|');
@@ -1253,7 +1259,7 @@ async function runStep4(args) {
   // ── EXIT RULES ─────────────────────────────────────────────────────────────────────────────
   let rc = 0;
   const fail = (msg) => { console.error(msg); rc = Math.max(rc, 2); };
-  if (xc.matchesNeither > 0) fail(`CONTROL FAILED: ${xc.matchesNeither} bodies matched NEITHER law — the Planet.js transcription in this tool has drifted. Every delta above is suspect.`);
+  if (xc.matchesNeither > 0) fail(`CONTROL FAILED: ${xc.matchesNeither} bodies matched NEITHER law — the live Planet material no longer agrees with the shared modules this tool recomputes from (atmosphereOpticsOf / terminatorOpticsOf). Every delta above is suspect.`);
   if (xc.discriminating === 0) fail('CONTROL FAILED: OLD and NEW produce identical uniforms on every body. The differential is not wired.');
   if (live.movedWide === 0) fail('CONTROL FAILED: the non-gas liveness probe moved nothing even under a full-range T sweep — the non-gas zero column is vacuous.');
   if (!repro) fail(`CONTROL FAILED: the table did not reproduce on a second build (${reproMismatch} mismatching bodies).`);

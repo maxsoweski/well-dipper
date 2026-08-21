@@ -475,9 +475,10 @@ outflow, **F16** dust mantles, **F20-strand**, **F21** karst. ⭐ **F4's chasma 
 - **P-11** limb + terminator optics for non-gas — `uLimbColor` `uLimbExponent` `uTermColor`
   `uTermStrength` `uTermWidth`. ⛔ *"must not be closed by scoping the ledger pass to the gas half"*;
   59 of 163 solid bodies diverge on `uLimbExponent` alone. ⭐ **Under D-5's recommendation the terminator
-  law is FORWARDED verbatim** — src/objects/Planet.js:1420 `const TERM_STRENGTH = 0.15;` and
-  src/objects/Planet.js:1653 `uTermStrength: { value: (optics.columnFraction ?? 0) * TERM_STRENGTH },`
-  — never re-authored inside a wiring commit.
+  law is FORWARDED verbatim** — and as of B3-1 it is forwarded from the shared module rather than from
+  the game material, so the citations move with it: src/worldengine/base/terminatorOptics.js:58
+  `export const TERM_STRENGTH = 0.15;`, and the game reads it at src/objects/Planet.js:1653
+  `uTermStrength: { value: term.termStrength },` — never re-authored inside a wiring commit.
 - **P-14**'s crater half (`uCraterAmp` `uCraterComplexD` `uCraterScale` `uEjectaAmp`), with
   `uDispDomainScale` split off.
 - **R-07** Venus zonal banding, **130 bodies** — per D-3, a condition-derived banding predicate **plus**
