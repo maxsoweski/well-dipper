@@ -28,7 +28,7 @@ import {
 import { craterSchedule, transitionDiameterKm } from '../src/worldengine/base/bombardment.js';
 import { radPerKm } from '../src/worldengine/base/baseStep.js';
 import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';
-import { generateSolarSystem } from '../src/generation/SolarSystemData.js';
+import { generateSolarSystem } from '../src/generation/SolarSystemData.js';  import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js'; import { compositionClass } from '../src/worldengine/base/e1Regime.js';  // ⛔ RIDE THIS LINE: tests/driver-pack-rockysurface.test.js:1092 cites crater-uniform-law.test.js:74 by symbol, so a new import LINE reds the citation fence. Same idiom as src/objects/Moon.js:3.
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
@@ -84,20 +84,111 @@ describe('crater law — uCraterAmp * uCraterScale is EXACTLY 1 (why craters nee
 describe('crater law — the population, with no type label anywhere', () => {
   // The numbers are the measured ones from tools/port-crater-measure.mjs. Ranges, not point pins:
   // this is a tripwire on the law moving, not a golden.
-  const EXPECT = {
-    'sol-mercury': [0.39, 0.47],
-    'sol-moon': [0.31, 0.38],
-    'sol-callisto': [0.39, 0.47],
-    'sol-europa': [0.28, 0.35],
-    'sol-triton': [0.26, 0.32],
-  };
-  for (const [id, [lo, hi]] of Object.entries(EXPECT)) {
-    it(`${id} keeps a crater record (density in [${lo}, ${hi}])`, () => {
-      const u = craterUniformsFrom(conditionFromBody(solBody(id)));
-      expect(u.density).toBeGreaterThanOrEqual(lo);
-      expect(u.density).toBeLessThanOrEqual(hi);
-    });
+  // ⛔⛔ THE FIVE SOL DENSITY PINS MOVED HERE 2026-08-20 (B2 leg 1) AND WERE **NOT** RE-RECORDED.
+  // They were sol-mercury [0.39, 0.47] · sol-moon [0.31, 0.38] · sol-callisto [0.39, 0.47] ·
+  // sol-europa [0.28, 0.35] · sol-triton [0.26, 0.32], measured by tools/port-crater-measure.mjs.
+  // Re-deriving CRATER_VIS_FLOOR_RAD (0.02 → 9.6e-4) put all five out of range — measured on the
+  // edited source: sol-callisto 0.7569, sol-europa 0.5636, sol-triton 0.5108 — and RE-BLESSING THEM
+  // ON SOL IS FORBIDDEN. `SolarSystemData.js` carries zero `massEarth`, so every Sol moon's
+  // `surfaceGravity` is fabricated as exactly 1/R² (docs/FEATURES/one-pipeline-two-frontends-PLAN.md:409),
+  // and `craterSchedule` reads gravity through `sizeMul = (G_REF/g)^K_GS` — so a range refitted on
+  // these bodies launders the exact defect that note exists to prevent. The PURPOSE is kept (catch
+  // the LAW moving; never a golden) and the SUBJECTS are replaced with procedural bodies drawn from
+  // `lab-procedural-0…24`, the same corpus family the ledger and the packs measure on.
+  //
+  // ⭐ AND THE REPLACEMENT IS STRONGER THAN THE FIVE NUMBERS IT RETIRES, because the law has a closed
+  // form the point-pins could not see. In `coverageBand`, count ∝ (1/lo² − 1/H²) and E[D²] =
+  // 2lo²ln(H/lo)/(1 − lo²/H²); the lo² and the (1 − lo²/H²) cancel exactly, leaving coverage ∝
+  // ln(H/lo). So moving the floor multiplies EVERY floor-bound, unclamped body's density by exactly
+  // ln(H/lo_new)/ln(H/lo_old) and changes nothing else. That is an identity, so it is tested as one.
+  // VERIFIED before it was written: max |measured ratio − predicted| = 1.33e-15 over every floor-bound
+  // body of `lab-procedural-0…24` × four floors {9.6e-4, 0.005, 0.02, 0.05}.
+  const CORPUS_SEEDS = 25;
+  const FIRED = [];
+  for (let i = 0; i < CORPUS_SEEDS; i++) {
+    const sys = StarSystemGenerator.generate(`lab-procedural-${i}`, null);
+    for (const e of (sys.planets || [])) {
+      const add = (d, kind) => {
+        const cond = conditionFromBody(d);
+        if (compositionClass(cond) === 'gas') return;
+        const u = craterUniformsFrom(cond);
+        if (!(u.density > 0)) return;
+        const sch = craterSchedule(cond);
+        const R_km = cond.radiusEarth * 6371;
+        const L = sch.D_LO_KM * sch.sizeMul;
+        FIRED.push({ kind, type: d.type, cond, u, sch, R_km, L, floorBinds: CRATER_VIS_FLOOR_RAD * R_km > L });
+      };
+      add(e.planetData, 'planet');
+      for (const m of (e.moons || [])) add(m, m.isPlanetMoon === true ? 'planet-class' : 'plain-moon');
+    }
   }
+  /** The same closed form craterUniformsFrom runs, with the floor as a parameter. */
+  const densityAtFloor = (b, floor) => Math.max(0, Math.min(1,
+    coverageBand(b.sch, radPerKm(b.cond.radiusEarth), Math.max(b.L, floor * b.R_km), b.sch.D_HI_KM) / RENDERED_CELL_COVERAGE));
+
+  it('POPULATION GUARD — the corpus slice produced enough of both outcomes to mean anything', () => {
+    expect(FIRED.length, 'measured 98 on lab-procedural-0…24').toBeGreaterThanOrEqual(60);
+    expect(FIRED.filter((b) => b.kind === 'planet').length, 'measured 27').toBeGreaterThan(0);
+    expect(FIRED.filter((b) => b.kind === 'plain-moon').length, 'measured 71').toBeGreaterThan(0);
+    expect(FIRED.filter((b) => b.floorBinds).length, 'measured 54').toBeGreaterThanOrEqual(30);
+  });
+
+  it('⭐ THE LAW TRIPWIRE — the floor scales a floor-bound density by ln(H/lo) and by nothing else', () => {
+    const subjects = FIRED.filter((b) => b.floorBinds && b.u.density < 1);
+    expect(subjects.length, 'no unclamped floor-bound body ⇒ this proves nothing').toBeGreaterThanOrEqual(20);
+    // H == C_BASIN·R_km with C_BASIN 1.0 and lo == floor·R_km, so H/lo is 1/floor on every subject.
+    const predicted = Math.log(1 / CRATER_VIS_FLOOR_RAD) / Math.log(1 / 0.02);
+    expect(predicted).toBeCloseTo(1.7762107390117239, 12);
+    for (const b of subjects) {
+      expect(b.u.density / densityAtFloor(b, 0.02), `${b.kind}/${b.type} R=${b.cond.radiusEarth}`)
+        .toBeCloseTo(predicted, 12);
+    }
+    // …and the arm CAN fail: a floor silently reverted to 0.02 makes the ratio 1 and reds every subject.
+    expect(Math.abs(predicted - 1)).toBeGreaterThan(0.5);
+  });
+
+  it('…and the population PARTITIONS into three classes, of which one is bit-untouched by the move', () => {
+    // ⚠ WRITTEN WRONG FIRST AND KEPT AS THE CORRECTION: `!floorBinds` is evaluated at the NEW floor,
+    // and a body can be L-bound at 9.6e-4 while the OLD 0.02 still bound it — those bodies move, by a
+    // body-dependent ln(H/L)/ln(H/0.02·R_km) rather than by the population-wide constant. The class
+    // that cannot move is the one whose schedule low edge already exceeds the OLD floor's lo.
+    const untouched = FIRED.filter((b) => b.L >= 0.02 * b.R_km);
+    const bothFloors = FIRED.filter((b) => b.floorBinds);
+    const crossed = FIRED.filter((b) => !b.floorBinds && b.L < 0.02 * b.R_km);
+    expect(untouched.length + bothFloors.length + crossed.length).toBe(FIRED.length);
+    // MEASURED 2026-08-20 on lab-procedural-0…24: untouched 2, floor-bound at both floors 54,
+    // crossed 42. ⚠ `untouched` is a THIN class here, so its arm is a PRESENCE check and is not a
+    // population claim; the partition-sums-to-FIRED arm above is what carries the weight.
+    expect(untouched.length, 'measured 2').toBeGreaterThanOrEqual(1);
+    expect(crossed.length, 'measured 42').toBeGreaterThanOrEqual(20);
+    for (const b of untouched) expect(densityAtFloor(b, 0.02), `${b.kind}/${b.type}`).toBe(b.u.density);
+    // …and every crossed body moved, so the class is not a relabelled copy of the untouched one —
+    // EXCEPT where clamp01 already saturated it at 1 on both sides, which is a real third outcome and
+    // is excluded by name rather than by loosening the arm. MEASURED: crossed-and-unclamped 26 of 42.
+    const crossedLive = crossed.filter((b) => b.u.density < 1);
+    expect(crossedLive.length, 'measured 26').toBeGreaterThanOrEqual(10);
+    for (const b of crossedLive) expect(densityAtFloor(b, 0.02), `${b.kind}/${b.type}`).not.toBe(b.u.density);
+  });
+
+  it('the five procedural subjects that replace Sol\'s five — over a radius span Sol could not offer', () => {
+    // Sol's five all sat in 0.21–0.38 R⊕; these span 0.22–0.92. Selected by DECLARED PREDICATE
+    // (nearest radius among floor-bound unclamped subjects) so a moving moon population RE-SELECTS
+    // instead of reddening — the same reason FAMILY 27 in the rocky pack suite pins no moon count.
+    const cand = FIRED.filter((b) => b.floorBinds && b.u.density < 1);
+    const nearest = (t) => cand.reduce((a, b) =>
+      Math.abs(b.cond.radiusEarth - t) < Math.abs(a.cond.radiusEarth - t) ? b : a);
+    // MEASURED 2026-08-20 at 9.6e-4: 0.9408 · 0.0011294 · 0.0010203 · 0.15637 · 0.00070110.
+    const BANDS = [[0.20, 0.70, 1.00], [0.30, 8e-4, 1.6e-3], [0.45, 7e-4, 1.5e-3], [0.65, 0.11, 0.22], [0.90, 5e-4, 1.0e-3]];
+    for (const [t, lo, hi] of BANDS) {
+      const b = nearest(t);
+      const id = `R≈${t}: ${b.kind}/${b.type} R=${b.cond.radiusEarth.toFixed(4)}`;
+      expect(b.u.density, id).toBeGreaterThanOrEqual(lo);
+      expect(b.u.density, id).toBeLessThanOrEqual(hi);
+      // ⭐ THE ARM THAT STOPS THIS BEING A GOLDEN: the PRE-B2 floor's answer must fall OUTSIDE the band.
+      const before = densityAtFloor(b, 0.02);
+      expect(before < lo || before > hi, `${id} — band must exclude the 0.02 answer ${before}`).toBe(true);
+    }
+  });
 
   it('a temperate 1-bar Earthlike renders NO craters — erosion, not a label, suppresses them', () => {
     const earthlike = {

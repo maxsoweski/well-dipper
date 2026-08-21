@@ -480,7 +480,7 @@ describe('2. the collapse in per-body variation', () => {
     expect(LAB_SHADER_CORPUS).toContain('uTime');
   });
 
-  it('⭐⭐ the CARRIED bucket is a NAME bucket — 20 of 28 diverge in value', () => {
+  it('⭐⭐ the CARRIED bucket is a NAME bucket — 24 of 28 diverge in value', () => {
     // THE CONTROL IS THE TWO ANSWERS ON ONE INPUT. `swapLedgerOf` reports these names as CARRIED;
     // a value comparison over the identical pair of materials reports them as diverged. A ledger
     // that ruled the name would record 28 surviving features where at most 8 survive.
@@ -493,7 +493,7 @@ describe('2. the collapse in per-body variation', () => {
     // the 103 gas ones. This is a REAL per-body loss on the newly-admitted half, not an instrument
     // artefact, and P-11 claims it again in the ledger for exactly that reason. ⛔ Do not "fix" it by
     // scoping this pass to the gas half — that would suppress the loss rather than record it.
-    expect(LEDGER.divergedCarried.size).toBe(20);
+    expect(LEDGER.divergedCarried.size).toBe(24);   // ⭐⭐ 20 -> 24 AT B2 LEG 1, 2026-08-20, AND THE FOUR NEWCOMERS ARE THE ONES P-14 PREDICTED: `uCraterDensity` (64 of 266 bodies), `uEjectaStrength` (64), `uCraterRelaxation` (56), `uEjectaRampart` (42). They used to sit in the "agree by absence" list below — both sides zero — and P-14 wrote down in advance what would happen: "a loud default behind a shut gate … it becomes a pixel the moment anything opens that gate." Leg 1 opened it: re-deriving CRATER_VIS_FLOOR_RAD 0.02 -> 9.6e-4 and replacing the fixed density floor with the per-body CRATER_MIN_VISIBLE gave 289 of 526 bodies a live crater record where 8 had one. ⚠ AND THE DIRECTION IS THE BAD ONE, MEASURED NOT ASSUMED: on every diverging body the GAME writes the live value and the LAB writes 0 (`rocky: uCraterDensity 0.0008051676964833844 -> 0`; `sub-neptune: uEjectaStrength 1 -> 0`). The cause is a GATE difference the leg neither created nor closes — rockySurface multiplies the crater terms by `craterRelevanceOf(condition)` and its pack predicate excludes gas-class bodies, while the legacy material's crater path is keyed on the TYPE LABEL — so the four names JOIN the blocking P-14 row rather than being re-blessed into agreement.
     const everyBody = [...LEDGER.divergedCarried.entries()]
       .filter(([k, v]) => v === LEDGER.carriedTotal.get(k)).map(([k]) => k);
     // ⭐ 17 -> 10 AT STEP 10a. rockySurface writes the palette, the crater terms and the offsets, so
@@ -507,11 +507,11 @@ describe('2. the collapse in per-body variation', () => {
       // …and these six have no writer on either half.
       'uDispDomainScale', 'uLimbColor', 'uNoiseScale', 'uTermColor', 'uTermStrength', 'uTermWidth',
     ].sort());
-    // The eight that agree, agree by ABSENCE — both sides are zero or the same constant.
+    // The four that agree, agree by a shared CONSTANT (it was eight, and four agreed by ABSENCE until B2 leg 1 — see above).
     const agreeing = [...LEDGER.carried].filter((n) => !LEDGER.divergedCarried.has(n)).sort();
+    // ⭐ EIGHT -> FOUR AT B2 LEG 1. The four that left are named on the assertion above; the four that remain are the ones genuinely CONSTANT on both sides (`uEjectaLump` 0.6, `uTerraceCount` 4.0, `uVoroCells` 27, `uFwClamp`) rather than merely both-zero — which is why opening the crater gate could not move them, and is the control that says the four that DID move, moved for a reason.
     expect(agreeing).toEqual([
-      'uCraterDensity', 'uCraterRelaxation', 'uEjectaLump', 'uEjectaRampart', 'uEjectaStrength',
-      'uFwClamp',
+      'uEjectaLump', 'uFwClamp',
       'uTerraceCount', 'uVoroCells',
     ]);
     for (const n of agreeing) {
@@ -527,11 +527,11 @@ describe('2. the collapse in per-body variation', () => {
 describe('3. channel 1 — the uniform diff, run not read', () => {
   const measured = () => new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.divergedCarried.keys()]);
 
-  it('the subject set is 44 lost names plus the 20 value-defaulted carried ones', () => {
+  it('the subject set is 44 lost names plus the 24 value-defaulted carried ones', () => {
     expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero]).size).toBe(44);   // 43 -> 44 AT B2P: the game spelling uPosterizeLevels leaves the material at the swap; P-18 rules it carried — NOT by object identity (the lab's scalar uLevels holds POSTERIZE_LEVELS, the game's vec2 holds POSTERIZE_QUANTUM) but by single-writer construction.
     // 62 -> 63 AT STEP 10a: `uLimbExponent` re-enters the diverged bucket on the 163 newly-admitted
     // solid bodies, which limbDeck's gas-only predicate never claims. See §2's note; P-11 claims it.
-    expect(measured().size).toBe(64);   // 63 -> 64 AT B2P, same one name.
+    expect(measured().size).toBe(68);   // 63 -> 64 AT B2P, same one name; 64 -> 68 AT B2 LEG 1 — the four crater names §2 names, which join P-14's subject cell rather than acquiring a row.
     // 44 lost + 28 carried = the 72 the game material declares. Nothing fell between the buckets.
     expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.carried]).size).toBe(72);
   });

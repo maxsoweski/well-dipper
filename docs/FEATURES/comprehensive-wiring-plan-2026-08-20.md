@@ -397,10 +397,10 @@ as 254 → 371 distinct signatures over 1156 bodies, largest bucket 9.8% → 5.3
 
 **Contents** — cite, do not re-derive: `docs/FEATURES/r-rows-decision-packet-2026-08-20.md:564`
 `### Option C — Differentiation push: two crater floors, a hue-moving palette input, unpin \`uNoiseScale\``.
-1. **Two crater floors** — src/worldengine/port/craterUniforms.js:71 `export const CRATER_VIS_FLOOR_RAD = 0.02;`,
-   calibrated on Sol's 39 bodies whose gravity was fabricated as 1/R², and
-   src/worldengine/port/craterUniforms.js:79 `export const CRATER_MIN_DENSITY = 1e-3;`, which refuses
-   151 of 632 plain moons.
+1. **Two crater floors** — ✅ **LEG 1 BUILT 2026-08-20.** The line now reads src/worldengine/port/craterUniforms.js:71 `export const CRATER_VIS_FLOOR_RAD = 9.6e-4;`, re-derived from the RENDER-pixel disc at the closest measured approach framing (Max's ruling 2026-08-20: re-derive it from the renderer, touch Sol not at all, and leave the Sol-mass follow-on open) —
+   ⛔ the pre-leg text is kept only as the thing corrected and must not be re-quoted as current: it read `CRATER_VIS_FLOOR_RAD = 0.02`, "calibrated on Sol's 39 bodies whose gravity was fabricated as 1/R²". And
+   src/worldengine/port/craterUniforms.js:79 `export const CRATER_MIN_VISIBLE = 1.0;`, which retires the fixed `CRATER_MIN_DENSITY = 1e-3` — "which refuses
+   151 of 632 plain moons" — into the per-body `density * visibleCells >= CRATER_MIN_VISIBLE`. MEASURED after, on `lab-procedural-0…199`'s 1160 non-gas bodies: cratered 485 → 761, non-gas planets with craters 12 → 214 of 509, distinct `uCraterScale` 21 → 322, bodies rendering under one crater 119 → 0, plain moons with craters 473 → 547 of 632. Derivation + delta table: `docs/FEATURES/crater-floors-calibration-2026-08-20.md`.
 2. **A hue-moving palette input** — `uCratonColor === uWeatheredColor` on 73.6% of 1156 non-gas and on
    100% of plain moons (`lab-procedural-0…199`). r-rows §4 calls the palette *"the biggest single reason
    the discs look alike"*.

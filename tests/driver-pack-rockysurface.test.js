@@ -688,8 +688,9 @@ describe('C — every driver is a forward of a shared producer', () => {
     const FORBIDDEN = {
       '0.1706': 'RENDERED_CELL_COVERAGE — the density normaliser (craterUniforms.js:56)',
       '0.05': 'EJECTA_RIM_FRACTION (craterUniforms.js:63)',
-      '0.02': 'CRATER_VIS_FLOOR_RAD — the resolvable-band floor (craterUniforms.js:71)',
-      '1e-3': 'CRATER_MIN_DENSITY (craterUniforms.js:79)',
+      '9.6e-4': 'CRATER_VIS_FLOOR_RAD — the resolvable-band floor (craterUniforms.js:71)',
+      '0.02': 'the PRE-B2 CRATER_VIS_FLOOR_RAD, retired 2026-08-20 — kept forbidden because a pack that re-typed the OLD floor is exactly the regression this fence is for',
+      '1e-3': 'the retired CRATER_MIN_DENSITY (craterUniforms.js:79 now carries CRATER_MIN_VISIBLE), kept for the same reason. ⚠ AND THE HOLE IS NAMED RATHER THAN PAPERED OVER: the successor value 1.0 CANNOT be listed here, because `1.0` is already a DECLARED pack literal (C_CRATER, asserted below), so this fence does not cover CRATER_MIN_VISIBLE at all — the per-body form at craterUniforms.js:145 is what makes a re-typing visible instead',
       '4.0': 'TERRACE_COUNT — constant across the population, so FAMILY 7 cannot see it',
       '0.6': 'EJECTA_LUMP — likewise constant, likewise invisible to FAMILY 7',
       '0.2': 'D_D_SIMPLE / CRATER_DEPTH — the depth/diameter law (bombardment.js:99)',
@@ -1044,7 +1045,7 @@ describe('E — the pack obeys the Step-5a contract and stays inside its scope',
     expect(r.meta.reliefEnvelope).toBeGreaterThan(0);
     expect(Object.keys(r.meta.palette).sort()).toEqual(['craton', 'fresh', 'pigment', 'sediment', 'weathered']);
     // `cratersFired` reads Dchar, NOT density, and the two are different questions: a density of 0
-    // also covers a body with a real band whose coverage rounded away under CRATER_MIN_DENSITY, and
+    // also covers a body with a real band whose coverage rounded away under CRATER_MIN_VISIBLE (that
     // a crater-IRRELEVANT body whose relevance zeroed a real density. Three worlds, one number.
     const off = packFor(UNFIRED_MOONS[0]);
     expect(off.meta.cratersFired).toBe(false);
@@ -1418,38 +1419,55 @@ describe('F — the entry is registry-ready and collision-free', () => {
     }
   });
 
-  it('FAMILY 27 · POPULATION STATISTICS vs a declared prior — craters are a MOON phenomenon here', () => {
-    // ⭐ THE PRIOR, DECLARED BEFORE THE NUMBERS. `craterUniforms.js:79 CRATER_MIN_DENSITY` is a COST
-    // floor: a body showing less than one crater on the whole visible disc gets none. Big
-    // atmosphere-bearing planets are exactly the bodies that fail it; small airless moons are
-    // exactly the bodies that pass. So the prior is "a small minority of solid PLANETS and a large
-    // majority of solid MOONS", and the measurement is what the suite gates on.
-    // MEASURED 2026-08-19: planets 3 of 66 (4.5%); moons 50 of 58 (86.2%), 15 distinct densities.
-    // ⚠ FLOORS, NOT EQUALITIES. A moon-formation program has the moon window open (Instruments A,
-    // B and C are red by design over it), so the moon census is live and moving. Pinning 50 here
-    // would red this file for a reason that has nothing to do with the pack.
+  it('FAMILY 27 · POPULATION STATISTICS vs a RE-DECLARED prior — craters are moon-LED, no longer moon-ONLY', () => {
+    // ⭐⭐ THE PRIOR WAS RE-DECLARED 2026-08-20 (B2 leg 1), AND THE MOVE IS THE LEG'S POINT, NOT A NUDGE.
+    // THE OLD PRIOR, kept verbatim as the thing corrected: "`craterUniforms.js:79 CRATER_MIN_DENSITY` is
+    // a COST floor: a body showing less than one crater on the whole visible disc gets none. Big
+    // atmosphere-bearing planets are exactly the bodies that fail it; small airless moons are exactly
+    // the bodies that pass. So the prior is 'a small minority of solid PLANETS and a large majority of
+    // solid MOONS'." It measured planets 3 of 66 (4.5%), moons 50 of 58 (86.2%), 15 distinct densities.
+    // ⛔ THAT PRIOR'S SECOND HALF WAS AN ARTEFACT OF THE GATE, NOT A FACT ABOUT PLANETS. The 4.5% came
+    // from a FIXED DENSITY floor standing in for "one crater on the visible disc" — a substitution that
+    // is only valid at one uCraterScale, and B2 leg 1 moved the scale. With the honest per-body form
+    // (`density * visibleCells >= CRATER_MIN_VISIBLE`, craterUniforms.js:145) and the re-derived
+    // visibility floor, a big planet's craters are small and numerous rather than absent.
+    // ⭐ THE NEW PRIOR, declared before the numbers: small airless bodies still pass far more often than
+    // big atmosphere-bearing ones — that is physics (t_exp erosion + atmospheric screening) and it must
+    // survive — so `moonFrac > planetFrac` stands. What must NOT stand is the planet share being a
+    // rounding error. MEASURED 2026-08-20 on this file's own 24 seeds: planets 28 of 66 (42.4%), moons
+    // 52 of 58 (89.7%), 17 distinct moon densities, 41 distinct uCraterScale across the fired set.
+    // ⚠ FLOORS, NOT EQUALITIES, for the same reason as before: the moon-formation window is open, so
+    // the moon census is live and moving, and pinning 52 would red this file for a reason that has
+    // nothing to do with the pack.
     const planetFrac = FIRED_PLANETS.length / SOLID.length;
     const moonFrac = FIRED_MOONS.length / SOLID_MOONS.length;
-    expect(planetFrac).toBeLessThan(0.25);
+    expect(planetFrac, 'measured 0.424 — a collapse back toward 0.045 means the gate re-fixed itself')
+      .toBeGreaterThan(0.20);
     expect(moonFrac).toBeGreaterThan(0.5);
     expect(moonFrac).toBeGreaterThan(planetFrac);
     expect(FIRED_MOONS.length).toBeGreaterThan(20);
     const densities = new Set(FIRED_MOONS.map((b) => valueOf(b, 'uCraterDensity').toFixed(9)));
     expect(densities.size, 'a dead wire would give one repeated value').toBeGreaterThan(8);
     for (const b of FIRED_MOONS) expect(valueOf(b, 'uCraterDensity'), b.id).toBeGreaterThan(0);
+    // ⭐ AND THE SIZE UN-PINS, which the old prior could not have seen because it did not look:
+    // uCraterScale was one value on every body whose visibility floor bound, and 21 across all 485
+    // cratered bodies of `lab-procedural-0…199`. It is 41 across this file's fired set now.
+    const scales = new Set([...FIRED_PLANETS, ...FIRED_MOONS].map((b) => valueOf(b, 'uCraterScale').toFixed(9)));
+    expect(scales.size, 'measured 41 — one value would mean the floor still binds on everything').toBeGreaterThan(5);
 
     // ⛔ AND THE STEP-10 GATE IS **NOT** CLAIMED HERE — nor, any longer, is it the ≥95% bar.
     // docs/FEATURES/one-pipeline-two-frontends-PLAN.md:460 used to want ">=95% of plain moons resolve
     // a non-zero uCraterDensity with >=20 distinct values"; that clause was WITHDRAWN 2026-08-19 as
-    // unreachable and is now a distinctness gate. Measured over `lab-procedural-0…199`: 473 of 632
-    // plain moons = 74.8% non-zero with 236 distinct, and the entry predicate already admits 632 of
-    // 632 — so the 20-point shortfall is `craterUniforms.js:79 CRATER_MIN_DENSITY` refusing 151
-    // bodies, a CRATER-LAW question no predicate change touches. This corpus measures 86.2% and 15
-    // distinct on the pack's own 24 seeds; the difference between the two figures is the moon
-    // POPULATION and the BodyRenderer branch, neither of which is in this commit. Saying so is part
-    // of the measurement. (That plan line's "today: 0 of ~571" was also a population figure the
-    // blueprint could not reproduce — 632 over the ledger's corpus, 770 over FENCE-221 — which is
-    // the second reason this file pins no moon count.)
+    // unreachable and is now a distinctness gate. ⭐ RE-MEASURED 2026-08-20 over `lab-procedural-0…199`
+    // after B2 leg 1: **547 of 632 plain moons = 86.6%** non-zero, up from 473 = 74.8%. The 20-point
+    // shortfall the old text blamed on `CRATER_MIN_DENSITY` is now 8.4 points, and the remaining 85
+    // refusals split **8 by the schedule not firing** (T_eq ≥ 450 K or P ≥ 200 bar — no floor reaches
+    // those) and **77 by `CRATER_MIN_VISIBLE`**, which is still a CRATER-LAW question and still not a
+    // predicate one. This corpus measures 89.7% on the pack's own 24 seeds; the difference between the
+    // two figures is the moon POPULATION and the BodyRenderer branch, neither of which is in this
+    // commit. Saying so is part of the measurement. (That plan line's "today: 0 of ~571" was also a
+    // population figure the blueprint could not reproduce — 632 over the ledger's corpus, 770 over
+    // FENCE-221 — which is the second reason this file pins no moon count.)
     expect(moonFrac).toBeLessThan(1.0);
   });
 

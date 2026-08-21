@@ -17,7 +17,7 @@
 //
 // ⛔ TWO THINGS THIS FILE REFUSES TO ASSERT, EACH FOR A MEASURED REASON:
 //   · NOT ">= 95% of plain moons resolve a non-zero uCraterDensity". MEASURED over the corpus
-//     below: 473/632 = 74.8%. The 151-body shortfall is `CRATER_MIN_DENSITY` in craterUniforms.js
+//     below: 473/632 = 74.8%. The 151-body shortfall is `CRATER_MIN_DENSITY` in craterUniforms.js  ⭐ RE-MEASURED 2026-08-20 AFTER B2 LEG 1: 547/632 = 86.6%; that constant was retired into `CRATER_MIN_VISIBLE`, which refuses 77 of the remaining 85 (the other 8 are schedule-refused). The refusal to assert the bar is unchanged and so is its reason.
 //     declining to seed craters on small/young bodies — a CRATER-LAW question that no edit in this
 //     step could move. Writing it would red this file for a reason Step 10 does not own. The
 //     DISTINCTNESS half is kept instead, and it is the half that discriminates: a dead wire pinning
@@ -370,7 +370,7 @@ describe('3. the driven value is a distribution', () => {
     // renders 632 identical balls. MEASURED at this commit over the corpus: 237 distinct values,
     // 473 of 632 non-zero (74.8%). The bar is 20 — an order of magnitude below the measurement, so
     // ordinary crater-law tuning cannot red it, while a collapsed wire fails it by two orders.
-    // The 74.8% is NOT asserted: the 159-body shortfall is `CRATER_MIN_DENSITY` declining to seed
+    // The 74.8% is NOT asserted: the 159-body shortfall is `CRATER_MIN_DENSITY` declining to seed  ⭐ RE-MEASURED 2026-08-20 AFTER B2 LEG 1 over `lab-procedural-0…199`: 547 of 632 non-zero (86.6%) with 308 distinct — the bar of 20 is now more than an order of magnitude below the measurement on both halves.
     // craters, a crater-law question this step does not own and could not fix.
     // ⛔ AND THE MATERIAL COMES FROM `BodyRenderer.createMoon`, NOT FROM `Planet._createLabSurface`.
     // The static takes the condition the TEST computes, so measuring it measured a PURE FUNCTION

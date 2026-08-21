@@ -442,7 +442,7 @@ function footprintProbe(bodies) {
 // three separate facts and reports all of them:
 //
 //   1. HOW MANY BODIES HAVE CRATERS AT ALL. `craterUniformsFrom` returns CRATERS_OFF unless the
-//      schedule fires AND the resolvable band is non-empty AND density ≥ CRATER_MIN_DENSITY. A
+//      schedule fires AND the resolvable band is non-empty AND density * visibleCells ≥ CRATER_MIN_VISIBLE (was `density ≥ CRATER_MIN_DENSITY` until B2 leg 1, 2026-08-20). A
 //      quantity that is off on almost every body cannot move on almost every body.
 //   2. WHETHER THE CHAIN CAN SEE A TIDAL MOVE AT ALL — forced swing 0 → 1e5 on the same
 //      conditions. If the uniforms move there, the comparator is not blind.
@@ -1475,7 +1475,7 @@ function main() {
   out.push('');
   out.push(`- **Craters are on at all on only ${cd.cratersOn} / ${cd.n} bodies.** \`craterUniformsFrom\` returns`);
   out.push('  `CRATERS_OFF` unless the schedule fires, the resolvable band is non-empty and');
-  out.push('  `density ≥ CRATER_MIN_DENSITY`. A uniform that is off almost everywhere cannot move almost');
+  out.push('  `density * visibleCells ≥ CRATER_MIN_VISIBLE` (was `density ≥ CRATER_MIN_DENSITY` until B2 leg 1). A uniform that is off almost everywhere cannot move almost');
   out.push('  anywhere.');
   out.push(`- **The chain CAN see a tidal move.** Forcing \`rawTidalIoRatio\` 0 → 1e5 on the same conditions`);
   out.push(`  moves \`craterSchedule\` on **${cd.scheduleMovedOnForcedSwing} / ${cd.n}** bodies and the crater uniforms on`);

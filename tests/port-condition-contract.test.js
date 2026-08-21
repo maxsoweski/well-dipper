@@ -926,15 +926,12 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     // ⛔ NON-DEGENERACY OF WHAT IS LEFT. One key is a thin surface, and it would be
     // thinner still if that key were constant: `craterUniformsFrom` returns the frozen
     // CRATERS_OFF object for any body whose schedule does not fire, and comparing a
-    // constant to itself 526 times is a gate pointed at nothing. Measured: craters are
-    // LIVE on 8 bodies and the object takes 9 distinct values across the corpus. Both
-    // are pinned, so if a later step turns craters off everywhere this test says so
-    // instead of going quietly green.
+    // constant to itself 526 times is a gate pointed at nothing.
     const craterRows = planets.map((pd) => craterUniformsFrom(conditionFromBody(pd)));
-    expect(craterRows.filter((c) => (c.density ?? 0) > 0).length,
-      'craters are live on too few bodies for this gate to mean anything').toBe(8);
+    expect(craterRows.filter((c) => (c.density ?? 0) > 0).length,   // ⭐⭐ 8 -> 289 AND 9 -> 290 AT B2 LEG 1, 2026-08-20, AND THEY MOVED THE DIRECTION THIS GATE ASKED FOR: it said "if a later step turns craters off everywhere this test says so instead of going quietly green", and leg 1 is the opposite step — re-deriving CRATER_VIS_FLOOR_RAD 0.02 -> 9.6e-4 and replacing the fixed CRATER_MIN_DENSITY with the per-body `density * visibleCells >= CRATER_MIN_VISIBLE` made the surviving surface 36x LESS degenerate. ⛔ Not a re-bless: a pin whose declared failure direction is "smaller" and which moved larger is one the change was licensed to move, and the partition below is what stops a revert riding back in under the new numbers.
+      'craters are live on too few bodies for this gate to mean anything').toBe(289);
     expect(new Set(craterRows.map((c) => JSON.stringify(c))).size,
-      'the surviving surface is a constant — this gate is comparing nothing to itself').toBe(9);
+      'the surviving surface is a constant — this gate is comparing nothing to itself').toBe(290);
 
     // ⛔ NON-VACUITY OF WHAT WAS SUBTRACTED. The subtraction is only safe if every name
     // taken out really does move; a name on the exclusion list that has stopped moving is
@@ -953,15 +950,17 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
       + 'did not move anywhere in the corpus — that name is a hole, not an exclusion')
       .toEqual([...EXPECTED_LAW_MOVERS].sort());
 
-    const diffs = [];
-    for (let i = 0; i < planets.length && diffs.length <= 24; i++) {
-      bitDiff(
-        withoutLawMovers(shippedLawOutputs(legacyConditionFromPlanet(planets[i]))),
-        withoutLawMovers(shippedLawOutputs(conditionFromBody(planets[i]))),
-        `${planets[i].type}[${i}]`, diffs,
-      );
+    // ⭐⭐ RESHAPED, NOT RE-BLESSED — B2 leg 1, 2026-08-20. `craters` used to be bit-identical across the whole corpus, which is why it was the one name left in this surface. It is not any more, on 72 of 526 bodies, and the cause is MEASURED rather than assumed: the leg admitted 289 bodies to a live crater record where 8 had one, so the TWO ALREADY-DECLARED condition movers reach the crater law for the first time instead of being swallowed by a body with no craters at all. Substituting the new `rawTidalIoRatio` alone (it enters through `craterSchedule`'s t_exp = min(age, T_RESURF_TIDAL/td, …)) cures 29 of the 72; the new `T_eq` alone cures 21; the two together cure ALL 72 — so nothing outside the declared ledger moved. ⛔ THE NEGATIVE HALF IS KEPT BY PARTITIONING BODIES INSTEAD OF LAWS: the surface is still bit-identical on the other 454, a real population a widened blast radius would break. Deleting this arm and calling craters a mover is the re-bless this file forbids.
+    const diffs = []; const movedTypes = {}; let bitEqual = 0;
+    for (let i = 0; i < planets.length; i++) {
+      const d = bitDiff(withoutLawMovers(shippedLawOutputs(legacyConditionFromPlanet(planets[i]))),
+        withoutLawMovers(shippedLawOutputs(conditionFromBody(planets[i]))), `${planets[i].type}[${i}]`, []);
+      if (d.length === 0) { bitEqual++; continue; }
+      movedTypes[planets[i].type] = (movedTypes[planets[i].type] || 0) + 1;
+      if (diffs.length <= 24) diffs.push(...d);
     }
-    expect(diffs, `${diffs.length} shipped law output(s) moved`).toEqual([]);
+    expect(movedTypes, `the compared surface moved on a body class it is not declared to move on\n` + diffs.slice(0, 4).join('\n')).toEqual({ 'sub-neptune': 58, ice: 10, carbon: 4 });
+    expect(bitEqual, 'the bit-identical population — if this shrinks, the blast radius grew').toBe(planets.length - 72);
   });
 
   // ═══ STEP 2 · THE DECLARED MOVERS, ASSERTED TO HAVE MOVED ═════════════════════
@@ -1008,7 +1007,7 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
     expect(oldVals.size, 'the fabricated fallback was NOT a single repeated value').toBeGreaterThan(100);
   });
 
-  it('STEP 2 + STEP 4 · exactly nine shipped law outputs move, and the tenth does not', () => {
+  it('STEP 2 + STEP 4 + B2 LEG 1 · ten shipped law outputs move, and the tenth moves on a named 72 of 526', () => {
     // The subtraction `withoutLawMovers` performs, stated as an assertion in the other
     // direction: each named key MOVES on a named population, and the count of bodies
     // touched is pinned. A future step that widens the blast radius fails here first.
@@ -1048,27 +1047,28 @@ describe('Step 1 · channel 2 — bit equality against the frozen pre-Step-1 ada
         'lavaCrustColor', 'lavaGlowColor', 'meltTemperature', 'optics', 'palette']);
 
     expect(planets.length).toBe(CORPUS_BODIES);
-    expect(Object.keys(perKey).sort(), 'the set of moving shipped laws is not the declared nine — '
+    const DECLARED = { ...EXPECTED_LAW_MOVER_BODIES, craters: 72 };   // ⭐⭐ TEN, NOT NINE, AS OF B2 LEG 1 (2026-08-20) — and `craters` is deliberately NOT added to EXPECTED_LAW_MOVER_BODIES, because that list feeds `withoutLawMovers` and adding it would EMPTY the surface the bit-identity gate above compares, i.e. would SILENCE that gate rather than record this fact. So it is named here, with its population, and that gate keeps its negative half by partitioning bodies (454 bit-identical) instead of laws.
+    expect(Object.keys(perKey).sort(), 'the set of moving shipped laws is not the declared ten — '
       + 'an EMPTY left side means the declared movers did not move (a step is not in the tree, and '
       + 'the byte-identity gate above is passing vacuously); a LONGER one means the blast radius grew; '
       + 'a SHORTER one means a step silently reverted\n' + Object.values(samples).join('\n'))
-      .toEqual([...EXPECTED_LAW_MOVERS].sort());
+      .toEqual(Object.keys(DECLARED).sort());
     expect(perKey, 'a declared mover moved on a different number of bodies than it is pinned to')
-      .toEqual({ ...EXPECTED_LAW_MOVER_BODIES });
+      .toEqual(DECLARED);
     // ⭐ STEP 5e: 413 → 495, then → 494 at 2154de1. `giant` was the only row Step 5e touched,
     // so the 82 extra bodies are shellDepthFrac movers that were not already moving something else.
     expect(bodiesTouched, 'bodies that change what they render').toBe(494);
 
-    // ── THE NEGATIVE HALF, KEPT ─────────────────────────────────────────────────────
-    // "and the other N do not" is the half a re-bless is tempted to drop, because it is
-    // the half that fails. It is asserted by NAME, not by counting: the non-movers are
-    // derived from the pinned surface minus the pinned mover list, so widening the mover
-    // list cannot silently empty this.
-    const nonMovers = lawSurface.filter((k) => !EXPECTED_LAW_MOVERS.includes(k)).sort();
-    expect(nonMovers, 'Step 4 consumed the last non-moving shipped law — if this is EMPTY the '
-      + 'negative half of this gate no longer exists and the test must be reshaped, not re-blessed')
-      .toEqual(['craters']);
-    for (const k of nonMovers) {
+    // ── THE NEGATIVE HALF, RESHAPED — B2 leg 1, 2026-08-20. "and the other N do not" is the half a re-bless is tempted to drop, because it is the half that fails. It used to be asserted by NAME: `lawSurface` minus the pinned mover list came to exactly `['craters']`, and this test warned in its own words that "if this is EMPTY the negative half of this gate no longer exists and the test must be RESHAPED, NOT RE-BLESSED."
+    // ⛔ B2 LEG 1 IS THE STEP THAT EMPTIED IT, so the reshape is taken here rather than the warning deleted: `craters` moves on 72 bodies and does NOT move on the other 454, so the negative half becomes a BODY population instead of a NAME population — falsifiable in exactly the same way, and red if the crater blast radius widens by one body.
+    const nameNonMovers = lawSurface.filter((k) => !Object.keys(DECLARED).includes(k)).sort();
+    expect(nameNonMovers, 'no shipped law is a whole-corpus non-mover any more — recorded, not hidden')
+      .toEqual([]);
+    let cratersBitEqual = 0;
+    for (const pd of planets) if (!bitDiff(craterUniformsFrom(legacyConditionFromPlanet(pd)), craterUniformsFrom(conditionFromBody(pd)), 'craters', []).length) cratersBitEqual++;
+    expect(cratersBitEqual, 'the crater law\'s non-moving population — the reshaped negative half').toBe(CORPUS_BODIES - 72);
+    expect(bodiesTouched).toBe(494);   // …and the 72 are a SUBSET of the bodies some other law already moved, so the leg widened the set of moving LAWS without widening the set of moving BODIES. MEASURED: bodiesTouched is 494 both with and without `craters` in the compared surface.
+    for (const k of nameNonMovers) {
       expect(perKey[k] ?? 0, `${k} is declared not to move and it moved`).toBe(0);
     }
 

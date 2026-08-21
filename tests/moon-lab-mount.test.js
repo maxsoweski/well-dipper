@@ -16,7 +16,7 @@
 //     0 of Sol's 25 plain moons admit with the flag forced ON. A test here would assert a branch
 //     that does not exist and would go green for the wrong reason if someone added one.
 //   · NO ">= 95% of plain moons resolve non-zero uCraterDensity". MEASURED: 473/632 = 74.8%. The
-//     shortfall is `CRATER_MIN_DENSITY` in craterUniforms.js refusing 151 bodies — a CRATER-LAW
+//     shortfall is `CRATER_MIN_DENSITY` in craterUniforms.js refusing 151 bodies — a CRATER-LAW  ⭐ RE-MEASURED 2026-08-20 AFTER B2 LEG 1: 547/632 = 86.6%, and `CRATER_MIN_DENSITY` no longer exists — of the remaining 85, 8 are schedule-refused and 77 are refused by its successor `CRATER_MIN_VISIBLE`. Still a crater-law
 //     question, not a pipeline one. Gating a pipeline step on it would red this file for a reason
 //     no edit in this step could fix. The DISTINCTNESS half is kept, because that is the half that
 //     discriminates a dead wire: a constant value across 632 moons passes every "non-zero" gate

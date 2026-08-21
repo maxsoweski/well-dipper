@@ -437,7 +437,7 @@ export function rockySurfacePack(condition, ctx = {}) {
   // src/worldengine/port/craterUniforms.js:96 `Dchar: 0,` — so it says "this body has no resolvable
   // crater band at all", while a density of 0 also covers a body whose band exists and whose
   // coverage rounded to nothing under
-  // src/worldengine/port/craterUniforms.js:79 `export const CRATER_MIN_DENSITY = 1e-3;`, and covers
+  // src/worldengine/port/craterUniforms.js:79 `export const CRATER_MIN_VISIBLE = 1.0;` — ⭐ RE-POINTED 2026-08-20 (B2 leg 1): that line carried `CRATER_MIN_DENSITY = 1e-3` until the leg retired the fixed density floor into the per-body form `density * visibleCells >= CRATER_MIN_VISIBLE`. The sentence is unchanged in substance — a body whose band exists and whose coverage rounds away still reaches here with density 0 — only the constant it names moved. It also covers
   // a crater-IRRELEVANT body whose `rel` zeroed a real density. Three different worlds, one number.
   const meta = {
     compositionClass: compositionClass(condition),

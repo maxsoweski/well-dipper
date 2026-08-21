@@ -47,7 +47,7 @@ export const CELL_CRATER_AREA = Math.PI * (R_LO * R_LO + R_LO * (R_HI - R_LO) + 
 //   mean 0.1706, sd 0.0175 (10.3% spread — one constant fits the population about as well as
 //   RELIEF_GAIN's did), against the analytic 0.4544. The analytic form over-counts by 2.66x.
 // Offscreen probe, 512^2, ROCKY variant, uCraterScale 7.0711 (identical on every body whose
-// visibility floor binds, which is all of them).
+// visibility floor binds, which WAS all of them). ⛔ THAT PARENTHESIS IS STALE AS OF 2026-08-20 (B2 leg 1): the floor is now 9.6e-4, so a floor-bound body reads uCraterScale 32.275, and MEASURED over lab-procedural-0…199 only 440 of the 761 cratered bodies are floor-bound at all — the other 321 read the schedule's own low edge and carry 322 distinct scales between them. The 0.1706 measurement itself was NOT re-taken at the new scale and that is a known gap: it is a per-CELL fraction, which is scale-free to first order, but nobody has measured it at 32.275.
 //
 // ⚠ CONSEQUENCE WORTH NAMING: 0.1706 is also the CEILING. One crater per cell means the game cannot
 // paint more than ~17% crater coverage however bombarded a world is, so a truly saturated surface
@@ -62,21 +62,21 @@ export const CRATER_DEPTH = 0.2;
 // than tuned — the lab's own uEjectaAmp is a GUI slider whose default sits ~800x above continuity.
 export const EJECTA_RIM_FRACTION = 0.05;
 
-// ── The one constant this port owns. ─────────────────────────────────────────────────────────────
-// The game's raster floor, in radians of crater diameter — the analogue of the lab's
-// MESH_FLOOR_RAD = 0.055. Craters below it cannot be resolved on screen and only alias. MEASURED on
-// Sol's 39 bodies as mean crater diameter in pixels on a planet drawn 400 px across:
-//   sub-floor (the lab's band) 0.8 px | full SFD 3.5 px | 0.02 rad 20.6 px | 0.05 rad 32.6 px
-// 0.02 puts ~50 craters of ~20 px on the visible disc, which is what reads as a cratered world.
-export const CRATER_VIS_FLOOR_RAD = 0.02;
+// ── The two constants this port owns. ⭐ BOTH RE-DERIVED 2026-08-20 (B2 leg 1) FROM STATED RULES. ────────
+// ⭐ FLOOR RULE — re-close it by changing the "4" and re-running the arithmetic. THE SMALLEST CRATER THE
+// SHADER DRAWS (2*R_LO = 0.36 CELL units; one cell == D_char, so its angular diameter is 0.36*sqrt(f*C_BASIN)
+// rad with C_BASIN 1.0) MUST SPAN >= 4 RENDER px AT THE CLOSEST MEASURED APPROACH FRAMING. Why 4: 2x Nyquist,
+// because a crater has to show bowl AND rim to read as one, not merely be detected. CONVENTION: read at the
+// DISC CENTRE, face-on, small-angle — where a crater is largest, so the rule bounds the BEST case on the disc.
+export const CRATER_VIS_FLOOR_RAD = 9.6e-4;   // ARITHMETIC: camera 1.2 body radii, 1600x999 dpr1 ⇒ disc RADIUS 1078.23 SCREEN px ÷ pixelScale 3 (src/rendering/RetroRenderer.js:811 `const renderWidth = Math.ceil(width / this.pixelScale);`, src/ui/Settings.js:12 pixelScale 3) = 359.41 RENDER px; 0.36*sqrt(f)*359.41 >= 4 ⇒ f >= 9.557e-4. ⚠ THE SHIPPED 0.02 WAS NOT THIS RULE — it measured D_char (the band's geometric mean, sqrt(f) rad), not the smallest DRAWN crater, and that is the whole of the sqrt in its "px = K*sqrt(floor)": 20.6/32.6 = 0.6325 = sqrt(0.02/0.05) to 4 dp. Its residual K = 0.36425*disc_px against centre-of-disc geometry's 0.5*disc_px is NOT reproducible from any convention written in source, so it is recorded and not adopted. Derivation, the corpus table and the named COST at distance: docs/FEATURES/crater-floors-calibration-2026-08-20.md.
 
-// Below this host-cell fraction a body shows LESS THAN ONE crater on the whole visible disc, so the
-// pass is pure cost — a voronoi3d per fragment (27 hash33 at uVoroCells = 27) to draw nothing. The
-// sphere crosses ~4*pi*scale^2 cells, half of them facing the camera, which at the derived
-// scale ~7.07 is ~316 visible cells; 1e-3 of that is 0.3 craters. ⚠ This is a COST floor, not a
-// physics one: Sol's Earth derives 1.4e-5 here and that number is right — Earth really does keep a
-// handful of impact craters. It is below one pixel's worth of them.
-export const CRATER_MIN_DENSITY = 1e-3;
+// ⭐ RETIRED `CRATER_MIN_DENSITY = 1e-3` INTO THE QUANTITY IT WAS ALWAYS TRYING TO EXPRESS. That constant's
+// own comment refused bodies showing "less than one crater on the whole visible disc" — which a fixed
+// DENSITY cannot state, because craters are counted in CELLS and the visible cell count is 2*PI*scale^2, a
+// number this file's own floor moves. MEASURED at the shipped pair: scale 7.0711 ⇒ 314 visible cells, so
+// 1e-3 admitted 0.3 craters and 119 of 485 cratered bodies rendered UNDER ONE CRATER. Any fixed replacement
+// goes stale the moment the floor moves — which is exactly what the line above just did — so the gate is
+export const CRATER_MIN_VISIBLE = 1.0;   // per-body: `density * visibleCells >= this`, in which 1.0 literally reads "at least one crater is visible on the disc". ⚠ It is still a COST floor and not a physics one, and the old comment's example survives the change: Sol's Earth really does keep a handful of impact craters, below one visible crater's worth. MEASURED after: 0 of 761 cratered bodies render under one crater, over lab-procedural-0…199's 1160 non-gas bodies.
 
 // Lab defaults, carried across unchanged (both are lab-tunable knobs, not derived quantities).
 const TERRACE_COUNT = 4.0;
@@ -141,8 +141,8 @@ export function craterUniformsFrom(condition) {
 
   const Dchar = Math.sqrt(lo * H);
   const density = clamp01(coverageBand(sch, rpk, lo, H) / RENDERED_CELL_COVERAGE);
-  if (!(density >= CRATER_MIN_DENSITY)) return CRATERS_OFF;
-
+  const visibleCells = 2 * Math.PI * (R_km / Dchar) ** 2;   // == 2*PI*uCraterScale^2 — the camera-facing half
+  if (!(density * visibleCells >= CRATER_MIN_VISIBLE)) return CRATERS_OFF;   // ⭐ per-body, not a fixed density
   // uCraterAmp: radPerKm(RE)*D_char is the characteristic crater diameter as a fraction of the
   // planet radius. craterProfile applies its own CRATER_DEPTH shape factor internally, so dividing
   // it out here makes the COMPOSED on-screen depth honour Pike's d/D = D_D_SIMPLE exactly once.
@@ -153,7 +153,7 @@ export function craterUniformsFrom(condition) {
   // uCraterComplexD, in CELL units (one cell == D_char km). ⛔ NOT the lab's value: the lab pins
   // this high to force morphology == 0, because every crater it draws is a sub-floor simple bowl.
   // The game's craters are ~0.1 R across — complex craters — and their central peaks and wall
-  // terraces are most of what makes a big crater read as a crater rather than a dent.
+  // terraces are most of what makes a big crater read as a crater rather than a dent. ⛔ THE "~0.1 R" ON THE LINE ABOVE IS SUPERSEDED, 2026-08-20 (B2 leg 1) — it was sqrt(0.02); the re-derived floor makes D_char sqrt(9.6e-4) = 0.031 R on a floor-bound body, so the drawn crater is 4.6x smaller and complexD 4.6x larger. The CLAIM the line makes about morphology survives on the population and the sentence's number does not: MEASURED over lab-procedural-0…199, all-complex bodies went 241 of 485 (49.7%) to 386 of 761 (50.7%) and all-simple 182 of 485 (37.5%) to 210 of 761 (27.6%).
   const g = Math.max(1e-6, condition?.surfaceGravity ?? 0.5);
   const complexD = transitionDiameterKm(g) / Dchar;
 
