@@ -1,0 +1,11 @@
+<!-- ✅ THE REPAIRED HALF of registration 2b's control. Identical to lab-stub-broken.html except
+     that it imports the newcomer back. AC4's observable ends "Restoring the import returns it to
+     green", so the fixture ships BOTH states and the control asserts the transition, not just the
+     failure. A fence that can only be shown to go red has not been shown to be about anything. -->
+<!doctype html>
+<html><body>
+  <script type="module">
+    import { newDeckPack } from './drivers/newDeck.js';
+    export const applied = (c) => newDeckPack(c);
+  </script>
+</body></html>

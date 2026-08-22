@@ -535,6 +535,145 @@ describe('registration 2 — every pipeline module the game imports is imported 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
+// REGISTRATION 2b — AC4. THE DRIVERS ROSTER IS CLOSED.
+//
+// ⭐ WHAT THIS ADDS THAT REGISTRATION 2 ABOVE DOES NOT, stated as the hole rather than as a policy.
+// Registration 2 catches a diverging module and offers the author two ways out: import it back, or
+// add a debt row. The second way out is the one that must not exist for PACKS — it is, precisely,
+// what the seven rows in `IMPORT_BACK_DEBT` record having happened seven times. And the ledger's
+// `<=` ceiling makes that route OPEN AGAIN the moment this workstream succeeds: the liveness test
+// deletes a cleared row, the length drops to 10, the ceiling stays 11, and a free slot now sits
+// there for the next pack. Nothing reds. That is not a hypothetical — clearing rows is the stated
+// purpose of the work in flight, so the hole opens on success, which is the worst time to find it.
+//
+// TWO LAWS CLOSE IT, and they are separate because they fail differently:
+//   · THE ROSTER IS CLOSED. Seven packs are grandfathered BY NAME. Any other file under
+//     `src/worldengine/drivers/` must be in the lab's import closure — no ledger row can buy it in.
+//     A new pack therefore has exactly one way to ship: the lab imports it. That is AC4 verbatim.
+//   · THE LEDGER HAS NO SLACK. `IMPORT_BACK_DEBT_CEILING` must EQUAL the ledger length, so a
+//     cleared row forces the ceiling down instead of leaving an unearned slot behind it.
+//
+// ⛔ THE ROSTER IS NOT DERIVED FROM THE DEBT LEDGER, and that is the whole mechanism. Deriving it
+// would mean adding a debt row also extends the roster — the hole, re-opened by the fix for it. It
+// is a frozen list, asserted to be a SUBSET of the ledger so the two cannot disagree, and asserted
+// LIVE so an entry the lab has since imported is deleted rather than left standing as cover.
+//
+// ⚠ `index.js` is excluded as the composition point, exactly as registration 4 excludes it. It is
+// not a pack; it is where packs are composed, and its own debt row is blocked by the seven above.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+// ⛔ CLOSED 2026-08-22. This list may SHRINK and may never gain an entry. A pack authored after this
+// date has one route into the tree: planet-lod-lab.html imports it. ⭐ Measured, not asserted — the
+// non-vacuity control below drives the same scanner with an EMPTY roster and pins exactly these
+// seven, so the list is a reading of the tree rather than a claim about it. `giantDeck.js` is absent
+// because the lab really does import it at planet-lod-lab.html:188 `giantDeckPack` — the one precedent.
+const GRANDFATHERED_UNIMPORTED_PACKS = Object.freeze(
+  ['craterDeck', 'giantSurface', 'limbDeck', 'polarDeck', 'rockySurface', 'solidFeatures', 'solidOptics']
+    .map((n) => `${DRIVERS_DIR}/${n}.js`),
+);
+
+/** Unearned admissions the ledger can absorb: ceiling minus rows. Must be 0. */
+export function ledgerSlack(debtLength, ceiling) {
+  return ceiling - debtLength;
+}
+
+/**
+ * Packs under `driversRel` that the lab front-end does not import.
+ * @param {string} driversRel     repo-relative drivers directory
+ * @param {string} labRel         the lab front-end
+ * @param {Set<string>} grandfathered  roster paths exempt while their debt rows stand
+ * @returns {string[]} repo-relative paths of packs outside the roster and outside the lab's closure
+ */
+export function unimportedNewPacks(driversRel, labRel, grandfathered) {
+  const lab = closureOf([labRel]);
+  const out = [];
+  for (const ent of readdirSync(join(ROOT, driversRel), { withFileTypes: true })) {
+    if (!ent.isFile() || !ent.name.endsWith('.js')) continue;
+    if (ent.name === 'index.js') continue;              // the composition point, not a pack
+    const path = `${driversRel}/${ent.name}`;
+    if (!grandfathered.has(path) && !lab.has(path)) out.push(path);
+  }
+  return out.sort();
+}
+
+function newPackMessage(violations) {
+  return (
+    `one-pipeline-fence registration 2b (AC4): a pack was authored under \`${DRIVERS_DIR}/\` that ` +
+    `planet-lod-lab.html does NOT import, and the grandfathered roster is CLOSED — it cannot take ` +
+    `a newcomer. Import it back in the lab — the precedent is planet-lod-lab.html:188 `+'`giantDeckPack`'+`. ` +
+    `A debt row will not clear this: the roster, not the ledger, is what admits a pack. ` +
+    `Offending packs:\n` + violations.map((v) => `  · ${v}`).join('\n')
+  );
+}
+
+describe('registration 2b — a NEW pack cannot ship without the lab importing it (AC4)', () => {
+  const CONTROL = `${FIXTURES}/new-unimported-pack`;
+
+  it('ZERO packs outside the grandfathered roster are missing from the lab closure', () => {
+    const violations = unimportedNewPacks(DRIVERS_DIR, LAB_HTML, new Set(GRANDFATHERED_UNIMPORTED_PACKS));
+    expect(violations, violations.length ? newPackMessage(violations) : undefined).toEqual([]);
+  });
+
+  it('CONTROL: the scan is non-vacuous — an EMPTY roster names all seven unimported packs', () => {
+    // Pass no roster against the REAL drivers tree. Everything the lab does not import must be
+    // reported, which proves the walker reads the shipped subject — the green above cannot.
+    // `giantDeck.js` is absent from this list because the lab genuinely imports it (:188), and that
+    // single presence is what makes the other seven a measurement rather than an assumption.
+    const all = unimportedNewPacks(DRIVERS_DIR, LAB_HTML, new Set());
+    expect(all).toEqual([
+      'craterDeck', 'giantSurface', 'limbDeck', 'polarDeck', 'rockySurface', 'solidFeatures', 'solidOptics',
+    ].map((n) => `${DRIVERS_DIR}/${n}.js`));
+  });
+
+  it('the roster is LIVE — a roster pack the lab now imports is DELETED, not left standing', () => {
+    const lab = closureOf([LAB_HTML]);
+    const stale = GRANDFATHERED_UNIMPORTED_PACKS.filter((p) => lab.has(p));
+    expect(
+      stale,
+      `the lab now imports these — DELETE them from the roster (and their debt rows, and lower ` +
+      `IMPORT_BACK_DEBT_CEILING). A roster that keeps admitting a pack the lab already imports is ` +
+      `a hole with a name on it:\n${stale.join('\n')}`,
+    ).toEqual([]);
+  });
+
+  it('every roster entry has a debt row — the roster is not a second expression of the same fact', () => {
+    // Registration 3 bans a law declared in two trees. This roster IS such a duplicate unless it is
+    // pinned to the ledger it grandfathers, so it is asserted to be a strict subset. Adding a pack
+    // here without a debt row would create exactly the free-floating exemption the fence exists for.
+    const debt = new Set(IMPORT_BACK_DEBT.map((e) => e.path));
+    const unbacked = GRANDFATHERED_UNIMPORTED_PACKS.filter((p) => !debt.has(p));
+    expect(unbacked, `roster entries with no debt row naming what clears them:\n${unbacked.join('\n')}`).toEqual([]);
+  });
+
+  it('the debt ledger has NO SLACK — a free slot under the ceiling is an unearned admission', () => {
+    expect(
+      ledgerSlack(IMPORT_BACK_DEBT.length, IMPORT_BACK_DEBT_CEILING),
+      `the ceiling sits ABOVE the ledger, so a new module can be admitted as debt and stay green. ` +
+      `Lower IMPORT_BACK_DEBT_CEILING to ${IMPORT_BACK_DEBT.length}.`,
+    ).toBe(0);
+  });
+
+  it('CONTROL: slack is detected on the exact post-clear state — a row cleared, ceiling not lowered', () => {
+    // The assertion above passes today (11 === 11), so on its own it proves nothing. This drives the
+    // same function with the state this workstream is actively creating — one row cleared by the
+    // liveness test and the ceiling left where it was — and demands it report the free slot.
+    expect(ledgerSlack(IMPORT_BACK_DEBT_CEILING - 1, IMPORT_BACK_DEBT_CEILING)).toBeGreaterThan(0);
+    expect(ledgerSlack(IMPORT_BACK_DEBT_CEILING, IMPORT_BACK_DEBT_CEILING)).toBe(0);
+  });
+
+  it('CONTROL: the broken fixture makes it fail BY NAME, with the offending path in the message', () => {
+    const violations = unimportedNewPacks(`${CONTROL}/drivers`, `${CONTROL}/lab-stub-broken.html`, new Set());
+    expect(violations.length).toBeGreaterThan(0);
+    expect(newPackMessage(violations)).toContain(`${CONTROL}/drivers/newDeck.js`);
+  });
+
+  it('CONTROL: restoring the lab import returns the SAME fixture to green', () => {
+    const repaired = unimportedNewPacks(`${CONTROL}/drivers`, `${CONTROL}/lab-stub-fixed.html`, new Set());
+    expect(repaired).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
 // ROLL-CALL — registrations 1 and 6, which ship elsewhere.
 //
 // ⛔ WHY THEY ARE NOT RE-AUTHORED HERE. Both already exist WITH executed controls. Copying either
