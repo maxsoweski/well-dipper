@@ -13423,6 +13423,48 @@ window.addEventListener('keydown', (e) => {
     }
   }
 
+  // ── ']' : TERRAIN-SCALE A/B (temporary instrument, 2026-08-21) ───────────────────────────────
+  // B7 moved swapped bodies onto the lab material, whose `uDispDomainScale` defaults to 1.0. The
+  // legacy game material writes RELIEF_DOMAIN_SCALE = 1.0/0.3 = 3.333 at Planet.js:1682, for the
+  // reason stated there: it keeps fbmd's FIRST octave on the legacy base frequency, i.e. it exists
+  // SPECIFICALLY to preserve feature size across the noise-law swap. So the flip renders terrain
+  // features ~3.3x larger, and that number has never been put in front of Max.
+  //
+  // ⭐ A BARE KEY FLIPPED WHILE MOVING, not a screenshot: relief scale only reads on approach, and
+  // a static frame cannot carry it. Walks live materials rather than reaching into Planet internals
+  // so it works on every swapped body in the scene, planet or moon, with no per-class branch.
+  // ⛔ DELETE THIS BLOCK WHEN THE RULING LANDS. It is an instrument, not a feature.
+  if (e.code === 'BracketRight') {
+    const SHIPPED = 1.0, LEGACY = 1.0 / 0.3;
+    const hit = [];
+    scene.traverse((o) => {
+      const u = o.material && o.material.uniforms;
+      if (u && u.uDispDomainScale) hit.push(u.uDispDomainScale);
+    });
+    if (hit.length) {
+      const nowShipped = Math.abs(hit[0].value - SHIPPED) < 1e-6;
+      const next = nowShipped ? LEGACY : SHIPPED;
+      for (const u of hit) u.value = next;
+      let hud = document.getElementById('_terrainScaleAB');
+      if (!hud) {
+        hud = document.createElement('div');
+        hud.id = '_terrainScaleAB';
+        hud.style.cssText =
+          'position:fixed;left:50%;top:14%;transform:translateX(-50%);z-index:99999;' +
+          'font:600 15px/1.5 monospace;color:#fff;background:rgba(0,0,0,.72);' +
+          'padding:10px 16px;border-radius:6px;text-align:center;pointer-events:none';
+        document.body.appendChild(hud);
+      }
+      hud.innerHTML = next === SHIPPED
+        ? `uDispDomainScale = <b>1.0</b> &nbsp;— <b>A: SHIPPED after B7</b> (matches the lab)<br>` +
+          `<span style="opacity:.75">features ~3.3x LARGER &nbsp;·&nbsp; ']' to compare &nbsp;·&nbsp; ${hit.length} bodies</span>`
+        : `uDispDomainScale = <b>3.333</b> &nbsp;— <b>B: THE OLD GAME LOOK</b> (pre-B7)<br>` +
+          `<span style="opacity:.75">features ~3.3x smaller &nbsp;·&nbsp; ']' to compare &nbsp;·&nbsp; ${hit.length} bodies</span>`;
+    }
+    e.preventDefault();
+    return;
+  }
+
   // K key: toggle keybinds overlay (works always — title, gameplay, warp)
   if (e.code === 'KeyK') {
     toggleKeybinds();
