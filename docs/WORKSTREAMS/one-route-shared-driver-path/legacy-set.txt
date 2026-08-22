@@ -1,0 +1,54 @@
+
+LEGACY-SET SCAN — world-engine code no front-end exercises
+========================================================================
+engine modules: 61 · reached by lab 43 · game 37 · fieldviz 7
+
+── DEAD MODULES — no front-end imports them at all (3) ──
+   src/worldengine/base/lidDisruption.js   [2 test file(s) import it — tested, unused]
+   src/worldengine/base/verify.js   [1 test file(s) import it — tested, unused]
+   src/worldengine/instrument/laws.js   [1 test file(s) import it — tested, unused]
+
+── DEAD LAWS — exported function/class in a LIVE module, no front-end consumer (18) ──
+   src/worldengine/base/band-flow.js
+      advectAnisotropyRatio   [tested x1, no front-end]
+      bandRoughnessCenters   [tested x1, no front-end]
+   src/worldengine/base/baseStep.js
+      bodyAgeNorm   [tested x1, no front-end]
+      bodyLiquidStability   [tested x1, no front-end]
+      bodyRadialStrain   [tested x1, no front-end]
+      bodyThermalState   [tested x1, no front-end]
+   src/worldengine/base/climate-e5.js
+      zonalBandProfile   [NO consumer at all]
+   src/worldengine/base/emission-e.js
+      bakeEmissionEAttributes   [tested x1, no front-end]
+      writeEmissionESphere   [tested x1, no front-end]
+   src/worldengine/base/giant-drivers.js
+      deriveGiantDriversForSeed   [tested x1, no front-end]
+   src/worldengine/drivers/giantDeck.js
+      hasKmShapedDriver   [tested x2, no front-end]
+   src/worldengine/instrument/descriptors.js
+      boundaryDensity   [NO consumer at all]
+      craterSFD   [tested x1, no front-end]
+      drainageDensity   [tested x1, no front-end]
+   src/worldengine/instrument/sampling.js
+      angleBetween   [tested x2, no front-end]
+      heightUnitsToKm   [tested x1, no front-end]
+      kmToHeightUnits   [tested x1, no front-end]
+      latLonFromDir   [tested x1, no front-end]
+
+── WHOLLY UNREACHED MODULES — every law in them, no front-end (0) ──
+   These are feature areas nothing has ever asked for. The clearest "legacy" candidates.
+
+── PARTIALLY UNREACHED — live modules carrying dead branches (8) ──
+   ⚠ These are NOT delete candidates. The module is in use; some branch of it is not.
+   src/worldengine/base/baseStep.js   [4/10 laws unreached]
+   src/worldengine/instrument/sampling.js   [4/11 laws unreached]
+   src/worldengine/instrument/descriptors.js   [3/22 laws unreached]
+   src/worldengine/base/band-flow.js   [2/13 laws unreached]
+   src/worldengine/base/emission-e.js   [2/5 laws unreached]
+   src/worldengine/base/climate-e5.js   [1/13 laws unreached]
+   src/worldengine/base/giant-drivers.js   [1/8 laws unreached]
+   src/worldengine/drivers/giantDeck.js   [1/6 laws unreached]
+
+TOTAL: 3 dead module(s), 0 wholly-unreached module(s), 8 partially-unreached, 18 unreached law(s) in all.
+⚠ This is a CANDIDATE list for Max to rule on. "Unused" is measured; "deprecated" is his call.
