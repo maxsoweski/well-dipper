@@ -108,7 +108,7 @@
 // suite pins this file's whole numeric-literal set for the same reason rockySurface's is pinned.
 import { compositionClass } from '../base/e1Regime.js';
 import { deriveUniforms } from '../base/labCore.js';
-import { scalar, assertDisplayPolicy, assertPackResult, PackContractError } from '../port/writePackUniforms.js';
+import { scalar, assertDisplayPolicy, assertPackResult, resolveDriver, PackContractError } from '../port/writePackUniforms.js';
 
 // ── The four declared gate names ─────────────────────────────────────────────────────────────────
 // ⭐ FOUR, NOT ONE, because the lab has four independent checkboxes over these six families and they
@@ -263,3 +263,81 @@ export const SOLID_FEATURES_UNIFORMS = Object.freeze([
   'uPldStrength',
   'uGlacialStrength', 'uGlacialFlowVigor',
 ]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE TWO FRONT-END HELPERS — the lab's import-back seam (workstream AC5, 2026-08-22)
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Uniform name -> the `state` field planet-lod-lab.html's per-frame writer reads.
+ *
+ * ⭐ WHY A MIRROR AND NOT A DIRECT WRITE, read off the only import-back that has ever worked
+ * (`giantDeck`, planet-lod-lab.html:188): every field below is a live lil-gui slider, bound with
+ * `.listen()`. Writing pack output straight to the material would take the lab's authoring surface
+ * out of its own loop, which is the lab's entire reason to exist. So the pack result is mirrored
+ * into `state` and the lab's frame loop keeps writing the uniforms exactly as it always has.
+ *
+ * ⚠ ALL FOURTEEN MIRROR, so `solidFeaturesDirectDrivers` returns `{}`. That is a RESULT, not a gap —
+ * this pack emits nothing the lab's frame loop does not already own — and the suite asserts the
+ * emptiness so the day it stops being empty is loud instead of silent.
+ */
+export const SOLID_FEATURES_LAB_BINDING = Object.freeze({
+  uVolcanismStrength: 'volcanismStrength',
+  uEdificeMaxHeight: 'edificeMaxHeight',
+  uShieldStratoMix: 'shieldStratoMix',
+  uCryoActivity: 'cryoActivity',
+  uChaosRaftJitter: 'chaosRaftJitter',
+  uFrostMaxCoverage: 'frostMaxCoverage',
+  uFrostCondensationT: 'frostCondensationT',
+  uFrostLatitudeBias: 'frostLatitudeBias',
+  uFrostAlbedo: 'frostAlbedo',
+  uPlanetTempEq: 'tempEq',
+  uFrostLocked: 'frostLocked',
+  uPldStrength: 'pldStrength',
+  uGlacialStrength: 'glacialStrength',
+  uGlacialFlowVigor: 'glacialFlowVigor',
+});
+
+/**
+ * ⛔⛔ EVERY GATE ON, AND THAT IS THE LOAD-BEARING PART OF THIS FILE'S LAB SEAM.
+ *
+ * The lab re-applies its OWN ✓ checkbox at the per-frame writer —
+ * `uniforms.uVolcanismStrength.value = state.edificesEnabled ? state.volcanismStrength : 0.0` — so
+ * the value this mirror puts into `state` must be the UNGATED one. A mirror that resolved the gate
+ * too would apply the decision twice: a body whose feature is enabled would still read zero the
+ * moment the pack's gate map disagreed with the checkbox, and nothing would throw, because zero is
+ * a legal value for every one of these masters. planet-lod-lab.html:1749 names this hazard for
+ * pack #1 and it is the same hazard here.
+ */
+const LAB_MIRROR_CTX = Object.freeze({
+  displayRadiusEarth: 1, animRate: 1, relevance: {},
+  gates: Object.freeze({ [EDIFICE_GATE]: true, [CHAOS_GATE]: true, [FROST_GATE]: true, [GLACIAL_GATE]: true }),
+});
+
+/**
+ * The subset of a pack result the LAB mirrors into `state`, resolved with every gate ON.
+ * @param {{drivers: object}} pack  a `solidFeaturesPack` result
+ * @returns {object} `state` field name -> value, containing ONLY the keys the pack actually emitted
+ */
+export function solidFeaturesLabState(pack) {
+  const out = {};
+  for (const [uName, stateField] of Object.entries(SOLID_FEATURES_LAB_BINDING)) {
+    if (!(uName in pack.drivers)) continue;
+    out[stateField] = resolveDriver(uName, pack.drivers[uName], LAB_MIRROR_CTX);
+  }
+  return out;
+}
+
+/**
+ * The complement: drivers the lab writes STRAIGHT to uniforms because its frame loop does not own
+ * them. Derived by SUBTRACTION from the binding rather than listed, so a driver added to the pack
+ * and forgotten in the binding defaults to being WRITTEN — a forgotten entry shows up as a uniform
+ * that moves, not as one that silently never does.
+ */
+export function solidFeaturesDirectDrivers(pack) {
+  const out = {};
+  for (const [uName, d] of Object.entries(pack.drivers)) {
+    if (uName in SOLID_FEATURES_LAB_BINDING) continue;
+    out[uName] = d;
+  }
+  return out;
+}

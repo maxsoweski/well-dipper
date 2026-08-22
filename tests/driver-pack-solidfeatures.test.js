@@ -28,6 +28,7 @@ import { buildLabPlanetMaterial } from '../src/rendering/LabPlanetMaterial.js';
 import { writePackUniforms, isPackDriver, PackContractError } from '../src/worldengine/port/writePackUniforms.js';
 import { PACKS, gatesFor, selectPacks, applyDriverPacks } from '../src/worldengine/drivers/index.js';
 import { ROCKY_SURFACE_UNIFORMS } from '../src/worldengine/drivers/rockySurface.js';
+import { solidFeaturesLabState, solidFeaturesDirectDrivers, SOLID_FEATURES_LAB_BINDING } from '../src/worldengine/drivers/solidFeatures.js';
 import { SOLID_OPTICS_UNIFORMS } from '../src/worldengine/drivers/solidOptics.js';
 import { CRATER_DECK_UNIFORMS } from '../src/worldengine/drivers/craterDeck.js';
 import { labPackCtx } from '../src/objects/Planet.js';
@@ -466,5 +467,70 @@ describe('H — the two seam repairs this leg needed', () => {
       expect(u.chasmaCount).toBe(r.chasmaCount);
       expect(u.chasmaAxes).toEqual(r.chasmaAxes);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// §H — THE TWO FRONT-END HELPERS. Added 2026-08-22 for the lab's import-back (workstream AC5).
+//
+// ⭐ WHY A PACK NEEDS TWO HELPERS AND NOT ONE CALL, read off the only import-back that has ever
+// worked (`giantDeck`, planet-lod-lab.html:188): the lab's per-frame writer reads `state`, and every
+// one of those fields is a live lil-gui slider. Writing pack output STRAIGHT to uniforms would take
+// the lab's authoring surface out of its own loop. So the pack result is MIRRORED into `state`, and
+// only the drivers the frame loop does not own go direct.
+//
+// ⛔⛔ THE MIRROR MUST BE UNGATED, AND THIS IS THE ASSERTION THAT MATTERS. The lab re-applies its own
+// ✓ checkbox at the per-frame writer (`state.edificesEnabled ? state.volcanismStrength : 0.0`). If
+// the mirror ALSO resolved the gate, the decision would be applied twice — a body whose feature is
+// enabled would still read zero the moment the pack's gate map disagreed, and nothing would throw.
+// planet-lod-lab.html:1749 names this hazard by name for pack #1.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+describe('§H — the lab mirror and its complement', () => {
+  const B = SOLID[0];
+
+  it('mirrors EVERY emitted driver into a lab state field — none is silently dropped', () => {
+    const mirrored = solidFeaturesLabState(packFor(B));
+    const missing = SOLID_FEATURES_UNIFORMS.filter((u) => !(SOLID_FEATURES_LAB_BINDING[u] in mirrored));
+    expect(missing, `these drivers reach no lab state field: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('the mirror is UNGATED — a gated-OFF pack result still mirrors the live value', () => {
+    // The whole point. Build the pack with every gate SHUT, mirror it, and demand the masters still
+    // carry their real values — because the lab's own checkbox, not the pack's gate map, is what
+    // switches these features in the lab.
+    const SHUT = Object.freeze({ edifices: false, chaos: false, frost: false, glacial: false });
+    const open = solidFeaturesLabState(packFor(B));
+    const closed = solidFeaturesLabState(packFor(B, SHUT));
+    expect(closed).toEqual(open);
+    expect(closed.volcanismStrength).toBe(open.volcanismStrength);
+  });
+
+  it('the direct complement is EMPTY — all fourteen mirror, and that is a result, not a gap', () => {
+    // Derived by SUBTRACTION from the binding, exactly as giantDeckDirectDrivers is, so a driver
+    // added to the pack and forgotten here defaults to being WRITTEN rather than silently skipped.
+    // Today the answer is {}, and asserting it keeps the day it stops being {} loud.
+    expect(solidFeaturesDirectDrivers(packFor(B))).toEqual({});
+  });
+
+  it('the binding covers the emitted set EXACTLY — no stale key, no missing one', () => {
+    expect(Object.keys(SOLID_FEATURES_LAB_BINDING).sort()).toEqual([...SOLID_FEATURES_UNIFORMS].sort());
+  });
+
+  it('CONTROL: the mirror is non-vacuous — it carries REAL numbers, not a shape of zeros', () => {
+    // A mirror that returned every field as 0 would satisfy every assertion above. This demands the
+    // masters actually vary across the population, which is the only thing that proves the wire.
+    const seen = new Map();
+    for (const b of SOLID) {
+      const m = solidFeaturesLabState(packFor(b));
+      for (const [k, v] of Object.entries(m)) {
+        if (Array.isArray(v)) continue;
+        if (!seen.has(k)) seen.set(k, new Set());
+        seen.get(k).add(v);
+      }
+    }
+    const constant = [...seen.entries()].filter(([, s]) => s.size < 2).map(([k]) => k);
+    expect(seen.size).toBeGreaterThan(8);
+    expect(constant.length, `these mirrored fields never vary across the population: ${constant.join(', ')}`)
+      .toBeLessThan(seen.size);
   });
 });
