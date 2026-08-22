@@ -13423,57 +13423,6 @@ window.addEventListener('keydown', (e) => {
     }
   }
 
-  // ── ']' : TERRAIN FEATURE-SCALE A/B (temporary instrument, 2026-08-21) ──────────────────────
-  // ⛔⛔ THE FIRST VERSION OF THIS DROVE `uDispDomainScale` AND THAT WAS A CONTAMINATED COMPARISON.
-  // Both materials share heightNoise.glsl.js's fbmd, whose octave-0 frequency is
-  // `uNoiseScale * 0.3 * uDispDomainScale`, so 3.333 does restore the legacy frequency (Planet.js:1376
-  // says that is exactly why the constant exists). BUT the lab stack ALSO spends the same uniform as a
-  // sample-domain multiplier at height.glsl.js:689 and a province-partition multiplier at :836, which
-  // the legacy material never does — Planet.js spends it ONLY at :317, normalising a gradient. So
-  // raising it changed feature size AND province count together. Ledger P-15 already warned this:
-  // "Same spelling, two quantities."
-  //
-  // ⭐ THERE IS NO UNIFORM-LEVEL "OLD GAME LOOK" ON A SWAPPED BODY — the two materials are different
-  // shader stacks, not one stack with a dial. What CAN be varied cleanly is the shipped pipeline's own
-  // base feature frequency, and `uNoiseScale` is that dial: it keys every octave in the lab stack
-  // (height.glsl.js:690-693, :974, :2396, :2430) and fbmd's freq, and NOTHING else. x3.333 puts fbmd's
-  // octave-0 exactly on the legacy frequency with no domain or province side-effect.
-  // ⛔ DELETE THIS BLOCK WHEN THE RULING LANDS. It is an instrument, not a feature.
-  if (e.code === 'BracketRight') {
-    const LEGACY_FREQ_MATCH = 1.0 / 0.3;   // puts fbmd octave-0 on uNoiseScale, the legacy value
-    const hit = [];
-    scene.traverse((o) => {
-      const u = o.material && o.material.uniforms;
-      if (u && u.uNoiseScale && u.uDispDomainScale) {
-        if (o.material.userData._baseNoiseScale === undefined) {
-          o.material.userData._baseNoiseScale = u.uNoiseScale.value;
-        }
-        hit.push({ u, base: o.material.userData._baseNoiseScale });
-      }
-    });
-    if (hit.length) {
-      const shippedNow = Math.abs(hit[0].u.uNoiseScale.value - hit[0].base) < 1e-9;
-      for (const h of hit) h.u.uNoiseScale.value = shippedNow ? h.base * LEGACY_FREQ_MATCH : h.base;
-      let hud = document.getElementById('_terrainScaleAB');
-      if (!hud) {
-        hud = document.createElement('div');
-        hud.id = '_terrainScaleAB';
-        hud.style.cssText =
-          'position:fixed;left:50%;top:14%;transform:translateX(-50%);z-index:99999;' +
-          'font:600 15px/1.5 monospace;color:#fff;background:rgba(0,0,0,.72);' +
-          'padding:10px 16px;border-radius:6px;text-align:center;pointer-events:none';
-        document.body.appendChild(hud);
-      }
-      hud.innerHTML = shippedNow
-        ? `<b>B: features ~3.3x SMALLER</b> &nbsp;— fbmd octave-0 on the pre-B7 frequency<br>` +
-          `<span style="opacity:.75">']' to compare &nbsp;·&nbsp; ${hit.length} bodies &nbsp;·&nbsp; feature size ONLY, no province change</span>`
-        : `<b>A: SHIPPED after B7</b> &nbsp;— the larger features you are seeing now<br>` +
-          `<span style="opacity:.75">']' to compare &nbsp;·&nbsp; ${hit.length} bodies &nbsp;·&nbsp; feature size ONLY, no province change</span>`;
-    }
-    e.preventDefault();
-    return;
-  }
-
   // K key: toggle keybinds overlay (works always — title, gameplay, warp)
   if (e.code === 'KeyK') {
     toggleKeybinds();
