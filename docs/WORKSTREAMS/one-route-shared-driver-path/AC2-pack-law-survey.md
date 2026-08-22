@@ -71,3 +71,52 @@ whether that decision still stands now that the goal is one route.
 Both workflows this session produced a plan or a claim set that did not survive contact with the
 adversarial pass — the wholesale-extraction plan (13 defects) and this survey (29 claims → 3
 decisions). ⭐ **In both cases the refuting agent was cheaper than the work its refutation prevented.**
+
+
+---
+
+# Rulings — 2026-08-22
+
+## `stormSeed`: **a lab authoring knob. Divergence DECLARED, not closed.** (Max)
+
+The pack keeps `GAME_STORM_SEED = 0`; the lab keeps its slider. ⭐ The 6 confirmed `polarDeck` rows
+are therefore **not debt** — they are a correct, intentional difference, and `polarDeck.js:86-101`
+already carries the argument. `stormSeed` is a control Max dials while authoring; `macroSeed` already
+varies per body, so the game needs no second entropy source. ⛔ **Do not "fix" these six.**
+
+## Crater floor: **the mesh-vs-raster split STANDS.** (Max)
+
+`craterUniforms.js:10-18`'s reasoning ("Same law, same closed forms, different floor") holds.
+`rockySurface`'s 11 and `craterDeck`'s 6 stay as they are. Unifying would move crater pixels on every
+rocky body to close a difference that is already reasoned and deliberate.
+
+## `uTermStrength`: ⛔ **PRECEDENT DOES NOT APPLY. HELD FOR MAX.**
+
+The limb precedent was applied, the change was written, it **failed two gates, and was reverted** —
+recorded here because the failure is the finding.
+
+**What failed, and why each is legitimate:**
+
+1. **`tests/port-terminator-law.test.js`** — *"magnitude matches the value the lab retuned to"*. The
+   test scrapes the lab's ternary for `0.15` and asserts `TERM_STRENGTH === that`. ⭐ **THE LAB IS THE
+   DELIBERATE SOURCE OF TRUTH FOR THIS TASTE VALUE AND THE MODULE MIRRORS IT** — the suite's own title
+   is *"strength and width are the LAB'S laws, not game-authored constants"*. Deleting the lab's copy
+   destroys the anchor that keeps the module honest against Max's UAT retune.
+2. **`tests/lab-surface-ratchet.test.js`** set 4 — shrink-only on `applyDrivers`'s call set. Adding a
+   `terminatorOpticsOf` call is a growth, and the ratchet is designed to make exactly that a reviewed
+   event, not a silent one.
+
+**Why the limb precedent does NOT extend here, stated precisely:**
+
+| | limb | termStrength |
+|---|---|---|
+| the lab's version was | a CRUDER law overriding a richer shared one | the TASTE MAGNITUDE the shared law is pinned against |
+| deleting it | closed a divergence | destroys the pin |
+
+⚠ The real disagreement is small and known: the module adds a pressure ramp the lab lacks, differing
+on **exactly two thin-column bodies** (~0.1304 vs 0.15 at ~0.105 bar), named at
+`terminatorOptics.js:83-88`. Max's 0.15 is preserved either way — the shared law's 0.15 is a CEILING.
+
+**Landing it needs Max, because it costs two fence edits:** re-pin the test on `TERM_STRENGTH` with
+provenance instead of scraping the lab, and re-bless the ratchet's set 4. ⛔ Modifying the gates that
+guard the work, to land a change nobody asked for, is not a trade working-Claude should make alone.
