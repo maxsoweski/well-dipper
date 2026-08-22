@@ -41,7 +41,7 @@ and it fails silently.**
 | `_gcond` (`planet-lod-lab.html:1726`) | `_fp = DRIVER_PRESETS[preset]` — the **FROZEN** preset | radius-aware, seed-**deaf** |
 | the lab's own 14 | `_dp = drawPresetConditions(preset, macroSeed)` — the **PER-SEED** draw | seed-aware, radius-**deaf** |
 
-The lab's own comment at `planet-lod-lab.html:1937` says why `_dp` exists: *"a macro seed produces a
+The lab's own comment at `planet-lod-lab.html:1935` says why `_dp` exists: *"a macro seed produces a
 genuinely different WORLD (iron, volatiles, age, temperature) rather than the same physics with a
 re-rolled noise field."* Handing the pack `_gcond` throws that away — every seed would render the
 same volcanism, frost and temperature. **Nothing would be red.**
