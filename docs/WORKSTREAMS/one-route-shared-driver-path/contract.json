@@ -15,25 +15,25 @@
     },
     {
       "id": "AC2",
-      "statement": "applyDrivers lives under src/worldengine/ as a shared module and planet-lod-lab.html IMPORTS IT BACK rather than declaring its own — so the lab and the game run the same driver code, and a change to one is live in the other.",
+      "statement": "applyDrivers's driver logic is converted into PACKS that both front-ends apply, and the lab's local applyDrivers shrinks to a thin caller over them \u2014 so the lab and the game run the same driver code. \u26d4 NOT a wholesale move of the 828 lines: that plan was killed on measured evidence (AC2-refutation.md). The destination is packs because packs are already the contracted thing both front-ends share.",
       "verifyVia": {
-        "input": "Grep planet-lod-lab.html for a local `function applyDrivers`, and resolve the lab's import closure.",
-        "observable": "No local definition survives in the lab; the shared module is in BOTH the lab's and the game's import closure. tests/one-pipeline-fence.test.js registration 2 reports it as shared rather than game-only."
+        "input": "Resolve the lab's and the game's import closures, and count the driver logic still local to planet-lod-lab.html.",
+        "observable": "Each converted block is a registered pack in the runtime PACKS array, imported by BOTH front-ends; the lab's applyDrivers no longer computes it locally. tests/one-pipeline-fence.test.js registration 2 shows the debt ledger SHRINKING, never growing."
       },
       "layer": "unit"
     },
     {
       "id": "AC3",
-      "statement": "The extraction changes no pixels. Moving the driver path is a code-lift, not a look change — any pixel movement means the two routes were not equivalent and that is a finding, not an acceptable cost.",
+      "statement": "Each conversion changes no pixels AND breaks no gate. \u26d4 THE GATE LIST IS THE CORRECTION THE REFUTATION FORCED: the killed plan's acceptance was a state-value diff, which is structurally blind to the citation fence and to fences that pin literal lab bytes. A criterion that cannot fail is not a criterion.",
       "verifyVia": {
-        "input": "Run Instrument C (port-uniform-delta:check) and the Instrument A membership diff at the extraction commit.",
-        "observable": "Instrument C reports ZERO delta on all shipped shared uniforms, exit 0. Instrument A shows no NEWLY RED test. Planet.js line count unchanged."
+        "input": "At each conversion commit run: port-uniform-delta:check, port-uniform-delta:citations, the Instrument A membership diff, and the fence suites (radius-live-feed, vis-scale, src-boundary, lab-surface-ratchet, one-pipeline).",
+        "observable": "Instrument C ZERO delta exit 0 \u00b7 citations exit 0 with CHECKED not falling \u00b7 Instrument A shows no NEWLY RED \u00b7 all fence suites green. \u26a0 planet-lod-lab.html carries 175 line-anchored citations inside 1933-2760 and 500 at or past 1933, so ANY line movement there is a citation event, not a free edit."
       },
       "layer": "integration"
     },
     {
       "id": "AC4",
-      "statement": "A new pack CANNOT ship without the lab importing it — the import-back rule is a gate that fails by name with the offending path, not a convention that rots. This is the half that stops the bleeding: the rule already existed in prose and was dropped for seven consecutive packs.",
+      "statement": "A new pack CANNOT ship without the lab importing it \u2014 the import-back rule is a gate that fails by name with the offending path, not a convention that rots. This is the half that stops the bleeding: the rule already existed in prose and was dropped for seven consecutive packs.",
       "verifyVia": {
         "input": "Add a deliberately-broken control pack that the lab does not import, and run the fence.",
         "observable": "tests/one-pipeline-fence.test.js fails by name with the offending module path in the message, and the debt ledger's shrink-only ceiling refuses to grow. Restoring the import returns it to green."
@@ -42,17 +42,17 @@
     },
     {
       "id": "AC5",
-      "statement": "Wiring the NEXT lab feature is demonstrably not a hand reconciliation of two routes — proven by doing one end to end against the shared path and recording what it actually cost.",
+      "statement": "Wiring the NEXT lab feature is demonstrably not a hand reconciliation of two routes \u2014 proven by converting one block to a pack end to end and recording what it actually cost.",
       "verifyVia": {
         "input": "Wire one previously-unwired lab feature from the queue-(a) set through the shared driver path.",
-        "observable": "The feature renders on a generated body in the running game, and the change touches the shared module plus its registration only — no second, game-side reconciliation of the same law."
+        "observable": "The feature renders on a generated body in the running game, and the change touches the shared module plus its registration only \u2014 no second, game-side reconciliation of the same law."
       },
       "layer": "integration",
       "live": true
     },
     {
       "id": "AC6",
-      "statement": "The lab still works. The extraction moves the lab's own driver path out from under it, so the lab authoring surface must behave exactly as before — this is the regression that would be easiest to miss and most expensive to discover later.",
+      "statement": "The lab still works. The extraction moves the lab's own driver path out from under it, so the lab authoring surface must behave exactly as before \u2014 this is the regression that would be easiest to miss and most expensive to discover later.",
       "verifyVia": {
         "input": "Load planet-lod-lab.html, drive its controls, and re-run the Step-5 shrink-only ratchet.",
         "observable": "tests/lab-surface-ratchet.test.js green; the lab renders and its controls move the same uniforms they moved before."
@@ -72,12 +72,12 @@
   ],
   "architecturalConnections": {
     "inputs": [
-      "planet-lod-lab.html:1933 `function applyDrivers()` — 828 lines, 146 distinct state fields, the subject of the extraction",
-      "src/worldengine/base/labCore.js — the lab's shared core, already imported by both front-ends",
-      "src/worldengine/port/writePackUniforms.js — the pack contract the shared path must keep honouring",
-      "src/worldengine/drivers/index.js — the runtime PACKS array and applyDriverPacks composition point",
-      "docs/FEATURES/lab-pipeline-into-game-PLAN.md — the plan of record; constraint #2 and LAYER 3 own this work",
-      "docs/FEATURES/lab-features-not-yet-wired-2026-08-20.md — the 48-feature inventory that sizes the follow-on"
+      "planet-lod-lab.html:1933 `function applyDrivers()` \u2014 828 lines, 146 distinct state fields, the subject of the extraction",
+      "src/worldengine/base/labCore.js \u2014 the lab's shared core, already imported by both front-ends",
+      "src/worldengine/port/writePackUniforms.js \u2014 the pack contract the shared path must keep honouring",
+      "src/worldengine/drivers/index.js \u2014 the runtime PACKS array and applyDriverPacks composition point",
+      "docs/FEATURES/lab-pipeline-into-game-PLAN.md \u2014 the plan of record; constraint #2 and LAYER 3 own this work",
+      "docs/FEATURES/lab-features-not-yet-wired-2026-08-20.md \u2014 the 48-feature inventory that sizes the follow-on"
     ],
     "outputs": [
       "A shared driver module under src/worldengine/ that BOTH front-ends import",
@@ -86,14 +86,19 @@
       "The follow-on workstream (wiring the ~26 queue-(a)/(p) features) becomes cheap because there is one route"
     ],
     "mustStayWorking": [
-      "The lab authoring surface — planet-lod-lab.html renders and its controls drive the same uniforms (AC6)",
-      "All 8 registered driver packs continue to apply on the same body populations — no body may change material",
+      "The lab authoring surface \u2014 planet-lod-lab.html renders and its controls drive the same uniforms (AC6)",
+      "All 8 registered driver packs continue to apply on the same body populations \u2014 no body may change material",
       "Instrument C: ZERO delta on the 55 shipped shared uniforms",
       "Instrument A: the 31 red-by-design tests stay exactly 31; no NEWLY RED",
       "The citation fence: CHECKED must RISE, never fall (805 -> 813 at B6)",
-      "B7's shipped flip — all swapped bodies keep rendering through the lab material",
-      "tests/lab-surface-ratchet.test.js — the Step-5 shrink-only ratchet over planet-lod-lab.html",
-      "Sol's 39 bodies keep rendering on the legacy path — it is Sol's renderer, permanently, not a fallback"
+      "B7's shipped flip \u2014 all swapped bodies keep rendering through the lab material",
+      "tests/lab-surface-ratchet.test.js \u2014 the Step-5 shrink-only ratchet over planet-lod-lab.html",
+      "Sol's 39 bodies keep rendering on the legacy path \u2014 it is Sol's renderer, permanently, not a fallback",
+      "tests/radius-live-feed-fence.test.js \u2014 :676 and :681 pin literal lab byte-strings at planet-lod-lab.html:2283 and :2406, INSIDE the region this workstream edits",
+      "tests/vis-scale-fence.test.js \u2014 :215 requires >=15 sVis-keyed uniform writes to REMAIN in the lab; :270 pins `const _dispR = sVis;` present there",
+      "tests/src-boundary-fence.test.js \u2014 :135 asserts the root-file allowlist is EXACTLY ONE entry; drawPresetConditions/drawPresetRadius come from the repo-root driver-presets.js",
+      "src/worldengine/port/writePackUniforms.js \u2014 the existing contracted writer. No second writer may be authored; conversions go through it",
+      "The pack collision guard at src/worldengine/drivers/index.js:317 \u2014 it only runs INSIDE applyDriverPacks's loop, so nothing may write pack-owned uniforms after it returns"
     ]
   }
 }
