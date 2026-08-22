@@ -4,13 +4,23 @@
 
 For longer arc, see `JOURNEY.md`. For meta-purpose, see `HEART_OF_DESIRE.md`.
 
-> ## ▶ 2026-08-21 (evening) — **B3 + B4 MERGED AND GATE-GREEN. D-2 PASSED. ▶ NEXT = THE GAS-HALF BLOCK.**
+> ## ▶ 2026-08-21 (late) — ⭐⭐ **B7 SHIPPED. THE WORLD ENGINE REACHES A PLAYER.** ▶ NEXT = MAX'S TERRAIN-SCALE RULING, THEN B6.
 >
-> **Handoff: [`FEATURES/handoff-2026-08-21-gas-half-next.md`](FEATURES/handoff-2026-08-21-gas-half-next.md).**
-> HEAD `0604d13`, tree clean, **pushed** (remote 0/0).
+> **Handoff: [`FEATURES/handoff-2026-08-21-b7-shipped-next-b6.md`](FEATURES/handoff-2026-08-21-b7-shipped-next-b6.md).**
+> HEAD `08c2521`, tree clean, **pushed** (remote 0/0, verified by `git ls-remote`).
 >
-> ⚠⚠ **Max's browser has `wd.labGasBodies = '1'` in localStorage — his game is NOT at its shipped
-> default.** Restore with `localStorage.setItem('wd.labGasBodies','0'); location.reload();`
+> `LAB_GAS_BODIES_DEFAULT` is **true**: 846 of 852 generated planets and 632 moons render through the
+> world engine. The parity ledger has **zero `blocking` rows** in both channels. ⛔ Step 12's "delete the
+> fallbacks" half is **STRUCK** — measured live, Sol renders 39 bodies and ZERO are swapped, so
+> `GAS_BODY` is Jupiter/Saturn/Uranus/Neptune's renderer, permanently. It is not a fallback.
+>
+> ⚠ **The Chrome dev window was buggy and must be RELAUNCHED** before any browser work.
+> ⛔ **Max does not use the browser console — drive it yourself via chrome-devtools.** His
+> `wd.labGasBodies` key is CLEARED (removed, not `'0'`); ⛔ do not set it to `'0'`, that now OUTRANKS the
+> shipped default and pins him to the legacy look.
+>
+> ▶ **The one open question:** `uDispDomainScale` went `3.333 → 1.0` with the flip — terrain features
+> render ~3.3x larger and nobody ruled that number. Max's eyes, one-line revert. Handoff §1.
 >
 > ### EIGHT LEDGER ROWS CLOSED
 > **B3** P-05 aurora · P-11's non-gas half · P-14's crater half · R-07 venus banding (130 bodies)
