@@ -1,0 +1,21 @@
+<!-- tests/fixtures/broken-control-pack/surviving-copy/lab-copy.html
+     ⛔⛔ BROKEN ON PURPOSE. The lab-side half of registration 3's control. It re-declares
+     `DUPLICATED_LAW` at module top level instead of importing it back, with a value that disagrees
+     with engine/dupLaw.js. Indentation matters: the real lab's module body sits at four spaces, and
+     the scanner anchors on that to tell a TOP-LEVEL declaration from a local inside a function. -->
+<!doctype html>
+<html>
+  <body>
+  <script type="module">
+    const DUPLICATED_LAW = 3.0;
+
+    function usesIt() {
+      // A LOCAL of the same name, indented deeper. The scanner must NOT count this one, or every
+      // shadowed variable in the real lab would read as a surviving copy.
+      const DUPLICATED_LAW = 4.0;
+      return DUPLICATED_LAW;
+    }
+    export { DUPLICATED_LAW, usesIt };
+  </script>
+  </body>
+</html>

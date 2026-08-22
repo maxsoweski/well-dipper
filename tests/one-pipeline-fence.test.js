@@ -1,0 +1,604 @@
+// tests/one-pipeline-fence.test.js — PLAN §4 Step 11, "the standing 'cheaper next time' fence".
+//
+// ⛔ THE GATE, IN THE PLAN'S OWN WORDS: *"A pass with no failing control is worthless."* Every
+// registration below is paired with a DELIBERATELY-BROKEN CONTROL FIXTURE committed under
+// tests/fixtures/broken-control-pack/, and the control asserts the fence goes red **by name, with
+// the offending path in the message**. A registration whose control has never been executed is not
+// a fence; it is a comment that runs.
+//
+// ⭐ WHY THE CONTROLS SCAN A FIXTURE TREE AND NOT src/. A control cannot leave a broken module under
+// `src/worldengine/` — that ships. So every scanner here takes its subject as an ARGUMENT and the
+// control re-enters through EXACTLY the same function the real assertion calls. A control that
+// passes is therefore evidence about the shipped scanner, not about a parallel copy of it. This is
+// the idiom tests/lab-surface-ratchet.test.js:233 `const LAB_SRC = process.env.WD_LAB_SURFACE_SRC` already uses for the same reason.
+//
+// ⚠ FIVE REGISTRATIONS PLUS THE STEP-5 RATCHET AS A SIXTH — but TWO of the six already ship, with
+// their own executed controls, and are NOT re-authored here:
+//   · Registration 1 (boundary) is tests/src-boundary-fence.test.js:213 `CONTROL: the scan is non-vacuous`.
+//   · Registration 6 (shrink-only ratchet) is tests/lab-surface-ratchet.test.js, CONTROLS A–N.
+// Copying either into this file would create a second expression of a law free to drift from the
+// one under test — which is the exact hazard registration 3 exists to ban. Instead the ROLL-CALL at
+// the bottom asserts both files still exist AND still carry a live control, so deleting one reds
+// here rather than silently reducing the fence from six registrations to four.
+import { describe, it, expect } from 'vitest';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join, relative, resolve } from 'node:path';
+import { stripCommentsPreservingOffsets, jsFilesUnder, lineOf } from './helpers/source-scan.mjs';
+import { PACKS } from '../src/worldengine/drivers/index.js';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const FIXTURES = 'tests/fixtures/broken-control-pack';
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// REGISTRATION 5 — no `SeededRandom` under `src/worldengine/`.
+//
+// ⭐ WHY THIS IS THE ONLY MECHANICAL GUARD AGAINST THE WHOLE HAZARD CLASS, stated with the measured
+// reason rather than as a taste rule: `conditionFromBody` runs INSIDE the rng-consuming region of
+// `PlanetGenerator.generate` — called at :726, while `noiseDetail: rng.range(0.3, 0.8)` is drawn at
+// :780. A worldengine module that imported, accepted or even referenced the seeded stream could
+// advance it, and every draw AFTER that point shifts. The failure surfaces as unrelated bodies
+// changing, with nothing red, which is why a grep is worth more here than its cost.
+//
+// "IMPORT, ACCEPT OR REFERENCE" is three distinct spellings and the scan must see all three: an
+// `import { SeededRandom }`, a parameter named for it, and a bare textual mention in live code.
+// Comments are stripped first — the prose in these files discusses the hazard constantly, and a
+// scanner that counted prose would be red on day one and get deleted.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+const SEEDED_RANDOM_RE = /\bSeededRandom\b/g;
+
+/**
+ * @param {string} rel repo-relative directory to scan
+ * @returns {{path: string, line: number, text: string}[]} one entry per live-code reference
+ */
+export function seededRandomViolations(rel) {
+  const out = [];
+  for (const path of jsFilesUnder(ROOT, rel)) {
+    const raw = readFileSync(join(ROOT, path), 'utf8');
+    // ⛔ COMMENTS STRIPPED, STRING LITERALS KEPT. Prose in this tree discusses the hazard by name
+    // constantly, so counting comments would red the fence on day one and get it deleted. Literals
+    // are KEPT because `require('SeededRandom')` and a dynamic `import('.../SeededRandom.js')` are
+    // both string-shaped, and both are real ways to reach it.
+    const code = stripCommentsPreservingOffsets(raw);
+    for (const m of code.matchAll(SEEDED_RANDOM_RE)) {
+      out.push({ path, line: lineOf(code, m.index), text: raw.split('\n')[lineOf(code, m.index) - 1].trim() });
+    }
+  }
+  return out;
+}
+
+/** The message the fence dies with. The offending PATH is the load-bearing part. */
+function seededRandomMessage(violations) {
+  return (
+    `one-pipeline-fence registration 5: \`SeededRandom\` is referenced in live code under the ` +
+    `worldengine tree. It must not be imported, accepted or referenced there — see the header. ` +
+    `Offending sites:\n` +
+    violations.map((v) => `  · ${v.path}:${v.line} — ${v.text}`).join('\n')
+  );
+}
+
+describe('registration 5 — no SeededRandom under src/worldengine/', () => {
+  it('the worldengine tree holds ZERO live references', () => {
+    const violations = seededRandomViolations('src/worldengine');
+    expect(violations, violations.length ? seededRandomMessage(violations) : undefined).toEqual([]);
+  });
+
+  it('CONTROL: the scan is non-vacuous — it DOES see a reference where one really lives', () => {
+    // src/generation/ is where SeededRandom is defined and used. A scanner that found nothing here
+    // would be finding nothing anywhere, and the assertion above would be a green that means zero.
+    const seen = seededRandomViolations('src/generation');
+    expect(seen.length).toBeGreaterThan(0);
+  });
+
+  it('CONTROL: the broken fixture makes it fail BY NAME, with the offending path in the message', () => {
+    const violations = seededRandomViolations(`${FIXTURES}/seeded-random`);
+    expect(violations.length).toBeGreaterThan(0);
+    const msg = seededRandomMessage(violations);
+    expect(msg).toContain(`${FIXTURES}/seeded-random/tainted.js`);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// REGISTRATION 4 — every module under `src/worldengine/drivers/` appears in the runtime `PACKS`.
+//
+// ⭐ THE ONE REGISTRATION WITH A VISUAL CONTROL, and it is the whole fence's: delete `giantDeck`'s
+// entry from `PACKS` and the same generated gas giant loses its bands; restore it and they return.
+// Registrations 1, 2, 3 and 5 have no pixel subject and none is manufactured for them.
+//
+// ⚠ REGISTRATION 2 CATCHES AN ORPHAN MODULE — one nothing imports. THIS catches the strictly harder
+// case: a module that IS imported, by the composition point itself, and then never applied. Nothing
+// throws in that state. The pack's own suite passes, because a pack suite calls the pack directly.
+// The game renders, because `applyDriverPacks` iterates `PACKS` and never reaches the entry. The
+// only symptom is a feature that does not appear.
+//
+// ⛔ THE LINK IS THE FILENAME ↔ `name` CONVENTION, said out loud rather than left implicit, because
+// it is the fence's one assumption: `giantDeck.js` ↔ `name: 'giantDeck'`. Measured at authoring —
+// eight files, eight entries, 1:1. The convention is not decoration; it IS what makes an
+// unregistered module detectable, so BOTH directions are asserted. A file with no entry is the
+// hazard above; an entry with no file is a hand-written copy of a pack in `index.js`, which is the
+// drift registration 3 bans in the other tree.
+//
+// `index.js` is excluded as the composition point itself — it is not a pack.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+const DRIVERS_DIR = 'src/worldengine/drivers';
+
+/**
+ * @param {string} rel repo-relative drivers directory
+ * @param {string[]} packNames the runtime `PACKS` names
+ * @returns {{path: string, module: string}[]} one entry per module with no registration
+ */
+export function unregisteredDrivers(rel, packNames) {
+  const registered = new Set(packNames);
+  const out = [];
+  for (const ent of readdirSync(join(ROOT, rel), { withFileTypes: true })) {
+    if (!ent.isFile() || !ent.name.endsWith('.js')) continue;
+    if (ent.name === 'index.js') continue;           // the composition point, not a pack
+    const module = ent.name.replace(/\.js$/, '');
+    if (!registered.has(module)) out.push({ path: `${rel}/${ent.name}`, module });
+  }
+  return out.sort((a, b) => a.module.localeCompare(b.module));
+}
+
+function unregisteredMessage(violations) {
+  return (
+    `one-pipeline-fence registration 4: a module under \`${DRIVERS_DIR}/\` is NOT in the runtime ` +
+    `\`PACKS\` array, so it can never be applied and nothing will throw. Add its entry to ` +
+    `src/worldengine/drivers/index.js, or delete the module. Offending modules:\n` +
+    violations.map((v) => `  · ${v.path} (expected a PACKS entry named '${v.module}')`).join('\n')
+  );
+}
+
+describe('registration 4 — every drivers module is in the runtime PACKS array', () => {
+  const packNames = PACKS.map((p) => p.name);
+
+  it('ZERO drivers modules are unregistered', () => {
+    const violations = unregisteredDrivers(DRIVERS_DIR, packNames);
+    expect(violations, violations.length ? unregisteredMessage(violations) : undefined).toEqual([]);
+  });
+
+  it('the reverse also holds — every PACKS entry has a module file behind it', () => {
+    // An entry with no file is a pack hand-written into the composition point, free to drift from
+    // the gated one. Same law, other direction.
+    const orphanEntries = packNames.filter((n) => !existsSync(join(ROOT, DRIVERS_DIR, `${n}.js`)));
+    expect(orphanEntries).toEqual([]);
+  });
+
+  it('CONTROL: the scan is non-vacuous — it reads the REAL drivers tree, all eight of them', () => {
+    // Pass an EMPTY registration list against the real tree: every module must then be reported.
+    // This proves the walker sees the subject, which the green above cannot.
+    const allUnregistered = unregisteredDrivers(DRIVERS_DIR, []);
+    expect(allUnregistered.map((v) => v.module).sort()).toEqual(
+      ['craterDeck', 'giantDeck', 'giantSurface', 'limbDeck', 'polarDeck', 'rockySurface', 'solidFeatures', 'solidOptics'],
+    );
+  });
+
+  it('CONTROL: the broken fixture makes it fail BY NAME, with the offending path in the message', () => {
+    const violations = unregisteredDrivers(`${FIXTURES}/unregistered-driver`, packNames);
+    expect(violations.length).toBeGreaterThan(0);
+    expect(unregisteredMessage(violations)).toContain(`${FIXTURES}/unregistered-driver/ghostDeck.js`);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// REGISTRATION 3 — no surviving lab copy.
+//
+// ⭐ THE PRECEDENT IS NAMED IN THE PLAN AND IT IS NOT HYPOTHETICAL: `craterRelief.glsl.js` kept BOTH
+// implementations, "and that copy is now a law that quietly disagrees". A law with two declarations
+// has no single home, so nothing tells you which one the pixels came from. The fence's subject is
+// therefore an EXPORTED worldengine symbol that the lab RE-DECLARES at module top level instead of
+// importing back.
+//
+// ⚠ TWO ANCHORS DO THE DISCRIMINATING, and both were arrived at by MEASUREMENT, not by taste:
+//   · engine side — `export`ed names only. Scanning every definition instead finds 65 collisions,
+//     all of them local variables (`h`, `g`, `out`, `seed`) that share a name by coincidence. An
+//     exported name is a law with a home; a local is not.
+//   · lab side — declarations at EXACTLY four spaces, the real lab's module-body indent (its one
+//     module script opens at planet-lod-lab.html:148 `<script type="module">`). A deeper indent is a local inside
+//     a function, and counting those would make every shadowed variable read as a surviving copy.
+// With both anchors the real corpus yields 608 exported names against 267 lab top-level ones and
+// EXACTLY ONE collision — the allowlisted entry below.
+//
+// ⛔ THE ALLOWLIST CARRIES WHAT REMOVES IT, and "TBD" is not an admissible value — the same
+// discipline tests/src-boundary-fence.test.js states for its own single entry. It also carries a
+// VALUE PIN, which is the stronger half: an allowlisted duplicate is only tolerable while the two
+// declarations AGREE, so the drift the fence exists to catch is caught even on the entry that is
+// permitted to exist.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+const LAB_HTML = 'planet-lod-lab.html';
+
+const SURVIVING_COPY_ALLOWLIST = Object.freeze([
+  Object.freeze({
+    name: 'C_CRATER',
+    // src/worldengine/drivers/craterDeck.js:78 `export const C_CRATER = 1.0;` declares itself "a forward of the lab's own
+    // declaration", citing planet-lod-lab.html:821 `const C_CRATER = 1.0;` by line. So this duplicate is DELIBERATE and
+    // documented at both ends — which is what makes it allowlistable, and is also exactly why it
+    // needs the value pin: a forward that stops agreeing is worse than no forward.
+    clears:
+      "registration 2's import-back applied to the calibration constants — the lab imports " +
+      'C_CRATER from src/worldengine/drivers/craterDeck.js instead of declaring its own. Not done ' +
+      'in this step because planet-lod-lab.html is edited concurrently by other lanes and the ' +
+      'Step-5 ratchet watches that file.',
+    // Both declarations must resolve to this. If either moves, the pin reds by name.
+    pinnedValue: '1.0',
+  }),
+]);
+
+/** Exported symbol → defining path, over a worldengine-shaped tree. */
+export function exportedEngineSymbols(rel) {
+  const EXPORTED = /(?:^|\n)export\s+(?:async\s+)?(?:function|const|let|class)\s+([A-Za-z_$][\w$]*)/g;
+  const out = new Map();
+  for (const path of jsFilesUnder(ROOT, rel)) {
+    const code = stripCommentsPreservingOffsets(readFileSync(join(ROOT, path), 'utf8'));
+    for (const m of code.matchAll(EXPORTED)) if (!out.has(m[1])) out.set(m[1], path);
+  }
+  return out;
+}
+
+/** Top-level (four-space) declaration name → line, over a lab-shaped HTML file. */
+export function labTopLevelDecls(rel) {
+  const code = stripCommentsPreservingOffsets(readFileSync(join(ROOT, rel), 'utf8'));
+  const TOPLEVEL = /\n {4}(?:async\s+)?(?:function|const|let|class)\s+([A-Za-z_$][\w$]*)/g;
+  const out = new Map();
+  for (const m of code.matchAll(TOPLEVEL)) if (!out.has(m[1])) out.set(m[1], lineOf(code, m.index + 1));
+  return out;
+}
+
+export function survivingCopies(engineRel, labRel, allowlist = SURVIVING_COPY_ALLOWLIST) {
+  const permitted = new Set(allowlist.map((e) => e.name));
+  const engine = exportedEngineSymbols(engineRel);
+  const lab = labTopLevelDecls(labRel);
+  const out = [];
+  for (const [name, enginePath] of engine) {
+    if (permitted.has(name) || !lab.has(name)) continue;
+    out.push({ name, enginePath, labPath: labRel, labLine: lab.get(name) });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function survivingCopyMessage(violations) {
+  return (
+    `one-pipeline-fence registration 3: a law exported from the worldengine tree is ALSO declared ` +
+    `at top level in the lab. Two declarations, no single home — the craterRelief.glsl.js ` +
+    `precedent. Import it back, or allowlist it with what clears it AND a value pin. Offending:\n` +
+    violations.map((v) => `  · ${v.name} — ${v.enginePath} vs ${v.labPath}:${v.labLine}`).join('\n')
+  );
+}
+
+describe('registration 3 — no surviving lab copy', () => {
+  it('ZERO un-allowlisted laws are declared in both trees', () => {
+    const violations = survivingCopies('src/worldengine', LAB_HTML);
+    expect(violations, violations.length ? survivingCopyMessage(violations) : undefined).toEqual([]);
+  });
+
+  it('CONTROL: the lab scan is non-vacuous — it still matches a known-present declaration', () => {
+    // The plan's own non-vacuity requirement, verbatim: "proven non-vacuous by asserting it still
+    // matches a known-present string". `C_CRATER` is that string, and it is also the allowlisted
+    // entry — so this control ALSO proves the allowlist is live rather than vestigial.
+    const decls = labTopLevelDecls(LAB_HTML);
+    expect(decls.has('C_CRATER')).toBe(true);
+    expect(decls.size).toBeGreaterThan(200);
+  });
+
+  it('every allowlist entry names what clears it, and "TBD" is not admissible', () => {
+    for (const e of SURVIVING_COPY_ALLOWLIST) {
+      expect(e.clears, `allowlist entry '${e.name}' must name what removes it`).toBeTruthy();
+      expect(e.clears.trim().toUpperCase()).not.toBe('TBD');
+      expect(e.clears.length).toBeGreaterThan(20);
+    }
+  });
+
+  it('an allowlisted duplicate is pinned at BOTH ends — it is tolerable only while it agrees', () => {
+    // The load-bearing half of the allowlist. A forward that stops agreeing is worse than no
+    // forward, because both sides still look documented.
+    const labSrc = readFileSync(join(ROOT, LAB_HTML), 'utf8');
+    const engineFiles = jsFilesUnder(ROOT, 'src/worldengine');
+    for (const e of SURVIVING_COPY_ALLOWLIST) {
+      const decl = new RegExp(`\\b(?:const|let)\\s+${e.name}\\s*=\\s*([^;,]+)`);
+      const labHit = labSrc.match(decl);
+      expect(labHit, `${e.name} is allowlisted but no longer declared in ${LAB_HTML}`).toBeTruthy();
+      expect(labHit[1].trim()).toBe(e.pinnedValue);
+      const engineHit = engineFiles
+        .map((f) => readFileSync(join(ROOT, f), 'utf8').match(new RegExp(`export\\s+const\\s+${e.name}\\s*=\\s*([^;,]+)`)))
+        .find(Boolean);
+      expect(engineHit, `${e.name} is allowlisted but no longer exported from the engine tree`).toBeTruthy();
+      expect(engineHit[1].trim()).toBe(e.pinnedValue);
+    }
+  });
+
+  it('CONTROL: the broken fixture makes it fail BY NAME, with the offending path in the message', () => {
+    const violations = survivingCopies(
+      `${FIXTURES}/surviving-copy/engine`,
+      `${FIXTURES}/surviving-copy/lab-copy.html`,
+      [],
+    );
+    expect(violations.length).toBeGreaterThan(0);
+    const msg = survivingCopyMessage(violations);
+    expect(msg).toContain('DUPLICATED_LAW');
+    expect(msg).toContain(`${FIXTURES}/surviving-copy/engine/dupLaw.js`);
+  });
+
+  it('CONTROL: a DEEPER-indented local of the same name is NOT a surviving copy', () => {
+    // lab-copy.html shadows DUPLICATED_LAW inside `usesIt()` at six spaces. Exactly one violation
+    // must be reported, not two — otherwise the fence would red on every shadowed variable.
+    const violations = survivingCopies(
+      `${FIXTURES}/surviving-copy/engine`,
+      `${FIXTURES}/surviving-copy/lab-copy.html`,
+      [],
+    );
+    expect(violations).toHaveLength(1);
+    expect(violations[0].labLine).toBe(10);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// REGISTRATION 2 — import-back, GENERALISED BEYOND `drivers/`.
+//
+// Every pipeline module the GAME imports is also imported by `planet-lod-lab.html`. ⭐ Scoping this
+// to packs would never have seen `atmosphereOptics.js`, which is not a pack and is the failure that
+// HAS ALREADY OCCURRED. The subject is therefore the two IMPORT CLOSURES, not a directory.
+//
+// ⛔⛔ THIS REGISTRATION IS RED-ON-ARRIVAL AND THAT IS THE POINT — 14 modules measured at authoring
+// sit in the game's closure and not the lab's. It is not this step's job to fix them (that means
+// editing planet-lod-lab.html, which other lanes edit concurrently, and converting the lab's inline
+// uniform writes to pack calls). It IS this step's job to make the number COUNTED, NAMED, and unable
+// to GROW. So the divergence ships as a shrink-only debt ledger, and a 15th entry reds.
+//
+// ⭐ THE SHARPEST ROW, and the evidence is the module's OWN HEADER, not this fence's reading:
+// src/worldengine/base/terminatorOptics.js:2 `ONE function object answers for both front-ends`
+// says exactly that — and the lab does not import it. A module whose stated purpose is
+// unmet, with nothing red. That is the whole registration in one file.
+//
+// ⚠ THE PRECEDENT THAT PROVES THE DISCIPLINE EXISTED AND WAS DROPPED: planet-lod-lab.html:188 `giantDeckPack`
+// imports it back, with a comment reading "now live in ONE module the GAME imports
+// too" (PLAN §4 Step 5c, driver pack #1). Seven packs have been added since; NONE of them was
+// imported back. The fence exists because that is invisible otherwise.
+//
+// TWO TIERS, and the split is what keeps the ledger honest:
+//   · GAME_ONLY_BY_DESIGN — modules that must NEVER be in the lab's closure. Each names a reason AND
+//     an in-source `evidence` phrase, and the phrase is ASSERTED to still be present. An exemption
+//     whose justification has been edited away is deleted, not inherited.
+//   · IMPORT_BACK_DEBT — real divergences. Each names what clears it. SHRINK-ONLY: the ceiling below
+//     may be lowered, never raised, and an entry that is no longer divergent must be REMOVED (the
+//     liveness test reds on a stale one, so the ledger cannot quietly accumulate fiction).
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+const GAME_ONLY_BY_DESIGN = Object.freeze([
+  Object.freeze({
+    path: 'src/worldengine/port/conditionFromBody.js',
+    reason:
+      'The game-side adapter itself. It converts PlanetGenerator output into a condition vector; ' +
+      'the lab has no PlanetGenerator output to convert, it authors conditions from its own state. ' +
+      'Importing it into the lab would give the lab a seam it has no data for.',
+    evidence: 'the GAME-SIDE adapter into the world engine',
+  }),
+]);
+
+// ⛔ SHRINK-ONLY. Lower it when an entry clears; NEVER raise it. Raising it is how a fence becomes a
+// changelog. Measured 13 at authoring (2026-08-21), the 14 diverging modules minus the one exemption.
+const IMPORT_BACK_DEBT_CEILING = 13;
+
+const IMPORT_BACK_DEBT = Object.freeze([
+  // ── the seven packs added after driver pack #1, none imported back ──
+  ...['craterDeck', 'giantSurface', 'limbDeck', 'polarDeck', 'rockySurface', 'solidFeatures', 'solidOptics'].map((n) =>
+    Object.freeze({
+      path: `src/worldengine/drivers/${n}.js`,
+      clears:
+        `planet-lod-lab.html imports ${n} back and calls it, as it already does for giantDeckPack ` +
+        `at the giantDeckPack import site (PLAN §4 Step 5c). Until then the lab writes these uniforms ` +
+        `inline and the two front-ends compute the same values by two routes.`,
+    }),
+  ),
+  Object.freeze({
+    path: 'src/worldengine/drivers/index.js',
+    clears:
+      'The lab applies packs through `applyDriverPacks` instead of calling each pack individually. ' +
+      'Blocked by the seven rows above — there is nothing to compose until the packs are imported.',
+  }),
+  Object.freeze({
+    path: 'src/worldengine/port/craterUniforms.js',
+    clears:
+      "The lab calls `craterUniformsFrom` instead of its inline uCrater*/uEjecta* writes at " +
+      'planet-lod-lab.html:5358 `featureFrequencyFromKm`. Rides with the craterDeck row above.',
+  }),
+  Object.freeze({
+    path: 'src/worldengine/shaders/craterRelief.glsl.js',
+    clears:
+      'A DECLARED divergence, not an oversight: the header records three deliberate departures from ' +
+      'the lab, each measured, and tests/crater-relief-transcription.test.js pins them. It clears ' +
+      'when the lab adopts the merged combiner — or it is promoted to a GAME_ONLY_BY_DESIGN row if ' +
+      'Max rules the divergences permanent. ⚠ Listed as debt rather than exempt BECAUSE that ruling ' +
+      'has not been made, and the plan names this exact file as the both-were-kept precedent.',
+  }),
+  Object.freeze({
+    path: 'src/worldengine/base/terminatorOptics.js',
+    clears:
+      'The lab imports `terminatorOpticsOf`. ⭐ This module\u2019s own header (line 2) states it was ' +
+      'extracted "so that ONE function object answers for both front-ends" — so its stated purpose ' +
+      'is unmet today, and clearing this row is what makes the header true.',
+  }),
+  Object.freeze({
+    path: 'src/worldengine/base/macroWavelength.js',
+    clears:
+      "The lab imports the wavelength law rather than computing its own. ⚠ B7 moved the game's " +
+      '`uNoiseScale` onto this derivation to MATCH the lab, so the lab reaching the same number by ' +
+      'a different route is precisely the drift this fence is for.',
+  }),
+  Object.freeze({
+    path: 'src/worldengine/base/emission-e.js',
+    clears:
+      'The lab imports the blackbody emission register. Increment #2 shipped it into the game ' +
+      'closure only; the lab has no emission control surface yet, so this clears with that control.',
+  }),
+]);
+
+/** Import specifiers of one file, resolved to repo-relative paths that exist. */
+export function resolvedImportsOf(rel) {
+  const SPEC = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])([^'"]+)\1/g;
+  const code = stripCommentsPreservingOffsets(readFileSync(join(ROOT, rel), 'utf8'), { blankLiteralText: false });
+  const out = [];
+  for (const m of code.matchAll(SPEC)) {
+    const spec = m[2];
+    if (!spec.startsWith('.') && !spec.startsWith('/')) continue;   // bare = node_modules, not our subject
+    const abs = spec.startsWith('/') ? join(ROOT, spec) : resolve(join(ROOT, dirname(rel)), spec);
+    const r = relative(ROOT, abs).split('\\').join('/');
+    if (existsSync(join(ROOT, r))) out.push(r);
+  }
+  return out;
+}
+
+function closureOf(roots) {
+  const seen = new Set();
+  const stack = [...roots];
+  while (stack.length) {
+    const f = stack.pop();
+    if (seen.has(f)) continue;
+    seen.add(f);
+    try { for (const d of resolvedImportsOf(f)) if (!seen.has(d)) stack.push(d); } catch { /* unreadable = leaf */ }
+  }
+  return seen;
+}
+
+/**
+ * Pipeline modules in the game's closure but not the lab's.
+ * @param {string} srcRel  a `src`-shaped tree; its `worldengine/` subtree is the pipeline
+ * @param {string} labRel  the lab front-end
+ */
+export function gameOnlyPipelineModules(srcRel, labRel) {
+  const engineRel = `${srcRel}/worldengine`;
+  const all = jsFilesUnder(ROOT, srcRel);
+  const gameEntries = all.filter(
+    (f) => !f.startsWith(`${engineRel}/`) && resolvedImportsOf(f).some((d) => d.startsWith(`${engineRel}/`)),
+  );
+  const game = closureOf(gameEntries);
+  const lab = closureOf([labRel]);
+  return [...game].filter((f) => f.startsWith(`${engineRel}/`) && !lab.has(f)).sort();
+}
+
+function importBackMessage(violations) {
+  return (
+    `one-pipeline-fence registration 2: a pipeline module is in the GAME's import closure and NOT ` +
+    `the lab's, so one front-end exercises it and the other cannot. Import it back in ` +
+    `planet-lod-lab.html (the giantDeckPack import precedent), or add a debt row ` +
+    `naming what clears it. Offending modules:\n` +
+    violations.map((v) => `  · ${v}`).join('\n')
+  );
+}
+
+describe('registration 2 — every pipeline module the game imports is imported by the lab', () => {
+  const accounted = new Set([...GAME_ONLY_BY_DESIGN.map((e) => e.path), ...IMPORT_BACK_DEBT.map((e) => e.path)]);
+
+  it('ZERO unaccounted modules diverge between the two closures', () => {
+    const violations = gameOnlyPipelineModules('src', LAB_HTML).filter((f) => !accounted.has(f));
+    expect(violations, violations.length ? importBackMessage(violations) : undefined).toEqual([]);
+  });
+
+  it('the debt ledger is SHRINK-ONLY — it may fall, never grow', () => {
+    expect(IMPORT_BACK_DEBT.length).toBeLessThanOrEqual(IMPORT_BACK_DEBT_CEILING);
+  });
+
+  it('every debt row is LIVE — a cleared row is deleted, not left standing as fiction', () => {
+    const diverging = new Set(gameOnlyPipelineModules('src', LAB_HTML));
+    const stale = IMPORT_BACK_DEBT.filter((e) => !diverging.has(e.path)).map((e) => e.path);
+    expect(
+      stale,
+      `these debt rows no longer diverge — DELETE them and lower IMPORT_BACK_DEBT_CEILING:\n${stale.join('\n')}`,
+    ).toEqual([]);
+  });
+
+  it('every debt row names what clears it, and "TBD" is not admissible', () => {
+    for (const e of IMPORT_BACK_DEBT) {
+      expect(e.clears, `debt row '${e.path}' must name what removes it`).toBeTruthy();
+      expect(e.clears.trim().toUpperCase()).not.toBe('TBD');
+      expect(e.clears.length).toBeGreaterThan(40);
+    }
+  });
+
+  it('every by-design exemption still carries its in-source justification', () => {
+    // An exemption is only as good as the reason in the file. If someone rewrites that header, the
+    // exemption must fall over rather than be inherited by whatever the file became.
+    for (const e of GAME_ONLY_BY_DESIGN) {
+      const src = readFileSync(join(ROOT, e.path), 'utf8');
+      expect(src, `${e.path} no longer states: "${e.evidence}"`).toContain(e.evidence);
+    }
+  });
+
+  it('CONTROL: the closures are non-vacuous — both front-ends really do reach the pipeline', () => {
+    const game = gameOnlyPipelineModules('src', LAB_HTML);
+    expect(game.length).toBe(accounted.size);           // 14 measured at authoring
+    expect(closureOf([LAB_HTML]).size).toBeGreaterThan(40);
+  });
+
+  it('CONTROL: the broken fixture makes it fail BY NAME, with the offending path in the message', () => {
+    const base = `${FIXTURES}/no-lab-import`;
+    const violations = gameOnlyPipelineModules(`${base}/src`, `${base}/lab-stub.html`);
+    expect(violations.length).toBeGreaterThan(0);
+    expect(importBackMessage(violations)).toContain(`${base}/src/worldengine/base/orphanOptics.js`);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// ROLL-CALL — registrations 1 and 6, which ship elsewhere.
+//
+// ⛔ WHY THEY ARE NOT RE-AUTHORED HERE. Both already exist WITH executed controls. Copying either
+// into this file would create a second expression of a law free to drift from the one under test —
+// which is the exact hazard registration 3 above exists to ban, committed by the fence that bans it.
+//
+// ⭐ WHAT THIS ROLL-CALL BUYS, and it is not bookkeeping: without it, deleting
+// src/src-boundary-fence.test.js silently reduces Step 11's fence from six registrations to four,
+// and every remaining test still passes. The roll-call is what makes that deletion loud. It asserts
+// each file EXISTS and still carries a live control — not merely that a filename is present.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+const DISCHARGED_ELSEWHERE = Object.freeze([
+  Object.freeze({
+    registration: 1,
+    what: 'no file under src/ imports a loose repo-root .js; allowlist entries name what clears them',
+    file: 'tests/src-boundary-fence.test.js',
+    controlEvidence: 'CONTROL: the scan is non-vacuous',
+  }),
+  Object.freeze({
+    registration: 6,
+    what: "the Step-5 shrink-only ratchet over planet-lod-lab.html",
+    file: 'tests/lab-surface-ratchet.test.js',
+    controlEvidence: 'CONTROL',
+  }),
+]);
+
+describe('roll-call — registrations 1 and 6 are discharged, not missing', () => {
+  it('each discharged registration still has its file', () => {
+    for (const e of DISCHARGED_ELSEWHERE) {
+      expect(
+        existsSync(join(ROOT, e.file)),
+        `registration ${e.registration} (${e.what}) was discharged by ${e.file}, which is GONE. ` +
+        `Step 11's fence is now missing a registration. Restore the file, or author the ` +
+        `registration here and delete this roll-call row.`,
+      ).toBe(true);
+    }
+  });
+
+  it('each discharged registration still carries a live control of its own', () => {
+    // The file existing is not enough — a fence whose control was deleted is the "pass with no
+    // failing control" the gate calls worthless, and this roll-call would otherwise bless it.
+    for (const e of DISCHARGED_ELSEWHERE) {
+      const src = readFileSync(join(ROOT, e.file), 'utf8');
+      expect(
+        src.includes(e.controlEvidence),
+        `${e.file} no longer contains a control matching "${e.controlEvidence}" — registration ` +
+        `${e.registration} may still assert, but nothing proves it can FAIL.`,
+      ).toBe(true);
+    }
+  });
+
+  it('all six registrations are accounted for — four here, two discharged', () => {
+    // The arithmetic is the point: Step 11 specifies five registrations plus the Step-5 ratchet as a
+    // sixth. If someone deletes a describe() block above, this stays green — which is why the
+    // per-registration controls, not this count, are the real gate. It exists to catch the OTHER
+    // failure: a registration nobody ever wrote.
+    const authoredHere = [2, 3, 4, 5];
+    const discharged = DISCHARGED_ELSEWHERE.map((e) => e.registration);
+    expect([...authoredHere, ...discharged].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+});

@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-21T22:23:04.150Z",
+  "recordedAt": "2026-08-22T03:18:54.043Z",
   "recordedFromCommit": {
-    "sha": "3e42a8129a47c9c8caf4baa0c68415b49bff25cf",
+    "sha": "cc0bfe4c03db0bdf51c214f46a7a94a2867b8928",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -28,12 +28,12 @@
   },
   "summary": {
     "counts": {
-      "collectedFiles": 340,
+      "collectedFiles": 341,
       "failingFiles": 6,
       "nonCollectingFiles": 15,
-      "tests": 5675,
+      "tests": 5698,
       "failed": 31,
-      "passed": 5640,
+      "passed": 5663,
       "skipped": 4,
       "todo": 0
     },
@@ -287,6 +287,7 @@
       "tests/moon-rng-stream-identity.test.js": 4,
       "tests/moon-shadow-write-guard.test.js": 12,
       "tests/motion-test-kit-smoke.test.js": 6,
+      "tests/one-pipeline-fence.test.js": 23,
       "tests/orbit-ring-rebase.test.js": 10,
       "tests/pack-contract.test.js": 31,
       "tests/planet-archetypes.test.js": 21,
