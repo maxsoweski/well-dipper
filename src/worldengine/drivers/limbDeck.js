@@ -18,7 +18,7 @@
 //     — INSIDE `applyDrivers`, i.e. inside the pack-legal region and NOT inside the fenced storm
 //     writer. Its one input is planet-lod-lab-core.js:625 `const hasAtmo = !!d.atmosphere;`, which
 //     the game's condition vector answers directly. Nothing had to be extracted.
-//   · WIDTH and HUE — the lab does not own these either. planet-lod-lab.html:2464 `const _atmoOptics = atmosphereOpticsOf(`
+//   · WIDTH and HUE — the lab does not own these either. planet-lod-lab.html:2465 `const _atmoOptics = atmosphereOpticsOf(`
 //     is the SAME module the game already calls at src/objects/Planet.js:1610 `const optics = atmosphereOpticsOf(condition);`
 //     and already writes to its own legacy material at src/objects/Planet.js:1643 `uLimbExponent: { value: optics.limbExponent },`.
 //     So this pack does not compute a width or a hue: it forwards the shared law's answer, and on a

@@ -10,6 +10,10 @@
 // and is acceptable ONLY because this file measures rather than renders. Verified chain:
 // lab:2854 writes state.craterDensity -> lab:5354 writes uCraterDensity, and BOTH front-ends
 // multiply by craterRelevance, so the comparison below is apples-to-apples on the pre-relevance term.
+// ⛔⛔ AS OF 2026-08-22 THIS TOOL MEASURES HISTORY, NOT CURRENT STATE. The lab was converted to call
+// `craterUniformsFrom`, so the transcribed expression below is the law the lab USED TO run. Kept as the
+// record of what the divergence WAS (88.0%, median 0.47x) — the number that justified the conversion.
+// ⚠ Do NOT read a fresh run as 'the divergence is still there': it is measuring the retired expression.
 // ⚠ 60 systems, not the canonical 200 — directional, and the sample size is stated rather than implied.
 import { StarSystemGenerator } from '../src/generation/StarSystemGenerator.js';
 import { conditionFromBody } from '../src/worldengine/port/conditionFromBody.js';

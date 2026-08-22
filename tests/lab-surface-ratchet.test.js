@@ -673,7 +673,7 @@ const APPLY_DRIVERS_AND_FRAME_CALLEES = [
   'applyDrivers::_ss',
   'applyDrivers::applyArchetypeFilter',
   'applyDrivers::applyStormState',        // ⭐ driver function #3 — see KNOWN LIMIT 1
-  'applyDrivers::atmosphereOpticsOf',
+  'applyDrivers::atmosphereOpticsOf', 'applyDrivers::terminatorOpticsOf',   // ⛔ APPENDED ON THIS LINE, NOT INSERTED — this file is line-cited (one-pipeline-fence.test.js:233). ⭐ terminatorOpticsOf REGISTERED 2026-08-22, per this fence's own instruction ('add the entry ... with a one-line reason. Silence is not one of the options.'). REASON: it is the OPPOSITE of the hazard set 4 guards. Set 4 exists to catch a feature authored INTO the lab through a helper instead of a pack; this call REMOVES a law from the lab — the binary termStrength copy — and routes it to the shared module the game already uses. It sits beside atmosphereOpticsOf, which is here for the same reason.
   'applyDrivers::deriveConditionVector',
   'applyDrivers::deriveUniforms',
   'applyDrivers::drawPresetConditions',

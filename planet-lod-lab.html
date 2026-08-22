@@ -175,7 +175,7 @@
     import { computeE1 } from './src/worldengine/base/e1Regime.js'; import { giantRegimeOf, compositionClass } from './src/worldengine/base/e1Regime.js';   // V2-1 Slice D (SHADOW): pure condition-vector+macroSeed → E1 regime tuple. DATA-ONLY — stashed on state for _lab.e1Probe(), NEVER passed into route() (E1 has zero routing influence this increment). ⚠ TWO import STATEMENTS FROM ONE MODULE ON ONE LINE, ON PURPOSE — do not "tidy" them into a single braced list. tests/worldengine-e1-shadow-audit.test.js pins this exact byte string `import { computeE1 } from './src/worldengine/base/e1Regime.js'` (V2-1 AC-0 check 1), so widening the first list reds that audit — MEASURED, it went red on exactly that edit and green again on this one — and the §10 line-stability rule on this file — eight symbol-checked refs from other files land BELOW this edit, e.g. planet-lod-lab.html:1811 `function applyStormState(){` — forbids spending a second line on it. Step 4 item 5's giantRegimeOf + compositionClass ride the second statement.
     import { icenessOf, surfacePaletteOf, biosphereOf, BIO_PIGMENT } from './src/worldengine/base/surfaceMaterial.js';   // V2-6 S3: condition-derived icy-material fraction → drives uIcenessMix (Stage-6 albedo). Pure scalar, imports nothing. · surfacePaletteOf: condition-derived GROUND PALETTE {fresh, weathered, sediment} → drives uFreshColor/uWeatheredColor/uSedColor (was a single hard-coded rocky tone for all 18 presets, uniform across every world's whole surface).
     import { applyAlbedoTransfer } from './src/worldengine/display/albedoTransfer.js';   // the albedo DISPLAY transfer, shared with the game port (one copy, by design — see that file's header).
-    import { atmosphereOpticsOf } from './src/worldengine/base/atmosphereOptics.js';   // V2-7: condition-derived limb/terminator hue -> retires LIMB_COLOR_BY_PRESET + TERM_COLOR_BY_PRESET (the last name-keyed lookups in the colour path). Pure scalar, imports nothing.
+    import { atmosphereOpticsOf } from './src/worldengine/base/atmosphereOptics.js'; import { terminatorOpticsOf } from './src/worldengine/base/terminatorOptics.js'; import { craterUniformsFrom } from './src/worldengine/port/craterUniforms.js';   // V2-7: condition-derived limb/terminator hue -> retires LIMB_COLOR_BY_PRESET + TERM_COLOR_BY_PRESET (the last name-keyed lookups in the colour path). Pure scalar, imports nothing.
     import { craterSchedule, craterRelevanceOf, D_D_SIMPLE } from './src/worldengine/base/bombardment.js';   // inc3b S3-fix: schedule-derived single crater law (sub-floor texture band) + the condition-derived crater/ejecta relevance gate (replaces the preset-name featureRelevant.craters lookup). e1-blind, pure.
     import { radPerKm } from './src/worldengine/base/baseStep.js';   // inc3b S3-fix: km→angular scalar for the normalized crater-depth law (uCraterAmp = D_D_SIMPLE·radPerKm(R)·D_char). Pure.
     import { assessProvinceAssociation, provinceStats, classProportions } from './src/worldengine/base/province.js';   // V2-4 slice-4: the province honesty instrument (read-only) for _lab.provinceProbe()
@@ -2461,8 +2461,8 @@
       // condition draw the ground palette uses — so two seeds of the same body get atmospheres
       // that differ in PHYSICS (drawn volatile budget / temperature / gravity), not merely in
       // noise, and a drawn body that never had a hand-written table row still gets a hue.
-      const _atmoOptics = atmosphereOpticsOf(
-        deriveConditionVector(drawPresetConditions(driverUI.preset, state.macroSeed | 0), u, state.planetRadiusEarth));
+      const _atmoCond = deriveConditionVector(drawPresetConditions(driverUI.preset, state.macroSeed | 0), u, state.planetRadiusEarth);
+      const _atmoOptics = atmosphereOpticsOf(_atmoCond);   // hoisted 2026-08-22 so terminatorOpticsOf reads the SAME condition object rather than deriving a second one.
       // ── F34 limb / atmosphere rim glow — driver derivation (card §6.5 step 3;
       // post-process HERE per the F11 precedent — core.js untouched). The core's
       // hasAtmo gate stays the master: u.limbStrength is 0.7 on every retained
@@ -2494,7 +2494,7 @@
       // (Max-reported, all planet types). 0.15 reads as subtle twilight reddening; the
       // physically-motivated per-preset WIDTH ramp (below) is unchanged. Taste-call →
       // Max UAT (live `strength`/`width` sliders, both .listen()).
-      state.termStrength = _fp.atmosphere?.retained ? 0.15 : 0.0;
+      state.termStrength = terminatorOpticsOf(_atmoCond).termStrength;   // ⭐ SHARED LAW 2026-08-22 (Max: "same here"). Was `_fp.atmosphere?.retained ? 0.15 : 0.0` — a BINARY copy of src/worldengine/base/terminatorOptics.js:95 `termStrength: (optics.columnFraction ?? 0) * TERM_STRENGTH,`. ⚠ THE 0.15 IN THE COMMENT ABOVE IS MAX'S OWN UAT RETUNE AND IT SURVIVES: the shared law is columnFraction x 0.15, so 0.15 is its CEILING — thick atmospheres still resolve exactly 0.15 and it can only go LOWER, so it cannot reintroduce the "heavy orange BELT" he reported. Disagreement is TWO thin-column bodies (~0.1304 at ~0.105 bar), named at terminatorOptics.js:83-88.
       // Band width from D5 pressure on a log ramp (card §6.5 step 3): hairline
       // 0.06 at <= ~0.1 bar, 0.12 at 1 bar (Rocky/Eyeball), ~0.14 at 1.5 bar
       // (Ocean/Titan), saturating at the 0.30 Venus-class ceiling (92 bar — the
@@ -2828,7 +2828,7 @@
       // out of scope here.)
       {
         const _clamp01c = (x) => Math.max(0, Math.min(1, x));
-        const _sch = craterSchedule(_bodyDrivers.condition);
+        const _sch = craterSchedule(_bodyDrivers.condition);   const _cu = craterUniformsFrom(_bodyDrivers.condition);   // ⛔ TWO STATEMENTS ON ONE LINE, ON PURPOSE (line stability). The pack's producer, now the single source for the five crater fields below.
         const _RE  = Math.max(1e-6, _bodyDrivers.condition.radiusEarth ?? 1.0);
         // F1: condition-derived 0/1 relevance (bombardment.js leaf; e1-blind, replaces featureRelevant.craters).
         state.craterRelevance = craterRelevanceOf(_bodyDrivers.condition);
@@ -2838,11 +2838,11 @@
         //   D_km = diameter·D_char; the 0.55 tail ⇒ max diameter 2·0.55 = 1.10 cell units ⇒ D_km_max = 1.10·D_char.
         //   Forcing D_km_max ≤ D_FLOOR_KM keeps every synth crater AT/below the mesh floor so the synth never
         //   double-renders the discrete stamped population (which is D ≥ D_FLOOR_KM) ⇒ D_char ≤ D_FLOOR_KM/1.10.
-        const _HASH_TAIL_MAX = 2.0 * 0.55;                                   // max synth diameter (cell units), glsl mix(0.18,0.55)
-        const _L = _sch.D_LO_KM * _sch.sizeMul;
-        const _Dgeo = Math.sqrt(Math.max(_L, 1e-9) * Math.max(_sch.D_FLOOR_KM, 1e-9));
-        const _Dchar = Math.min(_Dgeo, _sch.D_FLOOR_KM / _HASH_TAIL_MAX);    // F3 clamp
-        state.craterSizeKm = _Dchar > 0 ? _Dchar : state.craterSizeKm;       // uCraterScale = RE·6371/D_char (featureFrequencyFromKm, C_CRATER=1, :5958)
+        // ⛔ DEAD AS OF 2026-08-22 — line kept, code removed. `craterUniformsFrom` now supplies every crater field, so this local has no consumer. ⚠ IT IS COMMENTED RATHER THAN DELETED because 500 line-anchored citations sit at or past :1933 and a net line change here reds them. ⛔ AND IT IS NOT MERELY TIDINESS: tests/worldengine-inc3b-synth-law.test.js:144-145 matched these very constants, so leaving them would have kept that suite GREEN against code nothing runs — a dead control. WAS: const _HASH_TAIL_MAX = 2.0 * 0.55;                                   // max synth diameter (cell units), glsl mix(0.18,0.55)
+        // ⛔ DEAD AS OF 2026-08-22 — line kept, code removed. `craterUniformsFrom` now supplies every crater field, so this local has no consumer. ⚠ IT IS COMMENTED RATHER THAN DELETED because 500 line-anchored citations sit at or past :1933 and a net line change here reds them. ⛔ AND IT IS NOT MERELY TIDINESS: tests/worldengine-inc3b-synth-law.test.js:144-145 matched these very constants, so leaving them would have kept that suite GREEN against code nothing runs — a dead control. WAS: const _L = _sch.D_LO_KM * _sch.sizeMul;
+        // ⛔ DEAD AS OF 2026-08-22 — line kept, code removed. `craterUniformsFrom` now supplies every crater field, so this local has no consumer. ⚠ IT IS COMMENTED RATHER THAN DELETED because 500 line-anchored citations sit at or past :1933 and a net line change here reds them. ⛔ AND IT IS NOT MERELY TIDINESS: tests/worldengine-inc3b-synth-law.test.js:144-145 matched these very constants, so leaving them would have kept that suite GREEN against code nothing runs — a dead control. WAS: const _Dgeo = Math.sqrt(Math.max(_L, 1e-9) * Math.max(_sch.D_FLOOR_KM, 1e-9));
+        // ⛔ DEAD AS OF 2026-08-22 — line kept, code removed. `craterUniformsFrom` now supplies every crater field, so this local has no consumer. ⚠ IT IS COMMENTED RATHER THAN DELETED because 500 line-anchored citations sit at or past :1933 and a net line change here reds them. ⛔ AND IT IS NOT MERELY TIDINESS: tests/worldengine-inc3b-synth-law.test.js:144-145 matched these very constants, so leaving them would have kept that suite GREEN against code nothing runs — a dead control. WAS: const _Dchar = Math.min(_Dgeo, _sch.D_FLOOR_KM / _HASH_TAIL_MAX);    // F3 clamp
+        state.craterSizeKm = _cu.Dchar > 0 ? _cu.Dchar : state.craterSizeKm;   // ⭐ SHARED LAW 2026-08-22 (Max: "game's ... the important thing is the game and lab end up working the same"). Was the local `_Dchar` (geometric mean of the MESH-floor band). The pack resolves Dchar over the band the raster can RESOLVE — src/worldengine/port/craterUniforms.js:142 `const Dchar = Math.sqrt(lo * H);`.
         // uCraterDensity: the host-cell fraction that REPRODUCES the schedule's sub-floor areal coverage
         //   (regolithRoughness = fraction of the surface the never-stamped craters cover). In the synth, each
         //   hosted unit voronoi cell places ONE crater of radius craterRadius = mix(0.18,0.55) cell units,
@@ -2850,8 +2850,8 @@
         //   E[craterRadius²] = ∫₀¹(0.18+0.37u)²du = 0.18² + 0.18·0.37 + 0.37²/3 = 0.1446333. So the covered
         //   fraction = density·π·E[craterRadius²] ⇒ density = regolithRoughness / (π·0.1446333) (= /0.4543790).
         //   Temperate/eroded worlds (regolithRoughness ~1e-5) thus derive a near-0 density and render nothing.
-        const _CELL_CRATER_AREA = Math.PI * (0.18 * 0.18 + 0.18 * 0.37 + 0.37 * 0.37 / 3);
-        state.craterDensity = _clamp01c(_sch.regolithRoughness / _CELL_CRATER_AREA);
+        // ⛔ DEAD AS OF 2026-08-22 — line kept, code removed. `craterUniformsFrom` now supplies every crater field, so this local has no consumer. ⚠ IT IS COMMENTED RATHER THAN DELETED because 500 line-anchored citations sit at or past :1933 and a net line change here reds them. ⛔ AND IT IS NOT MERELY TIDINESS: tests/worldengine-inc3b-synth-law.test.js:144-145 matched these very constants, so leaving them would have kept that suite GREEN against code nothing runs — a dead control. WAS: const _CELL_CRATER_AREA = Math.PI * (0.18 * 0.18 + 0.18 * 0.37 + 0.37 * 0.37 / 3);
+        state.craterDensity = _cu.density;   // ⭐ SHARED LAW 2026-08-22 (Max: "game's ... the important thing is the game and lab end up working the same"). ⭐⭐ THE BIG ONE, AND IT WAS NOT A CALIBRATION DIFFERENCE. Was `_sch.regolithRoughness / _CELL_CRATER_AREA`: src/worldengine/base/bombardment.js:196 `regolithRoughness = subCount * rpk * rpk * ED2s / 16;` is the SUB-FLOOR band, "the craters folded into TEXTURE rather than stamped" — a near-DISJOINT population from the pack's "band the raster can resolve". MEASURED before the change (tools/crater-density-divergence.mjs): 410 of 466 non-gas bodies disagreed (88.0%), lab at a MEDIAN 0.47x the game, and 20 bodies where the lab drew craters the game never stamped.
         // uCraterAmp: the fresh-simple depth-SCALE amplitude. radPerKm(RE)·D_char = D_char/(6371·RE) = the crater
         //   diameter as a unit-sphere fraction. The craterProfile cavity (planet-lod-height.glsl.js:1931 =
         //   CRATER_DEPTH·(r²−1), CPU mirror planet-lod-lab-core.js) applies the SHAPE depth factor internally, so
@@ -2863,20 +2863,20 @@
         //   D_D_SIMPLE·δ here, composing to d/D≈0.04, a double-application corrected at the adjudication seam).
         //   Sub-floor ≪ D_t ⇒ pure simple bowls (no complex roll-off). Envelope-free — rides uPerturb ONCE via
         //   reliefAmp (F6, kept bare at :5959).
-        state.craterAmp = (D_D_SIMPLE / CRATER_DEPTH) * radPerKm(_RE) * _Dchar;
+        state.craterAmp = _cu.amp;   // ⭐ SHARED LAW 2026-08-22 (Max: "game's ... the important thing is the game and lab end up working the same"). Identical closed form to the old local, but fed the MESH-floor `_Dchar`; it now rides the same Dchar as everything else.
         // uCraterComplexD: morphology = smoothstep(uCraterComplexD·0.6, uCraterComplexD, diameter) must be 0 for
         //   EVERY synth crater (all sub-floor craters are simple). The largest synth diameter is _HASH_TAIL_MAX
         //   cell units, so the smoothstep lower edge uCraterComplexD·0.6 ≥ _HASH_TAIL_MAX ⇒ uCraterComplexD ≥
         //   _HASH_TAIL_MAX/0.6 forces morphology≡0.
-        state.craterComplexD = _HASH_TAIL_MAX / 0.6;
+        state.craterComplexD = _cu.complexD;   // ⭐ SHARED LAW 2026-08-22 (Max: "game's ... the important thing is the game and lab end up working the same"). Was the constant `_HASH_TAIL_MAX / 0.6`, chosen to force morphology to 0 for sub-floor synth craters. The pack uses the gravity-keyed physical term — craterUniforms.js:157 `const complexD = transitionDiameterKm(g) / Dchar;`.
         // uCraterRelaxation: the schedule-derived palimpsest fraction that REPLACES the deleted _craterWeathering.
         //   tExp is the schedule's retained exposure age (min of the physical age cap, tidal- and erosion-
         //   truncation); the fraction of the surface age LOST to active resurfacing/erosion, 1 − tExp/ageEff,
         //   degrades the surviving craters. Airless dead worlds retain the whole age (tExp = ageEff ⇒ 0, sharp);
         //   eroded/tidal worlds truncate it (⇒ higher relaxation). ageEff uses the schedule's OWN caps
         //   (AGE_MAX 4.6, AGE_REF 4.0 default — bombardment.js).
-        const _ageEff = Math.min(4.6, Math.max(0, _bodyDrivers.condition.age ?? 4.0));
-        state.craterRelaxation = (_sch.tExp > 0 && _ageEff > 0) ? _clamp01c(1 - _sch.tExp / _ageEff) : 0;
+        // ⛔ DEAD AS OF 2026-08-22 — line kept, code removed. `craterUniformsFrom` now supplies every crater field, so this local has no consumer. ⚠ IT IS COMMENTED RATHER THAN DELETED because 500 line-anchored citations sit at or past :1933 and a net line change here reds them. ⛔ AND IT IS NOT MERELY TIDINESS: tests/worldengine-inc3b-synth-law.test.js:144-145 matched these very constants, so leaving them would have kept that suite GREEN against code nothing runs — a dead control. WAS: const _ageEff = Math.min(4.6, Math.max(0, _bodyDrivers.condition.age ?? 4.0));
+        state.craterRelaxation = _cu.relaxation;   // ⭐ SHARED LAW 2026-08-22 (Max: "game's ... the important thing is the game and lab end up working the same"). The formula was already IDENTICAL on both sides (the survey classed it already-agrees); routed through the pack so there is one expression rather than two that merely match today.
       }
       // V2-1 Slice D (SHADOW): compute the E1 regime tuple from the SAME condition vector + macroSeed and
       // stash it for _lab.e1Probe() (AC7). DATA-ONLY — state._lastE1 is NEVER threaded into route() below

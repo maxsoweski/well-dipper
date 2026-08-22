@@ -13,6 +13,8 @@
 //   • morphology≡0 (all synth craters simple), and determinism;
 //   • that the SHIPPED lab source carries these formulas (not just this test's copy).
 import { describe, it, expect } from 'vitest';
+import { readFileSync as _rfs } from 'node:fs';
+const CRATER_UNIFORMS_SRC = _rfs(new URL('../src/worldengine/port/craterUniforms.js', import.meta.url), 'utf8');
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -140,9 +142,19 @@ describe('Inc-3b S3-fix — the SHIPPED lab source carries the derivation (not j
     expect(lab).toMatch(/import\s*\{[^}]*\bradPerKm\b[^}]*\}\s*from\s*['"][^'"]*baseStep/);
   });
   it('contains the depth law, the closed-form density, the hash-tail clamp, and the relevance call', () => {
-    expect(lab).toMatch(/D_D_SIMPLE\s*\/\s*CRATER_DEPTH\)\s*\*\s*radPerKm\(/); // uCraterAmp composed depth law (shape factor divided out)
-    expect(lab).toMatch(/0\.18\s*\*\s*0\.18\s*\+\s*0\.18\s*\*\s*0\.37/); // CELL_CRATER_AREA closed form
-    expect(lab).toMatch(/2\.0\s*\*\s*0\.55/);                            // _HASH_TAIL_MAX
+    // ⛔⛔ THESE THREE USED TO ASSERT THE LAB SOURCE CARRIED THE DERIVATIONS INLINE. Max ruled
+    // 2026-08-22 — "game's ... the important thing here is the game and lab end up working the same"
+    // — and the lab now DELEGATES to the shared producer, so the derivations are gone from it by
+    // design. The old assertions are not merely stale: with the lab's now-dead locals still present
+    // they would have kept MATCHING while nothing executed them, which is a dead control.
+    //
+    // ⭐ THE PIN MOVES TO THE MODULE, AND GAINS THE HALF IT NEVER HAD — that the lab actually READS it.
+    expect(CRATER_UNIFORMS_SRC, 'the amp depth law lives in the shared producer now')
+      .toMatch(/D_D_SIMPLE\s*\/\s*CRATER_DEPTH/);
+    expect(lab, 'the lab must CALL the shared producer')
+      .toMatch(/craterUniformsFrom\(_bodyDrivers\.condition\)/);
+    expect(lab, 'and must not re-derive amp/density/complexD locally')
+      .not.toMatch(/state\.craterAmp\s*=\s*\(D_D_SIMPLE/);
     expect(lab).toMatch(/craterRelevanceOf\(_bodyDrivers\.condition\)/);  // F1 relevance leaf call
     // Boot-enable: applyWorldDefaults must derive the crater enable from the SAME condition leaf (the
     // rendersOn name-add is barred), else preset selection clears cratersEnabled and the synth never

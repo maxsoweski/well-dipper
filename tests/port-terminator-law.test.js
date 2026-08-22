@@ -96,10 +96,25 @@ describe('terminator: strength and width are the LAB’s laws, not game-authored
     expect(mod, 'TERM_STRENGTH must be EXPORTED from src/worldengine/base/terminatorOptics.js').toBeTruthy();
     expect(Number(mod[1])).toBe(TERM_STRENGTH);
 
-    const lab = LAB.match(/state\.termStrength = [^;]*\?\s*([0-9.]+)\s*:/);
-    expect(lab, 'the lab must still carry state.termStrength').toBeTruthy();
-
-    expect(TERM_STRENGTH).toBe(Number(lab[1]));
+    // ⛔⛔ THIS ASSERTION USED TO SCRAPE THE LAB'S TERNARY FOR 0.15 AND COMPARE. That worked only
+    // while the lab held a SECOND COPY of the magnitude, and requiring two copies so they can be
+    // compared is the two-routes disease encoded as a test. Max ruled 2026-08-22 — "the important
+    // thing here is the game and lab end up working the same" — and the lab now CALLS the module:
+    // planet-lod-lab.html:2497 `state.termStrength = terminatorOpticsOf(_atmoCond).termStrength;`.
+    //
+    // ⭐ SO THE PIN MOVES HERE, AND IT IS STRONGER THAN WHAT IT REPLACES — it pins the VALUE with
+    // its provenance, and separately pins that the lab READS the module, which the scrape never did:
+    //   · 0.15 is MAX'S OWN UAT RETUNE. The prior value "swamped the surface into a heavy orange
+    //     BELT on every atmospheric world" (Max-reported, recorded at planet-lod-lab.html:2493-2496).
+    //     It is a taste ruling, not a derived quantity, which is exactly why it needs a literal pin.
+    //   · The shared law is `columnFraction * TERM_STRENGTH`, so 0.15 is a CEILING. Max's ruling
+    //     cannot be violated upward by the ramp; it can only resolve lower on thin columns.
+    expect(TERM_STRENGTH, "0.15 is Max's UAT retune — changing it needs a new ruling, not a refactor")
+      .toBe(0.15);
+    expect(LAB, 'the lab must READ the shared law, not re-fork it')
+      .toMatch(/state\.termStrength = terminatorOpticsOf\(/);
+    expect(LAB, 'the lab must not carry a second literal copy of the magnitude')
+      .not.toMatch(/state\.termStrength = [^;]*\?\s*[0-9.]+\s*:/);
 
     // columnFraction saturates to exactly 1.0 above 0.3 bar and EVERY generated planet is above
     // that, so using it as the magnitude is both 6.7x too strong and identical on every body.
