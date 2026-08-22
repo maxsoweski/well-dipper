@@ -632,19 +632,27 @@ describe('6d — no Sol body reaches the pack path, and the reason is provenance
 // ═════════════════════════════════════════════════════════════════════════════
 // 6e — THE FLAG
 // ═════════════════════════════════════════════════════════════════════════════
-describe('6e — the flag is OFF by default and it selects a DIFFERENT material', () => {
+describe('6e — ⭐ the flag is ON by default since B7 (was OFF), and either value selects a DIFFERENT material', () => {
   const body = () => GEN_GAS[0];
 
-  it('the default is OFF, and the read reports WHICH source answered', () => {
-    expect(LAB_GAS_BODIES_DEFAULT).toBe(false);
+  it('⭐ the default is ON since B7, and the read still reports WHICH source answered', () => {
+    // ⭐ LAB_GAS_BODIES_DEFAULT: false -> true AT B7, 2026-08-21, AND THE REASON IS the lab material
+    // is now the shader 846/852 planets and 632 moons actually mount — `false` described a world
+    // this codebase no longer ships. What this test protects did NOT move: the flag's own read still
+    // NAMES which of the three sources (override / window / localStorage / default) answered it, so
+    // "on because nobody said otherwise" stays distinguishable from "on because someone said so".
+    expect(LAB_GAS_BODIES_DEFAULT).toBe(true);
     const f = labGasBodiesFlag();
-    expect(f).toEqual({ enabled: false, source: 'default', default: false });
-    expect(labGasBodiesEnabled()).toBe(false);
+    expect(f).toEqual({ enabled: true, source: 'default', default: true });
+    expect(labGasBodiesEnabled()).toBe(true);
   });
 
   it('an override is reported as an override, and clears back to the environment', () => {
     setLabGasBodiesOverride(true);
-    expect(labGasBodiesFlag()).toEqual({ enabled: true, source: 'override', default: false });
+    // ⭐ `default` -> true AT B7, 2026-08-21: this field always echoes LAB_GAS_BODIES_DEFAULT, never
+    // the override's own value — that independence is exactly what this line proves, and it is why
+    // the field broke the instant the constant flipped rather than tracking `enabled` for free.
+    expect(labGasBodiesFlag()).toEqual({ enabled: true, source: 'override', default: true });
     setLabGasBodiesOverride(false);
     expect(labGasBodiesFlag().enabled).toBe(false);
     expect(labGasBodiesFlag().source).toBe('override');
@@ -702,7 +710,10 @@ describe('6e — the flag is OFF by default and it selects a DIFFERENT material'
   it('the E caption can print the flag AND its source off the body itself (§12.5 fact 6)', () => {
     const { lab } = planetAt(body().d, true);
     expect(lab.isLabPipeline).toBe(true);
-    expect(lab.flag).toEqual({ enabled: true, source: 'override', default: false });
+    // ⭐ `default` -> true AT B7, 2026-08-21, same reason as the test above: this body was built
+    // under an explicit override, and `default` still has to read LAB_GAS_BODIES_DEFAULT rather than
+    // the override in force, or the E caption would print a fact about the flag that isn't true.
+    expect(lab.flag).toEqual({ enabled: true, source: 'override', default: true });
     expect(lab.packsApplied).toEqual(['giantDeck', 'limbDeck', 'polarDeck', 'craterDeck', 'giantSurface']);
     expect(lab.gates).toEqual({ bands: true, jets: true, limb: true, polarVortex: true, craters: true, ejecta: true, terminator: true });
     expect(lab.provenance.isWorldEngine).toBe(true);
@@ -936,7 +947,12 @@ describe('6e safety — turning the flag ON does not throw from any writer this 
   });
 
   it('CONTROL — the skip counter stays EMPTY on a legacy body, so it is not counting everything', () => {
-    const br = BodyRenderer.createPlanet(buildable(GEN_GAS[0].d), null, null);   // flag default OFF
+    // ⭐ FORCED OFF, NOT INHERITED, SINCE B7 2026-08-21: this control's whole job is to produce a
+    // legacy body, and until B7 the un-set default did that for free. LAB_GAS_BODIES_DEFAULT flipping
+    // to true means the un-set flag no longer reaches Moon.js's/the legacy path at all, so the OFF
+    // twin has to say so explicitly instead of relying on what "nothing set" used to mean.
+    setLabGasBodiesOverride(false);
+    const br = BodyRenderer.createPlanet(buildable(GEN_GAS[0].d), null, null);
     expect(isLabPlanetMaterial(br.surface.material)).toBe(false);
     br.setLOD(2);
     expect(br.labSkips).toEqual({});

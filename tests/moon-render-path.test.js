@@ -294,11 +294,15 @@ describe('1. admission over the corpus', () => {
     expect(classes.gas, 'a gas-class plain moon would be refused by rockySurface').toBeUndefined();
   });
 
-  it('⭐ THE OFF TWIN AT POPULATION SCALE — the default flag admits NONE of them', () => {
-    // 6e's whole claim is that nothing reaches a player before Step 12. One admitted body here
-    // means the flag stopped gating and the UAT everyone is waiting on has already happened by
-    // accident. Sampled rather than exhaustive because the flag is read per call and the point is
-    // the branch, not the census.
+  it('⭐ THE OFF TWIN AT POPULATION SCALE — the flag forced OFF admits NONE of them', () => {
+    // ⭐ FORCED, NOT DEFAULTED, SINCE B7 2026-08-21: this test used to make its point by setting
+    // nothing — LAB_GAS_BODIES_DEFAULT was OFF, so the un-set flag WAS the OFF twin at population
+    // scale. B7 flips that constant to true, which is Step 12 itself (846/852 planets, 632 moons
+    // now admit by default); the un-set flag can no longer stand in for OFF. The population-scale
+    // proof this test exists for — one flag value, checked across hundreds of real generated moons,
+    // still fully gates admission — is unaffected, so the fix is to name the value explicitly rather
+    // than retire the control. One admitted body here would still mean the flag stopped gating.
+    setLabGasBodiesOverride(false);
     let admitted = 0; let seen = 0;
     for (const seed of CORPUS.slice(0, 20)) {
       for (const m of plainMoonsOf(seed)) {
@@ -307,7 +311,7 @@ describe('1. admission over the corpus', () => {
       }
     }
     expect(seen).toBeGreaterThan(30);
-    expect(admitted, 'the 6e flag defaults OFF — no plain moon may admit without an override').toBe(0);
+    expect(admitted, 'the 6e flag forced OFF — no plain moon may admit without it').toBe(0);
   });
 });
 
@@ -342,7 +346,10 @@ describe('2. the back-link', () => {
     expect(moonWd.lab.isLabPipeline).toBe(true);
     expect(moonWd.lab.flag.enabled).toBe(true);
     expect(moonWd.lab.flag.source).toBe('override');       // the flag AND where it came from
-    expect(moonWd.lab.flag.default).toBe(false);
+    // ⭐ `default` -> true AT B7, 2026-08-21: it always echoes LAB_GAS_BODIES_DEFAULT, not the
+    // override this moon was actually built under — an E caption reading `default` off this body
+    // must see the real constant, or it would misreport what an un-set flag would have done here.
+    expect(moonWd.lab.flag.default).toBe(true);
     // ⭐ `solidOptics` JOINS ON A PLAIN MOON AT B3 LEG 1 — its predicate is `!== 'gas'`, the same
     // one that put `rockySurface` here, so a moon is claimed by both or by neither. ⚠ Its two
     // MAGNITUDES land on zero for a plain moon (no atmosphere ⇒ columnFraction 0 and

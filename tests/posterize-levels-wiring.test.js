@@ -20,7 +20,7 @@ import { describe, it, expect, afterAll, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
-import { Planet, PLANET_SHADER_VARIANTS } from '../src/objects/Planet.js';
+import { Planet, PLANET_SHADER_VARIANTS, setLabGasBodiesOverride } from '../src/objects/Planet.js';
 import { Moon } from '../src/objects/Moon.js';
 import { AsteroidBelt } from '../src/objects/AsteroidBelt.js';
 import { buildLabPlanetMaterial } from '../src/rendering/LabPlanetMaterial.js';
@@ -34,6 +34,14 @@ import {
 const src = (rel) => readFileSync(fileURLToPath(new URL('../src/' + rel, import.meta.url)), 'utf8');
 
 // The five material paths, built the way the game builds them, from a real generated system.
+// ⭐ `planet`/`moon` FORCED OFF AT CONSTRUCTION, SINCE B7 2026-08-21: LAB_GAS_BODIES_DEFAULT flipped
+// false -> true, so an un-set `new Planet(...)`/`new Moon(...)` now mounts the LAB material by
+// default — exactly the swap the first four PATHS entries below must NOT undergo, because their
+// whole point is proving the SHARED uPosterizeLevels object reaches the four LEGACY game programs
+// (body, ring, moon, belt). The lab material's own uLevels path is exercised separately, below, via
+// `buildLabPlanetMaterial()` directly — it never went through this flag — so forcing it off here
+// removes no coverage; it restores the legacy-program coverage this file was always testing.
+setLabGasBodiesOverride(false);
 const sys = StarSystemGenerator.generate('lab-procedural-0', null);
 const entry = sys.planets.find((e) => e.planetData.rings) ?? sys.planets[0];
 const rec = entry.planetData;
@@ -48,6 +56,7 @@ const beltData = { name: 'b', innerRadius: 3, outerRadius: 5, asteroids: Array.f
   scale: 0.01, color: [0.5, 0.5, 0.5], tilt: 0, y: 0, spinAxis: [0, 1, 0], spinSpeed: 0.1 })) };
 const belt = new AsteroidBelt(beltData, sys.starInfo);
 const labMaterial = buildLabPlanetMaterial({ bodyRadius: 0.0426 }).material;
+setLabGasBodiesOverride(null);   // module-scope state; do not leak the override past this file's setup
 
 const readLevels = (u) => (u.value && u.value.isVector2 ? u.value.x : u.value);  // game slots carry vec2(levels, 1/levels); the lab's uLevels is a scalar float. Built ABOVE, i.e. BEFORE any set() below.
 const PATHS = {

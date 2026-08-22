@@ -119,9 +119,15 @@ describe('the mount', () => {
     expect(br.mesh.userData.wd?.lab?.isLabPipeline).toBe(true);
   });
 
-  it('⭐ THE OFF TWIN — with the flag at its default the SAME record gets Moon.js\'s own material', () => {
+  it('⭐ THE OFF TWIN — with the flag FORCED off the SAME record gets Moon.js\'s own material', () => {
     // This is the whole-branch mutant. If it ever goes green *and* test 1 goes green, the mount is
     // not reading the flag at all and 6e's OFF frame has stopped existing.
+    // ⭐ FORCED, NOT DEFAULTED, SINCE B7 2026-08-21: LAB_GAS_BODIES_DEFAULT flipped false -> true at
+    // B7 (Step 12), so the un-set flag no longer produces a legacy body — it produces the SAME lab
+    // material test 1 asserts. The OFF frame this mutant-catcher exists to prove still exists (the
+    // legacy path is Sol's renderer and is never deleted); it just has to be named explicitly now
+    // instead of inherited from silence.
+    setLabGasBodiesOverride(false);
     const d = aRealPlainMoon();
     const br = BodyRenderer.createMoon(d, null, null, REFS());
     expect(isLabPlanetMaterial(br.mesh.material)).toBe(false);

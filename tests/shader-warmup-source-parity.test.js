@@ -161,12 +161,18 @@ describe('the DEFAULT warm set is gated on the 6e flag', () => {
     expect(sel.omitted).toEqual([]);
   });
 
-  it('falls back to LAB_GAS_BODIES_DEFAULT (off) when nothing sets the flag', () => {
+  it('falls back to LAB_GAS_BODIES_DEFAULT (⭐ ON since B7) when nothing sets the flag', () => {
     // No override, no window: the shipped boot. This is the case main.js actually hits.
+    // ⭐ LAB_GAS_BODIES_DEFAULT: false -> true AT B7, 2026-08-21, AND THE REASON IS the lab material
+    // is no longer a program "no body in the session could be drawn with" (the comment this describe
+    // block opens with) — it is now what 846/852 planets and 632 moons mount. Warming it unasked at
+    // the un-set boot is therefore the SAME anti-stall reasoning this block exists for, pointed at
+    // the opposite variant: omitting it now would be the thing that pays a ~30s cold link on arrival.
     setLabGasBodiesOverride(null);
     const sel = resolveWarmVariants();
     expect(sel.labGasBodies.source).toBe('default');
-    expect(sel.variants).not.toContain('lab');
+    expect(sel.labGasBodies.enabled).toBe(true);
+    expect(sel.variants).toContain('lab');
   });
 });
 

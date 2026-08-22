@@ -2142,15 +2142,15 @@ export function worldEngineProvenance(d) {
 }
 
 // ── 6e. The flag ─────────────────────────────────────────────────────────────────────────────────
-// OFF by default. Deletion of the legacy `GAS_BODY` branch is Step 12, a named commit AFTER Max has
-// seen the consequence — not now, and not a permanent fallback either.
-//
+// ⭐⭐ ON BY DEFAULT SINCE B7 / STEP 12, 2026-08-21 — the one node in this program that reaches a player. ⛔⛔ AND STEP 12's OTHER HALF, "delete the legacy `GAS_BODY` branch", IS STRUCK RATHER THAN DEFERRED AGAIN: these three lines used to promise it. It cannot happen. Admission requires `provenance.isWorldEngine` (:2194, "never Sol"), so SOL NEVER ENTERS THIS PIPELINE AT ANY FLAG VALUE — and Sol's 2 `gas-giant` + 2 `sub-neptune` all route through `GAS_TYPES` (:1422) to `PLANET_SHADER_VARIANTS.gas`, i.e. to `GAS_BODY`. Deleting it leaves Jupiter, Saturn, Uranus and Neptune with no fragment shader; `Moon.js`'s legacy shader is load-bearing for Sol's 18 ice + 7 captured moons the same way.
+// ⭐ SO THE LEGACY PATH IS PERMANENT RATHER THAN TRANSITIONAL, and calling it a "fallback" is the word that made it look deletable — it is SOL'S RENDERER. Max ruled the strike 2026-08-21. ⛔ RIDES THESE THREE LINES rather than adding any: this file is pinned at 2304 lines and carries the densest citation refs in the tree.
+// ⚠ AND THE PRECEDENCE BELOW IS NOW A TRAP WORTH NAMING: a browser carrying `wd.labGasBodies = '0'` from before this commit OUTRANKS the new default and silently keeps the legacy look. CLEARING the key is what follows the default; setting it to '0' is what pins against it.
 // Three sources, most explicit first, and every read reports WHICH one answered, because "the flag
 // was on" and "the flag defaulted off and the shot shows legacy" are the same picture otherwise.
 // `localStorage` is in the list because 6e's OFF frame is "the flag OFF plus a RELOAD at a restored
 // camera pose" — a value that does not survive the reload cannot be the twin of one that does.
 export const LAB_GAS_BODIES_KEY = 'wd.labGasBodies';
-export const LAB_GAS_BODIES_DEFAULT = false;
+export const LAB_GAS_BODIES_DEFAULT = true;    // ⭐ B7: false -> true. 846 of 852 planets and 632 moons move onto the lab shader.
 let _labGasBodiesOverride = null;
 
 /** Force the flag (tests, and the E harness's ON/OFF pair). `null` restores environment reading. */
