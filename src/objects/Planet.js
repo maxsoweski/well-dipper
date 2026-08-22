@@ -1602,11 +1602,11 @@ export class Planet {
     // imports (planet-lod-lab.html:177). The game simply never called it. That is the whole shape of
     // this port: the game becomes a second consumer of what the lab already uses, so a future change
     // to the optics law lands in both without anyone porting anything.
-    // ⚠ It returns a CONTINUOUS limbExponent (3.5 - 1.7*thickHaze). The lab currently overrides this
-    // with its own binary  _thickHaze ? 1.8 : 3.5  at planet-lod-lab.html:3749 and ignores the
-    // module's value — a live drift between the lab and the module it imports. The game takes the
-    // module's value, deliberately: the module is the shared law. Reconciling the lab is its own
-    // change and must be byte-gated, so it is NOT done here.
+    // ⚠ It returns a CONTINUOUS limbExponent (3.5 - 1.7*thickHaze). ⭐ THE LAB'S BINARY OVERRIDE IS
+    // GONE, 2026-08-22, Max's ruling: the lab now takes this module's value at
+    // planet-lod-lab.html:2478 `state.limbExponent = _atmoOptics.limbExponent;`. This block used to
+    // read "a live drift between the lab and the module it imports", and to say reconciling the lab
+    // "is NOT done here" — it IS done, and both front-ends now render one limb law. ⛔ Its old ref
     const optics = atmosphereOpticsOf(condition); const term = terminatorOpticsOf(condition);   // ⛔ B3-1 RIDES THIS LINE (see :1403). `term` is the SHARED module the packs read, not a second law.
 
     // ── Biosphere cover (port: biosphereOf) ────────────────────────────────────────────────────

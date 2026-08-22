@@ -33,15 +33,15 @@
 //
 // ⛔⛔ WHAT IS DELIBERATELY NOT PORTED — declared here so it is not "discovered" at Step 9.
 // ---------------------------------------------------------------------------------------------
-//  1. THE LAB'S DISCRETE EXPONENT FORK AND ITS x1.3 STRENGTH BOOST.
+//  1. THE x1.3 STRENGTH BOOST. ⭐ THE EXPONENT HALF OF THIS ITEM CLOSED 2026-08-22, MAX'S RULING.
 //     planet-lod-lab.html:2479 `if (_thickHaze) state.limbStrength = Math.min(1.0, state.limbStrength * 1.3);`
-//     and the `_thickHaze ? 1.8 : 3.5` line above it ride `_cloudRegime`, which is derived inside
-//     the lab's own `applyDrivers` and has no game-side producer. The game keeps the CONTINUOUS law
-//     it already ships, src/worldengine/base/atmosphereOptics.js:161 `limbExponent: 3.5 - 1.7 * thick,`.
-//     ⚠ AND THAT IS ALREADY A LIVE DIVERGENCE THIS PACK DID NOT CREATE: the lab overrides the
-//     module it imports, at planet-lod-lab.html:2478 `state.limbExponent = _thickHaze ? 1.8 : 3.5;`,
-//     and the game already takes the module's value, which
-//     src/objects/Planet.js:1608 `module's value, deliberately: the module is the shared law` states. Over
+//     still rides `_cloudRegime`, which is derived inside the lab's own `applyDrivers` and has no
+//     game-side producer. The game keeps the CONTINUOUS law it already ships,
+//     src/worldengine/base/atmosphereOptics.js:161 `limbExponent: 3.5 - 1.7 * thick,`.
+//     ⭐⭐ THIS BLOCK USED TO SAY THE EXPONENT WAS 'ALREADY A LIVE DIVERGENCE THIS PACK DID NOT
+//     CREATE' — TRUE WHEN WRITTEN, AND NOW CLOSED: the lab takes the shared value at
+//     planet-lod-lab.html:2478 `state.limbExponent = _atmoOptics.limbExponent;`. The binary
+//     `_thickHaze ? 1.8 : 3.5` agreed with the module ONLY at thick 0 and 1. Over
 //     the GAS class the lab's fork reduces to exactly planet-lod-lab.html:2406 `else if (_gas && (state.planetRadiusEarth ?? 1) < 6 && (_fp.massEarth ?? 1) < 10) _cloudRegime = 2;`
 //     — radiusEarth < 6 && massEarth < 10 — so it is closable later in ONE place. Transcribing it
 //     HERE would create a second expression of a lab law with no shared module, which is the drift

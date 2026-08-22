@@ -2475,7 +2475,7 @@
       // (exponent ~1.8, strength x1.3); every other atmosphere keeps the narrow
       // blue-line rim (exponent ~3.5).
       const _thickHaze = _cloudRegime === 2 || _cloudRegime === 3 || _opaqueHaze;  // _opaqueHaze (cold solid tholin world, e.g. Titan) defined at the F26 weather-bands gate above
-      state.limbExponent = _thickHaze ? 1.8 : 3.5;
+      state.limbExponent = _atmoOptics.limbExponent;   // ⭐ SUPERSEDED 2026-08-22 (Max ruled): was `_thickHaze ? 1.8 : 3.5`, a BINARY law keyed on cloud regime, overriding the shared continuous one this file already computes two lines up. src/worldengine/base/atmosphereOptics.js:161 `limbExponent: 3.5 - 1.7 * thick` is keyed on haze/primordial/T_eq and its own comment names these exact endpoints ("3.5 narrow line -> 1.8 broad halo"), so the binary form was an earlier draft of the same idea. They agreed ONLY at thick 0 and 1; between them the lab rendered something the game would not. ⛔ The GAME already writes the shared value (src/objects/Planet.js:1643 `uLimbExponent: { value: optics.limbExponent },`), so this closes a live lab-vs-game divergence rather than creating one. ⚠ `state.limbStrength`'s x1.3 boost on the next line is a SEPARATE, UNANALYSED divergence and is deliberately left standing.
       if (_thickHaze) state.limbStrength = Math.min(1.0, state.limbStrength * 1.3);
       // Rim hue from the per-preset map; fallback = the uWeatheredColor rocky tone (the
       // pre-F34 tint — airless presets land here and stay inert behind strength 0).
