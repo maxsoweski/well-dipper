@@ -41,7 +41,7 @@ wants it.
 
 | module | evidence |
 |---|---|
-| `base/lidDisruption.js` | 2 test files import it; no front-end does. Coronae / diapir disruption profiles — a complete feature area with tests and no consumer. ⭐ **The clearest match to what Max described.** |
+| `base/lidDisruption.js` | 2 test files import it; no front-end does. ⭐ **AND THE REASON IS NOT NEGLECT — IT IS A LOSING PARALLEL IMPLEMENTATION.** The lab DOES do lid / corona / tessera work; it routes it through `stagnantLid.js` (`stagnantLidProbe`, planet-lod-lab.html:6013). So this is a SECOND expression of the same concept that nothing calls. ⛔ **Wiring it would author exactly the two-laws-for-one-thing disease this workstream exists to cure.** Deprecate. |
 | `base/verify.js` | 1 test file. A dev utility, not a feature — different nature, same disuse. |
 | `instrument/laws.js` | 1 test file, plus `scratchpad/` copies which are untracked throwaways. |
 
@@ -51,10 +51,15 @@ false positive. The scan names all three front-ends explicitly for this reason.
 
 ## The 18 unreached laws — and they are not one kind of thing
 
-- ⭐ **`base/emission-e.js` — `writeEmissionESphere`, `bakeEmissionEAttributes`.** The blackbody
-  thermal emission register: a real feature, with a bake, wired to nothing. It is in the GAME's
-  import closure and not the lab's (import-back debt row). **This is the strongest "developed, never
-  connected" case in the set.**
+- **`base/emission-e.js` — `writeEmissionESphere`, `bakeEmissionEAttributes`.**
+  ⛔ **CORRECTED 2026-08-22. This was first written as "the strongest 'developed, never connected'
+  case in the set" and that OVERSTATED it.** The module's core law is LIVE: `PlanetGenerator.js:4`
+  imports `emissiveBlackbody` from it. What is unreached is the per-vertex SPHERE/BAKE path, which
+  the current whole-globe `uEmissive` uniform supersedes (planet-lod-lab.html:2453 records the
+  thermal pair replacing that stand-in). So this is a latent FIDELITY UPGRADE sitting behind a
+  working simpler path — not an unwired feature. ⚠ The symbol-level scan cannot see this distinction
+  and never could: it reports unreached SYMBOLS, and a module can be live through one export while
+  another sits unused.
 - **`base/baseStep.js` — `bodyAgeNorm`, `bodyThermalState`, `bodyRadialStrain`, `bodyLiquidStability`.**
   ⚠ **NOT legacy features.** The suite calls them *"thin named helpers — each returns one field of
   `deriveBodyScalars`, zero formula duplication"*, and `deriveBodyScalars` IS live. An API surface
@@ -71,8 +76,18 @@ false positive. The scan names all three front-ends explicitly for this reason.
 into the shared pipeline. **The set is small enough that it does not threaten the extraction** — which
 is itself the useful result: the fear that `applyDrivers` is mostly dead weight is not supported.
 
-## Open for Max
+## Resolution — 2026-08-22, and it needed no ruling from Max
 
-1. `lidDisruption.js` — delete as deprecated, or wire it?
-2. `emission-e.js`'s two laws — wire (it is a real feature) or drop?
-3. The `baseStep.js` four — delete as an unused API surface? No capability is lost.
+⛔ **THREE QUESTIONS WERE PUT TO MAX AND ALL THREE WERE ANSWERABLE FROM THE CODE.** Recorded because
+the asking was the error, not the answers:
+
+| | resolution | why it was decidable without him |
+|---|---|---|
+| `lidDisruption.js` | **deprecate** | the lab already does this work through `stagnantLid.js`; wiring it would create a second law for one concept |
+| `emission-e.js`'s pair | **leave** | the module's core law is already live; the pair is a fidelity upgrade behind a working path |
+| `baseStep.js`'s four | **leave** | zero stakes; `deriveBodyScalars` is live and no capability rides on them |
+
+⭐ **THE TEST THAT MAKES ALL THREE OBVIOUS, and it is Max's own stated want:** none of these is *a lab
+feature missing from the game*. The lab does not use any of them either. They are engine-side
+leftovers, so they belong in neither this workstream nor the wiring follow-on. Applying his criterion
+answers all three; asking him to apply it for me was the mistake.
