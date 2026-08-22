@@ -378,7 +378,13 @@ const GAME_ONLY_BY_DESIGN = Object.freeze([
 
 // ⛔ SHRINK-ONLY. Lower it when an entry clears; NEVER raise it. Raising it is how a fence becomes a
 // changelog. Measured 13 at authoring (2026-08-21), the 14 diverging modules minus the one exemption.
-const IMPORT_BACK_DEBT_CEILING = 13;
+// ⭐ 13 -> 11 ON 2026-08-22: `port/craterUniforms.js` and `base/terminatorOptics.js` CLEARED — the lab
+// imports both now (planet-lod-lab.html:178) as part of Max's converge-the-laws ruling. THE LEDGER'S
+// FIRST SHRINK, and the liveness test is what forced it: the rows went stale the moment the imports
+// landed and this file refused to stay green on fiction.
+// ⭐ WHERE THEY CLOSED, cited so the shrink is auditable rather than asserted:
+// planet-lod-lab.html:178 `import { terminatorOpticsOf }` and planet-lod-lab.html:2831 `craterUniformsFrom`.
+const IMPORT_BACK_DEBT_CEILING = 11;
 
 const IMPORT_BACK_DEBT = Object.freeze([
   // ── the seven packs added after driver pack #1, none imported back ──
@@ -398,12 +404,6 @@ const IMPORT_BACK_DEBT = Object.freeze([
       'Blocked by the seven rows above — there is nothing to compose until the packs are imported.',
   }),
   Object.freeze({
-    path: 'src/worldengine/port/craterUniforms.js',
-    clears:
-      "The lab calls `craterUniformsFrom` instead of its inline uCrater*/uEjecta* writes at " +
-      'planet-lod-lab.html:5358 `featureFrequencyFromKm`. Rides with the craterDeck row above.',
-  }),
-  Object.freeze({
     path: 'src/worldengine/shaders/craterRelief.glsl.js',
     clears:
       'A DECLARED divergence, not an oversight: the header records three deliberate departures from ' +
@@ -411,13 +411,6 @@ const IMPORT_BACK_DEBT = Object.freeze([
       'when the lab adopts the merged combiner — or it is promoted to a GAME_ONLY_BY_DESIGN row if ' +
       'Max rules the divergences permanent. ⚠ Listed as debt rather than exempt BECAUSE that ruling ' +
       'has not been made, and the plan names this exact file as the both-were-kept precedent.',
-  }),
-  Object.freeze({
-    path: 'src/worldengine/base/terminatorOptics.js',
-    clears:
-      'The lab imports `terminatorOpticsOf`. ⭐ This module\u2019s own header (line 2) states it was ' +
-      'extracted "so that ONE function object answers for both front-ends" — so its stated purpose ' +
-      'is unmet today, and clearing this row is what makes the header true.',
   }),
   Object.freeze({
     path: 'src/worldengine/base/macroWavelength.js',
@@ -527,7 +520,9 @@ describe('registration 2 — every pipeline module the game imports is imported 
 
   it('CONTROL: the closures are non-vacuous — both front-ends really do reach the pipeline', () => {
     const game = gameOnlyPipelineModules('src', LAB_HTML);
-    expect(game.length).toBe(accounted.size);           // 14 measured at authoring
+    expect(game.length).toBe(accounted.size);           // 14 at authoring, 12 after the 2026-08-22 clears
+    // ⚠ This stays an EQUALITY against `accounted`, not a hardcoded 14 — it must track the ledger as it
+    // shrinks, or it becomes the next stale number in a file whose whole subject is stale numbers.
     expect(closureOf([LAB_HTML]).size).toBeGreaterThan(40);
   });
 
