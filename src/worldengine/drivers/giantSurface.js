@@ -115,7 +115,7 @@ import { applyAlbedoTransfer } from '../display/albedoTransfer.js';
 // populations and both must declare the same gate string in their registry entry; a second literal
 // is how one population silently stops honouring the lab's terminator checkbox.
 import { TERMINATOR_GATE } from './solidOptics.js';
-import { scalar, assertDisplayPolicy, assertPackResult, PackContractError } from '../port/writePackUniforms.js';
+import { scalar, assertDisplayPolicy, assertPackResult, resolveDriver, PackContractError } from '../port/writePackUniforms.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHARED BLOCK 1 — THE GROUND PALETTE (7). Imported by `rockySurface`.
@@ -373,3 +373,107 @@ export const GIANT_SURFACE_UNIFORMS = Object.freeze([
   'uWeatheredColor', 'uFreshColor', 'uSedColor', 'uCratonColor', 'uBioGroundColor',
   'uBioGroundCover', 'uIcenessMix',
 ]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE TWO FRONT-END HELPERS — the lab's import-back seam (workstream AC2/AC5, 2026-08-22)
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Uniform name -> the FLAT `state` field planet-lod-lab.html's per-frame writer reads.
+ *
+ * ⭐ SIX, NOT THIRTEEN, AND THE SHORTFALL IS THE POINT. `giantDeck` and `solidFeatures` mirror every
+ * driver through a table like this one because the lab holds each of their values in a flat field.
+ * This pack cannot: five of its thirteen are components of ONE lab object, `state.surfacePalette`
+ * (planet-lod-lab.html:2820), and two more are the lab's own seed wire. Forcing all thirteen into a
+ * flat table would mean inventing five lab state fields that do not exist, which is authoring a lab
+ * surface from inside a pack — the exact direction this program forbids.
+ *
+ * ⚠ `uCraterOffset` IS HERE AND ITS TWO SIBLINGS ARE NOT. It is a 🎲 transient the lab holds as
+ * `state.craterOffset` and resets on preset change; the macro/detail pair are written straight to
+ * the material by planet-lod-lab.html:1378 `    function updateSeedUniforms(){`. Same block in the pack, different
+ * owner in the lab, so they split here.
+ */
+export const GIANT_SURFACE_LAB_BINDING = Object.freeze({
+  uTermStrength: 'termStrength',
+  uTermWidth: 'termWidth',
+  uTermColor: 'termColor',
+  uIcenessMix: 'iceness',
+  uBioGroundCover: 'biosphere',
+  uCraterOffset: 'craterOffset',
+});
+
+/**
+ * The five palette drivers that reach `state` as components of ONE object rather than as fields.
+ *
+ * ⛔ DECLARED AS A NAMED GROUP RATHER THAN LEFT IMPLICIT, because the complement below is derived by
+ * SUBTRACTION and an undeclared name would fall through into the direct set. A palette colour
+ * written straight to the material would then be overwritten by the lab's frame loop from a stale
+ * `state.surfacePalette` on the very next frame — a uniform that flickers between two owners, which
+ * is invisible on a still and unbisectable in motion.
+ */
+export const GIANT_SURFACE_PALETTE_MIRRORED = Object.freeze([
+  'uWeatheredColor', 'uFreshColor', 'uSedColor', 'uCratonColor', 'uBioGroundColor',
+]);
+
+/**
+ * ⛔⛔ EVERY GATE ON, AND THAT IS THE LOAD-BEARING PART OF THIS SEAM.
+ *
+ * The lab re-applies its OWN ✓ checkbox at the per-frame writer —
+ * planet-lod-lab.html:5044 `      uniforms.uTermStrength.value = state.terminatorEnabled ? state.termStrength : 0.0;   // ✓ enable gate`
+ * — so the value this mirror puts into `state` must be the UNGATED one. A mirror that resolved the
+ * gate too would apply the decision twice: a body whose band is enabled would still read zero the
+ * moment the pack's gate map disagreed with the checkbox, and nothing would throw, because zero is
+ * a legal value for this master. planet-lod-lab.html:1749 names this hazard for pack #1.
+ */
+// ⛔ IT CARRIES THE GATE MAP AND NOTHING ELSE, AND THE OMISSIONS ARE DELIBERATE. `resolveDriver`
+// reads `ctx.displayRadiusEarth` ONLY for a km-shaped driver and `ctx.animRate` ONLY for an
+// animRate-scaled one (src/worldengine/port/writePackUniforms.js:219 `    const dispR = assertDisplayPolicy(ctx);`), and this
+// pack emits neither — the suite asserts both, at `NO driver is km-shaped` and at the seed-
+// independence gate. Adding a placeholder `displayRadiusEarth: 1` for symmetry with the other packs'
+// mirrors would put a numeric literal in a file whose whole anti-transcription fence is that it owns
+// no number, and it would answer a question nothing here asks. ⭐ If a km-keyed driver ever joins
+// this pack, the mirror THROWS at `assertDisplayPolicy` rather than resolving a wrong number — the
+// loud failure, and the reason this omission is safe rather than merely tidy.
+const LAB_MIRROR_CTX = Object.freeze({
+  gates: Object.freeze({ [TERMINATOR_GATE]: true }),
+});
+
+/**
+ * The subset of a pack result the LAB mirrors into `state`, resolved with every gate ON.
+ * @param {{drivers: object, meta: object}} pack  a `giantSurfacePack` result
+ * @returns {object} `state` field name -> value
+ */
+export function giantSurfaceLabState(pack) {
+  const out = {};
+  for (const [uName, stateField] of Object.entries(GIANT_SURFACE_LAB_BINDING)) {
+    if (!(uName in pack.drivers)) continue;
+    out[stateField] = resolveDriver(uName, pack.drivers[uName], LAB_MIRROR_CTX);
+  }
+  // ⭐ THE PALETTE ARRIVES AS THE PACK'S OWN `meta.palette` — the SAME object `surfacePaletteBlock`
+  // returned on the way in — so the lab stops calling `applyAlbedoTransfer(surfacePaletteOf(...))`
+  // itself. Re-deriving it here from `pack.drivers` would rebuild the object the pack already has
+  // and would drop `pigment`, which is not a driver name.
+  out.surfacePalette = pack.meta.palette;
+  return out;
+}
+
+/**
+ * The complement: drivers the lab writes STRAIGHT to uniforms because its frame loop does not own
+ * them. Derived by SUBTRACTION from the binding AND the palette group rather than listed, so a
+ * driver added to the pack and forgotten in both defaults to being WRITTEN — a forgotten entry shows
+ * up as a uniform that moves, not as one that silently never does.
+ *
+ * ⚠ TODAY IT IS `uMacroOffset` + `uDetailOffset`, AND THE LAB DOES NOT WRITE THEM EITHER. They are
+ * forwarded verbatim off the caller's own ctx, so what comes back is what the lab put in, and
+ * planet-lod-lab.html:1378 `    function updateSeedUniforms(){` already writes them to the material on every seed
+ * change. The complement is computed and asserted so the day a THIRD name joins it — one the lab
+ * does not already own — the addition is loud instead of silent.
+ */
+export function giantSurfaceDirectDrivers(pack) {
+  const out = {};
+  for (const [uName, d] of Object.entries(pack.drivers)) {
+    if (uName in GIANT_SURFACE_LAB_BINDING) continue;
+    if (GIANT_SURFACE_PALETTE_MIRRORED.includes(uName)) continue;
+    out[uName] = d;
+  }
+  return out;
+}

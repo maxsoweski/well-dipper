@@ -382,13 +382,13 @@ const GAME_ONLY_BY_DESIGN = Object.freeze([
 // imports both now (planet-lod-lab.html:178) as part of Max's converge-the-laws ruling. THE LEDGER'S
 // FIRST SHRINK, and the liveness test is what forced it: the rows went stale the moment the imports
 // landed and this file refused to stay green on fiction.
-// planet-lod-lab.html:178 `import { terminatorOpticsOf }` and planet-lod-lab.html:2831 `craterUniformsFrom`. ⭐ THE SECOND SHRINK, SAME DAY: `drivers/solidFeatures.js` cleared too — the lab imports pack #2 at planet-lod-lab.html:188 `solidFeaturesPack` and calls it at :2074, which is workstream AC5 and Max's ADOPT ruling on the radius-aware gravity. SIX packs remain unimported, not seven.
+// planet-lod-lab.html:178 `import { terminatorOpticsOf }` and planet-lod-lab.html:2831 `craterUniformsFrom`. ⭐ THE SECOND SHRINK, SAME DAY: `drivers/solidFeatures.js` cleared too — the lab imports pack #2 at planet-lod-lab.html:188 `solidFeaturesPack` and calls it at :2074, which is workstream AC5 and Max's ADOPT ruling on the radius-aware gravity. ⭐⭐ AND A THIRD, 10 -> 9, SAME DAY: `drivers/giantSurface.js` cleared too — the lab imports pack #8 at planet-lod-lab.html:188 `giantSurfacePack` and calls it at :2465, gas-gated. ⛔⛔ AND A FOURTH, 9 -> 8, WHICH NOBODY CHOSE AND WHICH THIS FENCE SHOULD BE READ CAREFULLY ABOUT: `drivers/solidOptics.js` cleared TRANSITIVELY. The lab does not call it and no ruling was made on its one confirmed conflict; it entered the lab's closure because `giantSurface.js` imports `TERMINATOR_GATE` from it so that the gate NAME has one home, and this test's criterion is IMPORT CLOSURE — reachability, not exercise. The row is deleted because the criterion is genuinely met and a row this test calls stale cannot be left standing, but the CALL-side work on solidOptics is NOT done and its absence from this ledger no longer records that. ⭐ FOUR packs remain on the roster; the two that closed on their own merits are precisely the two AC2-pack-law-survey.md scored at ZERO confirmed conflicts.
 // planet-lod-lab.html:178 `import { terminatorOpticsOf }` and planet-lod-lab.html:2831 `craterUniformsFrom`.
-const IMPORT_BACK_DEBT_CEILING = 10;
+const IMPORT_BACK_DEBT_CEILING = 8;
 
 const IMPORT_BACK_DEBT = Object.freeze([
   // ── the packs added after driver pack #1 and still not imported back (solidFeatures cleared 2026-08-22) ──
-  ...['craterDeck', 'giantSurface', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics'].map((n) =>
+  ...['craterDeck', 'limbDeck', 'polarDeck', 'rockySurface'].map((n) =>
     Object.freeze({
       path: `src/worldengine/drivers/${n}.js`,
       clears:
@@ -520,7 +520,7 @@ describe('registration 2 — every pipeline module the game imports is imported 
 
   it('CONTROL: the closures are non-vacuous — both front-ends really do reach the pipeline', () => {
     const game = gameOnlyPipelineModules('src', LAB_HTML);
-    expect(game.length).toBe(accounted.size);           // 14 at authoring, 12 after the 2026-08-22 clears
+    expect(game.length).toBe(accounted.size);           // 14 at authoring, 9 after the four 2026-08-22 clears
     // ⚠ This stays an EQUALITY against `accounted`, not a hardcoded 14 — it must track the ledger as it
     // shrinks, or it becomes the next stale number in a file whose whole subject is stale numbers.
     expect(closureOf([LAB_HTML]).size).toBeGreaterThan(40);
@@ -565,10 +565,10 @@ describe('registration 2 — every pipeline module the game imports is imported 
 // ⛔ CLOSED 2026-08-22. This list may SHRINK and may never gain an entry. A pack authored after this
 // date has one route into the tree: planet-lod-lab.html imports it. ⭐ Measured, not asserted — the
 // non-vacuity control below drives the same scanner with an EMPTY roster and pins exactly these
-// six, so the list is a reading of the tree rather than a claim about it. `giantDeck.js` is absent
+// four, so the list is a reading of the tree rather than a claim about it. `giantDeck.js` is absent
 // because the lab really does import it at planet-lod-lab.html:188 `giantDeckPack` — the one precedent.
 const GRANDFATHERED_UNIMPORTED_PACKS = Object.freeze(
-  ['craterDeck', 'giantSurface', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics']
+  ['craterDeck', 'limbDeck', 'polarDeck', 'rockySurface']
     .map((n) => `${DRIVERS_DIR}/${n}.js`),
 );
 
@@ -614,14 +614,14 @@ describe('registration 2b — a NEW pack cannot ship without the lab importing i
     expect(violations, violations.length ? newPackMessage(violations) : undefined).toEqual([]);
   });
 
-  it('CONTROL: the scan is non-vacuous — an EMPTY roster names all six unimported packs', () => {
+  it('CONTROL: the scan is non-vacuous — an EMPTY roster names all four unimported packs', () => {
     // Pass no roster against the REAL drivers tree. Everything the lab does not import must be
     // reported, which proves the walker reads the shipped subject — the green above cannot.
-    // `giantDeck.js` and `solidFeatures.js` are absent from this list because the lab genuinely imports both (:188), and that
-    // presence is what makes the other six a measurement rather than an assumption.
+    // `giantDeck.js`, `solidFeatures.js` and `giantSurface.js` are absent from this list because the lab genuinely imports all three at :188, and reaches solidOptics.js through giantSurface.js's TERMINATOR_GATE import, and that
+    // presence is what makes the other four a measurement rather than an assumption.
     const all = unimportedNewPacks(DRIVERS_DIR, LAB_HTML, new Set());
     expect(all).toEqual([
-      'craterDeck', 'giantSurface', 'limbDeck', 'polarDeck', 'rockySurface', 'solidOptics',
+      'craterDeck', 'limbDeck', 'polarDeck', 'rockySurface',
     ].map((n) => `${DRIVERS_DIR}/${n}.js`));
   });
 

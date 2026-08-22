@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-22T16:33:58.961Z",
+  "recordedAt": "2026-08-22T17:54:40.506Z",
   "recordedFromCommit": {
-    "sha": "2d85b4c549388aa44d168c85ffc35a74d67ca3ca",
+    "sha": "2f7402ffcd2d579cbf3df1420200f9ff1d171a5c",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -31,9 +31,9 @@
       "collectedFiles": 341,
       "failingFiles": 6,
       "nonCollectingFiles": 15,
-      "tests": 5711,
+      "tests": 5717,
       "failed": 31,
-      "passed": 5676,
+      "passed": 5682,
       "skipped": 4,
       "todo": 0
     },
@@ -248,7 +248,7 @@
       "tests/crater-uniform-law.test.js": 25,
       "tests/driver-pack-craterdeck.test.js": 26,
       "tests/driver-pack-giantdeck.test.js": 79,
-      "tests/driver-pack-giantsurface.test.js": 24,
+      "tests/driver-pack-giantsurface.test.js": 30,
       "tests/driver-pack-limbdeck.test.js": 31,
       "tests/driver-pack-polardeck.test.js": 35,
       "tests/driver-pack-rockysurface.test.js": 37,

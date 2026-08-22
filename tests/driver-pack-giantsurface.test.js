@@ -30,6 +30,8 @@ import { labPackCtx } from '../src/objects/Planet.js';
 import {
   giantSurfacePack, GIANT_SURFACE_ENTRY, GIANT_SURFACE_UNIFORMS,
   surfacePaletteBlock, offsetDriverBlock,
+  giantSurfaceLabState, giantSurfaceDirectDrivers,
+  GIANT_SURFACE_LAB_BINDING, GIANT_SURFACE_PALETTE_MIRRORED,
 } from '../src/worldengine/drivers/giantSurface.js';
 import { terminatorOpticsOf } from '../src/worldengine/base/terminatorOptics.js';
 import { surfacePaletteOf, icenessOf, biosphereOf, BIO_PIGMENT } from '../src/worldengine/base/surfaceMaterial.js';
@@ -344,5 +346,90 @@ describe('E — the wire reaches a real lab material', () => {
     expect(viaBlock.uFreshColor).toEqual(direct.fresh);
     expect(offsetDriverBlock({ macroOffset: [1, 2, 3], detailOffset: [4, 5, 6], craterOffset: [7, 8, 9] }, 'x')
       .drivers.uMacroOffset).toEqual([1, 2, 3]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// §H — THE TWO FRONT-END HELPERS. Added 2026-08-22 for the lab's import-back (workstream AC2/AC5).
+//
+// ⭐ THE SHAPE IS `solidFeatures`'s AND `giantDeck`'s, WITH ONE DIFFERENCE THAT IS THE WHOLE OF THIS
+// PACK'S SEAM. Those two mirror uniform -> a FLAT `state.<field>`. This pack cannot: the lab does not
+// hold five palette colours as five fields, it holds ONE object —
+// planet-lod-lab.html:2820 `      state.surfacePalette = applyAlbedoTransfer(surfacePaletteOf(_bodyDrivers.condition),`
+// — which its per-frame writer destructures at :5455-5464. So the mirror carries the flat six
+// through a binding table AND `surfacePalette` off the pack's own `meta.palette`, which is the same
+// object `surfacePaletteBlock` already returns. Re-deriving it at the lab would be a second copy of
+// the law this pack exists to single-source.
+//
+// ⛔ THE COMPLEMENT IS THE TWO SEED OFFSETS AND MUST STAY THAT WAY. `uMacroOffset` / `uDetailOffset`
+// are FORWARDED verbatim off the front-end's own ctx, so what comes back is what the lab put in;
+// planet-lod-lab.html:1378 `    function updateSeedUniforms(){` owns that wire and writes them straight to the
+// material on every seed change. Writing them again from the pack would move ownership of the seed
+// wire out of the seed function for no value. ⚠ `uCraterOffset` is NOT in that group — it is a 🎲
+// transient the lab holds as `state.craterOffset`, so it mirrors like the rest.
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+describe('§H — the lab mirror and its complement', () => {
+  const B = () => GAS[0];
+
+  it('mirrors every emitted driver into a lab state field — through the binding or through surfacePalette', () => {
+    const m = giantSurfaceLabState(packFor(B()));
+    const unreachable = GIANT_SURFACE_UNIFORMS.filter((u) =>
+      !(GIANT_SURFACE_LAB_BINDING[u] in m)
+      && !GIANT_SURFACE_PALETTE_MIRRORED.includes(u)
+      && !(u in giantSurfaceDirectDrivers(packFor(B()))));
+    expect(unreachable, `these drivers reach neither state nor the direct set: ${unreachable.join(', ')}`).toEqual([]);
+  });
+
+  it('the mirror is UNGATED — a gated-OFF pack result still mirrors the live terminator strength', () => {
+    // The hazard planet-lod-lab.html:1749 names for pack #1. The lab re-applies its own ✓ checkbox at
+    // planet-lod-lab.html:5044 `      uniforms.uTermStrength.value = state.terminatorEnabled ? state.termStrength : 0.0;   // ✓ enable gate`,
+    // so a mirror that resolved the gate too would apply the decision twice — and zero is a legal
+    // value for this master, so nothing would throw.
+    const open = giantSurfaceLabState(packFor(B()));
+    const shut = giantSurfaceLabState(packFor(B(), { [TERMINATOR_GATE]: false }));
+    expect(shut.termStrength).toBe(open.termStrength);
+    expect(shut.termStrength).toBeGreaterThan(0);
+  });
+
+  it('surfacePalette mirrors the SAME object surfacePaletteBlock builds — not a second derivation', () => {
+    const b = B();
+    const sp = giantSurfaceLabState(packFor(b)).surfacePalette;
+    const direct = applyAlbedoTransfer(surfacePaletteOf(b.cond), { extra: { pigment: BIO_PIGMENT } });
+    for (const k of ['weathered', 'fresh', 'sediment', 'craton']) expect(sp[k]).toEqual(direct[k]);
+    expect(sp.pigment).toEqual(direct.pigment);
+  });
+
+  it('the direct complement is EXACTLY the two seed offsets the lab own seed function writes', () => {
+    // Derived by SUBTRACTION from the binding plus the palette group, exactly as
+    // giantDeckDirectDrivers is, so a driver added to the pack and forgotten in both defaults to
+    // being WRITTEN — a forgotten entry shows up as a uniform that moves, not one that never does.
+    expect(Object.keys(giantSurfaceDirectDrivers(packFor(B()))).sort())
+      .toEqual(['uDetailOffset', 'uMacroOffset']);
+  });
+
+  it('the binding plus the palette group plus the complement partition the emitted set exactly', () => {
+    const covered = [
+      ...Object.keys(GIANT_SURFACE_LAB_BINDING),
+      ...GIANT_SURFACE_PALETTE_MIRRORED,
+      ...Object.keys(giantSurfaceDirectDrivers(packFor(B()))),
+    ];
+    expect(covered.sort()).toEqual([...GIANT_SURFACE_UNIFORMS].sort());
+    expect(new Set(covered).size, 'a name in two groups is written twice by two owners').toBe(covered.length);
+  });
+
+  it('CONTROL: the mirror is non-vacuous — it carries REAL values that vary across the gas population', () => {
+    // A mirror returning every field as 0 would satisfy every assertion above. This demands the
+    // values actually move over the population, which is the only thing that proves the wire.
+    const seen = new Map();
+    for (const b of GAS) {
+      for (const [k, v] of Object.entries(giantSurfaceLabState(packFor(b)))) {
+        if (typeof v !== 'number') continue;
+        if (!seen.has(k)) seen.set(k, new Set());
+        seen.get(k).add(v);
+      }
+    }
+    const varying = [...seen.entries()].filter(([, set]) => set.size > 1).map(([k]) => k);
+    expect(varying.length, `no mirrored scalar varies across ${GAS.length} gas bodies — the wire may be dead`)
+      .toBeGreaterThan(0);
   });
 });

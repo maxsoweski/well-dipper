@@ -46,10 +46,16 @@ const tally = (o, k) => { o[k] = (o[k] || 0) + 1; };
 const show = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}:${v}`).join('  ') || '(none)';
 
 // ── THE LAB'S TEN, transcribed from its own lines with the condition each one actually reads ─────
-// ⚠ THE LAB USES TWO DIFFERENT CONDITIONS FOR THESE TEN and that is a fact about the lab, not a
-// simplification here: the terminator triple reads the PER-SEED `_atmoCond` (:2464), the palette,
-// iceness and biosphere read `_bodyDrivers.condition`, which `buildBodyDrivers`:1674 builds from the
-// FROZEN preset. Both are passed in so the comparison is against what the file DOES.
+// ⛔ A CLAIM THIS FILE MADE AND GOT WRONG, CORRECTED IN PLACE 2026-08-22. The first version said the
+// palette, iceness and biosphere read a FROZEN condition, reasoning from `buildBodyDrivers`:1674's
+// `deriveConditionVector(fp, ...)`. That is the PARAMETER name. Its live caller is
+// planet-lod-lab.html:2783 `      const _bodyDrivers = buildBodyDrivers(_u, _fp);` inside `ensureNetworkRouted`, and that
+// function's `_fp` is planet-lod-lab.html:2776 `      const _fp = drawPresetConditions(_preset, state.macroSeed | 0);` — the PER-SEED DRAW. So all ten read
+// a per-seed condition and the lab is CONSISTENT here; there was no inconsistency to report. The
+// numbers below never moved, because on this pack's gas-only domain the two arms are identical
+// either way — which is precisely how a wrong reading survived producing right numbers.
+// ⚠ Both conditions are still passed in separately so the comparison is against what the file DOES
+// rather than against what this comment says about it.
 function labTen(fp, perSeedCond, frozenCond) {
   const sp = applyAlbedoTransfer(surfacePaletteOf(frozenCond), { extra: { pigment: BIO_PIGMENT } });  // :2820
   return {
