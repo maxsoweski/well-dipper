@@ -160,7 +160,7 @@ Leaving it undefined is how `C15` arrives on schedule — the ledger's own name 
 until the shot passes."
 
 **F-9. ONE FLAG EXPOSES BOTH SWAPS, and the moon route is not the one the earlier draft cited.**
-src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;` is the first term of the
+src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = true;` (⛔ B7, 2026-08-21 — THE SENTENCE AROUND THIS CITATION IS SUPERSEDED AND IS KEPT AS THE THING CORRECTED: it was written when this line read = false, and it reasons from a flag that is now ON. What it says about SOL remains true — Sol is excluded by PROVENANCE, not by the flag, at any flag value.) is the first term of the
 admission test at src/objects/Planet.js:2189 `export function labPipelineAdmits(d, condition) {`,
 which has exactly one call site — src/objects/Planet.js:2019 `const decision = labPipelineAdmits(d, condition);`
 inside `_createLabSurface`, reached for moons through
@@ -1110,7 +1110,7 @@ Recorded so nobody rebuilds that shape. Each was checked in source this run. ⭐
    WS3."* ⛔ No agent adopted it and **WS3 was NOT started.** It moves only if you lift the hold yourself.
 3. ⭐ **RULED, and here is what the biggest one now means.** **D-1: the eight `blocking` rows MUST CLOSE before
    the flag flips** — that is now B7's gate, not a proposal. The flag itself is untouched:
-   src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;` — and **it is ONE flag exposing
+   src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = true;` (⛔ B7, 2026-08-21 — THE SENTENCE AROUND THIS CITATION IS SUPERSEDED AND IS KEPT AS THE THING CORRECTED: it was written when this line read = false, and it reasons from a flag that is now ON. What it says about SOL remains true — Sol is excluded by PROVENANCE, not by the flag, at any flag value.) — and **it is ONE flag exposing
    BOTH swaps**; `labPipelineAdmits` has exactly one call site, reached for moons through
    `src/objects/Moon.js:58`. There is no separate moon flag. **D-3's R-07 is now a named B3 work item.**
 4. ⛔ **The honest headline did NOT improve: still seven stops for B0–B7, five on the path to a player.**

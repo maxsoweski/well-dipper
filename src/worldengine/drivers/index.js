@@ -145,7 +145,7 @@ export const PACKS = Object.freeze([
   // lab-procedural-0…199: swapped planets 341 -> 846, and 188 of the newcomers lose a legacy branch
   // that nothing yet rewrites (lava 52, ocean 6, venus 130 — ledger rows R-05, R-06, R-07).
   // ⭐ NOT A LIVE REGRESSION, AND THE REASON IS THE FLAG, NOT THE PACK: src/objects/Planet.js:2153
-  // `export const LAB_GAS_BODIES_DEFAULT = false;` is the first term of that same admission test, so
+  // `export const LAB_GAS_BODIES_DEFAULT = true;` is the first term of that same admission test — ⭐ FLIPPED AT B7, 2026-08-21, so the first term now PASSES and admission turns on the other two. ⛔ Sol is still refused, by PROVENANCE rather than by the flag. Formerly `= false`, and so
   // none of this reaches a player until Step 12 deletes the fallbacks. It IS the trajectory Step 12
   // commits to, and the ledger is where those losses are declared before Max is asked to accept them.
   // ⚠ ANY FUTURE PACK WITH A NON-'gas' PREDICATE WIDENS THE SWAPPED POPULATION. Say so in the commit

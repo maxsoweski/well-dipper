@@ -52,7 +52,7 @@ agree exactly (9 sig = float32 = 21 → 322); on `uNoiseScale` they do not (985 
 
 **Stated before the first number, because every table below is a POST-FLIP reading.** The lab
 material is admitted only behind a flag that is OFF —
-src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;` and
+src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = true;` (⛔ B7, 2026-08-21 — THE SENTENCE AROUND THIS CITATION IS SUPERSEDED AND IS KEPT AS THE THING CORRECTED: it was written when this line read = false, and it reasons from a flag that is now ON. What it says about SOL remains true — Sol is excluded by PROVENANCE, not by the flag, at any flag value.) and
 src/objects/Planet.js:2194 `    admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`,
 so `Planet._createLabSurface` returns null on every body in a default frame.
 
@@ -203,7 +203,7 @@ on every untidal body. **All** of the per-body variation comes from the Io-ancho
 RE-CALIBRATION, NOT A DIFFERENTIATOR.** Two measured facts, both stated at the top of this document:
 
 1. **It is invisible today.** 0 of 1160 bodies are ADMITTED to the lab material at
-   src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;`, so every count in §2.3
+   src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = true;` (⛔ B7, 2026-08-21 — THE SENTENCE AROUND THIS CITATION IS SUPERSEDED AND IS KEPT AS THE THING CORRECTED: it was written when this line read = false, and it reasons from a flag that is now ON. What it says about SOL remains true — Sol is excluded by PROVENANCE, not by the flag, at any flag value.), so every count in §2.3
    is a POST-FLIP reading.
 2. **Post-flip it REPLACES a 1160-distinct legacy draw with an 844-distinct derived one** (9 sig
    figs; 985 raw float64, 780 float32). Fewer values, on purpose: the trade Max ruled for is
@@ -401,7 +401,7 @@ have, so the reach is stated here as its own measurement:
 
 **So leg 2's pixel reach today is 350 of 1160 bodies** (336 planets + 14 planet-class), not 663. The
 other 313 are the value the pack *would* write on the lab material, which no body mounts at
-src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = false;`.
+src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = true;` (⛔ B7, 2026-08-21 — THE SENTENCE AROUND THIS CITATION IS SUPERSEDED AND IS KEPT AS THE THING CORRECTED: it was written when this line read = false, and it reasons from a flag that is now ON. What it says about SOL remains true — Sol is excluded by PROVENANCE, not by the flag, at any flag value.).
 
 ⭐ **The moon rows are still worth printing — no instrument in the repo prints them — and with that
 label on them they say two things.** The palette law lands on the moons at almost exactly half the

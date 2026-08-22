@@ -388,4 +388,9 @@ Why this is the smallest thing that works, rather than a new instrument: the led
 5. **Your `uNoiseScale` ruling is due and is not in any tier here.** You ruled it gets a characteristic wavelength in km *after moons ship*; moons shipped at Step 10a. r-rows measures it as the single largest differentiation win in the corpus. **Recommendation: schedule it alongside Tier 1 rather than inside it — it is not a lab-only feature and it will not surface from this document's list.**
 6. **Rule on the (d) eight — or confirm the existing carve-out already does.** `world-engine-production-L1-plan.md:205` already names the "overlay/enable" category and recommends the disposition under a don't-ask heading. **Recommendation: treat F44–F49 as already ruled and do not spend a cycle on them; only F19 (waiting on QB-4's render gate) and F39 (one law away, cheap) are genuinely new to the category.**
 7. **Decide whether Rule 2 gets its gate now or later.** §7's proposal is one field on an existing ledger row plus one bounded count. **Recommendation: do it before the next pack lands, because the count it produces is meaningless retroactively — it only bites on rows added after it exists.**
+8. ⛔ **SUPERSEDED AT B7, 2026-08-21 — CALLED, AND THE FLAG IS NOW ON.** `Planet.js:2153` reads
+   `export const LAB_GAS_BODIES_DEFAULT = true;`, so the shipped work DOES reach a player and every
+   "reaches 0 pixels" claim in this document is stale by that date. ⚠ THIS FILE IS NOT IN
+   `CITE_SOURCES`, so the citation fence cannot see its stale claims — which is why the correction
+   is written in rather than left to a gate. The item as written on 2026-08-20 read:
 8. **Step 12's gate still reads satisfied and nobody has called it.** Both UATs have your pass, and `Planet.js:2153` `export const LAB_GAS_BODIES_DEFAULT = false;` means none of the shipped work reaches a player. I did not touch it.
