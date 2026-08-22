@@ -1,7 +1,7 @@
 # AC5 — the solidFeatures import-back, and the seam nobody had named
 
 **Measured:** 2026-08-22 · **Instrument:** `tools/solid-features-seam-probe.mjs` (reproducible by command)
-**Status:** ✅ **LANDED 2026-08-22.** Max ruled **ADOPT**; the lab imports pack #2 and calls it. UAT is his and still open — see §6.
+**Status:** ✅ **LANDED 2026-08-22.** Max ruled **ADOPT**; the lab imports pack #2 and calls it. UAT CLOSED by Max the same day — see §6.
 
 ---
 
@@ -105,7 +105,15 @@ where the ruling REVERSED once the divergence was measured.
 | ✅ debt row cleared, ceiling 11 → 10 | roster and ledger both down to six packs |
 | ✅ AC6 live check | the lab loads, the pack drives, the [G] A/B flips exactly three values and nothing else |
 
-## 6. ⛔ WHAT IS STILL OPEN — AND IT IS MAX'S EYES, NOT A GATE
+## 6. ✅ MAX'S READ — the UAT gate, closed 2026-08-22
+
+> **"One seems right to me."** — Max, on the [G] A/B, 2026-08-22.
+
+Recorded in his words rather than translated into a verdict label. The adopted arm stands; the
+radius-aware `surfaceGravity` is what the lab's three ∝1/g morphology terms derive from from here on.
+The instrument below stays in the file — it is how the ruling is re-checkable, not scaffolding.
+
+### The instrument he was handed
 
 The [G] key A/B is in the lab (handler `planet-lod-lab.html:5566`, arm readout in the `#abBadge`
 element at `:147`). It flips the three ∝1/g terms between the adopted pack arm and the old lab arm
