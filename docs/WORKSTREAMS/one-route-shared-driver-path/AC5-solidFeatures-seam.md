@@ -1,7 +1,7 @@
 # AC5 — the solidFeatures import-back, and the seam nobody had named
 
 **Measured:** 2026-08-22 · **Instrument:** `tools/solid-features-seam-probe.mjs` (reproducible by command)
-**Status:** ⬜ NOT LANDED. One decision is open and it is Max's — see §4.
+**Status:** ✅ **LANDED 2026-08-22.** Max ruled **ADOPT**; the lab imports pack #2 and calls it. UAT is his and still open — see §6.
 
 ---
 
@@ -26,7 +26,7 @@ the lab's authoring sliders out of the loop, which is the lab's entire purpose. 
 carry the **UNGATED** value: the lab re-applies its own ✓ checkbox at the per-frame writer, so a
 gated mirror applies the decision twice (`planet-lod-lab.html:1749` names this hazard).
 
-⛔ `solidFeatures.js` exports **neither helper**. Authoring `solidFeaturesLabState` +
+✅ `solidFeatures.js` now exports both. Authoring `solidFeaturesLabState` +
 `solidFeaturesDirectDrivers` is the mechanical half of this AC. All fourteen uniforms mirror into
 `state`, so the direct set is EMPTY — worth stating, because `giantDeckDirectDrivers` derives itself
 by subtraction and an empty complement is a result, not a missing step.
@@ -100,7 +100,33 @@ where the ruling REVERSED once the divergence was measured.
 | ✅ mechanism read off the working precedent | the two-part mirror/direct split |
 | ✅ the seam identified AND measured | route C refuted at 297 vs 168 |
 | ✅ the residue reduced to one root cause | radius-aware vs radius-blind `surfaceGravity` |
-| ⬜ `solidFeaturesLabState` / `solidFeaturesDirectDrivers` | not authored |
-| ⬜ the line-neutral lab edit | not started — `planet-lod-lab.html` must stay 6559 lines |
-| ⬜ debt row cleared, ceiling 11 → 10 | blocked on the above |
-| ⬜ AC6 live check | a dev server IS up on :5173 serving this lane, so this is doable without Max |
+| ✅ `solidFeaturesLabState` / `solidFeaturesDirectDrivers` | authored, 5 tests (`§H`), complement asserted EMPTY |
+| ✅ the line-neutral lab edit | import on `:188` (third statement, before the trailing `//`); call site `:2074-2076`; eleven assignments neutralised in place. **6559 lines, unchanged** |
+| ✅ debt row cleared, ceiling 11 → 10 | roster and ledger both down to six packs |
+| ✅ AC6 live check | the lab loads, the pack drives, the [G] A/B flips exactly three values and nothing else |
+
+## 6. ⛔ WHAT IS STILL OPEN — AND IT IS MAX'S EYES, NOT A GATE
+
+The [G] key A/B is in the lab (handler `planet-lod-lab.html:5566`, arm readout in the `#abBadge`
+element at `:147`). It flips the three ∝1/g terms between the adopted pack arm and the old lab arm
+and touches nothing else — verified live: the other eleven read byte-identical across a flip.
+
+⭐⭐ **THE PARK IS `Europa (icy moon)`, AND THE INSTRUMENT IS THE RADIUS SLIDER, NOT THE KEY ALONE.**
+Europa is the only preset whose F9 chaos and F17 glacial masters are both fully live
+(`cryoActivity` 1.0, `glacialStrength` 1.0), and its canonical 0.5 R⊕ is exactly where the two arms
+agree — which is why the preset table reads 0% divergence and why a key-press alone shows nothing
+there. Dragging the radius is what separates them, and it separates them completely:
+
+```
+                         chaosRaftJitter   glacialFlowVigor
+  old lab arm  (any R)        0.660             0.760      ← radius-DEAF, the slider does nothing
+  pack arm  R=0.20 R⊕         0.744             0.844
+            R=0.50 R⊕         0.660             0.760      ← canonical: the two arms meet
+            R=2.00 R⊕         0.300             0.400
+```
+
+⚠ Where the KEY alone reads, at seed 1: `Lava (hot airless)` +60% shield-volcano height on
+`volcanismStrength` 1.0, and `Ocean (temperate)` +51% height with +36% glacial vigor together.
+⛔ Chaos rafts are NOT judgeable by key alone on any preset — every preset with a diverging radius
+has `cryoActivity` ≈ 0, and the one with real cryo locks to canonical. That is the reason for the
+radius-slider park, stated so nobody re-derives it.

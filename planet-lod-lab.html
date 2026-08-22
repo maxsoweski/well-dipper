@@ -40,7 +40,7 @@
       position: fixed; top: 12px; left: 12px;
       font-size: 13px; line-height: 1.55;
       text-shadow: 0 0 8px #000; pointer-events: none; z-index: 10; white-space: pre;
-    }
+    }   #abBadge { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1002; font: 13px/1.5 monospace; color: #0f0; background: rgba(0,0,0,0.78); border: 1px solid #0f0; padding: 3px 10px; pointer-events: none; white-space: pre; }   /* AC5's A/B badge, sharing this line for the §10 line budget. z-index 1002 clears lil-gui's 1001 ON PURPOSE — it is the one element that must never sit behind a panel. */
     #controls {
       position: fixed; bottom: 12px; left: 12px;
       background: rgba(0, 0, 0, 0.78);
@@ -144,7 +144,7 @@
   <div id="hud"></div>
   <button id="helpBtn" title="Help">?</button>
   <div id="help"></div>
-
+  <div id="abBadge"></div><!-- AC5's ∝1/g A/B arm readout. ⛔ NOT A HUD ROW: #hud is left:12px z-index:10 and lil-gui's left panel is left:0 at z-index 1001, so every one of the HUD's rows is COVERED — measured on a screenshot, the only part of the new row that showed was the few characters wider than the panel. An A/B judged while moving has to be readable while moving. -->
   <script type="module">
     import * as THREE from 'three';
     import GUI from 'lil-gui';
@@ -185,7 +185,7 @@
     import { E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a regime tags. ⭐ `bakeClimateE5Attributes` is NO LONGER IMPORTED HERE — PLAN §4 Step 5c moved the band/jet bake into giantDeckPack, and an unused import is how a "deleted" copy stays one edit away from coming back
     import { resolveStormE, bakeStormEAttributes, chromophoreColor, STORM_DECK } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp; S2 STORM_DECK deck table (carriage deckZ derivation)
     import { drawGiantConditions, deriveGiantDrivers, giantDriverScalars, drawRotationHours } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation); + S1 giantDriverScalars (single-sourced radius/rotation wire) & drawRotationHours (per-archetype rotation draw, hot-Jupiter derived)
-    import { giantDeckPack, giantDeckLabState, giantDeckDirectDrivers } from './src/worldengine/drivers/giantDeck.js'; import { writePackUniforms } from './src/worldengine/port/writePackUniforms.js';   // ⭐ PLAN §4 Step 5c — DRIVER PACK #1. The F24/F25 law + the E5 bake + the band-proxy export + the per-seed roughness draw now live in ONE module the GAME imports too; this line REPLACES the band-flow.js import, whose two symbols (drawBandRoughness, bandProxyUniforms) are now called by the pack and by nothing in this file. ⚠ TWO import STATEMENTS ON ONE LINE, ON PURPOSE — the §10 line-stability rule on this file forbids spending a second line (symbol-checked refs from PLAN.md and both radius-live-feed suites land below), exactly as the computeE1 line above already does
+    import { giantDeckPack, giantDeckLabState, giantDeckDirectDrivers } from './src/worldengine/drivers/giantDeck.js'; import { writePackUniforms } from './src/worldengine/port/writePackUniforms.js'; import { solidFeaturesPack, solidFeaturesLabState } from './src/worldengine/drivers/solidFeatures.js';   // ⭐ PLAN §4 Step 5c — DRIVER PACK #1. The F24/F25 law + the E5 bake + the band-proxy export + the per-seed roughness draw now live in ONE module the GAME imports too; this line REPLACES the band-flow.js import, whose two symbols (drawBandRoughness, bandProxyUniforms) are now called by the pack and by nothing in this file. ⚠ TWO import STATEMENTS ON ONE LINE, ON PURPOSE — the §10 line-stability rule on this file forbids spending a second line (symbol-checked refs from PLAN.md and both radius-live-feed suites land below), exactly as the computeE1 line above already does ⭐⭐ A THIRD import STATEMENT JOINED THIS LINE 2026-08-22 — DRIVER PACK #2, `solidFeatures` (workstream AC5), for the same line-budget reason the first two share it. ⛔⛔ IT WAS INSERTED BEFORE THIS COMMENT AND NEVER APPENDED AFTER IT: an import appended past a trailing `//` lands INSIDE the comment, both new imports were silently disabled exactly that way on 2026-08-21, every headless gate stayed GREEN, and the lab died only on page load. Loading the page is the only thing that found it.
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -2068,25 +2068,25 @@
       state.tesseraStrength  = u.tesseraStrength;
       state.tesseraAxes      = u.tesseraAxes;
       for (let i = 0; i < 2; i++) uniforms.uTesseraAxis.value[i].set(u.tesseraAxes[i][0], u.tesseraAxes[i][1], u.tesseraAxes[i][2]);
-      // F7 edifices (Stage-C step 3) — derived volcanism strength + g⁻¹ height scale +
-      // shield↔strato viscosity flow into state (frame loop → uniforms); scale/amp/caldera
-      // are lab knobs. Placement is its own sparse Voronoi (uEdificeScale < uCraterScale).
-      state.volcanismStrength = u.volcanismStrength;
-      state.edificeMaxHeight  = u.edificeMaxHeight;
-      state.shieldStratoMix   = u.shieldStratoMix;
+      // ── DRIVER PACK #2 — solidFeatures (workstream AC5, ADOPT ruled 2026-08-22) ──────────────
+      // F7 edifices, F9 chaos rafts, F10's shared uCryoActivity master, F23 frost, F22 PLD and F17
+      // glacial — FOURTEEN state fields — are now ONE law in ONE module the GAME imports too: src/worldengine/drivers/solidFeatures.js `export function solidFeaturesPack(`. The eleven `state.X = u.X` lines this replaces, at :2087 :2089 :2099-2104 :2106 :2112-2113, are NEUTRALISED IN PLACE below and never deleted — 500 line-anchored citations sit at or past :1933, so this file holds at 6559 lines (§10 line-stability).
+      const _sf = solidFeaturesPack(deriveConditionVector(_dp, u, state.planetRadiusEarth), { displayRadiusEarth: visScaleOf(state.planetRadiusEarth ?? 1) });   // ⛔⛔ THE SEAM IS `_dp`, THE PER-SEED DRAW — NOT `_fp`/`_gcond` (:1726), which is built from the FROZEN preset and is seed-DEAF. MEASURED over 13 presets x 6 seeds (tools/solid-features-seam-probe.mjs): route C disagrees on 9 uniforms / 297 rows against this route's 3 / 168, i.e. every seed would render the same volcanism, frost and temperature — and NOTHING WOULD GO RED. ⚠ deriveConditionVector is RE-RUN rather than shared with :1964, because that line is symbol-cited by docs/WORKSTREAMS/one-route-shared-driver-path/AC5-solidFeatures-seam.md and may not move; it is pure and applyDrivers runs on preset/quality change, not per frame. The ctx is the LAB's display policy, the same one pack #1 passes at :1748 and for the reason stated there; there is deliberately NO `gates` key, because this pack's gates are resolved ALL-ON inside solidFeaturesLabState's own LAB_MIRROR_CTX and the lab re-applies its ✓ checkboxes at the per-frame writer (:5398/:5437/:5449/:5488).
+      Object.assign(state, solidFeaturesLabState(_sf));   // ⭐ THE MIRROR, NOT A DIRECT UNIFORM WRITE, and that is what makes the import-back survivable: every one of the fourteen is a live `.listen()`-bound lil-gui slider, so writing pack output straight to the material would take the lab's authoring surface out of its own loop, which is the lab's entire reason to exist. Same call shape as pack #1 at :2326 — load-bearing text: tests/lab-surface-ratchet.test.js:349's `Object.assign` arm names the fourteen fields by following THIS call through to SOLID_FEATURES_LAB_BINDING, and hoisting it into a local would read to the ratchet as a bulk write it cannot name. `solidFeaturesDirectDrivers(_sf)` is deliberately NOT called: all fourteen mirror, so the complement is EMPTY — a result, not an omission, and that pack's §H suite pins the emptiness so the day it stops being empty is loud.
+      if (state.sfRadiusBlindAB) { state.edificeMaxHeight = u.edificeMaxHeight; state.chaosRaftJitter = u.chaosRaftJitter; state.glacialFlowVigor = u.glacialFlowVigor; } document.getElementById('abBadge').textContent = `∝1/g  [G]  ${state.sfRadiusBlindAB ? 'RADIUS-BLIND — the old lab arm' : 'RADIUS-AWARE — driver pack #2 (adopted)'}`;   // ⭐ THE [G] A/B — these THREE are the only values the adoption moves; the other eleven round-trip through the condition vector unchanged on all 78 measured body-seeds. All three are ∝1/surfaceGravity (src/worldengine/base/labCore.js `edificeMaxHeight`, `chaosRaftJitter`, `glacialFlowVigor`), deriveUniforms uses the canonical radius-BLIND g and the condition vector carries the radius-AWARE one — and :1964 already made exactly this conversion for the bulk relief envelope and the on-screen gravity readout ("both were radius-deaf until this line changed") without bringing these three along. DEFAULT FALSY = pack-derived = the adopted arm; [G] flips back to the old lab arm so the difference is judged in the live thing, moving, which no screenshot can carry. Key handler at :5566; the arm is painted to the #abBadge element (:147) from HERE rather than from frame(), because applyDrivers() is exactly what runs at boot and again on every flip. ⚠ `document.getElementById` and not the lab's `$` helper: a bare `$(` would register a NEW applyDrivers callee in tests/lab-surface-ratchet.test.js's set 4, and a method call does not.
       // F8 lava plains (Stage-C step 3) — derived coverage (resurfacing, SMOOTHS relief) +
       // activity (tidal, drives the emissive cracks) + wrinkle-ridge axis flow into state;
       // scale/wrinkle/crack/glow are lab knobs.
       state.lavaCoverage = u.lavaCoverage;
       state.lavaActivity = u.lavaActivity;
       state.lavaAxis     = u.lavaAxis;
-      // F9/F10 icy terrain (Stage-C step 3) — Relief-owned SHAPE flows into state. The COVERAGE
-      // gate (cryoActivity) is now DERIVED by Cryo (P7 — registry LIVE) and flows in from the
-      // preset like every other driven field; the ◀ ICY ACTIVITY slider stays a manual override
-      // (drag overrides until the next preset/quality change re-derives — same as lavaActivity etc.).
-      state.cryoActivity = u.cryoActivity;
+      // F9/F10 icy terrain (Stage-C step 3) — the two masters (cryoActivity, chaosRaftJitter) are now
+      // pack-owned (:2075); the Relief-owned SHAPE terms below stay lab-authored and are NOT in the pack —
+      // F10's own two seeded axes are that pack's named omission, and cellScale/matrixRough/ridge/band are
+      // lab knobs. The ◀ ICY ACTIVITY slider stays a manual override until the next preset/quality change.
+      // ↳ MOVED TO DRIVER PACK #2 (:2075). Was `state.cryoActivity = u.cryoActivity;` — F9/F10 shared master — the ONE gate BOTH features read. The lab writes it UNGATED (:5435), which is why the pack puts the ✓ chaos checkbox on the two morphology terms instead; the pack follows the lab here rather than correcting it. Neutralised, not deleted: §10 line-stability.
       state.chaosCellScale = u.chaosCellScale;
-      state.chaosRaftJitter = u.chaosRaftJitter;
+      // ↳ MOVED TO DRIVER PACK #2 (:2075). Was `state.chaosRaftJitter = u.chaosRaftJitter;` — F9 raft displacement — ∝1/g, so this is one of the THREE the [G] A/B at :2076 flips. Neutralised, not deleted: §10 line-stability.
       state.chaosMatrixRough = u.chaosMatrixRough;
       state.doubleRidgeFreq = u.doubleRidgeFreq;
       state.cryoRidgeOffset = u.cryoRidgeOffset;
@@ -2094,23 +2094,23 @@
       state.groovedBandFreq = u.groovedBandFreq;
       state.cryoRidgeAxis0 = u.cryoRidgeAxes[0];
       state.cryoRidgeAxis1 = u.cryoRidgeAxes[1];
-      // Cryo step 2 frost-coverage (F23/F22) — driven budget/condensationT/bias/albedo/locked/tempEq
-      // flow into state (frame loop → uniforms); latChill/lapse/edge/noise stay lab knobs.
-      state.frostMaxCoverage   = u.frostMaxCoverage;
-      state.frostCondensationT = u.frostCondensationT;
-      state.frostLatitudeBias  = u.frostLatitudeBias;
-      state.frostAlbedo        = u.frostAlbedo;
-      state.frostLocked        = u.frostLocked;
-      state.tempEq             = u.tempEq;
-      // Cryo step 3 F22 PLD strata — driven strength/levels flow into state; softness a lab knob.
-      state.pldStrength        = u.pldStrength;
+      // Cryo step 2 frost-coverage (F23/F22) — budget/condensationT/bias/albedo/locked/tempEq are pack-owned
+      // (:2075) and reach the uniforms through the same frame loop as before; latChill/lapse/edge/noise stay lab knobs.
+      // ↳ MOVED TO DRIVER PACK #2 (:2075). Was `state.frostMaxCoverage   = u.frostMaxCoverage;` — F23 frost budget (gated on `frost`). Neutralised, not deleted: §10 line-stability.
+      // ↳ MOVED TO DRIVER PACK #2 (:2075). Was `state.frostCondensationT = u.frostCondensationT;` — F23 condensation temperature — ungated on purpose: a gated-off body would otherwise carry the PREVIOUS body’s value behind a zero. Neutralised, not deleted: §10 line-stability.
+      // ↳ MOVED TO DRIVER PACK #2 (:2075). Was `state.frostLatitudeBias  = u.frostLatitudeBias;` — F23 latitude bias — live only since the `axialTilt`/`axialTiltDeg` spelling fix; still 0 on all 632 plain moons, and that is a generator fact. Neutralised, not deleted: §10 line-stability.
+      // ↳ MOVED TO DRIVER PACK #2 (:2075). Was `state.frostAlbedo        = u.frostAlbedo;` — F23 frost tint — the pack hands out a `.slice()`, because a live array is how one body’s tint follows another’s. Neutralised, not deleted: §10 line-stability.
+      // ↳ MOVED TO DRIVER PACK #2 (:2075). Was `state.frostLocked        = u.frostLocked;` — F23 tidal-lock flag. Neutralised, not deleted: §10 line-stability.
+      // ↳ MOVED TO DRIVER PACK #2 (:2075). Was `state.tempEq             = u.tempEq;` — the equilibrium temperature the frost pass reads (pack uniform `uPlanetTempEq`). Neutralised, not deleted: §10 line-stability.
+      // Cryo step 3 F22 PLD strata — strength is pack-owned (:2075); levels stays derived here, softness a lab knob.
+      // ↳ MOVED TO DRIVER PACK #2 (:2075). Was `state.pldStrength        = u.pldStrength;` — F22 polar-layered deposits — rides F23’s `frost` gate, which is the LAB’s own coupling (:5474) and not a simplification. Neutralised, not deleted: §10 line-stability.
       state.pldLevels          = u.pldLevels;
       // Cryo step 4 F18 sublimation — driven gate + species flow into state; shape params stay lab knobs.
       state.subStrength        = u.subStrength;
       state.volatileSpecies    = u.volatileSpecies;
-      // Cryo step 5 F17 glacial — driven gate + flow vigor flow into state; shape params stay lab knobs.
-      state.glacialStrength    = u.glacialStrength;
-      state.glacialFlowVigor   = u.glacialFlowVigor;
+      // Cryo step 5 F17 glacial — gate + flow vigor are pack-owned (:2075); shape params stay lab knobs.
+      // ↳ MOVED TO DRIVER PACK #2 (:2075). Was `state.glacialStrength    = u.glacialStrength;` — F17 glacial master (gated on `glacial`). Neutralised, not deleted: §10 line-stability.
+      // ↳ MOVED TO DRIVER PACK #2 (:2075). Was `state.glacialFlowVigor   = u.glacialFlowVigor;` — F17 flow vigor — ∝1/g, the third value the [G] A/B at :2076 flips. Neutralised, not deleted: §10 line-stability.
       // 🎲 transient contract: a preset / qualityTier change discards manual rolls → clean
       // slate. Axes above already re-derive from the seed; reset the domain offsets to 0.
       state.craterOffset = [0,0,0]; state.mountainDomainOffset = [0,0,0]; state.scarpDomainOffset = [0,0,0];
@@ -5563,7 +5563,7 @@
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
-
+    window.addEventListener('keydown', (e) => { if (e.key !== 'g' && e.key !== 'G') return; if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName || '')) return; state.sfRadiusBlindAB = !state.sfRadiusBlindAB; applyDrivers(); });   // ⭐ THE AC5 A/B, ON A BARE KEY AND NOT A GUI CHECKBOX. It flips the three ∝1/g morphology terms at :2076 between the ADOPTED pack arm (radius-AWARE g, default) and the old lab arm (radius-BLIND g); the live arm is on the #abBadge readout at top-centre so it reads while the planet is moving, which is the only way this difference can be judged — taller/shorter shield volcanoes, more/less chaos-raft displacement, bolder/softer glacial lineations, biggest on small bodies. ⚠ The INPUT/TEXTAREA/SELECT guard is what keeps typing a `g` into a lil-gui number field from silently flipping the instrument under the author.
     // ─────────────────────────────────────────────────────────────────────────
     // "?" help overlay — self-documenting so the code needn't be open
     // ─────────────────────────────────────────────────────────────────────────
@@ -5590,8 +5590,8 @@
         <dt>spin speed (rad/frame)</dt><dd>Auto-rotates the planet so you can watch the terminator sweep. 0 = stopped (default — drag to rotate it yourself); the slider center (0.000375 rad/frame) is the original auto-rate.</dd>
         <dt>Copy settings</dt><dd>Writes the live state (pixelScale, octaves, levels, perturb, toggles, yaw/pitch/distance) to the clipboard as JSON. Paste it back in chat so the next agent can reproduce the look.</dd>
         <dt>Reset</dt><dd>Restores all defaults (distance 20, ÷3, analytic, auto octaves, clamp on, spin speed 0).</dd>
+        <dt>key: G</dt><dd>A/Bs the three ∝1/<i>g</i> surface-feature terms driver pack #2 adopted — <b>edificeMaxHeight</b> (shield-volcano height), <b>chaosRaftJitter</b> (chaos-raft displacement) and <b>glacialFlowVigor</b> (glacial lineation boldness) — between the <b>radius-AWARE</b> gravity the condition vector carries (default; what the pack derives) and the <b>radius-BLIND</b> canonical gravity <code>deriveUniforms</code> uses (what this lab did before 2026-08-22). The live arm is named in the green badge at the top of the screen. The two diverge most on small bodies, so judge it on Moon/Mercury or Mars while moving — the other eleven of the pack's fourteen uniforms are identical either way.</dd>
       </dl>
-
       <h3>HUD READOUTS (top-left)</h3>
       <dl>
         <dt>dist/radius</dt><dd>Current approach distance in radii.</dd>

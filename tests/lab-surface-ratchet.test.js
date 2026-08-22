@@ -679,7 +679,7 @@ const APPLY_DRIVERS_AND_FRAME_CALLEES = [
   'applyDrivers::drawPresetConditions',
   'applyDrivers::drawPresetRadius',
   'applyDrivers::drawPresetRotation',
-  'applyDrivers::giantDeckLabState',      // the pack hop the Object.assign arm resolves
+  'applyDrivers::giantDeckLabState', 'applyDrivers::solidFeaturesPack', 'applyDrivers::solidFeaturesLabState', 'applyDrivers::visScaleOf',      // the pack hop the Object.assign arm resolves. ⛔ THE THREE APPENDED ON THIS LINE, NOT INSERTED — this file is line-cited (one-pipeline-fence.test.js:13 pins :233). ⭐ REGISTERED 2026-08-22, per this fence's own instruction, and they are the OPPOSITE of the hazard set 4 guards, exactly as atmosphereOpticsOf/terminatorOpticsOf above: set 4 exists to catch a feature authored INTO the lab through a helper instead of a pack, and these three REMOVE fourteen inline laws from the lab and route them to src/worldengine/drivers/solidFeatures.js, which the game already imports (workstream AC5). `visScaleOf` rides along because applyDrivers now passes the LAB's display policy to a pack — the same call rebakeE5Bands already makes at planet-lod-lab.html:1748 for pack #1, one region further in.
   'applyDrivers::rebakeE5Bands',          // ⭐ driver function #4 — see KNOWN LIMIT 1
   'applyDrivers::relevantFeatureSet',
   'applyDrivers::resetDriverOverrides',

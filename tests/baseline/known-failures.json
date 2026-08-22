@@ -13,9 +13,9 @@
     "sha as a reproduction recipe when it is set. A bare STRING there is a record",
     "written before 2026-08-07, whose dirtiness was never captured either way."
   ],
-  "recordedAt": "2026-08-22T14:54:07.256Z",
+  "recordedAt": "2026-08-22T16:33:58.961Z",
   "recordedFromCommit": {
-    "sha": "c11ce6cfaaff5ff1a5e56320d1015f9315e3ed71",
+    "sha": "2d85b4c549388aa44d168c85ffc35a74d67ca3ca",
     "dirty": true
   },
   "vitest": "4.1.0",
@@ -31,9 +31,9 @@
       "collectedFiles": 341,
       "failingFiles": 6,
       "nonCollectingFiles": 15,
-      "tests": 5706,
+      "tests": 5711,
       "failed": 31,
-      "passed": 5671,
+      "passed": 5676,
       "skipped": 4,
       "todo": 0
     },
@@ -252,7 +252,7 @@
       "tests/driver-pack-limbdeck.test.js": 31,
       "tests/driver-pack-polardeck.test.js": 35,
       "tests/driver-pack-rockysurface.test.js": 37,
-      "tests/driver-pack-solidfeatures.test.js": 33,
+      "tests/driver-pack-solidfeatures.test.js": 38,
       "tests/driver-pack-solidoptics.test.js": 26,
       "tests/feature-associations.test.js": 17,
       "tests/gas-body-lab-material.test.js": 63,
