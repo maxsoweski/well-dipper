@@ -13423,28 +13423,37 @@ window.addEventListener('keydown', (e) => {
     }
   }
 
-  // ── ']' : TERRAIN-SCALE A/B (temporary instrument, 2026-08-21) ───────────────────────────────
-  // B7 moved swapped bodies onto the lab material, whose `uDispDomainScale` defaults to 1.0. The
-  // legacy game material writes RELIEF_DOMAIN_SCALE = 1.0/0.3 = 3.333 at Planet.js:1682, for the
-  // reason stated there: it keeps fbmd's FIRST octave on the legacy base frequency, i.e. it exists
-  // SPECIFICALLY to preserve feature size across the noise-law swap. So the flip renders terrain
-  // features ~3.3x larger, and that number has never been put in front of Max.
+  // ── ']' : TERRAIN FEATURE-SCALE A/B (temporary instrument, 2026-08-21) ──────────────────────
+  // ⛔⛔ THE FIRST VERSION OF THIS DROVE `uDispDomainScale` AND THAT WAS A CONTAMINATED COMPARISON.
+  // Both materials share heightNoise.glsl.js's fbmd, whose octave-0 frequency is
+  // `uNoiseScale * 0.3 * uDispDomainScale`, so 3.333 does restore the legacy frequency (Planet.js:1376
+  // says that is exactly why the constant exists). BUT the lab stack ALSO spends the same uniform as a
+  // sample-domain multiplier at height.glsl.js:689 and a province-partition multiplier at :836, which
+  // the legacy material never does — Planet.js spends it ONLY at :317, normalising a gradient. So
+  // raising it changed feature size AND province count together. Ledger P-15 already warned this:
+  // "Same spelling, two quantities."
   //
-  // ⭐ A BARE KEY FLIPPED WHILE MOVING, not a screenshot: relief scale only reads on approach, and
-  // a static frame cannot carry it. Walks live materials rather than reaching into Planet internals
-  // so it works on every swapped body in the scene, planet or moon, with no per-class branch.
+  // ⭐ THERE IS NO UNIFORM-LEVEL "OLD GAME LOOK" ON A SWAPPED BODY — the two materials are different
+  // shader stacks, not one stack with a dial. What CAN be varied cleanly is the shipped pipeline's own
+  // base feature frequency, and `uNoiseScale` is that dial: it keys every octave in the lab stack
+  // (height.glsl.js:690-693, :974, :2396, :2430) and fbmd's freq, and NOTHING else. x3.333 puts fbmd's
+  // octave-0 exactly on the legacy frequency with no domain or province side-effect.
   // ⛔ DELETE THIS BLOCK WHEN THE RULING LANDS. It is an instrument, not a feature.
   if (e.code === 'BracketRight') {
-    const SHIPPED = 1.0, LEGACY = 1.0 / 0.3;
+    const LEGACY_FREQ_MATCH = 1.0 / 0.3;   // puts fbmd octave-0 on uNoiseScale, the legacy value
     const hit = [];
     scene.traverse((o) => {
       const u = o.material && o.material.uniforms;
-      if (u && u.uDispDomainScale) hit.push(u.uDispDomainScale);
+      if (u && u.uNoiseScale && u.uDispDomainScale) {
+        if (o.material.userData._baseNoiseScale === undefined) {
+          o.material.userData._baseNoiseScale = u.uNoiseScale.value;
+        }
+        hit.push({ u, base: o.material.userData._baseNoiseScale });
+      }
     });
     if (hit.length) {
-      const nowShipped = Math.abs(hit[0].value - SHIPPED) < 1e-6;
-      const next = nowShipped ? LEGACY : SHIPPED;
-      for (const u of hit) u.value = next;
+      const shippedNow = Math.abs(hit[0].u.uNoiseScale.value - hit[0].base) < 1e-9;
+      for (const h of hit) h.u.uNoiseScale.value = shippedNow ? h.base * LEGACY_FREQ_MATCH : h.base;
       let hud = document.getElementById('_terrainScaleAB');
       if (!hud) {
         hud = document.createElement('div');
@@ -13455,11 +13464,11 @@ window.addEventListener('keydown', (e) => {
           'padding:10px 16px;border-radius:6px;text-align:center;pointer-events:none';
         document.body.appendChild(hud);
       }
-      hud.innerHTML = next === SHIPPED
-        ? `uDispDomainScale = <b>1.0</b> &nbsp;— <b>A: SHIPPED after B7</b> (matches the lab)<br>` +
-          `<span style="opacity:.75">features ~3.3x LARGER &nbsp;·&nbsp; ']' to compare &nbsp;·&nbsp; ${hit.length} bodies</span>`
-        : `uDispDomainScale = <b>3.333</b> &nbsp;— <b>B: THE OLD GAME LOOK</b> (pre-B7)<br>` +
-          `<span style="opacity:.75">features ~3.3x smaller &nbsp;·&nbsp; ']' to compare &nbsp;·&nbsp; ${hit.length} bodies</span>`;
+      hud.innerHTML = shippedNow
+        ? `<b>B: features ~3.3x SMALLER</b> &nbsp;— fbmd octave-0 on the pre-B7 frequency<br>` +
+          `<span style="opacity:.75">']' to compare &nbsp;·&nbsp; ${hit.length} bodies &nbsp;·&nbsp; feature size ONLY, no province change</span>`
+        : `<b>A: SHIPPED after B7</b> &nbsp;— the larger features you are seeing now<br>` +
+          `<span style="opacity:.75">']' to compare &nbsp;·&nbsp; ${hit.length} bodies &nbsp;·&nbsp; feature size ONLY, no province change</span>`;
     }
     e.preventDefault();
     return;
