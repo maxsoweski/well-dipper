@@ -303,11 +303,22 @@ describe('GATE 3 · the eight driven uniforms land on a real material', () => {
     const expected = polarTintFromBandTint(cond.atmosphere.color);
     const got = uniforms.uPolarTint.value;
     expect([got.r, got.g, got.b]).toEqual(expected);
-    // The law is the lab's, verbatim — asserted against the lab's own source text so a retune there
-    // shows up here instead of drifting silently.
-    expect(LAB_SRC).toContain('[_bt[0] * 0.45, _bt[1] * 0.62, Math.min(1, _bt[2] * 0.85 + 0.25)]');
+    // ⛔⛔ THIS USED TO SCRAPE THE LAB FOR `[_bt[0] * 0.45, _bt[1] * 0.62, Math.min(1, _bt[2] * 0.85 + 0.25)]`
+    // AND COMPARE. That worked only while the lab held a SECOND COPY of the law, and requiring two
+    // copies so they can be compared is the two-routes disease encoded as a test. The lab now CALLS
+    // this pack — planet-lod-lab.html `Object.assign(state, polarDeckLabState(_pd));` — so the pin
+    // moves here, and it is STRONGER than what it replaces: it pins the VALUES with their provenance,
+    // and separately pins that the lab READS the module, which the scrape never did.
+    //
+    // ⭐ EXACTLY THE MOVE port-terminator-law.test.js MADE AT 0e814d1 on Max's "same here" ruling,
+    // and for the same reason. The four coefficients stay literal because they are a TASTE value —
+    // the Cassini gold-haze-outside / blue-core two-tone — not a derived quantity.
     expect([POLAR_TINT_LAW.R, POLAR_TINT_LAW.G, POLAR_TINT_LAW.B_MUL, POLAR_TINT_LAW.B_ADD])
       .toEqual([0.45, 0.62, 0.85, 0.25]);
+    expect(LAB_SRC, 'the lab must READ the shared polar law, not re-fork it')
+      .toMatch(/Object\.assign\(state,\s*polarDeckLabState\(/);
+    expect(LAB_SRC, 'the lab must not carry a second literal copy of the cap-tint law')
+      .not.toMatch(/state\.polarTint\s*=\s*\[/);
   });
 
   it('the gate zeroes uPolarStrength ALONE, reproducing the lab idiom', () => {

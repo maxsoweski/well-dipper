@@ -14,7 +14,7 @@
 // has been shared, pure and ported since the #3b merge and was merely UN-EXPORTED — reachable only
 // by going through `resolveStormE`, i.e. only by paying for the whole storm slice. This pack does
 // not extract a law out of planet-lod-lab.html; it opens a door onto one that was already inside
-// `src/worldengine/`. The lab's planet-lod-lab.html:1911 `state.polarStrength = _pl.strength;` is a
+// `src/worldengine/`. The lab's planet-lod-lab.html:1916 `const _pd = polarDeckPack(_scond, {` is a
 // CONSUMER of that producer, not the producer.
 //
 // ⛔ SO THE "THE LAB MUST IMPORT IT BACK" ACCEPTANCE TEST IS SATISFIED ALREADY, AND SAYING WHY IS
@@ -80,7 +80,7 @@
 import { compositionClass, giantRegimeOf } from '../base/e1Regime.js';
 import { resolvePolarVortex } from '../base/storm-e.js';
 import {
-  scalar, assertMacroSeed, assertDisplayPolicy, assertPackResult, PackContractError,
+  scalar, assertMacroSeed, assertDisplayPolicy, assertPackResult, resolveDriver, PackContractError,
 } from '../port/writePackUniforms.js';
 
 // ── THE ONE GENUINELY NEW LAW IN THIS PACK, DECLARED RATHER THAN DEFAULTED ───────────────────────
@@ -102,7 +102,8 @@ import {
 export const GAME_STORM_SEED = 0;
 
 // ── The cool shift that turns the deck tint into the cap tint ────────────────────────────────────
-// Ported verbatim from planet-lod-lab.html:1920 `state.polarTint = [_bt[0] * 0.45, _bt[1] * 0.62, Math.min(1, _bt[2] * 0.85 + 0.25)];`
+// Ported verbatim from the lab's inline cap-tint expression, which was RETIRED 2026-08-25 when the
+// lab began reading this law back instead of holding a second copy: planet-lod-lab.html:1920 `Object.assign(state, polarDeckLabState(_pd));`
 // — the Cassini gold-haze-outside / blue-core two-tone. Its input `_bt` is `state.bandTint`, which
 // pack #1 sources from `condition.atmosphere.color`, so feeding this the SAME condition field makes
 // the two front-ends' cap tints identical by construction rather than by coincidence.
@@ -291,3 +292,63 @@ export const POLAR_DECK_ENTRY = Object.freeze({
   gates: Object.freeze([POLAR_GATE]),
   pack: polarDeckPack,
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// THE LAB SEAM — the mirror the lab imports back, and the reason it lives HERE and not in the lab.
+//
+// ⭐ THE MAPPING IS THE THING THAT MUST NOT BE WRITTEN TWICE. planet-lod-lab.html wrote these eight
+// assignments by hand off `resolveStormE(...).pole`; the game reaches the same values through
+// `applyDriverPacks`. Two hand-written spellings of one uniform→field map is exactly the two-routes
+// disease this pack was extracted to end, so the map lives in the pack and both front-ends read it.
+//
+// ⚠ THE PAIR THE LAB KEEPS IS ABSENT ON PURPOSE. `POLAR_LAB_KNOBS` (`uPolarAmp`, `uPolarW`) are the
+// lab's authoring sliders, planet-lod-lab.html:1017 `polarAmp: 0.12,` and :1021 `polarW: 0.025,`,
+// and this pack never emits them. A mirror that invented them would hand the lab back its own knobs.
+export const POLAR_LAB_BINDING = Object.freeze({
+  uPolarStrength: 'polarStrength',
+  uPolarMode: 'polarMode',
+  uPolarSides: 'polarSides',
+  uPolarR0: 'polarR0',
+  uPolarPole: 'polarPole',
+  uPolarRing: 'polarRing',
+  uPolarPhase: 'polarPhase',
+  uPolarTint: 'polarTint',
+});
+
+/**
+ * ⛔⛔ EVERY GATE ON, for the reason solidFeatures.js:301 gives and one this pack makes sharper.
+ *
+ * The lab re-applies its OWN ✓ checkbox at the per-frame writer, planet-lod-lab.html:5200
+ * `uniforms.uPolarStrength.value = state.polarVortexEnabled ? state.polarStrength * state.featureRelevant.polarVortex : 0.0;`
+ * — so the value this mirror puts into `state.polarStrength` must be the UNGATED one, or the
+ * decision is applied twice.
+ *
+ * ⚠ AND ZERO IS A LEGAL VALUE HERE, WHICH IS WHY DOUBLE-GATING WOULD BE SILENT RATHER THAN LOUD:
+ * `uPolarStrength` is the per-seed PRESENCE term, not a master — POLAR_DECK_ENTRY's ⚠ measures it at
+ * 1 on roughly 24 of 41 generated gas bodies — so a double-gated body reads 0 and is indistinguishable
+ * from a body that legitimately drew no cap.
+ */
+const LAB_MIRROR_CTX = Object.freeze({
+  displayRadiusEarth: 1, animRate: 1, relevance: {},
+  gates: Object.freeze({ [POLAR_GATE]: true }),
+});
+
+/**
+ * The subset of a pack result the LAB mirrors into `state`, resolved with every gate ON.
+ *
+ * ⚠ SKIPS WHAT THE PACK DID NOT EMIT rather than defaulting it, and both omissions are real: a solid
+ * body returns empty `drivers` (the non-gas early return), and a gas body with no atmosphere colour
+ * omits `uPolarTint` so the last cap tint stands. Writing `undefined` into either would be a NEW
+ * behaviour wearing the byte-identity gate's clothes.
+ *
+ * @param {{drivers: object}} pack  a `polarDeckPack` result
+ * @returns {object} `state` field name -> value, containing ONLY the keys the pack actually emitted
+ */
+export function polarDeckLabState(pack) {
+  const out = {};
+  for (const [uName, stateField] of Object.entries(POLAR_LAB_BINDING)) {
+    if (!(uName in pack.drivers)) continue;
+    out[stateField] = resolveDriver(uName, pack.drivers[uName], LAB_MIRROR_CTX);
+  }
+  return out;
+}

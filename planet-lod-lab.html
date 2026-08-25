@@ -185,7 +185,7 @@
     import { E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a regime tags. ⭐ `bakeClimateE5Attributes` is NO LONGER IMPORTED HERE — PLAN §4 Step 5c moved the band/jet bake into giantDeckPack, and an unused import is how a "deleted" copy stays one edit away from coming back
     import { resolveStormE, bakeStormEAttributes, chromophoreColor, STORM_DECK } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp; S2 STORM_DECK deck table (carriage deckZ derivation)
     import { drawGiantConditions, deriveGiantDrivers, giantDriverScalars, drawRotationHours } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation); + S1 giantDriverScalars (single-sourced radius/rotation wire) & drawRotationHours (per-archetype rotation draw, hot-Jupiter derived)
-    import { giantDeckPack, giantDeckLabState, giantDeckDirectDrivers } from './src/worldengine/drivers/giantDeck.js'; import { writePackUniforms } from './src/worldengine/port/writePackUniforms.js'; import { solidFeaturesPack, solidFeaturesLabState } from './src/worldengine/drivers/solidFeatures.js'; import { giantSurfacePack, giantSurfaceLabState } from './src/worldengine/drivers/giantSurface.js';   // ⭐ PLAN §4 Step 5c — DRIVER PACK #1. The F24/F25 law + the E5 bake + the band-proxy export + the per-seed roughness draw now live in ONE module the GAME imports too; this line REPLACES the band-flow.js import, whose two symbols (drawBandRoughness, bandProxyUniforms) are now called by the pack and by nothing in this file. ⚠ TWO import STATEMENTS ON ONE LINE, ON PURPOSE — the §10 line-stability rule on this file forbids spending a second line (symbol-checked refs from PLAN.md and both radius-live-feed suites land below), exactly as the computeE1 line above already does ⭐⭐ A THIRD import STATEMENT JOINED THIS LINE 2026-08-22 — DRIVER PACK #2, `solidFeatures` (workstream AC5), for the same line-budget reason the first two share it. ⛔⛔ IT WAS INSERTED BEFORE THIS COMMENT AND NEVER APPENDED AFTER IT: an import appended past a trailing `//` lands INSIDE the comment, both new imports were silently disabled exactly that way on 2026-08-21, every headless gate stayed GREEN, and the lab died only on page load. Loading the page is the only thing that found it. ⭐ AND A FOURTH, 2026-08-22 — DRIVER PACK #8 `giantSurface`, the GAS-class complement, wired the same day and under the same two rules: inserted BEFORE this comment, and sharing this line rather than spending one.
+    import { giantDeckPack, giantDeckLabState, giantDeckDirectDrivers } from './src/worldengine/drivers/giantDeck.js'; import { writePackUniforms } from './src/worldengine/port/writePackUniforms.js'; import { solidFeaturesPack, solidFeaturesLabState } from './src/worldengine/drivers/solidFeatures.js'; import { giantSurfacePack, giantSurfaceLabState } from './src/worldengine/drivers/giantSurface.js'; import { polarDeckPack, polarDeckLabState } from './src/worldengine/drivers/polarDeck.js';   // ⭐ PLAN §4 Step 5c — DRIVER PACK #1. The F24/F25 law + the E5 bake + the band-proxy export + the per-seed roughness draw now live in ONE module the GAME imports too; this line REPLACES the band-flow.js import, whose two symbols (drawBandRoughness, bandProxyUniforms) are now called by the pack and by nothing in this file. ⚠ TWO import STATEMENTS ON ONE LINE, ON PURPOSE — the §10 line-stability rule on this file forbids spending a second line (symbol-checked refs from PLAN.md and both radius-live-feed suites land below), exactly as the computeE1 line above already does ⭐⭐ A THIRD import STATEMENT JOINED THIS LINE 2026-08-22 — DRIVER PACK #2, `solidFeatures` (workstream AC5), for the same line-budget reason the first two share it. ⛔⛔ IT WAS INSERTED BEFORE THIS COMMENT AND NEVER APPENDED AFTER IT: an import appended past a trailing `//` lands INSIDE the comment, both new imports were silently disabled exactly that way on 2026-08-21, every headless gate stayed GREEN, and the lab died only on page load. Loading the page is the only thing that found it. ⭐ AND A FOURTH, 2026-08-22 — DRIVER PACK #8 `giantSurface`, the GAS-class complement, wired the same day and under the same two rules: inserted BEFORE this comment, and sharing this line rather than spending one.
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -1905,19 +1905,19 @@
         age: v.ageScalar, embossDir: v.embossDir, billowPhase: v.billowPhase, mode: v.mode,
       }));
       state.trainCount = state.trainSpots.length;
-      // F29 polar vortex ← writer pole (drawn from the disjoint stormE:polar stream, BEFORE
-      // the variable-count vortex loop, so the count-mix never moves the pole structure — F5)
-      const _pl = _storm.pole;
-      state.polarStrength = _pl.strength;
-      state.polarMode = _pl.mode;
-      state.polarSides = _pl.sides;
-      state.polarR0 = _pl.r0;
-      state.polarRing = _pl.ring;
-      state.polarPole = _pl.pole;
-      state.polarPhase = _pl.phase;
-      // Cap tint: bandTint shifted COOL (teal-blue lean) — the Cassini gold-haze-outside /
-      // blue-core two-tone (card §6 item 2).
-      state.polarTint = [_bt[0] * 0.45, _bt[1] * 0.62, Math.min(1, _bt[2] * 0.85 + 0.25)];
+      // F29 polar vortex ← DRIVER PACK (polarDeck) — the eight-field bank AND the cap-tint law now
+      // live in ONE module the GAME imports too: src/worldengine/drivers/polarDeck.js
+      // `export function polarDeckPack(`. The hand-written bank that stood here read the SAME
+      // disjoint stormE:polar stream through `_storm.pole`; storm-e.js:595 pins the two byte-identical,
+      // which is why this swap is measured as a no-op rather than argued as one.
+      // ⭐ stormSeed IS PASSED AND NOT DEFAULTED — Max's ruling 2026-08-22 (AC2-pack-law-survey.md):
+      // the lab's slider is a LAB AUTHORING KNOB, so the divergence from the game's
+      // `GAME_STORM_SEED = 0` is DECLARED, not closed. Defaulting here would close it by accident.
+      const _pd = polarDeckPack(_scond, {
+        displayRadiusEarth: visScaleOf(state.planetRadiusEarth ?? 1),
+        macroSeed: state.macroSeed | 0, stormSeed: state.stormSeed | 0,
+        ...(state.e5Obliquity > 0 ? { obliquityDeg: state.e5Obliquity } : {}),
+      });   Object.assign(state, polarDeckLabState(_pd));
       // Slice 1: _storm.uranian is read downstream in applyDrivers (F31 hazeMute bump). The extraction
       // stashes it on state so that consumer keeps working — applyStormState() runs BEFORE that line.
       state._stormUranian = _storm.uranian;
