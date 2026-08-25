@@ -90,7 +90,34 @@ varies per body, so the game needs no second entropy source. ⛔ **Do not "fix" 
 `rockySurface`'s 11 and `craterDeck`'s 6 stay as they are. Unifying would move crater pixels on every
 rocky body to close a difference that is already reasoned and deliberate.
 
-## `uTermStrength`: ⛔ **PRECEDENT DOES NOT APPLY. HELD FOR MAX.**
+## `uTermStrength`: ✅ **RULED AND LANDED — 0e814d1, 2026-08-22 10:31.**
+
+⛔⛔ **THIS SECTION WAS STALE FOR THREE DAYS AND THE STALENESS COST A SESSION'S OPENING.** It stood
+as "HELD FOR MAX" from 10:09 on 2026-08-22 until 2026-08-25, and the 2026-08-22d handoff inherited
+that reading and put an already-answered question in front of Max as its headline ask. The heading
+below the line is the ORIGINAL text, kept because the reverted attempt is still the finding; what
+changed is that Max then ruled and the change landed 22 minutes later.
+
+**The ruling:** Max, 2026-08-22 — *"the important thing here is the game and lab end up working the
+same"*, recorded verbatim in `tests/port-terminator-law.test.js`. The lab now CALLS the shared law:
+`planet-lod-lab.html` `state.termStrength = terminatorOpticsOf(_atmoCond).termStrength;`, and its
+binary override is gone.
+
+**Both gates named below were re-blessed in that same commit**, which is why the revert did not
+stand: `port-terminator-law` stopped scraping the lab's ternary and now pins `TERM_STRENGTH` with
+provenance PLUS a new assertion that the lab reads the module — strictly stronger than what it
+replaced — and the ratchet's set 4 took `applyDrivers::terminatorOpticsOf`.
+
+⭐ **CONSEQUENCE FOR `solidOptics`, since this was its only confirmed conflict:** the pack now has
+ZERO outstanding law conflicts. What remained was never a ruling — it was one measurement, and it
+was taken 2026-08-25: `_giantDynamo` and `solidOptics.applies` are **disjoint by construction**
+(`_giantDynamo` conjoins `_gas`; `solidOptics` is `compositionClass !== 'gas'`), so no body can
+satisfy both. See the handoff of that date for what the wire still needs, which is a gas-side pack
+that does not yet exist.
+
+---
+
+### ORIGINAL TEXT, 2026-08-22 10:09 — superseded above, kept for the record
 
 The limb precedent was applied, the change was written, it **failed two gates, and was reverted** —
 recorded here because the failure is the finding.
