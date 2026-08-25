@@ -1975,8 +1975,8 @@ describe('Step 1 · the axialTiltDeg DOMAIN, and the consumer it feeds', () => {
 describe('Step 1 · the habitability shape normalisation', () => {
   it('the game emits an OBJECT and the lab emits a NUMBER under the same key', () => {
     // Found while building this step; not previously recorded.
-    // PhysicsEngine.js:688 `return { score: Math.min(score, 1.0), factors };` returns an
-    // object, while its own JSDoc at PhysicsEngine.js:637 `@returns {number} score 0-1`
+    // PhysicsEngine.js:698 `return { score: Math.min(score, 1.0), factors };` returns an
+    // object, while its own JSDoc at PhysicsEngine.js:647 `@returns {number} score 0-1`
     // says a number.
     expect(typeof planets[0].habitability).toBe('object');
     expect(typeof planets[0].habitability.score).toBe('number');

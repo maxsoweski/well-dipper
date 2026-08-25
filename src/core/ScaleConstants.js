@@ -67,7 +67,11 @@ export function earthRadiiToScene(earthRadii) {
 export const RADIUS_RANGES_EARTH = {
   'rocky':        [0.3, 0.8],    // Mercury (0.38) to Mars (0.53)
   'terrestrial':  [0.8, 1.5],    // Venus (0.95) to super-Earth
-  'ocean':        [0.8, 1.8],    // Earth-like to large water worlds
+  'ocean':        [0.8, 3.0],    // Earth-like to steam worlds. 3.0 is the OBSERVED ceiling for a
+                                 // volatile world with NO H/He envelope — above it the population is
+                                 // H/He-enriched and is a sub-neptune, not an ocean world. Raised from
+                                 // 1.8 on 2026-08-25 (Max: "go with what physics says"); the old ceiling
+                                 // sat inside the radius valley (~1.8-2.0) rather than above it.
   'eyeball':      [0.8, 1.3],    // Tidally locked terrestrial
   'venus':        [0.8, 1.2],    // Venus-like (0.95 real)
   'carbon':       [0.4, 0.9],    // Small, dense worlds

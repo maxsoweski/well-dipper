@@ -68,6 +68,16 @@ export function estimateMassEarth(radiusEarth, type = 'rocky') {
     // Neptune: 3.88 RE, 17.15 ME
     return Math.pow(radiusEarth, 1.7) * 2.7;
   }
+  if (type === 'ocean') {
+    // ⛔ NOT the iron-silicate law below, and this is a CORRECTION, not a new feature: until
+    // 2026-08-25 ocean worlds were priced as rock, so a 1.8 R⊕ "large water world" came out near
+    // 7.9 M⊕ / 2.4 g — denser than Earth, which is the opposite of what a volatile world is.
+    // Constant density 0.64x Earth's (≈3.5 g/cm³, a water-rock mix) rather than a fitted exponent,
+    // so the law stays honest at both ends of the range instead of only at the anchor.
+    // ANCHORED on the observed water-world point: 2.5 R⊕ ⇒ 0.64 · 2.5³ = 10.0 M⊕, which is the
+    // ~10 M⊕ the mass-radius literature puts at that radius. At the new 3.0 ceiling: 17.3 M⊕, 1.9 g.
+    return Math.pow(radiusEarth, 3.0) * 0.64;
+  }
   // Rocky/terrestrial: M ∝ R^3.7 (iron-silicate, Chen & Kipping)
   return Math.pow(radiusEarth, 3.7) * 0.9;
 }

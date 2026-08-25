@@ -294,7 +294,7 @@ export function effectiveObliquityDegreesOf(tiltDegrees) {
 //   lab   driver-presets.js:27 `habitability: 0.7`                  → a SCALAR
 //   game  PlanetGenerator.js `habitability: habScore` — §10 symbol-only, because it sits in the
 //         record literal that every step of this plan grows — assigned from
-//         PhysicsEngine.js:688 `return { score: Math.min(score, 1.0), factors };` → an OBJECT
+//         PhysicsEngine.js:698 `return { score: Math.min(score, 1.0), factors };` → an OBJECT
 // The engine's one reader is planet-lod-lab-core.js:773 `clamp01(d.habitability ?? 0)` — and
 // `clamp01` of an object is `Math.min(1, Math.max(0, {…}))` = **NaN**. NaN is the one failure mode in
 // this codebase that is NOT quiet: it propagates into a uniform and the whole body renders as a black
@@ -302,8 +302,8 @@ export function effectiveObliquityDegreesOf(tiltDegrees) {
 // axialTilt reaching a world matrix). Forwarding the raw object would therefore have shipped a
 // landmine to the first step that reads the field, three steps from here.
 //
-// ⚠ THE FUNCTION'S OWN JSDOC IS WRONG about this: PhysicsEngine.js:637 `@returns {number} score 0-1`
-// says a number, while PhysicsEngine.js:688 `return { score: Math.min(score, 1.0), factors };`
+// ⚠ THE FUNCTION'S OWN JSDOC IS WRONG about this: PhysicsEngine.js:647 `@returns {number} score 0-1`
+// says a number, while PhysicsEngine.js:698 `return { score: Math.min(score, 1.0), factors };`
 // returns an object. That is not fixed here — it is a game-side edit outside this seam — but one
 // live consumer is already miscomputing because of it:
 // NavComputer.js:2650 `if (pd.habitability > 0.3) lines.push(` and
@@ -400,7 +400,7 @@ export function atmosphereFromPlanet(gameAtmosphere) {
 // the names do not warn you.
 //   game   `planetData.tidalHeating` — the RAW Io-normalised ratio, computed for real from
 //          eccentricity + star mass + orbit (PlanetGenerator.js `tidalHeating,` in the record
-//          literal, from PhysicsEngine.js:342 `export function tidalHeatingPlanet(eccentricity, starMassSolar, planetRadiusEarth, orbitAU) {`;
+//          literal, from PhysicsEngine.js:352 `export function tidalHeatingPlanet(eccentricity, starMassSolar, planetRadiusEarth, orbitAU) {`;
 //          and MoonGenerator.js:185 `const tidalHeating = this._computeTidalHeating(`).
 //   engine baseStep.js:29 `const rawTidalIoRatio = (d.tidalHeat != null)   // D12 raw Io-ratio, PRE-calibrateTidal`
 //          reads the fp key `tidalHeat`.
