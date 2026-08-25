@@ -384,19 +384,34 @@ const GAME_ONLY_BY_DESIGN = Object.freeze([
 // landed and this file refused to stay green on fiction.
 // planet-lod-lab.html:178 `import { terminatorOpticsOf }` and planet-lod-lab.html:2831 `craterUniformsFrom`. ⭐ THE SECOND SHRINK, SAME DAY: `drivers/solidFeatures.js` cleared too — the lab imports pack #2 at planet-lod-lab.html:188 `solidFeaturesPack` and calls it at :2074, which is workstream AC5 and Max's ADOPT ruling on the radius-aware gravity. ⭐⭐ AND A THIRD, 10 -> 9, SAME DAY: `drivers/giantSurface.js` cleared too — the lab imports pack #8 at planet-lod-lab.html:188 `giantSurfacePack` and calls it at :2465, gas-gated. ⛔⛔ AND A FOURTH, 9 -> 8, WHICH NOBODY CHOSE — AND WHICH HAS SINCE BEEN REVERSED. `drivers/solidOptics.js` cleared TRANSITIVELY on 2026-08-22: the lab never called it, no ruling was made, and it entered the lab's closure only because `giantSurface.js` imports `TERMINATOR_GATE` from it so the gate NAME has one home. The row was deleted because the criterion of the day — import closure, reachability not exercise — was genuinely met, and the call-side work went untracked with nothing red. ⭐ 2026-08-25 FIXED THE CRITERION RATHER THAN THE ROW: the criterion is now reachable-AND-CALLED, which is what every row's own `clears` text has always said, so solidOptics is a debt row again and its remaining work — one MEASUREMENT on the _giantDynamo branch, not a decision — is written into that row. ⭐ THE CEILING NEVER MOVED. `drivers/polarDeck.js` cleared on its own merits in the SAME commit — the lab imports it at planet-lod-lab.html:188 `polarDeckPack` and calls it at :1916, passing its own `stormSeed` per Max's 2026-08-22 ruling that the slider is a lab authoring knob — so the ledger stayed at 8 and no correction had to buy itself a raise. THREE packs remain on the roster.
 // planet-lod-lab.html:178 `import { terminatorOpticsOf }` and planet-lod-lab.html:2831 `craterUniformsFrom`.
-const IMPORT_BACK_DEBT_CEILING = 6;
+// ⭐⭐ 6 -> 3 ON 2026-08-25 — THE CRATER WIRE, AND IT IS THE LARGEST SINGLE SHRINK THIS LEDGER HAS
+// TAKEN. Three rows cleared in one commit: `drivers/rockySurface.js` and `drivers/craterDeck.js` on
+// their own merits — the lab imports both at planet-lod-lab.html:188 and calls each at
+// planet-lod-lab.html:2880 under exact-complement predicates — and `base/macroWavelength.js` FOR
+// FREE, because `rockySurface.js` imports the wavelength law, so the lab reaches it the moment the
+// pack lands. ⚠ THE FREE ROW IS THE ONE TO READ TWICE. It cleared TRANSITIVELY, which is exactly
+// how `drivers/solidOptics.js` cleared wrongly on 2026-08-22 and had to be restored. It is DIFFERENT
+// here and the difference is the criterion fixed on 2026-08-25: reachable-AND-CALLED. macroWavelength
+// is not a pack with an uncalled entry point — it is a leaf whose only export is consumed by
+// `rockySurface.js:268` inside the pack the lab now calls every route, so the law is EXERCISED, not
+// merely importable. ⛔ THAT IS A MEASUREMENT AND IT WAS MADE: tools/crater-wire-seam-probe.mjs
+// drives 104 solid body-seeds through the call site.
+// ⭐ AND THE ROW ITSELF WARNED ABOUT THIS SHAPE — its `clears` text said B7 had already moved the
+// GAME's `uNoiseScale` onto this derivation to match the lab, so the lab reaching the same number by
+// a different route was 'precisely the drift this fence is for'. ⚠ WHAT THE WIRE ACTUALLY CLOSED IS
+// THE IMPORT, NOT THE WRITE: `uNoiseScale` is exclusion 5 in ROCKY_SURFACE_LAB_BINDING
+// (src/worldengine/drivers/rockySurface.js:441) because the lab holds NO state field for it, so the
+// lab still renders the factory 4.0 and the pack's per-body wavelength reaches the lab's material
+// through nothing. THE LAW IS NOW SINGLE-HOMED; ADOPTING ITS VALUE IN THE LAB IS A SEPARATE,
+// VISIBLE CHANGE AND IT IS MAX'S. Saying so here is the point — a reader who sees this row gone
+// would otherwise conclude the lab draws the shared frequency, and it does not.
+// THREE ROWS REMAIN, and the merge gate Max ruled is `<= 2`.
+const IMPORT_BACK_DEBT_CEILING = 3;
 
 const IMPORT_BACK_DEBT = Object.freeze([
-  // ── the packs added after driver pack #1 and still not imported back (solidFeatures cleared 2026-08-22) ──
-  ...['craterDeck', 'rockySurface'].map((n) =>
-    Object.freeze({
-      path: `src/worldengine/drivers/${n}.js`,
-      clears:
-        `planet-lod-lab.html imports ${n} back and calls it, as it already does for giantDeckPack ` +
-        `at the giantDeckPack import site (PLAN §4 Step 5c). Until then the lab writes these uniforms ` +
-        `inline and the two front-ends compute the same values by two routes.`,
-    }),
-  ),
+  // ⭐ THE TWO PACK ROWS (`craterDeck`, `rockySurface`) WERE DELETED 2026-08-25 — the lab imports and
+  // calls both. They are not rewritten as cleared-but-kept: the liveness test below reds on a stale
+  // row precisely so this ledger cannot become a changelog of things that used to be true.
   Object.freeze({
     path: 'src/worldengine/drivers/index.js',
     clears:
@@ -412,13 +427,9 @@ const IMPORT_BACK_DEBT = Object.freeze([
       'Max rules the divergences permanent. ⚠ Listed as debt rather than exempt BECAUSE that ruling ' +
       'has not been made, and the plan names this exact file as the both-were-kept precedent.',
   }),
-  Object.freeze({
-    path: 'src/worldengine/base/macroWavelength.js',
-    clears:
-      "The lab imports the wavelength law rather than computing its own. ⚠ B7 moved the game's " +
-      '`uNoiseScale` onto this derivation to MATCH the lab, so the lab reaching the same number by ' +
-      'a different route is precisely the drift this fence is for.',
-  }),
+  // ⭐ `base/macroWavelength.js` ROW DELETED 2026-08-25 — it entered the lab's closure with the
+  // crater wire, via `rockySurface.js`. The ceiling comment above states what that did and did NOT
+  // close, because the distinction is the whole reason this row existed.
   Object.freeze({
     path: 'src/worldengine/base/emission-e.js',
     clears:
@@ -623,10 +634,14 @@ describe('registration 2 — every pipeline module the game imports is imported 
 // non-vacuity control below drives the same scanner with an EMPTY roster and pins exactly these
 // four, so the list is a reading of the tree rather than a claim about it. `giantDeck.js` is absent
 // because the lab really does import it at planet-lod-lab.html:188 `giantDeckPack` — the one precedent.
-const GRANDFATHERED_UNIMPORTED_PACKS = Object.freeze(
-  ['craterDeck', 'rockySurface']
-    .map((n) => `${DRIVERS_DIR}/${n}.js`),
-);
+// ⭐⭐ THE ROSTER IS EMPTY AS OF 2026-08-25, AND AN EMPTY ROSTER IS THE SUCCESS STATE, NOT A GAP.
+// It grandfathered exactly two packs — `craterDeck` and `rockySurface` — and the crater wire imported
+// and called both, so registration 2b now admits NO pack that the lab does not import. ⛔ IT MUST STAY
+// EMPTY: the roster is CLOSED, so a new pack cannot be added here, and the fence's own message says so.
+// ⚠ AND EMPTYING IT KILLED THE CONTROL BELOW IN ITS ORIGINAL FORM — see that test's note. An expected
+// list that shrinks to `[]` alongside its subject stops testing anything, and this file is about
+// exactly that failure mode.
+const GRANDFATHERED_UNIMPORTED_PACKS = Object.freeze([]);
 
 /** Unearned admissions the ledger can absorb: ceiling minus rows. Must be 0. */
 export function ledgerSlack(debtLength, ceiling) {
@@ -670,17 +685,28 @@ describe('registration 2b — a NEW pack cannot ship without the lab importing i
     expect(violations, violations.length ? newPackMessage(violations) : undefined).toEqual([]);
   });
 
-  it('CONTROL: the scan is non-vacuous — an EMPTY roster names both unimported packs', () => {
-    // Pass no roster against the REAL drivers tree. Everything the lab does not import must be
-    // reported, which proves the walker reads the shipped subject — the green above cannot.
-    // `giantDeck.js`, `solidFeatures.js`, `giantSurface.js` and — since 2026-08-25 — `polarDeck.js` are absent
-    // from this list because the lab genuinely imports all four at :188 and CALLS each one, and that real
-    // presence is what makes the remaining three a measurement rather than an assumption.
-    // presence is what makes the other four a measurement rather than an assumption.
-    const all = unimportedNewPacks(DRIVERS_DIR, LAB_HTML, new Set());
-    expect(all).toEqual([
-      'craterDeck', 'rockySurface',
-    ].map((n) => `${DRIVERS_DIR}/${n}.js`));
+  it('CONTROL: the scan is non-vacuous — it reads the REAL drivers tree and names EVERY pack in it', () => {
+    // ⛔⛔ THIS CONTROL WAS REWRITTEN ON 2026-08-25 BECAUSE THE CRATER WIRE WOULD OTHERWISE HAVE KILLED
+    // IT SILENTLY, and the shape of that near-miss is worth more than the assertion. It used to read
+    // `unimportedNewPacks(DRIVERS_DIR, LAB_HTML, new Set())` and pin the answer to a HARDCODED
+    // ['craterDeck', 'rockySurface'] — the two packs the lab did not yet import. The wire imported
+    // both, so the honest edit was `toEqual([])` — and `expect([]).toEqual([])` passes just as well
+    // when the walker returns nothing because it is BROKEN. The control's subject and its expected
+    // value would have vanished together, leaving a green test that reads like coverage.
+    // ⭐ THE FIX IS TO KEEP THE REAL TREE AS THE SUBJECT AND MOVE THE VARIABLE TO THE LAB SIDE: walk
+    // the REAL drivers directory against a lab stub that imports none of it. Every shipped pack must
+    // be named. That answer GROWS as packs are added instead of shrinking as they are wired, so it
+    // cannot go vacuous the way its predecessor was one commit from doing.
+    // ⚠ The two fixture controls below still cover the walker's red/green transition; this one covers
+    // the thing they cannot — that the walker is pointed at what actually ships.
+    const shipped = unimportedNewPacks(DRIVERS_DIR, `${CONTROL}/lab-stub-fixed.html`, new Set());
+    const onDisk = readdirSync(join(ROOT, DRIVERS_DIR), { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.js') && e.name !== 'index.js')
+      .map((e) => `${DRIVERS_DIR}/${e.name}`).sort();
+    expect(onDisk.length, 'the drivers tree is empty — the walker has nothing to read').toBeGreaterThan(7);
+    expect(shipped).toEqual(onDisk);
+    // And the green above is the same walker over the same tree with the real lab: it imports them all.
+    expect(unimportedNewPacks(DRIVERS_DIR, LAB_HTML, new Set())).toEqual([]);
   });
 
   it('the roster is LIVE — a roster pack the lab now imports is DELETED, not left standing', () => {
