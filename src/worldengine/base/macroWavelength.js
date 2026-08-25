@@ -190,8 +190,8 @@ export function macroWavelengthKm(condition) {
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // ⭐⭐ (1) NOTHING HERE IS VISIBLE IN A DEFAULT FRAME TODAY, AND THAT IS THE PLAN'S OWN DESIGN.
-// src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = true;` (⛔ B7, 2026-08-21 — THE SENTENCE AROUND THIS CITATION IS SUPERSEDED AND IS KEPT AS THE THING CORRECTED: it was written when this line read = false, and it reasons from a flag that is now ON. What it says about SOL remains true — Sol is excluded by PROVENANCE, not by the flag, at any flag value.) and the admission test at
-// src/objects/Planet.js:2194 `    admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
+// src/objects/Planet.js:2158 `export const LAB_GAS_BODIES_DEFAULT = true;` (⛔ B7, 2026-08-21 — THE SENTENCE AROUND THIS CITATION IS SUPERSEDED AND IS KEPT AS THE THING CORRECTED: it was written when this line read = false, and it reasons from a flag that is now ON. What it says about SOL remains true — Sol is excluded by PROVENANCE, not by the flag, at any flag value.) and the admission test at
+// src/objects/Planet.js:2199 `    admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
 // mean `Planet._createLabSurface` returns null on every body in a default frame. MEASURED over
 // `lab-procedural-0…199`: `rockySurface` SELECTS 1160 of 1160 non-gas bodies and 0 of 1160 are
 // ADMITTED at the default flag — the flag alone refuses all 1160. So this module writes nothing a

@@ -71,7 +71,7 @@ import { scalar, assertDisplayPolicy, assertPackResult, resolveDriver, PackContr
 // — an enable gate and nothing else. Unlike the F29 polar writer, which is
 // planet-lod-lab.html:5200 `state.polarVortexEnabled ? state.polarStrength * state.featureRelevant.polarVortex : 0.0;`,
 // this line multiplies NO relevance term — so the limb needs an enable gate and needs NO relevance key,
-// and src/objects/Planet.js:2204 `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`
+// and src/objects/Planet.js:2209 `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`
 // stays untouched. Declaring the gate by NAME is what keeps the absent-gate throw alive at
 // src/worldengine/port/writePackUniforms.js:180 `if (gates == null || !(d.gate in gates)) {`: a
 // literal 1.0 would render the rim under a decision nobody had made.
@@ -175,8 +175,8 @@ export function limbDeckPack(condition, ctx = {}) {
  *
  * ⛔⛔ THE PREDICATE IS `compositionClass(condition) === 'gas'` AND IT MUST NOT BE `!!condition.atmosphere`,
  * even though the strength driver keys on exactly that. Admission runs through
- * src/objects/Planet.js:2192 `const packs = condition ? selectPacks(condition).map((e) => e.name) : [];`
- * into src/objects/Planet.js:2194 `admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
+ * src/objects/Planet.js:2197 `const packs = condition ? selectPacks(condition).map((e) => e.name) : [];`
+ * into src/objects/Planet.js:2199 `admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
  * — so a broader predicate would ADMIT EVERY ROCKY AND ICY WORLD-ENGINE BODY to the lab material,
  * which is Step 9's population arriving unruled at Step 6. ⛔ IT USED TO BE CHARACTER-IDENTICAL TO
  * THE GAS DECK'S ENTRY AND IT IS NOT ANY MORE, 2026-08-21 (B3 leg 2, ledger R-07): that entry now

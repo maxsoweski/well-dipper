@@ -108,12 +108,12 @@ line (`9b` did exactly this) or repair them all in the same edit.
 ### ⭐ The finding that matters most for whoever ships Step 12
 
 `index.js` said *"Registration cannot move a body from the legacy material to the lab material."*
-**True of the three gas entries, FALSE as of `db1cf51`.** `Planet.js:2192` feeds `packs.length > 0`
+**True of the three gas entries, FALSE as of `db1cf51`.** `Planet.js:2197` feeds `packs.length > 0`
 into the admission test, so a pack claiming bodies no other pack claimed **admits them**. Swapped
 planets went **341 → 846**, and **188 newcomers lose a legacy branch** nothing yet rewrites — lava
 52, ocean 6, venus 130 (ledger rows **R-05, R-06, R-07**).
 
-⭐ **Not a live regression, and the reason is the flag rather than the pack:** `Planet.js:2153`
+⭐ **Not a live regression, and the reason is the flag rather than the pack:** `Planet.js:2158`
 `LAB_GAS_BODIES_DEFAULT = false` is the first term of that same test. Nothing reaches a player until
 Step 12 deletes the fallbacks. **It IS the trajectory Step 12 commits to.**
 

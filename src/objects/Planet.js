@@ -1696,6 +1696,11 @@ export class Planet {
         uEjectaRampart: { value: craters.ejectaRampart },
         uEjectaAmp: { value: craters.ejectaAmp },
         uEjectaLump: { value: craters.ejectaLump },
+        // ⭐ 2026-08-25, Max's ruling: the GAME ADOPTS THE LAB'S VERSION of province gating on
+        // craters. 1.0 is the lab's own dial default (uniforms.js:469, planet-lod-lab.html:918),
+        // so the two front-ends now weight craters by the same terrain-region field instead of
+        // this path pinning it neutral. 0.0 restores the pre-ruling look exactly.
+        uProvinceWeight: { value: 1.0 },
         uVoroCells: { value: CRATER_VORO_CELLS },
         uCraterReliefGain: { value: CRATER_RELIEF_GAIN },
         lightDir: { value: this._lightDir },

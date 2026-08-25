@@ -78,7 +78,7 @@ implementations — `GAS_BODY` and `Moon.js`'s shader."* **That is struck, and t
 inferred.** Measured in the running game with the flag ON: **Sol renders 39 bodies and ZERO are swapped**;
 all 39 report `isWorldEngine: false`.
 
-Admission is `flag.enabled && provenance.isWorldEngine && packs.length > 0` (`Planet.js:2194`, docblock
+Admission is `flag.enabled && provenance.isWorldEngine && packs.length > 0` (`Planet.js:2199`, docblock
 says "never Sol"). Sol carries 2 `gas-giant` + 2 `sub-neptune`; `GAS_TYPES` (`Planet.js:1422`) routes all
 four to `PLANET_SHADER_VARIANTS.gas` — i.e. to `GAS_BODY`. Deleting it ships **Jupiter, Saturn, Uranus and
 Neptune with no fragment shader**. `Moon.js`'s legacy shader is load-bearing for Sol's 18 ice + 7 captured
@@ -122,7 +122,7 @@ B6 is the node that makes that class of failure loud.
 
 ## 6. ⛔ WHAT COSTS A SESSION TO REDISCOVER (new this session — the older list is in `handoff-2026-08-21-gas-half-next.md` §5, still valid)
 
-- ⭐⭐ **A CITED LINE'S TEXT CHANGING IS NOT A RENUMBERING JOB.** When `Planet.js:2153` flipped, 22 places
+- ⭐⭐ **A CITED LINE'S TEXT CHANGING IS NOT A RENUMBERING JOB.** When `Planet.js:2158` flipped, 22 places
   quoted it and the PROSE around each asserted "the flag defaults OFF". Fixing the quote alone leaves the
   claim standing, now wrong and freshly stamped as verified. Three treatments were needed — historical
   quote / bespoke rewrite / dated supersede marker — chosen per site. See `08c2521`.

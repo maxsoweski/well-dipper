@@ -160,9 +160,9 @@ Leaving it undefined is how `C15` arrives on schedule — the ledger's own name 
 until the shot passes."
 
 **F-9. ONE FLAG EXPOSES BOTH SWAPS, and the moon route is not the one the earlier draft cited.**
-src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = true;` (⛔ B7, 2026-08-21 — THE SENTENCE AROUND THIS CITATION IS SUPERSEDED AND IS KEPT AS THE THING CORRECTED: it was written when this line read = false, and it reasons from a flag that is now ON. What it says about SOL remains true — Sol is excluded by PROVENANCE, not by the flag, at any flag value.) is the first term of the
-admission test at src/objects/Planet.js:2189 `export function labPipelineAdmits(d, condition) {`,
-which has exactly one call site — src/objects/Planet.js:2019 `const decision = labPipelineAdmits(d, condition);`
+src/objects/Planet.js:2158 `export const LAB_GAS_BODIES_DEFAULT = true;` (⛔ B7, 2026-08-21 — THE SENTENCE AROUND THIS CITATION IS SUPERSEDED AND IS KEPT AS THE THING CORRECTED: it was written when this line read = false, and it reasons from a flag that is now ON. What it says about SOL remains true — Sol is excluded by PROVENANCE, not by the flag, at any flag value.) is the first term of the
+admission test at src/objects/Planet.js:2194 `export function labPipelineAdmits(d, condition) {`,
+which has exactly one call site — src/objects/Planet.js:2024 `const decision = labPipelineAdmits(d, condition);`
 inside `_createLabSurface`, reached for moons through
 src/objects/Moon.js:58 `Planet._createLabSurface(geometry, d, conditionFromBody(d), lightDir, lightDir2, starInfo)`.
 There is **no separate moon flag**, so this is one flip exposing both shipped swaps at once. ⚠ The
@@ -518,7 +518,7 @@ vector can answer, and both are PRESET-NAME lookups of exactly the kind
 `state.featureRelevant.mountains`, recomputed at `planet-lod-lab.html:1987-1988` as
 `(ASSOCIATIONS[key]?.rendersOn || []).includes(driverUI.preset) ? 1.0 : 0.0`, and
 `state.isExoticCarbonOrGeometric`, computed from `relevantFeatureSet().archs`. The game's answer to
-relevance is `src/objects/Planet.js:2204` `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`.
+relevance is `src/objects/Planet.js:2209` `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`.
 `craterRelevanceOf` exists because the lab ALREADY replaced the preset-name lookup for craters with a
 condition-derived law (the inc3b S3-fix); **no such law exists for mountains, and writing one is
 authoring, not wiring.** ⭐ Recommendation: F1 becomes its own scoped unit alongside the four HTML
@@ -672,7 +672,7 @@ the six exotic presets exist so the (d) queue can ever be scored.
    sit at status `verified` (built, not shipped, no UAT) with Max's complaints open in their contracts.
    They ship behind the spike, at B5's UAT, never standalone.
 4. ⭐ **THE ANIM-RATE SEAM — in no other document, and three backlog entries meet on one line.**
-   src/objects/Planet.js:2203 `export const GAME_ANIM_RATE = 1.0;` — whose own trailing comment reads *"the lab's _animRate GUI knob has no counterpart here"*
+   src/objects/Planet.js:2208 `export const GAME_ANIM_RATE = 1.0;` — whose own trailing comment reads *"the lab's _animRate GUI knob has no counterpart here"*
    against the lab's `_animRate`, applied to `uJetSpeed`, `uLightRate`, `uMagmaChurnSpeed` and
    `uLavaGlowRate`. `giantDeck.js:189` already emits `uJetSpeed` as `{ animRate: true }` **on a shipped
    pack**, so the game multiplies by 1.0 and jet drift does not slow on a large giant — which makes
@@ -1093,7 +1093,7 @@ Recorded so nobody rebuilds that shape. Each was checked in source this run. ⭐
 | 7 | B1 *"unblocks F1, F3, F4, F5, F6, F8, F9, F10, F12, F13, F16, F20-strand, F21"* | F3, F13, F16 and F21 appeared on that line **and nowhere else in the 857 lines** | The (p) queue's best buy — F13, *"the cheapest unblock in the set"* — ends with no work item and no queue position |
 | 8 | Spine 3 has *"zero game-side wiring cost, absorbed entirely by B7"* | The shader line is absorbed; the **uniform write** is not. G18's five frost uniforms are written by no pack | The one "free" item evaluates on five factory defaults, identical on 1156 bodies, indistinguishable at UAT from not building it |
 | 9 | B1's seam fix #5: *"Fix pack-side… route the existing seed"* | The gate is pack byte-identity; `macroSeed` occurs zero times in `rockySurface.js`; the pack's source refuses to synthesise a third seed→vec3 law and its test asserts seed-INDEPENDENCE | Three moves, none of them ruled: author a refused law, redden a gate the block forbids loosening, or drop a fix D-3 said must happen regardless |
-| 10 | Three citations wrong, two under load — `labCore.js:624` (the symbol is at `:620`), `PlanetMoonBody.js:33` *"reads the same flag"* (it is prose; the real route is `Moon.js:58` → `Planet.js:2019`), and *"`deriveUniforms` is called from two test files"* (36) | Verified | B0's own citation gate would have reddened on the first block, on the citation carrying the plan's central mechanism |
+| 10 | Three citations wrong, two under load — `labCore.js:624` (the symbol is at `:620`), `PlanetMoonBody.js:33` *"reads the same flag"* (it is prose; the real route is `Moon.js:58` → `Planet.js:2024`), and *"`deriveUniforms` is called from two test files"* (36) | Verified | B0's own citation gate would have reddened on the first block, on the citation carrying the plan's central mechanism |
 | 11 | D-12 asked Max to confirm the `uNoiseScale` ruling; open item 2 asked him to authorise two read-only measurements | Both are derivable or technical. The expiry condition is recorded twice; taking a render is read-only and touches no shipped code | Two of the sitting's slots spent on choice-theatre, in the document arguing against it |
 
 ---
@@ -1110,7 +1110,7 @@ Recorded so nobody rebuilds that shape. Each was checked in source this run. ⭐
    WS3."* ⛔ No agent adopted it and **WS3 was NOT started.** It moves only if you lift the hold yourself.
 3. ⭐ **RULED, and here is what the biggest one now means.** **D-1: the eight `blocking` rows MUST CLOSE before
    the flag flips** — that is now B7's gate, not a proposal. The flag itself is untouched:
-   src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = true;` (⛔ B7, 2026-08-21 — THE SENTENCE AROUND THIS CITATION IS SUPERSEDED AND IS KEPT AS THE THING CORRECTED: it was written when this line read = false, and it reasons from a flag that is now ON. What it says about SOL remains true — Sol is excluded by PROVENANCE, not by the flag, at any flag value.) — and **it is ONE flag exposing
+   src/objects/Planet.js:2158 `export const LAB_GAS_BODIES_DEFAULT = true;` (⛔ B7, 2026-08-21 — THE SENTENCE AROUND THIS CITATION IS SUPERSEDED AND IS KEPT AS THE THING CORRECTED: it was written when this line read = false, and it reasons from a flag that is now ON. What it says about SOL remains true — Sol is excluded by PROVENANCE, not by the flag, at any flag value.) — and **it is ONE flag exposing
    BOTH swaps**; `labPipelineAdmits` has exactly one call site, reached for moons through
    `src/objects/Moon.js:58`. There is no separate moon flag. **D-3's R-07 is now a named B3 work item.**
 4. ⛔ **The honest headline did NOT improve: still seven stops for B0–B7, five on the path to a player.**
@@ -1167,9 +1167,9 @@ call, not an agent's.
    src/objects/Planet.js:1279 `  finalColor = posterize(finalColor, uPosterizeLevels, gl_FragCoord.xy, 0.4);` — the
    three body programs (`GAS_BODY`, `ROCKY_BODY`, `EXOTIC_BODY`), each a separate fragment shader.
 2. ⚠ **REF CORRECTED HERE: the fourth site is the RING material, and it is a different quantity.**
-   src/objects/Planet.js:1881 `          color = posterize(color, uPosterizeLevels, gl_FragCoord.xy, 0.4);` spends
+   src/objects/Planet.js:1886 `          color = posterize(color, uPosterizeLevels, gl_FragCoord.xy, 0.4);` spends
    `color`, not `finalColor`, inside a material built by its own factory — and it carries its own second
-   copy of the function at src/objects/Planet.js:1837 `        vec3 posterize(vec3 color, vec2 levels, vec2 fragCoord, float edgeWidth) {`,
+   copy of the function at src/objects/Planet.js:1842 `        vec3 posterize(vec3 color, vec2 levels, vec2 fragCoord, float edgeWidth) {`,
    distinct from the body copy at src/objects/Planet.js:208 `vec3 posterize(vec3 color, vec2 levels, vec2 fragCoord, float edgeWidth) {`.
    **So this is two shader programs and two function copies, not one program with four call sites**, and
    a single uniform added to one material object reaches neither the other three programs nor the ring.

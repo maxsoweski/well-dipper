@@ -528,7 +528,7 @@ const UNWATCHED = [
   // stability of a number the game does not ship, which is a green with no subject.
   { game: 'lightDir',            reason: 'runtime', why: 'overwritten per frame — src/main.js:11346 `entry.planet._lightDir.copy(_sunDir)` (also :8932 `planet._lightDir`, :11375 `moon.planet._lightDir`).' },
   { game: 'lightDir2',           reason: 'runtime', why: 'overwritten per frame — src/main.js:11352 `entry.planet._lightDir2.copy(_sunDir2)` (binary companion); constructed as (0,0,0).' },
-  { game: 'time',                reason: 'runtime', why: 'animation clock — Planet.js:1955 `if (mat.uniforms.time)`, through :1918.' },
+  { game: 'time',                reason: 'runtime', why: 'animation clock — Planet.js:1960 `if (mat.uniforms.time)`, through :1918.' },
   { game: 'lodLevel',            reason: 'runtime', why: 'LOD tier — src/rendering/objects/BodyRenderer.js:213 `surface.material.uniforms.lodLevel.value = tier`.' },
   { game: 'starPos1',            reason: 'runtime', why: 'star world position — src/main.js:11422 `pu.starPos1`.' },
   { game: 'starPos2',            reason: 'runtime', why: 'second-star world position — src/main.js:11423 `pu.starPos2.value.copy(_star2Pos)` (also :10095 planet-class moons, :10101 textured moons). ⚠ The old ref here was :11357, a comment inside _updateRenderVisuals stating these are NOT written there — a citation that read as evidence and pointed at its own negation.' },

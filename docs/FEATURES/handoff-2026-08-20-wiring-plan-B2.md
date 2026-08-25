@@ -136,7 +136,7 @@ do not re-bless. Baseline set lives in the session scratchpad; regenerate it at 
   `_lab.frameBody(subject, opts)` — **radii goes in the SECOND arg**.
 - ⛔ Chrome pages are **visible windows on Max's desktop**. Reuse the existing page, close what you
   open, and leave `localStorage['wd.labGasBodies']` **removed** so the next reader gets the default.
-- ⛔ `LAB_GAS_BODIES_DEFAULT = false` (`Planet.js:2153`) — nothing reaches a player until **B7**.
+- ⛔ `LAB_GAS_BODIES_DEFAULT = false` (`Planet.js:2158`) — nothing reaches a player until **B7**.
 - ⛔ `npm run check:conic-gl` needs the sandbox DISABLED; it FATALs otherwise and looks like a real failure.
 - ⛔ Push with the sandbox **disabled** and verify with `git ls-remote` — this repo lies with
   "Everything up-to-date" above ~10 MB in-sandbox. **Confirm before pushing; Max says when.**

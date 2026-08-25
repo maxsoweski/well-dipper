@@ -98,7 +98,7 @@ export function craterDriverBlock(condition) {
   // The lab multiplies a per-feature relevance term into the two gated writes (the two lines quoted
   // above the gate constants). The obvious port is `scalar(v, { gate, relevance: 'craters' })` — and
   // it THROWS on every body, because the game's relevance map is empty:
-  // src/objects/Planet.js:2204 `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`
+  // src/objects/Planet.js:2209 `export const GAME_RELEVANCE = Object.freeze({});   // pack #1 keys no per-feature relevance`
   // and src/worldengine/port/writePackUniforms.js:240 `  if (d.relevance !== null && d.relevance !== undefined) {` refuses a name with no finite value.
   // ⛔ The fix is NOT to add a `craters` key to GAME_RELEVANCE. `craterRelevanceOf` is a pure
   // condition function — src/worldengine/base/bombardment.js:220 `export function craterRelevanceOf(condition) {`
@@ -119,7 +119,7 @@ export function craterDriverBlock(condition) {
     // a simplification: the GLSL keys the whole crater pass on the density
     // (src/worldengine/shaders/height.glsl.js:2203 `if (uCraterDensity <= 0.0) return;`) and the
     // whole apron on the strength
-    // (src/worldengine/shaders/craterRelief.glsl.js:157 `if (uEjectaStrength <= 0.0) return;`), so
+    // (src/worldengine/shaders/craterRelief.glsl.js:188 `if (uEjectaStrength <= 0.0) return;`), so
     // one zero deletes each pass byte-identically. Gating the morphology terms too would give the
     // same pixels and a different STATE — and would leave a gated-off body carrying the previous
     // body's terrace count behind a zero, invisible until something read them off-gate.
@@ -136,7 +136,7 @@ export function craterDriverBlock(condition) {
     // is the identity, so src/worldengine/base/featureScale.js:42 `export function featureFrequencyFromKm(radiusEarth, featureSizeKm, cFeature) {`
     // computes 1.0 * (R * 6371) / Dchar, and multiplying by an exact 1.0 is exact in IEEE.
     // ⚠ ONE MEASURED EDGE, STATED RATHER THAN DISCOVERED: `craterUniformsFrom` floors its radius at
-    // 1e-6 while `labPackCtx` passes the raw one (src/objects/Planet.js:2251 `displayRadiusEarth: gameDisplayRadiusEarth(condition.radiusEarth ?? d.radiusEarth ?? 1),`),
+    // 1e-6 while `labPackCtx` passes the raw one (src/objects/Planet.js:2256 `displayRadiusEarth: gameDisplayRadiusEarth(condition.radiusEarth ?? d.radiusEarth ?? 1),`),
     // so the two arms agree on every radius at or above that floor and only there. Below it the
     // display policy is refused outright, so there is no silent band.
     // ⚠ AND THE BYTE-IDENTITY ARM AGAINST THE LAB IS STRUCTURALLY IMPOSSIBLE ON THIS ONE NAME. The
@@ -159,7 +159,7 @@ export function craterDriverBlock(condition) {
     // ⚠⚠ THE TWO NAMES ABOVE AND BELOW ARE AN EXACT RECIPROCAL PAIR, DECLARED SO BY THE SHADER THAT
     // READS THEM, and the line above quietly put one of them behind a display policy. Say it here
     // rather than let a second front-end discover it:
-    // src/worldengine/shaders/craterRelief.glsl.js:29 `//    frequency: uCraterAmp * uCraterScale == 1 exactly, so the crater slope is body-independent`
+    // src/worldengine/shaders/craterRelief.glsl.js:33 `//    frequency: uCraterAmp * uCraterScale == 1 exactly, so the crater slope is body-independent`
     // src/worldengine/port/craterUniforms.js:150 `  // amp * scale == 1 EXACTLY, which is why the crater slope is body-independent.`
     // and the GAME LEANS ON IT rather than merely documenting it — both analytic-normal call sites
     // skip a divide they would otherwise owe, for this reason and no other:
@@ -258,7 +258,7 @@ export function craterDeckPack(condition, ctx = {}) {
  *
  * ⛔ IT MOVES NO BODY BETWEEN MATERIALS, and that is measured rather than argued. Every gas-class body
  * is already claimed by `giantDeck`, so the `packs.length > 0` term of
- * src/objects/Planet.js:2194 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
+ * src/objects/Planet.js:2199 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
  * cannot flip for any record, and no census is re-pinned by this registration. This is Step 10a's
  * entry inverted: that one WAS the first to widen the swapped population and said so.
  *

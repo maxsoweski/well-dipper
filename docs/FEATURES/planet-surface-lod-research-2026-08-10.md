@@ -216,7 +216,7 @@ the coefficient changes.
 **What it depends on.**
 - The mesh (Blocker 2) — displacement below the mesh's own angular resolution is invisible.
 - `kmPerUnit` (Blocker 4d) — you cannot displace by a physical amount that nobody has defined.
-- ⛔ **THREE surface programs, not two.** `src/objects/Planet.js:2153` `LAB_GAS_BODIES_DEFAULT = false`
+- ⛔ **THREE surface programs, not two.** `src/objects/Planet.js:2158` `LAB_GAS_BODIES_DEFAULT = false`
   `[SOURCE-VERIFIED-ME]`; `labPipelineAdmits` (`:2189`) requires `flag.enabled &&
   provenance.isWorldEngine && packs.length > 0`. **I grepped the whole repo: there is no production
   enable site — every reference to `setLabGasBodiesOverride` / `__wdLabGasBodies` outside Planet.js
@@ -779,7 +779,7 @@ Carried forward honestly. Several of these are load-bearing.
 
 2. **⭐ Nobody pinned the configuration.** The engine lane measured a 366,237-byte fragment shader on
    "game bodies"; the displacement lane established the lab pipeline is off by default. **I verified
-   `LAB_GAS_BODIES_DEFAULT = false` at `src/objects/Planet.js:2153` and grepped the repo: there is no
+   `LAB_GAS_BODIES_DEFAULT = false` at `src/objects/Planet.js:2158` and grepped the repo: there is no
    production enable site — every `setLabGasBodiesOverride` / `__wdLabGasBodies` reference outside
    Planet.js is in `tests/`.** `[SOURCE-VERIFIED-ME]` Both lanes are right about different
    configurations and neither said which it was in. The engine lane's session almost certainly had the

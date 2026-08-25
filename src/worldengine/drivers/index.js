@@ -139,12 +139,12 @@ export const PACKS = Object.freeze([
   // ⛔⛔ THAT PARAGRAPH IS TRUE OF THE THREE GAS ENTRIES ABOVE AND **FALSE AS OF STEP 10a**. It held
   // only because all three predicates were `compositionClass(condition) === 'gas'` character for
   // character, so the union of claims never grew. `rockySurface` is the COMPLEMENT, `!== 'gas'`, and
-  // src/objects/Planet.js:2192 `const packs = condition ? selectPacks(condition).map((e) => e.name) : [];`
+  // src/objects/Planet.js:2197 `const packs = condition ? selectPacks(condition).map((e) => e.name) : [];`
   // feeds `packs.length > 0` into the admission test one line below it. A pack whose predicate claims
   // bodies no other pack claimed therefore ADMITS THEM TO THE LAB MATERIAL. Measured over
   // lab-procedural-0…199: swapped planets 341 -> 846, and 188 of the newcomers lose a legacy branch
   // that nothing yet rewrites (lava 52, ocean 6, venus 130 — ledger rows R-05, R-06, R-07).
-  // ⭐ NOT A LIVE REGRESSION, AND THE REASON IS THE FLAG, NOT THE PACK: src/objects/Planet.js:2153
+  // ⭐ NOT A LIVE REGRESSION, AND THE REASON IS THE FLAG, NOT THE PACK: src/objects/Planet.js:2158
   // `export const LAB_GAS_BODIES_DEFAULT = true;` is the first term of that same admission test — ⭐ FLIPPED AT B7, 2026-08-21, so the first term now PASSES and admission turns on the other two. ⛔ Sol is still refused, by PROVENANCE rather than by the flag. Formerly `= false`, and so
   // none of this reaches a player until Step 12 deletes the fallbacks. It IS the trajectory Step 12
   // commits to, and the ledger is where those losses are declared before Max is asked to accept them.
@@ -185,7 +185,7 @@ export const PACKS = Object.freeze([
   // ⭐ ITS PREDICATE IS CHARACTER-IDENTICAL TO ROCKY_SURFACE_ENTRY'S, `!== 'gas'`, AND THAT IS THE
   // WHOLE OF ITS POPULATION ARGUMENT. `selectPacks` already returns a non-empty list for every body
   // this claims — rockySurface claims the same set — so the `packs.length > 0` term of
-  // src/objects/Planet.js:2194 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
+  // src/objects/Planet.js:2199 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
   // cannot flip for any record. ⛔ Unlike Step 10a's entry directly above, THIS ONE MOVES NO BODY
   // between materials and re-pins no census. That is asserted over lab-procedural-0…199 in
   // tests/driver-pack-solidoptics.test.js by comparing the swapped SET before and after
@@ -205,7 +205,7 @@ export const PACKS = Object.freeze([
   // ⭐ ITS PREDICATE IS THE EXACT COMPLEMENT OF ROCKY_SURFACE_ENTRY'S, `=== 'gas'`, AND THAT IS THE
   // WHOLE OF BOTH ITS POPULATION ARGUMENT AND ITS COLLISION ARGUMENT. Population: every gas-class
   // body is ALREADY claimed by giantDeck, so the `packs.length > 0` term of
-  // src/objects/Planet.js:2194 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
+  // src/objects/Planet.js:2199 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
   // cannot flip for any record and NO CENSUS MOVES — the opposite of Step 10a's entry above, which
   // was the first to widen the swapped population and said so. Collision: `rockySurface` writes the
   // impact family on `!== 'gas'` and this writes it on `=== 'gas'`, so across any corpus EXACTLY ONE
@@ -223,7 +223,7 @@ export const PACKS = Object.freeze([
   // ⭐ ITS PREDICATE IS CHARACTER-IDENTICAL TO ROCKY_SURFACE_ENTRY'S AND SOLID_OPTICS_ENTRY'S,
   // `!== 'gas'`, so this registration is population-neutral in the same way leg 1's was:
   // `selectPacks` already returns a non-empty list for every body it claims, the `packs.length > 0`
-  // term of src/objects/Planet.js:2194 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
+  // term of src/objects/Planet.js:2199 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
   // cannot flip for any record, and NO CENSUS IS RE-PINNED. Asserted over lab-procedural-0…199 in
   // tests/driver-pack-solidfeatures.test.js by comparing the swapped SET before and after
   // registration, not by reading three `applies` lines by eye.
@@ -248,7 +248,7 @@ export const PACKS = Object.freeze([
   //
   // ⛔ IT MOVES NO BODY BETWEEN MATERIALS. Every gas-class body is already claimed by `giantDeck`,
   // `limbDeck`, `polarDeck` and `craterDeck`, so the `packs.length > 0` term of
-  // src/objects/Planet.js:2194 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
+  // src/objects/Planet.js:2199 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
   // cannot flip for any record and no census is re-pinned.
   //
   // ⛔ IT CO-APPLIES WITH FOUR PACKS AND WITH NEITHER SOLID ONE. Because the predicate is the exact

@@ -16,7 +16,11 @@
 //    call is bit-identical to the first. It halves the cellular cost, which at uVoroCells = 27 is
 //    27 hash33 evaluations, the dominant term in the whole crater pass.
 //
-// 2. PROVINCE GATING IS STUBBED. The lab's provinceWeight ends
+// 2. PROVINCE GATING — WAS STUBBED, LIVE SINCE 2026-08-25 (Max: game adopts the lab's version).
+//    The paragraph below describes the STUB and is kept because it explains why the call survived
+//    the stubbed years. What replaced it is the CRATER SLICE of the lab's law, not the whole
+//    machinery — see the block at `const int PROV_CRATERS`. Historic text follows.
+//    The lab's provinceWeight ends
 //    `mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight)`, so at uProvinceWeight = 0 it returns EXACTLY
 //    1.0 for every feature id. The game pins provinces neutral until rung 5, so the whole ~4.8 KB /
 //    ~50-constant province machinery reduces to that constant. The CALL is kept rather than deleted
@@ -43,6 +47,7 @@ uniform float uEjectaStrength;    // apron gate; <=0 skips the apron, craters un
 uniform float uEjectaRampart;     // 0 = dry 1/r^2 skirt <-> 1 = fluidized lobate terminal ridge
 uniform float uEjectaAmp;         // apron amplitude, in planet radii
 uniform float uEjectaLump;        // 0..1 FBM lumpiness of the apron
+uniform float uProvinceWeight;    // global province-influence dial; 0 restores the pre-2026-08-25 neutral look
 `;
 
 export const CRATER_RELIEF_GLSL = /* glsl */ `
@@ -80,10 +85,35 @@ vec2 voronoi3d(vec3 p, int cells, out vec3 cellId, out vec3 grad){
   return vec2(f1, f2);
 }
 
-// ── Province gating, pinned NEUTRAL (divergence 2 above) ──
-// Rung 5 replaces this body with the lab's, and nothing else on this path changes.
-float provinceWeight(int fid){ return 1.0; }
-const int PROV_CRATERS = 0;
+// ── Province gating — LIVE as of 2026-08-25. Max: "game adopts lab's version." ─────────────────
+//
+// ⭐ THIS IS THE CRATER SLICE OF THE LAB'S LAW, NOT A REDUCTION OF IT. The header above priced this
+// at "~4.8 KB / ~50-constant province machinery"; that is the cost of porting ALL of it. This path
+// calls 'provinceWeight' with 'PROV_CRATERS' and nothing else (the single call site below), and the
+// crater branch — height.glsl.js:853 'else if (fid == PROV_CRATERS) { f = 1.0 - gProvince.x; fl = 0.25; }'
+// — reads ONLY 'gProvince.x'. That channel is a pure function of the a1/a2 octave pair
+// (height.glsl.js:845-846); the other four octaves feed '.y' and '.z', which nothing here reads.
+// So two 'noised()' samples reproduce the lab EXACTLY on this path. It is an exact port of the
+// reachable subset, not an approximation of the whole.
+//
+// ⚠ 'noised()' IS ALREADY ON THIS PATH and is held byte-identical to the lab's — Planet.js:279
+// splices in 'HEIGHT_NOISE_GLSL'. 'uMacroOffset' and 'uDispDomainScale' are likewise already
+// declared there. The only genuinely new uniform is 'uProvinceWeight', added above.
+//
+// ⛔ THE CALL SITE IS UNCHANGED, which is what the original stub's note asked for: this really was a
+// drop-in replacement of one function body plus a per-fragment init, exactly as it predicted.
+const int PROV_CRATERS = 1;   // matches height.glsl.js:787 — was 0 while the body was a stub
+vec3 gProvince = vec3(0.5);   // .x only is meaningful here; .y/.z stay at the lab's rest value
+void initProvinces(vec3 pos){
+  pos *= uDispDomainScale;    // height.glsl.js:836 — province scale tracks the display scale
+  vec4 a1 = noised(pos * 0.75 + uMacroOffset + vec3(17.3, -9.1, 4.7));
+  vec4 a2 = noised(pos * 1.5  + uMacroOffset + vec3(-3.2, 8.8, -12.6));
+  gProvince.x = smoothstep(0.35, 0.65, 0.5 + 0.5 * (a1.x + 0.35 * a2.x) / 1.35);
+}
+float provinceWeight(int fid){
+  float f = 1.0 - gProvince.x; float fl = 0.25;   // height.glsl.js:853, the PROV_CRATERS branch
+  return mix(1.0, fl + (1.0 - fl) * f, uProvinceWeight);   // height.glsl.js:901, verbatim
+}
 
 // ── craterProfile — BYTE-FAITHFUL to the lab (vitest-pinned analytic dhdr). ──
 // r = dist(fragment, centre) / craterRadius. Returns vec2(height, dh/dr).
@@ -144,6 +174,7 @@ void craterEjectaCombiner(vec3 dir, inout float h, inout vec3 slope){
   // lab, which pins this to force morphology == 0 because every crater it draws is sub-floor.
   float morphology = smoothstep(uCraterComplexD*0.6, uCraterComplexD, diameter);
   float r = ff.x / craterRadius;
+  initProvinces(dir);                             // per-fragment province field (lab: initProvinces(pos))
   float pw = provinceWeight(PROV_CRATERS);         // craters keep to old terrain (anti-tectonic)
 
   // dr/d(dir), chain-ruled exactly. Shared by both profiles — the merge's whole point.

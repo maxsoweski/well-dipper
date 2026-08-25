@@ -225,7 +225,7 @@ export function solidFeaturesPack(condition, ctx) {
  * ⛔⛔ THE PREDICATE IS CHARACTER-IDENTICAL TO rockySurface's AND solidOptics',
  * src/worldengine/drivers/solidOptics.js:148 `  applies: (condition) => compositionClass(condition) !== 'gas',`, AND THAT IS THE WHOLE OF ITS
  * POPULATION ARGUMENT. `selectPacks` already returns a non-empty list for every body this claims, so
- * the `packs.length > 0` term of src/objects/Planet.js:2194 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
+ * the `packs.length > 0` term of src/objects/Planet.js:2199 `      admitted: flag.enabled && provenance.isWorldEngine && packs.length > 0,`
  * cannot flip for any record: registration moves NO body between materials and re-pins no census.
  * Asserted over a generated population by comparing the swapped SET before and after registration,
  * not by reading three `applies` lines side by side.

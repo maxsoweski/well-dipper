@@ -149,7 +149,7 @@ palette uniform actually reaches today is smaller, and the difference is the who
 | **632 plain moons** | **0 / 632** | ⛔ **nothing binds a palette on a plain moon.** `grep -c 'uWeatheredColor\|uSedColor\|uFreshColor\|uBioGroundColor\|landPalette' src/objects/Moon.js` → **0**; a plain moon's colour is src/generation/MoonGenerator.js:134 `const palette = rng.pick(this.PALETTES[type]);`. The 313 that "move" is a POST-FLIP figure |
 
 **Leg 2's pixel reach today is 350 of 1160 bodies**, not 663 — and the lab material that would carry
-the other 313 is admitted on no body at src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = true;` (⛔ B7, 2026-08-21 — THE SENTENCE AROUND THIS CITATION IS SUPERSEDED AND IS KEPT AS THE THING CORRECTED: it was written when this line read = false, and it reasons from a flag that is now ON. What it says about SOL remains true — Sol is excluded by PROVENANCE, not by the flag, at any flag value.).
+the other 313 is admitted on no body at src/objects/Planet.js:2158 `export const LAB_GAS_BODIES_DEFAULT = true;` (⛔ B7, 2026-08-21 — THE SENTENCE AROUND THIS CITATION IS SUPERSEDED AND IS KEPT AS THE THING CORRECTED: it was written when this line read = false, and it reasons from a flag that is now ON. What it says about SOL remains true — Sol is excluded by PROVENANCE, not by the flag, at any flag value.).
 
 Other corpus movements: oxide mix values **534 → 699 distinct**; bodies with oxidation exactly zero
 **627 → 462**; `craton === weathered` **853 → 759**.

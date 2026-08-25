@@ -13,7 +13,7 @@
 // ⭐ WHY A FIFTH PACK RATHER THAN A WIDENED limbDeck. limbDeck's predicate is
 // src/worldengine/drivers/limbDeck.js:193 `  applies: (condition) => compositionClass(condition) === 'gas',`
 // and its own header records that the narrow predicate is load-bearing: admission to the lab
-// material runs through src/objects/Planet.js:2192
+// material runs through src/objects/Planet.js:2197
 // `    const packs = condition ? selectPacks(condition).map((e) => e.name) : [];` into the
 // `packs.length > 0` test one line below, so widening a predicate MOVES BODIES between materials.
 // This pack's predicate is the exact complement, `!== 'gas'`, which is character-identical to

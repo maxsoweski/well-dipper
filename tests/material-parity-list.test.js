@@ -194,7 +194,7 @@ function census(n) {
   return out;
 }
 
-/** src/objects/Planet.js:1916 `_typeIndex() {` — the same ordered list, which IS the GLSL branch id. */
+/** src/objects/Planet.js:1921 `_typeIndex() {` — the same ordered list, which IS the GLSL branch id. */
 const TYPE_INDEX = [
   'rocky', 'gas-giant', 'ice', 'lava', 'ocean', 'terrestrial',
   'hot-jupiter', 'eyeball', 'venus', 'carbon', 'sub-neptune',
@@ -424,15 +424,16 @@ describe('1. the swapped population, re-measured on lab-procedural-0…199', () 
 // 2. THE HEADLINE — how much per-body character survives the swap.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════
 describe('2. the collapse in per-body variation', () => {
-  it('45 of the game material’s 72 uniforms vary across bodies; 52 of the lab’s 369 do', () => {
-    expect(LEDGER.gameSize).toBe(72);   // 71 -> 72 AT B2P: uPosterizeLevels, the colour quantum. It is CONSTANT across bodies (a global display setting), so gameVarying stays 45 — the two numbers moving apart is the control that this is a declaration and not a new per-body draw.
+  it('45 of the game material’s 73 uniforms vary across bodies; 52 of the lab’s 369 do', () => {
+    expect(LEDGER.gameSize).toBe(73);   // ⭐ 72 -> 73 AT 2026-08-25: uProvinceWeight, on Max's ruling that the GAME ADOPTS THE LAB'S province gating for craters. This is the parity list measuring the game material moving one step TOWARD the lab's rather than away — the only direction this number is supposed to travel.
+    //   // 71 -> 72 AT B2P: uPosterizeLevels, the colour quantum. It is CONSTANT across bodies (a global display setting), so gameVarying stays 45 — the two numbers moving apart is the control that this is a declaration and not a new per-body draw.
     expect(LEDGER.labSize).toBe(369);   // ⭐⭐ 361 -> 369 AT B4-2, and the +8 is enumerable: uStarPos1, uStarPos2, uShadowMoonCount, uShadowMoonPos, uShadowMoonRadius, uShadowPlanetCount, uShadowPlanetPos, uShadowPlanetRadius — the caster set that closes ledger P-03. MEASURED in this session, not derived: makeUniforms() returns 364 keys and buildLabPlanetMaterial() reports uniformCount 369 (the 5 ensureLabSamplers slots). ⚠ gameVarying and gameSize are UNCHANGED again, the same control B4-1 used: the GAME material was not touched, so this is a lab-side declaration and not a new per-body draw.   // ⭐ 356 -> 361 AT B4-1, and the +5 is enumerable: uLightDir2, uStarColor1, uStarColor2, uStarBrightness1, uStarBrightness2 — the star set that closes ledger P-01 and P-02. MEASURED in this session, not derived: makeUniforms() returns 356 keys and buildLabPlanetMaterial() reports uniformCount 361 (the 5 ensureLabSamplers slots). ⚠ gameVarying stays 45 and gameSize stays 72: the GAME material was not touched, which is the control that this is a lab-side declaration and not a new per-body draw.
     // ⭐ RE-PINNED AT STEP 10a, 37 -> 45. This is a POPULATION move, not a code move: the pass now walks 266 bodies instead of 103, and eight game uniforms that read one value across the gas-only set read several across the whole one. Nothing about the game material changed. ⚠ AND B2 LEG 3 LEFT IT AT 45 ON PURPOSE, which is the control that the leg touched the LAB material and not the game's: `uNoiseScale` was already in `gameVarying` (the legacy material spends a drawn per-body `d.noiseScale`), so a leg that moved the game side would have moved this number too.
     expect(LEDGER.gameVarying.length).toBe(45);
     // ⛔ MEMBERSHIP, NOT A COUNT. Step 4 measured that a count-preserving permutation passes every
     // instrument this program owns byte-identically, so a bare count would accept a build in
     // which the bands stopped varying and something else started.
-    // ⭐⭐ 48 -> 49 AT B2 LEG 3, 2026-08-20, AND THE ONE NEW NAME IS THAT LEG'S ENTIRE CLAIM. `uNoiseScale` was the last frequency in the engine with no physical size behind it — the factory 4.0 on BOTH sides, written by NEITHER. rockySurface now emits it km-shaped, and it lands here rather than in the `written`-minus-`labVarying` residue below because it VARIES per body: the base wavelength law is a constant (radius cancels under the game display policy), so all of the variation is the Io-anchored tidal process term at src/worldengine/base/macroWavelength.js:126 `export function macroShortening(rawIoRatio) {`. ⚠ MEASURED on `lab-procedural-0…199`'s 1160 non-gas bodies, WITH THE PRECISION CONVENTION ON EVERY FIGURE because a raw float64 count splits one physical value across ULP-adjacent doubles: 985 distinct at raw float64, 844 at 9 significant figures, 780 at float32 — the precision a uniform reaches the shader at — across 83 distinct 5 % bins, where the LAB factory default was exactly 1 of each. ⛔ THAT `1` IS THE LAB'S 4.0, NOT WHAT RENDERS: the mounted legacy material writes the generator's own draw and MEASURED that is 1160 distinct over the same 1160 bodies at all three precisions, so the swap TRADES DISTINCTNESS FOR MEANING rather than adding it, and it reached 0 pixels until B7, 2026-08-21 — ⭐ CORRECTED, NOT DELETED: src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = true;` now admits these bodies, so the traded distinctness IS what renders. ⛔ IF THE PROCESS TERM WERE EVER REMOVED this name would leave this list and the residue assertion below would red — which is the control that says the differentiation is real and not a re-labelled constant.
+    // ⭐⭐ 48 -> 49 AT B2 LEG 3, 2026-08-20, AND THE ONE NEW NAME IS THAT LEG'S ENTIRE CLAIM. `uNoiseScale` was the last frequency in the engine with no physical size behind it — the factory 4.0 on BOTH sides, written by NEITHER. rockySurface now emits it km-shaped, and it lands here rather than in the `written`-minus-`labVarying` residue below because it VARIES per body: the base wavelength law is a constant (radius cancels under the game display policy), so all of the variation is the Io-anchored tidal process term at src/worldengine/base/macroWavelength.js:126 `export function macroShortening(rawIoRatio) {`. ⚠ MEASURED on `lab-procedural-0…199`'s 1160 non-gas bodies, WITH THE PRECISION CONVENTION ON EVERY FIGURE because a raw float64 count splits one physical value across ULP-adjacent doubles: 985 distinct at raw float64, 844 at 9 significant figures, 780 at float32 — the precision a uniform reaches the shader at — across 83 distinct 5 % bins, where the LAB factory default was exactly 1 of each. ⛔ THAT `1` IS THE LAB'S 4.0, NOT WHAT RENDERS: the mounted legacy material writes the generator's own draw and MEASURED that is 1160 distinct over the same 1160 bodies at all three precisions, so the swap TRADES DISTINCTNESS FOR MEANING rather than adding it, and it reached 0 pixels until B7, 2026-08-21 — ⭐ CORRECTED, NOT DELETED: src/objects/Planet.js:2158 `export const LAB_GAS_BODIES_DEFAULT = true;` now admits these bodies, so the traded distinctness IS what renders. ⛔ IF THE PROCESS TERM WERE EVER REMOVED this name would leave this list and the residue assertion below would red — which is the control that says the differentiation is real and not a re-labelled constant.
     // ⭐ 16 -> 48 AT STEP 10a, AND THE 32 NEW NAMES ARE THE WHOLE POINT OF THE STEP: the 21-name rockySurface family (crater, ejecta, palette, offsets, `uPerturb`) now varies per body, and the
     // three MASTER GATES `uBandStrength`/`uJetStrength`/`uLimbStrength` joined it too — not because a deck changed, but because they hold their gate value on the 103 gas bodies and the factory default on the 163 solid ones, so across the merged population they differ.
     // ⭐ B3 LEG 1 ADDS FOUR AND ONLY FOUR: the aurora family. Nothing else on this list moved, and
@@ -549,11 +550,11 @@ describe('2. the collapse in per-body variation', () => {
     expect(LAB_SHADER_CORPUS).toContain('uTime');
   });
 
-  it('⭐⭐ the CARRIED bucket is a NAME bucket — 24 of 28 diverge in value', () => {
+  it('⭐⭐ the CARRIED bucket is a NAME bucket — 24 of 29 diverge in value', () => {
     // THE CONTROL IS THE TWO ANSWERS ON ONE INPUT. `swapLedgerOf` reports these names as CARRIED;
     // a value comparison over the identical pair of materials reports them as diverged. A ledger
     // that ruled the name would record 28 surviving features where at most 8 survive.
-    expect(LEDGER.carried.size).toBe(28);
+    expect(LEDGER.carried.size).toBe(29);   // +1 2026-08-25: uProvinceWeight is CARRIED — the lab has it too, now at the same 1.0 default
     // ⛔ 19 -> 20 AT STEP 10a, AND THE ONE THAT CAME BACK IS `uLimbExponent`. At the limbDeck/polarDeck
     // registration it left this bucket (the deck wrote it, so the two sides agreed) and the note here
     // read "20 -> 19 … a registration that changed nothing would have left this at 20". That reading
@@ -637,7 +638,7 @@ describe('2. the collapse in per-body variation', () => {
       'uCraterDensity', 'uCraterOffset', 'uCraterRelaxation', 'uCraterScale',
       'uDetailOffset', 'uEjectaAmp', 'uEjectaLump', 'uEjectaRampart',
       'uEjectaStrength', 'uFreshColor', 'uFwClamp', 'uIcenessMix',
-      'uLimbColor', 'uLimbExponent', 'uMacroOffset', 'uSedColor',
+      'uLimbColor', 'uLimbExponent', 'uMacroOffset', 'uProvinceWeight', 'uSedColor',
       'uTermColor', 'uTermStrength', 'uTermWidth', 'uTerraceCount',
       'uVoroCells', 'uWeatheredColor'
     ]);
@@ -667,7 +668,7 @@ describe('3. channel 1 — the uniform diff, run not read', () => {
     // on all 266 bodies for every one of them.
     expect(measured().size).toBe(46);   // ⭐⭐⭐ 59 -> 46 AT THE GAS-HALF BLOCK, 2026-08-21 — the THIRD shrink and the largest. Thirteen subjects leave: P-13's three offsets and P-12's two scalars and P-11's two terminator magnitudes by a WIRE (`giantSurface`, the complement-predicate pack), and six colours by the INSTRUMENT (`encodeValue`'s container split, six names enumerated on §2's divergedCarried line, every one at maxComponentDelta 0 over 266/266). ⛔ ALL THREE ROWS ARE NOW `carried` AND CHANNEL 1 HAS NO `blocking` ROW LEFT; the residue this document still carries is named in P-13 (20 unwritten feature-domain offsets) and in the two names on §2's everyBody list, neither of which is a subject.   // 63 -> 64 AT B2P, same one name; 64 -> 68 AT B2 LEG 1 — the four crater names §2 names, which join P-14's subject cell rather than acquiring a row.
     // 44 lost + 28 carried = the 72 the game material declares. Nothing fell between the buckets.
-    expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.carried]).size).toBe(72);
+    expect(new Set([...LEDGER.lost, ...LEDGER.lostAtZero, ...LEDGER.carried]).size).toBe(73);
   });
 
   it('every measured subject is claimed by exactly ONE ledger row', () => {

@@ -48,7 +48,7 @@
 //  6. It asserts nothing about `uMacroOffset`/`uDetailOffset`/`uCraterOffset` (ledger P-13),
 //     `uDispDomainScale` (P-14's fifth name) or `uIcenessAlbedo` — declared non-ports in the pack header, absence asserted as a SCOPE FENCE in §E, a statement about this pack and not a claim that those rows are closed. ⛔ `uNoiseScale` (P-10) LEFT THIS ITEM AT B2 LEG 3, 2026-08-20, and this line is corrected rather than left to rot: the pack header now reads `NO LONGER A NON-PORT`, FAMILY 19 removed the name from `FORBIDDEN_NAMES`, and this file ASSERTS about it in FAMILY 16 and FAMILY 17. Reading item 6 as still covering it would make the scope fence claim coverage it gave up.
 //     ⚠ AND WHAT FAMILY 17 GATES IS THE SHAPE, NOT THE REACH: it proves the driver is km-SHAPED (a `scalar()` or a bare number would be policy-invariant and drop out).
-//     Whether that value reaches a pixel is a separate question and the answer WAS no until B7, 2026-08-21 — ⭐ CORRECTED, NOT DELETED. src/objects/Planet.js:2153 `export const LAB_GAS_BODIES_DEFAULT = true;` now puts the lab material on every admitted body in a default frame, so these values DO reach pixels. FAMILY 16/17 still assert the WIRE and not the reach, deliberately: a uniform-value gate cannot see a pixel, and that separation is why they survived the flip unchanged.
+//     Whether that value reaches a pixel is a separate question and the answer WAS no until B7, 2026-08-21 — ⭐ CORRECTED, NOT DELETED. src/objects/Planet.js:2158 `export const LAB_GAS_BODIES_DEFAULT = true;` now puts the lab material on every admitted body in a default frame, so these values DO reach pixels. FAMILY 16/17 still assert the WIRE and not the reach, deliberately: a uniform-value gate cannot see a pixel, and that separation is why they survived the flip unchanged.
 //  7. It writes no prose superlative it did not measure. Every number in a comment below is from a
 //     run recorded 2026-08-19 against the 24 systems `rocky-0…rocky-23`.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -458,7 +458,7 @@ describe('C — every driver is a forward of a shared producer', () => {
       checked++;
     }
     expect(checked).toBeGreaterThan(20);
-    // The relevance fold is CPU-side and it is FORCED, not chosen: src/objects/Planet.js:2204's
+    // The relevance fold is CPU-side and it is FORCED, not chosen: src/objects/Planet.js:2209's
     // GAME_RELEVANCE is frozen-empty, so `scalar(v, { relevance: 'craters' })` would throw on every
     // body at writePackUniforms.js:240. The channel is therefore left empty — asserted, not assumed.
     const { drivers } = packFor(SOLID_MOONS[0]);
@@ -567,7 +567,7 @@ describe('C — every driver is a forward of a shared producer', () => {
     expect(contradictions,
       'the fold has become observable — FAMILY 7 can now gate it behaviourally, so promote it').toBe(0);
     // The fold is kept anyway, and the reason is not caution: it is what the lab computes, and
-    // src/objects/Planet.js:2204's GAME_RELEVANCE is frozen-empty, so the `relevance` channel is
+    // src/objects/Planet.js:2209's GAME_RELEVANCE is frozen-empty, so the `relevance` channel is
     // not available to express it. A pack that dropped it would be a port of a DIFFERENT line.
     for (const b of FIRED_MOONS.slice(0, 5)) expect(craterRelevanceOf(b.cond)).toBe(1);
   });
@@ -1136,7 +1136,7 @@ describe('E — the pack obeys the Step-5a contract and stays inside its scope',
       expect(got, b.id).toBe(craterUniformsFrom(b.cond).scale);
     }
     // ⚠ WITH ITS STATED BOUND: craterUniformsFrom floors radiusEarth at 1e-6 (craterUniforms.js:131)
-    //   while labPackCtx passes it raw (Planet.js:2251), so the two arms agree at or above that
+    //   while labPackCtx passes it raw (Planet.js:2256), so the two arms agree at or above that
     //   floor AND ONLY THERE. Below it the display policy is refused outright, so there is no
     //   silent band — asserted, not reasoned.
     expect(() => rockySurfacePack(FIRED_MOONS[0].cond,
@@ -1144,7 +1144,7 @@ describe('E — the pack obeys the Step-5a contract and stays inside its scope',
 
     // (a2) ⭐ THE RECIPROCAL HALF OF THE PAIR, GATED ON THE EMITTED PRODUCT — ADDED 2026-08-19.
     //      `uCraterAmp` and `uCraterScale` are an EXACT reciprocal pair by law
-    //      (src/worldengine/shaders/craterRelief.glsl.js:29, src/worldengine/port/craterUniforms.js:150),
+    //      (src/worldengine/shaders/craterRelief.glsl.js:33, src/worldengine/port/craterUniforms.js:150),
     //      and both analytic-normal call sites skip a divide they would otherwise owe BECAUSE of it
     //      (src/objects/Planet.js:312, src/objects/Planet.js:1385). The pack routes ONE half through
     //      the display seam and forwards the other raw, so the pair is now two different kinds of
