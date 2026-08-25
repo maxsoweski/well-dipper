@@ -423,7 +423,7 @@ export const ROCKY_SURFACE_UNIFORMS = Object.freeze([
  *       by this file's preference. A wiring commit does not make a visible-change decision.
  *       ⚠ AND THE BLAST RADIUS IS WIDER THAN THE CRATER FIELD IT IS NAMED FOR: the same uniform sets
  *       the EJECTA APRON's FBM frequency at
- *       src/worldengine/shaders/craterRelief.glsl.js:196 `vec4 ln = noised(dir * (uCraterScale * 2.7) + uCraterOffset);`
+ *       src/worldengine/shaders/craterRelief.glsl.js:230 `vec4 ln = noised(dir * (uCraterScale * 2.7) + uCraterOffset);`
  *       so a mis-bound scale re-textures the aprons as well as re-tiling the bowls. The exclusion is
  *       stronger than it looks.
  *

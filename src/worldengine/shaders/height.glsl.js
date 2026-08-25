@@ -2211,7 +2211,41 @@ export const HEIGHT_GLSL = /* glsl */ `
         float r = ff.x / craterRadius;
         vec2 prof = craterProfile(r, morphology, uCraterRelaxation, uTerraceCount);
         float pw = provinceWeight(PROV_CRATERS);     // §8: craters keep to old terrain (anti-tectonic)
-        float amp = uCraterAmp * host * pw;
+      // THE 2026-08-25 CRATER-SHAPE FIX IS THE "* diameter" TERM, NOT A SCALE TWEAK — READ BEFORE REMOVING IT.
+      // uCraterAmp is ONE number per body, so before this line carried the size term every crater in the
+      // field got the SAME ABSOLUTE DEPTH while its width was hashed over mix(0.18, 0.55) — a 3.06x
+      // spread. Composed depth is CRATER_DEPTH * amp and width is diameter / uCraterScale, and
+      // src/worldengine/port/craterUniforms.js:150 pins amp * scale == 1 EXACTLY, so the old depth/diameter
+      // ratio was CRATER_DEPTH / diameter: 0.18 at the widest hashed crater and 0.56 at the narrowest,
+      // against Pike's ~0.20 for real simple craters. The small ones rendered as SPIKES.
+      // MULTIPLYING BY diameter MAKES d/D SIZE-INVARIANT: it becomes
+      // CRATER_DEPTH * uCraterAmp * uCraterScale, with no hashed term left in it, at EVERY hashed size.
+      // THE LEVEL THAT LANDS AT IS NOT THE SAME IN THE TWO FRONT-ENDS, AND THE FIRST DRAFT OF THIS NOTE
+      // GOT THAT WRONG BY READING ONE OF THEM. In the GAME amp * scale == 1 exactly (pinned at
+      // tests/crater-uniform-law.test.js:74), so d/D lands on CRATER_DEPTH == D_D_SIMPLE == 0.20, Pike
+      // exactly. In the LAB it does NOT: planet-lod-lab.html:5358 multiplies uCraterScale by the display
+      // scale while :5359 writes uCraterAmp raw, so the product is the display-resolved one —
+      // MEASURED LIVE 0.522 (Moon/Mercury), 0.649 (Frozen), 0.728 (Mars) — and d/D lands on 0.10 to 0.15.
+      // (THE DISPLAY-SCALE TOKEN IS DELIBERATELY NOT SPELLED ON THAT LINE. tests/vis-scale-fence.test.js
+      // bans it from every file under src/worldengine/**, COMMENTS INCLUDED, and naming it here reds
+      // five of its assertions — which is how this note was caught the first time it was written.)
+      // That lab/game gap is PRE-EXISTING, is the vis-scale seam itself, and this fix neither creates nor
+      // closes it. What this fix changes is the SPREAD: d/D swept 0.095 to 0.40 across one body's own
+      // crater field and now does not sweep at all.
+      // THE CALIBRATION POINT IS UNMOVED, which is why this is a fix and not a re-tune: a crater one cell
+      // unit across (diameter == 1.0, the characteristic crater Dchar the amp law is solved for) multiplies
+      // by exactly 1.0 and renders bit-identically. Only the off-nominal sizes move, and they move TOWARD
+      // the law the amp was already derived from.
+      // THIS LINE HAS A TWIN AND NOTHING PINS THEM TOGETHER. the game's merged craterEjectaCombiner at src/worldengine/shaders/craterRelief.glsl.js:218 carries the identical
+      // expression. The transcription fence in tests/crater-uniform-law.test.js pins only craterProfile,
+      // ejectaProfile, hash33 and voronoi3d — the COMBINERS are outside it, so a change here that is not
+      // mirrored there diverges SILENTLY. Both moved together.
+      // THE EJECTA APRON IS DELIBERATELY NOT TOUCHED. Its amplitude is uEjectaStrength * uEjectaAmp
+      // in ejectaCombiner, and that whole family is an open A/B for Max (a ~113x change); folding a size term into
+      // one factor of it here would pre-empt his ruling and move the lab further from the game, not closer.
+      // AND NO BACKTICK APPEARS ANYWHERE ABOVE, ON PURPOSE: this is inside a GLSL template literal, and one
+      // backtick terminates the string, silently un-collects 15 test files and LOWERS the failure count.
+        float amp = uCraterAmp * diameter * host * pw;
         h    += amp * prof.x;
         // d(h)/d(vPos) = dh/dr · (1/craterRadius) · d(f1)/d(vPos);  d(f1)/d(vPos) = voroGrad·uCraterScale
         grad += amp * prof.y * (1.0/craterRadius) * voroGrad * uCraterScale;
