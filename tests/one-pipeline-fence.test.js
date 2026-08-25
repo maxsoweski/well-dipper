@@ -439,7 +439,9 @@ const IMPORT_BACK_DEBT = Object.freeze([
     path: 'src/worldengine/shaders/craterRelief.glsl.js',
     clears:
       'A DECLARED divergence, not an oversight: the header records three deliberate departures from ' +
-      'the lab, each measured, and tests/crater-relief-transcription.test.js pins them. It clears ' +
+      'the lab, each measured, and the transcription block inside tests/crater-uniform-law.test.js ' +
+      'pins them (⚠ CORRECTED 2026-08-25: this row used to cite tests/crater-relief-transcription.test.js, which does not exist and never has — the second row today whose stated blocker was fiction. ' +
+      '⛔ AND THAT FENCE IS NARROWER THAN THE ROW IMPLIES: it pins craterProfile, ejectaProfile, hash33 and voronoi3d only, so the two COMBINERS are outside it and an unmirrored change to either diverges silently). It clears ' +
       'when the lab adopts the merged combiner — or it is promoted to a GAME_ONLY_BY_DESIGN row if ' +
       'Max rules the divergences permanent. ⚠ Listed as debt rather than exempt BECAUSE that ruling ' +
       'has not been made, and the plan names this exact file as the both-were-kept precedent.',
