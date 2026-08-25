@@ -1,0 +1,36 @@
+{
+  "name": "motion-test-kit",
+  "version": "0.1.0",
+  "description": "Engine-agnostic motion-testing kit \u2014 predicates, deterministic replay, fixed-timestep accumulator, transform-hash regression, flight-recorder ring buffer. Three.js + DOM adapters; Godot port supported by ports-and-adapters architecture.",
+  "type": "module",
+  "exports": {
+    "./core/loop/accumulator": "./core/loop/accumulator.js",
+    "./core/predicates": "./core/predicates/index.js",
+    "./core/predicates/errors": "./core/predicates/errors.js",
+    "./core/recorder/ring-buffer": "./core/recorder/ring-buffer.js",
+    "./core/recorder/on-failure-dump": "./core/recorder/on-failure-dump.js",
+    "./core/rng/mulberry32": "./core/rng/mulberry32.js",
+    "./core/replay/input-recorder": "./core/replay/input-recorder.js",
+    "./core/replay/input-player": "./core/replay/input-player.js",
+    "./core/hash/fnv1a": "./core/hash/fnv1a.js",
+    "./core/hash/transform-hash": "./core/hash/transform-hash.js",
+    "./core/hash/golden-trajectory": "./core/hash/golden-trajectory.js",
+    "./core/math/vec3": "./core/math/vec3.js",
+    "./adapters/three/three-loop-binding": "./adapters/three/three-loop-binding.js",
+    "./adapters/three/sample-capture": "./adapters/three/sample-capture.js",
+    "./adapters/dom/blob-download-writer": "./adapters/dom/blob-download-writer.js",
+    "./adapters/dom/keyboard-mouse-bridge": "./adapters/dom/keyboard-mouse-bridge.js",
+    "./adapters/node/fs-writer": "./adapters/node/fs-writer.js",
+    "./adapters/node/fs-reader": "./adapters/node/fs-reader.js",
+    "./core/inventory/errors": "./core/inventory/errors.js",
+    "./adapters/three/scene-inventory": "./adapters/three/scene-inventory.js",
+    "./adapters/dom/overlay-registry": "./adapters/dom/overlay-registry.js",
+    "./core/inventory/predicates": "./core/inventory/predicates.js",
+    "./core/inventory/diff": "./core/inventory/diff.js"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "lab": "node labs/serve.js"
+  },
+  "license": "MIT"
+}

@@ -20,9 +20,12 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # ⛔ `submodules: recursive` REMOVED 2026-08-25 — vendor/motion-test-kit is now a plain vendored
+      # directory, not a submodule. It was the latter until the first master push in 24 days failed
+      # HERE, at checkout, before npm ci or npm run build: the kit repo had gone private and the
+      # default GITHUB_TOKEN cannot read a second private repo. See vendor/motion-test-kit/VENDORED.md.
+      # ⚠ Re-adding this line without also adding a deploy key or PAT re-breaks the deploy silently.
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - uses: actions/setup-node@v4
         with:
           node-version: 20
