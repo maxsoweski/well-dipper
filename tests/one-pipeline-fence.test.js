@@ -384,11 +384,11 @@ const GAME_ONLY_BY_DESIGN = Object.freeze([
 // landed and this file refused to stay green on fiction.
 // planet-lod-lab.html:178 `import { terminatorOpticsOf }` and planet-lod-lab.html:2831 `craterUniformsFrom`. ⭐ THE SECOND SHRINK, SAME DAY: `drivers/solidFeatures.js` cleared too — the lab imports pack #2 at planet-lod-lab.html:188 `solidFeaturesPack` and calls it at :2074, which is workstream AC5 and Max's ADOPT ruling on the radius-aware gravity. ⭐⭐ AND A THIRD, 10 -> 9, SAME DAY: `drivers/giantSurface.js` cleared too — the lab imports pack #8 at planet-lod-lab.html:188 `giantSurfacePack` and calls it at :2465, gas-gated. ⛔⛔ AND A FOURTH, 9 -> 8, WHICH NOBODY CHOSE — AND WHICH HAS SINCE BEEN REVERSED. `drivers/solidOptics.js` cleared TRANSITIVELY on 2026-08-22: the lab never called it, no ruling was made, and it entered the lab's closure only because `giantSurface.js` imports `TERMINATOR_GATE` from it so the gate NAME has one home. The row was deleted because the criterion of the day — import closure, reachability not exercise — was genuinely met, and the call-side work went untracked with nothing red. ⭐ 2026-08-25 FIXED THE CRITERION RATHER THAN THE ROW: the criterion is now reachable-AND-CALLED, which is what every row's own `clears` text has always said, so solidOptics is a debt row again and its remaining work — one MEASUREMENT on the _giantDynamo branch, not a decision — is written into that row. ⭐ THE CEILING NEVER MOVED. `drivers/polarDeck.js` cleared on its own merits in the SAME commit — the lab imports it at planet-lod-lab.html:188 `polarDeckPack` and calls it at :1916, passing its own `stormSeed` per Max's 2026-08-22 ruling that the slider is a lab authoring knob — so the ledger stayed at 8 and no correction had to buy itself a raise. THREE packs remain on the roster.
 // planet-lod-lab.html:178 `import { terminatorOpticsOf }` and planet-lod-lab.html:2831 `craterUniformsFrom`.
-const IMPORT_BACK_DEBT_CEILING = 8;
+const IMPORT_BACK_DEBT_CEILING = 6;
 
 const IMPORT_BACK_DEBT = Object.freeze([
   // ── the packs added after driver pack #1 and still not imported back (solidFeatures cleared 2026-08-22) ──
-  ...['craterDeck', 'limbDeck', 'rockySurface'].map((n) =>
+  ...['craterDeck', 'rockySurface'].map((n) =>
     Object.freeze({
       path: `src/worldengine/drivers/${n}.js`,
       clears:
@@ -397,28 +397,6 @@ const IMPORT_BACK_DEBT = Object.freeze([
         `inline and the two front-ends compute the same values by two routes.`,
     }),
   ),
-  Object.freeze({
-    path: 'src/worldengine/drivers/solidOptics.js',
-    clears:
-      'planet-lod-lab.html calls `solidOpticsPack`. It already IMPORTS the module transitively — '
-      + 'giantSurface.js takes TERMINATOR_GATE from it — which is exactly why reachability alone '
-      + 'stopped measuring anything here. ⭐ NOTHING IS UNDECIDED. Its one confirmed law conflict was '
-      + 'uTermStrength, ruled by Max 2026-08-22 ("same here") and LANDED at 0e814d1. The aurora '
-      + 'question raised 2026-08-25 is CLOSED TWICE OVER, measured not argued: (1) the _giantDynamo '
-      + 'branch auroraOptics.js:33 leaves out is DISJOINT BY CONSTRUCTION from this pack — it conjoins '
-      + '_gas, and this pack is compositionClass !== gas, so no body can reach both; (2) driven live '
-      + 'over all 18 lab presets, auroraOpticsOf agrees with the lab on ALL FOUR aurora values for '
-      + 'every non-gas preset (14/14, six of them at non-zero intensity so the comparison is not '
-      + 'vacuous), and disagrees on exactly the four gas presets where _giantDynamo fires — Jovian, '
-      + 'Saturnian, Neptunian, Hot Jupiter, all at lab 0.6 vs shared 0. Those four are outside this '
-      + 'pack\'s predicate. ⚠ SO THE WIRE MOVES NOTHING ON THIS PACK\'S DOMAIN and what is left is '
-      + 'the wire itself: the lab writes all nine of this pack\'s uniforms inline (limb x2 at its '
-      + 'limbExponent/limbColor assignments, terminator x3, aurora x4) and calls no pack at all for '
-      + 'them, so this needs a solidOpticsLabState mirror plus a composition branch keeping gas '
-      + 'bodies on the lab path — the polarDeck shape, one size up. ⛔ The gas half is a SEPARATE '
-      + 'item: auroraOptics.js:41-42 says the giant-dynamo floor "has to come in at the drivers '
-      + 'layer", and no gas aurora pack exists yet.',
-  }),
   Object.freeze({
     path: 'src/worldengine/drivers/index.js',
     clears:
@@ -646,7 +624,7 @@ describe('registration 2 — every pipeline module the game imports is imported 
 // four, so the list is a reading of the tree rather than a claim about it. `giantDeck.js` is absent
 // because the lab really does import it at planet-lod-lab.html:188 `giantDeckPack` — the one precedent.
 const GRANDFATHERED_UNIMPORTED_PACKS = Object.freeze(
-  ['craterDeck', 'limbDeck', 'rockySurface']
+  ['craterDeck', 'rockySurface']
     .map((n) => `${DRIVERS_DIR}/${n}.js`),
 );
 
@@ -692,7 +670,7 @@ describe('registration 2b — a NEW pack cannot ship without the lab importing i
     expect(violations, violations.length ? newPackMessage(violations) : undefined).toEqual([]);
   });
 
-  it('CONTROL: the scan is non-vacuous — an EMPTY roster names all three unimported packs', () => {
+  it('CONTROL: the scan is non-vacuous — an EMPTY roster names both unimported packs', () => {
     // Pass no roster against the REAL drivers tree. Everything the lab does not import must be
     // reported, which proves the walker reads the shipped subject — the green above cannot.
     // `giantDeck.js`, `solidFeatures.js`, `giantSurface.js` and — since 2026-08-25 — `polarDeck.js` are absent
@@ -701,7 +679,7 @@ describe('registration 2b — a NEW pack cannot ship without the lab importing i
     // presence is what makes the other four a measurement rather than an assumption.
     const all = unimportedNewPacks(DRIVERS_DIR, LAB_HTML, new Set());
     expect(all).toEqual([
-      'craterDeck', 'limbDeck', 'rockySurface',
+      'craterDeck', 'rockySurface',
     ].map((n) => `${DRIVERS_DIR}/${n}.js`));
   });
 

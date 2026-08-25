@@ -63,7 +63,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { compositionClass } from '../base/e1Regime.js';
 import { atmosphereOpticsOf } from '../base/atmosphereOptics.js';
-import { scalar, assertDisplayPolicy, assertPackResult, PackContractError } from '../port/writePackUniforms.js';
+import { scalar, assertDisplayPolicy, assertPackResult, resolveDriver, PackContractError } from '../port/writePackUniforms.js';
 
 // ── The declared gate name ───────────────────────────────────────────────────
 // ⭐ A NAME, NOT A HARDCODED 1.0, AND THE DIFFERENCE IS THE WHOLE POINT OF ruling 4. The lab's write
@@ -197,3 +197,57 @@ export const LIMB_DECK_ENTRY = Object.freeze({
 
 /** The uniform names this pack writes, as a frozen SET for the collision and membership gates. */
 export const LIMB_UNIFORMS = Object.freeze(['uLimbStrength', 'uLimbExponent', 'uLimbColor']);
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// THE LAB SEAM — the mirror the lab imports back.
+//
+// ⭐ THIS PACK AND `solidOptics` ARE EXACT COMPLEMENTS OVER TWO OF THESE THREE NAMES, and that is
+// why they are wired in ONE commit rather than separately. `LIMB_DECK_ENTRY.applies` is
+// `compositionClass === 'gas'`; `SOLID_OPTICS_ENTRY.applies` is `!== 'gas'`; both emit
+// `uLimbExponent` and `uLimbColor`. The lab authors those two fields unconditionally, so wiring
+// either pack ALONE leaves the field with two owners on half the population — one branch reading a
+// pack and the other still reading the lab's inline derive. Wired as one ternary, every body has
+// exactly one owner and the fork disappears.
+//
+// ⭐ `uLimbStrength` IS HERE AND NOT IN solidOptics, deliberately: it is the limb MASTER GATE, which
+// solidOptics declines to claim. On gas bodies this pack owns it; on non-gas the lab keeps its own.
+export const LIMB_DECK_LAB_BINDING = Object.freeze({
+  uLimbStrength: 'limbStrength',
+  uLimbExponent: 'limbExponent',
+  uLimbColor: 'limbColor',
+});
+
+/**
+ * ⛔⛔ THE GATE IS ON, and for this pack the hazard is sharper than usual because the gated name is
+ * a MASTER: `uLimbStrength` at :142 is the only gated driver here, and the lab re-applies its own ✓
+ * checkbox at the per-frame writer. Resolving the gate here too would zero the limb on a body whose
+ * checkbox is on, and zero is the airless value — so it would read as a correct hard silhouette
+ * rather than as a bug.
+ *
+ * ⚠ AND THE LAB APPLIES A BOOST THIS MIRROR MUST LAND BEFORE, NOT AFTER: the thick-haze branch
+ * multiplies `state.limbStrength` by 1.3 further down `applyDrivers`. That boost is a DECLARED
+ * non-port (see the ⛔ at the head of this file), so the pack call has to sit ABOVE it or the boost
+ * is silently deleted on the thickest-rimmed bodies in the lab.
+ */
+const LAB_MIRROR_CTX = Object.freeze({
+  displayRadiusEarth: 1, animRate: 1, relevance: {},
+  gates: Object.freeze({ [LIMB_GATE]: true }),
+});
+
+/**
+ * The subset of a pack result the LAB mirrors into `state`, resolved with every gate ON.
+ *
+ * ⚠ SKIPS WHAT THE PACK DID NOT EMIT — a non-gas body returns empty `drivers` from this pack's gas
+ * predicate, and the lab's own inline derive is the correct owner there.
+ *
+ * @param {{drivers: object}} pack  a `limbDeckPack` result
+ * @returns {object} `state` field name -> value, containing ONLY the keys the pack actually emitted
+ */
+export function limbDeckLabState(pack) {
+  const out = {};
+  for (const [uName, stateField] of Object.entries(LIMB_DECK_LAB_BINDING)) {
+    if (!(uName in pack.drivers)) continue;
+    out[stateField] = resolveDriver(uName, pack.drivers[uName], LAB_MIRROR_CTX);
+  }
+  return out;
+}

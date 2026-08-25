@@ -48,7 +48,7 @@ import { compositionClass } from '../base/e1Regime.js';
 import { atmosphereOpticsOf } from '../base/atmosphereOptics.js';
 import { terminatorOpticsOf } from '../base/terminatorOptics.js';
 import { auroraOpticsOf } from '../base/auroraOptics.js';
-import { scalar, assertDisplayPolicy, assertPackResult, PackContractError } from '../port/writePackUniforms.js';
+import { scalar, assertDisplayPolicy, assertPackResult, resolveDriver, PackContractError } from '../port/writePackUniforms.js';
 
 // ── The gate names this pack's drivers key on ────────────────────────────────
 // Both mirror a real lab checkbox, and both are placed on the ONE uniform the lab's own per-frame
@@ -161,3 +161,59 @@ export const SOLID_OPTICS_UNIFORMS = Object.freeze([
   'uTermStrength', 'uTermWidth', 'uTermColor',
   'uAuroraIntensity', 'uAuroraColor', 'uAuroraRingLat', 'uAuroraRingWidth',
 ]);
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// THE LAB SEAM — the mirror the lab imports back.
+//
+// ⭐ NINE NAMES ACROSS THREE FAMILIES, and the map lives here so it is written ONCE. The lab used to
+// author all nine inline off `_atmoOptics`, `terminatorOpticsOf` and its own aurora block; two
+// hand-written spellings of one uniform→field map is the two-routes disease this pack exists to end.
+//
+// ⛔ `uLimbStrength` IS ABSENT AND THAT IS DELIBERATE, not an omission. This pack does not claim the
+// limb MASTER GATE — `limbDeck.js` owns it on gas bodies, and on non-gas the lab keeps authoring it.
+// A mirror that invented it here would hand back a field this pack never emits.
+export const SOLID_OPTICS_LAB_BINDING = Object.freeze({
+  uLimbExponent: 'limbExponent',
+  uLimbColor: 'limbColor',
+  uTermStrength: 'termStrength',
+  uTermWidth: 'termWidth',
+  uTermColor: 'termColor',
+  uAuroraIntensity: 'auroraIntensity',
+  uAuroraColor: 'auroraColor',
+  uAuroraRingLat: 'auroraRingLat',
+  uAuroraRingWidth: 'auroraRingWidth',
+});
+
+/**
+ * ⛔⛔ EVERY GATE ON, for the reason solidFeatures.js:301 gives. The lab re-applies its OWN ✓
+ * checkboxes at the per-frame writer — `state.terminatorEnabled ? state.termStrength : 0.0` and
+ * `state.auroraEnabled ? state.auroraIntensity : 0.0` — so the values this mirror puts into `state`
+ * must be the UNGATED ones, or the decision is applied twice.
+ *
+ * ⚠ ZERO IS A LEGAL VALUE FOR BOTH GATED NAMES, which is why double-gating would be SILENT rather
+ * than loud: a body with no retained atmosphere reads termStrength 0 legitimately, and aurora is 0
+ * on every body under the field gate. A double-gated body is indistinguishable from a correct one.
+ */
+const LAB_MIRROR_CTX = Object.freeze({
+  displayRadiusEarth: 1, animRate: 1, relevance: {},
+  gates: Object.freeze({ [TERMINATOR_GATE]: true, [AURORA_GATE]: true }),
+});
+
+/**
+ * The subset of a pack result the LAB mirrors into `state`, resolved with every gate ON.
+ *
+ * ⚠ SKIPS WHAT THE PACK DID NOT EMIT rather than defaulting it — a gas body returns empty `drivers`
+ * from this pack's non-gas predicate, and writing `undefined` into nine live `.listen()`-bound
+ * fields would be a NEW behaviour wearing the byte-identity gate's clothes.
+ *
+ * @param {{drivers: object}} pack  a `solidOpticsPack` result
+ * @returns {object} `state` field name -> value, containing ONLY the keys the pack actually emitted
+ */
+export function solidOpticsLabState(pack) {
+  const out = {};
+  for (const [uName, stateField] of Object.entries(SOLID_OPTICS_LAB_BINDING)) {
+    if (!(uName in pack.drivers)) continue;
+    out[stateField] = resolveDriver(uName, pack.drivers[uName], LAB_MIRROR_CTX);
+  }
+  return out;
+}

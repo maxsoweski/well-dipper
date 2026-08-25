@@ -185,7 +185,7 @@
     import { E5_REGIME } from './src/worldengine/base/climate-e5.js';   // #3a regime tags. ⭐ `bakeClimateE5Attributes` is NO LONGER IMPORTED HERE — PLAN §4 Step 5c moved the band/jet bake into giantDeckPack, and an unused import is how a "deleted" copy stays one edit away from coming back
     import { resolveStormE, bakeStormEAttributes, chromophoreColor, STORM_DECK } from './src/worldengine/base/storm-e.js';   // #3b Slice P: physics vortex placement (shear argmax) + storm/convection MASK (the one new baked attribute); V-α.4 chromophore age→color ramp; S2 STORM_DECK deck table (carriage deckZ derivation)
     import { drawGiantConditions, deriveGiantDrivers, giantDriverScalars, drawRotationHours } from './src/worldengine/base/giant-drivers.js';   // derive-not-freeze Slice D: per-seed condition → D-slot triple (shellDepthFrac/internalHeat/dissipation); + S1 giantDriverScalars (single-sourced radius/rotation wire) & drawRotationHours (per-archetype rotation draw, hot-Jupiter derived)
-    import { giantDeckPack, giantDeckLabState, giantDeckDirectDrivers } from './src/worldengine/drivers/giantDeck.js'; import { writePackUniforms } from './src/worldengine/port/writePackUniforms.js'; import { solidFeaturesPack, solidFeaturesLabState } from './src/worldengine/drivers/solidFeatures.js'; import { giantSurfacePack, giantSurfaceLabState } from './src/worldengine/drivers/giantSurface.js'; import { polarDeckPack, polarDeckLabState } from './src/worldengine/drivers/polarDeck.js';   // ⭐ PLAN §4 Step 5c — DRIVER PACK #1. The F24/F25 law + the E5 bake + the band-proxy export + the per-seed roughness draw now live in ONE module the GAME imports too; this line REPLACES the band-flow.js import, whose two symbols (drawBandRoughness, bandProxyUniforms) are now called by the pack and by nothing in this file. ⚠ TWO import STATEMENTS ON ONE LINE, ON PURPOSE — the §10 line-stability rule on this file forbids spending a second line (symbol-checked refs from PLAN.md and both radius-live-feed suites land below), exactly as the computeE1 line above already does ⭐⭐ A THIRD import STATEMENT JOINED THIS LINE 2026-08-22 — DRIVER PACK #2, `solidFeatures` (workstream AC5), for the same line-budget reason the first two share it. ⛔⛔ IT WAS INSERTED BEFORE THIS COMMENT AND NEVER APPENDED AFTER IT: an import appended past a trailing `//` lands INSIDE the comment, both new imports were silently disabled exactly that way on 2026-08-21, every headless gate stayed GREEN, and the lab died only on page load. Loading the page is the only thing that found it. ⭐ AND A FOURTH, 2026-08-22 — DRIVER PACK #8 `giantSurface`, the GAS-class complement, wired the same day and under the same two rules: inserted BEFORE this comment, and sharing this line rather than spending one.
+    import { giantDeckPack, giantDeckLabState, giantDeckDirectDrivers } from './src/worldengine/drivers/giantDeck.js'; import { writePackUniforms } from './src/worldengine/port/writePackUniforms.js'; import { solidFeaturesPack, solidFeaturesLabState } from './src/worldengine/drivers/solidFeatures.js'; import { giantSurfacePack, giantSurfaceLabState } from './src/worldengine/drivers/giantSurface.js'; import { polarDeckPack, polarDeckLabState } from './src/worldengine/drivers/polarDeck.js'; import { solidOpticsPack, solidOpticsLabState } from './src/worldengine/drivers/solidOptics.js'; import { limbDeckPack, limbDeckLabState } from './src/worldengine/drivers/limbDeck.js';   // ⭐ PLAN §4 Step 5c — DRIVER PACK #1. The F24/F25 law + the E5 bake + the band-proxy export + the per-seed roughness draw now live in ONE module the GAME imports too; this line REPLACES the band-flow.js import, whose two symbols (drawBandRoughness, bandProxyUniforms) are now called by the pack and by nothing in this file. ⚠ TWO import STATEMENTS ON ONE LINE, ON PURPOSE — the §10 line-stability rule on this file forbids spending a second line (symbol-checked refs from PLAN.md and both radius-live-feed suites land below), exactly as the computeE1 line above already does ⭐⭐ A THIRD import STATEMENT JOINED THIS LINE 2026-08-22 — DRIVER PACK #2, `solidFeatures` (workstream AC5), for the same line-budget reason the first two share it. ⛔⛔ IT WAS INSERTED BEFORE THIS COMMENT AND NEVER APPENDED AFTER IT: an import appended past a trailing `//` lands INSIDE the comment, both new imports were silently disabled exactly that way on 2026-08-21, every headless gate stayed GREEN, and the lab died only on page load. Loading the page is the only thing that found it. ⭐ AND A FOURTH, 2026-08-22 — DRIVER PACK #8 `giantSurface`, the GAS-class complement, wired the same day and under the same two rules: inserted BEFORE this comment, and sharing this line rather than spending one.
 
     // ─────────────────────────────────────────────────────────────────────────
     // Renderer / scene / camera
@@ -2463,23 +2463,23 @@
       // noise, and a drawn body that never had a hand-written table row still gets a hue.
       const _atmoCond = deriveConditionVector(drawPresetConditions(driverUI.preset, state.macroSeed | 0), u, state.planetRadiusEarth);
       const _atmoOptics = atmosphereOpticsOf(_atmoCond);   // hoisted 2026-08-22 so terminatorOpticsOf reads the SAME condition object rather than deriving a second one.
-      // ── F34 limb / atmosphere rim glow — driver derivation (card §6.5 step 3;
-      // post-process HERE per the F11 precedent — core.js untouched). The core's
-      // hasAtmo gate stays the master: u.limbStrength is 0.7 on every retained
-      // atmosphere and 0 airless (state.limbStrength picked it up at the top of
-      // applyDrivers), so Frozen/Lava/Europa keep a hard dark silhouette. This
-      // block picks the VARIANT (card §1): the thick-haze class — Venus blanket
-      // (regime 3), sub-neptune photochemical haze (regime 2), and the cold solid
-      // tholin world (Titan: retained, T_eq < 150 K, >= 1 bar, NOT h2-he — the
-      // gas giants' cold clear decks must stay out) — gets the fat detached halo
-      // (exponent ~1.8, strength x1.3); every other atmosphere keeps the narrow
-      // blue-line rim (exponent ~3.5).
+      // ── F34 limb / atmosphere rim glow — driver derivation (card §6.5 step 3; post-process HERE per
+      // the F11 precedent — core.js untouched). The core's hasAtmo gate stays the master:
+      // u.limbStrength is 0.7 on every retained atmosphere and 0 airless (state.limbStrength picked
+      // it up at the top of applyDrivers), so Frozen/Lava/Europa keep a hard dark silhouette. This
+      // block picks the VARIANT (card §1): the thick-haze class — Venus blanket (regime 3),
+      // sub-neptune photochemical haze (regime 2), and the cold solid tholin world (Titan: retained,
+      // T_eq < 150 K, >= 1 bar, NOT h2-he — the gas giants' cold clear decks must stay out) — gets
+      // the fat detached halo (exponent ~1.8, strength x1.3); every other atmosphere keeps the
+      // narrow blue-line rim (exponent ~3.5).
       const _thickHaze = _cloudRegime === 2 || _cloudRegime === 3 || _opaqueHaze;  // _opaqueHaze (cold solid tholin world, e.g. Titan) defined at the F26 weather-bands gate above
-      state.limbExponent = _atmoOptics.limbExponent;   // ⭐ SUPERSEDED 2026-08-22 (Max ruled): was `_thickHaze ? 1.8 : 3.5`, a BINARY law keyed on cloud regime, overriding the shared continuous one this file already computes two lines up. src/worldengine/base/atmosphereOptics.js:161 `limbExponent: 3.5 - 1.7 * thick` is keyed on haze/primordial/T_eq and its own comment names these exact endpoints ("3.5 narrow line -> 1.8 broad halo"), so the binary form was an earlier draft of the same idea. They agreed ONLY at thick 0 and 1; between them the lab rendered something the game would not. ⛔ The GAME already writes the shared value (src/objects/Planet.js:1643 `uLimbExponent: { value: optics.limbExponent },`), so this closes a live lab-vs-game divergence rather than creating one. ⚠ `state.limbStrength`'s x1.3 boost on the next line is a SEPARATE, UNANALYSED divergence and is deliberately left standing.
+      // ⭐ DRIVER PACKS — limbDeck (gas) and solidOptics (non-gas) are EXACT COMPLEMENTS over uLimbExponent/uLimbColor, so they wire as ONE branch: every body gets exactly one owner. ⛔ limbDeck MUST land above the _thickHaze boost on the next line — that boost is a declared non-port. solidOptics is APPLIED lower down, after the lab's terminator/aurora writes it supersedes.
+      const _optCtx = { displayRadiusEarth: visScaleOf(state.planetRadiusEarth ?? 1) };   const _gasBody = compositionClass(_atmoCond) === 'gas';   const _ld = _gasBody ? limbDeckPack(_atmoCond, _optCtx) : null;   const _so = _gasBody ? null : solidOpticsPack(_atmoCond, _optCtx);
+      if (_ld) Object.assign(state, limbDeckLabState(_ld)); else state.limbExponent = _atmoOptics.limbExponent;
       if (_thickHaze) state.limbStrength = Math.min(1.0, state.limbStrength * 1.3);
       // Rim hue from the per-preset map; fallback = the uWeatheredColor rocky tone (the
       // pre-F34 tint — airless presets land here and stay inert behind strength 0).
-      state.limbColor = _atmoOptics.limbColor.slice();
+      if (!_ld) state.limbColor = _atmoOptics.limbColor.slice();   // gas: owned by limbDeck above
       // F31e detached haze shell: > 0 ONLY for the thick-haze class, and only when
       // the rim itself fires — every clear/airless preset keeps the mesh invisible
       // (the per-frame writer keys visibility on this value + limbEnabled).
@@ -2627,7 +2627,7 @@
         'methane': [0.2, 0.6,  0.7],   // blue-green
       };
       const _ac = _auroraColorByComp[_fp.atmosphere?.composition];
-      state.auroraColor = _ac ? _ac.slice() : [0.3, 0.8, 0.4];
+      state.auroraColor = _ac ? _ac.slice() : [0.3, 0.8, 0.4];   if (_so) Object.assign(state, solidOpticsLabState(_so));   // ⭐ non-gas: the pack supersedes the terminator + aurora writes above; gas keeps them (no pack covers gas aurora yet)
       // Venus override — the F31 §7 fork (a) carry-over, resolved BY F37 here: the
       // core keys magneticField on the lock FLAG only, so the slow-rotator Venus
       // (243-day spin, no dynamo — rotationHours never reaches the core) derives a
