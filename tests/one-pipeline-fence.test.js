@@ -400,19 +400,24 @@ const IMPORT_BACK_DEBT = Object.freeze([
   Object.freeze({
     path: 'src/worldengine/drivers/solidOptics.js',
     clears:
-      'planet-lod-lab.html calls `solidOpticsPack` — it already IMPORTS the module transitively, '
-      + 'because giantSurface.js takes TERMINATOR_GATE from it, which is exactly why reachability '
-      + 'alone stopped measuring anything here. ⭐ NO RULING BLOCKS THIS: the pack\'s one confirmed '
-      + 'law conflict was uTermStrength, and Max ruled it 2026-08-22 ("same here") and it LANDED at '
-      + '0e814d1 — the lab calls the shared terminatorOpticsOf at its termStrength assignment. '
-      + '⚠ WHAT IS ACTUALLY LEFT IS ONE MEASUREMENT, not a decision: the pack emits nine uniforms, '
-      + 'and eight are already the lab\'s own values by inspection (limb x2 via _atmoOptics, '
-      + 'terminator x3, aurora colour/ringLat/ringWidth). The ninth is uAuroraIntensity, and '
-      + 'auroraOptics.js:33 says the _giantDynamo branch above 3.5 R⊕ is DELIBERATELY not expressed '
-      + 'in the shared module and "has to come in at the drivers layer" — which this pack does not '
-      + 'do. Measure whether that branch has any body on this pack\'s non-gas domain (the same shape '
-      + 'as the measurement that refuted giantSurface); if it is empty, the wire is a no-op and this '
-      + 'row clears. If it is populated, the branch belongs in the pack BEFORE the lab calls it.',
+      'planet-lod-lab.html calls `solidOpticsPack`. It already IMPORTS the module transitively — '
+      + 'giantSurface.js takes TERMINATOR_GATE from it — which is exactly why reachability alone '
+      + 'stopped measuring anything here. ⭐ NOTHING IS UNDECIDED. Its one confirmed law conflict was '
+      + 'uTermStrength, ruled by Max 2026-08-22 ("same here") and LANDED at 0e814d1. The aurora '
+      + 'question raised 2026-08-25 is CLOSED TWICE OVER, measured not argued: (1) the _giantDynamo '
+      + 'branch auroraOptics.js:33 leaves out is DISJOINT BY CONSTRUCTION from this pack — it conjoins '
+      + '_gas, and this pack is compositionClass !== gas, so no body can reach both; (2) driven live '
+      + 'over all 18 lab presets, auroraOpticsOf agrees with the lab on ALL FOUR aurora values for '
+      + 'every non-gas preset (14/14, six of them at non-zero intensity so the comparison is not '
+      + 'vacuous), and disagrees on exactly the four gas presets where _giantDynamo fires — Jovian, '
+      + 'Saturnian, Neptunian, Hot Jupiter, all at lab 0.6 vs shared 0. Those four are outside this '
+      + 'pack\'s predicate. ⚠ SO THE WIRE MOVES NOTHING ON THIS PACK\'S DOMAIN and what is left is '
+      + 'the wire itself: the lab writes all nine of this pack\'s uniforms inline (limb x2 at its '
+      + 'limbExponent/limbColor assignments, terminator x3, aurora x4) and calls no pack at all for '
+      + 'them, so this needs a solidOpticsLabState mirror plus a composition branch keeping gas '
+      + 'bodies on the lab path — the polarDeck shape, one size up. ⛔ The gas half is a SEPARATE '
+      + 'item: auroraOptics.js:41-42 says the giant-dynamo floor "has to come in at the drivers '
+      + 'layer", and no gas aurora pack exists yet.',
   }),
   Object.freeze({
     path: 'src/worldengine/drivers/index.js',
