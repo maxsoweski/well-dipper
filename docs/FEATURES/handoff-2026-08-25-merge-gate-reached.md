@@ -21,7 +21,30 @@ git push origin feature/world-engine-production-L1     # sandbox OFF; verify wit
 Pushing this BRANCH is safe. ⛔ **Pushing `master` AUTO-DEPLOYS** to `welldipper.maxsoweski.com` —
 `.github/workflows/deploy.yml` is `on: push branches [master]`, no staging step between merge and live.
 
-## 0b. ⛔⛔ THE MERGE SHIPPED. THE DEPLOY DID NOT — AND THE CAUSE IS NOT IN THIS REPO.
+## 0b. ✅ RESOLVED SAME DAY — the merge is LIVE and the deploy no longer depends on another repo.
+
+**Live**: `welldipper.maxsoweski.com` HTTP 200 serving `index-Do8ra-v_.js`, the bundle built from this
+merge. `origin/master`, `origin/feature/world-engine-production-L1`, and both local worktrees are all
+at **`9f141e5`**. `maxsoweski/motion-test-kit` is **PRIVATE again**.
+
+Max ruled *"1 then 3"*: unblock by making the kit public, then vendor it in so it can go back to
+private. Both done.
+- **`9f141e5`** de-submodules `vendor/motion-test-kit` (55 files at upstream `175a998`) and drops
+  `submodules: recursive` from the deploy workflow. Provenance and the full incident are in
+  `vendor/motion-test-kit/VENDORED.md`.
+- ⭐⭐ **THE COUPLING IS PROVEN GONE, NOT ASSUMED**: the kit was set back to PRIVATE and the deploy
+  RE-RUN — the exact condition that broke it — and it went green. A green run while the kit was still
+  public would have proved nothing.
+- ⛔ **AND THE FIRST TWO LIVENESS PROBES ON THE VENDORING WERE BOTH VACUOUS.** The bundle hash is
+  byte-identical before and after (the bundler could have been resolving the specifier elsewhere), and
+  appending an unused export to the vendored `fnv1a.js` ALSO produced the identical hash because
+  tree-shaking removes it. Only a syntax break — which failed the build naming the vendored path —
+  was decisive.
+
+⚠ **DO NOT RE-ADD THE SUBMODULE** without first putting a deploy key or PAT in repo secrets;
+`gh secret list` was empty on 2026-08-25. The original incident, kept for the record:
+
+## 0c. THE INCIDENT (resolved above, kept because the failure MODE is the lesson)
 
 `master` is at **`7d3eeb6`** on GitHub (clean fast-forward, 790 commits, pushed 2026-08-25). The
 Pages deploy that push triggered **FAILED at `actions/checkout@v4`, before `npm ci` or `npm run build`
@@ -53,7 +76,7 @@ PRODUCTION bundle imports it three times: `src/main.js:100-101` (accumulator, th
 `src/objects/Planet.js:6` and `src/util/scene-naming.js:20` (`fnv1a`). Removing it from checkout
 turns a failed deploy into a failed build.
 
-**THREE FIXES, all needing Max:**
+**THREE FIXES, all needing Max** (he chose 1 then 3; both are done — see §0b):
 1. **Make `maxsoweski/motion-test-kit` public again** — one click, restores exactly the state that
    deployed on 2026-08-01, zero changes to this repo. Only viable if the kit need not stay private.
 2. **Add a deploy key or PAT as a repo secret** and pass it to `actions/checkout` — keeps the kit
