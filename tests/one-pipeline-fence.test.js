@@ -406,7 +406,24 @@ const GAME_ONLY_BY_DESIGN = Object.freeze([
 // VISIBLE CHANGE AND IT IS MAX'S. Saying so here is the point — a reader who sees this row gone
 // would otherwise conclude the lab draws the shared frequency, and it does not.
 // THREE ROWS REMAIN, and the merge gate Max ruled is `<= 2`.
-const IMPORT_BACK_DEBT_CEILING = 3;
+// ⭐⭐ 3 -> 2 ON 2026-08-25, SAME DAY, AND THIS ONE REACHES MAX'S MERGE GATE — he ruled the gate is
+// `ledger <= 2` with honest `clears` text, not zero, because zero needs a ruling he should not have to
+// make plus an architecture rewrite unrelated to the lab/game split. `base/emission-e.js` cleared: the
+// lab now imports `EMISSION_PHYS` and reads all three of the constants it used to spell out as
+// literals (1.15, 1100, 0.26).
+// ⛔ AND THE LAW HAD TWO HOMES IN ONE FILE, WHICH IS THE HALF THAT NEARLY GOT MISSED. The day-lift
+// appears at planet-lod-lab.html:2443 AND at :5344 — the second inside `frame()`, re-assigning
+// `state.dayTempK` 60x/s and unconditionally overwriting the first. Converting :2443 alone changes
+// nothing observable AND LOOKS LIKE IT WORKED, because :2452 seeds `state.thermalTempEq` from the same
+// T_eq, so both routes yield the identical number until someone drags the T_eq slider. Both sites moved.
+// ⚠ ONE COPY WAS DELIBERATELY LEFT: `redistribution` 3.0 still has three live homes
+// (planet-lod-lab.html:1043, shaders/uniforms.js:459, emission-e.js:163 — a default parameter, not an
+// export) and NO debt row. It is named here rather than silently skipped: adding a key to
+// EMISSION_PHYS shifts emission-e.js:164, which conditionFromBody.js:194 cites BY LINE, so closing it
+// is a citation-repair job and its own decision. TWO ROWS REMAIN, and both are carried past the merge
+// by design: `drivers/index.js` is a composition question and `shaders/craterRelief.glsl.js` is a
+// DECLARED divergence awaiting Max's permanent-or-not ruling.
+const IMPORT_BACK_DEBT_CEILING = 2;
 
 const IMPORT_BACK_DEBT = Object.freeze([
   // ⭐ THE TWO PACK ROWS (`craterDeck`, `rockySurface`) WERE DELETED 2026-08-25 — the lab imports and
@@ -430,12 +447,13 @@ const IMPORT_BACK_DEBT = Object.freeze([
   // ⭐ `base/macroWavelength.js` ROW DELETED 2026-08-25 — it entered the lab's closure with the
   // crater wire, via `rockySurface.js`. The ceiling comment above states what that did and did NOT
   // close, because the distinction is the whole reason this row existed.
-  Object.freeze({
-    path: 'src/worldengine/base/emission-e.js',
-    clears:
-      'The lab imports the blackbody emission register. Increment #2 shipped it into the game ' +
-      'closure only; the lab has no emission control surface yet, so this clears with that control.',
-  }),
+  // ⭐ `base/emission-e.js` ROW DELETED 2026-08-25 — the lab imports `EMISSION_PHYS` at
+  // planet-lod-lab.html:188 and reads it at :1042, :2443, :2446 and :5344. ⛔ THE ROW'S OWN STATED
+  // BLOCKER WAS FICTION AND SAYING SO IS THE POINT: it read "the lab has no emission control surface
+  // yet", and the lab has had the F32/F33 thermal family with a seven-control GUI folder since well
+  // before this. A blocker nobody re-checked kept a row standing; the row was never blocked, only
+  // unattended. ⚠ AND IT IS NOT A PACK — reachability alone clears it, so the row is DELETED rather
+  // than rewritten, or the liveness test above reds on it.
 ]);
 
 /** Import specifiers of one file, resolved to repo-relative paths that exist. */
