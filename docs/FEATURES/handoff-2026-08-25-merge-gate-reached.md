@@ -9,9 +9,10 @@
 
 ---
 
-## 0. ⛔ TEN COMMITS UNPUSHED, AND MAX HAS STILL NOT BEEN ASKED
+## 0. ✅ PUSHED AND MERGED 2026-08-25 — this section is CLOSED, kept for the record
 
-`origin` is at **`47170f9`**; local HEAD is **`57e5fed`**. Ask him, then:
+Max authorised both. `origin/feature/world-engine-production-L1` and `origin/master` are both at
+**`7d3eeb6`**. ⛔ But read §0b — the deploy the master push triggered FAILED. The command was:
 
 ```bash
 git push origin feature/world-engine-production-L1     # sandbox OFF; verify with git ls-remote
@@ -19,6 +20,48 @@ git push origin feature/world-engine-production-L1     # sandbox OFF; verify wit
 
 Pushing this BRANCH is safe. ⛔ **Pushing `master` AUTO-DEPLOYS** to `welldipper.maxsoweski.com` —
 `.github/workflows/deploy.yml` is `on: push branches [master]`, no staging step between merge and live.
+
+## 0b. ⛔⛔ THE MERGE SHIPPED. THE DEPLOY DID NOT — AND THE CAUSE IS NOT IN THIS REPO.
+
+`master` is at **`7d3eeb6`** on GitHub (clean fast-forward, 790 commits, pushed 2026-08-25). The
+Pages deploy that push triggered **FAILED at `actions/checkout@v4`, before `npm ci` or `npm run build`
+ever ran** (run `32908280295`).
+
+```
+repository 'https://github.com/maxsoweski/motion-test-kit.git/' not found
+clone of '...' into submodule path 'vendor/motion-test-kit' failed
+```
+
+⭐ **THE LIVE SITE IS FINE.** `welldipper.maxsoweski.com` returns HTTP 200 and still serves the
+2026-08-01 build — GitHub Pages keeps the last successful artifact when a run fails. Nothing is
+broken; the site simply did not update.
+
+**MECHANISM, certain:** `vendor/motion-test-kit` is a git submodule pointing at
+`maxsoweski/motion-test-kit`, and that repo is **PRIVATE**. `actions/checkout` authenticates with the
+default `GITHUB_TOKEN`, which is scoped to well-dipper alone and cannot read a second private repo —
+GitHub answers 404, hence "not found" rather than "permission denied". **No repo secrets are
+configured** (`gh secret list` is empty), so there is no credential in place to fix it with.
+
+**TIMELINE, which rules this repo out as the cause:** `.gitmodules` and the workflow's
+`submodules: recursive` were BOTH already present at `6c4f49e`, the master that deployed successfully
+on 2026-08-01. The kit repo's `updatedAt` is **2026-08-13**. So the breakage arrived between 8/1 and
+today, on the OTHER repo, and stayed invisible because master was stale for 24 days and nothing
+deployed. ⛔ **Today's push did not break the deploy; it is what FOUND it broken.**
+
+⚠ **THE SUBMODULE CANNOT SIMPLY BE DROPPED FROM CHECKOUT.** It is not test-only tooling — the
+PRODUCTION bundle imports it three times: `src/main.js:100-101` (accumulator, three-loop-binding),
+`src/objects/Planet.js:6` and `src/util/scene-naming.js:20` (`fnv1a`). Removing it from checkout
+turns a failed deploy into a failed build.
+
+**THREE FIXES, all needing Max:**
+1. **Make `maxsoweski/motion-test-kit` public again** — one click, restores exactly the state that
+   deployed on 2026-08-01, zero changes to this repo. Only viable if the kit need not stay private.
+2. **Add a deploy key or PAT as a repo secret** and pass it to `actions/checkout` — keeps the kit
+   private. He mints the credential; the workflow edit is one line.
+3. **Vendor the kit in directly** (de-submodule; it is 592K at `175a998`). ⭐ The only option that
+   removes the failure MODE rather than the instance — a deploy that silently depends on a second
+   repo's visibility flag broke without anyone touching well-dipper. Costs the shared-tooling link,
+   which matters only if the kit is used by other projects.
 
 ## 1. WHAT CLOSED TODAY, AND WHY IT MATTERS
 
